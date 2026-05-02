@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from mcp.server.fastmcp.exceptions import ToolError
+from pydantic import ValidationError
 
 from owlbear_mcp_memory.models import MemoryCategory, MemoryEntry, MemoryState
 
@@ -102,17 +103,20 @@ async def store_learning(  # noqa: PLR0913
     """Create a new pending memory entry."""
     engine = _engine_from_ctx(ctx)
     now = _now_iso()
-    entry = MemoryEntry(
-        id=str(uuid4()),
-        title=title,
-        categories=categories,
-        confidence=confidence,
-        state="pending",
-        content=content,
-        scope_agents=scope_agents,
-        created_at=now,
-        updated_at=now,
-    )
+    try:
+        entry = MemoryEntry(
+            id=str(uuid4()),
+            title=title,
+            categories=categories,
+            confidence=confidence,
+            state="pending",
+            content=content,
+            scope_agents=scope_agents,
+            created_at=now,
+            updated_at=now,
+        )
+    except ValidationError as exc:
+        raise ToolError(str(exc)) from exc
     engine.write(entry)
     return _entry_to_dict(entry)
 
@@ -121,13 +125,32 @@ async def query_memory(
     ctx: Context,
     *,
     states: list[MemoryState] | None = None,
+    categories: list[MemoryCategory] | None = None,
+    scope_agents: list[str] | None = None,
+    min_confidence: float | None = None,
 ) -> list[dict[str, Any]]:
     """Return memory entries filtered by state and sorted by curation priority."""
     engine = _engine_from_ctx(ctx)
     allowed_states = set(states) if states else {"curated", "approved"}
+    category_filter = set(categories or [])
+    scope_filter = set(scope_agents or [])
 
     state_rank = {"approved": 0, "curated": 1, "pending": 2, "deleted": 3}
     entries = [e for e in engine.get_entries() if e.state in allowed_states]
+    if category_filter:
+        entries = [
+            e
+            for e in entries
+            if bool(category_filter.intersection(set(e.categories)))
+        ]
+    if scope_filter:
+        entries = [
+            e
+            for e in entries
+            if e.scope_agents and bool(scope_filter.intersection(set(e.scope_agents)))
+        ]
+    if min_confidence is not None:
+        entries = [e for e in entries if e.confidence >= min_confidence]
     entries.sort(key=lambda e: (state_rank.get(e.state, 99), -e.confidence, e.id))
     return [_entry_to_dict(entry) for entry in entries]
 
