@@ -100,3 +100,20 @@ class TestFromAC_FileEngine:
         entries = engine.load()
         assert len(entries) == 1
         assert entries[0].id == _VALID_UUID
+
+    def test_non_mapping_yaml_frontmatter_skipped(self, tmp_path: Path) -> None:
+        """File whose YAML frontmatter is a list or scalar (not a dict) is skipped.
+
+        yaml.safe_load("- item") → ["item"] (truthy non-dict).
+        The `or {}` fallback is NOT triggered, so data["content"] raises TypeError.
+        AC: non-mapping YAML frontmatter → entry skipped, no exception raised.
+        """
+        list_fm = tmp_path / "list-front-ff5544.md"
+        list_fm.write_text(
+            "---\n- list item\n- another item\n---\n\nsome body\n",
+            encoding="utf-8",
+        )
+        engine = MemoryEngine(tmp_path)
+        # Should skip the non-dict frontmatter, not raise TypeError
+        entries = engine.load()
+        assert entries == []
