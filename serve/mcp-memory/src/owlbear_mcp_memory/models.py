@@ -4,22 +4,33 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
+
+MemoryCategory = Literal[
+    "knowledge",
+    "behaviour",
+    "pitfall",
+    "process",
+    "tool",
+    "goal",
+    "personality",
+    "preference",
+    "context",
+]
+MemoryState = Literal["pending", "curated", "approved", "deleted"]
 
 
 class MemoryEntry(BaseModel):
-    """A single memory entry stored in the memory database."""
+    """A single markdown-backed memory entry."""
 
-    model_config = ConfigDict()
+    model_config = ConfigDict(extra="forbid")
 
     id: str
+    title: str
+    categories: list[MemoryCategory]
+    confidence: float = Field(ge=0.7, le=1.0)
+    state: MemoryState = "pending"
     content: str
-    category: Literal["preference", "knowledge", "context", "behavior", "goal"]
-    confidence: float
+    scope_agents: list[str] | None = None
     created_at: str
     updated_at: str
-    source: str
-    scope_agent: str | None = None
-    scope_project: str | None = None
-    approval_state: Literal["pending", "approved", "deleted"] = "pending"
-    deleted_at: str | None = None
