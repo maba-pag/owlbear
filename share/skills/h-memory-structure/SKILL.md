@@ -6,7 +6,7 @@ user-invocable: false
 
 # Memory Entry Structure
 
-Structural standards for OwlBear memory entries across file-based (`/memories/`) and MCP (`owlbearMemory`) storage. Covers entry shape, tier selection, deduplication, and quality enforcement.
+Structural standards for project memory entries across file-based (`/memories/`) and MCP (`owlbearMemory`) storage. Covers entry shape, tier selection, deduplication, and quality enforcement.
 
 For tool syntax, see `h-mcp-memory`. For curation workflow, see `w-mem-curation`. For pipeline integration (pre-flight, reflection), see `r-pipeline-protocol`.
 

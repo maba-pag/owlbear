@@ -1,12 +1,12 @@
 ---
 name: h-agent-structure
-description: "Handbook: Structural standards for OwlBear agent files, skill files, and instruction stubs"
+description: "Handbook: Structural standards for shared agent files, skill files, and instruction stubs"
 user-invocable: false
 ---
 
 # Agent Ecosystem Structure
 
-Structural model for all OwlBear agent, skill, and instruction files. Single source of truth for what belongs where.
+Structural model for all shared agent, skill, and instruction files. Single source of truth for what belongs where.
 
 ## Foundation
 
