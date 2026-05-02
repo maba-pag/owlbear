@@ -96,5 +96,7 @@ See [copilot-instructions.md](../../.github/copilot-instructions.md) §4 for all
 | `fastapi` | HTTP framework |
 | `uvicorn` | ASGI server |
 | `pydantic` | Request/response model validation |
+| `sse-starlette` | SSE streaming for the `GET /api/events` invalidation endpoint |
+| `watchfiles` | File-system watcher used by the events endpoint |
 | `owlbear-kanban` | Kanban engine (workspace package) |
 | `ruamel.yaml` | Round-trip YAML parsing for the Decisions API |
