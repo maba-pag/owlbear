@@ -265,4 +265,53 @@ describe('TestFromAC_UseBoardSSEContext', () => {
     })
     expect(tasksFetchCount(fetchMock)).toBeGreaterThan(countAfterFirst)
   })
+
+  // ─── AC4 discriminating: exact pause predicate ────────────────────────────
+
+  it('interval polling continues while context status is connecting (AC4 — exact predicate)', async () => {
+    // Proves paused = (sseStatus === 'open'), not a broader predicate like
+    // (sseStatus !== 'closed'). If polling were incorrectly paused during
+    // 'connecting', this test would fail.
+    // A wrong impl with paused=(status !== 'closed') keeps polls paused on
+    // 'connecting', so the count would not rise — catching the bug.
+    mockStatus = 'connecting'
+    const fetchMock = makeFetch()
+    vi.stubGlobal('fetch', fetchMock)
+    renderHook(() => useBoard())
+    await act(async () => {})
+    const countAfterMount = tasksFetchCount(fetchMock)
+
+    await act(async () => {
+      vi.advanceTimersByTime(3_001)
+    })
+
+    // Polling must fire — 'connecting' must NOT pause the interval.
+    expect(tasksFetchCount(fetchMock)).toBeGreaterThan(countAfterMount)
+  })
+
+  // ─── AC5 discriminating: mtime is the sole trigger ────────────────────────
+
+  it('status change to open without mtime change does not trigger SSE refetch (AC5 — sole trigger)', async () => {
+    // Proves mtime change is the SOLE trigger for the SSE-driven refetch.
+    // If [lastTasksMtime, sseStatus] effect fires refetch whenever status becomes
+    // 'open' (even with the same non-null mtime), this test catches the bug:
+    // a status-only change must not produce an extra /api/tasks fetch.
+    mockStatus = 'connecting'
+    mockTasksMtime = 500 // non-null: simulates a previously-received SSE mtime
+    const fetchMock = makeFetch()
+    vi.stubGlobal('fetch', fetchMock)
+    const { rerender } = renderHook(() => useBoard())
+    await act(async () => {})
+    const countAfterMount = tasksFetchCount(fetchMock)
+
+    // Transition to 'open' — connection established. Mtime unchanged (no new SSE event).
+    mockStatus = 'open'
+    await act(async () => {
+      rerender()
+    })
+
+    // SSE refetch must NOT fire from a status-only change — mtime is the trigger.
+    // Correct impl: effect guards on a NEW mtime value, not on sseStatus change.
+    expect(tasksFetchCount(fetchMock)).toBe(countAfterMount)
+  })
 })
