@@ -437,4 +437,59 @@ describe('TestFromAC_FilterPanel', () => {
       expect(getResetButton(container)).toBeNull()
     })
   })
+
+  // ─── AC controlled (retry #1251): Rendered state mirrors incoming filter prop ─
+  //
+  // These tests prove the controlled-component contract: each field of the
+  // incoming `filter` prop is reflected in the rendered DOM — not only emitted
+  // via callbacks.  Regression guard: removing any value/checked binding from
+  // FilterPanel.tsx must cause at least one test below to fail.
+
+  describe('AC controlled: rendered control state mirrors incoming filter prop', () => {
+    it('text input value reflects filter.text', () => {
+      const { container } = renderPanel({ filter: { ...emptyFilter, text: 'hello world' } })
+      const input = getTextInput(container) as HTMLInputElement
+      expect(input.value).toBe('hello world')
+    })
+
+    it('priority select value attribute reflects filter.priority', () => {
+      const { container } = renderPanel({ filter: { ...emptyFilter, priority: 'needed' } })
+      const pSelect = getPrioritySelect(container)!
+      // PDS React wrapper sets value as a DOM property on the custom element
+      type WithValue = Element & { value?: unknown }
+      expect((pSelect as WithValue).value).toBe('needed')
+    })
+
+    it('priority select value is empty when filter.priority is empty', () => {
+      const { container } = renderPanel({ filter: emptyFilter })
+      const pSelect = getPrioritySelect(container)!
+      type WithValue = Element & { value?: unknown }
+      const val = (pSelect as WithValue).value
+      expect(val === '' || val === undefined || val === null).toBe(true)
+    })
+
+    it('blocked checkbox checked state reflects filter.blocked true', () => {
+      const { container } = renderPanel({ filter: { ...emptyFilter, blocked: true } })
+      const blocked = getBlockedControl(container) as HTMLInputElement
+      expect(blocked.checked).toBe(true)
+    })
+
+    it('blocked checkbox checked state reflects filter.blocked false', () => {
+      const { container } = renderPanel({ filter: { ...emptyFilter, blocked: false } })
+      const blocked = getBlockedControl(container) as HTMLInputElement
+      expect(blocked.checked).toBe(false)
+    })
+
+    it('tags multi-select value prop reflects filter.tags', () => {
+      const { container } = renderPanel({
+        filter: { ...emptyFilter, tags: ['bug', 'feature'] },
+        availableTags: TAGS,
+      })
+      const tagsControl = getTagsControl(container)!
+      // React 19 sets array props as DOM properties on custom elements.
+      // The value property on the p-multi-select element must equal the incoming tags array.
+      type WithValue = Element & { value?: unknown }
+      expect((tagsControl as WithValue).value).toEqual(['bug', 'feature'])
+    })
+  })
 })
