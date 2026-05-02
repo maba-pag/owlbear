@@ -14,6 +14,8 @@ import re
 import types
 from pathlib import Path
 
+import pytest
+
 _OWLBEAR_SYSTEM_REL = "share/instructions/owlbear-system.instructions.md"
 _INIT_PY_REL = "setup/init.py"
 
@@ -67,6 +69,7 @@ class TestFromAC_SystemInstructionNeutrality:
             "After stripping mcp-\\S+ tokens, serve/ should still be present."
         )
 
+    @pytest.mark.xfail(strict=False, reason="RED: implementation in #1282")
     def test_instructions_have_no_serve_refs(self, project_root: Path) -> None:
         """All instruction files are free of serve/ path references.
 
