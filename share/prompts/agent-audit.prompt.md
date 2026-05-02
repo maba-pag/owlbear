@@ -131,7 +131,7 @@ Standards: `r-pipeline-protocol` § Signal Mapping, `h-agent-structure` § Agent
 | reviewer  | Test gap                     | `todo`        |
 | reviewer  | Test/AC quality              | `backlog`     |
 | reviewer  | 2nd+ FAIL                    | `backlog`     |
-| architect | AC wrong                     | ideation      |
+| architect | AC wrong                     | `research`    |
 | auditor   | Any rejection                | `backlog`     |
 
 **Rule:** `BLOCK` is a valid architect verdict only for `type:user-action` / AR blocking as defined by `w-arch-review` and `r-pipeline-protocol` § User-Action Tasks. No other agent uses `BLOCK`/`BLOCKED` as a verdict, and no agent blocks routine gate rejections that should route by status.
@@ -172,7 +172,7 @@ Standard: `h-memory-structure` § Entry Shape, § Tier-Content Fit, § Anti-Patt
 1. Load all four standards in order (§ 2 loading order).
 2. Use `file_search` to discover the current definitions surface.
 3. Read every file in both surfaces. No conclusions yet.
-4. For memory surface: call `get_knowledge(agent_id=auditor, limit=20)` if `owlbearMemory` is available; otherwise scan file-based tiers and note the degradation.
+4. For memory surface: call `query_memory(states=["curated", "approved"])` if `owlbearMemory` is available; otherwise scan file-based tiers and note the degradation.
 5. Build a severity-sorted queue: **HIGH** → **MED** → **LOW**.
 
 Call `askQuestions` to present the queue summary and confirm before starting the finding loop.

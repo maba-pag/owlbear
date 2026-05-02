@@ -43,12 +43,17 @@ jobs:
 
     steps:
       - name: Resolve scopes
+        env:
+          SYNC_SHARE: ${{ inputs.sync_share }}
+          SYNC_SERVE: ${{ inputs.sync_serve }}
+          SYNC_SETUP: ${{ inputs.sync_setup }}
+          SYNC_INFRA: ${{ inputs.sync_infra }}
         run: |
           scopes=""
-          if [[ "${{ inputs.sync_share }}" == "true" ]]; then scopes="${scopes:+$scopes,}share"; fi
-          if [[ "${{ inputs.sync_serve }}" == "true" ]]; then scopes="${scopes:+$scopes,}serve"; fi
-          if [[ "${{ inputs.sync_setup }}" == "true" ]]; then scopes="${scopes:+$scopes,}setup"; fi
-          if [[ "${{ inputs.sync_infra }}" == "true" ]]; then scopes="${scopes:+$scopes,}infra"; fi
+          if [[ "$SYNC_SHARE" == "true" ]]; then scopes="${scopes:+$scopes,}share"; fi
+          if [[ "$SYNC_SERVE" == "true" ]]; then scopes="${scopes:+$scopes,}serve"; fi
+          if [[ "$SYNC_SETUP" == "true" ]]; then scopes="${scopes:+$scopes,}setup"; fi
+          if [[ "$SYNC_INFRA" == "true" ]]; then scopes="${scopes:+$scopes,}infra"; fi
 
           if [[ -z "$scopes" ]]; then
             echo "::error::No sync scopes selected — enable at least one."
@@ -70,25 +75,32 @@ jobs:
 
       - name: Capture dev metadata
         run: |
-          echo "SHORT_SHA=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
-          echo "FULL_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
-          echo "DATE=$(date -u +"%Y-%m-%d")" >> "$GITHUB_ENV"
+          {
+            echo "SHORT_SHA=$(git rev-parse --short HEAD)"
+            echo "FULL_SHA=$(git rev-parse HEAD)"
+            echo "DATE=$(date -u +"%Y-%m-%d")"
+          } >> "$GITHUB_ENV"
 
       - name: Validate selected paths exist on dev
+        env:
+          SYNC_SHARE: ${{ inputs.sync_share }}
+          SYNC_SERVE: ${{ inputs.sync_serve }}
+          SYNC_SETUP: ${{ inputs.sync_setup }}
+          SYNC_INFRA: ${{ inputs.sync_infra }}
         run: |
           failed=0
           paths=""
 
-          if [[ "${{ inputs.sync_share }}" == "true" ]]; then
+          if [[ "$SYNC_SHARE" == "true" ]]; then
             paths="$paths share"
           fi
-          if [[ "${{ inputs.sync_serve }}" == "true" ]]; then
+          if [[ "$SYNC_SERVE" == "true" ]]; then
             paths="$paths serve"
           fi
-          if [[ "${{ inputs.sync_setup }}" == "true" ]]; then
+          if [[ "$SYNC_SETUP" == "true" ]]; then
             paths="$paths setup seed"
           fi
-          if [[ "${{ inputs.sync_infra }}" == "true" ]]; then
+          if [[ "$SYNC_INFRA" == "true" ]]; then
             paths="$paths .github .vscode .editorconfig .gitattributes .gitignore"
             paths="$paths .gitleaks.toml .gitleaksignore"
             paths="$paths .markdownlint-cli2.jsonc .markdownlint.json .markdownlintignore"
@@ -133,9 +145,13 @@ jobs:
       - name: Sync selected scopes from dev
         # All scopes on → full wipe (guarantees no stale files from prior syncs).
         # Partial → selective overlay (unselected scopes keep their state on main).
+        env:
+          ALL_SCOPES: ${{ env.SCOPES }}
+          SYNC_SHARE: ${{ inputs.sync_share }}
+          SYNC_SERVE: ${{ inputs.sync_serve }}
+          SYNC_SETUP: ${{ inputs.sync_setup }}
+          SYNC_INFRA: ${{ inputs.sync_infra }}
         run: |
-          ALL_SCOPES="${{ env.SCOPES }}"
-
           if [[ "$ALL_SCOPES" == "all" ]]; then
             echo "=== Full wipe — all scopes selected"
             git rm -rf . --quiet || true
@@ -151,25 +167,25 @@ jobs:
           else
             echo "=== Partial sync — scopes: $ALL_SCOPES"
 
-            if [[ "${{ inputs.sync_share }}" == "true" ]]; then
+            if [[ "$SYNC_SHARE" == "true" ]]; then
               echo "--- share/"
               git rm -rf share --quiet 2>/dev/null || true
               git checkout dev -- share
             fi
 
-            if [[ "${{ inputs.sync_serve }}" == "true" ]]; then
+            if [[ "$SYNC_SERVE" == "true" ]]; then
               echo "--- serve/"
               git rm -rf serve --quiet 2>/dev/null || true
               git checkout dev -- serve
             fi
 
-            if [[ "${{ inputs.sync_setup }}" == "true" ]]; then
+            if [[ "$SYNC_SETUP" == "true" ]]; then
               echo "--- setup/ + seed/"
               git rm -rf setup seed --quiet 2>/dev/null || true
               git checkout dev -- setup seed
             fi
 
-            if [[ "${{ inputs.sync_infra }}" == "true" ]]; then
+            if [[ "$SYNC_INFRA" == "true" ]]; then
               echo "--- infra (CI, linters, root configs)"
               git rm -rf .github .vscode --quiet 2>/dev/null || true
               git checkout dev -- \
@@ -208,6 +224,17 @@ jobs:
         if: ${{ inputs.sync_serve }}
         run: git add -f serve/cockpit/dist/
 
+      - name: Prune dev-only files from consumer tree
+        run: |
+          # .vscode/ — consumers get theirs from seed/.vscode/ via init.py
+          git rm -rf .vscode --quiet 2>/dev/null || true
+
+          # .github/copilot-instructions.md — describes owlbear-dev internals
+          git rm -f .github/copilot-instructions.md --quiet 2>/dev/null || true
+
+          # serve/cockpit/web/ — consumers only need the pre-built dist/
+          git rm -rf serve/cockpit/web --quiet 2>/dev/null || true
+
       - name: Detect changes
         run: |
           if [ "$MAIN_EXISTS" = "true" ] && git diff --staged --quiet HEAD 2>/dev/null; then
@@ -239,16 +266,23 @@ jobs:
 
       - name: Commit
         if: ${{ env.NO_CHANGES != 'true' }}
+        env:
+          COMMIT_SCOPES: ${{ env.SCOPES }}
+          COMMIT_SHORT_SHA: ${{ env.SHORT_SHA }}
+          COMMIT_MESSAGE: ${{ inputs.message }}
+          COMMIT_SERVER_URL: ${{ github.server_url }}
+          COMMIT_REPOSITORY: ${{ github.repository }}
+          COMMIT_RUN_ID: ${{ github.run_id }}
+          COMMIT_FULL_SHA: ${{ env.FULL_SHA }}
         run: |
-          subject="sync(${{ env.SCOPES }}): dev@${{ env.SHORT_SHA }}"
-          msg="${{ inputs.message }}"
-          if [[ -n "$msg" ]]; then subject="$subject — $msg"; fi
+          subject="sync($COMMIT_SCOPES): dev@$COMMIT_SHORT_SHA"
+          if [[ -n "$COMMIT_MESSAGE" ]]; then subject="$subject — $COMMIT_MESSAGE"; fi
 
-          run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          run_url="$COMMIT_SERVER_URL/$COMMIT_REPOSITORY/actions/runs/$COMMIT_RUN_ID"
 
           git commit -m "$subject" \
             -m "" \
-            --trailer "Dev-Ref: ${{ env.FULL_SHA }}" \
+            --trailer "Dev-Ref: $COMMIT_FULL_SHA" \
             --trailer "Run: $run_url"
 
       - name: Push to main
@@ -258,12 +292,18 @@ jobs:
 
       - name: Job summary — success
         if: ${{ success() }}
+        env:
+          SUMMARY_DRY_RUN: ${{ inputs.dry_run }}
+          SUMMARY_SHORT_SHA: ${{ env.SHORT_SHA }}
+          SUMMARY_DATE: ${{ env.DATE }}
+          SUMMARY_ACTOR: ${{ github.actor }}
+          SUMMARY_SCOPES: ${{ env.SCOPES }}
         run: |
           {
             echo ""
             if [ "$NO_CHANGES" = "true" ]; then
               echo "## Sync — No Changes"
-            elif [ "${{ inputs.dry_run }}" = "true" ]; then
+            elif [ "$SUMMARY_DRY_RUN" = "true" ]; then
               echo "## Sync Dry Run"
             else
               echo "## Sync Complete"
@@ -271,12 +311,12 @@ jobs:
             echo ""
             echo "| | |"
             echo "|---|---|"
-            echo "| **SHA** | \`${{ env.SHORT_SHA }}\` |"
-            echo "| **Date** | ${{ env.DATE }} |"
-            echo "| **Actor** | ${{ github.actor }} |"
-            echo "| **Scopes** | ${{ env.SCOPES }} |"
-            echo "| **Dry run** | ${{ inputs.dry_run }} |"
-            if [ "${{ inputs.dry_run }}" = "true" ]; then
+            echo "| **SHA** | \`$SUMMARY_SHORT_SHA\` |"
+            echo "| **Date** | $SUMMARY_DATE |"
+            echo "| **Actor** | $SUMMARY_ACTOR |"
+            echo "| **Scopes** | $SUMMARY_SCOPES |"
+            echo "| **Dry run** | $SUMMARY_DRY_RUN |"
+            if [ "$SUMMARY_DRY_RUN" = "true" ]; then
               echo ""
               echo "> Push skipped (dry run). Re-run without dry_run to sync."
             fi

@@ -159,30 +159,6 @@ Edit `.vscode/mcp.json` to add additional servers alongside the owlbear defaults
 > as defaults and your existing entries are preserved. Edit it manually to add new server
 > entries or customize existing ones.
 
-### Configuring the kanban MCP server
-
-The `ob-kanban` server supports environment variables to customise its behaviour.
-Set these in `.vscode/mcp.json` under the server's `env` key:
-
-```json
-{
-  "servers": {
-    "ob-kanban": {
-      "type": "stdio",
-      "command": "uv",
-      "args": ["run", "--project", "../owlbear", "-m", "owlbear_mcp_kanban"],
-      "env": {
-        "KANBAN_TOOLS_EXCLUDE": "create_task,move_task,edit_task"
-      }
-    }
-  }
-}
-```
-
-| Variable | Description |
-|----------|-------------|
-| `KANBAN_TOOLS_EXCLUDE` | Comma-separated tool names to hide (e.g. for read-only access) |
-
 ### Configuring the knowledge MCP server
 
 The `ob-knowledge` server supports environment variables to customise its behaviour.

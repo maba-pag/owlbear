@@ -77,6 +77,8 @@ uv run pytest -m e2e -q --tb=short
 | `asyncio_mode` | `strict` | Every async test **must** carry `@pytest.mark.asyncio` |
 | `norecursedirs` | `["v1"]` | Excludes `v1/` from test discovery |
 | `testpaths` | `["tests", "packages"]` | Discovers tests in both locations |
+| `timeout` | `30` | Per-test timeout via `pytest-timeout` — kills any single test exceeding 30s |
+| `session_timeout` | `300` | Whole-session timeout — kills the entire pytest run after 5 minutes |
 
 ## Coverage
 

@@ -58,11 +58,10 @@
   "github.copilot.chat.additionalReadAccessPaths": [
     "{{owlbear_abs_path}}"
   ],
-  "github.copilot.chat.agent.autoFix": false,
+  "github.copilot.chat.agent.autoFix": true,
   "github.copilot.chat.agent.currentEditorContext.enabled": false,
   "github.copilot.chat.agentHistorySummarizationInline": true,
   "github.copilot.chat.anthropic.contextEditing.mode": "clear-tooluse",
-  "github.copilot.chat.anthropic.thinking.budgetTokens": 32000,
   "github.copilot.chat.cli.sessionController.enabled": true,
   "github.copilot.chat.copilotMemory.enabled": false,
   "github.copilot.chat.enableUserPreferences": true,
@@ -99,7 +98,7 @@
   "python.terminal.useEnvFile": true,
   "python.testing.pytestEnabled": true,
   "redhat.telemetry.enabled": false,
-  "ruff.importStrategy": "useBundled",
+  "ruff.importStrategy": "fromEnvironment",
   "scm.defaultViewMode": "tree",
   "scm.graph.pageOnScroll": false,
   "search.exclude": {

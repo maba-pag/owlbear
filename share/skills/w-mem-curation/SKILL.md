@@ -31,7 +31,7 @@ Read `r-pipeline-protocol` skill if not already loaded.
 
 1. **Inventory existing thematic files:** `memory view /memories/repo/` — list all files (excluding `inbox/`, `deferred/`). These are the merge targets. Read each file's heading to understand its scope.
 2. **Capacity check:** count standalone files (not thematic). If any exist, add them to the consolidation queue (Step 4b).
-3. **Primary (MCP):** Call `list_entries(status=pending)` to fetch all pending entries from the `owlbearMemory` MCP database. See `h-mcp-memory` for full parameter reference.
+3. **Primary (MCP):** Call `query_memory(states=["pending"])` to fetch pending entries from the `owlbearMemory` MCP database. See `h-mcp-memory` for full parameter reference.
 4. **Secondary (file-based):** List the repo memory inbox: `memory view /memories/repo/inbox/` — read each file.
 5. Scan parent directory for misplaced entries agents wrote to `/memories/repo/` instead of the inbox. Move any unreviewed entries to the inbox first.
 6. Collect all entries from both sources for the remaining steps.
@@ -96,7 +96,7 @@ Rate each: **HIGH** / **MEDIUM** / **LOW** / **NOISE** / **DUPLICATE** / **CONFL
 
 ### Deletions
 
-- **MCP entries:** `mark_for-deletion(entry_id)` — soft-delete, preserves the entry for auditing.
+- **MCP entries:** `delete_entry(entry_id)` — marks entry `deleted`, preserves file history and lifecycle state.
 - **File-based inbox entries:** `memory delete /memories/repo/inbox/{filename}`
 
 ## Step 4b — Consolidation (capacity-triggered)
