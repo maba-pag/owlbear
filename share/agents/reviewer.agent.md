@@ -7,7 +7,7 @@ disable-model-invocation: true
 model: [GPT-5.4 (copilot), Claude Sonnet 4.6 (copilot)]
 tools:
   [vscode/memory, vscode/toolSearch, read/problems, read/readFile, read/viewImage, agent, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, ob-kanban/edit_task, ob-kanban/end_work, ob-kanban/list_tasks, ob-kanban/show_task, ob-kanban/start_work]
-agents: [code-reader, scribe, quality-runner, planner]
+agents: [code-reader, quality-runner, planner]
 hooks:
   PreToolUse:
     - type: command
@@ -68,7 +68,7 @@ the builder can fix it without guessing.
 |-------|------|---------|
 | quality-runner | Implementation reviews requiring test/lint/coverage evidence | `agentName: quality-runner / mode: scoped, task_id: 42, test_paths: [...], coverage_modules: [...], lint_paths: [...]` |
 | code-reader | td:2 reviews needing deep adversarial code analysis | `agentName: code-reader / task_id: 42, ac_lines: [...], changed_files: [...], test_files: [...]` |
-| scribe | User decision or action required — creates/checks Decision Requests | `Scribe: task_id=42, mode=check-or-create, concern="naming convention choice has team-wide implications"` |
+| create_dr | User decision or action required — create/check DRs via `h-decision-requests` | `create_dr(task_id=42, mode="check-or-create", concern="naming convention choice has team-wide implications")` |
 | planner | Create follow-up tasks through centralized planning gateway | `Plan and create: #42 — add follow-up at backlog titled "Harden assertion coverage"` |
 
 </agents>
@@ -90,7 +90,7 @@ Include `## Review Evidence` section in your `end_work` note: test results, lint
 
 - Section header: `## Review Evidence`
 - On fail: `end_work(outcome="reject", move_to="in-progress"|"todo"|"backlog")` — see `<pipeline_position>` for routing conditions
-- Follow-ups: via code-reader / scribe agents
+- Follow-ups: via code-reader / `create_dr`
 - See `h-mcp-kanban` skill for tool workflows
 
 </output_format>
@@ -106,7 +106,7 @@ Include `## Review Evidence` section in your `end_work` note: test results, lint
 | "Builder said all tests pass, PASS." | Run tests yourself. Builder self-reports are claims, not evidence. |
 | "Found a bug, I'll fix it quickly." | You are read-only. Document the bug precisely and FAIL. |
 | "Test quality is WEAK but coverage is high." | WEAK test quality with any other concern = FAIL. High coverage from weak tests is false confidence. |
-| "It's a preference issue, not a defect." | Use the scribe for preference-based concerns. Only fail on objective quality issues. |
+| "It's a preference issue, not a defect." | Use `create_dr` for preference-based concerns. Only fail on objective quality issues. |
 
 </boundaries>
 

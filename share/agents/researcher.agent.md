@@ -6,7 +6,7 @@ user-invocable: false
 disable-model-invocation: true
 tools:
   [vscode/memory, vscode/toolSearch, execute/executionSubagent, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, web, ddgs/extract_content, ddgs/search_text, 'microsoft/markitdown/*', ob-kanban/edit_task, ob-kanban/end_work, ob-kanban/list_tasks, ob-kanban/show_task, ob-kanban/start_work]
-agents: [Explore, challenger, scribe, planner]
+agents: [Explore, challenger, planner]
 hooks:
   PreToolUse:
     - type: command
@@ -42,7 +42,7 @@ can choose — you never disguise opinion as conclusion.
 - **Read `r-pipeline-protocol`** for channel communication, claiming conventions, and escalation tiers.
 - **Every claim needs ≥ 2 sources.** No unsubstantiated assertions in research docs.
 - **Every research doc must produce follow-up kanban tasks** at `research` status. Research without actionable output is just reading.
-- **T3 outcomes require a blocking decision request** via the scribe agent.
+- **T3 outcomes require a blocking decision request** via `create_dr`.
 - **Max 200 lines per research doc.** Concise, not voluminous.
 
 </critical_rules>
@@ -61,7 +61,7 @@ can choose — you never disguise opinion as conclusion.
 |-------|------|---------|
 | Explore | Need broad codebase context before analysis | `Find all modules using the embedding adapter pattern` |
 | challenger | Validate findings before committing to a recommendation | `Challenge the recommendation to use sqlite-vec over ChromaDB` |
-| scribe | User decision or action required — creates/checks Decision Requests | `Scribe: task_id=42, mode=check-or-create, concern="library choice with security implications"` |
+| create_dr | User decision or action required — create/check DRs via `h-decision-requests` | `create_dr(task_id=42, mode="check-or-create", concern="library choice with security implications")` |
 | planner | Create follow-up tasks through centralized planning gateway | `Plan and create: #42 — create one follow-up at research titled "Validate adapter contract"` |
 
 </agents>

@@ -6,11 +6,13 @@ user-invocable: false
 
 # Quality-Runner Subagent
 
-Consumer reference for invoking the `quality-runner` utility subagent. Quality-Runner runs pytest, ruff, and coverage, returning a structured report. It is a mechanical utility agent — it does not edit files, interact with kanban, or make judgments.
+Consumer reference for invoking the `quality-runner` utility subagent. Quality-Runner runs pytest, ruff, and coverage (Python) or vitest, eslint, and coverage (TypeScript/JavaScript), returning a structured report. It is a mechanical utility agent — it does not edit files, interact with kanban, or make judgments.
 
 ## Consumer Invocation Pattern
 
 Invoke via `runSubagent` with a structured prompt:
+
+Scoped (Python):
 
 ```
 agentName: quality-runner
@@ -18,13 +20,23 @@ prompt: |
   Run: mode=scoped, task_id=263, test_paths=["tests/test_my_module.py"], coverage_modules=["my_module"], lint_paths=["serve/my-package/", "tests/test_my_module.py"]
 ```
 
-Full-suite example:
+Scoped (TypeScript/JavaScript):
+
+```
+agentName: quality-runner
+prompt: |
+  Run: mode=scoped, task_id=1230, test_paths=["serve/cockpit/web/src/__tests__/MyComponent.test.tsx"], lint_paths=["serve/cockpit/web/src/components/MyComponent.tsx"]
+```
+
+Full suite:
 
 ```
 agentName: quality-runner
 prompt: |
   Run: mode=full, task_id=263
 ```
+
+Quality-runner selects the toolchain based on `test_paths`: paths under `serve/cockpit/web/` use vitest + eslint (see `h-vitest-and-linting`); all other paths use pytest + ruff (see `h-pytest-and-linting`).
 
 **Prerequisite:** The calling agent must list `quality-runner` in its frontmatter `agents:` array. Without this, `disable-model-invocation: true` blocks the call.
 
@@ -41,7 +53,9 @@ agents: [quality-runner]
 | `test_paths` | string[] | If `mode=scoped` | Paths to test files, e.g. `["tests/test_foo.py", "tests/test_bar.py"]` |
 | `task_id` | string | Yes | Kanban task ID — isolates file-capture fallback output in `.owlbear/scratch/` |
 | `coverage_modules` | string[] | No | Module names for focused coverage display; bare `--cov` always runs against all packages |
-| `lint_paths` | string[] | No | Paths to lint; defaults to `serve/ tests/` if omitted |
+| `lint_paths` | string[] | No | Paths to lint; defaults to `serve/ tests/` (Python) or `src/` (frontend) if omitted |
+
+**Frontend detection:** When any `test_paths` entry starts with `serve/cockpit/web/`, switch to frontend mode (vitest + eslint). See `h-vitest-and-linting`.
 
 ## Output Format
 
@@ -69,7 +83,7 @@ ruff: 1
 none
 ```
 
-**Exit code interpretation:**
+**Exit code interpretation (Python):**
 
 | pytest exit | Meaning |
 |-------------|---------|
@@ -79,3 +93,13 @@ none
 | 3 | Internal error |
 | 4 | Command-line usage error |
 | 5 | No tests collected |
+
+**Exit code interpretation (Frontend):**
+
+| Tool | Code | Meaning |
+|------|------|---------|
+| vitest | 0 | All tests passed |
+| vitest | 1 | Tests failed |
+| eslint | 0 | No violations |
+| eslint | 1 | Violations found |
+| eslint | 2 | Fatal/config error |

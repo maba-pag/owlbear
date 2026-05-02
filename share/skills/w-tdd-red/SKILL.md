@@ -62,11 +62,13 @@ Return: `DONE #{id} -> in-progress | retry, {N} existing tests preserved{, M new
 #### Step 1b.1 — Direct-to-Review Advance (Test-Only Retry)
 
 If ALL of the following are true:
+
 - Reviewer's Required Follow-up contained ONLY test-proof gaps (no implementation fixes needed)
 - All NEW tests PASS against current code (implementation already handles them)
 - No lint or coverage issues detected
 
 Then the builder has no work to do. Advance directly to `review` instead of `in-progress`:
+
 - `end_work(outcome="success", move_to="review", note="## Test-Writer Notes\n- Retry: added {M} tests for reviewer gaps. All pass against current impl.\n- Builder skip: test-only retry, all tests green.")`
 - Return: `DONE #{id} -> review | test-only retry, builder skipped`
 - **Stop here.**

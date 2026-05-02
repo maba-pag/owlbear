@@ -14,6 +14,7 @@ For pipeline conventions and claiming protocol, see `r-pipeline-protocol`.
 
 Exactly 8 tools are exposed:
 
+<!-- markdownlint-disable MD056 -- pipe chars in Python union types (str | None) inside table cells -->
 | Tool | Signature |
 |------|-----------|
 | `list_tasks` | `list_tasks(status: str | None = None, priority: str | None = None, tag: str | None = None, archival_reason: str | None = None, ids: list[int] | None = None, unclaimed: bool = False, blocked: bool | None = None, parent: int | None = None, search: str | None = None, sort: str | None = None, reverse: bool = False, limit: int = 0)` |
@@ -24,6 +25,7 @@ Exactly 8 tools are exposed:
 | `move_task` | `move_task(id: int, status: str, archival_reason: str | None = None, archival_refs: list[int] | None = None)` |
 | `start_work` | `start_work(id: int)` |
 | `end_work` | `end_work(id: int, outcome: str, move_to: str | None = None, note: str | None = None, archival_reason: str | None = None, archival_refs: list[int] | None = None, block_reason: str | None = None)` |
+<!-- markdownlint-enable MD056 -->
 
 ### Filter and Retrieval Additions
 
@@ -93,7 +95,7 @@ Mutation and lifecycle responses include `guidance: list[str]`.
 | `end_work(outcome="success")` | Always (commit-pushed reminder) |
 | `move_task` to a status > 1 slot ahead | Forward-skip warning |
 
-**Agent obligation:** If `guidance` is non-empty, read it before proceeding — it may require an immediate follow-up action (e.g., create a Decision Request via the scribe agent).
+**Agent obligation:** If `guidance` is non-empty, read it before proceeding — it may require an immediate follow-up action (e.g., create a Decision Request via the create_dr tool).
 
 ### `block:user` Tag Exemption
 
@@ -166,12 +168,6 @@ Do not use `edit_task` to append agent notes — use `end_work(note="...")` inst
 ## Error Handling
 
 All tools raise `ToolError` (MCP `isError: true`) on failure.
-
-## Configuration
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `KANBAN_TOOLS_EXCLUDE` | _(unset)_ | Comma-separated tool names to remove |
 
 ## Body Content Gotchas
 

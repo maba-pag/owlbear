@@ -41,8 +41,8 @@ Assess the task against `r-architecture-standards` and general architectural pri
 1. **Single responsibility** — one thing only? If "and" joins unrelated concerns, split.
 2. **Interface clarity** — inputs, outputs, side effects clear from AC?
 3. **Dependency correctness** — all listed? Any missing?
-4. **Module layering** — respect dependency direction from `r-architecture-standards`? No upward imports.
-5. **TDD compliance** — preceding test task exists?
+4. **Module layering** — respect dependency direction from `r-architecture-standards`? No upward imports. For frontend import-shape AC constraints, require a parent→child live-code trace (workspace search or `read_file` evidence) proving the constrained module actually imports from the cited path/barrel before naming that constraint in AC.
+5. **TDD compliance** — preceding test task exists? Before defining must-pass durable-suite gates in AC, run a suite-health pre-check and explicitly scope out known pre-existing failures unrelated to the current task.
 6. **KISS/YAGNI** — minimal scope? No hypothetical requirements? **Deletion Test (conditional):** If the task introduces a new abstraction (module, interface, adapter, wrapper), apply the Deletion Test from `r-architecture-standards` — if deleting the abstraction would make its callers simpler, it's a pass-through. Reject or propose inlining.
 7. **Premise challenge** — should this task exist? Does the capability already exist in: (a) IDE features, (b) runtime/stdlib, (c) existing tooling, or (d) extensions? If so, reject with evidence.
 8. **Pattern consistency** — follows existing codebase patterns (protocols, error taxonomy, MCP conventions, config via pydantic-settings)?
@@ -216,6 +216,8 @@ If fallback triggered, include only: `Design-diverge: FALLBACK — {reason}`.
 - [ ] Read full task details and research doc (if referenced)
 - [ ] Searched codebase for related patterns
 - [ ] Checked task body for prior context (architecture notes, reviewer feedback)
+- [ ] For frontend import-shape AC constraints, captured a parent→child live-code import trace via workspace search or `read_file` evidence before naming path/barrel constraints
+- [ ] Ran durable-suite health pre-check before defining must-pass suite gates; documented and excluded known unrelated pre-existing failures
 - [ ] All 13 Step 2 criteria evaluated
 - [ ] Each AC line annotated with `(td:N)` (Step 2.1)
 - [ ] Design-diverge evaluated (triggered / skipped with reason / fallback noted)
@@ -232,3 +234,5 @@ If fallback triggered, include only: `Design-diverge: FALLBACK — {reason}`.
 - **Body content escaping:** `--body` writes literal `\n` instead of newlines. Always use the temp-file pattern for multi-line AC.
 - **T3 research without DR:** If a task originated from T3 research with no approved decision request, reject it. Proceeding without approval risks reversal.
 - **Premise challenge skip:** The challenger is easy to skip but catches real issues. The mandatory trigger on APPROVE exists for a reason.
+- **#1225 import-shape drift:** Do not author frontend import-path/barrel AC constraints from assumption. Confirm the parent→child import chain in live code first, then write the constraint.
+- **#1225 suite gate debt inheritance:** Do not gate builders on durable suites with known unrelated failures. Pre-check suite health and scope those failures out in AC gate wording.
