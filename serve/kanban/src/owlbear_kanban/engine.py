@@ -803,13 +803,13 @@ class KanbanEngine:
             self._task_cache[filename] = (mtime_ns, task)
             return task
 
-        matches = list(self._tasks_dir.glob(f"{task_id}-*.md"))
-        if matches:
-            return read_task(matches[0], config=self._config)
-
         archive_matches = list(self._archive_dir.glob(f"{task_id}-*.md"))
         if archive_matches:
             return read_task(archive_matches[0], config=self._config)
+
+        matches = list(self._tasks_dir.glob(f"{task_id}-*.md"))
+        if matches:
+            return read_task(matches[0], config=self._config)
 
         msg = f"Task {task_id!r} not found in {self._tasks_dir} or {self._archive_dir}"
         raise FileNotFoundError(msg)
