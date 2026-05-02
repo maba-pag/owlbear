@@ -6,6 +6,7 @@ import re
 from pathlib import Path
 
 import yaml
+from pydantic import ValidationError
 
 from owlbear_mcp_memory.models import MemoryEntry
 
@@ -114,6 +115,12 @@ class MemoryEngine:
         if len(parts) < _FRONTMATTER_PARTS:
             return None
         _, frontmatter_raw, body = parts
-        data = yaml.safe_load(frontmatter_raw) or {}
+        try:
+            data = yaml.safe_load(frontmatter_raw) or {}
+        except yaml.YAMLError:
+            return None
         data["content"] = body.strip()
-        return MemoryEntry(**data)
+        try:
+            return MemoryEntry(**data)
+        except ValidationError:
+            return None
