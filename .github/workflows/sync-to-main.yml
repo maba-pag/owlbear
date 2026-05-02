@@ -224,6 +224,17 @@ jobs:
         if: ${{ inputs.sync_serve }}
         run: git add -f serve/cockpit/dist/
 
+      - name: Prune dev-only files from consumer tree
+        run: |
+          # .vscode/ — consumers get theirs from seed/.vscode/ via init.py
+          git rm -rf .vscode --quiet 2>/dev/null || true
+
+          # .github/copilot-instructions.md — describes owlbear-dev internals
+          git rm -f .github/copilot-instructions.md --quiet 2>/dev/null || true
+
+          # serve/cockpit/web/ — consumers only need the pre-built dist/
+          git rm -rf serve/cockpit/web --quiet 2>/dev/null || true
+
       - name: Detect changes
         run: |
           if [ "$MAIN_EXISTS" = "true" ] && git diff --staged --quiet HEAD 2>/dev/null; then
