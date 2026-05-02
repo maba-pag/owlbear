@@ -271,7 +271,8 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:  #
                 structured_extractor = None
         else:
             try:
-                from owlbear_knowledge.copilot_auth import (
+                from owlbear_knowledge.copilot_auth import (  # noqa: PLC0415
+                    # Imported lazily to avoid optional dependency costs at module import time.
                     detect_editor_versions,
                     get_copilot_token,
                 )
@@ -636,7 +637,10 @@ async def sync_from_global(ctx: Context) -> str:
 
     Returns a count string on success, or an ``error: `` string on failure.
     """
-    global_path = resolve_global_db_path(Path.cwd())
+    try:
+        global_path = resolve_global_db_path(Path.cwd())
+    except NotImplementedError as exc:
+        return f"error: {exc}"
     if isinstance(global_path, str):
         return "error: global DB path could not be resolved"
 
@@ -674,7 +678,10 @@ async def sync_to_global(ctx: Context) -> str:
 
     Returns a count string on success, or an ``error: `` string on failure.
     """
-    global_path = resolve_global_db_path(Path.cwd())
+    try:
+        global_path = resolve_global_db_path(Path.cwd())
+    except NotImplementedError as exc:
+        return f"error: {exc}"
     if isinstance(global_path, str):
         return f"error: {global_path}"
 
