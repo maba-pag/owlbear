@@ -118,16 +118,44 @@ class TestFromAC_CoreRemoval:
 
     def test_no_serve_orchestrator_in_tests_dir(self) -> None:
         """No .py file under tests/ may contain the string 'serve/orchestrator'."""
-        # Exclude this task-scoped test file: it contains the target string as a
-        # Python string literal in the scan expression itself.
-        this_file = Path(__file__).resolve()
+        # Exclude files that necessarily contain the literal as test-data strings:
+        # - this file: contains the string in the scan expression itself
+        # - test_dead_code_sweep_1296.py: tests that *other* locations don't reference
+        #   serve/orchestrator, so the literal appears in its own assertions/docstrings
+        excluded = {
+            Path(__file__).resolve(),
+            (_REPO_ROOT / "tests" / "test_dead_code_sweep_1296.py").resolve(),
+        }
         hits = [
             str(p)
             for p in (_REPO_ROOT / "tests").rglob("*.py")
-            if p.resolve() != this_file
+            if p.resolve() not in excluded
             and "serve/orchestrator" in p.read_text(encoding="utf-8")
         ]
         assert hits == [], f"tests/ files still reference serve/orchestrator: {hits}"
+
+    # ---- AC 6: setup/ -------------------------------------------------------
+
+    def test_no_serve_orchestrator_in_setup_dir(self) -> None:
+        """No .py file under setup/ may contain the string 'serve/orchestrator'."""
+        hits = [
+            str(p)
+            for p in (_REPO_ROOT / "setup").rglob("*.py")
+            if "serve/orchestrator" in p.read_text(encoding="utf-8")
+        ]
+        assert hits == [], f"setup/ files still reference serve/orchestrator: {hits}"
+
+    # ---- AC 6: serve/knowledge/ ---------------------------------------------
+
+    def test_no_serve_orchestrator_in_knowledge_dir(self) -> None:
+        """No file under serve/knowledge/ may contain the string 'serve/orchestrator'."""
+        hits = [
+            str(p)
+            for p in (_REPO_ROOT / "serve" / "knowledge").rglob("*")
+            if p.is_file()
+            and "serve/orchestrator" in p.read_text(encoding="utf-8", errors="ignore")
+        ]
+        assert hits == [], f"serve/knowledge/ files still reference serve/orchestrator: {hits}"
 
     # ---- Scope edit: test_package_boundary.py ALLOWED_IMPORTS ---------------
 
