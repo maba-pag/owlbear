@@ -363,12 +363,12 @@ describe('TestFromAC_FilterPanel', () => {
 
     it('text input is absent from DOM when open=false', () => {
       const { container } = renderPanel({ open: false })
-      expect(getTextInput(container)).toBeNull()
+      expect(container.querySelector('input[type="text"]')).toBeNull()
     })
 
     it('priority select is absent from DOM when open=false', () => {
       const { container } = renderPanel({ open: false })
-      expect(getPrioritySelect(container)).toBeNull()
+      expect(container.querySelector('select')).toBeNull()
     })
 
     it('blocked control is absent from DOM when open=false', () => {
