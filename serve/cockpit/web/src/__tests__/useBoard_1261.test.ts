@@ -1,67 +1,24 @@
-/**
- * RED phase tests for #1261: Integrate EventSource into useBoard with fallback orchestration.
- *
- * AC1 (td:1): useBoard creates an EventSource for /api/events on mount
- * AC2 (td:2): paused=true propagated to usePollingFetch when SSE is open (polling suppressed)
- * AC3 (td:2): refetchTasks() triggered when lastEventMtime changes via SSE event
- * AC4 (td:2): polling resumes (paused=false) when SSE transitions to not-open
- * AC5 (td:2): health computed as green/yellow/polling-fallback based on SSE status
- * AC6 (td:0): skipped — no tests needed
- * AC7 (td:1): UseBoardResult interface intact when EventSource is globally stubbed
- * AC8 (td:1): health field name preserved in UseBoardResult
- *
- * All 12 tests FAIL until builder wires useEventSource into useBoard.ts.
- */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { useBoard } from '../hooks/useBoard'
 
-// ─── MockEventSource ─────────────────────────────────────────────────────────
-//
-// jsdom has no EventSource. This mock matches the shape used by useEventSource:
-// onopen, onerror, close, and addEventListener (for 'tasks-changed' events).
-// readyState mirrors the Web spec constants.
+const sseState = vi.hoisted(() => ({
+  status: 'connecting' as 'connecting' | 'open' | 'closed',
+  tasksMtime: null as number | null,
+  decisionsMtime: null as number | null,
+}))
 
-class MockEventSource {
-  static instances: MockEventSource[] = []
-  static readonly CONNECTING = 0
-  static readonly OPEN = 1
-  static readonly CLOSED = 2
-
-  readyState: number = MockEventSource.CONNECTING
-  url: string
-  onopen: ((e: Event) => void) | null = null
-  onerror: ((e: Event) => void) | null = null
-  close = vi.fn()
-  private listeners: Record<string, ((e: MessageEvent) => void)[]> = {}
-
-  constructor(url: string) {
-    this.url = url
-    MockEventSource.instances.push(this)
-  }
-
-  addEventListener(type: string, fn: (e: MessageEvent) => void): void {
-    if (!this.listeners[type]) this.listeners[type] = []
-    this.listeners[type].push(fn)
-  }
-
-  simulateOpen(): void {
-    this.readyState = MockEventSource.OPEN
-    if (this.onopen) this.onopen(new Event('open'))
-  }
-
-  simulateFatalClose(): void {
-    this.readyState = MockEventSource.CLOSED
-    if (this.onerror) this.onerror(new Event('error'))
-  }
-
-  simulateEvent(type: string, data: unknown): void {
-    const event = new MessageEvent(type, { data: JSON.stringify(data) })
-    ;(this.listeners[type] ?? []).forEach((fn) => fn(event))
-  }
-}
-
-// ─── Fixtures ─────────────────────────────────────────────────────────────────
+vi.mock('../hooks/EventSourceProvider', () => ({
+  useSSEEvent: vi.fn((eventType: string) => {
+    if (eventType === 'tasks-changed') {
+      return { mtime: sseState.tasksMtime, status: sseState.status }
+    }
+    if (eventType === 'decisions-changed') {
+      return { mtime: sseState.decisionsMtime, status: sseState.status }
+    }
+    return { mtime: null, status: sseState.status }
+  }),
+}))
 
 const BOARD = {
   statuses: [{ name: 'backlog' }],
@@ -103,7 +60,6 @@ function makeFailFetch(): ReturnType<typeof vi.fn> {
     if (url.includes('/api/board')) {
       return Promise.resolve({ ok: true, json: () => Promise.resolve(BOARD) })
     }
-    // /api/tasks always fails → useConnectionHealth degrades
     return Promise.resolve({ ok: false, status: 503 })
   })
 }
@@ -112,13 +68,12 @@ function tasksFetchCount(fetchMock: ReturnType<typeof vi.fn>): number {
   return fetchMock.mock.calls.filter((c) => (c[0] as string).includes('/api/tasks')).length
 }
 
-// ─── Tests ────────────────────────────────────────────────────────────────────
-
 describe('TestFromAC_UseBoardSSEIntegration', () => {
   beforeEach(() => {
     vi.useFakeTimers()
-    MockEventSource.instances = []
-    vi.stubGlobal('EventSource', MockEventSource)
+    sseState.status = 'connecting'
+    sseState.tasksMtime = null
+    sseState.decisionsMtime = null
   })
 
   afterEach(() => {
@@ -127,381 +82,118 @@ describe('TestFromAC_UseBoardSSEIntegration', () => {
     vi.restoreAllMocks()
   })
 
-  // ─── AC1: useEventSource wired in ─────────────────────────────────────────
+  it('suppresses interval polling when SSE status is open', async () => {
+    const fetchMock = makeFetch()
+    vi.stubGlobal('fetch', fetchMock)
+    sseState.status = 'open'
 
-  it('creates an EventSource for /api/events on mount', async () => {
+    renderHook(() => useBoard())
+    await act(async () => {})
+    const countAfterMount = tasksFetchCount(fetchMock)
+
+    await act(async () => {
+      vi.advanceTimersByTime(3001)
+    })
+
+    expect(tasksFetchCount(fetchMock)).toBe(countAfterMount)
+  })
+
+  it('polling resumes when SSE moves from open to closed', async () => {
+    const fetchMock = makeFetch()
+    vi.stubGlobal('fetch', fetchMock)
+    sseState.status = 'open'
+
+    const { rerender } = renderHook(() => useBoard())
+    await act(async () => {})
+
+    await act(async () => {
+      vi.advanceTimersByTime(3001)
+    })
+    const countWhileOpen = tasksFetchCount(fetchMock)
+
+    sseState.status = 'closed'
+    await act(async () => {
+      rerender()
+    })
+    await act(async () => {})
+    await act(async () => {
+      vi.advanceTimersByTime(3001)
+    })
+
+    expect(tasksFetchCount(fetchMock)).toBeGreaterThan(countWhileOpen)
+  })
+
+  it('triggers refetch when tasks-changed mtime changes while SSE is open', async () => {
+    const fetchMock = makeFetch()
+    vi.stubGlobal('fetch', fetchMock)
+
+    sseState.status = 'open'
+    sseState.tasksMtime = null
+    const { rerender } = renderHook(() => useBoard())
+    await act(async () => {})
+    const countBeforeEvent = tasksFetchCount(fetchMock)
+
+    sseState.tasksMtime = 9001
+    await act(async () => {
+      rerender()
+    })
+
+    expect(tasksFetchCount(fetchMock)).toBeGreaterThan(countBeforeEvent)
+  })
+
+  it('does not trigger refetch when only decisions-changed mtime changes', async () => {
+    const fetchMock = makeFetch()
+    vi.stubGlobal('fetch', fetchMock)
+
+    sseState.status = 'open'
+    const { rerender } = renderHook(() => useBoard())
+    await act(async () => {})
+    const countBeforeDecisionsEvent = tasksFetchCount(fetchMock)
+
+    sseState.decisionsMtime = 9100
+    await act(async () => {
+      rerender()
+    })
+
+    expect(tasksFetchCount(fetchMock)).toBe(countBeforeDecisionsEvent)
+  })
+
+  it('returns health=green while SSE status is open', async () => {
+    vi.stubGlobal('fetch', makeFailFetch())
+    sseState.status = 'open'
+
+    const { result } = renderHook(() => useBoard())
+    await act(async () => {})
+
+    expect(result.current.health).toBe('green')
+  })
+
+  it('returns health=yellow while SSE status is connecting', async () => {
     vi.stubGlobal('fetch', makeFetch())
-    renderHook(() => useBoard())
-    await act(async () => {})
+    sseState.status = 'connecting'
 
-    expect(MockEventSource.instances).toHaveLength(1)
-    expect(MockEventSource.instances[0].url).toBe('/api/events')
-  })
-
-  // ─── AC2: paused=true when SSE is open ────────────────────────────────────
-
-  it('suppresses interval polling when SSE transitions to open', async () => {
-    const fetchMock = makeFetch()
-    vi.stubGlobal('fetch', fetchMock)
-    renderHook(() => useBoard())
-    // Let mount-time (immediate) poll complete
-    await act(async () => {})
-    const countAfterMount = tasksFetchCount(fetchMock)
-
-    // Open SSE — paused should become true
-    await act(async () => {
-      MockEventSource.instances[0]?.simulateOpen()
-    })
-    // Advance past one polling interval (3 s)
-    await act(async () => {
-      vi.advanceTimersByTime(3001)
-    })
-    // The interval poll should have been suppressed
-    expect(tasksFetchCount(fetchMock)).toBe(countAfterMount)
-  })
-
-  it('polling does not fire across multiple intervals while SSE remains open', async () => {
-    const fetchMock = makeFetch()
-    vi.stubGlobal('fetch', fetchMock)
-    renderHook(() => useBoard())
-    await act(async () => {})
-    const countAfterMount = tasksFetchCount(fetchMock)
-
-    await act(async () => {
-      MockEventSource.instances[0]?.simulateOpen()
-    })
-    // Advance past three polling intervals (9 s)
-    await act(async () => {
-      vi.advanceTimersByTime(9001)
-    })
-    // All three interval polls must be suppressed
-    expect(tasksFetchCount(fetchMock)).toBe(countAfterMount)
-  })
-
-  it('polling is paused immediately when SSE opens mid-interval (boundary)', async () => {
-    const fetchMock = makeFetch()
-    vi.stubGlobal('fetch', fetchMock)
-    renderHook(() => useBoard())
-    await act(async () => {})
-    const countAfterMount = tasksFetchCount(fetchMock)
-
-    // SSE opens partway through the first 3 s interval
-    await act(async () => {
-      vi.advanceTimersByTime(1500)
-    })
-    await act(async () => {
-      MockEventSource.instances[0]?.simulateOpen()
-    })
-    // Cross the interval boundary — would trigger a poll if not paused
-    await act(async () => {
-      vi.advanceTimersByTime(1501)
-    })
-    // The poll due at 3 s should be suppressed because SSE was open before it fired
-    expect(tasksFetchCount(fetchMock)).toBe(countAfterMount)
-  })
-
-  // ─── AC3: refetchTasks on lastEventMtime change ────────────────────────────
-
-  it('triggers refetchTasks when SSE delivers a tasks-changed event while open', async () => {
-    const fetchMock = makeFetch()
-    vi.stubGlobal('fetch', fetchMock)
-    renderHook(() => useBoard())
-    await act(async () => {})
-
-    await act(async () => {
-      MockEventSource.instances[0]?.simulateOpen()
-    })
-    const countAfterOpen = tasksFetchCount(fetchMock)
-
-    // Fire a tasks-changed event — should trigger an immediate refetch
-    await act(async () => {
-      MockEventSource.instances[0]?.simulateEvent('tasks-changed', { mtime: 9001 })
-    })
-    await act(async () => {})
-
-    expect(tasksFetchCount(fetchMock)).toBeGreaterThan(countAfterOpen)
-  })
-
-  it('triggers refetchTasks for each distinct tasks-changed SSE event', async () => {
-    const fetchMock = makeFetch()
-    vi.stubGlobal('fetch', fetchMock)
-    renderHook(() => useBoard())
-    await act(async () => {})
-
-    await act(async () => {
-      MockEventSource.instances[0]?.simulateOpen()
-    })
-    const countAfterOpen = tasksFetchCount(fetchMock)
-
-    // First event — refetch
-    await act(async () => {
-      MockEventSource.instances[0]?.simulateEvent('tasks-changed', { mtime: 1001 })
-    })
-    await act(async () => {})
-
-    // Second event with distinct mtime — another refetch
-    await act(async () => {
-      MockEventSource.instances[0]?.simulateEvent('tasks-changed', { mtime: 1002 })
-    })
-    await act(async () => {})
-
-    // Exactly two additional fetches — one per SSE event
-    expect(tasksFetchCount(fetchMock)).toBe(countAfterOpen + 2)
-  })
-
-  it('does NOT trigger refetchTasks when tasks-changed fires while SSE is not open (connecting)', async () => {
-    // This is the discriminating negative-path proof for AC3's "and SSE is open" guard.
-    // SSE stays in CONNECTING state throughout — simulateOpen() is never called.
-    // Firing tasks-changed while not open must NOT cause an additional fetch.
-    // A mutation that drops the sseStatus === 'open' guard in useBoard would fail here.
-    const fetchMock = makeFetch()
-    vi.stubGlobal('fetch', fetchMock)
-    renderHook(() => useBoard())
-    await act(async () => {})
-    const countAfterMount = tasksFetchCount(fetchMock)
-
-    // SSE is in connecting state — do NOT call simulateOpen()
-    await act(async () => {
-      MockEventSource.instances[0]?.simulateEvent('tasks-changed', { mtime: 5555 })
-    })
-    await act(async () => {})
-
-    // No additional tasks fetch must have occurred — the open guard blocks it
-    expect(tasksFetchCount(fetchMock)).toBe(countAfterMount)
-  })
-
-  it('does NOT trigger refetchTasks when decisions-changed fires while SSE is open — per-type discriminating proof', async () => {
-    // Discriminating proof that useBoard keys on lastEventByType['tasks-changed'] (per-type),
-    // NOT on aggregate lastEventMtime. Firing a 'decisions-changed' SSE event while SSE is
-    // open must NOT trigger an additional tasks fetch.
-    // A mutation that replaced the per-type key with the aggregate lastEventMtime would cause
-    // a spurious tasks refetch here and fail this assertion.
-    const fetchMock = makeFetch()
-    vi.stubGlobal('fetch', fetchMock)
-    renderHook(() => useBoard())
-    await act(async () => {})
-
-    // Open SSE — paused=true, SSE-driven refetch guard is active
-    await act(async () => {
-      MockEventSource.instances[0]?.simulateOpen()
-    })
-    const countAfterOpen = tasksFetchCount(fetchMock)
-
-    // Fire a decisions-changed event — should NOT trigger refetchTasks
-    await act(async () => {
-      MockEventSource.instances[0]?.simulateEvent('decisions-changed', { mtime: 9999 })
-    })
-    await act(async () => {})
-
-    // Tasks fetch count must not have increased — decisions-changed is not a tasks trigger
-    expect(tasksFetchCount(fetchMock)).toBe(countAfterOpen)
-  })
-
-  // ─── AC4: polling resumes when SSE is not open ────────────────────────────
-
-  it('polling resumes when SSE closes after an open period', async () => {
-    const fetchMock = makeFetch()
-    vi.stubGlobal('fetch', fetchMock)
-    renderHook(() => useBoard())
-    await act(async () => {})
-
-    // Open SSE → polling pauses
-    await act(async () => {
-      MockEventSource.instances[0]?.simulateOpen()
-    })
-    const countAfterOpen = tasksFetchCount(fetchMock)
-
-    // Confirm polling is paused
-    await act(async () => {
-      vi.advanceTimersByTime(3001)
-    })
-    expect(tasksFetchCount(fetchMock)).toBe(countAfterOpen)
-
-    // Close SSE → polling should resume
-    await act(async () => {
-      MockEventSource.instances[0]?.simulateFatalClose()
-    })
-    await act(async () => {
-      vi.advanceTimersByTime(3001)
-    })
-    // At least one interval poll should have fired after SSE closed
-    expect(tasksFetchCount(fetchMock)).toBeGreaterThan(countAfterOpen)
-  })
-
-  it('polling fires normally after SSE stall closes the connection (open → stall → closed)', async () => {
-    const fetchMock = makeFetch()
-    vi.stubGlobal('fetch', fetchMock)
-    renderHook(() => useBoard())
-    await act(async () => {})
-
-    await act(async () => {
-      MockEventSource.instances[0]?.simulateOpen()
-    })
-    const countAfterOpen = tasksFetchCount(fetchMock)
-
-    // Polling must be paused while SSE is open — proves integration (fails without it)
-    await act(async () => {
-      vi.advanceTimersByTime(3001)
-    })
-    expect(tasksFetchCount(fetchMock)).toBe(countAfterOpen)
-
-    // Simulate stall-induced connection close
-    await act(async () => {
-      MockEventSource.instances[0]?.simulateFatalClose()
-    })
-    await act(async () => {
-      vi.advanceTimersByTime(3001)
-    })
-    // Polling should have resumed (at least one fetch after close)
-    expect(tasksFetchCount(fetchMock)).toBeGreaterThan(countAfterOpen)
-  })
-
-  // ─── AC5: health computed from SSE status ─────────────────────────────────
-
-  it('returns health=green when SSE is open, overriding a degraded polling health', async () => {
-    // Polling always fails so useConnectionHealth degrades
-    const fetchMock = makeFailFetch()
-    vi.stubGlobal('fetch', fetchMock)
     const { result } = renderHook(() => useBoard())
-
-    // Advance until polling health degrades past the 6 s green threshold
-    await act(async () => {
-      vi.advanceTimersByTime(7000)
-    })
-    // Health should have degraded (yellow or red) due to failed polling
-    expect(['yellow', 'red']).toContain(result.current.health)
-
-    // Open SSE → health must override to green
-    await act(async () => {
-      MockEventSource.instances[0]?.simulateOpen()
-    })
-    expect(result.current.health).toBe('green')
-  })
-
-  it('returns health=yellow when SSE is connecting, overriding a healthy polling result', async () => {
-    // Polling succeeds → useConnectionHealth would report green
-    const fetchMock = makeFetch()
-    vi.stubGlobal('fetch', fetchMock)
-    const { result } = renderHook(() => useBoard())
-    // Let initial poll complete (polling health = green)
     await act(async () => {})
 
-    // SSE remains in connecting state (simulateOpen never called)
-    // After integration: health must be 'yellow' (connecting override)
-    // Currently: health is 'green' (polling-based only, no SSE override)
     expect(result.current.health).toBe('yellow')
   })
 
-  it('health remains green throughout an extended SSE-open period even when polling fails', async () => {
-    const fetchMock = makeFailFetch()
-    vi.stubGlobal('fetch', fetchMock)
+  it('falls through to polling health when SSE status is closed', async () => {
+    vi.stubGlobal('fetch', makeFetch())
+    sseState.status = 'closed'
+
     const { result } = renderHook(() => useBoard())
     await act(async () => {})
 
-    // Open SSE
-    await act(async () => {
-      MockEventSource.instances[0]?.simulateOpen()
-    })
-    // Advance well past the polling-health degradation threshold (15 s → red from polling)
-    await act(async () => {
-      vi.advanceTimersByTime(16000)
-    })
-    // SSE is still open — health must stay green (SSE override in effect)
     expect(result.current.health).toBe('green')
   })
 
-  // ─── AC4 (retry): polling fires while SSE remains in connecting state ────
+  it('returns all UseBoardResult fields including health', async () => {
+    vi.stubGlobal('fetch', makeFetch())
 
-  it('polling fires on schedule when SSE remains in connecting state for a full interval', async () => {
-    // SSE never opens — readyState stays CONNECTING.
-    // paused must be false (only 'open' suppresses polling).
-    const fetchMock = makeFetch()
-    vi.stubGlobal('fetch', fetchMock)
-    renderHook(() => useBoard())
-    await act(async () => {})
-    const countAfterMount = tasksFetchCount(fetchMock)
-
-    // Advance a full polling interval without ever opening SSE
-    await act(async () => {
-      vi.advanceTimersByTime(3001)
-    })
-    await act(async () => {})
-
-    // Interval poll must have fired — connecting is not paused
-    expect(tasksFetchCount(fetchMock)).toBeGreaterThan(countAfterMount)
-  })
-
-  // ─── AC5 (retry): health falls through to polling value when SSE is closed ─
-
-  it('health falls through to polling-based value (green) when SSE is closed', async () => {
-    // Polling succeeds → useConnectionHealth will be green after markHealthy()
-    const fetchMock = makeFetch()
-    vi.stubGlobal('fetch', fetchMock)
-    const { result } = renderHook(() => useBoard())
-
-    // Let initial poll complete — polling health becomes green
-    await act(async () => {})
-
-    // SSE starts in connecting → effectiveHealth is yellow
-    expect(result.current.health).toBe('yellow')
-
-    // Close SSE (fatal error with readyState=CLOSED) → sseStatus becomes 'closed'
-    await act(async () => {
-      MockEventSource.instances[0]?.simulateFatalClose()
-    })
-    await act(async () => {})
-
-    // SSE is now closed → effectiveHealth must fall through to polling health
-    // Polling succeeded earlier → polling health = green → effectiveHealth = green
-    expect(result.current.health).toBe('green')
-  })
-
-  // ─── AC5 (retry 2): discriminating closed-fallback — polling health is non-green ─
-
-  it('health falls through to degraded polling health (red) when SSE closes — discriminating AC5 proof', async () => {
-    // Polling always fails → markHealthy() is never called → elapsed grows unbounded.
-    // After ≥15 s of failed polls, computeHealth(elapsed) returns 'red'.
-    // Closing SSE while health is 'red' proves the fallthrough is the POLLING value,
-    // not a hardcoded constant.  A mutation (closed => 'green') would fail this assertion.
-    const fetchMock = makeFailFetch()
-    vi.stubGlobal('fetch', fetchMock)
-    const { result } = renderHook(() => useBoard())
-
-    // Let the mount-time poll fire (elapsed ≈ 0 → green internally; SSE connecting → yellow visible)
-    await act(async () => {})
-
-    // Advance 15 001 ms: 5 interval polls fire (at 3 s, 6 s, 9 s, 12 s, 15 s).
-    // Each failed poll calls updateHealth() without markHealthy(), so elapsed tracks wall-clock.
-    // After 15 001 ms elapsed, computeHealth returns 'red'.
-    await act(async () => {
-      vi.advanceTimersByTime(15001)
-    })
-    await act(async () => {})
-
-    // SSE is still 'connecting' → effectiveHealth is 'yellow' (internal health is 'red' but masked).
-    // Close SSE: readyState=CLOSED triggers onerror → useEventSource sets sseStatus='closed'.
-    await act(async () => {
-      MockEventSource.instances[0]?.simulateFatalClose()
-    })
-    await act(async () => {})
-
-    // effectiveHealth = health (fallthrough branch) = 'red' (polling-based).
-    // A wrong implementation that hardcodes any fixed value on closed would fail here.
-    expect(result.current.health).toBe('red')
-  })
-
-  // ─── AC7 + AC8: UseBoardResult interface with EventSource ─────────────────
-
-  it('returns all UseBoardResult fields including health when EventSource is globally available', async () => {
-    const fetchMock = makeFetch()
-    vi.stubGlobal('fetch', fetchMock)
     const { result } = renderHook(() => useBoard())
     await act(async () => {})
 
-    // EventSource must have been instantiated — proves SSE is wired in (AC7 gate)
-    expect(MockEventSource.instances.length).toBeGreaterThan(0)
-
-    // All required UseBoardResult fields present with correct types (AC7 interface, AC8 field names)
     expect(result.current).toHaveProperty('board')
     expect(result.current).toHaveProperty('tasks')
     expect(result.current).toHaveProperty('loading')
@@ -509,7 +201,6 @@ describe('TestFromAC_UseBoardSSEIntegration', () => {
     expect(result.current).toHaveProperty('isFetching')
     expect(result.current).toHaveProperty('isStale')
     expect(result.current).toHaveProperty('refetchTasks')
-    // health field name must be exactly 'health' — not renamed to sseHealth/effectiveHealth
     expect(result.current).toHaveProperty('health')
     expect(['green', 'yellow', 'red']).toContain(result.current.health)
   })

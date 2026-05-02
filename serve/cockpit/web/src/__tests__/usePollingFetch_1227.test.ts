@@ -11,6 +11,10 @@ import { renderHook, act } from '@testing-library/react'
 import { usePollingFetch } from '../hooks/usePollingFetch'
 import { useBoard } from '../hooks/useBoard'
 
+vi.mock('../hooks/EventSourceProvider', () => ({
+  useSSEEvent: vi.fn(() => ({ mtime: null, status: 'closed' as const })),
+}))
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function makeOkFetch(body: unknown = {}) {

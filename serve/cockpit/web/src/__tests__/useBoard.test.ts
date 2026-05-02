@@ -10,6 +10,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { useBoard } from '../hooks/useBoard'
 
+vi.mock('../hooks/EventSourceProvider', () => ({
+  useSSEEvent: vi.fn(() => ({ mtime: null, status: 'closed' as const })),
+}))
+
 // ─── Expected post-implementation hook interface ──────────────────────────────
 
 interface UseBoardWithPolling {

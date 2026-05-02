@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useConnectionHealth, type HealthState } from './useConnectionHealth'
 import { usePollingFetch } from './usePollingFetch'
-import { useEventSource } from './useEventSource'
+import { useSSEEvent } from './EventSourceProvider'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -54,12 +54,9 @@ export function useBoard(): UseBoardResult {
   const [error, setError] = useState<string | null>(null)
   const [isStale, setIsStale] = useState(false)
   const mtimeRef = useRef<number | null>(null)
-  const { status: sseStatus, lastEventByType } = useEventSource('/api/events', {
-    eventTypes: ['tasks-changed', 'decisions-changed'],
-  })
+  const { status: sseStatus, mtime: lastTasksMtime } = useSSEEvent('tasks-changed')
+  const { mtime: lastDecisionsMtime } = useSSEEvent('decisions-changed')
   const { health, markHealthy, updateHealth } = useConnectionHealth()
-  const lastTasksMtime = lastEventByType['tasks-changed'] ?? null
-  const lastDecisionsMtime = lastEventByType['decisions-changed'] ?? null
 
   const { isFetching, refetch: refetchTasks } = usePollingFetch<TasksResponse>('/api/tasks', {
     intervalMs: 3000,
