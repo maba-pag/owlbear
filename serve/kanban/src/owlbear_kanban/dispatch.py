@@ -7,7 +7,7 @@ Rank maps use *execution priority* order, which is intentionally the inverse of
 the config.yml display order:
   - PRIORITY_RANK: critical=0 (highest) → someday=4 (lowest)
     Config display order: someday first, critical last (opposite).
-  - STATUS_RANK: done=0 (highest) → research=6 (lowest)
+    - STATUS_RANK: released=0 (highest) → research=7 (lowest)
     Config display order: research first, done last (opposite).
 """
 
@@ -34,13 +34,14 @@ PRIORITY_RANK: dict[str, int] = {
 }
 
 STATUS_RANK: dict[str, int] = {
-    "done": 0,
-    "docs": 1,
-    "review": 2,
-    "in-progress": 3,
-    "todo": 4,
-    "backlog": 5,
-    "research": 6,
+    "released": 0,
+    "done": 1,
+    "docs": 2,
+    "review": 3,
+    "in-progress": 4,
+    "todo": 5,
+    "backlog": 6,
+    "research": 7,
 }
 
 # ---------------------------------------------------------------------------

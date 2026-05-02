@@ -539,10 +539,12 @@ class KanbanEngine:
         — are cleared so the next ``list_tasks()`` call performs a full cold
         scan and rebuilds the id→filename index.
         """
-        self._config = load_config(self._kanban_dir)
-        _validate_dispatch_rank_coverage(self._config)
-        self._tasks_dir = self._kanban_dir / self._config.paths.tasks_dir
-        self._archive_dir = self._kanban_dir / self._config.paths.archive_dir
+        refreshed_config = load_config(self._kanban_dir)
+        _validate_dispatch_rank_coverage(refreshed_config)
+
+        self._config = refreshed_config
+        self._tasks_dir = self._kanban_dir / refreshed_config.paths.tasks_dir
+        self._archive_dir = self._kanban_dir / refreshed_config.paths.archive_dir
         self._task_cache = {}
         self._archive_cache = {}
         self._id_to_filename = {}
