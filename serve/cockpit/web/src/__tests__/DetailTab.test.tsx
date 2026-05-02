@@ -9,10 +9,22 @@
  * react-markdown is mocked here (not yet in package.json). The builder installs
  * the real dep during GREEN phase; the mock intercepts the import automatically.
  */
-import { describe, it, expect, vi, afterEach } from 'vitest'
+import { beforeAll, describe, it, expect, vi, afterEach } from 'vitest'
 import { render, fireEvent, waitFor } from '@testing-library/react'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
 import DetailTab, { type TaskDetail } from '../components/DetailTab'
+
+// Newer jsdom versions expose a partial attachInternals that lacks setFormValue,
+// causing PDS Stencil form components (p-input-text, p-textarea, p-select) to
+// throw on mount. Unconditionally override for consistent PDS rendering.
+beforeAll(() => {
+  ;(HTMLElement.prototype as unknown as Record<string, unknown>)['attachInternals'] = vi.fn(() => ({
+    setFormValue: vi.fn(),
+    setValidity: vi.fn(),
+    checkValidity: vi.fn(() => true),
+    reportValidity: vi.fn(() => true),
+  }))
+})
 
 // ─── Mock react-markdown ──────────────────────────────────────────────────────
 // Factory-based mock works even before the real package is installed.
@@ -108,13 +120,14 @@ describe('TestFromAC_DetailTab', () => {
   describe('editable fields', () => {
     it('renders title as an input field', () => {
       const { container } = renderDetail()
-      expect(container.querySelector('input[data-field="title"]')).not.toBeNull()
+      expect(container.querySelector('p-input-text[data-field="title"]')).not.toBeNull()
     })
 
     it('title input shows the current task title value', () => {
       const { container } = renderDetail()
-      const input = container.querySelector('input[data-field="title"]') as HTMLInputElement | null
-      expect(input?.value).toBe('Fix login bug')
+      const input = container.querySelector('p-input-text[data-field="title"]') as (HTMLElement & { value?: string }) | null
+      // PDS PInputText exposes value as a JS property via the Stencil getter
+      expect(input?.value ?? input?.getAttribute('value')).toBe('Fix login bug')
     })
 
     it('renders priority as a select/dropdown control', () => {
@@ -201,7 +214,7 @@ describe('TestFromAC_DetailTab', () => {
       const toggle = container.querySelector('[data-testid="body-edit-toggle"]') as HTMLElement | null
       expect(toggle).not.toBeNull()
       fireEvent.click(toggle!)
-      expect(container.querySelector('textarea[data-field="body"]')).not.toBeNull()
+      expect(container.querySelector('p-textarea[data-field="body"]')).not.toBeNull()
     })
   })
 
@@ -496,14 +509,15 @@ describe('TestBuilderDiscovered', () => {
       vi.stubGlobal('fetch', fetchMock)
       const { container } = renderDetail()
 
-      // Toggle into edit mode so the body textarea is rendered
+      // Toggle into edit mode so the body p-textarea is rendered
       const toggle = container.querySelector('[data-testid="body-edit-toggle"]') as HTMLElement | null
       expect(toggle).not.toBeNull()
       fireEvent.click(toggle!)
 
-      const textarea = container.querySelector('textarea[data-field="body"]') as HTMLTextAreaElement | null
-      expect(textarea).not.toBeNull()
-      fireEvent.change(textarea!, { target: { value: 'edited body content' } })
+      // Drive p-textarea with CustomEvent matching readControlValue(event.detail?.value)
+      const pTextarea = container.querySelector('p-textarea[data-field="body"]') as HTMLElement | null
+      expect(pTextarea).not.toBeNull()
+      fireEvent(pTextarea!, new CustomEvent('change', { detail: { value: 'edited body content' }, bubbles: true }))
 
       const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
       expect(saveBtn).not.toBeNull()
