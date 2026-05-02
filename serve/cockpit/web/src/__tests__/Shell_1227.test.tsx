@@ -84,6 +84,7 @@ function stubUseBoard(health: UseBoardHealth = 'green'): void {
     isStale: false,
     health,
     refetchTasks: vi.fn(),
+    lastDecisionsMtime: null,
   } as ReturnType<typeof useBoard>)
 }
 
@@ -101,6 +102,7 @@ function stubPendingDRs(): void {
     items: [],
     isLoading: false,
     error: null,
+    refetch: vi.fn(),
   } as ReturnType<typeof usePendingDRs>)
 }
 
