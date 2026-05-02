@@ -1,10 +1,10 @@
 ---
 id: 1260
 title: Create useEventSource hook
-status: in-progress
+status: archived
 priority: nice-to-have
 created: 2026-05-01T09:34:24.718353+00:00
-updated: 2026-05-01T22:14:29.898589+00:00
+updated: 2026-05-02T01:54:00.567330+00:00
 tags:
 - cockpit
 - frontend
@@ -425,3 +425,124 @@ Architecture Review (loop-breaker): APPROVED. Implementation correct (reviewer c
 | AC6 | Direct state-write suppression after unmount | Covered (passes — isMountedRef guard works) |
 | AC7 | Stall timer cleared when disabled | Covered (passes — clearStallTimer in disabled path) |
 | AC7 | Retry timer cleared when disabled | Covered (passes — clearRetryTimer in disabled path) |
+[[2026-05-01]]
+## Builder Notes
+- Implementation: no source changes required in this cycle; existing `serve/cockpit/web/src/hooks/useEventSource.ts` already satisfies AC behavior.
+- Tests: 34 passed / 0 failed on `serve/cockpit/web/src/__tests__/useEventSource_1260.test.ts` (quality-runner scoped run).
+- Coverage: `useEventSource` 97.89% statements, 90.47% branch, 100% functions, 100% lines.
+- TypeScript diagnostics: no errors in both `serve/cockpit/web/src/hooks/useEventSource.ts` and `serve/cockpit/web/src/__tests__/useEventSource_1260.test.ts`.
+- Lint note: quality-runner does not execute TypeScript ESLint; frontend lint must be handled by frontend tooling, but diagnostics are clean.
+- Approach: validated current implementation against task-scoped proof suite and moved forward with no additional code churn.
+
+- Post-task reflection:
+  - Loop-breaker test additions now provide discriminating proof for stale-callback and timer-clear paths.
+  - Branch coverage remains above gate even with defensive guard branches intentionally untouched.
+  - A no-edit builder cycle is appropriate when RED/GREEN evidence is already complete and clean.
+
+[[2026-05-02]]
+## Review Evidence
+### Scope
+- Third review cycle. Two prior Review Evidence sections exist in .owlbear/kanban/tasks/1260-create-useeventsource-hook.md (lines 160 and 290).
+- Commit presence confirmed in git logs for a03c3741 (builder fix) and 57bd7d77 (test-writer proof-strengthening).
+- Reviewed live scope: serve/cockpit/web/src/hooks/useEventSource.ts and serve/cockpit/web/src/__tests__/useEventSource_1260.test.ts.
+- Downstream usages of useEventSource remain task-local.
+
+### Test Results
+- quality-runner: 34 passed, 0 failed on serve/cockpit/web/src/__tests__/useEventSource_1260.test.ts.
+
+### Lint
+- quality-runner ruff is not applicable to TypeScript; no Python lint scope here.
+- VS Code diagnostics: no errors in the reviewed hook or task test file.
+
+### Coverage
+- Current quality-runner run could not emit TypeScript coverage.
+- Prior reviewer evidence on the same unchanged hook recorded 97.89% statements, 90.47% branches, 100% functions, 100% lines for serve/cockpit/web/src/hooks/useEventSource.ts.
+- Small confidence deduction applied for not independently re-running TS coverage in this cycle.
+
+### Pass 1 - CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1 | Named exports exist in serve/cockpit/web/src/hooks/useEventSource.ts lines 3 and 15. Tests prove function export, exact UseEventSourceResult shape, and optional second arg at serve/cockpit/web/src/__tests__/useEventSource_1260.test.ts lines 92, 114, and 579. | PASS |
+| AC2 | Initial connecting state, EventSource(url), open transition, and fatal closed transition are exercised at serve/cockpit/web/src/__tests__/useEventSource_1260.test.ts lines 124, 129, 135, and 146 against serve/cockpit/web/src/hooks/useEventSource.ts lines 15 and 63-88. | PASS |
+| AC3 | tasks-changed listener registration and numeric mtime update are exercised at serve/cockpit/web/src/__tests__/useEventSource_1260.test.ts lines 167 and 174 against serve/cockpit/web/src/hooks/useEventSource.ts lines 112-123. | PASS |
+| AC4 | Stall timeout, boundary, single-stall-timer reset, and onopen-clear behavior are exercised at serve/cockpit/web/src/__tests__/useEventSource_1260.test.ts lines 190, 222, and 246 against serve/cockpit/web/src/hooks/useEventSource.ts lines 78-105. | PASS |
+| AC5 | Retry creation and reopen behavior are exercised at serve/cockpit/web/src/__tests__/useEventSource_1260.test.ts lines 271, 287, and 320; stale-onerror, stale-onopen, and one-retry-timer guarantees are exercised at lines 343, 415, and 444; implementation clears retry state in serve/cockpit/web/src/hooks/useEventSource.ts line 73 and schedules retries at lines 87 and 105. | PASS |
+| AC6 | Unmount close, timer clearing, and direct post-unmount state suppression are exercised at serve/cockpit/web/src/__tests__/useEventSource_1260.test.ts lines 475, 508, and 547 against serve/cockpit/web/src/hooks/useEventSource.ts lines 69, 96, and 137-150. | PASS |
+| AC7 | Disabled initial state, true->false shutdown, stale-event inertness after disable, and pending-timer clearing are exercised at serve/cockpit/web/src/__tests__/useEventSource_1260.test.ts lines 577, 587, 624, and 689 against serve/cockpit/web/src/hooks/useEventSource.ts lines 129-150. | PASS |
+
+#### Security Review
+- No issues. The hook uses native browser EventSource, parses in-memory JSON defensively, and adds no filesystem, shell, eval, or dependency surface.
+
+#### Test Integrity
+- No weakening found in the current TestFromAC suite.
+- Small confidence deduction: this session did not have a direct commit diff of the original test-writer artifact, so immutability is inferred from the current strict assertions, task history, and unchanged failure targets.
+
+#### Test Quality
+- STRONG.
+- The suite now contains discriminating proofs for the previously missing stale-callback, direct post-unmount suppression, and active-timer clearing paths.
+- Code-reader flagged AC5 clearRetryTimer-on-open as lax and noted malformed-payload and url-change gaps. I did not treat those as blocking: the clearRetryTimer call is present in source at serve/cockpit/web/src/hooks/useEventSource.ts line 73 and the observable AC5 contract is already covered by retry-open, stale-onopen, and single-retry tests; malformed payload and url-change behavior are not AC-traceable in this task.
+
+#### Data Safety
+- No issues. Source-identity and mounted guards are present at serve/cockpit/web/src/hooks/useEventSource.ts lines 69, 78, 96, and 113 and are exercised by stale-source and post-unmount tests at serve/cockpit/web/src/__tests__/useEventSource_1260.test.ts lines 343, 415, 547, and 624.
+
+#### Implementation-Aware Test Gap Analysis
+- No AC-blocking gaps remain.
+- Informational only: malformed JSON or non-number payload handling and url-change reconnection are untested defensive paths outside the declared AC.
+
+#### Necessity Check
+- No issue. A local EventSource hook is necessary for this frontend behavior.
+
+#### Builder Process Quality
+- CLEAN. Current cycle is a test-only retry with builder skip; no loop concern remains after loop-breaker re-entry.
+
+### Deductions
+- -0.03: quality-runner cannot supply TypeScript lint or coverage; used diagnostics plus scoped Vitest and prior unchanged-hook coverage evidence.
+- -0.02: TestFromAC immutability not proven from a direct diff in this session.
+
+### Confidence
+- 0.93
+
+### Verdict
+- PASS
+
+### Action
+- Advancing to docs.
+
+### Post-task Reflection
+- Frontend reviews need an explicit note when quality-runner falls back to Vitest plus diagnostics because ruff cannot parse TypeScript.
+- For hook state machines, stale-source regression tests are the proof that matters; they closed the actual prior false-green.
+- Not every subagent-flagged gap is task-blocking; AC traceability is the deciding filter for gate failures.
+[[2026-05-02]]
+## Docs Gate
+
+### Checklist
+
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | Changed files are `serve/cockpit/web/src/hooks/useEventSource.ts` and task test file — frontend TypeScript only. No IN-scope prose docs (README, setup guides, share/README) reference the `hooks/` directory or `useEventSource`. |
+| 2 | Module docstrings | No | N/A | No Python modules created or modified. |
+| 3 | External attribution | Yes | Verified | Sources already recorded in `.owlbear/sources/overview.md` under `## useEventSource Hook (Task #1260)` (lines 24-29): ReactUse and NepeinAV/react-sse-hooks. No new entries needed. |
+| 4 | Research doc | Yes | Verified | `.owlbear/research/1260-useeventsource-hook.md` exists and is linked from the task body. Follow-up tasks noted as none (this was the implementation task). |
+| 5 | Diagram maintenance (describes match) | Yes | Updated | `share/diagrams/cockpit.excalidraw` has `describes: serve/cockpit/src/**, serve/cockpit/web/src/**` — matches changed files. Footer updated from `8142e272` → `a5073046` (current HEAD, 2026-05-02). Committed as `d5369ffa`. |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation request in task body. |
+| 7 | Deletion detection | No | N/A | No files deleted; no orphaned IN-scope docs detected. |
+
+### Scope Classification
+
+- `serve/cockpit/web/src/hooks/useEventSource.ts` — TypeScript source, not IN-scope for direct doc edits
+- `serve/cockpit/web/src/__tests__/useEventSource_1260.test.ts` — test file, OUT-scope
+
+### Files Updated
+
+- `share/diagrams/cockpit.excalidraw` — footer hash updated to `a5073046` (commit `d5369ffa`)
+
+### Child Tasks Created
+
+None.
+
+### Scratch Files Cleaned
+
+No `.owlbear/scratch/1260-*` files found.
+[[2026-05-02]]
+## Audit\n### AC Verification\n| AC Line | Evidence | Status |\n|---------|----------|--------|\n| AC1 | Named exports at hooks/useEventSource.ts:3,15; exact type proof at test:579 | PASS |\n| AC2 | State transitions exercised at test:124-146 against hook:63-88 | PASS |\n| AC3 | tasks-changed listener + mtime update at test:167-174 against hook:112-123 | PASS |\n| AC4 | Stall timeout + single-timer + boundary at test:190-246 against hook:78-105 | PASS |\n| AC5 | Retry + stale-onerror/onopen + one-timer at test:271-444 against hook:73,87,105 | PASS |\n| AC6 | Unmount close + timer clear + direct state suppression at test:475-547 against hook:137-150 | PASS |\n| AC7 | Disable reset + stale inertness + timer clear at test:577-689 against hook:129-150 | PASS |\n\n### Test Results\n- Task suite (Vitest): 34 passed, 0 failed\n- Full Python suite: 115 failures, all pre-existing (unrelated packages: engine, mcp-kanban, models, decisions)\n- Full TS suite: 2 failures in FilterPanel_1250 and ActivityTab_1156 (unrelated)\n- No cross-task regressions from #1260\n\n### Lint\n- 4 ruff violations in unrelated packages (knowledge, mcp-knowledge, mcp-memory, orchestrator)\n- Zero lint issues in task scope (TS diagnostics clean)\n\n### Commit Integrity\n- c9e001a6: feat: implement useEventSource hook (#1260, builder)\n- a03c3741: fix: harden stale-event guards in useEventSource (#1260, builder)\n- 20e1d5e8: test: add stale-source race tests (#1260, retry test-writer)\n- 57bd7d77: test: add discriminating proofs (#1260, test-writer)\n- d5369ffa: docs: update cockpit diagram footer (#1260, doc-writer)\n\n### Architect Quality: 4/5\nAC was precise and verifiable (7 lines with td annotations). Minor gap: stale-source identity guards were below AC-level specification, requiring 2 review cycles to get proof quality right. Not AC vagueness per se, but the \"only one retry timer\" clause could have been more explicit about superseded-source inertness.\n\n### Deduction Breakdown\n- Start: 1.00\n- AC lines without evidence: 0 (all 7 PASS with file:line citations)\n- Lint violations in scope: 0\n- AC quality 4/5: no deduction\n- Reviewer evidence: present and thorough (3 cycles, final PASS at 0.93)\n- Full-suite failures in task scope: 0\n- Quality-runner TS limitation (cannot independently verify TS coverage): -0.02\n\n### Confidence: 0.98\n### Action: archive
