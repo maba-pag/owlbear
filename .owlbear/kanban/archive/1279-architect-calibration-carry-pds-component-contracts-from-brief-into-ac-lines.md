@@ -1,10 +1,10 @@
 ---
 id: 1279
 title: 'Architect calibration: carry PDS component contracts from brief into AC lines'
-status: in-progress
+status: archived
 priority: nice-to-have
 created: 2026-05-02T14:02:13.981726+00:00
-updated: 2026-05-02T15:58:47.245238+00:00
+updated: 2026-05-02T17:43:32.882923+00:00
 tags:
 - phase-2
 - quality
@@ -150,3 +150,130 @@ Refined AC from vague "checklist updated" to exact file targets: `w-arch-review/
 - Doc-only and quality-tagged tasks still need direct artifact inspection; pass-through routing is not proof of completion.
 - For content AC, builder notes should name the edited artifact explicitly; "no code changes needed" masked a straightforward miss.
 - On td:0 tasks, target-file no-match searches are strong review evidence when the AC requires exact wording or a new named entry.
+[[2026-05-02]]
+## Builder Notes
+- Implementation: updated `share/skills/w-arch-review/SKILL.md` to satisfy all refined AC lines.
+- Changes applied:
+  - Added Verification Checklist checkbox requiring exact selectors and assertion strategies for frontend tasks referencing design-system components.
+  - Added new Known Pitfalls entry `#1250 PDS contract carry-forward` defining the gate: when a Brief or research doc specifies design-system components (PDS or equivalent), AC lines must carry exact component contracts into testable criteria.
+  - Included all 4 required "instead of X, write Y" examples:
+    1) generic element wording -> exact PDS selector (for example `p-select`)
+    2) "populated from prop" -> exact-ordered-match assertion when order matters
+    3) "does not render" -> explicit DOM absence vs visual/a11y hiding strategy
+    4) broad "preserving fields" -> per-control verification for each affected control
+- Tests: not applicable (`td:0` doc-calibration task)
+- Coverage: not applicable (`td:0` doc-calibration task)
+- ruff: not applicable (no Python changes)
+- Lint: markdownlint-cli2 clean on target file (0 errors)
+- Evidence summary: reviewer-required artifact changes are now present in the specified checklist and known pitfalls sections of the target skill file.
+[[2026-05-02]]
+## Review Evidence
+### Test Results
+- Tests not applicable. All refined AC lines are tagged `(td:0)`, so no task-scoped test file or `TestFromAC_*` coverage was expected.
+- Independent quality-runner scoped run used no `test_paths` and reported `passed: 0`, `failed: []`, `skipped: 0`, which is the expected td:0 result.
+
+### Lint
+- quality-runner: `clean: true`, `violations: []`
+- Exit code: `markdownlint: 0`
+- Target: [share/skills/w-arch-review/SKILL.md](share/skills/w-arch-review/SKILL.md)
+
+### Coverage
+- Not applicable for this td:0 documentation task.
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+- Skipped. No `TestFromAC_*` classes apply because every AC line is `(td:0)`.
+
+#### Security Review
+- No security findings. Scope is a markdown skill artifact only; no runtime surface changed.
+
+#### Test Integrity
+- Skipped. No task-scoped test files and no `TestFromAC_*` content in scope.
+
+#### Test Quality
+- Skipped. No tests applicable.
+
+#### Data Safety
+- No findings. This task only changes review guidance text in a skill document.
+
+#### Implementation-Aware Test Gaps
+- No findings. The required artifact changes are present in the target file:
+  - [share/skills/w-arch-review/SKILL.md](share/skills/w-arch-review/SKILL.md#L220) adds the Verification Checklist checkbox requiring exact selectors and assertion strategies for frontend tasks referencing design-system components.
+  - [share/skills/w-arch-review/SKILL.md](share/skills/w-arch-review/SKILL.md#L240) adds the new `#1250 PDS contract carry-forward` Known Pitfalls entry and includes all 4 required calibration examples.
+
+#### Necessity Check
+- N/A. No dependency, integration, or external capability change.
+
+#### Builder Process Quality
+- CLEAN. There is one prior `## Review Evidence` rejection in the task body, followed by a materially different builder retry that edited the required artifact. No loop pattern.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| `share/skills/w-arch-review/SKILL.md` Known Pitfalls includes a new `#1250 PDS contract carry-forward` entry defining the gate | [share/skills/w-arch-review/SKILL.md](share/skills/w-arch-review/SKILL.md#L240) contains the new `#1250 PDS contract carry-forward` entry and states that when a Brief or research doc specifies design-system components, AC lines must carry exact component contracts into testable criteria | N/A (`td:0`) | PASS |
+| The Known Pitfalls entry includes all 4 concrete "instead of X, write Y" examples for the calibration targets | [share/skills/w-arch-review/SKILL.md](share/skills/w-arch-review/SKILL.md#L240) includes all 4 required examples: exact PDS selector (`p-select`), exact-ordered-match assertion, DOM absence vs visual/a11y hiding, and per-control verification | N/A (`td:0`) | PASS |
+| `share/skills/w-arch-review/SKILL.md` Verification Checklist includes the new checkbox about exact selectors and assertion strategies | [share/skills/w-arch-review/SKILL.md](share/skills/w-arch-review/SKILL.md#L220) contains the new checklist checkbox text verbatim | N/A (`td:0`) | PASS |
+
+### Deductions
+- None.
+
+### Verdict
+- PASS -> `docs`
+- Confidence: 0.98
+
+### Post-task Reflection
+- td:0 documentation tasks still require direct artifact inspection; pass-through routing does not reduce AC proof requirements.
+- quality-runner provides usable independent markdown lint evidence for doc-only review tasks, which keeps review evidence in the standard pipeline.
+- Prior review failure made the retry delta easy to verify because the AC named a single target artifact and exact required content.
+[[2026-05-02]]
+## Docs Gate
+
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | Changed file is `share/skills/w-arch-review/SKILL.md` (OUT scope). No IN-scope prose docs reference this skill by path. |
+| 2 | Module docstrings | No | N/A | No Python files changed. |
+| 3 | External attribution | No | N/A | No external patterns used; calibration examples derived from #1250 audit. |
+| 4 | Research doc | No | N/A | No research doc produced for this task. |
+| 5 | Diagram maintenance (describes match) | Yes | Updated | `share/diagrams/project-overview.excalidraw` has `describes: share/**` — matches `share/skills/w-arch-review/SKILL.md`. Footer updated to `Last verified: 2026-05-02 (326d8433)`. |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation requested in task body. |
+| 7 | Deletion detection | No | N/A | No files deleted; no orphaned IN-scope docs detected. |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| share/skills/w-arch-review/SKILL.md | OUT | No edit (agent-executable); diagram describes-match triggered Item 5 |
+| share/diagrams/project-overview.excalidraw | IN | Footer updated |
+
+### Files Updated
+- share/diagrams/project-overview.excalidraw (footer: `Last verified: 2026-05-02 (326d8433)`)
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None found for task #1279
+[[2026-05-02]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Known Pitfalls includes `#1250 PDS contract carry-forward` gate entry | `share/skills/w-arch-review/SKILL.md` ~L240: entry present, defines gate for design-system component contracts | PASS |
+| Entry includes all 4 "instead of X, write Y" examples | Same location: (1) generic→exact PDS selector, (2) populated→exact-ordered-match, (3) does not render→DOM absence vs a11y hiding, (4) preserving fields→per-control verification | PASS |
+| Verification Checklist includes new checkbox | `share/skills/w-arch-review/SKILL.md` ~L220: checkbox present verbatim | PASS |
+
+### Test Results
+- pytest: 3649 passed, 133 failed (all pre-existing, outside task scope), 4 skipped
+- vitest: 942 passed, 4 failed (pre-existing timing tests in usePollingFetch)
+- ruff: 3 violations (all pre-existing, outside task scope)
+- eslint: 4 issues (all pre-existing, outside task scope)
+
+### Architect Quality: 4/5
+Original AC was vague ("checklist updated") but refined to exact file paths and sections. Refinement was necessary — original would have scored 2/5. Refined version is precise with named targets and td:0 annotations.
+
+### Deduction Breakdown
+- Starting: 1.00
+- No deductions — all 3 AC lines verified with file evidence; no task-scope test or lint failures; reviewer evidence detailed (two rounds, first correctly caught implementation miss); AC quality 4/5 (> 3 threshold)
+
+### Confidence: 0.98
+### Action: archive
