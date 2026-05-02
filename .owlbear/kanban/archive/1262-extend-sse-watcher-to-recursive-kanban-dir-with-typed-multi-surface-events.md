@@ -2,10 +2,10 @@
 id: 1262
 title: Extend SSE watcher to recursive kanban_dir with typed multi-surface 
   events
-status: done
+status: archived
 priority: someday
 created: 2026-05-01T09:53:38.519349+00:00
-updated: 2026-05-02T07:43:55.667132+00:00
+updated: 2026-05-02T11:53:39.805646+00:00
 tags:
 - cockpit
 - backend
@@ -14,7 +14,7 @@ depends_on:
 - 1234
 blocked: false
 block_reason:
-claimed_at: 2026-05-02T07:43:55.667132+00:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -228,3 +228,36 @@ Skipped — this is a refinement pass for an already-approved and implemented ta
 
 ### Scratch Files Cleaned
 - None found (`1262-*` — no files)
+
+[[2026-05-02]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: Watch filter accepts tasks/*.md (depth=1), decisions/pending/*.md (depth=1), activity.jsonl; rejects .tmp- and all other | `_build_watch_filter` at events.py:35-50, `_is_direct_md` depth=1 check at :26-31; 9 filter tests in test_cockpit_events_1262.py:142-302 including nested rejection at :255, :273, :288 | PASS |
+| AC2: Path classification returns typed event names or None; only direct children qualify | `_classify_path` at events.py:57-68; classifier tests at test_cockpit_events_1262.py:315-601 including nested-None at :569 | PASS |
+| AC3: awatch uses engine.kanban_dir with recursive=True | Callsite at events.py:91-92; assertions at test_cockpit_events_1262.py:619, :636 | PASS |
+| AC4: One SSE event per distinct surface type per batch, max mtime, deleted paths suppressed | `latest_mtimes` dict accumulation at events.py:100-120; typed event tests at test_cockpit_events_1262.py:655-1079 including exact-count at :1040 | PASS |
+| AC5: Missing kanban_dir → immediate return, no crash | Guard at events.py:79-80; empty-stream tests at test_cockpit_events_1262.py:1092, :1140 | PASS |
+
+### Test Results
+- pytest: 3597 passed, 131 failed (0 in task-scoped test_cockpit_events_1262.py; 10 in stale test_cockpit_events_1234.py due to superseded API — architect-acknowledged; 121 pre-existing unrelated failures)
+- ruff: 3 violations, all in unrelated packages (knowledge, mcp-knowledge, orchestrator/examples)
+
+### Commit Integrity
+| Commit | Type | Agent |
+|--------|------|-------|
+| 1bf6414d | test (RED) | test-writer |
+| 4d8931e1 | feat (GREEN) | builder |
+| 4cda55d2 | test (gap fill) | test-writer retry 1 |
+| ae25f07a | test (depth/count) | test-writer retry 2 |
+| 5d0f94d5 | docs (diagram footer) | doc-writer |
+
+### Architect Quality: 4/5
+AC lines were specific and testable with td annotations. Initial AC wording for depth and coalescing was ambiguous enough to require two reviewer FAILs and an architect re-review pass to tighten. Final AC is exemplary — the loop was caused by insufficient initial precision, not missing concepts.
+
+### Deduction Breakdown
+- -.02: 10 stale test failures in test_cockpit_events_1234.py caused by API rename (acknowledged by architect as "not blocking" but no follow-up task created for cleanup)
+
+### Confidence: 0.98
+### Action: archive
