@@ -111,9 +111,11 @@ describe('TestFromAC_UseEventSource', () => {
     it('UseEventSourceResult full object shape matches exactly (no extra or missing properties)', () => {
       // toEqualTypeOf is structurally exact: fails if extra properties are added or if
       // UseEventSourceResult is narrowed/widened beyond the AC1 contract.
+      // Updated for #1263: lastEventByType added additively by the builder.
       expectTypeOf<UseEventSourceResult>().toEqualTypeOf<{
         status: 'connecting' | 'open' | 'closed'
         lastEventMtime: number | null
+        lastEventByType: Record<string, number>
       }>()
     })
   })
