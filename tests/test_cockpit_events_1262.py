@@ -269,6 +269,38 @@ class TestFromAC_WatchFilter:
             f"{tmp_path_str!r}. The .tmp- guard branch in events.py must be hit."
         )
 
+    @pytest.mark.asyncio
+    async def test_filter_rejects_nested_tasks_subdir_md(self, board_dir: Path) -> None:
+        """Filter must return False for paths nested below tasks/ (depth > 1).
+
+        tasks/subdir/x.md has len(relative.parts) == 2 relative to tasks_dir, so
+        _is_direct_md returns False. Proves the depth=1 guard in the filter
+        (AC1: 'direct children only; nested paths like tasks/sub/x.md must be rejected').
+        """
+        captured, engine = await _run_and_capture(board_dir)
+        nested = str(engine.tasks_dir / "subdir" / "task-x.md")
+        assert captured["filter"](None, nested) is False, (
+            f"Filter must reject nested tasks path {nested!r}; "
+            f"only direct children of tasks/ qualify (depth=1)."
+        )
+
+    @pytest.mark.asyncio
+    async def test_filter_rejects_nested_decisions_pending_subdir_md(
+        self, board_dir: Path
+    ) -> None:
+        """Filter must return False for paths nested below decisions/pending/ (depth > 1).
+
+        decisions/pending/subdir/dr.md has len(relative.parts) == 2 relative to
+        decisions_pending_dir, so _is_direct_md returns False. Proves the depth=1
+        guard in the filter (AC1: 'direct children only').
+        """
+        captured, engine = await _run_and_capture(board_dir)
+        nested = str(engine.kanban_dir / "decisions" / "pending" / "subdir" / "dr.md")
+        assert captured["filter"](None, nested) is False, (
+            f"Filter must reject nested decisions/pending path {nested!r}; "
+            f"only direct children of decisions/pending/ qualify (depth=1)."
+        )
+
 
 # ---------------------------------------------------------------------------
 # AC2: Path classifier — typed event names from board-specific paths (td:2)
@@ -531,6 +563,47 @@ class TestFromAC_Classify:
             f"decisions/pending/*.md from a different board must produce no events. "
             f"Got: {events_received!r}. "
             f"A directory-name check would misclassify this path."
+        )
+
+    @pytest.mark.asyncio
+    async def test_nested_tasks_subdir_classified_as_none_no_event(
+        self, board_dir: Path
+    ) -> None:
+        """A path at tasks/subdir/x.md must be classified as None → no SSE event.
+
+        The endpoint receives the nested path via the mocked awatch (bypassing the
+        filter) and _classify_path must return None because _is_direct_md rejects
+        depth>1 paths (AC2: 'only direct children qualify — nested descendants return None').
+        """
+        from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
+        from owlbear_kanban import KanbanEngine  # noqa: PLC0415
+
+        engine = KanbanEngine(board_dir, agent_name="cockpit")
+        nested_task = engine.tasks_dir / "subdir" / "task-deep.md"
+        nested_task.parent.mkdir(parents=True, exist_ok=True)
+        nested_task.write_text("# deep\n", encoding="utf-8")
+
+        async def _one_change(*_a, **_k):
+            yield {(MagicMock(), str(nested_task))}
+
+        app.dependency_overrides[get_engine] = lambda: engine
+        events_received: list[str] = []
+        try:
+            with patch("owlbear_cockpit.routes.events.awatch", _one_change):
+                transport = httpx.ASGITransport(app=app)
+                async with (
+                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
+                    ac.stream("GET", "/api/events") as response,
+                ):
+                    async for line in response.aiter_lines():
+                        if line.startswith(("event:", "data:")):
+                            events_received.append(line)
+        finally:
+            app.dependency_overrides.clear()
+
+        assert not events_received, (
+            f"tasks/subdir/x.md (nested, depth>1) must produce no events; "
+            f"classifier must return None. Got: {events_received!r}"
         )
 
 
@@ -961,6 +1034,48 @@ class TestFromAC_TypedEvents:
         assert "decisions-changed" in event_names, (
             f"decisions-changed MUST be emitted for the surviving decisions path. "
             f"Got events: {event_names!r}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_multiple_same_type_tasks_paths_emit_exactly_one_event(
+        self, board_dir: Path
+    ) -> None:
+        """A batch with two tasks/*.md paths must emit exactly ONE 'tasks-changed'
+        event, not two. Multiple same-type paths coalesce into a single event
+        (AC4: 'exactly one SSE event per distinct surface type present').
+        """
+        from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
+        from owlbear_kanban import KanbanEngine  # noqa: PLC0415
+
+        engine = KanbanEngine(board_dir, agent_name="cockpit")
+        task_a = engine.tasks_dir / "task-coalesce-a.md"
+        task_a.write_text("# a\n", encoding="utf-8")
+        task_b = engine.tasks_dir / "task-coalesce-b.md"
+        task_b.write_text("# b\n", encoding="utf-8")
+
+        async def _two_tasks(*_a, **_k):
+            yield {(MagicMock(), str(task_a)), (MagicMock(), str(task_b))}
+
+        app.dependency_overrides[get_engine] = lambda: engine
+        event_names: list[str] = []
+        try:
+            with patch("owlbear_cockpit.routes.events.awatch", _two_tasks):
+                transport = httpx.ASGITransport(app=app)
+                async with (
+                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
+                    ac.stream("GET", "/api/events") as response,
+                ):
+                    async for line in response.aiter_lines():
+                        if line.startswith("event:"):
+                            event_names.append(line.split(":", 1)[1].strip())
+        finally:
+            app.dependency_overrides.clear()
+
+        tasks_events = [e for e in event_names if e == "tasks-changed"]
+        assert len(tasks_events) == 1, (
+            f"Two tasks/*.md paths in a single batch must coalesce into exactly one "
+            f"'tasks-changed' event. Got {len(tasks_events)} 'tasks-changed' events "
+            f"in {event_names!r}."
         )
 
 
