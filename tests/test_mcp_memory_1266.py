@@ -162,7 +162,7 @@ class TestFromAC_MemoryEntryModel:
     def test_state_defaults_to_pending(self) -> None:
         """Omitting state produces a pending entry by default."""
         entry = MemoryEntry(
-            id="abc123",
+            id="00000000-0000-4000-8000-000000000001",
             title="Some learning",
             categories=["context"],
             confidence=0.8,
@@ -181,7 +181,7 @@ class TestFromAC_MemoryEntryModel:
     def test_scope_agents_is_optional(self) -> None:
         """Omitting scope_agents is valid; model defaults to None or empty."""
         entry = MemoryEntry(
-            id="abc",
+            id="00000000-0000-4000-8000-000000000002",
             title="Test",
             categories=["tool"],
             confidence=0.75,
@@ -527,6 +527,40 @@ class TestFromAC_StateTransitions:
         with pytest.raises(ToolError):
             await update_entry(ctx, entry_id=entry.id, state="curated")
 
+    @pytest.mark.asyncio
+    async def test_approved_update_with_title_raises_tool_error(self, tmp_path: Path) -> None:
+        """update_entry rejects ALL mutations on approved entries — field edit raises ToolError.
+
+        Covers AC: 'update_entry rejects ALL calls when current.state == approved'.
+        The bug is that _ensure_update_transition short-circuits when current == target,
+        so field mutations (title/content/etc.) on approved entries silently succeed.
+        """
+        entry = _make_entry(state="approved")
+        engine = MemoryEngine(memory_dir=tmp_path)
+        engine.write(entry)
+        ctx = _make_ctx(engine, caller="curator")
+
+        with pytest.raises(ToolError, match="approved"):
+            await update_entry(ctx, entry_id=entry.id, title="Modified title")
+
+    @pytest.mark.asyncio
+    async def test_approved_update_with_no_state_change_raises_tool_error(
+        self, tmp_path: Path
+    ) -> None:
+        """update_entry rejects calls on approved entries even when no state param is given.
+
+        Without a state param, target_state = state or current.state == 'approved', which
+        causes _ensure_update_transition to return early (current == target). The guard
+        must fire BEFORE _ensure_update_transition, not inside it.
+        """
+        entry = _make_entry(state="approved")
+        engine = MemoryEngine(memory_dir=tmp_path)
+        engine.write(entry)
+        ctx = _make_ctx(engine, caller="curator")
+
+        with pytest.raises(ToolError, match="approved"):
+            await update_entry(ctx, entry_id=entry.id, confidence=0.99)
+
 
 # ---------------------------------------------------------------------------
 # AC4: Mutation access restricted per tool
@@ -609,13 +643,13 @@ class TestFromAC_Retrieval:
     ) -> None:
         """Default query_memory call does not return pending entries."""
         pending = _make_entry(
-            id="id-pending",
+            id="10000000-0000-4000-8000-000000000001",
             title="Pending entry",
             state="pending",
             confidence=0.9,
         )
         curated = _make_entry(
-            id="id-curated",
+            id="20000000-0000-4000-8000-000000000002",
             title="Curated entry",
             state="curated",
             confidence=0.9,
@@ -628,8 +662,8 @@ class TestFromAC_Retrieval:
         results = await query_memory(ctx)
 
         ids = [r["id"] for r in results]
-        assert "id-pending" not in ids
-        assert "id-curated" in ids
+        assert "10000000-0000-4000-8000-000000000001" not in ids
+        assert "20000000-0000-4000-8000-000000000002" in ids
 
     @pytest.mark.asyncio
     async def test_query_excludes_deleted_entries_by_default(
@@ -637,13 +671,13 @@ class TestFromAC_Retrieval:
     ) -> None:
         """Default query_memory call does not return deleted entries."""
         deleted = _make_entry(
-            id="id-deleted",
+            id="30000000-0000-4000-8000-000000000003",
             title="Deleted entry",
             state="deleted",
             confidence=0.9,
         )
         approved = _make_entry(
-            id="id-approved",
+            id="40000000-0000-4000-8000-000000000004",
             title="Approved entry",
             state="approved",
             confidence=0.9,
@@ -656,20 +690,20 @@ class TestFromAC_Retrieval:
         results = await query_memory(ctx)
 
         ids = [r["id"] for r in results]
-        assert "id-deleted" not in ids
-        assert "id-approved" in ids
+        assert "30000000-0000-4000-8000-000000000003" not in ids
+        assert "40000000-0000-4000-8000-000000000004" in ids
 
     @pytest.mark.asyncio
     async def test_query_approved_sorted_before_curated(self, tmp_path: Path) -> None:
         """Approved entries appear before curated entries regardless of confidence."""
         curated = _make_entry(
-            id="id-curated",
+            id="20000000-0000-4000-8000-000000000002",
             title="Curated entry",
             state="curated",
             confidence=1.0,  # highest confidence, but curated
         )
         approved = _make_entry(
-            id="id-approved",
+            id="40000000-0000-4000-8000-000000000004",
             title="Approved entry",
             state="approved",
             confidence=0.7,  # lowest confidence, but approved
@@ -682,16 +716,16 @@ class TestFromAC_Retrieval:
         results = await query_memory(ctx)
 
         assert len(results) == 2
-        assert results[0]["id"] == "id-approved"
-        assert results[1]["id"] == "id-curated"
+        assert results[0]["id"] == "40000000-0000-4000-8000-000000000004"
+        assert results[1]["id"] == "20000000-0000-4000-8000-000000000002"
 
     @pytest.mark.asyncio
     async def test_query_sorted_by_confidence_desc_within_same_state(
         self, tmp_path: Path
     ) -> None:
         """Within the same state tier, entries are sorted by confidence descending."""
-        low = _make_entry(id="id-low", title="Low confidence", state="curated", confidence=0.75)
-        high = _make_entry(id="id-high", title="High confidence", state="curated", confidence=0.95)
+        low = _make_entry(id="50000000-0000-4000-8000-000000000005", title="Low confidence", state="curated", confidence=0.75)
+        high = _make_entry(id="60000000-0000-4000-8000-000000000006", title="High confidence", state="curated", confidence=0.95)
         engine = MemoryEngine(memory_dir=tmp_path)
         _write_entry_file(tmp_path, low)
         _write_entry_file(tmp_path, high)
@@ -699,8 +733,8 @@ class TestFromAC_Retrieval:
 
         results = await query_memory(ctx)
 
-        assert results[0]["id"] == "id-high"
-        assert results[1]["id"] == "id-low"
+        assert results[0]["id"] == "60000000-0000-4000-8000-000000000006"
+        assert results[1]["id"] == "50000000-0000-4000-8000-000000000005"
 
 
 # ---------------------------------------------------------------------------
@@ -734,3 +768,60 @@ class TestFromAC_SQLiteRemoval:
         assert "sqlite3" not in vars(engine_mod), (
             "engine.py imports sqlite3 — new file engine must not use SQLite"
         )
+
+
+# ---------------------------------------------------------------------------
+# Consumer drift (NEW AC): retire get_knowledge / list_entries references
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ConsumerDrift:
+    """New AC: consumer files must not reference retired memory API names.
+
+    Covers: share/prompts/agent-audit.prompt.md, share/agents/memory-curator.agent.md,
+            serve/mcp-memory/README.md must use current tool names only.
+    """
+
+    def test_agent_audit_prompt_does_not_call_get_knowledge(self) -> None:
+        """agent-audit.prompt.md must not call retired get_knowledge tool."""
+        prompt_path = (
+            Path(__file__).parent.parent
+            / "share" / "prompts" / "agent-audit.prompt.md"
+        )
+        assert prompt_path.exists(), f"prompt file not found: {prompt_path}"
+        content = prompt_path.read_text()
+        assert "get_knowledge" not in content, (
+            "agent-audit.prompt.md still calls retired get_knowledge — "
+            "update to query_memory"
+        )
+
+    def test_memory_curator_agent_does_not_reference_list_entries(self) -> None:
+        """memory-curator.agent.md must not reference retired list_entries tool."""
+        agent_path = (
+            Path(__file__).parent.parent
+            / "share" / "agents" / "memory-curator.agent.md"
+        )
+        assert agent_path.exists(), f"agent file not found: {agent_path}"
+        content = agent_path.read_text()
+        assert "list_entries" not in content, (
+            "memory-curator.agent.md still references retired list_entries — "
+            "update to query_memory"
+        )
+
+    def test_mcp_memory_readme_does_not_list_old_tools(self) -> None:
+        """serve/mcp-memory/README.md must not list retired tool names.
+
+        The old tool table includes get_knowledge, record_learning, list_entries.
+        All three must be gone and replaced with the current 5-tool API.
+        """
+        readme_path = (
+            Path(__file__).parent.parent
+            / "serve" / "mcp-memory" / "README.md"
+        )
+        assert readme_path.exists(), f"README not found: {readme_path}"
+        content = readme_path.read_text()
+        for retired_tool in ("get_knowledge", "record_learning", "list_entries"):
+            assert retired_tool not in content, (
+                f"serve/mcp-memory/README.md still documents retired tool '{retired_tool}' — "
+                "replace table with current 5-tool API"
+            )
