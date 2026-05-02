@@ -77,8 +77,8 @@ function getTextInput(container: HTMLElement): HTMLElement | null {
   return within(container).queryByRole('textbox')
 }
 
-function getPrioritySelect(container: HTMLElement): HTMLElement | null {
-  return within(container).queryByRole('combobox')
+function getPrioritySelect(container: HTMLElement): Element | null {
+  return container.querySelector('p-select')
 }
 
 function getTagsControl(container: HTMLElement): Element | null {
@@ -147,8 +147,8 @@ describe('TestFromAC_FilterPanel', () => {
 
     it('priority select contains all option values from the priorities prop', () => {
       const { container } = renderPanel({ priorities: PRIORITIES })
-      const select = getPrioritySelect(container) as HTMLSelectElement
-      const optionValues = Array.from(select.options).map((o) => o.value)
+      const pSelect = getPrioritySelect(container)!
+      const optionValues = Array.from(pSelect.querySelectorAll('option')).map((o) => (o as HTMLOptionElement).value)
       for (const p of PRIORITIES) {
         expect(optionValues).toContain(p)
       }
@@ -157,8 +157,8 @@ describe('TestFromAC_FilterPanel', () => {
     it('priority select has exactly priorities.length options (plus at most one empty placeholder)', () => {
       const custom = ['low', 'medium', 'high']
       const { container } = renderPanel({ priorities: custom })
-      const select = getPrioritySelect(container) as HTMLSelectElement
-      const options = Array.from(select.options)
+      const pSelect = getPrioritySelect(container)!
+      const options = Array.from(pSelect.querySelectorAll('option')) as HTMLOptionElement[]
       // Total must be exactly custom.length or custom.length+1 (one empty placeholder at most)
       expect(options.length).toBeGreaterThanOrEqual(custom.length)
       expect(options.length).toBeLessThanOrEqual(custom.length + 1)
@@ -175,8 +175,8 @@ describe('TestFromAC_FilterPanel', () => {
     it('priority select reflects a custom priorities list', () => {
       const custom = ['low', 'high']
       const { container } = renderPanel({ priorities: custom })
-      const select = getPrioritySelect(container) as HTMLSelectElement
-      const optionValues = Array.from(select.options).map((o) => o.value)
+      const pSelect = getPrioritySelect(container)!
+      const optionValues = Array.from(pSelect.querySelectorAll('option')).map((o) => (o as HTMLOptionElement).value)
       expect(optionValues).toContain('low')
       expect(optionValues).toContain('high')
     })
@@ -277,8 +277,8 @@ describe('TestFromAC_FilterPanel', () => {
     it('priority select change fires onFilterChange with updated priority', () => {
       const onFilterChange = vi.fn()
       const { container } = renderPanel({ filter: emptyFilter, onFilterChange })
-      const select = getPrioritySelect(container) as HTMLSelectElement
-      fireEvent.change(select, { target: { value: 'needed' } })
+      const pSelect = getPrioritySelect(container)!
+      fireEvent(pSelect, new CustomEvent('change', { detail: { value: 'needed' }, bubbles: true }))
       expect(onFilterChange).toHaveBeenCalledTimes(1)
       expect(onFilterChange).toHaveBeenCalledWith({ ...emptyFilter, priority: 'needed' })
     })
@@ -289,8 +289,8 @@ describe('TestFromAC_FilterPanel', () => {
         filter: { ...emptyFilter, priority: 'needed' },
         onFilterChange,
       })
-      const select = getPrioritySelect(container) as HTMLSelectElement
-      fireEvent.change(select, { target: { value: '' } })
+      const pSelect = getPrioritySelect(container)!
+      fireEvent(pSelect, new CustomEvent('change', { detail: { value: '' }, bubbles: true }))
       expect(onFilterChange).toHaveBeenCalledTimes(1)
       expect(onFilterChange).toHaveBeenCalledWith({ ...emptyFilter, priority: '' })
     })
@@ -360,8 +360,8 @@ describe('TestFromAC_FilterPanel', () => {
       const onFilterChange = vi.fn()
       const multiActive: FilterState = { text: 'search', priority: 'needed', tags: ['bug'], blocked: true }
       const { container } = renderPanel({ filter: multiActive, onFilterChange })
-      const select = getPrioritySelect(container) as HTMLSelectElement
-      fireEvent.change(select, { target: { value: 'critical' } })
+      const pSelect = getPrioritySelect(container)!
+      fireEvent(pSelect, new CustomEvent('change', { detail: { value: 'critical' }, bubbles: true }))
       expect(onFilterChange).toHaveBeenCalledTimes(1)
       expect(onFilterChange).toHaveBeenCalledWith({
         text: 'search',
@@ -416,7 +416,7 @@ describe('TestFromAC_FilterPanel', () => {
 
     it('priority select is absent from DOM when open=false', () => {
       const { container } = renderPanel({ open: false })
-      expect(container.querySelector('select')).toBeNull()
+      expect(container.querySelector('p-select')).toBeNull()
     })
 
     it('blocked control is absent from DOM when open=false', () => {
