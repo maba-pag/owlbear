@@ -5,14 +5,14 @@ title: 'Ideation: value audit of share/ files — which skills carry signal vs. 
 status: backlog
 priority: nice-to-have
 created: 2026-05-02T16:08:21.853770+00:00
-updated: 2026-05-02T16:08:33.223895+00:00
+updated: 2026-05-02T16:11:40.238739+00:00
 tags:
 - deferred
 - ideation
 parent:
 depends_on: []
-blocked: false
-block_reason:
+blocked: true
+block_reason: Needs ideation pass before development — discovery not started
 claimed_at:
 archival_reason:
 archival_refs: []
