@@ -22,10 +22,14 @@ created_at, and updated_at with no format validation.
 
 from __future__ import annotations
 
+import importlib.util
+import pathlib
+from typing import get_args
+
 import pytest
 from pydantic import ValidationError
 
-from owlbear_mcp_memory.models import MemoryEntry
+from owlbear_mcp_memory.models import MemoryCategory, MemoryEntry, MemoryState
 
 
 def _valid() -> dict:
@@ -87,6 +91,24 @@ class TestFromAC_IdValidation:
         field_errors = {e["loc"][0] for e in exc_info.value.errors()}
         assert "id" in field_errors
 
+    # ---- Edge cases: wrong-version / wrong-variant UUIDs rejected ----
+
+    def test_uuid_v1_rejected(self) -> None:
+        """UUID v1 (version nibble=1) must raise ValidationError on 'id'."""
+        data = {**_valid(), "id": "550e8400-e29b-11d4-a716-446655440000"}
+        with pytest.raises(ValidationError) as exc_info:
+            MemoryEntry(**data)
+        field_errors = {e["loc"][0] for e in exc_info.value.errors()}
+        assert "id" in field_errors
+
+    def test_uuid_wrong_variant_rejected(self) -> None:
+        """UUID with wrong variant nibble (not [89abAB]) must raise ValidationError on 'id'."""
+        data = {**_valid(), "id": "550e8400-e29b-41d4-0716-446655440000"}
+        with pytest.raises(ValidationError) as exc_info:
+            MemoryEntry(**data)
+        field_errors = {e["loc"][0] for e in exc_info.value.errors()}
+        assert "id" in field_errors
+
 
 class TestFromAC_TimestampValidation:
     """Scope: created_at / updated_at must validate as ISO 8601 datetimes."""
@@ -140,4 +162,65 @@ class TestFromAC_TimestampValidation:
             MemoryEntry(**data)
         field_errors = {e["loc"][0] for e in exc_info.value.errors()}
         assert "updated_at" in field_errors
+
+    # ---- Boundary: date-only / timezone-naive formats must be rejected ----
+
+    def test_created_at_date_only_rejected(self) -> None:
+        """Date-only string (no time component) must raise ValidationError on 'created_at'."""
+        data = {**_valid(), "created_at": "2026-05-02"}
+        with pytest.raises(ValidationError) as exc_info:
+            MemoryEntry(**data)
+        field_errors = {e["loc"][0] for e in exc_info.value.errors()}
+        assert "created_at" in field_errors
+
+    def test_updated_at_date_only_rejected(self) -> None:
+        """Date-only string (no time component) must raise ValidationError on 'updated_at'."""
+        data = {**_valid(), "updated_at": "2026-05-02"}
+        with pytest.raises(ValidationError) as exc_info:
+            MemoryEntry(**data)
+        field_errors = {e["loc"][0] for e in exc_info.value.errors()}
+        assert "updated_at" in field_errors
+
+    def test_created_at_timezone_naive_rejected(self) -> None:
+        """Timezone-naive datetime must raise ValidationError on 'created_at'."""
+        data = {**_valid(), "created_at": "2026-05-02T10:00:00"}
+        with pytest.raises(ValidationError) as exc_info:
+            MemoryEntry(**data)
+        field_errors = {e["loc"][0] for e in exc_info.value.errors()}
+        assert "created_at" in field_errors
+
+    def test_updated_at_timezone_naive_rejected(self) -> None:
+        """Timezone-naive datetime must raise ValidationError on 'updated_at'."""
+        data = {**_valid(), "updated_at": "2026-05-02T10:00:00"}
+        with pytest.raises(ValidationError) as exc_info:
+            MemoryEntry(**data)
+        field_errors = {e["loc"][0] for e in exc_info.value.errors()}
+        assert "updated_at" in field_errors
+
+
+class TestFromAC_CategoryCardinality:
+    """AC3: Category enum must have exactly 9 values — discriminating cardinality guard."""
+
+    def test_category_enum_has_exactly_9_values(self) -> None:
+        """Adding or removing a category value breaks this guard."""
+        assert len(get_args(MemoryCategory)) == 9
+
+
+class TestFromAC_StateCardinality:
+    """AC4: State enum must have exactly 4 values — discriminating cardinality guard."""
+
+    def test_state_enum_has_exactly_4_values(self) -> None:
+        """Adding or removing a state value breaks this guard."""
+        assert len(get_args(MemoryState)) == 4
+
+
+class TestFromAC_NoSQLiteReference:
+    """AC5: models.py must contain no SQLite references — direct regression guard."""
+
+    def test_no_sqlite_references_in_models_py(self) -> None:
+        """'sqlite' must not appear in models.py source (case-insensitive)."""
+        spec = importlib.util.find_spec("owlbear_mcp_memory.models")
+        assert spec is not None, "owlbear_mcp_memory.models module not found"
+        src = pathlib.Path(spec.origin).read_text()
+        assert "sqlite" not in src.lower()
 
