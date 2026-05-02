@@ -345,6 +345,41 @@ describe('TestFromAC_EventSourceProvider', () => {
       // Only sourceA and sourceB should exist — no stale-triggered retry connection
       expect(MockEventSource.instances).toHaveLength(2)
     })
+
+    // Boundary: full stall → close → retry composed path (AC2 discriminating proof)
+    //
+    // Removing the retryTimerRef.current = setTimeout(openConnection, ...) inside the stall
+    // callback would leave all other stall tests green but break this one, making it the
+    // sole discriminating proof for the stall-triggered reconnect branch.
+
+    it('stall-triggered reconnect: stall after 15s then new EventSource after 30s more', async () => {
+      renderHook(() => useSSEEvent('tasks-changed'), { wrapper })
+
+      // Stall error at t=0 — readyState===CONNECTING, stall timer starts (fires at +15s)
+      await act(async () => {
+        MockEventSource.instances[0].simulateStallError()
+      })
+
+      // Only the initial EventSource exists — retry has not fired yet
+      expect(MockEventSource.instances).toHaveLength(1)
+
+      // Advance 15s — stall timer fires: source closes, status → 'closed', retry timer starts (+30s)
+      await act(async () => {
+        vi.advanceTimersByTime(15_000)
+      })
+
+      // Source was closed; still only one instance — retry has not fired yet
+      expect(MockEventSource.instances[0].close).toHaveBeenCalledOnce()
+      expect(MockEventSource.instances).toHaveLength(1)
+
+      // Advance 30s — retry timer fires: openConnection() creates a second EventSource
+      await act(async () => {
+        vi.advanceTimersByTime(30_000)
+      })
+
+      expect(MockEventSource.instances).toHaveLength(2)
+      expect(MockEventSource.instances[1].url).toBe('/api/events')
+    })
   })
 
   // ─── AC3: event listeners and per-type mtime storage ──────────────────────
