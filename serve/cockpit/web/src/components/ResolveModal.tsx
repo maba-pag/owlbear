@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
+import rehypeSanitize from 'rehype-sanitize'
+import remarkGfm from 'remark-gfm'
 import {
   PButton,
   PHeading,
@@ -78,7 +80,7 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
   return (
     <div data-testid="resolve-modal" role="dialog" aria-label="Resolve decision request">
       <PHeading ref={setHeadingTagAttr} tag="h3">{dr.title}</PHeading>
-      <ReactMarkdown>{dr.body}</ReactMarkdown>
+      <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>{dr.body}</ReactMarkdown>
 
       <fieldset data-testid="response-selector">
         <legend>Response</legend>
