@@ -61,26 +61,30 @@ function renderModal({
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function getSelect(container: HTMLElement): HTMLSelectElement {
-  const el = container.querySelector('select') as HTMLSelectElement | null
-  if (!el) throw new Error('reason select not found')
+function getSelect(container: HTMLElement): HTMLElement {
+  const el = container.querySelector('p-select') as HTMLElement | null
+  if (!el) throw new Error('reason p-select not found')
   return el
 }
 
-function getRefsInput(container: HTMLElement): HTMLInputElement {
-  const el = container.querySelector('input[type="text"]') as HTMLInputElement | null
-  if (!el) throw new Error('refs input not found')
+function getRefsInput(container: HTMLElement): HTMLElement {
+  const el = container.querySelector('p-input-text') as HTMLElement | null
+  if (!el) throw new Error('refs p-input-text not found')
   return el
 }
 
-function getSubmitBtn(container: HTMLElement): HTMLButtonElement {
-  const el = container.querySelector('[data-testid="archival-submit"]') as HTMLButtonElement | null
+function getSubmitBtn(container: HTMLElement): HTMLElement {
+  const el = container.querySelector('[data-testid="archival-submit"]') as HTMLElement | null
   if (!el) throw new Error('submit button not found')
   return el
 }
 
+function changeRefsInput(container: HTMLElement, value: string): void {
+  fireEvent(getRefsInput(container), new CustomEvent('change', { detail: { value }, bubbles: true }))
+}
+
 function selectReason(container: HTMLElement, reason: string): void {
-  fireEvent.change(getSelect(container), { target: { value: reason } })
+  fireEvent(getSelect(container), new CustomEvent('change', { detail: { value: reason }, bubbles: true }))
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
@@ -128,24 +132,24 @@ describe('TestFromAC_ArchivalModal', () => {
       expect(modal?.getAttribute('aria-modal')).toBe('true')
     })
 
-    it('aria-labelledby exactly matches the id of the visible h3 title element', () => {
+    it('aria-labelledby exactly matches the id of the visible p-heading title element', () => {
       const { container } = renderModal()
       const modal = container.querySelector('[role="dialog"]')
       const labelledById = modal?.getAttribute('aria-labelledby')
       expect(labelledById).toBeTruthy()
-      const titleH3 = container.querySelector('h3')
-      expect(titleH3).not.toBeNull()
-      expect(labelledById).toBe(titleH3?.id)
+      const titleHeading = container.querySelector('p-heading')
+      expect(titleHeading).not.toBeNull()
+      expect(labelledById).toBe(titleHeading?.id)
     })
   })
 
   // ─── AC3: Focus on reason select when modal opens ─────────────────────────
 
   describe('AC3: focus placed on reason select when modal opens', () => {
-    it('document.activeElement is the reason select immediately after mount', () => {
+    it('document.activeElement is the reason p-select immediately after mount', () => {
       const { container } = renderModal()
-      const select = container.querySelector('select')
-      expect(document.activeElement).toBe(select)
+      const pSelect = container.querySelector('p-select')
+      expect(document.activeElement).toBe(pSelect)
     })
   })
 
@@ -154,8 +158,8 @@ describe('TestFromAC_ArchivalModal', () => {
   describe('AC4: completed option hidden when taskStatus !== "done"; shown when === "done"', () => {
     it('hides the completed option when taskStatus is "in-progress"', () => {
       const { container } = renderModal({ taskStatus: 'in-progress' })
-      const select = container.querySelector('select')
-      const opts = Array.from(select?.options ?? [])
+      const pSelect = container.querySelector('p-select')
+      const opts = Array.from(pSelect?.querySelectorAll('option') ?? []) as HTMLOptionElement[]
       const completedOpt = opts.find((o) => o.value === 'completed')
       // Option must be absent or hidden
       expect(completedOpt === undefined || completedOpt.hidden).toBe(true)
@@ -163,8 +167,8 @@ describe('TestFromAC_ArchivalModal', () => {
 
     it('shows the completed option when taskStatus is "done"', () => {
       const { container } = renderModal({ taskStatus: 'done' })
-      const select = container.querySelector('select')
-      const opts = Array.from(select?.options ?? [])
+      const pSelect = container.querySelector('p-select')
+      const opts = Array.from(pSelect?.querySelectorAll('option') ?? []) as HTMLOptionElement[]
       const completedOpt = opts.find((o) => o.value === 'completed')
       expect(completedOpt).not.toBeUndefined()
       expect(completedOpt?.hidden).toBe(false)
@@ -172,8 +176,8 @@ describe('TestFromAC_ArchivalModal', () => {
 
     it('hides the completed option when taskStatus is "todo" (boundary: non-done status)', () => {
       const { container } = renderModal({ taskStatus: 'todo' })
-      const select = container.querySelector('select')
-      const opts = Array.from(select?.options ?? [])
+      const pSelect = container.querySelector('p-select')
+      const opts = Array.from(pSelect?.querySelectorAll('option') ?? []) as HTMLOptionElement[]
       const completedOpt = opts.find((o) => o.value === 'completed')
       expect(completedOpt === undefined || completedOpt.hidden).toBe(true)
     })
@@ -185,36 +189,36 @@ describe('TestFromAC_ArchivalModal', () => {
     it('shows refs input when reason is "deprecated"', () => {
       const { container } = renderModal()
       selectReason(container, 'deprecated')
-      expect(container.querySelector('input[type="text"]')).not.toBeNull()
+      expect(container.querySelector('p-input-text')).not.toBeNull()
     })
 
     it('shows refs input when reason is "duplicate"', () => {
       const { container } = renderModal()
       selectReason(container, 'duplicate')
-      expect(container.querySelector('input[type="text"]')).not.toBeNull()
+      expect(container.querySelector('p-input-text')).not.toBeNull()
     })
 
     it('hides refs input when reason is "completed"', () => {
       const { container } = renderModal({ taskStatus: 'done' })
       selectReason(container, 'completed')
-      expect(container.querySelector('input[type="text"]')).toBeNull()
+      expect(container.querySelector('p-input-text')).toBeNull()
     })
 
     it('hides refs input when reason is "dropped"', () => {
       const { container } = renderModal()
       selectReason(container, 'dropped')
-      expect(container.querySelector('input[type="text"]')).toBeNull()
+      expect(container.querySelector('p-input-text')).toBeNull()
     })
 
     it('hides refs input when reason is "wontfix"', () => {
       const { container } = renderModal()
       selectReason(container, 'wontfix')
-      expect(container.querySelector('input[type="text"]')).toBeNull()
+      expect(container.querySelector('p-input-text')).toBeNull()
     })
 
     it('hides refs input in initial state (no reason selected)', () => {
       const { container } = renderModal()
-      expect(container.querySelector('input[type="text"]')).toBeNull()
+      expect(container.querySelector('p-input-text')).toBeNull()
     })
   })
 
@@ -224,23 +228,24 @@ describe('TestFromAC_ArchivalModal', () => {
     it('clears refs when switching from deprecated to dropped', () => {
       const { container } = renderModal()
       selectReason(container, 'deprecated')
-      fireEvent.change(getRefsInput(container), { target: { value: '1230, 1229' } })
+      changeRefsInput(container, '1230, 1229')
 
       selectReason(container, 'dropped')
-      // Switch back to verify the value was cleared
+      // refs cleared — submit still disabled (refs required but empty)
       selectReason(container, 'deprecated')
-      expect(getRefsInput(container).value).toBe('')
+      expect((getSubmitBtn(container) as HTMLButtonElement).disabled).toBe(true)
     })
 
     it('clears refs when switching from duplicate to wontfix', () => {
       const { container } = renderModal()
       selectReason(container, 'duplicate')
-      fireEvent.change(getRefsInput(container), { target: { value: '1230' } })
+      changeRefsInput(container, '1230')
 
       selectReason(container, 'wontfix')
-      // Switch back to verify the value was cleared
+      // Switch back to verify the value was cleared — refs empty → submit still disabled
       selectReason(container, 'duplicate')
-      expect(getRefsInput(container).value).toBe('')
+      // refs cleared — submit still disabled (refs required but empty)
+      expect((getSubmitBtn(container) as HTMLButtonElement).disabled).toBe(true)
     })
   })
 
@@ -250,7 +255,8 @@ describe('TestFromAC_ArchivalModal', () => {
     it('submit button is disabled in the initial state (no reason selected)', () => {
       const { container } = renderModal()
       const submitBtn = getSubmitBtn(container)
-      expect(submitBtn.disabled).toBe(true)
+      // PDS PButton exposes disabled as a JS property (React 19 sets it as property on custom element)
+      expect((submitBtn as HTMLButtonElement).disabled).toBe(true)
     })
   })
 
@@ -260,26 +266,26 @@ describe('TestFromAC_ArchivalModal', () => {
     it('submit disabled when reason is "deprecated" and refs is empty', () => {
       const { container } = renderModal()
       selectReason(container, 'deprecated')
-      expect(getSubmitBtn(container).disabled).toBe(true)
+      expect((getSubmitBtn(container) as HTMLButtonElement).disabled).toBe(true)
     })
 
     it('submit disabled when reason is "duplicate" and refs is empty', () => {
       const { container } = renderModal()
       selectReason(container, 'duplicate')
-      expect(getSubmitBtn(container).disabled).toBe(true)
+      expect((getSubmitBtn(container) as HTMLButtonElement).disabled).toBe(true)
     })
 
     it('submit enabled when reason is "deprecated" and refs has content', () => {
       const { container } = renderModal()
       selectReason(container, 'deprecated')
-      fireEvent.change(getRefsInput(container), { target: { value: '1230' } })
-      expect(getSubmitBtn(container).disabled).toBe(false)
+      changeRefsInput(container, '1230')
+      expect((getSubmitBtn(container) as HTMLButtonElement).disabled).toBe(false)
     })
 
     it('submit enabled when reason is "dropped" (no refs required)', () => {
       const { container } = renderModal()
       selectReason(container, 'dropped')
-      expect(getSubmitBtn(container).disabled).toBe(false)
+      expect((getSubmitBtn(container) as HTMLButtonElement).disabled).toBe(false)
     })
   })
 
@@ -299,7 +305,7 @@ describe('TestFromAC_ArchivalModal', () => {
       fireEvent.click(getSubmitBtn(container))
 
       await waitFor(() => {
-        expect(getSubmitBtn(container)).toBeDisabled()
+        expect((getSubmitBtn(container) as HTMLButtonElement).disabled).toBe(true)
       })
 
       // Resolve to clean up dangling promise
@@ -343,7 +349,7 @@ describe('TestFromAC_ArchivalModal', () => {
 
       const { container } = renderModal()
       selectReason(container, 'deprecated')
-      fireEvent.change(getRefsInput(container), { target: { value: 'abc' } })
+      changeRefsInput(container, 'abc')
       fireEvent.click(getSubmitBtn(container))
 
       await waitFor(() => {
@@ -361,7 +367,7 @@ describe('TestFromAC_ArchivalModal', () => {
 
       const { container } = renderModal()
       selectReason(container, 'deprecated')
-      fireEvent.change(getRefsInput(container), { target: { value: '1230, abc, 1229' } })
+      changeRefsInput(container, '1230, abc, 1229')
       fireEvent.click(getSubmitBtn(container))
 
       await waitFor(() => {
@@ -380,7 +386,7 @@ describe('TestFromAC_ArchivalModal', () => {
 
       const { container } = renderModal()
       selectReason(container, 'deprecated')
-      fireEvent.change(getRefsInput(container), { target: { value: '1230, 1229' } })
+      changeRefsInput(container, '1230, 1229')
       fireEvent.click(getSubmitBtn(container))
 
       await waitFor(() => {
@@ -523,7 +529,7 @@ describe('TestFromAC_ArchivalModal', () => {
 
       const { container } = renderModal({ taskId: 42, expectedUpdated: '2026-05-01T12:00:00+00:00' })
       selectReason(container, 'deprecated')
-      fireEvent.change(getRefsInput(container), { target: { value: '1230, 1229' } })
+      changeRefsInput(container, '1230, 1229')
       fireEvent.click(getSubmitBtn(container))
 
       await waitFor(() => {
@@ -544,7 +550,8 @@ describe('TestFromAC_ArchivalModal', () => {
 
       const modal = container.querySelector('[role="dialog"]') as HTMLElement
       const focusable = modal.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), [href], input:not([disabled]), ' +
+        'p-button:not([disabled]), p-input-text:not([disabled]), p-select:not([disabled]), ' +
+          'p-textarea:not([disabled]), button:not([disabled]), [href], input:not([disabled]), ' +
           'select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
       )
       expect(focusable.length).toBeGreaterThan(1)
@@ -564,7 +571,8 @@ describe('TestFromAC_ArchivalModal', () => {
 
       const modal = container.querySelector('[role="dialog"]') as HTMLElement
       const focusable = modal.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), [href], input:not([disabled]), ' +
+        'p-button:not([disabled]), p-input-text:not([disabled]), p-select:not([disabled]), ' +
+          'p-textarea:not([disabled]), button:not([disabled]), [href], input:not([disabled]), ' +
           'select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
       )
       expect(focusable.length).toBeGreaterThan(1)
@@ -619,7 +627,7 @@ describe('TestFromAC_ArchivalModal', () => {
 
       const { container } = renderModal({ taskId: 42, expectedUpdated: '2026-05-01T12:00:00+00:00' })
       selectReason(container, 'deprecated')
-      fireEvent.change(getRefsInput(container), { target: { value: '1230 1229' } })
+      changeRefsInput(container, '1230 1229')
       fireEvent.click(getSubmitBtn(container))
 
       await waitFor(() => {
@@ -637,7 +645,7 @@ describe('TestFromAC_ArchivalModal', () => {
 
       const { container } = renderModal({ taskId: 42, expectedUpdated: '2026-05-01T12:00:00+00:00' })
       selectReason(container, 'deprecated')
-      fireEvent.change(getRefsInput(container), { target: { value: '1230, 1229' } })
+      changeRefsInput(container, '1230, 1229')
       fireEvent.click(getSubmitBtn(container))
 
       await waitFor(() => {
@@ -655,7 +663,7 @@ describe('TestFromAC_ArchivalModal', () => {
 
       const { container } = renderModal({ taskId: 42, expectedUpdated: '2026-05-01T12:00:00+00:00' })
       selectReason(container, 'duplicate')
-      fireEvent.change(getRefsInput(container), { target: { value: '1230  1229' } })
+      changeRefsInput(container, '1230  1229')
       fireEvent.click(getSubmitBtn(container))
 
       await waitFor(() => {
@@ -693,7 +701,7 @@ describe('TestFromAC_ArchivalModal', () => {
 
       expect(onClose).not.toHaveBeenCalled()
       // isSubmitting resets — submit button is re-enabled
-      expect(getSubmitBtn(container).disabled).toBe(false)
+      expect((getSubmitBtn(container) as HTMLButtonElement).disabled).toBe(false)
     })
   })
 
@@ -718,7 +726,7 @@ describe('TestFromAC_ArchivalModal', () => {
 
       expect(onClose).not.toHaveBeenCalled()
       // isSubmitting resets — submit button is re-enabled
-      expect(getSubmitBtn(container).disabled).toBe(false)
+      expect((getSubmitBtn(container) as HTMLButtonElement).disabled).toBe(false)
     })
   })
 })
