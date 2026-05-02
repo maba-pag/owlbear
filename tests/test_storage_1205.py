@@ -9,7 +9,10 @@ AC2 (td:2) → TestFromAC_ReadTaskCachedConfig.test_ac2_error_corrupt_task_confi
 AC2 (td:2) → TestFromAC_ReadTaskCachedConfig.test_ac2_boundary_detection_runs_even_when_config_yml_absent
 AC3 (td:1) → TestFromAC_ReadTaskCachedConfig.test_ac3_explicit_none_returns_task
 AC3 (td:1) → TestFromAC_ReadTaskCachedConfig.test_ac3_explicit_none_calls_load_config
+AC3 (td:2) → TestFromAC_ReadTaskCachedConfig.test_ac3_corrupt_task_config_yml_present_none_raises
+AC3 (td:2) → TestFromAC_ReadTaskCachedConfig.test_ac3_corrupt_task_no_config_yml_config_none_returns_task
 AC4 (td:1) → TestFromAC_ReadTaskCachedConfig.test_ac4_engine_all_call_sites_pass_config
+AC4 (td:1) → TestFromAC_ReadTaskCachedConfig.test_ac4_engine_call_sites_value_is_self_config
 """
 
 from __future__ import annotations
@@ -255,6 +258,42 @@ class TestFromAC_ReadTaskCachedConfig:
         mock_load.assert_called_once()
 
     # ------------------------------------------------------------------
+    # AC3 (td:2 strengthened) — config=None: detection fires on corrupt input;
+    # absent config.yml guard skips detection
+    # ------------------------------------------------------------------
+
+    def test_ac3_corrupt_task_config_yml_present_none_raises(
+        self, tmp_path: Path
+    ) -> None:
+        """AC3 td:2: corrupt task + config.yml present + config=None → CorruptionError.
+
+        Proves detect_corruption fires on corrupt input in the config=None path.
+        Would silently pass if detection were removed from that branch.
+        """
+        board_dir, _ = _make_board_with_task(tmp_path)
+        tasks_dir = board_dir / "tasks"
+        corrupt_content = _CORRUPT_TASK_YAML.replace("id: 1", "id: 2")
+        corrupt_path = tasks_dir / "2-corrupt.md"
+        corrupt_path.write_text(corrupt_content, encoding="utf-8")
+        with pytest.raises(CorruptionError) as exc_info:
+            read_task(corrupt_path, config=None)
+        assert exc_info.value.code == ERR_CORRUPT_INVALID_STATUS
+
+    def test_ac3_corrupt_task_no_config_yml_config_none_returns_task(
+        self, tmp_path: Path
+    ) -> None:
+        """AC3 td:2: corrupt task + no config.yml + config=None → task returned.
+
+        Proves the config_path.exists() guard works: when config.yml is absent
+        and config=None, corruption detection is skipped and the task is returned
+        (even with an invalid status field).
+        """
+        task_path = _make_task_no_config_yml(tmp_path, corrupt=True)
+        # config=None + no config.yml → guard fires, detection skipped → task returned
+        task = read_task(task_path, config=None)
+        assert task.id == 1
+
+    # ------------------------------------------------------------------
     # AC4 — all engine.py call sites pass config=self._config
     # ------------------------------------------------------------------
 
@@ -282,4 +321,43 @@ class TestFromAC_ReadTaskCachedConfig:
             f"read_task() calls in engine.py missing config= keyword argument "
             f"at lines: {violations}. All engine call sites must pass "
             f"config=self._config per AC4."
+        )
+
+    def test_ac4_engine_call_sites_value_is_self_config(self) -> None:
+        """AC4 (strengthened): config= value at every engine.py call site must be
+        self._config (Attribute access: Name('self')._config), not just a keyword.
+
+        Catches cases like config=None or config=load_config(...) which would pass
+        test_ac4_engine_all_call_sites_pass_config but violate the contract.
+        """
+        engine_py = (
+            Path(__file__).parent.parent
+            / "serve/kanban/src/owlbear_kanban/engine.py"
+        )
+        source = engine_py.read_text(encoding="utf-8")
+        tree = ast.parse(source, filename=str(engine_py))
+
+        violations: list[int] = []
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "read_task"
+            ):
+                for kw in node.keywords:
+                    if kw.arg == "config":
+                        val = kw.value
+                        is_self_config = (
+                            isinstance(val, ast.Attribute)
+                            and val.attr == "_config"
+                            and isinstance(val.value, ast.Name)
+                            and val.value.id == "self"
+                        )
+                        if not is_self_config:
+                            violations.append(node.lineno)
+
+        assert not violations, (
+            f"read_task() calls in engine.py have config= but value is not "
+            f"self._config at lines: {violations}. Per AC4 the value must be "
+            f"self._config (attribute access on self)."
         )
