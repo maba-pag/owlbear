@@ -408,6 +408,40 @@ describe('TestFromAC_UseBoardSSEIntegration', () => {
     expect(result.current.health).toBe('green')
   })
 
+  // ─── AC5 (retry 2): discriminating closed-fallback — polling health is non-green ─
+
+  it('health falls through to degraded polling health (red) when SSE closes — discriminating AC5 proof', async () => {
+    // Polling always fails → markHealthy() is never called → elapsed grows unbounded.
+    // After ≥15 s of failed polls, computeHealth(elapsed) returns 'red'.
+    // Closing SSE while health is 'red' proves the fallthrough is the POLLING value,
+    // not a hardcoded constant.  A mutation (closed => 'green') would fail this assertion.
+    const fetchMock = makeFailFetch()
+    vi.stubGlobal('fetch', fetchMock)
+    const { result } = renderHook(() => useBoard())
+
+    // Let the mount-time poll fire (elapsed ≈ 0 → green internally; SSE connecting → yellow visible)
+    await act(async () => {})
+
+    // Advance 15 001 ms: 5 interval polls fire (at 3 s, 6 s, 9 s, 12 s, 15 s).
+    // Each failed poll calls updateHealth() without markHealthy(), so elapsed tracks wall-clock.
+    // After 15 001 ms elapsed, computeHealth returns 'red'.
+    await act(async () => {
+      vi.advanceTimersByTime(15001)
+    })
+    await act(async () => {})
+
+    // SSE is still 'connecting' → effectiveHealth is 'yellow' (internal health is 'red' but masked).
+    // Close SSE: readyState=CLOSED triggers onerror → useEventSource sets sseStatus='closed'.
+    await act(async () => {
+      MockEventSource.instances[0]?.simulateFatalClose()
+    })
+    await act(async () => {})
+
+    // effectiveHealth = health (fallthrough branch) = 'red' (polling-based).
+    // A wrong implementation that hardcodes any fixed value on closed would fail here.
+    expect(result.current.health).toBe('red')
+  })
+
   // ─── AC7 + AC8: UseBoardResult interface with EventSource ─────────────────
 
   it('returns all UseBoardResult fields including health when EventSource is globally available', async () => {
