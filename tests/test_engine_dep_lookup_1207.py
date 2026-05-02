@@ -7,7 +7,11 @@ AC coverage:
   AC4     — engine.show_task() raises CorruptionError/ValueError/KeyError → dep_status 'blocked'
   AC5     — Archival reason effects preserved: dropped/wontfix→blocked,
              deprecated/duplicate→redirect, else→ok
-  AC6     — CockpitView.show_task (delegates to AgentView.show_task) unaffected
+  AC6     — KanbanEngine.show_task warm-cache path: when _id_to_filename resolves an
+             ID to a tasks/ filename AND archive_dir/filename also exists, return the
+             archive copy and evict the ID from _id_to_filename (AC-C19 mode 7 parity)
+  AC7     — CockpitView.show_task (delegates to AgentView.show_task) unaffected
+  AC8     — tests pass
 
 All tests must FAIL before the implementation is changed (RED phase).
 """
@@ -604,4 +608,113 @@ class TestFromAC_CockpitViewRegression:
         assert resp.body == "content here\n\n", (
             f"section='Notes' must extract only the section content, "
             f"got {resp.body!r}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# AC6 (cycle 2): KanbanEngine.show_task warm-cache archive precedence
+#
+# New AC added after cycle-2 architecture review.
+# Strategy: warm _id_to_filename with dep 2 present only in tasks/, THEN place
+# an archive copy (simulating concurrent archival).  The warm-cache path finds
+# dep 2 in _id_to_filename → gets filename → stat(tasks/2-task.md) succeeds →
+# current code returns active copy without checking archive → dep_status='ok'
+# (REGRESSION).  Fix must check archive_dir/filename after stat succeeds and
+# return the archive copy if it exists, evicting the ID from _id_to_filename.
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_WarmCacheArchivePrecedence:
+    """AC6 (cycle 2): show_task warm-cache branch must honour archive precedence.
+
+    KanbanEngine.show_task warm-cache path (engine.py ~line 781):
+    when _id_to_filename resolves an ID to a tasks/ filename AND
+    archive_dir / filename also exists, the archive copy must be returned and
+    the ID evicted from _id_to_filename (AC-C19 mode 7 parity).
+    """
+
+    def test_warm_cache_dep_returns_archive_when_archive_appears_after_index(
+        self, tmp_path: Path
+    ) -> None:
+        """Discriminating warm-cache archive-wins test (AC6).
+
+        Setup:
+          1. dep 2 written to tasks/ only — no archive copy.
+          2. list_tasks(archived=False) called → _id_to_filename gains dep 2 (warm).
+          3. Archive copy of dep 2 added ('dropped') to simulate concurrent archival.
+          4. AgentView.show_task(1) called → warm-cache hit for dep 2.
+
+        Expected: dep_status='blocked' (archive copy, archival_reason='dropped').
+        Current (pre-fix): dep_status='ok' (tasks/ copy returned; archive not checked).
+        """
+        kanban_dir = _make_board(tmp_path)
+        _write_task(kanban_dir, task_id=1, title="Consumer", depends_on="[2]")
+        # dep 2 in tasks/ only — no archive copy yet.
+        _write_task(kanban_dir, task_id=2, title="ActiveDep", status="todo")
+        view = _make_agent_view(kanban_dir)
+
+        # Warm the index: dep 2 is added to _id_to_filename.
+        view.engine.list_tasks(archived=False)
+        assert 2 in view.engine._id_to_filename, (
+            "Test precondition failed: dep 2 must be in _id_to_filename after list_tasks"
+        )
+
+        # Simulate concurrent archival: place archive copy AFTER index is warm.
+        _write_task(
+            kanban_dir,
+            task_id=2,
+            title="DepDropped",
+            status="archived",
+            archival_reason="dropped",
+            subdir="archive",
+        )
+
+        # Warm-cache hit for dep 2 — must return archive copy, not active copy.
+        with mock.patch.object(view.engine, "list_tasks", side_effect=_raise_list_tasks_called):
+            resp = view.show_task(1)
+        assert resp.dep_status == "blocked", (
+            f"warm-cache archive-wins: dep 2 in tasks/ (active) and archive/ (dropped) "
+            f"after index warmed with active-only. Expected dep_status='blocked', "
+            f"got {resp.dep_status!r}"
+        )
+
+    def test_warm_cache_id_evicted_from_index_after_archive_precedence_applied(
+        self, tmp_path: Path
+    ) -> None:
+        """After archive-wins on warm-cache hit, dep ID is evicted from _id_to_filename.
+
+        AC6 states: 'return the archive copy and evict the ID from _id_to_filename'.
+        After the archive-precedence branch fires, dep 2 must no longer be cached in
+        _id_to_filename so that subsequent lookups use the cold archive-glob path.
+
+        Current (pre-fix): dep 2 remains in _id_to_filename because the warm-cache
+        path returns the active tasks/ copy and never reaches the eviction branch.
+        """
+        kanban_dir = _make_board(tmp_path)
+        _write_task(kanban_dir, task_id=1, title="Consumer", depends_on="[2]")
+        _write_task(kanban_dir, task_id=2, title="ActiveDep", status="todo")
+        engine = KanbanEngine(kanban_dir, activity_log=False)
+
+        # Warm the index.
+        engine.list_tasks(archived=False)
+        assert 2 in engine._id_to_filename, (
+            "Test precondition failed: dep 2 must be in _id_to_filename after list_tasks"
+        )
+
+        # Concurrent archival: place archive copy after index is warm.
+        _write_task(
+            kanban_dir,
+            task_id=2,
+            title="DepDropped",
+            status="archived",
+            archival_reason="dropped",
+            subdir="archive",
+        )
+
+        # Trigger the warm-cache archive-wins path for dep 2 directly.
+        engine.show_task("2")
+
+        # After archive-wins, dep 2 must be evicted from _id_to_filename.
+        assert 2 not in engine._id_to_filename, (
+            "After warm-cache archive-wins, dep 2 must be evicted from _id_to_filename"
         )
