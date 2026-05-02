@@ -3,11 +3,9 @@
 AC1 (td:1): _validate_engine_config function deleted from engine.py.
 
 AC5 (td:1): BoardConfig._validate_semantics still rejects invalid configs.
-  — Covered by the existing model-level test suite in
-    serve/kanban/tests/test_engine_init_1068.py (TestFromAC_BoardConfigSemanticValidation).
-  — Any smoke test added here for AC5 passes against current code, so per
-    w-tdd-red (passing tests = implementation already exists) it is omitted.
-    The builder's obligation is confirmed via that existing suite.
+  — Covered by TestFromAC_ValidateSemanticsStillRejects below (retry cycle:
+    reviewer required direct executable proof replacing the false reference to
+    the non-existent TestFromAC_BoardConfigSemanticValidation class).
 """
 
 from __future__ import annotations
@@ -45,3 +43,96 @@ class TestFromAC_RemoveValidateEngineConfig:
         """Direct import of _validate_engine_config from owlbear_kanban.engine must raise ImportError."""
         with pytest.raises(ImportError):
             from owlbear_kanban.engine import _validate_engine_config  # noqa: F401
+
+
+# ---------------------------------------------------------------------------
+# AC5 — BoardConfig._validate_semantics still rejects invalid configurations
+# ---------------------------------------------------------------------------
+
+# Minimal valid flat-key dict (no grouped sub-model instances) used as a base
+# for each invalid variant.  Flat keys avoid the "mixing" branch in
+# _normalise_legacy that would raise ERR_INVALID_STATUS before _validate_semantics runs.
+_VALID_BASE: dict = {
+    "statuses": ["research", "done"],
+    "priorities": ["low"],
+    "entry_status": "research",
+    "terminal_status": "done",
+    "claim_timeout": "1h",
+}
+
+
+class TestFromAC_ValidateSemanticsStillRejects:
+    """AC5: BoardConfig._validate_semantics rejects all listed invalid configs.
+
+    Proof that the model-level semantic validator still enforces the same
+    invariants that _validate_engine_config used to check — empty statuses,
+    empty priorities, invalid entry_status, invalid terminal_status, invalid
+    claim_timeout, non-list agent_compatibility, asymmetric agent_compatibility.
+
+    All tests use BoardConfig.model_validate() with flat-key dicts so that
+    _normalise_legacy routes through the non-grouped path, leaving
+    _validate_semantics as the sole gate under test.
+    """
+
+    def test_empty_statuses_raises(self) -> None:
+        """Empty statuses list must be rejected with ERR_INVALID_STATUS."""
+        from owlbear_kanban.models import BoardConfig, ConfigError
+
+        cfg = {**_VALID_BASE, "statuses": []}
+        with pytest.raises(ConfigError) as exc_info:
+            BoardConfig.model_validate(cfg)
+        assert exc_info.value.code == "ERR_INVALID_STATUS"
+
+    def test_empty_priorities_raises(self) -> None:
+        """Empty priorities list must be rejected with ERR_INVALID_PRIORITY."""
+        from owlbear_kanban.models import BoardConfig, ConfigError
+
+        cfg = {**_VALID_BASE, "priorities": []}
+        with pytest.raises(ConfigError) as exc_info:
+            BoardConfig.model_validate(cfg)
+        assert exc_info.value.code == "ERR_INVALID_PRIORITY"
+
+    def test_invalid_entry_status_raises(self) -> None:
+        """entry_status not in statuses must be rejected with ERR_ENTRY_STATUS_INVALID."""
+        from owlbear_kanban.models import BoardConfig, ConfigError
+
+        cfg = {**_VALID_BASE, "entry_status": "nonexistent"}
+        with pytest.raises(ConfigError) as exc_info:
+            BoardConfig.model_validate(cfg)
+        assert exc_info.value.code == "ERR_ENTRY_STATUS_INVALID"
+
+    def test_invalid_terminal_status_raises(self) -> None:
+        """terminal_status != statuses[-1] must be rejected with ERR_TERMINAL_STATUS_INVALID."""
+        from owlbear_kanban.models import BoardConfig, ConfigError
+
+        # "research" is in statuses but is not the last element
+        cfg = {**_VALID_BASE, "terminal_status": "research"}
+        with pytest.raises(ConfigError) as exc_info:
+            BoardConfig.model_validate(cfg)
+        assert exc_info.value.code == "ERR_TERMINAL_STATUS_INVALID"
+
+    def test_invalid_claim_timeout_raises(self) -> None:
+        """Unparseable claim_timeout must be rejected with ERR_INVALID_CLAIM_TIMEOUT."""
+        from owlbear_kanban.models import BoardConfig, ConfigError
+
+        cfg = {**_VALID_BASE, "claim_timeout": "not-a-duration"}
+        with pytest.raises(ConfigError) as exc_info:
+            BoardConfig.model_validate(cfg)
+        assert exc_info.value.code == "ERR_INVALID_CLAIM_TIMEOUT"
+
+    def test_non_list_agent_compatibility_raises(self) -> None:
+        """agent_compatibility value that is not a list must be rejected."""
+        from owlbear_kanban.models import BoardConfig, ConfigError
+
+        cfg = {**_VALID_BASE, "agent_compatibility": {"agent-a": "should-be-a-list"}}
+        with pytest.raises(ConfigError):
+            BoardConfig.model_validate(cfg)
+
+    def test_asymmetric_agent_compatibility_raises(self) -> None:
+        """One-sided agent_compatibility entry must be rejected."""
+        from owlbear_kanban.models import BoardConfig, ConfigError
+
+        # agent-a lists agent-b as compatible but agent-b has no entry at all
+        cfg = {**_VALID_BASE, "agent_compatibility": {"agent-a": ["agent-b"]}}
+        with pytest.raises(ConfigError):
+            BoardConfig.model_validate(cfg)
