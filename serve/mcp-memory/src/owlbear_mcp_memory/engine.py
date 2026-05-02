@@ -119,6 +119,8 @@ class MemoryEngine:
             data = yaml.safe_load(frontmatter_raw) or {}
         except yaml.YAMLError:
             return None
+        if not isinstance(data, dict):
+            return None
         data["content"] = body.strip()
         try:
             return MemoryEntry(**data)
