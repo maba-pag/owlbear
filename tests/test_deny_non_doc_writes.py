@@ -142,7 +142,7 @@ class TestDenyCodeWrites:
         payload = {
             "tool_name": "apply_patch",
             "tool_input": {
-                "input": "*** Begin Patch\n*** Update File: serve/orchestrator/src/owlbear_orchestrator/app.py\n@@\n-old\n+new\n*** End Patch"
+                "input": "*** Begin Patch\n*** Update File: serve/kanban/src/owlbear_kanban/engine.py\n@@\n-old\n+new\n*** End Patch"
             },
         }
         result = _invoke(hook_module, payload)

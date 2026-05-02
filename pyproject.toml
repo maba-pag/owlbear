@@ -40,7 +40,6 @@ target-version = "py312"
 line-length = 120
 src = [
   "serve/kanban/src",
-  "serve/orchestrator/src",
   "serve/knowledge/src",
   "serve/mcp-kanban/src",
   "serve/mcp-knowledge/src",
@@ -155,9 +154,7 @@ quote-style = "double"
 
 [tool.coverage.run]
 source_pkgs = [
-  "owlbear",
   "owlbear_kanban",
-  "owlbear_orchestrator",
   "owlbear_knowledge",
   "owlbear_mcp_browser",
   "owlbear_mcp_kanban",

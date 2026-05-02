@@ -6,7 +6,6 @@ project-local knowledge portability.
 
 from __future__ import annotations
 
-import json
 import os
 import sqlite3
 import uuid
@@ -29,42 +28,14 @@ _TRANSFER_TABLES = ("documents", "document_status", "chunks", "entities", "edges
 
 
 def resolve_global_db_path(cwd: Path) -> Path | str:
-    """Resolve the global knowledge DB path from environment or owlbear-project.json.
+    """Resolve the global knowledge DB path.
 
-    Resolution order:
-    1. ``OWLBEAR_GLOBAL_KB_PATH`` env var — returned as a Path immediately.
-    2. ``owlbear-project.json`` in *cwd* — reads ``owlbear_path`` field and resolves
-       ``{owlbear_path}/store/knowledge/global.db``.
-
-    Returns:
-        A :class:`~pathlib.Path` on success, or an ``"error: "``-prefixed string on
-        failure.
+    The global resolution path depended on owlbear-project.json infrastructure,
+    which has been removed.
     """
-    env_val = os.environ.get("OWLBEAR_GLOBAL_KB_PATH")
-    if env_val:
-        return Path(env_val)
-
-    config_path = cwd / "owlbear-project.json"
-    try:
-        config_text = config_path.read_text(encoding="utf-8")
-    except FileNotFoundError:
-        return "error: owlbear-project.json not found in cwd"
-
-    try:
-        config = json.loads(config_text)
-    except json.JSONDecodeError as exc:
-        return f"error: owlbear-project.json is not valid JSON: {exc}"
-
-    try:
-        owlbear_path_str = config["owlbear_path"]
-    except KeyError:
-        return "error: owlbear_path field missing from owlbear-project.json"
-
-    owlbear_path = Path(owlbear_path_str)
-    if not owlbear_path.exists():
-        return f"error: owlbear_path directory does not exist: {owlbear_path}"
-
-    return owlbear_path / "store" / "knowledge" / "global.db"
+    _ = cwd
+    msg = "global DB path resolution removed — see #1296"
+    raise NotImplementedError(msg)
 
 
 # ---------------------------------------------------------------------------

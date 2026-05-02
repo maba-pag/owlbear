@@ -9,8 +9,7 @@ irrelevant for boundary enforcement — a TYPE_CHECKING import still
 creates a coupling contract.
 
 Ground truth for ALLOWED_IMPORTS: ``serve/*/pyproject.toml`` workspace
-dependencies and the co-packaging layout of ``serve/orchestrator/``
-(``owlbear`` + ``owlbear_orchestrator`` ship in the same wheel).
+dependencies.
 """
 
 from __future__ import annotations
@@ -33,8 +32,6 @@ ALLOWED_IMPORTS: dict[str, set[str]] = {
     "owlbear_mcp_kanban": {"owlbear_kanban"},
     "owlbear_mcp_knowledge": {"owlbear_knowledge"},
     "owlbear_mcp_memory": set(),
-    "owlbear": {"owlbear_orchestrator"},  # co-packaged in orchestrator wheel
-    "owlbear_orchestrator": {"owlbear"},  # co-packaged in orchestrator wheel
     "owlbear_tools": set(),
 }
 
