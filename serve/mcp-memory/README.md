@@ -42,3 +42,4 @@ Entries are scoped to an optional agent (`scope_agents` list). Valid categories:
 |---------|---------|
 | `mcp[cli]` | FastMCP server framework |
 | `pydantic` | Model validation |
+| `pyyaml` | YAML frontmatter serialisation for memory files |
