@@ -21,19 +21,19 @@ Every vitest invocation below assumes this cwd.
 ### Scoped runs
 
 ```shell
-NODE_OPTIONS='--max-old-space-size=2048' npx vitest run src/__tests__/MyComponent.test.tsx
+NODE_OPTIONS='--max-old-space-size=2048' npx vitest run --silent src/__tests__/MyComponent.test.tsx
 ```
 
 Multiple files:
 
 ```shell
-NODE_OPTIONS='--max-old-space-size=2048' npx vitest run src/__tests__/A.test.tsx src/__tests__/B.test.tsx
+NODE_OPTIONS='--max-old-space-size=2048' npx vitest run --silent src/__tests__/A.test.tsx src/__tests__/B.test.tsx
 ```
 
 ### Full suite
 
 ```shell
-NODE_OPTIONS='--max-old-space-size=2048' npx vitest run
+NODE_OPTIONS='--max-old-space-size=2048' npx vitest run --silent
 ```
 
 Matches all `src/**/*.{test,spec}.{ts,tsx}` files (configured in `vite.config.ts`).
@@ -41,6 +41,7 @@ Matches all `src/**/*.{test,spec}.{ts,tsx}` files (configured in `vite.config.ts
 ### Default flags
 
 - `NODE_OPTIONS='--max-old-space-size=2048'` — matches the `test` script in `package.json`. Without it, PDS test suites can OOM.
+- `--silent` — suppresses `console.log` / `console.warn` / `console.error` from test code. PDS components emit hundreds of thousands of console lines in jsdom; without `--silent`, output can exceed 600K lines, making logs unreadable. Vitest still reports test names, pass/fail status, and assertion errors — only console noise is hidden.
 - `npx vitest run` (not `npx vitest`) — `run` disables watch mode. Without it, vitest stays open waiting for file changes.
 
 ## ESLint
@@ -68,13 +69,13 @@ ESLint uses a flat config (`eslint.config.js`) with `@eslint/js` + `typescript-e
 ## Coverage
 
 ```shell
-cd serve/cockpit/web && NODE_OPTIONS='--max-old-space-size=2048' npx vitest run --coverage.reporter=text --coverage.provider=v8
+cd serve/cockpit/web && NODE_OPTIONS='--max-old-space-size=2048' npx vitest run --silent --coverage.reporter=text --coverage.provider=v8
 ```
 
 Scoped with coverage:
 
 ```shell
-cd serve/cockpit/web && NODE_OPTIONS='--max-old-space-size=2048' npx vitest run src/__tests__/MyComponent.test.tsx --coverage.reporter=text --coverage.provider=v8
+cd serve/cockpit/web && NODE_OPTIONS='--max-old-space-size=2048' npx vitest run --silent src/__tests__/MyComponent.test.tsx --coverage.reporter=text --coverage.provider=v8
 ```
 
 Coverage reports module-level percentages only — no per-branch analysis.
@@ -109,7 +110,8 @@ Imports and shims applied before every test:
 ## Known Gotchas
 
 - **Must `cd serve/cockpit/web` first.** This is the #1 cause of quality-runner frontend failures. Vitest reads `vite.config.ts` from the cwd — running from the repo root skips the jsdom environment entirely.
-- **PDS console noise.** PDS components emit thousands of `console.error` / `console.warn` lines in jsdom (e.g. `variant 'tertiary'`, `CDN request blocked`). These are cosmetic — only the vitest summary line (`Test Files: N passed`, `Tests: N passed`) determines pass/fail.
-- **Output volume.** PDS noise can produce 100K+ characters. When parsing output, look for the last `Test Files:` and `Tests:` lines. If output is truncated, use the file-capture fallback: redirect to `.owlbear/scratch/vitest-{task_id}.log` and grep for the summary.
+- **PDS console noise.** PDS components emit thousands of `console.error` / `console.warn` lines in jsdom (e.g. `variant 'tertiary'`, `CDN request blocked`). The `--silent` flag suppresses this noise. If you omit `--silent` for debugging, only the vitest summary line (`Test Files: N passed`, `Tests: N passed`) determines pass/fail.
+- **Output volume.** Without `--silent`, PDS noise can produce 600K+ lines. Always use `--silent`. If output is still truncated, use the file-capture fallback: redirect to `.owlbear/scratch/vitest-{task_id}.log` and `grep` or `tail -50` for the summary — **never `read_file` on a vitest log** (they can be hundreds of thousands of lines).
 - **`npx vitest run` vs `npx vitest`.** Always use `run`. Without it, vitest enters watch mode and never exits.
 - **No `--reporter=verbose` by default.** The default reporter is sufficient for summary counts. Use `--reporter=verbose` only when individual test names are needed for debugging.
+- **Never `read_file` on vitest log files.** If you redirected output to a file, use `tail -50` to get the summary or `grep -E 'FAIL|Test Files:|Tests:' <file>` to extract results. Log files can be 600K+ lines; reading them with `read_file` wastes context and tokens.
