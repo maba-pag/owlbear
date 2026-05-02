@@ -794,6 +794,13 @@ class KanbanEngine:
                         archived_task,
                     )
                     return archived_task
+
+            archive_path = self._archive_dir / filename
+            if archive_path.exists():
+                self._task_cache.pop(filename, None)
+                del self._id_to_filename[int_id]
+                return read_task(archive_path, config=self._config)
+
             if (
                 filename in self._task_cache
                 and self._task_cache[filename][0] == mtime_ns
