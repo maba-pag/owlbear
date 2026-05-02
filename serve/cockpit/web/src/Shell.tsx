@@ -17,7 +17,7 @@ function isHealthBadgeItem(item: ScanPollingItem): item is HealthBadgeItem {
 }
 
 function Shell() {
-  const { board, tasks, loading, error, health, refetchTasks } = useBoard()
+  const { board, tasks, loading, error, health, refetchTasks, lastDecisionsMtime } = useBoard()
   const { count: pendingDRCount, items: pendingDRItems, refetch: refetchPendingDRs } = usePendingDRs()
   const { items: scanItems, isLoading, refetch } = useScanPolling()
   const normalizedItems = scanItems.filter(isHealthBadgeItem)
@@ -29,6 +29,7 @@ function Shell() {
   const tabsRef = useRef<HTMLElement>(null)
   const detailRef = useRef<HTMLDivElement>(null)
   const activityRef = useRef<HTMLDivElement>(null)
+  const refetchPendingDRsRef = useRef(refetchPendingDRs)
 
   const kanbanProps = {
     board,
@@ -64,6 +65,16 @@ function Shell() {
     tabs.addEventListener('tabChange', onTabChange)
     return () => tabs.removeEventListener('tabChange', onTabChange)
   }, [])
+
+  useEffect(() => {
+    refetchPendingDRsRef.current = refetchPendingDRs
+  }, [refetchPendingDRs])
+
+  useEffect(() => {
+    if (lastDecisionsMtime !== null) {
+      refetchPendingDRsRef.current()
+    }
+  }, [lastDecisionsMtime])
 
   useEffect(() => {
     if (selectedTaskId === null) {

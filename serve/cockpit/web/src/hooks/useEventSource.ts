@@ -1,12 +1,14 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 export type UseEventSourceResult = {
   status: 'connecting' | 'open' | 'closed'
   lastEventMtime: number | null
+  lastEventByType: Record<string, number>
 }
 
 export interface UseEventSourceOptions {
   enabled?: boolean
+  eventTypes?: string[]
 }
 
 const STALL_TIMEOUT_MS = 15_000
@@ -17,10 +19,16 @@ export function useEventSource(
   options?: UseEventSourceOptions,
 ): UseEventSourceResult {
   const enabled = options?.enabled ?? true
+  const eventTypesKey = (options?.eventTypes ?? ['tasks-changed']).join('|')
+  const eventTypes = useMemo(
+    () => options?.eventTypes ?? ['tasks-changed'],
+    [eventTypesKey],
+  )
   const [status, setStatus] = useState<'connecting' | 'open' | 'closed'>(
     enabled ? 'connecting' : 'closed',
   )
   const [lastEventMtime, setLastEventMtime] = useState<number | null>(null)
+  const [lastEventByType, setLastEventByType] = useState<Record<string, number>>({})
 
   const isMountedRef = useRef(true)
   const eventSourceRef = useRef<EventSource | null>(null)
@@ -109,21 +117,31 @@ export function useEventSource(
         }
       }
 
-      eventSource.addEventListener('tasks-changed', (event: Event) => {
-        if (!isMountedRef.current || !isCurrentSource(eventSource)) {
-          return
-        }
-
-        const messageEvent = event as MessageEvent<string>
-        try {
-          const payload = JSON.parse(messageEvent.data) as { mtime?: unknown }
-          if (typeof payload.mtime === 'number') {
-            setLastEventMtime(payload.mtime)
+      for (const eventType of eventTypes) {
+        eventSource.addEventListener(eventType, (event: Event) => {
+          if (!isMountedRef.current || !isCurrentSource(eventSource)) {
+            return
           }
-        } catch {
-          // Ignore malformed events to keep the stream alive.
-        }
-      })
+
+          const messageEvent = event as MessageEvent<string>
+          try {
+            const payload = JSON.parse(messageEvent.data) as { mtime?: unknown }
+            if (typeof payload.mtime === 'number') {
+              setLastEventByType((previousByType) => {
+                const nextByType = {
+                  ...previousByType,
+                  [eventType]: payload.mtime,
+                }
+                const nextMaxMtime = Math.max(...Object.values(nextByType))
+                setLastEventMtime(nextMaxMtime)
+                return nextByType
+              })
+            }
+          } catch {
+            // Ignore malformed events to keep the stream alive.
+          }
+        })
+      }
     }
 
     if (!enabled) {
@@ -132,6 +150,7 @@ export function useEventSource(
       clearRetryTimer()
       setStatus('closed')
       setLastEventMtime(null)
+      setLastEventByType({})
       return () => {
         isMountedRef.current = false
         closeActiveSource()
@@ -149,7 +168,7 @@ export function useEventSource(
       clearStallTimer()
       clearRetryTimer()
     }
-  }, [enabled, url])
+  }, [enabled, eventTypes, url])
 
-  return { status, lastEventMtime }
+  return { status, lastEventMtime, lastEventByType }
 }

@@ -41,6 +41,7 @@ interface UseBoardResult {
   isStale: boolean
   health: HealthState
   refetchTasks: () => void
+  lastDecisionsMtime: number | null
 }
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
@@ -53,8 +54,12 @@ export function useBoard(): UseBoardResult {
   const [error, setError] = useState<string | null>(null)
   const [isStale, setIsStale] = useState(false)
   const mtimeRef = useRef<number | null>(null)
-  const { status: sseStatus, lastEventMtime } = useEventSource('/api/events')
+  const { status: sseStatus, lastEventByType } = useEventSource('/api/events', {
+    eventTypes: ['tasks-changed', 'decisions-changed'],
+  })
   const { health, markHealthy, updateHealth } = useConnectionHealth()
+  const lastTasksMtime = lastEventByType['tasks-changed'] ?? null
+  const lastDecisionsMtime = lastEventByType['decisions-changed'] ?? null
 
   const { isFetching, refetch: refetchTasks } = usePollingFetch<TasksResponse>('/api/tasks', {
     intervalMs: 3000,
@@ -84,10 +89,10 @@ export function useBoard(): UseBoardResult {
   }, [refetchTasks])
 
   useEffect(() => {
-    if (sseStatus === 'open' && lastEventMtime !== null) {
+    if (sseStatus === 'open' && lastTasksMtime !== null) {
       refetchTasksRef.current()
     }
-  }, [lastEventMtime, sseStatus])
+  }, [lastTasksMtime, sseStatus])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -135,5 +140,6 @@ export function useBoard(): UseBoardResult {
     isStale,
     health: effectiveHealth,
     refetchTasks,
+    lastDecisionsMtime,
   }
 }
