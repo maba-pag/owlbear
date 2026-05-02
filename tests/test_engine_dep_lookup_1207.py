@@ -494,6 +494,41 @@ class TestFromAC_ArchivalReasonEffects:
             f"got {resp.dep_status!r}"
         )
 
+    def test_archive_wins_over_tasks_copy_for_dep_status(self, tmp_path: Path) -> None:
+        """AC5 archive-wins: dep in both tasks/ and archive/ → archive takes precedence.
+
+        Existing engine semantics (AC-C19 mode 7 in list_tasks): when an archive
+        copy of a dep exists, the tasks/ copy is ignored.  The new direct show_task
+        lookup must replicate this: the archived state (here 'dropped' → 'blocked')
+        must govern dep_status, not the active tasks/ copy ('ok').
+
+        Current (pre-fix) implementation: engine.show_task checks tasks/ first
+        via cold-path glob → returns active copy → dep_status='ok' (REGRESSION).
+        """
+        kanban_dir = _make_board(tmp_path)
+        _write_task(kanban_dir, task_id=1, title="Consumer", depends_on="[2]")
+        # dep 2 present in tasks/ as active — would give dep_status='ok' if returned
+        _write_task(kanban_dir, task_id=2, title="DepActive", status="todo")
+        # dep 2 also present in archive/ as 'dropped' — must win → dep_status='blocked'
+        _write_task(
+            kanban_dir,
+            task_id=2,
+            title="DepDropped",
+            status="archived",
+            archival_reason="dropped",
+            subdir="archive",
+        )
+        view = _make_agent_view(kanban_dir)
+        # Warm the index: list_tasks sees archive-wins and skips tasks/ copy for dep 2.
+        # After this call, _id_to_filename does NOT contain dep 2 (popped by AC-C19 mode 7).
+        view.engine.list_tasks(archived=False)
+        with mock.patch.object(view.engine, "list_tasks", side_effect=_raise_list_tasks_called):
+            resp = view.show_task(1)
+        assert resp.dep_status == "blocked", (
+            f"archive-wins: dep 2 in both tasks/ (active) and archive/ (dropped) "
+            f"must yield dep_status='blocked', got {resp.dep_status!r}"
+        )
+
 
 # ---------------------------------------------------------------------------
 # AC6: CockpitView.show_task unaffected — no API change (regression guard)
@@ -543,3 +578,30 @@ class TestFromAC_CockpitViewRegression:
             resp = cv.show_task(1, section="Notes")
         assert isinstance(resp, ShowTaskResponse)
         assert resp.body is not None, "section extraction must still work after refactor"
+
+    def test_cockpit_view_show_task_section_extracts_correct_content(
+        self, tmp_path: Path
+    ) -> None:
+        """AC6 (stronger): CockpitView.show_task section= returns the extracted content.
+
+        Discriminating assertion: body must equal the section's content text,
+        not merely be non-null.  A non-null but wrong body (e.g. full body or
+        wrong section) would still pass the weaker test above but fail here.
+        """
+        kanban_dir = _make_board(tmp_path)
+        _write_task(
+            kanban_dir,
+            task_id=1,
+            title="WithSection",
+            depends_on="[]",
+            body="## Notes\ncontent here\n",
+        )
+        cv = _make_cockpit_view(kanban_dir)
+        cv.engine.list_tasks(archived=False)
+        with mock.patch.object(cv.engine, "list_tasks", side_effect=_raise_list_tasks_called):
+            resp = cv.show_task(1, section="Notes")
+        assert isinstance(resp, ShowTaskResponse)
+        assert resp.body == "content here\n\n", (
+            f"section='Notes' must extract only the section content, "
+            f"got {resp.body!r}"
+        )
