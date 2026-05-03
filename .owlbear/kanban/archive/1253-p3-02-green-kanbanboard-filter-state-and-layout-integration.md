@@ -1,10 +1,10 @@
 ---
 id: 1253
 title: 'P3-02: GREEN — KanbanBoard filter state and layout integration'
-status: done
+status: archived
 priority: needed
 created: 2026-05-01T04:34:58.097220+00:00
-updated: 2026-05-03T14:05:58.794484+00:00
+updated: 2026-05-03T14:14:12.911039+00:00
 tags:
 - phase-3
 - scope:cockpit-web
@@ -14,7 +14,7 @@ depends_on:
 - 1252
 blocked: false
 block_reason:
-claimed_at: 2026-05-03T14:05:58.794484+00:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -354,3 +354,47 @@ Layout note: the task body explicitly treated the flex layout lines as implement
 
 ### Scratch Files Cleaned
 - No `.owlbear/scratch/1253-*` files found
+[[2026-05-03]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| useState for FilterState + panelOpen | KanbanBoard.tsx:70-71, tests :164/:175/:453 | PASS |
+| Derived filteredTasks via filterTasks() | KanbanBoard.tsx:74, tests :192/:238/:395 | PASS |
+| Derived deduplicated availableTags | KanbanBoard.tsx:75, test :284 | PASS |
+| Toggle button with badge count | KanbanBoard.tsx:222-226, test :426 | PASS |
+| Result count N / M tasks | KanbanBoard.tsx:228-230, test :301 | PASS |
+| FilterPanel prop forwarding (all 5 props) | KanbanBoard.tsx:236-240, tests :170/:181/:284/:328/:453 | PASS |
+| Flex-column layout + controls + scroll | KanbanBoard.tsx:210-243, architect source-verification | PASS |
+| Column.tsx maxHeight removed | grep confirms no maxHeight in Column.tsx | PASS |
+| onFilterChange clears contextMenu + dragSource | KanbanBoard.tsx:202-205, tests :322/:359 | PASS |
+| #1252 integration suite passes | 12/12 green | PASS |
+| Pre-existing suites pass | 45/45 green (KanbanBoard.test.tsx + KanbanBoard_959.test.tsx) | PASS |
+
+### Test Results
+- Frontend (task-scoped): 57 passed, 0 failed across 3 suites
+- Frontend (full): 15 failures in 2 files, all unrelated (ActivityTab_1278 RED tests, 1 pre-existing ActivityTab_1156 failure)
+- Python (full): 643 failures, all unrelated (task changed only frontend TSX files)
+- ruff: 1 violation in copilot_auth.py (unrelated)
+- ESLint: 1 config error (react-hooks rule definition missing, env issue)
+
+### Architect Quality: 4/5
+Specific AC with testids, format strings, initial values, td annotations, challenger rebuttal with refinements, and Builder Notes. Minor gap: badge-count sub-bullet initially under-tested (caught by reviewer).
+
+### Deduction Breakdown
+- AC lines: all 11 verified with evidence, 0 deduction
+- Lint: pre-existing violations unrelated to task scope, 0 deduction
+- AC quality 4/5 (above threshold), 0 deduction
+- Reviewer evidence: present, detailed, 2 cycles with proper gap closure, 0 deduction
+- Full-suite failures: none attributable to #1253 (frontend-only task, Python failures irrelevant; frontend failures from other tasks), 0 deduction
+
+### Confidence: 1.00
+### Action: archive
+
+### Commits Verified
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 489578a3 | feat | KanbanBoard.tsx, Column.tsx | #1253 |
+| da239cbf | test | KanbanBoard_1252.test.tsx | #1253 |
+| 2bbc0a31 | docs | research doc | #1253 |
+| 7cca18fa | docs | cockpit.excalidraw | #1253 |
