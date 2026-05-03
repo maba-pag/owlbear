@@ -13,13 +13,11 @@ import pytest
 from owlbear_kanban.config_loader import load_config
 from owlbear_kanban.corruption import (  # NEW module — ImportError in RED
     CorruptionError,
-    detect_corruption,
     attempt_repair,
-)
-from owlbear_kanban.storage import (  # NEW module — ImportError in RED
-    read_task,
+    detect_corruption,
     scan_and_fix,
 )
+from owlbear_kanban.storage import read_task  # NEW module — ImportError in RED
 
 # ---------------------------------------------------------------------------
 # Board helpers

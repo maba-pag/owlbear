@@ -15,10 +15,8 @@ from unittest.mock import patch
 
 
 from owlbear_kanban import KanbanEngine
-from owlbear_kanban.storage import (
-    SessionRecord,
-    list_activity_events,
-)
+from owlbear_kanban.activity_store import list_activity_events
+from owlbear_kanban.storage import SessionRecord
 
 # ---------------------------------------------------------------------------
 # Board helpers

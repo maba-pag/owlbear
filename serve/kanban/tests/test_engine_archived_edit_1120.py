@@ -32,10 +32,10 @@ import pytest
 
 from owlbear_kanban import KanbanEngine
 from owlbear_kanban.config_loader import load_config
+from owlbear_kanban.corruption import CorruptionError
 from owlbear_kanban.engine import AgentView
 from owlbear_kanban.models import ConcurrencyError, Task
 from owlbear_kanban.storage import (
-    CorruptionError,
     _normalize_timestamp,
     allocate_next_id,
     generate_slug,

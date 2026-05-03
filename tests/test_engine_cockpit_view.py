@@ -844,7 +844,7 @@ class TestFromAC_CockpitViewCompactActivity:
         kanban_dir = _make_board(tmp_path)
         cv = _make_cockpit_view(kanban_dir)
 
-        with mock.patch("owlbear_kanban.storage.compact_activity_log") as mock_compact:
+        with mock.patch("owlbear_kanban.engine.compact_activity_log") as mock_compact:
             mock_compact.return_value = ActivityCompactionResult(
                 before_bytes=0,
                 after_bytes=0,

@@ -43,10 +43,15 @@ from ruamel.yaml.error import YAMLError
 from owlbear_kanban import storage
 from owlbear_kanban._duration import _parse_duration
 from owlbear_kanban._locking import _exclusive_file_lock  # noqa: F401
+from owlbear_kanban.activity_store import compact_activity_log, list_activity_events
 from owlbear_kanban.agent_names import ADJECTIVES, NOUNS
 from owlbear_kanban.body_parser import parse_body
 from owlbear_kanban.config_loader import load_config
-from owlbear_kanban.corruption import ERR_CORRUPT_DUPLICATE_ID, CorruptionError
+from owlbear_kanban.corruption import (
+    ERR_CORRUPT_DUPLICATE_ID,
+    CorruptionError,
+    detect_corruption,
+)
 from owlbear_kanban.dispatch import PRIORITY_RANK, STATUS_RANK
 from owlbear_kanban.models import (
     ActivityCompactionResult,
@@ -587,8 +592,6 @@ class KanbanEngine:
         """
         cache = self._archive_cache if archived else self._task_cache
         source_dir = self._archive_dir if archived else self._tasks_dir
-        from owlbear_kanban.storage import detect_corruption as _detect_corruption  # noqa: PLC0415
-
         tasks: list[Task] = []
         archive_ids: set[int] = set()
         archived_reasons: dict[int, str | None] = {}
@@ -624,7 +627,7 @@ class KanbanEngine:
                 else:
                     path = source_dir / entry.name
                     if not archived:
-                        corruption = _detect_corruption(path, self._config)
+                        corruption = detect_corruption(path, self._config)
                         if corruption is not None and not (
                             corruption.code == "ERR_CORRUPT_MISSING_FIELD"
                             and corruption.detail
@@ -1496,8 +1499,6 @@ class KanbanEngine:
         released: list[int] = []
         timeout = self._parse_claim_timeout()
         now = datetime.now(tz=UTC)
-        from owlbear_kanban.storage import detect_corruption as _detect_corruption  # noqa: PLC0415
-
         for path in sorted(self._tasks_dir.glob("*.md")):
             try:
                 record = read_task(path, config=self._config)
@@ -1505,7 +1506,7 @@ class KanbanEngine:
                 continue  # silently skip corrupt files (AC-C27)
 
             # AC-C27: do not mutate parseable-but-corrupt files.
-            if _detect_corruption(path, self._config) is not None:
+            if detect_corruption(path, self._config) is not None:
                 continue
 
             # Only handle claimed_at (Brief C — claimed_by is legacy)
@@ -1642,7 +1643,7 @@ class KanbanEngine:
         limit: int | None = None,
     ) -> list[ActivityEvent]:
         """Return activity log entries filtered by task/action/source/time window."""
-        return storage.list_activity_events(
+        return list_activity_events(
             self._kanban_dir,
             task_id=task_id,
             action=action,
@@ -1659,14 +1660,14 @@ class KanbanEngine:
             if not directory.exists():
                 continue
             for path in sorted(directory.glob("*.md")):
-                issue = storage.detect_corruption(path, self._config)
+                issue = detect_corruption(path, self._config)
                 if issue is not None:
                     errors.append(issue)
         return errors
 
     def compact_activity(self) -> ActivityCompactionResult:
         """Compact activity.jsonl using retention rules in activity_store."""
-        return storage.compact_activity_log(self._kanban_dir)
+        return compact_activity_log(self._kanban_dir)
 
     # ------------------------------------------------------------------
     # Session helpers

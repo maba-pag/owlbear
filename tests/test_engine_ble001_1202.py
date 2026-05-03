@@ -173,7 +173,7 @@ class TestFromAC_ListTasksMainScanExceptions:
         engine = KanbanEngine(board, activity_log=False)
 
         with (
-            patch("owlbear_kanban.storage.detect_corruption", return_value=None),
+            patch("owlbear_kanban.engine.detect_corruption", return_value=None),
             patch(
                 "owlbear_kanban.engine.read_task", side_effect=RuntimeError("scan-err")
             ),
@@ -192,7 +192,7 @@ class TestFromAC_ListTasksMainScanExceptions:
         engine = KanbanEngine(board, activity_log=False)
 
         with (
-            patch("owlbear_kanban.storage.detect_corruption", return_value=None),
+            patch("owlbear_kanban.engine.detect_corruption", return_value=None),
             patch("owlbear_kanban.engine.read_task", side_effect=OSError("io")),
             pytest.raises(OSError),
         ):

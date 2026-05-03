@@ -1,7 +1,10 @@
-"""Public storage surface for owlbear-kanban (Brief C §1.3).
+"""Public storage persistence surface for owlbear-kanban (Brief C §1.3).
 
-This module is the single import boundary that ``engine.py`` and tests use.
-It re-exports all types and delegates to the lower-level modules:
+This module provides task/config persistence helpers and selected shared types.
+Parsing, corruption scanning/repair, and activity log APIs live in their source
+modules and should be imported directly by consumers.
+
+Lower-level modules used by this surface:
 
 - ``storage_io.py``    — atomic write primitive
 - ``body_parser.py``   — markdown section parsing / rendering
@@ -12,13 +15,10 @@ Public API (per Brief C §1.3):
   read_task, write_task, write_task_if_unchanged
   list_task_files, list_archive_files, move_to_archive, move_to_quarantine
     allocate_next_id, save_config
-  parse_body, render_body
-  append_activity_event, list_activity_events, compact_activity_log
-  scan_and_fix, detect_corruption, attempt_repair
 
 Re-exported types:
-  Section, ConcurrencyError, ActivityEvent, ActivityCompactionResult,
-  SessionRecord, RepairOutcome, MigrationRequiredError, CorruptionError
+    Section, ConcurrencyError, ActivityEvent, ActivityCompactionResult,
+    SessionRecord, MigrationRequiredError, CorruptionError
 """
 
 from __future__ import annotations
@@ -43,20 +43,11 @@ from owlbear_kanban._naming import (
     move_to_quarantine,
     validate_path_containment,
 )
-from owlbear_kanban.activity_store import (
-    append_activity_event,
-    compact_activity_log,
-    list_activity_events,
-)
-from owlbear_kanban.body_parser import parse_body, render_body
 from owlbear_kanban.corruption import (
     ERR_CORRUPT_ID_FILENAME_MISMATCH,
     ERR_CORRUPT_YAML_PARSE,
     CorruptionError,
-    RepairOutcome,
-    attempt_repair,
     detect_corruption,
-    scan_and_fix,
 )
 from owlbear_kanban.models import (
     ActivityCompactionResult,
@@ -537,35 +528,25 @@ def allocate_next_id(kanban_dir: Path) -> int:
 
 
 # ---------------------------------------------------------------------------
-# Re-exports — all public types accessible from owlbear_kanban.storage
+# Re-exports — selected public symbols accessible from owlbear_kanban.storage
 # ---------------------------------------------------------------------------
 
 __all__ = [
     "ActivityCompactionResult",
     "ActivityEvent",
     "ConcurrencyError",
-    "CorruptionError",
     "MigrationRequiredError",
-    "RepairOutcome",
     "Section",
     "SessionRecord",
     "allocate_next_id",
-    "append_activity_event",
     "atomic_write",
-    "attempt_repair",
-    "compact_activity_log",
-    "detect_corruption",
-    "list_activity_events",
     "list_archive_files",
     "list_task_files",
     "make_task_filename",
     "move_to_archive",
     "move_to_quarantine",
-    "parse_body",
     "read_task",
-    "render_body",
     "save_config",
-    "scan_and_fix",
     "validate_path_containment",
     "write_task",
     "write_task_if_unchanged",
