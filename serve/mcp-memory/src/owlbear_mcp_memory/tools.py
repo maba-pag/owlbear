@@ -121,13 +121,14 @@ async def store_learning(  # noqa: PLR0913
     return _entry_to_dict(entry)
 
 
-async def query_memory(
+async def query_memory(  # noqa: PLR0913
     ctx: Context,
     *,
     states: list[MemoryState] | None = None,
     categories: list[MemoryCategory] | None = None,
     scope_agents: list[str] | None = None,
     min_confidence: float | None = None,
+    limit: int | None = None,
 ) -> list[dict[str, Any]]:
     """Return memory entries filtered by state and sorted by curation priority."""
     engine = _engine_from_ctx(ctx)
@@ -152,6 +153,8 @@ async def query_memory(
     if min_confidence is not None:
         entries = [e for e in entries if e.confidence >= min_confidence]
     entries.sort(key=lambda e: (state_rank.get(e.state, 99), -e.confidence, e.id))
+    if limit is not None:
+        entries = entries[:limit]
     return [_entry_to_dict(entry) for entry in entries]
 
 
@@ -177,17 +180,21 @@ async def update_entry(  # noqa: PLR0913
     target_state = state or current.state
     _ensure_update_transition(current.state, target_state)
 
-    updated = current.model_copy(
-        update={
-            "title": current.title if title is None else title,
-            "content": current.content if content is None else content,
-            "categories": current.categories if categories is None else categories,
-            "confidence": current.confidence if confidence is None else confidence,
-            "state": target_state,
-            "scope_agents": current.scope_agents if scope_agents is None else scope_agents,
-            "updated_at": _now_iso(),
-        }
-    )
+    payload = {
+        "id": current.id,
+        "title": current.title if title is None else title,
+        "content": current.content if content is None else content,
+        "categories": current.categories if categories is None else categories,
+        "confidence": current.confidence if confidence is None else confidence,
+        "state": target_state,
+        "scope_agents": current.scope_agents if scope_agents is None else scope_agents,
+        "created_at": current.created_at,
+        "updated_at": _now_iso(),
+    }
+    try:
+        updated = MemoryEntry.model_validate(payload)
+    except ValidationError as exc:
+        raise ToolError(str(exc)) from exc
     engine.write(updated)
     return _entry_to_dict(updated)
 

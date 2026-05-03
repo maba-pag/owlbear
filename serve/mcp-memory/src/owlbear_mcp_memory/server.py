@@ -94,13 +94,14 @@ async def store_learning(  # noqa: PLR0913
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
-async def query_memory(
+async def query_memory(  # noqa: PLR0913
     ctx: Context,
     *,
     states: list[str] | None = None,
     categories: list[str] | None = None,
     scope_agents: list[str] | None = None,
     min_confidence: float | None = None,
+    limit: int | None = None,
 ) -> list[dict[str, Any]]:  # pragma: no cover
     """Query memory entries by lifecycle state and priority ordering."""
     return await query_memory_impl(
@@ -109,6 +110,7 @@ async def query_memory(
         categories=categories,
         scope_agents=scope_agents,
         min_confidence=min_confidence,
+        limit=limit,
     )
 
 
