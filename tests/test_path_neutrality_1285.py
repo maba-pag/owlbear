@@ -107,14 +107,20 @@ class TestFromAC_PathNeutrality:
     # ---- AC3 (td:1): h-quality-runner references copilot-instructions.md -----------------
 
     def test_quality_runner_skill_references_copilot_instructions(self) -> None:
-        """h-quality-runner/SKILL.md must contain a directive referencing copilot-instructions.md
-        for frontend root and test path routing per AC3.
+        """h-quality-runner/SKILL.md must contain a routing directive that names
+        copilot-instructions.md as the authority for frontend root and test-path mode
+        selection per AC3. The directive text itself must be present — mere filename
+        presence is insufficient.
         """
         skill_file = _SKILLS_ROOT / "h-quality-runner" / "SKILL.md"
         content = skill_file.read_text(encoding="utf-8")
+        assert "Routing authority for frontend root and test-path mode selection is" in content, (
+            "h-quality-runner/SKILL.md must contain the routing authority directive "
+            "('Routing authority for frontend root and test-path mode selection is …') — not found"
+        )
         assert "copilot-instructions.md" in content, (
-            "h-quality-runner/SKILL.md must reference copilot-instructions.md for "
-            "frontend root and test path routing — not found"
+            "h-quality-runner/SKILL.md must name copilot-instructions.md in the routing "
+            "authority directive — not found"
         )
 
     # ---- AC4 (td:1): r-architecture-standards has no legacy section headers ---------------
@@ -137,19 +143,21 @@ class TestFromAC_PathNeutrality:
     # ---- AC5 (td:2): r-doc-standards cross-reference chain --------------------------------
 
     def test_r_doc_standards_skill_references_instructions_stub(self) -> None:
-        """r-doc-standards/SKILL.md must contain a reference to doc-standards.instructions.md
-        (chain link 1: skill → instructions stub).
+        """r-doc-standards/SKILL.md must reference the exact canonical path
+        'share/instructions/doc-standards.instructions.md' (chain link 1: skill → instructions
+        stub). A filename-only substring is insufficient — path must be unambiguous.
         """
         skill_file = _SKILLS_ROOT / "r-doc-standards" / "SKILL.md"
         content = skill_file.read_text(encoding="utf-8")
-        assert "doc-standards.instructions" in content, (
+        assert "share/instructions/doc-standards.instructions.md" in content, (
             "Chain broken at link 1: r-doc-standards/SKILL.md does not reference "
-            "doc-standards.instructions.md"
+            "share/instructions/doc-standards.instructions.md (exact path required)"
         )
 
     def test_doc_standards_instructions_stub_references_audit_prompt(self) -> None:
-        """share/instructions/doc-standards.instructions.md must contain a reference to
-        doc-audit.prompt.md (chain link 2: instructions stub → audit prompt).
+        """share/instructions/doc-standards.instructions.md must reference the exact
+        canonical path '.owlbear/prompts/doc-audit.prompt.md' (chain link 2: instructions
+        stub → audit prompt). A filename-only substring is insufficient.
         """
         instructions_file = _SHARE_INSTRUCTIONS_ROOT / "doc-standards.instructions.md"
         assert instructions_file.exists(), (
@@ -157,9 +165,9 @@ class TestFromAC_PathNeutrality:
             f"{instructions_file.relative_to(_REPO_ROOT)}"
         )
         content = instructions_file.read_text(encoding="utf-8")
-        assert "doc-audit.prompt" in content, (
+        assert ".owlbear/prompts/doc-audit.prompt.md" in content, (
             "Chain broken at link 2: doc-standards.instructions.md does not reference "
-            "doc-audit.prompt.md"
+            ".owlbear/prompts/doc-audit.prompt.md (exact path required)"
         )
 
     def test_doc_audit_prompt_exists_at_chain_target(self) -> None:
@@ -182,18 +190,18 @@ class TestFromAC_PathNeutrality:
         prompt_file = _OWLBEAR_PROMPTS_ROOT / "doc-audit.prompt.md"
 
         skill_content = skill_file.read_text(encoding="utf-8")
-        assert "doc-standards.instructions" in skill_content, (
+        assert "share/instructions/doc-standards.instructions.md" in skill_content, (
             "Full-chain check: link 1 broken — r-doc-standards/SKILL.md does not reference "
-            "doc-standards.instructions.md"
+            "share/instructions/doc-standards.instructions.md (exact path required)"
         )
         assert instructions_file.exists(), (
             f"Full-chain check: link 2a broken — "
             f"{instructions_file.relative_to(_REPO_ROOT)} not found"
         )
         instructions_content = instructions_file.read_text(encoding="utf-8")
-        assert "doc-audit.prompt" in instructions_content, (
+        assert ".owlbear/prompts/doc-audit.prompt.md" in instructions_content, (
             "Full-chain check: link 2 broken — doc-standards.instructions.md does not "
-            "reference doc-audit.prompt.md"
+            "reference .owlbear/prompts/doc-audit.prompt.md (exact path required)"
         )
         assert prompt_file.exists(), (
             f"Full-chain check: link 3 broken — doc-audit.prompt.md not found at "
