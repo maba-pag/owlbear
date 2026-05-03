@@ -3,8 +3,8 @@ id: 1211
 title: Consolidate 8 duplicated helper functions
 status: backlog
 priority: needed
-created: '2026-04-30 15:29:15.204775+00:00'
-updated: '2026-04-30 15:32:04.162862+00:00'
+created: 2026-04-30 15:29:15.204775+00:00
+updated: 2026-05-03T16:34:11.236270+00:00
 tags:
 - audit-kanban
 - dry
@@ -13,7 +13,7 @@ depends_on:
 - 1210
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-03T16:34:11.236270+00:00
 archival_reason:
 archival_refs: []
 ---

@@ -1,10 +1,10 @@
 ---
 id: 1281
 title: 'P1-01: Test — system instruction neutrality and init.py scaffold verification'
-status: in-progress
+status: archived
 priority: critical
 created: 2026-05-02T16:01:10.581833+00:00
-updated: 2026-05-02T22:54:05.111316+00:00
+updated: 2026-05-03T16:42:39.242037+00:00
 tags:
 - phase-1
 - scope:test
@@ -792,3 +792,162 @@ Loop-breaker 3 re-approval. Root cause of 4+ review cycles: the decomposition cr
 | AC5 (no dangling cross-refs) | `test_section_refs_exist_in_owlbear_system` | PASS (regression guard) |
 
 **Downstream note:** When #1282 lands and removes `serve/` from `owlbear-system.instructions.md`, its AC must include removing the `@pytest.mark.xfail` marker from `test_instructions_have_no_serve_refs`.
+
+[[2026-05-03]]
+## Builder Notes
+- Implementation: no source or test file changes in this builder pass.
+- Scope alignment: task is test-focused (`scope:test`); builder performed verification-only pass.
+- Tests: quality-runner scoped result on `tests/test_neutral_shared_1281.py` -> 10 passed, 0 failed, 0 skipped (pytest exit 0).
+- Lint: clean on `tests/test_neutral_shared_1281.py` (ruff exit 0).
+- Coverage: requested module `setup.init` reported "no data collected" / not executed in this scoped run; non-blocking for this verification-only pass.
+- Evidence summary: scoped test + lint gates passed; no implementation changes required in this builder cycle.
+
+## Post-task Reflection
+- Scoped quality-runner verification avoided unrelated suite noise and provided clear gate evidence.
+- No-op builder passes should explicitly record "no files changed" to reduce reviewer ambiguity.
+- Coverage may be non-informative on task-local structural tests; pairing with explicit pass/fail evidence keeps the gate reliable.
+[[2026-05-03]]
+## Review Evidence
+### Test Results
+- quality-runner scoped: pytest 10 passed, 0 failed on `tests/test_neutral_shared_1281.py`
+- quality-runner scoped: no xfail / xpass in the live run
+
+### Lint
+- quality-runner scoped: clean on `tests/test_neutral_shared_1281.py`
+
+### Coverage
+- Not collected. Non-blocking for this td:1 test-task review.
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test / Evidence | Would Fail If AC Violated? | Verdict |
+|---------|------------------------|----------------------------|---------|
+| AC1: `tests/test_neutral_shared_1281.py` exists | live file present | Yes | COVERED |
+| AC2: live instruction scan strips `mcp-\S+`, skips `applyTo:` lines, and catches non-exempt `serve/` hits | `tests/test_neutral_shared_1281.py:39`, `:57-60`, `:70`, `:84-87`; live grep found only exempt `share/instructions/doc-standards.instructions.md:3` | Yes. The synthetic same-line `mcp-kanban` + `serve/tools/` case is discriminating, and the live scan fails on any non-exempt `serve/` hit. | COVERED |
+| AC3: root `.github/copilot-instructions.md` contains a Directory Structure section with table rows | `tests/test_neutral_shared_1281.py:114`, `:128`, `:135`; live file `.github/copilot-instructions.md:16`, `:20`, `:27` | Yes | COVERED |
+| AC4: `init()` generates the scaffold with directory/path heading and section-local rows | `tests/test_neutral_shared_1281.py:149`, `:160`, `:183`, `:199`, `:214`, `:233`, `:242`; seed scaffold `seed/.github/copilot-instructions.md:11`, `:18`, `:21`, `:23`; copy loop `setup/init.py:325`, `:329`, `:370` | Yes | COVERED |
+| AC5: no dangling `§ SectionName` cross-refs into `owlbear-system.instructions.md` from the scoped files | `tests/test_neutral_shared_1281.py:260`; live ref `share/skills/h-memory-structure/SKILL.md:49` resolves to `share/instructions/owlbear-system.instructions.md:38` | Yes | COVERED |
+| AC6: test file passes `ruff check` | quality-runner scoped lint report: clean | Yes | COVERED |
+| AC7: full suite is green for the current post-#1282 state | quality-runner scoped: 10 passed, 0 failed, 0 xfail/xpass | Yes | COVERED |
+
+#### Security Review
+- No issues found in `tests/test_neutral_shared_1281.py`, `.github/copilot-instructions.md`, `seed/.github/copilot-instructions.md`, `share/instructions/owlbear-system.instructions.md`, or `setup/init.py`.
+
+#### Test Integrity
+| Original Test | Change Made | Assessment |
+|---------------|-------------|------------|
+| `test_instructions_have_no_serve_refs` in commit `800c51db` included `import pytest` plus `@pytest.mark.xfail(strict=False, reason="RED: implementation in #1282")` | Commit `84ecd857` removed only the `pytest` import and the `xfail` decorator after the implementation landed; no assertion body changed | STRENGTHENED |
+
+- Evidence: `git show 800c51db:tests/test_neutral_shared_1281.py | rg -n 'xfail|test_instructions_have_no_serve_refs|import pytest'` shows the temporary xfail, while `git show 84ecd857 -- tests/test_neutral_shared_1281.py` shows only those two lines removed.
+- This satisfies the task body's own downstream note at `.owlbear/kanban/tasks/1281-p1-01-test-system-instruction-neutrality-and-init-py-scaffold-verification.md:768`, which says `#1282` must remove the xfail marker once implementation lands.
+
+#### Test Quality
+- No WEAK rating found.
+- AC2 has a discriminating negative case at `tests/test_neutral_shared_1281.py:39-67`.
+- AC4 has section-local proof at `tests/test_neutral_shared_1281.py:214-244`, so the earlier file-global proof gap is closed.
+- I did not re-open the earlier substring-heading/header-row objections because loop-breaker architecture review already narrowed those as YAGNI, and current live evidence still satisfies the accepted contract.
+
+#### Data Safety
+- No issues found.
+
+#### Implementation-Aware Test Gap Analysis
+- No significant untested path remains within current task scope.
+- `share/instructions/**/*.md` currently has no non-exempt `serve/` hits.
+- Root `.github/copilot-instructions.md` contains the required directory section and rows.
+- `seed/.github/copilot-instructions.md` contains the seeded scaffold section and rows, and `setup/init.py` copies seed files generically through the current seed walker.
+
+#### Necessity Check
+- Not applicable. No new dependency, integration, or external capability.
+
+#### Builder Process Quality
+- CLEAN, with one non-blocking artifact-drift note.
+- The task body's v3 AC still describes the temporary `xfail` state at `.owlbear/kanban/tasks/1281-p1-01-test-system-instruction-neutrality-and-init-py-scaffold-verification.md:703` and `:709`, but the same task body also anticipated downstream xfail removal at `:768`.
+- Current repo state plus git history shows that `#1282` landed and removed the temporary xfail, so the live `10 passed` state is stronger than the temporary `9 pass + 1 xfail` staging state, not a regression.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| AC1 | live file exists | artifact presence | PASS |
+| AC2 | scan logic at `tests/test_neutral_shared_1281.py:57-60` and `:84-87`; only remaining `serve/` hit is exempt `share/instructions/doc-standards.instructions.md:3` | `test_mcp_exemption_is_token_scoped`, `test_instructions_have_no_serve_refs` | PASS |
+| AC3 | `.github/copilot-instructions.md:16`, `:20`, `:27` | `test_has_directory_structure_heading`, `test_has_table_row_in_directory_section` | PASS |
+| AC4 | `seed/.github/copilot-instructions.md:11`, `:18`, `:21`, `:23`; `setup/init.py:325`, `:329`, `:370` | `test_generates_copilot_instructions`, `test_has_directory_section_heading`, `test_has_path_entry`, `test_idempotent`, `test_path_entry_within_directory_section` | PASS |
+| AC5 | `share/skills/h-memory-structure/SKILL.md:49` -> `share/instructions/owlbear-system.instructions.md:38` | `test_section_refs_exist_in_owlbear_system` | PASS |
+| AC6 | quality-runner scoped ruff clean | task-scoped lint | PASS |
+| AC7 | quality-runner scoped pytest 10 passed, 0 failed | full file run | PASS |
+
+### Deductions
+- `-0.03` The task body was not backfilled after downstream task `#1282` removed the temporary `xfail`, so the artifact history is stale.
+- `-0.02` A downstream builder task modified a `TestFromAC_*` file, which required git-history reconstruction to classify safely.
+
+### Informational
+- `git --no-pager log --oneline --follow -- tests/test_neutral_shared_1281.py` shows the relevant sequence clearly: `800c51db` added the temporary xfail, then `84ecd857` (`#1282`, builder) removed it after implementing the underlying docs change.
+- `git --no-pager log --oneline --grep '#1282' -n 30` also shows `e83568e7 chore: archive task #1282 (auditor)`, which supports treating the temporary xfail staging note as fulfilled downstream.
+
+### Verdict
+- PASS -> docs
+- Confidence: 0.93
+
+### Post-task Reflection
+- Temporary cross-task `xfail` markers need a matching task-body backfill once the downstream implementation removes them.
+- Git history is the fastest way to distinguish a strengthened TestFromAC cleanup from a weakened builder edit.
+- Stale kanban notes deserve a small confidence deduction, but live green evidence and a stronger final contract should win.
+
+[[2026-05-03]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | No IN-scope prose docs reference the changed files |
+| 2 | Module docstrings | No | N/A | No Python modules created or modified |
+| 3 | External attribution | No | N/A | Pattern source is internal (`test_deny_non_doc_writes.py`), no external repos cited |
+| 4 | Research doc | No | N/A | Research is inline in task body; no separate `.owlbear/research/*.md` file |
+| 5 | Diagram maintenance (describes match) | No | N/A | No IN-scope files in changed-files set to match against |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation request in task body |
+| 7 | Deletion detection | No | N/A | No files deleted |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| `tests/test_neutral_shared_1281.py` | OUT | test file — not IN-scope |
+| `.github/copilot-instructions.md` | OUT | agent-executable — explicitly OUT |
+| `seed/.github/copilot-instructions.md` | OUT | seed template — not in IN-scope list |
+| `share/instructions/owlbear-system.instructions.md` | OUT | `share/instructions/*.instructions.md` — agent-executable |
+
+**No docs impact.** All changed files are OUT-scope. Zero IN-scope files affected.
+
+### Files Updated
+- None
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no `.owlbear/scratch/1281-*` files found)
+[[2026-05-03]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: test file exists | `tests/test_neutral_shared_1281.py` (12717 bytes, 4 commits) | PASS |
+| AC2: serve/ scan with exclusions + xfail removed | `test_instructions_have_no_serve_refs` passes (lines 71-91); xfail added in `800c51db` (#1281), removed in `84ecd857` (#1282) | PASS |
+| AC3: discriminating negative test | `test_mcp_exemption_is_token_scoped` (lines 39-67) validates token-scoped mcp- exclusion with synthetic file | PASS |
+| AC4: Directory Structure heading + table row | `test_has_directory_structure_heading` + `test_has_table_row_in_directory_section` pass; live file `.github/copilot-instructions.md` has section | PASS |
+| AC5: init() scaffold | 5 tests pass: generates, heading, path entry, idempotent, section-local | PASS |
+| AC6: no dangling cross-refs | `test_section_refs_exist_in_owlbear_system` passes; live ref `h-memory-structure/SKILL.md` resolves | PASS |
+| AC7: ruff clean | `uv run ruff check tests/test_neutral_shared_1281.py` — exit 0, no violations | PASS |
+| AC8: suite result 10 pass, 0 failures | `.venv/bin/pytest tests/test_neutral_shared_1281.py -v` — 10 passed in 0.41s | PASS |
+
+### Test Results
+- pytest (task-scoped): 10 passed, 0 failed
+- pytest (full suite): 3799 passed, 128 failed, 4 skipped — 0 failures in task scope (all 128 pre-existing in unrelated modules: decisions, MCP kanban, guidance, migration, cockpit)
+- ruff (task file): clean
+
+### Architect Quality: 3/5
+Original AC had notable gaps: AC2 exclusion boundary unclear, AC4 vague scaffold spec, decomposition flaw (RED-phase test with cross-task dependency) required 3 loop-breaker architecture reviews and 4+ pipeline cycles. Refinements eventually produced correct, testable criteria. Score > 2 — no architect calibration follow-up needed.
+
+### Deduction Breakdown
+- -.03 AC quality score ≤ 3 (significant pipeline cycling from decomposition flaw)
+- -.02 Stale task body (v3 AC still references xfail state; downstream #1282 removed it but body not backfilled)
+
+### Confidence: .95
+### Action: archive

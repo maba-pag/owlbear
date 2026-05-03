@@ -1,10 +1,10 @@
 ---
 id: 1278
 title: Implement ActivityTab SSE live refetch
-status: in-progress
+status: todo
 priority: someday
 created: 2026-05-02T12:10:47.689197+00:00
-updated: 2026-05-03T14:01:04.817843+00:00
+updated: 2026-05-03T16:33:07.276264+00:00
 tags:
 - cockpit
 - frontend
@@ -39,7 +39,7 @@ Validation pass — existing research doc `.owlbear/research/1264-activity-tab-s
 
 ## Acceptance Criteria
 
-- [ ] AC1: ActivityTab replaces one-shot `useState`+`useEffect` fetch with `usePollingFetch<{ sessions: Session[] }>('/api/sessions?filter=all', { intervalMs: 120_000, paused: sseStatus === 'open', onSuccess: (data) => setSessions(data.sessions) })` (td:2)
+- [ ] AC1: ActivityTab wires `usePollingFetch<{ sessions: Session[] }>('/api/sessions?filter=all', { intervalMs: 120_000, paused: sseStatus === 'open', onSuccess: (data) => setSessions(data.sessions) })`; tests MUST prove three-state predicate discrimination: `open → paused: true`, `closed → paused: false`, `connecting → paused: false` (td:2)
 - [ ] AC2: ActivityTab calls `useSSEEvent('activity-changed')` and destructures `{ status: sseStatus, mtime }` (td:1)
 - [ ] AC3: A `useEffect` triggers `refetch()` when `mtime` changes AND `sseStatus === 'open'`, using a `lastObservedMtimeRef` guard to deduplicate — mirrors `useBoard.ts` lines 84-100 (td:2)
 - [ ] AC4: When `sseStatus !== 'open'` or mtime is null, no SSE-triggered refetch fires (negative guard) (td:2)
@@ -83,25 +83,43 @@ Validation pass — existing research doc `.owlbear/research/1264-activity-tab-s
 
 ### Verdict: APPROVE
 ### Action Taken: Refined AC from description into 6 verifiable lines addressing challenger gaps; advanced to todo
+[[2026-05-03]]
 
 [[2026-05-03]]
-Architecture review complete. Refined AC from narrative description into 6 verifiable lines with test-depth annotations. Challenger reconsider (0.67) addressed: added mtime guard AC (AC3), negative-case AC (AC4), and test-mock specificity (AC6). All 10 criteria PASS. Pattern mirrors useBoard.ts exactly — usePollingFetch + useSSEEvent + mtime guard effect. Max td:2, test-writer PROCEED.
-[[2026-05-03]]
-## Test-Writer Notes
+## Test-Writer Notes (historical)
 - Test file: serve/cockpit/web/src/__tests__/ActivityTab_1278.test.tsx
-- Classes: TestFromAC_ActivityTabSSE
-- Tests per category: happy 8 (AC1 url/intervalMs/paused-open/paused-closed/onSuccess, AC2 event type, AC3 new-mtime/mtime-advance), edge 3 (AC3 dedup guard, AC4 null mtime with open, AC5 mount), error 0, boundary 3 (AC4 closed/connecting guards, AC6 jsdom mock smoke)
-- Total: 14 tests, all FAIL
-- ruff: n/a (TypeScript); eslint: clean (exit 0)
+- Total: 14 tests, all PASS after builder implementation (commit `5a2a548a`)
+- Legacy suites updated: ActivityTab.test.tsx (15 pass), ActivityTab_1156.test.tsx (49 pass)
+- Coverage on ActivityTab.tsx: 98.73% statements, 100% branches, 93.75% functions, 100% lines
 
-AC coverage:
-| AC | Tests |
-|----|-------|
-| AC1 — usePollingFetch URL, intervalMs, paused flag, onSuccess | 5 |
-| AC2 — useSSEEvent('activity-changed') | 1 |
-| AC3 — mtime guard triggers refetch (new mtime, dedup, advance) | 3 |
-| AC4 — no refetch when closed/connecting/null-mtime | 3 |
-| AC5 — initial mount fetch (usePollingFetch called on mount) | 1 |
-| AC6 — EventSourceProvider mock pattern (jsdom compat) | 1 |
+## Architecture Review (cycle 2)
 
-Mock strategy: vi.hoisted mutable sseState + pollingCapture; vi.mock on usePollingFetch and useSSEEvent so no native EventSource needed in jsdom.
+### Context
+Reviewer loop-breaker routed task back to backlog. Implementation commit `5a2a548a` is correct and stays intact. The blocker is proof quality: AC1 (td:2) requires the exact predicate `paused: sseStatus === 'open'` but the task suite only tests `open` and `closed`, leaving `connecting` untested. A mutation to `paused: sseStatus !== 'closed'` would pass all existing tests while violating AC1.
+
+### AC Refinement
+AC1 rewritten to explicitly require three-state proof:
+- `open → paused: true`
+- `closed → paused: false`
+- `connecting → paused: false`
+
+This matches the repo precedent in `useBoard_1277.test.ts` which already covers the same predicate discrimination for the identical hook.
+
+### Evaluation (delta only — full evaluation passed in cycle 1)
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| TDD compliance | PASS | Adding `connecting` discriminator completes td:2 proof quality |
+| Pattern consistency | PASS | Mirrors useBoard_1277 three-state coverage pattern |
+
+### Challenge Results
+- Challenger: SKIP — surgical proof-quality fix on established precedent; no design alternatives
+
+### Test Depth
+- Max depth: 2
+- Test-writer: PROCEED (add connecting discriminator to AC1 test case in ActivityTab_1278.test.tsx)
+
+### Verdict: APPROVE
+### Action Taken: Refined AC1 to require explicit three-state (open/closed/connecting) paused-predicate proof; advanced to todo for test-writer to add connecting discriminator test case
+
+[[2026-05-03]]
+Architecture review cycle 2 complete. Refined AC1 to explicitly require three-state paused-predicate proof (open/closed/connecting), matching useBoard_1277 repo precedent. Implementation commit `5a2a548a` is intact — next cycle is test-writer only (add connecting discriminator).
