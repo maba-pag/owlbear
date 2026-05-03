@@ -1,10 +1,10 @@
 ---
 id: 1253
 title: 'P3-02: GREEN — KanbanBoard filter state and layout integration'
-status: review
+status: done
 priority: needed
 created: 2026-05-01T04:34:58.097220+00:00
-updated: 2026-05-03T13:27:56.856212+00:00
+updated: 2026-05-03T14:05:58.794484+00:00
 tags:
 - phase-3
 - scope:cockpit-web
@@ -14,7 +14,7 @@ depends_on:
 - 1252
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-03T14:05:58.794484+00:00
 archival_reason:
 archival_refs: []
 ---
@@ -234,3 +234,123 @@ Key findings:
 - Builder skip: test-only retry, all tests green → advancing directly to review per Step 1b.1.
 [[2026-05-03]]
 Builder skip: test-only retry — all 2 new proof tests pass against current impl. No source change needed. Advancing to review.
+[[2026-05-03]]
+## Review Evidence
+### Scope
+- Builder commit `489578a3` changed only `serve/cockpit/web/src/KanbanBoard.tsx` and `serve/cockpit/web/src/components/Column.tsx`.
+- Test-writer retry commit `da239cbf` changed only `serve/cockpit/web/src/__tests__/KanbanBoard_1252.test.tsx` and strengthened the `TestFromAC_FilterIntegration` suite.
+- One prior `## Review Evidence` section existed; this review re-checked the live repo state after the test-only retry rather than relying on the earlier verdict.
+
+### Test Results
+- quality-runner scoped frontend run: 57 passed, 0 failed, 0 skipped.
+- Files exercised: `KanbanBoard_1252.test.tsx` (12), `KanbanBoard.test.tsx` (35), `KanbanBoard_959.test.tsx` (10).
+
+### Lint
+- quality-runner: ESLint clean for `serve/cockpit/web/src/KanbanBoard.tsx`, `serve/cockpit/web/src/components/Column.tsx`, and `serve/cockpit/web/src/__tests__/KanbanBoard_1252.test.tsx`.
+- VS Code diagnostics: no errors in the two changed source files or the task suite.
+
+### Coverage
+- `KanbanBoard.tsx`: 83.87% statements / 80.00% branches / 83.33% functions / 85.21% lines
+- `Column.tsx`: 87.50% statements / 93.47% branches / 85.71% functions / 84.61% lines
+- Gate interpretation: PASS. These are whole-module frontend percentages, not diff-scoped task coverage; the changed lines for this task are directly exercised or source-verified, and the uncovered lines are outside the narrow filter/layout delta.
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---------|-------------|---------------------------|---------|
+| Filter state + panel toggle wiring | `KanbanBoard_1252.test.tsx:170`, `:181`, `:395`, `:453` | Yes — open/close behavior, empty reset, and live filter prop assertions would fail | COVERED |
+| `filteredTasks` derived from full task set | `KanbanBoard_1252.test.tsx:198`, `:244`, `:395` | Yes — exact per-column presence/absence and reset-to-empty would fail | COVERED |
+| `availableTags` derived from full task set with dedup wiring | `KanbanBoard_1252.test.tsx:284` plus source `KanbanBoard.tsx:75` | Yes for the full-set contract; dedup mechanism is explicit in source and the visible tag set is asserted | COVERED |
+| Filter toggle badge shows active filter count | `KanbanBoard_1252.test.tsx:426` | Yes — toggle text must move from `Filters` to `Filters (1)` and `Filters (2)` | COVERED |
+| Result count shows exact `N / M tasks` text adjacent to toggle when active | `KanbanBoard_1252.test.tsx:307` plus source `KanbanBoard.tsx:219-230` | Yes — exact text is asserted and adjacency is explicit in the control-row JSX | COVERED |
+| `FilterPanel` receives `filter`, `onFilterChange`, `priorities`, `availableTags`, `open` | `KanbanBoard_1252.test.tsx:170`, `:181`, `:284`, `:328`, `:359`, `:453` plus source `KanbanBoard.tsx:236-240` | Yes — retry tests now prove live `filter` state and current `priorities` value, existing tests prove `open`, `availableTags`, and callback behavior | COVERED |
+| Interaction rules clear `contextMenu` and `dragSource` | `KanbanBoard_1252.test.tsx:328`, `:359` | Yes — both visible side effects fail if the resets are removed | COVERED |
+
+Layout note: the task body explicitly treated the flex layout lines as implementation-detail verification. I verified those in the AC table below rather than requiring separate DOM-style assertions.
+
+#### Security Review
+- No issues found. The diff adds local UI state, derived arrays, and JSX only; there is no new network boundary, secret handling, HTML injection sink, or persistence path.
+
+#### Test Integrity
+| Original Test | Change Made | Assessment |
+|---------------|-------------|------------|
+| `TestFromAC_FilterIntegration` | Retry commit `da239cbf` added prop capture for `filter`/`priorities` and two new proof tests; no existing assertion was weakened or removed | STRENGTHENED |
+
+#### Test Quality
+- Assertion specificity: ADEQUATE
+- Negative/error/state coverage: ADEQUATE
+- Manual mutation reasoning: ADEQUATE. Removing the badge suffix, removing live filter forwarding, or stopping the `onFilterChange` resets would now fail the suite.
+- Test independence: STRONG
+- Descriptive naming: STRONG
+- Informational robustness only: a duplicate-tag fixture would harden the dedup proof, and a non-canonical priorities fixture would harden the priorities-source proof. Those are worthwhile improvements, but they do not negate the current AC proof because the source wiring is explicit.
+
+#### Data Safety
+- No issues found. The change is local React state over an existing in-memory task array; no shared mutation, persistence, or unbounded work was added.
+
+#### Test Gaps
+- No blocking gaps remain for the current AC.
+- `code-reader` raised two non-blocking proof-hardening ideas:
+  - add a duplicate-tag fixture to mutation-kill removal of `new Set(...)`
+  - use a non-canonical priorities fixture to mutation-kill a matching literal
+- I did not gate on missing style assertions for the layout lines because the architect already bound those lines as implementation-detail verification and the source matches the AC exactly.
+
+#### Necessity Check
+- Not applicable. No new dependency, integration, or external capability was introduced.
+
+#### Builder Process Quality
+- CLEAN. One builder attempt, then one test-only retry that directly closed the prior review gaps.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| `useState` for `filter` and `panelOpen` with the required initial values | `KanbanBoard.tsx:70-71`, `KanbanBoard.tsx:236-240` | `clicking filter toggle opens FilterPanel`, `clicking filter toggle again closes FilterPanel`, `FilterPanel receives the live filter state and board priorities as props` | PASS |
+| `filteredTasks` derived through `filterTasks()` over the full task set | `KanbanBoard.tsx:74` | `priority filter proves exact placement...`, `text filter removes non-matching tasks...`, `empty filter state shows all tasks in their columns` | PASS |
+| `availableTags` derived from the full task set and deduplicated | `KanbanBoard.tsx:75` | `FilterPanel receives all tags from all tasks regardless of active filter` | PASS |
+| Toggle button exists and shows the active-filter count badge | `KanbanBoard.tsx:76-81`, `KanbanBoard.tsx:222-226` | `renders a filter toggle button`, `filter toggle label reflects the active filter count` | PASS |
+| Result count uses exact `N / M tasks` format and sits in the control row next to the toggle when active | `KanbanBoard.tsx:219-230` | `shows result count element with filtered and total counts when filter is active` | PASS |
+| `FilterPanel` receives `filter`, `onFilterChange`, `priorities`, `availableTags`, `open` | `KanbanBoard.tsx:236-240` | `clicking filter toggle opens FilterPanel`, `clicking filter toggle again closes FilterPanel`, `FilterPanel receives all tags from all tasks regardless of active filter`, `filter change dismisses an open context menu`, `filter change deactivates drop targets by cancelling active drag`, `FilterPanel receives the live filter state and board priorities as props` | PASS |
+| Vertical flex-column layout with control row, panel, and horizontal-scroll columns container | `KanbanBoard.tsx:213`, `KanbanBoard.tsx:219`, `KanbanBoard.tsx:235`, `KanbanBoard.tsx:243` | architect-bound source verification | PASS |
+| `Column.tsx` removes hardcoded `maxHeight` while retaining `overflowY:auto` | `Column.tsx:57`; grep confirms no `maxHeight` remains in the file | source verification | PASS |
+| `onFilterChange` clears `contextMenu` and `dragSource` | `KanbanBoard.tsx:202-205` | `filter change dismisses an open context menu`, `filter change deactivates drop targets by cancelling active drag` | PASS |
+| All `#1252` integration tests pass | quality-runner scoped run: 12/12 in `KanbanBoard_1252.test.tsx` | execution evidence | PASS |
+| Pre-existing KanbanBoard suites continue passing | quality-runner scoped run: 45/45 across `KanbanBoard.test.tsx` and `KanbanBoard_959.test.tsx` | execution evidence | PASS |
+
+### Deductions
+- `0.03` `code-reader` surfaced two useful proof-hardening ideas, but they are robustness improvements rather than current AC failures.
+- `0.02` module-level frontend coverage is below 90%; under the task’s diff-scoped gate, the changed lines are still sufficiently proven.
+
+### Verdict
+- Confidence: `0.93`
+- PASS
+- Action: advance to `docs`
+
+### Reflection
+- Whole-module frontend coverage can understate narrow UI tasks; diff-scoped proof is the correct gate for review.
+- Checking the retry commit directly prevented a false second-cycle rejection; the latest cycle was additive test work only.
+- For prop-forwarding ACs, exact-value tests plus explicit source wiring are enough to pass; hypothetical matching literals belong in proof-hardening notes, not blockers.
+[[2026-05-03]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | Changed files: `KanbanBoard.tsx`, `Column.tsx`, `KanbanBoard_1252.test.tsx` — all frontend TSX/test files; no README or setup guide references this narrow filter/layout addition |
+| 2 | Module docstrings | No | N/A | No Python files changed |
+| 3 | External attribution | No | N/A | No external patterns cited in builder/research notes; task body sources listed existing codebase references only |
+| 4 | Research doc | Yes | Verified | `.owlbear/research/kanbanboard-filter-green-1253.md` linked in task body; follow-up tasks noted as pre-existing (#1254–#1256) |
+| 5 | Diagram maintenance (describes match) | Yes | Updated | `share/diagrams/cockpit.excalidraw` has `describes: serve/cockpit/src/**, serve/cockpit/web/src/**` — matches `KanbanBoard.tsx` and `Column.tsx`; footer updated from `2026-05-03 (489578a3)` → `2026-05-03 (85b3e028)` |
+| 6 | Explicit diagram creation | No | N/A | No new diagram creation requested in task body |
+| 7 | Deletion detection | No | N/A | No files deleted; Column.tsx maxHeight removal is an inline edit, not file deletion |
+
+### Scope Classification
+- `serve/cockpit/web/src/KanbanBoard.tsx` — OUT-scope (application TSX)
+- `serve/cockpit/web/src/components/Column.tsx` — OUT-scope (application TSX)
+- `serve/cockpit/web/src/__tests__/KanbanBoard_1252.test.tsx` — OUT-scope (test file)
+
+### Files Updated
+- `share/diagrams/cockpit.excalidraw` — footer updated (commit `7cca18fa`)
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- No `.owlbear/scratch/1253-*` files found

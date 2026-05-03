@@ -1,10 +1,10 @@
 ---
 id: 1210
 title: Break circular imports — extract leaf modules
-status: backlog
+status: review
 priority: needed
 created: 2026-04-30 15:29:06.259647+00:00
-updated: 2026-05-03T13:10:06.147385+00:00
+updated: 2026-05-03T14:06:00.371789+00:00
 tags:
 - audit-kanban
 - architecture
@@ -14,7 +14,7 @@ depends_on:
 - 1209
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-03T14:06:00.371789+00:00
 archival_reason:
 archival_refs: []
 ---
@@ -365,3 +365,68 @@ Architecture review cycle 2 complete. AC5 refined: explicit module-level scope r
 - Adjacent runtime suites were necessary here to separate implementation health from proof quality.
 - A green structural refactor suite can still be false-green when the AC names exact call sites but the tests only pin import placement.
 - Second-cycle proof-only failures should not be routed back to the builder once the runtime surface is independently green.
+
+[[2026-05-03]]
+
+## Test-Writer Note (cycle 3)
+
+Two structural proof gaps from the reviewer must be closed. The existing AST helpers in the test file (`_locking_imports_inside_function`, `_module_level_imports_from`, `ast.walk`) are sufficient — no new infrastructure needed.
+
+**AC5 call-site proof:** Add a test that parses `storage.py` AST and asserts `_exclusive_file_lock` appears as a `Name` node inside a `Call` expression within each of the three target functions (`write_task_if_unchanged`, `move_to_archive`, `allocate_next_id`). Pattern: walk the `FunctionDef.body`, find `ast.Call` nodes where `func` is `ast.Name(id='_exclusive_file_lock')`.
+
+**AC6 validator-call proof:** Add a test that parses `models.py` AST and asserts `_parse_duration` appears as a `Name` node inside a `Call` expression within `_validate_semantics` method of `BoardConfig`. Same AST walk pattern.
+
+Both tests should FAIL if the call sites are removed (even if the import remains), closing the "dead import" mutation gap the reviewer identified. Ruff F401 provides belt-level protection; these tests add the suspenders.
+
+## Architecture Review (cycle 3)
+
+**Verdict:** APPROVED
+
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | Pure import extraction — unchanged from cycle 2 |
+| Interface clarity | PASS | AC5 explicitly names scope, call sites, and constraint |
+| Dependency correctness | PASS | Deps #1206, #1209 archived |
+| Module layering | PASS | `_locking.py` stdlib-only leaf; `_duration.py` → `errors` only |
+| TDD compliance | PASS | Test file exists (`tests/test_circular_imports_1210.py`); needs 2 additive assertions per test-writer note |
+| KISS/YAGNI | PASS | No new abstractions |
+| Premise challenge | PASS | Circular imports are real; extraction is warranted |
+| Pattern consistency | PASS | Follows existing leaf-module pattern |
+| Security surface | PASS | No new boundaries |
+| Single domain | PASS | Kanban engine internals only |
+
+### Challenge Results
+- Challenger: SKIPPED — cycle 3 re-approval of already-green implementation; only test-writer strengthening needed. No design changes since cycle 2 challenger invocation.
+
+### Test Depth
+- Max depth: 2 (AC6)
+- Test-writer: PROCEED (2 new assertions needed; existing tests preserved)
+
+### Verdict: APPROVE
+### Action Taken: Approved with test-writer guidance for AC5/AC6 structural call-site assertions. AC unchanged from cycle 2 refinement (still correct). Implementation is verified green. Routing to todo for test-writer strengthening pass.
+
+[[2026-05-03]]
+Architecture review cycle 3 complete. AC unchanged from cycle 2 (already precise). Implementation is verified green. Added test-writer guidance for 2 structural call-site assertions (AC5: _exclusive_file_lock usage in 3 functions; AC6: _parse_duration call in _validate_semantics). These close the reviewer's proof-quality gap without changing the AC contract.
+[[2026-05-03]]
+## Test-Writer Notes
+- Retry cycle 3: filling reviewer-specified call-site proof gaps (AC5 and AC6).
+- Test file: tests/test_circular_imports_1210.py
+- Classes modified: TestFromAC_StorageImport (+1), TestFromAC_ModelsDuplicateRemoved (+1)
+- New tests added (2):
+  - `test_storage_three_functions_call_exclusive_file_lock` — AST walk of storage.py; asserts `_exclusive_file_lock(…)` appears as a `Call` node (not just import) inside each of `write_task_if_unchanged`, `move_to_archive`, and `allocate_next_id`. Fails if any call site is removed even when module-level import stays. (AC5 call-site proof)
+  - `test_board_config_validate_semantics_calls_parse_duration` — AST walk of models.py; asserts `_parse_duration(…)` appears as a `Call` node inside `BoardConfig._validate_semantics`. Fails if the canonical-parser call is removed even when the import stays. (AC6 validator-call proof)
+- pytest result: 39 passed, 0 failed (2 new tests PASS against current green impl)
+- ruff: clean
+- Builder skip: test-only retry (cycle 3), all tests green — reviewer's Required Follow-up was proof-quality only, no implementation miss.
+- AC coverage: AC5 and AC6 call-site proofs close the "dead import" mutation gap identified in cycle-2 review.
+[[2026-05-03]]
+## Builder Notes
+- Implementation: no source changes in this builder pass; task was already in a GREEN implementation state from prior cycle.
+- Tests: 39/39 passed in `tests/test_circular_imports_1210.py` via scoped quality-runner verification.
+- Coverage: `_duration` 100%, `_locking` 100%, `models` 79%, `storage` 17% in scoped run (informational).
+- Ruff: clean for `serve/kanban/src/owlbear_kanban/storage.py`, `serve/kanban/src/owlbear_kanban/models.py`, `serve/kanban/src/owlbear_kanban/_duration.py`, `serve/kanban/src/owlbear_kanban/_locking.py`, and `tests/test_circular_imports_1210.py`.
+- Evidence summary: task-owned suite is fully green with zero failures and zero lint issues; no implementation defect remained to fix.
+
+- Reflection: this cycle was verification-only; no reproducible implementation gap remained after test-writer cycle 3.
+- Reflection: scoped quality-runner evidence was sufficient to validate AC-owned behavior without unrelated suite noise.
+- Reflection: no commit performed because no files were modified in this pass.

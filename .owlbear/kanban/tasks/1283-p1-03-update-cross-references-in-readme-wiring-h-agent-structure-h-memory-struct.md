@@ -1,10 +1,10 @@
 ---
 id: 1283
 title: 'P1-03: Update cross-references in README, WIRING, h-agent-structure, h-memory-structure'
-status: backlog
+status: in-progress
 priority: needed
 created: 2026-05-02T16:01:10.613477+00:00
-updated: 2026-05-03T13:25:58.568451+00:00
+updated: 2026-05-03T13:53:07.594800+00:00
 tags:
 - phase-1
 - scope:docs
@@ -351,3 +351,75 @@ pytest: 10 passed, 0 failed. ruff: clean.
 - Defining the exact expected string without asserting it is a recurrent false-green pattern in mirror-value tests.
 - The retry improved coverage, but it did not cross the line from subset membership to exact-value proof on the refined contract.
 - Because this is the second review failure, another narrow test-only retry would just repeat the loop unless the AC/test contract is tightened first.
+[[2026-05-03]]
+
+## Architecture Review (Return Cycle)
+
+### Context
+Task returned to backlog via reviewer loop-breaker after two review FAIL cycles. Both reviews confirmed the **implementation artifacts are correct** — the sole issue is test proof quality (assertions are substring-membership checks instead of exact-value assertions).
+
+### Refined AC — Test-Writer Retry Guidance
+
+The Refined Acceptance Criteria section above remains authoritative. This addendum clarifies the **assertion contract** for the test-writer's next retry. No AC lines change; only assertion expectations are tightened.
+
+| AC | Current test weakness | Required assertion fix |
+|----|----------------------|----------------------|
+| AC1 | Checks 4 `.owlbear/...` substrings in YAML field | Assert `applyTo_value == _FULL_APPLY_TO` (exact equality). The canonical value includes BOTH `share/...` and `.owlbear/...` halves. |
+| AC2 | Checks 4 `.owlbear/...` substrings in README row | Assert `_FULL_APPLY_TO in row` (full canonical value appears as substring in the table row). |
+| AC3 | Checks 4 `.owlbear/...` substrings in h-agent-structure row | Assert `_FULL_APPLY_TO in row` (full canonical value appears as substring in the table row). |
+| AC4 | Checks only `.owlbear/agents/**` in WIRING Table 2 row | Assert BOTH `share/agents/**` AND `.owlbear/agents/**` appear in the row (the abbreviated form includes both halves of the split). |
+| AC5 | Already adequate (reviewer: PASS) | No change needed. |
+
+**Key instruction:** `_FULL_APPLY_TO` is already defined in the test file at line 26. USE IT in assertions. The retry failed because the constant was defined but never asserted against.
+
+**Scope of retry:** Test-only. No implementation files need changes. The 5 existing "stronger" tests (lines 145–270) should be rewritten to use exact-value assertions. The 5 original weaker tests (lines 35–140) may be removed or kept as supplementary.
+
+### Evaluation (unchanged from first review)
+
+| Criterion | Assessment |
+|-----------|-----------|
+| Single responsibility | PASS |
+| Interface clarity | PASS (after assertion guidance above) |
+| Dependency correctness | PASS (#1282 done) |
+| Module layering | N/A (docs-only) |
+| TDD compliance | PASS |
+| KISS/YAGNI | PASS |
+| Premise challenge | PASS |
+| Pattern consistency | PASS |
+| Security surface | N/A |
+| Single domain | PASS |
+
+### Design Diverge
+Skipped — single approach (exact-value assertions).
+
+### Challenge Results
+Skipped — all td:0 exempt, and the only change is tightening assertion specificity on an already-correct implementation. The architectural decision (applyTo extension + mirrors) was challenged and approved in the first cycle.
+
+### Test Depth
+- Max depth: 1
+- Test-writer: PROCEED (5 lines td:1, assertions need exact-value rewrite)
+
+### Verdict: APPROVE
+### Action Taken: Added assertion-contract guidance table clarifying exact-value vs. substring expectations for each AC line. No AC changes. Test-writer retry is test-only (implementation correct). Advancing to todo.
+
+[[2026-05-03]]
+Architecture review (return cycle). Implementation is correct — sole issue is test proof quality. Added assertion-contract guidance table: AC1 needs exact equality against _FULL_APPLY_TO; AC2/AC3 need full canonical value as substring in row; AC4 needs both share/agents/** and .owlbear/agents/** in abbreviated row. Test-writer retry is test-only. Advancing to todo.
+[[2026-05-03]]
+## Test-Writer Notes
+- Retry (3rd cycle): rewrote 5 exact-value assertions per Architecture Review return-cycle guidance. All 10 tests pass against current (correct) impl.
+- Builder skip: test-only retry, all tests green.
+- Test file: tests/test_cross_references_1283.py
+- Class: TestFromAC_ApplyToExtension (10 tests total: 5 original weaker preserved + 5 rewritten with exact-value assertions)
+- ruff: clean
+- Commit: c4c10dd0
+
+### Retry changes (AR return-cycle required follow-up)
+| Reviewer gap | Fix applied |
+|---|---|
+| AC1: `applyTo_value == _FULL_APPLY_TO` (exact equality, not membership) | `assert apply_to_value == _FULL_APPLY_TO` |
+| AC2: full canonical value in README row (not just 4 .owlbear paths) | `assert _FULL_APPLY_TO in row` |
+| AC3: full canonical value in h-agent-structure row (not just 4 .owlbear paths) | `assert _FULL_APPLY_TO in row` |
+| AC4: BOTH `share/agents/**` AND `.owlbear/agents/**` in Table 2 row | two separate `assert ... in row` |
+| AC5: already adequate — no change | unchanged |
+
+All 10 tests green. pytest: 10 passed, 0 failed. ruff: clean.

@@ -1,10 +1,10 @@
 ---
 id: 1285
 title: 'P2-01: Test — path neutrality verification for share/skills/'
-status: todo
+status: review
 priority: critical
 created: 2026-05-02T16:01:17.041733+00:00
-updated: 2026-05-03T13:23:14.335322+00:00
+updated: 2026-05-03T14:05:58.962142+00:00
 tags:
 - phase-2
 - scope:test
@@ -14,7 +14,7 @@ depends_on:
 - 1282
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-03T14:05:58.962142+00:00
 archival_reason:
 archival_refs: []
 ---
@@ -368,3 +368,25 @@ Operational definition: (a) `r-doc-standards/SKILL.md` contains substring `share
 
 [[2026-05-03]]
 Architecture review (loop-breaker cycle): APPROVED → todo. Resolved reviewer's 2-cycle proof-quality failure by narrowing AC3/AC5 operational definitions to path-presence semantics. Test docstrings are the only fix surface — assertions and implementation are correct. Challenger skipped (docstring reconciliation only).
+[[2026-05-03]]
+## Test-Writer Notes
+- Retry (loop-breaker cycle): aligned 5 test docstrings to path-presence semantics per AC Reconciliation decision.
+- AC3 (`test_quality_runner_skill_references_copilot_instructions`): removed "directive text itself must be present — mere filename presence is insufficient" — replaced with "each as independent file-content substrings". Assertions unchanged.
+- AC5 (4 tests): removed all "chain link N", "A filename-only substring is insufficient", and "end-to-end chain integrity" language — replaced with exact descriptions of what each assertion actually checks (canonical path substring presence in file content + target file existence). Assertions unchanged.
+- All 9 tests pass against current workspace (builder impl correct, no source changes needed).
+- Builder skip: test-only retry, all tests green.
+- ruff: clean.
+- Commit: `85b3e028` — `test: align AC3+AC5 docstrings to path-presence semantics (#1285, test-writer loop-breaker)`
+[[2026-05-03]]
+## Builder Notes
+- Non-implementation pass-through for this cycle; reviewer-required follow-up was test/docstring alignment only.
+- Independent verification via quality-runner (scoped): `tests/test_path_neutrality_1285.py`.
+- Tests: 9 passed, 0 failed, 0 skipped.
+- ruff: clean (0 violations).
+- Coverage: N/A (test-only file; no production module imported).
+- Files changed by builder: none.
+
+### Post-task Reflection
+- Builder-skip routing prevented unnecessary implementation churn after a test-only retry.
+- Scoped quality-runner evidence was sufficient to validate pass-through confidence quickly.
+- Keeping builder notes explicit about "no file changes" helps reviewer and auditor trace ownership cleanly.
