@@ -1,10 +1,10 @@
 ---
 id: 1282
 title: 'P1-02: Split owlbear-system.instructions.md — extract directory table to .github/copilot-instructions.md'
-status: done
+status: archived
 priority: critical
 created: 2026-05-02T16:01:10.599380+00:00
-updated: 2026-05-03T00:35:15.293993+00:00
+updated: 2026-05-03T10:08:52.176335+00:00
 tags:
 - phase-1
 - scope:docs
@@ -196,3 +196,29 @@ Post-task reflection:
 
 ### Scratch Files Cleaned
 - None (no scratch files found for task 1282)
+[[2026-05-03]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Remove Directory Structure subsection from owlbear-system.instructions.md; keep "For file placement rules..." line | Heading absent; retained line at owlbear-system.instructions.md:36 | PASS |
+| Replace copilot-instructions.md directory table; drop scripts/ row; keep tests/ row | Richer table at copilot-instructions.md:16; grep scripts/ = 0 matches; tests/ row present | PASS |
+| Retain Decision Heuristics, Tech Stack, Pipeline, Memory Governance, Operational Fundamentals | Sections at owlbear-system.instructions.md L6, L19, L30, L38, L51 | PASS |
+| Update frontmatter description to "System instructions ..." | Confirmed at owlbear-system.instructions.md:2 | PASS |
+| No serve/ paths remain in owlbear-system.instructions.md | grep serve/ = 0 matches | PASS |
+| Remove xfail from test_instructions_have_no_serve_refs | grep xfail in test file = 0 matches | PASS |
+| test_neutral_shared_1281.py suite passes green | 10 passed, 0 failed, 0 skipped (0.41s) | PASS |
+
+### Test Results
+- pytest (task-scoped): 10 passed, 0 failed
+- pytest (full suite): 551 passed, 1 failed (pre-existing: test_engine_accessor_migration.py dead-code check, unrelated to #1282)
+- ruff (task-scoped): All checks passed
+
+### Architect Quality: 5/5
+Precise mechanical instructions with explicit file paths and section names. No ambiguity, no builder improvisation needed.
+
+### Deduction Breakdown
+No deductions applied. All 7 AC lines have direct file evidence, reviewer section is detailed with PASS verdict, full suite has zero task-scoped failures, lint clean. Pre-existing failure in test_engine_accessor_migration.py is outside task scope (engine dead code).
+
+### Confidence: .98
+### Action: archive
