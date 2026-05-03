@@ -50,6 +50,9 @@ playwright-report/
 .claude/
 .serena/
 
+# OS artifacts
+.DS_Store
+
 # Secrets - NEVER commit
 .env
 .env.*
