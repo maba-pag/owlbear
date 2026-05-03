@@ -822,7 +822,7 @@ class TestFromAC_SQLiteRemoval:
 class TestFromAC_ConsumerDrift:
     """New AC: consumer files must not reference retired memory API names.
 
-    Covers: share/prompts/agent-audit.prompt.md, share/agents/memory-curator.agent.md,
+    Covers: .owlbear/prompts/agent-audit.prompt.md, share/agents/memory-curator.agent.md,
             serve/mcp-memory/README.md must use current tool names only.
     """
 
@@ -830,7 +830,7 @@ class TestFromAC_ConsumerDrift:
         """agent-audit.prompt.md must not call retired get_knowledge tool."""
         prompt_path = (
             Path(__file__).parent.parent
-            / "share" / "prompts" / "agent-audit.prompt.md"
+            / ".owlbear" / "prompts" / "agent-audit.prompt.md"
         )
         assert prompt_path.exists(), f"prompt file not found: {prompt_path}"
         content = prompt_path.read_text()
