@@ -1,10 +1,10 @@
 ---
 id: 1254
 title: 'P4-01: RED — Filter accessibility tests'
-status: review
+status: in-progress
 priority: important
 created: 2026-05-01T04:35:01.084199+00:00
-updated: 2026-05-03T16:34:19.325807+00:00
+updated: 2026-05-03T19:00:14.512451+00:00
 tags:
 - phase-4
 - scope:cockpit-web
@@ -14,7 +14,7 @@ depends_on:
 - 1253
 blocked: false
 block_reason:
-claimed_at: 2026-05-03T16:34:19.325807+00:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -201,3 +201,535 @@ Moved AC3/AC7/AC8/AC9 to a new file with no `vi.mock('../components/FilterPanel'
 - Pattern discovered: PDS `label` prop is not always reflected as a test-visible DOM attribute; explicit `aria-label` is safer for assertion stability.
 - Time sink: reconciling stale historical AC text claiming "all fail" vs live RED baseline.
 - Quality gap: frontend scoped quality-runner did not produce module-level coverage instrumentation for touched files in this run mode.
+[[2026-05-03]]
+## Review Evidence
+
+### Test Results
+- quality-runner frontend scoped pass in `serve/cockpit/web`: 22 passed, 0 failed
+  - `serve/cockpit/web/src/__tests__/FilterAccessibility_1254.test.tsx`
+  - `serve/cockpit/web/src/__tests__/FilterAccessibilityPanel_1254.test.tsx`
+- Adjacent regression pass: 75 passed, 0 failed
+  - `serve/cockpit/web/src/__tests__/KanbanBoard.test.tsx`
+  - `serve/cockpit/web/src/__tests__/FilterPanel_1250.test.tsx`
+- VS Code diagnostics: no errors in touched source or task test files
+
+### Lint
+- ESLint clean on `serve/cockpit/web/src/KanbanBoard.tsx` and `serve/cockpit/web/src/components/FilterPanel.tsx`
+
+### Coverage
+- Scoped frontend coverage metric was unavailable from the quality-runner/vitest configuration in this workspace. This is not the fail reason, but it costs confidence.
+
+### AC Compliance
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| `.owlbear/kanban/tasks/1254-p4-01-red-filter-accessibility-tests.md:25` aria-expanded reflects panelOpen | `serve/cockpit/web/src/KanbanBoard.tsx:251`; `serve/cockpit/web/src/__tests__/FilterAccessibility_1254.test.tsx:130,136,145` | PASS |
+| `.owlbear/kanban/tasks/1254-p4-01-red-filter-accessibility-tests.md:26` aria-controls=`filter-panel` | `serve/cockpit/web/src/KanbanBoard.tsx:252`; `serve/cockpit/web/src/__tests__/FilterAccessibility_1254.test.tsx:160-163` | PASS |
+| `.owlbear/kanban/tasks/1254-p4-01-red-filter-accessibility-tests.md:27` panel id/role/aria-label | Implemented at `serve/cockpit/web/src/components/FilterPanel.tsx:134-136`, but tests split proof across `#filter-panel` at `serve/cockpit/web/src/__tests__/FilterAccessibilityPanel_1254.test.tsx:61` and separate `[role="region"]` queries at `:66` and `:72`, so the same-element contract is under-proved | LAX |
+| `.owlbear/kanban/tasks/1254-p4-01-red-filter-accessibility-tests.md:28` aria-live=`polite` present | `serve/cockpit/web/src/KanbanBoard.tsx:258`; `serve/cockpit/web/src/__tests__/FilterAccessibility_1254.test.tsx:170,184` | PASS |
+| `.owlbear/kanban/tasks/1254-p4-01-red-filter-accessibility-tests.md:29` user-initiated-only aria-live | Source branches text vs non-text at `serve/cockpit/web/src/KanbanBoard.tsx:226-229`, but every synthetic change in `serve/cockpit/web/src/__tests__/FilterAccessibility_1254.test.tsx:176,201,267,291,309,333,337` is text-only; positive assertions are only non-empty / regex at `:206` and `:271` | FAIL |
+| `.owlbear/kanban/tasks/1254-p4-01-red-filter-accessibility-tests.md:30` 300ms debounce | Timeout is set at `serve/cockpit/web/src/KanbanBoard.tsx:227`; negative 299ms proof exists at `serve/cockpit/web/src/__tests__/FilterAccessibility_1254.test.tsx:279`, but the positive proofs after 300ms and rapid input only require non-empty or changed text at `:317` and `:347` | FAIL |
+| `.owlbear/kanban/tasks/1254-p4-01-red-filter-accessibility-tests.md:31` focus moves to first panel control | Implementation focuses the text input at `serve/cockpit/web/src/components/FilterPanel.tsx:98`; the test named at `serve/cockpit/web/src/__tests__/FilterAccessibilityPanel_1254.test.tsx:80` only proves focus is somewhere inside the panel via `:114` and `:119` | FAIL |
+| `.owlbear/kanban/tasks/1254-p4-01-red-filter-accessibility-tests.md:32` programmatic focus return on collapse | The rerender-close path is covered at `serve/cockpit/web/src/__tests__/FilterAccessibilityPanel_1254.test.tsx:208` and `:244`, but the Escape-path proof is incomplete: the test creates `onClose = vi.fn()` at `:163`, fires Escape at `:185`, forces a closed rerender at `:189`, and the file contains no `expect(onClose...)` assertion while runtime wiring lives at `serve/cockpit/web/src/components/FilterPanel.tsx:139` and `serve/cockpit/web/src/KanbanBoard.tsx:275-276` | FAIL |
+| `.owlbear/kanban/tasks/1254-p4-01-red-filter-accessibility-tests.md:33` explicit labels on controls | `serve/cockpit/web/src/components/FilterPanel.tsx:146,154-155,170-171`; `serve/cockpit/web/src/__tests__/FilterAccessibilityPanel_1254.test.tsx:255,269,278` | PASS |
+| `.owlbear/kanban/tasks/1254-p4-01-red-filter-accessibility-tests.md:34` RED-only pre-implementation condition | Historical RED-phase requirement; not scored against the current GREEN snapshot | N/A |
+
+### Pass 1 — Critical
+#### Test-Writer AC Coverage
+- MISSING: none.
+- LAX / false-green risk:
+  - AC27 same-element semantics.
+  - AC29 announcement content and branch proof.
+  - AC30 exact debounce-announcement proof.
+  - AC31 first-control focus proof.
+  - AC32 Escape close wiring proof.
+
+#### Security Review
+- No issues in `serve/cockpit/web/src/KanbanBoard.tsx:213-229,251-276` or `serve/cockpit/web/src/components/FilterPanel.tsx:45-171`. No secrets, injection surface, unsafe deserialization, or new dependency risk.
+
+#### Test Integrity
+- Builder commit `3b1c83e0` changes only `serve/cockpit/web/src/KanbanBoard.tsx` and `serve/cockpit/web/src/components/FilterPanel.tsx`.
+- No builder modification to the `TestFromAC_*` files was found in the builder commit object.
+- Small confidence deduction remains because the broader commit range from test-writer commit `506d4da3` crosses unrelated history; immutability proof relies on the builder commit object itself.
+
+#### Test Quality
+- WEAK.
+- The suite still allows false green on core td:2 contracts:
+  - `serve/cockpit/web/src/__tests__/FilterAccessibility_1254.test.tsx:206` and `:317` accept any non-empty announcement text.
+  - `serve/cockpit/web/src/__tests__/FilterAccessibility_1254.test.tsx:271` accepts any text containing `1`.
+  - `serve/cockpit/web/src/__tests__/FilterAccessibility_1254.test.tsx:347` accepts any changed text, even stale or duplicate content.
+  - `serve/cockpit/web/src/__tests__/FilterAccessibilityPanel_1254.test.tsx:119` accepts focus on any descendant instead of the first control.
+- These are fail-worthy because the architect explicitly refined the task to avoid accidental aria-live and focus false-greens at `.owlbear/kanban/tasks/1254-p4-01-red-filter-accessibility-tests.md:48-49`.
+
+#### Data Safety
+- No issues. Timer cleanup and focus bookkeeping are bounded in `serve/cockpit/web/src/KanbanBoard.tsx:109,218,227` and `serve/cockpit/web/src/components/FilterPanel.tsx:77-82,111`.
+
+#### Test Gaps
+- Immediate announcement for non-text filter changes is untested even though the source has a separate branch at `serve/cockpit/web/src/KanbanBoard.tsx:226-229`.
+- Escape-to-close wiring is untested end-to-end; the current panel test proves only forced rerender focus restoration, not that Escape actually invokes `onClose` and closes the real board path.
+
+#### Necessity Check
+- N/A. No new dependency or integration surface.
+
+#### Builder Process Quality
+- FRICTION only, not a loop: two `## Builder Notes` sections at `.owlbear/kanban/tasks/1254-p4-01-red-filter-accessibility-tests.md:127` and `:175`, with an approach change after the test-writer split.
+- No prior `## Review Evidence` section exists in the task file, so this is the first review-cycle failure.
+
+### Deductions
+- `-0.12` weak/lax AC proof on td:2 contracts
+- `-0.02` frontend coverage metric unavailable
+- `-0.02` TestFromAC immutability reconstructed from the commit object rather than a clean linear range diff
+
+### Verdict
+- FAIL, confidence `0.84`
+
+### Action
+- Reject to `backlog`. This is not a source-implementation miss; it is a test-quality / AC-proof failure.
+- Required follow-up:
+  - strengthen AC29/30 assertions to exact announcement text/count, not non-empty/regex/different-text checks;
+  - add non-text filter-change coverage for the priority/tags/blocked immediate-announcement branch;
+  - assert the first control specifically for AC31;
+  - assert that Escape triggers `onClose` and, ideally, cover the real `KanbanBoard` close wiring for AC32;
+  - tighten AC27 so one panel-root element is required to carry `id`, `role`, and `aria-label` together.
+[[2026-05-03]]
+
+## Review Rejection — Test Strengthening Required
+
+Reviewer rejected at confidence 0.84 due to test-quality gaps, NOT implementation issues. The 22 tests pass but allow false-green on td:2 contracts. Test-writer must fix the following:
+
+### 1. AC3 same-element semantics (FilterAccessibilityPanel_1254)
+Current: three separate queries (`#filter-panel`, `[role="region"]`, `aria-label`). Fix: query ONE element and assert all three attributes on that single element, e.g. `const panel = container.querySelector('#filter-panel'); expect(panel).toHaveAttribute('role', 'region'); expect(panel).toHaveAttribute('aria-label', 'Task filters')`.
+
+### 2. AC5/AC6 exact announcement text (FilterAccessibility_1254)
+Current: assertions accept any non-empty / changed text. Fix: assert exact announcement content matching the visible count format (e.g. `"Showing 1 of 2 tasks"` or whatever the implementation produces). Concrete string, not regex/non-empty.
+
+### 3. AC5 non-text filter coverage (FilterAccessibility_1254)
+Current: only text-input filter changes tested. Fix: add test that priority/tags/blocked filter changes trigger immediate (non-debounced) aria-live update with correct count text.
+
+### 4. AC7 first-control specificity (FilterAccessibilityPanel_1254)
+Current: asserts focus is "inside the panel". Fix: assert `document.activeElement` is specifically the text input (the first focusable control), not just any descendant.
+
+### 5. AC8 Escape triggers onClose (FilterAccessibilityPanel_1254)
+Current: fires Escape, rerenders closed, checks focus — but never asserts `expect(onClose).toHaveBeenCalled()`. Fix: add `expect(onClose).toHaveBeenCalledTimes(1)` between the keydown and the rerender.
+
+[[2026-05-03]]
+## Architecture Review (cycle 2)
+
+### Verdict: APPROVE → todo
+
+### Context
+Reviewer rejected at confidence 0.84 — test-quality / assertion-strength failure, not implementation. All 22 tests pass but assertions are too weak to prevent false-green on td:2 contracts.
+
+### AC Assessment (unchanged)
+AC lines remain verifiable as-is. The weakness is in test assertion strength, not AC precision.
+
+| AC Line | Assessment | Action |
+|---------|-----------|--------|
+| AC1 aria-expanded (td:2) | Tests adequate | None |
+| AC2 aria-controls (td:1) | Tests adequate | None |
+| AC3 id/role/aria-label (td:1) | Tests query separately — same-element not proved | Guidance added |
+| AC4 aria-live present (td:1) | Tests adequate | None |
+| AC5 user-initiated only (td:2) | Weak assertions (non-empty); missing non-text coverage | Guidance added |
+| AC6 debounce 300ms (td:2) | Weak assertion (non-empty/changed) | Guidance added |
+| AC7 focus to first control (td:2) | Asserts "inside panel" not "first control" | Guidance added |
+| AC8 focus return on collapse (td:2) | Missing onClose assertion on Escape | Guidance added |
+| AC9 explicit labels (td:2) | Tests adequate | None |
+
+### Architecture Notes
+- Implementation is sound (reviewer confirmed PASS on source)
+- No structural changes needed — only test assertion tightening
+- Test-writer has explicit 5-point strengthening guide in task body
+
+### Dependency Analysis
+- #1253 (dependency): archived/done — no issue
+- Parent #1247: archived — context only
+
+### Challenge: SKIP
+Reviewer evidence is concrete and code-referenced. No architectural ambiguity to challenge — this is mechanical test-quality work.
+[[2026-05-03]]
+## Test-Writer Notes
+- Retry: strengthened 5 weak assertion areas per reviewer Required Follow-up
+- Files: `serve/cockpit/web/src/__tests__/FilterAccessibility_1254.test.tsx`, `serve/cockpit/web/src/__tests__/FilterAccessibilityPanel_1254.test.tsx`
+- Commit: `d8911678`
+
+### Changes made (all in `TestFromAC_` classes — no tests removed)
+
+1. **AC3 same-element** (`FilterAccessibilityPanel_1254`): consolidated 3 separate queries into 1 test that queries `#filter-panel` and asserts `role="region"` + `aria-label="Task filters"` on the single element. (-2 tests, +1 test)
+2. **AC5 exact announcement text** (`FilterAccessibility_1254`): changed `not.toBe('')` → `toBe('1 / 2 tasks')` (test 1) and `toMatch(/1/)` → `toBe('1 / 2 tasks')` (test 3)
+3. **AC5 non-text filter coverage** (`FilterAccessibility_1254`): added new test asserting priority filter change triggers **immediate** (non-debounced) announcement with exact count `'1 / 2 tasks'`. (+1 test)
+4. **AC6 exact announcement text** (`FilterAccessibility_1254`): changed `not.toBe('')` → `toBe('1 / 2 tasks')` (test 2) and `not.toBe(textBefore)` → `toBe('1 / 2 tasks')` (test 3)
+5. **AC7 first-control specificity** (`FilterAccessibilityPanel_1254`): changed `panelRegion?.contains(activeEl)` → `document.activeElement === textInput` (the text input explicitly)
+6. **AC8 Escape→onClose** (`FilterAccessibilityPanel_1254`): added `expect(onClose).toHaveBeenCalledTimes(1)` after `fireEvent.keyDown(Escape)`
+
+### Test outcome
+- Total: 21 tests (FilterAccessibility: 13, FilterAccessibilityPanel: 8)
+- All 21 PASS against current implementation — implementation already handles all strengthened contracts
+- ESLint: clean
+
+### Step 1b.1 — Direct-to-Review Advance
+Reviewer's Required Follow-up contained ONLY test-proof gaps; all new/strengthened tests pass. Builder skip — advancing to review.
+[[2026-05-03]]
+## Builder Notes
+- Implementation: no additional code changes required in this cycle; existing implementation in serve/cockpit/web/src/KanbanBoard.tsx and serve/cockpit/web/src/components/FilterPanel.tsx already satisfies strengthened tests.
+- Tests: 21 TestFromAC passed (0 failed)
+  - serve/cockpit/web/src/__tests__/FilterAccessibility_1254.test.tsx
+  - serve/cockpit/web/src/__tests__/FilterAccessibilityPanel_1254.test.tsx
+- Lint: clean
+  - npx eslint src/KanbanBoard.tsx src/components/FilterPanel.tsx src/__tests__/FilterAccessibility_1254.test.tsx src/__tests__/FilterAccessibilityPanel_1254.test.tsx
+- Coverage (scoped, task tests only):
+  - Statements: 70.14% (235/335)
+  - Branches: 68.91% (204/296)
+  - Functions: 40.00% (16/40)
+  - Lines: 70.69% (152/215)
+- Coverage note: broader combined coverage run for adjacent durable tests was interrupted in this terminal environment (exit 130), so only stable scoped module coverage metrics are recorded in this cycle.
+- Evidence summary: all reviewer-requested test-strengthening points are now present and passing; builder performed verification-only rerun and no new implementation changes were necessary.
+
+### Post-task Reflection
+- Problem faced: quality-runner and some coverage invocations returned inconsistent/interrupt-driven results in this session.
+- Workaround applied: used direct local vitest binary for stable scoped coverage capture.
+- Pattern discovered: for frontend coverage in this workspace, `./node_modules/.bin/vitest` is more reliable than `npx vitest` under tool orchestration.
+- Quality gap: could not capture broader coverage aggregation due repeated run interruption (exit 130).
+[[2026-05-03]]
+## Review Evidence
+
+### Test Results
+- quality-runner scoped frontend run in `serve/cockpit/web`: 96 passed, 0 failed
+  - task suites: `serve/cockpit/web/src/__tests__/FilterAccessibility_1254.test.tsx` (13) and `serve/cockpit/web/src/__tests__/FilterAccessibilityPanel_1254.test.tsx` (8)
+  - adjacent regression suites: `serve/cockpit/web/src/__tests__/KanbanBoard.test.tsx` (35) and `serve/cockpit/web/src/__tests__/FilterPanel_1250.test.tsx` (40)
+- VS Code diagnostics: no errors in `serve/cockpit/web/src/KanbanBoard.tsx`, `serve/cockpit/web/src/components/FilterPanel.tsx`, or the two task test files
+
+### Lint
+- ESLint clean on `serve/cockpit/web/src/KanbanBoard.tsx`, `serve/cockpit/web/src/components/FilterPanel.tsx`, `serve/cockpit/web/src/__tests__/FilterAccessibility_1254.test.tsx`, and `serve/cockpit/web/src/__tests__/FilterAccessibilityPanel_1254.test.tsx`
+
+### Coverage
+- Scoped frontend coverage is unavailable in this session. quality-runner reproduced a vitest v8 instrumentation hang / exit 130 on scoped coverage attempts. This is not the fail reason.
+
+### AC Compliance
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| `.owlbear/kanban/tasks/1254-p4-01-red-filter-accessibility-tests.md:25` aria-expanded reflects `panelOpen` | `serve/cockpit/web/src/KanbanBoard.tsx:251`; `serve/cockpit/web/src/__tests__/FilterAccessibility_1254.test.tsx:130` | PASS |
+| `.owlbear/kanban/tasks/1254-p4-01-red-filter-accessibility-tests.md:26` toggle has `aria-controls="filter-panel"` | `serve/cockpit/web/src/KanbanBoard.tsx:252`; `serve/cockpit/web/src/__tests__/FilterAccessibility_1254.test.tsx:160` | PASS |
+| `.owlbear/kanban/tasks/1254-p4-01-red-filter-accessibility-tests.md:27` panel root carries `id` / `role` / `aria-label` together | `serve/cockpit/web/src/components/FilterPanel.tsx:134-136`; `serve/cockpit/web/src/__tests__/FilterAccessibilityPanel_1254.test.tsx:59` | PASS |
+| `.owlbear/kanban/tasks/1254-p4-01-red-filter-accessibility-tests.md:28` result-count live region has `aria-live="polite"` | `serve/cockpit/web/src/KanbanBoard.tsx:258`; `serve/cockpit/web/src/__tests__/FilterAccessibility_1254.test.tsx:170` | PASS |
+| `.owlbear/kanban/tasks/1254-p4-01-red-filter-accessibility-tests.md:29` polling-driven task updates that change visible count must not create a new announcement | positive user-change proof exists at `serve/cockpit/web/src/__tests__/FilterAccessibility_1254.test.tsx:196`; source only writes announcements inside `handleFilterChange` at `serve/cockpit/web/src/KanbanBoard.tsx:213-230`; but the negative polling test at `serve/cockpit/web/src/__tests__/FilterAccessibility_1254.test.tsx:210-243` explicitly keeps filters inactive (`:212`), so it does not exercise the AC's named active-filter / visible-count-change permutation | FAIL |
+| `.owlbear/kanban/tasks/1254-p4-01-red-filter-accessibility-tests.md:30` announcement fires 300ms after the last text keystroke | single-input boundaries are covered at `serve/cockpit/web/src/__tests__/FilterAccessibility_1254.test.tsx:294-333`; however the rapid-keystroke proof at `:336-363` never inspects the stale-first-timer boundary. `serve/cockpit/web/src/utils/filterTasks.ts:14-20` makes `"A"` match 2 tasks and `"Al"` match 1, so a bug that fails to clear the first timer at `serve/cockpit/web/src/KanbanBoard.tsx:217-227` can still announce early and be overwritten before the only final assertion at `:363` | FAIL |
+| `.owlbear/kanban/tasks/1254-p4-01-red-filter-accessibility-tests.md:31` focus moves to the first panel control on expand | `serve/cockpit/web/src/components/FilterPanel.tsx:98`; `serve/cockpit/web/src/__tests__/FilterAccessibilityPanel_1254.test.tsx:71` | PASS |
+| `.owlbear/kanban/tasks/1254-p4-01-red-filter-accessibility-tests.md:32` programmatic focus return on collapse | `serve/cockpit/web/src/components/FilterPanel.tsx:79,139`; `serve/cockpit/web/src/__tests__/FilterAccessibilityPanel_1254.test.tsx:151,198` | PASS |
+| `.owlbear/kanban/tasks/1254-p4-01-red-filter-accessibility-tests.md:33` explicit labels on text input / priority / tags | `serve/cockpit/web/src/components/FilterPanel.tsx:146,154-155,170-171`; `serve/cockpit/web/src/__tests__/FilterAccessibilityPanel_1254.test.tsx:245,259,268` | PASS |
+| `.owlbear/kanban/tasks/1254-p4-01-red-filter-accessibility-tests.md:34` all tests fail in RED | historical td:0 line; not a GREEN gate in the current snapshot | N/A |
+
+### Pass 1 — Critical
+#### Test-Writer AC Coverage
+- FAIL: AC5 still lacks a TestFromAC proof for the exact regression named by the AC: active filters already applied, polling changes the visible count, aria-live text stays unchanged.
+- FAIL: AC6 still lacks a discriminating rapid-keystroke assertion at the stale-first-timer boundary; the current final-state-only check can false-green if the first timer fires early and the second timer overwrites it.
+- PASS: AC1, AC2, AC3, AC4, AC7, AC8, and AC9 are adequately covered for the current AC wording.
+
+#### Security Review
+- No issues in `serve/cockpit/web/src/KanbanBoard.tsx`, `serve/cockpit/web/src/components/FilterPanel.tsx`, or the task tests. No secrets, injection paths, unsafe deserialization, path handling, or new dependency surface.
+
+#### Test Integrity
+- Builder commit `3b1c83e0` touches only `serve/cockpit/web/src/KanbanBoard.tsx` and `serve/cockpit/web/src/components/FilterPanel.tsx`.
+- Retry test-writer commit `d8911678` touches only `serve/cockpit/web/src/__tests__/FilterAccessibility_1254.test.tsx` and `serve/cockpit/web/src/__tests__/FilterAccessibilityPanel_1254.test.tsx`.
+- No builder weakening of `TestFromAC_*` assertions was found.
+
+#### Test Quality
+- WEAK overall, due specifically to the remaining td:2 proof gaps in AC5 and AC6.
+- This is a proof-quality failure, not an implementation failure. Current source behavior appears consistent with the intended contract; the issue is that the test suite still does not prove both contracts strongly enough.
+
+#### Data Safety
+- No issues. Timeout cleanup is bounded at `serve/cockpit/web/src/KanbanBoard.tsx:109,217` and focus bookkeeping is local to `serve/cockpit/web/src/components/FilterPanel.tsx:49-98`.
+
+#### Test Gaps
+- AC5: add a polling rerender that starts from an already-active filter, changes the visible count, and proves the live-region text remains the pre-poll value.
+- AC6: tighten the rapid-keystroke test so the intermediate stale-timer boundary is observed directly.
+
+#### Necessity Check
+- N/A. No new dependency or integration surface.
+
+#### Builder Process Quality
+- CLEAN. No builder loop problem was found.
+- This task already contains one prior `## Review Evidence` section at `.owlbear/kanban/tasks/1254-p4-01-red-filter-accessibility-tests.md:205`, so this rejection is the second review-cycle fail and routes to backlog per the reviewer loop-breaker rule.
+
+### Deductions
+- `-0.08` AC5 active-filter polling permutation not proved by TestFromAC
+- `-0.08` AC6 last-keystroke / stale-timer boundary still under-proved
+- `-0.02` scoped frontend coverage unavailable in this session
+
+### Verdict
+- FAIL, confidence `0.82`
+
+### Action
+- Reject to `backlog`.
+- Required follow-up:
+  - AC5: start from an active filter, capture the live-region text, rerender tasks so the visible count changes, and assert the visible count updates while the aria-live text does not.
+  - AC6: use successive text inputs that produce different counts (`A` => `2 / 2 tasks`, `Al` => `1 / 2 tasks` with current fixtures), assert no announcement at the stale-first-timer boundary, then assert the exact final text only after 300ms from the second keystroke.
+  - Keep this with the test-writer / architect path. Builder source changes are not the blocker.
+
+### Post-task Reflection
+- Source inspection narrowed AC5 from a likely implementation concern to a proof-only gap; static code helped, but it did not replace missing TestFromAC coverage.
+- Rapid debounce tests need an intermediate boundary assertion, not just a before-window check and a final-state check.
+- Choosing successive inputs with different filtered counts makes timer-reset regressions observable instead of silently overwritten.
+[[2026-05-03]]
+## Architecture Review (cycle 3)
+
+### Verdict: APPROVE → todo
+
+### Context
+Second reviewer rejection at confidence 0.82. Two remaining proof gaps in test assertions — NOT implementation or AC issues. Both gaps are precisely identified with line-level source/test evidence.
+
+### AC Assessment (unchanged from cycle 2)
+AC lines remain correctly scoped. Only test assertion tightening is needed.
+
+| AC Line | Assessment | Action |
+|---------|-----------|--------|
+| AC1–AC4, AC7–AC9 | Reviewer PASS on both cycles | None |
+| AC5 user-initiated only (td:2) | Proof gap: polling test uses inactive filters — doesn't exercise "active filter + visible count changes" permutation | Guidance below |
+| AC6 debounce 300ms (td:2) | Proof gap: rapid-keystroke test has no assertion at first-timer boundary (t=300 from first keystroke) | Guidance below |
+
+### Architecture Notes
+- Implementation is confirmed sound by both reviewer cycles
+- Source at `KanbanBoard.tsx:213-230` only announces inside `handleFilterChange` — inherently user-initiated-only. But the TestFromAC must prove this contract survives future refactoring (e.g. a useEffect that recalculates on task changes)
+- Timer cancel at `KanbanBoard.tsx:217-219` correctly clears the previous timer, but the rapid-keystroke test must prove it at the boundary
+
+### Dependency Analysis
+- #1253: done — no issue
+- Parent #1247: context only
+
+### Challenge: SKIP
+Reviewer evidence is concrete, code-referenced, and unambiguous. No architectural ambiguity — purely mechanical test-assertion work.
+
+### Test Depth
+- Max depth: td:2
+- Test-writer: PROCEED
+
+### Guidance for Test-Writer (2 fixes only)
+
+**Fix 1 — AC5 active-filter polling permutation:**
+In `FilterAccessibility_1254.test.tsx`, add a test (or modify the existing polling test):
+1. Render board, open panel, apply filter `{ text: 'A', ... }` via `capturedOnFilterChange`
+2. Advance timer 300ms so announcement fires ('2 / 2 tasks')
+3. Capture `liveRegion.textContent` 
+4. Rerender with an additional task that ALSO matches 'A' (e.g. title: 'Another task')
+5. Assert `liveRegion.textContent` is STILL '2 / 2 tasks' — NOT updated to '3 / 3 tasks'
+This proves polling-driven visible-count changes don't trigger re-announcement.
+
+**Fix 2 — AC6 stale-first-timer boundary assertion:**
+In the rapid-keystroke test, after the second keystroke at t=100, add an assertion at the stale-first-timer boundary:
+1. After second keystroke, advance to t=300 (200ms more from current t=100 position) — this is where the FIRST timer would fire if not cancelled
+2. Assert `liveRegion.textContent === textBefore` (no announcement — first timer was cancelled)
+3. Then advance remaining 100ms to t=400 (300ms after second keystroke)
+4. Assert final announcement '1 / 2 tasks'
+
+Current test jumps from t=200→t=400 with a single `advanceTimersByTime(200)`. Split that into `advanceTimersByTime(100)` + assert + `advanceTimersByTime(100)` + assert.
+
+### Action Taken
+Approved to todo with precise 2-fix guidance. No AC changes needed — implementation is correct, only test proofs need tightening.
+[[2026-05-03]]
+## Test-Writer Notes
+- Retry (cycle 3): added 2 assertions / 1 new test for reviewer gaps — builder skip, direct-to-review advance
+- Files modified: `serve/cockpit/web/src/__tests__/FilterAccessibility_1254.test.tsx`
+- Commit: `bdba1436`
+- Tests: 22 passed, 0 failed (14 in FilterAccessibility_1254, 8 in FilterAccessibilityPanel_1254)
+- ESLint: clean
+
+### Changes made (surgical fill — no existing tests removed)
+
+**Fix 1 — AC5 active-filter polling permutation** (new test added):
+- Test: `'aria-live does not update when polling changes visible count while active filter is already applied'`
+- Scenario: apply text filter 'A' → advance 300ms → announcement fires ('2 / 2 tasks') → rerender with TASK_ANOTHER (also matches 'A') → assert aria-live text unchanged
+- Proves the active-filter + visible-count-change polling permutation that the prior test missed (prior test used inactive filters)
+
+**Fix 2 — AC6 stale-first-timer boundary assertion** (rapid-keystroke test modified):
+- Split the final `advanceTimersByTime(200)` into `advanceTimersByTime(100)` + assert + `advanceTimersByTime(100)` + assert
+- At t=300 (stale first-timer boundary): assert `liveRegion.textContent === textBefore` — proves first timer was cancelled
+- At t=400 (300ms after second keystroke): assert `'1 / 2 tasks'` — proves second timer fired correctly
+
+### Step 1b.1 — Direct-to-Review Advance
+- Reviewer's Required Follow-up contained ONLY test-proof gaps; no implementation fixes needed
+- All new/modified tests PASS against current implementation (source already handles both contracts)
+- Builder has no work to do → advancing directly to review
+[[2026-05-03]]
+## Builder Notes
+- Implementation: no new source edits in this cycle.
+- Verification scope: `serve/cockpit/web/src/__tests__/FilterAccessibility_1254.test.tsx`, `serve/cockpit/web/src/__tests__/FilterAccessibilityPanel_1254.test.tsx`, `serve/cockpit/web/src/KanbanBoard.tsx`, `serve/cockpit/web/src/components/FilterPanel.tsx`.
+- Tests: 22 passed, 0 failed, 0 skipped (scoped Vitest run).
+- Lint: clean (scoped ESLint run).
+- Coverage (scoped statements): overall 73.06%; `src/KanbanBoard.tsx` 67.9%; `src/components/FilterPanel.tsx` 74.16%.
+- Approach: verification-only builder pass, since latest test-writer retry already strengthened AC5/AC6 proofs and all task-scoped checks pass against existing implementation.
+
+### Evidence Summary
+- No builder test modifications.
+- No builder source modifications.
+- Current implementation already satisfies the strengthened task contracts in the latest `TestFromAC_*` assertions.
+
+### Post-task Reflection
+- Problem faced: historical task thread contains multiple prior rejection cycles, so stale evidence can mislead if not re-verified.
+- Workaround applied: ran fresh scoped quality-runner evidence against the current test and source snapshot.
+- Pattern discovered: this cycle is a pure proof-verification pass; forcing additional source edits would add risk without increasing AC confidence.
+[[2026-05-03]]
+## Review Evidence
+
+### Test Results
+- quality-runner scoped frontend pass: 97 passed, 0 failed
+  - task suites: serve/cockpit/web/src/__tests__/FilterAccessibility_1254.test.tsx (14) and serve/cockpit/web/src/__tests__/FilterAccessibilityPanel_1254.test.tsx (8)
+  - adjacent regression suites: serve/cockpit/web/src/__tests__/KanbanBoard.test.tsx (35) and serve/cockpit/web/src/__tests__/FilterPanel_1250.test.tsx (40)
+- VS Code diagnostics: no errors in serve/cockpit/web/src/KanbanBoard.tsx, serve/cockpit/web/src/components/FilterPanel.tsx, or the two task test files
+
+### Lint
+- ESLint clean on serve/cockpit/web/src/KanbanBoard.tsx, serve/cockpit/web/src/components/FilterPanel.tsx, serve/cockpit/web/src/__tests__/FilterAccessibility_1254.test.tsx, and serve/cockpit/web/src/__tests__/FilterAccessibilityPanel_1254.test.tsx
+
+### Coverage
+- Scoped frontend coverage was unavailable from quality-runner in this session. This is not the fail reason, but it reduces confidence.
+
+### AC Compliance
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1 aria-expanded reflects panelOpen | serve/cockpit/web/src/KanbanBoard.tsx:251; serve/cockpit/web/src/__tests__/FilterAccessibility_1254.test.tsx:130,136,145 | PASS |
+| AC2 aria-controls="filter-panel" | serve/cockpit/web/src/KanbanBoard.tsx:252; serve/cockpit/web/src/__tests__/FilterAccessibility_1254.test.tsx:160 | PASS |
+| AC3 panel root carries id, role, and aria-label together | serve/cockpit/web/src/components/FilterPanel.tsx:134-136; serve/cockpit/web/src/__tests__/FilterAccessibilityPanel_1254.test.tsx:59 | PASS |
+| AC4 result count live region has aria-live="polite" | serve/cockpit/web/src/KanbanBoard.tsx:258; serve/cockpit/web/src/__tests__/FilterAccessibility_1254.test.tsx:170,184 | PASS |
+| AC5 only user-initiated filter changes announce; polling does not create a new announcement | serve/cockpit/web/src/KanbanBoard.tsx:213-230; serve/cockpit/web/src/__tests__/FilterAccessibility_1254.test.tsx:206,290 | PASS |
+| AC6 announcement fires 300ms after last text keystroke | serve/cockpit/web/src/KanbanBoard.tsx:227; serve/cockpit/web/src/__tests__/FilterAccessibility_1254.test.tsx:383-417 | PASS |
+| AC7 focus moves to the first panel control on expand | serve/cockpit/web/src/components/FilterPanel.tsx:98; serve/cockpit/web/src/__tests__/FilterAccessibilityPanel_1254.test.tsx:71 | PASS |
+| AC8 focus returns to the toggle on programmatic collapse | serve/cockpit/web/src/components/FilterPanel.tsx:79,139; serve/cockpit/web/src/KanbanBoard.tsx:274; serve/cockpit/web/src/__tests__/FilterAccessibilityPanel_1254.test.tsx:151,198 | PASS |
+| AC9 filter controls have explicit accessible labels | Source labels exist at serve/cockpit/web/src/components/FilterPanel.tsx:146,154-155,170-171, but the proof in serve/cockpit/web/src/__tests__/FilterAccessibilityPanel_1254.test.tsx:250-251,264,273 only checks attribute presence. Empty aria-label or label values would still pass. | FAIL |
+| AC10 RED-only condition | Historical td:0 requirement; not a GREEN gate in the current snapshot | N/A |
+
+### Pass 1 - Critical
+#### Test-Writer AC Coverage
+- FAIL: AC9 is only covered by attribute-existence checks.
+- The current assertions use hasAttribute('aria-label'), hasAttribute('aria-labelledby'), and hasAttribute('label') at serve/cockpit/web/src/__tests__/FilterAccessibilityPanel_1254.test.tsx:250-251,264,273.
+- That does not prove a usable accessible name. A regression to aria-label="" or label="" would stay green.
+- PASS: AC1 through AC8 are adequately covered for the current task wording.
+
+#### Security Review
+- No issues in serve/cockpit/web/src/KanbanBoard.tsx or serve/cockpit/web/src/components/FilterPanel.tsx. No secrets, injection sinks, unsafe deserialization, path handling, or new dependency surface in scope.
+
+#### Test Integrity
+- git show confirms builder commit 3b1c83e0 touched only serve/cockpit/web/src/KanbanBoard.tsx and serve/cockpit/web/src/components/FilterPanel.tsx.
+- git show confirms later test-writer commits d8911678 and bdba1436 touched only the task test files.
+- No builder weakening or removal of TestFromAC assertions was found.
+
+#### Test Quality
+- WEAK, due to AC9.
+- The source sets explicit non-empty label values at serve/cockpit/web/src/components/FilterPanel.tsx:146,154-155,170-171, but the current tests do not prove those values remain usable.
+- Divergence from code-reader: code-reader also flagged a pending-debounce polling interaction as a possible gap. I am treating that as informational rather than fail-worthy because the current AC and architect guidance do not define a separate mid-debounce polling freshness contract. AC5 and AC6 as written are otherwise proved.
+
+#### Data Safety
+- No issues. Timeout cleanup and local focus bookkeeping are bounded in serve/cockpit/web/src/KanbanBoard.tsx and serve/cockpit/web/src/components/FilterPanel.tsx.
+
+#### Test Gaps
+- Fail-worthy gap: AC9 accessible-name proof is not discriminating enough.
+- Informational only: if architecture later widens the announcement contract, consider adding a polling-during-pending-debounce test.
+
+#### Necessity Check
+- N/A. No dependency or integration expansion in scope.
+
+#### Builder Process Quality
+- No builder loop issue found.
+- This task already contains two prior Review Evidence sections at .owlbear/kanban/tasks/1254-p4-01-red-filter-accessibility-tests.md:205 and :392, so this rejection is a third review-cycle failure and routes to backlog under the loop-breaker rule.
+
+### Deductions
+- -0.09 AC9 proof is weak because it checks only attribute existence, not a usable accessible name
+- -0.02 scoped frontend coverage unavailable in this session
+
+### Verdict
+- FAIL, confidence 0.89
+
+### Action
+- Reject to backlog.
+- Required follow-up:
+  - strengthen AC9 to assert non-empty accessible names, not bare attribute presence
+  - for the text input, assert the actual accessible name or exact aria-label value
+  - for the priority and tags controls, assert the actual accessible name or exact aria-label value
+  - keep the rest of the task intact; the remaining blocker is test proof quality, not implementation behavior
+
+### Post-task Reflection
+- Green task and regression suites can still hide a false green when a td:2 accessibility contract is checked with attribute-presence assertions.
+- Commit-surface reconstruction was clean here: the builder commit is source-only, and the later task commits are test-only.
+- When a subagent finds a broader robustness concern, keep the gate tied to the written AC unless the task artifact explicitly broadens the contract.
+[[2026-05-03]]
+## Architecture Review (cycle 4)
+
+### Verdict: APPROVE → todo
+
+### Context
+Third reviewer rejection at confidence 0.89 — single remaining gap: AC9 accessible-label tests check attribute *presence* (`hasAttribute`) rather than asserting non-empty, usable accessible names. Implementation is confirmed sound across all three review cycles.
+
+### AC Assessment (unchanged)
+AC lines remain correctly scoped. Only AC9 test assertion needs final tightening.
+
+| AC Line | Assessment | Action |
+|---------|-----------|--------|
+| AC1–AC8 | Reviewer PASS on all three cycles | None |
+| AC9 explicit labels (td:2) | Tests use `hasAttribute('aria-label')` / `hasAttribute('label')` — empty string `""` would pass | Guidance below |
+
+### Architecture Notes
+- Implementation sets concrete values at `FilterPanel.tsx:148` (`aria-label="Search tasks"`), `:154-155` (`label="Priority"`, `aria-label="Priority"`), `:170-171` (`label="Tags"`, `aria-label="Tags"`)
+- Test assertions at `FilterAccessibilityPanel_1254.test.tsx:250-251,264,273` only call `hasAttribute()` — a regression to empty-string labels would stay green
+- No structural or AC changes needed
+
+### Dependency Analysis
+- #1253: done — no issue
+- Parent #1247: context only
+
+### Challenge: SKIP
+Reviewer evidence is concrete and code-referenced. This is a single-line assertion-strength fix with no architectural ambiguity.
+
+### Test Depth
+- Max depth: td:2
+- Test-writer: PROCEED
+
+### Guidance for Test-Writer (1 fix, 3 assertions)
+
+In `FilterAccessibilityPanel_1254.test.tsx`, strengthen the AC9 assertions to verify non-empty accessible names:
+
+**Text input** (line ~250-251): Replace `hasAttribute('aria-label')` check with:
+```ts
+expect(textInput.getAttribute('aria-label')).toBe('Search tasks')
+```
+
+**Priority select** (line ~264): Replace `hasAttribute('label') || hasAttribute('aria-label')` with:
+```ts
+expect(pSelect!.getAttribute('aria-label')).toBe('Priority')
+```
+
+**Tags multi-select** (line ~273): Replace `hasAttribute('label') || hasAttribute('aria-label')` with:
+```ts
+expect(pMultiSelect!.getAttribute('aria-label')).toBe('Tags')
+```
+
+These match the concrete values already in `FilterPanel.tsx`. Any regression to empty or removed labels will now fail.
+
+### Action Taken
+Approved to todo with single-fix guidance. No AC changes needed — implementation is correct, only 3 attribute-existence assertions need exact-value assertions.
+[[2026-05-03]]
+## Test-Writer Notes (cycle 4)
+- Retry: tightened AC9 label assertions per architect cycle-4 guidance — builder skip, direct-to-review advance
+- File modified: `serve/cockpit/web/src/__tests__/FilterAccessibilityPanel_1254.test.tsx`
+- Commit: `235c4020`
+- Tests: 22 passed, 0 failed (FilterAccessibility_1254: 13, FilterAccessibilityPanel_1254: 9)
+- ESLint: clean
+
+### Single change made (3 assertions, AC9 only)
+Replaced bare `hasAttribute()` presence checks with exact-value assertions:
+1. **Text input**: `textInput.getAttribute('aria-label')` → `toBe('Search tasks')`
+2. **Priority select**: `pSelect!.getAttribute('aria-label')` → `toBe('Priority')`
+3. **Tags multi-select**: `pMultiSelect!.getAttribute('aria-label')` → `toBe('Tags')`
+
+Any regression to empty-string or removed labels now fails the suite.
+
+### AC Coverage (unchanged from cycle 3)
+| AC Line | Tests | Status |
+|---------|-------|--------|
+| AC1 aria-expanded | 3 | ✅ |
+| AC2 aria-controls | 1 | ✅ |
+| AC3 id/role/aria-label (same element) | 1 | ✅ |
+| AC4 aria-live present | 2 | ✅ |
+| AC5 user-initiated only + non-text branch | 3 | ✅ |
+| AC6 debounce 300ms + stale-timer boundary | 3 | ✅ |
+| AC7 focus to first control | 2 | ✅ |
+| AC8 focus return on collapse/Escape | 2 | ✅ |
+| AC9 explicit accessible labels (exact values) | 3 | ✅ |
+
+### Step 1b.1 — Direct-to-Review Advance
+Reviewer's cycle 4 Required Follow-up was a single assertion-strength fix. All tests pass against current implementation. Builder has no work → advancing to review.
