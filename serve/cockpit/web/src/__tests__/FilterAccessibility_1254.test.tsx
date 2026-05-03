@@ -286,6 +286,53 @@ describe('TestFromAC_FilterA11y', () => {
         expect(liveRegion?.textContent?.trim()).toBe('1 / 2 tasks')
       })
     })
+
+    it('aria-live does not update when polling changes visible count while active filter is already applied', async () => {
+      vi.useFakeTimers()
+      const { container, rerender } = renderBoard([TASK_A, TASK_B])
+      fireEvent.click(getToggle(container))
+      await act(async () => { vi.advanceTimersByTime(0) })
+      expect(capturedOnFilterChange).not.toBeNull()
+
+      // Apply text filter 'A' — both TASK_A ('Alpha task') and TASK_B ('Beta task')
+      // match case-insensitively → '2 / 2 tasks' announced after 300ms debounce
+      act(() => {
+        capturedOnFilterChange!({ text: 'A', priority: '', tags: [], blocked: false })
+      })
+      await act(async () => { vi.advanceTimersByTime(300) })
+      const liveRegion = container.querySelector('[aria-live="polite"]')
+      expect(liveRegion!.textContent.trim()).toBe('2 / 2 tasks')
+      const announcedText = liveRegion!.textContent
+
+      // Simulate polling: add a task that ALSO matches 'A' — visible count would become 3
+      const TASK_ANOTHER = {
+        id: 4,
+        title: 'Another task',
+        status: 'backlog',
+        priority: 'important',
+        updated: '2026-01-04T00:00:00+00:00',
+        tags: [],
+        blocked: false,
+        block_reason: null,
+        claimed: false,
+      }
+      rerender(
+        <PorscheDesignSystemProvider>
+          <MemoryRouter>
+            <KanbanBoard
+              board={BOARD}
+              tasks={[TASK_A, TASK_B, TASK_ANOTHER]}
+              loading={false}
+              error={null}
+            />
+          </MemoryRouter>
+        </PorscheDesignSystemProvider>,
+      )
+
+      // aria-live region must remain unchanged — polling must NOT trigger re-announcement
+      expect(liveRegion!.textContent).toBe(announcedText)
+      vi.useRealTimers()
+    })
   })
 
   // ─── AC6: aria-live debounce 300ms (td:2) ────────────────────────────────
@@ -357,8 +404,15 @@ describe('TestFromAC_FilterA11y', () => {
       // Should NOT have fired yet (debounce reset on second keystroke)
       expect(liveRegion?.textContent).toBe(textBefore)
 
-      // Advance remaining 200ms → now 300ms after second keystroke → must fire
-      await act(async () => { vi.advanceTimersByTime(200) })
+      // Advance 100ms more → t=300 from start; this is where the FIRST timer would fire
+      // if it was NOT cancelled when the second keystroke reset the debounce.
+      // If timer cancellation is broken, '2 / 2 tasks' would appear here.
+      await act(async () => { vi.advanceTimersByTime(100) })
+      // First timer must be cancelled — no announcement at the stale boundary
+      expect(liveRegion?.textContent).toBe(textBefore)
+
+      // Advance final 100ms → t=400; now 300ms after SECOND keystroke → announcement must fire
+      await act(async () => { vi.advanceTimersByTime(100) })
       // text='Al' matches TASK_A ('Alpha task') → exactly '1 / 2 tasks'
       expect(liveRegion?.textContent?.trim()).toBe('1 / 2 tasks')
       vi.useRealTimers()
