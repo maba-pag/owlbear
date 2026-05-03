@@ -27,6 +27,10 @@ vi.mock('../hooks/usePolling', () => ({
   usePolling: vi.fn(),
 }))
 
+vi.mock('../hooks/EventSourceProvider', () => ({
+  useSSEEvent: vi.fn(() => ({ status: 'closed', mtime: null })),
+}))
+
 // DRStatusIndicator is mocked as a vi.fn() with JSX so tests can:
 // (a) assert DOM presence via data-testid, and
 // (b) inspect props via .mock.calls.

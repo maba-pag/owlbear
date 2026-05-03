@@ -27,6 +27,10 @@ vi.mock('../hooks/usePolling', () => ({
   usePolling: vi.fn(),
 }))
 
+vi.mock('../hooks/EventSourceProvider', () => ({
+  useSSEEvent: vi.fn(() => ({ status: 'closed', mtime: null })),
+}))
+
 vi.mock('../components/DRStatusIndicator', () => ({
   default: vi.fn(
     ({

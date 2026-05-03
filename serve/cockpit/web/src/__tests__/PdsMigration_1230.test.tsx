@@ -25,6 +25,10 @@ import HealthBadge from '../components/HealthBadge'
 import DRStatusIndicator from '../components/DRStatusIndicator'
 import Shell from '../Shell'
 
+vi.mock('../hooks/EventSourceProvider', () => ({
+  useSSEEvent: vi.fn(() => ({ status: 'closed', mtime: null })),
+}))
+
 // ─── Module mocks ─────────────────────────────────────────────────────────────
 
 vi.mock('react-markdown', () => ({

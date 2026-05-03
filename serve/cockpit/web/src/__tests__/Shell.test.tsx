@@ -4,6 +4,10 @@ import { MemoryRouter } from 'react-router'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
 import Shell from '../Shell'
 
+vi.mock('../hooks/EventSourceProvider', () => ({
+  useSSEEvent: vi.fn(() => ({ status: 'closed', mtime: null })),
+}))
+
 // ─── Fetch stub (file-level) ──────────────────────────────────────────────────
 // Route "/" mounts KanbanBoard which fires fetch on mount.
 // Never-resolving promise keeps KanbanBoard in loading state, preventing state

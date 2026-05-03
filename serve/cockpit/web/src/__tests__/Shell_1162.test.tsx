@@ -24,6 +24,10 @@ vi.mock('../hooks/usePolling', () => ({
   usePolling: vi.fn(),
 }))
 
+vi.mock('../hooks/EventSourceProvider', () => ({
+  useSSEEvent: vi.fn(() => ({ status: 'closed', mtime: null })),
+}))
+
 import { useScanPolling } from '../hooks/useScanPolling'
 import type { ScanItem } from '../hooks/useScanPolling'
 import { usePolling } from '../hooks/usePolling'
