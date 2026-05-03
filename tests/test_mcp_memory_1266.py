@@ -874,7 +874,7 @@ class TestFromAC_ConsumerDrift:
         """agent-audit.prompt.md must reference the current query_memory tool (positive proof)."""
         prompt_path = (
             Path(__file__).parent.parent
-            / "share" / "prompts" / "agent-audit.prompt.md"
+            / ".owlbear" / "prompts" / "agent-audit.prompt.md"
         )
         assert prompt_path.exists(), f"prompt file not found: {prompt_path}"
         content = prompt_path.read_text()
