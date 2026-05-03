@@ -70,7 +70,7 @@ export default function FilterPanel({
     return () => {
       tagsElement.removeEventListener('update', onUpdate)
     }
-  }, [filter, onFilterChange])
+  }, [filter, onFilterChange, open])
 
   useEffect(() => {
     if (!open) {
