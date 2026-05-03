@@ -1,4 +1,4 @@
-"""RED-phase tests for dispatch-constant validation at engine init and refresh_config (#1209).
+"""Tests for dispatch-constant validation at engine init and refresh_config (#1209).
 
 AC coverage:
   AC1 (td:2): __init__ validates config.priorities against dispatch.PRIORITY_RANK →
@@ -11,8 +11,11 @@ AC coverage:
       TestFromAC_InitDispatchValidation.test_status_error_message_lists_unranked_values
       TestFromAC_InitDispatchValidation.test_multiple_unknown_statuses_all_in_message
 
-  AC3 (td:1): refresh_config runs same validation →
-      TestFromAC_RefreshConfigValidation.test_refresh_config_raises_on_dispatch_mismatch
+  AC3 (td:2, upgraded): refresh_config runs same validation — discriminating per code and message →
+      TestFromAC_RefreshConfigValidation.test_refresh_config_priority_mismatch_raises_exact_code
+      TestFromAC_RefreshConfigValidation.test_refresh_config_status_mismatch_raises_exact_code
+      TestFromAC_RefreshConfigValidation.test_refresh_config_priority_mismatch_lists_unranked_in_message
+      TestFromAC_RefreshConfigValidation.test_refresh_config_status_mismatch_lists_unranked_in_message
 
   AC4 (td:0): error codes in KANBAN_ERROR_CODES — no test (td:0 skip).
 """
@@ -177,26 +180,91 @@ class TestFromAC_InitDispatchValidation:
 
 
 class TestFromAC_RefreshConfigValidation:
-    """Covers AC3 — refresh_config runs the same dispatch-constant validation."""
+    """Covers AC3 (td:2, upgraded) — refresh_config runs the same dispatch-constant validation.
 
-    def test_refresh_config_raises_on_dispatch_mismatch(self, tmp_path: Path) -> None:
-        """Init with valid config; update config.yml to add unknown priority; refresh raises."""
-        kanban_dir = _make_board(tmp_path)
-        engine = KanbanEngine(kanban_dir, activity_log=False)
+    Each test is discriminating: asserts an exact error code or exact message content,
+    with separate cases for priority and status mismatches.
+    """
 
-        # Overwrite config.yml with an unknown priority
-        bad_priorities = [*_STANDARD_PRIORITIES, "hypercritical"]
-        prios_yaml = "\n".join(f"  - {p}" for p in bad_priorities)
-        stats_yaml = "\n".join(f"  - {s}" for s in _STANDARD_STATUSES)
-        new_config = _CONFIG_TEMPLATE.format(
+    # -- Shared config-writer helper ----------------------------------------
+
+    @staticmethod
+    def _write_config(
+        kanban_dir: Path,
+        priorities: list[str],
+        statuses: list[str],
+    ) -> None:
+        prios_yaml = "\n".join(f"  - {p}" for p in priorities)
+        stats_yaml = "\n".join(f"  - {s}" for s in statuses)
+        config_text = _CONFIG_TEMPLATE.format(
             priorities_yaml=prios_yaml,
             statuses_yaml=stats_yaml,
         )
-        (kanban_dir / "config.yml").write_text(new_config, encoding="utf-8")
+        (kanban_dir / "config.yml").write_text(config_text, encoding="utf-8")
 
+    # -- AC3: priority refresh mismatch -------------------------------------
+
+    def test_refresh_config_priority_mismatch_raises_exact_code(self, tmp_path: Path) -> None:
+        """Reload with unknown priority → ConfigError code is exactly ERR_DISPATCH_PRIORITY_MISMATCH.
+
+        Exact code assertion rejects ERR_DISPATCH_STATUS_MISMATCH false-greens.
+        """
+        kanban_dir = _make_board(tmp_path)
+        engine = KanbanEngine(kanban_dir, activity_log=False)
+
+        self._write_config(
+            kanban_dir,
+            priorities=[*_STANDARD_PRIORITIES, "hypercritical"],
+            statuses=_STANDARD_STATUSES,
+        )
         with pytest.raises(ConfigError) as exc_info:
             engine.refresh_config()
-        assert exc_info.value.code in {
-            "ERR_DISPATCH_PRIORITY_MISMATCH",
-            "ERR_DISPATCH_STATUS_MISMATCH",
-        }
+        assert exc_info.value.code == "ERR_DISPATCH_PRIORITY_MISMATCH"
+
+    def test_refresh_config_priority_mismatch_lists_unranked_in_message(self, tmp_path: Path) -> None:
+        """Error message for refresh-path priority mismatch must include the unranked value name."""
+        kanban_dir = _make_board(tmp_path)
+        engine = KanbanEngine(kanban_dir, activity_log=False)
+
+        self._write_config(
+            kanban_dir,
+            priorities=[*_STANDARD_PRIORITIES, "hypercritical"],
+            statuses=_STANDARD_STATUSES,
+        )
+        with pytest.raises(ConfigError) as exc_info:
+            engine.refresh_config()
+        assert "hypercritical" in exc_info.value.user_message
+
+    # -- AC3: status refresh mismatch ---------------------------------------
+
+    def test_refresh_config_status_mismatch_raises_exact_code(self, tmp_path: Path) -> None:
+        """Reload with unknown status → ConfigError code is exactly ERR_DISPATCH_STATUS_MISMATCH.
+
+        'waiting' is inserted in the middle so 'done' stays last (satisfies terminal_status check).
+        Exact code assertion rejects ERR_DISPATCH_PRIORITY_MISMATCH false-greens.
+        """
+        kanban_dir = _make_board(tmp_path)
+        engine = KanbanEngine(kanban_dir, activity_log=False)
+
+        self._write_config(
+            kanban_dir,
+            priorities=_STANDARD_PRIORITIES,
+            statuses=_STATUSES_WITH_WAITING,
+        )
+        with pytest.raises(ConfigError) as exc_info:
+            engine.refresh_config()
+        assert exc_info.value.code == "ERR_DISPATCH_STATUS_MISMATCH"
+
+    def test_refresh_config_status_mismatch_lists_unranked_in_message(self, tmp_path: Path) -> None:
+        """Error message for refresh-path status mismatch must include the unranked value name."""
+        kanban_dir = _make_board(tmp_path)
+        engine = KanbanEngine(kanban_dir, activity_log=False)
+
+        self._write_config(
+            kanban_dir,
+            priorities=_STANDARD_PRIORITIES,
+            statuses=_STATUSES_WITH_WAITING,
+        )
+        with pytest.raises(ConfigError) as exc_info:
+            engine.refresh_config()
+        assert "waiting" in exc_info.value.user_message

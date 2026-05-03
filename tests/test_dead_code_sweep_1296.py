@@ -32,13 +32,22 @@ _MCP_DELETED_IDS: frozenset[str] = frozenset(
 )
 
 # Directories excluded from "Copilot CLI" / "serve/orchestrator" grep checks per AC.
+# AC3 (refined by arch-review retry): .owlbear/decisions and .owlbear/sources added —
+# historical architecture decisions and bibliographic source entries are intentionally preserved.
 _EXCLUDED_DIRS = frozenset(
     {
         _REPO_ROOT / ".owlbear" / "research",
         _REPO_ROOT / ".owlbear" / "kanban",
         _REPO_ROOT / ".owlbear" / "scratch",
         _REPO_ROOT / ".owlbear" / "briefs",
+        _REPO_ROOT / ".owlbear" / "decisions",
+        _REPO_ROOT / ".owlbear" / "sources",
     }
+)
+
+# Directories to skip in repo-wide file scans (generated / VCS / vendored).
+_SCAN_SKIP_DIRS: frozenset[str] = frozenset(
+    {".git", ".venv", "node_modules", "__pycache__", "dist", "build", ".pytest_cache"}
 )
 
 
@@ -58,6 +67,42 @@ class TestFromAC_DeadCodeSweep:
     """Integration-level checks: AC2, AC3, AC4, AC9, AC10 of parent task #1296."""
 
     # ---- AC2: serve/orchestrator absent from doc and skill files ------------
+
+    # ---- AC2 (wide): serve/orchestrator absent from full repo surface --------
+
+    def test_no_serve_orchestrator_repo_wide(self) -> None:
+        """No non-excluded, non-test file in the repo may reference 'serve/orchestrator'.
+
+        Wider than the per-file spot checks below — enforces the full AC2 surface.
+        tests/ is excluded because test files that assert absence of a string
+        necessarily contain that string; import-level boundaries are enforced
+        separately by test_package_boundary.py.
+        """
+        tests_dir = _REPO_ROOT / "tests"
+        hits: list[str] = []
+        for p in _REPO_ROOT.rglob("*"):
+            if not p.is_file():
+                continue
+            rel = p.relative_to(_REPO_ROOT)
+            if any(part in _SCAN_SKIP_DIRS for part in rel.parts):
+                continue
+            if _is_excluded(p):
+                continue
+            try:
+                rel.relative_to(tests_dir.relative_to(_REPO_ROOT))
+            except ValueError:
+                pass
+            else:
+                continue  # skip tests/ directory
+            try:
+                text = p.read_text(encoding="utf-8")
+            except (UnicodeDecodeError, OSError):
+                continue
+            if "serve/orchestrator" in text:
+                hits.append(str(rel))
+        assert hits == [], f"Files still reference 'serve/orchestrator': {hits}"
+
+    # ---- AC2 (spot checks): serve/orchestrator absent from doc/skill files --
 
     def test_no_serve_orchestrator_in_readme(self) -> None:
         """README.md must not reference serve/orchestrator after sweep."""
@@ -83,6 +128,26 @@ class TestFromAC_DeadCodeSweep:
         assert hits == [], f"share/prompts/ files still reference serve/orchestrator: {hits}"
 
     # ---- AC3: Copilot CLI zero hits in *.md outside excluded paths ----------
+
+    # ---- AC3 (wide): Copilot CLI absent from all *.md files repo-wide ---------
+
+    def test_no_copilot_cli_in_md_files_repo_wide(self) -> None:
+        """No *.md file outside excluded dirs may contain 'Copilot CLI'.
+
+        Enforces the full AC3 surface: all Markdown files repo-wide except
+        .owlbear/{research,kanban,scratch,briefs,decisions,sources}/ and
+        generated/VCS dirs.
+        """
+        hits = [
+            str(p.relative_to(_REPO_ROOT))
+            for p in _REPO_ROOT.rglob("*.md")
+            if not _is_excluded(p)
+            and not any(part in _SCAN_SKIP_DIRS for part in p.relative_to(_REPO_ROOT).parts)
+            and "Copilot CLI" in p.read_text(encoding="utf-8")
+        ]
+        assert hits == [], f"*.md files still contain 'Copilot CLI': {hits}"
+
+    # ---- AC3 (spot checks): Copilot CLI absent from key doc surfaces ----------
 
     def test_no_copilot_cli_in_readme(self) -> None:
         """README.md must not contain 'Copilot CLI'."""
