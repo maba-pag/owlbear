@@ -1,10 +1,10 @@
 ---
 id: 1285
 title: 'P2-01: Test — path neutrality verification for share/skills/'
-status: in-progress
+status: archived
 priority: critical
 created: 2026-05-02T16:01:17.041733+00:00
-updated: 2026-05-03T16:38:13.552056+00:00
+updated: 2026-05-03T17:36:21.350296+00:00
 tags:
 - phase-2
 - scope:test
@@ -705,3 +705,176 @@ Architecture review (audit-regression cycle): APPROVED → todo. Added AC8 for c
 - All tests pass against current workspace (builder impl correct, downstream-sweep root cause now fully cleared).
 - Builder skip: test-only retry, all tests green.
 - Commit: `fa78eba2` — `test: fix sibling retired-path in TestFromAC_ConsumerDrift (#1285, test-writer retry)`
+[[2026-05-03]]
+## Builder Notes
+- Non-implementation pass-through cycle: no source changes required.
+- Scope rationale: latest retry is test-only in `tests/test_mcp_memory_1266.py`; implementation from earlier builder cycle remains unchanged.
+- Independent verification via quality-runner (scoped):
+  - `tests/test_path_neutrality_1285.py`
+  - `tests/test_mcp_memory_1266.py::TestFromAC_ConsumerDrift`
+- Results: 15 passed, 0 failed, 0 skipped.
+- Lint: clean (ruff 0 violations).
+- Coverage: 27% overall on loaded `owlbear_mcp_memory` modules in scoped run; informational only (no builder-owned runtime code changed in this cycle).
+- Files changed by builder: none.
+
+### Evidence Summary
+- Primary task suite remains green (`tests/test_path_neutrality_1285.py`).
+- Consumer-drift regression surface is now fully green at class scope (`TestFromAC_ConsumerDrift`).
+- No additional builder implementation is required.
+
+### Post-task Reflection
+- Running the entire affected class (not only the named test) is the right closure pattern after downstream-reference regressions.
+- Pass-through builder cycles still need independent quality evidence to prevent stale-green handoffs.
+- Explicitly marking “no file changes” improves ownership traceability for reviewer and auditor.
+[[2026-05-03]]
+## Review Evidence
+### Test Results
+- Quality-runner scoped run: 15 passed, 0 failed, 0 skipped across [tests/test_path_neutrality_1285.py](tests/test_path_neutrality_1285.py) and [tests/test_mcp_memory_1266.py](tests/test_mcp_memory_1266.py#L829).
+- The consumer-drift follow-up surface is fully green at class scope: `TestFromAC_ConsumerDrift` reported 6 passed, 0 failed.
+
+### Lint
+- Clean for [tests/test_path_neutrality_1285.py](tests/test_path_neutrality_1285.py) and [tests/test_mcp_memory_1266.py](tests/test_mcp_memory_1266.py).
+
+### Coverage
+- Informational only, not a gate for this review.
+- No builder-owned runtime module changed in the current cycle.
+- Quality-runner reported incidental `serve/mcp-memory` coverage at 27%; this is import-path fallout from the scoped test run, not a product-surface gate for task #1285.
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Were Violated? | Verdict |
+|---|---|---|---|
+| AC1: `tests/test_path_neutrality_1285.py` exists (td:0) | none | Yes. [tests/test_path_neutrality_1285.py](tests/test_path_neutrality_1285.py) exists and executed in the scoped run. | PASS |
+| AC2: zero `serve/` hits across `share/skills/**/*.md` with the stated exclusions (td:2) | [tests/test_path_neutrality_1285.py](tests/test_path_neutrality_1285.py#L84), [tests/test_path_neutrality_1285.py](tests/test_path_neutrality_1285.py#L101) | Yes. The helper uses the exact regex and exclusion semantics at [tests/test_path_neutrality_1285.py](tests/test_path_neutrality_1285.py#L32), [tests/test_path_neutrality_1285.py](tests/test_path_neutrality_1285.py#L36), [tests/test_path_neutrality_1285.py](tests/test_path_neutrality_1285.py#L64), and [tests/test_path_neutrality_1285.py](tests/test_path_neutrality_1285.py#L66). Independent workspace search found no `serve/` matches under `share/skills/**`. | COVERED |
+| AC3: h-quality-runner contains the routing-authority phrase and `copilot-instructions.md` as independent substrings (td:1, per AC reconciliation) | [tests/test_path_neutrality_1285.py](tests/test_path_neutrality_1285.py#L116), [tests/test_path_neutrality_1285.py](tests/test_path_neutrality_1285.py#L120) | Yes. The live directive is at [share/skills/h-quality-runner/SKILL.md](share/skills/h-quality-runner/SKILL.md#L41), and the test asserts both required substrings directly. | COVERED |
+| AC4: no legacy architecture-standard section headers remain (td:1) | [tests/test_path_neutrality_1285.py](tests/test_path_neutrality_1285.py#L127), [tests/test_path_neutrality_1285.py](tests/test_path_neutrality_1285.py#L137) | Yes. The forbidden-header set is exact at [tests/test_path_neutrality_1285.py](tests/test_path_neutrality_1285.py#L39), and independent search found no matches for the three removed headers in [share/skills/r-architecture-standards/SKILL.md](share/skills/r-architecture-standards/SKILL.md). | COVERED |
+| AC5: exact canonical-path substring presence plus target existence for the 3-member chain (td:2, per AC reconciliation) | [tests/test_path_neutrality_1285.py](tests/test_path_neutrality_1285.py#L150), [tests/test_path_neutrality_1285.py](tests/test_path_neutrality_1285.py#L166), [tests/test_path_neutrality_1285.py](tests/test_path_neutrality_1285.py#L194), [tests/test_path_neutrality_1285.py](tests/test_path_neutrality_1285.py#L203) | Yes. The live chain anchors are [share/skills/r-doc-standards/SKILL.md](share/skills/r-doc-standards/SKILL.md#L11), [share/instructions/doc-standards.instructions.md](share/instructions/doc-standards.instructions.md#L7), and [.owlbear/prompts/doc-audit.prompt.md](.owlbear/prompts/doc-audit.prompt.md). The tests assert the exact canonical path substrings plus target existence. | COVERED |
+| AC6: the three audit prompts exist only in `.owlbear/prompts/` and not in `share/prompts/` (td:1) | [tests/test_path_neutrality_1285.py](tests/test_path_neutrality_1285.py#L214), [tests/test_path_neutrality_1285.py](tests/test_path_neutrality_1285.py#L221), [tests/test_path_neutrality_1285.py](tests/test_path_neutrality_1285.py#L225) | Yes. `.owlbear/prompts/` currently contains `agent-audit.prompt.md`, `arch-audit.prompt.md`, and `doc-audit.prompt.md`, while `share/prompts/` no longer contains those files. | COVERED |
+| AC7: all tests fail initially (td:0) | none | SKIP. Architecture Review explicitly narrowed this to workflow evidence already recorded in the task history, not a live GREEN-state review gate. | SKIP |
+| AC8: `test_agent_audit_prompt_does_not_call_get_knowledge` references `.owlbear/prompts/agent-audit.prompt.md` (td:1) | [tests/test_mcp_memory_1266.py](tests/test_mcp_memory_1266.py#L829), [tests/test_mcp_memory_1266.py](tests/test_mcp_memory_1266.py#L873) | Yes. The negative and positive proofs both now target `.owlbear/prompts/agent-audit.prompt.md` at [tests/test_mcp_memory_1266.py](tests/test_mcp_memory_1266.py#L833) and [tests/test_mcp_memory_1266.py](tests/test_mcp_memory_1266.py#L877), with discriminating assertions at [tests/test_mcp_memory_1266.py](tests/test_mcp_memory_1266.py#L837) and [tests/test_mcp_memory_1266.py](tests/test_mcp_memory_1266.py#L881). The live prompt contains `query_memory` at [.owlbear/prompts/agent-audit.prompt.md](.owlbear/prompts/agent-audit.prompt.md#L175), and no `get_knowledge` matches remain. | COVERED |
+
+#### Security Review
+- No issues found in the task-owned tests, markdown skills, instruction stub, or relocated prompt files.
+
+#### Test Integrity
+- Clean ownership reconstruction.
+- `git show --name-status 8e442bdc` shows the builder commit renaming the three audit prompts from `share/prompts/` into `.owlbear/prompts/` and modifying skill/instruction files only.
+- `git diff-tree --no-commit-id --name-only -r 85b3e028` returns only [tests/test_path_neutrality_1285.py](tests/test_path_neutrality_1285.py).
+- `git diff-tree --no-commit-id --name-only -r fa78eba2` returns only [tests/test_mcp_memory_1266.py](tests/test_mcp_memory_1266.py).
+- No builder weakening or removal of `TestFromAC_*` assertions is evidenced.
+
+#### Test Quality
+- PASS. Under the binding AC reconciliation already recorded in the task body, AC3 and AC5 are path-presence contracts, and the current docstrings and executable assertions match that refined contract. AC8 now has both negative and positive proof on the relocated prompt path.
+
+#### Data Safety
+- No issues found.
+
+#### Test Gaps
+- No significant task-owned gaps remain under the current AC set.
+
+#### Necessity Check
+- Not applicable. No new dependency, integration, tool, or external capability was added.
+
+#### Builder Process Quality
+- CLEAN. The implementation landed in the original builder cycle; all later retries were test-only follow-ups with explicit builder pass-through notes and independent quality evidence.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---|---|---|---|
+| AC1 | [tests/test_path_neutrality_1285.py](tests/test_path_neutrality_1285.py) exists and executed in the scoped run. | none | PASS |
+| AC2 | Scoped run passed the zero-hit assertions at [tests/test_path_neutrality_1285.py](tests/test_path_neutrality_1285.py#L84) and [tests/test_path_neutrality_1285.py](tests/test_path_neutrality_1285.py#L101); helper semantics are at [tests/test_path_neutrality_1285.py](tests/test_path_neutrality_1285.py#L32) and [tests/test_path_neutrality_1285.py](tests/test_path_neutrality_1285.py#L36); independent search found no `serve/` hits under `share/skills/**`. | [tests/test_path_neutrality_1285.py](tests/test_path_neutrality_1285.py#L84), [tests/test_path_neutrality_1285.py](tests/test_path_neutrality_1285.py#L101) | PASS |
+| AC3 | The test asserts the routing-authority phrase and `copilot-instructions.md` at [tests/test_path_neutrality_1285.py](tests/test_path_neutrality_1285.py#L116) and [tests/test_path_neutrality_1285.py](tests/test_path_neutrality_1285.py#L120), matching the live directive at [share/skills/h-quality-runner/SKILL.md](share/skills/h-quality-runner/SKILL.md#L41). | [tests/test_path_neutrality_1285.py](tests/test_path_neutrality_1285.py#L116), [tests/test_path_neutrality_1285.py](tests/test_path_neutrality_1285.py#L120) | PASS |
+| AC4 | The exact forbidden-header list is at [tests/test_path_neutrality_1285.py](tests/test_path_neutrality_1285.py#L39), and the live file contains none of the removed headings. | [tests/test_path_neutrality_1285.py](tests/test_path_neutrality_1285.py#L137) | PASS |
+| AC5 | The test proves the reconciled chain contract via exact canonical-path substring assertions and target existence checks, matching the live anchors at [share/skills/r-doc-standards/SKILL.md](share/skills/r-doc-standards/SKILL.md#L11) and [share/instructions/doc-standards.instructions.md](share/instructions/doc-standards.instructions.md#L7). | [tests/test_path_neutrality_1285.py](tests/test_path_neutrality_1285.py#L150), [tests/test_path_neutrality_1285.py](tests/test_path_neutrality_1285.py#L166), [tests/test_path_neutrality_1285.py](tests/test_path_neutrality_1285.py#L194), [tests/test_path_neutrality_1285.py](tests/test_path_neutrality_1285.py#L203) | PASS |
+| AC6 | The relocation test passed, `.owlbear/prompts/` contains the three audit prompts, and `share/prompts/` does not. | [tests/test_path_neutrality_1285.py](tests/test_path_neutrality_1285.py#L214), [tests/test_path_neutrality_1285.py](tests/test_path_neutrality_1285.py#L221), [tests/test_path_neutrality_1285.py](tests/test_path_neutrality_1285.py#L225) | PASS |
+| AC7 | Historical RED evidence remains recorded earlier in the task body. | none | SKIP |
+| AC8 | The negative and positive agent-audit prompt proofs now both use `.owlbear/prompts/agent-audit.prompt.md` and the full `TestFromAC_ConsumerDrift` class is green. | [tests/test_mcp_memory_1266.py](tests/test_mcp_memory_1266.py#L829), [tests/test_mcp_memory_1266.py](tests/test_mcp_memory_1266.py#L873) | PASS |
+
+### Deductions
+- 0.02: Coverage is correctly non-gating here because the current cycle is test-only and touches no builder-owned runtime module.
+- 0.02: The final builder cycle was a pass-through, so ownership proof depends on commit file lists plus direct file inspection rather than a fresh builder diff.
+
+### Verdict
+- Confidence: 0.96
+- PASS. Independent quality-runner evidence is green, code-reader found no refined-contract violations, direct filesystem checks confirm the relocation and absence-based ACs, and no TestFromAC weakening is evidenced.
+- Action: advance to docs.
+
+### Informational
+- Non-blocking residual inconsistency: some standards-layer guidance still mentions `share/prompts/` as the only prompt surface. This did not violate any AC in task #1285 and does not reduce the current verdict below PASS.
+
+### Post-task Reflection
+- Running the full `TestFromAC_ConsumerDrift` class was the right closure step after the earlier scoped AC8-only retry missed a sibling stale path.
+- AC reconciliation is a valid loop-breaker when the narrowed contract is written into the task body and the tests are brought into alignment with it.
+- Commit name-status plus direct file inspection was sufficient to clear TestFromAC immutability on a builder pass-through cycle.
+[[2026-05-03]]
+## Docs Gate (cycle 2 — audit-regression)
+
+### Checklist
+
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | No behavior, API, CLI, or config changes in audit-regression cycles. `tests/test_mcp_memory_1266.py` is a test file; no IN-scope docs reference test internals. Prior gate already updated `share/README.md`. |
+| 2 | Module docstrings | No | N/A | No Python modules created or modified. |
+| 3 | External attribution | No | N/A | No external sources used. |
+| 4 | Research doc | No | N/A | Already verified in cycle 1 gate. `.owlbear/research/path-neutrality-tests-1285.md` exists and is linked. |
+| 5 | Diagram maintenance | No | N/A | No builder commits in audit-regression cycles touched diagram-described files. Prior gate already updated diagram footers. |
+| 6 | Explicit diagram creation | No | N/A | No explicit diagram creation request. |
+| 7 | Deletion detection | No | N/A | No deletions in audit-regression cycles. All prior deletions covered by cycle 1 gate. |
+
+### Scope Classification
+
+| File | Scope | Action |
+|------|-------|--------|
+| `tests/test_mcp_memory_1266.py` | OUT | N/A (test file) |
+
+No docs impact for the incremental audit-regression cycles (commits `27aaff99`, `fa78eba2`). Prior docs gate commit `8ccef1bb` already covers all IN-scope documentation for this task.
+
+### Files Updated
+- None
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no `.owlbear/scratch/1285-*` files found)
+[[2026-05-03]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1 (file exists) | `tests/test_path_neutrality_1285.py` exists and executed in full-suite run (3819 passed) | PASS |
+| AC2 (no serve/ refs) | 2 tests at L77, L92 with regex+exclusion helper; full-suite passed | PASS |
+| AC3 (quality-runner routing) | test at L109 checks routing phrase + filename per reconciled contract; full-suite passed | PASS |
+| AC4 (no legacy headers) | test at L128 checks absence of 3 headers; full-suite passed | PASS |
+| AC5 (doc-standards chain) | 4 tests at L145, L157, L173, L183 check canonical path substrings + existence per reconciled contract; full-suite passed | PASS |
+| AC6 (prompt relocation) | test at L214 checks presence in `.owlbear/prompts/` and absence in `share/prompts/`; full-suite passed | PASS |
+| AC7 (RED phase) | Workflow evidence in task history | SKIP |
+| AC8 (consumer-drift regression) | Both negative (L829) and positive (L873) proofs in test_mcp_memory_1266.py use `.owlbear/prompts/agent-audit.prompt.md`; full TestFromAC_ConsumerDrift class green | PASS |
+
+### Test Results
+- pytest (full): 3819 passed, 128 failed, 4 skipped
+- Task-scoped (test_path_neutrality_1285.py): 9 passed, 0 failed
+- Cross-task regression (test_mcp_memory_1266.py::TestFromAC_ConsumerDrift): 6 passed, 0 failed — prior audit regression fully resolved
+- 128 failures are pre-existing in unrelated subsystems (engine accessor migration, decisions, MCP kanban, cockpit react compiler, list sessions)
+- Frontend (vitest full): 936 passed, 13 failed — all in Shell_1227/Shell_966 (unrelated)
+- ruff: 1 pre-existing T201 violation (not in task scope)
+
+### Commits Verified
+| Commit | Type | Description |
+|--------|------|-------------|
+| `9f63d4f2` | test | RED phase test-writer |
+| `8e442bdc` | feat | builder implementation |
+| `1a39651f` | test | test-writer retry (AC3+AC5 strengthen) |
+| `85b3e028` | test | test-writer loop-breaker (docstring alignment) |
+| `8ccef1bb` | docs | doc-writer |
+| `27aaff99` | test | fix agent-audit prompt path |
+| `fa78eba2` | test | fix sibling retired-path in consumer-drift |
+
+### Architect Quality: 3/5
+AC3 ("directive referencing copilot-instructions.md") and AC5 ("no dangling cross-references") were vague enough to require 2 extra review cycles plus a loop-breaker reconciliation. The reconciliation was clean, but the original AC failed to define "references" operationally, costing significant pipeline cycles.
+
+### Deduction Breakdown
+- -.03: AC quality score 3/5 (≤ 3 threshold)
+
+### Confidence: .97
+### Action: archive
