@@ -14,7 +14,7 @@ All commands below run from your frontend package root. Running from the repo ro
 ### Working directory
 
 ```shell
-cd path/to/frontend-package-root
+cd frontend/  # adjust paths for your project layout
 ```
 
 Every vitest invocation below assumes this cwd.
@@ -48,13 +48,13 @@ Matches all `src/**/*.{test,spec}.{ts,tsx}` files (configured in `vite.config.ts
 ## ESLint
 
 ```shell
-cd path/to/frontend-package-root && npx eslint src/components/MyComponent.tsx
+cd frontend/ && npx eslint src/components/MyComponent.tsx  # adjust paths for your project layout
 ```
 
 Lint all source:
 
 ```shell
-cd path/to/frontend-package-root && npx eslint src/
+cd frontend/ && npx eslint src/  # adjust paths for your project layout
 ```
 
 ESLint uses a flat config (`eslint.config.js`) with `@eslint/js` + `typescript-eslint`. The rule set is intentionally minimal — `@typescript-eslint/no-unused-vars` as a warning.
@@ -70,13 +70,13 @@ ESLint uses a flat config (`eslint.config.js`) with `@eslint/js` + `typescript-e
 ## Coverage
 
 ```shell
-cd path/to/frontend-package-root && NODE_OPTIONS='--max-old-space-size=2048' npx vitest run --silent --coverage.reporter=text --coverage.provider=v8
+cd frontend/ && NODE_OPTIONS='--max-old-space-size=2048' npx vitest run --silent --coverage.reporter=text --coverage.provider=v8  # adjust paths for your project layout
 ```
 
 Scoped with coverage:
 
 ```shell
-cd path/to/frontend-package-root && NODE_OPTIONS='--max-old-space-size=2048' npx vitest run --silent src/__tests__/MyComponent.test.tsx --coverage.reporter=text --coverage.provider=v8
+cd frontend/ && NODE_OPTIONS='--max-old-space-size=2048' npx vitest run --silent src/__tests__/MyComponent.test.tsx --coverage.reporter=text --coverage.provider=v8  # adjust paths for your project layout
 ```
 
 Coverage reports module-level percentages only — no per-branch analysis.

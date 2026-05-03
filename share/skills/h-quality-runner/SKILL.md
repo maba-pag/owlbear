@@ -17,7 +17,8 @@ Scoped (Python):
 ```
 agentName: quality-runner
 prompt: |
-  Run: mode=scoped, task_id=263, test_paths=["tests/test_my_module.py"], coverage_modules=["my_module"], lint_paths=["path/to/source-package/", "tests/test_my_module.py"]
+  Run: mode=scoped, task_id=263, test_paths=["tests/test_my_module.py"], coverage_modules=["my_module"], lint_paths=["src/", "tests/test_my_module.py"]
+# adjust lint_paths for your project layout
 ```
 
 Scoped (TypeScript/JavaScript):
@@ -25,7 +26,8 @@ Scoped (TypeScript/JavaScript):
 ```
 agentName: quality-runner
 prompt: |
-  Run: mode=scoped, task_id=1230, test_paths=["path/to/frontend-package-root/src/__tests__/MyComponent.test.tsx"], lint_paths=["path/to/frontend-package-root/src/components/MyComponent.tsx"]
+  Run: mode=scoped, task_id=1230, test_paths=["frontend/src/__tests__/MyComponent.test.tsx"], lint_paths=["frontend/src/components/MyComponent.tsx"]
+# adjust test_paths and lint_paths for your project layout
 ```
 
 Full suite:
@@ -52,7 +54,7 @@ agents: [quality-runner]
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `mode` | `scoped` \| `full` | Yes | `scoped` runs only `test_paths`; `full` runs `tests/ path/to/source-packages/ -m "not api"` |
+| `mode` | `scoped` \| `full` | Yes | `scoped` runs only `test_paths`; `full` runs `tests/ src/ -m "not api"` |
 | `test_paths` | string[] | If `mode=scoped` | Paths to test files, e.g. `["tests/test_foo.py", "tests/test_bar.py"]` |
 | `task_id` | string | Yes | Kanban task ID — isolates file-capture fallback output in `.owlbear/scratch/` |
 | `coverage_modules` | string[] | No | Module names for focused coverage display; bare `--cov` always runs against all packages |
@@ -73,7 +75,7 @@ skipped: 2
 
 ## Lint
 clean: false
-violations: [{file: "path/to/source-package/src/foo/bar.py", line: 12, code: "F401", msg: "'os' imported but unused"}]
+violations: [{file: "src/foo/bar.py", line: 12, code: "F401", msg: "'os' imported but unused"}]
 
 ## Coverage
 overall_pct: 94
