@@ -3,8 +3,8 @@ id: 1212
 title: Remove storage.py re-exports — direct consumer imports
 status: backlog
 priority: needed
-created: '2026-04-30 15:29:15.222006+00:00'
-updated: '2026-04-30 15:32:04.170133+00:00'
+created: 2026-04-30 15:29:15.222006+00:00
+updated: 2026-05-03T19:37:52.631023+00:00
 tags:
 - audit-kanban
 - architecture
@@ -13,7 +13,7 @@ depends_on:
 - 1211
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-03T19:37:52.631023+00:00
 archival_reason:
 archival_refs: []
 ---

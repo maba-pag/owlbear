@@ -1,10 +1,10 @@
 ---
 id: 1254
 title: 'P4-01: RED — Filter accessibility tests'
-status: review
+status: done
 priority: important
 created: 2026-05-01T04:35:01.084199+00:00
-updated: 2026-05-03T19:14:20.920155+00:00
+updated: 2026-05-03T19:39:34.779087+00:00
 tags:
 - phase-4
 - scope:cockpit-web
@@ -14,7 +14,7 @@ depends_on:
 - 1253
 blocked: false
 block_reason:
-claimed_at: 2026-05-03T19:14:20.920155+00:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -753,3 +753,111 @@ Reviewer's cycle 4 Required Follow-up was a single assertion-strength fix. All t
 
 ### Fixes Applied
 - None in this cycle (verification-only pass).
+[[2026-05-03]]
+## Review Evidence
+
+### Test Results
+- quality-runner scoped frontend run in serve/cockpit/web: 97 passed, 0 failed, 0 skipped
+  - task suites: serve/cockpit/web/src/__tests__/FilterAccessibility_1254.test.tsx (14) and serve/cockpit/web/src/__tests__/FilterAccessibilityPanel_1254.test.tsx (8)
+  - adjacent regression suites: serve/cockpit/web/src/__tests__/KanbanBoard.test.tsx (35) and serve/cockpit/web/src/__tests__/FilterPanel_1250.test.tsx (40)
+- VS Code diagnostics: no errors in serve/cockpit/web/src/KanbanBoard.tsx, serve/cockpit/web/src/components/FilterPanel.tsx, or the two task test files
+
+### Lint
+- ESLint clean on serve/cockpit/web/src/KanbanBoard.tsx, serve/cockpit/web/src/components/FilterPanel.tsx, serve/cockpit/web/src/__tests__/FilterAccessibility_1254.test.tsx, and serve/cockpit/web/src/__tests__/FilterAccessibilityPanel_1254.test.tsx
+
+### Coverage
+- Frontend coverage artifact generated at serve/cockpit/web/coverage/
+- KanbanBoard.tsx: 84.65% statements, 81.02% branches, 76.19% functions, 85.29% lines
+- FilterPanel.tsx: 85.00% statements, 72.27% branches, 84.21% functions, 92.40% lines
+- The gate here is diff-scoped, not whole-file scoped. The builder-owned accessibility lines in both files are directly exercised by the task suites and adjacent regressions.
+
+### Pass 1 - Critical
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Evidence | Status |
+|---------|-------------|----------|--------|
+| AC1 aria-expanded reflects panelOpen | FilterAccessibility_1254.test.tsx:130 | KanbanBoard.tsx:251; exact false/true/false assertions in the AC1 block | PASS |
+| AC2 aria-controls="filter-panel" | FilterAccessibility_1254.test.tsx:160 | KanbanBoard.tsx:252 | PASS |
+| AC3 panel root carries id, role, and aria-label together | FilterAccessibilityPanel_1254.test.tsx:59 | FilterPanel.tsx:134-136 | PASS |
+| AC4 result-count live region has aria-live="polite" | FilterAccessibility_1254.test.tsx:170 | KanbanBoard.tsx:258 | PASS |
+| AC5 only user-initiated filter changes announce; polling does not re-announce | FilterAccessibility_1254.test.tsx:196,246,290 | KanbanBoard.tsx:223,227,258; exact `1 / 2 tasks` and `2 / 2 tasks` assertions plus active-filter polling no-update proof | PASS |
+| AC6 announcement fires 300ms after last text keystroke | FilterAccessibility_1254.test.tsx:362,383 | KanbanBoard.tsx:223,227; exact 300ms text and stale-first-timer boundary proof | PASS |
+| AC7 focus moves to first panel control on expand | FilterAccessibilityPanel_1254.test.tsx:71 | FilterPanel.tsx:98; exact activeElement equals text input at FilterAccessibilityPanel_1254.test.tsx:108 | PASS |
+| AC8 programmatic focus return on collapse | FilterAccessibilityPanel_1254.test.tsx:151 | FilterPanel.tsx:79,139; KanbanBoard.tsx:276; Escape path asserts onClose at FilterAccessibilityPanel_1254.test.tsx:175 | PASS |
+| AC9 explicit accessible labels on text input, priority, tags | FilterAccessibilityPanel_1254.test.tsx:245,252,259 | FilterPanel.tsx:146,154-155,170-171; exact aria-label value assertions at FilterAccessibilityPanel_1254.test.tsx:249,256,263 | PASS |
+| RED-only meta line | historical td:0 line | Not a GREEN gate in the current snapshot | N/A |
+
+#### Security Review
+- No issues. The changed code is local UI state, focus management, and aria-live behavior only; no new secrets, injection sinks, path handling, deserialization, or dependency surface.
+
+#### Test Integrity
+- Builder commit 3b1c83e0 touched only serve/cockpit/web/src/KanbanBoard.tsx and serve/cockpit/web/src/components/FilterPanel.tsx.
+- Test-writer commits 506d4da3, d8911678, bdba1436, and 235c4020 touched only the task test files.
+- No builder weakening or removal of TestFromAC assertions was found.
+
+#### Test Quality
+- PASS.
+- Current td:2 assertions are discriminating: exact announcement text, exact stale-first-timer boundary, exact activeElement, exact aria-label values.
+- Adjacent durable proof at serve/cockpit/web/src/__tests__/FilterPanel_1250.test.tsx:256 covers real text-input forwarding to onFilterChange, so the mocked board-level tests do not leave the current keystroke path unguarded.
+- Informational only: code-reader and challenger both surfaced a mid-debounce polling freshness edge in KanbanBoard.tsx:221-227. The current AC and architect guidance do not define that interleave as a gate condition, so I am not scoring it as a fail in this review.
+
+#### Data Safety
+- No fail-worthy issue in the builder-owned task scope.
+
+#### Test Gaps
+- None fail-worthy for the written AC.
+- Informational only: if product scope later requires announcement freshness when polling lands during a pending debounce window, add a dedicated interleaving test.
+
+#### Necessity Check
+- N/A.
+
+#### Builder Process Quality
+- CLEAN.
+- Three prior Review Evidence sections exist in the task file. The current snapshot resolves the prior proof-quality failures without any new builder weakening.
+
+### Deductions
+- -0.04 module-level coverage on the touched files remains below 90 in some dimensions, even though the diff-scoped accessibility lines are directly exercised
+- -0.03 one broader robustness edge remains informational rather than AC-gated
+
+### Verdict
+- PASS, confidence 0.91
+
+### Action
+- Advance to docs.
+
+### Post-task Reflection
+- Multiple stale review sections in the task body made it necessary to re-anchor on the live files and commit surfaces rather than prior notes.
+- On frontend tasks that intentionally mock a child component, adjacent durable suites can close a proof gap without widening the AC.
+- Diff-scoped coverage reasoning is more useful than raw whole-file percentages on narrow UI changes.
+- A real robustness edge can exist without being a valid fail reason when the written AC does not define that interleave.
+[[2026-05-03]]
+## Docs Gate
+
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | No IN-scope prose docs reference filter accessibility UI; serve/cockpit/README.md has no mention of ARIA attributes or FilterPanel a11y |
+| 2 | Module docstrings | No | N/A | No Python modules modified |
+| 3 | External attribution | Yes | Updated | WAI-ARIA APG Disclosure (Show/Hide) pattern cited in research doc — added row to `.owlbear/sources/overview.md`; precedent from task #962 (Menu Pattern) |
+| 4 | Research doc | Yes | Verified | `.owlbear/research/filter-accessibility-tests-1254.md` exists, linked from task body, follow-ups noted as none required |
+| 5 | Diagram maintenance (describes match) | No | N/A | No diagram in doc-index has a `describes` glob matching any changed file |
+| 6 | Explicit diagram creation | No | N/A | No explicit diagram creation request in task body |
+| 7 | Deletion detection | No | N/A | No files deleted |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| serve/cockpit/web/src/KanbanBoard.tsx | OUT | N/A |
+| serve/cockpit/web/src/components/FilterPanel.tsx | OUT | N/A |
+| serve/cockpit/web/src/__tests__/FilterAccessibility_1254.test.tsx | OUT | N/A |
+| serve/cockpit/web/src/__tests__/FilterAccessibilityPanel_1254.test.tsx | OUT | N/A |
+| .owlbear/research/filter-accessibility-tests-1254.md | IN | Verified (research doc exists, linked) |
+| .owlbear/sources/overview.md | IN | Updated (attribution row added) |
+
+### Files Updated
+- `.owlbear/sources/overview.md` — added WAI-ARIA APG Disclosure attribution row under new "Filter Accessibility Tests (Task #1254)" section
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no `.owlbear/scratch/1254-*` files found)

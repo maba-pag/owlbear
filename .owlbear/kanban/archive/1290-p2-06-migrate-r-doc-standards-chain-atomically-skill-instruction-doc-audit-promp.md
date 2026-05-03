@@ -2,10 +2,10 @@
 id: 1290
 title: 'P2-06: Migrate r-doc-standards chain atomically (skill + instruction + doc-audit
   prompt)'
-status: done
+status: archived
 priority: needed
 created: 2026-05-02T16:01:17.114235+00:00
-updated: 2026-05-03T19:16:42.105827+00:00
+updated: 2026-05-03T19:43:45.866461+00:00
 tags:
 - phase-2
 - scope:docs
@@ -291,3 +291,5 @@ Architecture review complete. Refined AC to specify extraction destination (`.ow
 
 ### Scratch Files Cleaned
 - None (no `.owlbear/scratch/1290-*` files existed)
+[[2026-05-03]]
+## Audit\n### AC Verification\n| AC Line | Evidence | Status |\n|---------|----------|--------|\n| Create .owlbear/instructions/doc-types.instructions.md with STR, PLC-3/4, AUD-1 | File exists: frontmatter applyTo matches, STR-1 through STR-13, PLC-3/4, AUD-1 present | PASS |\n| Reduce r-doc-standards to generic framework with companion wiring | Skill L9-11: generic description + companion wiring line; L37+: XREF rules; L59+: DIM rules; no STR/PLC/AUD-1 definitions remain | PASS |\n| Update doc-standards.instructions.md description, applyTo unchanged | Description: \"Documentation quality rules...\" (generic); applyTo unchanged; also loads local doc-types instruction | PASS |\n| Update doc-audit prompt for dual-source loading and correct authority mapping | L15: loads both; L62-65: authority split; L175: Phase 1 Step 2 loads both; L206/L249: {standards-source} placeholders; negative grep confirms no stale single-source phrases | PASS |\n| No dangling cross-references; #1285 tests pass | Chain wiring intact (skill->instruction->prompt); quality-runner 9/9 passed on test_path_neutrality_1285.py | PASS |\n| Single atomic commit | 1fca9847: exactly 4 task files; fb1e79b2: prompt-only retry fix; 363bb595: docs gate diagram footer | PASS |\n\n### Test Results\n- pytest (full): hangs at test_cockpit_events_1234.py (known SSE deadlock, pre-existing, unrelated)\n- pytest (scoped): 19 passed, 0 failed\n- ruff: 1 T201 in serve/knowledge copilot_auth.py (unrelated background debt)\n- vitest (scoped): 65 passed\n\n### Architect Quality: 4/5\nSpecific td:0 AC with explicit paths and content targets. Builder guidance helpful (pre-satisfied ACs noted, test constraint). Minor gap: refined AC did not flag stale-wording patterns in prompt, leaving the reviewer to catch it.\n\n### Deduction Breakdown\n- Full suite incomplete due to known background SSE hang: -.01\n- Regression test does not pin prompt internal authority text: -.02\n\n### Confidence: 0.97\n### Action: archive

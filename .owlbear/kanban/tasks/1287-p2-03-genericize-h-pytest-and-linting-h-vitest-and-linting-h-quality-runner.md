@@ -4,7 +4,7 @@ title: 'P2-03: Genericize h-pytest-and-linting, h-vitest-and-linting, h-quality-
 status: done
 priority: needed
 created: 2026-05-02T16:01:17.076781+00:00
-updated: 2026-05-03T19:16:44.318387+00:00
+updated: 2026-05-03T19:38:06.434799+00:00
 tags:
 - phase-2
 - scope:docs
@@ -15,7 +15,7 @@ depends_on:
 - 1285
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-03T19:38:06.434799+00:00
 archival_reason:
 archival_refs: []
 ---
