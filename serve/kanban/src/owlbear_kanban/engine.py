@@ -2277,14 +2277,17 @@ class AgentView:
         passes_tdd = dispatch_module._passes_tdd_gate  # noqa: SLF001
         passes_clarity = dispatch_module._passes_clarity_gate  # noqa: SLF001
 
-        gated_dispatchable: list[TaskSummary] = []
+        gated_dispatchable: list[Task] = []
         for task in dispatchable:
-            full_task = self.engine.show_task(str(task.id))
+            try:
+                full_task = self.engine.show_task(str(task.id))
+            except FileNotFoundError:
+                continue
             if not passes_tdd(full_task):
                 continue
             if not passes_clarity(full_task):
                 continue
-            gated_dispatchable.append(task)
+            gated_dispatchable.append(full_task)
 
         dispatchable = gated_dispatchable
         if not dispatchable:
@@ -2319,7 +2322,7 @@ class AgentView:
                 return mapped
             return str(mapped)
 
-        def _has_dep_edge(left: TaskSummary, right: TaskSummary) -> bool:
+        def _has_dep_edge(left: Task, right: Task) -> bool:
             left_deps = set(left.depends_on or [])
             right_deps = set(right.depends_on or [])
             return right.id in left_deps or left.id in right_deps
@@ -2334,7 +2337,7 @@ class AgentView:
                 and existing_bucket in candidate_allowed
             )
 
-        wave_tasks: list[list[TaskSummary]] = []
+        wave_tasks: list[list[Task]] = []
         dropped = 0
         for task in ordered:
             candidate_agent = _dispatch_agent_for_status(task.status)
