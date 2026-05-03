@@ -69,7 +69,10 @@ function KanbanBoardContent({
   const [dragSource, setDragSource] = useState<DragSourceState | null>(null)
   const [filter, setFilter] = useState<FilterState>(EMPTY_FILTER)
   const [panelOpen, setPanelOpen] = useState(false)
+  const [filterAnnouncement, setFilterAnnouncement] = useState('')
   const menuRef = useRef<HTMLDivElement | null>(null)
+  const filterToggleRef = useRef<HTMLButtonElement | null>(null)
+  const announcementTimerRef = useRef<number | null>(null)
 
   const filteredTasks = filterTasks(tasks, filter)
   const availableTags = [...new Set(tasks.flatMap((task) => task.tags))]
@@ -99,6 +102,14 @@ function KanbanBoardContent({
       document.removeEventListener('keydown', handleKeyDown)
     }
   }, [contextMenu])
+
+  useEffect(() => {
+    return () => {
+      if (announcementTimerRef.current !== null) {
+        window.clearTimeout(announcementTimerRef.current)
+      }
+    }
+  }, [])
 
   const handleContextMenu = (e: React.MouseEvent, task: Task) => {
     e.preventDefault()
@@ -202,6 +213,22 @@ function KanbanBoardContent({
   const handleFilterChange = (nextFilter: FilterState) => {
     setContextMenu(null)
     setDragSource(null)
+
+    if (announcementTimerRef.current !== null) {
+      window.clearTimeout(announcementTimerRef.current)
+    }
+
+    const updateAnnouncement = () => {
+      const nextFilteredCount = filterTasks(tasks, nextFilter).length
+      setFilterAnnouncement(`${nextFilteredCount} / ${tasks.length} tasks`)
+    }
+
+    if (nextFilter.text !== filter.text) {
+      announcementTimerRef.current = window.setTimeout(updateAnnouncement, 300)
+    } else {
+      updateAnnouncement()
+    }
+
     setFilter(nextFilter)
   }
 
@@ -218,13 +245,19 @@ function KanbanBoardContent({
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
         <button
+          ref={filterToggleRef}
           type="button"
           data-testid="filter-toggle"
+          aria-expanded={panelOpen}
+          aria-controls="filter-panel"
           onClick={() => setPanelOpen((open) => !open)}
         >
           Filters
           {hasActiveFilters ? ` (${activeFilterCount})` : ''}
         </button>
+        <span data-testid="filter-result-count-live" aria-live="polite" style={{ position: 'absolute', left: '-9999px' }}>
+          {filterAnnouncement}
+        </span>
         {hasActiveFilters ? (
           <span data-testid="filter-result-count">
             {filteredTasks.length} / {tasks.length} tasks
@@ -238,6 +271,10 @@ function KanbanBoardContent({
         priorities={board.priorities}
         availableTags={availableTags}
         open={panelOpen}
+        onClose={() => {
+          setPanelOpen(false)
+          filterToggleRef.current?.focus()
+        }}
       />
 
       <div style={{ display: 'flex', gap: '16px', overflowX: 'auto', flex: 1, minHeight: 0 }}>

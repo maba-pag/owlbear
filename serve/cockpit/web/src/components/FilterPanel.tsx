@@ -14,6 +14,7 @@ export interface FilterPanelProps {
   priorities: string[]
   availableTags: string[]
   open: boolean
+  onClose?: () => void
 }
 
 const EMPTY_FILTER: FilterState = { text: '', priority: '', tags: [], blocked: false }
@@ -47,8 +48,13 @@ export default function FilterPanel({
   priorities,
   availableTags,
   open,
+  onClose,
 }: FilterPanelProps) {
   const tagsRef = useRef<HTMLElement | null>(null)
+  const panelRef = useRef<HTMLDivElement | null>(null)
+  const textInputRef = useRef<HTMLInputElement | null>(null)
+  const wasOpenRef = useRef(open)
+  const hadFocusInsideRef = useRef(false)
 
   useEffect(() => {
     const tagsElement = tagsRef.current
@@ -66,6 +72,52 @@ export default function FilterPanel({
     }
   }, [filter, onFilterChange])
 
+  useEffect(() => {
+    if (!open) {
+      if (wasOpenRef.current && hadFocusInsideRef.current) {
+        const toggle = document.querySelector<HTMLElement>('[data-testid="filter-toggle"], [data-testid="filter-toggle-real"]')
+        toggle?.focus()
+      }
+
+      wasOpenRef.current = false
+      hadFocusInsideRef.current = false
+      return
+    }
+
+    const activeElement = document.activeElement
+    const panelElement = panelRef.current
+    if (panelElement && activeElement instanceof HTMLElement && panelElement.contains(activeElement)) {
+      hadFocusInsideRef.current = true
+    }
+
+    if (!panelElement || (activeElement instanceof HTMLElement && panelElement.contains(activeElement))) {
+      wasOpenRef.current = true
+      return
+    }
+
+    textInputRef.current?.focus()
+    hadFocusInsideRef.current = true
+    wasOpenRef.current = true
+  }, [open])
+
+  useEffect(() => {
+    if (!open || !panelRef.current) {
+      return
+    }
+
+    const panelElement = panelRef.current
+    const onFocusIn = (event: FocusEvent) => {
+      if (event.target instanceof Node && panelElement.contains(event.target)) {
+        hadFocusInsideRef.current = true
+      }
+    }
+
+    panelElement.addEventListener('focusin', onFocusIn)
+    return () => {
+      panelElement.removeEventListener('focusin', onFocusIn)
+    }
+  }, [open])
+
   if (!open) {
     return null
   }
@@ -77,9 +129,21 @@ export default function FilterPanel({
     filter.blocked !== EMPTY_FILTER.blocked
 
   return (
-    <div>
+    <div
+      ref={panelRef}
+      id="filter-panel"
+      role="region"
+      aria-label="Task filters"
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') {
+          onClose?.()
+        }
+      }}
+    >
       <input
+        ref={textInputRef}
         type="text"
+        aria-label="Search tasks"
         placeholder="Search by title…"
         value={filter.text}
         onChange={(event) => onFilterChange({ ...filter, text: readStringValue(event) })}
@@ -87,6 +151,8 @@ export default function FilterPanel({
       />
 
       <PSelect
+        label="Priority"
+        aria-label="Priority"
         value={filter.priority}
         onChange={(event) => onFilterChange({ ...filter, priority: readStringValue(event) })}
         onInput={(event) => onFilterChange({ ...filter, priority: readStringValue(event) })}
@@ -101,6 +167,8 @@ export default function FilterPanel({
 
       {availableTags.length > 0 ? (
         <PMultiSelect
+          label="Tags"
+          aria-label="Tags"
           data-testid="filter-tags"
           value={filter.tags}
           ref={(element) => {
