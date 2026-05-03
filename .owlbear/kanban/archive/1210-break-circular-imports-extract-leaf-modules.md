@@ -1,10 +1,10 @@
 ---
 id: 1210
 title: Break circular imports — extract leaf modules
-status: review
+status: archived
 priority: needed
 created: 2026-04-30 15:29:06.259647+00:00
-updated: 2026-05-03T14:06:00.371789+00:00
+updated: 2026-05-03T16:15:04.428582+00:00
 tags:
 - audit-kanban
 - architecture
@@ -14,7 +14,7 @@ depends_on:
 - 1209
 blocked: false
 block_reason:
-claimed_at: 2026-05-03T14:06:00.371789+00:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -430,3 +430,314 @@ Architecture review cycle 3 complete. AC unchanged from cycle 2 (already precise
 - Reflection: this cycle was verification-only; no reproducible implementation gap remained after test-writer cycle 3.
 - Reflection: scoped quality-runner evidence was sufficient to validate AC-owned behavior without unrelated suite noise.
 - Reflection: no commit performed because no files were modified in this pass.
+[[2026-05-03]]
+## Review Evidence
+### Test Results
+- quality-runner env fallback: both subagent attempts failed because `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1` prevented `xdist` / `pytest-cov` discovery in the canonical runner environment.
+- Direct reviewer fallback (allowed after 2 env failures): `.venv/bin/pytest -p xdist.plugin -p pytest_cov tests/test_circular_imports_1210.py --cov=owlbear_kanban.storage --cov=owlbear_kanban.models --cov=owlbear_kanban._duration --cov=owlbear_kanban._locking --cov-report=term-missing --cov-fail-under=0 -q --tb=short` -> 39 passed, 0 failed.
+- Adjacent regression fallback: `.venv/bin/pytest -p xdist.plugin serve/kanban/tests/test_storage_io.py serve/kanban/tests/test_storage_io_1055.py serve/kanban/tests/test_engine_archived_edit_1120.py -q --tb=short` -> 80 passed, 0 failed.
+
+### Lint
+- Direct fallback: `.venv/bin/ruff check serve/kanban/src/owlbear_kanban/storage.py serve/kanban/src/owlbear_kanban/models.py serve/kanban/src/owlbear_kanban/_duration.py serve/kanban/src/owlbear_kanban/_locking.py tests/test_circular_imports_1210.py` -> clean.
+
+### Coverage
+- Direct task-suite coverage: `_duration` 100%, `_locking` 100%, `models` 79%, `storage` 17%.
+- Coverage is informational here. This is a structural extraction task, and the adjacent storage regression surface is green.
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---------|-------------|---------------------------|---------|
+| AC1 `_duration.py` canonical parser leaf | `TestFromAC_DurationModule` | Yes — importability, export surface, intra-package import limit, and invalid-input behavior are pinned | COVERED |
+| AC2 `_locking.py` contextmanager leaf | `TestFromAC_LockingModule` | Yes — decorator AST proof and zero intra-package imports are pinned | COVERED |
+| AC3 engine leaf imports, local defs removed | `TestFromAC_EngineDefinitionsRemoved` | Yes — the suite fails if `engine.py` still defines or omits the named symbols/imports | COVERED |
+| AC4 config_loader imports from `_duration`, not engine | `TestFromAC_ConfigLoaderImport` | Yes — absence of `engine` imports and presence of `_duration` import are both pinned | COVERED |
+| AC5 storage module-scope `_locking` import, zero deferred imports, 3 call sites use top-level name | `TestFromAC_StorageImport` | Yes — module-level import, zero deferred `_locking` imports, and actual `_exclusive_file_lock(...)` call nodes in the 3 target functions are pinned | COVERED |
+| AC6 models duplicate removed and validator calls canonical parser | `TestFromAC_ModelsDuplicateRemoved` | Yes — duplicate removal, canonical import, valid/invalid runtime validation, non-export, and AST call to `_parse_duration(...)` inside `BoardConfig._validate_semantics` are pinned | COVERED |
+| AC7 downstream test imports/source target updated | `TestFromAC_TestFileImportUpdates` | Yes — downstream import and `_locking.py` source-target assertions are pinned | COVERED |
+| AC8 task-owned suite green | Independent reviewer execution | Yes — direct fallback run passed 39/39 | COVERED |
+
+#### Security Review
+- No issues found. `_duration.py` remains a closed regex-to-timedelta parser with `ConfigError` on invalid input, `_locking.py` remains a stdlib-only file-lock helper, and the storage refactor only rewires existing lock acquisition sites.
+
+#### Test Integrity
+| Original Test | Change Made | Assessment |
+|---------------|-------------|------------|
+| `tests/test_circular_imports_1210.py` from recorded commit `5e184055` | `git diff --name-only 5e184055 HEAD -- tests/test_circular_imports_1210.py` returned no output, so `HEAD` preserves the last recorded committed test-writer suite | PRESERVED |
+| Current working tree version of `tests/test_circular_imports_1210.py` | Additional cycle-3 proof-closing changes exist in the working tree but are not committed | STRENGTHENED BUT UNCOMMITTED |
+
+#### Test Quality
+| Dimension | Rating | Evidence |
+|-----------|--------|----------|
+| Assertion specificity | STRONG | AC5 now pins module import, no deferred imports, and actual `_exclusive_file_lock(...)` calls; AC6 now pins the `_parse_duration(...)` call inside `_validate_semantics` |
+| Negative/error-path coverage | STRONG | Invalid duration / claim-timeout behavior is exercised directly |
+| Manual mutation reasoning | STRONG | Reintroducing deferred imports, dead imports, or removing the named calls would now fail the task-owned suite |
+| Test independence | ADEQUATE | The suite is source/AST focused and does not share mutable state |
+| Descriptive naming | ADEQUATE | Test names map cleanly to AC clauses |
+
+#### Data Safety
+- No issues found. Storage still acquires locks at the three named call sites, and adjacent storage/archive regressions passed 80/80.
+
+#### Implementation-Aware Gaps
+- No blocking implementation or runtime gap remains on the reviewed surface. The task-owned suite is green, and adjacent regression suites for storage/archive behavior are also green.
+
+#### Necessity Check
+- Not applicable. Internal refactor only; no new dependency, integration, or external capability.
+
+#### Builder / Commit Process Quality
+- Prior `## Review Evidence` sections before this pass: 2. This is the third review cycle, so any FAIL routes to `backlog` per loop-breaker policy.
+- Blocking commit-gate violation: `git status --short -- tests/test_circular_imports_1210.py serve/kanban/src/owlbear_kanban/storage.py serve/kanban/src/owlbear_kanban/models.py serve/kanban/src/owlbear_kanban/_duration.py serve/kanban/src/owlbear_kanban/_locking.py serve/kanban/src/owlbear_kanban/engine.py serve/kanban/src/owlbear_kanban/config_loader.py serve/kanban/tests/test_engine_coverage_1068.py serve/kanban/tests/test_engine_storage.py tests/test_engine_dead_code_1112.py` shows task-owned deliverables still uncommitted in the working tree:
+  - `M serve/kanban/src/owlbear_kanban/config_loader.py`
+  - `M serve/kanban/src/owlbear_kanban/engine.py`
+  - `M serve/kanban/src/owlbear_kanban/models.py`
+  - `M serve/kanban/tests/test_engine_coverage_1068.py`
+  - `M serve/kanban/tests/test_engine_storage.py`
+  - `M tests/test_circular_imports_1210.py`
+  - `M tests/test_engine_dead_code_1112.py`
+  - `?? serve/kanban/src/owlbear_kanban/_duration.py`
+  - `?? serve/kanban/src/owlbear_kanban/_locking.py`
+- Latest committed task artifacts identified by `git log --oneline --decorate -5 -- tests/test_circular_imports_1210.py serve/kanban/src/owlbear_kanban/storage.py` are:
+  - `66083cdb fix: enforce module-level locking import in storage (#1210, builder)`
+  - `5e184055 test: strengthen AC5/AC2/AC7 structural proofs for circular-import extraction (#1210, test-writer)`
+  - `00cdfeff test: add failing tests for circular import extraction (#1210, test-writer)`
+- The current green snapshot is therefore not a committed deliverable. Per pipeline protocol, tasks may not advance to review or pass review on uncommitted builder/test-writer output.
+
+### Pass 2 — INFORMATIONAL
+- Environment note: the shell has `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1`, so reviewer fallback required explicit `-p xdist.plugin -p pytest_cov` to run pytest with the repo’s configured options.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| AC1 `_duration.py` exists with `_parse_duration` and `_DURATION_RE`; only intra-package import is `ConfigError` | `_duration.py` present with import at line 6 and parser body at lines 11-26 | `TestFromAC_DurationModule` | PASS |
+| AC2 `_locking.py` exists with `@contextlib.contextmanager`; zero intra-package imports | `_locking.py` decorator + helper at lines 12-30 | `TestFromAC_LockingModule` | PASS |
+| AC3 engine local defs removed; imports from leaf modules | `engine.py` imports `_parse_duration` / `_exclusive_file_lock` at lines 44-45 | `TestFromAC_EngineDefinitionsRemoved` | PASS |
+| AC4 config_loader imports `_parse_duration` from `_duration` | `config_loader.py` imports `_parse_duration` at line 17 | `TestFromAC_ConfigLoaderImport` | PASS |
+| AC5 storage imports `_exclusive_file_lock` from `_locking` at module scope and all 3 call sites use it | `storage.py` module import at line 39; call sites at lines 475, 548, 588 | `TestFromAC_StorageImport` | PASS |
+| AC6 models duplicate removed and validator calls canonical parser | `models.py` import at line 24; `_validate_semantics` calls `_parse_duration(...)` at lines 398-402 | `TestFromAC_ModelsDuplicateRemoved` | PASS |
+| AC7 downstream test imports/source target updated | `test_engine_coverage_1068.py` line 29, `test_engine_storage.py` lines 1015/1022/1029, `test_engine_dead_code_1112.py` lines 26-41 and 244-253 | `TestFromAC_TestFileImportUpdates` | PASS |
+| AC8 task-owned suite green | Direct reviewer fallback run: 39 passed, 0 failed | independent reviewer execution | PASS |
+
+### Deductions
+- -0.25 Commit gate violation: task-owned source/test deliverables are still modified or untracked in the working tree.
+- -0.05 Quality-runner env fallback: canonical runner could not execute due plugin autoload suppression.
+- -0.03 Task notes lack a committed cycle-3 test-writer hash even though the working tree contains additional cycle-3 test changes.
+
+### Verdict
+- FAIL. Confidence: 0.67.
+- Route: `backlog`.
+- Reason: the live implementation and proof now satisfy the refined AC, but the task cannot pass review on an uncommitted working-tree snapshot. This is also the third review cycle, so loop-breaker routing applies.
+
+### Required Follow-up
+- Commit the task-owned source and test files for #1210 so the green snapshot exists as an auditable artifact.
+- Record the missing cycle-3 test-writer commit hash in the task body once committed.
+- Re-enter review only after the committed snapshot matches the currently green working tree.
+
+### Reflection
+- The AC and proof-quality issues from cycle 2 are closed; the remaining blocker is process integrity, not runtime correctness.
+- `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1` breaks canonical quality-runner execution unless pytest plugins are explicitly loaded.
+- Third-cycle review failures should route to backlog even when the final blocker is a commit gate rather than a code defect.
+[[2026-05-03]]
+## Architecture Review (cycle 4)
+
+**Verdict:** APPROVED
+
+This is a re-approval after reviewer cycle 3 routed to backlog for a commit gate violation only. AC unchanged from cycle 2 refinement. Implementation and proof quality are both verified green from cycle 3 review evidence.
+
+**Remaining action:** Builder must commit the outstanding working-tree changes. Per cycle 3 review evidence, these files are modified/untracked:
+- `M serve/kanban/src/owlbear_kanban/config_loader.py`
+- `M serve/kanban/src/owlbear_kanban/engine.py`
+- `M serve/kanban/src/owlbear_kanban/models.py`
+- `M serve/kanban/tests/test_engine_coverage_1068.py`
+- `M serve/kanban/tests/test_engine_storage.py`
+- `M tests/test_circular_imports_1210.py`
+- `M tests/test_engine_dead_code_1112.py`
+- `?? serve/kanban/src/owlbear_kanban/_duration.py`
+- `?? serve/kanban/src/owlbear_kanban/_locking.py`
+
+**Challenger:** SKIPPED — cycle 4 re-approval with zero design/AC changes since cycle 2 challenger invocation. Only process issue remains.
+
+**Test-writer:** SKIP — tests already exist and are strengthened (cycle 3 commit `5e184055` + uncommitted call-site assertions). Test-writer should pass through.
+
+**Builder note (cycle 4):** The implementation is already green. Your only job is to commit ALL task-owned files listed above in a single atomic commit. Verify `uv run pytest tests/test_circular_imports_1210.py` passes post-commit. Do not modify source or test files.
+[[2026-05-03]]
+## Test-Writer Notes
+- Retry cycle 4: pass-through per architect directive.
+- Tests already exist and are strengthened: `tests/test_circular_imports_1210.py` (39 tests, all green against current impl from cycle 3 working tree).
+- Architect cycle 4 explicitly: "Test-writer: SKIP — tests already exist and are strengthened (cycle 3 commit `5e184055` + uncommitted call-site assertions)."
+- Reviewer cycle 3 Required Follow-up is a commit gate violation only — no test gaps.
+- Working tree confirms 9 task-owned files still uncommitted/untracked (same set as cycle 3 review evidence).
+- Builder action required: commit all task-owned files in a single atomic commit, then run `uv run pytest tests/test_circular_imports_1210.py` to verify 39 pass post-commit.
+[[2026-05-03]]
+## Builder Notes
+- Implementation: finalized leaf-module extraction deliverables for circular-import breakage across `serve/kanban/src/owlbear_kanban/_duration.py`, `serve/kanban/src/owlbear_kanban/_locking.py`, `serve/kanban/src/owlbear_kanban/engine.py`, `serve/kanban/src/owlbear_kanban/config_loader.py`, `serve/kanban/src/owlbear_kanban/models.py`, plus AC-owned test updates in `serve/kanban/tests/test_engine_coverage_1068.py`, `serve/kanban/tests/test_engine_storage.py`, `tests/test_engine_dead_code_1112.py`, and `tests/test_circular_imports_1210.py`.
+- Tests: 39 passed, 0 failed on `tests/test_circular_imports_1210.py` (quality-runner scoped run).
+- Coverage: `owlbear_kanban._duration` 100%, `owlbear_kanban._locking` 100%, `owlbear_kanban.models` 79%, `owlbear_kanban.storage` 17% (informational scoped coverage set).
+- Ruff: clean for AC-owned source/test paths.
+- Evidence summary: AC-owned extraction and import rewiring are present at module scope; deferred `_locking` imports removed from storage function bodies; task-owned suite is green.
+- Commit: `14fc7f0771faa28cb3312e5e8c5f4ce837cd31f8` (`refactor: extract kanban leaf modules for circular imports (#1210, builder)`).
+
+- Reflection: the remaining blocker in this cycle was process integrity (uncommitted deliverables), not runtime behavior.
+- Reflection: path-scoped staging was required because the workspace had unrelated dirty files.
+- Reflection: scoped quality-runner verification provided reliable ownership evidence without pulling in unrelated-suite noise.
+[[2026-05-03]]
+## Review Evidence
+Binding AC source: Refined AC (cycle 2 — supersedes original AC section).
+
+### Test Results
+- Scoped quality-runner: pytest 39 passed, 0 failed, 0 skipped for tests/test_circular_imports_1210.py.
+- Adjacent regression quality-runner: pytest 80 passed, 0 failed, 0 skipped for serve/kanban/tests/test_storage_io.py, serve/kanban/tests/test_storage_io_1055.py, and serve/kanban/tests/test_engine_archived_edit_1120.py.
+
+### Lint
+- Scoped ruff: clean for serve/kanban/src/owlbear_kanban/_duration.py, serve/kanban/src/owlbear_kanban/_locking.py, serve/kanban/src/owlbear_kanban/engine.py, serve/kanban/src/owlbear_kanban/config_loader.py, serve/kanban/src/owlbear_kanban/models.py, serve/kanban/src/owlbear_kanban/storage.py, serve/kanban/tests/test_engine_coverage_1068.py, serve/kanban/tests/test_engine_storage.py, tests/test_engine_dead_code_1112.py, and tests/test_circular_imports_1210.py.
+
+### Coverage
+- Task-suite module coverage: owlbear_kanban._duration 100%, owlbear_kanban._locking 100%, owlbear_kanban.models 79%, owlbear_kanban.storage 17%.
+- Coverage is informational here. This is a structural extraction task; the changed lines are directly proven by tests/test_circular_imports_1210.py:361-427 and by adjacent runtime regressions passing 80/80.
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---------|-------------|---------------------------|---------|
+| AC1 `_duration.py` leaf module | tests/test_circular_imports_1210.py:118-158 | Yes — importability, export surface, allowed intra-package import, and invalid-input behavior are pinned against serve/kanban/src/owlbear_kanban/_duration.py:6-26 | COVERED |
+| AC2 `_locking.py` leaf module | tests/test_circular_imports_1210.py:170-214 | Yes — runtime context-manager behavior, zero intra-package imports, and AST decorator proof pin serve/kanban/src/owlbear_kanban/_locking.py:12-16 | COVERED |
+| AC3 `engine.py` imports from leaf modules | tests/test_circular_imports_1210.py:223-274 | Yes — local definitions are forbidden and imports from the leaf modules are required at serve/kanban/src/owlbear_kanban/engine.py:44-45 | COVERED |
+| AC4 `config_loader.py` imports from `_duration` | tests/test_circular_imports_1210.py:286-318 | Yes — engine imports are forbidden and the direct `_duration` import at serve/kanban/src/owlbear_kanban/config_loader.py:17 is required | COVERED |
+| AC5 `storage.py` module-level `_locking` import and 3 call sites | tests/test_circular_imports_1210.py:361-427 | Yes — module-level import, zero deferred imports, and exact `_exclusive_file_lock(...)` call nodes are pinned against serve/kanban/src/owlbear_kanban/storage.py:39,475,548,588 | COVERED |
+| AC6 `models.py` duplicate removed and canonical parser call retained | tests/test_circular_imports_1210.py:439-518 | Yes — duplicate removal, runtime validation, non-export, and exact `_parse_duration(...)` call inside `_validate_semantics` are pinned against serve/kanban/src/owlbear_kanban/models.py:24,396-402 | COVERED |
+| AC7 downstream test updates | tests/test_circular_imports_1210.py:552-626 | Yes — downstream imports/source targets are pinned against serve/kanban/tests/test_engine_coverage_1068.py:29, serve/kanban/tests/test_engine_storage.py:1015,1022,1029, and tests/test_engine_dead_code_1112.py:26-40,244-253 | COVERED |
+| AC8 task-owned suite green | independent quality-runner execution | Yes — scoped run passed 39/39 | COVERED |
+
+#### Security Review
+- No new issues found in the changed surface. The refactor only extracts internal regex and file-lock helpers; adjacent storage/archive regressions stayed green.
+
+#### Test Integrity
+| Original Test | Change Made | Assessment |
+|---------------|-------------|------------|
+| tests/test_circular_imports_1210.py from 5e184055 to 14fc7f0771faa28cb3312e5e8c5f4ce837cd31f8 | Added `test_storage_three_functions_call_exclusive_file_lock` and `test_board_config_validate_semantics_calls_parse_duration`; no removals or relaxed assertions in diff | STRENGTHENED |
+
+#### Test Quality
+| Dimension | Rating | Evidence |
+|-----------|--------|----------|
+| Assertion specificity | STRONG | AC5 and AC6 now assert exact call sites, not just import presence |
+| Negative/error-path coverage | STRONG | Invalid duration and invalid claim_timeout paths are exercised directly |
+| Manual mutation reasoning | STRONG | Dead imports, removed call sites, or inline parser regressions would now fail |
+| Test independence | ADEQUATE | Source/AST tests do not share mutable state |
+| Descriptive naming | ADEQUATE | Names map directly to AC clauses |
+
+#### Data Safety
+- No issues found. serve/kanban/src/owlbear_kanban/storage.py still acquires locks at lines 475, 548, and 588, and adjacent runtime suites passed 80/80.
+
+#### Implementation-Aware Gaps
+- No blocking gaps found. The task-owned structural suite plus adjacent storage/archive regressions cover the import-time and lock-use surfaces touched by this task.
+
+#### Necessity Check
+- Not applicable. Internal refactor only; no new dependency or external capability.
+
+#### Builder / Commit Process Quality
+- CLEAN. Task-owned deliverables are fully committed across builder commits 66083cdb27f06c80afda13150aa22f4906340162 (storage.py) and 14fc7f0771faa28cb3312e5e8c5f4ce837cd31f8 (remaining AC-owned files). `git status --short` on all task-owned files returned no output.
+
+### Pass 2 — INFORMATIONAL
+- No material informational issues. `engine.py` still carries the `_exclusive_file_lock` import at line 45, but that matches the current AC and did not produce a runtime or proof gap.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| AC1 `_duration.py` exists with `_parse_duration` and `_DURATION_RE`; only intra-package import is `ConfigError` | serve/kanban/src/owlbear_kanban/_duration.py:6-26 | tests/test_circular_imports_1210.py:118-158 | PASS |
+| AC2 `_locking.py` exists with `@contextlib.contextmanager`; zero intra-package imports | serve/kanban/src/owlbear_kanban/_locking.py:12-16 | tests/test_circular_imports_1210.py:170-214 | PASS |
+| AC3 `engine.py` local defs removed; imports from leaf modules | serve/kanban/src/owlbear_kanban/engine.py:44-45 | tests/test_circular_imports_1210.py:223-274 | PASS |
+| AC4 `config_loader.py` imports `_parse_duration` from `_duration` | serve/kanban/src/owlbear_kanban/config_loader.py:17 | tests/test_circular_imports_1210.py:286-318 | PASS |
+| AC5 `storage.py` imports `_exclusive_file_lock` from `_locking` at module scope and all 3 call sites use it | serve/kanban/src/owlbear_kanban/storage.py:39,475,548,588 | tests/test_circular_imports_1210.py:361-427 | PASS |
+| AC6 `models.py` duplicate removed and validator calls canonical parser | serve/kanban/src/owlbear_kanban/models.py:24,396-402 | tests/test_circular_imports_1210.py:439-518 | PASS |
+| AC7 downstream test imports/source target updated | serve/kanban/tests/test_engine_coverage_1068.py:29; serve/kanban/tests/test_engine_storage.py:1015,1022,1029; tests/test_engine_dead_code_1112.py:26-40,244-253 | tests/test_circular_imports_1210.py:552-626 | PASS |
+| AC8 task-owned suite green | quality-runner scoped pytest: 39 passed, 0 failed | independent quality-runner execution | PASS |
+
+### Deductions
+- -0.03 Task traceability is split across two builder commits rather than one atomic builder snapshot.
+- -0.02 Overall module coverage on `owlbear_kanban.storage` remains low at 17%, though diff-scoped proof is strong.
+
+### Verdict
+- PASS. Confidence: 0.95.
+- Route: `docs`.
+- Reason: the refined AC is fully satisfied in the committed snapshot, the prior AC5/AC6 proof gaps are closed by committed additive tests, scoped pytest is green, adjacent regressions are green, and lint is clean.
+
+### Reflection
+- The decisive fix was adding exact call-site proofs for AC5 and AC6, not changing runtime code again.
+- Adjacent runtime suites were still necessary to prove the import extraction did not regress storage/archive behavior.
+- Reconstructing task ownership across 66083cdb + 14fc7f07 was necessary because the final green snapshot spans two builder retries.
+[[2026-05-03]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | Yes | N/A | `serve/kanban/README.md` documents public API only; new `_duration.py` and `_locking.py` are private internal modules (underscore-prefixed). Import restructuring has no public API surface change. No prose update needed. |
+| 2 | Module docstrings | Yes | N/A | `_duration.py`: `_parse_duration` has accurate docstring; no public classes. `_locking.py`: `_exclusive_file_lock` has accurate docstring; no public classes. Modified files (`engine.py`, `config_loader.py`, `storage.py`, `models.py`) received only import-level changes — no public API additions. No updates needed. |
+| 3 | External attribution | No | N/A | Pure internal refactoring; no external patterns referenced. |
+| 4 | Research doc | No | N/A | No research doc produced or referenced in task body. |
+| 5 | Diagram maintenance | Yes | Updated | `share/diagrams/kanban.excalidraw` has `describes: serve/kanban/src/**` — matches changed files. Footer updated from `2026-05-03 (5a7f802e)` → `2026-05-03 (5a2a548a)`. Commit: 86a19633. |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation request in task body. |
+| 7 | Deletion detection | No | N/A | No files deleted; only additions (`_duration.py`, `_locking.py`) and import-level modifications. No orphaned IN-scope docs. |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| serve/kanban/src/owlbear_kanban/_duration.py | IN (docstrings) | N/A — private module, no public API, function docstring accurate |
+| serve/kanban/src/owlbear_kanban/_locking.py | IN (docstrings) | N/A — private module, no public API, function docstring accurate |
+| serve/kanban/src/owlbear_kanban/engine.py | IN (docstrings) | N/A — import-level change only |
+| serve/kanban/src/owlbear_kanban/config_loader.py | IN (docstrings) | N/A — import-level change only |
+| serve/kanban/src/owlbear_kanban/storage.py | IN (docstrings) | N/A — import-level change only |
+| serve/kanban/src/owlbear_kanban/models.py | IN (docstrings) | N/A — import-level change only |
+| tests/test_circular_imports_1210.py | OUT (test file) | N/A |
+| serve/kanban/tests/test_engine_coverage_1068.py | OUT (test file) | N/A |
+| serve/kanban/tests/test_engine_storage.py | OUT (test file) | N/A |
+| tests/test_engine_dead_code_1112.py | OUT (test file) | N/A |
+| share/diagrams/kanban.excalidraw | IN | Updated (footer) |
+
+### Files Updated
+- share/diagrams/kanban.excalidraw (footer: `2026-05-03 (5a2a548a)`)
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- .owlbear/scratch/1210_pytest.log
+- .owlbear/scratch/1210_ruff.log
+[[2026-05-03]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1 `_duration.py` leaf module | `_duration.py` confirmed: only intra-pkg import is `ConfigError`; 39/39 task tests pass | PASS |
+| AC2 `_locking.py` contextmanager leaf | `_locking.py` present with `@contextlib.contextmanager`; zero intra-pkg imports; structural AST proof in test suite | PASS |
+| AC3 `engine.py` local defs removed | Reviewer verified at engine.py:44-45; structural tests confirm removal | PASS |
+| AC4 `config_loader.py` imports from `_duration` | Reviewer verified at config_loader.py:17; test suite confirms no engine import | PASS |
+| AC5 `storage.py` module-level `_locking` import, 3 call sites | Spot-checked storage.py:39 (module-level import confirmed); reviewer verified call sites at :475, :548, :588; AST call-site proofs in test suite | PASS |
+| AC6 `models.py` duplicate removed, canonical parser | Reviewer verified models.py:24 import and :398-402 validator call; AST call-site proof in test suite | PASS |
+| AC7 downstream test imports updated | Reviewer verified 3 downstream test files with line-level evidence | PASS |
+| AC8 task-owned suite green | quality-runner: 39 passed, 0 failed | PASS |
+
+### Test Results
+- pytest (full suite): 3777 passed, 125 failed (all pre-existing, task-external), 4 skipped
+- pytest (task-owned): 39 passed, 0 failed
+- ruff: clean on all task-owned files
+
+### Architect Quality: 3/5
+Original AC5 ambiguity ("no deferred import needed") caused a builder miss and 2 extra pipeline cycles. AC8 was overbroad (full-suite gate on a red branch created a no-exit loop). Cycle 2 refinement was excellent — precise scope, explicit constraints, effective guidance. But the original gaps cost real pipeline time.
+
+### Deduction Breakdown
+- AC quality ≤ 3: −0.03
+- Full-suite failures (125): no deduction — all pre-existing, task-external
+- All 8 AC lines have specific evidence: no deduction
+- Lint clean: no deduction
+- Reviewer evidence section present and detailed (cycle 4 PASS): no deduction
+
+### Confidence: 0.97
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 00cdfeff | test | test_circular_imports_1210.py | #1210 |
+| 5e184055 | test | test_circular_imports_1210.py | #1210 |
+| 66083cdb | fix | storage.py | #1210 |
+| 14fc7f07 | refactor | _duration.py, _locking.py, engine.py, config_loader.py, models.py, test files | #1210 |
+| 86a19633 | docs | kanban.excalidraw | #1210 |
