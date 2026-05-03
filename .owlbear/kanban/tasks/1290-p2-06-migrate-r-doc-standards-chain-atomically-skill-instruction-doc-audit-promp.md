@@ -2,10 +2,10 @@
 id: 1290
 title: 'P2-06: Migrate r-doc-standards chain atomically (skill + instruction + doc-audit
   prompt)'
-status: docs
+status: done
 priority: needed
 created: 2026-05-02T16:01:17.114235+00:00
-updated: 2026-05-03T19:09:10.420535+00:00
+updated: 2026-05-03T19:16:42.105827+00:00
 tags:
 - phase-2
 - scope:docs
@@ -261,3 +261,33 @@ Architecture review complete. Refined AC to specify extraction destination (`.ow
 - Docs-only tasks can legitimately PASS on td:0 when the content AC is proven by direct inspection and the required regression suite stays green; missing extra tests is a confidence deduction, not an automatic fail.
 - The most important retry check here was negative: confirm the previously stale single-source phrases are actually gone, not just that new dual-source text was added elsewhere.
 - Atomicity checks are easier to defend when the builder records the original migration commit and the retry commit separately, as happened here.
+[[2026-05-03]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | All changed files are agent-executable (OUT-scope); no IN-scope prose docs reference skill/instruction/prompt chain files |
+| 2 | Module docstrings | No | N/A | No Python modules created or modified |
+| 3 | External attribution | No | N/A | Reorganization of internal docs; no external patterns or sources used |
+| 4 | Research doc | Yes | Verified | `.owlbear/research/1290-doc-standards-chain-migration.md` exists and is linked from task body |
+| 5 | Diagram maintenance (describes match) | Yes | Updated | `share/diagrams/project-overview.excalidraw` describes `share/**` and `.owlbear/**`; footer updated to `Last verified: 2026-05-03 (599768ca)` and committed at `363bb595` |
+| 6 | Explicit diagram creation | No | N/A | No explicit diagram creation request in task body |
+| 7 | Deletion detection | No | N/A | No files deleted; all changed files were created or modified |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| `.owlbear/instructions/doc-types.instructions.md` | OUT | N/A (agent-executable instructions file) |
+| `share/skills/r-doc-standards/SKILL.md` | OUT | N/A (agent-executable SKILL.md) |
+| `share/instructions/doc-standards.instructions.md` | OUT | N/A (agent-executable instructions stub) |
+| `.owlbear/prompts/doc-audit.prompt.md` | OUT | N/A (agent-executable prompt file) |
+| `share/diagrams/project-overview.excalidraw` | IN | Updated (diagram footer — describes `share/**`, `.owlbear/**`) |
+
+### Files Updated
+- `share/diagrams/project-overview.excalidraw` — footer updated to `Last verified: 2026-05-03 (599768ca)`, commit `363bb595`
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no `.owlbear/scratch/1290-*` files existed)

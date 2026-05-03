@@ -1,10 +1,10 @@
 ---
 id: 1288
 title: 'P2-04: Genericize w-doc-update and w-code-review'
-status: in-progress
+status: review
 priority: important
 created: 2026-05-02T16:01:17.090078+00:00
-updated: 2026-05-03T19:10:05.364798+00:00
+updated: 2026-05-03T19:15:27.589455+00:00
 tags:
 - phase-2
 - scope:docs
@@ -76,3 +76,15 @@ This is verifiable by inspecting the two target files:
 ## Test-Writer Notes
 - All AC lines are (td:0) — test-writer skipped.
 - Passing through to builder.
+[[2026-05-03]]
+## Builder Notes
+- Non-implementation task (td:0 pass-through): no code changes required.
+- AC evidence verified directly:
+  - `w-doc-update` contains `workspace/*/README.md` path placeholder.
+  - `w-code-review` contains both `workspace/{package}/src/` lint template occurrences.
+  - No `serve/` references remain in either target skill file.
+- Quality evidence:
+  - quality-runner lint-only scoped run on both skill files: clean (0 violations).
+  - quality-runner scoped gate run on `tests/test_path_neutrality_1285.py`: 9 passed, 0 failed; lint clean.
+- Coverage: N/A (no source changes; td:0 verification task).
+- Files changed: none.

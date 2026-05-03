@@ -1,10 +1,10 @@
 ---
 id: 1211
 title: Consolidate 6 duplicated helper functions
-status: done
+status: archived
 priority: needed
 created: 2026-04-30 15:29:15.204775+00:00
-updated: 2026-05-03T19:05:20.773230+00:00
+updated: 2026-05-03T19:22:20.678962+00:00
 tags:
 - audit-kanban
 - dry
@@ -466,3 +466,39 @@ REFINED and APPROVED. Key finding: original "keep in storage.py" creates circula
 
 ### Scratch Files Cleaned
 - None found
+[[2026-05-03]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1 — `_naming.py` exists with 4 helpers | `_naming.py:18,30,35,55` (generate_slug, make_task_filename, validate_path_containment, move_to_quarantine) | PASS |
+| AC2 — `storage.py` re-exports from `_naming.py`; no local bodies | `storage.py:40-44` imports from `_naming`; reviewer evidence at test lines 167-223, 335-340 | PASS |
+| AC3 — `corruption.py` imports from `_naming.py`; private copies deleted | `corruption.py:17-19` imports make_task_filename + move_to_quarantine; builder diff confirms 4 private copies removed | PASS |
+| AC4 — AgentView._dep_effect_from_archival_reason removed; delegates to KanbanEngine | Reviewer mapped at engine.py:510,543; tests at test_consolidate_helpers_1211.py:289-305 | PASS |
+| AC5 — AgentView._compute_dep_status removed; delegation with pre-computed sets | engine.py:2119-2135 (verified: pre-computes active_ids/archived_reasons, delegates to self.engine._compute_dep_status) | PASS |
+| AC6 — No circular imports | Package import path test at test_consolidate_helpers_1211.py:322-340; confirmed via __init__.py:9-10 chain | PASS |
+| AC7 — Existing test suite passes (td:0) | SKIP per architecture review designation |
+
+### Test Results
+- pytest (full): 736 passed, 15 failed (all pre-existing; 0 in task scope); task-scoped: 28/28 passed
+- vitest (full): 937 passed, 13 failed (pre-existing Shell tests)
+- ruff (scoped): clean on serve/kanban/src/owlbear_kanban/ and tests/test_consolidate_helpers_1211.py
+
+### Pre-existing failure note
+`test_corruption.py::test_make_yaml_disables_timestamp_resolver` — _make_yaml removed in commit 59eddcae (task #1048); not a #1211 regression.
+
+### Architect Quality: 4/5
+Specific, verifiable AC with td annotations. Required refinement to catch circular import risk (challenger caught at 0.53). Original "8 helpers" corrected to 6. Clean path after refinement.
+
+### Deduction Breakdown
+- Start: 1.00
+- AC7 not independently verified (td:0 skip): -.02
+- No lint violations, no missing reviewer evidence, no task-scope failures
+
+### Confidence: .98
+### Action: archive
+
+### Commit Integrity
+- `0f189abe` — refactor: consolidate duplicated kanban helpers (#1211, builder) — _naming.py, storage.py, corruption.py, engine.py
+- `b94454c5` — test: commit test file for helper consolidation (#1211, test-writer) — tests/test_consolidate_helpers_1211.py
+- Working tree: clean for all deliverables

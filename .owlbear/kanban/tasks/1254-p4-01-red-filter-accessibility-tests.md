@@ -4,7 +4,7 @@ title: 'P4-01: RED — Filter accessibility tests'
 status: review
 priority: important
 created: 2026-05-01T04:35:01.084199+00:00
-updated: 2026-05-03T19:11:00.933295+00:00
+updated: 2026-05-03T19:14:20.920155+00:00
 tags:
 - phase-4
 - scope:cockpit-web
@@ -14,7 +14,7 @@ depends_on:
 - 1253
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-03T19:14:20.920155+00:00
 archival_reason:
 archival_refs: []
 ---

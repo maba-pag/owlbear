@@ -1,10 +1,10 @@
 ---
 id: 1287
 title: 'P2-03: Genericize h-pytest-and-linting, h-vitest-and-linting, h-quality-runner'
-status: docs
+status: done
 priority: needed
 created: 2026-05-02T16:01:17.076781+00:00
-updated: 2026-05-03T19:09:13.210349+00:00
+updated: 2026-05-03T19:16:44.318387+00:00
 tags:
 - phase-2
 - scope:docs
@@ -267,3 +267,31 @@ Architecture review complete. All criteria pass. AC verifiable against Brief §N
 - Workaround applied: separated executable replacement lines from non-executable warning examples and anchored the verdict to the exact brief wording plus task scope.
 - Pattern discovered: for shared-doc genericization tasks, the real gate is the replacement surface named in the AC, not every illustrative string in the file.
 - Quality gap: td:0 doc tasks still benefit from one explicit regression run when an AC names an existing suite, even if the default td:0 workflow would otherwise be lint-only.
+[[2026-05-03]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | Changed files are all `share/skills/*/SKILL.md` (OUT-of-scope agent-executable). No IN-scope descriptive docs reference these skill files by name. |
+| 2 | Module docstrings | No | N/A | No Python modules modified. |
+| 3 | External attribution | No | N/A | No external patterns used; pure internal notation-convention refactor. |
+| 4 | Research doc | Yes | Verified | `.owlbear/research/1287-genericize-skills.md` exists and is linked from task body under ## Research. |
+| 5 | Diagram maintenance (describes match) | Yes | N/A (already current) | `share/diagrams/project-overview.excalidraw` describes `share/**` which matches the three changed skill files. Footer already updated to `2026-05-03 (599768ca)` by #1290 doc-writer (commit `363bb595`). No further update needed. |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation request in task body. |
+| 7 | Deletion detection | No | N/A | No files deleted. No orphaned IN-scope docs detected. |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| share/skills/h-pytest-and-linting/SKILL.md | OUT | No action (agent-executable SKILL.md) |
+| share/skills/h-vitest-and-linting/SKILL.md | OUT | No action (agent-executable SKILL.md) |
+| share/skills/h-quality-runner/SKILL.md | OUT | No action (agent-executable SKILL.md) |
+
+### Files Updated
+- None (diagram footer was already current from #1290 doc-writer)
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None found (`.owlbear/scratch/1287-*` — no matches)
