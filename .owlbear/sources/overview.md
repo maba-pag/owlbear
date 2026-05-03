@@ -2,6 +2,12 @@
 
 External repos and resources studied during OwlBear development.
 
+## Filter Accessibility Tests (Task #1254)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| WAI-ARIA APG Disclosure (Show/Hide) Pattern | <https://www.w3.org/WAI/ARIA/apg/patterns/disclosure/> | `aria-expanded` + `aria-controls` on toggle button, panel `id`/`role="region"`/`aria-label` semantics, focus management on expand/collapse | `.owlbear/research/filter-accessibility-tests-1254.md` | 2026-05-03 |
+
 ## Real-Time Cockpit Updates (Task #1233)
 
 | Source | URL | What | Where Used | Date |
