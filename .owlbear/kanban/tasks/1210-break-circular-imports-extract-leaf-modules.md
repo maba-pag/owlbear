@@ -1,10 +1,10 @@
 ---
 id: 1210
 title: Break circular imports — extract leaf modules
-status: todo
+status: in-progress
 priority: needed
 created: 2026-04-30 15:29:06.259647+00:00
-updated: 2026-05-03T00:33:44.297052+00:00
+updated: 2026-05-03T11:18:22.236550+00:00
 tags:
 - audit-kanban
 - architecture
@@ -14,7 +14,7 @@ depends_on:
 - 1209
 blocked: false
 block_reason:
-claimed_at: 2026-05-03T00:33:44.297052+00:00
+claimed_at: 2026-05-03T11:18:22.236550+00:00
 archival_reason:
 archival_refs: []
 ---
@@ -89,3 +89,12 @@ Extract `_parse_duration()` + `_DURATION_RE` to `_duration.py`. Extract `_exclus
 
 [[2026-05-03]]
 Architecture review complete. AC refined from 5 vague lines to 8 precise, test-depth-annotated lines. Key additions: models.py dedup (td:2), downstream test coupling (3 test files with import/AST changes), import graph before/after documenting cycle elimination. Challenger override: valid test-coupling concern incorporated; block recommendation was based on misreading review stage as post-implementation check.
+[[2026-05-03]]
+## Test-Writer Notes
+- Test file: tests/test_circular_imports_1210.py
+- Classes: TestFromAC_DurationModule, TestFromAC_LockingModule, TestFromAC_EngineDefinitionsRemoved, TestFromAC_ConfigLoaderImport, TestFromAC_StorageImport, TestFromAC_ModelsDuplicateRemoved, TestFromAC_TestFileImportUpdates
+- Tests per category: happy 8, edge 3, error 3, boundary 0, structural/structural-AST 17
+- Total: 31 tests, all FAIL (ModuleNotFoundError or AssertionError against current state)
+- ruff: clean
+- AC coverage: all 8 AC lines covered (AC7 td:1 maps to 4 tests; AC6 td:2 maps to 5 tests; AC1–5 each td:1 smoke-tested with import+structural assertions)
+- Commit: 00cdfeff

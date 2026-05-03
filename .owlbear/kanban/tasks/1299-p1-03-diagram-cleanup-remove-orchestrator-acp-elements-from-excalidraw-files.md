@@ -2,10 +2,10 @@
 id: 1299
 title: 'P1-03: Diagram cleanup — remove orchestrator/ACP elements from excalidraw
   files'
-status: in-progress
+status: docs
 priority: important
 created: 2026-05-02T19:40:07.803534+00:00
-updated: 2026-05-03T00:36:05.303505+00:00
+updated: 2026-05-03T10:54:41.393351+00:00
 tags:
 - cleanup
 parent: 1296
@@ -159,3 +159,86 @@ Notes:
 | AC | Test | Status |
 |----|------|--------|
 | AC7 (supervisory role confirmed by discriminating assertion) | `test_orchestrator_supervisory_label_exact_text_present` + `test_orchestrator_label_not_just_plain_name` | PASS ✓ |
+[[2026-05-03]]
+## Builder Notes
+- Implementation: none (non-implementation pass-through; no file changes required).
+- Files changed: none.
+- Tests: 2/2 passed via quality-runner on `tests/test_pipeline_diagram_1299.py`.
+- Coverage: not applicable for this pass-through (test-proof hardening only; no source module edits).
+- ruff: clean on `tests/test_pipeline_diagram_1299.py`.
+- Evidence summary: task body shows test-writer retry already hardened AC7 proof with discriminating assertions; this builder pass confirms green verification in current workspace and advances to review.
+- Knowledge pre-flight: ob-memory/query_memory unavailable in this tool surface; proceeded per graceful-degradation rule.
+[[2026-05-03]]
+## Review Evidence
+### Test Results
+- `quality-runner` on `tests/test_pipeline_diagram.py`: 37 passed, 0 failed, 0 skipped
+- `quality-runner` on `tests/test_pipeline_diagram_1299.py`: 2 passed, 0 failed, 0 skipped
+- `quality-runner` on both files together: 39 passed, 0 failed, 0 skipped
+
+### Lint
+- Ruff: clean on `tests/test_pipeline_diagram.py`
+- Ruff: clean on `tests/test_pipeline_diagram_1299.py`
+
+### Coverage
+- Informational only for this review: no Python implementation module changed in task #1299; the retry only added test proof.
+- Durable-suite run reported 42% on `serve/tools/src/owlbear_tools/doc_index.py`; this does not gate the verdict because the task scope is diagram cleanup plus assertion hardening, not source-module changes.
+- Retry-suite run reported no coverage-tracked package data, which is expected for direct JSON-file assertions.
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---------|-------------|---------------------------|---------|
+| 7. Pipeline diagram still visually represents the orchestrator in a supervisory/auxiliary role (test assertion confirms) | `TestFromAC_OrchestratorSupervisoryRole.test_orchestrator_supervisory_label_exact_text_present` + `test_orchestrator_label_not_just_plain_name` | Yes. The first test fails unless the full supervisory/auxiliary label is present; the second fails if any non-stage orchestrator text is bare and lacks role qualifiers. | COVERED |
+
+#### Security Review
+- No issues. Scope is three `.excalidraw` JSON files plus Python tests; no new secret, injection, path, or persistence surface was introduced.
+
+#### Test Integrity
+- No weakened or removed `TestFromAC_*` assertions found in the live workspace.
+- Commit `3a4cb4fc` touched only `tests/test_pipeline_diagram_1299.py`; the retry did not modify the durable `tests/test_pipeline_diagram.py` suite.
+
+#### Test Quality
+- STRONG assertion specificity for AC7.
+- `tests/test_pipeline_diagram_1299.py` asserts the exact supervisory label text and separately rejects bare-name orchestrator entries, closing the prior false-green gap.
+- Manual mutation check: changing `orchestrator: supervisory layer (auxiliary)` to plain `orchestrator` would fail both retry tests.
+
+#### Data Safety
+- No issues.
+
+#### Implementation-Aware Test Gaps
+- No significant gaps in task scope.
+- Live diagram evidence still contains `orchestrator: supervisory layer (auxiliary)` in `share/diagrams/pipeline.excalidraw`.
+- The retry suite now proves the role-specific contract instead of only checking that the word `orchestrator` appears somewhere.
+
+#### Necessity Check
+- Skip. Cleanup / proof-hardening task; no new dependency or integration.
+
+#### Builder Process Quality
+- CLEAN. This was a test-only retry after a proof-gap review failure; the builder correctly made no source changes and advanced the already-correct implementation back to review.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| 1. `python -m json.tool share/diagrams/mcp-topology.excalidraw` succeeds | Reviewer command verification: `python3 -m json.tool share/diagrams/mcp-topology.excalidraw` completed successfully. | n/a | PASS |
+| 2. `python -m json.tool share/diagrams/pipeline.excalidraw` succeeds | Reviewer command verification: `python3 -m json.tool share/diagrams/pipeline.excalidraw` completed successfully. | n/a | PASS |
+| 3. `python -m json.tool share/diagrams/project-overview.excalidraw` succeeds | Reviewer command verification: `python3 -m json.tool share/diagrams/project-overview.excalidraw` completed successfully. | n/a | PASS |
+| 4. No element in `mcp-topology.excalidraw` references deleted IDs in `boundElements`, `startBinding`, or `endBinding` | Reviewer scan found zero occurrences of `s1_orchestrator_rect`, `s1_orchestrator_text`, `s1_acp_arrow`, or `s1_acp_label` anywhere in `share/diagrams/mcp-topology.excalidraw`, so no surviving binding field can reference those deleted IDs. | n/a | PASS |
+| 5. `grep -l "acp\|agent-client-protocol" share/diagrams/` returns zero hits | Reviewer search across `share/diagrams/**` returned zero matches for `acp` or `agent-client-protocol`. | n/a | PASS |
+| 6. `uv run pytest tests/test_pipeline_diagram.py` passes | `quality-runner` scoped run on `tests/test_pipeline_diagram.py`: 37 passed, 0 failed. | `tests/test_pipeline_diagram.py` | PASS |
+| 7. The pipeline diagram still visually represents the orchestrator in a supervisory/auxiliary role (test assertion confirms) | Live file contains `orchestrator: supervisory layer (auxiliary)`; retry tests in `tests/test_pipeline_diagram_1299.py` passed 2/2 and are discriminating against bare-name regressions. | `test_orchestrator_supervisory_label_exact_text_present`, `test_orchestrator_label_not_just_plain_name` | PASS |
+| 8. `grep "Copilot CLI" share/diagrams/` returns zero hits | Reviewer search across `share/diagrams/**` returned zero matches for `Copilot CLI`. | n/a | PASS |
+
+### Deductions
+- -0.02: the original durable assertion in `tests/test_pipeline_diagram.py` remains the weaker substring check; the repaired proof now lives in the task-local retry suite instead of replacing that assertion in place. This is informational only and does not block AC satisfaction.
+
+### Verdict
+- PASS -> `docs`
+- Confidence: 0.96
+
+### Action
+- Advance to `docs`.
+
+### Reflection
+- Separate `quality-runner` passes for the durable suite and the retry file produced cleaner AC evidence than relying on a single combined green run.
+- For diagram/content tasks, direct artifact checks (`json.tool`, banned-string scans, deleted-ID scans) are still required even when pytest is green.
+- A proof-only retry can validly close a prior false-green by adding a discriminating task-local test file; no builder source change is needed when the live artifact is already correct.

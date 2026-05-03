@@ -1,10 +1,10 @@
 ---
 id: 1277
 title: Refactor useBoard to consume EventSourceProvider context
-status: in-progress
+status: backlog
 priority: someday
 created: 2026-05-02T12:10:47.678864+00:00
-updated: 2026-05-03T00:33:48.376202+00:00
+updated: 2026-05-03T10:25:36.881335+00:00
 tags:
 - cockpit
 - frontend
@@ -13,7 +13,7 @@ depends_on:
 - 1276
 blocked: false
 block_reason:
-claimed_at: 2026-05-03T00:33:48.376202+00:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -426,3 +426,26 @@ Outcome: reconsider (0.78). Addressed: (1) documented all 10 Shell-rendering tes
 - Architecture review explicitly states "Test-writer: SKIP — all new AC lines are td:0."
 - Existing 10 tests in `serve/cockpit/web/src/__tests__/useBoard_1277.test.ts` are unaffected and remain as-is.
 - Passing through to builder for Shell-rendering test file fixes (AC9/AC10).
+[[2026-05-03]]
+## Builder Notes
+- Scope check: AC9 is already satisfied in all listed files; each has module-level EventSourceProvider mock (`useSSEEvent`) in place: `Shell.test.tsx`, `Shell_1162.test.tsx`, `Shell_1192.test.tsx`, `Shell_1194.test.tsx`, `Shell_1228.test.tsx`, `PdsMigration_1230.test.tsx`.
+- RED baseline verification (quality-runner scoped): 147 passed, 0 failed across the six AC9 files; no test failures in the stated target set.
+- AC10 verification (quality-runner full vitest): FAIL with 11 failures in unrelated suites:
+  - `KanbanBoard_1252.test.tsx`: 10 failures expecting `[data-testid="filter-toggle"]` (RED task content unrelated to #1277 SSE context)
+  - `ActivityTab_1156.test.tsx`: 1 failure (`block_reason` default value assertion), also unrelated to #1277 changes
+- Lint status (scoped AC9 files): clean except existing warnings in `Shell_1228.test.tsx` (unused vars), no blocking errors.
+- Files changed by builder in this cycle: none.
+
+### AC mismatch (reason for reject)
+AC10 requires full frontend suite green, but this workspace currently contains unrelated failing RED suites outside #1277 scope. This makes AC10 structurally infeasible as a builder gate for #1277.
+
+### AC suggestion
+Replace AC10 with a scoped regression gate tied to #1277 blast radius, for example:
+- "All `useBoard*`, `usePollingFetch_1227`, and the six AC9 Shell-rendering suites pass."
+Or defer full-suite green to an integration/auditor gate after unrelated RED tasks are resolved.
+
+### Post-task Reflection
+- Full-suite gates on mixed RED/GREEN repos can create false blockers for otherwise complete scoped fixes.
+- Running both scoped and full quality-runner passes was necessary to separate true task failures from unrelated baseline debt.
+- AC9 was already implemented before this cycle; the only blocker here is acceptance-gate granularity, not missing implementation.
+- Keeping this as reject-to-backlog preserves correctness and avoids unrelated test churn.

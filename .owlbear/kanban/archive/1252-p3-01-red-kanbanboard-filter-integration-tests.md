@@ -1,10 +1,10 @@
 ---
 id: 1252
 title: 'P3-01: RED — KanbanBoard filter integration tests'
-status: in-progress
+status: archived
 priority: needed
 created: 2026-05-01T04:34:55.076834+00:00
-updated: 2026-05-03T00:36:33.529944+00:00
+updated: 2026-05-03T11:21:43.918409+00:00
 tags:
 - phase-3
 - scope:cockpit-web
@@ -628,3 +628,120 @@ Text filter test: 6 placement assertions (home + wrong-column for retained task;
 |---|---|---|
 | AC3 — filter state → correct columns (exact placement, ≥2 columns) | 2 | `priority filter proves exact placement of matching and non-matching tasks across columns`, `text filter removes non-matching tasks from columns` |
 | All others | unchanged | same as R3 |
+[[2026-05-03]]
+## Builder Notes
+- Files changed: none.
+- Scope: RED-phase pass-through verification for KanbanBoard filter integration tests; no production code changes required.
+- Test results (quality-runner, scoped): 0 passed / 10 failed / 0 skipped in `serve/cockpit/web/src/__tests__/KanbanBoard_1252.test.tsx`.
+- Failure signature: all failures are behavioral RED signals (`expected null not to be null`) rooted in missing `[data-testid="filter-toggle"]` wiring in `KanbanBoard`.
+- Lint status: ESLint clean for `serve/cockpit/web/src/__tests__/KanbanBoard_1252.test.tsx`.
+- Coverage: not collected (scoped RED run; tests intentionally fail before GREEN implementation).
+- Evidence summary: frontend test runtime is healthy; failures are not harness/config errors and are attributable to intentionally missing filter integration in current board implementation.
+- Fixes applied: none (task type is RED test verification).
+[[2026-05-03]]
+## Review Evidence
+### Test Results
+- quality-runner scoped: `0 passed, 10 failed, 0 skipped` in `serve/cockpit/web/src/__tests__/KanbanBoard_1252.test.tsx`.
+- Failure signature is clean RED, not a harness problem: all failures are missing `filter-toggle` / filter wiring assertions; no jsdom or `act(...)` runtime error remains.
+
+### Lint
+- quality-runner: ESLint clean for `serve/cockpit/web/src/__tests__/KanbanBoard_1252.test.tsx`.
+- VS Code diagnostics: no errors in `serve/cockpit/web/src/__tests__/KanbanBoard_1252.test.tsx`, `serve/cockpit/web/src/KanbanBoard.tsx`, `serve/cockpit/web/src/components/FilterPanel.tsx`, or `serve/cockpit/web/src/utils/filterTasks.ts`.
+
+### Coverage
+- Not a gate for this RED review. quality-runner coverage hung during V8 initialization on the intentionally failing jsdom suite, so no meaningful coverage metric was produced before GREEN implementation exists.
+
+### Pass 1 - CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Evidence | Status |
+|---|---|---|
+| 1. Board renders filter toggle button | `serve/cockpit/web/src/__tests__/KanbanBoard_1252.test.tsx:158-160` requires the toggle test id, and `:164-185` then clicks the same control and proves it drives panel state. That is sufficient for this Phase 3 wiring task; semantic button-role checks belong to the stated Phase 4 accessibility scope. | PASS |
+| 2. Toggle button opens/closes FilterPanel | `serve/cockpit/web/src/__tests__/KanbanBoard_1252.test.tsx:164-185` opens then closes `filter-panel-stub`. | PASS |
+| 3. Filter state changes cause filtered tasks to appear only in their correct columns: matching tasks present in home column and absent from all other columns; non-matching tasks absent from all columns; at least one sub-test with matching tasks in >=2 distinct status columns | Latest binding refinement is in `.owlbear/kanban/tasks/1252-p3-01-red-kanbanboard-filter-integration-tests.md:537,547-548`. Current AC3 tests at `serve/cockpit/web/src/__tests__/KanbanBoard_1252.test.tsx:192-275` satisfy that refinement. The priority case uses the added multi-column fixture described at `.owlbear/kanban/tasks/1252-p3-01-red-kanbanboard-filter-integration-tests.md:603`, and both AC3 tests assert home-column positives plus wrong-column / all-column negatives. | PASS |
+| 4. Derived `availableTags` computed from full (unfiltered) task set — set-membership, order-insensitive | `serve/cockpit/web/src/__tests__/KanbanBoard_1252.test.tsx:278-295` opens the panel first and then asserts exact Set equality at `:294`. | PASS |
+| 5. Result count displays `N / M tasks` when filter is active | `serve/cockpit/web/src/__tests__/KanbanBoard_1252.test.tsx:301-317` requires `filter-result-count` and exact `^1 / 3 tasks$` formatting. | PASS |
+| 6. Filter change dismisses open context menu | `serve/cockpit/web/src/__tests__/KanbanBoard_1252.test.tsx:322-348` opens a real context menu, applies a filter change, and requires dismissal. | PASS |
+| 7. Filter change cancels active drag — drop targets deactivated | `serve/cockpit/web/src/__tests__/KanbanBoard_1252.test.tsx:353-384` proves an active drop target before the filter change and an inactive target after it. | PASS |
+| 8. Empty filter state shows all tasks | `serve/cockpit/web/src/__tests__/KanbanBoard_1252.test.tsx:389-409` applies a filter, clears back to `EMPTY_FILTER`, and restores all cards. | PASS |
+| 9. All tests fail (RED) — KanbanBoard not yet wired to FilterPanel | quality-runner confirms `0 passed / 10 failed`. Live `serve/cockpit/web/src/KanbanBoard.tsx:137-183` still groups raw tasks by status and renders the board shell without filter wiring; `serve/cockpit/web/src/components/FilterPanel.tsx:69` still returns `null` when `open=false`. | PASS |
+
+#### Security Review
+- No scoped security issues. The deliverable is a frontend test file with local mocks / fixtures only.
+
+#### Test Integrity
+- `git diff --name-only 765454f6~1 765454f6` shows only `serve/cockpit/web/src/__tests__/KanbanBoard_1252.test.tsx`.
+- `git log --oneline -- serve/cockpit/web/src/__tests__/KanbanBoard_1252.test.tsx` shows only the three task-specific test-writer commits (`3d0d7f98`, `cc7e608c`, `765454f6`); no later commit touches this file.
+- No live-file evidence of weakened or removed `TestFromAC_*` assertions.
+
+#### Test Quality
+- PASS. The prior AC3 exact-placement false-green path is closed by the R4 retry.
+- The earlier reviewer FAIL at `.owlbear/kanban/tasks/1252-p3-01-red-kanbanboard-filter-integration-tests.md:451-503` is superseded by the later architecture re-review at `:516-553` and the R4 retry notes at `:592-629`.
+- Informational only: this integration suite uses representative text / priority filter-state changes rather than exhausting every `FilterState` dimension. That is acceptable under the ratified 10-test scope for this RED wiring task. Separate direct coverage for tag / blocked behavior already exists in `serve/cockpit/web/src/__tests__/filterTasks_1248.test.ts` and `serve/cockpit/web/src/__tests__/FilterPanel_1250.test.tsx`.
+
+#### Data Safety
+- No issues.
+
+### Deductions
+- `-0.04` quality-runner coverage unavailable on the RED jsdom path; not a gate, but it limits supplemental evidence.
+- `-0.03` tag / blocked board-level wiring is not directly exercised in this single integration file; treated as residual risk, not an AC failure under the current task contract.
+
+### Verdict
+- PASS -> docs
+- Confidence: `0.93`
+
+### Action
+- Advance to docs. No remaining blocking implementation or test-proof defect is traceable to the current ratified AC.
+[[2026-05-03]]
+## Docs Gate
+
+### Checklist
+
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 0a | Review Evidence present | YES | PASS | Final `## Review Evidence` section present (PASS → docs, confidence 0.93) |
+| 1 | Prose docs affected | NO | N/A | Task is test-only (RED phase); no behavior, API, CLI, config, or package-structure change |
+| 2 | Python module docstrings | NO | N/A | Frontend test file only; no `.py` files changed |
+| 3 | External attribution | NO | N/A | All sources in research doc are internal workspace files |
+| 4 | Research doc | YES | PASS | `.owlbear/research/kanbanboard-filter-integration-red-1252.md` exists and is linked from task body; follow-up note correctly cites #1253 |
+| 5 | Diagram maintenance | YES | DONE | `share/diagrams/cockpit.excalidraw` describes `serve/cockpit/web/src/**` — matches `KanbanBoard_1252.test.tsx`; footer updated to `2026-05-03 (bb63990c)` |
+| 6 | Explicit diagram creation | NO | N/A | No diagram creation request in task body |
+| 7 | Deletion detection | NO | N/A | No files deleted; no orphaned IN-scope docs detected |
+
+### Files Updated
+- `share/diagrams/cockpit.excalidraw` — footer `Last verified: 2026-05-03 (bb63990c)`
+
+### Child Tasks Created
+None.
+
+### Scratch Files Cleaned
+No `.owlbear/scratch/1252-*` files found.
+
+### Commit
+`7dd1efcd` — docs: update cockpit diagram footer for KanbanBoard filter integration tests (#1252, doc-writer)
+[[2026-05-03]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| 1. Board renders filter toggle button | `KanbanBoard_1252.test.tsx:158-160` asserts `filter-toggle` testid | PASS |
+| 2. Toggle opens/closes FilterPanel | `:164-185` click toggle, assert panel-stub mount/unmount | PASS |
+| 3. Filter state → correct columns (exact placement, ≥2 columns) | `:192-275` 4-task fixture, matching tasks in backlog+todo, 8 placement assertions per sub-test | PASS |
+| 4. availableTags from full set (exact, order-insensitive) | `:278-295` exact Set equality after applying filter | PASS |
+| 5. Result count `N / M tasks` | `:301-317` exact `/^1 \/ 3 tasks$/` format | PASS |
+| 6. Filter change dismisses context menu | `:322-348` opens real menu, applies filter, asserts dismissal | PASS |
+| 7. Filter change cancels drag — drop targets deactivated | `:353-384` proves drag target active before, inactive after | PASS |
+| 8. Empty filter shows all tasks | `:389-409` filter→clear→all 3 cards visible | PASS |
+| 9. All tests fail (RED) | quality-runner 0/10 passed; grep confirms zero filter code in KanbanBoard.tsx | PASS |
+
+### Test Results
+- vitest (full): 947 passed, 11 failed (10 expected RED + 1 pre-existing ActivityTab_1156 failure — not from this task)
+- ESLint: clean
+
+### Architect Quality: 4/5
+Original AC3 too vague for td:2 — required 3 refinement cycles. Architect adapted well each time; final AC set is specific and complete. Challenger used effectively.
+
+### Deduction Breakdown
+- Full suite not fully clean: 1 pre-existing failure outside task scope (ActivityTab_1156, last touched by #1156). No regression detected. → -0.02
+
+### Confidence: .98
+### Action: archive

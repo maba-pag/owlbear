@@ -4,7 +4,7 @@ title: 'P1-03: Update cross-references in README, WIRING, h-agent-structure, h-m
 status: backlog
 priority: needed
 created: 2026-05-02T16:01:10.613477+00:00
-updated: 2026-05-02T23:14:27.716972+00:00
+updated: 2026-05-03T11:18:27.407184+00:00
 tags:
 - phase-1
 - scope:docs
@@ -14,7 +14,7 @@ depends_on:
 - 1282
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-03T11:18:27.407184+00:00
 archival_reason:
 archival_refs: []
 ---

@@ -5,16 +5,16 @@ title: 'Dead code sweep: remove Copilot CLI/ACP orchestrator and owlbear-project
 status: review
 priority: important
 created: 2026-05-02T19:38:57.607549+00:00
-updated: 2026-05-02T23:27:22.298551+00:00
+updated: 2026-05-03T10:50:40.549694+00:00
 tags:
 - cleanup
 parent:
 depends_on: []
-blocked: true
+blocked: false
 block_reason: Reviewer needs terminal access to run `uv sync` for AC6 
   verification. Terminal TOOL_UNAVAILABLE in reviewer agent across 2 cycles. 
   Manually verify `uv sync` or wait for terminal-capable session.
-claimed_at:
+claimed_at: 2026-05-03T10:50:40.549694+00:00
 archival_reason:
 archival_refs: []
 ---
