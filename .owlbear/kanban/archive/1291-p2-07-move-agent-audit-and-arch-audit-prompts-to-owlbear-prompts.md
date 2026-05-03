@@ -1,10 +1,10 @@
 ---
 id: 1291
 title: 'P2-07: Move agent-audit and arch-audit prompts to .owlbear/prompts/'
-status: done
+status: archived
 priority: important
 created: 2026-05-02T16:01:17.128331+00:00
-updated: 2026-05-03T18:55:49.889173+00:00
+updated: 2026-05-03T19:13:35.519854+00:00
 tags:
 - phase-2
 - scope:docs
@@ -198,3 +198,5 @@ No follow-up tasks needed — all ACs satisfied by prior work.
 
 ### Scratch Files Cleaned
 - None (no `.owlbear/scratch/1291-*` files found)
+[[2026-05-03]]
+## Audit\n### AC Verification\n| AC Line | Evidence | Status |\n|---------|----------|--------|\n| agent-audit.prompt.md moved to .owlbear/prompts/ | file_search: exists at `.owlbear/prompts/`, absent from `share/prompts/` | PASS |\n| arch-audit.prompt.md moved to .owlbear/prompts/ | file_search: exists at `.owlbear/prompts/`, absent from `share/prompts/` | PASS |\n| No dangling references in instruction/skill files | grep `share/prompts/agent-audit\|arch-audit` across `share/**`: 0 matches | PASS |\n| Tests from #1285 pass for prompt-location assertions | `test_audit_prompts_relocated_to_owlbear_prompts`: 1 passed | PASS |\n\n### Test Results\n- pytest (full): 3841 passed, 128 failed, 4 skipped — all failures pre-existing, unrelated to prompt relocation (engine, config, decisions, Shell domains)\n- vitest (full): 937 passed, 13 failed — Shell EventSourceProvider test setup issue, unrelated\n- ruff: 1 T201 (print statement) — not in task scope\n\n### Upstream Commits\n- Deliverables committed in `8e442bdc` (task #1285 builder) — this task was a verification-only pass-through dependent on #1285\n\n### Architect Quality: 5/5\nAC lines specify exact source/dest paths, a dangling-reference gate, and a test-pass assertion. Clear, unambiguous, verifiable.\n\n### Deduction Breakdown\n- None. All 4 AC lines verified with specific evidence. Reviewer evidence detailed (0.96, PASS). No in-scope lint or test failures.\n\n### Confidence: 1.00\n### Action: archive

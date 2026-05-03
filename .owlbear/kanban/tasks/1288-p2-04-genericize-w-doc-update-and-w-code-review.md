@@ -1,10 +1,10 @@
 ---
 id: 1288
 title: 'P2-04: Genericize w-doc-update and w-code-review'
-status: todo
+status: in-progress
 priority: important
 created: 2026-05-02T16:01:17.090078+00:00
-updated: 2026-05-03T19:00:00.658326+00:00
+updated: 2026-05-03T19:10:05.364798+00:00
 tags:
 - phase-2
 - scope:docs
@@ -72,3 +72,7 @@ This is verifiable by inspecting the two target files:
 
 ### Verdict: APPROVE
 ### Action Taken: Refined AC4 to remove false sibling-consistency claim. Replaced with verifiable brief-convention reference. All other AC lines unchanged — still satisfied by parent #1285 commit 8e442bdc. Tagged type:docs retained for pass-through.
+[[2026-05-03]]
+## Test-Writer Notes
+- All AC lines are (td:0) — test-writer skipped.
+- Passing through to builder.

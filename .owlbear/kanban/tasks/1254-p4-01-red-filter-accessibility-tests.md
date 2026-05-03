@@ -1,10 +1,10 @@
 ---
 id: 1254
 title: 'P4-01: RED — Filter accessibility tests'
-status: in-progress
+status: review
 priority: important
 created: 2026-05-01T04:35:01.084199+00:00
-updated: 2026-05-03T19:00:14.512451+00:00
+updated: 2026-05-03T19:11:00.933295+00:00
 tags:
 - phase-4
 - scope:cockpit-web
@@ -733,3 +733,23 @@ Any regression to empty-string or removed labels now fails the suite.
 
 ### Step 1b.1 — Direct-to-Review Advance
 Reviewer's cycle 4 Required Follow-up was a single assertion-strength fix. All tests pass against current implementation. Builder has no work → advancing to review.
+[[2026-05-03]]
+## Builder Notes
+- Implementation: no source changes required in this builder pass.
+- Files changed: none.
+- Tests: 97 passed, 0 failed (scoped frontend run).
+  - task suites: `serve/cockpit/web/src/__tests__/FilterAccessibility_1254.test.tsx` (14), `serve/cockpit/web/src/__tests__/FilterAccessibilityPanel_1254.test.tsx` (8)
+  - adjacent regression suites: `serve/cockpit/web/src/__tests__/KanbanBoard.test.tsx` (35), `serve/cockpit/web/src/__tests__/FilterPanel_1250.test.tsx` (40)
+- Lint: clean.
+  - `serve/cockpit/web/src/KanbanBoard.tsx`
+  - `serve/cockpit/web/src/components/FilterPanel.tsx`
+  - `serve/cockpit/web/src/__tests__/FilterAccessibility_1254.test.tsx`
+  - `serve/cockpit/web/src/__tests__/FilterAccessibilityPanel_1254.test.tsx`
+- Coverage: not requested in this scoped quality-runner invocation.
+
+### Evidence Summary
+- Current implementation already satisfies latest strengthened `TestFromAC_*` assertions.
+- No additional builder code edits were necessary; verification-only builder pass completed with clean test and lint results.
+
+### Fixes Applied
+- None in this cycle (verification-only pass).
