@@ -246,32 +246,21 @@ describe('TestFromAC_FilterA11yPanel', () => {
       const { container } = renderPanel(true)
       const textInput = container.querySelector('input[type="text"]') as HTMLElement
       expect(textInput).not.toBeNull()
-      // Must have aria-label, aria-labelledby, or an associated <label> element
-      const hasAriaLabel = textInput.hasAttribute('aria-label')
-      const hasAriaLabelledBy = textInput.hasAttribute('aria-labelledby')
-      const inputId = textInput.getAttribute('id')
-      const hasAssociatedLabel = inputId
-        ? container.querySelector(`label[for="${inputId}"]`) !== null
-        : false
-      expect(hasAriaLabel || hasAriaLabelledBy || hasAssociatedLabel).toBe(true)
+      expect(textInput.getAttribute('aria-label')).toBe('Search tasks')
     })
 
     it('priority select has an accessible label', () => {
       const { container } = renderPanel(true)
       const pSelect = container.querySelector('p-select')
       expect(pSelect).not.toBeNull()
-      // PDS PSelect accepts a label prop that renders as accessible label
-      const hasLabel = pSelect!.hasAttribute('label') || pSelect!.hasAttribute('aria-label')
-      expect(hasLabel).toBe(true)
+      expect(pSelect!.getAttribute('aria-label')).toBe('Priority')
     })
 
     it('tags multi-select has an accessible label', () => {
       const { container } = renderPanel(true, ['bug', 'feature'])
       const pMultiSelect = container.querySelector('[data-testid="filter-tags"]')
       expect(pMultiSelect).not.toBeNull()
-      // PDS PMultiSelect accepts a label prop
-      const hasLabel = pMultiSelect!.hasAttribute('label') || pMultiSelect!.hasAttribute('aria-label')
-      expect(hasLabel).toBe(true)
+      expect(pMultiSelect!.getAttribute('aria-label')).toBe('Tags')
     })
 
   })
