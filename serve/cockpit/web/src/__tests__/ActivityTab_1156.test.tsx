@@ -17,6 +17,12 @@ import DetailTab, { type TaskDetail } from '../components/DetailTab'
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
+// ActivityTab now uses useSSEEvent; jsdom has no native EventSource so mock the
+// provider hook. Returning status='closed' keeps paused:false → polling fires.
+vi.mock('../hooks/EventSourceProvider', () => ({
+  useSSEEvent: vi.fn(() => ({ status: 'closed', mtime: null })),
+}))
+
 vi.mock('react-markdown', () => ({
   default: ({ children }: { children: string }) => (
     <div data-testid="markdown-body">{children}</div>
@@ -718,7 +724,9 @@ describe('TestFromAC_CoverageProof', () => {
         <DetailTab task={blocked} />
       </PorscheDesignSystemProvider>,
     )
-    const input = container.querySelector('[data-field="block_reason"]') as HTMLInputElement | null
-    expect(input?.defaultValue).toBe('Blocked by #50')
+    const input = container.querySelector('[data-field="block_reason"]')
+    // PDS PInputText renders defaultValue as the lowercase DOM attribute 'defaultvalue'
+    // on the <p-input-text> web component host element; not as a JS property.
+    expect(input?.getAttribute('defaultvalue')).toBe('Blocked by #50')
   })
 })

@@ -10,6 +10,14 @@ import { render, fireEvent, waitFor } from '@testing-library/react'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
 import ActivityTab from '../components/ActivityTab'
 
+// ─── Mocks ────────────────────────────────────────────────────────────────────
+
+// ActivityTab now uses useSSEEvent; jsdom has no native EventSource so mock the
+// provider hook. Returning status='closed' keeps paused:false → polling fires.
+vi.mock('../hooks/EventSourceProvider', () => ({
+  useSSEEvent: vi.fn(() => ({ status: 'closed', mtime: null })),
+}))
+
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
 const SESSION_RUNNING = {
