@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { PButton } from '@porsche-design-system/components-react'
 import { type Session } from './HistorySubtab'
 import { rowStyleForState } from '../utils/styles'
+import { usePollingFetch } from '../hooks/usePollingFetch'
+import { useSSEEvent } from '../hooks/EventSourceProvider'
 
 export interface ActivityTabProps {
   onSelectTask?: (taskId: number, subtab?: string) => void
@@ -27,20 +29,28 @@ function applyFilter(sessions: Session[], filter: FilterType): Session[] {
 export default function ActivityTab({ onSelectTask }: ActivityTabProps) {
   const [sessions, setSessions] = useState<Session[]>([])
   const [filter, setFilter] = useState<FilterType>('active')
+  const lastObservedMtimeRef = useRef<number | null>(null)
+  const { status: sseStatus, mtime } = useSSEEvent('activity-changed')
+
+  const { refetch } = usePollingFetch<{ sessions: Session[] }>('/api/sessions?filter=all', {
+    intervalMs: 120_000,
+    paused: sseStatus === 'open',
+    onSuccess: (data) => {
+      setSessions(data.sessions)
+    },
+  })
+
+  const refetchRef = useRef(refetch)
+  useEffect(() => {
+    refetchRef.current = refetch
+  }, [refetch])
 
   useEffect(() => {
-    void (async () => {
-      try {
-        const res = await fetch('/api/sessions?filter=all', { method: 'GET' })
-        if (res.ok) {
-          const data = (await res.json()) as { sessions: Session[] }
-          setSessions(data.sessions)
-        }
-      } catch {
-        // ignore
-      }
-    })()
-  }, [])
+    if (sseStatus === 'open' && mtime !== null && lastObservedMtimeRef.current !== mtime) {
+      refetchRef.current()
+    }
+    lastObservedMtimeRef.current = mtime
+  }, [mtime, sseStatus])
 
   const displayed = applyFilter(sessions, filter)
 
