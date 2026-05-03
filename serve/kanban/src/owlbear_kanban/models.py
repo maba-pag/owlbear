@@ -16,13 +16,12 @@ microsecond precision drift on round-trips.
 
 from __future__ import annotations
 
-import re
-from datetime import timedelta
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from owlbear_kanban import errors as _errors
+from owlbear_kanban._duration import _parse_duration
 
 # Backward-compatible re-exports for existing imports from owlbear_kanban.models.
 KANBAN_ERROR_CODES = _errors.KANBAN_ERROR_CODES
@@ -32,27 +31,6 @@ NotFoundError = _errors.NotFoundError
 ConcurrencyError = _errors.ConcurrencyError
 ConfigError = _errors.ConfigError
 MigrationRequiredError = _errors.MigrationRequiredError
-
-
-_DURATION_RE = re.compile(r"^(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$")
-
-
-def _parse_claim_timeout(value: str) -> timedelta:
-    """Parse claim_timeout strings like 1h, 30m, 2d, 30s."""
-    m = _DURATION_RE.match(value.strip())
-    if not m or not any(m.groups()):
-        raise ConfigError(
-            code="ERR_INVALID_CLAIM_TIMEOUT",
-            user_message=(
-                f"Invalid claim_timeout format: {value!r} - expected e.g. "
-                "'1h', '30m', '2h30m', '30s', '2d'"
-            ),
-        )
-    days = int(m.group(1) or 0)
-    hours = int(m.group(2) or 0)
-    minutes = int(m.group(3) or 0)
-    seconds = int(m.group(4) or 0)
-    return timedelta(days=days, hours=hours, minutes=minutes, seconds=seconds)
 
 
 def _validate_status_and_priority(statuses: list[str], priorities: list[str]) -> None:
@@ -228,6 +206,21 @@ class BoardConfig(BaseModel):
         has_grouped_sections = any(key in data for key in grouped_keys)
         schema_value = data.get("schema")
         is_grouped_schema = schema_value == "grouped"
+
+        if not is_grouped_schema and isinstance(data.get("pipeline"), dict):
+            pipeline_claim_timeout = data["pipeline"].get("claim_timeout")
+            if "claim_timeout" not in data and isinstance(pipeline_claim_timeout, str):
+                data["claim_timeout"] = pipeline_claim_timeout
+
+        if has_grouped_sections and not is_grouped_schema:
+            grouped_section_names = {key for key in grouped_keys if key in data}
+            pipeline_only_claim_timeout = (
+                grouped_section_names == {"pipeline"}
+                and isinstance(data.get("pipeline"), dict)
+                and set(data["pipeline"].keys()) <= {"claim_timeout"}
+            )
+            if pipeline_only_claim_timeout:
+                has_grouped_sections = False
 
         if has_grouped_sections and not is_grouped_schema:
             has_flat_keys = any(
@@ -406,7 +399,7 @@ class BoardConfig(BaseModel):
         _validate_entry_and_terminal(
             self.statuses, self.pipeline.entry_status, self.pipeline.terminal_status
         )
-        _parse_claim_timeout(self.pipeline.claim_timeout)
+        _parse_duration(self.pipeline.claim_timeout)
         _validate_agent_compatibility(self.agents.agent_compatibility)
 
         return self

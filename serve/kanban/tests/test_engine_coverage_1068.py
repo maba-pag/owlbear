@@ -26,6 +26,7 @@ from pathlib import Path
 import pytest
 
 from owlbear_kanban import KanbanEngine
+from owlbear_kanban._duration import _parse_duration
 from owlbear_kanban.engine import (
     AgentView,
     _apply_session_filter,
@@ -33,7 +34,6 @@ from owlbear_kanban.engine import (
     _classify_end_work_state,
     _collect_task_sessions,
     _compute_duration,
-    _parse_duration,
     _state_from_age,
     _validate_session_filter,
 )

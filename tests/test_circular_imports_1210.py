@@ -395,6 +395,37 @@ class TestFromAC_StorageImport:
             f"at line(s) {lines}; all 3 call sites must use the module-level name"
         )
 
+    def test_storage_three_functions_call_exclusive_file_lock(self) -> None:
+        """write_task_if_unchanged, move_to_archive, and allocate_next_id must each
+        contain a Call node invoking _exclusive_file_lock by name (not just import it)."""
+        src = _source("storage.py")
+        tree = ast.parse(src)
+
+        def _calls_in_funcdef(funcname: str) -> list[str]:
+            for node in ast.walk(tree):
+                if isinstance(node, ast.FunctionDef) and node.name == funcname:
+                    return [
+                        child.func.id  # type: ignore[attr-defined]
+                        for child in ast.walk(node)
+                        if (
+                            isinstance(child, ast.Call)
+                            and isinstance(child.func, ast.Name)
+                            and child.func.id == "_exclusive_file_lock"
+                        )
+                    ]
+            return []
+
+        for funcname in (
+            "write_task_if_unchanged",
+            "move_to_archive",
+            "allocate_next_id",
+        ):
+            calls = _calls_in_funcdef(funcname)
+            assert calls, (
+                f"{funcname} in storage.py does not call _exclusive_file_lock(…); "
+                "a dead module-level import does not satisfy AC5 — the lock must be used"
+            )
+
 
 # ===========================================================================
 # AC6 — models.py: _parse_claim_timeout and _DURATION_RE deleted;
@@ -473,6 +504,43 @@ class TestFromAC_ModelsDuplicateRemoved:
             "owlbear_kanban.models still exposes _parse_claim_timeout — "
             "duplicate function must be deleted"
         )
+
+    def test_board_config_validate_semantics_calls_parse_duration(self) -> None:
+        """_validate_semantics method of BoardConfig must call _parse_duration(…) by name,
+        not just import it — a dead import does not satisfy AC6."""
+        src = _source("models.py")
+        tree = ast.parse(src)
+
+        for class_node in ast.walk(tree):
+            if not (isinstance(class_node, ast.ClassDef) and class_node.name == "BoardConfig"):
+                continue
+            for method in ast.walk(class_node):
+                if not (
+                    isinstance(method, ast.FunctionDef)
+                    and method.name == "_validate_semantics"
+                ):
+                    continue
+                calls = [
+                    child
+                    for child in ast.walk(method)
+                    if (
+                        isinstance(child, ast.Call)
+                        and isinstance(child.func, ast.Name)
+                        and child.func.id == "_parse_duration"
+                    )
+                ]
+                assert calls, (
+                    "BoardConfig._validate_semantics does not call _parse_duration(…); "
+                    "a dead import of _parse_duration does not satisfy AC6 — "
+                    "the canonical parser must be invoked inside the validator"
+                )
+                return
+            pytest.fail(
+                "_validate_semantics method not found inside BoardConfig class in models.py"
+            )
+            return
+
+        pytest.fail("BoardConfig class not found in models.py")
 
 
 # ===========================================================================

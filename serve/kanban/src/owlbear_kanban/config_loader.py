@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from pathlib import Path
 
+from owlbear_kanban._duration import _parse_duration
 from owlbear_kanban.models import BoardConfig
 from owlbear_kanban.yaml_rt import make_yaml as _make_yaml
 
@@ -45,8 +46,6 @@ def load_config(kanban_dir: Path) -> BoardConfig:
 
 def _validate_claim_timeout(config: BoardConfig) -> None:
     """Validate claim_timeout by delegating to the canonical parser (AC-C50)."""
-    from owlbear_kanban.engine import _parse_duration  # noqa: PLC0415
-
     _parse_duration(config.pipeline.claim_timeout)
 
 

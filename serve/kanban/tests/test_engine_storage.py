@@ -1003,7 +1003,7 @@ class TestFromAC_ParseDuration:
 
     def test_ac_c49_parse_duration_30m(self) -> None:
         """AC-C49: _parse_duration('30m') returns timedelta(minutes=30)."""
-        from owlbear_kanban.engine import (
+        from owlbear_kanban._duration import (
             _parse_duration,
         )  # NEW function signature  # noqa: PLC0415
 
@@ -1012,21 +1012,21 @@ class TestFromAC_ParseDuration:
 
     def test_ac_c49_parse_duration_1h(self) -> None:
         """AC-C49: _parse_duration('1h') returns timedelta(hours=1)."""
-        from owlbear_kanban.engine import _parse_duration  # noqa: PLC0415
+        from owlbear_kanban._duration import _parse_duration  # noqa: PLC0415
 
         result = _parse_duration("1h")
         assert result == timedelta(hours=1)
 
     def test_ac_c49_parse_duration_2h30m(self) -> None:
         """AC-C49: _parse_duration('2h30m') returns timedelta(hours=2, minutes=30)."""
-        from owlbear_kanban.engine import _parse_duration  # noqa: PLC0415
+        from owlbear_kanban._duration import _parse_duration  # noqa: PLC0415
 
         result = _parse_duration("2h30m")
         assert result == timedelta(hours=2, minutes=30)
 
     def test_ac_c49_malformed_raises_config_error(self) -> None:
         """AC-C49: _parse_duration with malformed input raises ConfigError(code=ERR_INVALID_CLAIM_TIMEOUT)."""
-        from owlbear_kanban.engine import _parse_duration  # noqa: PLC0415
+        from owlbear_kanban._duration import _parse_duration  # noqa: PLC0415
         from owlbear_kanban.models import (
             ConfigError,
         )  # NEW exception type  # noqa: PLC0415
@@ -1065,7 +1065,7 @@ class TestFromAC_ParseDuration:
     def test_ac_c50_config_load_calls_parse_duration_not_only_regex(
         self, tmp_path: Path
     ) -> None:
-        """AC-C50: config_loader.load_config must call engine._parse_duration at load time.
+        """AC-C50: config_loader.load_config must call _duration._parse_duration at load time.
 
         The AC states 'BoardConfig validation calls _parse_duration(claim_timeout) at
         config load time (eager validation)'. KanbanEngine.__init__ uses
@@ -1076,11 +1076,12 @@ class TestFromAC_ParseDuration:
         called exactly once.
         """
         import owlbear_kanban.config_loader as _config_loader  # noqa: PLC0415
-        import owlbear_kanban.engine as _eng  # noqa: PLC0415
 
         kanban_dir = _make_new_board(tmp_path)
         with patch.object(
-            _eng, "_parse_duration", wraps=_eng._parse_duration
+            _config_loader,
+            "_parse_duration",
+            wraps=_config_loader._parse_duration,
         ) as mock_pd:
             _config_loader.load_config(
                 kanban_dir

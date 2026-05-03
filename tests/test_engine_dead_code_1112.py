@@ -23,6 +23,7 @@ from pathlib import Path
 
 import pytest
 
+import owlbear_kanban._locking as _locking_mod
 import owlbear_kanban.engine as _engine_mod
 from owlbear_kanban import KanbanEngine
 
@@ -34,6 +35,10 @@ _ENGINE_PATH = Path(inspect.getfile(_engine_mod))
 _ENGINE_SOURCE = _ENGINE_PATH.read_text(encoding="utf-8")
 _ENGINE_LINES = _ENGINE_SOURCE.splitlines()
 _ENGINE_TREE = ast.parse(_ENGINE_SOURCE)
+_LOCKING_PATH = Path(inspect.getfile(_locking_mod))
+_LOCKING_SOURCE = _LOCKING_PATH.read_text(encoding="utf-8")
+_LOCKING_LINES = _LOCKING_SOURCE.splitlines()
+_LOCKING_TREE = ast.parse(_LOCKING_SOURCE)
 
 
 def _class_method_source(method_name: str, class_name: str = "KanbanEngine") -> str:
@@ -225,26 +230,26 @@ class TestFromAC_Win32PragmaAnnotation:
 
     def test_win32_check_line_has_pragma_no_cover(self) -> None:
         """The line ``if sys.platform == "win32":`` must include the pragma annotation."""
-        for line in _ENGINE_LINES:
+        for line in _LOCKING_LINES:
             if 'sys.platform == "win32"' in line:
                 assert "# pragma: no cover" in line, (
                     f"win32 branch line is missing '# pragma: no cover': {line!r}"
                 )
                 return
         pytest.fail(
-            "No 'sys.platform == \"win32\"' line found in engine.py — "
+            "No 'sys.platform == \"win32\"' line found in _locking.py — "
             "was the branch removed entirely instead of annotated?"
         )
 
     def test_win32_branch_exists_in_exclusive_file_lock(self) -> None:
         """_exclusive_file_lock must still contain the win32 branch (annotated, not deleted)."""
         found = False
-        for node in ast.walk(_ENGINE_TREE):
+        for node in ast.walk(_LOCKING_TREE):
             if (
                 isinstance(node, ast.FunctionDef)
                 and node.name == "_exclusive_file_lock"
             ):
-                src = "\n".join(_ENGINE_LINES[node.lineno - 1 : node.end_lineno])
+                src = "\n".join(_LOCKING_LINES[node.lineno - 1 : node.end_lineno])
                 found = "win32" in src
                 break
         assert found, (

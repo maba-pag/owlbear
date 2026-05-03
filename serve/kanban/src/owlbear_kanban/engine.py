@@ -32,7 +32,6 @@ import os
 import random
 import re
 import subprocess
-import sys
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -42,6 +41,8 @@ from ruamel.yaml import YAML
 from ruamel.yaml.error import YAMLError
 
 from owlbear_kanban import storage
+from owlbear_kanban._duration import _parse_duration
+from owlbear_kanban._locking import _exclusive_file_lock  # noqa: F401
 from owlbear_kanban.agent_names import ADJECTIVES, NOUNS
 from owlbear_kanban.body_parser import parse_body
 from owlbear_kanban.config_loader import load_config
@@ -74,46 +75,12 @@ from owlbear_kanban.storage import (
     write_task,
 )
 
-# ---------------------------------------------------------------------------
-# Module-level duration parser (AC-C49)
-# ---------------------------------------------------------------------------
-
-_DURATION_RE = re.compile(r"^(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$")
 _BLOCK_REASON_UNSET = object()
 _MAX_CLAIM_STALE_RETRIES = 4
 LOGGER = logging.getLogger(__name__)
 
 
-def _parse_duration(s: str) -> timedelta:
-    """Parse a duration string like ``'1h'``, ``'30m'``, ``'2h30m'``, ``'30s'``, ``'2d'``.
-
-    Args:
-        s: Duration string.
-
-    Returns:
-        :class:`timedelta` representation.
-
-    Raises:
-        ConfigError: code='ERR_INVALID_CLAIM_TIMEOUT' when format is invalid.
-    """
-    m = _DURATION_RE.match(s.strip())
-    if not m or not any(m.groups()):
-        raise ConfigError(
-            code="ERR_INVALID_CLAIM_TIMEOUT",
-            user_message=(
-                f"Invalid claim_timeout format: {s!r} — expected e.g. "
-                "'1h', '30m', '2h30m', '30s', '2d'"
-            ),
-        )
-    days = int(m.group(1) or 0)
-    hours = int(m.group(2) or 0)
-    minutes = int(m.group(3) or 0)
-    seconds = int(m.group(4) or 0)
-    return timedelta(days=days, hours=hours, minutes=minutes, seconds=seconds)
-
-
 if TYPE_CHECKING:
-    from collections.abc import Generator
     from pathlib import Path
 
 
@@ -363,34 +330,6 @@ def _move_file(src: Path, dest: Path) -> None:
         # git not installed, or timed out (e.g. waiting for index.lock)
         pass
     src.replace(dest)
-
-
-@contextlib.contextmanager
-def _exclusive_file_lock(lock_path: Path) -> Generator[None, None, None]:
-    """Acquire an exclusive cross-process file lock on *lock_path*.
-
-    Uses ``msvcrt.locking`` on Windows and ``fcntl.flock`` on Unix.
-    The lock is always released, including on exception paths.
-    """
-    with lock_path.open("a+b") as fh:
-        if sys.platform == "win32":  # pragma: no cover
-            import msvcrt  # noqa: PLC0415
-
-            fh.seek(0)
-            msvcrt.locking(fh.fileno(), msvcrt.LK_LOCK, 1)
-            try:
-                yield
-            finally:
-                fh.seek(0)
-                msvcrt.locking(fh.fileno(), msvcrt.LK_UNLCK, 1)
-        else:
-            import fcntl  # noqa: PLC0415
-
-            fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
-            try:
-                yield
-            finally:
-                fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
 
 
 class KanbanEngine:
