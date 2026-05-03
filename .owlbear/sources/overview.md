@@ -4394,3 +4394,11 @@ External repos and resources studied during OwlBear development.
 |--------|-----|------|------------|------|
 | Ousterhout — Philosophy of Software Design (Pragmatic Engineer) | <https://newsletter.pragmaticengineer.com/p/the-philosophy-of-software-design> | "Design It Twice" concept — generate multiple radically different designs, compare | .owlbear/research/1149-arch-review-design-diverge.md | 2026-04-27 |
 | mattpocock/design-an-interface (SkillsMP) | <https://skillsmp.com/skills/mattpocock-skills-design-an-interface-skill-md> | VS Code skill: 3+ parallel sub-agents with constraint-driven design prompts, 17.6K stars | .owlbear/research/1149-arch-review-design-diverge.md | 2026-04-27 |
+
+## Init.py Consumer Scaffold (Task #1284)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| GitHub Blog — 5 Tips for Custom Instructions | <https://github.blog/ai-and-ml/github-copilot/5-tips-for-writing-better-custom-instructions-for-copilot/> | Recommended sections: project overview, tech stack, guidelines, project structure, resources | .owlbear/research/init-scaffold-copilot-instructions.md | 2026-05-03 |
+| VS Code Docs — Custom Instructions | <https://code.visualstudio.com/docs/copilot/customization/custom-instructions> | File format, auto-detection, priority rules, `copilot-instructions.md` usage patterns | .owlbear/research/init-scaffold-copilot-instructions.md | 2026-05-03 |
+| Graham Knapp — My Copilot Instructions File | <https://grahamknapp.com/blog/my-copilot-instructions-file/> | Real-world copilot-instructions.md as "project map, not rulebook"; contextual, project-specific | .owlbear/research/init-scaffold-copilot-instructions.md | 2026-05-03 |
