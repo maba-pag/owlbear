@@ -27,11 +27,10 @@ from pathlib import Path
 import pytest
 
 from owlbear_kanban.config_loader import load_config
-from owlbear_kanban.corruption import CorruptionError
+from owlbear_kanban.corruption import CorruptionError, detect_corruption
 from owlbear_kanban.models import Task
 from owlbear_kanban.storage import (
     MigrationRequiredError,
-    detect_corruption,
     move_to_quarantine,
     read_task,
     write_task,

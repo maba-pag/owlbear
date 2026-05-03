@@ -18,7 +18,7 @@ Public API (per Brief C §1.3):
 
 Re-exported types:
     Section, ConcurrencyError, ActivityEvent, ActivityCompactionResult,
-    SessionRecord, MigrationRequiredError, CorruptionError
+    SessionRecord, MigrationRequiredError
 """
 
 from __future__ import annotations
