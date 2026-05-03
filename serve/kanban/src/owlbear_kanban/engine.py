@@ -1833,39 +1833,6 @@ class AgentView:
             user_message=f"Task '{task_id}' not found",
         )
 
-    @staticmethod
-    def _dep_effect_from_archival_reason(reason: str | None) -> str:
-        if reason in {"dropped", "wontfix"}:
-            return "blocked"
-        if reason in {"deprecated", "duplicate"}:
-            return "redirect"
-        return "ok"
-
-    def _compute_dep_status(
-        self,
-        task: Task,
-    ) -> str | None:
-        deps = task.depends_on or []
-        if not deps:
-            return None
-
-        status = "ok"
-        for dep_id in deps:
-            try:
-                dep_task = self.engine.show_task(str(dep_id))
-            except (FileNotFoundError, CorruptionError, ValueError, KeyError):
-                return "blocked"
-            if dep_task.status != "archived":
-                continue
-
-            dep_effect = self._dep_effect_from_archival_reason(dep_task.archival_reason)
-            if dep_effect == "blocked":
-                return "blocked"
-            if dep_effect == "redirect":
-                status = "redirect"
-
-        return status
-
     def _task_exists(self, task_id: int) -> bool:
         try:
             self.engine.show_task(str(task_id))
@@ -2149,7 +2116,24 @@ class AgentView:
         if isinstance(payload.get("body"), list):
             payload["body"] = None
 
-        payload["dep_status"] = self._compute_dep_status(task)
+        active_ids: set[int] = set()
+        archived_reasons: dict[int, str | None] = {}
+        for dep_id in task.depends_on or []:
+            try:
+                dep_task = self.engine.show_task(str(dep_id))
+            except (FileNotFoundError, CorruptionError, ValueError, KeyError):
+                continue
+
+            if dep_task.status == "archived":
+                archived_reasons[dep_id] = dep_task.archival_reason
+            else:
+                active_ids.add(dep_id)
+
+        payload["dep_status"] = self.engine._compute_dep_status(  # noqa: SLF001
+            task,
+            active_ids=active_ids,
+            archived_reasons=archived_reasons,
+        )
 
         guidance: list[str] = []
         missing_sections: list[str] | None = None

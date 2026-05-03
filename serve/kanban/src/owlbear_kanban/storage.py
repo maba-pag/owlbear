@@ -37,6 +37,12 @@ if TYPE_CHECKING:
     from ruamel.yaml import YAML
 
 from owlbear_kanban._locking import _exclusive_file_lock
+from owlbear_kanban._naming import (
+    generate_slug,  # noqa: F401
+    make_task_filename,
+    move_to_quarantine,
+    validate_path_containment,
+)
 from owlbear_kanban.activity_store import (
     append_activity_event,
     compact_activity_log,
@@ -83,55 +89,11 @@ YAML12SafeLoader.add_implicit_resolver(
     list("tTfF"),
 )
 
-_WINDOWS_RESERVED: frozenset[str] = frozenset(
-    ["con", "prn", "aux", "nul"]
-    + [f"com{i}" for i in range(1, 10)]
-    + [f"lpt{i}" for i in range(1, 10)]
-)
-
-
 def _make_yaml() -> YAML:
     """Return a round-trip ruamel YAML instance with timestamp resolver disabled."""
     from owlbear_kanban.yaml_rt import make_yaml  # noqa: PLC0415
 
     return make_yaml()
-
-
-def generate_slug(title: str) -> str:
-    """Return a filesystem-safe slug derived from *title*."""
-    if not title:
-        return ""
-    slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
-    slug = slug[:80]
-    if slug in _WINDOWS_RESERVED:
-        msg = f"Invalid title: '{slug}' is a Windows reserved filename"
-        raise ValueError(msg)
-    return slug
-
-
-def make_task_filename(task_id: int, title: str) -> str:
-    """Return canonical task filename ``{id}-{slug}.md``."""
-    return f"{task_id}-{generate_slug(title)}.md"
-
-
-def validate_path_containment(tasks_dir: Path, path: Path) -> None:
-    """Raise if *path* is not safely contained within *tasks_dir*."""
-    if "\x00" in str(path):
-        msg = "Path contains null byte"
-        raise ValueError(msg)
-
-    resolved_dir = tasks_dir.resolve()
-    resolved_path = path.resolve()
-
-    if resolved_path == resolved_dir:
-        msg = f"Path must be a file inside tasks_dir, not tasks_dir itself: {path}"
-        raise ValueError(msg)
-
-    try:
-        resolved_path.relative_to(resolved_dir)
-    except ValueError:
-        msg = f"Path is outside tasks_dir '{tasks_dir}': {path}"
-        raise PermissionError(msg) from None
 
 
 def _parse_task_file(path: Path) -> Task:
@@ -554,27 +516,6 @@ def move_to_archive(task_id: int, kanban_dir: Path) -> Path:
         dest = archive_dir / src.name
         src.replace(dest)
         return dest
-
-
-def move_to_quarantine(task_path: Path, kanban_dir: Path) -> Path:
-    """Move *task_path* to ``quarantine/``, creating the dir if absent (AC-C28, AC-C29).
-
-    Lock files (hidden ``.lock`` files) are skipped: the function returns *task_path*
-    unchanged without moving or creating any quarantine directory entry.
-
-    Raises:
-        PermissionError: when *task_path* is outside *kanban_dir*.
-    """
-    if task_path.name.startswith(".") and task_path.name.endswith(".lock"):
-        return task_path
-
-    validate_path_containment(kanban_dir, task_path)
-
-    quarantine_dir = kanban_dir / "quarantine"
-    quarantine_dir.mkdir(parents=True, exist_ok=True)
-    dest = quarantine_dir / task_path.name
-    task_path.replace(dest)
-    return dest
 
 
 # ---------------------------------------------------------------------------
