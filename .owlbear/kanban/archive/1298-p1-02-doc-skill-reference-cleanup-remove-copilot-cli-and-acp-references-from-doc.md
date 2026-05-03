@@ -2,10 +2,10 @@
 id: 1298
 title: 'P1-02: Doc/skill reference cleanup — remove Copilot CLI and ACP references
   from docs'
-status: done
+status: archived
 priority: important
 created: 2026-05-02T19:40:07.788907+00:00
-updated: 2026-05-03T00:35:39.550573+00:00
+updated: 2026-05-03T10:12:24.905658+00:00
 tags:
 - cleanup
 parent: 1296
@@ -186,3 +186,32 @@ Passing through to builder.
 
 ### Scratch Files Cleaned
 - None (no scratch files matching `1298-*` found)
+[[2026-05-03]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| 1. `serve/orchestrator` zero hits in scoped files | Auditor grep: exit=1 (no matches). Test `test_dead_code_sweep_1296.py::test_no_serve_orchestrator_repo_wide` passes | PASS |
+| 2. `Copilot CLI` zero hits outside exclusions | Reviewer searches confirmed; test `test_no_copilot_cli_in_md_files_repo_wide` passes | PASS |
+| 3. `owlbear-project.json` zero hits | Reviewer grep confirmed; task-scoped tests pass | PASS |
+| 4. `.owlbear/doc-index.md` clean | Auditor grep: zero `serve/orchestrator` hits (exit=1). Test `test_doc_index_no_serve_orchestrator` passes | PASS |
+| 5. `ruff check` passes | No Python files touched; quality-runner lint clean for scope | PASS |
+| 6. Live orchestrator agent intact | Auditor confirmed `share/agents/orchestrator.agent.md` exists | PASS |
+
+### Test Results
+- pytest (task-scoped): 17 passed, 0 failed
+- pytest (full suite): 3714 passed, 165 failed, 4 skipped — all failures in `test_engine_accessor_migration.py` / `test_engine_coverage_1068.py`, pre-existing and unrelated
+- ruff: 1 pre-existing violation in `copilot_auth.py`, not in scope
+
+### Architect Quality: 4/5
+Specific, grep-verifiable AC. Minor gap: parent #1296 Architecture Review refined AC3 exclusion list was not back-propagated to child task body, creating avoidable reviewer overhead.
+
+### Deduction Breakdown
+- 6/6 AC lines with specific evidence: no deduction
+- Lint violations in scope: none → no deduction
+- AC quality 4/5: no deduction (threshold ≤3)
+- Reviewer evidence section: present, detailed, PASS → no deduction
+- Full-suite failures outside task scope: no deduction
+
+### Confidence: .98
+### Action: archive
