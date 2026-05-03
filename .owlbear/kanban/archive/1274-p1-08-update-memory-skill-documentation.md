@@ -1,10 +1,10 @@
 ---
 id: 1274
 title: 'P1-08: Update memory skill documentation'
-status: backlog
+status: archived
 priority: important
 created: 2026-05-02T03:43:38.563184+00:00
-updated: 2026-05-03T16:22:55.637716+00:00
+updated: 2026-05-03T17:55:48.457105+00:00
 tags:
 - phase-1
 - scope:docs
@@ -257,3 +257,206 @@ Challenge: SKIP — all AC lines td:0 per Step 2.1.
 - Re-open AC1 at architecture review instead of inheriting the earlier PASS assumption.
 - If AC1 truly requires full parameter coverage, update `share/skills/h-mcp-memory/SKILL.md` so the `query_memory` section documents `categories`, `scope_agents`, `min_confidence`, and `limit` in addition to `states`.
 - Re-run markdown lint on the four scoped skill files after the documentation fix.
+[[2026-05-03]]
+
+[[2026-05-03]]
+## Architecture Review (cycle 2)
+
+**Verdict:** APPROVE (refined) — backlog → todo
+
+### AC Assessment
+
+| AC line | Assessment | Action |
+|---------|-----------|--------|
+| AC1: h-mcp-memory documents all 5 tools with params | FAIL in prior cycle — `query_memory` only documents `states`; live MCP surface exposes 5 params | Builder guidance updated with exact params to add |
+| AC2: h-memory-structure documents schema + 9 categories | PASS (satisfied in prior build) | No change, td:0 |
+| AC3: w-mem-curation state machine | PASS (satisfied in prior build) | No change, td:0 |
+| AC4: r-pipeline-protocol references store_learning | PASS (satisfied in prior build) | No change, td:0 |
+| AC5: No old references remain | PASS (fixed in prior build) | No change, td:0 |
+| AC6: Markdown lint passes | PASS | No change, td:0 |
+
+### Architecture Notes
+
+- All AC lines remain td:0. Test-writer: SKIP.
+- Only AC1 requires further work: `query_memory` section in `share/skills/h-mcp-memory/SKILL.md` must document all 5 parameters to match the public MCP surface at `serve/mcp-memory/src/owlbear_mcp_memory/server.py:97-104`.
+- No structural changes, no new modules, no security surface.
+
+### Dependency Analysis
+
+- Dep #1273 (done/archived): tools exist and function. No blockers.
+
+### Challenge
+
+Challenge: SKIP — all AC lines td:0 per Step 2.1.
+
+### Updated Builder Guidance
+
+**Only AC1 remains.** All other AC lines are satisfied from prior cycles.
+
+**AC1 fix — `share/skills/h-mcp-memory/SKILL.md`:**
+
+The `query_memory` section (around line 40-50) currently documents only `states`. Add the missing 4 parameters to the parameter table to match the live implementation at `serve/mcp-memory/src/owlbear_mcp_memory/tools.py:124-131`:
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `states` | list[str] \| null | `null` | Optional explicit state filter (default: curated + approved) |
+| `categories` | list[str] \| null | `null` | Filter by category values |
+| `scope_agents` | list[str] \| null | `null` | Filter by agent scope |
+| `min_confidence` | float \| null | `null` | Minimum confidence threshold (inclusive) |
+| `limit` | int \| null | `null` | Maximum entries to return |
+
+After editing, verify with `markdownlint-cli` on all 4 scoped files.
+
+[[2026-05-03]]
+APPROVE (refined) — cycle 2. Only AC1 remains: query_memory param table needs 4 additional params documented. Builder guidance updated with exact table.
+[[2026-05-03]]
+## Test-Writer Notes
+- All AC lines are (td:0) — test-writer skipped.
+- Passing through to builder.
+[[2026-05-03]]
+## Builder Notes
+- Implementation: updated `share/skills/h-mcp-memory/SKILL.md` only.
+- Fix applied: expanded `query_memory` docs to include all supported parameters (`states`, `categories`, `scope_agents`, `min_confidence`, `limit`) in both Tool Summary and the parameter table.
+- Tests: 0 task tests (all AC lines are `td:0`; test-writer skip remains valid).
+- Coverage: n/a (documentation-only task).
+- ruff: n/a (no Python source changes).
+- Markdown lint: `npx --yes markdownlint-cli share/skills/h-mcp-memory/SKILL.md share/skills/h-memory-structure/SKILL.md share/skills/w-mem-curation/SKILL.md share/skills/r-pipeline-protocol/SKILL.md` -> pass (exit 0).
+- API/doc parity check: `rg -n "query_memory|states|categories|scope_agents|min_confidence|limit" share/skills/h-mcp-memory/SKILL.md` confirms all 5 query params are documented.
+- Commit: `22f9c1ab` (`docs: complete query_memory params in memory skill (#1274, builder)`).
+
+### Post-task Reflection
+- Problem faced: prior cycle assumptions marked AC1 as complete, but reviewer evidence showed drift against the live MCP signature.
+- Workaround applied: verified the current server/tool signatures first, then made a one-file surgical doc correction.
+- Pattern discovered: API parameter drift in handbook docs is easiest to catch by matching the public MCP registration signature.
+- Quality gap noted: task-local historical guidance can become stale across retries; source code must remain the final authority.
+[[2026-05-03]]
+## Review Evidence
+### Test Results
+- Task depth: td:0 documentation task; no task tests were required or run.
+- Quality-runner retry reported 0 requested tests, 0 failures, markdownlint exit code 0, and no execution errors for the four scoped skill files.
+
+### Lint
+- Quality-runner retry reported clean markdown lint for [share/skills/h-mcp-memory/SKILL.md](share/skills/h-mcp-memory/SKILL.md), [share/skills/h-memory-structure/SKILL.md](share/skills/h-memory-structure/SKILL.md), [share/skills/w-mem-curation/SKILL.md](share/skills/w-mem-curation/SKILL.md), and [share/skills/r-pipeline-protocol/SKILL.md](share/skills/r-pipeline-protocol/SKILL.md).
+- VS Code diagnostics reported no errors in the same four files.
+
+### Coverage
+- Not applicable for a td:0 documentation task.
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+- Not applicable. All AC lines are td:0 and the test-writer correctly skipped.
+
+#### Security Review
+- No security issues. This is documentation-only scope, and the latest binding builder retry is the one recorded at [task 1274](.owlbear/kanban/tasks/1274-p1-08-update-memory-skill-documentation.md#L318-L325).
+
+#### Test Integrity
+- Not applicable. No TestFromAC files or classes are in scope.
+
+#### Test Quality
+- Not applicable. No task tests were required for this td:0 task.
+
+#### Data Safety
+- No issues. Documentation-only change.
+
+#### Implementation-Aware Gap Analysis
+- PASS. The latest binding architecture refinement narrowed the remaining work to AC1 at [task 1274](.owlbear/kanban/tasks/1274-p1-08-update-memory-skill-documentation.md#L263-L311). The live docs now satisfy that refined contract: [share/skills/h-mcp-memory/SKILL.md](share/skills/h-mcp-memory/SKILL.md#L14-L22) documents all five tools in the summary; [share/skills/h-mcp-memory/SKILL.md](share/skills/h-mcp-memory/SKILL.md#L38-L56) documents `query_memory`; and the parameter rows at [share/skills/h-mcp-memory/SKILL.md](share/skills/h-mcp-memory/SKILL.md#L50-L54) match the live MCP signature at [serve/mcp-memory/src/owlbear_mcp_memory/server.py](serve/mcp-memory/src/owlbear_mcp_memory/server.py#L97-L104).
+- Access restrictions and return values are also documented for every tool in [share/skills/h-mcp-memory/SKILL.md](share/skills/h-mcp-memory/SKILL.md#L24-L109), matching the live entry-shape and role gates at [serve/mcp-memory/src/owlbear_mcp_memory/tools.py](serve/mcp-memory/src/owlbear_mcp_memory/tools.py#L57), [serve/mcp-memory/src/owlbear_mcp_memory/tools.py](serve/mcp-memory/src/owlbear_mcp_memory/tools.py#L173), [serve/mcp-memory/src/owlbear_mcp_memory/tools.py](serve/mcp-memory/src/owlbear_mcp_memory/tools.py#L204), and [serve/mcp-memory/src/owlbear_mcp_memory/tools.py](serve/mcp-memory/src/owlbear_mcp_memory/tools.py#L218).
+
+#### Necessity Check
+- Not applicable. No dependency, integration, or external capability was added.
+
+#### Builder Process Quality
+- CLEAN. The task has earlier review sections at [task 1274](.owlbear/kanban/tasks/1274-p1-08-update-memory-skill-documentation.md#L139) and [task 1274](.owlbear/kanban/tasks/1274-p1-08-update-memory-skill-documentation.md#L198), but the later architecture rewrite at [task 1274](.owlbear/kanban/tasks/1274-p1-08-update-memory-skill-documentation.md#L263-L311) materially refined scope. Current review is anchored to that latest contract, and the current repo state satisfies it.
+
+### AC Compliance
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| h-mcp-memory documents all 5 tools with params, return values, and access restrictions | [share/skills/h-mcp-memory/SKILL.md](share/skills/h-mcp-memory/SKILL.md#L14-L22) lists all five tools; [share/skills/h-mcp-memory/SKILL.md](share/skills/h-mcp-memory/SKILL.md#L24-L109) provides per-tool params, return values, and access restrictions; `query_memory` specifically documents `states`, `categories`, `scope_agents`, `min_confidence`, and `limit` at [share/skills/h-mcp-memory/SKILL.md](share/skills/h-mcp-memory/SKILL.md#L50-L54), matching [serve/mcp-memory/src/owlbear_mcp_memory/server.py](serve/mcp-memory/src/owlbear_mcp_memory/server.py#L97-L104). | PASS |
+| h-memory-structure documents the YAML frontmatter schema including an explicit enumeration of all 9 category values, the 4 states, and confidence range | [share/skills/h-memory-structure/SKILL.md](share/skills/h-memory-structure/SKILL.md#L13-L35) defines the entry shape; category/state/range enumerations are explicit at [share/skills/h-memory-structure/SKILL.md](share/skills/h-memory-structure/SKILL.md#L31), [share/skills/h-memory-structure/SKILL.md](share/skills/h-memory-structure/SKILL.md#L32), and [share/skills/h-memory-structure/SKILL.md](share/skills/h-memory-structure/SKILL.md#L33), matching [serve/mcp-memory/src/owlbear_mcp_memory/models.py](serve/mcp-memory/src/owlbear_mcp_memory/models.py#L11-L22) and [serve/mcp-memory/src/owlbear_mcp_memory/models.py](serve/mcp-memory/src/owlbear_mcp_memory/models.py#L33-L36). | PASS |
+| w-mem-curation documents the explicit state machine and tool-triggered transitions | [share/skills/w-mem-curation/SKILL.md](share/skills/w-mem-curation/SKILL.md#L19-L31) contains the state machine table and the explicit approved-to-deleted purge-flow note. | PASS |
+| r-pipeline-protocol Post-task Reflection references `store_learning` | [share/skills/r-pipeline-protocol/SKILL.md](share/skills/r-pipeline-protocol/SKILL.md#L229-L237) names `store_learning`, its parameters, and the updated category mapping. | PASS |
+| No references to SQLite, old tool names, or old schema remain in updated skills | Targeted regex sweeps for `sqlite`, `add_learning`, `get_learnings`, `curate_learning`, `old schema`, and singular `scope_agent` returned no matches in the four scoped skill files. | PASS |
+| All skill files pass markdown lint | Quality-runner retry reported clean markdown lint for the four scoped skill files, and editor diagnostics reported no errors. | PASS |
+
+### Deductions
+- -0.02: shared terminal contamination prevented direct `git show` extraction of commit `22f9c1ab`; changed-file scope was reconstructed from the latest builder note at [task 1274](.owlbear/kanban/tasks/1274-p1-08-update-memory-skill-documentation.md#L318-L325) plus current file inspection.
+- Final confidence: 0.96
+
+### Verdict
+- PASS. Advance to docs.
+
+### Action
+- Released task to `docs`.
+[[2026-05-03]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | No IN-scope prose docs reference the changed skill files |
+| 2 | Module docstrings | No | N/A | No Python source files modified (models.py/tools.py referenced for verification only, not changed) |
+| 3 | External attribution | No | N/A | No external patterns used |
+| 4 | Research doc | No | N/A | No research doc produced for this task |
+| 5 | Diagram maintenance (describes match) | No | N/A | No diagram describes-match for SKILL.md files |
+| 6 | Explicit diagram creation | No | N/A | No explicit diagram creation requested |
+| 7 | Deletion detection | No | N/A | No files deleted |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| share/skills/h-memory-structure/SKILL.md | OUT | N/A — agent-executable SKILL.md |
+| share/skills/h-mcp-memory/SKILL.md | OUT | N/A — agent-executable SKILL.md |
+| share/skills/w-mem-curation/SKILL.md | OUT | N/A — agent-executable SKILL.md |
+| share/skills/r-pipeline-protocol/SKILL.md | OUT | N/A — agent-executable SKILL.md |
+
+### Files Updated
+- None
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None
+
+No docs impact — all changed files are OUT-of-scope agent-executable SKILL.md files. Advancing to done.
+[[2026-05-03]]
+## Audit
+
+### AC Verification
+
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: h-mcp-memory documents all 5 tools with params, return values, access restrictions | Spot-checked: SKILL.md L14-22 (summary), L38-56 (query_memory with all 5 params). Matches live MCP surface at server.py:97-104. | PASS |
+| AC2: h-memory-structure documents YAML schema, 9 categories, 4 states, confidence range | Reviewer evidence at h-memory-structure/SKILL.md L13-35. Trusted reviewer detail. | PASS |
+| AC3: w-mem-curation documents explicit state machine | Spot-checked: SKILL.md L19-31 has transitions table with From/To/Trigger/Tool/Actor and purge-flow note. | PASS |
+| AC4: r-pipeline-protocol references store_learning | Spot-checked: SKILL.md L229-237 references store_learning with params and category mapping. | PASS |
+| AC5: No old references remain | Reviewer grep evidence (no sqlite/old tool names/stale scope_agent). Trusted. | PASS |
+| AC6: All skill files pass markdown lint | Reviewer and quality-runner markdownlint exit 0 on all 4 scoped files. | PASS |
+
+### Test Results
+
+- pytest: 3827 passed, 128 failed, 4 skipped. All 128 failures are in unrelated modules (engine accessor migration, storage, cockpit events). Zero task-scope failures: task changed only SKILL.md documentation files.
+- ruff: 1 violation in serve/knowledge/copilot_auth.py (T201 print). Not in task scope.
+
+### Commit Verification
+
+Three builder commits confirmed via git log:
+- 22f9c1ab docs: complete query_memory params in memory skill (#1274, builder)
+- 78448069 docs: fix scope_agents naming in memory structure skill (#1274, builder)
+- 3c1e77fe docs: update memory skill docs (#1274, builder)
+
+### Architect Quality: 4/5
+
+AC was specific and verifiable. Minor gap: AC1 was initially marked satisfied but reviewer caught incomplete query_memory params, requiring a cycle 2 architecture refinement. The cycle 2 guidance was precise and well-targeted. Score docked from 5 for the initial false-positive on AC1.
+
+### Deduction Breakdown
+
+- Start: 1.00
+- AC lines without evidence: 0 (all 6 verified)
+- Lint violations in scope: 0
+- AC quality <=3: N/A (score 4)
+- Missing reviewer evidence: 0 (present, detailed, 0.96 confidence)
+- Full-suite task-scope failures: 0
+
+### Confidence: .98
+
+### Action: archive
