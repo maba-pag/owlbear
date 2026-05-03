@@ -40,12 +40,16 @@ interface FilterPanelStubProps {
 
 let capturedOnFilterChange: ((filter: FilterState) => void) | null = null
 let capturedAvailableTags: string[] | null = null
+let capturedFilter: FilterState | null = null
+let capturedPriorities: string[] | null = null
 
 vi.mock('../components/FilterPanel', () => ({
   default: vi.fn(
-    ({ onFilterChange, availableTags, open }: FilterPanelStubProps) => {
+    ({ filter, onFilterChange, priorities, availableTags, open }: FilterPanelStubProps) => {
       capturedOnFilterChange = onFilterChange
       capturedAvailableTags = availableTags
+      capturedFilter = filter
+      capturedPriorities = priorities
       if (!open) return null
       return (
         <div
@@ -148,6 +152,8 @@ describe('TestFromAC_FilterIntegration', () => {
   beforeEach(() => {
     capturedOnFilterChange = null
     capturedAvailableTags = null
+    capturedFilter = null
+    capturedPriorities = null
   })
 
   afterEach(() => {
@@ -414,5 +420,54 @@ describe('TestFromAC_FilterIntegration', () => {
         container.querySelector('[data-column="todo"] [data-testid="task-card"][data-id="3"]'),
       ).not.toBeNull()
     })
+  })
+
+  // Reviewer gap: toggle label shows active-filter count suffix when filters are active
+  it('filter toggle label reflects the active filter count', async () => {
+    const { container } = renderBoard()
+    const toggle = container.querySelector('[data-testid="filter-toggle"]')!
+    // No filters active: no count suffix
+    expect(toggle.textContent).toBe('Filters')
+    // Open panel to obtain the onFilterChange callback
+    fireEvent.click(toggle)
+    await waitFor(() => {
+      expect(container.querySelector('[data-testid="filter-panel-stub"]')).not.toBeNull()
+    })
+    // Activate one filter criterion (priority)
+    act(() => {
+      capturedOnFilterChange!({ ...EMPTY_FILTER, priority: 'needed' })
+    })
+    await waitFor(() => {
+      expect(toggle.textContent).toMatch(/^Filters \(1\)$/)
+    })
+    // Activate two filter criteria (priority + text) — count must increment
+    act(() => {
+      capturedOnFilterChange!({ ...EMPTY_FILTER, priority: 'needed', text: 'foo' })
+    })
+    await waitFor(() => {
+      expect(toggle.textContent).toMatch(/^Filters \(2\)$/)
+    })
+  })
+
+  // Reviewer gap: FilterPanel receives live filter state and board.priorities
+  it('FilterPanel receives the live filter state and board priorities as props', async () => {
+    const { container } = renderBoard()
+    const toggle = container.querySelector('[data-testid="filter-toggle"]')!
+    fireEvent.click(toggle)
+    await waitFor(() => {
+      expect(container.querySelector('[data-testid="filter-panel-stub"]')).not.toBeNull()
+    })
+    // Initially FilterPanel must receive the empty filter and the board's priority list
+    expect(capturedFilter).toEqual(EMPTY_FILTER)
+    expect(capturedPriorities).toEqual(BOARD.priorities)
+    // After a filter change, FilterPanel must receive the updated live filter state
+    act(() => {
+      capturedOnFilterChange!({ ...EMPTY_FILTER, priority: 'needed' })
+    })
+    await waitFor(() => {
+      expect(capturedFilter).toEqual({ ...EMPTY_FILTER, priority: 'needed' })
+    })
+    // Priorities prop must remain the board's priorities regardless of filter state
+    expect(capturedPriorities).toEqual(BOARD.priorities)
   })
 })
