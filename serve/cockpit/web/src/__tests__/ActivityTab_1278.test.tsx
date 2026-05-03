@@ -117,6 +117,15 @@ describe('TestFromAC_ActivityTabSSE', () => {
       )
     })
 
+    it('passes paused: false to usePollingFetch when sseStatus is connecting', () => {
+      sseState.status = 'connecting'
+      renderActivity()
+      expect(vi.mocked(usePollingFetch)).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ paused: false }),
+      )
+    })
+
     it('onSuccess callback populates sessions in the rendered component', async () => {
       const sessions: Session[] = [
         {
