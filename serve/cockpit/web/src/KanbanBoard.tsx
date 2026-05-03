@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { Column } from './components/Column'
 import ArchivalModal from './components/ArchivalModal'
+import FilterPanel from './components/FilterPanel'
+import { filterTasks, type FilterState } from './utils/filterTasks'
 import { type Board, type Task } from './hooks/useBoard'
 
 // ─── KanbanBoard ──────────────────────────────────────────────────────────────
@@ -23,6 +25,13 @@ interface DragSourceState {
   status: string
   taskId: number
   taskUpdated: string
+}
+
+const EMPTY_FILTER: FilterState = {
+  text: '',
+  priority: '',
+  tags: [],
+  blocked: false,
 }
 
 export interface KanbanBoardProps {
@@ -58,7 +67,18 @@ function KanbanBoardContent({
   const [archivalModal, setArchivalModal] = useState<ArchivalModalState | null>(null)
   const [moveError, setMoveError] = useState<string | null>(null)
   const [dragSource, setDragSource] = useState<DragSourceState | null>(null)
+  const [filter, setFilter] = useState<FilterState>(EMPTY_FILTER)
+  const [panelOpen, setPanelOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement | null>(null)
+
+  const filteredTasks = filterTasks(tasks, filter)
+  const availableTags = [...new Set(tasks.flatMap((task) => task.tags))]
+  const activeFilterCount =
+    (filter.text ? 1 : 0) +
+    (filter.priority ? 1 : 0) +
+    (filter.tags.length > 0 ? 1 : 0) +
+    (filter.blocked ? 1 : 0)
+  const hasActiveFilters = activeFilterCount > 0
 
   useEffect(() => {
     if (!contextMenu) return
@@ -134,7 +154,7 @@ function KanbanBoardContent({
     }
   }
 
-  const tasksByStatus = tasks.reduce<Record<string, Task[]>>((acc, task) => {
+  const tasksByStatus = filteredTasks.reduce<Record<string, Task[]>>((acc, task) => {
     if (!acc[task.status]) acc[task.status] = []
     acc[task.status].push(task)
     return acc
@@ -179,29 +199,70 @@ function KanbanBoardContent({
     }
   }
 
+  const handleFilterChange = (nextFilter: FilterState) => {
+    setContextMenu(null)
+    setDragSource(null)
+    setFilter(nextFilter)
+  }
+
   return (
-    <div data-testid="kanban-board" style={{ display: 'flex', gap: '16px', overflowX: 'auto' }}>
-      {board.statuses.map(({ name }) => {
-        const colTasks = tasksByStatus[name] ?? []
-        return (
-          <Column
-            key={name}
-            status={name}
-            tasks={colTasks}
-            priorities={board.priorities}
-            selectedId={selectedId}
-            onSelectTask={onSelectTask}
-            onContextMenu={handleContextMenu}
-            onDragStart={handleDragStart}
-            onDrop={handleDrop}
-            onDragEnd={handleDragEnd}
-            isValidDragTarget={
-              dragSource !== null &&
-              (board.valid_transitions[dragSource.status] ?? []).includes(name)
-            }
-          />
-        )
-      })}
+    <div
+      data-testid="kanban-board"
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '16px',
+        minHeight: 0,
+        height: '100%',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <button
+          type="button"
+          data-testid="filter-toggle"
+          onClick={() => setPanelOpen((open) => !open)}
+        >
+          Filters
+          {hasActiveFilters ? ` (${activeFilterCount})` : ''}
+        </button>
+        {hasActiveFilters ? (
+          <span data-testid="filter-result-count">
+            {filteredTasks.length} / {tasks.length} tasks
+          </span>
+        ) : null}
+      </div>
+
+      <FilterPanel
+        filter={filter}
+        onFilterChange={handleFilterChange}
+        priorities={board.priorities}
+        availableTags={availableTags}
+        open={panelOpen}
+      />
+
+      <div style={{ display: 'flex', gap: '16px', overflowX: 'auto', flex: 1, minHeight: 0 }}>
+        {board.statuses.map(({ name }) => {
+          const colTasks = tasksByStatus[name] ?? []
+          return (
+            <Column
+              key={name}
+              status={name}
+              tasks={colTasks}
+              priorities={board.priorities}
+              selectedId={selectedId}
+              onSelectTask={onSelectTask}
+              onContextMenu={handleContextMenu}
+              onDragStart={handleDragStart}
+              onDrop={handleDrop}
+              onDragEnd={handleDragEnd}
+              isValidDragTarget={
+                dragSource !== null &&
+                (board.valid_transitions[dragSource.status] ?? []).includes(name)
+              }
+            />
+          )
+        })}
+      </div>
 
       {moveError && <div data-testid="move-error">{moveError}</div>}
 

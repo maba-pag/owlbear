@@ -54,7 +54,7 @@ export function Column({
         e.preventDefault()
         onDrop(status)
       }}
-      style={{ overflowY: 'auto', maxHeight: 'calc(100vh - 56px)' }}
+      style={{ overflowY: 'auto' }}
     >
       <header>
         <span>{status}</span>
