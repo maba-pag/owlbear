@@ -17,7 +17,7 @@ Scoped (Python):
 ```
 agentName: quality-runner
 prompt: |
-  Run: mode=scoped, task_id=263, test_paths=["tests/test_my_module.py"], coverage_modules=["my_module"], lint_paths=["workspace/my-package/", "tests/test_my_module.py"]
+  Run: mode=scoped, task_id=263, test_paths=["tests/test_my_module.py"], coverage_modules=["my_module"], lint_paths=["path/to/source-package/", "tests/test_my_module.py"]
 ```
 
 Scoped (TypeScript/JavaScript):
@@ -25,7 +25,7 @@ Scoped (TypeScript/JavaScript):
 ```
 agentName: quality-runner
 prompt: |
-  Run: mode=scoped, task_id=1230, test_paths=["workspace/cockpit/web/src/__tests__/MyComponent.test.tsx"], lint_paths=["workspace/cockpit/web/src/components/MyComponent.tsx"]
+  Run: mode=scoped, task_id=1230, test_paths=["path/to/frontend-package-root/src/__tests__/MyComponent.test.tsx"], lint_paths=["path/to/frontend-package-root/src/components/MyComponent.tsx"]
 ```
 
 Full suite:
@@ -36,7 +36,8 @@ prompt: |
   Run: mode=full, task_id=263
 ```
 
-Quality-runner selects the toolchain based on `test_paths`: paths under `workspace/cockpit/web/` use vitest + eslint (see `h-vitest-and-linting`); all other paths use pytest + ruff (see `h-pytest-and-linting`).
+Quality-runner selects the toolchain based on `test_paths`: paths under your frontend package root use vitest + eslint (see `h-vitest-and-linting`), and all other paths use pytest + ruff (see `h-pytest-and-linting`).
+> Example (OwlBear-dev frontend root): `serve/cockpit/web/`
 
 Routing authority for frontend root and test-path mode selection is `.github/copilot-instructions.md`; if examples here drift from workspace conventions, follow `copilot-instructions.md`.
 
@@ -51,13 +52,14 @@ agents: [quality-runner]
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `mode` | `scoped` \| `full` | Yes | `scoped` runs only `test_paths`; `full` runs `tests/ workspace/ -m "not api"` |
+| `mode` | `scoped` \| `full` | Yes | `scoped` runs only `test_paths`; `full` runs `tests/ path/to/source-packages/ -m "not api"` |
 | `test_paths` | string[] | If `mode=scoped` | Paths to test files, e.g. `["tests/test_foo.py", "tests/test_bar.py"]` |
 | `task_id` | string | Yes | Kanban task ID — isolates file-capture fallback output in `.owlbear/scratch/` |
 | `coverage_modules` | string[] | No | Module names for focused coverage display; bare `--cov` always runs against all packages |
-| `lint_paths` | string[] | No | Paths to lint; defaults to `workspace/ tests/` (Python) or `src/` (frontend) if omitted |
+| `lint_paths` | string[] | No | Paths to lint; defaults to your source package paths plus `tests/` (Python) or `src/` (frontend) if omitted |
 
-**Frontend detection:** When any `test_paths` entry starts with `workspace/cockpit/web/`, switch to frontend mode (vitest + eslint). See `h-vitest-and-linting`.
+**Frontend detection:** When any `test_paths` entry starts with your frontend package root, switch to frontend mode (vitest + eslint). See `h-vitest-and-linting`.
+> Example (OwlBear-dev): `serve/cockpit/web/src/__tests__/MyComponent.test.tsx`
 
 ## Output Format
 
@@ -71,7 +73,7 @@ skipped: 2
 
 ## Lint
 clean: false
-violations: [{file: "workspace/foo/src/foo/bar.py", line: 12, code: "F401", msg: "'os' imported but unused"}]
+violations: [{file: "path/to/source-package/src/foo/bar.py", line: 12, code: "F401", msg: "'os' imported but unused"}]
 
 ## Coverage
 overall_pct: 94

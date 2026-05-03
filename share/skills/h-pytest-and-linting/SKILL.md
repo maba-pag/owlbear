@@ -20,8 +20,11 @@ uv run pytest tests/test_{module}.py -q --tb=short
 
 ### Full suite (auditor)
 
+Run against your test directory and your source package directory.
+> Example (OwlBear-dev): `tests/` and `serve/`
+
 ```shell
-uv run pytest tests/ workspace/ -m "not api" -q --tb=short
+uv run pytest tests/ path/to/source-packages/ -m "not api" -q --tb=short
 ```
 
 For full suite runs, use `mode=async` to avoid output truncation in long-lived terminal sessions. The agent is automatically notified when the command finishes — no manual polling needed:
@@ -33,7 +36,7 @@ run_in_terminal(command="uv run pytest tests/ -m 'not api' -q --tb=short", mode=
 # If the terminal needs input: send_to_terminal(id=..., data="...")
 ```
 
-`testpaths` in `pyproject.toml` is `["tests", "serve"]`, so bare `uv run pytest` also discovers `workspace/`. Passing both paths explicitly is preferred for clarity.
+`testpaths` in `pyproject.toml` should include both your tests and source packages. Bare `uv run pytest` may already discover both, but passing explicit paths is preferred for clarity.
 
 ### Default flags
 
@@ -57,13 +60,13 @@ run_in_terminal(command="uv run pytest tests/ -m 'not api' -q --tb=short", mode=
 
 ```shell
 # Skip API tests (standard builder run)
-uv run pytest tests/ workspace/ -m "not api" -q --tb=short
+uv run pytest tests/ path/to/source-packages/ -m "not api" -q --tb=short
 
 # Skip API and slow
-uv run pytest tests/ workspace/ -m "not api and not slow" -q --tb=short
+uv run pytest tests/ path/to/source-packages/ -m "not api and not slow" -q --tb=short
 
 # Only integration tests
-uv run pytest tests/ workspace/ -m "integration" -q --tb=short
+uv run pytest tests/ path/to/source-packages/ -m "integration" -q --tb=short
 
 # Run e2e explicitly
 uv run pytest -m e2e -q --tb=short
@@ -93,7 +96,7 @@ uv run pytest tests/test_{module}.py --cov --cov-report=term-missing --cov-fail-
 | Flag | Problem |
 |------|---------|
 | `--cov=dotted.module.name` | pydantic MRO crash |
-| `--cov=workspace/mcp-kanban/src/` | Reports 0% (src-layout issue) |
+| `--cov=path/to/package/src/` | Reports 0% in src-layout setups |
 | `coverage run --source=...` | Incompatible with pytest-cov config |
 
 Only bare `--cov` works. It reads `[tool.coverage.run] source_pkgs` from `pyproject.toml`, covering all 8 installed packages automatically.
@@ -101,7 +104,7 @@ Only bare `--cov` works. It reads `[tool.coverage.run] source_pkgs` from `pyproj
 ## ruff
 
 ```shell
-uv run ruff check workspace/ tests/
+uv run ruff check path/to/source-packages/ tests/
 ```
 
 ## NEVER Pipe `uv run` Output Through PowerShell Cmdlets
@@ -117,7 +120,7 @@ PS 5.1 wraps stderr from `2>&1` in ErrorRecord objects. Every pipe combination c
 If the terminal truncates output, use Python as the I/O layer:
 
 ```shell
-uv run python -c "import subprocess,sys,pathlib; r=subprocess.run([sys.executable,'-m','pytest','tests/','workspace/','-m','not api','-q','--tb=line'], capture_output=True, text=True); pathlib.Path('.owlbear/scratch/pytest-output.txt').write_text(r.stdout+'\n'+r.stderr); print('exit:', r.returncode)"
+uv run python -c "import subprocess,sys,pathlib; r=subprocess.run([sys.executable,'-m','pytest','tests/','path/to/source-packages/','-m','not api','-q','--tb=line'], capture_output=True, text=True); pathlib.Path('.owlbear/scratch/pytest-output.txt').write_text(r.stdout+'\n'+r.stderr); print('exit:', r.returncode)"
 ```
 
 Then `read_file` on `.owlbear/scratch/pytest-output.txt`. Delete after use.
