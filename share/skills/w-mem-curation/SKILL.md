@@ -16,6 +16,20 @@ Repo memory (`/memories/repo/`) is organized as **thematic files** — each file
 
 **Inbox** (`/memories/repo/inbox/`) holds raw agent field notes awaiting triage. **Deferred** (`/memories/repo/deferred/`) holds conflicts needing manual resolution.
 
+## State Machine
+
+Memory lifecycle transitions are explicit and tool-driven:
+
+| From | To | Trigger | Tool | Actor |
+|------|----|---------|------|-------|
+| `pending` | `curated` | Curator promotes after review | `update_entry(state="curated")` | curator agent |
+| `curated` | `approved` | User signs off | `approve_entry` | human user |
+| `pending` | `deleted` | Noise/duplicate pruned | `delete_entry` | curator agent |
+| `curated` | `deleted` | Superseded or invalidated | `delete_entry` | curator agent |
+| `approved` | `deleted` | Obsolete knowledge purged | `delete_entry` | curator agent |
+
+Purge flow: periodic curation may mark previously approved entries as `deleted` when they become obsolete, stale, or replaced by better guidance.
+
 ## Step 0 — Setup
 
 Read `r-pipeline-protocol` skill if not already loaded.

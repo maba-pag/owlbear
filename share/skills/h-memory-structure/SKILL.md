@@ -26,6 +26,12 @@ Memory entries use markdown body + YAML frontmatter. Core fields:
 | `created_at` | str | UTC timestamp |
 | `updated_at` | str | UTC timestamp |
 
+Enumerations and ranges used by the schema:
+
+- `categories` values: `knowledge`, `behaviour`, `pitfall`, `process`, `tool`, `goal`, `personality`, `preference`, `context`
+- `state` values: `pending`, `curated`, `approved`, `deleted`
+- `confidence` range: inclusive `[0.7, 1.0]`
+
 This schema is validated by `MemoryEntry` in the `mcp-memory` package.
 
 **File-based entry shape** (inbox fallback):
