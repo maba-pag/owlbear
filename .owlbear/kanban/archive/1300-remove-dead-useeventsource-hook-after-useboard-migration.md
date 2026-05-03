@@ -1,10 +1,10 @@
 ---
 id: 1300
 title: Remove dead useEventSource hook after useBoard migration
-status: done
+status: archived
 priority: someday
 created: 2026-05-02T19:48:32.676272+00:00
-updated: 2026-05-03T16:34:17.353690+00:00
+updated: 2026-05-03T16:48:12.988874+00:00
 tags:
 - cockpit
 - frontend
@@ -13,7 +13,7 @@ depends_on:
 - 1277
 blocked: false
 block_reason:
-claimed_at: 2026-05-03T16:34:17.353690+00:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -169,3 +169,39 @@ Architecture review cycle 2 complete. Refined AC to fix two process gaps that ca
 
 ### Scratch Files Cleaned
 - None (no scratch files found for task #1300)
+[[2026-05-03]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Hook file deleted | `file_search` returns no file; `git log` shows deletion in `f82de323` | PASS |
+| Test file `useEventSource_1260` deleted | `file_search` returns no file; same commit | PASS |
+| Test file `useEventSource_1263` deleted | `file_search` returns no file; same commit | PASS |
+| No production import of `useEventSource` | `grep_search` on `serve/cockpit/web/src/**/*.ts` — only hits are test comments in `useBoard_1277.test.ts` and `EventSourceProvider_1276.test.tsx` | PASS |
+
+### Test Results
+- pytest: 3799 passed, 128 failed, 4 skipped — all failures pre-existing (guidance, migrate, server, engine, react-compiler modules); zero in task scope
+- vitest: 936 passed, 13 failed — failures in Shell_966/ActivityTab suites tracked by #1278; zero in task scope
+- ruff: 1 pre-existing T201 in copilot_auth.py (unrelated)
+- eslint: 4 pre-existing issues (unrelated)
+- quality-runner env fallback: 2× SIGINT; executed directly
+
+### Architect Quality: 4/5
+AC is clear and specific (file paths, td:0 across the board). Required one cycle-2 iteration to authorize TestFromAC deletion and replace infeasible blanket test gate — reasonable for a deletion task with process edge cases.
+
+### Deduction Breakdown
+- Starting: 1.00
+- AC evidence: all 4 lines verified with independent tooling — no deduction
+- Lint: pre-existing violations only, none in task scope — no deduction
+- Full-suite failures: pre-existing across unrelated modules — no deduction
+- Reviewer evidence: present, detailed, PASS verdict — no deduction
+- Reviewer confidence .94 (below .95) on process-artifact deductions (can't lint deleted files): -.01
+
+### Confidence: .99
+### Action: archive
+
+### Commits Verified
+| Commit | Type | Files | Agent |
+|--------|------|-------|-------|
+| f82de323 | chore | 3 deleted files (hook + 2 tests) | builder |
+| fd79a004 | docs | cockpit.excalidraw footer | doc-writer |
