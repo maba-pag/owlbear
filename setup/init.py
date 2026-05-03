@@ -50,6 +50,7 @@ _DICT_MERGE_KEYS = _LOCATION_KEYS | frozenset(
 _SKIP_NAMES = frozenset({"scratch-pad.txt"})
 _SKIP_IF_EXISTS_REL = frozenset(
     {
+        ".github/copilot-instructions.md",
         ".editorconfig",
         ".gitattributes",
         ".markdownlint-cli2.jsonc",
