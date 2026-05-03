@@ -2273,14 +2273,26 @@ class AgentView:
             for task in active
             if task.dep_status != "blocked" and task.status != "archived"
         ]
+        dispatch_module = importlib.import_module("owlbear_kanban.dispatch")
+        passes_tdd = dispatch_module._passes_tdd_gate  # noqa: SLF001
+        passes_clarity = dispatch_module._passes_clarity_gate  # noqa: SLF001
+
+        gated_dispatchable: list[TaskSummary] = []
+        for task in dispatchable:
+            full_task = self.engine.show_task(str(task.id))
+            if not passes_tdd(full_task):
+                continue
+            if not passes_clarity(full_task):
+                continue
+            gated_dispatchable.append(task)
+
+        dispatchable = gated_dispatchable
         if not dispatchable:
             return PickTasksResponse(waves=[], guidance=[])
 
         created_rank = {task.id: index for index, task in enumerate(active)}
 
-        priority_rank = {
-            name: idx for idx, name in enumerate(config.pipeline.priorities)
-        }
+        priority_rank = PRIORITY_RANK
 
         ordered = sorted(
             dispatchable,

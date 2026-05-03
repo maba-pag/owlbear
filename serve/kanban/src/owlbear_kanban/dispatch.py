@@ -14,6 +14,7 @@ the config.yml display order:
 from __future__ import annotations
 
 import re
+import warnings
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
@@ -163,6 +164,12 @@ def pick_dispatchable(  # noqa: C901
     Returns:
         Sorted, capped list of Task instances.
     """
+    warnings.warn(
+        "pick_dispatchable() is deprecated; use AgentView.pick_tasks() instead",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+
     tasks: list[Task] = []
     for path in sorted(engine._tasks_dir.glob("*.md")):  # noqa: SLF001
         task_id = path.stem.split("-", 1)[0]
