@@ -1,10 +1,10 @@
 ---
 id: 1283
 title: 'P1-03: Update cross-references in README, WIRING, h-agent-structure, h-memory-structure'
-status: in-progress
+status: archived
 priority: needed
 created: 2026-05-02T16:01:10.613477+00:00
-updated: 2026-05-03T13:53:07.594800+00:00
+updated: 2026-05-03T15:05:39.462988+00:00
 tags:
 - phase-1
 - scope:docs
@@ -423,3 +423,152 @@ Architecture review (return cycle). Implementation is correct — sole issue is 
 | AC5: already adequate — no change | unchanged |
 
 All 10 tests green. pytest: 10 passed, 0 failed. ruff: clean.
+[[2026-05-03]]
+## Builder Notes
+- Non-implementation retry cycle: implementation artifacts were already correct; this pass validates current snapshot and advances routing.
+- Files changed: none.
+- Tests: 10 passed, 0 failed, 0 skipped on `tests/test_cross_references_1283.py` (quality-runner scoped run).
+- Ruff: clean on `tests/test_cross_references_1283.py`.
+- Coverage: not applicable for this docs/assertion-only task; quality-runner reported no instrumented modules (expected).
+- Evidence summary: AC-proof assertions are now exact-value checks in the test snapshot; scoped quality gate is green.
+
+### Reflection
+- Test-only retry cycles benefit from explicit builder pass-through notes to avoid unnecessary implementation churn.
+- For docs/instruction assertion tasks, coverage output can be zero while still being a valid GREEN gate; recording this prevents false alarms.
+- Keeping verification scoped to the task test file avoids unrelated-suite noise and gives a deterministic handoff to review.
+[[2026-05-03]]
+## Review Evidence
+### Test Results
+- quality-runner pytest: 10 passed, 0 failed on [tests/test_cross_references_1283.py](tests/test_cross_references_1283.py#L145)
+
+### Lint
+- quality-runner ruff: clean on [tests/test_cross_references_1283.py](tests/test_cross_references_1283.py#L1)
+
+### Coverage
+- Not applicable for this docs-only artifact-validation task. The tests validate markdown/instruction content rather than instrumented runtime modules.
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---------|-------------|---------------------------|---------|
+| AC1: YAML `applyTo` field equals the full canonical value at [share/instructions/agent-ecosystem.instructions.md](share/instructions/agent-ecosystem.instructions.md#L3) | [tests/test_cross_references_1283.py](tests/test_cross_references_1283.py#L145) with exact equality at [tests/test_cross_references_1283.py](tests/test_cross_references_1283.py#L173) | Yes. The test extracts the YAML field and asserts `apply_to_value == _FULL_APPLY_TO`, so any missing `share/...` or `.owlbear/...` segment fails. | COVERED |
+| AC2: README stubs row mirrors the full AC1 value at [share/README.md](share/README.md#L106) | [tests/test_cross_references_1283.py](tests/test_cross_references_1283.py#L179) with full canonical-row assertion at [tests/test_cross_references_1283.py](tests/test_cross_references_1283.py#L193) | Yes. The row must contain the full canonical `applyTo` string, so partial mirror regressions fail. | COVERED |
+| AC3: h-agent-structure stubs row mirrors the full AC1 value at [share/skills/h-agent-structure/SKILL.md](share/skills/h-agent-structure/SKILL.md#L328) | [tests/test_cross_references_1283.py](tests/test_cross_references_1283.py#L200) with full canonical-row assertion at [tests/test_cross_references_1283.py](tests/test_cross_references_1283.py#L220) | Yes. The row must contain the full canonical `applyTo` string, so partial mirror regressions fail. | COVERED |
+| AC4: WIRING Table 2 row reflects the split scope at [share/WIRING.md](share/WIRING.md#L226) | [tests/test_cross_references_1283.py](tests/test_cross_references_1283.py#L227) with row assertions at [tests/test_cross_references_1283.py](tests/test_cross_references_1283.py#L243) and [tests/test_cross_references_1283.py](tests/test_cross_references_1283.py#L248) | Yes for the current Architecture Review retry contract. The row must contain both `share/agents/**` and `.owlbear/agents/**`, which catches the named abbreviated-scope regression. | COVERED |
+| AC5: WIRING Gap Analysis notes reflect `.owlbear/` ecosystem scope at [share/WIRING.md](share/WIRING.md#L257) | [tests/test_cross_references_1283.py](tests/test_cross_references_1283.py#L254) with scope-language assertion at [tests/test_cross_references_1283.py](tests/test_cross_references_1283.py#L269) | Yes. The test requires both `.owlbear/` and `ecosystem`, so the intended scope wording is discriminating. | COVERED |
+
+#### Security Review
+- No issues in the doc-only artifacts at [share/instructions/agent-ecosystem.instructions.md](share/instructions/agent-ecosystem.instructions.md#L3), [share/README.md](share/README.md#L106), [share/WIRING.md](share/WIRING.md#L226), [share/WIRING.md](share/WIRING.md#L257), and [share/skills/h-agent-structure/SKILL.md](share/skills/h-agent-structure/SKILL.md#L344).
+
+#### Test Integrity
+- PRESERVED. Builder implementation commit `e66cbe42` changed only [share/README.md](share/README.md), [share/WIRING.md](share/WIRING.md), [share/instructions/agent-ecosystem.instructions.md](share/instructions/agent-ecosystem.instructions.md), and [share/skills/h-agent-structure/SKILL.md](share/skills/h-agent-structure/SKILL.md).
+- Test-writer commit `c4c10dd0` changed only [tests/test_cross_references_1283.py](tests/test_cross_references_1283.py).
+- Latest builder cycle is a pass-through with no file changes, per [.owlbear/kanban/tasks/1283-p1-03-update-cross-references-in-readme-wiring-h-agent-structure-h-memory-struct.md](.owlbear/kanban/tasks/1283-p1-03-update-cross-references-in-readme-wiring-h-agent-structure-h-memory-struct.md#L427). No builder modification to `TestFromAC_*` assertions was detected.
+
+#### Test Quality
+- Assertion specificity: ADEQUATE. AC1 now uses exact equality at [tests/test_cross_references_1283.py](tests/test_cross_references_1283.py#L173). AC2 and AC3 assert the full canonical value at [tests/test_cross_references_1283.py](tests/test_cross_references_1283.py#L193) and [tests/test_cross_references_1283.py](tests/test_cross_references_1283.py#L220). AC4 asserts both abbreviated halves at [tests/test_cross_references_1283.py](tests/test_cross_references_1283.py#L243) and [tests/test_cross_references_1283.py](tests/test_cross_references_1283.py#L248). AC5 asserts `.owlbear/` plus `ecosystem` at [tests/test_cross_references_1283.py](tests/test_cross_references_1283.py#L269).
+- Manual mutation resistance: ADEQUATE. Removing required `share/...` or `.owlbear/...` segments from AC1-AC4, or dropping ecosystem wording from AC5, would now fail the strengthened tests.
+- Independence and naming: STRONG. The tests are isolated file-content reads with clear, AC-scoped names.
+- Informational only: the original weaker tests remain as supplementary coverage, but the review verdict is anchored to the strengthened assertions added in the latest retry.
+
+#### Data Safety
+- No issues. This task only changes static documentation and instruction artifacts.
+
+#### Implementation-Aware Test Gaps
+- No significant gaps. The task-owned behavior is static artifact content, and each td:1 AC line now has direct executable proof plus direct artifact inspection.
+
+#### Builder Process Quality
+- CLEAN. Task history shows one implementation pass at [.owlbear/kanban/tasks/1283-p1-03-update-cross-references-in-readme-wiring-h-agent-structure-h-memory-struct.md](.owlbear/kanban/tasks/1283-p1-03-update-cross-references-in-readme-wiring-h-agent-structure-h-memory-struct.md#L154), then builder-skip/pass-through notes at [.owlbear/kanban/tasks/1283-p1-03-update-cross-references-in-readme-wiring-h-agent-structure-h-memory-struct.md](.owlbear/kanban/tasks/1283-p1-03-update-cross-references-in-readme-wiring-h-agent-structure-h-memory-struct.md#L267) and [.owlbear/kanban/tasks/1283-p1-03-update-cross-references-in-readme-wiring-h-agent-structure-h-memory-struct.md](.owlbear/kanban/tasks/1283-p1-03-update-cross-references-in-readme-wiring-h-agent-structure-h-memory-struct.md#L427). No repeated implementation churn remains in the passing cycle.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| AC1 | [share/instructions/agent-ecosystem.instructions.md](share/instructions/agent-ecosystem.instructions.md#L3) and exact field assertion at [tests/test_cross_references_1283.py](tests/test_cross_references_1283.py#L173) | [tests/test_cross_references_1283.py](tests/test_cross_references_1283.py#L145) | PASS |
+| AC2 | [share/README.md](share/README.md#L106) and full canonical-row assertion at [tests/test_cross_references_1283.py](tests/test_cross_references_1283.py#L193) | [tests/test_cross_references_1283.py](tests/test_cross_references_1283.py#L179) | PASS |
+| AC3 | [share/skills/h-agent-structure/SKILL.md](share/skills/h-agent-structure/SKILL.md#L328) and full canonical-row assertion at [tests/test_cross_references_1283.py](tests/test_cross_references_1283.py#L220) | [tests/test_cross_references_1283.py](tests/test_cross_references_1283.py#L200) | PASS |
+| AC4 | [share/WIRING.md](share/WIRING.md#L226) and dual abbreviated-scope assertions at [tests/test_cross_references_1283.py](tests/test_cross_references_1283.py#L243) and [tests/test_cross_references_1283.py](tests/test_cross_references_1283.py#L248) | [tests/test_cross_references_1283.py](tests/test_cross_references_1283.py#L227) | PASS |
+| AC5 | [share/WIRING.md](share/WIRING.md#L257) and `.owlbear/` + `ecosystem` assertion at [tests/test_cross_references_1283.py](tests/test_cross_references_1283.py#L269) | [tests/test_cross_references_1283.py](tests/test_cross_references_1283.py#L254) | PASS |
+| AC6 | [share/skills/h-agent-structure/SKILL.md](share/skills/h-agent-structure/SKILL.md#L344) matches the refined cosmetic wording. | td:0 - no test required | PASS |
+| Verification: README substantive-docs row already correct | [share/README.md](share/README.md#L97) remains correct. | td:0 - no test required | PASS |
+| Verification: WIRING filename references remain valid | [share/WIRING.md](share/WIRING.md#L42) remains valid. | td:0 - no test required | PASS |
+| Verification: h-memory-structure reference remains valid | [share/skills/h-memory-structure/SKILL.md](share/skills/h-memory-structure/SKILL.md#L43) remains valid. | td:0 - no test required | PASS |
+
+### Deductions
+- -0.04: AC2-AC4 use row-level assertions rather than parsing markdown cells exactly, so there is minor residual proof risk even though the latest Architecture Review retry contract explicitly accepted this row-level form and the live artifacts match.
+
+### Verdict
+- PASS with confidence 0.94. The current strengthened tests and direct artifact inspection satisfy the refined acceptance criteria; the earlier FAIL sections in the task history are stale against the current repo state.
+
+### Action
+- Advance to `docs`.
+- No builder or test-writer follow-up is required from this review.
+
+### Reflection
+- Earlier review sections in the task body lagged behind the live test file; the final verdict needed to anchor to the current repo state, not stale notes.
+- Exact-value assertions resolved the earlier false-green pattern without any further implementation churn.
+- Builder-skip notes were useful evidence here because they made the final cycle's ownership boundaries explicit.
+[[2026-05-03]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | Yes | N/A (already updated by builder) | `share/README.md` and `share/WIRING.md` were updated by builder commit `e66cbe42`; reviewer PASS at 0.94 confirmed correctness |
+| 2 | Module docstrings | No | N/A | No Python modules created or modified |
+| 3 | External attribution | No | N/A | No external patterns cited in task |
+| 4 | Research doc | Yes | Verified | `.owlbear/research/p1-03-cross-reference-update.md` exists and is linked from task body |
+| 5 | Diagram maintenance (describes match) | Yes | Updated | `share/diagrams/project-overview.excalidraw` has `describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**` — matches changed `share/README.md`, `share/WIRING.md`, `share/instructions/agent-ecosystem.instructions.md`, `share/skills/h-agent-structure/SKILL.md`; footer updated from `f82de323` to `8c413efa` (current HEAD) |
+| 6 | Explicit diagram creation | No | N/A | No explicit diagram creation request in task body |
+| 7 | Deletion detection | No | N/A | No files deleted; no orphaned IN-scope docs detected |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| share/README.md | IN | Already updated by builder; verified correct by reviewer |
+| share/WIRING.md | IN (adjacent doc) | Already updated by builder; verified correct by reviewer |
+| share/instructions/agent-ecosystem.instructions.md | OUT (agent-executable) | No edit; builder changes verified correct |
+| share/skills/h-agent-structure/SKILL.md | OUT (agent-executable SKILL.md) | No edit; builder changes verified correct |
+| tests/test_cross_references_1283.py | OUT (test file) | No edit |
+| share/diagrams/project-overview.excalidraw | IN | Footer updated: commit `2210970c` |
+
+### Files Updated
+- `share/diagrams/project-overview.excalidraw` — footer updated to `Last verified: 2026-05-03 (8c413efa)`
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no `1283-*` scratch files found)
+[[2026-05-03]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: agent-ecosystem.instructions.md YAML applyTo extended | Live file confirmed — exact match. Test exact equality at test_cross_references_1283.py:173 | PASS |
+| AC2: share/README.md mirrors full value | Reviewer verified at README.md:106, test at test_cross_references_1283.py:193 | PASS |
+| AC3: h-agent-structure stubs row mirrors full value | Reviewer verified at SKILL.md:328, test at test_cross_references_1283.py:220 | PASS |
+| AC4: WIRING Table 2 row includes both halves | Reviewer verified, dual assertion at test_cross_references_1283.py:243,248 | PASS |
+| AC5: WIRING Gap Analysis notes reflect ecosystem scope | Reviewer verified, test at test_cross_references_1283.py:269 | PASS |
+| AC6: h-agent-structure cosmetic fix | Live file confirmed (lines 340-348) — matches refined wording | PASS |
+| Verification: README substantive-docs already correct | Reviewer verified at README.md:97 | PASS |
+| Verification: WIRING filename refs valid | Reviewer verified at WIRING.md:42 | PASS |
+| Verification: h-memory-structure ref valid | Reviewer verified at h-memory-structure:43 | PASS |
+
+### Test Results
+- pytest: 3797 passed, 130 failed (0 in task scope), 4 skipped
+- Task-scoped: 10/10 passed (test_cross_references_1283.py)
+- ruff: 1 violation in copilot_auth.py (unrelated)
+- vitest: 769 failed (all pre-existing, unrelated to docs-only task)
+
+### Architect Quality: 3/5
+Initial AC was 6 vague cross-reference checks requiring full replacement. Refined AC was specific but lacked assertion-contract guidance, causing 2 review cycles before the return-cycle AR added it.
+
+### Deduction Breakdown
+- 9/9 AC lines verified with specific evidence: no deduction
+- Lint in task scope: clean → no deduction
+- AC quality score ≤ 3: -0.03
+- Reviewer evidence: present, detailed, PASS at 0.94 → no deduction
+- Full-suite failures in task scope: 0 → no deduction
+- Commits verified: e66cbe42 (builder), c4c10dd0 (test-writer), c095374d (initial test-writer) → no deduction
+
+### Confidence: .97
+### Action: archive
