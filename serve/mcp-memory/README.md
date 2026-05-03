@@ -19,7 +19,7 @@ Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json
 | Tool | Description |
 |------|-------------|
 | `store_learning` | Create a new `pending` memory entry |
-| `query_memory` | Retrieve entries by state (`curated` and `approved` by default), approved-first then confidence-desc |
+| `query_memory` | Retrieve entries by state (`curated` and `approved` by default), approved-first then confidence-desc; supports optional `categories`, `scope_agents`, and `min_confidence` filters (AND semantics) |
 | `update_entry` | Curator-only updates; supports `pending -> curated` and blocks modifications of `approved` entries |
 | `delete_entry` | Curator-only soft delete to `deleted` state |
 | `approve_entry` | User-only promotion from `curated -> approved` |
