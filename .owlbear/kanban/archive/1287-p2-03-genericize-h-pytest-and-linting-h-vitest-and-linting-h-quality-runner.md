@@ -1,10 +1,10 @@
 ---
 id: 1287
 title: 'P2-03: Genericize h-pytest-and-linting, h-vitest-and-linting, h-quality-runner'
-status: done
+status: archived
 priority: needed
 created: 2026-05-02T16:01:17.076781+00:00
-updated: 2026-05-03T19:38:06.434799+00:00
+updated: 2026-05-03T19:44:57.497166+00:00
 tags:
 - phase-2
 - scope:docs
@@ -15,7 +15,7 @@ depends_on:
 - 1285
 blocked: false
 block_reason:
-claimed_at: 2026-05-03T19:38:06.434799+00:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -295,3 +295,38 @@ Architecture review complete. All criteria pass. AC verifiable against Brief §N
 
 ### Scratch Files Cleaned
 - None found (`.owlbear/scratch/1287-*` — no matches)
+[[2026-05-03]]
+## Audit
+
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| h-pytest-and-linting: ~7 serve/ paths replaced | SKILL.md:23-27 prose-first + framed example + adjustment notes; no serve/ in commands | PASS |
+| h-vitest-and-linting: ~6 paths replaced with "your frontend package root" | SKILL.md:9-10 + cd frontend/ with adjustment notes at :17,:51,:57,:73,:79 | PASS |
+| h-quality-runner: genericized + routing prose | SKILL.md:20-21, 29-30 concrete examples + routing to copilot-instructions.md at :44 | PASS |
+| Brief notation convention (prose-first, framed examples, no template syntax) | Spot-checked all 3 files: > Example (OwlBear-dev): framing, # adjust paths notes, no {{}} or path/to/ placeholders in commands | PASS |
+| Tests from #1285 pass | tests/test_path_neutrality_1285.py: 9 passed, 0 failed | PASS |
+
+### Test Results
+- pytest full suite: 3841 passed, 128 failed (all in serve/kanban/ and serve/mcp-knowledge/ pre-existing), 4 skipped. 0 failures in task scope.
+- vitest full suite: 937 passed, 13 failed (Shell_1227/Shell_966 traffic-light tests pre-existing). 0 in task scope.
+- ruff: 1 pre-existing T201 in copilot_auth.py. Not in task scope.
+- Task regression gate: tests/test_path_neutrality_1285.py 9/9 green.
+
+### Commit Integrity
+- d47024b9 docs: genericize skill path notation (#1287, builder)
+- 00a2296c docs: finalize path-neutral command examples (#1287, builder)
+- Both commits touch only the 3 target skill files. No test files modified.
+
+### Architect Quality: 4/5
+AC lines are specific and verifiable. Minor approximation in AC1/AC2 (uses ~7 and ~6 counts rather than exact), but transformation is clearly defined and the notation convention reference anchors the format requirement.
+
+### Deduction Breakdown
+- AC lines without evidence: 0 (all PASS)
+- Lint in scope: 0
+- AC quality <=3: no (score 4)
+- Missing reviewer evidence: no (detailed, 2-cycle review with line-level inspection)
+- Full-suite failures in scope: 0
+
+### Confidence: 0.98
+### Action: archive
