@@ -214,3 +214,176 @@ class TestFromAC_RootTestPatchTargets:
         assert "owlbear_kanban.storage.compact_activity_log" not in source, (
             "test_engine_cockpit_view.py still patches owlbear_kanban.storage.compact_activity_log"
         )
+
+
+# ---------------------------------------------------------------------------
+# Helper for positive import assertions
+# ---------------------------------------------------------------------------
+
+
+def _imports_from_source(source: str, module: str, symbol: str) -> bool:
+    """Return True if *symbol* is imported from *module* in *source*."""
+    block_pattern = re.compile(
+        rf"from\s+{re.escape(module)}\s+import\s+\(([^)]*)\)",
+        re.DOTALL,
+    )
+    escaped = re.escape(symbol)
+    if any(
+        re.search(rf"\b{escaped}\b", m.group(1))
+        for m in block_pattern.finditer(source)
+    ):
+        return True
+    single_pattern = re.compile(
+        rf"from\s+{re.escape(module)}\s+import\s+([^(\n]+)"
+    )
+    return any(
+        re.search(rf"\b{escaped}\b", m.group(1))
+        for m in single_pattern.finditer(source)
+    )
+
+
+# ---------------------------------------------------------------------------
+# AC1 (positive): storage.py source contains no import lines for removed symbols
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_StorageSourceImportLineRemoval:
+    """AC1 positive: storage.py source must have NO import lines for body_parser or
+    activity_store (the pure re-export modules were entirely removed)."""
+
+    def test_storage_source_no_body_parser_import_line(self) -> None:
+        """storage.py must have no 'from owlbear_kanban.body_parser' import line."""
+        source = (_SERVE_KANBAN_SRC / "storage.py").read_text(encoding="utf-8")
+        assert "from owlbear_kanban.body_parser" not in source, (
+            "storage.py still contains a 'from owlbear_kanban.body_parser' import line"
+        )
+
+    def test_storage_source_no_activity_store_import_line(self) -> None:
+        """storage.py must have no 'from owlbear_kanban.activity_store' import line."""
+        source = (_SERVE_KANBAN_SRC / "storage.py").read_text(encoding="utf-8")
+        assert "from owlbear_kanban.activity_store" not in source, (
+            "storage.py still contains a 'from owlbear_kanban.activity_store' import line"
+        )
+
+    def test_storage_corruption_import_still_present_for_internal_use(self) -> None:
+        """storage.py must still import from owlbear_kanban.corruption for internal use
+        (CorruptionError etc. are used by storage's own functions — not re-exported)."""
+        source = (_SERVE_KANBAN_SRC / "storage.py").read_text(encoding="utf-8")
+        assert "from owlbear_kanban.corruption import" in source, (
+            "storage.py lost its internal owlbear_kanban.corruption import — "
+            "migration was too aggressive"
+        )
+
+
+# ---------------------------------------------------------------------------
+# AC2 (positive): engine.py imports migrated symbols from source modules
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_EngineNewImportTargets:
+    """AC2 positive: engine.py must import detect_corruption, list_activity_events,
+    and compact_activity_log from their source modules, not from storage."""
+
+    def test_engine_imports_detect_corruption_from_corruption(self) -> None:
+        """engine.py must import detect_corruption from owlbear_kanban.corruption."""
+        source = (_SERVE_KANBAN_SRC / "engine.py").read_text(encoding="utf-8")
+        assert _imports_from_source(
+            source, "owlbear_kanban.corruption", "detect_corruption"
+        ), "engine.py does not import detect_corruption from owlbear_kanban.corruption"
+
+    def test_engine_imports_list_activity_events_from_activity_store(self) -> None:
+        """engine.py must import list_activity_events from owlbear_kanban.activity_store."""
+        source = (_SERVE_KANBAN_SRC / "engine.py").read_text(encoding="utf-8")
+        assert _imports_from_source(
+            source, "owlbear_kanban.activity_store", "list_activity_events"
+        ), "engine.py does not import list_activity_events from owlbear_kanban.activity_store"
+
+    def test_engine_imports_compact_activity_log_from_activity_store(self) -> None:
+        """engine.py must import compact_activity_log from owlbear_kanban.activity_store."""
+        source = (_SERVE_KANBAN_SRC / "engine.py").read_text(encoding="utf-8")
+        assert _imports_from_source(
+            source, "owlbear_kanban.activity_store", "compact_activity_log"
+        ), "engine.py does not import compact_activity_log from owlbear_kanban.activity_store"
+
+
+# ---------------------------------------------------------------------------
+# AC3 (positive): package-local tests import from source modules
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_PackageTestSourceModuleImports:
+    """AC3 positive: serve/kanban/tests/ files must import the migrated symbols
+    from source modules (owlbear_kanban.corruption / owlbear_kanban.activity_store)."""
+
+    def test_test_corruption_imports_scan_and_fix_from_corruption(self) -> None:
+        """test_corruption.py must import scan_and_fix from owlbear_kanban.corruption."""
+        source = (_SERVE_KANBAN_TESTS / "test_corruption.py").read_text(encoding="utf-8")
+        assert _imports_from_source(
+            source, "owlbear_kanban.corruption", "scan_and_fix"
+        ), "test_corruption.py does not import scan_and_fix from owlbear_kanban.corruption"
+
+    def test_test_engine_activity_imports_list_activity_events_from_activity_store(
+        self,
+    ) -> None:
+        """test_engine_activity.py must import list_activity_events from activity_store."""
+        source = (_SERVE_KANBAN_TESTS / "test_engine_activity.py").read_text(
+            encoding="utf-8"
+        )
+        assert _imports_from_source(
+            source, "owlbear_kanban.activity_store", "list_activity_events"
+        ), (
+            "test_engine_activity.py does not import list_activity_events "
+            "from owlbear_kanban.activity_store"
+        )
+
+    def test_test_engine_archived_edit_imports_corruption_error_from_corruption(
+        self,
+    ) -> None:
+        """test_engine_archived_edit_1120.py must import CorruptionError from corruption."""
+        source = (_SERVE_KANBAN_TESTS / "test_engine_archived_edit_1120.py").read_text(
+            encoding="utf-8"
+        )
+        assert _imports_from_source(
+            source, "owlbear_kanban.corruption", "CorruptionError"
+        ), (
+            "test_engine_archived_edit_1120.py does not import CorruptionError "
+            "from owlbear_kanban.corruption"
+        )
+
+    def test_test_storage_1050_imports_corruption_error_from_corruption(self) -> None:
+        """test_storage_1050.py must import CorruptionError from owlbear_kanban.corruption."""
+        source = (_SERVE_KANBAN_TESTS / "test_storage_1050.py").read_text(encoding="utf-8")
+        assert _imports_from_source(
+            source, "owlbear_kanban.corruption", "CorruptionError"
+        ), "test_storage_1050.py does not import CorruptionError from owlbear_kanban.corruption"
+
+    def test_test_storage_imports_detect_corruption_from_corruption(self) -> None:
+        """test_storage.py must import detect_corruption from owlbear_kanban.corruption."""
+        source = (_SERVE_KANBAN_TESTS / "test_storage.py").read_text(encoding="utf-8")
+        assert _imports_from_source(
+            source, "owlbear_kanban.corruption", "detect_corruption"
+        ), "test_storage.py does not import detect_corruption from owlbear_kanban.corruption"
+
+
+# ---------------------------------------------------------------------------
+# AC4 (positive): root-level tests use exact replacement patch target strings
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_RootTestNewPatchTargets:
+    """AC4 positive: root-level tests must patch the migrated symbols at their
+    new engine-module path (owlbear_kanban.engine.*), not via storage."""
+
+    def test_ble001_patches_engine_detect_corruption(self) -> None:
+        """test_engine_ble001_1202.py must patch owlbear_kanban.engine.detect_corruption."""
+        source = (_ROOT_TESTS / "test_engine_ble001_1202.py").read_text(encoding="utf-8")
+        assert "owlbear_kanban.engine.detect_corruption" in source, (
+            "test_engine_ble001_1202.py does not patch owlbear_kanban.engine.detect_corruption"
+        )
+
+    def test_cockpit_view_patches_engine_compact_activity_log(self) -> None:
+        """test_engine_cockpit_view.py must patch owlbear_kanban.engine.compact_activity_log."""
+        source = (_ROOT_TESTS / "test_engine_cockpit_view.py").read_text(encoding="utf-8")
+        assert "owlbear_kanban.engine.compact_activity_log" in source, (
+            "test_engine_cockpit_view.py does not patch owlbear_kanban.engine.compact_activity_log"
+        )
