@@ -55,6 +55,56 @@
 - ## `4. Cockpit Backend`
 - ## `5. Tools Package`
 
+## .owlbear/prompts/agent-audit.prompt.md
+- # `Agent Ecosystem Audit`
+- ## `1. Preamble`
+- ## `2. Audit Surface and Standards`
+- ### `Two Surfaces`
+- ### `Standards Loading Order`
+- ## `3. Seven Audit Dimensions`
+- ### `D1 — Structural`
+- ### `D2 — Duplication`
+- ### `D3 — Content Placement`
+- ### `D4 — Quality`
+- ### `D5 — Pipeline Integrity`
+- ### `D6 — Signal-to-Noise Ratio (SNR)`
+- ### `D7 — Memory Governance and Content`
+- ## `4. Process`
+- ### `Phase 1 — Scan`
+- ### `Phase 2 — Finding Loop`
+- ## `5. Verification`
+
+## .owlbear/prompts/arch-audit.prompt.md
+- # `Architecture Module Quality Audit`
+- ## `Step 1 - Load the standard first`
+- ## `Step 2 - Define the audit unit`
+- ## `Step 3 - Evaluate with full vocabulary`
+- ## `Step 4 - Output format`
+- ## `Step 5 - Optional follow-up tasks`
+
+## .owlbear/prompts/doc-audit.prompt.md
+- # `Documentation Audit`
+- ## `1. Preamble`
+- ## `2. Setup — Doc-Index Regeneration`
+- ## `3. Audit Surface and Standards`
+- ### `Documentation Surface`
+- ### `Out-of-Scope Files`
+- ### `Standards`
+- ## `4. Eight Audit Dimensions`
+- ### `D1 — Structural (DIM-1)`
+- ### `D2 — Duplication (DIM-2)`
+- ### `D3 — Placement (DIM-3)`
+- ### `D4 — Accuracy (DIM-4)`
+- ### `D5 — Coverage Integrity (DIM-5)`
+- ### `D6 — Currency / Staleness (DIM-6)`
+- ### `D7 — Cross-Reference Integrity (DIM-7)`
+- ### `D8 — Audience Fitness (DIM-8)`
+- ## `5. Process`
+- ### `Phase 1 — Scan`
+- ### `Phase 2 — Finding Loop`
+- ### `Task Emission Contract`
+- ## `6. Verification`
+
 ## .pytest_cache/README.md
 - # `pytest cache directory #`
 
@@ -62,13 +112,13 @@
 - [the docs](https://docs.pytest.org/en/stable/how-to/cache.html)
 
 ## seed/.github/copilot-instructions.md
-- # `OwlBear — Copilot Workspace Instructions`
+- # `Project Copilot Instructions`
 - ## `1. Project Identity`
-- ## `2. Repository Branches`
-- ## `Directory Structure`
-- ## `3. Cockpit Frontend`
-- ## `4. Cockpit Backend`
-- ## `5. Tools Package`
+- ## `2. Directory Structure`
+- ## `3. Tech Stack`
+- ## `4. Working Rules`
+- ## `5. Useful Commands`
+- ## `6. Resources`
 
 ## serve/browser/README.md
 - # `owlbear-browser — Browser Content Fetcher`
@@ -438,7 +488,6 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ## `2. System Awareness`
 - ### `Tech Stack`
 - ### `Pipeline`
-- ### `Directory Structure`
 - ## `3. Memory Governance`
 - ## `4. Operational Fundamentals`
 
@@ -451,33 +500,6 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 
 ## share/instructions/research-docs.instructions.md
 
-## share/prompts/agent-audit.prompt.md
-- # `Agent Ecosystem Audit`
-- ## `1. Preamble`
-- ## `2. Audit Surface and Standards`
-- ### `Two Surfaces`
-- ### `Standards Loading Order`
-- ## `3. Seven Audit Dimensions`
-- ### `D1 — Structural`
-- ### `D2 — Duplication`
-- ### `D3 — Content Placement`
-- ### `D4 — Quality`
-- ### `D5 — Pipeline Integrity`
-- ### `D6 — Signal-to-Noise Ratio (SNR)`
-- ### `D7 — Memory Governance and Content`
-- ## `4. Process`
-- ### `Phase 1 — Scan`
-- ### `Phase 2 — Finding Loop`
-- ## `5. Verification`
-
-## share/prompts/arch-audit.prompt.md
-- # `Architecture Module Quality Audit`
-- ## `Step 1 - Load the standard first`
-- ## `Step 2 - Define the audit unit`
-- ## `Step 3 - Evaluate with full vocabulary`
-- ## `Step 4 - Output format`
-- ## `Step 5 - Optional follow-up tasks`
-
 ## share/prompts/design-context.prompt.md
 - # `Design-Context Onboarding`
 - ## `Step 1 — Inspect current context`
@@ -485,29 +507,6 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ### `The 7 sections`
 - ## `Step 3 — Write docs/design-context.md`
 - ## `Rules`
-
-## share/prompts/doc-audit.prompt.md
-- # `Documentation Audit`
-- ## `1. Preamble`
-- ## `2. Setup — Doc-Index Regeneration`
-- ## `3. Audit Surface and Standards`
-- ### `Documentation Surface`
-- ### `Out-of-Scope Files`
-- ### `Standards`
-- ## `4. Eight Audit Dimensions`
-- ### `D1 — Structural (DIM-1)`
-- ### `D2 — Duplication (DIM-2)`
-- ### `D3 — Placement (DIM-3)`
-- ### `D4 — Accuracy (DIM-4)`
-- ### `D5 — Coverage Integrity (DIM-5)`
-- ### `D6 — Currency / Staleness (DIM-6)`
-- ### `D7 — Cross-Reference Integrity (DIM-7)`
-- ### `D8 — Audience Fitness (DIM-8)`
-- ## `5. Process`
-- ### `Phase 1 — Scan`
-- ### `Phase 2 — Finding Loop`
-- ### `Task Emission Contract`
-- ## `6. Verification`
 
 ## share/prompts/frontend-audit.prompt.md
 - # `Frontend Audit`
@@ -870,7 +869,7 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 
 ## share/skills/r-architecture-standards/SKILL.md
 - # `Architecture Standards`
-- ## `v2 Architecture Overview`
+- ## `Architecture Overview`
 - ## `Module Quality Vocabulary`
 - ### `Deletion Test`
 - ### `Dependency Classification`
@@ -882,9 +881,9 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ### `Lifespan Pattern`
 - ### `Tool Exclusion`
 - ### `Module Exports`
-- ## `Package Dependency Rules`
+- ## `Dependency Rules`
 - ## `Configuration`
-- ## `Domain Taxonomy`
+- ## `Domain Scope Map`
 
 ## share/skills/r-doc-standards/SKILL.md
 - # `Documentation Standards`
@@ -892,7 +891,7 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ## `1. Doc Types and Required Sections`
 - ### `1.1 Root README (`README.md`)`
 - ### `1.2 `SECURITY.md``
-- ### `1.3 Package README (`serve/*/README.md`)`
+- ### `1.3 Package README (`workspace/*/README.md`)`
 - ### `1.4 Share-Category README (`share/*/README.md`)`
 - ### `1.5 Setup Guide (`setup/*.md`)`
 - ## `2. Placement Rules`
@@ -964,8 +963,7 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - # `Code Review`
 - ## `Step 0 — Setup`
 - ## `Step 1 — Check Source Control Changes`
-- ## `Step 2 — Run Tests Independently`
-- ## `Step 2.5 — Parallel Fan-Out Dispatch`
+- ## `Step 2 — Evidence Gathering`
 - ### `Code-Reader Consumer Contract`
 - ## `Step 3 — Run Lint`
 - ## `Step 4 — Run Coverage`
