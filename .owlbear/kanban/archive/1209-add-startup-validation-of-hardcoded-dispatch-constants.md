@@ -1,10 +1,10 @@
 ---
 id: 1209
 title: Add startup validation of hardcoded dispatch constants
-status: in-progress
+status: archived
 priority: needed
 created: 2026-04-30 15:29:06.250180+00:00
-updated: 2026-05-02T22:08:04.195701+00:00
+updated: 2026-05-03T00:07:45.676134+00:00
 tags:
 - audit-kanban
 - fragility
@@ -339,3 +339,151 @@ APPROVE — implementation is correct; test-writer must strengthen AC3 refresh-p
 - Builder skip: test-only retry. All 4 new AC3 tests pass against current implementation — refresh_config already validates before mutating state (builder fix from cycle 1 is correct).
 - Discriminating assertions: each test asserts an exact error code (not a union) and separate tests assert unranked values appear in user_message, matching the init-path proof quality.
 - Previous lax test (`code in {...}` union assertion) removed per architect's explicit AC3 refinement instruction.
+[[2026-05-02]]
+## Builder Notes
+- Implementation: no additional source edits required in this cycle; existing implementation already satisfies refined AC.
+- Verification run (quality-runner, scoped): 11 passed, 0 failed, 0 skipped.
+- Test scope: `tests/test_engine_dispatch_validation_1209.py` plus targeted adjacent regression `serve/kanban/tests/test_engine_coverage_1068.py::TestFromAC_EngineConfigOps::test_refresh_config_reloads_updated_config`.
+- Lint: ruff clean for `serve/kanban/src/owlbear_kanban/engine.py`, `serve/kanban/src/owlbear_kanban/errors.py`, `serve/kanban/src/owlbear_kanban/dispatch.py`, and `tests/test_engine_dispatch_validation_1209.py`.
+- Coverage (informational, scoped): overall 19%; `owlbear_kanban.engine` 12%, `owlbear_kanban.errors` 86%, `owlbear_kanban.dispatch` 26%.
+- Evidence summary: AC1/AC2/AC3 tests all pass with discriminating refresh-path assertions now in place; AC4 remains satisfied by registered error codes in `errors`.
+
+- Reflection:
+  - Problem faced: this cycle was a proof-quality retry rather than a code-gap cycle, so the main risk was unnecessary edits.
+  - Workaround applied: strict scoped quality-runner verification across task tests and one adjacent regression path.
+  - Pattern discovered: once AC3 proof is strengthened, builder can safely pass through without touching stable code.
+  - Quality gap: module coverage remains low for this narrow scoped run, but no AC regression signal surfaced.
+
+[[2026-05-02]]
+## Review Evidence
+### Test Results
+- quality-runner scoped: 11 passed, 0 failed, 0 errors
+- tests/test_engine_dispatch_validation_1209.py: 10 passed
+- targeted adjacent regression: serve/kanban/tests/test_engine_coverage_1068.py::TestFromAC_EngineConfigOps::test_refresh_config_reloads_updated_config: 1 passed
+
+### Lint
+- ruff clean for serve/kanban/src/owlbear_kanban/engine.py, serve/kanban/src/owlbear_kanban/errors.py, serve/kanban/src/owlbear_kanban/dispatch.py, and tests/test_engine_dispatch_validation_1209.py
+- VS Code diagnostics: no errors in reviewed source/test files
+
+### Coverage
+- overall scoped: 19%
+- owlbear_kanban.engine: 12%
+- owlbear_kanban.errors: 86%
+- owlbear_kanban.dispatch: 26%
+- Module-level coverage is informational for this narrow diff; changed paths are directly exercised by task tests and one adjacent regression test.
+
+### Pass 1 - CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---------|-------------|---------------------------|---------|
+| AC1 `KanbanEngine.__init__` validates priorities and raises `ERR_DISPATCH_PRIORITY_MISMATCH` listing unranked values | `test_unknown_priority_raises_with_correct_code`; `test_priority_error_message_lists_unranked_values`; `test_multiple_unknown_priorities_all_in_message` | Yes. Constructor calls the shared validator and the tests assert the exact code plus offending value names. | COVERED |
+| AC2 `KanbanEngine.__init__` validates statuses and raises `ERR_DISPATCH_STATUS_MISMATCH` listing unranked values | `test_unknown_status_raises_with_correct_code`; `test_status_error_message_lists_unranked_values`; `test_multiple_unknown_statuses_all_in_message` | Yes. Constructor calls the shared validator and the tests assert the exact code plus offending value names. | COVERED |
+| AC3 `refresh_config` runs the same dispatch-constant validation after reloading config | `test_refresh_config_priority_mismatch_raises_exact_code`; `test_refresh_config_priority_mismatch_lists_unranked_in_message`; `test_refresh_config_status_mismatch_raises_exact_code`; `test_refresh_config_status_mismatch_lists_unranked_in_message` | Yes. Refresh uses the same validator before mutating engine state, and the refresh tests separately prove exact code and message-content behavior for both priority and status mismatch branches. | COVERED |
+| AC4 error codes registered in `KANBAN_ERROR_CODES` | td:0 direct source proof | Yes. `ERR_DISPATCH_PRIORITY_MISMATCH` and `ERR_DISPATCH_STATUS_MISMATCH` are present in `KANBAN_ERROR_CODES`; the mismatch tests would also fail if those codes were unregistered because `KanbanError.__init__` rejects unknown codes. | PASS |
+
+#### Security Review
+- No issues found. The change only performs membership checks against static rank maps and raises `ConfigError` with registered codes.
+
+#### Test Integrity
+- No weakened or removed `TestFromAC_*` assertions are evident in the current task test file. Current assertions are exact-code and explicit offending-value checks for both constructor and refresh paths.
+- Small confidence deduction: full diff-based immutability was not reconstructed in this read-only review context.
+
+#### Test Quality
+- STRONG. Assertions are discriminating, negative-path focused, and split by exact code vs message content for both priority and status branches. Fresh tmp_path board setup keeps tests independent.
+
+#### Data Safety
+- PASS. `refresh_config` validates the freshly loaded config before mutating `_config`, paths, or caches, so the previously identified partial-update failure mode is closed.
+
+#### Test Gaps
+- No AC-blocking gaps found.
+- Residual risk outside current AC: `create_task()` reloads config from disk and stores it on the engine without dispatch-rank validation. This path was not changed by this task and does not block PASS for the refined AC.
+
+#### Necessity Check
+- No issues found.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| AC1 init validates priorities | engine.py lines 176-186 and 417-418; tests/test_engine_dispatch_validation_1209.py lines 116-143 | three constructor priority tests | PASS |
+| AC2 init validates statuses | engine.py lines 191-197 and 417-418; tests/test_engine_dispatch_validation_1209.py lines 147-174 | three constructor status tests | PASS |
+| AC3 refresh_config reruns validation after reload | engine.py lines 532-543; tests/test_engine_dispatch_validation_1209.py lines 207-270; adjacent regression test_engine_coverage_1068.py lines 537-554 | four refresh-path tests + one adjacent regression | PASS |
+| AC4 error codes registered | errors.py lines 7-46 and 70-75 | td:0 direct source proof | PASS |
+
+### Deductions
+- 0.03: full diff-based TestFromAC immutability could not be reconstructed in read-only review context
+- 0.03: residual out-of-scope config reload path remains in `create_task()`
+
+### Verdict
+- PASS. Confidence: 0.94.
+- Action: advance to docs.
+
+### Reflection
+- Pattern discovered: the architect's AC3 refinement converted the previous false-green refresh proof into discriminating exact-code and message-content checks.
+- Quality gap: module-level coverage remains low on scoped modules, but the changed validation paths are directly proven and the targeted adjacent refresh regression stays green.
+- Residual risk: `create_task()` still reloads config without dispatch-rank validation; this is outside the current AC and should be considered separately if dispatch.py remains in service before #1214 lands.
+[[2026-05-02]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | serve/kanban/README.md lists KanbanEngine methods and config but does not reference dispatch rank maps or ERR_DISPATCH_* codes; root READMEs are implementation-agnostic. No prose update needed. |
+| 2 | Module docstrings | Yes | Verified | `_validate_dispatch_rank_coverage` has accurate docstring; `refresh_config` docstring describes two-phase reload correctly; `errors.py` module docstring unchanged and accurate; `dispatch.py` module docstring updated by builder to `released=0 (highest) → research=7 (lowest)` — accurate. All public API unchanged. |
+| 3 | External attribution | No | N/A | No external patterns referenced in task body or builder notes. |
+| 4 | Research doc | No | N/A | No research doc produced for this task. |
+| 5 | Diagram maintenance (describes match) | Yes | Updated | `share/diagrams/kanban.excalidraw` (describes `serve/kanban/src/**`) footer updated from `2026-05-02 (f74ea565)` to `2026-05-03 (5a7f802e)`. `share/diagrams/mcp-topology.excalidraw` (also describes `serve/kanban/src/**`) footer updated from `2026-05-03 (800c51db)` to `2026-05-03 (5a7f802e)`. |
+| 6 | Explicit diagram creation | No | N/A | No explicit diagram creation requested. |
+| 7 | Deletion detection | No | N/A | No files deleted in this task. |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| serve/kanban/src/owlbear_kanban/engine.py | IN (docstrings) | Verified — accurate |
+| serve/kanban/src/owlbear_kanban/errors.py | IN (docstrings) | Verified — accurate |
+| serve/kanban/src/owlbear_kanban/dispatch.py | IN (docstrings) | Verified — accurate |
+| tests/test_engine_dispatch_validation_1209.py | OUT | Test file — no doc action |
+| share/diagrams/kanban.excalidraw | IN | Footer updated |
+| share/diagrams/mcp-topology.excalidraw | IN | Footer updated |
+
+### Files Updated
+- share/diagrams/kanban.excalidraw (footer: `2026-05-03 (5a7f802e)`)
+- share/diagrams/mcp-topology.excalidraw (footer: `2026-05-03 (5a7f802e)`)
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no 1209-* scratch files found)
+
+Commit: `3bffa98a` — `docs: update diagram footers for dispatch validation (#1209, doc-writer)`
+
+[[2026-05-03]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1 init validates priorities, raises ERR_DISPATCH_PRIORITY_MISMATCH listing unranked | engine.py:176-187 validator + :418 call site; test_engine_dispatch_validation_1209.py:116-143 (3 tests: exact code, message content, multiple values) | PASS |
+| AC2 init validates statuses, raises ERR_DISPATCH_STATUS_MISMATCH listing unranked | engine.py:191-198 validator + :418 call site; test_engine_dispatch_validation_1209.py:147-174 (3 tests: exact code, message content, multiple values) | PASS |
+| AC3 refresh_config runs same validation after reload | engine.py:536-537 loads then validates before mutation at :539; test_engine_dispatch_validation_1209.py:207-270 (4 discriminating tests: priority code, priority message, status code, status message); adjacent regression 1/1 green | PASS |
+| AC4 error codes registered in KANBAN_ERROR_CODES | errors.py:45-46 both codes present in frozenset; KanbanError.__init__ rejects unknown codes as safety net | PASS |
+
+### Test Results
+- pytest (task-scoped): 10 passed, 0 failed
+- pytest (adjacent regression): 1 passed, 0 failed
+- pytest (full suite): 3718 passed, 128 failed, 4 skipped — 0 failures task-relevant (accessor migration debt, status advancement, frontend/storage, permissions)
+- ruff: 1 violation in copilot_auth.py:106 (T201) — not task-related; task files clean
+
+### Architect Quality: 4/5
+AC was precise with test-depth annotations, scope notes, failure mode map, and challenger results. Minor gap: AC3 initially td:1, required upgrade to td:2 after reviewer found proof weakness. Architect responded well in cycle 2, demonstrating good pipeline-signal processing.
+
+### Deduction Breakdown
+- AC lines without evidence: 0 (all 4 have specific evidence) → 0.00
+- Lint violations in task scope: 0 → 0.00
+- AC quality ≤ 3: no (4/5) → 0.00
+- Missing reviewer evidence: no (detailed, PASS) → 0.00
+- Full-suite failures in task scope: 0 → 0.00
+- Commit integrity: 4 commits properly tagged (#1209, agent roles, correct types) → 0.00
+- Docs gate: diagram footers updated, committed → 0.00
+- Pipeline cycles: 3 cycles total; implementation correct by cycle 2, test proof strengthened in cycle 3 — informational, no deduction
+
+### Confidence: 0.98
+### Action: archive
