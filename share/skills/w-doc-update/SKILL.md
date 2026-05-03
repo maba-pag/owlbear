@@ -47,7 +47,7 @@ Classify each file as **IN-scope** or **OUT-scope**:
 **IN scope (edit + deletion-proposal):**
 
 - Root: `README.md`, `README-consumer.md`, `SECURITY.md`
-- Package READMEs: `serve/*/README.md` (9 files)
+- Package READMEs: `workspace/*/README.md` (9 files)
 - Setup guides: `setup/setup-guide.md`, `setup/sharing-guide.md`
 - Share ecosystem doc: `share/README.md`
 - Diagrams: `share/diagrams/*.excalidraw`

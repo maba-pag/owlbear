@@ -78,7 +78,7 @@ Remove all archived task-tests for this module.
 After all modules are processed:
 
 ```shell
-uv run pytest tests/ serve/ -n auto -q --tb=short
+uv run pytest tests/ workspace/ -n auto -q --tb=short
 ```
 
 All tests must pass. If the full suite fails, identify the breaking module and revert it:

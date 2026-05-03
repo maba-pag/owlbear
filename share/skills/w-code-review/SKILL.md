@@ -49,7 +49,7 @@ prompt: |
   task_id: {id}
   test_paths: ["tests/test_{module}_{task_id}.py"]
   coverage_modules: ["{module}"]
-  lint_paths: ["serve/{package}/src/", "tests/test_{module}_{task_id}.py"]
+  lint_paths: ["workspace/{package}/src/", "tests/test_{module}_{task_id}.py"]
 ```
 
 ```
@@ -101,7 +101,7 @@ prompt: |
   mode: scoped
   task_id: {id}
   test_paths: []
-  lint_paths: ["serve/{package}/src/", "tests/test_{module}_{task_id}.py"]
+  lint_paths: ["workspace/{package}/src/", "tests/test_{module}_{task_id}.py"]
 ```
 
 Record: `clean: true/false` and any `violations` from the `## Lint` section.

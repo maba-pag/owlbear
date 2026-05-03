@@ -326,7 +326,7 @@ Current stubs:
 | `frontend.instructions.md` | `"**/*.tsx,**/*.jsx,**/*.vue,**/*.svelte,**/*.css,**/*.scss"` | `h-frontend-conventions` |
 | `research-docs.instructions.md` | `".owlbear/research/*.md"` | `w-research` |
 | `agent-ecosystem.instructions.md` | `"share/agents/**,share/skills/**,share/instructions/**,share/prompts/**"` | `share/README.md` + `h-agent-structure` |
-| `doc-standards.instructions.md` | `"README.md,README-consumer.md,SECURITY.md,serve/*/README.md,share/README.md,setup/*.md"` | `r-doc-standards` |
+| `doc-standards.instructions.md` | `"README.md,README-consumer.md,SECURITY.md,workspace/*/README.md,share/README.md,setup/*.md"` | `r-doc-standards` |
 
 ### Authority Files — Embedded Rules
 

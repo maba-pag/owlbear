@@ -90,7 +90,7 @@ prompt: |
   mode: scoped
   task_id: {id}
   test_paths: ["tests/test_{module}_{task_id}.py"]
-  lint_paths: ["serve/{package}/src/", "tests/test_{module}_{task_id}.py"]
+  lint_paths: ["workspace/{package}/src/", "tests/test_{module}_{task_id}.py"]
 ```
 
 All tests must pass (`failed: []`), zero failures.
@@ -132,7 +132,7 @@ prompt: |
   task_id: {id}
   test_paths: ["tests/test_{module}_{task_id}.py"]
   coverage_modules: ["{module}"]
-  lint_paths: ["serve/{package}/src/", "tests/test_{module}_{task_id}.py"]
+  lint_paths: ["workspace/{package}/src/", "tests/test_{module}_{task_id}.py"]
 ```
 
 All must pass (`failed: []`, `clean: true`). Target 90% coverage on touched modules.
@@ -177,7 +177,7 @@ agentName: fix-attempt
 prompt: |
   task_id: {id}
   test_file: tests/test_{module}_{task_id}.py
-  source_files: serve/{package}/src/{namespace}/{module}.py
+  source_files: workspace/{package}/src/{namespace}/{module}.py
   retry_hint: {extract specific errors from error output; identify which failing tests produced them; provide Reflexion-style verbal diagnosis — what went wrong, which failing test(s) are blocked, and the suggested fix direction. Not generic "tests failed".}
   error_summary: {condensed pytest failure output, max 500 tokens}
 ```
@@ -196,7 +196,7 @@ Include builder notes in your `end_work` note.
 **Commit your deliverables** (see `r-pipeline-protocol` → Who Commits What):
 
 ```shell
-git add serve/{package}/src/{namespace}/{module}.py && git commit -m "feat: implement {feature} (#{id}, builder)"
+git add workspace/{package}/src/{namespace}/{module}.py && git commit -m "feat: implement {feature} (#{id}, builder)"
 ```
 
 Stage only files you created or modified. Verify with `git diff --cached --name-only` if uncertain.

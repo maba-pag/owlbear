@@ -8,6 +8,8 @@ user-invocable: false
 
 Rules for OwlBear documentation. Covers five doc types, placement rules, cross-reference integrity, audience fitness, and the eight audit dimensions used by `doc-audit`.
 
+Companion wiring: `share/instructions/doc-standards.instructions.md` applies this standard and routes audits through `.owlbear/prompts/doc-audit.prompt.md`.
+
 ## Citation Format
 
 Rules use **`{SECTION}-{N}`** IDs (e.g., `STR-1`, `PLC-1`, `AUD-1`). The prefix maps to the section below:
@@ -40,7 +42,7 @@ Five doc types are in scope. Each has a required section set.
 
 `STR-5` Must NOT contain installation guides, feature descriptions, or anything unrelated to security posture.
 
-### 1.3 Package README (`serve/*/README.md`)
+### 1.3 Package README (`workspace/*/README.md`)
 
 `STR-6` Must contain: Package purpose (one paragraph), entry points / launch commands, configuration options (env vars, flags), and a link to the parent README.
 
@@ -75,11 +77,11 @@ Five doc types are in scope. Each has a required section set.
 | Root README | `/README.md` |
 | Consumer README | `/README-consumer.md` (if needed) |
 | SECURITY.md | `/SECURITY.md` |
-| Package README | `serve/{package}/README.md` |
+| Package README | `workspace/{package}/README.md` |
 | Share-category README | `share/{category}/README.md` |
 | Setup guide | `setup/{name}.md` |
 
-`PLC-4` Docs that do not fit an existing doc type go in `.owlbear/research/` (findings) or `.owlbear/decisions/` (decision records). They are NOT placed in `share/`, `serve/`, or `setup/` unless they match a canonical doc type.
+`PLC-4` Docs that do not fit an existing doc type go in `.owlbear/research/` (findings) or `.owlbear/decisions/` (decision records). They are NOT placed in `share/`, `workspace/`, or `setup/` unless they match a canonical doc type.
 
 `PLC-5` A doc file in the wrong location is a placement violation regardless of its content quality.
 

@@ -8,18 +8,18 @@ user-invocable: false
 
 Conventions that are **not obvious best practices**. If it's standard Python or general software engineering practice, it does not belong here unless OwlBear deviates from or adds specificity to the norm.
 
-## v2 Architecture Overview
+## Architecture Overview
 
-OwlBear v2 has no custom Python agent runtime. Agents are `.agent.md` files executed by VS Code and GitHub Copilot. Tools are provided by MCP servers (`serve/mcp-*`) or VS Code built-in tools.
+OwlBear v2 has no custom Python agent runtime. Agents are `.agent.md` files executed by VS Code and GitHub Copilot. Tools are provided by MCP servers (`workspace/mcp-*`) or VS Code built-in tools.
 
 ```
 agents/*.agent.md            (agent definitions — pure markdown, no Python)
     use tools from
-serve/mcp-kanban/         (MCP server: kanban board operations)
-serve/mcp-knowledge/      (MCP server: knowledge base operations)
-serve/mcp-memory/         (MCP server: persistent agent memory)
+workspace/mcp-kanban/         (MCP server: kanban board operations)
+workspace/mcp-knowledge/      (MCP server: knowledge base operations)
+workspace/mcp-memory/         (MCP server: persistent agent memory)
     import from
-serve/knowledge/          (core library: graph, vector, ingest, query)
+workspace/knowledge/          (core library: graph, vector, ingest, query)
 ```
 
 Each MCP server is a standalone FastMCP application. Core libraries live in separate packages. Cross-package imports are enforced by `tests/test_package_boundary.py`.
@@ -130,7 +130,7 @@ Comma-separated tool names are removed via `server.remove_tool()`. Unknown names
 
 Every `server.py` defines `__all__` listing its public symbols.
 
-## Package Dependency Rules
+## Dependency Rules
 
 Cross-namespace imports are enforced by `tests/test_package_boundary.py`. The `ALLOWED_IMPORTS` constant in that file maps each package namespace to its permitted owlbear-namespace imports.
 
@@ -146,18 +146,18 @@ Cross-namespace imports are enforced by `tests/test_package_boundary.py`. The `A
 - Core library settings use `pydantic-settings` fields. Never read `os.environ` directly in library code — surface it through the MCP server's `AppContext`.
 - Feature flags use `bool` fields with `default=False` (opt-in).
 
-## Domain Taxonomy
+## Domain Scope Map
 
 Each task targets exactly one domain. Multi-domain work must be split into separate tasks.
 
 | Domain | Scope |
 |--------|-------|
-| knowledge | `serve/knowledge/` (graph, vector, ingest, query, embeddings) |
-| mcp-kanban | `serve/mcp-kanban/` |
-| mcp-knowledge | `serve/mcp-knowledge/` |
-| mcp-memory | `serve/mcp-memory/` |
-| browser | `serve/browser/` |
-| mcp-browser | `serve/mcp-browser/` |
+| knowledge | `workspace/knowledge/` (graph, vector, ingest, query, embeddings) |
+| mcp-kanban | `workspace/mcp-kanban/` |
+| mcp-knowledge | `workspace/mcp-knowledge/` |
+| mcp-memory | `workspace/mcp-memory/` |
+| browser | `workspace/browser/` |
+| mcp-browser | `workspace/mcp-browser/` |
 | agent-config | `agents/`, `skills/`, `instructions/`, `.github/copilot-instructions.md` |
 | test-infra | shared conftest, fixtures, factories (not individual test files) |
 | docs | `docs/`, `README.md`, `SECURITY.md` |

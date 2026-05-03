@@ -40,7 +40,7 @@ Keep the project root clean. Every file created during a task goes to its design
 | Research documents | `.owlbear/research/` | `{slug}.md` with task ref in content | Yes |
 | Cloned external repos | `.owlbear/scratch/research/` | `{repo-name}/` | No (gitignored) |
 | Benchmark / eval scripts | `tests/benchmarks/` | descriptive `.py` name | Yes |
-| Source code | `serve/*/src/` | Package-local module structure | Yes |
+| Source code | `workspace/*/src/` | Package-local module structure | Yes |
 | Tests (task-scoped, transient) | `tests/` | `test_{module}_{task_id}.py` | Yes |
 | Tests (module-level, durable) | `tests/` | `test_{module}.py` | Yes |
 | Agents | `share/agents/` | `{role}.agent.md` | Yes |
