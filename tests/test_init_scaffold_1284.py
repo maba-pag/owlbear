@@ -141,6 +141,26 @@ class TestFromAC_CommentedPathMappingSection:
             f"Directory section content:\n{section}"
         )
 
+    def test_directory_section_has_test_path_entry(
+        self, project_root: Path, tmp_path: Path
+    ) -> None:
+        """Directory section references test paths (e.g. 'tests/').
+
+        AC2 requires all four dimensions: project layout, source packages, frontend
+        root, AND test paths. The directory section must contain an explicit test-path
+        entry so generated Copilot answers are path-aware for test-related tasks.
+        """
+        module = _load_init(project_root)
+        module.init(tmp_path, project_root)
+        content = (tmp_path / _CI_REL).read_text(encoding="utf-8")
+        section = _extract_directory_section(content).lower()
+        assert "tests/" in section, (
+            "Directory section must contain a 'tests/' entry representing test paths. "
+            "AC2 requires all four dimensions: project layout, source packages, "
+            "frontend root, and test paths. "
+            f"Directory section content:\n{section}"
+        )
+
 
 # ---------------------------------------------------------------------------
 # AC3 — Illustrative examples with customization instruction comments
