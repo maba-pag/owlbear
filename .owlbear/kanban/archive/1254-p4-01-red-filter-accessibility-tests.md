@@ -1,10 +1,10 @@
 ---
 id: 1254
 title: 'P4-01: RED — Filter accessibility tests'
-status: done
+status: archived
 priority: important
 created: 2026-05-01T04:35:01.084199+00:00
-updated: 2026-05-03T19:39:34.779087+00:00
+updated: 2026-05-03T19:57:37.870586+00:00
 tags:
 - phase-4
 - scope:cockpit-web
@@ -861,3 +861,43 @@ Reviewer's cycle 4 Required Follow-up was a single assertion-strength fix. All t
 
 ### Scratch Files Cleaned
 - None (no `.owlbear/scratch/1254-*` files found)
+[[2026-05-03]]
+## Audit
+
+### AC Verification (spot-check, reviewer cycle 4 PASS trusted)
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1 aria-expanded | KanbanBoard.tsx:251; FilterAccessibility_1254.test.tsx:130 | PASS |
+| AC2 aria-controls | KanbanBoard.tsx:252; FilterAccessibility_1254.test.tsx:160 | PASS |
+| AC3 id/role/aria-label same element | FilterPanel.tsx:134-136; FilterAccessibilityPanel_1254.test.tsx:59 | PASS |
+| AC4 aria-live polite | KanbanBoard.tsx:258; FilterAccessibility_1254.test.tsx:170 | PASS |
+| AC5 user-initiated only (incl. active-filter polling) | KanbanBoard.tsx:213-230; FilterAccessibility_1254.test.tsx:196,290 | PASS |
+| AC6 debounce 300ms (incl. stale-timer boundary) | KanbanBoard.tsx:227; FilterAccessibility_1254.test.tsx:362,383 | PASS |
+| AC7 focus to first control | FilterPanel.tsx:98; FilterAccessibilityPanel_1254.test.tsx:71 | PASS |
+| AC8 focus return on collapse | FilterPanel.tsx:79,139; FilterAccessibilityPanel_1254.test.tsx:151,198 | PASS |
+| AC9 explicit labels (exact values) | FilterPanel.tsx:146,154-155,170-171; FilterAccessibilityPanel_1254.test.tsx:249,256,263 | PASS |
+
+### Test Results
+- Task-scoped frontend: 97 passed, 0 failed (22 task + 75 regression)
+- Full Python suite: 128 failures (all unrelated: events_1234 import, engine_init_1067 ConfigError, Shell_966 context)
+- Full frontend suite: 13 failures (all unrelated: Shell_966, Shell_1228 polyfill)
+- No cross-task regressions from #1254 deliverables (confirmed via grep)
+- ESLint: clean on all 4 task files
+- Ruff: 1 violation in copilot_auth.py (unrelated)
+
+### Commit Integrity
+- Builder 3b1c83e0: KanbanBoard.tsx, FilterPanel.tsx only
+- Test-writer 235c4020: FilterAccessibilityPanel_1254.test.tsx only
+- Test-writer bdba1436: FilterAccessibility_1254.test.tsx only
+- Docs commit: sources/overview.md attribution added
+- No builder weakening of TestFromAC assertions
+
+### Architect Quality: 4/5
+AC lines were specific and testable. Required iterative refinement on td:2 edge cases (focus-return mechanism, aria-live separation, existing label). Challenger-driven refinement worked correctly. Minor gap: original AC did not pre-specify assertion strength expectations, leading to 4 review cycles.
+
+### Deduction Breakdown
+- Frontend coverage metric unavailable from quality-runner: -0.02
+- No other deductions (all AC evidenced, lint clean in scope, AC quality > 3, reviewer evidence present and detailed)
+
+### Confidence: 0.98
+### Action: archive
