@@ -109,6 +109,20 @@ const TASK_TODO = {
   claimed: false,
 }
 
+// AC3 multi-column fixture: needed-priority task in todo column so the priority
+// filter test has matching tasks in ≥2 distinct status columns (AC3 td:2 contract).
+const TASK_TODO_MATCH = {
+  id: 4,
+  title: 'Needed todo task',
+  status: 'todo',
+  priority: 'needed',
+  updated: '2026-01-04T00:00:00+00:00',
+  tags: ['delta'],
+  blocked: false,
+  block_reason: null,
+  claimed: false,
+}
+
 const EMPTY_FILTER: FilterState = { text: '', priority: '', tags: [], blocked: false }
 
 // ─── Render helper ────────────────────────────────────────────────────────────
@@ -172,9 +186,11 @@ describe('TestFromAC_FilterIntegration', () => {
     })
   })
 
-  // AC3 — Filter state → filtered columns: priority filter hides non-matching tasks across all columns (td:2)
-  it('priority filter removes non-matching tasks from columns', async () => {
-    const { container } = renderBoard()
+  // AC3 — Filter state → filtered columns: priority filter proves exact placement across ≥2 status columns (td:2)
+  // Uses extended 4-task fixture: TASK_NEEDED (backlog, needed) + TASK_TODO_MATCH (todo, needed) both match;
+  // TASK_SOMEDAY (backlog, someday) + TASK_TODO (todo, important) do not match.
+  it('priority filter proves exact placement of matching and non-matching tasks across columns', async () => {
+    const { container } = renderBoard([TASK_NEEDED, TASK_SOMEDAY, TASK_TODO, TASK_TODO_MATCH])
     // Open panel to capture onFilterChange callback — works with any mount strategy
     const toggle = container.querySelector('[data-testid="filter-toggle"]')!
     expect(toggle).not.toBeNull()
@@ -187,17 +203,33 @@ describe('TestFromAC_FilterIntegration', () => {
       capturedOnFilterChange!({ ...EMPTY_FILTER, priority: 'needed' })
     })
     await waitFor(() => {
-      // TASK_NEEDED (backlog, priority=needed) should remain in backlog
+      // TASK_NEEDED (backlog, needed) — matching: present in home column, absent from all others
       expect(
         container.querySelector('[data-column="backlog"] [data-testid="task-card"][data-id="1"]'),
       ).not.toBeNull()
-      // TASK_SOMEDAY (backlog, priority=someday) should be hidden from backlog
+      expect(
+        container.querySelector('[data-column="todo"] [data-testid="task-card"][data-id="1"]'),
+      ).toBeNull()
+      // TASK_TODO_MATCH (todo, needed) — matching in different column: present in home, absent from all others
+      expect(
+        container.querySelector('[data-column="todo"] [data-testid="task-card"][data-id="4"]'),
+      ).not.toBeNull()
+      expect(
+        container.querySelector('[data-column="backlog"] [data-testid="task-card"][data-id="4"]'),
+      ).toBeNull()
+      // TASK_SOMEDAY (backlog, someday) — non-matching: absent from ALL columns
       expect(
         container.querySelector('[data-column="backlog"] [data-testid="task-card"][data-id="2"]'),
       ).toBeNull()
-      // TASK_TODO (todo, priority=important) should also be hidden from the todo column
+      expect(
+        container.querySelector('[data-column="todo"] [data-testid="task-card"][data-id="2"]'),
+      ).toBeNull()
+      // TASK_TODO (todo, important) — non-matching: absent from ALL columns
       expect(
         container.querySelector('[data-column="todo"] [data-testid="task-card"][data-id="3"]'),
+      ).toBeNull()
+      expect(
+        container.querySelector('[data-column="backlog"] [data-testid="task-card"][data-id="3"]'),
       ).toBeNull()
     })
   })
@@ -217,17 +249,27 @@ describe('TestFromAC_FilterIntegration', () => {
       capturedOnFilterChange!({ ...EMPTY_FILTER, text: 'important' })
     })
     await waitFor(() => {
-      // TASK_NEEDED title "Important task" matches "important" (case-insensitive) — visible in backlog
+      // TASK_NEEDED title "Important task" matches "important" (case-insensitive) — matching
+      // Present in home column (backlog); absent from every other column
       expect(
         container.querySelector('[data-column="backlog"] [data-testid="task-card"][data-id="1"]'),
       ).not.toBeNull()
-      // TASK_SOMEDAY title "Low priority task" does not match — hidden from backlog
+      expect(
+        container.querySelector('[data-column="todo"] [data-testid="task-card"][data-id="1"]'),
+      ).toBeNull()
+      // TASK_SOMEDAY title "Low priority task" does not match — absent from ALL columns
       expect(
         container.querySelector('[data-column="backlog"] [data-testid="task-card"][data-id="2"]'),
       ).toBeNull()
-      // TASK_TODO title "In-progress work" does not match — hidden from todo column
+      expect(
+        container.querySelector('[data-column="todo"] [data-testid="task-card"][data-id="2"]'),
+      ).toBeNull()
+      // TASK_TODO title "In-progress work" does not match — absent from ALL columns
       expect(
         container.querySelector('[data-column="todo"] [data-testid="task-card"][data-id="3"]'),
+      ).toBeNull()
+      expect(
+        container.querySelector('[data-column="backlog"] [data-testid="task-card"][data-id="3"]'),
       ).toBeNull()
     })
   })
