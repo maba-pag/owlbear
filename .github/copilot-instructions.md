@@ -70,3 +70,30 @@ All other `serve/` packages are Python — use `uv run` for those.
 | Public API | `collect_docs()`, `generate_index()`, `should_regenerate()`, `parse_index()` — all in `owlbear_tools.doc_index` |
 | Test scope | `serve/tools/tests/test_doc_index_1018.py` |
 | Package manager | `uv` |
+
+## 6. File Placement
+
+Keep the project root clean. Every file created during a task goes to its designated location:
+
+| File type | Location | Naming | Tracked? |
+|-----------|----------|--------|----------|
+| Temp/debug output | `.owlbear/scratch/` | `{task-id}-{desc}.{ext}` | No (gitignored) |
+| Research documents | `.owlbear/research/` | `{slug}.md` with task ref in content | Yes |
+| Cloned external repos | `.owlbear/scratch/research/` | `{repo-name}/` | No (gitignored) |
+| Benchmark / eval scripts | `tests/benchmarks/` | descriptive `.py` name | Yes |
+| Source code | `serve/*/src/` | Package-local module structure | Yes |
+| Tests (task-scoped, transient) | `tests/` | `test_{module}_{task_id}.py` | Yes |
+| Tests (module-level, durable) | `tests/` | `test_{module}.py` | Yes |
+| Agents | `share/agents/` | `{role}.agent.md` | Yes |
+| Skills | `share/skills/{prefix}-{name}/` | `SKILL.md` | Yes |
+| Instructions | `share/instructions/` | `{name}.instructions.md` | Yes |
+| Prompts | `share/prompts/` | `{name}.prompt.md` | Yes |
+| Decision requests | `.owlbear/decisions/pending/` | `{task-id}-{slug}.md` | Yes |
+
+Before marking a task `done`, delete all `.owlbear/scratch/{task-id}-*` files created for that task.
+
+## 7. Project Layout
+
+- Source: `serve/*/src/` (workspace packages, each with `__init__.py`).
+- Root tests: `tests/` at workspace root, named `test_{module}.py`.
+- Package-local tests: `serve/*/tests/` for package-scoped test suites.
