@@ -56,21 +56,12 @@ describe('TestFromAC_FilterA11yPanel', () => {
   // ─── AC3: FilterPanel id/role/aria-label (td:1) ──────────────────────────
 
   describe('AC3: FilterPanel has id="filter-panel", role="region", aria-label="Task filters"', () => {
-    it('FilterPanel root element has id="filter-panel"', () => {
+    it('a single root element carries id="filter-panel", role="region", and aria-label="Task filters" together', () => {
       const { container } = renderPanel(true)
-      expect(container.querySelector('#filter-panel')).not.toBeNull()
-    })
-
-    it('FilterPanel root element has role="region"', () => {
-      const { container } = renderPanel(true)
-      const regionEl = container.querySelector('[role="region"]')
-      expect(regionEl).not.toBeNull()
-    })
-
-    it('FilterPanel root element has aria-label="Task filters"', () => {
-      const { container } = renderPanel(true)
-      const regionEl = container.querySelector('[role="region"]')
-      expect(regionEl?.getAttribute('aria-label')).toBe('Task filters')
+      const panel = container.querySelector('#filter-panel')
+      expect(panel).not.toBeNull()
+      expect(panel).toHaveAttribute('role', 'region')
+      expect(panel).toHaveAttribute('aria-label', 'Task filters')
     })
   })
 
@@ -111,12 +102,10 @@ describe('TestFromAC_FilterA11yPanel', () => {
       )
 
       await waitFor(() => {
-        const activeEl = document.activeElement
-        // Focus must not remain on the toggle button
-        expect(activeEl).not.toBe(toggleBtn)
-        // Focus must be inside the filter panel region
-        const panelRegion = container.querySelector('[role="region"]')
-        expect(panelRegion?.contains(activeEl)).toBe(true)
+        // Focus must move to the text input — the first focusable control in the panel
+        const textInput = container.querySelector('input[type="text"]') as HTMLElement
+        expect(textInput).not.toBeNull()
+        expect(document.activeElement).toBe(textInput)
       })
     })
 
@@ -181,8 +170,9 @@ describe('TestFromAC_FilterA11yPanel', () => {
       textInput?.focus()
       expect(document.activeElement).toBe(textInput)
 
-      // Press Escape — panel should call onClose and return focus to toggle
+      // Press Escape — panel must invoke onClose callback
       fireEvent.keyDown(textInput, { key: 'Escape', code: 'Escape' })
+      expect(onClose).toHaveBeenCalledTimes(1)
 
       // Re-render with panel closed (KanbanBoard's response to onClose)
       const toggleBtn = container.querySelector('[data-testid="filter-toggle-real"]') as HTMLElement

@@ -203,7 +203,7 @@ describe('TestFromAC_FilterA11y', () => {
       await waitFor(() => {
         const liveRegion = container.querySelector('[aria-live="polite"]')
         expect(liveRegion).not.toBeNull()
-        expect(liveRegion!.textContent.trim()).not.toBe('')
+        expect(liveRegion!.textContent.trim()).toBe('1 / 2 tasks')
       })
     })
 
@@ -243,6 +243,21 @@ describe('TestFromAC_FilterA11y', () => {
       expect(liveRegion!.textContent).toBe(initialText)
     })
 
+    it('aria-live region updates immediately (no debounce) when non-text filter (priority) changes', async () => {
+      const { container } = renderBoard([TASK_A, TASK_B])
+      fireEvent.click(getToggle(container))
+      await waitFor(() => expect(capturedOnFilterChange).not.toBeNull())
+
+      // Priority change is a non-text filter — must fire immediately without waiting 300ms
+      act(() => {
+        capturedOnFilterChange!({ text: '', priority: 'needed', tags: [], blocked: false })
+      })
+
+      // No waitFor needed — announcement is synchronous for non-text changes
+      const liveRegion = container.querySelector('[aria-live="polite"]')
+      expect(liveRegion!.textContent.trim()).toBe('1 / 2 tasks')
+    })
+
     it('aria-live region text updates after user-initiated filter change even after prior polling update', async () => {
       const { container, rerender } = renderBoard([TASK_A, TASK_B])
       fireEvent.click(getToggle(container))
@@ -268,7 +283,7 @@ describe('TestFromAC_FilterA11y', () => {
       })
       await waitFor(() => {
         const liveRegion = container.querySelector('[aria-live="polite"]')
-        expect(liveRegion?.textContent?.trim()).toMatch(/1/)
+        expect(liveRegion?.textContent?.trim()).toBe('1 / 2 tasks')
       })
     })
   })
@@ -313,8 +328,8 @@ describe('TestFromAC_FilterA11y', () => {
 
       const liveRegion = container.querySelector('[aria-live="polite"]')
       expect(liveRegion).not.toBeNull()
-      // The content must reflect the current filtered count
-      expect(liveRegion!.textContent.trim()).not.toBe('')
+      // The content must reflect the current filtered count — text='Al' matches TASK_A ('Alpha task')
+      expect(liveRegion!.textContent.trim()).toBe('1 / 2 tasks')
       vi.useRealTimers()
     })
 
@@ -344,7 +359,8 @@ describe('TestFromAC_FilterA11y', () => {
 
       // Advance remaining 200ms → now 300ms after second keystroke → must fire
       await act(async () => { vi.advanceTimersByTime(200) })
-      expect(liveRegion?.textContent?.trim()).not.toBe(textBefore?.trim())
+      // text='Al' matches TASK_A ('Alpha task') → exactly '1 / 2 tasks'
+      expect(liveRegion?.textContent?.trim()).toBe('1 / 2 tasks')
       vi.useRealTimers()
     })
   })
