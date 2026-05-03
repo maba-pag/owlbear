@@ -182,6 +182,13 @@ class TestFromAC_PackageTestImportSources:
             source, "CorruptionError"
         ), "test_storage_1050.py still imports CorruptionError from owlbear_kanban.storage"
 
+    def test_test_storage_1050_detect_corruption_not_from_storage(self) -> None:
+        """test_storage_1050.py: detect_corruption must not be imported from storage."""
+        source = (_SERVE_KANBAN_TESTS / "test_storage_1050.py").read_text(encoding="utf-8")
+        assert not _imports_from_storage(
+            source, "detect_corruption"
+        ), "test_storage_1050.py still imports detect_corruption from owlbear_kanban.storage"
+
     def test_test_storage_detect_corruption_not_from_storage(self) -> None:
         """test_storage.py: detect_corruption must not be imported from storage."""
         source = (_SERVE_KANBAN_TESTS / "test_storage.py").read_text(encoding="utf-8")
@@ -356,6 +363,13 @@ class TestFromAC_PackageTestSourceModuleImports:
         assert _imports_from_source(
             source, "owlbear_kanban.corruption", "CorruptionError"
         ), "test_storage_1050.py does not import CorruptionError from owlbear_kanban.corruption"
+
+    def test_test_storage_1050_imports_detect_corruption_from_corruption(self) -> None:
+        """test_storage_1050.py must import detect_corruption from owlbear_kanban.corruption."""
+        source = (_SERVE_KANBAN_TESTS / "test_storage_1050.py").read_text(encoding="utf-8")
+        assert _imports_from_source(
+            source, "owlbear_kanban.corruption", "detect_corruption"
+        ), "test_storage_1050.py does not import detect_corruption from owlbear_kanban.corruption"
 
     def test_test_storage_imports_detect_corruption_from_corruption(self) -> None:
         """test_storage.py must import detect_corruption from owlbear_kanban.corruption."""
