@@ -66,6 +66,7 @@ Running `init.py` writes the following files into your project directory:
 | `.owlbear/knowledge/.gitkeep` | Knowledge store placeholder | Always written |
 | `store/knowledge/.gitkeep` | Knowledge store placeholder | Always written |
 | `store/memory/.gitkeep` | Memory store placeholder | Always written |
+| `.github/copilot-instructions.md` | Consumer scaffold for project-specific Copilot instructions — placeholder sections for Project Identity, Directory Structure, Tech Stack, and Resources | Skipped if file already exists |
 | `.editorconfig` | Editor formatting rules | Skipped if file already exists |
 | `.gitattributes` | Git line-ending and diff rules | Skipped if file already exists |
 | `.gitignore` | Gitignore rules; owlbear section appended if marker absent | Appended if owlbear marker absent; idempotent once present |
