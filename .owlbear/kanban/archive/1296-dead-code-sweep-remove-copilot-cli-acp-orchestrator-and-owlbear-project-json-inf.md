@@ -2,10 +2,10 @@
 id: 1296
 title: 'Dead code sweep: remove Copilot CLI/ACP orchestrator and owlbear-project.json
   infrastructure'
-status: review
+status: archived
 priority: important
 created: 2026-05-02T19:38:57.607549+00:00
-updated: 2026-05-03T10:50:40.549694+00:00
+updated: 2026-05-03T12:16:42.424868+00:00
 tags:
 - cleanup
 parent:
@@ -14,7 +14,7 @@ blocked: false
 block_reason: Reviewer needs terminal access to run `uv sync` for AC6 
   verification. Terminal TOOL_UNAVAILABLE in reviewer agent across 2 cycles. 
   Manually verify `uv sync` or wait for terminal-capable session.
-claimed_at: 2026-05-03T10:50:40.549694+00:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -590,3 +590,167 @@ Architecture review (retry): refined AC3 exclusion list to add `.owlbear/decisio
 
 ### Action
 - Released with `fail`; task remains in `review` because AC6 could not be independently verified in this tool surface.
+[[2026-05-03]]
+## Review Evidence
+### Test Results
+- pytest via quality-runner: 70 passed, 0 failed, 0 skipped
+- Scoped suites: `tests/test_dead_code_sweep_1296.py`, `tests/test_core_removal_1297.py`, `tests/test_pipeline_diagram.py`
+
+### Lint
+- ruff via quality-runner: clean
+- Violations: none
+
+### Coverage
+- Not measured in this td:1 structural-cleanup pass.
+- Nongating here: the latest retry is test-only / structural verification with no production Python edits in the latest builder pass.
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---------|-------------|---------------------------|---------|
+| AC2 — zero `serve/orchestrator` hits outside exclusions | [tests/test_dead_code_sweep_1296.py](tests/test_dead_code_sweep_1296.py#L73) plus sibling structural guard at [tests/test_core_removal_1297.py](tests/test_core_removal_1297.py#L82) | Mostly yes. The repo-wide scan fails on non-excluded live surfaces, and targeted review searches over `.owlbear/decisions/**` and `.owlbear/sources/**` found no current `serve/orchestrator` hits. The shared exclusion helper at [tests/test_dead_code_sweep_1296.py](tests/test_dead_code_sweep_1296.py#L37) makes this a small proof-quality note, not a live miss. | LAX |
+| AC3 — zero `Copilot CLI` hits outside refined exclusions | [tests/test_dead_code_sweep_1296.py](tests/test_dead_code_sweep_1296.py#L134) with refined exclusions declared at [tests/test_dead_code_sweep_1296.py](tests/test_dead_code_sweep_1296.py#L37) | Yes. Any non-excluded Markdown hit would fail. Remaining hits are limited to the architect-approved excluded historical and bibliographic paths. | COVERED |
+| AC4 — zero `agent-client-protocol` hits in `*.toml` | [tests/test_dead_code_sweep_1296.py](tests/test_dead_code_sweep_1296.py#L178) | Yes. Current search on `*.toml` returned no matches. | COVERED |
+| AC9 — doc-index clean of orchestrator / CLI refs | [tests/test_dead_code_sweep_1296.py](tests/test_dead_code_sweep_1296.py#L189) | Yes for the file-state contract. The current workspace has no `serve/orchestrator`, `Copilot CLI`, or `agent-client-protocol` hits in `.owlbear/doc-index.md`. | COVERED |
+| AC10 — Excalidraw cleanup / valid JSON | Diagram parse and structure tests at [tests/test_dead_code_sweep_1296.py](tests/test_dead_code_sweep_1296.py#L196) and [tests/test_dead_code_sweep_1296.py](tests/test_dead_code_sweep_1296.py#L225), plus project-overview text check at [tests/test_dead_code_sweep_1296.py](tests/test_dead_code_sweep_1296.py#L261) | Yes. The tests call `json.loads(...)` on the Excalidraw files and would fail on deleted IDs, dangling bindings, or stale project-overview text. | COVERED |
+
+#### Security Review
+- No security issues found in the reviewed scope.
+
+#### Test Integrity
+- No evidence of weakened `TestFromAC_*` assertions in the current workspace.
+- Commit ownership is consistent with the task history: [commit `222942f`](.owlbear/kanban/tasks/1296-dead-code-sweep-remove-copilot-cli-acp-orchestrator-and-owlbear-project-json-inf.md#L148) changed docs and diagrams only, [commit `d9e4481`](.owlbear/kanban/tasks/1296-dead-code-sweep-remove-copilot-cli-acp-orchestrator-and-owlbear-project-json-inf.md#L248) changed only [pyproject.toml](pyproject.toml#L35) and [share/agents/architect.agent.md](share/agents/architect.agent.md#L120), and [commit `1347bb5f`](.owlbear/kanban/tasks/1296-dead-code-sweep-remove-copilot-cli-acp-orchestrator-and-owlbear-project-json-inf.md#L414) is the test-writer test-file commit.
+
+#### Test Quality
+- Assertion specificity: STRONG
+- Negative/error-path coverage: ADEQUATE for a structural cleanup task
+- Manual mutation reasoning: ADEQUATE — reintroducing a non-excluded live hit for `serve/orchestrator`, `Copilot CLI`, or `agent-client-protocol` would fail the widened scans; the only remaining proof gap is the AC2 helper coupling noted above.
+- Test independence: STRONG
+- Descriptive test names: STRONG
+
+#### Data Safety
+- No issues found.
+
+#### Implementation-Aware Test Gap Analysis
+- No remaining implementation defect found on the current workspace state.
+- [pyproject.toml](pyproject.toml#L35) no longer mentions `Copilot CLI` in the `e2e` marker text.
+- [share/agents/architect.agent.md](share/agents/architect.agent.md#L120) now points to `serve/kanban/...`, not `serve/orchestrator/...`.
+- Targeted review searches found no `serve/orchestrator` hits in `.owlbear/decisions/**` or `.owlbear/sources/**`, closing the only live-surface concern raised by the challenger pass.
+- Current `Copilot CLI` Markdown hits remain only in the architect-approved excluded files [v2 architecture decision](.owlbear/decisions/resolved/v2-architecture.md#L9), [v2 architecture decision](.owlbear/decisions/resolved/v2-architecture.md#L13), [v2 architecture decision](.owlbear/decisions/resolved/v2-architecture.md#L20), [sources overview](.owlbear/sources/overview.md#L333), [sources overview](.owlbear/sources/overview.md#L1769), and [sources overview](.owlbear/sources/overview.md#L1770).
+
+#### Necessity Check
+- N/A
+
+#### Builder Process Quality
+- CLEAN. Prior FAILs were resolved by the architecture retry that refined AC3 and required wider proof, then by test-writer widening plus builder verification-only pass.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| 1. `serve/orchestrator/` gone | `file_search("serve/orchestrator/**")` returned no files; adjacent structural proof at [tests/test_core_removal_1297.py](tests/test_core_removal_1297.py#L82) | `test_orchestrator_dir_absent` | PASS |
+| 2. zero `serve/orchestrator` hits outside exclusions | quality-runner green on [tests/test_dead_code_sweep_1296.py](tests/test_dead_code_sweep_1296.py#L73); targeted searches found no hits in `.owlbear/decisions/**` or `.owlbear/sources/**` | `test_no_serve_orchestrator_repo_wide` | PASS |
+| 3. zero `Copilot CLI` hits outside refined exclusions | quality-runner green on [tests/test_dead_code_sweep_1296.py](tests/test_dead_code_sweep_1296.py#L134); remaining hits are only in excluded `.owlbear/decisions/**` and `.owlbear/sources/**` paths listed above | `test_no_copilot_cli_in_md_files_repo_wide` | PASS |
+| 4. zero `agent-client-protocol` hits in `*.toml` | Search on `*.toml` returned no matches | `test_no_acp_protocol_in_toml_files` | PASS |
+| 5. `owlbear-project.json` and `seed/owlbear-project.json` gone | `file_search("**/owlbear-project.json")` returned no files; adjacent structural proof at [tests/test_core_removal_1297.py](tests/test_core_removal_1297.py#L97) and [tests/test_core_removal_1297.py](tests/test_core_removal_1297.py#L103) | `test_root_project_json_absent`, `test_seed_project_json_absent` | PASS |
+| 6. `uv sync` succeeds | Direct terminal verification in workspace root succeeded in this review session | none | PASS |
+| 7. pytest passes on touched files | quality-runner: 70 passed, 0 failed, 0 skipped | scoped suites above | PASS |
+| 8. ruff check passes on touched files | quality-runner: clean, 0 violations | scoped lint above | PASS |
+| 9. doc-index regenerated without orchestrator CLI refs | quality-runner green on [tests/test_dead_code_sweep_1296.py](tests/test_dead_code_sweep_1296.py#L189); current workspace search found no matching refs in `.owlbear/doc-index.md` | `test_doc_index_no_serve_orchestrator` | PASS |
+| 10. Excalidraw valid JSON | Diagram parse / structure tests green at [tests/test_dead_code_sweep_1296.py](tests/test_dead_code_sweep_1296.py#L196), [tests/test_dead_code_sweep_1296.py](tests/test_dead_code_sweep_1296.py#L225), and [tests/test_dead_code_sweep_1296.py](tests/test_dead_code_sweep_1296.py#L261) | diagram tests | PASS |
+| 11. `test_pipeline_diagram` passes | quality-runner green on [tests/test_pipeline_diagram.py](tests/test_pipeline_diagram.py) | `tests/test_pipeline_diagram.py` | PASS |
+
+### Deductions
+- `-0.03` AC2 proof is slightly broader than the literal AC2 exclusion set because `_EXCLUDED_DIRS` is shared with refined AC3; direct review searches closed the current live-surface risk.
+- `-0.02` The task body still contains the pre-refinement top-level AC text, so the review relied on the later Architecture Review retry as the canonical AC3 contract.
+
+### Verdict
+- PASS
+- Confidence: 0.95
+
+### Informational
+- The AC2 / AC3 shared exclusion helper in [tests/test_dead_code_sweep_1296.py](tests/test_dead_code_sweep_1296.py#L37) is acceptable for the current workspace state but slightly blurs AC-specific proof boundaries.
+
+### Action
+- Advanced to `docs`.
+
+### Post-task Reflection
+- Problem faced: prior review cycles stalled on AC6 because the reviewer session could not execute commands.
+- Workaround applied: used direct terminal verification for `uv sync` and paired it with fresh quality-runner evidence instead of trusting prior review notes.
+- Pattern discovered: shared test exclusion helpers can quietly weaken adjacent AC proof when only one AC is supposed to inherit a broader carveout.
+- Time sink: reconstructing commit ownership across builder-skip cycles required git-history checks rather than relying on the latest builder note alone.
+- Quality gap: the task body still carries the stale pre-refinement AC block above the later architecture retry, which adds avoidable review ambiguity.
+
+[[2026-05-03]]
+## Docs Gate
+
+### Checklist
+
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | Yes | Verified/N/A | `README.md`, `README-consumer.md`, `setup/setup-guide.md`, `setup/sharing-guide.md` — all IN-scope. grep for `Copilot CLI`, `orchestrator`, `owlbear-project` returned no hits in any of these four files. Content accurate. No edits needed. |
+| 2 | Module docstrings | Yes | Verified | `serve/knowledge/src/owlbear_knowledge/scope_transfer.py` — IN-scope. `resolve_global_db_path()` docstring accurately states the owlbear-project.json infrastructure was removed and cites #1296. Module-level docstring is unchanged and accurate. No edits needed. |
+| 3 | External attribution | No | N/A | Pure deletion/cleanup task — no external patterns used. |
+| 4 | Research doc | No | N/A | No `.owlbear/research/` doc was produced for this task. |
+| 5 | Diagram maintenance (describes match) | Yes | Updated | `share/diagrams/mcp-topology.excalidraw` — describes `serve/knowledge/src/**`, matches changed `scope_transfer.py`. `share/diagrams/project-overview.excalidraw` — describes `serve/*/pyproject.toml, share/**, setup/**, .owlbear/**`, matches `README.md`, `setup/*.md`. Both footers updated to `Last verified: 2026-05-03 (8e442bdc)`. |
+| 6 | Explicit diagram creation | No | N/A | No new diagram creation requested in task body. |
+| 7 | Deletion detection | No | N/A | Deleted files (`serve/orchestrator/`, `owlbear-project.json`, `seed/owlbear-project.json`, `tests/fixtures/mock_acp_agent.py`, `.owlbear/scripts/e2e_smoke.py`) are OUT-scope application code or test artifacts — no IN-scope docs reference them as orphaned candidates after builder cleanup. |
+
+### Scope Classification
+
+| File | Scope | Action |
+|------|-------|--------|
+| `README.md` | IN | Verified clean |
+| `README-consumer.md` | IN | Verified clean |
+| `setup/setup-guide.md` | IN | Verified clean |
+| `setup/sharing-guide.md` | IN | Verified clean |
+| `share/diagrams/mcp-topology.excalidraw` | IN | Footer updated |
+| `share/diagrams/project-overview.excalidraw` | IN | Footer updated |
+| `serve/knowledge/src/owlbear_knowledge/scope_transfer.py` | IN | Docstring verified accurate |
+| `.github/copilot-instructions.md` | OUT | Agent-executable — no action |
+| `seed/.github/copilot-instructions.md` | OUT | Agent-executable — no action |
+| `share/skills/r-architecture-standards/SKILL.md` | OUT | Agent-executable — no action |
+| `share/skills/w-research/SKILL.md` | OUT | Agent-executable — no action |
+| `share/prompts/arch-audit.prompt.md` | OUT | Agent-executable — no action |
+| `share/agents/architect.agent.md` | OUT | Agent-executable — no action |
+| `pyproject.toml` | OUT | Application config — no action |
+| `setup/init.py` | OUT | Application code — no action |
+
+### Files Updated
+- `share/diagrams/mcp-topology.excalidraw` (footer: 5a7f802e → 8e442bdc)
+- `share/diagrams/project-overview.excalidraw` (footer: 91a14158 → 8e442bdc)
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no `.owlbear/scratch/1296-*` files found)
+[[2026-05-03]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| 1. `serve/orchestrator/` gone | `file_search("serve/orchestrator/**")` → no files | PASS |
+| 2. zero `serve/orchestrator` hits outside exclusions | Reviewer verified; `test_no_serve_orchestrator_repo_wide` green (70/0) | PASS |
+| 3. zero `Copilot CLI` hits outside refined exclusions | Reviewer verified; `test_no_copilot_cli_in_md_files_repo_wide` green; residual hits only in arch-approved excluded paths | PASS |
+| 4. zero `agent-client-protocol` in `*.toml` | `test_no_acp_protocol_in_toml_files` green | PASS |
+| 5. `owlbear-project.json` gone | `file_search("**/owlbear-project.json")` → no files | PASS |
+| 6. `uv sync` succeeds | Independent terminal verification: "Resolved 170 packages in 3ms" | PASS |
+| 7. pytest passes on touched files | quality-runner scoped: 70 passed, 0 failed | PASS |
+| 8. ruff passes on touched files | quality-runner scoped: clean, 0 violations | PASS |
+| 9. doc-index no orchestrator refs | `test_doc_index_no_serve_orchestrator` green | PASS |
+| 10. Excalidraw valid JSON | Diagram parse/structure tests green | PASS |
+| 11. `test_pipeline_diagram` passes | quality-runner green | PASS |
+
+### Test Results
+- pytest (full): 3775 passed, 138 failed (all pre-existing from unrelated tasks — e.g. test_engine_accessor_migration.py), 4 skipped
+- pytest (scoped): 70 passed, 0 failed
+- ruff (scoped): clean
+
+### Architect Quality: 3/5
+AC3 exclusion list omitted `.owlbear/decisions/` and `.owlbear/sources/` (legitimate historical records), causing 2 reviewer rejections before architecture retry corrected it. Remaining AC lines were specific and testable. Good decomposition into 3 child tasks.
+
+### Deduction Breakdown
+- -.03 AC quality score 3/5
+
+### Confidence: .97
+### Action: archive
