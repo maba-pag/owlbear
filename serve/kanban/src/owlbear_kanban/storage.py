@@ -36,6 +36,7 @@ from ruamel.yaml.comments import CommentedMap
 if TYPE_CHECKING:
     from ruamel.yaml import YAML
 
+from owlbear_kanban._locking import _exclusive_file_lock
 from owlbear_kanban.activity_store import (
     append_activity_event,
     compact_activity_log,
@@ -464,7 +465,6 @@ def write_task_if_unchanged(
         FileNotFoundError: Task file not found in tasks/ or archive/.
     """
     from owlbear_kanban.config_loader import load_config as _load_config  # noqa: PLC0415
-    from owlbear_kanban.engine import _exclusive_file_lock  # noqa: PLC0415
 
     config = _load_config(kanban_dir)
     tasks_dir = kanban_dir / config.paths.tasks_dir
@@ -536,7 +536,6 @@ def list_archive_files(kanban_dir: Path) -> list[Path]:
 def move_to_archive(task_id: int, kanban_dir: Path) -> Path:
     """Move the task file for *task_id* from ``tasks/`` to ``archive/``."""
     from owlbear_kanban.config_loader import load_config as _load_config  # noqa: PLC0415
-    from owlbear_kanban.engine import _exclusive_file_lock  # noqa: PLC0415
 
     config = _load_config(kanban_dir)
     tasks_dir = kanban_dir / config.paths.tasks_dir
@@ -585,8 +584,6 @@ def move_to_quarantine(task_path: Path, kanban_dir: Path) -> Path:
 
 def allocate_next_id(kanban_dir: Path) -> int:
     """Allocate the next task ID from config under exclusive flock (Brief C §3.3)."""
-    from owlbear_kanban.engine import _exclusive_file_lock  # noqa: PLC0415
-
     lock_path = kanban_dir / ".next_id.lock"
     with _exclusive_file_lock(lock_path):
         from owlbear_kanban.config_loader import load_config as _load_config  # noqa: PLC0415
