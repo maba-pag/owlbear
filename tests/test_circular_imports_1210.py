@@ -10,8 +10,6 @@ All tests must FAIL in RED (new modules absent, old structures intact).
 from __future__ import annotations
 
 import ast
-import importlib
-import inspect
 from pathlib import Path
 
 import pytest
@@ -104,8 +102,6 @@ class TestFromAC_DurationModule:
 
     def test_duration_re_exported(self) -> None:
         """_duration must export _DURATION_RE as a compiled pattern."""
-        import re
-
         from owlbear_kanban._duration import _DURATION_RE
 
         assert hasattr(_DURATION_RE, "match"), "_DURATION_RE must be a compiled regex"
@@ -257,9 +253,11 @@ class TestFromAC_ConfigLoaderImport:
     def test_config_loader_has_no_deferred_engine_import(self) -> None:
         """config_loader.py must have no inline/deferred import from owlbear_kanban.engine."""
         src = _source("config_loader.py")
-        assert "owlbear_kanban.engine" not in src and "from owlbear_kanban import engine" not in src, (
-            "config_loader.py still contains a deferred import from owlbear_kanban.engine; "
-            "must be removed"
+        assert "owlbear_kanban.engine" not in src, (
+            "config_loader.py still contains 'owlbear_kanban.engine' import; must be removed"
+        )
+        assert "from owlbear_kanban import engine" not in src, (
+            "config_loader.py still contains 'from owlbear_kanban import engine'; must be removed"
         )
 
     def test_config_loader_imports_parse_duration_from_duration(self) -> None:
