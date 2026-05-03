@@ -4,14 +4,16 @@ title: 'P1-01: Test — system instruction neutrality and init.py scaffold verif
 status: in-progress
 priority: critical
 created: 2026-05-02T16:01:10.581833+00:00
-updated: 2026-05-02T22:08:11.628768+00:00
+updated: 2026-05-02T22:54:05.111316+00:00
 tags:
 - phase-1
 - scope:test
 - shared-layer
-- type:test
 parent: 1280
-depends_on: []
+depends_on:
+- 1282
+- 1283
+- 1284
 blocked: false
 block_reason:
 claimed_at:
@@ -673,3 +675,120 @@ Loop-breaker 2 re-approval. Third review cycle failed on YAGNI test-proof concer
 | AC3 | `test_has_directory_structure_heading`, `test_has_table_row_in_directory_section` | PASS |
 | AC4 | `test_generates_copilot_instructions`, `test_has_directory_section_heading`, `test_has_path_entry`, `test_idempotent`, `test_path_entry_within_directory_section` | PASS |
 | AC5 | `test_section_refs_exist_in_owlbear_system` | PASS (regression guard) |
+[[2026-05-02]]
+## Builder Notes
+- Files changed: none (no code or test edits made in this builder pass).
+- Scoped quality evidence: `tests/test_neutral_shared_1281.py` -> 9 passed, 1 failed.
+- Failing test: `TestFromAC_SystemInstructionNeutrality::test_instructions_have_no_serve_refs`.
+- Failure evidence: `share/instructions/owlbear-system.instructions.md:40` still contains `serve/`.
+- Lint: clean on `tests/test_neutral_shared_1281.py`.
+
+## Rejection Reason
+This builder gate is structurally misrouted for GREEN:
+- #1281 is a test-task deliverable, but is currently in `in-progress` expecting builder GREEN.
+- Live TestFromAC remains RED due to missing implementation.
+- Required implementation tasks are still upstream in `research`:
+  - #1282 (`scope:docs`) status = research
+  - #1283 (`scope:docs`) status = research
+  - #1284 (`scope:tools`) status = research
+
+Given this state, GREEN cannot be completed in #1281 without violating task scope and ownership. Routing/AC sequencing needs architect correction before builder can produce a valid GREEN transition.
+[[2026-05-02]]
+
+## Refined Acceptance Criteria (v3 — supersedes all prior AC sections)
+
+*Test-writer: use ONLY this section. Prior AC and "Refined AC" sections are historical.*
+
+- [ ] Pytest test file `tests/test_neutral_shared_1281.py` exists (td:0)
+- [ ] Test scans `share/instructions/**/*.md` for `serve/` references with: (a) `mcp-\S+` tokens stripped via `re.sub` before checking, (b) lines starting with `applyTo:` skipped. The live-scan test `test_instructions_have_no_serve_refs` is marked `@pytest.mark.xfail(strict=False, reason="RED: implementation in #1282")` because the implementation removing `serve/` from `owlbear-system.instructions.md` belongs to #1282. (td:1)
+- [ ] Discriminating negative test `test_mcp_exemption_is_token_scoped` verifies token-scoped exclusion using a synthetic file (passes now). (td:0)
+- [ ] Test asserts `.github/copilot-instructions.md` contains a `## Directory Structure` heading and at least one table row in that section. (td:0)
+- [ ] Test invokes `setup/init.py` `init()` in `tmp_path`, asserts generated `.github/copilot-instructions.md` exists with directory/path-mapping heading and section-local path entries. (td:0)
+- [ ] Test asserts no dangling `§ SectionName` cross-references from 4 scoped files to `owlbear-system.instructions.md` (regression guard, passes now). (td:0)
+- [ ] Test file passes `ruff check`. (td:0)
+- [ ] Full suite result: 10 tests, 9 pass + 1 xfail, **0 failures**. (td:0)
+
+## Architecture Review (loop-breaker 3)
+
+### Root Cause of Pipeline Cycling
+
+This task has cycled 4+ times through test-writer → builder → reviewer because of a structural decomposition flaw:
+
+1. Task #1281 writes RED-phase tests. One test (`test_instructions_have_no_serve_refs`) fails because the implementation (removing `serve/` from `owlbear-system.instructions.md`) belongs to #1282.
+2. The builder cannot make this test pass without violating task scope.
+3. The reviewer sees 1 failure and rejects.
+4. The loop-breaker re-approves, but the same cycle repeats because the pipeline has no "expected failure" concept.
+
+### Resolution: `xfail` Marker
+
+Standard pytest pattern for cross-task RED dependencies. Mark `test_instructions_have_no_serve_refs` with `@pytest.mark.xfail(strict=False, reason="RED: implementation in #1282")`.
+
+Effect:
+- Current state: test fails → xfail (expected), suite reports 0 failures
+- After #1282 lands: test passes → xpass (not a failure with `strict=False`)
+- #1282's AC must include removing the xfail marker
+
+### Tag Change
+
+Removed `type:test` — this tag triggers test-writer/builder pass-through, but the test-writer MUST process this task to add the xfail marker. The `scope:test` tag remains (not a pass-through tag).
+
+### AC Changes
+
+- All existing tests already pass except the one needing xfail. Every AC line except the xfail addition is `(td:0)` — test-writer's only code change is adding the marker.
+- Removed AC6 ("tests fail initially") — replaced by the explicit xfail requirement in AC2.
+- AC3/AC4/AC5 test-proof concerns from prior reviews resolved by loop-breakers 1 and 2 as YAGNI. No further tightening.
+
+### Evaluation
+
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | Test-only task |
+| Interface clarity | PASS | AC now has explicit expected-failure handling via xfail |
+| Dependency correctness | PASS | No deps; #1282 depends on this |
+| Module layering | N/A | Test file only |
+| TDD compliance | PASS | This IS the RED phase; xfail is the standard RED-dependency pattern |
+| KISS/YAGNI | PASS | Single-line xfail marker, no over-engineering |
+| Premise challenge | PASS | Tests needed for TDD flow; xfail breaks the pipeline cycle |
+| Pattern consistency | PASS | `xfail(strict=False)` is standard pytest pattern |
+| Security surface | N/A | No system boundaries |
+| Single domain | PASS | Test domain only |
+
+### Challenge
+
+Skipped — loop-breaker 3 re-approval. All AC lines are td:0 except one td:1 (the xfail marker itself). No new architecture decisions; the change is a one-line pytest marker addition.
+
+### Test-Writer Guidance
+
+**Only change needed:** Add `@pytest.mark.xfail(strict=False, reason="RED: implementation in #1282")` to `test_instructions_have_no_serve_refs` in `tests/test_neutral_shared_1281.py`. Import `pytest` if not already imported. No other changes.
+
+Expected result: `10 passed, 1 xfailed` → 0 failures.
+
+### Downstream Note
+
+When #1282 reaches architect review, its AC must include: "Remove `@pytest.mark.xfail` from `test_instructions_have_no_serve_refs` in `tests/test_neutral_shared_1281.py`."
+
+### Verdict: APPROVE → todo
+
+[[2026-05-02]]
+Loop-breaker 3 re-approval. Root cause of 4+ review cycles: the decomposition created a RED-phase test task where one test can never pass within scope (#1282 owns the implementation). Fix: add `@pytest.mark.xfail(strict=False)` to the cross-task-dependent test so the suite reports 0 failures. Removed `type:test` tag (was causing pass-through when test-writer needs to add the marker). Test-writer's only change is a one-line xfail addition.
+[[2026-05-02]]
+## Test-Writer Notes
+
+**Retry 5 (loop-breaker 3) — single xfail marker addition.**
+
+**Only change made:** Added `import pytest` and `@pytest.mark.xfail(strict=False, reason="RED: implementation in #1282")` to `test_instructions_have_no_serve_refs` in `tests/test_neutral_shared_1281.py`.
+
+**Result:** 10 tests, 9 passed, 1 xfailed, 0 failures. ruff: clean (exit 0).
+
+**Commit:** `test: mark test_instructions_have_no_serve_refs xfail pending #1282 (#1281, test-writer)`
+
+**AC coverage:**
+
+| AC | Test(s) | Status |
+|----|---------|--------|
+| AC2 (no serve/ in instructions) | `test_instructions_have_no_serve_refs` (xfail — RED: #1282 not yet implemented) + `test_mcp_exemption_is_token_scoped` (PASS) | xfail ✓ |
+| AC3 (## Directory Structure heading + table row) | `test_has_directory_structure_heading`, `test_has_table_row_in_directory_section` | PASS |
+| AC4 (init() scaffold) | `test_generates_copilot_instructions`, `test_has_directory_section_heading`, `test_has_path_entry`, `test_idempotent`, `test_path_entry_within_directory_section` | PASS |
+| AC5 (no dangling cross-refs) | `test_section_refs_exist_in_owlbear_system` | PASS (regression guard) |
+
+**Downstream note:** When #1282 lands and removes `serve/` from `owlbear-system.instructions.md`, its AC must include removing the `@pytest.mark.xfail` marker from `test_instructions_have_no_serve_refs`.

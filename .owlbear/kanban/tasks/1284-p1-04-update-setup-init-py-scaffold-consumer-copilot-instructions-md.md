@@ -11,7 +11,6 @@ tags:
 - shared-layer
 parent: 1280
 depends_on:
-- 1281
 - 1282
 blocked: false
 block_reason:

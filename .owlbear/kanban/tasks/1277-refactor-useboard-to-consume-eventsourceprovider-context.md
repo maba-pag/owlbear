@@ -4,7 +4,7 @@ title: Refactor useBoard to consume EventSourceProvider context
 status: in-progress
 priority: someday
 created: 2026-05-02T12:10:47.678864+00:00
-updated: 2026-05-02T22:04:19.533934+00:00
+updated: 2026-05-03T00:33:48.376202+00:00
 tags:
 - cockpit
 - frontend
@@ -13,7 +13,7 @@ depends_on:
 - 1276
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-03T00:33:48.376202+00:00
 archival_reason:
 archival_refs: []
 ---
@@ -200,3 +200,229 @@ alone cannot trigger the SSE refetch path.
 
 ### Prior tests
 8 pre-existing tests in TestFromAC_UseBoardSSEContext all PASS (builder implementation correct for AC1–AC4, AC5 happy/edge/boundary paths).
+[[2026-05-02]]
+## Builder Notes
+- Implementation: updated serve/cockpit/web/src/hooks/useBoard.ts to ensure SSE-driven task refetch only runs when tasks-changed mtime value actually changes, preventing status-only (connecting -> open) transitions from triggering an extra fetch.
+- Files changed: serve/cockpit/web/src/hooks/useBoard.ts
+- Tests: quality-runner scoped task suite passed 10/10 in serve/cockpit/web/src/__tests__/useBoard_1277.test.ts.
+- Regression tests: quality-runner AC8 scoped suite passed 69/69 across useBoard_1277, useBoard, useBoard_967, useBoard_1261, useBoard_1263, and usePollingFetch_1227 tests.
+- Coverage: useBoard.ts statements 96.15%, lines 96.15%, functions 100%, branches 70.37%.
+- Lint: ESLint clean on useBoard.ts and all 6 scoped regression test files.
+- Commit: a0eab0cf
+- Approach: retained existing status gate (open) and added previous-mtime tracking so refetch is tied to mtime deltas rather than effect re-runs from status-only changes.
+
+### Post-task Reflection
+- The regression was a classic dependency-array trap where adding status as a dependency broadened the trigger semantics beyond AC5.
+- Keeping the fix in the production hook (not tests) preserved the stronger retry tests as durable proof.
+- Re-running the full AC8 suite was necessary to ensure no behavior regression in legacy useBoard variants while tightening the refetch trigger.
+
+[[2026-05-02]]
+## Review Evidence
+### Test Results
+- quality-runner scoped frontend run: 69 passed, 0 failed, 0 skipped across `useBoard_1277.test.ts` (10), `useBoard.test.ts` (14), `useBoard_967.test.ts` (19), `useBoard_1261.test.ts` (8), `useBoard_1263.test.ts` (5), and `usePollingFetch_1227.test.ts` (13).
+- VS Code diagnostics: no errors in `serve/cockpit/web/src/hooks/useBoard.ts` or the 6 scoped frontend test files.
+
+### Lint
+- Scoped lint clean on `serve/cockpit/web/src/hooks/useBoard.ts` plus all 6 scoped task/regression suites.
+- Informational only: the coverage-retry run used broader default lint scope and surfaced one unrelated pre-existing ESLint config issue in `src/hooks/usePolling.ts:49` (`react-hooks/exhaustive-deps` rule missing). That file is outside the task diff and outside the scoped lint gate for #1277.
+
+### Coverage
+- quality-runner retry with coverage: overall 97.88%.
+- `serve/cockpit/web/src/hooks/useBoard.ts`: 96.15% coverage.
+- Changed SSE wiring is directly exercised at `useBoard.ts:58-64` and `useBoard.ts:90-99`; uncovered lines reported by quality-runner (`110`, `119`) are outside the retry fix path.
+
+### AC Compliance
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1 | `useBoard.ts:58-59`; `useBoard_1277.test.ts` tests at lines 125 and 136; `useBoard_1263.test.ts` line 78 | PASS |
+| AC2 | `useBoard.ts:44,59,147`; `useBoard_1277.test.ts` line 148; `useBoard_1263.test.ts` line 96 | PASS |
+| AC3 | `useBoard.ts:135-136`; `useBoard_1277.test.ts` line 162; `useBoard_1261.test.ts` lines 161, 171, 181; `usePollingFetch_1227.test.ts` closed-state health assertions | PASS |
+| AC4 | `useBoard.ts:64`; `useBoard_1277.test.ts` lines 177 and 271; `useBoard_1261.test.ts` lines 85 and 101 | PASS |
+| AC5 | `useBoard.ts:90-99`; `useBoard_1277.test.ts` lines 199, 220, 241, and 294; `useBoard_1261.test.ts` line 126; `useBoard_1263.test.ts` lines 109 and 124 | PASS |
+| AC6 | `useBoard.ts:1-4,58-59` contains `useSSEEvent` import/use and no `useEventSource` import | PASS |
+| AC7 | module-level `vi.mock('../hooks/EventSourceProvider', ...)` present at `useBoard.test.ts:13`, `useBoard_967.test.ts:16`, `useBoard_1261.test.ts:11`, `useBoard_1263.test.ts:12`, `usePollingFetch_1227.test.ts:14` | PASS |
+| AC8 | quality-runner run verified all pre-existing `useBoard*` and `usePollingFetch_1227` suites green (69/69) | PASS |
+
+### Pass 1 — Critical
+#### Test-Writer AC Coverage
+- COVERED. The retry tests now discriminate the previously weak cases: `useBoard_1277.test.ts:271` proves polling continues while SSE status is `connecting`, and `useBoard_1277.test.ts:294` proves a status-only transition to `open` does not trigger an SSE refetch.
+
+#### Security Review
+- No issues found. This refactor only rewires internal hook consumption and adds no new boundary, dependency, persistence, or dynamic execution surface.
+
+#### Test Integrity
+- No weakened or removed `TestFromAC_*` assertions are visible in the current workspace snapshot.
+- Lower-confidence note only: I verified builder/test-writer commit presence from `.git/logs/*` (`9e7b3f43`, `b4b2ac33`, `a0eab0cf`) but did not have a direct pre/post diff for immutable assertion comparison.
+
+#### Test Quality
+- STRONG. Assertions are exact and discriminating for the prior false-green risks: open vs connecting pause behavior, task-mtime vs decision-mtime triggers, and status-only transition non-triggering.
+
+#### Data Safety
+- No issues found.
+
+#### Implementation-Aware Gap Analysis
+- No significant untested path remains in the changed SSE wiring. Positive and negative coverage exist for task mtime changes, decisions-only changes, status-only changes, and pause-state transitions.
+
+#### Necessity Check
+- Not applicable. No new dependency, integration, or speculative capability was introduced.
+
+#### Builder Process Quality
+- CLEAN. The task file contains one prior `## Review Evidence` section at `.owlbear/kanban/tasks/1277-refactor-useboard-to-consume-eventsourceprovider-context.md:123`, followed by one targeted test-writer retry and one targeted builder retry that changed approach and resolved the reported proof gap.
+
+### Deductions
+- `-0.02` TestFromAC immutability verification is lower-confidence without direct commit diff access.
+- `-0.01` Coverage required a retry because frontend instrumentation did not initialize on the first quality-runner pass.
+
+### Verdict
+- PASS -> docs | confidence 0.95
+
+### Action
+- Advance to `docs`.
+
+### Post-task Reflection
+- The prior FAIL was valid; the retry added the exact negative controls that were missing for AC4 and AC5.
+- Independent reruns matter on frontend tasks: the first quality pass hid coverage behind a tooling hiccup, but the retry produced the needed module evidence.
+- The broad ESLint retry surfaced unrelated frontend lint debt; scoped lint on the changed task files is the correct gate for this review.
+[[2026-05-02]]
+## Docs Gate
+
+### Checklist
+
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | Task is a frontend hook internal refactor (useBoard SSE wiring). No README or setup guide references useBoard SSE internals. |
+| 2 | Module docstrings | No | N/A | TypeScript-only task; no Python modules created or modified. |
+| 3 | External attribution | No | N/A | No external repos, articles, or docs cited; standard React context pattern. |
+| 4 | Research doc | Yes | Verified | `.owlbear/research/1277-refactor-useboard-sse-context.md` exists and is linked in task body. Follow-up #1300 created for dead-code cleanup. |
+| 5 | Diagram maintenance (describes match) | Yes | Updated | `share/diagrams/cockpit.excalidraw` describes `serve/cockpit/web/src/**` — matches `useBoard.ts`. Footer updated: `Last verified: 2026-05-03 (0ae82a7b)`. Commit: `5a7f802e`. |
+| 6 | Explicit diagram creation | No | N/A | No explicit diagram creation request in task body. |
+| 7 | Deletion detection | No | N/A | No files deleted; `useEventSource` dead code tracked via follow-up #1300. |
+
+### Scope Classification
+- **IN-scope changed files:** `serve/cockpit/web/src/hooks/useBoard.ts` (docstrings — TypeScript, N/A), `.owlbear/research/1277-refactor-useboard-sse-context.md` (research doc, verified)
+- **OUT-scope:** all test files, application source
+
+### Files Updated
+- `share/diagrams/cockpit.excalidraw` — footer date/hash updated (commit `5a7f802e`)
+
+### Scratch Files
+- No `.owlbear/scratch/1277-*` files found.
+
+### Child Tasks
+- None created.
+[[2026-05-02]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1 | `useBoard.ts:4,58-59` imports and calls `useSSEEvent` for both channels | PASS |
+| AC2 | `useBoard.ts:44,59,147` returns `lastDecisionsMtime` from context | PASS |
+| AC3 | `useBoard.ts:135-136` maps open→green, connecting→yellow, else polling health | PASS |
+| AC4 | `useBoard.ts:64` passes `paused: sseStatus === 'open'` | PASS |
+| AC5 | `useBoard.ts:90-99` refetches on mtime delta only (prevMtimeRef guards status-only transitions) | PASS |
+| AC6 | `useBoard.ts:1-4` — no `useEventSource` import in production | PASS |
+| AC7 | 5 enumerated files have `vi.mock('../hooks/EventSourceProvider', ...)` | PASS |
+| AC8 | useBoard* and usePollingFetch_1227 suites all green (69/69 scoped) | PASS |
+
+### Cross-Task Regression (auditor unique finding)
+**80 vitest tests FAIL across 8 test files** — all caused by this task's changes:
+- `Shell.test.tsx` (18 tests)
+- `Shell_1162.test.tsx`
+- `Shell_1192.test.tsx`
+- `Shell_1194.test.tsx`
+- `Shell_1228.test.tsx`
+- `KanbanBoard_1252.test.tsx`
+- `ActivityTab_1156.test.tsx`
+- `PdsMigration_1230.test.tsx`
+
+All fail with: `useSSEEvent must be used within an EventSourceProvider`. These are component-level tests that render Shell (which calls useBoard → useSSEEvent) but were not updated with EventSourceProvider mocks.
+
+AC7 only enumerated `renderHook(useBoard)` callers. Shell/component tests that transitively depend on useBoard were missed. The challenger noted "5 test files, not 2" but still only counted direct hook consumers, not component renderers.
+
+### Test Results
+- pytest: 128 failed, 3717 passed — all Python failures are pre-existing/unrelated to this frontend task (kanban engine, MCP, guidance tests)
+- vitest: 80 failed, 878 passed — 80 failures are directly caused by #1277 (confirmed via error message)
+- ruff: 1 violation in `serve/knowledge/copilot_auth.py:106` (unrelated T201)
+- eslint: 1 error in `usePolling.ts:49` (pre-existing, unrelated)
+
+quality-runner env fallback: SIGINT (exit 130) on two consecutive runs; direct execution used.
+
+### Architect Quality: 3/5
+AC7's test blast radius was undercounted even after challenger intervention. The challenger correctly flagged the blast radius issue but only counted `renderHook(useBoard)` callers (5 files), missing component-level renders that transitively use useBoard through Shell (8 additional files). This gap resulted in a 80-test regression that was invisible to scoped reviewer runs but caught by the full-suite auditor gate.
+
+### Deduction Breakdown
+- -0.10: 80 vitest failures across 8 test files directly caused by task changes (cross-task regression)
+
+### Confidence: 0.90
+### Action: reject-to-backlog
+
+### Required Fix
+Add `vi.mock('../hooks/EventSourceProvider', ...)` (or equivalent provider wrapper) to all 8 failing test files that render Shell or components using useBoard transitively. Re-run full vitest suite to confirm 0 failures.
+[[2026-05-03]]
+
+## Acceptance Criteria (addendum — auditor regression fix)
+
+9. Test files that render Shell without mocking `useBoard` must provide EventSourceProvider context (mock or wrapper). Currently affected: `Shell.test.tsx`, `Shell_1162.test.tsx`, `Shell_1192.test.tsx`, `Shell_1194.test.tsx`, `Shell_1228.test.tsx`, `PdsMigration_1230.test.tsx` (td:0)
+10. Full vitest suite (`npm test` in `serve/cockpit/web/`) passes with 0 failures (td:0)
+
+### Auditor regression context
+- Runtime dependency chain: `Shell.tsx:20` → `useBoard()` → `useSSEEvent('tasks-changed')` at `useBoard.ts:58` → throws without provider (`EventSourceProvider.tsx:178`)
+- 10 Shell-rendering test files exist; 4 already mock `useBoard` (Shell_966, Shell_1227, Shell_1228_integration, Shell_1263) — safe. 6 do not — listed in AC9.
+- Auditor also flagged `KanbanBoard_1252.test.tsx` and `ActivityTab_1156.test.tsx`. These are false positives: `KanbanBoard.tsx:4` has type-only import (`import { type Board, type Task }`); `ActivityTab.tsx` has zero dependency on useSSEEvent/useBoard/EventSourceProvider. AC10 (full suite gate) will catch any unexpected failures.
+
+[[2026-05-03]]
+## Architecture Review (re-review after auditor rejection)
+
+**Verdict: APPROVED → todo**
+
+### Reason for re-review
+Auditor rejected to backlog: 80 vitest failures across component-level test files rendering Shell without EventSourceProvider context. AC7 only enumerated direct `renderHook(useBoard)` callers (5 files), missing Shell-rendering component tests.
+
+### Evaluation
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | Fix is scoped to test harness mocks only — no production change |
+| Interface clarity | PASS | AC9 states behavioral requirement + enumerates affected files; AC10 is binary gate |
+| Dependency correctness | PASS | No new deps. #1276 done. Follow-up #1300 tracks dead useEventSource |
+| Module layering | PASS | Mock at provider boundary — correct layer |
+| TDD compliance | PASS | AC9/AC10 are td:0; existing AC1-AC8 already implemented and verified |
+| KISS/YAGNI | PASS | Minimal fix: 6 test files need provider mock |
+| Premise challenge | PASS | Regression is real — Shell renders useBoard which calls useSSEEvent |
+| Pattern consistency | PASS | Same vi.mock pattern as AC7 |
+| Security surface | PASS | Test-only change |
+| Single domain | PASS | cockpit frontend only |
+
+### Blast radius analysis (10 Shell-rendering test files)
+| File | Mocks useBoard? | Needs fix? |
+|------|----------------|-----------|
+| Shell.test.tsx | No | YES |
+| Shell_966.test.tsx | Yes (line 19) | No — safe |
+| Shell_1162.test.tsx | No | YES |
+| Shell_1192.test.tsx | No | YES |
+| Shell_1194.test.tsx | No | YES |
+| Shell_1227.test.tsx | Yes (line 20) | No — safe |
+| Shell_1228.test.tsx | No | YES |
+| Shell_1228_integration.test.tsx | Yes (line 21) | No — safe |
+| Shell_1263.test.tsx | Yes (line 22) | No — safe |
+| PdsMigration_1230.test.tsx | No | YES |
+
+### Auditor false-positive analysis
+- `KanbanBoard_1252.test.tsx`: KanbanBoard.tsx:4 is `import { type Board, type Task }` — type-only, zero runtime useSSEEvent call
+- `ActivityTab_1156.test.tsx`: ActivityTab.tsx has no import of useSSEEvent, useBoard, or EventSourceProvider
+- AC10 (full suite gate) catches any unexpected failures
+
+### Challenger
+Outcome: reconsider (0.78). Addressed: (1) documented all 10 Shell-rendering test files with safety analysis; (2) included runtime import graph evidence for auditor override; (3) reworded AC9 as behavioral requirement rather than technique prescription; (4) simplified AC10 to binary gate. Confidence after addressing: 0.90.
+
+### Notes
+- AC1-AC8 are fully implemented and pipeline-verified. Only AC9/AC10 are new work.
+- Test-writer: SKIP — all new AC lines are td:0. Existing test file `useBoard_1277.test.ts` (10 tests) is unaffected.
+- Builder: add EventSourceProvider mock or useBoard mock to each AC9 file. The choice of mock strategy is left to the builder (consistent with existing file patterns).
+[[2026-05-03]]
+## Test-Writer Notes
+- Retry: all new AC lines are td:0 — no new failing tests required.
+  - AC9 (td:0): add EventSourceProvider mock/wrapper to 6 Shell-rendering test files
+  - AC10 (td:0): full vitest suite passes with 0 failures (binary gate)
+- Architecture review explicitly states "Test-writer: SKIP — all new AC lines are td:0."
+- Existing 10 tests in `serve/cockpit/web/src/__tests__/useBoard_1277.test.ts` are unaffected and remain as-is.
+- Passing through to builder for Shell-rendering test file fixes (AC9/AC10).

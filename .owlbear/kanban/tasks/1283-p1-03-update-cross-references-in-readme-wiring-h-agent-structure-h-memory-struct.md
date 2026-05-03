@@ -1,10 +1,10 @@
 ---
 id: 1283
 title: 'P1-03: Update cross-references in README, WIRING, h-agent-structure, h-memory-structure'
-status: research
+status: backlog
 priority: needed
 created: 2026-05-02T16:01:10.613477+00:00
-updated: 2026-05-02T16:08:43.802978+00:00
+updated: 2026-05-02T23:14:27.716972+00:00
 tags:
 - phase-1
 - scope:docs
@@ -37,3 +37,19 @@ Brief: see parent #1280 and `.owlbear/briefs/draft-neutral-shared/brief.md`
 
 
 **Additional scope (from research File 20):** Extend `agent-ecosystem.instructions.md` applyTo to also cover `.owlbear/agents/**,.owlbear/skills/**,.owlbear/instructions/**,.owlbear/prompts/**` so consumers writing to local `.owlbear/` paths get the structural conventions.
+
+[[2026-05-02]]
+## Research
+- Research doc: .owlbear/research/p1-03-cross-reference-update.md
+- Sources: 9 studied, 7 high-relevance
+- Recommendation: T1 autonomous — 5 files, ~7 line changes (confidence: 0.92)
+- Follow-up tasks created: none (this task IS the implementation task)
+- Decision requests: none
+- Dependency added: depends_on #1282 (must complete first to know new description text)
+
+### Key findings
+- 2 description references need updating after #1282 (README.md:97, h-agent-structure:344)
+- agent-ecosystem.instructions.md applyTo extension requires 4 mirror updates (README.md, h-agent-structure, WIRING.md ×2)
+- h-memory-structure § Memory Governance reference is SAFE (§3 stays in file)
+- WIRING.md filename references are SAFE (filename unchanged)
+- Challenge: skipped (trivial cross-reference inventory)
