@@ -107,10 +107,9 @@ class TestFromAC_PathNeutrality:
     # ---- AC3 (td:1): h-quality-runner references copilot-instructions.md -----------------
 
     def test_quality_runner_skill_references_copilot_instructions(self) -> None:
-        """h-quality-runner/SKILL.md must contain a routing directive that names
-        copilot-instructions.md as the authority for frontend root and test-path mode
-        selection per AC3. The directive text itself must be present — mere filename
-        presence is insufficient.
+        """h-quality-runner/SKILL.md must contain both the routing-authority phrase
+        ('Routing authority for frontend root and test-path mode selection') and the
+        filename 'copilot-instructions.md', each as independent file-content substrings.
         """
         skill_file = _SKILLS_ROOT / "h-quality-runner" / "SKILL.md"
         content = skill_file.read_text(encoding="utf-8")
@@ -143,9 +142,8 @@ class TestFromAC_PathNeutrality:
     # ---- AC5 (td:2): r-doc-standards cross-reference chain --------------------------------
 
     def test_r_doc_standards_skill_references_instructions_stub(self) -> None:
-        """r-doc-standards/SKILL.md must reference the exact canonical path
-        'share/instructions/doc-standards.instructions.md' (chain link 1: skill → instructions
-        stub). A filename-only substring is insufficient — path must be unambiguous.
+        """r-doc-standards/SKILL.md must contain the exact canonical path substring
+        'share/instructions/doc-standards.instructions.md' in its file content.
         """
         skill_file = _SKILLS_ROOT / "r-doc-standards" / "SKILL.md"
         content = skill_file.read_text(encoding="utf-8")
@@ -155,9 +153,9 @@ class TestFromAC_PathNeutrality:
         )
 
     def test_doc_standards_instructions_stub_references_audit_prompt(self) -> None:
-        """share/instructions/doc-standards.instructions.md must reference the exact
-        canonical path '.owlbear/prompts/doc-audit.prompt.md' (chain link 2: instructions
-        stub → audit prompt). A filename-only substring is insufficient.
+        """share/instructions/doc-standards.instructions.md must exist on disk and
+        contain the exact canonical path substring '.owlbear/prompts/doc-audit.prompt.md'
+        in its file content.
         """
         instructions_file = _SHARE_INSTRUCTIONS_ROOT / "doc-standards.instructions.md"
         assert instructions_file.exists(), (
@@ -172,7 +170,7 @@ class TestFromAC_PathNeutrality:
 
     def test_doc_audit_prompt_exists_at_chain_target(self) -> None:
         """doc-audit.prompt.md must exist at .owlbear/prompts/ — the post-move target path
-        per AC6 (chain link 3: prompt target is accessible at the new canonical location).
+        per AC6. Verified by file existence at the expected canonical location.
         """
         prompt_file = _OWLBEAR_PROMPTS_ROOT / "doc-audit.prompt.md"
         assert prompt_file.exists(), (
@@ -181,9 +179,12 @@ class TestFromAC_PathNeutrality:
         )
 
     def test_r_doc_standards_full_chain_resolved(self) -> None:
-        """All three links in the r-doc-standards cross-reference chain must be intact:
-        r-doc-standards/SKILL.md → doc-standards.instructions.md → doc-audit.prompt.md
-        (end-to-end chain integrity check).
+        """The r-doc-standards cross-reference chain has no dangling targets, verified by:
+        (a) r-doc-standards/SKILL.md contains the exact canonical path substring
+            'share/instructions/doc-standards.instructions.md';
+        (b) doc-standards.instructions.md exists on disk and contains the exact canonical
+            path substring '.owlbear/prompts/doc-audit.prompt.md';
+        (c) doc-audit.prompt.md exists at .owlbear/prompts/.
         """
         skill_file = _SKILLS_ROOT / "r-doc-standards" / "SKILL.md"
         instructions_file = _SHARE_INSTRUCTIONS_ROOT / "doc-standards.instructions.md"
