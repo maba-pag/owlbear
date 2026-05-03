@@ -81,6 +81,31 @@ def _intra_pkg_imports(source: str, pkg_prefix: str = "owlbear_kanban") -> list[
     return modules
 
 
+def _locking_imports_inside_function(source: str, funcname: str) -> list[int]:
+    """Return line numbers of deferred owlbear_kanban._locking imports inside funcname."""
+    tree = ast.parse(source)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef) and node.name == funcname:
+            result = []
+            for child in ast.walk(node):
+                if (
+                    isinstance(child, ast.ImportFrom)
+                    and child.module == "owlbear_kanban._locking"
+                ):
+                    result.append(child.lineno)
+            return result
+    return []
+
+
+def _module_level_imports_from(source: str, module: str) -> list[str]:
+    """Return names imported at module-level scope (direct Module children) from module."""
+    tree = ast.parse(source)
+    for node in ast.iter_child_nodes(tree):
+        if isinstance(node, ast.ImportFrom) and node.module == module:
+            return [alias.name for alias in node.names]
+    return []
+
+
 # ===========================================================================
 # AC1 — _duration.py: exists, exports _parse_duration and _DURATION_RE,
 #        only intra-package import is ConfigError from owlbear_kanban.errors
@@ -166,6 +191,26 @@ class TestFromAC_LockingModule:
         intra = _intra_pkg_imports(src)
         assert not intra, (
             f"_locking.py must have zero intra-package imports; found: {intra}"
+        )
+
+    def test_exclusive_file_lock_has_contextmanager_decorator_structurally(self) -> None:
+        """_exclusive_file_lock must carry @contextlib.contextmanager in its AST decorator_list."""
+        src = _source("_locking.py")
+        tree = ast.parse(src)
+        for node in ast.iter_child_nodes(tree):
+            if isinstance(node, ast.FunctionDef) and node.name == "_exclusive_file_lock":
+                for dec in node.decorator_list:
+                    if (
+                        isinstance(dec, ast.Attribute) and dec.attr == "contextmanager"
+                    ) or (isinstance(dec, ast.Name) and dec.id == "contextmanager"):
+                        return
+                pytest.fail(
+                    "_exclusive_file_lock has no @contextlib.contextmanager decorator "
+                    "in its AST decorator_list — structural proof failed"
+                )
+                return
+        pytest.fail(
+            "_exclusive_file_lock not found as a module-level FunctionDef in _locking.py"
         )
 
 
@@ -311,6 +356,43 @@ class TestFromAC_StorageImport:
         assert occurrences == 0, (
             f"storage.py still references owlbear_kanban.engine {occurrences} time(s); "
             "all 3 deferred import call sites must be updated"
+        )
+
+    def test_storage_locking_imported_at_module_level(self) -> None:
+        """storage.py must import _exclusive_file_lock from _locking at module-level scope."""
+        src = _source("storage.py")
+        names = _module_level_imports_from(src, "owlbear_kanban._locking")
+        assert "_exclusive_file_lock" in names, (
+            "storage.py has no module-level 'from owlbear_kanban._locking import "
+            "_exclusive_file_lock'; the import is deferred inside function bodies — "
+            "must be hoisted to module scope (AC5 refined)"
+        )
+
+    def test_storage_write_task_if_unchanged_no_deferred_locking_import(self) -> None:
+        """write_task_if_unchanged must not import _locking inside its body."""
+        src = _source("storage.py")
+        lines = _locking_imports_inside_function(src, "write_task_if_unchanged")
+        assert not lines, (
+            f"write_task_if_unchanged has deferred owlbear_kanban._locking import(s) "
+            f"at line(s) {lines}; all 3 call sites must use the module-level name"
+        )
+
+    def test_storage_move_to_archive_no_deferred_locking_import(self) -> None:
+        """move_to_archive must not import _locking inside its body."""
+        src = _source("storage.py")
+        lines = _locking_imports_inside_function(src, "move_to_archive")
+        assert not lines, (
+            f"move_to_archive has deferred owlbear_kanban._locking import(s) "
+            f"at line(s) {lines}; all 3 call sites must use the module-level name"
+        )
+
+    def test_storage_allocate_next_id_no_deferred_locking_import(self) -> None:
+        """allocate_next_id must not import _locking inside its body."""
+        src = _source("storage.py")
+        lines = _locking_imports_inside_function(src, "allocate_next_id")
+        assert not lines, (
+            f"allocate_next_id has deferred owlbear_kanban._locking import(s) "
+            f"at line(s) {lines}; all 3 call sites must use the module-level name"
         )
 
 
@@ -471,4 +553,25 @@ class TestFromAC_TestFileImportUpdates:
         assert "owlbear_kanban._locking" in src or "_locking" in src, (
             "test_engine_dead_code_1112.py must be updated to read _locking.py "
             "for the _exclusive_file_lock / win32-branch structural assertions"
+        )
+
+    def test_dead_code_1112_win32_class_reads_locking_lines_structurally(self) -> None:
+        """TestFromAC_Win32PragmaAnnotation must reference _LOCKING_LINES or _LOCKING_SOURCE."""
+        src = _root_test_source("test_engine_dead_code_1112.py")
+        tree = ast.parse(src)
+        src_lines = src.splitlines()
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.ClassDef)
+                and node.name == "TestFromAC_Win32PragmaAnnotation"
+            ):
+                class_src = "\n".join(src_lines[node.lineno - 1 : node.end_lineno])
+                assert "_LOCKING_LINES" in class_src or "_LOCKING_SOURCE" in class_src, (
+                    "TestFromAC_Win32PragmaAnnotation does not reference _LOCKING_LINES "
+                    "or _LOCKING_SOURCE — win32 branch structural proof must read "
+                    "_locking.py source, not engine.py source"
+                )
+                return
+        pytest.fail(
+            "TestFromAC_Win32PragmaAnnotation class not found in test_engine_dead_code_1112.py"
         )
