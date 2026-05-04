@@ -2186,7 +2186,13 @@ class AgentView:
            ``ValueError``) are suppressed and logged at ``WARNING``; unexpected
            exception types propagate.
           3. **Filter** — exclude claimed, archived, ``blocked=True``, and
-           ``dep_status="blocked"`` tasks.
+           ``dep_status="blocked"`` tasks; rehydrate each candidate with
+           ``show_task()`` to obtain the full body, skip any whose
+           ``status == "archived"`` (post-rehydrate guard), then apply the
+           TDD gate (in-progress tasks require ``## Test-Writer Notes`` or a
+           non-impl tag) and the clarity gate (active-status tasks require
+           at least one bullet/numbered AC line).  Gate predicates are
+           resolved from ``owlbear_kanban.dispatch``.
           4. **Sort** — deterministic ordering: ``priority_rank ASC``,
            age (oldest first) ``DESC``, ``id ASC``.
           5. **Greedy wave assembly** — fill waves respecting three constraints:

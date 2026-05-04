@@ -51,6 +51,8 @@ engine.release_task(42)
 
 ### Dispatch helper
 
+> **Deprecated.** `pick_dispatchable()` is deprecated; use `AgentView.pick_tasks()` instead.
+
 ```python
 from owlbear_kanban import pick_dispatchable
 
@@ -67,7 +69,7 @@ for wave in response.waves:
         ...
 ```
 
-`AgentView.pick_tasks` runs a six-step pipeline: validate `agent_map` completeness (raises `ConfigError(ERR_INVALID_STATUS)` if any pipeline status is missing from `agent_map`), resolve pending Decision Requests (exceptions suppressed, never blocks dispatch), filter (exclude claimed/archived/blocked/dep-blocked tasks), deterministic sort (priority ASC, age DESC, id ASC), greedy wave assembly (size cap, dep-disjointness, agent-bucket compatibility), and agent assignment from `BoardConfig.agent_map`.
+`AgentView.pick_tasks` runs a six-step pipeline: validate `agent_map` completeness (raises `ConfigError(ERR_INVALID_STATUS)` if any pipeline status is missing from `agent_map`), resolve pending Decision Requests (exceptions suppressed, never blocks dispatch), filter (exclude claimed/archived/blocked/dep-blocked tasks; also apply TDD gate — in-progress tasks without `## Test-Writer Notes` and without a non-impl tag are excluded — and clarity gate — tasks in active statuses without a bullet/numbered AC line are excluded; post-rehydrate archived-status guard skips any task archived between list and show), deterministic sort (priority ASC, age DESC, id ASC), greedy wave assembly (size cap, dep-disjointness, agent-bucket compatibility), and agent assignment from `BoardConfig.agent_map`.
 
 ## Migration
 
