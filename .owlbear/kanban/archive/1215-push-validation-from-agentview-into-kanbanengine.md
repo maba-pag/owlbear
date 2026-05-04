@@ -1,10 +1,10 @@
 ---
 id: 1215
 title: Push validation from AgentView into KanbanEngine
-status: done
+status: archived
 priority: needed
 created: 2026-04-30 15:29:15.255749+00:00
-updated: 2026-05-04T10:08:18.039351+00:00
+updated: 2026-05-04T10:19:16.692900+00:00
 tags:
 - audit-kanban
 - architecture
@@ -1333,3 +1333,44 @@ Architecture review cycle 8 explicitly states: "Test-writer: SKIP (all new AC is
 
 ### Scratch Files Cleaned
 - None (.owlbear/scratch/1215-* — no files found)
+[[2026-05-04]]
+## Audit
+
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1 validate_body_size | engine.py:848; full suite green | PASS |
+| AC2 validate_archival | engine.py:856; full suite green | PASS |
+| AC3 validate_status_predicate | engine.py:915; full suite green | PASS |
+| AC4 task_exists | engine.py:820; full suite green | PASS |
+| AC5r create/edit 6 branches | All 6 branches exercised in task suite | PASS |
+| AC6 move_task validation | engine.py:1238,:1252; full suite green | PASS |
+| AC7 AgentView removal | Removal asserts green; engine delegation confirmed | PASS |
+| AC8 CockpitView removal | Removal asserts green; view.py:170 delegation | PASS |
+| AC9r2 exact user_message | 12-code obligation met with exact equality | PASS |
+| AC10r AgentView retention | Header references durable suites; all green | PASS |
+| AC11r 8 regression paths | All 8 specific tests pass in full suite | PASS |
+| AC12 archival_refs None contract | mutation.py:43 confirms list[int] or None = None; 7 tests green | PASS |
+
+### Test Results
+- pytest (full): 228 passed, 0 failed
+- vitest (full): 950 passed, 13 failed (Shell/polling, unrelated)
+- ruff: clean
+- eslint: 1 pre-existing config error (react-hooks rule def, unrelated)
+
+### Commits Verified
+All task commits present in git log: b8e30164, f5a91e1a, bb87c352, c26ca414, 15ee7688, f545495b, ec5d4e4f, 613da662, 3b857809, cc6e93ed
+
+### Architect Quality: 3/5
+Original AC was 5 vague lines requiring 8 refinement cycles. Final AC is precise and testable, but iteration cost was excessive.
+
+### Deduction Breakdown
+| Criterion | Deduction |
+|-----------|-----------|
+| AC quality score 3/5 | -.03 |
+| No Python failures | 0 |
+| Frontend failures unrelated to task | 0 |
+| Commits verified directly (git log) | 0 |
+
+### Confidence: 0.97
+### Action: archive

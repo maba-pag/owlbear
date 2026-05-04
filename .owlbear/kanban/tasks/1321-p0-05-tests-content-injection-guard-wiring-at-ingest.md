@@ -4,7 +4,7 @@ title: 'P0-05: Tests — Content injection guard wiring at ingest'
 status: done
 priority: critical
 created: 2026-05-04T05:48:37.782310+00:00
-updated: 2026-05-04T10:10:06.521536+00:00
+updated: 2026-05-04T10:15:48.500502+00:00
 tags:
 - phase-0
 - scope:knowledge
@@ -14,7 +14,7 @@ parent: 1316
 depends_on: []
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-04T10:15:48.500502+00:00
 archival_reason:
 archival_refs: []
 ---

@@ -4,7 +4,7 @@ title: 'P0-02: MCP startup fix — remove copilot_auth from lifespan'
 status: research
 priority: critical
 created: 2026-05-04T05:48:37.751521+00:00
-updated: 2026-05-04T05:50:51.022279+00:00
+updated: 2026-05-04T10:15:38.001657+00:00
 tags:
 - phase-0
 - scope:mcp-knowledge
@@ -14,7 +14,7 @@ depends_on:
 - 1317
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-04T10:15:38.001657+00:00
 archival_reason:
 archival_refs: []
 ---

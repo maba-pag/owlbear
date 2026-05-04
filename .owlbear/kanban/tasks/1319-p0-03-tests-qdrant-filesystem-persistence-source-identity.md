@@ -4,7 +4,7 @@ title: 'P0-03: Tests — Qdrant filesystem persistence + source identity'
 status: review
 priority: critical
 created: 2026-05-04T05:48:37.762103+00:00
-updated: 2026-05-04T10:06:53.460790+00:00
+updated: 2026-05-04T10:15:34.537255+00:00
 tags:
 - phase-0
 - scope:knowledge
@@ -14,7 +14,7 @@ parent: 1316
 depends_on: []
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-04T10:15:34.537255+00:00
 archival_reason:
 archival_refs: []
 ---
