@@ -20,7 +20,7 @@ Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json
 |------|-------------|
 | `search_knowledge` | Semantic search over the knowledge base |
 | `list_sources` | List registered knowledge sources, optionally filtered by scope |
-| `ingest_document` | Ingest a document (file path or URL) into the knowledge base |
+| `ingest_document` | Ingest text content into the knowledge base (optional `source_url` for attribution) |
 | `list_entities` | List knowledge-graph entities, optionally filtered by type |
 | `get_stats` | Summary statistics (document count, entity count, edge count) |
 | `bookmark_source` | Evaluate a URL and optionally ingest it as a bookmark |
@@ -39,6 +39,7 @@ Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json
 |----------|---------|-------------|
 | `OWLBEAR_LOCAL_KB_PATH` | — | Path to the local SQLite knowledge database (takes precedence) |
 | `OWLBEAR_KB_PATH` | `.owlbear/knowledge/local.db` | Fallback KB path |
+| `OWLBEAR_QDRANT_PATH` | `.owlbear/knowledge/vectors` | Path to Qdrant vector store directory (filesystem persistence) |
 | `OWLBEAR_LLM_API_KEY` | — | LLM API key for entity extraction (takes precedence over `OPENAI_API_KEY`) |
 | `OPENAI_API_KEY` | — | OpenAI-compatible API key fallback |
 | `OWLBEAR_LLM_MODEL` | `gpt-4o-mini` | LLM model name for entity extraction |
