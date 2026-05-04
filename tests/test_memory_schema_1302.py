@@ -22,8 +22,10 @@ missing, content length not validated, scope_agents defaults to None.
 
 from __future__ import annotations
 
+import asyncio
 import enum
 import tempfile
+from unittest.mock import MagicMock
 
 import pytest
 import yaml
@@ -31,6 +33,7 @@ from pydantic import ValidationError
 
 from owlbear_mcp_memory.engine import MemoryEngine
 from owlbear_mcp_memory.models import MemoryCategory, MemoryEntry, MemoryState
+from owlbear_mcp_memory.tools import store_learning
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -623,3 +626,47 @@ class TestFromAC_EngineRoundtrip:
             entries = engine.load()
             assert len(entries) == 1
             assert entries[0].approved_at is None
+
+
+# ---------------------------------------------------------------------------
+# AC11: store_learning() normalizes scope_agents=None → []
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_StoreLearningNormalization:
+    """AC11: store_learning() normalizes scope_agents=None to [] before constructing MemoryEntry.
+
+    Regression from builder commit 269f11d6: tools.py passes scope_agents=scope_agents
+    directly to MemoryEntry, but MemoryEntry.scope_agents is list[str] (not list[str]|None).
+    Passing None explicitly bypasses the default_factory and raises ValidationError,
+    which tools.py wraps as ToolError instead of returning an entry with scope_agents=[].
+
+    In RED: store_learning raises ToolError (via ValidationError for scope_agents=None) →
+            assertion is never reached → test FAILS.
+    In GREEN: tools.py normalizes scope_agents or []  (or omits the kwarg) →
+              MemoryEntry.scope_agents defaults to [] → result["scope_agents"] == [] → PASS.
+    """
+
+    def test_store_learning_scope_agents_none_normalized_to_empty_list(self) -> None:
+        """Omitting scope_agents (default None) must produce scope_agents=[] in the result.
+
+        Current code: MemoryEntry(scope_agents=None, ...) → ValidationError (list[str] rejects
+        None) → ToolError raised before return → assertion unreachable → FAIL (RED).
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            engine = MemoryEngine(tmp)
+            ctx = MagicMock()
+            ctx.request_context.lifespan_context.engine = engine
+            ctx.request_context.lifespan_context.caller = "builder"
+
+            result = asyncio.run(
+                store_learning(
+                    ctx,
+                    title="Normalization test entry",
+                    content="Test content body.",
+                    categories=[MemoryCategory("domain-knowledge")],
+                    confidence=0.85,
+                    # scope_agents intentionally omitted — defaults to None in signature
+                )
+            )
+            assert result["scope_agents"] == []
