@@ -100,69 +100,6 @@
       "autoResize": true
     },
     {
-      "id": "s1_orchestrator_rect",
-      "type": "rectangle",
-      "x": 160,
-      "y": 160,
-      "width": 220,
-      "height": 80,
-      "angle": 0,
-      "strokeColor": "#868e96",
-      "backgroundColor": "#f1f3f5",
-      "fillStyle": "solid",
-      "strokeWidth": 2,
-      "strokeStyle": "solid",
-      "roughness": 0,
-      "opacity": 100,
-      "seed": 10004,
-      "versionNonce": 20004,
-      "groupIds": [],
-      "boundElements": [
-        {
-          "id": "s1_orchestrator_text",
-          "type": "text"
-        },
-        {
-          "id": "s1_acp_arrow",
-          "type": "arrow"
-        }
-      ],
-      "isDeleted": false,
-      "roundness": {
-        "type": 3
-      }
-    },
-    {
-      "id": "s1_orchestrator_text",
-      "type": "text",
-      "x": 160,
-      "y": 160,
-      "width": 220,
-      "height": 80,
-      "angle": 0,
-      "strokeColor": "#495057",
-      "backgroundColor": "transparent",
-      "fillStyle": "solid",
-      "strokeWidth": 1,
-      "strokeStyle": "solid",
-      "roughness": 0,
-      "opacity": 100,
-      "seed": 10005,
-      "versionNonce": 20005,
-      "groupIds": [],
-      "boundElements": [],
-      "isDeleted": false,
-      "fontSize": 16,
-      "fontFamily": 1,
-      "text": "Orchestrator\n(ACP client \u2192 VS Code)",
-      "originalText": "Orchestrator\n(ACP client \u2192 VS Code)",
-      "textAlign": "center",
-      "verticalAlign": "middle",
-      "lineHeight": 1.25,
-      "containerId": "s1_orchestrator_rect",
-      "autoResize": true
-    },
-    {
       "id": "s1_vscode_rect",
       "type": "rectangle",
       "x": 500,
@@ -184,10 +121,6 @@
         {
           "id": "s1_vscode_text",
           "type": "text"
-        },
-        {
-          "id": "s1_acp_arrow",
-          "type": "arrow"
         },
         {
           "id": "s2_arrow_kanban",
@@ -247,83 +180,6 @@
       "verticalAlign": "middle",
       "lineHeight": 1.25,
       "containerId": "s1_vscode_rect",
-      "autoResize": true
-    },
-    {
-      "id": "s1_acp_arrow",
-      "type": "arrow",
-      "x": 380,
-      "y": 200,
-      "width": 120,
-      "height": 0,
-      "angle": 0,
-      "strokeColor": "#868e96",
-      "backgroundColor": "transparent",
-      "fillStyle": "solid",
-      "strokeWidth": 2,
-      "strokeStyle": "dashed",
-      "roughness": 0,
-      "opacity": 100,
-      "seed": 10008,
-      "versionNonce": 20008,
-      "groupIds": [],
-      "boundElements": [
-        {
-          "id": "s1_acp_label",
-          "type": "text"
-        }
-      ],
-      "isDeleted": false,
-      "points": [
-        [
-          0,
-          0
-        ],
-        [
-          120,
-          0
-        ]
-      ],
-      "lastCommittedPoint": null,
-      "startBinding": {
-        "elementId": "s1_orchestrator_rect",
-        "focus": 0,
-        "gap": 4
-      },
-      "endBinding": {
-        "elementId": "s1_vscode_rect",
-        "focus": 0,
-        "gap": 4
-      }
-    },
-    {
-      "id": "s1_acp_label",
-      "type": "text",
-      "x": 422,
-      "y": 180,
-      "width": 36,
-      "height": 18,
-      "angle": 0,
-      "strokeColor": "#868e96",
-      "backgroundColor": "transparent",
-      "fillStyle": "solid",
-      "strokeWidth": 1,
-      "strokeStyle": "solid",
-      "roughness": 0,
-      "opacity": 100,
-      "seed": 10009,
-      "versionNonce": 20009,
-      "groupIds": [],
-      "boundElements": [],
-      "isDeleted": false,
-      "fontSize": 16,
-      "fontFamily": 1,
-      "text": "ACP",
-      "originalText": "ACP",
-      "textAlign": "center",
-      "verticalAlign": "middle",
-      "lineHeight": 1.25,
-      "containerId": "s1_acp_arrow",
       "autoResize": true
     },
     {
@@ -1459,8 +1315,8 @@
       "isDeleted": false,
       "fontSize": 16,
       "fontFamily": 1,
-      "text": "Last verified: 2026-05-02 (1eb46340)",
-      "originalText": "Last verified: 2026-05-02 (1eb46340)",
+      "text": "Last verified: 2026-05-04 (587e4487)",
+      "originalText": "Last verified: 2026-05-04 (e1db031a)",
       "textAlign": "left",
       "verticalAlign": "top",
       "lineHeight": 1.25,

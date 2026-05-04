@@ -223,7 +223,7 @@ All 9 agents (critic, pragmatist, simplifier, outsider, ideation-architect, data
 | **python.instructions** | builder, test-writer, reviewer, auditor, quality-runner, code-reader, fix-attempt, test-curator | `applyTo: *.py` | doc-writer, challenger | `applyTo: *.py` (occasionally) |
 | **frontend.instructions** | — | — | builder, reviewer | `applyTo: *.tsx` (cockpit work) |
 | **research-docs.instructions** | researcher | `applyTo: .owlbear/research/*.md` | doc-writer | `applyTo: .owlbear/research/*.md` |
-| **agent-ecosystem.instructions** | — | — | any agent editing share/ files | `applyTo: share/agents/**,...` |
+| **agent-ecosystem.instructions** | — | — | any agent editing share/ and `.owlbear/` ecosystem files | `applyTo: share/agents/**,...,.owlbear/agents/**,...` |
 | **doc-standards.instructions** | — | — | any agent editing doc files | `applyTo: README.md,serve/*/README.md,...` |
 
 ---
@@ -254,7 +254,7 @@ Impact analysis: which agents break when a subagent is unavailable.
 | **h-frontend-conventions** | Stub-only | Only referenced as `applyTo` target by frontend.instructions stub. No agent or prompt lists it. By design — fires when frontend files are touched. |
 | **frontend.instructions** | No regular consumer | Only fires for cockpit work (builder/reviewer). Acceptable — suspenders-only safety net. |
 | **doc-standards.instructions** | No regular consumer | Fires when any agent edits doc files (README.md, SECURITY.md, setup/*.md, etc.). Acceptable — suspenders-only. |
-| **agent-ecosystem.instructions** | No regular consumer | Fires when any agent edits share/ files. Acceptable — suspenders-only. |
+| **agent-ecosystem.instructions** | No regular consumer | Fires when any agent edits share/ or `.owlbear/` ecosystem files. Acceptable — suspenders-only. |
 
 ### Potential Gaps (agent has sparse file coverage)
 

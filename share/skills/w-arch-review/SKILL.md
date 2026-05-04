@@ -217,6 +217,7 @@ If fallback triggered, include only: `Design-diverge: FALLBACK — {reason}`.
 - [ ] Searched codebase for related patterns
 - [ ] Checked task body for prior context (architecture notes, reviewer feedback)
 - [ ] For frontend import-shape AC constraints, captured a parent→child live-code import trace via workspace search or `read_file` evidence before naming path/barrel constraints
+- [ ] For frontend tasks referencing Briefs with design-system components, AC names exact selectors and assertion strategies (not generic HTML elements)
 - [ ] Ran durable-suite health pre-check before defining must-pass suite gates; documented and excluded known unrelated pre-existing failures
 - [ ] All 13 Step 2 criteria evaluated
 - [ ] Each AC line annotated with `(td:N)` (Step 2.1)
@@ -236,3 +237,4 @@ If fallback triggered, include only: `Design-diverge: FALLBACK — {reason}`.
 - **Premise challenge skip:** The challenger is easy to skip but catches real issues. The mandatory trigger on APPROVE exists for a reason.
 - **#1225 import-shape drift:** Do not author frontend import-path/barrel AC constraints from assumption. Confirm the parent→child import chain in live code first, then write the constraint.
 - **#1225 suite gate debt inheritance:** Do not gate builders on durable suites with known unrelated failures. Pre-check suite health and scope those failures out in AC gate wording.
+- **#1250 PDS contract carry-forward:** When a Brief or research doc specifies design-system components (PDS or equivalent), AC lines must carry exact component contracts into testable criteria. Instead of generic "select" wording, name the exact PDS selector (for example `p-select`). Instead of "populated from priorities prop," specify exact-ordered-match assertions when order matters. Instead of "does not render controls," state whether the proof requires DOM absence or visual/a11y hiding. Instead of "preserving other fields" with one broad check, require per-control verification for each affected control.

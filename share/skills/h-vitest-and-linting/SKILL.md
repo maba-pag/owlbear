@@ -6,14 +6,15 @@ user-invocable: false
 
 # Vitest, ESLint, and Coverage Reference
 
-All commands below run from `serve/cockpit/web/`. Running from the repo root causes `ReferenceError: HTMLElement is not defined` — the jsdom environment in `vite.config.ts` is not discovered.
+All commands below run from your frontend package root. Running from the repo root causes `ReferenceError: HTMLElement is not defined` because the jsdom environment in `vite.config.ts` is not discovered.
+> Example (OwlBear-dev): `serve/cockpit/web/`
 
 ## Vitest Commands
 
 ### Working directory
 
 ```shell
-cd serve/cockpit/web
+cd frontend/  # adjust paths for your project layout
 ```
 
 Every vitest invocation below assumes this cwd.
@@ -47,13 +48,13 @@ Matches all `src/**/*.{test,spec}.{ts,tsx}` files (configured in `vite.config.ts
 ## ESLint
 
 ```shell
-cd serve/cockpit/web && npx eslint src/components/MyComponent.tsx
+cd frontend/ && npx eslint src/components/MyComponent.tsx  # adjust paths for your project layout
 ```
 
 Lint all source:
 
 ```shell
-cd serve/cockpit/web && npx eslint src/
+cd frontend/ && npx eslint src/  # adjust paths for your project layout
 ```
 
 ESLint uses a flat config (`eslint.config.js`) with `@eslint/js` + `typescript-eslint`. The rule set is intentionally minimal — `@typescript-eslint/no-unused-vars` as a warning.
@@ -69,13 +70,13 @@ ESLint uses a flat config (`eslint.config.js`) with `@eslint/js` + `typescript-e
 ## Coverage
 
 ```shell
-cd serve/cockpit/web && NODE_OPTIONS='--max-old-space-size=2048' npx vitest run --silent --coverage.reporter=text --coverage.provider=v8
+cd frontend/ && NODE_OPTIONS='--max-old-space-size=2048' npx vitest run --silent --coverage.reporter=text --coverage.provider=v8  # adjust paths for your project layout
 ```
 
 Scoped with coverage:
 
 ```shell
-cd serve/cockpit/web && NODE_OPTIONS='--max-old-space-size=2048' npx vitest run --silent src/__tests__/MyComponent.test.tsx --coverage.reporter=text --coverage.provider=v8
+cd frontend/ && NODE_OPTIONS='--max-old-space-size=2048' npx vitest run --silent src/__tests__/MyComponent.test.tsx --coverage.reporter=text --coverage.provider=v8  # adjust paths for your project layout
 ```
 
 Coverage reports module-level percentages only — no per-branch analysis.
@@ -109,7 +110,8 @@ Imports and shims applied before every test:
 
 ## Known Gotchas
 
-- **Must `cd serve/cockpit/web` first.** This is the #1 cause of quality-runner frontend failures. Vitest reads `vite.config.ts` from the cwd — running from the repo root skips the jsdom environment entirely.
+- **Must `cd` to your frontend package root first.** This is the #1 cause of quality-runner frontend failures. Vitest reads `vite.config.ts` from the cwd, so running from the repo root skips the jsdom environment entirely.
+  > Example (OwlBear-dev): `cd serve/cockpit/web`
 - **PDS console noise.** PDS components emit thousands of `console.error` / `console.warn` lines in jsdom (e.g. `variant 'tertiary'`, `CDN request blocked`). The `--silent` flag suppresses this noise. If you omit `--silent` for debugging, only the vitest summary line (`Test Files: N passed`, `Tests: N passed`) determines pass/fail.
 - **Output volume.** Without `--silent`, PDS noise can produce 600K+ lines. Always use `--silent`. If output is still truncated, use the file-capture fallback: redirect to `.owlbear/scratch/vitest-{task_id}.log` and `grep` or `tail -50` for the summary — **never `read_file` on a vitest log** (they can be hundreds of thousands of lines).
 - **`npx vitest run` vs `npx vitest`.** Always use `run`. Without it, vitest enters watch mode and never exits.

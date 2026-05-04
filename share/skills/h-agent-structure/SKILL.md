@@ -1,12 +1,12 @@
 ---
 name: h-agent-structure
-description: "Handbook: Structural standards for OwlBear agent files, skill files, and instruction stubs"
+description: "Handbook: Structural standards for shared agent files, skill files, and instruction stubs"
 user-invocable: false
 ---
 
 # Agent Ecosystem Structure
 
-Structural model for all OwlBear agent, skill, and instruction files. Single source of truth for what belongs where.
+Structural model for all shared agent, skill, and instruction files. Single source of truth for what belongs where.
 
 ## Foundation
 
@@ -325,8 +325,8 @@ Current stubs:
 | `python.instructions.md` | `"**/*.py"` | `h-python-conventions` |
 | `frontend.instructions.md` | `"**/*.tsx,**/*.jsx,**/*.vue,**/*.svelte,**/*.css,**/*.scss"` | `h-frontend-conventions` |
 | `research-docs.instructions.md` | `".owlbear/research/*.md"` | `w-research` |
-| `agent-ecosystem.instructions.md` | `"share/agents/**,share/skills/**,share/instructions/**,share/prompts/**"` | `share/README.md` + `h-agent-structure` |
-| `doc-standards.instructions.md` | `"README.md,README-consumer.md,SECURITY.md,serve/*/README.md,share/README.md,setup/*.md"` | `r-doc-standards` |
+| `agent-ecosystem.instructions.md` | `"share/agents/**,share/skills/**,share/instructions/**,share/prompts/**,.owlbear/agents/**,.owlbear/skills/**,.owlbear/instructions/**,.owlbear/prompts/**"` | `share/README.md` + `h-agent-structure` |
+| `doc-standards.instructions.md` | `"README.md,README-consumer.md,SECURITY.md,workspace/*/README.md,share/README.md,setup/*.md"` | `r-doc-standards` |
 
 ### Authority Files — Embedded Rules
 
@@ -341,7 +341,7 @@ Current authority files:
 | File | applyTo | Role |
 |------|---------|------|
 | `pipeline-agents.instructions.md` | `share/skills/r-pipeline-protocol/**` | Channel B protocol and per-agent section-header mapping (pipeline-scoped) |
-| `owlbear-system.instructions.md` | `**` | Decision heuristics, system awareness, memory governance (universal) |
+| `owlbear-system.instructions.md` | `**` | System instructions — decision heuristics, system awareness, memory governance, and operational fundamentals (universal) |
 
 | Rule | Value |
 |------|-------|

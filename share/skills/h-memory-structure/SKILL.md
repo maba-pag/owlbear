@@ -6,7 +6,7 @@ user-invocable: false
 
 # Memory Entry Structure
 
-Structural standards for OwlBear memory entries across file-based (`/memories/`) and MCP (`owlbearMemory`) storage. Covers entry shape, tier selection, deduplication, and quality enforcement.
+Structural standards for project memory entries across file-based (`/memories/`) and MCP (`owlbearMemory`) storage. Covers entry shape, tier selection, deduplication, and quality enforcement.
 
 For tool syntax, see `h-mcp-memory`. For curation workflow, see `w-mem-curation`. For pipeline integration (pre-flight, reflection), see `r-pipeline-protocol`.
 
@@ -25,6 +25,12 @@ Memory entries use markdown body + YAML frontmatter. Core fields:
 | `scope_agents` | list[str] \| null | Optional scope list |
 | `created_at` | str | UTC timestamp |
 | `updated_at` | str | UTC timestamp |
+
+Enumerations and ranges used by the schema:
+
+- `categories` values: `knowledge`, `behaviour`, `pitfall`, `process`, `tool`, `goal`, `personality`, `preference`, `context`
+- `state` values: `pending`, `curated`, `approved`, `deleted`
+- `confidence` range: inclusive `[0.7, 1.0]`
 
 This schema is validated by `MemoryEntry` in the `mcp-memory` package.
 
@@ -93,7 +99,7 @@ An entry **fails** if any of the following are true:
 
 - Generic: "always write tests", "use type hints", "be careful with async"
 - No citation: no task ID, file, or tool mentioned
-- Ambiguous scope: the insight only applies to a specific project but `scope_agent` is null
+- Ambiguous scope: the insight only applies to a specific project but `scope_agents` is null
 - Ambiguous scope: the insight only applies to a specific role but `scope_agents` is missing
 - Duplicate: substantially the same as an existing approved entry
 
@@ -110,6 +116,6 @@ An entry **fails** if any of the following are true:
 
 1. **Storing research findings as memory entries.** Research belongs in `.owlbear/research/`; memory is for agent behavioral learnings.
 2. **Writing to `/memories/` for agent learnings.** User memory is the operator's space. Agent learnings go to `owlbearMemory` and the inbox.
-3. **Recording with `scope_agent=null`.** Global entries flood every agent's pre-flight. Always pass `scope_agent`.
+3. **Recording with `scope_agents=null`.** Global entries flood every agent's pre-flight. Always pass `scope_agents`.
 4. **One entry per task regardless of insight count.** Record 0 entries if nothing notable happened. Record N entries for N distinct insights.
 5. **Confidence below 0.7.** The server rejects it. Do not round up to bypass the floor — raise confidence only when evidence justifies it.

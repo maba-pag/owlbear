@@ -19,12 +19,6 @@ user-invocable: false
 - Pylance strict mode for type checking.
 - Pydantic `BaseModel` / `BaseSettings` for structured data and config.
 
-## Project Layout
-
-- Source: `serve/*/src/` (monorepo workspace packages, each with `__init__.py`).
-- Root tests: `tests/` at workspace root, named `test_{module}.py`.
-- Package-local tests: `serve/*/tests/` for package-scoped test suites.
-
 ## Testing
 
 - **pytest** with `pytest-asyncio` for async tests.

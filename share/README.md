@@ -103,28 +103,28 @@ See `h-agent-structure` § Nesting Depth & DMI for the full rule and ND3 agent t
 | `python.instructions.md` | `**/*.py` | `h-python-conventions` |
 | `frontend.instructions.md` | `**/*.tsx,**/*.jsx,**/*.vue,**/*.svelte,**/*.css,**/*.scss` | `h-frontend-conventions` |
 | `research-docs.instructions.md` | `.owlbear/research/*.md` | `w-research` |
-| `agent-ecosystem.instructions.md` | `share/agents/**,share/skills/**,share/instructions/**,share/prompts/**` | `share/README.md` + `h-agent-structure` |
+| `agent-ecosystem.instructions.md` | `share/agents/**,share/skills/**,share/instructions/**,share/prompts/**,.owlbear/agents/**,.owlbear/skills/**,.owlbear/instructions/**,.owlbear/prompts/**` | `share/README.md` + `h-agent-structure` |
 | `doc-standards.instructions.md` | `README.md,README-consumer.md,SECURITY.md,serve/*/README.md,share/README.md,setup/*.md` | `r-doc-standards` |
 
 Stubs catch agents editing files without the relevant skill loaded. They do not duplicate the skill content — they direct the agent to load it.
 
 ## Prompts
 
-10 prompt files (`.prompt.md`). Prompts are user-invocable one-shot commands triggered from the VS Code chat command palette. Many accept `${input:...}` variable substitution.
+9 prompt files (`.prompt.md`). Prompts are user-invocable one-shot commands triggered from the VS Code chat command palette. Many accept `${input:...}` variable substitution.
 
 **Naming convention:**
 
 | Pattern | Meaning |
 |---------|---------|
 | `{verb}.prompt.md` | Single-purpose action (e.g., `orchestrate`) |
-| `{scope}-{verb}.prompt.md` | Scoped action (e.g., `frontend-audit`, `doc-audit`) |
+| `{scope}-{verb}.prompt.md` | Scoped action (e.g., `frontend-audit`, `memory-audit`) |
 
 **Current prompts:**
 
 | Group | Prompts |
 |-------|---------|
 | Orchestration | `orchestrate` |
-| Audits | `agent-audit`, `doc-audit`, `frontend-audit` |
+| Audits | `frontend-audit`, `memory-audit` |
 | Frontend | `frontend-normalize`, `frontend-polish`, `design-context` |
 | Ideation | `ideation-discover`, `ideation-mediate` |
 | Curation | `test-curation` |

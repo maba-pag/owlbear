@@ -43,8 +43,8 @@ The test-writer has already created `TestFromAC_*` classes in `tests/test_{modul
 1. Read the test file — identify every `TestFromAC_*` class.
 2. Extract expected interfaces: function signatures, class names, error types, return values, and import paths.
 3. Compare expected interfaces against the actual codebase. If they conflict:
-   - **Tests assume wrong interface** (AC is correct, tests are wrong) → `end_work(outcome="reject", move_to="todo")` with notes on the real interface. Test-writer rewrites.
-   - **AC describes wrong interface** (codebase contradicts the AC) → `end_work(outcome="reject", move_to="backlog")` with notes on the mismatch. Architect fixes AC.
+   - **Tests assume wrong interface** (AC is correct, tests are wrong) → `end_work(outcome="reject", move_to="todo")` with Required Follow-up table (see `r-pipeline-protocol` §3) targeting test-writer: list each test method + the correct interface it should assert.
+   - **AC describes wrong interface** (codebase contradicts the AC) → `end_work(outcome="reject", move_to="backlog")` with Required Follow-up table targeting architect: list each AC line + what the codebase actually does.
 4. Plan implementation approach based on these interfaces.
 
 Verify all `TestFromAC_*` tests currently **fail** via Quality-Runner:
@@ -90,7 +90,7 @@ prompt: |
   mode: scoped
   task_id: {id}
   test_paths: ["tests/test_{module}_{task_id}.py"]
-  lint_paths: ["serve/{package}/src/", "tests/test_{module}_{task_id}.py"]
+  lint_paths: ["workspace/{package}/src/", "tests/test_{module}_{task_id}.py"]
 ```
 
 All tests must pass (`failed: []`), zero failures.
@@ -105,8 +105,7 @@ When that happens:
 1. Do **not** write a new test.
 2. Do **not** modify `TestFromAC_*` classes.
 3. Reject back to the test-writer via `end_work(outcome="reject", move_to="todo")`.
-4. Record exactly what behavior is missing, why it blocks correct implementation,
-  and what coverage the test-writer needs to add.
+4. Include a Required Follow-up table (see `r-pipeline-protocol` §3) targeting test-writer: list the missing behavior, why it blocks implementation, and which test class should cover it.
 5. Do not commit partial GREEN-phase work when rejecting for missing test
   coverage.
 
@@ -132,7 +131,7 @@ prompt: |
   task_id: {id}
   test_paths: ["tests/test_{module}_{task_id}.py"]
   coverage_modules: ["{module}"]
-  lint_paths: ["serve/{package}/src/", "tests/test_{module}_{task_id}.py"]
+  lint_paths: ["workspace/{package}/src/", "tests/test_{module}_{task_id}.py"]
 ```
 
 All must pass (`failed: []`, `clean: true`). Target 90% coverage on touched modules.
@@ -177,7 +176,7 @@ agentName: fix-attempt
 prompt: |
   task_id: {id}
   test_file: tests/test_{module}_{task_id}.py
-  source_files: serve/{package}/src/{namespace}/{module}.py
+  source_files: workspace/{package}/src/{namespace}/{module}.py
   retry_hint: {extract specific errors from error output; identify which failing tests produced them; provide Reflexion-style verbal diagnosis — what went wrong, which failing test(s) are blocked, and the suggested fix direction. Not generic "tests failed".}
   error_summary: {condensed pytest failure output, max 500 tokens}
 ```
@@ -186,8 +185,8 @@ Handle fix-attempt result:
 
 | Verdict | Action |
 |---------|--------|
-| `FIXED` | Re-verify with pytest (all tests must pass) and ruff (lint clean). If pass → proceed to Step 7. If still failing → `end_work(outcome="reject")`: diagnose root cause and route to `todo` (test assumptions wrong) or `backlog` (AC/architecture wrong). |
-| `FAILED` | Diagnose root cause: test assumptions wrong → `end_work(outcome="reject", move_to="todo")`; AC/architecture wrong → `end_work(outcome="reject", move_to="backlog")`. Append Channel B notes with same-context retry (Step 6.2) diagnosis and fix-attempt diagnosis — record each source separately. |
+| `FIXED` | Re-verify with pytest (all tests must pass) and ruff (lint clean). If pass → proceed to Step 7. If still failing → `end_work(outcome="reject")`: diagnose root cause and route to `todo` (test assumptions wrong) or `backlog` (AC/architecture wrong). Include Required Follow-up table. |
+| `FAILED` | Diagnose root cause: test assumptions wrong → `end_work(outcome="reject", move_to="todo")`; AC/architecture wrong → `end_work(outcome="reject", move_to="backlog")`. Include Required Follow-up table. Append Channel B notes with same-context retry (Step 6.2) diagnosis and fix-attempt diagnosis — record each source separately. |
 
 ## Step 7 — Commit & Advance
 
@@ -196,7 +195,7 @@ Include builder notes in your `end_work` note.
 **Commit your deliverables** (see `r-pipeline-protocol` → Who Commits What):
 
 ```shell
-git add serve/{package}/src/{namespace}/{module}.py && git commit -m "feat: implement {feature} (#{id}, builder)"
+git add workspace/{package}/src/{namespace}/{module}.py && git commit -m "feat: implement {feature} (#{id}, builder)"
 ```
 
 Stage only files you created or modified. Verify with `git diff --cached --name-only` if uncertain.

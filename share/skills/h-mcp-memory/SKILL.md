@@ -16,7 +16,7 @@ For curation workflow, see `w-mem-curation`.
 | Tool | Description | Key parameters |
 |------|-------------|----------------|
 | `store_learning` | Create a new `pending` memory entry | `title`, `content`, `categories`, `confidence`, `scope_agents` |
-| `query_memory` | Read entries by lifecycle state with curated defaults | `states` (optional) |
+| `query_memory` | Read entries by lifecycle state with curated defaults | `states`, `categories`, `scope_agents`, `min_confidence`, `limit` |
 | `update_entry` | Edit an entry (curator-only) | `entry_id`, optional mutable fields, optional `state` |
 | `delete_entry` | Mark an entry as `deleted` (curator-only) | `entry_id` |
 | `approve_entry` | Promote `curated -> approved` (user-only) | `entry_id` |
@@ -48,6 +48,10 @@ Default behavior (when `states` is omitted):
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `states` | list[str] \| null | `null` | Optional explicit state filter |
+| `categories` | list[str] \| null | `null` | Optional category filter |
+| `scope_agents` | list[str] \| null | `null` | Optional agent-scope filter |
+| `min_confidence` | float \| null | `null` | Optional inclusive minimum confidence threshold |
+| `limit` | int \| null | `null` | Optional maximum number of entries |
 
 Returns: `list[entry]` with the same entry fields as `store_learning`.
 

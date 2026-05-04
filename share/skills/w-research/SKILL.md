@@ -25,7 +25,7 @@ Before a task can leave `research`, complete this checklist. Items 1–6 are **m
 1. **Theoretical validity** — Sound concept? Right approach?
 2. **Environment audit** — Capability already provided by IDE, runtime, extensions, or existing tooling?
 3. **Prior art** — 2+ GitHub repos, articles, or docs showing how others solved this.
-4. **Technical feasibility** — Works in our stack (Python 3.12, FastMCP, Copilot CLI)? Blockers?
+4. **Technical feasibility** — Works in our stack (Python 3.12, FastMCP, VS Code + Copilot)? Blockers?
 5. **Architecture fit** — Integrates with existing OwlBear components? Interfaces?
 6. **Implementation approach** — Patterns, idioms, data structures to adopt.
 7. **Testing strategy** _(recommended)_ — How to test? Unit, integration, mocks? Coverage?

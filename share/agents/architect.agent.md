@@ -117,7 +117,7 @@ Include `## Architecture Review` section in your `end_work` note: verdict, AC as
 
 <good_example why="AC refinement with codebase evidence">
 AC line "support retries" — searched codebase, found existing RetryPolicy in
-serve/orchestrator/src/owlbear/retry.py. Rewrote AC: "Use existing RetryPolicy
+serve/kanban/src/owlbear_kanban/retry.py. Rewrote AC: "Use existing RetryPolicy
 with max_attempts=3, exponential backoff base=1s." Checked 2 dependent modules.
 Challenger verified: proceed. Confidence in AC clarity: .92 → approve.
 </good_example>
