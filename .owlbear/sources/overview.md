@@ -2,6 +2,12 @@
 
 External repos and resources studied during OwlBear development.
 
+## Qdrant Persistence + Source Identity (Task #1320)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Qdrant local mode docs | <https://qdrant.tech/documentation/guides/installation/#local-mode> | `QdrantClient(path=...)` filesystem persistence without server | `.owlbear/research/1320-qdrant-persistence-source-identity-impl.md` | 2026-05-04 |
+
 ## Filter Accessibility Tests (Task #1254)
 
 | Source | URL | What | Where Used | Date |
