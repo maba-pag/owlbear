@@ -178,7 +178,7 @@ class TestFromAC_SearchKnowledgeV2:
 
         await search_knowledge(ctx, query="bounded", limit=7)
 
-        qs.query.assert_awaited_once_with("bounded", top_k=7)
+        qs.query.assert_awaited_once_with("bounded", top_k=7, scopes=None)
 
     # ------------------------------------------------------------------
     # AC: returns "Knowledge service not available." when query_service is None

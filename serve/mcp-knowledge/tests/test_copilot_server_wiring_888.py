@@ -1,11 +1,10 @@
-"""RED-phase tests for server.py Copilot fallback wiring (task #888).
+"""Replacement tests for server.py after copilot_auth removal (task #1317).
 
-AC coverage:
-  AC4: LLMExtractor uses Copilot token when OWLBEAR_LLM_API_KEY is not set
-  AC5: Graceful fallback: if Copilot auth fails, extraction is None (no-op)
-  AC3 (extended): Copilot-Integration-Id and Editor headers forwarded to LLMExtractor
+Replaces the 5 copilot-fallback assertions removed when #1318 deleted the
+copilot_auth fallback path.  New tests cover the API-key path (complementary
+to test_server_1317.py which covers the no-API-key path).
 
-All tests FAIL until #888 implements the Copilot fallback path in app_lifespan.
+AC4 of task #1317: existing tests replaced with tests reflecting removed auth flow.
 """
 
 from __future__ import annotations
@@ -22,23 +21,6 @@ from owlbear_mcp_knowledge.server import app_lifespan
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-
-def _make_copilot_auth_mod(
-    get_token_return: str | None = "copilot_token_xyz",  # noqa: S107
-    get_token_side_effect: Exception | None = None,
-    editor_versions: dict | None = None,
-) -> ModuleType:
-    """Return a fake owlbear_knowledge.copilot_auth module."""
-    mod = ModuleType("owlbear_knowledge.copilot_auth")
-    if get_token_side_effect is not None:
-        mod.get_copilot_token = AsyncMock(side_effect=get_token_side_effect)  # type: ignore[attr-defined]
-    else:
-        mod.get_copilot_token = AsyncMock(return_value=get_token_return)  # type: ignore[attr-defined]
-    mod.detect_editor_versions = MagicMock(  # type: ignore[attr-defined]
-        return_value=editor_versions or {"Editor-Version": "vscode/1.97.1"}
-    )
-    return mod
 
 
 def _make_llm_mod(llm_cls: MagicMock | None = None) -> ModuleType:
@@ -71,131 +53,54 @@ def mock_lifespan_deps():
 
 
 # ---------------------------------------------------------------------------
-# TestFromAC_CopilotServerFallback
-# AC4, AC5: lifespan tries Copilot when no explicit API key is set
+# TestFromAC_ApiKeyPath
+# Replacement for removed CopilotServerFallback — tests the API-key wiring path
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_CopilotServerFallback:
-    """AC4, AC5: app_lifespan falls back to Copilot auth when no LLM API key is set."""
+class TestFromAC_ApiKeyPath:
+    """Replacement: OWLBEAR_LLM_API_KEY path wires LLMExtractor (no copilot fallback)."""
 
     @pytest.mark.asyncio
-    async def test_lifespan_calls_get_copilot_token_when_no_api_key(
+    async def test_llm_extractor_created_when_api_key_set(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """get_copilot_token() is called during lifespan when neither API key env var is set."""
-        monkeypatch.delenv("OWLBEAR_LLM_API_KEY", raising=False)
-        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        """structured_extractor is not None when OWLBEAR_LLM_API_KEY is set."""
+        monkeypatch.setenv("OWLBEAR_LLM_API_KEY", "sk-test-key")
 
-        copilot_mod = _make_copilot_auth_mod(get_token_return="cp_tok")
-        llm_mod = _make_llm_mod()
-
-        with patch.dict(
-            sys.modules,
-            {
-                "owlbear_knowledge.copilot_auth": copilot_mod,
-                "owlbear_knowledge.llm_extractor": llm_mod,
-            },
-        ):
-            async with app_lifespan(MagicMock()):
-                pass
-
-        copilot_mod.get_copilot_token.assert_called_once()  # type: ignore[attr-defined]
-
-    @pytest.mark.asyncio
-    async def test_lifespan_creates_llm_extractor_with_copilot_token_as_api_key(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """LLMExtractor receives the Copilot token as api_key when no OWLBEAR_LLM_API_KEY set."""
-        monkeypatch.delenv("OWLBEAR_LLM_API_KEY", raising=False)
-        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-
-        copilot_token = "github_copilot_tok_abc"
-        copilot_mod = _make_copilot_auth_mod(get_token_return=copilot_token)
-        mock_llm_cls = MagicMock(name="LLMExtractorCls")
+        mock_llm_cls = MagicMock(name="LLMExtractorCls", return_value=MagicMock())
         llm_mod = _make_llm_mod(mock_llm_cls)
 
-        with patch.dict(
-            sys.modules,
-            {
-                "owlbear_knowledge.copilot_auth": copilot_mod,
-                "owlbear_knowledge.llm_extractor": llm_mod,
-            },
-        ):
-            async with app_lifespan(MagicMock()):
-                pass
-
-        mock_llm_cls.assert_called_once()
-        _, kwargs = mock_llm_cls.call_args
-        assert kwargs.get("api_key") == copilot_token
-
-    @pytest.mark.asyncio
-    async def test_lifespan_structured_extractor_not_none_when_copilot_succeeds(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """ctx.structured_extractor is populated when Copilot auth succeeds and no API key."""
-        monkeypatch.delenv("OWLBEAR_LLM_API_KEY", raising=False)
-        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-
-        copilot_mod = _make_copilot_auth_mod(get_token_return="cp_tok")
-        mock_llm_instance = MagicMock(name="LLMExtractorInstance")
-        mock_llm_cls = MagicMock(name="LLMExtractorCls", return_value=mock_llm_instance)
-        llm_mod = _make_llm_mod(mock_llm_cls)
-
-        with patch.dict(
-            sys.modules,
-            {
-                "owlbear_knowledge.copilot_auth": copilot_mod,
-                "owlbear_knowledge.llm_extractor": llm_mod,
-            },
-        ):
+        with patch.dict(sys.modules, {"owlbear_knowledge.llm_extractor": llm_mod}):
             async with app_lifespan(MagicMock()) as ctx:
-                # Copilot path wired: extractor must NOT be None
                 assert ctx.structured_extractor is not None  # noqa: S101
 
     @pytest.mark.asyncio
-    async def test_lifespan_structured_extractor_none_when_copilot_auth_fails(
+    async def test_llm_extractor_receives_api_key_value(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """ctx.structured_extractor is None when Copilot auth raises (graceful fallback)."""
-        monkeypatch.delenv("OWLBEAR_LLM_API_KEY", raising=False)
-        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        """LLMExtractor is constructed with the api_key from OWLBEAR_LLM_API_KEY."""
+        monkeypatch.setenv("OWLBEAR_LLM_API_KEY", "sk-expected-key")
 
-        copilot_mod = _make_copilot_auth_mod(
-            get_token_side_effect=TimeoutError("browser auth timeout")
-        )
-
-        with patch.dict(sys.modules, {"owlbear_knowledge.copilot_auth": copilot_mod}):
-            async with app_lifespan(MagicMock()) as ctx:
-                # Both: Copilot was attempted AND gracefully degraded to None
-                copilot_mod.get_copilot_token.assert_called_once()  # noqa: S101  # type: ignore[attr-defined]
-                assert ctx.structured_extractor is None  # noqa: S101
-
-    @pytest.mark.asyncio
-    async def test_lifespan_passes_copilot_integration_header_to_llm_extractor(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """LLMExtractor receives 'Copilot-Integration-Id' in default_headers on Copilot path."""
-        monkeypatch.delenv("OWLBEAR_LLM_API_KEY", raising=False)
-        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-
-        copilot_mod = _make_copilot_auth_mod(get_token_return="cp_tok")
-        mock_llm_cls = MagicMock(name="LLMExtractorCls")
+        mock_llm_cls = MagicMock(name="LLMExtractorCls", return_value=MagicMock())
         llm_mod = _make_llm_mod(mock_llm_cls)
 
-        with patch.dict(
-            sys.modules,
-            {
-                "owlbear_knowledge.copilot_auth": copilot_mod,
-                "owlbear_knowledge.llm_extractor": llm_mod,
-            },
-        ):
+        with patch.dict(sys.modules, {"owlbear_knowledge.llm_extractor": llm_mod}):
             async with app_lifespan(MagicMock()):
                 pass
 
         mock_llm_cls.assert_called_once()
         _, kwargs = mock_llm_cls.call_args
-        default_headers = kwargs.get("default_headers") or {}
-        assert "Copilot-Integration-Id" in default_headers, (
-            f"Expected 'Copilot-Integration-Id' in default_headers. Got: {default_headers}"
-        )
+        assert kwargs.get("api_key") == "sk-expected-key"  # noqa: S101
+
+    @pytest.mark.asyncio
+    async def test_structured_extractor_none_when_llm_import_fails(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """structured_extractor is None when LLMExtractor import raises (graceful degradation)."""
+        monkeypatch.setenv("OWLBEAR_LLM_API_KEY", "sk-test-key")
+
+        # Blocking import via None sentinel in sys.modules raises ImportError on 'from ... import'
+        with patch.dict(sys.modules, {"owlbear_knowledge.llm_extractor": None}):
+            async with app_lifespan(MagicMock()) as ctx:
+                assert ctx.structured_extractor is None  # noqa: S101
