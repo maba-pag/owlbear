@@ -561,12 +561,37 @@ class TestFromAC_PriorityOrdering:
         self, tmp_path: Path
     ) -> None:
         """With 3 approved + 3 curated entries and limit=4, all 3 approved survive
-        and exactly 1 curated fills the remaining slot (AC6-fix: sort-then-slice proof)."""
-        approved_titles = ["Approved Alpha", "Approved Beta", "Approved Gamma"]
-        curated_titles = ["Curated Delta", "Curated Epsilon", "Curated Zeta"]
+        and exactly 1 curated fills the remaining slot.
+
+        Non-cooperative fixture: curated titles begin with "Aaa" and approved
+        titles begin with "Zzz". Disk load (sorted filenames) therefore returns
+        curated entries first. recall_memory's .sort() must reorder them so that
+        approved appears before curated before slicing. A slice-before-sort bug
+        would produce curated-first results and fail at least one of the assertions
+        below. (AC6-fix v2: discriminating sort-then-slice proof)
+        """
+        # "Aaa Curated ..." slugs sort alphabetically BEFORE "Zzz Approved ..." slugs.
+        # Engine.load() returns entries in filename order → curated loads first.
+        curated_titles = [
+            "Aaa Curated One",
+            "Aaa Curated Three",
+            "Aaa Curated Two",
+        ]
+        approved_titles = [
+            "Zzz Approved One",
+            "Zzz Approved Three",
+            "Zzz Approved Two",
+        ]
 
         engine = MemoryEngine(memory_dir=tmp_path)
-        for i, title in enumerate(approved_titles, start=10):
+        for i, title in enumerate(curated_titles, start=10):
+            engine.write(_make_entry(
+                id=_uuid(i),
+                title=title,
+                state="curated",
+                scope_agents=["builder"],
+            ))
+        for i, title in enumerate(approved_titles, start=20):
             engine.write(_make_entry(
                 id=_uuid(i),
                 title=title,
@@ -574,25 +599,23 @@ class TestFromAC_PriorityOrdering:
                 scope_agents=["builder"],
                 approved_at=_TS,
             ))
-        for i, title in enumerate(curated_titles, start=20):
-            engine.write(_make_entry(
-                id=_uuid(i),
-                title=title,
-                state="curated",
-                scope_agents=["builder"],
-            ))
         ctx = _make_ctx(engine)
 
         result = await _recall(ctx, agent="builder", limit=4)
 
         heading_count = result.count("\n## ") + (1 if result.startswith("## ") else 0)
-        assert heading_count == 4  # exactly limit entries
-        # All 3 approved entries survive the slice
+        assert heading_count == 4  # exactly limit entries returned
+        # All 3 approved entries must survive the sort-then-slice (a slice-before-sort
+        # bug would keep 3 curated + 1 approved instead)
         for title in approved_titles:
-            assert f"## {title}" in result, f"approved entry '{title}' missing from result"
+            assert f"## {title}" in result, (
+                f"approved entry '{title}' missing — sort-then-slice may be broken"
+            )
         # Exactly 1 curated entry fills the remaining slot
         curated_in_result = sum(1 for t in curated_titles if f"## {t}" in result)
-        assert curated_in_result == 1
+        assert curated_in_result == 1, (
+            f"expected 1 curated entry in result, got {curated_in_result}"
+        )
 
 
 # ---------------------------------------------------------------------------
