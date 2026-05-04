@@ -203,7 +203,11 @@ class TestFromAC_PickTasksTDDGate:
 
         result = view.pick_tasks()
 
-        assert 4 not in _all_task_ids(result), (
+        all_ids = _all_task_ids(result)
+        assert 3 in all_ids, (
+            "in-progress task WITH ## Test-Writer Notes must be included in waves"
+        )
+        assert 4 not in all_ids, (
             "in-progress task without ## Test-Writer Notes must be excluded by TDD gate"
         )
 
@@ -237,7 +241,11 @@ class TestFromAC_PickTasksTDDGate:
 
         result = view.pick_tasks()
 
-        assert 6 not in _all_task_ids(result), (
+        all_ids = _all_task_ids(result)
+        assert 5 in all_ids, (
+            "in-progress task with non-impl tag (research) must be included in waves"
+        )
+        assert 6 not in all_ids, (
             "in-progress task without notes or non-impl tag must be excluded"
         )
 
@@ -426,7 +434,11 @@ class TestFromAC_PickTasksClarityGate:
 
         result = view.pick_tasks()
 
-        assert 17 not in _all_task_ids(result), (
+        all_ids = _all_task_ids(result)
+        assert 16 in all_ids, (
+            "todo task with numbered list items must be included in waves (clarity gate passes)"
+        )
+        assert 17 not in all_ids, (
             "todo task without any list items must be excluded by clarity gate"
         )
 
@@ -595,4 +607,326 @@ class TestFromAC_WaveAssemblyRegressionGuard:
         wave0_ids = [entry.id for entry in result.waves[0].tasks] if result.waves else []
         assert wave0_ids.index(1) < wave0_ids.index(2), (
             "critical task (id=1) must sort before someday task (id=2) in wave 0"
+        )
+
+
+# ---------------------------------------------------------------------------
+# AC7: Clarity-gate delegation provenance — pick_tasks uses dispatch._passes_clarity_gate
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ClarityGateDelegation:
+    """AC7: pick_tasks must delegate to dispatch._passes_clarity_gate.
+
+    Patching the predicate to unconditional-True must allow a clarity-failing
+    (prose-only) todo task through, proving the engine does not inline the
+    clarity logic.  If inlined, the patch has no effect and the task stays
+    excluded — the assertion then fails, catching the regression.
+    """
+
+    def test_clarity_gate_predicate_from_dispatch_controls_pick_tasks(
+        self, tmp_path: Path
+    ) -> None:
+        """Patching dispatch._passes_clarity_gate to always True must include a
+        normally-clarity-gated prose-only todo task in pick_tasks output.
+
+        Regression: if engine.py inlines the clarity predicate instead of
+        calling dispatch._passes_clarity_gate, patching dispatch has no effect
+        and the task remains excluded — this assertion fails.
+        """
+        board = _make_board(tmp_path)
+        _write_task(
+            board / "tasks",
+            task_id=30,
+            title="Prose-only todo — normally clarity-gated",
+            status="todo",
+            body="Pure prose, no bullet points at all.",
+        )
+        view = AgentView(KanbanEngine(board, activity_log=False))
+
+        with patch(
+            "owlbear_kanban.dispatch._passes_clarity_gate", return_value=True
+        ):
+            result = view.pick_tasks()
+
+        assert 30 in _all_task_ids(result), (
+            "patching dispatch._passes_clarity_gate to True must allow a "
+            "prose-only task through; if inlined the patch has no effect "
+            "and this assertion fails"
+        )
+
+
+# ---------------------------------------------------------------------------
+# AC8: Clarity gate applies to docs and review statuses
+# ---------------------------------------------------------------------------
+
+_BASE_CONFIG_WITH_DOCS = """\
+schema: grouped
+statuses:
+  - research
+  - backlog
+  - todo
+  - in-progress
+  - review
+  - docs
+  - done
+priorities:
+  - someday
+  - nice-to-have
+  - important
+  - needed
+  - critical
+next_id: 20
+paths:
+    tasks_dir: tasks
+    archive_dir: archive
+pipeline:
+    entry_status: research
+    terminal_status: done
+    wave_size: 4
+    claim_timeout: 1h
+agents:
+    agent_map:
+        research: researcher
+        backlog: architect
+        todo: builder
+        in-progress: builder
+        review: reviewer
+        docs: doc-writer
+        done: auditor
+    agent_types: {}
+    agent_compatibility: {}
+policy:
+    non_impl_tags: [research, docs]
+    archival_reasons: [completed, deprecated, dropped, duplicate, wontfix]
+    status_predicates: {}
+"""
+
+
+def _make_board_with_docs(base_dir: Path) -> Path:
+    """Create a board that includes 'docs' as a valid pipeline status."""
+    kanban_dir = base_dir / "board"
+    kanban_dir.mkdir(parents=True, exist_ok=True)
+    (kanban_dir / "config.yml").write_text(_BASE_CONFIG_WITH_DOCS, encoding="utf-8")
+    (kanban_dir / "tasks").mkdir(exist_ok=True)
+    (kanban_dir / "archive").mkdir(exist_ok=True)
+    return kanban_dir
+
+
+class TestFromAC_ClarityGateStatusCoverage:
+    """AC8: Clarity gate must exclude tasks in 'review' and 'docs' statuses
+    when their bodies contain no bullet or numbered list items.
+    """
+
+    def test_clarity_gate_excludes_review_task_with_prose_only_body(
+        self, tmp_path: Path
+    ) -> None:
+        """Error path: review task with prose-only body → excluded by clarity gate.
+
+        review is in _CLARITY_STATUSES; tasks without bullets must be excluded.
+        Removing 'review' from dispatch._CLARITY_STATUSES would keep this test
+        passing vacuously (task never excluded), so this explicitly proves the
+        named status remains gated.
+        """
+        board = _make_board(tmp_path)
+        _write_task(
+            board / "tasks",
+            task_id=31,
+            title="Review task — prose only, no bullets",
+            status="review",
+            body="Prose only. No bullet points anywhere in this body.",
+        )
+        view = AgentView(KanbanEngine(board, activity_log=False))
+
+        result = view.pick_tasks()
+
+        assert 31 not in _all_task_ids(result), (
+            "pick_tasks must exclude review tasks with no bullet/numbered AC line"
+        )
+
+    def test_clarity_gate_excludes_docs_task_with_prose_only_body(
+        self, tmp_path: Path
+    ) -> None:
+        """Error path: docs task with prose-only body → excluded by clarity gate.
+
+        docs is in _CLARITY_STATUSES; uses a board config that includes 'docs'
+        in statuses so the task is not silently skipped due to an invalid status.
+        """
+        board = _make_board_with_docs(tmp_path)
+        _write_task(
+            board / "tasks",
+            task_id=32,
+            title="Docs task — prose only, no bullets",
+            status="docs",
+            body="Prose only. No list items in this body at all.",
+        )
+        view = AgentView(KanbanEngine(board, activity_log=False))
+
+        result = view.pick_tasks()
+
+        assert 32 not in _all_task_ids(result), (
+            "pick_tasks must exclude docs tasks with no bullet/numbered AC line"
+        )
+
+    def test_clarity_gate_passes_review_task_with_bullet_body(
+        self, tmp_path: Path
+    ) -> None:
+        """Happy path: review task WITH bullets → passes clarity gate.
+
+        Alongside a prose-only review task (id=34) that must be excluded.
+        Confirms the gate does not over-exclude well-formed review tasks.
+        """
+        board = _make_board(tmp_path)
+        tasks_dir = board / "tasks"
+        _write_task(
+            tasks_dir,
+            task_id=33,
+            title="Review with bullets — passes clarity gate",
+            status="review",
+            body="## Review Notes\n- item one\n- item two\n",
+        )
+        _write_task(
+            tasks_dir,
+            task_id=34,
+            title="Review prose only — clarity gated",
+            status="review",
+            body="Prose body with no list items here.",
+        )
+        view = AgentView(KanbanEngine(board, activity_log=False))
+
+        result = view.pick_tasks()
+
+        all_ids = _all_task_ids(result)
+        assert 33 in all_ids, (
+            "review task WITH bullet body must be included in waves (clarity gate passes)"
+        )
+        assert 34 not in all_ids, (
+            "review task without bullets must be excluded by clarity gate"
+        )
+
+
+# ---------------------------------------------------------------------------
+# AC9: Wave-assembly agent-bucket regression with clarity-compliant fixtures
+# ---------------------------------------------------------------------------
+
+_BASE_CONFIG_INCOMPATIBLE_BUCKETS = """\
+schema: grouped
+statuses:
+  - research
+  - backlog
+  - todo
+  - in-progress
+  - review
+  - done
+priorities:
+  - someday
+  - nice-to-have
+  - important
+  - needed
+  - critical
+next_id: 20
+paths:
+    tasks_dir: tasks
+    archive_dir: archive
+pipeline:
+    entry_status: research
+    terminal_status: done
+    wave_size: 4
+    claim_timeout: 1h
+agents:
+    agent_map:
+        research: researcher
+        backlog: architect
+        todo: builder
+        in-progress: builder
+        review: reviewer
+        done: auditor
+    agent_types:
+        builder: type-builder
+        reviewer: type-reviewer
+    agent_compatibility:
+        type-builder: [type-builder]
+        type-reviewer: [type-reviewer]
+policy:
+    non_impl_tags: [research, docs]
+    archival_reasons: [completed, deprecated, dropped, duplicate, wontfix]
+    status_predicates: {}
+"""
+
+
+def _make_board_incompatible_buckets(base_dir: Path) -> Path:
+    """Create a board where builder and reviewer agent types are mutually incompatible."""
+    kanban_dir = base_dir / "board"
+    kanban_dir.mkdir(parents=True, exist_ok=True)
+    (kanban_dir / "config.yml").write_text(
+        _BASE_CONFIG_INCOMPATIBLE_BUCKETS, encoding="utf-8"
+    )
+    (kanban_dir / "tasks").mkdir(exist_ok=True)
+    (kanban_dir / "archive").mkdir(exist_ok=True)
+    return kanban_dir
+
+
+class TestFromAC_BucketCompatibilityRegressionGuard:
+    """AC9: Wave assembly must place tasks with incompatible agent buckets in
+    separate waves — even after the new gate stage narrows the candidate set.
+
+    Both fixtures use clarity-compliant bodies (AC bullets) so they clear the
+    clarity gate and reach wave assembly.  Without clarity-compliant bodies the
+    tasks would be excluded before bucket compatibility is checked, making this
+    an empty proof.
+    """
+
+    def test_incompatible_agent_buckets_go_to_different_waves(
+        self, tmp_path: Path
+    ) -> None:
+        """Two tasks mapped to incompatible agent buckets AND with clarity-compliant
+        bodies must be placed in separate waves by pick_tasks.
+
+        Task 40: todo → builder → type-builder bucket
+        Task 41: review → reviewer → type-reviewer bucket
+        type-builder and type-reviewer are configured as incompatible (each
+        bucket only allows itself in agent_compatibility).
+
+        If both land in the same wave, the bucket-compatibility check is broken.
+        Both tasks must appear somewhere (clarity gate clears them) to prove
+        the compatibility check is the constraint, not gate exclusion.
+        """
+        board = _make_board_incompatible_buckets(tmp_path)
+        tasks_dir = board / "tasks"
+        _write_task(
+            tasks_dir,
+            task_id=40,
+            title="Todo task — builder bucket, clarity compliant",
+            status="todo",
+            priority="needed",
+            body="## AC\n- item one\n- item two\n",
+        )
+        _write_task(
+            tasks_dir,
+            task_id=41,
+            title="Review task — reviewer bucket, clarity compliant",
+            status="review",
+            priority="needed",
+            body="## AC\n- item one\n- item two\n",
+        )
+        view = AgentView(KanbanEngine(board, activity_log=False))
+
+        result = view.pick_tasks()
+
+        all_ids = _all_task_ids(result)
+        assert 40 in all_ids, "todo task (builder bucket) must clear gates and appear"
+        assert 41 in all_ids, "review task (reviewer bucket) must clear gates and appear"
+
+        wave_sets = [{entry.id for entry in wave.tasks} for wave in result.waves]
+        task_40_wave = next(
+            (i for i, ids in enumerate(wave_sets) if 40 in ids), None
+        )
+        task_41_wave = next(
+            (i for i, ids in enumerate(wave_sets) if 41 in ids), None
+        )
+        assert task_40_wave is not None, "task 40 must be placed in a wave"
+        assert task_41_wave is not None, "task 41 must be placed in a wave"
+        assert task_40_wave != task_41_wave, (
+            "tasks with incompatible agent buckets must be in different waves; "
+            "same wave means bucket-compatibility check is broken after gate filtering"
         )
