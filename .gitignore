@@ -110,6 +110,7 @@ store/audit/
 
 # Knowledge and memory databases
 .owlbear/knowledge/*.db
+.owlbear/knowledge/vectors/
 .owlbear/memory/*.db
 
 # Lock files (transient runtime artifacts)

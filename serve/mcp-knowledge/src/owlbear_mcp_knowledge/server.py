@@ -43,6 +43,7 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
 _DEFAULT_KB_PATH = ".owlbear/knowledge/local.db"
+_DEFAULT_QDRANT_PATH = ".owlbear/knowledge/vectors"
 
 
 class SearchResult(TypedDict):
@@ -250,10 +251,11 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
     path = os.environ.get("OWLBEAR_LOCAL_KB_PATH") or os.environ.get(
         "OWLBEAR_KB_PATH", _DEFAULT_KB_PATH
     )
+    qdrant_path = os.environ.get("OWLBEAR_QDRANT_PATH", _DEFAULT_QDRANT_PATH)
     conn = init_db(path)
     try:
         gs = GraphStore(conn)
-        vs = QdrantVectorStore()
+        vs = QdrantVectorStore(location=qdrant_path)
         emb = BgeM3EmbeddingProvider()
         structured_extractor = None
         api_key = os.environ.get("OWLBEAR_LLM_API_KEY") or os.environ.get(
@@ -284,6 +286,7 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
             vector_store=vs, graph_store=gs, embedding_provider=emb, retriever=gar
         )
         doc_store = DocumentStore(conn, gs, vs, emb)
+        source_store = KnowledgeSourceStore(conn)
         chunker = TextChunker()
         content_guard = ContentInjectionGuard()
         pipeline = IngestPipeline(
@@ -291,8 +294,8 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
             extractor,
             chunker,
             content_guard=content_guard,
+            source_store=source_store,
         )
-        source_store = KnowledgeSourceStore(conn)
         bookmark_store = BookmarkStore(conn)
         evaluator = SourceEvaluator(llm_fn=make_evaluate_fn())
 
@@ -405,6 +408,7 @@ async def ingest_document(
     text: str,
     metadata: dict[str, Any] | None = None,
     scope: str = "global",
+    source_url: str | None = None,
 ) -> str:
     """Ingest a text document into the knowledge base."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
@@ -412,7 +416,12 @@ async def ingest_document(
     if pipeline is None:
         return "error: ingest pipeline not available"
     try:
-        result = await pipeline.ingest_text(text, metadata=metadata, scope=scope)
+        result = await pipeline.ingest_text(
+            text,
+            metadata=metadata,
+            scope=scope,
+            source_url=source_url,
+        )
     except Exception as exc:  # noqa: BLE001
         return f"error: ingestion failed: {exc}"
     else:
