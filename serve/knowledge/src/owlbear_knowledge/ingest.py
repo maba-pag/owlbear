@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from owlbear_knowledge.content_guard import ContentInjectionGuard
     from owlbear_knowledge.extractor import EntityExtractor
     from owlbear_knowledge.intake import IntakeResult
+    from owlbear_knowledge.source_store import KnowledgeSourceStore
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +68,7 @@ class IngestPipeline:
         cancel_signal: object | None = None,
         content_guard: ContentInjectionGuard | None = None,
         injection_mode: Literal["strict", "warn"] = "warn",
+        source_store: KnowledgeSourceStore | None = None,
     ) -> None:
         self._docs = document_store
         self._extractor = entity_extractor
@@ -74,6 +76,7 @@ class IngestPipeline:
         self._cancel_signal = cancel_signal
         self._content_guard = content_guard
         self._injection_mode = injection_mode
+        self._source_store = source_store
 
     async def ingest_text(
         self,
@@ -82,6 +85,7 @@ class IngestPipeline:
         metadata: dict[str, object] | None = None,
         scope: str = "global",
         source_id: str | None = None,
+        source_url: str | None = None,
     ) -> IngestResult:
         """Chunk *text*, extract entities, persist to store, return IngestResult.
 
@@ -121,10 +125,17 @@ class IngestPipeline:
                 metadata=_meta,
                 scope=scope,
             )
+
+            resolved_source_id = source_id
+            if source_url is not None and self._source_store is not None:
+                resolved_source = self._source_store.resolve_by_url(source_url)
+                if resolved_source is not None:
+                    resolved_source_id = resolved_source.id
+
             await asyncio.to_thread(
                 self._docs.insert_document,
                 doc,
-                source_id=source_id,
+                source_id=resolved_source_id,
             )  # type: ignore[union-attr]
 
             chunk_ids: list[str] = await asyncio.to_thread(
