@@ -20,11 +20,11 @@ Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json
 |------|-------------|
 | `store_learning` | Create a new `pending` memory entry |
 | `query_memory` | Retrieve entries by state (`curated` and `approved` by default), approved-first then confidence-desc; supports optional `categories`, `scope_agents`, `min_confidence`, and `limit` filters (AND semantics) |
-| `update_entry` | Curator-only updates; auto-promotes `pending → curated` when `scope_agents` provided (scope gate rejects if missing); auto-downgrades `approved → curated` unconditionally |
-| `delete_entry` | Curator-only delete; hard-deletes `pending` entries (file removed from disk); soft-deletes `curated`/`approved` entries to `deleted` state |
-| `approve_entry` | User-only promotion from `curated → approved` |
-| `curate_memory` | Alias for `update_entry` — same curation semantics |
-| `delete_memory` | Alias for `delete_entry` — same deletion semantics |
+| `update_entry` | Update mutable fields; auto-promotes `pending → curated` when `scope_agents` provided (scope gate rejects if missing); auto-downgrades `approved → curated` unconditionally |
+| `delete_entry` | Delete an entry; hard-deletes `pending` entries (file removed from disk); soft-deletes `curated`/`approved` entries to `deleted` state |
+| `approve_entry` | Promote a `curated` entry to `approved` |
+| `curate_memory` | Alias for `update_entry` — same curation semantics; returns a `hint` field describing the state transition |
+| `delete_memory` | Alias for `delete_entry` — same deletion semantics; returns a `hint` field identifying hard-delete vs soft-delete |
 
 ### Entry schema
 
@@ -35,8 +35,7 @@ Entries are scoped to an optional agent (`scope_agents` list) and carry a requir
 | Variable | Default | Purpose |
 |----------|---------|--------|
 | `OWLBEAR_MEMORY_DIR` | `.owlbear/memory` | Directory for markdown memory files |
-| `OWLBEAR_MEMORY_CALLER` | `unknown` | Caller identity used for access-control checks |
-| `MEMORY_TOOLS_EXCLUDE` | — | Comma-separated tool names to remove from this server instance |
+| `OWLBEAR_MEMORY_CALLER` | `unknown` | Caller identity stored in request context (informational; no longer gates tool access) |
 
 ## Dependencies
 
