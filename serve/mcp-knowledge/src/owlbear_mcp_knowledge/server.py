@@ -59,9 +59,9 @@ class _BrowserContentFetcher:
 
     async def fetch(self, url: str) -> str:
         """Raise a clear error until a live browser fetcher is injected."""
-        msg = (
-            f"browser fetcher selected but no browser session is wired for URL {url!r}"
-        )
+        # Keep protocol signature without leaking URL details into persisted errors.
+        _ = url
+        msg = "browser fetcher selected but no browser session is wired"
         raise RuntimeError(msg)
 
 
