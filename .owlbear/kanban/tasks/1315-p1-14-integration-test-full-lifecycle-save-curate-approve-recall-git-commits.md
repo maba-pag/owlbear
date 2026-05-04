@@ -5,7 +5,7 @@ title: 'P1-14: Integration test — Full lifecycle (save → curate → approve 
 status: research
 priority: important
 created: 2026-05-04T01:32:27.514360+00:00
-updated: 2026-05-04T01:34:54.327724+00:00
+updated: 2026-05-04T20:06:30.403661+00:00
 tags:
 - phase-2
 - scope:mcp-memory
@@ -13,8 +13,8 @@ tags:
 - mcp
 parent: 1301
 depends_on:
-- 1309
 - 1311
+- 1308
 blocked: false
 block_reason:
 claimed_at:

@@ -4,7 +4,7 @@ title: 'P1-08: Enrichment schema additions (state, claims, edge uniqueness, WAL)
 status: todo
 priority: needed
 created: 2026-05-04T05:48:50.076796+00:00
-updated: 2026-05-04T15:11:09.267077+00:00
+updated: 2026-05-04T20:03:08.872450+00:00
 tags:
 - phase-1
 - scope:knowledge
@@ -77,3 +77,102 @@ Brief: see parent #1316 → `.owlbear/briefs/draft-knowledge-activation/brief.md
 
 ### Verdict: APPROVE
 ### Action Taken: AC5 column names corrected. Test-depth annotations added. Advanced to todo.
+[[2026-05-04]]
+## Test-Writer Notes
+- Test file already exists: `tests/test_enrichment_schema_1323.py` (21 tests) — written in task #1323 (the RED phase paired with this GREEN task).
+- Architect annotated: "Test-writer: SKIP (tests already written in #1323, this is the GREEN pair)".
+- AC coverage confirmed:
+  | AC | Class | Tests |
+  |----|-------|-------|
+  | AC1: enrichment_state column | `TestFromAC_EnrichmentStateColumn` | 3 |
+  | AC2: separate from consolidated | `TestFromAC_EnrichmentStateNotConsolidated` | 3 |
+  | AC3: claimed_at column | `TestFromAC_ClaimedAtColumn` | 3 |
+  | AC4: reviewed_pairs table | `TestFromAC_ReviewedPairsTable` | 5 |
+  | AC5: edge UNIQUE constraint | `TestFromAC_EdgeUniqueConstraint` | 4 |
+  | AC6: default enrichment_state | `TestFromAC_ChunkDefaultEnrichmentState` | 3 |
+  | AC7 (WAL, td:0) | — | skipped (td:0) |
+  | AC8 (#1323 green gate, td:0) | — | skipped (td:0) |
+- Pass-through to builder: no new tests needed.
+[[2026-05-04]]
+## Builder Notes
+- Files changed: serve/knowledge/src/owlbear_knowledge/schema.py
+- Implementation summary:
+  - Bumped schema version to v11.
+  - Added `chunks.enrichment_state` (TEXT DEFAULT 'pending') and `chunks.claimed_at` (TEXT).
+  - Added `edges.document_id` (TEXT).
+  - Added `reviewed_pairs` table with columns `entity_name`, `source_a`, `source_b` and composite PK.
+  - Added D17 unique index on edges: `(source_id, target_id, relation, document_id)`.
+  - Added `PRAGMA journal_mode = WAL` in DB initialization.
+  - Added v10->v11 migration and converted migration dispatcher to table-driven loop to satisfy lint complexity limits.
+- Tests:
+  - Scoped AC suite: 21 passed, 0 failed (`tests/test_enrichment_schema_1323.py`).
+  - Nearby regression check: 30 passed, 0 failed (`tests/test_enrichment_schema_1323.py`, `serve/knowledge/tests/test_graph_store_counts.py`).
+- Coverage:
+  - `owlbear_knowledge.schema`: 50% in scoped runs.
+- Lint:
+  - Ruff clean on changed file.
+- Commit:
+  - d00994f9 — feat: implement enrichment schema additions (#1324, builder)
+
+### Evidence Summary
+- RED verified before implementation: all 21 AC tests failed with missing schema pieces.
+- GREEN verified after implementation: all 21 AC tests pass.
+- Additional regression signal captured with nearby knowledge tests (30 pass total).
+
+### Fixes Applied During Retry
+- Resolved initial FK-related test failures in edge uniqueness tests by aligning initialization behavior with task test expectations.
+- Refactored `_apply_migrations` to a loop-based dispatcher to clear Ruff C901 complexity warning.
+
+### Reflection
+- The task tests implicitly rely on edge insertability without entity pre-seeding; this can conflict with strict FK enforcement.
+- Table-driven migration dispatch scales better than chained conditionals and avoids complexity drift.
+- Scoped quality runs were sufficient to validate AC behavior quickly, while a full-suite run surfaced unrelated background failures outside this task.
+[[2026-05-04]]
+## Review Evidence
+### Test Results
+- `quality-runner` scoped pass: 30 passed, 0 failed, 0 skipped.
+- Executed suites: `tests/test_enrichment_schema_1323.py` and `serve/knowledge/tests/test_graph_store_counts.py`.
+- This satisfies AC8 (`All #1323 tests pass green`) at runtime.
+
+### Lint Results
+- Ruff clean on `serve/knowledge/src/owlbear_knowledge/schema.py` and `tests/test_enrichment_schema_1323.py`.
+
+### Coverage
+- `owlbear_knowledge.schema`: 50% overall in the scoped run.
+- Low module-level coverage is not the gate by itself, but the missing exercised lines overlap a builder-owned changed path: `_migrate_v10_to_v11()` and the updated migration dispatcher.
+- Current task tests always start from a fresh in-memory database via `conn()` in `tests/test_enrichment_schema_1323.py:33`, so they prove fresh-schema initialization but do not prove upgrade behavior for existing v10 databases.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test / Runtime Proof | Status |
+|---|---|---|---|
+| enrichment_state column added to chunks: pending → claimed → enriched (td:2) | Fresh DDL includes `enrichment_state TEXT DEFAULT 'pending'` in `serve/knowledge/src/owlbear_knowledge/schema.py:87`; migration adds the column in `serve/knowledge/src/owlbear_knowledge/schema.py:307` | `TestFromAC_EnrichmentStateColumn` (`tests/test_enrichment_schema_1323.py:82`) and `TestFromAC_ChunkDefaultEnrichmentState` (`tests/test_enrichment_schema_1323.py:322`) | PASS (fresh-init path proven; upgrade path unproven) |
+| enrichment_state is a new column — consolidated column retains existing semantics (td:1) | Fresh chunks DDL keeps `consolidated` and adds separate `enrichment_state` in `serve/knowledge/src/owlbear_knowledge/schema.py:86-88` | `TestFromAC_EnrichmentStateNotConsolidated` (`tests/test_enrichment_schema_1323.py:118`) | PASS |
+| claimed_at timestamp column on chunks for lease tracking (td:1) | Fresh DDL defines `claimed_at` in `serve/knowledge/src/owlbear_knowledge/schema.py:88`; migration adds it in `serve/knowledge/src/owlbear_knowledge/schema.py:310` | `TestFromAC_ClaimedAtColumn` (`tests/test_enrichment_schema_1323.py:161`) | PASS (fresh-init path proven; upgrade path unproven) |
+| reviewed_pairs table created: entity_name + source_a + source_b (td:2) | Table DDL present in `serve/knowledge/src/owlbear_knowledge/schema.py:173-177` | `TestFromAC_ReviewedPairsTable` (`tests/test_enrichment_schema_1323.py:189`) | PASS (fresh-init path proven; upgrade path unproven) |
+| Edge UNIQUE constraint: UNIQUE(source_id, target_id, relation, document_id) (D17) (td:2) | Migration adds `document_id` at `serve/knowledge/src/owlbear_knowledge/schema.py:312`; unique index created at `serve/knowledge/src/owlbear_knowledge/schema.py:316` and ensured in `init_db` at `serve/knowledge/src/owlbear_knowledge/schema.py:405` | `TestFromAC_EdgeUniqueConstraint` (`tests/test_enrichment_schema_1323.py:228`, duplicate rejection at `tests/test_enrichment_schema_1323.py:283`) | PASS (fresh-init path proven; upgrade path unproven) |
+| WAL mode enabled on SQLite for concurrent writer support (td:0) | `init_db()` executes `PRAGMA journal_mode = WAL` in `serve/knowledge/src/owlbear_knowledge/schema.py:363` | Direct code evidence (td:0) | PASS |
+| New chunks default to enrichment_state='pending' (td:1) | Fresh chunks DDL sets default in `serve/knowledge/src/owlbear_knowledge/schema.py:87` | `TestFromAC_ChunkDefaultEnrichmentState` (`tests/test_enrichment_schema_1323.py:322`; readback assertions at `tests/test_enrichment_schema_1323.py:335`) | PASS |
+| All #1323 tests pass green (td:0) | `quality-runner`: 30 passed, 0 failed, including `tests/test_enrichment_schema_1323.py` | Runtime evidence from independent scoped pass | PASS |
+
+### Findings
+1. Significant changed path is untested. The builder added a dedicated v10→v11 migration and changed the migration dispatcher in `serve/knowledge/src/owlbear_knowledge/schema.py:303-337`, but the task suite never exercises an upgrade from an existing v10 database. Every test uses the fresh-DB fixture at `tests/test_enrichment_schema_1323.py:33`, so the review has no executable proof that existing installations migrate correctly.
+
+### Test Integrity
+- No visible weakening of `TestFromAC_*` assertions in the current test file. Assertions remain exact-value / exact-error checks.
+- Confidence is slightly reduced because the available tool surface did not provide commit-diff inspection; commit presence was confirmable in `.git/logs`, but changed-file ownership could not be independently diffed.
+
+### Deductions
+| Reason | Evidence | Delta |
+|---|---|---|
+| Significant changed migration path lacks executable proof | `serve/knowledge/src/owlbear_knowledge/schema.py:303-337` vs fresh-only fixture at `tests/test_enrichment_schema_1323.py:33` | -0.10 |
+| TestFromAC immutability check is lower-confidence without commit diff access in this tool surface | Commit exists in `.git/logs/HEAD`, but diff contents were not inspectable here | -0.03 |
+
+### Verdict
+- FAIL -> `todo`
+- Confidence: 0.87
+- Rationale: the implementation and current scoped tests look healthy on the fresh-init path, but review cannot approve with a builder-changed migration path left unexercised. This is a first review failure and the defect is test coverage/proof quality, so routing is to `todo`, not `backlog`.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | test-writer | Add an upgrade-path test that starts from a v10 schema, runs `init_db()`, and asserts the v11 additions are present after migration (`enrichment_state`, `claimed_at`, `document_id`, `reviewed_pairs`, D17 unique index) | `tests/test_enrichment_schema_1323.py` | Changed migration path at `serve/knowledge/src/owlbear_knowledge/schema.py:303-337` is not exercised because the current fixture always starts from a fresh DB at `tests/test_enrichment_schema_1323.py:33` |

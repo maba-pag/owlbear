@@ -1,17 +1,19 @@
 ---
 id: 1343
-title: 'Complete engine config validation: entry_status, terminal_status, agent_map,
-  compatibility'
-status: todo
+title: 'Config validation cleanup: remove agent_name while preserving lazy agent_map'
+status: backlog
 priority: needed
 created: 2026-05-04T15:10:51.036581+00:00
-updated: 2026-05-04T15:11:11.914799+00:00
+updated: 2026-05-04T17:28:16+00:00
 tags:
 - sync-blocker
 - kanban
 - config
+- cockpit
 parent:
-depends_on: []
+depends_on:
+- 1336
+- 1351
 blocked: false
 block_reason:
 claimed_at:
@@ -21,34 +23,36 @@ archival_refs: []
 
 ## Context
 
-`serve/kanban/tests/test_engine_init_1067.py` has 15 red tests verifying config validation behaviors. The engine constructor and config model are missing several validation checks that were designed but not implemented.
-
-The init/config validation ensures the engine has a consistent, valid configuration before running — prerequisite for lifecycle contract correctness.
+Most old engine-init config validation expectations are now implemented or intentionally superseded by lazy dispatch validation. The remaining deployment-relevant work is D33: remove the stale `agent_name` constructor parameter while preserving lazy `agent_map` behavior for Cockpit and other non-dispatch consumers.
 
 ## Acceptance Criteria
 
-1. `entry_status` not in config.pipeline.statuses → raises `ConfigError(ERR_ENTRY_STATUS_INVALID)` (case-sensitive, rejects empty string)
-2. `terminal_status` must be in statuses AND equal statuses[-1] — not first, not middle
-3. `agent_map` must have entries for ALL declared statuses (D24)
-4. `agent_compatibility` must be symmetric (D63) — if A→B allowed, B→A must be allowed; else raises
-5. `claim_timeout` accepts extended format (1h, 30s, 2d) (D29)
-6. Engine constructor has NO `agent_name` parameter (D33)
-7. `terminal_status` is a Pydantic model field with default "done" (D65)
-8. `archival_reasons` is a frozenset, not list (D37)
-9. AgentView has `pick_tasks` method (stub or full)
-10. All 15 tests in `test_engine_init_1067.py` pass
-11. No regression in passing engine/config tests
+1. Remove `agent_name` from `KanbanEngine.__init__`.
+2. Update every first-party caller, test, and benchmark that still passes `agent_name`, including Cockpit launch wiring.
+3. Preserve deterministic Cockpit activity/source labeling through explicit `source="cockpit"` mutation calls or an approved replacement, not constructor state.
+4. Preserve lazy `agent_map` validation: empty/incomplete `agent_map` must not fail engine construction when dispatch is not being used.
+5. `AgentView.pick_tasks()` continues to raise the appropriate config error when dispatch needs missing `agent_map` entries.
+6. Replace stale `test_engine_init_1067.py` assertions that require eager `agent_map` validation with tests for the lazy dispatch contract.
+7. Keep already-green semantic config tests for entry status, terminal status, claim timeout, archival reason type, and symmetric compatibility.
+8. Run config, lazy-agent-map, Cockpit launch/read/mutation, and engine-init tests together before completion.
 
 ## Key Files
 
-- `serve/kanban/src/owlbear_kanban/engine.py` (constructor, validation)
-- `serve/kanban/src/owlbear_kanban/config_loader.py` (model fields, validators)
+- `serve/kanban/src/owlbear_kanban/engine.py`
+- `serve/kanban/src/owlbear_kanban/models.py`
+- `serve/kanban/src/owlbear_kanban/agent_view.py`
+- `serve/cockpit/src/owlbear_cockpit/main.py`
 - `serve/kanban/tests/test_engine_init_1067.py`
+- `tests/test_engine_lazy_agent_map_1221.py`
+- `tests/test_cockpit_launch.py`
 
-## Dependencies
+## Audit Evidence
 
-None — but #1339 (lifecycle reconciliation) depends on THIS being done first. Config must be valid before lifecycle behavior is reconciled.
+- `serve/kanban/tests/test_engine_init_1067.py` now has 13 passed / 4 failed, not 15 broad failures.
+- Entry status, terminal status, claim timeout, archival reason type, AgentView existence, and symmetric compatibility are already implemented.
+- The old eager `agent_map` init failures conflict with current lazy validation and Cockpit's ability to start with `agent_map: {}`.
+- User decision during deployment audit: keep D33 and remove `agent_name`, despite current Cockpit/tests still using it.
 
 ## Source
 
-Research: `.owlbear/research/kanban-mcp-deployment-audit.md`
+Deployment audit reconciliation, 2026-05-04.

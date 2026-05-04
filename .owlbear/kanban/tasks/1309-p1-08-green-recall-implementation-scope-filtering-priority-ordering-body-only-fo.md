@@ -2,15 +2,16 @@
 id: 1309
 title: 'P1-08: GREEN — Recall implementation (scope filtering, priority ordering,
   body-only format, wildcard block)'
-status: research
+status: backlog
 priority: needed
 created: 2026-05-04T01:32:27.284697+00:00
-updated: 2026-05-04T01:34:54.276362+00:00
+updated: 2026-05-04T20:06:52.790338+00:00
 tags:
 - phase-2
 - scope:mcp-memory
 - memory
 - mcp
+- merged
 parent: 1301
 depends_on:
 - 1308
@@ -40,3 +41,5 @@ Brief: see parent #1301
 
 - In: recall_memory handler, query logic, result formatting
 - Out: mutation tools (done in #1307), git integration, consumer wiring
+[[2026-05-04]]
+MERGED into #1308. The builder for #1308 already implemented recall_memory (commit 26f65acd) — all 1309 AC is satisfied by the existing implementation in serve/mcp-memory/src/owlbear_mcp_memory/tools.py:280-324. Task is redundant. Dependencies (1313, 1315) redirected to 1308.

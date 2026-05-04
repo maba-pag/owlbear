@@ -5,7 +5,7 @@ title: 'P1-12: Consumer updates Phase 2-3 — All pipeline agents + instruction 
 status: research
 priority: important
 created: 2026-05-04T01:32:27.397472+00:00
-updated: 2026-05-04T01:34:54.314862+00:00
+updated: 2026-05-04T20:06:30.416220+00:00
 tags:
 - phase-2
 - scope:agents
@@ -14,7 +14,7 @@ tags:
 parent: 1301
 depends_on:
 - 1312
-- 1309
+- 1308
 blocked: false
 block_reason:
 claimed_at:
