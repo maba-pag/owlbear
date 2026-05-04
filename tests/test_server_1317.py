@@ -261,11 +261,9 @@ class TestFromAC_TokenFileCleanup:
 
         with patch("pathlib.Path.home", return_value=tmp_path):
             async with app_lifespan(MagicMock()):
-                pass
-
-        # New code: lifespan deletes the token file.
-        # Current code: no cleanup — file still exists → assertion FAILS.
-        assert not token_file.exists()  # noqa: S101
+                # Assertion inside the body proves cleanup is a startup action, not teardown.
+                # A regression moving unlink() to the finally: block would fail here.
+                assert not token_file.exists()  # noqa: S101
 
     @pytest.mark.asyncio
     async def test_token_file_cleanup_idempotent_when_absent(
