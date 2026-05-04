@@ -15,7 +15,6 @@ from pathlib import Path
 
 import pytest
 import owlbear_mcp_kanban.server as _server_module
-from owlbear_mcp_kanban.server import mcp
 
 # ---------------------------------------------------------------------------
 # Paths to doc files under test
