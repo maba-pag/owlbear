@@ -18,6 +18,14 @@ from owlbear_kanban._duration import _parse_duration
 from owlbear_kanban.models import BoardConfig
 from owlbear_kanban.yaml_rt import make_yaml as _make_yaml
 
+_DEFAULT_PRIORITIES = [
+    "someday",
+    "nice-to-have",
+    "important",
+    "needed",
+    "critical",
+]
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -39,7 +47,23 @@ def load_config(kanban_dir: Path) -> BoardConfig:
     with config_path.open("r", encoding="utf-8") as fh:
         raw = y.load(fh)
 
-    config = BoardConfig.model_validate(_to_plain(raw))
+    plain = _to_plain(raw)
+    if isinstance(plain, dict) and plain.get("schema") == "grouped":
+        if "priorities" not in plain:
+            plain["priorities"] = list(_DEFAULT_PRIORITIES)
+
+        statuses = plain.get("statuses")
+        if isinstance(statuses, list) and statuses:
+            pipeline = plain.get("pipeline")
+            if not isinstance(pipeline, dict):
+                pipeline = {}
+            if "entry_status" not in pipeline:
+                pipeline["entry_status"] = statuses[0]
+            if "terminal_status" not in pipeline:
+                pipeline["terminal_status"] = statuses[-1]
+            plain["pipeline"] = pipeline
+
+    config = BoardConfig.model_validate(plain)
     _validate_claim_timeout(config)
     return config
 
