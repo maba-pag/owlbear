@@ -1,10 +1,10 @@
 ---
 id: 1321
 title: 'P0-05: Tests — Content injection guard wiring at ingest'
-status: done
+status: archived
 priority: critical
 created: 2026-05-04T05:48:37.782310+00:00
-updated: 2026-05-04T10:15:48.500502+00:00
+updated: 2026-05-04T10:20:54.072536+00:00
 tags:
 - phase-0
 - scope:knowledge
@@ -14,7 +14,7 @@ parent: 1316
 depends_on: []
 blocked: false
 block_reason:
-claimed_at: 2026-05-04T10:15:48.500502+00:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -594,3 +594,37 @@ All 32 tests pass against the existing implementation. The implementation alread
 - None (no `.owlbear/scratch/1321-*` files found)
 
 Commit: `de2018bf` — docs: fix IngestPipeline docstring and update mcp-topology diagram (#1321, doc-writer)
+[[2026-05-04]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1 — Guard instantiated in app_lifespan, passed to IngestPipeline, scan() called in ingest_text() | Commit cd74db6e wires guard in server.py:288-293 and ingest.py:106-116; 6 tests cover this in test_content_guard_wiring_1321.py | PASS |
+| AC2 — Strict blocks/not stored; non-strict warns and persists (refined) | Binding contract is Architecture Review loop-breaker at task body; tests at L292, L335, L366, L383 prove strict block + non-strict warn+persist | PASS |
+| AC3 — scan() before store_chunks() ordering | Call-order assertions at L451, L485, L521 would fail on reversed ordering | PASS |
+| AC4 — Search/query path does not invoke guard (D20) | Query path at server.py:375 calls qs.query() directly; regression guards at L568, L588 | PASS |
+| AC5 — All source_type values scanned, no exemption | Unconditional scan at ingest.py:106; parametrized tests at L654, L675, L698 | PASS |
+
+### Test Results
+- pytest (task-scoped): 32 passed, 0 failed
+- pytest (full suite): 4056 passed, 244 failed — no failures in task scope
+- vitest (full suite): 948 passed, 15 failed — no failures in task scope
+- ruff: 1 T201 violation (not in task files)
+- eslint: 1 react-hooks error (not in task files)
+
+### Commit Integrity
+- cd74db6e — feat: wire ingest guard at lifespan/text path (#1321, builder) — 2 source files
+- 3577dec9 — test: strengthen AC2 non-strict persistence proof (#1321, test-writer) — test file
+- de2018bf — docs: fix IngestPipeline docstring and update mcp-topology diagram (#1321, doc-writer) — docstring + diagram
+
+All properly scoped. No unrelated files in commits.
+
+### Architect Quality: 3/5
+Original AC2 conflated behavior (block/warn) with ordering (scan-before-store), causing 2 unnecessary review cycles before loop-breaker refinement resolved the ambiguity. AC3 already owned ordering, making the "before chunk storage" modifier in AC2 a source of interpretation dispute.
+
+### Deduction Breakdown
+- -.03 AC quality score ≤ 3 (ordering ambiguity in AC2 caused 2 unnecessary review cycles)
+- -.01 Full git diff/dirty-tree checks unavailable in tool surface (reviewer also noted this)
+
+### Confidence: .96
+### Action: archive
