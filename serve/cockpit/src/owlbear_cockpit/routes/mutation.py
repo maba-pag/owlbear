@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 from owlbear_cockpit import adapter
 from owlbear_cockpit.deps import get_view
@@ -40,7 +40,7 @@ class MoveRequest(BaseModel):
     status: str
     updated: str
     archival_reason: str | None = None
-    archival_refs: list[int] = Field(default_factory=list)
+    archival_refs: list[int] | None = None
 
 
 class EditRequest(BaseModel):

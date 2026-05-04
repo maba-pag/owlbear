@@ -899,11 +899,12 @@ class TestFromAC_EngineCreateTask:
     def test_create_task_with_tags_body_parent_deps(self, tmp_path: Path) -> None:
         board = _make_board(tmp_path)
         engine = KanbanEngine(board, activity_log=False)
+        _write_task(board, task_id=1, title="Parent")
         task = engine.create_task(
             "Sub-task",
             tags=["alpha", "beta"],
             body="Initial body.",
-            parent=0,
+            parent=1,
             depends_on=[],
         )
         assert "alpha" in task.tags
@@ -985,6 +986,7 @@ class TestFromAC_EngineEditTask:
     def test_edit_task_add_and_remove_deps(self, tmp_path: Path) -> None:
         board = _make_board(tmp_path)
         _write_task(board, task_id=1, depends_on="[5]")
+        _write_task(board, task_id=6)
         engine = KanbanEngine(board, activity_log=False)
         result = engine.edit_task("1", add_deps=[6], remove_deps=[5])
         assert 6 in result.depends_on
@@ -1055,7 +1057,7 @@ class TestFromAC_EngineMoveTask:
         board = _make_board(tmp_path)
         _write_task(board, task_id=1, status="done")
         engine = KanbanEngine(board, activity_log=False)
-        engine.move_task("1", "archived")
+        engine.move_task("1", "archived", archival_reason="completed")
         assert not (board / "tasks" / "1-task.md").exists()
         assert (board / "archive" / "1-task.md").exists()
 
@@ -1760,6 +1762,7 @@ class TestFromAC_EngineEditTaskFieldAssignment:
         """edit_task with parent updates the parent field."""
         board = _make_board(tmp_path)
         _write_task(board, task_id=1)
+        _write_task(board, task_id=42, title="Parent")
         engine = KanbanEngine(board, activity_log=False)
         result = engine.edit_task("1", parent=42)
         assert result.parent == 42
