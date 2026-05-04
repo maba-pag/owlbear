@@ -2,10 +2,10 @@
 id: 1308
 title: 'P1-07+08: Recall tool — tighten test proof quality (assertion gaps in format,
   ordering, default limit)'
-status: todo
+status: review
 priority: needed
 created: 2026-05-04T01:32:18.553275+00:00
-updated: 2026-05-04T20:07:06.998953+00:00
+updated: 2026-05-04T21:11:42.106898+00:00
 tags:
 - phase-2
 - scope:mcp-memory
@@ -271,3 +271,29 @@ Merged #1309 (GREEN) into #1308. Builder commit 26f65acd already delivered both 
 
 ### Challenge
 Skipped — this is a proof-quality fix with no design decisions. All AC lines are td:0-2 assertion-level changes to an existing passing test suite.
+[[2026-05-04]]
+## Test-Writer Notes
+- Retry: tightened discriminating assertions for AC5-fix, AC6-fix, AC7-fix per architect reconciliation.
+- Test file: `tests/test_recall_memory_1308.py`
+- New tests added (4):
+  - `TestFromAC_BodyOnlyFormat.test_exact_per_entry_format_and_all_metadata_fields_absent` — pins exact `"## {title}\n{content}"` format and asserts ALL 8 metadata field names + values absent (id, state, confidence, categories, scope_agents, approved_at, created_at, updated_at + their values)
+  - `TestFromAC_BodyOnlyFormat.test_two_entries_joined_with_double_newline_separator` — asserts exact full string equality for two-entry output with `"\n\n"` separator
+  - `TestFromAC_PriorityOrdering.test_sort_then_slice_approved_fills_before_curated` — 3 approved + 3 curated, limit=4: asserts heading_count == 4, all 3 approved present, exactly 1 curated fills remaining slot
+  - `TestFromAC_LimitParameter.test_default_limit_is_exactly_20` — asserts heading_count == 20 (exact equality, not <= 20)
+- Builder skip: test-only retry, all 25 tests green against current impl.
+- Ruff: clean.
+- Commit: `90d4688a`
+[[2026-05-04]]
+## Builder Notes
+- Non-implementation builder pass-through: task scope is proof-quality test tightening already completed by test-writer.
+- Files changed by builder: none.
+- quality-runner scoped verification: `tests/test_recall_memory_1308.py` -> 25 passed, 0 failed, 0 skipped.
+- Ruff (scoped): clean for `serve/mcp-memory/src/owlbear_mcp_memory/tools.py` and `tests/test_recall_memory_1308.py`.
+- Coverage evidence (scoped run): `owlbear_mcp_memory.tools` 23% (legacy module-level baseline; no builder code changes in this pass).
+- Module-level durable test check: `tests/test_recall_memory.py` does not exist, so module regression check is skipped per workflow.
+- Evidence summary: task-scoped suite is fully green and no implementation delta is required from builder.
+
+### Post-task Reflection
+- Problem faced: lifecycle churn left task 1308 in `in-progress` despite builder-skip notes in test-writer handoff.
+- Workaround applied: treated this run as strict verification + pass-through, avoiding any unnecessary source edits.
+- Pattern discovered: when reviewer failures are assertion-only and retry tests pass, builder should route quickly with explicit evidence rather than re-open implementation work.

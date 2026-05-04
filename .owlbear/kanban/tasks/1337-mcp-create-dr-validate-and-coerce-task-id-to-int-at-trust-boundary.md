@@ -1,10 +1,10 @@
 ---
 id: 1337
 title: Validate MCP task IDs at every task endpoint trust boundary
-status: in-progress
+status: todo
 priority: critical
 created: 2026-05-04T15:00:05.722955+00:00
-updated: 2026-05-04T20:22:41.389259+00:00
+updated: 2026-05-04T21:06:45.329388+00:00
 tags:
 - sync-blocker
 - security
@@ -148,3 +148,24 @@ AC coverage table:
 - All 38 tests PASS against current implementation (builder's parse_task_id already handles the corrected assertion).
 - ruff: clean
 - Builder skip: test-only retry, all tests green — advancing directly to review.
+[[2026-05-04]]
+## Builder Notes
+- Code changes in this run: none (validation-only pass).
+- Existing implementation in `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py` remains functionally GREEN for task-scoped behavior.
+- Quality-runner verification (task-scoped):
+  - tests: 38 passed, 0 failed
+  - ruff: clean
+  - coverage: `owlbear_mcp_kanban.server` = 56%
+- Quality-runner verification (module-level regression + task tests):
+  - tests: 47 passed, 0 failed
+  - ruff: clean
+  - coverage: `owlbear_mcp_kanban.server` = 61%
+- Gate result: coverage for the touched module remains below the required 90% threshold, so task cannot advance to review under builder gate criteria.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | test-writer | Add/expand tests that execute additional MCP server paths in `owlbear_mcp_kanban.server` (beyond current parser + endpoint-boundary slice) until touched-module coverage reaches >=90% while preserving current security assertions. | tests/test_mcp_task_id_parser_1337.py, tests/test_mcp_create_dr_coerce_1337.py, tests/test_mcp_kanban.py | quality-runner: 47 passed, 0 failed, module coverage 61% for `owlbear_mcp_kanban.server` |
+| 2 | test-writer | Keep existing `TestFromAC_*` assertions unchanged in intent and extend with additional valid/invalid ID flows across all task-id tools to improve path coverage. | tests/test_mcp_task_id_parser_1337.py | quality-runner coverage deficit against touched module gate |
+
+- Builder rejects to `todo` for test-depth/coverage completion only; no implementation defects found in this run.

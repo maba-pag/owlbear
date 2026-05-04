@@ -1,10 +1,10 @@
 ---
 id: 1338
 title: Fix storage round-trip timestamp and archive claimed_by leaks
-status: backlog
+status: todo
 priority: needed
 created: 2026-05-04T15:00:05.755705+00:00
-updated: 2026-05-04T20:25:34.896567+00:00
+updated: 2026-05-04T21:11:44.721678+00:00
 tags:
 - sync-blocker
 - kanban
@@ -168,3 +168,20 @@ Architecture review complete. Refined AC3 (clarified "non-UTC offsets" vs naive)
 |---|-------------|----------------|---------|----------|
 | 1 | architect | Refine/split AC6 into a separate migration-lane stabilization task or rebaseline gate so #1338 is evaluated against storage contract scope. | `serve/kanban/tests/test_migrate.py`, task #1338 AC6 | quality-runner: 137 passed, 5 failed all in migrate suite while storage/roundtrip tests pass |
 | 2 | builder | Re-run AC6 suite and advance to review after architect clarifies gate or migration failures are resolved. | `serve/kanban/tests/test_storage.py`, `serve/kanban/tests/test_storage_1050.py`, `serve/kanban/tests/test_migrate.py` | current gate blocked solely by migrate tests unrelated to `storage.py` change |
+[[2026-05-04]]
+
+## Architecture Review — AC6 Refinement (2026-05-04)
+
+**Issue:** Builder reported AC6 gate blocked by 5 pre-existing failures in `serve/kanban/tests/test_migrate.py` (lane completeness, config idempotency predicates, manual-summary output). These test migration lane logic unrelated to timestamp formatting or `claimed_by` stripping.
+
+**Evidence:** All storage-scoped suites pass (test_storage.py, test_storage_1050.py). The 5 failing migrate tests assert lane dispatch, integer-status detection, and stderr summary headers — none exercise timestamp scalar formatting or archive field stripping.
+
+**Refinement applied:**
+- AC6 (old): Existing suites (test_storage.py, test_storage_1050.py, test_migrate.py) pass or are corrected only where tests assert stale formatting.
+- AC6 (new): Existing storage suites (`serve/kanban/tests/test_storage.py`, `serve/kanban/tests/test_storage_1050.py`) pass. Pre-existing failures in `serve/kanban/tests/test_migrate.py` unrelated to timestamp formatting or `claimed_by` stripping are out of scope.
+
+**Rationale:** AC6 was a non-regression gate for the storage contract. The 5 migrate failures exercise separate migration-lane logic (tasks_dir, mtime stability, manual-action summaries) that predates this fix. Blocking a storage-scoped fix on unrelated migrate debt violates single-responsibility.
+
+**Verdict:** APPROVE (re-advance to todo). Builder should re-verify the refined AC6 gate (both storage suites green) and advance to review.
+[[2026-05-04]]
+AC6 refinement: scoped gate to storage suites only (test_storage.py, test_storage_1050.py — both green). Removed test_migrate.py from gate — its 5 failures are pre-existing lane/idempotency/summary assertions unrelated to timestamp formatting or claimed_by stripping. Builder can re-verify refined AC6 and advance to review.

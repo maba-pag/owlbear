@@ -1,10 +1,10 @@
 ---
 id: 1324
 title: 'P1-08: Enrichment schema additions (state, claims, edge uniqueness, WAL)'
-status: todo
+status: review
 priority: needed
 created: 2026-05-04T05:48:50.076796+00:00
-updated: 2026-05-04T20:03:08.872450+00:00
+updated: 2026-05-04T21:10:53.665936+00:00
 tags:
 - phase-1
 - scope:knowledge
@@ -176,3 +176,32 @@ Brief: see parent #1316 → `.owlbear/briefs/draft-knowledge-activation/brief.md
 | # | Target Agent | Action Required | File(s) | Evidence |
 |---|-------------|----------------|---------|----------|
 | 1 | test-writer | Add an upgrade-path test that starts from a v10 schema, runs `init_db()`, and asserts the v11 additions are present after migration (`enrichment_state`, `claimed_at`, `document_id`, `reviewed_pairs`, D17 unique index) | `tests/test_enrichment_schema_1323.py` | Changed migration path at `serve/knowledge/src/owlbear_knowledge/schema.py:303-337` is not exercised because the current fixture always starts from a fresh DB at `tests/test_enrichment_schema_1323.py:33` |
+[[2026-05-04]]
+## Test-Writer Notes
+- Retry: added 6 upgrade-path tests for reviewer gap. All 27 tests pass against current impl.
+- Builder skip: test-only retry, all new tests green — advancing directly to review.
+- Test file: tests/test_enrichment_schema_1323.py
+- New class: `TestFromAC_MigrationUpgradePath`
+- New fixture: `v10_conn` — builds complete v10 schema manually (no enrichment_state/claimed_at on chunks, no document_id on edges, no reviewed_pairs), schema_version=10.
+- Tests per class (new): 6 tests covering enrichment_state added, claimed_at added, document_id added, reviewed_pairs table exists, D17 unique index exists, schema_version updated to 11.
+- Total: 27 tests (21 original + 6 new), all PASS against current implementation.
+- ruff: clean
+[[2026-05-04]]
+## Builder Notes
+- Non-implementation pass-through on retry cycle: no source edits required.
+- Files changed: none.
+- Verification scope: `tests/test_enrichment_schema_1323.py` + ruff on `serve/knowledge/src/owlbear_knowledge/schema.py` and `tests/test_enrichment_schema_1323.py`.
+- Test result: 27 passed, 0 failed, 0 skipped.
+- Lint result: ruff clean.
+- Coverage evidence: `owlbear_knowledge.schema` at 64% in scoped run.
+- Gate rationale: reviewer-required upgrade-path proof is now present in `TestFromAC_MigrationUpgradePath`; scoped suite is green against current implementation.
+
+### Evidence Summary
+- quality-runner scoped pytest: PASS (`failed: []`).
+- quality-runner scoped ruff: clean.
+- No blocking implementation defect found in current code path after test-writer retry.
+
+### Reflection
+- Retry-cycle builder dispatch can be verification-only when the failure was test-proof quality, not implementation behavior.
+- Scoped quality-runner evidence remains the fastest safe gate for this pattern.
+- Keeping builder pass-through explicit avoids unnecessary churn in stable schema migrations.

@@ -1,10 +1,10 @@
 ---
 id: 1325
 title: 'P1-09: Tests — Browser fetcher wiring + RefreshOrchestrator fix'
-status: review
+status: in-progress
 priority: needed
 created: 2026-05-04T05:48:50.088181+00:00
-updated: 2026-05-04T19:58:20.574913+00:00
+updated: 2026-05-04T21:16:14.963729+00:00
 tags:
 - phase-1
 - scope:knowledge
@@ -29,6 +29,7 @@ Brief: see parent #1316 → `.owlbear/briefs/draft-knowledge-activation/brief.md
 - [ ] Tests verify fetcher selection logic maps fetch_method value to correct ContentFetcher type ("http"/"" → HttpxContentFetcher, "browser" → protocol-compatible non-HTTP ContentFetcher placeholder) (td:2)
 - [ ] Tests verify RefreshOrchestrator.refresh_source completes without error when inter_doc_builder=None (td:1)
 - [ ] Tests verify refresh_source reads fetch_method from KnowledgeSource record and selects the corresponding ContentFetcher (td:2)
+- [ ] Tests verify _BrowserContentFetcher.fetch() raises RuntimeError without embedding the source URL in the exception message (td:1)
 
 ## Scope
 
@@ -44,6 +45,7 @@ Brief: see parent #1316 → `.owlbear/briefs/draft-knowledge-activation/brief.md
 - BrowserContentFetcher requires BrowserContext (from serve/browser/) — always mock it in these tests, never instantiate
 - Follow patching pattern from tests/test_persistence_source_wiring_1320.py (patch app_lifespan deps)
 - fetch_method vocabulary: use "http" and "browser" as string values per Brief §4.5
+- AC6: call `_BrowserContentFetcher().fetch("https://secret.example.com/token?key=abc")` and assert the raised RuntimeError message does NOT contain the URL. Builder fix: remove `{url!r}` from the f-string at server.py:63 (message should say "browser fetcher not wired" without echoing the URL).
 
 ## Research
 - Research doc: .owlbear/research/browser-fetcher-wiring-tests-1325.md
@@ -493,3 +495,161 @@ Architecture re-review (loop-breaker). Refined AC1/AC3 — removed cross-package
 ## Test-Writer Notes (routing correction)
 - Advancing directly to `review` — builder skip confirmed per prior Test-Writer Notes.
 - All 12 tests pass; no implementation work needed; Direct-to-Review advance.
+[[2026-05-04]]
+## Review Evidence
+### Test Results
+- quality-runner task-scoped run on `tests/test_browser_fetcher_wiring_1325.py`: 12 passed, 0 failed, 0 skipped.
+- quality-runner adjacent regression on `tests/test_browser_fetcher_wiring_1325.py`, `tests/test_persistence_source_wiring_1320.py`, `tests/test_qdrant_source_identity_1319.py`, and `tests/test_content_guard_wiring_1321.py`: 87 passed, 0 failed, 0 skipped.
+- code-reader td:2 audit found a live browser-path secret leak and missing negative-path proof for that branch.
+
+### Lint: clean
+- Ruff clean on `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py`, `serve/knowledge/src/owlbear_knowledge/refresh.py`, `tests/test_browser_fetcher_wiring_1325.py`, and the adjacent suites above.
+
+### Coverage
+- `owlbear_mcp_knowledge.server`: 46%
+- `owlbear_knowledge.refresh`: 48%
+- Overall scoped report: 31%
+- Informational only: module percentages are low, but the changed task-owned paths are exercised.
+
+### Pass 1 - CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---|---|---|---|
+| AC1: app_lifespan passes a ContentFetcher instance; default HttpxContentFetcher; alternative implementations accepted by protocol | `tests/test_browser_fetcher_wiring_1325.py:165`, `:187`, `:208` | Omitting `content_fetcher` or wiring the wrong default type would fail. The alternative-implementation proof is slightly lax because the non-HTTP mock is validated as protocol-compatible rather than injected through the constructor path. | LAX |
+| AC2: app_lifespan passes `graph_store` for inter-doc edge building | `tests/test_browser_fetcher_wiring_1325.py:264` | Yes. Missing or `None` would fail. | COVERED |
+| AC3: fetcher selection maps `http` and empty to `HttpxContentFetcher`; browser maps to a protocol-compatible non-HTTP placeholder | `tests/test_browser_fetcher_wiring_1325.py:304`, `:315`, `:327`, `:346`; `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:101`, `:105` | Yes under the refined task contract at `.owlbear/kanban/tasks/1325-p1-09-tests-browser-fetcher-wiring-refreshorchestrator-fix.md:29` and refinement note at `:430`. | COVERED |
+| AC4: refresh completes without error when `inter_doc_builder=None` | `tests/test_browser_fetcher_wiring_1325.py:386`, `:440` | Yes. The test would fail if the no-builder path regressed to the prior no-op refreshed count. | COVERED |
+| AC5: `refresh_source` reads persisted `fetch_method` and selects the corresponding ContentFetcher | `tests/test_browser_fetcher_wiring_1325.py:545`, `:598`, `:599`; `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:766` | Yes for selector choice, though the terminal fetch assertions are broader than ideal. | COVERED |
+
+#### Security Review
+- FAIL: `_BrowserContentFetcher.fetch()` embeds the raw source URL in its RuntimeError message at `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:63`.
+- FAIL: authenticated-web refresh appends `str(exc)` to `errors` at `serve/knowledge/src/owlbear_knowledge/refresh.py:307` and persists the joined text into `last_error` at `:352`.
+- Result: browser-mode sources can write query tokens or embedded credentials verbatim into persistent error state. The architect loop-breaker note already acknowledged this as a follow-up at `.owlbear/kanban/tasks/1325-p1-09-tests-browser-fetcher-wiring-refreshorchestrator-fix.md:432` and `:461`, but the defect remains live in the reviewed code.
+
+#### Test Integrity
+- No weakening or removal of the current `TestFromAC_*` suites is visible in `tests/test_browser_fetcher_wiring_1325.py`.
+- Builder commit `e84457898e5288563d3fc1da6f8335132e904792` exists in `.git/logs/HEAD:1849` and `.git/logs/refs/heads/dev:1697`. Direct diff-surface proof was not available, so immutability confidence is slightly reduced.
+
+#### Test Quality
+| Dimension | Rating | Evidence |
+|---|---|---|
+| Assertion specificity | ADEQUATE | Constructor-call inspection and exact type checks are strong for AC1 to AC4. AC5 ends with broad `assert_called()` checks at `tests/test_browser_fetcher_wiring_1325.py:504`, `:542`, `:598`, `:599`, so proof is not maximally discriminating. |
+| Negative and error-path coverage | WEAK | All browser-mode AC5 tests patch `select_content_fetcher` at `tests/test_browser_fetcher_wiring_1325.py:498`, `:536`, `:591`, `:592`, so no task test executes the live browser placeholder failure path or asserts sanitized persisted error state. This gap let the raw-URL leak ship behind a green suite. |
+| Manual mutation reasoning | ADEQUATE | Swapping selector branches or dropping the fetcher selection would be caught by the persisted-method tests. |
+| Test independence | STRONG | Fresh stores, pipelines, sources, and contexts are created per test helper. |
+| Descriptive test names | STRONG | Names map directly to the refined AC slices. |
+
+#### Data Safety
+- FAIL: the intentional browser placeholder branch persists raw URL-derived exception text into `KnowledgeSource.last_error` through `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:63` plus `serve/knowledge/src/owlbear_knowledge/refresh.py:307` and `:352`.
+
+#### Implementation-Aware Gaps
+- FAIL: the live browser placeholder and error-persistence branch at `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:105` and `:766`, together with `serve/knowledge/src/owlbear_knowledge/refresh.py:246-307` and `:345-352`, has zero task-local execution because all browser-mode tests patch the selector before the branch runs.
+
+#### Builder Process Quality
+| Metric | Value |
+|---|---|
+| Existing `## Review Evidence` sections before this review | 2 |
+| Builder retries in task body | Multiple, with approach variation |
+| Assessment | FRICTION |
+
+### Pass 2 - INFORMATIONAL
+- The refined AC is the binding contract: `.owlbear/kanban/tasks/1325-p1-09-tests-browser-fetcher-wiring-refreshorchestrator-fix.md:27`, `:29`, and the loop-breaker refinement at `:428` and `:430`. Under that contract, AC3 passes with the placeholder implementation.
+- Stale RED-phase comments remain in `tests/test_browser_fetcher_wiring_1325.py`, but they do not affect executable behavior.
+- Broader adjacent regression scope is clean, so this is not a general repo instability issue.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---|---|---|---|
+| AC1 | Refined task line at `.owlbear/kanban/tasks/1325-p1-09-tests-browser-fetcher-wiring-refreshorchestrator-fix.md:27`; task tests assert constructor kwarg presence and default type at `tests/test_browser_fetcher_wiring_1325.py:165` and `:187`; live wiring uses `content_fetcher=select_content_fetcher("http")` at `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:339`. | `TestFromAC_ContentFetcherInjection` | PASS |
+| AC2 | Task line at `.owlbear/kanban/tasks/1325-p1-09-tests-browser-fetcher-wiring-refreshorchestrator-fix.md:28`; constructor receives `graph_store=gs` at `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:341`; task test asserts the kwarg at `tests/test_browser_fetcher_wiring_1325.py:264`. | `TestFromAC_GraphStoreInjection` | PASS |
+| AC3 | Refined task line at `.owlbear/kanban/tasks/1325-p1-09-tests-browser-fetcher-wiring-refreshorchestrator-fix.md:29` and refinement note at `:430`; selector exists at `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:101` and browser branch returns `_BrowserContentFetcher()` at `:105`; task tests cover export, http, browser placeholder, and empty default at `tests/test_browser_fetcher_wiring_1325.py:304`, `:315`, `:327`, `:346`. | `TestFromAC_FetchMethodSelection` | PASS |
+| AC4 | Task line at `.owlbear/kanban/tasks/1325-p1-09-tests-browser-fetcher-wiring-refreshorchestrator-fix.md:30`; task test drives `RefreshOrchestrator.refresh(...)` with `inter_doc_builder=None` and asserts `refreshed == 1` at `tests/test_browser_fetcher_wiring_1325.py:386` and `:440`. | `TestFromAC_RefreshWithoutInterDocBuilder` | PASS |
+| AC5 | Task line at `.owlbear/kanban/tasks/1325-p1-09-tests-browser-fetcher-wiring-refreshorchestrator-fix.md:31`; live tool reads `source.fetch_method` into `selected_fetcher = select_content_fetcher(source.fetch_method)` at `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:766`; persisted-source test covers both methods at `tests/test_browser_fetcher_wiring_1325.py:545`, `:598`, `:599`. | `TestFromAC_RefreshSourceFetchMethodIntegration` | PASS |
+
+### Deductions
+- Major: browser-mode error handling persists raw URL text into `last_error`.
+- Major: no task test exercises the live browser placeholder failure branch, so the green suite missed the leak.
+- Minor: AC1 alternative-implementation proof is present but not fully discriminating.
+- Minor: direct commit-diff access was unavailable, so TestFromAC immutability confidence is slightly reduced.
+
+### Confidence: .62
+### Verdict: FAIL
+### Action: reject to `backlog`. This is a third review-cycle failure on the same task, so the loop-breaker rule applies even though the immediate defect is implementation-facing.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|---|---|---|---|
+| 1 | architect | Split or refine the task so browser-mode refresh sanitizes URL-derived exception text before persistence. | `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py`, `serve/knowledge/src/owlbear_knowledge/refresh.py` | Raw URL enters RuntimeError at `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:63`, is copied to `errors` at `serve/knowledge/src/owlbear_knowledge/refresh.py:307`, and is persisted at `:352`. |
+| 2 | architect | Add explicit acceptance criteria for the live browser placeholder failure branch, including proof that sensitive URL text is not persisted. | `.owlbear/kanban/tasks/1325-p1-09-tests-browser-fetcher-wiring-refreshorchestrator-fix.md`, `tests/test_browser_fetcher_wiring_1325.py` | Current browser-mode tests patch the selector at `tests/test_browser_fetcher_wiring_1325.py:498`, `:536`, `:591`, `:592`, so the live branch is never executed. |
+| 3 | architect | Reconcile the earlier “security follow-up later” note with the still-live defect before the next retry is dispatched. | `.owlbear/kanban/tasks/1325-p1-09-tests-browser-fetcher-wiring-refreshorchestrator-fix.md` | The loop-breaker re-review deferred security work at `:432` and `:461`, but the reviewed implementation still leaks raw URL text. |
+
+### Reflection
+- The task suite is genuinely green and the refined AC mostly matches the implementation; the blocker is a hidden browser-path defect, not a broken happy path.
+- Parallel quality-runner plus code-reader was necessary here; the bug was visible only when code-reading the unexecuted error branch.
+- Reading the latest architecture refinement mattered; stale earlier notes in the same task body would have produced a wrong AC verdict.
+[[2026-05-04]]
+
+## Architecture Review (loop-breaker cycle 2)
+
+### Context
+Third review failure (confidence 0.62). Reviewer's actionable findings:
+1. `_BrowserContentFetcher.fetch()` embeds raw URL in RuntimeError → persisted to `last_error` via `str(exc)` in refresh.py:307
+2. No task test exercises the live browser placeholder failure branch
+
+### Root Cause
+The builder introduced `_BrowserContentFetcher.fetch()` with `f"...URL {url!r}"` in the error message. The downstream `errors.append(str(exc))` → `last_error` persistence is pre-existing, but the URL-in-exception is new code from this task. One extra AC line resolves both reviewer concerns (security + unexercised branch).
+
+### AC Refinement
+Added AC6: placeholder error branch exercises + URL sanitization proof. Test-depth td:1 (single assertion path).
+
+### Evaluation (incremental — prior eval unchanged)
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | AC6 covers the security gap in code this task introduced |
+| Security surface | PASS (after AC6) | Browser placeholder error no longer leaks URL to persistence |
+| KISS/YAGNI | PASS | One test, one line fix (remove url!r from message) |
+
+### Challenger Results
+- Challenge: SKIPPED (td:1 addition to already-approved td:2 task; no architectural uncertainty)
+
+### Verdict: APPROVED (after AC6 refinement)
+- Existing AC1-AC5 proven green; AC6 closes the reviewer's security/branch-coverage gap
+- Builder fix is trivial: remove `{url!r}` from the RuntimeError at server.py:63
+- No broader error-sanitization pattern change required (str(exc) persistence is pre-existing, out-of-scope)
+
+[[2026-05-04]]
+Architecture re-review (loop-breaker cycle 2). Added AC6: _BrowserContentFetcher.fetch() must not embed source URL in RuntimeError message (td:1). This resolves reviewer's security concern (raw URL → last_error persistence) AND the unexercised-branch gap in one minimal test+fix. Existing AC1-AC5 are already green. Advancing to todo.
+[[2026-05-04]]
+## Test-Writer Notes
+- **Test file:** `tests/test_browser_fetcher_wiring_1325.py`
+- **Retry (loop-breaker cycle 2):** Architect added AC6 after second review failure. AC1-AC5 already green (12 tests). Added 1 new failing test for AC6.
+- **Ruff:** clean (exit 0)
+- **Result:** 12 old tests PASS, 1 new test FAILS ✓ — total 13 tests, 1 failing
+
+### New test class
+
+| Class | AC | Tests | Category |
+|---|---|---|---|
+| `TestFromAC_BrowserFetcherErrorSanitization` | AC6 | 1 | security/error-path |
+
+### AC coverage table
+
+| AC | Tests | Status |
+|---|---|---|
+| AC1: app_lifespan passes ContentFetcher to RefreshOrchestrator | 3 (passing) | COVERED |
+| AC2: app_lifespan passes graph_store to RefreshOrchestrator | 1 (passing) | COVERED |
+| AC3: fetch_method maps to correct ContentFetcher impl | 4 (passing) | COVERED |
+| AC4: refresh completes when inter_doc_builder=None | 1 (passing) | COVERED |
+| AC5: refresh_source reads fetch_method, invokes correct fetcher | 3 (passing) | COVERED |
+| AC6: _BrowserContentFetcher.fetch() error must not embed source URL | 1 (FAILING) | NEW — fails because server.py:63 embeds `{url!r}` in RuntimeError message |
+
+### Failure evidence
+```
+FAILED TestFromAC_BrowserFetcherErrorSanitization::test_browser_fetcher_error_does_not_embed_source_url
+AssertionError: RuntimeError message must not contain the source URL ...
+got: "browser fetcher selected but no browser session is wired for URL 'https://secret.example.com/token?key=abc'"
+```
+
+### Builder notes
+- Fix: remove `{url!r}` from the f-string at `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:63`
+- Message should say "browser fetcher not wired" (or similar) without echoing the URL
