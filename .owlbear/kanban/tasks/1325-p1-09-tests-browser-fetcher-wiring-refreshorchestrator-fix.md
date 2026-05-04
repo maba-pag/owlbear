@@ -1,10 +1,10 @@
 ---
 id: 1325
 title: 'P1-09: Tests — Browser fetcher wiring + RefreshOrchestrator fix'
-status: todo
+status: in-progress
 priority: needed
 created: 2026-05-04T05:48:50.088181+00:00
-updated: 2026-05-04T14:35:24.028677+00:00
+updated: 2026-05-04T14:47:50.718236+00:00
 tags:
 - phase-1
 - scope:knowledge
@@ -15,7 +15,7 @@ depends_on:
 - 1320
 blocked: false
 block_reason:
-claimed_at: 2026-05-04T14:35:24.028677+00:00
+claimed_at: 2026-05-04T14:47:50.718236+00:00
 archival_reason:
 archival_refs: []
 ---
@@ -202,3 +202,35 @@ Architecture review complete. AC refined per challenger findings: corrected AC2 
 - The task body was explicit, but the upstream pass-through treated the `test` tag as a reason to skip the deliverable.
 - Running adjacent suites was useful: it separated a missing-proof failure from general repo instability.
 - The absence of the task artifact made direct TestFromAC immutability checks impossible, but the missing file itself is conclusive evidence for rejection.
+[[2026-05-04]]
+## Test-Writer Notes
+- **Test file:** `tests/test_browser_fetcher_wiring_1325.py`
+- **Retry:** all 5 AC lines were MISSING (no test file delivered previously); wrote full coverage now.
+- **Ruff:** clean (exit 0)
+- **Result:** 12 tests, **all FAIL** ✓
+
+### Test classes
+
+| Class | AC | Tests | Category |
+|---|---|---|---|
+| `TestFromAC_ContentFetcherInjection` | AC1 | 3 | happy, happy, contract |
+| `TestFromAC_GraphStoreInjection` | AC2 | 1 | happy |
+| `TestFromAC_FetchMethodSelection` | AC3 | 4 | export, http, browser, edge |
+| `TestFromAC_RefreshWithoutInterDocBuilder` | AC4 | 1 | integration |
+| `TestFromAC_RefreshSourceFetchMethodIntegration` | AC5 | 3 | browser, http, persisted |
+
+### AC coverage table
+
+| AC | Tests | Fail Reason |
+|---|---|---|
+| AC1: app_lifespan passes ContentFetcher to RefreshOrchestrator | 3 | `content_fetcher` kwarg absent in constructor call at server.py:308 |
+| AC2: app_lifespan passes graph_store to RefreshOrchestrator | 1 | `graph_store` kwarg absent in constructor call at server.py:308 |
+| AC3: fetch_method maps to correct ContentFetcher impl | 4 | `select_content_fetcher` not exported from server module |
+| AC4: refresh completes when inter_doc_builder=None | 1 | content_fetcher not wired → AUTHENTICATED_WEB returns no-op (refreshed=0, expected 1) |
+| AC5: refresh_source reads fetch_method, invokes correct fetcher | 3 | no per-source fetcher selection logic; fetcher.fetch() never called |
+
+### Builder notes
+- AC1/AC2: wire `content_fetcher=HttpxContentFetcher()` and `graph_store=gs` into `RefreshOrchestrator(...)` in `app_lifespan`
+- AC3: add `select_content_fetcher(method: str) -> ContentFetcher` to server module; "http" → `HttpxContentFetcher()`, "browser" → `BrowserContentFetcher(context)`, `""` → `HttpxContentFetcher()` 
+- AC5: either (a) add per-source fetcher selection in `_handle_authenticated_web` reading `source.fetch_method`, or (b) pass a fetcher registry/factory to `RefreshOrchestrator`
+- AC4 test requires AC1 to pass (integration path through lifespan-created orchestrator)

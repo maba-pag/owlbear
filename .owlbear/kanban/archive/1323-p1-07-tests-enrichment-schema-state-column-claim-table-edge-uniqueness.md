@@ -1,10 +1,10 @@
 ---
 id: 1323
 title: 'P1-07: Tests — Enrichment schema (state column, claim table, edge uniqueness)'
-status: done
+status: archived
 priority: needed
 created: 2026-05-04T05:48:50.064935+00:00
-updated: 2026-05-04T14:36:43.267301+00:00
+updated: 2026-05-04T14:53:08.877898+00:00
 tags:
 - phase-1
 - scope:knowledge
@@ -197,3 +197,29 @@ Summary:
 
 ### Scratch Files Cleaned
 - None (no `.owlbear/scratch/1323-*` files existed)
+[[2026-05-04]]
+## Audit
+
+### AC Verification
+| AC | Evidence | Status |
+|----|----------|--------|
+| AC1: enrichment_state column on chunks | Tests at L82-98 assert column presence/type/default via PRAGMA. 21 RED failures confirm schema not yet present. | PASS |
+| AC2: enrichment_state separate from consolidated | Tests at L112-135 assert both columns coexist. Fails because enrichment_state missing. | PASS |
+| AC3: claimed_at column on chunks | Tests at L153-170 assert column presence/type/null default. Clean RED. | PASS |
+| AC4: reviewed_pairs table | Tests at L181-203 assert table existence + 3 columns. Fails because table absent. | PASS |
+| AC5: edge UNIQUE constraint | Tests at L220-277 assert document_id + uniqueness index. Clean RED. | PASS |
+| AC6: default enrichment_state='pending' | Tests at L300-335 assert default + explicit states. Clean RED. | PASS |
+
+### Test Results
+- Scoped: 21 failed, 0 passed (correct RED state)
+- Full suite: 427 Python failures, 13 frontend failures — ALL pre-existing from other RED-phase tasks (1325, 1266, engine accessor, Shell 966/1227). This task changed NO source files, cannot have caused regressions.
+- Lint: ruff clean on task file
+
+### AC Quality Score: 5/5
+Specific columns, tables, constraints, and defaults. Clear PRAGMA-based verification path. No ambiguity.
+
+### Deductions
+- -.02: Test file `tests/test_enrichment_schema_1323.py` is UNTRACKED (not committed by upstream agents). Process concern noted.
+
+### Confidence: 0.98
+### Action: ARCHIVE
