@@ -63,11 +63,12 @@ All other `serve/` packages are Python — use `uv run` for those.
 
 | Attribute | Value |
 |-----------|-------|
-| Entry point | `uv run doc-index` |
-| Output | `.owlbear/doc-index.md` (auto-generated; committed to repo) |
+| Entry points | `uv run doc-index`, `uv run test-root <path>` |
+| Output (doc-index) | `.owlbear/doc-index.md` (auto-generated; committed to repo) |
+| Output (test-root) | JSON to stdout: `{"test_path", "cwd", "toolchain", "cmd"}` — resolves nearest package manifest to determine toolchain and execution cwd |
 | Conditional regen | Skips write when index mtime > newest collected doc mtime |
 | Exclusion list | Paths: `.owlbear/scratch`, `.owlbear/research`, `.owlbear/kanban`, `.owlbear/decisions`, `.owlbear/briefs`, `.owlbear/sources`, `store`, `tests`; Names (any depth): `node_modules`, `.git`, `.venv`, `dist`, `build` |
-| Public API | `collect_docs()`, `generate_index()`, `should_regenerate()`, `parse_index()` — all in `owlbear_tools.doc_index` |
+| Public API | `collect_docs()`, `generate_index()`, `should_regenerate()`, `parse_index()` — all in `owlbear_tools.doc_index`; `find_test_root()` in `owlbear_tools.test_root` |
 | Test scope | `serve/tools/tests/test_doc_index_1018.py` |
 | Package manager | `uv` |
 

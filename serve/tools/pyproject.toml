@@ -14,3 +14,4 @@ packages = ["src/owlbear_tools"]
 
 [project.scripts]
 doc-index = "owlbear_tools.doc_index:main"
+test-root = "owlbear_tools.test_root:main"

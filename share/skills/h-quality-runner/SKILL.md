@@ -38,10 +38,22 @@ prompt: |
   Run: mode=full, task_id=263
 ```
 
-Quality-runner selects the toolchain based on `test_paths`: paths under your frontend package root use vitest + eslint (see `h-vitest-and-linting`), and all other paths use pytest + ruff (see `h-pytest-and-linting`).
-> Example (OwlBear-dev frontend root): `serve/cockpit/web/`
+Quality-runner selects the toolchain and execution cwd by resolving the nearest package manifest from each test path:
 
-Routing authority for frontend root and test-path mode selection is `.github/copilot-instructions.md`; if examples here drift from workspace conventions, follow `copilot-instructions.md`.
+1. Walk up from the test file's directory toward the workspace root.
+2. If you encounter `package.json` containing a `test` script or vitest dependency, that directory is the **frontend cwd** — use vitest + eslint (see `h-vitest-and-linting`).
+3. Otherwise, use pytest + ruff from the workspace root (see `h-pytest-and-linting`).
+
+> Example (OwlBear-dev): `serve/cockpit/web/src/__tests__/Foo.test.tsx` → walk up → `serve/cockpit/web/package.json` found → cwd is `serve/cockpit/web/`, toolchain is vitest.
+
+If your project has `owlbear-tools` installed, you can resolve this programmatically:
+
+```bash
+uv run test-root serve/cockpit/web/src/__tests__/Foo.test.tsx
+# → {"test_path": "...", "cwd": "serve/cockpit/web", "toolchain": "vitest", "cmd": "npm test"}
+```
+
+The project's `.github/copilot-instructions.md` is the authoritative source for package roots and toolchain conventions. If the manifest-walk result conflicts with what's documented there, follow `copilot-instructions.md`.
 
 **Prerequisite:** The calling agent must list `quality-runner` in its frontmatter `agents:` array. Without this, `disable-model-invocation: true` blocks the call.
 
@@ -60,8 +72,8 @@ agents: [quality-runner]
 | `coverage_modules` | string[] | No | Module names for focused coverage display; bare `--cov` always runs against all packages |
 | `lint_paths` | string[] | No | Paths to lint; defaults to your source package paths plus `tests/` (Python) or `src/` (frontend) if omitted |
 
-**Frontend detection:** When any `test_paths` entry starts with your frontend package root, switch to frontend mode (vitest + eslint). See `h-vitest-and-linting`.
-> Example (OwlBear-dev): `serve/cockpit/web/src/__tests__/MyComponent.test.tsx`
+**Frontend detection:** When any `test_paths` entry resolves to a directory containing `package.json` with vitest (via the manifest-walk above), switch to frontend mode (vitest + eslint). See `h-vitest-and-linting`.
+> Example (OwlBear-dev): `serve/cockpit/web/src/__tests__/MyComponent.test.tsx` → cwd `serve/cockpit/web/`
 
 ## Output Format
 
