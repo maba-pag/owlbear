@@ -646,6 +646,16 @@ class TestFromAC_EngineCreateEditValidation:
             engine.edit_task("100", add_deps=[9999])
         assert exc_info.value.code == "ERR_DEP_NOT_FOUND"
 
+    def test_edit_task_missing_parent_raises(self, tmp_path: Path) -> None:
+        """KanbanEngine.edit_task with non-existent parent must raise ERR_PARENT_NOT_FOUND."""
+        board = _make_board(tmp_path)
+        _write_task(board, 100, "Editable Task")
+        engine = KanbanEngine(board)
+        with pytest.raises(ValidationError) as exc_info:
+            engine.edit_task("100", parent=9999)
+        assert exc_info.value.code == "ERR_PARENT_NOT_FOUND"
+        assert exc_info.value.user_message == "Parent task '9999' not found"
+
 
 # ---------------------------------------------------------------------------
 # AC6 — KanbanEngine.move_task calls validate_archival + validate_status_predicate
