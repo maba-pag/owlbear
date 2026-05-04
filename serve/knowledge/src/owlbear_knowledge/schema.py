@@ -16,7 +16,7 @@ from datetime import UTC, datetime
 # Constants
 # ---------------------------------------------------------------------------
 
-_SCHEMA_VERSION: int = 9
+_SCHEMA_VERSION: int = 10
 """Current schema version written to the ``schema_version`` table."""
 
 _SCOPE_TABLES: tuple[str, ...] = (
@@ -104,6 +104,8 @@ CREATE TABLE IF NOT EXISTS knowledge_sources (
     id                TEXT PRIMARY KEY,
     name              TEXT NOT NULL,
     source_type       TEXT NOT NULL,
+    fetch_method      TEXT NOT NULL DEFAULT '',
+    enrich            INTEGER NOT NULL DEFAULT 0,
     config            TEXT NOT NULL,
     scope             TEXT DEFAULT 'global',
     enabled           INTEGER DEFAULT 1,
@@ -270,6 +272,22 @@ def _migrate_v8_to_v9(conn: sqlite3.Connection) -> None:
     )
 
 
+def _migrate_v9_to_v10(conn: sqlite3.Connection) -> None:
+    """Migrate a v9 database to v10 — adds source fetch_method and enrich columns."""
+    with contextlib.suppress(sqlite3.OperationalError):
+        conn.execute(
+            "ALTER TABLE knowledge_sources ADD COLUMN fetch_method TEXT NOT NULL DEFAULT ''"
+        )
+    with contextlib.suppress(sqlite3.OperationalError):
+        conn.execute(
+            "ALTER TABLE knowledge_sources ADD COLUMN enrich INTEGER NOT NULL DEFAULT 0"
+        )
+    conn.execute(
+        "UPDATE schema_version SET version = ?, applied_at = ?",
+        (10, datetime.now(tz=UTC).isoformat()),
+    )
+
+
 def _apply_migrations(conn: sqlite3.Connection, current: int) -> None:
     """Apply all pending schema migrations starting from *current* version."""
     if current < 2:  # noqa: PLR2004
@@ -288,6 +306,8 @@ def _apply_migrations(conn: sqlite3.Connection, current: int) -> None:
         _migrate_v7_to_v8(conn)
     if current < 9:  # noqa: PLR2004
         _migrate_v8_to_v9(conn)
+    if current < 10:  # noqa: PLR2004
+        _migrate_v9_to_v10(conn)
 
 
 # ---------------------------------------------------------------------------
@@ -302,7 +322,7 @@ def init_db(conn: sqlite3.Connection) -> None:
     connection is safe and will not duplicate data or raise errors.
 
     If the database contains an older schema, it is automatically migrated
-    through v2-v9.
+    through v2-v10.
 
     Args:
         conn (sqlite3.Connection): An open :class:`sqlite3.Connection`.  Works with both

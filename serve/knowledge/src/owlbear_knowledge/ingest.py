@@ -81,6 +81,7 @@ class IngestPipeline:
         *,
         metadata: dict[str, object] | None = None,
         scope: str = "global",
+        source_id: str | None = None,
     ) -> IngestResult:
         """Chunk *text*, extract entities, persist to store, return IngestResult.
 
@@ -120,7 +121,11 @@ class IngestPipeline:
                 metadata=_meta,
                 scope=scope,
             )
-            await asyncio.to_thread(self._docs.insert_document, doc)  # type: ignore[union-attr]
+            await asyncio.to_thread(
+                self._docs.insert_document,
+                doc,
+                source_id=source_id,
+            )  # type: ignore[union-attr]
 
             chunk_ids: list[str] = await asyncio.to_thread(
                 self._docs.store_chunks,

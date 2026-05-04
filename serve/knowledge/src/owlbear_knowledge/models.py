@@ -81,6 +81,8 @@ class KnowledgeSource(BaseModel):
     id: str = Field(default_factory=_uuid_hex)
     name: str
     source_type: SourceType
+    fetch_method: str = ""
+    enrich: bool = False
     config: dict[str, Any] = Field(default_factory=dict)
     scope: str = "global"
     enabled: bool = True
