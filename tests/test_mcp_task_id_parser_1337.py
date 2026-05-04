@@ -466,7 +466,7 @@ class TestFromAC_NoSideEffects:
             await mcp_start_work(ctx, id="-5")
 
         post_task = app_ctx.engine.show_task(str(task_id))
-        assert not post_task.claimed, (
+        assert post_task.claimed_at is None, (
             "Task was claimed after rejected start_work with negative ID"
         )
 
