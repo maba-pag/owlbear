@@ -2283,6 +2283,8 @@ class AgentView:
                 full_task = self.engine.show_task(str(task.id))
             except FileNotFoundError:
                 continue
+            if full_task.status == "archived":
+                continue
             if not passes_tdd(full_task):
                 continue
             if not passes_clarity(full_task):
