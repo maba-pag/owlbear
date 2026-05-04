@@ -53,10 +53,11 @@ class IngestPipeline:
         entity_extractor: Entity extraction component.
         text_chunker: Text splitting component.
         cancel_signal: Optional threading.Event; if set, ingest returns cancelled.
-        content_guard: Optional ContentInjectionGuard; when set, untrusted-source
-            chunk text is scanned for prompt-injection phrases before entity
-            extraction.  Strict/warn behaviour is controlled by the guard's own
-            ``strict_mode`` parameter.
+        content_guard: Optional ContentInjectionGuard; when set, every chunk's
+            text is scanned for prompt-injection phrases before entity
+            extraction — no ``source_type`` value is exempt.  Strict/warn
+            behaviour is controlled by the guard's own ``strict_mode``
+            parameter.
         injection_mode: Unused; strict/warn behaviour is delegated to the guard's
             ``strict_mode``.  Reserved for future pipeline-level mode override.
     """
