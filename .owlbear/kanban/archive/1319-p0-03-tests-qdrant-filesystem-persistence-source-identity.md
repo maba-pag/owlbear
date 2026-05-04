@@ -1,10 +1,10 @@
 ---
 id: 1319
 title: 'P0-03: Tests — Qdrant filesystem persistence + source identity'
-status: review
+status: archived
 priority: critical
 created: 2026-05-04T05:48:37.762103+00:00
-updated: 2026-05-04T10:15:34.537255+00:00
+updated: 2026-05-04T11:58:49.272144+00:00
 tags:
 - phase-0
 - scope:knowledge
@@ -14,7 +14,7 @@ parent: 1316
 depends_on: []
 blocked: false
 block_reason:
-claimed_at: 2026-05-04T10:15:34.537255+00:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -649,3 +649,261 @@ Both tests are immediately GREEN — the production ingest path already implemen
   - Final test-writer loop-breaker tests for real create-then-second-resolve branch are green.
   - Task-local acceptance criteria test suite is fully passing.
 - Builder action: pass-through to review (non-implementation cycle).
+[[2026-05-04]]
+## Review Evidence
+### Test Results
+- quality-runner scoped pytest: 34 passed, 0 failed, 0 skipped on tests/test_qdrant_source_identity_1319.py
+- quality-runner note: 16 non-fatal sqlite ResourceWarnings during teardown
+
+### Lint
+- quality-runner scoped ruff: clean on serve/knowledge/src/owlbear_knowledge/ingest.py, serve/knowledge/src/owlbear_knowledge/source_store.py, serve/knowledge/src/owlbear_knowledge/models.py, serve/knowledge/src/owlbear_knowledge/schema.py, tests/test_qdrant_source_identity_1319.py
+
+### Coverage
+- owlbear_knowledge.ingest: 58%
+- owlbear_knowledge.source_store: 59%
+- owlbear_knowledge.models: 95%
+- owlbear_knowledge.schema: 46%
+- Module percentages are informational here. The blocking issue is proof quality on refined AC3, not broad module coverage.
+
+### Pass 1 — CRITICAL
+#### Security Review
+- No issues found in scoped files. The reviewed code adds no shell, eval, deserialization, secret, or user-controlled SQL surface.
+
+#### Test Integrity
+- No weakening is visible in the current TestFromAC classes.
+- Task-related commits are present in .git/logs/HEAD for 315e3777, 13b42977, 2298a80f, and b844bdcf.
+- Exact git diff / dirty-tree contamination checks were not available in this tool surface, so immutability confidence is slightly reduced.
+
+#### Test Quality
+| Dimension | Rating | Evidence |
+|-----------|--------|----------|
+| Assertion specificity | WEAK | The final AC3 create-path test at tests/test_qdrant_source_identity_1319.py:780 only proves create() was called under create.return_value=None and then asserts created_obj.name == target_url at tests/test_qdrant_source_identity_1319.py:808. It does not assert the runtime resolver key config["url"]. |
+| Manual mutation resistance | WEAK | The second-resolve id test at tests/test_qdrant_source_identity_1319.py:813 hardwires resolve_by_url.side_effect = [None, just_created] at lines 823-824. If serve/knowledge/src/owlbear_knowledge/ingest.py:147 stopped storing config={"url": source_url}, the mocked second resolve would still succeed and the test would remain green. |
+| Test independence | STRONG | Fixtures remain isolated across Qdrant, sqlite, and ingest-path checks. |
+| Descriptive naming | STRONG | Test names map directly to the refined AC language. |
+
+#### Implementation-Aware Gaps
+- The latest architect refinement for AC3 requires tests that exercise the REAL runtime contract and assert the created KnowledgeSource carries the requested URL before the second resolve supplies the FK (task file line 577).
+- The live resolver keys on source.config.get("url") at serve/knowledge/src/owlbear_knowledge/source_store.py:154.
+- The live ingest path writes that URL into config at serve/knowledge/src/owlbear_knowledge/ingest.py:147, then re-resolves at serve/knowledge/src/owlbear_knowledge/ingest.py:156.
+- The current final tests never assert config["url"] on the created source and they mock the second resolve to succeed regardless of what create() persisted. This means the runtime-critical resolver branch is still not discriminatingly proven.
+
+#### Data Safety
+- I am not using broader get-or-create race concerns as a gate here because concurrency is outside the declared AC. The objective blocking issue is narrower: the refined AC3 create-path proof is still lax.
+
+#### Builder Process Quality
+| Metric | Value |
+|-------|-------|
+| Existing Review Evidence sections in task file | 3 |
+| Assessment | LOOP-BREAKER ACTIVE |
+| Notes | Prior review sections already exist at task file lines 139, 301, and 482, so another sub-0.90 review must route to backlog. |
+
+### Pass 2 — INFORMATIONAL
+- AC1 proof did execute in this review cycle: quality-runner reported 0 skipped tests, so the Qdrant guard did not suppress the persistence assertions.
+- The retained source_id passthrough tests are still useful regression coverage, but they do not strengthen the final AC3 create-path proof.
+
+### AC Compliance
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1 | Same-path reopen and element-wise vector equality are asserted in tests/test_qdrant_source_identity_1319.py and the suite ran with 0 skips. | PASS |
+| AC2 | File-backed sqlite close/reopen persistence is asserted in tests/test_qdrant_source_identity_1319.py. | PASS |
+| AC3 | FAIL. tests/test_qdrant_source_identity_1319.py:780 and :813 use create.return_value=None, but they only assert created_obj.name == target_url and a mocked second resolve id. The real resolver key is source.config.get("url") at serve/knowledge/src/owlbear_knowledge/source_store.py:154, and the real ingest path sets that value at serve/knowledge/src/owlbear_knowledge/ingest.py:147. Because the second resolve is mocked to succeed at tests/test_qdrant_source_identity_1319.py:793 and :823, removing the config URL write would not fail the tests. | FAIL |
+| AC4 | First-class model/schema field and not-config-key proofs are present in the task suite. | PASS |
+| AC5 | URL/path identity resolution via knowledge_sources.id UUID FK is directly asserted in the task suite. | PASS |
+| AC6 | Enrich true/false reads are directly asserted in the task suite. | PASS |
+
+### Deductions
+- -0.13: refined AC3 create-path proof does not pin the actual resolver key used in production.
+- -0.05: exact diff / dirty-tree contamination checks were unavailable in this tool surface.
+
+### Confidence: 0.82
+### Verdict: FAIL
+### Action
+- Reject to backlog. This is a repeat review failure on the same proof-quality issue family, and the remaining gap is now in the AC/proof design rather than builder implementation.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Tighten the final AC3 proof so it pins the runtime resolver key actually used by production. Either require an assertion on created_source.config["url"] == source_url or replace the mock-store create-path proof with a real-store integration assertion that would fail if serve/knowledge/src/owlbear_knowledge/ingest.py:147 were removed. | tests/test_qdrant_source_identity_1319.py; serve/knowledge/src/owlbear_knowledge/ingest.py; serve/knowledge/src/owlbear_knowledge/source_store.py; .owlbear/kanban/tasks/1319-p0-03-tests-qdrant-filesystem-persistence-source-identity.md | Current test only asserts created_obj.name at tests/test_qdrant_source_identity_1319.py:808, while the live resolver keys on source.config.get("url") at serve/knowledge/src/owlbear_knowledge/source_store.py:154. |
+| 2 | architect | Re-scope the retry as backlog proof work only. Preserve AC1, AC2, AC4, AC5, and AC6 as complete and avoid sending the task back to builder until the AC3 evidence is discriminating. | .owlbear/kanban/tasks/1319-p0-03-tests-qdrant-filesystem-persistence-source-identity.md; tests/test_qdrant_source_identity_1319.py | There are already three prior Review Evidence sections in the task file, so another sub-0.90 review cannot route to builder or test-writer directly. |
+
+### Post-task Reflection
+- The remaining defect is not a red test or failing implementation; it is a false-green proof gap in a mock-heavy create-path test.
+- Latest architecture refinement improved the suite materially, but its "name or config[url]" allowance is still too loose for the production resolver contract.
+- quality-runner provided clean mechanical evidence; the failure came only from discriminating-proof review against live source semantics.
+- Limited git-surface access prevented a full dirty-tree/diff check, so I carried a small confidence deduction instead of overstating certainty.
+[[2026-05-04]]
+
+## Architecture Review — Final AC3 Proof Pin (4th retry)
+
+### Root Cause
+The reviewer correctly identifies that `test_ingest_text_registers_source_via_real_store_contract` asserts `created_obj.name == target_url` but not `created_obj.config["url"] == target_url`. The real `resolve_by_url()` at `source_store.py:154` keys on `source.config.get("url")`, not on `name`. If the ingest path wrote a wrong config URL but correct name, the test would pass but production would break.
+
+### Fix
+Add ONE assertion to the existing test: `assert created_obj.config["url"] == target_url`. This pins the actual runtime resolver key. No new tests, no structural change. The implementation is already correct — this makes the proof discriminating.
+
+### Refined AC (ONLY this line needs 1 assertion added)
+
+- [x] AC1: DONE
+- [x] AC2: DONE
+- [x] AC4: DONE
+- [x] AC5: DONE
+- [x] AC6: DONE
+- [ ] AC3 (final-final): In `test_ingest_text_registers_source_via_real_store_contract`, add assertion `assert created_obj.config["url"] == target_url` alongside the existing `created_obj.name` check. This proves the KnowledgeSource passed to `create()` carries the resolver key `config["url"]` that `resolve_by_url()` actually queries. (td:1)
+
+### Verdict: APPROVE
+- Test-writer: PROCEED — add 1 assertion to existing test.
+- Builder: verify GREEN (implementation already writes correct config).
+- Preserved work: 34 passing tests must not regress.
+- Test depth: td:1 (single assertion addition).
+
+[[2026-05-04]]
+4th loop-breaker retry. Single remaining gap: AC3 create-path test asserts `created_obj.name` but not `created_obj.config["url"]` — the actual key used by `resolve_by_url()`. Fix: add 1 assertion. All other AC lines (1/2/4/5/6) complete with evidence. Implementation already correct — proof-only gap.
+[[2026-05-04]]
+## Test-Writer Notes
+
+- Test file: tests/test_qdrant_source_identity_1319.py
+- Retry cycle: 4th loop-breaker — added 1 assertion to existing `test_ingest_text_registers_source_via_real_store_contract`.
+
+### Change made
+
+**AC3 resolver key pin (architect final gap):** Added `assert created_obj.config.get("url") == target_url` to `TestFromAC_IngestSourceResolutionContract::test_ingest_text_registers_source_via_real_store_contract`.
+
+The real `resolve_by_url()` in `source_store.py:154` keys on `source.config.get("url")`, not on `source.name`. Without this assertion, removing `config={"url": source_url}` from the `KnowledgeSource` passed to `create()` in `ingest.py:147` would still pass. The new assertion pins the actual runtime resolver key, making the proof discriminating.
+
+### Test results
+- pytest: 34 passed, 0 failed, 0 skipped (tests/test_qdrant_source_identity_1319.py)
+- ruff: clean
+
+### AC Coverage (final — no regressions)
+
+| AC | Tests | Status |
+|----|-------|--------|
+| AC1 (presence + content equality) | TestFromAC_QdrantFilesystemPersistence (2) | PASS |
+| AC2 | TestFromAC_SQLiteDiskPersistence (2) | PASS |
+| AC3 passthrough | TestFromAC_IngestSourceRegistration (2) | PASS |
+| AC3 resolve contract | TestFromAC_IngestSourceResolutionContract (5) | PASS |
+| AC3 get-or-create real contract + config URL pin | TestFromAC_IngestSourceResolutionContract (2) | PASS |
+| AC4 full set | TestFromAC_KnowledgeSourceAllNamedFields (9) | PASS |
+| AC4 fetch_method/enrich | TestFromAC_KnowledgeSourceFields (6) | PASS |
+| AC5 | TestFromAC_SourceIdentityResolution (3) | PASS |
+| AC6 | TestFromAC_EnrichFlag (2) | PASS |
+[[2026-05-04]]
+## Builder Notes
+- No code changes made in this builder cycle.
+- Scope determination: final retry is proof-only; implementation already satisfied refined AC3 contract.
+- Verification (quality-runner, scoped):
+  - pytest: 34 passed, 0 failed, 0 skipped on tests/test_qdrant_source_identity_1319.py
+  - ruff: clean on serve/knowledge/src/owlbear_knowledge/ingest.py, serve/knowledge/src/owlbear_knowledge/source_store.py, serve/knowledge/src/owlbear_knowledge/models.py, serve/knowledge/src/owlbear_knowledge/schema.py, tests/test_qdrant_source_identity_1319.py
+  - coverage: owlbear_knowledge.ingest 58%, owlbear_knowledge.source_store 59%, owlbear_knowledge.models 95%, owlbear_knowledge.schema 46%
+- Evidence summary:
+  - Task-local AC suite is fully GREEN after final AC3 proof pin update.
+  - No regressions detected in scoped lint/test checks.
+
+[[2026-05-04]]
+## Review Evidence
+### Test Results
+- quality-runner scoped pytest: 34 passed, 0 failed, 0 skipped on [tests/test_qdrant_source_identity_1319.py](tests/test_qdrant_source_identity_1319.py)
+- quality-runner note: 16 non-fatal sqlite `ResourceWarning` entries during teardown; no test failures or skips.
+
+### Lint
+- quality-runner scoped ruff: clean on [serve/knowledge/src/owlbear_knowledge/ingest.py](serve/knowledge/src/owlbear_knowledge/ingest.py), [serve/knowledge/src/owlbear_knowledge/source_store.py](serve/knowledge/src/owlbear_knowledge/source_store.py), [serve/knowledge/src/owlbear_knowledge/models.py](serve/knowledge/src/owlbear_knowledge/models.py), [serve/knowledge/src/owlbear_knowledge/schema.py](serve/knowledge/src/owlbear_knowledge/schema.py), and [tests/test_qdrant_source_identity_1319.py](tests/test_qdrant_source_identity_1319.py).
+
+### Coverage
+- `owlbear_knowledge.ingest`: 58%
+- `owlbear_knowledge.source_store`: 59%
+- `owlbear_knowledge.models`: 95%
+- `owlbear_knowledge.schema`: 46%
+- `owlbear_knowledge.qdrant`: 52%
+- Module percentages are informational here. The latest architect refinement narrowed the remaining work to a proof-only AC3 assertion in [.owlbear/kanban/tasks/1319-p0-03-tests-qdrant-filesystem-persistence-source-identity.md](.owlbear/kanban/tasks/1319-p0-03-tests-qdrant-filesystem-persistence-source-identity.md#L737-L754), and the task-owned lines are directly exercised by the task-local suite.
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1 refined: same-path reopen + payload equality | Reopen is covered by [tests/test_qdrant_source_identity_1319.py](tests/test_qdrant_source_identity_1319.py#L408) with retrieval asserted at [tests/test_qdrant_source_identity_1319.py](tests/test_qdrant_source_identity_1319.py#L425). Content equality is pinned by [tests/test_qdrant_source_identity_1319.py](tests/test_qdrant_source_identity_1319.py#L447), [tests/test_qdrant_source_identity_1319.py](tests/test_qdrant_source_identity_1319.py#L467), [tests/test_qdrant_source_identity_1319.py](tests/test_qdrant_source_identity_1319.py#L468), and [tests/test_qdrant_source_identity_1319.py](tests/test_qdrant_source_identity_1319.py#L472). | COVERED |
+| AC2: SQLite file-backed close/reopen persistence | File-backed reopen is covered by [tests/test_qdrant_source_identity_1319.py](tests/test_qdrant_source_identity_1319.py#L487) with persisted row assertions at [tests/test_qdrant_source_identity_1319.py](tests/test_qdrant_source_identity_1319.py#L514) and [tests/test_qdrant_source_identity_1319.py](tests/test_qdrant_source_identity_1319.py#L515). Multi-row persistence is covered by [tests/test_qdrant_source_identity_1319.py](tests/test_qdrant_source_identity_1319.py#L541). | COVERED |
+| AC3 final-final: create-path proof pins the real resolver key and FK/order contract | The latest binding refinement requires the `config["url"]` assertion in [.owlbear/kanban/tasks/1319-p0-03-tests-qdrant-filesystem-persistence-source-identity.md](.owlbear/kanban/tasks/1319-p0-03-tests-qdrant-filesystem-persistence-source-identity.md#L752). Current repo state satisfies that with create-path assertions at [tests/test_qdrant_source_identity_1319.py](tests/test_qdrant_source_identity_1319.py#L780), [tests/test_qdrant_source_identity_1319.py](tests/test_qdrant_source_identity_1319.py#L808), [tests/test_qdrant_source_identity_1319.py](tests/test_qdrant_source_identity_1319.py#L814), and FK forwarding at [tests/test_qdrant_source_identity_1319.py](tests/test_qdrant_source_identity_1319.py#L820) and [tests/test_qdrant_source_identity_1319.py](tests/test_qdrant_source_identity_1319.py#L842). Ordering remains covered at [tests/test_qdrant_source_identity_1319.py](tests/test_qdrant_source_identity_1319.py#L772) and [tests/test_qdrant_source_identity_1319.py](tests/test_qdrant_source_identity_1319.py#L775), matching the live path in [serve/knowledge/src/owlbear_knowledge/ingest.py](serve/knowledge/src/owlbear_knowledge/ingest.py#L133), [serve/knowledge/src/owlbear_knowledge/ingest.py](serve/knowledge/src/owlbear_knowledge/ingest.py#L147), [serve/knowledge/src/owlbear_knowledge/ingest.py](serve/knowledge/src/owlbear_knowledge/ingest.py#L156), and [serve/knowledge/src/owlbear_knowledge/ingest.py](serve/knowledge/src/owlbear_knowledge/ingest.py#L163), with the resolver key defined in [serve/knowledge/src/owlbear_knowledge/source_store.py](serve/knowledge/src/owlbear_knowledge/source_store.py#L149) and [serve/knowledge/src/owlbear_knowledge/source_store.py](serve/knowledge/src/owlbear_knowledge/source_store.py#L154). | COVERED |
+| AC4: first-class source fields + schema columns + not-config-key proof | Model fields are present at [serve/knowledge/src/owlbear_knowledge/models.py](serve/knowledge/src/owlbear_knowledge/models.py#L84) and [serve/knowledge/src/owlbear_knowledge/models.py](serve/knowledge/src/owlbear_knowledge/models.py#L85), schema migration columns at [serve/knowledge/src/owlbear_knowledge/schema.py](serve/knowledge/src/owlbear_knowledge/schema.py#L279) and [serve/knowledge/src/owlbear_knowledge/schema.py](serve/knowledge/src/owlbear_knowledge/schema.py#L283), and store mapping at [serve/knowledge/src/owlbear_knowledge/source_store.py](serve/knowledge/src/owlbear_knowledge/source_store.py#L46) and [serve/knowledge/src/owlbear_knowledge/source_store.py](serve/knowledge/src/owlbear_knowledge/source_store.py#L47). Task-local proof exists at [tests/test_qdrant_source_identity_1319.py](tests/test_qdrant_source_identity_1319.py#L554), [tests/test_qdrant_source_identity_1319.py](tests/test_qdrant_source_identity_1319.py#L561), [tests/test_qdrant_source_identity_1319.py](tests/test_qdrant_source_identity_1319.py#L585), [tests/test_qdrant_source_identity_1319.py](tests/test_qdrant_source_identity_1319.py#L603), and [tests/test_qdrant_source_identity_1319.py](tests/test_qdrant_source_identity_1319.py#L606). | COVERED |
+| AC5: URL/path identity resolution via `knowledge_sources.id` UUID FK | Store helpers exist at [serve/knowledge/src/owlbear_knowledge/source_store.py](serve/knowledge/src/owlbear_knowledge/source_store.py#L149), [serve/knowledge/src/owlbear_knowledge/source_store.py](serve/knowledge/src/owlbear_knowledge/source_store.py#L154), [serve/knowledge/src/owlbear_knowledge/source_store.py](serve/knowledge/src/owlbear_knowledge/source_store.py#L158), and [serve/knowledge/src/owlbear_knowledge/source_store.py](serve/knowledge/src/owlbear_knowledge/source_store.py#L163). Task-local UUID assertions are at [tests/test_qdrant_source_identity_1319.py](tests/test_qdrant_source_identity_1319.py#L296), [tests/test_qdrant_source_identity_1319.py](tests/test_qdrant_source_identity_1319.py#L317), and [tests/test_qdrant_source_identity_1319.py](tests/test_qdrant_source_identity_1319.py#L342), with URL miss handling at [tests/test_qdrant_source_identity_1319.py](tests/test_qdrant_source_identity_1319.py#L355). | COVERED |
+| AC6: enrich true/false readable on the record | Exact boolean reads are asserted at [tests/test_qdrant_source_identity_1319.py](tests/test_qdrant_source_identity_1319.py#L379) and [tests/test_qdrant_source_identity_1319.py](tests/test_qdrant_source_identity_1319.py#L395). | COVERED |
+
+#### Security Review
+- No issues found. The scoped ingest/store changes add no shell, eval, unsafe deserialization, path traversal, or user-built SQL surfaces.
+
+#### Test Integrity
+- No weakening is visible in the current `TestFromAC_*` suite.
+- Task-related commits are present in [.git/logs/HEAD](.git/logs/HEAD#L1790), [.git/logs/HEAD](.git/logs/HEAD#L1797), [.git/logs/HEAD](.git/logs/HEAD#L1801), and [.git/logs/HEAD](.git/logs/HEAD#L1804).
+- Exact diff / dirty-tree contamination checks were not available in this tool surface, so immutability certainty is slightly reduced.
+
+#### Test Quality
+| Dimension | Rating | Evidence |
+|-----------|--------|----------|
+| Assertion specificity | ADEQUATE | AC1 content equality, AC2 persisted-row equality, AC3 `config["url"]` pin + FK assertions, AC4 non-config-key checks, AC5 UUID equality, and AC6 exact booleans are all discriminating. |
+| Negative/error-path coverage | ADEQUATE | URL miss is covered at [tests/test_qdrant_source_identity_1319.py](tests/test_qdrant_source_identity_1319.py#L355); Qdrant path isolation is covered by the second AC1 test; the remaining code-reader suggestions are outside the latest refined AC scope. |
+| Manual mutation resistance | ADEQUATE | Removing `config={"url": source_url}` from [serve/knowledge/src/owlbear_knowledge/ingest.py](serve/knowledge/src/owlbear_knowledge/ingest.py#L147) would now fail [tests/test_qdrant_source_identity_1319.py](tests/test_qdrant_source_identity_1319.py#L814); removing the post-create re-resolve / FK forwarding would fail [tests/test_qdrant_source_identity_1319.py](tests/test_qdrant_source_identity_1319.py#L842); breaking ordering would fail [tests/test_qdrant_source_identity_1319.py](tests/test_qdrant_source_identity_1319.py#L772) and [tests/test_qdrant_source_identity_1319.py](tests/test_qdrant_source_identity_1319.py#L775). |
+| Test independence | STRONG | Temp paths and fresh SQLite fixtures isolate the persistence and source-store cases. |
+| Descriptive naming | STRONG | Test names map directly to the final accepted contract. |
+
+#### Data Safety
+- No AC-scoped data-safety issue is being used as a gate in this verdict.
+
+### Pass 2 — INFORMATIONAL
+- code-reader raised broader concerns about `resolve_by_path` miss coverage, the `create() -> None -> second resolve still None` failure branch, and `fetch_method="url"` vocabulary drift at [serve/knowledge/src/owlbear_knowledge/ingest.py](serve/knowledge/src/owlbear_knowledge/ingest.py#L145). I did not use those as gates because the latest binding architect refinement explicitly narrowed the remaining retry scope to the single AC3 proof-pin assertion in [.owlbear/kanban/tasks/1319-p0-03-tests-qdrant-filesystem-persistence-source-identity.md](.owlbear/kanban/tasks/1319-p0-03-tests-qdrant-filesystem-persistence-source-identity.md#L737-L754), and Step 8 forbids inventing new requirements outside that accepted scope.
+- `get_errors` reported no diagnostics in the scoped files.
+
+### AC Compliance
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1 | Same-path reopen and element-wise payload equality are directly asserted in [tests/test_qdrant_source_identity_1319.py](tests/test_qdrant_source_identity_1319.py#L408) and [tests/test_qdrant_source_identity_1319.py](tests/test_qdrant_source_identity_1319.py#L447-L472). | PASS |
+| AC2 | File-backed close/reopen persistence is directly asserted in [tests/test_qdrant_source_identity_1319.py](tests/test_qdrant_source_identity_1319.py#L487-L541). | PASS |
+| AC3 | The final architect refinement requires the `config["url"]` pin in [.owlbear/kanban/tasks/1319-p0-03-tests-qdrant-filesystem-persistence-source-identity.md](.owlbear/kanban/tasks/1319-p0-03-tests-qdrant-filesystem-persistence-source-identity.md#L752), and the current create-path suite now asserts it at [tests/test_qdrant_source_identity_1319.py](tests/test_qdrant_source_identity_1319.py#L814) alongside FK forwarding at [tests/test_qdrant_source_identity_1319.py](tests/test_qdrant_source_identity_1319.py#L842). | PASS |
+| AC4 | Top-level model/schema field and not-config-key proofs are present in [tests/test_qdrant_source_identity_1319.py](tests/test_qdrant_source_identity_1319.py#L554-L606) and the corresponding runtime definitions in [serve/knowledge/src/owlbear_knowledge/models.py](serve/knowledge/src/owlbear_knowledge/models.py#L84-L85) and [serve/knowledge/src/owlbear_knowledge/schema.py](serve/knowledge/src/owlbear_knowledge/schema.py#L279-L283). | PASS |
+| AC5 | URL/path resolution via source UUID is asserted in [tests/test_qdrant_source_identity_1319.py](tests/test_qdrant_source_identity_1319.py#L296-L355) against the live helpers in [serve/knowledge/src/owlbear_knowledge/source_store.py](serve/knowledge/src/owlbear_knowledge/source_store.py#L149-L163). | PASS |
+| AC6 | Exact true/false enrich reads are asserted in [tests/test_qdrant_source_identity_1319.py](tests/test_qdrant_source_identity_1319.py#L365-L395). | PASS |
+
+### Deductions
+- -0.05: exact diff / dirty-tree contamination checks were unavailable in this tool surface.
+- -0.02: the final one-line AC3 proof pin is present in the working tree and current suite, but the task history does not record a dedicated final commit hash for that last proof-only retry.
+
+### Confidence: 0.91
+### Verdict: PASS
+### Action
+- Advance to `docs`. The latest binding AC is satisfied in current repo state, the scoped suite is green, and no remaining critical proof gap is traceable to the accepted retry scope.
+[[2026-05-04]]
+## Docs Gate
+
+### Checklist
+
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | Yes | N/A | serve/knowledge/README.md already documents Qdrant filesystem mode and lists KnowledgeSourceStore/IngestPipeline in module groups; no behaviorally inaccurate sections found |
+| 2 | Module docstrings | Yes | Updated | IngestPipeline class docstring Args block was missing the new `source_store` parameter — added. resolve_by_url and resolve_by_path already had accurate docstrings. KnowledgeSource fields (fetch_method, enrich) have type annotations; class docstring unchanged. ingest_text method docstring accurate. |
+| 3 | External attribution | No | N/A | Research doc sources table lists only internal codebase files; no external repos/articles used |
+| 4 | Research doc | Yes | Verified | .owlbear/research/1319-qdrant-persistence-source-identity-tests.md exists and is linked from task body |
+| 5 | Diagram maintenance | Yes | Updated | share/diagrams/mcp-topology.excalidraw describes: serve/mcp-*/src/**, serve/kanban/src/**, serve/knowledge/src/**, .vscode/mcp.json — matches changed files. Footer updated from 6b0ccf32 → f61e4846 (2026-05-04) |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation request in task body |
+| 7 | Deletion detection | No | N/A | No deleted files in changed-files set |
+
+### Scope Classification
+
+| File | Scope | Action |
+|------|-------|--------|
+| serve/knowledge/src/owlbear_knowledge/models.py | IN (docstrings) | N/A — class docstring accurate |
+| serve/knowledge/src/owlbear_knowledge/schema.py | IN (docstrings) | N/A — migration code has no public API docstrings to update |
+| serve/knowledge/src/owlbear_knowledge/source_store.py | IN (docstrings) | N/A — new methods have accurate docstrings |
+| serve/knowledge/src/owlbear_knowledge/ingest.py | IN (docstrings) | Updated — added source_store to Args block |
+| tests/test_qdrant_source_identity_1319.py | OUT (test file) | N/A |
+
+### Files Updated
+- share/diagrams/mcp-topology.excalidraw (footer updated)
+- serve/knowledge/src/owlbear_knowledge/ingest.py (docstring updated)
+- Commit: e870c729
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no 1319-* scratch files found)
+[[2026-05-04]]
+## Audit\n\n### AC Verification\n| AC | Evidence | Status |\n|----|----------|--------|\n| AC1 (Qdrant filesystem persistence + content equality) | 34/34 tests pass; reviewer confirmed element-wise float comparison at test L447-472 | PASS |\n| AC2 (SQLite file-backed close/reopen) | Reviewer confirmed file-backed reopen assertions at test L487, L514-515 | PASS |\n| AC3 (ingest get-or-create + config URL pin) | Final 4th-retry assertion pins `config[\"url\"]` resolver key at test L814; FK forwarding at L842; ordering at L772/775 | PASS |\n| AC4 (first-class fields + not-config-keys) | Model fields at models.py:84-85, schema columns at schema.py:279/283, test proof at L554-606 | PASS |\n| AC5 (URL/path identity resolution via UUID FK) | Store helpers at source_store.py:149/158; UUID assertions at test L296/317/342 | PASS |\n| AC6 (enrich flag readable) | Exact boolean assertions at test L379/395 | PASS |\n\n### Test Results\n- Task-scoped: 34 passed, 0 failed\n- Knowledge-module: 5 failures all unrelated (test_outputschema_541, test_phase_a_config)\n- Full suite: 270 failures, none in task scope (background debt from other modules)\n- Lint: Clean in task scope; 3 violations in unrelated files\n- Vitest: Previous session runs confirm full pass; timeout during this audit cycle (informational)\n\n### Commit Integrity\n7 task commits present: 65d96e29 (researcher), 6e3f24a0 (test-writer), 315e3777/13b42977/2298a80f (builder), b844bdcf (test-writer final), e870c729 (doc-writer)\n\n### Architect Quality\nScore: 3/5 — Original AC was specific with class/method/field names and td annotations, but ambiguity in AC1 (presence vs content), AC3 (resolve-only vs get-or-create), and AC4 (proof completeness) required 4 retry cycles. Architect responded well to challenges and produced tight final scope, but initial specificity gap caused significant pipeline friction.\n\n### Deductions\n- -0.03: AC quality score 3/5\n- -0.01: Vitest full suite timed out (prior evidence shows pass)\n\n### Confidence: 0.96\n### Verdict: ARCHIVE
