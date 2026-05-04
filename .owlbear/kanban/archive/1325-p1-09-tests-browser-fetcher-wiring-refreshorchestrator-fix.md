@@ -1,10 +1,10 @@
 ---
 id: 1325
 title: 'P1-09: Tests — Browser fetcher wiring + RefreshOrchestrator fix'
-status: in-progress
+status: archived
 priority: needed
 created: 2026-05-04T05:48:50.088181+00:00
-updated: 2026-05-04T21:16:14.963729+00:00
+updated: 2026-05-04T23:07:01.749717+00:00
 tags:
 - phase-1
 - scope:knowledge
@@ -653,3 +653,177 @@ got: "browser fetcher selected but no browser session is wired for URL 'https://
 ### Builder notes
 - Fix: remove `{url!r}` from the f-string at `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:63`
 - Message should say "browser fetcher not wired" (or similar) without echoing the URL
+[[2026-05-04]]
+## Builder Notes
+- Implementation: updated `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py` to sanitize `_BrowserContentFetcher.fetch()` RuntimeError text so it no longer embeds source URLs.
+- Tests: `tests/test_browser_fetcher_wiring_1325.py` -> 13 passed, 0 failed, 0 skipped (quality-runner scoped).
+- Coverage: `owlbear_mcp_knowledge.server` 46% (scoped report capture).
+- ruff: clean on `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py` and `tests/test_browser_fetcher_wiring_1325.py`.
+- Evidence summary: RED confirmed first (`TestFromAC_BrowserFetcherErrorSanitization::test_browser_fetcher_error_does_not_embed_source_url` failing with URL leak), then GREEN after fix with no failing tests.
+- Commit: `09e060d4` — `feat: sanitize browser placeholder error message (#1325, builder)`.
+
+### Reflection
+- The AC6 failure was tightly scoped, so a one-line message sanitization plus lint-safe signature handling resolved the blocker without touching broader flow.
+- Keeping the `fetch(url)` signature intact avoided interface risk while meeting the no-leak requirement.
+- Scoped quality-runner runs provided fast RED→GREEN confirmation with reproducible evidence.
+[[2026-05-04]]
+## Review Evidence
+### Test Results
+- quality-runner task-scoped run: `tests/test_browser_fetcher_wiring_1325.py` reported 13 passed, 0 failed, 0 skipped.
+- quality-runner adjacent regression context: `tests/test_persistence_source_wiring_1320.py`, `tests/test_qdrant_source_identity_1319.py`, and `tests/test_content_guard_wiring_1321.py` reported 75 passed, 0 failed, 0 skipped.
+- No environment or tooling issues were reported.
+- quality-runner reported the repository state as clean for the review run.
+
+### Lint: clean
+- Ruff clean on `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py`, `serve/knowledge/src/owlbear_knowledge/refresh.py`, and `tests/test_browser_fetcher_wiring_1325.py`.
+- VS Code diagnostics on the same files: no errors.
+
+### Coverage
+- `owlbear_mcp_knowledge.server`: 46%
+- `owlbear_knowledge.refresh`: 48%
+- Overall scoped report: 31%
+- Informational only: module percentages are below full-module gate levels, but the task-owned paths exercised by the task suite are covered and adjacent regressions are green.
+
+### Pass 1 - CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Were Violated? | Verdict |
+|---|---|---|---|
+| AC1: app_lifespan passes a ContentFetcher instance to RefreshOrchestrator; default HttpxContentFetcher; protocol acceptance proven for alternative implementations | `tests/test_browser_fetcher_wiring_1325.py:157`, `:179`, `:200`; implementation at `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:339` | Yes for missing `content_fetcher` wiring and wrong default type. Alternative-implementation proof is indirect but consistent with the refined task contract. | LAX |
+| AC2: app_lifespan passes graph_store for inter-doc edge building | `tests/test_browser_fetcher_wiring_1325.py:256`; implementation at `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:341` | Yes for omitted or `None` graph_store. | COVERED |
+| AC3: fetcher selection maps `http` and empty to HttpxContentFetcher and `browser` to a protocol-compatible non-HTTP placeholder | `tests/test_browser_fetcher_wiring_1325.py:290`, `:307`, `:319`, `:339`; implementation at `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:101`, `:104`, `:105` | Yes. Wrong selector export or wrong mapping would fail. | COVERED |
+| AC4: RefreshOrchestrator refresh completes without error when `inter_doc_builder=None` | `tests/test_browser_fetcher_wiring_1325.py:378`; implementation at `serve/knowledge/src/owlbear_knowledge/refresh.py:222`, `:298`, `:321` | Yes for the current success path. Proof would be stronger with explicit `failed == 0` and empty `errors` assertions. | LAX |
+| AC5: refresh_source reads `fetch_method` from the KnowledgeSource record and selects the corresponding ContentFetcher | `tests/test_browser_fetcher_wiring_1325.py:457`, `:496`, `:522`, `:545`; implementation at `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:755`, `:766` | Yes. The persisted-source side-effect test would fail if the selector ignored the stored `fetch_method`. | COVERED |
+| AC6: `_BrowserContentFetcher.fetch()` raises RuntimeError without embedding the source URL | `tests/test_browser_fetcher_wiring_1325.py:612`; implementation at `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:62`, `:64` | Yes. Reintroducing the URL into the message would fail immediately. | COVERED |
+
+#### Security Review
+- No live browser-path URL leak remains in the reviewed code.
+- `_BrowserContentFetcher.fetch()` now discards the incoming URL and raises a constant message at `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:62-65`.
+- `refresh.py` still persists `str(exc)` into `last_error` at `serve/knowledge/src/owlbear_knowledge/refresh.py:307` and `:352`, but under the current task scope the reviewed placeholder no longer feeds URL data into that sink.
+
+#### Test Integrity
+- No weakening or removal of the current `TestFromAC_*` suites is visible in `tests/test_browser_fetcher_wiring_1325.py`.
+- Builder commits were confirmed in git logs: `e84457898e5288563d3fc1da6f8335132e904792` at `.git/logs/HEAD:1849` and `.git/logs/refs/heads/dev:1697`; `09e060d455b7e1b608c4385bf2bb7a3f1d2ec307` at `.git/logs/HEAD:1889` and `.git/logs/refs/heads/dev:1735`.
+- Direct diff-surface proof was not available from the tool surface, so immutability confidence is slightly reduced.
+
+#### Test Quality
+| Dimension | Rating | Evidence |
+|---|---|---|
+| Assertion specificity | ADEQUATE | The suite discriminates against missing wiring, wrong default type, wrong selector mapping, and URL-leak regression. AC1 alternative-implementation proof and AC4 no-error proof are indirect rather than maximal. |
+| Negative and error-path coverage | ADEQUATE | AC6 executes the real browser placeholder error path directly and proves URL sanitization. |
+| Manual mutation reasoning | ADEQUATE | Dropping `content_fetcher` wiring, breaking `select_content_fetcher`, or reintroducing the URL into the placeholder exception would fail the suite. AC4 would be stronger with explicit zero-failure assertions. |
+| Test independence | STRONG | Fresh sources, stores, pipelines, and env patches are created per test helper or test class. |
+| Descriptive test names | STRONG | Test names map directly to the acceptance criteria. |
+
+#### Data Safety
+- No live data-safety defect found in the reviewed task scope.
+- Residual caution only: `last_error` remains a raw join of exception text in `serve/knowledge/src/owlbear_knowledge/refresh.py:352`, so future injected fetchers must continue sanitizing their own messages.
+
+#### Implementation-Aware Gaps
+- No AC-scoped untested path warrants rejection after the latest architecture refinement.
+- Non-blocking robustness notes:
+  - AC1 proves protocol compatibility for alternatives indirectly rather than by injecting a non-HTTP fetcher through the constructor path.
+  - AC4 proves success via `refreshed == 1`; it does not also assert zero failures and empty errors.
+  - `select_content_fetcher` normalization for whitespace and case is untested, but that behavior is outside the stated AC.
+
+#### Builder Process Quality
+| Metric | Value |
+|---|---|
+| Existing `## Review Evidence` sections before this review | 3 |
+| Builder retries in task body | Multiple, with approach variation and architecture refinements |
+| Assessment | FRICTION, resolved |
+
+### Pass 2 - INFORMATIONAL
+- The latest architecture refinement in the task body is binding for AC1 and AC3: `.owlbear/kanban/tasks/1325-p1-09-tests-browser-fetcher-wiring-refreshorchestrator-fix.md:27-32` plus refinement notes at `:430-432`.
+- Review anchored to that refined contract, not the earlier cross-package class wording that previous review cycles rejected.
+- `refresh_source` still uses the lifespan-created orchestrator only as a non-None gate before constructing a fresh orchestrator. That coupling is unnecessary but not a failure under the current AC.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---|---|---|---|
+| AC1 | Task line at `.owlbear/kanban/tasks/1325-p1-09-tests-browser-fetcher-wiring-refreshorchestrator-fix.md:27`; constructor wiring at `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:339`; task tests at `tests/test_browser_fetcher_wiring_1325.py:157`, `:179`, `:200`. | `TestFromAC_ContentFetcherInjection` | PASS |
+| AC2 | Task line at `.owlbear/kanban/tasks/1325-p1-09-tests-browser-fetcher-wiring-refreshorchestrator-fix.md:28`; constructor wiring at `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:341`; task test at `tests/test_browser_fetcher_wiring_1325.py:256`. | `TestFromAC_GraphStoreInjection` | PASS |
+| AC3 | Task line at `.owlbear/kanban/tasks/1325-p1-09-tests-browser-fetcher-wiring-refreshorchestrator-fix.md:29` and refinement note at `:432`; selector implementation at `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:101-106`; task tests at `tests/test_browser_fetcher_wiring_1325.py:290`, `:307`, `:319`, `:339`. | `TestFromAC_FetchMethodSelection` | PASS |
+| AC4 | Task line at `.owlbear/kanban/tasks/1325-p1-09-tests-browser-fetcher-wiring-refreshorchestrator-fix.md:30`; authenticated-web refresh flow at `serve/knowledge/src/owlbear_knowledge/refresh.py:222-309`; task test at `tests/test_browser_fetcher_wiring_1325.py:378`. | `TestFromAC_RefreshWithoutInterDocBuilder` | PASS |
+| AC5 | Task line at `.owlbear/kanban/tasks/1325-p1-09-tests-browser-fetcher-wiring-refreshorchestrator-fix.md:31`; persisted-source lookup and per-source selector at `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:755-776`; task tests at `tests/test_browser_fetcher_wiring_1325.py:457`, `:522`, `:545`. | `TestFromAC_RefreshSourceFetchMethodIntegration` | PASS |
+| AC6 | Task line at `.owlbear/kanban/tasks/1325-p1-09-tests-browser-fetcher-wiring-refreshorchestrator-fix.md:32`; sanitized placeholder message at `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:62-65`; task test at `tests/test_browser_fetcher_wiring_1325.py:612`. | `TestFromAC_BrowserFetcherErrorSanitization` | PASS |
+
+### Deductions
+- Minor: AC1 alternative-implementation proof is indirect rather than constructor-path injection.
+- Minor: AC4 would be stronger with explicit `failed == 0` and empty `errors` assertions.
+- Minor: direct commit diff was unavailable; commit existence was reconstructed from git-log evidence.
+
+### Confidence: .91
+### Verdict: PASS
+### Action: advance to docs.
+
+### Reflection
+- The task history matters here: the binding contract is the refined architecture note, not the earlier cross-package class wording.
+- Fresh quality-runner evidence was necessary because prior review sections in the task body no longer matched the live state.
+- The remaining concerns are proof-strength notes, not current implementation defects.
+[[2026-05-04]]
+## Docs Gate
+
+### Checklist
+
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | `serve/mcp-knowledge/README.md` mentions `refresh_source` tool name only (no implementation details). `serve/knowledge/README.md` shows `graph_store` in existing API examples — no change needed. No prose doc references `select_content_fetcher`, `_BrowserContentFetcher`, or wiring internals. |
+| 2 | Module docstrings | Yes | Verified | `_BrowserContentFetcher` has class + method docstrings. `select_content_fetcher` has a docstring. `RefreshOrchestrator` class docstring already documents `content_fetcher` and `graph_store` params accurately. All public classes in server.py (`SearchResult`, `SourceInfo`, `EntityInfo`, `StatsResult`, `AppContext`) have docstrings. No updates needed. |
+| 3 | External attribution | No | N/A | All 8 sources in research doc are internal codebase files — no external URLs or articles. No row needed in sources/overview.md. |
+| 4 | Research doc | Yes | Verified | `.owlbear/research/browser-fetcher-wiring-tests-1325.md` exists, links to task #1325, and is referenced in the task body. Follow-up tasks noted as "none (leaf test task)". |
+| 5 | Diagram maintenance (describes match) | Yes | Updated | `share/diagrams/mcp-topology.excalidraw` describes `serve/mcp-*/src/**` and `serve/knowledge/src/**` — both match changed files. Footer updated to `Last verified: 2026-05-05 (c3eb57eb)`. Committed. |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation request in task body. |
+| 7 | Deletion detection | No | N/A | No files deleted. No orphaned IN-scope docs detected. |
+
+### Scope Classification
+
+| File | Scope | Action |
+|------|-------|--------|
+| `tests/test_browser_fetcher_wiring_1325.py` | OUT (test file, no public API docstrings) | N/A |
+| `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py` | IN (docstrings) | Verified — accurate |
+| `serve/knowledge/src/owlbear_knowledge/refresh.py` | IN (docstrings) | Verified — accurate |
+| `.owlbear/research/browser-fetcher-wiring-tests-1325.md` | IN (research doc) | Verified — exists and linked |
+
+### Files Updated
+- `share/diagrams/mcp-topology.excalidraw` — footer updated to 2026-05-05 (c3eb57eb)
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None found
+[[2026-05-04]]
+## Audit
+
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: app_lifespan passes ContentFetcher (default HttpxContentFetcher; protocol acceptance) | server.py:339 wires content_fetcher; tests/test_browser_fetcher_wiring_1325.py:157,179,200 assert presence+type | PASS |
+| AC2: app_lifespan passes graph_store for inter-doc edge building | server.py:341 wires graph_store; test:256 asserts non-None | PASS |
+| AC3: fetch_method maps http/empty to HttpxContentFetcher, browser to protocol-compatible placeholder | server.py:101-105 selector; tests:290,307,319,339 cover all branches | PASS |
+| AC4: refresh completes without error when inter_doc_builder=None | refresh.py:222-309; test:378 drives orchestrator.refresh, asserts refreshed==1 | PASS |
+| AC5: refresh_source reads fetch_method and selects correct fetcher | server.py:766 calls select_content_fetcher(source.fetch_method); tests:457,522,545 prove dispatch | PASS |
+| AC6: _BrowserContentFetcher.fetch() raises RuntimeError without embedding URL | server.py:60-65 discards url, constant message; test:612 asserts URL not in error | PASS |
+
+### Test Results
+- pytest (task-scoped + adjacent): 54 passed, 0 failed
+- pytest (full suite): 4357 passed, 254 failed (all failures in unrelated domains: engine accessor, path neutrality, cockpit, memory engine, etc.)
+- ruff: 12 violations, all in unrelated files (copilot_auth.py, test_root.py)
+
+### Architect Quality: 3/5
+Original decomposition was sound (5 focused ACs) but required 2 loop-breaker re-reviews: first to correct cross-package class naming (BrowserContentFetcher from serve/browser/ referenced in AC, but mcp-knowledge cannot import it), second to add AC6 for a security gap the original missed. Led to 4 review cycles.
+
+### Deduction Breakdown
+- AC lines without evidence: 0 (all 6 verified) = 0
+- Lint violations in task scope: 0 = 0
+- AC quality score 3 (leq 3): -.03
+- Missing reviewer evidence: 0 (present, thorough)
+- Full-suite failures in task scope: 0 = 0
+
+### Confidence: .97
+### Action: archive
+
+### Commit Verification
+- e8445789: feat: wire refresh fetcher selection (#1325, builder) -- confirmed
+- 09e060d4: feat: sanitize browser placeholder error message (#1325, builder) -- confirmed
+- Docs gate commit also present (mcp-topology.excalidraw footer update)
