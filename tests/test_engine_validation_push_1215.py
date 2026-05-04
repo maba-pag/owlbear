@@ -358,6 +358,10 @@ class TestFromAC_ValidateArchival:
                 config=config,
             )
         assert exc_info.value.code == "ERR_ARCHIVAL_REASON_INVALID"
+        assert exc_info.value.user_message == (
+            "archival_reason must be one of "
+            "['completed', 'deprecated', 'dropped', 'duplicate', 'wontfix']"
+        )
 
     def test_deprecated_without_refs_raises(self, tmp_path: Path) -> None:
         """reason='deprecated' with no refs must raise ERR_ARCHIVAL_REFS_REQUIRED."""
@@ -371,6 +375,7 @@ class TestFromAC_ValidateArchival:
                 config=config,
             )
         assert exc_info.value.code == "ERR_ARCHIVAL_REFS_REQUIRED"
+        assert exc_info.value.user_message == "archival_refs required for archival_reason='deprecated'"
 
     def test_duplicate_without_refs_raises(self, tmp_path: Path) -> None:
         """reason='duplicate' with no refs must raise ERR_ARCHIVAL_REFS_REQUIRED."""
@@ -397,6 +402,7 @@ class TestFromAC_ValidateArchival:
                 config=config,
             )
         assert exc_info.value.code == "ERR_ARCHIVAL_REFS_FORBIDDEN"
+        assert exc_info.value.user_message == "archival_refs forbidden for archival_reason='completed'"
 
     def test_completed_not_terminal_raises(self, tmp_path: Path) -> None:
         """reason='completed' with can_mark_completed=False raises ERR_COMPLETED_REQUIRES_DONE."""
@@ -410,6 +416,7 @@ class TestFromAC_ValidateArchival:
                 config=config,
             )
         assert exc_info.value.code == "ERR_COMPLETED_REQUIRES_DONE"
+        assert exc_info.value.user_message == "archival_reason='completed' requires terminal status"
 
     def test_self_ref_raises(self, tmp_path: Path) -> None:
         """archival_refs containing task's own id must raise ERR_ARCHIVAL_REF_SELF."""
@@ -436,6 +443,7 @@ class TestFromAC_ValidateArchival:
                 config=config,
             )
         assert exc_info.value.code == "ERR_ARCHIVAL_REF_MISSING"
+        assert exc_info.value.user_message == "archival reference task '9999' not found"
 
     def test_cycle_raises(self, tmp_path: Path) -> None:
         """archival_refs creating a cycle must raise ERR_ARCHIVAL_REF_CYCLE.
@@ -481,6 +489,7 @@ Archived.
                 config=config,
             )
         assert exc_info.value.code == "ERR_ARCHIVAL_REF_CYCLE"
+        assert exc_info.value.user_message == "archival_refs would introduce a cycle"
 
 
 # ---------------------------------------------------------------------------
@@ -608,6 +617,7 @@ class TestFromAC_EngineCreateEditValidation:
         with pytest.raises(ValidationError) as exc_info:
             engine.create_task("Test Task", parent=9999)
         assert exc_info.value.code == "ERR_PARENT_NOT_FOUND"
+        assert exc_info.value.user_message == "Parent task '9999' not found"
 
     def test_create_task_missing_dep_raises(self, tmp_path: Path) -> None:
         """KanbanEngine.create_task with non-existent dep must raise ERR_DEP_NOT_FOUND."""
@@ -615,6 +625,7 @@ class TestFromAC_EngineCreateEditValidation:
         with pytest.raises(ValidationError) as exc_info:
             engine.create_task("Test Task", depends_on=[9999])
         assert exc_info.value.code == "ERR_DEP_NOT_FOUND"
+        assert exc_info.value.user_message == "Dependency task '9999' not found"
 
     def test_edit_task_large_body_raises(self, tmp_path: Path) -> None:
         """KanbanEngine.edit_task with body > 500 KB must raise ERR_BODY_TOO_LARGE."""
@@ -773,7 +784,7 @@ class TestFromAC_ErrorCodesPreserved:
         assert exc_info.value.user_message == "archival_reason is required when status='archived'"
 
     def test_validate_archival_refs_required_code(self, tmp_path: Path) -> None:
-        """ERR_ARCHIVAL_REFS_REQUIRED code preserved at engine level."""
+        """ERR_ARCHIVAL_REFS_REQUIRED code and message preserved at engine level."""
         engine = KanbanEngine(_make_board(tmp_path))
         config = engine.board_config()
         with pytest.raises(ValidationError) as exc_info:
@@ -785,9 +796,10 @@ class TestFromAC_ErrorCodesPreserved:
                 config=config,
             )
         assert exc_info.value.code == "ERR_ARCHIVAL_REFS_REQUIRED"
+        assert exc_info.value.user_message == "archival_refs required for archival_reason='deprecated'"
 
     def test_validate_archival_self_ref_code(self, tmp_path: Path) -> None:
-        """ERR_ARCHIVAL_REF_SELF code preserved at engine level."""
+        """ERR_ARCHIVAL_REF_SELF code and message preserved at engine level."""
         engine = KanbanEngine(_make_board(tmp_path))
         config = engine.board_config()
         with pytest.raises(ValidationError) as exc_info:
@@ -799,6 +811,7 @@ class TestFromAC_ErrorCodesPreserved:
                 config=config,
             )
         assert exc_info.value.code == "ERR_ARCHIVAL_REF_SELF"
+        assert exc_info.value.user_message == "archival_refs cannot include the task itself"
 
     def test_validate_predicate_failed_code_and_message(
         self, tmp_path: Path
