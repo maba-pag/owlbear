@@ -1,10 +1,10 @@
 ---
 id: 1264
 title: Wire ActivityTab to SSE activity-changed live updates
-status: todo
+status: archived
 priority: someday
 created: 2026-05-01T09:53:38.547262+00:00
-updated: 2026-05-03T22:47:49.444124+00:00
+updated: 2026-05-04T05:55:07.972157+00:00
 tags:
 - cockpit
 - frontend
