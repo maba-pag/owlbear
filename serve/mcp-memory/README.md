@@ -26,7 +26,7 @@ Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json
 
 ### Entry schema
 
-Entries are scoped to an optional agent (`scope_agents` list). Valid categories: `knowledge`, `behaviour`, `pitfall`, `process`, `tool`, `goal`, `personality`, `preference`, `context`. Confidence must be in [0.7, 1.0]. States: `pending` (default), `curated`, `approved`, `deleted`.
+Entries are scoped to an optional agent (`scope_agents` list) and carry a required `source_agent` (set automatically from the caller identity). Valid categories: `domain-knowledge`, `behaviour`, `pitfall`, `process`, `tool-usage`, `goal`, `personality`, `preference`, `env-context`. Confidence must be in [0.7, 1.0]. States: `pending` (default), `curated`, `approved`, `deleted`.
 
 ## Configuration
 
