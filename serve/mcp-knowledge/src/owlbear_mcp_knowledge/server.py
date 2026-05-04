@@ -23,6 +23,7 @@ from owlbear_knowledge.document_store import DocumentStore
 from owlbear_knowledge.embeddings import BgeM3EmbeddingProvider
 from owlbear_knowledge.evaluator import EvaluateFn, EvaluationResult, SourceEvaluator
 from owlbear_knowledge.extractor import EntityExtractor
+from owlbear_knowledge.fetcher import HttpxContentFetcher
 from owlbear_knowledge.graph_builder import IntraDocGraphBuilder
 from owlbear_knowledge.graph_store import GraphStore
 from owlbear_knowledge.ingest import IngestPipeline
@@ -42,8 +43,27 @@ from owlbear_knowledge.source_store import KnowledgeSourceStore
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
+    from owlbear_knowledge.protocol import ContentFetcher
+
 _DEFAULT_KB_PATH = ".owlbear/knowledge/local.db"
 _DEFAULT_QDRANT_PATH = ".owlbear/knowledge/vectors"
+
+
+class _BrowserContentFetcher:
+    """Protocol-compatible browser fetcher placeholder.
+
+    The browser MCP server owns Playwright lifecycle. This placeholder preserves
+    fetch-method routing behavior in mcp-knowledge without introducing a direct
+    package dependency on owlbear_browser.
+    """
+
+    async def fetch(self, url: str) -> str:
+        """Raise a clear error until a live browser fetcher is injected."""
+        msg = (
+            "browser fetcher selected but no browser session is wired "
+            f"for URL {url!r}"
+        )
+        raise RuntimeError(msg)
 
 
 class SearchResult(TypedDict):
@@ -77,6 +97,14 @@ class StatsResult(TypedDict):
     documents: int
     entities: int
     edges: int
+
+
+def select_content_fetcher(method: str) -> ContentFetcher:
+    """Return the content fetcher implementation for a persisted fetch method."""
+    normalized = method.strip().lower()
+    if normalized == "browser":
+        return _BrowserContentFetcher()
+    return HttpxContentFetcher()
 
 
 def init_db(path: str) -> sqlite3.Connection:
@@ -309,6 +337,9 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
             store=source_store,
             pipeline=pipeline,
             workspace_root=Path.cwd(),
+            content_fetcher=select_content_fetcher("http"),
+            inter_doc_builder=inter_doc_builder,
+            graph_store=gs,
         )
         consolidation_service: ConsolidationService | None = ConsolidationService(
             conn, make_text_completion_fn()
@@ -354,6 +385,7 @@ __all__ = [
     "mcp",
     "refresh_source",
     "search_knowledge",
+    "select_content_fetcher",
     "sync_from_global",
     "sync_to_global",
     "update_bookmark_tags",
@@ -728,8 +760,21 @@ async def refresh_source(ctx: Context, source_id: str) -> dict | str:
     orchestrator = app_ctx.refresh_orchestrator
     if orchestrator is None:
         return "error: refresh orchestrator not available"
+    pipeline = app_ctx.ingest_pipeline
+    if pipeline is None:
+        return "error: ingest pipeline not available"
+
+    selected_fetcher = select_content_fetcher(source.fetch_method)
+    run_orchestrator = RefreshOrchestrator(
+        store=store,
+        pipeline=pipeline,
+        workspace_root=Path.cwd(),
+        content_fetcher=selected_fetcher,
+        inter_doc_builder=app_ctx.inter_doc_builder,
+        graph_store=app_ctx.graph_store,
+    )
     try:
-        result = await orchestrator.refresh(source)
+        result = await run_orchestrator.refresh(source)
     except ValueError as exc:
         return f"error: {exc}"
     return {

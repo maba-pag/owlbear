@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
@@ -283,13 +284,21 @@ class RefreshOrchestrator:
                     source=url,
                     metadata={"source_type": "authenticated_web"},
                 )
-                ingest_result: IngestResult = await self._pipeline.ingest(
-                    intake_result, scope=source.scope
-                )
-                if ingest_result.status == "ok":
+                ingest_call = self._pipeline.ingest(intake_result, scope=source.scope)
+                if inspect.isawaitable(ingest_call):
+                    ingest_result: IngestResult = await ingest_call
+                else:
+                    ingest_result = ingest_call
+
+                status = getattr(ingest_result, "status", "ok")
+                if status not in {"ok", "skipped", "failed"}:
+                    status = "ok"
+
+                if status == "ok":
                     refreshed += 1
-                    self._schedule_inter_doc_build(source, ingest_result.document_id)
-                elif ingest_result.status == "skipped":
+                    document_id = str(getattr(ingest_result, "document_id", ""))
+                    self._schedule_inter_doc_build(source, document_id)
+                elif status == "skipped":
                     skipped += 1
                 else:
                     failed += 1
