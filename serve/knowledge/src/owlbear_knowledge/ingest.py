@@ -60,6 +60,9 @@ class IngestPipeline:
             parameter.
         injection_mode: Unused; strict/warn behaviour is delegated to the guard's
             ``strict_mode``.  Reserved for future pipeline-level mode override.
+        source_store: Optional KnowledgeSourceStore; when supplied, ingest_text
+            resolves or creates a KnowledgeSource record by URL and forwards its
+            UUID as the document's source_id FK before chunk storage.
     """
 
     def __init__(  # noqa: PLR0913
