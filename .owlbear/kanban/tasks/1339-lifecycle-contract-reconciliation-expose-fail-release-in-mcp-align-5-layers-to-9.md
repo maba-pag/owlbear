@@ -2,10 +2,10 @@
 id: 1339
 title: 'Lifecycle contract reconciliation: expose fail+release in MCP, align 5 layers
   to 9 tools'
-status: todo
+status: in-progress
 priority: needed
 created: 2026-05-04T15:00:05.806598+00:00
-updated: 2026-05-04T15:01:06.364192+00:00
+updated: 2026-05-04T15:40:01.595750+00:00
 tags:
 - sync-blocker
 - mcp-kanban
@@ -45,3 +45,35 @@ Decision (confirmed): Expose both `fail` (records failure) and `release` (silent
 ## Source
 
 Finding 4 in `.owlbear/research/kanban-mcp-deployment-audit.md`
+[[2026-05-04]]
+## Test-Writer Notes
+
+**Test file:** `tests/test_mcp_end_work_fail_1339.py`
+
+**Classes and distribution:**
+
+| Class | Category | Tests | AC |
+|---|---|---|---|
+| `TestFromAC_EndWorkFailOutcome` | boundary/happy | 2 | AC1 |
+| `TestFromAC_EndWorkOutcomeSpec` | boundary | 2 | AC1+AC2 |
+| `TestFromAC_SkillDocToolCount` | error (missing doc) | 2 | AC3 |
+| `TestFromAC_SkillDocEndWorkOutcomes` | error (missing doc) | 3 | AC4 |
+| `TestFromAC_ReadmeEndWorkOutcomes` | error (missing doc) | 3 | AC5 |
+
+**Total: 12 tests — all FAIL (verified via pytest: 12 failed, 0 passed)**
+
+**AC Coverage:**
+
+| AC | Description | Covered? | Notes |
+|---|---|---|---|
+| AC1 | MCP server end_work accepts outcome="fail" | ✓ | Type hint Literal check; 5-value count check |
+| AC2 | Literal["fail"] added alongside existing values | ✓ | checks both fail∈args AND release∈args |
+| AC3 | SKILL.md tool count = 9, create_dr row present | ✓ | two failing tests |
+| AC4 | SKILL.md end_work Outcome table has fail row | ✓ | table-row-specific regex (not substring match) |
+| AC5 | README.md end_work Outcomes section has fail | ✓ | three failing tests |
+| AC6 | Covered via AC1 type hint tests | ✓ | schema derives from Literal |
+| AC7 | AgentView already supports fail+release | skip | already-passing behavior; testing would produce green tests |
+
+**Ruff:** clean (exit 0)
+
+**Key test-writer technique:** SKILL.md tests use `| \`fail\`` table-cell pattern rather than bare `"fail" in section` to avoid false-positive match on "On failure: raises ToolError" prose.

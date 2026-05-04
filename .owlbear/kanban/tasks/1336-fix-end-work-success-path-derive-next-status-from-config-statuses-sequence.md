@@ -1,10 +1,10 @@
 ---
 id: 1336
 title: 'Fix end_work success path: derive next status from config.statuses sequence'
-status: todo
+status: in-progress
 priority: critical
 created: 2026-05-04T15:00:05.698435+00:00
-updated: 2026-05-04T15:08:59.893198+00:00
+updated: 2026-05-04T15:47:52.481236+00:00
 tags:
 - sync-blocker
 - kanban
@@ -12,7 +12,7 @@ parent:
 depends_on: []
 blocked: false
 block_reason:
-claimed_at: 2026-05-04T15:08:59.893198+00:00
+claimed_at: 2026-05-04T15:47:52.481236+00:00
 archival_reason:
 archival_refs: []
 ---
@@ -39,3 +39,12 @@ In `serve/kanban/src/owlbear_kanban/engine.py`, the `end_work(outcome="success")
 ## Source
 
 Finding 1 in `.owlbear/research/kanban-mcp-deployment-audit.md`
+[[2026-05-04]]
+## Test-Writer Notes
+- Test file: tests/test_end_work_success_1336.py
+- Classes: TestFromAC_SuccessStatusAdvancement, TestFromAC_SuccessAtTerminalStatus, TestFromAC_SuccessFromInProgress
+- Tests per category: happy 5 (AC1 advancement from various positions), error 3 (AC2 terminal raises)
+- Total: 8 tests, all FAIL
+- ruff: clean
+- AC coverage: AC1 (4 advancement tests fail — status goes to "research" instead of next in sequence), AC2 (3 terminal tests fail — no error raised at terminal status), AC3 (reject unchanged — regression guard passes in RED so omitted per w-tdd-red skill rule)
+- Commit: 81f7f7bd
