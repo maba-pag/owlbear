@@ -365,6 +365,81 @@ class TestFromAC_BodyOnlyFormat:
         assert "## First Entry" in result
         assert "## Second Entry" in result
 
+    @pytest.mark.asyncio
+    async def test_exact_per_entry_format_and_all_metadata_fields_absent(
+        self, tmp_path: Path
+    ) -> None:
+        """Pins exact output format and asserts ALL metadata field names and values
+        are absent from the returned string (AC5-fix: discriminating check)."""
+        entry = _make_entry(
+            id=_uuid(99),
+            title="Format Pin Test",
+            content="Pinned body text.",
+            state="curated",
+            confidence=0.92,
+            categories=["domain-knowledge"],
+            scope_agents=["recall-scope-tester"],
+            source_agent="builder",
+            created_at="2026-01-15T08:30:00Z",
+            updated_at="2026-02-20T14:15:00Z",
+            approved_at=None,
+        )
+        engine = MemoryEngine(memory_dir=tmp_path)
+        engine.write(entry)
+        ctx = _make_ctx(engine)
+
+        result = await _recall(ctx, agent="recall-scope-tester")
+
+        # Pin exact per-entry format: "## {title}\n{content}"
+        assert result == "## Format Pin Test\nPinned body text."
+        # Assert ALL metadata field names absent
+        for field_name in (
+            "id", "state", "confidence", "categories",
+            "scope_agents", "approved_at", "created_at", "updated_at",
+        ):
+            assert field_name not in result, (
+                f"metadata field {field_name!r} leaked into output"
+            )
+        # Assert metadata values absent
+        assert _uuid(99) not in result                  # id value
+        assert "curated" not in result                  # state value
+        assert "0.92" not in result                     # confidence value
+        assert "domain-knowledge" not in result         # category value
+        assert "recall-scope-tester" not in result      # scope_agents value
+        assert "2026-01-15T08:30:00Z" not in result     # created_at value
+        assert "2026-02-20T14:15:00Z" not in result     # updated_at value
+
+    @pytest.mark.asyncio
+    async def test_two_entries_joined_with_double_newline_separator(
+        self, tmp_path: Path
+    ) -> None:
+        """Two matching entries are joined by '\\n\\n' — exact per-entry format pinned
+        (AC5-fix: separator proof)."""
+        e1 = _make_entry(
+            id=_uuid(1),
+            title="Alpha Entry",
+            content="Alpha content.",
+            state="curated",
+            scope_agents=["builder"],
+        )
+        e2 = _make_entry(
+            id=_uuid(2),
+            title="Beta Entry",
+            content="Beta content.",
+            state="curated",
+            scope_agents=["builder"],
+        )
+        engine = MemoryEngine(memory_dir=tmp_path)
+        engine.write(e1)
+        engine.write(e2)
+        ctx = _make_ctx(engine)
+
+        result = await _recall(ctx, agent="builder")
+
+        # _uuid(1) < _uuid(2): same state+confidence, alpha sorts first by id
+        expected = "## Alpha Entry\nAlpha content.\n\n## Beta Entry\nBeta content."
+        assert result == expected
+
 
 # ---------------------------------------------------------------------------
 # AC6 (td:2): ordering — approved entries first, curated entries second
@@ -481,6 +556,44 @@ class TestFromAC_PriorityOrdering:
 
         assert "## Deleted Entry" not in result
 
+    @pytest.mark.asyncio
+    async def test_sort_then_slice_approved_fills_before_curated(
+        self, tmp_path: Path
+    ) -> None:
+        """With 3 approved + 3 curated entries and limit=4, all 3 approved survive
+        and exactly 1 curated fills the remaining slot (AC6-fix: sort-then-slice proof)."""
+        approved_titles = ["Approved Alpha", "Approved Beta", "Approved Gamma"]
+        curated_titles = ["Curated Delta", "Curated Epsilon", "Curated Zeta"]
+
+        engine = MemoryEngine(memory_dir=tmp_path)
+        for i, title in enumerate(approved_titles, start=10):
+            engine.write(_make_entry(
+                id=_uuid(i),
+                title=title,
+                state="approved",
+                scope_agents=["builder"],
+                approved_at=_TS,
+            ))
+        for i, title in enumerate(curated_titles, start=20):
+            engine.write(_make_entry(
+                id=_uuid(i),
+                title=title,
+                state="curated",
+                scope_agents=["builder"],
+            ))
+        ctx = _make_ctx(engine)
+
+        result = await _recall(ctx, agent="builder", limit=4)
+
+        heading_count = result.count("\n## ") + (1 if result.startswith("## ") else 0)
+        assert heading_count == 4  # exactly limit entries
+        # All 3 approved entries survive the slice
+        for title in approved_titles:
+            assert f"## {title}" in result, f"approved entry '{title}' missing from result"
+        # Exactly 1 curated entry fills the remaining slot
+        curated_in_result = sum(1 for t in curated_titles if f"## {t}" in result)
+        assert curated_in_result == 1
+
 
 # ---------------------------------------------------------------------------
 # AC7 (td:1): limit parameter works (default 20)
@@ -530,3 +643,24 @@ class TestFromAC_LimitParameter:
 
         heading_count = result.count("\n## ") + (1 if result.startswith("## ") else 0)
         assert heading_count <= 20
+
+    @pytest.mark.asyncio
+    async def test_default_limit_is_exactly_20(self, tmp_path: Path) -> None:
+        """Default limit returns exactly 20 entries — a broken default of 5 or 12
+        must fail (AC7-fix: exact equality check, not <= 20)."""
+        engine = MemoryEngine(memory_dir=tmp_path)
+        for i in range(1, 26):  # 25 entries
+            engine.write(
+                _make_entry(
+                    id=_uuid(i),
+                    title=f"Exact Limit Entry {i:02d}",
+                    state="curated",
+                    scope_agents=["builder"],
+                )
+            )
+        ctx = _make_ctx(engine)
+
+        result = await _recall(ctx, agent="builder")
+
+        heading_count = result.count("\n## ") + (1 if result.startswith("## ") else 0)
+        assert heading_count == 20  # must be exactly 20, not just <= 20
