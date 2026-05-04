@@ -852,6 +852,29 @@ class AgentView:
         archival_reason: str | None = None,
         archival_refs: list[int] | None = None,
     ) -> SingleTaskResponse:
+        """Change the task's status with validation.
+
+        Validates archival constraints when *status* is ``"archived"`` and
+        forbids archival fields on any other transition.  Runs the configured
+        status predicate before mutation.
+
+        Args:
+            task_id:         Numeric task ID.
+            status:          Target status string or ``"archived"``.
+            archival_reason: Required when *status* is ``"archived"``.
+            archival_refs:   Optional list of related task IDs when archiving.
+
+        Returns:
+            :class:`SingleTaskResponse` with the updated task and any
+            ``guidance`` strings (e.g. skip-column warning).
+
+        Raises:
+            :class:`ValidationError`: Invalid status (``ERR_INVALID_STATUS``),
+                archival fields on a non-archived move
+                (``ERR_ARCHIVAL_FIELDS_FORBIDDEN``), or archival constraint
+                violation (various ``ERR_ARCHIVAL_*`` codes).
+            :class:`NotFoundError`: No task matching *task_id*.
+        """
         try:
             before = self.engine.show_task(str(task_id))
             config = self.engine.board_config()
@@ -899,6 +922,25 @@ class AgentView:
         return self._to_single_response(task, guidance)
 
     def start_work(self, task_id: int) -> SingleTaskResponse:
+        """Claim a task for this agent and return the full task record.
+
+        Archived and blocked tasks cannot be claimed.  Concurrent claims by
+        another agent raise ``ConcurrencyError``.
+
+        Args:
+            task_id: Numeric task ID.
+
+        Returns:
+            :class:`SingleTaskResponse` with the claimed task's current state.
+
+        Raises:
+            :class:`ValidationError`: Task is archived
+                (``ERR_ARCHIVED_NOT_CLAIMABLE``) or blocked
+                (``ERR_BLOCKED_NOT_CLAIMABLE``).
+            :class:`ConcurrencyError`: Task is already claimed by another
+                agent (``ERR_ALREADY_CLAIMED``).
+            :class:`NotFoundError`: No task matching *task_id*.
+        """
         try:
             task_record = self.engine.show_task(str(task_id))
             if task_record.status == "archived":
