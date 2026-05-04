@@ -9,12 +9,13 @@ AC coverage:
   AC6  → TestFromAC_EngineMoveValidation
   AC7  → TestFromAC_AgentViewMethodsRemoved
   AC8  → TestFromAC_CockpitViewMethodsRemoved
-  AC9  → TestFromAC_ErrorCodesPreserved
-  AC10 → omitted: "end_work/pick_tasks/no-op remain in AgentView" tests are
-          naturally green pre-refactoring (existing behavior already correct).
-          Regression coverage provided by existing durable suites. The builder
-          must not move these to KanbanEngine, but a test for that would pass
-          now since the engine doesn't have them yet.
+  AC9  → TestFromAC_ErrorCodesPreserved  (exact equality assertions on user_message)
+  AC10 → regression evidence via reviewer-accepted durable suites:
+          - serve/kanban/tests/test_engine_end_work_1077.py   (end_work matrix)
+          - tests/test_dispatch_gate_port_1214.py             (pick_tasks pipeline)
+          - serve/kanban/tests/test_engine_create_edit_1070.py (semantic no-op)
+          - tests/test_engine_create_edit_1072.py             (semantic no-op)
+          - tests/test_engine_cockpit_view.py                 (CockpitView omission guards)
 """
 
 from __future__ import annotations
@@ -752,7 +753,7 @@ class TestFromAC_ErrorCodesPreserved:
         with pytest.raises(ValidationError) as exc_info:
             engine.validate_body_size(body)
         assert exc_info.value.code == "ERR_BODY_TOO_LARGE"
-        assert "500 KB" in exc_info.value.user_message
+        assert exc_info.value.user_message == "Task body exceeds 500 KB"
 
     def test_validate_archival_reason_required_message(
         self, tmp_path: Path
@@ -769,7 +770,7 @@ class TestFromAC_ErrorCodesPreserved:
                 config=config,
             )
         assert exc_info.value.code == "ERR_ARCHIVAL_REASON_REQUIRED"
-        assert "archived" in exc_info.value.user_message
+        assert exc_info.value.user_message == "archival_reason is required when status='archived'"
 
     def test_validate_archival_refs_required_code(self, tmp_path: Path) -> None:
         """ERR_ARCHIVAL_REFS_REQUIRED code preserved at engine level."""
@@ -812,7 +813,7 @@ class TestFromAC_ErrorCodesPreserved:
                 config=config,
             )
         assert exc_info.value.code == "ERR_PREDICATE_FAILED"
-        assert "review" in exc_info.value.user_message
+        assert exc_info.value.user_message == "Task body does not satisfy predicate for status 'review'"
 
     def test_engine_move_archival_reason_required_via_engine(
         self, tmp_path: Path
@@ -824,4 +825,4 @@ class TestFromAC_ErrorCodesPreserved:
         with pytest.raises(ValidationError) as exc_info:
             engine.move_task("100", "archived", archival_reason=None)
         assert exc_info.value.code == "ERR_ARCHIVAL_REASON_REQUIRED"
-        assert "archived" in exc_info.value.user_message
+        assert exc_info.value.user_message == "archival_reason is required when status='archived'"
