@@ -930,3 +930,119 @@ class TestFromAC_BucketCompatibilityRegressionGuard:
             "tasks with incompatible agent buckets must be in different waves; "
             "same wave means bucket-compatibility check is broken after gate filtering"
         )
+
+
+# ---------------------------------------------------------------------------
+# AC11: Post-rehydrate archived-status guard
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_PostRehydrateArchivedGuard:
+    """AC11: After show_task() returns in pick_tasks(), candidates with
+    status='archived' must be skipped — they must not enter wave assembly.
+
+    Guards against the archive-wins precedence in show_task(): when a task
+    file exists in BOTH tasks/ and archive/, show_task() returns the archived
+    copy.  Without an explicit status check, that archived task bypasses both
+    gates (archived ∉ _CLARITY_STATUSES, ≠ in-progress) and is dispatched.
+    """
+
+    def test_archived_task_returned_by_show_task_is_skipped(
+        self, tmp_path: Path
+    ) -> None:
+        """A task whose show_task() call returns status='archived' must not
+        appear in any wave — even when it passed the active-task pre-filter.
+
+        Setup:
+        - tasks/50-task.md: status=todo, clarity-compliant → enters dispatchable list
+        - archive/50-task.md: status=archived → show_task() prefers this (archive-wins)
+
+        Before fix: pick_tasks() has no post-rehydrate status check → archived
+        task bypasses both gates (archived ∉ _CLARITY_STATUSES, ≠ in-progress)
+        and enters wave assembly → 50 IS in waves → assertion FAILS.
+
+        After fix: pick_tasks() adds `if full_task.status == "archived": continue`
+        after show_task() → task 50 skipped → not in waves → PASSES.
+        """
+        board = _make_board(tmp_path)
+        tasks_dir = board / "tasks"
+        archive_dir = board / "archive"
+
+        # Active copy in tasks/ — enters dispatchable via list_tasks(archived=False)
+        _write_task(
+            tasks_dir,
+            task_id=50,
+            title="Task archived between list and show",
+            status="todo",
+            body="## AC\n- item one\n",
+        )
+        # Archive copy — same filename; show_task() prefers archive when both exist
+        _write_task(
+            archive_dir,
+            task_id=50,
+            title="Task archived between list and show",
+            status="archived",
+            body="## AC\n- item one\n",
+        )
+
+        view = AgentView(KanbanEngine(board, activity_log=False))
+        result = view.pick_tasks()
+
+        assert 50 not in _all_task_ids(result), (
+            "pick_tasks must skip tasks whose show_task() returns status='archived'; "
+            "failing means an archived task entered wave assembly via archive-wins precedence"
+        )
+
+
+# ---------------------------------------------------------------------------
+# AC12: Isolated in-progress clarity proof
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_InProgressClarityIsolation:
+    """AC12: An in-progress task that passes the TDD gate (has ## Test-Writer
+    Notes) but fails the clarity gate (prose-only body, no bullet/numbered
+    lines) must be excluded by pick_tasks().
+
+    Isolates the in-progress branch of _CLARITY_STATUSES from TDD behavior.
+    All prior in-progress test bodies contain bullet points, so removing
+    'in-progress' from dispatch._CLARITY_STATUSES would not be caught by
+    them — those tasks would still be excluded by TDD gate.
+
+    Mutation target: removing 'in-progress' from dispatch._CLARITY_STATUSES
+    causes this task to pass clarity and appear in waves → assertion FAILS.
+    """
+
+    def test_in_progress_passes_tdd_but_fails_clarity_is_excluded(
+        self, tmp_path: Path
+    ) -> None:
+        """in-progress task WITH ## Test-Writer Notes (passes TDD gate) but
+        WITHOUT any bullet or numbered list line (fails clarity gate) must not
+        appear in any wave.
+
+        - Has '## Test-Writer Notes' → _passes_tdd_gate returns True
+        - Has no bullet/numbered line → _passes_clarity_gate returns False
+          (in-progress ∈ _CLARITY_STATUSES, _AC_PATTERN finds no match)
+        - Must be excluded from pick_tasks output
+
+        Regression: removing 'in-progress' from dispatch._CLARITY_STATUSES
+        would make _passes_clarity_gate return True for this task → appears
+        in waves → assertion FAILS, catching the missing-status regression.
+        """
+        board = _make_board(tmp_path)
+        _write_task(
+            board / "tasks",
+            task_id=60,
+            title="In-progress with TDD notes but prose body",
+            status="in-progress",
+            body="## Test-Writer Notes\nProse description without any bullet or numbered items.",
+        )
+        view = AgentView(KanbanEngine(board, activity_log=False))
+
+        result = view.pick_tasks()
+
+        assert 60 not in _all_task_ids(result), (
+            "pick_tasks must exclude in-progress tasks that pass TDD gate "
+            "but fail clarity gate (prose-only body, no bullet/numbered lines); "
+            "failing means 'in-progress' was removed from dispatch._CLARITY_STATUSES"
+        )
