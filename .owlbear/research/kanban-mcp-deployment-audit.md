@@ -208,23 +208,67 @@ Add `expected_updated: str | None = None` to engine's `edit_task()`, `move_task(
 
 ---
 
+## Finding 8 — HIGH: pick_tasks wave assembly broken (20 tests red)
+
+### Problem
+
+The greedy bin-packing wave assembler in `agent_view.py` (L300–540) has bugs in: dependency-disjointness checking, agent-bucket compatibility matching (D63 symmetric check), and wave-size cap enforcement. 20 tests red.
+
+### Decision
+
+Fix the greedy algorithm constraint logic. All 20 tests in test_engine_pick_tasks_1074.py must pass.
+
+### Relevant files
+
+- `serve/kanban/src/owlbear_kanban/agent_view.py` (L300–540)
+- `serve/kanban/src/owlbear_kanban/dispatch.py`
+- `serve/kanban/tests/test_engine_pick_tasks_1074.py`
+
+---
+
+## Finding 9 — HIGH: Engine config validation incomplete (15 tests red)
+
+### Problem
+
+Engine constructor and config model missing several designed validation checks: entry_status/terminal_status validation, agent_map completeness (D24), agent_compatibility symmetry (D63), archival_reasons frozenset (D37), claim_timeout extended format (D29).
+
+### Decision
+
+Implement all designed validation checks. All 15 tests in test_engine_init_1067.py must pass. #1339 (lifecycle reconciliation) depends on this completing first.
+
+### Relevant files
+
+- `serve/kanban/src/owlbear_kanban/engine.py` (constructor, validation)
+- `serve/kanban/src/owlbear_kanban/config_loader.py` (model fields, validators)
+- `serve/kanban/tests/test_engine_init_1067.py`
+
+---
+
 ## Sync Blockers Summary
 
-| # | Severity | Blocker? | Minimum fix |
-|---|----------|----------|-------------|
-| 1 | Critical | Yes | Wire next-status derivation from config.statuses |
-| 2 | Critical | Yes | Validate + coerce task_id at MCP boundary |
-| 3 | High | Yes | Green migration/storage suites |
-| 4 | High | Yes (contract) | Reconcile lifecycle outcomes across 5 layers |
-| 5 | High | — | Risk accepted |
-| 6 | High | Yes | Revert or justify Python floor |
-| 7 | Medium | Soft | Wire OCC through engine methods |
+| # | Severity | Blocker? | Minimum fix | Task |
+|---|----------|----------|-------------|------|
+| 1 | Critical | Yes | Wire next-status derivation from config.statuses | #1336 |
+| 2 | Critical | Yes | Validate + coerce task_id at MCP boundary | #1337 |
+| 3 | High | Yes | Green migration/storage suites | #1338 |
+| 4 | High | Yes (contract) | Reconcile lifecycle outcomes across 5 layers | #1339 |
+| 5 | High | — | Risk accepted | — |
+| 6 | High | Yes | Revert or justify Python floor | #1340 |
+| 7 | Medium | Soft | Wire OCC through engine methods | #1341 |
+| 8 | High | Yes | Fix pick_tasks wave assembly | #1342 |
+| 9 | High | Yes | Complete engine config validation | #1343 |
 
 ## Recommended Fix Sequence
 
-1. **Finding 6** (Python floor) — 30 min, unblocks everything else by clarifying runtime target
-2. **Finding 2** (task_id validation) — 1 task, security-critical, small scope
-3. **Finding 1** (next-status derivation) — 1 task, requires Brief B re-read
-4. **Finding 4** (lifecycle reconciliation) — 1 task, doc-heavy + code changes in MCP
-5. **Finding 3** (migration safety) — may be multi-task depending on gap size
-6. **Finding 7** (OCC wiring) — 1 task, isolated plumbing
+1. **#1340 — Python floor** — audit for 3.14 features, revert if none
+2. **#1337 — task_id validation** — security-critical, small scope
+3. **#1343 — config validation** — prerequisite for lifecycle reconciliation
+4. **#1336 — end_work next-status** — requires Brief B re-read, config must be valid
+5. **#1339 — lifecycle reconciliation** — depends on #1343 being done
+6. **#1342 — pick_tasks wave assembly** — independent, self-contained algorithm fix
+7. **#1338 — migration/storage** — may be multi-step depending on gap size
+8. **#1341 — OCC wiring** — isolated plumbing, lowest priority
+
+### Dependencies
+
+None. All 8 tasks are independent — they touch different subsystems and can be parallelized or executed in any order.
