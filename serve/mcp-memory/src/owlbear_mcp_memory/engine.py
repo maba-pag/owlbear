@@ -126,6 +126,14 @@ class MemoryEngine:
         msg = f"Entry {entry_id!r} not found"
         raise KeyError(msg)
 
+    def delete(self, entry_id: str) -> None:
+        """Remove an entry file from disk by ID or raise KeyError if missing."""
+        target = self._path_for_entry_id(entry_id)
+        if target is None:
+            msg = f"Entry {entry_id!r} not found"
+            raise KeyError(msg)
+        target.unlink()
+
     def _path_for_entry_id(self, entry_id: str) -> Path | None:
         for file_path in self._memory_dir.glob("*.md"):
             entry = self._load_file(file_path)
