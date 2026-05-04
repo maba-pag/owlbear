@@ -51,26 +51,24 @@ In stdio MCP context, stdout is the JSON-RPC transport — the auth prompt is in
 - Browser fetcher is NOT injected into knowledge pipeline (exported from `serve/browser/` but not used by `serve/knowledge/`)
 - Hybrid vector search (sparse vectors) not yet active in Qdrant collection config
 
-### F4: MCP Tool Surface (14 Tools)
+### F4: MCP Tool Surface — Revised (8 Active + 4 Deferred)
 
-| Tool | Agent-facing? | Operator-facing? | Notes |
-|------|:---:|:---:|-------|
-| `search_knowledge` | ✅ | | Core tool for agents |
-| `list_sources` | ✅ | | Context/awareness |
-| `get_stats` | ✅ | | Status check |
-| `list_entities` | ✅ | | Graph exploration |
-| `ingest_document` | | ✅ | Mutating — operator triggers via prompt |
-| `bookmark_source` | | ✅ | Evaluate + queue URL for ingest |
-| `list_bookmarks` | | ✅ | View bookmark queue |
-| `update_bookmark_tags` | | ✅ | Organize bookmarks |
-| `refresh_source` | | ✅ | Re-ingest stale content |
-| `consolidate_knowledge` | | ✅ | Requires LLM — generates insights |
-| `import_scope` | | ✅ | Multi-project machinery |
-| `export_scope` | | ✅ | Multi-project machinery |
-| `sync_from_global` | | ✅ | Multi-project machinery |
-| `sync_to_global` | | ✅ | Multi-project machinery |
+Original server had 14 tools. Cut to 8 active by eliminating: `list_entities` (vague browser — value flows through `search_knowledge` graph-augmented results), `bookmark_source`/`list_bookmarks`/`update_bookmark_tags` (premature), `consolidate_knowledge` (replaced by `get_consolidation_candidates` with deterministic pair-based matching).
 
-**Observation:** 4 read-only tools for agents, 10 operator/curation tools. This split aligns with the user's intent (agents search, operator curates via VS Code prompts).
+| Tool | Consumer | Purpose |
+|------|----------|---------|
+| `search_knowledge` | Pipeline agents, user | Semantic search + graph-augmented results |
+| `list_sources` | Pipeline agents, user, ingestor | What's indexed |
+| `get_stats` | Ingestor, enricher | Health check + enrichment/consolidation progress |
+| `ingest_document` | Ingestor | Add content |
+| `refresh_source` | Ingestor | Re-ingest stale source |
+| `get_next_batch` | Enricher | Pull unprocessed chunks (Phase 1) |
+| `get_consolidation_candidates` | Enricher | Pull unreviewed cross-source entity pairs (Phase 2) |
+| `store_enrichment` | Enricher | Write results for both phases; empty edges = dismissed pair |
+
+Deferred: import_scope, export_scope, sync_from_global, sync_to_global (stubs until second consumer project).
+
+**Agent model:** 2 functional roles — `knowledge-ingestor` (ingest, refresh, dispatch enrichment) and `knowledge-enricher` (Phase 1 extraction + Phase 2 consolidation). Enricher uses same worker loop for both phases, different pull source.
 
 ### F5: Protocol Interfaces (Extensibility)
 
@@ -166,6 +164,35 @@ Loop:
 Parallelism: User chooses 1-6 workers at prompt time. Each pulls from same pool. `get_next_batch` marks chunks in-progress to prevent duplicates. Session-safe: if VS Code closes, unfinished chunks revert to unprocessed on timeout.
 
 Volume: ~5,480 chunks (548 sources × ~10 chunks). At 20 chunks/batch, ~274 batches. One agent session.
+
+### Consolidation Flow (Phase 2 Enrichment — Pull-Based Worker)
+
+```
+Agent: knowledge-enricher (Phase 2 mode)
+Model: gpt-5.4 mini (0.33x, 400K context)
+Tools: get_consolidation_candidates, store_enrichment, get_stats
+
+Loop:
+  1. get_consolidation_candidates(limit=20) → [{entity_name, source_a: {name, chunks}, source_b: {name, chunks}}]
+  2. For each candidate pair:
+     - Read chunks from both sources (returned inline)
+     - Decide: same entity? → store_enrichment(candidate_id, edges=[{source, target, type}])
+     - Not a match? → store_enrichment(candidate_id, edges=[]) — marks pair as reviewed
+  3. Repeat until get_consolidation_candidates returns empty
+```
+
+Review unit: source-pair per entity name. Adding a new source generates new candidate pairs without resurface of old dismissed pairs. Deterministic SQL:
+
+```sql
+SELECT e1.name, e1.source_id, e2.source_id
+FROM entities e1
+JOIN entities e2 ON e1.name = e2.name AND e1.source_id < e2.source_id
+LEFT JOIN reviewed_pairs rp
+  ON rp.entity_name = e1.name
+  AND rp.source_a = e1.source_id
+  AND rp.source_b = e2.source_id
+WHERE rp.id IS NULL
+```
 
 ### Ingest Flow (/kb-ingest prompt)
 

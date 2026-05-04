@@ -137,13 +137,28 @@ New MCP tools: `get_next_batch`, `store_enrichment`, `get_enrichment_status`.
 
 **Chosen:** Per-source `enrich: true/false` flag in sources.yaml. Ingest prompt asks user for new sources. Separate `/kb-enrich` prompt for bulk/catch-up.
 
-## D11 — 2026-05-04 — MCP Tool Surface
+## D11 — 2026-05-04 (revised 2026-05-05) — MCP Tool Surface
 
-**Chosen:** Single MCP server, 17 tools total:
-- 4 agent-facing read-only: search_knowledge, list_sources, get_stats, list_entities
-- 6 operator curation: ingest_document, bookmark_source, list_bookmarks, update_bookmark_tags, refresh_source, consolidate_knowledge
-- 3 enrichment (NEW): get_next_batch, store_enrichment, get_enrichment_status
-- 4 scope interfaces (deferred impl): import_scope, export_scope, sync_from_global, sync_to_global
+**Chosen:** Single MCP server, 8 active tools + 4 deferred scope interfaces.
+
+Cut from original 17 by eliminating: list_entities (vague browser), bookmark_source/list_bookmarks/update_bookmark_tags (premature), consolidate_knowledge (replaced by get_consolidation_candidates), get_enrichment_status (folded into get_stats).
+
+**Active tools (8):**
+
+| Tool | Consumer | Purpose |
+|------|----------|--------|
+| `search_knowledge` | Pipeline agents, user | Semantic search + graph-augmented results |
+| `list_sources` | Pipeline agents, user, ingestor | What's indexed |
+| `get_stats` | Ingestor, enricher | Health check + enrichment/consolidation progress |
+| `ingest_document` | Ingestor | Add content (local files, URLs, browser-fetched) |
+| `refresh_source` | Ingestor | Re-ingest stale source |
+| `get_next_batch` | Enricher | Pull unprocessed chunks for Phase 1 entity extraction |
+| `get_consolidation_candidates` | Enricher | Pull unreviewed cross-source entity pairs for Phase 2 consolidation |
+| `store_enrichment` | Enricher | Write entities + edges (Phase 1) or cross-source edges/dismissals (Phase 2) |
+
+**Deferred scope interfaces (4):** import_scope, export_scope, sync_from_global, sync_to_global — stubs until second consumer project.
+
+**Design invariant:** `store_enrichment` serves both phases. Empty edges = "reviewed, no match" — candidate is consumed from queue.
 
 ## D12 — 2026-05-04 — Scope Machinery
 
@@ -152,3 +167,46 @@ New MCP tools: `get_next_batch`, `store_enrichment`, `get_enrichment_status`.
 ## D13 — 2026-05-04 — Entity Type Schema
 
 **Chosen:** Phase 2 research question. Current types (FUNCTION, CLASS, FILE, CONCEPT, REQUIREMENT, SOLUTION, PROCEDURE, POLICY, STANDARD) may need extension (TICKET, COMPLIANCE_CONTROL, etc.) for cross-source mapping use case.
+
+## D14 — 2026-05-05 — Consolidation Design (Phase 2 Enrichment)
+
+**Decision:** Consolidation is Phase 2 of enrichment, not a separate concept.
+
+**Mechanism:**
+- `get_consolidation_candidates` runs deterministic SQL: finds entity names appearing in multiple sources without cross-source edges
+- Returns entity name + relevant chunks from both sources inline (agent has full context)
+- Agent decides: same entity? → `store_enrichment(edges=[...])`. Not a match? → `store_enrichment(edges=[])` (marks pair as reviewed)
+- Review unit is the **source-pair per entity name** — new sources generate new candidate pairs; old dismissals are preserved
+- No rejected candidates accumulate; no matches lost when new sources are added
+
+**Rejected:**
+- Separate `dismiss_candidate` tool — unnecessary when empty edges already signal dismissal
+- Entity-level "done" marking — would lose matches when new sources are added
+
+## D15 — 2026-05-05 — Agent Model
+
+**Decision:** 2 functional agent roles for the knowledge system:
+
+| Agent | Job | Triggered by |
+|-------|-----|-------------|
+| `knowledge-ingestor` | Ingest, refresh, dispatch enrichment | User via prompt |
+| `knowledge-enricher` | Phase 1 entity extraction + Phase 2 consolidation | Ingestor dispatch or user directly |
+
+Whether these are 1 or 2 `.agent.md` files is an architect decision.
+
+**Consumer matrix:**
+
+| Tool | Pipeline agents | Ingestor | Enricher | User |
+|------|:-:|:-:|:-:|:-:|
+| `search_knowledge` | ✓ | | | ✓ |
+| `list_sources` | ✓ | ✓ | | ✓ |
+| `get_stats` | | ✓ | ✓ | |
+| `ingest_document` | | ✓ | | |
+| `refresh_source` | | ✓ | | |
+| `get_next_batch` | | | ✓ | |
+| `get_consolidation_candidates` | | | ✓ | |
+| `store_enrichment` | | | ✓ | |
+
+**Rejected:**
+- `knowledge-curator` naming — too close to `memory-curator` which does refinement. "Ingestor" is more accurate for bringing content in.
+- Single combined agent — the enricher worker loop is a distinct behavioral mode better served by its own prompt/agent.

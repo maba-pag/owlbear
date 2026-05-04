@@ -46,10 +46,11 @@ The knowledge MCP server remains dead code. Agents cannot retrieve curated domai
 
 1. **MCP server starts cleanly** — no auth loop, copilot_auth removed from lifespan, vector search works on ingested content
 2. **Ingest pipeline works end-to-end** — local files (loader.py), public URLs (fetcher.py), authenticated pages (browser module + Playwright + Edge SSO)
-3. **Enrichment via VS Code prompt** — pull-based worker agents, gpt-5.4 mini, 3 new MCP tools (get_next_batch, store_enrichment, get_enrichment_status)
+3. **Enrichment via VS Code prompt** — pull-based worker agents, gpt-5.4 mini, Phase 1 (entity extraction via `get_next_batch`/`store_enrichment`) + Phase 2 (cross-source consolidation via `get_consolidation_candidates`/`store_enrichment`)
 4. **Graph-augmented retrieval works** — cross-source relationships surfaced via graph traversal when enrichment has been run
 5. **DB is local state** — gitignored, rebuilt from sources.yaml via /kb-rebuild prompt
-6. **MCP tool surface approved** — 17 tools total in one server (4 agent-facing, 6 curation, 3 enrichment new, 4 scope interfaces)
+6. **MCP tool surface approved** — 8 active tools (3 agent-facing, 2 curation, 3 enrichment) + 4 deferred scope interfaces
 7. **Browser detection** — HTTP-first with user validation, fetch_method saved to manifest
 8. **Per-source enrichment flag** — sources.yaml `enrich: true/false` controls which sources get entity extraction
 9. **Entity type schema** — Phase 2 research question (may need TICKET, COMPLIANCE_CONTROL, etc.)
+10. **Agent model** — 2 functional roles: `knowledge-ingestor` (ingest, refresh, dispatch enrichment) and `knowledge-enricher` (Phase 1 extraction + Phase 2 consolidation)
