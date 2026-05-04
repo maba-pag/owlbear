@@ -2,10 +2,10 @@
 id: 1293
 title: 'Ideation: value audit of share/ files — which skills carry signal vs. restate
   common knowledge?'
-status: backlog
+status: archived
 priority: nice-to-have
 created: 2026-05-02T16:08:21.853770+00:00
-updated: 2026-05-02T16:11:40.238739+00:00
+updated: 2026-05-04T21:27:38.327110+00:00
 tags:
 - deferred
 - ideation
