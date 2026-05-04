@@ -368,3 +368,193 @@ class TestFromAC_ChunkDefaultEnrichmentState:
         ).fetchone()
         assert row is not None
         assert row[0] == "enriched"
+
+
+# ---------------------------------------------------------------------------
+# Upgrade path: v10 → v11 migration
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def v10_conn() -> sqlite3.Connection:
+    """In-memory SQLite connection simulating an existing v10 database.
+
+    Builds the complete v10 schema manually — all columns through v10, none of
+    the v11 additions (no enrichment_state/claimed_at on chunks, no document_id
+    on edges, no reviewed_pairs table).  Schema version is recorded as 10.
+    Calling init_db() on this connection should trigger the v10→v11 migration.
+    """
+    c = sqlite3.connect(":memory:")
+    c.execute(
+        """\
+CREATE TABLE documents (
+    id TEXT PRIMARY KEY, title TEXT, content TEXT, metadata TEXT,
+    created_at TEXT, scope TEXT DEFAULT 'global', source_id TEXT
+)"""
+    )
+    c.execute(
+        """\
+CREATE TABLE entities (
+    id TEXT PRIMARY KEY, name TEXT, entity_type TEXT, description TEXT,
+    metadata TEXT, created_at TEXT, scope TEXT DEFAULT 'global',
+    document_id TEXT, chunk_id TEXT, importance REAL DEFAULT 0.5
+)"""
+    )
+    # v10 edges: no document_id column (added in v11)
+    c.execute(
+        """\
+CREATE TABLE edges (
+    id TEXT PRIMARY KEY, source_id TEXT, target_id TEXT,
+    relation TEXT, weight REAL, metadata TEXT,
+    created_at TEXT, scope TEXT DEFAULT 'global'
+)"""
+    )
+    # v10 chunks: no enrichment_state, no claimed_at (both added in v11)
+    c.execute(
+        """\
+CREATE TABLE chunks (
+    id TEXT PRIMARY KEY, document_id TEXT, chunk_index INTEGER,
+    content TEXT, metadata TEXT, created_at TEXT,
+    scope TEXT DEFAULT 'global', consolidated INTEGER DEFAULT 0
+)"""
+    )
+    c.execute(
+        """\
+CREATE TABLE document_status (
+    document_id TEXT PRIMARY KEY, status TEXT, source TEXT,
+    error TEXT, created_at TEXT, updated_at TEXT,
+    scope TEXT DEFAULT 'global', content_hash TEXT
+)"""
+    )
+    c.execute(
+        """\
+CREATE TABLE knowledge_sources (
+    id TEXT PRIMARY KEY, name TEXT NOT NULL, source_type TEXT NOT NULL,
+    fetch_method TEXT NOT NULL DEFAULT '', enrich INTEGER NOT NULL DEFAULT 0,
+    config TEXT NOT NULL, scope TEXT DEFAULT 'global', enabled INTEGER DEFAULT 1,
+    priority INTEGER DEFAULT 0, last_refreshed_at TEXT, last_error TEXT,
+    created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+)"""
+    )
+    c.execute(
+        """\
+CREATE TABLE bookmarks (
+    id TEXT PRIMARY KEY, url TEXT NOT NULL, title TEXT NOT NULL,
+    description TEXT, tags TEXT NOT NULL DEFAULT '[]',
+    relevance_score REAL NOT NULL DEFAULT 0.0, reason TEXT,
+    scope TEXT NOT NULL DEFAULT 'global', document_id TEXT,
+    content_hash TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+)"""
+    )
+    c.execute(
+        """\
+CREATE TABLE consolidations (
+    id TEXT PRIMARY KEY, source_ids TEXT NOT NULL, summary TEXT,
+    insight TEXT, created_at TEXT, scope TEXT DEFAULT 'global'
+)"""
+    )
+    c.execute(
+        """\
+CREATE TABLE source_pages (
+    id TEXT PRIMARY KEY, source_id TEXT, url TEXT NOT NULL,
+    status TEXT DEFAULT 'discovered', extraction_hash TEXT,
+    last_extracted TEXT, scope TEXT DEFAULT 'global',
+    created_at TEXT, updated_at TEXT
+)"""
+    )
+    c.execute("CREATE TABLE schema_version (version INTEGER, applied_at TEXT)")
+    c.execute("INSERT INTO schema_version VALUES (10, '2026-01-01T00:00:00+00:00')")
+
+    # Pre-existing indexes created by earlier migrations
+    c.execute("CREATE INDEX idx_document_status_source ON document_status(source)")
+    c.execute(
+        "CREATE UNIQUE INDEX idx_knowledge_sources_name_scope"
+        " ON knowledge_sources(name, scope)"
+    )
+    c.execute("CREATE INDEX idx_knowledge_sources_scope ON knowledge_sources(scope)")
+    c.execute("CREATE UNIQUE INDEX idx_bookmarks_url_scope ON bookmarks(url, scope)")
+    c.execute("CREATE INDEX idx_bookmarks_scope ON bookmarks(scope)")
+    c.execute("CREATE INDEX idx_source_pages_source_id ON source_pages(source_id)")
+    for table in (
+        "entities",
+        "documents",
+        "edges",
+        "chunks",
+        "document_status",
+        "source_pages",
+    ):
+        c.execute(f"CREATE INDEX idx_{table}_scope ON {table}(scope)")
+
+    c.commit()
+    return c
+
+
+class TestFromAC_MigrationUpgradePath:
+    """Upgrade-path tests: existing v10 database migrates to v11 via init_db()."""
+
+    def test_v10_to_v11_enrichment_state_added_to_chunks(
+        self, v10_conn: sqlite3.Connection
+    ) -> None:
+        """init_db() on a v10 DB must add enrichment_state column to chunks."""
+        init_db(v10_conn)
+        cols = _column_names(v10_conn, "chunks")
+        assert "enrichment_state" in cols, (
+            "v10→v11 migration did not add enrichment_state to chunks"
+        )
+
+    def test_v10_to_v11_claimed_at_added_to_chunks(
+        self, v10_conn: sqlite3.Connection
+    ) -> None:
+        """init_db() on a v10 DB must add claimed_at column to chunks."""
+        init_db(v10_conn)
+        cols = _column_names(v10_conn, "chunks")
+        assert "claimed_at" in cols, (
+            "v10→v11 migration did not add claimed_at to chunks"
+        )
+
+    def test_v10_to_v11_document_id_added_to_edges(
+        self, v10_conn: sqlite3.Connection
+    ) -> None:
+        """init_db() on a v10 DB must add document_id column to edges."""
+        init_db(v10_conn)
+        cols = _column_names(v10_conn, "edges")
+        assert "document_id" in cols, (
+            "v10→v11 migration did not add document_id to edges"
+        )
+
+    def test_v10_to_v11_reviewed_pairs_table_exists(
+        self, v10_conn: sqlite3.Connection
+    ) -> None:
+        """init_db() on a v10 DB must result in the reviewed_pairs table existing."""
+        init_db(v10_conn)
+        assert _table_exists(v10_conn, "reviewed_pairs"), (
+            "reviewed_pairs table not present after v10→v11 upgrade via init_db()"
+        )
+
+    def test_v10_to_v11_d17_unique_index_exists(
+        self, v10_conn: sqlite3.Connection
+    ) -> None:
+        """init_db() on a v10 DB must create D17 UNIQUE index on edges."""
+        init_db(v10_conn)
+        indexes = v10_conn.execute("PRAGMA index_list(edges)").fetchall()
+        unique_indexes = [idx for idx in indexes if idx[2] == 1]
+        found = False
+        for idx in unique_indexes:
+            idx_cols = _index_columns(v10_conn, idx[1])
+            required = {"source_id", "target_id", "relation", "document_id"}
+            if required.issubset(set(idx_cols)):
+                found = True
+                break
+        assert found, (
+            "D17 UNIQUE index on edges(source_id, target_id, relation, document_id)"
+            " not present after v10→v11 upgrade via init_db()"
+        )
+
+    def test_v10_to_v11_schema_version_updated_to_11(
+        self, v10_conn: sqlite3.Connection
+    ) -> None:
+        """init_db() on a v10 DB must update schema_version to 11."""
+        init_db(v10_conn)
+        ver = v10_conn.execute("SELECT version FROM schema_version").fetchone()
+        assert ver is not None, "schema_version table empty after migration"
+        assert ver[0] == 11, f"Expected schema version 11, got {ver[0]}"  # noqa: PLR2004
