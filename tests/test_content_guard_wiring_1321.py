@@ -15,6 +15,7 @@ AC5: Guard runs for ALL source_type metadata values passed to ingest_text() —
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Self
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -145,6 +146,11 @@ class TestFromAC_LifespanGuardWiring:
     """AC1: ContentInjectionGuard instantiated in app_lifespan, passed to
     IngestPipeline; scan() called during ingest_text() flow."""
 
+    @pytest.fixture(autouse=True)
+    def _sandbox_lifespan_home(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Redirect Path.home() to tmp_path so lifespan tests cannot touch real ~/.owlbear."""
+        monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+
     @pytest.mark.asyncio
     async def test_app_lifespan_passes_content_guard_to_ingest_pipeline(self) -> None:
         """IngestPipeline in app_lifespan is constructed with a non-None content_guard."""
@@ -208,6 +214,31 @@ class TestFromAC_LifespanGuardWiring:
         assert chunk_text in scan_args, (
             f"scan() must be called with chunk text '{chunk_text}'. "
             f"Actual scan args: {scan_args}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_lifespan_token_cleanup_operates_in_sandboxed_home(
+        self, tmp_path: Path
+    ) -> None:
+        """Regression guard: lifespan token-path operations target sandboxed tmp_path, not real home.
+
+        Proves that _sandbox_lifespan_home fixture is effective: the token file in
+        tmp_path is deleted by app_lifespan, confirming Path.home() returns tmp_path
+        and the real ~/.owlbear/copilot_token.json is never touched.
+        """
+        token_dir = tmp_path / ".owlbear"
+        token_dir.mkdir(parents=True, exist_ok=True)
+        token_file = token_dir / "copilot_token.json"
+        token_file.write_text('{"token": "stale"}')
+
+        patches = _lifespan_heavy_patches()
+        with _contextlib_exitstack(patches):
+            async with app_lifespan(MagicMock()):
+                pass
+
+        assert not token_file.exists(), (
+            "app_lifespan must have deleted the token file in sandboxed home (tmp_path); "
+            "if this fails, Path.home() is not redirected and real ~/.owlbear is at risk"
         )
 
     @pytest.mark.asyncio

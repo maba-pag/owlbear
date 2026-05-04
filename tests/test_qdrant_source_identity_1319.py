@@ -808,6 +808,13 @@ class TestFromAC_IngestSourceResolutionContract:
         assert created_obj.name == target_url, (
             f"KnowledgeSource.name must be {target_url!r}, got {created_obj.name!r}"
         )
+        # The real resolve_by_url() keys on source.config.get("url"), not on name.
+        # If the ingest path wrote a wrong config URL the resolver would not find the
+        # just-created source on the fallback call, so we must pin this key.
+        assert created_obj.config.get("url") == target_url, (
+            f"KnowledgeSource.config['url'] must be {target_url!r} "
+            f"(the key used by resolve_by_url), got {created_obj.config.get('url')!r}"
+        )
 
     @pytest.mark.asyncio
     async def test_ingest_text_uses_second_resolve_id_as_fk_after_create(self) -> None:

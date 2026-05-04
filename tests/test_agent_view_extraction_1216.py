@@ -1,11 +1,12 @@
-"""Failing tests for AgentView extraction from engine.py (task #1216).
+"""Tests for AgentView extraction from engine.py (task #1216).
 
-AC:
+AC (refined per architecture re-review 2026-05-04):
   1. engine.py does NOT contain `class AgentView`
-  2. agent_view.py contains AgentView class with identical public interface
+  2. agent_view.py contains AgentView class exposing all 8 public methods:
+     list_tasks, show_task, pick_tasks, create_task, edit_task, move_task, start_work, end_work
   3. agent_view.py imports KanbanEngine from engine (no circular import)
-  4. Package __init__.py re-exports AgentView from agent_view
-  5. All existing tests pass without modification (regression guard)
+  4. Package __init__.py re-exports AgentView from agent_view (backward-compatible public API)
+  5. Backward-compatible access: `from owlbear_kanban.engine import AgentView` resolves via __getattr__
 """
 
 from __future__ import annotations
@@ -213,3 +214,46 @@ class TestFromAC_ExistingAPIUnchanged:
         engine = KanbanEngine(tmp_path)
         av = AgentView(engine)
         assert av.engine is engine, "AgentView.engine must be the KanbanEngine passed to __init__"
+
+
+# ---------------------------------------------------------------------------
+# AC#5 (refined) — `from owlbear_kanban.engine import AgentView` via __getattr__
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_BackwardCompatEngineImport:
+    """`from owlbear_kanban.engine import AgentView` must resolve via __getattr__."""
+
+    def test_engine_import_of_agent_view_does_not_raise(self) -> None:
+        """`from owlbear_kanban.engine import AgentView` must not raise."""
+        try:
+            from owlbear_kanban.engine import AgentView  # noqa: F401
+        except (ImportError, AttributeError) as exc:
+            pytest.fail(
+                f"from owlbear_kanban.engine import AgentView raised: {exc}"
+            )
+
+    def test_engine_import_of_agent_view_originates_from_agent_view_module(
+        self,
+    ) -> None:
+        """AgentView accessed via engine.__getattr__ must be defined in agent_view."""
+        from owlbear_kanban.engine import AgentView  # noqa: PLC0415
+
+        assert AgentView.__module__ == "owlbear_kanban.agent_view", (
+            f"from owlbear_kanban.engine import AgentView resolved to "
+            f"{AgentView.__module__!r} instead of 'owlbear_kanban.agent_view' — "
+            "__getattr__ must proxy to agent_view.AgentView, not re-define it in engine"
+        )
+
+    def test_engine_import_of_agent_view_is_same_class_as_agent_view_module(
+        self,
+    ) -> None:
+        """AgentView from engine import must be the identical object as agent_view.AgentView."""
+        from owlbear_kanban.engine import AgentView as AgentViewFromEngine
+        from owlbear_kanban.agent_view import AgentView as AgentViewFromModule
+
+        assert AgentViewFromEngine is AgentViewFromModule, (
+            "AgentView from `owlbear_kanban.engine` is not the same object as "
+            "`owlbear_kanban.agent_view.AgentView` — __getattr__ must return "
+            "the exact same class, not a copy or re-implementation"
+        )
