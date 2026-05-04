@@ -58,13 +58,15 @@ def _entry_to_dict(entry: MemoryEntry) -> dict[str, object]:
     return {
         "id": entry.id,
         "title": entry.title,
-        "categories": list(entry.categories),
+        "categories": [str(category) for category in entry.categories],
         "confidence": entry.confidence,
-        "state": entry.state,
+        "state": str(entry.state),
         "content": entry.content,
         "scope_agents": entry.scope_agents,
+        "source_agent": entry.source_agent,
         "created_at": entry.created_at,
         "updated_at": entry.updated_at,
+        "approved_at": entry.approved_at,
     }
 
 
@@ -80,10 +82,10 @@ def _ensure_update_transition(current: MemoryState, target: MemoryState) -> None
     if current == target:
         return
     allowed: dict[MemoryState, set[MemoryState]] = {
-        "pending": {"curated"},
-        "curated": set(),
-        "approved": set(),
-        "deleted": set(),
+        MemoryState.PENDING: {MemoryState.CURATED},
+        MemoryState.CURATED: set(),
+        MemoryState.APPROVED: set(),
+        MemoryState.DELETED: set(),
     }
     if target in allowed[current]:
         return
@@ -109,11 +111,13 @@ async def store_learning(  # noqa: PLR0913
             title=title,
             categories=categories,
             confidence=confidence,
-            state="pending",
+            state=MemoryState.PENDING,
             content=content,
             scope_agents=scope_agents,
+            source_agent=_caller_from_ctx(ctx) or "unknown",
             created_at=now,
             updated_at=now,
+            approved_at=None,
         )
     except ValidationError as exc:
         raise ToolError(str(exc)) from exc
@@ -132,11 +136,16 @@ async def query_memory(  # noqa: PLR0913
 ) -> list[dict[str, Any]]:
     """Return memory entries filtered by state and sorted by curation priority."""
     engine = _engine_from_ctx(ctx)
-    allowed_states = set(states) if states else {"curated", "approved"}
+    allowed_states = set(states) if states else {MemoryState.CURATED, MemoryState.APPROVED}
     category_filter = set(categories or [])
     scope_filter = set(scope_agents or [])
 
-    state_rank = {"approved": 0, "curated": 1, "pending": 2, "deleted": 3}
+    state_rank = {
+        MemoryState.APPROVED: 0,
+        MemoryState.CURATED: 1,
+        MemoryState.PENDING: 2,
+        MemoryState.DELETED: 3,
+    }
     entries = [e for e in engine.get_entries() if e.state in allowed_states]
     if category_filter:
         entries = [
@@ -173,7 +182,7 @@ async def update_entry(  # noqa: PLR0913
     _require_role(ctx, allowed={"curator"}, tool_name="update_entry")
     engine = _engine_from_ctx(ctx)
     current = _load_entry_or_raise(engine, entry_id)
-    if current.state == "approved":
+    if current.state == MemoryState.APPROVED:
         msg = "update_entry cannot modify approved entries"
         raise ToolError(msg)
 
@@ -188,8 +197,10 @@ async def update_entry(  # noqa: PLR0913
         "confidence": current.confidence if confidence is None else confidence,
         "state": target_state,
         "scope_agents": current.scope_agents if scope_agents is None else scope_agents,
+        "source_agent": current.source_agent,
         "created_at": current.created_at,
         "updated_at": _now_iso(),
+        "approved_at": current.approved_at,
     }
     try:
         updated = MemoryEntry.model_validate(payload)
@@ -205,10 +216,12 @@ async def delete_entry(ctx: Context, *, entry_id: str) -> dict[str, Any]:
     engine = _engine_from_ctx(ctx)
     current = _load_entry_or_raise(engine, entry_id)
 
-    if current.state == "deleted":
+    if current.state == MemoryState.DELETED:
         return _entry_to_dict(current)
 
-    updated = current.model_copy(update={"state": "deleted", "updated_at": _now_iso()})
+    updated = current.model_copy(
+        update={"state": MemoryState.DELETED, "updated_at": _now_iso()}
+    )
     engine.write(updated)
     return _entry_to_dict(updated)
 
@@ -219,10 +232,16 @@ async def approve_entry(ctx: Context, *, entry_id: str) -> dict[str, Any]:
     engine = _engine_from_ctx(ctx)
     current = _load_entry_or_raise(engine, entry_id)
 
-    if current.state != "curated":
+    if current.state != MemoryState.CURATED:
         msg = f"approve_entry requires curated state, got {current.state}"
         raise ToolError(msg)
 
-    updated = current.model_copy(update={"state": "approved", "updated_at": _now_iso()})
+    updated = current.model_copy(
+        update={
+            "state": MemoryState.APPROVED,
+            "updated_at": _now_iso(),
+            "approved_at": _now_iso(),
+        }
+    )
     engine.write(updated)
     return _entry_to_dict(updated)

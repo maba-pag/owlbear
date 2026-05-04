@@ -88,12 +88,14 @@ class MemoryEngine:
         frontmatter = {
             "id": entry.id,
             "title": entry.title,
-            "categories": entry.categories,
+            "categories": list(entry.categories),
             "confidence": entry.confidence,
-            "state": entry.state,
+            "state": str(entry.state),
             "scope_agents": entry.scope_agents,
+            "source_agent": entry.source_agent,
             "created_at": entry.created_at,
             "updated_at": entry.updated_at,
+            "approved_at": entry.approved_at,
         }
         content = (
             "---\n"

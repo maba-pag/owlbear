@@ -2,40 +2,56 @@
 
 from __future__ import annotations
 
+import enum
 import re
 from datetime import datetime
-from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-MemoryCategory = Literal[
-    "knowledge",
-    "behaviour",
-    "pitfall",
-    "process",
-    "tool",
-    "goal",
-    "personality",
-    "preference",
-    "context",
-]
-MemoryState = Literal["pending", "curated", "approved", "deleted"]
+
+class MemoryCategory(enum.StrEnum):
+    """Supported memory categories."""
+
+    DOMAIN_KNOWLEDGE = "domain-knowledge"
+    BEHAVIOUR = "behaviour"
+    PITFALL = "pitfall"
+    PROCESS = "process"
+    TOOL_USAGE = "tool-usage"
+    GOAL = "goal"
+    PERSONALITY = "personality"
+    PREFERENCE = "preference"
+    ENV_CONTEXT = "env-context"
+
+
+class MemoryState(enum.StrEnum):
+    """Lifecycle state of a memory entry."""
+
+    PENDING = "pending"
+    CURATED = "curated"
+    APPROVED = "approved"
+    DELETED = "deleted"
 
 
 class MemoryEntry(BaseModel):
     """A single markdown-backed memory entry."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(
+        extra="forbid",
+        validate_assignment=True,
+        use_enum_values=True,
+    )
 
     id: str
     title: str
     categories: list[MemoryCategory] = Field(min_length=1)
     confidence: float = Field(ge=0.7, le=1.0)
-    state: MemoryState = "pending"
-    content: str
-    scope_agents: list[str] | None = None
+    state: MemoryState = MemoryState.PENDING
+    content: str = Field(max_length=1024)
+    scope_agents: list[str] = Field(default_factory=list)
+    source_agent: str = Field(frozen=True)
     created_at: str
     updated_at: str
+    approved_at: str | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -50,6 +66,14 @@ class MemoryEntry(BaseModel):
     def _validate_title_not_blank(cls, value: str) -> str:
         if not value.strip():
             msg = "title must not be empty"
+            raise ValueError(msg)
+        return value
+
+    @field_validator("source_agent")
+    @classmethod
+    def _validate_source_agent_not_blank(cls, value: str) -> str:
+        if not value.strip():
+            msg = "source_agent must not be empty"
             raise ValueError(msg)
         return value
 
@@ -69,9 +93,11 @@ class MemoryEntry(BaseModel):
             raise ValueError(msg)
         return value
 
-    @field_validator("created_at", "updated_at")
+    @field_validator("created_at", "updated_at", "approved_at")
     @classmethod
-    def _validate_iso_datetime(cls, value: str) -> str:
+    def _validate_iso_datetime(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
         if "T" not in value and "t" not in value:
             msg = "timestamp must include date and time"
             raise ValueError(msg)
