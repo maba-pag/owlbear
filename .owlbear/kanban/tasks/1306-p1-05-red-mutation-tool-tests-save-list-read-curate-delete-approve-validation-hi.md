@@ -2,10 +2,10 @@
 id: 1306
 title: 'P1-05: RED — Mutation tool tests (save, list, read, curate, delete, approve
   — validation + hints)'
-status: backlog
+status: docs
 priority: needed
 created: 2026-05-04T01:32:18.531671+00:00
-updated: 2026-05-04T21:29:42.864675+00:00
+updated: 2026-05-04T23:17:43.911611+00:00
 tags:
 - phase-2
 - scope:mcp-memory
@@ -433,3 +433,195 @@ All 13 new tests PASS against the pre-existing implementation (commit deae8a95).
 | 1 | architect | Refine AC4 and AC10 so the RED suite must prove both confidence bounds (<0.7 and >1.0) and re-dispatch the test-proof work from that explicit contract | tests/test_mutation_tools_1306.py | Confidence failure inputs are only 0.5 at tests/test_mutation_tools_1306.py:651, :1273, and :1367 |
 | 2 | architect | Tighten AC5 update-in-place hint proof so the update branch requires an update-specific phrase rather than generic curated-only wording | tests/test_mutation_tools_1306.py | Assertions at tests/test_mutation_tools_1306.py:752 and :832 allow "updat" or "curated" |
 | 3 | architect | Tighten AC10 category-teaching proof to require the Brief keyword "provide" rather than generic category wording | tests/test_mutation_tools_1306.py, serve/mcp-memory/src/owlbear_mcp_memory/tools.py | tests/test_mutation_tools_1306.py:1216 allows "categor" or "provide"; implementation guidance is at serve/mcp-memory/src/owlbear_mcp_memory/tools.py:103 |
+[[2026-05-04]]
+
+[[2026-05-04]]
+## Architecture Review (3rd pass — loop-breaker refinement)
+
+### Reviewer Concerns Addressed
+
+| # | Reviewer Concern | Resolution |
+|---|---|---|
+| 1 | AC4/AC10 confidence only tests <0.7 (0.5); upper bound >1.0 never tested | Refined: explicitly require BOTH bounds — one test with value <0.7 AND one with value >1.0 |
+| 2 | AC5 curated→curated hint accepts generic "curated" alone | Refined: require "updat" keyword specifically; "curated" alone is NOT sufficient for update-in-place branch |
+| 3 | AC10 category teaching message accepts "categor" | Refined: require "provide" keyword specifically; "categor" alone is NOT sufficient |
+
+### Refined AC (supersedes 2nd-pass AC — changes marked with ⚡)
+
+- [ ] Tests assert save_memory creates entry with state=pending, returns result["hint"] containing discriminating substring(s) that uniquely identify the save-pending guidance (not just key presence) (td:2)
+- [ ] Tests assert list_memories returns metadata without body, sorts pending-first by state rank then by created_at within same-state entries (proven with 2+ entries of identical state having different created_at), filters by state/categories/scope_agents including proof that states=["pending"] excludes curated entries (td:2)
+- [ ] Tests assert read_memory returns full entry by ID, errors on invalid/deleted IDs (td:2)
+- [ ] ⚡ Tests assert curate_memory validates: title non-empty, content <=1024, confidence [0.7,1.0] — BOTH bounds proven: one input <0.7 AND one input >1.0 must raise, categories >=1 (td:2)
+- [ ] ⚡ Tests assert curate_memory returns result["hint"] with transition-specific discriminating phrase: pending→curated requires "pending"/"promot"; approved→curated requires "downgrad"/"re-approv"; curated→curated (update-in-place) requires "updat" keyword specifically — "curated" alone is NOT sufficient (td:2)
+- [ ] Tests assert delete_memory returns result["hint"] with discriminating content distinguishing hard-delete from soft-delete (different expected substrings per branch) (td:2)
+- [ ] Tests assert approve_memory only works on curated entries, errors on other states (td:2)
+- [ ] Tests assert monkeypatching OWLBEAR_MEMORY_CALLER env var does not gate tool execution — test sets env var via monkeypatch, creates ctx through standard path, invokes mutation tool, tool succeeds (td:1)
+- [ ] Tests assert MEMORY_TOOLS_EXCLUDE has no runtime effect: _apply_tool_exclusions absent from server module AND "MEMORY_TOOLS_EXCLUDE" string not found in server module source text (td:1)
+- [ ] ⚡ Tests assert validation errors return teaching messages: title→"non-empty", content→"split", confidence→"between", categories→"provide" specifically (not "categor" which matches generic Pydantic output) (td:2)
+- [ ] All tests fail at assertion/method level — no collection-time ImportError (td:0)
+
+### Specific test changes required
+
+1. **Confidence upper bound (AC4):** Add test with `confidence=1.5` (or any >1.0) asserting ToolError with "between" keyword. Currently all confidence tests use 0.5.
+2. **Curated→curated hint (AC5):** Change assertion from `"updat" in hint or "curated" in hint` to `"updat" in hint` — remove the `or "curated"` fallback. The update-in-place branch must specifically mention updating.
+3. **Category keyword (AC10):** Change assertion from `"categor" in error_text or "provide" in error_text` to `"provide" in error_text` — remove the `or "categor"` fallback. The Brief specifies "Provide at least one category..."
+
+### Evaluation (3rd pass — loop-breaker)
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | Tests only — narrowing 3 assertion specificity gaps |
+| Interface clarity | PASS | Each refinement specifies exact keyword and removes fallback alternatives |
+| Dependency correctness | PASS | #1305 done |
+| Module layering | PASS | Tests import from owlbear_mcp_memory.tools |
+| TDD compliance | PASS | This IS the RED task |
+| KISS/YAGNI | PASS | Minimal targeted fixes — 3 changes total |
+| Premise challenge | PASS | Reviewer proved these gaps with mutation reasoning |
+| Pattern consistency | PASS | Same test patterns, tighter assertions |
+| Security surface | N/A | Test-only |
+| Single domain | PASS | mcp-memory only |
+
+### Challenge Results
+- Challenger: SKIPPED — loop-breaker 3rd pass; changes are purely narrowing existing assertions per reviewer evidence; no architectural decision to challenge
+
+### Test Depth
+- Max depth: 2
+- Test-writer: PROCEED (3 targeted assertion fixes per "Specific test changes required" section)
+
+### Implementation Note
+All 3 fixes address assertions only in the existing test file. The implementation (commit deae8a95) already handles both confidence bounds and uses the exact keywords. These tests will pass once assertions are tightened — no source changes expected.
+
+### Verdict: APPROVE (3rd pass loop-breaker)
+### Action Taken: Refined AC4 (both confidence bounds), AC5 (remove "curated" fallback), AC10 (remove "categor" fallback). Advanced to todo.
+[[2026-05-04]]
+3rd-pass loop-breaker refinement. Addressed 3 narrow proof-quality gaps from reviewer: (1) AC4 now requires both confidence bounds tested (<0.7 AND >1.0), (2) AC5 curated→curated assertion must require "updat" specifically — removed "curated" as standalone fallback, (3) AC10 category teaching requires "provide" specifically — removed "categor" as fallback. All changes are assertion-tightening only; implementation already passes.
+[[2026-05-04]]
+## Test-Writer Notes
+
+**Test file:** `tests/test_mutation_tools_1306.py`
+**Result:** 47 tests, all PASS — Step 1b.1: test-only retry, builder skip, direct-to-review
+**Ruff:** clean (exit 0)
+
+### Retry summary — 3rd-pass loop-breaker (4 changes: 1 new test + 3 tightened assertions)
+
+| Class | AC | Change | Gap Addressed |
+|---|---|---|---|
+| `TestFromAC_CurateMemoryValidation` | AC4 | +1 new test: `test_curate_memory_rejects_confidence_above_range_with_teaching_message` (confidence=1.5) | Upper bound >1.0 was untested; all previous confidence tests used 0.5 |
+| `TestFromAC_CurateMemoryHint` | AC5 | Tightened: `assert "updat" in hint` (removed `or "curated"` fallback) | Curated→curated update-in-place hint proved specifically by "updat", not generic "curated" |
+| `TestFromAC_CurateMemoryHint` | AC5 | Tightened: `assert "updat" in hint_lower` (removed `or "curated"` fallback) in `test_curate_memory_curated_update_hint_does_not_imply_transition` | Same gap in second AC5 test |
+| `TestFromAC_ValidationTeachingMessages` | AC10 | Tightened: `assert "provide" in error_text` (removed `"categor" in error_text or` fallback) | Category teaching message now requires Brief keyword "provide", not generic "categor" |
+
+### AC coverage (47 tests total)
+
+| AC | Covered | Tests |
+|---|---|---|
+| AC1: save_memory hint discriminating | ✓ | 5 |
+| AC2: list_memories same-state ordering + explicit filter | ✓ | 7 |
+| AC3: read_memory full entry + invalid/deleted errors | ✓ | 4 |
+| AC4: curate_memory validates with teaching messages — BOTH confidence bounds | ✓ | 5 (was 4) |
+| AC5: curate_memory transition-specific hints — "updat" required, no fallback | ✓ | 6 |
+| AC6: delete_memory discriminating hard/soft keywords | ✓ | 5 |
+| AC7: approve_memory curated-only | ✓ | 5 |
+| AC8: OWLBEAR_MEMORY_CALLER env var no effect (monkeypatched) | ✓ | 2 |
+| AC9: MEMORY_TOOLS_EXCLUDE absent function + source text | ✓ | 2 |
+| AC10: Brief-keyword teaching messages — "provide" required, no "categor" fallback | ✓ | 6 |
+| AC11: no collection-time ImportError | ✓ | (structural) |
+
+### Builder skip rationale
+All 47 tests PASS against pre-existing implementation (commit deae8a95). Implementation "Curated entry updated." hint contains "updat"; "Provide at least one category from the allowed list." contains "provide"; confidence=1.5 triggers ToolError with "between". No builder changes needed.
+[[2026-05-04]]
+## Builder Notes
+- Non-implementation builder pass-through on retry path: implementation already existed from prior cycle; this run performed GREEN verification only.
+- Files changed: none.
+- Commit: none required (no source or test edits in this pass).
+
+- Quality-runner verification (fresh scoped run):
+  - `tests/test_mutation_tools_1306.py`: 47 passed, 0 failed.
+  - Ruff: clean for `serve/mcp-memory/src/owlbear_mcp_memory/` and `tests/test_mutation_tools_1306.py`.
+
+- Coverage evidence (informational for unchanged-code pass-through):
+  - `owlbear_mcp_memory.tools`: 72%
+  - `owlbear_mcp_memory.server`: 100%
+  - No module code was touched in this builder pass; coverage ≥90 gate for touched modules is N/A.
+
+- Evidence summary:
+  - All `TestFromAC_*` assertions in task #1306 are green in a fresh run.
+  - No code edits were required for this builder cycle.
+
+### Post-task Reflection
+- Problem faced: task history had multiple prior loops; latest executable state was already GREEN.
+- Workaround applied: anchored on live quality-runner evidence instead of historical RED claims.
+- Pattern discovered: retry-loop builder cycles can be verification-only when implementation is already present and tests were strengthened upstream.
+- Time sink: long historical task body required careful filtering to latest authoritative sections.
+- Quality gap: scoped coverage is below 90% on tools module, but no touched source in this pass makes that gate non-blocking.
+[[2026-05-04]]
+## Review Evidence
+### Test Results
+- quality-runner, task-local: `tests/test_mutation_tools_1306.py` -> 47 passed, 0 failed.
+- quality-runner, adjacent regression slice: selected `TestFromAC_*` classes in `tests/test_state_machine_1304.py` -> 17 passed, 0 failed.
+
+### Lint Results
+- Ruff clean for `serve/mcp-memory/src/owlbear_mcp_memory/tools.py`, `serve/mcp-memory/src/owlbear_mcp_memory/server.py`, and `tests/test_mutation_tools_1306.py`.
+
+### Coverage
+- Task-local: `owlbear_mcp_memory.tools` 72%, `owlbear_mcp_memory.server` 100%.
+- Adjacent regression slice: `owlbear_mcp_memory.tools` 53%, `owlbear_mcp_memory.server` 0%.
+- Coverage is informational for this builder-skip retry: no source files changed in the latest cycle, so the gate here is proof quality in the task-owned tests rather than diff-scoped line coverage.
+
+### Pass 1 — Critical
+#### Test-Writer AC Coverage
+| AC Line | Evidence | Status |
+|---|---|---|
+| save_memory creates pending + discriminating hint | `tests/test_mutation_tools_1306.py:99` and `:209`; save hint text in `serve/mcp-memory/src/owlbear_mcp_memory/tools.py:189` | PASS |
+| list_memories metadata/no body/sort/filter | `tests/test_mutation_tools_1306.py:253`, `:277`, `:337`, `:369`, `:394`, and `:428`; sort/filter logic in `serve/mcp-memory/src/owlbear_mcp_memory/tools.py:193-225` | PASS |
+| read_memory full entry by ID + invalid/deleted errors | `tests/test_mutation_tools_1306.py:493-496`, `:518-529`, `:535`, and `:554`; `read_memory` resolves `entry_id` in `serve/mcp-memory/src/owlbear_mcp_memory/tools.py:228-234` | PASS |
+| curate_memory validates title/content/confidence/categories with teaching messages | `tests/test_mutation_tools_1306.py:589`, `:613`, `:637`, `:661`, and `:685`; teaching messages in `serve/mcp-memory/src/owlbear_mcp_memory/tools.py:92-103` | PASS |
+| curate_memory transition-specific hints | `tests/test_mutation_tools_1306.py:722`, `:740`, `:763`, `:781`, `:806`, and `:833`; hint branches in `serve/mcp-memory/src/owlbear_mcp_memory/tools.py:443-453` | PASS |
+| delete_memory hard-delete vs soft-delete hints | `tests/test_mutation_tools_1306.py:874`, `:892`, `:910`, `:933`, and `:956`; hint branches in `serve/mcp-memory/src/owlbear_mcp_memory/tools.py:461-465` | PASS |
+| approve_memory curated-only, errors on other states | `tests/test_mutation_tools_1306.py:983`, `:991`, `:1012`, `:1035`, and `:1053`; approve guard in `serve/mcp-memory/src/owlbear_mcp_memory/tools.py:475-487` | PASS |
+| `OWLBEAR_MEMORY_CALLER` env var has no effect | `tests/test_mutation_tools_1306.py:1130-1153` monkeypatches the env var, propagates the env-derived caller into ctx, and the tool succeeds; env read is at `serve/mcp-memory/src/owlbear_mcp_memory/server.py:51` | PASS |
+| `MEMORY_TOOLS_EXCLUDE` env var has no effect | `tests/test_mutation_tools_1306.py:1163` and `:1182`; current server module contains no `_apply_tool_exclusions` helper and no `MEMORY_TOOLS_EXCLUDE` reference | PASS |
+| validation errors return Brief teaching keywords | `tests/test_mutation_tools_1306.py:1214`, `:1333`, `:1364`, and `:1395`; teaching keywords are emitted from `serve/mcp-memory/src/owlbear_mcp_memory/tools.py:97-103` | PASS |
+| no collection-time ImportError | localized imports inside task-owned test methods at `tests/test_mutation_tools_1306.py:106`, `:259`, `:477`, and `:996`; quality-runner collected and ran all 47 tests successfully | PASS |
+
+#### Security Review
+- No issues found in scope. The reviewed code is limited to validation, sorting/filtering, env reads, state transitions, and engine delegation. No shell, SQL, traversal, deserialization, or secret-handling surface was introduced.
+
+#### Test Integrity
+| Original Test | Change Made | Assessment |
+|---------------|-------------|------------|
+| `tests/test_mutation_tools_1306.py` `TestFromAC_*` suites | Current snapshot retains all `TestFromAC_*` classes with no `skip`/`xfail` markers; builder commit presence verified in `.git/logs/refs/heads/dev:1707` (`deae8a95a1a07108a1e2591982f77e51aa8dd621`) | PRESERVED (small confidence deduction: direct historical diff/status was unavailable from the current tool surface) |
+
+#### Test Quality
+| Dimension | Rating | Evidence |
+|-----------|--------|----------|
+| Assertion specificity | ADEQUATE | Discriminating hint/teaching-message assertions now exist for AC1/AC4/AC5/AC6/AC10; remaining AC3 strengthening opportunity is noted below as residual, not blocking |
+| Negative/error-path coverage | STRONG | invalid/deleted reads, both confidence bounds, non-curated approve, and delete branches are exercised |
+| Manual mutation reasoning | ADEQUATE | the suite now fails for the prior reviewer-found regressions; the main remaining improvement is a stronger positive-path ID-disambiguation case for `read_memory` |
+| Test independence | STRONG | each test uses a fresh `tmp_path`-backed `MemoryEngine` and mocked context |
+| Descriptive names | STRONG | test names map cleanly to AC branches and prior reviewer findings |
+
+#### Data Safety
+- No issues found in scope.
+
+#### Implementation-Aware Gaps
+- Non-blocking residuals only:
+  - AC3 positive-path proof would be stronger with a multi-entry disambiguation case or an exact `result["id"] == entry.id` assertion.
+  - AC8 mirrors the server env->caller read instead of invoking `app_lifespan` directly, but the latest architecture refinement scoped deeper runtime proof out of this task and kept the requirement at the tool-behavior level.
+
+#### Builder Process Quality
+- Existing `## Review Evidence` sections before this review: 2 (`.owlbear/kanban/tasks/1306-p1-05-red-mutation-tool-tests-save-list-read-curate-delete-approve-validation-hi.md:169` and `:340`).
+- Latest cycle is a builder-skip verification pass with no file edits. Current review anchors on the latest 3rd-pass Architecture Review narrowing rather than earlier stale fail notes.
+
+### Pass 2 — Informational
+- The server still exposes canonical tool names only; the 2nd-pass Architecture Review explicitly scoped MCP registration/runtime exposure to `#1307`, so that is informational here, not a blocker for `#1306`.
+- Adjacent regression evidence is green on the selected state-machine classes; no fallout was observed in the exercised neighboring paths.
+
+### Deductions
+- -0.03: direct historical git diff/status for `TestFromAC_*` immutability was unavailable; commit presence was verified, but not a full historical diff.
+- -0.02: AC3 positive-path proof is acceptable under the current refined AC but could be tightened with multi-entry disambiguation.
+- -0.02: AC8 mirrors the server env->caller path rather than invoking `app_lifespan` directly; accepted as within current task scope per the latest refinement.
+
+### Verdict
+- PASS
+- Confidence: 0.93
+- Action: advance to docs. The prior proof-quality blockers from earlier review cycles are cleared under the latest 3rd-pass architecture refinement, and the remaining concerns are residual robustness gaps rather than current AC failures.

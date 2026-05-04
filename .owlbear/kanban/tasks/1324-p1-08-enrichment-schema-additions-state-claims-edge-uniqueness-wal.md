@@ -4,7 +4,7 @@ title: 'P1-08: Enrichment schema additions (state, claims, edge uniqueness, WAL)
 status: review
 priority: needed
 created: 2026-05-04T05:48:50.076796+00:00
-updated: 2026-05-04T21:10:53.665936+00:00
+updated: 2026-05-04T23:18:40.016657+00:00
 tags:
 - phase-1
 - scope:knowledge
@@ -14,7 +14,7 @@ depends_on:
 - 1323
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-04T23:18:40.016657+00:00
 archival_reason:
 archival_refs: []
 ---
@@ -205,3 +205,138 @@ Brief: see parent #1316 → `.owlbear/briefs/draft-knowledge-activation/brief.md
 - Retry-cycle builder dispatch can be verification-only when the failure was test-proof quality, not implementation behavior.
 - Scoped quality-runner evidence remains the fastest safe gate for this pattern.
 - Keeping builder pass-through explicit avoids unnecessary churn in stable schema migrations.
+[[2026-05-04]]
+## Review Evidence
+### Test Results
+- quality-runner scoped pass: 36 passed, 0 failed, 0 skipped.
+- Executed suites: `tests/test_enrichment_schema_1323.py` and `serve/knowledge/tests/test_graph_store_counts.py`.
+- AC8 (`All #1323 tests pass green`) is satisfied at runtime.
+
+### Lint Results
+- Ruff clean on `serve/knowledge/src/owlbear_knowledge/schema.py` and `tests/test_enrichment_schema_1323.py`.
+
+### Coverage
+- `owlbear_knowledge.schema`: 64% in the scoped run.
+- Coverage is not the blocking issue. The blocking issue is proof quality in the retry-added migration tests.
+
+### Security / Data Safety
+- No security or data-safety defects found in the scoped schema change.
+
+### Test Integrity
+- No visible weakened or removed `TestFromAC_*` assertions in the live test file.
+- The rejection is not an implementation defect and not a detected builder weakening; it is a remaining proof-quality failure in the retry-added upgrade-path coverage.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test / Runtime Proof | Status |
+|---|---|---|---|
+| enrichment_state column added to chunks: pending → claimed → enriched (td:2) | Fresh schema DDL defines the column in `serve/knowledge/src/owlbear_knowledge/schema.py:78`; v10→v11 migration adds it in `serve/knowledge/src/owlbear_knowledge/schema.py:307` | `TestFromAC_EnrichmentStateColumn` at `tests/test_enrichment_schema_1323.py:82` and migration fixture/tests at `tests/test_enrichment_schema_1323.py:379` / `tests/test_enrichment_schema_1323.py:495` | PASS |
+| enrichment_state is a new column — consolidated column retains existing semantics (td:1) | Fresh chunks DDL keeps both columns in `serve/knowledge/src/owlbear_knowledge/schema.py:78` | `TestFromAC_EnrichmentStateNotConsolidated` at `tests/test_enrichment_schema_1323.py:118` | PASS |
+| claimed_at timestamp column on chunks for lease tracking (td:1) | Fresh schema DDL includes `claimed_at`; migration adds it at `serve/knowledge/src/owlbear_knowledge/schema.py:310` | `TestFromAC_ClaimedAtColumn` at `tests/test_enrichment_schema_1323.py:161` and migration test at `tests/test_enrichment_schema_1323.py:505` | PASS |
+| reviewed_pairs table created: entity_name + source_a + source_b (td:2) | Table DDL exists in `serve/knowledge/src/owlbear_knowledge/schema.py:173` | Fresh-table tests at `tests/test_enrichment_schema_1323.py:189` and `tests/test_enrichment_schema_1323.py:211`; retry upgrade existence check at `tests/test_enrichment_schema_1323.py:525` | PASS with weak upgrade-path proof |
+| Edge UNIQUE constraint: UNIQUE(source_id, target_id, relation, document_id) (D17) (td:2) | Migration creates the index at `serve/knowledge/src/owlbear_knowledge/schema.py:316`; init-time bootstrap also recreates it at `serve/knowledge/src/owlbear_knowledge/schema.py:405` | Fresh enforcement tests at `tests/test_enrichment_schema_1323.py:257` and `tests/test_enrichment_schema_1323.py:297`; index-shape checks at `tests/test_enrichment_schema_1323.py:248` and `tests/test_enrichment_schema_1323.py:545` use subset matching only | FAIL |
+| WAL mode enabled on SQLite for concurrent writer support (td:0) | `init_db()` executes `PRAGMA journal_mode = WAL` in `serve/knowledge/src/owlbear_knowledge/schema.py:363` | Direct code evidence | PASS |
+| New chunks default to enrichment_state='pending' (td:1) | Fresh-schema default is asserted by insert/readback at `tests/test_enrichment_schema_1323.py:325` and `tests/test_enrichment_schema_1323.py:338`; migration line carries the default at `serve/knowledge/src/owlbear_knowledge/schema.py:307` | Retry upgrade test at `tests/test_enrichment_schema_1323.py:495` checks only column presence after v10→v11, not post-upgrade insert default behavior | FAIL |
+| All #1323 tests pass green (td:0) | Independent runtime evidence from quality-runner | 36 passed, 0 failed | PASS |
+
+### Findings
+1. AC5 remains under-proven. Both the fresh-schema and retry-added upgrade-path index checks accept any unique index that merely contains the D17 columns as a subset (`tests/test_enrichment_schema_1323.py:248`, `tests/test_enrichment_schema_1323.py:545`). That would still pass an incorrect broader key even though the AC names the exact four-column constraint.
+2. AC5 migration proof is also partially false-green. The retry upgrade-path test at `tests/test_enrichment_schema_1323.py:534` can still pass if the v10→v11 migration stops creating the index, because `init_db()` recreates `idx_edges_d17_unique` unconditionally after version handling at `serve/knowledge/src/owlbear_knowledge/schema.py:405`.
+3. AC7 remains under-proven on the upgrade path. The fresh-path default is strong (`tests/test_enrichment_schema_1323.py:325`, `tests/test_enrichment_schema_1323.py:338`), but the retry v10→v11 test at `tests/test_enrichment_schema_1323.py:495` only checks column presence. If the migration dropped the `'pending'` default from `serve/knowledge/src/owlbear_knowledge/schema.py:307`, the current retry suite would still pass for upgraded databases.
+4. The retry also leaves a narrower false-green around reviewed_pairs: `tests/test_enrichment_schema_1323.py:525` only proves end-state existence, while `init_db()` creates `reviewed_pairs` before it even checks `schema_version` at `serve/knowledge/src/owlbear_knowledge/schema.py:374`. This is not the primary fail, but it confirms the upgrade-path tests are still not discriminating migration-owned effects cleanly.
+5. No implementation defect was observed in the live schema. The rejection is for proof quality only.
+
+### Deductions
+| Reason | Evidence | Delta |
+|---|---|---|
+| Exact D17 contract still not discriminated by tests | `tests/test_enrichment_schema_1323.py:248`, `tests/test_enrichment_schema_1323.py:545` | -0.08 |
+| Upgrade-path D17 proof is masked by unconditional init-time index creation | `tests/test_enrichment_schema_1323.py:534` vs `serve/knowledge/src/owlbear_knowledge/schema.py:405` | -0.05 |
+| Upgrade-path default-on-insert for `enrichment_state='pending'` is still unproven | `tests/test_enrichment_schema_1323.py:495` vs `serve/knowledge/src/owlbear_knowledge/schema.py:307` and fresh-only proof at `tests/test_enrichment_schema_1323.py:325` / `tests/test_enrichment_schema_1323.py:338` | -0.07 |
+| This task already had one prior `## Review Evidence` section before the current review, so the loop-breaker rule applies on a second review failure | `.owlbear/kanban/tasks/1324-p1-08-enrichment-schema-additions-state-claims-edge-uniqueness-wal.md:131` | -0.03 |
+
+### Verdict
+- FAIL -> `backlog`
+- Confidence: 0.79
+- Rationale: runtime behavior is green, but the retry-added migration tests still do not prove two named parts of the contract: the exact D17 key and default-on-upgrade behavior for new chunks. Because this task already failed review once and the remaining defect is still proof quality, the loop-breaker rule routes the task to `backlog`, not back to `todo`.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Refine the retry contract so AC5 requires exact four-column D17 proof on upgrade, not subset-based index detection, and ensure the next RED suite would fail on any broader key | `tests/test_enrichment_schema_1323.py`; `.owlbear/kanban/tasks/1324-p1-08-enrichment-schema-additions-state-claims-edge-uniqueness-wal.md` | Subset-only assertions at `tests/test_enrichment_schema_1323.py:248` and `tests/test_enrichment_schema_1323.py:545` |
+| 2 | architect | Clarify and re-specify upgrade-path proof for AC7 so a v10→v11 database must demonstrate that post-upgrade chunk inserts still default `enrichment_state` to `'pending'` | `tests/test_enrichment_schema_1323.py`; `.owlbear/kanban/tasks/1324-p1-08-enrichment-schema-additions-state-claims-edge-uniqueness-wal.md` | Migration line carries the default at `serve/knowledge/src/owlbear_knowledge/schema.py:307`, but retry upgrade coverage at `tests/test_enrichment_schema_1323.py:495` proves only column presence |
+| 3 | architect | Decide whether reviewed_pairs and D17 index creation should be migration-owned only or whether tests should target `init_db()` end-state explicitly; the current mix creates false-green upgrade assertions | `serve/knowledge/src/owlbear_knowledge/schema.py`; `tests/test_enrichment_schema_1323.py` | `init_db()` bootstraps `reviewed_pairs` at `serve/knowledge/src/owlbear_knowledge/schema.py:374` and the D17 index at `serve/knowledge/src/owlbear_knowledge/schema.py:405`, masking the retry upgrade tests at `tests/test_enrichment_schema_1323.py:525` and `tests/test_enrichment_schema_1323.py:534` |
+[[2026-05-04]]
+
+## Architecture Review (Cycle 2)
+
+### Reviewer Follow-up Decisions
+
+| # | Reviewer Concern | Architect Decision |
+|---|---|---|
+| 1 | AC5: subset-based index detection accepts broader keys | **REFINE** — tests must use exact-match (`set(idx_cols) == {…}` not `.issubset()`) |
+| 2 | AC7: upgrade-path only proves column presence, not default-on-insert | **REFINE** — add post-upgrade insert/readback assertion |
+| 3 | init_db() masking migration effects via idempotent bootstrap | **ACCEPT AS-IS** — `init_db()` is the only public entry point; end-state testing through it is the correct contract. Migration isolation would require exporting private functions — YAGNI for DDL-only. Defense-in-depth bootstrap is correct architecture. |
+
+### AC Refinement
+
+- **AC5 (D17 index)**: Both fresh-path and upgrade-path tests must assert exact column equality: `set(idx_cols) == {"source_id", "target_id", "relation", "document_id"}` — subset matching is rejected. This applies to `test_edges_unique_index_exists` and `test_v10_to_v11_d17_unique_index_exists`.
+- **AC7 (default on upgrade)**: Upgrade-path test must include a post-upgrade insert/readback: insert a chunk WITHOUT specifying `enrichment_state` into a v10→v11 upgraded DB, then assert the readback value is `'pending'`.
+
+### Test Depth
+- Refinements are test-only changes (no source code edits). Max depth: td:2.
+- Test-writer processes normally.
+
+### Challenge
+- Challenger: SKIPPED — refinement cycle with no design choice; changes are mechanical test assertion tightening.
+
+### Verdict: APPROVE
+- Routing: backlog → todo
+- The implementation in `schema.py` is correct and unchanged. Only test assertions need tightening per reviewer findings.
+
+[[2026-05-04]]
+Architecture review cycle 2: Refined AC5 (exact D17 column match required, not subset) and AC7 (post-upgrade insert/readback proof required). Accepted init_db masking as correct defense-in-depth architecture. Implementation unchanged — test-only precision fixes needed. Approved to todo.
+[[2026-05-04]]
+## Test-Writer Notes
+- Retry: tightened 2 assertions + added 1 new test for reviewer gaps. All 28 tests pass against current impl.
+- Builder skip: test-only retry, all tests green — advancing directly to review.
+- Test file: tests/test_enrichment_schema_1323.py
+
+### Changes Made
+1. **AC5 fresh-path** (`TestFromAC_EdgeUniqueConstraint.test_edges_unique_index_exists`): Changed `required.issubset(set(idx_cols))` → `set(idx_cols) == required` (exact four-column match required, not subset).
+2. **AC5 upgrade-path** (`TestFromAC_MigrationUpgradePath.test_v10_to_v11_d17_unique_index_exists`): Same exact-equality fix.
+3. **AC7 upgrade-path** (`TestFromAC_MigrationUpgradePath.test_v10_to_v11_enrichment_state_default_on_insert`): NEW — inserts chunk into post-upgrade DB without specifying `enrichment_state`, asserts readback is `'pending'`.
+
+### AC Coverage
+| AC | Test(s) | Status |
+|----|---------|--------|
+| AC1: enrichment_state column | `TestFromAC_EnrichmentStateColumn` (3) | PASS |
+| AC2: separate from consolidated | `TestFromAC_EnrichmentStateNotConsolidated` (3) | PASS |
+| AC3: claimed_at column | `TestFromAC_ClaimedAtColumn` (3) | PASS |
+| AC4: reviewed_pairs table | `TestFromAC_ReviewedPairsTable` (5) | PASS |
+| AC5: exact D17 UNIQUE constraint | `TestFromAC_EdgeUniqueConstraint` (4, exact-equality), upgrade-path (1, exact-equality) | PASS |
+| AC6: default enrichment_state | `TestFromAC_ChunkDefaultEnrichmentState` (3) | PASS |
+| AC7: default on upgrade-path insert | `test_v10_to_v11_enrichment_state_default_on_insert` (NEW) | PASS |
+| AC7 (WAL, td:0) | — | skipped |
+| AC8 (#1323 green gate, td:0) | — | runtime evidence |
+
+### Quality
+- Total: 28 tests, all PASS
+- Ruff: clean
+- Coverage: owlbear_knowledge.schema 64%
+[[2026-05-04]]
+## Builder Notes
+- Implementation: no source changes in this cycle (test-only retry from test-writer).
+- Files changed: none.
+- Tests: 28 passed, 0 failed, 0 skipped (`tests/test_enrichment_schema_1323.py`).
+- Coverage: `owlbear_knowledge.schema` 64% (scoped).
+- ruff: clean on `serve/knowledge/src/owlbear_knowledge/schema.py` and `tests/test_enrichment_schema_1323.py`.
+- Approach: verification-only builder pass-through per retry contract; implementation remains unchanged.
+
+### Evidence Summary
+- quality-runner scoped pytest: PASS (`failed: []`).
+- quality-runner scoped lint: clean (`violations: []`).
+- quality-runner scoped coverage module: `owlbear_knowledge.schema` at 64%.
+
+### Reflection
+- Retry cycles with test-only deltas are best handled as verification-only builder passes.
+- Scoped quality-runner runs gave sufficient gate evidence with minimal noise.
+- Keeping source untouched avoided unnecessary schema churn while preserving review traceability.

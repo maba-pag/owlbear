@@ -5,7 +5,7 @@ title: 'P1-07+08: Recall tool — tighten test proof quality (assertion gaps in 
 status: review
 priority: needed
 created: 2026-05-04T01:32:18.553275+00:00
-updated: 2026-05-04T21:11:42.106898+00:00
+updated: 2026-05-04T23:18:43.917113+00:00
 tags:
 - phase-2
 - scope:mcp-memory
@@ -16,7 +16,7 @@ depends_on:
 - 1305
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-04T23:18:43.917113+00:00
 archival_reason:
 archival_refs: []
 ---
@@ -297,3 +297,150 @@ Skipped — this is a proof-quality fix with no design decisions. All AC lines a
 - Problem faced: lifecycle churn left task 1308 in `in-progress` despite builder-skip notes in test-writer handoff.
 - Workaround applied: treated this run as strict verification + pass-through, avoiding any unnecessary source edits.
 - Pattern discovered: when reviewer failures are assertion-only and retry tests pass, builder should route quickly with explicit evidence rather than re-open implementation work.
+[[2026-05-04]]
+## Review Evidence
+### Test Results
+- quality-runner scoped pass on `tests/test_recall_memory_1308.py`: 25 passed, 0 failed, 0 skipped.
+- This proves the retried suite is green, but green alone is not enough for the refined proof-quality contract.
+
+### Lint Results
+- quality-runner scoped lint: clean for `serve/mcp-memory/src/owlbear_mcp_memory/tools.py` and `tests/test_recall_memory_1308.py`.
+
+### Coverage
+- quality-runner reported `owlbear_mcp_memory.tools` at 23% module coverage in the scoped run.
+- Informational only: this retry is test-only; no source delta was made in the latest cycle, so module-level percentage is not the gate.
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---|---|---|---|
+| AC5-fix: exact per-entry format, all metadata fields absent, `"\n\n"` separator | `test_exact_per_entry_format_and_all_metadata_fields_absent` (`tests/test_recall_memory_1308.py:369`) and `test_two_entries_joined_with_double_newline_separator` (`tests/test_recall_memory_1308.py:413`) | Yes. Exact equality at `tests/test_recall_memory_1308.py:394` and full two-entry string equality at `tests/test_recall_memory_1308.py:440-441` fail on metadata leakage, format drift, or wrong separator. | COVERED |
+| AC6-fix: sort-then-slice under truncation (3 approved + 3 curated, limit=4) | `test_sort_then_slice_approved_fills_before_curated` (`tests/test_recall_memory_1308.py:560`) | No. The fixture is already approved-first by title (`tests/test_recall_memory_1308.py:565-566`), and `MemoryEngine.load()` reads files in sorted filename order (`serve/mcp-memory/src/owlbear_mcp_memory/engine.py:67`). A slice-before-sort bug could still return 3 approved + 1 curated and pass. Live code sorts then slices at `serve/mcp-memory/src/owlbear_mcp_memory/tools.py:321-322`. | LAX |
+| AC7-fix: default limit is exactly 20 | `test_default_limit_is_exactly_20` (`tests/test_recall_memory_1308.py:648`) | Yes. Exact equality at `tests/test_recall_memory_1308.py:666` fails if default is not 20. | COVERED |
+| All 21+ tests pass after assertion fixes | quality-runner scoped run | Yes. 25 passed, 0 failed, 0 skipped. | COVERED |
+
+#### Security Review
+- No security issues found in review scope. `recall_memory` only filters in-memory entries, caps results, and renders markdown (`serve/mcp-memory/src/owlbear_mcp_memory/tools.py:280-324`).
+
+#### Test Integrity
+| Original Test | Change Made | Assessment |
+|---|---|---|
+| `TestFromAC_BodyOnlyFormat.*` | Added stronger exact-format / metadata-absence siblings at `tests/test_recall_memory_1308.py:369` and `tests/test_recall_memory_1308.py:413` | PRESERVED + STRENGTHENED |
+| `TestFromAC_PriorityOrdering.*` | Added truncation proof attempt at `tests/test_recall_memory_1308.py:560` | PRESERVED, but still insufficient proof |
+| `TestFromAC_LimitParameter.*` | Added exact-count sibling at `tests/test_recall_memory_1308.py:648` | PRESERVED + STRENGTHENED |
+
+#### Test Quality
+| Dimension | Rating | Evidence |
+|---|---|---|
+| Assertion specificity | ADEQUATE | AC5 and AC7 now have exact-equality sibling proofs at `tests/test_recall_memory_1308.py:394`, `tests/test_recall_memory_1308.py:440-441`, and `tests/test_recall_memory_1308.py:666`. |
+| Negative / error-path coverage | ADEQUATE | Wildcard rejection remains covered at `tests/test_recall_memory_1308.py:252-264`. |
+| Manual mutation resistance | WEAK | AC6-fix does not force failure for slice-before-sort because fixture ordering cooperates with filename-sorted engine loading (`serve/mcp-memory/src/owlbear_mcp_memory/engine.py:67`). |
+| Test independence | STRONG | Each test constructs fresh engine/context fixtures. |
+| Descriptive names | STRONG | New tests accurately describe their proof intent. |
+
+#### Data Safety
+- No issues found in review scope.
+
+#### Implementation-Aware Gaps
+- No new implementation gap found in `recall_memory`; the remaining blocker is proof quality for AC6-fix.
+
+#### Builder Process Quality
+| Metric | Value |
+|---|---|
+| Builder Notes sections | 2 |
+| Approach variation | Yes |
+| Assessment | FRICTION |
+
+### Pass 2 — INFORMATIONAL
+- The top-level task header still carries stale RED-era acceptance criteria, but the binding contract is the later `## Architecture Reconciliation` section in the task body.
+- The older legacy tests at `tests/test_recall_memory_1308.py:327` and `tests/test_recall_memory_1308.py:628` remain weak, but the refined AC5/AC7 proof is adequately covered by stronger sibling tests. I did not fail on method-name placement alone.
+- I could verify commit presence in `.git/logs` for `26f65acd` and `90d4688a`, but this tool surface does not expose `git show` / `git status`, so exact diff-scoped dirty-tree contamination could not be proven. Small confidence deduction applied.
+- There is already one prior `## Review Evidence` section in `.owlbear/kanban/tasks/1308-p1-07-red-recall-tool-tests-priority-ordering-body-only-format-scope-filtering-w.md:146`; this rejection is therefore a second-cycle review fail and routes to backlog per protocol.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---|---|---|---|
+| AC5-fix: exact per-entry format, all metadata fields absent, `"\n\n"` separator | exact single-entry equality + all metadata field-name/value exclusions at `tests/test_recall_memory_1308.py:394-410`; exact two-entry joined output at `tests/test_recall_memory_1308.py:440-441`; implementation render shape at `serve/mcp-memory/src/owlbear_mcp_memory/tools.py:324` | `test_exact_per_entry_format_and_all_metadata_fields_absent`; `test_two_entries_joined_with_double_newline_separator` | PASS |
+| AC6-fix: sort-then-slice under truncation | truncation test present at `tests/test_recall_memory_1308.py:560-595`, but fixture ordering matches filename-sorted engine load at `serve/mcp-memory/src/owlbear_mcp_memory/engine.py:67`; live sort/slice happens at `serve/mcp-memory/src/owlbear_mcp_memory/tools.py:321-322` | `test_sort_then_slice_approved_fills_before_curated` | FAIL |
+| AC7-fix: default limit is exactly 20 | exact boundary assertion at `tests/test_recall_memory_1308.py:666`; default limit implementation at `serve/mcp-memory/src/owlbear_mcp_memory/tools.py:298` | `test_default_limit_is_exactly_20` | PASS |
+| All 21+ tests pass after assertion fixes | quality-runner scoped report: 25 passed, 0 failed, 0 skipped | full task suite | PASS |
+
+### Deductions
+- -0.12 AC6-fix remains non-discriminating against the named slice-before-sort regression.
+- -0.03 exact diff-scoped dirty-tree contamination could not be verified with available tools.
+- -0.02 stale task/test naming creates some review ambiguity, though it is not the fail driver.
+
+### Confidence: 0.83
+### Verdict: FAIL
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|---|---|---|---|
+| 1 | architect | Rewrite AC6-fix so the proof uses a non-cooperative fixture ordering that fails on slice-before-sort (for example, curated filenames that sort ahead of approved, or any input order intentionally opposed to the required output), then route the task back through test-writer | `tests/test_recall_memory_1308.py`, `serve/mcp-memory/src/owlbear_mcp_memory/engine.py`, `serve/mcp-memory/src/owlbear_mcp_memory/tools.py` | `tests/test_recall_memory_1308.py:560-595`; `serve/mcp-memory/src/owlbear_mcp_memory/engine.py:67`; `serve/mcp-memory/src/owlbear_mcp_memory/tools.py:321-322` |
+| 2 | architect | Clarify the refined AC wording so it states whether suite-level sibling proofs are acceptable for AC5/AC7 or whether the specifically named legacy tests at `tests/test_recall_memory_1308.py:327` and `tests/test_recall_memory_1308.py:628` must be rewritten in place | `.owlbear/kanban/tasks/1308-p1-07-red-recall-tool-tests-priority-ordering-body-only-format-scope-filtering-w.md`, `tests/test_recall_memory_1308.py` | task-body reconciliation text vs. live file layout at `tests/test_recall_memory_1308.py:327-345`, `tests/test_recall_memory_1308.py:369-441`, `tests/test_recall_memory_1308.py:628-666` |
+[[2026-05-04]]
+
+## Architecture Review (Proof-Quality Pass 2)
+
+### Reviewer Follow-up Resolution
+
+**Follow-up 1 — AC6-fix non-discriminating fixture:**
+The reviewer is correct. The test at `tests/test_recall_memory_1308.py:560` uses titles "Approved Alpha/Beta/Gamma" and "Curated Delta/Epsilon/Zeta". Since `engine.write()` creates filenames via `_slugify(title)` and `engine.load()` returns `sorted(glob("*.md"))`, the disk load already produces approved-before-curated order. The `.sort()` in `recall_memory` at `tools.py:321` is therefore not exercised by this test.
+
+**Fix:** AC6-fix must require curated entries with titles that sort alphabetically BEFORE approved entries on disk (e.g., curated titles starting with "A*", approved titles starting with "Z*"). This forces the `.sort()` to actually reorder entries — a slice-before-sort bug would then return curated entries where approved should be.
+
+**Follow-up 2 — Sibling proofs for AC5/AC7:**
+The stronger sibling tests (`test_exact_per_entry_format_and_all_metadata_fields_absent`, `test_two_entries_joined_with_double_newline_separator`, `test_default_limit_is_exactly_20`) provide adequate discriminating proof. The weaker legacy tests may coexist but are not required to be rewritten. Suite-level sibling proofs are acceptable — the AC gates on discriminating assertions existing, not on specific test method names.
+
+### Revised AC (supersedes prior AC6-fix only)
+
+- [ ] AC6-fix v2: Rewrite `test_sort_then_slice_approved_fills_before_curated` so curated entries have titles that sort alphabetically BEFORE approved entries on disk (e.g., curated="Aaa Curated One/Two/Three", approved="Zzz Approved One/Two/Three"). With limit=4, assert all 3 approved survive and exactly 1 curated fills the remaining slot. This proves `entries.sort()` reorders against natural disk load order. (td:2)
+- [x] AC5-fix: COVERED — exact format and metadata absence proven by sibling tests (reviewer pass 2 confirmed PASS)
+- [x] AC7-fix: COVERED — exact equality assertion proven by sibling test (reviewer pass 2 confirmed PASS)
+- [ ] All 25+ tests pass after AC6-fix v2 rewrite (td:0)
+
+### What stays (no rework)
+
+- AC5-fix sibling proofs: adequate per follow-up 2 resolution
+- AC7-fix exact-count assertion: adequate per reviewer pass 2
+- All other AC1-4 original assertions: discriminating and verified
+- Implementation in `serve/mcp-memory/src/owlbear_mcp_memory/tools.py:280-324`: correct, read-only
+
+### Architecture Notes
+
+- Only `tests/test_recall_memory_1308.py` changes needed (rewrite fixture titles in one test method)
+- The key invariant to prove: `recall_memory` sorts by `(state_rank, -confidence, id)` regardless of disk load order
+- Builder note: this is a single-test fixture rewrite, no source changes
+
+### Test Depth
+
+- Max depth: 2
+- Test-writer: PROCEED
+
+### Challenge
+Skipped — single fixture rewrite with no design decisions. Proof gap is mechanical, not architectural.
+
+### Verdict: APPROVE
+
+[[2026-05-04]]
+Architecture review pass 2: resolved both reviewer follow-ups. AC6-fix v2 requires non-cooperative fixture ordering (curated titles sort before approved on disk) to force the .sort() to actually reorder entries. AC5/AC7 sibling proofs confirmed adequate — no legacy test rewrite needed. Single fixture rewrite, no source changes.
+[[2026-05-04]]
+## Test-Writer Notes
+- Retry (pass 3): rewrote `test_sort_then_slice_approved_fills_before_curated` with non-cooperative fixture ordering per AC6-fix v2.
+- **Change:** Curated entry titles now begin with "Aaa Curated ..." and approved titles with "Zzz Approved ...". Filenames (`aaa-curated-*.md`) sort alphabetically before (`zzz-approved-*.md`), so `engine.load()` returns curated entries first from disk. `recall_memory`'s `.sort()` must reorder them approved-first before slicing. A slice-before-sort bug would return 3 curated + 1 approved, failing both the `for title in approved_titles` assertion loop and the `curated_in_result == 1` check.
+- **Builder skip:** test-only retry, all 25 tests green against current impl (Step 1b.1).
+- Commit: `86b6921d`
+- Ruff: clean. 25 passed, 0 failed.
+[[2026-05-04]]
+## Builder Notes
+- Non-implementation builder pass-through for this cycle: scope is test-proof tightening already delivered by test-writer.
+- Files changed by builder: none.
+- quality-runner scoped verification:
+  - `tests/test_recall_memory_1308.py`: 25 passed, 0 failed, 0 skipped.
+  - Coverage module `owlbear_mcp_memory.tools`: 23% (informational; no source delta in this builder pass).
+  - Ruff: clean for `serve/mcp-memory/src/owlbear_mcp_memory/tools.py` and `tests/test_recall_memory_1308.py`.
+- Evidence summary: reconciled AC proof suite is green; no implementation change required.
+
+### Post-task Reflection
+- Problem faced: task remained in `in-progress` despite test-only retry completion.
+- Workaround applied: used strict quality-runner verification and no-op builder pass-through to avoid unnecessary churn.
+- Pattern discovered: explicit builder-skip handoffs are safest when paired with a fresh scoped quality-runner run before advancing.

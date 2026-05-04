@@ -4,7 +4,7 @@ title: Fix raw engine end_work success default and terminal archive contract
 status: in-progress
 priority: critical
 created: 2026-05-04T15:00:05.698435+00:00
-updated: 2026-05-04T21:21:13.158641+00:00
+updated: 2026-05-04T23:04:59.443407+00:00
 tags:
 - sync-blocker
 - kanban
@@ -263,3 +263,127 @@ AC coverage:
 | AC5 (td:1) | 1 new test | AgentView integration proves no masking layer |
 | AC6 (td:0) | N/A — meta-AC |  |
 | AC7 (td:0) | N/A — re-scoped to task-owned suites (builder responsibility) |  |
+[[2026-05-04]]
+## Builder Notes
+- Implementation: no source changes required in this cycle. Verified live behavior already matches refined AC (raw engine default move_to=None, config-derived advancement, terminal success archive path).
+- Files changed: none.
+- Tests: 64 passed, 0 failed, 0 skipped (quality-runner scoped run on task-owned suites).
+  - tests/test_end_work_success_1336.py
+  - serve/kanban/tests/test_engine_end_work_1077.py
+  - tests/test_engine_activity_session.py
+- Lint: clean on serve/kanban/src/owlbear_kanban/engine.py, serve/kanban/src/owlbear_kanban/agent_view.py, tests/test_end_work_success_1336.py.
+- Coverage: owlbear_kanban.engine 46% in scoped run (informational; no touched module this cycle).
+- Evidence summary: AC1-AC5 behavior present in current code paths and discriminating tests; AC7 task-owned suites pass.
+
+### Reflection
+- Problem faced: task is a test-only retry cycle where implementation was already correct, so RED->GREEN implementation delta was empty.
+- Workaround applied: collected fresh quality-runner evidence to ensure routing can proceed without speculative edits.
+- Pattern discovered: when architect re-scopes AC to task-owned suites, builder closeout can be verification-only with zero-diff source state.
+- Quality gap: module-level coverage remains low in narrow scoped measurement due large module surface vs focused task scope.
+[[2026-05-04]]
+## Review Evidence
+
+### Test Results
+- `quality-runner` scoped run: 64 passed, 0 failed, 0 skipped.
+- Executed suites:
+  - `tests/test_end_work_success_1336.py`
+  - `serve/kanban/tests/test_engine_end_work_1077.py`
+  - `tests/test_engine_activity_session.py`
+- No task-owned runtime failures were observed in this cycle.
+
+### Lint Results
+- `ruff`: clean on `serve/kanban/src/owlbear_kanban/engine.py`, `serve/kanban/src/owlbear_kanban/agent_view.py`, and `tests/test_end_work_success_1336.py`.
+
+### Coverage
+- Informational only: scoped report showed overall 39%, with `owlbear_kanban.engine=46%` and `owlbear_kanban.agent_view=26%`.
+- This did not drive the verdict because the cycle is test-only, there is no source diff in the builder notes, and the available report is module-level rather than diff-scoped.
+
+### AC Compliance
+| AC Line | Evidence | Status |
+|---|---|---|
+| 1. Raw `KanbanEngine.end_work(..., outcome="success")` derives next status from `config.pipeline.statuses` when no explicit `move_to` is supplied; at least one test uses a non-stock config. | Raw engine success path is config-driven in `serve/kanban/src/owlbear_kanban/engine.py:1532-1540`; custom-config discriminators in `tests/test_end_work_success_1336.py:422` and `tests/test_end_work_success_1336.py:439` prove advancement on a non-stock status order. | PASS |
+| 2. Raw success no longer moves tasks to `research` by default. | Raw signature now defaults `move_to` to `None` in `serve/kanban/src/owlbear_kanban/engine.py:1559-1566`; negative regression remains in `tests/test_end_work_success_1336.py:360`. | PASS |
+| 3. Success from the terminal status archives the task with `archival_reason="completed"` and `archival_refs=[]`; at least one terminal-archive test uses a custom terminal status. | Terminal branch sets `archival_reason` and clears refs in `serve/kanban/src/owlbear_kanban/engine.py:1534-1537`. Custom-terminal tests at `tests/test_end_work_success_1336.py:469` and `tests/test_end_work_success_1336.py:487` prove custom-terminal archive behavior, and adjacent wrapper regression at `serve/kanban/tests/test_engine_end_work_1077.py:209-227` asserts `archival_refs == []`. But the task-owned helper hardcodes `archival_refs: []` in `tests/test_end_work_success_1336.py:81` and `tests/test_end_work_success_1336.py:101`, `_write_task` cannot seed non-empty refs in `tests/test_end_work_success_1336.py:117`, and raw engine `edit_task` can persist live refs via `serve/kanban/src/owlbear_kanban/engine.py:1162-1163`. Removing the clear at `serve/kanban/src/owlbear_kanban/engine.py:1537` would likely stay green, so the `archival_refs=[]` part of AC3 remains under-proven. | FAIL (proof gap) |
+| 4. Explicit `move_to` behavior remains available for non-success outcomes where currently supported, especially `reject`. | Raw reject branch preserves explicit `move_to` in `serve/kanban/src/owlbear_kanban/engine.py:1548-1555`; adjacent regressions in `serve/kanban/tests/test_engine_end_work_1077.py:256` and `serve/kanban/tests/test_engine_end_work_1077.py:438` cover explicit archive and missing-`move_to` validation through the supported wrapper path. | PASS |
+| 5. `AgentView.end_work(outcome="success")` advances identically to raw engine; one discriminating wrapper test proves no masking. | `AgentView.end_work` forwards directly in `serve/kanban/src/owlbear_kanban/agent_view.py:1177-1185`; wrapper-vs-raw comparison in `tests/test_end_work_success_1336.py:525-545` would fail if a masking layer changed success behavior. | PASS |
+| 6. `tests/test_end_work_success_1336.py` is corrected so terminal success expects archive behavior, not an error. | Terminal-success expectations are positive archive assertions in `tests/test_end_work_success_1336.py:274`, `tests/test_end_work_success_1336.py:290`, and `tests/test_end_work_success_1336.py:306`. | PASS |
+| 7. Task-owned suites pass: `tests/test_end_work_success_1336.py`, `serve/kanban/tests/test_engine_end_work_1077.py`, `tests/test_engine_activity_session.py`. | `quality-runner` scoped run: 64 passed, 0 failed, 0 skipped across the three task-owned suites. | PASS |
+
+### Additional Review Findings
+- `code-reader` found no security or data-safety issue in the reviewed engine/wrapper paths.
+- No visible weakening or removal of `TestFromAC_*` assertions was found in the current snapshot.
+- Dirty-tree / commit-diff provenance could not be independently verified in this tool surface, so immutability confidence is slightly reduced.
+- Existing `## Review Evidence` sections before this review: 1. This is a second review failure, so backlog routing applies even though the remaining issue is proof quality rather than runtime breakage.
+
+### Deductions
+- AC3 still has a false-green path: the suite proves archive behavior, but not that terminal success normalizes a pre-existing non-empty raw-engine `archival_refs` state to `[]`.
+- The task-local fixtures mask this because they always start with `archival_refs: []`.
+- The remaining gap is test-proof quality, not implementation correctness; the live engine behavior appears correct.
+- Git/dirty-tree verification was unavailable here, so provenance confidence takes a small deduction.
+
+### Verdict
+- `FAIL` with confidence `0.88`.
+- Runtime evidence is clean, but the gate is not met because AC3's `archival_refs=[]` contract is still not discriminatingly proven against reachable raw-engine state.
+- Action: reject to `backlog` under the second-review-failure loop-breaker and test-quality routing rules.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|---|---|---|---|
+| 1 | architect | Refine AC3 / test plan to state whether raw-engine terminal success must normalize pre-existing live `archival_refs` to `[]`; if yes, require a discriminating test seeded from a non-empty raw-engine state. | `tests/test_end_work_success_1336.py`, `serve/kanban/src/owlbear_kanban/engine.py` | Task helper hardcodes empty refs at `tests/test_end_work_success_1336.py:81`, `:101`, and cannot seed refs at `:117`; raw engine can persist live refs at `serve/kanban/src/owlbear_kanban/engine.py:1162-1163`; terminal clear happens at `serve/kanban/src/owlbear_kanban/engine.py:1537`. |
+
+### Reflection
+- The narrowed task now passes all runtime gates; the remaining blocker is purely proof quality.
+- Exact-field contracts like `archival_refs=[]` need a non-default starting state, otherwise default fixtures can hide regressions.
+- On looped review tasks, green scoped runs do not eliminate the need for mutation-style assertion checks.
+[[2026-05-04]]
+
+## Architecture Review — Re-scope (Cycle 3)
+
+### Reviewer Deduction Addressed
+
+| Deduction | Root cause | Fix |
+|-----------|-----------|-----|
+| AC3 `archival_refs=[]` not discriminatingly proven | Task fixtures always seed empty refs; removing the `record.archival_refs = []` line would stay green | AC3 refined: require one test that seeds non-empty refs before terminal success |
+
+### Refined AC3
+
+3. Success from the terminal status archives the task with `archival_reason="completed"` and normalizes `archival_refs` to `[]` even if the task previously had non-empty refs (via raw `edit_task`). **Test-plan requirement**: at least one terminal-archive test seeds `archival_refs=[<non-empty>]` via engine `edit_task` before calling terminal success, then asserts `archival_refs == []`. (td:2)
+
+### Architecture Notes
+
+- `edit_task` at `serve/kanban/src/owlbear_kanban/engine.py:1162-1163` can set `archival_refs` to any `list[int]` on a live task.
+- Terminal success branch at `serve/kanban/src/owlbear_kanban/engine.py:1537` unconditionally sets `record.archival_refs = []` — this normalization is intentional (completed tasks have no outstanding references).
+- The discriminating test must: (1) create a task at terminal status, (2) call `edit_task` to set `archival_refs=[100, 200]`, (3) call `end_work(outcome="success")`, (4) assert archived task has `archival_refs == []`.
+- All other AC lines (1, 2, 4, 5, 6, 7) remain unchanged from cycle 2.
+
+### Test-Writer Guidance (cycle 3 delta)
+
+- Add 1 discriminating test for AC3: seed non-empty `archival_refs` on a terminal-status task via `engine.edit_task(task_id, archival_refs=[100, 200])`, then call `end_work(outcome="success")` and assert the archived task has `archival_refs == []`.
+- Existing 15 tests remain valid; this adds 1 supplemental test.
+
+### Verdict: APPROVE (re-scoped)
+
+AC3 is now precise and discriminating. The single remaining reviewer gap is addressed by requiring a seeded-refs normalization test. No split needed — this is still one logical domain (engine success-path contract).
+
+[[2026-05-04]]
+Architecture re-review (cycle 3) complete. Refined AC3 to require discriminating normalization test: seed non-empty archival_refs via edit_task before terminal success, assert cleared to []. Single remaining reviewer gap addressed. All other AC lines unchanged from cycle 2. Verdict: APPROVE.
+[[2026-05-04]]
+## Test-Writer Notes
+- Retry (cycle 3): added 1 discriminating test for reviewer AC3 proof-quality gap. Test passes against current implementation.
+- Builder skip: test-only retry, all 16 tests green.
+- Test file: `tests/test_end_work_success_1336.py`
+- New test: `TestFromAC_SuccessAtTerminalStatus.test_success_at_terminal_normalizes_nonempty_archival_refs_to_empty`
+- Technique: seeds `archival_refs=[100, 200]` via `engine.edit_task` before terminal success; asserts `result.archival_refs == []`. Removing the `record.archival_refs = []` normalization line would break this test.
+- Total: 16 tests (15 prior + 1 new), all PASS
+- Ruff: clean
+
+AC coverage:
+| AC | Tests | Notes |
+|----|-------|-------|
+| AC1 (td:2) | 7 tests | Custom-config discriminators confirm config-derived advancement |
+| AC2 (td:1) | 1 test | Negative assertion passes |
+| AC3 (td:2) | 5+1=6 tests | New test discriminates archival_refs normalization with seeded non-empty state |
+| AC4 (td:1) | 1 test | Unchanged |
+| AC5 (td:1) | 1 test | AgentView integration, no masking |
+| AC6 (td:0) | N/A — meta-AC |  |
+| AC7 (td:0) | N/A — task-owned suites pass |  |
