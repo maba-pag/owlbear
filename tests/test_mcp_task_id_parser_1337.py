@@ -557,6 +557,10 @@ class TestFromAC_ValidIdsRegression:
         ctx = _make_mcp_ctx(app_ctx)
         await mcp_edit_task(ctx, id="1", append_body="ok")
         mock_view.edit_task.assert_called_once()
+        call_args = mock_view.edit_task.call_args
+        task_id_arg = call_args.args[0] if call_args.args else call_args.kwargs.get("task_id")
+        assert task_id_arg == 1, f"edit_task must receive int 1; got {task_id_arg!r}"
+        assert isinstance(task_id_arg, int), f"task_id must be int, got {type(task_id_arg)}"
 
     @pytest.mark.asyncio
     async def test_start_work_valid_int_id_reaches_engine(
@@ -570,6 +574,10 @@ class TestFromAC_ValidIdsRegression:
         ctx = _make_mcp_ctx(app_ctx)
         await mcp_start_work(ctx, id="1")
         mock_view.start_work.assert_called_once()
+        call_args = mock_view.start_work.call_args
+        task_id_arg = call_args.args[0] if call_args.args else call_args.kwargs.get("task_id")
+        assert task_id_arg == 1, f"start_work must receive int 1; got {task_id_arg!r}"
+        assert isinstance(task_id_arg, int), f"task_id must be int, got {type(task_id_arg)}"
 
     @pytest.mark.asyncio
     async def test_end_work_valid_int_id_reaches_engine(
@@ -583,6 +591,10 @@ class TestFromAC_ValidIdsRegression:
         ctx = _make_mcp_ctx(app_ctx)
         await mcp_end_work(ctx, id="1", note="done")
         mock_view.end_work.assert_called_once()
+        call_args = mock_view.end_work.call_args
+        task_id_arg = call_args.args[0] if call_args.args else call_args.kwargs.get("task_id")
+        assert task_id_arg == 1, f"end_work must receive int 1; got {task_id_arg!r}"
+        assert isinstance(task_id_arg, int), f"task_id must be int, got {type(task_id_arg)}"
 
     @pytest.mark.asyncio
     async def test_show_task_valid_int_id_reaches_engine(
@@ -596,3 +608,7 @@ class TestFromAC_ValidIdsRegression:
         ctx = _make_mcp_ctx(app_ctx)
         await mcp_show_task(ctx, id=1)
         mock_view.show_task.assert_called_once()
+        call_args = mock_view.show_task.call_args
+        task_id_arg = call_args.kwargs.get("task_id") if call_args.kwargs else (call_args.args[0] if call_args.args else None)
+        assert task_id_arg == 1, f"show_task must receive task_id=1; got {task_id_arg!r}"
+        assert isinstance(task_id_arg, int), f"task_id must be int, got {type(task_id_arg)}"
