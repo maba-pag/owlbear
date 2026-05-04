@@ -165,6 +165,27 @@ class TestFromAC_AutoPromote:
         assert result["state"] == "curated"
         assert set(result["scope_agents"]) == {"builder", "reviewer"}
 
+    @pytest.mark.asyncio
+    async def test_auto_promote_persists_curated_state_to_disk(
+        self, tmp_path: Path
+    ) -> None:
+        """After auto-promote, reloading from disk must return state=curated.
+
+        Proves engine.write(updated) is called on the promote path.
+        If the write were removed, the return value would still be curated
+        (it's constructed in-memory), but disk state would remain pending.
+        """
+        entry = _make_entry(state="pending", scope_agents=[])
+        engine = MemoryEngine(memory_dir=tmp_path)
+        engine.write(entry)
+        ctx = _make_ctx(engine, caller="curator")
+
+        await update_entry(ctx, entry_id=entry.id, scope_agents=["builder"])
+
+        reloaded = engine.get_entry(entry.id)
+        assert reloaded.state == MemoryState.CURATED
+        assert "builder" in reloaded.scope_agents
+
 
 # ---------------------------------------------------------------------------
 # AC2 (td:2): Scope gate — pending curate rejected atomically when scope_agents missing
@@ -270,6 +291,30 @@ class TestFromAC_CuratedStaysCurated:
         assert result["state"] == "curated"
         assert result["title"] == "Updated title"
 
+    @pytest.mark.asyncio
+    async def test_curated_edit_persists_title_to_disk(
+        self, tmp_path: Path
+    ) -> None:
+        """After editing a curated entry, reloading from disk returns the updated title.
+
+        Proves engine.write(updated) is called on the curated-edit path.
+        If the write were removed, the returned dict would still show the new title
+        (built in-memory), but the file on disk would still have the old title.
+        """
+        from owlbear_mcp_memory.tools import curate_memory
+
+        entry = _make_entry(state="curated", scope_agents=["builder"])
+        engine = MemoryEngine(memory_dir=tmp_path)
+        engine.write(entry)
+        ctx = _make_ctx(engine, caller="curator")
+
+        new_title = "Persisted curated title"
+        await curate_memory(ctx, entry_id=entry.id, title=new_title)
+
+        reloaded = engine.get_entry(entry.id)
+        assert reloaded.title == new_title
+        assert reloaded.state == MemoryState.CURATED
+
 
 # ---------------------------------------------------------------------------
 # AC4 (td:2): Auto-downgrade — approved -> curated on any curate_memory call
@@ -361,6 +406,51 @@ class TestFromAC_AutoDowngrade:
 
         assert result["state"] == "curated"
         assert result["approved_at"] is None
+
+    @pytest.mark.asyncio
+    async def test_auto_downgrade_ignores_explicit_conflicting_state_param(
+        self, tmp_path: Path
+    ) -> None:
+        """Approved→curated downgrade is unconditional even when caller passes state=PENDING.
+
+        The code at tools.py:201-207 forces target_state=CURATED before reaching
+        the `elif state is not None` branch. An explicit conflicting state= value
+        must be silently overridden — proving the downgrade is truly unconditional,
+        not equality-checked.
+        """
+        entry = _make_entry(state="approved", scope_agents=["builder"], approved_at=_TS)
+        engine = MemoryEngine(memory_dir=tmp_path)
+        engine.write(entry)
+        ctx = _make_ctx(engine, caller="curator")
+
+        result = await update_entry(
+            ctx, entry_id=entry.id, state=MemoryState.PENDING
+        )
+
+        assert result["state"] == "curated"
+        assert result["approved_at"] is None
+
+    @pytest.mark.asyncio
+    async def test_auto_downgrade_persists_curated_state_to_disk(
+        self, tmp_path: Path
+    ) -> None:
+        """After auto-downgrade from approved, reloading from disk returns state=curated.
+
+        Proves engine.write(updated) is called on the downgrade path.
+        If the write were removed, the return value would show curated (in-memory),
+        but the file on disk would still be state=approved with approved_at set.
+        """
+        entry = _make_entry(state="approved", scope_agents=["builder"], approved_at=_TS)
+        engine = MemoryEngine(memory_dir=tmp_path)
+        engine.write(entry)
+        ctx = _make_ctx(engine, caller="curator")
+
+        await update_entry(ctx, entry_id=entry.id, title="Post-downgrade")
+
+        reloaded = engine.get_entry(entry.id)
+        assert reloaded.state == MemoryState.CURATED
+        assert reloaded.approved_at is None
+        assert reloaded.title == "Post-downgrade"
 
 
 # ---------------------------------------------------------------------------
@@ -662,6 +752,30 @@ class TestFromAC_InvalidTransitions:
         with pytest.raises(ToolError):
             await update_entry(
                 ctx, entry_id=entry.id, state=MemoryState.APPROVED
+            )
+
+    @pytest.mark.asyncio
+    async def test_pending_to_approved_rejected_by_transition_guard_not_scope_gate(
+        self, tmp_path: Path
+    ) -> None:
+        """PENDING->APPROVED is rejected by _ensure_update_transition, not the scope gate.
+
+        By providing scope_agents=["builder"] we bypass the scope gate at
+        tools.py:197-199. The ToolError must come from _ensure_update_transition
+        and must carry the 'invalid state transition' message, confirming the
+        transition guard is the mechanism (not the scope-gate confounder).
+        """
+        entry = _make_entry(state="pending", scope_agents=[])
+        engine = MemoryEngine(memory_dir=tmp_path)
+        engine.write(entry)
+        ctx = _make_ctx(engine, caller="curator")
+
+        with pytest.raises(ToolError, match="invalid state transition"):
+            await update_entry(
+                ctx,
+                entry_id=entry.id,
+                scope_agents=["builder"],
+                state=MemoryState.APPROVED,
             )
 
     @pytest.mark.asyncio
