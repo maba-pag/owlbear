@@ -345,9 +345,15 @@ class TestFromAC_SchemaRoundTrip:
         assert task_after.title == task_before.title
         assert task_after.status == task_before.status
         assert task_after.priority == task_before.priority
+        assert task_after.body == task_before.body
+        assert task_after.parent == task_before.parent
         assert task_after.tags == task_before.tags
         assert task_after.depends_on == task_before.depends_on
         assert task_after.blocked == task_before.blocked
+        assert task_after.block_reason == task_before.block_reason
+        assert task_after.claimed_at == task_before.claimed_at
+        assert task_after.archival_reason == task_before.archival_reason
+        assert task_after.archival_refs == task_before.archival_refs
 
         # Timestamps must round-trip in canonical +00:00 format (no quoting artefacts)
         frontmatter = _extract_frontmatter(written_path)
