@@ -2,10 +2,10 @@
 id: 1304
 title: 'P1-03: RED — State machine tests (transitions, auto-promote, auto-downgrade,
   scope gate, deletion)'
-status: review
+status: archived
 priority: needed
 created: 2026-05-04T01:32:18.507736+00:00
-updated: 2026-05-04T12:08:46.063359+00:00
+updated: 2026-05-04T12:44:01.152933+00:00
 tags:
 - phase-2
 - scope:mcp-memory
@@ -709,3 +709,114 @@ Architecture Review — Remediation Pass: Audit REJECTED on commit integrity onl
   - Coverage modules: `owlbear_mcp_memory.tools` 100%, `owlbear_mcp_memory.engine` 100%, `owlbear_mcp_memory.models` 100% (scoped total 100%; overall report 93%).
   - Lint: `ruff` clean on `serve/mcp-memory/src/owlbear_mcp_memory/tools.py`, `serve/mcp-memory/src/owlbear_mcp_memory/engine.py`, and `tests/test_state_machine_1304.py`.
 - Evidence summary: all remediation AC lines satisfied in this pass (commit integrity + lint + regression safety).
+
+[[2026-05-04]]
+## Review Evidence
+### Test Results
+- Quality-runner scoped pass: 60 passed, 0 failed, 0 skipped in [tests/test_state_machine_1304.py](tests/test_state_machine_1304.py)
+- Target-module coverage from the same scoped run: [serve/mcp-memory/src/owlbear_mcp_memory/tools.py](serve/mcp-memory/src/owlbear_mcp_memory/tools.py) 100%, [serve/mcp-memory/src/owlbear_mcp_memory/engine.py](serve/mcp-memory/src/owlbear_mcp_memory/engine.py) 100%, [serve/mcp-memory/src/owlbear_mcp_memory/models.py](serve/mcp-memory/src/owlbear_mcp_memory/models.py) 100% (overall report 93%)
+
+### Lint
+- Ruff clean on [serve/mcp-memory/src/owlbear_mcp_memory/tools.py](serve/mcp-memory/src/owlbear_mcp_memory/tools.py), [serve/mcp-memory/src/owlbear_mcp_memory/engine.py](serve/mcp-memory/src/owlbear_mcp_memory/engine.py), and [tests/test_state_machine_1304.py](tests/test_state_machine_1304.py)
+
+### Security Review
+- No new security issues found in the remediation scope. The reviewed code paths do not introduce subprocess execution, eval/exec, unsafe deserialization, or unchecked external-input file access.
+
+### AC Compliance
+| AC Line | Evidence | Status |
+|---|---|---|
+| `engine.py` uncommitted `delete()` method committed with `feat:` type message | Remediation AC is recorded at [.owlbear/kanban/tasks/1304-p1-03-red-state-machine-tests-transitions-auto-promote-auto-downgrade-scope-gate.md](.owlbear/kanban/tasks/1304-p1-03-red-state-machine-tests-transitions-auto-promote-auto-downgrade-scope-gate.md#L653). The live delete implementation is present at [serve/mcp-memory/src/owlbear_mcp_memory/engine.py](serve/mcp-memory/src/owlbear_mcp_memory/engine.py#L129), the hard-delete path still calls it at [serve/mcp-memory/src/owlbear_mcp_memory/tools.py](serve/mcp-memory/src/owlbear_mcp_memory/tools.py#L248), and a task-scoped `feat:` commit is recorded at [.git/logs/refs/heads/dev](.git/logs/refs/heads/dev#L1668). Exact commit-diff membership could not be read in this tool surface. | PASS with deduction |
+| 2 E501 violations in `tools.py` fixed | The remediation requirement is recorded at [.owlbear/kanban/tasks/1304-p1-03-red-state-machine-tests-transitions-auto-promote-auto-downgrade-scope-gate.md](.owlbear/kanban/tasks/1304-p1-03-red-state-machine-tests-transitions-auto-promote-auto-downgrade-scope-gate.md#L654). The previously long docstrings are now wrapped at [serve/mcp-memory/src/owlbear_mcp_memory/tools.py](serve/mcp-memory/src/owlbear_mcp_memory/tools.py#L185) and [serve/mcp-memory/src/owlbear_mcp_memory/tools.py](serve/mcp-memory/src/owlbear_mcp_memory/tools.py#L236), and quality-runner reported Ruff clean on the scoped files. | PASS |
+| Implementation code in `tools.py` has a proper `feat:` commit | The remediation requirement is recorded at [.owlbear/kanban/tasks/1304-p1-03-red-state-machine-tests-transitions-auto-promote-auto-downgrade-scope-gate.md](.owlbear/kanban/tasks/1304-p1-03-red-state-machine-tests-transitions-auto-promote-auto-downgrade-scope-gate.md#L655). The prior misattributed docs commit still exists at [.git/logs/refs/heads/dev](.git/logs/refs/heads/dev#L1662), and the follow-up builder remediation commit is recorded as `feat: finalize memory state-machine remediation (#1304, builder)` at [.git/logs/refs/heads/dev](.git/logs/refs/heads/dev#L1668), which satisfies the AC wording allowing a follow-up `feat:` commit. | PASS |
+| All 60 existing tests still pass after fixes | The remediation requirement is recorded at [.owlbear/kanban/tasks/1304-p1-03-red-state-machine-tests-transitions-auto-promote-auto-downgrade-scope-gate.md](.owlbear/kanban/tasks/1304-p1-03-red-state-machine-tests-transitions-auto-promote-auto-downgrade-scope-gate.md#L656). Quality-runner independently reported 60 passed / 0 failed / 0 skipped in [tests/test_state_machine_1304.py](tests/test_state_machine_1304.py). Representative behavioral guards remain present at [tests/test_state_machine_1304.py](tests/test_state_machine_1304.py#L134), [tests/test_state_machine_1304.py](tests/test_state_machine_1304.py#L222), [tests/test_state_machine_1304.py](tests/test_state_machine_1304.py#L333), [tests/test_state_machine_1304.py](tests/test_state_machine_1304.py#L531), [tests/test_state_machine_1304.py](tests/test_state_machine_1304.py#L621), and [tests/test_state_machine_1304.py](tests/test_state_machine_1304.py#L687). | PASS |
+
+### Deductions
+| Criterion | Deduction |
+|---|---|
+| Exact `git show` / `git status` verification was unavailable in this tool surface; commit existence was recovered through [.git/logs/refs/heads/dev](.git/logs/refs/heads/dev#L1662) and [.git/logs/refs/heads/dev](.git/logs/refs/heads/dev#L1668) instead of direct diff/status output. | -.04 |
+| **Total** | **-.04** |
+
+### Confidence: 0.91
+### Verdict: PASS
+
+### Reflection
+- The remediation pass cleared the prior audit blockers: the scoped suite is green, lint is clean, and a task-scoped `feat:` remediation commit now exists in the branch reflog.
+- The only material confidence loss was git-surface visibility. I could prove commit existence via `.git/logs/**`, but not inspect exact commit file membership or current dirty state with `git show` / `git status`.
+- The hard-delete behavior remains pinned by both the live implementation at [serve/mcp-memory/src/owlbear_mcp_memory/engine.py](serve/mcp-memory/src/owlbear_mcp_memory/engine.py#L129) and the passing task tests anchored in [tests/test_state_machine_1304.py](tests/test_state_machine_1304.py#L431) and [tests/test_state_machine_1304.py](tests/test_state_machine_1304.py#L452).
+[[2026-05-04]]
+## Docs Gate (remediation pass)
+
+This is a second docs gate pass following the audit REJECT + remediation cycle. The prior docs gate (commit `6686d6db`) already handled all prose docs, docstrings, research doc verification, and diagram maintenance. This pass covers the delta from remediation.
+
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | `serve/mcp-memory/README.md` already updated in first docs gate. Remediation only committed engine.py delete() (no new API surface beyond what README already covers) and wrapped tool.py docstrings for E501 (content unchanged). No prose docs updates needed. |
+| 2 | Module docstrings | Yes | Verified | `engine.py` `MemoryEngine.delete()` (newly committed in remediation) has accurate docstring: `"Remove an entry file from disk by ID or raise KeyError if missing."` `tools.py` E501 wrapping preserved content verified in first pass — no new inaccuracies. |
+| 3 | External attribution | No | N/A | No external sources used in remediation. |
+| 4 | Research doc | No | N/A | Already verified in first docs gate; no new research. |
+| 5 | Diagram maintenance (describes match) | Yes | Updated | `share/diagrams/memory-layers.excalidraw` describes `serve/mcp-memory/src/**` — remediation committed changes to files in that glob. Footer updated from `3a77363b` to `86eb7f9a` (2026-05-04). Commit: `2a62319b`. |
+| 6 | Explicit diagram creation | No | N/A | No explicit diagram creation request. |
+| 7 | Deletion detection | No | N/A | No files deleted in remediation. |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| `tests/test_state_machine_1304.py` | OUT | N/A (test file) |
+| `serve/mcp-memory/src/owlbear_mcp_memory/engine.py` | IN (docstrings) | Verified — delete() has accurate docstring |
+| `serve/mcp-memory/src/owlbear_mcp_memory/tools.py` | IN (docstrings) | Verified — E501 wrapping only; content unchanged from first pass |
+| `share/diagrams/memory-layers.excalidraw` | IN (describes match) | Footer updated |
+
+### Files Updated
+- share/diagrams/memory-layers.excalidraw
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no scratch files for #1304)
+[[2026-05-04]]
+## Audit
+
+### AC Verification (spot-check, trusting reviewer's 3rd-pass detail)
+| AC Line | Evidence | Status |
+|---|---|---|
+| AC1 pending→curated via curate_memory | test L134, L150 (public alias) | PASS |
+| AC2 scope gate atomic rejection | test L182, L199, L222 (updated_at proof) | PASS |
+| AC3 curated stays curated | test L256 | PASS |
+| AC4 approved→curated via curate_memory | test L333, L349 (alias path) | PASS |
+| AC5 approved_at lifecycle | test L381, L398 | PASS |
+| AC6 hard-delete pending | test L431, L452 | PASS |
+| AC7 soft-delete curated/approved | test L487, L531 (disk reload proof) | PASS |
+| AC8 deleted terminal | test L585, L603, L621 (all surfaces) | PASS |
+| AC9 invalid transitions | test L649, L668, L687 | PASS |
+| AC10 historical RED evidence | task body Test-Writer Notes (pytest exit 1, 15/17 FAIL); architecture reconciliation refined AC10 | PASS |
+| Remediation: engine.py committed | `42e0709f feat: finalize memory state-machine remediation (#1304, builder)` — git show confirms engine.py +8 lines | PASS |
+| Remediation: E501 fixed | ruff check exit 0 on tools.py | PASS |
+| Remediation: proper feat: commit | `42e0709f` exists with correct type | PASS |
+| Remediation: 60 tests still pass | pytest exit 0, 60 passed | PASS |
+
+### Test Results (full suite)
+- Task-scoped: 60 passed, 0 failed
+- Full suite: 20 failures — all in cockpit domain (`test_cockpit_events_1234.py`, `test_cockpit_kanban_routes.py`, `test_cockpit_models.py`, `test_cockpit_mutation_api.py`, `test_cockpit_react_compiler_1015.py`, `test_cockpit_read_api.py`). Root cause: Pydantic ValidationError in `agent_view.py:214` from task #1216 changes. Zero failures in mcp-memory domain.
+
+### Lint
+- Ruff clean (exit 0) on `tools.py`, `engine.py`, `test_state_machine_1304.py`
+
+### Commit Integrity
+- `42e0709f feat: finalize memory state-machine remediation (#1304, builder)` — +18/-2 in engine.py and tools.py
+- `git status --short serve/mcp-memory/src/owlbear_mcp_memory/` — clean (no uncommitted changes)
+- Test file committed (git status clean)
+
+### AC Quality Score: 4/5
+AC was specific enough to verify. Minor gap: AC10 required architecture reconciliation mid-pipeline (builder absorbed GREEN scope), but this was resolved properly with documented rationale.
+
+### Deduction Breakdown
+| Criterion | Deduction |
+|---|---|
+| Residual process concern (docs commit 6686d6db still contains feat code in history) | -.01 |
+| No git-diff membership proof (can only verify stat, not line-level) | -.02 |
+| **Total** | **-.03** |
+
+### Confidence: 0.97
+### Verdict: ARCHIVE

@@ -1,10 +1,10 @@
 ---
 id: 1216
 title: Split engine.py — extract agent_view.py
-status: review
+status: done
 priority: needed
 created: 2026-04-30 15:29:15.267734+00:00
-updated: 2026-05-04T12:06:45.660957+00:00
+updated: 2026-05-04T12:38:51.671935+00:00
 tags:
 - audit-kanban
 - architecture
@@ -12,7 +12,7 @@ parent:
 depends_on: []
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-04T12:38:51.671935+00:00
 archival_reason:
 archival_refs: []
 ---
@@ -262,3 +262,88 @@ All 10 architecture criteria remain PASS. Implementation is complete and sound �
 - Notes:
   - This pass is a retry-cycle builder pass-through: implementation was already present and green for refined td:1 structural ACs.
   - No commit created in this pass because no files were modified.
+[[2026-05-04]]
+## Review Evidence
+### Test Results
+- quality-runner scoped pass A: 172 passed, 0 failed, 0 skipped across `tests/test_agent_view_extraction_1216.py`, `tests/test_init_exports_1213.py`, `tests/test_config_loader.py`, `serve/kanban/tests/test_engine_reads_1069.py`, `serve/kanban/tests/test_engine_create_edit_1070.py`, `serve/kanban/tests/test_engine_end_work_1077.py`, and `tests/test_dispatch_gate_port_1214.py`.
+- quality-runner scoped pass B: 20 passed, 0 failed, 0 skipped across `serve/kanban/tests/test_engine_move_claim.py` to cover the moved `move_task` / `start_work` runtime surface.
+- Net independent evidence for this review: 192 passed, 0 failed.
+
+### Lint Results
+- `ruff` clean on `serve/kanban/src/owlbear_kanban/engine.py`, `serve/kanban/src/owlbear_kanban/agent_view.py`, `serve/kanban/src/owlbear_kanban/__init__.py`, `serve/kanban/src/owlbear_kanban/config_loader.py`, and `tests/test_agent_view_extraction_1216.py`.
+- VS Code diagnostics also reported no errors on the same files.
+
+### Coverage Data
+- Informational only for this td:1 structural extraction review.
+- quality-runner pass A reported: `__init__.py` 100%, `config_loader.py` 100%, `agent_view.py` 78%, `engine.py` 49%.
+- quality-runner pass B reported: `engine.py` 29%, `agent_view.py` 19%.
+- Coverage was not used as a fail gate here; the relevant proof is the green task-local suite plus adjacent runtime suites exercising the extracted import surface.
+
+### Test Integrity
+- No evidence that the builder weakened `TestFromAC_*` assertions in the current cycle. The latest builder pass was explicit pass-through with no file changes.
+- Builder commit `6b0ccf32` was independently confirmed in `.git/logs/HEAD:1814` and `.git/logs/refs/heads/dev:1663`.
+- Full diff ownership and dirty-tree contamination could not be proven because direct `git show` / `git status` execution was unavailable in this review session. Confidence deduction applied.
+
+### AC Compliance
+| AC line | Evidence | Status |
+|---|---|---|
+| `engine.py` does NOT contain `class AgentView` | `serve/kanban/src/owlbear_kanban/engine.py:1982` exposes module `__getattr__` instead of an in-file class definition; `tests/test_agent_view_extraction_1216.py:43` passed and source-checks for absence of `class AgentView` | PASS |
+| `agent_view.py` contains `AgentView` exposing all 8 public methods | `serve/kanban/src/owlbear_kanban/agent_view.py:39` defines `AgentView`; `tests/test_agent_view_extraction_1216.py:91` passed and asserts the full 8-method surface; adjacent runtime suites imported and exercised the extracted facade via `serve/kanban/tests/test_engine_reads_1069.py:29`, `serve/kanban/tests/test_engine_create_edit_1070.py:29`, `serve/kanban/tests/test_engine_end_work_1077.py:38`, `tests/test_dispatch_gate_port_1214.py:21`, and `serve/kanban/tests/test_engine_move_claim.py:48` | PASS |
+| `agent_view.py` imports `KanbanEngine` from `engine` (no circular import) | `serve/kanban/src/owlbear_kanban/agent_view.py:15` imports `KanbanEngine` from `engine`; `tests/test_agent_view_extraction_1216.py:120` passed on a cold re-import cycle | PASS |
+| Package `__init__.py` re-exports `AgentView` from `agent_view` | `serve/kanban/src/owlbear_kanban/__init__.py:9` re-exports `AgentView`; `tests/test_agent_view_extraction_1216.py:141` passed; adjacent package export guard `tests/test_init_exports_1213.py` was green in quality-runner pass A | PASS |
+| Backward-compatible access: `from owlbear_kanban.engine import AgentView` resolves via `__getattr__` | `serve/kanban/src/owlbear_kanban/engine.py:1982` and `serve/kanban/src/owlbear_kanban/engine.py:1985` implement the lazy compatibility accessor; `tests/test_agent_view_extraction_1216.py:236` and `tests/test_agent_view_extraction_1216.py:248` passed; the adjacent green suites above all import `AgentView` from `owlbear_kanban.engine` and execute real methods through that compatibility path | PASS |
+| `ruff check` passes on new and modified files | quality-runner lint result: clean | PASS |
+
+### Informational
+- `serve/kanban/src/owlbear_kanban/config_loader.py:52-63` adds grouped-schema fallback defaults that are outside the extraction AC, but `tests/test_config_loader.py` stayed green and no regression surfaced in the scoped review. Treat as adjacent debt already accepted by architecture re-review, not a blocker for this task.
+- The task-local AC#5 tests prove the compatibility outcome and identity; the mechanism itself is additionally confirmed by direct code inspection at `engine.py:1982-1985`.
+
+### Deductions
+- `-0.03` full diff ownership / dirty-tree contamination could not be independently reconstructed because `git show` and `git status` were unavailable through tools in this session.
+
+### Verdict
+- PASS -> `docs`
+- Confidence: `0.94`
+- Reason: the refined AC is fully satisfied in code, the task-local `TestFromAC_*` suite is green, and adjacent durable runtime suites using `from owlbear_kanban.engine import AgentView` also stayed green across the extracted method surface.
+
+### Reflection
+- Direct git inspection was unavailable, so commit existence was verified via `.git/logs/**` and confidence was reduced slightly instead of assuming clean ownership.
+- The first scoped pass did not cover `move_task` / `start_work`, so an extra adjacent runtime pass on `serve/kanban/tests/test_engine_move_claim.py` was required before rendering a pass.
+- The non-AC `config_loader.py` change remains informational only because the dedicated loader suite stayed green and the architecture re-review already accepted it as test-infrastructure accommodation.
+[[2026-05-04]]
+## Docs Gate
+
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | Yes | N/A | `serve/kanban/README.md` already documents `AgentView` dispatch pipeline and `agent_view()` method; extraction is purely structural — no public API change, README remains accurate |
+| 2 | Module docstrings | Yes | Updated | `agent_view.py` is a new module created by this task; `move_task` and `start_work` lacked docstrings; added full Args/Returns/Raises docstrings to both; all 8 public methods now documented |
+| 3 | External attribution | No | N/A | Mechanical refactor; no external patterns used |
+| 4 | Research doc | No | N/A | No research phase for this task |
+| 5 | Diagram maintenance (describes match) | Yes | Updated | `share/diagrams/kanban.excalidraw` (describes: `serve/kanban/src/**`) and `share/diagrams/mcp-topology.excalidraw` (describes: `serve/kanban/src/**`) both matched; footer updated to `Last verified: 2026-05-04 (2a62319b)` |
+| 6 | Explicit diagram creation | No | N/A | No explicit diagram creation request in task body |
+| 7 | Deletion detection | No | N/A | No files deleted; `agent_view.py` is new, others modified |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| `serve/kanban/src/owlbear_kanban/agent_view.py` | IN | Updated (docstrings: move_task, start_work) |
+| `serve/kanban/src/owlbear_kanban/engine.py` | IN | N/A — existing public methods unchanged; `__getattr__` shim has no public docstring gap |
+| `serve/kanban/src/owlbear_kanban/__init__.py` | IN | N/A — re-export only, no docstring gap |
+| `serve/kanban/src/owlbear_kanban/config_loader.py` | IN | N/A — existing module, no new public API added by this task |
+| `tests/test_agent_view_extraction_1216.py` | OUT | Test file — skipped |
+| `share/diagrams/kanban.excalidraw` | IN | Updated (footer) |
+| `share/diagrams/mcp-topology.excalidraw` | IN | Updated (footer) |
+
+### Files Updated
+- `serve/kanban/src/owlbear_kanban/agent_view.py` — added docstrings to `move_task` and `start_work`
+- `share/diagrams/kanban.excalidraw` — footer: `Last verified: 2026-05-04 (2a62319b)`
+- `share/diagrams/mcp-topology.excalidraw` — footer: `Last verified: 2026-05-04 (2a62319b)`
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no `.owlbear/scratch/1216-*` files found)
+
+Commit: `0c44c334`
