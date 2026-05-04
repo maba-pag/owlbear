@@ -205,6 +205,41 @@ class TestFromAC_SaveMemory:
 
         assert result["source_agent"] == "specific-builder"
 
+    @pytest.mark.asyncio
+    async def test_save_memory_hint_identifies_save_pending_guidance(
+        self, tmp_path: Path
+    ) -> None:
+        """save_memory hint contains discriminating substrings uniquely identifying save-pending guidance.
+
+        Refined AC1: hint must mention both 'pending' state and curation action — a generic
+        'OK' or 'Entry created' message cannot pass this test.
+        """
+        try:
+            from owlbear_mcp_memory.tools import save_memory
+        except ImportError as exc:
+            pytest.fail(f"save_memory not importable: {exc}")
+
+        engine = MemoryEngine(memory_dir=tmp_path)
+        ctx = _make_ctx(engine, caller="builder")
+
+        result = await save_memory(
+            ctx,
+            title="Lesson learned",
+            content="Short content body.",
+            categories=["domain-knowledge"],
+            confidence=0.85,
+            source_agent="builder",
+        )
+
+        hint = result.get("hint", "")
+        hint_lower = hint.lower()
+        assert "pending" in hint_lower, (
+            f"save_memory hint must identify 'pending' state, got: {hint!r}"
+        )
+        assert "curate" in hint_lower, (
+            f"save_memory hint must mention curation action ('curate'), got: {hint!r}"
+        )
+
 
 # ---------------------------------------------------------------------------
 # AC2 (td:2): list_memories returns metadata without body, pending-first, filters
@@ -354,6 +389,72 @@ class TestFromAC_ListMemories:
 
         assert len(results) == 1
         assert results[0]["id"] == entry_a.id
+
+    @pytest.mark.asyncio
+    async def test_list_memories_same_state_ordered_by_created_at(
+        self, tmp_path: Path
+    ) -> None:
+        """Within the same state, list_memories sorts entries by created_at ascending.
+
+        Refined AC2: 2+ pending entries with different created_at — the entry with
+        the earlier created_at must appear first within the same state group.
+        """
+        try:
+            from owlbear_mcp_memory.tools import list_memories
+        except ImportError as exc:
+            pytest.fail(f"list_memories not importable: {exc}")
+
+        engine = MemoryEngine(memory_dir=tmp_path)
+        # n=1 → created_at=2026-05-01T10:00:01Z (earlier)
+        # n=2 → created_at=2026-05-01T10:00:02Z (later)
+        earlier = _make_entry(n=1, state="pending")
+        later = _make_entry(n=2, state="pending")
+        # Write in reverse insertion order to prove sort is by created_at, not arrival
+        engine.write(later)
+        engine.write(earlier)
+        ctx = _make_ctx(engine)
+
+        results = await list_memories(ctx, states=["pending"])
+
+        pending_results = [r for r in results if r["state"] == "pending"]
+        assert len(pending_results) >= 2, "expected at least 2 pending entries"
+        created_ats = [r["created_at"] for r in pending_results]
+        assert created_ats == sorted(created_ats), (
+            f"Same-state entries must be sorted by created_at ascending. "
+            f"Got order: {created_ats}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_list_memories_explicit_states_filter_excludes_curated(
+        self, tmp_path: Path
+    ) -> None:
+        """Passing states=['pending'] explicitly excludes curated entries from results.
+
+        Refined AC2: explicit state filter must gate output — curated entries must NOT
+        appear when states=['pending'] is specified, even when curated entries exist.
+        """
+        try:
+            from owlbear_mcp_memory.tools import list_memories
+        except ImportError as exc:
+            pytest.fail(f"list_memories not importable: {exc}")
+
+        engine = MemoryEngine(memory_dir=tmp_path)
+        pending = _make_entry(n=1, state="pending")
+        curated = _make_entry(n=2, state="curated", scope_agents=["builder"])
+        engine.write(pending)
+        engine.write(curated)
+        ctx = _make_ctx(engine)
+
+        results = await list_memories(ctx, states=["pending"])
+
+        returned_states = {r["state"] for r in results}
+        assert "curated" not in returned_states, (
+            "list_memories(states=['pending']) must exclude curated entries; "
+            f"got states: {returned_states}"
+        )
+        assert "pending" in returned_states, (
+            "list_memories(states=['pending']) must include pending entries"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -652,6 +753,86 @@ class TestFromAC_CurateMemoryHint:
             f"Hint for curated→curated should mention update/curated, got: {result['hint']}"
         )
 
+    @pytest.mark.asyncio
+    async def test_curate_memory_pending_to_curated_hint_identifies_transition(
+        self, tmp_path: Path
+    ) -> None:
+        """pending→curated hint contains discriminating phrases identifying both states.
+
+        Refined AC5: hint must contain 'pending' or 'promot' AND 'curated' so it
+        cannot be confused with the approved→curated downgrade or update-in-place hint.
+        """
+        engine = MemoryEngine(memory_dir=tmp_path)
+        entry = _make_entry(n=1, state="pending", scope_agents=[])
+        engine.write(entry)
+        ctx = _make_ctx(engine)
+
+        result = await curate_memory(ctx, entry_id=entry.id, scope_agents=["builder"])
+
+        hint = result.get("hint", "")
+        hint_lower = hint.lower()
+        assert "pending" in hint_lower or "promot" in hint_lower, (
+            f"pending→curated hint must identify promotion from pending, got: {hint!r}"
+        )
+        assert "curated" in hint_lower, (
+            f"pending→curated hint must mention curated state, got: {hint!r}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_curate_memory_approved_to_curated_hint_identifies_downgrade(
+        self, tmp_path: Path
+    ) -> None:
+        """approved→curated hint contains discriminating phrase identifying a downgrade.
+
+        Refined AC5: hint must contain 'downgrad' or 're-approv' so it cannot be
+        confused with the pending→curated promotion hint or the update-in-place hint.
+        """
+        engine = MemoryEngine(memory_dir=tmp_path)
+        entry = _make_entry(
+            n=1,
+            state="approved",
+            scope_agents=["builder"],
+            approved_at="2026-05-01T10:00:01Z",
+        )
+        engine.write(entry)
+        ctx = _make_ctx(engine)
+
+        result = await curate_memory(ctx, entry_id=entry.id, title="Updated title")
+
+        hint = result.get("hint", "")
+        hint_lower = hint.lower()
+        assert "downgrad" in hint_lower or "re-approv" in hint_lower or "re-approve" in hint_lower, (
+            f"approved→curated hint must mention downgrade/re-approval to be discriminating, got: {hint!r}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_curate_memory_curated_update_hint_does_not_imply_transition(
+        self, tmp_path: Path
+    ) -> None:
+        """curated→curated update hint is distinct from promotion/downgrade hints.
+
+        Refined AC5: update-in-place hint must NOT mention 'pending' (would imply
+        promotion) or 'downgrad' (would imply downgrade). It must indicate a plain update.
+        """
+        engine = MemoryEngine(memory_dir=tmp_path)
+        entry = _make_entry(n=1, state="curated", scope_agents=["builder"])
+        engine.write(entry)
+        ctx = _make_ctx(engine)
+
+        result = await curate_memory(ctx, entry_id=entry.id, title="Refined title")
+
+        hint = result.get("hint", "")
+        hint_lower = hint.lower()
+        assert "pending" not in hint_lower, (
+            f"curated→curated hint must not mention pending (implies promotion), got: {hint!r}"
+        )
+        assert "downgrad" not in hint_lower, (
+            f"curated→curated hint must not mention downgrade, got: {hint!r}"
+        )
+        assert "updat" in hint_lower or "curated" in hint_lower, (
+            f"curated→curated hint must indicate an update, got: {hint!r}"
+        )
+
 
 # ---------------------------------------------------------------------------
 # AC6 (td:2): delete_memory returns correct hint for hard-delete vs soft-delete
@@ -722,6 +903,51 @@ class TestFromAC_DeleteMemoryHint:
         hint = result["hint"].lower()
         assert "soft" in hint or "retain" in hint or "audit" in hint, (
             f"Hint for approved soft-delete should mention soft-delete/retained, got: {result['hint']}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_delete_memory_pending_hint_must_contain_hard_keyword(
+        self, tmp_path: Path
+    ) -> None:
+        """Pending delete hint must contain the word 'hard' to discriminate from soft-delete.
+
+        Refined AC6: 'hard' uniquely identifies the hard-delete branch. Accepting only
+        'removed' or 'never committed' would allow a soft-delete hint to false-green
+        if it happened to contain either word.
+        """
+        engine = MemoryEngine(memory_dir=tmp_path)
+        entry = _make_entry(n=1, state="pending", scope_agents=[])
+        engine.write(entry)
+        ctx = _make_ctx(engine)
+
+        result = await delete_memory(ctx, entry_id=entry.id)
+
+        hint = result.get("hint", "")
+        hint_lower = hint.lower()
+        assert "hard" in hint_lower, (
+            f"pending delete hint must contain 'hard' to identify hard-delete branch, got: {hint!r}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_delete_memory_curated_hint_must_contain_soft_keyword(
+        self, tmp_path: Path
+    ) -> None:
+        """Curated delete hint must contain the word 'soft' to discriminate from hard-delete.
+
+        Refined AC6: 'soft' uniquely identifies the soft-delete branch. Accepting only
+        'retain' or 'audit' would allow a hard-delete hint mentioning 'audit' to false-green.
+        """
+        engine = MemoryEngine(memory_dir=tmp_path)
+        entry = _make_entry(n=1, state="curated", scope_agents=["builder"])
+        engine.write(entry)
+        ctx = _make_ctx(engine)
+
+        result = await delete_memory(ctx, entry_id=entry.id)
+
+        hint = result.get("hint", "")
+        hint_lower = hint.lower()
+        assert "soft" in hint_lower, (
+            f"curated delete hint must contain 'soft' to identify soft-delete branch, got: {hint!r}"
         )
 
 
@@ -876,6 +1102,34 @@ class TestFromAC_CallerEnvVarNoEffect:
 
         assert result["title"] == "Updated title"
 
+    @pytest.mark.asyncio
+    async def test_owlbear_memory_caller_env_var_does_not_gate_tool(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Setting OWLBEAR_MEMORY_CALLER env var does not prevent tool execution.
+
+        Refined AC8: monkeypatch sets the env var to a non-curator value; ctx is
+        created with that caller (mimicking what app_lifespan does at server.py:51);
+        mutation tool must still succeed — env var has no gating effect.
+        """
+        import os
+
+        monkeypatch.setenv("OWLBEAR_MEMORY_CALLER", "non-curator-role")
+        # Mimic app_lifespan: caller = os.environ.get("OWLBEAR_MEMORY_CALLER", "unknown")
+        env_caller = os.environ.get("OWLBEAR_MEMORY_CALLER", "unknown")
+
+        engine = MemoryEngine(memory_dir=tmp_path)
+        ctx = _make_ctx(engine, caller=env_caller)
+
+        entry = _make_entry(n=1, state="curated", scope_agents=["builder"])
+        engine.write(entry)
+
+        # Must succeed — OWLBEAR_MEMORY_CALLER does not gate tool execution
+        result = await curate_memory(ctx, entry_id=entry.id, title="Updated")
+        assert result["title"] == "Updated", (
+            "curate_memory must succeed when OWLBEAR_MEMORY_CALLER is set to non-standard role"
+        )
+
 
 # ---------------------------------------------------------------------------
 # AC9 (td:1): MEMORY_TOOLS_EXCLUDE env var has no effect (access control removed)
@@ -899,6 +1153,23 @@ class TestFromAC_ToolExcludeEnvVarNoEffect:
 
         assert not hasattr(server_module, "_apply_tool_exclusions"), (
             "_apply_tool_exclusions still present in server — MEMORY_TOOLS_EXCLUDE is still active"
+        )
+
+    def test_memory_tools_exclude_string_absent_from_server_source(self) -> None:
+        """'MEMORY_TOOLS_EXCLUDE' string must not appear anywhere in server module source.
+
+        Refined AC9: proves the env var hook is completely removed — not just the
+        helper function, but all textual references including conditional logic.
+        README documentation is excluded because inspect.getsource reads Python only.
+        """
+        import inspect
+
+        import owlbear_mcp_memory.server as server_module
+
+        source = inspect.getsource(server_module)
+        assert "MEMORY_TOOLS_EXCLUDE" not in source, (
+            "Server module still references 'MEMORY_TOOLS_EXCLUDE' — "
+            "env var exclusion hook not fully removed from Python source"
         )
 
 
@@ -1006,4 +1277,97 @@ class TestFromAC_ValidationTeachingMessages:
         error_text = str(exc_info.value).lower()
         assert "confidence" in error_text or "0.7" in error_text, (
             f"Expected teaching message about confidence range, got: {exc_info.value}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_save_memory_blank_title_error_contains_non_empty_keyword(
+        self, tmp_path: Path
+    ) -> None:
+        """save_memory blank title error contains 'non-empty' (Brief-specified keyword).
+
+        Refined AC10: 'non-empty' uniquely identifies the Brief teaching message;
+        generic Pydantic output says 'should have at least 1 character' — no 'non-empty'.
+        """
+        try:
+            from owlbear_mcp_memory.tools import save_memory
+        except ImportError as exc:
+            pytest.fail(f"save_memory not importable: {exc}")
+
+        engine = MemoryEngine(memory_dir=tmp_path)
+        ctx = _make_ctx(engine, caller="builder")
+
+        with pytest.raises(ToolError) as exc_info:
+            await save_memory(
+                ctx,
+                title="",
+                content="Content",
+                categories=["domain-knowledge"],
+                confidence=0.85,
+                source_agent="builder",
+            )
+
+        assert "non-empty" in str(exc_info.value).lower(), (
+            f"Title error must contain 'non-empty' (Brief keyword), got: {exc_info.value}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_save_memory_oversized_content_error_contains_split_keyword(
+        self, tmp_path: Path
+    ) -> None:
+        """save_memory oversized content error contains 'split' (Brief-specified keyword).
+
+        Refined AC10: 'split' uniquely identifies the Brief teaching message;
+        generic Pydantic output says 'String should have at most 1024 characters' — no 'split'.
+        """
+        try:
+            from owlbear_mcp_memory.tools import save_memory
+        except ImportError as exc:
+            pytest.fail(f"save_memory not importable: {exc}")
+
+        engine = MemoryEngine(memory_dir=tmp_path)
+        ctx = _make_ctx(engine, caller="builder")
+
+        with pytest.raises(ToolError) as exc_info:
+            await save_memory(
+                ctx,
+                title="Test",
+                content="x" * 1025,
+                categories=["domain-knowledge"],
+                confidence=0.85,
+                source_agent="builder",
+            )
+
+        assert "split" in str(exc_info.value).lower(), (
+            f"Content error must contain 'split' (Brief keyword), got: {exc_info.value}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_save_memory_confidence_error_contains_between_keyword(
+        self, tmp_path: Path
+    ) -> None:
+        """save_memory confidence error contains 'between' (Brief-specified keyword).
+
+        Refined AC10: 'between' uniquely identifies the Brief teaching message;
+        generic Pydantic output says 'Input should be greater than or equal to 0.7' — no 'between'.
+        """
+        try:
+            from owlbear_mcp_memory.tools import save_memory
+        except ImportError as exc:
+            pytest.fail(f"save_memory not importable: {exc}")
+
+        engine = MemoryEngine(memory_dir=tmp_path)
+        ctx = _make_ctx(engine, caller="builder")
+
+        with pytest.raises(ToolError) as exc_info:
+            await save_memory(
+                ctx,
+                title="Test",
+                content="Content",
+                categories=["domain-knowledge"],
+                confidence=0.5,
+                source_agent="builder",
+            )
+
+        assert "between" in str(exc_info.value).lower(), (
+            f"Confidence error must contain 'between' (Brief keyword), got: {exc_info.value}"
         )

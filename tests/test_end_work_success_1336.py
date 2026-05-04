@@ -17,7 +17,7 @@ FAIL reasons:
 
 from __future__ import annotations
 
-from owlbear_kanban import KanbanEngine
+from owlbear_kanban import AgentView, KanbanEngine
 
 # ---------------------------------------------------------------------------
 # Board / task helpers (matching conventions in adjacent test files)
@@ -125,6 +125,57 @@ def _make_engine(base_dir, config_yaml: str = _BASE_CONFIG) -> KanbanEngine:
     """Create a KanbanEngine backed by a fresh board in base_dir."""
     kanban_dir = _make_board(base_dir, config_yaml)
     return KanbanEngine(kanban_dir, activity_log=False)
+
+
+def _make_view(
+    base_dir, config_yaml: str = _BASE_CONFIG
+) -> tuple[AgentView, object]:
+    """Create an AgentView (and its underlying engine) backed by a fresh board."""
+    kanban_dir = _make_board(base_dir, config_yaml)
+    engine = KanbanEngine(kanban_dir, activity_log=False)
+    return AgentView(engine), kanban_dir
+
+
+# 3-status board with stock statuses in a NON-STANDARD ORDER:
+#   in-progress → backlog → review   (terminal: review, not "done")
+#
+# Discriminating power:
+#   AC1 — a hardcoded stock-order implementation would advance
+#          in-progress → review (stock idx 3→4), not → backlog (config idx 0→1).
+#   AC3 — a hardcoded "done is terminal" check would NOT archive from "review",
+#          so only config-driven terminal detection passes.
+#
+# Uses only STATUS_RANK-known values so _validate_dispatch_rank_coverage passes.
+_CUSTOM_3_CONFIG = """\
+schema: grouped
+statuses:
+  - in-progress
+  - backlog
+  - review
+priorities:
+  - someday
+  - nice-to-have
+  - important
+  - needed
+  - critical
+next_id: 1
+paths:
+    tasks_dir: tasks
+    archive_dir: archive
+pipeline:
+    entry_status: in-progress
+    terminal_status: review
+    wave_size: 4
+    claim_timeout: 1h
+agents:
+    agent_map: {}
+    agent_types: {}
+    agent_compatibility: {}
+policy:
+    non_impl_tags: []
+    archival_reasons: [completed, deprecated, dropped, duplicate, wontfix]
+    status_predicates: {}
+"""
 
 
 # ---------------------------------------------------------------------------
@@ -351,4 +402,147 @@ class TestFromAC_RejectWithoutMoveToContract:
         assert result.status != "research", (
             f"AC4: reject without explicit move_to must not go to 'research'; "
             f"got {result.status!r} — engine move_to default is still 'research'"
+        )
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_CustomConfigAdvancement — AC1 discriminating: non-stock config
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_CustomConfigAdvancement:
+    """AC1 (discriminating): success must derive next status from config.pipeline.statuses.
+
+    Uses a 3-status board with statuses in non-standard order
+    (in-progress → backlog → review) instead of the stock 6-status board.
+    A hardcoded stock-order implementation would advance in-progress → review
+    (stock idx 3→4).  Config-driven logic correctly advances to backlog (idx 0→1).
+    """
+
+    def test_success_from_first_custom_status_advances_to_second(self, tmp_path) -> None:
+        """AC1: success from 'in-progress' (idx=0) advances to 'backlog' (idx=1) on custom board.
+
+        Discriminating: stock-order code would advance in-progress → review (stock idx 3→4).
+        Config-driven logic reads in-progress as idx=0 in [in-progress, backlog, review]
+        and advances to backlog (idx=1).
+        """
+        engine = _make_engine(tmp_path, _CUSTOM_3_CONFIG)
+        _write_task(engine._kanban_dir, task_id=1, status="in-progress")
+
+        result = engine.end_work("1", note="done", outcome="success")
+
+        assert result.status == "backlog", (
+            f"AC1 (custom config): success from 'in-progress' must advance to 'backlog' "
+            f"(config idx 0→1); got {result.status!r} — stock-order code would give 'review'"
+        )
+
+    def test_success_from_second_custom_status_advances_to_third(self, tmp_path) -> None:
+        """AC1: success from 'backlog' (idx=1) advances to 'review' (idx=2) on custom board.
+
+        Discriminating: proves advancement reads the second custom position,
+        not a position derived from the standard stock order.
+        """
+        engine = _make_engine(tmp_path, _CUSTOM_3_CONFIG)
+        _write_task(engine._kanban_dir, task_id=1, status="backlog")
+
+        result = engine.end_work("1", note="done", outcome="success")
+
+        assert result.status == "review", (
+            f"AC1 (custom config): success from 'backlog' must advance to 'review' "
+            f"(config idx 1→2); got {result.status!r}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_CustomTerminalArchive — AC3 discriminating: custom terminal status
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_CustomTerminalArchive:
+    """AC3 (discriminating): terminal detection must read from config, not hardcode 'done'.
+
+    Uses a 3-status board where 'review' is the last (terminal) status.
+    Any code that checks 'if status == "done": archive' would not archive from
+    'review'; config-driven logic (current_idx == len(statuses) - 1) passes.
+    """
+
+    def test_success_at_custom_terminal_sets_archival_reason_completed(
+        self, tmp_path
+    ) -> None:
+        """AC3: success from custom terminal 'review' sets archival_reason='completed'.
+
+        Discriminating: proves terminal detection reads the last entry in
+        config.pipeline.statuses, not the literal string 'done'.
+        """
+        engine = _make_engine(tmp_path, _CUSTOM_3_CONFIG)
+        _write_task(engine._kanban_dir, task_id=1, status="review")
+
+        result = engine.end_work("1", note="shipped", outcome="success")
+
+        assert result.archival_reason == "completed", (
+            f"AC3 (custom terminal): success from 'review' (custom terminal, not 'done') "
+            f"must archive with archival_reason='completed'; got {result.archival_reason!r}"
+        )
+
+    def test_success_at_custom_terminal_moves_file_to_archive_dir(
+        self, tmp_path
+    ) -> None:
+        """AC3: success from custom terminal 'review' moves task file to archive/.
+
+        Discriminating: confirms the full archival flow triggers for a
+        non-'done' terminal status, not just a status-string swap.
+        """
+        engine = _make_engine(tmp_path, _CUSTOM_3_CONFIG)
+        _write_task(engine._kanban_dir, task_id=1, status="review")
+
+        engine.end_work("1", note="shipped", outcome="success")
+
+        archive_file = engine._archive_dir / "1-task.md"
+        tasks_file = engine._tasks_dir / "1-task.md"
+        assert archive_file.exists(), (
+            "AC3 (custom terminal): success from 'review' must move task to archive/; "
+            "file not found there"
+        )
+        assert not tasks_file.exists(), (
+            "AC3 (custom terminal): success from 'review' must remove task from tasks/; "
+            "file still present"
+        )
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_AgentViewNoMasking — AC5: AgentView does not mask engine behavior
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_AgentViewNoMasking:
+    """AC5: AgentView.end_work(outcome="success") advances identically to raw engine.
+
+    A discriminating integration test that calls through AgentView (not the
+    raw engine) and verifies the result status matches the engine's config-
+    driven advancement.  Proves the wrapper layer adds no masking logic.
+    """
+
+    def test_agentview_success_advances_identically_to_raw_engine(
+        self, tmp_path
+    ) -> None:
+        """AC5: AgentView success from 'in-progress' reaches 'review', same as raw engine.
+
+        Two boards are constructed from the same config.  The raw engine and
+        AgentView are driven independently from the same starting status; both
+        must return the same next status.  Any masking layer in AgentView that
+        overrides the engine's new default would produce a divergent result.
+        """
+        # Raw engine path
+        raw_engine = _make_engine(tmp_path / "raw", _BASE_CONFIG)
+        _write_task(raw_engine._kanban_dir, task_id=1, status="in-progress")
+        raw_result = raw_engine.end_work("1", note="done", outcome="success")
+
+        # AgentView path (task must be claimed — _TASK_TMPL sets claimed_at != None)
+        view, kanban_dir = _make_view(tmp_path / "view", _BASE_CONFIG)
+        _write_task(kanban_dir, task_id=2, status="in-progress")
+        view_result = view.end_work(2, outcome="success", note="done")
+
+        assert view_result.status == raw_result.status, (
+            f"AC5: AgentView must advance identically to raw engine; "
+            f"raw={raw_result.status!r}, view={view_result.status!r}"
         )

@@ -48,10 +48,24 @@ _SYNCED_SOURCES: dict[str, pathlib.Path] = {
     "tools": _ROOT / "serve/tools/src/owlbear_tools",
 }
 
-# Python 3.13+ exclusive feature patterns
+# Python 3.13+/3.14+ exclusive feature patterns (broad audit)
 _PY313_PLUS_PATTERNS = [
-    r"\bTypeIs\b",  # PEP 742 — typing.TypeIs (Python 3.13+)
+    r"\bTypeIs\b",              # PEP 742 — typing.TypeIs (Python 3.13+)
+    r"\btyping\.ReadOnly\b",   # PEP 705 — typing.ReadOnly (Python 3.13+)
+    r"\btyping\.deprecated\b", # PEP 702 — typing.deprecated (Python 3.13+)
+    r"\bwarnings\.deprecated\b",  # PEP 702 — warnings.deprecated (Python 3.13+)
+    r"\bTypeForm\b",            # PEP 747 — typing.TypeForm (Python 3.14+)
 ]
+
+# Prerequisite doc files that must state the Python 3.12 floor (AC4)
+_PREREQUISITE_DOCS: dict[str, pathlib.Path] = {
+    "README.md": _ROOT / "README.md",
+    "README-consumer.md": _ROOT / "README-consumer.md",
+    "setup/setup-guide.md": _ROOT / "setup/setup-guide.md",
+    "owlbear-system.instructions.md": _ROOT / "share/instructions/owlbear-system.instructions.md",
+}
+
+_UV_LOCK = _ROOT / "uv.lock"
 
 
 def _read_requires_python(path: pathlib.Path) -> str:
@@ -173,4 +187,78 @@ class TestFromAC_RenovatePythonPolicy:
             "No Renovate python rule targets 'pep621' or 'uv' managers — "
             "AC5 requires matchManagers to include 'pep621' or 'uv' so the rule "
             "actually applies to pyproject.toml requires-python updates."
+        )
+
+
+class TestFromAC_DependencyFloorAudit:
+    """AC1: No locked dependency forces the project's Python floor above 3.12."""
+
+    def test_uv_lock_workspace_floor_is_3_12(self) -> None:
+        """The uv.lock workspace requires-python must be '>=3.12'.
+
+        uv derives this value as the maximum of all workspace-member
+        requires-python declarations, so a value above '>=3.12' would mean
+        at least one member (or resolved dependency constraint) demands a
+        higher Python floor.
+        """
+        content = _UV_LOCK.read_text()
+        # The workspace-level requires-python appears near the top of the lock file.
+        match = re.search(r'^requires-python\s*=\s*"([^"]+)"', content, re.MULTILINE)
+        assert match, "uv.lock has no workspace-level requires-python declaration."
+        floor = match.group(1)
+        assert floor == ">=3.12", (
+            f"uv.lock workspace requires-python is {floor!r} — expected '>=3.12'. "
+            "A value above >=3.12 indicates that a workspace member or dependency "
+            "constraint has pushed the floor above the approved project minimum."
+        )
+
+    def test_no_synced_package_has_313_plus_feature_in_source(self) -> None:
+        """AC1 broad scan: no synced source file uses any Python 3.13+/3.14+ feature token."""
+        violations: list[str] = []
+        for src in _SYNCED_SOURCES.values():
+            for py_file in src.rglob("*.py"):
+                text = py_file.read_text()
+                for pattern in _PY313_PLUS_PATTERNS:
+                    if re.search(pattern, text):
+                        rel = py_file.relative_to(_ROOT)
+                        violations.append(
+                            f"  {rel}: matches pattern {pattern!r} (3.13+/3.14+ exclusive)"
+                        )
+        assert not violations, (
+            "Python 3.13+/3.14+ exclusive features detected in synced source files.\n"
+            "Either raise the project floor to match or replace with 3.12-compatible code:\n"
+            + "\n".join(violations)
+        )
+
+
+class TestFromAC_PrerequisiteDocsAlignment:
+    """AC4: Consumer-facing prerequisite docs must state the Python 3.12 floor."""
+
+    def test_readme_states_python_3_12_floor(self) -> None:
+        content = (_ROOT / "README.md").read_text()
+        assert re.search(r"Python 3\.12", content), (
+            "README.md does not mention 'Python 3.12' — AC4 requires all "
+            "consumer-facing prerequisite docs to be aligned to the Python 3.12 floor."
+        )
+
+    def test_readme_consumer_states_python_3_12_floor(self) -> None:
+        content = (_ROOT / "README-consumer.md").read_text()
+        assert re.search(r"Python 3\.12", content), (
+            "README-consumer.md does not mention 'Python 3.12' — AC4 requires all "
+            "consumer-facing prerequisite docs to be aligned to the Python 3.12 floor."
+        )
+
+    def test_setup_guide_states_python_3_12_floor(self) -> None:
+        content = (_ROOT / "setup/setup-guide.md").read_text()
+        assert re.search(r"Python 3\.12", content), (
+            "setup/setup-guide.md does not mention 'Python 3.12' — AC4 requires all "
+            "consumer-facing prerequisite docs to be aligned to the Python 3.12 floor."
+        )
+
+    def test_system_instructions_states_python_3_12_floor(self) -> None:
+        content = (_ROOT / "share/instructions/owlbear-system.instructions.md").read_text()
+        assert re.search(r"Python 3\.12", content), (
+            "share/instructions/owlbear-system.instructions.md does not mention "
+            "'Python 3.12' — AC4 requires this synced prerequisite reference to be "
+            "aligned to the Python 3.12 floor."
         )

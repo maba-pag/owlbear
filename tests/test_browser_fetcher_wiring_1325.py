@@ -1,26 +1,16 @@
-"""Failing tests for task #1325: Browser fetcher wiring + RefreshOrchestrator fix.
-
-RED phase — tests must FAIL until builder task #1326 implements:
-  1. app_lifespan wires content_fetcher= into RefreshOrchestrator (AC1)
-  2. app_lifespan wires graph_store= into RefreshOrchestrator (AC2)
-  3. A select_content_fetcher factory maps fetch_method to concrete fetcher (AC3)
-  4. refresh_source reads fetch_method from KnowledgeSource and invokes the
-     corresponding ContentFetcher (AC5)
-
-Note on AC4: RefreshOrchestrator already safe-returns when inter_doc_builder=None
-(existing behaviour). AC4 tests verify this contract and may PASS against the
-current codebase — they serve as regression guards.
+"""Tests for task #1325: Browser fetcher wiring + RefreshOrchestrator fix.
 
 AC coverage:
   AC1: app_lifespan passes a ContentFetcher instance to RefreshOrchestrator (td:2)
        - content_fetcher kwarg present in RefreshOrchestrator constructor call
        - Default fetcher is HttpxContentFetcher
-       - A BrowserContentFetcher mock also satisfies the contract
+       - A protocol-compatible alternative implementation is accepted
   AC2: app_lifespan passes graph_store to RefreshOrchestrator (td:1)
        - graph_store kwarg present in RefreshOrchestrator constructor call
-  AC3: fetch_method maps "http" → HttpxContentFetcher, "browser" → BrowserContentFetcher (td:2)
+  AC3: fetch_method maps "http"/""→ HttpxContentFetcher, "browser"→ protocol-compatible
+       non-HTTP ContentFetcher placeholder (td:2)
        - select_content_fetcher("http") returns HttpxContentFetcher instance
-       - select_content_fetcher("browser") returns object satisfying ContentFetcher
+       - select_content_fetcher("browser") returns ContentFetcher-compatible non-HTTP object
        - Empty / unset fetch_method defaults to HttpxContentFetcher
   AC4: RefreshOrchestrator.refresh completes without error when inter_doc_builder=None (td:1)
        - Refresh of AUTHENTICATED_WEB source with content_fetcher, no inter_doc_builder
@@ -29,6 +19,8 @@ AC coverage:
        - refresh_source with fetch_method="browser" invokes browser fetcher
        - refresh_source with fetch_method="http" invokes http fetcher
        - fetch_method read from the stored KnowledgeSource record at refresh time
+  AC6: _BrowserContentFetcher.fetch() raises RuntimeError without embedding the source URL (td:1)
+       - Error message must not contain the URL to prevent credential leakage into last_error
 """
 
 from __future__ import annotations
@@ -597,3 +589,44 @@ class TestFromAC_RefreshSourceFetchMethodIntegration:
         # Each fetcher must have been called for its respective source.
         http_fetcher.fetch.assert_called()
         browser_fetcher.fetch.assert_called()
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_BrowserFetcherErrorSanitization
+# AC6: _BrowserContentFetcher.fetch() raises RuntimeError without embedding source URL (td:1)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_BrowserFetcherErrorSanitization:
+    """AC6: _BrowserContentFetcher.fetch() error message must not contain the source URL.
+
+    Currently FAILS: server.py:63 embeds {url!r} in the RuntimeError message.
+    URLs can carry embedded credentials or query tokens; echoing the URL into the
+    message causes str(exc) → errors → last_error persistence to leak secrets.
+
+    Builder fix: remove {url!r} from the f-string so the message says only
+    "browser fetcher not wired" (or similar) without the URL.
+    """
+
+    @pytest.mark.asyncio
+    async def test_browser_fetcher_error_does_not_embed_source_url(self) -> None:
+        """RuntimeError from _BrowserContentFetcher.fetch() must not contain the URL.
+
+        Calling fetch() with a URL containing a sensitive token must raise
+        RuntimeError whose message does not echo the URL back, preventing
+        credential leakage via errors.append(str(exc)) → last_error persistence.
+
+        Currently FAILS: server.py:63 embeds f\"...URL {url!r}\" in the message,
+        so the full URL (including query tokens) appears in the error string.
+        """
+        secret_url = "https://secret.example.com/token?key=abc"
+        fetcher = server_module._BrowserContentFetcher()
+
+        with pytest.raises(RuntimeError) as exc_info:
+            await fetcher.fetch(secret_url)
+
+        error_msg = str(exc_info.value)
+        assert secret_url not in error_msg, (
+            f"RuntimeError message must not contain the source URL to prevent "
+            f"credential leakage into persisted last_error; got: {error_msg!r}"
+        )
