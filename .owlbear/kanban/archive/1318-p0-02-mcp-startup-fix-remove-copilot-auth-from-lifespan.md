@@ -1,10 +1,10 @@
 ---
 id: 1318
 title: 'P0-02: MCP startup fix — remove copilot_auth from lifespan'
-status: done
+status: archived
 priority: critical
 created: 2026-05-04T05:48:37.751521+00:00
-updated: 2026-05-04T11:49:19.352490+00:00
+updated: 2026-05-04T12:02:37.713544+00:00
 tags:
 - phase-0
 - scope:mcp-knowledge
@@ -14,7 +14,7 @@ depends_on:
 - 1317
 blocked: false
 block_reason:
-claimed_at: 2026-05-04T11:49:19.352490+00:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -141,3 +141,29 @@ All 5 ACs verified against live codebase: copilot_auth removed from lifespan (se
 
 **Files updated:** `share/diagrams/mcp-topology.excalidraw` (footer only)
 **Scratch files:** none to clean (no task-scoped scratch files found)
+[[2026-05-04]]
+## Audit
+
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| copilot_auth.py removed from MCP server lifespan — no import, no device-flow | grep server.py: zero matches; commit cd74db6e (sibling #1321) removed it | PASS |
+| IngestPipeline starts with extractor=None; vector search works without LLM | Reviewer mapped to server.py:258, :274, :283, :289; tests test_server_1317.py:137, :166, :195 | PASS |
+| Server starts cleanly with search_knowledge returning results (O1) | search_knowledge at server.py:364; test_search_v2.py:63, :173, :188 green | PASS |
+| Cached token at ~/.owlbear/copilot_token.json cleaned up if present | server.py:249; test_server_1317.py:247, :294 green | PASS |
+| All #1317 tests pass green | Auditor independent run: 8/8 pass in test_server_1317.py; 185/190 pass in serve/mcp-knowledge/tests/ (5 pre-existing failures in unrelated test_outputschema_541 and test_phase_a_config) | PASS |
+
+### Full Suite Results
+- pytest: 3920 passed, 395 failed, 4 skipped — zero failures in task scope; all 395 are pre-existing background debt in kanban/memory/cockpit modules
+- vitest: not re-run (frontend unrelated to mcp-knowledge scope)
+- ruff: 3 violations (copilot_auth.py T201, mcp-memory E501×2) — none in task scope
+- eslint: not re-run (frontend unrelated)
+
+### AC Quality Score: 4/5
+ACs precise and verifiable. Minor gap: AC #3 O1 wording broader than testable without live Qdrant, but dependency #1317 already refined scope.
+
+### Deductions
+- None applicable. All ACs evidenced, no lint in scope, reviewer evidence thorough, no task-scope failures.
+
+### Confidence: 0.98
+Action: ARCHIVE
