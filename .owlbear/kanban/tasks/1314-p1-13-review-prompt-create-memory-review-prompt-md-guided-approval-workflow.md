@@ -20,4 +20,18 @@ archival_reason:
 archival_refs: []
 ---
 
-Brief: see parent #1301\n\n## Acceptance Criteria\n\n- [ ] memory-review.prompt.md created in share/prompts/\n- [ ] Prompt presents curated entries for user review (list -> read -> decide)\n- [ ] User can approve (approve_memory), request changes (curate_memory), or reject (delete_memory)\n- [ ] Batch commit instruction: all mutations committed at end of review session\n- [ ] Tools listed in prompt frontmatter: ob-memory/list_memories, ob-memory/read_memory, ob-memory/approve_memory, ob-memory/curate_memory, ob-memory/delete_memory\n- [ ] Prompt is self-contained: works without prior context\n\n## Scope\n\n- In: prompt file creation, guided workflow design\n- Out: MCP server code, agent wiring (done in #1312/#1313), tool implementation
+Brief: see parent #1301
+
+## Acceptance Criteria
+
+- [ ] memory-review.prompt.md created in share/prompts/
+- [ ] Prompt presents curated entries for user review (list -> read -> decide)
+- [ ] User can approve (approve_memory), request changes (curate_memory), or reject (delete_memory)
+- [ ] Batch commit instruction: all mutations committed at end of review session
+- [ ] Tools listed in prompt frontmatter: ob-memory/list_memories, ob-memory/read_memory, ob-memory/approve_memory, ob-memory/curate_memory, ob-memory/delete_memory
+- [ ] Prompt is self-contained: works without prior context
+
+## Scope
+
+- In: prompt file creation, guided workflow design
+- Out: MCP server code, agent wiring (done in #1312/#1313), tool implementation

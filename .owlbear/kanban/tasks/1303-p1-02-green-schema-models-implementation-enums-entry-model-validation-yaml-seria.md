@@ -21,4 +21,19 @@ archival_reason:
 archival_refs: []
 ---
 
-Brief: see parent #1301\n\n## Acceptance Criteria\n\n- [ ] MemoryCategory enum with 9 values including 3 renames (domain-knowledge, behaviour, pitfall)\n- [ ] MemoryState enum with 4 values (pending, curated, approved, deleted)\n- [ ] Entry dataclass with all schema fields, correct types, and defaults (scope_agents=[], approved_at=None)\n- [ ] Validation: confidence rejects outside [0.7, 1.0], content rejects >1024 chars, categories requires >=1\n- [ ] source_agent immutable after creation\n- [ ] YAML frontmatter serialization and deserialization preserve all fields\n- [ ] All #1302 tests pass\n\n## Scope\n\n- In: models module, enums, dataclass, validation logic, YAML serializer\n- Out: state transitions, tool handlers, MCP registration
+Brief: see parent #1301
+
+## Acceptance Criteria
+
+- [ ] MemoryCategory enum with 9 values including 3 renames (domain-knowledge, behaviour, pitfall)
+- [ ] MemoryState enum with 4 values (pending, curated, approved, deleted)
+- [ ] Entry dataclass with all schema fields, correct types, and defaults (scope_agents=[], approved_at=None)
+- [ ] Validation: confidence rejects outside [0.7, 1.0], content rejects >1024 chars, categories requires >=1
+- [ ] source_agent immutable after creation
+- [ ] YAML frontmatter serialization and deserialization preserve all fields
+- [ ] All #1302 tests pass
+
+## Scope
+
+- In: models module, enums, dataclass, validation logic, YAML serializer
+- Out: state transitions, tool handlers, MCP registration

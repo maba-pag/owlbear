@@ -21,4 +21,18 @@ archival_reason:
 archival_refs: []
 ---
 
-Brief: see parent #1301\n\n## Acceptance Criteria\n\n- [ ] memory-curator.agent.md tools: include ob-memory/list_memories, ob-memory/read_memory, ob-memory/curate_memory, ob-memory/delete_memory\n- [ ] vscode/memory removed from memory-curator.agent.md\n- [ ] h-mcp-memory skill fully rewritten: 7 tool names, parameters, descriptions, usage patterns, examples\n- [ ] h-memory-structure skill updated: new fields (source_agent, approved_at), renamed categories, state model\n- [ ] w-mem-curation skill updated: new MCP tool names, auto-state logic documentation, guidance hints\n- [ ] Curator can exercise full lifecycle: list -> read -> curate -> delete via MCP tools\n\n## Scope\n\n- In: curator agent file, 3 skill files (h-mcp-memory, h-memory-structure, w-mem-curation)\n- Out: general pipeline agents (Phase 2-3, task #1313), review prompt, instruction stubs
+Brief: see parent #1301
+
+## Acceptance Criteria
+
+- [ ] memory-curator.agent.md tools: include ob-memory/list_memories, ob-memory/read_memory, ob-memory/curate_memory, ob-memory/delete_memory
+- [ ] vscode/memory removed from memory-curator.agent.md
+- [ ] h-mcp-memory skill fully rewritten: 7 tool names, parameters, descriptions, usage patterns, examples
+- [ ] h-memory-structure skill updated: new fields (source_agent, approved_at), renamed categories, state model
+- [ ] w-mem-curation skill updated: new MCP tool names, auto-state logic documentation, guidance hints
+- [ ] Curator can exercise full lifecycle: list -> read -> curate -> delete via MCP tools
+
+## Scope
+
+- In: curator agent file, 3 skill files (h-mcp-memory, h-memory-structure, w-mem-curation)
+- Out: general pipeline agents (Phase 2-3, task #1313), review prompt, instruction stubs

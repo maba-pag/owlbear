@@ -22,4 +22,18 @@ archival_reason:
 archival_refs: []
 ---
 
-Brief: see parent #1301\n\n## Acceptance Criteria\n\n- [ ] All ~12 pipeline agents have ob-memory/save_memory and ob-memory/recall_memory in tools: array\n- [ ] vscode/memory removed from all pipeline agent .agent.md files\n- [ ] agent-common.instructions.md updated: recall_memory pre-flight pattern replaces old memory pattern\n- [ ] r-pipeline-protocol skill updated: Knowledge Pre-flight section references save_memory/recall_memory\n- [ ] No agent file references old tool names (query_memory, add_memory, update_entry, delete_entry)\n- [ ] Big-bang replacement complete: no coexistence of old and new paths\n\n## Scope\n\n- In: all pipeline agent.md files, agent-common.instructions.md, r-pipeline-protocol skill\n- Out: curator agent (done in #1312), review prompt (#1314), MCP server code
+Brief: see parent #1301
+
+## Acceptance Criteria
+
+- [ ] All ~12 pipeline agents have ob-memory/save_memory and ob-memory/recall_memory in tools: array
+- [ ] vscode/memory removed from all pipeline agent .agent.md files
+- [ ] agent-common.instructions.md updated: recall_memory pre-flight pattern replaces old memory pattern
+- [ ] r-pipeline-protocol skill updated: Knowledge Pre-flight section references save_memory/recall_memory
+- [ ] No agent file references old tool names (query_memory, add_memory, update_entry, delete_entry)
+- [ ] Big-bang replacement complete: no coexistence of old and new paths
+
+## Scope
+
+- In: all pipeline agent.md files, agent-common.instructions.md, r-pipeline-protocol skill
+- Out: curator agent (done in #1312), review prompt (#1314), MCP server code

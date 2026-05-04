@@ -21,4 +21,22 @@ archival_reason:
 archival_refs: []
 ---
 
-Brief: see parent #1301\n\n## Acceptance Criteria\n\n- [ ] Tests assert pending -> curated when curate_memory provides scope_agents (auto-promote)\n- [ ] Tests assert pending curate rejected atomically when scope_agents missing (scope gate)\n- [ ] Tests assert curated -> curated on any field edit (stays curated)\n- [ ] Tests assert approved -> curated on any curate_memory call (unconditional auto-downgrade)\n- [ ] Tests assert approved_at set on approve, cleared on downgrade\n- [ ] Tests assert pending -> [removed] via hard-delete (file deleted from disk)\n- [ ] Tests assert curated/approved -> deleted via soft-delete (file retained, state=deleted)\n- [ ] Tests assert deleted is terminal (no transitions out, operations rejected)\n- [ ] Tests assert invalid transitions rejected (pending->approved directly, deleted->any)\n- [ ] All tests fail (RED state)\n\n## Scope\n\n- In: state transition logic, deletion semantics, scope gate validation\n- Out: tool parameter validation, MCP registration, git commits
+Brief: see parent #1301
+
+## Acceptance Criteria
+
+- [ ] Tests assert pending -> curated when curate_memory provides scope_agents (auto-promote)
+- [ ] Tests assert pending curate rejected atomically when scope_agents missing (scope gate)
+- [ ] Tests assert curated -> curated on any field edit (stays curated)
+- [ ] Tests assert approved -> curated on any curate_memory call (unconditional auto-downgrade)
+- [ ] Tests assert approved_at set on approve, cleared on downgrade
+- [ ] Tests assert pending -> [removed] via hard-delete (file deleted from disk)
+- [ ] Tests assert curated/approved -> deleted via soft-delete (file retained, state=deleted)
+- [ ] Tests assert deleted is terminal (no transitions out, operations rejected)
+- [ ] Tests assert invalid transitions rejected (pending->approved directly, deleted->any)
+- [ ] All tests fail (RED state)
+
+## Scope
+
+- In: state transition logic, deletion semantics, scope gate validation
+- Out: tool parameter validation, MCP registration, git commits
