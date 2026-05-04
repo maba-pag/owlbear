@@ -42,32 +42,13 @@ class AppContext:
     caller: str
 
 
-def _apply_tool_exclusions(server: FastMCP) -> set[str]:  # pragma: no cover
-    """Remove tools listed in MEMORY_TOOLS_EXCLUDE, ignoring unknown names."""
-    excluded: set[str] = set()
-    env_val = os.environ.get("MEMORY_TOOLS_EXCLUDE", "")
-    if not env_val:
-        return excluded
-    for raw in env_val.split(","):
-        tool_name = raw.strip()
-        if not tool_name:
-            continue
-        try:
-            server.remove_tool(tool_name)
-            excluded.add(tool_name)
-        except Exception:  # noqa: BLE001,S110
-            pass
-    return excluded
-
-
 @asynccontextmanager
 async def app_lifespan(
-    server: FastMCP,
+    _server: FastMCP,
 ) -> AsyncGenerator[AppContext, None]:  # pragma: no cover
     """Construct and expose memory runtime context for this MCP session."""
     memory_dir = Path(os.environ.get("OWLBEAR_MEMORY_DIR", str(_DEFAULT_MEMORY_DIR)))
     caller = os.environ.get("OWLBEAR_MEMORY_CALLER", "unknown")
-    _apply_tool_exclusions(server)
     yield AppContext(engine=MemoryEngine(memory_dir=memory_dir), caller=caller)
 
 
