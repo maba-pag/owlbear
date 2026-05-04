@@ -20,9 +20,39 @@ Note every AC line from the task body — each will be verified individually.
 
 ## Step 1 — Check Source Control Changes
 
-Use `git diff --name-only <commit>~1 <commit>` (with the builder's commit hash from the task body to scope the diff) to list files changed by the builder. If no commit hash is available, reconsturct the changed-file list from the builder notes, task scope, and direct file inspection. Record the changed file list — use it to scope subsequent steps.
+Use `git diff --name-only <commit>~1 <commit>` (with the builder's commit hash from the task body to scope the diff) to list files changed by the builder. If no commit hash is available, reconstruct the changed-file list from the builder notes, task scope, and direct file inspection. Record the changed file list — use it to scope subsequent steps.
 
 For any changed function or class signatures, use `vscode_listCodeUsages` to trace all callers and assess downstream impact.
+
+### Step 1.1 — Dirty-Tree Contamination Check
+
+After identifying the scoped files (builder's changed files + task test files), check for uncommitted modifications:
+
+```shell
+git status --porcelain -- <changed_files> <test_files>
+```
+
+**Exclude** `.owlbear/kanban/tasks/` from this check — task files are always dirty (pipeline ephemera) and do not affect code correctness.
+
+Interpret results:
+
+- **Clean** (empty output): proceed normally — test evidence will be reliable.
+- **Dirty and overlapping with review scope**: the working tree contains uncommitted changes to files this review must assess. Test results run against this tree may reflect uncommitted code rather than the builder's committed work. **FAIL immediately** with an actionable diagnosis:
+
+  ```
+  FAIL #{id} -> in-progress | dirty-tree contamination: uncommitted changes in {files} overlap with review scope. Builder's commit may be incomplete or another agent's crash left residue. Builder retry needed to commit properly.
+  ```
+
+  Route to `in-progress` (not backlog) — the builder needs to re-commit, not start over. Include Required Follow-up in `end_work` note:
+
+  ```
+  ### Required Follow-up
+  | # | Target Agent | Action Required | File(s) | Evidence |
+  |---|-------------|----------------|---------|----------|
+  | 1 | builder | Commit all task-scoped changes that are currently uncommitted | {dirty files} | git status --porcelain output |
+  ```
+
+- **Dirty but unrelated** (modified files are outside review scope): proceed normally — unrelated dirty state does not contaminate evidence for this task.
 
 ## Step 2 — Evidence Gathering
 
@@ -328,6 +358,11 @@ Append to task body before advancing:
 
 ### Confidence: {.XX}
 ### Verdict: {PASS/FAIL}
+### Required Follow-up
+(Only on FAIL. See r-pipeline-protocol §3 — Required Follow-up format.)
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | {role} | {imperative verb + object} | {paths} | {Pass 1 check reference} |
 ```
 
 ## Verification Checklist

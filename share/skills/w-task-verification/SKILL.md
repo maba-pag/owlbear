@@ -132,6 +132,11 @@ Append to task body before returning:
 {list each criterion applied}
 ### Confidence: {.XX}
 ### Action: {archive/reject-to-backlog}
+### Required Follow-up
+(Only on reject. See r-pipeline-protocol §3 — Required Follow-up format.)
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | {role} | {imperative verb + object} | {paths} | {deduction reference} |
 ```
 
 If the audit section exceeds ~1500 tokens, write to `.owlbear/scratch/{id}-auditor.md` and reference it.

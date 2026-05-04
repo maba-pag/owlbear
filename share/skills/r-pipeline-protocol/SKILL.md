@@ -201,12 +201,36 @@ See .owlbear/scratch/480-reviewer.md for full evidence.
 
 To retrieve the full task body, use `show_task(task_id="{id}")` (see `h-mcp-kanban`).
 
+### Required Follow-up (Negative Signal Format)
+
+Any agent issuing a FAIL, REJECT, or BLOCK verdict **must** include a `### Required Follow-up` section in their `end_work` note. This makes negative signals machine-parseable and unambiguous for the receiving agent.
+
+Format:
+
+```markdown
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | {role} | {imperative verb + object} | {paths} | {finding reference} |
+```
+
+Rules:
+
+- **Target Agent** = specific pipeline role that must act (builder, test-writer, architect — never "someone")
+- **Action Required** = imperative verb phrase describing what to DO, not what's wrong. "Fix import cycle in engine.py:34" not "there's an import cycle"
+- **File(s)** = exact workspace-relative paths. "serve/kanban/src/..." not "the source code"
+- **Evidence** = where the problem was found (test output, AC line, file:line, quality-runner report)
+- Every row traces to a specific finding from the agent's analysis
+- Minimum 1 row. If there are no specific actionable items, the verdict should be PASS, not FAIL.
+- When routing to a specific status (in-progress, todo, backlog), the Target Agent column must be consistent with who works at that status.
+
 ## 4. Closing
 
 ### Who Commits What
 
 | Agent | Commits | When |
 |-------|---------|------|
+| Researcher | Research files (`.owlbear/research/*.md`) | Before advancing to backlog |
 | Test-writer | Test files | Before advancing to in-progress |
 | Builder | Source code | Before advancing to review |
 | Doc-writer | Documentation files | Before advancing to done |
@@ -214,6 +238,7 @@ To retrieve the full task body, use `show_task(task_id="{id}")` (see `h-mcp-kanb
 
 Rules:
 
+- **Dirty-tree tolerance.** Never refuse work because of uncommitted changes in the working tree. Other agents' crash residue or kanban task file edits are not your concern. Proceed with your task, stage only your own files, and commit normally. The shared working tree is always potentially dirty — that is expected.
 - **Commit gates advance.** If you created or modified files, commit them BEFORE calling `end_work`. No commit → no advance. If you have no file deliverables (pass-through, reviewer, orchestrator), skip.
 - **Atomic single command.** Run stage + commit as one terminal invocation to prevent interleaving with concurrent agents: `git add <your-files> && git commit -m "type: description (#{id}, role)"`. Never split across separate commands.
 - **Scope to your own files.** Stage only files YOU created or modified in this task. Do not stage files from other agents or unrelated changes. Verify with `git diff --cached --name-only` if uncertain.
