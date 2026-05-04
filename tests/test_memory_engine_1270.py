@@ -43,9 +43,7 @@ class TestFromAC_FileEngine:
     Scope: 'Handle malformed files gracefully (skip with warning, don't crash)'
     """
 
-    def test_invalid_yaml_syntax_in_frontmatter_skipped(
-        self, tmp_path: Path
-    ) -> None:
+    def test_invalid_yaml_syntax_in_frontmatter_skipped(self, tmp_path: Path) -> None:
         """File with invalid YAML syntax in frontmatter is skipped; load() returns []."""
         malformed = tmp_path / "bad-entry-aabb11.md"
         malformed.write_text(

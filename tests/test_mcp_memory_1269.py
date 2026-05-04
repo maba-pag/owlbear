@@ -223,4 +223,3 @@ class TestFromAC_NoSQLiteReference:
         assert spec is not None, "owlbear_mcp_memory.models module not found"
         src = pathlib.Path(spec.origin).read_text()
         assert "sqlite" not in src.lower()
-

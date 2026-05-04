@@ -61,7 +61,9 @@ def _apply_tool_exclusions(server: FastMCP) -> set[str]:  # pragma: no cover
 
 
 @asynccontextmanager
-async def app_lifespan(server: FastMCP) -> AsyncGenerator[AppContext, None]:  # pragma: no cover
+async def app_lifespan(
+    server: FastMCP,
+) -> AsyncGenerator[AppContext, None]:  # pragma: no cover
     """Construct and expose memory runtime context for this MCP session."""
     memory_dir = Path(os.environ.get("OWLBEAR_MEMORY_DIR", str(_DEFAULT_MEMORY_DIR)))
     caller = os.environ.get("OWLBEAR_MEMORY_CALLER", "unknown")
@@ -140,12 +142,16 @@ async def update_entry(  # noqa: PLR0913
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=True))
-async def delete_entry(ctx: Context, *, entry_id: str) -> dict[str, Any]:  # pragma: no cover
+async def delete_entry(
+    ctx: Context, *, entry_id: str
+) -> dict[str, Any]:  # pragma: no cover
     """Mark an entry as deleted (curator-only)."""
     return await delete_entry_impl(ctx, entry_id=entry_id)
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=False))
-async def approve_entry(ctx: Context, *, entry_id: str) -> dict[str, Any]:  # pragma: no cover
+async def approve_entry(
+    ctx: Context, *, entry_id: str
+) -> dict[str, Any]:  # pragma: no cover
     """Promote a curated entry to approved (user-only)."""
     return await approve_entry_impl(ctx, entry_id=entry_id)

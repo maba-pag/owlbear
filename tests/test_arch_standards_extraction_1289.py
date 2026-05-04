@@ -23,7 +23,9 @@ from __future__ import annotations
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).parent.parent
-_ARCH_INSTRUCTIONS = _REPO_ROOT / ".owlbear" / "instructions" / "architecture.instructions.md"
+_ARCH_INSTRUCTIONS = (
+    _REPO_ROOT / ".owlbear" / "instructions" / "architecture.instructions.md"
+)
 _ARCH_SKILL = _REPO_ROOT / "share" / "skills" / "r-architecture-standards" / "SKILL.md"
 
 

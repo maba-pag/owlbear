@@ -253,7 +253,9 @@ class TestFromAC_ReadTaskCachedConfig:
     def test_ac3_explicit_none_calls_load_config(self, tmp_path: Path) -> None:
         """AC3: when config=None, load_config is still called from disk."""
         _, task_path = _make_board_with_task(tmp_path)
-        with patch("owlbear_kanban.config_loader.load_config", wraps=load_config) as mock_load:
+        with patch(
+            "owlbear_kanban.config_loader.load_config", wraps=load_config
+        ) as mock_load:
             # Pre-impl: TypeError before mock can capture the call
             read_task(task_path, config=None)
         mock_load.assert_called_once()
@@ -301,8 +303,7 @@ class TestFromAC_ReadTaskCachedConfig:
     def test_ac4_engine_all_call_sites_pass_config(self) -> None:
         """AC4: every read_task() call in engine.py must include config= keyword arg."""
         engine_py = (
-            Path(__file__).parent.parent
-            / "serve/kanban/src/owlbear_kanban/engine.py"
+            Path(__file__).parent.parent / "serve/kanban/src/owlbear_kanban/engine.py"
         )
         source = engine_py.read_text(encoding="utf-8")
         tree = ast.parse(source, filename=str(engine_py))
@@ -332,8 +333,7 @@ class TestFromAC_ReadTaskCachedConfig:
         test_ac4_engine_all_call_sites_pass_config but violate the contract.
         """
         engine_py = (
-            Path(__file__).parent.parent
-            / "serve/kanban/src/owlbear_kanban/engine.py"
+            Path(__file__).parent.parent / "serve/kanban/src/owlbear_kanban/engine.py"
         )
         source = engine_py.read_text(encoding="utf-8")
         tree = ast.parse(source, filename=str(engine_py))

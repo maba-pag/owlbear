@@ -66,18 +66,40 @@ _CONFIG_TEMPLATE = dedent("""\
     """)
 
 _STANDARD_STATUSES = [
-    "research", "backlog", "todo", "in-progress", "review", "done",
+    "research",
+    "backlog",
+    "todo",
+    "in-progress",
+    "review",
+    "done",
 ]
 _STANDARD_PRIORITIES = [
-    "someday", "nice-to-have", "important", "needed", "critical",
+    "someday",
+    "nice-to-have",
+    "important",
+    "needed",
+    "critical",
 ]
 
 # Statuses with one unknown inserted in the middle (keeps "done" as last = terminal_status).
 _STATUSES_WITH_WAITING = [
-    "research", "backlog", "todo", "waiting", "in-progress", "review", "done",
+    "research",
+    "backlog",
+    "todo",
+    "waiting",
+    "in-progress",
+    "review",
+    "done",
 ]
 _STATUSES_WITH_PARKED_AND_SHELVED = [
-    "research", "backlog", "parked", "todo", "shelved", "in-progress", "review", "done",
+    "research",
+    "backlog",
+    "parked",
+    "todo",
+    "shelved",
+    "in-progress",
+    "review",
+    "done",
 ]
 
 
@@ -164,9 +186,7 @@ class TestFromAC_InitDispatchValidation:
 
     def test_multiple_unknown_statuses_all_in_message(self, tmp_path: Path) -> None:
         """All unranked status values appear in the error message (boundary: plural)."""
-        kanban_dir = _make_board(
-            tmp_path, statuses=_STATUSES_WITH_PARKED_AND_SHELVED
-        )
+        kanban_dir = _make_board(tmp_path, statuses=_STATUSES_WITH_PARKED_AND_SHELVED)
         with pytest.raises(ConfigError) as exc_info:
             KanbanEngine(kanban_dir, activity_log=False)
         assert exc_info.value.code == "ERR_DISPATCH_STATUS_MISMATCH"
@@ -204,7 +224,9 @@ class TestFromAC_RefreshConfigValidation:
 
     # -- AC3: priority refresh mismatch -------------------------------------
 
-    def test_refresh_config_priority_mismatch_raises_exact_code(self, tmp_path: Path) -> None:
+    def test_refresh_config_priority_mismatch_raises_exact_code(
+        self, tmp_path: Path
+    ) -> None:
         """Reload with unknown priority → ConfigError code is exactly ERR_DISPATCH_PRIORITY_MISMATCH.
 
         Exact code assertion rejects ERR_DISPATCH_STATUS_MISMATCH false-greens.
@@ -221,7 +243,9 @@ class TestFromAC_RefreshConfigValidation:
             engine.refresh_config()
         assert exc_info.value.code == "ERR_DISPATCH_PRIORITY_MISMATCH"
 
-    def test_refresh_config_priority_mismatch_lists_unranked_in_message(self, tmp_path: Path) -> None:
+    def test_refresh_config_priority_mismatch_lists_unranked_in_message(
+        self, tmp_path: Path
+    ) -> None:
         """Error message for refresh-path priority mismatch must include the unranked value name."""
         kanban_dir = _make_board(tmp_path)
         engine = KanbanEngine(kanban_dir, activity_log=False)
@@ -237,7 +261,9 @@ class TestFromAC_RefreshConfigValidation:
 
     # -- AC3: status refresh mismatch ---------------------------------------
 
-    def test_refresh_config_status_mismatch_raises_exact_code(self, tmp_path: Path) -> None:
+    def test_refresh_config_status_mismatch_raises_exact_code(
+        self, tmp_path: Path
+    ) -> None:
         """Reload with unknown status → ConfigError code is exactly ERR_DISPATCH_STATUS_MISMATCH.
 
         'waiting' is inserted in the middle so 'done' stays last (satisfies terminal_status check).
@@ -255,7 +281,9 @@ class TestFromAC_RefreshConfigValidation:
             engine.refresh_config()
         assert exc_info.value.code == "ERR_DISPATCH_STATUS_MISMATCH"
 
-    def test_refresh_config_status_mismatch_lists_unranked_in_message(self, tmp_path: Path) -> None:
+    def test_refresh_config_status_mismatch_lists_unranked_in_message(
+        self, tmp_path: Path
+    ) -> None:
         """Error message for refresh-path status mismatch must include the unranked value name."""
         kanban_dir = _make_board(tmp_path)
         engine = KanbanEngine(kanban_dir, activity_log=False)

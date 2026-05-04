@@ -175,7 +175,9 @@ class TestFromAC_WatchFilter:
         )
 
     @pytest.mark.asyncio
-    async def test_filter_rejects_decisions_non_pending_md(self, board_dir: Path) -> None:
+    async def test_filter_rejects_decisions_non_pending_md(
+        self, board_dir: Path
+    ) -> None:
         """Filter must return False for decisions that are not in pending/.
 
         Only decisions/pending/*.md is watched. decisions/resolved/*.md and
@@ -336,14 +338,16 @@ class TestFromAC_Classify:
             with patch("owlbear_cockpit.routes.events.awatch", _one_change):
                 transport = httpx.ASGITransport(app=app)
                 async with (
-                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
+                    httpx.AsyncClient(
+                        transport=transport, base_url="http://test"
+                    ) as ac,
                     ac.stream("GET", "/api/events") as response,
                 ):
                     assert response.status_code == 200
                     event_names: list[str] = []
                     async for line in response.aiter_lines():
                         if line.startswith("event:"):
-                            event_names.append(line[len("event:"):].strip())
+                            event_names.append(line[len("event:") :].strip())
                         if event_names:
                             break
         finally:
@@ -380,13 +384,15 @@ class TestFromAC_Classify:
             with patch("owlbear_cockpit.routes.events.awatch", _one_change):
                 transport = httpx.ASGITransport(app=app)
                 async with (
-                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
+                    httpx.AsyncClient(
+                        transport=transport, base_url="http://test"
+                    ) as ac,
                     ac.stream("GET", "/api/events") as response,
                 ):
                     event_names: list[str] = []
                     async for line in response.aiter_lines():
                         if line.startswith("event:"):
-                            event_names.append(line[len("event:"):].strip())
+                            event_names.append(line[len("event:") :].strip())
                         if event_names:
                             break
         finally:
@@ -424,7 +430,9 @@ class TestFromAC_Classify:
             with patch("owlbear_cockpit.routes.events.awatch", _one_change):
                 transport = httpx.ASGITransport(app=app)
                 async with (
-                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
+                    httpx.AsyncClient(
+                        transport=transport, base_url="http://test"
+                    ) as ac,
                     ac.stream("GET", "/api/events") as response,
                 ):
                     async for line in response.aiter_lines():
@@ -465,7 +473,9 @@ class TestFromAC_Classify:
             with patch("owlbear_cockpit.routes.events.awatch", _one_change):
                 transport = httpx.ASGITransport(app=app)
                 async with (
-                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
+                    httpx.AsyncClient(
+                        transport=transport, base_url="http://test"
+                    ) as ac,
                     ac.stream("GET", "/api/events") as response,
                 ):
                     async for line in response.aiter_lines():
@@ -507,7 +517,9 @@ class TestFromAC_Classify:
             with patch("owlbear_cockpit.routes.events.awatch", _one_change):
                 transport = httpx.ASGITransport(app=app)
                 async with (
-                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
+                    httpx.AsyncClient(
+                        transport=transport, base_url="http://test"
+                    ) as ac,
                     ac.stream("GET", "/api/events") as response,
                 ):
                     async for line in response.aiter_lines():
@@ -550,7 +562,9 @@ class TestFromAC_Classify:
             with patch("owlbear_cockpit.routes.events.awatch", _one_change):
                 transport = httpx.ASGITransport(app=app)
                 async with (
-                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
+                    httpx.AsyncClient(
+                        transport=transport, base_url="http://test"
+                    ) as ac,
                     ac.stream("GET", "/api/events") as response,
                 ):
                     async for line in response.aiter_lines():
@@ -592,7 +606,9 @@ class TestFromAC_Classify:
             with patch("owlbear_cockpit.routes.events.awatch", _one_change):
                 transport = httpx.ASGITransport(app=app)
                 async with (
-                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
+                    httpx.AsyncClient(
+                        transport=transport, base_url="http://test"
+                    ) as ac,
                     ac.stream("GET", "/api/events") as response,
                 ):
                     async for line in response.aiter_lines():
@@ -624,7 +640,9 @@ class TestFromAC_AWatchTarget:
         Current code passes engine.tasks_dir → this test FAILS.
         """
         captured, engine = await _run_and_capture(board_dir)
-        assert len(captured["args"]) >= 1, "awatch must be called with at least one positional arg"
+        assert len(captured["args"]) >= 1, (
+            "awatch must be called with at least one positional arg"
+        )
         called_with = Path(captured["args"][0])
         assert called_with == engine.kanban_dir, (
             f"awatch must be called with engine.kanban_dir ({engine.kanban_dir!r}), "
@@ -682,7 +700,9 @@ class TestFromAC_TypedEvents:
             with patch("owlbear_cockpit.routes.events.awatch", _one_change):
                 transport = httpx.ASGITransport(app=app)
                 async with (
-                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
+                    httpx.AsyncClient(
+                        transport=transport, base_url="http://test"
+                    ) as ac,
                     ac.stream("GET", "/api/events") as response,
                 ):
                     lines: list[str] = []
@@ -730,7 +750,9 @@ class TestFromAC_TypedEvents:
             with patch("owlbear_cockpit.routes.events.awatch", _one_change):
                 transport = httpx.ASGITransport(app=app)
                 async with (
-                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
+                    httpx.AsyncClient(
+                        transport=transport, base_url="http://test"
+                    ) as ac,
                     ac.stream("GET", "/api/events") as response,
                 ):
                     lines: list[str] = []
@@ -782,7 +804,9 @@ class TestFromAC_TypedEvents:
             with patch("owlbear_cockpit.routes.events.awatch", _mixed_batch):
                 transport = httpx.ASGITransport(app=app)
                 async with (
-                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
+                    httpx.AsyncClient(
+                        transport=transport, base_url="http://test"
+                    ) as ac,
                     ac.stream("GET", "/api/events") as response,
                 ):
                     event_names: list[str] = []
@@ -836,7 +860,9 @@ class TestFromAC_TypedEvents:
             with patch("owlbear_cockpit.routes.events.awatch", _all_surfaces):
                 transport = httpx.ASGITransport(app=app)
                 async with (
-                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
+                    httpx.AsyncClient(
+                        transport=transport, base_url="http://test"
+                    ) as ac,
                     ac.stream("GET", "/api/events") as response,
                 ):
                     event_names: list[str] = []
@@ -870,6 +896,7 @@ class TestFromAC_TypedEvents:
         """
         from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
+
         engine = KanbanEngine(board_dir, agent_name="cockpit")
         task_early = engine.tasks_dir / "task-early.md"
         task_early.write_text("# early\n", encoding="utf-8")
@@ -880,7 +907,9 @@ class TestFromAC_TypedEvents:
         task_late = engine.tasks_dir / "task-late.md"
         task_late.write_text("# late\n", encoding="utf-8")
         task_late_mtime = task_late.stat().st_mtime_ns
-        assert task_late_mtime > task_early_mtime, "Test setup: task_late must have newer mtime"
+        assert task_late_mtime > task_early_mtime, (
+            "Test setup: task_late must have newer mtime"
+        )
 
         # decisions/pending path with VERY late mtime (newest overall)
         pending_dir = engine.kanban_dir / "decisions" / "pending"
@@ -904,14 +933,19 @@ class TestFromAC_TypedEvents:
             with patch("owlbear_cockpit.routes.events.awatch", _two_tasks_one_dr):
                 transport = httpx.ASGITransport(app=app)
                 async with (
-                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
+                    httpx.AsyncClient(
+                        transport=transport, base_url="http://test"
+                    ) as ac,
                     ac.stream("GET", "/api/events") as response,
                 ):
                     current_event: str | None = None
                     async for line in response.aiter_lines():
                         if line.startswith("event:"):
                             current_event = line.split(":", 1)[1].strip()
-                        elif line.startswith("data:") and current_event == "tasks-changed":
+                        elif (
+                            line.startswith("data:")
+                            and current_event == "tasks-changed"
+                        ):
                             payload = json.loads(line.split(":", 1)[1].strip())
                             tasks_mtimes.append(payload.get("mtime", 0))
                             current_event = None
@@ -956,7 +990,9 @@ class TestFromAC_TypedEvents:
             with patch("owlbear_cockpit.routes.events.awatch", _mixed_decisions):
                 transport = httpx.ASGITransport(app=app)
                 async with (
-                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
+                    httpx.AsyncClient(
+                        transport=transport, base_url="http://test"
+                    ) as ac,
                     ac.stream("GET", "/api/events") as response,
                 ):
                     event_names: list[str] = []
@@ -1013,10 +1049,14 @@ class TestFromAC_TypedEvents:
         app.dependency_overrides[get_engine] = lambda: engine
         event_names: list[str] = []
         try:
-            with patch("owlbear_cockpit.routes.events.awatch", _deleted_task_surviving_dr):
+            with patch(
+                "owlbear_cockpit.routes.events.awatch", _deleted_task_surviving_dr
+            ):
                 transport = httpx.ASGITransport(app=app)
                 async with (
-                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
+                    httpx.AsyncClient(
+                        transport=transport, base_url="http://test"
+                    ) as ac,
                     ac.stream("GET", "/api/events") as response,
                 ):
                     async for line in response.aiter_lines():
@@ -1062,7 +1102,9 @@ class TestFromAC_TypedEvents:
             with patch("owlbear_cockpit.routes.events.awatch", _two_tasks):
                 transport = httpx.ASGITransport(app=app)
                 async with (
-                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
+                    httpx.AsyncClient(
+                        transport=transport, base_url="http://test"
+                    ) as ac,
                     ac.stream("GET", "/api/events") as response,
                 ):
                     async for line in response.aiter_lines():
@@ -1120,7 +1162,9 @@ class TestFromAC_MissingKanbanDir:
             with patch("owlbear_cockpit.routes.events.awatch", _record_if_called):
                 transport = httpx.ASGITransport(app=app)
                 async with (
-                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
+                    httpx.AsyncClient(
+                        transport=transport, base_url="http://test"
+                    ) as ac,
                     ac.stream("GET", "/api/events") as response,
                 ):
                     assert response.status_code == 200
@@ -1137,9 +1181,7 @@ class TestFromAC_MissingKanbanDir:
         )
 
     @pytest.mark.asyncio
-    async def test_missing_kanban_dir_stream_is_empty(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_missing_kanban_dir_stream_is_empty(self, tmp_path: Path) -> None:
         """When kanban_dir does not exist the consumed SSE stream must carry no
         event lines and no data lines — it closes immediately after the 200 header.
 
@@ -1161,7 +1203,9 @@ class TestFromAC_MissingKanbanDir:
             with patch("owlbear_cockpit.routes.events.awatch"):
                 transport = httpx.ASGITransport(app=app)
                 async with (
-                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
+                    httpx.AsyncClient(
+                        transport=transport, base_url="http://test"
+                    ) as ac,
                     ac.stream("GET", "/api/events") as response,
                 ):
                     assert response.status_code == 200

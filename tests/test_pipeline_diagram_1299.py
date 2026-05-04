@@ -43,9 +43,7 @@ class TestFromAC_OrchestratorSupervisoryRole:
         data = json.loads(_DIAGRAM_PATH.read_text())
         texts = _all_element_texts(data)
         expected = "orchestrator: supervisory layer (auxiliary)"
-        assert any(
-            expected in t for t in texts
-        ), (
+        assert any(expected in t for t in texts), (
             f"No element contains the supervisory/auxiliary role label.\n"
             f"Expected substring: {expected!r}\n"
             f"Element texts found: {texts}"
@@ -62,14 +60,14 @@ class TestFromAC_OrchestratorSupervisoryRole:
         data = json.loads(_DIAGRAM_PATH.read_text())
         texts = _all_element_texts(data)
         orchestrator_texts = [
-            t for t in texts
-            if "orchestrator" in t.lower() and "stage" not in t.lower()
+            t for t in texts if "orchestrator" in t.lower() and "stage" not in t.lower()
         ]
         assert orchestrator_texts, (
             "No elements containing 'orchestrator' found — diagram is missing the element."
         )
         bare_entries = [
-            t for t in orchestrator_texts
+            t
+            for t in orchestrator_texts
             if "supervisory" not in t.lower() and "auxiliary" not in t.lower()
         ]
         assert not bare_entries, (

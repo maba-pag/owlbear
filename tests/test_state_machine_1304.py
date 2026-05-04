@@ -38,7 +38,13 @@ from pydantic import ValidationError
 
 from owlbear_mcp_memory.engine import MemoryEngine
 from owlbear_mcp_memory.models import MemoryCategory, MemoryEntry, MemoryState
-from owlbear_mcp_memory.tools import approve_entry, delete_entry, query_memory, store_learning, update_entry
+from owlbear_mcp_memory.tools import (
+    approve_entry,
+    delete_entry,
+    query_memory,
+    store_learning,
+    update_entry,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -292,9 +298,7 @@ class TestFromAC_CuratedStaysCurated:
         assert result["title"] == "Updated title"
 
     @pytest.mark.asyncio
-    async def test_curated_edit_persists_title_to_disk(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_curated_edit_persists_title_to_disk(self, tmp_path: Path) -> None:
         """After editing a curated entry, reloading from disk returns the updated title.
 
         Proves engine.write(updated) is called on the curated-edit path.
@@ -347,14 +351,14 @@ class TestFromAC_AutoDowngrade:
         engine.write(entry)
         ctx = _make_ctx(engine, caller="curator")
 
-        result = await update_entry(ctx, entry_id=entry.id, title="Updated from approved")
+        result = await update_entry(
+            ctx, entry_id=entry.id, title="Updated from approved"
+        )
 
         assert result["state"] == "curated"
 
     @pytest.mark.asyncio
-    async def test_auto_downgrade_applies_field_update(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_auto_downgrade_applies_field_update(self, tmp_path: Path) -> None:
         """After auto-downgrade, the edited field is persisted alongside state=curated.
 
         Current failure: ToolError raised before the entry is modified at all.
@@ -423,9 +427,7 @@ class TestFromAC_AutoDowngrade:
         engine.write(entry)
         ctx = _make_ctx(engine, caller="curator")
 
-        result = await update_entry(
-            ctx, entry_id=entry.id, state=MemoryState.PENDING
-        )
+        result = await update_entry(ctx, entry_id=entry.id, state=MemoryState.PENDING)
 
         assert result["state"] == "curated"
         assert result["approved_at"] is None
@@ -518,9 +520,7 @@ class TestFromAC_HardDeletePending:
     """AC6: delete_memory on pending entry removes the file from disk (hard-delete)."""
 
     @pytest.mark.asyncio
-    async def test_delete_pending_removes_file_from_disk(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_delete_pending_removes_file_from_disk(self, tmp_path: Path) -> None:
         """Deleting a pending entry must remove the file from disk entirely.
 
         Current failure: delete_entry soft-deletes → file IS present with
@@ -557,7 +557,7 @@ class TestFromAC_HardDeletePending:
         all_entries = engine.get_entries()
         ids = {e.id for e in all_entries}
         assert entry.id not in ids, (
-            f"Hard-deleted pending entry still returned by get_entries"
+            "Hard-deleted pending entry still returned by get_entries"
         )
 
 
@@ -604,9 +604,7 @@ class TestFromAC_SoftDeleteCuratedApproved:
         """
         from owlbear_mcp_memory.tools import delete_memory  # ImportError in RED
 
-        entry = _make_entry(
-            state="approved", scope_agents=["builder"], approved_at=_TS
-        )
+        entry = _make_entry(state="approved", scope_agents=["builder"], approved_at=_TS)
         engine = MemoryEngine(memory_dir=tmp_path)
         engine.write(entry)
         ctx = _make_ctx(engine, caller="curator")
@@ -672,9 +670,7 @@ class TestFromAC_DeletedTerminal:
     """AC8: deleted state is terminal — all operations must raise ToolError."""
 
     @pytest.mark.asyncio
-    async def test_update_deleted_entry_raises_tool_error(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_update_deleted_entry_raises_tool_error(self, tmp_path: Path) -> None:
         """update_entry on a deleted entry must raise ToolError (terminal state).
 
         Current failure: no terminal-state check in update_entry. When no state
@@ -690,9 +686,7 @@ class TestFromAC_DeletedTerminal:
             await update_entry(ctx, entry_id=entry.id, title="Should fail")
 
     @pytest.mark.asyncio
-    async def test_delete_deleted_entry_raises_tool_error(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_delete_deleted_entry_raises_tool_error(self, tmp_path: Path) -> None:
         """delete_entry on an already-deleted entry must raise ToolError.
 
         Current failure: delete_entry is idempotent for deleted entries
@@ -736,9 +730,7 @@ class TestFromAC_InvalidTransitions:
     """AC9: invalid state transitions must raise ToolError."""
 
     @pytest.mark.asyncio
-    async def test_pending_to_approved_directly_rejected(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_pending_to_approved_directly_rejected(self, tmp_path: Path) -> None:
         """update_entry(state=approved) on pending raises ToolError.
 
         This regression guard PASSES in current code (already rejected by
@@ -750,9 +742,7 @@ class TestFromAC_InvalidTransitions:
         ctx = _make_ctx(engine, caller="curator")
 
         with pytest.raises(ToolError):
-            await update_entry(
-                ctx, entry_id=entry.id, state=MemoryState.APPROVED
-            )
+            await update_entry(ctx, entry_id=entry.id, state=MemoryState.APPROVED)
 
     @pytest.mark.asyncio
     async def test_pending_to_approved_rejected_by_transition_guard_not_scope_gate(
@@ -839,7 +829,9 @@ class TestFromAC_StoreLearning:
         assert result["approved_at"] is None
 
     @pytest.mark.asyncio
-    async def test_store_learning_with_scope_agents_preserved(self, tmp_path: Path) -> None:
+    async def test_store_learning_with_scope_agents_preserved(
+        self, tmp_path: Path
+    ) -> None:
         """store_learning stores provided scope_agents on the new entry."""
         engine = MemoryEngine(memory_dir=tmp_path)
         ctx = _make_ctx(engine, caller="curator")
@@ -905,7 +897,9 @@ class TestFromAC_QueryMemory:
         assert _uuid(1) not in result_ids  # pending excluded by default
 
     @pytest.mark.asyncio
-    async def test_query_memory_with_explicit_states_filter(self, tmp_path: Path) -> None:
+    async def test_query_memory_with_explicit_states_filter(
+        self, tmp_path: Path
+    ) -> None:
         """Explicit states=[PENDING] returns only pending entries."""
         engine = MemoryEngine(memory_dir=tmp_path)
         ctx = _make_ctx(engine, caller="curator")
@@ -928,11 +922,15 @@ class TestFromAC_QueryMemory:
         ctx = _make_ctx(engine, caller="curator")
 
         e1 = _make_entry(
-            id=_uuid(1), state="curated", scope_agents=["builder"],
+            id=_uuid(1),
+            state="curated",
+            scope_agents=["builder"],
             categories=["domain-knowledge"],
         )
         e2 = _make_entry(
-            id=_uuid(2), state="curated", scope_agents=["builder"],
+            id=_uuid(2),
+            state="curated",
+            scope_agents=["builder"],
             categories=["pitfall"],
         )
         engine.write(e1)
@@ -962,13 +960,19 @@ class TestFromAC_QueryMemory:
         assert _uuid(2) not in result_ids
 
     @pytest.mark.asyncio
-    async def test_query_memory_with_min_confidence_filter(self, tmp_path: Path) -> None:
+    async def test_query_memory_with_min_confidence_filter(
+        self, tmp_path: Path
+    ) -> None:
         """min_confidence filter excludes entries below the threshold."""
         engine = MemoryEngine(memory_dir=tmp_path)
         ctx = _make_ctx(engine, caller="curator")
 
-        low = _make_entry(id=_uuid(1), state="curated", scope_agents=["builder"], confidence=0.75)
-        high = _make_entry(id=_uuid(2), state="curated", scope_agents=["builder"], confidence=0.95)
+        low = _make_entry(
+            id=_uuid(1), state="curated", scope_agents=["builder"], confidence=0.75
+        )
+        high = _make_entry(
+            id=_uuid(2), state="curated", scope_agents=["builder"], confidence=0.95
+        )
         engine.write(low)
         engine.write(high)
 
@@ -985,7 +989,9 @@ class TestFromAC_QueryMemory:
         ctx = _make_ctx(engine, caller="curator")
 
         for i in range(1, 4):
-            engine.write(_make_entry(id=_uuid(i), state="curated", scope_agents=["builder"]))
+            engine.write(
+                _make_entry(id=_uuid(i), state="curated", scope_agents=["builder"])
+            )
 
         results = await query_memory(ctx, limit=1)
         assert len(results) == 1
@@ -1000,7 +1006,9 @@ class TestFromAC_RoleGating:
     """Coverage: _require_role raises ToolError when caller is not in allowed set."""
 
     @pytest.mark.asyncio
-    async def test_update_entry_rejects_non_curator_caller(self, tmp_path: Path) -> None:
+    async def test_update_entry_rejects_non_curator_caller(
+        self, tmp_path: Path
+    ) -> None:
         """update_entry with caller='user' (requires 'curator') raises ToolError."""
         entry = _make_entry(state="curated", scope_agents=["builder"])
         engine = MemoryEngine(memory_dir=tmp_path)
@@ -1011,7 +1019,9 @@ class TestFromAC_RoleGating:
             await update_entry(ctx, entry_id=entry.id, title="Rejected")
 
     @pytest.mark.asyncio
-    async def test_delete_entry_rejects_non_curator_caller(self, tmp_path: Path) -> None:
+    async def test_delete_entry_rejects_non_curator_caller(
+        self, tmp_path: Path
+    ) -> None:
         """delete_entry with caller='user' (requires 'curator') raises ToolError."""
         entry = _make_entry(state="curated", scope_agents=["builder"])
         engine = MemoryEngine(memory_dir=tmp_path)
@@ -1042,7 +1052,9 @@ class TestFromAC_EntryNotFound:
     """Coverage: operations on non-existent IDs raise ToolError."""
 
     @pytest.mark.asyncio
-    async def test_update_nonexistent_entry_raises_tool_error(self, tmp_path: Path) -> None:
+    async def test_update_nonexistent_entry_raises_tool_error(
+        self, tmp_path: Path
+    ) -> None:
         """update_entry on a non-existent ID raises ToolError with 'not found' message."""
         engine = MemoryEngine(memory_dir=tmp_path)
         ctx = _make_ctx(engine, caller="curator")
@@ -1051,7 +1063,9 @@ class TestFromAC_EntryNotFound:
             await update_entry(ctx, entry_id=_uuid(99), title="Ghost entry")
 
     @pytest.mark.asyncio
-    async def test_delete_nonexistent_entry_raises_tool_error(self, tmp_path: Path) -> None:
+    async def test_delete_nonexistent_entry_raises_tool_error(
+        self, tmp_path: Path
+    ) -> None:
         """delete_entry on a non-existent ID raises ToolError with 'not found' message."""
         engine = MemoryEngine(memory_dir=tmp_path)
         ctx = _make_ctx(engine, caller="curator")
@@ -1060,7 +1074,9 @@ class TestFromAC_EntryNotFound:
             await delete_entry(ctx, entry_id=_uuid(99))
 
     @pytest.mark.asyncio
-    async def test_approve_nonexistent_entry_raises_tool_error(self, tmp_path: Path) -> None:
+    async def test_approve_nonexistent_entry_raises_tool_error(
+        self, tmp_path: Path
+    ) -> None:
         """approve_entry on a non-existent ID raises ToolError with 'not found' message."""
         engine = MemoryEngine(memory_dir=tmp_path)
         ctx = _make_ctx(engine, caller="user")
@@ -1078,7 +1094,9 @@ class TestFromAC_ApproveNonCurated:
     """Coverage: approve_entry requires curated state; other states raise ToolError."""
 
     @pytest.mark.asyncio
-    async def test_approve_pending_entry_raises_tool_error(self, tmp_path: Path) -> None:
+    async def test_approve_pending_entry_raises_tool_error(
+        self, tmp_path: Path
+    ) -> None:
         """approve_entry on a pending entry raises ToolError (must be curated)."""
         entry = _make_entry(state="pending")
         engine = MemoryEngine(memory_dir=tmp_path)
@@ -1248,7 +1266,10 @@ class TestFromAC_EngineWriteException:
         entry = _make_entry()
 
         with (
-            patch("owlbear_mcp_memory.engine.Path.replace", side_effect=OSError("disk full")),
+            patch(
+                "owlbear_mcp_memory.engine.Path.replace",
+                side_effect=OSError("disk full"),
+            ),
             pytest.raises(OSError),
         ):
             engine.write(entry)
@@ -1271,52 +1292,88 @@ class TestFromAC_ModelValidationPaths:
         """Blank title triggers _validate_title_not_blank error branch."""
         with pytest.raises(ValidationError, match="title must not be empty"):
             MemoryEntry(
-                id=_uuid(1), title="   ", categories=["domain-knowledge"],
-                confidence=0.8, state="pending", content="c",
-                source_agent="builder", created_at=_TS, updated_at=_TS,
+                id=_uuid(1),
+                title="   ",
+                categories=["domain-knowledge"],
+                confidence=0.8,
+                state="pending",
+                content="c",
+                source_agent="builder",
+                created_at=_TS,
+                updated_at=_TS,
             )
 
     def test_blank_source_agent_raises_validation_error(self) -> None:
         """Blank source_agent triggers _validate_source_agent_not_blank error branch."""
         with pytest.raises(ValidationError, match="source_agent must not be empty"):
             MemoryEntry(
-                id=_uuid(1), title="T", categories=["domain-knowledge"],
-                confidence=0.8, state="pending", content="c",
-                source_agent="  ", created_at=_TS, updated_at=_TS,
+                id=_uuid(1),
+                title="T",
+                categories=["domain-knowledge"],
+                confidence=0.8,
+                state="pending",
+                content="c",
+                source_agent="  ",
+                created_at=_TS,
+                updated_at=_TS,
             )
 
     def test_invalid_uuid_format_raises_validation_error(self) -> None:
         """Non-UUIDv4 id triggers _validate_id_uuid_v4 error branch."""
         with pytest.raises(ValidationError, match="UUIDv4"):
             MemoryEntry(
-                id="not-a-uuid", title="T", categories=["domain-knowledge"],
-                confidence=0.8, state="pending", content="c",
-                source_agent="builder", created_at=_TS, updated_at=_TS,
+                id="not-a-uuid",
+                title="T",
+                categories=["domain-knowledge"],
+                confidence=0.8,
+                state="pending",
+                content="c",
+                source_agent="builder",
+                created_at=_TS,
+                updated_at=_TS,
             )
 
     def test_datetime_without_time_raises_validation_error(self) -> None:
         """Date-only created_at triggers 'must include date and time' error."""
         with pytest.raises(ValidationError, match="date and time"):
             MemoryEntry(
-                id=_uuid(1), title="T", categories=["domain-knowledge"],
-                confidence=0.8, state="pending", content="c",
-                source_agent="builder", created_at="2026-05-01", updated_at=_TS,
+                id=_uuid(1),
+                title="T",
+                categories=["domain-knowledge"],
+                confidence=0.8,
+                state="pending",
+                content="c",
+                source_agent="builder",
+                created_at="2026-05-01",
+                updated_at=_TS,
             )
 
     def test_unparseable_datetime_raises_validation_error(self) -> None:
         """Malformed datetime triggers 'valid ISO 8601' error in validator."""
         with pytest.raises(ValidationError, match="ISO 8601"):
             MemoryEntry(
-                id=_uuid(1), title="T", categories=["domain-knowledge"],
-                confidence=0.8, state="pending", content="c",
-                source_agent="builder", created_at="2026-99-99T00:00:00Z", updated_at=_TS,
+                id=_uuid(1),
+                title="T",
+                categories=["domain-knowledge"],
+                confidence=0.8,
+                state="pending",
+                content="c",
+                source_agent="builder",
+                created_at="2026-99-99T00:00:00Z",
+                updated_at=_TS,
             )
 
     def test_datetime_without_timezone_raises_validation_error(self) -> None:
         """Timezone-naive datetime triggers 'must include timezone' error."""
         with pytest.raises(ValidationError, match="timezone"):
             MemoryEntry(
-                id=_uuid(1), title="T", categories=["domain-knowledge"],
-                confidence=0.8, state="pending", content="c",
-                source_agent="builder", created_at="2026-05-01T10:00:00", updated_at=_TS,
+                id=_uuid(1),
+                title="T",
+                categories=["domain-knowledge"],
+                confidence=0.8,
+                state="pending",
+                content="c",
+                source_agent="builder",
+                created_at="2026-05-01T10:00:00",
+                updated_at=_TS,
             )

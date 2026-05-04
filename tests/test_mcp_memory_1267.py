@@ -30,7 +30,9 @@ class TestFromAC_NoSQLiteImports:
             content = py_file.read_text(encoding="utf-8")
             if "import sqlite3" in content or "from sqlite3" in content:
                 violations.append(py_file.name)
-        assert violations == [], f"sqlite3 imports still present in: {sorted(violations)}"
+        assert violations == [], (
+            f"sqlite3 imports still present in: {sorted(violations)}"
+        )
 
     def test_approve_py_deleted(self) -> None:
         """AC1 + scope: approve.py (sqlite3 user) must be deleted."""

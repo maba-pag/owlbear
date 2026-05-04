@@ -82,7 +82,9 @@ async def events(request: Request, engine: _Engine) -> EventSourceResponse:
         tasks_dir = _resolve(engine.tasks_dir)
         decisions_pending_dir = _resolve(kanban_dir / "decisions" / "pending")
         activity_path = _resolve(kanban_dir / "activity.jsonl")
-        watch_filter = _build_watch_filter(tasks_dir, decisions_pending_dir, activity_path)
+        watch_filter = _build_watch_filter(
+            tasks_dir, decisions_pending_dir, activity_path
+        )
 
         async for changes in awatch(
             kanban_dir,

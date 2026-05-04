@@ -37,10 +37,7 @@ class TestFromAC_ApplyToExtension:
     ) -> None:
         """AC1: agent-ecosystem.instructions.md YAML applyTo field includes all .owlbear/ paths."""
         stub = (
-            project_root
-            / "share"
-            / "instructions"
-            / "agent-ecosystem.instructions.md"
+            project_root / "share" / "instructions" / "agent-ecosystem.instructions.md"
         )
         content = stub.read_text(encoding="utf-8")
         for path in _EXPECTED_OWLBEAR_PATHS:
@@ -74,13 +71,7 @@ class TestFromAC_ApplyToExtension:
         self, project_root: Path
     ) -> None:
         """AC3: h-agent-structure SKILL.md stubs table agent-ecosystem.instructions.md row mirrors AC1."""
-        skill = (
-            project_root
-            / "share"
-            / "skills"
-            / "h-agent-structure"
-            / "SKILL.md"
-        )
+        skill = project_root / "share" / "skills" / "h-agent-structure" / "SKILL.md"
         content = skill.read_text(encoding="utf-8")
         lines = content.splitlines()
         agent_eco_rows = [
@@ -147,10 +138,7 @@ class TestFromAC_ApplyToExtension:
     ) -> None:
         """AC1 (exact): YAML applyTo: field equals _FULL_APPLY_TO — not just subset membership."""
         stub = (
-            project_root
-            / "share"
-            / "instructions"
-            / "agent-ecosystem.instructions.md"
+            project_root / "share" / "instructions" / "agent-ecosystem.instructions.md"
         )
         content = stub.read_text(encoding="utf-8")
         lines = content.splitlines()
@@ -201,13 +189,7 @@ class TestFromAC_ApplyToExtension:
         self, project_root: Path
     ) -> None:
         """AC3 (exact): h-agent-structure stubs row contains full _FULL_APPLY_TO value, including share/ prefixes."""
-        skill = (
-            project_root
-            / "share"
-            / "skills"
-            / "h-agent-structure"
-            / "SKILL.md"
-        )
+        skill = project_root / "share" / "skills" / "h-agent-structure" / "SKILL.md"
         content = skill.read_text(encoding="utf-8")
         lines = content.splitlines()
         agent_eco_rows = [

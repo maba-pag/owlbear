@@ -99,7 +99,9 @@ class TestFromAC_ScopeAgentMatch:
         assert entry.title in result
 
     @pytest.mark.asyncio
-    async def test_entry_with_different_agent_not_returned(self, tmp_path: Path) -> None:
+    async def test_entry_with_different_agent_not_returned(
+        self, tmp_path: Path
+    ) -> None:
         """Entry scoped to "reviewer" is not returned when agent="builder"."""
         entry = _make_entry(id=_uuid(1), state="curated", scope_agents=["reviewer"])
         engine = MemoryEngine(memory_dir=tmp_path)
@@ -111,7 +113,9 @@ class TestFromAC_ScopeAgentMatch:
         assert entry.title not in result
 
     @pytest.mark.asyncio
-    async def test_entry_with_agent_among_multiple_scopes_is_returned(self, tmp_path: Path) -> None:
+    async def test_entry_with_agent_among_multiple_scopes_is_returned(
+        self, tmp_path: Path
+    ) -> None:
         """Entry with scope_agents=["builder", "reviewer"] is returned for agent="builder"."""
         entry = _make_entry(
             id=_uuid(1), state="curated", scope_agents=["builder", "reviewer"]
@@ -162,7 +166,9 @@ class TestFromAC_UniversalScope:
         assert entry.title in result
 
     @pytest.mark.asyncio
-    async def test_universal_scope_approved_entry_returned(self, tmp_path: Path) -> None:
+    async def test_universal_scope_approved_entry_returned(
+        self, tmp_path: Path
+    ) -> None:
         """Approved entry with scope_agents=["*"] is also returned."""
         entry = _make_entry(
             id=_uuid(1),
@@ -339,7 +345,9 @@ class TestFromAC_BodyOnlyFormat:
         assert "scope_agents" not in result
 
     @pytest.mark.asyncio
-    async def test_multiple_entries_concatenated_in_result(self, tmp_path: Path) -> None:
+    async def test_multiple_entries_concatenated_in_result(
+        self, tmp_path: Path
+    ) -> None:
         """Multiple matching entries all appear in a single concatenated string."""
         e1 = _make_entry(
             id=_uuid(1), title="First Entry", state="curated", scope_agents=["builder"]

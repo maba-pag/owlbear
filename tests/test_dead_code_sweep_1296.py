@@ -116,7 +116,9 @@ class TestFromAC_DeadCodeSweep:
             for p in (_REPO_ROOT / "share" / "skills").rglob("*.md")
             if "serve/orchestrator" in p.read_text(encoding="utf-8")
         ]
-        assert hits == [], f"share/skills/ files still reference serve/orchestrator: {hits}"
+        assert hits == [], (
+            f"share/skills/ files still reference serve/orchestrator: {hits}"
+        )
 
     def test_no_serve_orchestrator_in_share_prompts(self) -> None:
         """No *.md file in share/prompts/ may reference serve/orchestrator."""
@@ -125,7 +127,9 @@ class TestFromAC_DeadCodeSweep:
             for p in (_REPO_ROOT / "share" / "prompts").rglob("*.md")
             if "serve/orchestrator" in p.read_text(encoding="utf-8")
         ]
-        assert hits == [], f"share/prompts/ files still reference serve/orchestrator: {hits}"
+        assert hits == [], (
+            f"share/prompts/ files still reference serve/orchestrator: {hits}"
+        )
 
     # ---- AC3: Copilot CLI zero hits in *.md outside excluded paths ----------
 
@@ -142,7 +146,9 @@ class TestFromAC_DeadCodeSweep:
             str(p.relative_to(_REPO_ROOT))
             for p in _REPO_ROOT.rglob("*.md")
             if not _is_excluded(p)
-            and not any(part in _SCAN_SKIP_DIRS for part in p.relative_to(_REPO_ROOT).parts)
+            and not any(
+                part in _SCAN_SKIP_DIRS for part in p.relative_to(_REPO_ROOT).parts
+            )
             and "Copilot CLI" in p.read_text(encoding="utf-8")
         ]
         assert hits == [], f"*.md files still contain 'Copilot CLI': {hits}"
@@ -180,7 +186,8 @@ class TestFromAC_DeadCodeSweep:
         hits = [
             str(p)
             for p in _REPO_ROOT.rglob("*.toml")
-            if not _is_excluded(p) and "agent-client-protocol" in p.read_text(encoding="utf-8")
+            if not _is_excluded(p)
+            and "agent-client-protocol" in p.read_text(encoding="utf-8")
         ]
         assert hits == [], f"*.toml files still reference agent-client-protocol: {hits}"
 
@@ -245,7 +252,10 @@ class TestFromAC_DeadCodeSweep:
             # startBinding / endBinding
             for binding_key in ("startBinding", "endBinding"):
                 binding = elem.get(binding_key)
-                if isinstance(binding, dict) and binding.get("elementId") in _MCP_DELETED_IDS:
+                if (
+                    isinstance(binding, dict)
+                    and binding.get("elementId") in _MCP_DELETED_IDS
+                ):
                     dangling.append(
                         f"element '{eid}' {binding_key}.elementId '{binding.get('elementId')}'"
                     )
@@ -254,7 +264,9 @@ class TestFromAC_DeadCodeSweep:
                 dangling.append(
                     f"element '{eid}' containerId '{elem.get('containerId')}'"
                 )
-        assert dangling == [], f"Dangling binding refs found in mcp-topology.excalidraw: {dangling}"
+        assert dangling == [], (
+            f"Dangling binding refs found in mcp-topology.excalidraw: {dangling}"
+        )
 
     # ---- AC10: project-overview.excalidraw — no serve/orchestrator text -----
 

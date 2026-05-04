@@ -96,7 +96,9 @@ class TestFromAC_PathNeutrality:
         GREEN task before the suite-wide test passes.
         """
         skill_file = _SKILLS_ROOT / "r-architecture-standards" / "SKILL.md"
-        assert skill_file.exists(), f"Expected {skill_file.relative_to(_REPO_ROOT)} to exist"
+        assert skill_file.exists(), (
+            f"Expected {skill_file.relative_to(_REPO_ROOT)} to exist"
+        )
         violations = _collect_serve_ref_violations(skill_file)
         assert violations == [], (
             f"{len(violations)} serve/ reference(s) in r-architecture-standards/SKILL.md "
@@ -113,7 +115,10 @@ class TestFromAC_PathNeutrality:
         """
         skill_file = _SKILLS_ROOT / "h-quality-runner" / "SKILL.md"
         content = skill_file.read_text(encoding="utf-8")
-        assert "Routing authority for frontend root and test-path mode selection is" in content, (
+        assert (
+            "Routing authority for frontend root and test-path mode selection is"
+            in content
+        ), (
             "h-quality-runner/SKILL.md must contain the routing authority directive "
             "('Routing authority for frontend root and test-path mode selection is …') — not found"
         )
@@ -135,7 +140,7 @@ class TestFromAC_PathNeutrality:
         content = skill_file.read_text(encoding="utf-8")
         found = [h for h in _LEGACY_SECTION_HEADERS if h in content]
         assert found == [], (
-            f"Legacy section header(s) still present in r-architecture-standards/SKILL.md: "
+            "Legacy section header(s) still present in r-architecture-standards/SKILL.md: "
             + ", ".join(repr(h) for h in found)
         )
 

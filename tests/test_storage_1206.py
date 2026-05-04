@@ -89,5 +89,3 @@ class TestFromAC_NoDoubleValidation:
             "storage.py still references _validate_claim_timeout — "
             "the double-validation wrapper has not been removed"
         )
-
-

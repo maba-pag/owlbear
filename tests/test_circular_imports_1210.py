@@ -193,12 +193,17 @@ class TestFromAC_LockingModule:
             f"_locking.py must have zero intra-package imports; found: {intra}"
         )
 
-    def test_exclusive_file_lock_has_contextmanager_decorator_structurally(self) -> None:
+    def test_exclusive_file_lock_has_contextmanager_decorator_structurally(
+        self,
+    ) -> None:
         """_exclusive_file_lock must carry @contextlib.contextmanager in its AST decorator_list."""
         src = _source("_locking.py")
         tree = ast.parse(src)
         for node in ast.iter_child_nodes(tree):
-            if isinstance(node, ast.FunctionDef) and node.name == "_exclusive_file_lock":
+            if (
+                isinstance(node, ast.FunctionDef)
+                and node.name == "_exclusive_file_lock"
+            ):
                 for dec in node.decorator_list:
                     if (
                         isinstance(dec, ast.Attribute) and dec.attr == "contextmanager"
@@ -512,7 +517,10 @@ class TestFromAC_ModelsDuplicateRemoved:
         tree = ast.parse(src)
 
         for class_node in ast.walk(tree):
-            if not (isinstance(class_node, ast.ClassDef) and class_node.name == "BoardConfig"):
+            if not (
+                isinstance(class_node, ast.ClassDef)
+                and class_node.name == "BoardConfig"
+            ):
                 continue
             for method in ast.walk(class_node):
                 if not (
@@ -634,7 +642,9 @@ class TestFromAC_TestFileImportUpdates:
                 and node.name == "TestFromAC_Win32PragmaAnnotation"
             ):
                 class_src = "\n".join(src_lines[node.lineno - 1 : node.end_lineno])
-                assert "_LOCKING_LINES" in class_src or "_LOCKING_SOURCE" in class_src, (
+                assert (
+                    "_LOCKING_LINES" in class_src or "_LOCKING_SOURCE" in class_src
+                ), (
                     "TestFromAC_Win32PragmaAnnotation does not reference _LOCKING_LINES "
                     "or _LOCKING_SOURCE — win32 branch structural proof must read "
                     "_locking.py source, not engine.py source"

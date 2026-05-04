@@ -211,9 +211,7 @@ class TestFromAC_PickTasksTDDGate:
             "in-progress task without ## Test-Writer Notes must be excluded by TDD gate"
         )
 
-    def test_tdd_gate_non_impl_tag_bypasses_tdd_gate(
-        self, tmp_path: Path
-    ) -> None:
+    def test_tdd_gate_non_impl_tag_bypasses_tdd_gate(self, tmp_path: Path) -> None:
         """Edge: in-progress + non-impl tag (research) without notes → passes TDD gate.
         Alongside a task that fails TDD gate, the non-impl tag task should appear
         but the untagged one must not.
@@ -249,9 +247,7 @@ class TestFromAC_PickTasksTDDGate:
             "in-progress task without notes or non-impl tag must be excluded"
         )
 
-    def test_tdd_gate_only_applies_to_in_progress_status(
-        self, tmp_path: Path
-    ) -> None:
+    def test_tdd_gate_only_applies_to_in_progress_status(self, tmp_path: Path) -> None:
         """Edge: non-in-progress task (todo) without ## Test-Writer Notes is NOT subject
         to TDD gate. Must appear in waves if it passes clarity gate.
         Alongside a gated in-progress task, the gated one must not appear.
@@ -342,9 +338,7 @@ class TestFromAC_PickTasksClarityGate:
             "pick_tasks must exclude done tasks with no bullet/numbered AC line"
         )
 
-    def test_clarity_gate_passes_todo_with_bullet_ac(
-        self, tmp_path: Path
-    ) -> None:
+    def test_clarity_gate_passes_todo_with_bullet_ac(self, tmp_path: Path) -> None:
         """Happy path: todo task with bullet AC line → included.
         Alongside a gated task (prose-only todo) that must be excluded.
 
@@ -374,9 +368,7 @@ class TestFromAC_PickTasksClarityGate:
             "todo task without bullets must be excluded by clarity gate"
         )
 
-    def test_clarity_gate_backlog_not_subject_to_gate(
-        self, tmp_path: Path
-    ) -> None:
+    def test_clarity_gate_backlog_not_subject_to_gate(self, tmp_path: Path) -> None:
         """Edge: backlog task without bullets → passes clarity gate (not in _CLARITY_STATUSES).
         A todo without bullets in same board must still be excluded.
 
@@ -406,9 +398,7 @@ class TestFromAC_PickTasksClarityGate:
             "todo task without bullets must be excluded; backlog exemption must not mask it"
         )
 
-    def test_clarity_gate_numbered_ac_line_qualifies(
-        self, tmp_path: Path
-    ) -> None:
+    def test_clarity_gate_numbered_ac_line_qualifies(self, tmp_path: Path) -> None:
         """Boundary: numbered list item (1. text) qualifies as AC line — task passes.
         Alongside a gated prose-only todo that must be excluded.
 
@@ -478,9 +468,7 @@ class TestFromAC_GateImportedFromDispatch:
         )
         view = AgentView(KanbanEngine(board, activity_log=False))
 
-        with patch(
-            "owlbear_kanban.dispatch._passes_tdd_gate", return_value=False
-        ):
+        with patch("owlbear_kanban.dispatch._passes_tdd_gate", return_value=False):
             result = view.pick_tasks()
 
         assert 1 not in _all_task_ids(result), (
@@ -497,9 +485,7 @@ class TestFromAC_GateImportedFromDispatch:
 class TestFromAC_PickDispatchableDeprecation:
     """AC4: pick_dispatchable() must emit DeprecationWarning via warnings.warn()."""
 
-    def test_pick_dispatchable_emits_deprecation_warning(
-        self, tmp_path: Path
-    ) -> None:
+    def test_pick_dispatchable_emits_deprecation_warning(self, tmp_path: Path) -> None:
         """pick_dispatchable() call must produce exactly one DeprecationWarning.
 
         Currently: no warning is emitted → pytest.warns() context raises AssertionError.
@@ -552,13 +538,9 @@ class TestFromAC_WaveAssemblyRegressionGuard:
 
         result = view.pick_tasks()
 
-        assert 2 not in _all_task_ids(result), (
-            "gated task must not consume a wave slot"
-        )
+        assert 2 not in _all_task_ids(result), "gated task must not consume a wave slot"
 
-    def test_sort_order_preserved_after_gate_filtering(
-        self, tmp_path: Path
-    ) -> None:
+    def test_sort_order_preserved_after_gate_filtering(self, tmp_path: Path) -> None:
         """Priority sort order is preserved for tasks that pass gates.
 
         Wave 0 should contain critical task before someday task.
@@ -604,7 +586,9 @@ class TestFromAC_WaveAssemblyRegressionGuard:
         assert 1 in all_ids, "critical todo must appear in waves"
         assert 2 in all_ids, "someday todo must appear in waves"
         # Verify wave 0 contains id=1 (critical) before id=2 (someday) — sort unchanged
-        wave0_ids = [entry.id for entry in result.waves[0].tasks] if result.waves else []
+        wave0_ids = (
+            [entry.id for entry in result.waves[0].tasks] if result.waves else []
+        )
         assert wave0_ids.index(1) < wave0_ids.index(2), (
             "critical task (id=1) must sort before someday task (id=2) in wave 0"
         )
@@ -644,9 +628,7 @@ class TestFromAC_ClarityGateDelegation:
         )
         view = AgentView(KanbanEngine(board, activity_log=False))
 
-        with patch(
-            "owlbear_kanban.dispatch._passes_clarity_gate", return_value=True
-        ):
+        with patch("owlbear_kanban.dispatch._passes_clarity_gate", return_value=True):
             result = view.pick_tasks()
 
         assert 30 in _all_task_ids(result), (
@@ -915,15 +897,13 @@ class TestFromAC_BucketCompatibilityRegressionGuard:
 
         all_ids = _all_task_ids(result)
         assert 40 in all_ids, "todo task (builder bucket) must clear gates and appear"
-        assert 41 in all_ids, "review task (reviewer bucket) must clear gates and appear"
+        assert 41 in all_ids, (
+            "review task (reviewer bucket) must clear gates and appear"
+        )
 
         wave_sets = [{entry.id for entry in wave.tasks} for wave in result.waves]
-        task_40_wave = next(
-            (i for i, ids in enumerate(wave_sets) if 40 in ids), None
-        )
-        task_41_wave = next(
-            (i for i, ids in enumerate(wave_sets) if 41 in ids), None
-        )
+        task_40_wave = next((i for i, ids in enumerate(wave_sets) if 40 in ids), None)
+        task_41_wave = next((i for i, ids in enumerate(wave_sets) if 41 in ids), None)
         assert task_40_wave is not None, "task 40 must be placed in a wave"
         assert task_41_wave is not None, "task 41 must be placed in a wave"
         assert task_40_wave != task_41_wave, (

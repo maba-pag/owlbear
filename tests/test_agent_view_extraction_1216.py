@@ -45,8 +45,7 @@ class TestFromAC_EngineNoLongerContainsAgentView:
     ) -> None:
         """Source of engine.py must not contain `class AgentView`."""
         engine_file = (
-            Path(__file__).parent.parent
-            / "serve/kanban/src/owlbear_kanban/engine.py"
+            Path(__file__).parent.parent / "serve/kanban/src/owlbear_kanban/engine.py"
         )
         source = engine_file.read_text()
         assert "class AgentView" not in source, (
@@ -151,8 +150,7 @@ class TestFromAC_PackageReexportsAgentView:
     def test_package_init_imports_agent_view_from_agent_view_module(self) -> None:
         """__init__.py must import AgentView from agent_view, not engine."""
         init_file = (
-            Path(__file__).parent.parent
-            / "serve/kanban/src/owlbear_kanban/__init__.py"
+            Path(__file__).parent.parent / "serve/kanban/src/owlbear_kanban/__init__.py"
         )
         source = init_file.read_text()
         assert "from owlbear_kanban.agent_view import" in source or (
@@ -213,7 +211,9 @@ class TestFromAC_ExistingAPIUnchanged:
 
         engine = KanbanEngine(tmp_path)
         av = AgentView(engine)
-        assert av.engine is engine, "AgentView.engine must be the KanbanEngine passed to __init__"
+        assert av.engine is engine, (
+            "AgentView.engine must be the KanbanEngine passed to __init__"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -229,9 +229,7 @@ class TestFromAC_BackwardCompatEngineImport:
         try:
             from owlbear_kanban.engine import AgentView  # noqa: F401
         except (ImportError, AttributeError) as exc:
-            pytest.fail(
-                f"from owlbear_kanban.engine import AgentView raised: {exc}"
-            )
+            pytest.fail(f"from owlbear_kanban.engine import AgentView raised: {exc}")
 
     def test_engine_import_of_agent_view_originates_from_agent_view_module(
         self,

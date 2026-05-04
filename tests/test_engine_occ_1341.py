@@ -219,9 +219,7 @@ class TestFromAC_EngineEditTaskOCC:
         _write_task(kanban_dir, 1, updated=_FIXED_UPDATED)
         engine = _make_engine(kanban_dir)
 
-        with mock.patch(
-            "owlbear_kanban.storage.write_task_if_unchanged"
-        ) as mock_cas:
+        with mock.patch("owlbear_kanban.storage.write_task_if_unchanged") as mock_cas:
             engine.edit_task("1", append_body="non-occ edit")
 
         mock_cas.assert_not_called()
@@ -344,7 +342,9 @@ class TestFromAC_EngineSweepOCC:
         """sweep invokes write_task_if_unchanged when clearing an expired claim."""
         kanban_dir = _make_board(tmp_path)
         _write_task(
-            kanban_dir, 1, claimed_at=f'"{self._expired_ts()}"',
+            kanban_dir,
+            1,
+            claimed_at=f'"{self._expired_ts()}"',
             updated=_FIXED_UPDATED,
         )
         engine = _make_engine(kanban_dir)
@@ -360,7 +360,9 @@ class TestFromAC_EngineSweepOCC:
         """sweep catches ConcurrencyError ERR_STALE and does not re-raise it."""
         kanban_dir = _make_board(tmp_path)
         _write_task(
-            kanban_dir, 1, claimed_at=f'"{self._expired_ts()}"',
+            kanban_dir,
+            1,
+            claimed_at=f'"{self._expired_ts()}"',
             updated=_FIXED_UPDATED,
         )
         engine = _make_engine(kanban_dir)
@@ -381,7 +383,9 @@ class TestFromAC_EngineSweepOCC:
         """sweep does not include a ERR_STALE task in the returned released list."""
         kanban_dir = _make_board(tmp_path)
         _write_task(
-            kanban_dir, 1, claimed_at=f'"{self._expired_ts()}"',
+            kanban_dir,
+            1,
+            claimed_at=f'"{self._expired_ts()}"',
             updated=_FIXED_UPDATED,
         )
         engine = _make_engine(kanban_dir)
@@ -402,10 +406,16 @@ class TestFromAC_EngineSweepOCC:
         kanban_dir = _make_board(tmp_path)
         expired = self._expired_ts()
         _write_task(
-            kanban_dir, 1, claimed_at=f'"{expired}"', updated=_FIXED_UPDATED,
+            kanban_dir,
+            1,
+            claimed_at=f'"{expired}"',
+            updated=_FIXED_UPDATED,
         )
         _write_task(
-            kanban_dir, 2, title="Task Two", claimed_at=f'"{expired}"',
+            kanban_dir,
+            2,
+            title="Task Two",
+            claimed_at=f'"{expired}"',
             updated=_FIXED_UPDATED,
         )
         engine = _make_engine(kanban_dir)

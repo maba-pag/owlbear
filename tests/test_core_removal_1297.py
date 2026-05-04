@@ -54,11 +54,11 @@ def _allowed_imports_keys() -> set[str]:
                 and target.id == "ALLOWED_IMPORTS"
                 and isinstance(value, ast.Dict)
             ):
-                    return {
-                        key.value
-                        for key in value.keys
-                        if isinstance(key, ast.Constant) and isinstance(key.value, str)
-                    }
+                return {
+                    key.value
+                    for key in value.keys
+                    if isinstance(key, ast.Constant) and isinstance(key.value, str)
+                }
         elif isinstance(node, ast.Assign):
             for target in node.targets:
                 if (
@@ -66,11 +66,11 @@ def _allowed_imports_keys() -> set[str]:
                     and target.id == "ALLOWED_IMPORTS"
                     and isinstance(node.value, ast.Dict)
                 ):
-                        return {
-                            key.value
-                            for key in node.value.keys
-                            if isinstance(key, ast.Constant) and isinstance(key.value, str)
-                        }
+                    return {
+                        key.value
+                        for key in node.value.keys
+                        if isinstance(key, ast.Constant) and isinstance(key.value, str)
+                    }
     return set()
 
 
@@ -155,7 +155,9 @@ class TestFromAC_CoreRemoval:
             if p.is_file()
             and "serve/orchestrator" in p.read_text(encoding="utf-8", errors="ignore")
         ]
-        assert hits == [], f"serve/knowledge/ files still reference serve/orchestrator: {hits}"
+        assert hits == [], (
+            f"serve/knowledge/ files still reference serve/orchestrator: {hits}"
+        )
 
     # ---- Scope edit: test_package_boundary.py ALLOWED_IMPORTS ---------------
 

@@ -41,9 +41,10 @@ class TestFromAC_UsePollingFetchExists:
             "usePollingFetch.ts missing — run test_usepollingfetch_file_exists first."
         )
         content = hook_file.read_text()
-        assert "export function usePollingFetch" in content or "export const usePollingFetch" in content, (
-            "usePollingFetch.ts must export 'usePollingFetch' as a named function."
-        )
+        assert (
+            "export function usePollingFetch" in content
+            or "export const usePollingFetch" in content
+        ), "usePollingFetch.ts must export 'usePollingFetch' as a named function."
 
     def test_usepollingfetch_accepts_onsuccess_callback(self) -> None:
         """usePollingFetch must accept an onSuccess callback (health tracking)."""
@@ -209,7 +210,7 @@ class TestFromAC_KanbanBoardLegacyRemoval:
         invocation = re.search(r"\buseBoard\s*\(\s*\)", content)
         assert invocation is None, (
             f"KanbanBoard.tsx still invokes useBoard() at: "
-            f"{content[max(0, invocation.start() - 40):invocation.end() + 40]!r}. "
+            f"{content[max(0, invocation.start() - 40) : invocation.end() + 40]!r}. "
             "After AC4 state-lifting and LegacyKanbanBoard removal, KanbanBoard "
             "must not call useBoard() on any code path."
         )
@@ -359,7 +360,10 @@ class TestFromAC_DurableSuiteAlignment:
         suite = self.TESTS_DIR / "useBoard_967.test.ts"
         assert suite.exists(), "useBoard_967.test.ts missing."
         content = suite.read_text()
-        assert "toHaveProperty('health')" in content or 'toHaveProperty("health")' in content, (
+        assert (
+            "toHaveProperty('health')" in content
+            or 'toHaveProperty("health")' in content
+        ), (
             "useBoard_967.test.ts does not assert toHaveProperty('health') in its "
             "interface test.  useBoard now returns a 'health' field — AC6 (cycle 3) "
             "requires the durable interface assertion to include it."

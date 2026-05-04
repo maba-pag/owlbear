@@ -49,11 +49,7 @@ _SERVER_PY = (
     / "server.py"
 )
 _LIFECYCLE_TOOLS_PY = (
-    _TESTS_DIR.parent
-    / "serve"
-    / "mcp-kanban"
-    / "tests"
-    / "test_mcp_lifecycle_tools.py"
+    _TESTS_DIR.parent / "serve" / "mcp-kanban" / "tests" / "test_mcp_lifecycle_tools.py"
 )
 
 # ---------------------------------------------------------------------------
@@ -431,6 +427,7 @@ class TestFromAC_CanonicalResolverBranches:
 
         Proof: candidate() raises RuntimeError → _canonical_agent_view_for returns None.
         """
+
         def _raising() -> None:
             msg = "test error — must be suppressed"
             raise RuntimeError(msg)

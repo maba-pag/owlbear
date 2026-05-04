@@ -125,7 +125,9 @@ class TestFromAC_LifespanNoCopilotAuth:
         monkeypatch.delenv("OWLBEAR_LLM_API_KEY", raising=False)
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         # Ensure copilot_auth is NOT pre-loaded so the check is meaningful.
-        monkeypatch.delitem(sys.modules, "owlbear_knowledge.copilot_auth", raising=False)
+        monkeypatch.delitem(
+            sys.modules, "owlbear_knowledge.copilot_auth", raising=False
+        )
         monkeypatch.delitem(sys.modules, "owlbear_knowledge", raising=False)
 
         async with app_lifespan(MagicMock()):

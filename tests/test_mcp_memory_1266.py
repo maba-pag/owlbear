@@ -336,7 +336,9 @@ class TestFromAC_MtimeScanCache:
         cache.has_changed()  # prime
 
         # Write a new file — updates directory mtime
-        (tmp_path / "new-entry-abc123.md").write_text("---\n---\nbody", encoding="utf-8")
+        (tmp_path / "new-entry-abc123.md").write_text(
+            "---\n---\nbody", encoding="utf-8"
+        )
 
         assert cache.has_changed() is True
 
@@ -528,7 +530,9 @@ class TestFromAC_StateTransitions:
             await update_entry(ctx, entry_id=entry.id, state="curated")
 
     @pytest.mark.asyncio
-    async def test_approved_update_with_title_raises_tool_error(self, tmp_path: Path) -> None:
+    async def test_approved_update_with_title_raises_tool_error(
+        self, tmp_path: Path
+    ) -> None:
         """update_entry rejects ALL mutations on approved entries — field edit raises ToolError.
 
         Covers AC: 'update_entry rejects ALL calls when current.state == approved'.
@@ -562,7 +566,9 @@ class TestFromAC_StateTransitions:
             await update_entry(ctx, entry_id=entry.id, confidence=0.99)
 
     @pytest.mark.asyncio
-    async def test_approved_update_with_content_raises_tool_error(self, tmp_path: Path) -> None:
+    async def test_approved_update_with_content_raises_tool_error(
+        self, tmp_path: Path
+    ) -> None:
         """update_entry rejects content mutations on approved entries (ALL calls contract)."""
         entry = _make_entry(state="approved")
         engine = MemoryEngine(memory_dir=tmp_path)
@@ -573,7 +579,9 @@ class TestFromAC_StateTransitions:
             await update_entry(ctx, entry_id=entry.id, content="Modified content")
 
     @pytest.mark.asyncio
-    async def test_approved_update_with_categories_raises_tool_error(self, tmp_path: Path) -> None:
+    async def test_approved_update_with_categories_raises_tool_error(
+        self, tmp_path: Path
+    ) -> None:
         """update_entry rejects categories mutations on approved entries (ALL calls contract)."""
         entry = _make_entry(state="approved")
         engine = MemoryEngine(memory_dir=tmp_path)
@@ -584,7 +592,9 @@ class TestFromAC_StateTransitions:
             await update_entry(ctx, entry_id=entry.id, categories=["pitfall"])
 
     @pytest.mark.asyncio
-    async def test_approved_update_with_state_raises_tool_error(self, tmp_path: Path) -> None:
+    async def test_approved_update_with_state_raises_tool_error(
+        self, tmp_path: Path
+    ) -> None:
         """update_entry rejects state change mutations on approved entries (ALL calls contract)."""
         entry = _make_entry(state="approved")
         engine = MemoryEngine(memory_dir=tmp_path)
@@ -595,7 +605,9 @@ class TestFromAC_StateTransitions:
             await update_entry(ctx, entry_id=entry.id, state="curated")
 
     @pytest.mark.asyncio
-    async def test_approved_update_with_scope_agents_raises_tool_error(self, tmp_path: Path) -> None:
+    async def test_approved_update_with_scope_agents_raises_tool_error(
+        self, tmp_path: Path
+    ) -> None:
         """update_entry rejects scope_agents mutations on approved entries (ALL calls contract)."""
         entry = _make_entry(state="approved")
         engine = MemoryEngine(memory_dir=tmp_path)
@@ -768,8 +780,18 @@ class TestFromAC_Retrieval:
         self, tmp_path: Path
     ) -> None:
         """Within the same state tier, entries are sorted by confidence descending."""
-        low = _make_entry(id="50000000-0000-4000-8000-000000000005", title="Low confidence", state="curated", confidence=0.75)
-        high = _make_entry(id="60000000-0000-4000-8000-000000000006", title="High confidence", state="curated", confidence=0.95)
+        low = _make_entry(
+            id="50000000-0000-4000-8000-000000000005",
+            title="Low confidence",
+            state="curated",
+            confidence=0.75,
+        )
+        high = _make_entry(
+            id="60000000-0000-4000-8000-000000000006",
+            title="High confidence",
+            state="curated",
+            confidence=0.95,
+        )
         engine = MemoryEngine(memory_dir=tmp_path)
         _write_entry_file(tmp_path, low)
         _write_entry_file(tmp_path, high)
@@ -830,7 +852,9 @@ class TestFromAC_ConsumerDrift:
         """agent-audit.prompt.md must not call retired get_knowledge tool."""
         prompt_path = (
             Path(__file__).parent.parent
-            / ".owlbear" / "prompts" / "agent-audit.prompt.md"
+            / ".owlbear"
+            / "prompts"
+            / "agent-audit.prompt.md"
         )
         assert prompt_path.exists(), f"prompt file not found: {prompt_path}"
         content = prompt_path.read_text()
@@ -843,7 +867,9 @@ class TestFromAC_ConsumerDrift:
         """memory-curator.agent.md must not reference retired list_entries tool."""
         agent_path = (
             Path(__file__).parent.parent
-            / "share" / "agents" / "memory-curator.agent.md"
+            / "share"
+            / "agents"
+            / "memory-curator.agent.md"
         )
         assert agent_path.exists(), f"agent file not found: {agent_path}"
         content = agent_path.read_text()
@@ -859,8 +885,7 @@ class TestFromAC_ConsumerDrift:
         All three must be gone and replaced with the current 5-tool API.
         """
         readme_path = (
-            Path(__file__).parent.parent
-            / "serve" / "mcp-memory" / "README.md"
+            Path(__file__).parent.parent / "serve" / "mcp-memory" / "README.md"
         )
         assert readme_path.exists(), f"README not found: {readme_path}"
         content = readme_path.read_text()
@@ -874,7 +899,9 @@ class TestFromAC_ConsumerDrift:
         """agent-audit.prompt.md must reference the current query_memory tool (positive proof)."""
         prompt_path = (
             Path(__file__).parent.parent
-            / ".owlbear" / "prompts" / "agent-audit.prompt.md"
+            / ".owlbear"
+            / "prompts"
+            / "agent-audit.prompt.md"
         )
         assert prompt_path.exists(), f"prompt file not found: {prompt_path}"
         content = prompt_path.read_text()
@@ -887,7 +914,9 @@ class TestFromAC_ConsumerDrift:
         """memory-curator.agent.md must reference query_memory (positive proof)."""
         agent_path = (
             Path(__file__).parent.parent
-            / "share" / "agents" / "memory-curator.agent.md"
+            / "share"
+            / "agents"
+            / "memory-curator.agent.md"
         )
         assert agent_path.exists(), f"agent file not found: {agent_path}"
         content = agent_path.read_text()
@@ -899,8 +928,7 @@ class TestFromAC_ConsumerDrift:
     def test_mcp_memory_readme_lists_all_current_tools(self) -> None:
         """serve/mcp-memory/README.md must list all 5 current tool names (positive proof)."""
         readme_path = (
-            Path(__file__).parent.parent
-            / "serve" / "mcp-memory" / "README.md"
+            Path(__file__).parent.parent / "serve" / "mcp-memory" / "README.md"
         )
         assert readme_path.exists(), f"README not found: {readme_path}"
         content = readme_path.read_text()

@@ -179,8 +179,7 @@ class TestFromAC_SuccessStatusAdvancement:
         result = engine.end_work("1", note="done", outcome="success")
 
         assert result.status == "done", (
-            f"AC1: success from 'review' must advance to 'done'; "
-            f"got {result.status!r}"
+            f"AC1: success from 'review' must advance to 'done'; got {result.status!r}"
         )
 
     def test_success_advances_across_all_non_terminal_steps(self, tmp_path) -> None:
@@ -244,8 +243,7 @@ class TestFromAC_SuccessAtTerminalStatus:
 
         error_text = str(exc_info.value).lower()
         assert any(
-            kw in error_text
-            for kw in ("advance", "final", "terminal", "last", "end")
+            kw in error_text for kw in ("advance", "final", "terminal", "last", "end")
         ), (
             f"AC2: error message must describe inability to advance past final status; "
             f"got: {str(exc_info.value)!r}"

@@ -77,7 +77,9 @@ class TestFromAC_AtomicWrite:
         engine = MemoryEngine(tmp_path)
         entry = _make_entry()
         with (
-            patch("owlbear_mcp_memory.engine.mkstemp", wraps=_real_mkstemp) as mock_mkstemp,
+            patch(
+                "owlbear_mcp_memory.engine.mkstemp", wraps=_real_mkstemp
+            ) as mock_mkstemp,
             patch("os.fsync") as mock_fsync,
         ):
             path = engine.write(entry)
