@@ -18,7 +18,9 @@ if TYPE_CHECKING:
 
 __all__ = [
     "approve_entry",
+    "curate_memory",
     "delete_entry",
+    "delete_memory",
     "query_memory",
     "store_learning",
     "update_entry",
@@ -84,7 +86,7 @@ def _ensure_update_transition(current: MemoryState, target: MemoryState) -> None
     allowed: dict[MemoryState, set[MemoryState]] = {
         MemoryState.PENDING: {MemoryState.CURATED},
         MemoryState.CURATED: set(),
-        MemoryState.APPROVED: set(),
+        MemoryState.APPROVED: {MemoryState.CURATED},
         MemoryState.DELETED: set(),
     }
     if target in allowed[current]:
@@ -178,15 +180,29 @@ async def update_entry(  # noqa: PLR0913
     state: MemoryState | None = None,
     scope_agents: list[str] | None = None,
 ) -> dict[str, Any]:
-    """Update mutable fields on an existing entry (curator-only)."""
+    """Update mutable fields on an existing entry (curator-only); auto-promotes pending→curated when scope_agents provided; auto-downgrades approved→curated."""
     _require_role(ctx, allowed={"curator"}, tool_name="update_entry")
     engine = _engine_from_ctx(ctx)
     current = _load_entry_or_raise(engine, entry_id)
-    if current.state == MemoryState.APPROVED:
-        msg = "update_entry cannot modify approved entries"
+
+    if current.state == MemoryState.DELETED:
+        msg = "update_entry cannot modify deleted entries"
         raise ToolError(msg)
 
-    target_state = state or current.state
+    next_scope_agents = current.scope_agents if scope_agents is None else scope_agents
+    if current.state == MemoryState.PENDING and not next_scope_agents:
+        msg = "scope_agents are required when curating pending entries"
+        raise ToolError(msg)
+
+    if current.state == MemoryState.APPROVED:
+        target_state = MemoryState.CURATED
+    elif state is not None:
+        target_state = state
+    elif current.state == MemoryState.PENDING and bool(next_scope_agents):
+        target_state = MemoryState.CURATED
+    else:
+        target_state = current.state
+
     _ensure_update_transition(current.state, target_state)
 
     payload = {
@@ -196,11 +212,11 @@ async def update_entry(  # noqa: PLR0913
         "categories": current.categories if categories is None else categories,
         "confidence": current.confidence if confidence is None else confidence,
         "state": target_state,
-        "scope_agents": current.scope_agents if scope_agents is None else scope_agents,
+        "scope_agents": next_scope_agents,
         "source_agent": current.source_agent,
         "created_at": current.created_at,
         "updated_at": _now_iso(),
-        "approved_at": current.approved_at,
+        "approved_at": None if current.state == MemoryState.APPROVED else current.approved_at,
     }
     try:
         updated = MemoryEntry.model_validate(payload)
@@ -211,19 +227,56 @@ async def update_entry(  # noqa: PLR0913
 
 
 async def delete_entry(ctx: Context, *, entry_id: str) -> dict[str, Any]:
-    """Mark an entry as deleted (curator-only)."""
+    """Delete an entry (curator-only): pending entries are hard-deleted from disk; curated and approved are soft-deleted to deleted state."""
     _require_role(ctx, allowed={"curator"}, tool_name="delete_entry")
     engine = _engine_from_ctx(ctx)
     current = _load_entry_or_raise(engine, entry_id)
 
     if current.state == MemoryState.DELETED:
-        return _entry_to_dict(current)
+        msg = "delete_entry cannot delete an entry that is already deleted"
+        raise ToolError(msg)
+
+    if current.state == MemoryState.PENDING:
+        engine.delete(current.id)
+        deleted = current.model_copy(
+            update={"state": MemoryState.DELETED, "updated_at": _now_iso(), "approved_at": None}
+        )
+        return _entry_to_dict(deleted)
 
     updated = current.model_copy(
-        update={"state": MemoryState.DELETED, "updated_at": _now_iso()}
+        update={"state": MemoryState.DELETED, "updated_at": _now_iso(), "approved_at": None}
     )
     engine.write(updated)
     return _entry_to_dict(updated)
+
+
+async def curate_memory(  # noqa: PLR0913
+    ctx: Context,
+    *,
+    entry_id: str,
+    title: str | None = None,
+    content: str | None = None,
+    categories: list[MemoryCategory] | None = None,
+    confidence: float | None = None,
+    state: MemoryState | None = None,
+    scope_agents: list[str] | None = None,
+) -> dict[str, Any]:
+    """Compatibility alias for curation-style updates."""
+    return await update_entry(
+        ctx,
+        entry_id=entry_id,
+        title=title,
+        content=content,
+        categories=categories,
+        confidence=confidence,
+        state=state,
+        scope_agents=scope_agents,
+    )
+
+
+async def delete_memory(ctx: Context, *, entry_id: str) -> dict[str, Any]:
+    """Compatibility alias for delete semantics."""
+    return await delete_entry(ctx, entry_id=entry_id)
 
 
 async def approve_entry(ctx: Context, *, entry_id: str) -> dict[str, Any]:

@@ -20,9 +20,11 @@ Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json
 |------|-------------|
 | `store_learning` | Create a new `pending` memory entry |
 | `query_memory` | Retrieve entries by state (`curated` and `approved` by default), approved-first then confidence-desc; supports optional `categories`, `scope_agents`, `min_confidence`, and `limit` filters (AND semantics) |
-| `update_entry` | Curator-only updates; supports `pending -> curated` and blocks modifications of `approved` entries |
-| `delete_entry` | Curator-only soft delete to `deleted` state |
-| `approve_entry` | User-only promotion from `curated -> approved` |
+| `update_entry` | Curator-only updates; auto-promotes `pending → curated` when `scope_agents` provided (scope gate rejects if missing); auto-downgrades `approved → curated` unconditionally |
+| `delete_entry` | Curator-only delete; hard-deletes `pending` entries (file removed from disk); soft-deletes `curated`/`approved` entries to `deleted` state |
+| `approve_entry` | User-only promotion from `curated → approved` |
+| `curate_memory` | Alias for `update_entry` — same curation semantics |
+| `delete_memory` | Alias for `delete_entry` — same deletion semantics |
 
 ### Entry schema
 
