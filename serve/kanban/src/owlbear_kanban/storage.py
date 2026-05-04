@@ -296,7 +296,13 @@ def _yaml_safe_value(value: object) -> object:
 
 
 def _normalize_timestamp(ts: str | None) -> str | None:
-    """Return *ts* with an explicit UTC +00:00 suffix when it lacks a timezone."""
+    """Normalise *ts* to an explicit UTC ``+00:00`` form.
+
+    - No timezone: appends ``+00:00``.
+    - ``Z`` suffix: replaced with ``+00:00``.
+    - Non-UTC offset (e.g. ``+02:00``): converted to UTC via :func:`datetime.astimezone`.
+    - Non-timestamp strings: returned unchanged.
+    """
     if ts is None:
         return None
     normalized = ts.strip()
