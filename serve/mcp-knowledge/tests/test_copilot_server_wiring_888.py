@@ -94,6 +94,25 @@ class TestFromAC_ApiKeyPath:
         assert kwargs.get("api_key") == "sk-expected-key"  # noqa: S101
 
     @pytest.mark.asyncio
+    async def test_structured_extractor_is_exact_llmextractor_instance(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """ctx.structured_extractor is the exact LLMExtractor instance constructed from the API key.
+
+        AC2 discriminating assertion: pins identity of the object assigned to AppContext,
+        not just any truthy value.
+        """
+        monkeypatch.setenv("OWLBEAR_LLM_API_KEY", "sk-pin-test")
+
+        expected_instance = MagicMock(name="expected_extractor_instance")
+        mock_llm_cls = MagicMock(name="LLMExtractorCls", return_value=expected_instance)
+        llm_mod = _make_llm_mod(mock_llm_cls)
+
+        with patch.dict(sys.modules, {"owlbear_knowledge.llm_extractor": llm_mod}):
+            async with app_lifespan(MagicMock()) as ctx:
+                assert ctx.structured_extractor is expected_instance  # noqa: S101
+
+    @pytest.mark.asyncio
     async def test_structured_extractor_none_when_llm_import_fails(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:

@@ -114,6 +114,55 @@ class TestFromAC_LifespanNoCopilotAuth:
         mock_auth.get_copilot_token.assert_not_called()  # type: ignore[attr-defined]
 
     @pytest.mark.asyncio
+    async def test_copilot_auth_module_absent_from_sys_modules_after_lifespan(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """owlbear_knowledge.copilot_auth is NOT in sys.modules after lifespan exits.
+
+        AC1 postcondition: 'absent from sys.modules after lifespan completes'.
+        Stronger than a getter-call check: catches any import (even without getter use).
+        """
+        monkeypatch.delenv("OWLBEAR_LLM_API_KEY", raising=False)
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        # Ensure copilot_auth is NOT pre-loaded so the check is meaningful.
+        monkeypatch.delitem(sys.modules, "owlbear_knowledge.copilot_auth", raising=False)
+        monkeypatch.delitem(sys.modules, "owlbear_knowledge", raising=False)
+
+        async with app_lifespan(MagicMock()):
+            pass
+
+        assert "owlbear_knowledge.copilot_auth" not in sys.modules  # noqa: S101
+
+    @pytest.mark.asyncio
+    async def test_ingest_pipeline_and_query_service_are_actual_constructed_instances(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """ctx.ingest_pipeline and ctx.query_service are the exact instances constructed in lifespan.
+
+        AC2 discriminating assertion: pins identity of the actual objects assigned to AppContext,
+        not just any truthy value.
+        """
+        monkeypatch.delenv("OWLBEAR_LLM_API_KEY", raising=False)
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+        mock_qs_instance = MagicMock(name="qs_instance")
+        mock_pipeline_instance = MagicMock(name="pipeline_instance")
+
+        with (
+            patch(
+                "owlbear_mcp_knowledge.server.KnowledgeQueryService",
+                return_value=mock_qs_instance,
+            ),
+            patch(
+                "owlbear_mcp_knowledge.server.IngestPipeline",
+                return_value=mock_pipeline_instance,
+            ),
+        ):
+            async with app_lifespan(MagicMock()) as ctx:
+                assert ctx.query_service is mock_qs_instance  # noqa: S101
+                assert ctx.ingest_pipeline is mock_pipeline_instance  # noqa: S101
+
+    @pytest.mark.asyncio
     async def test_structured_extractor_is_none_without_api_key(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -242,3 +291,25 @@ class TestFromAC_TokenFileCleanup:
         # New code: cleanup code calls unlink (with missing_ok=True) even when absent.
         # Current code: no cleanup → unlink never called → assertion FAILS.
         mock_unlink.assert_called()
+
+    @pytest.mark.asyncio
+    async def test_token_file_cleanup_no_exception_when_absent_real_fs(
+        self, tmp_path: Path
+    ) -> None:
+        """Lifespan does NOT raise when copilot_token.json is absent (real filesystem, no mock).
+
+        AC3 discriminating assertion: exercises real Path.unlink so missing_ok=True semantics
+        are verified. A bare unlink() without missing_ok would raise FileNotFoundError here
+        because the file is genuinely absent in tmp_path.
+        """
+        owlbear_dir = tmp_path / ".owlbear"
+        owlbear_dir.mkdir(parents=True)
+        token_file = owlbear_dir / "copilot_token.json"
+        assert not token_file.exists()
+
+        # No patch on Path.unlink — real filesystem call is exercised.
+        with patch("pathlib.Path.home", return_value=tmp_path):
+            async with app_lifespan(MagicMock()):
+                pass  # FileNotFoundError propagates here if missing_ok is absent
+
+        assert not token_file.exists()  # noqa: S101
