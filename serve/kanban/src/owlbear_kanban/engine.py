@@ -2987,7 +2987,7 @@ class AgentView:
                     user_message=(f"move_to must be one of {sorted(valid_statuses)}"),
                 )
             if move_to == "archived":
-                self._validate_move_archival_for_archive(
+                self.engine.validate_archival(
                     task_id=task_id,
                     can_mark_completed=False,
                     config=config,
@@ -3060,13 +3060,13 @@ class AgentView:
                 if before.status in statuses:
                     current_idx = statuses.index(before.status)
                     if current_idx < len(statuses) - 1:
-                        self._validate_move_destination_predicate(
+                        self.engine.validate_status_predicate(
                             target_status=statuses[current_idx + 1],
                             body=body,
                             config=config,
                         )
             elif outcome in {"reject", "block"} and move_to is not None:
-                self._validate_move_destination_predicate(
+                self.engine.validate_status_predicate(
                     target_status=move_to,
                     body=body,
                     config=config,
