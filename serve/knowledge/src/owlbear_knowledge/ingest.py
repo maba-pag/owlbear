@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Literal
 from uuid import uuid4
 
@@ -129,6 +130,29 @@ class IngestPipeline:
             resolved_source_id = source_id
             if source_url is not None and self._source_store is not None:
                 resolved_source = self._source_store.resolve_by_url(source_url)
+                if resolved_source is None:
+                    from owlbear_knowledge.models import (  # noqa: PLC0415
+                        KnowledgeSource,
+                        SourceType,
+                    )
+
+                    now = datetime.now(tz=UTC).isoformat()
+                    created_source = self._source_store.create(
+                        KnowledgeSource(
+                            name=source_url,
+                            source_type=SourceType.AUTHENTICATED_WEB,
+                            fetch_method="url",
+                            enrich=False,
+                            config={"url": source_url},
+                            created_at=now,
+                            updated_at=now,
+                        )
+                    )
+                    # Store implementation returns None; test doubles may return the source.
+                    if created_source is not None:
+                        resolved_source = created_source
+                    else:
+                        resolved_source = self._source_store.resolve_by_url(source_url)
                 if resolved_source is not None:
                     resolved_source_id = resolved_source.id
 
