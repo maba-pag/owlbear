@@ -523,6 +523,11 @@ class TestFromAC_SerializationRoundtrip:
         assert restored.approved_at == entry.approved_at
         assert restored.scope_agents == entry.scope_agents
         assert restored.content == entry.content
+        assert restored.categories == entry.categories
+        assert restored.confidence == entry.confidence
+        assert restored.state == entry.state
+        assert restored.created_at == entry.created_at
+        assert restored.updated_at == entry.updated_at
 
     def test_content_is_body_not_in_frontmatter(self) -> None:
         content_body = "This is the markdown body of the memory entry."
@@ -576,6 +581,11 @@ class TestFromAC_EngineRoundtrip:
             assert restored.approved_at == entry.approved_at
             assert restored.scope_agents == entry.scope_agents
             assert restored.content == entry.content
+            assert restored.categories == entry.categories
+            assert restored.confidence == entry.confidence
+            assert restored.state == entry.state
+            assert restored.created_at == entry.created_at
+            assert restored.updated_at == entry.updated_at
 
     def test_content_is_body_not_frontmatter_in_file(self) -> None:
         """write() places content in the markdown body section, not in YAML frontmatter."""
