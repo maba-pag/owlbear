@@ -306,7 +306,7 @@ class TestFromAC_AgentViewDelegation:
 
     def test_agentview_show_task_delegates_compute_dep_status(self) -> None:
         """AC5: AgentView.show_task() must call self.engine._compute_dep_status(...)."""
-        src = _source("engine.py")
+        src = _source("agent_view.py")
         assert _method_calls_engine_attr(src, "AgentView", "show_task", "_compute_dep_status"), \
             "AgentView.show_task() does not delegate to self.engine._compute_dep_status(...)"
 
