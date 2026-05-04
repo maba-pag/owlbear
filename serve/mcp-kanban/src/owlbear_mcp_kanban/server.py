@@ -64,12 +64,31 @@ __all__ = [
     "list_tasks",
     "mcp",
     "move_task",
+    "parse_task_id",
     "pick_tasks",
     "show_task",
     "start_work",
 ]
 
 _DEFAULT_KANBAN_DIR = Path(".owlbear/kanban")
+
+
+def parse_task_id(value: str | int, *, field: str = "task_id") -> int:
+    """Parse MCP task identifiers as positive base-10 integers."""
+    msg = f"{field} must be a positive integer"
+    if isinstance(value, bool):
+        raise ToolError(msg)
+    if isinstance(value, int):
+        parsed = value
+    elif isinstance(value, str):
+        if not value or value != value.strip() or not value.isdecimal():
+            raise ToolError(msg)
+        parsed = int(value)
+    else:
+        raise ToolError(msg)
+    if parsed <= 0:
+        raise ToolError(msg)
+    return parsed
 
 
 def _map_kanban_error(exc: KanbanError) -> None:
@@ -227,7 +246,7 @@ def _canonical_agent_view_for(engine: KanbanEngine) -> object | None:
 def _invoke_view_move_task(
     view: object | None,
     *,
-    task_id: str,
+    task_id: int,
     status: str,
     archival_reason: str | None,
     archival_refs: list[int] | None,
@@ -237,7 +256,7 @@ def _invoke_view_move_task(
         return None
     try:
         record = view.move_task(
-            int(task_id),
+            task_id,
             status,
             archival_reason=archival_reason,
             archival_refs=archival_refs,
@@ -249,10 +268,10 @@ def _invoke_view_move_task(
         return None
 
 
-async def _show_validated(app_ctx: AppContext, task_id: str) -> KanbanTask:
+async def _show_validated(app_ctx: AppContext, task_id: int) -> KanbanTask:
     """Retrieve a task from the engine and return a validated KanbanTask."""
     try:
-        record = app_ctx.engine.show_task(task_id)
+        record = app_ctx.engine.show_task(str(task_id))
     except FileNotFoundError as exc:
         msg = str(exc)
         raise ToolError(msg) from exc
@@ -286,7 +305,7 @@ async def _invoke_engine_end_work(  # noqa: PLR0913
 def _invoke_view_end_work(  # noqa: PLR0913
     view: object | None,
     *,
-    task_id: str,
+    task_id: int,
     outcome: str,
     move_to: str | None,
     note: str | None,
@@ -299,7 +318,7 @@ def _invoke_view_end_work(  # noqa: PLR0913
         return None
     try:
         record = view.end_work(
-            int(task_id),
+            task_id,
             outcome=outcome,
             move_to=move_to,
             note=note,
@@ -331,8 +350,9 @@ async def show_task(
     app_ctx: AppContext = ctx.request_context.lifespan_context
     try:
         params = ShowTaskParams.model_validate({"id": id, "section": section})
+        validated_id = parse_task_id(params.id, field="id")
         view = app_ctx.engine.agent_view()
-        return view.show_task(task_id=params.id, section=params.section)
+        return view.show_task(task_id=validated_id, section=params.section)
     except KanbanError as exc:
         _map_kanban_error(exc)
     except PydanticValidationError as exc:
@@ -368,7 +388,7 @@ async def create_task(  # noqa: PLR0913
 @mcp.tool(annotations=ToolAnnotations(destructiveHint=False))
 async def create_dr(
     ctx: Context,
-    task_id: str,
+    task_id: str | int,
     agent: str,
     request_type: str,
     body: str,
@@ -379,12 +399,13 @@ async def create_dr(
         raise ToolError(msg)
 
     app_ctx: AppContext = ctx.request_context.lifespan_context
+    parsed_task_id = parse_task_id(task_id, field="task_id")
     try:
         created_path = await asyncio.to_thread(
             decisions.create_dr,
             app_ctx.kanban_dir / "decisions",
             app_ctx.engine,
-            task_id=task_id,
+            task_id=parsed_task_id,
             agent=agent,
             request_type=request_type,
             body=body,
@@ -406,7 +427,7 @@ async def move_task(
 ) -> SingleTaskResponse:
     """Move a task to the specified status column, or archive it when status is "archived"."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
-    resolved_id = id
+    resolved_id = parse_task_id(id, field="id")
     if status is None:
         msg = "status is required"
         raise ToolError(msg)
@@ -425,7 +446,7 @@ async def move_task(
     try:
         record = await asyncio.to_thread(
             app_ctx.engine.move_task,
-            resolved_id,
+            str(resolved_id),
             status,
             archival_reason=archival_reason,
             archival_refs=archival_refs,
@@ -464,7 +485,7 @@ async def edit_task(  # noqa: PLR0912, PLR0913, C901
 ) -> SingleTaskResponse:
     """Edit task fields."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
-    resolved_id = id
+    resolved_id = parse_task_id(id, field="id")
     kwargs: dict[str, object] = {}
     if body:
         kwargs["body"] = body
@@ -491,7 +512,7 @@ async def edit_task(  # noqa: PLR0912, PLR0913, C901
     if archival_refs is not None:
         kwargs["archival_refs"] = archival_refs
     try:
-        response = app_ctx.engine.agent_view().edit_task(int(resolved_id), **kwargs)
+        response = app_ctx.engine.agent_view().edit_task(resolved_id, **kwargs)
     except KanbanError as exc:
         _map_kanban_error(exc)
     result = _to_single_task_response(response)
@@ -508,7 +529,7 @@ async def start_work(
 ) -> SingleTaskResponse:
     """Claim a task and return its full details."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
-    resolved_id = id
+    resolved_id = parse_task_id(id, field="id")
 
     canonical_view = _canonical_agent_view_for(app_ctx.engine)
     if canonical_view is not None and hasattr(canonical_view, "start_work"):
@@ -521,7 +542,7 @@ async def start_work(
             pass
 
     try:
-        record = app_ctx.engine.start_work(resolved_id)
+        record = app_ctx.engine.start_work(str(resolved_id))
     except KanbanError as exc:
         _map_kanban_error(exc)
     except (ValueError, FileNotFoundError) as exc:
@@ -546,7 +567,7 @@ async def end_work(  # noqa: PLR0913
 ) -> SingleTaskResponse:
     """Release a task: append note, advance or resolve status, release claim."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
-    resolved_id = id
+    resolved_id = parse_task_id(id, field="id")
 
     canonical_result = _invoke_view_end_work(
         _canonical_agent_view_for(app_ctx.engine),
@@ -564,7 +585,7 @@ async def end_work(  # noqa: PLR0913
     try:
         record = await _invoke_engine_end_work(
             app_ctx.engine,
-            task_id=resolved_id,
+            task_id=str(resolved_id),
             note=note,
             outcome=outcome,
             block_reason=block_reason,
