@@ -25,6 +25,7 @@ __all__ = [
     "list_memories",
     "query_memory",
     "read_memory",
+    "recall_memory",
     "save_memory",
     "store_learning",
     "update_entry",
@@ -274,6 +275,53 @@ async def query_memory(  # noqa: PLR0913
     if limit is not None:
         entries = entries[:limit]
     return [_entry_to_dict(entry) for entry in entries]
+
+
+async def recall_memory(
+    ctx: Context,
+    *,
+    agent: str,
+    categories: list[MemoryCategory] | None = None,
+    limit: int | None = None,
+) -> str:
+    """Return body-only recall text for a single scoped agent.
+
+    Output format: concatenated markdown blocks using "## {title}" headings
+    followed by each entry body.
+    """
+    if agent == "*":
+        msg = 'wildcard agent "*" is not allowed for recall_memory'
+        raise ToolError(msg)
+
+    engine = _engine_from_ctx(ctx)
+    category_filter = set(categories or [])
+    capped_limit = 20 if limit is None else limit
+
+    state_rank = {
+        MemoryState.APPROVED: 0,
+        MemoryState.CURATED: 1,
+    }
+    entries = [
+        entry
+        for entry in engine.get_entries()
+        if entry.state in {MemoryState.APPROVED, MemoryState.CURATED}
+    ]
+    entries = [
+        entry
+        for entry in entries
+        if entry.scope_agents
+        and (agent in entry.scope_agents or "*" in entry.scope_agents)
+    ]
+    if category_filter:
+        entries = [
+            entry
+            for entry in entries
+            if bool(category_filter.intersection(set(entry.categories)))
+        ]
+    entries.sort(key=lambda entry: (state_rank[entry.state], -entry.confidence, entry.id))
+    entries = entries[:capped_limit]
+
+    return "\n\n".join(f"## {entry.title}\n{entry.content}" for entry in entries)
 
 
 async def update_entry(  # noqa: PLR0913
