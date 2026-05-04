@@ -1,10 +1,10 @@
 ---
 id: 1216
 title: Split engine.py — extract agent_view.py
-status: done
+status: archived
 priority: needed
 created: 2026-04-30 15:29:15.267734+00:00
-updated: 2026-05-04T12:38:51.671935+00:00
+updated: 2026-05-04T12:46:50.914729+00:00
 tags:
 - audit-kanban
 - architecture
@@ -12,7 +12,7 @@ parent:
 depends_on: []
 blocked: false
 block_reason:
-claimed_at: 2026-05-04T12:38:51.671935+00:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -347,3 +347,35 @@ All 10 architecture criteria remain PASS. Implementation is complete and sound �
 - None (no `.owlbear/scratch/1216-*` files found)
 
 Commit: `0c44c334`
+[[2026-05-04]]
+## Audit
+
+### AC Verification
+| AC line | Evidence | Status |
+|---|---|---|
+| engine.py NOT contain `class AgentView` | `grep "class AgentView" engine.py` returns no match; `TestFromAC_EngineNoLongerContainsAgentView` (2 tests) PASS | PASS |
+| agent_view.py exposes all 8 public methods | grep confirms methods at L94, L216, L300, L536, L623, L847, L924, L978; `TestFromAC_AgentViewModuleExists` (3 tests) PASS | PASS |
+| agent_view.py imports KanbanEngine, no circular import | Reviewer confirmed at L15; `TestFromAC_AgentViewImportsKanbanEngine` (2 tests) PASS | PASS |
+| __init__.py re-exports AgentView from agent_view | `__init__.py:9` confirmed; `TestFromAC_PackageReexportsAgentView` (2 tests) PASS | PASS |
+| Backward-compat engine import via `__getattr__` | `TestFromAC_BackwardCompatEngineImport` (3 tests) PASS; mechanism at engine.py:1982-1985 | PASS |
+| ruff passes | 0 violations on all task files | PASS |
+
+### Test Results
+- Task-scoped: 15 passed, 0 failed
+- Full pytest suite: 4068 passed, 256 failed — 0 failures in task scope; kanban-adjacent failures (`test_engine_init_1068`, `test_storage_1050`) are pre-existing stale contracts
+- Full vitest suite: 950 passed, 13 failed — ActivityTab unrelated to task
+- Lint (ruff): clean on all task-scoped files
+
+### Commit Integrity
+- `3a77363b` test: add failing tests (#1216, test-writer)
+- `6b0ccf32` refactor: extract AgentView module (#1216, builder)
+- `0c44c334` docs: add docstrings, update diagram footers (#1216, doc-writer)
+
+### AC Quality Score: 4/5
+Refined AC is specific and testable. Required one refinement cycle (reviewer rejection → architect re-review) to narrow over-claimed AC#2 and AC#5. End result is clean.
+
+### Deductions
+- None. All AC lines have specific evidence; lint clean; reviewer evidence detailed; no task-scope failures.
+
+### Confidence: 0.98
+### Action: ARCHIVE
