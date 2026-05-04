@@ -1,10 +1,10 @@
 ---
 id: 1320
 title: 'P0-04: Qdrant filesystem persistence + source identity fix'
-status: research
+status: backlog
 priority: critical
 created: 2026-05-04T05:48:37.771717+00:00
-updated: 2026-05-04T05:50:51.032623+00:00
+updated: 2026-05-04T12:12:46.135113+00:00
 tags:
 - phase-0
 - scope:knowledge
@@ -35,3 +35,22 @@ Brief: see parent #1316 → `.owlbear/briefs/draft-knowledge-activation/brief.md
 
 - **In scope:** Qdrant config, SQLite persistence, source record table/model, ingest_document source registration
 - **Out of scope:** Enrichment schema (Layer 1), browser detection flow (Layer 1)
+[[2026-05-04]]
+## Research
+- Research doc: .owlbear/research/1320-qdrant-persistence-source-identity-impl.md
+- Sources: 10 studied, 6 high-relevance (1.0)
+- Recommendation: 4-change wiring task (~20 LOC across server.py + .gitignore) (confidence: 0.92)
+- Follow-up tasks created: none — this IS the implementation task
+- Decision requests: none
+
+## Key Findings
+
+All library code already works — 34/34 #1319 tests pass GREEN. Gaps are MCP server wiring only:
+
+1. `QdrantVectorStore()` in lifespan defaults to `:memory:` — needs `location=".owlbear/knowledge/vectors"`
+2. `IngestPipeline()` missing `source_store=source_store` kwarg (created but not passed)
+3. MCP `ingest_document` tool lacks `source_url`/`source_id` params (pipeline supports them)
+4. `.gitignore` missing Qdrant directory entry
+
+## Challenge Results
+Challenge: proceed — confidence 0.92. Trivial wiring, no design ambiguity.

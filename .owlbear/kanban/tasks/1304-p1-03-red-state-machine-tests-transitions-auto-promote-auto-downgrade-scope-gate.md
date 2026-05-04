@@ -2,10 +2,10 @@
 id: 1304
 title: 'P1-03: RED — State machine tests (transitions, auto-promote, auto-downgrade,
   scope gate, deletion)'
-status: in-progress
+status: review
 priority: needed
 created: 2026-05-04T01:32:18.507736+00:00
-updated: 2026-05-04T11:49:17.511530+00:00
+updated: 2026-05-04T12:08:46.063359+00:00
 tags:
 - phase-2
 - scope:mcp-memory
@@ -697,3 +697,15 @@ Architecture Review — Remediation Pass: Audit REJECTED on commit integrity onl
 **Reason:** Remediation scope is commit hygiene only — uncommitted `engine.py`, 2 E501 docstring violations, commit-type misattribution. No new testable Python interfaces introduced. Existing 60 tests in `tests/test_state_machine_1304.py` cover all behavioral AC.
 
 **No test file changes.** Advancing to in-progress for builder.
+[[2026-05-04]]
+## Builder Notes
+- Implementation: remediation-only cycle completed; committed targeted fixes in `serve/mcp-memory/src/owlbear_mcp_memory/engine.py` and `serve/mcp-memory/src/owlbear_mcp_memory/tools.py`.
+- Fixes applied:
+  - Committed `MemoryEngine.delete()` hard-delete implementation (pending-entry file removal path).
+  - Resolved 2 E501 violations in `tools.py` by wrapping `update_entry` and `delete_entry` docstrings (no behavior changes).
+  - Added proper `feat:` commit for remediation integrity: `42e0709f` (`feat: finalize memory state-machine remediation (#1304, builder)`).
+- Verification (quality-runner, scoped):
+  - Tests: `tests/test_state_machine_1304.py` -> 60 passed, 0 failed, 0 skipped.
+  - Coverage modules: `owlbear_mcp_memory.tools` 100%, `owlbear_mcp_memory.engine` 100%, `owlbear_mcp_memory.models` 100% (scoped total 100%; overall report 93%).
+  - Lint: `ruff` clean on `serve/mcp-memory/src/owlbear_mcp_memory/tools.py`, `serve/mcp-memory/src/owlbear_mcp_memory/engine.py`, and `tests/test_state_machine_1304.py`.
+- Evidence summary: all remediation AC lines satisfied in this pass (commit integrity + lint + regression safety).

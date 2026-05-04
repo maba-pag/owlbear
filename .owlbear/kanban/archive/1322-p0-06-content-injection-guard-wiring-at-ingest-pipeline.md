@@ -1,10 +1,10 @@
 ---
 id: 1322
 title: 'P0-06: Content injection guard wiring at ingest pipeline'
-status: done
+status: archived
 priority: critical
 created: 2026-05-04T05:48:37.792577+00:00
-updated: 2026-05-04T11:50:59.904177+00:00
+updated: 2026-05-04T12:13:44.541148+00:00
 tags:
 - phase-0
 - scope:knowledge
@@ -170,3 +170,38 @@ APPROVED — all ACs pre-satisfied by existing implementation (cd74db6e from #13
 
 ### Scratch Files Cleaned
 - None
+[[2026-05-04]]
+## Audit
+
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| ContentInjectionGuard wired into ingest_document tool path (O9) | server.py L288: `ContentInjectionGuard()` instantiated, L290-293: passed to `IngestPipeline` | PASS |
+| All web content passes through guard before being stored as chunks | ingest.py L108-125: guard scans every chunk before storage (L128+) | PASS |
+| Guard rejects or sanitizes content containing injection markers | ingest.py L110-111: `check.blocked` returns early; L120-125: threat logs warning | PASS |
+| Pre-guard legacy chunks are not retroactively scanned (D20) | Reviewer confirmed search_knowledge has no guard hook; brief D20 scopes to ingest only | PASS |
+| All #1321 tests pass green | 32 passed, 0 failed | PASS |
+
+### Test Results
+- Scoped: 32 passed, 0 failed (tests/test_content_guard_wiring_1321.py)
+- Full Python suite: 1175 passed, 68 failed (all in kanban/mcp-memory domains — none in knowledge scope)
+- Full frontend suite: 950 passed, 13 failed (ActivityTab component — unrelated)
+- Background failures are pre-existing tech debt in other domains
+
+### Lint
+- Scoped (ingest.py, server.py, test file): clean
+- Full ruff: 1 violation in copilot_auth.py (T201 print — unrelated)
+- ESLint: 1 rule definition issue in usePolling.ts (unrelated)
+
+### Commit Integrity
+- cd74db6e confirmed: `feat: wire ingest guard at lifespan/text path (#1321, builder)`
+- Research doc exists: .owlbear/research/1322-content-guard-wiring.md
+
+### AC Quality Score: 4/5
+AC lines were specific and verifiable. Task was purely verification of pre-existing work (all td:0). No gaps requiring builder improvisation.
+
+### Deductions
+- -.01 background failures in other domains (process awareness)
+
+### Confidence: 0.99
+### Action: ARCHIVE

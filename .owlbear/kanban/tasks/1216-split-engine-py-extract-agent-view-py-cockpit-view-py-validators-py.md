@@ -1,10 +1,10 @@
 ---
 id: 1216
 title: Split engine.py â€” extract agent_view.py
-status: in-progress
+status: review
 priority: needed
 created: 2026-04-30 15:29:15.267734+00:00
-updated: 2026-05-04T11:53:45.385762+00:00
+updated: 2026-05-04T12:06:45.660957+00:00
 tags:
 - audit-kanban
 - architecture
@@ -239,3 +239,26 @@ All 10 architecture criteria remain PASS. Implementation is complete and sound â
 | agent_view.py imports KanbanEngine, no circular import | `TestFromAC_AgentViewImportsKanbanEngine` (2 tests) |
 | `__init__.py` re-exports from agent_view | `TestFromAC_PackageReexportsAgentView` (2 tests) |
 | `from owlbear_kanban.engine import AgentView` via `__getattr__` | `TestFromAC_BackwardCompatEngineImport` (3 tests) |
+[[2026-05-04]]
+## Builder Notes
+- Implementation status: no additional code changes in this pass; existing extraction remains intact.
+- Files validated:
+  - serve/kanban/src/owlbear_kanban/engine.py
+  - serve/kanban/src/owlbear_kanban/agent_view.py
+  - serve/kanban/src/owlbear_kanban/__init__.py
+  - tests/test_agent_view_extraction_1216.py
+- AC verification:
+  - engine module does not define `class AgentView`; backward-compat export provided via `engine.__getattr__`.
+  - `agent_view.py` defines `AgentView` and exposes the 8 required public methods.
+  - `agent_view.py` references `KanbanEngine` from engine without circular-import failure.
+  - package root re-exports `AgentView` from `agent_view`.
+- Quality-runner (scoped) evidence:
+  - tests: 15 passed, 0 failed, 0 skipped
+  - lint: clean (0 violations)
+  - coverage (scoped structural suite):
+    - owlbear_kanban.agent_view: 6%
+    - owlbear_kanban.engine: 14%
+    - overall in scoped run: 19%
+- Notes:
+  - This pass is a retry-cycle builder pass-through: implementation was already present and green for refined td:1 structural ACs.
+  - No commit created in this pass because no files were modified.
