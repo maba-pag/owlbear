@@ -1,21 +1,21 @@
 """RED-phase tests for task #1336: Fix end_work success path.
 
 AC coverage:
-  AC1 — end_work(outcome="success") derives next status from config.statuses[idx+1],
-        not from move_to default "research"
-  AC2 — end_work(outcome="success") at last configured status raises a clear error
-        (cannot advance past final status)
-  AC3 — end_work(outcome="reject", move_to=X) still uses explicit move_to (regression guard)
+  AC1 — KanbanEngine.end_work(outcome="success") derives next status from config.statuses;
+        no explicit move_to required.
+  AC2 — Raw success no longer moves tasks to "research" by default (negative assertion).
+  AC3 — Success from terminal status archives with archival_reason="completed",
+        archival_refs=[], task moved to archive/.
+  AC4 — reject without explicit move_to leaves status unchanged (not "research").
 
 FAIL reasons:
   AC1 tests FAIL: engine default move_to="research" causes success to move backward.
-  AC2 tests FAIL: engine moves to "research" instead of raising an error at terminal.
-  AC3 tests PASS in RED (reject already works); included as regression guards per skill rules.
+  AC2 test FAILS: end_work(success) returns status="research" with the buggy default.
+  AC3 tests FAIL: terminal success sets status="research" (not archived) with current code.
+  AC4 test FAILS: reject without move_to moves to "research" instead of leaving unchanged.
 """
 
 from __future__ import annotations
-
-import pytest
 
 from owlbear_kanban import KanbanEngine
 
@@ -206,71 +206,70 @@ class TestFromAC_SuccessStatusAdvancement:
 
 
 # ---------------------------------------------------------------------------
-# TestFromAC_SuccessAtTerminalStatus — AC2: raise error at final status
+# TestFromAC_SuccessAtTerminalStatus — AC3: terminal success archives the task
 # ---------------------------------------------------------------------------
 
 
 class TestFromAC_SuccessAtTerminalStatus:
-    """end_work(outcome="success") at the last configured status must raise a clear error."""
+    """end_work(outcome="success") from terminal status archives with archival_reason="completed".
 
-    def test_success_at_last_config_status_raises_error(self, tmp_path) -> None:
-        """AC2: success from 'done' (last in statuses) raises a ValueError.
+    FAIL reasons (current code): engine defaults move_to="research"; _apply_outcome sets
+    record.status="research" instead of triggering the archive branch, so:
+    - result.archival_reason is None (not "completed")
+    - result.status is "research" (not "archived")
+    - the file stays in tasks/ (not moved to archive/)
+    """
 
-        FAIL reason: current code moves status to "research" (the move_to default)
-        without raising any error; no exception is thrown.
+    def test_success_at_terminal_returns_archival_reason_completed(self, tmp_path) -> None:
+        """AC3: success from 'done' sets archival_reason='completed' on the returned task.
+
+        FAIL reason: current code sets status to 'research' (buggy default move_to);
+        _apply_outcome never reaches the archive branch, so archival_reason stays None.
         """
         engine = _make_engine(tmp_path)
         _write_task(engine._kanban_dir, task_id=1, status="done")
 
-        with pytest.raises((ValueError, Exception)) as exc_info:
-            engine.end_work("1", note="what next?", outcome="success")
+        result = engine.end_work("1", note="shipped", outcome="success")
 
-        assert exc_info is not None, (
-            "AC2: success at terminal status 'done' must raise an error; "
-            "no exception was raised"
+        assert result.archival_reason == "completed", (
+            f"AC3: success at terminal must set archival_reason='completed'; "
+            f"got {result.archival_reason!r}"
         )
 
-    def test_success_at_terminal_error_message_mentions_advance(self, tmp_path) -> None:
-        """AC2: error raised at last status describes the 'cannot advance' constraint.
+    def test_success_at_terminal_returns_status_archived(self, tmp_path) -> None:
+        """AC3: success from 'done' sets status='archived' on the returned task.
 
-        FAIL reason: no error is raised at all; the task moves to "research" silently.
+        FAIL reason: current code sets status to 'research' (buggy default move_to);
+        the archive branch is never triggered.
         """
         engine = _make_engine(tmp_path)
         _write_task(engine._kanban_dir, task_id=1, status="done")
 
-        with pytest.raises((ValueError, Exception)) as exc_info:
-            engine.end_work("1", note="stuck", outcome="success")
+        result = engine.end_work("1", note="shipped", outcome="success")
 
-        error_text = str(exc_info.value).lower()
-        assert any(
-            kw in error_text for kw in ("advance", "final", "terminal", "last", "end")
-        ), (
-            f"AC2: error message must describe inability to advance past final status; "
-            f"got: {str(exc_info.value)!r}"
+        assert result.status == "archived", (
+            f"AC3: success at terminal must return status='archived'; "
+            f"got {result.status!r}"
         )
 
-    def test_success_at_terminal_raises_not_moves_backward(self, tmp_path) -> None:
-        """AC2: success at terminal must raise an error, not silently move to 'research'.
+    def test_success_at_terminal_moves_file_to_archive_dir(self, tmp_path) -> None:
+        """AC3: success from 'done' moves the task file from tasks/ to archive/.
 
-        A correctly implemented engine raises a clear error at the last status.
-        The buggy engine moves to 'research' with no error.
-
-        FAIL reason: DID NOT RAISE — end_work sets status='research' and returns
-        a result instead of raising an error.
+        FAIL reason: current code sets status to 'research' without archiving;
+        the file stays in tasks/ and archive/ remains empty.
         """
         engine = _make_engine(tmp_path)
         _write_task(engine._kanban_dir, task_id=1, status="done")
 
-        with pytest.raises(ValueError) as exc_info:
-            engine.end_work("1", note="oops", outcome="success")
+        engine.end_work("1", note="shipped", outcome="success")
 
-        # After fix: error must name the status that blocked advancement
-        assert "done" in str(exc_info.value).lower() or any(
-            kw in str(exc_info.value).lower()
-            for kw in ("advance", "final", "terminal", "last", "beyond")
-        ), (
-            f"AC2: error must reference the terminal state or advancement constraint; "
-            f"got: {str(exc_info.value)!r}"
+        archive_file = engine._archive_dir / "1-task.md"
+        tasks_file = engine._tasks_dir / "1-task.md"
+        assert archive_file.exists(), (
+            "AC3: success at terminal must move task to archive/; file not found there"
+        )
+        assert not tasks_file.exists(), (
+            "AC3: success at terminal must remove task from tasks/; file still present"
         )
 
 
@@ -296,4 +295,60 @@ class TestFromAC_SuccessFromInProgress:
         assert result.status == "review", (
             f"AC1: success from 'in-progress' must advance to 'review'; "
             f"got {result.status!r}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_NoDefaultResearch — AC2: raw success must not default to "research"
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_NoDefaultResearch:
+    """AC2: end_work(outcome="success") must not move any task to "research" by default."""
+
+    def test_success_result_is_not_research(self, tmp_path) -> None:
+        """AC2: success from 'todo' must NOT return status='research'.
+
+        FAIL reason: current engine default is move_to="research"; the result status
+        is always "research" regardless of the task's position in the pipeline.
+        """
+        engine = _make_engine(tmp_path)
+        _write_task(engine._kanban_dir, task_id=1, status="todo")
+
+        result = engine.end_work("1", note="done", outcome="success")
+
+        assert result.status != "research", (
+            f"AC2: success must not default to 'research'; "
+            f"got {result.status!r} — engine move_to default is still 'research'"
+        )
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_RejectWithoutMoveToContract — AC4: reject default now None
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_RejectWithoutMoveToContract:
+    """AC4: reject without explicit move_to leaves status unchanged after fix.
+
+    Before fix: engine default move_to="research" causes reject to always set
+    status="research" even without an explicit target.
+    After fix: move_to=None means reject with no explicit move_to leaves status unchanged.
+    """
+
+    def test_reject_without_move_to_does_not_go_to_research(self, tmp_path) -> None:
+        """AC4: reject from 'todo' without explicit move_to must not set status='research'.
+
+        FAIL reason: current engine default move_to="research" causes _apply_outcome
+        to set record.status="research" for reject (move_to is not None → sets status).
+        After fix: move_to=None → status unchanged → remains 'todo'.
+        """
+        engine = _make_engine(tmp_path)
+        _write_task(engine._kanban_dir, task_id=1, status="todo")
+
+        result = engine.end_work("1", note="not ready", outcome="reject")
+
+        assert result.status != "research", (
+            f"AC4: reject without explicit move_to must not go to 'research'; "
+            f"got {result.status!r} — engine move_to default is still 'research'"
         )
