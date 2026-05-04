@@ -140,10 +140,10 @@ class TestFromAC_MoveRequestArchivalFields:
         assert req.archival_reason is None
 
     def test_moverequest_without_archival_fields_has_empty_refs(self) -> None:
-        """MoveRequest without archival_refs defaults to [] (AC1)."""
+        """MoveRequest without archival_refs defaults to None (AC1)."""
         req = MoveRequest(status="in-progress", updated="2026-01-01T00:00:00+00:00")
         # AttributeError → RED (field does not exist yet)
-        assert req.archival_refs == []
+        assert req.archival_refs is None
 
     # --- AC2: explicit archival field values accepted ---
 
@@ -334,7 +334,7 @@ class TestFromAC_MoveRouteArchivalPassThrough:
     def test_move_route_default_archival_refs_forwarded_as_empty_list(
         self, mock_view_client, engine: KanbanEngine
     ) -> None:
-        """Route explicitly passes archival_refs=[] when not in body (AC5).
+        """Route explicitly passes archival_refs=None when not in body (AC5).
 
         Fails in RED: route omits archival_refs kwarg entirely, so
         'archival_refs' is not in call_args.kwargs.
@@ -360,4 +360,4 @@ class TestFromAC_MoveRouteArchivalPassThrough:
         call_kwargs = view.move_task.call_args.kwargs
         # Fails in RED: key absent from kwargs (route doesn't forward archival params)
         assert "archival_refs" in call_kwargs
-        assert call_kwargs["archival_refs"] == []
+        assert call_kwargs["archival_refs"] is None

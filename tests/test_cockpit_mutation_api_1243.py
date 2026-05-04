@@ -167,14 +167,14 @@ class TestFromAC_MoveRequestArchivalRefs:
         assert hasattr(req, "archival_refs")
 
     def test_archival_refs_defaults_to_empty_list(self) -> None:
-        """archival_refs default is [] when not supplied (AC2)."""
+        """archival_refs default is None when not supplied (AC2)."""
         req = MoveRequest(status="in-progress", updated="2026-01-01T00:00:00+00:00")
-        assert req.archival_refs == []
+        assert req.archival_refs is None
 
     def test_archival_refs_default_is_list_type(self) -> None:
-        """archival_refs default value is a list instance (AC2)."""
+        """archival_refs default value is None when omitted (AC2)."""
         req = MoveRequest(status="in-progress", updated="2026-01-01T00:00:00+00:00")
-        assert isinstance(req.archival_refs, list)
+        assert req.archival_refs is None
 
     def test_archival_refs_accepts_list_of_ints(self) -> None:
         """archival_refs accepts a list of integer task IDs (AC2)."""
@@ -186,12 +186,11 @@ class TestFromAC_MoveRequestArchivalRefs:
         assert req.archival_refs == [10, 20, 30]
 
     def test_archival_refs_mutable_default_is_safe(self) -> None:
-        """Two MoveRequest instances share no archival_refs state (AC2 — safe default)."""
+        """Two MoveRequest instances both default archival_refs to None (AC2)."""
         req_a = MoveRequest(status="in-progress", updated="2026-01-01T00:00:00+00:00")
         req_b = MoveRequest(status="in-progress", updated="2026-01-01T00:00:00+00:00")
-        # Mutating one must not affect the other (Field(default_factory=list) safety)
-        req_a.archival_refs.append(99)
-        assert req_b.archival_refs == []
+        assert req_a.archival_refs is None
+        assert req_b.archival_refs is None
 
 
 # ---------------------------------------------------------------------------
@@ -348,9 +347,9 @@ class TestFromAC_BackwardsCompatibility:
         assert req.archival_reason is None
 
     def test_plain_move_request_defaults_archival_refs_to_empty_list(self) -> None:
-        """Plain MoveRequest gets archival_refs=[] default (AC5)."""
+        """Plain MoveRequest gets archival_refs=None default (AC5)."""
         req = MoveRequest(status="review", updated="2026-01-01T00:00:00+00:00")
-        assert req.archival_refs == []
+        assert req.archival_refs is None
 
     def test_route_with_no_archival_fields_still_returns_200(
         self, mock_view_client, engine: KanbanEngine
@@ -378,7 +377,7 @@ class TestFromAC_BackwardsCompatibility:
     def test_route_with_no_archival_fields_passes_none_and_empty_list(
         self, mock_view_client, engine: KanbanEngine
     ) -> None:
-        """Plain move POST forwards archival_reason=None, archival_refs=[] (AC5)."""
+        """Plain move POST forwards archival_reason=None, archival_refs=None (AC5)."""
         from owlbear_kanban.models import SingleTaskResponse  # noqa: PLC0415
 
         client, view = mock_view_client
@@ -399,4 +398,4 @@ class TestFromAC_BackwardsCompatibility:
         assert resp.status_code == 200
         kwargs = view.move_task.call_args.kwargs
         assert kwargs.get("archival_reason") is None
-        assert kwargs.get("archival_refs") == []
+        assert kwargs.get("archival_refs") is None
