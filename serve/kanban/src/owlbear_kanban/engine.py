@@ -82,6 +82,7 @@ from owlbear_kanban.storage import (
 
 _BLOCK_REASON_UNSET = object()
 _MAX_CLAIM_STALE_RETRIES = 4
+_MAX_BODY_BYTES = 500 * 1024
 LOGGER = logging.getLogger(__name__)
 
 
@@ -800,6 +801,146 @@ class KanbanEngine:
         msg = f"Task {task_id!r} not found in {self._tasks_dir} or {self._archive_dir}"
         raise FileNotFoundError(msg)
 
+    @staticmethod
+    def _required_sections_passes(body: str, sections: list[str]) -> bool:
+        if not sections:
+            return True
+        present = {
+            part.heading.strip().casefold()
+            for part in parse_body(body)
+            if part.heading is not None and part.heading.strip()
+        }
+        required = {
+            section.strip().lstrip("#").strip().casefold()
+            for section in sections
+            if section.strip()
+        }
+        return required.issubset(present)
+
+    def task_exists(self, task_id: int) -> bool:
+        """Return True when a task exists in active or archived storage."""
+        try:
+            self.show_task(str(task_id))
+        except FileNotFoundError:
+            return False
+        return True
+
+    def _has_archival_cycle(self, root_task_id: int, refs: list[int]) -> bool:
+        """Return True when new archival refs would introduce a cycle."""
+
+        def visits_root(task_id: int, seen: set[int]) -> bool:
+            if task_id in seen:
+                return False
+            seen.add(task_id)
+            try:
+                task = self.show_task(str(task_id))
+            except FileNotFoundError:
+                return False
+            for dep_id in task.archival_refs:
+                if dep_id == root_task_id:
+                    return True
+                if visits_root(dep_id, seen):
+                    return True
+            return False
+
+        return any(visits_root(ref_id, set()) for ref_id in refs)
+
+    def validate_body_size(self, body: str) -> None:
+        """Validate the 500 KB task body hard limit."""
+        if len(body.encode("utf-8")) > _MAX_BODY_BYTES:
+            raise ValidationError(
+                code="ERR_BODY_TOO_LARGE",
+                user_message="Task body exceeds 500 KB",
+            )
+
+    def validate_archival(
+        self,
+        *,
+        task_id: int,
+        archival_reason: str | None,
+        archival_refs: list[int],
+        can_mark_completed: bool,
+        config: BoardConfig,
+    ) -> None:
+        """Validate archival reason/ref matrix and reference integrity."""
+        if not archival_reason:
+            raise ValidationError(
+                code="ERR_ARCHIVAL_REASON_REQUIRED",
+                user_message="archival_reason is required when status='archived'",
+            )
+        if archival_reason not in config.policy.archival_reasons:
+            raise ValidationError(
+                code="ERR_ARCHIVAL_REASON_INVALID",
+                user_message=(
+                    "archival_reason must be one of "
+                    f"{sorted(config.policy.archival_reasons)}"
+                ),
+            )
+        if archival_reason in {"deprecated", "duplicate"} and not archival_refs:
+            raise ValidationError(
+                code="ERR_ARCHIVAL_REFS_REQUIRED",
+                user_message=(
+                    f"archival_refs required for archival_reason='{archival_reason}'"
+                ),
+            )
+        if archival_reason in {"completed", "dropped", "wontfix"} and archival_refs:
+            raise ValidationError(
+                code="ERR_ARCHIVAL_REFS_FORBIDDEN",
+                user_message=(
+                    f"archival_refs forbidden for archival_reason='{archival_reason}'"
+                ),
+            )
+        if archival_reason == "completed" and not can_mark_completed:
+            raise ValidationError(
+                code="ERR_COMPLETED_REQUIRES_DONE",
+                user_message="archival_reason='completed' requires terminal status",
+            )
+        for ref_id in archival_refs:
+            if ref_id == task_id:
+                raise ValidationError(
+                    code="ERR_ARCHIVAL_REF_SELF",
+                    user_message="archival_refs cannot include the task itself",
+                )
+            if not self.task_exists(ref_id):
+                raise ValidationError(
+                    code="ERR_ARCHIVAL_REF_MISSING",
+                    user_message=f"archival reference task '{ref_id}' not found",
+                )
+        if self._has_archival_cycle(task_id, archival_refs):
+            raise ValidationError(
+                code="ERR_ARCHIVAL_REF_CYCLE",
+                user_message="archival_refs would introduce a cycle",
+            )
+
+    def validate_status_predicate(
+        self,
+        *,
+        target_status: str,
+        body: str,
+        config: BoardConfig,
+    ) -> None:
+        """Validate status predicate rules for a target status."""
+        if target_status == "archived":
+            return
+
+        predicate_spec = config.policy.status_predicates.get(target_status)
+        if not isinstance(predicate_spec, dict):
+            return
+        if predicate_spec.get("type") != "required_sections":
+            return
+
+        sections = predicate_spec.get("sections")
+        required = (
+            [str(section) for section in sections] if isinstance(sections, list) else []
+        )
+        if not self._required_sections_passes(body, required):
+            raise ValidationError(
+                code="ERR_PREDICATE_FAILED",
+                user_message=(
+                    f"Task body does not satisfy predicate for status '{target_status}'"
+                ),
+            )
+
     # ------------------------------------------------------------------
     # Write operations
     # ------------------------------------------------------------------
@@ -848,13 +989,39 @@ class KanbanEngine:
             msg = f"Invalid priority {priority!r}. Valid options: {config.pipeline.priorities}"
             raise ValueError(msg)
 
+        self.validate_body_size(body)
+
+        if parent is not None and not self.task_exists(parent):
+            raise ValidationError(
+                code="ERR_PARENT_NOT_FOUND",
+                user_message=f"Parent task '{parent}' not found",
+            )
+
+        dep_ids = depends_on or []
+        missing_dep = next(
+            (dep_id for dep_id in dep_ids if not self.task_exists(dep_id)),
+            None,
+        )
+        if missing_dep is not None:
+            raise ValidationError(
+                code="ERR_DEP_NOT_FOUND",
+                user_message=f"Dependency task '{missing_dep}' not found",
+            )
+
+        entry_status = status or config.pipeline.entry_status
+        self.validate_status_predicate(
+            target_status=entry_status,
+            body=body,
+            config=config,
+        )
+
         task_id = storage.allocate_next_id(self._kanban_dir)
         now = datetime.now(tz=UTC).isoformat()
 
         record = Task(
             id=task_id,
             title=title,
-            status=status or config.pipeline.entry_status,
+            status=entry_status,
             priority=priority or config.pipeline.default_priority,
             created=now,
             updated=now,
@@ -936,6 +1103,22 @@ class KanbanEngine:
             msg = f"Invalid priority {priority!r}. Valid options: {self._config.pipeline.priorities}"
             raise ValueError(msg)
 
+        if body is not None:
+            self.validate_body_size(body)
+
+        if parent is not None and not self.task_exists(parent):
+            raise ValidationError(
+                code="ERR_PARENT_NOT_FOUND",
+                user_message=f"Parent task '{parent}' not found",
+            )
+
+        for dep_id in add_deps or []:
+            if not self.task_exists(dep_id):
+                raise ValidationError(
+                    code="ERR_DEP_NOT_FOUND",
+                    user_message=f"Dependency task '{dep_id}' not found",
+                )
+
         task_path = self._find_task_path(
             task_id, self._tasks_dir, include_archive_fallback=True
         )
@@ -981,6 +1164,7 @@ class KanbanEngine:
                 date_str = datetime.now(tz=UTC).strftime("%Y-%m-%d")
                 prefix = f"[[{date_str}]]\n"
             record.body = record.body + "\n" + prefix + append_body
+            self.validate_body_size(record.body)
 
         if archival_reason is not None:
             record.archival_reason = archival_reason
@@ -1011,7 +1195,7 @@ class KanbanEngine:
         self._revision += 1
         return record
 
-    def move_task(  # noqa: PLR0913
+    def move_task(  # noqa: PLR0913, PLR0915
         self,
         task_id: str,
         status: str,
@@ -1049,6 +1233,27 @@ class KanbanEngine:
         old_status = record.status
         archived = False
         dest = self._archive_dir / task_path.name
+
+        if status == "archived":
+            self.validate_archival(
+                task_id=record.id,
+                archival_reason=archival_reason,
+                archival_refs=archival_refs or [],
+                can_mark_completed=record.status == self._config.pipeline.terminal_status,
+                config=self._config,
+            )
+        elif archival_reason is not None or archival_refs is not None:
+            raise ValidationError(
+                code="ERR_ARCHIVAL_FIELDS_FORBIDDEN",
+                user_message="archival fields are only allowed on archived tasks",
+            )
+
+        body = record.body if isinstance(record.body, str) else ""
+        self.validate_status_predicate(
+            target_status=status,
+            body=body,
+            config=self._config,
+        )
 
         if status == "archived":
             self._archive_dir.mkdir(parents=True, exist_ok=True)
@@ -1834,136 +2039,6 @@ class AgentView:
             user_message=f"Task '{task_id}' not found",
         )
 
-    def _task_exists(self, task_id: int) -> bool:
-        try:
-            self.engine.show_task(str(task_id))
-        except FileNotFoundError:
-            return False
-        return True
-
-    @staticmethod
-    def _required_sections_passes(body: str, sections: list[str]) -> bool:
-        if not sections:
-            return True
-        present = {
-            part.heading.strip().casefold()
-            for part in parse_body(body)
-            if part.heading is not None and part.heading.strip()
-        }
-        return all(section.strip().casefold() in present for section in sections)
-
-    @classmethod
-    def _validate_body_size(cls, body: str) -> None:
-        if len(body.encode("utf-8")) > cls._MAX_BODY_BYTES:
-            raise ValidationError(
-                code="ERR_BODY_TOO_LARGE",
-                user_message="Task body exceeds 500 KB",
-            )
-
-    def _has_archival_cycle(self, root_task_id: int, refs: list[int]) -> bool:
-        def visits_root(task_id: int, seen: set[int]) -> bool:
-            if task_id in seen:
-                return False
-            seen.add(task_id)
-            try:
-                task = self.engine.show_task(str(task_id))
-            except FileNotFoundError:
-                return False
-            for dep_id in task.archival_refs:
-                if dep_id == root_task_id:
-                    return True
-                if visits_root(dep_id, seen):
-                    return True
-            return False
-
-        return any(visits_root(ref_id, set()) for ref_id in refs)
-
-    def _validate_move_archival_for_archive(
-        self,
-        *,
-        task_id: int,
-        can_mark_completed: bool,
-        config: BoardConfig,
-        archival_reason: str | None,
-        archival_refs: list[int],
-    ) -> None:
-        if not archival_reason:
-            raise ValidationError(
-                code="ERR_ARCHIVAL_REASON_REQUIRED",
-                user_message="archival_reason is required when status='archived'",
-            )
-        if archival_reason not in config.policy.archival_reasons:
-            raise ValidationError(
-                code="ERR_ARCHIVAL_REASON_INVALID",
-                user_message=(
-                    "archival_reason must be one of "
-                    f"{sorted(config.policy.archival_reasons)}"
-                ),
-            )
-        if archival_reason in {"deprecated", "duplicate"} and not archival_refs:
-            raise ValidationError(
-                code="ERR_ARCHIVAL_REFS_REQUIRED",
-                user_message=(
-                    f"archival_refs required for archival_reason='{archival_reason}'"
-                ),
-            )
-        if archival_reason in {"completed", "dropped", "wontfix"} and archival_refs:
-            raise ValidationError(
-                code="ERR_ARCHIVAL_REFS_FORBIDDEN",
-                user_message=(
-                    f"archival_refs forbidden for archival_reason='{archival_reason}'"
-                ),
-            )
-        if archival_reason == "completed" and not can_mark_completed:
-            raise ValidationError(
-                code="ERR_COMPLETED_REQUIRES_DONE",
-                user_message="archival_reason='completed' requires terminal status",
-            )
-        for ref_id in archival_refs:
-            if ref_id == task_id:
-                raise ValidationError(
-                    code="ERR_ARCHIVAL_REF_SELF",
-                    user_message="archival_refs cannot include the task itself",
-                )
-            if not self._task_exists(ref_id):
-                raise ValidationError(
-                    code="ERR_ARCHIVAL_REF_MISSING",
-                    user_message=f"archival reference task '{ref_id}' not found",
-                )
-        if self._has_archival_cycle(task_id, archival_refs):
-            raise ValidationError(
-                code="ERR_ARCHIVAL_REF_CYCLE",
-                user_message="archival_refs would introduce a cycle",
-            )
-
-    def _validate_move_destination_predicate(
-        self,
-        *,
-        target_status: str,
-        body: str,
-        config: BoardConfig,
-    ) -> None:
-        if target_status == "archived":
-            return
-
-        predicate_spec = config.policy.status_predicates.get(target_status)
-        if not isinstance(predicate_spec, dict):
-            return
-        if predicate_spec.get("type") != "required_sections":
-            return
-
-        sections = predicate_spec.get("sections")
-        required = (
-            [str(section) for section in sections] if isinstance(sections, list) else []
-        )
-        if not self._required_sections_passes(body, required):
-            raise ValidationError(
-                code="ERR_PREDICATE_FAILED",
-                user_message=(
-                    f"Task body does not satisfy predicate for status '{target_status}'"
-                ),
-            )
-
     def list_tasks(  # noqa: PLR0913
         self,
         *,
@@ -2446,9 +2521,9 @@ class AgentView:
                 code="ERR_INVALID_STATUS",
                 user_message="title must not be empty",
             )
-        self._validate_body_size(body)
+        self.engine.validate_body_size(body)
 
-        if parent is not None and not self._task_exists(parent):
+        if parent is not None and not self.engine.task_exists(parent):
             raise ValidationError(
                 code="ERR_PARENT_NOT_FOUND",
                 user_message=f"Parent task '{parent}' not found",
@@ -2456,7 +2531,7 @@ class AgentView:
 
         dep_ids = depends_on or []
         missing_dep = next(
-            (dep_id for dep_id in dep_ids if not self._task_exists(dep_id)),
+            (dep_id for dep_id in dep_ids if not self.engine.task_exists(dep_id)),
             None,
         )
         if missing_dep is not None:
@@ -2467,22 +2542,11 @@ class AgentView:
 
         config = self.engine.board_config()
         entry_status = config.pipeline.entry_status
-        predicate_spec = config.policy.status_predicates.get(entry_status)
-        if (
-            isinstance(predicate_spec, dict)
-            and predicate_spec.get("type") == "required_sections"
-        ):
-            sections = predicate_spec.get("sections")
-            required = (
-                [str(section) for section in sections]
-                if isinstance(sections, list)
-                else []
-            )
-            if not self._required_sections_passes(body, required):
-                raise ValidationError(
-                    code="ERR_PREDICATE_FAILED",
-                    user_message=f"Task body does not satisfy predicate for status '{entry_status}'",
-                )
+        self.engine.validate_status_predicate(
+            target_status=entry_status,
+            body=body,
+            config=config,
+        )
 
         try:
             task = self.engine.create_task(
@@ -2587,16 +2651,16 @@ class AgentView:
             )
 
         if body_set:
-            self._validate_body_size(body)
+            self.engine.validate_body_size(body)
 
-        if parent > 0 and not self._task_exists(parent):
+        if parent > 0 and not self.engine.task_exists(parent):
             raise ValidationError(
                 code="ERR_PARENT_NOT_FOUND",
                 user_message=f"Parent task '{parent}' not found",
             )
 
         for dep_id in add_dep or []:
-            if not self._task_exists(dep_id):
+            if not self.engine.task_exists(dep_id):
                 raise ValidationError(
                     code="ERR_DEP_NOT_FOUND",
                     user_message=f"Dependency task '{dep_id}' not found",
@@ -2608,7 +2672,7 @@ class AgentView:
                 append_payload = f"{stamp}\n{append_body}"
             current_body = existing.body if isinstance(existing.body, str) else ""
             append_resulting_body = current_body + "\n" + append_payload
-            self._validate_body_size(append_resulting_body)
+            self.engine.validate_body_size(append_resulting_body)
 
         if archival_reason_set or archival_refs_set:
             if existing.status != "archived":
@@ -2625,60 +2689,13 @@ class AgentView:
             effective_refs = (
                 archival_refs if archival_refs_set else list(existing.archival_refs)
             )
-
-            if (
-                archival_reason_set
-                and effective_reason not in config.policy.archival_reasons
-            ):
-                raise ValidationError(
-                    code="ERR_ARCHIVAL_REASON_INVALID",
-                    user_message=(
-                        "archival_reason must be one of "
-                        f"{sorted(config.policy.archival_reasons)}"
-                    ),
-                )
-
-            if effective_reason in {"deprecated", "duplicate"} and not effective_refs:
-                raise ValidationError(
-                    code="ERR_ARCHIVAL_REFS_REQUIRED",
-                    user_message=f"archival_refs required for archival_reason='{effective_reason}'",
-                )
-
-            if (
-                effective_reason in {"completed", "dropped", "wontfix"}
-                and effective_refs
-            ):
-                raise ValidationError(
-                    code="ERR_ARCHIVAL_REFS_FORBIDDEN",
-                    user_message=f"archival_refs forbidden for archival_reason='{effective_reason}'",
-                )
-
-            if (
-                effective_reason == "completed"
-                and existing.status != config.pipeline.terminal_status
-            ):
-                raise ValidationError(
-                    code="ERR_COMPLETED_REQUIRES_DONE",
-                    user_message="archival_reason='completed' requires terminal status",
-                )
-
-            for ref_id in effective_refs:
-                if ref_id == task_id:
-                    raise ValidationError(
-                        code="ERR_ARCHIVAL_REF_SELF",
-                        user_message="archival_refs cannot include the task itself",
-                    )
-                if not self._task_exists(ref_id):
-                    raise ValidationError(
-                        code="ERR_ARCHIVAL_REF_MISSING",
-                        user_message=f"archival reference task '{ref_id}' not found",
-                    )
-
-            if self._has_archival_cycle(task_id, effective_refs):
-                raise ValidationError(
-                    code="ERR_ARCHIVAL_REF_CYCLE",
-                    user_message="archival_refs would introduce a cycle",
-                )
+            self.engine.validate_archival(
+                task_id=task_id,
+                archival_reason=effective_reason,
+                archival_refs=effective_refs,
+                can_mark_completed=existing.status == config.pipeline.terminal_status,
+                config=config,
+            )
 
         kwargs: dict[str, object] = {}
         if body:
@@ -2788,7 +2805,7 @@ class AgentView:
             config = self.engine.board_config()
 
             if status == "archived":
-                self._validate_move_archival_for_archive(
+                self.engine.validate_archival(
                     task_id=task_id,
                     can_mark_completed=before.status == config.pipeline.terminal_status,
                     config=config,
@@ -2802,7 +2819,7 @@ class AgentView:
                 )
 
             body = before.body if isinstance(before.body, str) else ""
-            self._validate_move_destination_predicate(
+            self.engine.validate_status_predicate(
                 target_status=status,
                 body=body,
                 config=config,

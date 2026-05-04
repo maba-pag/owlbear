@@ -88,84 +88,6 @@ class CockpitView:
             user_message=f"Task '{task_id}' not found",
         )
 
-    def _has_archival_cycle(self, root_task_id: int, refs: list[int]) -> bool:
-        def visits_root(task_id: int, seen: set[int]) -> bool:
-            if task_id in seen:
-                return False
-            seen.add(task_id)
-            try:
-                task = self.engine.show_task(str(task_id))
-            except FileNotFoundError:
-                return False
-            for dep_id in task.archival_refs:
-                if dep_id == root_task_id:
-                    return True
-                if visits_root(dep_id, seen):
-                    return True
-            return False
-
-        return any(visits_root(ref_id, set()) for ref_id in refs)
-
-    def _validate_move_archival_for_archive(
-        self,
-        *,
-        task_id: int,
-        can_mark_completed: bool,
-        config: BoardConfig,
-        archival_reason: str | None,
-        archival_refs: list[int],
-    ) -> None:
-        if not archival_reason:
-            raise ValidationError(
-                code="ERR_ARCHIVAL_REASON_REQUIRED",
-                user_message="archival_reason is required when status='archived'",
-            )
-        if archival_reason not in config.policy.archival_reasons:
-            raise ValidationError(
-                code="ERR_ARCHIVAL_REASON_INVALID",
-                user_message=(
-                    "archival_reason must be one of "
-                    f"{sorted(config.policy.archival_reasons)}"
-                ),
-            )
-        if archival_reason in {"deprecated", "duplicate"} and not archival_refs:
-            raise ValidationError(
-                code="ERR_ARCHIVAL_REFS_REQUIRED",
-                user_message=(
-                    f"archival_refs required for archival_reason='{archival_reason}'"
-                ),
-            )
-        if archival_reason in {"completed", "dropped", "wontfix"} and archival_refs:
-            raise ValidationError(
-                code="ERR_ARCHIVAL_REFS_FORBIDDEN",
-                user_message=(
-                    f"archival_refs forbidden for archival_reason='{archival_reason}'"
-                ),
-            )
-        if archival_reason == "completed" and not can_mark_completed:
-            raise ValidationError(
-                code="ERR_COMPLETED_REQUIRES_DONE",
-                user_message="archival_reason='completed' requires terminal status",
-            )
-        for ref_id in archival_refs:
-            if ref_id == task_id:
-                raise ValidationError(
-                    code="ERR_ARCHIVAL_REF_SELF",
-                    user_message="archival_refs cannot include the task itself",
-                )
-            try:
-                self.engine.show_task(str(ref_id))
-            except FileNotFoundError as exc:
-                raise ValidationError(
-                    code="ERR_ARCHIVAL_REF_MISSING",
-                    user_message=f"archival reference task '{ref_id}' not found",
-                ) from exc
-        if self._has_archival_cycle(task_id, archival_refs):
-            raise ValidationError(
-                code="ERR_ARCHIVAL_REF_CYCLE",
-                user_message="archival_refs would introduce a cycle",
-            )
-
     def edit_task(  # noqa: C901, PLR0912, PLR0913
         self,
         task_id: int,
@@ -245,7 +167,7 @@ class CockpitView:
             if status == "archived":
                 before = self.engine.show_task(str(task_id))
                 config = self.engine.board_config()
-                self._validate_move_archival_for_archive(
+                self.engine.validate_archival(
                     task_id=task_id,
                     can_mark_completed=before.status == config.pipeline.terminal_status,
                     config=config,
