@@ -32,6 +32,7 @@ from typing import TYPE_CHECKING, Any
 import yaml
 from pydantic import ValidationError
 from ruamel.yaml.comments import CommentedMap
+from ruamel.yaml.scalarstring import PlainScalarString
 
 if TYPE_CHECKING:
     from ruamel.yaml import YAML
@@ -88,8 +89,8 @@ def _make_yaml() -> YAML:
     return make_yaml()
 
 
-def _parse_task_file(path: Path) -> Task:
-    """Parse a markdown task file into a validated Task model."""
+def _parse_task_file(path: Path) -> dict[str, Any]:
+    """Parse a markdown task file into a frontmatter/body dictionary."""
     try:
         content = path.read_text(encoding="utf-8")
     except UnicodeDecodeError:
@@ -113,7 +114,58 @@ def _parse_task_file(path: Path) -> Task:
     body = "\n".join(lines[closing_idx + 1 :])
     data: dict[str, Any] = yaml.load(frontmatter_str, Loader=YAML12SafeLoader) or {}  # noqa: S506
     data["body"] = body
-    return Task.model_validate(data)
+    return data
+
+
+def _is_archive_path(path: Path, board_dir: Path, config: BoardConfig | None) -> bool:
+    """Return True when *path* points to the board's archive directory."""
+    if config is not None:
+        return path.parent == (board_dir / config.paths.archive_dir)
+    return path.parent.name == "archive"
+
+
+def _resolve_board_config(
+    path: Path, config: BoardConfig | None
+) -> tuple[Path, BoardConfig | None]:
+    """Resolve board root and optional config for a task file path."""
+    board_dir = path.parent.parent
+    if config is not None:
+        return board_dir, config
+    config_path = board_dir / "config.yml"
+    if not config_path.exists():
+        return board_dir, None
+
+    from owlbear_kanban.config_loader import load_config as _load_config  # noqa: PLC0415
+
+    return board_dir, _load_config(board_dir)
+
+
+def _as_plain_timestamp_scalar(value: str) -> str | PlainScalarString:
+    """Return timestamp-like strings as plain scalars to avoid quoted YAML output."""
+    normalized = _normalize_timestamp(value)
+    if normalized is None:
+        return value
+    if _TS_RE.match(normalized.strip()):
+        return PlainScalarString(normalized)
+    return normalized
+
+
+def _unquote_timestamp_scalars(yaml_str: str) -> str:
+    """Remove single quotes from timestamp scalar lines in frontmatter YAML."""
+    out_lines: list[str] = []
+    for line in yaml_str.splitlines(keepends=True):
+        stripped = line.rstrip("\n")
+        m = re.match(r"^([^:\n]+): '(.*)'$", stripped)
+        if m is None:
+            out_lines.append(line)
+            continue
+        key, value = m.groups()
+        normalized = _normalize_timestamp(value)
+        if normalized is not None and _TS_RE.match(normalized.strip()):
+            out_lines.append(f"{key}: {normalized}\n")
+            continue
+        out_lines.append(line)
+    return "".join(out_lines)
 
 
 def _validation_to_corruption(path: Path, exc: ValidationError) -> CorruptionError:
@@ -290,8 +342,13 @@ def read_task(path: Path, *, config: BoardConfig | None = None) -> Task:
         CorruptionError: ERR_CORRUPT_INVALID_STATUS when status is outside config.
         CorruptionError: ERR_CORRUPT_INVALID_PRIORITY when priority is outside config.
     """
+    board_dir, loaded_config = _resolve_board_config(path, config)
+
     try:
-        task = _parse_task_file(path)
+        data = _parse_task_file(path)
+        if _is_archive_path(path, board_dir, loaded_config):
+            data.pop("claimed_by", None)
+        task = Task.model_validate(data)
     except yaml.YAMLError as exc:
         raise CorruptionError(
             code=ERR_CORRUPT_YAML_PARSE,
@@ -308,20 +365,10 @@ def read_task(path: Path, *, config: BoardConfig | None = None) -> Task:
         ) from exc
 
     # Targeted reads (e.g. show_task) must surface board-level corruption modes.
-    board_dir = path.parent.parent
-    if config is not None:
-        corruption = detect_corruption(path, config)
+    if loaded_config is not None:
+        corruption = detect_corruption(path, loaded_config)
         if corruption is not None:
             raise corruption
-    else:
-        config_path = board_dir / "config.yml"
-        if config_path.exists():
-            from owlbear_kanban.config_loader import load_config as _load_config  # noqa: PLC0415
-
-            loaded_config = _load_config(board_dir)
-            corruption = detect_corruption(path, loaded_config)
-            if corruption is not None:
-                raise corruption
 
     # Mode 6: filename prefix id must match frontmatter id.
     try:
@@ -381,17 +428,17 @@ def write_task(task: Task, kanban_dir: Path, *, target_dir: Path | None = None) 
             continue
         val = data[key]
         if key in _TS_FIELDS and isinstance(val, str):
-            val = _normalize_timestamp(val)
+            val = _as_plain_timestamp_scalar(val)
         ordered[key] = val
     # Vendor extras (AC-C15 applies to all timestamp-looking values).
     for key, val in data.items():
         if key not in _CANONICAL_FIELD_SET and key != "claimed_by":
-            normalized_val = _normalize_timestamp(val) if isinstance(val, str) else val
+            normalized_val = _as_plain_timestamp_scalar(val) if isinstance(val, str) else val
             ordered[key] = normalized_val
 
     stream = io.StringIO()
     _make_yaml().dump(ordered, stream)
-    yaml_str = stream.getvalue()
+    yaml_str = _unquote_timestamp_scalars(stream.getvalue())
     content = f"---\n{yaml_str}---\n{body}"
     atomic_write(path, content)
     return path
