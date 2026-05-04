@@ -113,7 +113,7 @@ async def store_learning(  # noqa: PLR0913
             confidence=confidence,
             state=MemoryState.PENDING,
             content=content,
-            scope_agents=scope_agents,
+            scope_agents=scope_agents or [],
             source_agent=_caller_from_ctx(ctx) or "unknown",
             created_at=now,
             updated_at=now,
