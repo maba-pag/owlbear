@@ -323,6 +323,27 @@ class TestFromAC_SuccessAtTerminalStatus:
             "AC3: success at terminal must remove task from tasks/; file still present"
         )
 
+    def test_success_at_terminal_normalizes_nonempty_archival_refs_to_empty(
+        self, tmp_path
+    ) -> None:
+        """AC3 (discriminating): terminal success normalizes non-empty archival_refs to [].
+
+        Seeds archival_refs=[100, 200] via edit_task before calling end_work.
+        Fixtures always start with archival_refs=[], so removing the
+        ``record.archival_refs = []`` normalization line in the archive branch
+        would leave this test with refs=[100, 200] — proving the clear is real.
+        """
+        engine = _make_engine(tmp_path)
+        _write_task(engine._kanban_dir, task_id=1, status="done")
+        engine.edit_task("1", archival_refs=[100, 200])
+
+        result = engine.end_work("1", note="shipped", outcome="success")
+
+        assert result.archival_refs == [], (
+            f"AC3: terminal success must normalize archival_refs to []; "
+            f"got {result.archival_refs!r} — refs seeded as [100, 200] via edit_task"
+        )
+
 
 # ---------------------------------------------------------------------------
 # TestFromAC_SuccessFromInProgress — additional AC1 step coverage
