@@ -1563,7 +1563,7 @@ class KanbanEngine:
         note: str,
         outcome: str = "success",
         block_reason: str = "",
-        move_to: str | None = "research",
+        move_to: str | None = None,
         archival_reason: str | None = None,
         archival_refs: list[int] | None = None,
         expected_updated: str | None = None,
@@ -1579,7 +1579,7 @@ class KanbanEngine:
             note:         Text to append (prefixed with ISO-8601 datetime timestamp).
             outcome:      One of ``"success"``, ``"fail"``, ``"block"``, ``"reject"``.
             block_reason: Required when *outcome* is ``"block"``; stored on the task.
-            move_to:      Target status when *outcome* is ``"reject"`` (default ``"research"``).
+            move_to:      Optional target status when *outcome* is ``"reject"``.
             archival_reason: Archival reason used when ``reject`` moves to ``"archived"``.
             archival_refs: Archival references used when ``reject`` moves to ``"archived"``.
             expected_updated: Optional OCC token for compare-and-swap writes.
@@ -1689,6 +1689,10 @@ class KanbanEngine:
 
         Only handles ``claimed_at``-based timeouts (Brief C §1.5, AC-C23).
         Does NOT move archived tasks or touch corrupt files.
+
+        Claim releases use compare-and-swap writes (``write_task_if_unchanged``);
+        tasks modified concurrently (``ERR_STALE``) are silently skipped and not
+        included in the returned list.
 
         Returns:
             List of integer task IDs whose expired claims were released.

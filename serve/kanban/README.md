@@ -36,7 +36,7 @@ engine.release_task(42)
 | `show_task(task_id)` | Fetch a single full `Task` by ID |
 | `create_task(title, …)` | Allocate next ID and write a new task file |
 | `edit_task(task_id, …)` | Update task fields in-place (slug/filename unchanged) |
-| `move_task(task_id, status, *, archival_reason=None, archival_refs=None)` | Change task status; `"archived"` moves file to `archive/` — requires a valid `archival_reason` |
+| `move_task(task_id, status, *, archival_reason=None, archival_refs=None, expected_updated=None)` | Change task status; `"archived"` moves file to `archive/` — requires a valid `archival_reason`; optional `expected_updated` token enables compare-and-swap writes |
 | `claim_task(task_id)` | Mark task claimed by this engine's `agent_name`; rejects blocked/rival claims |
 | `release_task(task_id, *, note=None)` | Clear claim unconditionally; appends a timestamped note to the body when `note` is provided |
 | `start_work(task_id)` | Claim the task for this agent (no status advancement) |
