@@ -210,3 +210,85 @@ Whether these are 1 or 2 `.agent.md` files is an architect decision.
 **Rejected:**
 - `knowledge-curator` naming — too close to `memory-curator` which does refinement. "Ingestor" is more accurate for bringing content in.
 - Single combined agent — the enricher worker loop is a distinct behavioral mode better served by its own prompt/agent.
+
+## D16 — 2026-05-04 — Scope Tool Inclusion (Panel OQ1)
+
+**Status quo:** D12 defers scope implementation. Architect panel says import_scope/export_scope are fully implemented and useful for backup/restore.
+**Decision to make:** Active or deferred?
+
+**Options considered:**
+
+- A: Defer all scope tools (D12 stands, register as stubs)
+- B: Keep import/export active, defer only sync_* tools
+
+**Chosen:** A — Defer all. D12 already decided this. Backup/restore is nice-to-have, not activation-critical.
+
+**Rejected:**
+
+- B because narrower active surface reduces exposure (security) and D12 already made this call.
+
+**Source inputs:** Architect stance §MCP Tool Surface, Security stance §7 Least-Privilege
+
+## D17 — 2026-05-04 — Edge Uniqueness Constraint (Panel OQ2)
+
+**Status quo:** Enrichment writes entity edges. Need a uniqueness constraint.
+**Decision to make:** Coarse or provenance-aware?
+
+**Options considered:**
+
+- A: UNIQUE(source_entity, target_entity, relation) — simpler, loses per-document evidence chain
+- B: UNIQUE(source_entity, target_entity, relation, document_id) — preserves which document established each edge
+
+**Chosen:** B — Provenance-aware. Cross-source relationship mapping is the core value. Edges must be traceable to their source document.
+
+**Rejected:**
+
+- A because losing provenance undermines the graph's trustworthiness for the cross-source mapping use case.
+
+**Source inputs:** Data stance §4, Architect stance §6
+
+## D18 — 2026-05-04 — get_stats Output Depth (Panel OQ3)
+
+**Status quo:** get_stats needs a response contract.
+**Decision to make:** How much detail?
+
+**Options considered:**
+
+- A: Minimal (total sources, chunks, entities)
+- B: Include enrichment progress (chunks processed / total)
+- C: Full per-source health (enrichment coverage, per-source chunk count, enrichment state)
+
+**Chosen:** B — Enrichment progress included. Workers need this to know when they're done. Defer per-source breakdown to post-activation.
+
+**Rejected:**
+
+- A because enrichment workers need progress visibility.
+- C because per-source health is post-activation polish.
+
+**Source inputs:** Enduser stance B2, R2
+
+## D19 — 2026-05-04 — delete_source Tool (Panel OQ4)
+
+**Status quo:** No delete tool exists. Manual path: edit sources.yaml + re-ingest.
+**Decision to make:** Include in this brief or defer?
+
+**Chosen:** Defer. Manual ingest means manual lifecycle. Document the manual path. Add tool when operator feels the pain.
+
+**Rejected:**
+
+- Include because it's meaningful new work and manual lifecycle is acceptable at current scale.
+
+**Source inputs:** Enduser stance R4
+
+## D20 — 2026-05-04 — Content Guard Timing (Critic Finding)
+
+**Status quo:** Security says scan at ingest AND before enrichment. Critic flagged synthesis for citing the stronger claim but adopting only ingest-time scanning.
+**Decision to make:** Ingest only, or also pre-enrichment?
+
+**Chosen:** Ingest only. Pre-guard chunks are a one-time legacy issue. All new ingestion goes through the guard.
+
+**Rejected:**
+
+- Both ingest and enrichment because the risk is limited to pre-guard legacy chunks, and scanning at enrichment time adds per-batch overhead for a one-time edge case.
+
+**Source inputs:** Security stance §2, §8; Critic Pass 1 T6; Critic Pass 2 #8
