@@ -19,7 +19,7 @@ import pytest
 from owlbear_kanban import KanbanEngine
 from owlbear_kanban.dispatch import pick_dispatchable
 from owlbear_kanban.engine import AgentView
-from owlbear_kanban.models import PickTasksResponse
+from owlbear_kanban.models import PickTasksResponse, Task
 
 # ---------------------------------------------------------------------------
 # Fixtures / helpers
@@ -941,56 +941,66 @@ class TestFromAC_PostRehydrateArchivedGuard:
     """AC11: After show_task() returns in pick_tasks(), candidates with
     status='archived' must be skipped — they must not enter wave assembly.
 
-    Guards against the archive-wins precedence in show_task(): when a task
-    file exists in BOTH tasks/ and archive/, show_task() returns the archived
-    copy.  Without an explicit status check, that archived task bypasses both
-    gates (archived ∉ _CLARITY_STATUSES, ≠ in-progress) and is dispatched.
+    Simulates the archive-between-list-and-show race by patching
+    KanbanEngine.show_task to return an archived Task for a candidate that
+    passed the active-list pre-filter (no archive copy on disk at list time).
+    Without a post-rehydrate `if full_task.status == "archived": continue`
+    guard, the archived task bypasses both TDD and clarity gates
+    (archived ∉ _CLARITY_STATUSES, archived ≠ in-progress) and is dispatched.
     """
 
     def test_archived_task_returned_by_show_task_is_skipped(
         self, tmp_path: Path
     ) -> None:
-        """A task whose show_task() call returns status='archived' must not
-        appear in any wave — even when it passed the active-task pre-filter.
+        """Patching show_task() to return status='archived' for a task that
+        passed the active-list filter must cause that task to be absent from
+        all waves.
 
         Setup:
-        - tasks/50-task.md: status=todo, clarity-compliant → enters dispatchable list
-        - archive/50-task.md: status=archived → show_task() prefers this (archive-wins)
+        - tasks/50-task.md: status=todo, clarity-compliant → list_tasks() includes it
+        - NO archive copy on disk → list_tasks() archive pre-scan does NOT filter it
+        - show_task is patched to return Task(status='archived') for task 50,
+          simulating a concurrent archive between list_tasks() and show_task()
 
-        Before fix: pick_tasks() has no post-rehydrate status check → archived
-        task bypasses both gates (archived ∉ _CLARITY_STATUSES, ≠ in-progress)
-        and enters wave assembly → 50 IS in waves → assertion FAILS.
+        Current implementation (no guard): after show_task() returns, both
+        gates pass for status='archived' (TDD gate only fires for in-progress;
+        clarity gate only fires for _CLARITY_STATUSES, archived ∉ that set).
+        Task 50 is appended to gated_dispatchable and enters waves.
+        → assertion FAILS (50 IS in waves).
 
-        After fix: pick_tasks() adds `if full_task.status == "archived": continue`
-        after show_task() → task 50 skipped → not in waves → PASSES.
+        After fix: `if full_task.status == "archived": continue` after show_task()
+        → task 50 is skipped → not in waves → assertion PASSES.
         """
         board = _make_board(tmp_path)
-        tasks_dir = board / "tasks"
-        archive_dir = board / "archive"
-
-        # Active copy in tasks/ — enters dispatchable via list_tasks(archived=False)
+        # Write to tasks/ ONLY — no archive copy, so list_tasks() includes task 50
         _write_task(
-            tasks_dir,
+            board / "tasks",
             task_id=50,
             title="Task archived between list and show",
             status="todo",
             body="## AC\n- item one\n",
         )
-        # Archive copy — same filename; show_task() prefers archive when both exist
-        _write_task(
-            archive_dir,
-            task_id=50,
+        engine = KanbanEngine(board, activity_log=False)
+        view = AgentView(engine)
+
+        # Simulate the race: show_task() returns archived copy even though
+        # list_tasks() saw the active todo copy (no archive on disk at list time)
+        archived_task = Task(
+            id=50,
             title="Task archived between list and show",
             status="archived",
+            priority="needed",
+            created="2024-01-01T00:00:00+00:00",
+            updated="2024-01-01T00:00:00+00:00",
             body="## AC\n- item one\n",
         )
-
-        view = AgentView(KanbanEngine(board, activity_log=False))
-        result = view.pick_tasks()
+        with patch.object(engine, "show_task", return_value=archived_task):
+            result = view.pick_tasks()
 
         assert 50 not in _all_task_ids(result), (
             "pick_tasks must skip tasks whose show_task() returns status='archived'; "
-            "failing means an archived task entered wave assembly via archive-wins precedence"
+            "currently archived bypasses both TDD and clarity gates and enters waves "
+            "because archived ∉ _CLARITY_STATUSES and archived ≠ in-progress"
         )
 
 
