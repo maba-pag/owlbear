@@ -46,10 +46,10 @@ Quality-runner selects the toolchain and execution cwd by resolving the nearest 
 
 > Example (OwlBear-dev): `serve/cockpit/web/src/__tests__/Foo.test.tsx` → walk up → `serve/cockpit/web/package.json` found → cwd is `serve/cockpit/web/`, toolchain is vitest.
 
-If your project has `owlbear-tools` installed, you can resolve this programmatically:
+If your project has `.owlbear/scripts/test-root.py` (seeded by `setup/init.py`), you can resolve this programmatically:
 
 ```bash
-uv run test-root serve/cockpit/web/src/__tests__/Foo.test.tsx
+uv run .owlbear/scripts/test-root.py serve/cockpit/web/src/__tests__/Foo.test.tsx
 # → {"test_path": "...", "cwd": "serve/cockpit/web", "toolchain": "vitest", "cmd": "npm test"}
 ```
 
