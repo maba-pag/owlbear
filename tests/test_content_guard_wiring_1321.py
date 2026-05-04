@@ -147,7 +147,9 @@ class TestFromAC_LifespanGuardWiring:
     IngestPipeline; scan() called during ingest_text() flow."""
 
     @pytest.fixture(autouse=True)
-    def _sandbox_lifespan_home(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def _sandbox_lifespan_home(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Redirect Path.home() to tmp_path so lifespan tests cannot touch real ~/.owlbear."""
         monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
 
@@ -155,7 +157,10 @@ class TestFromAC_LifespanGuardWiring:
     async def test_app_lifespan_passes_content_guard_to_ingest_pipeline(self) -> None:
         """IngestPipeline in app_lifespan is constructed with a non-None content_guard."""
         patches = _lifespan_heavy_patches()
-        with patch("owlbear_mcp_knowledge.server.IngestPipeline") as mock_pipeline_cls, _contextlib_exitstack(patches):
+        with (
+            patch("owlbear_mcp_knowledge.server.IngestPipeline") as mock_pipeline_cls,
+            _contextlib_exitstack(patches),
+        ):
             async with app_lifespan(MagicMock()):
                 pass
 
@@ -170,7 +175,10 @@ class TestFromAC_LifespanGuardWiring:
     async def test_content_guard_is_content_injection_guard_instance(self) -> None:
         """The content_guard passed to IngestPipeline is a ContentInjectionGuard instance."""
         patches = _lifespan_heavy_patches()
-        with patch("owlbear_mcp_knowledge.server.IngestPipeline") as mock_pipeline_cls, _contextlib_exitstack(patches):
+        with (
+            patch("owlbear_mcp_knowledge.server.IngestPipeline") as mock_pipeline_cls,
+            _contextlib_exitstack(patches),
+        ):
             async with app_lifespan(MagicMock()):
                 pass
 
@@ -323,7 +331,9 @@ class TestFromAC_BlockAndWarnBehavior:
         """Non-strict mode calls scan() but returns status != 'blocked' for injection content."""
         guard = MagicMock(spec=ContentInjectionGuard)
         guard.scan.return_value = CheckResult(
-            threat=True, blocked=False, reason="injection detected",
+            threat=True,
+            blocked=False,
+            reason="injection detected",
             pattern="ignore previous instructions",
         )
         pipeline, _ = _build_pipeline(text=INJECTION_TEXT, guard=guard)
@@ -367,7 +377,9 @@ class TestFromAC_BlockAndWarnBehavior:
         """Non-strict threat content returns exactly status='ok' (not just not-blocked)."""
         guard = MagicMock(spec=ContentInjectionGuard)
         guard.scan.return_value = CheckResult(
-            threat=True, blocked=False, reason="injection detected",
+            threat=True,
+            blocked=False,
+            reason="injection detected",
             pattern="ignore previous instructions",
         )
         pipeline, _ = _build_pipeline(text=INJECTION_TEXT, guard=guard)
@@ -391,7 +403,9 @@ class TestFromAC_BlockAndWarnBehavior:
         guard.scan.side_effect = lambda _text: (
             call_log.append("scan"),
             CheckResult(
-                threat=True, blocked=False, reason="injection detected",
+                threat=True,
+                blocked=False,
+                reason="injection detected",
                 pattern="ignore previous instructions",
             ),
         )[-1]
@@ -651,9 +665,7 @@ class TestFromAC_AllSourceTypesScanned:
         ],
     )
     @pytest.mark.asyncio
-    async def test_guard_scans_for_source_type(
-        self, source_type: str | None
-    ) -> None:
+    async def test_guard_scans_for_source_type(self, source_type: str | None) -> None:
         """guard.scan() is called for ingest_text() regardless of source_type."""
         guard = MagicMock(spec=ContentInjectionGuard)
         guard.scan.return_value = CheckResult(

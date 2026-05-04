@@ -80,6 +80,7 @@ YAML12SafeLoader.add_implicit_resolver(
     list("tTfF"),
 )
 
+
 def _make_yaml() -> YAML:
     """Return a round-trip ruamel YAML instance with timestamp resolver disabled."""
     from owlbear_kanban.yaml_rt import make_yaml  # noqa: PLC0415

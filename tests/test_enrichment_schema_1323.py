@@ -90,14 +90,20 @@ class TestFromAC_EnrichmentStateColumn:
 
     def test_enrichment_state_is_text_type(self, conn: sqlite3.Connection) -> None:
         info = _column_info(conn, "chunks")
-        assert "enrichment_state" in info, "chunks table missing enrichment_state column"
+        assert "enrichment_state" in info, (
+            "chunks table missing enrichment_state column"
+        )
         assert info["enrichment_state"]["type"].upper() == "TEXT", (
             f"enrichment_state should be TEXT, got {info['enrichment_state']['type']}"
         )
 
-    def test_enrichment_state_default_is_pending(self, conn: sqlite3.Connection) -> None:
+    def test_enrichment_state_default_is_pending(
+        self, conn: sqlite3.Connection
+    ) -> None:
         info = _column_info(conn, "chunks")
-        assert "enrichment_state" in info, "chunks table missing enrichment_state column"
+        assert "enrichment_state" in info, (
+            "chunks table missing enrichment_state column"
+        )
         dflt = info["enrichment_state"]["dflt_value"]
         assert dflt == "'pending'", (
             f"enrichment_state default should be 'pending', got {dflt!r}"
@@ -132,7 +138,9 @@ class TestFromAC_EnrichmentStateNotConsolidated:
             "enrichment_state and consolidated share the same column id — they must be distinct"
         )
 
-    def test_enrichment_state_is_text_not_integer(self, conn: sqlite3.Connection) -> None:
+    def test_enrichment_state_is_text_not_integer(
+        self, conn: sqlite3.Connection
+    ) -> None:
         """consolidated is INTEGER; enrichment_state must be TEXT (different type)."""
         info = _column_info(conn, "chunks")
         assert "enrichment_state" in info, "enrichment_state column missing"
@@ -186,11 +194,11 @@ class TestFromAC_ReviewedPairsTable:
             "reviewed_pairs table does not exist"
         )
 
-    def test_reviewed_pairs_has_entity_name_column(self, conn: sqlite3.Connection) -> None:
+    def test_reviewed_pairs_has_entity_name_column(
+        self, conn: sqlite3.Connection
+    ) -> None:
         cols = _column_names(conn, "reviewed_pairs")
-        assert "entity_name" in cols, (
-            "reviewed_pairs table missing entity_name column"
-        )
+        assert "entity_name" in cols, "reviewed_pairs table missing entity_name column"
 
     def test_reviewed_pairs_has_source_a_column(self, conn: sqlite3.Connection) -> None:
         cols = _column_names(conn, "reviewed_pairs")
@@ -262,19 +270,33 @@ class TestFromAC_EdgeUniqueConstraint:
         conn.execute(
             "INSERT INTO edges (id, source_id, target_id, relation, document_id, created_at)"
             " VALUES (?, ?, ?, ?, ?, ?)",
-            (edge_id_1, common["source_id"], common["target_id"],
-             common["relation"], common["document_id"], now),
+            (
+                edge_id_1,
+                common["source_id"],
+                common["target_id"],
+                common["relation"],
+                common["document_id"],
+                now,
+            ),
         )
 
         with pytest.raises(sqlite3.IntegrityError):
             conn.execute(
                 "INSERT INTO edges (id, source_id, target_id, relation, document_id, created_at)"
                 " VALUES (?, ?, ?, ?, ?, ?)",
-                (edge_id_2, common["source_id"], common["target_id"],
-                 common["relation"], common["document_id"], now),
+                (
+                    edge_id_2,
+                    common["source_id"],
+                    common["target_id"],
+                    common["relation"],
+                    common["document_id"],
+                    now,
+                ),
             )
 
-    def test_edges_different_document_id_is_allowed(self, conn: sqlite3.Connection) -> None:
+    def test_edges_different_document_id_is_allowed(
+        self, conn: sqlite3.Connection
+    ) -> None:
         """Same source/target/relation but different document_id must NOT conflict."""
         now = _now()
         conn.execute(

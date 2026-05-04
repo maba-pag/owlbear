@@ -209,9 +209,7 @@ class TestFromAC_EngineCleanup:
             "engine.py must not define a cockpit_view method/property after relocation"
         )
 
-    def test_engine_py_has_no_owlbear_cockpit_import(
-        self, project_root: Path
-    ) -> None:
+    def test_engine_py_has_no_owlbear_cockpit_import(self, project_root: Path) -> None:
         """AC2: engine.py must have zero import/from lines referencing owlbear_cockpit."""
         engine_py = (
             project_root / "serve" / "kanban" / "src" / "owlbear_kanban" / "engine.py"
@@ -716,7 +714,9 @@ class TestFromAC_CockpitViewBehavior:
             f"CockpitView.list_tasks() count {len(view_result.tasks)} must equal "
             f"engine.agent_view().list_tasks() count {len(engine_result.tasks)}"
         )
-        assert {t.id for t in view_result.tasks} == {t.id for t in engine_result.tasks}, (
+        assert {t.id for t in view_result.tasks} == {
+            t.id for t in engine_result.tasks
+        }, (
             "CockpitView.list_tasks() task IDs must exactly match engine.agent_view().list_tasks() IDs"
         )
 

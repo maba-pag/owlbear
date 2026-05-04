@@ -264,7 +264,9 @@ class TestFromAC_KnowledgeSourceFields:
         """
         columns = [
             row[1]
-            for row in db_conn.execute("PRAGMA table_info(knowledge_sources)").fetchall()
+            for row in db_conn.execute(
+                "PRAGMA table_info(knowledge_sources)"
+            ).fetchall()
         ]
         assert "fetch_method" in columns, (
             f"knowledge_sources schema must have 'fetch_method' column; found: {columns}"
@@ -279,7 +281,9 @@ class TestFromAC_KnowledgeSourceFields:
         """
         columns = [
             row[1]
-            for row in db_conn.execute("PRAGMA table_info(knowledge_sources)").fetchall()
+            for row in db_conn.execute(
+                "PRAGMA table_info(knowledge_sources)"
+            ).fetchall()
         ]
         assert "enrich" in columns, (
             f"knowledge_sources schema must have 'enrich' column; found: {columns}"
@@ -550,7 +554,9 @@ class TestFromAC_SQLiteDiskPersistence:
 class TestFromAC_KnowledgeSourceAllNamedFields:
     """AC4: all 6 named fields are top-level model fields and schema columns, not config keys."""
 
-    @pytest.mark.parametrize("field_name", ["name", "source_type", "created_at", "updated_at"])
+    @pytest.mark.parametrize(
+        "field_name", ["name", "source_type", "created_at", "updated_at"]
+    )
     def test_remaining_ac4_named_fields_are_top_level_model_fields(
         self, field_name: str
     ) -> None:
@@ -576,7 +582,9 @@ class TestFromAC_KnowledgeSourceAllNamedFields:
         """
         columns = [
             row[1]
-            for row in db_conn.execute("PRAGMA table_info(knowledge_sources)").fetchall()
+            for row in db_conn.execute(
+                "PRAGMA table_info(knowledge_sources)"
+            ).fetchall()
         ]
         assert col_name in columns, (
             f"knowledge_sources must have a dedicated '{col_name}' column; found: {columns}"
@@ -606,7 +614,9 @@ class TestFromAC_KnowledgeSourceAllNamedFields:
         assert "enrich" not in config_dict, (
             "enrich must be a dedicated column, not a key in the config JSON blob"
         )
-        assert row[1] == "rss-feed", f"fetch_method column must be 'rss-feed', got {row[1]!r}"
+        assert row[1] == "rss-feed", (
+            f"fetch_method column must be 'rss-feed', got {row[1]!r}"
+        )
         assert bool(row[2]) is True, f"enrich column must be 1 (True), got {row[2]!r}"
 
 
@@ -640,7 +650,9 @@ class TestFromAC_IngestSourceResolutionContract:
         mock_chunker.chunk.return_value = [MagicMock(text="chunk")] * chunk_count
 
         mock_extractor = MagicMock()
-        mock_extractor.extract = AsyncMock(return_value=MagicMock(entities=[], edges=[]))
+        mock_extractor.extract = AsyncMock(
+            return_value=MagicMock(entities=[], edges=[])
+        )
 
         mock_docs = MagicMock()
         mock_docs.insert_document.return_value = None
@@ -696,12 +708,16 @@ class TestFromAC_IngestSourceResolutionContract:
         mock_store.resolve_by_url.return_value = MagicMock(id="resolved-uuid-abc")
         pipeline = self._make_pipeline_with_source_store(mock_store)
 
-        await pipeline.ingest_text("text content", source_url="https://docs.example.com")
+        await pipeline.ingest_text(
+            "text content", source_url="https://docs.example.com"
+        )
 
         mock_store.resolve_by_url.assert_called_once_with("https://docs.example.com")
 
     @pytest.mark.asyncio
-    async def test_ingest_text_passes_resolved_source_id_to_insert_document(self) -> None:
+    async def test_ingest_text_passes_resolved_source_id_to_insert_document(
+        self,
+    ) -> None:
         """AC3: insert_document must receive source_id equal to the resolved KnowledgeSource.id.
 
         The FK must originate from source_store.resolve_by_url().id — not from a
@@ -713,7 +729,9 @@ class TestFromAC_IngestSourceResolutionContract:
         mock_store.resolve_by_url.return_value = MagicMock(id=expected_fk)
         pipeline = self._make_pipeline_with_source_store(mock_store)
 
-        await pipeline.ingest_text("document text", source_url="https://docs.example.com")
+        await pipeline.ingest_text(
+            "document text", source_url="https://docs.example.com"
+        )
 
         mock_docs = pipeline._docs  # type: ignore[attr-defined]
         call_kwargs = mock_docs.insert_document.call_args.kwargs
@@ -739,11 +757,11 @@ class TestFromAC_IngestSourceResolutionContract:
         )
 
         mock_docs = MagicMock()
-        mock_docs.insert_document.side_effect = (
-            lambda *_a, **_kw: call_order.append("insert_document")
+        mock_docs.insert_document.side_effect = lambda *_a, **_kw: call_order.append(
+            "insert_document"
         )
-        mock_docs.store_chunks.side_effect = (
-            lambda *_a, **_kw: call_order.append("store_chunks") or []
+        mock_docs.store_chunks.side_effect = lambda *_a, **_kw: (
+            call_order.append("store_chunks") or []
         )
         mock_docs.store_embeddings.return_value = None
         mock_docs.store_extractions.return_value = (0, 0)
@@ -761,7 +779,9 @@ class TestFromAC_IngestSourceResolutionContract:
 
         await pipeline.ingest_text("text", source_url="https://docs.example.com")
 
-        assert "resolve_by_url" in call_order, "source_store.resolve_by_url must be called"
+        assert "resolve_by_url" in call_order, (
+            "source_store.resolve_by_url must be called"
+        )
         assert "insert_document" in call_order, "insert_document must be called"
         assert "store_chunks" in call_order, "store_chunks must be called"
 
@@ -800,7 +820,9 @@ class TestFromAC_IngestSourceResolutionContract:
 
         mock_store.create.assert_called_once()
         call_args = mock_store.create.call_args
-        created_obj = call_args[0][0] if call_args[0] else call_args.kwargs.get("source")
+        created_obj = (
+            call_args[0][0] if call_args[0] else call_args.kwargs.get("source")
+        )
         # The KnowledgeSource passed to create() must carry the requested URL
         assert hasattr(created_obj, "name"), (
             "create() must receive a KnowledgeSource object with a 'name' attribute"

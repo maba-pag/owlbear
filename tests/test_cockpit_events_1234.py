@@ -132,13 +132,14 @@ class TestFromAC_EventsModuleExists:
         from owlbear_cockpit.routes.events import router  # noqa: PLC0415
         from fastapi import APIRouter  # noqa: PLC0415
 
-        assert isinstance(router, APIRouter), "events.router must be a FastAPI APIRouter"
+        assert isinstance(router, APIRouter), (
+            "events.router must be a FastAPI APIRouter"
+        )
 
     def test_events_router_registered_in_main(self) -> None:
         """main.py must import and register the events router under /api prefix."""
         main_file = (
-            Path(__file__).parent.parent
-            / "serve/cockpit/src/owlbear_cockpit/main.py"
+            Path(__file__).parent.parent / "serve/cockpit/src/owlbear_cockpit/main.py"
         )
         content = main_file.read_text(encoding="utf-8")
         assert "events" in content, (
@@ -162,8 +163,7 @@ class TestFromAC_EventsModuleExists:
     def test_events_router_registered_in_main_exact_pattern(self) -> None:
         """AC1 (tightened): main.py must contain the exact include_router call wiring."""
         main_file = (
-            Path(__file__).parent.parent
-            / "serve/cockpit/src/owlbear_cockpit/main.py"
+            Path(__file__).parent.parent / "serve/cockpit/src/owlbear_cockpit/main.py"
         )
         content = main_file.read_text(encoding="utf-8")
         assert 'include_router(events_router, prefix="/api")' in content, (
@@ -237,7 +237,9 @@ class TestFromAC_EventSourceResponseEndpoint:
             with patch("owlbear_cockpit.routes.events.awatch", new=_capture_path):
                 transport = httpx.ASGITransport(app=app)
                 async with (
-                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
+                    httpx.AsyncClient(
+                        transport=transport, base_url="http://test"
+                    ) as ac,
                     ac.stream("GET", "/api/events") as response,
                 ):
                     assert response.status_code == 200
@@ -273,7 +275,9 @@ class TestFromAC_WatchFilter:
         """_watch_filter must accept .md files regardless of parent path depth."""
         from owlbear_cockpit.routes.events import _watch_filter  # noqa: PLC0415
 
-        assert _watch_filter(None, "/home/user/.owlbear/kanban/tasks/42-title.md") is True
+        assert (
+            _watch_filter(None, "/home/user/.owlbear/kanban/tasks/42-title.md") is True
+        )
 
     def test_filter_rejects_tmp_prefix_md_file(self) -> None:
         """_watch_filter must return False for files starting with .tmp-."""
@@ -326,7 +330,9 @@ class TestFromAC_WatchFilter:
             with patch("owlbear_cockpit.routes.events.awatch", new=_capture_and_stop):
                 transport = httpx.ASGITransport(app=app)
                 async with (
-                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
+                    httpx.AsyncClient(
+                        transport=transport, base_url="http://test"
+                    ) as ac,
                     ac.stream("GET", "/api/events") as response,
                 ):
                     assert response.status_code == 200
@@ -378,7 +384,9 @@ class TestFromAC_EventPayload:
             with patch("owlbear_cockpit.routes.events.awatch", _one_change):
                 transport = httpx.ASGITransport(app=app)
                 async with (
-                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
+                    httpx.AsyncClient(
+                        transport=transport, base_url="http://test"
+                    ) as ac,
                     ac.stream("GET", "/api/events") as response,
                 ):
                     assert response.status_code == 200
@@ -413,7 +421,9 @@ class TestFromAC_EventPayload:
             with patch("owlbear_cockpit.routes.events.awatch", _one_change):
                 transport = httpx.ASGITransport(app=app)
                 async with (
-                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
+                    httpx.AsyncClient(
+                        transport=transport, base_url="http://test"
+                    ) as ac,
                     ac.stream("GET", "/api/events") as response,
                 ):
                     data_payloads = []
@@ -457,7 +467,9 @@ class TestFromAC_EventPayload:
             with patch("owlbear_cockpit.routes.events.awatch", _one_change_then_stop):
                 transport = httpx.ASGITransport(app=app)
                 async with (
-                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
+                    httpx.AsyncClient(
+                        transport=transport, base_url="http://test"
+                    ) as ac,
                     ac.stream("GET", "/api/events") as response,
                 ):
                     assert response.status_code == 200
@@ -473,7 +485,9 @@ class TestFromAC_EventPayload:
         )
 
     @pytest.mark.asyncio
-    async def test_mixed_batch_surviving_file_still_emits_event(self, board_dir) -> None:
+    async def test_mixed_batch_surviving_file_still_emits_event(
+        self, board_dir
+    ) -> None:
         """AC4b: When a batch contains both a deleted and a surviving .md file, the surviving file still produces a tasks-changed event."""
         from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
@@ -495,7 +509,9 @@ class TestFromAC_EventPayload:
             with patch("owlbear_cockpit.routes.events.awatch", _mixed_batch_then_stop):
                 transport = httpx.ASGITransport(app=app)
                 async with (
-                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
+                    httpx.AsyncClient(
+                        transport=transport, base_url="http://test"
+                    ) as ac,
                     ac.stream("GET", "/api/events") as response,
                 ):
                     assert response.status_code == 200
@@ -503,9 +519,9 @@ class TestFromAC_EventPayload:
                     data_lines: list[str] = []
                     async for line in response.aiter_lines():
                         if line.startswith("event:"):
-                            event_lines.append(line[len("event:"):].strip())
+                            event_lines.append(line[len("event:") :].strip())
                         elif line.startswith("data:"):
-                            data_lines.append(line[len("data:"):].strip())
+                            data_lines.append(line[len("data:") :].strip())
                         if event_lines and data_lines:
                             break
         finally:
@@ -541,7 +557,9 @@ class TestFromAC_EventPayload:
             with patch("owlbear_cockpit.routes.events.awatch", _one_change):
                 transport = httpx.ASGITransport(app=app)
                 async with (
-                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
+                    httpx.AsyncClient(
+                        transport=transport, base_url="http://test"
+                    ) as ac,
                     ac.stream("GET", "/api/events") as response,
                 ):
                     data_payloads = []
@@ -649,7 +667,9 @@ class TestFromAC_MissingDirGuard:
         )
 
     @pytest.mark.asyncio
-    async def test_missing_tasks_dir_awatch_unreachable_on_consumed_path(self, tmp_path) -> None:
+    async def test_missing_tasks_dir_awatch_unreachable_on_consumed_path(
+        self, tmp_path
+    ) -> None:
         """AC5 (combined proof): consuming a missing-dir stream produces zero events AND never calls awatch.
 
         Patches awatch to raise immediately if invoked on the consumed path,
@@ -678,7 +698,9 @@ class TestFromAC_MissingDirGuard:
             with patch("owlbear_cockpit.routes.events.awatch", _raise_if_called):
                 transport = httpx.ASGITransport(app=app)
                 async with (
-                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
+                    httpx.AsyncClient(
+                        transport=transport, base_url="http://test"
+                    ) as ac,
                     ac.stream("GET", "/api/events") as response,
                 ):
                     assert response.status_code == 200
@@ -791,7 +813,9 @@ class TestFromAC_GeneratorCleanup:
         )
 
     @pytest.mark.asyncio
-    async def test_generator_terminates_on_disconnect_executable(self, board_dir) -> None:
+    async def test_generator_terminates_on_disconnect_executable(
+        self, board_dir
+    ) -> None:
         """AC6b: When is_disconnected() returns True, generator exits the watch loop — proven by consuming body_iterator."""
         import asyncio  # noqa: PLC0415
 
@@ -860,7 +884,10 @@ class TestFromAC_GeneratorCleanup:
             emitted_chunks: list = []
             async with asyncio.timeout(3.0):
                 async for chunk in response.body_iterator:
-                    if isinstance(chunk, dict) and chunk.get("event") == "tasks-changed":
+                    if (
+                        isinstance(chunk, dict)
+                        and chunk.get("event") == "tasks-changed"
+                    ):
                         emitted_chunks.append(chunk)
 
         assert not emitted_chunks, (
@@ -895,7 +922,10 @@ class TestFromAC_GeneratorCleanup:
             events_yielded: list[dict] = []
             async with asyncio.timeout(3.0):
                 async for chunk in response.body_iterator:
-                    if isinstance(chunk, dict) and chunk.get("event") == "tasks-changed":
+                    if (
+                        isinstance(chunk, dict)
+                        and chunk.get("event") == "tasks-changed"
+                    ):
                         events_yielded.append(chunk)
                     if events_yielded:
                         break  # got the expected event, stop consuming
@@ -915,9 +945,7 @@ class TestFromAC_GeneratorCleanup:
 class TestFromAC_ProjDependencies:
     """AC7: Both sse-starlette and watchfiles must appear in serve/cockpit/pyproject.toml."""
 
-    _PYPROJECT = (
-        Path(__file__).parent.parent / "serve/cockpit/pyproject.toml"
-    )
+    _PYPROJECT = Path(__file__).parent.parent / "serve/cockpit/pyproject.toml"
 
     def test_sse_starlette_in_pyproject_dependencies(self) -> None:
         """sse-starlette must be explicitly listed in serve/cockpit/pyproject.toml."""

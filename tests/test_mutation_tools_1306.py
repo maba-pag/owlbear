@@ -105,7 +105,9 @@ class TestFromAC_SaveMemory:
         try:
             from owlbear_mcp_memory.tools import save_memory
         except ImportError as exc:
-            pytest.fail(f"save_memory not importable from owlbear_mcp_memory.tools: {exc}")
+            pytest.fail(
+                f"save_memory not importable from owlbear_mcp_memory.tools: {exc}"
+            )
 
         engine = MemoryEngine(memory_dir=tmp_path)
         ctx = _make_ctx(engine, caller="builder")
@@ -130,7 +132,9 @@ class TestFromAC_SaveMemory:
         try:
             from owlbear_mcp_memory.tools import save_memory
         except ImportError as exc:
-            pytest.fail(f"save_memory not importable from owlbear_mcp_memory.tools: {exc}")
+            pytest.fail(
+                f"save_memory not importable from owlbear_mcp_memory.tools: {exc}"
+            )
 
         engine = MemoryEngine(memory_dir=tmp_path)
         ctx = _make_ctx(engine, caller="builder")
@@ -155,7 +159,9 @@ class TestFromAC_SaveMemory:
         try:
             from owlbear_mcp_memory.tools import save_memory
         except ImportError as exc:
-            pytest.fail(f"save_memory not importable from owlbear_mcp_memory.tools: {exc}")
+            pytest.fail(
+                f"save_memory not importable from owlbear_mcp_memory.tools: {exc}"
+            )
 
         engine = MemoryEngine(memory_dir=tmp_path)
         ctx = _make_ctx(engine, caller="builder")
@@ -181,7 +187,9 @@ class TestFromAC_SaveMemory:
         try:
             from owlbear_mcp_memory.tools import save_memory
         except ImportError as exc:
-            pytest.fail(f"save_memory not importable from owlbear_mcp_memory.tools: {exc}")
+            pytest.fail(
+                f"save_memory not importable from owlbear_mcp_memory.tools: {exc}"
+            )
 
         engine = MemoryEngine(memory_dir=tmp_path)
         ctx = _make_ctx(engine, caller="some-other-agent")
@@ -215,7 +223,9 @@ class TestFromAC_ListMemories:
         try:
             from owlbear_mcp_memory.tools import list_memories
         except ImportError as exc:
-            pytest.fail(f"list_memories not importable from owlbear_mcp_memory.tools: {exc}")
+            pytest.fail(
+                f"list_memories not importable from owlbear_mcp_memory.tools: {exc}"
+            )
 
         engine = MemoryEngine(memory_dir=tmp_path)
         entry = _make_entry(n=1, state="curated", scope_agents=["builder"])
@@ -237,7 +247,9 @@ class TestFromAC_ListMemories:
         try:
             from owlbear_mcp_memory.tools import list_memories
         except ImportError as exc:
-            pytest.fail(f"list_memories not importable from owlbear_mcp_memory.tools: {exc}")
+            pytest.fail(
+                f"list_memories not importable from owlbear_mcp_memory.tools: {exc}"
+            )
 
         engine = MemoryEngine(memory_dir=tmp_path)
         curated = _make_entry(n=1, state="curated", scope_agents=["builder"])
@@ -258,7 +270,9 @@ class TestFromAC_ListMemories:
         )
 
     @pytest.mark.asyncio
-    async def test_list_memories_excludes_deleted_by_default(self, tmp_path: Path) -> None:
+    async def test_list_memories_excludes_deleted_by_default(
+        self, tmp_path: Path
+    ) -> None:
         """list_memories default view excludes deleted entries.
 
         RED: list_memories does not exist → ImportError.
@@ -266,7 +280,9 @@ class TestFromAC_ListMemories:
         try:
             from owlbear_mcp_memory.tools import list_memories
         except ImportError as exc:
-            pytest.fail(f"list_memories not importable from owlbear_mcp_memory.tools: {exc}")
+            pytest.fail(
+                f"list_memories not importable from owlbear_mcp_memory.tools: {exc}"
+            )
 
         engine = MemoryEngine(memory_dir=tmp_path)
         curated = _make_entry(n=1, state="curated", scope_agents=["builder"])
@@ -278,7 +294,9 @@ class TestFromAC_ListMemories:
         results = await list_memories(ctx)
 
         returned_states = {r["state"] for r in results}
-        assert "deleted" not in returned_states, "deleted entries must be excluded by default"
+        assert "deleted" not in returned_states, (
+            "deleted entries must be excluded by default"
+        )
 
     @pytest.mark.asyncio
     async def test_list_memories_filters_by_categories(self, tmp_path: Path) -> None:
@@ -289,11 +307,20 @@ class TestFromAC_ListMemories:
         try:
             from owlbear_mcp_memory.tools import list_memories
         except ImportError as exc:
-            pytest.fail(f"list_memories not importable from owlbear_mcp_memory.tools: {exc}")
+            pytest.fail(
+                f"list_memories not importable from owlbear_mcp_memory.tools: {exc}"
+            )
 
         engine = MemoryEngine(memory_dir=tmp_path)
-        entry_dk = _make_entry(n=1, state="curated", categories=["domain-knowledge"], scope_agents=["builder"])
-        entry_pt = _make_entry(n=2, state="curated", categories=["pitfall"], scope_agents=["builder"])
+        entry_dk = _make_entry(
+            n=1,
+            state="curated",
+            categories=["domain-knowledge"],
+            scope_agents=["builder"],
+        )
+        entry_pt = _make_entry(
+            n=2, state="curated", categories=["pitfall"], scope_agents=["builder"]
+        )
         engine.write(entry_dk)
         engine.write(entry_pt)
         ctx = _make_ctx(engine)
@@ -312,7 +339,9 @@ class TestFromAC_ListMemories:
         try:
             from owlbear_mcp_memory.tools import list_memories
         except ImportError as exc:
-            pytest.fail(f"list_memories not importable from owlbear_mcp_memory.tools: {exc}")
+            pytest.fail(
+                f"list_memories not importable from owlbear_mcp_memory.tools: {exc}"
+            )
 
         engine = MemoryEngine(memory_dir=tmp_path)
         entry_a = _make_entry(n=1, state="curated", scope_agents=["builder"])
@@ -336,7 +365,9 @@ class TestFromAC_ReadMemory:
     """AC3: read_memory returns full entry by ID; errors on invalid/deleted IDs."""
 
     @pytest.mark.asyncio
-    async def test_read_memory_returns_full_entry_with_content(self, tmp_path: Path) -> None:
+    async def test_read_memory_returns_full_entry_with_content(
+        self, tmp_path: Path
+    ) -> None:
         """read_memory returns the full entry including 'content' body.
 
         RED: read_memory does not exist → ImportError.
@@ -344,10 +375,17 @@ class TestFromAC_ReadMemory:
         try:
             from owlbear_mcp_memory.tools import read_memory
         except ImportError as exc:
-            pytest.fail(f"read_memory not importable from owlbear_mcp_memory.tools: {exc}")
+            pytest.fail(
+                f"read_memory not importable from owlbear_mcp_memory.tools: {exc}"
+            )
 
         engine = MemoryEngine(memory_dir=tmp_path)
-        entry = _make_entry(n=1, state="curated", scope_agents=["builder"], content="Rich body text here.")
+        entry = _make_entry(
+            n=1,
+            state="curated",
+            scope_agents=["builder"],
+            content="Rich body text here.",
+        )
         engine.write(entry)
         ctx = _make_ctx(engine)
 
@@ -357,7 +395,9 @@ class TestFromAC_ReadMemory:
         assert result["content"] == "Rich body text here."
 
     @pytest.mark.asyncio
-    async def test_read_memory_returns_all_metadata_fields(self, tmp_path: Path) -> None:
+    async def test_read_memory_returns_all_metadata_fields(
+        self, tmp_path: Path
+    ) -> None:
         """read_memory result includes all frontmatter metadata fields.
 
         RED: read_memory does not exist → ImportError.
@@ -365,7 +405,9 @@ class TestFromAC_ReadMemory:
         try:
             from owlbear_mcp_memory.tools import read_memory
         except ImportError as exc:
-            pytest.fail(f"read_memory not importable from owlbear_mcp_memory.tools: {exc}")
+            pytest.fail(
+                f"read_memory not importable from owlbear_mcp_memory.tools: {exc}"
+            )
 
         engine = MemoryEngine(memory_dir=tmp_path)
         entry = _make_entry(n=1, state="curated", scope_agents=["builder"])
@@ -375,8 +417,15 @@ class TestFromAC_ReadMemory:
         result = await read_memory(ctx, entry_id=entry.id)
 
         required_fields = (
-            "id", "title", "categories", "confidence", "state",
-            "scope_agents", "source_agent", "created_at", "updated_at",
+            "id",
+            "title",
+            "categories",
+            "confidence",
+            "state",
+            "scope_agents",
+            "source_agent",
+            "created_at",
+            "updated_at",
         )
         for field in required_fields:
             assert field in result, f"read_memory result missing field: {field}"
@@ -390,7 +439,9 @@ class TestFromAC_ReadMemory:
         try:
             from owlbear_mcp_memory.tools import read_memory
         except ImportError as exc:
-            pytest.fail(f"read_memory not importable from owlbear_mcp_memory.tools: {exc}")
+            pytest.fail(
+                f"read_memory not importable from owlbear_mcp_memory.tools: {exc}"
+            )
 
         engine = MemoryEngine(memory_dir=tmp_path)
         ctx = _make_ctx(engine)
@@ -407,7 +458,9 @@ class TestFromAC_ReadMemory:
         try:
             from owlbear_mcp_memory.tools import read_memory
         except ImportError as exc:
-            pytest.fail(f"read_memory not importable from owlbear_mcp_memory.tools: {exc}")
+            pytest.fail(
+                f"read_memory not importable from owlbear_mcp_memory.tools: {exc}"
+            )
 
         engine = MemoryEngine(memory_dir=tmp_path)
         deleted = _make_entry(n=1, state="deleted", scope_agents=[])
@@ -565,7 +618,9 @@ class TestFromAC_CurateMemoryHint:
         """Auto-downgrade approved→curated: hint mentions downgrade and re-approval."""
         engine = MemoryEngine(memory_dir=tmp_path)
         entry = _make_entry(
-            n=1, state="approved", scope_agents=["builder"],
+            n=1,
+            state="approved",
+            scope_agents=["builder"],
             approved_at="2026-05-01T10:00:01Z",
         )
         engine.write(entry)
@@ -653,7 +708,9 @@ class TestFromAC_DeleteMemoryHint:
         """Deleting an approved entry: hint indicates soft-delete and file retention."""
         engine = MemoryEngine(memory_dir=tmp_path)
         entry = _make_entry(
-            n=1, state="approved", scope_agents=["builder"],
+            n=1,
+            state="approved",
+            scope_agents=["builder"],
             approved_at="2026-05-01T10:00:01Z",
         )
         engine.write(entry)
@@ -688,7 +745,9 @@ class TestFromAC_ApproveMemory:
         try:
             from owlbear_mcp_memory.tools import approve_memory
         except ImportError as exc:
-            pytest.fail(f"approve_memory not importable from owlbear_mcp_memory.tools: {exc}")
+            pytest.fail(
+                f"approve_memory not importable from owlbear_mcp_memory.tools: {exc}"
+            )
 
         engine = MemoryEngine(memory_dir=tmp_path)
         entry = _make_entry(n=1, state="curated", scope_agents=["builder"])
@@ -707,7 +766,9 @@ class TestFromAC_ApproveMemory:
         try:
             from owlbear_mcp_memory.tools import approve_memory
         except ImportError as exc:
-            pytest.fail(f"approve_memory not importable from owlbear_mcp_memory.tools: {exc}")
+            pytest.fail(
+                f"approve_memory not importable from owlbear_mcp_memory.tools: {exc}"
+            )
 
         engine = MemoryEngine(memory_dir=tmp_path)
         entry = _make_entry(n=1, state="curated", scope_agents=["builder"])
@@ -716,17 +777,19 @@ class TestFromAC_ApproveMemory:
 
         result = await approve_memory(ctx, entry_id=entry.id)
 
-        assert result.get("approved_at") is not None, "approved_at must be set after approve_memory"
+        assert result.get("approved_at") is not None, (
+            "approved_at must be set after approve_memory"
+        )
 
     @pytest.mark.asyncio
-    async def test_approve_memory_raises_on_pending_entry(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_approve_memory_raises_on_pending_entry(self, tmp_path: Path) -> None:
         """approve_memory raises ToolError when entry is in pending state."""
         try:
             from owlbear_mcp_memory.tools import approve_memory
         except ImportError as exc:
-            pytest.fail(f"approve_memory not importable from owlbear_mcp_memory.tools: {exc}")
+            pytest.fail(
+                f"approve_memory not importable from owlbear_mcp_memory.tools: {exc}"
+            )
 
         engine = MemoryEngine(memory_dir=tmp_path)
         entry = _make_entry(n=1, state="pending", scope_agents=[])
@@ -744,11 +807,15 @@ class TestFromAC_ApproveMemory:
         try:
             from owlbear_mcp_memory.tools import approve_memory
         except ImportError as exc:
-            pytest.fail(f"approve_memory not importable from owlbear_mcp_memory.tools: {exc}")
+            pytest.fail(
+                f"approve_memory not importable from owlbear_mcp_memory.tools: {exc}"
+            )
 
         engine = MemoryEngine(memory_dir=tmp_path)
         entry = _make_entry(
-            n=1, state="approved", scope_agents=["builder"],
+            n=1,
+            state="approved",
+            scope_agents=["builder"],
             approved_at="2026-05-01T10:00:01Z",
         )
         engine.write(entry)
@@ -758,14 +825,14 @@ class TestFromAC_ApproveMemory:
             await approve_memory(ctx, entry_id=entry.id)
 
     @pytest.mark.asyncio
-    async def test_approve_memory_raises_on_deleted_entry(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_approve_memory_raises_on_deleted_entry(self, tmp_path: Path) -> None:
         """approve_memory raises ToolError when entry is in deleted state."""
         try:
             from owlbear_mcp_memory.tools import approve_memory
         except ImportError as exc:
-            pytest.fail(f"approve_memory not importable from owlbear_mcp_memory.tools: {exc}")
+            pytest.fail(
+                f"approve_memory not importable from owlbear_mcp_memory.tools: {exc}"
+            )
 
         engine = MemoryEngine(memory_dir=tmp_path)
         entry = _make_entry(n=1, state="deleted", scope_agents=[])
@@ -906,9 +973,9 @@ class TestFromAC_ValidationTeachingMessages:
             )
 
         error_text = str(exc_info.value).lower()
-        assert "1024" in error_text or "limit" in error_text or "exceed" in error_text, (
-            f"Expected teaching message about 1024-char limit, got: {exc_info.value}"
-        )
+        assert (
+            "1024" in error_text or "limit" in error_text or "exceed" in error_text
+        ), f"Expected teaching message about 1024-char limit, got: {exc_info.value}"
 
     @pytest.mark.asyncio
     async def test_save_memory_confidence_out_of_range_teaching_message(

@@ -171,7 +171,10 @@ class TestFromAC_QueryMemoryFilters:
             id=_uuid(10), title="Pitfall entry", state="curated", categories=["pitfall"]
         )
         knowledge = _make_entry(
-            id=_uuid(11), title="Knowledge entry", state="curated", categories=["knowledge"]
+            id=_uuid(11),
+            title="Knowledge entry",
+            state="curated",
+            categories=["knowledge"],
         )
         engine = MemoryEngine(memory_dir=tmp_path)
         _seed(tmp_path, pitfall)
@@ -248,10 +251,18 @@ class TestFromAC_QueryMemoryFilters:
     ) -> None:
         """query_memory(min_confidence=0.9) excludes entries below the threshold."""
         low = _make_entry(
-            id=_uuid(30), title="Low", state="curated", categories=["knowledge"], confidence=0.75
+            id=_uuid(30),
+            title="Low",
+            state="curated",
+            categories=["knowledge"],
+            confidence=0.75,
         )
         high = _make_entry(
-            id=_uuid(31), title="High", state="curated", categories=["knowledge"], confidence=0.95
+            id=_uuid(31),
+            title="High",
+            state="curated",
+            categories=["knowledge"],
+            confidence=0.95,
         )
         engine = MemoryEngine(memory_dir=tmp_path)
         _seed(tmp_path, low)
@@ -268,7 +279,11 @@ class TestFromAC_QueryMemoryFilters:
     async def test_min_confidence_boundary_is_inclusive(self, tmp_path: Path) -> None:
         """min_confidence boundary is inclusive — entry exactly at threshold is returned."""
         exact = _make_entry(
-            id=_uuid(32), title="Exact", state="approved", categories=["process"], confidence=0.8
+            id=_uuid(32),
+            title="Exact",
+            state="approved",
+            categories=["process"],
+            confidence=0.8,
         )
         engine = MemoryEngine(memory_dir=tmp_path)
         _seed(tmp_path, exact)
@@ -285,13 +300,25 @@ class TestFromAC_QueryMemoryFilters:
     ) -> None:
         """categories and min_confidence filters combine as AND logic."""
         match = _make_entry(
-            id=_uuid(40), title="Match", state="curated", categories=["pitfall"], confidence=0.9
+            id=_uuid(40),
+            title="Match",
+            state="curated",
+            categories=["pitfall"],
+            confidence=0.9,
         )
         wrong_cat = _make_entry(
-            id=_uuid(41), title="Wrong cat", state="curated", categories=["knowledge"], confidence=0.9
+            id=_uuid(41),
+            title="Wrong cat",
+            state="curated",
+            categories=["knowledge"],
+            confidence=0.9,
         )
         low_conf = _make_entry(
-            id=_uuid(42), title="Low conf pitfall", state="curated", categories=["pitfall"], confidence=0.75
+            id=_uuid(42),
+            title="Low conf pitfall",
+            state="curated",
+            categories=["pitfall"],
+            confidence=0.75,
         )
         engine = MemoryEngine(memory_dir=tmp_path)
         _seed(tmp_path, match)

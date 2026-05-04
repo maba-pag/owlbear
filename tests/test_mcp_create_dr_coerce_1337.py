@@ -244,9 +244,7 @@ class TestFromAC_IntegrationRejection:
             )
 
     @pytest.mark.asyncio
-    async def test_integration_alpha_string_rejected(
-        self, app_ctx: AppContext
-    ) -> None:
+    async def test_integration_alpha_string_rejected(self, app_ctx: AppContext) -> None:
         """AC2 integration: 'abc' raises ToolError with a clear message (no mock).
 
         FAIL path (RED): current code calls decisions.create_dr; 'abc-decision.md'
@@ -289,7 +287,9 @@ class TestFromAC_IntegrationRejection:
                 body="probe",
             )
 
-        existing_files = list(decisions_pending.rglob("*")) if decisions_pending.exists() else []
+        existing_files = (
+            list(decisions_pending.rglob("*")) if decisions_pending.exists() else []
+        )
         assert existing_files == [], (
             f"decisions/pending must be empty after path-traversal rejection; "
             f"found: {existing_files}"
@@ -336,5 +336,3 @@ class TestFromAC_RegressionValidIds:
         assert isinstance(call_kwargs["task_id"], int), (
             f"task_id must be int after coercion, got {type(call_kwargs['task_id']).__name__}"
         )
-
-

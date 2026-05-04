@@ -138,7 +138,9 @@ async def query_memory(  # noqa: PLR0913
 ) -> list[dict[str, Any]]:
     """Return memory entries filtered by state and sorted by curation priority."""
     engine = _engine_from_ctx(ctx)
-    allowed_states = set(states) if states else {MemoryState.CURATED, MemoryState.APPROVED}
+    allowed_states = (
+        set(states) if states else {MemoryState.CURATED, MemoryState.APPROVED}
+    )
     category_filter = set(categories or [])
     scope_filter = set(scope_agents or [])
 
@@ -151,9 +153,7 @@ async def query_memory(  # noqa: PLR0913
     entries = [e for e in engine.get_entries() if e.state in allowed_states]
     if category_filter:
         entries = [
-            e
-            for e in entries
-            if bool(category_filter.intersection(set(e.categories)))
+            e for e in entries if bool(category_filter.intersection(set(e.categories)))
         ]
     if scope_filter:
         entries = [
@@ -220,7 +220,9 @@ async def update_entry(  # noqa: PLR0913
         "source_agent": current.source_agent,
         "created_at": current.created_at,
         "updated_at": _now_iso(),
-        "approved_at": None if current.state == MemoryState.APPROVED else current.approved_at,
+        "approved_at": None
+        if current.state == MemoryState.APPROVED
+        else current.approved_at,
     }
     try:
         updated = MemoryEntry.model_validate(payload)
@@ -247,12 +249,20 @@ async def delete_entry(ctx: Context, *, entry_id: str) -> dict[str, Any]:
     if current.state == MemoryState.PENDING:
         engine.delete(current.id)
         deleted = current.model_copy(
-            update={"state": MemoryState.DELETED, "updated_at": _now_iso(), "approved_at": None}
+            update={
+                "state": MemoryState.DELETED,
+                "updated_at": _now_iso(),
+                "approved_at": None,
+            }
         )
         return _entry_to_dict(deleted)
 
     updated = current.model_copy(
-        update={"state": MemoryState.DELETED, "updated_at": _now_iso(), "approved_at": None}
+        update={
+            "state": MemoryState.DELETED,
+            "updated_at": _now_iso(),
+            "approved_at": None,
+        }
     )
     engine.write(updated)
     return _entry_to_dict(updated)

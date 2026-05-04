@@ -149,8 +149,7 @@ def _validate_dispatch_rank_coverage(config: BoardConfig) -> None:
         raise ConfigError(
             code="ERR_DISPATCH_PRIORITY_MISMATCH",
             user_message=(
-                "dispatch priority ranks missing configured values: "
-                f"{names}"
+                f"dispatch priority ranks missing configured values: {names}"
             ),
         )
 
@@ -159,10 +158,7 @@ def _validate_dispatch_rank_coverage(config: BoardConfig) -> None:
         names = ", ".join(unranked_statuses)
         raise ConfigError(
             code="ERR_DISPATCH_STATUS_MISMATCH",
-            user_message=(
-                "dispatch status ranks missing configured values: "
-                f"{names}"
-            ),
+            user_message=(f"dispatch status ranks missing configured values: {names}"),
         )
 
 
@@ -1234,7 +1230,8 @@ class KanbanEngine:
                 task_id=record.id,
                 archival_reason=archival_reason,
                 archival_refs=archival_refs or [],
-                can_mark_completed=record.status == self._config.pipeline.terminal_status,
+                can_mark_completed=record.status
+                == self._config.pipeline.terminal_status,
                 config=self._config,
             )
         elif archival_reason is not None or archival_refs is not None:

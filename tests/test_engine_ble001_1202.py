@@ -548,7 +548,9 @@ class TestFromAC_RepairStorageCatchBranch:
         with (
             patch("owlbear_kanban.corruption.scan_and_fix", return_value=[outcome]),
             patch.object(
-                KanbanEngine, "create_task", side_effect=KanbanError("ERR_NOT_FOUND", "kanban-err")
+                KanbanEngine,
+                "create_task",
+                side_effect=KanbanError("ERR_NOT_FOUND", "kanban-err"),
             ),
         ):
             results = engine.repair_storage()
@@ -567,9 +569,7 @@ class TestFromAC_RepairStorageCatchBranch:
 
         with (
             patch("owlbear_kanban.corruption.scan_and_fix", return_value=[outcome]),
-            patch.object(
-                KanbanEngine, "create_task", side_effect=OSError("disk full")
-            ),
+            patch.object(KanbanEngine, "create_task", side_effect=OSError("disk full")),
         ):
             results = engine.repair_storage()
 
@@ -608,9 +608,9 @@ class TestFromAC_PickTasksWarningLogs:
         warning_msgs = [
             r.getMessage() for r in caplog.records if r.levelno == logging.WARNING
         ]
-        assert any("Failed to import decisions module" in msg for msg in warning_msgs), (
-            "WARNING must be logged when importlib.import_module raises ImportError"
-        )
+        assert any(
+            "Failed to import decisions module" in msg for msg in warning_msgs
+        ), "WARNING must be logged when importlib.import_module raises ImportError"
 
     def test_pick_tasks_kanban_error_from_resolve_is_caught_and_logged(
         self, tmp_path: Path, caplog: pytest.LogCaptureFixture
@@ -618,7 +618,9 @@ class TestFromAC_PickTasksWarningLogs:
         """KanbanError from resolve_pending_drs → caught → WARNING logged → pick_tasks returns."""
         view = _make_view(tmp_path)
         mock_decisions = MagicMock()
-        mock_decisions.resolve_pending_drs.side_effect = KanbanError("ERR_NOT_FOUND", "kanban-err")
+        mock_decisions.resolve_pending_drs.side_effect = KanbanError(
+            "ERR_NOT_FOUND", "kanban-err"
+        )
 
         with (
             caplog.at_level(logging.WARNING, logger="owlbear_kanban.engine"),

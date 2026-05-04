@@ -154,7 +154,9 @@ class TestFromAC_ContentFetcherInjection:
     """
 
     @pytest.fixture(autouse=True)
-    def _patch_home(self, tmp_path: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch) -> None:
+    def _patch_home(
+        self, tmp_path: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
         monkeypatch.delenv("OWLBEAR_LLM_API_KEY", raising=False)
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
@@ -179,9 +181,7 @@ class TestFromAC_ContentFetcherInjection:
         assert "content_fetcher" in kwargs, (
             "RefreshOrchestrator must receive content_fetcher= kwarg from app_lifespan"
         )
-        assert kwargs["content_fetcher"] is not None, (
-            "content_fetcher must not be None"
-        )
+        assert kwargs["content_fetcher"] is not None, "content_fetcher must not be None"
 
     @pytest.mark.asyncio
     async def test_app_lifespan_httpx_fetcher_is_default_content_fetcher(self) -> None:
@@ -253,13 +253,17 @@ class TestFromAC_GraphStoreInjection:
     """
 
     @pytest.fixture(autouse=True)
-    def _patch_home(self, tmp_path: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch) -> None:
+    def _patch_home(
+        self, tmp_path: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
         monkeypatch.delenv("OWLBEAR_LLM_API_KEY", raising=False)
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
     @pytest.mark.asyncio
-    async def test_app_lifespan_passes_graph_store_to_refresh_orchestrator(self) -> None:
+    async def test_app_lifespan_passes_graph_store_to_refresh_orchestrator(
+        self,
+    ) -> None:
         """RefreshOrchestrator receives the same GraphStore instance as AppContext.
 
         Currently FAILS: graph_store is not passed in the RefreshOrchestrator
@@ -314,9 +318,7 @@ class TestFromAC_FetchMethodSelection:
         Currently FAILS: function does not exist.
         """
         select_fn = getattr(server_module, "select_content_fetcher", None)
-        assert select_fn is not None, (
-            "select_content_fetcher not found — see AC3"
-        )
+        assert select_fn is not None, "select_content_fetcher not found — see AC3"
         fetcher = select_fn("http")
         assert isinstance(fetcher, HttpxContentFetcher), (
             f"'http' fetch_method must map to HttpxContentFetcher, got {type(fetcher)}"
@@ -328,9 +330,7 @@ class TestFromAC_FetchMethodSelection:
         Currently FAILS: function does not exist.
         """
         select_fn = getattr(server_module, "select_content_fetcher", None)
-        assert select_fn is not None, (
-            "select_content_fetcher not found — see AC3"
-        )
+        assert select_fn is not None, "select_content_fetcher not found — see AC3"
         fetcher = select_fn("browser")
         assert fetcher is not None, (
             "select_content_fetcher('browser') must not return None"
@@ -350,9 +350,7 @@ class TestFromAC_FetchMethodSelection:
         select_content_fetcher does not exist.
         """
         select_fn = getattr(server_module, "select_content_fetcher", None)
-        assert select_fn is not None, (
-            "select_content_fetcher not found — see AC3"
-        )
+        assert select_fn is not None, "select_content_fetcher not found — see AC3"
         fetcher = select_fn("")
         assert isinstance(fetcher, HttpxContentFetcher), (
             f"Empty fetch_method must default to HttpxContentFetcher, got {type(fetcher)}"
@@ -377,7 +375,9 @@ class TestFromAC_RefreshWithoutInterDocBuilder:
     """
 
     @pytest.fixture(autouse=True)
-    def _patch_home(self, tmp_path: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch) -> None:
+    def _patch_home(
+        self, tmp_path: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
         monkeypatch.delenv("OWLBEAR_LLM_API_KEY", raising=False)
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
@@ -409,12 +409,16 @@ class TestFromAC_RefreshWithoutInterDocBuilder:
         # Exclude both KnowledgeSourceStore and IngestPipeline so our explicit
         # controlled mocks are not shadowed by the generic heavy-patch stubs.
         patches_filtered = [
-            p for p in patches
+            p
+            for p in patches
             if "KnowledgeSourceStore" not in str(p) and "IngestPipeline" not in str(p)
         ]
 
         with (
-            patch("owlbear_mcp_knowledge.server.KnowledgeSourceStore", return_value=mock_source_store),
+            patch(
+                "owlbear_mcp_knowledge.server.KnowledgeSourceStore",
+                return_value=mock_source_store,
+            ),
             patch("owlbear_mcp_knowledge.server.IngestPipeline", return_value=pipeline),
             # Patch fetch so no real HTTP request is made; fetch_method="http" will
             # use HttpxContentFetcher after AC1 is implemented.
@@ -491,7 +495,10 @@ class TestFromAC_RefreshSourceFetchMethodIntegration:
         # FAILS now: AttributeError (function not in server module).
         # After #1326 adds select_content_fetcher AND wires it in the refresh path,
         # the browser mock's fetch() gets called and the assertion passes.
-        with patch("owlbear_mcp_knowledge.server.select_content_fetcher", return_value=browser_fetcher):
+        with patch(
+            "owlbear_mcp_knowledge.server.select_content_fetcher",
+            return_value=browser_fetcher,
+        ):
             await refresh_source(mcp_ctx, source_id=source.id)
 
         browser_fetcher.fetch.assert_called()
@@ -526,7 +533,10 @@ class TestFromAC_RefreshSourceFetchMethodIntegration:
 
         # Patch select_content_fetcher to return the http mock.
         # FAILS now: AttributeError (function not in server module).
-        with patch("owlbear_mcp_knowledge.server.select_content_fetcher", return_value=http_fetcher):
+        with patch(
+            "owlbear_mcp_knowledge.server.select_content_fetcher",
+            return_value=http_fetcher,
+        ):
             await refresh_source(mcp_ctx, source_id=source.id)
 
         http_fetcher.fetch.assert_called()
@@ -578,7 +588,9 @@ class TestFromAC_RefreshSourceFetchMethodIntegration:
         # Patch select_content_fetcher with side_effect so each call dispatches
         # to the right mock based on fetch_method.
         # FAILS now: AttributeError (function not in server module).
-        with patch("owlbear_mcp_knowledge.server.select_content_fetcher", side_effect=_select):
+        with patch(
+            "owlbear_mcp_knowledge.server.select_content_fetcher", side_effect=_select
+        ):
             await refresh_source(mcp_http, source_id=source_http.id)
             await refresh_source(mcp_browser, source_id=source_browser.id)
 

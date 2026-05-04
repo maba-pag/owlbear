@@ -107,13 +107,10 @@ class TestFromAC_CopilotInstructionsDirectoryStructure:
             encoding="utf-8"
         )
         headings = [
-            line.strip()
-            for line in content.splitlines()
-            if line.startswith("## ")
+            line.strip() for line in content.splitlines() if line.startswith("## ")
         ]
         assert any("Directory Structure" in h for h in headings), (
-            f"No '## Directory Structure' heading found. "
-            f"Headings present: {headings}"
+            f"No '## Directory Structure' heading found. Headings present: {headings}"
         )
 
     def test_has_table_row_in_directory_section(self, project_root: Path) -> None:
@@ -167,9 +164,7 @@ class TestFromAC_InitScaffold:
             encoding="utf-8"
         )
         headings = [
-            line.strip()
-            for line in content.splitlines()
-            if line.startswith("#")
+            line.strip() for line in content.splitlines() if line.startswith("#")
         ]
         has_dir_heading = any(
             any(kw in h.lower() for kw in ("directory", "path", "structure"))
@@ -291,6 +286,4 @@ class TestFromAC_NoDanglingCrossRefs:
                         f"{rel}: § {section_name!r} not found in owlbear-system.instructions.md"
                     )
 
-        assert not missing, (
-            "Dangling section references found:\n" + "\n".join(missing)
-        )
+        assert not missing, "Dangling section references found:\n" + "\n".join(missing)

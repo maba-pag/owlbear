@@ -145,7 +145,9 @@ class MemoryEngine:
         raw = file_path.read_text(encoding="utf-8")
         parts = raw.split("---", 2)
         if len(parts) < _FRONTMATTER_PARTS:
-            _LOGGER.warning("Skipping malformed memory file without frontmatter: %s", file_path)
+            _LOGGER.warning(
+                "Skipping malformed memory file without frontmatter: %s", file_path
+            )
             return None
         _, frontmatter_raw, body = parts
         try:
@@ -154,7 +156,9 @@ class MemoryEngine:
             _LOGGER.warning("Skipping malformed memory YAML in %s: %s", file_path, exc)
             return None
         if not isinstance(data, dict):
-            _LOGGER.warning("Skipping memory file with non-object frontmatter: %s", file_path)
+            _LOGGER.warning(
+                "Skipping memory file with non-object frontmatter: %s", file_path
+            )
             return None
         data["content"] = body.strip()
         try:

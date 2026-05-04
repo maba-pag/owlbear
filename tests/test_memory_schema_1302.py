@@ -242,7 +242,9 @@ class TestFromAC_EntryFields:
     def test_id_uuid_v1_format_rejected(self) -> None:
         # Version digit is '1' not '4' → regex rejects it.
         with pytest.raises(ValidationError):
-            MemoryEntry(**{**_valid_old(), "id": "550e8400-e29b-11d4-a716-446655440000"})
+            MemoryEntry(
+                **{**_valid_old(), "id": "550e8400-e29b-11d4-a716-446655440000"}
+            )
 
     def test_id_uuid_without_hyphens_rejected(self) -> None:
         # Canonical format requires hyphens.
@@ -362,6 +364,7 @@ class TestFromAC_CategoriesValidation:
         # "context" renamed to "env-context".
         with pytest.raises(ValidationError):
             MemoryEntry(**{**_valid_old(), "categories": ["context"]})
+
     def test_old_knowledge_category_rejected_new_schema(self) -> None:
         """Discriminating: ValidationError must be specifically on 'categories' field.
 
@@ -375,6 +378,7 @@ class TestFromAC_CategoriesValidation:
         assert "categories" in field_names, (
             f"Expected ValidationError on 'categories' field, got: {field_names}"
         )
+
 
 # ---------------------------------------------------------------------------
 # AC7: source_agent validation
@@ -599,7 +603,9 @@ class TestFromAC_EngineRoundtrip:
             path = engine.write(entry)
             raw = path.read_text(encoding="utf-8")
             parts = raw.split("---", 2)
-            assert len(parts) == 3, "File must have opening and closing frontmatter delimiters"
+            assert len(parts) == 3, (
+                "File must have opening and closing frontmatter delimiters"
+            )
             frontmatter_section = parts[1]
             body_section = parts[2]
             assert content not in frontmatter_section

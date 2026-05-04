@@ -56,9 +56,7 @@ class TestFromAC_EndWorkFailOutcome:
         except Exception as exc:  # noqa: BLE001
             pytest.fail(f"get_type_hints(end_work) raised: {exc}")
         outcome_hint = hints.get("outcome")
-        assert outcome_hint is not None, (
-            "'outcome' not found in end_work type hints"
-        )
+        assert outcome_hint is not None, "'outcome' not found in end_work type hints"
         args = typing.get_args(outcome_hint)
         assert "fail" in args, (
             f"'fail' not in end_work outcome hint. "
@@ -221,9 +219,11 @@ class TestFromAC_SkillDocEndWorkOutcomes:
         next_section = text.find("\n## ", idx + 10)
         next_subsection = text.find("\n### ", idx + 10)
         # Stop at whichever comes first
-        end = min(
-            x for x in [next_section, next_subsection] if x != -1
-        ) if (next_section != -1 or next_subsection != -1) else len(text)
+        end = (
+            min(x for x in [next_section, next_subsection] if x != -1)
+            if (next_section != -1 or next_subsection != -1)
+            else len(text)
+        )
         return text[idx:end]
 
     def test_skill_md_end_work_section_documents_fail_outcome(self) -> None:
@@ -345,7 +345,9 @@ class TestFromAC_ReadmeEndWorkOutcomes:
         assert fail_idx != -1, "'fail' not in README.md end_work section at all"
         # After the token, expect some prose or table structure
         surrounding = section[fail_idx : fail_idx + 150].lower()
-        has_structure = "|" in surrounding or "-" in surrounding or "record" in surrounding
+        has_structure = (
+            "|" in surrounding or "-" in surrounding or "record" in surrounding
+        )
         assert has_structure, (
             f"'fail' in README.md end_work section has no associated description.\n"
             f"Context: {surrounding!r}"
