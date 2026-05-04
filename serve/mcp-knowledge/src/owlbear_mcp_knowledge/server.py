@@ -18,6 +18,7 @@ from owlbear_knowledge.bookmark_pipeline import BookmarkPipeline
 from owlbear_knowledge.bookmark_store import BookmarkStore
 from owlbear_knowledge.chunker import TextChunker
 from owlbear_knowledge.consolidation import ConsolidationService, TextCompletionFn
+from owlbear_knowledge.content_guard import ContentInjectionGuard
 from owlbear_knowledge.document_store import DocumentStore
 from owlbear_knowledge.embeddings import BgeM3EmbeddingProvider
 from owlbear_knowledge.evaluator import EvaluateFn, EvaluationResult, SourceEvaluator
@@ -241,9 +242,11 @@ async def _web_read(url: str) -> str | None:
 
 
 @asynccontextmanager
-async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:  # noqa: PLR0915
+async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
     """Initialise knowledge-base services; close the DB connection on exit."""
     global _app_context  # noqa: PLW0603
+    token_path = Path.home() / ".owlbear" / "copilot_token.json"
+    token_path.unlink(missing_ok=True)
     path = os.environ.get("OWLBEAR_LOCAL_KB_PATH") or os.environ.get(
         "OWLBEAR_KB_PATH", _DEFAULT_KB_PATH
     )
@@ -269,26 +272,6 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:  #
                 )
             except ImportError:
                 structured_extractor = None
-        else:
-            try:
-                from owlbear_knowledge.copilot_auth import (  # noqa: PLC0415
-                    # Imported lazily to avoid optional dependency costs at module import time.
-                    detect_editor_versions,
-                    get_copilot_token,
-                )
-                from owlbear_knowledge.llm_extractor import LLMExtractor  # noqa: PLC0415
-
-                copilot_token = await get_copilot_token()
-                model = os.environ.get("OWLBEAR_LLM_MODEL", "gpt-4o-mini")
-                editor_versions = detect_editor_versions()
-                headers = {**editor_versions, "Copilot-Integration-Id": "vscode-chat"}
-                structured_extractor = LLMExtractor(
-                    model=model,
-                    api_key=copilot_token,
-                    default_headers=headers,
-                )
-            except Exception:  # noqa: BLE001
-                structured_extractor = None
         extractor = EntityExtractor(extractor=structured_extractor)
         intra_doc_builder = IntraDocGraphBuilder(extractor=structured_extractor)
         inter_doc_builder = (
@@ -302,7 +285,13 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:  #
         )
         doc_store = DocumentStore(conn, gs, vs, emb)
         chunker = TextChunker()
-        pipeline = IngestPipeline(doc_store, extractor, chunker)
+        content_guard = ContentInjectionGuard()
+        pipeline = IngestPipeline(
+            doc_store,
+            extractor,
+            chunker,
+            content_guard=content_guard,
+        )
         source_store = KnowledgeSourceStore(conn)
         bookmark_store = BookmarkStore(conn)
         evaluator = SourceEvaluator(llm_fn=make_evaluate_fn())

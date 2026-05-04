@@ -95,6 +95,24 @@ class IngestPipeline:
             chunks = await asyncio.to_thread(self._chunker.chunk, text, metadata=_meta)
             chunk_count = len(chunks)
 
+            if self._content_guard is not None:
+                for chunk in chunks:
+                    check = self._content_guard.scan(chunk.text)
+                    if check.blocked:
+                        return IngestResult(
+                            document_id=doc_id,
+                            chunk_count=chunk_count,
+                            entity_count=0,
+                            edge_count=0,
+                            status="blocked",
+                        )
+                    if check.threat:
+                        logger.warning(
+                            "Content injection detected while ingesting doc_id=%s: %s",
+                            doc_id,
+                            check.reason,
+                        )
+
             doc = Document(
                 id=doc_id,
                 title=str(_meta.get("title") or doc_id),
