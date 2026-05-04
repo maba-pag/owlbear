@@ -1,10 +1,10 @@
 ---
 id: 1340
 title: Set coherent Python runtime floor and Renovate policy before sync
-status: review
+status: archived
 priority: critical
 created: 2026-05-04T15:00:05.846058+00:00
-updated: 2026-05-04T21:14:35.061085+00:00
+updated: 2026-05-04T22:48:03.301767+00:00
 tags:
 - sync-blocker
 - config
@@ -246,3 +246,89 @@ All 6 new tests PASS against current code. Reviewer's Required Follow-up contain
 - Workaround applied: reran scoped quality-runner checks and a direct smoke import check before routing.
 - Pattern discovered: policy/config assertion tests can legitimately produce zero production coverage data; this should be interpreted alongside passing assertions and smoke checks.
 - Quality gap noted: none in current builder scope.
+[[2026-05-04]]
+## Review Evidence
+### Test Results
+- quality-runner scoped on `tests/test_python_version_floor_1340.py`: 13 passed, 0 failed, 0 skipped.
+- quality-runner supplementary AC7 smoke-equivalent selectors: 3 passed, 0 failed, exit code 0.
+  - `tests/test_cockpit_boundary.py::TestFromAC_CockpitPackageSkeleton::test_main_module_importable`
+  - `tests/test_mcp_memory_tools_1273.py::TestFromAC_MCPEntrypoint::test_main_module_importable_and_exposes_mcp`
+  - `tests/test_engine_dead_code_1204.py::TestFromAC_RemoveValidateEngineConfig::test_function_not_in_engine_module`
+
+### Lint Results
+- quality-runner lint on `tests/test_python_version_floor_1340.py`: clean.
+
+### Coverage
+- Not a meaningful gate for this task. The task suite validates configuration and policy surfaces rather than exercising production modules, so quality-runner correctly reported production coverage as not applicable / no data collected.
+
+### TestFromAC Audit
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---|---|---|---|
+| AC1: audit synced packages for 3.13+/3.14+ features and dependency floors above 3.12 | `test_all_packages_floor_justified_by_source_syntax`, `test_uv_lock_workspace_floor_is_3_12`, `test_no_synced_package_has_313_plus_feature_in_source` | Yes. The task suite now checks all synced source trees via `_SYNCED_SOURCES` / `_PY313_PLUS_PATTERNS` and fails if `uv.lock` workspace `requires-python` rises above `>=3.12`. | COVERED |
+| AC2: synced manifests use `>=3.12` when no newer floor is justified | `test_all_synced_packages_require_python_3_12`, `test_no_synced_package_pins_to_3_14` | Yes. | COVERED |
+| AC3: if a newer floor is justified, document and align to that floor | Indirect for current branch | Yes for the current accepted branch: AC1 evidence and live files keep the project on the default 3.12 path, so the conditional newer-floor branch is not active. | COVERED FOR CURRENT BRANCH |
+| AC4: align `.python-version`, package metadata, README.md, README-consumer.md, setup/setup-guide.md, and synced prerequisite references | `test_python_version_file_says_3_12`, `test_readme_states_python_3_12_floor`, `test_readme_consumer_states_python_3_12_floor`, `test_setup_guide_states_python_3_12_floor`, `test_system_instructions_states_python_3_12_floor` | Yes. These fail if the aligned 3.12 prerequisite text is removed from the named surfaces. | COVERED |
+| AC5: add Renovate Python floor-freeze rule | `test_renovate_has_python_package_rule`, `test_renovate_python_rule_has_allowed_versions`, `test_renovate_python_rule_targets_pep621_or_uv_manager` | Yes. | COVERED |
+| AC6: task test verifies final project-wide floor and Renovate policy | File-scope artifact evidence in `tests/test_python_version_floor_1340.py` | Yes. `_SYNCED_PACKAGES` now spans all 9 synced packages and the file contains Renovate-policy assertions. | COVERED |
+| AC7: run focused version-floor tests and a representative Python package import/smoke test | quality-runner scoped task suite + supplementary import-bearing selectors | Yes. Independent review reran the focused task suite and three import-bearing selectors covering the same package entry points as the builder's smoke command. | COVERED |
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---|---|---|---|
+| AC1 | `tests/test_python_version_floor_1340.py:52`, `tests/test_python_version_floor_1340.py:115`, `tests/test_python_version_floor_1340.py:196`, `tests/test_python_version_floor_1340.py:215`, `uv.lock:3` | AC1 trio | PASS |
+| AC2 | `tests/test_python_version_floor_1340.py:89`, `tests/test_python_version_floor_1340.py:100`, and all synced manifests at `serve/*/pyproject.toml:4` declare `requires-python = ">=3.12"` | AC2 pair | PASS |
+| AC3 | No newer floor selected in live state: `.python-version:1` is `3.12`, root Ruff target remains `py312` at `pyproject.toml:39`, and AC1 audit stayed on the default 3.12 branch | Indirect via AC1/AC4 evidence | PASS |
+| AC4 | `.python-version:1`, `README.md:13`, `README-consumer.md:21`, `setup/setup-guide.md:11`, `share/instructions/owlbear-system.instructions.md:23`, plus task tests at `tests/test_python_version_floor_1340.py:136`, `:237`, `:244`, `:251`, `:258` | AC4 set | PASS |
+| AC5 | `.github/renovate.json:29`, `:30`, `:33`, `:37` plus task tests at `tests/test_python_version_floor_1340.py:147`, `:160`, `:174` | Renovate trio | PASS |
+| AC6 | `tests/test_python_version_floor_1340.py:27-35` enumerates all synced packages; Renovate coverage is present at `tests/test_python_version_floor_1340.py:147-174` | File scope | PASS |
+| AC7 | quality-runner: task suite 13/13 pass; supplementary smoke selectors 3/3 pass under Python 3.12.13 | task suite + smoke selectors | PASS |
+
+### Security / Data Safety / Necessity
+- No security, data-safety, or necessity issues found. This task changes version-policy/config surfaces only and adds no new dependencies or runtime behavior.
+
+### Deductions
+- `-0.03` This tool surface did not provide direct `git diff` / `git status`, so dirty-tree contamination and exact TestFromAC ownership could not be verified at terminal level. Current task history shows a test-only retry with builder skip and no new builder file changes, which reduces but does not eliminate that risk.
+
+### Verdict
+- PASS
+- Confidence: 0.95
+- Routing rationale: live config surfaces are aligned to Python 3.12, the Renovate freeze rule is present, the broadened task suite independently passes, and supplementary import-bearing smoke selectors passed under Python 3.12.13.
+
+### Action
+- Advance to `docs`.
+[[2026-05-04]]
+## Docs Gate
+
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | Yes | Verified/No change | `README.md:13`, `README-consumer.md:21`, `setup/setup-guide.md:11` already say "Python 3.12+" — no update needed |
+| 2 | Module docstrings | No | N/A | Changed files are config metadata (`pyproject.toml`, `.python-version`, `.github/renovate.json`) — no Python module logic touched |
+| 3 | External attribution | No | N/A | No external repos or articles cited |
+| 4 | Research doc | No | N/A | No research document produced |
+| 5 | Diagram maintenance (describes match) | Yes | Updated | `share/diagrams/project-overview.excalidraw` describes `serve/*/pyproject.toml` — footer updated to `Last verified: 2026-05-05 (09e060d4)` |
+| 6 | Explicit diagram creation | No | N/A | No explicit diagram creation request in task body |
+| 7 | Deletion detection | No | N/A | No files deleted; no orphaned IN-scope docs detected |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| `.python-version` | OUT | N/A (config file) |
+| `.github/renovate.json` | OUT | N/A (config file) |
+| `serve/*/pyproject.toml` (9 files) | OUT | N/A (metadata config, not docstrings) |
+| `tests/test_python_version_floor_1340.py` | OUT | N/A (test file) |
+| `share/diagrams/project-overview.excalidraw` | IN | Footer updated (diagram describes-match) |
+| `README.md` | IN | Verified accurate (already says Python 3.12+) |
+| `README-consumer.md` | IN | Verified accurate (already says Python 3.12+) |
+| `setup/setup-guide.md` | IN | Verified accurate (already says Python 3.12+) |
+
+### Files Updated
+- `share/diagrams/project-overview.excalidraw` — footer updated to `Last verified: 2026-05-05 (09e060d4)`, committed `b2eb4b09`
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no `1340-*` scratch files existed)
+[[2026-05-04]]
+## Audit\n### AC Verification\n| AC Line | Evidence | Status |\n|---------|----------|--------|\n| AC1: audit synced packages for 3.13+/3.14+ features and dep floors | Tests `test_all_packages_floor_justified_by_source_syntax`, `test_uv_lock_workspace_floor_is_3_12`, `test_no_synced_package_has_313_plus_feature_in_source` — 3/3 pass | PASS |\n| AC2: all synced manifests use `>=3.12` | Tests `test_all_synced_packages_require_python_3_12`, `test_no_synced_package_pins_to_3_14` — live state confirms `serve/cockpit/pyproject.toml:4` reads `>=3.12` | PASS |\n| AC3: conditional newer floor alignment | No newer floor selected; default 3.12 branch active. Covered by AC1+AC2+AC4 evidence | PASS |\n| AC4: align .python-version + prerequisite docs | `.python-version` = `3.12`; tests `test_python_version_file_says_3_12`, `test_readme_states_python_3_12_floor`, `test_readme_consumer_states_python_3_12_floor`, `test_setup_guide_states_python_3_12_floor`, `test_system_instructions_states_python_3_12_floor` — 5/5 pass | PASS |\n| AC5: Renovate Python floor-freeze rule | Live `.github/renovate.json` confirmed: matchPackageNames=[python], matchManagers=[pep621,uv], allowedVersions=<3.13.0; tests 3/3 pass | PASS |\n| AC6: broaden task test to project-wide scope | File covers all 9 synced packages + Renovate policy assertions — 13 total tests | PASS |\n| AC7: run focused tests + smoke | 13/13 task tests pass independently; builder import-smoke exit 0 | PASS |\n\n### Test Results\n- pytest (task-scoped): 13 passed, 0 failed\n- pytest (full suite): 260 failures, all in unrelated domains (memory model, engine accessor, decision routing, wave assembly, frontend shell) — none in task scope\n- ruff (task file): clean\n\n### Architect Quality: 4/5\nAC lines are precise with conditional branching (AC2/AC3). Challenger refinement to AC1 (dependency floor audit) caught a real gap. Minor: AC4 could have explicitly listed all prerequisite files in the initial draft.\n\n### Deduction Breakdown\n- AC lines with no evidence: 0 (all 7 covered) -> 0\n- Lint violations: 0 -> 0\n- AC quality <= 3: no (4/5) -> 0\n- Missing reviewer evidence: no (thorough, two-pass) -> 0\n- Full-suite failures in task scope: 0 -> 0\n- Conservative: -0.02 for full-suite exit code 1 (failures demonstrably out-of-scope but exhaustive cross-check not possible)\n\n### Confidence: 0.98\n### Action: archive\n\n### Commits Verified\n| Commit | Type | Attribution |\n|--------|------|-------------|\n| eb6eebc0 | test | test-writer |\n| 20bdf7fc | chore | builder |\n| b2eb4b09 | docs | doc-writer |
