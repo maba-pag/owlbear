@@ -18,18 +18,16 @@ Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json
 
 | Tool | Description |
 |------|-------------|
-| `store_learning` | Create a new `pending` memory entry |
-| `query_memory` | Retrieve entries by state (`curated` and `approved` by default), approved-first then confidence-desc; supports optional `categories`, `scope_agents`, `min_confidence`, and `limit` filters (AND semantics) |
-| `update_entry` | Update mutable fields; auto-promotes `pending → curated` when `scope_agents` provided (scope gate rejects if missing); auto-downgrades `approved → curated` unconditionally |
-| `delete_entry` | Delete an entry; hard-deletes `pending` entries (file removed from disk); soft-deletes `curated`/`approved` entries to `deleted` state |
-| `approve_entry` | Promote a `curated` entry to `approved` |
-| `curate_memory` | Alias for `update_entry` — same curation semantics; returns a `hint` field describing the state transition |
-| `delete_memory` | Alias for `delete_entry` — same deletion semantics; returns a `hint` field identifying hard-delete vs soft-delete |
-| `recall_memory` | Retrieve body-only text for a single scoped agent; returns approved entries first then curated, filtered by `scope_agents`; supports optional `categories` and `limit` (default 20); rejects wildcard `agent="*"` |
+| `save_memory` | Create a new `pending` memory entry with explicit `source_agent` |
+| `list_memories` | List entry metadata sorted by curation priority (pending first, then by `created_at`); supports optional `states`, `categories`, and `scope_agents` filters |
+| `read_memory` | Read a full memory entry by `entry_id` |
+| `curate_memory` | Update mutable fields on an entry; auto-promotes `pending → curated` when `scope_agents` provided; auto-downgrades `approved → curated`; returns a `hint` describing the transition |
+| `delete_memory` | Delete an entry; hard-deletes `pending` entries (file removed from disk); soft-deletes `curated`/`approved` to `deleted` state; returns a `hint` identifying the deletion type |
+| `approve_memory` | Approve a `curated` entry; returns a `hint` confirming visibility to scoped agents |
 
 ### Entry schema
 
-Entries are scoped to an optional agent (`scope_agents` list) and carry a required `source_agent` (set automatically from the caller identity). Valid categories: `domain-knowledge`, `behaviour`, `pitfall`, `process`, `tool-usage`, `goal`, `personality`, `preference`, `env-context`. Confidence must be in [0.7, 1.0]. States: `pending` (default), `curated`, `approved`, `deleted`.
+Entries are scoped to an optional agent (`scope_agents` list) and carry a required `source_agent` (caller-supplied). Valid categories: `domain-knowledge`, `behaviour`, `pitfall`, `process`, `tool-usage`, `goal`, `personality`, `preference`, `env-context`. Confidence must be in [0.7, 1.0]. States: `pending` (default), `curated`, `approved`, `deleted`.
 
 ## Configuration
 

@@ -330,7 +330,7 @@ async def update_entry(  # noqa: PLR0913
     state: MemoryState | None = None,
     scope_agents: list[str] | None = None,
 ) -> dict[str, Any]:
-    """Update mutable fields on an existing entry (curator-only).
+    """Update mutable fields on an existing entry.
 
     Auto-promotes pending→curated when ``scope_agents`` are provided and
     auto-downgrades approved→curated.
@@ -382,7 +382,7 @@ async def update_entry(  # noqa: PLR0913
 
 
 async def delete_entry(ctx: Context, *, entry_id: str) -> dict[str, Any]:
-    """Delete an entry (curator-only).
+    """Delete an entry.
 
     Pending entries are hard-deleted from disk; curated and approved entries
     are soft-deleted to deleted state.
@@ -462,7 +462,7 @@ async def delete_memory(ctx: Context, *, entry_id: str) -> dict[str, Any]:
 
 
 async def approve_entry(ctx: Context, *, entry_id: str) -> dict[str, Any]:
-    """Promote a curated entry to approved (user-only)."""
+    """Promote a curated entry to approved."""
     engine = _engine_from_ctx(ctx)
     current = _load_entry_or_raise(engine, entry_id)
 
