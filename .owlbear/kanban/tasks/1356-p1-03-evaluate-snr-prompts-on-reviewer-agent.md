@@ -14,12 +14,27 @@ parent: 1353
 depends_on:
 - 1354
 - 1355
-blocked: true
-block_reason: 'Blocked until #1354 and #1355 are complete — evaluation requires both
-  prompts to exist'
+blocked: false
+block_reason:
 claimed_at:
 archival_reason:
 archival_refs: []
 ---
 
-## AC (from Brief AC4)\n\n**In scope:**\n- Run `agent-deep-audit.prompt.md` targeting the reviewer agent (192 lines + 1,113 lines required reading)\n- Rate proposal quality: measurable token reduction with per-section justification\n- Verify no pipeline regression after applying proposals (run reviewer on a known task)\n- Document findings: what worked, what was over-cut, what taxonomy categories appeared most\n\n**Out of scope:**\n- Actually applying all proposals permanently (this is evaluation only)\n- Modifying the prompts based on findings (separate follow-up if needed)\n\n**Pre-conditions:**\n- #1354 and #1355 must both be complete (prompts must exist)\n- This is a user-action task — requires human execution and judgment\n\n**Brief:** see parent #1353 → `.owlbear/briefs/draft-skill-snr/brief.md`
+## AC (from Brief AC4)
+
+**In scope:**
+- Run `agent-deep-audit.prompt.md` targeting the reviewer agent (192 lines + 1,113 lines required reading)
+- Rate proposal quality: measurable token reduction with per-section justification
+- Verify no pipeline regression after applying proposals (run reviewer on a known task)
+- Document findings: what worked, what was over-cut, what taxonomy categories appeared most
+
+**Out of scope:**
+- Actually applying all proposals permanently (this is evaluation only)
+- Modifying the prompts based on findings (separate follow-up if needed)
+
+**Pre-conditions:**
+- #1354 and #1355 must both be complete (prompts must exist)
+- This is a user-action task — requires human execution and judgment
+
+**Brief:** see parent #1353 → `.owlbear/briefs/draft-skill-snr/brief.md`
