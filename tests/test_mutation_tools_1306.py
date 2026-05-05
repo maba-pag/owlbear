@@ -658,6 +658,30 @@ class TestFromAC_CurateMemoryValidation:
         )
 
     @pytest.mark.asyncio
+    async def test_curate_memory_rejects_confidence_above_range_with_teaching_message(
+        self, tmp_path: Path
+    ) -> None:
+        """curate_memory ToolError for confidence > 1.0 contains teaching message.
+
+        AC4 (3rd-pass refinement): BOTH bounds of [0.7, 1.0] must be proven.
+        This test exercises the upper bound (confidence=1.5 > 1.0).
+        The teaching message must contain 'between' per Brief.
+        """
+        engine = MemoryEngine(memory_dir=tmp_path)
+        entry = _make_entry(n=1, state="curated", scope_agents=["builder"])
+        engine.write(entry)
+        ctx = _make_ctx(engine)
+
+        with pytest.raises(ToolError) as exc_info:
+            await curate_memory(ctx, entry_id=entry.id, confidence=1.5)
+
+        error_text = str(exc_info.value).lower()
+        # Teaching message must say "between" (Brief: "Confidence must be between 0.7 and 1.0")
+        assert "between" in error_text, (
+            f"Expected teaching message with 'between' for upper bound, got: {exc_info.value}"
+        )
+
+    @pytest.mark.asyncio
     async def test_curate_memory_rejects_empty_categories_with_teaching_message(
         self, tmp_path: Path
     ) -> None:
@@ -749,8 +773,8 @@ class TestFromAC_CurateMemoryHint:
 
         assert "hint" in result, "curate_memory must return a 'hint' key"
         hint = result["hint"].lower()
-        assert "updat" in hint or "curated" in hint, (
-            f"Hint for curated→curated should mention update/curated, got: {result['hint']}"
+        assert "updat" in hint, (
+            f"Hint for curated→curated must specifically mention update (not just 'curated'), got: {result['hint']}"
         )
 
     @pytest.mark.asyncio
@@ -829,8 +853,8 @@ class TestFromAC_CurateMemoryHint:
         assert "downgrad" not in hint_lower, (
             f"curated→curated hint must not mention downgrade, got: {hint!r}"
         )
-        assert "updat" in hint_lower or "curated" in hint_lower, (
-            f"curated→curated hint must indicate an update, got: {hint!r}"
+        assert "updat" in hint_lower, (
+            f"curated→curated hint must specifically mention update (not just 'curated'), got: {hint!r}"
         )
 
 
@@ -1213,8 +1237,8 @@ class TestFromAC_ValidationTeachingMessages:
             )
 
         error_text = str(exc_info.value).lower()
-        assert "categor" in error_text or "provide" in error_text, (
-            f"Expected teaching message about categories, got: {exc_info.value}"
+        assert "provide" in error_text, (
+            f"Expected teaching message with 'provide' (Brief keyword), got: {exc_info.value}"
         )
 
     @pytest.mark.asyncio

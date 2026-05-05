@@ -245,12 +245,12 @@ class TestFromAC_EdgeUniqueConstraint:
             idx_name = idx[1]
             idx_cols = _index_columns(conn, idx_name)
             required = {"source_id", "target_id", "relation", "document_id"}
-            if required.issubset(set(idx_cols)):
+            if set(idx_cols) == required:
                 found = True
                 break
 
         assert found, (
-            "No UNIQUE index on edges covering (source_id, target_id, relation, document_id). "
+            "No UNIQUE index on edges with exactly (source_id, target_id, relation, document_id). "
             f"Existing unique indexes: {[idx[1] for idx in unique_indexes]}"
         )
 
@@ -542,11 +542,11 @@ class TestFromAC_MigrationUpgradePath:
         for idx in unique_indexes:
             idx_cols = _index_columns(v10_conn, idx[1])
             required = {"source_id", "target_id", "relation", "document_id"}
-            if required.issubset(set(idx_cols)):
+            if set(idx_cols) == required:
                 found = True
                 break
         assert found, (
-            "D17 UNIQUE index on edges(source_id, target_id, relation, document_id)"
+            "D17 UNIQUE index with exactly (source_id, target_id, relation, document_id)"
             " not present after v10→v11 upgrade via init_db()"
         )
 
@@ -558,3 +558,22 @@ class TestFromAC_MigrationUpgradePath:
         ver = v10_conn.execute("SELECT version FROM schema_version").fetchone()
         assert ver is not None, "schema_version table empty after migration"
         assert ver[0] == 11, f"Expected schema version 11, got {ver[0]}"  # noqa: PLR2004
+
+    def test_v10_to_v11_enrichment_state_default_on_insert(
+        self, v10_conn: sqlite3.Connection
+    ) -> None:
+        """Post-upgrade chunk inserts must default enrichment_state to 'pending'."""
+        init_db(v10_conn)
+        chunk_id = str(uuid.uuid4())
+        now = _now()
+        v10_conn.execute(
+            "INSERT INTO chunks (id, content, created_at) VALUES (?, ?, ?)",
+            (chunk_id, "upgraded content", now),
+        )
+        row = v10_conn.execute(
+            "SELECT enrichment_state FROM chunks WHERE id = ?", (chunk_id,)
+        ).fetchone()
+        assert row is not None, "Chunk not found after insert into upgraded DB"
+        assert row[0] == "pending", (
+            f"Post-upgrade chunk insert must default enrichment_state='pending', got {row[0]!r}"
+        )

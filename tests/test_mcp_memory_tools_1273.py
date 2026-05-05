@@ -24,8 +24,7 @@ from mcp.server.fastmcp.exceptions import ToolError
 
 from owlbear_mcp_memory.engine import MemoryEngine
 from owlbear_mcp_memory.models import MemoryEntry
-from owlbear_mcp_memory.server import app_lifespan, mcp
-from owlbear_mcp_memory.tools import query_memory as server_query_memory
+from owlbear_mcp_memory.server import app_lifespan, list_memories as server_list_memories, mcp
 from owlbear_mcp_memory.tools import approve_entry, query_memory, update_entry
 
 # ---------------------------------------------------------------------------
@@ -41,11 +40,12 @@ def _make_entry(**overrides: object) -> MemoryEntry:
     defaults: dict[str, object] = {
         "id": _uuid(1),
         "title": "Test entry",
-        "categories": ["knowledge"],
+        "categories": ["domain-knowledge"],
         "confidence": 0.85,
         "state": "pending",
         "content": "Entry body text.",
-        "scope_agents": None,
+        "scope_agents": [],
+        "source_agent": "test-agent",
         "created_at": "2026-05-01T10:00:00Z",
         "updated_at": "2026-05-01T10:00:00Z",
     }
@@ -69,6 +69,7 @@ def _seed(memory_dir: Path, entry: MemoryEntry) -> None:
         "confidence": entry.confidence,
         "state": entry.state,
         "scope_agents": entry.scope_agents,
+        "source_agent": entry.source_agent,
         "created_at": entry.created_at,
         "updated_at": entry.updated_at,
     }
@@ -203,9 +204,9 @@ class TestFromAC_QueryMemoryLimit:
                 tmp_path,
                 _make_entry(
                     id=_uuid(i + 40),
-                    title=f"Knowledge entry {i}",
+                    title=f"Domain entry {i}",
                     state="curated",
-                    categories=["knowledge"],
+                    categories=["domain-knowledge"],
                     confidence=0.70 + i * 0.05,
                 ),
             )
@@ -222,12 +223,12 @@ class TestFromAC_QueryMemoryLimit:
         engine = MemoryEngine(memory_dir=tmp_path)
         ctx = _make_ctx(engine)
 
-        results = await query_memory(ctx, categories=["knowledge"], limit=2)
+        results = await query_memory(ctx, categories=["domain-knowledge"], limit=2)
 
         assert len(results) == 2
         # All returned entries must satisfy the category filter
         for r in results:
-            assert "knowledge" in r["categories"]
+            assert "domain-knowledge" in r["categories"]
 
 
 # ---------------------------------------------------------------------------
@@ -237,47 +238,48 @@ class TestFromAC_QueryMemoryLimit:
 
 
 class TestFromAC_MCPRegistration:
-    """5 tools registered and callable via MCP — server surface contract."""
+    """6 tools registered and callable via MCP — server surface contract."""
 
-    def test_all_five_tool_names_registered(self) -> None:
-        """All 5 expected tool names are present in the FastMCP registry."""
+    def test_all_six_tool_names_registered(self) -> None:
+        """All 6 expected tool names are present in the FastMCP registry."""
         registered = {t.name for t in mcp._tool_manager._tools.values()}  # noqa: SLF001
         expected = {
-            "store_learning",
-            "query_memory",
-            "update_entry",
-            "delete_entry",
-            "approve_entry",
+            "save_memory",
+            "list_memories",
+            "read_memory",
+            "curate_memory",
+            "delete_memory",
+            "approve_memory",
         }
         missing = expected - registered
         assert not missing, f"Tools not registered: {missing}; registered: {registered}"
 
     @pytest.mark.asyncio
-    async def test_server_query_memory_wrapper_accepts_limit_and_forwards(
+    async def test_server_list_memories_wrapper_callable_via_mcp_surface(
         self, tmp_path: Path
     ) -> None:
-        """Server-side query_memory wrapper accepts limit= and forwards to the implementation.
+        """Server-side list_memories wrapper is callable and delegates to list_memories_impl.
 
-        The wrapper in server.py is marked # pragma: no cover — this test exercises it
-        directly to prove the MCP-visible signature includes the limit parameter and
-        that forwarding to query_memory_impl works end-to-end.
+        The wrapper in server.py is marked # pragma: no cover — this test calls it
+        directly to prove the MCP-visible surface exposes list_memories and that
+        forwarding to the implementation works end-to-end.
         """
-        for i in range(3):
-            _seed(
-                tmp_path,
-                _make_entry(
-                    id=_uuid(i + 60),
-                    title=f"Server entry {i}",
-                    state="curated",
-                ),
-            )
+        _seed(
+            tmp_path,
+            _make_entry(
+                id=_uuid(60),
+                title="Server entry",
+                state="curated",
+            ),
+        )
         engine = MemoryEngine(memory_dir=tmp_path)
         ctx = _make_ctx(engine)
 
-        results = await server_query_memory(ctx, limit=1)
+        results = await server_list_memories(ctx)
 
         assert isinstance(results, list)
         assert len(results) == 1
+        assert results[0]["title"] == "Server entry"
 
 
 # ---------------------------------------------------------------------------
@@ -300,12 +302,10 @@ class TestFromAC_MCPEntrypoint:
     async def test_app_lifespan_wires_env_to_context(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """app_lifespan reads OWLBEAR_MEMORY_DIR and OWLBEAR_MEMORY_CALLER from env."""
+        """app_lifespan reads OWLBEAR_MEMORY_DIR from env and wires engine to context."""
         monkeypatch.setenv("OWLBEAR_MEMORY_DIR", str(tmp_path))
-        monkeypatch.setenv("OWLBEAR_MEMORY_CALLER", "test-curator")
 
         async with app_lifespan(mcp) as ctx:
-            assert ctx.caller == "test-curator"
             assert isinstance(ctx.engine, MemoryEngine)
 
 
