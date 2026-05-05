@@ -140,7 +140,7 @@ claimed_at: {claimed_at}
 archival_reason: null
 archival_refs: []
 ---
-Body text.
+- AC item.
 """
 
 _ARCHIVE_TASK_TMPL = """\
