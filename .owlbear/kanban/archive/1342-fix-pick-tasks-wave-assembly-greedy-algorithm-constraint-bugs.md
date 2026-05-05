@@ -1,10 +1,10 @@
 ---
 id: 1342
 title: Curate stale pick_tasks RED suite after clarity-gate integration
-status: done
+status: archived
 priority: needed
 created: 2026-05-04T15:10:47.698484+00:00
-updated: 2026-05-05T11:36:42.637664+00:00
+updated: 2026-05-05T11:42:05.683636+00:00
 tags:
 - sync-blocker
 - kanban
@@ -14,7 +14,7 @@ depends_on:
 - 1343
 blocked: false
 block_reason:
-claimed_at: 2026-05-05T11:36:42.637664+00:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -197,3 +197,5 @@ Architecture review complete. Refined AC: removed trivially-satisfied AC3 (no in
 
 ### Scratch Files Cleaned
 - None (no scratch files existed for task #1342)
+[[2026-05-05]]
+## Audit\n### AC Verification\n| AC Line | Evidence | Status |\n|---------|----------|--------|\n| 1. Audit every failing test against current clarity/TDD contract | quality-runner full suite: 1074 not in 198 failures; reviewer mapped all formerly-failing tests to clarity-gate root cause | PASS |\n| 2. Fixtures include bullet or numbered AC lines | Spot-checked serve/kanban/tests/test_engine_pick_tasks_1074.py:143 -- template body is now `- AC item.` matching _AC_PATTERN | PASS |\n| 3. Tests contradicting current contract rewritten or deleted | Reviewer verified at :427 (research inclusion), :460 (full agent string), :515/:531/:542 (archived-dep handling) -- all assert current behavior | PASS |\n| 4. Remaining failures isolated as focused algorithm contracts | quality-runner: 0 failures in 1074 file (22/22 pass) | PASS |\n| 5. test_dispatch_gate_port_1214.py remains green | Not in quality-runner failure list (4565 passed includes it) | PASS |\n| 6. No algorithm changes to agent_view.py or dispatch.py | git show --stat 546bc901: 1 file changed (test file only), 1 insertion, 1 deletion | PASS |\n\n### Test Results\n- pytest full suite: 4565 passed, 198 failed, 4 skipped\n- 198 failures all in unrelated modules (test_server_1199, test_engine_create_edit_1203, test_pick_tasks_resolve_1184, test_decisions_1195, test_memory_tools_1272, test_engine_pick_tasks_1076, test_guidance_edit_task_973, test_cockpit_react_compiler_1015); no imports from 1074 confirmed\n- ruff: 12 violations all in serve/knowledge/ and serve/tools/ -- none in task-scoped files\n\n### Commit Integrity\n- 546bc901 test: fix clarity-gate fixture in pick_tasks suite (#1342, test-writer)\n- Scope: 1 file, 1 insertion, 1 deletion -- clean\n\n### Architect Quality: 4/5\nAC lines are specific (exact file, regex pattern, clear pass/fail). Challenger appropriately removed anticipatory AC3. Minor gap: could have explicitly listed the expected test count after curation.\n\n### Deduction Breakdown\n- No AC lines without evidence: 0\n- No lint violations in scope: 0\n- AC quality 4 (above 3): 0\n- Reviewer evidence present and detailed: 0\n- No full-suite failures in task scope: 0\n\n### Confidence: 1.00\n### Action: archive
