@@ -4,8 +4,13 @@ Acceptance Criteria coverage:
   AC1: end_work handler accepts outcome="fail" and routes to engine.end_work(outcome="fail")
   AC2: end_work handler still accepts outcome="release"
   AC3: h-mcp-kanban/SKILL.md Tool Summary table lists 9 tools (add create_dr row)
+       NOTE: AC3 was pre-satisfied — SKILL.md already says '9 tools' and has create_dr row.
+             No RED tests; builder has no work for AC3.
   AC4: h-mcp-kanban/SKILL.md outcome documentation lists all 5 outcomes
   AC5: mcp-kanban/README.md matches (9 tools, 5 outcomes documented)
+  AC8: _patch_params descriptions use 'JSON array', not 'comma-separated strings'
+  AC9: schema-light — no hard-coded _STATUSES/_PRIORITIES enum constraints on list_tasks
+  AC10: end_work.outcome description mentions all 5 lifecycle outcomes including 'release'
 """
 
 from __future__ import annotations
@@ -133,62 +138,6 @@ class TestFromAC_EndWorkOutcomeSpec:
         assert {"fail", "release"}.issubset(actual_args), (
             f"outcome type hint must include both 'fail' and 'release'. "
             f"Current resolved args: {sorted(actual_args)!r}"
-        )
-
-
-# ---------------------------------------------------------------------------
-# TestFromAC_SkillDocToolCount
-# AC3: h-mcp-kanban/SKILL.md Tool Summary table lists 9 tools (add create_dr).
-# Currently: "Exactly 8 tools" — create_dr row is missing.
-# ---------------------------------------------------------------------------
-
-
-class TestFromAC_SkillDocToolCount:
-    """SKILL.md Tool Summary must declare 9 tools and include create_dr (AC3)."""
-
-    def _skill_text(self) -> str:
-        assert _SKILL_MD.exists(), f"SKILL.md not found at {_SKILL_MD}"
-        return _SKILL_MD.read_text(encoding="utf-8")
-
-    def test_skill_md_tool_summary_declares_nine_tools(self) -> None:
-        """SKILL.md must state '9 tools', not '8 tools', in the Tool Summary section.
-
-        Currently reads 'Exactly 8 tools are exposed:'.
-        """
-        text = self._skill_text()
-        # Find the Tool Summary section
-        tool_summary_idx = text.lower().find("## tool summary")
-        assert tool_summary_idx != -1, "Tool Summary section not found in SKILL.md"
-        # Look in the section for a tool count
-        section_text = text[tool_summary_idx : tool_summary_idx + 500]
-        assert "9" in section_text, (
-            f"Expected '9' in Tool Summary section, but found:\n{section_text!r}\n"
-            "SKILL.md still says '8 tools' — create_dr row not yet added."
-        )
-        assert "8" not in section_text or "9" in section_text, (
-            "SKILL.md still declares '8 tools' instead of '9'."
-        )
-
-    def test_skill_md_tool_table_includes_create_dr_row(self) -> None:
-        """SKILL.md Tool Summary table must include a row for create_dr.
-
-        Currently the table has 8 rows (list_tasks through end_work) but
-        omits create_dr. After the fix, create_dr must appear in the table.
-        """
-        text = self._skill_text()
-        tool_summary_idx = text.lower().find("## tool summary")
-        assert tool_summary_idx != -1, "Tool Summary section not found in SKILL.md"
-        # Look for the table region (ends at the next ## heading)
-        next_section = text.find("\n## ", tool_summary_idx + 10)
-        table_text = (
-            text[tool_summary_idx:next_section]
-            if next_section != -1
-            else text[tool_summary_idx:]
-        )
-        assert "`create_dr`" in table_text or "create_dr" in table_text, (
-            f"'create_dr' not found in SKILL.md Tool Summary table.\n"
-            f"Table region:\n{table_text!r}\n"
-            "The create_dr row is missing from the 9-tool table."
         )
 
 
@@ -351,4 +300,168 @@ class TestFromAC_ReadmeEndWorkOutcomes:
         assert has_structure, (
             f"'fail' in README.md end_work section has no associated description.\n"
             f"Context: {surrounding!r}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Shared helper
+# ---------------------------------------------------------------------------
+
+
+def _get_tool_props(tool_name: str) -> dict:
+    """Return the JSON Schema 'properties' dict for a FastMCP tool."""
+    import owlbear_mcp_kanban.server as _srv
+
+    tool = next(
+        t for t in _srv.mcp._tool_manager._tools.values() if t.name == tool_name
+    )
+    return tool.parameters.get("properties", {})
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_PatchParamsJsonArrayDoc
+# AC8: _patch_params descriptions must NOT say "Comma-separated" for parameters
+#      that accept JSON arrays (list[int] / list[str]).
+# Currently create_task and edit_task _patch_params carry "Comma-separated" text
+# even though MCP transports JSON; agents must send arrays, not string scalars.
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_PatchParamsJsonArrayDoc:
+    """AC8: patch_params descriptions use 'JSON array', not 'comma-separated'."""
+
+    def test_create_task_depends_on_description_not_comma_separated(self) -> None:
+        """create_task.depends_on description must not say 'Comma-separated'.
+
+        Currently: 'Comma-separated dependency task IDs'.
+        After fix: description uses 'JSON array' (matches list[int] type).
+        """
+        props = _get_tool_props("create_task")
+        desc = props.get("depends_on", {}).get("description", "")
+        assert "comma" not in desc.lower(), (
+            f"create_task.depends_on still says 'comma-separated': {desc!r}. "
+            "Must use 'JSON array' to match actual parameter type (list[int])."
+        )
+
+    def test_create_task_tags_description_not_comma_separated(self) -> None:
+        """create_task.tags description must not say 'Comma-separated'.
+
+        Currently: 'Comma-separated tags'.
+        After fix: description uses 'JSON array' (matches list[str] type).
+        """
+        props = _get_tool_props("create_task")
+        desc = props.get("tags", {}).get("description", "")
+        assert "comma" not in desc.lower(), (
+            f"create_task.tags still says 'comma-separated': {desc!r}. "
+            "Must use 'JSON array' to match actual parameter type (list[str])."
+        )
+
+    def test_edit_task_add_dep_description_not_comma_separated(self) -> None:
+        """edit_task.add_dep description must not say 'comma-separated'.
+
+        Currently: "Add dependency task IDs (comma-separated, e.g. '601,602')".
+        After fix: description uses 'JSON array' (matches list[int] type).
+        """
+        props = _get_tool_props("edit_task")
+        desc = props.get("add_dep", {}).get("description", "")
+        assert "comma" not in desc.lower(), (
+            f"edit_task.add_dep still says 'comma-separated': {desc!r}. "
+            "Must use 'JSON array' to match actual parameter type (list[int])."
+        )
+
+    def test_edit_task_remove_dep_description_not_comma_separated(self) -> None:
+        """edit_task.remove_dep description must not say 'comma-separated'.
+
+        Currently: "Remove dependency task IDs (comma-separated, e.g. '601,602')".
+        After fix: description uses 'JSON array' (matches list[int] type).
+        """
+        props = _get_tool_props("edit_task")
+        desc = props.get("remove_dep", {}).get("description", "")
+        assert "comma" not in desc.lower(), (
+            f"edit_task.remove_dep still says 'comma-separated': {desc!r}. "
+            "Must use 'JSON array' to match actual parameter type (list[int])."
+        )
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_SchemaLight
+# AC9: _STATUSES/_PRIORITIES must not appear as hard-coded enum constraints
+#      in the tool parameter schemas. The live board config is the authority;
+#      hard-coded lists drift silently when config changes.
+# Currently list_tasks.status and list_tasks.priority expose enum arrays.
+# After fix (schema-light): no enum key; engine validates invalid values.
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_SchemaLight:
+    """AC9: schema-light — no hard-coded _STATUSES/_PRIORITIES enums on list_tasks."""
+
+    def test_list_tasks_status_has_no_enum_constraint(self) -> None:
+        """list_tasks.status schema must not have a hard-coded enum constraint.
+
+        Currently: enum: ['research', 'backlog', 'todo', 'in-progress', ...].
+        After fix: no enum key — engine validates; agents use board config values.
+        """
+        status_schema = _get_tool_props("list_tasks").get("status", {})
+        assert "enum" not in status_schema, (
+            f"list_tasks.status still has hard-coded enum: {status_schema.get('enum')!r}. "
+            "Remove enum to prevent drift from live board config (AC9 schema-light)."
+        )
+
+    def test_list_tasks_priority_has_no_enum_constraint(self) -> None:
+        """list_tasks.priority schema must not have a hard-coded enum constraint.
+
+        Currently: enum: ['someday', 'nice-to-have', 'important', 'needed', 'critical'].
+        After fix: no enum key — engine validates; agents use board config values.
+        """
+        priority_schema = _get_tool_props("list_tasks").get("priority", {})
+        assert "enum" not in priority_schema, (
+            f"list_tasks.priority still has hard-coded enum: {priority_schema.get('enum')!r}. "
+            "Remove enum to prevent drift from live board config (AC9 schema-light)."
+        )
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_OutcomeDescriptionConsistency
+# AC10: The lifecycle parameter matrix must be explicit and consistent.
+# end_work.outcome _patch_params description currently reads:
+#   "success = advance, fail = stay, block = mark blocked, reject = move back"
+# — 'release' is absent. After the 5-outcome reconciliation, the description
+# must mention all 5 outcomes so agents understand the full contract.
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_OutcomeDescriptionConsistency:
+    """AC10: end_work.outcome description mentions all 5 lifecycle outcomes."""
+
+    @staticmethod
+    def _outcome_description() -> str:
+        return _get_tool_props("end_work").get("outcome", {}).get("description", "")
+
+    def test_end_work_outcome_description_includes_release(self) -> None:
+        """end_work.outcome description must mention 'release'.
+
+        Currently: 'success = advance, fail = stay, block = mark blocked, reject = move back'
+        — 'release' is absent. After fix: all 5 outcomes appear in the description.
+        """
+        desc = self._outcome_description()
+        assert "release" in desc.lower(), (
+            f"end_work.outcome description does not mention 'release'.\n"
+            f"Current description: {desc!r}\n"
+            "Expected all 5 outcomes: success, fail, reject, block, release."
+        )
+
+    def test_end_work_outcome_description_includes_all_five_outcomes(self) -> None:
+        """end_work.outcome description must mention all 5 lifecycle outcomes (AC10).
+
+        Currently 'release' is absent from the description string.
+        After fix: success, fail, reject, block, release are all present.
+        """
+        desc = self._outcome_description().lower()
+        required = ["success", "fail", "reject", "block", "release"]
+        missing = [o for o in required if o not in desc]
+        assert not missing, (
+            f"end_work.outcome description is missing outcomes: {missing}.\n"
+            f"Current description: {self._outcome_description()!r}\n"
+            "Update _patch_params for end_work to cover all 5 outcomes."
         )
