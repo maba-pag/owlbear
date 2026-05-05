@@ -9,7 +9,7 @@ AC:
 - AC4 (refined): No import of `owlbear_cockpit` in any .py file under
         serve/kanban/src/ (test files excluded)
 - AC5 (refined): All 6 pre-existing symbols (KanbanEngine, WorkSession,
-        Task, TaskSummary, BoardConfig, pick_dispatchable) remain in __all__
+    Task, TaskSummary, BoardConfig) remain in __all__
         and each resolves via `from owlbear_kanban import X` without error
 """
 
@@ -55,7 +55,6 @@ class TestFromAC_KanbanInitExports:
             "Task",
             "TaskSummary",
             "WorkSession",
-            "pick_dispatchable",
         }
         expected_new = {
             "AgentView",
@@ -66,6 +65,7 @@ class TestFromAC_KanbanInitExports:
         }
         actual_new = set(owlbear_kanban.__all__) - existing
         assert actual_new == expected_new
+        assert "pick_dispatchable" not in owlbear_kanban.__all__
 
     # --- AC2: AgentView importable from package root ---
 
@@ -147,10 +147,6 @@ class TestFromAC_KanbanInitExports:
         """AC5: BoardConfig must remain in owlbear_kanban.__all__."""
         assert "BoardConfig" in owlbear_kanban.__all__
 
-    def test_pick_dispatchable_in_dunder_all(self) -> None:
-        """AC5: pick_dispatchable must remain in owlbear_kanban.__all__."""
-        assert "pick_dispatchable" in owlbear_kanban.__all__
-
     # --- AC5: pre-existing symbols importable from package root ---
 
     def test_kanbanengine_importable_from_root(self) -> None:
@@ -178,9 +174,3 @@ class TestFromAC_KanbanInitExports:
         mod = importlib.import_module("owlbear_kanban")
         assert hasattr(mod, "BoardConfig"), "BoardConfig not found on owlbear_kanban"
 
-    def test_pick_dispatchable_importable_from_root(self) -> None:
-        """AC5: pick_dispatchable resolves via from owlbear_kanban import pick_dispatchable."""
-        mod = importlib.import_module("owlbear_kanban")
-        assert hasattr(mod, "pick_dispatchable"), (
-            "pick_dispatchable not found on owlbear_kanban"
-        )

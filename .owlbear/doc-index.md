@@ -54,6 +54,25 @@
 - ## `3. Cockpit Frontend`
 - ## `4. Cockpit Backend`
 - ## `5. Tools Package`
+- ## `6. File Placement`
+- ## `7. Project Layout`
+
+## .owlbear/instructions/architecture.instructions.md
+- ## `Architecture Overview`
+- ## `Dependency Rules`
+- ## `Domain Scope Map`
+
+## .owlbear/instructions/doc-types.instructions.md
+- # `OwlBear Documentation Types`
+- ## `Rule IDs`
+- ## `1. Doc Types and Required Sections`
+- ### `1.1 Root README (`README.md`)`
+- ### `1.2 `SECURITY.md``
+- ### `1.3 Package README (`serve/*/README.md`)`
+- ### `1.4 Share README (`share/README.md`)`
+- ### `1.5 Setup Guide (`setup/*.md`)`
+- ## `2. Placement Mapping`
+- ## `3. Audience Targets`
 
 ## .owlbear/prompts/agent-audit.prompt.md
 - # `Agent Ecosystem Audit`
@@ -157,7 +176,6 @@
 - # `owlbear-kanban — Kanban Engine`
 - ## `Launch / Usage`
 - ### `KanbanEngine methods`
-- ### `Dispatch helper`
 - ### `AgentView dispatch pipeline`
 - ## `Migration`
 - ## `Configuration`
@@ -826,7 +844,6 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - # `Python Conventions`
 - ## `Package Management`
 - ## `Code Style`
-- ## `Project Layout`
 - ## `Testing`
 - ### `Two-Tier Test Model`
 - ## `Known Gotchas`
@@ -869,7 +886,6 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 
 ## share/skills/r-architecture-standards/SKILL.md
 - # `Architecture Standards`
-- ## `Architecture Overview`
 - ## `Module Quality Vocabulary`
 - ### `Deletion Test`
 - ### `Dependency Classification`
@@ -881,23 +897,15 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ### `Lifespan Pattern`
 - ### `Tool Exclusion`
 - ### `Module Exports`
-- ## `Dependency Rules`
 - ## `Configuration`
-- ## `Domain Scope Map`
 
 ## share/skills/r-doc-standards/SKILL.md
-- # `Documentation Standards`
+- # `Documentation Quality Standards`
 - ## `Citation Format`
-- ## `1. Doc Types and Required Sections`
-- ### `1.1 Root README (`README.md`)`
-- ### `1.2 `SECURITY.md``
-- ### `1.3 Package README (`workspace/*/README.md`)`
-- ### `1.4 Share-Category README (`share/*/README.md`)`
-- ### `1.5 Setup Guide (`setup/*.md`)`
-- ## `2. Placement Rules`
-- ## `3. Cross-Reference Integrity`
-- ## `4. Audience Fitness`
-- ## `5. Audit Dimensions`
+- ## `1. Shared Placement Rules`
+- ## `2. Cross-Reference Integrity`
+- ## `3. Audience Fitness`
+- ## `4. Audit Dimensions`
 
 ## share/skills/r-pipeline-protocol/SKILL.md
 - # `Pipeline Protocol`
@@ -925,6 +933,7 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ### `Per-Agent Signal Mapping`
 - ### `Body Size Rule`
 - ### `Reading Rules`
+- ### `Required Follow-up (Negative Signal Format)`
 - ## `4. Closing`
 - ### `Who Commits What`
 - ### `Post-task Reflection`
@@ -941,10 +950,9 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ### `Format`
 - ### `Rules`
 - ### `VS Code Auto-Staging Trap`
-- ## `2. File Placement`
-- ## `3. Attribution`
-- ## `4. Priority Scheme`
-- ## `5. Tag Taxonomy`
+- ## `2. Attribution`
+- ## `3. Priority Scheme`
+- ## `4. Tag Taxonomy`
 
 ## share/skills/w-arch-review/SKILL.md
 - # `Architecture Review`
@@ -963,6 +971,7 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - # `Code Review`
 - ## `Step 0 — Setup`
 - ## `Step 1 — Check Source Control Changes`
+- ### `Step 1.1 — Dirty-Tree Contamination Check`
 - ## `Step 2 — Evidence Gathering`
 - ### `Code-Reader Consumer Contract`
 - ## `Step 3 — Run Lint`
@@ -1057,6 +1066,7 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 ## share/skills/w-mem-curation/SKILL.md
 - # `Memory Curation`
 - ## `Architecture`
+- ## `State Machine`
 - ## `Step 0 — Setup`
 - ## `Step 1 — Gather and Inventory`
 - ## `Step 2 — Deduplicate`
@@ -1099,7 +1109,8 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ## `Step 5 — Classify Outcome and Create Follow-Up Tasks`
 - ### `Tier Classification`
 - ### `Create Follow-Up Tasks`
-- ## `Step 6 — Commit & Advance`
+- ## `Step 6 — Finalize Artifacts`
+- ## `Step 7 — Commit & Advance`
 - ## `Output Template`
 - ## `Verification Checklist`
 - ## `Known Pitfalls`
@@ -1168,7 +1179,6 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ## `Step 3 — Plan Test Categories`
 - ## `Step 4 — Write Tests`
 - ## `Step 5 — Verify RED`
-- ## `Step 6 — Deliverables`
 - ## `Step 6 — Commit & Advance`
 - ## `Output Template`
 - ## `Verification Checklist`

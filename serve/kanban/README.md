@@ -23,7 +23,7 @@ cfg   = engine.board_config()
 # Write
 engine.create_task("My task", body="…", priority="important")
 engine.move_task(42, "review")
-engine.edit_task(42, tags=["phase-1"])
+engine.edit_task("42", add_tags=["phase-1"])
 engine.claim_task(42)
 engine.release_task(42)
 ```
@@ -48,16 +48,6 @@ engine.release_task(42)
 | `sweep()` | Release stale claims exceeding `claim_timeout` |
 | `repair_storage()` | Quarantine corrupt task files and create action-required tasks |
 | `list_sessions(**kwargs)` | Derived `SessionRecord` objects from `activity.jsonl` |
-
-### Dispatch helper
-
-> **Deprecated.** `pick_dispatchable()` is deprecated; use `AgentView.pick_tasks()` instead.
-
-```python
-from owlbear_kanban import pick_dispatchable
-
-dispatchable = pick_dispatchable(tasks)   # returns list[TaskSummary]
-```
 
 ### AgentView dispatch pipeline
 
