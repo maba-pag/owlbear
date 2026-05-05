@@ -129,6 +129,72 @@ class TestFromAC_SourceVocabularyDocumented:
             "owlbear_kanban.activity_store module docstring (AC3)"
         )
 
+    def test_source_vocab_docstring_has_vocabulary_section(self) -> None:
+        """AC3 (strengthened): docstring contains a dedicated source vocabulary section.
+
+        A vocabulary header proves the three words appear as a canonical contract,
+        not as incidental prose.
+        """
+        import owlbear_kanban.activity_store as store_mod  # noqa: PLC0415
+
+        doc = store_mod.__doc__ or ""
+        assert "source vocabulary" in doc.lower(), (
+            "activity_store module docstring must contain a 'source vocabulary' "
+            "section that documents the canonical enum-like contract (AC3)"
+        )
+
+    def test_source_vocab_engine_purpose_documented(self) -> None:
+        """AC3 (strengthened): 'engine' is paired with its purpose in the docstring.
+
+        Checks that 'engine' appears alongside 'internal' — proving semantic
+        documentation rather than incidental word presence.
+        """
+        import owlbear_kanban.activity_store as store_mod  # noqa: PLC0415
+
+        doc = store_mod.__doc__ or ""
+        assert "engine" in doc, (
+            "docstring must contain 'engine' as a source vocabulary value (AC3)"
+        )
+        assert "internal" in doc, (
+            "docstring must document 'engine' as the source for internal engine "
+            "operations, not just list the word (AC3)"
+        )
+
+    def test_source_vocab_agent_purpose_documented(self) -> None:
+        """AC3 (strengthened): 'agent' is paired with its purpose in the docstring.
+
+        Checks that 'agent' appears alongside 'agent-initiated' — proving semantic
+        documentation rather than incidental word presence.
+        """
+        import owlbear_kanban.activity_store as store_mod  # noqa: PLC0415
+
+        doc = store_mod.__doc__ or ""
+        assert "agent" in doc, (
+            "docstring must contain 'agent' as a source vocabulary value (AC3)"
+        )
+        assert "agent-initiated" in doc, (
+            "docstring must document 'agent' as the source for agent-initiated "
+            "operations, not just list the word (AC3)"
+        )
+
+    def test_source_vocab_cockpit_purpose_documented(self) -> None:
+        """AC3 (strengthened): 'cockpit' is paired with its purpose in the docstring.
+
+        Checks that 'cockpit' appears alongside a UI-initiated marker, proving the
+        docstring maps cockpit to its semantic purpose (UI-initiated operations).
+        """
+        import owlbear_kanban.activity_store as store_mod  # noqa: PLC0415
+
+        doc = store_mod.__doc__ or ""
+        doc_lower = doc.lower()
+        assert "cockpit" in doc_lower, (
+            "docstring must contain 'cockpit' as a source vocabulary value (AC3)"
+        )
+        assert "ui" in doc_lower, (
+            "docstring must document 'cockpit' as the source for UI-initiated "
+            "operations (e.g. 'Cockpit UI-initiated'), not just list the word (AC3)"
+        )
+
 
 # ---------------------------------------------------------------------------
 # AC4 — cockpit README audit-trail section uses source, not actor
@@ -146,6 +212,56 @@ class TestFromAC_CockpitReadmeAuditTrail:
         assert 'actor: "cockpit"' not in readme, (
             'serve/cockpit/README.md still contains \'actor: "cockpit"\' — '
             "update audit-trail section to use source vocabulary per AC4"
+        )
+
+    def test_audit_trail_section_present(self, project_root: Path) -> None:
+        """AC4 (strengthened): README must contain an audit-trail section heading.
+
+        Without this, a removal of the section would false-green the absence test.
+        """
+        readme = (project_root / "serve/cockpit/README.md").read_text(encoding="utf-8")
+        # Accept both the old and new heading styles (case-insensitive check)
+        has_section = (
+            "## Audit Trail" in readme
+            or "## audit trail" in readme.lower()
+        )
+        assert has_section, (
+            "serve/cockpit/README.md must contain an 'Audit Trail' section "
+            "documenting the source attribution contract (AC4)"
+        )
+
+    def test_audit_trail_source_cockpit_mapping_present(self, project_root: Path) -> None:
+        """AC4 (strengthened): README audit-trail section documents source=\"cockpit\".
+
+        Proves the required cockpit mapping is present, not merely that a stale
+        actor phrase is absent.
+        """
+        readme = (project_root / "serve/cockpit/README.md").read_text(encoding="utf-8")
+        assert 'source="cockpit"' in readme, (
+            'serve/cockpit/README.md must document source="cockpit" in the '
+            "audit-trail section (AC4 — UI-initiated mutation attribution)"
+        )
+
+    def test_audit_trail_source_agent_mapping_present(self, project_root: Path) -> None:
+        """AC4 (strengthened): README audit-trail section documents source=\"agent\".
+
+        Proves the required agent mapping is present.
+        """
+        readme = (project_root / "serve/cockpit/README.md").read_text(encoding="utf-8")
+        assert 'source="agent"' in readme, (
+            'serve/cockpit/README.md must document source="agent" in the '
+            "audit-trail section (AC4 — agent-initiated mutation attribution)"
+        )
+
+    def test_audit_trail_source_engine_mapping_present(self, project_root: Path) -> None:
+        """AC4 (strengthened): README audit-trail section documents source=\"engine\".
+
+        Proves the required engine mapping is present.
+        """
+        readme = (project_root / "serve/cockpit/README.md").read_text(encoding="utf-8")
+        assert 'source="engine"' in readme, (
+            'serve/cockpit/README.md must document source="engine" in the '
+            "audit-trail section (AC4 — internal engine operation attribution)"
         )
 
 
