@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import os
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -105,8 +106,9 @@ def parse_task_id(value: str | int, *, field: str = "task_id") -> int:
 
 
 def _map_kanban_error(exc: KanbanError) -> None:
-    """Raise MCP ToolError with the user-facing message from a KanbanError."""
-    raise ToolError(exc.user_message) from exc
+    """Raise MCP ToolError with machine-readable code and human-readable message."""
+    payload = json.dumps({"code": exc.code, "message": exc.user_message})
+    raise ToolError(payload) from exc
 
 
 @dataclass
@@ -252,46 +254,6 @@ def _to_single_task_response(record: object) -> SingleTaskResponse:
     return SingleTaskResponse.model_validate(record)
 
 
-def _canonical_agent_view_for(engine: KanbanEngine) -> object | None:
-    """Resolve the authoritative engine AgentView instance when available."""
-    candidate = getattr(engine, "agent_view", None)
-    if candidate is None:
-        return None
-    if callable(candidate):
-        resolved = None
-        with contextlib.suppress(Exception):
-            resolved = candidate()
-        if resolved is None:
-            return None
-        return resolved
-    return candidate
-
-
-def _invoke_view_move_task(
-    view: object | None,
-    *,
-    task_id: int,
-    status: str,
-    archival_reason: str | None,
-    archival_refs: list[int] | None,
-) -> SingleTaskResponse | None:
-    """Call view.move_task when available; return None when unsupported."""
-    if view is None or not hasattr(view, "move_task"):
-        return None
-    try:
-        record = view.move_task(
-            task_id,
-            status,
-            archival_reason=archival_reason,
-            archival_refs=archival_refs,
-        )
-        return _to_single_task_response(record)
-    except KanbanError as exc:
-        _map_kanban_error(exc)
-    except NotImplementedError:
-        return None
-
-
 async def _show_validated(app_ctx: AppContext, task_id: int) -> KanbanTask:
     """Retrieve a task from the engine and return a validated KanbanTask."""
     try:
@@ -300,68 +262,6 @@ async def _show_validated(app_ctx: AppContext, task_id: int) -> KanbanTask:
         msg = str(exc)
         raise ToolError(msg) from exc
     return _record_to_task(record)
-
-
-async def _invoke_engine_end_work(  # noqa: PLR0913
-    engine: KanbanEngine,
-    *,
-    task_id: str,
-    note: str | None,
-    outcome: str,
-    block_reason: str | None,
-    move_to: str | None,
-    archival_reason: str | None,
-    archival_refs: list[int] | None,
-) -> object:
-    """Run end_work fallback directly on the engine for compatibility paths."""
-    return await asyncio.to_thread(
-        engine.end_work,
-        task_id,
-        note=note,
-        outcome=outcome,
-        block_reason=block_reason,
-        move_to=move_to,
-        archival_reason=archival_reason,
-        archival_refs=archival_refs,
-    )
-
-
-def _invoke_view_end_work(  # noqa: PLR0913
-    view: object | None,
-    *,
-    task_id: int,
-    outcome: str,
-    move_to: str | None,
-    note: str | None,
-    block_reason: str | None,
-    archival_reason: str | None,
-    archival_refs: list[int] | None,
-) -> SingleTaskResponse | None:
-    """Call view.end_work when available; return None when unsupported."""
-    if view is None or not hasattr(view, "end_work"):
-        return None
-    try:
-        record = view.end_work(
-            task_id,
-            outcome=outcome,
-            move_to=move_to,
-            note=note,
-            block_reason=block_reason,
-            archival_reason=archival_reason,
-            archival_refs=archival_refs,
-        )
-    except KanbanError as exc:
-        _map_kanban_error(exc)
-    except NotImplementedError:
-        return None
-    task = _to_single_task_response(record)
-    if outcome in {"success", "block", "fail"}:
-        with contextlib.suppress(Exception):
-            if not task.guidance:
-                task.guidance = collect_guidance(
-                    "end_work", None, task, outcome=outcome
-                )
-    return task
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
@@ -453,30 +353,16 @@ async def move_task(
         msg = "status is required"
         raise ToolError(msg)
 
-    canonical_result = _invoke_view_move_task(
-        _canonical_agent_view_for(app_ctx.engine),
-        task_id=resolved_id,
-        status=status,
-        archival_reason=archival_reason,
-        archival_refs=archival_refs,
-    )
-    if canonical_result is not None:
-        return canonical_result
-
     pre_task = await _show_validated(app_ctx, resolved_id)
     try:
-        record = await asyncio.to_thread(
-            app_ctx.engine.move_task,
-            str(resolved_id),
+        record = app_ctx.engine.agent_view().move_task(
+            resolved_id,
             status,
             archival_reason=archival_reason,
             archival_refs=archival_refs,
         )
     except KanbanError as exc:
         _map_kanban_error(exc)
-    except (FileNotFoundError, ValueError) as exc:
-        msg = str(exc)
-        raise ToolError(msg) from exc
     result = _to_single_task_response(record)
     with contextlib.suppress(Exception):
         status_names = list(app_ctx.engine.board_config().statuses)
@@ -558,18 +444,8 @@ async def start_work(
     app_ctx: AppContext = ctx.request_context.lifespan_context
     resolved_id = parse_task_id(id, field="id")
 
-    canonical_view = _canonical_agent_view_for(app_ctx.engine)
-    if canonical_view is not None and hasattr(canonical_view, "start_work"):
-        try:
-            record = canonical_view.start_work(int(resolved_id))
-            return _to_single_task_response(record)
-        except KanbanError as exc:
-            _map_kanban_error(exc)
-        except NotImplementedError:
-            pass
-
     try:
-        record = app_ctx.engine.start_work(str(resolved_id))
+        record = app_ctx.engine.agent_view().start_work(resolved_id)
     except KanbanError as exc:
         _map_kanban_error(exc)
     except (ValueError, FileNotFoundError) as exc:
@@ -596,23 +472,9 @@ async def end_work(  # noqa: PLR0913
     app_ctx: AppContext = ctx.request_context.lifespan_context
     resolved_id = parse_task_id(id, field="id")
 
-    canonical_result = _invoke_view_end_work(
-        _canonical_agent_view_for(app_ctx.engine),
-        task_id=resolved_id,
-        outcome=outcome,
-        move_to=move_to,
-        note=note,
-        block_reason=block_reason,
-        archival_reason=archival_reason,
-        archival_refs=archival_refs,
-    )
-    if canonical_result is not None:
-        return canonical_result
-
     try:
-        record = await _invoke_engine_end_work(
-            app_ctx.engine,
-            task_id=str(resolved_id),
+        record = app_ctx.engine.agent_view().end_work(
+            resolved_id,
             note=note,
             outcome=outcome,
             block_reason=block_reason,
