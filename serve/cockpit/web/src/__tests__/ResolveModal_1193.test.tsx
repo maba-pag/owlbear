@@ -96,6 +96,23 @@ describe('TestFromAC_ResolveModal', () => {
       expect(text).toContain('rejected')
       expect(text).toContain('needs-info')
     })
+
+    it('response-selector contains exactly three options and does not include completed', () => {
+      const { container } = renderModal()
+      const selector = container.querySelector('[data-testid="response-selector"]')
+      expect(selector).not.toBeNull()
+      // Check radio inputs — completed must not appear as an option
+      const radios = selector?.querySelectorAll('input[type="radio"]')
+      const values = Array.from(radios ?? []).map((r) => (r as HTMLInputElement).value)
+      expect(values).not.toContain('completed')
+      // Selector text must not include the word 'completed' as an option label
+      const text = selector?.textContent?.toLowerCase() ?? ''
+      expect(text).not.toContain('completed')
+      // Exactly 3 choices offered
+      if (radios && radios.length > 0) {
+        expect(radios).toHaveLength(3)
+      }
+    })
   })
 
   // ─── AC3: Optional notes textarea accepts freeform markdown ──────────────

@@ -8,7 +8,7 @@ AC coverage:
   - body_preview truncated to ~200 chars (td:1)
   - Returns {count:0, items:[]} when pending/ is empty or missing (td:1)
   - POST /api/decisions/{id}/resolve endpoint registered (td:1)
-  - Accepts {response: enum, notes?: string} for approved/needs-info/rejected/completed (td:2)
+  - Accepts {response: enum, notes?: string} for approved/needs-info/rejected (td:2)
   - Updates file: sets response in frontmatter, appends ## Response section with notes (td:2)
   - Returns 404 for non-existent DR id (td:1)
 """

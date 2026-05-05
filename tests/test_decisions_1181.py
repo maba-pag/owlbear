@@ -508,3 +508,68 @@ class TestFromAC_ResolvePendingDrs:
             f"after first attempt: {len(append_calls_first)} call(s), "
             f"after retry: {len(append_calls_total)} call(s) — duplicate detected"
         )
+
+    # --- AC5: rejected path appends summary (retry gap fill) ---
+
+    def test_ac5_rejected_path_appends_summary_to_task(
+        self, tmp_path: Path
+    ) -> None:
+        """AC5 boundary: rejected DR must append_body to task before unblock and move."""
+        decisions_dir, pending_dir, _resolved_dir = _make_dirs(tmp_path)
+        _write_dr(
+            pending_dir, "88-approach-selection.md", response="rejected", task_id=88
+        )
+        engine = _mock_engine()
+
+        resolve_pending_drs(decisions_dir, engine)
+
+        append_calls = [
+            c
+            for c in engine.edit_task.call_args_list
+            if len(c.args) > 0
+            and c.args[0] == 88
+            and c.kwargs.get("append_body") is not None
+        ]
+        assert append_calls, (
+            f"rejected DR must trigger engine.edit_task(88, append_body=...) — "
+            f"actual calls: {engine.edit_task.call_args_list}"
+        )
+        # Summary must mention the response value
+        summary_text = append_calls[0].kwargs["append_body"]
+        assert "rejected" in summary_text, (
+            f"append_body summary must contain 'rejected'; got: {summary_text!r}"
+        )
+
+    # --- AC6: pending removal for needs-info and rejected (retry gap fill) ---
+
+    def test_ac6_needs_info_file_removed_from_pending_after_resolve(
+        self, tmp_path: Path
+    ) -> None:
+        """AC6: after resolve_pending_drs(), needs-info DR must not remain in pending/."""
+        decisions_dir, pending_dir, _resolved_dir = _make_dirs(tmp_path)
+        dr_file = _write_dr(
+            pending_dir, "55-approach-selection.md", response="needs-info", task_id=55
+        )
+        engine = _mock_engine()
+
+        resolve_pending_drs(decisions_dir, engine)
+
+        assert not dr_file.exists(), (
+            "needs-info DR must be removed from pending/ after resolve_pending_drs() runs"
+        )
+
+    def test_ac6_rejected_file_removed_from_pending_after_resolve(
+        self, tmp_path: Path
+    ) -> None:
+        """AC6: after resolve_pending_drs(), rejected DR must not remain in pending/."""
+        decisions_dir, pending_dir, _resolved_dir = _make_dirs(tmp_path)
+        dr_file = _write_dr(
+            pending_dir, "88-approach-selection.md", response="rejected", task_id=88
+        )
+        engine = _mock_engine()
+
+        resolve_pending_drs(decisions_dir, engine)
+
+        assert not dr_file.exists(), (
+            "rejected DR must be removed from pending/ after resolve_pending_drs() runs"
+        )
