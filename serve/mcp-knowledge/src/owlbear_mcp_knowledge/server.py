@@ -8,7 +8,7 @@ import os
 import sqlite3
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypedDict
 from uuid import uuid4
@@ -230,9 +230,6 @@ async def get_next_batch(ctx: Context, limit: int = 10) -> list[EnrichmentChunk]
     conn = app_ctx.conn
     now = datetime.now(tz=UTC)
     now_iso = now.isoformat()
-    # Add a small safety margin so a chunk claimed exactly 10 minutes ago
-    # is not treated as stale because of sub-second scheduling drift.
-    stale_cutoff = (now - timedelta(minutes=10, seconds=1)).isoformat()
 
     conn.execute("PRAGMA busy_timeout = 5000")
     conn.execute("BEGIN IMMEDIATE")
@@ -254,13 +251,13 @@ async def get_next_batch(ctx: Context, limit: int = 10) -> list[EnrichmentChunk]
                 OR (
                     c.enrichment_state = 'claimed'
                     AND c.claimed_at IS NOT NULL
-                    AND c.claimed_at < ?
+                                        AND (strftime('%s', ?) - strftime('%s', c.claimed_at)) > 600
                 )
               )
             ORDER BY c.created_at ASC, c.id ASC
             LIMIT ?
             """,
-            (stale_cutoff, limit),
+                        (now_iso, limit),
         ).fetchall()
 
         if rows:
