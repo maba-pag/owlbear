@@ -27,7 +27,6 @@ from owlbear_knowledge.fetcher import HttpxContentFetcher
 from owlbear_knowledge.graph_builder import IntraDocGraphBuilder
 from owlbear_knowledge.graph_store import GraphStore
 from owlbear_knowledge.ingest import IngestPipeline
-from owlbear_knowledge.inter_doc_graph_builder import InterDocGraphBuilder
 from owlbear_knowledge.models import EntityType
 from owlbear_knowledge.qdrant import QdrantVectorStore
 from owlbear_knowledge.query_service import KnowledgeQueryService
@@ -43,7 +42,10 @@ from owlbear_knowledge.source_store import KnowledgeSourceStore
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
+    from owlbear_knowledge.inter_doc_graph_builder import InterDocGraphBuilder
     from owlbear_knowledge.protocol import ContentFetcher
+else:
+    InterDocGraphBuilder = Any
 
 _DEFAULT_KB_PATH = ".owlbear/knowledge/local.db"
 _DEFAULT_QDRANT_PATH = ".owlbear/knowledge/vectors"
@@ -303,11 +305,7 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
                 structured_extractor = None
         extractor = EntityExtractor(extractor=structured_extractor)
         intra_doc_builder = IntraDocGraphBuilder(extractor=structured_extractor)
-        inter_doc_builder = (
-            InterDocGraphBuilder(structured_extractor, vs, gs)
-            if structured_extractor is not None
-            else None
-        )
+        inter_doc_builder = None
         gar = GraphAugmentedRetriever(vs, gs, emb)
         qs = KnowledgeQueryService(
             vector_store=vs, graph_store=gs, embedding_provider=emb, retriever=gar
@@ -769,7 +767,7 @@ async def refresh_source(ctx: Context, source_id: str) -> dict | str:
         pipeline=pipeline,
         workspace_root=Path.cwd(),
         content_fetcher=selected_fetcher,
-        inter_doc_builder=app_ctx.inter_doc_builder,
+        inter_doc_builder=None,
         graph_store=app_ctx.graph_store,
     )
     try:
