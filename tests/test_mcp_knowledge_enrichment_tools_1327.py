@@ -23,6 +23,7 @@ Run with: uv run pytest tests/test_mcp_knowledge_enrichment_tools_1327.py
 from __future__ import annotations
 
 import asyncio
+import json
 import sqlite3
 import threading
 import uuid
@@ -214,6 +215,70 @@ class TestFromAC_GetNextBatch:
             "BEGIN IMMEDIATE must be used even when no chunks are pending"
         )
 
+    @pytest.mark.asyncio
+    async def test_select_and_update_within_single_immediate_transaction(
+        self, conn: sqlite3.Connection
+    ) -> None:
+        """SQL trace must show BEGIN IMMEDIATE → SELECT → UPDATE → COMMIT with no COMMIT between SELECT and UPDATE.
+
+        Discriminating proof: a split-transaction implementation (BEGIN→SELECT→COMMIT,
+        BEGIN→UPDATE→COMMIT) would have a COMMIT between the SELECT and UPDATE positions
+        and would therefore FAIL this test.
+        """
+        source_id = _insert_source(conn)
+        doc_id = _insert_document(conn, source_id=source_id)
+        _insert_chunk(conn, document_id=doc_id)
+
+        sql_trace: list[str] = []
+        conn.set_trace_callback(sql_trace.append)
+
+        ctx = _make_mcp_ctx(conn)
+        await get_next_batch(ctx, limit=1)
+
+        conn.set_trace_callback(None)
+
+        upper_trace = [s.upper().strip() for s in sql_trace]
+
+        begin_idx = next(
+            (i for i, s in enumerate(upper_trace) if "BEGIN IMMEDIATE" in s), None
+        )
+        assert begin_idx is not None, f"BEGIN IMMEDIATE not found in SQL trace: {sql_trace}"
+
+        select_idx = next(
+            (i for i, s in enumerate(upper_trace) if "SELECT" in s and i > begin_idx), None
+        )
+        assert select_idx is not None, (
+            f"SELECT not found after BEGIN IMMEDIATE in SQL trace: {sql_trace}"
+        )
+
+        update_idx = next(
+            (i for i, s in enumerate(upper_trace) if s.startswith("UPDATE") and i > begin_idx), None
+        )
+        assert update_idx is not None, (
+            f"UPDATE not found after BEGIN IMMEDIATE in SQL trace: {sql_trace}"
+        )
+
+        commit_idx = next(
+            (i for i, s in enumerate(upper_trace) if s == "COMMIT" and i > begin_idx), None
+        )
+        assert commit_idx is not None, (
+            f"COMMIT not found after BEGIN IMMEDIATE in SQL trace: {sql_trace}"
+        )
+
+        # Discriminating: both SELECT and UPDATE precede the COMMIT
+        assert select_idx < commit_idx, "SELECT must occur before COMMIT"
+        assert update_idx < commit_idx, "UPDATE must occur before COMMIT"
+
+        # Discriminating: no COMMIT may appear between SELECT and UPDATE
+        intermediate_commits = [
+            i for i, s in enumerate(upper_trace)
+            if s == "COMMIT" and select_idx < i < update_idx
+        ]
+        assert not intermediate_commits, (
+            "COMMIT must not occur between SELECT and UPDATE — "
+            f"found intermediate commits at positions {intermediate_commits} in trace: {sql_trace}"
+        )
+
     # --- AC2: returns chunk metadata via JOINed data (td:1) ---
 
     @pytest.mark.asyncio
@@ -298,6 +363,40 @@ class TestFromAC_GetNextBatch:
         item = result[0]
         assert _has_chunk_field(item, "section_path"), (
             "Result item missing section_path field"
+        )
+
+    @pytest.mark.asyncio
+    async def test_section_path_round_trip_from_metadata_json(
+        self, conn: sqlite3.Connection
+    ) -> None:
+        """section_path is parsed from chunks.metadata JSON — insert a known value and assert exact round-trip.
+
+        Discriminating proof: a constant/None section_path would fail this test because
+        the assertion requires the exact value stored in the JSON metadata field.
+        """
+        source_id = _insert_source(conn)
+        doc_id = _insert_document(conn, source_id=source_id)
+
+        chunk_id = str(uuid.uuid4())
+        now = _now_iso()
+        metadata_json = json.dumps({"section_path": "Introduction/Background"})
+        conn.execute(
+            "INSERT INTO chunks "
+            "(id, document_id, chunk_index, content, metadata, created_at, scope, enrichment_state, claimed_at) "
+            "VALUES (?, ?, 0, ?, ?, ?, 'global', 'pending', NULL)",
+            (chunk_id, doc_id, "round-trip chunk", metadata_json, now),
+        )
+        conn.commit()
+
+        ctx = _make_mcp_ctx(conn)
+        result = await get_next_batch(ctx, limit=10)
+
+        assert len(result) == 1, f"Expected exactly 1 chunk, got {len(result)}"
+        item = result[0]
+        actual_section_path = _get_chunk_field(item, "section_path")
+        assert actual_section_path == "Introduction/Background", (
+            f"section_path round-trip failed: expected 'Introduction/Background', "
+            f"got {actual_section_path!r}"
         )
 
     @pytest.mark.asyncio
