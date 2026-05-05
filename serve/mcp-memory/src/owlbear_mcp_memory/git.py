@@ -51,6 +51,7 @@ def commit_batch(memory_dir: Path, *, session_type: str) -> str:
         raise ValueError(msg)
 
     repo_dir = Path(_git(memory_dir, "rev-parse", "--show-toplevel"))
+    staged_paths: list[str] = []
 
     for file_path in sorted(memory_dir.glob("*.md")):
         state = _state_from_file(file_path)
@@ -58,9 +59,13 @@ def commit_batch(memory_dir: Path, *, session_type: str) -> str:
             continue
         rel_path = str(file_path.relative_to(repo_dir))
         _git(repo_dir, "add", "--", rel_path)
+        staged_paths.append(rel_path)
 
-    diff_exit_code = subprocess.run(
-        ["git", "diff", "--cached", "--quiet"],  # noqa: S607
+    if not staged_paths:
+        return ""
+
+    diff_exit_code = subprocess.run(  # noqa: S603
+        ["git", "diff", "--cached", "--quiet", "--", *staged_paths],  # noqa: S607
         cwd=repo_dir,
         stdin=subprocess.DEVNULL,
         check=False,
@@ -70,5 +75,5 @@ def commit_batch(memory_dir: Path, *, session_type: str) -> str:
 
     actor = _SESSION_TO_ACTOR[session_type]
     message = f"chore: memory {session_type} batch (mcp-memory, {actor})"
-    _git(repo_dir, "commit", "-m", message)
+    _git(repo_dir, "commit", "-m", message, "--", *staged_paths)
     return _git(repo_dir, "rev-parse", "HEAD")
