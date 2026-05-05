@@ -90,7 +90,7 @@ Include `## Review Evidence` section in your `end_work` note: test results, lint
 
 - Section header: `## Review Evidence`
 - On fail: `end_work(outcome="reject", move_to="in-progress"|"todo"|"backlog")` — see `<pipeline_position>` for routing conditions
-- Follow-ups: via code-reader / `create_dr`
+- Follow-ups: `create_dr` for preference-based DRs; planner for task creation
 - See `h-mcp-kanban` skill for tool workflows
 
 </output_format>
