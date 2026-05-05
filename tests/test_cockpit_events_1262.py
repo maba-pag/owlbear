@@ -161,17 +161,20 @@ class TestFromAC_WatchFilter:
         )
 
     @pytest.mark.asyncio
-    async def test_filter_rejects_archive_md(self, board_dir: Path) -> None:
-        """Filter must return False for .md files in archive/ (not a watched surface).
+    async def test_filter_accepts_archive_md(self, board_dir: Path) -> None:
+        """Post-1346 AC5: Filter must return True for .md files in archive/.
 
-        Current generic filter accepts any .md regardless of directory → returns True
-        → this test FAILS against current code.
+        archive/*.md is now a watched surface: archive moves affect active-board
+        membership and must trigger a tasks-changed SSE event. The old contract
+        said archive/*.md is rejected (classifier returns None). New contract:
+        archive/*.md is accepted by the watch filter and classified as tasks-changed.
         """
         captured, engine = await _run_and_capture(board_dir)
         archive_md = str(engine.kanban_dir / "archive" / "100-done-task.md")
-        assert captured["filter"](None, archive_md) is False, (
-            f"Filter must reject archive/*.md; got True for {archive_md!r}. "
-            f"Current filter accepts any .md — new filter must be board-specific."
+        assert captured["filter"](None, archive_md) is True, (
+            f"Filter must accept archive/*.md (AC5: archive moves are task-list "
+            f"invalidation signals); got False for {archive_md!r}. "
+            f"Post-1346: archive_dir is an accepted watch surface."
         )
 
     @pytest.mark.asyncio
@@ -407,12 +410,15 @@ class TestFromAC_Classify:
         )
 
     @pytest.mark.asyncio
-    async def test_archive_md_classified_as_none_no_event(
+    async def test_archive_md_classified_as_tasks_changed(
         self, board_dir: Path
     ) -> None:
-        """A path in archive/ must be classified as None (no event emitted).
+        """Post-1346 AC5: A path in archive/ must be classified as 'tasks-changed'
+        (archive moves affect active-board membership).
 
-        Current code emits 'tasks-changed' for any surviving .md → FAILS.
+        Old contract said classifier returns None for archive paths (no event).
+        New contract: archive/*.md maps to tasks-changed so the frontend refetches
+        when a task is archived out of the active list.
         """
         from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
@@ -438,13 +444,20 @@ class TestFromAC_Classify:
                     async for line in response.aiter_lines():
                         if line.startswith(("event:", "data:")):
                             events_received.append(line)
+                        if len(events_received) >= 2:
+                            break
         finally:
             app.dependency_overrides.clear()
 
-        assert not events_received, (
-            f"archive/*.md must produce no events (classifier returns None). "
-            f"Got: {events_received!r}. "
-            f"Current code emits 'tasks-changed' for any surviving .md."
+        event_names = [
+            ln.split(":", 1)[1].strip()
+            for ln in events_received
+            if ln.startswith("event:")
+        ]
+        assert "tasks-changed" in event_names, (
+            f"archive/*.md must produce 'tasks-changed' (AC5: archive moves are "
+            f"task-list invalidation signals). Got: {event_names!r}. "
+            f"Old contract said 'no event for archive paths' — new contract requires emission."
         )
 
     @pytest.mark.asyncio
@@ -1015,17 +1028,17 @@ class TestFromAC_TypedEvents:
         )
 
     @pytest.mark.asyncio
-    async def test_deletion_only_tasks_batch_emits_no_tasks_changed_event(
+    async def test_deletion_only_tasks_batch_emits_tasks_changed_event(
         self, board_dir: Path
     ) -> None:
-        """When ALL paths for the tasks surface in a batch are deleted (stat raises
-        FileNotFoundError), no 'tasks-changed' event must be emitted for that type.
+        """Post-1346 AC4: When ALL paths for the tasks surface are deleted (stat raises
+        FileNotFoundError), a 'tasks-changed' event MUST still be emitted using a
+        synthetic time.time_ns() mtime.
 
+        Old contract said deletion-only suppresses the event. New contract: emit
+        even for deleted paths so the frontend detects the deletion and refetches.
         A surviving decisions/pending path in the same batch must still yield
-        'decisions-changed', proving the deletion-only suppression is per-surface.
-
-        This covers the deletion-only suppression branch at events.py:113 for a type
-        where every path has vanished.
+        'decisions-changed' independently.
         """
         from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
@@ -1067,9 +1080,10 @@ class TestFromAC_TypedEvents:
         finally:
             app.dependency_overrides.clear()
 
-        assert "tasks-changed" not in event_names, (
-            f"tasks-changed must NOT be emitted when the only tasks path is deleted "
-            f"(stat raises FileNotFoundError). Got events: {event_names!r}"
+        assert "tasks-changed" in event_names, (
+            f"tasks-changed MUST be emitted for a deleted task path (AC4: synthetic mtime). "
+            f"Got events: {event_names!r}. "
+            f"Old contract said 'suppress deletion-only events' — new contract requires emission."
         )
         assert "decisions-changed" in event_names, (
             f"decisions-changed MUST be emitted for the surviving decisions path. "

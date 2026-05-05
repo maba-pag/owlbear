@@ -856,8 +856,14 @@ class TestFromAC_MtimeScanCacheUnit:
         )
         assert result > 0, "scan() must return positive mtime_ns when files are present"
 
-    def test_scan_returns_max_mtime_across_files(self, tmp_path: Path) -> None:
-        """MtimeScanCache.scan() returns the maximum mtime_ns across files."""
+    def test_scan_returns_robust_signature_not_raw_max_mtime(self, tmp_path: Path) -> None:
+        """Post-1346 AC1: MtimeScanCache.scan() returns a directory signature (hash)
+        that captures file-name set changes, NOT the raw maximum mtime_ns.
+
+        Old contract was 'returns max mtime_ns', which missed deletions of
+        non-newest files. New contract: opaque integer signature that changes on
+        create, edit, delete, and rename of .md task files.
+        """
         from owlbear_cockpit.cache import MtimeScanCache  # noqa: PLC0415
 
         first = tmp_path / "1-task.md"
@@ -866,10 +872,22 @@ class TestFromAC_MtimeScanCacheUnit:
         second = tmp_path / "2-task.md"
         second.write_text("# task 2", encoding="utf-8")
 
-        expected_max = max(first.stat().st_mtime_ns, second.stat().st_mtime_ns)
+        raw_max_mtime = max(first.stat().st_mtime_ns, second.stat().st_mtime_ns)
         cache = MtimeScanCache(tmp_path)
-        assert cache.scan() == expected_max, (
-            "scan() must return the maximum mtime_ns, not the first or minimum"
+        sig = cache.scan()
+        assert isinstance(sig, int), f"scan() must return int, got {type(sig).__name__}"
+        assert sig != raw_max_mtime, (
+            "scan() must NOT return the raw max mtime_ns. Post-1346 it returns a "
+            "directory signature (hash) that detects deletions and renames, not "
+            f"just max mtime. Got {sig!r} == raw_max {raw_max_mtime!r}."
+        )
+        # Signature must change when the file-name set changes (deletion detection)
+        first.unlink()
+        sig_after_delete = cache.scan()
+        assert sig_after_delete != sig, (
+            f"scan() must return a different signature after deleting a file. "
+            f"before={sig!r}, after={sig_after_delete!r}. "
+            f"Max-mtime-only scan would NOT detect this deletion."
         )
 
     def test_scan_is_repeatable_with_no_changes(self, tmp_path: Path) -> None:

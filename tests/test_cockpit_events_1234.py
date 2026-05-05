@@ -218,8 +218,8 @@ class TestFromAC_EventSourceResponseEndpoint:
         app.dependency_overrides.clear()
 
     @pytest.mark.asyncio
-    async def test_endpoint_uses_injected_engine_tasks_dir(self, tmp_path) -> None:
-        """DI contract: the endpoint must call awatch with the overridden engine's tasks_dir, not a default."""
+    async def test_endpoint_uses_injected_engine_kanban_dir(self, tmp_path) -> None:
+        """DI contract: the endpoint must call awatch with the overridden engine's kanban_dir (recursive watch), not tasks_dir."""
         from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
@@ -251,70 +251,79 @@ class TestFromAC_EventSourceResponseEndpoint:
         assert len(awatch_paths) == 1, (
             f"awatch must be called exactly once per connection, got {len(awatch_paths)}"
         )
-        assert Path(awatch_paths[0]) == Path(engine_b.tasks_dir), (
-            f"Endpoint must use injected engine_b.tasks_dir ({engine_b.tasks_dir!r}); "
-            f"got {awatch_paths[0]!r} — DI is not propagating the engine to the watcher."
+        assert Path(awatch_paths[0]) == Path(engine_b.kanban_dir), (
+            f"Endpoint must use injected engine_b.kanban_dir ({engine_b.kanban_dir!r}) "
+            f"for recursive watching; got {awatch_paths[0]!r}. "
+            f"Post-1346: awatch watches kanban_dir recursively, not tasks_dir alone."
         )
 
 
 # ---------------------------------------------------------------------------
-# AC3: Watch filter — accepts .md, rejects .tmp- prefix and non-.md (td:2)
+# AC3: Watch filter — board-specific, accepts tasks/.md, rejects .tmp-, non-.md (td:2)
 # ---------------------------------------------------------------------------
 
 
 class TestFromAC_WatchFilter:
-    """AC3: Module-level _watch_filter function implements the file-type guard."""
+    """AC3: Board-specific watch filter built by _build_watch_filter."""
 
-    def test_filter_accepts_plain_md_file(self) -> None:
-        """_watch_filter must return True for a standard .md task file."""
-        from owlbear_cockpit.routes.events import _watch_filter  # noqa: PLC0415
+    _TASKS = Path("/fake/kanban/tasks")
+    _ARCHIVE = Path("/fake/kanban/archive")
+    _DECISIONS_PENDING = Path("/fake/kanban/decisions/pending")
+    _ACTIVITY = Path("/fake/kanban/activity.jsonl")
 
-        assert _watch_filter(None, "/tasks/1234-my-task.md") is True
+    def _make_filter(self) -> object:
+        from owlbear_cockpit.routes.events import _build_watch_filter  # noqa: PLC0415
 
-    def test_filter_accepts_md_file_in_nested_path(self) -> None:
-        """_watch_filter must accept .md files regardless of parent path depth."""
-        from owlbear_cockpit.routes.events import _watch_filter  # noqa: PLC0415
-
-        assert (
-            _watch_filter(None, "/home/user/.owlbear/kanban/tasks/42-title.md") is True
+        return _build_watch_filter(
+            self._TASKS, self._ARCHIVE, self._DECISIONS_PENDING, self._ACTIVITY
         )
 
-    def test_filter_rejects_tmp_prefix_md_file(self) -> None:
-        """_watch_filter must return False for files starting with .tmp-."""
-        from owlbear_cockpit.routes.events import _watch_filter  # noqa: PLC0415
+    def test_filter_accepts_plain_md_file(self) -> None:
+        """Board-specific filter must return True for a direct .md child of tasks_dir."""
+        assert self._make_filter()(None, "/fake/kanban/tasks/1234-my-task.md") is True
 
-        assert _watch_filter(None, "/tasks/.tmp-1234-my-task.md") is False
+    def test_filter_accepts_md_file_in_tasks_dir(self) -> None:
+        """Filter accepts a direct .md child of the configured tasks dir (depth-1 path)."""
+        tasks_dir = Path("/home/user/.owlbear/kanban/tasks")
+        from owlbear_cockpit.routes.events import _build_watch_filter  # noqa: PLC0415
+
+        watch_filter = _build_watch_filter(
+            tasks_dir,
+            tasks_dir.parent / "archive",
+            tasks_dir.parent / "decisions" / "pending",
+            tasks_dir.parent / "activity.jsonl",
+        )
+        assert watch_filter(None, "/home/user/.owlbear/kanban/tasks/42-title.md") is True
+
+    def test_filter_rejects_tmp_prefix_md_file(self) -> None:
+        """Filter must return False for .md files starting with .tmp-."""
+        assert (
+            self._make_filter()(None, "/fake/kanban/tasks/.tmp-1234-my-task.md") is False
+        )
 
     def test_filter_rejects_non_md_file(self) -> None:
-        """_watch_filter must return False for non-.md files (e.g. .json)."""
-        from owlbear_cockpit.routes.events import _watch_filter  # noqa: PLC0415
-
-        assert _watch_filter(None, "/tasks/task-1.json") is False
+        """Filter must return False for non-.md files (e.g. .json) in tasks_dir."""
+        assert self._make_filter()(None, "/fake/kanban/tasks/task-1.json") is False
 
     def test_filter_rejects_yml_config_file(self) -> None:
-        """_watch_filter must return False for .yml files (e.g. config.yml)."""
-        from owlbear_cockpit.routes.events import _watch_filter  # noqa: PLC0415
-
-        assert _watch_filter(None, "/tasks/config.yml") is False
+        """Filter must return False for .yml files in tasks_dir."""
+        assert self._make_filter()(None, "/fake/kanban/tasks/config.yml") is False
 
     def test_filter_accepts_md_with_tmp_in_middle_of_name(self) -> None:
         """Rejection is prefix-specific: 'task-tmp-123.md' (no leading dot) must pass."""
-        from owlbear_cockpit.routes.events import _watch_filter  # noqa: PLC0415
-
         # 'tmp' in the middle of the filename is not the .tmp- prefix pattern
-        assert _watch_filter(None, "/tasks/task-tmp-123.md") is True
+        assert (
+            self._make_filter()(None, "/fake/kanban/tasks/task-tmp-123.md") is True
+        )
 
     def test_filter_rejects_minimal_tmp_prefix(self) -> None:
         """Boundary: file named exactly '.tmp-.md' must be rejected."""
-        from owlbear_cockpit.routes.events import _watch_filter  # noqa: PLC0415
-
-        assert _watch_filter(None, "/tasks/.tmp-.md") is False
+        assert self._make_filter()(None, "/fake/kanban/tasks/.tmp-.md") is False
 
     @pytest.mark.asyncio
     async def test_awatch_call_site_receives_correct_arguments(self, board_dir) -> None:
-        """AC3 (revised): awatch() must be called with engine.tasks_dir, watch_filter=_watch_filter, recursive=False."""
+        """Post-1346: awatch() must be called with engine.kanban_dir, a callable watch_filter, recursive=True."""
         from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
-        from owlbear_cockpit.routes.events import _watch_filter  # noqa: PLC0415
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
         engine = KanbanEngine(board_dir)
@@ -345,16 +354,16 @@ class TestFromAC_WatchFilter:
             f"awatch must be called exactly once per connection, got {len(awatch_calls)}"
         )
         args, kwargs = awatch_calls[0]
-        assert Path(args[0]) == Path(engine.tasks_dir), (
-            f"awatch first arg must be engine.tasks_dir ({engine.tasks_dir!r}), "
-            f"got {args[0]!r}"
+        assert Path(args[0]) == Path(engine.kanban_dir), (
+            f"awatch first arg must be engine.kanban_dir ({engine.kanban_dir!r}), "
+            f"got {args[0]!r}. Post-1346: awatch uses kanban_dir with recursive=True."
         )
-        assert kwargs.get("watch_filter") is _watch_filter, (
-            f"awatch must receive watch_filter=_watch_filter; "
+        assert callable(kwargs.get("watch_filter")), (
+            f"awatch must receive a callable watch_filter; "
             f"got watch_filter={kwargs.get('watch_filter')!r}"
         )
-        assert kwargs.get("recursive") is False, (
-            f"awatch must receive recursive=False; got recursive={kwargs.get('recursive')!r}"
+        assert kwargs.get("recursive") is True, (
+            f"awatch must receive recursive=True; got recursive={kwargs.get('recursive')!r}"
         )
 
 
@@ -445,10 +454,15 @@ class TestFromAC_EventPayload:
             app.dependency_overrides.clear()
 
     @pytest.mark.asyncio
-    async def test_event_skipped_when_changed_file_deleted_before_stat(
+    async def test_event_emitted_when_changed_file_deleted_before_stat(
         self, board_dir
     ) -> None:
-        """If all changed files are deleted before stat(), no event must be emitted."""
+        """Post-1346 AC4: When a tasks file is deleted before stat(), a tasks-changed
+        event MUST still be emitted using a synthetic time.time_ns() mtime.
+
+        Old contract said 'skip deleted paths — no event'. New contract says emit
+        a numeric mtime payload so the frontend detects the deletion and refetches.
+        """
         from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
@@ -461,7 +475,7 @@ class TestFromAC_EventPayload:
             yield {(MagicMock(), str(deleted_path))}
             # generator exhausts after one yield; no more changes
 
-        events_received = []
+        events_received: list[str] = []
         app.dependency_overrides[get_engine] = lambda: engine
         try:
             with patch("owlbear_cockpit.routes.events.awatch", _one_change_then_stop):
@@ -479,9 +493,28 @@ class TestFromAC_EventPayload:
         finally:
             app.dependency_overrides.clear()
 
-        assert not events_received, (
-            f"Expected no events when all changed files are deleted, "
-            f"but got: {events_received}"
+        event_names = [
+            ln.split(":", 1)[1].strip()
+            for ln in events_received
+            if ln.startswith("event:")
+        ]
+        data_payloads = [
+            ln.split(":", 1)[1].strip()
+            for ln in events_received
+            if ln.startswith("data:")
+        ]
+        assert "tasks-changed" in event_names, (
+            f"tasks-changed MUST be emitted for a deleted task file (AC4: synthetic mtime). "
+            f"Got events: {event_names!r}. "
+            f"Old contract said 'skip deleted paths' — new contract requires emission."
+        )
+        assert data_payloads, "No data payload received for deleted-file tasks-changed event"
+        payload = json.loads(data_payloads[0])
+        assert isinstance(payload.get("mtime"), int), (
+            f"mtime must be an integer (synthetic time.time_ns()); got {payload!r}"
+        )
+        assert payload["mtime"] > 0, (
+            f"Synthetic mtime must be positive; got {payload['mtime']}"
         )
 
     @pytest.mark.asyncio
@@ -498,7 +531,6 @@ class TestFromAC_EventPayload:
         deleted_path = board_dir / "tasks" / "task-deleted.md"
         # deleted_path intentionally does NOT exist
         assert not deleted_path.exists(), "Test setup: deleted_path must not exist"
-        expected_mtime = surviving_path.stat().st_mtime_ns
 
         async def _mixed_batch_then_stop(*_args, **_kwargs):
             # One batch with both a deleted path and a surviving path
@@ -528,14 +560,18 @@ class TestFromAC_EventPayload:
             app.dependency_overrides.clear()
 
         assert event_lines == ["tasks-changed"], (
-            f"Expected one 'tasks-changed' event from the surviving file in a mixed batch. "
-            f"Got events: {event_lines!r} — deleted file in the same batch must NOT suppress the event."
+            f"Expected one 'tasks-changed' event from the mixed batch (deleted file "
+            f"must NOT suppress the event). Got events: {event_lines!r}"
         )
         assert data_lines, "No data line received for the mixed-batch event"
         payload = json.loads(data_lines[0])
-        assert payload.get("mtime") == expected_mtime, (
-            f"mtime must be from the surviving file's st_mtime_ns ({expected_mtime}), "
-            f"got {payload.get('mtime')!r}"
+        assert isinstance(payload.get("mtime"), int), (
+            f"mtime must be an integer. Got: {payload!r}"
+        )
+        assert payload.get("mtime") > 0, (  # type: ignore[operator]
+            f"mtime must be positive. Post-1346: the batch mtime is the "
+            f"max of all paths' mtimes, including synthetic time.time_ns() for deleted "
+            f"files (which is >= the surviving file's st_mtime_ns). Got: {payload!r}"
         )
 
     @pytest.mark.asyncio
@@ -667,13 +703,15 @@ class TestFromAC_MissingDirGuard:
         )
 
     @pytest.mark.asyncio
-    async def test_missing_tasks_dir_awatch_unreachable_on_consumed_path(
+    async def test_missing_kanban_dir_awatch_unreachable_on_consumed_path(
         self, tmp_path
     ) -> None:
         """AC5 (combined proof): consuming a missing-dir stream produces zero events AND never calls awatch.
 
-        Patches awatch to raise immediately if invoked on the consumed path,
-        proving the missing-dir guard short-circuits before awatch is reached.
+        Patches awatch to raise immediately if invoked, proving the missing-dir guard
+        (checks kanban_dir.exists()) short-circuits before awatch is reached.
+        Post-1346: guard checks kanban_dir (not tasks_dir) since awatch now watches
+        kanban_dir recursively.
         """
         import shutil  # noqa: PLC0415
 
@@ -682,12 +720,12 @@ class TestFromAC_MissingDirGuard:
 
         kanban_dir = _make_board(tmp_path)
         engine = KanbanEngine(kanban_dir)
-        shutil.rmtree(engine.tasks_dir)
-        assert not engine.tasks_dir.exists(), "Test setup: tasks_dir must not exist"
+        shutil.rmtree(engine.kanban_dir)
+        assert not engine.kanban_dir.exists(), "Test setup: kanban_dir must not exist"
 
         async def _raise_if_called(*_args, **_kwargs):
             msg = (
-                "awatch must not be called when tasks_dir does not exist "
+                "awatch must not be called when kanban_dir does not exist "
                 "\u2014 missing-dir guard is absent or placed after the awatch call."
             )
             raise AssertionError(msg)
