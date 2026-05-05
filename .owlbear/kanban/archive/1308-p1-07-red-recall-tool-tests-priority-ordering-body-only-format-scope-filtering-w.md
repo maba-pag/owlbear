@@ -2,10 +2,10 @@
 id: 1308
 title: 'P1-07+08: Recall tool — tighten test proof quality (assertion gaps in format,
   ordering, default limit)'
-status: review
+status: archived
 priority: needed
 created: 2026-05-04T01:32:18.553275+00:00
-updated: 2026-05-04T23:18:43.917113+00:00
+updated: 2026-05-05T00:37:01.345973+00:00
 tags:
 - phase-2
 - scope:mcp-memory
@@ -16,7 +16,7 @@ depends_on:
 - 1305
 blocked: false
 block_reason:
-claimed_at: 2026-05-04T23:18:43.917113+00:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -444,3 +444,89 @@ Architecture review pass 2: resolved both reviewer follow-ups. AC6-fix v2 requir
 - Problem faced: task remained in `in-progress` despite test-only retry completion.
 - Workaround applied: used strict quality-runner verification and no-op builder pass-through to avoid unnecessary churn.
 - Pattern discovered: explicit builder-skip handoffs are safest when paired with a fresh scoped quality-runner run before advancing.
+[[2026-05-04]]
+## Review Evidence
+### Test Results
+- quality-runner scoped pass on [tests/test_recall_memory_1308.py](tests/test_recall_memory_1308.py): 25 passed, 0 failed, 0 skipped.
+
+### Lint Results
+- quality-runner scoped lint: clean for [serve/mcp-memory/src/owlbear_mcp_memory/tools.py](serve/mcp-memory/src/owlbear_mcp_memory/tools.py), [tests/test_recall_memory_1308.py](tests/test_recall_memory_1308.py), and editor diagnostics for [serve/mcp-memory/src/owlbear_mcp_memory/engine.py](serve/mcp-memory/src/owlbear_mcp_memory/engine.py).
+
+### Coverage
+- quality-runner reported 23% module coverage for [serve/mcp-memory/src/owlbear_mcp_memory/tools.py](serve/mcp-memory/src/owlbear_mcp_memory/tools.py).
+- Informational only: the latest retry is test-only and the current cycle has no source delta.
+
+### Task / Commit Scope
+- The binding contract for this review is the latest refinement in [.owlbear/kanban/tasks/1308-p1-07-red-recall-tool-tests-priority-ordering-body-only-format-scope-filtering-w.md](.owlbear/kanban/tasks/1308-p1-07-red-recall-tool-tests-priority-ordering-body-only-format-scope-filtering-w.md#L382) through [.owlbear/kanban/tasks/1308-p1-07-red-recall-tool-tests-priority-ordering-body-only-format-scope-filtering-w.md](.owlbear/kanban/tasks/1308-p1-07-red-recall-tool-tests-priority-ordering-body-only-format-scope-filtering-w.md#L399), not the stale RED header.
+- Latest retry commit presence verified in [.git/logs/HEAD](.git/logs/HEAD#L1891) and [.git/logs/refs/heads/dev](.git/logs/refs/heads/dev#L1737): 86b6921d rewrite AC6-fix fixture with non-cooperative ordering.
+- Exact diff-scoped dirty-tree contamination could not be proven because this tool surface does not expose git show or git status. Small confidence deduction retained.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---|---|---|---|
+| AC5-fix: exact per-entry format, all metadata fields absent, and double-newline separator | Exact single-entry equality and metadata absence at [tests/test_recall_memory_1308.py](tests/test_recall_memory_1308.py#L369) and [tests/test_recall_memory_1308.py](tests/test_recall_memory_1308.py#L394), exact two-entry serialization at [tests/test_recall_memory_1308.py](tests/test_recall_memory_1308.py#L413) and [tests/test_recall_memory_1308.py](tests/test_recall_memory_1308.py#L440), renderer join shape at [serve/mcp-memory/src/owlbear_mcp_memory/tools.py](serve/mcp-memory/src/owlbear_mcp_memory/tools.py#L324) | test_exact_per_entry_format_and_all_metadata_fields_absent; test_two_entries_joined_with_double_newline_separator | PASS |
+| AC6-fix v2: non-cooperative fixture ordering proves sort-then-slice under truncation | The rewritten test at [tests/test_recall_memory_1308.py](tests/test_recall_memory_1308.py#L560) uses Aaa curated titles and Zzz approved titles. Filenames are derived from title slug at [serve/mcp-memory/src/owlbear_mcp_memory/engine.py](serve/mcp-memory/src/owlbear_mcp_memory/engine.py#L25) and [serve/mcp-memory/src/owlbear_mcp_memory/engine.py](serve/mcp-memory/src/owlbear_mcp_memory/engine.py#L86), then loaded in sorted filename order at [serve/mcp-memory/src/owlbear_mcp_memory/engine.py](serve/mcp-memory/src/owlbear_mcp_memory/engine.py#L67), which deterministically yields curated entries before approved entries on disk. Because recall sorts before slicing at [serve/mcp-memory/src/owlbear_mcp_memory/tools.py](serve/mcp-memory/src/owlbear_mcp_memory/tools.py#L321) and [serve/mcp-memory/src/owlbear_mcp_memory/tools.py](serve/mcp-memory/src/owlbear_mcp_memory/tools.py#L322), a slice-before-sort bug would retain only 1 approved + 3 curated and fail the approved-presence / curated-count assertions at [tests/test_recall_memory_1308.py](tests/test_recall_memory_1308.py#L604) through [tests/test_recall_memory_1308.py](tests/test_recall_memory_1308.py#L617) | test_sort_then_slice_approved_fills_before_curated | PASS |
+| AC7-fix: default limit is exactly 20 | Exact heading-count assertion at [tests/test_recall_memory_1308.py](tests/test_recall_memory_1308.py#L671) through [tests/test_recall_memory_1308.py](tests/test_recall_memory_1308.py#L689), default limit implementation at [serve/mcp-memory/src/owlbear_mcp_memory/tools.py](serve/mcp-memory/src/owlbear_mcp_memory/tools.py#L298) | test_default_limit_is_exactly_20 | PASS |
+| All 25+ tests pass after AC6-fix v2 rewrite | quality-runner scoped run: 25 passed, 0 failed, 0 skipped | full task suite | PASS |
+
+### Code-Reader Reconciliation
+- code-reader initially marked AC6-fix v2 as lax.
+- I overrode that concern after direct inspection of [serve/mcp-memory/src/owlbear_mcp_memory/engine.py](serve/mcp-memory/src/owlbear_mcp_memory/engine.py#L25), [serve/mcp-memory/src/owlbear_mcp_memory/engine.py](serve/mcp-memory/src/owlbear_mcp_memory/engine.py#L67), [serve/mcp-memory/src/owlbear_mcp_memory/engine.py](serve/mcp-memory/src/owlbear_mcp_memory/engine.py#L86), and [serve/mcp-memory/src/owlbear_mcp_memory/tools.py](serve/mcp-memory/src/owlbear_mcp_memory/tools.py#L321). The test does not need a separate raw-order assertion because the engine makes the curated-first load order deterministic from the adversarial titles.
+
+### Security / Data Safety
+- No security or data-safety blockers found in reviewed scope.
+
+### Deductions
+- -0.03 exact diff-scoped dirty-tree contamination could not be checked on this tool surface.
+- -0.02 code-reader disagreement required manual reconciliation before verdict.
+
+### Confidence
+- 0.95
+
+### Verdict
+- PASS -> docs
+- Action: advance to docs
+
+### Post-task Reflection
+- Problem faced: code-reader reported AC6-fix v2 as lax even after the pass-2 rewrite.
+- Workaround applied: reconciled that claim against slug generation, filename ordering, engine load order, and recall sort/slice logic.
+- Pattern discovered: a non-cooperative fixture can be discriminating without an explicit baseline assertion when the engine makes the hostile input order deterministic.
+- Quality gap: exact diff-scoped dirty-tree contamination still cannot be proven on this tool surface, so a small confidence deduction remains.
+[[2026-05-05]]
+## Docs Gate
+
+### Checklist
+
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | Yes | Updated | `recall_memory` was absent from `serve/mcp-memory/README.md` Tools table; added row with description, filtering, ordering, limit, and wildcard-rejection behaviour |
+| 2 | Module docstrings | Yes | N/A | `recall_memory` docstring at `tools.py:286–290` accurately describes return format and output shape — no change needed |
+| 3 | External attribution | No | N/A | Research gate passed as trivial-scope; no external patterns used |
+| 4 | Research doc | No | N/A | Task notes explicitly: "No research doc needed" |
+| 5 | Diagram maintenance (describes match) | Yes | Updated | `share/diagrams/memory-layers.excalidraw` describes `serve/mcp-memory/src/**` — footer updated from `d7b481da` to `12c2add1` (2026-05-05). `share/diagrams/mcp-topology.excalidraw` describes `serve/mcp-*/src/**` — already at `12c2add1`, no update needed |
+| 6 | Explicit diagram creation | No | N/A | No explicit diagram creation request in task body |
+| 7 | Deletion detection | No | N/A | No files deleted |
+
+### Scope Classification
+
+| File | Scope | Action |
+|------|-------|--------|
+| `tests/test_recall_memory_1308.py` | OUT | N/A (test file) |
+| `serve/mcp-memory/src/owlbear_mcp_memory/tools.py` | IN (docstrings) | Docstring verified accurate; no change |
+| `serve/mcp-memory/README.md` | IN | Updated — added `recall_memory` row to Tools table |
+| `share/diagrams/memory-layers.excalidraw` | IN | Updated — footer bumped to `12c2add1` |
+
+### Files Updated
+- `serve/mcp-memory/README.md` — added `recall_memory` tool row
+- `share/diagrams/memory-layers.excalidraw` — footer updated to `Last verified: 2026-05-05 (12c2add1)`
+
+### Commit
+`4ad9b01f` — docs: add recall_memory to mcp-memory README and update diagram footer (#1308, doc-writer)
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no `1308-*` scratch files found)
+[[2026-05-05]]
+## Audit\n\n### AC Verification\n| AC Line | Evidence | Status |\n|---------|----------|--------|\n| AC5-fix: exact per-entry format, all metadata fields absent, double-newline separator | Reviewer pass 3 PASS; exact equality at tests/test_recall_memory_1308.py:394, two-entry join at :440 | PASS |\n| AC6-fix v2: non-cooperative fixture ordering proves sort-then-slice | Spot-checked tests/test_recall_memory_1308.py:560-617: curated Aaa titles sort before approved Zzz on disk; slice-before-sort would fail approved-presence assertions | PASS |\n| AC7-fix: default limit is exactly 20 | Reviewer pass 3 PASS; exact heading_count == 20 at tests/test_recall_memory_1308.py:671 | PASS |\n| All 25+ tests pass after AC6-fix v2 rewrite | quality-runner full: 25 passed, 0 failed for task scope | PASS |\n\n### Test Results\n- pytest (full): 4372 passed, 258 failed (all unrelated to task scope), 4 skipped\n- pytest (task scope): 25 passed, 0 failed\n- ruff (task scope): clean\n- ruff (full): 12 violations in serve/tools/tests (unrelated)\n\n### Reviewer Evidence\nPresent and detailed (pass 3, confidence 0.95). Code-reader disagreement on AC6-fix resolved with direct code inspection. Trusted.\n\n### Commit Verification\n- 26f65acd: feat: implement recall_memory tool (#1308, builder)\n- 90d4688a: test: tighten proof quality for recall_memory AC5/AC6/AC7 (#1308, test-writer)\n- 86b6921d: test: rewrite AC6-fix fixture with non-cooperative ordering (#1308, test-writer)\n- 4ad9b01f: docs: add recall_memory to mcp-memory README and update diagram footer (#1308, doc-writer)\n\n### Architect Quality: 3/5\nOriginal AC had lifecycle defect (RED/GREEN split) requiring 2 reconciliation passes. Final AC was specific and produced a discriminating test, but the initial scoping missed builder ownership boundary.\n\n### Deduction Breakdown\n- -0.03 AC quality score 3 (lifecycle churn, 2 reconciliation passes)\n- -0.02 tool surface limitation: exact diff/dirty-tree unverifiable\n\n### Confidence: 0.95\n### Action: archive
