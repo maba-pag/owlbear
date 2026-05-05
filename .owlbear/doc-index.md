@@ -143,7 +143,7 @@
 - ## `Work Sessions Model`
 - ### `Derived states`
 - ### `Filter vocabulary`
-- ## `Audit Trail — `actor: "cockpit"` Convention`
+- ## `Audit Trail — source Attribution Contract`
 - ## `Configuration`
 - ## `Dependencies`
 
@@ -597,6 +597,15 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ### `3.5 Thematic Drift`
 - ## `4. Findings Loop`
 - ## `5. Summary`
+
+## share/prompts/memory-review.prompt.md
+- # `Memory Review`
+- ## `1. Goal`
+- ## `2. Session Setup`
+- ## `3. Review Loop (list -> read -> decide)`
+- ### `3.1 Action Details`
+- ## `4. End of Session (Batch Commit)`
+- ## `5. Operating Rules`
 
 ## share/prompts/orchestrate.prompt.md
 
