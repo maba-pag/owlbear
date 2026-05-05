@@ -72,6 +72,7 @@ from owlbear_kanban.storage import (
 )
 
 _BLOCK_REASON_UNSET = object()
+_PARENT_UNSET = object()
 _MAX_CLAIM_STALE_RETRIES = 4
 _MAX_BODY_BYTES = 500 * 1024
 LOGGER = logging.getLogger(__name__)
@@ -1051,7 +1052,7 @@ class KanbanEngine:
         body: str | None = None,
         priority: str | None = None,
         status: str | None = None,
-        parent: int | None = None,
+        parent: int | None | object = _PARENT_UNSET,
         add_tags: list[str] | None = None,
         remove_tags: list[str] | None = None,
         add_deps: list[int] | None = None,
@@ -1106,7 +1107,7 @@ class KanbanEngine:
         if body is not None:
             self.validate_body_size(body)
 
-        if parent is not None and not self.task_exists(parent):
+        if parent is not _PARENT_UNSET and parent is not None and not self.task_exists(parent):
             raise ValidationError(
                 code="ERR_PARENT_NOT_FOUND",
                 user_message=f"Parent task '{parent}' not found",
@@ -1134,7 +1135,7 @@ class KanbanEngine:
             record.priority = priority
         if status is not None:
             record.status = status
-        if parent is not None:
+        if parent is not _PARENT_UNSET:
             record.parent = parent
 
         if add_tags:

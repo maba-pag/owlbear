@@ -623,17 +623,18 @@ class AgentView:
         self,
         task_id: int,
         *,
-        body: str = "",
-        append_body: str = "",
+        title: str | None = None,
+        body: str | None = None,
+        append_body: str | None = None,
         timestamp: bool = False,
-        priority: str = "",
-        parent: int = 0,
+        priority: str | None = None,
+        parent: int | None = None,
         add_dep: list[int] | None = None,
         remove_dep: list[int] | None = None,
         add_tag: list[str] | None = None,
         remove_tag: list[str] | None = None,
         block_reason: str | None | object = _BLOCK_REASON_UNSET,
-        archival_reason: str = "",
+        archival_reason: str | None = None,
         archival_refs: list[int] | None = None,
     ) -> SingleTaskResponse:
         """Edit fields on an existing task with semantic no-op detection.
@@ -654,11 +655,12 @@ class AgentView:
 
         Args:
             task_id:        Numeric task ID.
+            title:          Replace task title (non-empty when provided).
             body:           Replace the task body.  Mutually exclusive with *append_body*.
             append_body:    Text to append to the existing body.
             timestamp:      When ``True``, prepend an ISO-8601 datestamp to *append_body*.
             priority:       Replace task priority.
-            parent:         Replace parent task ID (``0`` = no change).
+            parent:         Replace parent task ID (``0`` clears parent).
             add_dep:        Dependency IDs to add.
             remove_dep:     Dependency IDs to remove.
             add_tag:        Tags to add.
@@ -687,13 +689,22 @@ class AgentView:
             raise self._wrap_not_found(task_id) from exc
 
         config = self.engine.board_config()
-        body_set = bool(body)
+        title_set = title is not None
+        body_set = body is not None
         append_set = bool(append_body)
-        archival_reason_set = bool(archival_reason)
+        parent_set = parent is not None
+        parent_value = None if parent == 0 else parent
+        archival_reason_set = archival_reason is not None
         archival_refs_set = archival_refs is not None
         block_reason_set = block_reason is not _BLOCK_REASON_UNSET
-        append_payload = append_body
+        append_payload = append_body or ""
         append_resulting_body = ""
+
+        if title_set and (title is None or not title.strip()):
+            raise ValidationError(
+                code="ERR_INVALID_TITLE",
+                user_message="title must not be empty",
+            )
 
         if body_set and append_set:
             raise ValidationError(
@@ -704,10 +715,10 @@ class AgentView:
         if body_set:
             self.engine.validate_body_size(body)
 
-        if parent > 0 and not self.engine.task_exists(parent):
+        if parent_set and parent_value is not None and not self.engine.task_exists(parent_value):
             raise ValidationError(
                 code="ERR_PARENT_NOT_FOUND",
-                user_message=f"Parent task '{parent}' not found",
+                user_message=f"Parent task '{parent_value}' not found",
             )
 
         for dep_id in add_dep or []:
@@ -749,14 +760,16 @@ class AgentView:
             )
 
         kwargs: dict[str, object] = {}
-        if body:
+        if title_set:
+            kwargs["title"] = title
+        if body_set:
             kwargs["body"] = body
         if append_set:
             kwargs["append_body"] = append_payload
-        if priority:
+        if priority is not None:
             kwargs["priority"] = priority
-        if parent > 0:
-            kwargs["parent"] = parent
+        if parent_set:
+            kwargs["parent"] = parent_value
         if add_dep is not None:
             kwargs["add_deps"] = add_dep
         if remove_dep is not None:
@@ -784,13 +797,15 @@ class AgentView:
             )
 
         changes_requested = False
-        if body_set and body.rstrip("\n") != existing.body.rstrip("\n"):
+        if title_set and title != existing.title:
+            changes_requested = True
+        if body_set and _task_body_as_text(body).rstrip("\n") != _task_body_as_text(existing.body).rstrip("\n"):
             changes_requested = True
         if append_set:
             changes_requested = True
-        if priority and priority != existing.priority:
+        if priority is not None and priority != existing.priority:
             changes_requested = True
-        if parent > 0 and parent != existing.parent:
+        if parent_set and parent_value != existing.parent:
             changes_requested = True
         if add_dep is not None and any(
             dep_id not in existing.depends_on for dep_id in add_dep
@@ -837,7 +852,7 @@ class AgentView:
             ) from exc
 
         guidance: list[str] = []
-        if body_set and len(body.encode("utf-8")) > 100 * 1024:
+        if body_set and len(_task_body_as_text(body).encode("utf-8")) > 100 * 1024:
             guidance.append(self._BODY_SIZE_WARNING)
         if append_set and len(append_resulting_body.encode("utf-8")) > 100 * 1024:
             guidance.append(self._BODY_SIZE_WARNING)

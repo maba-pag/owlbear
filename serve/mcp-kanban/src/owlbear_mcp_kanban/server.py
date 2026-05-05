@@ -491,32 +491,38 @@ async def edit_task(  # noqa: PLR0912, PLR0913, C901
     ctx: Context,
     *,
     id: StrId,  # noqa: A002
-    body: str = "",
-    append_body: str = "",
+    title: str | None = None,
+    body: str | None = None,
+    append_body: str | None = None,
     timestamp: bool = False,
-    priority: str = "",
-    parent: int = 0,
+    priority: str | None = None,
+    parent: int | None = None,
     add_dep: list[int] | None = None,
     remove_dep: list[int] | None = None,
     add_tag: list[str] | None = None,
     remove_tag: list[str] | None = None,
     block_reason: str | None = None,
-    archival_reason: str = "",
+    archival_reason: str | None = None,
     archival_refs: list[int] | None = None,
 ) -> SingleTaskResponse:
     """Edit task fields."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     resolved_id = parse_task_id(id, field="id")
     kwargs: dict[str, object] = {}
-    if body:
+    # FastMCP maps both omitted optional params and explicit JSON null to Python None.
+    # We intentionally use None defaults for tri-state fields: None=no-change,
+    # empty string/value clears where supported by AgentView, non-empty sets.
+    if title is not None:
+        kwargs["title"] = title
+    if body is not None:
         kwargs["body"] = body
     if append_body:
         kwargs["append_body"] = append_body
     if timestamp:
         kwargs["timestamp"] = True
-    if priority:
+    if priority is not None:
         kwargs["priority"] = priority
-    if parent > 0:
+    if parent is not None:
         kwargs["parent"] = parent
     if add_dep is not None:
         kwargs["add_dep"] = add_dep
@@ -528,7 +534,7 @@ async def edit_task(  # noqa: PLR0912, PLR0913, C901
         kwargs["remove_tag"] = remove_tag
     if block_reason is not None:
         kwargs["block_reason"] = block_reason
-    if archival_reason:
+    if archival_reason is not None:
         kwargs["archival_reason"] = archival_reason
     if archival_refs is not None:
         kwargs["archival_refs"] = archival_refs
@@ -733,7 +739,10 @@ _patch_params(
 _patch_params(
     "edit_task",
     {
-        "body": {"description": "Replace the entire task body"},
+        "title": {"description": "Replace task title (must be non-empty)"},
+        "body": {
+            "description": "Replace task body; empty string clears, null/omitted = no change"
+        },
         "append_body": {"description": "Append to body (preserves existing content)"},
         "timestamp": {"description": "Prepend [[date]] timestamp to appended body"},
         "add_dep": {
