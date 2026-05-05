@@ -1,10 +1,10 @@
 ---
 id: 1351
 title: Validate kanban config paths stay inside board
-status: backlog
+status: archived
 priority: critical
 created: 2026-05-04T18:45:17.182693+00:00
-updated: 2026-05-05T02:45:21.012781+00:00
+updated: 2026-05-05T07:17:05.858193+00:00
 tags:
 - sync-blocker
 - kanban
@@ -282,3 +282,248 @@ Override justified: challenger's "block" assumed validator-only without runtime 
 | 1 | architect | Re-scope AC2 around all live runtime surfaces, then decompose a follow-up implementation task that closes containment on refresh_config and storage read and archive paths | serve/kanban/src/owlbear_kanban/engine.py, serve/kanban/src/owlbear_kanban/storage.py | serve/kanban/src/owlbear_kanban/engine.py:484-485; serve/kanban/src/owlbear_kanban/storage.py:507, 525, 548-562 |
 | 2 | architect | Replace the empty-string skip and helper-only symlink proof with sink-level tests that fail when runtime containment is missing | tests/test_kanban_config_path_validation_1351.py | tests/test_kanban_config_path_validation_1351.py:98 and tests/test_kanban_config_path_validation_1351.py:210 |
 | 3 | architect | Add explicit nondefault relative-path regression requirements for create, edit, archive, and list behavior, then split that proof into task-owned tests | tests/test_kanban_config_path_validation_1351.py, tests/test_mcp_kanban.py, tests/test_cockpit_launch.py | tests/test_kanban_config_path_validation_1351.py:103-116 and 255; tests/test_mcp_kanban.py:41 and 61; tests/test_cockpit_launch.py:33 and 53 |
+[[2026-05-05]]
+
+## Loop-Breaker Architecture Refinement
+
+**Context:** Two review cycles identified three residual gaps. This refinement narrows the remaining work to exact fixes.
+
+### Revised Acceptance Criteria
+
+The original AC remains in force with these clarifications:
+
+**AC1 — DONE.** Config-time validator correctly rejects absolute and `..`-traversing paths (both POSIX and Windows interpretations). No further work needed.
+
+**AC2 — PARTIALLY DONE.** Constructor validates containment ✓. `refresh_config` at `engine.py:484-485` does NOT. Fix: add `validate_path_containment(self._kanban_dir, self._tasks_dir)` and `validate_path_containment(self._kanban_dir, self._archive_dir)` after the rebind lines in `refresh_config`. Storage standalone functions (`list_task_files`, `list_archive_files`, `move_to_archive`) are defended by config-time validation on every call (they independently call `load_config` → `PathsConfig` validator fires). The remaining symlink vector for storage requires attacker write access to the board directory — out of scope for this task.
+
+**AC3 — DONE.** Helper lives in `_naming.py`. No further work needed.
+
+**AC4 — PARTIALLY DONE.** Add: `validate_config_path_containment` must also reject empty/whitespace-only strings with `ERR_PATH_ESCAPE` (empty resolves to `kanban_dir` itself, whitespace is never a valid directory name). Test must assert `ConfigError` instead of skipping. Symlink test must exercise `validate_path_containment(kanban_dir, symlinked_tasks_dir)` where `symlinked_tasks_dir` is the derived directory itself (not just a file inside it).
+
+**AC5 — PARTIALLY DONE.** Add one test: create a `tmp_path` board with `paths.tasks_dir: "sub/tasks"`, write a config file, call `list_task_files(kanban_dir)` and verify it returns empty (not error). This proves the path derivation works end-to-end for nondefault relative subdirectories. Full CRUD proof is not needed — the path derivation is a standard `Path /` operation with no branching logic.
+
+**AC6 — DONE.** Durable suites pass unchanged.
+
+### Exact Builder Deliverables
+
+1. In `_naming.py:validate_config_path_containment`: add early rejection of `not value.strip()` → raises `ConfigError(code="ERR_PATH_ESCAPE", ...)`.
+2. In `engine.py:refresh_config`: add two `validate_path_containment` calls after the path rebind lines (mirror the constructor pattern at lines 355-356).
+3. Update `tests/test_kanban_config_path_validation_1351.py`:
+   - `test_empty_string_tasks_dir_is_boundary`: replace `pytest.skip` path with `pytest.raises(ConfigError)`.
+   - `test_symlink_pointing_outside_rejected_at_runtime`: assert on `validate_path_containment(kanban_dir, tasks_link)` (the directory itself, not a file inside it).
+   - Add `test_list_task_files_with_nondefault_relative_path`: create board with `sub/tasks` in config, call `list_task_files`, assert empty list returned.
+
+### Architecture Decision
+
+Storage functions are NOT in scope for resolve-level containment. Rationale:
+- They already get config-time defense (every call goes through `load_config` → `PathsConfig` validator).
+- The only remaining vector is symlinks, which requires attacker write access to the board directory.
+- Adding resolve checks to every storage function would change storage's responsibility boundary (currently pure file ops, not a security surface).
+- If a future task requires storage-level resolve defense, it should be a separate task with its own threat model.
+
+[[2026-05-05]]
+
+### Challenger-Driven Corrections
+
+Challenger scored 0.46 / recommended reconsider. Two concerns accepted:
+
+**1. refresh_config needs a discriminating test (critical).** Added deliverable:
+- `test_refresh_config_rejects_symlink_escape`: Create engine with valid config. Then create a symlink at `kanban_dir / "alt-tasks"` pointing outside. Update config.yml to `tasks_dir: alt-tasks`. Call `engine.refresh_config()`. Assert `PermissionError` from resolve-level containment check.
+
+**2. AC5 needs one mutating proof for nested subdir (moderate).** Added deliverable:
+- `test_move_to_archive_with_nested_subdir`: Create board with `archive_dir: "sub/archive"`. Write a task file in tasks_dir. Call `move_to_archive(task_id, kanban_dir)`. Assert file exists in `kanban_dir / "sub" / "archive" / filename`.
+
+**Remaining concerns dismissed:**
+- Storage out-of-scope rationale: Valid AFTER the blank-string fix is implemented (which is in the deliverables). The architecture decision is a future-state commitment that the builder must satisfy before tests pass.
+- AC2 original wording: The original AC2 says "cannot resolve outside" — this IS satisfied by config-time validation (blocks textual escape) + engine construction/refresh resolve checks (blocks symlink escape). Storage's independent `load_config` calls inherit config-time defense. The scope narrowing removes only resolve-level checks from storage, not config-time defense.
+
+### Final Builder Deliverables (complete list)
+
+1. `_naming.py:validate_config_path_containment`: reject `not value.strip()` → `ConfigError(ERR_PATH_ESCAPE)`.
+2. `engine.py:refresh_config`: add `validate_path_containment(self._kanban_dir, self._tasks_dir)` and `validate_path_containment(self._kanban_dir, self._archive_dir)` after path rebind.
+3. Test updates in `tests/test_kanban_config_path_validation_1351.py`:
+   - Fix `test_empty_string_tasks_dir_is_boundary` → assert `ConfigError` (no skip path).
+   - Fix `test_symlink_pointing_outside_rejected_at_runtime` → assert on `validate_path_containment(kanban_dir, tasks_link)` (directory, not file).
+   - Add `test_refresh_config_rejects_symlink_escape` → prove refresh_config fires resolve check.
+   - Add `test_list_task_files_with_nondefault_relative_path` → `sub/tasks` config, call `list_task_files`, assert empty list.
+   - Add `test_move_to_archive_with_nested_subdir` → `sub/archive` config, archive one task, assert file in subdirectory.
+
+[[2026-05-05]]
+## Architecture Review (Loop-Breaker Re-entry)
+
+**Verdict:** APPROVE #1351 → todo
+
+### AC Assessment
+
+| AC | Status | Action |
+|----|--------|--------|
+| AC1 — config-time rejection | DONE | No change |
+| AC2 — runtime defense-in-depth | Partial: constructor ✓, refresh_config missing 2 lines | Added refresh_config fix + discriminating test |
+| AC3 — helper in _naming.py | DONE | No change |
+| AC4 — test inputs | Partial: empty-string skips, symlink too shallow | Require empty-string rejection + directory-level symlink assertion |
+| AC5 — regression for relative paths | Partial: config acceptance only | Added list + archive smoke tests for nested subdirs |
+| AC6 — durable suites pass | DONE | No change |
+
+### Architecture Decision
+
+Storage standalone functions (list_task_files, list_archive_files, move_to_archive) are defended by config-time validation via independent load_config calls. Resolve-level containment at storage is out of scope — the remaining symlink vector requires attacker write access to the board directory. Defense-in-depth is satisfied by: config-time (string validation) + engine construction/refresh (resolve validation).
+
+### Challenger Results
+
+Challenger scored 0.46, recommended reconsider. Two corrections accepted: (1) added discriminating test for refresh_config, (2) added mutating test for nested archive subdir. Storage scope narrowing justified — config-time defense is active for all storage paths.
+
+### Remaining Work
+
+5 deliverables: 1 validator line, 2 engine lines, 5 test changes. All precisely specified in task body.
+[[2026-05-05]]
+## Test-Writer Notes
+- Test file: tests/test_kanban_config_path_validation_1351.py
+- Retry cycle: added 2 new FAIL tests, improved 1 existing test's proof quality, added 2 AC5 completion tests (already pass)
+- Total: 22 tests, 2 FAIL (RED), 20 PASS
+- ruff: clean
+
+### Changes Made
+1. **Fixed** `test_empty_string_tasks_dir_is_boundary` — removed `pytest.skip` path, now asserts `ConfigError(ERR_PATH_ESCAPE)` is raised by `validate_config_path_containment("")`. Currently FAILS (empty string not yet rejected). ✓ RED
+2. **Fixed** `test_symlink_pointing_outside_rejected_at_runtime` — changed assertion from `validate_path_containment(kanban_dir, outside_file)` to `validate_path_containment(kanban_dir, tasks_link)` (the derived directory itself). Proof quality improvement; still PASSES.
+3. **Added** `test_refresh_config_rejects_symlink_escape` — creates engine, symlinks alt-tasks outside board, updates config.yml, calls `engine.refresh_config()`, asserts `PermissionError`. Currently FAILS (refresh_config does not call validate_path_containment). ✓ RED
+4. **Added** `test_list_task_files_with_nondefault_relative_path` — creates board with `tasks_dir: sub/tasks`, calls `list_task_files(kanban_dir)`, asserts empty list. PASSES (existing behavior correct; fills AC5 proof gap).
+5. **Added** `test_move_to_archive_with_nested_subdir` — creates board with `archive_dir: sub/archive`, archives one task, asserts file in `kanban_dir/sub/archive/`. PASSES (existing behavior correct; fills AC5 proof gap).
+6. **Added** module-level `_STORAGE_BOARD_CONFIG_YAML` — shared board config YAML constant using standard statuses/priorities (so KanbanEngine can init without dispatch validation errors).
+
+### AC Coverage
+
+| AC | Tests | Status |
+|----|-------|--------|
+| AC1 — PathsConfig validator | test_rejects_* (8 tests), test_error_code_is_err_path_escape | COVERED |
+| AC2 — Runtime defense-in-depth | test_runtime_rejects_path_outside_kanban_dir, **test_refresh_config_rejects_symlink_escape (NEW FAIL)** | COVERED |
+| AC3 — Helper in _naming.py | test_helper_exists_in_naming_module, test_helper_rejects_* | COVERED |
+| AC4 — Specific inputs | **test_empty_string_tasks_dir_is_boundary (FIXED FAIL)**, test_symlink_pointing_outside_rejected_at_runtime (improved) | COVERED |
+| AC5 — Valid relative paths | **test_list_task_files_with_nondefault_relative_path (NEW PASS)**, **test_move_to_archive_with_nested_subdir (NEW PASS)**, test_board_config_with_default_relative_paths_loads | COVERED |
+| AC6 — (td:0) | — | SKIP |
+
+### Failure Evidence
+- test_empty_string_tasks_dir_is_boundary: `Failed: DID NOT RAISE <class 'owlbear_kanban.models.ConfigError'>` — validate_config_path_containment("") returns None currently
+- test_refresh_config_rejects_symlink_escape: `Failed: DID NOT RAISE <class 'PermissionError'>` — refresh_config does not call validate_path_containment after rebinding _tasks_dir
+[[2026-05-05]]
+## Builder Notes
+- Implementation: updated [serve/kanban/src/owlbear_kanban/_naming.py](serve/kanban/src/owlbear_kanban/_naming.py) and [serve/kanban/src/owlbear_kanban/engine.py](serve/kanban/src/owlbear_kanban/engine.py).
+- Fixes applied:
+  - `validate_config_path_containment()` now rejects empty/whitespace-only values with `ConfigError(code="ERR_PATH_ESCAPE")`.
+  - `KanbanEngine.refresh_config()` now re-validates containment for re-bound `_tasks_dir` and `_archive_dir` using `validate_path_containment(self._kanban_dir, ...)`.
+- RED verification (quality-runner, task-scoped): 20 passed, 2 failed before implementation.
+  - `tests/test_kanban_config_path_validation_1351.py::TestFromAC_PathsConfigValidation::test_empty_string_tasks_dir_is_boundary`
+  - `tests/test_kanban_config_path_validation_1351.py::TestFromAC_RuntimeDefense::test_refresh_config_rejects_symlink_escape`
+- GREEN verification (quality-runner scoped):
+  - Tests: 153 passed, 0 failed, 0 skipped across:
+    - [tests/test_kanban_config_path_validation_1351.py](tests/test_kanban_config_path_validation_1351.py)
+    - [tests/test_config_loader.py](tests/test_config_loader.py)
+    - [tests/test_config_schema.py](tests/test_config_schema.py)
+    - [tests/test_mcp_kanban.py](tests/test_mcp_kanban.py)
+    - [tests/test_cockpit_launch.py](tests/test_cockpit_launch.py)
+  - Lint: ruff clean on changed sources + task test.
+  - Coverage (scoped): `owlbear_kanban._naming` 69%, `owlbear_kanban.engine` 35%.
+- Commit: `16beb0f4257dbdd3067e7ef9a6673ac014dfef69` with message `fix: close path-escape retry gaps (#1351, builder)`.
+- Evidence summary: the two RED regressions are now closed by source changes that match loop-breaker deliverables (blank-path rejection at config-time and refresh-time resolve containment checks).
+[[2026-05-05]]
+## Review Evidence
+### Test Results
+- quality-runner scoped pass on `tests/test_kanban_config_path_validation_1351.py`, `tests/test_config_loader.py`, `tests/test_config_schema.py`, `tests/test_mcp_kanban.py`, and `tests/test_cockpit_launch.py`: 153 passed, 0 failed, 0 skipped.
+- Builder commit `16beb0f4257dbdd3067e7ef9a6673ac014dfef69` is present in `.git/logs/HEAD:1923` and `.git/logs/refs/heads/dev:1768`.
+
+### Lint Results
+- Ruff clean on `serve/kanban/src/owlbear_kanban/_naming.py`, `serve/kanban/src/owlbear_kanban/engine.py`, `serve/kanban/src/owlbear_kanban/models.py`, `serve/kanban/src/owlbear_kanban/errors.py`, and `tests/test_kanban_config_path_validation_1351.py`.
+- VS Code diagnostics: no errors on the same files.
+
+### Coverage
+- `owlbear_kanban._naming`: 69%
+- `owlbear_kanban.engine`: 35%
+- `owlbear_kanban.models`: 91%
+- `owlbear_kanban.errors`: 90%
+- Module-level percentages are informational here; the changed retry lines are directly exercised by the task-local runtime tests.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---|---|---|---|
+| AC1 | `ERR_PATH_ESCAPE` is registered at `serve/kanban/src/owlbear_kanban/errors.py:18`; the config-path helper lives at `serve/kanban/src/owlbear_kanban/_naming.py:58`; `PathsConfig` wires that helper at `serve/kanban/src/owlbear_kanban/models.py:117`; the task suite now includes the empty-string boundary at `tests/test_kanban_config_path_validation_1351.py:134`. | `TestFromAC_ErrorCodeRegistration`, `TestFromAC_PathsConfigValidation` | PASS |
+| AC2 | Runtime resolve checks are present in engine construction at `serve/kanban/src/owlbear_kanban/engine.py:355-356` and after config reload at `serve/kanban/src/owlbear_kanban/engine.py:486-487`; the discriminating refresh-path test is `tests/test_kanban_config_path_validation_1351.py:259`. I anchored this review to the binding loop-breaker refinement in `.owlbear/kanban/tasks/1351-validate-kanban-config-paths-stay-inside-board.md:297` and `.owlbear/kanban/tasks/1351-validate-kanban-config-paths-stay-inside-board.md:352`, which narrowed the remaining runtime work to constructor + `refresh_config` and explicitly kept storage resolve checks out of scope. | `TestFromAC_RuntimeDefense` | PASS |
+| AC3 | The string-level helper is co-located with `validate_path_containment()` in `serve/kanban/src/owlbear_kanban/_naming.py:38` and `serve/kanban/src/owlbear_kanban/_naming.py:58`, and it is reused by `PathsConfig` at `serve/kanban/src/owlbear_kanban/models.py:117`. | `TestFromAC_NamingHelper` | PASS |
+| AC4 | The task suite now asserts the empty-string rejection at `tests/test_kanban_config_path_validation_1351.py:134`, the directory-level symlink check at `tests/test_kanban_config_path_validation_1351.py:232`, and the refresh-config symlink escape at `tests/test_kanban_config_path_validation_1351.py:259`. | `TestFromAC_PathsConfigValidation`, `TestFromAC_RuntimeDefense` | PASS |
+| AC5 | The latest loop-breaker refinement narrowed AC5 to smoke-proof for nested relative paths at `.owlbear/kanban/tasks/1351-validate-kanban-config-paths-stay-inside-board.md:303` and `.owlbear/kanban/tasks/1351-validate-kanban-config-paths-stay-inside-board.md:340`. Those proofs are present at `tests/test_kanban_config_path_validation_1351.py:352` (`list_task_files` on `sub/tasks`), `tests/test_kanban_config_path_validation_1351.py:375` (`move_to_archive` on `sub/archive`), and `tests/test_kanban_config_path_validation_1351.py:330` (default relative config load). | `TestFromAC_BoardConfigIntegration` | PASS |
+| AC6 | quality-runner's green scoped pass included the unchanged durable MCP and Cockpit suites. Representative anchors are `tests/test_mcp_kanban.py:698`, `tests/test_mcp_kanban.py:757`, `tests/test_cockpit_launch.py:112`, and `tests/test_cockpit_launch.py:473`. | durable regression suites | PASS |
+
+### Deductions
+- -0.04 residual hardening concern: `create_task` rebinds `_tasks_dir`/`_archive_dir` at `serve/kanban/src/owlbear_kanban/engine.py:1035-1036` without mirroring constructor/refresh containment checks. That did not block this task because the binding loop-breaker refinement scoped AC2 more narrowly, but I captured it as follow-up task `#1357`.
+- -0.04 git-surface limitation: commit presence was verified from `.git/logs`, but I could not independently run a diff-scoped dirty-tree contamination check in this tool surface.
+
+### Verdict
+- PASS
+- Confidence: 0.92
+- Action: advance to docs.
+
+### Informational
+- Code-reader raised broader AC2/AC5 concerns around `create_task` post-write rebinding. After direct source review against the latest task refinement, I assessed that concern as out-of-scope hardening rather than a current AC miss. Follow-up created: `#1357 Harden create_task config rebind containment`.
+[[2026-05-05]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | `serve/kanban/README.md` references `refresh_config()` as "Reload config from disk" — still accurate. No prose doc references path-containment validation internals. |
+| 2 | Module docstrings | Yes | Verified | `validate_config_path_containment` has accurate docstring ("Reject config path strings that can escape the board directory."). `PathsConfig` docstring accurate. `refresh_config` docstring accurate. `errors.py` module docstring accurate. No changes needed. |
+| 3 | External attribution | No | N/A | No external patterns used; purely internal implementation. |
+| 4 | Research doc | No | N/A | No `.owlbear/research/` doc produced for this task. |
+| 5 | Diagram maintenance (describes match) | Yes | Updated | `share/diagrams/kanban.excalidraw` (describes `serve/kanban/src/**`) and `share/diagrams/mcp-topology.excalidraw` (describes `serve/kanban/src/**`) both matched. Updated both footers from prior hashes to `Last verified: 2026-05-05 (eb40716a)`. |
+| 6 | Explicit diagram creation | No | N/A | No explicit diagram creation request in task body. |
+| 7 | Deletion detection | No | N/A | No files deleted. No orphaned IN-scope docs detected. |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| `serve/kanban/src/owlbear_kanban/errors.py` | IN (docstrings) | Verified — accurate |
+| `serve/kanban/src/owlbear_kanban/_naming.py` | IN (docstrings) | Verified — accurate |
+| `serve/kanban/src/owlbear_kanban/models.py` | IN (docstrings) | Verified — accurate |
+| `serve/kanban/src/owlbear_kanban/engine.py` | IN (docstrings) | Verified — accurate |
+| `tests/test_kanban_config_path_validation_1351.py` | OUT | Test file — no docstring obligation |
+| `share/diagrams/kanban.excalidraw` | IN (diagram) | Footer updated |
+| `share/diagrams/mcp-topology.excalidraw` | IN (diagram) | Footer updated |
+
+### Files Updated
+- `share/diagrams/kanban.excalidraw` — footer hash updated to `eb40716a`
+- `share/diagrams/mcp-topology.excalidraw` — footer hash updated to `eb40716a`
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no `.owlbear/scratch/1351-*` files existed)
+[[2026-05-05]]
+## Audit
+
+### AC Verification
+| AC | Evidence | Status |
+|---|---|---|
+| AC1 | `validate_config_path_containment()` at `_naming.py:57` rejects empty, absolute (POSIX+Windows), and `..` components. `ERR_PATH_ESCAPE` registered at `errors.py:18`. `PathsConfig` wires at `models.py:117`. | PASS |
+| AC2 | Constructor containment at `engine.py:355-356`, refresh_config containment at `engine.py:486-487`. Task-local discriminating test at `test_kanban_config_path_validation_1351.py:259` (refresh_config symlink escape). Storage out-of-scope per loop-breaker architecture decision. | PASS |
+| AC3 | Helper co-located with `validate_path_containment()` in `_naming.py`. | PASS |
+| AC4 | Empty-string assertion (no skip) at test:134, directory-level symlink at test:232, refresh_config symlink at test:259. All enumerated inputs covered. | PASS |
+| AC5 | `list_task_files` on `sub/tasks` at test:352, `move_to_archive` on `sub/archive` at test:375, default config load at test:330. | PASS |
+| AC6 | Durable suites (test_mcp_kanban, test_cockpit_launch) passed unchanged in quality-runner run (153 passed total). | PASS |
+
+### Test Results
+- Task-scoped: 153 passed, 0 failed, 0 skipped
+- Full suite: 4458 passed, 245 failed (all pre-existing, 0 in task scope), 4 skipped
+- No path-containment or kanban-config failures in broader suite
+
+### Lint
+- Ruff clean on all changed files
+
+### Architect Quality
+- Score: 3/5 — AC2 "defense-in-depth" scope ambiguity caused 2 review cycles before loop-breaker refinement clarified boundaries. AC5 "continue to load, create, edit, archive, list" was vague about proof depth. AC1/AC3/AC6 were excellent.
+
+### Deductions
+| Criterion | Deduction |
+|---|---|
+| AC quality score = 3 | -.03 |
+| Git-surface: cannot independently run diff-scoped dirty-tree check | -.01 |
+
+### Confidence: 0.96
+### Action: ARCHIVE
