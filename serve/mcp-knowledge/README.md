@@ -40,14 +40,7 @@ Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json
 | `OWLBEAR_LOCAL_KB_PATH` | — | Path to the local SQLite knowledge database (takes precedence) |
 | `OWLBEAR_KB_PATH` | `.owlbear/knowledge/local.db` | Fallback KB path |
 | `OWLBEAR_QDRANT_PATH` | `.owlbear/knowledge/vectors` | Path to Qdrant vector store directory (filesystem persistence) |
-| `OWLBEAR_LLM_API_KEY` | — | LLM API key for entity extraction (takes precedence over `OPENAI_API_KEY`) |
-| `OPENAI_API_KEY` | — | OpenAI-compatible API key fallback |
-| `OWLBEAR_LLM_MODEL` | `gpt-4o-mini` | LLM model name for entity extraction |
-| `OWLBEAR_LLM_BASE_URL` | — | LLM base URL (takes precedence over `OPENAI_BASE_URL`) |
-| `OPENAI_BASE_URL` | — | OpenAI-compatible base URL fallback |
 | `KNOWLEDGE_TOOLS_EXCLUDE` | _(none)_ | Comma-separated tool names to remove at startup |
-
-Entity extraction (and bookmarking with evaluation) requires an LLM API key. The server starts without one but extraction-dependent features degrade gracefully.
 
 ## Dependencies
 

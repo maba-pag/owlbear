@@ -528,22 +528,6 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
         vs = QdrantVectorStore(location=qdrant_path)
         emb = BgeM3EmbeddingProvider()
         structured_extractor = None
-        api_key = os.environ.get("OWLBEAR_LLM_API_KEY") or os.environ.get(
-            "OPENAI_API_KEY"
-        )
-        if api_key:
-            try:
-                from owlbear_knowledge.llm_extractor import LLMExtractor  # noqa: PLC0415
-
-                model = os.environ.get("OWLBEAR_LLM_MODEL", "gpt-4o-mini")
-                base_url = os.environ.get("OWLBEAR_LLM_BASE_URL") or os.environ.get(
-                    "OPENAI_BASE_URL"
-                )
-                structured_extractor = LLMExtractor(
-                    model=model, api_key=api_key, base_url=base_url
-                )
-            except ImportError:
-                structured_extractor = None
         extractor = EntityExtractor(extractor=structured_extractor)
         intra_doc_builder = IntraDocGraphBuilder(extractor=structured_extractor)
         inter_doc_builder = None
