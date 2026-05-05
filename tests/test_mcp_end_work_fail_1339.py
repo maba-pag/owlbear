@@ -17,9 +17,12 @@ from __future__ import annotations
 
 import typing
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 import owlbear_mcp_kanban.server as _server_module
+from owlbear_kanban import KanbanEngine
+from owlbear_mcp_kanban.server import AppContext, end_work
 
 # ---------------------------------------------------------------------------
 # Paths to doc files under test
@@ -465,3 +468,219 @@ class TestFromAC_OutcomeDescriptionConsistency:
             f"Current description: {self._outcome_description()!r}\n"
             "Update _patch_params for end_work to cover all 5 outcomes."
         )
+
+
+# ---------------------------------------------------------------------------
+# Runtime test infrastructure
+# ---------------------------------------------------------------------------
+
+_RUNTIME_CONFIG_YAML = """\
+version: 10
+board:
+  name: TestBoard
+tasks_dir: tasks
+statuses:
+- name: research
+- name: backlog
+- name: todo
+- name: in-progress
+- name: review
+- name: docs
+- name: done
+priorities:
+- someday
+- nice-to-have
+- important
+- needed
+- critical
+defaults:
+  status: research
+  priority: important
+claim_timeout: 1h
+next_id: 1
+archive_dir: archive
+activity_log: false
+agent_map:
+  research: researcher
+  backlog: architect
+  todo: test-writer
+  in-progress: builder
+  review: reviewer
+  docs: doc-writer
+  done: auditor
+agent_types: {}
+agent_compatibility: {}
+non_impl_tags: []
+archival_reasons: [completed, deprecated, dropped, duplicate, wontfix]
+status_predicates: {}
+"""
+
+
+def _make_rt_board(base_dir: Path) -> Path:
+    kanban_dir = base_dir / "board"
+    kanban_dir.mkdir(parents=True, exist_ok=True)
+    (kanban_dir / "config.yml").write_text(_RUNTIME_CONFIG_YAML, encoding="utf-8")
+    (kanban_dir / "tasks").mkdir(exist_ok=True)
+    (kanban_dir / "archive").mkdir(exist_ok=True)
+    return kanban_dir
+
+
+def _make_rt_ctx(app_ctx: AppContext) -> MagicMock:
+    ctx = MagicMock()
+    ctx.request_context.lifespan_context = app_ctx
+    return ctx
+
+
+@pytest.fixture()
+def claimed_task_ctx(tmp_path: Path) -> AppContext:
+    """AppContext with a single claimed task in 'in-progress'."""
+    kanban_dir = _make_rt_board(tmp_path)
+    engine = KanbanEngine(kanban_dir)
+    engine.create_task("Runtime test task", status="in-progress", priority="important")
+    engine.list_tasks()
+    engine.claim_task("1")
+    return AppContext(engine=engine, kanban_dir=kanban_dir)
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_ReadmeOutcomeStructured
+# AC11: README end_work Outcomes section must use bullet-list entries per outcome.
+# Bare substring "fail" matches "failure" in prose — false-green risk.
+# Structured "- `fail`" only matches a deliberate bullet-list entry.
+# After builder fix: README uses "- `fail`: ..." bullet, so these tests PASS.
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ReadmeOutcomeStructured:
+    """AC11 guard: README Outcomes section uses structured '- `outcome`' bullets."""
+
+    def _outcomes_section(self) -> str:
+        assert _README_MD.exists(), f"README.md not found at {_README_MD}"
+        text = _README_MD.read_text(encoding="utf-8")
+        idx = text.lower().find("end_work outcomes")
+        assert idx != -1, "'end_work Outcomes' section not found in README.md"
+        next_section = text.find("\n## ", idx + 10)
+        return text[idx:next_section] if next_section != -1 else text[idx:]
+
+    def test_readme_fail_is_bullet_entry_not_bare_substring(self) -> None:
+        """'fail' must appear as '- `fail`' bullet, not generic prose (AC11 guard).
+
+        '- `fail`' only matches a deliberate outcome bullet.
+        'fail' (bare) would also match 'failure', 'failing', or any error prose.
+        This test enforces the structured format the AC11 false-green guard requires.
+        """
+        section = self._outcomes_section()
+        assert "- `fail`" in section, (
+            f"'- `fail`' bullet entry not found in README end_work Outcomes section.\n"
+            f"AC11: bare substring 'fail' would match 'failure' in prose — too loose.\n"
+            f"Section:\n{section!r}"
+        )
+
+    def test_readme_all_five_outcomes_are_bullet_entries(self) -> None:
+        """All 5 outcomes must appear as '- `outcome`' bullets in README (AC11 guard).
+
+        Structured matching prevents false greens where 'reject' in a URL or
+        'block' in a paragraph satisfies a bare-substring check.
+        """
+        section = self._outcomes_section()
+        required = ["success", "fail", "reject", "block", "release"]
+        missing = [o for o in required if f"- `{o}`" not in section]
+        assert not missing, (
+            f"README end_work Outcomes section missing '- `outcome`' bullets for: {missing}.\n"
+            f"AC11: structured bullet format required to prevent false-green matches.\n"
+            f"Section:\n{section!r}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_EndWorkReleaseRuntime
+# AC2 runtime proof: MCP end_work handler executes outcome='release' end-to-end.
+# Proves the runtime path is reachable, not just the type hint.
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_EndWorkReleaseRuntime:
+    """AC2 runtime proof: end_work(outcome='release') executes without error."""
+
+    @pytest.mark.asyncio
+    async def test_end_work_release_returns_task_response(
+        self, claimed_task_ctx: AppContext
+    ) -> None:
+        """end_work(outcome='release') must return a task response on a claimed task.
+
+        Proves the runtime path for 'release' is reachable end-to-end through
+        the MCP handler → _invoke_view_end_work → engine.release_task().
+        """
+        result = await end_work(
+            _make_rt_ctx(claimed_task_ctx),
+            id="1",
+            outcome="release",
+            note=None,
+        )
+        assert result is not None
+        assert result.id == 1
+
+    @pytest.mark.asyncio
+    async def test_end_work_release_does_not_advance_status(
+        self, claimed_task_ctx: AppContext
+    ) -> None:
+        """end_work(outcome='release') must leave the task status unchanged.
+
+        The task starts in 'in-progress'. Release unclaims it without advancing.
+        """
+        result = await end_work(
+            _make_rt_ctx(claimed_task_ctx),
+            id="1",
+            outcome="release",
+            note=None,
+        )
+        assert result.status == "in-progress"
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_EndWorkSuccessMoveTo
+# AC10 runtime proof: MCP end_work handler accepts outcome='success' + move_to.
+# Proves the accepted 'success + move_to' path is reachable at runtime,
+# consistent with the handbook/README documentation and the engine contract.
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_EndWorkSuccessMoveTo:
+    """AC10 runtime proof: end_work(outcome='success', move_to=...) executes correctly."""
+
+    @pytest.mark.asyncio
+    async def test_end_work_success_with_move_to_returns_task_response(
+        self, claimed_task_ctx: AppContext
+    ) -> None:
+        """end_work(outcome='success', move_to='done') must return a task response.
+
+        Proves the runtime path for success+move_to is accepted end-to-end
+        through the MCP handler → _invoke_view_end_work → engine.end_work().
+        """
+        result = await end_work(
+            _make_rt_ctx(claimed_task_ctx),
+            id="1",
+            outcome="success",
+            move_to="done",
+            note=None,
+        )
+        assert result is not None
+        assert result.id == 1
+
+    @pytest.mark.asyncio
+    async def test_end_work_success_move_to_advances_to_specified_status(
+        self, claimed_task_ctx: AppContext
+    ) -> None:
+        """end_work(outcome='success', move_to='done') advances to 'done', not 'review'.
+
+        Task starts in 'in-progress'. Default next is 'review'.
+        With move_to='done', the task skips to 'done' directly.
+        """
+        result = await end_work(
+            _make_rt_ctx(claimed_task_ctx),
+            id="1",
+            outcome="success",
+            move_to="done",
+            note=None,
+        )
+        assert result.status == "done"
