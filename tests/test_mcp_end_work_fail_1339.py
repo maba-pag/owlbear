@@ -758,3 +758,56 @@ class TestFromAC_BlockMoveToMatrix:
             "AC10 (refined): block bullet must document that move_to is optional "
             "(required on reject, optional on success/block, forbidden on fail/release)."
         )
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_SkillDocReleaseRowExactWording
+# AC5 (refined, Cycle 4): The SKILL.md end_work 'release' row behavior cell must
+# read exactly: 'Release claim, no status change (note appended if provided;
+# no-op when unclaimed)' — no trailing period.
+#
+# Current text: 'Release claim, keep status unchanged.'
+# Adjacent contract suite: tests/test_engine_end_work_fail_1125.py::
+#   TestFromAC_SkillDocReleaseRow::test_skill_doc_release_row_exact_behavior_text
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_SkillDocReleaseRowExactWording:
+    """AC5 refined: SKILL.md end_work 'release' row uses the exact established behavior text."""
+
+    def _skill_release_row(self) -> str:
+        """Return the 'release' table row from the SKILL.md end_work Outcome table."""
+        assert _SKILL_MD.exists(), f"SKILL.md not found at {_SKILL_MD}"
+        text = _SKILL_MD.read_text(encoding="utf-8")
+        idx = text.find("### end_work")
+        assert idx != -1, "'### end_work' section not found in SKILL.md"
+        section = text[idx:]
+        for line in section.splitlines():
+            if "| `release`" in line or "| release |" in line.lower():
+                return line
+        return ""
+
+    def test_skill_md_release_row_exact_behavior_text(self) -> None:
+        """SKILL.md end_work 'release' behavior cell must match the established contract.
+
+        Refined AC5: the behavior cell must read exactly:
+          'Release claim, no status change (note appended if provided; no-op when unclaimed)'
+        — no trailing period.
+
+        Current text: 'Release claim, keep status unchanged.'
+        This is the task-local pin for the same contract that
+        tests/test_engine_end_work_fail_1125.py::TestFromAC_SkillDocReleaseRow
+        ::test_skill_doc_release_row_exact_behavior_text validates in the adjacent
+        lifecycle suite. Both must agree.
+        """
+        row = self._skill_release_row()
+        assert row, "| `release` | row not found in SKILL.md end_work Outcome table."
+        expected = (
+            "Release claim, no status change (note appended if provided; no-op when unclaimed)"
+        )
+        assert expected in row, (
+            f"SKILL.md 'release' row behavior text does not match the established contract.\n"
+            f"Current row: {row!r}\n"
+            f"Expected behavior cell to contain: {expected!r}\n"
+            "Refined AC5: no trailing period; includes note-appended and unclaimed semantics."
+        )
