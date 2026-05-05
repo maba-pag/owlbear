@@ -14,8 +14,8 @@ parent: 1316
 depends_on:
 - 1324
 - 1318
-blocked: false
-block_reason:
+blocked: true
+block_reason: postponed
 claimed_at:
 archival_reason:
 archival_refs: []

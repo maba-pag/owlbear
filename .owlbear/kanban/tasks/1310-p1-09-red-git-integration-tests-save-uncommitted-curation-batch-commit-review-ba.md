@@ -5,7 +5,7 @@ title: 'P1-09: RED — Git integration tests (save uncommitted, curation batch c
 status: in-progress
 priority: needed
 created: 2026-05-04T01:32:27.314281+00:00
-updated: 2026-05-05T09:17:49.784992+00:00
+updated: 2026-05-05T09:43:31.527830+00:00
 tags:
 - phase-2
 - scope:mcp-memory
@@ -14,9 +14,9 @@ tags:
 parent: 1301
 depends_on:
 - 1307
-blocked: false
-block_reason:
-claimed_at:
+blocked: true
+block_reason: postponed
+claimed_at: 2026-05-05T09:43:31.527830+00:00
 archival_reason:
 archival_refs: []
 ---
@@ -93,3 +93,19 @@ AC coverage:
 | AC5 (td:1) soft-deleted in batch | test_soft_deleted_entry_included_in_commit |
 | AC6 (td:1) commit message format | test_curation_batch_commit_message, test_review_batch_commit_message |
 | AC7 (td:0) all fail | guaranteed by ImportError — no test written |
+[[2026-05-05]]
+## Builder Notes
+- Implementation: added [serve/mcp-memory/src/owlbear_mcp_memory/git.py](serve/mcp-memory/src/owlbear_mcp_memory/git.py) with `commit_batch(memory_dir, *, session_type)` plus small internal helpers (`_git`, `_state_from_file`).
+- Behavior: stages only non-pending memory markdown files, creates a single batch commit when staged diff exists, returns `\"\"` when nothing is staged, and uses exact commit messages:
+  - `chore: memory curation batch (mcp-memory, curator)`
+  - `chore: memory review batch (mcp-memory, reviewer)`
+- Tests: 10 `TestFromAC_*` passed in [tests/test_memory_git_integration_1310.py](tests/test_memory_git_integration_1310.py).
+- Coverage: 100% on target module `owlbear_mcp_memory.git` (quality-runner scoped report).
+- ruff: clean for changed source + task test file.
+- Module-level durable test file: none present for this module (`tests/test_memory_git*.py` only contains task-scoped file).
+- Commit: `f260e033493e0e81cc1d28c19cfd06b170715d67` (`feat: implement memory git batch commit (#1310, builder)`).
+
+### Reflection
+- Kept change surgical to one new source file to avoid touching existing tool handlers.
+- Used defensive parsing for malformed frontmatter while keeping staging logic simple and deterministic.
+- Quality gate required small lint/coverage polish (`PLR2004`, trailing newline, defensive branch coverage).

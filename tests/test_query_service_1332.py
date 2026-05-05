@@ -617,3 +617,128 @@ class TestFromAC_RelatedSourcesExactValues:
         results = await _query(service)
 
         assert results[0].related_sources[0]["entity"] == "TargetEntity"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# AC10: entity type exact-value assertion (td:1)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestFromAC_EntityTypeExactValue:
+    """AC10: entities[i]['type'] must match the exact entity_type string from graph_store."""
+
+    @pytest.mark.asyncio
+    async def test_entity_type_value_matches_fixture_entity_type(self) -> None:
+        """entities[0]['type'] equals the exact entity_type on the mock entity (not empty or wrong)."""
+        ents = [_mock_entity("ent-1", "SomeConcept", "concept")]
+        gs = _mock_graph_store(entities=ents)
+        service = KnowledgeQueryService(
+            vector_store=_mock_vector_store(),
+            graph_store=gs,
+            embedding_provider=_mock_embedding_provider(),
+        )
+
+        results = await _query(service)
+
+        assert results[0].entities[0]["type"] == "concept"
+
+    @pytest.mark.asyncio
+    async def test_entity_type_not_empty_string(self) -> None:
+        """entities[0]['type'] is non-empty when entity_type is set on the fixture."""
+        ents = [_mock_entity("ent-1", "RegexParser", "function")]
+        gs = _mock_graph_store(entities=ents)
+        service = KnowledgeQueryService(
+            vector_store=_mock_vector_store(),
+            graph_store=gs,
+            embedding_provider=_mock_embedding_provider(),
+        )
+
+        results = await _query(service)
+
+        assert results[0].entities[0]["type"] == "function"
+        assert results[0].entities[0]["type"] != ""
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# AC11: incoming-edge traversal (focal entity as edge target) (td:1)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestFromAC_RelatedSourcesIncomingEdge:
+    """AC11: related_sources resolves correctly when focal entity is the edge TARGET."""
+
+    def _build_incoming_edge_service(self) -> KnowledgeQueryService:
+        """Fixture: peer entity (ent-b, src-2) has an outgoing edge to focal entity (ent-a, src-1).
+
+        Edge direction: ent-b → ent-a (focal entity is the target, not the source).
+        Only list_edges(target_id="ent-a") returns the edge; list_edges(source_id="ent-a") is empty.
+        """
+        focal_doc = _mock_doc("doc-1", source_id="src-1")
+        peer_doc = _mock_doc("doc-2", source_id="src-2")
+        focal_entity = _mock_entity("ent-a", "FocalEntity", "class_", "doc-1")
+        peer_entity = _mock_entity("ent-b", "PeerEntity", "function", "doc-2")
+        # Edge runs FROM peer (ent-b) TO focal (ent-a) — incoming from focal's perspective
+        edge = _mock_edge("edge-inc", "ent-b", "ent-a", "calls")
+
+        def _list_edges(_source_id: str | None = None, target_id: str | None = None, **_: object) -> list:  # type: ignore[return]
+            """Route list_edges calls: only the target_id='ent-a' call returns results."""
+            if target_id == "ent-a":
+                return [edge]
+            return []
+
+        gs = MagicMock()
+        gs.get_document_id_for_chunk.return_value = "doc-1"
+        doc_lookup: dict[str, MagicMock] = {"doc-1": focal_doc, "doc-2": peer_doc}
+        gs.get_document.side_effect = doc_lookup.get
+        gs.list_entities_for_document.return_value = [focal_entity]
+        gs.list_edges.side_effect = _list_edges
+        gs.get_entity.return_value = peer_entity
+
+        ks1 = _real_source("SourceS1", "https://s1.example/", "src-1")
+        ks2 = _real_source("SourceS2", "https://s2.example/", "src-2")
+        ss = MagicMock()
+        src_lookup: dict[str, KnowledgeSource] = {"src-1": ks1, "src-2": ks2}
+        ss.get.side_effect = src_lookup.get
+
+        return KnowledgeQueryService(
+            vector_store=_mock_vector_store(),
+            graph_store=gs,
+            embedding_provider=_mock_embedding_provider(),
+            source_store=ss,
+        )
+
+    @pytest.mark.asyncio
+    async def test_incoming_edge_yields_related_source_entry(self) -> None:
+        """related_sources is non-empty when the focal entity is the edge target."""
+        service = self._build_incoming_edge_service()
+
+        results = await _query(service)
+
+        assert len(results[0].related_sources) >= 1
+
+    @pytest.mark.asyncio
+    async def test_incoming_edge_related_source_name_is_peer_source(self) -> None:
+        """related_sources[0]['name'] is the peer source name (not the focal source name)."""
+        service = self._build_incoming_edge_service()
+
+        results = await _query(service)
+
+        assert results[0].related_sources[0]["name"] == "SourceS2"
+
+    @pytest.mark.asyncio
+    async def test_incoming_edge_relationship_is_exact_edge_relation(self) -> None:
+        """related_sources[0]['relationship'] matches the edge.relation of the incoming edge."""
+        service = self._build_incoming_edge_service()
+
+        results = await _query(service)
+
+        assert results[0].related_sources[0]["relationship"] == "calls"
+
+    @pytest.mark.asyncio
+    async def test_incoming_edge_entity_is_peer_entity_name(self) -> None:
+        """related_sources[0]['entity'] is the peer entity name (the edge source)."""
+        service = self._build_incoming_edge_service()
+
+        results = await _query(service)
+
+        assert results[0].related_sources[0]["entity"] == "PeerEntity"

@@ -2,10 +2,10 @@
 id: 1312
 title: 'P1-11: Consumer updates Phase 1 — Curator agent wiring + skill rewrites (h-mcp-memory,
   h-memory-structure, w-mem-curation)'
-status: in-progress
+status: review
 priority: needed
 created: 2026-05-04T01:32:27.358510+00:00
-updated: 2026-05-05T09:12:55.023406+00:00
+updated: 2026-05-05T09:43:48.200399+00:00
 tags:
 - phase-2
 - scope:agents
@@ -15,8 +15,8 @@ tags:
 parent: 1301
 depends_on:
 - 1307
-blocked: false
-block_reason:
+blocked: true
+block_reason: postponed
 claimed_at:
 archival_reason:
 archival_refs: []
@@ -93,3 +93,8 @@ Architecture review complete. Refined AC3 (7→6 tool names — recall_memory no
 - Non-implementation task (tagged `agent`) — no tests applicable.
 - All 6 AC lines are annotated (td:0): agent file tool list edits and skill markdown rewrites only.
 - Passing through to builder.
+[[2026-05-05]]
+## Builder Notes
+- Non-implementation task — no code changes needed.
+- Test-writer marked all AC lines as (td:0) pass-through.
+- Passing through to review.

@@ -1,10 +1,10 @@
 ---
 id: 1332
 title: 'P3-16: Search result provenance contract'
-status: review
+status: todo
 priority: important
 created: 2026-05-04T05:48:50.166605+00:00
-updated: 2026-05-05T09:18:38.156819+00:00
+updated: 2026-05-05T10:59:00.835204+00:00
 tags:
 - phase-3
 - scope:mcp-knowledge
@@ -14,7 +14,7 @@ depends_on:
 - 1331
 blocked: false
 block_reason:
-claimed_at: 2026-05-05T09:18:38.156819+00:00
+claimed_at: 2026-05-05T10:59:00.835204+00:00
 archival_reason:
 archival_refs: []
 ---
@@ -197,3 +197,225 @@ Architecture review complete. AC refined: (1) AC2 now distinguishes producible v
 - A one-line surgical fix closed the live boundary gap without widening scope.
 - Scoped quality-runner verification remained green before and after the patch, reducing regression risk.
 - Existing tests already covered this path sufficiently once serializer behavior matched the real config dict contract.
+[[2026-05-05]]
+## Review Evidence
+### Test Results
+- quality-runner scoped run: 59 passed, 0 failed, 0 skipped across `tests/test_query_service_1332.py`, `tests/test_search_provenance_1331.py`, and `serve/mcp-knowledge/tests/test_search_v2.py`
+
+### Lint Results
+- Ruff clean on `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py`, `serve/knowledge/src/owlbear_knowledge/query_service.py`, `tests/test_query_service_1332.py`, `tests/test_search_provenance_1331.py`, and `serve/mcp-knowledge/tests/test_search_v2.py`
+
+### Coverage
+- `owlbear_knowledge.query_service`: 75%
+- `owlbear_mcp_knowledge.server`: 38%
+- Module percentages are informational here. The blocking issue is proof quality, not module-level coverage.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---|---|---|---|
+| search_knowledge results include: score, source (name + URL resolved from KnowledgeSource.config["url"]), retrieval_path, entities, related_sources (O5) (td:2) | Live fix is present in `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:206-215` and matches the real model shape in `serve/knowledge/src/owlbear_knowledge/models.py:76-90`, but MCP-boundary proof remains false-green: `tests/test_search_provenance_1331.py:42` builds `source` with a bare `.url`, the only exact serialized URL assertion is `tests/test_search_provenance_1331.py:464`, and the real-shape assertion at `tests/test_query_service_1332.py:205` stops at the service object rather than `search_knowledge()` output | `TestFromAC_SourceFieldPopulation::test_source_url_accessible_from_config_dict`; `TestFromAC_SearchProvenanceDeterminism::test_source_url_matches_mock_value` | FAIL |
+| retrieval_path is one of: "vector", "vector+graph" (producible now), or "graph" (reserved — no codepath yet; include in type constraint only) (td:2) | Retrieval-path branch remains at `serve/knowledge/src/owlbear_knowledge/query_service.py:213-215`; scoped tests cover `vector`, `vector+graph`, and reserved `graph` values and all passed | `TestFromAC_RetrievalPath`; `TestFromAC_SearchProvenanceFields::test_retrieval_path_value_is_vector`; `..._is_graph`; `..._is_vector_plus_graph` | PASS |
+| entities array contains extracted entity references (name, type) from graph_store.list_entities_for_document (td:1) | Entity mapping remains at `serve/knowledge/src/owlbear_knowledge/query_service.py:223-229`; scoped suites prove population and shape | `TestFromAC_EntitiesPopulation`; `TestFromAC_SearchProvenanceFields::test_entities_items_have_name_and_type_keys` | PASS |
+| related_sources array contains cross-source relationships (name, relationship, entity) via entity edge traversal (td:2) | Query assembly remains at `serve/knowledge/src/owlbear_knowledge/query_service.py:144-165`, but positive assertions are still shape-only: `tests/test_query_service_1332.py:386` and `tests/test_query_service_1332.py:470` require non-empty output and key presence, and `tests/test_search_provenance_1331.py:248` only checks keys. Wrong or blank positive payload values could still pass. | `TestFromAC_RelatedSources`; `TestFromAC_SearchProvenanceFields::test_related_sources_items_have_required_keys` | FAIL |
+| When enrichment not run, entities and related_sources are empty arrays (td:1) | Exact empty-list assertions remain in both layers and passed | `TestFromAC_UnenrichedDefaults`; `TestFromAC_SearchProvenanceUnenrichedState` | PASS |
+| Response shape deterministic regardless of enrichment state (all provenance keys always present) (td:1) | MCP-layer key-presence assertions cover both enriched and unenriched responses and passed | `TestFromAC_ShapeDeterminism`; `TestFromAC_SearchProvenanceDeterminism` | PASS |
+| All #1331 tests pass green (td:0) | quality-runner scoped run includes `tests/test_search_provenance_1331.py` and reported 21 passed, 0 failed | `tests/test_search_provenance_1331.py` | PASS |
+
+### Deductions
+- `-0.12` AC1 MCP-boundary proof gap remains after the implementation fix
+- `-0.08` AC4 positive related_sources assertions remain shape-only instead of value-discriminating
+- `-0.03` Commit presence for `41c6636c` and `92fdc36f` was confirmed via `.git/logs/HEAD`, but file-level diff and dirty-tree overlap checks were not available in this tool surface
+
+### Verdict
+- FAIL to backlog | confidence 0.77
+- Reason: the live serializer defect from the first review is fixed, but this is now the second review cycle and the remaining blockers are proof-quality failures. The current green suites still do not fully prove AC1 or AC4.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Refine the retry contract so MCP-boundary source URL proof uses a real config-backed `KnowledgeSource` shape, then re-dispatch test-writer with that explicit proof requirement | `tests/test_search_provenance_1331.py`, `tests/test_query_service_1332.py`, `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py` | Mock source helper at `tests/test_search_provenance_1331.py:42`; exact serialized URL assertion at `tests/test_search_provenance_1331.py:464`; real config fallback branch at `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:206-215`; service-only config assertion at `tests/test_query_service_1332.py:205` |
+| 2 | architect | Refine the AC/test contract to require exact positive `related_sources` payload assertions for `name`, `relationship`, and `entity` values | `tests/test_query_service_1332.py`, `tests/test_search_provenance_1331.py`, `serve/knowledge/src/owlbear_knowledge/query_service.py` | Shape-only assertions at `tests/test_query_service_1332.py:386`, `tests/test_query_service_1332.py:470`, and `tests/test_search_provenance_1331.py:248` against values assembled at `serve/knowledge/src/owlbear_knowledge/query_service.py:144-165` |
+
+### Post-task Reflection
+- The builder repaired the live serializer path, but the boundary-proof hardening requested in the first review never landed.
+- Running the full scoped suite again was necessary to separate “implementation repaired” from “contract still under-proved.”
+- Commit hashes were verifiable through `.git/logs`, but the lack of diff/dirty-tree tooling kept immutability confidence slightly reduced.
+[[2026-05-05]]
+
+## Architecture Review (cycle 3 — proof hardening)
+
+### Context
+Implementation is complete and correct. Two review cycles identified proof gaps where green tests don't exercise real codepaths. This cycle adds explicit proof-quality AC lines and test-writer guidance for targeted fixes.
+
+### New AC Lines (append to existing)
+
+- [ ] MCP-boundary source URL test uses config-backed KnowledgeSource fixture (no bare `.url` mock attribute); asserts serialized `url` matches `config["url"]` value (td:1)
+- [ ] Positive related_sources assertions pin exact expected values for `name`, `relationship`, and `entity` — not just key presence or non-empty checks (td:1)
+
+### Proof Gap Analysis
+
+**AC1 gap:** `_make_source()` in `tests/test_search_provenance_1331.py:42` creates `MagicMock()` with `source.url = url`. `_serialize_source()` finds this via `getattr(value, "url", None)` and never exercises the config-dict fallback. Real `KnowledgeSource` has no `.url` attr — only `config: dict` with optional `"url"` key. Fix: replace `_make_source()` with `_real_source()` pattern from `tests/test_query_service_1332.py:35` (constructs actual `KnowledgeSource` with `config={"url": url}`).
+
+**AC4 gap:** `tests/test_query_service_1332.py:386` asserts `len(...) >= 1` and key presence. `tests/test_search_provenance_1331.py:248` asserts `"name" in rel`. Neither checks `rel["name"] == "SourceB"` or `rel["relationship"] == "references"`. Fix: pin exact expected values in existing cross-source-edge test using known mock fixtures.
+
+### Test-Writer Guidance
+
+1. In `tests/test_search_provenance_1331.py`: replace `_make_source()` with a helper that returns a real `KnowledgeSource` object (matching `_real_source()` pattern). Update affected test assertions if mock shape changes require it.
+2. In `tests/test_query_service_1332.py::test_related_source_item_has_required_keys`: after the key-presence loop, add exact-value assertions: `assert results[0].related_sources[0]["name"] == "SourceB"`, `assert ... ["relationship"] == "references"`, `assert ... ["entity"] == "TargetEntity"`.
+3. In `tests/test_search_provenance_1331.py::test_related_sources_items_have_required_keys`: add exact-value assertions for the fixture data (`"doc-b"`, `"references"`, `"API"`).
+4. No implementation changes needed — `_serialize_source()` already handles the config fallback correctly.
+
+### Evaluation (cycle 3)
+| Criterion | Assessment |
+|-----------|-----------|
+| Single responsibility | PASS — proof fixes only, no new logic |
+| Interface clarity | PASS — exact fixture shapes and assertion targets specified |
+| TDD compliance | PASS — test-writer adds/fixes tests, builder not needed unless tests reveal impl bug |
+| KISS/YAGNI | PASS — minimal targeted changes to existing tests |
+
+### Test Depth (new lines)
+- AC8 (MCP boundary proof): td:1 — single fixture swap + assertion update
+- AC9 (exact values): td:1 — add value assertions to existing tests
+
+### Challenge
+- Challenger: SKIPPED — proof-hardening pass with no design decisions; reviewer already identified exact gaps
+
+### Verdict: APPROVED → todo
+Test-writer processes new AC8/AC9 lines only; existing AC1-AC7 are implementation-complete and should not be re-tested (regression gate via AC7 suffices).
+
+[[2026-05-05]]
+Architecture review cycle 3 — proof hardening. Added AC8 (MCP-boundary source fixture must use real KnowledgeSource, not bare .url mock) and AC9 (related_sources assertions must pin exact values). Implementation is complete and correct; only test-layer proof fixes needed. Test-writer guidance specifies exact files, helpers, and assertion targets. Challenger skipped — no design decisions in scope.
+[[2026-05-05]]
+## Test-Writer Notes
+- Retry (cycle 3): added 5 new tests for AC8 and AC9 proof gaps. All pass against current implementation.
+- Builder skip: test-only retry — implementation is correct, proof was insufficient.
+
+**Test file (AC8):** tests/test_search_provenance_1331.py
+- Class added: `TestFromAC_MCPBoundarySourceProof` — 2 tests
+- Helper added: `_real_ks_source()` — constructs real `KnowledgeSource` with `config["url"]`
+- Import added: `KnowledgeSource`, `SourceType` from `owlbear_knowledge.models`
+
+**Test file (AC9):** tests/test_query_service_1332.py
+- Class added: `TestFromAC_RelatedSourcesExactValues` — 3 tests (exact name, relationship, entity)
+- Helper added: `_build_cross_source_service()` — shared fixture for SourceA→SourceB edge setup
+
+| AC | New Tests | Result |
+|----|-----------|--------|
+| AC8 (MCP-boundary source URL, td:1) | `test_source_url_serialized_from_config_dict_not_bare_attr`, `test_source_name_serialized_from_real_knowledge_source` | PASS — `_serialize_source()` correctly reads `config["url"]` |
+| AC9 (exact related_sources values, td:1) | `test_related_source_name_is_exact_peer_source_name`, `test_related_source_relationship_is_exact_edge_relation`, `test_related_source_entity_is_exact_peer_entity_name` | PASS — implementation populates exact values from mock fixtures |
+
+- Total new tests: 5 | All PASS (Step 1b.1 — Direct-to-Review Advance)
+- ruff: clean
+- Commit: `82060cec test: add AC8/AC9 proof-hardening tests (#1332, test-writer)`
+[[2026-05-05]]
+## Builder Notes
+- Implementation: no source changes required in this cycle.
+- Reason: task is in proof-hardening completion state; scoped TestFromAC and dependency suites already pass against current implementation.
+- Tests: 64 passed, 0 failed, 0 skipped (`tests/test_query_service_1332.py`, `tests/test_search_provenance_1331.py`, `serve/mcp-knowledge/tests/test_search_v2.py`).
+- Coverage: `owlbear_knowledge.query_service` 75%, `owlbear_mcp_knowledge.server` 38% (informational from scoped run).
+- ruff: clean on scoped source and test paths.
+- Approach: verified GREEN evidence with quality-runner and performed surgical no-op builder pass-through because no failing behavior remained to implement.
+
+### Post-task Reflection
+- Multi-cycle task history can leave builder-dispatched tasks with no remaining code delta; scoped quality evidence is the fastest safe gate.
+- Running the exact proof-hardening suites avoided unnecessary code churn in already-correct implementation paths.
+- Keeping this cycle as a no-op implementation pass preserves signal clarity for reviewer and auditor.
+[[2026-05-05]]
+## Review Evidence
+### Test Results
+- quality-runner scoped run on tests/test_query_service_1332.py, tests/test_search_provenance_1331.py, and serve/mcp-knowledge/tests/test_search_v2.py: 64 passed, 0 failed, 0 skipped
+
+### Lint Results
+- Ruff clean on serve/knowledge/src/owlbear_knowledge/query_service.py, serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py, tests/test_query_service_1332.py, tests/test_search_provenance_1331.py, and serve/mcp-knowledge/tests/test_search_v2.py
+
+### Coverage
+- owlbear_knowledge.query_service: 75%
+- owlbear_mcp_knowledge.server: 38%
+- Module percentages are informational here. The blockers are proof gaps, not module-level coverage.
+
+### Findings
+1. AC3 is still under-proved. The implementation reads entities from serve/knowledge/src/owlbear_knowledge/query_service.py:206 and maps the type field at serve/knowledge/src/owlbear_knowledge/query_service.py:229, but the task-local tests only prove names at tests/test_query_service_1332.py:308 and key presence at tests/test_query_service_1332.py:329. The MCP-layer suite also stops at key presence in tests/test_search_provenance_1331.py:180. A regression that emitted wrong or empty type values would still go green.
+2. AC4 still misses a significant branch. The implementation traverses both outgoing and incoming entity edges at serve/knowledge/src/owlbear_knowledge/query_service.py:121-122, but every positive related_sources fixture keeps the focal entity on the edge source side at tests/test_query_service_1332.py:361, tests/test_query_service_1332.py:442, and tests/test_query_service_1332.py:571. The new exact-value assertions at tests/test_query_service_1332.py:595, tests/test_query_service_1332.py:604, and tests/test_query_service_1332.py:613 strengthen only that outgoing-path scenario. The incoming-edge path can regress without detection.
+3. AC1/AC8 source URL proof is now correctly hardened. The real KnowledgeSource shape is defined at serve/knowledge/src/owlbear_knowledge/models.py:76 and serve/knowledge/src/owlbear_knowledge/models.py:86, the serializer fallback is in serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:206, and the boundary proof now uses a config-backed fixture at tests/test_search_provenance_1331.py:493 and tests/test_search_provenance_1331.py:506.
+4. Loop-breaker routing applies. The task artifact already contains two prior review sections at .owlbear/kanban/tasks/1332-p3-16-search-result-provenance-contract.md:134 and .owlbear/kanban/tasks/1332-p3-16-search-result-provenance-contract.md:201, so this third review failure must route to backlog.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---|---|---|---|
+| search_knowledge results include: score, source (name + URL resolved from KnowledgeSource.config["url"]), retrieval_path, entities, related_sources (O5) (td:2) | Serializer wiring is live at serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:649-653, source fallback is correct at serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:206, and real-shape URL/name proof exists at tests/test_search_provenance_1331.py:493 and tests/test_search_provenance_1331.py:506 | tests/test_query_service_1332.py:161, tests/test_query_service_1332.py:192, tests/test_search_provenance_1331.py:493 | PASS |
+| retrieval_path is one of: "vector", "vector+graph" (producible now), or "graph" (reserved — no codepath yet; include in type constraint only) (td:2) | Literal constraint and runtime branch are in serve/knowledge/src/owlbear_knowledge/query_service.py:31 and serve/knowledge/src/owlbear_knowledge/query_service.py:213; value coverage exists in tests/test_query_service_1332.py:231, tests/test_query_service_1332.py:244, tests/test_query_service_1332.py:258, tests/test_query_service_1332.py:272, tests/test_query_service_1332.py:286 and tests/test_search_provenance_1331.py:125, tests/test_search_provenance_1331.py:136, tests/test_search_provenance_1331.py:147 | TestFromAC_RetrievalPath; MCP retrieval_path tests | PASS |
+| entities array contains extracted entity references (name, type) from graph_store.list_entities_for_document (td:1) | Implementation uses serve/knowledge/src/owlbear_knowledge/query_service.py:206 and serve/knowledge/src/owlbear_knowledge/query_service.py:229, but current assertions only prove names and key presence at tests/test_query_service_1332.py:308, tests/test_query_service_1332.py:329, and tests/test_search_provenance_1331.py:180 | TestFromAC_EntitiesPopulation; TestFromAC_SearchProvenanceFields::test_entities_items_have_name_and_type_keys | FAIL |
+| related_sources array contains cross-source relationships (name, relationship, entity) via entity edge traversal (td:2) | Implementation traverses both directions at serve/knowledge/src/owlbear_knowledge/query_service.py:121-122, but positive proofs only exercise source-side edges at tests/test_query_service_1332.py:361, tests/test_query_service_1332.py:442, and tests/test_query_service_1332.py:571; exact-value assertions at tests/test_query_service_1332.py:595, tests/test_query_service_1332.py:604, and tests/test_query_service_1332.py:613 do not cover the target-side branch | TestFromAC_RelatedSources; TestFromAC_RelatedSourcesExactValues; tests/test_search_provenance_1331.py:228 | FAIL |
+| When enrichment not run, entities and related_sources are empty arrays (td:1) | Exact empty-list assertions exist at tests/test_query_service_1332.py:483, tests/test_query_service_1332.py:497, tests/test_search_provenance_1331.py:266, and tests/test_search_provenance_1331.py:282 | TestFromAC_UnenrichedDefaults; TestFromAC_SearchProvenanceUnenrichedState | PASS |
+| Response shape deterministic regardless of enrichment state (all provenance keys always present) (td:1) | search_knowledge always serializes entities/related_sources/source at serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:649-653; enriched and unenriched key-presence proofs exist at tests/test_search_provenance_1331.py:342, tests/test_search_provenance_1331.py:358, tests/test_search_provenance_1331.py:370, tests/test_search_provenance_1331.py:381, and tests/test_search_provenance_1331.py:396 | TestFromAC_ShapeDeterminism; TestFromAC_SearchProvenanceDeterminism | PASS |
+| All #1331 tests pass green (td:0) | quality-runner scoped run reported 64 passed, 0 failed, 0 skipped across the full task/dependency test set including tests/test_search_provenance_1331.py | tests/test_search_provenance_1331.py | PASS |
+| MCP-boundary source URL test uses config-backed KnowledgeSource fixture (no bare .url mock attribute); asserts serialized url matches config["url"] value (td:1) | Real KnowledgeSource config shape is in serve/knowledge/src/owlbear_knowledge/models.py:76 and serve/knowledge/src/owlbear_knowledge/models.py:86; boundary proof uses that shape at tests/test_search_provenance_1331.py:493 | TestFromAC_MCPBoundarySourceProof::test_source_url_serialized_from_config_dict_not_bare_attr | PASS |
+| Positive related_sources assertions pin exact expected values for name, relationship, and entity — not just key presence or non-empty checks (td:1) | Exact value assertions exist at tests/test_query_service_1332.py:595, tests/test_query_service_1332.py:604, and tests/test_query_service_1332.py:613 | TestFromAC_RelatedSourcesExactValues | PASS |
+
+### Deductions
+- -0.10 AC3 proof gap: exact entity type values are not discriminately asserted
+- -0.10 AC4 proof gap: incoming-edge traversal branch is untested
+- -0.03 commit presence was confirmed only via .git/logs/HEAD entries at .git/logs/HEAD:1942, .git/logs/HEAD:1952, and .git/logs/HEAD:1964; file-level diff and dirty-tree overlap could not be independently verified in this tool surface
+
+### Verdict
+- FAIL to backlog | confidence 0.77
+- Reason: the implementation is green, but the task still does not meet the proof bar for AC3 and AC4. Because the task artifact already shows two prior review failures, the loop-breaker rule applies and this third failure routes to backlog.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Refine the retry contract so AC3 requires exact entity type value assertions that would fail on wrong or empty `type` mappings, then re-dispatch test-writer | tests/test_query_service_1332.py, tests/test_search_provenance_1331.py, serve/knowledge/src/owlbear_knowledge/query_service.py | serve/knowledge/src/owlbear_knowledge/query_service.py:206, serve/knowledge/src/owlbear_knowledge/query_service.py:229, tests/test_query_service_1332.py:308, tests/test_query_service_1332.py:329, tests/test_search_provenance_1331.py:180 |
+| 2 | architect | Refine the retry contract so AC4 explicitly proves both edge-traversal directions, including a cross-source case where the focal entity is the edge target, then re-dispatch test-writer | tests/test_query_service_1332.py, serve/knowledge/src/owlbear_knowledge/query_service.py | serve/knowledge/src/owlbear_knowledge/query_service.py:121-122, tests/test_query_service_1332.py:361, tests/test_query_service_1332.py:442, tests/test_query_service_1332.py:571 |
+
+### Post-task Reflection
+- The cycle-3 proof hardening fixed the real KnowledgeSource URL gap, but it left the original AC3 proof weakness untouched.
+- Exact-value related_sources assertions improved the outgoing-path proof, but the incoming-edge half of the implementation remains untested.
+- Commit hashes were recoverable from .git/logs, but the lack of diff/status tooling kept ownership and contamination checks slightly below normal review confidence.
+[[2026-05-05]]
+
+## Architecture Review (cycle 4 — final proof hardening)
+
+### Context
+Implementation is complete and correct (3 commits landed). Cycles 1-3 progressively fixed the serializer bug and hardened source URL + related_sources exact-value proofs. Two proof gaps remain: entity `type` value discrimination (AC3) and incoming-edge traversal coverage (AC4).
+
+### New AC Lines (append to existing)
+
+- [ ] Entity `type` assertions verify exact `entity_type` attribute value from graph_store entities (not just key presence); a regression producing empty or wrong type strings must fail (td:1)
+- [ ] Related_sources incoming-edge test: fixture places focal entity as edge TARGET (not source), proves cross-source resolution still yields correct name/relationship/entity values (td:1)
+
+### Proof Gap Analysis
+
+**AC3 gap (entity type):** `query_service.py:229` maps `"type": str(getattr(entity, "entity_type", ""))`. Current tests at `tests/test_query_service_1332.py:308` assert entity names and at `:329` assert key presence (`"type" in entity`). Neither asserts the actual `type` value matches the fixture's `entity_type`. Fix: in the existing `TestFromAC_EntitiesPopulation`, add `assert entities[0]["type"] == "function"` (or whatever the fixture's `entity_type` is set to).
+
+**AC4 gap (incoming edge):** `query_service.py:121-122` calls `list_edges(source_id=entity_id)` AND `list_edges(target_id=entity_id)`. All positive fixtures at `:361`, `:442`, `:571` set the focal entity as the edge source. No test places it as the target. Fix: add a test where the focal entity appears only in `target_id` of an edge, with a distinct peer entity on the `source_id` side belonging to a different source — prove the related_sources output still resolves correctly.
+
+### Test-Writer Guidance
+
+1. In `tests/test_query_service_1332.py::TestFromAC_EntitiesPopulation`: add an assertion that `entities[0]["type"]` equals the exact `entity_type` string set on the mock entity fixture. If the fixture uses `entity_type="function"`, assert `== "function"`.
+2. In `tests/test_query_service_1332.py`: add a new test class `TestFromAC_RelatedSourcesIncomingEdge` with a fixture where:
+   - Entity A (focal) has `id="entity-a"` in document D1, source S1
+   - Entity B (peer) has `id="entity-b"` in document D2, source S2
+   - Edge: `source_id="entity-b"`, `target_id="entity-a"`, `relation="calls"`
+   - Assert `related_sources` contains `{"name": "S2-name", "relationship": "calls", "entity": "EntityB"}` (exact values)
+3. No implementation changes needed.
+
+### Evaluation (cycle 4)
+| Criterion | Assessment |
+|-----------|-----------|
+| Single responsibility | PASS — proof fixes only |
+| Interface clarity | PASS — exact fixture shapes and assertion targets specified |
+| TDD compliance | PASS — test-only additions |
+| KISS/YAGNI | PASS — minimal, targeted |
+
+### Test Depth (new lines)
+- AC10 (entity type exactness): td:1 — add value assertion to existing test
+- AC11 (incoming-edge proof): td:1 — new test with inverted fixture
+
+### Challenge
+- Challenger: SKIPPED — proof-hardening with no design decisions; reviewer already identified exact gaps
+
+### Verdict: APPROVED → todo
+Test-writer processes AC10/AC11 only; existing AC1-AC9 are implementation-complete and should not be re-tested.
+
+[[2026-05-05]]
+Architecture review cycle 4 — final proof hardening. Added AC10 (entity type exact-value assertion) and AC11 (incoming-edge traversal proof). Implementation is complete across 3 prior commits; only test-layer fixes needed. Test-writer guidance specifies exact fixtures and assertion targets for both gaps. Challenger skipped — no design decisions.

@@ -16,8 +16,8 @@ parent: 1301
 depends_on:
 - 1308
 - 1307
-blocked: false
-block_reason:
+blocked: true
+block_reason: postponed
 claimed_at:
 archival_reason:
 archival_refs: []
@@ -56,7 +56,8 @@ Task body explicitly states MERGED into #1308. Verified implementation exists at
 | Agent-scope filtering | ✅ scope_agents check at L306-309 |
 | Unscoped exclusion | ✅ `if entry.scope_agents` guards empty list |
 | Wildcard block | ✅ agent=="*" raises ToolError at L288 |
-| Body-only format | ✅ `## {title}\n{content}` join at L318 |
+| Body-only format | ✅ `## {title}
+{content}` join at L318 |
 | Priority ordering | ✅ state_rank APPROVED=0, CURATED=1 |
 | Limit respected | ✅ capped_limit default 20, slice at L316 |
 
@@ -78,7 +79,8 @@ Every AC line in #1309 is identical to #1308's AC. `tests/test_recall_memory_130
 | Agent-scope filtering | `TestFromAC_ScopeAgentMatch` (3 tests) |
 | Unscoped exclusion (scope_agents=[]) | `TestFromAC_UnscopedExclusion` (3 tests) |
 | Wildcard block (agent="*" → ToolError) | `TestFromAC_WildcardAgentBlock` |
-| Body-only format (## title\ncontent, no metadata) | `TestFromAC_BodyOnlyFormat` (6 tests) |
+| Body-only format (## title
+content, no metadata) | `TestFromAC_BodyOnlyFormat` (6 tests) |
 | Priority ordering (approved before curated) | `TestFromAC_PriorityOrdering` (5 tests) |
 | Limit respected (default 20) | `TestFromAC_LimitParameter` (3 tests) |
 
@@ -159,7 +161,8 @@ Any test written for #1309 would immediately pass against the existing implement
 | Agent-scope filtering: returns entries where agent name in scope_agents OR scope_agents=["*"] | Filter implemented in tools.py:304-309; exercised by TestFromAC_ScopeAgentMatch and TestFromAC_UniversalScope. | tests/test_recall_memory_1308.py:86, 137 | PASS |
 | Unscoped exclusion: entries with scope_agents=[] never returned | tools.py:307 rejects empty scope_agents; exercised by TestFromAC_UnscopedExclusion. | tests/test_recall_memory_1308.py:193 | PASS |
 | Wildcard block: agent="*" rejected with descriptive error message | tools.py:287-289 raises ToolError; exercised by TestFromAC_WildcardAgentBlock. | tests/test_recall_memory_1308.py:252 | PASS |
-| Body-only format: each entry rendered as "## {title}\n{content}" with no metadata | tools.py:319 join format; exercised by exact-format and metadata-absence checks. | tests/test_recall_memory_1308.py:272 | PASS |
+| Body-only format: each entry rendered as "## {title}
+{content}" with no metadata | tools.py:319 join format; exercised by exact-format and metadata-absence checks. | tests/test_recall_memory_1308.py:272 | PASS |
 | Priority ordering: approved entries sorted before curated entries | tools.py:295-317 sorts approved before curated; exercised by TestFromAC_PriorityOrdering. | tests/test_recall_memory_1308.py:449 | PASS |
 | Limit respected: returns at most N entries (default 20) | tools.py:293,317 default/slice behavior; exercised by TestFromAC_LimitParameter. | tests/test_recall_memory_1308.py:626 | PASS |
 | All #1308 tests pass | quality-runner report: 37 passed, 0 failed. | quality-runner scoped run | PASS |
