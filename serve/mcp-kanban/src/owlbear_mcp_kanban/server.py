@@ -29,7 +29,6 @@ from owlbear_mcp_kanban.models import (
     KanbanTask,
     ListTasksParams,
     PickTasksParams,
-    ShowTaskParams,
 )
 
 if TYPE_CHECKING:
@@ -343,20 +342,17 @@ def _invoke_view_end_work(  # noqa: PLR0913
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
 async def show_task(
     ctx: Context,
-    id: int = 0,  # noqa: A002
+    id: StrId,  # noqa: A002
     section: str | None = None,
 ) -> ShowTaskResponse:
     """Show a single task by ID with full details."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
+    validated_id = parse_task_id(id, field="id")
     try:
-        params = ShowTaskParams.model_validate({"id": id, "section": section})
-        validated_id = parse_task_id(params.id, field="id")
         view = app_ctx.engine.agent_view()
-        return view.show_task(task_id=validated_id, section=params.section)
+        return view.show_task(task_id=validated_id, section=section)
     except KanbanError as exc:
         _map_kanban_error(exc)
-    except PydanticValidationError as exc:
-        raise ToolError(str(exc)) from exc
 
 
 @mcp.tool(annotations=ToolAnnotations(destructiveHint=False))
