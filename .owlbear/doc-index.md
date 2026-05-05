@@ -74,25 +74,6 @@
 - ## `2. Placement Mapping`
 - ## `3. Audience Targets`
 
-## .owlbear/prompts/agent-audit.prompt.md
-- # `Agent Ecosystem Audit`
-- ## `1. Preamble`
-- ## `2. Audit Surface and Standards`
-- ### `Two Surfaces`
-- ### `Standards Loading Order`
-- ## `3. Seven Audit Dimensions`
-- ### `D1 — Structural`
-- ### `D2 — Duplication`
-- ### `D3 — Content Placement`
-- ### `D4 — Quality`
-- ### `D5 — Pipeline Integrity`
-- ### `D6 — Signal-to-Noise Ratio (SNR)`
-- ### `D7 — Memory Governance and Content`
-- ## `4. Process`
-- ### `Phase 1 — Scan`
-- ### `Phase 2 — Finding Loop`
-- ## `5. Verification`
-
 ## .owlbear/prompts/arch-audit.prompt.md
 - # `Architecture Module Quality Audit`
 - ## `Step 1 - Load the standard first`
@@ -518,6 +499,50 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 
 ## share/instructions/research-docs.instructions.md
 
+## share/prompts/agent-broad-audit.prompt.md
+- # `Agent Ecosystem Broad Audit`
+- ## `1. Preamble`
+- ## `2. Audit Surface and Standards`
+- ### `Two Surfaces`
+- ### `Standards Loading Order`
+- ## `3. Seven Audit Dimensions`
+- ### `D1 - Structural`
+- ### `D2 - Duplication`
+- ### `D3 - Content Placement`
+- ### `D4 - Quality`
+- ### `D5 - Pipeline Integrity`
+- ### `D6 - Signal-to-Noise Ratio (SNR) Broad Triage`
+- #### `6-Category Noise Taxonomy (inline definitions)`
+- #### `Positive probes`
+- #### `Attention flag format`
+- #### `Negative-space probe`
+- ### `D7 - Memory Governance and Content`
+- ## `4. Process`
+- ### `Phase 1 - Scan`
+- ### `Phase 2 - Finding Loop`
+- ## `5. Verification and Ranked Output`
+- ### `End-of-run ranked report (required)`
+
+## share/prompts/agent-deep-audit.prompt.md
+- # `Agent Deep Audit`
+- ## `1. Preamble`
+- ## `2. Shared Noise Taxonomy (Inline Reference)`
+- ## `3. Scope Modes`
+- ### `3.1 Agent Mode`
+- ### `3.2 Skill Mode`
+- ## `4. Pre-Analysis (Required Before Any Judgments)`
+- ## `5. Core Analysis Dimensions`
+- ### `5.1 Correctness`
+- ### `5.2 Completeness`
+- ### `5.3 Naming and Structure`
+- ### `5.4 Value Per Instruction`
+- ### `5.5 Signal-to-Noise (Per Sentence)`
+- ### `5.6 Cross-File Coherence`
+- ## `6. Output Contract (Single Structured Proposal Per Target)`
+- ## `7. Interaction Model (Approval Loop)`
+- ## `8. Guardrails`
+- ## `9. Final Deliverable Format`
+
 ## share/prompts/design-context.prompt.md
 - # `Design-Context Onboarding`
 - ## `Step 1 — Inspect current context`
@@ -785,6 +810,7 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - # `MCP Kanban Tool Reference`
 - ## `Tool Summary`
 - ### `Filter and Retrieval Additions`
+- ### `edit_task Semantics`
 - ## `Projection Schemas`
 - ### `TaskSummary`
 - ### `TaskFull`
@@ -805,12 +831,17 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 ## share/skills/h-mcp-memory/SKILL.md
 - # `MCP Memory Tool Reference`
 - ## `Tool Summary`
-- ## `store_learning`
-- ## `query_memory`
-- ## `update_entry`
-- ## `delete_entry`
-- ## `approve_entry`
+- ## `save_memory`
+- ## `list_memories`
+- ## `read_memory`
+- ## `curate_memory`
+- ## `delete_memory`
+- ## `approve_memory`
 - ## `Categories`
+- ## `Usage Patterns`
+- ### `Curator lifecycle (list -> read -> curate -> delete)`
+- ### `User approval flow`
+- ## `Examples`
 - ## `Reflection Mapping`
 - ## `Configuration`
 
@@ -819,6 +850,7 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ## `Entry Shape`
 - ## `Tier-Content Fit`
 - ## `File vs. MCP Relationship`
+- ## `State Model`
 - ## `Deduplication Rules`
 - ## `Content-Quality Bar`
 - ## `Anti-Patterns`

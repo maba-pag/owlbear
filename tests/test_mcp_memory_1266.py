@@ -844,22 +844,22 @@ class TestFromAC_SQLiteRemoval:
 class TestFromAC_ConsumerDrift:
     """New AC: consumer files must not reference retired memory API names.
 
-    Covers: .owlbear/prompts/agent-audit.prompt.md, share/agents/memory-curator.agent.md,
+    Covers: share/prompts/agent-broad-audit.prompt.md, share/agents/memory-curator.agent.md,
             serve/mcp-memory/README.md must use current tool names only.
     """
 
-    def test_agent_audit_prompt_does_not_call_get_knowledge(self) -> None:
-        """agent-audit.prompt.md must not call retired get_knowledge tool."""
+    def test_agent_broad_audit_prompt_does_not_call_get_knowledge(self) -> None:
+        """agent-broad-audit.prompt.md must not call retired get_knowledge tool."""
         prompt_path = (
             Path(__file__).parent.parent
-            / ".owlbear"
+            / "share"
             / "prompts"
-            / "agent-audit.prompt.md"
+            / "agent-broad-audit.prompt.md"
         )
         assert prompt_path.exists(), f"prompt file not found: {prompt_path}"
         content = prompt_path.read_text()
         assert "get_knowledge" not in content, (
-            "agent-audit.prompt.md still calls retired get_knowledge — "
+            "agent-broad-audit.prompt.md still calls retired get_knowledge — "
             "update to query_memory"
         )
 
@@ -895,18 +895,18 @@ class TestFromAC_ConsumerDrift:
                 "replace table with current 5-tool API"
             )
 
-    def test_agent_audit_prompt_references_query_memory(self) -> None:
-        """agent-audit.prompt.md must reference the current query_memory tool (positive proof)."""
+    def test_agent_broad_audit_prompt_references_query_memory(self) -> None:
+        """agent-broad-audit.prompt.md must reference query_memory when memory MCP is audited."""
         prompt_path = (
             Path(__file__).parent.parent
-            / ".owlbear"
+            / "share"
             / "prompts"
-            / "agent-audit.prompt.md"
+            / "agent-broad-audit.prompt.md"
         )
         assert prompt_path.exists(), f"prompt file not found: {prompt_path}"
         content = prompt_path.read_text()
         assert "query_memory" in content, (
-            "agent-audit.prompt.md does not reference query_memory — "
+            "agent-broad-audit.prompt.md does not reference query_memory — "
             "consumer was not updated to the current API"
         )
 
