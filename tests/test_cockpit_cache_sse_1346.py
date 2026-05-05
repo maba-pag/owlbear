@@ -562,6 +562,79 @@ class TestFromAC_MutationCacheInvalidation:
         finally:
             app.dependency_overrides.clear()
 
+    def test_get_tasks_reflects_status_change_after_move_route(
+        self, tmp_path: Path
+    ) -> None:
+        """After POST /api/tasks/{id}/move, GET /api/tasks must reflect the new status.
+
+        AC3/AC7 proof gap: existing AC3 tests use direct filesystem renames rather
+        than calling the cockpit mutation route.  This test drives the full
+        mutation-route → read-route cycle exactly as a real client would:
+
+          1. Prime cache via GET /api/tasks (both tasks visible in 'todo').
+          2. Move task 1 to 'in-progress' via POST /api/tasks/1/move.
+          3. The route rewrites the task file on disk → file mtime changes.
+          4. GET /api/tasks?status=todo must exclude task 1 (cache invalidated).
+
+        Fails if cache.scan() still returns the old signature (e.g. because the
+        mutation route does not touch files in tasks_dir or the signature ignores
+        mtime changes to existing files).
+        """
+        from fastapi.testclient import TestClient  # noqa: PLC0415
+
+        from owlbear_cockpit.cache import MtimeScanCache  # noqa: PLC0415
+        from owlbear_cockpit.deps import get_cache  # noqa: PLC0415
+        from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
+
+        kanban_dir = _make_board(tmp_path / "board_mutation")
+        seed = KanbanEngine(kanban_dir)
+        seed.create_task("Alpha task", status="todo", priority="important")
+        seed.create_task("Beta task", status="todo", priority="needed")
+        seed.list_tasks()
+
+        eng = KanbanEngine(kanban_dir)
+        eng.list_tasks()
+        local_cache = MtimeScanCache(eng.tasks_dir)
+
+        app.dependency_overrides[get_engine] = lambda: eng
+        app.dependency_overrides[get_cache] = lambda: local_cache
+        try:
+            client = TestClient(app)
+
+            # Prime the cache with both tasks in 'todo'.
+            resp_prime = client.get("/api/tasks")
+            assert resp_prime.status_code == 200
+            todo_ids_before = {
+                t["id"] for t in resp_prime.json()["tasks"] if t["status"] == "todo"
+            }
+            assert 1 in todo_ids_before, "Precondition: task 1 must be in 'todo'"
+
+            # Move task 1 from 'todo' to 'in-progress' via the cockpit mutation route.
+            task = eng.show_task("1")
+            move_resp = client.post(
+                "/api/tasks/1/move",
+                json={"status": "in-progress", "updated": task.updated},
+            )
+            assert move_resp.status_code == 200, (
+                f"POST /api/tasks/1/move returned {move_resp.status_code}: "
+                f"{move_resp.json()}"
+            )
+
+            # GET /api/tasks?status=todo must NOT include task 1 (now in-progress).
+            resp_after = client.get("/api/tasks", params={"status": "todo"})
+            assert resp_after.status_code == 200
+            todo_ids_after = {t["id"] for t in resp_after.json()["tasks"]}
+
+            assert 1 not in todo_ids_after, (
+                "Task 1 was moved from 'todo' to 'in-progress' via POST /api/tasks/1/move, "
+                "but GET /api/tasks?status=todo still returns it. "
+                "The cache was not invalidated after the mutation route rewrote the task "
+                "file on disk. AC3/AC7 requires deterministic cache invalidation after "
+                "cockpit mutation routes change task visibility."
+            )
+        finally:
+            app.dependency_overrides.clear()
+
 
 # ===========================================================================
 # AC4 (td:2): SSE — tasks-changed emitted for deleted/archived paths
@@ -668,6 +741,61 @@ class TestFromAC_SSEDeletedPathEvent:
             "tasks-changed must be emitted for the deleted task path in a mixed batch. "
             "Current events.py skips deleted paths, so only decisions-changed is "
             "emitted — AC4 requires tasks-changed even when the file is gone."
+        )
+
+    @pytest.mark.asyncio
+    async def test_repeated_tasks_changed_payload_differs_when_candidate_mtime_unchanged(
+        self, board_dir: Path
+    ) -> None:
+        """Two successive tasks-changed emissions from the same file at the same mtime
+        must produce different (strictly increasing) payload mtime values.
+
+        AC4 proof gap: _next_event_mtime() has a stateful guard —
+        when candidate_mtime <= last_emitted_mtime, it returns last_emitted + 1 so
+        the frontend always sees a new value and triggers a refetch.  This branch
+        is exercised by sending two watch batches with the same path at the same
+        pinned mtime:
+
+          Batch 1: file.stat().st_mtime_ns = T → emitted = T
+          Batch 2: same file, same mtime   → candidate T <= previous T → emitted T+1
+
+        The test asserts that mtime2 == mtime1 + 1, proving the stateful branch runs.
+        """
+        engine = KanbanEngine(board_dir)
+        tasks_dir = engine.tasks_dir
+
+        # Create a task file and pin its mtime to a fixed nanosecond value so both
+        # batches see the identical candidate_mtime from stat().
+        task_file = tasks_dir / "77-stable.md"
+        task_file.write_text("---\nid: 77\n---\n", encoding="utf-8")
+        pinned_ns = 1_700_000_000_000_000_000  # arbitrary fixed timestamp
+        stat = task_file.stat()
+        os.utime(task_file, ns=(stat.st_atime_ns, pinned_ns))
+
+        # Two batches pointing to the same file — mtime is identical in both.
+        batch1 = {("modified", str(task_file))}
+        batch2 = {("modified", str(task_file))}
+        collected = await _collect_sse(engine, [batch1, batch2])
+
+        tasks_changed = [e for e in collected if e.get("event") == "tasks-changed"]
+        assert len(tasks_changed) == 2, (
+            f"Expected 2 tasks-changed events (one per batch); "
+            f"got {len(tasks_changed)}.  Events: {tasks_changed}"
+        )
+
+        mtime1 = json.loads(tasks_changed[0]["data"])["mtime"]
+        mtime2 = json.loads(tasks_changed[1]["data"])["mtime"]
+
+        assert mtime1 != mtime2, (
+            f"Two successive tasks-changed emissions from the same file at the same "
+            f"mtime must produce different payload values. Got mtime1={mtime1}, "
+            f"mtime2={mtime2}. _next_event_mtime() stateful guard (candidate <= "
+            f"previous → previous + 1) was not exercised."
+        )
+        assert mtime2 == mtime1 + 1, (
+            f"When candidate_mtime == previous emitted mtime, _next_event_mtime() must "
+            f"return previous + 1. Got mtime1={mtime1}, mtime2={mtime2} "
+            f"(expected {mtime1 + 1})."
         )
 
 
