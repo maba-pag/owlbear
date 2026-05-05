@@ -1,10 +1,10 @@
 ---
 id: 1324
 title: 'P1-08: Enrichment schema additions (state, claims, edge uniqueness, WAL)'
-status: review
+status: archived
 priority: needed
 created: 2026-05-04T05:48:50.076796+00:00
-updated: 2026-05-04T23:18:40.016657+00:00
+updated: 2026-05-05T00:36:24.451796+00:00
 tags:
 - phase-1
 - scope:knowledge
@@ -14,7 +14,7 @@ depends_on:
 - 1323
 blocked: false
 block_reason:
-claimed_at: 2026-05-04T23:18:40.016657+00:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -340,3 +340,98 @@ Architecture review cycle 2: Refined AC5 (exact D17 column match required, not s
 - Retry cycles with test-only deltas are best handled as verification-only builder passes.
 - Scoped quality-runner runs gave sufficient gate evidence with minimal noise.
 - Keeping source untouched avoided unnecessary schema churn while preserving review traceability.
+[[2026-05-04]]
+## Review Evidence
+### Test Results
+- quality-runner scoped pass: 37 passed, 0 failed, 0 skipped.
+- Executed suites: `tests/test_enrichment_schema_1323.py` and `serve/knowledge/tests/test_graph_store_counts.py`.
+- AC8 (`All #1323 tests pass green`) is satisfied by independent runtime evidence.
+
+### Lint Results
+- Ruff clean on `serve/knowledge/src/owlbear_knowledge/schema.py` and `tests/test_enrichment_schema_1323.py`.
+- VS Code diagnostics: no errors in the reviewed files.
+
+### Coverage
+- `owlbear_knowledge.schema`: 64% in the scoped run.
+- Module-level coverage is non-blocking here. The builder-owned paths for this task are exercised by the fresh-schema assertions and the v10→v11 upgrade assertions, so the diff-scoped gate is satisfied even though the whole module remains below 90%.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test / Runtime Proof | Status |
+|---|---|---|---|
+| enrichment_state column added to chunks: pending → claimed → enriched (td:2) | v10→v11 migration adds `enrichment_state` at `serve/knowledge/src/owlbear_knowledge/schema.py:307` | `tests/test_enrichment_schema_1323.py:82`, `:91`, `:100`, `:495` | PASS |
+| enrichment_state is a new column — consolidated column retains existing semantics (td:1) | Separate-column semantics are asserted directly in `tests/test_enrichment_schema_1323.py:118` | `TestFromAC_EnrichmentStateNotConsolidated` | PASS |
+| claimed_at timestamp column on chunks for lease tracking (td:1) | v10→v11 migration adds `claimed_at` at `serve/knowledge/src/owlbear_knowledge/schema.py:310` | `tests/test_enrichment_schema_1323.py:161`, `:505` | PASS |
+| reviewed_pairs table created: entity_name + source_a + source_b (td:2) | End-state table presence and insertability are both proven | `tests/test_enrichment_schema_1323.py:189`, `:211`, `:525` | PASS |
+| Edge UNIQUE constraint: UNIQUE(source_id, target_id, relation, document_id) (D17) (td:2) | v10→v11 creates D17 index at `serve/knowledge/src/owlbear_knowledge/schema.py:316`; fresh and upgrade tests now require exact column-set equality | `tests/test_enrichment_schema_1323.py:236`, `:248`, `:257`, `:297`, `:534`, `:545` | PASS |
+| WAL mode enabled on SQLite for concurrent writer support (td:0) | `init_db()` executes `PRAGMA journal_mode = WAL` at `serve/knowledge/src/owlbear_knowledge/schema.py:363` | Direct code evidence (td:0) | PASS |
+| New chunks default to enrichment_state='pending' (td:1) | Migration default is set at `serve/knowledge/src/owlbear_knowledge/schema.py:307`; fresh and upgraded DB insert/readback proofs both exist | `tests/test_enrichment_schema_1323.py:322`, `:325`, `:562` | PASS |
+| All #1323 tests pass green (td:0) | Independent quality-runner runtime evidence | 37 passed, 0 failed, 0 skipped | PASS |
+
+### Code-Reader Synthesis
+- No blocking security or TestFromAC integrity defects found.
+- The prior reviewer concerns are closed in the live tests: AC5 now uses exact-set checks at `tests/test_enrichment_schema_1323.py:248` and `:545`, and the upgrade-path default proof is now covered at `tests/test_enrichment_schema_1323.py:562`.
+- Code-reader noted that WAL has no mapped runtime test, but that AC is explicitly `td:0`; direct code evidence at `serve/knowledge/src/owlbear_knowledge/schema.py:363` is the correct proof type for this task.
+- Code-reader also noted broader robustness questions around suppressed `ALTER TABLE` failures and populated legacy-row migration behavior. Those concerns are outside the refined AC for this task and do not outweigh the current green runtime evidence.
+
+### Deductions
+| Reason | Evidence | Delta |
+|---|---|---|
+| WAL proof is direct code evidence rather than file-backed runtime evidence because both task fixtures use `:memory:` and the AC is `td:0` | `tests/test_enrichment_schema_1323.py:35`, `:387`; `serve/knowledge/src/owlbear_knowledge/schema.py:363` | -0.02 |
+| TestFromAC immutability could not be diff-backed in this tool surface | Live-file inspection only; no commit diff available here | -0.03 |
+
+### Verdict
+- PASS -> `docs`
+- Confidence: 0.95
+- Rationale: independent scoped execution is green, the previously failing AC5/AC7 proof gaps are closed, and the remaining concerns are either informational or explicitly outside the refined AC.
+[[2026-05-05]]
+## Docs Gate
+
+| Check | Applies? | Status | Evidence |
+|-------|----------|--------|----------|
+| 1. Descriptive prose docs | No | N/A | `serve/knowledge/README.md` documents the public API and module groups, not schema internals. No prose reference to DDL columns or schema version. No update needed. |
+| 2. Module docstrings | Yes | Fixed | `init_db` docstring said "migrated through v2-v10" — stale after v11 was added. Updated to "v2-v11". All private migration functions already have accurate docstrings. |
+| 3. External attribution | No | N/A | Builder notes cite no external patterns or articles. No new sources row needed. |
+| 4. Research doc | Yes | OK | `.owlbear/research/1324-enrichment-schema-additions.md` exists and is linked in task body. |
+| 5. Diagram maintenance | Yes | Updated | `share/diagrams/mcp-topology.excalidraw` describes `serve/knowledge/src/**` — matches changed `schema.py`. Footer updated to `Last verified: 2026-05-05 (12c2add1)`. |
+| 6. Explicit diagram creation | No | N/A | No diagram creation request in task body. |
+| 7. Deletion detection | No | N/A | No files deleted. No orphaned IN-scope docs. |
+
+**Files updated:** `serve/knowledge/src/owlbear_knowledge/schema.py` (docstring only), `share/diagrams/mcp-topology.excalidraw` (footer).
+**Commit:** `7da18c1b — docs: fix init_db docstring and diagram footer (#1324, doc-writer)`
+**Scratch files cleaned:** 5 files deleted (`1324-pytest-full.txt`, `1324-pytest-scoped.txt`, `1324-pytest.txt`, `1324-ruff-scoped.txt`, `1324-ruff.txt`).
+**Child tasks created:** none.
+[[2026-05-05]]
+## Audit
+
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| enrichment_state column (td:2) | schema.py:307 migration + tests/test_enrichment_schema_1323.py:82,495 | PASS |
+| enrichment_state separate from consolidated (td:1) | schema.py:78 DDL + test:118 | PASS |
+| claimed_at column (td:1) | schema.py:310 migration + test:161,505 | PASS |
+| reviewed_pairs table (td:2) | schema.py:173 DDL + test:189,211,525 | PASS |
+| Edge UNIQUE D17 (td:2) | schema.py:316 index + test:248 exact-set equality, test:545 upgrade-path exact-set | PASS |
+| WAL mode (td:0) | schema.py:363 PRAGMA (td:0 code evidence) | PASS |
+| Default enrichment_state='pending' (td:1) | schema.py:307 DEFAULT + test:325 fresh-path + test:562 upgrade insert/readback | PASS |
+| All #1323 tests pass green (td:0) | quality-runner full: task tests not in failure list (258 failures all unrelated) | PASS |
+
+### Test Results
+- pytest full suite: 4372 passed, 258 failed (all failures in unrelated task-scoped files: #1351, #1195, #1268, #1202, #1285, #1015, #1272, #1269, #1076)
+- Task-scoped tests (test_enrichment_schema_1323.py): 28 passed, 0 failed
+- ruff: 12 violations all in unrelated files (copilot_auth.py, tools/test_root.py); task file clean
+
+### Commit Integrity
+- d00994f9 feat: implement enrichment schema additions (#1324, builder)
+- 3dce3474 test: add v10-to-v11 upgrade-path tests for enrichment schema (#1324, test-writer)
+- 7da18c1b docs: fix init_db docstring and diagram footer (#1324, doc-writer)
+
+### Architect Quality: 3/5
+AC was directionally correct but lacked precision on upgrade-path proof requirements (AC5 subset vs exact-match, AC7 column-presence vs insert/readback). Required a full cycle-2 refinement after reviewer rejection. The refinement was cleanly specified and resolved the issues.
+
+### Deduction Breakdown
+| Criterion | Delta |
+|-----------|-------|
+| AC quality score 3 (leq 3) | -0.03 |
+
+### Confidence: 0.97
+### Action: archive
