@@ -24,7 +24,12 @@ from mcp.server.fastmcp.exceptions import ToolError
 
 from owlbear_mcp_memory.engine import MemoryEngine
 from owlbear_mcp_memory.models import MemoryEntry
-from owlbear_mcp_memory.server import app_lifespan, list_memories as server_list_memories, mcp
+from owlbear_mcp_memory.server import (
+    app_lifespan,
+    list_memories as server_list_memories,
+    mcp,
+    recall_memory as server_recall_memory,
+)
 from owlbear_mcp_memory.tools import approve_entry, query_memory, update_entry
 
 # ---------------------------------------------------------------------------
@@ -238,10 +243,10 @@ class TestFromAC_QueryMemoryLimit:
 
 
 class TestFromAC_MCPRegistration:
-    """6 tools registered and callable via MCP — server surface contract."""
+    """7 tools registered and callable via MCP — server surface contract."""
 
-    def test_all_six_tool_names_registered(self) -> None:
-        """All 6 expected tool names are present in the FastMCP registry."""
+    def test_all_tool_names_registered(self) -> None:
+        """All 7 expected tool names are present in the FastMCP registry."""
         registered = {t.name for t in mcp._tool_manager._tools.values()}  # noqa: SLF001
         expected = {
             "save_memory",
@@ -250,9 +255,73 @@ class TestFromAC_MCPRegistration:
             "curate_memory",
             "delete_memory",
             "approve_memory",
+            "recall_memory",
         }
         missing = expected - registered
         assert not missing, f"Tools not registered: {missing}; registered: {registered}"
+
+    def test_recall_memory_tool_schema_contract(self) -> None:
+        """recall_memory MCP schema: agent is required; categories and limit are optional.
+
+        AC: recall_memory registered with parameter schema (agent: required string,
+        categories: optional list, limit: optional int default 20).
+        Server wrapper declares limit: int | None = None — behavioral default 20
+        lives in tools.py, so MCP schema correctly marks limit as optional.
+        """
+        tool = next(
+            t for t in mcp._tool_manager._tools.values() if t.name == "recall_memory"  # noqa: SLF001
+        )
+        required = set(tool.parameters.get("required", []))
+
+        assert "agent" in required, "agent must be required in recall_memory schema"
+        assert "categories" not in required, "categories must be optional in recall_memory schema"
+        assert "limit" not in required, "limit must be optional in recall_memory schema"
+
+    @pytest.mark.asyncio
+    async def test_server_recall_memory_wrapper_callable_via_mcp_surface(
+        self, tmp_path: Path
+    ) -> None:
+        """Server recall_memory wrapper is callable and delegates to recall_memory_impl.
+
+        Exercises all 3 parameters (agent, categories, limit) to prove the MCP-visible
+        wrapper correctly forwards to the tools-layer implementation.
+        Seeded entries: one scoped/category-matching, one scoped/different category.
+        Only the matching entry must appear in the output.
+        """
+        entry_match = _make_entry(
+            id=_uuid(70),
+            title="Scoped curated entry",
+            content="Curated body text",
+            state="curated",
+            scope_agents=["test-agent"],
+            categories=["domain-knowledge"],
+            confidence=0.85,
+        )
+        entry_other_cat = _make_entry(
+            id=_uuid(71),
+            title="Different category entry",
+            content="Other body text",
+            state="approved",
+            scope_agents=["test-agent"],
+            categories=["pitfall"],
+            confidence=0.90,
+        )
+        _seed(tmp_path, entry_match)
+        _seed(tmp_path, entry_other_cat)
+        engine = MemoryEngine(memory_dir=tmp_path)
+        ctx = _make_ctx(engine)
+
+        result = await server_recall_memory(
+            ctx,
+            agent="test-agent",
+            categories=["domain-knowledge"],
+            limit=5,
+        )
+
+        assert isinstance(result, str)
+        assert "## Scoped curated entry" in result
+        assert "Curated body text" in result
+        assert "Different category entry" not in result
 
     @pytest.mark.asyncio
     async def test_server_list_memories_wrapper_callable_via_mcp_surface(
