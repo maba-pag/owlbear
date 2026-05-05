@@ -28,6 +28,9 @@ from owlbear_mcp_memory.tools import (
     read_memory as read_memory_impl,
 )
 from owlbear_mcp_memory.tools import (
+    recall_memory as recall_memory_impl,
+)
+from owlbear_mcp_memory.tools import (
     save_memory as save_memory_impl,
 )
 
@@ -91,6 +94,23 @@ async def list_memories(
         states=states,
         categories=categories,
         scope_agents=scope_agents,
+    )
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
+async def recall_memory(
+    ctx: Context,
+    *,
+    agent: str,
+    categories: list[str] | None = None,
+    limit: int | None = None,
+) -> str:  # pragma: no cover
+    """Recall markdown body blocks for entries scoped to a specific agent."""
+    return await recall_memory_impl(
+        ctx,
+        agent=agent,
+        categories=categories,
+        limit=limit,
     )
 
 
