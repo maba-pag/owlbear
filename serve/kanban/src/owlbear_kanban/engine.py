@@ -969,6 +969,9 @@ class KanbanEngine:
 
         Raises:
             ValueError: ``status`` or ``priority`` is not a valid configured value.
+            PermissionError: A post-write config reload yields a ``tasks_dir`` or
+                ``archive_dir`` path that escapes the board root (symlink escape).
+                The cached engine state is not mutated when this is raised.
         """
         config: BoardConfig = load_config(self._kanban_dir)
 
