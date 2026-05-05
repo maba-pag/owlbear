@@ -22,13 +22,19 @@ Memory lifecycle transitions are explicit and tool-driven:
 
 | From | To | Trigger | Tool | Actor |
 |------|----|---------|------|-------|
-| `pending` | `curated` | Curator promotes after review | `update_entry(state="curated")` | curator agent |
-| `curated` | `approved` | User signs off | `approve_entry` | human user |
-| `pending` | `deleted` | Noise/duplicate pruned | `delete_entry` | curator agent |
-| `curated` | `deleted` | Superseded or invalidated | `delete_entry` | curator agent |
-| `approved` | `deleted` | Obsolete knowledge purged | `delete_entry` | curator agent |
+| `pending` | `curated` | Curator promotes after review | `curate_memory(scope_agents=[...])` | curator agent |
+| `curated` | `approved` | User signs off | `approve_memory` | human user |
+| `approved` | `curated` | Any curator edit (auto-downgrade) | `curate_memory(...)` | curator agent |
+| `pending` | `deleted` | Noise/duplicate pruned | `delete_memory` (hard delete) | curator agent |
+| `curated` | `deleted` | Superseded or invalidated | `delete_memory` (soft delete) | curator agent |
+| `approved` | `deleted` | Obsolete knowledge purged | `delete_memory` (soft delete) | curator agent |
 
 Purge flow: periodic curation may mark previously approved entries as `deleted` when they become obsolete, stale, or replaced by better guidance.
+
+Tool hints are part of the workflow signal:
+
+- `curate_memory` returns hints describing promotion/downgrade/update path.
+- `delete_memory` returns whether hard-delete (pending) or soft-delete (curated/approved) was applied.
 
 ## Step 0 — Setup
 
@@ -45,10 +51,11 @@ Read `r-pipeline-protocol` skill if not already loaded.
 
 1. **Inventory existing thematic files:** `memory view /memories/repo/` — list all files (excluding `inbox/`, `deferred/`). These are the merge targets. Read each file's heading to understand its scope.
 2. **Capacity check:** count standalone files (not thematic). If any exist, add them to the consolidation queue (Step 4b).
-3. **Primary (MCP):** Call `query_memory(states=["pending"])` to fetch pending entries from the `owlbearMemory` MCP database. See `h-mcp-memory` for full parameter reference.
-4. **Secondary (file-based):** List the repo memory inbox: `memory view /memories/repo/inbox/` — read each file.
-5. Scan parent directory for misplaced entries agents wrote to `/memories/repo/` instead of the inbox. Move any unreviewed entries to the inbox first.
-6. Collect all entries from both sources for the remaining steps.
+3. **Primary (MCP):** Call `list_memories(states=["pending"])` to fetch pending entries from the `owlbearMemory` MCP database. See `h-mcp-memory` for full parameter reference.
+4. For each candidate ID, call `read_memory(entry_id=...)` to inspect the full entry content before scoring.
+5. **Secondary (file-based):** List the repo memory inbox: `memory view /memories/repo/inbox/` — read each file.
+6. Scan parent directory for misplaced entries agents wrote to `/memories/repo/` instead of the inbox. Move any unreviewed entries to the inbox first.
+7. Collect all entries from both sources for the remaining steps.
 
 ## Step 2 — Deduplicate
 
@@ -110,7 +117,7 @@ Rate each: **HIGH** / **MEDIUM** / **LOW** / **NOISE** / **DUPLICATE** / **CONFL
 
 ### Deletions
 
-- **MCP entries:** `delete_entry(entry_id)` — marks entry `deleted`, preserves file history and lifecycle state.
+- **MCP entries:** `delete_memory(entry_id)` — pending entries are hard-deleted; curated/approved entries are soft-deleted to `state=deleted`.
 - **File-based inbox entries:** `memory delete /memories/repo/inbox/{filename}`
 
 ## Step 4b — Consolidation (capacity-triggered)

@@ -22,13 +22,15 @@ Memory entries use markdown body + YAML frontmatter. Core fields:
 | `confidence` | float | Inclusive `[0.7, 1.0]` |
 | `state` | str | One of: `pending`, `curated`, `approved`, `deleted` |
 | `content` | str | Markdown body |
-| `scope_agents` | list[str] \| null | Optional scope list |
+| `scope_agents` | list[str] | Scope list (empty list allowed) |
+| `source_agent` | str | Required; immutable provenance marker |
 | `created_at` | str | UTC timestamp |
 | `updated_at` | str | UTC timestamp |
+| `approved_at` | str \| null | Approval timestamp (set on approve, cleared on downgrade/delete) |
 
 Enumerations and ranges used by the schema:
 
-- `categories` values: `knowledge`, `behaviour`, `pitfall`, `process`, `tool`, `goal`, `personality`, `preference`, `context`
+- `categories` values: `domain-knowledge`, `behaviour`, `pitfall`, `process`, `tool-usage`, `goal`, `personality`, `preference`, `env-context`
 - `state` values: `pending`, `curated`, `approved`, `deleted`
 - `confidence` range: inclusive `[0.7, 1.0]`
 
@@ -66,23 +68,39 @@ During active migration, both stores are written. After migration, MCP is sole c
 
 | Situation | Action |
 |-----------|--------|
-| Standard post-task reflection | Write MCP first via `store_learning`, then file-based inbox as fallback |
+| Standard post-task reflection | Write MCP first via `save_memory`, then file-based inbox as fallback |
 | MCP tool unavailable or errors | Write file-based inbox only; do not retry MCP |
 | Curation pass | Read both sources (see `w-mem-curation` Step 1); merge into MCP |
-| Pre-flight knowledge load | MCP only (`query_memory`) — file inbox is write-only for agents |
+| Pre-flight knowledge load | MCP only (`list_memories` + `read_memory`) — file inbox is write-only for agents |
 
 Dual-write procedure is defined in `r-pipeline-protocol` § Post-task Reflection. Follow it exactly.
+
+## State Model
+
+Lifecycle transitions are controlled by MCP tools:
+
+| From | To | Trigger | Tool |
+|------|----|---------|------|
+| `pending` | `curated` | Curator sets scope or explicit state during curation | `curate_memory` |
+| `curated` | `approved` | User approval | `approve_memory` |
+| `approved` | `curated` | Any curation edit (auto-downgrade) | `curate_memory` |
+| `pending` | `deleted` | Prune noise/duplicates (hard delete from disk) | `delete_memory` |
+| `curated` | `deleted` | Prune superseded guidance (soft delete) | `delete_memory` |
+| `approved` | `deleted` | Retire obsolete approved guidance (soft delete) | `delete_memory` |
+
+Tool responses include hints describing which branch was applied (for example, pending promotion, approved downgrade, hard-delete vs soft-delete).
 
 ## Deduplication Rules
 
 These rules apply at **write time** to prevent recording near-duplicates. Curation-time dedup (grouping, merging, pruning) is handled by `w-mem-curation` Step 2 — do not replicate that logic here.
 
-**Before calling `store_learning`:**
+**Before calling `save_memory`:**
 
-1. Call `query_memory()` (or `query_memory(states=["pending","curated","approved"])` for broader checks) and scan returned entries.
-2. If an existing entry covers the same core insight, **do not record**. Append new evidence as a note to the task body instead.
-3. If an existing entry is partially overlapping, record only the delta (what the existing entry lacks).
-4. On conflict (new entry contradicts an existing approved entry), record the new entry with `categories=["knowledge"]` and note the conflict in the `content` field: `"Contradicts {entry_id}: ..."`.
+1. Call `list_memories(states=["pending","curated","approved"])` and inspect returned metadata.
+2. Use `read_memory(entry_id=...)` for full-content checks on likely overlaps.
+3. If an existing entry covers the same core insight, **do not record**. Append new evidence as a note to the task body instead.
+4. If an existing entry is partially overlapping, record only the delta (what the existing entry lacks).
+5. On conflict (new entry contradicts an existing approved entry), record the new entry with `categories=["domain-knowledge"]` and note the conflict in the `content` field: `"Contradicts {entry_id}: ..."`.
 
 **Which entry wins:** The most recently recorded entry with higher confidence wins at retrieval. The curator resolves conflicts during curation — do not delete approved entries yourself.
 
@@ -108,7 +126,7 @@ An entry **fails** if any of the following are true:
 | Confidence | When to use |
 |-----------|------------|
 | 0.7 | Single occurrence, plausible but unverified |
-| 0.8 | Single occurrence, verified by test or observation (pipeline default) |
+| 0.8 | Single occurrence, verified by test or observation |
 | 0.9 | Recurring pattern (2+ tasks) |
 | 1.0 | Reserved — do not use |
 
