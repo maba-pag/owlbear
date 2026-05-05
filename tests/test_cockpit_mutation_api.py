@@ -877,3 +877,91 @@ class TestFromAC_BlockUserTagConflict:
         assert "scope:test" in result_tags, (
             f"Expected scope:test in tags after block, got {result_tags!r}"
         )
+
+
+# ---------------------------------------------------------------------------
+# AC7: Durable proof of parent:null, body:"", body:null/omitted, negative parent
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_EditBodyParentSemantics:
+    """Durable proof of tri-state body/parent edit semantics (AC7).
+
+    AC7 requires:
+      (a) parent: null → clears parent
+      (b) body: "" → clears body
+      (c) body: null / omitted → no change
+      (d) negative parent → 422
+    """
+
+    def test_edit_parent_null_clears_parent(
+        self, client: TestClient, engine: KanbanEngine
+    ) -> None:
+        """AC7(a): parent: null in request body clears the parent field."""
+        engine.edit_task("1", parent=3)
+        task = engine.show_task("1")
+        assert task.parent == 3, "Precondition: task 1 must have parent=3"
+
+        response = client.post(
+            "/api/tasks/1/edit",
+            json={"updated": task.updated, "parent": None},
+        )
+        assert response.status_code == 200
+        assert response.json()["parent"] is None
+
+    def test_edit_body_empty_string_clears_body(
+        self, client: TestClient, engine: KanbanEngine
+    ) -> None:
+        """AC7(b): body: "" clears the task body to empty string."""
+        engine.edit_task("1", body="## Original content")
+        task = engine.show_task("1")
+        assert task.body, "Precondition: task 1 must have a non-empty body"
+
+        response = client.post(
+            "/api/tasks/1/edit",
+            json={"updated": task.updated, "body": ""},
+        )
+        assert response.status_code == 200
+        assert response.json()["body"] == ""
+
+    def test_edit_body_null_does_not_change_body(
+        self, client: TestClient, engine: KanbanEngine
+    ) -> None:
+        """AC7(c): body: null leaves the task body unchanged (no-change semantics)."""
+        original_body = "## Persistent content"
+        engine.edit_task("1", body=original_body)
+        task = engine.show_task("1")
+        assert task.body == original_body, "Precondition: body must be set"
+
+        response = client.post(
+            "/api/tasks/1/edit",
+            json={"updated": task.updated, "title": "no-op body", "body": None},
+        )
+        assert response.status_code == 200
+        assert response.json()["body"] == original_body
+
+    def test_edit_body_omitted_does_not_change_body(
+        self, client: TestClient, engine: KanbanEngine
+    ) -> None:
+        """AC7(c): omitting body from the request leaves the task body unchanged."""
+        original_body = "## Persistent content that must survive"
+        engine.edit_task("1", body=original_body)
+        task = engine.show_task("1")
+
+        response = client.post(
+            "/api/tasks/1/edit",
+            json={"updated": task.updated, "title": "changed title, body omitted"},
+        )
+        assert response.status_code == 200
+        assert response.json()["body"] == original_body
+
+    def test_edit_negative_parent_returns_422(
+        self, client: TestClient, engine: KanbanEngine
+    ) -> None:
+        """AC7(d): negative parent value returns 422."""
+        task = engine.show_task("1")
+        response = client.post(
+            "/api/tasks/1/edit",
+            json={"updated": task.updated, "parent": -1},
+        )
+        assert response.status_code == 422

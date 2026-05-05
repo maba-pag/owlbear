@@ -13,6 +13,7 @@ import { beforeAll, describe, it, expect, vi, afterEach } from 'vitest'
 import { render, fireEvent, waitFor } from '@testing-library/react'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
 import DetailTab, { type TaskDetail } from '../components/DetailTab'
+import type { Board } from '../hooks/useBoard'
 
 // Newer jsdom versions expose a partial attachInternals that lacks setFormValue,
 // causing PDS Stencil form components (p-input-text, p-textarea, p-select) to
@@ -64,6 +65,28 @@ const TASK_WITH_DEPS: TaskDetail = {
   parent: 5,
 }
 
+const BOARD: Board = {
+  statuses: [
+    { name: 'research' },
+    { name: 'backlog' },
+    { name: 'todo' },
+    { name: 'in-progress' },
+    { name: 'review' },
+    { name: 'docs' },
+    { name: 'done' },
+  ],
+  priorities: ['someday', 'nice-to-have', 'important', 'needed', 'critical'],
+  valid_transitions: {
+    research: ['backlog'],
+    backlog: ['research', 'todo'],
+    todo: ['backlog', 'in-progress'],
+    'in-progress': ['todo', 'review'],
+    review: ['in-progress', 'docs'],
+    docs: ['review', 'done'],
+    done: [],
+  },
+}
+
 const SESSIONS_SINGLE = {
   sessions: [
     {
@@ -106,6 +129,21 @@ function renderDetail(task: TaskDetail = TASK) {
       <DetailTab task={task} />
     </PorscheDesignSystemProvider>,
   )
+}
+
+function renderDetailWithBoard(task: TaskDetail = TASK, board: Board | null = BOARD) {
+  return render(
+    <PorscheDesignSystemProvider>
+      <DetailTab task={task} board={board} />
+    </PorscheDesignSystemProvider>,
+  )
+}
+
+function clickConfirm(container: HTMLElement): void {
+  const btns = container.querySelectorAll('[data-testid="confirm-dialog"] p-button')
+  const confirmBtn = btns[btns.length - 1] as HTMLElement | null
+  expect(confirmBtn).not.toBeNull()
+  fireEvent.click(confirmBtn!)
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
@@ -571,10 +609,250 @@ describe('TestBuilderDiscovered', () => {
 
       await waitFor(
         () => {
-          expect(fetchMock).toHaveBeenCalledTimes(2)
-          const [url, options] = fetchMock.mock.calls[1] as unknown as [string, RequestInit]
-          expect(url).toContain('/api/tasks/42/edit')
-          expect(options.method).toBe('POST')
+          // Three calls: initial POST (409), refetch GET, force-save POST
+          expect(fetchMock).toHaveBeenCalledTimes(3)
+          // Call 2 (index 1): refetch GET /api/tasks/{id}
+          const [refetchUrl, refetchOpts] = fetchMock.mock.calls[1] as unknown as [string, RequestInit]
+          expect(refetchUrl).toContain('/api/tasks/42')
+          expect(refetchOpts.method).toBe('GET')
+          // Call 3 (index 2): force-save POST /api/tasks/{id}/edit
+          const [forceSaveUrl, forceSaveOpts] = fetchMock.mock.calls[2] as unknown as [string, RequestInit]
+          expect(forceSaveUrl).toContain('/api/tasks/42/edit')
+          expect(forceSaveOpts.method).toBe('POST')
+        },
+        { timeout: 500 },
+      )
+    })
+  })
+
+  // ─── AC8: Typed save payload proofs ────────────────────────────────────────
+
+  describe('save payload typed fields (AC8)', () => {
+    it('save payload includes depends_on as an array of integers', async () => {
+      const fetchMock = vi.fn(() =>
+        Promise.resolve({ ok: true, json: () => Promise.resolve(TASK_WITH_DEPS) }),
+      )
+      vi.stubGlobal('fetch', fetchMock)
+      const { container } = renderDetail(TASK_WITH_DEPS)
+      const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
+      expect(saveBtn).not.toBeNull()
+      fireEvent.click(saveBtn!)
+      await waitFor(
+        () => {
+          const [, options] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+          const body = JSON.parse(options.body as string) as Record<string, unknown>
+          expect(body).toHaveProperty('depends_on')
+          const deps = body['depends_on'] as unknown[]
+          expect(Array.isArray(deps)).toBe(true)
+          expect(deps.every((d) => typeof d === 'number')).toBe(true)
+          expect(deps).toContain(10)
+          expect(deps).toContain(20)
+        },
+        { timeout: 500 },
+      )
+    })
+
+    it('save payload includes parent as integer when task has a parent', async () => {
+      const fetchMock = vi.fn(() =>
+        Promise.resolve({ ok: true, json: () => Promise.resolve(TASK_WITH_DEPS) }),
+      )
+      vi.stubGlobal('fetch', fetchMock)
+      const { container } = renderDetail(TASK_WITH_DEPS)
+      const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
+      expect(saveBtn).not.toBeNull()
+      fireEvent.click(saveBtn!)
+      await waitFor(
+        () => {
+          const [, options] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+          const body = JSON.parse(options.body as string) as Record<string, unknown>
+          expect(body).toHaveProperty('parent')
+          expect(typeof body['parent']).toBe('number')
+          expect(body['parent']).toBe(5)
+        },
+        { timeout: 500 },
+      )
+    })
+
+    it('save payload includes parent as null when task has no parent', async () => {
+      const fetchMock = vi.fn(() =>
+        Promise.resolve({ ok: true, json: () => Promise.resolve(TASK) }),
+      )
+      vi.stubGlobal('fetch', fetchMock)
+      const { container } = renderDetail(TASK)
+      const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
+      expect(saveBtn).not.toBeNull()
+      fireEvent.click(saveBtn!)
+      await waitFor(
+        () => {
+          const [, options] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+          const body = JSON.parse(options.body as string) as Record<string, unknown>
+          expect(body).toHaveProperty('parent')
+          expect(body['parent']).toBeNull()
+        },
+        { timeout: 500 },
+      )
+    })
+
+    it('save payload includes block_reason string for blocked tasks', async () => {
+      const fetchMock = vi.fn(() =>
+        Promise.resolve({ ok: true, json: () => Promise.resolve(TASK_BLOCKED) }),
+      )
+      vi.stubGlobal('fetch', fetchMock)
+      const { container } = renderDetail(TASK_BLOCKED)
+      const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
+      expect(saveBtn).not.toBeNull()
+      fireEvent.click(saveBtn!)
+      await waitFor(
+        () => {
+          const [, options] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+          const body = JSON.parse(options.body as string) as Record<string, unknown>
+          expect(body).toHaveProperty('block_reason')
+          expect(typeof body['block_reason']).toBe('string')
+          expect(body['block_reason']).toBe('Waiting for dependency #100')
+        },
+        { timeout: 500 },
+      )
+    })
+  })
+
+  // ─── AC8: Action endpoint proofs ───────────────────────────────────────────
+
+  describe('action endpoint proofs (AC8)', () => {
+    it('unblock confirmation POSTs to edit endpoint with block_reason: null', async () => {
+      const fetchMock = vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ...TASK_BLOCKED, blocked: false, block_reason: null }),
+        }),
+      )
+      vi.stubGlobal('fetch', fetchMock)
+      const { container } = renderDetail(TASK_BLOCKED)
+      const unblockBtn = container.querySelector('[data-testid="unblock-action"]') as HTMLElement | null
+      expect(unblockBtn).not.toBeNull()
+      fireEvent.click(unblockBtn!)
+      await waitFor(
+        () => expect(container.querySelector('[data-testid="confirm-dialog"]')).not.toBeNull(),
+        { timeout: 500 },
+      )
+      clickConfirm(container)
+      await waitFor(
+        () => {
+          const editCalls = fetchMock.mock.calls.filter(([url]) =>
+            (url as string).includes(`/api/tasks/${TASK_BLOCKED.id}/edit`),
+          )
+          expect(editCalls.length).toBeGreaterThan(0)
+          const [, options] = editCalls[0] as unknown as [string, RequestInit]
+          const body = JSON.parse(options.body as string) as Record<string, unknown>
+          expect(body).toHaveProperty('block_reason', null)
+        },
+        { timeout: 500 },
+      )
+    })
+
+    it('unclaim confirmation POSTs to the release endpoint', async () => {
+      const fetchMock = vi.fn(() =>
+        Promise.resolve({ ok: true, json: () => Promise.resolve(TASK) }),
+      )
+      vi.stubGlobal('fetch', fetchMock)
+      const { container } = renderDetail(TASK)
+      const unclaimBtn = container.querySelector('[data-testid="unclaim-action"]') as HTMLElement | null
+      expect(unclaimBtn).not.toBeNull()
+      fireEvent.click(unclaimBtn!)
+      await waitFor(
+        () => expect(container.querySelector('[data-testid="confirm-dialog"]')).not.toBeNull(),
+        { timeout: 500 },
+      )
+      clickConfirm(container)
+      await waitFor(
+        () => {
+          const releaseCalls = fetchMock.mock.calls.filter(([url]) =>
+            (url as string).includes(`/api/tasks/${TASK.id}/release`),
+          )
+          expect(releaseCalls.length).toBeGreaterThan(0)
+        },
+        { timeout: 500 },
+      )
+    })
+
+    it('move-backward sends previous pipeline status in the request body', async () => {
+      const fetchMock = vi.fn(() =>
+        Promise.resolve({ ok: true, json: () => Promise.resolve(TASK) }),
+      )
+      vi.stubGlobal('fetch', fetchMock)
+      // TASK.status = 'todo'; previous status in BOARD is 'backlog'
+      const { container } = renderDetailWithBoard(TASK, BOARD)
+      const moveBackBtn = container.querySelector('[data-testid="move-backward"]') as HTMLElement | null
+      expect(moveBackBtn).not.toBeNull()
+      fireEvent.click(moveBackBtn!)
+      await waitFor(
+        () => expect(container.querySelector('[data-testid="confirm-dialog"]')).not.toBeNull(),
+        { timeout: 500 },
+      )
+      clickConfirm(container)
+      await waitFor(
+        () => {
+          const moveCalls = fetchMock.mock.calls.filter(([url]) =>
+            (url as string).includes(`/api/tasks/${TASK.id}/move`),
+          )
+          expect(moveCalls.length).toBeGreaterThan(0)
+          const [, options] = moveCalls[0] as unknown as [string, RequestInit]
+          const body = JSON.parse(options.body as string) as Record<string, unknown>
+          // TASK.status = 'todo' → previous status in BOARD is 'backlog'
+          expect(body).toHaveProperty('status', 'backlog')
+        },
+        { timeout: 500 },
+      )
+    })
+
+    it('404 from mutation calls onTaskCleared callback', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(() =>
+          Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({ detail: 'not found' }) }),
+        ),
+      )
+      const onTaskCleared = vi.fn()
+      const { container } = render(
+        <PorscheDesignSystemProvider>
+          <DetailTab task={TASK} onTaskCleared={onTaskCleared} />
+        </PorscheDesignSystemProvider>,
+      )
+      const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
+      expect(saveBtn).not.toBeNull()
+      fireEvent.click(saveBtn!)
+      await waitFor(
+        () => {
+          expect(onTaskCleared).toHaveBeenCalledTimes(1)
+        },
+        { timeout: 500 },
+      )
+    })
+  })
+
+  // ─── AC8: onTaskUpdated callback ───────────────────────────────────────────
+
+  describe('onTaskUpdated callback (AC8)', () => {
+    it('successful save calls onTaskUpdated with the response task', async () => {
+      const updatedTask: TaskDetail = { ...TASK, title: 'Updated title from server' }
+      const fetchMock = vi.fn(() =>
+        Promise.resolve({ ok: true, json: () => Promise.resolve(updatedTask) }),
+      )
+      vi.stubGlobal('fetch', fetchMock)
+      const onTaskUpdated = vi.fn()
+      const { container } = render(
+        <PorscheDesignSystemProvider>
+          <DetailTab task={TASK} onTaskUpdated={onTaskUpdated} />
+        </PorscheDesignSystemProvider>,
+      )
+      const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
+      expect(saveBtn).not.toBeNull()
+      fireEvent.click(saveBtn!)
+      await waitFor(
+        () => {
+          expect(onTaskUpdated).toHaveBeenCalledTimes(1)
+          expect(onTaskUpdated).toHaveBeenCalledWith(
+            expect.objectContaining({ title: 'Updated title from server' }),
+          )
         },
         { timeout: 500 },
       )
