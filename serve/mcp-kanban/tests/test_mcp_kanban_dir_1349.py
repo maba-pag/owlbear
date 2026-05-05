@@ -324,6 +324,78 @@ class TestFromAC_StartupValidation:
             async with app_lifespan(_server_mock()) as _ctx:
                 pass
 
+    @pytest.mark.asyncio
+    async def test_engine_init_failure_message_names_path_and_kanban_dir(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """AC4 (engine-init branch): exception names the resolved path AND 'KANBAN_DIR'."""
+        empty_dir = tmp_path / "no_config_board"
+        empty_dir.mkdir()
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("KANBAN_DIR", str(empty_dir))
+
+        with pytest.raises(Exception) as exc_info:
+            async with app_lifespan(_server_mock()) as _ctx:
+                pass
+
+        error_msg = str(exc_info.value)
+        assert str(empty_dir.resolve()) in error_msg, (
+            f"Engine-init failure must name the resolved board path "
+            f"{str(empty_dir.resolve())!r} in: {error_msg!r}"
+        )
+        assert "KANBAN_DIR" in error_msg, (
+            f"Engine-init failure must include 'KANBAN_DIR' remediation hint in: {error_msg!r}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_tasks_dir_failure_message_names_path_and_kanban_dir(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """AC4 (tasks-dir branch): exception names the resolved board path AND 'KANBAN_DIR'."""
+        board = tmp_path / "board_no_tasks"
+        board.mkdir()
+        (board / "config.yml").write_text(_CONFIG_YAML, encoding="utf-8")
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("KANBAN_DIR", str(board))
+
+        with patch("owlbear_mcp_kanban.server.KanbanEngine") as mock_cls:
+            mock_cls.return_value = _mocked_engine(tasks_dir_exists=False)
+            with pytest.raises(Exception) as exc_info:
+                async with app_lifespan(_server_mock()) as _ctx:
+                    pass
+
+        error_msg = str(exc_info.value)
+        assert str(board.resolve()) in error_msg, (
+            f"Tasks-dir failure must name the resolved board path "
+            f"{str(board.resolve())!r} in: {error_msg!r}"
+        )
+        assert "KANBAN_DIR" in error_msg, (
+            f"Tasks-dir failure must include 'KANBAN_DIR' remediation hint in: {error_msg!r}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_nonexistent_board_skips_engine_construction(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """AC3a ordering: is_dir() fails before KanbanEngine is ever constructed."""
+        nonexistent = tmp_path / "ghost_board"
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("KANBAN_DIR", str(nonexistent))
+
+        with patch("owlbear_mcp_kanban.server.KanbanEngine") as mock_cls, pytest.raises(
+            Exception, match=str(nonexistent)
+        ):
+            async with app_lifespan(_server_mock()) as _ctx:
+                pass
+
+        mock_cls.assert_not_called()
+
 
 # ---------------------------------------------------------------------------
 # AC5 — sweep() ordering: only called after all validation passes
