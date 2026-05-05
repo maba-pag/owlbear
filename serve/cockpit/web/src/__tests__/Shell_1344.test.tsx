@@ -93,10 +93,13 @@ const TASK_42_DETAIL: TaskDetail = {
   depends_on: [],
 }
 
-// Updated task returned by the save endpoint — title differs to trigger refetchTasks().
+// Updated task returned by the save endpoint — title AND updated differ.
+// Different updated triggers the DetailTab useEffect so title state re-syncs,
+// enabling a discriminating assertion that the new title is actually rendered.
 const TASK_42_UPDATED: TaskDetail = {
   ...TASK_42_DETAIL,
   title: 'Updated Title From Server',
+  updated: '2026-01-02T00:00:00+00:00',
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -205,12 +208,17 @@ describe('TestFromAC_ShellOnTaskUpdated (AC6)', () => {
     expect(saveBtn).not.toBeNull()
     fireEvent.click(saveBtn!)
 
-    // AC6: Shell receives onTaskUpdated(TASK_42_UPDATED) and calls setSelectedTask.
-    // DetailTab remounts/updates; field-id is still 42 (unchanged id proves re-render with updated data).
+    // AC6 discriminating assertion: Shell receives onTaskUpdated(TASK_42_UPDATED) and calls
+    // setSelectedTask(updatedTask). The new task.updated differs from the original, so DetailTab's
+    // useEffect fires, re-syncing title state to 'Updated Title From Server'. This would fail if
+    // setSelectedTask were not called (title would remain 'Original Title').
     await waitFor(
       () => {
-        // Verify the detail panel is still showing task 42 after the update
-        expect(container.querySelector('[data-testid="field-id"]')?.textContent).toBe('42')
+        const titleInput = container.querySelector('p-input-text[data-field="title"]') as
+          | (HTMLElement & { value?: string })
+          | null
+        const titleValue = titleInput?.value ?? titleInput?.getAttribute('value')
+        expect(titleValue).toBe('Updated Title From Server')
       },
       { timeout: 500 },
     )

@@ -986,3 +986,85 @@ class TestFromAC_EditBodyParentSemantics:
         body = response.json()
         assert body["blocked"] is False, "empty block_reason must unblock the task"
         assert "block:user" not in (body.get("tags") or []), "block:user tag must be removed"
+
+
+# ---------------------------------------------------------------------------
+# AC1: Durable proof of tags/depends_on clear+omit semantics
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_EditListClearOmit:
+    """Durable proof of tags/depends_on clear+omit semantics (AC1).
+
+    _apply_list_diff() in mutation.py handles:
+    - desired=[] → clear (remove all current items from the task)
+    - desired=None (field omitted from request) → no-op (preserve current items)
+    """
+
+    def test_edit_tags_empty_list_clears_all_tags(
+        self, client: TestClient, engine: KanbanEngine
+    ) -> None:
+        """AC1: tags=[] removes all existing tags (full-clear semantics)."""
+        engine.edit_task("1", add_tags=["scope:test", "type:bug"])
+        task = engine.show_task("1")
+        assert {"scope:test", "type:bug"} <= set(task.tags or []), (
+            "Precondition: task 1 must have scope:test and type:bug tags"
+        )
+
+        response = client.post(
+            "/api/tasks/1/edit",
+            json={"updated": task.updated, "tags": []},
+        )
+        assert response.status_code == 200
+        assert response.json()["tags"] == []
+
+    def test_edit_depends_on_empty_list_clears_all_deps(
+        self, client: TestClient, engine: KanbanEngine
+    ) -> None:
+        """AC1: depends_on=[] removes all existing dependencies (full-clear semantics)."""
+        engine.edit_task("1", add_deps=[3])
+        task = engine.show_task("1")
+        assert 3 in (task.depends_on or []), (
+            "Precondition: task 1 must have dep on task 3"
+        )
+
+        response = client.post(
+            "/api/tasks/1/edit",
+            json={"updated": task.updated, "depends_on": []},
+        )
+        assert response.status_code == 200
+        assert response.json()["depends_on"] == []
+
+    def test_edit_tags_field_omitted_preserves_existing_tags(
+        self, client: TestClient, engine: KanbanEngine
+    ) -> None:
+        """AC1: omitting tags from request leaves existing tags unchanged (omit semantics)."""
+        engine.edit_task("1", add_tags=["scope:test"])
+        task = engine.show_task("1")
+        assert "scope:test" in (task.tags or []), (
+            "Precondition: task 1 must have scope:test tag"
+        )
+
+        response = client.post(
+            "/api/tasks/1/edit",
+            json={"updated": task.updated, "title": "title change, tags omitted"},
+        )
+        assert response.status_code == 200
+        assert "scope:test" in (response.json()["tags"] or [])
+
+    def test_edit_depends_on_field_omitted_preserves_existing_deps(
+        self, client: TestClient, engine: KanbanEngine
+    ) -> None:
+        """AC1: omitting depends_on from request leaves existing deps unchanged (omit semantics)."""
+        engine.edit_task("1", add_deps=[3])
+        task = engine.show_task("1")
+        assert 3 in (task.depends_on or []), (
+            "Precondition: task 1 must have dep on task 3"
+        )
+
+        response = client.post(
+            "/api/tasks/1/edit",
+            json={"updated": task.updated, "title": "title change, deps omitted"},
+        )
+        assert response.status_code == 200
+        assert 3 in (response.json()["depends_on"] or [])

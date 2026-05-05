@@ -945,5 +945,57 @@ describe('TestBuilderDiscovered', () => {
         { timeout: 500 },
       )
     })
+
+    it('typed priority value overrides seeded priority in save payload', async () => {
+      const fetchMock = vi.fn(() =>
+        Promise.resolve({ ok: true, json: () => Promise.resolve(TASK) }),
+      )
+      vi.stubGlobal('fetch', fetchMock)
+      const { container } = renderDetail(TASK)
+
+      const prioritySelect = container.querySelector('p-select[data-field="priority"]') as HTMLElement | null
+      expect(prioritySelect).not.toBeNull()
+      // PSelect uses onChange → React attaches a 'change' listener on the custom element
+      fireEvent(prioritySelect!, new CustomEvent('change', { detail: { value: 'critical' }, bubbles: true }))
+
+      const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
+      fireEvent.click(saveBtn!)
+
+      await waitFor(
+        () => {
+          const [, options] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+          const body = JSON.parse(options.body as string) as Record<string, unknown>
+          expect(body['priority']).toBe('critical')
+          // Must not echo the seeded 'important' value
+          expect(body['priority']).not.toBe(TASK.priority)
+        },
+        { timeout: 500 },
+      )
+    })
+
+    it('typed depends_on value overrides seeded value in save payload', async () => {
+      const fetchMock = vi.fn(() =>
+        Promise.resolve({ ok: true, json: () => Promise.resolve(TASK) }),
+      )
+      vi.stubGlobal('fetch', fetchMock)
+      const { container } = renderDetail(TASK)
+
+      const depsInput = container.querySelector('p-input-text[data-field="depends_on"]') as HTMLElement | null
+      expect(depsInput).not.toBeNull()
+      // PInputText uses onInput → fire 'input' CustomEvent with detail.value
+      fireEvent(depsInput!, new CustomEvent('input', { detail: { value: '10, 20' }, bubbles: true }))
+
+      const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
+      fireEvent.click(saveBtn!)
+
+      await waitFor(
+        () => {
+          const [, options] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+          const body = JSON.parse(options.body as string) as Record<string, unknown>
+          expect(body['depends_on']).toEqual([10, 20])
+        },
+        { timeout: 500 },
+      )
+    })
   })
 })
