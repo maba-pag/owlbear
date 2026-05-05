@@ -684,3 +684,77 @@ class TestFromAC_EndWorkSuccessMoveTo:
             note=None,
         )
         assert result.status == "done"
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_BlockMoveToMatrix
+# AC10 (refined): The move_to parameter matrix must be explicit and consistent.
+# Specifically, the SKILL.md 'block' outcome row and the README 'block' bullet
+# must document that move_to is optional on 'block'.
+# Currently both omit any mention of move_to for 'block'.
+# Builder fix: add "Optionally move to `move_to` status." to SKILL.md block row,
+# and "optionally move to `move_to`" to README block bullet.
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_BlockMoveToMatrix:
+    """AC10: SKILL.md and README 'block' outcome entries mention optional move_to."""
+
+    def _skill_block_row(self) -> str:
+        """Return the 'block' table row from the SKILL.md end_work Outcome table."""
+        assert _SKILL_MD.exists(), f"SKILL.md not found at {_SKILL_MD}"
+        text = _SKILL_MD.read_text(encoding="utf-8")
+        idx = text.find("### end_work")
+        assert idx != -1, "'### end_work' section not found in SKILL.md"
+        section = text[idx:]
+        for line in section.splitlines():
+            if "| `block`" in line or "| block |" in line.lower():
+                return line
+        return ""
+
+    def _readme_block_bullet(self) -> str:
+        """Return the 'block' bullet line from the README end_work Outcomes section."""
+        assert _README_MD.exists(), f"README.md not found at {_README_MD}"
+        text = _README_MD.read_text(encoding="utf-8")
+        idx = text.lower().find("end_work outcomes")
+        assert idx != -1, "'end_work Outcomes' section not found in README.md"
+        section = text[idx:]
+        for line in section.splitlines():
+            stripped = line.strip()
+            if stripped.startswith(("- `block`", "- block:")):
+                return line
+        return ""
+
+    def test_skill_md_block_row_mentions_move_to(self) -> None:
+        """SKILL.md end_work 'block' table row must mention optional 'move_to'.
+
+        Current row: '| `block` | Mark blocked with `block_reason`, release claim. |'
+        — no mention of move_to. After builder fix: row must include 'move_to'
+        to document that move_to is optional on block, consistent with the
+        code at agent_view.py:1000, :1107, :1162.
+        """
+        row = self._skill_block_row()
+        assert row, "| `block` | row not found in SKILL.md end_work Outcome table."
+        assert "move_to" in row, (
+            f"SKILL.md 'block' outcome row does not mention 'move_to'.\n"
+            f"Current row: {row!r}\n"
+            "AC10 (refined): block row must document that move_to is optional "
+            "(required on reject, optional on success/block, forbidden on fail/release)."
+        )
+
+    def test_readme_block_bullet_mentions_move_to(self) -> None:
+        """README end_work 'block' bullet must mention optional 'move_to'.
+
+        Current bullet: '- `block`: Mark task blocked (requires `block_reason`), then release claim.'
+        — no mention of move_to. After builder fix: bullet must include 'move_to'
+        to document that move_to is optional on block, consistent with the
+        engine implementation and the full lifecycle matrix.
+        """
+        bullet = self._readme_block_bullet()
+        assert bullet, "- `block` bullet not found in README.md end_work Outcomes section."
+        assert "move_to" in bullet, (
+            f"README 'block' outcome bullet does not mention 'move_to'.\n"
+            f"Current bullet: {bullet!r}\n"
+            "AC10 (refined): block bullet must document that move_to is optional "
+            "(required on reject, optional on success/block, forbidden on fail/release)."
+        )
