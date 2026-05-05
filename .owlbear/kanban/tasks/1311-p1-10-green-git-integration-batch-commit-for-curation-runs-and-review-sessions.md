@@ -5,12 +5,13 @@ title: 'P1-10: GREEN — Git integration (batch commit for curation runs and rev
 status: research
 priority: needed
 created: 2026-05-04T01:32:27.341678+00:00
-updated: 2026-05-04T01:34:54.299860+00:00
+updated: 2026-05-05T21:36:04.746460+00:00
 tags:
 - phase-2
 - scope:mcp-memory
 - memory
 - mcp
+- merged
 parent: 1301
 depends_on:
 - 1310
@@ -37,3 +38,8 @@ Brief: see parent #1301
 
 - In: git integration module, batch commit triggers, file staging logic
 - Out: tool handlers (done in #1307/#1309), consumer wiring, agent files
+[[2026-05-05]]
+
+
+## Merged
+This task has been merged into #1310. The builder implemented both tests and the git.py module under #1310 during its first cycle. The architect consolidated scope here during cycle 2 review (2026-05-05). No further work needed on this task — advance to done when triaged.

@@ -1,10 +1,10 @@
 ---
 id: 1327
 title: 'P2-11: Tests — Phase 1 enrichment tools (get_next_batch, store_enrichment)'
-status: in-progress
+status: archived
 priority: needed
 created: 2026-05-04T05:48:50.111772+00:00
-updated: 2026-05-05T09:14:59.185588+00:00
+updated: 2026-05-05T21:47:02.872165+00:00
 tags:
 - phase-2
 - scope:mcp-knowledge
@@ -14,8 +14,8 @@ parent: 1316
 depends_on:
 - 1324
 - 1318
-blocked: true
-block_reason: postponed
+blocked: false
+block_reason:
 claimed_at:
 archival_reason:
 archival_refs: []
@@ -432,3 +432,132 @@ Verdict: APPROVE → todo
 | AC1 (td:2): IMMEDIATE transaction (discriminating) | test_uses_immediate_transaction, test_immediate_transaction_used_when_no_pending_chunks, test_select_and_update_within_single_immediate_transaction |
 | AC2 (td:2): section_path round-trip + LEFT JOIN NULL proof | test_returns_chunk_id_field, test_returns_text_field_with_chunk_content, test_returns_doc_title_from_documents_join, test_returns_source_name_from_knowledge_sources_join, **test_source_name_is_none_for_document_without_knowledge_source** (NEW), test_returns_section_path_field, test_section_path_round_trip_from_metadata_json, test_limit_parameter_caps_returned_items |
 | AC3–AC9 | All 20 original tests preserved and passing |
+[[2026-05-05]]
+## Builder Notes
+- Implementation: no source edits in this pass; this cycle was verification-only after the latest test-writer retry.
+- Files changed: none.
+- Tests: 28 passed, 0 failed, 0 skipped on tests/test_mcp_knowledge_enrichment_tools_1327.py (quality-runner scoped run).
+- Coverage: 37% on owlbear_mcp_knowledge.server (module-level informational; AC-targeted behavior covered by task suite).
+- Ruff: clean on serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py and tests/test_mcp_knowledge_enrichment_tools_1327.py.
+- Evidence summary: AC1/AC2 discriminating tests and prior AC3-AC9 tests are all green in the current verification run.
+
+### Post-task Reflection
+- Problem faced: this task has undergone several review loops driven by proof-shape gaps rather than implementation defects.
+- Workaround applied: used fresh quality-runner scoped evidence to validate the latest test-only closure without introducing unnecessary code churn.
+- Pattern discovered: for test-only retries with green implementation, verification-only builder passes are the lowest-risk path.
+- Quality gap: module-wide coverage remains low due to broad server.py scope, so confidence is driven by AC-targeted discriminating tests.
+
+[[2026-05-05]]
+## Review Evidence
+### Test Results
+- quality-runner scoped run on tests/test_mcp_knowledge_enrichment_tools_1327.py: 28 passed, 0 failed, 0 skipped.
+- task-scoped ruff: clean for serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py and tests/test_mcp_knowledge_enrichment_tools_1327.py.
+- coverage for owlbear_mcp_knowledge.server: 37% module-level. This is informational only because the review gate is AC proof on the touched behavior, not whole-module coverage.
+- adjacent schema regression on tests/test_enrichment_schema_1323.py: 28 passed, 0 failed.
+
+### AC Compliance
+| AC Line | Evidence | Status |
+|---|---|---|
+| AC1: SELECT and UPDATE occur within a single BEGIN IMMEDIATE transaction | tests/test_mcp_knowledge_enrichment_tools_1327.py:219 adds the discriminating SQL-trace proof; implementation begins the transaction at serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:235 and performs the claim update at serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:267. | PASS |
+| AC2: return fields from chunk/document/source data, including section_path round-trip and NULL-source LEFT JOIN behavior | tests/test_mcp_knowledge_enrichment_tools_1327.py:353 proves a document with source_id=NULL is preserved and returns source_name=None; tests/test_mcp_knowledge_enrichment_tools_1327.py:397 proves exact section_path round-trip from metadata JSON; implementation uses LEFT JOIN at serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:247 and extracts section_path via _extract_section_path at serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:150. | PASS |
+| AC3: claimed chunks are not returned in subsequent calls | tests/test_mcp_knowledge_enrichment_tools_1327.py:448 proves first-call inclusion and second-call exclusion; claim update occurs at serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:267. | PASS |
+| AC4: stale claims older than 10 minutes become eligible again, while the exact 10-minute boundary does not | tests/test_mcp_knowledge_enrichment_tools_1327.py:486 proves stale reclaimed eligibility and tests/test_mcp_knowledge_enrichment_tools_1327.py:532 proves the exact boundary is not expired; implementation compares integer epoch seconds at serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:254. | PASS |
+| AC5: entity upsert semantics on the entities primary key | tests/test_mcp_knowledge_enrichment_tools_1327.py:644 proves same-id replacement to a single row; implementation uses INSERT OR REPLACE at serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:304. | PASS |
+| AC6: edge dedupe on UNIQUE(source_id, target_id, relation, document_id) | tests/test_mcp_knowledge_enrichment_tools_1327.py:733 proves duplicate collapse to one row for the task path; adjacent durable schema tests at tests/test_enrichment_schema_1323.py:257 and tests/test_enrichment_schema_1323.py:297 prove the exact uniqueness tuple and that different document_id values remain allowed; implementation uses INSERT OR IGNORE at serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:325. | PASS |
+| AC7: store_enrichment marks the chunk enriched | tests/test_mcp_knowledge_enrichment_tools_1327.py:765 proves enrichment_state='enriched'; implementation updates the chunk at serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:343. | PASS |
+| AC8: WAL file-backed multi-connection write safety | tests/test_mcp_knowledge_enrichment_tools_1327.py:807 and tests/test_mcp_knowledge_enrichment_tools_1327.py:874 exercise file-backed WAL writes from separate threads and prove both chunks reach enriched state without write errors. | PASS |
+| AC9: get_next_batch excludes enrich=false sources | tests/test_mcp_knowledge_enrichment_tools_1327.py:614 proves mixed-source filtering; implementation applies the source filter at serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:248. | PASS |
+
+### Test Integrity
+- Commit-log grep confirms task-scoped history for this cycle chain: test-writer commit 144e1a10, builder fix commit 8058638409454cee7cd2de9321bcf6f0e67541d8, and latest test-writer retry commit 1ca98d5e4303df2237ba5c7d8601fe30d4db2ad8.
+- The latest task notes at .owlbear/kanban/tasks/1327-p2-11-tests-phase-1-enrichment-tools-get-next-batch-store-enrichment.md:418 and :438 show the final retry added the NULL-source LEFT JOIN proof and that the last builder verification cycle changed no files.
+- Dirty-tree contamination and full TestFromAC immutability remain slightly lower-confidence checks because git diff and git status were not available in this review environment.
+
+### Deductions
+- -0.05 direct git diff/status evidence was unavailable, so dirty-tree contamination and exact TestFromAC immutability could not be proven as strongly as usual.
+- -0.03 module-level coverage remains low outside the task surface; this is informational only because the AC-mapped paths are directly exercised.
+
+### Verdict
+- PASS
+- Confidence: 0.92
+- Reason: the latest retry closes the prior AC2 gap, the scoped suite and adjacent schema regression are green, and the live implementation matches the AC-proven behavior for AC1 through AC9.
+
+### Action
+- Advance to docs.
+
+### Informational
+- The WAL tests could be hardened further by asserting both threads are no longer alive after join, but under the current AC wording this is residual hardening debt, not a blocker.
+- The task header’s top-level AC2 line is stale relative to the later architecture re-evaluation and retry notes; current review anchored to the latest binding refinement in the task body.
+[[2026-05-05]]
+## Docs Gate
+
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | `get_next_batch`/`store_enrichment` are internal async helpers (no `@mcp.tool` decorator); not listed in README tools table — no prose doc impact |
+| 2 | Module docstrings | Yes | Verified | Both functions have accurate docstrings: `get_next_batch` (lines 224–227) and `store_enrichment` (line 288); no updates needed |
+| 3 | External attribution | No | N/A | Research doc sources list stdlib docs and general SQLite WAL knowledge; no external code patterns copied |
+| 4 | Research doc | Yes | Verified | `.owlbear/research/1327-enrichment-tools-tests.md` exists and is linked from task body; follow-ups note pairs with #1328 |
+| 5 | Diagram maintenance (describes match) | Yes | Updated | `share/diagrams/mcp-topology.excalidraw` describes `serve/mcp-*/src/**` — matches changed `server.py`; footer updated from `60168ef3` → `30298a83` (2026-05-05) |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation request in task body |
+| 7 | Deletion detection | No | N/A | No deleted files in changed-files set |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py | IN (docstrings) | Verified — docstrings accurate |
+| tests/test_mcp_knowledge_enrichment_tools_1327.py | OUT | N/A |
+| share/diagrams/mcp-topology.excalidraw | IN (diagram) | Footer updated |
+| .owlbear/research/1327-enrichment-tools-tests.md | IN (research) | Verified |
+
+### Files Updated
+- share/diagrams/mcp-topology.excalidraw (footer: `Last verified: 2026-05-05 (30298a83)`)
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- .owlbear/scratch/1327-pytest-cov.txt
+- .owlbear/scratch/1327-pytest-scoped.txt
+- .owlbear/scratch/1327-pytest.txt
+- .owlbear/scratch/1327-qr-adjacent.txt
+- .owlbear/scratch/1327-qr-pytest.txt
+- .owlbear/scratch/1327-qr-ruff.json
+- .owlbear/scratch/1327-quality-pytest.txt
+- .owlbear/scratch/1327-ruff-scoped.txt
+- .owlbear/scratch/1327-ruff.txt
+[[2026-05-05]]
+## Audit
+
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: atomic SELECT+UPDATE in single BEGIN IMMEDIATE | test_select_and_update_within_single_immediate_transaction (line 219) discriminates split-tx | PASS |
+| AC2: fields incl section_path round-trip + LEFT JOIN NULL | test_source_name_is_none_for_document_without_knowledge_source (line 353), test_section_path_round_trip_from_metadata_json (line 397) | PASS |
+| AC3: claimed chunks excluded | tests:448, 441 (first-call inclusion, second-call exclusion) | PASS |
+| AC4: stale claims >10 min revert | tests:486, 532 (stale/fresh/boundary), server.py:254 epoch-sec comparison | PASS |
+| AC5: UPSERT entities INSERT OR REPLACE | tests:644 proves replacement | PASS |
+| AC6: INSERT OR IGNORE edges UNIQUE tuple | tests:733 proves collapse; schema test 1323 proves tuple | PASS |
+| AC7: enrichment_state set to enriched | tests:765 proves state; tests:759 proves downstream exclusion | PASS |
+| AC8: WAL concurrent write safety | tests:807, 874 file-backed WAL threads, both reach enriched state | PASS |
+| AC9: excludes enrich=false sources | tests:614 mixed-source filtering | PASS |
+
+### Test Results
+- pytest full suite: 4590 passed, 213 failed (ALL failures in unrelated modules: kanban engine, memory models, output schema; zero failures in task scope)
+- ruff: clean on both task files
+
+### Architect Quality: 3/5
+Original AC had notable gaps (non-discriminating proof shapes, inaccurate JOIN attribution) requiring 3 architect re-evaluations. Each correction was precise but initial quality should have been higher.
+
+### Deduction Breakdown
+- AC quality score 3/5: -0.03
+- Dirty-tree/git-status unavailable (terminal SIGINT): -0.02
+
+### Confidence: 0.95
+### Action: archive
+
+### Commits Verified
+- 85f8074b feat: implement enrichment worker DB helpers (#1327, builder)
+- 80586384 fix: tighten enrichment lease expiry comparison (#1327, builder)
+- 4824b865 test: add discriminating AC1/AC2 proofs (#1327, test-writer)
+- 1ca98d5e test: add LEFT JOIN NULL proof for AC2 (#1327, test-writer)
