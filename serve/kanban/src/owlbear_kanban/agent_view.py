@@ -656,7 +656,9 @@ class AgentView:
         Args:
             task_id:        Numeric task ID.
             title:          Replace task title (non-empty when provided).
-            body:           Replace the task body.  Mutually exclusive with *append_body*.
+            body:           Tri-state body control: ``None`` means no change, ``""`` clears
+                            the body, non-empty text replaces the body.  Mutually exclusive
+                            with *append_body*.
             append_body:    Text to append to the existing body.
             timestamp:      When ``True``, prepend an ISO-8601 datestamp to *append_body*.
             priority:       Replace task priority.

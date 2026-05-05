@@ -1071,7 +1071,8 @@ class KanbanEngine:
         Args:
             task_id:     Numeric task ID as a string.
             title:       Replace task title.
-            body:        Replace task body.
+            body:        Replace task body; ``None`` means no change, ``""`` clears the
+                         body, non-empty text replaces it.
             priority:    Replace priority.
             status:      Replace status.
             parent:      Replace parent ID.
