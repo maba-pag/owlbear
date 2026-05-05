@@ -1,10 +1,10 @@
 ---
 id: 1339
 title: Reconcile MCP lifecycle tools, guidance, and 9-tool contract
-status: review
+status: done
 priority: needed
 created: 2026-05-04T15:00:05.806598+00:00
-updated: 2026-05-05T11:36:40.173741+00:00
+updated: 2026-05-05T12:59:22.338830+00:00
 tags:
 - sync-blocker
 - mcp-kanban
@@ -15,7 +15,7 @@ depends_on:
 - 1349
 blocked: false
 block_reason:
-claimed_at: 2026-05-05T11:36:40.173741+00:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -320,3 +320,439 @@ Task is rejected to `todo` because remaining acceptance gaps are test-authoring 
 - Ruff: clean on scoped source + test paths.
 - Evidence summary: task-specific lifecycle contract tests and MCP behavior regression suite all pass; no additional surgical intervention was necessary.
 - Fixes applied: none (verification-only builder pass).
+[[2026-05-05]]
+## Review Evidence
+### Test Results
+- quality-runner scoped run: 85 passed, 0 failed across `tests/test_mcp_end_work_fail_1339.py`, `tests/test_guidance_text_1183.py`, and `tests/test_mcp_kanban.py`
+- code-reader adversarial audit completed on the current source, docs, and task tests
+- IDE diagnostics: no errors in `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py`, `serve/kanban/src/owlbear_kanban/agent_view.py`, `tests/test_mcp_end_work_fail_1339.py`, `tests/test_guidance_text_1183.py`, or `tests/test_mcp_kanban.py`
+
+### Lint
+- Ruff clean on scoped source and test files
+
+### Coverage
+- `owlbear_mcp_kanban.server`: 98%
+- `owlbear_kanban.agent_view`: 94%
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---------|-------------|---------------------------|---------|
+| AC1 `fail` accepted and routed | `tests/test_mcp_end_work_fail_1339.py:52`, `:75`; adjacent forwarding check at `tests/test_mcp_kanban.py:326` | No. The task-local tests stop at type-hint inspection, and the adjacent MCP test only proves one `outcome="fail"` call reaches `mock_view.end_work` once. A runtime misroute in the real lifecycle path could stay green. | LAX |
+| AC2 `release` releases claim without recording failure | `tests/test_mcp_end_work_fail_1339.py:606`, `:624` | No. The release tests only assert `result is not None`, `result.id == 1`, and unchanged status at `:620`, `:621`, `:637`; they do not assert claim release or absence of failure recording. | LAX |
+| AC4 skill 9-tool contract with `create_dr` row | none; the only task-local `9 tools` / `create_dr` references are header comments at `tests/test_mcp_end_work_fail_1339.py:6` and `:7` | No. There is no executable assertion that would fail if the skill tool table dropped the ninth tool row. | MISSING |
+| AC10 lifecycle matrix consistency | `tests/test_mcp_end_work_fail_1339.py:457`, `:606`, `:624`, `:653`, `:671` | Partly. The tests prove `success + move_to` reaches `done`, but they do not pin the full `move_to` matrix across all documented outcomes. | LAX |
+| AC11 false-green guard on README prose | `tests/test_mcp_end_work_fail_1339.py:565`, `:579` | Yes. The assertions require structured `- \`outcome\`` bullets, not bare substrings. | COVERED |
+
+#### Security Review
+- No issues found in the reviewed scope. The changes are limited to lifecycle outcome validation, guidance wording, and MCP/doc metadata.
+
+#### Test Integrity
+| Original Test Surface | Change Made | Assessment |
+|-----------------------|-------------|------------|
+| `TestFromAC_*` classes in `tests/test_mcp_end_work_fail_1339.py` | Test-writer retry added new structured README and runtime tests; no weakening was demonstrated from the available evidence | PRESERVED |
+| Commit sequence | Reflog evidence confirms builder commit `dbe217f8` followed by test-writer commit `78abefdc` | PRESERVED |
+
+#### Test Quality
+| Dimension | Rating | Evidence |
+|-----------|--------|----------|
+| Assertion specificity | WEAK | `tests/test_mcp_end_work_fail_1339.py:620`, `:621`, and `:637` only prove response existence and unchanged status for `release`, not claim release or no failure record. |
+| Negative/error-path coverage | ADEQUATE | Validation matrix branches for invalid combinations exist in `serve/kanban/src/owlbear_kanban/agent_view.py:1049` and `:1112`, and the scoped regression suite stays green. |
+| Manual mutation reasoning | WEAK | A mutation that accepted `release` but left the task claimed, or that accepted `fail` in metadata but misrouted the live lifecycle path, would likely keep the current task tests green. |
+| Test independence | ADEQUATE | Runtime tests use a fresh temp board fixture per case. |
+| Descriptive names | STRONG | Task-local tests are specific and readable. |
+
+#### Data Safety
+- No issues found. `AgentView.end_work()` validates the parameter matrix before mutating task state and routes `release` through `engine.release_task()` separately from `engine.end_work()`.
+
+#### Implementation-Aware Gaps
+- AC10 is still violated in the live contract surface. `AgentView.end_work()` documents `move_to` as optional on `block` and `success` at `serve/kanban/src/owlbear_kanban/agent_view.py:999`, `:1000`, `:1002`, validates `block + move_to` at `:1107` and `:1162`, and emits skip guidance for that path at `:1220`. MCP metadata narrows `move_to` to `reject` or optional `success` only at `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:762`. The handbook and README likewise describe `move_to` for `success`/`reject` but not `block` at `share/skills/h-mcp-kanban/SKILL.md:125`, `:127`, `:129`, `:131` and `serve/mcp-kanban/README.md:79`, `:81`, `:82`, `:87`.
+
+#### Builder Process Quality
+| Metric | Value |
+|--------|-------|
+| Builder Notes sections | 3 |
+| Approach variation | Yes |
+| Assessment | FRICTION |
+
+### Pass 2 — INFORMATIONAL
+- The implementation for `fail` and `release` is present and readable: `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:583`, `:622`, `:755`, `:757`; `serve/kanban/src/owlbear_kanban/agent_view.py:1049`, `:1112`, `:1169`, `:1170`, `:1177`.
+- AC7 is satisfied and pinned by current text: `serve/kanban/src/owlbear_kanban/agent_view.py:46`, `:47`; `serve/mcp-kanban/src/owlbear_mcp_kanban/guidance.py:13`, `:14`; `tests/test_guidance_text_1183.py` passes in the scoped run.
+- Dirty-tree contamination could not be checked from this tool surface because terminal `git status --porcelain` was unavailable.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| 1. `fail` accepted and routed | `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:583`; `serve/kanban/src/owlbear_kanban/agent_view.py:1049`, `:1177` | `tests/test_mcp_end_work_fail_1339.py:52`, `:75`; `tests/test_mcp_kanban.py:326` | PASS |
+| 2. `release` accepted and routes to claim release | `serve/kanban/src/owlbear_kanban/agent_view.py:1112`, `:1169`, `:1170` | `tests/test_mcp_end_work_fail_1339.py:606`, `:624` | PASS |
+| 3. schema/metadata names all five outcomes | `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:583`, `:755`, `:757` | `tests/test_mcp_end_work_fail_1339.py:52`, `:75`, `:457` | PASS |
+| 4. skill lists 9 tools and `create_dr` | `share/skills/h-mcp-kanban/SKILL.md:17`, `:30` | none | PASS |
+| 5. skill documents all five outcomes | `share/skills/h-mcp-kanban/SKILL.md:125`, `:126`, `:127`, `:128`, `:129` | `tests/test_mcp_end_work_fail_1339.py:181`, `:200`, `:217` | PASS |
+| 6. README matches 9-tool / 5-outcome contract | `serve/mcp-kanban/README.md:19`, `:31`, `:79`, `:80`, `:81`, `:82`, `:83` | README outcome tests at `tests/test_mcp_end_work_fail_1339.py:265`, `:284`, `:565`, `:579` | PASS |
+| 7. canonical `create_dr` guidance text | `serve/kanban/src/owlbear_kanban/agent_view.py:46`, `:47`; `serve/mcp-kanban/src/owlbear_mcp_kanban/guidance.py:13`, `:14` | `tests/test_guidance_text_1183.py` scoped pass | PASS |
+| 8. patch params match live signatures / JSON arrays | `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:718`, `:720`, `:740`, `:743` | `tests/test_mcp_end_work_fail_1339.py:357`, `:370`, `:383`, `:396` | PASS |
+| 9. schema-light status / priority metadata | `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py` contains no `_STATUSES` / `_PRIORITIES`; `list_tasks` patch only sets `sort` enum | `tests/test_mcp_end_work_fail_1339.py:402`, `:414` | PASS |
+| 10. lifecycle matrix explicit and consistent across code/tests/docs | Code allows and documents `block + move_to`, but MCP metadata/README/handbook do not: `serve/kanban/src/owlbear_kanban/agent_view.py:999`, `:1000`, `:1002`, `:1107`, `:1162`; `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:762`; `share/skills/h-mcp-kanban/SKILL.md:125`, `:127`, `:129`, `:131`; `serve/mcp-kanban/README.md:79`, `:81`, `:82`, `:87` | `tests/test_mcp_end_work_fail_1339.py:457`, `:653`, `:671` | FAIL |
+| 11. false-green substring tests prevented | Structured README bullet assertions at `tests/test_mcp_end_work_fail_1339.py:565`, `:579` | same | PASS |
+| 12. existing MCP behavior tests pass | quality-runner: 85 passed, 0 failed including `tests/test_mcp_kanban.py` | `tests/test_mcp_kanban.py` scoped pass | PASS |
+
+### Deductions
+- `-0.08` AC10 live parameter-matrix inconsistency across code, MCP metadata, README, and handbook
+- `-0.05` AC1 and AC2 proof quality is under-discriminating for lifecycle postconditions
+- `-0.03` AC4 / AC6 9-tool contract is functionally correct but not pinned by task-local executable assertions
+- `-0.02` dirty-tree overlap could not be independently verified from the current tool surface
+
+### Confidence
+- `0.82`
+
+### Verdict
+- FAIL to backlog
+- Reason: one prior `## Review Evidence` section already exists in the task history, so this second review failure triggers the loop-breaker route to backlog.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Resolve and rewrite AC10 so the full `end_work.move_to` matrix is explicit, including whether `block + move_to` is supported, then align code, MCP metadata, README, handbook, and proof obligations to that single contract | `serve/kanban/src/owlbear_kanban/agent_view.py`, `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py`, `share/skills/h-mcp-kanban/SKILL.md`, `serve/mcp-kanban/README.md` | `serve/kanban/src/owlbear_kanban/agent_view.py:999`, `:1000`, `:1002`, `:1107`, `:1162`; `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:762`; `share/skills/h-mcp-kanban/SKILL.md:125`, `:127`, `:129`, `:131`; `serve/mcp-kanban/README.md:79`, `:81`, `:82`, `:87` |
+| 2 | architect | Tighten the AC and test plan so lifecycle proofs assert discriminating postconditions for `fail` and `release` and pin the 9-tool / `create_dr` doc contract with executable assertions rather than header comments | `tests/test_mcp_end_work_fail_1339.py`, `tests/test_mcp_kanban.py` | `tests/test_mcp_end_work_fail_1339.py:6`, `:7`, `:52`, `:75`, `:606`, `:620`, `:621`, `:624`, `:637`; `tests/test_mcp_kanban.py:326`, `:340`, `:348` |
+
+### Reflection
+- Green scoped runs were not enough here; the remaining defects were contract-consistency and proof-quality issues.
+- Reflog evidence confirmed builder and test-writer ordering, but lack of terminal `git status` kept a small contamination deduction in place.
+- The retry fixed AC11 well; the remaining gap is that the lifecycle matrix is still not single-sourced.
+[[2026-05-05]]
+
+## Architecture Review (Cycle 3)
+
+### Reviewer Follow-up Assessment
+
+| Follow-up | Assessment | Action |
+|-----------|-----------|--------|
+| 1. AC10 `move_to` matrix inconsistency | VALID — code supports `block + move_to` (agent_view.py:1000, :1107, :1162, :1220) but MCP metadata, SKILL.md, and README omit it | Refine AC10 text below |
+| 2. Test proof quality (AC1/AC2 discriminating postconditions, AC4 9-tool assertion) | ACCEPTABLE FOR SCOPE — this is a reconciliation task, not new feature. Runtime routing tested via `tests/test_mcp_kanban.py:326` (fail routing); release postconditions covered by `TestFromAC_EndWorkReleaseRuntime` (status unchanged = claim released since `release_task()` is atomic). Engine behavior tested in its own suite. Adding postcondition tests here would test engine internals, not MCP contract. | No additional test AC |
+
+### AC10 Refinement
+
+Replacing original AC10 with explicit matrix:
+
+> 10. The `move_to` parameter matrix is explicit and consistent across code, MCP metadata (`server.py` `_patch_params`), SKILL.md outcome table, and README outcome bullets. Specifically: `move_to` is required on `reject`, optional on `success` and `block`, forbidden on `fail` and `release`. The SKILL.md `block` row and README `block` bullet mention the optional `move_to`. (td:1)
+
+### Builder Guidance (Cycle 3)
+
+Three surgical doc/metadata edits:
+
+1. `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py` — `_patch_params` for `end_work.move_to`: change description from `"Target status when outcome=reject or optional status when outcome=success"` to `"Target status when outcome=reject; optional status move when outcome=success or block"`.
+2. `share/skills/h-mcp-kanban/SKILL.md` — `block` row: change from `"Mark blocked with \`block_reason\`, release claim."` to `"Mark blocked with \`block_reason\`, release claim. Optionally move to \`move_to\` status."`.
+3. `serve/mcp-kanban/README.md` — `block` bullet: change from `"Mark task blocked (requires \`block_reason\`), then release claim."` to `"Mark task blocked (requires \`block_reason\`), optionally move to \`move_to\`, then release claim."`.
+
+### Existing Test Coverage for AC10 (refined)
+
+- `tests/test_mcp_end_work_fail_1339.py:653-671` — proves `success + move_to` runtime
+- `tests/test_mcp_end_work_fail_1339.py:457` — outcome description includes all 5 outcomes
+- SKILL.md content tests at `:181`, `:200`, `:217` cover outcome table rows
+- README structured bullet tests at `:565`, `:579` cover outcome documentation
+- These tests will catch the `block + move_to` documentation addition via the existing pattern
+
+### Verdict: APPROVE
+
+AC10 refined to be explicit. Three doc/metadata edits remain. All other AC lines (1-9, 11-12) are satisfied per review evidence. The AC1/AC2 proof-quality concern is a false positive — the existing 85-test green suite plus structural and runtime proofs are sufficient for a contract-reconciliation task.
+
+Test-writer: existing AC10 tests (`TestFromAC_OutcomeDescriptionConsistency`) already check the outcome description metadata. Add one test asserting the SKILL.md `block` row contains `move_to` and the README `block` bullet contains `move_to`. (td:1)
+[[2026-05-05]]
+[[2026-05-05]]
+Architecture review cycle 3 complete. Refined AC10 to explicitly name the full move_to matrix (required on reject, optional on success/block, forbidden on fail/release). Three surgical doc/metadata edits specified for builder. AC1/AC2 proof-quality concern rebutted — existing 85-test green suite is sufficient for a reconciliation task. Approved → todo.
+[[2026-05-05]]
+## Test-Writer Notes
+
+**Test file:** `tests/test_mcp_end_work_fail_1339.py`
+
+**Retry cycle (Step 1b):** Architecture Review Cycle 3 directed test-writer to add documentation proof tests for the refined AC10 `block + move_to` matrix.
+
+### New tests added this session (2 tests)
+
+| Class | Tests | AC | Category |
+|-------|-------|----|----------|
+| `TestFromAC_BlockMoveToMatrix` | 2 | AC10 | boundary — documentation consistency |
+
+### Tests
+
+1. `test_skill_md_block_row_mentions_move_to` — asserts SKILL.md `block` outcome table row mentions `move_to`; currently fails because row says only "Mark blocked with `block_reason`, release claim."
+2. `test_readme_block_bullet_mentions_move_to` — asserts README `block` bullet mentions `move_to`; currently fails because bullet says only "Mark task blocked (requires `block_reason`), then release claim."
+
+### Verification
+
+- **Old tests (24):** all PASS ✅
+- **New tests (2):** all FAIL ✅ (implementation gap confirmed)
+- **Total: 24 passed, 2 failed** (1.01s)
+- **Ruff:** clean
+
+### Commit
+
+`a8f1948b` — test: add retry tests for block move_to matrix documentation (#1339, test-writer)
+
+### AC coverage
+
+| AC | Tests | Coverage |
+|----|-------|----------|
+| AC10 (refined) | 2 (BlockMoveToMatrix) | SKILL.md block row + README block bullet must mention move_to |
+| All others | 24 existing | Unchanged, all PASS |
+[[2026-05-05]]
+## Builder Notes
+- Files changed:
+  - serve/mcp-kanban/src/owlbear_mcp_kanban/server.py
+  - share/skills/h-mcp-kanban/SKILL.md
+  - serve/mcp-kanban/README.md
+- Commit:
+  - ea0e6ab2
+- Surgical fixes applied (AC10 refined matrix alignment):
+  - Updated MCP `_patch_params` metadata for `end_work.move_to` to: `reject` target + optional status move on `success` and `block`.
+  - Updated handbook `end_work` outcome table `block` row to mention optional `move_to`.
+  - Updated README `end_work` outcomes `block` bullet to mention optional `move_to`.
+- RED verification before edits:
+  - quality-runner scoped (`tests/test_mcp_end_work_fail_1339.py`): 24 passed, 2 failed (`TestFromAC_BlockMoveToMatrix` pair), ruff clean.
+- GREEN verification after edits:
+  - quality-runner scoped (`tests/test_mcp_end_work_fail_1339.py`, `tests/test_guidance_text_1183.py`, `tests/test_mcp_kanban.py`): 93 passed, 0 failed.
+- Lint status:
+  - Ruff clean (`clean: true`, no violations).
+- Coverage:
+  - `owlbear_mcp_kanban.server`: 90% (scoped quality-runner report).
+- IDE diagnostics:
+  - No errors in changed files.
+- Evidence summary:
+  - The two AC10 retry failures are resolved by direct string-level contract alignment across MCP metadata + handbook + README with no behavioral code-path changes.
+[[2026-05-05]]
+## Review Evidence
+### Test Results
+- quality-runner scoped run: 93 passed, 0 failed across `tests/test_mcp_end_work_fail_1339.py`, `tests/test_guidance_text_1183.py`, and `tests/test_mcp_kanban.py`
+- quality-runner adjacent lifecycle run: 100 passed, 1 failed across `serve/mcp-kanban/tests/test_mcp_lifecycle_tools.py`, `serve/kanban/tests/test_engine_end_work_1077.py`, `tests/test_engine_end_work_fail_1125.py`, and `tests/test_engine_release_note.py`
+- failing test: `tests/test_engine_end_work_fail_1125.py::TestFromAC_SkillDocReleaseRow::test_skill_doc_release_row_exact_behavior_text`
+- code-reader audit completed; its earlier fail/release proof concerns were cross-checked against adjacent durable suites and did not remain blockers
+
+### Lint Results
+- Ruff clean on `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py`, `serve/kanban/src/owlbear_kanban/agent_view.py`, `tests/test_mcp_end_work_fail_1339.py`, `tests/test_guidance_text_1183.py`, and `tests/test_mcp_kanban.py`
+- IDE diagnostics: no errors in the changed source, handbook, README, or task tests
+
+### Coverage
+- Scoped coverage: `owlbear_mcp_kanban.server` 90%; `owlbear_kanban.agent_view` 28%
+- Adjacent lifecycle suites materially exercised the fail/release matrix despite low module-wide percentages
+
+### AC Compliance
+| AC | Evidence | Status |
+|----|----------|--------|
+| 1 | `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:583` accepts `fail`; `tests/test_mcp_kanban.py:327-348` forwards `outcome="fail"`; the fail-outcome engine suite in `tests/test_engine_end_work_fail_1125.py` passed in the adjacent run | PASS |
+| 2 | `serve/kanban/src/owlbear_kanban/agent_view.py:1112-1170` implements `release`; `tests/test_mcp_end_work_fail_1339.py:606` and `:624` plus `serve/mcp-kanban/tests/test_mcp_lifecycle_tools.py:333` passed | PASS |
+| 3 | `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:583` and `:753-757` name all five outcomes | PASS |
+| 4 | `share/skills/h-mcp-kanban/SKILL.md:17-30` lists 9 tools including `create_dr` | PASS |
+| 5 | `share/skills/h-mcp-kanban/SKILL.md:126-129` documents the outcome table, but the `release` row at `:128` regressed an established behavior contract. Adjacent failure: `tests/test_engine_end_work_fail_1125.py:387-412` expects `Release claim, no status change (note appended if provided; no-op when unclaimed)`; current row is `Release claim, keep status unchanged.` Existing release semantics remain proven by `tests/test_engine_release_note.py:158-223` and `:355-410` | FAIL |
+| 6 | `serve/mcp-kanban/README.md:19` and `:79-83` match the 9-tool / 5-outcome contract | PASS |
+| 7 | `serve/kanban/src/owlbear_kanban/agent_view.py:46-47` matches the canonical `create_dr` wording and `tests/test_guidance_text_1183.py` passed | PASS |
+| 8 | `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:718`, `:720`, `:739-742` use JSON-array wording and stale patched params are absent from the live patch set | PASS |
+| 9 | `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py` ships no hard-coded `_STATUSES` / `_PRIORITIES`; task-local schema-light tests passed | PASS |
+| 10 | `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:761-762`, `share/skills/h-mcp-kanban/SKILL.md:129`, and `serve/mcp-kanban/README.md:82` align the refined `block + move_to` contract; forbidden branches remain covered by `serve/mcp-kanban/tests/test_mcp_lifecycle_tools.py:488`, `serve/kanban/tests/test_engine_end_work_1077.py:688-707`, and `tests/test_engine_end_work_fail_1125.py:248-259` | PASS |
+| 11 | `tests/test_mcp_end_work_fail_1339.py:579` and the README outcome bullets at `serve/mcp-kanban/README.md:79-83` prevent bare-substring false greens | PASS |
+| 12 | Scoped MCP behavior suites stayed green: 93 passed, 0 failed including `tests/test_mcp_kanban.py` | PASS |
+
+### Findings
+1. The handbook reconciliation is still incomplete on the changed `end_work` table surface. `share/skills/h-mcp-kanban/SKILL.md:128` now says `Release claim, keep status unchanged.`, but the established release contract exercised elsewhere includes note-appended and unclaimed no-op semantics. That mismatch is why `tests/test_engine_end_work_fail_1125.py::TestFromAC_SkillDocReleaseRow::test_skill_doc_release_row_exact_behavior_text` fails.
+2. The earlier td:2 proof concerns about `fail`/`release` routing do not remain blockers after the adjacent pass: the fail/release and forbidden-matrix suites passed in `serve/mcp-kanban/tests/test_mcp_lifecycle_tools.py`, `serve/kanban/tests/test_engine_end_work_1077.py`, `tests/test_engine_end_work_fail_1125.py`, and `tests/test_engine_release_note.py`.
+
+### Deductions
+- `-0.10` changed handbook row still breaks an adjacent lifecycle contract test
+- `-0.02` dirty-tree / commit-diff verification unavailable from the current tool surface
+
+### Verdict
+- FAIL -> backlog
+- Confidence: `0.88`
+- Reason: task 1339 already has two prior `## Review Evidence` sections, so this additional review failure triggers the loop-breaker route to backlog.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Reconcile the `release` handbook row contract with the established `end_work` release semantics, then route a single follow-up that keeps `share/skills/h-mcp-kanban/SKILL.md` and the adjacent lifecycle doc suite aligned | `share/skills/h-mcp-kanban/SKILL.md`, `tests/test_engine_end_work_fail_1125.py`, `tests/test_engine_release_note.py` | `share/skills/h-mcp-kanban/SKILL.md:128`; `tests/test_engine_end_work_fail_1125.py::TestFromAC_SkillDocReleaseRow::test_skill_doc_release_row_exact_behavior_text`; `tests/test_engine_release_note.py:158-223`; `tests/test_engine_release_note.py:355-410` |
+| 2 | architect | Expand the retry test plan for handbook-table edits to include the adjacent release-row contract suite, not only the task-local reconciliation file, before sending this surface back to builder | `tests/test_mcp_end_work_fail_1339.py`, `tests/test_engine_end_work_fail_1125.py` | task-local scoped run was green, but adjacent quality-runner run still failed on `tests/test_engine_end_work_fail_1125.py::TestFromAC_SkillDocReleaseRow::test_skill_doc_release_row_exact_behavior_text` |
+
+### Reflection
+- The narrow task suite was green, but the adjacent release-row contract suite exposed a real handbook regression on the same changed table surface.
+- The architecture-review refinement correctly narrowed the earlier fail/release proof concerns; the remaining blocker is not the matrix itself, it is release-row wording drift against an existing durable contract.
+- Low module-wide `agent_view` coverage in the task-local pass was residual breadth, not the root problem; the adjacent lifecycle suites materially exercised the relevant branches.
+[[2026-05-05]]
+
+## Architecture Review (Cycle 4)
+
+### Reviewer Follow-up Assessment
+
+| Follow-up | Assessment | Action |
+|-----------|-----------|--------|
+| 1. Release row wording drift | VALID — `share/skills/h-mcp-kanban/SKILL.md:128` says `Release claim, keep status unchanged.` but the established contract (pinned by `tests/test_engine_end_work_fail_1125.py:387-420`) requires exactly `Release claim, no status change (note appended if provided; no-op when unclaimed)` (no trailing period) | Refine AC5 + builder guidance |
+| 2. Expand retry test plan | VALID — builder must run `tests/test_engine_end_work_fail_1125.py` alongside the task-local suite | Include in builder guidance |
+
+### AC5 Refinement
+
+Original AC5: "SKILL.md documents all five `end_work` outcomes with concise use-when guidance."
+
+Refined AC5:
+> 5. `share/skills/h-mcp-kanban/SKILL.md` documents all five `end_work` outcomes with concise use-when guidance. The `release` row behavior cell must read exactly: `Release claim, no status change (note appended if provided; no-op when unclaimed)` — no trailing period. (td:1)
+
+### Builder Guidance (Cycle 4)
+
+One surgical edit:
+
+1. `share/skills/h-mcp-kanban/SKILL.md` line 128 — replace:
+   ```
+   | `release` | Release claim, keep status unchanged. |
+   ```
+   with:
+   ```
+   | `release` | Release claim, no status change (note appended if provided; no-op when unclaimed) |
+   ```
+
+### Scoped Test Surface
+
+Builder MUST run both:
+- `tests/test_mcp_end_work_fail_1339.py` (task-local: 26 tests)
+- `tests/test_engine_end_work_fail_1125.py` (adjacent release-row contract)
+- `tests/test_guidance_text_1183.py` (guidance wording)
+- `tests/test_mcp_kanban.py` (MCP regression)
+
+All must pass green before marking done.
+
+### Verdict: APPROVE
+### Action Taken: Refined AC5 with exact release-row wording requirement. Single surgical doc edit. Approved → todo.
+
+[[2026-05-05]]
+Architecture review cycle 4 complete. Single remaining gap: SKILL.md release row wording drifted from established contract pinned by tests/test_engine_end_work_fail_1125.py. Refined AC5 to require exact text. One surgical doc edit specified for builder. Approved → todo.
+[[2026-05-05]]
+## Test-Writer Notes
+
+**Test file:** `tests/test_mcp_end_work_fail_1339.py`
+
+**Retry cycle (Step 1b):** Architecture Review Cycle 4 refined AC5 to require exact wording for the SKILL.md `release` row behavior cell. The existing `TestFromAC_SkillDocEndWorkOutcomes` class only checks for row presence, not exact text — gap confirmed.
+
+### New test added this session (1 test)
+
+| Class | Tests | AC | Category |
+|-------|-------|----|----------|
+| `TestFromAC_SkillDocReleaseRowExactWording` | 1 | AC5 (refined) | boundary — exact wording contract |
+
+### Test
+
+`test_skill_md_release_row_exact_behavior_text` — asserts SKILL.md `release` outcome row contains exactly `Release claim, no status change (note appended if provided; no-op when unclaimed)` (no trailing period). Currently FAILS because row reads `Release claim, keep status unchanged.`
+
+### Verification
+
+- **Old tests (26):** all PASS ✅
+- **New test (1):** FAIL ✅ (confirmed against current SKILL.md)
+- **Total: 26 passed, 1 failed** (1.05s)
+- **Ruff:** clean
+
+### Commit
+
+`09f3914e` — test: add retry test for release row exact wording AC5 (#1339, test-writer)
+
+### AC coverage
+
+| AC | Tests | Coverage |
+|----|-------|----------|
+| AC5 (refined) | 1 (SkillDocReleaseRowExactWording) | SKILL.md release row must contain exact contract text |
+| All others | 26 existing | Unchanged, all PASS |
+
+### Builder guidance
+
+- AC5: Change SKILL.md end_work `release` row from `Release claim, keep status unchanged.` to `Release claim, no status change (note appended if provided; no-op when unclaimed)` (no trailing period)
+- Run both `tests/test_mcp_end_work_fail_1339.py` AND `tests/test_engine_end_work_fail_1125.py` to validate (per Cycle 4 scope)
+[[2026-05-05]]
+## Builder Notes
+- Files changed: share/skills/h-mcp-kanban/SKILL.md
+- Commit: f3b98b0c
+- Implementation: updated the `end_work` outcome table `release` row to exact required wording: `Release claim, no status change (note appended if provided; no-op when unclaimed)` (no trailing period).
+- RED verification (before edit): quality-runner scoped run reported 108 passed, 2 failed (`tests/test_engine_end_work_fail_1125.py::TestFromAC_SkillDocReleaseRow::test_skill_doc_release_row_exact_behavior_text`, `tests/test_mcp_end_work_fail_1339.py::TestFromAC_SkillDocReleaseRowExactWording::test_skill_md_release_row_exact_behavior_text`).
+- GREEN verification (after edit): quality-runner scoped run reported 110 passed, 0 failed across:
+  - tests/test_mcp_end_work_fail_1339.py
+  - tests/test_engine_end_work_fail_1125.py
+  - tests/test_guidance_text_1183.py
+  - tests/test_mcp_kanban.py
+- Lint: clean (ruff exit code 0; no violations).
+- Coverage: `owlbear_mcp_kanban.server` 90% in scoped verification.
+- Evidence summary: single-line handbook contract alignment resolved both failing exact-wording tests while preserving all adjacent MCP lifecycle regression passes.
+[[2026-05-05]]
+## Review Evidence
+### Test Results
+- quality-runner scoped pass: 195 passed, 0 failed across `tests/test_mcp_end_work_fail_1339.py`, `tests/test_guidance_text_1183.py`, `tests/test_mcp_kanban.py`, `tests/test_engine_end_work_fail_1125.py`, `tests/test_engine_release_note.py`, `serve/mcp-kanban/tests/test_mcp_lifecycle_tools.py`, and `serve/kanban/tests/test_engine_end_work_1077.py`.
+- code-reader reported proof-quality concerns around the task-local AC5 wording test and MCP fail/release boundary coverage, but those concerns are closed by the adjacent durable suites and the Architecture Review Cycle 3/4 refinements already recorded in the task body.
+
+### Lint Results
+- Ruff clean on scoped source and test files.
+- VS Code diagnostics: no errors in `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py`, `serve/kanban/src/owlbear_kanban/agent_view.py`, or the scoped tests.
+
+### Coverage
+- `owlbear_mcp_kanban.server`: 91%
+- `owlbear_kanban.agent_view`: 40% module-wide in this scoped run; the changed fail/release/move_to branches are exercised by the adjacent engine and release suites, so the low module-wide percentage is residual breadth, not a blocker.
+
+### AC Compliance
+| AC | Evidence | Status |
+|----|----------|--------|
+| 1 | `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:583`, `:593`, `:607`; `serve/kanban/src/owlbear_kanban/agent_view.py:1049`, `:1177`; `tests/test_engine_end_work_fail_1125.py:145`, `:158`, `:173`; mocked MCP forwarding at `tests/test_mcp_kanban.py:340` and `serve/mcp-kanban/tests/test_mcp_lifecycle_tools.py:371` | PASS |
+| 2 | `serve/kanban/src/owlbear_kanban/agent_view.py:1112`, `:1169`, `:1170`; `tests/test_mcp_end_work_fail_1339.py:606`, `:624`; `serve/mcp-kanban/tests/test_mcp_lifecycle_tools.py:329`; `tests/test_engine_release_note.py:199`, `:479`, `:501` | PASS |
+| 3 | `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:583`, `:755`, `:756`, `:757`; `tests/test_mcp_end_work_fail_1339.py:108`, `:457` | PASS |
+| 4 | `share/skills/h-mcp-kanban/SKILL.md:17`, `:30` | PASS |
+| 5 | `share/skills/h-mcp-kanban/SKILL.md:125`, `:126`, `:127`, `:128`, `:129`; exact release-row proof at `tests/test_engine_end_work_fail_1125.py:387`, `:416` | PASS |
+| 6 | `serve/mcp-kanban/README.md:19`, `:31`, `:79`, `:80`, `:81`, `:82`, `:83`; structured outcome proof at `tests/test_mcp_end_work_fail_1339.py:579`, `:745` | PASS |
+| 7 | `serve/kanban/src/owlbear_kanban/agent_view.py:47`; `serve/mcp-kanban/src/owlbear_mcp_kanban/guidance.py:14`; `tests/test_guidance_text_1183.py:41`, `:52` | PASS |
+| 8 | `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:718`, `:720`, `:740`, `:743`; no stale edit/create patch entries remain on the live metadata surface | PASS |
+| 9 | `tests/test_mcp_end_work_fail_1339.py:402`, `:414`; grep on `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py` found no `_STATUSES` / `_PRIORITIES` matches | PASS |
+| 10 | `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:762`; `serve/kanban/src/owlbear_kanban/agent_view.py:1052`, `:1073`, `:1110`, `:1115`; `share/skills/h-mcp-kanban/SKILL.md:125`, `:127`, `:129`; `serve/mcp-kanban/README.md:79`, `:81`, `:82`; runtime proof at `tests/test_mcp_end_work_fail_1339.py:652`, `:671` | PASS |
+| 11 | `tests/test_mcp_end_work_fail_1339.py:579`; `serve/mcp-kanban/README.md:79`, `:80`, `:81`, `:82`, `:83` | PASS |
+| 12 | quality-runner regression bundle stayed green: 195 passed, 0 failed including `tests/test_mcp_kanban.py`, `serve/mcp-kanban/tests/test_mcp_lifecycle_tools.py`, and `serve/kanban/tests/test_engine_end_work_1077.py` | PASS |
+
+### Notes
+- The task-local AC5 wording test at `tests/test_mcp_end_work_fail_1339.py:790` uses containment (`:808`), which is weaker than exact equality, but the adjacent durable suite closes that gap with `tests/test_engine_end_work_fail_1125.py:387` and `:416`. This is not a blocker.
+- Architecture Review Cycle 3 explicitly scoped out the earlier AC1/AC2 proof-quality complaint as non-blocking for this reconciliation task; the green adjacent lifecycle suites support that decision.
+
+### Deductions
+- `-0.02` dirty-tree / commit-diff verification unavailable from the current tool surface
+- `-0.04` task-local AC5 proof is weaker than the adjacent durable equality check, but the adjacent suite keeps the shipped contract pinned
+
+### Verdict
+- PASS -> docs
+- Confidence: 0.94
+- Action: advance to docs
+
+### Reflection
+- The adjacent durable lifecycle suites were decisive; the task-local file alone would have overstated the remaining proof gap.
+- Architecture Review Cycle 3/4 refinements were binding and prevented re-failing already-scoped-out concerns.
+- Lack of direct `git status` / `git diff` access still warrants a small confidence deduction even on a clean green run.
+[[2026-05-05]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | Yes | Verified | `serve/mcp-kanban/README.md` (IN scope, changed by builder): read and verified accurate — 9 tools table, 5 outcome bullets including `block + move_to`, archival fields, guidance field. All PASS. |
+| 2 | Module docstrings | Yes | Verified | `server.py:end_work` docstring accurate (`"Release a task: append note, advance or resolve status, release claim."`). `agent_view.py:AgentView.end_work` detailed docstring accurately reflects the full 5-outcome move_to matrix per AC10 refinement. No edits needed. |
+| 3 | External attribution | No | N/A | Internal reconciliation task; no external research patterns used. |
+| 4 | Research doc | No | N/A | No research doc produced or referenced in task body. |
+| 5 | Diagram maintenance (describes match) | Yes | Updated | `share/diagrams/kanban.excalidraw` (describes `serve/kanban/src/**, serve/mcp-kanban/src/**`) and `share/diagrams/mcp-topology.excalidraw` (describes `serve/mcp-*/src/**, serve/kanban/src/**`) both matched changed files. Footers updated from `f3b98b0c` → `290e8b49`. Committed as `9abd0f60`. |
+| 6 | Explicit diagram creation | No | N/A | No explicit diagram creation requested. |
+| 7 | Deletion detection | No | N/A | No deleted files in changed-files set. |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py` | IN (docstrings) | Verified — docstring accurate |
+| `serve/kanban/src/owlbear_kanban/agent_view.py` | IN (docstrings) | Verified — docstring accurate |
+| `serve/mcp-kanban/README.md` | IN | Verified accurate |
+| `share/skills/h-mcp-kanban/SKILL.md` | OUT (agent-executable) | No edit |
+| `tests/test_mcp_end_work_fail_1339.py` | OUT (test) | No edit |
+| `tests/test_guidance_text_1183.py` | OUT (test) | No edit |
+| `tests/test_mcp_kanban.py` | OUT (test) | No edit |
+| `tests/test_engine_end_work_fail_1125.py` | OUT (test) | No edit |
+| `share/diagrams/kanban.excalidraw` | IN (diagram) | Footer updated |
+| `share/diagrams/mcp-topology.excalidraw` | IN (diagram) | Footer updated |
+
+### Files Updated
+- `share/diagrams/kanban.excalidraw` — footer → `2026-05-05 (290e8b49)`
+- `share/diagrams/mcp-topology.excalidraw` — footer → `2026-05-05 (290e8b49)`
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no `1339-*` scratch files found)
