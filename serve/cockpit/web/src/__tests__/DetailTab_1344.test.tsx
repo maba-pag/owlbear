@@ -1,0 +1,539 @@
+/**
+ * Failing tests for #1344: Fix Cockpit detail edit workflow contract
+ *
+ * RED phase — all tests must fail until builder implements fixes.
+ *
+ * AC coverage:
+ *   AC4: DetailTab controlled inputs; save payload includes depends_on, parent,
+ *        and block_reason with correct types (list[int], int|null, str|null).
+ *   AC5: Action confirmations call correct endpoints — unblock → POST /edit with
+ *        block_reason: null; unclaim → POST /release; move-backward → POST /move
+ *        with previous-pipeline-status target. All handle 409 and 422 responses.
+ *   AC6: Successful save invokes onTaskUpdated(responseTask) callback.
+ *
+ * Current bugs (audit evidence):
+ *   - handleSave() only sends {updated, title, priority, body} — missing
+ *     depends_on, parent, block_reason.
+ *   - ConfirmDialog.onConfirm() only calls setConfirmType(null) — no API call.
+ *   - onTaskUpdated prop is not destructured from DetailTabProps — never called.
+ */
+
+import { beforeAll, describe, it, expect, vi, afterEach } from 'vitest'
+import { render, fireEvent, waitFor } from '@testing-library/react'
+import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
+import DetailTab, { type TaskDetail } from '../components/DetailTab'
+import type { Board } from '../hooks/useBoard'
+
+// ─── PDS jsdom patch ─────────────────────────────────────────────────────────
+
+beforeAll(() => {
+  ;(HTMLElement.prototype as unknown as Record<string, unknown>)['attachInternals'] = vi.fn(() => ({
+    setFormValue: vi.fn(),
+    setValidity: vi.fn(),
+    checkValidity: vi.fn(() => true),
+    reportValidity: vi.fn(() => true),
+  }))
+})
+
+// ─── Module mocks ─────────────────────────────────────────────────────────────
+
+vi.mock('react-markdown', () => ({
+  default: ({ children }: { children: string }) => (
+    <div data-testid="markdown-body">{children}</div>
+  ),
+}))
+
+// ─── Fixtures ─────────────────────────────────────────────────────────────────
+
+const TASK: TaskDetail = {
+  id: 42,
+  title: 'Fix login bug',
+  status: 'in-progress',
+  priority: 'important',
+  body: '## Objectives\n\n- item one',
+  updated: '2026-04-18T10:00:00+00:00',
+  created: '2026-04-17T09:00:00+00:00',
+  tags: ['bug'],
+  blocked: false,
+  block_reason: null,
+  parent: null,
+  depends_on: [],
+}
+
+const TASK_WITH_DEPS: TaskDetail = {
+  ...TASK,
+  depends_on: [10, 20],
+  parent: 5,
+}
+
+const TASK_BLOCKED: TaskDetail = {
+  ...TASK,
+  blocked: true,
+  block_reason: 'Waiting for dependency #100',
+}
+
+/** Board fixture matching the default pipeline status order. */
+const BOARD: Board = {
+  statuses: [
+    { name: 'research' },
+    { name: 'backlog' },
+    { name: 'todo' },
+    { name: 'in-progress' },
+    { name: 'review' },
+    { name: 'docs' },
+    { name: 'done' },
+  ],
+  priorities: ['someday', 'nice-to-have', 'important', 'needed', 'critical'],
+  valid_transitions: {
+    research: ['backlog'],
+    backlog: ['research', 'todo'],
+    todo: ['backlog', 'in-progress'],
+    'in-progress': ['todo', 'review'],
+    review: ['in-progress', 'docs'],
+    docs: ['review', 'done'],
+    done: [],
+  },
+}
+
+// ─── Render helpers ───────────────────────────────────────────────────────────
+
+function renderDetail(task: TaskDetail = TASK) {
+  return render(
+    <PorscheDesignSystemProvider>
+      <DetailTab task={task} />
+    </PorscheDesignSystemProvider>,
+  )
+}
+
+/**
+ * Render DetailTab with a board prop.
+ *
+ * The `board` prop does not exist on DetailTabProps yet — the builder adds it.
+ * @ts-expect-error is intentional; it will be removed once the prop is added.
+ */
+function renderDetailWithBoard(task: TaskDetail = TASK, board: Board | null = BOARD) {
+  return render(
+    <PorscheDesignSystemProvider>
+      {/* @ts-expect-error board prop will be added by builder in GREEN phase */}
+      <DetailTab task={task} board={board} />
+    </PorscheDesignSystemProvider>,
+  )
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+/** Click the Confirm button inside an open ConfirmDialog. */
+function clickConfirm(container: HTMLElement): void {
+  const btns = container.querySelectorAll('[data-testid="confirm-dialog"] p-button')
+  const confirmBtn = btns[btns.length - 1] as HTMLElement | null
+  expect(confirmBtn).not.toBeNull()
+  fireEvent.click(confirmBtn!)
+}
+
+// ─── Tests ────────────────────────────────────────────────────────────────────
+
+// ---------------------------------------------------------------------------
+// AC4: controlled inputs + correct typed save payload
+// ---------------------------------------------------------------------------
+
+describe('TestFromAC_DetailTabEditPayload', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('save payload includes depends_on as an array of integers', async () => {
+    /**
+     * AC4: save sends depends_on with correct type (list[int]).
+     *
+     * Current bug: handleSave() only sends {updated, title, priority, body} —
+     * depends_on is not included.
+     */
+    const fetchMock = vi.fn(() =>
+      Promise.resolve({ ok: true, json: () => Promise.resolve(TASK_WITH_DEPS) }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const { container } = renderDetail(TASK_WITH_DEPS)
+
+    const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
+    expect(saveBtn).not.toBeNull()
+    fireEvent.click(saveBtn!)
+
+    await waitFor(
+      () => {
+        const [, options] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+        const body = JSON.parse(options.body as string) as Record<string, unknown>
+        expect(body).toHaveProperty('depends_on')
+        const deps = body['depends_on'] as unknown[]
+        expect(Array.isArray(deps)).toBe(true)
+        expect(deps.every((d) => typeof d === 'number')).toBe(true)
+        expect(deps).toContain(10)
+        expect(deps).toContain(20)
+      },
+      { timeout: 500 },
+    )
+  })
+
+  it('save payload includes parent as an integer when task has a parent', async () => {
+    /**
+     * AC4: save sends parent with correct type (int), not as a string.
+     *
+     * Current bug: handleSave() does not include parent in the request body.
+     */
+    const fetchMock = vi.fn(() =>
+      Promise.resolve({ ok: true, json: () => Promise.resolve(TASK_WITH_DEPS) }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const { container } = renderDetail(TASK_WITH_DEPS)
+
+    const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
+    expect(saveBtn).not.toBeNull()
+    fireEvent.click(saveBtn!)
+
+    await waitFor(
+      () => {
+        const [, options] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+        const body = JSON.parse(options.body as string) as Record<string, unknown>
+        expect(body).toHaveProperty('parent')
+        expect(typeof body['parent']).toBe('number')
+        expect(body['parent']).toBe(5)
+      },
+      { timeout: 500 },
+    )
+  })
+
+  it('save payload includes parent as null when task has no parent', async () => {
+    /**
+     * AC4: save sends parent: null (int|null) when task.parent is null.
+     * Omitting the field entirely is not equivalent — backend treats omit as
+     * "no change" while null signals "clear parent".
+     *
+     * Current bug: parent field is absent from handleSave() payload.
+     */
+    const fetchMock = vi.fn(() =>
+      Promise.resolve({ ok: true, json: () => Promise.resolve(TASK) }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const { container } = renderDetail(TASK)
+
+    const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
+    expect(saveBtn).not.toBeNull()
+    fireEvent.click(saveBtn!)
+
+    await waitFor(
+      () => {
+        const [, options] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+        const body = JSON.parse(options.body as string) as Record<string, unknown>
+        expect(body).toHaveProperty('parent')
+        expect(body['parent']).toBeNull()
+      },
+      { timeout: 500 },
+    )
+  })
+
+  it('save payload includes block_reason when task is blocked', async () => {
+    /**
+     * AC4: save sends block_reason for blocked tasks.
+     *
+     * Current bug: handleSave() does not include block_reason.
+     */
+    const fetchMock = vi.fn(() =>
+      Promise.resolve({ ok: true, json: () => Promise.resolve(TASK_BLOCKED) }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const { container } = renderDetail(TASK_BLOCKED)
+
+    const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
+    expect(saveBtn).not.toBeNull()
+    fireEvent.click(saveBtn!)
+
+    await waitFor(
+      () => {
+        const [, options] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+        const body = JSON.parse(options.body as string) as Record<string, unknown>
+        expect(body).toHaveProperty('block_reason')
+        expect(body['block_reason']).toBe('Waiting for dependency #100')
+      },
+      { timeout: 500 },
+    )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// AC5: action confirmations call the correct endpoints
+// ---------------------------------------------------------------------------
+
+describe('TestFromAC_DetailTabActions', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('unblock confirmation POSTs to edit endpoint with block_reason: null', async () => {
+    /**
+     * AC5: unblock → POST /api/tasks/{id}/edit with block_reason: null.
+     *
+     * Current bug: ConfirmDialog.onConfirm only calls setConfirmType(null) —
+     * no API call is made.
+     */
+    const fetchMock = vi.fn(() =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ ...TASK_BLOCKED, blocked: false, block_reason: null }),
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const { container } = renderDetail(TASK_BLOCKED)
+
+    const unblockBtn = container.querySelector('[data-testid="unblock-action"]') as HTMLElement | null
+    expect(unblockBtn).not.toBeNull()
+    fireEvent.click(unblockBtn!)
+
+    await waitFor(
+      () => expect(container.querySelector('[data-testid="confirm-dialog"]')).not.toBeNull(),
+      { timeout: 500 },
+    )
+
+    clickConfirm(container)
+
+    await waitFor(
+      () => {
+        const editCalls = fetchMock.mock.calls.filter(([url]) =>
+          (url as string).includes(`/api/tasks/${TASK_BLOCKED.id}/edit`),
+        )
+        expect(editCalls.length).toBeGreaterThan(0)
+        const [, options] = editCalls[0] as unknown as [string, RequestInit]
+        const body = JSON.parse(options.body as string) as Record<string, unknown>
+        expect(body).toHaveProperty('block_reason', null)
+      },
+      { timeout: 500 },
+    )
+  })
+
+  it('unclaim confirmation POSTs to the release endpoint', async () => {
+    /**
+     * AC5: unclaim → POST /api/tasks/{id}/release.
+     *
+     * Current bug: ConfirmDialog.onConfirm only calls setConfirmType(null) —
+     * no API call is made.
+     */
+    const fetchMock = vi.fn(() =>
+      Promise.resolve({ ok: true, json: () => Promise.resolve(TASK) }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const { container } = renderDetail(TASK)
+
+    const unclaimBtn = container.querySelector('[data-testid="unclaim-action"]') as HTMLElement | null
+    expect(unclaimBtn).not.toBeNull()
+    fireEvent.click(unclaimBtn!)
+
+    await waitFor(
+      () => expect(container.querySelector('[data-testid="confirm-dialog"]')).not.toBeNull(),
+      { timeout: 500 },
+    )
+
+    clickConfirm(container)
+
+    await waitFor(
+      () => {
+        const releaseCalls = fetchMock.mock.calls.filter(([url]) =>
+          (url as string).includes(`/api/tasks/${TASK.id}/release`),
+        )
+        expect(releaseCalls.length).toBeGreaterThan(0)
+      },
+      { timeout: 500 },
+    )
+  })
+
+  it('move-backward confirmation POSTs to the move endpoint', async () => {
+    /**
+     * AC5: move-backward → POST /api/tasks/{id}/move.
+     *
+     * Current bug: ConfirmDialog.onConfirm only calls setConfirmType(null) —
+     * no API call is made.
+     */
+    const fetchMock = vi.fn(() =>
+      Promise.resolve({ ok: true, json: () => Promise.resolve(TASK) }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const { container } = renderDetailWithBoard(TASK)
+
+    const moveBackBtn = container.querySelector('[data-testid="move-backward"]') as HTMLElement | null
+    expect(moveBackBtn).not.toBeNull()
+    fireEvent.click(moveBackBtn!)
+
+    await waitFor(
+      () => expect(container.querySelector('[data-testid="confirm-dialog"]')).not.toBeNull(),
+      { timeout: 500 },
+    )
+
+    clickConfirm(container)
+
+    await waitFor(
+      () => {
+        const moveCalls = fetchMock.mock.calls.filter(([url]) =>
+          (url as string).includes(`/api/tasks/${TASK.id}/move`),
+        )
+        expect(moveCalls.length).toBeGreaterThan(0)
+      },
+      { timeout: 500 },
+    )
+  })
+
+  it('move-backward sends the previous pipeline status in the request body', async () => {
+    /**
+     * AC5: target status derived from pipeline-order (previous status from
+     * valid_transitions or board status list).
+     *
+     * TASK.status = 'in-progress' (index 3 in BOARD.statuses).
+     * Previous status = 'todo' (index 2).
+     *
+     * Current bug: no API call on confirm → never sends move request.
+     */
+    const fetchMock = vi.fn(() =>
+      Promise.resolve({ ok: true, json: () => Promise.resolve(TASK) }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const { container } = renderDetailWithBoard(TASK, BOARD)
+
+    const moveBackBtn = container.querySelector('[data-testid="move-backward"]') as HTMLElement | null
+    expect(moveBackBtn).not.toBeNull()
+    fireEvent.click(moveBackBtn!)
+
+    await waitFor(
+      () => expect(container.querySelector('[data-testid="confirm-dialog"]')).not.toBeNull(),
+      { timeout: 500 },
+    )
+
+    clickConfirm(container)
+
+    await waitFor(
+      () => {
+        const moveCalls = fetchMock.mock.calls.filter(([url]) =>
+          (url as string).includes(`/api/tasks/${TASK.id}/move`),
+        )
+        expect(moveCalls.length).toBeGreaterThan(0)
+        const [, options] = moveCalls[0] as unknown as [string, RequestInit]
+        const body = JSON.parse(options.body as string) as Record<string, unknown>
+        // 'in-progress' previous status in BOARD.statuses order is 'todo'
+        expect(body).toHaveProperty('status', 'todo')
+      },
+      { timeout: 500 },
+    )
+  })
+
+  it('409 from action confirmation shows a conflict indicator', async () => {
+    /**
+     * AC5: actions handle 409 (refetch + show conflict).
+     *
+     * Current bug: no API call is made → 409 is never returned →
+     * conflict modal never appears.
+     */
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve({ ok: false, status: 409, json: () => Promise.resolve({ detail: 'stale' }) }),
+      ),
+    )
+    const { container } = renderDetail(TASK_BLOCKED)
+
+    const unblockBtn = container.querySelector('[data-testid="unblock-action"]') as HTMLElement | null
+    expect(unblockBtn).not.toBeNull()
+    fireEvent.click(unblockBtn!)
+
+    await waitFor(
+      () => expect(container.querySelector('[data-testid="confirm-dialog"]')).not.toBeNull(),
+      { timeout: 500 },
+    )
+
+    clickConfirm(container)
+
+    await waitFor(
+      () => {
+        expect(container.querySelector('[data-testid="conflict-modal"]')).not.toBeNull()
+      },
+      { timeout: 500 },
+    )
+  })
+
+  it('422 from action confirmation shows a validation message', async () => {
+    /**
+     * AC5: actions handle 422 (show validation message).
+     *
+     * Current bug: no API call is made → 422 is never returned →
+     * validation message never shown.
+     */
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve({
+          ok: false,
+          status: 422,
+          json: () => Promise.resolve({ detail: 'invalid value' }),
+        }),
+      ),
+    )
+    const { container } = renderDetail(TASK_BLOCKED)
+
+    const unblockBtn = container.querySelector('[data-testid="unblock-action"]') as HTMLElement | null
+    expect(unblockBtn).not.toBeNull()
+    fireEvent.click(unblockBtn!)
+
+    await waitFor(
+      () => expect(container.querySelector('[data-testid="confirm-dialog"]')).not.toBeNull(),
+      { timeout: 500 },
+    )
+
+    clickConfirm(container)
+
+    await waitFor(
+      () => {
+        expect(container.querySelector('[data-testid="validation-message"]')).not.toBeNull()
+      },
+      { timeout: 500 },
+    )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// AC6 (td:1): Successful save invokes onTaskUpdated callback
+// ---------------------------------------------------------------------------
+
+describe('TestFromAC_DetailTabTaskUpdated', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('successful save calls onTaskUpdated with the response task', async () => {
+    /**
+     * AC6 (td:1): DetailTab calls onTaskUpdated(responseTask) callback on success.
+     *
+     * Current bug: onTaskUpdated is declared in DetailTabProps but not destructured
+     * from the component's props — the callback is never invoked.
+     */
+    const updatedTask: TaskDetail = { ...TASK, title: 'Updated title from server' }
+    const fetchMock = vi.fn(() =>
+      Promise.resolve({ ok: true, json: () => Promise.resolve(updatedTask) }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const onTaskUpdated = vi.fn()
+
+    const { container } = render(
+      <PorscheDesignSystemProvider>
+        <DetailTab task={TASK} onTaskUpdated={onTaskUpdated} />
+      </PorscheDesignSystemProvider>,
+    )
+
+    const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
+    expect(saveBtn).not.toBeNull()
+    fireEvent.click(saveBtn!)
+
+    await waitFor(
+      () => {
+        expect(onTaskUpdated).toHaveBeenCalledTimes(1)
+        expect(onTaskUpdated).toHaveBeenCalledWith(
+          expect.objectContaining({ title: 'Updated title from server' }),
+        )
+      },
+      { timeout: 500 },
+    )
+  })
+})
