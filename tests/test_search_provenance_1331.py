@@ -24,6 +24,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from owlbear_knowledge.models import KnowledgeSource, SourceType
 from owlbear_mcp_knowledge.server import search_knowledge
 
 
@@ -462,3 +463,54 @@ class TestFromAC_SearchProvenanceDeterminism:
         result = await search_knowledge(ctx, query="test")
 
         assert result[0]["source"]["url"] == "https://exact-url.example.com"
+
+
+# ---------------------------------------------------------------------------
+# Class 4: AC8 — MCP-boundary source URL proof with real KnowledgeSource
+# ---------------------------------------------------------------------------
+
+
+def _real_ks_source(
+    name: str = "RealSource",
+    url: str = "https://real.example.com/",
+    source_id: str = "src-real",
+) -> KnowledgeSource:
+    """Return a real KnowledgeSource with config['url'] set (no bare .url attr)."""
+    return KnowledgeSource(
+        id=source_id,
+        name=name,
+        source_type=SourceType.URL_LIST,
+        config={"url": url},
+        created_at="2026-01-01T00:00:00Z",
+        updated_at="2026-01-01T00:00:00Z",
+    )
+
+
+class TestFromAC_MCPBoundarySourceProof:
+    """AC8: MCP serializer resolves URL from real KnowledgeSource.config['url'], not bare .url."""
+
+    @pytest.mark.asyncio
+    async def test_source_url_serialized_from_config_dict_not_bare_attr(self) -> None:
+        """search_knowledge serializes URL from config['url'] for a real KnowledgeSource."""
+        real_ks = _real_ks_source(name="RealSource", url="https://config-dict.example.com/")
+
+        qs = AsyncMock()
+        qs.query = AsyncMock(return_value=[_make_enriched_result(source=real_ks)])
+        ctx = _make_ctx(qs)
+
+        result = await search_knowledge(ctx, query="test")
+
+        assert result[0]["source"]["url"] == "https://config-dict.example.com/"
+
+    @pytest.mark.asyncio
+    async def test_source_name_serialized_from_real_knowledge_source(self) -> None:
+        """search_knowledge serializes name from real KnowledgeSource.name attribute."""
+        real_ks = _real_ks_source(name="RealSourceName", url="https://example.com/")
+
+        qs = AsyncMock()
+        qs.query = AsyncMock(return_value=[_make_enriched_result(source=real_ks)])
+        ctx = _make_ctx(qs)
+
+        result = await search_knowledge(ctx, query="test")
+
+        assert result[0]["source"]["name"] == "RealSourceName"

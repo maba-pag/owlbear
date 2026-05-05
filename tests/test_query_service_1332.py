@@ -552,3 +552,68 @@ class TestFromAC_ShapeDeterminism:
 
         for attr in self._PROVENANCE_ATTRS:
             assert hasattr(results[0], attr), f"missing '{attr}' on StructuredSearchResult"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# AC9: related_sources exact payload values (td:1)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestFromAC_RelatedSourcesExactValues:
+    """AC9: related_sources items pin exact name, relationship, and entity values."""
+
+    def _build_cross_source_service(self) -> KnowledgeQueryService:
+        """Build a service with one cross-source entity edge (SourceA→SourceB, 'references')."""
+        primary_doc = _mock_doc("doc-1", source_id="src-1")
+        target_doc = _mock_doc("doc-2", source_id="src-2")
+        ent = _mock_entity("ent-1", "OriginEntity", "concept", "doc-1")
+        tgt_ent = _mock_entity("ent-2", "TargetEntity", "pattern", "doc-2")
+        edge = _mock_edge("edge-1", "ent-1", "ent-2", "references")
+
+        gs = MagicMock()
+        gs.get_document_id_for_chunk.return_value = "doc-1"
+        doc_map: dict[str, MagicMock] = {"doc-1": primary_doc, "doc-2": target_doc}
+        gs.get_document.side_effect = doc_map.get
+        gs.list_entities_for_document.return_value = [ent]
+        gs.list_edges.return_value = [edge]
+        gs.get_entity.return_value = tgt_ent
+
+        ks1 = _real_source("SourceA", "https://a.com/", "src-1")
+        ks2 = _real_source("SourceB", "https://b.com/", "src-2")
+        ss = MagicMock()
+        src_map: dict[str, KnowledgeSource] = {"src-1": ks1, "src-2": ks2}
+        ss.get.side_effect = src_map.get
+
+        return KnowledgeQueryService(
+            vector_store=_mock_vector_store(),
+            graph_store=gs,
+            embedding_provider=_mock_embedding_provider(),
+            source_store=ss,
+        )
+
+    @pytest.mark.asyncio
+    async def test_related_source_name_is_exact_peer_source_name(self) -> None:
+        """related_sources[0]['name'] matches the exact KnowledgeSource.name of the peer."""
+        service = self._build_cross_source_service()
+
+        results = await _query(service)
+
+        assert results[0].related_sources[0]["name"] == "SourceB"
+
+    @pytest.mark.asyncio
+    async def test_related_source_relationship_is_exact_edge_relation(self) -> None:
+        """related_sources[0]['relationship'] matches the exact edge.relation value."""
+        service = self._build_cross_source_service()
+
+        results = await _query(service)
+
+        assert results[0].related_sources[0]["relationship"] == "references"
+
+    @pytest.mark.asyncio
+    async def test_related_source_entity_is_exact_peer_entity_name(self) -> None:
+        """related_sources[0]['entity'] matches the exact peer entity name."""
+        service = self._build_cross_source_service()
+
+        results = await _query(service)
+
+        assert results[0].related_sources[0]["entity"] == "TargetEntity"
