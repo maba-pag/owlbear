@@ -350,6 +350,34 @@ class TestFromAC_GetNextBatch:
         assert _get_chunk_field(item, "source_name") == "My Knowledge Source"
 
     @pytest.mark.asyncio
+    async def test_source_name_is_none_for_document_without_knowledge_source(
+        self, conn: sqlite3.Connection
+    ) -> None:
+        """Document with no linked knowledge_source (source_id=NULL) still returns chunk with source_name=None.
+
+        Discriminating proof for LEFT JOIN: replacing LEFT JOIN with INNER JOIN would
+        drop the document and chunk entirely — this test would FAIL in that case.
+        """
+        doc_id = _insert_document(conn, title="Sourceless Doc", source_id=None)
+        chunk_id = _insert_chunk(conn, document_id=doc_id, content="sourceless chunk")
+
+        ctx = _make_mcp_ctx(conn)
+        result = await get_next_batch(ctx, limit=10)
+
+        returned_ids = {_get_chunk_field(r, "chunk_id") for r in result}
+        assert chunk_id in returned_ids, (
+            "Chunk from a document with no linked knowledge_source must still be returned "
+            "(LEFT JOIN must not drop sourceless documents)"
+        )
+
+        item = next(r for r in result if _get_chunk_field(r, "chunk_id") == chunk_id)
+        actual_source_name = _get_chunk_field(item, "source_name")
+        assert actual_source_name is None, (
+            f"source_name must be None for a document with no linked knowledge_source, "
+            f"got {actual_source_name!r}"
+        )
+
+    @pytest.mark.asyncio
     async def test_returns_section_path_field(self, conn: sqlite3.Connection) -> None:
         """Each result item carries a section_path field (may be None if not stored)."""
         source_id = _insert_source(conn)
