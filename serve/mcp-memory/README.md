@@ -25,6 +25,7 @@ Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json
 | `approve_entry` | Promote a `curated` entry to `approved` |
 | `curate_memory` | Alias for `update_entry` — same curation semantics; returns a `hint` field describing the state transition |
 | `delete_memory` | Alias for `delete_entry` — same deletion semantics; returns a `hint` field identifying hard-delete vs soft-delete |
+| `recall_memory` | Retrieve body-only text for a single scoped agent; returns approved entries first then curated, filtered by `scope_agents`; supports optional `categories` and `limit` (default 20); rejects wildcard `agent="*"` |
 
 ### Entry schema
 
