@@ -594,6 +594,13 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
 
 mcp = FastMCP("owlbear-knowledge", lifespan=app_lifespan)
 
+get_next_batch = mcp.tool(
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
+)(get_next_batch)
+store_enrichment = mcp.tool(
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
+)(store_enrichment)
+
 __all__ = [
     "AppContext",
     "_apply_tool_exclusions",
