@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import sqlite3
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypedDict
+from uuid import uuid4
 
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
@@ -100,12 +103,166 @@ class StatsResult(TypedDict):
     edges: int
 
 
+class EnrichmentChunk(TypedDict):
+    """Chunk payload claimed by enrichment workers."""
+
+    chunk_id: str
+    text: str
+    doc_title: str
+    section_path: str | None
+    source_name: str | None
+
+
 def select_content_fetcher(method: str) -> ContentFetcher:
     """Return the content fetcher implementation for a persisted fetch method."""
     normalized = method.strip().lower()
     if normalized == "browser":
         return _BrowserContentFetcher()
     return HttpxContentFetcher()
+
+
+def _extract_section_path(metadata: str | None) -> str | None:
+    """Extract section_path from serialized chunk metadata."""
+    if not metadata:
+        return None
+    try:
+        parsed = json.loads(metadata)
+    except (TypeError, ValueError):
+        return None
+    section_path = parsed.get("section_path")
+    return section_path if isinstance(section_path, str) else None
+
+
+async def get_next_batch(ctx: Context, limit: int = 10) -> list[EnrichmentChunk]:
+    """Atomically claim a batch of chunks ready for enrichment.
+
+    Chunks are eligible when state is pending, or when a previous claim lease
+    is stale (>10 minutes). Chunks from sources with enrich=0 are excluded.
+    """
+    app_ctx: AppContext = ctx.request_context.lifespan_context
+    conn = app_ctx.conn
+    now = datetime.now(tz=UTC)
+    now_iso = now.isoformat()
+    # Add a small safety margin so a chunk claimed exactly 10 minutes ago
+    # is not treated as stale because of sub-second scheduling drift.
+    stale_cutoff = (now - timedelta(minutes=10, seconds=1)).isoformat()
+
+    conn.execute("PRAGMA busy_timeout = 5000")
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        rows = conn.execute(
+            """
+            SELECT
+                c.id,
+                c.content,
+                d.title,
+                c.metadata,
+                ks.name
+            FROM chunks AS c
+            JOIN documents AS d ON d.id = c.document_id
+            LEFT JOIN knowledge_sources AS ks ON ks.id = d.source_id
+            WHERE COALESCE(ks.enrich, 1) = 1
+              AND (
+                c.enrichment_state = 'pending'
+                OR (
+                    c.enrichment_state = 'claimed'
+                    AND c.claimed_at IS NOT NULL
+                    AND c.claimed_at < ?
+                )
+              )
+            ORDER BY c.created_at ASC, c.id ASC
+            LIMIT ?
+            """,
+            (stale_cutoff, limit),
+        ).fetchall()
+
+        if rows:
+            chunk_ids = [row[0] for row in rows]
+            placeholders = ",".join("?" for _ in chunk_ids)
+            conn.execute(
+                f"UPDATE chunks SET enrichment_state='claimed', claimed_at=? WHERE id IN ({placeholders})",  # noqa: S608
+                (now_iso, *chunk_ids),
+            )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+
+    return [
+        {
+            "chunk_id": row[0],
+            "text": row[1],
+            "doc_title": row[2],
+            "section_path": _extract_section_path(row[3]),
+            "source_name": row[4],
+        }
+        for row in rows
+    ]
+
+
+async def store_enrichment(
+    ctx: Context,
+    chunk_id: str,
+    entities: list[dict[str, Any]],
+    edges: list[dict[str, Any]],
+) -> None:
+    """Persist extracted entities/edges and mark chunk as enriched."""
+    app_ctx: AppContext = ctx.request_context.lifespan_context
+    conn = app_ctx.conn
+    now_iso = datetime.now(tz=UTC).isoformat()
+
+    conn.execute("PRAGMA busy_timeout = 5000")
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        for entity in entities:
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO entities
+                (id, name, entity_type, description, metadata, created_at, scope, document_id, chunk_id, importance)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    entity.get("id") or uuid4().hex,
+                    entity.get("name", ""),
+                    entity.get("entity_type", ""),
+                    entity.get("description", ""),
+                    json.dumps(entity.get("metadata", {})),
+                    now_iso,
+                    entity.get("scope", "global"),
+                    entity.get("document_id"),
+                    entity.get("chunk_id"),
+                    entity.get("importance", 0.5),
+                ),
+            )
+
+        for edge in edges:
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO edges
+                (id, source_id, target_id, relation, document_id, weight, metadata, created_at, scope)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    edge.get("id") or uuid4().hex,
+                    edge.get("source_id"),
+                    edge.get("target_id"),
+                    edge.get("relation"),
+                    edge.get("document_id"),
+                    edge.get("weight", 1.0),
+                    json.dumps(edge.get("metadata", {})),
+                    now_iso,
+                    edge.get("scope", "global"),
+                ),
+            )
+
+        conn.execute(
+            "UPDATE chunks SET enrichment_state='enriched', claimed_at=NULL WHERE id = ?",
+            (chunk_id,),
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
 
 
 def init_db(path: str) -> sqlite3.Connection:
