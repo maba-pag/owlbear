@@ -751,7 +751,9 @@ _patch_params(
         "remove_dep": {
             "description": "Remove dependency task IDs (JSON array, e.g. [601, 602])"
         },
-        "parent": {"description": "Parent task ID for subtask hierarchy"},
+        "parent": {
+            "description": "Parent task ID for subtask hierarchy; use 0 to clear parent"
+        },
     },
 )
 

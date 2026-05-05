@@ -24,7 +24,7 @@ The server exposes 9 tools:
 | `show_task` | `show_task(id: str \| int, section: str \| None = None)` |
 | `pick_tasks` | `pick_tasks(wave_size: int \| None = None, max_waves: int = 3)` |
 | `create_task` | `create_task(title: str, body: str = "", priority: str = "needed", tags: list[str] \| None = None, parent: int \| None = None, depends_on: list[int] \| None = None)` |
-| `edit_task` | `edit_task(id: str \| int, body: str \| None = None, append_body: str \| None = None, timestamp: bool = False, priority: str \| None = None, parent: int \| None = None, add_dep: list[int] \| None = None, remove_dep: list[int] \| None = None, add_tag: list[str] \| None = None, remove_tag: list[str] \| None = None, block_reason: str \| None = None, archival_reason: str \| None = None, archival_refs: list[int] \| None = None)` |
+| `edit_task` | `edit_task(id: str \| int, title: str \| None = None, body: str \| None = None, append_body: str \| None = None, timestamp: bool = False, priority: str \| None = None, parent: int \| None = None, add_dep: list[int] \| None = None, remove_dep: list[int] \| None = None, add_tag: list[str] \| None = None, remove_tag: list[str] \| None = None, block_reason: str \| None = None, archival_reason: str \| None = None, archival_refs: list[int] \| None = None)` |
 | `move_task` | `move_task(id: str \| int, status: str, archival_reason: str \| None = None, archival_refs: list[int] \| None = None)` |
 | `start_work` | `start_work(id: str \| int)` |
 | `end_work` | `end_work(id: str \| int, outcome: str, move_to: str \| None = None, note: str \| None = None, archival_reason: str \| None = None, archival_refs: list[int] \| None = None, block_reason: str \| None = None)` |
@@ -87,6 +87,11 @@ Documented lifecycle outcomes for agent routing:
 `reject` uses `move_to` as the target status.
 
 ## Usage Examples
+
+`edit_task` semantics:
+
+- `body`: omitted or `null` means no change, `""` clears, non-empty text replaces body
+- `parent`: positive ID sets parent, `0` clears parent, omitted or `null` means no change
 
 ```json
 {"tool":"list_tasks","arguments":{"status":"in-progress","blocked":false,"limit":20}}

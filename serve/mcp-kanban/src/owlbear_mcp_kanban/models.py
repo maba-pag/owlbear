@@ -78,6 +78,7 @@ class EditTaskParams(MCPParamsBase):
     """Input schema for edit_task."""
 
     id: int
+    title: str | None = None
     body: str | None = None
     append_body: str | None = None
     timestamp: bool = False
