@@ -1202,7 +1202,7 @@ class TestEditTaskContractDurable:
         # Task has no body — already empty
         app_ctx = AppContext(engine=engine, kanban_dir=board)
 
-        with pytest.raises(ToolError):
+        with pytest.raises(ToolError, match="No changes requested"):
             await edit_task(_make_ctx(app_ctx), id=str(task.id), body="")
 
 
