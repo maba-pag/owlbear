@@ -935,8 +935,8 @@ class TestFromAC_EngineReloadOnMtimeChange:
         second = client.get("/api/tasks")
         assert second.status_code == 200
         mtime_after = second.json()["mtime"]
-        assert mtime_after > mtime_before, (
-            "mtime must increase after a new task file is created "
+        assert mtime_after != mtime_before, (
+            "signature must change after a new task file is created "
             f"(before={mtime_before}, after={mtime_after})"
         )
 
