@@ -76,10 +76,11 @@ Responses include `guidance: list[str]` for operational hints (for example: DR-r
 
 Documented lifecycle outcomes for agent routing:
 
-- `success`
-- `reject`
-- `release`
-- `block`
+- `success`: Advance to the next status (or `move_to` when provided).
+- `fail`: Record a failed attempt and release claim without changing status.
+- `reject`: Move to `move_to`, then release claim.
+- `block`: Mark task blocked (requires `block_reason`), optionally move to `move_to`, then release claim.
+- `release`: Release claim without changing status.
 
 `block` requires `block_reason`.
 

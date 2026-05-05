@@ -759,7 +759,7 @@ _patch_params(
         },
         "block_reason": {"description": "Required when outcome=block"},
         "move_to": {
-            "description": "Target status when outcome=reject or optional status when outcome=success",
+            "description": "Target status when outcome=reject; optional status move when outcome=success or block",
         },
     },
 )
