@@ -23,6 +23,7 @@ Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json
 | `read_memory` | Read a full memory entry by `entry_id` |
 | `curate_memory` | Update mutable fields on an entry; auto-promotes `pending → curated` when `scope_agents` provided; auto-downgrades `approved → curated`; returns a `hint` describing the transition |
 | `delete_memory` | Delete an entry; hard-deletes `pending` entries (file removed from disk); soft-deletes `curated`/`approved` to `deleted` state; returns a `hint` identifying the deletion type |
+| `recall_memory` | Recall body-only markdown blocks for entries scoped to a specific agent; supports optional `categories` filter and `limit` (default 20); approved entries returned before curated |
 | `approve_memory` | Approve a `curated` entry; returns a `hint` confirming visibility to scoped agents |
 
 ### Entry schema
