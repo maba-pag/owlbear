@@ -548,11 +548,15 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
         intra_doc_builder = IntraDocGraphBuilder(extractor=structured_extractor)
         inter_doc_builder = None
         gar = GraphAugmentedRetriever(vs, gs, emb)
+        source_store = KnowledgeSourceStore(conn)
         qs = KnowledgeQueryService(
-            vector_store=vs, graph_store=gs, embedding_provider=emb, retriever=gar
+            vector_store=vs,
+            graph_store=gs,
+            embedding_provider=emb,
+            retriever=gar,
+            source_store=source_store,
         )
         doc_store = DocumentStore(conn, gs, vs, emb)
-        source_store = KnowledgeSourceStore(conn)
         chunker = TextChunker()
         content_guard = ContentInjectionGuard()
         pipeline = IngestPipeline(
