@@ -83,7 +83,7 @@ Usage: `GET /api/sessions?filter=active`
 
 ## Audit Trail — `actor: "cockpit"` Convention
 
-The engine is initialised with `agent_name="cockpit"`. Every mutation written to `activity.jsonl` carries `actor: "cockpit"`, distinguishing UI-initiated changes from agent-initiated ones (e.g. `actor: "builder"`).
+Every mutation written to `activity.jsonl` carries `actor: "cockpit"`, distinguishing UI-initiated changes from agent-initiated ones (e.g. `actor: "builder"`). `CockpitView` passes `source="cockpit"` explicitly on each mutation call — no constructor-level identity is set.
 
 ## Configuration
 
