@@ -568,3 +568,103 @@ class TestFromAC_ScopedStagingRegression:
         assert any(
             "unrelated.txt" in line and line.startswith("A") for line in status_lines
         ), "unrelated.txt must remain staged after commit_batch"
+
+
+# ---------------------------------------------------------------------------
+# Cycle 3: AC1 (td:1) — _state_from_file catches yaml.YAMLError and returns None
+# Cycle 3: AC2+AC3 (td:2) — commit_batch skips malformed files, commits valid,
+#           leaves no partial staged state
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_MalformedFrontmatterSkip:
+    """Cycle 3 ACs: malformed-YAML file safety in _state_from_file and commit_batch.
+
+    AC1 (td:1): _state_from_file must catch yaml.YAMLError and return None (not raise).
+    AC2 (td:2): commit_batch must skip files where _state_from_file returns None —
+                malformed files are never staged or committed.
+    AC3 (td:2): Integration — malformed file skipped, valid file committed,
+                no partial staged state remains after commit_batch returns.
+    """
+
+    def test_state_from_file_returns_none_for_malformed_yaml(
+        self, tmp_path: Path
+    ) -> None:
+        """_state_from_file with malformed YAML must return None, not raise yaml.YAMLError.
+
+        Current code: yaml.safe_load raises yaml.YAMLError on malformed input — test
+        FAILS in RED because the function raises instead of returning None.
+        After fix: try/except YAMLError returns None with a warning log.
+        """
+        from owlbear_mcp_memory.git import _state_from_file  # noqa: PLC0415
+
+        malformed = tmp_path / "malformed.md"
+        malformed.write_text("---\nstate: [unclosed bracket\n---\nContent body.\n")
+
+        result = _state_from_file(malformed)
+        assert result is None, (
+            "_state_from_file must return None for malformed YAML, not raise yaml.YAMLError"
+        )
+
+    def test_commit_batch_skips_malformed_commits_valid_no_partial_state(
+        self, git_repo: Path
+    ) -> None:
+        """Batch with malformed + valid file: skips malformed, commits valid, no partial staged state.
+
+        Covers AC2 and AC3 (td:2):
+        - Malformed file is NOT committed (must never be staged).
+        - Valid curated file IS committed in the single batch commit.
+        - No partial staged state remains after commit_batch returns.
+
+        Malformed file is named with a leading "0" so it sorts alphabetically BEFORE
+        the valid file, ensuring the malformed file is encountered first in the
+        staging loop — making the mid-loop exception / skip-on-None most impactful.
+
+        Current code: yaml.YAMLError propagates out of commit_batch — test FAILS in
+        RED with an unexpected exception before any assertion is reached.
+        """
+        memory_dir = git_repo / "memory"
+        engine = MemoryEngine(memory_dir=memory_dir)
+
+        # Valid curated entry written via engine (well-formed frontmatter).
+        valid_path = engine.write(
+            _make_entry(id=_uuid(30), state="curated", title="Valid Curated Entry")
+        )
+
+        # Malformed .md file written directly (bypasses engine so YAML is broken).
+        # Leading "0000" ensures it sorts before valid_path alphabetically.
+        malformed = memory_dir / "0000-malformed-cycle3.md"
+        malformed.write_text("---\nstate: [unclosed bracket\n---\nContent.\n")
+
+        # commit_batch must complete without raising yaml.YAMLError.
+        _commit_batch(memory_dir, session_type="curation")
+
+        committed = _all_committed_filenames(git_repo)
+
+        # Malformed file must NOT appear anywhere in git history.
+        assert not any("0000-malformed-cycle3" in path for path in committed), (
+            "Malformed YAML file must be skipped and must never be staged or committed"
+        )
+
+        # Valid curated file MUST appear in the batch commit.
+        assert any(valid_path.name in path for path in committed), (
+            "Valid curated file must be committed even when a malformed file is present"
+        )
+
+        # No partial staged state: malformed file must not be in the git index.
+        status_lines = subprocess.run(  # noqa: S603
+            ["git", "status", "--porcelain"],  # noqa: S607
+            capture_output=True,
+            text=True,
+            check=True,
+            cwd=git_repo,
+            stdin=subprocess.DEVNULL,
+        ).stdout.splitlines()
+        staged_malformed = [
+            line
+            for line in status_lines
+            if "0000-malformed-cycle3" in line and not line.startswith("??")
+        ]
+        assert not staged_malformed, (
+            f"Malformed file must not be staged after commit_batch; git status: {status_lines}"
+        )
