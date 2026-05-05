@@ -210,7 +210,7 @@ def _serialize_source(value: object) -> SearchSource:
 
     if not isinstance(url, str):
         config = getattr(value, "config", None)
-        config_url = getattr(config, "url", None)
+        config_url = config.get("url") if isinstance(config, dict) else None
         if isinstance(config_url, str):
             url = config_url
 
