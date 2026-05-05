@@ -118,16 +118,20 @@ Classify every finding before acting:
 
 Delegate follow-up task creation to planner via `Plan and create:` using single-task or decomposition mode as needed, and set status to `research`. For findings requiring user decisions, use the scribe to check/create a decision request.
 
-## Step 6 — Commit & Advance
+## Step 6 — Finalize Artifacts
 
 1. Add rows to `.owlbear/sources/overview.md` for external sources (see `r-project-standards` → Attribution).
 2. Delete any cloned repos from `.owlbear/scratch/research/`.
 
-If you created or modified files (research doc, sources), **commit them** (see `r-pipeline-protocol` → Who Commits What):
+## Step 7 — Commit & Advance
+
+**Commit your deliverables** (see `r-pipeline-protocol` → Who Commits What):
 
 ```shell
 git add .owlbear/research/{doc}.md .owlbear/sources/overview.md && git commit -m "docs: research {topic} (#{id}, researcher)"
 ```
+
+Stage only files you created or modified. Verify with `git diff --cached --name-only` if uncertain.
 
 Include the research summary and challenge results in your `end_work` note.
 
@@ -165,6 +169,7 @@ Append to task body before advancing:
 - [ ] Cloned repos deleted from `.owlbear/scratch/research/`
 - [ ] Challenger invoked for recommendation (or fallback noted)
 - [ ] Tier classification applied to every finding (T1/T2/T3)
+- [ ] Research files committed before advancing
 - [ ] Task advanced to `backlog` and claim released
 
 ## Known Pitfalls
@@ -174,3 +179,4 @@ Append to task body before advancing:
 - **Forgetting to delete cloned repos:** `.owlbear/scratch/research/` repos accumulate if not cleaned. Delete after analysis.
 - **T3 without DR:** New capabilities and architecture changes MUST go through the scribe for a blocking DR. Proceeding without approval risks reversal.
 - **Over-long research docs:** 200-line cap exists to force conciseness. If you need more, the analysis is not focused enough.
+- **Forgetting to commit:** The commit in Step 7 is a hard gate — never call `end_work` with uncommitted files. If in doubt, run `git status` to check.
