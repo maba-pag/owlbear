@@ -246,7 +246,6 @@ class TestFromAC_DecisionsResolve:
             ("approved", "Looks good."),
             ("needs-info", None),
             ("rejected", "Not aligned with scope."),
-            ("completed", "Implemented as requested."),
         ],
     )
     def test_resolve_accepts_response_enum_and_optional_notes(

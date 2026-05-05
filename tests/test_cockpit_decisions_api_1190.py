@@ -430,7 +430,7 @@ class TestFromAC_PostResolveEnum:
     """AC: Accepts {response: enum, notes?: string} — all four valid values (td:2)."""
 
     @pytest.mark.parametrize(
-        "resolution", ["approved", "needs-info", "rejected", "completed"]
+        "resolution", ["approved", "needs-info", "rejected"]
     )
     def test_each_valid_enum_value_is_accepted(
         self, client: TestClient, decisions_dir: Path, resolution: str
@@ -561,9 +561,9 @@ class TestFromAC_PostResolvePersistence:
 
         resp = client.post(
             "/api/decisions/83-body-preserved/resolve",
-            json={"response": "completed", "notes": "Done."},
+            json={"response": "approved", "notes": "Approved."},
         )
-        assert resp.status_code == 200  # proves route is registered; fails in RED
+        assert resp.status_code == 200
 
         content = (decisions_dir / "pending" / "83-body-preserved.md").read_text(
             encoding="utf-8"

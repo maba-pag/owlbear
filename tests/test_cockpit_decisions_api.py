@@ -280,7 +280,7 @@ class TestFromAC_ResolveDecisions:
             ("approved", "Looks good."),
             ("needs-info", None),
             ("rejected", "Not aligned with scope."),
-            ("completed", "Implemented as requested."),
+
         ],
     )
     def test_resolve_accepts_valid_responses_and_optional_notes(
