@@ -36,7 +36,6 @@ Entries are scoped to an optional agent (`scope_agents` list) and carry a requir
 | Variable | Default | Purpose |
 |----------|---------|--------|
 | `OWLBEAR_MEMORY_DIR` | `.owlbear/memory` | Directory for markdown memory files |
-| `OWLBEAR_MEMORY_CALLER` | `unknown` | Caller identity stored in request context (informational; no longer gates tool access) |
 
 ## Dependencies
 

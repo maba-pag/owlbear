@@ -13,19 +13,22 @@ from mcp.types import ToolAnnotations
 
 from owlbear_mcp_memory.engine import MemoryEngine
 from owlbear_mcp_memory.tools import (
-    approve_entry as approve_entry_impl,
+    approve_memory as approve_memory_impl,
 )
 from owlbear_mcp_memory.tools import (
-    delete_entry as delete_entry_impl,
+    curate_memory as curate_memory_impl,
 )
 from owlbear_mcp_memory.tools import (
-    query_memory as query_memory_impl,
+    delete_memory as delete_memory_impl,
 )
 from owlbear_mcp_memory.tools import (
-    store_learning as store_learning_impl,
+    list_memories as list_memories_impl,
 )
 from owlbear_mcp_memory.tools import (
-    update_entry as update_entry_impl,
+    read_memory as read_memory_impl,
+)
+from owlbear_mcp_memory.tools import (
+    save_memory as save_memory_impl,
 )
 
 if TYPE_CHECKING:
@@ -39,7 +42,6 @@ class AppContext:
     """Runtime context passed through MCP lifespan to all tools."""
 
     engine: MemoryEngine
-    caller: str
 
 
 @asynccontextmanager
@@ -48,57 +50,62 @@ async def app_lifespan(
 ) -> AsyncGenerator[AppContext, None]:  # pragma: no cover
     """Construct and expose memory runtime context for this MCP session."""
     memory_dir = Path(os.environ.get("OWLBEAR_MEMORY_DIR", str(_DEFAULT_MEMORY_DIR)))
-    caller = os.environ.get("OWLBEAR_MEMORY_CALLER", "unknown")
-    yield AppContext(engine=MemoryEngine(memory_dir=memory_dir), caller=caller)
+    yield AppContext(engine=MemoryEngine(memory_dir=memory_dir))
 
 
 mcp = FastMCP("owlbear-memory", lifespan=app_lifespan)
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=False))
-async def store_learning(  # noqa: PLR0913
+async def save_memory(  # noqa: PLR0913
     ctx: Context,
     *,
     title: str,
     content: str,
     categories: list[str],
     confidence: float,
-    scope_agents: list[str] | None = None,
+    source_agent: str,
 ) -> dict[str, Any]:  # pragma: no cover
-    """Create a new pending memory entry."""
-    return await store_learning_impl(
+    """Create a new pending memory entry with explicit source agent."""
+    return await save_memory_impl(
         ctx,
         title=title,
         content=content,
         categories=categories,
         confidence=confidence,
-        scope_agents=scope_agents,
+        source_agent=source_agent,
     )
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
-async def query_memory(  # noqa: PLR0913
+async def list_memories(
     ctx: Context,
     *,
     states: list[str] | None = None,
     categories: list[str] | None = None,
     scope_agents: list[str] | None = None,
-    min_confidence: float | None = None,
-    limit: int | None = None,
 ) -> list[dict[str, Any]]:  # pragma: no cover
-    """Query memory entries by lifecycle state and priority ordering."""
-    return await query_memory_impl(
+    """List memory metadata sorted by curation priority."""
+    return await list_memories_impl(
         ctx,
         states=states,
         categories=categories,
         scope_agents=scope_agents,
-        min_confidence=min_confidence,
-        limit=limit,
     )
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=False))
-async def update_entry(  # noqa: PLR0913
+async def read_memory(
+    ctx: Context,
+    *,
+    entry_id: str,
+) -> dict[str, Any]:  # pragma: no cover
+    """Read a full memory entry by ID."""
+    return await read_memory_impl(ctx, entry_id=entry_id)
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=False))
+async def curate_memory(  # noqa: PLR0913
     ctx: Context,
     *,
     entry_id: str,
@@ -109,8 +116,8 @@ async def update_entry(  # noqa: PLR0913
     state: str | None = None,
     scope_agents: list[str] | None = None,
 ) -> dict[str, Any]:  # pragma: no cover
-    """Update mutable fields of an entry (curator-only)."""
-    return await update_entry_impl(
+    """Curate and mutate a memory entry."""
+    return await curate_memory_impl(
         ctx,
         entry_id=entry_id,
         title=title,
@@ -123,16 +130,16 @@ async def update_entry(  # noqa: PLR0913
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=True))
-async def delete_entry(
+async def delete_memory(
     ctx: Context, *, entry_id: str
 ) -> dict[str, Any]:  # pragma: no cover
-    """Mark an entry as deleted (curator-only)."""
-    return await delete_entry_impl(ctx, entry_id=entry_id)
+    """Delete a memory entry with lifecycle-aware semantics."""
+    return await delete_memory_impl(ctx, entry_id=entry_id)
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=False))
-async def approve_entry(
+async def approve_memory(
     ctx: Context, *, entry_id: str
 ) -> dict[str, Any]:  # pragma: no cover
-    """Promote a curated entry to approved (user-only)."""
-    return await approve_entry_impl(ctx, entry_id=entry_id)
+    """Approve a curated memory entry."""
+    return await approve_memory_impl(ctx, entry_id=entry_id)

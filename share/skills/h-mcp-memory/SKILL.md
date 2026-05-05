@@ -140,8 +140,4 @@ Recommended category mapping for post-task reflection bullets:
 
 | Env var | Default | Description |
 |---------|---------|-------------|
-| `MEMORY_TOOLS_EXCLUDE` | (unset) | Comma-separated tool names to remove at startup; unknown names silently ignored |
 | `OWLBEAR_MEMORY_DIR` | `.owlbear/memory` | Path to memory markdown entry directory |
-| `OWLBEAR_MEMORY_CALLER` | `unknown` | Default caller identity in non-interactive server contexts |
-
-**Tool exclusion example:** Set `MEMORY_TOOLS_EXCLUDE=update_entry,delete_entry,approve_entry` to force read-and-capture mode.

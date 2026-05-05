@@ -106,7 +106,6 @@ Tool exclusion is supported on select servers only:
 | Server | Env var |
 |--------|---------|
 | mcp-knowledge | `KNOWLEDGE_TOOLS_EXCLUDE` |
-| mcp-memory | `MEMORY_TOOLS_EXCLUDE` |
 
 Comma-separated tool names are removed via `server.remove_tool()`. Unknown names are silently ignored. Default (unset) = all tools registered.
 

@@ -25,7 +25,7 @@ from mcp.server.fastmcp.exceptions import ToolError
 from owlbear_mcp_memory.engine import MemoryEngine
 from owlbear_mcp_memory.models import MemoryEntry
 from owlbear_mcp_memory.server import app_lifespan, mcp
-from owlbear_mcp_memory.server import query_memory as server_query_memory
+from owlbear_mcp_memory.tools import query_memory as server_query_memory
 from owlbear_mcp_memory.tools import approve_entry, query_memory, update_entry
 
 # ---------------------------------------------------------------------------

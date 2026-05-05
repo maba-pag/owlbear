@@ -40,11 +40,6 @@ def _engine_from_ctx(ctx: Context) -> MemoryEngine:
         raise ToolError(msg) from exc
 
 
-def _caller_from_ctx(ctx: Context) -> str:
-    caller = getattr(ctx.request_context.lifespan_context, "caller", "")
-    return str(caller or "")
-
-
 def _now_iso() -> str:
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
@@ -144,7 +139,7 @@ async def store_learning(  # noqa: PLR0913
             state=MemoryState.PENDING,
             content=content,
             scope_agents=scope_agents or [],
-            source_agent=_caller_from_ctx(ctx) or "unknown",
+            source_agent="unknown",
             created_at=now,
             updated_at=now,
             approved_at=None,
@@ -488,4 +483,5 @@ async def approve_entry(ctx: Context, *, entry_id: str) -> dict[str, Any]:
 
 async def approve_memory(ctx: Context, *, entry_id: str) -> dict[str, Any]:
     """Compatibility alias for approving curated memory entries."""
-    return await approve_entry(ctx, entry_id=entry_id)
+    approved = await approve_entry(ctx, entry_id=entry_id)
+    return _with_hint(approved, "Entry approved. Now visible to scoped agents.")
