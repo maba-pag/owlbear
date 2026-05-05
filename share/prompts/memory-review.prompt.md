@@ -1,5 +1,5 @@
 ---
-description: "Review pending and curated memory entries with a guided approve/edit/reject workflow"
+description: "Review curated memory entries with a guided approve/edit/reject workflow"
 tools:
   - ob-memory/list_memories
   - ob-memory/read_memory
@@ -14,11 +14,11 @@ Run a guided review session for MCP memory entries. This prompt is self-containe
 
 ## 1. Goal
 
-Review entries in `pending` and `curated` states one by one and decide whether to approve, request changes, or reject.
+Review entries in the `curated` state one by one and decide whether to approve, request changes, or reject.
 
 ## 2. Session Setup
 
-1. Call `ob-memory/list_memories` with `states: ["pending", "curated"]`.
+1. Call `ob-memory/list_memories` with `states: ["curated"]`.
 2. Present a compact queue summary with:
    - total count
    - entry ID
@@ -54,7 +54,7 @@ When the user selects an action:
   - Show the resulting state.
 
 - `Request changes`
-  - Collect a specific edit from the user (for example title/content/category/state changes).
+  - Collect a specific edit from the user (for example title/content/category changes).
   - Call `ob-memory/curate_memory` with `entry_id` and only the fields the user wants changed.
   - Show a concise before/after summary.
 
