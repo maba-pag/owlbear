@@ -248,7 +248,7 @@ def _apply_block_kwargs(
     block_reason: str | None,
 ) -> None:
     """Enforce D21 block:user lifecycle and resolve tag-diff conflicts."""
-    if block_reason is None:
+    if not block_reason:
         _remove_tag_op(kwargs, "add_tag", "block:user")
         if "block:user" in current_tags:
             _add_tag_op(kwargs, "remove_tag", "block:user")
