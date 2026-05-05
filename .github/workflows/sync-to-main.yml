@@ -122,6 +122,14 @@ jobs:
           fi
           echo "All selected paths present on dev."
 
+      - name: Install uv for MCP dev-source gate
+        if: ${{ inputs.sync_serve }}
+        uses: astral-sh/setup-uv@v6
+
+      - name: Verify MCP surface contract from dev source
+        if: ${{ inputs.sync_serve }}
+        run: uv run pytest serve/mcp-kanban/tests/test_mcp_surface_contract.py -q --tb=short
+
       - name: Configure git identity
         run: |
           git config user.name "github-actions[bot]"
