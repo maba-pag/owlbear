@@ -72,6 +72,20 @@ __all__ = [
 _DEFAULT_KANBAN_DIR = Path(".owlbear/kanban")
 
 
+def _resolve_kanban_dir() -> Path:
+    """Resolve KANBAN_DIR from the environment, defaulting to cwd/.owlbear/kanban."""
+    raw_value = os.environ.get("KANBAN_DIR", "").strip()
+    selected = Path(raw_value) if raw_value else _DEFAULT_KANBAN_DIR
+    return selected.resolve()
+
+
+def _startup_error(kanban_dir: Path, detail: str) -> RuntimeError:
+    """Build a startup error with board path and KANBAN_DIR remediation guidance."""
+    return RuntimeError(
+        f"{detail}: {kanban_dir}. Set KANBAN_DIR to a valid kanban board directory."
+    )
+
+
 def parse_task_id(value: str | int, *, field: str = "task_id") -> int:
     """Parse MCP task identifiers as positive base-10 integers."""
     msg = f"{field} must be a positive integer"
@@ -131,9 +145,20 @@ def _apply_tool_exclusions(server: FastMCP) -> set[str]:
 @asynccontextmanager
 async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
     """Instantiate KanbanEngine and yield AppContext for the MCP session."""
-    kanban_dir: Path = _DEFAULT_KANBAN_DIR
+    kanban_dir = _resolve_kanban_dir()
     _apply_tool_exclusions(_server)
-    engine = KanbanEngine(kanban_dir)
+
+    if not kanban_dir.is_dir():
+        raise _startup_error(kanban_dir, "Kanban directory does not exist")
+
+    try:
+        engine = KanbanEngine(kanban_dir)
+    except Exception as exc:
+        raise _startup_error(kanban_dir, "Failed to initialize kanban board") from exc
+
+    if not engine.tasks_dir.is_dir():
+        raise _startup_error(kanban_dir, "Kanban tasks directory does not exist")
+
     engine.sweep()
     yield AppContext(engine=engine, kanban_dir=kanban_dir)
 

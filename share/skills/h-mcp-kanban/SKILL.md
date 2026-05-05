@@ -8,6 +8,8 @@ user-invocable: false
 
 The Owlbear Kanban MCP server exposes the native kanban engine operations as MCP tools over stdio transport. Registered in `.vscode/mcp.json` as `ob-kanban`.
 
+Server startup resolves board location from `KANBAN_DIR` when set. If unset or empty, it falls back to `.owlbear/kanban` relative to the process working directory.
+
 For pipeline conventions and claiming protocol, see `r-pipeline-protocol`.
 
 ## Tool Summary
