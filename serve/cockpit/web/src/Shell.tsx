@@ -154,7 +154,25 @@ function Shell() {
               <DetailTab
                 key={selectedTaskId ?? -1}
                 task={selectedTask}
+                board={board}
                 onSelectTask={(taskId) => setSelectedTaskId(taskId)}
+                onTaskCleared={() => {
+                  setSelectedTaskId(null)
+                  setSelectedTask(null)
+                }}
+                onTaskUpdated={(updatedTask) => {
+                  const previousTask = selectedTask
+                  setSelectedTask(updatedTask)
+                  if (
+                    previousTask === null ||
+                    previousTask.title !== updatedTask.title ||
+                    previousTask.priority !== updatedTask.priority ||
+                    previousTask.status !== updatedTask.status ||
+                    previousTask.blocked !== updatedTask.blocked
+                  ) {
+                    refetchTasks()
+                  }
+                }}
               />
             </div>
           </p-tabs-item>

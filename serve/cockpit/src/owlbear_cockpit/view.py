@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from owlbear_kanban import KanbanEngine
 
 _BLOCK_REASON_UNSET = object()
+_FIELD_UNSET = object()
 
 
 class CockpitView:
@@ -94,11 +95,11 @@ class CockpitView:
         *,
         expected_updated: str,
         title: str | None = None,
-        body: str = "",
+        body: str | None | object = _FIELD_UNSET,
         append_body: str = "",
         timestamp: bool = False,
         priority: str = "",
-        parent: int = 0,
+        parent: int | None | object = _FIELD_UNSET,
         add_dep: list[int] | None = None,
         remove_dep: list[int] | None = None,
         add_tag: list[str] | None = None,
@@ -114,14 +115,19 @@ class CockpitView:
         }
         if title is not None:
             kwargs["title"] = title
-        if body:
+        if body is not _FIELD_UNSET:
             kwargs["body"] = body
         if append_body:
             kwargs["append_body"] = append_body
             kwargs["timestamp"] = timestamp
         if priority:
             kwargs["priority"] = priority
-        if parent > 0:
+        if isinstance(parent, int) and parent < 0:
+            raise ValidationError(
+                code="ERR_PARENT_NOT_FOUND",
+                user_message="parent must be >= 0 or null",
+            )
+        if parent is not _FIELD_UNSET:
             kwargs["parent"] = parent
         if add_dep is not None:
             kwargs["add_deps"] = add_dep

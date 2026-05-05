@@ -10,6 +10,7 @@ import remarkGfm from 'remark-gfm'
 import rehypeSanitize from 'rehype-sanitize'
 import HistorySubtab, { type Session } from './HistorySubtab'
 import ConfirmDialog from './ConfirmDialog'
+import type { Board } from '../hooks/useBoard'
 
 export interface TaskDetail {
   id: number
@@ -28,48 +29,147 @@ export interface TaskDetail {
 
 export interface DetailTabProps {
   task: TaskDetail | null
+  board?: Board | null
   onTaskUpdated?: (task: TaskDetail) => void
   onSelectTask?: (taskId: number, subtab?: string) => void
+  onTaskCleared?: () => void
 }
 
-export default function DetailTab({ task, onSelectTask }: DetailTabProps) {
+export default function DetailTab({ task, board, onTaskUpdated, onSelectTask, onTaskCleared }: DetailTabProps) {
   const [editBody, setEditBody] = useState(false)
   const [showConflict, setShowConflict] = useState(false)
+  const [validationMessage, setValidationMessage] = useState<string | null>(null)
   const [confirmType, setConfirmType] = useState<null | 'move-backward' | 'unblock' | 'unclaim'>(null)
   const [showHistory, setShowHistory] = useState(false)
   const [sessions, setSessions] = useState<Session[]>([])
   const [title, setTitle] = useState(task?.title ?? '')
   const [priority, setPriority] = useState(task?.priority ?? '')
   const [body, setBody] = useState(task?.body ?? '')
+  const [dependsOn, setDependsOn] = useState(task?.depends_on.join(', ') ?? '')
+  const [parent, setParent] = useState(task?.parent !== null ? String(task?.parent) : '')
+  const [blockReason, setBlockReason] = useState(task?.block_reason ?? '')
 
   useEffect(() => {
     setTitle(task?.title ?? '')
     setPriority(task?.priority ?? '')
     setBody(task?.body ?? '')
-  }, [task?.id])
+    setDependsOn(task?.depends_on.join(', ') ?? '')
+    setParent(task?.parent !== null ? String(task?.parent) : '')
+    setBlockReason(task?.block_reason ?? '')
+    setValidationMessage(null)
+    setConfirmType(null)
+  }, [task?.id, task?.updated])
 
   if (!task) return null
 
   const t = task
 
-  async function handleSave() {
-    const res = await fetch(`/api/tasks/${t.id}/edit`, {
+  function parseDependsOn(raw: string): number[] {
+    return raw
+      .split(',')
+      .map((value) => value.trim())
+      .filter((value) => value.length > 0)
+      .map((value) => Number(value))
+      .filter((value) => Number.isInteger(value) && value >= 0)
+  }
+
+  function parseParent(raw: string): number | null {
+    const trimmed = raw.trim()
+    if (trimmed.length === 0) {
+      return null
+    }
+    const parsed = Number(trimmed)
+    return Number.isInteger(parsed) ? parsed : null
+  }
+
+  function previousStatus(current: string): string | null {
+    const statuses = board?.statuses.map((status) => status.name) ?? []
+    const currentIndex = statuses.indexOf(current)
+    const valid = board?.valid_transitions[current] ?? []
+    const fromValid = valid.find((candidate) => statuses.indexOf(candidate) === currentIndex - 1)
+    if (fromValid) {
+      return fromValid
+    }
+    if (currentIndex > 0) {
+      return statuses[currentIndex - 1]
+    }
+    return null
+  }
+
+  async function runMutation(url: string, payload: Record<string, unknown>): Promise<void> {
+    setValidationMessage(null)
+    const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ updated: t.updated, title, priority, body }),
+      body: JSON.stringify(payload),
     })
+
+    if (res.ok) {
+      const updatedTask = (await res.json()) as TaskDetail
+      onTaskUpdated?.(updatedTask)
+      return
+    }
+
     if (res.status === 409) {
       setShowConflict(true)
+      return
     }
+
+    if (res.status === 404) {
+      onTaskCleared?.()
+      return
+    }
+
+    if (res.status === 422) {
+      const data = (await res.json()) as { detail?: string }
+      setValidationMessage(data.detail ?? 'Validation failed')
+    }
+  }
+
+  async function handleSave() {
+    const payload: Record<string, unknown> = {
+      updated: t.updated,
+      title,
+      priority,
+      body,
+      depends_on: parseDependsOn(dependsOn),
+      parent: parseParent(parent),
+      block_reason: t.blocked ? blockReason : null,
+    }
+    await runMutation(`/api/tasks/${t.id}/edit`, payload)
   }
 
   async function handleForceSave() {
     setShowConflict(false)
-    await fetch(`/api/tasks/${t.id}/edit`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ updated: t.updated, title, priority, body }),
+    await runMutation(`/api/tasks/${t.id}/edit`, {
+      updated: t.updated,
+      title,
+      priority,
+      body,
+      depends_on: parseDependsOn(dependsOn),
+      parent: parseParent(parent),
+      block_reason: t.blocked ? blockReason : null,
     })
+  }
+
+  async function handleConfirm() {
+    if (confirmType === 'unblock') {
+      await runMutation(`/api/tasks/${t.id}/edit`, { updated: t.updated, block_reason: null })
+      setConfirmType(null)
+      return
+    }
+    if (confirmType === 'unclaim') {
+      await runMutation(`/api/tasks/${t.id}/release`, { updated: t.updated })
+      setConfirmType(null)
+      return
+    }
+    if (confirmType === 'move-backward') {
+      const target = previousStatus(t.status)
+      if (target) {
+        await runMutation(`/api/tasks/${t.id}/move`, { updated: t.updated, status: target })
+      }
+      setConfirmType(null)
+    }
   }
 
   async function handleHistoryClick() {
@@ -148,20 +248,29 @@ export default function DetailTab({ task, onSelectTask }: DetailTabProps) {
         ref={setHideLabelAttr}
         data-field="depends_on"
         hideLabel={true}
-        defaultValue={t.depends_on.join(', ')}
+        value={dependsOn}
+        defaultValue={dependsOn}
+        onChange={(event) => setDependsOn(readControlValue(event))}
+        onInput={(event) => setDependsOn(readControlValue(event))}
       />
       <PInputText
         ref={setHideLabelAttr}
         data-field="parent"
         hideLabel={true}
-        defaultValue={t.parent !== null ? String(t.parent) : ''}
+        value={parent}
+        defaultValue={parent}
+        onChange={(event) => setParent(readControlValue(event))}
+        onInput={(event) => setParent(readControlValue(event))}
       />
       {t.blocked && (
         <PInputText
           ref={setHideLabelAttr}
           data-field="block_reason"
           hideLabel={true}
-          defaultValue={t.block_reason ?? ''}
+          value={blockReason}
+          defaultValue={blockReason}
+          onChange={(event) => setBlockReason(readControlValue(event))}
+          onInput={(event) => setBlockReason(readControlValue(event))}
         />
       )}
 
@@ -214,6 +323,7 @@ export default function DetailTab({ task, onSelectTask }: DetailTabProps) {
           <PButton data-testid="conflict-overwrite" onClick={() => void handleForceSave()}>Force save</PButton>
         </div>
       )}
+      {validationMessage && <div data-testid="validation-message">{validationMessage}</div>}
 
       {/* Confirm dialog */}
       {confirmType !== null && (
@@ -221,7 +331,7 @@ export default function DetailTab({ task, onSelectTask }: DetailTabProps) {
           type={confirmType}
           blockReason={t.block_reason}
           onCancel={() => setConfirmType(null)}
-          onConfirm={() => setConfirmType(null)}
+          onConfirm={() => void handleConfirm()}
         />
       )}
     </div>
