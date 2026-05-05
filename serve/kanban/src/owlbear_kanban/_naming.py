@@ -57,6 +57,12 @@ def validate_path_containment(tasks_dir: Path, path: Path) -> None:
 
 def validate_config_path_containment(path_value: str) -> None:
     """Reject config path strings that can escape the board directory."""
+    if not path_value.strip():
+        raise ConfigError(
+            code="ERR_PATH_ESCAPE",
+            user_message="Configured path must be a non-empty board-relative subdirectory.",
+        )
+
     if PurePosixPath(path_value).is_absolute() or PureWindowsPath(path_value).is_absolute():
         raise ConfigError(
             code="ERR_PATH_ESCAPE",

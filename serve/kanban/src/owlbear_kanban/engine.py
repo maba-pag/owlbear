@@ -483,6 +483,8 @@ class KanbanEngine:
         self._config = refreshed_config
         self._tasks_dir = self._kanban_dir / refreshed_config.paths.tasks_dir
         self._archive_dir = self._kanban_dir / refreshed_config.paths.archive_dir
+        validate_path_containment(self._kanban_dir, self._tasks_dir)
+        validate_path_containment(self._kanban_dir, self._archive_dir)
         self._task_cache = {}
         self._archive_cache = {}
         self._id_to_filename = {}
