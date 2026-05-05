@@ -858,4 +858,92 @@ describe('TestBuilderDiscovered', () => {
       )
     })
   })
+
+  // ─── AC4: Live-edit proof — state-driven controlled field values ────────────
+  // Reviewer gap: prior AC8 payload tests render seeded state and immediately
+  // click save.  These tests drive a live user edit (fire input event) first,
+  // proving that the current user-edited value (not the initial prop value)
+  // reaches the save payload.
+
+  describe('live field edits reach save payload (AC4)', () => {
+    it('typed title overrides seeded value in save payload', async () => {
+      const fetchMock = vi.fn(() =>
+        Promise.resolve({ ok: true, json: () => Promise.resolve(TASK) }),
+      )
+      vi.stubGlobal('fetch', fetchMock)
+      const { container } = renderDetail(TASK)
+
+      const titleInput = container.querySelector('p-input-text[data-field="title"]') as HTMLElement | null
+      expect(titleInput).not.toBeNull()
+      // Drive live edit via PDS-compatible custom event (detail.value path in readControlValue)
+      fireEvent(titleInput!, new CustomEvent('input', { detail: { value: 'User-Typed Title' }, bubbles: true }))
+
+      const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
+      fireEvent.click(saveBtn!)
+
+      await waitFor(
+        () => {
+          const [, options] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+          const body = JSON.parse(options.body as string) as Record<string, unknown>
+          expect(body['title']).toBe('User-Typed Title')
+          // Must not echo the seeded value
+          expect(body['title']).not.toBe(TASK.title)
+        },
+        { timeout: 500 },
+      )
+    })
+
+    it('typed parent id overrides seeded null in save payload', async () => {
+      const fetchMock = vi.fn(() =>
+        Promise.resolve({ ok: true, json: () => Promise.resolve(TASK) }),
+      )
+      vi.stubGlobal('fetch', fetchMock)
+      // Render with no parent (null) so we can prove that typing "7" into the field
+      // causes parent: 7 (not null) to appear in the payload.
+      const { container } = renderDetail(TASK)
+
+      const parentInput = container.querySelector('p-input-text[data-field="parent"]') as HTMLElement | null
+      expect(parentInput).not.toBeNull()
+      fireEvent(parentInput!, new CustomEvent('input', { detail: { value: '7' }, bubbles: true }))
+
+      const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
+      fireEvent.click(saveBtn!)
+
+      await waitFor(
+        () => {
+          const [, options] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+          const body = JSON.parse(options.body as string) as Record<string, unknown>
+          expect(body['parent']).toBe(7)
+        },
+        { timeout: 500 },
+      )
+    })
+
+    it('cleared block_reason field sends empty string in save payload when task is blocked', async () => {
+      const fetchMock = vi.fn(() =>
+        Promise.resolve({ ok: true, json: () => Promise.resolve(TASK_BLOCKED) }),
+      )
+      vi.stubGlobal('fetch', fetchMock)
+      const { container } = renderDetail(TASK_BLOCKED)
+
+      const blockReasonInput = container.querySelector('p-input-text[data-field="block_reason"]') as HTMLElement | null
+      expect(blockReasonInput).not.toBeNull()
+      // Clear the block reason field — user deletes the existing text
+      fireEvent(blockReasonInput!, new CustomEvent('input', { detail: { value: '' }, bubbles: true }))
+
+      const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
+      fireEvent.click(saveBtn!)
+
+      await waitFor(
+        () => {
+          const [, options] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+          const body = JSON.parse(options.body as string) as Record<string, unknown>
+          // block_reason must reflect the live-edited empty value, not the seeded 'Waiting for dependency #100'
+          expect(body['block_reason']).not.toBe('Waiting for dependency #100')
+          expect(body['block_reason']).toBe('')
+        },
+        { timeout: 500 },
+      )
+    })
+  })
 })

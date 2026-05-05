@@ -965,3 +965,24 @@ class TestFromAC_EditBodyParentSemantics:
             json={"updated": task.updated, "parent": -1},
         )
         assert response.status_code == 422
+
+    def test_edit_empty_string_block_reason_clears_blocked_state(
+        self, client: TestClient, engine: KanbanEngine
+    ) -> None:
+        """AC1: block_reason: '' (empty string) unblocks — same semantics as null.
+
+        _apply_block_kwargs must treat falsy block_reason (None or '') as the
+        unblock signal, removing block:user tag and setting blocked=False.
+        """
+        engine.edit_task("1", blocked=True, block_reason="waiting for review")
+        task = engine.show_task("1")
+        assert task.blocked is True, "Precondition: task 1 must be blocked"
+
+        response = client.post(
+            "/api/tasks/1/edit",
+            json={"updated": task.updated, "block_reason": ""},
+        )
+        assert response.status_code == 200
+        body = response.json()
+        assert body["blocked"] is False, "empty block_reason must unblock the task"
+        assert "block:user" not in (body.get("tags") or []), "block:user tag must be removed"
