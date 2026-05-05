@@ -103,7 +103,7 @@ def board_dir(tmp_path: Path) -> Path:
     Task 2: status=in-progress, priority=needed     (claimed   — release target)
     """
     kanban_dir = _make_board(tmp_path)
-    seed = KanbanEngine(kanban_dir, agent_name="seed")
+    seed = KanbanEngine(kanban_dir)
     seed.create_task("Alpha task", status="todo", priority="important")
     seed.create_task("Beta task", status="in-progress", priority="needed")
     seed.list_tasks()
@@ -114,7 +114,7 @@ def board_dir(tmp_path: Path) -> Path:
 @pytest.fixture
 def engine(board_dir: Path) -> KanbanEngine:
     """KanbanEngine bound to the test board with activity logging enabled."""
-    eng = KanbanEngine(board_dir, agent_name="cockpit", activity_log=True)
+    eng = KanbanEngine(board_dir, activity_log=True)
     eng.list_tasks()
     return eng
 

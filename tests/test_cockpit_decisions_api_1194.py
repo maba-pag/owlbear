@@ -99,7 +99,7 @@ def _write_pending_dr(
 @pytest.fixture
 def engine(tmp_path: Path) -> KanbanEngine:
     board_dir = _make_board(tmp_path)
-    eng = KanbanEngine(board_dir, agent_name="cockpit")
+    eng = KanbanEngine(board_dir)
     eng.list_tasks()
     return eng
 

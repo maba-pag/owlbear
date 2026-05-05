@@ -82,7 +82,7 @@ def _make_board(base_dir: Path) -> Path:
 def board_dir(tmp_path: Path) -> Path:
     """Board with one unclaimed task in todo status."""
     kanban_dir = _make_board(tmp_path)
-    seed = KanbanEngine(kanban_dir, agent_name="seed")
+    seed = KanbanEngine(kanban_dir)
     seed.create_task("Alpha task", status="todo", priority="important")
     seed.list_tasks()
     return kanban_dir
@@ -91,7 +91,7 @@ def board_dir(tmp_path: Path) -> Path:
 @pytest.fixture
 def engine(board_dir: Path) -> KanbanEngine:
     """KanbanEngine bound to the test board."""
-    eng = KanbanEngine(board_dir, agent_name="cockpit", activity_log=False)
+    eng = KanbanEngine(board_dir, activity_log=False)
     eng.list_tasks()
     return eng
 

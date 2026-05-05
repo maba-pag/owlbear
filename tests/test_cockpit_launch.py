@@ -299,7 +299,7 @@ class TestFromAC_CockpitLaunch:
 
             run()
 
-        engine = KanbanEngine(kanban_dir, agent_name="test")
+        engine = KanbanEngine(kanban_dir)
         app.dependency_overrides[get_engine] = lambda: engine
         try:
             with TestClient(app, raise_server_exceptions=True) as client:

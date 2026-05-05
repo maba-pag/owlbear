@@ -83,7 +83,7 @@ def _make_board(base_dir: Path) -> Path:
 def board_dir(tmp_path: Path) -> Path:
     """Minimal board with two tasks at different statuses."""
     kanban_dir = _make_board(tmp_path)
-    seed = KanbanEngine(kanban_dir, agent_name="seed-1137")
+    seed = KanbanEngine(kanban_dir)
     seed.create_task("Alpha task", status="todo", priority="important")
     seed.create_task("Beta task", status="review", priority="critical")
     return kanban_dir
@@ -92,7 +92,7 @@ def board_dir(tmp_path: Path) -> Path:
 @pytest.fixture
 def engine(board_dir: Path) -> KanbanEngine:
     """KanbanEngine with pre-warmed id→filename cache."""
-    eng = KanbanEngine(board_dir, agent_name="test-1137")
+    eng = KanbanEngine(board_dir)
     eng.list_tasks()
     return eng
 

@@ -90,7 +90,7 @@ def engine(board_dir: Path):
     """KanbanEngine bound to the test board."""
     from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
-    return KanbanEngine(board_dir, agent_name="cockpit")
+    return KanbanEngine(board_dir)
 
 
 # ---------------------------------------------------------------------------
@@ -109,7 +109,7 @@ async def _run_and_capture(board_dir: Path) -> tuple[dict, object]:
     from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
     from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
-    engine = KanbanEngine(board_dir, agent_name="cockpit")
+    engine = KanbanEngine(board_dir)
     captured: dict = {"filter": None, "args": (), "kwargs": {}}
 
     async def _grab(*args, **kwargs):
@@ -324,7 +324,7 @@ class TestFromAC_Classify:
         from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
-        engine = KanbanEngine(board_dir, agent_name="cockpit")
+        engine = KanbanEngine(board_dir)
         pending_dir = engine.kanban_dir / "decisions" / "pending"
         pending_dir.mkdir(parents=True, exist_ok=True)
         dr_path = pending_dir / "dr-10.md"
@@ -372,7 +372,7 @@ class TestFromAC_Classify:
         from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
-        engine = KanbanEngine(board_dir, agent_name="cockpit")
+        engine = KanbanEngine(board_dir)
         activity_path = engine.kanban_dir / "activity.jsonl"
         activity_path.write_text("{}\n", encoding="utf-8")
 
@@ -417,7 +417,7 @@ class TestFromAC_Classify:
         from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
-        engine = KanbanEngine(board_dir, agent_name="cockpit")
+        engine = KanbanEngine(board_dir)
         archive_md = engine.kanban_dir / "archive" / "old-task.md"
         archive_md.write_text("# done\n", encoding="utf-8")  # exists on disk
 
@@ -458,7 +458,7 @@ class TestFromAC_Classify:
         from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
-        engine = KanbanEngine(board_dir, agent_name="cockpit")
+        engine = KanbanEngine(board_dir)
         # Create a real .md file in a different board's tasks directory
         other_task = tmp_path / "other_board" / "tasks" / "task-42.md"
         other_task.parent.mkdir(parents=True)
@@ -503,7 +503,7 @@ class TestFromAC_Classify:
         from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
-        engine = KanbanEngine(board_dir, agent_name="cockpit")
+        engine = KanbanEngine(board_dir)
         other_activity = tmp_path / "other_board" / "activity.jsonl"
         other_activity.parent.mkdir(parents=True, exist_ok=True)
         other_activity.write_text("{}\n", encoding="utf-8")
@@ -548,7 +548,7 @@ class TestFromAC_Classify:
         from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
-        engine = KanbanEngine(board_dir, agent_name="cockpit")
+        engine = KanbanEngine(board_dir)
         other_pending = tmp_path / "other_board" / "decisions" / "pending" / "dr-99.md"
         other_pending.parent.mkdir(parents=True, exist_ok=True)
         other_pending.write_text("# DR-99\n", encoding="utf-8")
@@ -592,7 +592,7 @@ class TestFromAC_Classify:
         from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
-        engine = KanbanEngine(board_dir, agent_name="cockpit")
+        engine = KanbanEngine(board_dir)
         nested_task = engine.tasks_dir / "subdir" / "task-deep.md"
         nested_task.parent.mkdir(parents=True, exist_ok=True)
         nested_task.write_text("# deep\n", encoding="utf-8")
@@ -685,7 +685,7 @@ class TestFromAC_TypedEvents:
         from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
-        engine = KanbanEngine(board_dir, agent_name="cockpit")
+        engine = KanbanEngine(board_dir)
         pending_dir = engine.kanban_dir / "decisions" / "pending"
         pending_dir.mkdir(parents=True, exist_ok=True)
         dr = pending_dir / "dr-1.md"
@@ -737,7 +737,7 @@ class TestFromAC_TypedEvents:
         from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
-        engine = KanbanEngine(board_dir, agent_name="cockpit")
+        engine = KanbanEngine(board_dir)
         activity = engine.kanban_dir / "activity.jsonl"
         activity.write_text("{}\n", encoding="utf-8")
         expected_mtime = activity.stat().st_mtime_ns
@@ -788,7 +788,7 @@ class TestFromAC_TypedEvents:
         from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
-        engine = KanbanEngine(board_dir, agent_name="cockpit")
+        engine = KanbanEngine(board_dir)
         task_md = engine.tasks_dir / "task-11.md"
         task_md.write_text("# task 11\n", encoding="utf-8")
         pending_dir = engine.kanban_dir / "decisions" / "pending"
@@ -838,7 +838,7 @@ class TestFromAC_TypedEvents:
         from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
-        engine = KanbanEngine(board_dir, agent_name="cockpit")
+        engine = KanbanEngine(board_dir)
         task_md = engine.tasks_dir / "task-20.md"
         task_md.write_text("# task 20\n", encoding="utf-8")
         pending_dir = engine.kanban_dir / "decisions" / "pending"
@@ -897,7 +897,7 @@ class TestFromAC_TypedEvents:
         from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
-        engine = KanbanEngine(board_dir, agent_name="cockpit")
+        engine = KanbanEngine(board_dir)
         task_early = engine.tasks_dir / "task-early.md"
         task_early.write_text("# early\n", encoding="utf-8")
         task_early_mtime = task_early.stat().st_mtime_ns
@@ -971,7 +971,7 @@ class TestFromAC_TypedEvents:
         from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
-        engine = KanbanEngine(board_dir, agent_name="cockpit")
+        engine = KanbanEngine(board_dir)
         pending_dir = engine.kanban_dir / "decisions" / "pending"
         pending_dir.mkdir(parents=True, exist_ok=True)
         surviving_dr = pending_dir / "dr-alive.md"
@@ -1030,7 +1030,7 @@ class TestFromAC_TypedEvents:
         from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
-        engine = KanbanEngine(board_dir, agent_name="cockpit")
+        engine = KanbanEngine(board_dir)
         # This task file does not exist on disk — stat() will raise FileNotFoundError
         deleted_task = engine.tasks_dir / "task-vanished.md"
         assert not deleted_task.exists(), "Test setup: task must not exist on disk"
@@ -1087,7 +1087,7 @@ class TestFromAC_TypedEvents:
         from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
-        engine = KanbanEngine(board_dir, agent_name="cockpit")
+        engine = KanbanEngine(board_dir)
         task_a = engine.tasks_dir / "task-coalesce-a.md"
         task_a.write_text("# a\n", encoding="utf-8")
         task_b = engine.tasks_dir / "task-coalesce-b.md"

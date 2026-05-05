@@ -456,10 +456,10 @@ class TestFromAC_CockpitInitWithEmptyAgentMap:
     def test_cockpit_engine_init_succeeds_with_empty_agent_map(
         self, tmp_path: Path
     ) -> None:
-        """KanbanEngine(kanban_dir, agent_name='cockpit') must not raise for agent_map: {}."""
+        """KanbanEngine(kanban_dir) must not raise for agent_map: {}."""
         kanban_dir = _make_board(tmp_path, _BASE_CONFIG_EMPTY_AGENT_MAP)
         # RED: currently raises ConfigError at __init__
-        engine = KanbanEngine(kanban_dir, agent_name="cockpit")
+        engine = KanbanEngine(kanban_dir)
         assert engine is not None
 
     def test_cockpit_engine_board_config_accessible_with_empty_agent_map(
@@ -468,7 +468,7 @@ class TestFromAC_CockpitInitWithEmptyAgentMap:
         """board_config() must be callable after cockpit init with empty agent_map."""
         kanban_dir = _make_board(tmp_path, _BASE_CONFIG_EMPTY_AGENT_MAP)
         # RED: engine creation currently fails before board_config() can be called
-        engine = KanbanEngine(kanban_dir, agent_name="cockpit")
+        engine = KanbanEngine(kanban_dir)
         cfg = engine.board_config()
         assert cfg is not None
 

@@ -67,7 +67,7 @@ def board_dir(tmp_path: Path) -> Path:
 
 @pytest.fixture()
 def engine(board_dir: Path) -> KanbanEngine:
-    eng = KanbanEngine(board_dir, agent_name="test-1223")
+    eng = KanbanEngine(board_dir)
     eng.list_tasks()
     return eng
 
@@ -92,7 +92,7 @@ def board_with_session_dir(tmp_path: Path) -> Path:
     (kanban_dir / "config.yml").write_text(_CONFIG_YAML, encoding="utf-8")
     (kanban_dir / "tasks").mkdir(exist_ok=True)
     (kanban_dir / "archive").mkdir(exist_ok=True)
-    seed_eng = KanbanEngine(kanban_dir, agent_name="seeder", activity_log=True)
+    seed_eng = KanbanEngine(kanban_dir, activity_log=True)
     task = seed_eng.create_task("Session task", status="todo")
     seed_eng.list_tasks()
     seed_eng.claim_task(str(task.id))
@@ -105,7 +105,7 @@ def client_with_session(board_with_session_dir: Path):
     from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
 
     eng = KanbanEngine(
-        board_with_session_dir, agent_name="test-1223-s", activity_log=True
+        board_with_session_dir, activity_log=True
     )
     eng.list_tasks()
     app.dependency_overrides[get_engine] = lambda: eng

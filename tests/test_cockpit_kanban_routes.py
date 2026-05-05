@@ -101,7 +101,7 @@ def _inject_corrupt_task_file(kanban_dir: Path) -> Path:
 def board_dir(tmp_path: Path) -> Path:
     """Board with 2 tasks; task 2 is pre-claimed for release-route tests."""
     kanban_dir = _make_board(tmp_path)
-    seed = KanbanEngine(kanban_dir, agent_name="seed")
+    seed = KanbanEngine(kanban_dir)
     seed.create_task("Alpha task", status="todo", priority="important")
     seed.create_task("Beta task", status="in-progress", priority="needed")
     seed.list_tasks()
@@ -112,7 +112,7 @@ def board_dir(tmp_path: Path) -> Path:
 @pytest.fixture
 def engine(board_dir: Path) -> KanbanEngine:
     """Cockpit engine with activity logging enabled."""
-    eng = KanbanEngine(board_dir, agent_name="cockpit", activity_log=True)
+    eng = KanbanEngine(board_dir, activity_log=True)
     eng.list_tasks()
     return eng
 
@@ -628,7 +628,7 @@ class TestFromAC_CockpitAdminRoutes:
 
         alt_dir = _make_board(tmp_path / "alt")
         _inject_corrupt_task_file(alt_dir)
-        alt_engine = KanbanEngine(alt_dir, agent_name="alt-scan")
+        alt_engine = KanbanEngine(alt_dir)
 
         app.dependency_overrides[get_engine] = lambda: alt_engine
         try:
@@ -694,7 +694,7 @@ class TestFromAC_CockpitAdminRoutes:
 
         alt_dir = _make_board(tmp_path / "alt")
         _inject_corrupt_task_file(alt_dir)
-        alt_engine = KanbanEngine(alt_dir, agent_name="alt-repair-di")
+        alt_engine = KanbanEngine(alt_dir)
 
         app.dependency_overrides[get_engine] = lambda: alt_engine
         try:
@@ -765,7 +765,6 @@ class TestFromAC_CockpitAdminRoutes:
         alt_dir = _make_board(tmp_path / "alt")
         alt_engine = KanbanEngine(
             alt_dir,
-            agent_name="alt-compact-di",
             activity_log=True,
         )
 

@@ -157,7 +157,7 @@ class TestFromAC_CallerCleanup:
         """Cockpit main.run() source must not contain an agent_name= keyword argument.
 
         RED: currently fails — main.py line 74 reads:
-            engine = KanbanEngine(kanban_dir, agent_name="cockpit")
+            engine = KanbanEngine(kanban_dir)
         After the builder removes the constructor param and updates the caller,
         agent_name must not appear anywhere in run().
         """

@@ -101,7 +101,7 @@ def board_dir(tmp_path: Path) -> Path:
     Task 3: status=todo,        priority=someday    (unclaimed — depends_on/parent target)
     """
     kanban_dir = _make_board(tmp_path)
-    seed = KanbanEngine(kanban_dir, agent_name="seed")
+    seed = KanbanEngine(kanban_dir)
     seed.create_task("Alpha task", status="todo", priority="important")
     seed.create_task("Beta task", status="in-progress", priority="needed")
     seed.create_task("Gamma task", status="todo", priority="someday")
@@ -113,7 +113,7 @@ def board_dir(tmp_path: Path) -> Path:
 @pytest.fixture
 def engine(board_dir: Path) -> KanbanEngine:
     """KanbanEngine with agent_name='cockpit' and activity logging enabled."""
-    eng = KanbanEngine(board_dir, agent_name="cockpit", activity_log=True)
+    eng = KanbanEngine(board_dir, activity_log=True)
     eng.list_tasks()  # populate id→filename cache
     return eng
 

@@ -477,4 +477,4 @@ class TestFromAC_MoveSharedSuiteContract:
 
         # Must not raise ConfigError — failure here proves the shared suite
         # is setup-blocked and AC4 cannot be confirmed by executable regression
-        KanbanEngine(kanban_dir, agent_name="probe")
+        KanbanEngine(kanban_dir)

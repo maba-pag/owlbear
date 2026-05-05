@@ -93,7 +93,7 @@ def board_dir(tmp_path: Path) -> Path:
             (pre-blocked for conflict and unblock tests)
     """
     kanban_dir = _make_board(tmp_path)
-    seed = KanbanEngine(kanban_dir, agent_name="seed")
+    seed = KanbanEngine(kanban_dir)
     seed.create_task("Alpha task", status="todo", priority="important")
     seed.create_task(
         "Beta blocked", status="todo", priority="needed", tags=["scope:cockpit"]
@@ -108,7 +108,7 @@ def board_dir(tmp_path: Path) -> Path:
 @pytest.fixture
 def engine(board_dir: Path) -> KanbanEngine:
     """KanbanEngine with agent_name='cockpit' and cache pre-warmed."""
-    eng = KanbanEngine(board_dir, agent_name="cockpit")
+    eng = KanbanEngine(board_dir)
     eng.list_tasks()  # populate id→filename cache
     return eng
 

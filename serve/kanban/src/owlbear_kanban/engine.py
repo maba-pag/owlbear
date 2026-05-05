@@ -344,7 +344,6 @@ class KanbanEngine:
         self,
         kanban_dir: Path,
         *,
-        agent_name: str | None = None,
         activity_log: bool | None = None,
     ) -> None:
         self._kanban_dir = kanban_dir
@@ -355,9 +354,7 @@ class KanbanEngine:
         validate_path_containment(self._kanban_dir, self._tasks_dir)
         validate_path_containment(self._kanban_dir, self._archive_dir)
         self._agent_name: str = (
-            agent_name
-            if agent_name is not None
-            else f"{random.choice(ADJECTIVES)}-{random.choice(NOUNS)}"  # noqa: S311
+            f"{random.choice(ADJECTIVES)}-{random.choice(NOUNS)}"  # noqa: S311
         )
         effective_activity_log = (
             activity_log if activity_log is not None else self._config.activity_log

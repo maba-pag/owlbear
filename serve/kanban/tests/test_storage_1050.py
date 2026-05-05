@@ -508,7 +508,7 @@ class TestFromAC_QuarantineRepair:
         kanban_dir = _make_board(tmp_path)
         _write_claimed_by_file(kanban_dir / "tasks", task_id=1)
 
-        engine = KanbanEngine(kanban_dir=kanban_dir, agent_name="test-agent")
+        engine = KanbanEngine(kanban_dir=kanban_dir)
         engine.repair_storage()
 
         ar_tasks = [
@@ -529,7 +529,7 @@ class TestFromAC_QuarantineRepair:
         kanban_dir = _make_board(tmp_path)
         _write_claimed_by_file(kanban_dir / "tasks", task_id=1)
 
-        engine = KanbanEngine(kanban_dir=kanban_dir, agent_name="test-agent")
+        engine = KanbanEngine(kanban_dir=kanban_dir)
         engine.repair_storage()
 
         ar_tasks = [
@@ -550,7 +550,7 @@ class TestFromAC_QuarantineRepair:
         kanban_dir = _make_board(tmp_path)
         _write_claimed_by_file(kanban_dir / "tasks", task_id=1)
 
-        engine = KanbanEngine(kanban_dir=kanban_dir, agent_name="test-agent")
+        engine = KanbanEngine(kanban_dir=kanban_dir)
         engine.repair_storage()
 
         ar_tasks = [
@@ -644,7 +644,7 @@ class TestFromAC_ArchiveExemption:
 
         # Must not raise MigrationRequiredError even though gate is active
         try:
-            engine = KanbanEngine(kanban_dir=kanban_dir, agent_name="test-agent")
+            engine = KanbanEngine(kanban_dir=kanban_dir)
         except MigrationRequiredError:
             pytest.fail(
                 "MigrationRequiredError raised for engine init with claimed_by only in archive/"
@@ -1056,7 +1056,7 @@ class TestBuilderDiscovered:
         kanban_dir = _make_board(tmp_path)
         _write_claimed_by_file(kanban_dir / "archive", task_id=77)
 
-        engine = KanbanEngine(kanban_dir=kanban_dir, agent_name="test-agent")
+        engine = KanbanEngine(kanban_dir=kanban_dir)
         archived = {task.id: task for task in engine.list_tasks(archived=True)}
 
         assert 77 in archived
@@ -1097,7 +1097,7 @@ class TestFromAC_ClaimListRegression:
         from owlbear_kanban import KanbanEngine
 
         kanban_dir = self._make_new_schema_board(tmp_path, task_id=1)
-        engine = KanbanEngine(kanban_dir=kanban_dir, agent_name="test-agent")
+        engine = KanbanEngine(kanban_dir=kanban_dir)
         engine.claim_task("1")
 
         task_ids = {t.id for t in engine.list_tasks()}
@@ -1117,7 +1117,7 @@ class TestFromAC_ClaimListRegression:
         from owlbear_kanban import KanbanEngine
 
         kanban_dir = self._make_new_schema_board(tmp_path, task_id=2)
-        engine = KanbanEngine(kanban_dir=kanban_dir, agent_name="test-agent")
+        engine = KanbanEngine(kanban_dir=kanban_dir)
 
         # Warm the cache so next call exercises the cache-miss path
         engine.list_tasks()
@@ -1136,7 +1136,7 @@ class TestFromAC_ClaimListRegression:
         from owlbear_kanban import KanbanEngine
 
         kanban_dir = self._make_new_schema_board(tmp_path, task_id=3)
-        engine = KanbanEngine(kanban_dir=kanban_dir, agent_name="test-agent")
+        engine = KanbanEngine(kanban_dir=kanban_dir)
         engine.start_work("3")
 
         task_ids = {t.id for t in engine.list_tasks()}

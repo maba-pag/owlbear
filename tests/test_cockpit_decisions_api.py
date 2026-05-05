@@ -117,7 +117,7 @@ def _find_dr_file(decisions_dir: Path, decision_id: str) -> Path:
 def engine(tmp_path: Path) -> KanbanEngine:
     """KanbanEngine fixture for cockpit dependency injection."""
     board_dir = _make_board(tmp_path)
-    eng = KanbanEngine(board_dir, agent_name="cockpit")
+    eng = KanbanEngine(board_dir)
     eng.list_tasks()
     return eng
 

@@ -87,7 +87,7 @@ def engine(board_dir: Path):
     """KanbanEngine bound to the test board."""
     from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
-    return KanbanEngine(board_dir, agent_name="cockpit")
+    return KanbanEngine(board_dir)
 
 
 @pytest.fixture
@@ -195,8 +195,8 @@ class TestFromAC_EventSourceResponseEndpoint:
         from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
-        engine_a = KanbanEngine(board_dir, agent_name="cockpit")
-        engine_b = KanbanEngine(board_dir, agent_name="cockpit")
+        engine_a = KanbanEngine(board_dir)
+        engine_b = KanbanEngine(board_dir)
 
         async def _noop_awatch(*_a, **_kw):
             return
@@ -224,7 +224,7 @@ class TestFromAC_EventSourceResponseEndpoint:
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
         board_b = _make_board(tmp_path / "board_b")
-        engine_b = KanbanEngine(board_b, agent_name="cockpit")
+        engine_b = KanbanEngine(board_b)
         awatch_paths: list = []
 
         async def _capture_path(path, **_kwargs):
@@ -317,7 +317,7 @@ class TestFromAC_WatchFilter:
         from owlbear_cockpit.routes.events import _watch_filter  # noqa: PLC0415
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
-        engine = KanbanEngine(board_dir, agent_name="cockpit")
+        engine = KanbanEngine(board_dir)
         awatch_calls: list[tuple] = []
 
         async def _capture_and_stop(*args, **kwargs):
@@ -372,7 +372,7 @@ class TestFromAC_EventPayload:
         from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
-        engine = KanbanEngine(board_dir, agent_name="cockpit")
+        engine = KanbanEngine(board_dir)
         fake_path = board_dir / "tasks" / "task-99.md"
         fake_path.write_text("---\nid: 99\n---\n", encoding="utf-8")
 
@@ -408,7 +408,7 @@ class TestFromAC_EventPayload:
         from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
-        engine = KanbanEngine(board_dir, agent_name="cockpit")
+        engine = KanbanEngine(board_dir)
         fake_path = board_dir / "tasks" / "task-88.md"
         fake_path.write_text("---\nid: 88\n---\n", encoding="utf-8")
         expected_mtime = fake_path.stat().st_mtime_ns
@@ -452,7 +452,7 @@ class TestFromAC_EventPayload:
         from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
-        engine = KanbanEngine(board_dir, agent_name="cockpit")
+        engine = KanbanEngine(board_dir)
         # Path that does NOT exist — simulates file deleted after awatch yield
         deleted_path = board_dir / "tasks" / "gone.md"
         assert not deleted_path.exists(), "Test setup: file must not exist"
@@ -492,7 +492,7 @@ class TestFromAC_EventPayload:
         from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
-        engine = KanbanEngine(board_dir, agent_name="cockpit")
+        engine = KanbanEngine(board_dir)
         surviving_path = board_dir / "tasks" / "task-surviving.md"
         surviving_path.write_text("---\nid: 10\n---\n", encoding="utf-8")
         deleted_path = board_dir / "tasks" / "task-deleted.md"
@@ -544,7 +544,7 @@ class TestFromAC_EventPayload:
         from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
-        engine = KanbanEngine(board_dir, agent_name="cockpit")
+        engine = KanbanEngine(board_dir)
         fake_path = board_dir / "tasks" / "task-77.md"
         fake_path.write_text("---\nid: 77\n---\n", encoding="utf-8")
         mtime_ns = fake_path.stat().st_mtime_ns
@@ -598,7 +598,7 @@ class TestFromAC_MissingDirGuard:
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
         kanban_dir = _make_board(tmp_path)
-        engine = KanbanEngine(kanban_dir, agent_name="cockpit")
+        engine = KanbanEngine(kanban_dir)
         shutil.rmtree(engine.tasks_dir)
         assert not engine.tasks_dir.exists(), "Test setup: tasks_dir must not exist"
 
@@ -618,7 +618,7 @@ class TestFromAC_MissingDirGuard:
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
         kanban_dir = _make_board(tmp_path)
-        engine = KanbanEngine(kanban_dir, agent_name="cockpit")
+        engine = KanbanEngine(kanban_dir)
         shutil.rmtree(engine.tasks_dir)
 
         mock_request = AsyncMock()
@@ -642,7 +642,7 @@ class TestFromAC_MissingDirGuard:
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
         kanban_dir = _make_board(tmp_path)
-        engine = KanbanEngine(kanban_dir, agent_name="cockpit")
+        engine = KanbanEngine(kanban_dir)
         shutil.rmtree(engine.tasks_dir)
         assert not engine.tasks_dir.exists(), "Test setup: tasks_dir must not exist"
 
@@ -681,7 +681,7 @@ class TestFromAC_MissingDirGuard:
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
         kanban_dir = _make_board(tmp_path)
-        engine = KanbanEngine(kanban_dir, agent_name="cockpit")
+        engine = KanbanEngine(kanban_dir)
         shutil.rmtree(engine.tasks_dir)
         assert not engine.tasks_dir.exists(), "Test setup: tasks_dir must not exist"
 
@@ -745,7 +745,7 @@ class TestFromAC_GeneratorCleanup:
         from owlbear_cockpit.routes.events import events  # noqa: PLC0415
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
-        engine = KanbanEngine(board_dir, agent_name="cockpit")
+        engine = KanbanEngine(board_dir)
         fake_path = board_dir / "tasks" / "task-d.md"
         fake_path.write_text("---\nid: 1\n---\n", encoding="utf-8")
 
@@ -788,7 +788,7 @@ class TestFromAC_GeneratorCleanup:
         from owlbear_cockpit.routes.events import events  # noqa: PLC0415
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
-        engine = KanbanEngine(board_dir, agent_name="cockpit")
+        engine = KanbanEngine(board_dir)
         mock_request = AsyncMock()
         mock_request.is_disconnected = AsyncMock(return_value=False)
         awatch_kwargs: list[dict] = []
@@ -822,7 +822,7 @@ class TestFromAC_GeneratorCleanup:
         from owlbear_cockpit.routes.events import events  # noqa: PLC0415
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
-        engine = KanbanEngine(board_dir, agent_name="cockpit")
+        engine = KanbanEngine(board_dir)
         fake_path = board_dir / "tasks" / "task-d2.md"
         fake_path.write_text("---\nid: 1\n---\n", encoding="utf-8")
 
@@ -867,7 +867,7 @@ class TestFromAC_GeneratorCleanup:
         from owlbear_cockpit.routes.events import events  # noqa: PLC0415
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
-        engine = KanbanEngine(board_dir, agent_name="cockpit")
+        engine = KanbanEngine(board_dir)
         real_path = board_dir / "tasks" / "task-dc.md"
         real_path.write_text("---\nid: 1\n---\n", encoding="utf-8")
 
@@ -904,7 +904,7 @@ class TestFromAC_GeneratorCleanup:
         from owlbear_cockpit.routes.events import events  # noqa: PLC0415
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
-        engine = KanbanEngine(board_dir, agent_name="cockpit")
+        engine = KanbanEngine(board_dir)
         real_path = board_dir / "tasks" / "task-real.md"
         real_path.write_text("---\nid: 1\n---\n", encoding="utf-8")
 

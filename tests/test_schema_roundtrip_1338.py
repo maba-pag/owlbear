@@ -300,7 +300,7 @@ class TestFromAC_SchemaRoundTrip:
             f"kanban-migrate failed:\n{result.stdout}\n{result.stderr}"
         )
 
-        engine = KanbanEngine(kanban_dir=kanban_dir, agent_name="test-agent")
+        engine = KanbanEngine(kanban_dir=kanban_dir)
         task = engine.show_task(task_id="1001")
         written_path = write_task(task, kanban_dir)
 
@@ -334,7 +334,7 @@ class TestFromAC_SchemaRoundTrip:
             f"kanban-migrate failed:\n{result.stdout}\n{result.stderr}"
         )
 
-        engine = KanbanEngine(kanban_dir=kanban_dir, agent_name="test-agent")
+        engine = KanbanEngine(kanban_dir=kanban_dir)
         task_before = engine.show_task(task_id="1001")
         written_path = write_task(task_before, kanban_dir)
 

@@ -120,7 +120,7 @@ def _parse_frontmatter(path: Path) -> dict:
 def engine(tmp_path: Path) -> KanbanEngine:
     """KanbanEngine fixture for cockpit app dependency injection."""
     board_dir = _make_board(tmp_path)
-    eng = KanbanEngine(board_dir, agent_name="cockpit")
+    eng = KanbanEngine(board_dir)
     eng.list_tasks()
     return eng
 

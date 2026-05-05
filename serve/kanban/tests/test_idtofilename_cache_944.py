@@ -111,13 +111,13 @@ def board(tmp_path: Path) -> Path:
 @pytest.fixture
 def engine(board: Path) -> KanbanEngine:
     """KanbanEngine for the board fixture (cache cold)."""
-    return KanbanEngine(board, agent_name="test-agent", activity_log=False)
+    return KanbanEngine(board, activity_log=False)
 
 
 @pytest.fixture
 def warm_engine(board: Path) -> KanbanEngine:
     """KanbanEngine whose cache is pre-warmed by list_tasks()."""
-    eng = KanbanEngine(board, agent_name="test-agent", activity_log=False)
+    eng = KanbanEngine(board, activity_log=False)
     eng.list_tasks()
     return eng
 
@@ -166,7 +166,7 @@ class TestFromAC_IdToFilenameCache_944:
         _write_task_file(tasks_dir, 11, status="todo")
 
         # Reload engine so it discovers all 5 files
-        eng = KanbanEngine(board, agent_name="test-agent", activity_log=False)
+        eng = KanbanEngine(board, activity_log=False)
         result = eng.list_tasks(status="done")
 
         assert len(result) == 1, "filter must return only done tasks"
@@ -190,7 +190,7 @@ class TestFromAC_IdToFilenameCache_944:
         the pruned _task_cache, so deleted tasks must no longer appear.
         """
         tasks_dir = board / "tasks"
-        eng = KanbanEngine(board, agent_name="test-agent", activity_log=False)
+        eng = KanbanEngine(board, activity_log=False)
         eng.list_tasks()  # warm cache with tasks 1-3
 
         # Confirm task 2 is indexed
@@ -215,7 +215,7 @@ class TestFromAC_IdToFilenameCache_944:
         The scandir loop picks up new files; _id_to_filename is rebuilt from the updated cache.
         """
         tasks_dir = board / "tasks"
-        eng = KanbanEngine(board, agent_name="test-agent", activity_log=False)
+        eng = KanbanEngine(board, activity_log=False)
         eng.list_tasks()  # warm cache with tasks 1-3
 
         # Manually write a new file (bypassing create_task to avoid cache updates)
@@ -235,7 +235,7 @@ class TestFromAC_IdToFilenameCache_944:
         not clear or modify it.
         """
         archive_dir = board / "archive"
-        eng = KanbanEngine(board, agent_name="test-agent", activity_log=False)
+        eng = KanbanEngine(board, activity_log=False)
         eng.list_tasks()  # populate _id_to_filename with tasks 1-3
         pre_index = dict(eng._id_to_filename)  # snapshot
 
@@ -353,7 +353,7 @@ class TestFromAC_IdToFilenameCache_944:
         from both caches in the same operation.
         """
         tasks_dir = board / "tasks"
-        eng = KanbanEngine(board, agent_name="test-agent", activity_log=False)
+        eng = KanbanEngine(board, activity_log=False)
         eng.list_tasks()
 
         task_id = next(iter(eng._id_to_filename))
@@ -366,7 +366,7 @@ class TestFromAC_IdToFilenameCache_944:
     def test_show_task_eviction_leaves_other_tasks_intact(self, board: Path) -> None:
         """Evicting one ghost entry must not disturb other entries in _id_to_filename."""
         tasks_dir = board / "tasks"
-        eng = KanbanEngine(board, agent_name="test-agent", activity_log=False)
+        eng = KanbanEngine(board, activity_log=False)
         eng.list_tasks()
         ids = sorted(eng._id_to_filename.keys())
         assert len(ids) >= 2, "pre-condition: need at least 2 tasks"
@@ -393,7 +393,7 @@ class TestFromAC_IdToFilenameCache_944:
         Second call must find it via glob fallback.
         """
         tasks_dir = board / "tasks"
-        eng = KanbanEngine(board, agent_name="test-agent", activity_log=False)
+        eng = KanbanEngine(board, activity_log=False)
         eng.list_tasks()
 
         task_id = next(iter(eng._id_to_filename))
@@ -493,7 +493,7 @@ class TestFromAC_IdToFilenameCache_944:
         used when searching another directory.
         """
         archive_dir = board / "archive"
-        eng = KanbanEngine(board, agent_name="test-agent", activity_log=False)
+        eng = KanbanEngine(board, activity_log=False)
         eng.list_tasks()  # populate _id_to_filename with tasks 1-3
 
         # Write task 1 to archive dir (simulating an archived version)

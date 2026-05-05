@@ -262,7 +262,7 @@ def test_list_tasks_latency(
     performance for comparison after optimisation tasks #940 and #941.
     """
     kanban_dir = bench_boards[n_tasks]
-    engine = KanbanEngine(kanban_dir, agent_name="bench-agent", activity_log=False)
+    engine = KanbanEngine(kanban_dir, activity_log=False)
     cold_ms, p50_ms, p99_ms = _measure(engine, kwargs)
 
     with capsys.disabled():
@@ -297,7 +297,7 @@ def test_warm_cache_p99_under_50ms_at_1500_tasks(
     This test FAILS in RED phase — cache not yet implemented so p99 ~450ms.
     """
     kanban_dir = bench_boards[1500]
-    engine = KanbanEngine(kanban_dir, agent_name="bench-warm-agent", activity_log=False)
+    engine = KanbanEngine(kanban_dir, activity_log=False)
 
     # Warm the cache with one unmetered call
     engine.list_tasks()

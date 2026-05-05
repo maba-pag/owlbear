@@ -91,7 +91,7 @@ def client(tmp_path: Path, decisions_dir: Path):
     from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
     board_dir = _make_board(tmp_path)
-    engine = KanbanEngine(board_dir, agent_name="cockpit")
+    engine = KanbanEngine(board_dir)
     engine.list_tasks()
 
     app.dependency_overrides[get_engine] = lambda: engine

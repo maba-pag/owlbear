@@ -147,30 +147,49 @@ class TestFromAC_TerminalStatusValidation:
 
 
 # ---------------------------------------------------------------------------
-# D24 — agent_map must cover all declared statuses
+# D24/D33 — lazy agent_map validation (init succeeds, pick_tasks validates)
 # ---------------------------------------------------------------------------
 
 
 class TestFromAC_AgentMapCoverage:
-    """D24: agent_map missing a declared status → ConfigError at init."""
+    """D24/D33: __init__ allows incomplete agent_map; AgentView validates at pick_tasks."""
 
-    def test_agent_map_missing_one_status_raises(self, tmp_path: Path) -> None:
-        # Remove the "done" entry — agent_map no longer covers all statuses
+    def test_init_allows_missing_status_in_agent_map(self, tmp_path: Path) -> None:
+        # Remove the "done" entry — init should still succeed with lazy validation.
         config = _BASE_CONFIG.replace("  done: auditor\n", "")
         kanban_dir = _make_board(tmp_path, config)
-        with pytest.raises(ConfigError):
-            KanbanEngine(kanban_dir)
+        engine = KanbanEngine(kanban_dir)
+        assert engine is not None
 
-    def test_agent_map_empty_with_nonempty_statuses_raises(
-        self, tmp_path: Path
-    ) -> None:
+    def test_init_allows_empty_agent_map(self, tmp_path: Path) -> None:
         config = _BASE_CONFIG.replace(
             "agent_map:\n  research: researcher\n  backlog: architect\n  todo: builder\n  done: auditor",
             "agent_map: {}",
         )
         kanban_dir = _make_board(tmp_path, config)
-        with pytest.raises(ConfigError):
-            KanbanEngine(kanban_dir)
+        engine = KanbanEngine(kanban_dir)
+        assert engine is not None
+
+    def test_pick_tasks_raises_for_missing_status_in_agent_map(
+        self, tmp_path: Path
+    ) -> None:
+        config = _BASE_CONFIG.replace("  done: auditor\n", "")
+        kanban_dir = _make_board(tmp_path, config)
+        engine = KanbanEngine(kanban_dir)
+        with pytest.raises(ConfigError) as exc_info:
+            engine.agent_view().pick_tasks()
+        assert exc_info.value.code == "ERR_INVALID_STATUS"
+
+    def test_pick_tasks_raises_for_empty_agent_map(self, tmp_path: Path) -> None:
+        config = _BASE_CONFIG.replace(
+            "agent_map:\n  research: researcher\n  backlog: architect\n  todo: builder\n  done: auditor",
+            "agent_map: {}",
+        )
+        kanban_dir = _make_board(tmp_path, config)
+        engine = KanbanEngine(kanban_dir)
+        with pytest.raises(ConfigError) as exc_info:
+            engine.agent_view().pick_tasks()
+        assert exc_info.value.code == "ERR_INVALID_STATUS"
 
 
 # ---------------------------------------------------------------------------

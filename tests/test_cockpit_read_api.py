@@ -90,7 +90,7 @@ def board_dir(tmp_path: Path) -> Path:
     Task 4: status=in-progress,priority=important, tags=[delta], blocked=False, claimed=True
     """
     kanban_dir = _make_board(tmp_path)
-    seed_engine = KanbanEngine(kanban_dir, agent_name="seed")
+    seed_engine = KanbanEngine(kanban_dir)
     seed_engine.create_task(
         "Alpha task", status="todo", priority="important", tags=["alpha"]
     )
@@ -113,7 +113,7 @@ def board_dir(tmp_path: Path) -> Path:
 @pytest.fixture
 def engine(board_dir: Path) -> KanbanEngine:
     """KanbanEngine pointed at the test board, cache pre-warmed."""
-    eng = KanbanEngine(board_dir, agent_name="test-cockpit")
+    eng = KanbanEngine(board_dir)
     eng.list_tasks()  # populate id→filename cache
     return eng
 
@@ -148,7 +148,7 @@ def empty_board_dir(tmp_path: Path) -> Path:
 @pytest.fixture
 def empty_engine(empty_board_dir: Path) -> KanbanEngine:
     """KanbanEngine pointed at an empty board."""
-    return KanbanEngine(empty_board_dir, agent_name="test-cockpit-empty")
+    return KanbanEngine(empty_board_dir)
 
 
 @pytest.fixture

@@ -105,7 +105,7 @@ def board_dir(tmp_path: Path) -> Path:
     Task 1: status=todo, priority=important (unclaimed — target for all AC tests)
     """
     kanban_dir = _make_board(tmp_path)
-    seed = KanbanEngine(kanban_dir, agent_name="seed")
+    seed = KanbanEngine(kanban_dir)
     seed.create_task("Alpha task", status="todo", priority="important")
     seed.list_tasks()  # populate id→filename cache
     return kanban_dir
@@ -114,7 +114,7 @@ def board_dir(tmp_path: Path) -> Path:
 @pytest.fixture
 def engine(board_dir: Path) -> KanbanEngine:
     """KanbanEngine bound to the test board."""
-    eng = KanbanEngine(board_dir, agent_name="cockpit", activity_log=False)
+    eng = KanbanEngine(board_dir, activity_log=False)
     eng.list_tasks()  # populate id→filename cache
     return eng
 

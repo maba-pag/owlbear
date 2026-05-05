@@ -113,13 +113,13 @@ def board(tmp_path: Path) -> Path:
 @pytest.fixture
 def engine(board: Path) -> KanbanEngine:
     """KanbanEngine for the board fixture (cache cold)."""
-    return KanbanEngine(board, agent_name="test-agent", activity_log=False)
+    return KanbanEngine(board, activity_log=False)
 
 
 @pytest.fixture
 def warm_engine(board: Path) -> KanbanEngine:
     """KanbanEngine whose cache is pre-warmed by list_tasks()."""
-    eng = KanbanEngine(board, agent_name="test-agent", activity_log=False)
+    eng = KanbanEngine(board, activity_log=False)
     eng.list_tasks()  # populates _task_cache and rebuilds _id_to_filename
     return eng
 
@@ -190,7 +190,7 @@ class TestFromAC_IdToFilenameCache:
         """list_tasks(archived=True) must NOT rebuild _id_to_filename — it uses _archive_cache."""
         archive_dir = board / "archive"
         _write_task_file(archive_dir, 99)
-        eng = KanbanEngine(board, agent_name="test-agent", activity_log=False)
+        eng = KanbanEngine(board, activity_log=False)
         eng.list_tasks(archived=True)
         # _id_to_filename must remain empty; archived tasks are not indexed there
         assert eng._id_to_filename == {}, (
@@ -257,7 +257,7 @@ class TestFromAC_IdToFilenameCache:
     def test_show_task_stale_mtime_triggers_reread(self, board: Path) -> None:
         """show_task() must re-read file when mtime has changed since cache was built."""
         tasks_dir = board / "tasks"
-        eng = KanbanEngine(board, agent_name="test-agent", activity_log=False)
+        eng = KanbanEngine(board, activity_log=False)
         eng.list_tasks()  # warm cache
 
         task_id = next(iter(eng._id_to_filename))
@@ -274,7 +274,7 @@ class TestFromAC_IdToFilenameCache:
     def test_show_task_stale_mtime_updates_cache_entry(self, board: Path) -> None:
         """After a stale-mtime re-read, _task_cache must contain the new mtime and task."""
         tasks_dir = board / "tasks"
-        eng = KanbanEngine(board, agent_name="test-agent", activity_log=False)
+        eng = KanbanEngine(board, activity_log=False)
         eng.list_tasks()
 
         task_id = next(iter(eng._id_to_filename))
@@ -298,7 +298,7 @@ class TestFromAC_IdToFilenameCache:
     def test_show_task_missing_file_evicts_task_cache(self, board: Path) -> None:
         """When stat() reveals file is gone, the entry must be evicted from _task_cache."""
         tasks_dir = board / "tasks"
-        eng = KanbanEngine(board, agent_name="test-agent", activity_log=False)
+        eng = KanbanEngine(board, activity_log=False)
         eng.list_tasks()
 
         task_id = next(iter(eng._id_to_filename))
@@ -315,7 +315,7 @@ class TestFromAC_IdToFilenameCache:
     def test_show_task_missing_file_evicts_id_to_filename(self, board: Path) -> None:
         """When the file is gone, the entry must be evicted from _id_to_filename."""
         tasks_dir = board / "tasks"
-        eng = KanbanEngine(board, agent_name="test-agent", activity_log=False)
+        eng = KanbanEngine(board, activity_log=False)
         eng.list_tasks()
 
         task_id = next(iter(eng._id_to_filename))

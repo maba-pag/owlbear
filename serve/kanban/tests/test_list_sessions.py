@@ -125,7 +125,7 @@ def board(tmp_path: Path) -> Path:
 @pytest.fixture
 def engine(board: Path) -> KanbanEngine:
     """KanbanEngine for the board fixture."""
-    return KanbanEngine(board, agent_name="test-agent", activity_log=True)
+    return KanbanEngine(board, activity_log=True)
 
 
 @pytest.fixture

@@ -71,7 +71,7 @@ def run() -> None:
         sys.exit(1)
 
     # --- engine init (before uvicorn starts) ---
-    engine = KanbanEngine(kanban_dir, agent_name="cockpit")
+    engine = KanbanEngine(kanban_dir)
     app.state.engine = engine
 
     # --- static file mount and SPA catch-all (inside run() for test isolation) ---

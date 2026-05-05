@@ -81,7 +81,7 @@ class TestFromAC_EnginePublicProperties:
         from owlbear_kanban import KanbanEngine
 
         kanban_dir = _make_board(tmp_path)
-        engine = KanbanEngine(kanban_dir, agent_name="test-1222")
+        engine = KanbanEngine(kanban_dir)
         assert hasattr(engine, "tasks_dir"), (
             "KanbanEngine must expose a public 'tasks_dir' property"
         )
@@ -90,14 +90,14 @@ class TestFromAC_EnginePublicProperties:
         from owlbear_kanban import KanbanEngine
 
         kanban_dir = _make_board(tmp_path)
-        engine = KanbanEngine(kanban_dir, agent_name="test-1222")
+        engine = KanbanEngine(kanban_dir)
         assert engine.tasks_dir == kanban_dir / "tasks"
 
     def test_tasks_dir_is_read_only(self, tmp_path: Path) -> None:
         from owlbear_kanban import KanbanEngine
 
         kanban_dir = _make_board(tmp_path)
-        engine = KanbanEngine(kanban_dir, agent_name="test-1222")
+        engine = KanbanEngine(kanban_dir)
         with pytest.raises(AttributeError):
             engine.tasks_dir = tmp_path / "other"  # type: ignore[misc]
 
@@ -105,7 +105,7 @@ class TestFromAC_EnginePublicProperties:
         from owlbear_kanban import KanbanEngine
 
         kanban_dir = _make_board(tmp_path)
-        engine = KanbanEngine(kanban_dir, agent_name="test-1222")
+        engine = KanbanEngine(kanban_dir)
         assert hasattr(engine, "kanban_dir"), (
             "KanbanEngine must expose a public 'kanban_dir' property"
         )
@@ -114,14 +114,14 @@ class TestFromAC_EnginePublicProperties:
         from owlbear_kanban import KanbanEngine
 
         kanban_dir = _make_board(tmp_path)
-        engine = KanbanEngine(kanban_dir, agent_name="test-1222")
+        engine = KanbanEngine(kanban_dir)
         assert engine.kanban_dir == kanban_dir
 
     def test_kanban_dir_is_read_only(self, tmp_path: Path) -> None:
         from owlbear_kanban import KanbanEngine
 
         kanban_dir = _make_board(tmp_path)
-        engine = KanbanEngine(kanban_dir, agent_name="test-1222")
+        engine = KanbanEngine(kanban_dir)
         with pytest.raises(AttributeError):
             engine.kanban_dir = tmp_path / "other"  # type: ignore[misc]
 

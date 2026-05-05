@@ -93,7 +93,7 @@ def _make_board(base_dir: Path) -> Path:
 def board_dir(tmp_path: Path) -> Path:
     """Board with two tasks: task 1 at 'done', task 2 at 'todo'."""
     kanban_dir = _make_board(tmp_path)
-    seed = KanbanEngine(kanban_dir, agent_name="seed")
+    seed = KanbanEngine(kanban_dir)
     seed.create_task("Done task", status="done", priority="important")
     seed.create_task("Todo task", status="todo", priority="important")
     return kanban_dir
@@ -102,7 +102,7 @@ def board_dir(tmp_path: Path) -> Path:
 @pytest.fixture
 def engine(board_dir: Path) -> KanbanEngine:
     """KanbanEngine bound to the test board."""
-    eng = KanbanEngine(board_dir, agent_name="cockpit")
+    eng = KanbanEngine(board_dir)
     eng.list_tasks()
     return eng
 
@@ -367,11 +367,11 @@ class TestFromAC_ArchivalValidation422Surfacing:
         from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
 
         kanban_dir = _make_board(tmp_path)
-        seed = KanbanEngine(kanban_dir, agent_name="seed")
+        seed = KanbanEngine(kanban_dir)
         seed.create_task("Task A", status="done", priority="important")
         seed.create_task("Task B", status="todo", priority="important")
 
-        eng = KanbanEngine(kanban_dir, agent_name="cockpit")
+        eng = KanbanEngine(kanban_dir)
         eng.list_tasks()
         # Archive B directly via engine (bypassing view validation): B refs A.
         eng.move_task("2", "archived", archival_reason="deprecated", archival_refs=[1])
