@@ -46,8 +46,14 @@ class MoveRequest(BaseModel):
 class EditRequest(BaseModel):
     """Request body for POST /tasks/{id}/edit.
 
-    Only allowlisted fields accepted. `extra="forbid"` rejects `status`,
-    `blocked`, and any other non-allowlisted fields with 422.
+    Only allowlisted fields accepted. ``extra="forbid"`` rejects ``status``,
+    ``blocked``, and any other non-allowlisted fields with 422.
+
+    Tri-state field semantics (``model_fields_set`` distinguishes omit from null):
+
+    - ``body: ""`` clears task body; ``body: null`` or omitted = no change.
+    - ``parent: null`` clears parent; negative value → 422; omitted = no change.
+    - ``block_reason: ""`` or ``null`` unblocks; non-empty string sets block reason.
     """
 
     model_config = ConfigDict(extra="forbid")
