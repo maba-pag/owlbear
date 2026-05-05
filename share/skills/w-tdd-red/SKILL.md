@@ -53,7 +53,13 @@ If the body contains both `## Test-Writer Notes` and `## Review Evidence`, this 
 - **If reviewer cites code quality, weak tests, or security (not missing tests):** Pass through — the builder will address the findings.
 - Run pytest to verify: old tests PASS, new tests FAIL (for the new gaps). If all tests pass (implementation already handles the gap), note this and advance — **the builder pass-through is unnecessary** (see Step 1b.1 below).
 
-**Advance:** via `end_work(note="## Test-Writer Notes\n- Retry: {summary of changes}")` (moves to `in-progress` + releases claim).
+**Advance:** Commit new test files first, then advance:
+
+```shell
+git add tests/test_{module}_{task_id}.py && git commit -m "test: add retry tests for {feature} (#{id}, test-writer)"
+```
+
+Then: `end_work(note="## Test-Writer Notes\n- Retry: {summary of changes}")` (moves to `in-progress` + releases claim).
 
 Return: `DONE #{id} -> in-progress | retry, {N} existing tests preserved{, M new tests added}`
 
@@ -67,7 +73,11 @@ If ALL of the following are true:
 - All NEW tests PASS against current code (implementation already handles them)
 - No lint or coverage issues detected
 
-Then the builder has no work to do. Advance directly to `review` instead of `in-progress`:
+Then the builder has no work to do. Commit new tests, then advance directly to `review` instead of `in-progress`:
+
+```shell
+git add tests/test_{module}_{task_id}.py && git commit -m "test: add retry tests for {feature} (#{id}, test-writer)"
+```
 
 - `end_work(outcome="success", move_to="review", note="## Test-Writer Notes\n- Retry: added {M} tests for reviewer gaps. All pass against current impl.\n- Builder skip: test-only retry, all tests green.")`
 - Return: `DONE #{id} -> review | test-only retry, builder skipped`
@@ -152,7 +162,7 @@ Confirm all tests appear in `failed:` list and `clean: true` in the Quality-Runn
 
 Must be clean.
 
-## Step 6 — Deliverables
+## Step 6 — Commit & Advance
 
 Include the test summary in your `end_work` note:
 
@@ -164,8 +174,6 @@ Include the test summary in your `end_work` note:
 - Total: {N} tests, all FAIL
 - ruff: clean
 ```
-
-## Step 6 — Commit & Advance
 
 **Commit your deliverables** (see `r-pipeline-protocol` → Who Commits What):
 
@@ -214,3 +222,4 @@ Append to task body before advancing:
 - **Modifying source files:** The test-writer must never create or edit `src/` files. Tests define the contract; the builder implements.
 - **Retry cycle confusion:** On retry, do NOT re-run the full RED phase. Read the reviewer's evidence and act on the specific feedback.
 - **Pass-through tag detection:** Check both bare tags and `type:` prefix variants. Missing a pass-through tag causes unnecessary test writing for non-impl tasks.
+- **Forgetting to commit on retry paths:** Step 1b and Step 1b.1 both create new test files. Commit them before calling `end_work` — the same rule applies as the main path.

@@ -122,6 +122,7 @@ If the terminal truncates output, use Python as the I/O layer:
 ```shell
 uv run python -c "import subprocess,sys,pathlib; r=subprocess.run([sys.executable,'-m','pytest','tests/','src/','-m','not api','-q','--tb=line'], capture_output=True, text=True); pathlib.Path('.owlbear/scratch/pytest-output.txt').write_text(r.stdout+'\n'+r.stderr); print('exit:', r.returncode)"
 ```
+
 Adjust the `tests/` and `src/` arguments for your project layout.
 
 Then `read_file` on `.owlbear/scratch/pytest-output.txt`. Delete after use.
