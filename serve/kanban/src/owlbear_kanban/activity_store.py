@@ -4,6 +4,11 @@ Provides three functions over the board-level ``activity.jsonl`` file:
 - ``append_activity_event``  — append one ActivityEvent record
 - ``list_activity_events``   — query events with optional filters
 - ``compact_activity_log``   — rewrite the file retaining only recent events
+
+The canonical source vocabulary for activity attribution is:
+- ``engine`` for internal engine operations
+- ``agent`` for agent-initiated operations
+- ``cockpit`` for Cockpit UI-initiated operations
 """
 
 from __future__ import annotations
