@@ -66,7 +66,9 @@ def validate_config_path_containment(path_value: str) -> None:
             ),
         )
 
-    if any(part == ".." for part in PurePosixPath(path_value).parts):
+    posix_parts = PurePosixPath(path_value).parts
+    windows_parts = PureWindowsPath(path_value).parts
+    if any(part == ".." for part in (*posix_parts, *windows_parts)):
         raise ConfigError(
             code="ERR_PATH_ESCAPE",
             user_message=(

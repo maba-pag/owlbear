@@ -352,6 +352,8 @@ class KanbanEngine:
         _validate_dispatch_rank_coverage(self._config)
         self._tasks_dir = kanban_dir / self._config.paths.tasks_dir
         self._archive_dir = kanban_dir / self._config.paths.archive_dir
+        validate_path_containment(self._kanban_dir, self._tasks_dir)
+        validate_path_containment(self._kanban_dir, self._archive_dir)
         self._agent_name: str = (
             agent_name
             if agent_name is not None
