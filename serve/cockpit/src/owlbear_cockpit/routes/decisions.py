@@ -26,7 +26,7 @@ class ResolveRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    response: Literal["approved", "needs-info", "rejected", "completed"]
+    response: Literal["approved", "needs-info", "rejected"]
     notes: str | None = None
 
 
