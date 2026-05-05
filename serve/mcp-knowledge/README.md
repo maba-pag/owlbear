@@ -32,6 +32,8 @@ Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json
 | `sync_to_global` | Export local scope `global` rows to the global knowledge DB |
 | `refresh_source` | Re-ingest a registered source by source ID |
 | `consolidate_knowledge` | Synthesize cross-document insights from unconsolidated chunks |
+| `get_next_batch` | Atomically claim a batch of chunks ready for enrichment |
+| `store_enrichment` | Persist extracted entities and edges, mark chunk as enriched |
 
 ## Configuration
 
