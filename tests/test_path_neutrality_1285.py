@@ -45,7 +45,6 @@ _LEGACY_SECTION_HEADERS = (
 # Audit prompts that must be relocated from share/prompts/ to .owlbear/prompts/ per AC6.
 _AUDIT_PROMPTS = (
     "doc-audit.prompt.md",
-    "agent-audit.prompt.md",
     "arch-audit.prompt.md",
 )
 
@@ -217,7 +216,7 @@ class TestFromAC_PathNeutrality:
     # ---- AC6 (td:1): audit prompts relocated to .owlbear/prompts/ -------------------------
 
     def test_audit_prompts_relocated_to_owlbear_prompts(self) -> None:
-        """doc-audit.prompt.md, agent-audit.prompt.md, and arch-audit.prompt.md must each
+        """doc-audit.prompt.md and arch-audit.prompt.md must each
         exist in .owlbear/prompts/ and must NOT exist in share/prompts/.
         """
         for prompt_name in _AUDIT_PROMPTS:
