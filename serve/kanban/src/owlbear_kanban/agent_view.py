@@ -693,6 +693,7 @@ class AgentView:
         body_set = body is not None
         append_set = bool(append_body)
         parent_set = parent is not None
+        # Task IDs are 1-based, so parent=0 is an unambiguous clear sentinel.
         parent_value = None if parent == 0 else parent
         archival_reason_set = archival_reason is not None
         archival_refs_set = archival_refs is not None
