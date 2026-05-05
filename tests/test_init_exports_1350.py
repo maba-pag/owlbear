@@ -10,6 +10,7 @@ AC coverage:
 from __future__ import annotations
 
 import pathlib
+import re
 
 import owlbear_kanban
 
@@ -26,6 +27,10 @@ class TestFromAC_DispatchExportRemoval:
         doc = owlbear_kanban.__doc__ or ""
         assert "dispatch selector (pick_dispatchable)" not in doc
 
+    def test_pick_dispatchable_absent_from_root_namespace(self) -> None:
+        """AC1: pick_dispatchable must NOT be bound on the owlbear_kanban root namespace."""
+        assert not hasattr(owlbear_kanban, "pick_dispatchable")
+
 
 class TestFromAC_TestFileSurgery:
     """AC2: test_init_exports_1213.py updated to reflect the export removal."""
@@ -41,3 +46,12 @@ class TestFromAC_TestFileSurgery:
         test_file = pathlib.Path(__file__).parent / "test_init_exports_1213.py"
         content = test_file.read_text(encoding="utf-8")
         assert '"pick_dispatchable" not in owlbear_kanban.__all__' in content
+
+    def test_existing_set_pruned_of_pick_dispatchable(self) -> None:
+        """AC2: the 'existing' baseline set in test_init_exports_1213.py must not list pick_dispatchable."""
+        test_file = pathlib.Path(__file__).parent / "test_init_exports_1213.py"
+        content = test_file.read_text(encoding="utf-8")
+        match = re.search(r"existing\s*=\s*\{([^}]+)\}", content, re.DOTALL)
+        assert match is not None, "existing set not found in test_init_exports_1213.py"
+        existing_body = match.group(1)
+        assert "pick_dispatchable" not in existing_body
