@@ -1027,12 +1027,15 @@ class KanbanEngine:
         task_path = self._tasks_dir / filename
         validate_path_containment(self._tasks_dir, task_path)
         write_task(record, self._kanban_dir)
-        self._config = load_config(self._kanban_dir)
+        reloaded_config = load_config(self._kanban_dir)
+        reloaded_tasks_dir = self._kanban_dir / reloaded_config.paths.tasks_dir
+        reloaded_archive_dir = self._kanban_dir / reloaded_config.paths.archive_dir
+        validate_path_containment(self._kanban_dir, reloaded_tasks_dir)
+        validate_path_containment(self._kanban_dir, reloaded_archive_dir)
 
-        self._tasks_dir = self._kanban_dir / self._config.paths.tasks_dir
-        self._archive_dir = self._kanban_dir / self._config.paths.archive_dir
-        validate_path_containment(self._kanban_dir, self._tasks_dir)
-        validate_path_containment(self._kanban_dir, self._archive_dir)
+        self._config = reloaded_config
+        self._tasks_dir = reloaded_tasks_dir
+        self._archive_dir = reloaded_archive_dir
 
         self._revision += 1
         return record
