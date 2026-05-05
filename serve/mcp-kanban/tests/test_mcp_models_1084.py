@@ -900,6 +900,7 @@ class TestFromAC_ExactFieldSets:
 
         assert set(EditTaskParams.model_fields.keys()) == {
             "id",
+            "title",
             "body",
             "append_body",
             "timestamp",

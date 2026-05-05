@@ -292,7 +292,7 @@ class TestFromAC_CreateTaskAdapter:
 
 # ---------------------------------------------------------------------------
 # TestFromAC_EditTaskAdapter
-# AC: edit_task forwards all 13 params to AgentView; SingleTaskResponse returned;
+# AC: edit_task forwards all 14 params to AgentView; SingleTaskResponse returned;
 #     error cases mapped to ToolError
 # ---------------------------------------------------------------------------
 
@@ -311,15 +311,16 @@ class TestFromAC_EditTaskAdapter:
         mock_av.edit_task.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_edit_task_forwards_all_13_params(
+    async def test_edit_task_forwards_all_14_params(
         self, app_ctx_with_mock_agent_view: tuple[AppContext, MagicMock]
     ) -> None:
-        """All 13 AgentView.edit_task params must be forwarded from the adapter (§1.5)."""
+        """All 14 AgentView.edit_task params must be forwarded from the adapter (§1.5)."""
         app_ctx, mock_av = app_ctx_with_mock_agent_view
         ctx = _make_mcp_ctx(app_ctx)
         await edit_task(
             ctx,
             id="1",
+            title="updated title",
             body="new body",
             append_body="appended",
             timestamp=True,
@@ -335,6 +336,7 @@ class TestFromAC_EditTaskAdapter:
         )
         mock_av.edit_task.assert_called_once()
         _, kwargs = mock_av.edit_task.call_args
+        assert kwargs.get("title") == "updated title"
         assert kwargs.get("body") == "new body"
         assert kwargs.get("append_body") == "appended"
         assert kwargs.get("timestamp") is True
