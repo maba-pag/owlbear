@@ -4,7 +4,7 @@ title: Reconcile MCP lifecycle tools, guidance, and 9-tool contract
 status: review
 priority: needed
 created: 2026-05-04T15:00:05.806598+00:00
-updated: 2026-05-05T10:59:19.155709+00:00
+updated: 2026-05-05T11:36:40.173741+00:00
 tags:
 - sync-blocker
 - mcp-kanban
@@ -15,7 +15,7 @@ depends_on:
 - 1349
 blocked: false
 block_reason:
-claimed_at: 2026-05-05T10:59:19.155709+00:00
+claimed_at: 2026-05-05T11:36:40.173741+00:00
 archival_reason:
 archival_refs: []
 ---
@@ -203,3 +203,120 @@ Architecture review complete. All 10 criteria PASS. Challenger rebutted (factual
   - `owlbear_kanban.agent_view` remains low in scoped coverage due module breadth; no tests were modified by builder per protocol.
 - Notes:
   - One broader optional regression bundle including `tests/test_mcp_kanban_1197.py` reports an existing structural substring assertion (`"_agent_view_for" not in source`) unrelated to this task's acceptance checks; no changes were made to that legacy test in builder phase.
+[[2026-05-05]]
+## Review Evidence
+### Test Results
+- quality-runner scoped pass: 85 passed, 0 failed across `tests/test_mcp_end_work_fail_1339.py`, `tests/test_guidance_text_1183.py`, and `tests/test_mcp_kanban.py`
+- code-reader audit completed on the changed source/docs/tests
+
+### Lint Results
+- Ruff clean on `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py`, `serve/kanban/src/owlbear_kanban/agent_view.py`, `tests/test_mcp_end_work_fail_1339.py`, `tests/test_guidance_text_1183.py`, and `tests/test_mcp_kanban.py`
+
+### Coverage
+- `owlbear_mcp_kanban.server`: 98%
+- `owlbear_kanban.agent_view`: 94%
+
+### AC Compliance
+| AC | Evidence | Status |
+|----|----------|--------|
+| 1 | `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:583` accepts `fail`; `:593` and `:607` forward into the lifecycle handlers; `serve/kanban/src/owlbear_kanban/agent_view.py:1048` and `:1176` implement the fail path | PASS |
+| 2 | `serve/kanban/src/owlbear_kanban/agent_view.py:1111` and `:1169` implement the release path without the failure branch | PASS |
+| 3 | `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:583`, `:755`, and `:757` name all five outcomes | PASS |
+| 4 | `share/skills/h-mcp-kanban/SKILL.md:17` and `:30` show 9 tools and the `create_dr` row | PASS |
+| 5 | `share/skills/h-mcp-kanban/SKILL.md:123`, `:125`, `:126`, `:127`, `:128`, and `:129` document all five `end_work` outcomes with use-when guidance | PASS |
+| 6 | `serve/mcp-kanban/README.md:19`, `:31`, `:75`, `:79`, `:80`, `:81`, `:82`, and `:83` match the 9-tool / 5-outcome contract | PASS |
+| 7 | `serve/kanban/src/owlbear_kanban/agent_view.py:47` matches `serve/mcp-kanban/src/owlbear_mcp_kanban/guidance.py:14` on canonical `create_dr` wording | PASS |
+| 8 | `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:718`, `:720`, `:740`, and `:743` use JSON-array wording and stale patched params are gone from the live metadata surface | PASS |
+| 9 | `grep` on `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py` found no `_STATUSES` / `_PRIORITIES` symbols; schema-light behavior is what ships | PASS |
+| 10 | `serve/kanban/src/owlbear_kanban/agent_view.py:1002` still says `move_to` is forbidden on `success`, while the implementation validates it at `:1028`; MCP metadata still narrows `move_to` to reject-only at `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:762`, but the handbook and README advertise `success + move_to` at `share/skills/h-mcp-kanban/SKILL.md:125`, `:131`, and `serve/mcp-kanban/README.md:79` | FAIL |
+| 11 | README proof is still vulnerable to false greens: `tests/test_mcp_end_work_fail_1339.py:270`, `:280`, and `:293` use bare substring matching for `fail`, the exact pattern this AC forbids | FAIL |
+| 12 | quality-runner regression evidence is green: 85 scoped tests passed including `tests/test_mcp_kanban.py` | PASS |
+
+### Findings
+1. AC10 remains inconsistent in shipped code and metadata. The `AgentView.end_work()` docstring still forbids `move_to` on `success` (`serve/kanban/src/owlbear_kanban/agent_view.py:1002`), the implementation accepts/validates it (`:1028`), and MCP parameter metadata says `move_to` is only for reject (`serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:762`). This is a real contract mismatch, not just a proof gap.
+2. AC11 is not satisfied. The README assertions in `tests/test_mcp_end_work_fail_1339.py` still pass on generic prose because they only search for bare substrings (`:270`, `:280`, `:293`). That is the exact false-green class called out in the task body and builder guidance.
+3. Runtime proof is still incomplete. The task-specific suite checks type hints at `tests/test_mcp_end_work_fail_1339.py:60`, `:82`, `:112`, and `:132`, and the outcome-description metadata at `:439`, but the only `outcome="release"` occurrence in that file is the comment header at `:5`. `tests/test_mcp_kanban.py` contains no `outcome="release"` usage, and every `move_to` argument in its `end_work` calls is `None` (`tests/test_mcp_kanban.py:317`, `:342`, `:604`, `:619`, `:636`, `:657`, `:674`), so the accepted `success + move_to` path is still unproved.
+4. No security or data-safety issues were found in the scoped code paths.
+5. Small confidence deduction: this tool surface could not run `git status --porcelain` on the scoped files, so dirty-tree contamination and exact TestFromAC immutability versus the original RED snapshot were not independently proven.
+
+### Deductions
+- `-0.10` AC10 contract mismatch still present in code/metadata
+- `-0.05` AC11 false-green README assertions remain
+- `-0.03` release and positive `success + move_to` runtime coverage still missing
+- `-0.02` dirty-tree / commit-diff verification unavailable from current tool surface
+
+### Verdict
+- FAIL -> in-progress
+- Confidence: 0.80
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Align the lifecycle parameter matrix for `move_to` across MCP metadata and code comments with the accepted `success + move_to` behavior | `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py`, `serve/kanban/src/owlbear_kanban/agent_view.py` | `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:762`; `serve/kanban/src/owlbear_kanban/agent_view.py:1002`; `serve/kanban/src/owlbear_kanban/agent_view.py:1028`; `share/skills/h-mcp-kanban/SKILL.md:125`; `share/skills/h-mcp-kanban/SKILL.md:131`; `serve/mcp-kanban/README.md:79` |
+| 2 | builder | Replace the README outcome assertions with structured row/bullet assertions that fail on unrelated prose and preserve the AC11 false-green guard | `tests/test_mcp_end_work_fail_1339.py` | `tests/test_mcp_end_work_fail_1339.py:270`; `:280`; `:293` |
+| 3 | builder | Add executable runtime coverage for `outcome="release"` and a positive `success + move_to` path in the MCP `end_work` surface | `tests/test_mcp_end_work_fail_1339.py`, `tests/test_mcp_kanban.py` | `tests/test_mcp_end_work_fail_1339.py:5`; `tests/test_mcp_end_work_fail_1339.py:60`; `:82`; `:112`; `:132`; `tests/test_mcp_kanban.py:317`; `:342`; `:604`; `:619`; `:636`; `:657`; `:674` |
+[[2026-05-05]]
+## Builder Notes
+- Files changed:
+  - serve/kanban/src/owlbear_kanban/agent_view.py
+  - serve/mcp-kanban/src/owlbear_mcp_kanban/server.py
+- Commit:
+  - dbe217f8
+- Surgical fix applied:
+  - Aligned `AgentView.end_work()` docstring matrix with implemented behavior: `move_to` is optional on `success`, forbidden on `release`.
+  - Aligned MCP `end_work.move_to` parameter metadata description with accepted behavior (`reject` target + optional `success` status move).
+- Verification:
+  - quality-runner scoped tests: 85 passed, 0 failed (`tests/test_mcp_end_work_fail_1339.py`, `tests/test_guidance_text_1183.py`, `tests/test_mcp_kanban.py`)
+  - ruff: clean on changed files and scoped tests
+  - get_errors: no diagnostics in changed Python files
+- Coverage snapshot (scoped run):
+  - serve/mcp-kanban/server.py: 90%
+
+Task is rejected to `todo` because remaining acceptance gaps are test-authoring work (AC11/runtime-proof strengthening), which builder mode cannot perform.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | test-writer | Replace README outcome checks with structured row/bullet assertions that cannot pass via unrelated `failure` prose (AC11 guard). | tests/test_mcp_end_work_fail_1339.py | Existing README checks still rely on broad substring presence patterns in the outcomes section. |
+| 2 | test-writer | Add executable runtime coverage for `outcome="release"` and positive `outcome="success" + move_to` in MCP `end_work` path. | tests/test_mcp_end_work_fail_1339.py, tests/test_mcp_kanban.py | Current scoped suites pass but do not exercise these runtime combinations as explicit behavior proofs. |
+[[2026-05-05]]
+## Test-Writer Notes
+
+**Test file:** `tests/test_mcp_end_work_fail_1339.py`
+
+**Retry cycle (Step 1b.1):** Builder filled all implementation gaps in prior pass. Both Required Follow-up items were test-proof gaps only — no further implementation needed.
+
+### New tests added this session (6 tests)
+
+| Class | Tests | AC | Category |
+|-------|-------|----|----------|
+| `TestFromAC_ReadmeOutcomeStructured` | 2 | AC11 | boundary — structured bullet matching |
+| `TestFromAC_EndWorkReleaseRuntime` | 2 | AC2 | happy — runtime execution proof |
+| `TestFromAC_EndWorkSuccessMoveTo` | 2 | AC10 | happy — runtime execution proof |
+
+### Verification
+
+- **Old tests (18):** all PASS ✅
+- **New tests (6):** all PASS ✅ — implementation already handles all gaps
+- **Total: 24 passed, 0 failed** (0.99s)
+- **Ruff:** clean
+
+**Step 1b.1 applied:** All new tests PASS against current code. Builder has no remaining work. Advancing directly to `review`.
+
+### Builder Follow-up items addressed
+
+1. **AC11 structured README assertions:** `TestFromAC_ReadmeOutcomeStructured` checks `- \`outcome\`` bullet format, not bare substrings. Would catch "failure" prose false greens.
+2. **Runtime coverage for `release`:** `TestFromAC_EndWorkReleaseRuntime` calls `end_work(outcome="release")` end-to-end and verifies status unchanged.
+3. **Runtime coverage for `success + move_to`:** `TestFromAC_EndWorkSuccessMoveTo` calls `end_work(outcome="success", move_to="done")` and verifies task advances to "done" (skipping "review").
+
+### Commit
+
+`78abefdc` — test: add retry tests for README structured assertions and runtime proof (#1339, test-writer)
+[[2026-05-05]]
+## Builder Notes
+- Implementation: No code changes required in this builder pass; prior implementation for AC1-AC11 was already present.
+- Tests: 91 passed, 0 failed (`tests/test_mcp_end_work_fail_1339.py`, `tests/test_guidance_text_1183.py`, `tests/test_mcp_kanban.py`).
+- Coverage: `owlbear_mcp_kanban.server` 90%; `owlbear_kanban.agent_view` 28% in this scoped run.
+- Ruff: clean on scoped source + test paths.
+- Evidence summary: task-specific lifecycle contract tests and MCP behavior regression suite all pass; no additional surgical intervention was necessary.
+- Fixes applied: none (verification-only builder pass).
