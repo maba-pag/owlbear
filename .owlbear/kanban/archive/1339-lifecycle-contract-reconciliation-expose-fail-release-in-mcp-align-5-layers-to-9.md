@@ -1,10 +1,10 @@
 ---
 id: 1339
 title: Reconcile MCP lifecycle tools, guidance, and 9-tool contract
-status: done
+status: archived
 priority: needed
 created: 2026-05-04T15:00:05.806598+00:00
-updated: 2026-05-05T12:59:22.338830+00:00
+updated: 2026-05-05T13:09:12.425085+00:00
 tags:
 - sync-blocker
 - mcp-kanban
@@ -756,3 +756,46 @@ Architecture review cycle 4 complete. Single remaining gap: SKILL.md release row
 
 ### Scratch Files Cleaned
 - None (no `1339-*` scratch files found)
+[[2026-05-05]]
+## Audit
+
+### AC Verification
+| AC | Evidence | Status |
+|----|----------|--------|
+| 1 | server.py:583 Literal includes "fail"; 5-outcome type confirmed | PASS |
+| 2 | agent_view.py:1112-1170 release path; runtime tests at test_mcp_end_work_fail_1339.py:606,624 | PASS |
+| 3 | server.py:583,755-757 names all five outcomes | PASS |
+| 4 | SKILL.md:17,30 lists 9 tools + create_dr | PASS |
+| 5 | SKILL.md:128 exact wording confirmed; tests/test_engine_end_work_fail_1125.py pins it | PASS |
+| 6 | README.md:19,31,79-83 matches 9-tool/5-outcome contract | PASS |
+| 7 | agent_view.py:47 canonical create_dr text confirmed | PASS |
+| 8 | server.py:718,720,740,743 JSON-array wording; no stale patches | PASS |
+| 9 | No _STATUSES/_PRIORITIES in server.py; schema-light confirmed | PASS |
+| 10 | server.py:762 "optional status move when outcome=success or block"; SKILL.md:129, README:82 aligned | PASS |
+| 11 | test_mcp_end_work_fail_1339.py:579 structured bullet assertions | PASS |
+| 12 | Full suite 4567 passed, 203 failed (all pre-existing/unrelated); task tests 27/27 green | PASS |
+
+### Test Results
+- pytest (full): 4567 passed, 203 failed (pre-existing across engine refactor, mcp-memory, cockpit e2e, etc.)
+- pytest (task-scoped): 27 passed, 0 failed
+- ruff: clean
+
+### Architect Quality: 3/5
+Original AC10 was vague enough to require 4 architecture review cycles. Eventual resolution was clean with exact wording requirements. Edge cases (block+move_to, release semantics) discovered during pipeline, not anticipated.
+
+### Deduction Breakdown
+- AC quality score 3 (<=3): -0.03
+
+### Confidence: 0.97
+### Action: archive
+
+### Commits Verified
+- f3b98b0c docs: align release row exact wording (#1339, builder)
+- 09f3914e test: add retry test for release row exact wording AC5 (#1339, test-writer)
+- ea0e6ab2 fix: align block move_to matrix docs/meta (#1339, builder)
+- a8f1948b test: add retry tests for block move_to matrix documentation (#1339, test-writer)
+- 78abefdc test: add retry tests for README structured assertions and runtime proof (#1339, test-writer)
+- dbe217f8 fix: align end_work move_to contract text (#1339, builder)
+- a6d107b8 test: expand RED coverage for MCP lifecycle contract reconciliation (#1339, test-writer)
+- 9abd0f60 docs: update diagram footers for mcp lifecycle reconciliation (#1339, doc-writer)
+- Dirty tree: clean
