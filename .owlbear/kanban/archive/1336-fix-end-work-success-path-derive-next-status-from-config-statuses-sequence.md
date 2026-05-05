@@ -1,10 +1,10 @@
 ---
 id: 1336
 title: Fix raw engine end_work success default and terminal archive contract
-status: in-progress
+status: archived
 priority: critical
 created: 2026-05-04T15:00:05.698435+00:00
-updated: 2026-05-04T23:04:59.443407+00:00
+updated: 2026-05-05T00:53:24.269767+00:00
 tags:
 - sync-blocker
 - kanban
@@ -387,3 +387,139 @@ AC coverage:
 | AC5 (td:1) | 1 test | AgentView integration, no masking |
 | AC6 (td:0) | N/A — meta-AC |  |
 | AC7 (td:0) | N/A — task-owned suites pass |  |
+[[2026-05-04]]
+## Builder Notes
+- Implementation: no source edits required in this cycle; verified existing engine and AgentView behavior matches refined AC.
+- Files changed: none.
+- Tests: 65 passed, 0 failed, 0 skipped.
+  - tests/test_end_work_success_1336.py
+  - serve/kanban/tests/test_engine_end_work_1077.py
+  - tests/test_engine_activity_session.py
+- Lint: clean (ruff on serve/kanban/src/owlbear_kanban/engine.py, serve/kanban/src/owlbear_kanban/agent_view.py, tests/test_end_work_success_1336.py).
+- Coverage: overall 40%; owlbear_kanban.engine 50%; owlbear_kanban.agent_view 26% (informational for verification-only cycle).
+- Evidence summary: AC1-AC5 validated by task-owned TestFromAC coverage and current runtime behavior; AC7 task-owned suites pass.
+
+### Reflection
+- Problem faced: this was a verification-only retry cycle with no implementation delta.
+- Workaround applied: used a strict task-scoped quality-runner pass to avoid unrelated-suite noise.
+- Pattern discovered: for test-only retry cycles, a fresh scoped quality gate is sufficient to route forward when implementation is unchanged.
+[[2026-05-05]]
+## Review Evidence
+
+### Test Results
+- `quality-runner` scoped run: 65 passed, 0 failed, 0 skipped.
+- Executed suites:
+  - `tests/test_end_work_success_1336.py`
+  - `serve/kanban/tests/test_engine_end_work_1077.py`
+  - `tests/test_engine_activity_session.py`
+- No environment, plugin, or execution issues were reported.
+
+### Lint Results
+- `ruff`: clean on `serve/kanban/src/owlbear_kanban/engine.py`, `serve/kanban/src/owlbear_kanban/agent_view.py`, `tests/test_end_work_success_1336.py`, `serve/kanban/tests/test_engine_end_work_1077.py`, and `tests/test_engine_activity_session.py`.
+- Editor diagnostics: `get_errors` reported no errors in the same scoped files.
+
+### Coverage
+- Informational only: overall 40%; `owlbear_kanban.engine` 50%; `owlbear_kanban.agent_view` 26%.
+- This remains module-level rather than diff-scoped, and there is no source diff in the latest builder cycle.
+
+### AC Compliance
+| AC Line | Evidence | Status |
+|---|---|---|
+| 1. Raw `KanbanEngine.end_work(task_id, outcome="success")` derives next status from `config.pipeline.statuses` when no explicit `move_to` is supplied; at least one test uses a non-stock config. | Success branch advances by config order in `serve/kanban/src/owlbear_kanban/engine.py:1534-1540`. Non-stock discriminators in `tests/test_end_work_success_1336.py:443-455` and `tests/test_end_work_success_1336.py:460-471` prove `in-progress -> backlog` and `backlog -> review` on a custom 3-status board, which would fail on a hardcoded stock sequence. | PASS |
+| 2. Raw success no longer moves tasks to `research` by default. | Raw engine now defaults `move_to` to `None` in `serve/kanban/src/owlbear_kanban/engine.py:1566`. Negative regression at `tests/test_end_work_success_1336.py:381-392`, plus the exact-value AC1 advancement tests, prove success no longer falls back to `research`. | PASS |
+| 3. Success from the terminal status archives the task with `archival_reason="completed"` and normalizes `archival_refs` to `[]` even if the task previously had non-empty refs via raw `edit_task`. | Terminal archive branch sets `archival_reason` and clears refs in `serve/kanban/src/owlbear_kanban/engine.py:1534-1537`. The discriminating seeded-refs test in `tests/test_end_work_success_1336.py:326-342` seeds `[100, 200]` via `engine.edit_task` at `tests/test_end_work_success_1336.py:338` and then asserts `archival_refs == []` at `tests/test_end_work_success_1336.py:342`. Stock-terminal archive assertions remain exact at `tests/test_end_work_success_1336.py:285`, `tests/test_end_work_success_1336.py:301`, and `tests/test_end_work_success_1336.py:317-319`, and custom-terminal archive assertions at `tests/test_end_work_success_1336.py:503` and `tests/test_end_work_success_1336.py:521-523` prove terminal detection is config-driven rather than hardcoded to `done`. | PASS |
+| 4. Explicit `move_to` behavior remains available for non-success outcomes where currently supported, especially `reject`. | Reject handling remains in `serve/kanban/src/owlbear_kanban/engine.py:1548-1555`. Supported wrapper regressions at `serve/kanban/tests/test_engine_end_work_1077.py:246`, `serve/kanban/tests/test_engine_end_work_1077.py:256-278`, and `serve/kanban/tests/test_engine_end_work_1077.py:438-452` prove explicit reject `move_to` flows and required validation remain intact. | PASS |
+| 5. `AgentView.end_work(outcome="success")` advances identically to raw engine; one discriminating wrapper test proves no masking layer alters success behavior. | `AgentView` delegates directly to `engine.end_work(...)` in `serve/kanban/src/owlbear_kanban/agent_view.py:1177-1184`. The comparison test at `tests/test_end_work_success_1336.py:546-566` drives raw engine and wrapper independently and asserts identical resulting status at `tests/test_end_work_success_1336.py:566`. | PASS |
+| 6. `tests/test_end_work_success_1336.py` is corrected so terminal success expects archive behavior, not an error. | Terminal-success expectations are now positive archive assertions in `tests/test_end_work_success_1336.py:285`, `tests/test_end_work_success_1336.py:301`, and `tests/test_end_work_success_1336.py:317-319`. No remaining terminal-error expectation was found in the file. | PASS |
+| 7. Task-owned suites pass: `tests/test_end_work_success_1336.py`, `serve/kanban/tests/test_engine_end_work_1077.py`, `tests/test_engine_activity_session.py`. | `quality-runner` scoped run completed cleanly: 65 passed, 0 failed, 0 skipped across the three task-owned suites. | PASS |
+
+### Additional Review Findings
+- `code-reader` found no security or data-safety issue in the reviewed engine and `AgentView` success/reject paths.
+- Current snapshot shows no visible weakening or removal of `TestFromAC_*` assertions.
+- Existing `## Review Evidence` sections before this review: 2. This cycle closes the remaining proof gap from the prior review rather than changing runtime behavior.
+- Git-log evidence confirms task-related committed test-writer retries for `#1336` in `.git/logs/HEAD:1845`, `.git/logs/HEAD:1863`, and `.git/logs/HEAD:1896`.
+
+### Deductions
+- `tests/test_end_work_success_1336.py:423` (`test_reject_without_move_to_does_not_go_to_research`) is a lax negative assertion for a non-AC behavior; it would false-green on an incorrect non-`research` status.
+- This is non-blocking because the refined AC4 is about explicit `move_to` behavior, and that contract is discriminatingly proven elsewhere in the wrapper suite.
+- Full dirty-tree and exact commit-diff verification were not available in this tool surface, so provenance confidence takes a small deduction despite the git-log evidence above.
+
+### Verdict
+- `PASS` with confidence `0.94`.
+- The prior AC3 false-green risk is closed by the seeded non-empty `archival_refs` discriminator, and all task-owned runtime gates are green.
+- Action: advance to `docs`.
+[[2026-05-05]]
+## Docs Gate
+
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | Yes | N/A | `serve/kanban/README.md:43` describes `end_work` briefly ("Finalise a work session: append timestamped note and apply outcome"); description remains accurate after move_to default change. No prose update needed. |
+| 2 | Module docstrings | Yes | N/A | `engine.py` `end_work` docstring already accurate: Note section says success advances by config sequence; move_to described as optional for reject — no stale "research" content. `agent_view.py` docstring accurate: move_to "Forbidden on success." No updates needed. |
+| 3 | External attribution | No | N/A | No external sources used. |
+| 4 | Research doc | No | N/A | No research phase for this task. |
+| 5 | Diagram maintenance (describes match) | Yes | Updated | `share/diagrams/kanban.excalidraw` (describes: `serve/kanban/src/**`) — footer updated from `(0c497432)` to `(5c71fc13)`. `share/diagrams/mcp-topology.excalidraw` (describes: `serve/kanban/src/**`) — footer updated from `(12c2add1)` to `(5c71fc13)`. |
+| 6 | Explicit diagram creation | No | N/A | No explicit diagram creation request. |
+| 7 | Deletion detection | No | N/A | No deleted files; no orphaned IN-scope docs detected. |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| `serve/kanban/src/owlbear_kanban/engine.py` | IN (docstrings) | Docstring verified accurate — no edit needed |
+| `serve/kanban/src/owlbear_kanban/agent_view.py` | IN (docstrings) | Docstring verified accurate — no edit needed |
+| `tests/test_end_work_success_1336.py` | OUT | Test file — no doc action |
+| `serve/kanban/tests/test_engine_end_work_1077.py` | OUT | Test file — no doc action |
+| `tests/test_engine_activity_session.py` | OUT | Test file — no doc action |
+| `share/diagrams/kanban.excalidraw` | IN (diagram) | Footer updated to 2026-05-05 (5c71fc13) |
+| `share/diagrams/mcp-topology.excalidraw` | IN (diagram) | Footer updated to 2026-05-05 (5c71fc13) |
+
+### Files Updated
+- `share/diagrams/kanban.excalidraw` — footer hash updated
+- `share/diagrams/mcp-topology.excalidraw` — footer hash updated
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- `.owlbear/scratch/1336-pytest.txt`
+- `.owlbear/scratch/1336-ruff.txt`
+[[2026-05-05]]
+## Audit
+
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| 1. Raw success derives next status from config | engine.py:1528 reads config.pipeline.statuses; custom-config discriminators at test:443,460 | PASS |
+| 2. No default to research | Signature at engine.py:1566 has move_to=None | PASS |
+| 3. Terminal archives with archival_reason/refs | engine.py:1534-1537; seeded-refs discriminator at test:326-342 | PASS |
+| 4. Explicit move_to for reject | Reject branch at engine.py:1548-1555; wrapper regressions in 1077 suite | PASS |
+| 5. AgentView no masking | agent_view.py:1177-1184 pass-through; comparison test at test:546-566 | PASS |
+| 6. Test file corrected | Terminal assertions at test:285,301,317 expect archive not error | PASS |
+| 7. Task-owned suites pass | quality-runner: 65 passed, 0 failed in scoped suites | PASS |
+
+### Test Results
+- Full suite: 4384 passed, 250 failed (all pre-existing unrelated debt), 5 skipped
+- Task-owned (16 tests): ALL PASS
+- ruff: clean
+
+### Architect Quality: 4/5
+Initial AC was reasonable and testable. Required 2 re-scoping cycles for proof-quality discriminators (custom config tests, seeded-refs normalization). Responsive to reviewer feedback. Minor gap: initial test-plan requirements could have been more discriminating upfront.
+
+### Deduction Breakdown
+- AC lines without evidence: 0 (all 7 pass) = 0
+- Lint violations: 0 = 0
+- AC quality (4/5, not <=3): 0
+- Missing reviewer evidence: 0 (detailed, present) = 0
+- Full-suite task-scope failures: 0 = 0
+- Background noise (250 pre-existing failures reduce cross-task regression signal): -0.02
+
+### Confidence: 0.98
+### Action: archive
+
+### Commit Integrity
+- 4 commits verified via git log --grep=1336:
+  - 81f7f7bd test: add failing tests (test-writer)
+  - d87750c5 test: correct end_work success/terminal tests (test-writer)
+  - 267fbf36 test: add AC3 archival_refs normalization discriminator (test-writer)
+  - c9ba8481 docs: update diagram footers (doc-writer)
+- No engine.py changes committed (confirmed: builder found default already correct)
