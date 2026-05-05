@@ -111,6 +111,13 @@ export default function DetailTab({ task, board, onTaskUpdated, onSelectTask, on
     }
 
     if (res.status === 409) {
+      const latestRes = await fetch(`/api/tasks/${t.id}`, { method: 'GET' })
+      if (latestRes.ok) {
+        const latestTask = (await latestRes.json()) as TaskDetail
+        onTaskUpdated?.(latestTask)
+      } else if (latestRes.status === 404) {
+        onTaskCleared?.()
+      }
       setShowConflict(true)
       return
     }
@@ -189,16 +196,22 @@ export default function DetailTab({ task, board, onTaskUpdated, onSelectTask, on
 
   function readControlValue(
     event: {
-      target?: { value?: unknown }
-      detail?: { value?: unknown }
+      target?: EventTarget | null
+      detail?: unknown
     },
   ): string {
-    if (typeof event.detail?.value === 'string') {
-      return event.detail.value
+    if (event.detail && typeof event.detail === 'object' && 'value' in event.detail) {
+      const detailValue = event.detail.value
+      if (typeof detailValue === 'string') {
+        return detailValue
+      }
     }
 
-    if (typeof event.target?.value === 'string') {
-      return event.target.value
+    if (event.target && 'value' in event.target) {
+      const value = event.target.value
+      if (typeof value === 'string') {
+        return value
+      }
     }
 
     return ''
@@ -207,7 +220,7 @@ export default function DetailTab({ task, board, onTaskUpdated, onSelectTask, on
   return (
     <div>
       {/* History tab button — always visible */}
-      <PButton data-testid="history-tab" variant="tertiary" onClick={() => void handleHistoryClick()}>
+      <PButton data-testid="history-tab" variant="secondary" onClick={() => void handleHistoryClick()}>
         History
       </PButton>
 
@@ -219,6 +232,7 @@ export default function DetailTab({ task, board, onTaskUpdated, onSelectTask, on
       {/* Editable fields */}
       <PInputText
         ref={setHideLabelAttr}
+        name="title"
         data-field="title"
         hideLabel={true}
         value={title}
@@ -227,11 +241,11 @@ export default function DetailTab({ task, board, onTaskUpdated, onSelectTask, on
       />
       <PSelect
         ref={setHideLabelAttr}
+        name="priority"
         data-field="priority"
         hideLabel={true}
         value={priority}
         onChange={(event) => setPriority(readControlValue(event))}
-        onInput={(event) => setPriority(readControlValue(event))}
       >
         <option value="someday">someday</option>
         <option value="nice-to-have">nice-to-have</option>
@@ -246,29 +260,29 @@ export default function DetailTab({ task, board, onTaskUpdated, onSelectTask, on
       ))}
       <PInputText
         ref={setHideLabelAttr}
+        name="depends_on"
         data-field="depends_on"
         hideLabel={true}
         value={dependsOn}
-        defaultValue={dependsOn}
         onChange={(event) => setDependsOn(readControlValue(event))}
         onInput={(event) => setDependsOn(readControlValue(event))}
       />
       <PInputText
         ref={setHideLabelAttr}
+        name="parent"
         data-field="parent"
         hideLabel={true}
         value={parent}
-        defaultValue={parent}
         onChange={(event) => setParent(readControlValue(event))}
         onInput={(event) => setParent(readControlValue(event))}
       />
       {t.blocked && (
         <PInputText
           ref={setHideLabelAttr}
+          name="block_reason"
           data-field="block_reason"
           hideLabel={true}
           value={blockReason}
-          defaultValue={blockReason}
           onChange={(event) => setBlockReason(readControlValue(event))}
           onInput={(event) => setBlockReason(readControlValue(event))}
         />
@@ -278,6 +292,7 @@ export default function DetailTab({ task, board, onTaskUpdated, onSelectTask, on
       {editBody ? (
         <PTextarea
           ref={setHideLabelAttr}
+          name="body"
           data-field="body"
           hideLabel={true}
           value={body}
@@ -287,7 +302,7 @@ export default function DetailTab({ task, board, onTaskUpdated, onSelectTask, on
       ) : (
         <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>{t.body}</ReactMarkdown>
       )}
-      <PButton data-testid="body-edit-toggle" variant="tertiary" onClick={() => setEditBody((v) => !v)}>
+      <PButton data-testid="body-edit-toggle" variant="secondary" onClick={() => setEditBody((v) => !v)}>
         Edit
       </PButton>
 
@@ -295,14 +310,14 @@ export default function DetailTab({ task, board, onTaskUpdated, onSelectTask, on
       <PButton data-testid="save-button" onClick={() => void handleSave()}>
         Save
       </PButton>
-      <PButton data-testid="move-backward" variant="tertiary" onClick={() => setConfirmType('move-backward')}>
+      <PButton data-testid="move-backward" variant="secondary" onClick={() => setConfirmType('move-backward')}>
         Move Backward
       </PButton>
-      <PButton data-testid="unclaim-action" variant="tertiary" onClick={() => setConfirmType('unclaim')}>
+      <PButton data-testid="unclaim-action" variant="secondary" onClick={() => setConfirmType('unclaim')}>
         Unclaim
       </PButton>
       {t.blocked && (
-        <PButton data-testid="unblock-action" variant="tertiary" onClick={() => setConfirmType('unblock')}>
+        <PButton data-testid="unblock-action" variant="secondary" onClick={() => setConfirmType('unblock')}>
           Unblock
         </PButton>
       )}
@@ -315,7 +330,7 @@ export default function DetailTab({ task, board, onTaskUpdated, onSelectTask, on
         <div data-testid="conflict-modal">
           <PButton
             data-testid="conflict-refresh"
-            variant="tertiary"
+            variant="secondary"
             onClick={() => setShowConflict(false)}
           >
             Discard changes
