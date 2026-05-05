@@ -1052,3 +1052,177 @@ class TestEndWorkEngineFallbackPath:
             pytest.raises(ToolError, match="invalid outcome"),
         ):
             await end_work(ctx, id="1", outcome="success", note="done")
+
+
+class TestEditTaskContractDurable:
+    @pytest.mark.asyncio
+    async def test_edit_task_non_empty_body_replaces_body(self, tmp_path: Path) -> None:
+        board = _make_board(tmp_path)
+        engine = KanbanEngine(board)
+        task = engine.create_task(
+            "Contract Task", body="original", status="todo", priority="important"
+        )
+        app_ctx = AppContext(engine=engine, kanban_dir=board)
+
+        result = await edit_task(_make_ctx(app_ctx), id=str(task.id), body="updated")
+
+        assert result.body == "updated"
+        persisted = engine.show_task(str(task.id))
+        assert persisted.body == "updated"
+
+    @pytest.mark.asyncio
+    async def test_edit_task_omitted_body_keeps_existing_body(self, tmp_path: Path) -> None:
+        board = _make_board(tmp_path)
+        engine = KanbanEngine(board)
+        task = engine.create_task(
+            "Contract Task", body="keep-me", status="todo", priority="important"
+        )
+        app_ctx = AppContext(engine=engine, kanban_dir=board)
+
+        result = await edit_task(_make_ctx(app_ctx), id=str(task.id), priority="critical")
+
+        assert result.body == "keep-me"
+        persisted = engine.show_task(str(task.id))
+        assert persisted.body == "keep-me"
+        assert persisted.priority == "critical"
+
+    @pytest.mark.asyncio
+    async def test_edit_task_null_body_keeps_existing_body(self, tmp_path: Path) -> None:
+        board = _make_board(tmp_path)
+        engine = KanbanEngine(board)
+        task = engine.create_task(
+            "Contract Task", body="keep-me", status="todo", priority="important"
+        )
+        app_ctx = AppContext(engine=engine, kanban_dir=board)
+
+        result = await edit_task(
+            _make_ctx(app_ctx),
+            id=str(task.id),
+            body=None,
+            priority="critical",
+        )
+
+        assert result.body == "keep-me"
+        persisted = engine.show_task(str(task.id))
+        assert persisted.body == "keep-me"
+        assert persisted.priority == "critical"
+
+    @pytest.mark.asyncio
+    async def test_edit_task_body_clear_append_conflict_does_not_mutate_storage(
+        self, tmp_path: Path
+    ) -> None:
+        board = _make_board(tmp_path)
+        engine = KanbanEngine(board)
+        task = engine.create_task(
+            "Contract Task", body="existing", status="todo", priority="important"
+        )
+        app_ctx = AppContext(engine=engine, kanban_dir=board)
+
+        with pytest.raises(ToolError):
+            await edit_task(
+                _make_ctx(app_ctx),
+                id=str(task.id),
+                body="",
+                append_body="more",
+            )
+
+        persisted = engine.show_task(str(task.id))
+        assert persisted.body == "existing"
+
+    @pytest.mark.asyncio
+    async def test_edit_task_empty_body_clears_body(self, tmp_path: Path) -> None:
+        board = _make_board(tmp_path)
+        engine = KanbanEngine(board)
+        task = engine.create_task(
+            "Contract Task", body="existing content", status="todo", priority="important"
+        )
+        app_ctx = AppContext(engine=engine, kanban_dir=board)
+
+        result = await edit_task(_make_ctx(app_ctx), id=str(task.id), body="")
+
+        assert result.body == ""
+        persisted = engine.show_task(str(task.id))
+        assert persisted.body == ""
+
+    @pytest.mark.asyncio
+    async def test_edit_task_parent_zero_clears_parent(self, tmp_path: Path) -> None:
+        board = _make_board(tmp_path)
+        engine = KanbanEngine(board)
+        parent_task = engine.create_task("Parent", status="todo", priority="important")
+        child_task = engine.create_task("Child", status="todo", priority="important")
+        engine.edit_task(str(child_task.id), parent=parent_task.id)
+        app_ctx = AppContext(engine=engine, kanban_dir=board)
+
+        result = await edit_task(_make_ctx(app_ctx), id=str(child_task.id), parent=0)
+
+        assert result.parent is None
+        persisted = engine.show_task(str(child_task.id))
+        assert persisted.parent is None
+
+    @pytest.mark.asyncio
+    async def test_edit_task_title_update_succeeds(self, tmp_path: Path) -> None:
+        board = _make_board(tmp_path)
+        engine = KanbanEngine(board)
+        task = engine.create_task("Original Title", status="todo", priority="important")
+        app_ctx = AppContext(engine=engine, kanban_dir=board)
+
+        result = await edit_task(_make_ctx(app_ctx), id=str(task.id), title="Updated Title")
+
+        assert result.title == "Updated Title"
+        persisted = engine.show_task(str(task.id))
+        assert persisted.title == "Updated Title"
+
+    @pytest.mark.asyncio
+    async def test_edit_task_empty_title_raises_tool_error(self, tmp_path: Path) -> None:
+        board = _make_board(tmp_path)
+        engine = KanbanEngine(board)
+        task = engine.create_task("My Task", status="todo", priority="important")
+        app_ctx = AppContext(engine=engine, kanban_dir=board)
+
+        with pytest.raises(ToolError):
+            await edit_task(_make_ctx(app_ctx), id=str(task.id), title="")
+
+    @pytest.mark.asyncio
+    async def test_edit_task_whitespace_title_raises_tool_error(self, tmp_path: Path) -> None:
+        board = _make_board(tmp_path)
+        engine = KanbanEngine(board)
+        task = engine.create_task("My Task", status="todo", priority="important")
+        app_ctx = AppContext(engine=engine, kanban_dir=board)
+
+        with pytest.raises(ToolError):
+            await edit_task(_make_ctx(app_ctx), id=str(task.id), title="   ")
+
+    @pytest.mark.asyncio
+    async def test_edit_task_already_empty_body_clear_raises_noop(
+        self, tmp_path: Path
+    ) -> None:
+        board = _make_board(tmp_path)
+        engine = KanbanEngine(board)
+        task = engine.create_task("My Task", status="todo", priority="important")
+        # Task has no body — already empty
+        app_ctx = AppContext(engine=engine, kanban_dir=board)
+
+        with pytest.raises(ToolError):
+            await edit_task(_make_ctx(app_ctx), id=str(task.id), body="")
+
+
+class TestEditTaskToolSchemaContract:
+    def test_edit_task_tool_schema_keeps_body_optional_and_nullable(self) -> None:
+        tool = next(
+            t for t in _server_mod.mcp._tool_manager._tools.values() if t.name == "edit_task"
+        )
+        required_fields = set(tool.parameters.get("required", []))
+        body_schema = tool.parameters["properties"]["body"]
+
+        assert "body" not in required_fields
+        any_of = body_schema.get("anyOf", [])
+        assert any(option.get("type") == "null" for option in any_of)
+
+    def test_edit_task_parent_description_documents_clear_sentinel(self) -> None:
+        tool = next(
+            t for t in _server_mod.mcp._tool_manager._tools.values() if t.name == "edit_task"
+        )
+        parent_description = tool.parameters["properties"]["parent"].get(
+            "description", ""
+        )
+        assert "0 to clear" in parent_description
