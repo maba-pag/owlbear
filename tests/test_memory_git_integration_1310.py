@@ -368,3 +368,203 @@ class TestFromAC_CommitMessageFormat:
         assert _commit_message(git_repo) == (
             "chore: memory review batch (mcp-memory, reviewer)"
         )
+
+
+# ---------------------------------------------------------------------------
+# Retry: Revised AC2 (td:1) — save_memory discriminator: file exists AND untracked
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_SaveNoCommit_FilesystemProof:
+    """Revised AC2: save_memory places file on disk without git-adding it.
+
+    Strengthens the existing commit-count assertion by proving the file is both
+    written to disk and visible as untracked (not staged) in git status.
+    """
+
+    def test_save_writes_file_as_untracked(self, git_repo: Path) -> None:
+        """engine.write writes the pending file to disk without staging it.
+
+        Discriminator: the file must exist on disk AND appear as '??' (untracked)
+        in git status --porcelain — not as 'A' (staged) or 'M' (modified staged).
+        """
+        memory_dir = git_repo / "memory"
+        engine = MemoryEngine(memory_dir=memory_dir)
+        written_path = engine.write(_make_entry(id=_uuid(10), state="pending"))
+
+        assert written_path.exists(), "write() must create the file on disk"
+
+        # Use --untracked-files=all so individual files inside new dirs are listed
+        status_output = subprocess.run(  # noqa: S603
+            ["git", "status", "--porcelain", "--untracked-files=all"],  # noqa: S607
+            capture_output=True,
+            text=True,
+            check=True,
+            cwd=git_repo,
+            stdin=subprocess.DEVNULL,
+        ).stdout
+
+        filename = written_path.name
+        matching = [line for line in status_output.splitlines() if filename in line]
+        assert len(matching) == 1, f"{filename} not found in git status output"
+        assert matching[0].startswith("??"), (
+            f"Expected '??' (untracked) prefix, got: {matching[0]!r}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Retry: Revised AC3 (td:2) — curation batch with curated AND soft-deleted entries
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_CurationBatch_MixedTypes:
+    """Revised AC3: curation batch with both curated and soft-deleted entries → single commit.
+
+    The original AC2 test only exercised multiple curated entries.  This class
+    adds the mixed-type scenario the reviewer identified as missing.
+    """
+
+    def test_curation_batch_with_curated_and_deleted(self, git_repo: Path) -> None:
+        """One curated entry + one soft-deleted entry → exactly one new commit."""
+        memory_dir = git_repo / "memory"
+        engine = MemoryEngine(memory_dir=memory_dir)
+
+        engine.write(_make_entry(id=_uuid(1), state="curated", title="Keep This"))
+        engine.write(_make_entry(id=_uuid(2), state="deleted", title="Mark Deleted"))
+
+        before = _commit_count(git_repo)
+        _commit_batch(memory_dir, session_type="curation")
+        after = _commit_count(git_repo)
+
+        assert after - before == 1, "Mixed curated+deleted curation must produce exactly one commit"
+
+
+# ---------------------------------------------------------------------------
+# Retry: Revised AC4 (td:2) — review batch with approved, curated AND soft-deleted entries
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ReviewBatch_MixedTypes:
+    """Revised AC4: review batch with approved, curated, and soft-deleted → single commit.
+
+    The original AC3 tests only covered approved+curated combinations.  This class
+    adds the three-way mixed scenario the reviewer identified as missing.
+    """
+
+    def test_review_batch_with_approved_curated_and_deleted(
+        self, git_repo: Path
+    ) -> None:
+        """One approved + one curated + one soft-deleted → exactly one new commit."""
+        memory_dir = git_repo / "memory"
+        engine = MemoryEngine(memory_dir=memory_dir)
+
+        engine.write(
+            _make_entry(
+                id=_uuid(1), state="approved", title="Approved", approved_at=_TS
+            )
+        )
+        engine.write(_make_entry(id=_uuid(2), state="curated", title="Curated"))
+        engine.write(_make_entry(id=_uuid(3), state="deleted", title="Soft Deleted"))
+
+        before = _commit_count(git_repo)
+        _commit_batch(memory_dir, session_type="review")
+        after = _commit_count(git_repo)
+
+        assert after - before == 1, (
+            "Review batch with approved+curated+deleted must produce exactly one commit"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Retry: Revised AC6 (td:1) — soft-deleted file content assertion
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_SoftDeletedContent:
+    """Revised AC6: committed soft-deleted file must contain 'state: deleted' in frontmatter.
+
+    The original AC5 test only checked that the filename appeared in git history.
+    This class adds the content-level discriminator the reviewer required.
+    """
+
+    def test_soft_deleted_content_has_deleted_state_in_commit(
+        self, git_repo: Path
+    ) -> None:
+        """The committed version of a soft-deleted file has 'state: deleted' in frontmatter."""
+        memory_dir = git_repo / "memory"
+        engine = MemoryEngine(memory_dir=memory_dir)
+
+        deleted_path = engine.write(
+            _make_entry(id=_uuid(20), state="deleted", title="Soft Deleted Content")
+        )
+        rel_path = str(deleted_path.relative_to(git_repo))
+
+        _commit_batch(memory_dir, session_type="curation")
+
+        committed_content = _git("show", f"HEAD:{rel_path}", cwd=git_repo)
+        assert "state: deleted" in committed_content, (
+            f"Committed file must contain 'state: deleted' in frontmatter, got:\n{committed_content}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Retry: Revised AC8 (td:2) — scoped staging regression
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ScopedStagingRegression:
+    """Revised AC8: commit_batch must only commit the memory paths it staged.
+
+    A pre-staged unrelated file must NOT be swept into the memory batch commit.
+    This test fails against the current implementation because git.py uses
+    'git commit -m <msg>' without '-- <paths>', causing it to commit all
+    currently-staged files regardless of whether they belong to the memory store.
+    """
+
+    def test_commit_batch_does_not_sweep_unrelated_staged_file(
+        self, git_repo: Path
+    ) -> None:
+        """Pre-staged unrelated file is excluded from the memory batch commit.
+
+        Setup: stage an unrelated file, then call commit_batch with a curated entry.
+        Expected: memory batch commit contains only the memory file; unrelated.txt
+        remains staged (not committed) so it can be included in a separate commit.
+        """
+        memory_dir = git_repo / "memory"
+        engine = MemoryEngine(memory_dir=memory_dir)
+        engine.write(_make_entry(id=_uuid(1), state="curated", title="Memory Entry"))
+
+        # Stage an unrelated file before calling commit_batch
+        unrelated = git_repo / "unrelated.txt"
+        unrelated.write_text("unrelated content\n")
+        subprocess.run(  # noqa: S603
+            ["git", "add", "--", "unrelated.txt"],  # noqa: S607
+            capture_output=True,
+            check=True,
+            cwd=git_repo,
+            stdin=subprocess.DEVNULL,
+        )
+
+        _commit_batch(memory_dir, session_type="curation")
+
+        # unrelated.txt must NOT appear in the files changed by the last commit
+        committed_files = _git(
+            "diff-tree", "--no-commit-id", "-r", "--name-only", "HEAD",
+            cwd=git_repo,
+        ).splitlines()
+        assert "unrelated.txt" not in committed_files, (
+            "commit_batch must not sweep pre-staged unrelated files into the memory commit"
+        )
+
+        # unrelated.txt must still be staged (indexed as 'A' — new file)
+        status_lines = subprocess.run(  # noqa: S603
+            ["git", "status", "--porcelain"],  # noqa: S607
+            capture_output=True,
+            text=True,
+            check=True,
+            cwd=git_repo,
+            stdin=subprocess.DEVNULL,
+        ).stdout.splitlines()
+        assert any(
+            "unrelated.txt" in line and line.startswith("A") for line in status_lines
+        ), "unrelated.txt must remain staged after commit_batch"
