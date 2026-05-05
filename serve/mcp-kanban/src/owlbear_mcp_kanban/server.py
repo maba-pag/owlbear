@@ -580,7 +580,7 @@ async def end_work(  # noqa: PLR0913
     *,
     id: StrId,  # noqa: A002
     note: str | None = None,
-    outcome: Literal["success", "block", "reject", "release"] = "success",
+    outcome: Literal["success", "fail", "reject", "block", "release"] = "success",
     block_reason: str | None = None,
     move_to: str | None = None,
     archival_reason: str | None = None,
@@ -684,8 +684,6 @@ for _tool_name in (
 # Patch input parameter descriptions for better agent discoverability.
 # FastMCP auto-generates titles from argument names but has no descriptions.
 # ---------------------------------------------------------------------------
-_STATUSES = ["research", "backlog", "todo", "in-progress", "review", "docs", "done"]
-_PRIORITIES = ["someday", "nice-to-have", "important", "needed", "critical"]
 _SORT_FIELDS = ["priority", "updated", "id", "title", "status", "created"]
 
 
@@ -704,9 +702,7 @@ def _patch_params(
 _patch_params(
     "list_tasks",
     {
-        "status": {"enum": _STATUSES},
         "tag": {"description": "Filter by tag, e.g. 'phase-2'"},
-        "priority": {"enum": _PRIORITIES},
         "search": {"description": "Full-text search in titles and bodies"},
         "sort": {"enum": _SORT_FIELDS},
         "blocked": {
@@ -719,18 +715,18 @@ _patch_params(
     "create_task",
     {
         "body": {"description": "Markdown body (objectives, AC, context)"},
-        "depends_on": {"description": "Comma-separated dependency task IDs"},
+        "depends_on": {"description": "JSON array of dependency task IDs"},
         "parent": {"description": "Parent task ID for subtask hierarchy"},
-        "priority": {"enum": _PRIORITIES},
-        "status": {"enum": _STATUSES},
-        "tags": {"description": "Comma-separated tags"},
+        "tags": {"description": "JSON array of tags"},
     },
 )
 
 _patch_params(
     "move_task",
     {
-        "status": {"enum": [*_STATUSES, "archived"]},
+        "status": {
+            "description": "Target status name, or 'archived' to archive the task"
+        },
     },
 )
 
@@ -738,22 +734,15 @@ _patch_params(
     "edit_task",
     {
         "body": {"description": "Replace the entire task body"},
-        "block": {"description": "Block reason (empty = no change)"},
-        "tags": {"description": "Replace all tags (comma-separated)"},
-        "priority": {"enum": _PRIORITIES},
         "append_body": {"description": "Append to body (preserves existing content)"},
-        "status": {"enum": _STATUSES},
         "timestamp": {"description": "Prepend [[date]] timestamp to appended body"},
         "add_dep": {
-            "description": "Add dependency task IDs (comma-separated, e.g. '601,602')"
+            "description": "Add dependency task IDs (JSON array, e.g. [601, 602])"
         },
         "remove_dep": {
-            "description": "Remove dependency task IDs (comma-separated, e.g. '601,602')"
+            "description": "Remove dependency task IDs (JSON array, e.g. [601, 602])"
         },
         "parent": {"description": "Parent task ID for subtask hierarchy"},
-        "depends_on": {
-            "description": "Not supported on edit. Use add_dep / remove_dep instead."
-        },
     },
 )
 
@@ -762,12 +751,15 @@ _patch_params(
     {
         "note": {"description": "Summary note appended to task body"},
         "outcome": {
-            "description": "success = advance, fail = stay, block = mark blocked, reject = move back",
+            "description": (
+                "success = advance, fail = record failure and release claim, "
+                "reject = move back, block = mark blocked and release claim, "
+                "release = release claim without changing status"
+            ),
         },
         "block_reason": {"description": "Required when outcome=block"},
         "move_to": {
-            "enum": _STATUSES,
-            "description": "Target status when outcome=reject",
+            "description": "Target status when outcome=reject or optional status when outcome=success",
         },
     },
 )

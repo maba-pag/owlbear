@@ -44,8 +44,7 @@ class AgentView:
         "\u26a0\ufe0f Task body is large (>100 KB); consider splitting."
     )
     _BLOCK_AR_HINT = (
-        "\u26a0\ufe0f ACTION REQUIRED: Create a Decision Request for this block via the"
-        " scribe agent (see w-decision-routing)."
+        "\u26a0\ufe0f ACTION REQUIRED: Create a Decision Request via the create_dr tool."
         " Blocks without a DR are invisible to the pipeline."
     )
 
@@ -1000,7 +999,8 @@ class AgentView:
             move_to:         Required when *outcome* is ``"reject"``; target
                              status or ``"archived"``.  Optional additional
                              status move when *outcome* is ``"block"``.
-                             Forbidden on ``"success"`` and ``"release"``.
+                             Optional status move on ``"success"``.
+                             Forbidden on ``"release"``.
             block_reason:    Non-empty, non-whitespace string required when
                              *outcome* is ``"block"``; stored on the task.
                              Forbidden on all other outcomes.
