@@ -124,7 +124,7 @@ jobs:
 
       - name: Install uv for MCP dev-source gate
         if: ${{ inputs.sync_serve }}
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # v8.1.0
 
       - name: Verify MCP surface contract from dev source
         if: ${{ inputs.sync_serve }}
