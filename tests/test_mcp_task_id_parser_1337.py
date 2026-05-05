@@ -13,6 +13,7 @@ AC coverage:
   ac3-whitespace  — ' 42 ' rejected (whitespace-padded)
   ac3-mixed       — '42abc' rejected (mixed decimal+alpha)
   ac4-message     — ToolError message mentions field name or 'integer'/'numeric'
+  ac4-show-string — show_task string rejection uses field-specific message ("positive")
   ac5-no-side-effect — rejected move_task, edit_task, start_work leave no state change
   ac6-regression  — valid int IDs continue to work on all task-id accepting endpoints
   ac7-breadth     — parser tested beyond create_dr, across every endpoint family
@@ -21,6 +22,11 @@ All tests FAIL (RED phase):
   - TestFromAC_SharedParserContract: ImportError at collection time — parse_task_id does
     not exist in owlbear_mcp_kanban.server yet; pytest cannot collect the file.
   - All remaining classes fail transitively due to collection failure.
+  - TestFromAC_ShowTaskStringBoundary: FAIL (match pattern mismatch) — current show_task
+    dispatches malformed strings through ShowTaskParams PydanticValidationError path,
+    producing a generic "valid integer" message instead of the parse_task_id
+    field-specific "id must be a positive integer" message.  The discriminating pattern
+    is r"positive" which Pydantic does NOT emit but parse_task_id DOES.
 """
 
 from __future__ import annotations
@@ -612,3 +618,109 @@ class TestFromAC_ValidIdsRegression:
         task_id_arg = call_args.kwargs.get("task_id") if call_args.kwargs else (call_args.args[0] if call_args.args else None)
         assert task_id_arg == 1, f"show_task must receive task_id=1; got {task_id_arg!r}"
         assert isinstance(task_id_arg, int), f"task_id must be int, got {type(task_id_arg)}"
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_ShowTaskStringBoundary — AC4, AC7 (rework cycle)
+# ---------------------------------------------------------------------------
+
+# Discriminating match: parse_task_id emits "id must be a positive integer"
+# Pydantic v2 emits "Input should be a valid integer, unable to parse string
+# as an integer [type=int_parsing, ...]" — no "positive" in that message.
+# So r"positive" is ONLY satisfied by the parse_task_id field-specific contract.
+_FIELD_SPECIFIC_MATCH = r"positive"
+
+
+class TestFromAC_ShowTaskStringBoundary:
+    """show_task malformed-string inputs must use the parse_task_id field-specific
+    ToolError contract ("id must be a positive integer"), NOT the generic Pydantic
+    validation error path ("valid integer, unable to parse...").
+
+    These tests are the 'malformed-string show_task boundary tests' required by the
+    rework scope after the second reviewer cycle identified that show_task still
+    used id: int = 0, routing strings through ShowTaskParams -> PydanticValidationError
+    -> ToolError(str(exc)) before parse_task_id was reached.
+
+    Discriminating pattern: r"positive"
+      - parse_task_id output: "id must be a positive integer"      → MATCHES
+      - Pydantic output:      "Input should be a valid integer, …"  → NO MATCH
+
+    FAIL path (current implementation):
+      show_task(id="abc") → ShowTaskParams.model_validate({"id": "abc"}) →
+      PydanticValidationError → ToolError("1 validation error for ShowTaskParams…
+      valid integer…") → does NOT contain "positive" →
+      pytest.raises(match=r"positive") FAILS → RED gate satisfied.
+
+    PASS path (after builder fix: id parameter changed to StrId):
+      show_task(id="abc") → parse_task_id("abc", field="id") →
+      ToolError("id must be a positive integer") → contains "positive" →
+      pytest.raises(match=r"positive") PASSES.
+    """
+
+    @pytest.mark.asyncio
+    async def test_show_task_rejects_path_traversal_string(
+        self, app_ctx: AppContext
+    ) -> None:
+        """AC4/AC7: show_task("../foo") must raise field-specific ToolError.
+
+        "positive" in the error proves parse_task_id was reached, not the
+        PydanticValidationError fallback path.
+
+        FAIL (current): generic Pydantic error "valid integer" lacks "positive".
+        """
+        ctx = _make_mcp_ctx(app_ctx)
+        with pytest.raises(ToolError, match=_FIELD_SPECIFIC_MATCH):
+            await mcp_show_task(ctx, id="../foo")  # type: ignore[arg-type]
+
+    @pytest.mark.asyncio
+    async def test_show_task_rejects_alpha_string(
+        self, app_ctx: AppContext
+    ) -> None:
+        """AC4/AC7: show_task("abc") must raise field-specific ToolError.
+
+        FAIL (current): generic Pydantic error lacks "positive".
+        """
+        ctx = _make_mcp_ctx(app_ctx)
+        with pytest.raises(ToolError, match=_FIELD_SPECIFIC_MATCH):
+            await mcp_show_task(ctx, id="abc")  # type: ignore[arg-type]
+
+    @pytest.mark.asyncio
+    async def test_show_task_rejects_empty_string(
+        self, app_ctx: AppContext
+    ) -> None:
+        """AC4/AC7: show_task("") must raise field-specific ToolError.
+
+        FAIL (current): generic Pydantic error lacks "positive".
+        """
+        ctx = _make_mcp_ctx(app_ctx)
+        with pytest.raises(ToolError, match=_FIELD_SPECIFIC_MATCH):
+            await mcp_show_task(ctx, id="")  # type: ignore[arg-type]
+
+    @pytest.mark.asyncio
+    async def test_show_task_rejects_shell_injection_string(
+        self, app_ctx: AppContext
+    ) -> None:
+        """AC4/AC7: show_task("1; rm -rf") must raise field-specific ToolError.
+
+        FAIL (current): generic Pydantic error lacks "positive".
+        """
+        ctx = _make_mcp_ctx(app_ctx)
+        with pytest.raises(ToolError, match=_FIELD_SPECIFIC_MATCH):
+            await mcp_show_task(ctx, id="1; rm -rf")  # type: ignore[arg-type]
+
+    @pytest.mark.asyncio
+    async def test_show_task_rejects_whitespace_padded_string(
+        self, app_ctx: AppContext
+    ) -> None:
+        """AC4/AC7: show_task(" 42 ") must raise field-specific ToolError.
+
+        Pydantic strips whitespace before int coercion; parse_task_id rejects
+        whitespace-padded strings via .strip() check.
+
+        FAIL (current): Pydantic may accept " 42 " as int 42, letting it pass
+        Pydantic validation and reach parse_task_id — but parse_task_id should
+        reject the padded string.  Either way the "positive" match discriminates.
+        """
+        ctx = _make_mcp_ctx(app_ctx)
+        with pytest.raises(ToolError, match=_FIELD_SPECIFIC_MATCH):
+            await mcp_show_task(ctx, id=" 42 ")  # type: ignore[arg-type]
