@@ -77,6 +77,32 @@ class SearchResult(TypedDict):
     score: float
     snippet: str
     entity_type: str | None
+    retrieval_path: str
+    entities: list[SearchEntity]
+    related_sources: list[RelatedSource]
+    source: SearchSource
+
+
+class SearchEntity(TypedDict):
+    """A single entity mention attached to a search result."""
+
+    name: str
+    type: str
+
+
+class RelatedSource(TypedDict):
+    """A relationship edge from this result to another source."""
+
+    name: str
+    relationship: str
+    entity: str
+
+
+class SearchSource(TypedDict):
+    """Source metadata attached to a search result."""
+
+    name: str
+    url: str
 
 
 class SourceInfo(TypedDict):
@@ -131,6 +157,67 @@ def _extract_section_path(metadata: str | None) -> str | None:
         return None
     section_path = parsed.get("section_path")
     return section_path if isinstance(section_path, str) else None
+
+
+def _serialize_search_entities(value: object) -> list[SearchEntity]:
+    """Normalize result entities to a list of {name, type} objects."""
+    if not isinstance(value, list):
+        return []
+
+    entities: list[SearchEntity] = []
+    for item in value:
+        if isinstance(item, dict):
+            name = item.get("name")
+            entity_type = item.get("type")
+        else:
+            name = getattr(item, "name", None)
+            entity_type = getattr(item, "type", None)
+        if isinstance(name, str) and isinstance(entity_type, str):
+            entities.append({"name": name, "type": entity_type})
+    return entities
+
+
+def _serialize_related_sources(value: object) -> list[RelatedSource]:
+    """Normalize related_sources to {name, relationship, entity} objects."""
+    if not isinstance(value, list):
+        return []
+
+    related_sources: list[RelatedSource] = []
+    for item in value:
+        if isinstance(item, dict):
+            name = item.get("name")
+            relationship = item.get("relationship")
+            entity = item.get("entity")
+        else:
+            name = getattr(item, "name", None)
+            relationship = getattr(item, "relationship", None)
+            entity = getattr(item, "entity", None)
+        if (
+            isinstance(name, str)
+            and isinstance(relationship, str)
+            and isinstance(entity, str)
+        ):
+            related_sources.append(
+                {"name": name, "relationship": relationship, "entity": entity}
+            )
+    return related_sources
+
+
+def _serialize_source(value: object) -> SearchSource:
+    """Normalize source metadata to a {name, url} object."""
+    name = getattr(value, "name", None)
+    url = getattr(value, "url", None)
+
+    if not isinstance(url, str):
+        config = getattr(value, "config", None)
+        config_url = getattr(config, "url", None)
+        if isinstance(config_url, str):
+            url = config_url
+
+    return {
+        "name": name if isinstance(name, str) else "",
+        "url": url if isinstance(url, str) else "",
+    }
 
 
 async def get_next_batch(ctx: Context, limit: int = 10) -> list[EnrichmentChunk]:
@@ -562,15 +649,26 @@ async def search_knowledge(
     if qs is None:
         return "error: Knowledge service not available."
     results = await qs.query(query, top_k=limit, scopes=scopes)
-    return [
-        {
-            "title": r.title,
-            "score": r.score,
-            "snippet": r.snippet,
-            "entity_type": r.entity_type,
-        }
-        for r in results
-    ]
+    serialized: list[SearchResult] = []
+    for r in results:
+        retrieval_path = getattr(r, "retrieval_path", "vector")
+        serialized.append(
+            {
+                "title": r.title,
+                "score": r.score,
+                "snippet": r.snippet,
+                "entity_type": r.entity_type,
+                "retrieval_path": (
+                    retrieval_path if isinstance(retrieval_path, str) else "vector"
+                ),
+                "entities": _serialize_search_entities(getattr(r, "entities", [])),
+                "related_sources": _serialize_related_sources(
+                    getattr(r, "related_sources", [])
+                ),
+                "source": _serialize_source(getattr(r, "source", None)),
+            }
+        )
+    return serialized
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
