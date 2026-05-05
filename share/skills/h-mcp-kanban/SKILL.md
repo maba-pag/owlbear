@@ -1,6 +1,6 @@
 ---
 name: h-mcp-kanban
-description: "Handbook: Owlbear Kanban MCP tool reference — 8 tools for programmatic board management"
+description: "Handbook: Owlbear Kanban MCP tool reference — 9 tools for programmatic board management"
 user-invocable: false
 ---
 
@@ -14,19 +14,20 @@ For pipeline conventions and claiming protocol, see `r-pipeline-protocol`.
 
 ## Tool Summary
 
-Exactly 8 tools are exposed:
+Exactly 9 tools are exposed:
 
 <!-- markdownlint-disable MD056 -- pipe chars in Python union types (str | None) inside table cells -->
 | Tool | Signature |
 |------|-----------|
 | `list_tasks` | `list_tasks(status: str | None = None, priority: str | None = None, tag: str | None = None, archival_reason: str | None = None, ids: list[int] | None = None, unclaimed: bool = False, blocked: bool | None = None, parent: int | None = None, search: str | None = None, sort: str | None = None, reverse: bool = False, limit: int = 0)` |
-| `show_task` | `show_task(id: int, section: str | None = None)` |
+| `show_task` | `show_task(id: str | int, section: str | None = None)` |
 | `pick_tasks` | `pick_tasks(wave_size: int | None = None, max_waves: int = 3)` |
 | `create_task` | `create_task(title: str, body: str = "", priority: str = "needed", tags: list[str] | None = None, parent: int | None = None, depends_on: list[int] | None = None)` |
-| `edit_task` | `edit_task(id: int, body: str | None = None, append_body: str | None = None, timestamp: bool = False, priority: str | None = None, parent: int | None = None, add_dep: list[int] | None = None, remove_dep: list[int] | None = None, add_tag: list[str] | None = None, remove_tag: list[str] | None = None, block_reason: str | None = None, archival_reason: str | None = None, archival_refs: list[int] | None = None)` |
-| `move_task` | `move_task(id: int, status: str, archival_reason: str | None = None, archival_refs: list[int] | None = None)` |
-| `start_work` | `start_work(id: int)` |
-| `end_work` | `end_work(id: int, outcome: str, move_to: str | None = None, note: str | None = None, archival_reason: str | None = None, archival_refs: list[int] | None = None, block_reason: str | None = None)` |
+| `edit_task` | `edit_task(id: str | int, body: str | None = None, append_body: str | None = None, timestamp: bool = False, priority: str | None = None, parent: int | None = None, add_dep: list[int] | None = None, remove_dep: list[int] | None = None, add_tag: list[str] | None = None, remove_tag: list[str] | None = None, block_reason: str | None = None, archival_reason: str | None = None, archival_refs: list[int] | None = None)` |
+| `move_task` | `move_task(id: str | int, status: str, archival_reason: str | None = None, archival_refs: list[int] | None = None)` |
+| `start_work` | `start_work(id: str | int)` |
+| `end_work` | `end_work(id: str | int, outcome: str, move_to: str | None = None, note: str | None = None, archival_reason: str | None = None, archival_refs: list[int] | None = None, block_reason: str | None = None)` |
+| `create_dr` | `create_dr(task_id: str, agent: str, request_type: str, body: str)` |
 <!-- markdownlint-enable MD056 -->
 
 ### Filter and Retrieval Additions
