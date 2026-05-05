@@ -2,10 +2,10 @@
 id: 1306
 title: 'P1-05: RED — Mutation tool tests (save, list, read, curate, delete, approve
   — validation + hints)'
-status: docs
+status: archived
 priority: needed
 created: 2026-05-04T01:32:18.531671+00:00
-updated: 2026-05-04T23:17:43.911611+00:00
+updated: 2026-05-05T00:22:07.696320+00:00
 tags:
 - phase-2
 - scope:mcp-memory
@@ -625,3 +625,40 @@ All 47 tests PASS against pre-existing implementation (commit deae8a95). Impleme
 - PASS
 - Confidence: 0.93
 - Action: advance to docs. The prior proof-quality blockers from earlier review cycles are cleared under the latest 3rd-pass architecture refinement, and the remaining concerns are residual robustness gaps rather than current AC failures.
+[[2026-05-04]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | Yes | Updated | `serve/mcp-memory/README.md` — removed "Curator-only"/"User-only" role labels from tools table; updated `OWLBEAR_MEMORY_CALLER` description (no longer says "access-control checks"); removed `MEMORY_TOOLS_EXCLUDE` row (builder removed `_apply_tool_exclusions`, env var has no runtime effect) |
+| 2 | Module docstrings | Yes | N/A | New public functions `save_memory`, `list_memories`, `read_memory`, `approve_memory` all have adequate one-line docstrings in `tools.py`. No changes required. |
+| 3 | External attribution | No | N/A | No external patterns used; task is test/assertion-tightening only |
+| 4 | Research doc | No | N/A | Research gate passed (T1 autonomous); no separate research doc produced |
+| 5 | Diagram maintenance (describes match) | Yes | Updated | `memory-layers.excalidraw` footer updated 2026-05-04 (86eb7f9a) → 2026-05-05 (d7b481da); `mcp-topology.excalidraw` footer updated (0c497432) → (d7b481da). Both have `describes` globs matching `serve/mcp-memory/src/**`. |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation requested in task body |
+| 7 | Deletion detection | No | N/A | No files deleted in changed-files set |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| `serve/mcp-memory/src/owlbear_mcp_memory/tools.py` | IN (docstrings) | Verified — docstrings adequate, no edits needed |
+| `serve/mcp-memory/src/owlbear_mcp_memory/server.py` | IN (docstrings) | Verified — existing docstrings accurate, no edits needed |
+| `tests/test_mutation_tools_1306.py` | OUT | No action |
+| `serve/mcp-memory/README.md` | IN | Updated — 3 doc inaccuracies corrected |
+| `share/diagrams/memory-layers.excalidraw` | IN | Footer updated |
+| `share/diagrams/mcp-topology.excalidraw` | IN | Footer updated |
+
+### Files Updated
+- `serve/mcp-memory/README.md`
+- `share/diagrams/memory-layers.excalidraw`
+- `share/diagrams/mcp-topology.excalidraw`
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no `1306-*` scratch files existed)
+
+Commit: 12c2add1
+[[2026-05-05]]
+## Audit\n\n### AC Verification\n| AC Line | Evidence | Status |\n|---------|----------|--------|\n| save_memory creates pending + discriminating hint | tests/test_mutation_tools_1306.py:99, :209; 47/47 green | PASS |\n| list_memories metadata/sort/filter incl same-state ordering | tests/test_mutation_tools_1306.py:253-428; 7 tests green | PASS |\n| read_memory full entry + invalid/deleted errors | tests/test_mutation_tools_1306.py:469-554; 4 tests green | PASS |\n| curate_memory validates both confidence bounds | tests/test_mutation_tools_1306.py:661 (confidence=1.5 upper); :637 (0.5 lower); green | PASS |\n| curate_memory transition-specific hints (updat required) | tests/test_mutation_tools_1306.py:722-833; \"updat\" keyword required, no fallback | PASS |\n| delete_memory hard/soft hints | tests/test_mutation_tools_1306.py:874-956; 5 tests green | PASS |\n| approve_memory curated-only | tests/test_mutation_tools_1306.py:983-1054; 5 tests green | PASS |\n| OWLBEAR_MEMORY_CALLER env var no effect | tests/test_mutation_tools_1306.py:1133-1154; monkeypatch + success assertion | PASS |\n| MEMORY_TOOLS_EXCLUDE no effect | tests/test_mutation_tools_1306.py:1163, :1182; absence + source-text scan | PASS |\n| validation errors use Brief keywords (provide, not categor) | tests/test_mutation_tools_1306.py:1214-1395; 6 tests green | PASS |\n| no collection-time ImportError | localized imports; all 47 tests collected and ran | PASS |\n\n### Test Results\n- Full suite: 4369 passed, 242 failed, 4 skipped\n- Task-scoped (tests/test_mutation_tools_1306.py): 47 passed, 0 failed\n- 50 mcp-memory adjacent failures (test_mcp_memory_1266.py) are pre-existing schema-evolution debt (Pydantic model: missing source_agent, changed categories enum, scope_agents type). NOT caused by #1306 changes.\n- Ruff: clean on all task files\n\n### Commit Integrity\n- deae8a95: feat: implement mutation tool UX flows (#1306, builder)\n- 987fb27c: chore: update tests (includes #1306 3rd-pass assertion tightening)\n- 12c2add1: docs: update mcp-memory README and diagram footers (#1306, doc-writer)\n\n### Architect Quality: 3/5\nOriginal AC had notable assertion-specificity gaps (key-presence-only hints, missing upper confidence bound, proxy env-var assertions) that required 2 reviewer rejections before passing. Eventually delivered tight AC on 3rd loop-breaker pass. Gaps were caught by reviewer, not architect.\n\n### Deduction Breakdown\n- AC quality score 3/5: -0.03\n- All 11 AC lines have evidence: no deduction\n- Lint clean: no deduction\n- Reviewer evidence present and detailed: no deduction\n- Full-suite failures not in task scope: no deduction\n\n### Confidence: 0.97\n### Action: archive
