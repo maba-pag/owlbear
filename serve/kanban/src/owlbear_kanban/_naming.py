@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import re
+from pathlib import PurePosixPath, PureWindowsPath
 from typing import TYPE_CHECKING
+
+from owlbear_kanban.errors import ConfigError
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -50,6 +53,27 @@ def validate_path_containment(tasks_dir: Path, path: Path) -> None:
     except ValueError:
         msg = f"Path is outside tasks_dir '{tasks_dir}': {path}"
         raise PermissionError(msg) from None
+
+
+def validate_config_path_containment(path_value: str) -> None:
+    """Reject config path strings that can escape the board directory."""
+    if PurePosixPath(path_value).is_absolute() or PureWindowsPath(path_value).is_absolute():
+        raise ConfigError(
+            code="ERR_PATH_ESCAPE",
+            user_message=(
+                "Configured path must be board-relative and must not be absolute: "
+                f"{path_value!r}"
+            ),
+        )
+
+    if any(part == ".." for part in PurePosixPath(path_value).parts):
+        raise ConfigError(
+            code="ERR_PATH_ESCAPE",
+            user_message=(
+                "Configured path must be board-relative and must not contain '..': "
+                f"{path_value!r}"
+            ),
+        )
 
 
 def move_to_quarantine(task_path: Path, kanban_dir: Path) -> Path:

@@ -18,10 +18,11 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from owlbear_kanban import errors as _errors
 from owlbear_kanban._duration import _parse_duration
+from owlbear_kanban._naming import validate_config_path_containment
 
 # Backward-compatible re-exports for existing imports from owlbear_kanban.models.
 KANBAN_ERROR_CODES = _errors.KANBAN_ERROR_CODES
@@ -110,6 +111,12 @@ class PathsConfig(BaseModel):
 
     tasks_dir: str = "tasks"
     archive_dir: str = "archive"
+
+    @field_validator("tasks_dir", "archive_dir")
+    @classmethod
+    def _validate_board_relative_paths(cls, value: str) -> str:
+        validate_config_path_containment(value)
+        return value
 
 
 class PipelineConfig(BaseModel):

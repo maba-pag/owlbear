@@ -15,6 +15,7 @@ KANBAN_ERROR_CODES: frozenset[str] = frozenset(
         "ERR_INVALID_TITLE",
         "ERR_INVALID_STATUS",
         "ERR_CONFLICT_STATUS",
+        "ERR_PATH_ESCAPE",
         "ERR_INVALID_PRIORITY",
         "ERR_INVALID_WAVE_PARAM",
         "ERR_PARENT_NOT_FOUND",
