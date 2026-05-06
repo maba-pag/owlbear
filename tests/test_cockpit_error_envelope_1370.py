@@ -255,6 +255,7 @@ class TestFromAC_ErrorCoverage:
         assert resp.status_code == 409
         assert "code" in body  # FAILS
         assert "message" in body  # FAILS
+        assert "detail" not in body  # FAILS — FastAPI detail still present
 
     def test_invalid_transition_422_has_envelope(
         self, client: TestClient, engine: KanbanEngine
@@ -271,6 +272,7 @@ class TestFromAC_ErrorCoverage:
         assert resp.status_code == 422
         assert "code" in body  # FAILS
         assert "message" in body  # FAILS
+        assert "detail" not in body  # FAILS — FastAPI detail still present
 
     def test_config_error_500_has_envelope(
         self, client: TestClient, engine: KanbanEngine
@@ -294,6 +296,7 @@ class TestFromAC_ErrorCoverage:
         assert resp.status_code == 500
         assert "code" in body  # FAILS: currently {"detail": "Invalid board configuration"}
         assert "message" in body  # FAILS
+        assert "detail" not in body  # FAILS — FastAPI detail still present
 
     def test_scan_corruption_exception_500_has_envelope(
         self, client: TestClient
@@ -313,6 +316,7 @@ class TestFromAC_ErrorCoverage:
         body = resp.json()
         assert "code" in body
         assert "message" in body
+        assert "detail" not in body  # FAILS — envelope replaces FastAPI detail
 
     def test_repair_storage_exception_500_has_envelope(
         self, client: TestClient
@@ -332,6 +336,7 @@ class TestFromAC_ErrorCoverage:
         body = resp.json()
         assert "code" in body
         assert "message" in body
+        assert "detail" not in body  # FAILS — envelope replaces FastAPI detail
 
 
 # ---------------------------------------------------------------------------
@@ -416,17 +421,30 @@ class TestFromAC_GuidancePolicy:
     def test_list_cache_miss_guidance_in_response(
         self, cache_client: TestClient
     ) -> None:
-        """(b) Cache-miss list response includes a 'guidance' list field.
+        """(b) Cache-miss list response forwards exact engine guidance (not a hardcoded empty list).
 
+        Injects a sentinel guidance payload via mock so a hardcoded [] implementation
+        cannot falsely pass this test.
         Pre-condition: KanbanError exception handler must be registered (#1371).
         """
         assert _has_kanban_error_handler()  # FAILS — handler not yet registered
 
-        resp = cache_client.get("/api/tasks")
+        from owlbear_cockpit.view import CockpitView  # noqa: PLC0415
+
+        sentinel_guidance = ["cockpit-test-guidance-sentinel"]
+        with mock.patch.object(
+            CockpitView,
+            "list_tasks",
+            return_value=mock.MagicMock(
+                tasks=[],
+                guidance=sentinel_guidance,
+                missing_ids=[],
+            ),
+        ):
+            resp = cache_client.get("/api/tasks")
         body = resp.json()
         assert resp.status_code == 200
-        assert "guidance" in body
-        assert isinstance(body["guidance"], list)
+        assert body["guidance"] == sentinel_guidance  # proves forwarding, not hardcoded []
 
     def test_list_cache_hit_guidance_is_empty_list(
         self, cache_client: TestClient
