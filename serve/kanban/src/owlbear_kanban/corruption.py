@@ -1,6 +1,6 @@
 """Corruption detection and repair for kanban task files (Brief C §4).
 
-Defines the 9 ERR_CORRUPT_* codes, CorruptionError, RepairOutcome,
+Defines the 10 ERR_CORRUPT_* codes, CorruptionError, RepairOutcome,
 detect_corruption(), attempt_repair(), and scan_and_fix().
 """
 
@@ -83,7 +83,7 @@ def _configured_priorities(config: BoardConfig) -> list[str]:
 class CorruptionError(KanbanError):
     """Raised when storage detects unrepairable on-disk state.
 
-    Carries one of the 9 ERR_CORRUPT_* codes from §4.1.
+    Carries one of the 10 ERR_CORRUPT_* codes from §4.1.
     Accepts both positional ``detail`` and keyword ``user_message`` to satisfy
     the Brief C AC-C21 constructor contract.
     """
@@ -353,7 +353,7 @@ def attempt_repair(  # noqa: C901, PLR0911, PLR0912, PLR0915
 
     Args:
         path:   Path to the corrupt file.
-        code:   One of the 9 ERR_CORRUPT_* codes.
+        code:   One of the 10 ERR_CORRUPT_* codes.
         config: Loaded :class:`BoardConfig`.
 
     Returns:
