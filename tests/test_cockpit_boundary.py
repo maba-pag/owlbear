@@ -251,6 +251,39 @@ class TestFromAC_BoundaryEnforcement:
 
 
 # ---------------------------------------------------------------------------
+# AC#1390: Route exclusion guardrail (HTTP surface)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_RouteExclusionGuardrail:
+    """Excluded lifecycle endpoints must not be exposed by Cockpit HTTP routes."""
+
+    @pytest.fixture
+    def client(self):
+        """Return a FastAPI test client for route-surface assertions."""
+        from fastapi.testclient import TestClient
+        from owlbear_cockpit.main import app
+
+        return TestClient(app)
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "/api/tasks/create",
+            "/api/tasks/123/claim",
+            "/api/tasks/123/start",
+            "/api/tasks/123/end-work",
+        ],
+    )
+    def test_excluded_lifecycle_post_routes_not_available(self, client, path: str) -> None:
+        """POST lifecycle routes must return 404/405 to enforce product boundary."""
+        response = client.post(path)
+        assert response.status_code in (404, 405), (
+            f"Expected 404 or 405 for excluded route {path}, got {response.status_code}"
+        )
+
+
+# ---------------------------------------------------------------------------
 # AC#6: Root ruff config
 # ---------------------------------------------------------------------------
 

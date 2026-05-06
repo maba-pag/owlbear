@@ -44,6 +44,8 @@ All mutation routes go through the `CockpitView` facade.
 | `claim_task()` / `start_work()` / `end_work()` | Agent lifecycle operations |
 | `refresh_config()` | Managed internally by the engine |
 
+Any route exposing excluded lifecycle methods requires an explicit product brief before implementation.
+
 ## Error Envelope
 
 All error responses use a stable JSON envelope. The `detail` field is absent; `guidance` is also absent on error responses.
