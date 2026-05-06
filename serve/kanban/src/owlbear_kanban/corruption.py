@@ -136,6 +136,7 @@ ERR_CORRUPT_INVALID_STATUS = _make_corruption_code_type("ERR_CORRUPT_INVALID_STA
 ERR_CORRUPT_INVALID_PRIORITY = _make_corruption_code_type(
     "ERR_CORRUPT_INVALID_PRIORITY"
 )
+ERR_CORRUPT_ENCODING = _make_corruption_code_type("ERR_CORRUPT_ENCODING")
 
 
 # _make_yaml removed — dead code; callers use YAML(typ="safe") directly
@@ -220,6 +221,12 @@ def detect_corruption(path: Path, config: BoardConfig) -> CorruptionError | None
     # Mode 1: delimiter check
     try:
         content = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        return CorruptionError(
+            code=ERR_CORRUPT_ENCODING,
+            detail=f"UTF-8 decode error: {exc}",
+            path=path,
+        )
     except OSError:
         return None
 
