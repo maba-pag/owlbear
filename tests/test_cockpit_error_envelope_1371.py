@@ -109,6 +109,20 @@ def client(engine: KanbanEngine):
 
 
 @pytest.fixture
+def envelope_client(engine: KanbanEngine):
+    """TestClient with raise_server_exceptions=False for unexpected-error handler tests."""
+    from fastapi.testclient import TestClient  # noqa: PLC0415
+
+    from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
+
+    app.dependency_overrides[get_engine] = lambda: engine
+    try:
+        yield TestClient(app, raise_server_exceptions=False)
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.fixture
 def mock_view_client(engine: KanbanEngine):
     """TestClient with CockpitView replaced by a MagicMock.
 
@@ -296,4 +310,78 @@ class TestFromAC_DecisionsFrameworkCarveOut:
         )
         assert "message" not in body, (
             f"Decisions route must NOT use domain envelope; got {body!r}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# AC3: Unexpected-error handler — exact stable literal assertions
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_UnexpectedErrorExactContract:
+    """AC3 (td:2): Unexpected exceptions return exact stable literals.
+
+    The 1370 tests prove key presence only ('code' in body, 'message' in body).
+    These discriminating tests pin the exact string literals named by AC3:
+      code    == "COCKPIT_INTERNAL_ERROR"
+      message == "An unexpected error occurred."
+
+    A handler returning a different code/message literal would still pass the
+    1370 presence checks but will fail these tests.
+    """
+
+    def test_scan_unexpected_error_returns_exact_cockpit_internal_error_code(
+        self, envelope_client: TestClient
+    ) -> None:
+        """RuntimeError from scan_corruption → exact code 'COCKPIT_INTERNAL_ERROR'."""
+        from owlbear_cockpit.view import CockpitView  # noqa: PLC0415
+
+        with mock.patch.object(
+            CockpitView,
+            "scan_corruption",
+            side_effect=RuntimeError("disk I/O failure"),
+        ):
+            resp = envelope_client.post("/api/tasks/scan")
+
+        assert resp.status_code == 500
+        assert resp.headers.get("content-type", "").startswith("application/json"), (
+            f"Content-type must be application/json; got {resp.headers.get('content-type')!r}"
+        )
+        body = resp.json()
+        assert "detail" not in body, (
+            f"Unexpected-error envelope must NOT include 'detail'; got {body!r}"
+        )
+        assert body.get("code") == "COCKPIT_INTERNAL_ERROR", (
+            f"Expected exact code 'COCKPIT_INTERNAL_ERROR'; got {body.get('code')!r}"
+        )
+        assert body.get("message") == "An unexpected error occurred.", (
+            f"Expected exact message 'An unexpected error occurred.'; got {body.get('message')!r}"
+        )
+
+    def test_repair_unexpected_error_returns_exact_cockpit_internal_error_message(
+        self, envelope_client: TestClient
+    ) -> None:
+        """RuntimeError from repair_storage → exact message 'An unexpected error occurred.'."""
+        from owlbear_cockpit.view import CockpitView  # noqa: PLC0415
+
+        with mock.patch.object(
+            CockpitView,
+            "repair_storage",
+            side_effect=RuntimeError("storage backend unavailable"),
+        ):
+            resp = envelope_client.post("/api/tasks/repair")
+
+        assert resp.status_code == 500
+        assert resp.headers.get("content-type", "").startswith("application/json"), (
+            f"Content-type must be application/json; got {resp.headers.get('content-type')!r}"
+        )
+        body = resp.json()
+        assert "detail" not in body, (
+            f"Unexpected-error envelope must NOT include 'detail'; got {body!r}"
+        )
+        assert body.get("code") == "COCKPIT_INTERNAL_ERROR", (
+            f"Expected exact code 'COCKPIT_INTERNAL_ERROR'; got {body.get('code')!r}"
+        )
+        assert body.get("message") == "An unexpected error occurred.", (
+            f"Expected exact message 'An unexpected error occurred.'; got {body.get('message')!r}"
         )
