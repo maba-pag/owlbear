@@ -1,10 +1,10 @@
 ---
 id: 1402
 title: Harden cache populate ordering in MtimeScanCache
-status: in-progress
+status: archived
 priority: nice-to-have
 created: 2026-05-06T03:40:51.447745+00:00
-updated: 2026-05-06T06:21:52.802872+00:00
+updated: 2026-05-06T08:29:26.673712+00:00
 tags:
 - cockpit
 - cache
@@ -401,3 +401,129 @@ Architect re-scope confirmed: "existing tests, verification pass-through expecte
 - `has_changed_at()` still exists and is used in test setup for priming cache state.
 
 Builder: verification-only pass per architect re-scope guidance. Run the 5-file scoped suite, confirm ruff clean on `cache.py` + `routes/read.py`, then advance to review.
+[[2026-05-06]]
+## Builder Notes
+- Implementation: verification-only cycle; no source changes made.
+- Files changed: none.
+- Scope followed architect re-scope: excluded `tests/test_cockpit_read_api.py::TestFromAC_TaskDetail::test_task_detail_nonexistent_id_returns_404_with_id_in_detail` as #1370-envelope-contract divergence.
+- Tests: 158 passed, 0 failed, 0 skipped across:
+  - `tests/test_cockpit_cache_populate_1402.py`
+  - `tests/test_cockpit_cache_sse_1346.py`
+  - `tests/test_cockpit_events_1234.py`
+  - `tests/test_cockpit_events_1262.py`
+  - `tests/test_cockpit_read_api.py` (with one explicit deselect per re-scope)
+- Coverage:
+  - `owlbear_cockpit.cache`: 91%
+  - `owlbear_cockpit.routes.read`: 98%
+- ruff: clean on `serve/cockpit/src/owlbear_cockpit/cache.py`, `serve/cockpit/src/owlbear_cockpit/routes/read.py`, `tests/test_cockpit_cache_populate_1402.py`.
+- Evidence summary: AC1/AC2 behavior remains green and AC3 refined regression surface is green; task ready for review.
+
+### Reflection
+- Focused scoped execution avoided false blockers from concurrent #1370 contract migration.
+- Using explicit deselect kept verification aligned with architect-approved AC3 refinement.
+- No-code verification cycles still need full quality evidence (tests + coverage + lint) to close cleanly.
+[[2026-05-06]]
+## Review Evidence
+### Test Results
+- quality-runner scoped review pass: 158 passed, 0 failed, 0 skipped across `tests/test_cockpit_cache_populate_1402.py`, `tests/test_cockpit_cache_sse_1346.py`, `tests/test_cockpit_events_1234.py`, `tests/test_cockpit_events_1262.py`, and `tests/test_cockpit_read_api.py`.
+- The run excluded the single architect-scoped-out 404 detail assertion in `tests/test_cockpit_read_api.py::TestFromAC_TaskDetail::test_task_detail_nonexistent_id_returns_404_with_id_in_detail`, consistent with the Architecture Re-scope refinement at `.owlbear/kanban/tasks/1402-harden-cache-populate-ordering-in-mtimescancache.md:323`.
+
+### Lint Results
+- Ruff clean on `serve/cockpit/src/owlbear_cockpit/cache.py`, `serve/cockpit/src/owlbear_cockpit/routes/read.py`, and `tests/test_cockpit_cache_populate_1402.py`.
+
+### Coverage
+- Focused module coverage on the reviewed implementation is above gate:
+  - `owlbear_cockpit.cache`: 91%
+  - `owlbear_cockpit.routes.read`: 98%
+- quality-runner also reported a lower package-wide overall percentage from broad instrumentation, but the task gate is the changed-path proof and touched-module coverage above.
+
+### Scope and Integrity
+- Binding scope anchored to the latest Architecture Re-scope: AC3 explicitly excludes the known #1370-driven 404 detail assertion, and the current task-detail route is back to the clean pass-through at `serve/cockpit/src/owlbear_cockpit/routes/read.py:127`.
+- Exact search confirmed the new cache helpers are narrowly used: `changed_since` and `commit_signature` appear only in `serve/cockpit/src/owlbear_cockpit/cache.py:74-83` and `serve/cockpit/src/owlbear_cockpit/routes/read.py:91-94`.
+- No current review tool exposed a direct diff-scoped immutability check or dirty-tree contamination check for the scoped files, so confidence is slightly reduced on those two process dimensions only.
+
+### AC Compliance
+| AC Line | Evidence | Status |
+|---|---|---|
+| AC1 | `serve/cockpit/src/owlbear_cockpit/routes/read.py:89-94` now scans, checks `changed_since(mtime)`, populates `cache.tasks`, and only then commits the signature. The task tests prove both halves of the contract: failed refresh keeps the prior signature at `tests/test_cockpit_cache_populate_1402.py:174` and `tests/test_cockpit_cache_populate_1402.py:471`, while successful populate commits the new signature at `tests/test_cockpit_cache_populate_1402.py:304`. | PASS |
+| AC2 | The warm-cache failure-recovery path is discriminating and complete: the retry returns fresh two-task data at `tests/test_cockpit_cache_populate_1402.py:411`, `view.list_tasks()` is called exactly three times at `tests/test_cockpit_cache_populate_1402.py:418`, and the rollback prerequisite is pinned at `tests/test_cockpit_cache_populate_1402.py:471`. | PASS |
+| AC3 | quality-runner passed the refined regression surface with the one architect-approved exclusion. The excluded assertion is documented at `.owlbear/kanban/tasks/1402-harden-cache-populate-ordering-in-mtimescancache.md:323`, and the current read route behavior at `serve/cockpit/src/owlbear_cockpit/routes/read.py:127` is unrelated to the cache-ordering change. | PASS |
+
+### Findings
+- No blocking defects found in the cache-ordering implementation or the task-owned proof suite.
+- The prior success-side proof gap is closed by `tests/test_cockpit_cache_populate_1402.py:304`; removing `cache.commit_signature(mtime)` from `serve/cockpit/src/owlbear_cockpit/routes/read.py:94` would now fail the task suite.
+- No security or data-safety issues were found in the reviewed change surface.
+- Informational only: `has_changed_at()` in `serve/cockpit/src/owlbear_cockpit/cache.py:69-75` remains a mutating helper that could be misused in future callers, but the reviewed route no longer relies on it and that concern is outside this task's AC.
+
+### Deductions
+- 0.02: exact diff-scoped TestFromAC immutability was not directly provable from the available tool surface.
+- 0.03: dirty-tree contamination could not be checked directly from the available tool surface.
+- Confidence: 0.95.
+
+### Verdict
+- PASS to docs.
+- Reason: AC1 and AC2 are fully proven by the current implementation and task-local tests, and the refined AC3 regression surface is green.
+[[2026-05-06]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | `serve/cockpit/README.md` has no reference to cache module or signature helpers; no other IN-scope prose docs reference the changed internals |
+| 2 | Module docstrings | Yes | Verified | `changed_since()` and `commit_signature()` both have accurate one-line docstrings; all other public methods in `cache.py` and `routes/read.py` already had docstrings; no updates needed |
+| 3 | External attribution | No | N/A | No external patterns used per task body; no attribution entry required |
+| 4 | Research doc | No | N/A | No `.owlbear/research/` doc produced for this task |
+| 5 | Diagram maintenance (describes match) | Yes | Updated | `share/diagrams/cockpit.excalidraw` has `describes: serve/cockpit/src/**` — matches changed files; footer updated to `Last verified: 2026-05-06 (43417267)` |
+| 6 | Explicit diagram creation | No | N/A | No explicit diagram creation request in task body |
+| 7 | Deletion detection | No | N/A | No files deleted; no orphaned IN-scope docs detected |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| `serve/cockpit/src/owlbear_cockpit/cache.py` | IN (docstrings) | Verified — docstrings accurate |
+| `serve/cockpit/src/owlbear_cockpit/routes/read.py` | IN (docstrings) | Verified — docstrings accurate |
+| `tests/test_cockpit_cache_populate_1402.py` | OUT | Test file — no doc action |
+
+### Files Updated
+- `share/diagrams/cockpit.excalidraw` — footer updated (commit `7b441638`)
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no `1402-*` scratch files found)
+[[2026-05-06]]
+## Audit
+
+### AC Verification
+| AC Line | Evidence | Status |
+|---|---|---|
+| AC1 — signature not committed until populate succeeds | `routes/read.py:91-94`: `changed_since(mtime)` checks without side effect, `commit_signature(mtime)` called only after `cache.tasks = envelope.tasks`. Tests at `test_cockpit_cache_populate_1402.py` prove rollback on failure (L174, L471) and commit on success (L304). | PASS |
+| AC2 — warm-cache failure-recovery proof | `test_cockpit_cache_populate_1402.py:329-418`: 4-step sequence (prime → sig-change → fail → retry) asserts fresh data and `call_count == 3`. | PASS |
+| AC3 — existing suites green (refined) | quality-runner scoped: 158 passed, 0 failed. One architect-approved exclusion (#1370 404 detail assertion). | PASS |
+
+### Full Suite Results
+- 4680 passed, 244 failed, 4 skipped
+- All 244 failures in unrelated packages: `test_engine_accessor_migration.py`, `test_mcp_memory_1266.py`, `test_state_machine_1304.py`, `test_engine_coverage_1068.py`
+- Zero failures in cockpit cache, routes, or any task-adjacent module
+
+### Lint
+- Ruff clean on all task files
+
+### Coverage
+- `owlbear_cockpit.cache`: 91%
+- `owlbear_cockpit.routes.read`: 100%
+
+### Commit Integrity
+- `bc30d605` feat: harden cache signature commit ordering (#1402, builder)
+- `4d4b5288` test: add retry tests for cache signature success-side proof (#1402, test-writer)
+- `67a1ab10` test: add failing tests for cache populate ordering (#1402, test-writer)
+- Out-of-scope `4d436ae6` superseded by #1370 (`ea01a886`) — current routes/read.py is clean
+
+### AC Quality Score
+4/5 — Specific and verifiable AC. Minor iteration needed (warm-cache precondition added via challenger, plus one arch re-scope for concurrent #1370 collision). Well within acceptable range.
+
+### Deductions
+- 0.02: dirty-tree/diff-scoped immutability not directly provable from tool surface
+
+### Confidence: 0.98
+### Action: ARCHIVE
