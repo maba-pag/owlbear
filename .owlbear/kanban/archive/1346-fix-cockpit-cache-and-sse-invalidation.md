@@ -1,10 +1,10 @@
 ---
 id: 1346
 title: Fix Cockpit cache and SSE invalidation
-status: done
+status: archived
 priority: critical
 created: 2026-05-04T17:27:34.924833+00:00
-updated: 2026-05-06T05:09:37.580495+00:00
+updated: 2026-05-06T05:21:32.257290+00:00
 tags:
 - sync-blocker
 - cockpit
@@ -16,7 +16,7 @@ depends_on:
 - 1345
 blocked: false
 block_reason:
-claimed_at: 2026-05-06T05:09:37.580495+00:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -703,3 +703,43 @@ Post-task reflection:
 
 ### Scratch Files Cleaned
 - 21 × .owlbear/scratch/1346-* files deleted
+[[2026-05-06]]
+## Audit
+
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1 | cache.py:28-60 blake2b over sorted .md names+mtimes, dot/tmp exclusion verified directly; 154 scoped tests pass | PASS |
+| AC2 | routes/read.py:81-121 single-scan via has_changed_at(); reviewer evidence detailed and accepted | PASS |
+| AC3 | Architect AC3 clarification (mechanism equivalence) accepted; move-route proof at test_cockpit_cache_sse_1346.py:565 | PASS |
+| AC4 | events.py:_batch_latest_mtimes catches FileNotFoundError, uses time.time_ns(); _next_event_mtime guarantees differing payloads; verified directly in source | PASS |
+| AC5 | events.py:_classify_path includes archive_dir as tasks-changed; verified directly | PASS |
+| AC6 | Reviewer evidence: test_cockpit_cache_sse_1346.py:925,:964 prove activity-changed and decisions-changed intact | PASS |
+| AC7 | 154 scoped tests across 4 suites pass; durable tests aligned to 1346 contracts | PASS |
+
+### Test Results
+- Full suite (quality-runner mode=full): 4676 passed, 239 failed (all failures outside 1346 scope: memory models, engine migrations, error envelope #1370, corruption #1368, etc.)
+- Scoped suite: 154 passed, 0 failed
+- ruff: clean on all touched source files (lint violations in serve/knowledge and serve/tools only, unrelated)
+
+### Commit Integrity
+Source files are committed. Commit log for deliverables:
+- 4652228f, 6a8c3ded, 5febf495, d4f97be4: test-writer commits (properly attributed)
+- ad87cdf3: events.py implementation (missing #1346 reference in message)
+- b53cc8bd: cache.py/read.py implementation bundled in docs commit (misattributed)
+- bc30d605: #1402 follow-up hardening (separate task, expected)
+- 6593737b: docs-gate diagram update
+Process concern: events.py commit (ad87cdf3) lacks task reference; cache.py/read.py implementation is in a docs-labeled commit (b53cc8bd). Code is committed and working tree is clean. Previous auditor rejection resolved the uncommitted-code issue; attribution remains imperfect but does not affect deliverable integrity.
+
+### Architect Quality: 5/5
+AC lines are specific, testable, and complete. Challenger refinements (signature scoping, atomic clause, payload type) improved clarity. Architecture notes on double-scan TOCTOU and archive path sourcing directly guided implementation.
+
+### Deduction Breakdown
+- AC lines without evidence: 0 x -.02 = 0
+- Lint violations in scope: none, -.00
+- AC quality score: 5/5, no deduction
+- Reviewer evidence: present, detailed, PASS 0.96, -.00
+- Full-suite failures in task scope: none, -.00
+
+### Confidence: 1.00
+### Action: archive
