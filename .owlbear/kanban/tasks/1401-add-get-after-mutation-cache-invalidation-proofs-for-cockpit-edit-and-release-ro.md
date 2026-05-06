@@ -5,7 +5,7 @@ title: Add GET-after-mutation cache invalidation proofs for cockpit edit and
 status: in-progress
 priority: nice-to-have
 created: 2026-05-06T03:40:00.756804+00:00
-updated: 2026-05-06T05:06:39.001804+00:00
+updated: 2026-05-06T06:20:44.121236+00:00
 tags:
 - cockpit
 - cache
@@ -29,7 +29,7 @@ Follow-up from #1346 reviewer recommendation #2. Currently only the move-route h
 2. A test proves that `GET /api/tasks` reflects tag changes after a successful `POST /api/tasks/{id}/edit` with a tags mutation. The test must assert that the mutated task's `tags` field exactly matches the replacement tag list (not merely that new tags are present — removed tags must be absent). (td:1)
 3. A test proves that `GET /api/tasks` reflects claimed-state changes after a successful `POST /api/tasks/{id}/release`. The test must locate the released task by ID and assert `claimed` is `false`. (td:1)
 4. All new tests follow the prime→mutate→re-read pattern: prime cache via initial `GET /api/tasks`, perform mutation via the corresponding `POST` route, then assert a fresh `GET /api/tasks` reflects the change. The assertion strategy is field-inspection on the task summary object (differs from the move-route proof which uses filter-exclusion). (td:0)
-5. Existing tests remain green; no weakening of existing assertions. (td:0)
+5. The task introduces no new test failures and does not weaken existing assertions. Pre-existing failures in adjacent suites caused by other in-flight tasks (e.g., #1370 error envelope migration) are excluded from this gate. Verification: task-scoped `tests/test_cockpit_cache_sse_1401.py` passes; no diff to other test files. (td:0)
 
 ## Key Files
 
@@ -195,3 +195,137 @@ Direct-to-review advance: all 3 proof tests pass against current code. Implement
 - Builder skip: test-only retry, all tests green.
 - Ruff: clean (0 errors).
 - Commit: 1e9fb275 test: strengthen AC2 tag exact-set assertion for cache invalidation proof (#1401, test-writer)
+[[2026-05-06]]
+## Builder Notes
+- Non-implementation task — no code changes needed.
+- Test-writer retry already strengthened AC2 to exact tag-set equality and reported all task-scoped proofs passing.
+- Builder pass-through applied per w-tdd-green Step 0a.
+- Files changed: none.
+- Tests/lint run by builder: none (pass-through path).
+[[2026-05-06]]
+## Review Evidence
+### Test Results
+- quality-runner task-only pass: tests/test_cockpit_cache_sse_1401.py -> 3 passed, 0 failed
+- quality-runner adjacent regression: tests/test_cockpit_mutation_api.py -> 47 passed, 6 failed
+- Adjacent failures reproduce without the task file present, so they are not caused by tests/test_cockpit_cache_sse_1401.py
+- Failing adjacent tests: test_move_nonexistent_task_returns_404, test_move_concurrency_error_returns_409_with_stale_detail, test_edit_nonexistent_task_returns_404, test_edit_concurrency_error_returns_409_with_stale_detail, test_release_nonexistent_task_returns_404, test_release_stale_updated_returns_409_with_stale_detail
+- Failure mode: KeyError: 'detail' in tests/test_cockpit_mutation_api.py:195, :227, :405, :414, :475, :489
+
+### Lint Results
+- Ruff clean on tests/test_cockpit_cache_sse_1401.py
+
+### Coverage
+- Informational only: this is a test-only task with no production-file changes
+- owlbear_cockpit.cache: 79%
+- owlbear_cockpit.routes.read: 73%
+- owlbear_cockpit.routes.mutation: 64%
+
+### Pass 1 - CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Evidence | Status |
+|---|---|---|
+| AC1 - GET /api/tasks reflects title changes after edit | tests/test_cockpit_cache_sse_1401.py:94, :126, :136, :150 prove prime -> mutate -> re-read with exact title equality to "Mutated title" | PASS |
+| AC2 - GET /api/tasks reflects exact tag replacement after edit | tests/test_cockpit_cache_sse_1401.py:158, :194, :204, :220 assert exact set equality `{"new-tag", "another-tag"}` on the summary tags field | PASS |
+| AC3 - GET /api/tasks reflects claimed=false after release | tests/test_cockpit_cache_sse_1401.py:229, :263, :273, :287 prove prime -> mutate -> re-read with exact `claimed is False` | PASS |
+| AC4 - All new tests use the prime -> mutate -> re-read pattern | tests/test_cockpit_cache_sse_1401.py:126/:136/:145, :194/:204/:214, :263/:273/:282 | PASS |
+| AC5 - Existing tests remain green; no weakening of existing assertions | Adjacent regression on tests/test_cockpit_mutation_api.py is red: 47 passed, 6 failed. Those failures are legacy `response.json()["detail"]` expectations at :195, :227, :405, :414, :475, :489, while the live app returns the error envelope from serve/cockpit/src/owlbear_cockpit/main.py:44-65 | FAIL |
+
+#### Security Review
+- No security issues in task scope. Test-only change; no new runtime surface or dependency.
+
+#### Test Integrity
+- Live review scope shows a dedicated task file with stronger AC2 proof at tests/test_cockpit_cache_sse_1401.py:220.
+- Git reflog confirms two task-scoped test-writer commits for #1401: 0a8beeaa and 1e9fb275.
+- Exact commit diff / dirty-tree verification was unavailable in this tool surface, so immutability gets a small confidence deduction.
+
+#### Test Quality
+| Dimension | Rating | Evidence |
+|---|---|---|
+| Assertion specificity | STRONG | AC1/AC2/AC3 use exact equality / exact boolean assertions at tests/test_cockpit_cache_sse_1401.py:150, :220, :287 |
+| Negative/error-path coverage | ADEQUATE | td:1 proof task; AC scope is happy-path cache invalidation proof |
+| Manual mutation reasoning | STRONG | Stale title, stale claimed state, or any extra/missing tag would fail the exact assertions |
+| Test independence | STRONG | Each test builds its own temp board and clears dependency overrides |
+| Descriptive test names | STRONG | Names map directly to AC behavior |
+
+#### Data Safety
+- No issues found.
+
+#### Implementation-Aware Test Gap Analysis
+- No task-owned proof gap remains. The 1401 file verifies the intended read-after-write cache behavior for title, tags, and claimed state.
+- The blocking issue is AC5: the branch's adjacent mutation suite is independently red for a different contract.
+
+#### Builder Process Quality
+| Metric | Value |
+|---|---|
+| Prior Review Evidence sections | 1 |
+| Current review cycle | 2 |
+| Assessment | LOOP-BREAKER applies on any second review FAIL |
+
+### Pass 2 - INFORMATIONAL
+- The adjacent failures are consistent with the current cockpit error-envelope contract, not with 1401's cache-invalidation proof. serve/cockpit/src/owlbear_cockpit/main.py:44-65 returns `{code, message}`, while tests/test_cockpit_mutation_api.py still dereferences `response.json()["detail"]` at the six failing locations.
+- Because the task-owned file passes on its own, 1401 did not introduce these failures.
+- This makes AC5 structurally infeasible as currently written on the present branch snapshot.
+
+### Deductions
+- -0.06: no direct commit diff / dirty-tree check in this tool surface
+- -0.06: AC5 is ambiguous against a pre-existing adjacent-suite red baseline
+
+### Confidence: 0.88
+### Verdict: FAIL
+### Action: Reject to backlog
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|---|---|---|---|
+| 1 | architect | Refine or split AC5 so task 1401 is reviewable against task-owned proof only, or create separate follow-up work for the legacy mutation-api `detail` assertions that now conflict with the live `{code, message}` error envelope. | .owlbear/kanban/tasks/1401-add-get-after-mutation-cache-invalidation-proofs-for-cockpit-edit-and-release-ro.md; tests/test_cockpit_mutation_api.py; serve/cockpit/src/owlbear_cockpit/main.py | quality-runner adjacent regression (47 passed, 6 failed); tests/test_cockpit_mutation_api.py:195, :227, :405, :414, :475, :489; serve/cockpit/src/owlbear_cockpit/main.py:44-65; prior review already recorded at .owlbear/kanban/tasks/1401-add-get-after-mutation-cache-invalidation-proofs-for-cockpit-edit-and-release-ro.md:115 |
+[[2026-05-06]]
+
+## Architecture Review (cycle 2)
+
+**Trigger:** Reviewer rejected to backlog — AC5 structurally infeasible due to pre-existing adjacent-suite failures (6 tests in `tests/test_cockpit_mutation_api.py` broken by #1370 error envelope change, not by #1401).
+
+### AC Refinement
+- **AC5 (old):** "Existing tests remain green; no weakening of existing assertions."
+- **AC5 (refined):** "The task introduces no new test failures and does not weaken existing assertions. Pre-existing failures in adjacent suites caused by other in-flight tasks (e.g., #1370 error envelope migration) are excluded from this gate. Verification: task-scoped `tests/test_cockpit_cache_sse_1401.py` passes; no diff to other test files." (td:0)
+
+### Evaluation
+| Criterion | Assessment |
+|-----------|-----------|
+| AC precision | PASS — AC5 now scoped to task-owned proof; pre-existing failures explicitly excluded |
+| Architecture | PASS — unchanged from cycle 1; test-only task |
+| Dependency | PASS — no deps; #1370 is independent (error envelope is not a prerequisite for cache proofs) |
+
+### Rationale
+The 6 legacy failures (`KeyError: 'detail'` at tests/test_cockpit_mutation_api.py:195, :227, :405, :414, :475, :489) are caused by #1370 replacing `HTTPException(detail=...)` with `{code, message}` envelope. Those tests are #1370's responsibility, not #1401's. The reviewer's own evidence confirms: "Adjacent failures reproduce without the task file present, so they are not caused by tests/test_cockpit_cache_sse_1401.py."
+
+### Challenge
+Skipped — all AC lines are td:0 or td:1 with no architectural change from cycle 1 (already challenged at 0.66, issues resolved). Refinement is purely a gate-scoping fix.
+
+### Test Depth
+- Max depth: 1 (AC1-3)
+- AC4-5: td:0
+- Test-writer: PROCEED (tagged `test` — pass-through expected)
+
+### Verdict: APPROVE
+Refined AC5 to exclude pre-existing adjacent-suite failures. No architectural or implementation change needed — task-owned suite already passes (3/3 green from reviewer's own evidence).
+
+[[2026-05-06]]
+Refined AC5 to scope gate to task-owned proofs only. Pre-existing adjacent failures (6 tests in test_cockpit_mutation_api.py caused by #1370 error envelope migration) explicitly excluded. Task-owned suite (3/3 green) already satisfies the refined gate. Re-approved to todo.
+[[2026-05-06]]
+## Test-Writer Notes
+- Retry (cycle 3): AC5 was refined by architect to exclude pre-existing adjacent-suite failures. No test changes required from test-writer.
+- Test file: tests/test_cockpit_cache_sse_1401.py
+- Class: TestFromAC_EditReleaseCacheInvalidation
+- Tests: 3 (all PASS against current code)
+- Ruff: clean (0 errors)
+- No new commits — no test file changes this cycle.
+- Direct-to-review advance per w-tdd-red §1b.1: all tests pass, no builder work needed.
+
+### AC coverage
+| AC | Test | Status |
+|----|------|--------|
+| AC1 — title reflected after edit | test_get_tasks_reflects_title_after_edit_route | PASS |
+| AC2 — exact tag replacement reflected after edit | test_get_tasks_reflects_tags_after_edit_route | PASS (exact set equality `=={"new-tag","another-tag"}`) |
+| AC3 — claimed=False reflected after release | test_get_tasks_reflects_claimed_false_after_release_route | PASS |
+| AC4 — prime→mutate→re-read pattern | all three tests | structural ✅ |
+| AC5 — no new failures (task-scoped only; pre-existing adjacent failures excluded per architect refinement) | scoped pytest: 3 passed, 0 failed | PASS |

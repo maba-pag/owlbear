@@ -4,7 +4,7 @@ title: Cockpit audit remediation
 status: in-progress
 priority: critical
 created: 2026-05-06T00:58:14.547083+00:00
-updated: 2026-05-06T05:05:36.787833+00:00
+updated: 2026-05-06T06:19:22.208477+00:00
 tags:
 - cockpit
 - audit-remediation
@@ -237,3 +237,73 @@ Remediated reviewer findings from Pass 1. Removed `docs` tag (caused incorrect n
 - Coverage: N/A.
 - ruff: N/A.
 - Evidence: task body Completion Contract and AC lines are all td:0 container-routing checks.
+[[2026-05-06]]
+## Builder Notes
+- Pass-through on non-implementation live parent container task; no source or test files changed.
+- Completion Contract requires test-writer and builder to perform pass-through with no advancement beyond `in-progress`.
+- Child tasks #1364-#1375 remain the implementation/test deliverables; this parent remains active until all children reach `done`.
+- Tests: not run (td:0 container scope).
+- Coverage: N/A.
+- ruff: N/A.
+- Evidence: task body Completion Contract and AC lines are all td:0 container-routing checks.
+
+### Reflection
+- Container tasks need explicit routing contracts to prevent accidental pipeline advancement.
+- Keep builder/test-writer pass-through tasks at `in-progress` when the completion contract says the parent is live.
+- No code/test execution is appropriate for td:0 container-only scope.
+[[2026-05-06]]
+## Builder Notes
+- Pass-through on non-implementation live parent container task; no source or test files changed.
+- Completion Contract requires test-writer and builder to perform pass-through with no advancement beyond `in-progress`.
+- Child tasks #1364-#1375 remain the implementation/test deliverables; this parent stays active until all children reach `done`.
+- Tests: not run (td:0 container scope).
+- Coverage: N/A.
+- ruff: N/A.
+- Evidence summary: task body Completion Contract and AC lines are all td:0 container-routing checks.
+
+### Reflection
+- Container tasks with td:0 AC should not be advanced by builder even on successful pass-through.
+- Releasing with non-advance outcome preserves the parent lifecycle while unblocking child delivery.
+- No code/test execution was appropriate for this scope.
+[[2026-05-06]]
+## Builder Notes
+- Pass-through on non-implementation live parent container task; no source or test files changed.
+- Completion Contract requires test-writer and builder to perform pass-through with no advancement beyond `in-progress`.
+- Child tasks #1364-#1375 remain the implementation/test deliverables; this parent stays active until all children reach `done`.
+- Tests: not run (td:0 container scope).
+- Coverage: N/A.
+- ruff: N/A.
+- Evidence summary: task body Completion Contract and AC lines are all td:0 container-routing checks.
+
+### Reflection
+- Container tasks with td:0 AC should not be advanced by builder even on successful pass-through.
+- Releasing with non-advance outcome preserves parent lifecycle while unblocking child delivery.
+- No code/test execution was appropriate for this scope.
+[[2026-05-06]]
+## Builder Notes
+- Pass-through on non-implementation live parent container task; no source or test files changed.
+- Completion Contract requires builder pass-through with no advancement beyond `in-progress`.
+- Child tasks #1364-#1375 remain the implementation/test deliverables; this parent stays active until all children reach `done`.
+- Tests: not run (td:0 container scope).
+- Coverage: N/A.
+- ruff: N/A.
+- Evidence summary: AC and Completion Contract are container-routing checks only; no code/test artifacts are task-owned.
+
+### Reflection
+- Container tasks with td:0 AC should not be advanced by builder even on successful pass-through.
+- Releasing with non-advance outcome preserves parent lifecycle while unblocking child delivery.
+- No code/test execution was appropriate for this scope.
+[[2026-05-06]]
+## Builder Notes
+- Pass-through on non-implementation live parent container task; no source or test files changed.
+- Completion Contract requires builder pass-through with no advancement beyond `in-progress`.
+- Child tasks #1364-#1375 remain the implementation/test deliverables; this parent stays active until all children reach `done`.
+- Tests: not run (td:0 container scope).
+- Coverage: N/A.
+- ruff: N/A.
+- Evidence summary: AC and Completion Contract are container-routing checks only; no code/test artifacts are task-owned.
+
+### Reflection
+- Container tasks with td:0 AC should not be advanced by builder even on successful pass-through.
+- Releasing with non-advance outcome preserves parent lifecycle while unblocking child delivery.
+- No code/test execution was appropriate for this scope.

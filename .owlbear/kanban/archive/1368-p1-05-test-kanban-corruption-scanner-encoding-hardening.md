@@ -1,10 +1,10 @@
 ---
 id: 1368
 title: 'P1-05: Test kanban corruption scanner encoding hardening'
-status: review
+status: archived
 priority: critical
 created: 2026-05-06T00:58:38.511616+00:00
-updated: 2026-05-06T04:55:11.758125+00:00
+updated: 2026-05-06T06:32:37.887704+00:00
 tags:
 - cockpit
 - audit-remediation
@@ -262,3 +262,69 @@ AC-2 detail assertions now use keyword matching (`"encoding"`, `"decode"`, `"utf
 - No code changes were made by builder.
 - Applied GREEN pass-through rule from `w-tdd-green` Step 0a.
 - Routing decision: advance to `review` for pipeline continuity on this test-only task.
+[[2026-05-06]]
+## Review Evidence
+### Test Results
+- quality-runner scoped pytest on tests/test_corruption_1368.py: 11 failed, 0 passed.
+- Failure alignment: the live snapshot remains RED as intended for this test-only contract task. `detect_corruption()` still reads UTF-8 text at serve/kanban/src/owlbear_kanban/corruption.py:222 and catches only `OSError` at line 223, so non-UTF8 fixtures still propagate `UnicodeDecodeError`. `ERR_CORRUPT_ENCODING` is still absent from serve/kanban/src/owlbear_kanban/corruption.py, so the explicit imports at tests/test_corruption_1368.py:155, tests/test_corruption_1368.py:248, and tests/test_corruption_1368.py:306 still fail on the unpatched snapshot.
+- code-reader audit: no missing AC coverage, no visible TestFromAC weakening, no security or data-safety issues in the test module.
+
+### Lint Results
+- quality-runner scoped ruff on tests/test_corruption_1368.py: clean.
+
+### Coverage Data
+- quality-runner reported 15% coverage for owlbear_kanban.corruption.
+- Informational only for this RED contract task. The review gate here is RED validity plus proof quality, not green-path module coverage.
+
+### AC Compliance
+| AC Line | Evidence | Status |
+|---|---|---|
+| AC-1: non-UTF8 fixtures under tasks and archive prove no UnicodeDecodeError should escape | The suite creates task and archive fixture locations at tests/test_corruption_1368.py:87 and tests/test_corruption_1368.py:88, writes non-UTF8 bytes at tests/test_corruption_1368.py:121 and tests/test_corruption_1368.py:216, and calls `detect_corruption()` at tests/test_corruption_1368.py:125 and tests/test_corruption_1368.py:219. The live implementation still fails at serve/kanban/src/owlbear_kanban/corruption.py:222 on unpatched code, which is the intended RED proof. | PASS |
+| AC-2: returned CorruptionError has encoding code, file_path, and encoding-specific detail | The suite asserts exact code equality at tests/test_corruption_1368.py:164 and tests/test_corruption_1368.py:257, exact file_path equality at tests/test_corruption_1368.py:181 and tests/test_corruption_1368.py:274, and encoding/decode keyword requirements in detail at tests/test_corruption_1368.py:197, tests/test_corruption_1368.py:198, tests/test_corruption_1368.py:290, and tests/test_corruption_1368.py:291. The prior proof-quality gap on generic non-empty detail is resolved. | PASS |
+| AC-3: valid UTF-8 task returns None | The regression test writes a valid UTF-8 task at tests/test_corruption_1368.py:309, calls `detect_corruption()` at tests/test_corruption_1368.py:313, and asserts exact `None` at tests/test_corruption_1368.py:314. | PASS |
+| AC-4: direct import from owlbear_kanban.corruption | Module-level direct import is present at tests/test_corruption_1368.py:20. | PASS |
+| AC-5: current unpatched snapshot fails in RED phase for counterpart task 1369 | quality-runner confirmed the live snapshot still fails on the expected unpatched paths, and code-reader confirmed the suite is RED-by-design rather than false-green. | PASS |
+
+### Deductions
+- -0.03 The valid-UTF8 regression test includes an unused future-constant import at tests/test_corruption_1368.py:306, so its present-day RED failure is attributed to missing `ERR_CORRUPT_ENCODING` before the SUT call. This does not weaken the steady-state exact-`None` assertion at line 314, but it is a small evidence-quality deduction.
+- -0.03 Dirty-tree contamination and exact TestFromAC immutability could not be proven from this tool surface because direct git diff/status inspection was unavailable in-session.
+
+### Verdict
+- PASS
+- Confidence: 0.92
+- Second review cycle: the earlier AC-2 detail-message proof gap is resolved.
+- Action: advance to docs.
+
+### Post-task Reflection
+- Reviewing RED-only test tasks requires distinguishing expected test failure from actual proof weakness; the task now clears that bar.
+- The previous blocker was assertion quality, not task scope. The revised keyword-gated detail assertions fixed the real problem.
+- Tool-surface limits on git diff/status still warrant a small confidence deduction even when the live file reads cleanly.
+
+[[2026-05-06]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | Only changed file is tests/test_corruption_1368.py — no IN-scope prose docs reference test internals |
+| 2 | Module docstrings | No | N/A | No source modules created or modified; this is a test-only task (type:test) |
+| 3 | External attribution | No | N/A | No external patterns cited in task body |
+| 4 | Research doc | No | N/A | No research doc produced for this task |
+| 5 | Diagram maintenance (describes match) | No | N/A | No diagram describes-match for test files |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation requested |
+| 7 | Deletion detection | No | N/A | No files deleted |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| tests/test_corruption_1368.py | OUT | N/A — test file, not an IN-scope doc |
+
+### Files Updated
+- None
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no 1368-* scratch files found)
+[[2026-05-06]]
+## Audit\n### AC Verification\n| AC Line | Evidence | Status |\n|---------|----------|--------|\n| AC-1: non-UTF8 in tasks/archive does not raise | Tests at test_corruption_1368.py:111-126, :205-221 call detect_corruption on binary fixtures; RED confirms UnicodeDecodeError propagates (correct RED signal) | PASS |\n| AC-2: CorruptionError shape (code, file_path, encoding detail) | Assertions at :164, :181, :195-198, :252, :269, :283-286; keyword-gated detail check resolved prior review gap | PASS |\n| AC-3: valid UTF-8 returns None | test_valid_utf8_task_returns_none at :302-314; exact None assertion | PASS |\n| AC-4: direct import from owlbear_kanban.corruption | Module-level import at :20 | PASS |\n| AC-5: unpatched code fails (RED validity) | 11/11 tests fail: 8 via UnicodeDecodeError, 3 via ImportError (ERR_CORRUPT_ENCODING absent) | PASS |\n\n### Test Results\n- pytest (full suite): 4675 passed, 241 failed (pre-existing background debt; zero regressions from this test-only task)\n- pytest (task-scoped): 11 failed, 0 passed (expected RED)\n- ruff (task file): clean\n\n### Architect Quality: 4/5\nAC was specific about return types, error codes, fixture strategy, and module targets. Minor initial ambiguity on detail-message requirements caught and resolved during review cycle. Good design rationale distinguishing scanner vs storage behavior.\n\n### Deduction Breakdown\n- -0.02: test_valid_utf8_task_returns_none fails via ImportError (confounding RED signal) rather than exercising the valid-path assertion; acceptable for RED contract but slightly reduces diagnostic clarity\n\n### Confidence: 0.98\n### Action: archive\n\n### Commits Verified\n- 69dba5eb test: corruption scanner encoding hardening RED (#1368, test-writer)\n- b198b923 test: enhance detail assertion for CorruptionError in encoding tests
