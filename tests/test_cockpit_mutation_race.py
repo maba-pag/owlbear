@@ -267,9 +267,10 @@ class TestFromAC_409DetailStrings:
             json={"updated": "1970-01-01T00:00:00", "title": "Stale probe"},
         )
         assert response.status_code == 409
-        assert response.json()["detail"] == (
-            "Task was modified since your last load (stale snapshot)"
-        )
+        body = response.json()
+        assert "detail" not in body
+        assert body.get("code") == "ERR_STALE"
+        assert "message" in body
 
     def test_release_unclaimed_task_exact_detail_string(
         self, client, engine: KanbanEngine
@@ -278,7 +279,10 @@ class TestFromAC_409DetailStrings:
         task = engine.show_task("1")
         response = client.post("/api/tasks/1/release", json={"updated": task.updated})
         assert response.status_code == 409
-        assert response.json()["detail"] == "Task 1 is not currently claimed"
+        body = response.json()
+        assert "detail" not in body
+        assert "code" in body
+        assert "not currently claimed" in str(body.get("message", "")).lower()
 
 
 # ---------------------------------------------------------------------------

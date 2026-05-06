@@ -706,10 +706,12 @@ class TestFromAC_ReleaseStaleToken:
 
         response = client.post("/api/tasks/2/release", json={"updated": stale_token})
         assert response.status_code == 409
-        detail = response.json()["detail"]
-        assert "stale" in detail.lower() or "modified" in detail.lower(), (
+        body = response.json()
+        assert "detail" not in body
+        assert body.get("code") == "ERR_STALE"
+        assert "message" in body, (
             f"Stale token on claimed task must return 409 with stale-snapshot detail (AC7), "
-            f"got detail: {detail!r}"
+            f"got body: {body!r}"
         )
 
     def test_release_fresh_updated_token_on_claimed_task_returns_200(

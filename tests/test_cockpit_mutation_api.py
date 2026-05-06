@@ -202,7 +202,10 @@ class TestFromAC_MoveTask:
             json={"status": "in-progress", "updated": task.updated},
         )
         assert response.status_code == 404
-        assert "999" in response.json()["detail"]
+        body = response.json()
+        assert "detail" not in body
+        assert body.get("code") == "ERR_NOT_FOUND"
+        assert "999" in str(body.get("message", ""))
 
     def test_move_missing_updated_returns_422(self, client: TestClient) -> None:
         """Missing required 'updated' field in move request returns 422."""
@@ -238,9 +241,10 @@ class TestFromAC_MoveTask:
             )
 
         assert response.status_code == 409
-        assert response.json()["detail"] == (
-            "Task was modified since your last load (stale snapshot)"
-        )
+        body = response.json()
+        assert "detail" not in body
+        assert body.get("code") == "ERR_STALE"
+        assert "message" in body
 
 
 # ---------------------------------------------------------------------------
@@ -409,7 +413,10 @@ class TestFromAC_EditTask:
             json={"updated": "2025-01-01T00:00:00", "title": "Ghost task"},
         )
         assert response.status_code == 404
-        assert "999" in response.json()["detail"]
+        body = response.json()
+        assert "detail" not in body
+        assert body.get("code") == "ERR_NOT_FOUND"
+        assert "999" in str(body.get("message", ""))
 
     def test_edit_concurrency_error_returns_409_with_stale_detail(
         self, client: TestClient, engine: KanbanEngine
@@ -425,9 +432,10 @@ class TestFromAC_EditTask:
             )
 
         assert response.status_code == 409
-        assert response.json()["detail"] == (
-            "Task was modified since your last load (stale snapshot)"
-        )
+        body = response.json()
+        assert "detail" not in body
+        assert body.get("code") == "ERR_STALE"
+        assert "message" in body
 
 
 # ---------------------------------------------------------------------------
@@ -479,7 +487,10 @@ class TestFromAC_ReleaseTask:
         token = engine.show_task("1").updated
         response = client.post("/api/tasks/999/release", json={"updated": token})
         assert response.status_code == 404
-        assert "999" in response.json()["detail"]
+        body = response.json()
+        assert "detail" not in body
+        assert body.get("code") == "ERR_NOT_FOUND"
+        assert "999" in str(body.get("message", ""))
 
     def test_release_without_body_returns_422(self, client: TestClient) -> None:
         """Release requires a request body with the current updated token."""
@@ -497,8 +508,10 @@ class TestFromAC_ReleaseTask:
         response = client.post("/api/tasks/2/release", json={"updated": stale_updated})
 
         assert response.status_code == 409
-        detail = response.json()["detail"].lower()
-        assert "stale" in detail or "modified" in detail
+        body = response.json()
+        assert "detail" not in body
+        assert body.get("code") == "ERR_STALE"
+        assert "message" in body
 
 
 # ---------------------------------------------------------------------------
