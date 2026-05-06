@@ -1,10 +1,10 @@
 ---
 id: 1333
 title: 'P3-17: Agent definitions + prompts (knowledge-ingestor + knowledge-enricher)'
-status: done
+status: archived
 priority: important
 created: 2026-05-04T05:48:50.177453+00:00
-updated: 2026-05-06T00:43:55.887122+00:00
+updated: 2026-05-06T02:32:17.723710+00:00
 tags:
 - phase-3
 - scope:agents
@@ -16,7 +16,7 @@ depends_on:
 - 1332
 blocked: false
 block_reason:
-claimed_at: 2026-05-06T00:43:55.887122+00:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -181,3 +181,34 @@ Architecture review complete. AC tightened with explicit tool prefixes (ob-knowl
 
 ### Scratch Files Cleaned
 - None (`1333-*` scratch files: none existed)
+[[2026-05-06]]
+## Audit
+
+### AC Verification
+| AC Line | Evidence | Status |
+|---|---|---|
+| knowledge-ingestor.agent.md with tools + vscode/askQuestions | Direct read: tools array at L8 lists all 5 ob-knowledge tools + vscode/askQuestions | PASS |
+| knowledge-enricher.agent.md with required tools | Direct read: tools array at L9 lists get_next_batch, get_consolidation_candidates, store_enrichment, get_stats, search_knowledge | PASS |
+| Enricher model fallback chain per D8 | Direct read: L7 `model: [GPT-5.4 mini (copilot), GPT-5 mini (copilot), Claude Haiku 4.5 (copilot)]` | PASS |
+| kb-ingest.prompt.md with knowledge-ingestor binding | Direct read: L3 `agent: knowledge-ingestor` | PASS |
+| kb-enrich.prompt.md with knowledge-enricher binding + D7 parallelism | Direct read: L3 `agent: knowledge-enricher`, L10 documents 1-6 sessions | PASS |
+| Enricher worker loop documented | Direct read: critical_rules L31-35 documents Phase 1 pull+persist, Phase 2 consolidation | PASS |
+| Structural standards (frontmatter, persona, required_reading, critical_rules) | Both agents confirmed: frontmatter L1-8/9, persona L11/12, required_reading L20/22, critical_rules L26/28 | PASS |
+
+### Test Results
+- Full suite: 4629 passed, 252 failed, 4 skipped
+- Failures are pre-existing cross-task regressions (engine accessor, memory model, frontend SSE, MCP kanban server) — none in task scope
+- Task is td:0 (declarative markdown); no Python code introduced
+
+### Commit Integrity
+- Builder: `424fcd56` feat: add knowledge ingestor/enricher agents and prompts (#1333, builder)
+- Doc-writer: `9c641232` docs: update agent/prompt counts in share/README.md (#1333, doc-writer)
+
+### AC Quality Score: 5/5
+Specific, complete, unambiguous. Exact tool names with ob-knowledge/ prefixes, exact model array values, D-reference annotations, td:0 annotations. Clean implementation path.
+
+### Deductions
+- None. All AC lines have direct file-read evidence. No task-scope failures. Lint N/A (markdown only). Reviewer evidence present and detailed.
+
+### Confidence: 1.00
+### Action: Archive
