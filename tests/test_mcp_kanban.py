@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import inspect
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 from mcp.server.fastmcp.exceptions import ToolError
@@ -16,9 +16,6 @@ from owlbear_kanban.models import SingleTaskResponse
 from owlbear_mcp_kanban.server import (
     AppContext,
     _apply_tool_exclusions,
-    _canonical_agent_view_for,
-    _invoke_view_end_work,
-    _invoke_view_move_task,
     _show_validated,
     _to_single_task_response,
     create_dr,
@@ -303,12 +300,9 @@ class TestNoRetryOnTypeError:
     ) -> None:
         mock_view = MagicMock()
         mock_view.end_work.side_effect = TypeError("unexpected kwarg: archival_refs")
-        resolver_name = "_canonical" + "_agent" + "_view_for"
+        app_ctx_claimed.engine._agent_view = mock_view  # noqa: SLF001
 
-        with (
-            patch.object(_server_mod, resolver_name, return_value=mock_view),
-            pytest.raises(TypeError),
-        ):
+        with pytest.raises(TypeError):
             await end_work(
                 _make_ctx(app_ctx_claimed),
                 id="1",
@@ -328,12 +322,9 @@ class TestNoRetryOnTypeError:
     ) -> None:
         mock_view = MagicMock()
         mock_view.end_work.side_effect = TypeError("unexpected kwarg: archival_refs")
-        resolver_name = "_canonical" + "_agent" + "_view_for"
+        app_ctx_claimed.engine._agent_view = mock_view  # noqa: SLF001
 
-        with (
-            patch.object(_server_mod, resolver_name, return_value=mock_view),
-            pytest.raises(TypeError),
-        ):
+        with pytest.raises(TypeError):
             await end_work(
                 _make_ctx(app_ctx_claimed),
                 id="1",
@@ -353,12 +344,9 @@ class TestNoRetryOnTypeError:
     ) -> None:
         mock_view = MagicMock()
         mock_view.move_task.side_effect = TypeError("unexpected kwarg: archival_refs")
-        resolver_name = "_canonical" + "_agent" + "_view_for"
+        app_ctx_todo.engine._agent_view = mock_view  # noqa: SLF001
 
-        with (
-            patch.object(_server_mod, resolver_name, return_value=mock_view),
-            pytest.raises(TypeError),
-        ):
+        with pytest.raises(TypeError):
             await move_task(
                 _make_ctx(app_ctx_todo),
                 id="1",
@@ -496,188 +484,23 @@ class TestToSingleTaskResponse:
         assert result is original
 
 
-class TestCanonicalAgentViewFor:
-    """Branch coverage for _canonical_agent_view_for."""
+class TestAgentViewHelpersRemoved:
+    """Regression: dead-code helpers were removed in #1360; confirm they are gone."""
 
-    def test_agent_view_none_returns_none(self, tmp_path: Path) -> None:
-        kanban_dir = _make_board(tmp_path)
-        engine = KanbanEngine(kanban_dir)
-        engine.agent_view = None  # type: ignore[method-assign]
-        result = _canonical_agent_view_for(engine)
-        assert result is None
+    def test_canonical_agent_view_for_not_exported(self) -> None:
+        import owlbear_mcp_kanban.server as srv
 
-    def test_callable_raises_returns_none(self, tmp_path: Path) -> None:
-        kanban_dir = _make_board(tmp_path)
-        engine = KanbanEngine(kanban_dir)
+        assert not hasattr(srv, "_canonical_agent_view_for")
 
-        def _raising() -> None:
-            msg = "boom"
-            raise RuntimeError(msg)
+    def test_invoke_view_move_task_not_exported(self) -> None:
+        import owlbear_mcp_kanban.server as srv
 
-        engine.agent_view = _raising  # type: ignore[method-assign]
-        result = _canonical_agent_view_for(engine)
-        assert result is None
+        assert not hasattr(srv, "_invoke_view_move_task")
 
-    def test_non_callable_returns_object_directly(self, tmp_path: Path) -> None:
-        kanban_dir = _make_board(tmp_path)
-        engine = KanbanEngine(kanban_dir)
-        sentinel = object()
-        engine.agent_view = sentinel  # type: ignore[method-assign]
-        result = _canonical_agent_view_for(engine)
-        assert result is sentinel
+    def test_invoke_view_end_work_not_exported(self) -> None:
+        import owlbear_mcp_kanban.server as srv
 
-
-class TestInvokeViewMoveTask:
-    """Branch coverage for _invoke_view_move_task."""
-
-    def test_none_view_returns_none(self) -> None:
-        result = _invoke_view_move_task(
-            None, task_id=1, status="todo", archival_reason=None, archival_refs=None
-        )
-        assert result is None
-
-    def test_view_without_move_task_attr_returns_none(self) -> None:
-        result = _invoke_view_move_task(
-            object(),
-            task_id=1,
-            status="todo",
-            archival_reason=None,
-            archival_refs=None,
-        )
-        assert result is None
-
-    def test_not_implemented_returns_none(self) -> None:
-        mock_view = MagicMock()
-        mock_view.move_task.side_effect = NotImplementedError()
-        result = _invoke_view_move_task(
-            mock_view,
-            task_id=1,
-            status="todo",
-            archival_reason=None,
-            archival_refs=None,
-        )
-        assert result is None
-
-    def test_kanban_error_raises_tool_error(self) -> None:
-        mock_view = MagicMock()
-        mock_view.move_task.side_effect = KanbanError(
-            code="ERR_NOT_FOUND", user_message="something went wrong"
-        )
-        with pytest.raises(ToolError, match="something went wrong"):
-            _invoke_view_move_task(
-                mock_view,
-                task_id=1,
-                status="done",
-                archival_reason=None,
-                archival_refs=None,
-            )
-
-
-class TestInvokeViewEndWork:
-    """Branch coverage for _invoke_view_end_work."""
-
-    _TASK_DICT: dict[str, object] = {  # noqa: RUF012
-        "id": 1,
-        "title": "T",
-        "status": "in-progress",
-        "priority": "important",
-        "tags": [],
-        "depends_on": [],
-        "blocked": False,
-        "block_reason": None,
-        "claimed": False,
-        "claimed_at": None,
-        "archival_reason": None,
-        "archival_refs": [],
-        "dep_status": None,
-        "created": "2026-01-01T00:00:00+00:00",
-        "updated": "2026-01-01T00:00:00+00:00",
-        "body": "",
-        "guidance": [],
-    }
-
-    def test_none_view_returns_none(self) -> None:
-        result = _invoke_view_end_work(
-            None,
-            task_id=1,
-            outcome="success",
-            move_to=None,
-            note=None,
-            block_reason=None,
-            archival_reason=None,
-            archival_refs=None,
-        )
-        assert result is None
-
-    def test_not_implemented_returns_none(self) -> None:
-        mock_view = MagicMock()
-        mock_view.end_work.side_effect = NotImplementedError()
-        result = _invoke_view_end_work(
-            mock_view,
-            task_id=1,
-            outcome="success",
-            move_to=None,
-            note=None,
-            block_reason=None,
-            archival_reason=None,
-            archival_refs=None,
-        )
-        assert result is None
-
-    def test_success_outcome_returns_task_and_collects_guidance(self) -> None:
-        mock_view = MagicMock()
-        mock_view.end_work.return_value = SingleTaskResponse.model_validate(
-            self._TASK_DICT
-        )
-        result = _invoke_view_end_work(
-            mock_view,
-            task_id=1,
-            outcome="success",
-            move_to=None,
-            note="done",
-            block_reason=None,
-            archival_reason=None,
-            archival_refs=None,
-        )
-        assert isinstance(result, SingleTaskResponse)
-        end_work_call = mock_view.end_work.call_args
-        assert end_work_call.args[0] == 1, f"task_id forwarded as {end_work_call.args[0]!r}, expected 1"
-        assert end_work_call.kwargs.get("outcome") == "success"
-        assert end_work_call.kwargs.get("note") == "done"
-
-    def test_block_outcome_triggers_guidance_collection(self) -> None:
-        mock_view = MagicMock()
-        mock_view.end_work.return_value = SingleTaskResponse.model_validate(
-            self._TASK_DICT
-        )
-        result = _invoke_view_end_work(
-            mock_view,
-            task_id=1,
-            outcome="block",
-            move_to=None,
-            note="blocked",
-            block_reason="waiting",
-            archival_reason=None,
-            archival_refs=None,
-        )
-        assert isinstance(result, SingleTaskResponse)
-        end_work_call = mock_view.end_work.call_args
-        assert end_work_call.args[0] == 1, f"task_id forwarded as {end_work_call.args[0]!r}, expected 1"
-        assert end_work_call.kwargs.get("outcome") == "block"
-        assert end_work_call.kwargs.get("block_reason") == "waiting"
-
-    def test_view_without_end_work_attr_returns_none(self) -> None:
-        result = _invoke_view_end_work(
-            object(),
-            task_id=1,
-            outcome="success",
-            move_to=None,
-            note=None,
-            block_reason=None,
-            archival_reason=None,
-            archival_refs=None,
-        )
-        assert result is None
+        assert not hasattr(srv, "_invoke_view_end_work")
 
 
 class TestShowValidated:
@@ -830,20 +653,17 @@ class TestCreateDRExtraBranches:
             )
 
 
-class TestMovetaskFallbackPath:
-    """move_task falls back to engine.move_task when canonical view returns None."""
+class TestMoveTaskDirectPath:
+    """move_task uses engine.agent_view() directly — no fallback path exists (#1360)."""
 
     @pytest.mark.asyncio
-    async def test_fallback_path_moves_task(self, app_ctx_todo: AppContext) -> None:
+    async def test_direct_path_moves_task(self, app_ctx_todo: AppContext) -> None:
         ctx = _make_ctx(app_ctx_todo)
-        with patch.object(
-            _server_mod, "_canonical_agent_view_for", return_value=None
-        ):
-            result = await move_task(ctx, id="1", status="in-progress")
+        result = await move_task(ctx, id="1", status="in-progress")
         assert result.status == "in-progress"
 
     @pytest.mark.asyncio
-    async def test_fallback_path_no_status_raises(
+    async def test_no_status_raises_tool_error(
         self, app_ctx_todo: AppContext
     ) -> None:
         ctx = _make_ctx(app_ctx_todo)
@@ -851,36 +671,29 @@ class TestMovetaskFallbackPath:
             await move_task(ctx, id="1")
 
     @pytest.mark.asyncio
-    async def test_fallback_kanban_error_raises_tool_error(
+    async def test_agent_view_kanban_error_raises_tool_error(
         self, app_ctx_todo: AppContext
     ) -> None:
+        mock_view = MagicMock()
+        mock_view.move_task.side_effect = KanbanError(
+            code="ERR_NOT_FOUND", user_message="move failed"
+        )
+        app_ctx_todo.engine._agent_view = mock_view  # noqa: SLF001
         ctx = _make_ctx(app_ctx_todo)
-        with (
-            patch.object(_server_mod, "_canonical_agent_view_for", return_value=None),
-            patch.object(
-                app_ctx_todo.engine,
-                "move_task",
-                side_effect=KanbanError(code="ERR_NOT_FOUND", user_message="move failed"),
-            ),
-            pytest.raises(ToolError, match="move failed"),
-        ):
+        with pytest.raises(ToolError, match="move failed"):
             await move_task(ctx, id="1", status="in-progress")
 
     @pytest.mark.asyncio
-    async def test_fallback_value_error_raises_tool_error(
+    async def test_not_implemented_propagates_without_fallback(
         self, app_ctx_todo: AppContext
     ) -> None:
+        """NotImplementedError from agent_view().move_task() is NOT caught — no engine fallback."""
+        mock_view = MagicMock()
+        mock_view.move_task.side_effect = NotImplementedError("view unavailable")
+        app_ctx_todo.engine._agent_view = mock_view  # noqa: SLF001
         ctx = _make_ctx(app_ctx_todo)
-        with (
-            patch.object(_server_mod, "_canonical_agent_view_for", return_value=None),
-            patch.object(
-                app_ctx_todo.engine,
-                "move_task",
-                side_effect=ValueError("invalid status"),
-            ),
-            pytest.raises(ToolError, match="invalid status"),
-        ):
-            await move_task(ctx, id="1", status="bad-status")
+        with pytest.raises(NotImplementedError):
+            await move_task(ctx, id="1", status="in-progress")
 
 
 class TestEditTaskKwargsBranches:
@@ -977,80 +790,78 @@ class TestEditTaskKwargsBranches:
         assert call_kwargs.get("archival_refs") == [100]
 
 
-class TestStartWorkFallbackPath:
-    """start_work falls to engine path when view raises NotImplementedError."""
+class TestStartWorkDirectPath:
+    """start_work uses engine.agent_view() directly — no engine fallback (#1360)."""
 
     @pytest.mark.asyncio
-    async def test_not_implemented_falls_back_to_engine(
+    async def test_not_implemented_propagates_without_fallback(
         self, app_ctx_todo: AppContext
     ) -> None:
+        """NotImplementedError from agent_view().start_work() propagates — no engine fallback."""
         mock_view = MagicMock()
-        mock_view.start_work.side_effect = NotImplementedError()
-        with patch.object(
-            _server_mod, "_canonical_agent_view_for", return_value=mock_view
-        ):
-            ctx = _make_ctx(app_ctx_todo)
-            result = await start_work(ctx, id="1")
-        assert result.id == 1
+        mock_view.start_work.side_effect = NotImplementedError("view unavailable")
+        app_ctx_todo.engine._agent_view = mock_view  # noqa: SLF001
+        ctx = _make_ctx(app_ctx_todo)
+        with pytest.raises(NotImplementedError):
+            await start_work(ctx, id="1")
 
     @pytest.mark.asyncio
-    async def test_engine_fallback_value_error_raises_tool_error(
+    async def test_agent_view_value_error_raises_tool_error(
         self, app_ctx_todo: AppContext
     ) -> None:
-        with (
-            patch.object(_server_mod, "_canonical_agent_view_for", return_value=None),
-            patch.object(
-                app_ctx_todo.engine,
-                "start_work",
-                side_effect=ValueError("bad task id"),
-            ),
-            pytest.raises(ToolError, match="bad task id"),
-        ):
+        """ValueError from agent_view().start_work() is converted to ToolError."""
+        mock_view = MagicMock()
+        mock_view.start_work.side_effect = ValueError("bad task id")
+        app_ctx_todo.engine._agent_view = mock_view  # noqa: SLF001
+        with pytest.raises(ToolError, match="bad task id"):
             await start_work(_make_ctx(app_ctx_todo), id="1")
 
 
-class TestEndWorkEngineFallbackPath:
-    """end_work falls back to asyncio.to_thread(engine.end_work) when view is None."""
+class TestEndWorkDirectPath:
+    """end_work uses engine.agent_view() directly — no engine fallback (#1360)."""
 
     @pytest.mark.asyncio
-    async def test_engine_fallback_advances_task(
+    async def test_direct_path_advances_task(
         self, app_ctx_claimed: AppContext
     ) -> None:
         ctx = _make_ctx(app_ctx_claimed)
-        with patch.object(_server_mod, "_canonical_agent_view_for", return_value=None):
-            result = await end_work(ctx, id="1", outcome="success", note="done")
+        result = await end_work(ctx, id="1", outcome="success", note="done")
         assert result.id == 1
 
     @pytest.mark.asyncio
-    async def test_engine_fallback_kanban_error_raises_tool_error(
+    async def test_agent_view_kanban_error_raises_tool_error(
         self, app_ctx_claimed: AppContext
     ) -> None:
+        mock_view = MagicMock()
+        mock_view.end_work.side_effect = KanbanError(
+            code="ERR_NOT_FOUND", user_message="end failed"
+        )
+        app_ctx_claimed.engine._agent_view = mock_view  # noqa: SLF001
         ctx = _make_ctx(app_ctx_claimed)
-        with (
-            patch.object(_server_mod, "_canonical_agent_view_for", return_value=None),
-            patch.object(
-                app_ctx_claimed.engine,
-                "end_work",
-                side_effect=KanbanError(code="ERR_NOT_FOUND", user_message="end failed"),
-            ),
-            pytest.raises(ToolError, match="end failed"),
-        ):
+        with pytest.raises(ToolError, match="end failed"):
             await end_work(ctx, id="1", outcome="success", note="done")
 
     @pytest.mark.asyncio
-    async def test_engine_fallback_value_error_raises_tool_error(
+    async def test_agent_view_value_error_raises_tool_error(
         self, app_ctx_claimed: AppContext
     ) -> None:
+        mock_view = MagicMock()
+        mock_view.end_work.side_effect = ValueError("invalid outcome")
+        app_ctx_claimed.engine._agent_view = mock_view  # noqa: SLF001
         ctx = _make_ctx(app_ctx_claimed)
-        with (
-            patch.object(_server_mod, "_canonical_agent_view_for", return_value=None),
-            patch.object(
-                app_ctx_claimed.engine,
-                "end_work",
-                side_effect=ValueError("invalid outcome"),
-            ),
-            pytest.raises(ToolError, match="invalid outcome"),
-        ):
+        with pytest.raises(ToolError, match="invalid outcome"):
+            await end_work(ctx, id="1", outcome="success", note="done")
+
+    @pytest.mark.asyncio
+    async def test_not_implemented_propagates_without_fallback(
+        self, app_ctx_claimed: AppContext
+    ) -> None:
+        """NotImplementedError from agent_view().end_work() propagates — no engine fallback."""
+        mock_view = MagicMock()
+        mock_view.end_work.side_effect = NotImplementedError("view unavailable")
+        app_ctx_claimed.engine._agent_view = mock_view  # noqa: SLF001
+        ctx = _make_ctx(app_ctx_claimed)
+        with pytest.raises(NotImplementedError):
             await end_work(ctx, id="1", outcome="success", note="done")
 
 
