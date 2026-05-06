@@ -217,6 +217,73 @@ class TestFromAC_ErrorEnvelopeShape:
         body = resp.json()
         assert "code" in body  # FAILS: {"detail": "Task was modified..."} has no code
 
+    def test_stale_conflict_409_code_is_nonempty_string(
+        self, client: TestClient, engine: KanbanEngine
+    ) -> None:
+        """AC1 tightening: 409 envelope code and message are non-empty strings."""
+        tasks = engine.list_tasks(status="todo")
+        assert tasks, "fixture must have a todo task"
+        task = tasks[0]
+        resp = client.post(
+            f"/api/tasks/{task.id}/move",
+            json={"status": "in-progress", "updated": "2000-01-01T00:00:00"},
+        )
+        assert resp.status_code == 409
+        body = resp.json()
+        code = body.get("code")
+        assert isinstance(code, str)  # FAILS: code is absent (None)
+        assert code  # non-empty
+        message = body.get("message")
+        assert isinstance(message, str)  # FAILS: message is absent
+        assert message  # non-empty
+
+    def test_invalid_transition_422_code_is_nonempty_string(
+        self, client: TestClient, engine: KanbanEngine
+    ) -> None:
+        """AC1 tightening: 422 envelope code and message are non-empty strings."""
+        tasks = engine.list_tasks(status="todo")
+        assert tasks, "fixture must have a todo task"
+        task = tasks[0]
+        resp = client.post(
+            f"/api/tasks/{task.id}/move",
+            json={"status": "nonexistent-status", "updated": task.updated},
+        )
+        assert resp.status_code == 422
+        body = resp.json()
+        code = body.get("code")
+        assert isinstance(code, str)  # FAILS: code is absent (None)
+        assert code  # non-empty
+        message = body.get("message")
+        assert isinstance(message, str)  # FAILS: message is absent
+        assert message  # non-empty
+
+    def test_config_error_500_code_is_nonempty_string(
+        self, client: TestClient, engine: KanbanEngine
+    ) -> None:
+        """AC1 tightening: 500 envelope code and message are non-empty strings."""
+        from owlbear_cockpit.view import CockpitView  # noqa: PLC0415
+
+        tasks = engine.list_tasks(status="todo")
+        assert tasks, "fixture must have a todo task"
+        task = tasks[0]
+        with mock.patch.object(
+            CockpitView,
+            "edit_task",
+            side_effect=ConfigError("ERR_INVALID_STATUS", "invalid board configuration"),
+        ):
+            resp = client.post(
+                f"/api/tasks/{task.id}/edit",
+                json={"updated": task.updated, "title": "Patched title"},
+            )
+        assert resp.status_code == 500
+        body = resp.json()
+        code = body.get("code")
+        assert isinstance(code, str)  # FAILS: code is absent (None)
+        assert code  # non-empty
+        message = body.get("message")
+        assert isinstance(message, str)  # FAILS: message is absent
+        assert message  # non-empty
+
 
 # ---------------------------------------------------------------------------
 # AC2: Representative error coverage — status code + envelope per error type
@@ -449,17 +516,34 @@ class TestFromAC_GuidancePolicy:
     def test_list_cache_hit_guidance_is_empty_list(
         self, cache_client: TestClient
     ) -> None:
-        """(b) Cache-hit list response returns guidance=[] (no stale guidance surfaced).
+        """(b) Cache-hit returns guidance=[] even when the seeding miss had sentinel guidance.
 
+        Seeds the cache via a mocked miss that returns non-empty sentinel guidance.
+        After the mock exits, the second request is a cache hit (directory unchanged)
+        and must return guidance=[] — proving the hit path never surfaces stale guidance.
         Pre-condition: KanbanError exception handler must be registered (#1371).
         """
         assert _has_kanban_error_handler()  # FAILS — handler not yet registered
 
-        cache_client.get("/api/tasks")  # warm the cache
-        resp = cache_client.get("/api/tasks")  # cache hit
+        from owlbear_cockpit.view import CockpitView  # noqa: PLC0415
+
+        sentinel_guidance = ["cockpit-test-cache-hit-sentinel"]
+        with mock.patch.object(
+            CockpitView,
+            "list_tasks",
+            return_value=mock.MagicMock(
+                tasks=[],
+                guidance=sentinel_guidance,
+                missing_ids=[],
+            ),
+        ):
+            cache_client.get("/api/tasks")  # cache miss — sentinel guidance stored
+
+        # Second request: cache hit — list_tasks is NOT called; guidance must be []
+        resp = cache_client.get("/api/tasks")
         body = resp.json()
         assert resp.status_code == 200
-        assert body.get("guidance") == []
+        assert body.get("guidance") == []  # must NOT return the sentinel guidance
 
     def test_mutation_response_guidance_is_empty_list(
         self, cache_client: TestClient, engine: KanbanEngine
