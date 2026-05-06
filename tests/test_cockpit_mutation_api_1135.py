@@ -434,8 +434,9 @@ class TestFromAC_MoveSharedSuiteContract:
             window = "\n".join(lines[start:end])
             if "client.post" not in window:
                 continue
-            # Skip if 'updated' key is absent (already caught by the weak guard)
-            if '"updated"' not in window and "'updated'" not in window:
+            # Skip if 'updated' key is absent from actual payload (colon
+            # distinguishes dict keys from docstring/comment mentions)
+            if '"updated":' not in window and "'updated':" not in window:
                 continue
             # Stronger: verify 'updated' value is sourced from task.updated
             if "task.updated" not in window:

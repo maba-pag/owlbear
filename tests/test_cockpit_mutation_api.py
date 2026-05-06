@@ -244,7 +244,7 @@ class TestFromAC_MoveTask:
         body = response.json()
         assert "detail" not in body
         assert body.get("code") == "ERR_STALE"
-        assert "message" in body
+        assert body["message"] == "stale"
 
 
 # ---------------------------------------------------------------------------
@@ -435,7 +435,7 @@ class TestFromAC_EditTask:
         body = response.json()
         assert "detail" not in body
         assert body.get("code") == "ERR_STALE"
-        assert "message" in body
+        assert body["message"] == "stale"
 
 
 # ---------------------------------------------------------------------------
@@ -511,7 +511,7 @@ class TestFromAC_ReleaseTask:
         body = response.json()
         assert "detail" not in body
         assert body.get("code") == "ERR_STALE"
-        assert "message" in body
+        assert "changed since read" in body["message"]
 
 
 # ---------------------------------------------------------------------------

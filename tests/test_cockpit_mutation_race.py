@@ -270,7 +270,7 @@ class TestFromAC_409DetailStrings:
         body = response.json()
         assert "detail" not in body
         assert body.get("code") == "ERR_STALE"
-        assert "message" in body
+        assert "changed since read" in body["message"]
 
     def test_release_unclaimed_task_exact_detail_string(
         self, client, engine: KanbanEngine
