@@ -1,10 +1,10 @@
 ---
 id: 1371
 title: 'P1-08: Implement Cockpit backend error envelope and guidance contract'
-status: todo
+status: archived
 priority: critical
 created: 2026-05-06T00:58:43.072416+00:00
-updated: 2026-05-06T15:55:23.361659+00:00
+updated: 2026-05-06T16:56:35.813173+00:00
 tags:
 - cockpit
 - audit-remediation
@@ -19,7 +19,7 @@ depends_on:
 - 1370
 blocked: false
 block_reason:
-claimed_at: 2026-05-06T15:55:23.361659+00:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -550,3 +550,178 @@ Architecture review (retry refinement): broadened AC7 to include 3 additional fa
 - The latest retry did close the prior AC3 and Pydantic carve-out gaps.
 - The remaining blocker is narrower but more serious: the migration weakened durable `TestFromAC` proofs while leaving their stated contracts unchanged.
 - A red adjacent durable suite inside the touched surface is enough to block review even when the core envelope handler code looks correct.
+[[2026-05-06]]
+## Test-Writer Notes
+- Retry verification pass — no new tests written.
+- Test file: tests/test_cockpit_error_envelope_1371.py (12 tests, all PASS — unchanged from commit b0b18c23)
+- ruff: clean
+
+### AC Coverage
+| AC | Status | Notes |
+|----|--------|-------|
+| AC7 (broadened) | 4+3 PASS | TestFromAC_LegacyTestMigration (4) + TestFromAC_ReleaseErrorEnvelope (3) — all durable migration sites covered |
+| AC4(d) | 1 PASS | TestFromAC_ShowTaskGuidanceForwarding — sentinel forwarding |
+| AC8 | 1 PASS | TestFromAC_DecisionsFrameworkCarveOut — decisions HTTPException retains detail |
+| AC3 | 2 PASS | TestFromAC_UnexpectedErrorExactContract — exact COCKPIT_INTERNAL_ERROR literals |
+| AC10 | 1 PASS | TestFromAC_PydanticCarveOut — code/message absent from 422 |
+
+### Notes
+- Architect retry guidance: "process AC7 (new files only) and AC10" — both were already fulfilled by commit b0b18c23 in the prior test-writer cycle.
+- Previously failing test `tests/test_cockpit_mutation_api_1135.py::TestFromAC_MoveSharedSuiteContract::test_shared_suite_move_posts_source_updated_from_engine_show_task` now PASSES (1 PASSED — confirmed by direct run).
+- Scoped regression suite: 271 passed, 0 failed, 0 skipped (11 files including all previously-failing durable suites).
+- Direct-to-review per Step 1b.1: all tests PASS, no implementation delta needed, no lint issues.
+[[2026-05-06]]
+## Builder Notes
+- Implementation: no file edits in this builder cycle (verification-only pass-through).
+- Context: latest test-writer retry already resolved the prior proof gaps; this builder pass re-validated current state before handoff.
+- Tests: 231 passed, 0 failed, 0 skipped (scoped quality-runner batch over task + affected durable cockpit suites).
+- Coverage (scoped context): `owlbear_cockpit.main` 57%, `owlbear_cockpit.routes.read` 98%, `owlbear_cockpit.routes.mutation` 90%, `owlbear_cockpit.routes.decisions` 39%.
+- Ruff: clean (0 violations) on scoped files.
+- Approach: no implementation delta required; verification-only pass-through to provide fresh GREEN evidence and route to review.
+
+### Post-task Reflection
+- The remaining work at this stage was evidence freshness rather than code changes.
+- A scoped quality-runner pass across both task-owned and adjacent durable suites reduced false-green risk before handoff.
+- Keeping this cycle edit-free avoided unnecessary churn and preserved the prior test-writer contract hardening.
+[[2026-05-06]]
+## Review Evidence
+### Test Results
+- quality-runner scoped pass: 266 passed, 0 failed, 0 skipped across tests/test_cockpit_error_envelope_1371.py, tests/test_cockpit_error_envelope_1370.py, tests/test_cockpit_mutation_api_1134.py, tests/test_cockpit_mutation_api_1135.py, tests/test_cockpit_read_api.py, tests/test_cockpit_mutation_api.py, tests/test_cockpit_mutation_api_1132.py, tests/test_cockpit_mutation_race.py, tests/test_cockpit_kanban_routes.py, and tests/test_decisions_1218.py.
+- pytest exit code: 0.
+
+### Lint Results
+- Ruff clean on serve/cockpit/src/owlbear_cockpit/ and the 10 scoped test files.
+
+### Coverage Data
+- owlbear_cockpit.main: 57%
+- owlbear_cockpit.routes.read: 100%
+- owlbear_cockpit.routes.mutation: 96%
+- owlbear_cockpit.routes.decisions: 39%
+- owlbear_cockpit.view: 85%
+- Context only: no source changes landed in the final retry cycle; read, mutation, and view coverage is sufficient for the task-owned surface. decisions and main remain residual suite debt, not blockers for this review.
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---------|-------------|---------------------------|---------|
+| AC1 | 1370 envelope test, 1371 legacy migration tests, 1371 unexpected-error exact-contract tests, durable read/mutation envelope assertions | Yes | COVERED |
+| AC2 | mutation_api move/release 404 and 409 tests, 1134 edit 409 test, main.py KanbanError handler | Yes | COVERED |
+| AC3 | 1371 unexpected-error exact-contract tests | Yes | COVERED |
+| AC4 | 1370 error/list/mutation guidance tests, 1371 show-task sentinel forwarding test, view.py _to_single_response shared success-path normalization | Yes | COVERED |
+| AC5 | 1370 status-preservation tests, mutation_api 404 and 409 tests, 1134 no-op 422 regression, 1371 Pydantic 422 carve-out test | Yes | COVERED |
+| AC6 | Fresh quality-runner scoped run includes all tests in tests/test_cockpit_error_envelope_1370.py | Yes | COVERED |
+| AC7 | Durable envelope migrations in 1134, 1135, read_api, mutation_api, 1132, and mutation_race | Yes | COVERED |
+| AC8 | 1371 decisions carve-out test and 1371 Pydantic carve-out test | Yes | COVERED |
+| AC9 | Review scope contains no frontend files | N/A | COVERED |
+| AC10 | 1371 Pydantic carve-out discrimination test | Yes | COVERED |
+
+#### Security Review
+- No issues found. The current surface is test-only and introduces no secrets, shell calls, unsafe path joins, or new dependencies.
+
+#### Test Integrity
+| Original Test | Change Made | Assessment |
+|---------------|-------------|------------|
+| Named durable envelope-migration sites in 1134, 1135, read_api, mutation_api, 1132, and mutation_race | Direct diff evidence was unavailable in this tool surface. Current files assert detail absence plus envelope checks, and all named suites are green in the fresh scoped run. Some docstrings still say detail after the envelope migration. | PRESERVED (low-confidence, wording drift only) |
+
+#### Test Quality
+| Dimension | Rating | Evidence |
+|-----------|--------|----------|
+| Assertion specificity | ADEQUATE | Exact unexpected-error literals are pinned in tests/test_cockpit_error_envelope_1371.py:333 and :361. Named durable migration sites assert detail absence and envelope fields in tests/test_cockpit_mutation_api_1134.py:193, tests/test_cockpit_mutation_api_1135.py:154 and :296, tests/test_cockpit_mutation_api.py:195, :230, :483, :500, and tests/test_cockpit_read_api.py:455. |
+| Negative/error-path coverage | STRONG | 404, 409, 422, and 500 paths are exercised across 1370, 1371, 1134, 1135, read_api, and mutation_api suites. |
+| Manual mutation reasoning | ADEQUATE | Reintroducing detail, changing COCKPIT_INTERNAL_ERROR literals, dropping show-task guidance forwarding, or surfacing stale list guidance would fail the current suite. Successful edit/release guidance relies partly on shared helper composition at serve/cockpit/src/owlbear_cockpit/view.py:72, :160, :197, :220. |
+| Test independence | STRONG | tmp_path board fixtures and dependency overrides isolate runs. |
+| Descriptive naming | ADEQUATE | Some durable tests still say detail in names/docstrings, but they remain route-specific and readable. |
+
+#### Data Safety
+- No issues found.
+
+#### Implementation-Aware Gaps
+- No untested path rises to FAIL severity in the current task contract.
+- I do not count compact-specific admin failure tests as missing because the latest architect refinement scoped that proof out explicitly: the app-level handlers in serve/cockpit/src/owlbear_cockpit/main.py:61 and :70 are already exercised by scan/repair tests, and the refinement at .owlbear/kanban/tasks/1371-p1-08-implement-cockpit-backend-error-envelope-and-guidance-contract.md:435 makes that narrower proof binding.
+- I also do not count AC4(c) as a blocker. The only exact end-to-end guidance=[] assertion is the move success case in tests/test_cockpit_error_envelope_1370.py:548, but successful move, edit, and release all flow through CockpitView._to_single_response at serve/cockpit/src/owlbear_cockpit/view.py:72, :160, :197, :220, and the green route suites still exercise success responses on move and release.
+
+#### Builder Process Quality
+| Metric | Value |
+|--------|-------|
+| Builder Notes sections | 5 |
+| Approach variation | Yes |
+| Assessment | FRICTION |
+
+### Pass 2 — INFORMATIONAL
+- Some durable test names/docstrings still say detail although the live assertions now prove the envelope contract, for example tests/test_cockpit_mutation_api.py:230 and :500 plus tests/test_cockpit_mutation_race.py:278. This is stale wording, not a contract failure.
+- Direct commit-diff and dirty-tree contamination checks were unavailable in this tool surface, so immutability evidence carries a small confidence deduction.
+- code-reader raised two objections that I do not count as blockers after source verification: compact-specific admin failure tests, and per-route end-to-end guidance=[] checks for edit/release.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| AC1 | serve/cockpit/src/owlbear_cockpit/main.py:61-77; tests/test_cockpit_error_envelope_1370.py:478; tests/test_cockpit_error_envelope_1371.py legacy and exact-contract suites; durable read/mutation envelope assertions stay green | 1370 envelope test, 1371 legacy migration, durable read/mutation suites | PASS |
+| AC2 | serve/cockpit/src/owlbear_cockpit/main.py:61-67; tests/test_cockpit_mutation_api.py:195, :230, :483, :500; tests/test_cockpit_mutation_api_1134.py:193; admin handler proof accepted per task refinement at task file:435 | Durable move/edit/release error suites plus shared handler proof | PASS |
+| AC3 | serve/cockpit/src/owlbear_cockpit/main.py:70-77; tests/test_cockpit_error_envelope_1371.py:333 and :361 | TestFromAC_UnexpectedErrorExactContract | PASS |
+| AC4 | tests/test_cockpit_error_envelope_1370.py:478, :488, :516, :548; tests/test_cockpit_error_envelope_1371.py:254; serve/cockpit/src/owlbear_cockpit/view.py:72, :160, :197, :220; tests/test_cockpit_kanban_routes.py:197 and :210 | 1370 guidance-policy tests, 1371 show-task sentinel forwarding, release/move route smoke | PASS |
+| AC5 | tests/test_cockpit_error_envelope_1370.py status-preservation suite; tests/test_cockpit_mutation_api.py:195, :230, :483, :500; tests/test_cockpit_mutation_api_1134.py:267; tests/test_cockpit_error_envelope_1371.py:490 | 1370 status tests, durable move/edit/release tests, Pydantic carve-out | PASS |
+| AC6 | Fresh quality-runner scoped run includes tests/test_cockpit_error_envelope_1370.py with no failures | quality-runner scoped run | PASS |
+| AC7 | tests/test_cockpit_mutation_api_1134.py:193; tests/test_cockpit_mutation_api_1135.py:154 and :296; tests/test_cockpit_read_api.py:455; tests/test_cockpit_mutation_api.py:195, :230, :483, :500; tests/test_cockpit_mutation_api_1132.py:686; tests/test_cockpit_mutation_race.py:278 | Named durable migration suites and task-owned regression suite | PASS |
+| AC8 | tests/test_cockpit_error_envelope_1371.py:292 and :490 | Decisions framework carve-out and Pydantic carve-out tests | PASS |
+| AC9 | No frontend files in scope or changed-file surface | Scope inspection | PASS |
+| AC10 | task refinement at task file:433; tests/test_cockpit_error_envelope_1371.py:490 | TestFromAC_PydanticCarveOut | PASS |
+
+### Confidence: 0.92
+### Verdict: PASS
+[[2026-05-06]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | All changes are test files only (tests/). serve/cockpit/README.md §Error Envelope (lines 47–63) already accurately documents the envelope contract — added by prior task; no prose update needed for this test-migration task. |
+| 2 | Module docstrings | No | N/A | Only test files modified in this task; no production module source changed (implementation landed in #1370). |
+| 3 | External attribution | No | N/A | No external repos or articles used — mechanical test assertion migration. |
+| 4 | Research doc | No | N/A | No research phase for this task. |
+| 5 | Diagram maintenance (describes match) | No | N/A | cockpit.excalidraw describes `serve/cockpit/src/**`; changed files are all under `tests/` — no glob match. |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation requested in task body. |
+| 7 | Deletion detection | No | N/A | No files deleted in this task. |
+
+### Scope Classification
+Changed-files set: tests/test_cockpit_error_envelope_1371.py, tests/test_cockpit_mutation_api_1134.py, tests/test_cockpit_mutation_api_1135.py, tests/test_cockpit_read_api.py, tests/test_cockpit_mutation_api.py, tests/test_cockpit_mutation_api_1132.py, tests/test_cockpit_mutation_race.py — all test files under tests/. No IN-scope docs in changed set.
+
+### Files Updated
+None — no docs impact.
+
+### Child Tasks Created
+None.
+
+### Scratch Files Cleaned
+None found (no 1371-* scratch files existed).
+[[2026-05-06]]
+## Audit
+
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: domain errors use {code, message}, no detail | main.py:60-78, 1370 envelope suite green, durable migration suites green | PASS |
+| AC2: KanbanError handlers with correct HTTP statuses | main.py:60-67 handler, mutation routes raise subclasses, 266 scoped tests pass | PASS |
+| AC3: unexpected errors return exact COCKPIT_INTERNAL_ERROR envelope | main.py:70-78 hardcodes literals, 1371.py:333 and :361 pin exact strings | PASS |
+| AC4: guidance policy (error omits, list miss forwards, list hit and mutations return []) | 1370.py guidance tests, 1371.py:254 sentinel forwarding, view.py:72 normalizer | PASS |
+| AC5: HTTP status codes preserved | Durable suites green with 404/409/422/500 assertions | PASS |
+| AC6: all 1370 tests pass | quality-runner scoped: 266 passed including 1370 suite | PASS |
+| AC7: legacy durable suites migrated to envelope | 1134:193, 1135:154/296, read_api:455, mutation_api:195/230/483/500, 1132:686, race:278 | PASS |
+| AC8: framework-level errors unchanged | 1371.py:292 decisions carve-out, 1371.py:490 Pydantic carve-out | PASS |
+| AC9: frontend out of scope | No frontend files touched | PASS |
+| AC10: Pydantic carve-out discrimination | 1371.py:490-506 asserts code/message absent from 422 | PASS |
+
+### Test Results
+- pytest (scoped, 10 files): 266 passed, 0 failed
+- pytest (full suite): 175 failed, all in unrelated modules (engine, memory, mcp, tools)
+- ruff (task scope): clean
+- vitest: pass
+
+### Architect Quality: 3/5
+Original AC missed 3 additional durable test files needing migration, required 3 architect refinement cycles (broadened AC7, AC3 proof gap, AC10 addition). Final AC was specific and complete after refinements.
+
+### Deduction Breakdown
+- AC quality score 3 (at or below 3): -0.03
+- One commit (23e47b16) in task scope without #1371 reference: -0.01
+- Direct diff unavailable (reflog-only commit evidence): -0.01
+
+### Confidence: 0.95
+### Action: archive
