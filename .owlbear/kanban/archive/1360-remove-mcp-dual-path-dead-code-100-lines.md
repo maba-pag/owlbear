@@ -1,10 +1,10 @@
 ---
 id: 1360
 title: Remove MCP dual-path dead code (~100 lines)
-status: review
+status: archived
 priority: needed
 created: 2026-05-05T23:34:52.820872+00:00
-updated: 2026-05-06T03:19:32.970734+00:00
+updated: 2026-05-06T05:14:00.366476+00:00
 tags:
 - kanban
 - cleanup
@@ -302,3 +302,149 @@ Architecture re-review after audit rejection. Challenger identified 2 additional
 - Live quality-runner evidence is the safest way to resolve stale body claims from earlier failed cycles.
 - Keeping scoped verification broad enough to include stale regressions (`test_server_1170.py`, `test_mcp_kanban_1197.py`, `test_mcp_kanban_1126.py`) prevented a false-green advance.
 - Coverage should be assessed on touched module scope (`owlbear_mcp_kanban.server`), not repo overall aggregate in this gate.
+[[2026-05-06]]
+## Review Evidence
+### Test Results
+- quality-runner scoped gate: 108 passed, 0 failed on `tests/test_mcp_kanban_1360.py`, `tests/test_mcp_kanban.py`, `tests/test_server_1170.py`, `tests/test_mcp_kanban_1197.py`, `tests/test_mcp_kanban_1126.py`
+- quality-runner disabled xdist (`-n 0`) after a session-specific worker hang; the rerun completed cleanly
+- broader MCP-kanban-context run: 634 passed, 19 failed, but those failures are from unrelated RED/failing suites outside #1360's accepted gate:
+  - `tests/test_server_1172.py:1` — "RED tests" for task #1172
+  - `tests/test_mcp_lifecycle_1173.py:1` — "RED phase tests" for task #1173
+  - `serve/mcp-kanban/tests/test_mcp_guidance_1089.py:1,16` — "RED tests" / "All tests must FAIL"
+  - `serve/mcp-kanban/tests/test_guidance_end_work_973.py:3` — RED phase
+  - `serve/mcp-kanban/tests/test_guidance_edit_task_973.py:3` — RED phase
+  - `tests/test_server_1199.py:1` — failing tests for unrelated helper-removal task #1199
+- AC4 is therefore anchored to the architect-refined retry scope, not repo-retained RED suites from other tasks
+
+### Lint
+- ruff: clean on `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py` and the 5 task-scope test files
+
+### Coverage
+- `owlbear_mcp_kanban.server`: 93% (240/257)
+
+### Pass 1 - CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Evidence | Would Fail If Violated? | Verdict |
+| --- | --- | --- | --- |
+| AC1 `_canonical_agent_view_for` removed | No matches in `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py`; `tests/test_mcp_kanban_1360.py:104` and `tests/test_mcp_kanban.py:487` assert symbol absence | Yes | COVERED |
+| AC2 fallback helper branches removed | No matches in source for `_invoke_view_move_task`, `_invoke_view_end_work`, `_invoke_engine_end_work`; `tests/test_mcp_kanban_1360.py:110,116,122` and `tests/test_mcp_kanban_1126.py:37` enforce absence / no `except TypeError` | Yes | COVERED |
+| AC3 direct AgentView calls replace fallback | `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:358,448,476` call `engine.agent_view().move_task/start_work/end_work`; no-fallback tests at `tests/test_mcp_kanban_1360.py:153,172,191` and durable classes at `tests/test_mcp_kanban.py:656,793,820` | Yes | COVERED |
+| AC4 existing MCP kanban tests pass | Scoped retry suite 108/108 green across the 5 files named in the retry cycle; `tests/test_server_1170.py:10`, `tests/test_mcp_kanban_1197.py:3`, and `tests/test_mcp_kanban_1126.py:3-4` document the stale helper-dependent cases removed from this task gate | Yes | COVERED |
+| AC5 `~100 lines` net reduction | `tests/test_mcp_kanban_1360.py:128` enforces `<720`; the guard is green on the live module | Yes | COVERED |
+
+#### Security Review
+- No issues found. The change removes dead private fallback code and does not add input, path, subprocess, or serialization surface.
+
+#### Test Integrity
+| Test Surface | Assessment | Evidence |
+| --- | --- | --- |
+| `tests/test_mcp_kanban_1360.py` `TestFromAC_*` classes | PRESERVED | Live file still contains exact absence / propagation assertions at `104-191` |
+| Durable direct-path regression classes | CURRENT / STRONGER | `tests/test_mcp_kanban.py:487,656,793,820` pin helper absence and direct-path behavior |
+
+#### Test Quality
+| Dimension | Rating | Evidence |
+| --- | --- | --- |
+| Assertion specificity | STRONG | Exact `hasattr(...)=False`, exact `pytest.raises(NotImplementedError)`, exact line-count threshold |
+| Negative and error-path coverage | STRONG | `move_task`, `start_work`, and `end_work` each have no-fallback propagation tests; durable suite also covers `KanbanError` / `ValueError` mapping |
+| Manual mutation reasoning | STRONG | Reintroducing any helper export, fallback catch, or `except TypeError` would break the current tests |
+| Test independence | STRONG | Each test builds its own mock/context state |
+| Descriptive names | STRONG | Names state the removed helper or direct-path contract explicitly |
+
+#### Data Safety
+- No issues found.
+
+#### Implementation-Aware Gaps
+- No significant untested path found inside #1360 scope.
+- Grep across test files found no remaining executable imports or patches of `_canonical_agent_view_for`, `_invoke_view_move_task`, `_invoke_view_end_work`, or `_invoke_engine_end_work`.
+
+#### Builder Process Quality
+| Metric | Value |
+| --- | --- |
+| Builder Notes sections | 2 |
+| Approach variation | Initial implementation, then verification-only pass-through after test-writer retry |
+| Assessment | CLEAN |
+
+### Pass 2 - INFORMATIONAL
+- Current source change is bundled under builder commit `af05ce05` (`#1362`) in `.git/logs/HEAD:2087`; task-local `#1360` commits visible from this tool surface are test-writer commits `7f468ee7` (`.git/logs/HEAD:2088`) and `060c1e12` (`.git/logs/HEAD:2104`).
+- Dirty-tree contamination check could not be run because git status / terminal access is not available in this reviewer session.
+
+### AC Compliance
+| AC Line | Evidence | Status |
+| --- | --- | --- |
+| `_canonical_agent_view_for` helper removed | Source grep clean; absence tests green | PASS |
+| `_invoke_view_move_task`, `_invoke_view_start_work`, `_invoke_view_end_work` fallback branches removed | Source grep clean for surviving helper names; no `except TypeError`; no-fallback `start_work` tests green | PASS |
+| Direct AgentView calls replace view-or-fallback pattern | Direct calls at `server.py:358,448,476`; propagation tests green in task and durable suites | PASS |
+| All existing MCP kanban tests pass | Architect-refined retry scope is green 108/108; broader failing suites are unrelated RED tasks and non-gating | PASS |
+| `~100 lines` net reduction | Line-count guard green | PASS |
+
+### Deductions
+| Criterion | Deduction |
+| --- | --- |
+| Dirty-tree contamination check unavailable from this tool surface | -.02 |
+| Source change bundled under `#1362` rather than a task-local `#1360` builder commit | -.02 |
+
+### Confidence: 0.94
+### Verdict: PASS
+### Action: advance to docs
+[[2026-05-06]]
+## Docs Gate
+
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | No prose docs reference test file internals; `serve/mcp-kanban/README.md` unchanged |
+| 2 | Module docstrings | No | N/A | No Python modules modified in this cycle; source change was in prior cycle |
+| 3 | External attribution | No | N/A | Test-file cleanup; no external patterns used |
+| 4 | Research doc | No | N/A | No research phase for this task |
+| 5 | Diagram maintenance | No | N/A | Changed files (`tests/test_server_1170.py`, `tests/test_mcp_kanban_1197.py`, `tests/test_mcp_kanban_1126.py`) do not match `describes` globs of any diagram (globs cover `serve/mcp-kanban/src/**`, `serve/mcp-*/src/**`) |
+| 6 | Explicit diagram creation | No | N/A | No explicit diagram creation request |
+| 7 | Deletion detection | No | N/A | Deleted test content is OUT scope; no IN-scope docs reference removed test classes |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| `tests/test_server_1170.py` | OUT | N/A |
+| `tests/test_mcp_kanban_1197.py` | OUT | N/A |
+| `tests/test_mcp_kanban_1126.py` | OUT | N/A |
+
+**Prior cycle note:** `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py` (source change) was handled in the previous Docs Gate pass — diagrams `kanban.excalidraw` and `mcp-topology.excalidraw` footers updated then, commit `82a19310`.
+
+### Files Updated
+- None (no-impact cycle — test files only)
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- `.owlbear/scratch/1360-regression-pass.txt` — deleted
+[[2026-05-06]]
+## Audit
+
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| `_canonical_agent_view_for` helper removed | grep on serve/mcp-kanban/src/ returns 0 matches; hasattr tests green | PASS |
+| `_invoke_view_move/start/end` fallback branches removed | grep returns 0 matches; symbol-absence + no-fallback propagation tests green | PASS |
+| Direct AgentView calls replace fallback in move_task, start_work, end_work | server.py:358,448,476 call `engine.agent_view().move_task/start_work/end_work` directly | PASS |
+| All existing MCP kanban tests pass | Full suite 4664 passed; 0 failures in MCP kanban scope (108/108 scoped green per reviewer) | PASS |
+| ~100 lines net reduction | wc -l reports 638 lines (was ~776); below 720 threshold; line-count test green | PASS |
+
+### Test Results
+- pytest (full suite): 4664 passed, failures only in unrelated RED-phase tests (#1364, #1368, #1370, #1172, etc.)
+- ruff: clean in task scope; violations only in serve/tools/ (unrelated)
+
+### Commit Integrity
+- Test-writer: 8d6aec25, 7f468ee7, 060c1e12 — all properly attributed #1360
+- Builder source: bundled under af05ce05 (#1362) — process concern, code is committed
+- Docs: 82a19310 (diagram footers)
+
+### Architect Quality: 4/5
+AC lines are specific and verifiable. AC4 scope slightly under-specified (didn't enumerate test files importing removed symbols), requiring a retry cycle. Caught and corrected in pipeline.
+
+### Deduction Breakdown
+| Criterion | Deduction |
+|-----------|-----------|
+| Builder commit attributed to #1362 not #1360 | -.02 |
+
+### Confidence: .98
+### Action: archive
