@@ -1,10 +1,10 @@
 ---
 id: 1365
 title: 'P1-02: Fix Cockpit PDS v4 build compatibility'
-status: review
+status: archived
 priority: critical
 created: 2026-05-06T00:58:31.995607+00:00
-updated: 2026-05-06T08:53:55.988372+00:00
+updated: 2026-05-06T09:46:18.802209+00:00
 tags:
 - cockpit
 - audit-remediation
@@ -192,3 +192,162 @@ Builder must change `variant="tertiary"` → `variant="secondary"` in all affect
 - Pattern discovered: PDS v4 wrapper typings require stricter control props (`name`) and event signatures than legacy usage patterns in this code.
 - Time sink: A small syntax regression during typed state-update refactor caused one intermediate red run; fixed by explicit callback return typing.
 - Quality gap observed: Global eslint config still has unrelated baseline debt, so scoped lint-on-changed-files evidence remains necessary for builder gate clarity.
+[[2026-05-06]]
+## Review Evidence
+### Test Results
+- quality-runner scoped pass: `pytest` 16 passed, 0 failed across `tests/test_cockpit_pds_build_compat_1364.py` and `tests/test_cockpit_pds_build_compat_1365.py`
+- frontend gates inside those wrappers also passed: `npm run build` exited 0 in `serve/cockpit/web`, and full `npm test -- --run` exited 0
+- direct diagnostics: no VS Code errors in the changed source files, wrapper tests, or touched vitest suites
+
+### Lint: clean
+- `ruff check` on the two Python wrapper tests: clean
+- `eslint` on the changed frontend source files: clean
+- direct grep on changed source found no `@ts-ignore`, `@ts-expect-error`, `@ts-nocheck`, or `eslint-disable`
+- direct grep for `variant="tertiary"` under `serve/cockpit/web/src/**` found no live source hits; only a comment in `PdsMigration_1230.test.tsx`
+
+### Coverage: wrapper tests 93%
+- `tests.test_cockpit_pds_build_compat_1364`: 100%
+- `tests.test_cockpit_pds_build_compat_1365`: 82%
+- Interpretation: this task's source proof comes from the passing build/vitest gates plus exact frontend assertions; wrapper-file coverage is informational only here.
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---------|-------------|---------------------------|---------|
+| AC1 build passes cleanly | `test_npm_build_exits_zero` | Yes | COVERED |
+| AC2 PDS v4/type fixes with no broad suppression | `test_known_pds_v4_type_failures_absent`; `TestAc2NoBroadTypeSuppressionGuards::*`; `PdsMigration_1230.test.tsx` variant assertions | Yes | COVERED |
+| AC3 ResolveModal body typing corrected | `test_pending_dr_body_type_mismatch_absent` | Yes | COVERED |
+| AC4 scope stays build/design-system only | td:0 reviewer inspection; adjacent `EventSourceProvider_1276.test.tsx` and `ActivityTab_1278.test.tsx` still green | N/A | COVERED |
+| AC5 #1364 gates pass | full `tests/test_cockpit_pds_build_compat_1364.py` suite | Yes | COVERED |
+| AC6 existing vitest suites pass | `TestFromAC_ExistingVitestSuites::*`; full `npm test -- --run` exit 0 | Yes | COVERED |
+
+#### Security Review
+- No issues found. `ResolveModal.tsx` still sanitizes markdown, fetch targets remain fixed backend routes, and `EventSourceProvider.tsx` ignores malformed SSE payloads.
+
+#### Test Integrity
+| Original Test | Change Made | Assessment |
+|---------------|-------------|------------|
+| `tests/test_cockpit_pds_build_compat_1364.py::TestFromAC_*` | Exact build/suppression assertions still present; no builder-owned weakening evident | PRESERVED |
+| `tests/test_cockpit_pds_build_compat_1365.py::TestFromAC_ExistingVitestSuites` | Exit-zero gate and named-suite guards still present; no builder-owned weakening evident | PRESERVED |
+| `serve/cockpit/web/src/__tests__/PdsMigration_1230.test.tsx` | Test-writer retry updated exact variant expectations from `tertiary` to `secondary`; builder left them intact | STRENGTHENED |
+| `Shell_966.test.tsx`, `Shell_1227.test.tsx`, `ActivityTab_1156.test.tsx` | Test-writer retry added jsdom-safe provider mock / corrected exact value assertion; current assertions remain discriminating | STRENGTHENED |
+
+#### Test Quality
+| Dimension | Rating | Evidence |
+|-----------|--------|----------|
+| Assertion specificity | STRONG | Exact build exit, exact error-fragment absence, exact `variant` values, exact `data-health`, exact refetch call counts |
+| Negative/error-path coverage | STRONG | `EventSourceProvider_1276.test.tsx` covers fatal/stall/retry/malformed payload paths; wrapper tests cover build/type failures |
+| Manual mutation reasoning | STRONG | Reintroducing `tertiary`, removing required `name` props, broadening `paused: sseStatus === 'open'`, or removing mtime dedup would fail existing tests |
+| Test independence | STRONG | Isolated mocks/reset patterns and module-scoped subprocess fixtures |
+| Descriptive names | STRONG | Test names state the exact contract and boundary |
+
+#### Data Safety
+- No issues found. `Shell.tsx` still aborts stale task-detail fetches; `EventSourceProvider.tsx` clears timers and ignores malformed/non-number `mtime` payloads.
+
+#### Implementation-Aware Gaps
+- No significant untested task-owned paths found after adjacent-suite verification. `EventSourceProvider_1276.test.tsx` covers connection status, timers, cleanup, malformed JSON, and per-event `mtime`. `ActivityTab_1278.test.tsx` covers `paused` branching, `activity-changed` wiring, refetch-on-mtime, and dedup behavior.
+
+#### Builder Process Quality
+| Metric | Value |
+|--------|-------|
+| Builder Notes sections | 2 |
+| Approach variation | Yes |
+| Assessment | CLEAN |
+
+### Pass 2 — INFORMATIONAL
+- No builder commit hash was recorded, so changed-file ownership and test immutability were reconstructed from task history, current file state, and usage tracing instead of commit diff. Small confidence deduction.
+- I could not run the git dirty-tree contamination check in this tool surface. Small confidence deduction.
+- `ResolveModal` and `useSSEEvent` caller tracing shows current typed surfaces remain compatible with `Shell.tsx`, `useBoard.ts`, and the relevant vitest suites.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| AC1 `npm run build` passes cleanly | quality-runner: build completed successfully; exact build gate stayed green | `test_npm_build_exits_zero` | PASS |
+| AC2 PDS v4/type errors resolved without broad suppression | no live source suppression markers; no live `tertiary` variant; required `name` props/value readers present in `ArchivalModal.tsx`, `FilterPanel.tsx`, `ResolveModal.tsx`; exact secondary-variant assertions in `PdsMigration_1230.test.tsx` pass | `test_known_pds_v4_type_failures_absent`; `TestAc2NoBroadTypeSuppressionGuards::*`; `PdsMigration_1230.test.tsx` | PASS |
+| AC3 PendingDR/ResolveModal body typing corrected | `ResolveModal.tsx` makes `body` optional and renders `dr.body ?? ''`; build-output mismatch test is green; `ResolveModal` usages remain compatible | `test_pending_dr_body_type_mismatch_absent` | PASS |
+| AC4 changes stay scoped to build/design-system compatibility | touched files show compatibility-focused edits (secondary variants, `name` props, safer control-value readers, `ReactElement` typing, typed SSE `mtime` parsing); `Shell.tsx` layout regions remain intact; adjacent SSE/activity suites stay green | reviewer inspection; `EventSourceProvider_1276.test.tsx`; `ActivityTab_1278.test.tsx` | PASS |
+| AC5 #1364 tests/quality gates pass | full `tests/test_cockpit_pds_build_compat_1364.py` suite passed; no diagnostics on changed source/wrapper files | `tests/test_cockpit_pds_build_compat_1364.py` | PASS |
+| AC6 existing vitest suites pass after v4 alignment | quality-runner: full `npm test -- --run` exit 0; `tests/test_cockpit_pds_build_compat_1365.py` 5/5 green; named suites `PdsMigration_1230`, `Shell_966`, `Shell_1227`, and `ActivityTab_1156` remain green | `TestFromAC_ExistingVitestSuites::*` | PASS |
+
+### Confidence: 0.93
+### Verdict: PASS
+### Action: advance to `docs`
+[[2026-05-06]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | All changed files are TypeScript/React components and test files within `serve/cockpit/web/src/`; no prose README or setup guide references cockpit component internals |
+| 2 | Module docstrings | No | N/A | No Python modules created or modified; Python files are subprocess-wrapper test fixtures only |
+| 3 | External attribution | No | N/A | Task body and builder notes reference no external repos or articles used as patterns |
+| 4 | Research doc | No | N/A | No `.owlbear/research/` doc produced for this task |
+| 5 | Diagram maintenance (describes match) | Yes | Updated | `share/diagrams/cockpit.excalidraw` describes `serve/cockpit/web/src/**`; footer updated to `Last verified: 2026-05-06 (79172f76)` |
+| 6 | Explicit diagram creation | No | N/A | No explicit diagram creation requested in task body |
+| 7 | Deletion detection | No | N/A | No files deleted; all changes are modifications or additions |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| serve/cockpit/web/src/Shell.tsx | OUT | N/A (app source) |
+| serve/cockpit/web/src/hooks/EventSourceProvider.tsx | OUT | N/A (app source) |
+| serve/cockpit/web/src/components/ActivityTab.tsx | OUT | N/A (app source) |
+| serve/cockpit/web/src/components/ArchivalModal.tsx | OUT | N/A (app source) |
+| serve/cockpit/web/src/components/ConfirmDialog.tsx | OUT | N/A (app source) |
+| serve/cockpit/web/src/components/DRStatusIndicator.tsx | OUT | N/A (app source) |
+| serve/cockpit/web/src/components/FilterPanel.tsx | OUT | N/A (app source) |
+| serve/cockpit/web/src/components/HealthBadge.tsx | OUT | N/A (app source) |
+| serve/cockpit/web/src/components/RepairPanel.tsx | OUT | N/A (app source) |
+| serve/cockpit/web/src/components/ResolveModal.tsx | OUT | N/A (app source) |
+| serve/cockpit/web/src/__tests__/PdsMigration_1230.test.tsx | OUT | N/A (test file) |
+| serve/cockpit/web/src/__tests__/Shell_966.test.tsx | OUT | N/A (test file) |
+| serve/cockpit/web/src/__tests__/Shell_1227.test.tsx | OUT | N/A (test file) |
+| serve/cockpit/web/src/__tests__/ActivityTab_1156.test.tsx | OUT | N/A (test file) |
+| tests/test_cockpit_pds_build_compat_1365.py | OUT | N/A (test file) |
+| share/diagrams/cockpit.excalidraw | IN | Footer updated |
+
+### Files Updated
+- share/diagrams/cockpit.excalidraw — footer bumped to `Last verified: 2026-05-06 (79172f76)` (commit b16d3cbd)
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None found (no `.owlbear/scratch/1365-*` files existed)
+[[2026-05-06]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1 npm run build passes cleanly | quality-runner: npm run build exit 0; test_npm_build_exits_zero PASS | PASS |
+| AC2 PDS v4 type errors resolved without broad suppression | No live tertiary variants, no ts-ignore/nocheck; 992 frontend tests pass; PdsMigration_1230 variant assertions green | PASS |
+| AC3 PendingDR/ResolveModal body typing corrected | test_pending_dr_body_type_mismatch_absent PASS; build passes with optional body + fallback | PASS |
+| AC4 Changes stay scoped to build/design-system compat | All changed files in serve/cockpit/web/src/; reviewer confirmed scope; no layout redesign | PASS |
+| AC5 Tests from #1364 pass | 11/11 in test_cockpit_pds_build_compat_1364.py PASS | PASS |
+| AC6 Existing vitest suites pass | 5/5 in test_cockpit_pds_build_compat_1365.py PASS; npm test 992 tests pass (59 files) | PASS |
+
+### Test Results
+- pytest (task-scoped): 16 passed, 0 failed
+- pytest (full suite): 266 failures, ALL in unrelated modules (kanban engine, memory engine, cockpit backend Pydantic, server tests). Zero failures in task scope.
+- npm run build: exit 0
+- npm test: 992 tests pass, 59 files
+- ruff: 12 violations all in serve/tools/ (unrelated to task scope)
+
+### Architect Quality: 4/5
+Specific, verifiable AC lines. AC6 added adaptively per challenger feedback. Test depths annotated. Clear scope boundaries. Minor: AC4 is td:0 (scope constraint, reviewer-verified only) which is appropriate but slightly less rigorous.
+
+### Deduction Breakdown
+- AC lines without evidence: 0 (all 6 verified) = 0.00
+- Lint violations in task scope: 0 = 0.00
+- AC quality score: 4 (above 3) = 0.00
+- Missing reviewer evidence: present and comprehensive = 0.00
+- Full-suite failures in task scope: 0 = 0.00
+
+### Confidence: 1.00
+### Action: archive
+
+### Commits Verified
+| Commit | Type | Agent | Files |
+|--------|------|-------|-------|
+| fe569e36 | fix | builder | Source components (10 files) |
+| 679221f2 | test | test-writer | Vitest suite alignment (4 files) |
+| 6fd7a816 | test | test-writer | Initial vitest gate (1 file) |
