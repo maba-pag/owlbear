@@ -299,14 +299,15 @@ describe('TestFromAC_PdsMigration_Buttons', () => {
     })
   })
 
-  // ─ AC1 variant: cancel/toggle/filter/nav buttons are tertiary; action buttons are primary ─
+  // ─ AC1 variant: cancel/toggle/filter/nav buttons are secondary; action buttons are primary ─
   // PDS v4 variant is a DOM property (not a reflected HTML attribute) — access via .variant
+  // PDS v4 removed the 'tertiary' variant; 'secondary' is the correct non-primary variant.
 
-  describe('AC1 variant: ConfirmDialog — cancel=tertiary, confirm=primary', () => {
-    it('cancel button has variant="tertiary"', () => {
+  describe('AC1 variant: ConfirmDialog — cancel=secondary, confirm=primary', () => {
+    it('cancel button has variant="secondary" (PDS v4: tertiary removed)', () => {
       const { container } = renderConfirm()
       const buttons = container.querySelectorAll('p-button')
-      expect((buttons[0] as HTMLElement & { variant: string }).variant).toBe('tertiary')
+      expect((buttons[0] as HTMLElement & { variant: string }).variant).toBe('secondary')
     })
 
     it('confirm button has variant="primary" (default action)', () => {
@@ -316,100 +317,100 @@ describe('TestFromAC_PdsMigration_Buttons', () => {
     })
   })
 
-  describe('AC1 variant: ArchivalModal — archive=primary, cancel=tertiary', () => {
+  describe('AC1 variant: ArchivalModal — archive=primary, cancel=secondary', () => {
     it('archive submit button has variant="primary" (default action)', () => {
       const { container } = renderArchival()
       const submitBtn = container.querySelector('p-button[data-testid="archival-submit"]')
       expect((submitBtn as HTMLElement & { variant: string }).variant).toBe('primary')
     })
 
-    it('cancel button has variant="tertiary"', () => {
+    it('cancel button has variant="secondary" (PDS v4: tertiary removed)', () => {
       const { container } = renderArchival()
       const buttons = container.querySelectorAll('p-button')
-      const tertiary = Array.from(buttons).find(
-        (b) => (b as HTMLElement & { variant: string }).variant === 'tertiary',
+      const secondary = Array.from(buttons).find(
+        (b) => (b as HTMLElement & { variant: string }).variant === 'secondary',
       )
-      expect(tertiary).not.toBeUndefined()
+      expect(secondary).not.toBeUndefined()
     })
   })
 
-  describe('AC1 variant: ActivityTab — all filter buttons are tertiary', () => {
-    it('filter-active has variant="tertiary"', () => {
+  describe('AC1 variant: ActivityTab — all filter buttons are secondary (PDS v4: tertiary removed)', () => {
+    it('filter-active has variant="secondary"', () => {
       const { container } = renderActivityTab()
       const el = container.querySelector('p-button[data-testid="filter-active"]')
-      expect((el as HTMLElement & { variant: string }).variant).toBe('tertiary')
+      expect((el as HTMLElement & { variant: string }).variant).toBe('secondary')
     })
 
-    it('filter-all has variant="tertiary"', () => {
+    it('filter-all has variant="secondary"', () => {
       const { container } = renderActivityTab()
       const el = container.querySelector('p-button[data-testid="filter-all"]')
-      expect((el as HTMLElement & { variant: string }).variant).toBe('tertiary')
+      expect((el as HTMLElement & { variant: string }).variant).toBe('secondary')
     })
 
-    it('filter-blocked has variant="tertiary"', () => {
+    it('filter-blocked has variant="secondary"', () => {
       const { container } = renderActivityTab()
       const el = container.querySelector('p-button[data-testid="filter-blocked"]')
-      expect((el as HTMLElement & { variant: string }).variant).toBe('tertiary')
+      expect((el as HTMLElement & { variant: string }).variant).toBe('secondary')
     })
 
-    it('filter-stuck has variant="tertiary"', () => {
+    it('filter-stuck has variant="secondary"', () => {
       const { container } = renderActivityTab()
       const el = container.querySelector('p-button[data-testid="filter-stuck"]')
-      expect((el as HTMLElement & { variant: string }).variant).toBe('tertiary')
+      expect((el as HTMLElement & { variant: string }).variant).toBe('secondary')
     })
 
-    it('filter-released has variant="tertiary"', () => {
+    it('filter-released has variant="secondary"', () => {
       const { container } = renderActivityTab()
       const el = container.querySelector('p-button[data-testid="filter-released"]')
-      expect((el as HTMLElement & { variant: string }).variant).toBe('tertiary')
+      expect((el as HTMLElement & { variant: string }).variant).toBe('secondary')
     })
   })
 
-  describe('AC1 variant: DetailTab — save=primary, all other action buttons=tertiary', () => {
+  describe('AC1 variant: DetailTab — save=primary, all other action buttons=secondary (PDS v4: tertiary removed)', () => {
     it('save-button has variant="primary" (default action)', () => {
       const { container } = renderDetailTab()
       const el = container.querySelector('p-button[data-testid="save-button"]')
       expect((el as HTMLElement & { variant: string }).variant).toBe('primary')
     })
 
-    it('history-tab has variant="tertiary"', () => {
+    it('history-tab has variant="secondary"', () => {
       const { container } = renderDetailTab()
       const el = container.querySelector('p-button[data-testid="history-tab"]')
-      expect((el as HTMLElement & { variant: string }).variant).toBe('tertiary')
+      expect((el as HTMLElement & { variant: string }).variant).toBe('secondary')
     })
 
-    it('body-edit-toggle has variant="tertiary"', () => {
+    it('body-edit-toggle has variant="secondary"', () => {
       const { container } = renderDetailTab()
       const el = container.querySelector('p-button[data-testid="body-edit-toggle"]')
-      expect((el as HTMLElement & { variant: string }).variant).toBe('tertiary')
+      expect((el as HTMLElement & { variant: string }).variant).toBe('secondary')
     })
 
-    it('move-backward has variant="tertiary"', () => {
+    it('move-backward has variant="secondary"', () => {
       const { container } = renderDetailTab()
       const el = container.querySelector('p-button[data-testid="move-backward"]')
-      expect((el as HTMLElement & { variant: string }).variant).toBe('tertiary')
+      expect((el as HTMLElement & { variant: string }).variant).toBe('secondary')
     })
 
-    it('unclaim-action has variant="tertiary"', () => {
+    it('unclaim-action has variant="secondary"', () => {
       const { container } = renderDetailTab()
       const el = container.querySelector('p-button[data-testid="unclaim-action"]')
-      expect((el as HTMLElement & { variant: string }).variant).toBe('tertiary')
+      expect((el as HTMLElement & { variant: string }).variant).toBe('secondary')
     })
 
-    it('unblock-action has variant="tertiary" when task is blocked', () => {
+    it('unblock-action has variant="secondary" when task is blocked', () => {
       const { container } = renderDetailTab(TASK_BLOCKED)
       const el = container.querySelector('p-button[data-testid="unblock-action"]')
-      expect((el as HTMLElement & { variant: string }).variant).toBe('tertiary')
+      expect((el as HTMLElement & { variant: string }).variant).toBe('secondary')
     })
 
-    it('conflict-refresh has variant="tertiary" (shown in conflict modal)', async () => {
+    it('conflict-refresh has variant="secondary" (shown in conflict modal)', async () => {
       const { container } = renderDetailTab()
       vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: false, status: 409, json: () => Promise.resolve({}) })))
       const saveBtn = container.querySelector('p-button[data-testid="save-button"]')!
       fireEvent.click(saveBtn)
       await new Promise((r) => setTimeout(r, 0))
       const el = container.querySelector('p-button[data-testid="conflict-refresh"]')
-      expect((el as HTMLElement & { variant: string }).variant).toBe('tertiary')
+      expect((el as HTMLElement & { variant: string }).variant).toBe('secondary')
     })
 
     it('conflict-overwrite has variant="primary" (default action — no explicit variant prop)', async () => {
@@ -423,25 +424,25 @@ describe('TestFromAC_PdsMigration_Buttons', () => {
     })
   })
 
-  describe('AC1 variant: ResolveModal — submit=primary, cancel=tertiary', () => {
+  describe('AC1 variant: ResolveModal — submit=primary, cancel=secondary (PDS v4: tertiary removed)', () => {
     it('resolve-submit has variant="primary" (default action)', () => {
       const { container } = renderResolveModal()
       const el = container.querySelector('p-button[data-testid="resolve-submit"]')
       expect((el as HTMLElement & { variant: string }).variant).toBe('primary')
     })
 
-    it('resolve-cancel has variant="tertiary"', () => {
+    it('resolve-cancel has variant="secondary"', () => {
       const { container } = renderResolveModal()
       const el = container.querySelector('p-button[data-testid="resolve-cancel"]')
-      expect((el as HTMLElement & { variant: string }).variant).toBe('tertiary')
+      expect((el as HTMLElement & { variant: string }).variant).toBe('secondary')
     })
   })
 
-  describe('AC1 variant: Shell — nav rail kanban button is tertiary', () => {
-    it('kanban surface selector has variant="tertiary"', () => {
+  describe('AC1 variant: Shell — nav rail kanban button is secondary (PDS v4: tertiary removed)', () => {
+    it('kanban surface selector has variant="secondary"', () => {
       const { container } = renderShell()
       const el = container.querySelector('p-button[data-surface="kanban"]')
-      expect((el as HTMLElement & { variant: string }).variant).toBe('tertiary')
+      expect((el as HTMLElement & { variant: string }).variant).toBe('secondary')
     })
   })
 })

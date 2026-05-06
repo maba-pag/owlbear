@@ -28,6 +28,12 @@ vi.mock('../hooks/useScanPolling', () => ({
   useScanPolling: vi.fn(),
 }))
 
+// Shell renders ActivityTab which calls useSSEEvent — mock the provider hook so
+// tests are not broken by missing EventSourceProvider context after PDS v4 alignment.
+vi.mock('../hooks/EventSourceProvider', () => ({
+  useSSEEvent: vi.fn(() => ({ status: 'closed', mtime: null })),
+}))
+
 vi.mock('../KanbanBoard', () => ({
   default: vi.fn(() => <div data-testid="kb-stub" />),
 }))

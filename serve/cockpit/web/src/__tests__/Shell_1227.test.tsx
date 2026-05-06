@@ -33,6 +33,12 @@ vi.mock('../hooks/usePendingDRs', () => ({
   usePendingDRs: vi.fn(),
 }))
 
+// Shell renders ActivityTab which calls useSSEEvent — mock the provider hook so
+// tests are not broken by missing EventSourceProvider context after PDS v4 alignment.
+vi.mock('../hooks/EventSourceProvider', () => ({
+  useSSEEvent: vi.fn(() => ({ status: 'closed', mtime: null })),
+}))
+
 // KanbanBoard spy: captures props passed by Shell
 vi.mock('../KanbanBoard', () => ({
   default: vi.fn(() => <div data-testid="kb-stub" />),

@@ -725,8 +725,9 @@ describe('TestFromAC_CoverageProof', () => {
       </PorscheDesignSystemProvider>,
     )
     const input = container.querySelector('[data-field="block_reason"]')
-    // PDS PInputText renders defaultValue as the lowercase DOM attribute 'defaultvalue'
-    // on the <p-input-text> web component host element; not as a JS property.
-    expect(input?.getAttribute('defaultvalue')).toBe('Blocked by #50')
+    // DetailTab uses controlled value={blockReason} state (initialized from task.block_reason).
+    // PDS v4 PInputText exposes the current value as the .value JS property on the host element.
+    const inputEl = input as HTMLElement & { value?: string }
+    expect(inputEl?.value).toBe('Blocked by #50')
   })
 })
