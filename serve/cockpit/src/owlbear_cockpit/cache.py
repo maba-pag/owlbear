@@ -71,10 +71,18 @@ class MtimeScanCache:
 
         This enables callers to scan once and make an atomic change decision.
         """
-        if signature != self._last_signature:
-            self._last_signature = signature
+        if self.changed_since(signature):
+            self.commit_signature(signature)
             return True
         return False
+
+    def changed_since(self, signature: int) -> bool:
+        """Return True when ``signature`` differs from the last committed value."""
+        return signature != self._last_signature
+
+    def commit_signature(self, signature: int) -> None:
+        """Record ``signature`` as the last committed directory signature."""
+        self._last_signature = signature
 
     @property
     def last_mtime(self) -> int:
