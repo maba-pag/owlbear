@@ -4,7 +4,7 @@ AC coverage:
   AC1: GET /api/tasks reflects title changes after POST /api/tasks/{id}/edit
         (field-inspection: locate task by ID, assert title == new value)
   AC2: GET /api/tasks reflects exact tag replacement after POST /api/tasks/{id}/edit
-        (field-inspection: new tags present, removed tags absent)
+        (field-inspection: exact set equality — no stale or extra tags permitted)
   AC3: GET /api/tasks reflects claimed=False after POST /api/tasks/{id}/release
         (field-inspection: locate task by ID, assert claimed == False)
 
@@ -161,11 +161,12 @@ class TestFromAC_EditReleaseCacheInvalidation:
         """AC2: GET /api/tasks reflects exact tag replacement after POST /api/tasks/{id}/edit.
 
         After replacing tags via the cockpit edit route, a subsequent GET /api/tasks
-        must return the new tag list exactly — new tags present AND removed tags absent.
+        must return the new tag list with exact set equality — no stale, removed, or
+        extra tags permitted.
 
         Fails if:
         - Cache is not invalidated (stale tag list returned), OR
-        - Assertion only checks new-tag presence but not removed-tag absence.
+        - The tag set differs from the exact replacement list for any reason.
         """
         from fastapi.testclient import TestClient  # noqa: PLC0415
 
@@ -215,19 +216,12 @@ class TestFromAC_EditReleaseCacheInvalidation:
             after = {t["id"]: t for t in resp_after.json()["tasks"]}
             assert 1 in after, "Task 1 must still be present after tag edit"
             actual_tags = set(after[1]["tags"])
-            # New tags must be present.
-            assert "new-tag" in actual_tags, (
-                "new-tag must be present in GET /api/tasks after tag replacement"
-            )
-            assert "another-tag" in actual_tags, (
-                "another-tag must be present in GET /api/tasks after tag replacement"
-            )
-            # Removed tag must be absent — full-replacement semantics.
-            assert "old-tag" not in actual_tags, (
-                "old-tag was removed in tag replacement via POST /api/tasks/1/edit but "
-                "GET /api/tasks still lists it. "
-                "Cache was not invalidated after the edit route rewrote the task file, "
-                "or the tag replacement is not full-replacement semantics."
+            # Exact set equality — no stale, removed, or extra tags permitted.
+            assert actual_tags == {"new-tag", "another-tag"}, (
+                f"GET /api/tasks returned tags {actual_tags!r} after tag replacement "
+                "via POST /api/tasks/1/edit — expected exactly {{'new-tag', 'another-tag'}}. "
+                "Either the cache was not invalidated (stale tags returned) or the edit "
+                "route does not apply full-replacement semantics (extra or removed tags remain)."
             )
         finally:
             app.dependency_overrides.clear()
