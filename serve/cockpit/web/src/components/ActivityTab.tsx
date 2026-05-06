@@ -36,7 +36,7 @@ export default function ActivityTab({ onSelectTask }: ActivityTabProps) {
     intervalMs: 120_000,
     paused: sseStatus === 'open',
     onSuccess: (data) => {
-      setSessions(data.sessions)
+      setSessions(Array.isArray(data.sessions) ? data.sessions : [])
     },
   })
 

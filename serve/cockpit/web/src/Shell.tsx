@@ -135,7 +135,6 @@ function Shell() {
       </header>
       <nav className="shell__nav-rail" data-region="nav-rail">
         <PButton data-surface="kanban" aria-current="page" variant="secondary">
-          <p-icon name="list" aria-hidden="true" />
           Kanban
         </PButton>
       </nav>
