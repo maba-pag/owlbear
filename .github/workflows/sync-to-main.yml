@@ -12,8 +12,32 @@ name: Sync dev to main
         description: "share/ (agents, skills, instructions, prompts)"
         type: boolean
         default: true
-      sync_serve:
-        description: "serve/ (all packages + cockpit SPA build)"
+      sync_browser:
+        description: "serve/browser/ + serve/mcp-browser/"
+        type: boolean
+        default: true
+      sync_kanban:
+        description: "serve/kanban/ + serve/mcp-kanban/"
+        type: boolean
+        default: true
+      sync_knowledge:
+        description: "serve/knowledge/ + serve/mcp-knowledge/"
+        type: boolean
+        default: true
+      sync_mcp_memory:
+        description: "serve/mcp-memory/"
+        type: boolean
+        default: true
+      sync_cockpit:
+        description: "serve/cockpit/"
+        type: boolean
+        default: true
+      build_cockpit:
+        description: "Build cockpit SPA (only effective when sync_cockpit is enabled)"
+        type: boolean
+        default: true
+      sync_tools:
+        description: "serve/tools/"
         type: boolean
         default: true
       sync_setup:
@@ -45,13 +69,36 @@ jobs:
       - name: Resolve scopes
         env:
           SYNC_SHARE: ${{ inputs.sync_share }}
-          SYNC_SERVE: ${{ inputs.sync_serve }}
+          SYNC_BROWSER: ${{ inputs.sync_browser }}
+          SYNC_KANBAN: ${{ inputs.sync_kanban }}
+          SYNC_KNOWLEDGE: ${{ inputs.sync_knowledge }}
+          SYNC_COCKPIT: ${{ inputs.sync_cockpit }}
+          SYNC_TOOLS: ${{ inputs.sync_tools }}
+          SYNC_MCP_MEMORY: ${{ inputs.sync_mcp_memory }}
           SYNC_SETUP: ${{ inputs.sync_setup }}
           SYNC_INFRA: ${{ inputs.sync_infra }}
         run: |
           scopes=""
           if [[ "$SYNC_SHARE" == "true" ]]; then scopes="${scopes:+$scopes,}share"; fi
-          if [[ "$SYNC_SERVE" == "true" ]]; then scopes="${scopes:+$scopes,}serve"; fi
+
+          # Collect serve sub-scopes
+          serve_scopes=""
+          if [[ "$SYNC_BROWSER" == "true" ]]; then serve_scopes="${serve_scopes:+$serve_scopes,}browser"; fi
+          if [[ "$SYNC_KANBAN" == "true" ]]; then serve_scopes="${serve_scopes:+$serve_scopes,}kanban"; fi
+          if [[ "$SYNC_KNOWLEDGE" == "true" ]]; then serve_scopes="${serve_scopes:+$serve_scopes,}knowledge"; fi
+          if [[ "$SYNC_COCKPIT" == "true" ]]; then serve_scopes="${serve_scopes:+$serve_scopes,}cockpit"; fi
+          if [[ "$SYNC_TOOLS" == "true" ]]; then serve_scopes="${serve_scopes:+$serve_scopes,}tools"; fi
+          if [[ "$SYNC_MCP_MEMORY" == "true" ]]; then serve_scopes="${serve_scopes:+$serve_scopes,}mcp-memory"; fi
+
+          if [[ -n "$serve_scopes" ]]; then
+            # If all serve sub-scopes are selected, collapse to "serve"
+            if [[ "$serve_scopes" == "browser,kanban,knowledge,cockpit,tools,mcp-memory" ]]; then
+              scopes="${scopes:+$scopes,}serve"
+            else
+              scopes="${scopes:+$scopes,}$serve_scopes"
+            fi
+          fi
+
           if [[ "$SYNC_SETUP" == "true" ]]; then scopes="${scopes:+$scopes,}setup"; fi
           if [[ "$SYNC_INFRA" == "true" ]]; then scopes="${scopes:+$scopes,}infra"; fi
 
@@ -63,7 +110,17 @@ jobs:
           # Shorten label when everything is selected
           if [[ "$scopes" == "share,serve,setup,infra" ]]; then scopes="all"; fi
 
-          echo "SCOPES=$scopes" >> "$GITHUB_ENV"
+          # Export whether ALL serve packages are selected (for full-wipe logic)
+          any_serve="false"
+          all_serve="false"
+          if [[ -n "$serve_scopes" ]]; then any_serve="true"; fi
+          if [[ "$serve_scopes" == "browser,kanban,knowledge,cockpit,tools,mcp-memory" ]]; then all_serve="true"; fi
+
+          {
+            echo "SCOPES=$scopes"
+            echo "ANY_SERVE=$any_serve"
+            echo "ALL_SERVE=$all_serve"
+          } >> "$GITHUB_ENV"
           echo "Syncing scopes: $scopes"
 
       - name: Checkout dev branch (full history)
@@ -84,7 +141,12 @@ jobs:
       - name: Validate selected paths exist on dev
         env:
           SYNC_SHARE: ${{ inputs.sync_share }}
-          SYNC_SERVE: ${{ inputs.sync_serve }}
+          SYNC_BROWSER: ${{ inputs.sync_browser }}
+          SYNC_KANBAN: ${{ inputs.sync_kanban }}
+          SYNC_KNOWLEDGE: ${{ inputs.sync_knowledge }}
+          SYNC_COCKPIT: ${{ inputs.sync_cockpit }}
+          SYNC_TOOLS: ${{ inputs.sync_tools }}
+          SYNC_MCP_MEMORY: ${{ inputs.sync_mcp_memory }}
           SYNC_SETUP: ${{ inputs.sync_setup }}
           SYNC_INFRA: ${{ inputs.sync_infra }}
         run: |
@@ -94,8 +156,23 @@ jobs:
           if [[ "$SYNC_SHARE" == "true" ]]; then
             paths="$paths share"
           fi
-          if [[ "$SYNC_SERVE" == "true" ]]; then
-            paths="$paths serve"
+          if [[ "$SYNC_BROWSER" == "true" ]]; then
+            paths="$paths serve/browser serve/mcp-browser"
+          fi
+          if [[ "$SYNC_KANBAN" == "true" ]]; then
+            paths="$paths serve/kanban serve/mcp-kanban"
+          fi
+          if [[ "$SYNC_KNOWLEDGE" == "true" ]]; then
+            paths="$paths serve/knowledge serve/mcp-knowledge"
+          fi
+          if [[ "$SYNC_COCKPIT" == "true" ]]; then
+            paths="$paths serve/cockpit"
+          fi
+          if [[ "$SYNC_TOOLS" == "true" ]]; then
+            paths="$paths serve/tools"
+          fi
+          if [[ "$SYNC_MCP_MEMORY" == "true" ]]; then
+            paths="$paths serve/mcp-memory"
           fi
           if [[ "$SYNC_SETUP" == "true" ]]; then
             paths="$paths setup seed"
@@ -123,11 +200,11 @@ jobs:
           echo "All selected paths present on dev."
 
       - name: Install uv for MCP dev-source gate
-        if: ${{ inputs.sync_serve }}
+        if: ${{ inputs.sync_kanban }}
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # v8.1.0
 
       - name: Verify MCP surface contract from dev source
-        if: ${{ inputs.sync_serve }}
+        if: ${{ inputs.sync_kanban }}
         run: uv run pytest serve/mcp-kanban/tests/test_mcp_surface_contract.py -q --tb=short
 
       - name: Configure git identity
@@ -155,8 +232,14 @@ jobs:
         # Partial → selective overlay (unselected scopes keep their state on main).
         env:
           ALL_SCOPES: ${{ env.SCOPES }}
+          ALL_SERVE: ${{ env.ALL_SERVE }}
           SYNC_SHARE: ${{ inputs.sync_share }}
-          SYNC_SERVE: ${{ inputs.sync_serve }}
+          SYNC_BROWSER: ${{ inputs.sync_browser }}
+          SYNC_KANBAN: ${{ inputs.sync_kanban }}
+          SYNC_KNOWLEDGE: ${{ inputs.sync_knowledge }}
+          SYNC_COCKPIT: ${{ inputs.sync_cockpit }}
+          SYNC_TOOLS: ${{ inputs.sync_tools }}
+          SYNC_MCP_MEMORY: ${{ inputs.sync_mcp_memory }}
           SYNC_SETUP: ${{ inputs.sync_setup }}
           SYNC_INFRA: ${{ inputs.sync_infra }}
         run: |
@@ -181,10 +264,47 @@ jobs:
               git checkout dev -- share
             fi
 
-            if [[ "$SYNC_SERVE" == "true" ]]; then
-              echo "--- serve/"
+            # --- serve/ packages (granular) ---
+            if [[ "$ALL_SERVE" == "true" ]]; then
+              echo "--- serve/ (all packages)"
               git rm -rf serve --quiet 2>/dev/null || true
               git checkout dev -- serve
+            else
+              if [[ "$SYNC_BROWSER" == "true" ]]; then
+                echo "--- serve/browser + serve/mcp-browser"
+                git rm -rf serve/browser serve/mcp-browser --quiet 2>/dev/null || true
+                git checkout dev -- serve/browser serve/mcp-browser
+              fi
+
+              if [[ "$SYNC_KANBAN" == "true" ]]; then
+                echo "--- serve/kanban + serve/mcp-kanban"
+                git rm -rf serve/kanban serve/mcp-kanban --quiet 2>/dev/null || true
+                git checkout dev -- serve/kanban serve/mcp-kanban
+              fi
+
+              if [[ "$SYNC_KNOWLEDGE" == "true" ]]; then
+                echo "--- serve/knowledge + serve/mcp-knowledge"
+                git rm -rf serve/knowledge serve/mcp-knowledge --quiet 2>/dev/null || true
+                git checkout dev -- serve/knowledge serve/mcp-knowledge
+              fi
+
+              if [[ "$SYNC_COCKPIT" == "true" ]]; then
+                echo "--- serve/cockpit"
+                git rm -rf serve/cockpit --quiet 2>/dev/null || true
+                git checkout dev -- serve/cockpit
+              fi
+
+              if [[ "$SYNC_TOOLS" == "true" ]]; then
+                echo "--- serve/tools"
+                git rm -rf serve/tools --quiet 2>/dev/null || true
+                git checkout dev -- serve/tools
+              fi
+
+              if [[ "$SYNC_MCP_MEMORY" == "true" ]]; then
+                echo "--- serve/mcp-memory"
+                git rm -rf serve/mcp-memory --quiet 2>/dev/null || true
+                git checkout dev -- serve/mcp-memory
+              fi
             fi
 
             if [[ "$SYNC_SETUP" == "true" ]]; then
@@ -208,7 +328,7 @@ jobs:
           fi
 
       - name: Setup Node.js
-        if: ${{ inputs.sync_serve }}
+        if: ${{ inputs.sync_cockpit && inputs.build_cockpit }}
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0
         with:
           node-version-file: serve/cockpit/web/.nvmrc
@@ -216,12 +336,12 @@ jobs:
           cache-dependency-path: serve/cockpit/web/package-lock.json
 
       - name: Build cockpit SPA
-        if: ${{ inputs.sync_serve }}
+        if: ${{ inputs.sync_cockpit && inputs.build_cockpit }}
         working-directory: serve/cockpit/web
         run: npm ci && npm run build
 
       - name: Assert SPA bundle exists
-        if: ${{ inputs.sync_serve }}
+        if: ${{ inputs.sync_cockpit && inputs.build_cockpit }}
         run: |
           if [ ! -f serve/cockpit/dist/index.html ]; then
             echo "ERROR: serve/cockpit/dist/index.html not found — build may have failed or outDir is misconfigured."
@@ -229,7 +349,7 @@ jobs:
           fi
 
       - name: Stage built SPA bundle
-        if: ${{ inputs.sync_serve }}
+        if: ${{ inputs.sync_cockpit && inputs.build_cockpit }}
         run: git add -f serve/cockpit/dist/
 
       - name: Prune dev-only files from consumer tree
@@ -241,7 +361,9 @@ jobs:
           git rm -f .github/copilot-instructions.md --quiet 2>/dev/null || true
 
           # serve/cockpit/web/ — consumers only need the pre-built dist/
-          git rm -rf serve/cockpit/web --quiet 2>/dev/null || true
+          if [[ "${{ inputs.sync_cockpit }}" == "true" ]]; then
+            git rm -rf serve/cockpit/web --quiet 2>/dev/null || true
+          fi
 
       - name: Detect changes
         run: |
