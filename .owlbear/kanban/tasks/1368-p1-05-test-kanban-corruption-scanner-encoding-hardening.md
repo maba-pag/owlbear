@@ -1,10 +1,10 @@
 ---
 id: 1368
 title: 'P1-05: Test kanban corruption scanner encoding hardening'
-status: backlog
+status: in-progress
 priority: critical
 created: 2026-05-06T00:58:38.511616+00:00
-updated: 2026-05-06T01:00:11.343396+00:00
+updated: 2026-05-06T04:07:53.364626+00:00
 tags:
 - cockpit
 - audit-remediation
@@ -32,15 +32,175 @@ Write focused Python tests for non-UTF8 kanban task/archive files in the corrupt
 - Archived tasks with non-UTF8 bytes were observed under .owlbear/kanban/archive.
 
 ## Acceptance Criteria
-- Tests cover a non-UTF8 task or archive markdown fixture and prove corruption scanning does not crash.
-- Tests assert the intended behavior for unreadable encoding: explicit corruption/encoding scan item with file_path, code, and detail, or the same accepted fallback policy as storage.
-- Existing valid-file scan behavior remains covered and unchanged.
-- The proof is located at the kanban engine/scanner layer, not only at the Cockpit route boundary.
-- The proof fails against the audited broken behavior and is suitable for #1369 to satisfy.
+- Tests write a binary fixture (non-UTF8 bytes) to a task-file path under a tmp board's `tasks/` and `archive/` dirs, then call `detect_corruption(path, config)` and prove it does not raise `UnicodeDecodeError`. (td:2)
+- Tests assert `detect_corruption` returns a `CorruptionError` (not `None`, not raises) whose `.code` references encoding (e.g. `ERR_CORRUPT_ENCODING`), `.file_path` is set to the bad file, and `.detail` is a non-empty string describing the encoding failure. (td:2)
+- A regression test calls `detect_corruption` on a valid UTF-8 task fixture and asserts it returns `None` (no corruption). (td:1)
+- Test module imports `detect_corruption` from `owlbear_kanban.corruption` directly — not tested via Cockpit HTTP routes. (td:0)
+- Running the test against the current unpatched code produces a failure (the `UnicodeDecodeError` propagates or assertion on return type fails), confirming RED phase validity for #1369. (td:1)
 
 ## Scope
 - In scope: kanban corruption scanner tests and fixture coverage for encoding handling.
-- Out of scope: Cockpit UI error rendering and route-level catch-all masking.
+- Out of scope: Cockpit UI error rendering, route-level catch-all masking, and the cp1252 fallback approach (scanner reports encoding errors as findings, unlike storage which falls back).
+
+## Architecture Notes
+- Target module: `serve/kanban/src/owlbear_kanban/corruption.py`, function `detect_corruption()` at line ~222.
+- Bug location: `path.read_text(encoding="utf-8")` catches `OSError` but not `UnicodeDecodeError`.
+- Design choice: scanner reports encoding as a CorruptionError (its purpose is to find problems), rather than silently falling back like `storage.py` does with cp1252.
+- New error code: #1369 will add `ERR_CORRUPT_ENCODING` via `_make_corruption_code_type()`. Tests should reference this code name.
+- Test file location: `tests/test_corruption_1368.py` (task-scoped, follows existing `test_corruption_1057.py` pattern).
+- Fixture pattern: use `path.write_bytes(b'\x80\x81...')` to create non-UTF8 content wrapped in valid-looking `---` delimiters so the encoding error triggers during `read_text`, not during delimiter parsing.
 
 ## Counterpart
 Implementation task: #1369.
+
+[[2026-05-06]]
+## Architecture Review
+### Evaluation
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | Test-only task, single focus: encoding handling in corruption scanner |
+| Interface clarity | PASS | Refined AC specifies exact function, return type, error shape, and fixture strategy |
+| Dependency correctness | PASS | No dependencies needed — test task with no prereqs |
+| Module layering | PASS | Tests target engine layer directly (owlbear_kanban.corruption) |
+| TDD compliance | PASS | This IS the test task; #1369 is the GREEN counterpart |
+| KISS/YAGNI | PASS | Minimal scope — encoding error in one function |
+| Premise challenge | PASS | Bug is real and observed (500 on production data) |
+| Pattern consistency | PASS | Follows existing test_corruption.py fixture patterns (_make_board, _write) |
+| Security surface | N/A | Test code only |
+| Single domain | PASS | Kanban domain only |
+
+### Design Decision
+Scanner reports encoding issues as CorruptionError (new ERR_CORRUPT_ENCODING code) rather than silently falling back like storage.py. Rationale: scanner's purpose is to FIND problems; masking encoding errors defeats that purpose. Storage falls back because it needs to load data; scanner needs to report.
+
+### Challenge Results
+- Challenger: FALLBACK — agent returned no response
+- Architect response: Proceeded with independent assessment; design is straightforward
+
+### Test Depth
+- Max depth: 2
+- Test-writer: pass-through (type:test tag present)
+
+### Verdict: APPROVE
+### Action Taken: Refined AC from ambiguous dual-option behavior to specific error-reporting contract. Added Architecture Notes section with module location, bug line, fixture strategy, and new error code name. Advanced to todo.
+[[2026-05-06]]
+## Test-Writer Notes
+
+**Test file:** `tests/test_corruption_1368.py`
+**Class:** `TestFromAC_EncodingHardening`
+
+### Test counts by category
+
+| Category | Count |
+|----------|-------|
+| Happy path (valid UTF-8 → None) | 1 |
+| Error path (non-UTF8 raises/returns) | 10 |
+| **Total** | **11** |
+
+All 11 tests FAIL (RED confirmed, ruff clean).
+
+### Failure modes
+
+| Tests | Failure type | Root cause |
+|-------|-------------|-----------|
+| 1–10 | `UnicodeDecodeError` | `detect_corruption()` catches `OSError` but not `UnicodeDecodeError` at line 222 of corruption.py |
+| 11 | `ImportError` | `ERR_CORRUPT_ENCODING` not yet defined — added by #1369 |
+
+### AC coverage
+
+| AC line | td | Tests |
+|---------|-----|-------|
+| AC-1: non-UTF8 in tasks/ does not raise | td:2 | test_non_utf8_in_tasks_dir_does_not_raise_unicode_error, test_non_utf8_in_tasks_dir_returns_corruption_error |
+| AC-2: tasks/ CorruptionError shape (.code, .file_path, .detail) | td:2 | test_non_utf8_in_tasks_dir_code_is_encoding, test_non_utf8_in_tasks_dir_file_path_is_set, test_non_utf8_in_tasks_dir_detail_is_non_empty |
+| AC-1: non-UTF8 in archive/ does not raise | td:2 | test_non_utf8_in_archive_dir_does_not_raise_unicode_error, test_non_utf8_in_archive_dir_returns_corruption_error |
+| AC-2: archive/ CorruptionError shape | td:2 | test_non_utf8_in_archive_dir_code_is_encoding, test_non_utf8_in_archive_dir_file_path_is_set, test_non_utf8_in_archive_dir_detail_is_non_empty |
+| AC-3: valid UTF-8 returns None | td:1 | test_valid_utf8_task_returns_none (fails RED via ERR_CORRUPT_ENCODING ImportError) |
+| AC-4: import from owlbear_kanban.corruption | td:0 | n/a (verified by module-level imports in test file) |
+| AC-5: unpatched code produces failure | td:1 | confirmed — all 11 fail |
+
+### Fixture strategy
+
+Non-UTF8 bytes: `b"---\nid: 1001\ntitle: broken\n---\n\x80\x81\x82\x83 bad bytes"` — wrapped in valid-looking `---` delimiters; UnicodeDecodeError fires during `read_text()` before delimiter parsing. Tests cover both `tasks/` and `archive/` paths to exercise archive branch logic.
+
+**Commit:** `test: corruption scanner encoding hardening RED (#1368, test-writer)`
+[[2026-05-06]]
+## Builder Notes
+- Non-implementation task (`type:test`) with explicit counterpart implementation task `#1369`.
+- No source-code edits applied by builder.
+- Test-writer RED evidence is present and complete (11 failing `TestFromAC_EncodingHardening` tests) for downstream GREEN work in `#1369`.
+- Routing: pass-through to review for process continuity on this test-only task.
+[[2026-05-06]]
+## Review Evidence
+### Test Results
+- quality-runner scoped pytest on `tests/test_corruption_1368.py`: 11 failed, 0 passed.
+- Failure alignment: 8 failures are propagated `UnicodeDecodeError` from `serve/kanban/src/owlbear_kanban/corruption.py:222`; 3 failures are `ImportError` for missing `ERR_CORRUPT_ENCODING` from `tests/test_corruption_1368.py:155`, `tests/test_corruption_1368.py:243`, and `tests/test_corruption_1368.py:296`.
+- Snapshot verdict: STILL RED. This satisfies the RED-validity contract from task AC line 39 on the live snapshot.
+
+### Lint Results
+- quality-runner scoped ruff on `tests/test_corruption_1368.py`: clean.
+
+### Coverage Data
+- quality-runner reported 15% coverage for `owlbear_kanban.corruption`.
+- Informational only for this RED-phase test task: the suite fails before the future encoding-handling branch is exercised, so this is not a blocking gate for task #1368.
+
+### AC Compliance
+| AC Line | Evidence | Status |
+|---|---|---|
+| AC-1: non-UTF8 fixtures under `tasks/` and `archive/` prove no `UnicodeDecodeError` should escape (task line 35) | Tests exist at `tests/test_corruption_1368.py:111-126` and `tests/test_corruption_1368.py:202-215`; current scoped run fails with propagated `UnicodeDecodeError` at `serve/kanban/src/owlbear_kanban/corruption.py:222`, which is correct RED evidence against the live snapshot. | PASS |
+| AC-2: returned `CorruptionError` must have encoding code, file_path, and `.detail` describing the encoding failure (task line 36) | Code and file_path assertions are discriminating at `tests/test_corruption_1368.py:164-165`, `tests/test_corruption_1368.py:181`, `tests/test_corruption_1368.py:252-253`, and `tests/test_corruption_1368.py:269`, but detail assertions only require `isinstance(result.detail, str)` and truthiness at `tests/test_corruption_1368.py:195-196` and `tests/test_corruption_1368.py:283-284`. A generic non-empty detail would still pass. | FAIL |
+| AC-3: valid UTF-8 task returns `None` (task line 37) | `test_valid_utf8_task_returns_none` asserts exact `None` at `tests/test_corruption_1368.py:303-305`. | PASS |
+| AC-4: direct import from `owlbear_kanban.corruption` (task line 38) | Module imports `detect_corruption` directly at `tests/test_corruption_1368.py:20`. | PASS |
+| AC-5: live unpatched snapshot fails in RED phase (task line 39) | quality-runner confirmed 11 of 11 failures with the expected root causes: propagated `UnicodeDecodeError` and missing `ERR_CORRUPT_ENCODING`. | PASS |
+
+### Deductions
+- -0.10 AC-2 proof gap: detail-message assertions are lax and do not enforce an encoding-specific explanation.
+- -0.04 dirty-tree contamination could not be checked from this tool surface; commit presence was confirmable, working-tree cleanliness was not.
+- -0.02 TestFromAC immutability could not be proven from a direct diff in this session.
+
+### Verdict
+- FAIL
+- Confidence: 0.84
+- First review cycle confirmed: no prior `## Review Evidence` section exists in the live task file.
+- Action: reject to `todo` for test-writer proof strengthening.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | test-writer | Strengthen the AC-2 detail assertions so they fail unless `CorruptionError.detail` explicitly references the encoding or decode failure, for both `tasks/` and `archive/` cases | `tests/test_corruption_1368.py` | Task AC line 36; current assertions at `tests/test_corruption_1368.py:195-196` and `tests/test_corruption_1368.py:283-284` accept any non-empty string |
+
+[[2026-05-06]]
+## Test-Writer Notes (revision)
+
+**Test file:** `tests/test_corruption_1368.py`
+**Class:** `TestFromAC_EncodingHardening`
+
+### Fix applied (review rejection response)
+Strengthened AC-2 detail assertions per reviewer feedback. The two lax `assert result.detail` checks (tests `test_non_utf8_in_tasks_dir_detail_is_non_empty` and `test_non_utf8_in_archive_dir_detail_is_non_empty`) now require at least one encoding-related keyword (`"encoding"`, `"decode"`, `"utf-8"`, `"utf8"`, `"unicode"`) to appear in `result.detail.lower()`. A generic non-empty string no longer passes.
+
+### Test counts by category
+
+| Category | Count |
+|----------|-------|
+| Happy path (valid UTF-8 → None) | 1 |
+| Error path (non-UTF8 raises/returns) | 10 |
+| **Total** | **11** |
+
+All 11 tests FAIL (RED confirmed, ruff clean).
+
+### Failure modes
+
+| Tests | Failure type | Root cause |
+|-------|-------------|------------|
+| 1–8 | `UnicodeDecodeError` | `detect_corruption()` catches `OSError` but not `UnicodeDecodeError` at corruption.py:222 |
+| 9–11 | `ImportError` | `ERR_CORRUPT_ENCODING` not yet defined — added by #1369 |
+
+### AC coverage
+
+| AC line | Tests |
+|---------|-------|
+| AC-1: non-UTF8 in tasks/ does not raise | test_non_utf8_in_tasks_dir_does_not_raise_unicode_error, test_non_utf8_in_tasks_dir_returns_corruption_error |
+| AC-2: tasks/ CorruptionError shape (.code, .file_path, .detail with encoding keywords) | test_non_utf8_in_tasks_dir_code_is_encoding, test_non_utf8_in_tasks_dir_file_path_is_set, test_non_utf8_in_tasks_dir_detail_is_non_empty |
+| AC-1: non-UTF8 in archive/ does not raise | test_non_utf8_in_archive_dir_does_not_raise_unicode_error, test_non_utf8_in_archive_dir_returns_corruption_error |
+| AC-2: archive/ CorruptionError shape | test_non_utf8_in_archive_dir_code_is_encoding, test_non_utf8_in_archive_dir_file_path_is_set, test_non_utf8_in_archive_dir_detail_is_non_empty |
+| AC-3: valid UTF-8 returns None | test_valid_utf8_task_returns_none |
+| AC-4: direct import from owlbear_kanban.corruption | verified by module-level imports |
+| AC-5: unpatched code fails | confirmed — all 11 fail |

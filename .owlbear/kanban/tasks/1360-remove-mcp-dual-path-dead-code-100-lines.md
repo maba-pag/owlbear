@@ -1,10 +1,10 @@
 ---
 id: 1360
 title: Remove MCP dual-path dead code (~100 lines)
-status: backlog
+status: review
 priority: needed
 created: 2026-05-05T23:34:52.820872+00:00
-updated: 2026-05-06T00:54:40.142795+00:00
+updated: 2026-05-06T03:19:32.970734+00:00
 tags:
 - kanban
 - cleanup
@@ -218,3 +218,87 @@ AC lines are specific and verifiable. AC4 scope ("all existing MCP kanban tests"
 |---|-------------|----------------|---------|----------|
 | 1 | test-writer | Remove or update tests/test_server_1170.py to eliminate imports of deleted private helpers (_invoke_engine_end_work, _invoke_view_end_work, _invoke_view_move_task, _canonical_agent_view_for); either delete coverage-gap tests for removed code or rewrite to test current direct-path behavior | tests/test_server_1170.py | ImportError at collection: cannot import name _invoke_engine_end_work |
 | 2 | builder | Create a dedicated commit for the server.py dead-code removal attributed to #1360 (currently bundled in af05ce05 #1362) or document the bundling explicitly | serve/mcp-kanban/src/owlbear_mcp_kanban/server.py | git log shows no #1360-attributed commit for server.py |
+[[2026-05-06]]
+
+## Architecture Review (Re-entry)
+### Evaluation
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | Remove dead fallback code — one concern |
+| Interface clarity | PASS | AC lines name exact symbols and verify via test gates |
+| Dependency correctness | PASS | No task dependencies; source change is complete |
+| Module layering | PASS | Removal only; no new imports or upward dependencies |
+| TDD compliance | PASS | RED tests exist (test_mcp_kanban_1360.py, 8 tests) |
+| KISS/YAGNI | PASS | Pure deletion, no new abstractions |
+| Premise challenge | PASS | Dead code confirmed — engine.agent_view() always resolves |
+| Pattern consistency | PASS | Direct calls follow existing codebase pattern |
+| Security surface | PASS | No new boundaries introduced |
+| Single domain | PASS | kanban MCP server only |
+
+### Challenge Results
+- Challenger: block (confidence 0.34 in original APPROVE rationale)
+- Architect response: ACCEPTED in part — challenger correctly identified that test_mcp_kanban_1197.py and test_mcp_kanban_1126.py ALSO reference deleted symbols (patches on `_canonical_agent_view_for`). Expanded affected-files list. Commit attribution concern is noted but non-blocking (code exists, tests will gate correctness). Re-approving with expanded scope.
+
+### Affected Test Files (expanded from audit)
+| File | Failure Mode | Required Action |
+|------|-------------|-----------------|
+| tests/test_server_1170.py | ImportError at collection (lines 37-39) | Remove imports + test classes for deleted helpers |
+| tests/test_mcp_kanban_1197.py | AttributeError at runtime (patches _canonical_agent_view_for) | Remove/rewrite AC2 tests that patch deleted symbol |
+| tests/test_mcp_kanban_1126.py | AttributeError at runtime (patch.object with resolver_name) | Remove/rewrite 3 tests that patch deleted symbol |
+
+### Test Depth
+| AC Line | Depth |
+|---------|-------|
+| AC1: _canonical_agent_view_for helper removed | td:0 |
+| AC2: _invoke_view_* fallback branches removed | td:0 |
+| AC3: Direct AgentView calls replace fallback | td:0 |
+| AC4: All existing MCP kanban tests pass | td:1 |
+| AC5: ~100 lines net reduction | td:0 |
+
+- Max depth: 1
+- Test-writer: PROCEED — fix 3 stale test files (delete/rewrite tests that reference removed private helpers)
+
+### Verdict: APPROVE
+### Action Taken: Approved to todo. Test-writer must update 3 files (not just test_server_1170.py per audit). Source changes are complete; only test maintenance remains.
+[[2026-05-06]]
+Architecture re-review after audit rejection. Challenger identified 2 additional affected test files beyond the audit's finding. Expanded scope: test-writer must fix test_server_1170.py, test_mcp_kanban_1197.py, and test_mcp_kanban_1126.py (all reference deleted private helpers). Source changes are complete. AC is verifiable. Approved to todo.
+[[2026-05-06]]
+## Test-Writer Notes
+- Retry (2nd): fixed 3 stale test files — all reference deleted private helpers from #1360's dead-code removal.
+- Commit: 060c1e12
+
+### Files updated
+| File | Changes |
+|---|---|
+| `tests/test_server_1170.py` | Removed imports of `_invoke_engine_end_work`, `_invoke_view_end_work`, `_invoke_view_move_task`; removed `_resolve_canonical_view` helper; removed `TestFromAC_AgentViewHelpers`, `TestFromAC_InvokeEngineEndWork`, `TestFromAC_InvokeViewEndWork`, `TestFromAC_StartWorkFallbackPaths`, `TestFromAC_EndWorkFallbackPath`; trimmed `TestFromAC_MoveTaskFallbackPath` to keep only `test_status_none_raises_tool_error_before_engine_call` (1107 → 570 lines) |
+| `tests/test_mcp_kanban_1197.py` | Removed AC2 spy tests (patching `_canonical_agent_view_for`), `TestFromAC_CanonicalResolverClean`, `TestFromAC_CanonicalResolverBranches`, `TestFromAC_TestPatchesUpdated`; removed unused imports; 438 → 82 lines |
+| `tests/test_mcp_kanban_1126.py` | Stripped to single AC3 structural test `test_no_except_typeerror_in_server_source`; removed 3 behavioral tests patching `_canonical_agent_view_for`; 253 → 38 lines |
+
+### Step 1b.1 — Direct-to-review advance
+- All 108 tests PASS against current implementation (builder already removed dead code)
+- Scoped suite: `test_mcp_kanban.py` + `test_mcp_kanban_1360.py` + 3 fixed files = 108 passed, 0 failed
+- ruff: clean on all 3 changed files
+- AC4 satisfied: all existing MCP kanban tests pass
+
+### AC Coverage (from prior iteration — preserved)
+| AC Line | Tests |
+|---|---|
+| AC1: `_canonical_agent_view_for` removed | `test_mcp_kanban_1360.py::TestFromAC_DeadCodeRemoval::test_canonical_agent_view_for_helper_removed`; `test_mcp_kanban.py::TestAgentViewHelpersRemoved` |
+| AC2: fallback branches removed | `test_mcp_kanban_1360.py::TestFromAC_DeadCodeRemoval` (3 tests); `test_mcp_kanban.py` direct-path classes |
+| AC3: Direct AgentView calls | `test_mcp_kanban_1360.py::TestFromAC_DirectAgentViewPath` (3 tests); `test_mcp_kanban.py` direct-path classes |
+| AC4: All existing MCP kanban tests pass | 108/108 green — collection errors in 3 stale files now resolved |
+| AC5: ~100 lines net reduction | `test_mcp_kanban_1360.py::test_server_module_line_count_reduced` (green, 638 lines &lt; 720) |
+[[2026-05-06]]
+## Builder Notes
+- Implementation: no files changed in this cycle (pass-through verification only).
+- Verification: quality-runner scoped suite passed 108/108 across `tests/test_mcp_kanban_1360.py`, `tests/test_mcp_kanban.py`, `tests/test_server_1170.py`, `tests/test_mcp_kanban_1197.py`, `tests/test_mcp_kanban_1126.py`.
+- Coverage: `owlbear_mcp_kanban.server` at 93% (>=90% gate).
+- ruff: clean on `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py` and scoped test files.
+- Evidence summary: task-owned dead-code removal contract remains satisfied (no fallback behavior reintroduced), and previously stale durable test files now collect and pass.
+- Approach: builder skip/pass-through per retry-cycle state; source implementation already present from prior cycle, so this run verified gate health and routed forward.
+
+### Post-task Reflection
+- Retry-cycle builder handoffs can be verification-only when implementation deltas are already landed and green.
+- Live quality-runner evidence is the safest way to resolve stale body claims from earlier failed cycles.
+- Keeping scoped verification broad enough to include stale regressions (`test_server_1170.py`, `test_mcp_kanban_1197.py`, `test_mcp_kanban_1126.py`) prevented a false-green advance.
+- Coverage should be assessed on touched module scope (`owlbear_mcp_kanban.server`), not repo overall aggregate in this gate.

@@ -1,10 +1,10 @@
 ---
 id: 1310
 title: 'P1-09+10: Git integration — batch commit with scoped staging fix'
-status: in-progress
+status: archived
 priority: needed
 created: 2026-05-04T01:32:27.314281+00:00
-updated: 2026-05-06T00:46:32.180303+00:00
+updated: 2026-05-06T04:14:56.070457+00:00
 tags:
 - phase-2
 - scope:mcp-memory
@@ -503,3 +503,110 @@ Architecture review cycle 4 complete (loop-breaker). Narrowed AC to observable-b
 | AC4 (td:0): all 17 existing tests continue to pass | all 17 pass | PASS |
 
 Builder skip: test-only retry, all tests green.
+[[2026-05-06]]
+## Builder Notes
+- Implementation: no code changes in this cycle (test-only pass-through after Cycle 4 AC narrowing).
+- Verification: quality-runner scoped run is green.
+- Tests: 17 passed, 0 failed, 0 skipped in tests/test_memory_git_integration_1310.py.
+- Coverage: 100% on module `owlbear_mcp_memory.git` (overall scoped report: 40%).
+- ruff: clean for serve/mcp-memory/src/owlbear_mcp_memory/git.py and tests/test_memory_git_integration_1310.py.
+- Evidence summary: narrowed AC is satisfied by existing suite; no additional builder implementation required.
+
+### Reflection
+- This cycle was a pure gate-verification pass-through; prior implementation already satisfied narrowed, observable-behavior AC.
+- Scoped quality-runner verification remains necessary to avoid false green after AC changes.
+- No repo changes were needed, so no commit was created in this cycle.
+[[2026-05-06]]
+## Review Evidence
+### Source Control
+- Cycle 4 is an explicit pass-through retry: the task body records no code changes in this cycle and no new builder commit was created after the AC narrowing at [.owlbear/kanban/tasks/1310-p1-09-red-git-integration-tests-save-uncommitted-curation-batch-commit-review-ba.md](.owlbear/kanban/tasks/1310-p1-09-red-git-integration-tests-save-uncommitted-curation-batch-commit-review-ba.md#L490).
+- The task already contained three prior `## Review Evidence` sections at [.owlbear/kanban/tasks/1310-p1-09-red-git-integration-tests-save-uncommitted-curation-batch-commit-review-ba.md](.owlbear/kanban/tasks/1310-p1-09-red-git-integration-tests-save-uncommitted-curation-batch-commit-review-ba.md#L126), [.owlbear/kanban/tasks/1310-p1-09-red-git-integration-tests-save-uncommitted-curation-batch-commit-review-ba.md](.owlbear/kanban/tasks/1310-p1-09-red-git-integration-tests-save-uncommitted-curation-batch-commit-review-ba.md#L262), and [.owlbear/kanban/tasks/1310-p1-09-red-git-integration-tests-save-uncommitted-curation-batch-commit-review-ba.md](.owlbear/kanban/tasks/1310-p1-09-red-git-integration-tests-save-uncommitted-curation-batch-commit-review-ba.md#L396); any new FAIL would have routed to backlog under the loop-breaker rule.
+- Exact commit-diff and scoped `git status --porcelain` checks were not available in this tool surface, so immutability/dirty-tree confidence is slightly reduced.
+
+### Test Results
+- quality-runner scoped report: 17 passed, 0 failed, 0 skipped in [tests/test_memory_git_integration_1310.py](tests/test_memory_git_integration_1310.py).
+
+### Lint Results
+- Ruff clean for [serve/mcp-memory/src/owlbear_mcp_memory/git.py](serve/mcp-memory/src/owlbear_mcp_memory/git.py) and [tests/test_memory_git_integration_1310.py](tests/test_memory_git_integration_1310.py).
+
+### Coverage
+- quality-runner scoped coverage: 100% on [serve/mcp-memory/src/owlbear_mcp_memory/git.py](serve/mcp-memory/src/owlbear_mcp_memory/git.py).
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---|---|---|---|
+| `_state_from_file` returns `None` for malformed YAML files (no exception propagates) | [_state_from_file](serve/mcp-memory/src/owlbear_mcp_memory/git.py#L34) parses frontmatter with `yaml.safe_load` and returns `None` on `yaml.YAMLError` at [serve/mcp-memory/src/owlbear_mcp_memory/git.py](serve/mcp-memory/src/owlbear_mcp_memory/git.py#L41). The task’s current AC explicitly removed warning-log proof as an implementation detail at [.owlbear/kanban/tasks/1310-p1-09-red-git-integration-tests-save-uncommitted-curation-batch-commit-review-ba.md](.owlbear/kanban/tasks/1310-p1-09-red-git-integration-tests-save-uncommitted-curation-batch-commit-review-ba.md#L456). | [test_state_from_file_returns_none_for_malformed_yaml](tests/test_memory_git_integration_1310.py#L590) with exact `assert result is None` at [tests/test_memory_git_integration_1310.py](tests/test_memory_git_integration_1310.py#L605) | PASS |
+| `commit_batch` excludes files where `_state_from_file` returns `None` from the batch commit, with no partial staged state remaining after return | [commit_batch](serve/mcp-memory/src/owlbear_mcp_memory/git.py#L53) skips `None` states before `git add` at [serve/mcp-memory/src/owlbear_mcp_memory/git.py](serve/mcp-memory/src/owlbear_mcp_memory/git.py#L64), scopes the cached diff at [serve/mcp-memory/src/owlbear_mcp_memory/git.py](serve/mcp-memory/src/owlbear_mcp_memory/git.py#L74), and commits only tracked memory paths at [serve/mcp-memory/src/owlbear_mcp_memory/git.py](serve/mcp-memory/src/owlbear_mcp_memory/git.py#L84). The binding AC-narrowing rationale defines the observable contract as malformed file excluded from history plus no staged-but-uncommitted malformed path after return at [.owlbear/kanban/tasks/1310-p1-09-red-git-integration-tests-save-uncommitted-curation-batch-commit-review-ba.md](.owlbear/kanban/tasks/1310-p1-09-red-git-integration-tests-save-uncommitted-curation-batch-commit-review-ba.md#L457). | [test_commit_batch_skips_malformed_commits_valid_no_partial_state](tests/test_memory_git_integration_1310.py#L609) with malformed-history assertion at [tests/test_memory_git_integration_1310.py](tests/test_memory_git_integration_1310.py#L645) and staged-malformed check at [tests/test_memory_git_integration_1310.py](tests/test_memory_git_integration_1310.py#L663) | PASS |
+| Test: batch with a malformed-YAML `.md` file skips it, commits remaining valid files, leaves no partial staged state | The same integration test proves malformed exclusion from history, valid-file inclusion, and no leftover staged malformed path after return at [tests/test_memory_git_integration_1310.py](tests/test_memory_git_integration_1310.py#L645), [tests/test_memory_git_integration_1310.py](tests/test_memory_git_integration_1310.py#L650), and [tests/test_memory_git_integration_1310.py](tests/test_memory_git_integration_1310.py#L663). | [test_commit_batch_skips_malformed_commits_valid_no_partial_state](tests/test_memory_git_integration_1310.py#L609) | PASS |
+| All 17 existing passing tests in `tests/test_memory_git_integration_1310.py` continue to pass | quality-runner scoped report is green: 17 passed, 0 failed, 0 skipped. | Entire task suite | PASS |
+
+### Informational
+- code-reader flagged a robustness gap around valid-first / malformed-second filename ordering because the integration test intentionally forces malformed-first ordering at [tests/test_memory_git_integration_1310.py](tests/test_memory_git_integration_1310.py#L619) and [tests/test_memory_git_integration_1310.py](tests/test_memory_git_integration_1310.py#L635). I am not failing on that concern because the latest architect refinement expressly narrows AC2 to observable end-state guarantees and states that the existing integration test is sufficient proof for this task at [.owlbear/kanban/tasks/1310-p1-09-red-git-integration-tests-save-uncommitted-curation-batch-commit-review-ba.md](.owlbear/kanban/tasks/1310-p1-09-red-git-integration-tests-save-uncommitted-curation-batch-commit-review-ba.md#L457).
+- No security finding was identified in the touched scope. YAML parsing uses `yaml.safe_load` and git subprocess calls are argv-based with `--` path termination at [serve/mcp-memory/src/owlbear_mcp_memory/git.py](serve/mcp-memory/src/owlbear_mcp_memory/git.py#L41), [serve/mcp-memory/src/owlbear_mcp_memory/git.py](serve/mcp-memory/src/owlbear_mcp_memory/git.py#L74), and [serve/mcp-memory/src/owlbear_mcp_memory/git.py](serve/mcp-memory/src/owlbear_mcp_memory/git.py#L84).
+- Historical comments describing pre-fix failure behavior are stale in [tests/test_memory_git_integration_1310.py](tests/test_memory_git_integration_1310.py#L519) and [tests/test_memory_git_integration_1310.py](tests/test_memory_git_integration_1310.py#L623), but they do not affect runtime behavior or AC proof.
+
+### Deductions
+- 0.03 no direct diff-based immutability proof in this tool surface.
+- 0.02 no direct scoped porcelain proof for the review files in this tool surface.
+- 0.02 non-blocking robustness gap on malformed-file ordering is not covered by a dedicated task-local test, but it is outside the narrowed AC proof surface.
+
+### Verdict
+- PASS
+- Confidence: 0.93
+
+### Action
+- Advanced to `docs`. The live implementation and current task-local suite satisfy the narrowed Cycle 4 acceptance criteria.
+[[2026-05-06]]
+## Docs Gate
+
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | Yes | N/A | `commit_batch` is an internal helper — not a public MCP tool. `serve/mcp-memory/README.md` documents the 7 MCP tools only; no reference to internal git module needed. No prose doc update required. |
+| 2 | Module docstrings | Yes | Verified OK | `git.py` has accurate module docstring, plus docstrings on all three functions: `_git`, `_state_from_file`, `commit_batch`. Content matches implementation. |
+| 3 | External attribution | No | N/A | Task body: "Sources: 6 studied, 4 high-relevance (all internal)." No external sources. |
+| 4 | Research doc | Yes | Verified | `.owlbear/research/memory-git-integration-tests.md` exists (confirmed by file_search). Referenced in task body. |
+| 5 | Diagram maintenance (describes match) | Yes | Updated | `memory-layers.excalidraw` (describes: `serve/mcp-memory/src/**`) and `mcp-topology.excalidraw` (describes: `serve/mcp-*/src/**`) both match changed file `serve/mcp-memory/src/owlbear_mcp_memory/git.py`. Footer updated to `Last verified: 2026-05-06 (060c1e12)` in both. |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation request in task body. |
+| 7 | Deletion detection | No | N/A | No files deleted. |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| serve/mcp-memory/src/owlbear_mcp_memory/git.py | IN (docstrings) | Verified OK |
+| tests/test_memory_git_integration_1310.py | OUT | N/A |
+| share/diagrams/memory-layers.excalidraw | IN | Footer updated |
+| share/diagrams/mcp-topology.excalidraw | IN | Footer updated |
+
+### Files Updated
+- share/diagrams/memory-layers.excalidraw — footer: `Last verified: 2026-05-06 (060c1e12)`
+- share/diagrams/mcp-topology.excalidraw — footer: `Last verified: 2026-05-06 (060c1e12)`
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no `.owlbear/scratch/1310-*` files found)
+[[2026-05-06]]
+## Audit
+### AC Verification (Cycle 4 — narrowed AC)
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| `_state_from_file` returns `None` for malformed YAML (no exception) | `git.py:41-44` catches `yaml.YAMLError`, returns `None`. Test asserts `result is None`. | PASS |
+| `commit_batch` excludes malformed files, no partial staged state remaining | `git.py:64` skips `None` before `git add`. Integration test proves exclusion from history + clean porcelain end-state. | PASS |
+| Batch with malformed file skips it, commits valid, no partial staged state | Integration test at `test_commit_batch_skips_malformed_commits_valid_no_partial_state` proves all three. | PASS |
+| All 17 existing tests pass | 17 passed, 0 failed, 0 skipped (quality-runner full + scoped spot-check). | PASS |
+
+### Test Results
+- pytest (full): 4658 passed, 246 failed, 4 skipped. All 246 failures in unrelated task scopes (engine_accessor_migration, mcp_memory_1266, engine_coverage_1068). Zero failures in 1310 scope.
+- pytest (scoped): 17 passed, 0 failed in tests/test_memory_git_integration_1310.py.
+- ruff: 12 violations, all outside task scope (serve/knowledge/, serve/tools/). Task files clean.
+
+### Architect Quality: 4/5
+Original RED/GREEN split (1310/1311) caused cycle-1 rejection, but architect corrected promptly in cycle 2 by merging scope. Subsequent AC refinements (cycle 3 malformed-YAML hardening, cycle 4 observable-behavior narrowing) were well-targeted. Challenger input properly incorporated across all cycles.
+
+### Deduction Breakdown
+- No deductions applied. All 4 AC lines have specific evidence. No task-scope test failures. No task-scope lint violations. Reviewer evidence present and detailed (PASS, cycle 4). 5 upstream commits verified (3 builder, 2 test-writer) + 1 doc-writer commit. AC quality 4/5.
+
+### Confidence: 1.00
+### Action: archive
