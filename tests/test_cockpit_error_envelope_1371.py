@@ -1,64 +1,299 @@
-"""Tests for Cockpit error envelope legacy test migration (task #1371).
+"""Tests for Cockpit error envelope legacy test migration (task #1371) — retry.
 
 tests/test_cockpit_error_envelope_1370.py covers AC1-AC4(a)(b)(c) in full.
-This file covers the remaining uncovered acceptance criterion:
+This file covers the remaining gaps identified in the reviewer's Required Follow-up:
 
-  AC7 (td:1): Legacy durable-suite tests that assert `detail` format for domain
-              errors must be updated to assert the stable {code, message} envelope.
+  AC7 (td:1): Discriminating API-level assertions proving domain error paths
+              return {code, message} without any 'detail' field.
+  AC4(d) (td:1): GET /api/tasks/{id} forwards sentinel guidance verbatim from
+                 the view (not just a 'guidance' key presence check).
+  AC8 (td:0): Decisions-route HTTPException retains FastAPI {detail} format
+              and is NOT converted to the domain envelope.
 
-All three tests fail until the builder updates the legacy assertion lines to use
-the envelope format instead of the old FastAPI {detail} field.
+Retry: replaces weak source-string guards from the first test-writer pass with
+discriminating API assertions that call real endpoints and verify exact shapes.
 """
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
+from unittest import mock
+
+import pytest
+
+from owlbear_kanban import KanbanEngine
+from owlbear_kanban.errors import ConcurrencyError
+from owlbear_kanban.models import ShowTaskResponse
+
+if TYPE_CHECKING:
+    from fastapi.testclient import TestClient
+
+# ---------------------------------------------------------------------------
+# Board fixture helpers
+# ---------------------------------------------------------------------------
+
+_CONFIG_YAML = """\
+statuses:
+    - research
+    - backlog
+    - todo
+    - in-progress
+    - review
+    - docs
+    - done
+priorities:
+    - someday
+    - nice-to-have
+    - important
+    - needed
+    - critical
+entry_status: research
+terminal_status: done
+wave_size: 4
+agent_map:
+    research: researcher
+    backlog: architect
+    todo: test-writer
+    in-progress: builder
+    review: reviewer
+    docs: doc-writer
+    done: auditor
+agent_types: {}
+agent_compatibility: {}
+non_impl_tags: [research, docs]
+archival_reasons: [completed, deprecated, dropped, duplicate, wontfix]
+status_predicates: {}
+claim_timeout: 1h
+next_id: 1
+"""
+
+
+def _make_board(base_dir: Path) -> Path:
+    kanban_dir = base_dir / "board"
+    kanban_dir.mkdir(parents=True, exist_ok=True)
+    (kanban_dir / "config.yml").write_text(_CONFIG_YAML, encoding="utf-8")
+    (kanban_dir / "tasks").mkdir(exist_ok=True)
+    (kanban_dir / "archive").mkdir(exist_ok=True)
+    return kanban_dir
+
+
+@pytest.fixture
+def board_dir(tmp_path: Path) -> Path:
+    kanban_dir = _make_board(tmp_path)
+    seed = KanbanEngine(kanban_dir)
+    seed.create_task("Alpha task", status="todo", priority="important")
+    seed.create_task("Beta task", status="in-progress", priority="needed")
+    seed.list_tasks()
+    seed.claim_task("2")
+    return kanban_dir
+
+
+@pytest.fixture
+def engine(board_dir: Path) -> KanbanEngine:
+    eng = KanbanEngine(board_dir)
+    eng.list_tasks()
+    return eng
+
+
+@pytest.fixture
+def client(engine: KanbanEngine):
+    from fastapi.testclient import TestClient  # noqa: PLC0415
+
+    from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
+
+    app.dependency_overrides[get_engine] = lambda: engine
+    try:
+        yield TestClient(app)
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def mock_view_client(engine: KanbanEngine):
+    """TestClient with CockpitView replaced by a MagicMock.
+
+    Yields (client, view_mock) so tests can configure return values before
+    issuing requests.
+    """
+    from fastapi.testclient import TestClient  # noqa: PLC0415
+
+    from owlbear_cockpit.deps import get_view  # noqa: PLC0415
+    from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
+
+    view_mock = mock.MagicMock()
+    app.dependency_overrides[get_engine] = lambda: engine
+    app.dependency_overrides[get_view] = lambda: view_mock
+    try:
+        yield TestClient(app), view_mock
+    finally:
+        app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
+# AC7: discriminating API-level assertions for legacy migration sites
+# ---------------------------------------------------------------------------
 
 
 class TestFromAC_LegacyTestMigration:
-    """AC7 (td:1): Legacy durable tests migrated from detail-assertions to envelope.
+    """AC7 (td:1): Domain error paths return {code, message}; no 'detail' key.
 
-    Affected files:
-      - tests/test_cockpit_mutation_api_1134.py  (stale-conflict edit error)
-      - tests/test_cockpit_mutation_api_1135.py  (not-found move, concurrency move)
-      - tests/test_cockpit_read_api.py           (not-found task detail)
+    Discriminating API-level assertions: each test triggers a domain-error code
+    path and verifies the exact envelope shape — replacing the source-string
+    guards from the first test-writer pass.
 
-    Each test checks for the absence of the OLD domain-error assertion pattern.
-    Fails now because the pattern still exists; passes after the builder removes
-    the `detail`-format assertions and replaces them with envelope assertions.
+    Covered migration sites:
+      - edit ConcurrencyError → 409   (test_cockpit_mutation_api_1134 ~line 204)
+      - move NotFoundError  → 404     (test_cockpit_mutation_api_1135 ~line 165)
+      - move ConcurrencyError → 409   (test_cockpit_mutation_api_1135 ~line 313)
+      - show-task NotFoundError → 404 (test_cockpit_read_api ~line 461)
     """
 
-    _tests_dir = Path(__file__).parent
-
-    def test_mutation_1134_stale_error_no_detail_get(self) -> None:
-        """test_cockpit_mutation_api_1134 must not call .get('detail') for stale error.
-
-        Line ~204: `detail = response.json().get("detail", "")` must be replaced
-        with an envelope assertion (`code` / `message` fields).
-        """
-        source = (self._tests_dir / "test_cockpit_mutation_api_1134.py").read_text(
-            encoding="utf-8"
+    def test_edit_concurrency_error_returns_envelope_not_detail(
+        self, client: TestClient, engine: KanbanEngine
+    ) -> None:
+        """409 stale-edit response carries {code, message}; no 'detail' field."""
+        task = engine.show_task("1")
+        exc = ConcurrencyError(code="ERR_STALE", user_message="stale snapshot detected")
+        with mock.patch.object(engine, "edit_task", side_effect=exc):
+            response = client.post(
+                "/api/tasks/1/edit",
+                json={"updated": task.updated, "title": "Envelope probe"},
+            )
+        body = response.json()
+        assert response.status_code == 409
+        assert "detail" not in body, (
+            f"Domain error must NOT include 'detail' key; got {body!r}"
         )
-        assert 'response.json().get("detail"' not in source  # FAILS: pattern still present
-
-    def test_mutation_1135_domain_errors_no_detail_subscript(self) -> None:
-        """test_cockpit_mutation_api_1135 must not subscript json()['detail'] for domain errors.
-
-        Lines ~165 and ~313: `response.json()["detail"]` must be replaced with
-        assertions on the `code` or `message` fields of the error envelope.
-        """
-        source = (self._tests_dir / "test_cockpit_mutation_api_1135.py").read_text(
-            encoding="utf-8"
+        assert body.get("code") == "ERR_STALE"
+        assert "stale snapshot detected" in body.get("message", ""), (
+            f"Envelope message must carry ConcurrencyError.user_message; got {body!r}"
         )
-        assert 'response.json()["detail"]' not in source  # FAILS: pattern still present
 
-    def test_read_api_not_found_no_detail_get(self) -> None:
-        """test_cockpit_read_api must not call .get('detail') for 404 domain error.
-
-        Line ~461: `detail = response.json().get("detail", "")` inside
-        test_task_detail_nonexistent_id_returns_404_with_id_in_detail must be
-        replaced with an envelope assertion on the `code` or `message` field.
-        """
-        source = (self._tests_dir / "test_cockpit_read_api.py").read_text(
-            encoding="utf-8"
+    def test_move_not_found_returns_envelope_not_detail(
+        self, client: TestClient
+    ) -> None:
+        """404 non-existent-task move response carries {code, message}; no 'detail' field."""
+        response = client.post(
+            "/api/tasks/999/move",
+            json={"status": "in-progress", "updated": "2025-01-01T00:00:00"},
         )
-        assert 'response.json().get("detail"' not in source  # FAILS: pattern still present
+        body = response.json()
+        assert response.status_code == 404
+        assert "detail" not in body, (
+            f"Domain error must NOT include 'detail' key; got {body!r}"
+        )
+        assert body.get("code") == "ERR_NOT_FOUND"
+        assert "999" in str(body.get("message", "")), (
+            f"404 message should reference the missing task ID '999'; got {body!r}"
+        )
+
+    def test_move_concurrency_error_returns_envelope_not_detail(
+        self, client: TestClient, engine: KanbanEngine
+    ) -> None:
+        """409 stale-move response carries {code, message}; no 'detail' field."""
+        task = engine.show_task("1")
+        exc = ConcurrencyError(code="ERR_STALE", user_message="stale write detected")
+        with mock.patch.object(engine, "move_task", side_effect=exc):
+            response = client.post(
+                "/api/tasks/1/move",
+                json={"status": "in-progress", "updated": task.updated},
+            )
+        body = response.json()
+        assert response.status_code == 409
+        assert "detail" not in body, (
+            f"Domain error must NOT include 'detail' key; got {body!r}"
+        )
+        assert body.get("code") == "ERR_STALE"
+        assert "stale write detected" in body.get("message", ""), (
+            f"Envelope message must carry ConcurrencyError.user_message; got {body!r}"
+        )
+
+    def test_get_task_not_found_returns_envelope_not_detail(
+        self, client: TestClient
+    ) -> None:
+        """404 task-detail response carries {code, message}; no 'detail' field."""
+        response = client.get("/api/tasks/9999")
+        body = response.json()
+        assert response.status_code == 404
+        assert "detail" not in body, (
+            f"Domain error must NOT include 'detail' key; got {body!r}"
+        )
+        assert body.get("code") == "ERR_NOT_FOUND"
+        assert "9999" in str(body.get("message", "")), (
+            f"404 message should reference the requested ID '9999'; got {body!r}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# AC4(d): sentinel-value forwarding for show-task guidance
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ShowTaskGuidanceForwarding:
+    """AC4(d) (td:1): GET /api/tasks/{id} forwards guidance verbatim from the view.
+
+    The route is a one-line passthrough. Tests that a non-empty sentinel guidance
+    list injected through the view dependency appears unchanged in the response.
+    An implementation that hardcodes guidance=[] or drops the list fails this test.
+    """
+
+    def test_show_task_forwards_sentinel_guidance_values(
+        self, mock_view_client, engine: KanbanEngine
+    ) -> None:
+        """Sentinel guidance list injected via mocked view appears verbatim in response."""
+        client, view_mock = mock_view_client
+        sentinel = ["sentinel-guidance-alpha", "sentinel-guidance-beta"]
+
+        task = engine.show_task("1")
+        payload = task.model_dump()
+        payload["guidance"] = sentinel
+        payload["missing_sections"] = None
+        if isinstance(payload.get("body"), list):
+            payload["body"] = None
+        view_mock.show_task.return_value = ShowTaskResponse.model_validate(payload)
+
+        response = client.get("/api/tasks/1")
+        body = response.json()
+
+        assert response.status_code == 200
+        assert body.get("guidance") == sentinel, (
+            f"Expected sentinel guidance {sentinel!r} forwarded verbatim; "
+            f"got {body.get('guidance')!r}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# AC8: decisions-route framework errors retain FastAPI detail format
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_DecisionsFrameworkCarveOut:
+    """AC8 (td:0): Decisions-route HTTPException retains FastAPI {detail} format.
+
+    FastAPI's built-in HTTPException handler produces {"detail": <value>}.
+    The domain envelope handler (KanbanError → {code, message}) must NOT be
+    applied here — the decisions route uses HTTPException, not KanbanError.
+    """
+
+    def test_malformed_decision_id_returns_detail_body_not_domain_envelope(
+        self, client: TestClient
+    ) -> None:
+        """POST /decisions/.hidden/resolve returns {\"detail\": \"Invalid decision id\"}."""
+        response = client.post(
+            "/api/decisions/.hidden/resolve",
+            json={"response": "approved"},
+        )
+        assert response.status_code == 422
+        body = response.json()
+        assert "detail" in body, (
+            f"Decisions HTTPException must use FastAPI detail format; got {body!r}"
+        )
+        assert body["detail"] == "Invalid decision id", (
+            f"Expected exact detail string 'Invalid decision id'; got {body['detail']!r}"
+        )
+        assert "code" not in body, (
+            f"Decisions route must NOT use domain envelope; got {body!r}"
+        )
+        assert "message" not in body, (
+            f"Decisions route must NOT use domain envelope; got {body!r}"
+        )
