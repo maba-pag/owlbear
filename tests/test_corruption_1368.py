@@ -193,7 +193,12 @@ class TestFromAC_EncodingHardening:
         result = detect_corruption(bad_file, config)
         assert isinstance(result, CorruptionError)
         assert isinstance(result.detail, str), "detail must be a string"
-        assert result.detail, "detail must be non-empty"
+        assert any(
+            kw in result.detail.lower()
+            for kw in ("encoding", "decode", "utf-8", "utf8", "unicode")
+        ), (
+            f"detail must reference the encoding/decode failure, got {result.detail!r}"
+        )
 
     # -----------------------------------------------------------------
     # archive/ directory — AC-1 (no UnicodeDecodeError raised)
@@ -281,7 +286,12 @@ class TestFromAC_EncodingHardening:
         result = detect_corruption(bad_file, config)
         assert isinstance(result, CorruptionError)
         assert isinstance(result.detail, str), "detail must be a string"
-        assert result.detail, "detail must be non-empty"
+        assert any(
+            kw in result.detail.lower()
+            for kw in ("encoding", "decode", "utf-8", "utf8", "unicode")
+        ), (
+            f"detail must reference the encoding/decode failure, got {result.detail!r}"
+        )
 
     # -----------------------------------------------------------------
     # Regression guard — AC-3
