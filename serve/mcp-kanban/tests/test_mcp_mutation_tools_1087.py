@@ -25,6 +25,7 @@ AC coverage:
 from __future__ import annotations
 
 import inspect
+import json
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -502,7 +503,7 @@ class TestFromAC_KanbanErrorMapping:
     async def test_validation_error_user_message_in_tool_error(
         self, app_ctx_with_mock_agent_view: tuple[AppContext, MagicMock]
     ) -> None:
-        """ValidationError.user_message must appear in the raised ToolError."""
+        """ValidationError maps to ToolError with JSON payload carrying code + message."""
         app_ctx, mock_av = app_ctx_with_mock_agent_view
         user_msg = "priority 'invalid' is not a valid priority"
         mock_av.create_task.side_effect = ValidationError(
@@ -512,15 +513,19 @@ class TestFromAC_KanbanErrorMapping:
         ctx = _make_mcp_ctx(app_ctx)
         with pytest.raises(ToolError) as exc_info:
             await create_task(ctx, title="T", priority="invalid")
-        assert user_msg in str(exc_info.value), (
-            "ToolError must embed the KanbanError.user_message verbatim"
+        payload = json.loads(str(exc_info.value))
+        assert payload["code"] == "ERR_INVALID_PRIORITY", (
+            f"ToolError JSON must carry parseable error code; got {payload!r}"
+        )
+        assert payload["message"] == user_msg, (
+            f"ToolError JSON must carry human-readable user_message; got {payload!r}"
         )
 
     @pytest.mark.asyncio
     async def test_not_found_error_maps_to_tool_error(
         self, app_ctx_with_mock_agent_view: tuple[AppContext, MagicMock]
     ) -> None:
-        """NotFoundError from AgentView.edit_task maps to ToolError."""
+        """NotFoundError from AgentView.edit_task maps to ToolError with JSON payload."""
         app_ctx, mock_av = app_ctx_with_mock_agent_view
         user_msg = "task 9999 not found"
         mock_av.edit_task.side_effect = NotFoundError(
@@ -530,8 +535,12 @@ class TestFromAC_KanbanErrorMapping:
         ctx = _make_mcp_ctx(app_ctx)
         with pytest.raises(ToolError) as exc_info:
             await edit_task(ctx, id="9999", priority="critical")
-        assert user_msg in str(exc_info.value), (
-            "ToolError must embed the NotFoundError.user_message verbatim"
+        payload = json.loads(str(exc_info.value))
+        assert payload["code"] == "ERR_NOT_FOUND", (
+            f"ToolError JSON must carry parseable error code; got {payload!r}"
+        )
+        assert payload["message"] == user_msg, (
+            f"ToolError JSON must carry human-readable user_message; got {payload!r}"
         )
 
     @pytest.mark.asyncio

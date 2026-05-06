@@ -21,6 +21,7 @@ AC coverage:
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -1061,7 +1062,7 @@ class TestFromAC_ErrorMapping:
     async def test_tool_error_carries_user_message_not_code(
         self, app_ctx_with_mock_agent_view: tuple[object, MagicMock]
     ) -> None:
-        """ToolError message is the human-readable user_message, not the error code."""
+        """ToolError text is JSON with both 'code' and 'message' fields."""
         from owlbear_mcp_kanban.server import show_task
 
         app_ctx, mock_av = app_ctx_with_mock_agent_view
@@ -1074,11 +1075,12 @@ class TestFromAC_ErrorMapping:
         with pytest.raises(ToolError) as exc_info:
             await show_task(ctx, id=42)
 
-        err_str = str(exc_info.value)
-        assert user_msg in err_str, "ToolError must contain the user_message"
-        # Should NOT expose the internal code as the primary message
-        assert "ERR_NOT_FOUND" not in err_str or user_msg in err_str, (
-            "ToolError should expose user_message, not raw error code"
+        payload = json.loads(str(exc_info.value))
+        assert payload["code"] == "ERR_NOT_FOUND", (
+            f"ToolError JSON must carry parseable error code; got {payload!r}"
+        )
+        assert payload["message"] == user_msg, (
+            f"ToolError JSON must carry human-readable user_message; got {payload!r}"
         )
 
     @pytest.mark.asyncio

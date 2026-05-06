@@ -29,6 +29,7 @@ FAIL paths summary:
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import ClassVar
 from unittest.mock import MagicMock, patch
@@ -415,24 +416,21 @@ class TestFromAC_ErrorMapping:
     async def test_validation_error_maps_to_tool_error(
         self, app_ctx: AppContext
     ) -> None:
-        """ValidationError from AgentView.create_task(title='') → ToolError(user_message).
+        """ValidationError from AgentView.create_task(title='') → structured JSON ToolError.
 
         An empty title is invalid input. AgentView.create_task must raise ValidationError;
-        the adapter must catch it as KanbanError and re-raise as ToolError(user_message).
-
-        FAIL path (RED): AgentView.create_task() raises TypeError (unexpected kwargs
-        body/priority/…), which is NOT a ToolError — pytest.raises(ToolError) fails.
+        the adapter must catch it as KanbanError and re-raise as ToolError containing
+        a JSON payload with both 'code' and 'message' fields.
         """
         ctx = _make_ctx(app_ctx)
         with pytest.raises(ToolError) as exc_info:
             await create_task(ctx, title="")
-        assert str(exc_info.value) == "title must not be empty", (
-            f"ToolError must pass exact user_message; got {exc_info.value!r}"
+        payload = json.loads(str(exc_info.value))
+        assert payload["code"] == "ERR_INVALID_STATUS", (
+            f"ToolError JSON must carry error code; got {payload!r}"
         )
-        assert not any(
-            word.startswith("ERR_") for word in str(exc_info.value).split()
-        ), (
-            f"ToolError must not expose machine error code on wire; got {str(exc_info.value)!r}"
+        assert payload["message"] == "title must not be empty", (
+            f"ToolError JSON must carry human-readable message; got {payload!r}"
         )
 
 
@@ -526,8 +524,12 @@ class TestFromAC_GuidanceProofRepair:
         ctx = _make_ctx(app_ctx)
         with pytest.raises(ToolError) as exc_info:
             await show_task(ctx, id=9999)
-        assert str(exc_info.value) == "Task '9999' not found", (
-            f"ToolError must pass exact user_message; got {exc_info.value!r}"
+        payload = json.loads(str(exc_info.value))
+        assert payload["code"] == "ERR_NOT_FOUND", (
+            f"ToolError JSON must carry parseable error code; got {payload!r}"
+        )
+        assert payload["message"] == "Task '9999' not found", (
+            f"ToolError JSON must carry human-readable message; got {payload!r}"
         )
 
     @pytest.mark.asyncio
@@ -548,12 +550,12 @@ class TestFromAC_GuidanceProofRepair:
         ctx = _make_ctx(app_ctx_claimed)
         with pytest.raises(ToolError) as exc_info:
             await start_work(ctx, id="1")
-        error_text = str(exc_info.value)
-        assert error_text.startswith("Task '1' is already claimed by another agent"), (
-            f"ToolError must start with exact prefix; got {error_text!r}"
+        payload = json.loads(str(exc_info.value))
+        assert payload["code"] == "ERR_ALREADY_CLAIMED", (
+            f"ToolError JSON must carry parseable error code; got {payload!r}"
         )
-        assert "ERR_ALREADY_CLAIMED" not in error_text, (
-            f"ToolError must NOT expose machine code on wire; got {error_text!r}"
+        assert "Task '1' is already claimed by another agent" in payload["message"], (
+            f"ToolError JSON message must describe the concurrency conflict; got {payload!r}"
         )
 
     @pytest.mark.asyncio
@@ -580,10 +582,10 @@ class TestFromAC_GuidanceProofRepair:
             pytest.raises(ToolError) as exc_info,
         ):
             await list_tasks(ctx)
-        error_text = str(exc_info.value)
-        assert error_text == user_msg, (
-            f"ToolError must expose exact user_message; got {error_text!r}"
+        payload = json.loads(str(exc_info.value))
+        assert payload["code"] == "ERR_INVALID_CLAIM_TIMEOUT", (
+            f"ToolError JSON must carry parseable error code; got {payload!r}"
         )
-        assert "ERR_INVALID_CLAIM_TIMEOUT" not in error_text, (
-            f"ToolError must NOT expose machine error code on wire; got {error_text!r}"
+        assert payload["message"] == user_msg, (
+            f"ToolError JSON must carry human-readable user_message; got {payload!r}"
         )

@@ -12,6 +12,7 @@ Module: serve/mcp-kanban/tests/test_mcp_lifecycle_tools.py
 
 from __future__ import annotations
 
+import json
 from unittest.mock import MagicMock, NonCallableMagicMock
 
 import pytest
@@ -63,13 +64,13 @@ def _make_task_dict() -> dict:
 
 
 def _make_engine_mock(agent_view: MagicMock) -> MagicMock:
-    """Engine mock where engine.agent_view = mock_av and all methods return valid dicts.
+    """Engine mock where engine.agent_view() returns mock_av and all methods return valid dicts.
 
-    Allows the current (pre-refactor) adapter code to run without crashing,
+    Allows the current adapter code to run without crashing,
     so tests reach the assertion point and fail for the right reason.
     """
     engine = MagicMock()
-    engine.agent_view = agent_view
+    engine.agent_view = MagicMock(return_value=agent_view)
     task_dict = _make_task_dict()
     for method_name in (
         "show_task",
@@ -425,37 +426,46 @@ class TestFromAC_KanbanErrorMapping:
     async def test_not_found_error_mapped_to_tool_error_with_user_message(
         self, ctx: MagicMock, mock_av: MagicMock
     ) -> None:
-        """NotFoundError from AgentView → ToolError that carries user_message."""
+        """NotFoundError from AgentView → ToolError with JSON payload carrying code + message."""
         user_msg = "task 999 not found"
         mock_av.start_work.side_effect = NotFoundError(
             code="ERR_NOT_FOUND", user_message=user_msg
         )
-        with pytest.raises(ToolError, match=user_msg):
+        with pytest.raises(ToolError) as exc_info:
             await start_work(ctx, id="999")
+        payload = json.loads(str(exc_info.value))
+        assert payload["code"] == "ERR_NOT_FOUND"
+        assert payload["message"] == user_msg
 
     @pytest.mark.asyncio
     async def test_concurrency_error_mapped_to_tool_error_with_user_message(
         self, ctx: MagicMock, mock_av: MagicMock
     ) -> None:
-        """ConcurrencyError from AgentView → ToolError that carries user_message."""
+        """ConcurrencyError from AgentView → ToolError with JSON payload carrying code + message."""
         user_msg = "already claimed at 2026-01-01T00:00:00+00:00"
         mock_av.start_work.side_effect = ConcurrencyError(
             code="ERR_ALREADY_CLAIMED", user_message=user_msg
         )
-        with pytest.raises(ToolError, match="already claimed at"):
+        with pytest.raises(ToolError) as exc_info:
             await start_work(ctx, id="42")
+        payload = json.loads(str(exc_info.value))
+        assert payload["code"] == "ERR_ALREADY_CLAIMED"
+        assert payload["message"] == user_msg
 
     @pytest.mark.asyncio
     async def test_migration_error_mapped_to_tool_error_with_user_message(
         self, ctx: MagicMock, mock_av: MagicMock
     ) -> None:
-        """MigrationRequiredError (KanbanError subclass) from AgentView → ToolError."""
+        """MigrationRequiredError (KanbanError subclass) from AgentView → ToolError with JSON payload."""
         user_msg = "board requires migration before use"
         mock_av.end_work.side_effect = MigrationRequiredError(
             code="ERR_MIGRATION_REQUIRED", user_message=user_msg
         )
-        with pytest.raises(ToolError, match="board requires migration"):
+        with pytest.raises(ToolError) as exc_info:
             await end_work(ctx, id="42", outcome="success", note=None)
+        payload = json.loads(str(exc_info.value))
+        assert payload["code"] == "ERR_MIGRATION_REQUIRED"
+        assert payload["message"] == user_msg
 
 
 # ---------------------------------------------------------------------------
