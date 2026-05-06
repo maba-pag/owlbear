@@ -8,10 +8,12 @@ from __future__ import annotations
 
 import subprocess
 from pathlib import Path
+import json
 
 import pytest
 
 _WEB = Path(__file__).parent.parent / "serve" / "cockpit" / "web"
+_SRC = _WEB / "src"
 
 
 @pytest.fixture(scope="module")
@@ -30,6 +32,25 @@ def build_result() -> subprocess.CompletedProcess[str]:
 def build_output(build_result: subprocess.CompletedProcess[str]) -> str:
     """Return merged stdout/stderr from the build invocation."""
     return build_result.stdout + build_result.stderr
+
+
+@pytest.fixture(scope="module")
+def app_source_text() -> str:
+    """Return merged non-test TS/TSX source text for suppression scanning."""
+    fragments: list[str] = []
+    for path in _SRC.rglob("*"):
+        if path.suffix not in {".ts", ".tsx"}:
+            continue
+        if "__tests__" in path.parts:
+            continue
+        fragments.append(path.read_text(encoding="utf-8"))
+    return "\n".join(fragments)
+
+
+@pytest.fixture(scope="module")
+def tsconfig_data() -> dict[str, object]:
+    """Load cockpit web tsconfig for anti-suppression assertions."""
+    return json.loads((_WEB / "tsconfig.json").read_text(encoding="utf-8"))
 
 
 class TestFromAC_CockpitPdsV4BuildCompatibility:
@@ -83,3 +104,31 @@ class TestFromAC_PendingDrResolveModalBodyContract:
             "Detected PendingDR/ResolveModal body mismatch in build output. "
             "Resolve by aligning DR types or supplying required body in the selected DR flow."
         )
+
+
+class TestAc2NoBroadTypeSuppressionGuards:
+    """AC2: prove no broad type-suppression shortcuts are used."""
+
+    @pytest.mark.parametrize(
+        ("directive", "reason"),
+        [
+            ("@ts-ignore", "Suppresses TypeScript errors instead of fixing PDS v4 compatibility."),
+            ("@ts-nocheck", "Disables type-checking for entire files and can hide audited failures."),
+            ("@ts-expect-error", "Can mask audited contract failures instead of fixing component usage."),
+        ],
+    )
+    def test_app_source_does_not_use_typescript_suppression_directives(
+        self,
+        directive: str,
+        reason: str,
+        app_source_text: str,
+    ) -> None:
+        """Reject TypeScript directive suppressions in non-test cockpit source."""
+        assert directive not in app_source_text, f"Detected {directive} in app source. {reason}"
+
+    def test_tsconfig_does_not_disable_typecheck(self, tsconfig_data: dict[str, object]) -> None:
+        """Reject tsconfig noCheck-based bypasses for build compatibility."""
+        compiler_options = tsconfig_data.get("compilerOptions", {})
+        assert isinstance(compiler_options, dict)
+        assert compiler_options.get("strict") is True, "tsconfig must keep strict mode enabled."
+        assert compiler_options.get("noCheck") is not True, "tsconfig must not disable type-checking via noCheck."
