@@ -6,7 +6,7 @@ user-invocable: false
 disable-model-invocation: true
 model: [GPT-5.4 (copilot), Claude Sonnet 4.6 (copilot)]
 tools:
-  [vscode/memory, vscode/toolSearch, read/problems, read/readFile, read/viewImage, agent, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, ob-kanban/edit_task, ob-kanban/end_work, ob-kanban/list_tasks, ob-kanban/show_task, ob-kanban/start_work]
+  [ob-memory/save_memory, ob-memory/recall_memory, vscode/toolSearch, read/problems, read/readFile, read/viewImage, agent, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, ob-kanban/edit_task, ob-kanban/end_work, ob-kanban/list_tasks, ob-kanban/show_task, ob-kanban/start_work]
 agents: [code-reader, quality-runner, planner]
 hooks:
   PreToolUse:
@@ -90,7 +90,7 @@ Include `## Review Evidence` section in your `end_work` note: test results, lint
 
 - Section header: `## Review Evidence`
 - On fail: `end_work(outcome="reject", move_to="in-progress"|"todo"|"backlog")` — see `<pipeline_position>` for routing conditions
-- Follow-ups: via code-reader / `create_dr`
+- Follow-ups: `create_dr` for preference-based DRs; planner for task creation
 - See `h-mcp-kanban` skill for tool workflows
 
 </output_format>

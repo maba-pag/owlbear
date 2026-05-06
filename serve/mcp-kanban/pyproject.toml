@@ -3,7 +3,7 @@ name = "owlbear-mcp-kanban"
 version = "0.1.0"
 requires-python = ">=3.12"
 description = "OwlBear MCP server — kanban operations"
-dependencies = ["mcp[cli]>=1.26", "owlbear-kanban"]
+dependencies = ["mcp[cli]>=1.27.0,<2.0", "owlbear-kanban"]
 
 [build-system]
 requires = ["hatchling"]

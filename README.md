@@ -48,8 +48,7 @@ code .
 ```
 
 Setup creates merged VS Code settings/MCP config plus copied runtime files such as
-`.owlbear/hooks/`, `.owlbear/kanban/`, and `owlbear-project.json` in your project
-directory. Agents, skills, instructions, and prompts still load live from the owlbear
+`.owlbear/hooks/` and `.owlbear/kanban/` in your project directory. Agents, skills, instructions, and prompts still load live from the owlbear
 clone via relative paths, so the same owlbear repo can be shared across multiple
 projects on your machine.
 

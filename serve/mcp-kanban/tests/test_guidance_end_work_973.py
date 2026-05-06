@@ -101,25 +101,29 @@ class TestFromAC_EndWorkGuidanceIntegration:
         ctx = _make_ctx(app_ctx)
         result = await end_work(
             ctx,
-            task_id="1",
+            id="1",
             note="blocking for dependency",
             outcome="block",
             block_reason="waiting on infra",
         )
-        assert len(result.guidance) > 0, f"Expected non-empty guidance for block outcome, got {result.guidance!r}"
+        assert len(result.guidance) > 0, (
+            f"Expected non-empty guidance for block outcome, got {result.guidance!r}"
+        )
         assert "Decision Request" in result.guidance[0], (
             f"Expected 'Decision Request' in guidance, got {result.guidance[0]!r}"
         )
 
     @pytest.mark.asyncio
-    async def test_block_outcome_removes_block_user_tag_if_present(self, app_ctx: AppContext) -> None:
+    async def test_block_outcome_removes_block_user_tag_if_present(
+        self, app_ctx: AppContext
+    ) -> None:
         """end_work(outcome='block') on task with block:user → block:user removed."""
         # Setup: add block:user tag before end_work
         app_ctx.engine.edit_task("1", add_tags=["block:user"])
         ctx = _make_ctx(app_ctx)
         result = await end_work(
             ctx,
-            task_id="1",
+            id="1",
             note="agent re-blocking",
             outcome="block",
             block_reason="stale dependency",
@@ -129,41 +133,53 @@ class TestFromAC_EndWorkGuidanceIntegration:
         )
 
     @pytest.mark.asyncio
-    async def test_success_outcome_returns_commit_guidance(self, app_ctx: AppContext) -> None:
+    async def test_success_outcome_returns_commit_guidance(
+        self, app_ctx: AppContext
+    ) -> None:
         """end_work(outcome='success') → guidance contains commit reminder."""
         ctx = _make_ctx(app_ctx)
         result = await end_work(
             ctx,
-            task_id="1",
+            id="1",
             note="all done",
             outcome="success",
         )
-        assert len(result.guidance) > 0, f"Expected non-empty guidance for success outcome, got {result.guidance!r}"
+        assert len(result.guidance) > 0, (
+            f"Expected non-empty guidance for success outcome, got {result.guidance!r}"
+        )
         assert "commit" in result.guidance[0].lower(), (
             f"Expected 'commit' in guidance message, got {result.guidance[0]!r}"
         )
 
     @pytest.mark.asyncio
-    async def test_fail_outcome_returns_empty_guidance(self, app_ctx: AppContext) -> None:
+    async def test_fail_outcome_returns_empty_guidance(
+        self, app_ctx: AppContext
+    ) -> None:
         """end_work(outcome='fail') → empty guidance."""
         ctx = _make_ctx(app_ctx)
         result = await end_work(
             ctx,
-            task_id="1",
+            id="1",
             note="failed attempt",
             outcome="fail",
         )
-        assert result.guidance == [], f"Expected empty guidance for fail outcome, got {result.guidance!r}"
+        assert result.guidance == [], (
+            f"Expected empty guidance for fail outcome, got {result.guidance!r}"
+        )
 
     @pytest.mark.asyncio
-    async def test_reject_outcome_returns_empty_guidance(self, app_ctx: AppContext) -> None:
+    async def test_reject_outcome_returns_empty_guidance(
+        self, app_ctx: AppContext
+    ) -> None:
         """end_work(outcome='reject') → empty guidance."""
         ctx = _make_ctx(app_ctx)
         result = await end_work(
             ctx,
-            task_id="1",
+            id="1",
             note="rejecting to backlog",
             outcome="reject",
             move_to="backlog",
         )
-        assert result.guidance == [], f"Expected empty guidance for reject outcome, got {result.guidance!r}"
+        assert result.guidance == [], (
+            f"Expected empty guidance for reject outcome, got {result.guidance!r}"
+        )

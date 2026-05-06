@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import os
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -14,12 +15,22 @@ from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
 from mcp.types import ToolAnnotations
 from pydantic import BeforeValidator
+from pydantic import ValidationError as PydanticValidationError
 
-from owlbear_kanban import KanbanEngine
-from owlbear_kanban.dispatch import pick_dispatchable
-from owlbear_kanban.models import TaskSummary
+from owlbear_kanban import KanbanEngine, decisions
+from owlbear_kanban.errors import KanbanError
+from owlbear_kanban.models import (
+    ListTasksResponse,
+    PickTasksResponse,
+    ShowTaskResponse,
+    SingleTaskResponse,
+)
 from owlbear_mcp_kanban.guidance import collect_guidance
-from owlbear_mcp_kanban.models import KanbanTask
+from owlbear_mcp_kanban.models import (
+    KanbanTask,
+    ListTasksParams,
+    PickTasksParams,
+)
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -43,20 +54,61 @@ __all__ = [
     "AppContext",
     "StrId",
     "_apply_tool_exclusions",
+    "_map_kanban_error",
     "_show_validated",
     "app_lifespan",
+    "create_dr",
     "create_task",
     "edit_task",
     "end_work",
     "list_tasks",
     "mcp",
     "move_task",
+    "parse_task_id",
     "pick_tasks",
     "show_task",
     "start_work",
 ]
 
 _DEFAULT_KANBAN_DIR = Path(".owlbear/kanban")
+
+
+def _resolve_kanban_dir() -> Path:
+    """Resolve KANBAN_DIR from the environment, defaulting to cwd/.owlbear/kanban."""
+    raw_value = os.environ.get("KANBAN_DIR", "").strip()
+    selected = Path(raw_value) if raw_value else _DEFAULT_KANBAN_DIR
+    return selected.resolve()
+
+
+def _startup_error(kanban_dir: Path, detail: str) -> RuntimeError:
+    """Build a startup error with board path and KANBAN_DIR remediation guidance."""
+    return RuntimeError(
+        f"{detail}: {kanban_dir}. Set KANBAN_DIR to a valid kanban board directory."
+    )
+
+
+def parse_task_id(value: str | int, *, field: str = "task_id") -> int:
+    """Parse MCP task identifiers as positive base-10 integers."""
+    msg = f"{field} must be a positive integer"
+    if isinstance(value, bool):
+        raise ToolError(msg)
+    if isinstance(value, int):
+        parsed = value
+    elif isinstance(value, str):
+        if not value or value != value.strip() or not value.isdecimal():
+            raise ToolError(msg)
+        parsed = int(value)
+    else:
+        raise ToolError(msg)
+    if parsed <= 0:
+        raise ToolError(msg)
+    return parsed
+
+
+def _map_kanban_error(exc: KanbanError) -> None:
+    """Raise MCP ToolError with machine-readable code and human-readable message."""
+    payload = json.dumps({"code": exc.code, "message": exc.user_message})
+    raise ToolError(payload) from exc
 
 
 @dataclass
@@ -95,9 +147,20 @@ def _apply_tool_exclusions(server: FastMCP) -> set[str]:
 @asynccontextmanager
 async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
     """Instantiate KanbanEngine and yield AppContext for the MCP session."""
-    kanban_dir: Path = _DEFAULT_KANBAN_DIR
+    kanban_dir = _resolve_kanban_dir()
     _apply_tool_exclusions(_server)
-    engine = KanbanEngine(kanban_dir)
+
+    if not kanban_dir.is_dir():
+        raise _startup_error(kanban_dir, "Kanban directory does not exist")
+
+    try:
+        engine = KanbanEngine(kanban_dir)
+    except Exception as exc:
+        raise _startup_error(kanban_dir, "Failed to initialize kanban board") from exc
+
+    if not engine.tasks_dir.is_dir():
+        raise _startup_error(kanban_dir, "Kanban tasks directory does not exist")
+
     engine.sweep()
     yield AppContext(engine=engine, kanban_dir=kanban_dir)
 
@@ -109,32 +172,56 @@ mcp = FastMCP("owlbear-kanban", lifespan=app_lifespan)
 async def list_tasks(  # noqa: PLR0913
     ctx: Context,
     *,
-    status: str = "",
-    tag: str = "",
-    priority: str = "",
-    search: str = "",
-    sort: str = "",
+    status: str | None = None,
+    tag: str | None = None,
+    priority: str | None = None,
+    archival_reason: str | None = None,
+    ids: list[int] | None = None,
+    parent: int | None = None,
+    search: str | None = None,
+    sort: str | None = None,
     unclaimed: bool = False,
-    archived: bool = False,
     limit: int = 0,
     reverse: bool = False,
     blocked: bool | None = None,
-) -> list[TaskSummary]:
+) -> ListTasksResponse:
     """List kanban tasks with optional filters."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
-    records = app_ctx.engine.list_tasks(
-        status=status,
-        tag=tag,
-        priority=priority,
-        search=search,
-        sort=sort,
-        unclaimed=unclaimed,
-        archived=archived,
-        limit=limit,
-        reverse=reverse,
-        blocked=blocked,
-    )
-    return [TaskSummary.model_validate(record.model_dump()) for record in records]
+    try:
+        params = ListTasksParams.model_validate(
+            {
+                "status": status,
+                "tag": tag,
+                "priority": priority,
+                "archival_reason": archival_reason,
+                "ids": ids,
+                "parent": parent,
+                "search": search,
+                "sort": sort,
+                "unclaimed": unclaimed,
+                "limit": limit,
+                "reverse": reverse,
+                "blocked": blocked,
+            }
+        )
+        return app_ctx.engine.agent_view().list_tasks(
+            status=params.status,
+            tag=params.tag,
+            priority=params.priority,
+            archival_reason=params.archival_reason,
+            ids=params.ids,
+            parent=params.parent,
+            search=params.search,
+            sort=params.sort,
+            unclaimed=params.unclaimed,
+            limit=params.limit,
+            reverse=params.reverse,
+            blocked=params.blocked,
+        )
+    except KanbanError as exc:
+        _map_kanban_error(exc)
+    except PydanticValidationError as exc:
+        raise ToolError(str(exc)) from exc
 
 
 # Set outputSchema for list_tasks (lean task array)
@@ -144,14 +231,7 @@ _list_tasks_tool_obj = next(
     if t.name == "list_tasks"
 )
 _list_tasks_tool_obj.fn_metadata.output_schema = {
-    "type": "object",
-    "properties": {
-        "result": {
-            "type": "array",
-            "items": TaskSummary.model_json_schema(),
-        },
-    },
-    "required": ["result"],
+    **ListTasksResponse.model_json_schema(),
 }
 
 
@@ -160,10 +240,24 @@ def _record_to_task(record: Task) -> KanbanTask:
     return KanbanTask.model_validate(record.model_dump())
 
 
-async def _show_validated(app_ctx: AppContext, task_id: str) -> KanbanTask:
+def _to_single_task_response(record: object) -> SingleTaskResponse:
+    """Normalize engine/view results into SingleTaskResponse."""
+    if isinstance(record, SingleTaskResponse):
+        return record
+    if isinstance(record, KanbanTask):
+        return SingleTaskResponse.model_validate(record.model_dump())
+    if hasattr(record, "model_dump"):
+        data = record.model_dump()
+        return SingleTaskResponse.model_validate(data)
+    if isinstance(record, dict):
+        return SingleTaskResponse.model_validate(record)
+    return SingleTaskResponse.model_validate(record)
+
+
+async def _show_validated(app_ctx: AppContext, task_id: int) -> KanbanTask:
     """Retrieve a task from the engine and return a validated KanbanTask."""
     try:
-        record = app_ctx.engine.show_task(task_id)
+        record = app_ctx.engine.show_task(str(task_id))
     except FileNotFoundError as exc:
         msg = str(exc)
         raise ToolError(msg) from exc
@@ -171,10 +265,19 @@ async def _show_validated(app_ctx: AppContext, task_id: str) -> KanbanTask:
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
-async def show_task(ctx: Context, task_id: StrId) -> KanbanTask:
+async def show_task(
+    ctx: Context,
+    id: StrId,  # noqa: A002
+    section: str | None = None,
+) -> ShowTaskResponse:
     """Show a single task by ID with full details."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
-    return await _show_validated(app_ctx, task_id)
+    validated_id = parse_task_id(id, field="id")
+    try:
+        view = app_ctx.engine.agent_view()
+        return view.show_task(task_id=validated_id, section=section)
+    except KanbanError as exc:
+        _map_kanban_error(exc)
 
 
 @mcp.tool(annotations=ToolAnnotations(destructiveHint=False))
@@ -183,49 +286,89 @@ async def create_task(  # noqa: PLR0913
     *,
     title: str,
     body: str = "",
-    depends_on: StrId = "",
-    parent: int = 0,
-    priority: str = "",
-    status: str = "",
-    tags: str = "",
-) -> KanbanTask:
+    depends_on: list[int] | None = None,
+    parent: int | None = None,
+    priority: str = "needed",
+    tags: list[str] | None = None,
+) -> SingleTaskResponse:
     """Create a new kanban task."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
-    tags_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else []
-    deps_list = [int(d.strip()) for d in depends_on.split(",") if d.strip()] if depends_on else []
     try:
-        record = app_ctx.engine.create_task(
-            title,
+        return app_ctx.engine.agent_view().create_task(
+            title=title,
             body=body,
-            tags=tags_list or None,
             priority=priority,
-            status=status,
-            parent=parent if parent > 0 else None,
-            depends_on=deps_list or None,
+            tags=tags,
+            parent=parent,
+            depends_on=depends_on,
         )
-    except ValueError as exc:
-        raise ToolError(str(exc)) from exc
-    return _record_to_task(record)
+    except KanbanError as exc:
+        _map_kanban_error(exc)
+
+
+@mcp.tool(annotations=ToolAnnotations(destructiveHint=False))
+async def create_dr(
+    ctx: Context,
+    task_id: str | int,
+    agent: str,
+    request_type: str,
+    body: str,
+) -> dict[str, object]:
+    """Create a pending decision/action request file and return relative path."""
+    if request_type not in {"decision", "action"}:
+        msg = "request_type must be one of: decision, action"
+        raise ToolError(msg)
+
+    app_ctx: AppContext = ctx.request_context.lifespan_context
+    parsed_task_id = parse_task_id(task_id, field="task_id")
+    try:
+        created_path = await asyncio.to_thread(
+            decisions.create_dr,
+            app_ctx.kanban_dir / "decisions",
+            app_ctx.engine,
+            task_id=parsed_task_id,
+            agent=agent,
+            request_type=request_type,
+            body=body,
+        )
+    except KanbanError as exc:
+        _map_kanban_error(exc)
+
+    relative_path = created_path.relative_to(app_ctx.kanban_dir).as_posix()
+    return {"created": True, "path": relative_path}
 
 
 @mcp.tool(annotations=ToolAnnotations(destructiveHint=False, idempotentHint=True))
-async def move_task(ctx: Context, task_id: StrId, status: str) -> KanbanTask:
+async def move_task(
+    ctx: Context,
+    id: StrId,  # noqa: A002
+    status: str | None = None,
+    archival_reason: str | None = None,
+    archival_refs: list[int] | None = None,
+) -> SingleTaskResponse:
     """Move a task to the specified status column, or archive it when status is "archived"."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
-    pre_task = await _show_validated(app_ctx, task_id)
+    resolved_id = parse_task_id(id, field="id")
+    if status is None:
+        msg = "status is required"
+        raise ToolError(msg)
+
+    pre_task = await _show_validated(app_ctx, resolved_id)
     try:
-        record = await asyncio.to_thread(
-            app_ctx.engine.move_task,
-            task_id,
+        record = app_ctx.engine.agent_view().move_task(
+            resolved_id,
             status,
+            archival_reason=archival_reason,
+            archival_refs=archival_refs,
         )
-    except (FileNotFoundError, ValueError) as exc:
-        msg = str(exc)
-        raise ToolError(msg) from exc
-    result = _record_to_task(record)
+    except KanbanError as exc:
+        _map_kanban_error(exc)
+    result = _to_single_task_response(record)
     with contextlib.suppress(Exception):
-        status_names = [s["name"] for s in app_ctx.engine.board_config().statuses]
-        result.guidance = collect_guidance("move", before=pre_task, after=result, status_names=status_names)
+        status_names = list(app_ctx.engine.board_config().statuses)
+        result.guidance = collect_guidance(
+            "move", before=pre_task, after=result, status_names=status_names
+        )
     return result
 
 
@@ -233,122 +376,123 @@ async def move_task(ctx: Context, task_id: StrId, status: str) -> KanbanTask:
 async def edit_task(  # noqa: PLR0912, PLR0913, C901
     ctx: Context,
     *,
-    task_id: StrId,
-    body: str = "",
-    block: str = "",
-    unblock: bool = False,
-    tags: str = "",
-    add_tag: str = "",
-    remove_tag: str = "",
-    priority: str = "",
-    append_body: str = "",
-    status: str = "",
+    id: StrId,  # noqa: A002
+    title: str | None = None,
+    body: str | None = None,
+    append_body: str | None = None,
     timestamp: bool = False,
-    add_dep: StrId = "",
-    remove_dep: StrId = "",
-    parent: int = 0,
-    title: str = "",
-    depends_on: StrId = "",
-) -> KanbanTask:
+    priority: str | None = None,
+    parent: int | None = None,
+    add_dep: list[int] | None = None,
+    remove_dep: list[int] | None = None,
+    add_tag: list[str] | None = None,
+    remove_tag: list[str] | None = None,
+    block_reason: str | None = None,
+    archival_reason: str | None = None,
+    archival_refs: list[int] | None = None,
+) -> SingleTaskResponse:
     """Edit task fields."""
-    if depends_on:
-        msg = "edit_task does not accept 'depends_on'. Use 'add_dep' or 'remove_dep' instead."
-        raise ToolError(msg)
-    if tags:
-        msg = "edit_task does not accept 'tags'. Use 'add_tag' or 'remove_tag' instead."
-        raise ToolError(msg)
     app_ctx: AppContext = ctx.request_context.lifespan_context
+    resolved_id = parse_task_id(id, field="id")
     kwargs: dict[str, object] = {}
-    if body:
-        kwargs["body"] = body
-    if title:
+    # FastMCP maps both omitted optional params and explicit JSON null to Python None.
+    # We intentionally use None defaults for tri-state fields: None=no-change,
+    # empty string/value clears where supported by AgentView, non-empty sets.
+    if title is not None:
         kwargs["title"] = title
-    if priority:
-        kwargs["priority"] = priority
-    if status:
-        kwargs["status"] = status
-    if block:
-        kwargs["blocked"] = True
-        kwargs["block_reason"] = block
-    elif unblock:
-        kwargs["blocked"] = False
-    if add_tag:
-        kwargs["add_tags"] = [add_tag]
-    if remove_tag:
-        kwargs["remove_tags"] = [remove_tag]
-    if add_dep:
-        kwargs["add_deps"] = [int(add_dep)]
-    if remove_dep:
-        kwargs["remove_deps"] = [int(remove_dep)]
+    if body is not None:
+        kwargs["body"] = body
     if append_body:
         kwargs["append_body"] = append_body
     if timestamp:
         kwargs["timestamp"] = True
-    if parent > 0:
+    if priority is not None:
+        kwargs["priority"] = priority
+    if parent is not None:
         kwargs["parent"] = parent
-    # Remove block:user tag on any MCP block/unblock (agent takes ownership)
-    if block or unblock:
-        remove_tags: list[str] = list(kwargs.get("remove_tags", []))  # type: ignore[arg-type]
-        if "block:user" not in remove_tags:
-            remove_tags.append("block:user")
-        kwargs["remove_tags"] = remove_tags
+    if add_dep is not None:
+        kwargs["add_dep"] = add_dep
+    if remove_dep is not None:
+        kwargs["remove_dep"] = remove_dep
+    if add_tag is not None:
+        kwargs["add_tag"] = add_tag
+    if remove_tag is not None:
+        kwargs["remove_tag"] = remove_tag
+    if block_reason is not None:
+        kwargs["block_reason"] = block_reason
+    if archival_reason is not None:
+        kwargs["archival_reason"] = archival_reason
+    if archival_refs is not None:
+        kwargs["archival_refs"] = archival_refs
     try:
-        record = app_ctx.engine.edit_task(task_id, **kwargs)
-    except (FileNotFoundError, ValueError) as exc:
-        msg = str(exc)
-        raise ToolError(msg) from exc
-    task = _record_to_task(record)
+        response = app_ctx.engine.agent_view().edit_task(resolved_id, **kwargs)
+    except KanbanError as exc:
+        _map_kanban_error(exc)
+    result = _to_single_task_response(response)
     with contextlib.suppress(Exception):
-        task.guidance = collect_guidance("edit_task", None, task)
-    return task
+        if not result.guidance:
+            result.guidance = collect_guidance("edit_task", None, result)
+    return result
 
 
 @mcp.tool(annotations=ToolAnnotations(destructiveHint=False))
-async def start_work(ctx: Context, task_id: StrId) -> KanbanTask:
+async def start_work(
+    ctx: Context,
+    id: StrId,  # noqa: A002
+) -> SingleTaskResponse:
     """Claim a task and return its full details."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
+    resolved_id = parse_task_id(id, field="id")
+
     try:
-        record = app_ctx.engine.start_work(task_id)
+        record = app_ctx.engine.agent_view().start_work(resolved_id)
+    except KanbanError as exc:
+        _map_kanban_error(exc)
     except (ValueError, FileNotFoundError) as exc:
         raise ToolError(str(exc)) from exc
-    return _record_to_task(record)
+    result = _to_single_task_response(record)
+    with contextlib.suppress(Exception):
+        result.guidance = collect_guidance("start_work", None, result)
+    return result
 
 
 @mcp.tool(annotations=ToolAnnotations(destructiveHint=False))
 async def end_work(  # noqa: PLR0913
     ctx: Context,
     *,
-    task_id: StrId,
-    note: str,
-    outcome: Literal["success", "fail", "block", "reject"] = "success",
-    block_reason: str = "",
-    move_to: str = "research",
-) -> KanbanTask:
+    id: StrId,  # noqa: A002
+    note: str | None = None,
+    outcome: Literal["success", "fail", "reject", "block", "release"] = "success",
+    block_reason: str | None = None,
+    move_to: str | None = None,
+    archival_reason: str | None = None,
+    archival_refs: list[int] | None = None,
+) -> SingleTaskResponse:
     """Release a task: append note, advance or resolve status, release claim."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
-
-    if outcome == "block" and not block_reason:
-        msg = "block_reason is required when outcome=block"
-        raise ToolError(msg)
+    resolved_id = parse_task_id(id, field="id")
 
     try:
-        record = await asyncio.to_thread(
-            app_ctx.engine.end_work,
-            task_id,
+        record = app_ctx.engine.agent_view().end_work(
+            resolved_id,
             note=note,
             outcome=outcome,
             block_reason=block_reason,
             move_to=move_to,
+            archival_reason=archival_reason,
+            archival_refs=archival_refs,
         )
+    except KanbanError as exc:
+        _map_kanban_error(exc)
     except (ValueError, FileNotFoundError) as exc:
         raise ToolError(str(exc)) from exc
-    # Remove block:user tag on MCP block outcome (agent takes ownership)
-    if outcome == "block":
+    task = _to_single_task_response(record)
+    if outcome in {"success", "block", "fail"}:
         with contextlib.suppress(Exception):
-            record = app_ctx.engine.edit_task(task_id, remove_tags=["block:user"])
-    task = _record_to_task(record)
-    with contextlib.suppress(Exception):
-        task.guidance = collect_guidance("end_work", None, task, outcome=outcome)
+            if not task.guidance:
+                task.guidance = collect_guidance(
+                    "end_work", None, task, outcome=outcome
+                )
     return task
 
 
@@ -358,30 +502,56 @@ async def end_work(  # noqa: PLR0913
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
-async def pick_tasks(ctx: Context, *, limit: int = 25, tag: str = "") -> dict:
-    """Pick dispatchable tasks: gate-filtered, sorted by priority/status, capped at limit.
+async def pick_tasks(
+    ctx: Context,
+    *,
+    wave_size: int | None = None,
+    max_waves: int = 3,
+) -> PickTasksResponse:
+    """Pick dispatchable tasks from AgentView and return wave envelopes.
 
-    Optional tag pre-filters candidates before gating (e.g. 'phase-2').
+    wave_size defaults to engine configuration when omitted.
     """
     app_ctx: AppContext = ctx.request_context.lifespan_context
-    tasks = pick_dispatchable(app_ctx.engine, limit=limit, tag=tag)
-    return {"dispatch": [{"task_id": int(t.id), "status": str(t.status)} for t in tasks]}
+    try:
+        params = PickTasksParams.model_validate(
+            {
+                "wave_size": wave_size,
+                "max_waves": max_waves,
+            }
+        )
+        return app_ctx.engine.agent_view().pick_tasks(
+            wave_size=params.wave_size,
+            max_waves=params.max_waves,
+        )
+    except KanbanError as exc:
+        _map_kanban_error(exc)
+    except PydanticValidationError as exc:
+        raise ToolError(str(exc)) from exc
 
 
-# Override outputSchema for tools that return KanbanTask. This ensures the
-# advertised schema matches what structuredContent actually contains.
-_kanbantask_schema = KanbanTask.model_json_schema()
-for _tool_name in ("show_task", "move_task", "edit_task", "create_task", "start_work", "end_work"):
-    _tool_obj = next(t for t in mcp._tool_manager._tools.values() if t.name == _tool_name)  # noqa: SLF001
-    _tool_obj.fn_metadata.output_schema = _kanbantask_schema
+# Override outputSchema for mutation/lifecycle tools that return
+# SingleTaskResponse. This ensures advertised schema matches tool output.
+_single_task_schema = SingleTaskResponse.model_json_schema()
+for _tool_name in (
+    "move_task",
+    "edit_task",
+    "create_task",
+    "start_work",
+    "end_work",
+):
+    _tool_obj = next(
+        t
+        for t in mcp._tool_manager._tools.values()  # noqa: SLF001
+        if t.name == _tool_name
+    )
+    _tool_obj.fn_metadata.output_schema = _single_task_schema
 
 
 # ---------------------------------------------------------------------------
 # Patch input parameter descriptions for better agent discoverability.
 # FastMCP auto-generates titles from argument names but has no descriptions.
 # ---------------------------------------------------------------------------
-_STATUSES = ["research", "backlog", "todo", "in-progress", "review", "docs", "done"]
-_PRIORITIES = ["someday", "nice-to-have", "important", "needed", "critical"]
 _SORT_FIELDS = ["priority", "updated", "id", "title", "status", "created"]
 
 
@@ -400,12 +570,12 @@ def _patch_params(
 _patch_params(
     "list_tasks",
     {
-        "status": {"enum": _STATUSES},
         "tag": {"description": "Filter by tag, e.g. 'phase-2'"},
-        "priority": {"enum": _PRIORITIES},
         "search": {"description": "Full-text search in titles and bodies"},
         "sort": {"enum": _SORT_FIELDS},
-        "blocked": {"description": "true = only blocked, false = only unblocked, null = all"},
+        "blocked": {
+            "description": "true = only blocked, false = only unblocked, null = all"
+        },
     },
 )
 
@@ -413,35 +583,39 @@ _patch_params(
     "create_task",
     {
         "body": {"description": "Markdown body (objectives, AC, context)"},
-        "depends_on": {"description": "Comma-separated dependency task IDs"},
+        "depends_on": {"description": "JSON array of dependency task IDs"},
         "parent": {"description": "Parent task ID for subtask hierarchy"},
-        "priority": {"enum": _PRIORITIES},
-        "status": {"enum": _STATUSES},
-        "tags": {"description": "Comma-separated tags"},
+        "tags": {"description": "JSON array of tags"},
     },
 )
 
 _patch_params(
     "move_task",
     {
-        "status": {"enum": [*_STATUSES, "archived"]},
+        "status": {
+            "description": "Target status name, or 'archived' to archive the task"
+        },
     },
 )
 
 _patch_params(
     "edit_task",
     {
-        "body": {"description": "Replace the entire task body"},
-        "block": {"description": "Block reason (empty = no change)"},
-        "tags": {"description": "Replace all tags (comma-separated)"},
-        "priority": {"enum": _PRIORITIES},
+        "title": {"description": "Replace task title (must be non-empty)"},
+        "body": {
+            "description": "Replace task body; empty string clears, null/omitted = no change"
+        },
         "append_body": {"description": "Append to body (preserves existing content)"},
-        "status": {"enum": _STATUSES},
         "timestamp": {"description": "Prepend [[date]] timestamp to appended body"},
-        "add_dep": {"description": "Add dependency task IDs (comma-separated, e.g. '601,602')"},
-        "remove_dep": {"description": "Remove dependency task IDs (comma-separated, e.g. '601,602')"},
-        "parent": {"description": "Parent task ID for subtask hierarchy"},
-        "depends_on": {"description": "Not supported on edit. Use add_dep / remove_dep instead."},
+        "add_dep": {
+            "description": "Add dependency task IDs (JSON array, e.g. [601, 602])"
+        },
+        "remove_dep": {
+            "description": "Remove dependency task IDs (JSON array, e.g. [601, 602])"
+        },
+        "parent": {
+            "description": "Parent task ID for subtask hierarchy; use 0 to clear parent"
+        },
     },
 )
 
@@ -450,9 +624,15 @@ _patch_params(
     {
         "note": {"description": "Summary note appended to task body"},
         "outcome": {
-            "description": "success = advance, fail = stay, block = mark blocked, reject = move back",
+            "description": (
+                "success = advance, fail = record failure and release claim, "
+                "reject = move back, block = mark blocked and release claim, "
+                "release = release claim without changing status"
+            ),
         },
         "block_reason": {"description": "Required when outcome=block"},
-        "move_to": {"enum": _STATUSES, "description": "Target status when outcome=reject"},
+        "move_to": {
+            "description": "Target status when outcome=reject; optional status move when outcome=success or block",
+        },
     },
 )

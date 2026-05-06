@@ -15,7 +15,9 @@ import re
 
 from owlbear_kanban.models import Section
 
-# ATX heading: 1-6 `#` followed by a space (or end of line for empty heading)
+__all__ = ["Section", "parse_body", "render_body"]
+
+# ATX heading: 1-6 '#' followed by a space
 _ATX_RE = re.compile(r"^(#{1,6}) (.*)$")
 
 # Setext underline: line of only `=` or `-` (3+ chars)
@@ -27,6 +29,15 @@ _FENCE_RE = re.compile(r"^(`{3,}|~{3,})")
 
 # Indented code block: 4 spaces or 1 tab
 _INDENT_RE = re.compile(r"^(    |\t)")
+
+
+def _normalize_atx_heading(raw_heading: str) -> str:
+    """Return CommonMark-normalized ATX heading text."""
+    stripped = raw_heading.strip()
+    if stripped and set(stripped) == {"#"}:
+        return ""
+    # Optional closing hash run is removed only when preceded by whitespace.
+    return re.sub(r"[ \t]+#+[ \t]*$", "", raw_heading).strip()
 
 
 def parse_body(markdown: str) -> list[Section]:  # noqa: C901, PLR0915
@@ -66,7 +77,9 @@ def parse_body(markdown: str) -> list[Section]:  # noqa: C901, PLR0915
         # Skip empty preamble (heading=None, no real content) to avoid ghost sections
         if current_heading is None and not content.strip():
             return
-        sections.append(Section(heading=current_heading, level=current_level, content=content))
+        sections.append(
+            Section(heading=current_heading, level=current_level, content=content)
+        )
 
     i = 0
     while i < len(lines):
@@ -105,7 +118,7 @@ def parse_body(markdown: str) -> list[Section]:  # noqa: C901, PLR0915
             # blank-line separator (preserving round-trip fidelity, AC-C12).
             current_lines.append("")
             _flush()
-            current_heading = atx_match.group(2).strip()
+            current_heading = _normalize_atx_heading(atx_match.group(2))
             current_level = len(atx_match.group(1))
             current_lines = []
             i += 1

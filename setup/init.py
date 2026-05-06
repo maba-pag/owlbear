@@ -9,6 +9,7 @@ the location of this script.
 
 from __future__ import annotations
 
+import difflib
 import json
 import os
 import re
@@ -16,7 +17,6 @@ import shutil
 import sys
 import warnings
 from contextlib import suppress
-from datetime import UTC, datetime
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
@@ -50,12 +50,12 @@ _DICT_MERGE_KEYS = _LOCATION_KEYS | frozenset(
 _SKIP_NAMES = frozenset({"scratch-pad.txt"})
 _SKIP_IF_EXISTS_REL = frozenset(
     {
+        ".github/copilot-instructions.md",
         ".editorconfig",
         ".gitattributes",
         ".markdownlint-cli2.jsonc",
         ".markdownlint.json",
         ".markdownlintignore",
-        "owlbear-project.json",
     }
 )
 
@@ -162,23 +162,6 @@ def _write_settings(src: Path, dest: Path, replacements: dict[str, str]) -> None
     dest.write_text(json.dumps(merged, indent=2), encoding="utf-8")
 
 
-def _write_project_json(
-    src: Path,
-    dest: Path,
-    owlbear_rel_path: str,
-    name: str,
-) -> None:
-    """Write owlbear-project.json with computed fields.  Skips if dest already exists."""
-    if dest.exists():
-        return
-    template = src.read_text(encoding="utf-8")
-    template = _replace_placeholders(template, {"name": name})
-    data: dict = json.loads(template)
-    data["owlbear_rel_path"] = owlbear_rel_path
-    data["created_at"] = datetime.now(tz=UTC).isoformat()
-    dest.write_text(json.dumps(data, indent=2), encoding="utf-8")
-
-
 def _write_mcp(src: Path, dest: Path, replacements: dict[str, str]) -> None:
     """Write .vscode/mcp.json, merging with existing file if present.
 
@@ -264,13 +247,14 @@ def _should_replace_hook_file(
         if choice in {"skip", "s"}:
             return False
         if choice in {"cancel", "c"}:
-            raise RuntimeError("Hook seeding cancelled by user.")
+            msg = "Hook seeding cancelled by user."
+            raise RuntimeError(msg)
         print("Enter replace, skip, or cancel.")
 
 
 def _hook_diff(src: Path, dest: Path) -> str:
     """Return a short unified diff between src (seed) and dest (existing)."""
-    import difflib
+    max_diff_lines = 40
 
     try:
         seed_lines = src.read_text(encoding="utf-8").splitlines(keepends=True)
@@ -286,8 +270,8 @@ def _hook_diff(src: Path, dest: Path) -> str:
             n=2,
         )
     )
-    if len(diff_lines) > 40:
-        diff_lines = diff_lines[:40] + ["... (diff truncated)\n"]
+    if len(diff_lines) > max_diff_lines:
+        diff_lines = [*diff_lines[:max_diff_lines], "... (diff truncated)\n"]
     return "".join(diff_lines)
 
 
@@ -319,11 +303,10 @@ def create_mcp_config(target_dir: Path, owlbear_dir: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def init(
+def init(  # noqa: C901
     target_dir: Path,
     owlbear_dir: Path,
     *,
-    name: str | None = None,
     replace_hooks: bool = False,
     interactive: bool | None = None,
 ) -> None:
@@ -331,23 +314,16 @@ def init(
 
     Walks the seed/ tree inside *owlbear_dir*, copies static files, and
     replaces ``{{placeholder}}`` tokens in ``.json`` / ``.yml`` templates.
-    Computed fields (owlbear_rel_path, created_at) are generated here rather than
-    stored as template placeholders.
-
-    Idempotent: ``owlbear-project.json`` is skipped when it already exists.
     ``settings.json`` and ``mcp.json`` are deep-merged with existing files.
 
     Args:
         target_dir: Destination project directory.
         owlbear_dir: Root of the owlbear installation (contains ``seed/``).
-        name: Project name.  Defaults to *target_dir.name*.
         replace_hooks: Overwrite differing existing hook runtime files.
         interactive: Whether hook conflicts may prompt. Defaults to TTY detect.
     """
     seed_dir = owlbear_dir / "seed"
     replacements = _build_replacements(owlbear_dir, target_dir)
-    owlbear_rel_path = replacements["owlbear_rel_path"]
-    resolved_name = name if name is not None else target_dir.name
     interactive_mode = _is_interactive_session() if interactive is None else interactive
 
     for src in sorted(seed_dir.rglob("*")):
@@ -375,10 +351,6 @@ def init(
 
         if rel_posix == ".gitignore":
             _write_gitignore(src, dest)
-            continue
-
-        if rel_posix == "owlbear-project.json":
-            _write_project_json(src, dest, owlbear_rel_path, resolved_name)
             continue
 
         if rel_posix in _SKIP_IF_EXISTS_REL and dest.exists():
@@ -421,7 +393,7 @@ if __name__ == "__main__":  # pragma: no cover
     _target = Path.cwd()
     _owlbear = Path(__file__).resolve().parent.parent
     try:
-        init(_target, _owlbear, name=args.name, replace_hooks=args.replace_hooks)
+        init(_target, _owlbear, replace_hooks=args.replace_hooks)
     except RuntimeError as exc:
         raise SystemExit(str(exc)) from exc
     print(f"OwlBear workspace initialised in '{_target.name}'.")

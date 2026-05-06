@@ -32,7 +32,7 @@ markers = [
   "api: tests that require API integrations or network services",
   "slow: tests that are long-running",
   "integration: marks tests that require the kanban-md binary (deselect with -m 'not integration')",
-  "e2e: end-to-end tests requiring Copilot CLI on PATH (run explicitly with -m e2e)",
+  "e2e: end-to-end tests requiring VS Code agent runtime prerequisites (run explicitly with -m e2e)",
 ]
 
 [tool.ruff]
@@ -40,7 +40,6 @@ target-version = "py312"
 line-length = 120
 src = [
   "serve/kanban/src",
-  "serve/orchestrator/src",
   "serve/knowledge/src",
   "serve/mcp-kanban/src",
   "serve/mcp-knowledge/src",
@@ -155,9 +154,7 @@ quote-style = "double"
 
 [tool.coverage.run]
 source_pkgs = [
-  "owlbear",
   "owlbear_kanban",
-  "owlbear_orchestrator",
   "owlbear_knowledge",
   "owlbear_mcp_browser",
   "owlbear_mcp_kanban",

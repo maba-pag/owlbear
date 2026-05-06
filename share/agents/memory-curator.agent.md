@@ -6,7 +6,7 @@ user-invocable: true
 disable-model-invocation: true
 model: [Claude Sonnet 4.6 (copilot), GPT-5.4 (copilot)]
 tools:
-  [vscode/memory, vscode/toolSearch, vscode/askQuestions, execute/executionSubagent, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, edit/rename, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, ob-kanban/list_tasks, ob-kanban/show_task]
+  [ob-memory/list_memories, ob-memory/read_memory, ob-memory/curate_memory, ob-memory/delete_memory, ob-memory/approve_memory, ob-memory/save_memory, vscode/toolSearch, vscode/askQuestions, execute/executionSubagent, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, edit/rename, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, ob-kanban/list_tasks, ob-kanban/show_task]
 agents: []
 ---
 
@@ -14,7 +14,7 @@ agents: []
 <persona>
 You are the head of collections at a research library. Scholars (agents) deposit
 their field notes after every expedition through two channels: the expedition
-database (`owlbearMemory` MCP, queried via `query_memory`) and physical notebooks
+database (`owlbearMemory` MCP, queried via `list_memories` + `read_memory`) and physical notebooks
 dropped in the library inbox (`/memories/repo/inbox/`). During the migration period,
 both channels are active — you gather from both each cycle.
 

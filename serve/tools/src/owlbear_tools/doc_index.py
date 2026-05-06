@@ -14,7 +14,7 @@ _AUTO_GENERATED_HEADER = (
     " DO NOT EDIT. Regenerated on demand. -->"
 )
 
-_EXCLUDED_DIRS: frozenset[Path] = frozenset(
+_EXCLUDED_PATHS: frozenset[Path] = frozenset(
     Path(p)
     for p in [
         ".owlbear/scratch",
@@ -25,11 +25,17 @@ _EXCLUDED_DIRS: frozenset[Path] = frozenset(
         ".owlbear/sources",
         "store",
         "tests",
+    ]
+)
+
+_EXCLUDED_NAMES: frozenset[str] = frozenset(
+    {
         "node_modules",
         ".git",
+        ".venv",
         "dist",
         "build",
-    ]
+    }
 )
 
 _DOC_SUFFIXES: frozenset[str] = frozenset({".md", ".excalidraw"})
@@ -55,12 +61,14 @@ class DocEntry(TypedDict):
 
 
 def _is_excluded_dir(dirpath: Path, root: Path) -> bool:
-    """Return True if *dirpath* matches an entry in the exclusion list."""
+    """Return True if *dirpath* matches an excluded path or contains an excluded name."""
     try:
         rel = dirpath.relative_to(root)
     except ValueError:  # pragma: no cover
         return False  # pragma: no cover
-    return rel in _EXCLUDED_DIRS
+    if rel in _EXCLUDED_PATHS:
+        return True
+    return any(part in _EXCLUDED_NAMES for part in rel.parts)
 
 
 def collect_docs(root: Path) -> list[Path]:
@@ -208,7 +216,9 @@ def parse_index(text: str) -> list[DocEntry]:
 
 def main() -> None:
     """CLI entry point: regenerate the doc index for a workspace root."""
-    parser = argparse.ArgumentParser(description="Generate or update the OwlBear doc index.")
+    parser = argparse.ArgumentParser(
+        description="Generate or update the OwlBear doc index."
+    )
     parser.add_argument("root", nargs="?", default=".", help="Workspace root directory")
     parser.add_argument(
         "--output",

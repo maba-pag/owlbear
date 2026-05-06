@@ -8,12 +8,14 @@ Architecture:
   - list_tasks() scans tasks_dir (or archive dir), applies filters,
     sorts by config-ranked field, and returns list[TaskSummary].
   - show_task() finds a single task file by ID and returns its Task.
-  - create_task() allocates next_id, writes a new task file, increments config.
+    - create_task() allocates next_id via allocate_next_id
+        (persists config.next_id before write), then writes a new task file.
   - edit_task() modifies task fields in-place; slug/filename never changes.
   - move_task() changes status; "archived" moves file to archive/.
   - claim_task() marks a task as claimed by this engine's agent_name; rejects
     blocked tasks and rival claims within the configured timeout window.
-  - release_task() clears claimed_by and claimed_at fields unconditionally.
+    - release_task() clears claimed_at unconditionally;
+        appends a timestamped note to the body when ``note`` is provided.
   - board_config() returns a defensive copy of the current BoardConfig.
   - refresh_config() reloads config from disk, updating all derived state.
   - valid_transitions(status) returns the set of all statuses except the given one.
@@ -24,60 +26,62 @@ from __future__ import annotations
 
 import contextlib
 import json
+import logging
 import os
 import random
-import re
 import subprocess
-import sys
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
+from ruamel.yaml import YAML
+from ruamel.yaml.error import YAMLError
+
+from owlbear_kanban import storage
+from owlbear_kanban._duration import _parse_duration
+from owlbear_kanban._locking import _exclusive_file_lock  # noqa: F401
+from owlbear_kanban.activity_store import compact_activity_log, list_activity_events
 from owlbear_kanban.agent_names import ADJECTIVES, NOUNS
-from owlbear_kanban.config_loader import load_config, save_config
+from owlbear_kanban.body_parser import parse_body
+from owlbear_kanban.config_loader import load_config
+from owlbear_kanban.corruption import (
+    ERR_CORRUPT_DUPLICATE_ID,
+    CorruptionError,
+    detect_corruption,
+)
+from owlbear_kanban.dispatch import PRIORITY_RANK, STATUS_RANK
 from owlbear_kanban.models import (
+    ActivityCompactionResult,
+    ActivityEvent,
     BoardConfig,
+    ConcurrencyError,
     ConfigError,
+    KanbanError,
     MigrationRequiredError,
     SessionRecord,
     Task,
     TaskSummary,
+    ValidationError,
 )
-from owlbear_kanban.task_io import make_task_filename, read_task, validate_path_containment, write_task
+from owlbear_kanban.storage import (
+    make_task_filename,
+    read_task,
+    validate_path_containment,
+    write_task,
+)
 
-# ---------------------------------------------------------------------------
-# Module-level duration parser (AC-C49)
-# ---------------------------------------------------------------------------
+_BLOCK_REASON_UNSET = object()
+_PARENT_UNSET = object()
+_MAX_CLAIM_STALE_RETRIES = 4
+_MAX_BODY_BYTES = 500 * 1024
+LOGGER = logging.getLogger(__name__)
 
-_DURATION_RE = re.compile(r"^(?:(\d+)h)?(?:(\d+)m)?$")
-
-
-def _parse_duration(s: str) -> timedelta:
-    """Parse a duration string like ``'1h'``, ``'30m'``, ``'2h30m'``.
-
-    Args:
-        s: Duration string.
-
-    Returns:
-        :class:`timedelta` representation.
-
-    Raises:
-        ConfigError: code='ERR_INVALID_CLAIM_TIMEOUT' when format is invalid.
-    """
-    m = _DURATION_RE.match(s.strip())
-    if not m or not (m.group(1) or m.group(2)):
-        raise ConfigError(
-            code="ERR_INVALID_CLAIM_TIMEOUT",
-            user_message=f"Invalid claim_timeout format: {s!r} — expected e.g. '1h', '30m', '2h30m'",
-        )
-    hours = int(m.group(1) or 0)
-    minutes = int(m.group(2) or 0)
-    return timedelta(hours=hours, minutes=minutes)
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
     from pathlib import Path
+
+    from owlbear_kanban.agent_view import AgentView
 
 
 @dataclass
@@ -98,6 +102,8 @@ def _classify_end_work_state(detail: str) -> str:
         return "completed"
     if detail.startswith("reject:"):
         return "rejected"
+    if detail.startswith("release"):
+        return "released"
     # blocked:* and outcome=fail both map to the canonical blocked state.
     return "blocked"
 
@@ -108,6 +114,8 @@ def _classify_end_work_outcome(detail: str) -> str:
         return "success"
     if detail.startswith("reject:"):
         return "reject"
+    if detail.startswith("release"):
+        return "released"
     if detail.startswith("outcome=fail"):
         return "fail"
     return "block"
@@ -125,6 +133,47 @@ def _compute_duration(claim_ts: str, close_ts: str) -> float:
     if close_dt.tzinfo is None:
         close_dt = close_dt.replace(tzinfo=UTC)
     return (close_dt - claim_dt).total_seconds()
+
+
+def _task_body_as_text(body: object) -> str:
+    """Return a string body for task mutation operations."""
+    return body if isinstance(body, str) else ""
+
+
+def _validate_dispatch_rank_coverage(config: BoardConfig) -> None:
+    """Ensure dispatch rank maps cover every configured priority and status."""
+    unranked_priorities = [
+        value for value in config.priorities if value not in PRIORITY_RANK
+    ]
+    if unranked_priorities:
+        names = ", ".join(unranked_priorities)
+        raise ConfigError(
+            code="ERR_DISPATCH_PRIORITY_MISMATCH",
+            user_message=(
+                f"dispatch priority ranks missing configured values: {names}"
+            ),
+        )
+
+    unranked_statuses = [value for value in config.statuses if value not in STATUS_RANK]
+    if unranked_statuses:
+        names = ", ".join(unranked_statuses)
+        raise ConfigError(
+            code="ERR_DISPATCH_STATUS_MISMATCH",
+            user_message=(f"dispatch status ranks missing configured values: {names}"),
+        )
+
+
+def _restore_snapshot_if_unchanged(
+    original: Task,
+    expected_updated: str,
+    kanban_dir: Path,
+) -> None:
+    """Best-effort rollback that never overwrites a newer concurrent update."""
+    try:
+        storage.write_task_if_unchanged(original, expected_updated, kanban_dir)
+    except ConcurrencyError as exc:
+        if exc.code != "ERR_STALE":
+            raise
 
 
 def _state_from_age(ref_ts: str, timeout: timedelta, now: datetime) -> str:
@@ -145,6 +194,7 @@ def _collect_task_sessions(
     """Append SessionRecord entries for one task's event list into *sessions*."""
     open_claim_ts: str | None = None
     open_claim_task_status: str | None = None
+    open_claim_agent: str | None = None
     last_activity_ts: str | None = None
 
     for event in events:
@@ -152,7 +202,7 @@ def _collect_task_sessions(
         detail = str(event["detail"])
         ts = str(event["timestamp"])
 
-        if action == "claim":
+        if action in {"claim", "start_work"}:
             if open_claim_ts is not None:
                 # A new claim arrived without a close event (crash/restart scenario).
                 # Apply the same age-based logic as the unclosed-session path: only
@@ -162,41 +212,48 @@ def _collect_task_sessions(
                     SessionRecord(
                         task_id=task_id,
                         task_status_at_start=open_claim_task_status,
+                        agent=open_claim_agent,
                         state=_state_from_age(ref_ts, timeout, now),
                         started_at=open_claim_ts,
                         ended_at=None,
                         outcome=None,
+                        duration=None,
                         duration_s=None,
                     )
                 )
             open_claim_ts = ts
             open_claim_task_status = event.get("task_status_at_start")
+            open_claim_agent = detail
             last_activity_ts = ts
         elif action in _CLOSE_ACTIONS:
             if open_claim_ts is None:
                 continue
             if action == "release":
                 state = "released"
-                outcome = "released"
+                outcome = "release"
             elif action == "sweep-release":
                 state = "expired"
                 outcome = "expired"
             else:
                 state = _classify_end_work_state(detail)
                 outcome = _classify_end_work_outcome(detail)
+            duration = _compute_duration(open_claim_ts, ts)
             sessions.append(
                 SessionRecord(
                     task_id=task_id,
                     task_status_at_start=open_claim_task_status,
+                    agent=open_claim_agent,
                     state=state,
                     started_at=open_claim_ts,
                     ended_at=ts,
                     outcome=outcome,
-                    duration_s=_compute_duration(open_claim_ts, ts),
+                    duration=duration,
+                    duration_s=duration,
                 )
             )
             open_claim_ts = None
             open_claim_task_status = None
+            open_claim_agent = None
             last_activity_ts = None
         elif open_claim_ts is not None:
             last_activity_ts = ts
@@ -207,10 +264,12 @@ def _collect_task_sessions(
             SessionRecord(
                 task_id=task_id,
                 task_status_at_start=open_claim_task_status,
+                agent=open_claim_agent,
                 state=_state_from_age(ref_ts, timeout, now),
                 started_at=open_claim_ts,
                 ended_at=None,
                 outcome=None,
+                duration=None,
                 duration_s=None,
             )
         )
@@ -225,19 +284,21 @@ _SESSION_FILTER_STATES: dict[str, frozenset[str]] = {
 }
 
 
-def _validate_session_filter(filter: str) -> None:  # noqa: A002
+def _validate_session_filter(session_filter: str) -> None:
     """Validate the list_sessions filter name."""
-    if filter == "all" or filter in _SESSION_FILTER_STATES:
+    if session_filter == "all" or session_filter in _SESSION_FILTER_STATES:
         return
-    msg = f"Unsupported session filter: {filter}"
+    msg = f"Unsupported session filter: {session_filter}"
     raise ValueError(msg)
 
 
-def _apply_session_filter(sessions: list[SessionRecord], filter: str) -> list[SessionRecord]:  # noqa: A002
+def _apply_session_filter(
+    sessions: list[SessionRecord], session_filter: str
+) -> list[SessionRecord]:
     """Return *sessions* filtered by *filter* name."""
-    if filter == "all":
+    if session_filter == "all":
         return sessions
-    allowed = _SESSION_FILTER_STATES[filter]
+    allowed = _SESSION_FILTER_STATES[session_filter]
     return [s for s in sessions if s.state in allowed]
 
 
@@ -267,34 +328,6 @@ def _move_file(src: Path, dest: Path) -> None:
     src.replace(dest)
 
 
-@contextlib.contextmanager
-def _exclusive_file_lock(lock_path: Path) -> Generator[None, None, None]:
-    """Acquire an exclusive cross-process file lock on *lock_path*.
-
-    Uses ``msvcrt.locking`` on Windows and ``fcntl.flock`` on Unix.
-    The lock is always released, including on exception paths.
-    """
-    with lock_path.open("a+b") as fh:
-        if sys.platform == "win32":
-            import msvcrt  # noqa: PLC0415
-
-            fh.seek(0)
-            msvcrt.locking(fh.fileno(), msvcrt.LK_LOCK, 1)
-            try:
-                yield
-            finally:
-                fh.seek(0)
-                msvcrt.locking(fh.fileno(), msvcrt.LK_UNLCK, 1)
-        else:
-            import fcntl  # noqa: PLC0415
-
-            fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
-            try:
-                yield
-            finally:
-                fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
-
-
 class KanbanEngine:
     """Native kanban engine backed by filesystem task files.
 
@@ -303,9 +336,6 @@ class KanbanEngine:
 
     Args:
         kanban_dir:    Root directory of the kanban board.
-        agent_name:    Fixed agent identity for this instance.  Generated as
-                       ``{adjective}-{noun}`` from the ``agent_names`` pool if
-                       omitted; stable across all calls on the same instance.
         activity_log:  When ``True``, append entries to ``activity.jsonl`` on
                        every mutation.  When ``None`` (default), reads from
                        ``config.yml`` ``activity_log`` field.
@@ -315,26 +345,31 @@ class KanbanEngine:
         self,
         kanban_dir: Path,
         *,
-        agent_name: str | None = None,
         activity_log: bool | None = None,
     ) -> None:
         self._kanban_dir = kanban_dir
         self._config: BoardConfig = load_config(kanban_dir)
-        self._tasks_dir = kanban_dir / self._config.tasks_dir
-        self._archive_dir = kanban_dir / self._config.archive_dir
-        # fmt: off
+        _validate_dispatch_rank_coverage(self._config)
+        self._tasks_dir = kanban_dir / self._config.paths.tasks_dir
+        self._archive_dir = kanban_dir / self._config.paths.archive_dir
+        validate_path_containment(self._kanban_dir, self._tasks_dir)
+        validate_path_containment(self._kanban_dir, self._archive_dir)
         self._agent_name: str = (
-            agent_name
-            if agent_name is not None
-            else f"{random.choice(ADJECTIVES)}-{random.choice(NOUNS)}"  # noqa: S311
+            f"{random.choice(ADJECTIVES)}-{random.choice(NOUNS)}"  # noqa: S311
         )
-        # fmt: on
-        effective_activity_log = activity_log if activity_log is not None else self._config.activity_log
-        self._activity_log_path: Path | None = kanban_dir / "activity.jsonl" if effective_activity_log else None
+        effective_activity_log = (
+            activity_log if activity_log is not None else self._config.activity_log
+        )
+        self._activity_log_path: Path | None = (
+            kanban_dir / "activity.jsonl" if effective_activity_log else None
+        )
         self._revision: int = 0
         self._task_cache: dict[str, tuple[int, Task]] = {}
         self._archive_cache: dict[str, tuple[int, Task]] = {}
         self._id_to_filename: dict[int, str] = {}
+        from owlbear_kanban.agent_view import AgentView  # noqa: PLC0415
+
+        self._agent_view = AgentView(self)
 
         # AC-C47: migration gate — new-schema boards only (no 'version' field)
         # Legacy boards used claimed_by; new-schema boards must not have it.
@@ -352,24 +387,36 @@ class KanbanEngine:
                 if "claimed_by:" not in content:
                     continue
                 # Verify it's in the frontmatter (not body)
-                lines = content.split("\n")
-                if not lines[0].startswith("---"):
+                lines = content.splitlines()
+                if not lines or lines[0].strip() != "---":
                     continue
                 closing = None
                 for i, line in enumerate(lines[1:], 1):
-                    if line == "---":
+                    if line.strip() == "---":
                         closing = i
                         break
                 if closing is None:
                     continue
-                for line in lines[1:closing]:
-                    if line.startswith("claimed_by:"):
-                        val = line.split(":", 1)[1].strip()
-                        if val and val.lower() not in ("null", "~", ""):
-                            raise MigrationRequiredError(
-                                code="ERR_MIGRATION_REQUIRED",
-                                user_message="board has legacy claimed_by fields — run: uv run kanban-migrate",
-                            )
+                frontmatter_text = "\n".join(lines[1:closing])
+                try:
+                    frontmatter = YAML(typ="safe").load(frontmatter_text) or {}
+                except YAMLError:
+                    continue
+
+                if not isinstance(frontmatter, dict) or "claimed_by" not in frontmatter:
+                    continue
+
+                claimed_by = frontmatter["claimed_by"]
+                is_cleared = claimed_by is None or (
+                    isinstance(claimed_by, str) and not claimed_by.strip()
+                )
+                if is_cleared:
+                    continue
+
+                raise MigrationRequiredError(
+                    code="ERR_MIGRATION_REQUIRED",
+                    user_message="board has legacy claimed_by fields — run: uv run kanban-migrate",
+                )
 
     @property
     def agent_name(self) -> str:
@@ -381,18 +428,25 @@ class KanbanEngine:
         """Per-instance write counter; incremented on every mutating operation."""
         return self._revision
 
+    @property
+    def tasks_dir(self) -> Path:
+        """Configured tasks directory for the active board."""
+        return self._tasks_dir
+
+    @property
+    def kanban_dir(self) -> Path:
+        """Root kanban directory for the active board."""
+        return self._kanban_dir
+
     # ------------------------------------------------------------------
     # Config-derived rank maps
     # ------------------------------------------------------------------
 
     def _priority_rank(self) -> dict[str, int]:
-        return {p: i for i, p in enumerate(self._config.priorities)}
+        return {p: i for i, p in enumerate(self._config.pipeline.priorities)}
 
     def _status_rank(self) -> dict[str, int]:
-        statuses = self._config.statuses
-        # Support both list[str] (new schema) and list[dict] (legacy schema)
-        if statuses and isinstance(statuses[0], dict):
-            return {s["name"]: i for i, s in enumerate(statuses)}
+        statuses = self._config.pipeline.statuses
         return {s: i for i, s in enumerate(statuses)}
 
     # ------------------------------------------------------------------
@@ -407,6 +461,10 @@ class KanbanEngine:
         """
         return self._config.model_copy(deep=True)
 
+    def agent_view(self) -> AgentView:
+        """Return the cached agent-facing view facade."""
+        return self._agent_view
+
     def refresh_config(self) -> None:
         """Reload config from disk and update all derived state.
 
@@ -417,9 +475,14 @@ class KanbanEngine:
         — are cleared so the next ``list_tasks()`` call performs a full cold
         scan and rebuilds the id→filename index.
         """
-        self._config = load_config(self._kanban_dir)
-        self._tasks_dir = self._kanban_dir / self._config.tasks_dir
-        self._archive_dir = self._kanban_dir / self._config.archive_dir
+        refreshed_config = load_config(self._kanban_dir)
+        _validate_dispatch_rank_coverage(refreshed_config)
+
+        self._config = refreshed_config
+        self._tasks_dir = self._kanban_dir / refreshed_config.paths.tasks_dir
+        self._archive_dir = self._kanban_dir / refreshed_config.paths.archive_dir
+        validate_path_containment(self._kanban_dir, self._tasks_dir)
+        validate_path_containment(self._kanban_dir, self._archive_dir)
         self._task_cache = {}
         self._archive_cache = {}
         self._id_to_filename = {}
@@ -436,14 +499,53 @@ class KanbanEngine:
         Raises:
             ValueError: *status* is not a configured status.
         """
-        valid_statuses = set(self._config.statuses)
-        # Also support legacy list-of-dicts schema
-        if valid_statuses and isinstance(next(iter(valid_statuses)), dict):
-            valid_statuses = {s["name"] for s in self._config.statuses}  # type: ignore[union-attr]
+        valid_statuses = set(self._config.pipeline.statuses)
         if status not in valid_statuses:
             msg = f"Invalid status {status!r}. Valid options: {sorted(valid_statuses)}"
             raise ValueError(msg)
         return valid_statuses - {status}
+
+    @staticmethod
+    def _dep_effect_from_archival_reason(reason: str | None) -> str:
+        """Map archival reason to dependency effect category.
+
+        Returns ``ok``, ``redirect``, or ``blocked``.
+        """
+        if reason in {"dropped", "wontfix"}:
+            return "blocked"
+        if reason in {"deprecated", "duplicate"}:
+            return "redirect"
+        return "ok"
+
+    def _compute_dep_status(
+        self,
+        task: Task,
+        *,
+        active_ids: set[int],
+        archived_reasons: dict[int, str | None],
+    ) -> str | None:
+        """Compute dep_status from dependency IDs and archive metadata.
+
+        Precedence follows Brief B: blocked > redirect > ok.
+        """
+        deps = task.depends_on or []
+        if not deps:
+            return None
+
+        status = "ok"
+        for dep_id in deps:
+            if dep_id in active_ids:
+                continue
+            if dep_id not in archived_reasons:
+                return "blocked"
+
+            dep_effect = self._dep_effect_from_archival_reason(archived_reasons[dep_id])
+            if dep_effect == "blocked":
+                return "blocked"
+            if dep_effect == "redirect":
+                status = "redirect"
+
+        return status
 
     # ------------------------------------------------------------------
     # Read operations
@@ -455,6 +557,7 @@ class KanbanEngine:
         status: str = "",
         tag: str = "",
         priority: str = "",
+        parent: int | None = None,
         search: str = "",
         sort: str = "",
         unclaimed: bool = False,
@@ -469,9 +572,10 @@ class KanbanEngine:
             status:    Only return tasks with this status.  Empty = no filter.
             tag:       Only return tasks that include this tag.  Empty = no filter.
             priority:  Only return tasks with this priority.  Empty = no filter.
+            parent:    Only return tasks whose parent exactly equals this task ID.
             search:    Case-insensitive substring match on title and body.
             sort:      Field to sort by: id, title, status, priority, created, updated.
-            unclaimed: When True, only tasks with no claimed_by value.
+            unclaimed: When True, only tasks with no claimed_at value (not claimed).
             archived:  When True, read from archive/ instead of tasks_dir.
             limit:     Cap on results (0 = unlimited).
             reverse:   When True, reverse the sort order.
@@ -482,9 +586,24 @@ class KanbanEngine:
         """
         cache = self._archive_cache if archived else self._task_cache
         source_dir = self._archive_dir if archived else self._tasks_dir
-        from owlbear_kanban.storage import detect_corruption as _detect_corruption  # noqa: PLC0415
-
         tasks: list[Task] = []
+        archive_ids: set[int] = set()
+        archived_reasons: dict[int, str | None] = {}
+        if not archived and self._archive_dir.exists():
+            for archive_path in self._archive_dir.glob("*.md"):
+                archive_stem = archive_path.stem
+                archive_head = archive_stem.split("-", 1)[0]
+                if archive_head.isdigit():
+                    archive_id = int(archive_head)
+                    archive_ids.add(archive_id)
+                    try:
+                        archive_task = read_task(archive_path, config=self._config)
+                    except (FileNotFoundError, ValueError, KeyError):
+                        archived_reasons[archive_id] = None
+                    except CorruptionError:
+                        archived_reasons[archive_id] = None
+                    else:
+                        archived_reasons[archive_id] = archive_task.archival_reason
         seen: set[str] = set()
         try:
             scan_iter = os.scandir(source_dir)
@@ -501,27 +620,31 @@ class KanbanEngine:
                     tasks.append(cache[entry.name][1])
                 else:
                     path = source_dir / entry.name
-                    if not archived and _detect_corruption(path, self._config) is not None:
-                        cache.pop(entry.name, None)
-                        continue
+                    if not archived:
+                        corruption = detect_corruption(path, self._config)
+                        if corruption is not None and not (
+                            corruption.code == "ERR_CORRUPT_MISSING_FIELD"
+                            and corruption.detail
+                            == "forbidden field claimed_by present"
+                        ):
+                            cache.pop(entry.name, None)
+                            continue
                     try:
-                        task = read_task(path)
+                        task = read_task(path, config=self._config)
                     except FileNotFoundError:
                         cache.pop(entry.name, None)
                         continue
                     except (ValueError, KeyError):
                         continue
-                    except Exception as _exc:  # noqa: BLE001
-                        # Silently skip other parse errors (CorruptionError modes 1, 3-9)
-                        from owlbear_kanban.corruption import CorruptionError as _CorruptionError  # noqa: PLC0415
-                        if isinstance(_exc, _CorruptionError):
-                            continue
+                    except CorruptionError:
                         continue
-                    if archived:
-                        task.claimed_by = None
                     cache[entry.name] = (mtime_ns, task)
+                    if not archived and task.id in archive_ids:
+                        # AC-C19 mode 7: if an archive copy exists, skip tasks/ copy.
+                        cache.pop(entry.name, None)
+                        continue
                     # AC-C19: skip mode 8 (invalid status) silently
-                    _valid_statuses = set(self._config.statuses)
+                    _valid_statuses = set(self._config.pipeline.statuses)
                     if task.status not in _valid_statuses | {"archived"}:
                         continue
                     tasks.append(task)
@@ -534,9 +657,7 @@ class KanbanEngine:
             id_seen: dict[int, str] = {}
             for task in tasks:
                 if task.id in id_seen:
-                    from owlbear_kanban.corruption import ERR_CORRUPT_DUPLICATE_ID  # noqa: PLC0415
-                    from owlbear_kanban.corruption import CorruptionError as _CorruptionError  # noqa: PLC0415
-                    raise _CorruptionError(
+                    raise CorruptionError(
                         code=ERR_CORRUPT_DUPLICATE_ID,
                         detail=f"task id={task.id} appears in multiple files",
                     )
@@ -544,8 +665,13 @@ class KanbanEngine:
 
         if not archived:
             self._id_to_filename = dict(
-                sorted((cached_task.id, filename) for filename, (_, cached_task) in self._task_cache.items())
+                sorted(
+                    (cached_task.id, filename)
+                    for filename, (_, cached_task) in self._task_cache.items()
+                )
             )
+
+        all_active_ids = {task.id for task in tasks}
 
         # --- Filters ---
         if status:
@@ -554,13 +680,19 @@ class KanbanEngine:
             tasks = [t for t in tasks if tag in t.tags]
         if priority:
             tasks = [t for t in tasks if t.priority == priority]
+        if parent is not None:
+            tasks = [t for t in tasks if t.parent == parent]
         if blocked is not None:
             tasks = [t for t in tasks if t.blocked is blocked]
         if unclaimed:
-            tasks = [t for t in tasks if t.claimed_by is None]
+            tasks = [t for t in tasks if t.claimed_at is None]
         if search:
             needle = search.lower()
-            tasks = [t for t in tasks if needle in t.title.lower() or needle in t.body.lower()]
+            tasks = [
+                t
+                for t in tasks
+                if needle in t.title.lower() or needle in t.body.lower()
+            ]
 
         # --- Sort ---
         if sort:
@@ -575,9 +707,9 @@ class KanbanEngine:
             elif sort == "title":
                 tasks.sort(key=lambda t: t.title)
             elif sort == "created":
-                tasks.sort(key=lambda t: datetime.fromisoformat(t.created))
+                tasks.sort(key=lambda t: (datetime.fromisoformat(t.created), t.id))
             elif sort == "updated":
-                tasks.sort(key=lambda t: datetime.fromisoformat(t.updated))
+                tasks.sort(key=lambda t: (datetime.fromisoformat(t.updated), t.id))
 
         if reverse:
             tasks.reverse()
@@ -585,16 +717,34 @@ class KanbanEngine:
         if limit > 0:
             tasks = tasks[:limit]
 
-        return [TaskSummary.model_validate(t.model_dump()) for t in tasks]
+        if archived:
+            return [TaskSummary.model_validate(t.model_dump()) for t in tasks]
+
+        summaries: list[TaskSummary] = []
+        for task in tasks:
+            projected = task.model_dump()
+            projected["dep_status"] = self._compute_dep_status(
+                task,
+                active_ids=all_active_ids,
+                archived_reasons=archived_reasons,
+            )
+            summaries.append(TaskSummary.model_validate(projected))
+        return summaries
 
     def show_task(self, task_id: str) -> Task:
         """Return the :class:`Task` for a single task by its string ID.
+
+        When a matching file exists in both the ``archive/`` and ``tasks/``
+        directories, the archived copy takes precedence.  The internal filename
+        index is evicted on any archive-wins resolution so subsequent calls
+        return a fresh lookup.
 
         Args:
             task_id: The numeric task ID as a string (e.g. ``"42"``).
 
         Raises:
-            FileNotFoundError: No task file matching ``{task_id}-*.md`` in tasks_dir.
+            FileNotFoundError: No task file matching ``{task_id}-*.md`` in tasks_dir or
+            archive_dir.
         """
         try:
             int_id = int(task_id)
@@ -609,19 +759,180 @@ class KanbanEngine:
             except FileNotFoundError:
                 self._task_cache.pop(filename, None)
                 del self._id_to_filename[int_id]
-                msg = f"Task {task_id!r} not found in {self._tasks_dir}"
-                raise FileNotFoundError(msg) from None
-            if filename in self._task_cache and self._task_cache[filename][0] == mtime_ns:
+                archive_path = self._archive_dir / filename
+                if archive_path.exists():
+                    archived_task = read_task(archive_path, config=self._config)
+                    self._task_cache[filename] = (
+                        archive_path.stat().st_mtime_ns,
+                        archived_task,
+                    )
+                    return archived_task
+
+            archive_path = self._archive_dir / filename
+            if archive_path.exists():
+                self._task_cache.pop(filename, None)
+                del self._id_to_filename[int_id]
+                return read_task(archive_path, config=self._config)
+
+            if (
+                filename in self._task_cache
+                and self._task_cache[filename][0] == mtime_ns
+            ):
                 return self._task_cache[filename][1]
-            task = read_task(path)
+            task = read_task(path, config=self._config)
             self._task_cache[filename] = (mtime_ns, task)
             return task
 
+        archive_matches = list(self._archive_dir.glob(f"{task_id}-*.md"))
+        if archive_matches:
+            return read_task(archive_matches[0], config=self._config)
+
         matches = list(self._tasks_dir.glob(f"{task_id}-*.md"))
-        if not matches:
-            msg = f"Task {task_id!r} not found in {self._tasks_dir}"
-            raise FileNotFoundError(msg)
-        return read_task(matches[0])
+        if matches:
+            return read_task(matches[0], config=self._config)
+
+        msg = f"Task {task_id!r} not found in {self._tasks_dir} or {self._archive_dir}"
+        raise FileNotFoundError(msg)
+
+    @staticmethod
+    def _required_sections_passes(body: str, sections: list[str]) -> bool:
+        if not sections:
+            return True
+        present = {
+            part.heading.strip().casefold()
+            for part in parse_body(body)
+            if part.heading is not None and part.heading.strip()
+        }
+        required = {
+            section.strip().lstrip("#").strip().casefold()
+            for section in sections
+            if section.strip()
+        }
+        return required.issubset(present)
+
+    def task_exists(self, task_id: int) -> bool:
+        """Return True when a task exists in active or archived storage."""
+        try:
+            self.show_task(str(task_id))
+        except FileNotFoundError:
+            return False
+        return True
+
+    def _has_archival_cycle(self, root_task_id: int, refs: list[int]) -> bool:
+        """Return True when new archival refs would introduce a cycle."""
+
+        def visits_root(task_id: int, seen: set[int]) -> bool:
+            if task_id in seen:
+                return False
+            seen.add(task_id)
+            try:
+                task = self.show_task(str(task_id))
+            except FileNotFoundError:
+                return False
+            for dep_id in task.archival_refs:
+                if dep_id == root_task_id:
+                    return True
+                if visits_root(dep_id, seen):
+                    return True
+            return False
+
+        return any(visits_root(ref_id, set()) for ref_id in refs)
+
+    def validate_body_size(self, body: str) -> None:
+        """Validate the 500 KB task body hard limit."""
+        if len(body.encode("utf-8")) > _MAX_BODY_BYTES:
+            raise ValidationError(
+                code="ERR_BODY_TOO_LARGE",
+                user_message="Task body exceeds 500 KB",
+            )
+
+    def validate_archival(
+        self,
+        *,
+        task_id: int,
+        archival_reason: str | None,
+        archival_refs: list[int],
+        can_mark_completed: bool,
+        config: BoardConfig,
+    ) -> None:
+        """Validate archival reason/ref matrix and reference integrity."""
+        if not archival_reason:
+            raise ValidationError(
+                code="ERR_ARCHIVAL_REASON_REQUIRED",
+                user_message="archival_reason is required when status='archived'",
+            )
+        if archival_reason not in config.policy.archival_reasons:
+            raise ValidationError(
+                code="ERR_ARCHIVAL_REASON_INVALID",
+                user_message=(
+                    "archival_reason must be one of "
+                    f"{sorted(config.policy.archival_reasons)}"
+                ),
+            )
+        if archival_reason in {"deprecated", "duplicate"} and not archival_refs:
+            raise ValidationError(
+                code="ERR_ARCHIVAL_REFS_REQUIRED",
+                user_message=(
+                    f"archival_refs required for archival_reason='{archival_reason}'"
+                ),
+            )
+        if archival_reason in {"completed", "dropped", "wontfix"} and archival_refs:
+            raise ValidationError(
+                code="ERR_ARCHIVAL_REFS_FORBIDDEN",
+                user_message=(
+                    f"archival_refs forbidden for archival_reason='{archival_reason}'"
+                ),
+            )
+        if archival_reason == "completed" and not can_mark_completed:
+            raise ValidationError(
+                code="ERR_COMPLETED_REQUIRES_DONE",
+                user_message="archival_reason='completed' requires terminal status",
+            )
+        for ref_id in archival_refs:
+            if ref_id == task_id:
+                raise ValidationError(
+                    code="ERR_ARCHIVAL_REF_SELF",
+                    user_message="archival_refs cannot include the task itself",
+                )
+            if not self.task_exists(ref_id):
+                raise ValidationError(
+                    code="ERR_ARCHIVAL_REF_MISSING",
+                    user_message=f"archival reference task '{ref_id}' not found",
+                )
+        if self._has_archival_cycle(task_id, archival_refs):
+            raise ValidationError(
+                code="ERR_ARCHIVAL_REF_CYCLE",
+                user_message="archival_refs would introduce a cycle",
+            )
+
+    def validate_status_predicate(
+        self,
+        *,
+        target_status: str,
+        body: str,
+        config: BoardConfig,
+    ) -> None:
+        """Validate status predicate rules for a target status."""
+        if target_status == "archived":
+            return
+
+        predicate_spec = config.policy.status_predicates.get(target_status)
+        if not isinstance(predicate_spec, dict):
+            return
+        if predicate_spec.get("type") != "required_sections":
+            return
+
+        sections = predicate_spec.get("sections")
+        required = (
+            [str(section) for section in sections] if isinstance(sections, list) else []
+        )
+        if not self._required_sections_passes(body, required):
+            raise ValidationError(
+                code="ERR_PREDICATE_FAILED",
+                user_message=(
+                    f"Task body does not satisfy predicate for status '{target_status}'"
+                ),
+            )
 
     # ------------------------------------------------------------------
     # Write operations
@@ -638,11 +949,12 @@ class KanbanEngine:
         parent: int | None = None,
         depends_on: list[int] | None = None,
     ) -> Task:
-        """Allocate next_id, write a new task file, and increment config next_id.
+        """Allocate next_id, then write a new task file.
 
-        The entire read→write→save critical section is protected by an exclusive
-        cross-process file lock (``.next_id.lock``), preventing duplicate IDs
-        when concurrent engine instances call this method simultaneously.
+        ID allocation is delegated to ``storage.allocate_next_id()``, which
+        advances and persists ``config.next_id`` under the shared file lock.
+        If writing the task file fails after allocation, the allocated ID is
+        intentionally burned to preserve crash safety.
 
         Args:
             title:      Task title (used to generate the filename slug).
@@ -658,51 +970,81 @@ class KanbanEngine:
 
         Raises:
             ValueError: ``status`` or ``priority`` is not a valid configured value.
+            PermissionError: A post-write config reload yields a ``tasks_dir`` or
+                ``archive_dir`` path that escapes the board root (symlink escape).
+                The cached engine state is not mutated when this is raised.
         """
-        with _exclusive_file_lock(self._kanban_dir / ".next_id.lock"):
-            config: BoardConfig = load_config(self._kanban_dir)
+        config: BoardConfig = load_config(self._kanban_dir)
 
-            if status:
-                valid_statuses = {s["name"] for s in config.statuses}
-                if status not in valid_statuses:
-                    msg = f"Invalid status {status!r}. Valid options: {sorted(valid_statuses)}"
-                    raise ValueError(msg)
-            if priority and priority not in config.priorities:
-                msg = f"Invalid priority {priority!r}. Valid options: {config.priorities}"
+        if status:
+            valid_statuses = set(config.pipeline.statuses)
+            if status not in valid_statuses:
+                msg = f"Invalid status {status!r}. Valid options: {sorted(valid_statuses)}"
                 raise ValueError(msg)
+        if priority and priority not in config.pipeline.priorities:
+            msg = f"Invalid priority {priority!r}. Valid options: {config.pipeline.priorities}"
+            raise ValueError(msg)
 
-            task_id = config.next_id
-            now = datetime.now(tz=UTC).isoformat()
+        self.validate_body_size(body)
 
-            record = Task(
-                id=task_id,
-                title=title,
-                status=status or config.defaults.status,
-                priority=priority or config.defaults.priority,
-                created=now,
-                updated=now,
-                body=body,
-                tags=list(tags) if tags else [],
-                parent=parent,
-                depends_on=list(depends_on) if depends_on else [],
+        if parent is not None and not self.task_exists(parent):
+            raise ValidationError(
+                code="ERR_PARENT_NOT_FOUND",
+                user_message=f"Parent task '{parent}' not found",
             )
 
-            filename = make_task_filename(task_id, title)
-            task_path = self._tasks_dir / filename
-            validate_path_containment(self._tasks_dir, task_path)
-            write_task(task_path, record)
+        dep_ids = depends_on or []
+        missing_dep = next(
+            (dep_id for dep_id in dep_ids if not self.task_exists(dep_id)),
+            None,
+        )
+        if missing_dep is not None:
+            raise ValidationError(
+                code="ERR_DEP_NOT_FOUND",
+                user_message=f"Dependency task '{missing_dep}' not found",
+            )
 
-            config.next_id = task_id + 1
-            save_config(self._kanban_dir, config)
-            self._config = config
+        entry_status = status or config.pipeline.entry_status
+        self.validate_status_predicate(
+            target_status=entry_status,
+            body=body,
+            config=config,
+        )
 
-        self._tasks_dir = self._kanban_dir / self._config.tasks_dir
-        self._archive_dir = self._kanban_dir / self._config.archive_dir
+        task_id = storage.allocate_next_id(self._kanban_dir)
+        now = datetime.now(tz=UTC).isoformat()
+
+        record = Task(
+            id=task_id,
+            title=title,
+            status=entry_status,
+            priority=priority or config.pipeline.default_priority,
+            created=now,
+            updated=now,
+            body=body,
+            tags=list(tags) if tags else [],
+            parent=parent,
+            depends_on=list(depends_on) if depends_on else [],
+        )
+
+        filename = make_task_filename(task_id, title)
+        task_path = self._tasks_dir / filename
+        validate_path_containment(self._tasks_dir, task_path)
+        write_task(record, self._kanban_dir)
+        reloaded_config = load_config(self._kanban_dir)
+        reloaded_tasks_dir = self._kanban_dir / reloaded_config.paths.tasks_dir
+        reloaded_archive_dir = self._kanban_dir / reloaded_config.paths.archive_dir
+        validate_path_containment(self._kanban_dir, reloaded_tasks_dir)
+        validate_path_containment(self._kanban_dir, reloaded_archive_dir)
+
+        self._config = reloaded_config
+        self._tasks_dir = reloaded_tasks_dir
+        self._archive_dir = reloaded_archive_dir
 
         self._revision += 1
         return record
 
-    def edit_task(  # noqa: PLR0912, PLR0913, C901
+    def edit_task(  # noqa: PLR0912, PLR0913, PLR0915, C901
         self,
         task_id: str,
         *,
@@ -710,7 +1052,7 @@ class KanbanEngine:
         body: str | None = None,
         priority: str | None = None,
         status: str | None = None,
-        parent: int | None = None,
+        parent: int | None | object = _PARENT_UNSET,
         add_tags: list[str] | None = None,
         remove_tags: list[str] | None = None,
         add_deps: list[int] | None = None,
@@ -719,13 +1061,18 @@ class KanbanEngine:
         block_reason: str | None = None,
         append_body: str | None = None,
         timestamp: bool = False,
+        archival_reason: str | None = None,
+        archival_refs: list[int] | None = None,
+        expected_updated: str | None = None,
+        source: str = "engine",
     ) -> Task:
         """Modify fields on a task in-place; filename (slug) is never changed.
 
         Args:
             task_id:     Numeric task ID as a string.
             title:       Replace task title.
-            body:        Replace task body.
+            body:        Replace task body; ``None`` means no change, ``""`` clears the
+                         body, non-empty text replaces it.
             priority:    Replace priority.
             status:      Replace status.
             parent:      Replace parent ID.
@@ -737,6 +1084,10 @@ class KanbanEngine:
             block_reason: Set block reason (cleared when blocked=False).
             append_body: Text appended to existing body.
             timestamp:   When True, prepend ``[[YYYY-MM-DD]]`` to append_body.
+            archival_reason: Replace archival reason when provided.
+            archival_refs:   Replace archival reference IDs when provided.
+            expected_updated: Optional OCC token for compare-and-swap writes.
+            source:      Activity event source label (agent, cockpit, engine).
 
         Returns:
             Updated :class:`Task`.
@@ -746,16 +1097,36 @@ class KanbanEngine:
             ValueError: ``status`` or ``priority`` is not a valid configured value.
         """
         if status is not None:
-            valid_statuses = {s["name"] for s in self._config.statuses}
+            valid_statuses = set(self._config.pipeline.statuses)
             if status not in valid_statuses:
                 msg = f"Invalid status {status!r}. Valid options: {sorted(valid_statuses)}"
                 raise ValueError(msg)
-        if priority is not None and priority not in self._config.priorities:
-            msg = f"Invalid priority {priority!r}. Valid options: {self._config.priorities}"
+        if priority is not None and priority not in self._config.pipeline.priorities:
+            msg = f"Invalid priority {priority!r}. Valid options: {self._config.pipeline.priorities}"
             raise ValueError(msg)
 
-        task_path = self._find_task_path(task_id, self._tasks_dir)
-        record = read_task(task_path)
+        if body is not None:
+            self.validate_body_size(body)
+
+        if parent is not _PARENT_UNSET and parent is not None and not self.task_exists(parent):
+            raise ValidationError(
+                code="ERR_PARENT_NOT_FOUND",
+                user_message=f"Parent task '{parent}' not found",
+            )
+
+        for dep_id in add_deps or []:
+            if not self.task_exists(dep_id):
+                raise ValidationError(
+                    code="ERR_DEP_NOT_FOUND",
+                    user_message=f"Dependency task '{dep_id}' not found",
+                )
+
+        task_path = self._find_task_path(
+            task_id, self._tasks_dir, include_archive_fallback=True
+        )
+        target_dir = task_path.parent
+        record = read_task(task_path, config=self._config)
+        original = record.model_copy(deep=True)
 
         if title is not None:
             record.title = title
@@ -765,7 +1136,7 @@ class KanbanEngine:
             record.priority = priority
         if status is not None:
             record.status = status
-        if parent is not None:
+        if parent is not _PARENT_UNSET:
             record.parent = parent
 
         if add_tags:
@@ -795,21 +1166,56 @@ class KanbanEngine:
                 date_str = datetime.now(tz=UTC).strftime("%Y-%m-%d")
                 prefix = f"[[{date_str}]]\n"
             record.body = record.body + "\n" + prefix + append_body
+            self.validate_body_size(record.body)
+
+        if archival_reason is not None:
+            record.archival_reason = archival_reason
+        if archival_refs is not None:
+            record.archival_refs = list(archival_refs)
 
         record.updated = datetime.now(tz=UTC).isoformat()
 
-        write_task(task_path, record)
+        if expected_updated is not None:
+            storage.write_task_if_unchanged(
+                record,
+                expected_updated,
+                self._kanban_dir,
+            )
+        else:
+            write_task(record, self._kanban_dir, target_dir=target_dir)
 
-        self._emit_event("edit", record.id, "task edited")
+        try:
+            self._emit_event("edit", record.id, "task edited", source=source)
+        except OSError:
+            with contextlib.suppress(Exception):
+                _restore_snapshot_if_unchanged(
+                    original,
+                    record.updated,
+                    self._kanban_dir,
+                )
+            raise
         self._revision += 1
         return record
 
-    def move_task(self, task_id: str, status: str) -> Task:
+    def move_task(  # noqa: PLR0913, PLR0915
+        self,
+        task_id: str,
+        status: str,
+        *,
+        archival_reason: str | None = None,
+        archival_refs: list[int] | None = None,
+        expected_updated: str | None = None,
+        source: str = "engine",
+    ) -> Task:
         """Change the status of a task; "archived" moves the file to archive/.
 
         Args:
             task_id: Numeric task ID as a string.
             status:  Target status name, or ``"archived"`` to archive the task.
+            archival_reason: Optional archive reason persisted when archiving.
+            archival_refs: Optional archive reference IDs persisted when archiving.
+            expected_updated: Optional OCC token for compare-and-swap writes.
+            source: Activity event source label (agent, cockpit, engine).
 
         Returns:
             Updated :class:`Task`.
@@ -818,30 +1224,99 @@ class KanbanEngine:
             FileNotFoundError: No task file matching ``{task_id}-*.md``.
             ValueError:        ``status`` is not valid and is not ``"archived"``.
         """
-        valid_statuses = set(self._config.statuses)
-        if valid_statuses and isinstance(next(iter(valid_statuses)), dict):
-            valid_statuses = {s["name"] for s in self._config.statuses}  # type: ignore[index]
+        valid_statuses = set(self._config.pipeline.statuses)
         if status != "archived" and status not in valid_statuses:
             msg = f"Invalid status {status!r}. Valid options: {sorted(valid_statuses)}"
             raise ValueError(msg)
 
         task_path = self._find_task_path(task_id, self._tasks_dir)
-        record = read_task(task_path)
+        record = read_task(task_path, config=self._config)
+        original = record.model_copy(deep=True)
         old_status = record.status
+        archived = False
+        dest = self._archive_dir / task_path.name
+
+        if status == "archived":
+            self.validate_archival(
+                task_id=record.id,
+                archival_reason=archival_reason,
+                archival_refs=archival_refs or [],
+                can_mark_completed=record.status
+                == self._config.pipeline.terminal_status,
+                config=self._config,
+            )
+        elif archival_reason is not None or archival_refs is not None:
+            raise ValidationError(
+                code="ERR_ARCHIVAL_FIELDS_FORBIDDEN",
+                user_message="archival fields are only allowed on archived tasks",
+            )
+
+        body = record.body if isinstance(record.body, str) else ""
+        self.validate_status_predicate(
+            target_status=status,
+            body=body,
+            config=self._config,
+        )
 
         if status == "archived":
             self._archive_dir.mkdir(parents=True, exist_ok=True)
-            dest = self._archive_dir / task_path.name
             record.status = "archived"
+            record.claimed_at = None
+            record.archival_reason = archival_reason
+            record.archival_refs = (
+                list(archival_refs) if archival_refs is not None else []
+            )
             record.updated = datetime.now(tz=UTC).isoformat()
-            write_task(task_path, record)
-            _move_file(task_path, dest)
+            if expected_updated is not None:
+                storage.write_task_if_unchanged(
+                    record,
+                    expected_updated,
+                    self._kanban_dir,
+                )
+            else:
+                write_task(record, self._kanban_dir)
+            try:
+                _move_file(task_path, dest)
+            except OSError:
+                with contextlib.suppress(Exception):
+                    _restore_snapshot_if_unchanged(
+                        original,
+                        record.updated,
+                        self._kanban_dir,
+                    )
+                raise
+            self._task_cache.pop(task_path.name, None)
+            self._id_to_filename.pop(record.id, None)
+            archived = True
         else:
             record.status = status
             record.updated = datetime.now(tz=UTC).isoformat()
-            write_task(task_path, record)
+            if expected_updated is not None:
+                storage.write_task_if_unchanged(
+                    record,
+                    expected_updated,
+                    self._kanban_dir,
+                )
+            else:
+                write_task(record, self._kanban_dir)
 
-        self._emit_event("move", record.id, f"{old_status} -> {record.status}")
+        try:
+            self._emit_event(
+                "move",
+                record.id,
+                f"{old_status} -> {record.status}",
+                source=source,
+            )
+        except OSError:
+            with contextlib.suppress(Exception):
+                if archived and dest.exists():
+                    _move_file(dest, task_path)
+                _restore_snapshot_if_unchanged(
+                    original,
+                    record.updated,
+                    self._kanban_dir,
+                )
+            raise
         self._revision += 1
         return record
 
@@ -854,7 +1329,7 @@ class KanbanEngine:
                      Defaults to ``datetime.now(UTC)``.
 
         Returns:
-            Updated :class:`Task` with ``claimed_by`` and ``claimed_at`` set.
+            Updated :class:`Task` with ``claimed_at`` set.
 
         Raises:
             FileNotFoundError: No task file matching ``{task_id}-*.md``.
@@ -862,52 +1337,169 @@ class KanbanEngine:
                         whose claim has not expired.
         """
         task_path = self._find_task_path(task_id, self._tasks_dir)
-        record = read_task(task_path)
+        stale_retries = 0
 
-        if record.blocked:
-            msg = f"Task {task_id!r} is blocked and cannot be claimed"
-            raise ValueError(msg)
+        while True:
+            # Keep injected `now` deterministic in tests, but refresh runtime time
+            # after each ERR_STALE retry so successful retries cannot regress D14.
+            effective_now = now if now is not None else datetime.now(tz=UTC)
+            record = read_task(task_path, config=self._config)
+            original = record.model_copy(deep=True)
+            expected_for_claim = original.updated
 
-        effective_now = now if now is not None else datetime.now(tz=UTC)
-
-        if record.claimed_by is not None and record.claimed_by != self._agent_name:
-            # Reject unless the existing claim has expired.
-            timeout = self._parse_claim_timeout()
-            claimed_at_dt = datetime.fromisoformat(record.claimed_at)  # type: ignore[arg-type]
-            if effective_now < claimed_at_dt + timeout:
-                msg = f"Task {task_id!r} is already claimed by {record.claimed_by!r}"
+            if record.blocked:
+                msg = f"Task {task_id!r} is blocked and cannot be claimed"
                 raise ValueError(msg)
 
-        record.claimed_by = self._agent_name
-        record.claimed_at = effective_now.isoformat()
-        record.updated = effective_now.isoformat()
-        write_task(task_path, record)
-        self._emit_event("claim", record.id, self._agent_name, task_status_at_start=record.status)
-        self._revision += 1
-        return record
+            if record.claimed_at is not None:
+                # Reject unless the existing claim has expired.
+                timeout = self._parse_claim_timeout()
+                claimed_at_dt = datetime.fromisoformat(record.claimed_at)  # type: ignore[arg-type]
+                if effective_now < claimed_at_dt + timeout:
+                    msg = (
+                        f"Task {task_id!r} is already claimed "
+                        f"(claimed_at={record.claimed_at})"
+                    )
+                    raise ValueError(msg)
 
-    def release_task(self, task_id: str) -> Task:
-        """Release the claim on a task, clearing ``claimed_by`` and ``claimed_at``.
+                # Expired rival claim: clear it first via CAS before claiming.
+                cleared = record.model_copy(deep=True)
+                cleared.claimed_at = None
+                cleared.updated = effective_now.isoformat()
+                try:
+                    storage.write_task_if_unchanged(
+                        cleared,
+                        original.updated,
+                        self._kanban_dir,
+                    )
+                except ConcurrencyError as exc:
+                    if (
+                        exc.code == "ERR_STALE"
+                        and stale_retries < _MAX_CLAIM_STALE_RETRIES
+                    ):
+                        stale_retries += 1
+                        continue
+                    raise
+                expected_for_claim = cleared.updated
+                record = cleared
 
-        This operation is a no-op if the task is not currently claimed.
+            record.claimed_at = effective_now.isoformat()
+            record.updated = effective_now.isoformat()
+
+            try:
+                storage.write_task_if_unchanged(
+                    record,
+                    expected_for_claim,
+                    self._kanban_dir,
+                )
+            except ConcurrencyError as exc:
+                if exc.code == "ERR_STALE" and stale_retries < _MAX_CLAIM_STALE_RETRIES:
+                    stale_retries += 1
+                    continue
+                raise
+
+            try:
+                self._emit_event(
+                    "claim",
+                    record.id,
+                    self._agent_name,
+                    task_status_at_start=record.status,
+                    timestamp=effective_now,
+                    source="agent",
+                )
+            except OSError:
+                with contextlib.suppress(Exception):
+                    write_task(original, self._kanban_dir)
+                raise
+            self._revision += 1
+            return record
+
+    def _append_timestamped_note(
+        self,
+        record: Task,
+        note: str | None,
+        now: datetime,
+    ) -> None:
+        """Append an ISO timestamp line and note line to ``record.body`` when provided."""
+        if note is None:
+            return
+        body = _task_body_as_text(record.body)
+        stamp = now.replace(microsecond=0).isoformat()
+        record.body = body + "\n" + stamp + "\n" + note
+
+    def release_task(
+        self,
+        task_id: str,
+        *,
+        expected_updated: str | None = None,
+        source: str = "engine",
+        note: str | None = None,
+    ) -> Task:
+        """Release the claim on a task, clearing ``claimed_at``.
+
+        When the task is not currently claimed:
+
+        - If ``expected_updated`` is ``None``, this is a silent no-op and the
+          unchanged record is returned.
+        - If ``expected_updated`` is provided, the token is verified against
+          ``record.updated``; a stale token raises :class:`ConcurrencyError`
+          (``ERR_STALE``); a matching token returns the unchanged record.
 
         Args:
             task_id: Numeric task ID as a string.
+            expected_updated: Optional OCC token for compare-and-swap release.
+            source:  Activity event source label (agent, cockpit, engine).
+            note:    Optional note text appended with an ISO-8601 timestamp.
 
         Returns:
-            Updated :class:`Task` with claim fields cleared.
+            :class:`Task` with claim fields cleared when the task was claimed,
+            or the unchanged record when the task was already unclaimed.
 
         Raises:
             FileNotFoundError: No task file matching ``{task_id}-*.md``.
+            ConcurrencyError: ``expected_updated`` was provided but does not
+                match the stored ``updated`` timestamp (code ``ERR_STALE``).
         """
         task_path = self._find_task_path(task_id, self._tasks_dir)
-        record = read_task(task_path)
+        record = read_task(task_path, config=self._config)
+        original = record.model_copy(deep=True)
+        now = datetime.now(tz=UTC)
 
-        record.claimed_by = None
+        if record.claimed_at is None:
+            if expected_updated is not None and record.updated != expected_updated:
+                raise ConcurrencyError(
+                    code="ERR_STALE",
+                    user_message=f"task {record.id} changed since read; reload and retry",
+                )
+            return record
+
+        self._append_timestamped_note(record, note, now)
+
         record.claimed_at = None
-        record.updated = datetime.now(tz=UTC).isoformat()
-        write_task(task_path, record)
-        self._emit_event("release", record.id, f"released by {self._agent_name}")
+        record.updated = now.isoformat()
+        if expected_updated is not None:
+            storage.write_task_if_unchanged(
+                record,
+                expected_updated,
+                self._kanban_dir,
+            )
+        else:
+            write_task(record, self._kanban_dir)
+        try:
+            self._emit_event(
+                "release",
+                record.id,
+                f"released by {source}",
+                source=source,
+            )
+        except OSError:
+            with contextlib.suppress(Exception):
+                _restore_snapshot_if_unchanged(
+                    original,
+                    record.updated,
+                    self._kanban_dir,
+                )
+            raise
         self._revision += 1
         return record
 
@@ -930,45 +1522,63 @@ class KanbanEngine:
         """
         return self.claim_task(task_id, now=now)
 
-    def _apply_outcome(
+    def _apply_outcome(  # noqa: PLR0913
         self,
         record: Task,
         outcome: str,
         block_reason: str,
-        move_to: str,
+        move_to: str | None,
+        archival_reason: str | None,
+        archival_refs: list[int],
     ) -> bool:
         """Apply outcome-specific mutations to *record* in-place.
 
         Returns ``True`` when the task should be moved to the archive directory.
         """
         if outcome == "success":
-            raw_statuses = self._config.statuses
-            statuses = (
-                [s["name"] for s in raw_statuses]  # type: ignore[index]
-                if raw_statuses and isinstance(raw_statuses[0], dict)
-                else list(raw_statuses)
+            statuses = list(self._config.pipeline.statuses)
+            current_idx = (
+                statuses.index(record.status) if record.status in statuses else -1
             )
-            current_idx = statuses.index(record.status) if record.status in statuses else -1
-            if current_idx == len(statuses) - 1:
+            if move_to is not None:
+                record.status = move_to
+            elif current_idx == len(statuses) - 1:
                 record.status = "archived"
+                record.archival_reason = "completed"
+                record.archival_refs = []
                 return True
-            record.status = statuses[current_idx + 1]
+            else:
+                record.status = statuses[current_idx + 1]
         elif outcome == "block":
             record.blocked = True
             record.block_reason = block_reason
+            # Agent-owned blocking should clear any prior user-owned block tag.
+            record.tags = [tag for tag in record.tags if tag != "block:user"]
+            if move_to:
+                record.status = move_to
         elif outcome == "reject":
-            record.status = move_to
+            if move_to == "archived":
+                record.status = "archived"
+                record.archival_reason = archival_reason
+                record.archival_refs = archival_refs
+                return True
+            if move_to is not None:
+                record.status = move_to
         # outcome == "fail": no status change
         return False
 
-    def end_work(
+    def end_work(  # noqa: PLR0913
         self,
         task_id: str,
         *,
         note: str,
         outcome: str = "success",
         block_reason: str = "",
-        move_to: str = "research",
+        move_to: str | None = None,
+        archival_reason: str | None = None,
+        archival_refs: list[int] | None = None,
+        expected_updated: str | None = None,
+        source: str = "engine",
     ) -> Task:
         """Finalise a work session: append note, update task state, release claim.
 
@@ -977,10 +1587,14 @@ class KanbanEngine:
 
         Args:
             task_id:      Numeric task ID as a string.
-            note:         Text to append (prefixed with ``[[YYYY-MM-DD]]`` timestamp).
+            note:         Text to append (prefixed with ISO-8601 datetime timestamp).
             outcome:      One of ``"success"``, ``"fail"``, ``"block"``, ``"reject"``.
             block_reason: Required when *outcome* is ``"block"``; stored on the task.
-            move_to:      Target status when *outcome* is ``"reject"`` (default ``"research"``).
+            move_to:      Optional target status when *outcome* is ``"reject"``.
+            archival_reason: Archival reason used when ``reject`` moves to ``"archived"``.
+            archival_refs: Archival references used when ``reject`` moves to ``"archived"``.
+            expected_updated: Optional OCC token for compare-and-swap writes.
+            source:       Activity source label for emitted ``end_work`` event.
 
         Returns:
             Updated :class:`Task` reflecting the new state.
@@ -997,46 +1611,63 @@ class KanbanEngine:
             by the underlying state machine.  For the full set of reachable
             statuses from a given state, see :meth:`valid_transitions`.
         """
-        # block_reason is optional — use note as fallback
         valid_outcomes = {"success", "fail", "block", "reject"}
         if outcome not in valid_outcomes:
             msg = f"Unknown outcome: {outcome!r}"
             raise ValueError(msg)
 
-        if outcome == "reject":
-            valid_statuses = set(self._config.statuses)
-            if valid_statuses and isinstance(next(iter(valid_statuses)), dict):
-                valid_statuses = {s["name"] for s in self._config.statuses}  # type: ignore[index]
+        if outcome == "reject" and move_to is not None:
+            valid_statuses = set(self._config.pipeline.statuses)
+            valid_statuses.add("archived")
             if move_to not in valid_statuses:
                 msg = f"Invalid move_to status {move_to!r}. Valid options: {sorted(valid_statuses)}"
                 raise ValueError(msg)
 
         # --- Single read ---
         task_path = self._find_task_path(task_id, self._tasks_dir)
-        record = read_task(task_path)
+        record = read_task(task_path, config=self._config)
+        original = record.model_copy(deep=True)
         old_status = record.status
 
         # --- Append timestamped note ---
-        date_str = datetime.now(tz=UTC).strftime("%Y-%m-%d")
-        record.body = record.body + "\n" + f"[[{date_str}]]\n" + note
+        now = datetime.now(tz=UTC)
+        self._append_timestamped_note(record, note, now)
 
         # --- Release claim ---
-        record.claimed_by = None
         record.claimed_at = None
 
         # --- Apply outcome-specific mutations ---
-        needs_archive = self._apply_outcome(record, outcome, block_reason, move_to)
+        needs_archive = self._apply_outcome(
+            record,
+            outcome,
+            block_reason,
+            move_to,
+            archival_reason,
+            list(archival_refs or []),
+        )
 
-        record.updated = datetime.now(tz=UTC).isoformat()
+        record.updated = now.isoformat()
 
         # --- Single write ---
-        write_task(task_path, record)
+        if expected_updated is not None:
+            storage.write_task_if_unchanged(
+                record,
+                expected_updated,
+                self._kanban_dir,
+            )
+        else:
+            write_task(record, self._kanban_dir)
 
         # --- Archive move (only after successful write) ---
+        dest = self._archive_dir / task_path.name
         if needs_archive:
             self._archive_dir.mkdir(parents=True, exist_ok=True)
-            dest = self._archive_dir / task_path.name
-            _move_file(task_path, dest)
+            try:
+                _move_file(task_path, dest)
+            except OSError:
+                with contextlib.suppress(Exception):
+                    write_task(original, self._kanban_dir)
+                raise
 
         # --- Activity logging ---
         _end_work_details = {
@@ -1044,8 +1675,18 @@ class KanbanEngine:
             "fail": "outcome=fail",
             "block": f"blocked: {block_reason}",
             "reject": f"reject: {old_status} -> {move_to}",
+            "release": "release",
         }
-        self._emit_event("end_work", record.id, _end_work_details[outcome])
+        try:
+            self._emit_event(
+                "end_work", record.id, _end_work_details[outcome], source=source
+            )
+        except OSError:
+            with contextlib.suppress(Exception):
+                if needs_archive and dest.exists():
+                    _move_file(dest, task_path)
+                write_task(original, self._kanban_dir)
+            raise
 
         self._revision += 1
         return record
@@ -1054,11 +1695,15 @@ class KanbanEngine:
     # Maintenance
     # ------------------------------------------------------------------
 
-    def sweep(self) -> list[int]:
+    def sweep(self) -> list[int]:  # noqa: C901
         """Release expired claims and return list of released task IDs.
 
         Only handles ``claimed_at``-based timeouts (Brief C §1.5, AC-C23).
         Does NOT move archived tasks or touch corrupt files.
+
+        Claim releases use compare-and-swap writes (``write_task_if_unchanged``);
+        tasks modified concurrently (``ERR_STALE``) are silently skipped and not
+        included in the returned list.
 
         Returns:
             List of integer task IDs whose expired claims were released.
@@ -1066,12 +1711,15 @@ class KanbanEngine:
         released: list[int] = []
         timeout = self._parse_claim_timeout()
         now = datetime.now(tz=UTC)
-
         for path in sorted(self._tasks_dir.glob("*.md")):
             try:
-                record = read_task(path)
-            except Exception:  # noqa: BLE001, S112
+                record = read_task(path, config=self._config)
+            except (FileNotFoundError, ValueError, KeyError, CorruptionError):
                 continue  # silently skip corrupt files (AC-C27)
+
+            # AC-C27: do not mutate parseable-but-corrupt files.
+            if detect_corruption(path, self._config) is not None:
+                continue
 
             # Only handle claimed_at (Brief C — claimed_by is legacy)
             if record.claimed_at:
@@ -1082,13 +1730,33 @@ class KanbanEngine:
                 if claimed_dt.tzinfo is None:
                     claimed_dt = claimed_dt.replace(tzinfo=UTC)
                 if now >= claimed_dt + timeout:
+                    original = record.model_copy(deep=True)
                     # Clear claimed_at and update timestamp
                     record.claimed_at = None
-                    record.claimed_by = None
                     record.updated = datetime.now(tz=UTC).isoformat()
-                    write_task(path, record)
+                    try:
+                        storage.write_task_if_unchanged(
+                            record,
+                            original.updated,
+                            self._kanban_dir,
+                        )
+                    except ConcurrencyError as exc:
+                        if exc.code == "ERR_STALE":
+                            continue
+                        raise
+                    try:
+                        self._emit_event(
+                            "sweep-release", record.id, "expired claim released"
+                        )
+                    except OSError:
+                        with contextlib.suppress(Exception):
+                            _restore_snapshot_if_unchanged(
+                                original,
+                                record.updated,
+                                self._kanban_dir,
+                            )
+                        continue
                     released.append(record.id)
-                    self._emit_event("sweep-release", record.id, "expired claim released")
 
         return released
 
@@ -1115,7 +1783,9 @@ class KanbanEngine:
         final_outcomes = []
         for outcome in outcomes:
             if outcome.action == "quarantined":
-                quarantine_path = self._kanban_dir / "quarantine" / _Path(outcome.file_path).name
+                quarantine_path = (
+                    self._kanban_dir / "quarantine" / _Path(outcome.file_path).name
+                )
                 body = (
                     "## Quarantined file\n\n"
                     f"- code: {outcome.code}\n"
@@ -1131,41 +1801,85 @@ class KanbanEngine:
                         tags=["type:user-action"],
                     )
                     final_outcomes.append(outcome)
-                except Exception as _exc:  # noqa: BLE001
+                except (ValueError, KanbanError, OSError) as _exc:
                     from owlbear_kanban.corruption import RepairOutcome  # noqa: PLC0415
-                    final_outcomes.append(RepairOutcome(
-                        task_id=outcome.task_id,
-                        file_path=outcome.file_path,
-                        code=outcome.code,
-                        action="failed",
-                        detail=f"AR creation failed: {_exc}",
-                    ))
+
+                    final_outcomes.append(
+                        RepairOutcome(
+                            task_id=outcome.task_id,
+                            file_path=outcome.file_path,
+                            code=outcome.code,
+                            action="failed",
+                            detail=f"AR creation failed: {_exc}",
+                        )
+                    )
             else:
                 final_outcomes.append(outcome)
 
         return final_outcomes
 
-    def _emit_event(
+    def _emit_event(  # noqa: PLR0913
         self,
         action: str,
         task_id: int | None = None,
         detail: str | None = None,
         task_status_at_start: str | None = None,
+        timestamp: datetime | None = None,
+        source: str = "engine",
     ) -> None:
         """Append one :class:`ActivityEvent` to ``activity.jsonl`` if logging is enabled."""
         if self._activity_log_path is None:
             return
         from owlbear_kanban.activity_store import append_activity_event  # noqa: PLC0415
         from owlbear_kanban.models import ActivityEvent  # noqa: PLC0415
+
+        event_time = timestamp if timestamp is not None else datetime.now(tz=UTC)
         evt = ActivityEvent(
-            timestamp=datetime.now(tz=UTC).isoformat(),
+            timestamp=event_time.isoformat(),
             task_id=task_id,
             action=action,
-            source="engine",
+            source=source,
             detail=detail or "",
             task_status_at_start=task_status_at_start,
         )
         append_activity_event(evt, self._kanban_dir)
+
+    def list_activity(  # noqa: PLR0913
+        self,
+        *,
+        task_id: int | None = None,
+        action: str | None = None,
+        source: str | None = None,
+        since: str | None = None,
+        until: str | None = None,
+        limit: int | None = None,
+    ) -> list[ActivityEvent]:
+        """Return activity log entries filtered by task/action/source/time window."""
+        return list_activity_events(
+            self._kanban_dir,
+            task_id=task_id,
+            action=action,
+            source=source,
+            since=since,
+            until=until,
+            limit=limit,
+        )
+
+    def scan_corruption(self) -> list:
+        """Read-only corruption scan for tasks and archive directories."""
+        errors = []
+        for directory in (self._tasks_dir, self._archive_dir):
+            if not directory.exists():
+                continue
+            for path in sorted(directory.glob("*.md")):
+                issue = detect_corruption(path, self._config)
+                if issue is not None:
+                    errors.append(issue)
+        return errors
+
+    def compact_activity(self) -> ActivityCompactionResult:
+        """Compact activity.jsonl using retention rules in activity_store."""
+        return compact_activity_log(self._kanban_dir)
 
     # ------------------------------------------------------------------
     # Session helpers
@@ -1237,9 +1951,15 @@ class KanbanEngine:
 
     def _parse_claim_timeout(self) -> timedelta:
         """Parse the ``claim_timeout`` string from config into a :class:`timedelta`."""
-        return _parse_duration(self._config.claim_timeout)
+        return _parse_duration(self._config.pipeline.claim_timeout)
 
-    def _find_task_path(self, task_id: str, search_dir: Path) -> Path:
+    def _find_task_path(
+        self,
+        task_id: str,
+        search_dir: Path,
+        *,
+        include_archive_fallback: bool = False,
+    ) -> Path:
         """Return the path of ``{task_id}-*.md`` in *search_dir*.
 
         Raises:
@@ -1251,10 +1971,31 @@ class KanbanEngine:
             except ValueError:
                 int_id = None
             if int_id is not None and int_id in self._id_to_filename:
-                return self._tasks_dir / self._id_to_filename[int_id]
+                filename = self._id_to_filename[int_id]
+                candidate = self._tasks_dir / filename
+                if candidate.exists():
+                    return candidate
+                self._task_cache.pop(filename, None)
+                del self._id_to_filename[int_id]
 
         matches = list(search_dir.glob(f"{task_id}-*.md"))
-        if not matches:
-            msg = f"Task {task_id!r} not found in {search_dir}"
-            raise FileNotFoundError(msg)
-        return matches[0]
+        if matches:
+            return matches[0]
+
+        if include_archive_fallback and search_dir == self._tasks_dir:
+            archive_matches = list(self._archive_dir.glob(f"{task_id}-*.md"))
+            if archive_matches:
+                return archive_matches[0]
+
+        msg = f"Task {task_id!r} not found in {search_dir}"
+        raise FileNotFoundError(msg)
+
+
+def __getattr__(name: str) -> object:
+    """Provide backward-compatible lazy access to ``AgentView``."""
+    if name == "AgentView":
+        from owlbear_kanban.agent_view import AgentView  # noqa: PLC0415
+
+        return AgentView
+    msg = f"module {__name__!r} has no attribute {name!r}"
+    raise AttributeError(msg)

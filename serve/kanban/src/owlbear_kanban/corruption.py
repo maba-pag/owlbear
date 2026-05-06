@@ -14,6 +14,11 @@ from typing import TYPE_CHECKING
 from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap
 
+from owlbear_kanban._naming import (
+    make_task_filename,
+    move_to_quarantine,
+)
+from owlbear_kanban.errors import KanbanError
 from owlbear_kanban.models import RepairOutcome
 from owlbear_kanban.storage_io import atomic_write
 
@@ -24,6 +29,7 @@ if TYPE_CHECKING:
 # The 9 ERR_CORRUPT_* codes (Brief C §4.1)
 # ---------------------------------------------------------------------------
 
+
 def _normalize_code(code: str | type[object]) -> str:
     """Return the canonical string code name from str/class input."""
     if isinstance(code, str):
@@ -31,6 +37,7 @@ def _normalize_code(code: str | type[object]) -> str:
     if isinstance(code, type):
         return code.__name__
     return str(code)
+
 
 # Required frontmatter fields
 _REQUIRED_FIELDS = ("id", "title", "status", "priority", "created", "updated")
@@ -49,7 +56,31 @@ _SAFE_DEFAULTS: dict[str, object] = {
 }
 
 
-class CorruptionError(Exception):
+def _configured_statuses(config: BoardConfig) -> list[str]:
+    """Return configured statuses from pipeline, falling back to root legacy data."""
+    try:
+        statuses = config.pipeline.statuses
+    except Exception:  # noqa: BLE001
+        statuses = None
+    if isinstance(statuses, list) and statuses:
+        return statuses
+    fallback = getattr(config, "statuses", [])
+    return fallback if isinstance(fallback, list) else []
+
+
+def _configured_priorities(config: BoardConfig) -> list[str]:
+    """Return configured priorities from pipeline, falling back to root legacy data."""
+    try:
+        priorities = config.pipeline.priorities
+    except Exception:  # noqa: BLE001
+        priorities = None
+    if isinstance(priorities, list) and priorities:
+        return priorities
+    fallback = getattr(config, "priorities", [])
+    return fallback if isinstance(fallback, list) else []
+
+
+class CorruptionError(KanbanError):
     """Raised when storage detects unrepairable on-disk state.
 
     Carries one of the 9 ERR_CORRUPT_* codes from §4.1.
@@ -67,17 +98,27 @@ class CorruptionError(Exception):
     ) -> None:
         code_name = _normalize_code(code)
         msg = user_message or detail or code_name
-        super().__init__(msg)
-        self.code = code_name
+        super().__init__(code_name, msg)
         self.detail = detail or user_message or code_name
         self.path = path
-        self.user_message = user_message or detail or code_name
         self.file_path = file_path or (str(path) if path else None)
+
+
+class _CorruptionCodeType(type):
+    """Metaclass for ERR_CORRUPT_* constants with string-name equality."""
+
+    def __eq__(cls, other: object) -> bool:
+        if isinstance(other, str):
+            return cls.__name__ == other
+        return super().__eq__(other)
+
+    def __hash__(cls) -> int:
+        return hash(cls.__name__)
 
 
 def _make_corruption_code_type(name: str) -> type[CorruptionError]:
     """Create an ERR_CORRUPT_* exception subclass with the given name."""
-    return type(name, (CorruptionError,), {})
+    return _CorruptionCodeType(name, (CorruptionError,), {})
 
 
 ERR_CORRUPT_DELIMITERS = _make_corruption_code_type("ERR_CORRUPT_DELIMITERS")
@@ -85,23 +126,20 @@ ERR_CORRUPT_DUPLICATE_ID = _make_corruption_code_type("ERR_CORRUPT_DUPLICATE_ID"
 ERR_CORRUPT_MISSING_FIELD = _make_corruption_code_type("ERR_CORRUPT_MISSING_FIELD")
 ERR_CORRUPT_TYPE_MISMATCH = _make_corruption_code_type("ERR_CORRUPT_TYPE_MISMATCH")
 ERR_CORRUPT_YAML_PARSE = _make_corruption_code_type("ERR_CORRUPT_YAML_PARSE")
-ERR_CORRUPT_ID_FILENAME_MISMATCH = _make_corruption_code_type("ERR_CORRUPT_ID_FILENAME_MISMATCH")
-ERR_CORRUPT_DUPLICATE_LOCATION = _make_corruption_code_type("ERR_CORRUPT_DUPLICATE_LOCATION")
+ERR_CORRUPT_ID_FILENAME_MISMATCH = _make_corruption_code_type(
+    "ERR_CORRUPT_ID_FILENAME_MISMATCH"
+)
+ERR_CORRUPT_DUPLICATE_LOCATION = _make_corruption_code_type(
+    "ERR_CORRUPT_DUPLICATE_LOCATION"
+)
 ERR_CORRUPT_INVALID_STATUS = _make_corruption_code_type("ERR_CORRUPT_INVALID_STATUS")
-ERR_CORRUPT_INVALID_PRIORITY = _make_corruption_code_type("ERR_CORRUPT_INVALID_PRIORITY")
+ERR_CORRUPT_INVALID_PRIORITY = _make_corruption_code_type(
+    "ERR_CORRUPT_INVALID_PRIORITY"
+)
 
 
-def _make_yaml() -> YAML:
-    """Return a round-trip YAML instance with timestamp resolution off."""
-    y = YAML(typ="rt")
-    _ts_tag = "tag:yaml.org,2002:timestamp"
-    for char_key in list(y.resolver.yaml_implicit_resolvers.keys()):
-        y.resolver.yaml_implicit_resolvers[char_key] = [
-            (tag, regexp)
-            for tag, regexp in y.resolver.yaml_implicit_resolvers[char_key]
-            if tag != _ts_tag
-        ]
-    return y
+# _make_yaml removed — dead code; callers use YAML(typ="safe") directly
+# or the shared make_yaml from yaml_rt.
 
 
 def _read_frontmatter(path: Path) -> tuple[str, dict, str]:
@@ -275,7 +313,7 @@ def detect_corruption(path: Path, config: BoardConfig) -> CorruptionError | None
     # Mode 8: invalid status
     status_val = fm.get("status")
     if status_val is not None:
-        valid_statuses = set(config.statuses) | {"archived"}
+        valid_statuses = set(_configured_statuses(config)) | {"archived"}
         if status_val not in valid_statuses:
             return CorruptionError(
                 code=ERR_CORRUPT_INVALID_STATUS,
@@ -285,7 +323,7 @@ def detect_corruption(path: Path, config: BoardConfig) -> CorruptionError | None
 
     # Mode 9: invalid priority
     priority_val = fm.get("priority")
-    if priority_val is not None and priority_val not in config.priorities:
+    if priority_val is not None and priority_val not in _configured_priorities(config):
         return CorruptionError(
             code=ERR_CORRUPT_INVALID_PRIORITY,
             detail=f"priority '{priority_val}' not in configured priorities",
@@ -321,7 +359,6 @@ def attempt_repair(  # noqa: C901, PLR0911, PLR0912, PLR0915
     code_name = _normalize_code(code)
 
     def _quarantine() -> RepairOutcome:
-        from owlbear_kanban.storage import move_to_quarantine  # noqa: PLC0415
         kanban_dir = path.parent.parent
         try:
             quarantine_path = move_to_quarantine(path, kanban_dir)
@@ -386,10 +423,32 @@ def attempt_repair(  # noqa: C901, PLR0911, PLR0912, PLR0915
         fm_id = fm.get("id")
         if not isinstance(fm_id, int):
             return _quarantine()
-        from owlbear_kanban.task_io import make_task_filename  # noqa: PLC0415
+
         title = fm.get("title", "task")
         new_name = make_task_filename(fm_id, title)
         new_path = path.parent / new_name
+        if new_path.exists():
+            kanban_dir = path.parent.parent
+            try:
+                quarantine_path = move_to_quarantine(path, kanban_dir)
+                return RepairOutcome(
+                    task_id=task_id,
+                    file_path=str(path),
+                    code=code_name,
+                    action="quarantined",
+                    detail=(
+                        f"rename collision on {new_path.name}; "
+                        f"quarantined to {quarantine_path}"
+                    ),
+                )
+            except Exception as exc:  # noqa: BLE001
+                return RepairOutcome(
+                    task_id=task_id,
+                    file_path=str(path),
+                    code=code_name,
+                    action="failed",
+                    detail=f"rename collision quarantine failed: {exc}",
+                )
         try:
             path.replace(new_path)
             return RepairOutcome(
@@ -421,9 +480,10 @@ def attempt_repair(  # noqa: C901, PLR0911, PLR0912, PLR0915
 
         # Other missing fields → apply safe defaults
         changed = False
+        configured_priorities = _configured_priorities(config)
         for field, default in _SAFE_DEFAULTS.items():
             if field not in fm:
-                fm[field] = config.priorities[0] if field == "priority" else default
+                fm[field] = configured_priorities[0] if field == "priority" else default
                 changed = True
 
         if not changed:
@@ -461,7 +521,7 @@ def attempt_repair(  # noqa: C901, PLR0911, PLR0912, PLR0915
 
     # Mode 9: invalid priority → coerce to first configured priority
     if code_name == ERR_CORRUPT_INVALID_PRIORITY.__name__:
-        fm["priority"] = config.priorities[0]
+        fm["priority"] = _configured_priorities(config)[0]
         return _write_repaired(path, fm, body_text, code_name, task_id)
 
     # Unknown code
@@ -477,7 +537,9 @@ def _write_repaired(
 ) -> RepairOutcome:
     """Serialise the repaired frontmatter back to *path* atomically."""
     try:
-        y = YAML(typ="rt")
+        from owlbear_kanban.yaml_rt import make_yaml  # noqa: PLC0415
+
+        y = make_yaml()
         cm = CommentedMap(fm)
         stream = io.StringIO()
         y.dump(cm, stream)
@@ -523,8 +585,8 @@ def scan_and_fix(kanban_dir: Path, config: BoardConfig) -> list[RepairOutcome]: 
     """
     outcomes: list[RepairOutcome] = []
 
-    tasks_dir = kanban_dir / config.tasks_dir
-    archive_dir = kanban_dir / config.archive_dir
+    tasks_dir = kanban_dir / config.paths.tasks_dir
+    archive_dir = kanban_dir / config.paths.archive_dir
 
     # Collect all files
     task_files: list[Path] = []
@@ -532,12 +594,12 @@ def scan_and_fix(kanban_dir: Path, config: BoardConfig) -> list[RepairOutcome]: 
 
     if tasks_dir.exists():
         task_files = [
-            p for p in sorted(tasks_dir.glob("*.md"))
-            if not p.name.startswith(".tmp-")
+            p for p in sorted(tasks_dir.glob("*.md")) if not p.name.startswith(".tmp-")
         ]
     if archive_dir.exists():
         archive_files = [
-            p for p in sorted(archive_dir.glob("*.md"))
+            p
+            for p in sorted(archive_dir.glob("*.md"))
             if not p.name.startswith(".tmp-")
         ]
 
@@ -564,24 +626,27 @@ def scan_and_fix(kanban_dir: Path, config: BoardConfig) -> list[RepairOutcome]: 
                 quarantined_ids.add(fid)
                 # This will raise from list_tasks; we log as quarantined
                 for p in paths:
-                    from owlbear_kanban.storage import move_to_quarantine  # noqa: PLC0415
                     try:
                         qp = move_to_quarantine(p, kanban_dir)
-                        outcomes.append(RepairOutcome(
-                            task_id=fid,
-                            file_path=str(p),
-                            code=ERR_CORRUPT_DUPLICATE_ID.__name__,
-                            action="quarantined",
-                            detail=f"duplicate ID {fid} quarantined to {qp}",
-                        ))
+                        outcomes.append(
+                            RepairOutcome(
+                                task_id=fid,
+                                file_path=str(p),
+                                code=ERR_CORRUPT_DUPLICATE_ID.__name__,
+                                action="quarantined",
+                                detail=f"duplicate ID {fid} quarantined to {qp}",
+                            )
+                        )
                     except Exception as exc:  # noqa: BLE001
-                        outcomes.append(RepairOutcome(
-                            task_id=fid,
-                            file_path=str(p),
-                            code=ERR_CORRUPT_DUPLICATE_ID.__name__,
-                            action="failed",
-                            detail=str(exc),
-                        ))
+                        outcomes.append(
+                            RepairOutcome(
+                                task_id=fid,
+                                file_path=str(p),
+                                code=ERR_CORRUPT_DUPLICATE_ID.__name__,
+                                action="failed",
+                                detail=str(exc),
+                            )
+                        )
 
     # Scan remaining files (skip already quarantined IDs)
     for p in task_files + archive_files:
@@ -609,4 +674,4 @@ def _extract_file_id(path: Path) -> int | None:
 
 def _is_archive_path(path: Path, config: BoardConfig) -> bool:
     """Return True if *path* is inside the archive directory."""
-    return path.parent.name == config.archive_dir.split("/")[-1]
+    return path.parent.name == config.paths.archive_dir.split("/")[-1]

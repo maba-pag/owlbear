@@ -99,46 +99,69 @@ class TestFromAC_MoveTaskGuidanceIntegration:
     """
 
     @pytest.mark.asyncio
-    async def test_forward_skip_more_than_one_slot_returns_guidance(self, app_ctx: AppContext) -> None:
+    async def test_forward_skip_more_than_one_slot_returns_guidance(
+        self, app_ctx: AppContext
+    ) -> None:
         """move_task forward skip >1 slot → guidance with skip message."""
         ctx = _make_ctx(app_ctx)
         # Task 1 is at "research"; skip to "todo" (2 slots: research→backlog→todo)
-        result = await move_task(ctx, task_id="1", status="todo")
-        assert len(result.guidance) > 0, f"Expected guidance for >1-slot skip (research→todo), got {result.guidance!r}"
+        result = await move_task(ctx, id="1", status="todo")
+        assert len(result.guidance) > 0, (
+            f"Expected guidance for >1-slot skip (research→todo), got {result.guidance!r}"
+        )
 
     @pytest.mark.asyncio
-    async def test_forward_skip_one_slot_returns_empty_guidance(self, app_ctx: AppContext) -> None:
+    async def test_forward_skip_one_slot_returns_empty_guidance(
+        self, app_ctx: AppContext
+    ) -> None:
         """move_task forward skip exactly 1 slot → empty guidance."""
         ctx = _make_ctx(app_ctx)
         # Task 1 is at "research"; advance to "backlog" (1 slot)
-        result = await move_task(ctx, task_id="1", status="backlog")
+        result = await move_task(ctx, id="1", status="backlog")
         assert result.guidance == [], (
             f"Expected empty guidance for 1-slot move (research→backlog), got {result.guidance!r}"
         )
 
     @pytest.mark.asyncio
-    async def test_backward_move_returns_empty_guidance(self, app_ctx: AppContext) -> None:
+    async def test_backward_move_returns_empty_guidance(
+        self, app_ctx: AppContext
+    ) -> None:
         """move_task backward move → empty guidance."""
         ctx = _make_ctx(app_ctx)
         # Task 2 is at "todo"; move back to "backlog"
-        result = await move_task(ctx, task_id="2", status="backlog")
+        result = await move_task(ctx, id="2", status="backlog")
         assert result.guidance == [], (
             f"Expected empty guidance for backward move (todo→backlog), got {result.guidance!r}"
         )
 
     @pytest.mark.asyncio
-    async def test_archive_move_returns_empty_guidance(self, app_ctx: AppContext) -> None:
+    async def test_archive_move_returns_empty_guidance(
+        self, app_ctx: AppContext
+    ) -> None:
         """move_task to 'archived' → empty guidance (archived excluded from skip detection)."""
         ctx = _make_ctx(app_ctx)
         # Task 3 is at "done"; archive it
-        result = await move_task(ctx, task_id="3", status="archived")
-        assert result.guidance == [], f"Expected empty guidance for archive move, got {result.guidance!r}"
+        result = await move_task(
+            ctx,
+            id="3",
+            status="archived",
+            archival_reason="completed",
+        )
+        assert result.guidance == [], (
+            f"Expected empty guidance for archive move, got {result.guidance!r}"
+        )
 
     @pytest.mark.asyncio
-    async def test_forward_skip_guidance_references_from_and_to_status(self, app_ctx: AppContext) -> None:
+    async def test_forward_skip_guidance_references_from_and_to_status(
+        self, app_ctx: AppContext
+    ) -> None:
         """Forward-skip guidance message references both source and target status."""
         ctx = _make_ctx(app_ctx)
-        result = await move_task(ctx, task_id="1", status="todo")
+        result = await move_task(ctx, id="1", status="todo")
         assert len(result.guidance) > 0
-        assert "research" in result.guidance[0], f"Expected 'research' in skip message, got {result.guidance[0]!r}"
-        assert "todo" in result.guidance[0], f"Expected 'todo' in skip message, got {result.guidance[0]!r}"
+        assert "research" in result.guidance[0], (
+            f"Expected 'research' in skip message, got {result.guidance[0]!r}"
+        )
+        assert "todo" in result.guidance[0], (
+            f"Expected 'todo' in skip message, got {result.guidance[0]!r}"
+        )

@@ -10,18 +10,17 @@ Section objects (Brief C C1 transition). Both forms are handled transparently.
 
 from __future__ import annotations
 
-import re
 from typing import TYPE_CHECKING
+
+from markdown_it import MarkdownIt
 
 from owlbear_kanban.body_parser import parse_body
 
 if TYPE_CHECKING:
     from owlbear_kanban.models import Section, Task
 
-# CommonMark list item: bullet (- * +) or ordered (1.) at start of line
-_BULLET_RE = re.compile(r"^[ \t]*[-*+] ", re.MULTILINE)
-_ORDERED_RE = re.compile(r"^[ \t]*\d+\. ", re.MULTILINE)
-_FENCE_RE = re.compile(r"^(`{3,}|~{3,})", re.MULTILINE)
+_MD = MarkdownIt()
+_LIST_OPEN_TOKENS = {"bullet_list_open", "ordered_list_open"}
 
 
 def _get_sections(task: Task) -> list[Section]:
@@ -53,7 +52,9 @@ def required_sections(task: Task, section_names: list[str]) -> bool:
     if not section_names:
         return True
     sections = _get_sections(task)
-    return all(any(_section_matches(s, name) for s in sections) for name in section_names)
+    return all(
+        any(_section_matches(s, name) for s in sections) for name in section_names
+    )
 
 
 def require_list_in_section(task: Task, section_name: str) -> bool:
@@ -79,31 +80,7 @@ def require_list_in_section(task: Task, section_name: str) -> bool:
 
 
 def _has_list_outside_fences(content: str) -> bool:
-    """Return True if *content* has a CommonMark list item outside code fences."""
+    """Return True if *content* parses to at least one CommonMark list token."""
     if not content:
         return False
-    # Remove fenced code blocks, then check for list items
-    stripped = _remove_fenced_blocks(content)
-    return bool(_BULLET_RE.search(stripped) or _ORDERED_RE.search(stripped))
-
-
-def _remove_fenced_blocks(text: str) -> str:
-    """Return *text* with all fenced code block contents replaced by blank lines."""
-    result: list[str] = []
-    in_fence = False
-    fence_char = ""
-    for line in text.split("\n"):
-        fence_match = _FENCE_RE.match(line)
-        if fence_match and not in_fence:
-            in_fence = True
-            fence_char = fence_match.group(1)[0]
-            result.append("")  # blank placeholder
-        elif in_fence:
-            closing = re.match(rf"^[{re.escape(fence_char)}]{{3,}}\s*$", line)
-            if closing:
-                in_fence = False
-                fence_char = ""
-            result.append("")  # blank placeholder
-        else:
-            result.append(line)
-    return "\n".join(result)
+    return any(token.type in _LIST_OPEN_TOKENS for token in _MD.parse(content))

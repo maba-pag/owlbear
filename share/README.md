@@ -1,15 +1,15 @@
 # share/ — Agent Ecosystem
 
-OwlBear's agent ecosystem: 26 agents, 33 skills, 7 instructions, 10 prompts. This directory is the single source of truth for agent definitions and their supporting documents.
+OwlBear's agent ecosystem: 28 agents, 33 skills, 7 instructions, 14 prompts. This directory is the single source of truth for agent definitions and their supporting documents.
 
 ## Directory Layout
 
 | Directory | Contents | Count |
 |-----------|----------|-------|
-| `agents/` | Agent definitions (`.agent.md`) | 26 |
+| `agents/` | Agent definitions (`.agent.md`) | 28 |
 | `skills/` | Reusable domain knowledge (`SKILL.md`) | 33 |
 | `instructions/` | Auto-loaded instruction files (`.instructions.md`) | 6 |
-| `prompts/` | User-invocable one-shot commands (`.prompt.md`) | 10 |
+| `prompts/` | User-invocable one-shot commands (`.prompt.md`) | 14 |
 | `diagrams/` | Shared visual assets (Excalidraw, SVG) | — |
 
 ## Loading Model

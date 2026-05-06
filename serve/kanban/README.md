@@ -23,7 +23,7 @@ cfg   = engine.board_config()
 # Write
 engine.create_task("My task", body="…", priority="important")
 engine.move_task(42, "review")
-engine.edit_task(42, tags=["phase-1"])
+engine.edit_task("42", add_tags=["phase-1"])
 engine.claim_task(42)
 engine.release_task(42)
 ```
@@ -36,24 +36,51 @@ engine.release_task(42)
 | `show_task(task_id)` | Fetch a single full `Task` by ID |
 | `create_task(title, …)` | Allocate next ID and write a new task file |
 | `edit_task(task_id, …)` | Update task fields in-place (slug/filename unchanged) |
-| `move_task(task_id, status)` | Change task status; `"archived"` moves file to `archive/` |
+| `move_task(task_id, status, *, archival_reason=None, archival_refs=None, expected_updated=None)` | Change task status; `"archived"` moves file to `archive/` — requires a valid `archival_reason`; optional `expected_updated` token enables compare-and-swap writes |
 | `claim_task(task_id)` | Mark task claimed by this engine's `agent_name`; rejects blocked/rival claims |
-| `release_task(task_id)` | Clear claim unconditionally |
-| `start_work(task_id)` | Claim and advance to `in-progress` |
-| `end_work(task_id, …)` | Append outcome note and advance or reject |
+| `release_task(task_id, *, note=None)` | Clear claim unconditionally; appends a timestamped note to the body when `note` is provided |
+| `start_work(task_id)` | Claim the task for this agent (no status advancement) |
+| `end_work(task_id, …)` | Finalise a work session: append timestamped note and apply outcome (success, fail, block, or reject) |
 | `board_config()` | Defensive copy of the current `BoardConfig` |
+| `agent_view()` | Return the cached `AgentView` facade for agent-facing operations |
 | `valid_transitions(status)` | Set of all statuses except the given one |
 | `refresh_config()` | Reload config from disk |
 | `sweep()` | Release stale claims exceeding `claim_timeout` |
-| `list_sessions(**kwargs)` | Derived `WorkSession` objects from `activity.jsonl` |
+| `repair_storage()` | Quarantine corrupt task files and create action-required tasks |
+| `list_sessions(**kwargs)` | Derived `SessionRecord` objects from `activity.jsonl` |
 
-### Dispatch helper
+### AgentView dispatch pipeline
 
 ```python
-from owlbear_kanban import pick_dispatchable
-
-dispatchable = pick_dispatchable(tasks)   # returns list[TaskSummary]
+agent = engine.agent_view()
+response = agent.pick_tasks(wave_size=3, max_waves=3)  # returns PickTasksResponse
+for wave in response.waves:
+    for entry in wave.tasks:   # each entry: id, status, priority, title, tags, agent
+        ...
 ```
+
+`AgentView.pick_tasks` runs a six-step pipeline: validate `agent_map` completeness (raises `ConfigError(ERR_INVALID_STATUS)` if any pipeline status is missing from `agent_map`), resolve pending Decision Requests (exceptions suppressed, never blocks dispatch), filter (exclude claimed/archived/blocked/dep-blocked tasks; also apply TDD gate — in-progress tasks without `## Test-Writer Notes` and without a non-impl tag are excluded — and clarity gate — tasks in active statuses without a bullet/numbered AC line are excluded; post-rehydrate archived-status guard skips any task archived between list and show), deterministic sort (priority ASC, age DESC, id ASC), greedy wave assembly (size cap, dep-disjointness, agent-bucket compatibility), and agent assignment from `BoardConfig.agent_map`.
+
+## Migration
+
+To migrate an existing board from the legacy schema to the grouped canonical schema (``schema: grouped``):
+
+```bash
+uv run kanban-migrate [--dry-run] [--lane tasks|archive|config|all] [--kanban-dir PATH]
+```
+
+| Flag | Description |
+|------|-------------|
+| `--lane tasks` | Migrate only active task files (`tasks/`) |
+| `--lane archive` | Migrate only archive files (`archive/`) |
+| `--lane config` | Migrate only `config.yml` |
+| `--lane all` | Run all three lanes (default) |
+| `--dry-run` | Report what would change without writing any files |
+| `--kanban-dir PATH` | Path to the kanban directory (default: auto-detect `.owlbear/kanban/`) |
+
+Exit code 0 when no files failed; exit code 1 otherwise. Each failed file is reported on stderr as `FAIL {path}: {reason}`.
+
+After `--lane config` runs, `agent_map`, `agent_types`, and `agent_compatibility` are empty stubs that must be populated before calling `pick_tasks()`. The engine starts successfully with an empty `agent_map`, but `pick_tasks()` raises `ConfigError(ERR_INVALID_STATUS)` until the map is complete.
 
 ## Configuration
 

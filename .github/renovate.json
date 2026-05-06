@@ -26,6 +26,17 @@
   },
   "packageRules": [
     {
+      "description": "Freeze Python runtime floor to 3.12.x",
+      "matchPackageNames": [
+        "python"
+      ],
+      "matchManagers": [
+        "pep621",
+        "uv"
+      ],
+      "allowedVersions": "<3.13.0"
+    },
+    {
       "description": "Group all non-major Python updates",
       "matchManagers": [
         "pip_requirements",

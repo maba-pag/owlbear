@@ -7,17 +7,16 @@ Rank maps use *execution priority* order, which is intentionally the inverse of
 the config.yml display order:
   - PRIORITY_RANK: critical=0 (highest) → someday=4 (lowest)
     Config display order: someday first, critical last (opposite).
-  - STATUS_RANK: done=0 (highest) → research=6 (lowest)
+    - STATUS_RANK: released=0 (highest) → research=7 (lowest)
     Config display order: research first, done last (opposite).
 """
 
 from __future__ import annotations
 
 import re
+import warnings
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
-
-from owlbear_kanban.task_io import read_task
 
 if TYPE_CHECKING:
     from owlbear_kanban.engine import KanbanEngine
@@ -36,13 +35,14 @@ PRIORITY_RANK: dict[str, int] = {
 }
 
 STATUS_RANK: dict[str, int] = {
-    "done": 0,
-    "docs": 1,
-    "review": 2,
-    "in-progress": 3,
-    "todo": 4,
-    "backlog": 5,
-    "research": 6,
+    "released": 0,
+    "done": 1,
+    "docs": 2,
+    "review": 3,
+    "in-progress": 4,
+    "todo": 5,
+    "backlog": 6,
+    "research": 7,
 }
 
 # ---------------------------------------------------------------------------
@@ -81,7 +81,7 @@ _TERMINAL_STATUSES = frozenset({"archived"})
 def _claim_is_active(task: Task, timeout: timedelta) -> bool:
     """Return True if the task's claim has not expired."""
     if not task.claimed_at:
-        return True  # no timestamp — treat as active defensively
+        return False
     claimed_dt = datetime.fromisoformat(task.claimed_at)
     if claimed_dt.tzinfo is None:
         claimed_dt = claimed_dt.replace(tzinfo=UTC)
@@ -136,7 +136,9 @@ def _passes_dependency_gate(task: Task, active_ids: frozenset[int]) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def pick_dispatchable(engine: KanbanEngine, *, limit: int = 25, tag: str = "") -> list[Task]:
+def pick_dispatchable(  # noqa: C901
+    engine: KanbanEngine, *, limit: int = 25, tag: str = ""
+) -> list[Task]:
     """Return a gate-filtered, sorted list of dispatchable tasks.
 
     Reads full Task objects (including body) directly from the filesystem so
@@ -162,10 +164,18 @@ def pick_dispatchable(engine: KanbanEngine, *, limit: int = 25, tag: str = "") -
     Returns:
         Sorted, capped list of Task instances.
     """
-    tasks: list[Task] = [
-        read_task(path)
-        for path in sorted(engine._tasks_dir.glob("*.md"))  # noqa: SLF001
-    ]
+    warnings.warn(
+        "pick_dispatchable() is deprecated; use AgentView.pick_tasks() instead",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+
+    tasks: list[Task] = []
+    for path in sorted(engine._tasks_dir.glob("*.md")):  # noqa: SLF001
+        task_id = path.stem.split("-", 1)[0]
+        if not task_id.isdigit():
+            continue
+        tasks.append(engine.show_task(task_id))
 
     active_ids: frozenset[int] = frozenset(t.id for t in tasks if t.id is not None)
     claim_timeout = engine._parse_claim_timeout()  # noqa: SLF001
@@ -178,7 +188,7 @@ def pick_dispatchable(engine: KanbanEngine, *, limit: int = 25, tag: str = "") -
             continue
         if not _passes_dependency_gate(task, active_ids):
             continue
-        if task.claimed_by is not None and _claim_is_active(task, claim_timeout):
+        if _claim_is_active(task, claim_timeout):
             continue
         if tag and tag not in (task.tags or []):
             continue

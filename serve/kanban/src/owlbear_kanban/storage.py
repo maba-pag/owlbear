@@ -1,7 +1,10 @@
-"""Public storage surface for owlbear-kanban (Brief C §1.3).
+"""Public storage persistence surface for owlbear-kanban (Brief C §1.3).
 
-This module is the single import boundary that ``engine.py`` and tests use.
-It re-exports all types and delegates to the lower-level modules:
+This module provides task/config persistence helpers and selected shared types.
+Parsing, corruption scanning/repair, and activity log APIs live in their source
+modules and should be imported directly by consumers.
+
+Lower-level modules used by this surface:
 
 - ``storage_io.py``    — atomic write primitive
 - ``body_parser.py``   — markdown section parsing / rendering
@@ -11,39 +14,41 @@ It re-exports all types and delegates to the lower-level modules:
 Public API (per Brief C §1.3):
   read_task, write_task, write_task_if_unchanged
   list_task_files, list_archive_files, move_to_archive, move_to_quarantine
-  allocate_next_id, load_config, save_config
-  parse_body, render_body
-  append_activity_event, list_activity_events, compact_activity_log
-  scan_and_fix, detect_corruption, attempt_repair
+    allocate_next_id, save_config
 
 Re-exported types:
-  Section, ConcurrencyError, ActivityEvent, ActivityCompactionResult,
-  SessionRecord, RepairOutcome, MigrationRequiredError, CorruptionError
+    Section, ConcurrencyError, ActivityEvent, ActivityCompactionResult,
+    SessionRecord, MigrationRequiredError
 """
 
 from __future__ import annotations
 
 import io
 import re
+from datetime import UTC, datetime
 from pathlib import Path  # noqa: TC003
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
+import yaml
+from pydantic import ValidationError
 from ruamel.yaml.comments import CommentedMap
+from ruamel.yaml.scalarstring import PlainScalarString
 
-from owlbear_kanban.activity_store import (
-    append_activity_event,
-    compact_activity_log,
-    list_activity_events,
+if TYPE_CHECKING:
+    from ruamel.yaml import YAML
+
+from owlbear_kanban._locking import _exclusive_file_lock
+from owlbear_kanban._naming import (
+    generate_slug,  # noqa: F401
+    make_task_filename,
+    move_to_quarantine,
+    validate_path_containment,
 )
-from owlbear_kanban.body_parser import parse_body, render_body
 from owlbear_kanban.corruption import (
     ERR_CORRUPT_ID_FILENAME_MISMATCH,
     ERR_CORRUPT_YAML_PARSE,
     CorruptionError,
-    RepairOutcome,
-    attempt_repair,
     detect_corruption,
-    scan_and_fix,
 )
 from owlbear_kanban.models import (
     ActivityCompactionResult,
@@ -56,12 +61,131 @@ from owlbear_kanban.models import (
     Task,
 )
 from owlbear_kanban.storage_io import atomic_write
-from owlbear_kanban.task_io import (
-    _make_yaml,
-    make_task_filename,
-    validate_path_containment,
+
+# YAML timestamp/bool tags used to preserve frontmatter fidelity.
+_TIMESTAMP_TAG = "tag:yaml.org,2002:timestamp"
+_BOOL_TAG = "tag:yaml.org,2002:bool"
+
+
+class YAML12SafeLoader(yaml.SafeLoader):
+    """PyYAML SafeLoader tuned for task frontmatter parsing."""
+
+
+YAML12SafeLoader.yaml_implicit_resolvers = {
+    k: [(tag, regexp) for tag, regexp in v if tag not in (_TIMESTAMP_TAG, _BOOL_TAG)]
+    for k, v in yaml.SafeLoader.yaml_implicit_resolvers.items()
+}
+YAML12SafeLoader.add_implicit_resolver(
+    _BOOL_TAG,
+    re.compile(r"^(?:true|True|TRUE|false|False|FALSE)$"),
+    list("tTfF"),
 )
-from owlbear_kanban.task_io import read_task as _task_io_read_task
+
+
+def _make_yaml() -> YAML:
+    """Return a round-trip ruamel YAML instance with timestamp resolver disabled."""
+    from owlbear_kanban.yaml_rt import make_yaml  # noqa: PLC0415
+
+    return make_yaml()
+
+
+def _parse_task_file(path: Path) -> dict[str, Any]:
+    """Parse a markdown task file into a frontmatter/body dictionary."""
+    try:
+        content = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        content = path.read_text(encoding="cp1252")
+
+    if not content.startswith("---"):
+        msg = f"Task file has no YAML frontmatter (missing opening '---'): {path}"
+        raise ValueError(msg)
+
+    lines = content.split("\n")
+    closing_idx: int | None = None
+    for i, line in enumerate(lines[1:], start=1):
+        if line == "---":
+            closing_idx = i
+            break
+    if closing_idx is None:
+        msg = f"Task file has no closing '---' frontmatter delimiter: {path}"
+        raise ValueError(msg)
+
+    frontmatter_str = "\n".join(lines[1:closing_idx])
+    body = "\n".join(lines[closing_idx + 1 :])
+    data: dict[str, Any] = yaml.load(frontmatter_str, Loader=YAML12SafeLoader) or {}  # noqa: S506
+    data["body"] = body
+    return data
+
+
+def _is_archive_path(path: Path, board_dir: Path, config: BoardConfig | None) -> bool:
+    """Return True when *path* points to the board's archive directory."""
+    if config is not None:
+        return path.parent == (board_dir / config.paths.archive_dir)
+    return path.parent.name == "archive"
+
+
+def _resolve_board_config(
+    path: Path, config: BoardConfig | None
+) -> tuple[Path, BoardConfig | None]:
+    """Resolve board root and optional config for a task file path."""
+    board_dir = path.parent.parent
+    if config is not None:
+        return board_dir, config
+    config_path = board_dir / "config.yml"
+    if not config_path.exists():
+        return board_dir, None
+
+    from owlbear_kanban.config_loader import load_config as _load_config  # noqa: PLC0415
+
+    return board_dir, _load_config(board_dir)
+
+
+def _as_plain_timestamp_scalar(value: str) -> str | PlainScalarString:
+    """Return timestamp-like strings as plain scalars to avoid quoted YAML output."""
+    normalized = _normalize_timestamp(value)
+    if normalized is None:
+        return value
+    if _TS_RE.match(normalized.strip()):
+        return PlainScalarString(normalized)
+    return normalized
+
+
+def _unquote_timestamp_scalars(yaml_str: str) -> str:
+    """Remove single quotes from timestamp scalar lines in frontmatter YAML."""
+    out_lines: list[str] = []
+    for line in yaml_str.splitlines(keepends=True):
+        stripped = line.rstrip("\n")
+        m = re.match(r"^([^:\n]+): '(.*)'$", stripped)
+        if m is None:
+            out_lines.append(line)
+            continue
+        key, value = m.groups()
+        normalized = _normalize_timestamp(value)
+        if normalized is not None and _TS_RE.match(normalized.strip()):
+            out_lines.append(f"{key}: {normalized}\n")
+            continue
+        out_lines.append(line)
+    return "".join(out_lines)
+
+
+def _validation_to_corruption(path: Path, exc: ValidationError) -> CorruptionError:
+    """Map pydantic validation errors to corruption mode codes."""
+    code = "ERR_CORRUPT_TYPE_MISMATCH"
+    for error in exc.errors():
+        if error.get("type") in ("missing", "value_error"):
+            code = "ERR_CORRUPT_MISSING_FIELD"
+            break
+    detail = (
+        "required field missing"
+        if code == "ERR_CORRUPT_MISSING_FIELD"
+        else "field type mismatch"
+    )
+    return CorruptionError(
+        code=code,
+        user_message=f"{detail} in {path.name}: {exc}",
+        file_path=str(path),
+    )
+
 
 # ---------------------------------------------------------------------------
 # Canonical frontmatter field order per Brief C §2.3
@@ -86,6 +210,7 @@ _CANONICAL_FIELDS: list[str] = [
 
 _CANONICAL_FIELD_SET: frozenset[str] = frozenset(_CANONICAL_FIELDS)
 _TS_FIELDS: frozenset[str] = frozenset({"created", "updated", "claimed_at"})
+_CONFIG_WRITE_EXCLUDE: frozenset[str] = frozenset({"board", "version"})
 _TS_RE = re.compile(
     r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})((?:\.\d+)?)([+-]\d{2}:\d{2}|Z)?$"
 )
@@ -96,54 +221,73 @@ _TS_RE = re.compile(
 # ---------------------------------------------------------------------------
 
 
-def load_config(kanban_dir: Path) -> BoardConfig:
-    """Load ``config.yml`` from *kanban_dir* and return a :class:`BoardConfig`.
-
-    Accepts both legacy schema (dict statuses) and new Brief-C schema
-    (string statuses) via the ``BoardConfig._normalise_legacy`` validator.
-    Validates ``claim_timeout`` format and raises :class:`ConfigError` on
-    invalid values (AC-C50).
-
-    Raises:
-        FileNotFoundError: when ``config.yml`` is absent.
-        ConfigError: when ``claim_timeout`` has an invalid format.
-    """
-    from owlbear_kanban.config_loader import _validate_claim_timeout  # noqa: PLC0415
-    from owlbear_kanban.config_loader import load_config as _load  # noqa: PLC0415
-    config = _load(kanban_dir)
-    _validate_claim_timeout(config)
-    return config
-
-
 def save_config(config: BoardConfig, kanban_dir: Path) -> None:
     """Write *config* to ``config.yml`` in *kanban_dir* using atomic write.
 
-    Writes the config in Brief-C new schema format.
+    Writes the config in grouped schema format (``schema: grouped``) with
+    nested ``paths``, ``pipeline``, ``agents``, and ``policy`` sub-sections.
 
     Args:
         config:     :class:`BoardConfig` to write.
         kanban_dir: Root directory of the kanban board.
     """
-    from ruamel.yaml import YAML  # noqa: PLC0415
+    from owlbear_kanban.yaml_rt import make_yaml  # noqa: PLC0415
 
     config_path = kanban_dir / "config.yml"
-    data = config.model_dump()
-    # Remove legacy-only output noise
-    for legacy_key in ("board", "version", "defaults", "activity_log"):
-        data.pop(legacy_key, None)
+    data = {
+        "schema": "grouped",
+        "statuses": config.statuses,
+        "priorities": config.priorities,
+        "next_id": config.next_id,
+        "activity_log": config.activity_log,
+        "paths": {
+            "tasks_dir": config.paths.tasks_dir,
+            "archive_dir": config.paths.archive_dir,
+        },
+        "pipeline": {
+            "entry_status": config.pipeline.entry_status,
+            "terminal_status": config.pipeline.terminal_status,
+            "wave_size": config.pipeline.wave_size,
+            "claim_timeout": config.pipeline.claim_timeout,
+            "default_priority": config.pipeline.default_priority,
+        },
+        "agents": {
+            "agent_map": config.agents.agent_map,
+            "agent_types": config.agents.agent_types,
+            "agent_compatibility": config.agents.agent_compatibility,
+        },
+        "policy": {
+            "non_impl_tags": config.policy.non_impl_tags,
+            "archival_reasons": config.policy.archival_reasons,
+            "status_predicates": config.policy.status_predicates,
+        },
+    }
 
-    y = YAML(typ="rt")
-    _ts_tag = "tag:yaml.org,2002:timestamp"
-    for char_key in list(y.resolver.yaml_implicit_resolvers.keys()):
-        y.resolver.yaml_implicit_resolvers[char_key] = [
-            (tag, regexp)
-            for tag, regexp in y.resolver.yaml_implicit_resolvers[char_key]
-            if tag != _ts_tag
-        ]
+    if config.model_extra:
+        for key, value in config.model_extra.items():
+            if key not in data:
+                data[key] = value
+
+    data = _yaml_safe_value(data)
+
+    y = make_yaml(explicit_start=True)
     cm = CommentedMap(data)
     stream = io.StringIO()
     y.dump(cm, stream)
     atomic_write(config_path, stream.getvalue())
+
+
+def _yaml_safe_value(value: object) -> object:
+    """Recursively convert non-YAML-safe values emitted by model_dump()."""
+    if isinstance(value, frozenset):
+        return sorted(value)
+    if isinstance(value, dict):
+        return {k: _yaml_safe_value(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_yaml_safe_value(v) for v in value]
+    if isinstance(value, tuple):
+        return [_yaml_safe_value(v) for v in value]
+    return value
 
 
 # ---------------------------------------------------------------------------
@@ -152,17 +296,24 @@ def save_config(config: BoardConfig, kanban_dir: Path) -> None:
 
 
 def _normalize_timestamp(ts: str | None) -> str | None:
-    """Return *ts* with an explicit UTC +00:00 suffix when it lacks a timezone."""
+    """Normalise *ts* to an explicit UTC ``+00:00`` form.
+
+    - No timezone: appends ``+00:00``.
+    - ``Z`` suffix: replaced with ``+00:00``.
+    - Non-UTC offset (e.g. ``+02:00``): converted to UTC via :func:`datetime.astimezone`.
+    - Non-timestamp strings: returned unchanged.
+    """
     if ts is None:
         return None
-    m = _TS_RE.match(ts.strip())
+    normalized = ts.strip()
+    m = _TS_RE.match(normalized)
     if not m:
         return ts
     base, frac, tz = m.groups()
     if tz:
         if tz == "Z":
             return f"{base}{frac}+00:00"
-        return ts
+        return datetime.fromisoformat(normalized).astimezone(UTC).isoformat()
     return f"{base}{frac}+00:00"
 
 
@@ -171,31 +322,39 @@ def _normalize_timestamp(ts: str | None) -> str | None:
 # ---------------------------------------------------------------------------
 
 
-def read_task(path: Path) -> Task:
-    """Parse a task file into a :class:`Task`, silently stripping ``claimed_by``.
+def read_task(path: Path, *, config: BoardConfig | None = None) -> Task:
+    """Parse a task file into a :class:`Task`.
 
-    Archive files containing the legacy ``claimed_by`` field are read without
-    raising :class:`CorruptionError`; the field is stripped from the returned
-    model (AC-C48).
+    For ``tasks/`` files, board-aware corruption detection runs before the model
+    is returned: corrupt fields (non-null ``claimed_by``, invalid status or
+    priority, id/filename mismatch) raise :class:`CorruptionError`. For
+    ``archive/`` files the legacy ``claimed_by`` field is stripped silently
+    (AC-C48).
 
     Args:
         path: Path to the task ``.md`` file.
+        config: Optional pre-resolved board config used for corruption detection.
+            When provided, corruption detection runs without reading ``config.yml``.
 
     Returns:
         Populated :class:`Task` with ``claimed_by`` set to ``None``.
 
     Raises:
         CorruptionError: ERR_CORRUPT_DELIMITERS when ``---`` delimiters are absent.
+        CorruptionError: ERR_CORRUPT_YAML_PARSE when YAML cannot be parsed.
         CorruptionError: ERR_CORRUPT_MISSING_FIELD when required frontmatter is absent.
         CorruptionError: ERR_CORRUPT_TYPE_MISMATCH when a field has an unexpected type.
+        CorruptionError: ERR_CORRUPT_ID_FILENAME_MISMATCH when filename id differs from frontmatter id.
         CorruptionError: ERR_CORRUPT_INVALID_STATUS when status is outside config.
         CorruptionError: ERR_CORRUPT_INVALID_PRIORITY when priority is outside config.
     """
-    import yaml  # noqa: PLC0415
-    from pydantic import ValidationError  # noqa: PLC0415
+    board_dir, loaded_config = _resolve_board_config(path, config)
 
     try:
-        task = _task_io_read_task(path)
+        data = _parse_task_file(path)
+        if _is_archive_path(path, board_dir, loaded_config):
+            data.pop("claimed_by", None)
+        task = Task.model_validate(data)
     except yaml.YAMLError as exc:
         raise CorruptionError(
             code=ERR_CORRUPT_YAML_PARSE,
@@ -203,20 +362,7 @@ def read_task(path: Path) -> Task:
             file_path=str(path),
         ) from exc
     except ValidationError as exc:
-        # Determine the specific code based on error types
-        for error in exc.errors():
-            if error.get("type") in ("missing", "value_error"):
-                raise CorruptionError(
-                    code="ERR_CORRUPT_MISSING_FIELD",
-                    user_message=f"required field missing in {path.name}: {exc}",
-                    file_path=str(path),
-                ) from exc
-        # Generic type mismatch
-        raise CorruptionError(
-            code="ERR_CORRUPT_TYPE_MISMATCH",
-            user_message=f"field type mismatch in {path.name}: {exc}",
-            file_path=str(path),
-        ) from exc
+        raise _validation_to_corruption(path, exc) from exc
     except ValueError as exc:
         raise CorruptionError(
             code="ERR_CORRUPT_DELIMITERS",
@@ -225,11 +371,8 @@ def read_task(path: Path) -> Task:
         ) from exc
 
     # Targeted reads (e.g. show_task) must surface board-level corruption modes.
-    board_dir = path.parent.parent
-    config_path = board_dir / "config.yml"
-    if config_path.exists():
-        config = load_config(board_dir)
-        corruption = detect_corruption(path, config)
+    if loaded_config is not None:
+        corruption = detect_corruption(path, loaded_config)
         if corruption is not None:
             raise corruption
 
@@ -245,12 +388,11 @@ def read_task(path: Path) -> Task:
             file_path=str(path),
         )
 
-    task.claimed_by = None
     return task
 
 
-def write_task(task: Task, kanban_dir: Path) -> Path:
-    """Serialise *task* to the ``tasks/`` directory of *kanban_dir*.
+def write_task(task: Task, kanban_dir: Path, *, target_dir: Path | None = None) -> Path:
+    """Serialise *task* to *target_dir* (or ``tasks/``) under *kanban_dir*.
 
     Frontmatter fields are written in canonical §2.3 order (AC-C13).
     Timestamps are normalised to explicit UTC ``+00:00`` (AC-C15).
@@ -260,12 +402,15 @@ def write_task(task: Task, kanban_dir: Path) -> Path:
     Args:
         task:       Task to serialise.
         kanban_dir: Root directory of the kanban board.
+        target_dir: Optional destination directory for the task file.
 
     Returns:
         Absolute path of the written file.
     """
-    config = load_config(kanban_dir)
-    tasks_dir = kanban_dir / config.tasks_dir
+    from owlbear_kanban.config_loader import load_config as _load_config  # noqa: PLC0415
+
+    config = _load_config(kanban_dir)
+    tasks_dir = target_dir or (kanban_dir / config.paths.tasks_dir)
 
     # Find existing file with this ID to keep filename stable
     existing = list(tasks_dir.glob(f"{task.id}-*.md"))
@@ -274,6 +419,7 @@ def write_task(task: Task, kanban_dir: Path) -> Path:
     else:
         filename = make_task_filename(task.id, task.title)
         path = tasks_dir / filename
+    validate_path_containment(kanban_dir, tasks_dir)
     validate_path_containment(tasks_dir, path)
 
     data: dict[str, Any] = task.model_dump()
@@ -288,16 +434,17 @@ def write_task(task: Task, kanban_dir: Path) -> Path:
             continue
         val = data[key]
         if key in _TS_FIELDS and isinstance(val, str):
-            val = _normalize_timestamp(val)
+            val = _as_plain_timestamp_scalar(val)
         ordered[key] = val
-    # Vendor extras
+    # Vendor extras (AC-C15 applies to all timestamp-looking values).
     for key, val in data.items():
         if key not in _CANONICAL_FIELD_SET and key != "claimed_by":
-            ordered[key] = val
+            normalized_val = _as_plain_timestamp_scalar(val) if isinstance(val, str) else val
+            ordered[key] = normalized_val
 
     stream = io.StringIO()
     _make_yaml().dump(ordered, stream)
-    yaml_str = stream.getvalue()
+    yaml_str = _unquote_timestamp_scalars(stream.getvalue())
     content = f"---\n{yaml_str}---\n{body}"
     atomic_write(path, content)
     return path
@@ -322,16 +469,20 @@ def write_task_if_unchanged(
 
     Raises:
         ConcurrencyError: code="ERR_STALE" when on-disk version is newer.
-        FileNotFoundError: Task file not found.
+        FileNotFoundError: Task file not found in tasks/ or archive/.
     """
-    from owlbear_kanban.engine import _exclusive_file_lock  # noqa: PLC0415
+    from owlbear_kanban.config_loader import load_config as _load_config  # noqa: PLC0415
 
-    config = load_config(kanban_dir)
-    tasks_dir = kanban_dir / config.tasks_dir
+    config = _load_config(kanban_dir)
+    tasks_dir = kanban_dir / config.paths.tasks_dir
+    archive_dir = kanban_dir / config.paths.archive_dir
     lock_path = tasks_dir / f".{task.id}.lock"
+    archive_lock_path = archive_dir / f".{task.id}.lock"
 
-    with _exclusive_file_lock(lock_path):
+    with _exclusive_file_lock(lock_path), _exclusive_file_lock(archive_lock_path):
         matches = list(tasks_dir.glob(f"{task.id}-*.md"))
+        if not matches:
+            matches = list(archive_dir.glob(f"{task.id}-*.md"))
         if not matches:
             msg = f"Task file for id={task.id} not found"
             raise FileNotFoundError(msg)
@@ -340,7 +491,7 @@ def write_task_if_unchanged(
         if current.updated != expected_updated:
             msg = f"task {task.id} changed since read; reload and retry"
             raise ConcurrencyError(code="ERR_STALE", user_message=msg)
-        return write_task(task, kanban_dir)
+        return write_task(task, kanban_dir, target_dir=task_path.parent)
 
 
 # ---------------------------------------------------------------------------
@@ -350,13 +501,17 @@ def write_task_if_unchanged(
 
 def list_task_files(kanban_dir: Path) -> list[Path]:
     """Return sorted list of all task ``.md`` files, excluding temp/lock files."""
-    config = load_config(kanban_dir)
-    tasks_dir = kanban_dir / config.tasks_dir
+    from owlbear_kanban.config_loader import load_config as _load_config  # noqa: PLC0415
+
+    config = _load_config(kanban_dir)
+    tasks_dir = kanban_dir / config.paths.tasks_dir
     if not tasks_dir.exists():
         return []
     return sorted(
-        p for p in tasks_dir.iterdir()
-        if p.suffix == ".md"
+        p
+        for p in tasks_dir.iterdir()
+        if p.is_file()
+        and p.suffix == ".md"
         and not p.name.startswith(".tmp-")
         and not p.name.startswith(".")
     )
@@ -364,13 +519,17 @@ def list_task_files(kanban_dir: Path) -> list[Path]:
 
 def list_archive_files(kanban_dir: Path) -> list[Path]:
     """Return sorted list of all archive ``.md`` files, excluding temp/lock files."""
-    config = load_config(kanban_dir)
-    archive_dir = kanban_dir / config.archive_dir
+    from owlbear_kanban.config_loader import load_config as _load_config  # noqa: PLC0415
+
+    config = _load_config(kanban_dir)
+    archive_dir = kanban_dir / config.paths.archive_dir
     if not archive_dir.exists():
         return []
     return sorted(
-        p for p in archive_dir.iterdir()
-        if p.suffix == ".md"
+        p
+        for p in archive_dir.iterdir()
+        if p.is_file()
+        and p.suffix == ".md"
         and not p.name.startswith(".tmp-")
         and not p.name.startswith(".")
     )
@@ -383,27 +542,25 @@ def list_archive_files(kanban_dir: Path) -> list[Path]:
 
 def move_to_archive(task_id: int, kanban_dir: Path) -> Path:
     """Move the task file for *task_id* from ``tasks/`` to ``archive/``."""
-    config = load_config(kanban_dir)
-    tasks_dir = kanban_dir / config.tasks_dir
-    archive_dir = kanban_dir / config.archive_dir
+    from owlbear_kanban.config_loader import load_config as _load_config  # noqa: PLC0415
+
+    config = _load_config(kanban_dir)
+    tasks_dir = kanban_dir / config.paths.tasks_dir
+    archive_dir = kanban_dir / config.paths.archive_dir
     archive_dir.mkdir(parents=True, exist_ok=True)
-    matches = list(tasks_dir.glob(f"{task_id}-*.md"))
-    if not matches:
-        msg = f"No task file found for id={task_id}"
-        raise FileNotFoundError(msg)
-    src = matches[0]
-    dest = archive_dir / src.name
-    src.replace(dest)
-    return dest
+    task_lock_path = tasks_dir / f".{task_id}.lock"
+    archive_lock_path = archive_dir / f".{task_id}.lock"
 
-
-def move_to_quarantine(task_path: Path, kanban_dir: Path) -> Path:
-    """Move *task_path* to ``quarantine/``, creating the dir if absent (AC-C28, AC-C29)."""
-    quarantine_dir = kanban_dir / "quarantine"
-    quarantine_dir.mkdir(parents=True, exist_ok=True)
-    dest = quarantine_dir / task_path.name
-    task_path.replace(dest)
-    return dest
+    # Keep lock order consistent with write_task_if_unchanged to avoid deadlocks.
+    with _exclusive_file_lock(task_lock_path), _exclusive_file_lock(archive_lock_path):
+        matches = list(tasks_dir.glob(f"{task_id}-*.md"))
+        if not matches:
+            msg = f"No task file found for id={task_id}"
+            raise FileNotFoundError(msg)
+        src = matches[0]
+        dest = archive_dir / src.name
+        src.replace(dest)
+        return dest
 
 
 # ---------------------------------------------------------------------------
@@ -413,11 +570,11 @@ def move_to_quarantine(task_path: Path, kanban_dir: Path) -> Path:
 
 def allocate_next_id(kanban_dir: Path) -> int:
     """Allocate the next task ID from config under exclusive flock (Brief C §3.3)."""
-    from owlbear_kanban.engine import _exclusive_file_lock  # noqa: PLC0415
-
     lock_path = kanban_dir / ".next_id.lock"
     with _exclusive_file_lock(lock_path):
-        config = load_config(kanban_dir)
+        from owlbear_kanban.config_loader import load_config as _load_config  # noqa: PLC0415
+
+        config = _load_config(kanban_dir)
         new_id = config.next_id
         config.next_id = new_id + 1
         save_config(config, kanban_dir)
@@ -425,37 +582,26 @@ def allocate_next_id(kanban_dir: Path) -> int:
 
 
 # ---------------------------------------------------------------------------
-# Re-exports — all public types accessible from owlbear_kanban.storage
+# Re-exports — selected public symbols accessible from owlbear_kanban.storage
 # ---------------------------------------------------------------------------
 
 __all__ = [
     "ActivityCompactionResult",
     "ActivityEvent",
     "ConcurrencyError",
-    "CorruptionError",
     "MigrationRequiredError",
-    "RepairOutcome",
     "Section",
     "SessionRecord",
     "allocate_next_id",
-    "append_activity_event",
     "atomic_write",
-    "attempt_repair",
-    "compact_activity_log",
-    "detect_corruption",
-    "list_activity_events",
     "list_archive_files",
     "list_task_files",
-    "load_config",
+    "make_task_filename",
     "move_to_archive",
     "move_to_quarantine",
-    "parse_body",
     "read_task",
-    "render_body",
     "save_config",
-    "scan_and_fix",
+    "validate_path_containment",
     "write_task",
     "write_task_if_unchanged",
 ]
-
-

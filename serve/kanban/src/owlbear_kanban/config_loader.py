@@ -1,7 +1,6 @@
 """Config loader for .owlbear/kanban/config.yml using ruamel.yaml round-trip mode.
 
-Provides load_config and save_config for lossless round-trips: YAML comments,
-field order, inline annotations, and unknown/vendor fields are all preserved.
+Provides load_config for parsing and validating board configuration.
 
 Timestamp resolver is disabled so that date-like strings (e.g. "2026-04-09",
 ISO 8601 datetimes, duration strings like "1h") are never auto-coerced to
@@ -12,29 +11,20 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from ruamel.yaml import YAML
-from ruamel.yaml.comments import CommentedMap, CommentedSeq
-
 if TYPE_CHECKING:
     from pathlib import Path
 
+from owlbear_kanban._duration import _parse_duration
 from owlbear_kanban.models import BoardConfig
+from owlbear_kanban.yaml_rt import make_yaml as _make_yaml
 
-_TIMESTAMP_TAG = "tag:yaml.org,2002:timestamp"
-
-
-def _make_yaml() -> YAML:
-    """Return a ruamel.yaml YAML instance (round-trip) with timestamp resolver off."""
-    y = YAML(typ="rt")
-    # Build an instance-level copy of the implicit-resolver table that omits
-    # the timestamp tag. Setting the attribute on the *instance* shadows the
-    # class-level dict; no global side effects.
-    y.resolver.yaml_implicit_resolvers = {
-        char: [(tag, regexp) for tag, regexp in pairs if tag != _TIMESTAMP_TAG]
-        for char, pairs in y.resolver.yaml_implicit_resolvers.items()
-    }
-    return y
-
+_DEFAULT_PRIORITIES = [
+    "someday",
+    "nice-to-have",
+    "important",
+    "needed",
+    "critical",
+]
 
 # ---------------------------------------------------------------------------
 # Public API
@@ -46,6 +36,8 @@ def load_config(kanban_dir: Path) -> BoardConfig:
 
     Raises:
         FileNotFoundError: when ``config.yml`` is absent from *kanban_dir*.
+        ConfigError: when ``claim_timeout`` is present but cannot be parsed
+            as a valid duration string (AC-C50).
     """
     config_path = kanban_dir / "config.yml"
     if not config_path.exists():
@@ -55,46 +47,30 @@ def load_config(kanban_dir: Path) -> BoardConfig:
     with config_path.open("r", encoding="utf-8") as fh:
         raw = y.load(fh)
 
-    return BoardConfig.model_validate(_to_plain(raw))
+    plain = _to_plain(raw)
+    if isinstance(plain, dict) and plain.get("schema") == "grouped":
+        if "priorities" not in plain:
+            plain["priorities"] = list(_DEFAULT_PRIORITIES)
+
+        statuses = plain.get("statuses")
+        if isinstance(statuses, list) and statuses:
+            pipeline = plain.get("pipeline")
+            if not isinstance(pipeline, dict):
+                pipeline = {}
+            if "entry_status" not in pipeline:
+                pipeline["entry_status"] = statuses[0]
+            if "terminal_status" not in pipeline:
+                pipeline["terminal_status"] = statuses[-1]
+            plain["pipeline"] = pipeline
+
+    config = BoardConfig.model_validate(plain)
+    _validate_claim_timeout(config)
+    return config
 
 
 def _validate_claim_timeout(config: BoardConfig) -> None:
-    """Validate claim_timeout format; raise ConfigError for invalid values (AC-C50)."""
-    import re  # noqa: PLC0415
-
-    from owlbear_kanban.models import ConfigError  # noqa: PLC0415
-    pat = re.compile(r"^(?:\d+h)?(?:\d+m)?$")
-    val = config.claim_timeout
-    if not pat.match(val) or not val.endswith(("h", "m")):
-        raise ConfigError(
-            code="ERR_INVALID_CLAIM_TIMEOUT",
-            user_message=f"Invalid claim_timeout in config: {val!r}",
-        )
-
-
-def save_config(kanban_dir: Path, config: BoardConfig) -> None:
-    """Write *config* back to ``config.yml`` in *kanban_dir*.
-
-    Uses a read-modify-write strategy so that YAML comments, field order, and
-    per-item sequence annotations are preserved: the existing file is loaded as
-    a :class:`~ruamel.yaml.comments.CommentedMap`, values are updated in-place
-    from *config*, then the map is written back.
-
-    If ``config.yml`` does not yet exist the file is created from scratch.
-    """
-    config_path = kanban_dir / "config.yml"
-    y = _make_yaml()
-
-    if config_path.exists():
-        with config_path.open("r", encoding="utf-8") as fh:
-            raw: CommentedMap = y.load(fh)
-    else:
-        raw = CommentedMap()
-
-    _merge_into(raw, config.model_dump())
-
-    with config_path.open("w", encoding="utf-8") as fh:
-        y.dump(raw, fh)
+    """Validate claim_timeout by delegating to the canonical parser (AC-C50)."""
+    _parse_duration(config.pipeline.claim_timeout)
 
 
 # ---------------------------------------------------------------------------
@@ -114,30 +90,3 @@ def _to_plain(obj: Any) -> Any:  # noqa: ANN401
     if isinstance(obj, list):
         return [_to_plain(item) for item in obj]
     return obj
-
-
-def _merge_into(target: CommentedMap, source: dict[str, Any]) -> None:
-    """Update *target* :class:`~ruamel.yaml.comments.CommentedMap` in-place.
-
-    Strategy:
-    - Nested mappings: recurse so that inline comments on child keys survive.
-    - Sequences (same length): update items in-place so per-item comments
-      (stored on the :class:`~ruamel.yaml.comments.CommentedSeq` object) are
-      preserved.  Length change → replace the whole sequence.
-    - Scalars: assign directly; ruamel.yaml keeps the inline comment on the
-      mapping key even when the value changes.
-    - Missing keys: add them (new vendor fields from model_dump).
-    """
-    for key, new_value in source.items():
-        if key not in target:
-            target[key] = new_value
-            continue
-
-        existing = target[key]
-        if isinstance(existing, CommentedMap) and isinstance(new_value, dict):
-            _merge_into(existing, new_value)
-        elif isinstance(existing, CommentedSeq) and isinstance(new_value, list) and len(existing) == len(new_value):
-            for i, item in enumerate(new_value):
-                existing[i] = item
-        else:
-            target[key] = new_value

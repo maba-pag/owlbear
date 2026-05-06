@@ -50,6 +50,9 @@ playwright-report/
 .claude/
 .serena/
 
+# OS artifacts
+.DS_Store
+
 # Secrets - NEVER commit
 .env
 .env.*
@@ -107,6 +110,7 @@ store/audit/
 
 # Knowledge and memory databases
 .owlbear/knowledge/*.db
+.owlbear/knowledge/vectors/
 .owlbear/memory/*.db
 
 # Lock files (transient runtime artifacts)
