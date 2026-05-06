@@ -44,6 +44,24 @@ All mutation routes go through the `CockpitView` facade.
 | `claim_task()` / `start_work()` / `end_work()` | Agent lifecycle operations |
 | `refresh_config()` | Managed internally by the engine |
 
+## Error Envelope
+
+All error responses use a stable JSON envelope. The `detail` field is absent; `guidance` is also absent on error responses.
+
+```json
+{"code": "<STABLE_CODE>", "message": "<user-facing text>"}
+```
+
+| Domain error | HTTP status | `code` example |
+|---|---|---|
+| `NotFoundError` | 404 | `ERR_NOT_FOUND` |
+| `ConcurrencyError` | 409 | `ERR_STALE` |
+| `ValidationError` | 422 | `ERR_INVALID_STATUS` |
+| `ConfigError` | 500 | *(varies by config context)* |
+| Unexpected exception | 500 | `COCKPIT_INTERNAL_ERROR` |
+
+Handled by centralized `@app.exception_handler` registrations in `main.py`; route code raises domain errors directly and lets the handlers serialize them.
+
 ## Decisions API
 
 Two endpoints handle Decision Request (DR) lifecycle. These routes use `get_decisions_dir` (a separate DI callable in `deps.py`) — not the CockpitView facade.
