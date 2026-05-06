@@ -1,10 +1,10 @@
 ---
 id: 1364
 title: 'P1-01: Test Cockpit PDS v4 build compatibility'
-status: done
+status: archived
 priority: critical
 created: 2026-05-06T00:58:30.519362+00:00
-updated: 2026-05-06T06:25:53.276927+00:00
+updated: 2026-05-06T06:34:04.704160+00:00
 tags:
 - cockpit
 - audit-remediation
@@ -18,7 +18,7 @@ parent: 1363
 depends_on: []
 blocked: false
 block_reason:
-claimed_at: 2026-05-06T06:25:53.276927+00:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -345,3 +345,32 @@ Architecture review cycle 2 (reviewer return). Refined AC2 and AC4 to require bu
 Files updated: none.
 Child tasks created: none.
 Scratch files cleaned: none found (`1364-*` absent).
+[[2026-05-06]]
+## Audit
+
+### AC Verification
+| AC Line | Evidence | Status |
+|---|---|---|
+| AC1: focused frontend verification path proves `npm run build` must pass cleanly | `tests/test_cockpit_pds_build_compat_1364.py:67` asserts `returncode == 0`; currently fails RED as intended | PASS |
+| AC2: assertions catch PDS v4 failures without broad type suppression; proof pins `scripts.build` to `tsc -b` | Output-fragment checks at L100, anti-suppression guards at L126-140, build-script pin at L151; 5 guards pass while 4 fragment checks fail RED | PASS |
+| AC3: PendingDR/ResolveModal body mismatch represented if still present | L109 asserts body-mismatch fragment absent; currently fails RED against live mismatch | PASS |
+| AC4: proof fails against broken state, suitable for #1365, detects build-script bypass | 6 failed / 5 passed; `tsc -b` pin closes previously-identified false-green path | PASS |
+
+### Test Results
+- Task-scoped: 6 failed, 5 passed (intentional RED state confirmed)
+- Full suite (excl. 1364): 249 failed, 4656 passed — all pre-existing failures unrelated to this task (test-only addition, no source modifications)
+- Lint: ruff clean on task file
+
+### Commit Integrity
+- `acd93141` — test: add cockpit pds build red proof (#1364, builder)
+- `7240af07` — test: harden pds build red proof against suppression (#1364, builder)
+- `ecc5e6b2` — test: pin cockpit build gate in red proof (#1364, builder)
+
+### Architect Quality
+- Score: 4/5 — Original AC missed build-script contract pinning; reviewer return prompted architecture cycle 2 which produced a specific, actionable refinement. Final AC is verifiable and complete.
+
+### Deductions
+- `-0.02` Full-suite background noise (249 pre-existing failures) prevents pristine cross-task regression baseline, though logically unattributable to this test-only task.
+
+### Confidence: 0.98
+### Action: Archive
