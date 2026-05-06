@@ -162,7 +162,10 @@ class TestFromAC_MoveRequestUpdatedField:
             json={"status": "in-progress", "updated": "2025-01-01T00:00:00"},
         )
         assert response.status_code == 404
-        assert "999" in response.json()["detail"]
+        body = response.json()
+        assert "detail" not in body
+        assert body.get("code") == "ERR_NOT_FOUND"
+        assert "999" in str(body.get("message", ""))
 
     def test_move_with_null_updated_returns_422(self, client) -> None:
         """Move request with null 'updated' value → 422 validation error.
@@ -310,9 +313,10 @@ class TestFromAC_MoveConcurrencyError:
                 "/api/tasks/1/move",
                 json={"status": "in-progress", "updated": task.updated},
             )
-        assert response.json()["detail"] == (
-            "Task was modified since your last load (stale snapshot)"
-        )
+        body = response.json()
+        assert "detail" not in body
+        assert body.get("code") == "ERR_STALE"
+        assert body.get("message") == "stale write detected"
 
 
 # ---------------------------------------------------------------------------

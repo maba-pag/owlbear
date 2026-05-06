@@ -458,9 +458,12 @@ class TestFromAC_TaskDetail:
         """GET /api/tasks/9999 returns 404 with the ID referenced in the error detail."""
         response = client.get("/api/tasks/9999")
         assert response.status_code == 404
-        detail = response.json().get("detail", "")
-        assert "9999" in str(detail), (
-            f"404 detail should reference the requested ID '9999', got: {detail!r}"
+        body = response.json()
+        assert "detail" not in body
+        assert body.get("code") == "ERR_NOT_FOUND"
+        message = body.get("message", "")
+        assert "9999" in str(message), (
+            f"404 message should reference the requested ID '9999', got: {message!r}"
         )
 
 

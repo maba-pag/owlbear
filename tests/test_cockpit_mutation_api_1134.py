@@ -201,9 +201,11 @@ class TestFromAC_ConcurrencyErrorHandler:
                 "/api/tasks/1/edit",
                 json={"updated": task.updated, "title": "Detail probe"},
             )
-        detail = response.json().get("detail", "")
-        assert detail == "Task was modified since your last load (stale snapshot)", (
-            f"Detail string mismatch: {detail!r}"
+        body = response.json()
+        assert "detail" not in body
+        assert body.get("code") == "ERR_STALE"
+        assert body.get("message") == "stale", (
+            f"Envelope message mismatch: {body!r}"
         )
 
     def test_edit_concurrency_error_not_propagated_as_500(
