@@ -252,6 +252,66 @@ class TestFromAC_CachePopulateOrdering:
         finally:
             app.dependency_overrides.clear()
 
+    def test_signature_committed_after_successful_populate(
+        self, engine: KanbanEngine
+    ) -> None:
+        """Happy path: cache.last_mtime must equal the scanned signature after success.
+
+        Regression guard: proves that cache.commit_signature(mtime) IS called on the
+        success path in routes/read.py.  Removing that call would leave last_mtime at
+        its prior value (0 for a cold cache), causing every subsequent request to
+        re-detect a change and re-invoke view.list_tasks(), defeating the cache.
+
+        Setup:
+          - Fresh cache (last_mtime == 0, has_cached_tasks == False).
+          - Mock scan() to return sig_new.
+          - Mock view.list_tasks() to succeed with an empty task list.
+          - GET /api/tasks → 200.
+
+        Assertion: cache.last_mtime == sig_new after the request.
+
+        Fails if commit_signature(mtime) is absent or skipped on the success path,
+        because last_mtime stays at 0 instead of advancing to sig_new.
+        """
+        from fastapi.testclient import TestClient  # noqa: PLC0415
+
+        from owlbear_cockpit.cache import MtimeScanCache  # noqa: PLC0415
+        from owlbear_cockpit.deps import get_cache, get_view  # noqa: PLC0415
+        from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
+        from owlbear_cockpit.view import CockpitView  # noqa: PLC0415
+        from owlbear_kanban.models import ListTasksResponse  # noqa: PLC0415
+
+        cache = MtimeScanCache(engine.tasks_dir)
+        sig_new = 999
+
+        assert cache.last_mtime == 0, "Precondition: fresh cache, last_mtime == 0."
+        assert not cache.has_cached_tasks, "Precondition: fresh cache, no tasks cached."
+
+        success_resp = ListTasksResponse(tasks=[], guidance=[], missing_ids=None)
+        mock_view = MagicMock(spec=CockpitView)
+        mock_view.list_tasks.return_value = success_resp
+
+        app.dependency_overrides[get_engine] = lambda: engine
+        app.dependency_overrides[get_cache] = lambda: cache
+        app.dependency_overrides[get_view] = lambda: mock_view
+
+        try:
+            client = TestClient(app, raise_server_exceptions=False)
+            with patch.object(cache, "scan", return_value=sig_new):
+                response = client.get("/api/tasks")
+
+            assert response.status_code == 200, "Successful populate must return 200."
+            assert cache.last_mtime == sig_new, (
+                f"cache.last_mtime must be committed to sig_new={sig_new} after a "
+                f"successful populate.  "
+                f"Current value: {cache.last_mtime}.  "
+                f"If commit_signature(mtime) is absent or skipped on the success "
+                f"path, last_mtime stays at 0 and every subsequent request "
+                f"re-detects a change, bypassing the cache entirely."
+            )
+        finally:
+            app.dependency_overrides.clear()
+
 
 # ===========================================================================
 # AC2 (td:2): Warm-cache failure-recovery: 4-step sequence
