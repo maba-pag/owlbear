@@ -350,6 +350,53 @@ class TestFromAC_GitSemantics:
         assert after_review - before_review == 1
 
     @pytest.mark.asyncio
+    async def test_curate_memory_does_not_create_commit(self, git_repo: Path) -> None:
+        """curate_memory writes state to disk but does NOT create a git commit."""
+        memory_dir = git_repo / "memory"
+        engine = MemoryEngine(memory_dir=memory_dir)
+        ctx = _make_ctx(engine)
+
+        saved = await save_memory(
+            ctx,
+            title="Curate no-commit test",
+            content="Content.",
+            categories=["domain-knowledge"],
+            confidence=0.9,
+            source_agent="test-agent",
+        )
+        entry_id = saved["id"]
+
+        before = _commit_count(git_repo)
+        await curate_memory(ctx, entry_id=entry_id, scope_agents=["builder"])
+        after = _commit_count(git_repo)
+
+        assert after == before
+
+    @pytest.mark.asyncio
+    async def test_approve_memory_does_not_create_commit(self, git_repo: Path) -> None:
+        """approve_memory writes state to disk but does NOT create a git commit."""
+        memory_dir = git_repo / "memory"
+        engine = MemoryEngine(memory_dir=memory_dir)
+        ctx = _make_ctx(engine)
+
+        saved = await save_memory(
+            ctx,
+            title="Approve no-commit test",
+            content="Content.",
+            categories=["domain-knowledge"],
+            confidence=0.9,
+            source_agent="test-agent",
+        )
+        entry_id = saved["id"]
+        await curate_memory(ctx, entry_id=entry_id, scope_agents=["builder"])
+
+        before = _commit_count(git_repo)
+        await approve_memory(ctx, entry_id=entry_id)
+        after = _commit_count(git_repo)
+
+        assert after == before
+
+    @pytest.mark.asyncio
     async def test_no_commit_when_only_pending_entries_present(
         self, git_repo: Path
     ) -> None:
