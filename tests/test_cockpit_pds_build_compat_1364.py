@@ -53,6 +53,12 @@ def tsconfig_data() -> dict[str, object]:
     return json.loads((_WEB / "tsconfig.json").read_text(encoding="utf-8"))
 
 
+@pytest.fixture(scope="module")
+def package_json_data() -> dict[str, object]:
+    """Load cockpit web package.json for build-gate contract assertions."""
+    return json.loads((_WEB / "package.json").read_text(encoding="utf-8"))
+
+
 class TestFromAC_CockpitPdsV4BuildCompatibility:
     """AC1/AC4: build must pass cleanly as a delivery gate."""
 
@@ -132,3 +138,14 @@ class TestAc2NoBroadTypeSuppressionGuards:
         assert isinstance(compiler_options, dict)
         assert compiler_options.get("strict") is True, "tsconfig must keep strict mode enabled."
         assert compiler_options.get("noCheck") is not True, "tsconfig must not disable type-checking via noCheck."
+
+    def test_package_json_build_script_keeps_tsc_build(
+        self,
+        package_json_data: dict[str, object],
+    ) -> None:
+        """Require the canonical build gate to keep TypeScript project build checks."""
+        scripts = package_json_data.get("scripts", {})
+        assert isinstance(scripts, dict)
+        build_script = scripts.get("build")
+        assert isinstance(build_script, str), "package.json scripts.build must be a string."
+        assert "tsc -b" in build_script, "package.json scripts.build must include 'tsc -b'."
