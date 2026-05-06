@@ -57,19 +57,19 @@ export default function ActivityTab({ onSelectTask }: ActivityTabProps) {
   return (
     <div>
       <div>
-        <PButton data-testid="filter-active" variant="tertiary" onClick={() => setFilter('active')}>
+        <PButton data-testid="filter-active" variant="secondary" onClick={() => setFilter('active')}>
           Active
         </PButton>
-        <PButton data-testid="filter-all" variant="tertiary" onClick={() => setFilter('all')}>
+        <PButton data-testid="filter-all" variant="secondary" onClick={() => setFilter('all')}>
           All
         </PButton>
-        <PButton data-testid="filter-blocked" variant="tertiary" onClick={() => setFilter('blocked')}>
+        <PButton data-testid="filter-blocked" variant="secondary" onClick={() => setFilter('blocked')}>
           Blocked
         </PButton>
-        <PButton data-testid="filter-stuck" variant="tertiary" onClick={() => setFilter('stuck')}>
+        <PButton data-testid="filter-stuck" variant="secondary" onClick={() => setFilter('stuck')}>
           Stuck
         </PButton>
-        <PButton data-testid="filter-released" variant="tertiary" onClick={() => setFilter('released')}>
+        <PButton data-testid="filter-released" variant="secondary" onClick={() => setFilter('released')}>
           Released
         </PButton>
       </div>

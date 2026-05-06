@@ -1,5 +1,6 @@
 import {
   createContext,
+  type ReactElement,
   type PropsWithChildren,
   useContext,
   useEffect,
@@ -13,7 +14,8 @@ const EVENT_TYPES = ['tasks-changed', 'decisions-changed', 'activity-changed'] a
 const STALL_TIMEOUT_MS = 15_000
 const RETRY_TIMEOUT_MS = 30_000
 
-type EventTypeMtimes = Record<string, number | null>
+type EventType = (typeof EVENT_TYPES)[number]
+type EventTypeMtimes = Record<EventType, number | null>
 
 interface EventSourceContextValue {
   status: EventSourceStatus
@@ -37,7 +39,7 @@ function createInitialMtimes(): EventTypeMtimes {
 export function EventSourceProvider({
   url,
   children,
-}: EventSourceProviderProps): JSX.Element {
+}: EventSourceProviderProps): ReactElement {
   const [status, setStatus] = useState<EventSourceStatus>('connecting')
   const [mtimes, setMtimes] = useState<EventTypeMtimes>(createInitialMtimes)
 
@@ -137,7 +139,7 @@ export function EventSourceProvider({
           try {
             const payload = JSON.parse(messageEvent.data) as { mtime?: unknown }
             if (typeof payload.mtime === 'number') {
-              setMtimes((previous) => ({
+              setMtimes((previous): EventTypeMtimes => ({
                 ...previous,
                 [eventType]: payload.mtime,
               }))
@@ -178,7 +180,7 @@ export function useSSEEvent(eventType: string): {
   }
 
   return {
-    mtime: context.mtimes[eventType] ?? null,
+    mtime: (context.mtimes as Record<string, number | null>)[eventType] ?? null,
     status: context.status,
   }
 }

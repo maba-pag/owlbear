@@ -30,7 +30,7 @@ export default function HealthBadge({ items, corruptionCount = 0, onRepairSucces
         data-region="health"
         data-health={health}
         aria-label={ariaLabel}
-        variant="tertiary"
+        variant="secondary"
         onClick={() => setIsOpen((current) => !current)}
       >
         Health {label}

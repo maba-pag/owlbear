@@ -47,7 +47,7 @@ export default function RepairPanel({ corruptionCount, onSuccess }: RepairPanelP
         >
           Confirm
         </PButton>
-        <PButton data-testid="repair-cancel-btn" variant="tertiary" onClick={cancelRepair}>
+        <PButton data-testid="repair-cancel-btn" variant="secondary" onClick={cancelRepair}>
           Cancel
         </PButton>
       </div>
@@ -79,7 +79,7 @@ export default function RepairPanel({ corruptionCount, onSuccess }: RepairPanelP
           <PText weight="semibold">Failed</PText>
           <ul>{renderOutcomeRows(grouped.failed)}</ul>
         </section>
-        <PButton data-testid="repair-dismiss-btn" variant="tertiary" onClick={dismissResults}>
+        <PButton data-testid="repair-dismiss-btn" variant="secondary" onClick={dismissResults}>
           Dismiss
         </PButton>
       </div>
@@ -90,7 +90,7 @@ export default function RepairPanel({ corruptionCount, onSuccess }: RepairPanelP
     return (
       <div>
         <PText data-testid="repair-error">{error}</PText>
-        <PButton data-testid="repair-dismiss-btn" variant="tertiary" onClick={dismissResults}>
+        <PButton data-testid="repair-dismiss-btn" variant="secondary" onClick={dismissResults}>
           Dismiss
         </PButton>
       </div>

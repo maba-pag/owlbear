@@ -48,6 +48,11 @@ function parseRefsInput(refsRaw: string): { values: number[]; invalid: boolean }
   return { values, invalid: false }
 }
 
+type ControlValueEvent = {
+  target?: unknown
+  detail?: unknown
+}
+
 export default function ArchivalModal({
   taskId,
   taskStatus,
@@ -88,18 +93,15 @@ export default function ArchivalModal({
     element?.setAttribute('tag', 'h3')
   }
 
-  function readControlValue(
-    event: {
-      target?: { value?: unknown }
-      detail?: { value?: unknown }
-    },
-  ): string {
-    if (typeof event.detail?.value === 'string') {
-      return event.detail.value
+  function readControlValue(event: ControlValueEvent): string {
+    const detailValue = (event.detail as { value?: unknown } | undefined)?.value
+    if (typeof detailValue === 'string') {
+      return detailValue
     }
 
-    if (typeof event.target?.value === 'string') {
-      return event.target.value
+    const target = event.target as { value?: unknown } | undefined
+    if (typeof target?.value === 'string') {
+      return target.value
     }
 
     return ''
@@ -224,12 +226,10 @@ export default function ArchivalModal({
       <label>
         Reason
         <PSelect
+          name="archival-reason"
           ref={reasonSelectRef}
           value={reason}
           onChange={(event) => {
-            handleReasonChange(readControlValue(event))
-          }}
-          onInput={(event) => {
             handleReasonChange(readControlValue(event))
           }}
         >
@@ -252,13 +252,10 @@ export default function ArchivalModal({
         <label>
           Refs
           <PInputText
+            name="archival-refs"
             placeholder="e.g., 1230, 1229"
             value={refsRaw}
             onChange={(event) => {
-              setRefsRaw(readControlValue(event))
-              setError(null)
-            }}
-            onInput={(event) => {
               setRefsRaw(readControlValue(event))
               setError(null)
             }}
@@ -276,7 +273,7 @@ export default function ArchivalModal({
       >
         Archive
       </PButton>
-      <PButton type="button" variant="tertiary" onClick={onClose}>
+      <PButton type="button" variant="secondary" onClick={onClose}>
         Cancel
       </PButton>
 

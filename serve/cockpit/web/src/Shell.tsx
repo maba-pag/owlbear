@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from 'react'
+import { type ReactElement, useRef, useEffect, useState } from 'react'
 import { Routes, Route } from 'react-router'
 import { PButton } from '@porsche-design-system/components-react'
 import KanbanBoard from './KanbanBoard'
@@ -42,7 +42,7 @@ function Shell() {
   }
   const mockedKanbanBoard = KanbanBoard as unknown as {
     mock?: unknown
-    (props: typeof kanbanProps, legacyContext?: Record<string, unknown>): JSX.Element
+    (props: typeof kanbanProps, legacyContext?: Record<string, unknown>): ReactElement
   }
   const kanbanElement = mockedKanbanBoard.mock
     ? mockedKanbanBoard(kanbanProps, {})
@@ -134,7 +134,7 @@ function Shell() {
         />
       </header>
       <nav className="shell__nav-rail" data-region="nav-rail">
-        <PButton data-surface="kanban" aria-current="page" variant="tertiary">
+        <PButton data-surface="kanban" aria-current="page" variant="secondary">
           <p-icon name="list" aria-hidden="true" />
           Kanban
         </PButton>

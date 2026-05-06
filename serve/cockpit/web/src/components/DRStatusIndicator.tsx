@@ -27,7 +27,7 @@ export default function DRStatusIndicator({ count, items, onItemClick }: DRStatu
         data-testid="dr-indicator"
         data-status={status}
         aria-label={`Pending decision requests: ${count}`}
-        variant="tertiary"
+        variant="secondary"
         onClick={() => setIsOpen((current) => !current)}
       >
         DR {count}
@@ -44,7 +44,7 @@ export default function DRStatusIndicator({ count, items, onItemClick }: DRStatu
                   <PButton
                     type="button"
                     data-testid={`dr-item-${item.id}`}
-                    variant="tertiary"
+                    variant="secondary"
                     onClick={() => onItemClick(item.id)}
                   >
                     <span>{item.title}</span>

@@ -12,13 +12,18 @@ import {
 import type { PendingDR } from '../hooks/usePendingDRs'
 
 export interface PendingDRWithBody extends PendingDR {
-  body: string
+  body?: string
 }
 
 export interface ResolveModalProps {
   dr: PendingDRWithBody | null
   onClose: () => void
   onResolved: () => void
+}
+
+type ControlValueEvent = {
+  target?: unknown
+  detail?: unknown
 }
 
 export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalProps) {
@@ -60,18 +65,15 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
     element?.setAttribute('hide-label', '')
   }
 
-  function readControlValue(
-    event: {
-      target?: { value?: unknown }
-      detail?: { value?: unknown }
-    },
-  ): string {
-    if (typeof event.detail?.value === 'string') {
-      return event.detail.value
+  function readControlValue(event: ControlValueEvent): string {
+    const detailValue = (event.detail as { value?: unknown } | undefined)?.value
+    if (typeof detailValue === 'string') {
+      return detailValue
     }
 
-    if (typeof event.target?.value === 'string') {
-      return event.target.value
+    const target = event.target as { value?: unknown } | undefined
+    if (typeof target?.value === 'string') {
+      return target.value
     }
 
     return ''
@@ -80,7 +82,7 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
   return (
     <div data-testid="resolve-modal" role="dialog" aria-label="Resolve decision request">
       <PHeading ref={setHeadingTagAttr} tag="h3">{dr.title}</PHeading>
-      <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>{dr.body}</ReactMarkdown>
+      <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>{dr.body ?? ''}</ReactMarkdown>
 
       <fieldset data-testid="response-selector">
         <legend>Response</legend>
@@ -117,12 +119,12 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
       </fieldset>
 
       <PTextarea
+        name="resolve-notes"
         ref={setHideLabelAttr}
         data-testid="resolve-notes"
         hideLabel={true}
         value={notes}
         onChange={(event) => setNotes(readControlValue(event))}
-        onInput={(event) => setNotes(readControlValue(event))}
       />
 
       <PButton
@@ -133,7 +135,7 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
       >
         Submit
       </PButton>
-      <PButton data-testid="resolve-cancel" variant="tertiary" onClick={onClose}>
+      <PButton data-testid="resolve-cancel" variant="secondary" onClick={onClose}>
         Cancel
       </PButton>
 

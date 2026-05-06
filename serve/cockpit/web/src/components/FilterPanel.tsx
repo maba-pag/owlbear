@@ -19,18 +19,19 @@ export interface FilterPanelProps {
 
 const EMPTY_FILTER: FilterState = { text: '', priority: '', tags: [], blocked: false }
 
-function readStringValue(
-  event: {
-    target?: { value?: unknown }
-    detail?: { value?: unknown }
-  },
-): string {
+type ControlValueEvent = {
+  target?: unknown
+  detail?: { value?: unknown }
+}
+
+function readStringValue(event: ControlValueEvent): string {
   if (typeof event.detail?.value === 'string') {
     return event.detail.value
   }
 
-  if (typeof event.target?.value === 'string') {
-    return event.target.value
+  const target = event.target as { value?: unknown } | undefined
+  if (typeof target?.value === 'string') {
+    return target.value
   }
 
   return ''
@@ -151,11 +152,11 @@ export default function FilterPanel({
       />
 
       <PSelect
+        name="priority-filter"
         label="Priority"
         aria-label="Priority"
         value={filter.priority}
         onChange={(event) => onFilterChange({ ...filter, priority: readStringValue(event) })}
-        onInput={(event) => onFilterChange({ ...filter, priority: readStringValue(event) })}
       >
         <option value="">All priorities</option>
         {priorities.map((priority) => (
@@ -167,6 +168,7 @@ export default function FilterPanel({
 
       {availableTags.length > 0 ? (
         <PMultiSelect
+          name="tags-filter"
           label="Tags"
           aria-label="Tags"
           data-testid="filter-tags"
@@ -194,7 +196,7 @@ export default function FilterPanel({
       </label>
 
       {isFilterActive ? (
-        <PButton data-testid="filter-reset" variant="tertiary" onClick={() => onFilterChange(EMPTY_FILTER)}>
+        <PButton data-testid="filter-reset" variant="secondary" onClick={() => onFilterChange(EMPTY_FILTER)}>
           Clear all
         </PButton>
       ) : null}
