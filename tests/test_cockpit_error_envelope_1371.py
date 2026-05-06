@@ -385,3 +385,124 @@ class TestFromAC_UnexpectedErrorExactContract:
         assert body.get("message") == "An unexpected error occurred.", (
             f"Expected exact message 'An unexpected error occurred.'; got {body.get('message')!r}"
         )
+
+
+# ---------------------------------------------------------------------------
+# AC7 (broadened): release-operation domain error paths
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ReleaseErrorEnvelope:
+    """AC7 broadened: Release-operation domain errors use {code, message} envelope.
+
+    Covers migration sites newly identified in:
+      - tests/test_cockpit_mutation_api.py lines 482, 500   (not-found + stale release)
+      - tests/test_cockpit_mutation_api_1132.py line 709     (stale release token)
+      - tests/test_cockpit_mutation_race.py line 281         (unclaimed release)
+
+    Each test proves the exact envelope shape at the API level: no 'detail' key,
+    'code' and 'message' keys present. These discriminate against old detail-only
+    assertions that the builder must migrate in the named durable test files.
+    """
+
+    def test_release_not_found_returns_envelope_not_detail(
+        self, client: TestClient, engine: KanbanEngine
+    ) -> None:
+        """404 release of non-existent task carries {code, message}; no 'detail' field."""
+        token = engine.show_task("1").updated
+        response = client.post("/api/tasks/999/release", json={"updated": token})
+        body = response.json()
+        assert response.status_code == 404
+        assert "detail" not in body, (
+            f"Domain 404 must NOT include 'detail' key; got {body!r}"
+        )
+        assert body.get("code") == "ERR_NOT_FOUND", (
+            f"Expected code 'ERR_NOT_FOUND'; got {body.get('code')!r}"
+        )
+        assert "999" in str(body.get("message", "")), (
+            f"404 message should reference the missing task ID '999'; got {body!r}"
+        )
+
+    def test_release_stale_token_returns_envelope_not_detail(
+        self, client: TestClient, engine: KanbanEngine
+    ) -> None:
+        """409 stale-release carries {code, message}; no 'detail' field.
+
+        Board fixture has task 2 pre-claimed.  Editing bumps 'updated' so the
+        saved token is stale when release is attempted.
+        """
+        task = engine.show_task("2")
+        stale_token = task.updated
+        engine.edit_task("2", title="Bumped to make stale token")
+
+        response = client.post("/api/tasks/2/release", json={"updated": stale_token})
+        body = response.json()
+        assert response.status_code == 409, (
+            f"Stale release must return 409; got {response.status_code}"
+        )
+        assert "detail" not in body, (
+            f"Domain 409 must NOT include 'detail' key; got {body!r}"
+        )
+        assert body.get("code") == "ERR_STALE", (
+            f"Expected code 'ERR_STALE'; got {body.get('code')!r}"
+        )
+        assert "message" in body, (
+            f"Domain 409 must include 'message' key; got {body!r}"
+        )
+
+    def test_release_unclaimed_task_returns_envelope_not_detail(
+        self, client: TestClient, engine: KanbanEngine
+    ) -> None:
+        """409 release of unclaimed task carries {code, message}; no 'detail' field."""
+        task = engine.show_task("1")
+        response = client.post("/api/tasks/1/release", json={"updated": task.updated})
+        body = response.json()
+        assert response.status_code == 409, (
+            f"Release of unclaimed task must return 409; got {response.status_code}"
+        )
+        assert "detail" not in body, (
+            f"Domain 409 must NOT include 'detail' key; got {body!r}"
+        )
+        assert "code" in body, (
+            f"Domain 409 must include 'code' key; got {body!r}"
+        )
+        assert "message" in body, (
+            f"Domain 409 must include 'message' key; got {body!r}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# AC10: Pydantic request-validation carve-out discrimination
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_PydanticCarveOut:
+    """AC10 (td:1): Pydantic request-validation 422 retains FastAPI detail format.
+
+    Discriminating proof: the domain envelope handler must NOT contaminate
+    framework request-validation errors.  Both facts are asserted together:
+      (a) 'detail' is a list  (FastAPI standard format preserved)
+      (b) 'code' and 'message' are absent  (domain envelope not applied)
+
+    The test_cockpit_kanban_routes.py:262 existing assertion only checks (a).
+    """
+
+    def test_pydantic_validation_422_retains_detail_list_and_excludes_envelope_keys(
+        self, client: TestClient
+    ) -> None:
+        """Missing required 'updated' in move -> 422 with detail list; no code/message."""
+        response = client.post(
+            "/api/tasks/1/move",
+            json={"status": "in-progress"},  # 'updated' is required
+        )
+        assert response.status_code == 422
+        body = response.json()
+        assert isinstance(body.get("detail"), list), (
+            f"Pydantic 422 must carry 'detail' list (FastAPI format); got {body!r}"
+        )
+        assert "code" not in body, (
+            f"Pydantic 422 must NOT contain domain 'code' key; got {body!r}"
+        )
+        assert "message" not in body, (
+            f"Pydantic 422 must NOT contain domain 'message' key; got {body!r}"
+        )
