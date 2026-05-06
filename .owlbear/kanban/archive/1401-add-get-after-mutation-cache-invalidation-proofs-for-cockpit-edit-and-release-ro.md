@@ -5,7 +5,7 @@ title: Add GET-after-mutation cache invalidation proofs for cockpit edit and
 status: archived
 priority: nice-to-have
 created: 2026-05-06T03:40:00.756804+00:00
-updated: 2026-05-06T08:25:23.462354+00:00
+updated: 2026-05-06T15:59:07.987429+00:00
 tags:
 - cockpit
 - cache
@@ -449,36 +449,29 @@ Refined AC5 to scope gate to task-owned proofs only. Pre-existing adjacent failu
 ## Audit
 
 ### AC Verification
-| AC Line | Evidence | Status |
-|---------|----------|--------|
-| AC1: title reflected after edit | Exact title equality at tests/test_cockpit_cache_sse_1401.py:150 | PASS |
-| AC2: exact tag replacement after edit | Exact set equality at tests/test_cockpit_cache_sse_1401.py:220 | PASS |
-| AC3: claimed=False after release | Exact boolean assertion at tests/test_cockpit_cache_sse_1401.py:287 | PASS |
-| AC4: prime/mutate/re-read pattern | All 3 tests follow GET/POST/GET with field-inspection at :126/:136/:150, :194/:204/:220, :263/:273/:287 | PASS |
-| AC5: no new failures (task-scoped gate) | quality-runner full suite: task file 3/3 green; 246 failures all pre-existing (memory, PDS, error envelope); no production code changed | PASS |
+| AC | Evidence | Status |
+|----|----------|--------|
+| AC1 — title reflected after edit | Exact title equality at tests/test_cockpit_cache_sse_1401.py:150; prime→mutate→re-read at :126/:136/:146 | PASS |
+| AC2 — exact tag replacement reflected | Exact set equality `== {"new-tag", "another-tag"}` at :220; old-tag setup and precondition assertion | PASS |
+| AC3 — claimed=False after release | Exact boolean assertion at :287; prime→mutate→re-read at :263/:273/:283 | PASS |
+| AC4 — prime→mutate→re-read pattern | All three tests follow GET→POST→GET with field-inspection | PASS |
+| AC5 — no new failures (task-scoped gate) | Task suite 3/3 green; git status clean; no diff to other test files | PASS |
 
 ### Test Results
-- Task-scoped: 3 passed, 0 failed
-- Full suite: 4673 passed, 246 failed (pre-existing from other in-flight tasks; test-only addition with isolated tmp_path cannot regress)
-- Ruff (task file): 0 violations
+- Task-scoped: tests/test_cockpit_cache_sse_1401.py → 3 passed, 0 failed (0.85s)
+- Full suite: 4681 passed, 222 failed — all failures in unrelated modules (memory models, engine accessor, cockpit view 1244, etc.); none in task scope or adjacent cockpit cache files
+- Lint (ruff): 13 workspace errors, 0 in task file
 
-### Reviewer Evidence
-- 3 review cycles; final confidence 0.93, PASS verdict
-- Detailed AC coverage, test quality (all STRONG), security review present
-- AC2 weakness caught in cycle 1 and resolved via test-writer retry
+### Commit Integrity
+- 0a8beeaa test: add GET-after-mutation cache proofs for edit and release routes (#1401, test-writer)
+- 1e9fb275 test: strengthen AC2 tag exact-set assertion for cache invalidation proof (#1401, test-writer)
+- Working tree clean for task file
 
 ### Architect Quality: 4/5
-AC lines were specific and verifiable. One refinement cycle needed (AC5 scoping against pre-existing failures) handled cleanly. Challenger feedback incorporated well (AC2 exact-set requirement).
+Specific, verifiable AC. Initial AC5 formulation was too broad (included pre-existing adjacent failures), requiring one reject-and-refine cycle. Refinement was clean and correctly scoped. Overall: adequate with one minor gap.
 
-### Deduction Breakdown
-- Start: 1.00
-- -0.01: No direct git diff proof of zero modifications to other test files (git log + reviewer evidence used instead)
+### Deductions
+- -0.02: 222 full-suite failures (all unrelated) add noise to cross-task regression assessment
 
-### Confidence: 0.99
+### Confidence: 0.98
 ### Action: Archive
-
-### Commits
-| Commit | Type | Files | Tasks |
-|--------|------|-------|-------|
-| 0a8beeaa | test | tests/test_cockpit_cache_sse_1401.py | #1401 |
-| 1e9fb275 | test | tests/test_cockpit_cache_sse_1401.py | #1401 |
