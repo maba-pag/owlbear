@@ -1,10 +1,10 @@
 ---
 id: 1368
 title: 'P1-05: Test kanban corruption scanner encoding hardening'
-status: in-progress
+status: review
 priority: critical
 created: 2026-05-06T00:58:38.511616+00:00
-updated: 2026-05-06T04:07:53.364626+00:00
+updated: 2026-05-06T04:55:11.758125+00:00
 tags:
 - cockpit
 - audit-remediation
@@ -204,3 +204,61 @@ All 11 tests FAIL (RED confirmed, ruff clean).
 | AC-3: valid UTF-8 returns None | test_valid_utf8_task_returns_none |
 | AC-4: direct import from owlbear_kanban.corruption | verified by module-level imports |
 | AC-5: unpatched code fails | confirmed — all 11 fail |
+[[2026-05-06]]
+REJECT #1368 -> todo | task is RED-by-design test suite and not GREEN-buildable without implementation in counterpart #1369 — test-writer/architect: keep #1368 as RED contract, move implementation to builder task #1369.
+
+## Builder Notes
+- Files changed: none.
+- quality-runner scoped pytest on `tests/test_corruption_1368.py`: 0 passed, 11 failed.
+- Failure causes:
+  - `UnicodeDecodeError` from `detect_corruption()` at `serve/kanban/src/owlbear_kanban/corruption.py:222` for non-UTF8 fixtures.
+  - `ImportError` for missing `ERR_CORRUPT_ENCODING` symbol in `owlbear_kanban.corruption`.
+- Ruff status: clean for `tests/test_corruption_1368.py`.
+- Coverage (informational from scoped run): `owlbear_kanban.corruption` ~15% in this failing RED run.
+- Evidence summary: #1368 is a test-only RED contract task. GREEN cannot be achieved within this task scope without implementing counterpart work in #1369.
+[[2026-05-06]]
+## Test-Writer Notes (re-verification after builder/reviewer bounce)
+
+**Test file:** `tests/test_corruption_1368.py`
+**Class:** `TestFromAC_EncodingHardening`
+
+### Status
+Test file was already complete from prior cycle (initial write + AC-2 detail strengthening per first review). Re-verification confirms all tests still fail correctly.
+
+### Test counts by category
+
+| Category | Count |
+|----------|-------|
+| Happy path (valid UTF-8 → None) | 1 |
+| Error path (non-UTF8 raises/returns) | 10 |
+| **Total** | **11** |
+
+All 11 FAIL. Ruff: clean.
+
+### Failure modes (re-verified 2026-05-06)
+
+| Tests | Failure type | Root cause |
+|-------|-------------|------------|
+| 8 tests (non-code/file_path/detail variants) | `UnicodeDecodeError: 'utf-8' codec can't decode byte 0x80` | `corruption.py:222` catches `OSError` only |
+| 3 tests (`*_code_is_encoding`, `test_valid_utf8_task_returns_none`) | `ImportError: cannot import name 'ERR_CORRUPT_ENCODING'` | Code added by #1369 |
+
+### AC coverage
+
+| AC line | Tests |
+|---------|-------|
+| AC-1: non-UTF8 in tasks/ does not raise | `test_non_utf8_in_tasks_dir_does_not_raise_unicode_error`, `test_non_utf8_in_tasks_dir_returns_corruption_error` |
+| AC-2: tasks/ CorruptionError shape (.code, .file_path, .detail w/ encoding keywords) | `test_non_utf8_in_tasks_dir_code_is_encoding`, `test_non_utf8_in_tasks_dir_file_path_is_set`, `test_non_utf8_in_tasks_dir_detail_is_non_empty` |
+| AC-1: non-UTF8 in archive/ does not raise | `test_non_utf8_in_archive_dir_does_not_raise_unicode_error`, `test_non_utf8_in_archive_dir_returns_corruption_error` |
+| AC-2: archive/ CorruptionError shape | `test_non_utf8_in_archive_dir_code_is_encoding`, `test_non_utf8_in_archive_dir_file_path_is_set`, `test_non_utf8_in_archive_dir_detail_is_non_empty` |
+| AC-3: valid UTF-8 returns None | `test_valid_utf8_task_returns_none` |
+| AC-4: direct import from owlbear_kanban.corruption | verified by module-level import at line 20 |
+| AC-5: unpatched code fails | confirmed — all 11 fail |
+
+### Previous reviewer gap: resolved
+AC-2 detail assertions now use keyword matching (`"encoding"`, `"decode"`, `"utf-8"`, `"utf8"`, `"unicode"`) — a generic non-empty string no longer passes. Assertions at lines 195–198 and 283–286.
+[[2026-05-06]]
+## Builder Notes
+- Non-implementation task detected (`type:test`) with explicit implementation counterpart `#1369`.
+- No code changes were made by builder.
+- Applied GREEN pass-through rule from `w-tdd-green` Step 0a.
+- Routing decision: advance to `review` for pipeline continuity on this test-only task.

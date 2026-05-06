@@ -1,10 +1,10 @@
 ---
 id: 1363
 title: Cockpit audit remediation
-status: todo
+status: in-progress
 priority: critical
 created: 2026-05-06T00:58:14.547083+00:00
-updated: 2026-05-06T04:08:40.542907+00:00
+updated: 2026-05-06T05:05:36.787833+00:00
 tags:
 - cockpit
 - audit-remediation
@@ -197,3 +197,43 @@ Precedent: #1316 (Knowledge Engine Activation) — parent container stays `in-pr
 ### Action Taken: Remediated reviewer findings. Parent container approved to `todo` — stays in-progress as live container per completion contract. Child tasks #1364–#1375 reviewed individually.
 [[2026-05-06]]
 Remediated reviewer findings from Pass 1. Removed `docs` tag (caused incorrect non-impl pass-through routing), added `parent` tag, wrote explicit Completion Contract and AC following #1316 parent-container precedent. Parent stays in-progress as live container; advances to review only after all 12 children (#1364–#1375) reach done.
+[[2026-05-06]]
+## Test-Writer Notes
+- **Pass-through — non-implementation container task.**
+- Test file: none created.
+- AC lines: all `td:0` (container routing, child completion trigger, parent status tracking) — no testable Python interfaces.
+- Completion Contract explicitly states: "Test-writer and builder: pass-through with NO advancement beyond `in-progress`."
+- This task stays `in-progress` as a live parent container while child tasks #1364–#1375 advance independently.
+- No tests written. No quality-runner run needed.
+[[2026-05-06]]
+## Builder Notes
+- Pass-through on non-implementation live parent container task; no source or test files changed.
+- Completion Contract requires test-writer and builder to perform pass-through with no advancement beyond in-progress.
+- Child tasks #1364-#1375 remain the implementation/test deliverables; this parent remains active until all children reach done.
+- Tests: not run (td:0 container scope).
+- Coverage: N/A.
+- ruff: N/A.
+- Evidence: task body Completion Contract and AC lines are all td:0 container-routing checks.
+[[2026-05-06]]
+## Builder Notes
+- Pass-through on non-implementation live parent container task; no source or test files changed.
+- Completion Contract requires test-writer and builder to perform pass-through with no advancement beyond `in-progress`.
+- Child tasks #1364-#1375 remain the implementation/test deliverables; this parent remains active until all children reach `done`.
+- Tests: not run (td:0 container scope).
+- Coverage: N/A.
+- ruff: N/A.
+- Evidence: task body Completion Contract and AC lines are all td:0 container-routing checks.
+
+### Reflection
+- Container tasks need explicit routing contracts to prevent accidental pipeline advancement.
+- Removing non-impl pass-through tags on live parents avoids false `review` transitions.
+- Embedding snapshot disclaimers in parent planning text prevents stale-state misreads downstream.
+[[2026-05-06]]
+## Builder Notes
+- Pass-through on non-implementation live parent container task; no source or test files changed.
+- Completion Contract requires test-writer and builder to perform pass-through with no advancement beyond in-progress.
+- Child tasks #1364-#1375 remain the implementation/test deliverables; this parent remains active until all children reach done.
+- Tests: not run (td:0 container scope).
+- Coverage: N/A.
+- ruff: N/A.
+- Evidence: task body Completion Contract and AC lines are all td:0 container-routing checks.

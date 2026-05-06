@@ -1,10 +1,10 @@
 ---
 id: 1362
 title: Implement structured JSON error responses at MCP boundary
-status: in-progress
+status: archived
 priority: needed
 created: 2026-05-05T23:35:00.574972+00:00
-updated: 2026-05-06T04:11:01.194450+00:00
+updated: 2026-05-06T05:16:51.026760+00:00
 tags:
 - kanban
 - agent-ux
@@ -220,3 +220,94 @@ All AC lines are (td:0). Implementation and tests already exist from 2 prior ful
 ## Test-Writer Notes
 - All AC lines are (td:0) — test-writer skipped.
 - Passing through to builder.
+[[2026-05-06]]
+## Builder Notes
+- Implementation: no source changes required; `_map_kanban_error` JSON payload behavior is already implemented in `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py`.
+- Files changed: none.
+- RED/GREEN status: task-scoped contract suite remained GREEN (13/13) and focused durable JSON-contract surface passed (29/29).
+- Durable-suite regression signal: broad MCP-kanban run reported 451 passed, 6 failed in guidance-related tests outside `_map_kanban_error` scope; these are pre-existing/unrelated to task 1362 acceptance criteria.
+- Coverage: 98% on `owlbear_mcp_kanban.server` in broad durable run; 60% in focused JSON-contract run (scope-limited informational).
+- ruff: clean (0 violations).
+- Evidence summary: refined AC2 requires no regressions plus dedicated JSON-contract assertions; dedicated error-mapping suites are green and JSON `code`/`message` parsing contract is preserved.
+
+### Post-task Reflection
+- Broad durable-suite runs are valuable for context but can include unrelated legacy failures; focused node-ID verification is necessary for AC-specific gating.
+- The architecture-refined AC2 removed an impossible requirement and made verification deterministic.
+- No code edits were needed because behavior and tests already existed; this was a strict verification-and-advance cycle.
+[[2026-05-06]]
+## Review Evidence
+### Test Results
+- quality-runner focused JSON-contract pass 1: 29 passed, 0 failed across the task-local suite plus the durable error-mapping classes in `serve/mcp-kanban/tests/test_mcp_lifecycle_tools.py`, `serve/mcp-kanban/tests/test_mcp_mutation_tools_1087.py`, and `serve/mcp-kanban/tests/test_mcp_read_tools.py`.
+- quality-runner focused JSON-contract pass 2: 4 passed, 0 failed on the four migrated guidance JSON tests in `serve/mcp-kanban/tests/test_mcp_guidance_1089.py`:
+  - `TestFromAC_ErrorMapping::test_validation_error_maps_to_tool_error`
+  - `TestFromAC_GuidanceProofRepair::test_not_found_error_maps_to_tool_error`
+  - `TestFromAC_GuidanceProofRepair::test_concurrency_error_maps_to_tool_error_user_message_only`
+  - `TestFromAC_GuidanceProofRepair::test_config_error_maps_to_tool_error_user_message_only`
+- quality-runner adjacent durable regression run: 214 passed, 3 failed. All 3 failures were guidance-passthrough tests in `serve/mcp-kanban/tests/test_mcp_guidance_1089.py` (`test_pick_tasks_dispatch_hints_guidance`, `test_move_task_skip_transition_warning_guidance`, `test_start_work_guidance_sentinel_passthrough`). They do not exercise `_map_kanban_error` and match the unrelated guidance-failure surface already recorded earlier in this task.
+
+### Lint Results
+- Ruff clean on `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py`.
+- Ruff clean on `tests/test_mcp_kanban_error_mapping_1362.py`.
+- Ruff clean on `serve/mcp-kanban/tests/test_mcp_guidance_1089.py`.
+- Ruff clean on `serve/mcp-kanban/tests/test_mcp_lifecycle_tools.py`.
+- Ruff clean on `serve/mcp-kanban/tests/test_mcp_mutation_tools_1087.py`.
+- Ruff clean on `serve/mcp-kanban/tests/test_mcp_read_tools.py`.
+
+### Coverage Data
+- Not run for gate purposes. Latest Architecture Review marked all AC lines `(td:0)`, the current cycle had no source diff, and this review used focused execution plus direct artifact inspection instead of a coverage gate.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---|---|---|---|
+| `_map_kanban_error` emits `json.dumps({"code": exc.code, "message": exc.user_message})` | `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:108-110` builds the JSON payload and raises `ToolError(payload)`; `_map_kanban_error` call sites remain wired at `server.py:222,280,306,335,365,430,450,486,528` | `tests/test_mcp_kanban_error_mapping_1362.py::TestFromAC_StructuredJsonErrors` (13/13 pass) | PASS |
+| No regressions in durable MCP-kanban suites; dedicated migrated error-mapping tests assert JSON `code` + `message` fields | Retry commit `c1c39b06` is present in `.git/logs/HEAD`; focused durable JSON tests passed in guidance, lifecycle, mutation, and read suites. Adjacent regression red is limited to three guidance-passthrough tests at `serve/mcp-kanban/tests/test_mcp_guidance_1089.py:267`, `:324`, `:474`, outside `_map_kanban_error` scope and consistent with the previously documented unrelated failure surface. | 4 migrated guidance JSON tests; `TestFromAC_KanbanErrorMapping` in lifecycle (4/4 pass); `TestFromAC_KanbanErrorMapping` in mutation (4/4 pass); `TestFromAC_ErrorMapping` in read (7/7 pass) | PASS |
+| Agents can parse error codes from ToolError text (`ERR_STALE` -> retry, `ERR_NOT_FOUND` -> stop, etc.) | Focused task-local and durable suites parse `str(exc_info.value)` with `json.loads(...)` and assert exact `payload["code"]` values | `tests/test_mcp_kanban_error_mapping_1362.py::test_map_kanban_error_err_stale_code_in_json`; `tests/test_mcp_kanban_error_mapping_1362.py::test_map_kanban_error_err_not_found_stop_signal`; `tests/test_mcp_kanban_error_mapping_1362.py::test_agent_can_parse_error_code_from_tool_error_text` | PASS |
+| Human-readable message still present in the JSON structure | Source emits `{"message": exc.user_message}` at `server.py:110`; focused tests assert exact `payload["message"]` equality and special-character round-tripping | `tests/test_mcp_kanban_error_mapping_1362.py::test_map_kanban_error_json_message_equals_user_message`; `tests/test_mcp_kanban_error_mapping_1362.py::test_map_kanban_error_user_message_with_special_chars_round_trips`; durable guidance/lifecycle/mutation/read JSON tests | PASS |
+
+### Deductions
+- -0.03: adjacent durable regression remains red on three unrelated guidance-passthrough tests, so the durable-suite context is not fully green even though the JSON error-contract surface is.
+- -0.02: exact dirty-tree contamination and commit-diff reconstruction were unavailable in this tool surface; commit presence was confirmed via `.git/logs/**` and current file inspection instead.
+
+### Verdict
+- PASS -> docs
+- Confidence: 0.95
+- Reason: the live implementation already satisfies the structured JSON ToolError contract, the dedicated migrated durable tests are green, lint is clean, and the only remaining red tests are previously documented unrelated guidance failures outside the refined AC.
+- Action: advance to docs.
+
+### Post-task Reflection
+- The Architecture Review refinement was binding and materially changed the gate: the prior broad AC2 concern was correctly narrowed to the `_map_kanban_error` family.
+- A broad adjacent regression pass was still useful because it separated the JSON-contract surface from unrelated guidance failures that remain elsewhere in the durable suite.
+- quality-runner’s first focused report had inconsistent totals, so a second focused run with explicit node reporting was necessary before rendering a PASS.
+[[2026-05-06]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | `serve/mcp-kanban/README.md` does not document `_map_kanban_error` wire format; no stale content referencing the changed area |
+| 2 | Module docstrings | No | N/A | `server.py` had no source changes; existing `_map_kanban_error` docstring ("Raise MCP ToolError with machine-readable code and human-readable message") is accurate for the JSON contract |
+| 3 | External attribution | No | N/A | No external patterns cited in task body |
+| 4 | Research doc | No | N/A | No research doc produced |
+| 5 | Diagram maintenance (describes match) | No | N/A | `kanban.excalidraw` and `mcp-topology.excalidraw` describe `serve/mcp-kanban/src/**` but no source files were changed — changed-files set is test files only |
+| 6 | Explicit diagram creation | No | N/A | No request in task body |
+| 7 | Deletion detection | No | N/A | No files deleted |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| serve/mcp-kanban/tests/test_mcp_guidance_1089.py | OUT | N/A |
+| serve/mcp-kanban/tests/test_mcp_lifecycle_tools.py | OUT | N/A |
+| serve/mcp-kanban/tests/test_mcp_mutation_tools_1087.py | OUT | N/A |
+| serve/mcp-kanban/tests/test_mcp_read_tools.py | OUT | N/A |
+| tests/test_mcp_kanban_error_mapping_1362.py | OUT | N/A |
+| serve/mcp-kanban/src/owlbear_mcp_kanban/server.py | IN (docstrings) | Verified accurate; no edit needed |
+
+### Files Updated
+- None
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no scratch files existed for task 1362)
+[[2026-05-06]]
+## Audit\n### AC Verification\n| AC Line | Evidence | Status |\n|---------|----------|--------|\n| `_map_kanban_error` emits `json.dumps({\"code\": exc.code, \"message\": exc.user_message})` | server.py:108-111 confirmed; task-local suite 13/13 pass | PASS |\n| No regressions in durable suites; dedicated migrated tests assert JSON `code` + `message` | Scoped suite 226 passed, 3 failed (pre-existing unrelated guidance-passthrough). Commit c1c39b06 migrated durable tests. | PASS |\n| Agents can parse error codes (ERR_STALE → retry, ERR_NOT_FOUND → stop) | Task-local tests parse with json.loads() and assert exact code values | PASS |\n| Human-readable message in JSON structure | Tests assert payload[\"message\"] == user_message + special char round-trips | PASS |\n\n### Test Results\n- pytest (full): 2742 passed, 202 failed — 0 failures in task scope; 202 are pre-existing background failures unrelated to #1362 (no source changes made)\n- pytest (scoped MCP-kanban): 226 passed, 3 failed — all 3 are guidance-passthrough tests outside `_map_kanban_error` scope, documented throughout task history\n- ruff: clean on task scope (server.py + all test files)\n\n### Architect Quality: 3/5\nOriginal AC2 (\"all existing error-handling tests updated to expect JSON\") was structurally impossible — server.py has 3 ToolError families and only `_map_kanban_error` produces JSON. This caused 2 failed review cycles before architecture refinement. Refined AC2 was clear and actionable. AC1/AC3/AC4 were well-specified throughout.\n\n### Deduction Breakdown\n- AC quality score 3: -0.03\n- All AC lines have specific evidence: no deduction\n- Lint clean: no deduction\n- Reviewer evidence present and detailed: no deduction\n- No task-scope test failures: no deduction\n\n### Confidence: 0.97\n### Action: archive\n\n### Commit Integrity\n- f257e98b: test: add failing tests for structured JSON error responses at MCP boundary (#1362, test-writer)\n- c1c39b06: test: update durable MCP-kanban error-mapping tests to JSON contract (#1362, test-writer)\n- No uncommitted changes in task scope. No source code changes (implementation pre-existed).

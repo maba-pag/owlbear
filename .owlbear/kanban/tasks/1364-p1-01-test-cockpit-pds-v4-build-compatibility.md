@@ -1,10 +1,10 @@
 ---
 id: 1364
 title: 'P1-01: Test Cockpit PDS v4 build compatibility'
-status: review
+status: in-progress
 priority: critical
 created: 2026-05-06T00:58:30.519362+00:00
-updated: 2026-05-06T04:09:28.697833+00:00
+updated: 2026-05-06T05:05:28.412240+00:00
 tags:
 - cockpit
 - audit-remediation
@@ -165,3 +165,105 @@ Architecture review complete. All 10 criteria PASS. AC is verifiable: build exit
 - Workaround applied: added explicit anti-suppression assertions in source and tsconfig scope.
 - Pattern discovered: type:test tasks may still need builder-owned test hardening when architecture delegates RED-proof ownership to builder.
 - Quality gap addressed: moved AC2 from output-only signal to output + configuration/source guard coverage.
+[[2026-05-06]]
+## Review Evidence
+### Test Results
+- quality-runner scoped run on `tests/test_cockpit_pds_build_compat_1364.py`: 4 passed, 6 failed, 0 skipped, `pytest` exit 1.
+- quality-runner confirmed all 10 collected tests executed; repo `pyproject.toml` has no `-x` or `--maxfail` early-stop flag.
+- RED failures still match the audited broken snapshot: `test_npm_build_exits_zero`, 4 parametrized `test_known_pds_v4_type_failures_absent[...]` cases, and `test_pending_dr_body_type_mismatch_absent`.
+- New anti-suppression guards pass on the current snapshot: 3 directive-scan cases plus `test_tsconfig_does_not_disable_typecheck`.
+
+### Lint Results
+- Ruff scoped to `tests/test_cockpit_pds_build_compat_1364.py`: clean, `ruff` exit 0.
+
+### Coverage
+- Not applicable for this review. The artifact under review is a Python RED-proof harness for the frontend build gate; no Python source module is the subject of task #1364.
+
+### Scope / Integrity
+- Builder commit presence verified from `.git/logs/HEAD`: `7240af07` (`test: harden pds build red proof against suppression (#1364, builder)`).
+- One prior `## Review Evidence` section already exists in the task body, so this is the second review cycle. Reviewer loop-breaker routing applies on FAIL.
+- Diff-scoped changed-file and dirty-tree verification were not fully available from the current tool surface; live file inspection and the builder note both point to `tests/test_cockpit_pds_build_compat_1364.py` as the retry surface.
+
+### AC Compliance
+| AC Line | Evidence | Status |
+|---|---|---|
+| AC1: a focused frontend verification path proves that `npm run build` in `serve/cockpit/web` must pass cleanly | `tests/test_cockpit_pds_build_compat_1364.py:23` runs `npm run build`, and `tests/test_cockpit_pds_build_compat_1364.py:59` asserts zero exit status. The live build script is still the canonical sync-to-main path at `serve/cockpit/web/package.json:11` (`tsc -b && vite build`). | PASS |
+| AC2: coverage or type-focused assertions catch the known PDS v4 component usage failures without broad type suppression | The retry added source/config guards at `tests/test_cockpit_pds_build_compat_1364.py:120` and `tests/test_cockpit_pds_build_compat_1364.py:129`, but the proof file contains no assertion pinning `package.json` or `tsc -b`. A grep of the proof file found no `package.json` or `tsc -b` references. That leaves a broad bypass open: `#1365` could weaken `npm run build` to skip type-checking, make the audited fragments disappear, and this harness would go green. | FAIL |
+| AC3: the PendingDR and ResolveModal body type mismatch is represented in the failing proof if it is still present | `tests/test_cockpit_pds_build_compat_1364.py:99` asserts the body-mismatch fragment is absent. The live source still exposes the mismatch: `serve/cockpit/web/src/components/ResolveModal.tsx:14` and `serve/cockpit/web/src/components/ResolveModal.tsx:19` require `PendingDRWithBody`, while `serve/cockpit/web/src/hooks/usePendingDRs.ts:6` defines `PendingDR` without `body`, and `serve/cockpit/web/src/Shell.tsx:187` plus `serve/cockpit/web/src/Shell.tsx:188` pass `selectedDR` straight into `ResolveModal`. quality-runner reports this test failing on the current snapshot. | PASS |
+| AC4: the proof fails against the audited broken state and is suitable for `#1365` to satisfy | The harness is still RED today (`4 passed / 6 failed`), but it is not yet suitable for the GREEN counterpart because it does not fail if the future fix weakens the `build` script instead of fixing the PDS v4 incompatibilities. | FAIL |
+
+### Critical Checks
+- Security review: PASS. The test invokes a fixed repo-local build command with a fixed cwd; no user-controlled shell interpolation or path traversal was observed.
+- Test integrity: PASS. This is a `type:test` task and the Architecture Review explicitly delegated the RED-proof file to the builder.
+- Test quality: FAIL. The proof executes whatever `npm run build` means at runtime but never asserts that the command remains the canonical `tsc -b && vite build` delivery gate at `serve/cockpit/web/package.json:11`. That is a false-green path for AC2/AC4.
+- Builder process quality: CLEAN. One retry, materially different approach, no loop in implementation tactics.
+
+### Deductions
+- `-0.10` AC2 remains non-discriminating against a build-script bypass. Source/tsconfig suppression guards were added, but the harness still does not pin the canonical type-checking build command.
+- `-0.04` AC4 remains incomplete because the proof is RED on the current snapshot but still not safe as a GREEN gate for `#1365`.
+- `-0.02` Dirty-tree/diff-scoped integrity evidence was partially reconstructed from task notes and `.git/logs` rather than a direct `git diff-tree` / `git status` surface.
+
+### Verdict
+- FAIL -> backlog
+- Confidence: 0.84
+- Routing rationale: this is the second review failure on the same task. The retry closed part of the prior gap, but the proof still leaves a canonical-build-script bypass open. Under the reviewer loop-breaker rule, the task returns to backlog for architecture-level clarification before another builder cycle.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Refine AC2/AC4 so the proof must pin the canonical Cockpit delivery build script, not only execute `npm run build`. Make the requirement explicit that the harness fails if `serve/cockpit/web/package.json` drops `tsc -b` from the `build` script. | `.owlbear/kanban/tasks/1364-p1-01-test-cockpit-pds-v4-build-compatibility.md`; `tests/test_cockpit_pds_build_compat_1364.py`; `serve/cockpit/web/package.json` | Current proof file has no `package.json` / `tsc -b` assertion; `serve/cockpit/web/package.json:11` is the only live source proving the canonical gate today. |
+| 2 | architect | Re-issue the builder-facing proof requirement with an executable assertion shape for the build-gate contract, not just a prose note to “keep the delivery gate proof intact.” | `.owlbear/kanban/tasks/1364-p1-01-test-cockpit-pds-v4-build-compatibility.md`; `tests/test_cockpit_pds_build_compat_1364.py` | Prior reviewer follow-up at task body line 144 required the real build gate to stay intact, but the retry only added source/tsconfig guards and still never encoded the build-script contract in the test file. |
+
+### Post-task Reflection
+- The builder retry improved AC2 materially, but it translated the previous follow-up only partially: source/config suppression is guarded, build-script weakening is not.
+- For RED-proof tasks that shell out to `npm run build`, the script definition itself is part of the contract and often needs a direct assertion.
+- The first quality-runner summary underreported the failure surface; a second scoped run was necessary to confirm all 10 tests executed and no early-stop flag was involved.
+[[2026-05-06]]
+
+## Architecture Review (Cycle 2 — Reviewer Return)
+
+### Reason for Return
+Reviewer identified a false-green bypass path: the proof runs `npm run build` but never asserts what `build` means. If #1365 removes `tsc -b` from `package.json` `scripts.build`, all type-error assertions pass vacuously. Two review cycles confirmed the gap persists after the first builder retry.
+
+### AC Refinement
+| AC | Change | Rationale |
+|---|---|---|
+| AC2 | Added: "The proof must assert that `serve/cockpit/web/package.json` `scripts.build` contains `tsc -b`, failing if the build command drops type-checking." | Closes the build-script-weakening bypass identified by the reviewer. |
+| AC4 | Added: "The proof is not suitable if the build script could be weakened to skip `tsc -b` without the proof detecting it." | Makes the suitability criterion for #1365 discriminating. |
+
+### Refined Acceptance Criteria
+- AC1: A focused frontend verification path proves that `npm run build` in `serve/cockpit/web` must pass cleanly. (td:1)
+- AC2: Coverage or type-focused assertions catch the known PDS v4 component usage failures without broad type suppression. The proof must assert that `serve/cockpit/web/package.json` `scripts.build` contains `tsc -b`, failing if the build command drops type-checking. (td:1)
+- AC3: The PendingDR and ResolveModal body type mismatch is represented in the failing proof if it is still present. (td:1)
+- AC4: The proof fails against the audited broken state and is suitable for #1365 to satisfy. The proof is not suitable if the build script could be weakened to skip `tsc -b` without the proof detecting it. (td:1)
+
+### Evaluation
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | One concern: prove PDS v4 build failure with anti-bypass guards |
+| Interface clarity | PASS | Build exit code + error fragments + script pinning = clear I/O |
+| Dependency correctness | PASS | No deps, correct for Layer 1 |
+| Module layering | PASS | Test-only task, no module changes |
+| TDD compliance | PASS | This IS the RED phase test, paired with #1365 |
+| KISS/YAGNI | PASS | Minimal scope: verify build state + pin build contract |
+| Premise challenge | PASS | sync-to-main requires passing build; blocking delivery |
+| Pattern consistency | PASS | Extends existing test with ~5 lines for build-script assertion |
+| Security surface | PASS | No new system boundaries |
+| Single domain | PASS | cockpit-web only |
+
+### Builder Guidance
+Add one assertion to `tests/test_cockpit_pds_build_compat_1364.py`: read `serve/cockpit/web/package.json`, parse `scripts.build`, and assert it contains `tsc -b`. This can be a new test method in `TestAc2NoBroadTypeSuppressionGuards` or a standalone test class. The existing `build_result` fixture already targets `_WEB`; reuse the `_WEB` path constant. Expected: this assertion passes today (the script IS `tsc -b && vite build`), joining the 4 already-passing anti-suppression guards.
+
+### Challenge
+Challenger: SKIP (all AC lines td:1, refinement-only cycle, no new architectural decisions). Self-challenge: the only change is adding a 5-line build-script assertion requirement — no risk of scope creep or architectural regression.
+
+### Verdict: APPROVE → todo
+
+[[2026-05-06]]
+Architecture review cycle 2 (reviewer return). Refined AC2 and AC4 to require build-script-pinning assertion: proof must assert `package.json` `scripts.build` contains `tsc -b`, closing the false-green bypass path. All 10 criteria PASS. Builder needs ~5 lines added to existing test file. Tagged type:test for test-writer pass-through.
+[[2026-05-06]]
+## Test-Writer Notes
+- Non-implementation task (tagged type:test) — no tests applicable.
+- Architecture Review Cycle 2 explicitly directs test-writer pass-through: "Tagged type:test for test-writer pass-through. Builder writes the failing build proof directly."
+- Retry context noted: prior Test-Writer Notes, two Builder Notes, and two Review Evidence sections present. Architect refined AC2/AC4 and provided explicit builder guidance (~5-line build-script assertion).
+- Passing through to builder.

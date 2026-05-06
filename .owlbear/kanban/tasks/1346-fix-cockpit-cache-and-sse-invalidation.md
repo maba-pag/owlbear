@@ -1,10 +1,10 @@
 ---
 id: 1346
 title: Fix Cockpit cache and SSE invalidation
-status: in-progress
+status: done
 priority: critical
 created: 2026-05-04T17:27:34.924833+00:00
-updated: 2026-05-06T04:08:02.707274+00:00
+updated: 2026-05-06T05:09:37.580495+00:00
 tags:
 - sync-blocker
 - cockpit
@@ -16,7 +16,7 @@ depends_on:
 - 1345
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-06T05:09:37.580495+00:00
 archival_reason:
 archival_refs: []
 ---
@@ -580,3 +580,126 @@ The edit/release proof gap is addressed by **mechanism equivalence**: all engine
 - Arch reviewer handled both concerns via AC3 clarification (mechanism equivalence) and follow-up recommendations; explicitly stated "Test-writer: PROCEED (already processed — 154 tests green)".
 - Scoped verification: 154 passed, 0 failed (tests/test_cockpit_cache_sse_1346.py + tests/test_cockpit_read_api.py + tests/test_cockpit_events_1234.py + tests/test_cockpit_events_1262.py).
 - Passing through to builder.
+[[2026-05-06]]
+## Builder Notes
+- Attempted GREEN verification via required `quality-runner` subagent (2 runs). Both runs failed with terminal instrumentation/session instability (`SIGINT`, interrupted commands), and the subagent returned `TOOL_UNAVAILABLE`.
+- Per pipeline fallback, executed direct scoped commands:
+  - `uv run pytest tests/test_cockpit_cache_sse_1346.py tests/test_cockpit_read_api.py tests/test_cockpit_events_1234.py tests/test_cockpit_events_1262.py -q --tb=short`
+  - retry with `-n 0`
+  - coverage run with `--cov=owlbear_cockpit.cache --cov=owlbear_cockpit.routes.read --cov=owlbear_cockpit.routes.events --cov-report=term-missing --cov-fail-under=0`
+  - retry with `-n 0`
+- All pytest/coverage attempts were interrupted before stable completion summary; no reliable pass/fail totals or coverage percentages were emitted in this session.
+- Lint fallback succeeded:
+  - `uv run ruff check serve/cockpit/src/owlbear_cockpit/cache.py serve/cockpit/src/owlbear_cockpit/routes/read.py serve/cockpit/src/owlbear_cockpit/routes/events.py tests/test_cockpit_cache_sse_1346.py tests/test_cockpit_read_api.py tests/test_cockpit_events_1234.py tests/test_cockpit_events_1262.py`
+  - Result: `All checks passed!`
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Re-run scoped quality gate for task 1346 in a fresh/stable terminal session and capture full pytest + coverage evidence before advancing | tests/test_cockpit_cache_sse_1346.py, tests/test_cockpit_read_api.py, tests/test_cockpit_events_1234.py, tests/test_cockpit_events_1262.py, serve/cockpit/src/owlbear_cockpit/cache.py, serve/cockpit/src/owlbear_cockpit/routes/read.py, serve/cockpit/src/owlbear_cockpit/routes/events.py | quality-runner returned TOOL_UNAVAILABLE twice; direct fallback pytest runs interrupted with SIGINT/KeyboardInterrupt |
+
+Post-task reflection:
+- The blocker is environment/tooling stability, not a discovered source-code failure.
+- Scoped retries with and without xdist were both interrupted, indicating terminal-level instability in this run.
+- Keeping the attempt scope narrow still preserved useful lint evidence while avoiding unrelated-suite noise.
+[[2026-05-06]]
+## Builder Notes
+- Validation-only builder cycle for task #1346; no source edits required in this pass.
+- Scoped quality-runner verification completed successfully:
+  - tests/test_cockpit_cache_sse_1346.py
+  - tests/test_cockpit_read_api.py
+  - tests/test_cockpit_events_1234.py
+  - tests/test_cockpit_events_1262.py
+  - Result: 154 passed, 0 failed, 0 skipped.
+- Lint status: ruff clean on touched source/test files.
+- Coverage on touched modules:
+  - owlbear_cockpit.cache: 92%
+  - owlbear_cockpit.routes.read: 98%
+  - owlbear_cockpit.routes.events: 100%
+- Evidence summary: AC-focused cache/SSE invalidation suites are stable and green in a single scoped run, resolving the prior tooling-stability blocker from the previous builder attempt.
+
+Post-task reflection:
+- Running the required verification through quality-runner in one scoped pass produced deterministic evidence.
+- No implementation deltas were needed; this cycle closed an execution-evidence gap only.
+- Keeping scope limited to AC-relevant suites avoided unrelated regression noise while preserving strong coverage proof.
+[[2026-05-06]]
+## Review Evidence
+### Test Results
+- quality-runner scoped: 154 passed, 0 failed, 0 skipped
+- Reviewed suites: tests/test_cockpit_cache_sse_1346.py, tests/test_cockpit_read_api.py, tests/test_cockpit_events_1234.py, tests/test_cockpit_events_1262.py
+
+### Lint Results
+- ruff clean on serve/cockpit/src/owlbear_cockpit/cache.py, serve/cockpit/src/owlbear_cockpit/routes/read.py, serve/cockpit/src/owlbear_cockpit/routes/events.py, and the four reviewed test files
+- VS Code diagnostics: no errors in reviewed source, tests, or serve/cockpit/web/src/hooks/EventSourceProvider.tsx
+
+### Coverage
+- owlbear_cockpit.cache: 91%
+- owlbear_cockpit.routes.read: 98%
+- owlbear_cockpit.routes.events: 100%
+
+### AC Compliance
+| AC Line | Evidence | Status |
+|---|---|---|
+| AC1 | serve/cockpit/src/owlbear_cockpit/cache.py:27 builds a directory signature over sorted direct-child .md names plus mtimes, while tests/test_cockpit_cache_sse_1346.py:236 and :342 plus tests/test_cockpit_read_api.py:859 and :925 prove delete, rename, and create/edit change detection without raw max-mtime semantics | PASS |
+| AC2 | serve/cockpit/src/owlbear_cockpit/routes/read.py:81-121 scans once at :90, decides off changed_since at :92, reloads via CockpitView.list_tasks, then commits the signature at :95; tests/test_cockpit_cache_sse_1346.py:379 and :411 prove deleted and archived tasks disappear on the next GET | PASS |
+| AC3 | tests/test_cockpit_cache_sse_1346.py:455, :505, and :565 prove same-mtime archive detection and route-driven invalidation. Direct source read closes the prior review gap: the read path no longer rescans before deciding, and edit, move, and release all rewrite the same task-file surface through the engine write path at serve/kanban/src/owlbear_kanban/engine.py:1179-1185, :1271-1301, and :1481-1487; fresh list reads return new TaskSummary projections at serve/kanban/src/owlbear_kanban/engine.py:721 and :731, so the move-route proof is valid mechanism evidence for summary-field mutations too | PASS |
+| AC4 | serve/cockpit/src/owlbear_cockpit/routes/events.py:83-109 synthesizes numeric mtimes for deleted paths and serve/cockpit/src/owlbear_cockpit/routes/events.py:113-123 guarantees changed payloads on repeated emissions; tests/test_cockpit_cache_sse_1346.py:650, :677, :747 and tests/test_cockpit_events_1234.py:457 prove delete-only emission, numeric payloads, and repeated-mtime differentiation; serve/cockpit/web/src/hooks/EventSourceProvider.tsx:139 still requires numeric payloads | PASS |
+| AC5 | serve/cockpit/src/owlbear_cockpit/routes/events.py:36-54 and :64-77 watch and classify archive .md changes as tasks-changed; tests/test_cockpit_events_1262.py:164 and :413 plus tests/test_cockpit_cache_sse_1346.py:839 and :864 prove archive-watch invalidation without leaking archived tasks into the active list | PASS |
+| AC6 | tests/test_cockpit_cache_sse_1346.py:925 and :964 prove activity-changed and decisions-changed still emit alongside archive-driven tasks-changed | PASS |
+| AC7 | Durable coverage now includes non-newest delete, non-newest archive, delete-only batch, mixed survivor batch, and mutation-route invalidation at tests/test_cockpit_cache_sse_1346.py:236, :379, :411, :565, :650, :839, tests/test_cockpit_events_1234.py:521, tests/test_cockpit_events_1262.py:1031, and tests/test_cockpit_read_api.py:859 | PASS |
+
+### Test Integrity
+- No weakened or removed TestFromAC assertions found in the current snapshot.
+- The earlier reviewer fail points are now closed by direct proof at tests/test_cockpit_cache_sse_1346.py:565 and :747.
+- Full commit-diff immutability proof was not available from the current tool surface.
+
+### Informational
+- Some durable test docstrings still describe pre-1346 broken behavior even though the executable assertions now match the new contract.
+- The cache property name last_mtime in serve/cockpit/src/owlbear_cockpit/cache.py:88 now represents the last committed signature, not a literal filesystem mtime.
+
+### Deductions
+- -0.02 dirty-tree contamination check unavailable from the current tool surface
+- -0.02 full commit-diff proof for TestFromAC immutability unavailable from the current tool surface
+- Confidence: 0.96
+
+### Verdict
+PASS. Fresh scoped quality evidence is green, AC1-AC7 are satisfied in the current snapshot, and the latest architecture clarification on AC3 is consistent with the live code.
+
+### Action
+Advance to docs.
+
+Post-task reflection:
+- The key review question was AC3: whether the single move-route test could false-green summary-field mutations. That required direct code verification of the shared engine write path and fresh TaskSummary projection behavior, not just test results.
+- The current read path commits the signature only after a successful reload, so the earlier intermediate concern about pre-commit stale cache state no longer applies to this snapshot.
+- Tool-surface limits still block dirty-tree and full git-diff verification, so a small confidence deduction remains on an otherwise clean pass.
+[[2026-05-06]]
+## Docs Gate
+
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | `serve/cockpit/README.md` covers API surface only (no cache/SSE internals). Root `README.md` covers launch commands only. No prose docs reference changed internals. |
+| 2 | Module docstrings | Yes | Verified | Previous doc-writer cycle (docs gate on 2026-05-06) already updated `MtimeScanCache` class docstring to "directory-signature changes", `last_mtime` to "last recorded signature", `CockpitListTasksResponse` to "signature metadata". All public symbols in cache.py, read.py, events.py verified accurate in current snapshot — reviewer's informational note on `last_mtime` naming was already addressed. |
+| 3 | External attribution | No | N/A | No external patterns introduced; internal implementation only. |
+| 4 | Research doc | No | N/A | No research doc produced for this task. |
+| 5 | Diagram maintenance (describes match) | Yes | Updated | `share/diagrams/cockpit.excalidraw` has `describes: serve/cockpit/src/**, serve/cockpit/web/src/**` — matches changed files. Footer updated from `(424fcd56)` → `(bc30d605)` (current HEAD), date unchanged 2026-05-06. |
+| 6 | Explicit diagram creation | No | N/A | No explicit diagram creation request in task body. |
+| 7 | Deletion detection | No | N/A | No files deleted; no orphaned IN-scope docs detected. |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| serve/cockpit/src/owlbear_cockpit/cache.py | IN (docstrings) | Verified accurate — previous cycle updated |
+| serve/cockpit/src/owlbear_cockpit/routes/read.py | IN (docstrings) | Verified accurate — previous cycle updated |
+| serve/cockpit/src/owlbear_cockpit/routes/events.py | IN (docstrings) | Verified accurate |
+| serve/cockpit/web/src/hooks/EventSourceProvider.tsx | OUT (TSX) | N/A |
+| tests/* | OUT (test files) | N/A |
+
+### Files Updated
+- share/diagrams/cockpit.excalidraw (footer: 2026-05-06, bc30d605) — commit 6593737b
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- 21 × .owlbear/scratch/1346-* files deleted
