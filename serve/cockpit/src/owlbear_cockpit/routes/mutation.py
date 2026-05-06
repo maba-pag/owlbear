@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict
 
 from owlbear_cockpit import adapter
@@ -12,7 +12,6 @@ from owlbear_cockpit.deps import get_view
 from owlbear_cockpit.view import CockpitView
 from owlbear_kanban.errors import (
     ConcurrencyError,
-    ConfigError,
     NotFoundError,
     ValidationError,
 )
@@ -146,42 +145,31 @@ def move_task(task_id: int, req: MoveRequest, view: _View) -> SingleTaskResponse
     try:
         task = view.engine.show_task(str(task_id))
     except FileNotFoundError:
-        raise HTTPException(
-            status_code=404, detail=f"Task {task_id} not found"
+        raise NotFoundError(
+            code="ERR_NOT_FOUND",
+            user_message=f"Task {task_id} not found",
         ) from None
 
     if req.updated != str(task.updated):
-        raise HTTPException(
-            status_code=409,
-            detail="Task was modified since your last load (stale snapshot)",
+        raise ConcurrencyError(
+            code="ERR_STALE",
+            user_message="Task was modified since your last load (stale snapshot)",
         )
 
     transitions = adapter.valid_transitions(view.engine, task.status)
     if req.status != "archived" and req.status not in transitions:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Cannot move from '{task.status}' to '{req.status}'",
+        raise ValidationError(
+            code="ERR_INVALID_STATUS",
+            user_message=f"Cannot move from '{task.status}' to '{req.status}'",
         )
 
-    try:
-        updated_task = view.move_task(
-            task_id,
-            req.status,
-            expected_updated=req.updated,
-            archival_reason=req.archival_reason,
-            archival_refs=req.archival_refs,
-        )
-    except NotFoundError:
-        raise HTTPException(
-            status_code=404, detail=f"Task {task_id} not found"
-        ) from None
-    except ValidationError as exc:
-        raise HTTPException(status_code=422, detail=exc.user_message) from exc
-    except ConcurrencyError:
-        raise HTTPException(
-            status_code=409,
-            detail="Task was modified since your last load (stale snapshot)",
-        ) from None
+    updated_task = view.move_task(
+        task_id,
+        req.status,
+        expected_updated=req.updated,
+        archival_reason=req.archival_reason,
+        archival_refs=req.archival_refs,
+    )
     return _task_to_single(updated_task)
 
 
@@ -290,34 +278,22 @@ def edit_task(task_id: int, req: EditRequest, view: _View) -> SingleTaskResponse
         try:
             task = view.show_task(task_id)
         except NotFoundError:
-            raise HTTPException(
-                status_code=404, detail=f"Task {task_id} not found"
+            raise NotFoundError(
+                code="ERR_NOT_FOUND",
+                user_message=f"Task {task_id} not found",
             ) from None
 
     kwargs = _build_edit_kwargs(req, task)
     if not kwargs:
-        raise HTTPException(status_code=422, detail="No editable fields provided")
-    try:
-        updated_task = view.edit_task(
-            task_id,
-            expected_updated=req.updated,
-            **kwargs,
+        raise ValidationError(
+            code="ERR_NO_OP",
+            user_message="No editable fields provided",
         )
-    except NotFoundError:
-        raise HTTPException(
-            status_code=404, detail=f"Task {task_id} not found"
-        ) from None
-    except ConcurrencyError:
-        raise HTTPException(
-            status_code=409,
-            detail="Task was modified since your last load (stale snapshot)",
-        ) from None
-    except ValidationError as exc:
-        raise HTTPException(status_code=422, detail=exc.user_message) from exc
-    except ConfigError:
-        raise HTTPException(
-            status_code=500, detail="Invalid board configuration"
-        ) from None
+    updated_task = view.edit_task(
+        task_id,
+        expected_updated=req.updated,
+        **kwargs,
+    )
     return _task_to_single(updated_task)
 
 
@@ -327,26 +303,18 @@ def release_task(task_id: int, req: ReleaseRequest, view: _View) -> SingleTaskRe
     try:
         task = view.show_task(task_id)
     except (FileNotFoundError, NotFoundError):
-        raise HTTPException(
-            status_code=404, detail=f"Task {task_id} not found"
+        raise NotFoundError(
+            code="ERR_NOT_FOUND",
+            user_message=f"Task {task_id} not found",
         ) from None
 
     if not task.claimed:
-        raise HTTPException(
-            status_code=409, detail=f"Task {task_id} is not currently claimed"
+        raise ConcurrencyError(
+            code="ERR_NOT_CLAIMED",
+            user_message=f"Task {task_id} is not currently claimed",
         )
 
-    try:
-        updated_task = view.release_task(task_id, expected_updated=req.updated)
-    except NotFoundError:
-        raise HTTPException(
-            status_code=404, detail=f"Task {task_id} not found"
-        ) from None
-    except ConcurrencyError:
-        raise HTTPException(
-            status_code=409,
-            detail="Task was modified since your last load (stale snapshot)",
-        ) from None
+    updated_task = view.release_task(task_id, expected_updated=req.updated)
 
     return _task_to_single(updated_task)
 

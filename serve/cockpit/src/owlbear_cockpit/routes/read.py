@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from owlbear_cockpit.cache import MtimeScanCache
@@ -14,7 +14,6 @@ from owlbear_cockpit.models import (
 )
 from owlbear_cockpit.view import CockpitView
 from owlbear_kanban import KanbanEngine
-from owlbear_kanban.errors import NotFoundError
 from owlbear_kanban.models import (
     ActivityEvent,
     ListTasksResponse,
@@ -125,12 +124,7 @@ def list_tasks(  # noqa: PLR0913
 @router.get("/tasks/{task_id}", response_model=ShowTaskResponse)
 def get_task(task_id: int, view: _View) -> ShowTaskResponse:
     """Return full task detail for the given task ID, or 404 if not found."""
-    try:
-        return view.show_task(task_id)
-    except NotFoundError:
-        raise HTTPException(
-            status_code=404, detail=f"Task {task_id!r} not found"
-        ) from None
+    return view.show_task(task_id)
 
 
 @router.get("/activity", response_model=list[ActivityEvent])

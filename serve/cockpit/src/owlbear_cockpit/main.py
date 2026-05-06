@@ -8,10 +8,11 @@ import sys
 import threading
 import webbrowser
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import uvicorn
 from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from starlette.staticfiles import StaticFiles
 
 from owlbear_cockpit.deps import get_engine  # noqa: F401 — re-exported for test DI
@@ -19,6 +20,16 @@ from owlbear_cockpit.routes.decisions import router as decisions_router
 from owlbear_cockpit.routes.events import router as events_router
 from owlbear_cockpit.routes.mutation import router as mutation_router
 from owlbear_cockpit.routes.read import router as read_router
+from owlbear_kanban.errors import (
+    ConcurrencyError,
+    ConfigError,
+    KanbanError,
+    NotFoundError,
+    ValidationError,
+)
+
+if TYPE_CHECKING:
+    from starlette.requests import Request
 
 _DEFAULT_PORT = 8420
 _MAX_PORT = 65535
@@ -28,6 +39,43 @@ app.include_router(read_router, prefix="/api")
 app.include_router(mutation_router, prefix="/api")
 app.include_router(decisions_router, prefix="/api")
 app.include_router(events_router, prefix="/api")
+
+
+def _error_envelope(code: str, message: str) -> dict[str, str]:
+    return {"code": code, "message": message}
+
+
+def _kanban_status(exc: KanbanError) -> int:
+    if isinstance(exc, NotFoundError):
+        return 404
+    if isinstance(exc, ConcurrencyError):
+        return 409
+    if isinstance(exc, ValidationError):
+        return 422
+    if isinstance(exc, ConfigError):
+        return 500
+    return 500
+
+
+@app.exception_handler(KanbanError)
+def handle_kanban_error(_request: Request, exc: KanbanError) -> JSONResponse:
+    """Return stable cockpit error envelope for domain errors."""
+    return JSONResponse(
+        status_code=_kanban_status(exc),
+        content=_error_envelope(exc.code, exc.user_message),
+    )
+
+
+@app.exception_handler(Exception)
+def handle_unexpected_error(_request: Request, _exc: Exception) -> JSONResponse:
+    """Normalize unexpected failures to a stable machine-readable envelope."""
+    return JSONResponse(
+        status_code=500,
+        content=_error_envelope(
+            "COCKPIT_INTERNAL_ERROR",
+            "An unexpected error occurred.",
+        ),
+    )
 
 
 @app.get("/health")
