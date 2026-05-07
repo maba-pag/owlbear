@@ -13,6 +13,7 @@ from ruamel.yaml import YAML
 from ruamel.yaml.error import YAMLError
 
 from owlbear_cockpit.deps import get_decisions_dir, get_engine
+from owlbear_kanban.decisions import canonical_summary, parse_dr
 from owlbear_kanban.errors import ConcurrencyError
 
 router = APIRouter()
@@ -30,36 +31,6 @@ class ResolveRequest(BaseModel):
 
     response: Literal["approved", "needs-info", "rejected"]
     notes: str | None = None
-
-
-def _parse_dr(path: Path) -> tuple[dict[str, object], str]:
-    """Parse frontmatter and markdown body from a decision file."""
-    content = path.read_text(encoding="utf-8")
-    lines = content.splitlines()
-
-    if (
-        not lines or lines[0].strip() != "---"
-    ):  # pragma: no cover - malformed file guard
-        msg = f"Invalid decision file (missing opening delimiter): {path}"
-        raise ValueError(msg)
-
-    closing_idx: int | None = None
-    for idx, line in enumerate(lines[1:], start=1):
-        if line.strip() == "---":
-            closing_idx = idx
-            break
-
-    if closing_idx is None:  # pragma: no cover - malformed file guard
-        msg = f"Invalid decision file (missing closing delimiter): {path}"
-        raise ValueError(msg)
-
-    yaml_text = "\n".join(lines[1:closing_idx])
-    body = "\n".join(lines[closing_idx + 1 :])
-    data = YAML(typ="safe").load(yaml_text) or {}
-    if not isinstance(data, dict):  # pragma: no cover - malformed file guard
-        msg = f"Invalid decision file (frontmatter must be mapping): {path}"
-        raise TypeError(msg)
-    return data, body
 
 
 def _extract_title(body: str, fallback: str) -> str:
@@ -100,14 +71,6 @@ def _validate_decision_id(decision_id: str) -> None:
     if not _DECISION_ID_PATTERN.fullmatch(decision_id):
         raise HTTPException(status_code=422, detail="Invalid decision id")
 
-def _canonical_summary(response: str, body: str) -> str:
-    """Return canonical decision summary appended to the linked task."""
-    return (
-        "## Decision Request\n"
-        f"- response: {response}\n"
-        f"- source: {body.strip() or '(no body)'}"
-    )
-
 
 @router.get("/decisions/pending")
 def list_pending_decisions(decisions_dir: _DecisionsDir) -> dict[str, object]:
@@ -119,7 +82,7 @@ def list_pending_decisions(decisions_dir: _DecisionsDir) -> dict[str, object]:
     items: list[dict[str, object]] = []
     for path in sorted(pending_dir.glob("*.md")):
         try:
-            meta, body = _parse_dr(path)
+            meta, body = parse_dr(path)
         except (TypeError, ValueError, YAMLError):
             continue
 
@@ -159,7 +122,7 @@ def resolve_decision(
     if not pending_path.exists():
         if resolved_path.exists():
             try:
-                resolved_meta, _ = _parse_dr(resolved_path)
+                resolved_meta, _ = parse_dr(resolved_path)
             except (TypeError, ValueError, YAMLError) as exc:
                 detail = "Invalid decision file format"
                 raise HTTPException(
@@ -184,7 +147,7 @@ def resolve_decision(
         raise HTTPException(status_code=404, detail=detail)
 
     try:
-        meta, body = _parse_dr(pending_path)
+        meta, body = parse_dr(pending_path)
     except (
         TypeError,
         ValueError,
@@ -211,7 +174,7 @@ def resolve_decision(
 
     task_id = updated.get("task_id")
     try:
-        engine.edit_task(task_id, append_body=_canonical_summary(req.response, body))
+        engine.edit_task(task_id, append_body=canonical_summary(req.response, body))
         if req.response in {"approved", "rejected"}:
             engine.edit_task(task_id, blocked=False)
     except FileNotFoundError:

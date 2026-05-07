@@ -33,7 +33,7 @@ def _slugify(text: str) -> str:
     return slug or "decision"
 
 
-def _parse_dr(path: Path) -> tuple[dict[str, object], str]:
+def parse_dr(path: Path) -> tuple[dict[str, object], str]:
     """Parse frontmatter and markdown body from a DR file."""
     content = path.read_text(encoding="utf-8")
     if not content.startswith("---"):  # pragma: no cover - defensive input guard
@@ -60,15 +60,20 @@ def _parse_dr(path: Path) -> tuple[dict[str, object], str]:
     return data, body
 
 
-def _append_summary(
-    engine: DecisionEngine, task_id: int | str, response: str, body: str
-) -> None:
-    """Append a compact DR summary to the task body."""
-    summary = (
+def canonical_summary(response: str, body: str) -> str:
+    """Return canonical decision summary appended to the linked task."""
+    return (
         "## Decision Request\n"
         f"- response: {response}\n"
         f"- source: {body.strip() or '(no body)'}"
     )
+
+
+def _append_summary(
+    engine: DecisionEngine, task_id: int | str, response: str, body: str
+) -> None:
+    """Append a compact DR summary to the task body."""
+    summary = canonical_summary(response, body)
     engine.edit_task(task_id, append_body=summary)
 
 
@@ -160,7 +165,7 @@ def resolve_pending_drs(
     moved: list[Path] = []
     for path in sorted(pending_dir.glob("*.md")):
         try:
-            meta, body = _parse_dr(path)
+            meta, body = parse_dr(path)
             response = str(meta.get("response", "pending"))
 
             if response == "pending":
