@@ -1,6 +1,6 @@
 # owlbear-mcp-knowledge — Knowledge MCP Server
 
-MCP server that exposes the `owlbear-knowledge` engine as tools for pipeline agents. Provides document ingestion, semantic search, entity graph queries, bookmarking, and cross-project scope transfer. Registered in VS Code's MCP configuration as `owlbear-knowledge`.
+MCP server that exposes the `owlbear-knowledge` engine as tools for pipeline agents. Provides document ingestion, semantic search, source management, enrichment batching, and consolidation candidate review. Registered in VS Code's MCP configuration as `owlbear-knowledge`.
 
 → Parent: [README.md](../../README.md)
 
@@ -21,18 +21,9 @@ Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json
 | `search_knowledge` | Semantic search over the knowledge base |
 | `list_sources` | List registered knowledge sources, optionally filtered by scope |
 | `ingest_document` | Ingest text content into the knowledge base (optional `source_url` for attribution) |
-| `list_entities` | List knowledge-graph entities, optionally filtered by type |
 | `get_consolidation_candidates` | List unresolved cross-source entity consolidation candidates (entities appearing in 2+ sources with no existing edge or reviewed dismissal) |
 | `get_stats` | Summary statistics: document, entity, and edge counts plus source count, chunk count, enrichment ratio, and consolidation candidates remaining |
-| `bookmark_source` | Evaluate a URL and optionally ingest it as a bookmark |
-| `list_bookmarks` | List bookmarks, optionally filtered by tag or minimum score |
-| `update_bookmark_tags` | Update tags on an existing bookmark |
-| `import_scope` | Import a project-local knowledge snapshot into the global KB |
-| `export_scope` | Export all knowledge rows for one scope to a portable SQLite file |
-| `sync_from_global` | Import the global knowledge DB into local scope `global` |
-| `sync_to_global` | Export local scope `global` rows to the global knowledge DB |
 | `refresh_source` | Re-ingest a registered source by source ID |
-| `consolidate_knowledge` | Synthesize cross-document insights from unconsolidated chunks |
 | `get_next_batch` | Atomically claim a batch of chunks ready for enrichment |
 | `store_enrichment` | Dual-mode enrichment persist: Phase 1 (`chunk_id`, `entities`, `edges`) marks chunk enriched; Phase 2 (`candidate_id`, `edges`) writes cross-source edges or records a reviewed-pair dismissal |
 
