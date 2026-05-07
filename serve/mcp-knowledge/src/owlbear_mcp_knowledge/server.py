@@ -127,6 +127,10 @@ class StatsResult(TypedDict):
     documents: int
     entities: int
     edges: int
+    total_sources: int
+    total_chunks: int
+    chunks_enriched_ratio: float
+    consolidation_candidates_remaining: int
 
 
 class EnrichmentChunk(TypedDict):
@@ -137,6 +141,149 @@ class EnrichmentChunk(TypedDict):
     doc_title: str
     section_path: str | None
     source_name: str | None
+
+
+class ConsolidationCandidate(TypedDict):
+    """Cross-source entity pair eligible for phase-2 consolidation."""
+
+    candidate_id: str
+    entity_name: str
+    source_a: str
+    source_b: str
+    source_a_name: str
+    source_b_name: str
+    source_a_chunk: str
+    source_b_chunk: str
+
+
+_CANDIDATE_ID_PARTS = 3
+
+
+def _encode_candidate_id(entity_name: str, source_a: str, source_b: str) -> str:
+    """Encode the reviewed-pair identity into an opaque candidate ID."""
+    return json.dumps([entity_name, source_a, source_b], separators=(",", ":"))
+
+
+def _decode_candidate_id(candidate_id: str) -> tuple[str, str, str]:
+    """Decode candidate ID into (entity_name, source_a, source_b)."""
+    try:
+        parsed = json.loads(candidate_id)
+    except (TypeError, ValueError) as exc:
+        msg = "invalid candidate_id"
+        raise ToolError(msg) from exc
+
+    if (
+        not isinstance(parsed, list)
+        or len(parsed) != _CANDIDATE_ID_PARTS
+        or not all(isinstance(part, str) for part in parsed)
+    ):
+        msg = "invalid candidate_id"
+        raise ToolError(msg)
+    return parsed[0], parsed[1], parsed[2]
+
+
+def _fetch_consolidation_candidate_rows(
+    conn: sqlite3.Connection,
+    *,
+    limit: int | None,
+) -> list[tuple[str, str, str, str | None, str | None, str | None, str | None]]:
+    """Return deduplicated candidate rows ordered by entity name."""
+    sql = """
+        WITH pair_candidates AS (
+            SELECT
+                e1.name AS entity_name,
+                CASE
+                    WHEN d1.source_id < d2.source_id THEN d1.source_id
+                    ELSE d2.source_id
+                END AS source_a,
+                CASE
+                    WHEN d1.source_id < d2.source_id THEN d2.source_id
+                    ELSE d1.source_id
+                END AS source_b,
+                CASE
+                    WHEN d1.source_id < d2.source_id THEN ks1.name
+                    ELSE ks2.name
+                END AS source_a_name,
+                CASE
+                    WHEN d1.source_id < d2.source_id THEN ks2.name
+                    ELSE ks1.name
+                END AS source_b_name,
+                CASE
+                    WHEN d1.source_id < d2.source_id THEN c1.content
+                    ELSE c2.content
+                END AS source_a_chunk,
+                CASE
+                    WHEN d1.source_id < d2.source_id THEN c2.content
+                    ELSE c1.content
+                END AS source_b_chunk
+            FROM entities AS e1
+            JOIN entities AS e2 ON e1.name = e2.name AND e1.id < e2.id
+            JOIN documents AS d1 ON d1.id = e1.document_id
+            JOIN documents AS d2 ON d2.id = e2.document_id
+            LEFT JOIN knowledge_sources AS ks1 ON ks1.id = d1.source_id
+            LEFT JOIN knowledge_sources AS ks2 ON ks2.id = d2.source_id
+            LEFT JOIN chunks AS c1 ON c1.id = e1.chunk_id
+            LEFT JOIN chunks AS c2 ON c2.id = e2.chunk_id
+            WHERE d1.source_id IS NOT NULL
+              AND d2.source_id IS NOT NULL
+              AND d1.source_id != d2.source_id
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM edges AS ed
+                  WHERE (ed.source_id = e1.id AND ed.target_id = e2.id)
+                     OR (ed.source_id = e2.id AND ed.target_id = e1.id)
+              )
+        )
+        SELECT
+            pc.entity_name,
+            pc.source_a,
+            pc.source_b,
+            MIN(pc.source_a_name) AS source_a_name,
+            MIN(pc.source_b_name) AS source_b_name,
+            MIN(pc.source_a_chunk) AS source_a_chunk,
+            MIN(pc.source_b_chunk) AS source_b_chunk
+        FROM pair_candidates AS pc
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM reviewed_pairs AS rp
+            WHERE rp.entity_name = pc.entity_name
+              AND (
+                  (rp.source_a = pc.source_a AND rp.source_b = pc.source_b)
+                 OR (rp.source_a = pc.source_b AND rp.source_b = pc.source_a)
+              )
+        )
+        GROUP BY pc.entity_name, pc.source_a, pc.source_b
+        ORDER BY pc.entity_name ASC, pc.source_a ASC, pc.source_b ASC
+    """
+
+    params: tuple[object, ...] = ()
+    if limit is not None:
+        sql += " LIMIT ?"
+        params = (limit,)
+    return conn.execute(sql, params).fetchall()
+
+
+async def get_consolidation_candidates(
+    ctx: Context,
+    limit: int = 20,
+) -> list[ConsolidationCandidate]:
+    """Return unresolved cross-source consolidation candidates."""
+    app_ctx: AppContext = ctx.request_context.lifespan_context
+    conn = app_ctx.conn
+    rows = _fetch_consolidation_candidate_rows(conn, limit=limit)
+    return [
+        {
+            "candidate_id": _encode_candidate_id(row[0], row[1], row[2]),
+            "entity_name": row[0],
+            "source_a": row[1],
+            "source_b": row[2],
+            "source_a_name": row[3] or "",
+            "source_b_name": row[4] or "",
+            "source_a_chunk": row[5] or "",
+            "source_b_chunk": row[6] or "",
+        }
+        for row in rows
+    ]
 
 
 def select_content_fetcher(method: str) -> ContentFetcher:
@@ -286,19 +433,67 @@ async def get_next_batch(ctx: Context, limit: int = 10) -> list[EnrichmentChunk]
 
 async def store_enrichment(
     ctx: Context,
-    chunk_id: str,
-    entities: list[dict[str, Any]],
-    edges: list[dict[str, Any]],
+    chunk_id: str | None = None,
+    entities: list[dict[str, Any]] | None = None,
+    edges: list[dict[str, Any]] | None = None,
+    candidate_id: str | None = None,
 ) -> None:
-    """Persist extracted entities/edges and mark chunk as enriched."""
+    """Persist enrichment results for phase-1 chunks or phase-2 candidates."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     conn = app_ctx.conn
     now_iso = datetime.now(tz=UTC).isoformat()
+    edge_rows = edges or []
+
+    if candidate_id is not None:
+        entity_name, source_a, source_b = _decode_candidate_id(candidate_id)
+
+        conn.execute("PRAGMA busy_timeout = 5000")
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            if edge_rows:
+                for edge in edge_rows:
+                    conn.execute(
+                        """
+                        INSERT OR IGNORE INTO edges
+                        (id, source_id, target_id, relation, document_id, weight, metadata, created_at, scope)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            edge.get("id") or uuid4().hex,
+                            edge.get("source_id"),
+                            edge.get("target_id"),
+                            edge.get("relation"),
+                            edge.get("document_id"),
+                            edge.get("weight", 1.0),
+                            json.dumps(edge.get("metadata", {})),
+                            now_iso,
+                            edge.get("scope", "global"),
+                        ),
+                    )
+            else:
+                conn.execute(
+                    """
+                    INSERT OR IGNORE INTO reviewed_pairs (entity_name, source_a, source_b)
+                    VALUES (?, ?, ?)
+                    """,
+                    (entity_name, source_a, source_b),
+                )
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        return
+
+    if chunk_id is None:
+        msg = "chunk_id is required for phase-1 store_enrichment"
+        raise ToolError(msg)
+
+    entity_rows = entities or []
 
     conn.execute("PRAGMA busy_timeout = 5000")
     conn.execute("BEGIN IMMEDIATE")
     try:
-        for entity in entities:
+        for entity in entity_rows:
             conn.execute(
                 """
                 INSERT OR REPLACE INTO entities
@@ -319,7 +514,7 @@ async def store_enrichment(
                 ),
             )
 
-        for edge in edges:
+        for edge in edge_rows:
             conn.execute(
                 """
                 INSERT OR IGNORE INTO edges
@@ -746,11 +941,33 @@ async def get_stats(ctx: Context) -> StatsResult:
     """Get knowledge base summary statistics."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     gs = app_ctx.graph_store
+    conn = app_ctx.conn
     if gs is None:
         msg = "graph store not available"
         raise ToolError(msg)
     doc_count, entity_count, edge_count = await asyncio.to_thread(gs.get_counts)
-    return {"documents": doc_count, "entities": entity_count, "edges": edge_count}
+
+    total_sources = conn.execute("SELECT COUNT(*) FROM knowledge_sources").fetchone()[0]
+    total_chunks = conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
+    enriched_chunks = conn.execute(
+        "SELECT COUNT(*) FROM chunks WHERE enrichment_state = 'enriched'"
+    ).fetchone()[0]
+    chunks_enriched_ratio = (
+        float(enriched_chunks) / float(total_chunks) if total_chunks else 0.0
+    )
+    consolidation_candidates_remaining = len(
+        _fetch_consolidation_candidate_rows(conn, limit=None)
+    )
+
+    return {
+        "documents": doc_count,
+        "entities": entity_count,
+        "edges": edge_count,
+        "total_sources": total_sources,
+        "total_chunks": total_chunks,
+        "chunks_enriched_ratio": chunks_enriched_ratio,
+        "consolidation_candidates_remaining": consolidation_candidates_remaining,
+    }
 
 
 async def knowledge_stats(ctx: Context) -> str:
