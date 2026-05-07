@@ -453,6 +453,47 @@ class TestFromAC_GetConsolidationCandidates:
             f"got: {candidate}"
         )
 
+    @pytest.mark.asyncio
+    async def test_candidate_chunk_payloads_are_exact_source_content(
+        self, conn: sqlite3.Connection
+    ) -> None:
+        """AC3 exact (retry): source_a_chunk and source_b_chunk fields hold the
+        specific chunk content for each source — not just a substring of the
+        serialised candidate object."""
+        source_a = _insert_source(conn, name="Source A")
+        source_b = _insert_source(conn, name="Source B")
+        doc_a = _insert_document(conn, source_id=source_a)
+        doc_b = _insert_document(conn, source_id=source_b)
+        chunk_a = _insert_chunk(conn, document_id=doc_a, content="Chunk text from Source A only")
+        chunk_b = _insert_chunk(conn, document_id=doc_b, content="Chunk text from Source B only")
+        _insert_entity(conn, name="TensorFlowExact", document_id=doc_a, chunk_id=chunk_a)
+        _insert_entity(conn, name="TensorFlowExact", document_id=doc_b, chunk_id=chunk_b)
+
+        ctx = _make_mcp_ctx(conn)
+        candidates = await get_consolidation_candidates(ctx, limit=20)
+
+        tf_candidates = [
+            c for c in candidates if _get_field(c, "entity_name") == "TensorFlowExact"
+        ]
+        assert tf_candidates, "Expected 'TensorFlowExact' in candidates"
+        candidate = tf_candidates[0]
+
+        source_a_chunk = _get_field(candidate, "source_a_chunk")
+        source_b_chunk = _get_field(candidate, "source_b_chunk")
+
+        actual_chunks = {source_a_chunk, source_b_chunk}
+        assert "Chunk text from Source A only" in actual_chunks, (
+            "Expected 'Chunk text from Source A only' in source_a_chunk or source_b_chunk, "
+            f"got: source_a_chunk={source_a_chunk!r}, source_b_chunk={source_b_chunk!r}"
+        )
+        assert "Chunk text from Source B only" in actual_chunks, (
+            "Expected 'Chunk text from Source B only' in source_a_chunk or source_b_chunk, "
+            f"got: source_a_chunk={source_a_chunk!r}, source_b_chunk={source_b_chunk!r}"
+        )
+        assert source_a_chunk != source_b_chunk, (
+            "source_a_chunk and source_b_chunk must be distinct (different source content)"
+        )
+
 
 # ---------------------------------------------------------------------------
 # TestFromAC_StoreEnrichmentPhase2
@@ -661,6 +702,52 @@ class TestFromAC_StoreEnrichmentPhase2:
                 f"but found candidate referencing both sources: {cand}"
             )
 
+    @pytest.mark.asyncio
+    async def test_exact_candidate_pairs_after_dismissal_and_new_source(
+        self, conn: sqlite3.Connection
+    ) -> None:
+        """AC6 exact (retry): after dismissing (Dask, A, B), only the (A,C) and (B,C)
+        pairs appear for 'Dask' — proven via structured source_a/source_b fields,
+        not via string representation of the candidate object."""
+        source_a = _insert_source(conn, name="Source A")
+        source_b = _insert_source(conn, name="Source B")
+        doc_a = _insert_document(conn, source_id=source_a)
+        doc_b = _insert_document(conn, source_id=source_b)
+        _insert_entity(conn, name="DaskExact", document_id=doc_a)
+        _insert_entity(conn, name="DaskExact", document_id=doc_b)
+        _insert_reviewed_pair(
+            conn, entity_name="DaskExact", source_a=source_a, source_b=source_b
+        )
+
+        source_c = _insert_source(conn, name="Source C")
+        doc_c = _insert_document(conn, source_id=source_c)
+        _insert_entity(conn, name="DaskExact", document_id=doc_c)
+
+        ctx = _make_mcp_ctx(conn)
+        candidates = await get_consolidation_candidates(ctx, limit=20)
+
+        dask_candidates = [
+            c for c in candidates if _get_field(c, "entity_name") == "DaskExact"
+        ]
+
+        candidate_pairs = {
+            frozenset({_get_field(c, "source_a"), _get_field(c, "source_b")})
+            for c in dask_candidates
+        }
+
+        ab_pair = frozenset({source_a, source_b})
+        assert ab_pair not in candidate_pairs, (
+            f"Dismissed (A, B) pair must not appear in structured candidates, "
+            f"got pairs: {candidate_pairs}"
+        )
+
+        ac_pair = frozenset({source_a, source_c})
+        bc_pair = frozenset({source_b, source_c})
+        assert candidate_pairs == {ac_pair, bc_pair}, (
+            f"Expected exactly pairs {{(A,C), (B,C)}}, got: {candidate_pairs}. "
+            f"Raw candidates: {dask_candidates}"
+        )
+
 
 # ---------------------------------------------------------------------------
 # TestFromAC_GetStatsExpansion
@@ -858,5 +945,31 @@ class TestFromAC_GetStatsExpansion:
         assert "consolidation_candidates_remaining" in result
         assert result["consolidation_candidates_remaining"] == 0, (
             f"Expected 0 candidates remaining (all pairs dismissed), "
+            f"got: {result['consolidation_candidates_remaining']}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_stats_consolidation_candidates_remaining_exact_count(
+        self, conn: sqlite3.Connection
+    ) -> None:
+        """AC7 exact (retry): consolidation_candidates_remaining == 1 for a
+        single-pair fixture — not >= 1, so overcounting is caught."""
+        source_a = _insert_source(conn, name="Source A")
+        source_b = _insert_source(conn, name="Source B")
+        doc_a = _insert_document(conn, source_id=source_a)
+        doc_b = _insert_document(conn, source_id=source_b)
+        _insert_entity(conn, name="Polars", document_id=doc_a)
+        _insert_entity(conn, name="Polars", document_id=doc_b)
+
+        ctx = _make_mcp_ctx_with_graph(conn)
+        result = await get_stats(ctx)
+
+        assert "consolidation_candidates_remaining" in result, (
+            f"Expected 'consolidation_candidates_remaining' in stats, "
+            f"got: {list(result.keys())}"
+        )
+        assert result["consolidation_candidates_remaining"] == 1, (
+            f"Expected exactly 1 consolidation_candidates_remaining "
+            f"(single pair: Polars in sources A and B), "
             f"got: {result['consolidation_candidates_remaining']}"
         )
