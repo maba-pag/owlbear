@@ -19,8 +19,9 @@ function isHealthBadgeItem(item: ScanPollingItem): item is HealthBadgeItem {
 function Shell() {
   const { board, tasks, loading, error, health, refetchTasks, lastDecisionsMtime } = useBoard()
   const { count: pendingDRCount, items: pendingDRItems, refetch: refetchPendingDRs } = usePendingDRs()
-  const { items: scanItems, isLoading, refetch } = useScanPolling()
+  const { items: scanItems, isLoading, error: scanError, refetch } = useScanPolling()
   const normalizedItems = scanItems.filter(isHealthBadgeItem)
+  const statusHealth = scanError ? 'red' : health
   const [hasLoadedScan, setHasLoadedScan] = useState(false)
   const [selectedDRId, setSelectedDRId] = useState<string | null>(null)
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null)
@@ -118,14 +119,30 @@ function Shell() {
   return (
     <div className="shell">
       <header className="shell__status-bar" data-region="status-bar">
-        <span data-testid="traffic-light" data-health={health} />
+        <span data-testid="traffic-light" data-health={statusHealth} />
         <span data-testid="task-count" />
-        {hasLoadedScan ? (
+        {hasLoadedScan && !scanError ? (
           <HealthBadge
             items={normalizedItems}
             corruptionCount={normalizedItems.length}
             onRepairSuccess={refetch}
           />
+        ) : null}
+        {scanError ? (
+          <>
+            <span data-testid="scan-error" data-health="error" role="status">
+              Scan failed: {scanError.message}
+            </span>
+            <PButton
+              type="button"
+              data-testid="scan-retry"
+              aria-label="Retry scan"
+              variant="secondary"
+              onClick={refetch}
+            >
+              Retry scan
+            </PButton>
+          </>
         ) : null}
         <DRStatusIndicator
           count={pendingDRCount}
