@@ -135,6 +135,15 @@ function Shell() {
       </header>
       <nav className="shell__nav-rail" data-region="nav-rail">
         <PButton data-surface="kanban" aria-current="page" variant="secondary">
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 16 16"
+            width="16"
+            height="16"
+            focusable="false"
+          >
+            <path d="M2 3h5v4H2V3zm7 0h5v4H9V3zM2 9h5v4H2V9zm7 0h5v4H9V9z" fill="currentColor" />
+          </svg>
           Kanban
         </PButton>
       </nav>
