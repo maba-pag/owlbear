@@ -792,6 +792,9 @@ mcp = FastMCP("owlbear-knowledge", lifespan=app_lifespan)
 get_next_batch = mcp.tool(
     annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
 )(get_next_batch)
+get_consolidation_candidates = mcp.tool(
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
+)(get_consolidation_candidates)
 store_enrichment = mcp.tool(
     annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
 )(store_enrichment)
@@ -903,7 +906,6 @@ async def ingest_document(
         )
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
 async def list_entities(
     ctx: Context,
     entity_type: str | None = None,
@@ -1000,7 +1002,6 @@ async def knowledge_stats_resource(ctx: Context | None = None) -> str:
     return f"Knowledge base: {doc_count} documents, {entity_count} entities, {edge_count} edges"
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
 async def bookmark_source(ctx: Context, url: str, reason: str | None = None) -> str:
     """Bookmark a URL: evaluate and optionally ingest into the knowledge base."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
@@ -1023,7 +1024,6 @@ class BookmarkInfo(TypedDict):
     tags: list[str]
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
 async def list_bookmarks(
     ctx: Context,
     tag: str | None = None,
@@ -1046,11 +1046,6 @@ async def list_bookmarks(
     ]
 
 
-@mcp.tool(
-    annotations=ToolAnnotations(
-        readOnlyHint=False, destructiveHint=False, idempotentHint=True
-    )
-)
 async def update_bookmark_tags(
     ctx: Context,
     url: str,
@@ -1076,7 +1071,6 @@ async def update_bookmark_tags(
     }
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
 async def import_scope(
     ctx: Context,
     project_name: str,
@@ -1099,7 +1093,6 @@ async def import_scope(
     )
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
 async def export_scope(
     ctx: Context,
     scope: str,
@@ -1119,7 +1112,6 @@ async def export_scope(
     )
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
 async def sync_from_global(ctx: Context) -> str:
     """Import all documents from the global knowledge DB into the local DB under scope='global'.
 
@@ -1158,7 +1150,6 @@ async def sync_from_global(ctx: Context) -> str:
     return await asyncio.to_thread(_run)
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
 async def sync_to_global(ctx: Context) -> str:
     """Export local documents with scope='global' into the global knowledge DB.
 
@@ -1246,7 +1237,6 @@ async def refresh_source(ctx: Context, source_id: str) -> dict | str:
     }
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
 async def consolidate_knowledge(ctx: Context, batch_size: int = 50) -> str:
     """Trigger cross-document insight synthesis for unconsolidated knowledge chunks.
 
