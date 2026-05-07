@@ -176,7 +176,11 @@ function KanbanBoardContent({
     return <div data-testid="loading-indicator">Loading…</div>
   }
 
-  if (error || !board) {
+  if (error) {
+    return <div data-testid="error-message">{error}</div>
+  }
+
+  if (!board) {
     return (
       <div data-testid="error-message">Failed to load board. Please try again.</div>
     )
