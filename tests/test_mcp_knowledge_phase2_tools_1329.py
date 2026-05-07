@@ -1242,3 +1242,57 @@ class TestFromAC_Cycle3Proofs:
             f"reviewed_pairs.source_b must equal decoded candidate_id source_b exactly — "
             f"expected {decoded_source_b!r}, got {row[2]!r}"
         )
+
+
+# ---------------------------------------------------------------------------
+# Cycle-4 proof tests: AC2 reverse cross-source edge direction
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_Cycle4Proofs:
+    """Cycle-4 retry: prove the reverse edge-direction SQL branch for AC2.
+
+    The candidate query join uses ``e1.id < e2.id``, so the forward exclusion
+    branch is ``ed.source_id = e1.id AND ed.target_id = e2.id`` (server.py:233)
+    and the reverse branch is ``ed.source_id = e2.id AND ed.target_id = e1.id``
+    (server.py:234).  Removing server.py:234 must cause this test to fail.
+    """
+
+    @pytest.mark.asyncio
+    async def test_ac2_reversed_edge_direction_still_excludes_candidate(
+        self, conn: sqlite3.Connection
+    ) -> None:
+        """AC2 exact (cycle 4): a cross-source edge inserted in the *reverse* entity
+        ordering (source_entity_id = the larger-id entity, target_entity_id = the
+        smaller-id entity) must still exclude the candidate pair.
+
+        The candidate SQL join is ``e1.id < e2.id``, so the forward branch handles
+        edges ``(e1, e2)`` and the reverse branch handles edges ``(e2, e1)``
+        (``server.py:234``).  This test inserts only the reverse-direction edge, so
+        removing that branch from the SQL would leave the candidate visible and cause
+        this test to fail.
+        """
+        source_a = _insert_source(conn, name="Source A")
+        source_b = _insert_source(conn, name="Source B")
+        doc_a = _insert_document(conn, source_id=source_a)
+        doc_b = _insert_document(conn, source_id=source_b)
+        entity_a_id = _insert_entity(conn, name="ReverseEdgeEntity", document_id=doc_a)
+        entity_b_id = _insert_entity(conn, name="ReverseEdgeEntity", document_id=doc_b)
+
+        # In the SQL join: e1.id < e2.id, so e1 = smaller string ID, e2 = larger.
+        # The forward exclusion branch covers (e1→e2); we need to exercise (e2→e1).
+        e1_id = min(entity_a_id, entity_b_id)
+        e2_id = max(entity_a_id, entity_b_id)
+        # Insert ONLY the reverse-direction edge (e2 → e1)
+        _insert_edge(conn, source_entity_id=e2_id, target_entity_id=e1_id)
+
+        ctx = _make_mcp_ctx(conn)
+        candidates = await get_consolidation_candidates(ctx, limit=20)
+
+        names = [c["entity_name"] for c in candidates]
+        assert "ReverseEdgeEntity" not in names, (
+            "Expected 'ReverseEdgeEntity' excluded because a reverse-direction cross-source "
+            "edge (e2→e1) exists — but it appeared in candidates. "
+            "This proves the OR branch at server.py:234 is required.\n"
+            f"Got candidates: {names}"
+        )
