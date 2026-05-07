@@ -4,7 +4,7 @@ title: Cockpit audit remediation
 status: in-progress
 priority: critical
 created: 2026-05-06T00:58:14.547083+00:00
-updated: 2026-05-06T14:42:18.182083+00:00
+updated: 2026-05-07T17:18:30.384575+00:00
 tags:
 - cockpit
 - audit-remediation
@@ -14,7 +14,7 @@ tags:
 - no-dispatch
 parent:
 depends_on: []
-blocked: true
+blocked: false
 block_reason: live parent container — not dispatchable until all children done
 claimed_at:
 archival_reason:
@@ -211,3 +211,18 @@ Remediated reviewer findings from Pass 1. Removed `docs` tag (caused incorrect n
 - Pass-through on non-implementation live parent container task; no source or test files changed.
 ## Hygiene Note
 Duplicate builder pass-through notes (20+ identical entries) trimmed on 2026-05-06. Task stays in-progress as live parent container per Completion Contract.
+
+[[2026-05-07]]
+## Builder Notes
+- Pass-through execution for live parent container task.
+- No source files changed.
+- No tests run (td:0 container scope; no task-owned implementation surface).
+- Child completion gate not met: multiple child tasks remain below done, so parent must remain `in-progress` per Completion Contract.
+- Action in this run: claim/release only, with status intentionally unchanged.
+[[2026-05-07]]
+## Builder Notes
+- Pass-through execution for live parent container task (td:0).
+- No source files changed.
+- No tests run (no task-owned implementation/test surface).
+- Completion gate still unmet: child tasks are not all `done` (e.g., #1372 is `in-progress`, #1373-#1375 are `backlog`).
+- Per Completion Contract, parent task remains `in-progress`; this run performed claim/release only with no status advancement.
