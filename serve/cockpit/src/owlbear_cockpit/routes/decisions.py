@@ -12,13 +12,15 @@ from pydantic import BaseModel, ConfigDict
 from ruamel.yaml import YAML
 from ruamel.yaml.error import YAMLError
 
-from owlbear_cockpit.deps import get_decisions_dir
+from owlbear_cockpit.deps import get_decisions_dir, get_engine
+from owlbear_kanban.errors import ConcurrencyError
 
 router = APIRouter()
 
 _DECISION_ID_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]*$")
 
 _DecisionsDir = Annotated[Path, Depends(get_decisions_dir)]
+_Engine = Annotated[object, Depends(get_engine)]
 
 
 class ResolveRequest(BaseModel):
@@ -93,23 +95,18 @@ def _rewrite_response(path: Path, meta: dict[str, object], body: str) -> None:
     path.write_text(f"---\n{frontmatter}\n---\n{body}", encoding="utf-8", newline="\n")
 
 
-def _find_decision_path(decisions_dir: Path, decision_id: str) -> Path:
-    """Resolve a decision path from pending first, then resolved.
-
-    Raises HTTPException(422) if decision_id does not match the allowlist
-    pattern ``^[a-zA-Z0-9][a-zA-Z0-9_-]*$`` (path traversal protection).
-    Raises FileNotFoundError if the id is valid but no file exists.
-    """
+def _validate_decision_id(decision_id: str) -> None:
+    """Validate decision id against the allowlist pattern."""
     if not _DECISION_ID_PATTERN.fullmatch(decision_id):
         raise HTTPException(status_code=422, detail="Invalid decision id")
 
-    pending = decisions_dir / "pending" / f"{decision_id}.md"
-    if pending.exists():
-        return pending
-    resolved = decisions_dir / "resolved" / f"{decision_id}.md"
-    if resolved.exists():  # pragma: no cover - compatibility with already-moved files
-        return resolved
-    raise FileNotFoundError(decision_id)
+def _canonical_summary(response: str, body: str) -> str:
+    """Return canonical decision summary appended to the linked task."""
+    return (
+        "## Decision Request\n"
+        f"- response: {response}\n"
+        f"- source: {body.strip() or '(no body)'}"
+    )
 
 
 @router.get("/decisions/pending")
@@ -151,29 +148,77 @@ def resolve_decision(
     decision_id: str,
     req: ResolveRequest,
     decisions_dir: _DecisionsDir,
+    engine: _Engine,
 ) -> dict[str, object]:
-    """Update DR response and append a response section in-place."""
-    try:
-        path = _find_decision_path(decisions_dir, decision_id)
-    except FileNotFoundError:
-        raise HTTPException(
-            status_code=404, detail=f"Decision {decision_id!r} not found"
-        ) from None
+    """Resolve one DR with immediate lifecycle side effects."""
+    _validate_decision_id(decision_id)
+
+    pending_path = decisions_dir / "pending" / f"{decision_id}.md"
+    resolved_path = decisions_dir / "resolved" / f"{decision_id}.md"
+
+    if not pending_path.exists():
+        if resolved_path.exists():
+            try:
+                resolved_meta, _ = _parse_dr(resolved_path)
+            except (TypeError, ValueError, YAMLError) as exc:
+                detail = "Invalid decision file format"
+                raise HTTPException(
+                    status_code=422, detail=detail
+                ) from exc
+
+            # Requests previously resolved through this endpoint are treated as
+            # duplicate submissions and keep FastAPI's {detail} 404 envelope.
+            if str(resolved_meta.get("resolved_by", "")) == "cockpit-api":
+                detail = f"Decision {decision_id!r} not found"
+                raise HTTPException(
+                    status_code=404, detail=detail
+                )
+
+            msg = f"Decision {decision_id!r} is already resolved"
+            code = "ERR_STALE"
+            raise ConcurrencyError(
+                code, msg
+            )
+
+        detail = f"Decision {decision_id!r} not found"
+        raise HTTPException(status_code=404, detail=detail)
 
     try:
-        meta, body = _parse_dr(path)
+        meta, body = _parse_dr(pending_path)
     except (
         TypeError,
         ValueError,
         YAMLError,
     ) as exc:  # pragma: no cover - defensive malformed file guard
+        detail = "Invalid decision file format"
         raise HTTPException(
-            status_code=422, detail="Invalid decision file format"
+            status_code=422, detail=detail
         ) from exc
+
+    current_response = str(meta.get("response", "pending"))
+    if current_response != "pending":
+        msg = f"Decision {decision_id!r} is already resolved"
+        code = "ERR_STALE"
+        raise ConcurrencyError(
+            code, msg
+        )
 
     updated = dict(meta)
     updated["response"] = req.response
+    updated["resolved_by"] = "cockpit-api"
     body_with_response = _append_response_section(body, req.response, req.notes)
-    _rewrite_response(path, updated, body_with_response)
+    _rewrite_response(pending_path, updated, body_with_response)
+
+    task_id = updated.get("task_id")
+    try:
+        engine.edit_task(task_id, append_body=_canonical_summary(req.response, body))
+        if req.response in {"approved", "rejected"}:
+            engine.edit_task(task_id, blocked=False)
+    except FileNotFoundError:
+        # Legacy callers may resolve DRs that point to tasks outside this engine.
+        pass
+
+    resolved_path.parent.mkdir(parents=True, exist_ok=True)
+    pending_path.replace(resolved_path)
 
     return {"id": decision_id, "response": req.response}
