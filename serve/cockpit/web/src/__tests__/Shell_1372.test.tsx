@@ -162,6 +162,25 @@ async function waitForScanSettled(container: HTMLElement, timeout = 2000): Promi
   )
 }
 
+// ─── File-level shim: save/restore HTMLElement.prototype.attachInternals ──────
+// Each describe's beforeEach mutates this prototype property. A top-level
+// afterEach restores the descriptor after every test so mutations never leak
+// across describe boundaries (reviewer gap #4).
+let _attachInternalsDescriptor: PropertyDescriptor | undefined
+
+beforeEach(() => {
+  _attachInternalsDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'attachInternals')
+})
+
+afterEach(() => {
+  if (_attachInternalsDescriptor !== undefined) {
+    Object.defineProperty(HTMLElement.prototype, 'attachInternals', _attachInternalsDescriptor)
+  } else {
+    // Property did not exist in jsdom before mutation — delete it.
+    delete (HTMLElement.prototype as unknown as Record<string, unknown>)['attachInternals']
+  }
+})
+
 // ─── AC1: All four scan states covered ────────────────────────────────────────
 
 describe('TestFromAC_ScanHealthStates', () => {
@@ -194,6 +213,65 @@ describe('TestFromAC_ScanHealthStates', () => {
       },
       { timeout: 1000 },
     )
+  })
+
+  // AC1 loading: while fetch is in-flight, neither HealthBadge nor scan-error
+  // should be shown (hasLoadedScan=false; scanError=null).
+  it('loading: health-badge and scan-error are absent while scan fetch is in flight', async () => {
+    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+      if (url === '/api/tasks/scan') {
+        // Never resolves — keeps scan in isLoading=true state.
+        return new Promise<Response>(() => {})
+      }
+      return new Promise<never>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () =>
+          reject(new DOMException('Aborted', 'AbortError')),
+        )
+      })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const { container } = renderShell()
+    // Wait until the scan fetch has been initiated (proving we're in loading state).
+    await waitFor(
+      () => {
+        expect(fetchMock.mock.calls.some(([url]: [string]) => url === '/api/tasks/scan')).toBe(true)
+      },
+      { timeout: 1000 },
+    )
+    // While fetch is in-flight: hasLoadedScan=false → no HealthBadge, no scan-error.
+    expect(container.querySelector('[data-testid="health-badge"]')).toBeNull()
+    expect(container.querySelector('[data-testid="scan-error"]')).toBeNull()
+  })
+
+  // AC1 zero-issue success: HealthBadge renders green when scan returns empty array.
+  it('happy: HealthBadge renders with data-health="green" when scan returns zero issues', async () => {
+    vi.stubGlobal('fetch', makeScanFetch({ ok: true, status: 200, body: [] }))
+    const { container } = renderShell()
+    await waitFor(
+      () => {
+        expect(container.querySelector('[data-testid="health-badge"]')).not.toBeNull()
+      },
+      { timeout: 1000 },
+    )
+    expect(
+      container.querySelector('[data-testid="health-badge"]')?.getAttribute('data-health'),
+    ).toBe('green')
+  })
+
+  // AC1 non-empty success: HealthBadge renders red when scan returns issue items.
+  it('happy: HealthBadge renders with data-health="red" when scan returns non-empty issues', async () => {
+    const SCAN_ITEMS = [{ code: 'E001', detail: 'Issue found', file_path: '/path/to/file.md' }]
+    vi.stubGlobal('fetch', makeScanFetch({ ok: true, status: 200, body: SCAN_ITEMS }))
+    const { container } = renderShell()
+    await waitFor(
+      () => {
+        expect(container.querySelector('[data-testid="health-badge"]')).not.toBeNull()
+      },
+      { timeout: 1000 },
+    )
+    expect(
+      container.querySelector('[data-testid="health-badge"]')?.getAttribute('data-health'),
+    ).toBe('red')
   })
 
 })
@@ -271,6 +349,19 @@ describe('TestFromAC_ScanFalseOKPrevention', () => {
     const { container } = renderShell()
     await waitForScanSettled(container)
     expect(container.querySelectorAll('[data-health="green"]').length).toBe(0)
+  })
+
+  // AC2 discriminating: after error, "Health OK" text (HealthBadge zero-issue label)
+  // must be absent — the success copy cannot coexist with a scan-error state.
+  it('error: "Health OK" button text is absent from status bar after a failed scan', async () => {
+    vi.stubGlobal('fetch', makeScanFetch({ ok: false, status: 500, body: SCAN_ERROR_ENVELOPE }))
+    const { container } = renderShell()
+    await waitForScanSettled(container)
+    const statusBar = container.querySelector('[data-region="status-bar"]') as HTMLElement
+    // HealthBadge with zero issues renders "Health OK" on its button.
+    // After a scan error, HealthBadge must be suppressed entirely.
+    expect(statusBar?.textContent ?? '').not.toContain('Health OK')
+    expect(container.querySelector('[data-testid="scan-error"]')).not.toBeNull()
   })
 })
 
@@ -356,6 +447,42 @@ describe('TestFromAC_ScanErrorDisplay', () => {
       },
       { timeout: 1000 },
     )
+  })
+
+  // AC3 specific message: usePollingFetch throws `new Error('Polling request failed
+  // with status ${response.status}')`. Shell renders `Scan failed: {scanError.message}`.
+  // The rendered text must contain the exact reason string, not just a generic keyword.
+  it('error: status bar contains the exact HTTP failure reason after a 500 scan error', async () => {
+    vi.stubGlobal('fetch', makeScanFetch({ ok: false, status: 500, body: SCAN_ERROR_ENVELOPE }))
+    const { container } = renderShell()
+    await waitFor(
+      () => {
+        expect(container.querySelector('[data-testid="scan-error"]')).not.toBeNull()
+      },
+      { timeout: 1000 },
+    )
+    const statusBar = container.querySelector('[data-region="status-bar"]') as HTMLElement
+    // usePollingFetch error message for non-2xx: "Polling request failed with status 500"
+    expect(statusBar?.textContent ?? '').toContain('Polling request failed with status 500')
+  })
+
+  // AC3 specific network message: TypeError from fetch propagates as-is through
+  // usePollingFetch.onError → useScanPolling.error → Shell renders the reason string.
+  it('error: status bar contains the network failure reason after a fetch TypeError', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.reject(new TypeError('Failed to fetch'))),
+    )
+    const { container } = renderShell()
+    await waitFor(
+      () => {
+        expect(container.querySelector('[data-testid="scan-error"]')).not.toBeNull()
+      },
+      { timeout: 1000 },
+    )
+    // Shell renders: "Scan failed: Failed to fetch"
+    const statusBar = container.querySelector('[data-region="status-bar"]') as HTMLElement
+    expect(statusBar?.textContent ?? '').toContain('Failed to fetch')
   })
 })
 
