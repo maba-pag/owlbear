@@ -17,6 +17,7 @@ import { render, fireEvent, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
 import KanbanBoard from '../KanbanBoard'
+import { useBoard } from '../hooks/useBoard'
 
 // ─── Module mocks (hoisted) ────────────────────────────────────────────────────
 
@@ -25,6 +26,13 @@ import KanbanBoard from '../KanbanBoard'
 vi.mock('../components/ArchivalModal', () => ({
   default: vi.fn(() => null),
   ARCHIVAL_REASONS: ['completed', 'dropped', 'wontfix', 'deprecated', 'duplicate'],
+}))
+
+// EventSourceProvider mock — required for AC7 tests that render via useBoard().
+// The existing renderBoard() tests pass props directly and never call useSSEEvent,
+// so this mock has no effect on them.
+vi.mock('../hooks/EventSourceProvider', () => ({
+  useSSEEvent: vi.fn(() => ({ mtime: null, status: 'connecting' })),
 }))
 
 // ─── PDS jsdom polyfill ────────────────────────────────────────────────────────
@@ -334,6 +342,122 @@ describe('TestFromAC_HealthPreservation', () => {
         expect(err!.textContent).toContain('board move rejected: index locked')
       },
       { timeout: 1000 },
+    )
+  })
+})
+
+// ─── AC7: Board-load error body discrimination (td:2) ─────────────────────────
+//
+// PROOF GAP identified by reviewer (2nd pass): no executed test asserts that the
+// body message text from a non-ok /api/board response reaches the rendered
+// error-message element. Existing renderBoard() tests pass error={null} and
+// bypass the board-load path entirely.
+//
+// These tests render via the real useBoard() hook so the full path is exercised:
+//   fetch /api/board → useBoard.getResponseErrorMessage() → error state →
+//   KanbanBoard error prop → <div data-testid="error-message">{error}</div>
+//
+// Expected: PASS against current code (implementation confirmed correct by two
+// reviewer code-path inspections — see ## Review Evidence in task body).
+
+function BoardViaHook() {
+  const { board, tasks, loading, error, refetchTasks } = useBoard()
+  return (
+    <KanbanBoard
+      board={board}
+      tasks={tasks}
+      loading={loading}
+      error={error}
+      refetchTasks={refetchTasks}
+    />
+  )
+}
+
+describe('TestFromAC_BoardLoadErrorBodyDiscrimination', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.clearAllMocks()
+  })
+
+  // EXPECTED TO PASS: useBoard parses {code,message} body via getResponseErrorMessage(),
+  // sets error state, and KanbanBoard renders it in the error-message element.
+  // If this fails, the board-load path does NOT discriminate body text from generic fallbacks.
+  it('board-load non-ok {code,message}: error-message contains response body message field', async () => {
+    const errorBody = { code: 'BOARD_ERR', message: 'board scan failed: index corrupted' }
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url.includes('/api/board')) {
+          return Promise.resolve({
+            ok: false,
+            status: 500,
+            json: () => Promise.resolve(errorBody),
+          } as Response)
+        }
+        // /api/tasks — return ok with empty tasks to prevent task-error interference
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ tasks: [], mtime: 1 }),
+        } as Response)
+      }),
+    )
+
+    const { container } = render(
+      <PorscheDesignSystemProvider>
+        <MemoryRouter>
+          <BoardViaHook />
+        </MemoryRouter>
+      </PorscheDesignSystemProvider>,
+    )
+
+    await waitFor(
+      () => {
+        const err = container.querySelector('[data-testid="error-message"]')
+        expect(err).not.toBeNull()
+        expect(err!.textContent).toContain('board scan failed: index corrupted')
+      },
+      { timeout: 2000 },
+    )
+  })
+
+  // EXPECTED TO PASS: same path but {detail} body shape — proves both envelope
+  // shapes are handled by getResponseErrorMessage() and reach the rendered element.
+  it('board-load non-ok {detail}: error-message contains response body detail field', async () => {
+    const errorBody = { detail: 'board scan failed: detail shape' }
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url.includes('/api/board')) {
+          return Promise.resolve({
+            ok: false,
+            status: 503,
+            json: () => Promise.resolve(errorBody),
+          } as Response)
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ tasks: [], mtime: 1 }),
+        } as Response)
+      }),
+    )
+
+    const { container } = render(
+      <PorscheDesignSystemProvider>
+        <MemoryRouter>
+          <BoardViaHook />
+        </MemoryRouter>
+      </PorscheDesignSystemProvider>,
+    )
+
+    await waitFor(
+      () => {
+        const err = container.querySelector('[data-testid="error-message"]')
+        expect(err).not.toBeNull()
+        expect(err!.textContent).toContain('board scan failed: detail shape')
+      },
+      { timeout: 2000 },
     )
   })
 })
