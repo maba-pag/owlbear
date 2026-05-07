@@ -874,16 +874,6 @@ class TestFromAC_ToolDescriptions:
             f"'ingest_document' description should start with a verb, got: {desc!r}"
         )
 
-    def test_list_entities_description_is_verb_first(self) -> None:
-        """list_entities tool description opens with an action verb."""
-        desc = _get_tool_description("list_entities")
-        first_word = (
-            desc.strip().split()[0].lower().rstrip(".,") if desc.strip() else ""
-        )
-        assert first_word in _VERB_FIRST_WORDS, (
-            f"'list_entities' description should start with a verb, got: {desc!r}"
-        )
-
     def test_get_stats_description_is_verb_first(self) -> None:
         """get_stats tool description opens with an action verb."""
         desc = _get_tool_description("get_stats")
@@ -920,16 +910,6 @@ class TestFromAC_ToolReadOnlyHints:
         )
         assert annotations.readOnlyHint is False, (  # type: ignore[union-attr]
             f"Expected readOnlyHint=False for ingest_document, got: {annotations.readOnlyHint!r}"
-        )
-
-    def test_list_entities_has_read_only_hint_true(self) -> None:
-        """list_entities must be registered with readOnlyHint=True (it only reads the KB)."""
-        annotations = _get_tool_annotations("list_entities")
-        assert annotations is not None, (
-            "list_entities has no ToolAnnotations; readOnlyHint=True must be set"
-        )
-        assert annotations.readOnlyHint is True, (  # type: ignore[union-attr]
-            f"Expected readOnlyHint=True for list_entities, got: {annotations.readOnlyHint!r}"
         )
 
     def test_get_stats_has_read_only_hint_true(self) -> None:

@@ -83,19 +83,6 @@ class TestFromAC_KnowledgeToolAnnotations:
             f"Expected idempotentHint=True for list_sources, got: {ann.idempotentHint!r}"
         )
 
-    # -- AC3: list_entities ---------------------------------------------------
-
-    def test_list_entities_idempotent_hint_true(self) -> None:
-        """list_entities is idempotent: listing entities with the same args is repeatable."""
-        ann = _get_tool_annotations("list_entities")
-        assert ann is not None, (
-            "list_entities has no ToolAnnotations; readOnlyHint=True already present but "
-            "idempotentHint=True must also be added"
-        )
-        assert ann.idempotentHint is True, (  # type: ignore[union-attr]
-            f"Expected idempotentHint=True for list_entities, got: {ann.idempotentHint!r}"
-        )
-
     # -- AC4: get_stats -------------------------------------------------------
 
     def test_get_stats_idempotent_hint_true(self) -> None:

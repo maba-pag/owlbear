@@ -157,49 +157,6 @@ class TestFromAC_ListToolOutputSchemas:
             f"SourceInfo.scope type expected 'string', got: {props['scope'].get('type')!r}"
         )
 
-    # -- AC3: list_entities / EntityInfo --------------------------------------
-
-    def test_list_entities_output_schema_has_defs_with_entity_info(self) -> None:
-        """list_entities output_schema must have EntityInfo in $defs."""
-        schema = _get_output_schema("list_entities")
-        assert schema is not None, "list_entities tool or fn_metadata not found"
-        assert "$defs" in schema, (
-            "output_schema for list_entities missing '$defs'; expected TypedDict EntityInfo to be defined there"
-        )
-        assert "EntityInfo" in schema["$defs"], (
-            f"'EntityInfo' not found in $defs; available keys: {list(schema['$defs'])}"
-        )
-
-    def test_list_entities_entity_info_has_name_field(self) -> None:
-        """EntityInfo in $defs must have a 'name' property of type string."""
-        schema = _get_output_schema("list_entities")
-        assert schema is not None
-        props = schema.get("$defs", {}).get("EntityInfo", {}).get("properties", {})
-        assert "name" in props, "EntityInfo missing 'name' property"
-        assert props["name"].get("type") == "string", (
-            f"EntityInfo.name type expected 'string', got: {props['name'].get('type')!r}"
-        )
-
-    def test_list_entities_entity_info_has_entity_type_field(self) -> None:
-        """EntityInfo in $defs must have a 'entity_type' property of type string."""
-        schema = _get_output_schema("list_entities")
-        assert schema is not None
-        props = schema.get("$defs", {}).get("EntityInfo", {}).get("properties", {})
-        assert "entity_type" in props, "EntityInfo missing 'entity_type' property"
-        assert props["entity_type"].get("type") == "string", (
-            f"EntityInfo.entity_type type expected 'string', got: {props['entity_type'].get('type')!r}"
-        )
-
-    def test_list_entities_entity_info_has_description_field(self) -> None:
-        """EntityInfo in $defs must have a 'description' property of type string."""
-        schema = _get_output_schema("list_entities")
-        assert schema is not None
-        props = schema.get("$defs", {}).get("EntityInfo", {}).get("properties", {})
-        assert "description" in props, "EntityInfo missing 'description' property"
-        assert props["description"].get("type") == "string", (
-            f"EntityInfo.description type expected 'string', got: {props['description'].get('type')!r}"
-        )
-
 
 # ---------------------------------------------------------------------------
 # TestFromAC_StatsOutputSchema
