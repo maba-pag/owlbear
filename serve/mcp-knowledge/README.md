@@ -22,7 +22,8 @@ Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json
 | `list_sources` | List registered knowledge sources, optionally filtered by scope |
 | `ingest_document` | Ingest text content into the knowledge base (optional `source_url` for attribution) |
 | `list_entities` | List knowledge-graph entities, optionally filtered by type |
-| `get_stats` | Summary statistics (document count, entity count, edge count) |
+| `get_consolidation_candidates` | List unresolved cross-source entity consolidation candidates (entities appearing in 2+ sources with no existing edge or reviewed dismissal) |
+| `get_stats` | Summary statistics: document, entity, and edge counts plus source count, chunk count, enrichment ratio, and consolidation candidates remaining |
 | `bookmark_source` | Evaluate a URL and optionally ingest it as a bookmark |
 | `list_bookmarks` | List bookmarks, optionally filtered by tag or minimum score |
 | `update_bookmark_tags` | Update tags on an existing bookmark |
@@ -33,7 +34,7 @@ Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json
 | `refresh_source` | Re-ingest a registered source by source ID |
 | `consolidate_knowledge` | Synthesize cross-document insights from unconsolidated chunks |
 | `get_next_batch` | Atomically claim a batch of chunks ready for enrichment |
-| `store_enrichment` | Persist extracted entities and edges, mark chunk as enriched |
+| `store_enrichment` | Dual-mode enrichment persist: Phase 1 (`chunk_id`, `entities`, `edges`) marks chunk enriched; Phase 2 (`candidate_id`, `edges`) writes cross-source edges or records a reviewed-pair dismissal |
 
 ## Configuration
 
