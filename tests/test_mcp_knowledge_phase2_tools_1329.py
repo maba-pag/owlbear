@@ -973,3 +973,123 @@ class TestFromAC_GetStatsExpansion:
             f"(single pair: Polars in sources A and B), "
             f"got: {result['consolidation_candidates_remaining']}"
         )
+
+
+# ---------------------------------------------------------------------------
+# Additional exact-proof tests for AC3, AC4, AC5 (cycle-2 review gaps)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ExactProofs:
+    """Cycle-2 retry: exact assertions for AC3 dict shape, AC4 edge row, AC5 reviewed_pairs row."""
+
+    @pytest.mark.asyncio
+    async def test_ac3_candidates_are_dicts_not_objects(
+        self, conn: sqlite3.Connection
+    ) -> None:
+        """AC3 exact (cycle 2): every candidate must be a plain dict — isinstance(candidate, dict)
+        required so duck-typing objects cannot slip past the shape contract."""
+        source_a = _insert_source(conn, name="Source A")
+        source_b = _insert_source(conn, name="Source B")
+        doc_a = _insert_document(conn, source_id=source_a)
+        doc_b = _insert_document(conn, source_id=source_b)
+        _insert_entity(conn, name="DictProofEntity", document_id=doc_a)
+        _insert_entity(conn, name="DictProofEntity", document_id=doc_b)
+
+        ctx = _make_mcp_ctx(conn)
+        candidates = await get_consolidation_candidates(ctx, limit=20)
+
+        assert len(candidates) >= 1, "Expected at least one candidate"
+        for candidate in candidates:
+            assert isinstance(candidate, dict), (
+                f"Expected each candidate to be a plain dict, "
+                f"got {type(candidate).__name__}: {candidate!r}"
+            )
+
+    @pytest.mark.asyncio
+    async def test_ac4_exact_edge_row_content_after_phase2_store(
+        self, conn: sqlite3.Connection
+    ) -> None:
+        """AC4 exact (cycle 2): store_enrichment Phase 2 with non-empty edges writes
+        an edge row whose source_id, target_id, and relation exactly match the
+        caller-supplied values — not just a count increment."""
+        source_a = _insert_source(conn, name="Source A")
+        source_b = _insert_source(conn, name="Source B")
+        doc_a = _insert_document(conn, source_id=source_a)
+        doc_b = _insert_document(conn, source_id=source_b)
+        entity_a_id = _insert_entity(conn, name="ExactEdgeEntity", document_id=doc_a)
+        entity_b_id = _insert_entity(conn, name="ExactEdgeEntity", document_id=doc_b)
+
+        ctx = _make_mcp_ctx(conn)
+        candidates = await get_consolidation_candidates(ctx, limit=20)
+        target = next(
+            c for c in candidates if _get_field(c, "entity_name") == "ExactEdgeEntity"
+        )
+        candidate_id = _get_field(target, "candidate_id")
+
+        await store_enrichment(
+            ctx,
+            candidate_id=candidate_id,
+            edges=[
+                {
+                    "source_id": entity_a_id,
+                    "target_id": entity_b_id,
+                    "relation": "exact_match_proof",
+                }
+            ],
+        )
+
+        row = conn.execute(
+            "SELECT source_id, target_id, relation FROM edges "
+            "WHERE source_id = ? AND target_id = ? AND relation = ?",
+            (entity_a_id, entity_b_id, "exact_match_proof"),
+        ).fetchone()
+        assert row is not None, (
+            f"Expected edge row (source_id={entity_a_id!r}, "
+            f"target_id={entity_b_id!r}, relation='exact_match_proof') — not found in DB"
+        )
+        assert row[0] == entity_a_id, f"source_id mismatch: {row[0]!r} != {entity_a_id!r}"
+        assert row[1] == entity_b_id, f"target_id mismatch: {row[1]!r} != {entity_b_id!r}"
+        assert row[2] == "exact_match_proof", f"relation mismatch: {row[2]!r}"
+
+    @pytest.mark.asyncio
+    async def test_ac5_exact_reviewed_pairs_row_content_after_dismissal(
+        self, conn: sqlite3.Connection
+    ) -> None:
+        """AC5 exact (cycle 2): store_enrichment Phase 2 with edges=[] writes a
+        reviewed_pairs row whose entity_name, source_a, source_b match the candidate
+        decoded from candidate_id — not just a count increment."""
+        source_a = _insert_source(conn, name="Source A")
+        source_b = _insert_source(conn, name="Source B")
+        doc_a = _insert_document(conn, source_id=source_a)
+        doc_b = _insert_document(conn, source_id=source_b)
+        _insert_entity(conn, name="ExactDismissalEntity", document_id=doc_a)
+        _insert_entity(conn, name="ExactDismissalEntity", document_id=doc_b)
+
+        ctx = _make_mcp_ctx(conn)
+        candidates = await get_consolidation_candidates(ctx, limit=20)
+        target = next(
+            c for c in candidates if _get_field(c, "entity_name") == "ExactDismissalEntity"
+        )
+        candidate_id = _get_field(target, "candidate_id")
+
+        await store_enrichment(ctx, candidate_id=candidate_id, edges=[])
+
+        row = conn.execute(
+            "SELECT entity_name, source_a, source_b FROM reviewed_pairs "
+            "WHERE entity_name = ?",
+            ("ExactDismissalEntity",),
+        ).fetchone()
+        assert row is not None, (
+            "Expected reviewed_pairs row for 'ExactDismissalEntity' — not found in DB"
+        )
+        assert row[0] == "ExactDismissalEntity", (
+            f"entity_name mismatch: {row[0]!r} != 'ExactDismissalEntity'"
+        )
+        # source_a and source_b may be stored in canonicalized order — check set equality
+        stored_sources = {row[1], row[2]}
+        expected_sources = {source_a, source_b}
+        assert stored_sources == expected_sources, (
+            f"Expected reviewed_pairs sources to be {expected_sources}, "
+            f"got: {stored_sources}"
+        )
