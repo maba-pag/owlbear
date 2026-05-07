@@ -202,6 +202,7 @@ export default function ArchivalModal({
 
       if (response.status === 409) {
         setError('Task snapshot is stale; refresh and try again.')
+        onRefresh()
         return
       }
 

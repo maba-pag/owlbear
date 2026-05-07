@@ -205,6 +205,12 @@ function KanbanBoardContent({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: targetStatus, updated }),
       })
+      if (res.status === 409) {
+        setMoveError('Move failed: stale snapshot (409)')
+        refetchTasks()
+        return
+      }
+
       if (!res.ok) {
         setMoveError(await getResponseErrorMessage(res, `Move failed: ${res.status}`))
         return

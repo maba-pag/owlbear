@@ -138,7 +138,7 @@ export function useBoard(): UseBoardResult {
     }
   }, [])
 
-  const loading = !boardReady || !tasksReady
+  const loading = (!boardReady || !tasksReady) && !(boardError !== null && board === null)
   const error = boardError ?? tasksError
   const effectiveHealth: HealthState =
     sseStatus === 'open' ? 'green' : sseStatus === 'connecting' ? 'yellow' : health
