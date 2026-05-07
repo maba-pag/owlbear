@@ -2,6 +2,14 @@
 
 External repos and resources studied during OwlBear development.
 
+## AC Quality Skill Schema (Task #1404)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| NextGenAnalysts — AC best practices | <https://nextgenanalysts.co.uk/how-to-write-clear-and-concise-acceptance-criteria-with-practical-examples/> | 5 AC quality components: specific/measurable, testable, independent, user-focused, clear DoD; banned vague terms | `.owlbear/research/1404-ac-quality-skill-schema.md` | 2026-05-08 |
+| Atlassian — Acceptance Criteria | <https://www.atlassian.com/work-management/project-management/acceptance-criteria> | AC as "testable statements focused on positive customer results" | `.owlbear/research/1404-ac-quality-skill-schema.md` | 2026-05-08 |
+| AltexSoft — AC Purposes, Formats, Best Practices | <https://www.altexsoft.com/blog/acceptance-criteria-purposes-formats-and-best-practices/> | "Each AC must be independently testable with clear pass/fail scenarios" | `.owlbear/research/1404-ac-quality-skill-schema.md` | 2026-05-08 |
+
 ## Qdrant Persistence + Source Identity (Task #1320)
 
 | Source | URL | What | Where Used | Date |
