@@ -52,7 +52,8 @@ export function useBoard(): UseBoardResult {
   const [tasks, setTasks] = useState<Task[]>([])
   const [boardReady, setBoardReady] = useState(false)
   const [tasksReady, setTasksReady] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [boardError, setBoardError] = useState<string | null>(null)
+  const [tasksError, setTasksError] = useState<string | null>(null)
   const [isStale, setIsStale] = useState(false)
   const mtimeRef = useRef<number | null>(null)
   const lastObservedTasksMtimeRef = useRef<number | null>(null)
@@ -68,14 +69,14 @@ export function useBoard(): UseBoardResult {
         mtimeRef.current = data.mtime
         setTasks(data.tasks)
       }
-      setError(null)
+      setTasksError(null)
       setIsStale(false)
       setTasksReady(true)
       markHealthy()
       updateHealth()
     },
     onError: async (pollError) => {
-      setError(pollError.message)
+      setTasksError(pollError.message)
       setIsStale(true)
       setTasksReady(true)
       updateHealth()
@@ -109,7 +110,7 @@ export function useBoard(): UseBoardResult {
 
         if (!boardRes.ok) {
           if (!cancelled) {
-            setError(
+            setBoardError(
               await getResponseErrorMessage(boardRes, `Board API error: ${boardRes.status}`),
             )
           }
@@ -122,7 +123,7 @@ export function useBoard(): UseBoardResult {
         }
       } catch (err) {
         if (!cancelled && !(err instanceof DOMException && err.name === 'AbortError')) {
-          setError(err instanceof Error ? err.message : 'Failed to load board')
+          setBoardError(err instanceof Error ? err.message : 'Failed to load board')
         }
       } finally {
         if (!cancelled) {
@@ -138,6 +139,7 @@ export function useBoard(): UseBoardResult {
   }, [])
 
   const loading = !boardReady || !tasksReady
+  const error = boardError ?? tasksError
   const effectiveHealth: HealthState =
     sseStatus === 'open' ? 'green' : sseStatus === 'connecting' ? 'yellow' : health
 
