@@ -1,3 +1,5 @@
+import { getResponseErrorMessage } from './errorMessage'
+
 export interface RepairOutcome {
   task_id: number | null
   file_path: string
@@ -10,7 +12,11 @@ export async function repairStorage(): Promise<RepairOutcome[]> {
   try {
     const response = await fetch('/api/tasks/repair', { method: 'POST' })
     if (!response.ok) {
-      throw new Error(`Repair request failed with status ${response.status}`)
+      const errorMessage = await getResponseErrorMessage(
+        response,
+        `Repair request failed with status ${response.status}`,
+      )
+      throw new Error(errorMessage)
     }
     return (await response.json()) as RepairOutcome[]
   } catch (error: unknown) {

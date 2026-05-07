@@ -7,6 +7,7 @@ import DetailTab, { type TaskDetail } from './components/DetailTab'
 import DRStatusIndicator from './components/DRStatusIndicator'
 import HealthBadge, { type ScanItem as HealthBadgeItem } from './components/HealthBadge'
 import ResolveModal from './components/ResolveModal'
+import { getResponseErrorMessage } from './api/errorMessage'
 import { useBoard } from './hooks/useBoard'
 import { usePendingDRs } from './hooks/usePendingDRs'
 import { type ScanItem as ScanPollingItem, useScanPolling } from './hooks/useScanPolling'
@@ -18,7 +19,7 @@ function isHealthBadgeItem(item: ScanPollingItem): item is HealthBadgeItem {
 
 function Shell() {
   const { board, tasks, loading, error, health, refetchTasks, lastDecisionsMtime } = useBoard()
-  const { count: pendingDRCount, items: pendingDRItems, refetch: refetchPendingDRs } = usePendingDRs()
+  const { count: pendingDRCount, items: pendingDRItems, error: pendingDRError, refetch: refetchPendingDRs } = usePendingDRs()
   const { items: scanItems, isLoading, error: scanError, refetch } = useScanPolling()
   const normalizedItems = scanItems.filter(isHealthBadgeItem)
   const statusHealth = scanError ? 'red' : health
@@ -26,6 +27,8 @@ function Shell() {
   const [selectedDRId, setSelectedDRId] = useState<string | null>(null)
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null)
   const [selectedTask, setSelectedTask] = useState<TaskDetail | null>(null)
+  const [selectedTaskError, setSelectedTaskError] = useState<string | null>(null)
+  const [taskFetchNonce, setTaskFetchNonce] = useState(0)
   const selectedDR = pendingDRItems.find((item) => item.id === selectedDRId) ?? null
   const tabsRef = useRef<HTMLElement>(null)
   const detailRef = useRef<HTMLDivElement>(null)
@@ -80,11 +83,13 @@ function Shell() {
   useEffect(() => {
     if (selectedTaskId === null) {
       setSelectedTask(null)
+      setSelectedTaskError(null)
       return
     }
 
     // Clear stale detail data immediately when switching tasks.
     setSelectedTask(null)
+    setSelectedTaskError(null)
 
     const controller = new AbortController()
     let cancelled = false
@@ -95,6 +100,11 @@ function Shell() {
         if (!response.ok) {
           if (!cancelled) {
             setSelectedTask(null)
+            const errorMessage = await getResponseErrorMessage(
+              response,
+              `Task fetch failed with status ${response.status}`,
+            )
+            setSelectedTaskError(errorMessage)
           }
           return
         }
@@ -102,10 +112,12 @@ function Shell() {
         const task = (await response.json()) as TaskDetail
         if (!cancelled) {
           setSelectedTask(task)
+          setSelectedTaskError(null)
         }
       } catch (error) {
         if (!(error instanceof DOMException && error.name === 'AbortError') && !cancelled) {
           setSelectedTask(null)
+          setSelectedTaskError(error instanceof Error ? error.message : 'Task fetch failed')
         }
       }
     })()
@@ -114,7 +126,7 @@ function Shell() {
       cancelled = true
       controller.abort()
     }
-  }, [selectedTaskId])
+  }, [selectedTaskId, taskFetchNonce])
 
   return (
     <div className="shell">
@@ -149,6 +161,11 @@ function Shell() {
           items={pendingDRItems}
           onItemClick={setSelectedDRId}
         />
+        {pendingDRError ? (
+          <span data-testid="dr-polling-error" role="status">
+            {pendingDRError.message}
+          </span>
+        ) : null}
       </header>
       <nav className="shell__nav-rail" data-region="nav-rail">
         <PButton data-surface="kanban" aria-current="page" variant="secondary">
@@ -176,6 +193,19 @@ function Shell() {
               {selectedTaskId === null
                 ? <div data-testid="detail-placeholder">Select a task to view details.</div>
                 : null}
+              {selectedTaskId !== null && selectedTaskError !== null ? (
+                <div data-testid="task-fetch-error" role="status">
+                  {selectedTaskError}
+                  <PButton
+                    type="button"
+                    data-testid="task-fetch-retry"
+                    variant="secondary"
+                    onClick={() => setTaskFetchNonce((value) => value + 1)}
+                  >
+                    Retry
+                  </PButton>
+                </div>
+              ) : null}
               <DetailTab
                 key={selectedTaskId ?? -1}
                 task={selectedTask}
@@ -184,10 +214,12 @@ function Shell() {
                 onTaskCleared={() => {
                   setSelectedTaskId(null)
                   setSelectedTask(null)
+                  setSelectedTaskError(null)
                 }}
                 onTaskUpdated={(updatedTask) => {
                   const previousTask = selectedTask
                   setSelectedTask(updatedTask)
+                  setSelectedTaskError(null)
                   if (
                     previousTask === null ||
                     previousTask.title !== updatedTask.title ||

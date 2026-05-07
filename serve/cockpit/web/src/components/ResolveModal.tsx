@@ -10,6 +10,7 @@ import {
 } from '@porsche-design-system/components-react'
 
 import type { PendingDR } from '../hooks/usePendingDRs'
+import { getResponseErrorMessage } from '../api/errorMessage'
 
 export interface PendingDRWithBody extends PendingDR {
   body?: string
@@ -43,12 +44,17 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
         body: JSON.stringify({ response, notes }),
       })
       if (!res.ok) {
-        setError('Failed to resolve decision request.')
+        const errorMessage = await getResponseErrorMessage(res, 'Failed to resolve decision request.')
+        setError(errorMessage)
         return
       }
       onResolved()
       onClose()
-    } catch {
+    } catch (caught) {
+      if (caught instanceof Error) {
+        setError(caught.message)
+        return
+      }
       setError('Failed to resolve decision request.')
     }
   }

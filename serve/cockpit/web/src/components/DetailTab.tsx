@@ -11,6 +11,7 @@ import rehypeSanitize from 'rehype-sanitize'
 import HistorySubtab, { type Session } from './HistorySubtab'
 import ConfirmDialog from './ConfirmDialog'
 import type { Board } from '../hooks/useBoard'
+import { getResponseErrorMessage } from '../api/errorMessage'
 
 export interface TaskDetail {
   id: number
@@ -128,9 +129,11 @@ export default function DetailTab({ task, board, onTaskUpdated, onSelectTask, on
     }
 
     if (res.status === 422) {
-      const data = (await res.json()) as { detail?: string }
-      setValidationMessage(data.detail ?? 'Validation failed')
+      setValidationMessage(await getResponseErrorMessage(res, 'Validation failed'))
+      return
     }
+
+    setValidationMessage(await getResponseErrorMessage(res, `Request failed with status ${res.status}`))
   }
 
   async function handleSave() {

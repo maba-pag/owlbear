@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { getResponseErrorMessage } from '../api/errorMessage'
 
 const DEFAULT_INTERVAL_MS = 3000
 
@@ -65,7 +66,11 @@ export function usePollingFetch<TPayload = unknown>(
         signal: controller.signal,
       })
       if (!response.ok) {
-        throw new Error(`Polling request failed with status ${response.status}`)
+        const errorMessage = await getResponseErrorMessage(
+          response,
+          `Polling request failed with status ${response.status}`,
+        )
+        throw new Error(errorMessage)
       }
 
       const parse = parseRef.current ?? (async (res: Response) => (await res.json()) as TPayload)
