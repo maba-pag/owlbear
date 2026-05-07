@@ -266,6 +266,52 @@ class TestFromAC_ApprovedResolution:
             "## Decision Request block must mention the resolution response"
         )
 
+    def test_approve_response_body_shape(
+        self, client: TestClient, engine: KanbanEngine, board_dir: Path
+    ) -> None:
+        """POST response for approved resolution must be exactly {id, response}.
+
+        FAILS now if implementation omits either key or adds extra keys.
+        Current implementation returns {"id": ..., "response": ...} so this
+        passes; added here to pin the contract per reviewer AC1 gap.
+        """
+        task_id = _create_blocked_task(engine, "Approve response shape task")
+        stem = f"{task_id}-approve-shape"
+        _write_pending_dr(board_dir, stem=stem, task_id=task_id)
+
+        resp = client.post(
+            f"/api/decisions/{stem}/resolve", json={"response": "approved"}
+        )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data == {"id": stem, "response": "approved"}, (
+            "Approved resolution POST must return exactly {id, response} shape"
+        )
+
+    def test_approve_summary_includes_source_line(
+        self, client: TestClient, engine: KanbanEngine, board_dir: Path
+    ) -> None:
+        """Approved resolution: canonical task summary must contain the '- source:' line.
+
+        FAILS now if _canonical_summary omits the source field.  Current impl
+        includes it; test added to pin the contract per reviewer AC1 gap.
+        """
+        task_id = _create_blocked_task(engine, "Approve source line task")
+        stem = f"{task_id}-approve-source"
+        _write_pending_dr(
+            board_dir, stem=stem, task_id=task_id, body="Decide the scope."
+        )
+
+        client.post(
+            f"/api/decisions/{stem}/resolve", json={"response": "approved"}
+        )
+
+        body = _read_task_body(engine, task_id)
+        assert "- source:" in body, (
+            "Canonical task summary must include '- source:' line (from _canonical_summary)"
+        )
+
 
 # ---------------------------------------------------------------------------
 # AC2: Rejected resolution lifecycle
@@ -346,6 +392,52 @@ class TestFromAC_RejectedResolution:
         )
         assert "rejected" in body, (
             "## Decision Request block must mention the rejection response"
+        )
+
+    def test_reject_response_body_shape(
+        self, client: TestClient, engine: KanbanEngine, board_dir: Path
+    ) -> None:
+        """POST response for rejected resolution must be exactly {id, response}.
+
+        FAILS now if implementation omits either key or adds extra keys.
+        Current implementation returns {"id": ..., "response": ...} so this
+        passes; added here to pin the contract per reviewer AC2 gap.
+        """
+        task_id = _create_blocked_task(engine, "Reject response shape task")
+        stem = f"{task_id}-reject-shape"
+        _write_pending_dr(board_dir, stem=stem, task_id=task_id)
+
+        resp = client.post(
+            f"/api/decisions/{stem}/resolve", json={"response": "rejected"}
+        )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data == {"id": stem, "response": "rejected"}, (
+            "Rejected resolution POST must return exactly {id, response} shape"
+        )
+
+    def test_reject_summary_includes_source_line(
+        self, client: TestClient, engine: KanbanEngine, board_dir: Path
+    ) -> None:
+        """Rejected resolution: canonical task summary must contain the '- source:' line.
+
+        FAILS now if _canonical_summary omits the source field.  Current impl
+        includes it; test added to pin the contract per reviewer AC2 gap.
+        """
+        task_id = _create_blocked_task(engine, "Reject source line task")
+        stem = f"{task_id}-reject-source"
+        _write_pending_dr(
+            board_dir, stem=stem, task_id=task_id, body="Decide the scope."
+        )
+
+        client.post(
+            f"/api/decisions/{stem}/resolve", json={"response": "rejected"}
+        )
+
+        body = _read_task_body(engine, task_id)
+        assert "- source:" in body, (
+            "Canonical task summary must include '- source:' line (from _canonical_summary)"
         )
 
 
