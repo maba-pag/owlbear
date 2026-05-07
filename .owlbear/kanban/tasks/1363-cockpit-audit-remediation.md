@@ -14,7 +14,7 @@ tags:
 - no-dispatch
 parent:
 depends_on: []
-blocked: false
+blocked: true
 block_reason: live parent container — not dispatchable until all children done
 claimed_at:
 archival_reason:
