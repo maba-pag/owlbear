@@ -4,6 +4,7 @@ import ArchivalModal from './components/ArchivalModal'
 import FilterPanel from './components/FilterPanel'
 import { filterTasks, type FilterState } from './utils/filterTasks'
 import { type Board, type Task } from './hooks/useBoard'
+import { getResponseErrorMessage } from './api/errorMessage'
 
 // ─── KanbanBoard ──────────────────────────────────────────────────────────────
 
@@ -159,7 +160,7 @@ function KanbanBoardContent({
         return
       }
 
-      setMoveError(`Move failed: ${res.status}`)
+      setMoveError(await getResponseErrorMessage(res, `Move failed: ${res.status}`))
     } catch {
       setMoveError('Move failed: network error')
     }
@@ -201,7 +202,7 @@ function KanbanBoardContent({
         body: JSON.stringify({ status: targetStatus, updated }),
       })
       if (!res.ok) {
-        setMoveError(`Move failed: ${res.status}`)
+        setMoveError(await getResponseErrorMessage(res, `Move failed: ${res.status}`))
         return
       }
       refetchTasks()

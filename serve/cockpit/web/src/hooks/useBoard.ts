@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useConnectionHealth, type HealthState } from './useConnectionHealth'
 import { usePollingFetch } from './usePollingFetch'
 import { useSSEEvent } from './EventSourceProvider'
+import { getResponseErrorMessage } from '../api/errorMessage'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -107,7 +108,12 @@ export function useBoard(): UseBoardResult {
         const boardRes = await fetch('/api/board', { signal: controller.signal })
 
         if (!boardRes.ok) {
-          throw new Error(`Board API error: ${boardRes.status}`)
+          if (!cancelled) {
+            setError(
+              await getResponseErrorMessage(boardRes, `Board API error: ${boardRes.status}`),
+            )
+          }
+          return
         }
 
         const boardData = (await boardRes.json()) as Board

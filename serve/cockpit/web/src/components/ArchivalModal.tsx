@@ -6,6 +6,7 @@ import {
   PSelect,
   PText,
 } from '@porsche-design-system/components-react'
+import { getResponseErrorMessage } from '../api/errorMessage'
 
 export const ARCHIVAL_REASONS = [
   'completed',
@@ -205,13 +206,13 @@ export default function ArchivalModal({
       }
 
       if (response.status === 422) {
-        const payload = (await response.json()) as { detail?: unknown }
-        const detail = typeof payload.detail === 'string' ? payload.detail : 'Validation failed.'
-        setError(detail)
+        setError(await getResponseErrorMessage(response, 'Validation failed.'))
         return
       }
 
-      setError(`Archival failed (${response.status}).`)
+      setError(
+        await getResponseErrorMessage(response, `Archival failed (${response.status}).`),
+      )
     } catch {
       setError('Archival failed due to network error.')
     } finally {
