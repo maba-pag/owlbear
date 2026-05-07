@@ -506,6 +506,54 @@ describe('TestFromAC_ErrorRenderingAndRetry', () => {
     )
   })
 
+  // ── Task-fetch: clicking retry issues a second /api/tasks/{id} fetch ──────────
+
+  // Proves the retry handler (setTaskFetchNonce increment → useEffect re-run → new fetch).
+  // Error indicator must remain visible after a failing retry (behavior intact).
+  it('Shell task-fetch: clicking task-fetch-retry issues a second fetch and error indicator remains', async () => {
+    stubShellHooks()
+    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+      if (url === '/api/tasks/42') {
+        return Promise.resolve({
+          ok: false,
+          status: 500,
+          json: () => Promise.resolve({ code: 'INTERNAL', message: 'task fetch failed' }),
+        } as Response)
+      }
+      return new Promise<never>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () =>
+          reject(new DOMException('Aborted', 'AbortError')),
+        )
+      })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const { container } = renderShell()
+
+    // Trigger initial task-fetch failure.
+    fireEvent.click(container.querySelector('[data-testid="select-task-42"]')!)
+    await waitFor(
+      () => {
+        expect(container.querySelector('[data-testid="task-fetch-error"]')).not.toBeNull()
+      },
+      { timeout: 1000 },
+    )
+    const callsAfterFirstFetch = fetchMock.mock.calls.filter(([url]) => url === '/api/tasks/42').length
+    expect(callsAfterFirstFetch).toBe(1)
+
+    // Click retry — must trigger a second fetch to /api/tasks/42.
+    fireEvent.click(container.querySelector('[data-testid="task-fetch-retry"]')!)
+    await waitFor(
+      () => {
+        const calls = fetchMock.mock.calls.filter(([url]) => url === '/api/tasks/42')
+        expect(calls.length).toBeGreaterThanOrEqual(2)
+      },
+      { timeout: 1000 },
+    )
+
+    // Error indicator stays visible — retry still fails, behavior intact.
+    expect(container.querySelector('[data-testid="task-fetch-error"]')).not.toBeNull()
+  })
+
   // ── DR polling: error is surfaced in Shell UI ─────────────────────────────────
 
   // FAILS: Shell destructures only {count, items, refetch} from usePendingDRs —
