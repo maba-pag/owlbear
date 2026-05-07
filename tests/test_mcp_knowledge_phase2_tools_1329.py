@@ -1093,3 +1093,152 @@ class TestFromAC_ExactProofs:
             f"Expected reviewed_pairs sources to be {expected_sources}, "
             f"got: {stored_sources}"
         )
+
+
+# ---------------------------------------------------------------------------
+# Cycle-3 proof tests: AC2 reversed order, AC3 positional chunks, AC5 positional columns
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_Cycle3Proofs:
+    """Cycle-3 retry: close remaining false-green paths in AC2, AC3, and AC5."""
+
+    # --- AC2: reversed reviewed_pairs still excludes candidate ---
+
+    @pytest.mark.asyncio
+    async def test_ac2_reversed_reviewed_pair_still_excludes_candidate(
+        self, conn: sqlite3.Connection
+    ) -> None:
+        """AC2 exact (cycle 3): a reviewed_pairs row inserted with source_a and source_b
+        swapped relative to the candidate's canonical order (min/max) must still exclude
+        the pair — proving the OR branch in the SQL filter fires correctly."""
+        source_x = _insert_source(conn, name="Source X")
+        source_y = _insert_source(conn, name="Source Y")
+        doc_x = _insert_document(conn, source_id=source_x)
+        doc_y = _insert_document(conn, source_id=source_y)
+        _insert_entity(conn, name="ReversedPairEntity", document_id=doc_x)
+        _insert_entity(conn, name="ReversedPairEntity", document_id=doc_y)
+
+        # Determine which source_id is canonical source_a (the lexicographically smaller one)
+        canonical_a, canonical_b = (
+            (source_x, source_y) if source_x < source_y else (source_y, source_x)
+        )
+        # Insert reviewed_pairs with the order DELIBERATELY REVERSED
+        _insert_reviewed_pair(
+            conn,
+            entity_name="ReversedPairEntity",
+            source_a=canonical_b,
+            source_b=canonical_a,
+        )
+
+        ctx = _make_mcp_ctx(conn)
+        candidates = await get_consolidation_candidates(ctx, limit=20)
+
+        names = [c["entity_name"] for c in candidates]
+        assert "ReversedPairEntity" not in names, (
+            "Expected 'ReversedPairEntity' excluded even when reviewed_pairs row uses "
+            f"reversed source_a/source_b order — got candidates: {names}"
+        )
+
+    # --- AC3: positional chunk content assertion (direct dict indexing, no set) ---
+
+    @pytest.mark.asyncio
+    async def test_ac3_source_a_chunk_and_source_b_chunk_match_positionally(
+        self, conn: sqlite3.Connection
+    ) -> None:
+        """AC3 exact (cycle 3): source_a_chunk must equal the chunk text from the
+        source assigned as source_a (min source_id), and source_b_chunk must equal
+        the chunk text from the source assigned as source_b (max source_id) — tested
+        with direct dict key access, no set comparison, no _get_field helper."""
+        source_p = _insert_source(conn, name="Source P")
+        source_q = _insert_source(conn, name="Source Q")
+        doc_p = _insert_document(conn, source_id=source_p)
+        doc_q = _insert_document(conn, source_id=source_q)
+        chunk_p = _insert_chunk(
+            conn, document_id=doc_p, content="Positional chunk from Source P"
+        )
+        chunk_q = _insert_chunk(
+            conn, document_id=doc_q, content="Positional chunk from Source Q"
+        )
+        _insert_entity(
+            conn, name="PositionalChunkEntity", document_id=doc_p, chunk_id=chunk_p
+        )
+        _insert_entity(
+            conn, name="PositionalChunkEntity", document_id=doc_q, chunk_id=chunk_q
+        )
+
+        ctx = _make_mcp_ctx(conn)
+        candidates = await get_consolidation_candidates(ctx, limit=20)
+
+        target = next(
+            c for c in candidates if c["entity_name"] == "PositionalChunkEntity"
+        )
+
+        # Determine canonical assignment: source with smaller string ID becomes source_a
+        if source_p < source_q:
+            expected_source_a_chunk = "Positional chunk from Source P"
+            expected_source_b_chunk = "Positional chunk from Source Q"
+        else:
+            expected_source_a_chunk = "Positional chunk from Source Q"
+            expected_source_b_chunk = "Positional chunk from Source P"
+
+        # Positional equality — direct dict indexing, no set/frozenset
+        assert target["source_a_chunk"] == expected_source_a_chunk, (
+            f"source_a_chunk must equal the chunk from canonical source_a exactly — "
+            f"expected {expected_source_a_chunk!r}, got {target['source_a_chunk']!r}"
+        )
+        assert target["source_b_chunk"] == expected_source_b_chunk, (
+            f"source_b_chunk must equal the chunk from canonical source_b exactly — "
+            f"expected {expected_source_b_chunk!r}, got {target['source_b_chunk']!r}"
+        )
+
+    # --- AC5: positional column equality decoded from candidate_id ---
+
+    @pytest.mark.asyncio
+    async def test_ac5_reviewed_pairs_columns_match_candidate_id_decoded_positionally(
+        self, conn: sqlite3.Connection
+    ) -> None:
+        """AC5 exact (cycle 3): after store_enrichment(ctx, candidate_id=..., edges=[]),
+        the reviewed_pairs row's source_a column must equal json.loads(candidate_id)[1]
+        and source_b column must equal json.loads(candidate_id)[2] — no set comparison."""
+        import json as _json  # noqa: PLC0415
+
+        source_r = _insert_source(conn, name="Source R")
+        source_s = _insert_source(conn, name="Source S")
+        doc_r = _insert_document(conn, source_id=source_r)
+        doc_s = _insert_document(conn, source_id=source_s)
+        _insert_entity(conn, name="PositionalDismissalEntity", document_id=doc_r)
+        _insert_entity(conn, name="PositionalDismissalEntity", document_id=doc_s)
+
+        ctx = _make_mcp_ctx(conn)
+        candidates = await get_consolidation_candidates(ctx, limit=20)
+        target = next(
+            c for c in candidates if c["entity_name"] == "PositionalDismissalEntity"
+        )
+        candidate_id = target["candidate_id"]
+
+        # Decode per implementation contract: json.loads(candidate_id) == [entity_name, source_a, source_b]
+        decoded = _json.loads(candidate_id)
+        decoded_entity_name: str = decoded[0]
+        decoded_source_a: str = decoded[1]
+        decoded_source_b: str = decoded[2]
+
+        await store_enrichment(ctx, candidate_id=candidate_id, edges=[])
+
+        row = conn.execute(
+            "SELECT entity_name, source_a, source_b FROM reviewed_pairs "
+            "WHERE entity_name = ?",
+            (decoded_entity_name,),
+        ).fetchone()
+        assert row is not None, (
+            f"Expected reviewed_pairs row for {decoded_entity_name!r} — not found in DB"
+        )
+        # Positional column equality — no set/frozenset comparison
+        assert row[1] == decoded_source_a, (
+            f"reviewed_pairs.source_a must equal decoded candidate_id source_a exactly — "
+            f"expected {decoded_source_a!r}, got {row[1]!r}"
+        )
+        assert row[2] == decoded_source_b, (
+            f"reviewed_pairs.source_b must equal decoded candidate_id source_b exactly — "
+            f"expected {decoded_source_b!r}, got {row[2]!r}"
+        )
