@@ -18,7 +18,7 @@
  * All tests fail until #1373 implements the fix.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, waitFor } from '@testing-library/react'
+import { render, waitFor, fireEvent } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
 
@@ -363,6 +363,19 @@ describe('TestFromAC_ScanFalseOKPrevention', () => {
     expect(statusBar?.textContent ?? '').not.toContain('Health OK')
     expect(container.querySelector('[data-testid="scan-error"]')).not.toBeNull()
   })
+
+  // AC2 gap (retry): "No issues" popover copy (HealthBadge.tsx:41) must also be
+  // absent when scan fails — not just "Health OK". HealthBadge is suppressed
+  // entirely on error, so neither copy can appear in the DOM.
+  it('error: "No issues" popover text is absent from the DOM after a failed scan', async () => {
+    vi.stubGlobal('fetch', makeScanFetch({ ok: false, status: 500, body: SCAN_ERROR_ENVELOPE }))
+    const { container } = renderShell()
+    await waitForScanSettled(container)
+    // HealthBadge emits "No issues" (HealthBadge.tsx:41) when items=[] and popover is open.
+    // A failed scan must suppress HealthBadge entirely — "No issues" must not appear.
+    expect(container.textContent ?? '').not.toContain('No issues')
+    expect(container.querySelector('[data-testid="scan-error"]')).not.toBeNull()
+  })
 })
 
 // ─── AC3: Actionable error text and retry mechanism must be accessible ────────
@@ -483,6 +496,32 @@ describe('TestFromAC_ScanErrorDisplay', () => {
     // Shell renders: "Scan failed: Failed to fetch"
     const statusBar = container.querySelector('[data-region="status-bar"]') as HTMLElement
     expect(statusBar?.textContent ?? '').toContain('Failed to fetch')
+  })
+
+  // AC3 gap (retry): clicking scan-retry control must invoke useScanPolling.refetch —
+  // a new fetch call to /api/tasks/scan must be initiated after the button is activated.
+  it('interaction: clicking scan-retry control triggers a new fetch call to /api/tasks/scan', async () => {
+    const fetchMock = makeScanFetch({ ok: false, status: 500, body: SCAN_ERROR_ENVELOPE })
+    vi.stubGlobal('fetch', fetchMock)
+    const { container } = renderShell()
+    await waitFor(
+      () => expect(container.querySelector('[data-testid="scan-retry"]')).not.toBeNull(),
+      { timeout: 1000 },
+    )
+    const callsBefore = fetchMock.mock.calls.filter(
+      ([url]: [string]) => url === '/api/tasks/scan',
+    ).length
+    fireEvent.click(container.querySelector('[data-testid="scan-retry"]')!)
+    // After the click, useScanPolling.refetch must trigger a new /api/tasks/scan request.
+    await waitFor(
+      () => {
+        const callsAfter = fetchMock.mock.calls.filter(
+          ([url]: [string]) => url === '/api/tasks/scan',
+        ).length
+        expect(callsAfter).toBeGreaterThan(callsBefore)
+      },
+      { timeout: 1000 },
+    )
   })
 })
 
