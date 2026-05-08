@@ -246,6 +246,7 @@ function Shell() {
           onClose={() => setSelectedDRId(null)}
           onResolved={() => {
             void refetchPendingDRs()
+            refetchTasks()
             setSelectedDRId(null)
           }}
         />
