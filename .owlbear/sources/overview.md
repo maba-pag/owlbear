@@ -27,6 +27,12 @@ External repos and resources studied during OwlBear development.
 | MegaLinter — Filtering files | <https://megalinter.io/latest/config-filtering/> | FILTER_REGEX_EXCLUDE "not applicable with linters using CLI lint mode project" | Task #1418 body | 2026-05-08 |
 | MegaLinter — editorconfig-checker descriptor | <https://megalinter.io/latest/descriptors/editorconfig_editorconfig_checker/> | Uses `list_of_files` mode; IS affected by FILTER_REGEX_EXCLUDE | Task #1418 body | 2026-05-08 |
 
+## Pre-end_work Scoped Commit Check (Task #1412)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Git documentation — git-status | <https://git-scm.com/docs/git-status> | `--porcelain` output format and pathspec filtering semantics | `.owlbear/research/1412-pre-end-work-scoped-commit-check.md` | 2026-05-08 |
+
 ## AC Quality Skill Schema (Task #1404)
 
 | Source | URL | What | Where Used | Date |
