@@ -375,3 +375,52 @@ class TestFromAC_ConventionMappingTable:
             "Convention mapping table must include a row for 'share/**' "
             "(maps to share/README.md, share/WIRING.md per brief)"
         )
+
+    def test_convention_mapping_has_pyproject_tests_row(self) -> None:
+        step1 = self._step1_section()
+        assert "pyproject.toml" in step1, (
+            "Convention mapping table must include 'pyproject.toml' "
+            "(maps to serve/{pkg}/README.md per brief row 2)"
+        )
+        assert "tests/**" in step1, (
+            "Convention mapping table must include 'tests/**' "
+            "(maps to serve/{pkg}/README.md per brief row 2)"
+        )
+
+    def test_convention_mapping_has_public_interface_row(self) -> None:
+        step1 = self._step1_section()
+        assert re.search(r"public interface|README-consumer", step1), (
+            "Convention mapping table must include a row for public interface changes "
+            "(maps to README.md, README-consumer.md per brief row 5)"
+        )
+
+    def test_gate_rule_task_caused_blocks(self) -> None:
+        content = SKILL_DOC_UPDATE.read_text()
+        assert "task-caused" in content, (
+            "SKILL.md gate rules must contain 'task-caused' "
+            "(task-caused unverified content must be named as blocking)"
+        )
+        assert "blocks" in content, (
+            "SKILL.md gate rules must contain 'blocks' "
+            "(gate rule must state that task-caused content blocks)"
+        )
+
+    def test_gate_rule_preexisting_passes(self) -> None:
+        content = SKILL_DOC_UPDATE.read_text()
+        assert "pre-existing" in content, (
+            "SKILL.md gate rules must contain 'pre-existing' "
+            "(pre-existing unverified content must be named as non-blocking)"
+        )
+        assert "passes" in content, (
+            "SKILL.md gate rules must contain 'passes' "
+            "(gate rule must state that pre-existing content passes)"
+        )
+
+    def test_no_impact_fast_path_advances(self) -> None:
+        step1 = self._step1_section()
+        assert "no docs impact" in step1, (
+            "Step 1 must include the no-impact fast path phrase 'no docs impact'"
+        )
+        assert "advance" in step1, (
+            "Step 1 no-impact fast path must say to 'advance' after writing 'no docs impact'"
+        )
