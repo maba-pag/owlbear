@@ -33,7 +33,8 @@ import pytest
 from mcp.server.fastmcp.exceptions import ToolError
 
 from owlbear_kanban import KanbanEngine
-from owlbear_mcp_kanban.server import AppContext, list_tasks, parse_task_id
+from owlbear_kanban.errors import ConcurrencyError, ValidationError
+from owlbear_mcp_kanban.server import AppContext, edit_task, end_work, list_tasks, move_task, parse_task_id
 
 # ---------------------------------------------------------------------------
 # Scratch-board helpers
@@ -142,6 +143,35 @@ def app_ctx_with_archived_duplicate(tmp_path: Path) -> AppContext:
     return AppContext(engine=engine, kanban_dir=kanban_dir)
 
 
+@pytest.fixture
+def app_ctx_with_mixed_archived(tmp_path: Path) -> AppContext:
+    """AppContext with two archived tasks of different archival reasons.
+
+    Task 1: archived, archival_reason='duplicate' (refs Task 3)
+    Task 2: archived, archival_reason='completed'
+    Task 3: active, status='todo' (ref target for Task 1)
+
+    Used to verify that list_tasks(archival_reason='duplicate') excludes
+    tasks archived for other reasons (negative control for AC2).
+    """
+    kanban_dir = _make_board(tmp_path)
+    engine = KanbanEngine(kanban_dir)
+    dup_task = engine.create_task("Duplicate task", status="todo", priority="important")
+    comp_task = engine.create_task("Completed task", status="todo", priority="important")
+    ref_task = engine.create_task("Reference task", status="todo", priority="important")
+    av = engine.agent_view()
+    av.move_task(
+        dup_task.id,
+        "archived",
+        archival_reason="duplicate",
+        archival_refs=[ref_task.id],
+    )
+    # 'completed' requires a terminal status first — move through pipeline to done.
+    av.move_task(comp_task.id, "done")
+    av.move_task(comp_task.id, "archived", archival_reason="completed")
+    return AppContext(engine=engine, kanban_dir=kanban_dir)
+
+
 # ---------------------------------------------------------------------------
 # TestFromAC_ListTasksEmptyIds
 # AC1: list_tasks(ids=[]) returns empty tasks list and no missing_ids entry.
@@ -190,6 +220,19 @@ class TestFromAC_ListTasksEmptyIds:
         result = await list_tasks(ctx, ids=[])
         assert result.tasks == [], (
             f"Expected [] for ids=[] with 3-task board, got {len(result.tasks)} task(s)"
+        )
+
+    @pytest.mark.asyncio
+    async def test_empty_ids_returns_missing_ids_is_none(self, app_ctx: AppContext) -> None:
+        """AC1: ids=[] response must carry missing_ids=None — no spurious missing-ID entry.
+
+        The AC states 'no missing_ids entry'; the implementation sets missing_ids=None
+        at ListTasksResponse construction. This test pins that contract explicitly.
+        """
+        ctx = _make_mcp_ctx(app_ctx)
+        result = await list_tasks(ctx, ids=[])
+        assert result.missing_ids is None, (
+            f"Expected missing_ids=None for ids=[], got {result.missing_ids!r}"
         )
 
 
@@ -245,6 +288,121 @@ class TestFromAC_ArchivalReasonFilter:
             "All returned tasks must have archival_reason='duplicate'"
         )
 
+    @pytest.mark.asyncio
+    async def test_archival_reason_duplicate_excludes_completed_reason(
+        self, app_ctx_with_mixed_archived: AppContext
+    ) -> None:
+        """AC2/negative: list_tasks(archival_reason='duplicate') must not return tasks
+        archived for other reasons.
+
+        Fixture has one 'duplicate' and one 'completed' archived task. The filter
+        must return exactly the duplicate, excluding the completed task.
+        """
+        ctx = _make_mcp_ctx(app_ctx_with_mixed_archived)
+        result = await list_tasks(ctx, archival_reason="duplicate")
+        assert len(result.tasks) == 1, (
+            f"Expected exactly 1 'duplicate' task; got {len(result.tasks)} "
+            f"(reasons: {[t.archival_reason for t in result.tasks]})"
+        )
+        assert result.tasks[0].archival_reason == "duplicate", (
+            f"Returned task must have archival_reason='duplicate'; "
+            f"got {result.tasks[0].archival_reason!r}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_MoveEndWorkEnvelope
+# AC3: move_task(status=invalid) and end_work(outcome='reject', move_to=invalid)
+# both return structured {code, message} JSON error envelopes.
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_MoveEndWorkEnvelope:
+    """move_task and end_work must surface KanbanErrors as JSON {code, message} ToolErrors.
+
+    The MCP adapter routes all KanbanError subclasses through _map_kanban_error which
+    emits json.dumps({"code": exc.code, "message": exc.user_message}).  These probes
+    confirm that the exact JSON contract is met at the MCP boundary — not just that a
+    ToolError is raised.
+    """
+
+    @pytest.mark.asyncio
+    async def test_move_task_invalid_status_raises_tool_error_with_json_payload(
+        self, app_ctx: AppContext
+    ) -> None:
+        """AC3/happy: move_task(status='not-a-real-status') raises ToolError with parseable JSON.
+
+        The invalid status propagates through agent_view.move_task → ValidationError
+        → _map_kanban_error → ToolError whose message is json.dumps({code, message}).
+        """
+        ctx = _make_mcp_ctx(app_ctx)
+        with pytest.raises(ToolError) as exc_info:
+            await move_task(ctx, id="1", status="not-a-real-status")
+        payload = json.loads(str(exc_info.value))
+        assert isinstance(payload, dict), (
+            f"ToolError message must be a JSON object; got: {str(exc_info.value)[:80]!r}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_move_task_invalid_status_json_has_code_and_message(
+        self, app_ctx: AppContext
+    ) -> None:
+        """AC3: JSON envelope from move_task invalid-status error has 'code' and 'message'."""
+        ctx = _make_mcp_ctx(app_ctx)
+        with pytest.raises(ToolError) as exc_info:
+            await move_task(ctx, id="1", status="not-a-real-status")
+        payload = json.loads(str(exc_info.value))
+        assert "code" in payload, "JSON error envelope must contain 'code' field"
+        assert "message" in payload, "JSON error envelope must contain 'message' field"
+
+    @pytest.mark.asyncio
+    async def test_end_work_reject_invalid_move_to_raises_tool_error_with_json_payload(
+        self, tmp_path: Path
+    ) -> None:
+        """AC3: end_work(outcome='reject', move_to='badstatus') raises JSON ToolError.
+
+        The engine's end_work raises ValidationError for an unrecognised move_to value;
+        _map_kanban_error converts it to a JSON-body ToolError.
+        """
+        mock_av = MagicMock()
+        mock_av.end_work.side_effect = ValidationError(
+            code="ERR_MOVE_TO_INVALID_STATUS",
+            user_message="invalid move_to: 'badstatus' is not a valid status",
+        )
+        mock_engine = MagicMock()
+        mock_engine.agent_view.return_value = mock_av
+        app_ctx = AppContext(engine=mock_engine, kanban_dir=tmp_path)
+        ctx = _make_mcp_ctx(app_ctx)
+        with pytest.raises(ToolError) as exc_info:
+            await end_work(ctx, id="1", outcome="reject", move_to="badstatus")
+        payload = json.loads(str(exc_info.value))
+        assert isinstance(payload, dict), (
+            f"ToolError message must be JSON; got: {str(exc_info.value)[:80]!r}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_end_work_reject_invalid_move_to_json_has_code_and_message(
+        self, tmp_path: Path
+    ) -> None:
+        """AC3: JSON envelope from end_work reject+invalid move_to has 'code' and 'message'."""
+        mock_av = MagicMock()
+        mock_av.end_work.side_effect = ValidationError(
+            code="ERR_MOVE_TO_INVALID_STATUS",
+            user_message="invalid move_to: 'badstatus' is not a valid status",
+        )
+        mock_engine = MagicMock()
+        mock_engine.agent_view.return_value = mock_av
+        app_ctx = AppContext(engine=mock_engine, kanban_dir=tmp_path)
+        ctx = _make_mcp_ctx(app_ctx)
+        with pytest.raises(ToolError) as exc_info:
+            await end_work(ctx, id="1", outcome="reject", move_to="badstatus")
+        payload = json.loads(str(exc_info.value))
+        assert "code" in payload, "JSON envelope must contain 'code' field"
+        assert "message" in payload, "JSON envelope must contain 'message' field"
+        assert payload["code"] == "ERR_MOVE_TO_INVALID_STATUS", (
+            f"Expected code='ERR_MOVE_TO_INVALID_STATUS'; got {payload['code']!r}"
+        )
+
 
 # ---------------------------------------------------------------------------
 # TestFromAC_MoveTaskAnnotations
@@ -271,6 +429,22 @@ class TestFromAC_MoveTaskAnnotations:
         assert ann is not None, "move_task has no ToolAnnotations registered"
         assert ann.idempotentHint is False, (  # type: ignore[union-attr]
             f"Expected idempotentHint=False for move_task, got: {ann.idempotentHint!r}"
+        )
+
+    def test_pick_tasks_read_only_hint_is_true(self) -> None:
+        """AC4(b)/smoke: pick_tasks ToolAnnotations must have readOnlyHint=True."""
+        ann = _get_tool_annotations("pick_tasks")
+        assert ann is not None, "pick_tasks has no ToolAnnotations registered"
+        assert ann.readOnlyHint is True, (  # type: ignore[union-attr]
+            f"Expected readOnlyHint=True for pick_tasks, got: {ann.readOnlyHint!r}"
+        )
+
+    def test_pick_tasks_idempotent_hint_is_true(self) -> None:
+        """AC4(b)/smoke: pick_tasks ToolAnnotations must have idempotentHint=True."""
+        ann = _get_tool_annotations("pick_tasks")
+        assert ann is not None, "pick_tasks has no ToolAnnotations registered"
+        assert ann.idempotentHint is True, (  # type: ignore[union-attr]
+            f"Expected idempotentHint=True for pick_tasks, got: {ann.idempotentHint!r}"
         )
 
 
@@ -314,3 +488,71 @@ class TestFromAC_MalformedIdEnvelope:
         payload = json.loads(str(exc_info.value))
         assert "code" in payload, "JSON error envelope must contain 'code' field"
         assert "message" in payload, "JSON error envelope must contain 'message' field"
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_ErrorEnvelopeContract
+# AC5: stale-write error surfaces {code, message} JSON envelope at MCP boundary.
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ErrorEnvelopeContract:
+    """ConcurrencyError (ERR_STALE) must reach agents as a JSON {code, message} ToolError.
+
+    The invalid-status branch is proven by TestFromAC_MoveEndWorkEnvelope above.
+    This class covers the remaining AC5 gap: optimistic-lock (stale-write) errors.
+    """
+
+    @pytest.mark.asyncio
+    async def test_stale_write_via_edit_task_returns_json_envelope(
+        self, tmp_path: Path
+    ) -> None:
+        """AC5: ConcurrencyError from edit_task surfaces as a parseable JSON ToolError.
+
+        The engine raises ConcurrencyError(code='ERR_STALE') on concurrent modification;
+        _map_kanban_error converts it to ToolError(json.dumps({code, message})).
+        Existing test at test_mcp_mutation_tools_1087.py:L547 only asserts message
+        text — this probe asserts the JSON structure.
+        """
+        mock_av = MagicMock()
+        mock_av.edit_task.side_effect = ConcurrencyError(
+            code="ERR_STALE",
+            user_message="task was modified concurrently; please retry",
+        )
+        mock_engine = MagicMock()
+        mock_engine.agent_view.return_value = mock_av
+        app_ctx = AppContext(engine=mock_engine, kanban_dir=tmp_path)
+        ctx = _make_mcp_ctx(app_ctx)
+        with pytest.raises(ToolError) as exc_info:
+            await edit_task(ctx, id="1", priority="critical")
+        payload = json.loads(str(exc_info.value))
+        assert isinstance(payload, dict), (
+            f"ToolError from stale-write must be JSON; got: {str(exc_info.value)[:80]!r}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_stale_write_json_has_code_and_message(
+        self, tmp_path: Path
+    ) -> None:
+        """AC5: JSON envelope from stale-write error has 'code' and 'message' fields."""
+        mock_av = MagicMock()
+        user_msg = "task was modified concurrently; please retry"
+        mock_av.edit_task.side_effect = ConcurrencyError(
+            code="ERR_STALE",
+            user_message=user_msg,
+        )
+        mock_engine = MagicMock()
+        mock_engine.agent_view.return_value = mock_av
+        app_ctx = AppContext(engine=mock_engine, kanban_dir=tmp_path)
+        ctx = _make_mcp_ctx(app_ctx)
+        with pytest.raises(ToolError) as exc_info:
+            await edit_task(ctx, id="1", priority="critical")
+        payload = json.loads(str(exc_info.value))
+        assert "code" in payload, "JSON stale-write envelope must contain 'code' field"
+        assert "message" in payload, "JSON stale-write envelope must contain 'message' field"
+        assert payload["code"] == "ERR_STALE", (
+            f"Expected code='ERR_STALE'; got {payload['code']!r}"
+        )
+        assert payload["message"] == user_msg, (
+            f"Expected user_message verbatim; got {payload['message']!r}"
+        )
