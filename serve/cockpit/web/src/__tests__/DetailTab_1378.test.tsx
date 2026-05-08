@@ -237,6 +237,60 @@ describe('TestFromAC_InvalidParentValidation', () => {
       { timeout: 500 },
     )
   })
+
+  it('invalid parent text is preserved in the parent field after validation fires', async () => {
+    /**
+     * AC1 preserved clause: after typing invalid text and validation fires,
+     * the raw input must remain in the field — it must not be cleared, nulled,
+     * or replaced with the previously-valid value.
+     *
+     * Readback assertion: field value === the invalid string the user typed.
+     */
+    const { container } = renderDetail()
+    typeIntoField(container, '[data-field="parent"]', 'not-a-number')
+
+    // Wait for validation error to confirm the component processed the input
+    await waitFor(
+      () => {
+        const error = container.querySelector('[data-testid="validation-message"]')
+        expect(error).not.toBeNull()
+      },
+      { timeout: 500 },
+    )
+
+    const el = container.querySelector('[data-field="parent"]') as HTMLInputElement | null
+    expect(el).not.toBeNull()
+    const fieldValue = (el as HTMLInputElement).value ?? el!.getAttribute('value')
+    expect(fieldValue).toBe('not-a-number')
+  })
+
+  it('invalid parent text is preserved in the parent field after a blocked save attempt', async () => {
+    /**
+     * AC1 preserved clause: after a blocked save attempt (fetch not called),
+     * the raw invalid text must still be visible in the parent field.
+     * The field must not revert to the loaded state or become empty.
+     */
+    vi.stubGlobal('fetch', vi.fn())
+    const { container } = renderDetail()
+    typeIntoField(container, '[data-field="parent"]', 'bad-parent')
+
+    const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
+    expect(saveBtn).not.toBeNull()
+    fireEvent.click(saveBtn!)
+
+    await waitFor(
+      () => {
+        const error = container.querySelector('[data-testid="validation-message"]')
+        expect(error).not.toBeNull()
+      },
+      { timeout: 500 },
+    )
+
+    const el = container.querySelector('[data-field="parent"]') as HTMLInputElement | null
+    expect(el).not.toBeNull()
+    const fieldValue = (el as HTMLInputElement).value ?? el!.getAttribute('value')
+    expect(fieldValue).toBe('bad-parent')
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -374,6 +428,60 @@ describe('TestFromAC_InvalidDependsOnValidation', () => {
       () => expect(fetchMock).not.toHaveBeenCalled(),
       { timeout: 500 },
     )
+  })
+
+  it('invalid depends_on text is preserved in the field after validation fires', async () => {
+    /**
+     * AC2 preserved clause: after typing invalid depends_on text and validation
+     * fires, the raw input must remain in the field — the invalid entry must
+     * not be silently dropped from the visible field value.
+     *
+     * Readback assertion: field value === the invalid string the user typed.
+     */
+    const { container } = renderDetail()
+    typeIntoField(container, '[data-field="depends_on"]', '10, not-valid, 20')
+
+    // Wait for validation error to confirm the component processed the input
+    await waitFor(
+      () => {
+        const error = container.querySelector('[data-testid="validation-message"]')
+        expect(error).not.toBeNull()
+      },
+      { timeout: 500 },
+    )
+
+    const el = container.querySelector('[data-field="depends_on"]') as HTMLInputElement | null
+    expect(el).not.toBeNull()
+    const fieldValue = (el as HTMLInputElement).value ?? el!.getAttribute('value')
+    expect(fieldValue).toBe('10, not-valid, 20')
+  })
+
+  it('invalid depends_on text is preserved in the field after a blocked save attempt', async () => {
+    /**
+     * AC2 preserved clause: after a blocked save attempt (fetch not called),
+     * the full raw invalid text must still be visible in the depends_on field.
+     * The invalid entry must not be silently removed from the field display.
+     */
+    vi.stubGlobal('fetch', vi.fn())
+    const { container } = renderDetail()
+    typeIntoField(container, '[data-field="depends_on"]', '5, bad-entry, 15')
+
+    const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
+    expect(saveBtn).not.toBeNull()
+    fireEvent.click(saveBtn!)
+
+    await waitFor(
+      () => {
+        const error = container.querySelector('[data-testid="validation-message"]')
+        expect(error).not.toBeNull()
+      },
+      { timeout: 500 },
+    )
+
+    const el = container.querySelector('[data-field="depends_on"]') as HTMLInputElement | null
+    expect(el).not.toBeNull()
+    const fieldValue = (el as HTMLInputElement).value ?? el!.getAttribute('value')
+    expect(fieldValue).toBe('5, bad-entry, 15')
   })
 })
 
