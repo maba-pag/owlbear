@@ -25,13 +25,6 @@ class TestFromAC_DocUpdateSkillContent:
             "Convention mapping must show serve/{pkg} → serve/{pkg}/README.md relationship"
         )
 
-    def test_checklist_has_exactly_four_items(self) -> None:
-        content = SKILL_DOC_UPDATE.read_text()
-        items = re.findall(r"### Item \d+", content)
-        assert len(items) == 4, (
-            f"Checklist must have exactly 4 items, found {len(items)}: {items}"
-        )
-
     def test_checklist_has_no_diagram_maintenance_item(self) -> None:
         content = SKILL_DOC_UPDATE.read_text()
         assert "Diagram Maintenance" not in content, (
@@ -293,6 +286,16 @@ class TestFromAC_ChecklistItemNames:
         item4 = match.group(0)
         assert re.search(r"\bDR\b|[Dd]ecision [Rr]equest", item4), (
             "Item 4 (Deletion Detection) must reference the DR (decision request) protocol"
+        )
+
+    def test_item3_research_doc_mentions_verification_language(self) -> None:
+        content = SKILL_DOC_UPDATE.read_text()
+        match = re.search(r"### Item 3:.*?(?=### Item 4:)", content, re.DOTALL)
+        assert match, "Could not find Item 3 section in SKILL.md"
+        item3 = match.group(0)
+        assert re.search(r"verif|linked from", item3, re.IGNORECASE), (
+            "Item 3 (Research Doc) must describe verifying the research file "
+            "linked from the task body — discriminator per refined AC1"
         )
 
     def test_no_impact_fast_path_present(self) -> None:
