@@ -2,6 +2,14 @@
 
 External repos and resources studied during OwlBear development.
 
+## CI/SAST Baseline Research (Task #1413)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Ruff S-rules / flake8-bandit | <https://pydevtools.com/handbook/how-to/how-to-enable-ruff-security-rules/> | S-rule coverage list; confirmed Ruff S-rules equivalent to Bandit | `.owlbear/research/1413-ci-sast-baseline.md` | 2026-05-08 |
+| Best SAST Tools for Python 2026 | <https://appsecsanta.com/sast-tools/sast-tools-for-python> | Tool comparison matrix; evaluated Semgrep, Bandit, CodeQL against existing stack | `.owlbear/research/1413-ci-sast-baseline.md` | 2026-05-08 |
+| Semgrep vs Bandit comparison | <https://dev.to/rahulxsingh/semgrep-vs-bandit-python-security-scanning-compared-2026-5e5j> | Taint-analysis trade-offs; basis for "defer Semgrep" decision | `.owlbear/research/1413-ci-sast-baseline.md` | 2026-05-08 |
+
 ## SARIF Upload to GitHub Code Scanning (Task #1417)
 
 | Source | URL | What | Where Used | Date |
