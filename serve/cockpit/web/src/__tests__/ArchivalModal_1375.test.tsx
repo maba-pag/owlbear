@@ -19,6 +19,7 @@ import { describe, it, expect, vi, beforeAll, afterEach } from 'vitest'
 import { render, fireEvent, waitFor } from '@testing-library/react'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
 import ArchivalModal from '../components/ArchivalModal'
+import { getResponseErrorMessage } from '../api/errorMessage'
 
 // ─── PDS jsdom polyfill ────────────────────────────────────────────────────────
 
@@ -208,5 +209,41 @@ describe('TestFromAC_ArchivalModalErrorBodyParsing', () => {
       },
       { timeout: 1000 },
     )
+  })
+})
+
+// ─── AC8: getResponseErrorMessage returns body without fallback decoration ──────
+//
+// Root cause of the durable ArchivalModal_1241 AC12 regression: the helper
+// currently returns `${fromBody} (${fallbackMessage})` when body parsing succeeds,
+// decorating the backend message with the fallback string.
+//
+// AC8: when body parsing succeeds, the helper returns the parsed body field alone.
+// The fallback is used ONLY when parsing fails.
+//
+// Both tests FAIL until errorMessage.ts changes:
+//   return `${fromBody} (${fallbackMessage})`  →  return fromBody
+
+describe('TestFromAC_ErrorMessageHelperNoDecoration', () => {
+  // FAILS: current code returns "engine scan failed (Archival failed (500).)".
+  // The fallback decoration must NOT appear when body parsing succeeds.
+  it('returns body message field alone without fallback decoration (td:1 smoke)', async () => {
+    const response = {
+      json: () => Promise.resolve({ code: 'SCAN_ERR', message: 'engine scan failed' }),
+    } as Response
+    const result = await getResponseErrorMessage(response, 'Archival failed (500).')
+    // FAILS: current code returns "engine scan failed (Archival failed (500).)"
+    expect(result).toBe('engine scan failed')
+  })
+
+  // FAILS: current code returns "refs not allowed for dropped (Validation failed.)".
+  // Matches the exact value that breaks ArchivalModal_1241 AC12 ({detail} shape).
+  it('returns body detail field alone without fallback decoration (td:1 smoke)', async () => {
+    const response = {
+      json: () => Promise.resolve({ detail: 'refs not allowed for dropped' }),
+    } as Response
+    const result = await getResponseErrorMessage(response, 'Validation failed.')
+    // FAILS: current code returns "refs not allowed for dropped (Validation failed.)"
+    expect(result).toBe('refs not allowed for dropped')
   })
 })
