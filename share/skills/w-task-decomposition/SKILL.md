@@ -13,6 +13,7 @@ Break complex features into atomic, test-driven kanban tasks with explicit depen
 ## Step 0 — Setup
 
 Read `r-pipeline-protocol` skill if not already loaded.
+Read `h-ac-quality` skill and use it as the authoritative AC validation checklist while drafting task acceptance criteria.
 
 **Claiming:** When **orchestrator-dispatched** (parent task ID provided), claim the parent task via `start_work` — it returns the task body, making a separate `show_task` call redundant. When **user-invoked**, read the task via `show_task` without claiming.
 
@@ -71,6 +72,7 @@ Ordering heuristic:
 
 When drafting AC for planned tasks:
 
+- Validate each AC block against `h-ac-quality` (authoritative checklist) before task creation.
 - AC defines behaviors and interfaces, not file paths or implementation details.
 - AC must be understandable without reading the codebase first.
 - Every task must include explicit scope boundaries (in-scope and out-of-scope).
@@ -143,6 +145,14 @@ Create each task via `create_task` with title, priority, status, tags, depends_o
 
 - Decomposition mode default status: `research`.
 - Shortcut mode status: caller-provided status, default `backlog` (or `research` for researcher follow-ups).
+- Never create tasks at `todo` status. `todo` is architect-gated and only reached via `backlog -> todo` promotion.
+
+When decomposition mode yields two or more implementation tasks (excluding test tasks) under a common parent, create exactly one consolidation-test task after creating the implementation siblings:
+
+- Title pattern: `consolidation test: {feature name}`
+- Tags: include `consolidation-test`
+- `depends_on`: all sibling implementation task IDs
+- Status: `backlog`
 
 Group by dependency layer (independent first, then dependents). Record created task IDs for the report.
 

@@ -31,6 +31,7 @@ has already approved the scope.
 
 - `r-pipeline-protocol` — task lifecycle, communication, quality
 - `w-task-decomposition` — primary workflow
+- `h-ac-quality` — authoritative AC validation checklist
 
 </required_reading>
 
@@ -38,6 +39,7 @@ has already approved the scope.
 
 - **Follow the `w-task-decomposition` skill** for the decomposition process, prefix-based execution mode (`Plan and create:` / `Plan:` / fallback), dependency graph construction, and priority/tag assignment.
 - **Read `r-pipeline-protocol`** for task quality standards, follow-up task requirements, and entry-gate conventions.
+- **Never create tasks at `todo` — only architect moves `backlog→todo`.**
 - **TDD pairing is mandatory for decomposition mode.** Single-task follow-up mode uses the shortcut and does not require TDD task pairs.
 - **Single responsibility per task.** If "and" joins unrelated concerns, split.
 - **Single domain per task.** Each task targets exactly one domain. Multi-domain work gets split. See `r-architecture-standards` for the domain taxonomy.
