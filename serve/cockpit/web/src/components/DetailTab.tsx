@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   PButton,
   PInputText,
@@ -50,7 +50,7 @@ export default function DetailTab({
 }: DetailTabProps) {
   const [editBody, setEditBody] = useState(false)
   const [showConflict, setShowConflict] = useState(false)
-  const [validationMessage, setValidationMessage] = useState<string | null>(null)
+  const [serverValidationMessage, setServerValidationMessage] = useState<string | null>(null)
   const [confirmType, setConfirmType] = useState<null | 'move-backward' | 'unblock' | 'unclaim'>(null)
   const [showHistory, setShowHistory] = useState(false)
   const [sessions, setSessions] = useState<Session[]>([])
@@ -68,7 +68,7 @@ export default function DetailTab({
     setDependsOn(task?.depends_on.join(', ') ?? '')
     setParent(task?.parent !== null ? String(task?.parent) : '')
     setBlockReason(task?.block_reason ?? '')
-    setValidationMessage(null)
+    setServerValidationMessage(null)
     setConfirmType(null)
   }, [task?.id, task?.updated])
 
@@ -84,23 +84,57 @@ export default function DetailTab({
 
   const t = task
 
-  function parseDependsOn(raw: string): number[] {
-    return raw
+  function parseDependsOn(raw: string): { values: number[]; error: string | null } {
+    const tokens = raw
       .split(',')
       .map((value) => value.trim())
       .filter((value) => value.length > 0)
-      .map((value) => Number(value))
-      .filter((value) => Number.isInteger(value) && value >= 0)
+    const values: number[] = []
+
+    for (const token of tokens) {
+      const parsed = Number(token)
+      if (!Number.isInteger(parsed) || parsed < 0) {
+        return {
+          values: [],
+          error: 'Dependencies must be a comma-separated list of non-negative integers.',
+        }
+      }
+      values.push(parsed)
+    }
+
+    return { values, error: null }
   }
 
-  function parseParent(raw: string): number | null {
+  function parseParent(raw: string): { value: number | null; error: string | null } {
     const trimmed = raw.trim()
     if (trimmed.length === 0) {
-      return null
+      return { value: null, error: null }
     }
+
     const parsed = Number(trimmed)
-    return Number.isInteger(parsed) ? parsed : null
+    if (!Number.isInteger(parsed) || parsed < 0) {
+      return {
+        value: null,
+        error: 'Parent must be a non-negative integer.',
+      }
+    }
+
+    return { value: parsed, error: null }
   }
+
+  const parsedParent = useMemo(() => parseParent(parent), [parent])
+  const parsedDependsOn = useMemo(() => parseDependsOn(dependsOn), [dependsOn])
+  const clientValidationMessage = parsedParent.error ?? parsedDependsOn.error
+
+  const isDirty =
+    title !== t.title
+    || priority !== t.priority
+    || body !== t.body
+    || dependsOn !== t.depends_on.join(', ')
+    || parent !== (t.parent !== null ? String(t.parent) : '')
+    || (t.blocked && blockReason !== (t.block_reason ?? ''))
+
+  const validationMessage = clientValidationMessage ?? serverValidationMessage
 
   function previousStatus(current: string): string | null {
     const statuses = board?.statuses.map((status) => status.name) ?? []
@@ -117,7 +151,7 @@ export default function DetailTab({
   }
 
   async function runMutation(url: string, payload: Record<string, unknown>): Promise<void> {
-    setValidationMessage(null)
+    setServerValidationMessage(null)
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -148,35 +182,43 @@ export default function DetailTab({
     }
 
     if (res.status === 422) {
-      setValidationMessage(await getResponseErrorMessage(res, 'Validation failed'))
+      setServerValidationMessage(await getResponseErrorMessage(res, 'Validation failed'))
       return
     }
 
-    setValidationMessage(await getResponseErrorMessage(res, `Request failed with status ${res.status}`))
+    setServerValidationMessage(await getResponseErrorMessage(res, `Request failed with status ${res.status}`))
   }
 
   async function handleSave() {
+    if (clientValidationMessage !== null) {
+      return
+    }
+
     const payload: Record<string, unknown> = {
       updated: t.updated,
       title,
       priority,
       body,
-      depends_on: parseDependsOn(dependsOn),
-      parent: parseParent(parent),
+      depends_on: parsedDependsOn.values,
+      parent: parsedParent.value,
       block_reason: t.blocked ? blockReason : null,
     }
     await runMutation(`/api/tasks/${t.id}/edit`, payload)
   }
 
   async function handleForceSave() {
+    if (clientValidationMessage !== null) {
+      return
+    }
+
     setShowConflict(false)
     await runMutation(`/api/tasks/${t.id}/edit`, {
       updated: t.updated,
       title,
       priority,
       body,
-      depends_on: parseDependsOn(dependsOn),
-      parent: parseParent(parent),
+      depends_on: parsedDependsOn.values,
+      parent: parsedParent.value,
       block_reason: t.blocked ? blockReason : null,
     })
   }
@@ -330,6 +372,8 @@ export default function DetailTab({
       <PButton data-testid="body-edit-toggle" variant="secondary" onClick={() => setEditBody((v) => !v)}>
         Edit
       </PButton>
+
+      {isDirty && <div data-testid="dirty-indicator">Unsaved changes</div>}
 
       {/* Actions */}
       <PButton data-testid="save-button" onClick={() => void handleSave()}>
