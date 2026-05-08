@@ -1,10 +1,10 @@
 ---
 id: 1378
 title: 'P2-03: Test Cockpit task detail edit validation and dirty state'
-status: done
+status: archived
 priority: critical
 created: 2026-05-06T01:04:32.576780+00:00
-updated: 2026-05-08T19:27:55.065868+00:00
+updated: 2026-05-08T19:56:56.784710+00:00
 tags:
 - cockpit
 - audit-remediation
@@ -329,3 +329,41 @@ None.
 
 ### Scratch Files Cleaned
 No `1378-*` scratch files found.
+[[2026-05-08]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: invalid parent → error + save blocked | `parseParent` at DetailTab.tsx:108 rejects non-integer/negative; `handleSave` at :192 guards on `clientValidationMessage`; 6 TestFromAC tests GREEN | PASS |
+| AC2: invalid dep entries → error + save blocked | `parseDependsOn` at DetailTab.tsx:87 rejects per-category; same save guard; 6 TestFromAC tests GREEN | PASS |
+| AC3: save refusal via fetch-mock (mechanism-agnostic) | Both `handleSave` (:192) and `handleForceSave` (:209) return early on client validation error; 2 TestFromAC tests GREEN | PASS |
+| AC4: dirty-state signal in DOM | `isDirty` at :129 compares loaded-vs-edited; `dirty-indicator` rendered at :376; 4 TestFromAC tests GREEN | PASS |
+| AC5: validation error in existing `validation-message` testid | `validationMessage` at :137 merges client+server; renders at :412 via `data-testid="validation-message"`; 2 TestFromAC tests GREEN | PASS |
+| AC6: fails against prior silent-transform behavior | Cycle 2 RED run confirmed 20 failures; GREEN after builder implementation | PASS |
+
+### Test Results
+- pytest: 2964 passed, 187 failed — no failures in task scope (frontend-only task; failures in backend tasks 1218, 1365, etc.)
+- ruff: 29 violations — none in task scope files
+- vitest: 1127 passed, 19 failed — no failures in task scope (failures in tasks 1388, 1344)
+- eslint: 1 error + 3 warnings — none in task scope (error in usePolling.ts, warnings in unrelated tests)
+
+### Architect Quality: 4/5
+Original ACs had selector fork (client-validation-message vs validation-message), AC3 overconstraint (disabled-only vs mechanism-agnostic), and AC2 save-proof gap (non-numeric only). Reviewer rejection triggered cycle 2, which produced specific, testable, well-scoped ACs. System worked as designed but required a full cycle to reach quality.
+
+### Deduction Breakdown
+- No AC lines without evidence: -0.00
+- No lint violations in task scope: -0.00
+- AC quality 4/5 (>3): -0.00
+- Reviewer evidence present and detailed: -0.00
+- No full-suite failures in task scope: -0.00
+
+### Confidence: .98
+### Action: archive
+
+### Commits Verified
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 7de85964 | test | DetailTab_1378.test.tsx | #1378 |
+| 4b2b257f | test | DetailTab_1378.test.tsx (cycle 2 retry) | #1378 |
+| e6feb8ac | feat | DetailTab.tsx | #1378 |
+| ac56bad0 | docs | cockpit.excalidraw | #1378 |
