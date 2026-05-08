@@ -404,26 +404,39 @@ class TestFromAC_ConventionMappingTable:
 
     def test_gate_rule_task_caused_blocks(self) -> None:
         content = SKILL_DOC_UPDATE.read_text()
+        gate_match = re.search(r"Gate rules:.*?(?=## )", content, re.DOTALL)
+        assert gate_match, "SKILL.md must have a 'Gate rules:' section"
+        gate_lines = gate_match.group(0).splitlines()
         assert any(
-            "task-caused" in line and "blocks" in line
-            for line in content.splitlines()
+            "task-caused" in line and "unverified" in line and "blocks" in line
+            for line in gate_lines
         ), (
-            "SKILL.md gate rules must have a single line binding 'task-caused' to 'blocks' "
-            "— whole-file token presence is insufficient (swapped verbs would still pass)"
+            "SKILL.md Gate rules section must have a single line binding "
+            "'task-caused' + 'unverified' + 'blocks' — section-scoped to prevent "
+            "false-green via checklist duplicate lines (R6 gap)"
         )
 
     def test_gate_rule_preexisting_passes(self) -> None:
         content = SKILL_DOC_UPDATE.read_text()
+        gate_match = re.search(r"Gate rules:.*?(?=## )", content, re.DOTALL)
+        assert gate_match, "SKILL.md must have a 'Gate rules:' section"
+        gate_lines = gate_match.group(0).splitlines()
         assert any(
-            "pre-existing" in line and "passes" in line
-            for line in content.splitlines()
+            "pre-existing" in line and "unverified" in line and "passes" in line
+            for line in gate_lines
         ), (
-            "SKILL.md gate rules must have a single line binding 'pre-existing' to 'passes' "
-            "— whole-file token presence is insufficient (swapped verbs would still pass)"
+            "SKILL.md Gate rules section must have a single line binding "
+            "'pre-existing' + 'unverified' + 'passes' — section-scoped to prevent "
+            "false-green via checklist duplicate lines (R6 gap)"
         )
 
     def test_no_impact_fast_path_advances(self) -> None:
         step1 = self._step1_section()
+        assert re.search(r"no README", step1, re.IGNORECASE), (
+            "Step 1 fast-path trigger must reference 'no READMEs' — "
+            "proves the trigger condition (changed files map to no READMEs), "
+            "not just the output phrase (R6 gap)"
+        )
         assert "no docs impact" in step1, (
             "Step 1 must include the no-impact fast path phrase 'no docs impact'"
         )
