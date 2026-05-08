@@ -1,10 +1,10 @@
 ---
 id: 1412
 title: 'D1: Pre-end_work scoped commit check — domain-scoped uncommitted file verification'
-status: review
+status: done
 priority: important
 created: 2026-05-07T23:16:25.281801+00:00
-updated: 2026-05-08T16:06:52.798135+00:00
+updated: 2026-05-08T17:01:00.156456+00:00
 tags:
 - pipeline
 - ws-protocol
@@ -13,7 +13,7 @@ parent: 1403
 depends_on: []
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-08T17:01:00.156456+00:00
 archival_reason:
 archival_refs: []
 ---
@@ -320,3 +320,66 @@ REFINE + APPROVE: AC builder domain example corrected from `serve/*/src/` to `se
 - Coverage: not requested; task is protocol markdown verification and no new implementation was performed.
 - Pre-`end_work` domain-scoped commit check executed for builder domain: `git status --porcelain -- serve/ share/` returned empty output (clean).
 - Evidence summary: no additional code changes required for this builder cycle; task is advanced with validated green state.
+[[2026-05-08]]
+## Review Evidence
+### Test Results
+- quality-runner scoped pytest on `tests/test_pipeline_commit_check_1412.py`: 8 passed, 0 failed.
+
+### Lint
+- quality-runner scoped ruff on `tests/test_pipeline_commit_check_1412.py`: clean.
+
+### Coverage
+- Not requested / not run. The latest Architecture Review marks all AC lines `td:0`, and the delivered artifact is markdown protocol text rather than an instrumented module.
+
+### Critical Checks
+- Current task authority is the Architecture Review refinement in `.owlbear/kanban/tasks/1412-d1-pre-end-work-scoped-commit-check-domain-scoped-uncommitted-file-verification.md:272-291`, which corrects P2 builder domain from `serve/*/src/` to `serve/, share/` and marks every AC line `td:0`.
+- The live protocol rule matches that refined contract in `share/skills/r-pipeline-protocol/SKILL.md:242-254`.
+- No security, data-safety, or necessity issues were found. This task changes protocol text only.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---|---|---|---|
+| P1: `r-pipeline-protocol` updated with pre-`end_work` commit check requirement | `share/skills/r-pipeline-protocol/SKILL.md:242-254` contains the new `Pre-advance verification` rule under `### Who Commits What`. | `test_pre_advance_verification_heading_exists` | PASS |
+| P2: Each agent verifies uncommitted files in its own file domain before calling `end_work`: researcher (`.owlbear/research/`), test-writer (`tests/`), builder (`serve/, share/`), doc-writer (docs), etc. | The refined AC is written into the task at `.owlbear/kanban/tasks/1412-d1-pre-end-work-scoped-commit-check-domain-scoped-uncommitted-file-verification.md:279`. The live table matches it at `share/skills/r-pipeline-protocol/SKILL.md:246-249`, including builder `serve/`, `share/`. | `test_builder_domain_paths_present` is supplemental only; direct artifact inspection provides the decisive proof for `share/`. | PASS |
+| P2: Check is domain-scoped — NOT raw `git status --porcelain` | The live rule requires `git status --porcelain -- <domain-paths>` at `share/skills/r-pipeline-protocol/SKILL.md:252`. | `test_verification_command_uses_pathspec_syntax` | PASS |
+| P2: Protocol specifies the check happens before `end_work`, not as a PostToolUse hook | The rule explicitly says `Before calling end_work` and remains inside `### Who Commits What` at `share/skills/r-pipeline-protocol/SKILL.md:242-254`. | `test_rule_placed_in_who_commits_what_section` | PASS |
+| P3: Verification by diff comparison of modified protocol file | `tests/test_pipeline_commit_check_1412.py` reads the modified protocol file directly, and the scoped suite is green against the live artifact. | `tests/test_pipeline_commit_check_1412.py` | PASS |
+
+### Deductions
+- -0.03: Git diff / dirty-scope contamination checks were not reconstructable from the available tool surface.
+- -0.03: `tests/test_pipeline_commit_check_1412.py:85-89` pins the builder `serve/` association but does not independently assert `share/`; non-gating because the latest Architecture Review explicitly refined P2 to `td:0`, and the live artifact directly proves the full builder row.
+
+### Confidence: .94
+### Verdict: PASS
+### Action
+- Advance to docs.
+- Prior review failures were superseded by the Architecture Review refinement; the earlier `serve/*/src/` wording is no longer the binding contract.
+[[2026-05-08]]
+## Docs Gate
+
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | All changed files are OUT of scope (SKILL.md is agent-executable, test file is non-doc). No IN-scope prose docs (READMEs, setup guides) reference the pre-advance verification rule. |
+| 2 | Module docstrings | No | N/A | No Python modules created or modified. |
+| 3 | External attribution | No | N/A | No external patterns used. Builder referenced `w-code-review Step 1.1` (internal). |
+| 4 | Research doc | Yes | Verified | `.owlbear/research/1412-pre-end-work-scoped-commit-check.md` exists; linked from task body `## Research` section. |
+| 5 | Diagram maintenance (describes match) | Yes | Updated | `pipeline.excalidraw` (describes `share/skills/r-pipeline-protocol/**`) and `project-overview.excalidraw` (describes `share/**`) both matched. Footers updated to `Last verified: 2026-05-08 (6a50a7fb)`. Commit: c196d123. |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation request in task body. |
+| 7 | Deletion detection | No | N/A | No files deleted by this task. |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| `share/skills/r-pipeline-protocol/SKILL.md` | OUT (agent-executable SKILL.md) | N/A — triggers diagram describes-match only |
+| `tests/test_pipeline_commit_check_1412.py` | OUT (test file) | N/A |
+
+### Files Updated
+- `share/diagrams/pipeline.excalidraw` — footer updated
+- `share/diagrams/project-overview.excalidraw` — footer updated
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no 1412-* scratch files found)

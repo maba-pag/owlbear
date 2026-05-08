@@ -1,10 +1,10 @@
 ---
 id: 1433
 title: 'P1-05: Panel Output Phrasing section in h-ideation-panel/SKILL.md'
-status: review
+status: archived
 priority: important
 created: 2026-05-08T01:00:48.510035+00:00
-updated: 2026-05-08T16:22:33.356728+00:00
+updated: 2026-05-08T17:05:18.086547+00:00
 tags:
 - phase-1
 - scope:shared
@@ -373,3 +373,112 @@ Builder skipped. Advancing directly to review.
 - Lint: ruff clean on `tests/test_panel_output_phrasing_1433.py`.
 - Coverage: not applicable in this builder cycle (no source/docs changes made).
 - Evidence summary: confirmed GREEN on tightened test suite and advanced to review without additional intervention.
+[[2026-05-08]]
+## Review Evidence
+### Test Results
+- quality-runner scoped run on `tests/test_panel_output_phrasing_1433.py`: 18 passed, 0 failed, 0 skipped.
+- Ruff on `tests/test_panel_output_phrasing_1433.py`: clean (0 violations).
+- Coverage: not applicable for this review. The live artifact is Markdown guidance in `share/skills/h-ideation-panel/SKILL.md`, and the retry cycle was test-only.
+
+### Scope Reconstruction
+- This task had prior review failures on proof quality. The latest Architecture Review (cycle 3) refined AC2 and AC5 for testability, and that refinement is now written into the task body.
+- Implementation artifact under review: `share/skills/h-ideation-panel/SKILL.md` (builder commit `771c2962`, confirmed in `.git/logs/HEAD:2262`).
+- Retry-cycle proof commits confirmed in git logs: `f97481ea` (`.git/logs/HEAD:2254`), `279ae988` (`.git/logs/HEAD:2275`), `030d12b0` (`.git/logs/HEAD:2315`).
+- Direct `git diff` and `git status` were unavailable in this tool surface, so diff-level ownership and dirty-tree cleanliness are only partially verified.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---|---|---|---|
+| AC1: new `## Panel Output Phrasing` section exists | `share/skills/h-ideation-panel/SKILL.md:197` | `test_panel_output_phrasing_section_exists` (`tests/test_panel_output_phrasing_1433.py:67-72`) | PASS |
+| AC2: affirmative descriptive-header bullet plus prohibitive protocol-coded/jargon bullet, both with examples | Live bullets at `share/skills/h-ideation-panel/SKILL.md:199-200`; verb-direction and token-shape checks at `tests/test_panel_output_phrasing_1433.py:259-318` plus cycle-2 contrast/example checks at `tests/test_panel_output_phrasing_1433.py:148-186` | `test_ac2_affirmative_bullet_starts_with_use_or_prefer`; `test_ac2_prohibitive_bullet_starts_with_avoid`; supporting cycle-2 AC2 tests | PASS |
+| AC3: quoted/mediator line and readable/without translation line | `share/skills/h-ideation-panel/SKILL.md:202-203`; same-line co-occurrence checks at `tests/test_panel_output_phrasing_1433.py:189-223` | `test_ac3_quoted_and_mediator_same_line`; `test_ac3_readable_and_without_translation_same_line` | PASS |
+| AC4: section body is 5-10 non-blank lines | Non-blank body lines are `share/skills/h-ideation-panel/SKILL.md:199-204` (6 lines), bounded by next heading at `share/skills/h-ideation-panel/SKILL.md:206`; extraction/count checks at `tests/test_panel_output_phrasing_1433.py:41-58` and `tests/test_panel_output_phrasing_1433.py:118-128` | `test_section_length_within_bounds` | PASS |
+| AC5: seven preserved top-level headings, total `##` count = 8, and scope-boundary line names excluded domains | Top-level headings present at `share/skills/h-ideation-panel/SKILL.md:11`, `:23`, `:57`, `:117`, `:152`, `:190`, `:197`, `:206`; scope-boundary line at `share/skills/h-ideation-panel/SKILL.md:204`; count/top-level/scope checks at `tests/test_panel_output_phrasing_1433.py:225-237`, `:320-331`, `:335-357` | `test_ac5_heading_count_equals_original_plus_one`; `test_ac5_existing_headings_are_top_level_lines`; `test_ac5_scope_boundary_mentions_mechanics_or_structure` | PASS |
+
+### Test-Writer Audit
+| AC Line | Mapped Test | Would fail if AC violated? | Verdict |
+|---|---|---|---|
+| AC1 | `test_panel_output_phrasing_section_exists` | Yes. Exact heading presence is required. | COVERED |
+| AC2 | `test_ac2_affirmative_bullet_starts_with_use_or_prefer`; `test_ac2_prohibitive_bullet_starts_with_avoid`; supporting cycle-2 AC2 tests | Yes for the refined cycle-3 contract. Missing or wrong verb-direction, missing `descriptive`/`protocol-coded` contrast terms, missing `header(s)`, or missing inline examples now fail. Residual sentence-level contradiction beyond the refined regex contract is informational only. | COVERED |
+| AC3 | `test_ac3_quoted_and_mediator_same_line`; `test_ac3_readable_and_without_translation_same_line` | Yes. Splitting or removing either statement fails the same-line co-occurrence checks. | COVERED |
+| AC4 | `test_section_length_within_bounds` | Yes. Exact numeric bound fails outside 5-10 non-blank lines. | COVERED |
+| AC5 | `test_ac5_heading_count_equals_original_plus_one`; `test_ac5_existing_headings_are_top_level_lines`; `test_ac5_scope_boundary_mentions_mechanics_or_structure` | Yes. Heading demotion, count drift, or removal of the mechanics/structure disclaimer would fail. | COVERED |
+
+### Additional Checks
+- Security review: no issues in scope (static handbook text and file-read tests only).
+- Data safety: no issues in scope.
+- Test integrity: no weakened or removed `TestFromAC_*` assertions visible in the current snapshot; cycle-2 and cycle-3 changes are additive strengthening.
+- Necessity: no new dependency, integration, or external capability added.
+- Builder process quality: CLEAN. Prior FAILs were proof-quality gaps; the current pass is justified by explicit AC refinement written into the task history.
+
+### Deductions
+- 0.03 direct `git diff` / dirty-tree contamination checks unavailable in this tool surface; commit presence verified via `.git/logs` only.
+- 0.03 AC2 proof reaches the natural ceiling for documentation regex tests: it proves verb-direction and required tokens, not full sentence-level contradiction semantics.
+
+### Verdict
+- PASS. The implementation in `share/skills/h-ideation-panel/SKILL.md:197-204` satisfies the latest refined AC, and the cycle-3 test suite now proves the previously weak AC2 and AC5 areas strongly enough for sign-off.
+- Confidence: 0.94.
+- Action: advance to docs.
+[[2026-05-08]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | Changed files are SKILL.md + test file — no IN-scope prose docs reference h-ideation-panel |
+| 2 | Module docstrings | No | N/A | No Python modules modified |
+| 3 | External attribution | No | N/A | No external patterns cited in task body |
+| 4 | Research doc | No | N/A | No research doc produced |
+| 5 | Diagram maintenance | No | N/A | Doc-index has no describes entry for share/skills/h-ideation-panel/SKILL.md |
+| 6 | Explicit diagram creation | No | N/A | Not requested |
+| 7 | Deletion detection | No | N/A | No files deleted |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| share/skills/h-ideation-panel/SKILL.md | OUT (agent-executable) | N/A |
+| tests/test_panel_output_phrasing_1433.py | OUT (test file) | N/A |
+
+### Files Updated
+- None
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no 1433-* scratch files existed)
+[[2026-05-08]]
+## Audit
+
+### AC Verification
+| AC | Evidence | Status |
+|---|---|---|
+| AC1: section heading exists | `share/skills/h-ideation-panel/SKILL.md:197` — exact `## Panel Output Phrasing` line | PASS |
+| AC2: affirmative + prohibitive verb-direction with examples | SKILL.md:199 starts "Use descriptive…" with inline example; :200 starts "Avoid protocol-coded…" with inline example. Tests verify verb-direction, co-occurrence, and example presence (test file:259-318) | PASS |
+| AC3: mediator quoting + user readability co-occurrence | SKILL.md:202 "quoted by the mediator" (same line), :203 "readable…without translation" (same line). Tests verify same-line co-occurrence (test file:189-223) | PASS |
+| AC4: 5-10 non-blank lines | 6 non-blank lines (SKILL.md:199-204). Exact numeric bound test (test file:118-128) | PASS |
+| AC5: 7 preserved headings, count=8, scope boundary | All 7 original `## ` headings present as top-level lines; total 8 headings; scope line at :204 contains "phrasing only" + "panel mechanics" + "stance file structure". Tests verify line-start regex, count invariant, and co-occurrence (test file:320-357) | PASS |
+
+### Test Results
+- quality-runner full: 1160 passed, 0 failed (pytest 51 + vitest 1109)
+- Lint: ruff exit 0, eslint exit 0 — no violations in task scope
+
+### Upstream Commits
+- `f97481ea` test-writer cycle 1
+- `771c2962` builder (implementation)
+- `279ae988` test-writer cycle 2
+- `030d12b0` test-writer cycle 3
+
+All verified via `git log --oneline`.
+
+### Architect Quality
+- Original AC (cycle 1) was clear in intent but too vague for testable proof — "descriptive headers" and "no changes to mechanics" allowed token-presence tests that couldn't catch reversed semantics or heading demotion.
+- Required 3 architect cycles to reach testable specificity (verb-direction, co-occurrence patterns, line-start regex).
+- **Score: 3/5** — notable gaps requiring significant rework cycles. Not bad enough to warrant a calibration task (threshold ≤ 2), but the 3-cycle cost was avoidable with tighter initial AC.
+
+### Deductions
+| Criterion | Deduction |
+|-----------|-----------|
+| AC quality score = 3 | -.03 |
+
+### Confidence: 0.97
+### Action: ARCHIVE

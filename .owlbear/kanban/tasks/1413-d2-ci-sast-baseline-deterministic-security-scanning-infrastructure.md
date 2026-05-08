@@ -1,10 +1,10 @@
 ---
 id: 1413
 title: 'D2: CI/SAST baseline — deterministic security scanning infrastructure'
-status: backlog
+status: in-progress
 priority: needed
 created: 2026-05-07T23:16:25.294264+00:00
-updated: 2026-05-08T00:08:48.106165+00:00
+updated: 2026-05-08T17:00:52.326550+00:00
 tags:
 - pipeline
 - ws-protocol
@@ -180,3 +180,30 @@ Skipped — single clear approach (gate task depending on children).
 
 [[2026-05-08]]
 REFINED and APPROVED. Re-scoped as verification gate: depends_on [#1416, #1418], all AC td:0, tagged type:config. Original AC superseded — parent no longer claims deliverables owned by children. Will sit in todo until critical-path children deliver.
+[[2026-05-08]]
+## Architecture Review (pass 3 — advancement)
+
+### Context
+Pass 2 correctly re-scoped this as a verification gate with td:0 AC and depends_on [#1416, #1418]. Both dependencies are now archived (done). All 4 refined AC lines verified against current repo state:
+
+| AC Line | Evidence | Verified |
+|---------|----------|----------|
+| P1: Push/PR triggers | `.github/workflows/megalinter.yml:4-9` has push + pull_request on dev | YES |
+| P1: All serve/*/src/ covered | `pyproject.toml:41-51` ruff src list includes all 9 packages | YES |
+| P2: uv.lock not excluded | `.mega-linter.yml:36` FILTER_REGEX_EXCLUDE no longer mentions uv.lock | YES |
+| P2: Automated CI | GitHub Actions workflow — not cognitive | YES |
+
+### Dependency Status
+- #1416 (triggers): archived ✓
+- #1417 (SARIF upload): archived ✓
+- #1418 (uv.lock + ruff src): archived ✓
+- #1419 (docs): review — nice-to-have, not blocking
+
+### Verdict: APPROVE
+All td:0 — Test-writer: SKIP. Advancing to todo.
+[[2026-05-08]]
+## Test-Writer Notes
+- Non-implementation task (tagged `type:config`) — no tests applicable.
+- All AC lines annotated `td:0`; architecture review pass 3 explicitly states "Test-writer: SKIP".
+- Task is a CI/SAST verification gate — no Python implementation, no testable interfaces.
+- Passing through to builder.

@@ -1,10 +1,10 @@
 ---
 id: 1422
 title: 'P1-01: Test — verify doc-writer quality redesign AC'
-status: review
+status: in-progress
 priority: needed
 created: 2026-05-08T00:32:15.467895+00:00
-updated: 2026-05-08T16:06:22.774313+00:00
+updated: 2026-05-08T17:01:51.278764+00:00
 tags:
 - phase-1
 - scope:shared
@@ -352,3 +352,143 @@ Architecture review R3 complete. AC1 supplemented with 2 specific discriminator 
 - Approach: verified latest test-writer retry state with a fresh scoped quality-runner gate before advancing
 - Evidence summary: quality-runner reported pytest exit 0 and ruff exit 0 with `failed: []` and `clean: true`
 - Fixes applied: none
+[[2026-05-08]]
+## Review Evidence
+### Test Results
+- pytest: 51 passed, 0 failed (`tests/test_doc_writer_quality_1422.py`) via `quality-runner`
+
+### Lint
+- ruff: 0 violations on `tests/test_doc_writer_quality_1422.py` via `quality-runner`
+- Initial `quality-runner` lint attempt hit an environment error; retry with an explicit workspace-root hint succeeded cleanly.
+
+### Coverage
+- N/A. This task reviews markdown-artifact assertions only; `coverage_modules=[]` for the scoped run.
+
+### Pass 1 — Critical
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---|---|---|---|
+| AC1 gate rule (`.owlbear/kanban/tasks/1422-p1-01-test-verify-doc-writer-quality-redesign-ac.md:68`) | `test_gate_rule_task_caused_blocks`, `test_gate_rule_preexisting_passes` | No. The current tests assert `task-caused` and `blocks` separately (`tests/test_doc_writer_quality_1422.py:407`, `:411`) and `pre-existing` and `passes` separately (`:418`, `:422`). If the live gate rules at `share/skills/w-doc-update/SKILL.md:91-92` were swapped to `task-caused ... passes` and `pre-existing ... blocks`, all four assertions would still pass. | LAX |
+| AC1 no-impact fast path (`.owlbear/kanban/tasks/1422-p1-01-test-verify-doc-writer-quality-redesign-ac.md:69`) | `test_no_impact_fast_path_advances` | Yes. The test now pins `no docs impact`, `with evidence`, and `advance` inside the Step 1 section (`tests/test_doc_writer_quality_1422.py:427-437`). | COVERED |
+| AC2 | `TestFromAC_DocWriterAgentNoDiagrams` | Yes. Direct absence tests exist at `tests/test_doc_writer_quality_1422.py:88`, `:98`, `:104`, and `grep_search` found 0 `diagram|excalidraw` matches in `share/agents/doc-writer.agent.md`. | COVERED |
+| AC3 | `TestFromAC_DocAuditPromptContent` | Yes. Section-presence tests exist at `tests/test_doc_writer_quality_1422.py:114`, `:124`, `:133`; the prompt contains the required sections at `.owlbear/prompts/doc-audit.prompt.md:46`, `:61`, `:69`, `:71-78`. | COVERED |
+| AC4 | `TestFromAC_NoOldDiagramItems` | Yes. Whole-file old-item bans exist at `tests/test_doc_writer_quality_1422.py:174`, `:181`, and `grep_search` found 0 `Item 5|Item 6` matches in `share/skills/w-doc-update/SKILL.md`. | COVERED |
+| AC5 | `test_todo_marker_complete_template` | Yes. The exact template is asserted at `tests/test_doc_writer_quality_1422.py:220` and exists at `share/skills/w-doc-update/SKILL.md:76`. | COVERED |
+
+#### Security Review
+- No issues. Scope is markdown artifacts plus file-content assertions only.
+
+#### Test Integrity
+- No live evidence of builder-weakened or builder-removed `TestFromAC_*` assertions in this builder-skip cycle.
+- Commit presence for the test-writer hashes was confirmed in `.git/logs/HEAD:2268` (`db7f17e7`), `.git/logs/HEAD:2286` (`5cb92faf`), and `.git/logs/HEAD:2314` (`5de383ce`).
+- Full additive diff reconstruction and dirty-tree overlap checks were not available in this reviewer tool surface. Small confidence deduction only.
+
+#### Test Quality
+| Dimension | Rating | Evidence |
+|---|---|---|
+| Assertion specificity | WEAK | AC1 gate semantics are still under-proved: the suite uses separate whole-file token checks at `tests/test_doc_writer_quality_1422.py:407`, `:411`, `:418`, `:422` rather than binding each subject to its verb. |
+| Negative / exclusion coverage | ADEQUATE | AC2 and AC4 use direct absence assertions and remained green against the live files. |
+| Manual mutation reasoning | WEAK | Swapping the verbs in the live gate rules at `share/skills/w-doc-update/SKILL.md:91-92` would preserve all four gate-rule assertions. |
+| Test independence | STRONG | Tests are isolated `Path.read_text()` assertions with no shared mutable state. |
+| Descriptive names | STRONG | Test names remain AC-shaped and readable. |
+
+#### Data Safety
+- No issues.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---|---|---|---|
+| AC1 refined (`.owlbear/kanban/tasks/1422-p1-01-test-verify-doc-writer-quality-redesign-ac.md:54-69`) | The suite now covers the previously missing R3 gaps: `src/**` at `tests/test_doc_writer_quality_1422.py:397` and fast-path `with evidence` / `advance` at `:427-437`. The remaining blocker is item 7 gate semantics: current token checks at `:407`, `:411`, `:418`, `:422` would not fail on a swapped-semantics regression against `share/skills/w-doc-update/SKILL.md:91-92`. | `TestFromAC_DocUpdateSkillContent`, `TestFromAC_ChecklistItemNames`, `TestFromAC_ConventionMappingTable` | FAIL |
+| AC2 | Agent file stayed clean under direct absence tests and grep scan. | `TestFromAC_DocWriterAgentNoDiagrams` | PASS |
+| AC3 | Prompt file contains TODO batch resolution, diagram ownership, and describes-based verification sections. | `TestFromAC_DocAuditPromptContent` | PASS |
+| AC4 | No old `Item 5` / `Item 6` references remain in the live skill; whole-file tests cover the condition. | `TestFromAC_NoOldDiagramItems` | PASS |
+| AC5 | Exact TODO template is present in the skill and asserted exactly in the suite. | `TestFromAC_TodoMarkerFormat` | PASS |
+
+### Informational
+- There are already two `## Review Evidence` sections in the task file at `.owlbear/kanban/tasks/1422-p1-01-test-verify-doc-writer-quality-redesign-ac.md:141` and `:213`; this is the third review cycle.
+- The R3 `src/**` and fast-path `with evidence` gaps are no longer blockers; those additions landed and are behaving as intended.
+- The current implementation in `share/skills/w-doc-update/SKILL.md` is correct. The remaining issue is proof quality / AC carry-through, not implementation behavior.
+
+### Deductions
+- `-0.08` AC1 gate-rule assertions still false-green on swapped semantics.
+- `-0.02` Full additive diff / dirty-tree overlap checks unavailable in this tool surface.
+
+### Confidence: 0.88
+### Verdict: FAIL
+### Action
+- Reject to `backlog` under the loop-breaker rule. This is the third review cycle, and the remaining blocker is AC/test-quality alignment rather than implementation correctness.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Refine AC1 item 7 so the next retry requires executable subject-verb coupling for both gate rules, for example exact line assertions or section-scoped sentence matches for `task-caused ... blocks` and `pre-existing ... passes`, then return the task to the test-writer. | `.owlbear/kanban/tasks/1422-p1-01-test-verify-doc-writer-quality-redesign-ac.md`, `tests/test_doc_writer_quality_1422.py`, `share/skills/w-doc-update/SKILL.md` | Prior reviewer requirement at `.owlbear/kanban/tasks/1422-p1-01-test-verify-doc-writer-quality-redesign-ac.md:280`; current split-token checks at `tests/test_doc_writer_quality_1422.py:407`, `:411`, `:418`, `:422`; live gate semantics at `share/skills/w-doc-update/SKILL.md:91-92` |
+[[2026-05-08]]
+
+## AC1 Supplement (R4 — gate-rule coupling)
+
+The 2 existing gate-rule tests (`test_gate_rule_task_caused_blocks`, `test_gate_rule_preexisting_passes`) use whole-file token checks that false-green on swapped semantics. Replace them with line-scoped coupling assertions.
+
+### Gap: Gate-rule subject-verb coupling (td:1)
+
+Replace the 4 separate whole-file `assert "token" in content` calls across the 2 gate-rule tests with line-scoped assertions that bind subject to verb on the same line:
+
+- `test_gate_rule_task_caused_blocks`: assert that at least one line in the Gate rules section contains BOTH `task-caused` AND `blocks`. (Example: `any("task-caused" in line and "blocks" in line for line in gate_lines)`)
+- `test_gate_rule_preexisting_passes`: assert that at least one line in the Gate rules section contains BOTH `pre-existing` AND `passes`. (Same pattern.)
+
+This ensures swapping the verbs would fail the test.
+
+### Test-writer guidance (R4)
+- Amend `tests/test_doc_writer_quality_1422.py` — modify the 2 existing gate-rule tests only.
+- Extract the "Gate rules:" section (2 bullet lines following the `Gate rules:` heading in Step 1) and use line-level iteration.
+- Total test count stays at 51 — no new tests, just tighter assertions in 2 existing tests.
+- DO NOT modify or remove any other tests.
+
+[[2026-05-08]]
+
+### R4 Correction (challenger feedback)
+
+The R4 supplement above incorrectly says "Gate rules: heading in Step 1" — the gate rules are in **Step 2** at `share/skills/w-doc-update/SKILL.md:91-92`. The test-writer should iterate lines of the **full file content** (as the current tests already do with `SKILL_DOC_UPDATE.read_text()`) and apply line-scoped coupling. No section extraction helper is needed — just check `any("task-caused" in line and "blocks" in line for line in content.splitlines())` and the equivalent for `pre-existing`/`passes`.
+
+[[2026-05-08]]
+## Architecture Review (R4)
+
+### Evaluation
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | Scoped to tightening 2 existing assertion bodies |
+| Interface clarity | PASS | Exact discriminator pattern specified with code example |
+| Dependency correctness | PASS | No dependencies |
+| Module layering | N/A | Test file only |
+| TDD compliance | PASS | This IS the test task |
+| KISS/YAGNI | PASS | Modify 2 assertions, no new tests or abstractions |
+| Premise challenge | PASS | Reviewer documented exact false-green mutation (swap verbs → still green) |
+| Pattern consistency | PASS | Uses same `content.splitlines()` pattern available in test file |
+| Security surface | PASS | No system boundaries |
+| Single domain | PASS | Agent ecosystem only |
+
+### Challenge Results
+- Challenger: reconsider (confidence 0.74)
+- Challenge 1 (Step 1 vs Step 2 locator): ACCEPTED — corrected in R4 supplement addendum. Gate rules are in Step 2, not Step 1. Test-writer guidance updated to use full-file line iteration.
+- Challenge 2 (change-surface understatement): noted but not a blocker. Modifying assertion bodies within 2 existing test functions is minimal.
+- Challenge 3 (contradictory authority — research vs review): the research doc predates the reviewer's gate-rule analysis. Review evidence supersedes research per normal lifecycle progression. No reconciliation needed — downstream agents follow the latest AC supplement.
+- Challenge 4 (duplicate surface): the same tokens appearing elsewhere in the skill file actually reinforces the need for line-scoped coupling rather than whole-file checks.
+
+### Test Depth
+- Max depth: 1 (single-assertion modifications)
+- Test-writer: PROCEED
+
+### Verdict: APPROVE
+### Action: AC1 supplemented with gate-rule subject-verb coupling requirement per reviewer R3 follow-up. Section locator corrected per challenger feedback. Task advanced to todo.
+[[2026-05-08]]
+## Test-Writer Notes (R4)
+- Test file: tests/test_doc_writer_quality_1422.py
+- Prior state: 51 tests (all passing — correct implementation already in place)
+- Changes: tightened 2 existing gate-rule tests — replaced 4 whole-file `assert "token" in content` calls with line-scoped `any("subject" in line and "verb" in line for line in content.splitlines())` checks
+  - `test_gate_rule_task_caused_blocks`: now asserts a single line has BOTH `task-caused` AND `blocks`
+  - `test_gate_rule_preexisting_passes`: now asserts a single line has BOTH `pre-existing` AND `passes`
+- Total: 51 tests, all PASS
+- ruff: clean (0 violations)
+- Mutation resistance: swapping the verbs in `share/skills/w-doc-update/SKILL.md:91-92` now fails both tests (was false-green under old whole-file token checks)
+- Builder skip: test-only, implementation already correct — advance to review
+- AC coverage: AC1 gate-rule coupling (R4 Gap: addressed), all prior AC2–AC5 unchanged
+- Commit: c3972833
