@@ -1,0 +1,203 @@
+from __future__ import annotations
+
+import re
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).parent.parent
+SKILL_DOC_UPDATE = REPO_ROOT / "share" / "skills" / "w-doc-update" / "SKILL.md"
+DOC_WRITER_AGENT = REPO_ROOT / "share" / "agents" / "doc-writer.agent.md"
+DOC_AUDIT_PROMPT = REPO_ROOT / ".owlbear" / "prompts" / "doc-audit.prompt.md"
+
+
+class TestFromAC_DocUpdateSkillContent:
+    """AC1: w-doc-update/SKILL.md contains required content for the redesign."""
+
+    def test_convention_mapping_serve_pkg_pattern(self) -> None:
+        content = SKILL_DOC_UPDATE.read_text()
+        assert "serve/{pkg}" in content, (
+            "SKILL.md must contain convention-based README mapping with 'serve/{pkg}' pattern"
+        )
+
+    def test_convention_mapping_serve_pkg_to_readme(self) -> None:
+        content = SKILL_DOC_UPDATE.read_text()
+        # Table must map serve/{pkg} paths to serve/{pkg}/README.md
+        assert re.search(r"serve/\{pkg\}.*README", content), (
+            "Convention mapping must show serve/{pkg} → serve/{pkg}/README.md relationship"
+        )
+
+    def test_checklist_has_exactly_four_items(self) -> None:
+        content = SKILL_DOC_UPDATE.read_text()
+        items = re.findall(r"### Item \d+", content)
+        assert len(items) == 4, (
+            f"Checklist must have exactly 4 items, found {len(items)}: {items}"
+        )
+
+    def test_checklist_has_no_diagram_maintenance_item(self) -> None:
+        content = SKILL_DOC_UPDATE.read_text()
+        assert "Diagram Maintenance" not in content, (
+            "SKILL.md must not have a 'Diagram Maintenance' checklist item"
+        )
+
+    def test_checklist_has_no_explicit_diagram_creation_item(self) -> None:
+        content = SKILL_DOC_UPDATE.read_text()
+        assert "Explicit Diagram Creation" not in content, (
+            "SKILL.md must not have an 'Explicit Diagram Creation' checklist item"
+        )
+
+    def test_verification_procedure_layer1_grep_present(self) -> None:
+        content = SKILL_DOC_UPDATE.read_text()
+        assert re.search(r"[Ll]ayer 1|Layer 1 —|grep.*structural|structural.*grep", content), (
+            "SKILL.md must document Layer 1 (grep-based structural) verification"
+        )
+
+    def test_verification_procedure_layer2_editorial_present(self) -> None:
+        content = SKILL_DOC_UPDATE.read_text()
+        assert re.search(r"[Ll]ayer 2|Layer 2 —|LLM.*editorial|editorial.*LLM", content), (
+            "SKILL.md must document Layer 2 (LLM editorial) verification"
+        )
+
+    def test_todo_marker_insertion_rules_present(self) -> None:
+        content = SKILL_DOC_UPDATE.read_text()
+        assert "TODO marker" in content, (
+            "SKILL.md must contain TODO marker insertion rules"
+        )
+
+    def test_todo_marker_blockquote_format_documented(self) -> None:
+        content = SKILL_DOC_UPDATE.read_text()
+        assert "> **TODO:**" in content, (
+            "SKILL.md must document the TODO marker visible blockquote format: > **TODO:**"
+        )
+
+    def test_gate_rule_task_caused_content_blocks(self) -> None:
+        content = SKILL_DOC_UPDATE.read_text()
+        assert re.search(r"task.caused|task.introduced|task.content", content, re.IGNORECASE), (
+            "SKILL.md must document that task-caused unverified content blocks the gate"
+        )
+
+    def test_gate_rule_preexisting_content_passes(self) -> None:
+        content = SKILL_DOC_UPDATE.read_text()
+        assert re.search(r"pre.existing", content, re.IGNORECASE), (
+            "SKILL.md must document that pre-existing unverified content passes the gate"
+        )
+
+
+class TestFromAC_DocWriterAgentNoDiagrams:
+    """AC2: doc-writer.agent.md contains NO references to diagrams, Excalidraw, or .excalidraw files."""
+
+    def test_no_diagram_references_anywhere(self) -> None:
+        content = DOC_WRITER_AGENT.read_text()
+        diagram_lines = [
+            line for line in content.splitlines() if "diagram" in line.lower()
+        ]
+        assert len(diagram_lines) == 0, (
+            f"doc-writer.agent.md must have zero 'diagram' references, "
+            f"found {len(diagram_lines)}: {diagram_lines[:3]}"
+        )
+
+    def test_no_excalidraw_file_references(self) -> None:
+        content = DOC_WRITER_AGENT.read_text()
+        assert ".excalidraw" not in content, (
+            "doc-writer.agent.md must not reference .excalidraw files"
+        )
+
+    def test_no_excalidraw_brand_references(self) -> None:
+        content = DOC_WRITER_AGENT.read_text()
+        assert "excalidraw" not in content.lower(), (
+            "doc-writer.agent.md must not reference Excalidraw in any form (case-insensitive)"
+        )
+
+
+class TestFromAC_DocAuditPromptContent:
+    """AC3: doc-audit.prompt.md includes TODO marker batch resolution, diagram ownership, describes-based verification."""
+
+    def test_todo_marker_batch_resolution_dimension_present(self) -> None:
+        content = DOC_AUDIT_PROMPT.read_text()
+        assert re.search(
+            r"TODO.*marker.*resol|resol.*TODO.*marker|TODO marker.*batch|batch.*TODO marker",
+            content,
+            re.IGNORECASE,
+        ), (
+            "doc-audit.prompt.md must include a TODO marker batch resolution dimension"
+        )
+
+    def test_diagram_ownership_section_present(self) -> None:
+        content = DOC_AUDIT_PROMPT.read_text()
+        assert re.search(
+            r"[Dd]iagram.*owner|[Dd]iagram.*responsib|[Dd]iagram.*full.*responsib",
+            content,
+        ), (
+            "doc-audit.prompt.md must include a diagram ownership / full responsibility section"
+        )
+
+    def test_describes_based_diagram_verification_present(self) -> None:
+        content = DOC_AUDIT_PROMPT.read_text()
+        assert re.search(
+            r"`describes`.*diagram|diagram.*`describes`|describes.*\.excalidraw|\.excalidraw.*describes",
+            content,
+            re.IGNORECASE,
+        ), (
+            "doc-audit.prompt.md must include describes-based diagram verification "
+            "(matching diagrams to changed files via doc-index 'describes' globs)"
+        )
+
+
+class TestFromAC_NoOldDiagramItems:
+    """AC4: No references to old 'item 5' or 'item 6' (diagram maintenance/creation) remain in w-doc-update."""
+
+    def test_no_item_5_section_heading(self) -> None:
+        content = SKILL_DOC_UPDATE.read_text()
+        assert "### Item 5" not in content, (
+            "w-doc-update/SKILL.md must not contain '### Item 5' "
+            "(removed: old Diagram Maintenance item)"
+        )
+
+    def test_no_item_6_section_heading(self) -> None:
+        content = SKILL_DOC_UPDATE.read_text()
+        assert "### Item 6" not in content, (
+            "w-doc-update/SKILL.md must not contain '### Item 6' "
+            "(removed: old Explicit Diagram Creation item)"
+        )
+
+    def test_output_template_no_diagram_row_5(self) -> None:
+        content = SKILL_DOC_UPDATE.read_text()
+        assert not re.search(r"\|\s*5\s*\|.*[Dd]iagram", content), (
+            "Output template in w-doc-update must not contain a row 5 for diagram maintenance"
+        )
+
+    def test_output_template_no_diagram_row_6(self) -> None:
+        content = SKILL_DOC_UPDATE.read_text()
+        assert not re.search(r"\|\s*6\s*\|.*[Dd]iagram", content), (
+            "Output template in w-doc-update must not contain a row 6 for diagram creation"
+        )
+
+
+class TestFromAC_TodoMarkerFormat:
+    """AC5: TODO marker format grep pattern works: > **TODO:** {category} — {description} [#{id}]"""
+
+    def test_todo_marker_format_verbatim_in_skill(self) -> None:
+        content = SKILL_DOC_UPDATE.read_text()
+        assert "> **TODO:**" in content, (
+            "w-doc-update/SKILL.md must document the exact TODO marker format: > **TODO:**"
+        )
+
+    def test_four_todo_categories_documented(self) -> None:
+        content = SKILL_DOC_UPDATE.read_text()
+        for category in ("stale", "inaccurate", "missing", "unverified"):
+            assert category in content, (
+                f"w-doc-update/SKILL.md must document the '{category}' TODO marker category"
+            )
+
+    def test_todo_marker_includes_task_ref_placeholder(self) -> None:
+        content = SKILL_DOC_UPDATE.read_text()
+        # Format must show the [#{id}] task reference component
+        assert re.search(r"\[#\{id\}\]|\[#\d+\]", content), (
+            "w-doc-update/SKILL.md must document the [#{id}] task reference in the TODO marker format"
+        )
+
+    def test_todo_marker_format_is_greppable(self) -> None:
+        content = SKILL_DOC_UPDATE.read_text()
+        # The skill must show that the format is greppable (> **TODO:** prefix is consistent)
+        # A concrete example like "> **TODO:** stale — ..." must appear
+        assert re.search(r"> \*\*TODO:\*\* (stale|inaccurate|missing|unverified)", content), (
+            "w-doc-update/SKILL.md must include a concrete TODO marker example with a category"
+        )
