@@ -1,10 +1,10 @@
 ---
 id: 1404
 title: 'A1: h-ac-quality skill — unified two-tier, six-rule AC schema'
-status: done
+status: archived
 priority: critical
 created: 2026-05-07T23:16:25.145713+00:00
-updated: 2026-05-08T00:18:33.609605+00:00
+updated: 2026-05-08T00:35:57.675250+00:00
 tags:
 - pipeline
 - ws-ac-quality
@@ -168,3 +168,35 @@ None found (`/owlbear/scratch/1404-*`).
 ### Child Tasks
 
 None.
+[[2026-05-08]]
+## Audit
+
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| P1: skill file at path | File exists at share/skills/h-ac-quality/SKILL.md; frontmatter name: h-ac-quality | PASS |
+| P2: meta-rule | Line 13: "Every AC line must be independently verifiable..." | PASS |
+| P2: Tier 1 (B1/B2/B3) | Lines 15-46; B1 function-scoped, B2 input-output, B3 banned words (7 enumerated) | PASS |
+| P2: Tier 2 (P1/P2/P3) | Lines 48-74; P1 agent-scoped, P2 artifact/state, P3 verification method | PASS |
+| P2: two-pass validation | Lines 76-88; mechanical lint pass + semantic review pass | PASS |
+| P2: bad-to-good examples | 6 examples (B1/B2/B3/P1/P2/P3) at lines 90-120 | PASS |
+| P2: validation checklist | Lines 124-150; Planner Draft + Architect/Challenger sections | PASS |
+| P3: artifact inspection | Verified directly by reading the file | PASS |
+
+### Test Results
+- pytest: 4789 passed, 215 failed (all pre-existing in unrelated modules: engine accessor migration, MCP memory, cockpit error envelope, PDS build compat)
+- ruff: 12 violations in serve/tools/ and serve/knowledge/ (not in task scope)
+- No regressions attributable to this markdown-only task
+
+### Architect Quality: 4/5
+AC lines are specific, enumerated, and independently verifiable. Minor structural note: multiple P2 lines could benefit from distinct numbering, but each was unambiguous in practice.
+
+### Deduction Breakdown
+- AC lines without evidence: 0 (all 8 verified) = 0
+- Lint in task scope: none = 0
+- AC quality (4/5, above threshold): 0
+- Reviewer evidence: present and detailed with line numbers = 0
+- Full-suite failures in task scope: none = 0
+
+### Confidence: 1.00
+### Action: archive
