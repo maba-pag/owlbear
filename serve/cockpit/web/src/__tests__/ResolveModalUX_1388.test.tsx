@@ -1,0 +1,263 @@
+/**
+ * RED phase tests for #1388: P2-13 Test Cockpit resolution UX — modal behavior
+ *
+ * Covers AC2, AC3, AC4, and AC5 against the existing ResolveModal.tsx.
+ *
+ * Current defects (source of failures):
+ *   - AC2: consequence descriptions absent — labels are bare single words
+ *           ("approved", "rejected", "needs-info")
+ *   - AC3: `useState('approved')` pre-selects approved by default;
+ *           submit button is never disabled
+ *   - AC4: action labels "Submit" and "Cancel" are single-word — not multi-word
+ *   - AC5: no keyboard/focus management — Escape unhandled, no autoFocus
+ *
+ * All tests FAIL against the current ResolveModal implementation.
+ *
+ * Builder counterpart: #1389.
+ */
+import { describe, it, expect, vi, afterEach } from 'vitest'
+import { render, fireEvent } from '@testing-library/react'
+import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
+import ResolveModal from '../components/ResolveModal'
+import type { PendingDRWithBody } from '../components/ResolveModal'
+
+// ─── react-markdown mock ──────────────────────────────────────────────────────
+
+vi.mock('react-markdown', () => ({
+  default: ({ children }: { children: string }) => (
+    <div data-testid="markdown-body">{children}</div>
+  ),
+}))
+
+// ─── Fixture ──────────────────────────────────────────────────────────────────
+
+const DR_FIXTURE: PendingDRWithBody = {
+  id: 'dr-ux-001',
+  task_id: 55,
+  agent: 'builder',
+  request_type: 'scope-decision',
+  created: '2026-05-01T10:00:00Z',
+  title: 'Confirm approach for caching strategy',
+  body_preview: 'Builder needs guidance on caching.',
+  body: '## Context\n\nShould we use Redis or in-memory cache?',
+}
+
+// ─── Render helper ────────────────────────────────────────────────────────────
+
+function renderModal(
+  dr: PendingDRWithBody | null = DR_FIXTURE,
+  onClose = vi.fn(),
+  onResolved = vi.fn(),
+) {
+  return render(
+    <PorscheDesignSystemProvider>
+      <ResolveModal dr={dr} onClose={onClose} onResolved={onResolved} />
+    </PorscheDesignSystemProvider>,
+  )
+}
+
+// ─── Tests ────────────────────────────────────────────────────────────────────
+
+describe('TestFromAC_ResolveModalUX', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.clearAllMocks()
+  })
+
+  // ─── AC2 (td:2): Consequence descriptions for each outcome ────────────────
+  //
+  // Current code: bare labels "approved", "rejected", "needs-info" → FAIL
+
+  it('approved option label contains more than the bare word "approved"', () => {
+    const { container } = renderModal()
+    // Find the element that wraps the approved radio
+    const approvedInput = container.querySelector(
+      'input[type="radio"][value="approved"]',
+    ) as HTMLInputElement | null
+    expect(approvedInput).not.toBeNull()
+    const labelEl = approvedInput!.closest('label') ?? approvedInput!.parentElement
+    const labelText = labelEl?.textContent?.trim() ?? ''
+    // Must contain more than just the single word "approved" (≥2 words or has description text)
+    const wordCount = labelText.split(/\s+/).filter(Boolean).length
+    expect(wordCount).toBeGreaterThan(1)
+  })
+
+  it('rejected option label contains more than the bare word "rejected"', () => {
+    const { container } = renderModal()
+    const rejectedInput = container.querySelector(
+      'input[type="radio"][value="rejected"]',
+    ) as HTMLInputElement | null
+    expect(rejectedInput).not.toBeNull()
+    const labelEl = rejectedInput!.closest('label') ?? rejectedInput!.parentElement
+    const labelText = labelEl?.textContent?.trim() ?? ''
+    const wordCount = labelText.split(/\s+/).filter(Boolean).length
+    expect(wordCount).toBeGreaterThan(1)
+  })
+
+  it('needs-info option label contains more than the bare word "needs-info"', () => {
+    const { container } = renderModal()
+    const needsInfoInput = container.querySelector(
+      'input[type="radio"][value="needs-info"]',
+    ) as HTMLInputElement | null
+    expect(needsInfoInput).not.toBeNull()
+    const labelEl = needsInfoInput!.closest('label') ?? needsInfoInput!.parentElement
+    const labelText = labelEl?.textContent?.trim() ?? ''
+    const wordCount = labelText.split(/\s+/).filter(Boolean).length
+    expect(wordCount).toBeGreaterThan(1)
+  })
+
+  it('consequence description for approved option explains effect (not merely echoes the value)', () => {
+    const { container } = renderModal()
+    const approvedInput = container.querySelector(
+      'input[type="radio"][value="approved"]',
+    ) as HTMLInputElement | null
+    const labelEl = approvedInput!.closest('label') ?? approvedInput!.parentElement
+    const labelText = (labelEl?.textContent ?? '').toLowerCase()
+    // The description must not be identical to "approved" alone; it should contain
+    // additional explanatory words
+    expect(labelText.replace('approved', '').trim().length).toBeGreaterThan(0)
+  })
+
+  it('consequence description for rejected option explains effect (not merely echoes the value)', () => {
+    const { container } = renderModal()
+    const rejectedInput = container.querySelector(
+      'input[type="radio"][value="rejected"]',
+    ) as HTMLInputElement | null
+    const labelEl = rejectedInput!.closest('label') ?? rejectedInput!.parentElement
+    const labelText = (labelEl?.textContent ?? '').toLowerCase()
+    expect(labelText.replace('rejected', '').trim().length).toBeGreaterThan(0)
+  })
+
+  it('consequence description for needs-info option explains effect (not merely echoes the value)', () => {
+    const { container } = renderModal()
+    const needsInfoInput = container.querySelector(
+      'input[type="radio"][value="needs-info"]',
+    ) as HTMLInputElement | null
+    const labelEl = needsInfoInput!.closest('label') ?? needsInfoInput!.parentElement
+    const labelText = (labelEl?.textContent ?? '').toLowerCase()
+    expect(labelText.replace('needs-info', '').trim().length).toBeGreaterThan(0)
+  })
+
+  // ─── AC3 (td:2): No pre-selected choice; submit disabled until selection ──
+  //
+  // Current code: `useState('approved')` pre-selects → FAIL
+
+  it('no radio is checked on initial render (no default pre-selection)', () => {
+    const { container } = renderModal()
+    const radios = container.querySelectorAll(
+      'input[type="radio"][name="resolve-response"]',
+    )
+    const checked = Array.from(radios).filter((r) => (r as HTMLInputElement).checked)
+    expect(checked).toHaveLength(0)
+  })
+
+  it('approved radio is not pre-selected on initial render', () => {
+    const { container } = renderModal()
+    const approved = container.querySelector(
+      'input[type="radio"][value="approved"]',
+    ) as HTMLInputElement | null
+    expect(approved).not.toBeNull()
+    expect(approved!.checked).toBe(false)
+  })
+
+  it('submit button is disabled when no choice has been selected', () => {
+    const { container } = renderModal()
+    const submit = container.querySelector(
+      '[data-testid="resolve-submit"]',
+    ) as HTMLElement | null
+    expect(submit).not.toBeNull()
+    // PDS PButton surfaces disabled as an attribute on the custom element
+    expect(submit!.hasAttribute('disabled')).toBe(true)
+  })
+
+  it('submit button is disabled → enabled only after explicit user selection (sequence test)', () => {
+    const { container } = renderModal()
+    const submit = container.querySelector('[data-testid="resolve-submit"]') as HTMLElement
+    // Step 1: disabled before any selection
+    expect(submit.hasAttribute('disabled')).toBe(true)
+    // Step 2: select a choice
+    const radio = container.querySelector(
+      'input[type="radio"][value="needs-info"]',
+    ) as HTMLInputElement
+    fireEvent.click(radio)
+    // Step 3: submit is now enabled
+    expect(submit.hasAttribute('disabled')).toBe(false)
+  })
+
+  // ─── AC4 (td:1): Multi-word action labels ────────────────────────────────
+  //
+  // Current code: "Submit" (1 word), "Cancel" (1 word) → FAIL
+
+  it('submit button label has more than one word', () => {
+    const { container } = renderModal()
+    const submit = container.querySelector(
+      '[data-testid="resolve-submit"]',
+    ) as HTMLElement | null
+    expect(submit).not.toBeNull()
+    const label = submit!.textContent?.trim() ?? ''
+    const wordCount = label.split(/\s+/).filter(Boolean).length
+    expect(wordCount).toBeGreaterThan(1)
+  })
+
+  it('cancel/close button label has more than one word', () => {
+    const { container } = renderModal()
+    const cancel = container.querySelector(
+      '[data-testid="resolve-cancel"]',
+    ) as HTMLElement | null
+    expect(cancel).not.toBeNull()
+    const label = cancel!.textContent?.trim() ?? ''
+    const wordCount = label.split(/\s+/).filter(Boolean).length
+    expect(wordCount).toBeGreaterThan(1)
+  })
+
+  it('consequence description text for each option uses PDS typography element (p-text)', () => {
+    const { container } = renderModal()
+    const selector = container.querySelector('[data-testid="response-selector"]')!
+    expect(selector).not.toBeNull()
+    // Each option's description should be in a p-text element — not bare text nodes
+    const pTextEls = selector.querySelectorAll('p-text')
+    expect(pTextEls.length).toBeGreaterThanOrEqual(3)
+  })
+
+  // ─── AC5 (td:2): Keyboard / focus behavior ───────────────────────────────
+  //
+  // Current code: no focus management, no Escape handler → all FAIL
+
+  it('initial focus within modal is not on the submit button (non-destructive element receives focus)', () => {
+    const { container } = renderModal()
+    const submit = container.querySelector(
+      '[data-testid="resolve-submit"]',
+    )
+    // After render, the active element must be inside the modal and not the submit button
+    const modal = container.querySelector('[data-testid="resolve-modal"]')!
+    expect(modal).not.toBeNull()
+    // Focus should have moved into the modal
+    expect(modal.contains(document.activeElement)).toBe(true)
+    // And it must NOT be on the (destructive) submit button
+    expect(document.activeElement).not.toBe(submit)
+  })
+
+  it('pressing Escape calls onClose', () => {
+    const onClose = vi.fn()
+    const { container } = renderModal(DR_FIXTURE, onClose)
+    const modal = container.querySelector('[data-testid="resolve-modal"]') as HTMLElement | null
+    expect(modal).not.toBeNull()
+    fireEvent.keyDown(modal!, { key: 'Escape', code: 'Escape' })
+    expect(onClose).toHaveBeenCalledOnce()
+  })
+
+  it('pressing Escape on document calls onClose (global handler)', () => {
+    const onClose = vi.fn()
+    renderModal(DR_FIXTURE, onClose)
+    fireEvent.keyDown(document, { key: 'Escape', code: 'Escape' })
+    expect(onClose).toHaveBeenCalledOnce()
+  })
+
+  it('modal has aria-modal="true" for proper focus trap semantics (required for logical tab order)', () => {
+    const { container } = renderModal()
+    const modal = container.querySelector('[data-testid="resolve-modal"]')!
+    // aria-modal="true" is required so assistive technology constrains Tab navigation
+    // within the modal — without it, screen-reader users can navigate out of the dialog.
+    expect(modal.getAttribute('aria-modal')).toBe('true')
+  })
+})
