@@ -1,10 +1,10 @@
 ---
 id: 1375
 title: 'P1-12: Implement Cockpit frontend error-contract adoption'
-status: in-progress
+status: done
 priority: critical
 created: 2026-05-06T00:58:53.765221+00:00
-updated: 2026-05-08T00:22:13.653264+00:00
+updated: 2026-05-08T01:01:41.711649+00:00
 tags:
 - cockpit
 - audit-remediation
@@ -19,7 +19,7 @@ depends_on:
 - 1374
 blocked: false
 block_reason:
-claimed_at: 2026-05-08T00:22:13.653264+00:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -667,3 +667,108 @@ Architecture review Pass 3 (reviewer loop-breaker return). Root-caused the durab
 | AC8: body detail shape without decoration (td:1) | 1 test — `{detail}` shape |
 
 **Prior AC notes:** AC1–AC7 from prior test-writer passes remain intact (not modified). Durable ArchivalModal_1241 AC12 test also independently verifies AC8 via rendered output — `toBe(errorDetail)` exact check currently fails due to the same decoration bug.
+[[2026-05-08]]
+## Builder Notes
+- Implementation: fixed AC8 helper behavior in `serve/cockpit/web/src/api/errorMessage.ts`.
+- Fix applied: when response JSON contains `{message}` or `{detail}`, `getResponseErrorMessage()` now returns the parsed body text directly (no fallback decoration).
+- Files changed: 1
+  - `serve/cockpit/web/src/api/errorMessage.ts`
+- Tests (quality-runner scoped): 90 passed, 0 failed, 0 skipped.
+  - `serve/cockpit/web/src/__tests__/ArchivalModal_1375.test.tsx`
+  - `serve/cockpit/web/src/__tests__/ArchivalModal_1241.test.tsx`
+  - `serve/cockpit/web/src/__tests__/KanbanBoard_1375.test.tsx`
+  - `serve/cockpit/web/src/__tests__/ErrorContract_1374.test.tsx`
+  - `serve/cockpit/web/src/__tests__/useBoard_1261.test.ts`
+- Lint: ESLint clean on scoped source/tests.
+- Coverage: not requested in this verification run.
+- Commit: `d6b88578` — `fix: remove error fallback decoration on parsed body (#1375, builder)`
+- Evidence summary: AC8 RED tests now pass and durable ArchivalModal regression coverage is green in the same verification slice.
+
+### Reflection
+- The remaining blocker was a helper-level string composition bug, so a one-line fix was sufficient.
+- Durable adjacent tests (`ArchivalModal_1241`) were essential to verify this did not remain a false green.
+- Keeping the diff to a single helper file minimized regression risk while restoring contract fidelity.
+[[2026-05-08]]
+## Review Evidence
+### Test Results
+- quality-runner scoped frontend gate: 90 passed, 0 failed, 0 skipped across [serve/cockpit/web/src/__tests__/KanbanBoard_1375.test.tsx](serve/cockpit/web/src/__tests__/KanbanBoard_1375.test.tsx), [serve/cockpit/web/src/__tests__/ArchivalModal_1375.test.tsx](serve/cockpit/web/src/__tests__/ArchivalModal_1375.test.tsx), [serve/cockpit/web/src/__tests__/ErrorContract_1374.test.tsx](serve/cockpit/web/src/__tests__/ErrorContract_1374.test.tsx), [serve/cockpit/web/src/__tests__/useBoard_1261.test.ts](serve/cockpit/web/src/__tests__/useBoard_1261.test.ts), and [serve/cockpit/web/src/__tests__/ArchivalModal_1241.test.tsx](serve/cockpit/web/src/__tests__/ArchivalModal_1241.test.tsx).
+- The current adjacent durable contract stayed green in [serve/cockpit/web/src/__tests__/ArchivalModal_1241.test.tsx#L427](serve/cockpit/web/src/__tests__/ArchivalModal_1241.test.tsx#L427), which was the exact regression that previously blocked the task.
+
+### Lint Results
+- quality-runner: ESLint clean on [serve/cockpit/web/src/api/errorMessage.ts](serve/cockpit/web/src/api/errorMessage.ts), [serve/cockpit/web/src/KanbanBoard.tsx](serve/cockpit/web/src/KanbanBoard.tsx), [serve/cockpit/web/src/components/ArchivalModal.tsx](serve/cockpit/web/src/components/ArchivalModal.tsx), [serve/cockpit/web/src/hooks/useBoard.ts](serve/cockpit/web/src/hooks/useBoard.ts), and the scoped test files above.
+- VS Code diagnostics: no TypeScript or editor diagnostics on the reviewed source or test files.
+
+### Coverage
+- quality-runner confirmed the changed modules were exercised in the scoped run: [serve/cockpit/web/src/api/errorMessage.ts](serve/cockpit/web/src/api/errorMessage.ts), [serve/cockpit/web/src/KanbanBoard.tsx](serve/cockpit/web/src/KanbanBoard.tsx), [serve/cockpit/web/src/components/ArchivalModal.tsx](serve/cockpit/web/src/components/ArchivalModal.tsx), and [serve/cockpit/web/src/hooks/useBoard.ts](serve/cockpit/web/src/hooks/useBoard.ts).
+- This tool surface did not emit module percentage tables in scoped mode, so I used exact executed proof on the changed branches rather than percentage gating.
+
+### Test Integrity
+- No weakened or removed live TestFromAC assertions were visible in the current task suites.
+- Commit presence for the final task snapshot is confirmed in `.git/logs/HEAD` and `.git/logs/refs/heads/dev` for `81781196608bd8b9fd9b4e8de3d8aab7069c3f0d` (`test: add retry tests for errorMessage no-decoration (AC8)`) and `d6b88578601242e78c67a156cc7682e7bb543ae4` (`fix: remove error fallback decoration on parsed body (#1375, builder)`).
+- Direct diff-scoped dirty-tree and immutability checks were not available in this reviewer tool surface, so confidence is slightly reduced.
+
+### AC Compliance
+| AC line | Evidence | Status |
+|---|---|---|
+| Frontend API calls parse and render the backend error envelope from #1371 consistently. (td:2) | The helper now returns parsed body text directly at [serve/cockpit/web/src/api/errorMessage.ts#L25](serve/cockpit/web/src/api/errorMessage.ts#L25). The changed consumers use that helper in [serve/cockpit/web/src/KanbanBoard.tsx#L163](serve/cockpit/web/src/KanbanBoard.tsx#L163), [serve/cockpit/web/src/KanbanBoard.tsx#L215](serve/cockpit/web/src/KanbanBoard.tsx#L215), [serve/cockpit/web/src/components/ArchivalModal.tsx#L210](serve/cockpit/web/src/components/ArchivalModal.tsx#L210), and [serve/cockpit/web/src/hooks/useBoard.ts](serve/cockpit/web/src/hooks/useBoard.ts). quality-runner kept the task-owned and inherited contract suites green in [serve/cockpit/web/src/__tests__/KanbanBoard_1375.test.tsx](serve/cockpit/web/src/__tests__/KanbanBoard_1375.test.tsx), [serve/cockpit/web/src/__tests__/ArchivalModal_1375.test.tsx](serve/cockpit/web/src/__tests__/ArchivalModal_1375.test.tsx), and [serve/cockpit/web/src/__tests__/ErrorContract_1374.test.tsx](serve/cockpit/web/src/__tests__/ErrorContract_1374.test.tsx). | PASS |
+| Detail, board moves (including KanbanBoard drag/context-menu and ArchivalModal), health scan, decision request polling/resolution, repair, and task fetch flows show user-visible recoverable error states. (td:2) | The green scoped run covered move/archive/detail/resolve/scan/task-fetch/repair surfaces in [serve/cockpit/web/src/__tests__/KanbanBoard_1375.test.tsx](serve/cockpit/web/src/__tests__/KanbanBoard_1375.test.tsx), [serve/cockpit/web/src/__tests__/ArchivalModal_1375.test.tsx](serve/cockpit/web/src/__tests__/ArchivalModal_1375.test.tsx), and [serve/cockpit/web/src/__tests__/ErrorContract_1374.test.tsx](serve/cockpit/web/src/__tests__/ErrorContract_1374.test.tsx). | PASS |
+| No expected backend error becomes a silent no-op, false empty state, or false health OK. (td:2) | The no-silent-error and health-preservation surfaces stayed green in [serve/cockpit/web/src/__tests__/ErrorContract_1374.test.tsx](serve/cockpit/web/src/__tests__/ErrorContract_1374.test.tsx) and [serve/cockpit/web/src/__tests__/useBoard_1261.test.ts](serve/cockpit/web/src/__tests__/useBoard_1261.test.ts). Board-load body discrimination also remains explicitly proven in [serve/cockpit/web/src/__tests__/KanbanBoard_1375.test.tsx#L385](serve/cockpit/web/src/__tests__/KanbanBoard_1375.test.tsx#L385) and [serve/cockpit/web/src/__tests__/KanbanBoard_1375.test.tsx#L426](serve/cockpit/web/src/__tests__/KanbanBoard_1375.test.tsx#L426). | PASS |
+| Retry or refetch affordances are available where the flow is recoverable. (td:2) | Task-fetch retry remains proven in [serve/cockpit/web/src/__tests__/ErrorContract_1374.test.tsx](serve/cockpit/web/src/__tests__/ErrorContract_1374.test.tsx), scan retry is already covered in [serve/cockpit/web/src/__tests__/Shell_1372.test.tsx#L503](serve/cockpit/web/src/__tests__/Shell_1372.test.tsx#L503), drag-drop stale recovery is proven in [serve/cockpit/web/src/__tests__/KanbanBoard_1229.test.tsx#L312](serve/cockpit/web/src/__tests__/KanbanBoard_1229.test.tsx#L312), and the live 409 recovery branches exist in [serve/cockpit/web/src/KanbanBoard.tsx#L209](serve/cockpit/web/src/KanbanBoard.tsx#L209), [serve/cockpit/web/src/KanbanBoard.tsx#L210](serve/cockpit/web/src/KanbanBoard.tsx#L210), [serve/cockpit/web/src/components/ArchivalModal.tsx#L204](serve/cockpit/web/src/components/ArchivalModal.tsx#L204), and [serve/cockpit/web/src/components/ArchivalModal.tsx#L205](serve/cockpit/web/src/components/ArchivalModal.tsx#L205). The latest Architecture Review pass explicitly accepted pattern-equivalence proof for the context-menu and archival 409 branches; no contrary runtime evidence surfaced in this review. | PASS |
+| The health behavior from #1373 is preserved rather than duplicated or regressed. (td:1) | quality-runner kept [serve/cockpit/web/src/__tests__/useBoard_1261.test.ts](serve/cockpit/web/src/__tests__/useBoard_1261.test.ts) green, and the hook still derives SSE-vs-polling health in [serve/cockpit/web/src/hooks/useBoard.ts](serve/cockpit/web/src/hooks/useBoard.ts). | PASS |
+| Tests from #1374 pass. (td:0) | quality-runner included [serve/cockpit/web/src/__tests__/ErrorContract_1374.test.tsx](serve/cockpit/web/src/__tests__/ErrorContract_1374.test.tsx) in the 90-pass scoped gate. | PASS |
+| Board-load error body discrimination: a test asserts that when /api/board returns non-ok with `{code, message}` JSON body, the rendered `error-message` element contains the body's message text, not a status-only fallback string. (td:2) | Live-path AC7 tests are present and passed in [serve/cockpit/web/src/__tests__/KanbanBoard_1375.test.tsx#L385](serve/cockpit/web/src/__tests__/KanbanBoard_1375.test.tsx#L385) and [serve/cockpit/web/src/__tests__/KanbanBoard_1375.test.tsx#L426](serve/cockpit/web/src/__tests__/KanbanBoard_1375.test.tsx#L426). | PASS |
+| `getResponseErrorMessage()` returns the parsed body message without fallback decoration when body parsing succeeds; the fallback is used only when parsing fails. (td:1) | The helper now returns the parsed body directly at [serve/cockpit/web/src/api/errorMessage.ts#L25](serve/cockpit/web/src/api/errorMessage.ts#L25). Exact-equality AC8 tests passed in [serve/cockpit/web/src/__tests__/ArchivalModal_1375.test.tsx#L230](serve/cockpit/web/src/__tests__/ArchivalModal_1375.test.tsx#L230) and [serve/cockpit/web/src/__tests__/ArchivalModal_1375.test.tsx#L241](serve/cockpit/web/src/__tests__/ArchivalModal_1375.test.tsx#L241), and the older exact rendered contract stayed green in [serve/cockpit/web/src/__tests__/ArchivalModal_1241.test.tsx#L427](serve/cockpit/web/src/__tests__/ArchivalModal_1241.test.tsx#L427). | PASS |
+
+### Findings
+- No blocking implementation, regression, or test-integrity defects remain in the current task snapshot.
+- Code-reader raised three residual concerns: DetailTab 404-clear behavior, task-fetch exact-message proof quality, and direct per-branch 409 refresh assertions. I did not treat those as blocking for this task because the latest architecture refinements explicitly scoped task-fetch proof quality out of #1375, accepted pattern-equivalence proof for the context-menu and archival 409 branches, and the #1374 RED header scoped the targeted DetailTab gap to non-422/409/404 responses rather than reopening the pre-existing 404-clear behavior.
+
+### Security Review
+- No security issues found in the changed frontend paths. The helper only reads JSON error fields and all reviewed surfaces render text, not unsanitized HTML.
+
+### Deductions
+- `-0.03` diff-scoped dirty-tree and immutability evidence was unavailable in this tool surface.
+- `-0.02` quality-runner scoped mode did not emit module percentage tables, so coverage confidence rests on exact executed branch proof.
+
+### Verdict
+- PASS -> docs
+- Confidence: `0.93`
+
+### Reflection
+- The final AC8 helper fix is correctly covered only when task-local exact-equality tests and the older durable exact-string suite are both included.
+- On looped tasks, the latest architecture refinement is binding; re-failing concerns that the refinement explicitly scoped out would have been incorrect.
+- `.git/logs/**` is sufficient to confirm commit presence when direct git diff is unavailable, but it does not fully replace diff-scoped immutability or dirty-tree checks.
+[[2026-05-08]]
+## Docs Gate
+
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | Changed files are frontend TSX/TS only. No IN-scope prose doc references these components. No new CLI, config, or package structure changes. |
+| 2 | Module docstrings | No | N/A | No Python modules changed. |
+| 3 | External attribution | No | N/A | No external repos or patterns referenced in task body. |
+| 4 | Research doc | No | N/A | No `.owlbear/research/*.md` produced or referenced. |
+| 5 | Diagram maintenance (describes match) | No | N/A | Doc-index has no `describes` glob matching `serve/cockpit/web/src/**`. |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation requested. |
+| 7 | Deletion detection | No | N/A | No files deleted; no orphaned IN-scope docs. |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| serve/cockpit/web/src/KanbanBoard.tsx | OUT | N/A |
+| serve/cockpit/web/src/components/ArchivalModal.tsx | OUT | N/A |
+| serve/cockpit/web/src/hooks/useBoard.ts | OUT | N/A |
+| serve/cockpit/web/src/api/errorMessage.ts | OUT | N/A |
+| serve/cockpit/web/src/__tests__/KanbanBoard_1375.test.tsx | OUT | N/A |
+| serve/cockpit/web/src/__tests__/ArchivalModal_1375.test.tsx | OUT | N/A |
+
+**No docs impact.** All changed files are frontend TypeScript/TSX — OUT of scope for doc-writer. All checklist items N/A.
+
+### Files Updated
+- None
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None

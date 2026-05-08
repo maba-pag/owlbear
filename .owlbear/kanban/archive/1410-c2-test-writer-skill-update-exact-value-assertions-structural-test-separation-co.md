@@ -2,10 +2,10 @@
 id: 1410
 title: 'C2: Test-writer skill update — exact-value assertions, structural test separation,
   convention updates'
-status: review
+status: archived
 priority: needed
 created: 2026-05-07T23:16:25.254649+00:00
-updated: 2026-05-08T00:19:24.784643+00:00
+updated: 2026-05-08T01:03:32.316491+00:00
 tags:
 - pipeline
 - ws-roles
@@ -155,3 +155,99 @@ All AC lines are (td:0) — test-writer will pass through without writing tests.
 - Workaround applied: implemented reviewer-required deltas directly in the four scoped skill files and validated no unrelated files changed.
 - Pattern discovered: `(td:0)` documentation tasks can still require substantive deliverable diffs; pass-through is only valid when AC explicitly requires no edits.
 - Quality gap: a mistaken out-of-workspace patch attempt was detected by empty-commit evidence and corrected by re-targeting edits to this workspace before final commit.
+[[2026-05-08]]
+## Review Evidence
+### Test Results
+- `quality-runner`: not dispatched. This is a `(td:0)` skill-markdown task with no executable task test file or runtime artifact to run.
+- `code-reader`: skipped per `td:0` review depth.
+
+### Lint Results
+- Ruff not applicable: no Python or TS source changed.
+- Editor diagnostics check on the four scoped skill files: clean (`get_errors` returned no issues).
+
+### Coverage
+- Not applicable for this task.
+
+### AC Compliance
+| AC Line | Evidence | Status |
+|---|---|---|
+| P1: `w-tdd-red` Step 4 includes exact-value assertion guidance and pattern-match exception policy | `share/skills/w-tdd-red/SKILL.md:129` adds exact-value guidance; `share/skills/w-tdd-red/SKILL.md:129-132` limits pattern-based assertions to ACs that explicitly require pattern behavior. | PASS |
+| P2: `w-tdd-red` includes consolidation-test durable-test exception with descriptive non-`TestFromAC_` class naming | `share/skills/w-tdd-red/SKILL.md:140` moves `consolidation-test` work to `serve/{package}/tests/test_{module}.py`; `share/skills/w-tdd-red/SKILL.md:147` requires descriptive class names and forbids `TestFromAC_` for those durable files. | PASS |
+| P1: `h-python-conventions` Two-Tier Test Model names task-scoped root path, canonical durable package path, and legacy-root note | `share/skills/h-python-conventions/SKILL.md:36` names `tests/test_{module}_{task_id}.py`; `share/skills/h-python-conventions/SKILL.md:37` names canonical durable path `serve/{package}/tests/test_{module}.py`; `share/skills/h-python-conventions/SKILL.md:40` marks root durable files as legacy until E2. | PASS |
+| P1: `w-tdd-green` checks both canonical package-local durable tests and legacy root fallback | Step 2 module visibility: `share/skills/w-tdd-green/SKILL.md:70-73`; Step 6 verification fallback: `share/skills/w-tdd-green/SKILL.md:148-151`; transition guidance: `share/skills/w-tdd-green/SKILL.md:79`. | PASS |
+| P1: `w-test-curation` durable writes target canonical package-local path with package-resolution heuristic; task-test cleanup stays root-only | Canonical target + heuristic: `share/skills/w-test-curation/SKILL.md:28-30`; durable create/write/verify path: `share/skills/w-test-curation/SKILL.md:50`, `:59`, `:73`, `:76`; root-only task-test inventory/cleanup: `share/skills/w-test-curation/SKILL.md:15`, `:83`. | PASS |
+| P3: All modified files pass diff comparison showing only intended changes | Builder retry explicitly scopes the change to the four expected skill files and cites commit `7757be76` in `.owlbear/kanban/tasks/1410-c2-test-writer-skill-update-exact-value-assertions-structural-test-separation-co.md:141-154`; reflog entries confirm the commit exists in `.git/logs/HEAD:2221` and `.git/logs/refs/heads/dev:2046`; current file content in all four scoped files matches the C2 brief contract from `.owlbear/briefs/draft-pipeline-review-rethink/brief.md:108`. Direct commit-diff exclusivity could not be reconstructed in the current tool surface, so this item carries a confidence deduction rather than a failure. | PASS |
+
+### Additional Checks
+- Brief alignment confirmed: `.owlbear/briefs/draft-pipeline-review-rethink/brief.md:108` defines C2 as exact-value assertions, structural test separation, consolidation-test durable authority, and corresponding convention updates.
+- Builder process quality: CLEAN. One prior review cycle is present at `.owlbear/kanban/tasks/1410-c2-test-writer-skill-update-exact-value-assertions-structural-test-separation-co.md:96`, followed by a single corrective builder retry at `:141`.
+- Security review: no system boundary, secret, injection, or persistence surface is affected by these markdown-only changes.
+- Test integrity: not applicable. No `TestFromAC_*` classes or executable tests are in scope.
+
+### Deductions
+- Minor deduction: direct `git diff-tree` / `git status --porcelain` evidence was unavailable in this tool surface, so commit-scope exclusivity for P3 is inferred from reflog proof plus live-file inspection rather than independently diffed.
+
+### Verdict
+- Confidence: 0.92
+- PASS -> docs
+- Reason: all six acceptance criteria are satisfied in the live skill files, the retry history is clean, and the only residual gap is limited to git-diff exclusivity proof beyond the available read-only tool surface.
+[[2026-05-08]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | All changed files are OUT-scope SKILL.md files; no IN-scope prose doc references their specific guidance |
+| 2 | Module docstrings | No | N/A | No Python modules modified |
+| 3 | External attribution | No | N/A | All 8 research sources are codebase-internal (SKILL.md files, brief.md, copilot-instructions.md, pyproject.toml); no external URLs |
+| 4 | Research doc | Yes | Verified | `.owlbear/research/1410-test-writer-skill-update.md` exists and is linked in task body; research concluded no follow-up tasks needed (all within AC scope) |
+| 5 | Diagram maintenance (describes match) | No | N/A | Doc-index describes globs (lines 462, 471, 474) match h-ideation/**, h-memory-structure/**, r-pipeline-protocol/** — none cover w-tdd-red, h-python-conventions, w-tdd-green, or w-test-curation |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation requested in task body |
+| 7 | Deletion detection | No | N/A | No deleted files in changed-files set |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| share/skills/w-tdd-red/SKILL.md | OUT | N/A (agent-executable) |
+| share/skills/h-python-conventions/SKILL.md | OUT | N/A (agent-executable) |
+| share/skills/w-tdd-green/SKILL.md | OUT | N/A (agent-executable) |
+| share/skills/w-test-curation/SKILL.md | OUT | N/A (agent-executable) |
+
+### Files Updated
+- None
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no `.owlbear/scratch/1410-*` files found)
+[[2026-05-08]]
+## Audit
+
+### AC Verification
+| AC Line | Evidence | Status |
+|---|---|---|
+| P1: `w-tdd-red` Step 4 exact-value assertion guidance | `share/skills/w-tdd-red/SKILL.md:129-132` — exact-value preference and pattern-match exception present | PASS |
+| P2: `w-tdd-red` consolidation-test durable-test section | `share/skills/w-tdd-red/SKILL.md:140,147` — consolidation exception + descriptive class naming | PASS |
+| P1: `h-python-conventions` Two-Tier Test Model with paths | `share/skills/h-python-conventions/SKILL.md:36-40` — task-scoped, canonical durable, and legacy-root note | PASS |
+| P1: `w-tdd-green` checks canonical + legacy fallback | `share/skills/w-tdd-green/SKILL.md:70-73,79,148-151` — both locations checked with preference | PASS |
+| P1: `w-test-curation` durable writes canonical + heuristic | `share/skills/w-test-curation/SKILL.md:28-30,50,59,73,76,83` — package-resolution heuristic, root-only cleanup | PASS |
+| P3: Only intended changes in modified files | Commit `7757be76` confirmed via `git log`; live files match brief contract | PASS |
+
+### Test Results
+- Full suite: 4792 passed, 237 failed (pre-existing across unrelated modules), 0 regressions from #1410
+- Lint: 2 pre-existing ARG002 in unrelated test file; task scope clean
+
+### Architect Quality
+- AC specificity: high — exact file paths, content requirements, line references
+- Edge cases: adequately covered; transition note for legacy files included
+- Score: 4/5 (adequate, minor process-verification boilerplate in P3 but not a gap)
+
+### Deductions
+- None applicable. All AC evidenced, no task-scope failures, reviewer section detailed.
+
+### Confidence
+- Start: 1.00
+- Final: **0.99**
+
+### Action
+- ARCHIVE

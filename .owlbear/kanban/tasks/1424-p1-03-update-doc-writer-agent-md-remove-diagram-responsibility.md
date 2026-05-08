@@ -4,7 +4,7 @@ title: 'P1-03: Update doc-writer.agent.md — remove diagram responsibility'
 status: research
 priority: important
 created: 2026-05-08T00:32:21.566488+00:00
-updated: 2026-05-08T00:32:58.358463+00:00
+updated: 2026-05-08T00:41:32.343802+00:00
 tags:
 - phase-1
 - scope:shared
@@ -32,3 +32,6 @@ Update `share/agents/doc-writer.agent.md`:
 **Out of scope:** Skill rewrite (#1423), prompt revision (#1425).
 
 Brief: see parent #1421
+
+
+**AC #2 clarification:** "Align critical_rules" means: rules must reference the 4-item checklist (README Verification, External Attribution, Research Doc, Deletion Detection), convention-based mapping, TODO marker insertion, and gate-blocking on unverified task content. No diagram/excalidraw language may remain anywhere in the file.
