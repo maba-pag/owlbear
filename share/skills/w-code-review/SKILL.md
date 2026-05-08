@@ -8,6 +8,8 @@ user-invocable: false
 
 Evidence-based review of a completed implementation task. Run tests, lint, read code, verify AC, and produce a verdict.
 
+Review model: batch-all-findings (no first-failure gating). Collect all Review Evidence findings before issuing a final verdict.
+
 **Kanban operations:** See `h-mcp-kanban` skill — section `## Agent Lifecycle Pattern`.
 
 ## Step 0 — Setup
@@ -56,7 +58,13 @@ Interpret results:
 
 ## Step 2 — Evidence Gathering
 
-Do NOT rely on builder self-reports. Run tests, lint, and coverage yourself via Quality-Runner.
+Read the builder's quality-runner output first. Re-run checks independently only when the existing evidence is missing, inconsistent, or otherwise not cost-justified.
+
+Use this scoped 3-item checklist to structure evidence review:
+
+1. AC→code mapping
+2. test→AC alignment
+3. proof sufficiency (including key boundary examples)
 
 **Depth-aware dispatch:** Check AC lines for `(td:N)` annotations. Determine the task's max depth (highest td value across all AC lines; default td:1 if no annotations).
 
@@ -190,15 +198,13 @@ Any vulnerability = FAIL.
 
 > **Conditional:** Only when `TestFromAC_*` classes exist.
 
-**Immutability scope:** TestFromAC immutability applies during the active pipeline (task creation through archive). The reviewer enforces this — any builder modification to `TestFromAC_*` assertions is a FAIL. Post-archive, the test-curator agent has authority to promote, consolidate, or remove assertions.
+Compare each `TestFromAC_*` test method against the test-writer's original intent and verify behavioral equivalence.
 
 Compare each `TestFromAC_*` test method against the test-writer's original intent. Produce a comparison table:
 
 | Original Test | Change Made | Assessment |
 |---------------|-------------|------------|
-| {test} | {description} | PRESERVED / WEAKENED / REMOVED / STRENGTHENED |
-
-**Any WEAKENED or REMOVED = automatic FAIL.** The builder must restore original assertions.
+| {test} | {description} | PRESERVED / CHANGED_WITH_JUSTIFICATION / NEEDS_REVIEW |
 
 Canonical weakened-assertion patterns: relaxed comparison, broadened exception, removed edge case, reduced boundary coverage, weakened assertion count, added `pytest.skip`/`xfail` without justification.
 
@@ -292,6 +298,18 @@ Build an evidence table — every AC line needs specific proof:
 
 Confidence threshold: 0.90 = PASS (see `r-pipeline-protocol` → Confidence Thresholds).
 
+Apply a batch-all-findings review pass: do not stop at first failure. Gather all Review Evidence findings, then decide PASS/FAIL once the full checklist is complete.
+
+Finding vs opinion rule:
+
+- `Review Evidence` items must cite an AC line or factual deficiency.
+- If an item has no citation, move it to `Observations`.
+- Observations never affect verdict.
+
+PASS confirmation line (required when no findings):
+
+`Verified: AC→code mapping complete, test→AC alignment confirmed, proof sufficiency met. Zero findings.`
+
 **Scope constraint — don't invent requirements:** The reviewer proves what AC declares, including its natural branches and edge cases. The reviewer does NOT invent requirements AC doesn't mention. If you find a gap that is not traceable to any AC line (even by reasonable implication), classify it as INFORMATIONAL — it cannot contribute to a FAIL verdict. Optionally create a follow-up task for genuinely important non-AC findings. Example: AC says "defaults to research, validated in statuses" → testing that validation rejects invalid values is fair (natural branch). Demanding an explicit "omission-path test" for what happens when the field isn't provided at all is an invention (Pydantic handles it implicitly).
 
 If code-reader was dispatched (td:2), build a unified **AC compliance table** by cross-walking Code-Reader's AC coverage assessment against Quality-Runner's test pass/fail status per AC line. Automatic FAIL triggers: any MISSING or WEAK finding from Code-Reader; any test failure reported by Quality-Runner; any security finding from Code-Reader. Note any divergence between subagent findings and your own analysis.
@@ -358,6 +376,11 @@ Append to task body before advancing:
 
 ### Confidence: {.XX}
 ### Verdict: {PASS/FAIL}
+
+## Observations
+- Non-blocking opinions only; no citation = Observations.
+- Observations never affect verdict.
+
 ### Required Follow-up
 (Only on FAIL. See r-pipeline-protocol §3 — Required Follow-up format.)
 | # | Target Agent | Action Required | File(s) | Evidence |
@@ -379,7 +402,7 @@ Append to task body before advancing:
 
 ## Known Pitfalls
 
-- **Trusting builder self-reports:** Always run tests yourself. "Builder said it passes" is not evidence.
+- **Skipping builder evidence:** Always read builder quality-runner output before deciding whether independent re-execution is cost-justified.
 - **Gut-feeling confidence:** If your score is .91–.95 without explicit deductions, recalculate with the rubric.
 - **Terminal runTests tool:** Deadlocks with parallel agents. Always use `uv run pytest` in terminal.
 - **Coverage measurement:** Invoke the `quality-runner` subagent for coverage measurement — do not load pytest skills or retry flag variations directly.

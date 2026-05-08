@@ -67,8 +67,14 @@ Researcher, architect, and planner must reject invalid task inputs immediately:
 
 ### Evidence Principles
 
-- Never trust self-reports. Verify deliverables yourself — run tests, read files, check the board.
+- Upstream evidence is valid input. Verify through independent checks only when cost-justified. The auditor serves as the pipeline-end integrity gate.
 - Cite specifics: file paths, line numbers, test names, command output. "It looks fine" is never acceptable.
+
+### Reviewer Contract (D2 trust-the-builder)
+
+- Reviewer follows a trust-the-builder evidence model by default.
+- Start from builder evidence (especially quality-runner output and scoped AC mapping) and verify completeness/consistency.
+- Escalate to independent reruns only when evidence is missing, contradictory, or otherwise cost-justified.
 
 ### Quality-Runner Mandate
 
