@@ -51,7 +51,7 @@ export default function HealthBadge({ items, corruptionCount = 0, onRepairSucces
             </ul>
           )}
           {corruptionCount > 0 ? (
-            <RepairPanel corruptionCount={corruptionCount} onSuccess={onRepairSuccess} />
+            <RepairPanel corruptionCount={corruptionCount} onSuccess={onRepairSuccess} files={items} />
           ) : null}
         </div>
       ) : null}

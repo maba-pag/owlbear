@@ -5,6 +5,7 @@ import { useRepairFlow } from '../hooks/useRepairFlow'
 export interface RepairPanelProps {
   corruptionCount: number
   onSuccess?: () => void
+  files?: Array<Pick<RepairOutcome, 'file_path' | 'code'>>
 }
 
 function renderOutcomeRows(outcomes: RepairOutcome[]) {
@@ -16,7 +17,7 @@ function renderOutcomeRows(outcomes: RepairOutcome[]) {
   ))
 }
 
-export default function RepairPanel({ corruptionCount, onSuccess }: RepairPanelProps) {
+export default function RepairPanel({ corruptionCount, onSuccess, files = [] }: RepairPanelProps) {
   const {
     phase,
     corruptionCount: requestedCount,
@@ -37,8 +38,18 @@ export default function RepairPanel({ corruptionCount, onSuccess }: RepairPanelP
       >
         <PText>
           This will attempt to repair {requestedCount} corrupted files. Fixed files are restored,
-          unfixable files are quarantined. Continue?
+          quarantined files are moved to the quarantine directory (.owlbear/scratch/quarantine),
+          and failed files remain corrupted. This action can be irreversible and cannot be undone.
         </PText>
+        {files.length > 0 ? (
+          <ul>
+            {files.map((file, index) => (
+              <li key={`${file.file_path}-${file.code}-${index}`}>
+                <span>{file.file_path}</span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
         <PButton
           data-testid="repair-confirm-btn"
           onClick={() => {
@@ -90,6 +101,14 @@ export default function RepairPanel({ corruptionCount, onSuccess }: RepairPanelP
     return (
       <div>
         <PText data-testid="repair-error">{error}</PText>
+        <PButton
+          data-testid="repair-retry-btn"
+          onClick={() => {
+            void confirmRepair()
+          }}
+        >
+          Retry
+        </PButton>
         <PButton data-testid="repair-dismiss-btn" variant="secondary" onClick={dismissResults}>
           Dismiss
         </PButton>

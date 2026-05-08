@@ -26,6 +26,7 @@ function Shell() {
   const [hasLoadedScan, setHasLoadedScan] = useState(false)
   const [selectedDRId, setSelectedDRId] = useState<string | null>(null)
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null)
+  const [selectedTaskSubtab, setSelectedTaskSubtab] = useState<string | null>(null)
   const [selectedTask, setSelectedTask] = useState<TaskDetail | null>(null)
   const [selectedTaskError, setSelectedTaskError] = useState<string | null>(null)
   const [taskFetchNonce, setTaskFetchNonce] = useState(0)
@@ -41,7 +42,9 @@ function Shell() {
     loading,
     error,
     refetchTasks,
-    onSelectTask: setSelectedTaskId,
+    onSelectTask: (taskId: number) => {
+      setSelectedTaskId(taskId)
+    },
     selectedId: selectedTaskId,
   }
   const mockedKanbanBoard = KanbanBoard as unknown as {
@@ -210,9 +213,14 @@ function Shell() {
                 key={selectedTaskId ?? -1}
                 task={selectedTask}
                 board={board}
-                onSelectTask={(taskId) => setSelectedTaskId(taskId)}
+                initialSubtab={selectedTaskSubtab}
+                onSelectTask={(taskId, subtab) => {
+                  setSelectedTaskId(taskId)
+                  setSelectedTaskSubtab((current) => subtab ?? current)
+                }}
                 onTaskCleared={() => {
                   setSelectedTaskId(null)
+                  setSelectedTaskSubtab(null)
                   setSelectedTask(null)
                   setSelectedTaskError(null)
                 }}
@@ -235,7 +243,12 @@ function Shell() {
           </p-tabs-item>
           <p-tabs-item ref={(el: HTMLElement | null) => el?.setAttribute('label', 'Activity')}>
             <div ref={activityRef} data-tab-content="activity" aria-hidden="true">
-              <ActivityTab onSelectTask={(taskId) => setSelectedTaskId(taskId)} />
+              <ActivityTab
+                onSelectTask={(taskId, subtab) => {
+                  setSelectedTaskId(taskId)
+                  setSelectedTaskSubtab(subtab ?? null)
+                }}
+              />
             </div>
           </p-tabs-item>
         </p-tabs>

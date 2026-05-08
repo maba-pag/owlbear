@@ -37,9 +37,17 @@ export interface DetailTabProps {
   onTaskUpdated?: (task: TaskDetail) => void
   onSelectTask?: (taskId: number, subtab?: string) => void
   onTaskCleared?: () => void
+  initialSubtab?: string | null
 }
 
-export default function DetailTab({ task, board, onTaskUpdated, onSelectTask, onTaskCleared }: DetailTabProps) {
+export default function DetailTab({
+  task,
+  board,
+  onTaskUpdated,
+  onSelectTask,
+  onTaskCleared,
+  initialSubtab,
+}: DetailTabProps) {
   const [editBody, setEditBody] = useState(false)
   const [showConflict, setShowConflict] = useState(false)
   const [validationMessage, setValidationMessage] = useState<string | null>(null)
@@ -63,6 +71,14 @@ export default function DetailTab({ task, board, onTaskUpdated, onSelectTask, on
     setValidationMessage(null)
     setConfirmType(null)
   }, [task?.id, task?.updated])
+
+  useEffect(() => {
+    if (initialSubtab !== 'history' || task === null) {
+      return
+    }
+
+    setShowHistory(true)
+  }, [initialSubtab, task])
 
   if (!task) return null
 
@@ -332,7 +348,9 @@ export default function DetailTab({ task, board, onTaskUpdated, onSelectTask, on
       )}
 
       {/* History subtab */}
-      {showHistory && <HistorySubtab sessions={taskSessions} onSelectTask={onSelectTask} />}
+      {(showHistory || initialSubtab === 'history') && (
+        <HistorySubtab sessions={taskSessions} onSelectTask={onSelectTask} />
+      )}
 
       {/* Conflict modal */}
       {showConflict && (
