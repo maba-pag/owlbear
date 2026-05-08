@@ -138,3 +138,114 @@ class TestFromAC_PanelOutputPhrasing:
         assert not missing, (
             f"Existing sections were removed or renamed (AC5 violation): {missing}"
         )
+
+    # =========================================================================
+    # Tightened tests added in retry cycle (cycle 2) — stronger AC2/AC3/AC5
+    # =========================================================================
+
+    # ---- AC2 (tightened): both-sides contrast + inline examples on each side ---------------
+
+    def test_ac2_contrast_both_terms_coexist(self) -> None:
+        """Section must contain BOTH 'descriptive' AND 'protocol-coded'/'jargon' — not just one side.
+
+        Existing test only required one side; tightened AC2 requires the full contrast.
+        """
+        body = _extract_section_body(_read_skill())
+        assert body is not None, "Section not found — AC1 prerequisite"
+        has_descriptive = bool(re.search(r"\bdescriptive\b", body, re.IGNORECASE))
+        has_negative_term = bool(re.search(r"\bprotocol.coded\b|\bjargon\b", body, re.IGNORECASE))
+        assert has_descriptive, "Section must contain 'descriptive' guidance (positive side of contrast)"
+        assert has_negative_term, (
+            "Section must contain 'protocol-coded' or 'jargon' to establish the contrast — "
+            "having 'avoid' alone is insufficient; the specific anti-pattern term is required"
+        )
+
+    def test_ac2_positive_side_has_inline_example(self) -> None:
+        """The descriptive-header guidance line must include an inline 'for example' illustration."""
+        body = _extract_section_body(_read_skill())
+        assert body is not None, "Section not found — AC1 prerequisite"
+        lines = body.splitlines()
+        descriptive_lines = [ln for ln in lines if re.search(r"\bdescriptive\b", ln, re.IGNORECASE)]
+        assert descriptive_lines, "No line containing 'descriptive' found in section body"
+        assert any(re.search(r"for example|e\.g\.", ln, re.IGNORECASE) for ln in descriptive_lines), (
+            "The descriptive-header guidance must include an inline 'for example' so "
+            "panelists know what a good header looks like"
+        )
+
+    def test_ac2_negative_side_has_inline_example(self) -> None:
+        """The protocol-coded-header guidance line must include an inline 'for example' illustration."""
+        body = _extract_section_body(_read_skill())
+        assert body is not None, "Section not found — AC1 prerequisite"
+        lines = body.splitlines()
+        negative_lines = [ln for ln in lines if re.search(r"\bprotocol.coded\b|\bjargon\b", ln, re.IGNORECASE)]
+        assert negative_lines, "No line referencing 'protocol-coded' or 'jargon' found in section body"
+        assert any(re.search(r"for example|e\.g\.", ln, re.IGNORECASE) for ln in negative_lines), (
+            "The protocol-coded-header guidance must include an inline negative example "
+            "so panelists know what pattern to avoid"
+        )
+
+    # ---- AC3 (tightened): same-line co-occurrence of key terms ----------------------------
+
+    def test_ac3_quoted_and_mediator_same_line(self) -> None:
+        """'quoted' and 'mediator' must co-occur on the same line/bullet.
+
+        Existing test only required 'mediator' anywhere; tightened AC3 requires both terms
+        to appear together to confirm the quoting-by-mediator statement is present.
+        """
+        body = _extract_section_body(_read_skill())
+        assert body is not None, "Section not found — AC1 prerequisite"
+        lines = body.splitlines()
+        assert any(
+            re.search(r"\bquoted\b", ln, re.IGNORECASE) and re.search(r"\bmediator\b", ln, re.IGNORECASE)
+            for ln in lines
+        ), (
+            "No single line contains both 'quoted' and 'mediator' — "
+            "AC3 requires their co-occurrence to confirm the stance-file-quoting statement"
+        )
+
+    def test_ac3_readable_and_without_translation_same_line(self) -> None:
+        """'readable' and 'without translation' must co-occur on the same line/bullet.
+
+        Existing test accepted any one of the three tokens; tightened AC3 requires both
+        'readable' and 'without translation' on the same line to prove the full statement.
+        """
+        body = _extract_section_body(_read_skill())
+        assert body is not None, "Section not found — AC1 prerequisite"
+        lines = body.splitlines()
+        assert any(
+            re.search(r"\breadable\b", ln, re.IGNORECASE) and re.search(r"without translation", ln, re.IGNORECASE)
+            for ln in lines
+        ), (
+            "No single line contains both 'readable' and 'without translation' — "
+            "AC3 requires their co-occurrence to confirm the user-readability statement"
+        )
+
+    # ---- AC5 (tightened): section-count invariant + explicit scope-boundary phrase --------
+
+    def test_ac5_heading_count_equals_original_plus_one(self) -> None:
+        """Total top-level ## heading count must be exactly 7 pre-existing + 1 new = 8.
+
+        Existing test only checked named headings remain; this adds the count invariant
+        to catch any heading insertions or deletions beyond the single allowed addition.
+        """
+        content = _read_skill()
+        headings = re.findall(r"^## ", content, re.MULTILINE)
+        expected = len(_EXPECTED_EXISTING_SECTIONS) + 1  # 7 + 1 = 8
+        assert len(headings) == expected, (
+            f"Expected {expected} top-level ## headings (7 pre-existing + 1 new = 8); "
+            f"found {len(headings)}"
+        )
+
+    def test_ac5_scope_boundary_phrase_present(self) -> None:
+        """Section body must contain 'phrasing only' (or equivalent) as an explicit scope boundary.
+
+        Existing test only checked named headings remain; tightened AC5 requires an
+        in-section statement confirming the guidance does not alter panel mechanics or
+        stance file structure.
+        """
+        body = _extract_section_body(_read_skill())
+        assert body is not None, "Section not found — AC1 prerequisite"
+        assert re.search(r"phrasing only|phrasing-only|only phrasing", body, re.IGNORECASE), (
+            "Section must include a scope-boundary statement containing 'phrasing only' "
+            "or equivalent to confirm it does not alter panel mechanics or stance file structure"
+        )
