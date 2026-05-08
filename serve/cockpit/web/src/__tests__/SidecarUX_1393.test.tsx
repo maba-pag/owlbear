@@ -76,6 +76,7 @@ import { useRepairFlow } from '../hooks/useRepairFlow'
 import { useBoard } from '../hooks/useBoard'
 import { usePendingDRs } from '../hooks/usePendingDRs'
 import type { Board } from '../hooks/useBoard'
+import { repairStorage } from '../api/repair'
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -764,4 +765,165 @@ describe('TestFromAC_RepairErrorContract', () => {
     expect(hook.confirmRepair).toHaveBeenCalledOnce()
   })
 
+})
+
+// ─── AC1 (retry): Discriminating nullability — no literal "null" or "NaN" ─────
+
+describe('TestFromAC_SessionNullabilityStrong', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  // Reviewer gap: existing tests only assert `not.toBe('')` — they pass if the component
+  // renders the string literal "null" or "NaN". These tests pin the exact exclusion.
+
+  it('HistorySubtab agent span does not render the string "null" when agent is null', () => {
+    const session = { ...SESSION_RUNNING, agent: null } as unknown as Session
+    const { container } = renderHistorySubtab([session])
+    const agentSpan = container.querySelector('[data-testid="session-agent"]')
+    expect(agentSpan).not.toBeNull()
+    expect(agentSpan!.textContent).not.toBe('null')
+    expect(agentSpan!.textContent).not.toContain('NaN')
+  })
+
+  it('ActivityTab task span does not render the string "null" when task_id is null', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({ sessions: [{ ...SESSION_RUNNING, task_id: null }] }),
+        }),
+      ),
+    )
+    const { container } = renderActivity()
+    fireEvent.click(container.querySelector('[data-testid="filter-all"]')!)
+    await waitFor(
+      () => {
+        expect(container.querySelector('[data-testid="session-row"]')).not.toBeNull()
+      },
+      { timeout: 500 },
+    )
+    const taskSpan = container.querySelector('[data-testid="session-task"]')
+    expect(taskSpan).not.toBeNull()
+    expect(taskSpan!.textContent).not.toBe('null')
+    expect(taskSpan!.textContent).not.toContain('NaN')
+  })
+
+  it('ActivityTab agent span does not render the string "null" when agent is null', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({ sessions: [{ ...SESSION_RUNNING, agent: null }] }),
+        }),
+      ),
+    )
+    const { container } = renderActivity()
+    fireEvent.click(container.querySelector('[data-testid="filter-all"]')!)
+    await waitFor(
+      () => {
+        expect(container.querySelector('[data-testid="session-row"]')).not.toBeNull()
+      },
+      { timeout: 500 },
+    )
+    const agentSpan = container.querySelector('[data-testid="session-agent"]')
+    expect(agentSpan).not.toBeNull()
+    expect(agentSpan!.textContent).not.toBe('null')
+    expect(agentSpan!.textContent).not.toContain('NaN')
+  })
+})
+
+// ─── AC2 (retry): Discriminating ActivityTab duration — exact human-readable value ────
+
+describe('TestFromAC_ActivityDurationFormat', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  // Reviewer gap: existing ActivityTab test only asserts `not.toBe('120')` which would accept
+  // garbage like "1200" or "12 ". This test pins the exact human-readable format.
+
+  it('ActivityTab session row with duration 120s renders exactly "2m", not a raw number', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ sessions: [SESSION_RELEASED] }),
+        }),
+      ),
+    )
+    const { container } = renderActivity()
+    fireEvent.click(container.querySelector('[data-testid="filter-all"]')!)
+    await waitFor(
+      () => {
+        expect(container.querySelector('[data-testid="session-row"]')).not.toBeNull()
+      },
+      { timeout: 500 },
+    )
+    const durationSpan = container.querySelector('[data-testid="session-duration"]')
+    expect(durationSpan).not.toBeNull()
+    // Exact assertion: 120s → "2m" per formatDuration in ActivityTab.tsx:14-29
+    expect(durationSpan!.textContent).toBe('2m')
+  })
+})
+
+// ─── AC7 (retry): Direct proof that repairStorage uses getResponseErrorMessage ───
+
+describe('TestFromAC_RepairErrorContractProof', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  // Reviewer gap: existing tests mock useRepairFlow entirely — clicking retry only proves
+  // the mock's confirmRepair was called, not that the real path uses getResponseErrorMessage.
+  // These tests call repairStorage() directly with controlled fetch responses.
+
+  it('repairStorage surfaces JSON body message via getResponseErrorMessage, not status fallback', async () => {
+    // Server returns 422 with a specific JSON error body
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve({
+          ok: false,
+          status: 422,
+          json: () => Promise.resolve({ message: 'checksum-mismatch-probe' }),
+        }),
+      ),
+    )
+    // getResponseErrorMessage must extract the JSON body message, not produce the status fallback
+    await expect(repairStorage()).rejects.toThrow('checksum-mismatch-probe')
+  })
+
+  it('repairStorage falls back to status message when JSON body has no message or detail field', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve({
+          ok: false,
+          status: 503,
+          json: () => Promise.resolve({ other: 'no-message-field' }),
+        }),
+      ),
+    )
+    // getResponseErrorMessage returns the fallback when body has neither message nor detail
+    await expect(repairStorage()).rejects.toThrow('Repair request failed with status 503')
+  })
+
+  it('RepairPanel dismiss in done phase calls dismissResults without issuing a network request', () => {
+    const hook = stubRepairHook({ phase: 'done', results: { fixed: [], quarantined: [], failed: [] } })
+    const fetchSpy = vi.fn()
+    vi.stubGlobal('fetch', fetchSpy)
+    const { container } = renderRepairPanel(3)
+    const dismissBtn = container.querySelector('[data-testid="repair-dismiss-btn"]')
+    expect(dismissBtn).not.toBeNull()
+    fireEvent.click(dismissBtn!)
+    // Dismiss is local-state reset only — no network call
+    expect(hook.dismissResults).toHaveBeenCalledOnce()
+    expect(fetchSpy).not.toHaveBeenCalled()
+  })
 })
