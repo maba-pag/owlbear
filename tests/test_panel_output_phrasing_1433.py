@@ -249,3 +249,110 @@ class TestFromAC_PanelOutputPhrasing:
             "Section must include a scope-boundary statement containing 'phrasing only' "
             "or equivalent to confirm it does not alter panel mechanics or stance file structure"
         )
+
+    # =========================================================================
+    # Tightened tests added in retry cycle (cycle 3) — verb-direction AC2, line-start AC5
+    # =========================================================================
+
+    # ---- AC2 (cycle 3): affirmative bullet verb-direction --------------------------------
+
+    def test_ac2_affirmative_bullet_starts_with_use_or_prefer(self) -> None:
+        """A bullet with affirmative intent must start with 'Use' or 'Prefer', co-occur with
+        'descriptive' and 'header(s)', and include an inline example.
+
+        Cycle 2 tests checked token presence only. This verifies the polarity: the positive
+        guidance line begins with an affirmative verb so reversed semantics would fail.
+        """
+        body = _extract_section_body(_read_skill())
+        assert body is not None, "Section not found — AC1 prerequisite"
+        lines = body.splitlines()
+        affirmative_lines = [ln for ln in lines if re.match(r"[-*]\s+(Use|Prefer)\b", ln)]
+        assert affirmative_lines, (
+            "Section must contain a bullet starting with 'Use' or 'Prefer' "
+            "(affirmative positive guidance)"
+        )
+        target_lines = [
+            ln for ln in affirmative_lines
+            if re.search(r"\bdescriptive\b", ln, re.IGNORECASE)
+            and re.search(r"\bheaders?\b", ln, re.IGNORECASE)
+        ]
+        assert target_lines, (
+            "The affirmative bullet must co-occur with 'descriptive' and 'header(s)' "
+            "to target the correct guidance surface"
+        )
+        assert any(re.search(r"for example|e\.g\.", ln, re.IGNORECASE) for ln in target_lines), (
+            "The affirmative descriptive-header guidance must include an inline 'for example' "
+            "so panelists know what a good header looks like"
+        )
+
+    # ---- AC2 (cycle 3): prohibitive bullet verb-direction --------------------------------
+
+    def test_ac2_prohibitive_bullet_starts_with_avoid(self) -> None:
+        """A bullet with prohibitive intent must start with 'Avoid', co-occur with
+        'protocol-coded' or 'jargon' and 'header(s)', and include an inline example.
+
+        Cycle 2 tests checked token presence only. This verifies the polarity: the negative
+        guidance line begins with a prohibitive verb so reversed semantics would fail.
+        """
+        body = _extract_section_body(_read_skill())
+        assert body is not None, "Section not found — AC1 prerequisite"
+        lines = body.splitlines()
+        prohibitive_lines = [ln for ln in lines if re.match(r"[-*]\s+Avoid\b", ln)]
+        assert prohibitive_lines, (
+            "Section must contain a bullet starting with 'Avoid' (prohibitive guidance)"
+        )
+        target_lines = [
+            ln for ln in prohibitive_lines
+            if re.search(r"\bprotocol.coded\b|\bjargon\b", ln, re.IGNORECASE)
+            and re.search(r"\bheaders?\b", ln, re.IGNORECASE)
+        ]
+        assert target_lines, (
+            "The 'Avoid' bullet must co-occur with 'protocol-coded' or 'jargon' "
+            "and 'header(s)' to target the correct anti-pattern"
+        )
+        assert any(re.search(r"for example|e\.g\.", ln, re.IGNORECASE) for ln in target_lines), (
+            "The prohibitive header guidance must include an inline negative example "
+            "so panelists know what pattern to avoid"
+        )
+
+    # ---- AC5 (cycle 3): line-start heading verification ---------------------------------
+
+    def test_ac5_existing_headings_are_top_level_lines(self) -> None:
+        """Each of the 7 pre-existing sections must exist as an exact top-level '## ' line.
+
+        Cycle 2 test used substring match — a heading demoted to '### ' would still pass.
+        This verifies each name appears as a line beginning with '^## ' (line-start regex).
+        """
+        content = _read_skill()
+        top_level = {line.rstrip() for line in content.splitlines() if re.match(r"^## ", line)}
+        missing = [h for h in _EXPECTED_EXISTING_SECTIONS if h not in top_level]
+        assert not missing, (
+            f"These sections are no longer top-level '## ' headings (AC5 violation): {missing}"
+        )
+
+    # ---- AC5 (cycle 3): scope-boundary co-occurrence ------------------------------------
+
+    def test_ac5_scope_boundary_mentions_mechanics_or_structure(self) -> None:
+        """The scope-boundary line must contain 'phrasing only' AND at least one of
+        'panel mechanics' or 'stance file structure'.
+
+        Cycle 2 test only required 'phrasing only' in the body; tightened AC5 requires the
+        full disclaimer — the specific domains excluded must also be named on the same line.
+        """
+        body = _extract_section_body(_read_skill())
+        assert body is not None, "Section not found — AC1 prerequisite"
+        lines = body.splitlines()
+        boundary_lines = [
+            ln for ln in lines
+            if re.search(r"phrasing only|phrasing-only", ln, re.IGNORECASE)
+        ]
+        assert boundary_lines, (
+            "No line containing 'phrasing only' found — required by AC5 scope-boundary contract"
+        )
+        assert any(
+            re.search(r"panel mechanics|stance file structure", ln, re.IGNORECASE)
+            for ln in boundary_lines
+        ), (
+            "The 'phrasing only' line must also reference 'panel mechanics' or "
+            "'stance file structure' to confirm the full scope disclaimer"
+        )
