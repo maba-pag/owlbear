@@ -126,18 +126,25 @@ For `(td:2)` lines, map each AC line to test categories:
 Create `tests/test_{module}_{task_id}.py` with class `TestFromAC_{Feature}`:
 
 - Each AC line gets at least one test.
+- Prefer exact-value assertions over pattern matching: use `==` for values, assert exact exception types, and assert exact return values.
+- Use pattern-based assertions (`in`, `>`, regex, partial matches) only when the AC explicitly describes pattern-based behavior.
 - **AC lines stating "X unchanged" / "no modification to Y" / "existing Z unmodified":** Write a direct regression guard test that calls the production code path and asserts the expected result. Do NOT rely on transitive coverage — if another test exercises X as a side-effect, that is not a substitute. A direct `TestFromAC_*` test is required.
 - Test the **contract** described in AC, not a specific implementation.
 - Use `unittest.mock.patch` / `MagicMock` for external dependencies.
 - `from __future__ import annotations` at top of new files.
 - Type hints on test helper functions.
 
-**File naming:** Task-scoped tests use `test_{module}_{task_id}.py` (transient — removed by test-curator post-archive). Module-level `test_{module}.py` files are test-curator-managed and must not be created or edited by the test-writer.
+**File naming:**
+
+- Default: task-scoped tests use `tests/test_{module}_{task_id}.py` (transient — removed by test-curator post-archive).
+- Consolidation exception: when the task is tagged `consolidation-test`, write durable tests in `serve/{package}/tests/test_{module}.py`.
+- Outside `consolidation-test` tasks, durable module-level files are test-curator-managed and must not be created or edited by the test-writer.
 
 **Class naming convention:**
 
 - `TestFromAC_{Feature}` — tests written by the test-writer from AC.
 - `TestBuilderDiscovered` is retired. If builder reports missing blocking edge-case coverage, add the needed tests under the `TestFromAC_` convention.
+- For `consolidation-test` durable files, use descriptive class names (for example, `TestBookmarkPipelineDurable`) and do not use `TestFromAC_`.
 
 **TestFromAC immutability:** During the active pipeline (task creation through archive), `TestFromAC_*` classes are immutable — the builder cannot weaken, remove, or modify them. Post-archive, the test-curator gains authority to promote, consolidate, or remove assertions.
 

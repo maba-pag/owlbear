@@ -67,10 +67,16 @@ Confirm all `TestFromAC_*` tests appear in the `failed:` list. If any pass, inve
 After confirming the task-scoped tests fail, also run the module's durable test file (if it exists) to establish a regression baseline:
 
 ```shell
-uv run pytest tests/test_{module}.py -q --tb=short 2>/dev/null || echo "No module-level test file — skip"
+if [ -f "serve/{package}/tests/test_{module}.py" ]; then
+  uv run pytest serve/{package}/tests/test_{module}.py -q --tb=short
+elif [ -f "tests/test_{module}.py" ]; then
+  uv run pytest tests/test_{module}.py -q --tb=short
+else
+  echo "No module-level test file — skip"
+fi
 ```
 
-This gives early cross-task regression signal without full-suite cost. If `tests/test_{module}.py` does not exist, skip with a note — module-level files are test-curator-managed.
+This gives early cross-task regression signal without full-suite cost. Prefer canonical package-local durable tests in `serve/{package}/tests/`, with root `tests/` as a legacy fallback during transition.
 
 ## Step 3 — Implement Minimal Code (GREEN)
 
@@ -139,7 +145,13 @@ All must pass (`failed: []`, `clean: true`). Target 90% coverage on touched modu
 Also run the module-level durable tests (if they exist) to catch cross-task regressions:
 
 ```shell
-uv run pytest tests/test_{module}.py -q --tb=short 2>/dev/null || echo "No module-level test file — skip"
+if [ -f "serve/{package}/tests/test_{module}.py" ]; then
+  uv run pytest serve/{package}/tests/test_{module}.py -q --tb=short
+elif [ -f "tests/test_{module}.py" ]; then
+  uv run pytest tests/test_{module}.py -q --tb=short
+else
+  echo "No module-level test file — skip"
+fi
 ```
 
 **Refactoring check:** If your change renames imports, changes function signatures, or moves mock targets, grep all test files for the old symbol name before proceeding:

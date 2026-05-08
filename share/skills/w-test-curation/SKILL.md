@@ -23,11 +23,23 @@ For each module in the inventory:
 
 1. Measure coverage using **only** the module-level test file (exclude task-tests):
 
+Resolve the durable test path before running commands:
+
+- Canonical target: `serve/{package}/tests/test_{module}.py`
+- Legacy fallback: `tests/test_{module}.py`
+- Package-resolution heuristic: search for `serve/*/tests/test_{module}.py`; if exactly one match exists, use it. If multiple matches exist, choose the package that owns the module under `serve/*/src/` and log the decision. If no canonical match exists, use the root legacy file.
+
 ```shell
-uv run pytest tests/test_{module}.py --cov=serve --cov-report=term-missing -q --tb=short 2>/dev/null || echo "No module-level test file yet"
+if [ -f "serve/{package}/tests/test_{module}.py" ]; then
+  uv run pytest serve/{package}/tests/test_{module}.py --cov=serve --cov-report=term-missing -q --tb=short
+elif [ -f "tests/test_{module}.py" ]; then
+  uv run pytest tests/test_{module}.py --cov=serve --cov-report=term-missing -q --tb=short
+else
+  echo "No module-level test file yet"
+fi
 ```
 
-2. Record baseline coverage. If no `test_{module}.py` exists, baseline is 0%.
+2. Record baseline coverage. If neither canonical nor legacy module-level files exist, baseline is 0%.
 
 ## Step 2 — Classify Modules
 
@@ -35,7 +47,7 @@ uv run pytest tests/test_{module}.py --cov=serve --cov-report=term-missing -q --
 |-------------|----------|--------|
 | At or above target (≥ 90%) | Good | **Fast path** — delete all archived task-tests for this module (Step 4) |
 | Below target | Gap | **Mine path** — proceed to Step 3 for this module |
-| No module-level file (0%) | Missing | **Mine path** — create `test_{module}.py`, proceed to Step 3 |
+| No module-level file (0%) | Missing | **Mine path** — create `serve/{package}/tests/test_{module}.py`, proceed to Step 3 |
 
 ## Step 3 — Mine Coverage Gaps
 
@@ -44,7 +56,7 @@ For modules below target:
 1. Read the coverage report from Step 1. Identify uncovered lines/branches.
 2. Read all archived task-tests for this module.
 3. Find assertions in the task-tests that exercise the uncovered paths.
-4. Write those assertions into `test_{module}.py`:
+4. Write those assertions into `serve/{package}/tests/test_{module}.py`:
    - Use descriptive class/method names (not `TestFromAC_` — those are task-scoped).
    - Add provenance comment: `# From task #{task_id}: {behavior description}`.
    - Adjust imports/fixtures for the module-level context.
@@ -58,10 +70,10 @@ For modules below target:
 After writing tests for a module:
 
 ```shell
-uv run pytest tests/test_{module}.py --cov=serve --cov-report=term-missing --cov-fail-under=90 -q --tb=short
+uv run pytest serve/{package}/tests/test_{module}.py --cov=serve --cov-report=term-missing --cov-fail-under=90 -q --tb=short
 ```
 
-**Gate failure:** Revert the module file (`git checkout -- tests/test_{module}.py`), log the failure, move to the next module. Do not block.
+**Gate failure:** Revert the canonical module file (`git checkout -- serve/{package}/tests/test_{module}.py`), log the failure, move to the next module. Do not block.
 
 ## Step 4 — Clean Up Task-Tests
 
@@ -84,7 +96,7 @@ uv run pytest tests/ workspace/ -n auto -q --tb=short
 All tests must pass. If the full suite fails, identify the breaking module and revert it:
 
 ```shell
-git checkout -- tests/test_{module}.py
+git checkout -- serve/{package}/tests/test_{module}.py
 ```
 
 Re-add its task-tests and log the failure.
