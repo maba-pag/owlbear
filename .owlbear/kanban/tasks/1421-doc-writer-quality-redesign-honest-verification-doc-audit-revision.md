@@ -1,10 +1,10 @@
 ---
 id: 1421
 title: Doc-writer quality redesign — honest verification + doc-audit revision
-status: todo
+status: done
 priority: needed
 created: 2026-05-08T00:30:10.683534+00:00
-updated: 2026-05-08T14:26:15.178880+00:00
+updated: 2026-05-08T15:57:54.914939+00:00
 tags:
 - scope:shared
 - brief:doc-writer-quality
@@ -587,3 +587,133 @@ The test-writer must add exactly 5 assertions to `tests/test_doc_writer_quality_
 ### Action: R4 — 5 final test assertions to close proof gaps. Implementation unchanged. Loop-breaker scope boundary declared.
 [[2026-05-08]]
 Architecture Review R4: APPROVE → todo. Implementation verified correct (all 5 mapping rows, 4 checklist items, gate rules, TODO format, fast path present in live skill). R4 adds 5 FINAL test assertions to close reviewer R3 proof-quality gaps: 2 mapping-row tests, 2 tightened gate-phrase tests, 1 fast-path-advance test. Loop-breaker scope boundary declared — no further test granularity escalation. Challenger override justified: concern was unrecorded contract (now recorded).
+[[2026-05-08]]
+## Test-Writer Notes
+- Retry (R4): added 5 tests addressing R4 architecture review proof-quality gaps (direct-to-review advance per w-tdd-red Step 1b.1).
+- Test file: tests/test_doc_writer_quality_1422.py
+- New tests added to `TestFromAC_ConventionMappingTable` (5 tests, all PASS — implementation already correct per R4 arch confirmation):
+  - `test_convention_mapping_has_pyproject_tests_row` (split into 2 asserts — ruff PT018)
+  - `test_convention_mapping_has_public_interface_row`
+  - `test_gate_rule_task_caused_blocks` (split into 2 asserts)
+  - `test_gate_rule_preexisting_passes` (split into 2 asserts)
+  - `test_no_impact_fast_path_advances` (split into 2 asserts)
+- pytest: 50 passed, 0 failed
+- ruff: clean (0 violations)
+- Advance: direct-to-review (all new tests PASS; reviewer R4 Required Follow-up was test-proof-only; implementation confirmed correct by architect)
+
+### AC Coverage (R4 additions)
+| AC | Tests | Status |
+|----|-------|--------|
+| AC1 (R4): pyproject.toml + tests/** row in mapping table | test_convention_mapping_has_pyproject_tests_row | PASS |
+| AC1 (R4): public interface / README-consumer row in mapping table | test_convention_mapping_has_public_interface_row | PASS |
+| AC1 (R4): gate rule — task-caused + blocks (combined) | test_gate_rule_task_caused_blocks | PASS |
+| AC1 (R4): gate rule — pre-existing + passes (combined) | test_gate_rule_preexisting_passes | PASS |
+| AC1 (R4): no-impact fast path says "no docs impact" and "advance" in Step 1 | test_no_impact_fast_path_advances | PASS |
+[[2026-05-08]]
+## Builder Notes
+- Verification-only builder pass for task #1421 (no additional implementation changes required).
+- Quality-runner scoped verification on `tests/test_doc_writer_quality_1422.py`: 50 passed, 0 failed, 0 skipped.
+- Ruff: clean (0 violations) on `tests/test_doc_writer_quality_1422.py`.
+- Coverage: not applicable for this scoped verification run (no coverage modules requested; task deliverables are markdown/prompt/agent artifacts).
+- Evidence summary: refined AC proof tests from R4 are currently GREEN; no failing `TestFromAC_*` cases remain, so no further code edits were needed in this builder cycle.
+[[2026-05-08]]
+## Review Evidence
+### Test Results
+- pytest: 50 passed, 0 failed on `tests/test_doc_writer_quality_1422.py` via `quality-runner`.
+
+### Lint
+- ruff: clean on `tests/test_doc_writer_quality_1422.py` via `quality-runner`.
+
+### Coverage
+- N/A. `quality-runner` reported no instrumentable production module for this markdown / prompt / agent task.
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---|---|---|---|
+| AC1: `share/skills/w-doc-update/SKILL.md` satisfies the final R4 contract | `test_checklist_exactly_four_items`, `TestFromAC_ChecklistItemNames`, `TestFromAC_ConventionMappingTable`, `test_todo_marker_complete_template` | Yes, under the binding R4 boundary. The live skill contains the required table rows and checklist content at `share/skills/w-doc-update/SKILL.md:28`, `:31`, `:34`, `:37`, `:43`, `:47-48`, `:52`, `:58`, `:63`, `:67`, `:69`, `:76`, `:91-92`, and the suite pins the final required proofs at `tests/test_doc_writer_quality_1422.py:28`, `:220`, `:231`, `:238`, `:244`, `:250`, `:284`, `:294`, `:312`, `:321`, `:340`, `:379`, `:390`, `:397`, `:408`, `:419`. | COVERED |
+| AC2: `share/agents/doc-writer.agent.md` has no diagram / Excalidraw references | `test_no_diagram_references_anywhere`, `test_no_excalidraw_file_references`, `test_no_excalidraw_brand_references` | Yes. `grep_search` found no `diagram|excalidraw` matches in `share/agents/doc-writer.agent.md`, and the scoped tests at `tests/test_doc_writer_quality_1422.py:88`, `:98`, and `:104` passed. | COVERED |
+| AC3: `.owlbear/prompts/doc-audit.prompt.md` includes TODO batch resolution, diagram ownership, and `describes`-based verification | `test_todo_marker_batch_resolution_dimension_present`, `test_diagram_ownership_section_present`, `test_describes_based_diagram_verification_present` | Yes. The prompt contains the required sections at `.owlbear/prompts/doc-audit.prompt.md:46`, `:61`, `:69`, `:71`, `:77-78`, and the scoped tests at `tests/test_doc_writer_quality_1422.py:114`, `:124`, and `:133` passed. | COVERED |
+| AC4: no old Items 5-6 remain in `share/skills/w-doc-update/SKILL.md` | `test_no_item_5_section_heading`, `test_no_item_6_section_heading`, `test_output_template_no_diagram_row_5`, `test_output_template_no_diagram_row_6` | Yes. `grep_search` found no `### Item 5`, `### Item 6`, row `5`, or row `6` matches in `share/skills/w-doc-update/SKILL.md`; the file exposes only Items 1-4 at `share/skills/w-doc-update/SKILL.md:43`, `:52`, `:58`, `:63`, and the scoped tests at `tests/test_doc_writer_quality_1422.py:148`, `:155`, `:162`, and `:168` passed. | COVERED |
+| AC5: TODO marker format matches `> **TODO:** {category} — {description} [#{id}]` | `test_todo_marker_format_verbatim_in_skill`, `test_four_todo_categories_documented`, `test_todo_marker_includes_task_ref_placeholder`, `test_todo_marker_format_is_greppable`, `test_todo_marker_complete_template` | Yes. The exact template is present at `share/skills/w-doc-update/SKILL.md:76`, categories at `:80-83`, and the scoped tests at `tests/test_doc_writer_quality_1422.py:192`, `:198`, `:205`, `:212`, and `:220` passed. | COVERED |
+
+#### Security Review
+- No issues. Reviewed files are markdown / prompt / agent artifacts plus one stdlib-only pytest module. No secrets, command execution, deserialization, or user-input boundary were introduced.
+
+#### Test Integrity
+| Original Test | Change Made | Assessment |
+|---|---|---|
+| `TestFromAC_*` suite in `tests/test_doc_writer_quality_1422.py` | Current snapshot still contains the previously missing regression guards `test_checklist_exactly_four_items` at `tests/test_doc_writer_quality_1422.py:28` and `test_todo_marker_complete_template` at `:220`, plus the five R4 additions at `:379`, `:390`, `:397`, `:408`, and `:419`. | PRESERVED (slightly reduced confidence; commit diff unavailable in this tool surface) |
+
+#### Test Quality
+| Dimension | Rating | Evidence |
+|---|---|---|
+| Assertion specificity | ADEQUATE | The live suite now pins exact item headings, exact TODO template, table structure, the R4 row additions, and the fast-path proof. The remaining code-reader concern is that the two gate-rule tests read whole-file content instead of slicing the gate-rules subsection, but R4 explicitly bounded the final additions to five `td:1` assertions at `.owlbear/kanban/tasks/1421-doc-writer-quality-redesign-honest-verification-doc-audit-revision.md:546`, `:551-553`, `:589`. |
+| Negative / exclusion coverage | ADEQUATE | Diagram / Excalidraw exclusion and Item 5/6 removal are covered by explicit absence checks at `tests/test_doc_writer_quality_1422.py:88`, `:98`, `:104`, `:148`, `:155`, `:162`, `:168`, `:174`, `:181`. |
+| Manual mutation reasoning | ADEQUATE | Removing any required table row token, checklist heading, Layer 1/Layer 2 language, child-task / DR language, TODO template, or fast-path wording would now fail the corresponding tests. |
+| Test independence | STRONG | Each test rereads file content directly; there is no shared mutable state. |
+| Descriptive names | STRONG | Test names remain AC-aligned and traceable. |
+
+#### Data Safety
+- No issues. Scope is static documentation artifacts plus a read-only test file.
+
+#### Implementation-Aware Gaps
+- No blocking implementation gaps found. The current skill content matches the latest R4 contract, and AC2-AC5 remain satisfied in the live files.
+
+#### Builder Process Quality
+| Metric | Value |
+|---|---|
+| Builder Notes sections | 4 |
+| Intervening Architecture Reviews | 3 (`R2`, `R3`, `R4`) at task lines `214`, `376`, `540` |
+| Assessment | FRICTION, not LOOP — retries were separated by substantive contract refinements, so this does not meet the builder-loop fail condition |
+
+### Pass 2 — INFORMATIONAL
+- Dirty-tree contamination and commit-diff ownership checks could not be performed in this reviewer tool surface because terminal / git-status access was unavailable.
+- `code-reader` reported a residual proof-quality concern on the two gate-rule tests because they search whole-file content rather than extracting the gate-rules subsection. I did not treat that as blocking because the binding R4 architecture review explicitly narrowed the remaining work to five final `td:1` assertions and declared no further AC1 test granularity escalation at `.owlbear/kanban/tasks/1421-doc-writer-quality-redesign-honest-verification-doc-audit-revision.md:546`, `:551-553`, `:589`.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---|---|---|---|
+| AC1 | The final skill contract is present at `share/skills/w-doc-update/SKILL.md:28`, `:31`, `:34`, `:37`, `:43`, `:47-48`, `:52`, `:58`, `:63`, `:67`, `:69`, `:76`, `:91-92`. The final proof boundary is recorded at `.owlbear/kanban/tasks/1421-doc-writer-quality-redesign-honest-verification-doc-audit-revision.md:546`, `:551-553`, `:589`, and the scoped test file contains the required assertions at `tests/test_doc_writer_quality_1422.py:28`, `:220`, `:231`, `:238`, `:244`, `:250`, `:284`, `:294`, `:312`, `:321`, `:340`, `:379`, `:390`, `:397`, `:408`, `:419`. | `tests/test_doc_writer_quality_1422.py` | PASS |
+| AC2 | No `diagram|excalidraw` matches in `share/agents/doc-writer.agent.md`; scoped tests at `tests/test_doc_writer_quality_1422.py:88`, `:98`, `:104` passed. | `TestFromAC_DocWriterAgentNoDiagrams` | PASS |
+| AC3 | Required prompt content present at `.owlbear/prompts/doc-audit.prompt.md:46`, `:61`, `:69`, `:71`, `:77-78`; scoped tests at `tests/test_doc_writer_quality_1422.py:114`, `:124`, `:133` passed. | `TestFromAC_DocAuditPromptContent` | PASS |
+| AC4 | Items 1-4 only at `share/skills/w-doc-update/SKILL.md:43`, `:52`, `:58`, `:63`; no Item 5/6 matches; scoped tests at `tests/test_doc_writer_quality_1422.py:148`, `:155`, `:162`, `:168` passed. | `TestFromAC_NoOldDiagramItems` | PASS |
+| AC5 | Exact TODO template present at `share/skills/w-doc-update/SKILL.md:76`; scoped tests at `tests/test_doc_writer_quality_1422.py:192`, `:198`, `:205`, `:212`, `:220` passed. | `TestFromAC_TodoMarkerFormat` | PASS |
+
+### Deductions
+- `-0.03` Dirty-tree contamination and commit-diff immutability checks were unavailable in this tool surface.
+- `-0.02` Residual proof-quality risk noted by `code-reader` on gate-rule whole-file matching, treated as non-blocking under the explicit R4 `td:1` boundary.
+
+### Confidence: 0.95
+### Verdict: PASS
+### Action
+- Advance to `docs`.
+[[2026-05-08]]
+## Docs Gate
+
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | README Verification (convention-mapped) | No | N/A | Changed files are `share/skills/`, `share/agents/`, `.owlbear/prompts/`, `tests/` — none covered by convention mapping table (`serve/{pkg}/src/**`, `setup/**`, `share/**` → READMEs). `share/**` maps to `share/README.md` and `share/WIRING.md`, but changed files are agent-executable (OUT scope) — not prose docs for updating. |
+| 2 | External Attribution | No | N/A | Task is an internal workflow redesign from a project brief. No external patterns, repos, or articles referenced. |
+| 3 | Research Doc | No | N/A | No `.owlbear/research/*.md` produced or mentioned in task body. |
+| 4 | Deletion Detection | No | N/A | No files deleted. Task rewrote existing files. |
+
+**No docs impact** — all changed files are OUT of scope (agent-executable + test file). Upstream `## Review Evidence` present: Verdict PASS, Confidence 0.95.
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| `share/skills/w-doc-update/SKILL.md` | OUT | N/A — agent-executable SKILL.md |
+| `share/agents/doc-writer.agent.md` | OUT | N/A — agent-executable .agent.md |
+| `.owlbear/prompts/doc-audit.prompt.md` | OUT | N/A — agent-executable prompt |
+| `tests/test_doc_writer_quality_1422.py` | OUT | N/A — test file |
+
+### Files Updated
+- None
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no `1421-*` scratch files found)

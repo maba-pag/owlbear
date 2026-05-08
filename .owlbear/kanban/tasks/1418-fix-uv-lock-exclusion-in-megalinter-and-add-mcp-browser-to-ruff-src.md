@@ -1,10 +1,10 @@
 ---
 id: 1418
 title: Fix uv.lock exclusion in MegaLinter and add mcp-browser to ruff src
-status: todo
+status: done
 priority: needed
 created: 2026-05-07T23:29:04.456182+00:00
-updated: 2026-05-08T14:18:49.128339+00:00
+updated: 2026-05-08T15:57:54.339225+00:00
 tags:
 - scope:infra
 - type:config
@@ -195,3 +195,89 @@ APPROVED — config-only task, all td:0. Added missing AC for `.editorconfig` `[
 **Confidence:** 0.96
 [[2026-05-08]]
 APPROVED #1418 -> todo | AC P2 refined from full-workspace ruff pass to task-scoped lint check. All builder work from cycle 2 is valid. Test-writer: SKIP (all td:0).
+[[2026-05-08]]
+## Test-Writer Notes
+- Retry cycle: task returned via architect AC refinement (P2 narrowed from workspace-root to task-scoped lint).
+- Non-implementation task (tagged type:config) — no tests applicable.
+- All AC lines remain (td:0): config-only changes to `.mega-linter.yml`, `.editorconfig`, and `pyproject.toml`.
+- Architecture Review Cycle 2 explicitly flags: Test-writer SKIP (all td:0).
+- Reviewer Required Follow-up targeted architect only (AC P2 rewrite) — resolved by architect.
+- All builder changes from cycle 2 are valid per architect verdict; passing through to builder for any remaining implementation gaps.
+[[2026-05-08]]
+## Builder Notes
+- Implementation: no new edits in this cycle; validated existing config changes in `.mega-linter.yml`, `.editorconfig`, and `pyproject.toml` satisfy AC P1.
+- Tests: 0 TestFromAC passed (td:0 config task; no tests applicable)
+- Coverage: not applicable (td:0)
+- ruff: clean (quality-runner scoped lint, exit code 0)
+- Evidence summary:
+  - `.mega-linter.yml` `FILTER_REGEX_EXCLUDE` no longer excludes `uv.lock`.
+  - `.editorconfig` includes `[uv.lock]` with `max_line_length = unset`.
+  - `pyproject.toml` includes `serve/mcp-browser/src` in `[tool.ruff].src`.
+  - quality-runner scoped check on `serve/mcp-browser/src`: clean=true, ruff=0.
+[[2026-05-08]]
+## Review Evidence
+### Test Results
+- No tests apply here. Every AC line is tagged `td:0`, the task changes only config files, and there are no `TestFromAC_*` classes to audit.
+- Code-reader was skipped per workflow because this is a `td:0` review.
+
+### Lint Results
+- Independent quality-runner scoped lint command: `uv run ruff check serve/mcp-browser/src`
+- Exit code: 0
+- Violations: none
+- Conclusion: adding `serve/mcp-browser/src` to `[tool.ruff].src` introduces no new Ruff violations in the newly-scoped source tree.
+
+### Coverage
+- Not applicable. This is a `td:0` config-only task.
+
+### Scoped Change Assessment
+- Reconstructed builder scope from task history and live artifacts: `.mega-linter.yml`, `.editorconfig`, and `pyproject.toml`.
+- Commit-log evidence records a builder commit for this task: `abc38755e87a29ecc926e6d84d6d5b150b0e754f` in `.git/logs/refs/heads/dev:2102`.
+- Live repository state matches the refined AC:
+  - `.mega-linter.yml:37` defines `FILTER_REGEX_EXCLUDE` without `uv.lock`.
+  - `.editorconfig:34-35` contains `[uv.lock]` and `max_line_length = unset`.
+  - `pyproject.toml:47` contains `"serve/mcp-browser/src"` in `[tool.ruff].src`.
+- No security or data-safety concerns surfaced in the reviewed config files.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---|---|---|---|
+| P1: `uv.lock` is no longer excluded from MegaLinter's `FILTER_REGEX_EXCLUDE` | `.mega-linter.yml:37` shows the active regex and it does not contain `uv.lock`. | n/a (`td:0`) | PASS |
+| P1: `.editorconfig` has a `[uv.lock]` section with `max_line_length = unset` | `.editorconfig:34` is `[uv.lock]`; `.editorconfig:35` is `max_line_length = unset`. | n/a (`td:0`) | PASS |
+| P1: `serve/mcp-browser/src` is listed in `[tool.ruff] src` in `pyproject.toml` | `pyproject.toml:47` contains `"serve/mcp-browser/src"`. | n/a (`td:0`) | PASS |
+| P2: Adding `serve/mcp-browser/src` to ruff src introduces no new ruff violations (scoped check exits 0) | quality-runner executed `uv run ruff check serve/mcp-browser/src` with exit code 0 and no violations. | n/a (`td:0`) | PASS |
+
+### Deductions
+- This task body includes prior review failures, but the latest binding artifact is `## Architecture Review (Cycle 2)`, which explicitly rewrote P2 from workspace-wide Ruff to task-scoped Ruff. Current evidence matches that refined AC.
+- I could not perform `git status --porcelain -- .mega-linter.yml .editorconfig pyproject.toml` because no terminal or git-status tool is available in this review surface; taking a small confidence deduction for dirty-tree contamination uncertainty.
+- Confidence: 0.95
+
+### Verdict
+- PASS. All current AC lines are satisfied with independent artifact and quality-runner evidence. Advance to docs.
+[[2026-05-08]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | Changed files are CI/tooling config only. `README.md:106` shows `ruff check serve/ tests/` but the ruff `src` list change doesn't affect that command. No IN-scope prose doc references `FILTER_REGEX_EXCLUDE`, `[uv.lock]` editorconfig, or `[tool.ruff].src`. |
+| 2 | Module docstrings | No | N/A | No Python modules changed. |
+| 3 | External attribution | No | N/A | Config-only task; no external patterns adopted. |
+| 4 | Research doc | Yes | Verified | `.owlbear/research/1413-ci-sast-baseline.md` referenced in task body; file confirmed on disk. |
+| 5 | Diagram maintenance (describes match) | No | N/A | `project-overview.excalidraw` describes `serve/*/pyproject.toml` (not root `pyproject.toml`), `share/**`, `setup/**`, `.owlbear/**`. Root `.mega-linter.yml`, `.editorconfig`, and `pyproject.toml` match no describes glob. |
+| 6 | Explicit diagram creation | No | N/A | Not requested in task body. |
+| 7 | Deletion detection | No | N/A | No files deleted. |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| `.mega-linter.yml` | OUT | N/A — CI config |
+| `.editorconfig` | OUT | N/A — editor config |
+| `pyproject.toml` | OUT | N/A — build config, no docstrings |
+
+### Files Updated
+- None
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no `.owlbear/scratch/1418-*` files found)

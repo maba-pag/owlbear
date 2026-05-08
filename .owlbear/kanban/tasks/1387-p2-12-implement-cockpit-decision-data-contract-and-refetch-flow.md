@@ -1,10 +1,10 @@
 ---
 id: 1387
 title: 'P2-12: Implement Cockpit decision data contract and refetch flow'
-status: backlog
+status: review
 priority: needed
 created: 2026-05-06T01:04:49.160414+00:00
-updated: 2026-05-08T14:15:15.394249+00:00
+updated: 2026-05-08T15:40:53.305002+00:00
 tags:
 - cockpit
 - audit-remediation
@@ -100,3 +100,50 @@ A researcher should:
 
 ### Verification summary
 All 12 tests from #1386 pass GREEN against the current codebase. The three problem-evidence items are stale — `body` field exists in `PendingDR`, `refetchTasks()` is already called in `onResolved`, and `getResponseErrorMessage` is already imported in `ResolveModal`. No implementation work needed. No follow-up tasks created.
+[[2026-05-08]]
+
+[[2026-05-08]]
+## Architecture Review (Pass 2)
+
+### Evaluation
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Premise challenge | PASS | Research confirmed all 3 problems already resolved; 12/12 tests GREEN |
+| Single responsibility | PASS | N/A — no-op |
+| TDD compliance | PASS | #1386 archived, tests pass |
+
+### AC Assessment
+| AC Line | Assessment | Action |
+|---------|-----------|--------|
+| Pending decision frontend types include full body | Already implemented (`PendingDR.body: string` at `usePendingDRs.ts:13`) | td:0 |
+| Pending decision data preserves task link/context/age/body/status | Already implemented in existing hook | td:0 |
+| Resolution refetches pending decisions and affected task/board state | Already implemented (`Shell.tsx:266-269` calls both refetch functions) | td:0 |
+| Loading/empty/error states consume frontend error contract | Already implemented (`ResolveModal.tsx:11` imports `getResponseErrorMessage`) | td:0 |
+| Implementation satisfies #1386 without viewport redesign | Confirmed — all #1386 tests pass without viewport changes | td:0 |
+
+### Architecture Notes
+All AC lines describe behavior already present in the codebase. Research doc `.owlbear/research/1387-decision-data-contract-noop.md` provides test execution evidence. No code changes required.
+
+### Challenge Results
+- Challenger: SKIPPED — all AC lines td:0, no implementation to challenge
+
+### Test Depth
+- Max depth: td:0 (all lines)
+- Test-writer: SKIP
+
+### Verdict: APPROVE (no-op — all AC satisfied by existing code)
+
+[[2026-05-08]]
+APPROVED #1387 -> todo | No-op: all AC already satisfied by existing code. Research verified 12/12 tests GREEN. All AC lines td:0, Test-writer: SKIP.
+[[2026-05-08]]
+## Test-Writer Notes
+- All AC lines are (td:0) — test-writer skipped.
+- Passing through to builder.
+- Architecture Review confirmed all 5 AC lines already satisfied by existing code (12/12 tests GREEN on #1386). No new tests to write.
+[[2026-05-08]]
+## Builder Notes
+- Non-implementation task (td:0 pass-through from architecture + test-writer).
+- Code changes: none.
+- Tests: no builder test run required for pass-through; prior pipeline evidence reports #1386 GREEN (12/12).
+- Lint: no code touched.
+- Passing through to review.

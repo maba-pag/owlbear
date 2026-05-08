@@ -1,10 +1,10 @@
 ---
 id: 1428
 title: 'Ideation UX: eliminate jargon leakage and restore purpose-driven communication'
-status: backlog
+status: todo
 priority: important
 created: 2026-05-08T00:58:29.125370+00:00
-updated: 2026-05-08T01:02:01.676803+00:00
+updated: 2026-05-08T15:20:33.685228+00:00
 tags:
 - ideation
 - ux
@@ -21,3 +21,32 @@ archival_refs: []
 ## Objective\n\nRewrite vocabulary and narration directives in ideation agent instruction files to eliminate jargon leakage and restore purpose-driven communication.\n\n## Brief\n\nFull brief at `.owlbear/briefs/draft-ideation-ux/brief.md`\n\n## Acceptance Criteria\n\n- [ ] New \"Communication Patterns\" section in `h-ideation/SKILL.md` with vocabulary table, narration principles, transition patterns, boundary heuristic, depth-control cues\n- [ ] 4 narration directives rewritten (3 in mediation, 1 in discovery) with co-located annotations\n- [ ] 6 before/after pairs included as behavioral specification\n- [ ] One critical_rule line added to both user-facing agent files\n- [ ] Verification criteria in both workflow skills updated (\"explains purpose\" not \"names component\")\n- [ ] Light \"Panel Output Phrasing\" section added to h-ideation-panel\n- [ ] Grep-based check: no protocol codes (M3.5, O15) appear in narration guidance without context\n- [ ] All changes are behavioral-equivalent (same information reaches user, different framing)\n\n## Files in Scope\n\n- `share/skills/h-ideation/SKILL.md`\n- `share/skills/w-ideation-mediation/SKILL.md`\n- `share/skills/w-ideation-discovery/SKILL.md`\n- `share/agents/ideation-mediator.agent.md`\n- `share/agents/ideation-discoverer.agent.md`\n- `share/skills/h-ideation-panel/SKILL.md`\n\n## Context\n\n- Research grounding: `.owlbear/research/thinking-companion-framework.md`\n- Prior overhaul: `.owlbear/briefs/draft-ideation-overhaul-2026-04-20/`\n- Decisions: `.owlbear/briefs/draft-ideation-ux/decisions.md` (D1-D12)
 [[2026-05-08]]
 ## Planning\n### Decomposition: Ideation UX jargon elimination\n- Tasks created: 5\n- Dependency layers: 2\n- Phase: 1\n\n### Task List\n| ID | Title | Priority | Depends On | Tags |\n|----|-------|----------|------------|------|\n| #1429 | P1-01: Communication Patterns section + vocabulary table in h-ideation/SKILL.md | critical | — | phase-1, scope:shared, ideation, ux |\n| #1430 | P1-02: Directive rewrites in w-ideation-mediation/SKILL.md | needed | #1429 | phase-1, scope:shared, ideation, ux |\n| #1431 | P1-03: Directive rewrite + tier presentation in w-ideation-discovery/SKILL.md | needed | #1429 | phase-1, scope:shared, ideation, ux |\n| #1432 | P1-04: Agent enforcement lines + verification criteria updates | needed | #1429 | phase-1, scope:shared, ideation, ux |\n| #1433 | P1-05: Panel Output Phrasing section in h-ideation-panel/SKILL.md | important | — | phase-1, scope:shared, ideation, ux |\n\n### Dependency Graph\n```mermaid\ngraph TD\n  1429[\"#1429 Communication Patterns\"]\n  1430[\"#1430 Mediation rewrites\"]\n  1431[\"#1431 Discovery rewrite\"]\n  1432[\"#1432 Agent enforcement\"]\n  1433[\"#1433 Panel phrasing\"]\n  1429 --> 1430\n  1429 --> 1431\n  1429 --> 1432\n```\n\n### Notes\n- All tasks are markdown prose edits (no code, no traditional tests). Verification via grep-based lint (AC #7 of parent).\n- #1429 is the foundation — all directive/enforcement tasks depend on the vocabulary table existing first.\n- #1433 is independent (panel phrasing is self-contained, no vocabulary dependency).\n- Status set to `todo` (brief provides all source content; no further research needed).\n- Skipped backlog column intentionally — content is fully specified in brief.
+[[2026-05-08]]
+## Architecture Review
+
+### Context
+Parent task decomposed by planner into 5 subtasks (#1429–#1433). Planning section present — advancing parent per decomposition-complete path.
+
+### Subtask Status
+| ID | Title | Status | Notes |
+|----|-------|--------|-------|
+| #1429 | Communication Patterns section | Task record absent | Deliverable verified in h-ideation/SKILL.md lines 115–388 (vocabulary table, narration principles, transition patterns, boundary heuristic, depth-control cues) |
+| #1430 | Mediation directive rewrites | done | All AC passed. Reviewer confidence .94 |
+| #1431 | Discovery directive rewrite | Task record absent | Deliverable verified: purpose-framed narration at w-ideation-discovery/SKILL.md:131, vocabulary cross-ref at line 119 |
+| #1432 | Agent enforcement + verification | Task record absent | Deliverable verified: critical_rule in mediator.agent.md:50 and discoverer.agent.md:41; verification criteria in mediation:150 and discovery:156 |
+| #1433 | Panel Output Phrasing | backlog | Implementation exists (h-ideation-panel/SKILL.md:197–204), stuck in reviewer loop on test-quality AC2/AC5 refinement — continues independently |
+
+### Parent AC Verification
+| AC | Evidence | Status |
+|----|----------|--------|
+| Communication Patterns section with 5 components | h-ideation/SKILL.md lines 115–388 | MET |
+| 4 narration directives rewritten | mediation: Step 1.5 (:97), Step 2 (:115), Disclosure Ladder (:50-70); discovery: handoff (:131) | MET |
+| 6 before/after pairs | h-ideation/SKILL.md lines 207–260 (Pairs 1–6) | MET |
+| Critical rule in both agent files | mediator.agent.md:50, discoverer.agent.md:41 | MET |
+| Verification criteria updated | mediation:150, discovery:156 | MET |
+| Panel Output Phrasing | h-ideation-panel/SKILL.md:197–204 (implementation done, #1433 test-quality cycle continues) | MET (impl) |
+| Grep: no uncontextualized protocol codes | M3.5/O15 appear only in vocabulary table and "Before" examples — narration guidance uses purpose-driven language | MET |
+| Behavioral equivalence | Pairs 1–6 demonstrate same info, different framing | MET |
+
+### Verdict: APPROVE
+Decomposition complete. All parent AC deliverables exist in the codebase. Subtask #1433 continues independently for test-quality refinement (implementation already in place).

@@ -1,10 +1,10 @@
 ---
 id: 1377
 title: 'P2-02: Implement Cockpit task detail context model'
-status: backlog
+status: review
 priority: critical
 created: 2026-05-06T01:04:31.145299+00:00
-updated: 2026-05-08T14:12:47.440034+00:00
+updated: 2026-05-08T15:40:49.436942+00:00
 tags:
 - cockpit
 - audit-remediation
@@ -15,8 +15,7 @@ tags:
 - task-detail
 - model
 parent: 1363
-depends_on:
-- 1376
+depends_on: []
 blocked: false
 block_reason:
 claimed_at:
@@ -99,3 +98,42 @@ Test task: #1376.
 ### Follow-up
 - Remove #1377 from #1378's depends_on to unblock Phase 2 downstream chain.
 - Archive #1377 — no implementation changes needed.
+[[2026-05-08]]
+## Architecture Review (2nd pass)
+
+### Verdict: APPROVE (no-op)
+
+### AC Assessment (all td:0)
+
+| AC Line | Assessment | Depth |
+|---------|-----------|-------|
+| Frontend model matches backend fields for claim state | ALREADY SATISFIED — `TaskDetail` in DetailTab.tsx L16-31 has `claimed: boolean`, `claimed_at: string \| null` | td:0 |
+| Dependency/parent context preserved | ALREADY SATISFIED — `dep_status: string \| null`, `parent: number \| null`, `depends_on: number[]` present | td:0 |
+| Optional context has explicit state, not clearing edit | ALREADY SATISFIED — all nullable fields typed as `T \| null`, never `undefined` | td:0 |
+| Existing flows continue to work | ALREADY SATISFIED — 15/15 tests pass in TaskDetailModel_1376.test.tsx | td:0 |
+| Satisfies #1376 without adding action-gating | ALREADY SATISFIED — #1376 was completed and archived with GREEN commit 216061a8 | td:0 |
+
+### Architecture Notes
+- All AC was implemented during #1376's pipeline traversal (GREEN phase, commit 216061a8).
+- Field-by-field comparison of frontend `TaskDetail` vs backend `ShowTaskResponse` shows zero gaps for decision-relevant fields.
+- Backend-only fields (`archival_reason`, `archival_refs`, `guidance`, `missing_sections`) are not needed for detail-view decisions.
+- Removed stale `depends_on: [1376]` — #1376 is archived/done.
+
+### Test-writer: SKIP
+All AC lines are td:0. No implementation or test work needed.
+
+### Follow-up (orchestrator)
+- Remove #1377 from #1378's `depends_on` to unblock Phase 2 downstream chain.
+[[2026-05-08]]
+## Test-Writer Notes
+- All AC lines are (td:0) — test-writer skipped.
+- Architecture Review (2nd pass) verdict: APPROVE (no-op). All AC was already implemented during #1376's pipeline traversal (GREEN commit 216061a8).
+- Passing through to builder.
+[[2026-05-08]]
+## Builder Notes
+- Non-implementation task — all AC lines are td:0 and already satisfied by prior pipeline work.
+- Files changed: none.
+- Tests run in this builder pass: none (pass-through per td:0 no-op contract).
+- Coverage: not applicable (no code changes).
+- ruff: not run (no code changes).
+- Evidence summary: Architecture Review (2nd pass) marked no-op APPROVE; Test-Writer Notes explicitly indicate pass-through to builder.

@@ -1,10 +1,10 @@
 ---
 id: 1433
 title: 'P1-05: Panel Output Phrasing section in h-ideation-panel/SKILL.md'
-status: backlog
+status: in-progress
 priority: important
 created: 2026-05-08T01:00:48.510035+00:00
-updated: 2026-05-08T13:33:41.448114+00:00
+updated: 2026-05-08T15:56:09.430234+00:00
 tags:
 - phase-1
 - scope:shared
@@ -275,3 +275,93 @@ Builder skipped. Advancing directly to review.
 |---|-------------|----------------|---------|----------|
 | 1 | architect | Refine AC2 into line-level semantic proof so tests must distinguish affirmative guidance to use descriptive headers from prohibitive guidance to avoid protocol-coded or jargon-first headers. | tests/test_panel_output_phrasing_1433.py | tests/test_panel_output_phrasing_1433.py:148, 163, 168, 175, 180 |
 | 2 | architect | Refine AC5 proof so tests verify each of the seven legacy sections remains a top-level ## heading and the scope-boundary line explicitly preserves unchanged panel mechanics and stance file structure. | tests/test_panel_output_phrasing_1433.py; share/skills/h-ideation-panel/SKILL.md | tests/test_panel_output_phrasing_1433.py:137, 225, 239, 248; share/skills/h-ideation-panel/SKILL.md:204 |
+[[2026-05-08]]
+
+## Architecture Review (cycle 3)
+
+### Context
+Reviewer FAIL (0.79) on cycle 2: AC2 tests still vulnerable to reversed-semantics mutations (token presence without verb-direction check); AC5 tests use substring match instead of line-level heading verification. Implementation remains correct and unchanged since cycle 1 commit `771c2962`.
+
+### Refined Acceptance Criteria (replacing cycle 2 AC)
+
+- [ ] AC1: New `## Panel Output Phrasing` section heading exists in h-ideation-panel/SKILL.md (td:1)
+- [ ] AC2: Section contains both semantic directions for header guidance: (a) a bullet with affirmative intent (starting with "Use" or "Prefer") that co-occurs with "descriptive" and "header(s)" and includes an inline example (`for example` or `e.g.`), AND (b) a bullet with prohibitive intent (starting with "Avoid") that co-occurs with "protocol-coded" or "jargon" and "header(s)" and includes an inline example. (td:2)
+- [ ] AC3: Section contains both: (a) a line where "quoted" and "mediator" co-occur, AND (b) a line where "readable" and "without translation" co-occur. (td:2) — unchanged from cycle 2, reviewer PASS
+- [ ] AC4: Section body is 5–10 non-blank lines (td:1) — unchanged, reviewer PASS
+- [ ] AC5: All 7 pre-existing top-level headings preserved as exact `## ` lines (verified by line-start regex `^## {name}`, not substring). Total `## ` heading count = 8 (7 + 1). Scope-boundary line contains "phrasing only" AND at least one of "panel mechanics" or "stance file structure". (td:1)
+
+### What changed from cycle 2
+- AC2: Added verb-direction requirement (affirmative/prohibitive bullet prefix) and "header(s)" co-occurrence. Closes reversed-semantics and target-surface-drift gaps.
+- AC5: Changed heading preservation from substring to line-start regex. Added scope-boundary co-occurrence (was single-token). Closes heading-level and scope-boundary proof gaps.
+- AC1/AC3/AC4: No changes needed.
+
+### Evaluation
+| Criterion | Assessment |
+|-----------|-----------|
+| Single responsibility | PASS — one section addition to one file |
+| Interface clarity | PASS — AC now specifies verb-direction + term co-occurrence patterns |
+| Dependency correctness | PASS — no dependencies |
+| TDD compliance | PASS — test file exists, test-writer will update assertions |
+| KISS/YAGNI | PASS — 6 bullets of guidance, minimal |
+| Pattern consistency | PASS — follows existing section patterns |
+
+### Challenge Results
+- Challenger: reconsider (0.67)
+- Accepted: contract drift (writing AC now), negated-verb (bullet prefix pattern), target-surface drift ("headers" co-occurrence)
+- Dismissed: example-polarity (prose-example semantics untestable by regex; natural ceiling for documentation tests)
+- Override justified: all accepted concerns addressed in refined AC
+
+### Test Depth
+- Max depth: 2
+- Test-writer: PROCEED — replace cycle 2 tightened assertions with verb-direction + heading-level checks
+
+### Implementation Note
+Implementation at share/skills/h-ideation-panel/SKILL.md:197-204 already satisfies all refined AC. Builder should NOT change the file — only test assertions need updating.
+
+### Verdict: APPROVE → todo
+
+[[2026-05-08]]
+Architecture review cycle 3: Refined AC2 (verb-direction bullet prefix + "headers" co-occurrence + inline example) and AC5 (line-start regex heading verification + scope-boundary co-occurrence). Closes reversed-semantics and heading-level proof gaps flagged by reviewer. Implementation unchanged — test-writer to update assertions only.
+[[2026-05-08]]
+## Test-Writer Notes
+
+- **Retry cycle (cycle 3) — test-only, direct-to-review advance**
+- Test file: `tests/test_panel_output_phrasing_1433.py`
+- Class: `TestFromAC_PanelOutputPhrasing`
+- Commit: `030d12b0`
+
+### New tests added (4 cycle-3 tightened, closing reviewer AC2/AC5 gaps)
+
+| Category | Tests | Count |
+|----------|-------|-------|
+| AC2 — affirmative verb-direction | `test_ac2_affirmative_bullet_starts_with_use_or_prefer` | 1 |
+| AC2 — prohibitive verb-direction | `test_ac2_prohibitive_bullet_starts_with_avoid` | 1 |
+| AC5 — line-start heading check | `test_ac5_existing_headings_are_top_level_lines` | 1 |
+| AC5 — scope-boundary co-occurrence | `test_ac5_scope_boundary_mentions_mechanics_or_structure` | 1 |
+| **Total new** | | **4** |
+
+### Result
+
+- 14 existing tests (cycles 1+2): PASS (unchanged)
+- 4 new cycle-3 tests: PASS (implementation already satisfies refined AC)
+- Total: **18/18 passed**, ruff clean
+
+### Step 1b.1 criteria satisfied
+
+- Reviewer follow-up cited only test-proof gaps (AC2 reversed-semantics, AC5 heading-level and scope-boundary)
+- All new tests pass against current implementation (section at SKILL.md:197-204 satisfies all criteria)
+- No lint issues
+
+Builder skipped. Advancing directly to review.
+
+### AC coverage table
+
+| AC | Test(s) | Cycle |
+|----|---------|-------|
+| AC1 — section exists | `test_panel_output_phrasing_section_exists` | 1 |
+| AC2 — contrast + examples (token) | `test_section_instructs_descriptive_headers`, `test_section_discourages_protocol_coded_headers`, `test_ac2_contrast_both_terms_coexist`, `test_ac2_positive_side_has_inline_example`, `test_ac2_negative_side_has_inline_example` | 1/2 |
+| AC2 — verb-direction | `test_ac2_affirmative_bullet_starts_with_use_or_prefer`, `test_ac2_prohibitive_bullet_starts_with_avoid` | 3 |
+| AC3 — mediator + readability | `test_section_mentions_mediator_quoting`, `test_section_mentions_user_readability`, `test_ac3_quoted_and_mediator_same_line`, `test_ac3_readable_and_without_translation_same_line` | 1/2 |
+| AC4 — brevity | `test_section_length_within_bounds` | 1 |
+| AC5 — heading count + scope phrase (substring) | `test_new_section_does_not_displace_existing_sections`, `test_ac5_heading_count_equals_original_plus_one`, `test_ac5_scope_boundary_phrase_present` | 1/2 |
+| AC5 — top-level heading + co-occurrence | `test_ac5_existing_headings_are_top_level_lines`, `test_ac5_scope_boundary_mentions_mechanics_or_structure` | 3 |

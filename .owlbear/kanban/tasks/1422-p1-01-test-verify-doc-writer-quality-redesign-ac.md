@@ -1,10 +1,10 @@
 ---
 id: 1422
 title: 'P1-01: Test — verify doc-writer quality redesign AC'
-status: backlog
+status: in-progress
 priority: needed
 created: 2026-05-08T00:32:15.467895+00:00
-updated: 2026-05-08T13:10:01.251248+00:00
+updated: 2026-05-08T15:55:09.195965+00:00
 tags:
 - phase-1
 - scope:shared
@@ -278,3 +278,68 @@ Architecture review complete. AC1 refined with behavior-level discriminators fro
 |---|---|---|---|---|
 | 1 | architect | Re-open child task `#1422` AC1 so the next retry contract requires a discriminating assertion for the `serve/{pkg}/src/**` mapping row, not generic `serve/{pkg}` / `README` presence checks. | `.owlbear/kanban/tasks/1422-p1-01-test-verify-doc-writer-quality-redesign-ac.md`, `tests/test_doc_writer_quality_1422.py`, `share/skills/w-doc-update/SKILL.md` | Child AC at task line `58`; live row at skill line `30`; current assertions at test lines `17`, `24`, and `357`; no `src/**` matches in the test file. |
 | 2 | architect | Rewrite the AC1 proof contract for gate and fast-path behavior so the next test-writer retry asserts `blocks`, `passes`, and `with evidence` semantics directly instead of token-presence regexes / substrings. | `.owlbear/kanban/tasks/1422-p1-01-test-verify-doc-writer-quality-redesign-ac.md`, `tests/test_doc_writer_quality_1422.py`, `share/skills/w-doc-update/SKILL.md` | Child AC at task lines `68-69`; live semantics at skill lines `37`, `91-92`; current checks at test lines `74`, `80`, and `342`; no `with evidence and advance` matches in the test file. |
+[[2026-05-08]]
+
+## AC1 Supplement (R3 — reviewer follow-up)
+
+The following 2 assertions are MISSING from the current test suite per reviewer cycles 1 and 2. The test-writer must add them. All other tests (currently 50) remain unchanged.
+
+### Gap 1: `src/**` mapping row (td:1)
+`TestFromAC_ConventionMappingTable` must include a test asserting that the Step 1 convention mapping table contains the literal string `src/**`. This discriminates the first table row (`serve/{pkg}/src/**` → `serve/{pkg}/README.md`) from the generic `serve/{pkg}` presence checks already in the suite.
+
+**Discriminator:** `assert "src/**" in step1` where `step1` is the Step 1 section text.
+
+### Gap 2: `with evidence` in fast-path (td:1)
+`TestFromAC_ConventionMappingTable.test_no_impact_fast_path_advances` (or a new test) must assert that `with evidence` appears in the Step 1 section alongside `no docs impact`. Currently `with evidence` only appears in an assertion message string (line 344), not in an executable predicate.
+
+**Discriminator:** `assert "with evidence" in step1` within the same Step 1 section extraction used by the fast-path test.
+
+### Test-writer guidance (R3)
+- Amend `tests/test_doc_writer_quality_1422.py` — add 1 new test + 1 modified assertion.
+- Expected net: +1 new test in `TestFromAC_ConventionMappingTable`, 1 assertion added to existing fast-path test.
+- DO NOT modify or remove any existing tests.
+
+## Architecture Review (R3)
+
+### Evaluation
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | Scoped to 2 missing test assertions |
+| Interface clarity | PASS | Each gap names exact discriminator string |
+| Dependency correctness | PASS | No dependencies |
+| Module layering | N/A | Test file only |
+| TDD compliance | PASS | This IS the test task |
+| KISS/YAGNI | PASS | 2 assertions, no new abstractions |
+| Premise challenge | PASS | Reviewer documented exact false-green mutations |
+| Pattern consistency | PASS | Same `step1` section extraction pattern as existing tests |
+| Security surface | PASS | No system boundaries |
+| Single domain | PASS | Agent ecosystem only |
+
+### Challenge Results
+- Challenger: block (confidence 0.21)
+- Root cause: challenger interpreted APPROVE as claiming tests already pass the new AC. Rebuttal: this approves the AC contract for test-writer implementation. The 2 gaps are precisely what the refined AC supplement defines. The test-writer will add them.
+- Challenge 3 (stale count 45 vs 50): accepted — count corrected to 50 in R3 guidance.
+- Challenges 1-2 (missing assertions): these ARE the gaps being defined. Not a blocker — they're the work item.
+
+### Test Depth
+- Max depth: 1 (both gaps are single-assertion additions)
+- Test-writer: PROCEED
+
+### Verdict: APPROVE
+### Action: AC1 supplemented with 2 specific discriminator assertions per reviewer follow-up. Task advanced to todo.
+
+[[2026-05-08]]
+Architecture review R3 complete. AC1 supplemented with 2 specific discriminator assertions addressing reviewer follow-up: (1) `src/**` literal in convention mapping table test, (2) `with evidence` in fast-path test predicate. Both gaps confirmed via grep — 0 executable matches in current test file. Existing 50 tests unchanged. Challenger rebutted: approval is for AC contract, not test completion.
+[[2026-05-08]]
+## Test-Writer Notes (R3)
+- Test file: tests/test_doc_writer_quality_1422.py
+- Prior state: 50 tests (all passing per R3 guidance)
+- New tests/assertions added (2):
+  1. `test_convention_mapping_has_src_selector` (TestFromAC_ConventionMappingTable) — asserts `"src/**"` in Step 1 section; discriminates the specific `serve/{pkg}/src/**` → `serve/{pkg}/README.md` row from generic `serve/{pkg}` presence checks
+  2. Added `assert "with evidence" in step1` to `test_no_impact_fast_path_advances` — asserts fast-path output is `"no docs impact" with evidence`, not bare phrase
+- Total: 51 tests, all PASS
+- ruff: clean (0 violations)
+- Both assertions pass against current correct implementation (src/** at SKILL.md:30; with evidence at fast-path sentence)
+- Pattern: implementation preceded tests (builder completed in #1421); these tests strengthen the suite against future regressions per reviewer R3 required follow-up
+- AC coverage: AC1 (all gaps addressed — src/** Gap 1, with evidence Gap 2), AC2–AC5 unchanged
+- Commit: 5de383ce
