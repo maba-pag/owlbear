@@ -1,10 +1,10 @@
 ---
 id: 1377
 title: 'P2-02: Implement Cockpit task detail context model'
-status: done
+status: archived
 priority: critical
 created: 2026-05-06T01:04:31.145299+00:00
-updated: 2026-05-08T16:25:13.188737+00:00
+updated: 2026-05-08T16:45:14.096349+00:00
 tags:
 - cockpit
 - audit-remediation
@@ -242,3 +242,33 @@ All AC lines are td:0. No implementation or test work needed.
 
 ### Scratch Files Cleaned
 - None (no `.owlbear/scratch/1377-*` files existed)
+[[2026-05-08]]
+## Audit
+
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Frontend model matches backend fields for claim state | `TaskDetail` in DetailTab.tsx L16-31 has `claimed: boolean`, `claimed_at: string \| null`; backend `TaskSummary` exposes these and explicitly drops `claimed_by` (models.py L459-503) | PASS |
+| Dependency/parent context preserved | `dep_status: string \| null`, `parent: number \| null`, `depends_on: number[]` in DetailTab.tsx L28-30; Shell.tsx L85-121 fetches into TaskDetail; mutation routes return SingleTaskResponse via model_dump() | PASS |
+| Optional context has explicit state, not clearing edit | All nullable fields typed as `T \| null` (not `undefined`); claimed_at/dep_status rendered read-only (L253-255); never sent in edit payloads (L157-180); parent clearing is explicit null via parseParent() | PASS |
+| Existing flows continue to work | vitest: 1109 passed, 0 failed; archived #1376 evidence: 63 passed scoped tests, ESLint clean | PASS |
+| Satisfies #1376 without action-gating | claimed/claimed_at/dep_status usage is read-only display only (L253-255); #1376 archived with GREEN commit 216061a8 | PASS |
+
+### Test Results
+- vitest: 1109 passed, 0 failed, 0 skipped (full frontend suite)
+- eslint: pre-existing warnings only (0 files changed)
+- pytest: 2921 passed, 167 failed (all pre-existing, 0 files changed by this task)
+- ruff: 29 pre-existing violations (0 introduced)
+
+### Architect Quality: 3/5
+Original Problem Evidence was factually incorrect (claimed fields were already present). Required 2 architecture review passes plus research to resolve to no-op. Pipeline self-corrected but overhead was notable. Not 2/5 because the review process did catch and correctly resolve the issue.
+
+### Deduction Breakdown
+- AC quality score <= 3: -0.03
+- All 5 AC lines have specific evidence: no deduction
+- Reviewer evidence section present and detailed (PASS at 0.95): no deduction
+- Lint violations: pre-existing only (0 files changed): no deduction
+- Full-suite failures not in task scope (0 files changed): no deduction
+
+### Confidence: 0.97
+### Action: archive
