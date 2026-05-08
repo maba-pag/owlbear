@@ -9,15 +9,15 @@
  *        `claimed_by` is NOT in the backend API response — not tested.
  *   AC2: TaskDetail exposes `dep_status` (string|null) from ShowTaskResponse.
  *        Existing `parent` and `depends_on` fields are not regressed.
- *   AC3: Absent optional context (`claimed_at: null`, `dep_status: null`) is
- *        represented as an explicit rendered element (not field absence).
- *        Scope note: `claimed_at` and `dep_status` are required (non-optional)
- *        fields in TaskDetail, so the null-vs-absent distinction is enforced at
- *        TypeScript compile time (`npm run tsc`), not at Vitest runtime. Tests
- *        here prove runtime rendering: explicit null renders as an empty element,
- *        not as a missing element.
+ *   AC3: When `claimed_at` or `dep_status` is null, DetailTab renders an explicit
+ *        DOM element (not a missing element). Runtime DOM proof only — test files
+ *        are excluded from tsc by tsconfig.json so compile-time enforcement applies
+ *        to the implementation file (DetailTab.tsx) only.
  *   AC4: State matrix — unclaimed, claimed, blocked, dep-constrained tasks
  *        produce the correct data shape (asserting field values, not UI gates).
+ *   AC5: Tests exercise all three new fields (`claimed`, `claimed_at`, `dep_status`)
+ *        via `data-testid` queries and exact value assertions; removing any rendered
+ *        field element from DetailTab would fail the suite.
  */
 import { describe, it, expect, vi } from 'vitest'
 import { render } from '@testing-library/react'
@@ -216,10 +216,12 @@ describe('TestFromAC_DepStatusOnModel', () => {
 describe('TestFromAC_ExplicitNullRepresentation', () => {
   it('field-claimed-at element is present in DOM even when claimed_at is null', () => {
     /**
-     * AC3 (runtime rendering scope): A null claimed_at must not make the element
+     * AC3 (runtime DOM proof): A null claimed_at must not make the element
      * disappear from the DOM. DetailTab must always render the field-claimed-at
-     * element regardless of value. Whether claimed_at is null vs absent is
-     * enforced by the required TaskDetail interface field at tsc compile time.
+     * element regardless of value.
+     * Note: test files are excluded from tsc by tsconfig.json (line 18), so
+     * compile-time null-vs-absent enforcement applies to the implementation
+     * file (DetailTab.tsx) only. This test proves runtime DOM presence only.
      */
     const { container } = renderDetail(UNCLAIMED_TASK)
     const el = container.querySelector('[data-testid="field-claimed-at"]')
@@ -229,15 +231,46 @@ describe('TestFromAC_ExplicitNullRepresentation', () => {
 
   it('field-dep-status element is present in DOM even when dep_status is null', () => {
     /**
-     * AC3 (runtime rendering scope): A null dep_status must not make the element
+     * AC3 (runtime DOM proof): A null dep_status must not make the element
      * disappear from the DOM. DetailTab must always render the field-dep-status
-     * element regardless of value. Whether dep_status is null vs absent is
-     * enforced by the required TaskDetail interface field at tsc compile time.
+     * element regardless of value.
+     * Note: test files are excluded from tsc by tsconfig.json (line 18), so
+     * compile-time null-vs-absent enforcement applies to the implementation
+     * file (DetailTab.tsx) only. This test proves runtime DOM presence only.
      */
     const { container } = renderDetail(UNCLAIMED_TASK)
     const el = container.querySelector('[data-testid="field-dep-status"]')
     // Element must exist (not null/undefined) even when value is null
     expect(el).not.toBeNull()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// AC5: Removing any rendered field element from DetailTab fails the suite (td:1)
+// ---------------------------------------------------------------------------
+
+describe('TestFromAC_FieldElementSensitivity', () => {
+  it('all three new fields are present with exact non-null values; removing any element would fail this test', () => {
+    /**
+     * AC5: Tests exercise all three new fields via data-testid queries and
+     * exact value assertions. If field-claimed, field-claimed-at, or
+     * field-dep-status were removed from DetailTab, the querySelector would
+     * return null and the `.not.toBeNull()` assertions below would fail.
+     * Uses CLAIMED_DEP_READY_TASK so all three fields carry non-null values.
+     */
+    const { container } = renderDetail(CLAIMED_DEP_READY_TASK)
+    // field-claimed: element exists with exact boolean string
+    const claimedEl = container.querySelector('[data-testid="field-claimed"]')
+    expect(claimedEl).not.toBeNull()
+    expect(claimedEl!.textContent).toBe('true')
+    // field-claimed-at: element exists with exact ISO timestamp
+    const claimedAtEl = container.querySelector('[data-testid="field-claimed-at"]')
+    expect(claimedAtEl).not.toBeNull()
+    expect(claimedAtEl!.textContent).toBe(CLAIMED_DEP_READY_TASK.claimed_at)
+    // field-dep-status: element exists with exact string value
+    const depStatusEl = container.querySelector('[data-testid="field-dep-status"]')
+    expect(depStatusEl).not.toBeNull()
+    expect(depStatusEl!.textContent).toBe('ready')
   })
 })
 
