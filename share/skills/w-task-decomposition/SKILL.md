@@ -39,8 +39,8 @@ If yes, use the shortcut flow:
 
 - Skip Steps 2–4 and Step 7.
 - Continue with Steps 5, 5a, 5b (user mode only), and 6.
-- Preserve caller metadata verbatim where provided: title, parent ID, tags, and requested status.
-- Status routing: caller should specify target status (for example, "at backlog" or "at research"). Default is `backlog`; researcher follow-ups use `research`.
+- Preserve caller metadata verbatim where provided: title, parent ID, and tags.
+- Status routing: caller should specify target status (for example, "at backlog" or "at research"). Default is `backlog`; researcher follow-ups use `research`; never create `todo` (normalize caller-requested `todo` to `backlog`, or `research` for researcher follow-ups).
 - Naming: no phase-based `P{phase}-{nn}` prefix in shortcut mode. Use caller-provided title directly.
 - TDD pairing is not required in shortcut mode (single follow-up tasks are not feature implementation decompositions).
 - Return the created task ID explicitly in your response message (for downstream linking and parent-child follow-up operations).
