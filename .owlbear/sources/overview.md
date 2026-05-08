@@ -4461,3 +4461,10 @@ External repos and resources studied during OwlBear development.
 | GitHub Blog — 5 Tips for Custom Instructions | <https://github.blog/ai-and-ml/github-copilot/5-tips-for-writing-better-custom-instructions-for-copilot/> | Recommended sections: project overview, tech stack, guidelines, project structure, resources | .owlbear/research/init-scaffold-copilot-instructions.md | 2026-05-03 |
 | VS Code Docs — Custom Instructions | <https://code.visualstudio.com/docs/copilot/customization/custom-instructions> | File format, auto-detection, priority rules, `copilot-instructions.md` usage patterns | .owlbear/research/init-scaffold-copilot-instructions.md | 2026-05-03 |
 | Graham Knapp — My Copilot Instructions File | <https://grahamknapp.com/blog/my-copilot-instructions-file/> | Real-world copilot-instructions.md as "project map, not rulebook"; contextual, project-specific | .owlbear/research/init-scaffold-copilot-instructions.md | 2026-05-03 |
+
+## Reviewer Rewrite Research (Task #1407)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Google Eng Practices — Review Standard | <https://google.github.io/eng-practices/review/reviewer/standard.html> | "Nit:" prefix for non-blocking; approve when code health improves; batch feedback | .owlbear/research/1407-reviewer-rewrite.md | 2026-05-08 |
+| Conventional Comments | <https://conventionalcomments.org/> | Formal label taxonomy: issue vs suggestion vs nitpick; blocking vs non-blocking | .owlbear/research/1407-reviewer-rewrite.md | 2026-05-08 |
