@@ -30,31 +30,41 @@ Use convention mapping to determine primary documentation targets:
 - Keep root docs (`README.md`, `README-consumer.md`, `SECURITY.md`) and setup guides
   as secondary targets only when the task body shows direct impact.
 
-If no mapped documentation is affected, proceed and record no-impact evidence.
+If all changed files map to no READMEs, use the no-impact fast path: write
+"no docs impact" with evidence and advance.
 
 ## Step 2 — Relevance-Gated Checklist (Exactly 4 Items)
 
 Evaluate only applicable checks.
 
-### Item 1: Prose Accuracy
+### Item 1: README Verification
 
-- Verify behavior, commands, and paths in affected prose docs.
-- Update inaccurate text in-place.
-- If no affected prose docs: record "N/A — no prose docs affected".
+- Use convention mapping to identify each `serve/{pkg}/README.md` target.
+- Perform a full-file read for every mapped README.
+- Layer 1: run grep-based structural checks for removed symbols/commands/flags.
+- Layer 2: perform LLM editorial comparison for coherence and contradictions.
+- Fix task-caused issues inline.
+- For pre-existing unresolved issues, insert a visible TODO marker.
 
-### Item 2: Docstrings
+### Item 2: External Attribution
 
-- For touched Python modules, verify public docstrings match current behavior.
-- You may edit docstrings only. Never change application logic.
-- If no Python module changes: record "N/A — no docstring impact".
+- If external sources influenced implementation, add/update
+  `.owlbear/sources/overview.md`.
+- If no external sources were used: record "N/A — no external attribution needed".
 
-### Item 3: Attribution and Research Linkage
+### Item 3: Research Doc
 
-- If external sources influenced implementation, add/update `.owlbear/sources/overview.md`.
 - If a research file exists, verify it is linked from the task body.
-- If not applicable: record "N/A — no external attribution or research linkage needed".
+- If no research artifact exists: record "N/A — no research doc linkage needed".
 
-### Item 4: TODO Marker and Gate Review
+### Item 4: Deletion Detection
+
+- Detect when source files were deleted in this task and whether mapped docs now
+  contain orphaned references.
+- When deletion impact needs coordinated remediation, create a child task for the
+  follow-up doc update.
+- Open a DR (Decision Request) when ownership, sequencing, or scope is ambiguous.
+- If no deletion impact exists: record "N/A — no deletion impact".
 
 Apply visible TODO markers for unresolved documentation issues so they remain reviewable.
 
@@ -108,10 +118,10 @@ Append to task body before advancing:
 ### Checklist
 | # | Check | Applies? | Status | Evidence |
 |---|-------|----------|--------|----------|
-| 1 | Prose accuracy | {Yes/No} | {Updated/N/A} | {details} |
-| 2 | Docstrings | {Yes/No} | {Updated/N/A} | {details} |
-| 3 | Attribution and research linkage | {Yes/No} | {Updated/N/A} | {details} |
-| 4 | TODO marker and gate review | {Yes/No} | {Updated/N/A} | {details} |
+| 1 | README verification | {Yes/No} | {Updated/N/A} | {details} |
+| 2 | External attribution | {Yes/No} | {Updated/N/A} | {details} |
+| 3 | Research doc | {Yes/No} | {Updated/N/A} | {details} |
+| 4 | Deletion detection | {Yes/No} | {Updated/N/A} | {details} |
 
 ### Verification Layers
 - Layer 1 — {grep structural evidence}
