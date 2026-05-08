@@ -245,7 +245,7 @@ Rules:
    |-------|------------------------------------------|
    | Researcher | `.owlbear/research/`, `.owlbear/sources/` |
    | Test-writer | `tests/` |
-   | Builder | `serve/` |
+   | Builder | `serve/*/src/` |
    | Doc-writer | `README.md`, `README-consumer.md`, `SECURITY.md`, `serve/*/README.md`, `share/README.md`, `setup/*.md` |
 
    Use `git status --porcelain -- <domain-paths>` (with `--` pathspec separator). Do not use raw `git status --porcelain` for this check.
