@@ -1,10 +1,10 @@
 ---
 id: 1412
 title: 'D1: Pre-end_work scoped commit check — domain-scoped uncommitted file verification'
-status: done
+status: archived
 priority: important
 created: 2026-05-07T23:16:25.281801+00:00
-updated: 2026-05-08T17:01:00.156456+00:00
+updated: 2026-05-08T17:07:42.964434+00:00
 tags:
 - pipeline
 - ws-protocol
@@ -13,7 +13,7 @@ parent: 1403
 depends_on: []
 blocked: false
 block_reason:
-claimed_at: 2026-05-08T17:01:00.156456+00:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -383,3 +383,34 @@ REFINE + APPROVE: AC builder domain example corrected from `serve/*/src/` to `se
 
 ### Scratch Files Cleaned
 - None (no 1412-* scratch files found)
+[[2026-05-08]]
+## Audit
+
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| P1: r-pipeline-protocol updated with pre-end_work commit check requirement | Rule at share/skills/r-pipeline-protocol/SKILL.md:242-256 under `### Who Commits What` | PASS |
+| P2: Each agent verifies uncommitted files in its own domain | Domain table at SKILL.md:246-252 lists researcher, test-writer, builder, doc-writer, auditor with default pathspecs | PASS |
+| P2: Check is domain-scoped, not raw `git status --porcelain` | Uses `git status --porcelain -- <domain-paths>` with pathspec separator | PASS |
+| P2: Before end_work, not PostToolUse hook | Rule inside `### Who Commits What`, says "Before `end_work`" | PASS |
+| P3: Verification by diff comparison | tests/test_pipeline_commit_check_1412.py — 8/8 green, asserts directly on protocol content | PASS |
+
+### Test Results
+- Task-scoped: 8 passed, 0 failed (tests/test_pipeline_commit_check_1412.py)
+- Full suite: 2971 passed, 184 failed (all pre-existing, none in task scope — task modifies markdown only)
+- Frontend: 1109 passed, 0 failed
+
+### Commit Integrity
+- test-writer: 5860dfb8
+- builder: 26caf036, 3e98d0be
+- doc-writer: c196d123
+- All deliverable files committed by upstream agents
+
+### AC Quality: 3/5
+Original AC example (`serve/*/src/`) was architecturally incorrect — builders modify `share/skills/`, `serve/cockpit/web/`, etc. Caused two review FAIL cycles before architect refinement corrected to `serve/, share/`. The "etc." qualifier acknowledged the list was illustrative, but the specific example misled reviewers into asserting against a wrong contract.
+
+### Deductions
+- -.03: AC quality ≤ 3
+
+### Confidence: .97
+### Action: Archive
