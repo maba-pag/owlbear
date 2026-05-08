@@ -1,7 +1,7 @@
 ---
 id: 1413
 title: 'D2: CI/SAST baseline — deterministic security scanning infrastructure'
-status: todo
+status: backlog
 priority: needed
 created: 2026-05-07T23:16:25.294264+00:00
 updated: 2026-05-08T00:08:48.106165+00:00

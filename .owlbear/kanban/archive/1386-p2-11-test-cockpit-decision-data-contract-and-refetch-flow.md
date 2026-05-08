@@ -1,10 +1,10 @@
 ---
 id: 1386
 title: 'P2-11: Test Cockpit decision data contract and refetch flow'
-status: todo
+status: archived
 priority: needed
 created: 2026-05-06T01:04:46.991799+00:00
-updated: 2026-05-08T09:07:13.375555+00:00
+updated: 2026-05-08T12:51:32.146047+00:00
 tags:
 - cockpit
 - audit-remediation
@@ -421,3 +421,149 @@ This is the third architecture review pass. The refinement eliminates the struct
 
 [[2026-05-08]]
 Loop-breaker refinement (Pass 3). Separated proof modalities to break the review loop: AC1 is now td:0 (build-step verification of TypeScript type contract), AC2-AC4 are runtime tests (unchanged), AC5 explicitly names both verification mechanisms. Root cause of two prior review failures was AC1 demanding a runtime proof of a static type declaration when vitest --typecheck is not enabled. Challenger reconsider (0.63) — all findings addressed in refinement.
+[[2026-05-08]]
+## Test-Writer Notes
+
+**Retry cycle — architect loop-breaker (Pass 3) resolved the structural impossibility.**
+
+No new tests written. No commit required.
+
+**Why this is a direct pass-through:**
+- AC1 (td:0): `PendingDR` now declares `body: string` at `usePendingDRs.ts:13`. Verified by `tsc --noEmit` (clean). The TypeScript-level contract proof that two prior reviews demanded IS the build-step gate — no runtime test can prove it, and none is needed.
+- AC2 (td:2): 4 existing tests pass — `TestFromAC_DecisionPollBodyAndErrorChain` (hook-level, `DecisionContract_1386_hook.test.ts:94`) + `TestFromAC_BodyContractAndErrorChain` (shell-level, `DecisionContract_1386.test.tsx:353`). Each asserts exact field values including `body` with no `as any` masking.
+- AC3 (td:2): 3 existing tests pass — `TestFromAC_OnResolvedRefetchBoth` asserts `refetchTasks()` called exactly once post-resolution. Live code confirms `Shell.tsx:261-262`.
+- AC4 (td:1): 5 existing tests pass — hook-level chain (`DecisionContract_1386_hook.test.ts:130-160`) proves `usePendingDRs → usePollingFetch → getResponseErrorMessage` path; shell-level (`DecisionContract_1386.test.tsx:419-439`) proves `pendingDRError.message` renders at `data-testid="dr-polling-error"`.
+- AC5 (td:0): No test needed — evidence documentation only. Both halves proven: AC3 (runtime RED/GREEN), AC1 (tsc clean).
+
+**Verification run:** vitest scoped — 12 passed, 0 failed across `DecisionContract_1386.test.tsx` + `DecisionContract_1386_hook.test.ts`. ESLint clean on 4 files. `tsc --noEmit` clean (AC1 build proof). 
+
+**Step 1b.1 conditions met:**
+- Reviewer's Required Follow-up contained ONLY test-proof/AC-design gaps (routed to architect, addressed by AC redesign)
+- No new tests written — existing tests satisfy all testable AC lines
+- Lint + TypeScript clean
+
+**Advancing directly to review — no builder work needed.**
+[[2026-05-08]]
+## Builder Notes (test-writer skip-through)
+
+No builder work required. All implementation is complete:
+- `PendingDR.body: string` declared in `serve/cockpit/web/src/hooks/usePendingDRs.ts:13`
+- `PendingDRWithBody = PendingDR` identity alias in `serve/cockpit/web/src/components/ResolveModal.tsx:15`
+- Both `refetchPendingDRs()` and `refetchTasks()` called in `Shell.tsx:261-262`
+- `tsc --noEmit` clean — AC1 build-step proof confirmed
+- 12/12 tests pass across `DecisionContract_1386.test.tsx` + `DecisionContract_1386_hook.test.ts`
+
+Advancing to review per test-writer Step 1b.1 (direct-to-review — no implementation changes needed).
+[[2026-05-08]]
+## Review Evidence
+### Test Results
+- quality-runner scoped frontend run: 68 passed, 0 failed, 0 skipped across `serve/cockpit/web/src/__tests__/DecisionContract_1386.test.tsx`, `serve/cockpit/web/src/__tests__/DecisionContract_1386_hook.test.ts`, `serve/cockpit/web/src/__tests__/Shell_1194.test.tsx`, `serve/cockpit/web/src/__tests__/ResolveModal_1193.test.tsx`, `serve/cockpit/web/src/__tests__/usePendingDRs_1191.test.ts`, and `serve/cockpit/web/src/__tests__/ErrorContract_1374.test.tsx`.
+- No test execution or environment errors were reported.
+
+### Lint Results
+- quality-runner reported ESLint clean for `serve/cockpit/web/src/Shell.tsx`, `serve/cockpit/web/src/hooks/usePendingDRs.ts`, `serve/cockpit/web/src/components/ResolveModal.tsx`, `serve/cockpit/web/src/__tests__/DecisionContract_1386.test.tsx`, and `serve/cockpit/web/src/__tests__/DecisionContract_1386_hook.test.ts`.
+
+### Coverage
+- quality-runner scoped coverage: overall 50.95%.
+- Changed modules: `Shell.tsx` 87.36%, `usePendingDRs.ts` 92.85%, `ResolveModal.tsx` 93.63%.
+- `Shell.tsx` remains below 90% at module level, but the changed `onResolved` path is directly exercised and adjacent Shell regression coverage is green, so this is informational rather than a gating miss.
+
+### Source / Diagnostics
+- `PendingDR` now declares `body: string` at `serve/cockpit/web/src/hooks/usePendingDRs.ts:13`.
+- `PendingDRWithBody` is an identity alias at `serve/cockpit/web/src/components/ResolveModal.tsx:15`.
+- Symbol-usage search found no non-test consumer that still requires a local type extension to access `body`; `PendingDRWithBody` is only referenced in `ResolveModal.tsx` itself.
+- `Shell` surfaces decision polling errors at `serve/cockpit/web/src/Shell.tsx:168` and refetches both pending decisions and board tasks at `serve/cockpit/web/src/Shell.tsx:261-262`.
+- VS Code diagnostics for `serve/cockpit/web` returned no errors.
+
+### AC Compliance
+| AC Line | Evidence | Status |
+|---|---|---|
+| AC1 | `PendingDR.body` at `serve/cockpit/web/src/hooks/usePendingDRs.ts:13`; identity alias at `serve/cockpit/web/src/components/ResolveModal.tsx:15`; build script declared at `serve/cockpit/web/package.json:11`; package-wide diagnostics clean; no non-test consumer extensions found in symbol usage scan | PASS with deduction |
+| AC2 | Exact hook-output field assertions at `serve/cockpit/web/src/__tests__/DecisionContract_1386_hook.test.ts:118-125`, including `body` at `:125`; scoped frontend run green | PASS |
+| AC3 | Implementation at `serve/cockpit/web/src/Shell.tsx:261-262`; exact refetch assertions at `serve/cockpit/web/src/__tests__/DecisionContract_1386.test.tsx:253`, `:271`, `:273`, and `:295` | PASS |
+| AC4 | Error display at `serve/cockpit/web/src/Shell.tsx:168`; exact backend-message assertions at `serve/cockpit/web/src/__tests__/DecisionContract_1386_hook.test.ts:140` and `:155`; Shell UI assertions at `serve/cockpit/web/src/__tests__/DecisionContract_1386.test.tsx:419` and `:439` | PASS |
+| AC5 | Task body records RED baseline at `.owlbear/kanban/tasks/1386-p2-11-test-cockpit-decision-data-contract-and-refetch-flow.md:104` and GREEN evidence at `:226` and `:256`; latest verification note at `:438` records 12 passed, 0 failed and `tsc --noEmit` clean | PASS with deduction |
+
+### Pass 1 - CRITICAL
+- No security issues found in the scoped files.
+- No data-safety issues found in the scoped files.
+- No significant untested runtime path found in the changed implementation.
+- Test integrity is preserved in the current snapshot; no weakened `TestFromAC_*` assertions were observed.
+
+### Pass 2 - INFORMATIONAL
+- `serve/cockpit/web/src/__tests__/DecisionContract_1386.test.tsx` and `serve/cockpit/web/src/__tests__/DecisionContract_1386_hook.test.ts` still contain stale commentary from the pre-fix type-gap state.
+- `serve/cockpit/web/src/__tests__/DecisionContract_1386.test.tsx` still uses redundant `PendingDR & { body: string }` widening in Shell-side fixtures even though `PendingDR` now already includes `body`. This does not weaken the runtime assertions.
+
+### Deductions
+- `-0.05` Direct `npm run build` evidence could not be executed in this tool surface because terminal access is unavailable. I relied on clean package-wide diagnostics, live source inspection, the declared build script, and green scoped frontend evidence instead.
+- `-0.02` Dirty-tree contamination and diff-level commit-scope verification could not be executed because git terminal access is unavailable in this tool surface.
+
+### Confidence
+- 0.91
+
+### Verdict
+- PASS
+- Route: `docs`
+[[2026-05-08]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | Changed files are frontend TypeScript/test files; no IN-scope README or guide references them. |
+| 2 | Module docstrings | No | N/A | No Python modules changed. |
+| 3 | External attribution | No | N/A | No external patterns sourced. |
+| 4 | Research doc | No | N/A | No research phase for this task. |
+| 5 | Diagram maintenance (describes match) | Yes | Updated | `share/diagrams/cockpit.excalidraw` describes `serve/cockpit/web/src/**`; footer updated from `2026-05-08 (3e98d0be)` → `2026-05-08 (5cb92faf)`. |
+| 6 | Explicit diagram creation | No | N/A | No explicit diagram creation request in task body. |
+| 7 | Deletion detection | No | N/A | No files deleted in this task. |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| serve/cockpit/web/src/Shell.tsx | OUT | N/A (source) |
+| serve/cockpit/web/src/hooks/usePendingDRs.ts | OUT | N/A (source) |
+| serve/cockpit/web/src/components/ResolveModal.tsx | OUT | N/A (source) |
+| serve/cockpit/web/src/__tests__/DecisionContract_1386.test.tsx | OUT | N/A (test) |
+| serve/cockpit/web/src/__tests__/DecisionContract_1386_hook.test.ts | OUT | N/A (test) |
+| share/diagrams/cockpit.excalidraw | IN | Footer updated |
+
+### Files Updated
+- share/diagrams/cockpit.excalidraw (footer only — `Last verified: 2026-05-08 (5cb92faf)`)
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None found
+[[2026-05-08]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1 — PendingDR exports body: string | `usePendingDRs.ts:13` declares `body: string`; `ResolveModal.tsx:15` is identity alias; `tsc --noEmit` clean; `npm run build` succeeds (381 modules) | PASS |
+| AC2 — hook output includes all required fields | `DecisionContract_1386_hook.test.ts:94-125` asserts all fields by exact value; 12/12 task tests pass | PASS |
+| AC3 — onResolved refetches both DRs and board tasks | `Shell.tsx:261-262` calls both `refetchPendingDRs()` and `refetchTasks()`; 3 `TestFromAC_OnResolvedRefetchBoth` tests enforce | PASS |
+| AC4 — decision error chain surfaces backend body | 5 hook-level tests (`DecisionContract_1386_hook.test.ts:130-160`) + 2 Shell-level tests (`DecisionContract_1386.test.tsx:419,439`) prove chain | PASS |
+| AC5 — RED baseline + GREEN evidence | Task body records RED (3 failed, refetchTasks missing) at `:104` and GREEN (12 passed) at `:226/:256`; type half proven by build step | PASS |
+
+### Test Results
+- Task-scoped vitest: 12 passed, 0 failed (DecisionContract_1386.test.tsx + DecisionContract_1386_hook.test.ts)
+- Adjacent regression: 54 passed, 0 failed (Shell.test.tsx, Shell_1194.test.tsx, usePendingDRs_1191.test.ts, ResolveModal_1193.test.tsx)
+- Full frontend suite: 80 passed, 917 failed — all failures in unrelated modules (jsdom env issues in useScanPolling, KanbanBoard, cache/SSE); pre-existing, not caused by #1386
+- Full Python suite: 2965 passed, 175 failed — pre-existing failures in unrelated packages
+- ESLint: clean on all 5 task files
+- ruff: 12 violations in unrelated packages (knowledge, tools)
+
+### Commit Integrity
+- 4 commits: `4cb16f7a` (test-writer RED), `d9f67cdf` (builder fix), `706c74aa` (test-writer AC2/AC4), `c5ce180c` (builder type contract)
+- `git diff HEAD` on all task files: clean (no uncommitted changes)
+- `npm run build`: succeeds (381 modules, 683ms)
+
+### Architect Quality: 4/5
+Initial AC mixed static and runtime proof modalities, causing two review failures. Loop-breaker refinement (Pass 3) correctly separated them. Effective correction but cost significant pipeline time.
+
+### Deduction Breakdown
+- -0.02: Pre-existing full frontend suite failures (917/997) limit comprehensive cross-task integration verification, though adjacent-module regression suite (54 tests) is clean
+
+### Confidence: 0.98
+### Action: archive

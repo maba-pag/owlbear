@@ -1,10 +1,10 @@
 ---
 id: 1435
 title: Add pre-advance commit verification rule to r-pipeline-protocol
-status: in-progress
+status: review
 priority: important
 created: 2026-05-08T06:58:54.587335+00:00
-updated: 2026-05-08T09:21:05.068695+00:00
+updated: 2026-05-08T13:12:55.890266+00:00
 tags:
 - pipeline
 - ws-protocol
@@ -132,3 +132,21 @@ P3: Verification by diff comparison of modified SKILL.md (td:0)
 |---|-------------|----------------|---------|----------|
 | 1 | builder | Update the `Pre-advance verification` table to match task 1435's refined contract: add `serve/*/tests/` to test-writer, replace builder `serve/*/src/` with `serve/` and `share/`, remove stale `share/README.md`, add `.owlbear/sources/` to doc-writer, and add auditor `.owlbear/kanban/` | `share/skills/r-pipeline-protocol/SKILL.md` | AC line 25; refinement lines 48-50; live rows 246-249 |
 | 2 | builder | Re-run closeout evidence against the current 1435 AC instead of the earlier #1412 contract, then commit the actual `SKILL.md` change before returning to review | `share/skills/r-pipeline-protocol/SKILL.md`; `.owlbear/kanban/tasks/1435-add-pre-advance-commit-verification-rule-to-r-pipeline-protocol.md` | Builder note line 68 and live artifact mismatch |
+[[2026-05-08]]
+## Builder Notes
+- Implementation: updated `share/skills/r-pipeline-protocol/SKILL.md` in §4 Closing → Who Commits What → Rules.
+- Fixes applied: aligned the **Pre-advance verification** domain-path table to refined AC by:
+  - adding test-writer `serve/*/tests/`
+  - replacing builder `serve/*/src/` with `serve/` and `share/`
+  - updating doc-writer paths to `README.md`, `README-consumer.md`, `SECURITY.md`, `setup/*.md`, `serve/*/README.md`, `.owlbear/sources/`
+  - adding auditor `.owlbear/kanban/`
+- Tests: 0 executed (td:0 docs-only task).
+- Coverage: N/A (no executable module touched).
+- Lint: quality-runner scoped markdownlint clean (exit 0).
+- Evidence summary: AC P1/P2/P3 now match live SKILL.md table and rule text; mismatch called out in review is resolved.
+- Commit: `dfcd2eec` (`docs: align pre-advance pathspec table (#1435, builder)`), 1 file changed.
+
+### Post-task Reflection
+- Reviewer evidence was precise; targeted the exact stale row set and prevented over-editing.
+- For td:0 protocol updates, in-file AC diff validation first avoids false “already present” assumptions.
+- Keeping the change to a single table block minimized risk and preserved surrounding protocol semantics.

@@ -1,10 +1,10 @@
 ---
 id: 1422
 title: 'P1-01: Test — verify doc-writer quality redesign AC'
-status: todo
+status: backlog
 priority: needed
 created: 2026-05-08T00:32:15.467895+00:00
-updated: 2026-05-08T09:12:35.552988+00:00
+updated: 2026-05-08T13:10:01.251248+00:00
 tags:
 - phase-1
 - scope:shared
@@ -184,3 +184,97 @@ Architecture review complete. AC1 refined with behavior-level discriminators fro
 | 1 | test-writer | Add an exact-cardinality assertion for `### Item N:` headings and a table-shape assertion that fails on bullet-based mapping prose. | `tests/test_doc_writer_quality_1422.py` | Refined AC1 at `.owlbear/kanban/tasks/1422-p1-01-test-verify-doc-writer-quality-redesign-ac.md:54-68`; current loose checks at `tests/test_doc_writer_quality_1422.py:15`, `:21`, `:202-233`; live bullets at `share/skills/w-doc-update/SKILL.md:26-29` |
 | 2 | test-writer | Expand negative coverage so AC1/AC4 fail on any Diagram/Docstring/old item 5/6 reference in the relevant surface, not just legacy item names or Item 5/6 headings. | `tests/test_doc_writer_quality_1422.py` | Current negative checks only at `tests/test_doc_writer_quality_1422.py:28`, `:34`, `:140-162`, `:227-233` |
 | 3 | test-writer | Replace the split TODO marker checks with one exact-line assertion or regex for `> **TODO:** {category} — {description} [#{id}]`. | `tests/test_doc_writer_quality_1422.py` | Current proof fragmented at `tests/test_doc_writer_quality_1422.py:170-194`; exact live contract line at `share/skills/w-doc-update/SKILL.md:73` |
+[[2026-05-08]]
+## Test-Writer Notes
+- Retry cycle (Step 1b.1): reviewer-cited gaps addressed, all new tests pass against current correct implementation.
+- Test file: tests/test_doc_writer_quality_1422.py
+- Prior state: 42 tests (all passing) — 5 tests were already added since the review cycle (test_checklist_exactly_four_items, TestFromAC_ConventionMappingTable ×3, test_no_impact_fast_path_present)
+- New tests added (3): 
+  - `test_no_diagram_in_any_checklist_heading` (TestFromAC_ChecklistItemNames) — Follow-up 2: bans "Diagram" in any `### Item N:` heading, not just legacy strings
+  - `test_no_item5_prose_reference` (TestFromAC_NoOldDiagramItems) — Follow-up 2: bans `\bItem 5\b` anywhere in prose/headings (beyond just heading format)
+  - `test_no_item6_prose_reference` (TestFromAC_NoOldDiagramItems) — Follow-up 2: bans `\bItem 6\b` anywhere in prose/headings
+- Total: 45 tests, all PASS
+- Follow-up 1 (cardinality + table-shape): already addressed by test_checklist_exactly_four_items and TestFromAC_ConventionMappingTable ×3 (added before this retry)
+- Follow-up 2 (expanded negatives): addressed by 3 new tests above
+- Follow-up 3 (exact TODO format): test_todo_marker_complete_template already provides the exact-line assertion; split tests remain as complementary coverage
+- ruff: 0 violations
+- Builder skip: test-only retry, implementation already correct; advance directly to review
+- Commit: 5cb92faf
+[[2026-05-08]]
+## Builder Notes
+- Implementation: no files changed (non-implementation pass-through; task scope is test-only)
+- Tests: 45 passed from tests/test_doc_writer_quality_1422.py, 0 failed, 0 skipped
+- Coverage: N/A for markdown/test-content validation task (no instrumented source module)
+- ruff: clean (0 violations)
+- Approach: Confirmed test-writer retry notes and executed fresh scoped quality-runner gate before handoff.
+- Evidence summary: quality-runner reported `failed: []`, `clean: true`, `pytest: 0`, `ruff: 0` for task-scoped suite.
+- Fixes applied: none
+[[2026-05-08]]
+## Review Evidence
+### Test Results
+- pytest: 45 passed, 0 failed (`tests/test_doc_writer_quality_1422.py`) via `quality-runner`
+
+### Lint
+- ruff: 0 violations on `tests/test_doc_writer_quality_1422.py` via `quality-runner`
+
+### Coverage
+- N/A. `quality-runner` reported `coverage_modules=[]` and no instrumentable source-module scope for this markdown-artifact task.
+
+### Pass 1 — Critical
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---|---|---|---|
+| AC1 refined mapping row (`.owlbear/kanban/tasks/1422-p1-01-test-verify-doc-writer-quality-redesign-ac.md:58`) | `test_convention_mapping_serve_pkg_pattern`, `test_convention_mapping_serve_pkg_to_readme`, `test_convention_mapping_is_table` | No. The live skill contains the required `serve/{pkg}/src/**` row at `share/skills/w-doc-update/SKILL.md:30`, but the suite only asserts generic `serve/{pkg}` presence at `tests/test_doc_writer_quality_1422.py:17`, loose `serve/{pkg}.*README` at `tests/test_doc_writer_quality_1422.py:24`, and generic table presence at `tests/test_doc_writer_quality_1422.py:357`. `grep_search` found no `src/**` match anywhere in `tests/test_doc_writer_quality_1422.py`, so removing the `src/**` selector while leaving another `serve/{pkg}`→README row would stay green. | MISSING |
+| AC1 gate + no-impact semantics (`.owlbear/kanban/tasks/1422-p1-01-test-verify-doc-writer-quality-redesign-ac.md:68-69`) | `test_gate_rule_task_caused_content_blocks`, `test_gate_rule_preexisting_content_passes`, `test_no_impact_fast_path_present` | No. The live skill states `"no docs impact" with evidence` at `share/skills/w-doc-update/SKILL.md:37` and explicit block/pass semantics at `share/skills/w-doc-update/SKILL.md:91-92`, but the suite only token-checks `task.caused|task.introduced|task.content` at `tests/test_doc_writer_quality_1422.py:74`, `pre.existing` at `tests/test_doc_writer_quality_1422.py:80`, and bare `"no docs impact"` presence at `tests/test_doc_writer_quality_1422.py:342`. `grep_search` found no `with evidence and advance` match in the test file. | LAX |
+| AC2 | `TestFromAC_DocWriterAgentNoDiagrams` | Yes. `grep_search` found 0 `diagram|excalidraw` matches in `share/agents/doc-writer.agent.md`, and the scoped suite stayed green. | COVERED |
+| AC3 | `TestFromAC_DocAuditPromptContent` | Yes. Required prompt sections are present at `.owlbear/prompts/doc-audit.prompt.md:46`, `:61`, `:69`, and `:77`, and the scoped suite stayed green. | COVERED |
+| AC4 | `TestFromAC_NoOldDiagramItems` | Yes. `grep_search` found 0 `Item 5|Item 6` matches in `share/skills/w-doc-update/SKILL.md`, and the scoped suite stayed green. | COVERED |
+| AC5 | `test_todo_marker_complete_template` + `TestFromAC_TodoMarkerFormat` | Yes. The exact template is present at `share/skills/w-doc-update/SKILL.md:76`, and the suite now pins it with `test_todo_marker_complete_template` at `tests/test_doc_writer_quality_1422.py:220-222`. | COVERED |
+
+#### Security Review
+- No issues. Scope is markdown artifacts plus file-content assertions only.
+
+#### Test Integrity
+- No live evidence of builder-weakened or builder-removed `TestFromAC_*` assertions in this builder-skip cycle.
+- Commit presence for the reported test-writer hashes was confirmed in `.git/logs/HEAD:2268` (`db7f17e7`) and `.git/logs/HEAD:2286` (`5cb92faf`), but I could not reconstruct a full additive diff or run a dirty-tree overlap check in this tool surface. Small confidence deduction only.
+
+#### Test Quality
+| Dimension | Rating | Evidence |
+|---|---|---|
+| Assertion specificity | WEAK | The suite does not directly assert the required `src/**` selector (`tests/test_doc_writer_quality_1422.py:17`, `:24`, `:357`) and only token-checks the gate / no-impact semantics (`:74`, `:80`, `:342`). |
+| Negative / exclusion coverage | ADEQUATE | AC2 and AC4 exclusions are enforced by direct whole-file absence checks and remained green. |
+| Manual mutation reasoning | WEAK | Removing the `src/**` token from `share/skills/w-doc-update/SKILL.md:30` while leaving another `serve/{pkg}`→README row would keep the suite green. Likewise, weakening `share/skills/w-doc-update/SKILL.md:37` to drop `with evidence` or preserving the words `task-caused` / `pre-existing` while changing the actual pass/block semantics would not trip the current assertions. |
+| Test independence | STRONG | Tests are isolated `Path.read_text()` assertions with no shared mutable state. |
+| Descriptive names | STRONG | Test names remain AC-shaped and readable. |
+
+#### Data Safety
+- No issues.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---|---|---|---|
+| AC1 refined (`.owlbear/kanban/tasks/1422-p1-01-test-verify-doc-writer-quality-redesign-ac.md:58`, `:68-69`) | Live skill satisfies the child contract at `share/skills/w-doc-update/SKILL.md:30`, `:37`, and `:91-92`, but current proof is incomplete: no `src/**` matches in `tests/test_doc_writer_quality_1422.py`, and semantic clauses are only token-checked at `:74`, `:80`, and `:342`. | `TestFromAC_DocUpdateSkillContent`, `TestFromAC_ConventionMappingTable`, `test_no_impact_fast_path_present` | FAIL |
+| AC2 | `grep_search` found 0 `diagram|excalidraw` matches in `share/agents/doc-writer.agent.md`; scoped suite green. | `TestFromAC_DocWriterAgentNoDiagrams` | PASS |
+| AC3 | Required sections present at `.owlbear/prompts/doc-audit.prompt.md:46`, `:61`, `:69`, `:77`; scoped suite green. | `TestFromAC_DocAuditPromptContent` | PASS |
+| AC4 | `grep_search` found 0 `Item 5|Item 6` matches in `share/skills/w-doc-update/SKILL.md`; scoped suite green. | `TestFromAC_NoOldDiagramItems` | PASS |
+| AC5 | Exact TODO template present at `share/skills/w-doc-update/SKILL.md:76` and directly asserted at `tests/test_doc_writer_quality_1422.py:220-222`. | `TestFromAC_TodoMarkerFormat` | PASS |
+
+### Informational
+- This is the second review cycle on child task `#1422`: an existing `## Review Evidence` section is already present at `.owlbear/kanban/tasks/1422-p1-01-test-verify-doc-writer-quality-redesign-ac.md:141`.
+- Parent task `#1421` later tightened AC1 further to a five-row mapping table at `.owlbear/kanban/tasks/1421-doc-writer-quality-redesign-honest-verification-doc-audit-revision.md:384-392`. I did not need that broader parent contract to fail this child task: the child task’s own refined AC already requires the missing `src/**` proof and the under-proved gate / fast-path semantics.
+
+### Deductions
+- `-0.07` AC1 required `serve/{pkg}/src/**` mapping row is not directly asserted.
+- `-0.05` AC1 gate / no-impact semantics are only token-checked.
+- `-0.02` Dirty-tree overlap and full commit-diff reconstruction were unavailable in this reviewer tool surface.
+
+### Confidence: 0.86
+### Verdict: FAIL
+### Action
+- Reject to `backlog` under the loop-breaker rule. This is the second review failure on child task `#1422`, and the remaining blocker is AC1 proof quality / contract clarity rather than implementation correctness.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|---|---|---|---|
+| 1 | architect | Re-open child task `#1422` AC1 so the next retry contract requires a discriminating assertion for the `serve/{pkg}/src/**` mapping row, not generic `serve/{pkg}` / `README` presence checks. | `.owlbear/kanban/tasks/1422-p1-01-test-verify-doc-writer-quality-redesign-ac.md`, `tests/test_doc_writer_quality_1422.py`, `share/skills/w-doc-update/SKILL.md` | Child AC at task line `58`; live row at skill line `30`; current assertions at test lines `17`, `24`, and `357`; no `src/**` matches in the test file. |
+| 2 | architect | Rewrite the AC1 proof contract for gate and fast-path behavior so the next test-writer retry asserts `blocks`, `passes`, and `with evidence` semantics directly instead of token-presence regexes / substrings. | `.owlbear/kanban/tasks/1422-p1-01-test-verify-doc-writer-quality-redesign-ac.md`, `tests/test_doc_writer_quality_1422.py`, `share/skills/w-doc-update/SKILL.md` | Child AC at task lines `68-69`; live semantics at skill lines `37`, `91-92`; current checks at test lines `74`, `80`, and `342`; no `with evidence and advance` matches in the test file. |

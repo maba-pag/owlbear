@@ -1,10 +1,10 @@
 ---
 id: 1418
 title: Fix uv.lock exclusion in MegaLinter and add mcp-browser to ruff src
-status: in-progress
+status: backlog
 priority: needed
 created: 2026-05-07T23:29:04.456182+00:00
-updated: 2026-05-08T09:01:30.116361+00:00
+updated: 2026-05-08T12:14:48.064995+00:00
 tags:
 - scope:infra
 - type:config
@@ -114,3 +114,57 @@ APPROVED — config-only task, all td:0. Added missing AC for `.editorconfig` `[
 | 2 | builder | Add a `[uv.lock]` section with `max_line_length = unset` | `.editorconfig` | Grep for `^\[uv\.lock\]$` returned no matches; surrounding sections at `.editorconfig:31` and `.editorconfig:35` show no inserted block |
 | 3 | builder | Add `serve/mcp-browser/src` to `[tool.ruff] src` | `pyproject.toml` | `pyproject.toml:41-50` omits the entry; direct grep found no `serve/mcp-browser/src` |
 | 4 | builder | Run and record `uv run ruff check` after updating the Ruff source list | `pyproject.toml`, `serve/mcp-browser/src` | AC P2 remains unproven because the source-list change has not been made |
+[[2026-05-08]]
+## Builder Notes
+- Implementation: .mega-linter.yml, .editorconfig, pyproject.toml
+- Tests: 0 TestFromAC passed (td:0 config task; no tests applicable)
+- Coverage: not applicable (td:0)
+- ruff: clean (quality-runner scoped lint, exit code 0)
+- Approach: applied minimal config edits per reviewer Required Follow-up, then verified lint clean after adding serve/mcp-browser/src to Ruff src list.
+- Evidence summary:
+  - Removed `uv\.lock$` from `FILTER_REGEX_EXCLUDE` in `.mega-linter.yml`.
+  - Added `[uv.lock]` with `max_line_length = unset` in `.editorconfig`.
+  - Added `serve/mcp-browser/src` to `[tool.ruff].src` in `pyproject.toml`.
+  - quality-runner report: failed=[], clean=true, ruff=0.
+[[2026-05-08]]
+## Review Evidence
+### Test Results
+- quality-runner was used for lint verification only. No tests or coverage apply here because every AC line is td:0 and the task changes only config files.
+
+### Lint Results
+- Independent quality-runner workspace-root Ruff verification exits 1 with 29 violations in pre-existing files outside task scope, including `.owlbear/hooks/deny-*.py:26-29` (PLR0912), `seed/.owlbear/scripts/test-root.py:1,49,67,68,73,75` (INP001/PTH201/PLR2004/T201), and `serve/tools/src/.../test_root.py:46,64` (PTH201/D415).
+- Independent quality-runner scoped Ruff verification for `serve/mcp-browser/src` exits 0 with zero violations.
+- Conclusion: adding `serve/mcp-browser/src` introduces no new Ruff violations, but the literal workspace-root Ruff command named by AC P2 remains red on the current branch.
+
+### Coverage
+- Not applicable. All AC lines are td:0 and this task changes only config files.
+
+### Scoped Change Assessment
+- Live repository state matches the three file-edit ACs:
+  - `.mega-linter.yml:37` shows `FILTER_REGEX_EXCLUDE` without `uv.lock`.
+  - `.editorconfig:34-35` adds `[uv.lock]` and `max_line_length = unset`.
+  - `pyproject.toml:47` includes `"serve/mcp-browser/src"` in `[tool.ruff].src`.
+- Commit-log evidence shows a builder commit for this task: `abc38755e87a29ecc926e6d84d6d5b150b0e754f` recorded in `.git/logs/refs/heads/dev:2102`.
+- I could not perform a git-status dirty-tree contamination check in this tool surface because terminal or git-status access is unavailable; taking a small confidence deduction.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---|---|---|---|
+| P1: `uv.lock` is no longer excluded from MegaLinter's `FILTER_REGEX_EXCLUDE` | `.mega-linter.yml:37` shows the full regex and it no longer contains `uv.lock`. | n/a (td:0) | PASS |
+| P1: `.editorconfig` has a `[uv.lock]` section with `max_line_length = unset` | `.editorconfig:34` contains `[uv.lock]`; `.editorconfig:35` contains `max_line_length = unset`. | n/a (td:0) | PASS |
+| P1: `serve/mcp-browser/src` is listed in `[tool.ruff] src` in `pyproject.toml` | `pyproject.toml:47` contains `"serve/mcp-browser/src"`. | n/a (td:0) | PASS |
+| P2: `uv run ruff check` still passes with no new errors after adding mcp-browser src | Independent quality-runner workspace-root Ruff verification exits 1 with 29 unrelated pre-existing violations; scoped `serve/mcp-browser/src` Ruff verification exits 0 with zero violations. | n/a (td:0) | FAIL |
+
+### Deductions
+- This task body already contains one prior `## Review Evidence` section, so this is the second review cycle and the loop-breaker rule applies on FAIL.
+- Confidence that the current task satisfies the literal AC as written: 0.84.
+- Major deduction reason: AC P2 requires a workspace-root Ruff pass, but independent review evidence shows that command is red on the current branch for unrelated pre-existing violations. The task-scoped config change is clean, so the remaining problem is task-contract or baseline mismatch rather than builder implementation quality.
+
+### Verdict
+- FAIL. The three file-edit ACs are satisfied, but P2 is not satisfied as written because the workspace-root Ruff check still exits non-zero. Since this is the second review cycle and the remaining failure is a structural AC or baseline mismatch, route to backlog for architecture or task refinement rather than another builder retry.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Rewrite AC P2 so it matches task-scoped lint evidence or split the repo-wide Ruff baseline cleanup into a separate backlog task | `.owlbear/kanban/tasks/1418.md`, `pyproject.toml` | quality-runner report: workspace-root Ruff exit 1, scoped `serve/mcp-browser/src` exit 0 |
+| 2 | architect | Decide whether this task should require full-workspace Ruff green or only prove that adding `serve/mcp-browser/src` introduces no new Ruff violations | `.owlbear/kanban/tasks/1418.md` | AC P2 text conflicts with independent lint evidence on the current branch |

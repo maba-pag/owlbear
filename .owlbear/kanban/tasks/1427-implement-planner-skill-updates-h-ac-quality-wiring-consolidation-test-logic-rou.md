@@ -2,10 +2,10 @@
 id: 1427
 title: Implement planner skill updates — h-ac-quality wiring, consolidation-test
   logic, routing enforcement
-status: review
+status: docs
 priority: needed
 created: 2026-05-08T00:47:38.789879+00:00
-updated: 2026-05-08T09:23:06.831808+00:00
+updated: 2026-05-08T13:17:58.079769+00:00
 tags:
 - pipeline
 - ws-ac-quality
@@ -16,7 +16,7 @@ depends_on:
 - 1405
 blocked: false
 block_reason:
-claimed_at: 2026-05-08T09:23:06.831808+00:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -90,3 +90,148 @@ Verdict: APPROVE
 - Tests: N/A (td:0 non-implementation pass-through from test-writer).
 - Lint/Coverage: N/A (no source/test modifications).
 - Approach: validated existing artifacts against AC and advanced without unnecessary edits.
+[[2026-05-08]]
+## Review Evidence
+### Test Results
+- quality-runner skipped: td:0 artifact-only review. Scope is markdown/agent-skill files only and introduces no executable task-local test surface.
+
+### Lint Results
+- quality-runner skipped: review scope is `share/skills/w-task-decomposition/SKILL.md` and `share/agents/planner.agent.md`; no runnable Python/TS lint surface is owned by this task.
+
+### Coverage
+- N/A (td:0 artifact task).
+
+### Scope and Duplicate Evidence
+- First review cycle: no prior `## Review Evidence` section exists in this task file.
+- Current task body states the work was already present before builder pickup: `.owlbear/kanban/tasks/1427-implement-planner-skill-updates-h-ac-quality-wiring-consolidation-test-logic-rou.md:72` says the changes were already present in both scoped files, and `:81` says `Implementation: no code changes required.`
+- Archived task `#1405` is the same A2 deliverable: `.owlbear/kanban/archive/1405-a2-planner-skill-update-ac-drafting-via-h-ac-quality-consolidation-test-creation.md:2-5`.
+- That archived task explicitly created follow-up `#1427` during research at `.owlbear/kanban/archive/1405-a2-planner-skill-update-ac-drafting-via-h-ac-quality-consolidation-test-creation.md:56`, then recorded builder commits at `:103` and `:171`, passed review to docs at `:220`, and reached audit at `:257`.
+- Result: `#1427` has no independent implementation delta left to review. This is a stale duplicate child / routing defect, not a builder bug.
+
+### AC Compliance
+| AC Line | Evidence | Status |
+|---|---|---|
+| `w-task-decomposition/SKILL.md` Step 0 required_reading includes `h-ac-quality` | `share/skills/w-task-decomposition/SKILL.md:16` | PASS |
+| Durability Principles references `h-ac-quality` as authoritative expanded schema | `share/skills/w-task-decomposition/SKILL.md:75` | PASS |
+| Consolidation-test creation rule exists with required title/deps semantics | `share/skills/w-task-decomposition/SKILL.md:150`, `:152`, `:154` | PASS |
+| Step 6 explicitly prohibits creating tasks at `todo` status | `share/skills/w-task-decomposition/SKILL.md:148` | PASS |
+| `planner.agent.md` `<required_reading>` includes `h-ac-quality` | `share/agents/planner.agent.md:34` | PASS |
+| `planner.agent.md` `<critical_rules>` includes architect-only `todo` rule | `share/agents/planner.agent.md:42` | PASS |
+
+### Findings
+1. Duplicate/stale child task: archived `#1405` already implemented and archived the same A2 planner update, while `#1427` remained open and reached review with zero independent builder delta. Approving this task would rubber-stamp duplicate delivery rather than a fresh implementation.
+
+### Deductions
+- 0.08: task is structurally non-reviewable as a fresh builder deliverable because archived `#1405` already owns and completed the same scope.
+- 0.02: direct git diff / dirty-tree checks were unavailable in the current tool surface; verdict is anchored to kanban archive state plus live artifact inspection.
+
+### Verdict
+- FAIL -> backlog
+- Confidence: 0.88
+
+### Action
+- Rejecting to backlog for architect cleanup / re-scope. Do not send back to builder; the repository already contains the A2 deliverable under archived `#1405`.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Archive/close `#1427` as a duplicate of archived `#1405`, or rewrite `#1427` so it names a distinct unfinished deliverable before it re-enters the pipeline | `.owlbear/kanban/tasks/1427-implement-planner-skill-updates-h-ac-quality-wiring-consolidation-test-logic-rou.md`, `.owlbear/kanban/archive/1405-a2-planner-skill-update-ac-drafting-via-h-ac-quality-consolidation-test-creation.md` | Duplicate evidence at archived `#1405`: `:2-5`, `:56`, `:103`, `:171`, `:220`, `:257`; active `#1427`: `:72`, `:81` |
+| 2 | architect | If new planner work is still intended, create or retitle a task whose AC differ from archived `#1405`’s A2 contract instead of reusing the already-satisfied planner wiring scope | `share/skills/w-task-decomposition/SKILL.md`, `share/agents/planner.agent.md` | Archived `#1405` AC at `.owlbear/kanban/archive/1405-a2-planner-skill-update-ac-drafting-via-h-ac-quality-consolidation-test-creation.md:28-31` already match live artifacts at `share/skills/w-task-decomposition/SKILL.md:16`, `:75`, `:148`, `:150`, `:152`, `:154`, and `share/agents/planner.agent.md:34`, `:42` |
+[[2026-05-08]]
+## Architecture Review (Duplicate Closure)
+
+**Verdict: APPROVE (duplicate — fast-track closure)**
+
+All 6 AC lines are already satisfied in live workspace artifacts, delivered by archived parent #1405. This task is a stale duplicate child created during #1405's research phase but never rescoped after #1405 completed the identical deliverables.
+
+### AC Verification (confirmed against live files)
+| AC Line | File:Line | Status |
+|---|---|---|
+| Step 0 required_reading includes h-ac-quality | w-task-decomposition/SKILL.md:16 | SATISFIED |
+| Durability Principles references h-ac-quality | w-task-decomposition/SKILL.md:75 | SATISFIED |
+| Consolidation-test creation rule | w-task-decomposition/SKILL.md:148-155 | SATISFIED |
+| Step 6 prohibits todo status | w-task-decomposition/SKILL.md:148 | SATISFIED |
+| planner.agent.md required_reading includes h-ac-quality | planner.agent.md:34 | SATISFIED |
+| planner.agent.md critical_rules todo prohibition | planner.agent.md:42 | SATISFIED |
+
+### Evaluation
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | All changes scoped to planner skill/agent wiring |
+| Interface clarity | PASS | AC artifact-inspection verified |
+| Dependency correctness | PASS | Parent #1405 archived (prereq done) |
+| Module layering | PASS | .md files only |
+| TDD compliance | N/A | Non-implementation (agent/skill) |
+| KISS/YAGNI | PASS | No new changes needed |
+| Premise challenge | PASS — duplicate | Work already delivered under #1405 |
+| Pattern consistency | PASS | Existing patterns followed |
+| Security surface | PASS | No system boundaries |
+| Single domain | PASS | Agent/skill domain only |
+
+### Test Depth
+- All AC lines: td:0
+- Test-writer: SKIP
+
+### Challenge
+- Challenger: SKIPPED (all td:0)
+
+### Routing Note
+Duplicate of archived #1405. All AC pre-satisfied. Downstream agents (test-writer, builder, reviewer) should pass through with zero work.
+[[2026-05-08]]
+## Test-Writer Notes
+- All AC lines are (td:0) — test-writer skipped.
+- Task tagged `agent`; all 6 AC lines are non-implementation artifact-inspection checks (SKILL.md / .agent.md files only).
+- Latest Architecture Review (Duplicate Closure) explicitly routes: "Test-writer: SKIP".
+- Passing through to builder.
+[[2026-05-08]]
+## Builder Notes
+- Non-implementation task (td:0 artifact verification only) — no code changes needed.
+- Verified AC artifacts already present in scope files:
+  - `share/skills/w-task-decomposition/SKILL.md` includes `h-ac-quality` in Step 0 required reading and Durability Principles reference.
+  - `share/skills/w-task-decomposition/SKILL.md` includes consolidation-test creation rule and explicit prohibition on creating tasks at `todo`.
+  - `share/agents/planner.agent.md` includes `h-ac-quality` in `<required_reading>` and the architect-only `backlog→todo` rule in `<critical_rules>`.
+- Tests: N/A (td:0 non-implementation pass-through from test-writer).
+- Lint/Coverage: N/A (no source or test file changes).
+- Passing through to review.
+[[2026-05-08]]
+## Review Evidence
+### Test Results
+- quality-runner not applicable: td:0 artifact-only task. The AC covers only `share/skills/w-task-decomposition/SKILL.md` and `share/agents/planner.agent.md` and introduces no executable test surface.
+
+### Lint Results
+- quality-runner not applicable for td:0 artifact scope.
+- Editor diagnostics are clean for `share/skills/w-task-decomposition/SKILL.md` and `share/agents/planner.agent.md`.
+
+### Coverage
+- N/A (td:0 artifact task).
+
+### Scope and Duplicate Evaluation
+- This is the second review cycle: the prior `## Review Evidence` section begins at `.owlbear/kanban/tasks/1427-implement-planner-skill-updates-h-ac-quality-wiring-consolidation-test-logic-rou.md:94`.
+- The prior fail was a duplicate-task concern, but the latest binding refinement is `## Architecture Review (Duplicate Closure)` at `.owlbear/kanban/tasks/1427-implement-planner-skill-updates-h-ac-quality-wiring-consolidation-test-logic-rou.md:141`. That section states all AC are already satisfied and explicitly routes downstream agents to pass through with zero work at `:179`.
+- Duplicate ownership is verified directly in the archived parent deliverable: `.owlbear/kanban/archive/1405-a2-planner-skill-update-ac-drafting-via-h-ac-quality-consolidation-test-creation.md:28-32` contains materially equivalent AC, `:56` created follow-up `#1427`, `:103` and `:171` record the builder commits, and `:257` plus `:280` show the task reached audit and archive.
+- Active task history also shows the scoped artifacts were already present before builder pickup: `.owlbear/kanban/tasks/1427-implement-planner-skill-updates-h-ac-quality-wiring-consolidation-test-logic-rou.md:72` and `:81`.
+
+### AC Compliance
+| AC Line | Evidence | Status |
+|---|---|---|
+| `w-task-decomposition/SKILL.md` Step 0 required_reading includes `h-ac-quality` | `share/skills/w-task-decomposition/SKILL.md:16` | PASS |
+| `w-task-decomposition/SKILL.md` Durability Principles references `h-ac-quality` as the authoritative expanded schema | `share/skills/w-task-decomposition/SKILL.md:75` | PASS |
+| `w-task-decomposition/SKILL.md` contains the consolidation-test creation rule with required trigger/title/deps/status semantics | `share/skills/w-task-decomposition/SKILL.md:150`, `:152`, `:154`, `:155` | PASS |
+| `w-task-decomposition/SKILL.md` Step 6 explicitly prohibits creating tasks at `todo` status | `share/skills/w-task-decomposition/SKILL.md:148` | PASS |
+| `planner.agent.md` `<required_reading>` includes `h-ac-quality` | `share/agents/planner.agent.md:34` | PASS |
+| `planner.agent.md` `<critical_rules>` includes the architect-only `todo` rule | `share/agents/planner.agent.md:42` | PASS |
+
+### Findings
+- No AC violations found.
+- Informational: this task remains a stale duplicate of archived `#1405`, but the latest Architecture Review explicitly resolved that concern by converting the current cycle to duplicate-closure pass-through. Repeating the earlier fail would no longer track an unsatisfied AC.
+
+### Deductions
+- 0.04: td:0 artifact-only scope means there is no executable quality-runner evidence; the verdict relies on direct artifact inspection plus clean editor diagnostics.
+- 0.02: direct git diff / dirty-tree checks were unavailable in the current tool surface, so duplicate ownership is reconstructed from kanban archive evidence plus live file inspection.
+
+### Verdict
+- PASS -> docs
+- Confidence: 0.93
+
+### Action
+- Advancing to docs. Downstream handling should treat this as duplicate-closure pass-through unless the task is later rewritten to a distinct unfinished scope.

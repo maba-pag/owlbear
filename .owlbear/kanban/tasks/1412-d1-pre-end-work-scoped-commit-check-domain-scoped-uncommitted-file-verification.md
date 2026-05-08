@@ -1,10 +1,10 @@
 ---
 id: 1412
 title: 'D1: Pre-end_work scoped commit check — domain-scoped uncommitted file verification'
-status: review
+status: backlog
 priority: important
 created: 2026-05-07T23:16:25.281801+00:00
-updated: 2026-05-08T09:16:33.585442+00:00
+updated: 2026-05-08T12:37:28.475777+00:00
 tags:
 - pipeline
 - ws-protocol
@@ -181,3 +181,85 @@ P3 ("Verification by diff comparison of modified protocol file") is fulfilled by
 - Commit gate: domain-scoped check run before release (`git status --porcelain -- share/skills/r-pipeline-protocol/`), committed, then rechecked clean.
 - Commit: 3e98d0be (`docs: narrow builder commit-check domain to serve src paths (#1412, builder)`).
 - Evidence summary: protocol now enforces path-scoped pre-`end_work` verification with Builder mapped to `serve/*/src/`, aligning with task AC wording.
+[[2026-05-08]]
+## Review Evidence
+### Test Results
+- quality-runner scoped pytest on tests/test_pipeline_commit_check_1412.py: 8 passed, 0 failed
+
+### Lint
+- quality-runner scoped ruff on tests/test_pipeline_commit_check_1412.py: clean
+
+### Coverage
+- Not applicable. The changed artifact is share/skills/r-pipeline-protocol/SKILL.md, a markdown protocol file.
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---|---|---|---|
+| P1: r-pipeline-protocol updated with pre-end_work commit check requirement | test_pre_advance_verification_heading_exists | Yes. Removing the rule text would fail the assertion in tests/test_pipeline_commit_check_1412.py:56-60. | COVERED |
+| P2: Each agent verifies uncommitted files in its own file domain before calling end_work, including builder serve/*/src/ | test_builder_domain_paths_present | No. The live artifact is correct at share/skills/r-pipeline-protocol/SKILL.md:248, but the assertion at tests/test_pipeline_commit_check_1412.py:88 and message at :89 still accept any builder row containing serve/. A regression from serve/*/src/ back to broader serve/ would stay green. | LAX |
+| P2: Check is domain-scoped, not raw porcelain status over the whole tree | test_verification_command_uses_pathspec_syntax | Yes. The live rule requires a path-scoped porcelain status check with a pathspec separator at share/skills/r-pipeline-protocol/SKILL.md:251. | COVERED |
+| P2: The check happens before end_work, not as a hook | test_rule_placed_in_who_commits_what_section | Yes. The rule remains inside the Who Commits What section at share/skills/r-pipeline-protocol/SKILL.md:229-251 and the test asserts that placement at tests/test_pipeline_commit_check_1412.py:116-120. | COVERED |
+| P3: Verification by diff comparison of the modified protocol file | task-local file-content assertions against the modified protocol file | Adequate for this text-only task. The task-local suite reads the modified protocol file directly and this review rechecked the live artifact. | COVERED |
+
+#### Security Review
+- No issues. This task changes protocol text only and does not introduce secrets, execution surface, or input handling.
+
+#### Test Integrity
+| Original Test | Change Made | Assessment |
+|---|---|---|
+| tests/test_pipeline_commit_check_1412.py::test_builder_domain_paths_present | No new weakening is visible in the live file, but commit-specific ownership could not be reconstructed from the available tool surface | UNVERIFIABLE (non-gating) |
+
+#### Test Quality
+| Dimension | Rating | Evidence |
+|---|---|---|
+| Assertion specificity | WEAK | The matcher at tests/test_pipeline_commit_check_1412.py:88 and message at :89 accept broader serve/ rather than exact serve/*/src/. |
+| Negative/error-path coverage | ADEQUATE | The command-scope and placement clauses still have discriminating assertions that would fail if removed. |
+| Manual mutation reasoning | WEAK | Reverting the live builder row at share/skills/r-pipeline-protocol/SKILL.md:248 from serve/*/src/ to serve/ would still pass the scoped suite. |
+| Test independence | STRONG | Each test reads the artifact independently and does not share mutable state. |
+| Descriptive test names | STRONG | Test names map directly to the task AC clauses. |
+
+#### Data Safety
+- No issues.
+
+#### Implementation-Aware Gaps
+- The protocol artifact now satisfies the builder-domain requirement in the task and the parent brief. The remaining gap is proof quality: the task-local suite does not contain an assertion that would fail on a broader builder-domain mapping.
+
+#### Necessity Check
+- N/A. No new dependency, integration, or external capability was added.
+
+#### Builder Process Quality
+| Metric | Value |
+|---|---|
+| Builder Notes sections | 2 |
+| Approach variation | Yes. The retry narrowed the builder domain after the first review finding. |
+| Assessment | FRICTION |
+
+### Pass 2 — INFORMATIONAL
+- One prior Review Evidence section already exists in the task file at .owlbear/kanban/tasks/1412-d1-pre-end-work-scoped-commit-check-domain-scoped-uncommitted-file-verification.md:101. No architecture narrowing rewrote this concern out of scope.
+- Commit-diff and dirty-scope contamination checks could not be reconstructed with the available tool surface, so TestFromAC immutability carries a small confidence deduction.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---|---|---|---|
+| P1: r-pipeline-protocol updated with pre-end_work commit check requirement | The rule exists in share/skills/r-pipeline-protocol/SKILL.md:229-251. | test_pre_advance_verification_heading_exists | PASS |
+| P2: Each agent verifies uncommitted files in its own file domain before calling end_work: researcher (.owlbear/research/), test-writer (tests/), builder (serve/*/src/), doc-writer (docs), etc. | The task AC at .owlbear/kanban/tasks/1412-d1-pre-end-work-scoped-commit-check-domain-scoped-uncommitted-file-verification.md:26 and the parent brief at .owlbear/briefs/draft-pipeline-review-rethink/brief.md:50 and :115 require builder serve/*/src/. The live protocol row at share/skills/r-pipeline-protocol/SKILL.md:248 matches that contract. | test_builder_domain_paths_present | PASS |
+| P2: Check is domain-scoped, not raw porcelain status over the whole tree | The live rule at share/skills/r-pipeline-protocol/SKILL.md:251 requires a path-scoped porcelain status check with a pathspec separator. | test_verification_command_uses_pathspec_syntax | PASS |
+| P2: Protocol specifies the check happens before end_work, not as a hook | The live rule remains inside the Who Commits What section in share/skills/r-pipeline-protocol/SKILL.md:229-251. | test_rule_placed_in_who_commits_what_section | PASS |
+| P3: Verification by diff comparison of modified protocol file | The task-local tests read the modified protocol file directly and this review rechecked the live artifact. | tests/test_pipeline_commit_check_1412.py | PASS |
+
+### Deductions
+- -0.12: test_builder_domain_paths_present is non-discriminating and still accepts a broader serve/ match.
+- -0.03: builder/test ownership and dirty-scope contamination could not be fully reconstructed from git evidence in this tool surface.
+- -0.04: this is a second review cycle with the same remaining proof gap, so loop-breaker routing applies.
+
+### Confidence: .81
+### Verdict: FAIL
+### Action
+- Route to backlog. The implementation now satisfies the AC, but the task-owned TestFromAC still provides weak proof, and this is the second review cycle.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|---|---|---|---|
+| 1 | architect | Re-route the retry as a proof-only correction and write the retry contract so the builder-domain assertion requires exact serve/*/src/ and rejects broader serve/ matches | tests/test_pipeline_commit_check_1412.py; .owlbear/kanban/tasks/1412-d1-pre-end-work-scoped-commit-check-domain-scoped-uncommitted-file-verification.md | tests/test_pipeline_commit_check_1412.py:88-89 stay green on a broader serve/ mapping; task line 26 and brief lines 50 and 115 require serve/*/src/ |
+| 2 | architect | Preserve the current protocol text unless a new artifact defect is found; the remaining failure is proof quality, not the live protocol row | share/skills/r-pipeline-protocol/SKILL.md | The live builder row at share/skills/r-pipeline-protocol/SKILL.md:248 matches the task AC, and the latest builder retry is recorded at .owlbear/kanban/tasks/1412-d1-pre-end-work-scoped-commit-check-domain-scoped-uncommitted-file-verification.md:182 |

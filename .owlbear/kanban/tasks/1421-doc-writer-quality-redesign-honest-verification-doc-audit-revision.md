@@ -1,10 +1,10 @@
 ---
 id: 1421
 title: Doc-writer quality redesign — honest verification + doc-audit revision
-status: todo
+status: backlog
 priority: needed
 created: 2026-05-08T00:30:10.683534+00:00
-updated: 2026-05-08T09:20:34.475006+00:00
+updated: 2026-05-08T12:38:50.119827+00:00
 tags:
 - scope:shared
 - brief:doc-writer-quality
@@ -439,3 +439,100 @@ Existing tests for AC2–AC5 remain valid.
 ### Action Taken: AC1 tightened R3 — require full brief convention-mapping table (5 rows), restore cardinality test, add table-format assertion and complete TODO template assertion. Implementation needs table format + 2 additional mapping rows in skill. Test-writer needs 5 new/restored assertions.
 [[2026-05-08]]
 Architecture Review R3: APPROVE → todo. AC1 tightened to require full 5-row convention mapping TABLE from brief (not bullets), restore cardinality test, add table-format and complete TODO template assertions. Challenger accepted (confidence 0.29) — revised position to match brief's multi-row structure. AC2–AC5 unchanged (passed both reviews).
+[[2026-05-08]]
+## Test-Writer Notes
+- Retry (R3): added 5 tests addressing R3 architecture review gaps.
+- Test file: tests/test_doc_writer_quality_1422.py
+- New class: TestFromAC_ConventionMappingTable (3 tests — all FAIL)
+  - test_convention_mapping_is_table
+  - test_convention_mapping_has_setup_row
+  - test_convention_mapping_has_share_row
+- Restored to TestFromAC_DocUpdateSkillContent: test_checklist_exactly_four_items (PASS — restores removed regression guard)
+- Added to TestFromAC_TodoMarkerFormat: test_todo_marker_complete_template (PASS — validates exact template string present)
+- pytest: 39 passed, 3 failed (test_convention_mapping_is_table, test_convention_mapping_has_setup_row, test_convention_mapping_has_share_row)
+- ruff: clean
+- Note on 2 passing new tests: test_checklist_exactly_four_items and test_todo_marker_complete_template validate already-correct behavior per R3 arch guidance ("restore cardinality assertion", "add single-line TODO marker syntax assertion"). Current skill has 4 items and exact template — these tests protect against regression, not against current code. The 3 FAIL tests are the blocking gap the builder must fix.
+
+### AC Coverage (R3)
+| AC | Tests | Failing? |
+|----|-------|---------|
+| AC1 (R3): convention mapping TABLE with setup/**, share/** rows | test_convention_mapping_is_table, test_convention_mapping_has_setup_row, test_convention_mapping_has_share_row | YES — 3 FAIL |
+| AC1: cardinality == 4 | test_checklist_exactly_four_items | PASS (regression guard restored) |
+| AC5: complete TODO template | test_todo_marker_complete_template | PASS (regression guard restored) |
+| AC2–AC5: all prior tests | unchanged from prior retry | 37 PASS |
+[[2026-05-08]]
+## Builder Notes
+- Implementation: updated [share/skills/w-doc-update/SKILL.md](share/skills/w-doc-update/SKILL.md) Step 1 to use the required markdown convention-mapping table (5 rows) from Architecture Review R3.
+- Files changed: [share/skills/w-doc-update/SKILL.md](share/skills/w-doc-update/SKILL.md)
+- Tests (RED): quality-runner scoped run on [tests/test_doc_writer_quality_1422.py](tests/test_doc_writer_quality_1422.py) showed 39 passed / 3 failed (`test_convention_mapping_is_table`, `test_convention_mapping_has_setup_row`, `test_convention_mapping_has_share_row`).
+- Tests (GREEN): quality-runner scoped run on [tests/test_doc_writer_quality_1422.py](tests/test_doc_writer_quality_1422.py) showed 42 passed / 0 failed.
+- Coverage: N/A for this task scope (documentation/skill markdown change; no Python source module target in scoped run).
+- Ruff: clean (0 violations in scoped run).
+- Evidence summary: AC1 R3 gap was limited to table structure and missing setup/share mapping rows; replacing the bullet mapping with the required table resolved all failing TestFromAC checks without touching tests or unrelated files.
+- Commit: `d41dc0b4` — `fix: enforce R3 mapping table in doc-update skill (#1421, builder)`.
+[[2026-05-08]]
+## Review Evidence
+### Test Results
+- pytest: 45 passed, 0 failed in tests/test_doc_writer_quality_1422.py via quality-runner
+
+### Lint
+- ruff: clean for tests/test_doc_writer_quality_1422.py via quality-runner
+
+### Coverage
+- N/A. This task's deliverables are markdown, prompt, and agent artifacts; quality-runner reported no source-module coverage scope.
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Evidence | Verdict |
+|---|---|---|
+| AC1 refined mapping table | share/skills/w-doc-update/SKILL.md line 31 contains the required serve/{pkg}/pyproject.toml plus tests/** row, and line 34 contains the required public-interface plus README-consumer.md row. grep_search found no matches for pyproject.toml, README-consumer, or public interface changes in tests/test_doc_writer_quality_1422.py. | MISSING |
+| AC1 gate and fast-path semantics | share/skills/w-doc-update/SKILL.md line 37 requires "no docs impact" with evidence and advance, and lines 91-92 require explicit blocks-versus-passes semantics. tests/test_doc_writer_quality_1422.py lines 74, 80, and 342 only assert token presence. | LAX |
+| AC2 | grep_search found no diagram or excalidraw matches in share/agents/doc-writer.agent.md. | COVERED |
+| AC3 | .owlbear/prompts/doc-audit.prompt.md lines 46-78 contain TODO batch resolution, diagram ownership, and describes-based verification. | COVERED |
+| AC4 | grep_search found no Item 5 or Item 6 matches in share/skills/w-doc-update/SKILL.md. | COVERED |
+| AC5 | share/skills/w-doc-update/SKILL.md line 76 contains the exact TODO template, and tests/test_doc_writer_quality_1422.py line 220 asserts the full string. | COVERED |
+
+#### Security Review
+- No issues. Scope is markdown plus file-content assertions only.
+
+#### Test Integrity
+- No current evidence of weakened or removed TestFromAC assertions in the live file. test_checklist_exactly_four_items is present at tests/test_doc_writer_quality_1422.py line 28 and test_todo_marker_complete_template is present at line 220.
+- Commit-diff immutability and dirty-tree overlap checks were not available in this reviewer tool surface; confidence reduced slightly.
+
+#### Test Quality
+| Dimension | Rating | Evidence |
+|---|---|---|
+| Assertion specificity | WEAK | The suite does not pin the line-31 and line-34 mapping rows and only token-checks gate semantics. |
+| Negative / exclusion coverage | ADEQUATE | Legacy diagram and Item 5/6 exclusions are covered. |
+| Manual mutation reasoning | WEAK | Removing either untested mapping row or flipping the blocks-versus-passes wording would leave the suite green. |
+| Test independence | STRONG | Tests are isolated file-read assertions. |
+| Descriptive names | STRONG | Test names remain AC-aligned. |
+
+### AC Compliance
+| AC Line | Evidence | Status |
+|---|---|---|
+| AC1 (R3, td:2) | Latest R3 contract is in .owlbear/kanban/tasks/1421-doc-writer-quality-redesign-honest-verification-doc-audit-revision.md lines 381-397. The live implementation satisfies that contract at share/skills/w-doc-update/SKILL.md lines 28-92, but the current suite under-proves the row at line 31, the row at line 34, the gate semantics at lines 91-92, and the fast path at line 37. | FAIL |
+| AC2 (td:1) | No diagram or excalidraw matches in share/agents/doc-writer.agent.md. | PASS |
+| AC3 (td:1) | Present in .owlbear/prompts/doc-audit.prompt.md lines 46-78. | PASS |
+| AC4 (td:1) | No Item 5 or Item 6 matches in share/skills/w-doc-update/SKILL.md. | PASS |
+| AC5 (td:1) | Exact TODO template present at share/skills/w-doc-update/SKILL.md line 76 and fully asserted at tests/test_doc_writer_quality_1422.py line 220. | PASS |
+
+### Deductions
+- -0.06 missing AC1 proof for two required mapping rows
+- -0.04 semantic proof gap for gate and no-impact clauses
+- -0.03 dirty-tree and commit-diff verification unavailable in current reviewer tool surface
+
+### Confidence: 0.87
+### Verdict: FAIL
+### Action
+- Reject to backlog under the loop-breaker rule. Existing Review Evidence sections already appear in the task file at lines 96 and 288, so this is the third review failure and the implementation itself is not the blocker.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|---|---|---|---|
+| 1 | architect | Re-open the AC1 test contract so the suite asserts all five mapping-table rows, including the serve/{pkg}/pyproject.toml plus tests/** row and the public-interface plus README-consumer row. | .owlbear/kanban/tasks/1421-doc-writer-quality-redesign-honest-verification-doc-audit-revision.md, tests/test_doc_writer_quality_1422.py, share/skills/w-doc-update/SKILL.md | task lines 389 and 392; skill lines 31 and 34; no corresponding matches in tests/test_doc_writer_quality_1422.py |
+| 2 | architect | Require semantic assertions for gate behavior and the no-impact fast path, not token-presence regexes or substring checks. | tests/test_doc_writer_quality_1422.py, share/skills/w-doc-update/SKILL.md | tests/test_doc_writer_quality_1422.py lines 74, 80, and 342 versus share/skills/w-doc-update/SKILL.md lines 37 and 91-92 |
+
+### Summary
+- Current implementation appears aligned with the latest R3 content contract.
+- The blocker is proof quality: the green 45-test suite still under-proves AC1 in ways that can false-green on real contract regressions.
