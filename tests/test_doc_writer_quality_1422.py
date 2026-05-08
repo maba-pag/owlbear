@@ -171,6 +171,20 @@ class TestFromAC_NoOldDiagramItems:
             "Output template in w-doc-update must not contain a row 6 for diagram creation"
         )
 
+    def test_no_item5_prose_reference(self) -> None:
+        content = SKILL_DOC_UPDATE.read_text()
+        assert not re.search(r"\bItem 5\b", content), (
+            "SKILL.md must not contain any 'Item 5' reference in prose or headings "
+            "(old Diagram Maintenance item removed in v3 — ban extends beyond just heading format)"
+        )
+
+    def test_no_item6_prose_reference(self) -> None:
+        content = SKILL_DOC_UPDATE.read_text()
+        assert not re.search(r"\bItem 6\b", content), (
+            "SKILL.md must not contain any 'Item 6' reference in prose or headings "
+            "(old Explicit Diagram Creation item removed in v3 — ban extends beyond just heading format)"
+        )
+
 
 class TestFromAC_TodoMarkerFormat:
     """AC5: TODO marker format grep pattern works: > **TODO:** {category} — {description} [#{id}]"""
@@ -246,6 +260,16 @@ class TestFromAC_ChecklistItemNames:
         assert len(docstring_items) == 0, (
             f"SKILL.md must not have a docstring checklist item (out of scope per brief); "
             f"found: {docstring_items}"
+        )
+
+    def test_no_diagram_in_any_checklist_heading(self) -> None:
+        content = SKILL_DOC_UPDATE.read_text()
+        item_headings = re.findall(r"### Item \d+:.*", content)
+        diagram_items = [h for h in item_headings if re.search(r"[Dd]iagram", h)]
+        assert len(diagram_items) == 0, (
+            f"SKILL.md must not have any diagram-related checklist item heading "
+            f"(any 'Diagram*' word banned per refined AC1 — not just 'Diagram Maintenance'); "
+            f"found: {diagram_items}"
         )
 
     def test_item1_mentions_convention_mapping(self) -> None:
