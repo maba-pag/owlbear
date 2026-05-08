@@ -174,24 +174,26 @@ describe('TestFromAC_DecisionViewport', () => {
   })
 
   // ─── AC1 (td:2): Item rendering — age ─────────────────────────────────────
+  // AC1 requires age rendered in a dedicated data-testid="decision-age-{id}" element.
+  // Reading from whole-item textContent is not discriminating (other fields differ too).
 
-  it('renders a non-empty age string derived from the created timestamp', () => {
+  it('renders a non-empty age string in a dedicated decision-age-{id} element', () => {
     const { container } = renderViewport({ items: [DR_A] })
-    const item = container.querySelector('[data-testid="decision-item-dr-vp-001"]')!
-    // Age text must be present; exact format is builder's choice
-    expect(item.textContent?.trim().length).toBeGreaterThan(0)
+    const ageEl = container.querySelector('[data-testid="decision-age-dr-vp-001"]')
+    expect(ageEl).not.toBeNull()
+    expect(ageEl!.textContent?.trim().length).toBeGreaterThan(0)
   })
 
-  it('age string differs between items with different created timestamps', () => {
+  it('age string differs between items with different created timestamps (read from dedicated age elements)', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-05-08T12:00:00.000Z'))
     const recent: PendingDR = { ...DR_A, id: 'dr-recent', created: '2026-05-08T11:00:00.000Z' } // 1h
     const old: PendingDR = { ...DR_B, id: 'dr-old', created: '2026-05-07T12:00:00.000Z' } // 24h
     try {
       const { container } = renderViewport({ items: [recent, old] })
-      const recentAge = container.querySelector('[data-testid="decision-item-dr-recent"]')?.textContent ?? ''
-      const oldAge = container.querySelector('[data-testid="decision-item-dr-old"]')?.textContent ?? ''
-      // The two items have different ages — their displayed text must differ
+      const recentAge = container.querySelector('[data-testid="decision-age-dr-recent"]')?.textContent ?? ''
+      const oldAge = container.querySelector('[data-testid="decision-age-dr-old"]')?.textContent ?? ''
+      // Dedicated age elements must show different text — not whole-item textContent (discriminating proof)
       expect(recentAge).not.toBe(oldAge)
     } finally {
       vi.useRealTimers()
@@ -257,10 +259,14 @@ describe('TestFromAC_DecisionViewport', () => {
     }
   })
 
-  it('task-id reference element has no tabindex=-1 (must not be excluded from tab order)', () => {
-    const { container } = renderViewport({ items: [DR_A] })
-    const ref = container.querySelector('[data-testid="decision-task-ref-dr-vp-001"]')!
-    expect(ref.getAttribute('tabindex')).not.toBe('-1')
+  it('decision-item elements have no tabindex=-1 — both focusable semantics AND tab-reachability on the same element', () => {
+    // AC5 requires both assertions on the same decision-item-* element (not split across task-ref)
+    const { container } = renderViewport({ items: [DR_A, DR_B] })
+    const items = container.querySelectorAll('[data-testid^="decision-item-"]')
+    expect(items.length).toBe(2)
+    for (const item of Array.from(items)) {
+      expect(item.getAttribute('tabindex')).not.toBe('-1')
+    }
   })
 
   // ─── AC6 (td:1): Viewport-level error is user-visible ────────────────────

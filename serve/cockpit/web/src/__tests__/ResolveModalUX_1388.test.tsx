@@ -74,85 +74,79 @@ describe('TestFromAC_ResolveModalUX', () => {
   // Current code: bare labels, no p-text in fieldset → all FAIL
 
   it('approved option has a p-text description element structurally separate from its radio label', () => {
+    // AC2: scope to per-option container (data-testid="option-approved"), not shared fieldset parent
     const { container } = renderModal()
-    const selector = container.querySelector('[data-testid="response-selector"]')!
-    const approvedInput = selector.querySelector(
+    const optionContainer = container.querySelector('[data-testid="option-approved"]')
+    expect(optionContainer).not.toBeNull()
+    const approvedInput = optionContainer!.querySelector(
       'input[type="radio"][value="approved"]',
     ) as HTMLInputElement | null
     expect(approvedInput).not.toBeNull()
     const approvedLabel = approvedInput!.closest('label') ?? approvedInput!.parentElement!
-    const optionContainer = approvedLabel.parentElement!
-    const descEl = optionContainer.querySelector('p-text')
+    const descEl = optionContainer!.querySelector('p-text')
     expect(descEl).not.toBeNull()
     // Description must be outside the radio's label, not inside it
     expect(approvedLabel.contains(descEl)).toBe(false)
   })
 
   it('approved description p-text contains action-oriented content beyond the bare status token', () => {
+    // AC2: ≥2 words beyond the status token (word-count — not char-length)
     const { container } = renderModal()
-    const selector = container.querySelector('[data-testid="response-selector"]')!
-    const approvedInput = selector.querySelector(
-      'input[type="radio"][value="approved"]',
-    ) as HTMLInputElement | null
-    const approvedLabel = approvedInput!.closest('label') ?? approvedInput!.parentElement!
-    const optionContainer = approvedLabel.parentElement!
+    const optionContainer = container.querySelector('[data-testid="option-approved"]')!
     const descEl = optionContainer.querySelector('p-text')!
     const text = (descEl.textContent ?? '').replace(/\bapprove[d]?\b/gi, '').trim()
-    expect(text.length).toBeGreaterThan(4)
+    const wordCount = text.split(/\s+/).filter(Boolean).length
+    expect(wordCount).toBeGreaterThanOrEqual(2)
   })
 
   it('rejected option has a p-text description element structurally separate from its radio label', () => {
+    // AC2: scope to per-option container (data-testid="option-rejected"), not shared fieldset parent
     const { container } = renderModal()
-    const selector = container.querySelector('[data-testid="response-selector"]')!
-    const rejectedInput = selector.querySelector(
+    const optionContainer = container.querySelector('[data-testid="option-rejected"]')
+    expect(optionContainer).not.toBeNull()
+    const rejectedInput = optionContainer!.querySelector(
       'input[type="radio"][value="rejected"]',
     ) as HTMLInputElement | null
     expect(rejectedInput).not.toBeNull()
     const rejectedLabel = rejectedInput!.closest('label') ?? rejectedInput!.parentElement!
-    const optionContainer = rejectedLabel.parentElement!
-    const descEl = optionContainer.querySelector('p-text')
+    const descEl = optionContainer!.querySelector('p-text')
     expect(descEl).not.toBeNull()
     expect(rejectedLabel.contains(descEl)).toBe(false)
   })
 
   it('rejected description p-text contains action-oriented content beyond the bare status token', () => {
+    // AC2: ≥2 words beyond the status token (word-count — not char-length)
     const { container } = renderModal()
-    const selector = container.querySelector('[data-testid="response-selector"]')!
-    const rejectedInput = selector.querySelector(
-      'input[type="radio"][value="rejected"]',
-    ) as HTMLInputElement | null
-    const rejectedLabel = rejectedInput!.closest('label') ?? rejectedInput!.parentElement!
-    const optionContainer = rejectedLabel.parentElement!
+    const optionContainer = container.querySelector('[data-testid="option-rejected"]')!
     const descEl = optionContainer.querySelector('p-text')!
     const text = (descEl.textContent ?? '').replace(/\breject(?:ed)?\b/gi, '').trim()
-    expect(text.length).toBeGreaterThan(4)
+    const wordCount = text.split(/\s+/).filter(Boolean).length
+    expect(wordCount).toBeGreaterThanOrEqual(2)
   })
 
   it('needs-info option has a p-text description element structurally separate from its radio label', () => {
+    // AC2: scope to per-option container (data-testid="option-needs-info"), not shared fieldset parent
     const { container } = renderModal()
-    const selector = container.querySelector('[data-testid="response-selector"]')!
-    const needsInfoInput = selector.querySelector(
+    const optionContainer = container.querySelector('[data-testid="option-needs-info"]')
+    expect(optionContainer).not.toBeNull()
+    const needsInfoInput = optionContainer!.querySelector(
       'input[type="radio"][value="needs-info"]',
     ) as HTMLInputElement | null
     expect(needsInfoInput).not.toBeNull()
     const needsInfoLabel = needsInfoInput!.closest('label') ?? needsInfoInput!.parentElement!
-    const optionContainer = needsInfoLabel.parentElement!
-    const descEl = optionContainer.querySelector('p-text')
+    const descEl = optionContainer!.querySelector('p-text')
     expect(descEl).not.toBeNull()
     expect(needsInfoLabel.contains(descEl)).toBe(false)
   })
 
   it('needs-info description p-text contains action-oriented content beyond the bare status token', () => {
+    // AC2: ≥2 words beyond the status token (word-count — not char-length)
     const { container } = renderModal()
-    const selector = container.querySelector('[data-testid="response-selector"]')!
-    const needsInfoInput = selector.querySelector(
-      'input[type="radio"][value="needs-info"]',
-    ) as HTMLInputElement | null
-    const needsInfoLabel = needsInfoInput!.closest('label') ?? needsInfoInput!.parentElement!
-    const optionContainer = needsInfoLabel.parentElement!
+    const optionContainer = container.querySelector('[data-testid="option-needs-info"]')!
     const descEl = optionContainer.querySelector('p-text')!
     const text = (descEl.textContent ?? '').replace(/\bneeds?[-\s]info\b/gi, '').trim()
-    expect(text.length).toBeGreaterThan(4)
+    const wordCount = text.split(/\s+/).filter(Boolean).length
+    expect(wordCount).toBeGreaterThanOrEqual(2)
   })
 
   // ─── AC3 (td:2): No pre-selected choice; submit disabled until selection ──
