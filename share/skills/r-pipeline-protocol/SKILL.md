@@ -239,6 +239,17 @@ Rules:
 Rules:
 
 - **Dirty-tree tolerance.** Never refuse work because of uncommitted changes in the working tree. Other agents' crash residue or kanban task file edits are not your concern. Proceed with your task, stage only your own files, and commit normally. The shared working tree is always potentially dirty — that is expected.
+- **Pre-advance verification.** Before calling `end_work`, verify your own domain for uncommitted files using a path-scoped check:
+
+   | Agent | Domain paths to verify before `end_work` |
+   |-------|------------------------------------------|
+   | Researcher | `.owlbear/research/`, `.owlbear/sources/` |
+   | Test-writer | `tests/` |
+   | Builder | `serve/` |
+   | Doc-writer | `README.md`, `README-consumer.md`, `SECURITY.md`, `serve/*/README.md`, `share/README.md`, `setup/*.md` |
+
+   Use `git status --porcelain -- <domain-paths>` (with `--` pathspec separator). Do not use raw `git status --porcelain` for this check.
+   If files appear in your domain, self-heal: stage and commit those files, then continue and call `end_work`.
 - **Commit gates advance.** If you created or modified files, commit them BEFORE calling `end_work`. No commit → no advance. If you have no file deliverables (pass-through, reviewer, orchestrator), skip.
 - **Atomic single command.** Run stage + commit as one terminal invocation to prevent interleaving with concurrent agents: `git add <your-files> && git commit -m "type: description (#{id}, role)"`. Never split across separate commands.
 - **Scope to your own files.** Stage only files YOU created or modified in this task. Do not stage files from other agents or unrelated changes. Verify with `git diff --cached --name-only` if uncertain.
