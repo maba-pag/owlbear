@@ -1,10 +1,10 @@
 ---
 id: 1430
 title: 'P1-02: Directive rewrites in w-ideation-mediation/SKILL.md'
-status: review
+status: archived
 priority: needed
 created: 2026-05-08T01:00:48.467318+00:00
-updated: 2026-05-08T14:15:10.215124+00:00
+updated: 2026-05-08T15:33:53.964838+00:00
 tags:
 - phase-1
 - scope:shared
@@ -173,3 +173,130 @@ Architecture review complete. All criteria PASS. Removed stale dep #1429 (task r
 - ruff: skipped (no lintable source-code changes in scope).
 - Commit: `5400d210` (`docs: rewrite mediation narration directives (#1430, builder)`).
 - Evidence summary: required narration rewrites and `Narrate as` annotations now present; communication-patterns cross-reference added; technical routing names remain in dispatch lists, not as user-facing narration instructions.
+[[2026-05-08]]
+## Review Evidence
+### Test Results
+- quality-runner: not dispatched. td:0 markdown task with no task-scoped test artifact; this workspace's td:0 review path skips quality-runner because scoped mode requires non-empty `test_paths`.
+- pytest: skipped for the same reason.
+
+### Lint: skipped
+- td:0 markdown skill task; no runnable scoped lint surface through quality-runner.
+
+### Coverage: skipped
+- td:0 markdown skill task; no code module changed.
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+- Skipped. No `TestFromAC_*` classes exist and all AC lines were marked td:0 by Architecture Review.
+
+#### Security Review
+- No security issues in scope. The change surface is markdown narration guidance only.
+
+#### Test Integrity
+- Skipped. No task-scoped test file exists.
+
+#### Test Quality
+- Skipped. No task-scoped test file exists.
+
+#### Data Safety
+- No issues found in scope.
+
+#### Implementation-Aware Gaps
+- No issues found. The previously missing rewrites are now present in `share/skills/w-ideation-mediation/SKILL.md`:
+  - Disclosure Ladder now cross-references `h-ideation -> ## Communication Patterns` at line 40 and includes verbal cues / concrete `Narrate as:` examples at lines 50, 59-61, and 68-70.
+  - Step 1.5 now requires a user-benefit announcement at line 97 with a co-located example at line 99.
+  - Step 2 now requires a purpose-and-angle introduction at line 115 with a co-located example at line 117.
+  - Raw internal names remain only in technical routing lists at lines 101-104 and 120-123, not in the user-facing narration examples.
+
+#### Builder Process Quality
+| Metric | Value |
+|---|---|
+| Builder Notes sections | 2 |
+| Approach variation | Yes |
+| Assessment | CLEAN |
+
+### Pass 2 — INFORMATIONAL
+- One prior `## Review Evidence` section exists in the task body; the current file state resolves the previously reported content gaps.
+- Builder commit `5400d210` is present in `.git/logs/refs/heads/dev` and `.git/logs/HEAD`; direct diff inspection was not available from this tool surface, so changed-file scope was reconstructed from the task scope, builder notes, and direct artifact reads.
+- Dirty-tree contamination could not be checked without git-status access. Small confidence deduction only.
+- Step 2 line 118 still says "State the signal and selected roster explicitly." Brief Pair 2 treats explicit roster disclosure as acceptable when surfaced as user-visible review labels with purpose; current user-facing narration at line 117 satisfies that bar, so this remains informational rather than blocking.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---|---|---|---|
+| Step 1.5 directive rewritten: no longer instructs agent to name internal switching mechanism; instead instructs purpose-framed announcement (what's happening + why) | `share/skills/w-ideation-mediation/SKILL.md:97` rewrites the instruction to a user-benefit announcement and `:99` provides the concrete `Narrate as:` example. This aligns with the result-only wording in `.owlbear/briefs/draft-ideation-ux/brief.md:136-143` and `share/skills/h-ideation/SKILL.md:259-261`. | N/A (td:0) | PASS |
+| Step 2 directive rewritten: no longer instructs agent to enumerate panelist agent names; instead instructs purpose-framed introduction (which reviews + why those angles) | `share/skills/w-ideation-mediation/SKILL.md:115` instructs introduction by purpose and angle and `:117` gives the concrete example. User-facing narration uses review labels, while raw agent names sit only in technical routing at `:120-123`. This matches brief Pair 2 at `.owlbear/briefs/draft-ideation-ux/brief.md:144-150`. | N/A (td:0) | PASS |
+| Disclosure Ladder updated with verbal cues from h-ideation § Depth-Control Verbal Cues | `share/skills/w-ideation-mediation/SKILL.md:40` cross-references `h-ideation -> ## Communication Patterns`; `:59` and `:68` add the verbal cues; `:50`, `:61`, and `:70` add concrete `Narrate as:` phrasing. Source cues exist at `share/skills/h-ideation/SKILL.md:286-292`. | N/A (td:0) | PASS |
+| Each rewritten directive has a co-located `**Narrate as:**` annotation with a concrete example phrase | Disclosure Ladder `:50`, `:61`, `:70`; Step 1.5 `:99`; Step 2 `:117`. | N/A (td:0) | PASS |
+| Behavioral equivalence: same information reaches the user (which reviews, what's happening next) — only framing changes | Step 1.5 `:99` still tells the user what happens next and why; Step 2 `:117` still tells the user which reviews run and what each checks. The framing changes from internal mechanism / roster narration to purpose-first language. | N/A (td:0) | PASS |
+| Grep verification: `grep -n "M3.5\|O15\|ideation-architect\|ideation-security" share/skills/w-ideation-mediation/SKILL.md` — hits in narration guidance positions carry explanatory context or appear in technical routing (not user-facing phrasing) | Internal-name hits in `share/skills/w-ideation-mediation/SKILL.md:101-104` and `:120-123` are dispatch lists. User-facing `Narrate as:` lines at `:99` and `:117` use explanatory context rather than raw internal names. `O15` and `M3.5` hits remain in section headers / technical instructions, not user-facing narration. | N/A (td:0) | PASS |
+| References h-ideation § Communication Patterns for vocabulary (cross-reference, not duplication) | `share/skills/w-ideation-mediation/SKILL.md:40` explicitly references `h-ideation -> ## Communication Patterns`; the source section exists at `share/skills/h-ideation/SKILL.md:182`. | N/A (td:0) | PASS |
+
+### Deductions
+- -0.03 Dirty-tree contamination could not be checked with the available tool surface.
+- -0.02 Exact commit diff was not accessible; commit presence was verified via `.git/logs` and the scoped artifact was read directly.
+- -0.01 Step 2 retains "selected roster explicitly" wording at `share/skills/w-ideation-mediation/SKILL.md:118`, but the surrounding narration and brief guidance keep it within the allowed user-visible-review framing.
+
+### Confidence: .94
+### Verdict: PASS
+[[2026-05-08]]
+## Docs Gate
+
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | Changed files are SKILL.md (agent-executable, OUT of scope). No IN-scope prose docs reference the directive phrasing. |
+| 2 | Module docstrings | No | N/A | No Python modules changed. |
+| 3 | External attribution | No | N/A | No external repo patterns used; changes draw from existing h-ideation vocabulary. |
+| 4 | Research doc | No | N/A | No `.owlbear/research/` doc produced by this task. |
+| 5 | Diagram maintenance (describes match) | Yes | Updated | `share/diagrams/ideation.excalidraw` has `describes: share/skills/w-ideation-mediation/**, share/skills/h-ideation/**` — both changed files match. Footer updated to `Last verified: 2026-05-08 (a7a9a679)`. Commit: f72650aa. |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation request in task body. |
+| 7 | Deletion detection | No | N/A | No files deleted; no orphaned IN-scope docs detected. |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| share/skills/w-ideation-mediation/SKILL.md | OUT (agent-executable SKILL.md) | N/A — not edited by doc-writer |
+| share/skills/h-ideation/SKILL.md | OUT (agent-executable SKILL.md) | N/A — not edited by doc-writer |
+| share/diagrams/ideation.excalidraw | IN (share/diagrams/*.excalidraw) | Footer updated (Item 5 describes-match) |
+
+### Files Updated
+- share/diagrams/ideation.excalidraw (footer: 331993d7 → a7a9a679)
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no `.owlbear/scratch/1430-*` files existed)
+[[2026-05-08]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Step 1.5 directive rewritten | w-ideation-mediation/SKILL.md:97 purpose-framed announcement; :99 Narrate as example | PASS |
+| Step 2 directive rewritten | :115 purpose-and-angle introduction; :117 Narrate as example; raw names only in dispatch routing :120-123 | PASS |
+| Disclosure Ladder updated with verbal cues | :40 cross-ref to h-ideation Communication Patterns; :50, :59-61, :68-70 verbal cues and Narrate as examples | PASS |
+| Each directive has Narrate as annotation | :50, :61, :70, :99, :117 — five co-located annotations | PASS |
+| Behavioral equivalence | Step 1.5 still communicates what happens next + why; Step 2 still communicates which reviews + purpose. Framing changed, info preserved. | PASS |
+| Grep verification | All hits in section headers, dispatch routing lists, or technical instructions — none in user-facing narration lines | PASS |
+| References h-ideation Communication Patterns | :40 explicit cross-reference; source at h-ideation/SKILL.md:182 | PASS |
+
+### Test Results
+- pytest: 2972 passed, 178 failed (background debt — memory model, engine accessor, import errors), 0 attributable to this markdown-only task
+- vitest: 1109 passed, 0 failed
+- ruff: 12 violations (background debt in copilot_auth.py, test_root.py, test_test_root.py — none in task scope)
+- eslint: 4 violations (background — usePolling.ts, unused vars)
+
+### Architect Quality: 5/5
+Excellent AC: named exact lines to rewrite, specified the format (`**Narrate as:**`), provided a concrete grep verification command, and explicitly scoped behavioral equivalence. Clean implementation path with zero ambiguity.
+
+### Deduction Breakdown
+- No AC lines without evidence: 7/7 PASS → no deduction
+- No lint in task scope → no deduction
+- AC quality 5/5 → no deduction
+- Reviewer evidence present and detailed (PASS, .94) → no deduction
+- No task-scope test failures → no deduction
+- Builder commit 5400d210 verified → no deduction
+
+### Confidence: .98
+### Action: archive
