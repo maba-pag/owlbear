@@ -12,9 +12,7 @@ import {
 import type { PendingDR } from '../hooks/usePendingDRs'
 import { getResponseErrorMessage } from '../api/errorMessage'
 
-export interface PendingDRWithBody extends PendingDR {
-  body?: string
-}
+export type PendingDRWithBody = PendingDR
 
 export interface ResolveModalProps {
   dr: PendingDRWithBody | null

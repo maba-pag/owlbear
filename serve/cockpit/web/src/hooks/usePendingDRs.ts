@@ -10,6 +10,7 @@ export interface PendingDR {
   request_type: string
   created: string
   title: string
+  body: string
   body_preview: string
 }
 
