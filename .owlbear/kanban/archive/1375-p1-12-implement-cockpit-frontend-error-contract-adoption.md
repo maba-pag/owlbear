@@ -1,10 +1,10 @@
 ---
 id: 1375
 title: 'P1-12: Implement Cockpit frontend error-contract adoption'
-status: done
+status: archived
 priority: critical
 created: 2026-05-06T00:58:53.765221+00:00
-updated: 2026-05-08T01:01:41.711649+00:00
+updated: 2026-05-08T01:17:33.960486+00:00
 tags:
 - cockpit
 - audit-remediation
@@ -772,3 +772,43 @@ Architecture review Pass 3 (reviewer loop-breaker return). Root-caused the durab
 
 ### Scratch Files Cleaned
 - None
+[[2026-05-08]]
+## Audit
+
+### AC Verification
+| AC line | Evidence | Status |
+|---|---|---|
+| AC1: Frontend API calls parse and render the backend error envelope consistently (td:2) | Helper returns body-only at errorMessage.ts L25; consumers in KanbanBoard.tsx, ArchivalModal.tsx, useBoard.ts all use it; 90-pass reviewer scoped run green | PASS |
+| AC2: Board moves, archival, health, DR, repair, task-fetch show recoverable error states (td:2) | Task-scoped + adjacent suites green (67 in final reviewer run); code-path confirmed across 4 reviewer passes | PASS |
+| AC3: No backend error becomes silent no-op, false empty, or false health OK (td:2) | ErrorContract_1374 no-silent-error + false-OK sections green; useBoard_1261 health assertions green | PASS |
+| AC4: Retry/refetch affordances where recoverable (td:2) | Drag-drop 409 refetch (KanbanBoard_1229 L312); context-menu + archival 409 added (5db84201); architect accepted pattern-equivalence proof | PASS |
+| AC5: Health behavior from #1373 preserved (td:1) | useBoard_1261 health tests green (SSE open/connecting/closed) | PASS |
+| AC6: Tests from #1374 pass (td:0) | ErrorContract_1374.test.tsx: 20 passed in reviewer scoped run | PASS |
+| AC7: Board-load error body discrimination (td:2) | Live-path tests at KanbanBoard_1375 L385, L426 pass with real useBoard hook | PASS |
+| AC8: getResponseErrorMessage returns body without decoration (td:1) | Exact-equality AC8 tests (ArchivalModal_1375 L230, L241) pass; durable ArchivalModal_1241 AC12 green | PASS |
+
+### Test Results (Full Suite)
+- **Python:** 1919 passed, 45 failed — all failures in `serve/kanban/` engine tests (outside task scope; pre-existing engine debt)
+- **Frontend (Vitest):** 1046 passed, 2 failed:
+  - `Shell_1228_integration`: title-rendering issue, NOT attributable to #1375
+  - `Shell_1372::TestFromAC_ScanErrorDisplay`: assertion expects old fallback string `"Polling request failed with status 500"` but AC8 change returns body message directly → assertion stale, behavior correct
+- **Lint:** Python ruff: 12 violations in unrelated modules; Frontend ESLint: 1 rule-config error in usePolling.ts (pre-existing), 3 warning-level unused vars in test files
+
+### Shell_1372 Regression Analysis
+The AC8 fix (returning parsed body without decoration) changed `usePollingFetch`'s error message from `"Board scan... (Polling request failed with status 500)"` to `"Board scan encountered an error and could not complete."`. The `Shell_1372` test assertion at L479 checks `toContain('Polling request failed with status 500')` — now stale. The BEHAVIOR is correct (scan error IS displayed with the backend message, which is better). This is test-assertion staleness, not a behavioral regression.
+
+### Architect Quality
+Score: 4/5. Initial AC was adequate (6 lines, specific flows named). Task required 3 arch passes due to emergent race conditions and proof gaps — but refinements (AC7, AC8) were responsive and well-scoped. Builder guidance was actionable.
+
+### Deduction Breakdown
+| Criterion | Deduction |
+|---|---|
+| Full-suite test failure attributable to task (Shell_1372 assertion staleness) | -.05 |
+| **Total deductions** | **-.05** |
+
+### Confidence: 0.95
+
+### Action: ARCHIVE
+
+### Follow-up Required
+The `Shell_1372.test.tsx` L479 assertion needs updating to expect the body message (`"Board scan encountered an error and could not complete."`) instead of the old fallback (`"Polling request failed with status 500"`). This is a one-line assertion-string fix — test-curation scope.
