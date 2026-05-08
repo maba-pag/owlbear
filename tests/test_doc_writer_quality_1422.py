@@ -434,3 +434,15 @@ class TestFromAC_ConventionMappingTable:
         assert "advance" in step1, (
             "Step 1 no-impact fast path must say to 'advance' after writing 'no docs impact'"
         )
+
+    def test_convention_mapping_exact_src_row_coupled(self) -> None:
+        step1 = self._step1_section()
+        assert any(
+            "serve/{pkg}/src/**" in line and "serve/{pkg}/README.md" in line
+            for line in step1.splitlines()
+        ), (
+            "Convention mapping table must have a single row coupling "
+            "'serve/{pkg}/src/**' to 'serve/{pkg}/README.md' — "
+            "split checks on each token independently false-green when the src row "
+            "points to a different destination (R5 gap)"
+        )
