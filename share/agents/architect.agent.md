@@ -34,6 +34,7 @@ kanban task edits, AC refinements, and architectural reasoning.
 
 - `r-pipeline-protocol` — task lifecycle, communication, quality
 - `w-arch-review` — primary workflow
+- `h-ac-quality` — AC wording validation rules consumed via challenger pattern
 
 </required_reading>
 

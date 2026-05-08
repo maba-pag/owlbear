@@ -117,12 +117,16 @@ Build a comparison matrix from returned approaches across the split criteria. Se
 
 After Step 2.3 selection (when triggered), challenge APPROVE verdicts using the **challenger** subagent. This is mandatory for APPROVE (unless all AC lines are td:0 — see Step 2.1), optional for REFINE, skip for SPLIT/REJECT.
 
-Pass: task_id, proposed_verdict, reasoning, ac_lines, codebase_evidence, selected_or_hybrid_design (from Step 2.3), and research-doc reference. When Step 2.3 is skipped, selected_or_hybrid_design should capture the single-pass design being evaluated.
+Pass: task_id, proposed_verdict, reasoning, ac_lines, codebase_evidence, selected_or_hybrid_design (from Step 2.3), sibling_tasks (optional), and research-doc reference. When Step 2.3 is skipped, selected_or_hybrid_design should capture the single-pass design being evaluated.
+
+For AC wording quality, require challenger to validate AC lines using `h-ac-quality` rules and surface issues via `ac-quality` findings. For consolidation-test coverage, pass sibling task metadata so challenger can detect a `consolidation-test-gap` when there are 2 or more sibling implementation tasks under the same parent and no sibling consolidation-test task.
 
 | Challenger output | Architect action |
 |-------------------|------------------|
 | `proceed` + confidence ≥ Challenger threshold (`r-pipeline-protocol`) | Continue with original verdict |
 | `reconsider` OR confidence below threshold | Re-evaluate, may revise or justify override |
+| `ac-quality` | REFINE AC wording before approval |
+| `consolidation-test-gap` | Dispatch planner follow-up for consolidation-test coverage before approval |
 | `block` | Strong signal to reject to research; must provide rebuttal if overriding |
 
 The architect retains final authority.
