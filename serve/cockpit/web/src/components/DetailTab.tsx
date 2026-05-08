@@ -24,6 +24,9 @@ export interface TaskDetail {
   tags: string[]
   blocked: boolean
   block_reason: string | null
+  claimed: boolean
+  claimed_at: string | null
+  dep_status: string | null
   parent: number | null
   depends_on: number[]
 }
@@ -231,6 +234,9 @@ export default function DetailTab({ task, board, onTaskUpdated, onSelectTask, on
       <span data-testid="field-id">{t.id}</span>
       <span data-testid="field-status">{t.status}</span>
       <span data-testid="field-created">{t.created}</span>
+      <span data-testid="field-claimed">{String(t.claimed)}</span>
+      <span data-testid="field-claimed-at">{t.claimed_at ?? ''}</span>
+      <span data-testid="field-dep-status">{t.dep_status ?? ''}</span>
 
       {/* Editable fields */}
       <PInputText
