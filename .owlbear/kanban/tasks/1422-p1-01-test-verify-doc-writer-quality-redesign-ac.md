@@ -1,10 +1,10 @@
 ---
 id: 1422
 title: 'P1-01: Test — verify doc-writer quality redesign AC'
-status: backlog
+status: in-progress
 priority: needed
 created: 2026-05-08T00:32:15.467895+00:00
-updated: 2026-05-08T18:54:04.125290+00:00
+updated: 2026-05-08T19:29:07.413846+00:00
 tags:
 - phase-1
 - scope:shared
@@ -729,3 +729,127 @@ Architecture review R5 complete. AC1 supplemented with exact-row coupling assert
 |---|-------------|----------------|---------|----------|
 | 1 | architect | Refine AC1 item 7 so the retry contract requires an executable assertion that couples `task-caused` / `pre-existing`, `unverified`, and `blocks` / `passes` in the same live rule text, then return the task to the test-writer. | `.owlbear/kanban/tasks/1422-p1-01-test-verify-doc-writer-quality-redesign-ac.md`, `tests/test_doc_writer_quality_1422.py`, `share/skills/w-doc-update/SKILL.md` | Child AC line `68`; live skill lines `91-92`; current executable predicates at test lines `408` and `418`; `unverified` exists only in assertion messages at test lines `75` and `81`. |
 | 2 | architect | Refine AC1 item 8 so the retry contract requires an executable assertion for the fast-path trigger `if changed files map to no READMEs`, not just the output phrase, then return the task to the test-writer. | `.owlbear/kanban/tasks/1422-p1-01-test-verify-doc-writer-quality-redesign-ac.md`, `tests/test_doc_writer_quality_1422.py`, `share/skills/w-doc-update/SKILL.md` | Child AC line `69`; live skill lines `36-37`; current executable predicates at test lines `342`, `427`, `430`, and `434`; `no READMEs` exists only in an assertion message at test line `344`. |
+[[2026-05-08]]
+
+## AC1 Supplement (R6 — final token coupling)
+
+Two remaining false-green gaps from reviewer R5. Both are tightenings of existing assertions.
+
+### Gap 1: `unverified` in gate-rule coupling (td:1)
+
+Tighten the 2 existing gate-rule tests to include `unverified` in the same-line binding:
+
+- `test_gate_rule_task_caused_blocks`: change the `any(...)` to require ALL THREE tokens on one line: `task-caused`, `unverified`, AND `blocks`
+- `test_gate_rule_preexisting_passes`: change the `any(...)` to require ALL THREE tokens on one line: `pre-existing`, `unverified`, AND `passes`
+
+Live text at `share/skills/w-doc-update/SKILL.md:91-92`:
+```
+- task-caused unverified content blocks the gate.
+- pre-existing unverified content passes the gate.
+```
+
+**Discriminator:** `any("task-caused" in line and "unverified" in line and "blocks" in line for line in content.splitlines())` — adding `"unverified" in line` to existing predicates.
+
+### Gap 2: `no READMEs` trigger in fast-path (td:1)
+
+Add one assertion to the existing `test_no_impact_fast_path_advances` test to prove the trigger condition, not just the output:
+
+```python
+assert re.search(r"no README", step1, re.IGNORECASE), (
+    "Step 1 fast-path trigger must reference 'no READMEs' — "
+    "proving the trigger condition, not just the output phrase"
+)
+```
+
+Live text at `share/skills/w-doc-update/SKILL.md:36-37`:
+```
+If all changed files map to no READMEs, use the no-impact fast path: write
+"no docs impact" with evidence and advance.
+```
+
+### Test-writer guidance (R6)
+- Amend `tests/test_doc_writer_quality_1422.py` — modify 3 existing tests only.
+- `test_gate_rule_task_caused_blocks`: add `and "unverified" in line` to the `any(...)` predicate.
+- `test_gate_rule_preexisting_passes`: add `and "unverified" in line` to the `any(...)` predicate.
+- `test_no_impact_fast_path_advances`: add 1 assertion for `no README` in Step 1.
+- Total test count stays at 52. No new tests — tighten 3 existing assertions.
+- DO NOT modify or remove any other tests.
+
+
+[[2026-05-08]]
+
+### R6 Correction (challenger feedback)
+
+The R6 Gap 1 supplement above uses whole-file `content.splitlines()` for gate-rule assertions. The challenger correctly identified that the same token triplets (`task-caused` + `unverified` + `blocks` and `pre-existing` + `unverified` + `passes`) appear at BOTH:
+- Lines 91–92 (authoritative Gate rules section)
+- Lines 148–149 (Verification Checklist summary)
+
+Whole-file iteration would false-green if the gate rules were deleted but the checklist duplicates remained.
+
+**Revised Gap 1:** Extract the Gate rules section using `re.search(r"Gate rules:.*?(?=## )", content, re.DOTALL)` and iterate its lines only. This scopes the assertion to the authoritative gate-rule text, not its checklist echo.
+
+Revised discriminator:
+```python
+gate_match = re.search(r"Gate rules:.*?(?=## )", content, re.DOTALL)
+assert gate_match, "SKILL.md must have a 'Gate rules:' section"
+gate_lines = gate_match.group(0).splitlines()
+assert any("task-caused" in line and "unverified" in line and "blocks" in line for line in gate_lines)
+assert any("pre-existing" in line and "unverified" in line and "passes" in line for line in gate_lines)
+```
+
+Gap 2 is unchanged — `_step1_section()` already provides section-scoped extraction.
+
+**Revised test-writer guidance (R6):**
+- Modify `test_gate_rule_task_caused_blocks`: replace whole-file `content.splitlines()` with section-scoped `gate_lines` from the `Gate rules:` section. Add `"unverified" in line` to the predicate.
+- Modify `test_gate_rule_preexisting_passes`: same section-scoped replacement. Add `"unverified" in line`.
+- Modify `test_no_impact_fast_path_advances`: add `assert re.search(r"no README", step1, re.IGNORECASE)`.
+- Total test count stays at 52. 3 existing tests tightened, no new tests.
+
+[[2026-05-08]]
+
+## Architecture Review (R6)
+
+### Evaluation
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | 3 assertion tightenings in existing test functions |
+| Interface clarity | PASS | Each gap specifies exact discriminator with code examples and section-scoping |
+| Dependency correctness | PASS | No dependencies |
+| Module layering | N/A | Test file only |
+| TDD compliance | PASS | This IS the test task |
+| KISS/YAGNI | PASS | Modify 3 existing predicates, no new tests or abstractions |
+| Premise challenge | PASS | Reviewer documented exact false-green mutations across 5 cycles; both gaps are directly evidenced |
+| Pattern consistency | PASS | Section extraction via `re.search(...)` matches existing `_step1_section()` pattern in the test file |
+| Security surface | PASS | No system boundaries |
+| Single domain | PASS | Agent ecosystem only |
+
+### Challenge Results
+- Challenger: block (confidence 0.38)
+- Challenge 1 (whole-file false-green via checklist duplicates at SKILL.md:148-149): ACCEPTED — revised supplement to use section-scoped `Gate rules:` extraction instead of whole-file iteration. Lines 148-149 echo the same tokens, confirming the false-green path.
+- Challenge 2 (Gap 2 regex looseness): NOTED — `re.search(r"no README", step1, re.IGNORECASE)` within `_step1_section()` is already section-scoped to Step 1. The trigger phrase "no READMEs" is semantically specific and does not appear elsewhere in Step 1. The assertion proves the trigger exists alongside the output. Acceptable specificity.
+- Challenge 3 (pass count as evidence): ACCEPTED — removed reliance on "52 tests" as corroborating evidence. The approval is based on AC contract precision, not test count.
+- Challenge 4 (append-only supplement ambiguity): NOTED — the R6 Correction subsection explicitly supersedes the initial R6 supplement. Downstream agents follow the latest guidance per normal lifecycle.
+
+### Test Depth
+- Max depth: 1 (all 3 modifications are single-assertion tightenings)
+- Test-writer: PROCEED
+
+### Verdict: APPROVE
+### Action: AC1 supplemented with section-scoped gate-rule coupling (`unverified` added to both predicates, scoped to `Gate rules:` section) and fast-path trigger assertion (`no READMEs`). Challenger feedback integrated — initial whole-file approach revised to section-scoped after confirming checklist duplicate false-green path. Task advanced to todo.
+
+[[2026-05-08]]
+Architecture review R6 complete. AC1 supplemented with 2 final proof-quality gaps from reviewer R5: (1) gate-rule tests tightened to bind `task-caused`+`unverified`+`blocks` and `pre-existing`+`unverified`+`passes` on same line, section-scoped to `Gate rules:` section (challenger correctly identified whole-file false-green via checklist duplicates at SKILL.md:148-149), (2) fast-path trigger `no READMEs` assertion added to existing test using Step 1 section scope. Test-writer: modify 3 existing tests, 0 new tests, total stays at 52.
+[[2026-05-08]]
+## Test-Writer Notes (R6)
+- Test file: tests/test_doc_writer_quality_1422.py
+- Prior state: 52 tests (all passing — correct implementation already in place)
+- Changes: tightened 3 existing tests per reviewer R6 required follow-up
+  1. `test_gate_rule_task_caused_blocks` (TestFromAC_ConventionMappingTable) — replaced whole-file `content.splitlines()` with section-scoped `Gate rules:` extraction via `re.search(r"Gate rules:.*?(?=## )", content, re.DOTALL)`; added `"unverified" in line` to predicate. Scoping prevents false-green via checklist duplicate lines at SKILL.md:148-149 (challenger-confirmed gap).
+  2. `test_gate_rule_preexisting_passes` (TestFromAC_ConventionMappingTable) — same section-scoped replacement + `"unverified" in line` added.
+  3. `test_no_impact_fast_path_advances` (TestFromAC_ConventionMappingTable) — added `assert re.search(r"no README", step1, re.IGNORECASE)` to prove the trigger condition, not just the output phrase.
+- Total: 52 tests, all PASS
+- ruff: clean (0 violations)
+- Mutation resistance: swapping unverified→verified in gate rules now fails; deleting gate-rules section now fails; removing no-READMEs trigger while keeping output sentence now fails
+- Builder skip: test-only retry, implementation already correct — advance directly to review
+- AC coverage: AC1 R6 gaps addressed (gate-rule triple coupling + fast-path trigger), all prior AC2–AC5 unchanged
+- Commit: 4693139e

@@ -1,10 +1,10 @@
 ---
 id: 1378
 title: 'P2-03: Test Cockpit task detail edit validation and dirty state'
-status: review
+status: done
 priority: critical
 created: 2026-05-06T01:04:32.576780+00:00
-updated: 2026-05-08T18:57:06.702181+00:00
+updated: 2026-05-08T19:27:55.065868+00:00
 tags:
 - cockpit
 - audit-remediation
@@ -19,7 +19,7 @@ depends_on:
 - 1377
 blocked: false
 block_reason:
-claimed_at: 2026-05-08T18:57:06.702181+00:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -261,3 +261,71 @@ Cycle 2 architecture review after reviewer rejection. Accepted 3 of 5 challenger
 - Result: 79 passed, 0 failed; ESLint clean.
 - Coverage on touched module `DetailTab.tsx`: 93.71% statements, 90.09% branches, 93.01% lines (functions 80.55%).
 - This addendum supersedes the earlier low-coverage scoped single-file reading for module confidence.
+[[2026-05-08]]
+## Review Evidence
+
+### Test Results
+- quality-runner ran the scoped frontend evidence pass from `serve/cockpit/web` across `serve/cockpit/web/src/__tests__/DetailTab_1378.test.tsx`, `serve/cockpit/web/src/__tests__/DetailTab.test.tsx`, and `serve/cockpit/web/src/__tests__/DetailTab_1344.test.tsx`.
+- Result: 79 passed, 0 failed, 0 skipped.
+- The task-local `TestFromAC_*` suite is GREEN, and adjacent `DetailTab` regression suites also remained GREEN.
+
+### Lint and Diagnostics
+- ESLint was clean for `serve/cockpit/web/src/components/DetailTab.tsx` and `serve/cockpit/web/src/__tests__/DetailTab_1378.test.tsx`.
+- VS Code diagnostics were clean for both files.
+
+### Coverage
+- quality-runner coverage retry reported `src/components/DetailTab.tsx` at 93.71% statements, 90.09% branches, 93.01% lines, and 80.55% functions.
+- For this frontend task, the changed validation and dirty-state paths cleared the practical gate: statements and branches on the touched module are both at or above 90%, and the scoped `DetailTab` suites are GREEN.
+
+### Code Review
+- `parseDependsOn` now rejects non-integer and negative dependency tokens with explicit client validation state in `serve/cockpit/web/src/components/DetailTab.tsx:87`.
+- `parseParent` now rejects non-integer and negative parent input with explicit client validation state in `serve/cockpit/web/src/components/DetailTab.tsx:108`.
+- Client-side errors reuse the existing validation-message path through `clientValidationMessage` and `validationMessage` in `serve/cockpit/web/src/components/DetailTab.tsx:127` and `serve/cockpit/web/src/components/DetailTab.tsx:137`, then render through `data-testid="validation-message"` in `serve/cockpit/web/src/components/DetailTab.tsx:412`.
+- Both `handleSave` and `handleForceSave` refuse to proceed while client validation is present in `serve/cockpit/web/src/components/DetailTab.tsx:192` and `serve/cockpit/web/src/components/DetailTab.tsx:209`.
+- Dirty-state is derived from loaded-vs-edited comparisons in `serve/cockpit/web/src/components/DetailTab.tsx:129` and exposed through `data-testid="dirty-indicator"` in `serve/cockpit/web/src/components/DetailTab.tsx:376`.
+
+### Test Integrity
+- No `TestFromAC_*` weakening or removal detected in `serve/cockpit/web/src/__tests__/DetailTab_1378.test.tsx`.
+- Cycle-2 corrections align with the refined contract: PDS `CustomEvent` input path at `serve/cockpit/web/src/__tests__/DetailTab_1378.test.tsx:102`, reuse of the existing `validation-message` surface, per-category save-block proof, and mechanism-agnostic AC3 assertions.
+
+### AC Compliance
+| AC line | Evidence | Status |
+|---|---|---|
+| AC1 invalid parent categories show validation-message and block save | Parent-validation `TestFromAC` block in `serve/cockpit/web/src/__tests__/DetailTab_1378.test.tsx:111`; implementation in `serve/cockpit/web/src/components/DetailTab.tsx:108`, `serve/cockpit/web/src/components/DetailTab.tsx:127`, `serve/cockpit/web/src/components/DetailTab.tsx:192`, and `serve/cockpit/web/src/components/DetailTab.tsx:412` | PASS |
+| AC2 invalid dependency categories show validation-message and block save | Depends-on validation `TestFromAC` block in `serve/cockpit/web/src/__tests__/DetailTab_1378.test.tsx:246`; implementation in `serve/cockpit/web/src/components/DetailTab.tsx:87`, `serve/cockpit/web/src/components/DetailTab.tsx:127`, `serve/cockpit/web/src/components/DetailTab.tsx:192`, and `serve/cockpit/web/src/components/DetailTab.tsx:412` | PASS |
+| AC3 save does not proceed while client validation errors are present | Mechanism-agnostic save-block `TestFromAC` block in `serve/cockpit/web/src/__tests__/DetailTab_1378.test.tsx:384`; guarded save path in `serve/cockpit/web/src/components/DetailTab.tsx:192` and click target in `serve/cockpit/web/src/components/DetailTab.tsx:379` | PASS |
+| AC4 dirty-state signal appears when values differ and clears when restored | Dirty-state `TestFromAC` block in `serve/cockpit/web/src/__tests__/DetailTab_1378.test.tsx:442`; loaded-vs-edited predicate in `serve/cockpit/web/src/components/DetailTab.tsx:129` and DOM surface in `serve/cockpit/web/src/components/DetailTab.tsx:376` | PASS |
+| AC5 client-side validation errors render in the existing `validation-message` element with visible text | Validation-visibility `TestFromAC` block in `serve/cockpit/web/src/__tests__/DetailTab_1378.test.tsx:530`; validation-message reuse path in `serve/cockpit/web/src/components/DetailTab.tsx:137` and render point in `serve/cockpit/web/src/components/DetailTab.tsx:412` | PASS |
+| AC6 suite targeted the prior silent-transform behavior and is satisfied by the current implementation | Task-local `TestFromAC` suites are GREEN, while the live implementation no longer silently filters/nulls invalid values because validation now fails early in `serve/cockpit/web/src/components/DetailTab.tsx:87` and `serve/cockpit/web/src/components/DetailTab.tsx:108` before the guarded save path at `serve/cockpit/web/src/components/DetailTab.tsx:192` | PASS |
+
+### Deductions
+- -0.03: Dirty-tree contamination could not be independently checked with the available tool surface.
+- -0.02: Coverage required a second quality-runner pass because the first scoped report omitted module percentages.
+- A code-reader hardening concern on delayed-post resistance was reviewed and challenged. It is non-blocking for this cycle because the latest refined AC intentionally bound AC1-AC3 to fetch-not-called-after-click proof, and the current suite matches that contract.
+
+### Verdict
+- PASS. Confidence 0.95.
+- Action: advance to docs.
+[[2026-05-08]]
+## Docs Gate
+
+### Checklist
+
+| Check | Applies? | Status | Evidence |
+|-------|----------|--------|----------|
+| 1. Descriptive prose docs | N/A | — | Changed files: `DetailTab_1378.test.tsx` (test) and `DetailTab.tsx` (component). No IN-scope prose docs (READMEs, setup guides) reference DetailTab validation internals. |
+| 2. Python docstrings | N/A | — | No Python modules created or modified; task is TypeScript/frontend only. |
+| 3. External attribution | N/A | — | No new external patterns used; builder reused existing vitest/testing-library/PDS CustomEvent harness already in the codebase. |
+| 4. Research doc | N/A | — | No research phase doc produced for this task. |
+| 5. Diagram maintenance | YES | DONE | `share/diagrams/cockpit.excalidraw` has `describes: serve/cockpit/web/src/**`, which matches the changed `DetailTab.tsx`. Footer updated to `Last verified: 2026-05-08 (69ab9a96)`. Committed `ac56bad0`. |
+| 6. Explicit diagram creation | N/A | — | No diagram creation request in task body. |
+| 7. Deletion detection | N/A | — | No files deleted; no orphaned IN-scope docs detected. |
+
+### Files Updated
+- `share/diagrams/cockpit.excalidraw` — footer updated (commit `ac56bad0`)
+
+### Child Tasks Created
+None.
+
+### Scratch Files Cleaned
+No `1378-*` scratch files found.

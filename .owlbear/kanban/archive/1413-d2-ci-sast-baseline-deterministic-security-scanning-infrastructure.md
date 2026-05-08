@@ -1,10 +1,10 @@
 ---
 id: 1413
 title: 'D2: CI/SAST baseline — deterministic security scanning infrastructure'
-status: done
+status: archived
 priority: needed
 created: 2026-05-07T23:16:25.294264+00:00
-updated: 2026-05-08T19:00:37.552226+00:00
+updated: 2026-05-08T19:33:10.465213+00:00
 tags:
 - pipeline
 - ws-protocol
@@ -456,3 +456,38 @@ Architecture review pass 4 — contract repair. Resolved three reviewer follow-u
 
 ### Scratch Files Cleaned
 - None (no `.owlbear/scratch/1413-*` files found)
+[[2026-05-08]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| P1: MegaLinter triggers on push to dev | `.github/workflows/megalinter.yml:5-9` — push + pull_request on dev | PASS |
+| P1: All serve/*/src/ covered incl. mcp-browser | `pyproject.toml:47` — all 9 packages listed | PASS |
+| P2: Trivy dependency/misconfig scanning configured | `.mega-linter.yml:97` — `REPOSITORY_TRIVY_ARGUMENTS: "--scanners vuln,misconfig --skip-dirs .venv"` | PASS |
+| P2: Scanning automated via CI, not cognitive | GitHub Actions workflow exists at `.github/workflows/megalinter.yml` | PASS |
+
+### Test Results
+- pytest: 2969 passed, 182 failed, 4 skipped, 6 errors — all failures are pre-existing repo debt (task has zero code changes, td:0 config gate)
+- vitest: 1127 passed, 19 failed — pre-existing
+- ruff: 29 violations — pre-existing, not in task scope
+- eslint: 1 error, 3 warnings — pre-existing
+
+### Architect Quality: 3/5
+Initial AC was poorly scoped (score 2) — parent claimed deliverables owned by child tasks, causing 2 reviewer rejections and 4 architect passes. Final AC (pass 4) is clean and specific with verifiable file/condition pairs. The rework volume signals initial architect quality gap.
+
+### Deduction Breakdown
+- AC quality score ≤ 3: -.03
+- All 4 AC lines have specific repo-state evidence: no deduction
+- Reviewer evidence section present and detailed (3 cycles, PASS): no deduction
+- No test failures in task scope (td:0, zero code changes): no deduction
+- Lint: no in-scope violations: no deduction
+
+### Confidence: 0.97
+### Action: archive
+
+### Commit Integrity
+- Child #1416 triggers: `60f88439`
+- Child #1417 SARIF: `53fe72ac`
+- Child #1418 uv.lock/ruff: `abc38755`
+- Docs gate: `67c3ac9e`
+- Research doc: `ae986a74`

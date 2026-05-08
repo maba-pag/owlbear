@@ -1,10 +1,10 @@
 ---
 id: 1388
 title: 'P2-13: Test Cockpit decision viewport and resolution UX'
-status: review
+status: backlog
 priority: needed
 created: 2026-05-06T01:04:50.731483+00:00
-updated: 2026-05-08T18:57:00.865267+00:00
+updated: 2026-05-08T19:27:18.726656+00:00
 tags:
 - cockpit
 - audit-remediation
@@ -19,7 +19,7 @@ depends_on:
 - 1387
 blocked: false
 block_reason:
-claimed_at: 2026-05-08T18:57:00.865267+00:00
+claimed_at: 2026-05-08T19:27:18.726656+00:00
 archival_reason:
 archival_refs: []
 ---
@@ -268,3 +268,54 @@ Architecture review pass 2 — refined AC addressing reviewer rejection. Key cha
   - Lint: eslint clean (0 violations) on both scoped test files.
 - Coverage: N/A for this RED test-only gate.
 - Outcome: Builder pass-through to review with verified RED evidence; no file edits, no commit required.
+[[2026-05-08]]
+## Review Evidence
+### Test Results
+- quality-runner scoped frontend run succeeded for the Cockpit web package.
+- `serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx` still fails at import time because it imports `../components/DecisionViewport` at `serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx:18`, and no matching component file exists under `serve/cockpit/web/src/components/`.
+- `serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx` collected 17 tests and all 17 failed, matching the current defects in `serve/cockpit/web/src/components/ResolveModal.tsx`: default-approved state at `:29`, missing `aria-modal` on the modal opened at `:87`, and single-word action buttons at `:135` and `:142`.
+
+### Lint Results
+- eslint clean on both scoped files: `serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx` and `serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx`.
+
+### Coverage Data
+- Not run. This is a RED-phase test-only review; the gate here is proof quality, not GREEN coverage.
+
+### Scope Reconstruction
+- Review scope reconstructed as `serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx` and `serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx`.
+- Commit `69f82181` is present in repository logs and matches the retry noted in the task body.
+- The task file already contains one prior `## Review Evidence` section at `.owlbear/kanban/tasks/1388-p2-13-test-cockpit-decision-viewport-and-resolution-ux.md:122`, so this is a second-cycle review. On FAIL, the loop-breaker route is `backlog`.
+- Direct `git diff` / `git status` evidence was not available in this tool surface, so I applied a small confidence deduction for scope/immutability verification.
+- Review anchored to the latest refined AC at `.owlbear/kanban/tasks/1388-p2-13-test-cockpit-decision-viewport-and-resolution-ux.md:37` through `:43`, not the stale first-pass review findings that were superseded by Architecture Review Pass 2.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---|---|---|---|
+| AC1 | The retry correctly strengthened the `body_preview` fixture discrimination at `serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx:31`, `:43`, `:203`, and `:206`, and it correctly proves `onItemClick` fires from the task-id reference at `:227` and `:233`. But the required age proof is still non-discriminating: the suite only asserts non-empty row text at `:182` and compares full row text at `:192`, `:193`, and `:195`, so other row fields can make the assertion pass even if the age field is wrong or constant. | `TestFromAC_DecisionViewport` | FAIL |
+| AC2 | The suite now targets structural description elements, but each per-option lookup walks from the radio label to `parentElement` and then grabs the first `p-text` descendant at `serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx:83` through `:85`, `:97` through `:101`, `:111` through `:113`, `:124` through `:128`, `:138` through `:140`, and `:151` through `:155`. In the current markup, all labels are siblings in the same fieldset at `serve/cockpit/web/src/components/ResolveModal.tsx:91`, so one shared description node could satisfy every assertion without being adjacent to a specific option. The consequence-copy proof is also weak because it reduces to `text.length > 4` after stripping the status token at `:101`, `:128`, and `:155`. | `TestFromAC_ResolveModalUX` | FAIL |
+| AC3 | Strong proof exists for the no-default-selection and disabled-until-selection contract at `serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx:177`, `:187`, `:194`, `:197`, and `:201`, and those failures map directly to the current implementation default at `serve/cockpit/web/src/components/ResolveModal.tsx:29`. | `TestFromAC_ResolveModalUX` | PASS |
+| AC4 | The refined AC is directly encoded by the multi-word label assertions at `serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx:216` and `:227`, plus the `>= 3` description-element assertion at `:235`. | `TestFromAC_ResolveModalUX` | PASS |
+| AC5 | The modal half of the contract is well targeted: initial focus inside the modal and not on submit at `serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx:252` and `:254`, Escape on modal/document at `:262` and `:269`, and `aria-modal="true"` at `:278`. The remaining gap is viewport item focusability: the suite checks button/link semantics on `decision-item` elements at `serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx:255` and `:256`, but the no-`tabindex=-1` assertion is only applied to the task-id reference at `:263`. That splits the focusability proof across two different elements, so a non-tabbable `decision-item` could still pass. Logical Tab traversal was correctly treated as out of scope per the refined AC. | `TestFromAC_DecisionViewport`, `TestFromAC_ResolveModalUX` | FAIL |
+| AC6 | The viewport error-state contract is covered by the visible error assertions at `serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx:101`, `:107`, and `:268`, and the suite does not duplicate ResolveModal error handling already covered by #1375. | `TestFromAC_DecisionViewport` | PASS |
+| AC7 | The RED delta is proven. `DecisionViewport` import remains unresolved at `serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx:18`, and the scoped quality-runner pass confirmed `ResolveModalUX_1388` still fails 17/17 against the current defects rooted in `serve/cockpit/web/src/components/ResolveModal.tsx:29` and `:87`. The latest AC explicitly scopes Shell-level popover replacement out of this task. | `TestFromAC_DecisionViewport`, `TestFromAC_ResolveModalUX` | PASS |
+
+### Deductions
+- Test quality is still **WEAK** for a td:2 artifact. The remaining failures are proof-quality failures, not RED-execution failures.
+- No `TestFromAC_*` weakening or removal detected in scope.
+- No security or data-safety issues found in the scoped files.
+- Non-blocking overreach remains in `serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx`: default-export smoke test at `:71` and generic PDS-presence test at `:238` are not traceable to the refined AC.
+
+### Verdict
+- FAIL -> backlog
+- Confidence: 0.84
+- Reason: second-cycle review. RED evidence is valid, but the td:2 proof is still non-discriminating on AC1, AC2, and AC5.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Rework the AC1 RED contract so the age assertion targets an isolated age field or age-specific string derived from `created`, not whole-row text, then send the task back through test-writing | `.owlbear/kanban/tasks/1388-p2-13-test-cockpit-decision-viewport-and-resolution-ux.md`, `serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx` | AC1 at `.owlbear/kanban/tasks/1388-p2-13-test-cockpit-decision-viewport-and-resolution-ux.md:37`; weak age assertions at `serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx:182`, `:192`, `:193`, `:195` |
+| 2 | architect | Rework the AC2 RED contract so each radio option must own its own adjacent description element and the consequence-copy proof is stricter than `text.length > 4`, then re-dispatch test-writing | `.owlbear/kanban/tasks/1388-p2-13-test-cockpit-decision-viewport-and-resolution-ux.md`, `serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx`, `serve/cockpit/web/src/components/ResolveModal.tsx` | AC2 at `.owlbear/kanban/tasks/1388-p2-13-test-cockpit-decision-viewport-and-resolution-ux.md:38`; broad fieldset-rooted queries at `serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx:83` through `:85`, `:97` through `:101`, `:111` through `:113`, `:124` through `:128`, `:138` through `:140`, `:151` through `:155`; current sibling-label structure at `serve/cockpit/web/src/components/ResolveModal.tsx:91` |
+| 3 | architect | Clarify AC5 so the same viewport element carries both the button/link semantics and the no-`tabindex=-1` requirement, then re-dispatch test-writing with that single focus target | `.owlbear/kanban/tasks/1388-p2-13-test-cockpit-decision-viewport-and-resolution-ux.md`, `serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx` | AC5 at `.owlbear/kanban/tasks/1388-p2-13-test-cockpit-decision-viewport-and-resolution-ux.md:41`; split proof at `serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx:255`, `:256`, `:263` |
+
+### Action Taken
+- Rejected task 1388 to `backlog` under the reviewer loop-breaker rule for architect-mediated contract tightening before another RED-phase retry.
