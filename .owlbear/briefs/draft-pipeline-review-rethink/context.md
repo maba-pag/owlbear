@@ -126,14 +126,36 @@ Instead of tagging:
 7. **Auditor focuses on regression + intent** — full suite run, intent-vs-AC alignment, logic flaws
 8. **Every agent gets role sharpening** — purer mandates, clear handoff contracts, no overlapping checks
 
+## Checker Subagent Mental Model
+
+The pipeline already follows a pattern where each agent has (or could have) a **checker subagent** that validates its output before handoff:
+
+- **Builder → Reviewer** — the reviewer IS the builder's checker, externalized into its own pipeline stage because the builder already does too much work. Stays externalized because: (1) combining the two longest agents blocks parallel work; (2) reviewer rejects to test-writer or architect, not just builder.
+- **Architect → Challenger** — already exists in `w-arch-review/SKILL.md` Step 2.5. Validates design decisions before approval.
+- **Test-writer** — checker dropped (minimal value).
+- **Researcher** — checker dropped.
+- **Doc-writer** — checker dropped (cost/benefit insufficient).
+- **Auditor** — THE big-picture pipeline gate, not a checker but a cross-cutting verifier.
+
+**Key design principle:** The optimization is "refocus existing checkers," not "add new ones."
+
+### Architect Checker Enhancement
+
+The architect's checker (challenger) should expand to validate **AC quality**, not just design decisions. When architect receives a task with planner-created AC:
+1. Architect sees AC, sees no immediate rewrite task
+2. Hands off to checker subagent to validate AC quality
+3. Acts on checker output: if checker flags issues → architect rewrites AC; if checker approves → architect ends work
+
+This works IF the planner follows the same AC quality rules as the architect — so planner creates AC that are already close to the standard, and the architect's checker catches the remaining gaps without the architect doing redundant review of already-good AC.
+
 ## Refined Role Table
 
-| Agent | Core job | Distinct value | Key change |
-|-------|----------|----------------|------------|
-| Planner | Write clear intent + scaffold best-effort AC | Task specification quality | MUST route through architect — no unchecked AC |
-| Architect | Audit + rewrite AC: explicit enumerations, named functions, observable contracts | AC quality gate (mandatory) | Strengthen specificity rules; eliminate vague wording |
-| Test-writer | Write tests with exact-value assertions; structural separation | Test scaffolding with clear lifecycle | Default to exact-value, no substring/presence-only |
-| Builder | Implement + fast feedback loop (self-checks via quality-runner) | Implementation quality | No change to builder's own loop |
-| Reviewer | Return ALL findings in one pass (batch, not gate). Check missed AC, proof quality | AC completion verification | Stop re-running tests; batch all findings |
-| Doc-writer | (Out of scope — needs separate rebuild) | Documentation accuracy | Separate effort |
-| Auditor | Full suite regression, intent alignment, logic flaws | Cross-cutting sanity | Focus on unique value only |
+| Agent | Core job | Checker | Distinct value | Key change |
+|-------|----------|---------|----------------|------------|
+| Planner | Write clear intent + AC using architect's quality rules | None | Task specification quality | Follows same AC quality skill as architect; MUST route through architect |
+| Architect | Fix AC only when checker flags them; validate feasibility | Challenger (expanded to AC validation) | AC quality gate (mandatory) | Checker-first workflow; no redundant review of good AC |
+| Test-writer | Write tests with exact-value assertions; structural separation | None (dropped) | Test scaffolding with clear lifecycle | Default to exact-value, no substring/presence-only |
+| Builder | Implement + fast feedback loop (self-checks via quality-runner) | Reviewer (externalized) | Implementation quality | No change to builder's own loop |
+| Reviewer | Return ALL findings in one pass (batch, not gate). Check missed AC, proof quality | N/A (IS the checker) | AC completion verification | Stop re-running tests; batch all findings |
+| Doc-writer | (Out of scope — needs separate rebuild) | None (dropped) | Documentation accuracy | Separate effort |
+| Auditor | Full suite regression, intent alignment, logic flaws | N/A (pipeline gate) | Cross-cutting sanity | Focus on unique value only |
