@@ -244,9 +244,10 @@ Rules:
    | Agent | Domain paths to verify before `end_work` |
    |-------|------------------------------------------|
    | Researcher | `.owlbear/research/`, `.owlbear/sources/` |
-   | Test-writer | `tests/` |
-   | Builder | `serve/*/src/` |
-   | Doc-writer | `README.md`, `README-consumer.md`, `SECURITY.md`, `serve/*/README.md`, `share/README.md`, `setup/*.md` |
+   | Test-writer | `tests/`, `serve/*/tests/` |
+   | Builder | `serve/`, `share/` |
+   | Doc-writer | `README.md`, `README-consumer.md`, `SECURITY.md`, `setup/*.md`, `serve/*/README.md`, `.owlbear/sources/` |
+   | Auditor | `.owlbear/kanban/` |
 
    Use `git status --porcelain -- <domain-paths>` (with `--` pathspec separator). Do not use raw `git status --porcelain` for this check.
    If files appear in your domain, self-heal: stage and commit those files, then continue and call `end_work`.
