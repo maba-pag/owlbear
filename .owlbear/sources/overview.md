@@ -11,6 +11,14 @@ External repos and resources studied during OwlBear development.
 | github/codeql-action upload-sarif action.yml | <https://github.com/github/codeql-action/blob/main/upload-sarif/action.yml> | Action input parameters: sarif_file, category, wait-for-processing, token | `.owlbear/research/1417-sarif-upload-code-scanning.md` | 2026-05-08 |
 | oxsecurity/megalinter SarifReporter.md | <https://github.com/oxsecurity/megalinter/blob/main/docs/reporters/SarifReporter.md> | Confirms file path and recommended workflow step | `.owlbear/research/1417-sarif-upload-code-scanning.md` | 2026-05-08 |
 
+## Legacy Audit Prompt (Task #1414)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Vulture — Python dead code finder | <https://github.com/jendrikseipp/vulture> | Detects unused functions, imports, unreachable code; structural inspiration for zero-caller heuristic | `.owlbear/research/1414-legacy-audit-prompt.md` | 2026-05-08 |
+| Knip — JS/TS unused code finder | <https://github.com/webpro-nl/knip> | Finds unused files, dependencies, exports; category-based scan structure | `.owlbear/research/1414-legacy-audit-prompt.md` | 2026-05-08 |
+| Ruff F401 — unused import rule | <https://github.com/astral-sh/ruff/issues/872> | Discussion of vulture-like dead code detection in ruff; confirms F401 covers imports | `.owlbear/research/1414-legacy-audit-prompt.md` | 2026-05-08 |
+
 ## MegaLinter uv.lock Exclusion & Ruff Src Fix (Task #1418)
 
 | Source | URL | What | Where Used | Date |
