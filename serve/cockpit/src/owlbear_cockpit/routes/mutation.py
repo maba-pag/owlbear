@@ -17,6 +17,7 @@ from owlbear_kanban.errors import (
 )
 from owlbear_kanban.models import (
     ActivityCompactionResult,
+    CleanupResult,
     RepairOutcome,
     SingleTaskResponse,
 )
@@ -323,6 +324,12 @@ def release_task(task_id: int, req: ReleaseRequest, view: _View) -> SingleTaskRe
 def sweep_tasks(view: _View) -> list[int]:
     """Release expired claims and return released task IDs."""
     return view.sweep()
+
+
+@router.post("/tasks/cleanup", response_model=CleanupResult)
+def cleanup_tasks(view: _View) -> CleanupResult:
+    """Run maintenance cleanup and return released, archived, and skipped items."""
+    return view.cleanup()
 
 
 @router.post("/tasks/scan", response_model=list[dict[str, Any]])

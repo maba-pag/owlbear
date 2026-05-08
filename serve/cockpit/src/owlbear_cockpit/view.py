@@ -8,6 +8,7 @@ from owlbear_kanban.models import (
     ActivityCompactionResult,
     ActivityEvent,
     BoardConfig,
+    CleanupResult,
     ListTasksResponse,
     NotFoundError,
     SessionRecord,
@@ -222,6 +223,10 @@ class CockpitView:
     def sweep(self) -> list[int]:
         """Release expired claims and return released task IDs."""
         return self.engine.sweep()
+
+    def cleanup(self) -> CleanupResult:
+        """Run maintenance cleanup and return released, archived, and skipped results."""
+        return self.engine.cleanup()
 
     def list_activity(  # noqa: PLR0913
         self,

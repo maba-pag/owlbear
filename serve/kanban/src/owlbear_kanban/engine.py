@@ -55,6 +55,7 @@ from owlbear_kanban.models import (
     ActivityCompactionResult,
     ActivityEvent,
     BoardConfig,
+    CleanupResult,
     ConcurrencyError,
     ConfigError,
     KanbanError,
@@ -1759,6 +1760,114 @@ class KanbanEngine:
                     released.append(record.id)
 
         return released
+
+    def cleanup(self) -> CleanupResult:  # noqa: C901, PLR0912, PLR0915
+        """Run maintenance cleanup and return aggregate results.
+
+        Cleanup includes three categories in one call:
+        - release expired claims (same semantics as :meth:`sweep`)
+        - move drift-archived task files from tasks/ to archive/
+        - report skipped task files with path+reason when they cannot be processed
+        """
+        released_claim_ids: list[int] = []
+        archived_task_ids: list[int] = []
+        skipped_items: list[dict[str, str]] = []
+        timeout = self._parse_claim_timeout()
+        now = datetime.now(tz=UTC)
+
+        for path in sorted(self._tasks_dir.glob("*.md")):
+            try:
+                record = read_task(path, config=self._config)
+            except (FileNotFoundError, ValueError, KeyError, CorruptionError) as exc:
+                skipped_items.append({"path": str(path), "reason": str(exc)})
+                continue
+
+            issue = detect_corruption(path, self._config)
+            if issue is not None:
+                skipped_items.append(
+                    {
+                        "path": str(path),
+                        "reason": getattr(issue, "user_message", str(issue)),
+                    }
+                )
+                continue
+
+            # Release expired claims via compare-and-swap, mirroring sweep() behavior.
+            if record.claimed_at:
+                try:
+                    claimed_dt = datetime.fromisoformat(record.claimed_at)
+                except ValueError:
+                    skipped_items.append(
+                        {
+                            "path": str(path),
+                            "reason": "invalid claimed_at timestamp",
+                        }
+                    )
+                    continue
+                if claimed_dt.tzinfo is None:
+                    claimed_dt = claimed_dt.replace(tzinfo=UTC)
+                if now >= claimed_dt + timeout:
+                    original = record.model_copy(deep=True)
+                    record.claimed_at = None
+                    record.updated = datetime.now(tz=UTC).isoformat()
+                    try:
+                        storage.write_task_if_unchanged(
+                            record,
+                            original.updated,
+                            self._kanban_dir,
+                        )
+                    except ConcurrencyError as exc:
+                        if exc.code == "ERR_STALE":
+                            skipped_items.append(
+                                {
+                                    "path": str(path),
+                                    "reason": "concurrent update while releasing claim",
+                                }
+                            )
+                            continue
+                        raise
+                    released_claim_ids.append(record.id)
+
+            # Move drift-archived files from tasks/ to archive/ when valid.
+            if record.status != "archived":
+                continue
+            if record.archival_reason is None:
+                skipped_items.append(
+                    {
+                        "path": str(path),
+                        "reason": "missing archival_reason for archived task",
+                    }
+                )
+                continue
+
+            dest = self._archive_dir / path.name
+            if dest.exists():
+                skipped_items.append(
+                    {
+                        "path": str(path),
+                        "reason": "archive destination already exists",
+                    }
+                )
+                continue
+
+            self._archive_dir.mkdir(parents=True, exist_ok=True)
+            try:
+                _move_file(path, dest)
+            except OSError as exc:
+                skipped_items.append({"path": str(path), "reason": str(exc)})
+                continue
+            self._task_cache.pop(path.name, None)
+            self._id_to_filename.pop(record.id, None)
+            archived_task_ids.append(record.id)
+
+        if released_claim_ids or archived_task_ids:
+            self._revision += 1
+
+        return CleanupResult(
+            released_claim_ids=released_claim_ids,
+            archived_task_ids=archived_task_ids,
+            skipped_items=skipped_items,
+        )
 
     def repair_storage(self) -> list:
         """Quarantine corrupt task files and create action-required tasks (AC-C24, AC-C25, AC-C30).

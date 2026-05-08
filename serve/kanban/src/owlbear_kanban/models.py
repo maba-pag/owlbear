@@ -568,6 +568,14 @@ class RepairOutcome(BaseModel):
     detail: str | None = None
 
 
+class CleanupResult(BaseModel):
+    """Result of maintenance cleanup operations."""
+
+    released_claim_ids: list[int] = Field(default_factory=list)
+    archived_task_ids: list[int] = Field(default_factory=list)
+    skipped_items: list[dict[str, str]] = Field(default_factory=list)
+
+
 # ---------------------------------------------------------------------------
 # Engine projections — Brief B
 # ---------------------------------------------------------------------------
