@@ -462,8 +462,8 @@ describe('TestFromAC_ScanErrorDisplay', () => {
     )
   })
 
-  // AC3 specific message: usePollingFetch throws `new Error('Polling request failed
-  // with status ${response.status}')`. Shell renders `Scan failed: {scanError.message}`.
+  // AC3 specific message: usePollingFetch now surfaces parsed envelope body text.
+  // Shell renders `Scan failed: {scanError.message}`.
   // The rendered text must contain the exact reason string, not just a generic keyword.
   it('error: status bar contains the exact HTTP failure reason after a 500 scan error', async () => {
     vi.stubGlobal('fetch', makeScanFetch({ ok: false, status: 500, body: SCAN_ERROR_ENVELOPE }))
@@ -475,8 +475,8 @@ describe('TestFromAC_ScanErrorDisplay', () => {
       { timeout: 1000 },
     )
     const statusBar = container.querySelector('[data-region="status-bar"]') as HTMLElement
-    // usePollingFetch error message for non-2xx: "Polling request failed with status 500"
-    expect(statusBar?.textContent ?? '').toContain('Polling request failed with status 500')
+    // usePollingFetch error message for non-2xx: parsed body message from envelope
+    expect(statusBar?.textContent ?? '').toContain('Board scan encountered an error and could not complete.')
   })
 
   // AC3 specific network message: TypeError from fetch propagates as-is through
