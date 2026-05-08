@@ -44,6 +44,7 @@ src = [
   "serve/mcp-kanban/src",
   "serve/mcp-knowledge/src",
   "serve/mcp-memory/src",
+  "serve/mcp-browser/src",
   "serve/browser/src",
   "serve/cockpit/src",
   "serve/tools/src",
