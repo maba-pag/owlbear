@@ -1,10 +1,10 @@
 ---
 id: 1387
 title: 'P2-12: Implement Cockpit decision data contract and refetch flow'
-status: done
+status: archived
 priority: needed
 created: 2026-05-06T01:04:49.160414+00:00
-updated: 2026-05-08T16:24:57.628668+00:00
+updated: 2026-05-08T16:49:54.930995+00:00
 tags:
 - cockpit
 - audit-remediation
@@ -222,3 +222,38 @@ APPROVED #1387 -> todo | No-op: all AC already satisfied by existing code. Resea
 
 ### Scratch Files Cleaned
 - None (no `1387-*` scratch files existed)
+[[2026-05-08]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Pending decision frontend types include full body | PendingDR.body: string at usePendingDRs.ts:13 (spot-checked) | PASS |
+| Pending decision data preserves task link/context/age/body/status | Reviewer mapped all fields; existing hook/component structure confirmed | PASS |
+| Resolution refetches pending decisions and affected task/board state | Shell.tsx:260-262 calls refetchPendingDRs() and refetchTasks() (spot-checked) | PASS |
+| Loading/empty/error states consume frontend error contract | Reviewer cites getResponseErrorMessage imports in ResolveModal.tsx:45, usePollingFetch.ts:69; accepted | PASS |
+| Satisfies 1386 without viewport redesign | Vitest 1109/0, DecisionContract 1386 tests pass green | PASS |
+
+### Test Results
+- pytest: 2977 passed, 178 failed, 4 skipped (all failures pre-existing background debt, none in task scope; no-op task made zero code changes)
+- vitest: 1109 passed, 0 failed (includes task-owned DecisionContract 1386 suites)
+- ruff: 29 violations (pre-existing, no code touched)
+- eslint: 4 problems (pre-existing)
+
+### Architect Quality: 3/5
+AC lines were specific and verifiable, which enabled the successful premise challenge. However, all 3 problem-evidence items were stale (described behavior already present), causing unnecessary pipeline work (research, second arch review, multiple pass-throughs). Upstream task scoping should verify current state before drafting.
+
+### Deduction Breakdown
+- Start: 1.00
+- AC quality score 3 (le 3): -.03
+- No AC evidence gaps (all 5 verified with file-line evidence)
+- No task-scope test failures (178 pytest failures are pre-existing background debt)
+- No lint violations attributable to task (no-op)
+- Reviewer evidence section present and detailed (PASS verdict, 0.95 confidence)
+- Research doc committed (2485828a)
+
+### Confidence: .97
+### Action: archive
+
+### Commits Verified
+- 2485828a docs: research decision data contract no-op (1387, researcher)
+- No source code commits expected (no-op task)
