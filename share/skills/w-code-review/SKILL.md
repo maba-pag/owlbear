@@ -114,7 +114,7 @@ Code-reader is a read-only adversarial subagent invoked from this workflow. Cons
 | `changed_files` | string[] | Files modified by the builder — scope for all checks |
 | `test_files` | string[] | Test files for the task — scope for test integrity and quality |
 
-Code-reader executes Critical Checks §5.0–5.7 and Informational Checks §6.1–6.4 (defined below) and returns exactly these 8 sections, each populated with findings + evidence or an explicit "No issues found" with brief justification:
+Code-reader mirrors the same 3-item checklist model as this workflow and returns exactly these 8 sections, each populated with findings + evidence or an explicit "No issues found" with brief justification:
 
 ```
 ## test_writer-audit
@@ -127,26 +127,15 @@ Code-reader executes Critical Checks §5.0–5.7 and Informational Checks §6.1�
 ## informational
 ```
 
-The reviewer synthesises the final verdict from code-reader's 8-section report plus quality-runner's 5-section report.
+The reviewer synthesises the final verdict from code-reader's 8-section report plus quality-runner's report.
 
-## Step 3 — Run Lint
+## Step 3 — Validate Builder Evidence
 
-Invoke Quality-Runner for lint if not already done in Step 2 report:
+Use builder-provided quality-runner output as the primary evidence source for tests, lint, and coverage.
 
-```
-agentName: quality-runner
-prompt: |
-  mode: scoped
-  task_id: {id}
-  test_paths: []
-  lint_paths: ["workspace/{package}/src/", "tests/test_{module}_{task_id}.py"]
-```
+Re-run checks independently only when evidence is missing, contradictory, or otherwise not cost-justified.
 
-Record: `clean: true/false` and any `violations` from the `## Lint` section.
-
-## Step 4 — Run Coverage
-
-Invoke Quality-Runner for coverage:
+If independent re-run is needed, use quality-runner and keep scope narrow:
 
 ```
 agentName: quality-runner
@@ -155,132 +144,30 @@ prompt: |
   task_id: {id}
   test_paths: ["tests/test_{module}_{task_id}.py"]
   coverage_modules: ["{module}"]
-  lint_paths: []
+  lint_paths: ["workspace/{package}/src/", "tests/test_{module}_{task_id}.py"]
 ```
 
-Verify touched modules have 90% coverage or higher from the `## Coverage` section.
+## Step 4 — Apply the Scoped 3-Item Checklist
 
-**Scoping rule:** The 90% gate applies to lines CHANGED by the builder in this task (diff-scoped), not the entire module. If the module has low overall coverage but the builder's changes are fully exercised, that is a PASS. Note module-level coverage as INFORMATIONAL context only — if it's genuinely low, create a follow-up test-curation task rather than rejecting the current task.
+This checklist is the operative review workflow.
 
-## Step 5 — Pass 1: CRITICAL Checks
+### 4.1 AC→Code Mapping
 
-Any finding in Pass 1 = automatic FAIL verdict. These are non-negotiable.
+For each AC line, verify concrete implementation evidence in changed files.
 
-### 5.0 Test-Writer Audit — AC-to-Test Coverage
+### 4.2 Test→AC Alignment
 
-> **Conditional:** Skip when no `TestFromAC_*` classes exist.
+For each AC line, verify mapped tests prove the intended behavior and would fail if violated.
 
-1. For each AC line, find the corresponding `TestFromAC_*` test(s).
-2. For each mapped test: would it fail if the AC were violated?
-3. Produce a coverage table:
+### 4.3 Proof Sufficiency (Boundary Examples)
 
-| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
-|---------|-------------|---------------------------|---------|
-| {line} | {test or "none"} | {Yes/No — reasoning} | COVERED / MISSING / LAX |
+Verify the available proof includes key boundary examples for changed behavior (success + failure/edge where applicable). If boundaries are absent, record a factual deficiency in Review Evidence.
 
-**Any MISSING = FAIL.** LAX = note. Builder-authored compensating tests are not part of the target process.
+### Informational Checks
 
-### 5.1 Security Review
+These never block a PASS verdict by themselves: style/readability, doc wording, naming, and minor test-tightening opportunities.
 
-Check changed code against OWASP Top 10 patterns:
-
-1. **Hardcoded secrets** — grep for tokens, passwords, API keys.
-2. **Injection** — unsanitized input in SQL, shell commands, templates.
-3. **Path traversal** — user-controlled input in file paths without validation.
-4. **Insecure deserialization** — `pickle.loads`, `yaml.load` without SafeLoader, `eval()`/`exec()`.
-5. **Missing input validation** — at system boundaries.
-6. **Dependency risk** — new dependencies well-maintained and not known-vulnerable?
-7. **Secret leakage** — error messages or logs exposing credentials/PII.
-
-Any vulnerability = FAIL.
-
-### 5.2 Test Integrity — TestFromAC Comparison
-
-> **Conditional:** Only when `TestFromAC_*` classes exist.
-
-Compare each `TestFromAC_*` test method against the test-writer's original intent and verify behavioral equivalence.
-
-Compare each `TestFromAC_*` test method against the test-writer's original intent. Produce a comparison table:
-
-| Original Test | Change Made | Assessment |
-|---------------|-------------|------------|
-| {test} | {description} | PRESERVED / CHANGED_WITH_JUSTIFICATION / NEEDS_REVIEW |
-
-Canonical weakened-assertion patterns: relaxed comparison, broadened exception, removed edge case, reduced boundary coverage, weakened assertion count, added `pytest.skip`/`xfail` without justification.
-
-### 5.3 Test Quality
-
-Evaluate each dimension: **STRONG** / **ADEQUATE** / **WEAK**.
-
-1. **Assertion specificity** — flag lazy assertions: `assert result`, `assert result is not None`.
-2. **Negative/error-path coverage** — for every happy-path test, where is the error test?
-3. **Manual mutation reasoning** — if you flipped `>` to `>=` or removed a return, would a test catch it?
-4. **Test independence** — no shared mutable state between tests.
-5. **Descriptive test names** — `test_1`, `test_it_works` are unacceptable.
-
-Any WEAK rating = automatic FAIL.
-
-### 5.4 Data Safety
-
-1. **Unvalidated LLM output** persisted without sanitization.
-2. **Race conditions** in shared mutable state.
-3. **Missing atomicity** in multi-step operations.
-4. **Unbounded input** to resource-intensive operations.
-
-Any data safety issue = FAIL.
-
-### 5.5 Implementation-Aware Test Gap Analysis
-
-Read the builder's actual code. For each significant code path, check whether a test exercises it:
-
-- Branches, error-handling, retry logic, state machines, configuration-dependent behavior.
-- Untested defensive code (validation, fallback logic, error recovery).
-
-Significant untested paths = FAIL. Trivial getters or obvious pass-through code = no flag.
-
-### 5.6 Necessity Check
-
-> **Conditional:** Only for tasks adding new dependencies, integrations, tools, or external capabilities. Skip for bug fixes, refactors, renames, config.
-
-1. **Already provided?** IDE, runtime, or installed extension provides this capability?
-2. **Tooling overlap?** Existing project tooling solves this need?
-3. **Presumptive feature?** Building for speculated future need?
-
-If yes to any = FAIL with evidence.
-
-### 5.7 Builder Process Quality (Loop Detection)
-
-Read the full task body via `show_task`. Check builder notes for loop patterns:
-
-1. Count `## Builder Notes` sections (including retries).
-2. Verify approach variation across retries.
-3. Check for tier-3 violation (3+ retries without handoff/block).
-
-| Assessment | Criteria | Action |
-|------------|----------|--------|
-| **CLEAN** | 1 retry max, or all retries vary approach | Note, no action |
-| **FRICTION** | 2 retries with approach variation | Informational only |
-| **LOOP** | Identical approaches, or tier-3 triggered without handoff | Automatic FAIL |
-
-> **Code-reader delegation:** For complex reviews, delegate deep code reading to the **code-reader** agent. The code-reader provides detailed analysis of specific files or functions. The reviewer retains verdict authority.
-
-## Step 6 — Pass 2: INFORMATIONAL Checks
-
-Findings noted but do NOT block a PASS verdict.
-
-### 6.1 Code Reading — style, type hints, patterns, naming, dead code
-
-### 6.2 Documentation — missing/stale docstrings, contradictory comments
-
-### 6.3 Minor Test Improvements — tighter assertions, simplified setup
-
-### 6.4 Code Structure — flat-vs-nested, function length, extraction opportunities
-
-### Suppressions
-
-Do NOT flag: threshold constants without justification, redundant readability guards, tests exercising multiple guards, already-addressed diff items, style-only consistency changes, regex edge cases for constrained inputs, `from __future__ import annotations` in test files, agent/skill markdown formatting nits, coverage gaps in untouched code.
-
-## Step 7 — Verify AC Compliance
+## Step 5 — Verify AC Compliance
 
 Build an evidence table — every AC line needs specific proof:
 
@@ -294,7 +181,7 @@ Build an evidence table — every AC line needs specific proof:
 
 **Verify every citation.** Read actual files and confirm. Fabricated line references are a recurring failure mode.
 
-## Step 8 — Produce Verdict
+## Step 6 — Produce Verdict
 
 Confidence threshold: 0.90 = PASS (see `r-pipeline-protocol` → Confidence Thresholds).
 
@@ -312,11 +199,11 @@ PASS confirmation line (required when no findings):
 
 **Scope constraint — don't invent requirements:** The reviewer proves what AC declares, including its natural branches and edge cases. The reviewer does NOT invent requirements AC doesn't mention. If you find a gap that is not traceable to any AC line (even by reasonable implication), classify it as INFORMATIONAL — it cannot contribute to a FAIL verdict. Optionally create a follow-up task for genuinely important non-AC findings. Example: AC says "defaults to research, validated in statuses" → testing that validation rejects invalid values is fair (natural branch). Demanding an explicit "omission-path test" for what happens when the field isn't provided at all is an invention (Pydantic handles it implicitly).
 
-If code-reader was dispatched (td:2), build a unified **AC compliance table** by cross-walking Code-Reader's AC coverage assessment against Quality-Runner's test pass/fail status per AC line. Automatic FAIL triggers: any MISSING or WEAK finding from Code-Reader; any test failure reported by Quality-Runner; any security finding from Code-Reader. Note any divergence between subagent findings and your own analysis.
+If code-reader was dispatched (td:2), build a unified **AC compliance table** by cross-walking code-reader AC coverage findings against builder/quality-runner evidence per AC line. Note any divergence between subagent findings and your own analysis.
 
-**PASS** (all Pass 1 criteria met): advance via `end_work` (moves to `docs` + releases claim).
+**PASS** (zero Review Evidence findings): advance via `end_work` (moves to `docs` + releases claim).
 
-**FAIL** (any Pass 1 criterion unmet): list every failing criterion with evidence. Choose target based on issue type:
+**FAIL** (one or more Review Evidence findings): list every failing criterion with evidence. Choose target based on issue type:
 
 - **Implementation issue** → `in-progress` (builder fixes directly)
 - **Test gap** → `todo` (tests insufficient but implementation is correct — test-writer adds missing coverage)
@@ -336,40 +223,18 @@ Append to task body before advancing:
 ```
 ## Review Evidence
 ### Test Results
-- pytest: {N} passed, {M} failed
+- quality-runner (builder evidence): {summary}
+- independent rerun (only if cost-justified): {summary or "not needed"}
 
-### Lint: {clean / N errors}
+### Lint
+- {clean / N errors}
 
-### Coverage: {module}: {X}%
+### Coverage
+- {module}: {X}% (or N/A for non-code tasks)
 
-### Pass 1 — CRITICAL
-#### Test-Writer AC Coverage
-| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
-|---------|-------------|---------------------------|---------|
-
-#### Security Review
-- {findings or "No issues"}
-
-#### Test Integrity
-| Original Test | Change Made | Assessment |
-
-#### Test Quality
-| Dimension | Rating | Evidence |
-
-#### Data Safety
-- {findings or "No issues"}
-
-#### Implementation-Aware Gaps
-- {findings or "No untested paths"}
-
-#### Builder Process Quality
-| Metric | Value |
-| Builder Notes sections | {count} |
-| Approach variation | {Yes/No/N/A} |
-| Assessment | {CLEAN/FRICTION/LOOP} |
-
-### Pass 2 — INFORMATIONAL
-- {findings or "None"}
+### Review Evidence
+- Findings that cite AC lines or factual deficiencies only.
+- If one or more findings exist, verdict is FAIL.
 
 ### AC Compliance
 | AC Line | Evidence | Mapped Test | Status |
@@ -390,11 +255,11 @@ Append to task body before advancing:
 
 ## Verification Checklist
 
-- [ ] All Pass 1 checks executed (5.0–5.7), conditionals applied correctly
+- [ ] Scoped 3-item checklist executed (AC→code mapping, test→AC alignment, proof sufficiency)
 - [ ] Evidence table has specific proof for every AC line (not self-reports)
 - [ ] Confidence score derived from explicit criteria, not gut feeling
-- [ ] Tests run independently, not trusting builder output
-- [ ] Coverage measured on touched modules
+- [ ] Builder quality-runner evidence reviewed first; independent re-run only when cost-justified
+- [ ] Coverage recorded when task scope includes code changes
 - [ ] Citations verified — file:line references read and confirmed
 - [ ] Verdict matches confidence threshold (0.90+)
 - [ ] Review evidence included in `end_work` note
@@ -404,6 +269,6 @@ Append to task body before advancing:
 
 - **Skipping builder evidence:** Always read builder quality-runner output before deciding whether independent re-execution is cost-justified.
 - **Gut-feeling confidence:** If your score is .91–.95 without explicit deductions, recalculate with the rubric.
-- **Terminal runTests tool:** Deadlocks with parallel agents. Always use `uv run pytest` in terminal.
-- **Coverage measurement:** Invoke the `quality-runner` subagent for coverage measurement — do not load pytest skills or retry flag variations directly.
+- **Independent rerun overuse:** Re-running every task by default violates the trust-the-builder model and adds cost without new evidence.
+- **Coverage measurement:** Invoke the `quality-runner` subagent when coverage is needed — do not load pytest skills or retry flag variations directly.
 - **Suppression over-application:** Suppressions are for intentional patterns only. Do not suppress genuine issues using the suppression list as justification.

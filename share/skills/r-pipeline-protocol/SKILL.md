@@ -123,7 +123,7 @@ The pipeline uses three lines of defense. Trust upstream lines' detailed work; f
 - **TDD by default.** Write the test first, watch it fail, then implement. Target ≥ 90% coverage per phase gate.
 - **State confidence at decision points.** Score 0.0–1.0. When multiple valid approaches exist, present trade-offs using `(bp:)` for best-practice and `(rec:)` for recommendation.
 - **Deliverables are kanban tasks and working code, not documents.** Research docs are supporting artifacts. After research, always create follow-up tasks.
-- **Verify subagent output.** After a subagent reports completion, verify deliverables exist and match AC. Run tests yourself.
+- **Verify subagent output.** After a subagent reports completion, verify deliverables exist and match AC; re-run independently only when evidence is missing or contradictory.
 
 ### Test-Depth Convention
 
