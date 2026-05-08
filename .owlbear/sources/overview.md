@@ -2,6 +2,15 @@
 
 External repos and resources studied during OwlBear development.
 
+## SARIF Upload to GitHub Code Scanning (Task #1417)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| MegaLinter SARIF Reporter docs | <https://megalinter.io/latest/reporters/SarifReporter/> | Canonical upload step template, SARIF file path `megalinter-report.sarif` | `.owlbear/research/1417-sarif-upload-code-scanning.md` | 2026-05-08 |
+| GitHub docs — Uploading a SARIF file | <https://docs.github.com/en/code-security/code-scanning/integrating-with-code-scanning/uploading-a-sarif-file-to-github> | Permissions (`security-events: write`, `actions: read`), category input, GHAS requirement | `.owlbear/research/1417-sarif-upload-code-scanning.md` | 2026-05-08 |
+| github/codeql-action upload-sarif action.yml | <https://github.com/github/codeql-action/blob/main/upload-sarif/action.yml> | Action input parameters: sarif_file, category, wait-for-processing, token | `.owlbear/research/1417-sarif-upload-code-scanning.md` | 2026-05-08 |
+| oxsecurity/megalinter SarifReporter.md | <https://github.com/oxsecurity/megalinter/blob/main/docs/reporters/SarifReporter.md> | Confirms file path and recommended workflow step | `.owlbear/research/1417-sarif-upload-code-scanning.md` | 2026-05-08 |
+
 ## MegaLinter uv.lock Exclusion & Ruff Src Fix (Task #1418)
 
 | Source | URL | What | Where Used | Date |
