@@ -90,18 +90,19 @@ def _startup_error(kanban_dir: Path, detail: str) -> RuntimeError:
 def parse_task_id(value: str | int, *, field: str = "task_id") -> int:
     """Parse MCP task identifiers as positive base-10 integers."""
     msg = f"{field} must be a positive integer"
+    payload = json.dumps({"code": "ERR_INVALID_ID", "message": msg})
     if isinstance(value, bool):
-        raise ToolError(msg)
+        raise ToolError(payload)
     if isinstance(value, int):
         parsed = value
     elif isinstance(value, str):
         if not value or value != value.strip() or not value.isdecimal():
-            raise ToolError(msg)
+            raise ToolError(payload)
         parsed = int(value)
     else:
-        raise ToolError(msg)
+        raise ToolError(payload)
     if parsed <= 0:
-        raise ToolError(msg)
+        raise ToolError(payload)
     return parsed
 
 
@@ -204,8 +205,13 @@ async def list_tasks(  # noqa: PLR0913
                 "blocked": blocked,
             }
         )
+        if params.ids is not None and len(params.ids) == 0:
+            return ListTasksResponse(tasks=[], guidance=[], missing_ids=None)
+        resolved_status = params.status
+        if resolved_status is None and params.archival_reason is not None:
+            resolved_status = "archived"
         return app_ctx.engine.agent_view().list_tasks(
-            status=params.status,
+            status=resolved_status,
             tag=params.tag,
             priority=params.priority,
             archival_reason=params.archival_reason,
@@ -338,7 +344,7 @@ async def create_dr(
     return {"created": True, "path": relative_path}
 
 
-@mcp.tool(annotations=ToolAnnotations(destructiveHint=False, idempotentHint=True))
+@mcp.tool(annotations=ToolAnnotations(destructiveHint=False, idempotentHint=False))
 async def move_task(
     ctx: Context,
     id: StrId,  # noqa: A002
