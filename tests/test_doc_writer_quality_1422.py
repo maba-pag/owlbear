@@ -394,6 +394,14 @@ class TestFromAC_ConventionMappingTable:
             "(maps to README.md, README-consumer.md per brief row 5)"
         )
 
+    def test_convention_mapping_has_src_selector(self) -> None:
+        step1 = self._step1_section()
+        assert "src/**" in step1, (
+            "Convention mapping table must contain the literal 'src/**' selector "
+            "(first table row is 'serve/{pkg}/src/**' → 'serve/{pkg}/README.md' per AC1 refined) — "
+            "generic 'serve/{pkg}' presence does not prove this row exists"
+        )
+
     def test_gate_rule_task_caused_blocks(self) -> None:
         content = SKILL_DOC_UPDATE.read_text()
         assert "task-caused" in content, (
@@ -420,6 +428,10 @@ class TestFromAC_ConventionMappingTable:
         step1 = self._step1_section()
         assert "no docs impact" in step1, (
             "Step 1 must include the no-impact fast path phrase 'no docs impact'"
+        )
+        assert "with evidence" in step1, (
+            "Step 1 no-impact fast path must require 'with evidence' — "
+            "AC1 refined specifies output is 'no docs impact with evidence', not bare phrase"
         )
         assert "advance" in step1, (
             "Step 1 no-impact fast path must say to 'advance' after writing 'no docs impact'"
