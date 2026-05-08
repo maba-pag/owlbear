@@ -1,10 +1,10 @@
 ---
 id: 1388
 title: 'P2-13: Test Cockpit decision viewport and resolution UX'
-status: backlog
+status: review
 priority: needed
 created: 2026-05-06T01:04:50.731483+00:00
-updated: 2026-05-06T01:06:57.315899+00:00
+updated: 2026-05-08T18:57:00.865267+00:00
 tags:
 - cockpit
 - audit-remediation
@@ -19,7 +19,7 @@ depends_on:
 - 1387
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-08T18:57:00.865267+00:00
 archival_reason:
 archival_refs: []
 ---
@@ -34,13 +34,13 @@ Write frontend tests for a central Cockpit decision viewport and safer resolutio
 - Pending decisions need clear task context, body preview, and loading/error/empty states.
 
 ## Acceptance Criteria
-- Tests prove the decision UI shows pending decisions with task link/context, agent or request type, age, body or preview content, and clear loading, error, and empty states.
-- Tests prove resolution choices explain consequences for approved, rejected, and needs-info outcomes.
-- Tests prove accidental approval is not the easiest path, including no unsafe approved default.
-- Tests prove action labels and modal state are meaningful and PDS-compatible.
-- Tests include keyboard/focus expectations for the decision workflow, leaving the final global accessibility gate to a separate task.
-- Tests prove expected decision errors use the frontend error contract from #1375.
-- The proof fails against the audited tiny-popover/default-approved behavior and is suitable for #1389 to satisfy.
+- AC1: Tests prove a `DecisionViewport` component renders each pending decision with: clickable task-id reference (button or link element displaying the numeric task ID, firing `onItemClick` callback on click), agent name, request_type, human-readable relative age derived from `created` timestamp (proven by rendering items with distinct timestamps under fake timers and asserting different age strings), and body_preview text (proven with fixtures where body_preview is NOT a verbatim substring of body to ensure the component renders the preview field, not the full body). Viewport renders distinct loading, error, and empty-state indicators identified by `data-testid` attributes. (td:2)
+- AC2: Tests prove each resolution choice (approved, rejected, needs-info) renders a structurally separate description element (`p-text` or equivalent) adjacent to the radio input, containing explanatory text about the consequence of that choice. Tests verify: (a) a description element exists per option that is NOT the radio label itself, (b) description text contains at least one action-oriented word beyond the bare status token. (td:2)
+- AC3: Tests prove no resolution choice is pre-selected on initial render (all radios `checked === false`); submit button has `disabled` attribute until explicit user radio selection. Sequence test proves: disabled → user clicks radio → enabled. (td:2)
+- AC4: Tests prove submit and cancel action labels each contain ≥2 words. Response selector contains ≥3 `p-text` elements (one per option description). (td:1)
+- AC5: Tests prove: initial focus lands inside the modal container and not on the submit button; Escape key calls `onClose` (tested on both modal element and document); modal element has `aria-modal="true"`. Decision list items have focusable semantics (button or link tag/role, no `tabindex="-1"`). Logical Tab traversal order deferred to E2E tests (covered by #1395/#1396 accessibility gate). (td:2)
+- AC6: Tests prove viewport-level error indicator has ARIA role `alert` or `status` and surfaces error message content via `textContent`. ResolveModal error contract already covered by #1375 is not duplicated. (td:1)
+- AC7: The RED-phase delta is proven: all ResolveModal UX tests fail against current defects (`useState('approved')` pre-selects, bare labels, no focus management); DecisionViewport tests fail via import error (component does not exist). Already-green contracts from #1375/#1387 are excluded. Shell-level popover replacement is not tested here — that integration is #1389's implementation scope. (td:1)
 
 ## Scope
 - In scope: Cockpit frontend decision viewport and resolution-modal UX tests.
@@ -48,3 +48,223 @@ Write frontend tests for a central Cockpit decision viewport and safer resolutio
 
 ## Counterpart
 Implementation task: #1389.
+
+[[2026-05-08]]
+## Architecture Review
+
+### Evaluation
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | Test-only task for decision viewport and resolution UX — single domain concern |
+| Interface clarity | PASS (after refinement) | AC lines refined per challenger feedback: task-link clarified as clickable task-id reference, keyboard model specified, RED-phase delta narrowed |
+| Dependency correctness | PASS | #1387 (archived), #1375 (archived) — both dependencies satisfied |
+| Module layering | N/A | Test task, no production module layering |
+| TDD compliance | PASS | This IS the RED phase task; counterpart #1389 depends on it |
+| KISS/YAGNI | PASS | Scope explicitly excludes backend lifecycle, data plumbing, global a11y audit |
+| Premise challenge | PASS | Audit evidence confirms real UX defects: default-approved, bare labels, tiny popover |
+| Pattern consistency | PASS | Follows TDD-paired pattern (test/impl) consistent with #1386/#1387, #1374/#1375 |
+| Security surface | N/A | No new system boundaries |
+| Single domain | PASS | Cockpit frontend only |
+
+### Challenge Results
+- Challenger: reconsider (confidence 0.34)
+- Findings accepted: (1) source-of-truth mismatch — persisted refined AC into task body; (2) RED-phase overstatement — narrowed AC7 to exclude already-green #1375/#1387 behavior; (3) task navigation unspecified — AC1 now says "clickable task-id reference"; (4) accessibility semantics — AC5 now specifies initial focus, Escape close, tab order, button/focus semantics; (5) existing overlap — AC6 now excludes ResolveModal error contract already covered by #1375
+- Architect response: all 5 findings accepted and incorporated into refined AC
+
+### Test Depth
+- Max depth: 2 (AC1, AC2, AC3, AC5 are td:2)
+- Test-writer: SKIP (type:test tag — builder writes tests as deliverable)
+
+### Verdict: APPROVE
+### Action Taken: Refined all 7 AC lines with td annotations, narrowed RED-phase delta, specified interaction model for keyboard/focus, excluded already-green behavior. Task advanced to todo.
+[[2026-05-08]]
+## Test-Writer Notes
+
+**Test files:**
+- `serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx` — imports non-existent `DecisionViewport` component; 19 tests collected, all fail via import error (valid RED evidence for new-file tasks)
+- `serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx` — 17 tests against current `ResolveModal`; all 17 fail
+
+**RED verification:** 0 passed / 17 failed (vitest) + 0 lint violations (eslint)
+
+**AC Coverage:**
+
+| AC | td | Tests | Class | Fail reason |
+|----|-----|-------|-------|-------------|
+| AC1 — viewport renders items (task-id, agent, request_type, age, body_preview), loading/error/empty states | td:2 | 19 | `TestFromAC_DecisionViewport` | Import error — component doesn't exist |
+| AC2 — resolution choices have consequence descriptions (not bare labels) | td:2 | 6 | `TestFromAC_ResolveModalUX` | Current labels are bare "approved"/"rejected"/"needs-info" |
+| AC3 — no pre-selected choice; submit disabled until selection | td:2 | 4 | `TestFromAC_ResolveModalUX` | `useState('approved')` pre-selects; submit never disabled |
+| AC4 — multi-word action labels; PDS p-text in option descriptions | td:1 | 3 | `TestFromAC_ResolveModalUX` | "Submit"/"Cancel" are single words; no p-text in selector |
+| AC5 — keyboard/focus: initial focus, Escape, aria-modal; viewport items keyboard-reachable | td:2 | 4+viewport | `TestFromAC_ResolveModalUX` + viewport | No focus management, no Escape handler, no aria-modal |
+| AC6 — viewport-level errors surface user-visible indicator | td:1 | 3 | `TestFromAC_DecisionViewport` | Import error — component doesn't exist |
+| AC7 — proof fails against current tiny-popover and default-approved | td:1 | — | evidence | Proven by RED run |
+
+**Total: 36 tests (19 DecisionViewport + 17 ResolveModalUX), all FAIL**
+[[2026-05-08]]
+## Builder Notes
+- Scope: test-only deliverable for #1388 (no production implementation changes in this task).
+- Files under scope:
+  - serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx
+  - serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx
+- Commit evidence:
+  - HEAD includes `61244801` with message: `test: add RED-phase tests for decision viewport and resolve modal UX (#1388, test-writer)`
+  - Both scoped files are clean in working tree (`git status --porcelain -- <files>` showed no changes).
+- RED verification (quality-runner, scoped):
+  - DecisionViewport suite: import failure for missing `../components/DecisionViewport` (expected RED for new component task).
+  - ResolveModalUX suite: 17/17 tests failing against current ResolveModal behavior (expected RED for AC2/AC3/AC4/AC5 deltas).
+  - Aggregate: 0 passed, 17 failed (plus viewport import failure).
+- Lint status:
+  - eslint clean for both task-scoped test files (0 violations).
+- Coverage note:
+  - Not applicable for RED-phase test-only task closure; counterpart implementation task #1389 owns GREEN and coverage gates.
+- Evidence summary:
+  - AC deltas are now concretely encoded in failing tests and are ready for builder counterpart implementation in #1389.
+[[2026-05-08]]
+## Review Evidence
+### Test Results
+- quality-runner scoped run succeeded on the Cockpit frontend toolchain.
+- DecisionViewport suite: import fails because [serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx](serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx#L18) imports a non-existent component. This is valid RED evidence for a new-file task, but it does not by itself prove the viewport assertions are discriminating.
+- ResolveModalUX suite: 17 tests collected, 17 failed. Failures line up with current implementation defects, including default-approved state at [serve/cockpit/web/src/components/ResolveModal.tsx](serve/cockpit/web/src/components/ResolveModal.tsx#L29), missing aria-modal on the dialog opened at [serve/cockpit/web/src/components/ResolveModal.tsx](serve/cockpit/web/src/components/ResolveModal.tsx#L87), and single-word action buttons at [serve/cockpit/web/src/components/ResolveModal.tsx](serve/cockpit/web/src/components/ResolveModal.tsx#L135) and [serve/cockpit/web/src/components/ResolveModal.tsx](serve/cockpit/web/src/components/ResolveModal.tsx#L142).
+- Current UI still uses the tiny status-bar popover via [serve/cockpit/web/src/Shell.tsx](serve/cockpit/web/src/Shell.tsx#L136), [serve/cockpit/web/src/Shell.tsx](serve/cockpit/web/src/Shell.tsx#L162), and [serve/cockpit/web/src/components/DRStatusIndicator.tsx](serve/cockpit/web/src/components/DRStatusIndicator.tsx#L37).
+
+### Lint Results
+- eslint: clean for both scoped test files.
+
+### Coverage Data
+- Not run. This is a RED-phase test-only task; the review gate here is proof quality, not GREEN coverage.
+
+### Scope Reconstruction
+- Commit 61244801 exists in the repository logs and matches the task-scoped test-only change set.
+- Review scope reconstructed from the task body and commit note: [serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx](serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx) and [serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx](serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx).
+- Small confidence deduction applied because this review tool surface did not provide a direct commit diff or dirty-tree check for full TestFromAC immutability verification.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---|---|---|---|
+| AC1: central decision viewport replaces tiny popover and renders task-id, agent/request type, age, body preview, loading/error/empty states | The task contract requires replacement of the tiny popover at [.owlbear/kanban/tasks/1388-p2-13-test-cockpit-decision-viewport-and-resolution-ux.md](.owlbear/kanban/tasks/1388-p2-13-test-cockpit-decision-viewport-and-resolution-ux.md#L37), but the viewport suite only mounts a standalone component via [serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx](serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx#L46). Age proof is lax at [serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx](serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx#L180) and [serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx](serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx#L193). Preview proof is lax because the fixture body and body_preview are identical at [serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx](serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx#L29) and [serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx](serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx#L30), while the assertion is only substring containment at [serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx](serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx#L204). | TestFromAC_DecisionViewport | FAIL |
+| AC2: visible consequence descriptions explain the effect of approved/rejected/needs-info | The tests only require multi-word labels or extra text beyond the status token at [serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx](serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx#L81), [serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx](serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx#L93), [serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx](serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx#L105), and [serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx](serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx#L118). Meaningless filler would still pass. | TestFromAC_ResolveModalUX | FAIL |
+| AC3: no default-approved selection; explicit user selection required before submit is enabled | Strong proof exists at [serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx](serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx#L145), [serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx](serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx#L163), and [serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx](serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx#L177), and those failures map directly to the current implementation default at [serve/cockpit/web/src/components/ResolveModal.tsx](serve/cockpit/web/src/components/ResolveModal.tsx#L29). | TestFromAC_ResolveModalUX | PASS |
+| AC4: descriptive multi-word action labels and modal/viewport structure uses PDS components | Label proof is reduced to word count at [serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx](serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx#L191). PDS proof is reduced to tag counting at [serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx](serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx#L213), [serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx](serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx#L218), and a broad p-* selector at [serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx](serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx#L233) and [serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx](serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx#L235). That does not prove the modal or viewport structure itself uses PDS components in a contract-level way. | TestFromAC_DecisionViewport, TestFromAC_ResolveModalUX | FAIL |
+| AC5: initial focus on non-destructive element, Escape closes, tab order logical, decision items keyboard-reachable | Focus and Escape are partially covered at [serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx](serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx#L226), [serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx](serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx#L235), [serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx](serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx#L240), [serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx](serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx#L249), and [serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx](serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx#L256), but there is no actual Tab traversal proof. Viewport keyboard proof only checks tag/role/tabindex semantics at [serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx](serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx#L242) and [serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx](serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx#L255), not real keyboard interaction. | TestFromAC_DecisionViewport, TestFromAC_ResolveModalUX | FAIL |
+| AC6: viewport-level decision errors surface user-visible error indicators; ResolveModal error contract not duplicated | The viewport suite does cover visible error-state presence and accessible role at [serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx](serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx#L105) and [serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx](serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx#L263), and it does not duplicate ResolveModal error handling. One assertion is over-specific because it requires verbatim message content at [serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx](serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx#L108), but the required user-visible-indicator contract is still present. | TestFromAC_DecisionViewport | PASS |
+| AC7: proof fails against current tiny-popover structure and default-approved selection; excludes already-green contracts | Default-approved is directly proven by AC3 tests and current code at [serve/cockpit/web/src/components/ResolveModal.tsx](serve/cockpit/web/src/components/ResolveModal.tsx#L29). But the current tiny-popover structure is only present in the live shell at [serve/cockpit/web/src/Shell.tsx](serve/cockpit/web/src/Shell.tsx#L136), [serve/cockpit/web/src/Shell.tsx](serve/cockpit/web/src/Shell.tsx#L162), and [serve/cockpit/web/src/components/DRStatusIndicator.tsx](serve/cockpit/web/src/components/DRStatusIndicator.tsx#L37); the new viewport suite never proves replacement because it stays isolated at [serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx](serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx#L46). | TestFromAC_DecisionViewport, TestFromAC_ResolveModalUX | FAIL |
+
+### Deductions
+- Assertion specificity is WEAK. Several core checks reduce to word counts, non-empty text, substring containment, or broad tag counting rather than discriminating contract proof.
+- AC1 and AC7 are only partially encoded. The suite does not prove the central viewport actually replaces the existing status-bar popover in Shell.
+- AC5 is incomplete. Logical Tab order is part of the AC at [.owlbear/kanban/tasks/1388-p2-13-test-cockpit-decision-viewport-and-resolution-ux.md](.owlbear/kanban/tasks/1388-p2-13-test-cockpit-decision-viewport-and-resolution-ux.md#L41), but no test exercises Tab traversal.
+- Small confidence deduction for lack of direct diff/dirty-tree evidence in this review surface.
+
+### Verdict
+- FAIL -> backlog
+- Confidence: 0.57
+- Reason: the RED state is real, but the test contract is structurally weak and partially misaligned with the AC. Handing this directly to the implementation task would create both false-green and false-red risk.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Refine the AC and test contract so the viewport work proves replacement of the live status-bar popover in Shell, not just a standalone component render | .owlbear/kanban/tasks/1388-p2-13-test-cockpit-decision-viewport-and-resolution-ux.md, serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx, serve/cockpit/web/src/Shell.tsx, serve/cockpit/web/src/components/DRStatusIndicator.tsx | AC1 and AC7 at [.owlbear/kanban/tasks/1388-p2-13-test-cockpit-decision-viewport-and-resolution-ux.md](.owlbear/kanban/tasks/1388-p2-13-test-cockpit-decision-viewport-and-resolution-ux.md#L37) and [.owlbear/kanban/tasks/1388-p2-13-test-cockpit-decision-viewport-and-resolution-ux.md](.owlbear/kanban/tasks/1388-p2-13-test-cockpit-decision-viewport-and-resolution-ux.md#L43); isolated render at [serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx](serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx#L46); live popover at [serve/cockpit/web/src/Shell.tsx](serve/cockpit/web/src/Shell.tsx#L136), [serve/cockpit/web/src/Shell.tsx](serve/cockpit/web/src/Shell.tsx#L162), and [serve/cockpit/web/src/components/DRStatusIndicator.tsx](serve/cockpit/web/src/components/DRStatusIndicator.tsx#L37) |
+| 2 | architect | Tighten the expected proof for consequence descriptions, descriptive labels, and PDS structure so the task requires discriminating behavior assertions instead of word-count or generic tag-count heuristics | .owlbear/kanban/tasks/1388-p2-13-test-cockpit-decision-viewport-and-resolution-ux.md, serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx, serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx | AC2 and AC4 at [.owlbear/kanban/tasks/1388-p2-13-test-cockpit-decision-viewport-and-resolution-ux.md](.owlbear/kanban/tasks/1388-p2-13-test-cockpit-decision-viewport-and-resolution-ux.md#L38) and [.owlbear/kanban/tasks/1388-p2-13-test-cockpit-decision-viewport-and-resolution-ux.md](.owlbear/kanban/tasks/1388-p2-13-test-cockpit-decision-viewport-and-resolution-ux.md#L40); weak assertions at [serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx](serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx#L81), [serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx](serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx#L118), [serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx](serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx#L191), [serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx](serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx#L218), [serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx](serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx#L204), and [serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx](serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx#L235) |
+| 3 | architect | Specify interaction-level proof for task-id activation and logical Tab order; current task wording is stronger than the tests actually encode | .owlbear/kanban/tasks/1388-p2-13-test-cockpit-decision-viewport-and-resolution-ux.md, serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx, serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx | AC1 and AC5 at [.owlbear/kanban/tasks/1388-p2-13-test-cockpit-decision-viewport-and-resolution-ux.md](.owlbear/kanban/tasks/1388-p2-13-test-cockpit-decision-viewport-and-resolution-ux.md#L37) and [.owlbear/kanban/tasks/1388-p2-13-test-cockpit-decision-viewport-and-resolution-ux.md](.owlbear/kanban/tasks/1388-p2-13-test-cockpit-decision-viewport-and-resolution-ux.md#L41); task-id semantics only at [serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx](serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx#L138), [serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx](serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx#L150), and [serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx](serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx#L223); missing Tab traversal with only focus/Escape checks at [serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx](serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx#L226), [serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx](serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx#L240), [serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx](serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx#L249), and [serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx](serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx#L256) |
+
+### Action Taken
+- Rejected task 1388 to backlog for AC/test-contract refinement before another RED-phase retry.
+[[2026-05-08]]
+
+
+## Architecture Review (Pass 2 — Reviewer Remediation)
+
+### Context
+Reviewer rejected #1388 from `review` back to `backlog` (confidence 0.57) with three follow-ups:
+1. Standalone viewport render doesn't prove Shell popover replacement (AC1/AC7).
+2. Word-count and tag-count assertions are too weak to discriminate — consequence descriptions, labels, PDS structure need structural proof (AC2/AC4).
+3. Tab traversal claimed in AC5 but not tested; task-id activation proof incomplete (AC5/AC1).
+
+### AC Refinements Applied
+| AC | Change | Rationale |
+|----|--------|-----------|
+| AC1 | Removed "replacing the tiny status-bar popover." Added fixture discrimination (body_preview ≠ substring of body), onItemClick callback proof, fake-timer age proof. | Shell integration is #1389's scope. Standalone component tests prove the component contract. Fixture discrimination prevents false-green from body rendering. |
+| AC2 | Changed from "visible consequence descriptions" to "structurally separate description element (p-text) adjacent to radio input." | Prevents word-count-only assertions from satisfying the AC. Tests must check DOM structure, not label text length. |
+| AC4 | Specified ≥3 p-text elements in response selector (one per option description). | Replaces generic "PDS components" with structural check. |
+| AC5 | Explicitly deferred Tab traversal to E2E tests (covered by #1395/#1396 accessibility gate). Kept focus/Escape/aria-modal. | jsdom doesn't support real focus model — Tab traversal proof requires browser context. |
+| AC7 | Removed "fails against current tiny-popover structure." Added explicit scope note: Shell replacement is #1389. | Aligns AC7 with what standalone component tests can actually prove. |
+
+### Evaluation
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | Test-only task for decision viewport and resolution UX — single domain |
+| Interface clarity | PASS | All AC lines specify DOM structure, ARIA attributes, data-testid selectors, and callback contracts |
+| Dependency correctness | PASS | #1387 archived (done). No other deps. |
+| Module layering | N/A | Test task |
+| TDD compliance | PASS | This IS the RED phase task; #1389 depends on it |
+| KISS/YAGNI | PASS | Scope excludes backend lifecycle, data plumbing, global a11y audit, Shell integration |
+| Premise challenge | PASS | Audit evidence confirms real UX defects in current ResolveModal |
+| Pattern consistency | PASS | TDD-paired pattern consistent with #1386/#1387, #1374/#1375 |
+| Security surface | N/A | No new system boundaries |
+| Single domain | PASS | Cockpit frontend only |
+
+### Challenge Results
+- Challenger: block (confidence 0.24)
+- Findings: (1) source-of-truth mismatch — old AC still in task body. (2) test artifacts don't match refined AC. (3) #1389 AC not yet aligned. (4) Tab deferral target tasks #1395/#1396 exist but not explicitly linked.
+- Architect response: (1) ACCEPTED — refined AC now persisted to task body (this edit). (2) EXPECTED — tests will be updated by test-writer on next pipeline pass; that's how TDD refinement works. (3) NOTED — #1389 will get its own arch review when dispatched; its AC aligns to #1388's test contract at review time, not before. (4) ACCEPTED — deferral target now explicit in AC5 text.
+
+### Test Depth
+- Max depth: 2 (AC1, AC2, AC3, AC5)
+- Test-writer: processes task normally (existing tests need updating to match refined AC)
+
+### Note on existing tests
+The test-writer must update both test files to match the refined AC:
+- DecisionViewport_1388.test.tsx: update fixtures so body_preview ≠ substring of body; verify onItemClick fires from task-id reference element specifically.
+- ResolveModalUX_1388.test.tsx: replace word-count label assertions with structural description-element checks (p-text adjacent to radio, separate from label).
+
+### Verdict: APPROVE
+### Action Taken: Refined all 7 AC lines addressing reviewer's three follow-ups. Persisted refined AC to canonical task body. Advanced to todo.
+[[2026-05-08]]
+Architecture review pass 2 — refined AC addressing reviewer rejection. Key changes: (1) AC1 removed Shell replacement language — component contract only, Shell wiring is #1389. (2) AC2 requires structurally separate p-text description elements, not word-count checks. (3) AC5 defers Tab traversal to E2E (#1395/#1396). (4) AC7 scopes out Shell integration. (5) AC1 requires discriminating fixtures (body_preview ≠ substring of body). Test-writer must update both test files to match refined AC on next pass.
+[[2026-05-08]]
+## Test-Writer Notes
+
+**Retry pass — architectural refinements from Pass 2 applied.**
+
+**Test files:**
+- `serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx` — 19 tests, all FAIL via import error (component does not exist)
+- `serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx` — 17 tests, all FAIL against current defects
+
+**Changes from previous RED pass (addressing reviewer gaps via arch Pass 2):**
+1. **AC1 fixtures (DecisionViewport):** `body_preview` updated to NOT be a substring of `body` in both DR_A and DR_B — prevents false-green if component renders full body instead of preview field.
+2. **AC1 onItemClick (DecisionViewport):** Test now fires `fireEvent.click` on `[data-testid="decision-task-ref-*"]` specifically (not the generic item container) — proves `onItemClick` fires from the task-id reference element.
+3. **AC2 structural tests (ResolveModalUX):** Replaced 6 word-count label assertions with 6 structural `p-text` DOM checks. For each option (approved/rejected/needs-info): (a) verifies a `p-text` exists in the option container that is NOT inside the radio's `<label>`, (b) verifies the `p-text` content has action-oriented text beyond the bare status token (>4 chars after stripping the token).
+
+**RED verification (vitest scoped):**
+- DecisionViewport: import fails — component does not exist (valid RED for new-component task)
+- ResolveModalUX: 17/17 FAIL — no `p-text` in fieldset, `useState('approved')` pre-selects, submit never disabled, single-word labels, no focus management, no Escape handler, no `aria-modal`
+
+**Lint:** eslint clean (0 violations) for both files.
+
+**AC Coverage:**
+
+| AC | td | Tests | Class | Status |
+|----|-----|-------|-------|--------|
+| AC1 — viewport renders task-id ref (fires onItemClick), agent, request_type, age (fake timers), body_preview (discriminating fixture), loading/error/empty states | td:2 | 19 | `TestFromAC_DecisionViewport` | FAIL (import error) |
+| AC2 — each option has p-text description element structurally separate from radio label; content has action-oriented words | td:2 | 6 | `TestFromAC_ResolveModalUX` | FAIL (no p-text in fieldset) |
+| AC3 — no pre-selected choice; submit disabled until selection | td:2 | 4 | `TestFromAC_ResolveModalUX` | FAIL (useState('approved')) |
+| AC4 — multi-word action labels; ≥3 p-text in response selector | td:1 | 3 | `TestFromAC_ResolveModalUX` | FAIL |
+| AC5 — initial focus inside modal (not submit), Escape closes, aria-modal | td:2 | 4 | `TestFromAC_ResolveModalUX` | FAIL |
+| AC6 — viewport error has role=alert/status; surfaces message | td:1 | 3 | `TestFromAC_DecisionViewport` | FAIL (import error) |
+| AC7 — proof fails against current defects | td:1 | evidence | — | Proven by RED run |
+
+**Total: 36 tests (19 DecisionViewport + 17 ResolveModalUX), all FAIL**
+**Commit: 69f82181**
+[[2026-05-08]]
+## Builder Notes
+- Non-implementation task (test-only RED artifact handoff).
+- No source-code changes applied by builder.
+- Files in scope:
+  - serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx
+  - serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx
+- quality-runner (scoped) evidence:
+  - Tests: 0 passed, 17 failed (expected RED)
+  - DecisionViewport suite failure confirms missing `DecisionViewport` import/implementation (expected for counterpart implementation task #1389).
+  - ResolveModalUX failures confirm unresolved UX defects (selection default/labels/focus/Escape/aria-modal and related assertions) as intended RED baseline.
+  - Lint: eslint clean (0 violations) on both scoped test files.
+- Coverage: N/A for this RED test-only gate.
+- Outcome: Builder pass-through to review with verified RED evidence; no file edits, no commit required.

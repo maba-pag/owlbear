@@ -1,10 +1,10 @@
 ---
 id: 1422
 title: 'P1-01: Test — verify doc-writer quality redesign AC'
-status: in-progress
+status: backlog
 priority: needed
 created: 2026-05-08T00:32:15.467895+00:00
-updated: 2026-05-08T17:01:51.278764+00:00
+updated: 2026-05-08T18:54:04.125290+00:00
 tags:
 - phase-1
 - scope:shared
@@ -492,3 +492,240 @@ The R4 supplement above incorrectly says "Gate rules: heading in Step 1" — the
 - Builder skip: test-only, implementation already correct — advance to review
 - AC coverage: AC1 gate-rule coupling (R4 Gap: addressed), all prior AC2–AC5 unchanged
 - Commit: c3972833
+[[2026-05-08]]
+## Builder Notes
+- Implementation: no files changed (test-only task; verification pass-through)
+- Tests: 51 passed, 0 failed, 0 skipped (`tests/test_doc_writer_quality_1422.py`)
+- Coverage: N/A for markdown-artifact assertions (`coverage_modules=[]` in scoped gate)
+- ruff: clean (0 violations)
+- Approach: validated current AC test suite state and executed a fresh scoped quality-runner gate prior to review handoff.
+- Evidence summary: quality-runner reported `failed: []`, `clean: true`, pytest exit 0, ruff exit 0.
+- Fixes applied: none
+[[2026-05-08]]
+## Review Evidence
+### Test Results
+- pytest: 51 passed, 0 failed (`tests/test_doc_writer_quality_1422.py`) via `quality-runner`
+
+### Lint: clean
+- ruff: 0 violations on `tests/test_doc_writer_quality_1422.py` via `quality-runner`
+
+### Coverage: N/A
+- `coverage_modules=[]`; this is a markdown-artifact test task with no instrumentable source module in scope.
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---------|-------------|---------------------------|---------|
+| AC1 mapping row (`.owlbear/kanban/tasks/1422-p1-01-test-verify-doc-writer-quality-redesign-ac.md:58`) | `test_convention_mapping_serve_pkg_to_readme`, `test_convention_mapping_has_src_selector` | No. `test_convention_mapping_serve_pkg_to_readme` at `tests/test_doc_writer_quality_1422.py:21` accepts any `serve/{pkg}.*README` match anywhere in the file, and `test_convention_mapping_has_src_selector` at `tests/test_doc_writer_quality_1422.py:397` only requires `src/**` somewhere in Step 1. If the Step 1 src row at `share/skills/w-doc-update/SKILL.md:30` were changed to point somewhere other than `serve/{pkg}/README.md` while the pyproject/tests row still mapped to `serve/{pkg}/README.md`, both tests would stay green. | MISSING |
+| AC1 gate + no-impact semantics (`.owlbear/kanban/tasks/1422-p1-01-test-verify-doc-writer-quality-redesign-ac.md:68-69`) | `test_gate_rule_task_caused_blocks`, `test_gate_rule_preexisting_passes`, `test_no_impact_fast_path_advances` | Yes. The latest retry now pins subject+verb coupling at `tests/test_doc_writer_quality_1422.py:405` and `:415`, and it pins `no docs impact` + `with evidence` + `advance` at `tests/test_doc_writer_quality_1422.py:425` against `share/skills/w-doc-update/SKILL.md:37`, `:91`, and `:92`. | COVERED |
+| AC2 | `TestFromAC_DocWriterAgentNoDiagrams` | Yes. Any `diagram`, `Excalidraw`, or `.excalidraw` reference would trip the direct absence tests at `tests/test_doc_writer_quality_1422.py:88`, `:98`, and `:104`. | COVERED |
+| AC3 | `TestFromAC_DocAuditPromptContent` | Yes for the stated presence contract. The prompt contains the required sections at `.owlbear/prompts/doc-audit.prompt.md:46`, `:61`, `:69`, and `:77`, and the suite asserts them at `tests/test_doc_writer_quality_1422.py:114`, `:124`, and `:133`. | COVERED |
+| AC4 | `TestFromAC_NoOldDiagramItems` | Yes. Whole-file bans at `tests/test_doc_writer_quality_1422.py:174` and `:181` would fail on any `Item 5` / `Item 6` reintroduction; live skill is clean. | COVERED |
+| AC5 | `test_todo_marker_complete_template` | Yes. The exact template is asserted at `tests/test_doc_writer_quality_1422.py:220` and exists at `share/skills/w-doc-update/SKILL.md:76`. | COVERED |
+
+#### Security Review
+- No issues. Scope is a stdlib-only file-content suite plus markdown artifacts.
+
+#### Test Integrity
+| Original Test | Change Made | Assessment |
+|---|---|---|
+| `TestFromAC_*` suite in `tests/test_doc_writer_quality_1422.py` | No weakening, skip, or xfail markers are visible in the current snapshot. Commit presence for task hashes was confirmed in `.git/logs/HEAD:2268` (`db7f17e7`), `.git/logs/HEAD:2286` (`5cb92faf`), `.git/logs/HEAD:2314` (`5de383ce`), and `.git/logs/HEAD:2323` (`c3972833`), but full additive diff reconstruction was unavailable in this tool surface. | PRESERVED (low-confidence) |
+
+#### Test Quality
+| Dimension | Rating | Evidence |
+|---|---|---|
+| Assertion specificity | WEAK | AC1's exact mapping-row contract is still split across `tests/test_doc_writer_quality_1422.py:21` and `:397` instead of proving the single row at `share/skills/w-doc-update/SKILL.md:30`. |
+| Negative / exclusion coverage | ADEQUATE | AC2 and AC4 use direct absence assertions and remained green against the live files. |
+| Manual mutation reasoning | WEAK | Repointing the src row away from `serve/{pkg}/README.md` while leaving the pyproject/tests row intact at `share/skills/w-doc-update/SKILL.md:31` would keep the current AC1 mapping tests green. |
+| Test independence | STRONG | Tests are isolated `Path.read_text()` checks over fixed files with no shared mutable state. |
+| Descriptive names | STRONG | Names remain AC-shaped and readable. |
+
+#### Data Safety
+- No issues.
+
+#### Implementation-Aware Gaps
+- `tests/test_doc_writer_quality_1422.py` still lacks a discriminating assertion that couples `serve/{pkg}/src/**` to `serve/{pkg}/README.md` on the same Step 1 mapping row. That leaves a significant untested branch in AC1's mapping contract.
+
+#### Builder Process Quality
+| Metric | Value |
+|---|---|
+| Builder Notes sections | 4 |
+| Approach variation | Yes — prior failures produced substantive AC supplements (R3 and R4) before the latest retry |
+| Assessment | FRICTION |
+
+### Pass 2 — INFORMATIONAL
+- There are already three `## Review Evidence` sections in the task file at `.owlbear/kanban/tasks/1422-p1-01-test-verify-doc-writer-quality-redesign-ac.md:141`, `:213`, and `:356`; this is the fourth review cycle, so the loop-breaker rule applies on any further FAIL.
+- `quality-runner` independently reported `51 passed / 0 failed` and `ruff: clean`; the blocker is proof quality, not runtime behavior.
+- `code-reader` also flagged broader `w-doc-update` workflow semantics such as the full-file-read sentence at `share/skills/w-doc-update/SKILL.md:46`, but the child task's refined AC at `.owlbear/kanban/tasks/1422-p1-01-test-verify-doc-writer-quality-redesign-ac.md:54-69` does not explicitly carry that clause, so I did not use it as a blocking defect.
+- Dirty-tree overlap and full additive diff reconstruction were unavailable in this tool surface.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---|---|---|---|
+| AC1 refined (`.owlbear/kanban/tasks/1422-p1-01-test-verify-doc-writer-quality-redesign-ac.md:54-69`) | The live skill satisfies the current child contract at `share/skills/w-doc-update/SKILL.md:30`, `:37`, `:91`, and `:92`. The latest retry closes the prior gate/no-impact gap, but it still does not prove the exact row `serve/{pkg}/src/**` → `serve/{pkg}/README.md`: `tests/test_doc_writer_quality_1422.py:21` matches any `serve/{pkg}.*README` row, and `:397` checks only for `src/**`. | `test_convention_mapping_serve_pkg_to_readme`, `test_convention_mapping_has_src_selector`, `test_gate_rule_task_caused_blocks`, `test_gate_rule_preexisting_passes`, `test_no_impact_fast_path_advances` | FAIL |
+| AC2 | Agent file is clean under direct absence checks and direct file read. | `TestFromAC_DocWriterAgentNoDiagrams` | PASS |
+| AC3 | Prompt file contains TODO batch resolution, diagram ownership, and describes-based verification sections. | `TestFromAC_DocAuditPromptContent` | PASS |
+| AC4 | No old `Item 5` / `Item 6` references remain in the live skill; whole-file tests cover the condition. | `TestFromAC_NoOldDiagramItems` | PASS |
+| AC5 | Exact TODO template is present in the skill and asserted exactly in the suite. | `TestFromAC_TodoMarkerFormat` | PASS |
+
+### Confidence: 0.89
+### Verdict: FAIL
+### Action
+- Reject to `backlog`. Only one AC1 proof defect remains, but this task already has three prior review sections, so the pipeline loop-breaker rule applies on a fourth review failure.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Reconcile AC1's retry contract with its still-binding exact-row requirement, then return the task to the test-writer with a proof obligation that couples `serve/{pkg}/src/**` and `serve/{pkg}/README.md` on the same mapping row. | `.owlbear/kanban/tasks/1422-p1-01-test-verify-doc-writer-quality-redesign-ac.md`, `tests/test_doc_writer_quality_1422.py`, `share/skills/w-doc-update/SKILL.md` | Child AC line `58` requires the exact pattern; live row is at `share/skills/w-doc-update/SKILL.md:30`; current proof remains split across `tests/test_doc_writer_quality_1422.py:21` and `:397`, which still false-greens on a wrong src-row destination. |
+[[2026-05-08]]
+
+## AC1 Supplement (R5 — exact-row coupling)
+
+The 1 remaining reviewer gap is that `test_convention_mapping_has_src_selector` checks for `src/**` alone and `test_convention_mapping_serve_pkg_to_readme` checks `serve/{pkg}.*README` alone — they are not coupled to the same table row. The test-writer must add one coupling assertion.
+
+### Gap: exact-row coupling for `serve/{pkg}/src/**` → `serve/{pkg}/README.md` (td:1)
+
+Add a new test in `TestFromAC_ConventionMappingTable` that asserts at least one line in the Step 1 section contains BOTH `serve/{pkg}/src/**` AND `serve/{pkg}/README.md`:
+
+```python
+assert any(
+    "serve/{pkg}/src/**" in line and "serve/{pkg}/README.md" in line
+    for line in step1.splitlines()
+), "Convention mapping must have a single row coupling serve/{pkg}/src/** to serve/{pkg}/README.md"
+```
+
+This proves the exact first table row at `share/skills/w-doc-update/SKILL.md:30` as a coupled pair, not two independent tokens. Same line-coupling pattern as R4 gate-rule fix.
+
+### Test-writer guidance (R5)
+- Amend `tests/test_doc_writer_quality_1422.py` — add 1 new test in `TestFromAC_ConventionMappingTable`.
+- Use `self._step1_section()` helper (already exists at line 351).
+- Expected: +1 test → 52 total. DO NOT modify or remove any existing tests.
+
+
+[[2026-05-08]]
+
+## Architecture Review (R5)
+
+### Evaluation
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | Single coupling assertion in existing test class |
+| Interface clarity | PASS | Exact discriminator strings specified with code example |
+| Dependency correctness | PASS | No dependencies |
+| Module layering | N/A | Test file only |
+| TDD compliance | PASS | This IS the test task |
+| KISS/YAGNI | PASS | 1 new test, no abstractions |
+| Premise challenge | PASS | Reviewer documented exact false-green mutation across 4 cycles |
+| Pattern consistency | PASS | Same line-coupling pattern as R4 gate-rule fix, same `_step1_section()` helper |
+| Security surface | PASS | No system boundaries |
+| Single domain | PASS | Agent ecosystem only |
+
+### Challenge Results
+- Challenger: block (confidence 0.24)
+- Key challenges: (1) initial proposal used `src/**` + `README.md` — too loose, wouldn't prove `serve/{pkg}` on both sides. ACCEPTED — revised to use full literals `serve/{pkg}/src/**` and `serve/{pkg}/README.md`. (2) Step 1 has two `serve/{pkg}` → README rows at SKILL.md:30-31, so decomposed proofs can false-green. ACCEPTED — the line-coupling assertion with full column literals resolves this by binding source+destination on the same row. (3) Contract narrowing from td:2 to td:1 — noted; the R5 supplement only covers this one remaining gap (td:1), the overall AC1 remains td:2 from prior supplements.
+- Architect response: accepted challenges 1-2, revised supplement to use full literal tokens. Challenge 3 noted — the original AC1 td:2 designation covers the full AC1 scope; the R5 gap is a single-assertion addition within that scope.
+
+### Test Depth
+- Max depth: 1 (single coupling assertion)
+- Test-writer: PROCEED
+
+### Verdict: APPROVE
+### Action: AC1 supplemented with exact-row coupling assertion using full `serve/{pkg}/src/**` and `serve/{pkg}/README.md` literals per reviewer R4 follow-up. Challenger feedback integrated — strengthened from generic `src/**`+`README.md` to full column literals. Task advanced to todo.
+
+
+[[2026-05-08]]
+Architecture review R5 complete. AC1 supplemented with exact-row coupling assertion: test must assert that a single line in the Step 1 convention mapping table contains BOTH `serve/{pkg}/src/**` AND `serve/{pkg}/README.md`, proving the first mapping row as a coupled pair. Challenger feedback integrated — initial generic `src/**`+`README.md` proposal strengthened to full column literals after challenger correctly identified false-green path via second `serve/{pkg}` row at SKILL.md:31. Test-writer: add 1 new test using existing `_step1_section()` helper → 52 total.
+[[2026-05-08]]
+## Test-Writer Notes (R5)
+- Test file: tests/test_doc_writer_quality_1422.py
+- Prior state: 51 tests (all passing — correct implementation already in place)
+- New test added (1): `test_convention_mapping_exact_src_row_coupled` (TestFromAC_ConventionMappingTable)
+  - Asserts at least one line in Step 1 contains BOTH `serve/{pkg}/src/**` AND `serve/{pkg}/README.md`
+  - Proves the exact first table row at `share/skills/w-doc-update/SKILL.md:30` as a coupled pair
+  - Closes R5 Gap: split checks on each token independently were false-green when the src row pointed to a wrong destination
+- Total: 52 tests, all PASS
+- ruff: clean (0 violations)
+- Pattern: `any("serve/{pkg}/src/**" in line and "serve/{pkg}/README.md" in line for line in step1.splitlines())` — same line-coupling pattern as R4 gate-rule fix
+- Builder skip: test-only, implementation already correct — advance directly to review
+- AC coverage: AC1 R5 gap addressed (exact row coupling), all prior AC2–AC5 unchanged
+- Commit: 1a455215
+[[2026-05-08]]
+## Builder Notes
+- Implementation: no files changed (test-only task; non-implementation pass-through)
+- Tests: 52 passed, 0 failed, 0 skipped (`tests/test_doc_writer_quality_1422.py`)
+- Coverage: N/A for markdown-artifact assertion scope (`coverage_modules=[]`)
+- ruff: clean (0 violations)
+- Approach: honored test-writer builder-skip guidance and executed a fresh scoped quality-runner gate before handoff
+- Evidence summary: quality-runner reported `failed: []`, `clean: true`, pytest exit 0, ruff exit 0
+- Fixes applied: none
+[[2026-05-08]]
+## Review Evidence
+### Test Results
+- pytest: 52 passed, 0 failed (`tests/test_doc_writer_quality_1422.py`) via `quality-runner`
+
+### Lint
+- ruff: 0 violations on `tests/test_doc_writer_quality_1422.py` via `quality-runner`
+
+### Coverage
+- N/A. This is a markdown-artifact assertion task with no instrumentable source module in scope; `quality-runner` reported coverage as not applicable.
+
+### Pass 1 — Critical
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---|---|---|---|
+| AC1 item 7 gate rule (`.owlbear/kanban/tasks/1422-p1-01-test-verify-doc-writer-quality-redesign-ac.md:68`) | `test_gate_rule_task_caused_blocks`, `test_gate_rule_preexisting_passes` | No. The executable predicates at `tests/test_doc_writer_quality_1422.py:408` and `:418` only bind subject to verb. The required `unverified` token from the AC and live skill text at `share/skills/w-doc-update/SKILL.md:91-92` appears only in assertion-message strings at `tests/test_doc_writer_quality_1422.py:75` and `:81`, so mutating the live rule to `verified content` would stay green. | MISSING |
+| AC1 item 8 no-impact fast path (`.owlbear/kanban/tasks/1422-p1-01-test-verify-doc-writer-quality-redesign-ac.md:69`) | `test_no_impact_fast_path_present`, `test_no_impact_fast_path_advances` | No. The executable predicates at `tests/test_doc_writer_quality_1422.py:342`, `:427`, `:430`, and `:434` prove the output phrase, evidence wording, and advance action, but the trigger `if changed files map to no READMEs` from the AC and live skill text at `share/skills/w-doc-update/SKILL.md:36-37` appears only in an assertion-message string at `tests/test_doc_writer_quality_1422.py:344`. Changing the trigger while preserving the output sentence would stay green. | MISSING |
+| AC2 | `TestFromAC_DocWriterAgentNoDiagrams` | Yes. `grep_search` found 0 `diagram|excalidraw` matches in `share/agents/doc-writer.agent.md`, and the direct absence tests remain green. | COVERED |
+| AC3 | `TestFromAC_DocAuditPromptContent` | Yes. Required sections are present at `.owlbear/prompts/doc-audit.prompt.md:46`, `:61`, `:69`, and `:77`, and the scoped suite remains green. | COVERED |
+| AC4 | `TestFromAC_NoOldDiagramItems` | Yes. `grep_search` found 0 `Item 5|Item 6` matches in `share/skills/w-doc-update/SKILL.md`, and the whole-file bans remain green. | COVERED |
+| AC5 | `test_todo_marker_complete_template` | Yes. The exact template exists at `share/skills/w-doc-update/SKILL.md:76` and is asserted exactly at `tests/test_doc_writer_quality_1422.py:220`. | COVERED |
+
+#### Security Review
+- No issues. Scope is markdown artifacts plus local `Path.read_text()` assertions only.
+
+#### Test Integrity
+- Commit presence for task-related test-writer hashes was confirmed in `.git/logs/HEAD:2268` (`db7f17e7`), `.git/logs/HEAD:2286` (`5cb92faf`), `.git/logs/HEAD:2314` (`5de383ce`), `.git/logs/HEAD:2323` (`c3972833`), and `.git/logs/HEAD:2331` (`1a455215`).
+- The latest builder cycle is pass-through / builder-skip with no implementation changes (`.owlbear/kanban/tasks/1422-p1-01-test-verify-doc-writer-quality-redesign-ac.md:654`).
+- Full additive diff reconstruction and dirty-tree overlap checks were not available in this reviewer tool surface. Small confidence deduction only.
+
+#### Test Quality
+| Dimension | Rating | Evidence |
+|---|---|---|
+| Assertion specificity | WEAK | AC1 still under-proves `unverified` and `no READMEs`: those tokens appear only in assertion messages at `tests/test_doc_writer_quality_1422.py:75`, `:81`, and `:344`, while executable predicates at `:408`, `:418`, `:427`, `:430`, and `:434` do not bind them. |
+| Negative / exclusion coverage | ADEQUATE | AC2 and AC4 use direct absence checks and the live files are clean. |
+| Manual mutation reasoning | WEAK | Replacing `unverified` with `verified` in `share/skills/w-doc-update/SKILL.md:91-92` or changing the fast-path trigger at `share/skills/w-doc-update/SKILL.md:36-37` while keeping the output sentence intact would preserve a green suite. |
+| Test independence | STRONG | The suite uses isolated file reads with no shared mutable state. |
+| Descriptive names | STRONG | Test names are AC-shaped and readable. |
+
+#### Data Safety
+- No issues.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---|---|---|---|
+| AC1 refined (`.owlbear/kanban/tasks/1422-p1-01-test-verify-doc-writer-quality-redesign-ac.md:68-69`) | The live skill currently satisfies the contract at `share/skills/w-doc-update/SKILL.md:36-37` and `:91-92`, but the suite does not executable-prove the `unverified` and `no READMEs` parts of those clauses. | `test_gate_rule_task_caused_blocks`, `test_gate_rule_preexisting_passes`, `test_no_impact_fast_path_present`, `test_no_impact_fast_path_advances` | FAIL |
+| AC2 | Agent file is clean under direct absence checks and grep scan. | `TestFromAC_DocWriterAgentNoDiagrams` | PASS |
+| AC3 | Prompt file contains TODO marker batch resolution, diagram ownership, and describes-based verification sections. | `TestFromAC_DocAuditPromptContent` | PASS |
+| AC4 | No old `Item 5` / `Item 6` references remain in the live skill; whole-file tests cover the condition. | `TestFromAC_NoOldDiagramItems` | PASS |
+| AC5 | Exact TODO template is present in the skill and asserted exactly in the suite. | `test_todo_marker_complete_template` | PASS |
+
+### Informational
+- `quality-runner` independently reported `52 passed / 0 failed` and `ruff: clean`; the blocker is proof quality, not runtime behavior.
+- There are already four prior `## Review Evidence` sections in `.owlbear/kanban/tasks/1422-p1-01-test-verify-doc-writer-quality-redesign-ac.md` at lines `141`, `213`, `356`, and `505`; this is a fifth review cycle.
+- A broader section-locality concern exists around the verification-procedure clause, but this verdict does not need it. AC1 already fails on items 7 and 8.
+
+### Deductions
+- `-0.06` AC1 item 7 `unverified` is not asserted by an executable predicate.
+- `-0.05` AC1 item 8 `no READMEs` trigger is not asserted by an executable predicate.
+- `-0.01` Full additive diff / dirty-tree overlap could not be reconstructed in this tool surface.
+
+### Confidence: 0.88
+### Verdict: FAIL
+### Action
+- Reject to `backlog`. This task already has four prior review sections, so the loop-breaker rule applies on any further FAIL. The remaining defects are AC1 proof-quality gaps, not implementation regressions.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Refine AC1 item 7 so the retry contract requires an executable assertion that couples `task-caused` / `pre-existing`, `unverified`, and `blocks` / `passes` in the same live rule text, then return the task to the test-writer. | `.owlbear/kanban/tasks/1422-p1-01-test-verify-doc-writer-quality-redesign-ac.md`, `tests/test_doc_writer_quality_1422.py`, `share/skills/w-doc-update/SKILL.md` | Child AC line `68`; live skill lines `91-92`; current executable predicates at test lines `408` and `418`; `unverified` exists only in assertion messages at test lines `75` and `81`. |
+| 2 | architect | Refine AC1 item 8 so the retry contract requires an executable assertion for the fast-path trigger `if changed files map to no READMEs`, not just the output phrase, then return the task to the test-writer. | `.owlbear/kanban/tasks/1422-p1-01-test-verify-doc-writer-quality-redesign-ac.md`, `tests/test_doc_writer_quality_1422.py`, `share/skills/w-doc-update/SKILL.md` | Child AC line `69`; live skill lines `36-37`; current executable predicates at test lines `342`, `427`, `430`, and `434`; `no READMEs` exists only in an assertion message at test line `344`. |
