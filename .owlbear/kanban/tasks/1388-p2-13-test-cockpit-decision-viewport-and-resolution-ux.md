@@ -1,10 +1,10 @@
 ---
 id: 1388
 title: 'P2-13: Test Cockpit decision viewport and resolution UX'
-status: backlog
+status: in-progress
 priority: needed
 created: 2026-05-06T01:04:50.731483+00:00
-updated: 2026-05-08T19:27:18.726656+00:00
+updated: 2026-05-08T21:09:36.370670+00:00
 tags:
 - cockpit
 - audit-remediation
@@ -19,7 +19,7 @@ depends_on:
 - 1387
 blocked: false
 block_reason:
-claimed_at: 2026-05-08T19:27:18.726656+00:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -319,3 +319,95 @@ Architecture review pass 2 — refined AC addressing reviewer rejection. Key cha
 
 ### Action Taken
 - Rejected task 1388 to `backlog` under the reviewer loop-breaker rule for architect-mediated contract tightening before another RED-phase retry.
+[[2026-05-08]]
+
+## Architecture Review (Pass 3 — Reviewer Remediation)
+
+### Context
+Second reviewer rejection (confidence 0.84) with three specific follow-ups:
+1. AC1 age proof reads from whole-item textContent — non-discriminating because items differ by other fields.
+2. AC2 description queries walk to shared fieldset parent — one shared p-text could satisfy all assertions.
+3. AC5 focusability proof split across decision-item and task-ref elements.
+
+### Refined AC (supersedes all prior AC text)
+- AC1: Tests prove a `DecisionViewport` component renders each pending decision with: clickable task-id reference (button or link element displaying the numeric task ID, firing `onItemClick` callback on click), agent name, request_type, human-readable relative age rendered in a dedicated element identified by `data-testid="decision-age-{id}"` derived from `created` timestamp (proven by rendering items with distinct timestamps under fake timers and asserting different age strings read from those dedicated age elements, not from whole-item textContent), and body_preview text (proven with fixtures where body_preview is NOT a verbatim substring of body to ensure the component renders the preview field, not the full body). Viewport renders distinct loading, error, and empty-state indicators identified by `data-testid` attributes. (td:2)
+- AC2: Tests prove each resolution choice (approved, rejected, needs-info) renders a structurally separate description element (`p-text` or equivalent) adjacent to the radio input, containing explanatory text about the consequence of that choice. Tests verify: (a) each option is wrapped in its own per-option container element and description queries are scoped to that container (not to the shared fieldset root), (b) a `p-text` description element exists within each per-option container and is NOT inside the radio's `<label>`, (c) description text contains at least 2 words beyond the bare status token. (td:2)
+- AC3: Tests prove no resolution choice is pre-selected on initial render (all radios `checked === false`); submit button has `disabled` attribute until explicit user radio selection. Sequence test proves: disabled → user clicks radio → enabled. (td:2)
+- AC4: Tests prove submit and cancel action labels each contain ≥2 words. Response selector contains ≥3 `p-text` elements (one per option description). (td:1)
+- AC5: Tests prove: initial focus lands inside the modal container and not on the submit button; Escape key calls `onClose` (tested on both modal element and document); modal element has `aria-modal="true"`. Decision list items (`data-testid="decision-item-{id}"`) have both focusable semantics (button or link tag/role) AND no `tabindex="-1"` — both assertions on the same `decision-item-*` element. Logical Tab traversal order deferred to E2E tests (covered by #1395/#1396 accessibility gate). (td:2)
+- AC6: Tests prove viewport-level error indicator has ARIA role `alert` or `status` and surfaces error message content via `textContent`. ResolveModal error contract already covered by #1375 is not duplicated. (td:1)
+- AC7: The RED-phase delta is proven: all ResolveModal UX tests fail against current defects (`useState('approved')` pre-selects, bare labels, no focus management); DecisionViewport tests fail via import error (component does not exist). Already-green contracts from #1375/#1387 are excluded. Shell-level popover replacement is not tested here — that integration is #1389's implementation scope. (td:1)
+
+### Evaluation
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | Test-only task, single domain |
+| Interface clarity | PASS | AC lines specify dedicated data-testid selectors, per-option container scoping, and same-element focusability |
+| Dependency correctness | PASS | #1387 archived/done |
+| Module layering | N/A | Test task |
+| TDD compliance | PASS | This IS the RED phase task; #1389 depends on it |
+| KISS/YAGNI | PASS | Three surgical AC refinements, no scope expansion |
+| Premise challenge | PASS | Reviewer evidence confirms non-discriminating assertions |
+| Pattern consistency | PASS | TDD-paired pattern |
+| Security surface | N/A | No new system boundaries |
+| Single domain | PASS | Cockpit frontend only |
+
+### Challenge Results
+- Challenger: block (confidence 0.34)
+- Findings:
+  (1) Canonical artifact mismatch — refined AC not yet persisted. EXPECTED: challenger runs before persistence; this append persists the refinements.
+  (2) Paired task #1389 AC not aligned. NOTED: #1389 gets its own arch review; test contract is source of truth for implementation.
+  (3) Tab deferral contradicted by ArchivalModal_1241 Tab tests. NOTED but KEPT: reviewer follow-up #3 asked for same-element assertion, not Tab traversal expansion. ArchivalModal precedent acknowledged; Tab can be added if future review requests it.
+  (4) Workflow-state inconsistency (prior APPROVE notes + current backlog). EXPECTED: stale history from passes rejected back.
+  (5) Body_preview positive-only. ACCEPTED: discriminating fixtures prevent false-green from rendering body alone; rendering both preview and body is acceptable UX.
+- Architect override: proceed with APPROVE. Challenger's critical finding is the expected pre-persistence state, not a genuine gap.
+
+### Test Depth
+- Max depth: 2 (AC1, AC2, AC3, AC5)
+- Test-writer must update both test files to match refined AC.
+
+### Note on existing tests
+The test-writer must update both test files to match these refined AC lines:
+- DecisionViewport_1388.test.tsx: (a) add data-testid="decision-age-{id}" selector for age assertions, read age from that element not whole-item textContent; (b) ensure focusability checks (button/link + no tabindex=-1) both on the same decision-item-* element.
+- ResolveModalUX_1388.test.tsx: (a) scope description queries to per-option container, not shared fieldset parent; (b) replace text.length > 4 with ≥2 words check after stripping status token.
+
+### Verdict: APPROVE
+### Action Taken: Refined AC1 (isolated age element), AC2 (per-option container scoping, ≥2 words), AC5 (same-element focusability). Persisted canonical AC. Advanced to todo.
+[[2026-05-08]]
+Architecture review pass 3 — refined AC addressing second reviewer rejection (confidence 0.84). Three surgical changes: (1) AC1: age must render in dedicated `data-testid="decision-age-{id}"` element; assertions read from that element, not whole-item textContent. (2) AC2: each radio option must be in its own per-option container; queries scoped to that container, not shared fieldset root; content proof requires ≥2 words beyond status token. (3) AC5: both focusable semantics (button/link) AND no tabindex="-1" on the same `decision-item-*` element. Test-writer must update both test files to match refined AC on next pass.
+[[2026-05-08]]
+## Test-Writer Notes
+
+**Retry pass 3 — applied Architecture Review Pass 3 surgical AC refinements.**
+
+**Test files:**
+- `serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx` — 25 tests, all FAIL via import error (component does not exist)
+- `serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx` — 17 tests, all FAIL against current defects
+
+**Changes from pass 2 (addressing second reviewer gaps via arch pass 3):**
+1. **AC1 age (DecisionViewport):** Age assertions now read from `[data-testid="decision-age-{id}"]` dedicated elements — NOT whole-item `textContent`. Fake-timer test compares age strings read from `decision-age-dr-recent` vs `decision-age-dr-old` directly (discriminating proof).
+2. **AC5 focusability (DecisionViewport):** Both focusable-semantics check (button/link tag/role) AND no-`tabindex=-1` check both target `[data-testid^="decision-item-"]` elements — same element, not split across task-ref.
+3. **AC2 word count (ResolveModalUX):** Word count check uses `split(/\s+/).filter(Boolean).length >= 2`, not `text.length > 4`.
+4. **AC2 container scoping (ResolveModalUX):** Description queries already correctly scoped to `[data-testid="option-approved/rejected/needs-info"]` per-option containers (done in pass 2, retained).
+
+**Commit:** 372fd71d
+
+**RED verification (vitest scoped):**
+- DecisionViewport: 1 suite failure — `Failed to resolve import "../components/DecisionViewport"` (valid RED for new-component task)
+- ResolveModalUX: 17/17 FAIL — no `[data-testid="option-*"]` containers, `useState('approved')` pre-selects, submit never disabled, single-word labels, no focus management, no Escape handler, no `aria-modal`
+
+**Lint:** eslint clean (0 violations) for both files.
+
+**AC Coverage:**
+
+| AC | td | Tests | Class | Status |
+|----|-----|-------|-------|--------|
+| AC1 — viewport renders task-id ref (fires onItemClick from ref element), agent, request_type, age (dedicated data-testid element, fake timers, discriminating comparison), body_preview (body_preview ≠ substring of body), loading/error/empty states | td:2 | 25 | `TestFromAC_DecisionViewport` | FAIL (import error) |
+| AC2 — each option in own per-option container; p-text description structurally separate from label; ≥2 words beyond status token | td:2 | 6 | `TestFromAC_ResolveModalUX` | FAIL (no option containers, no p-text) |
+| AC3 — no pre-selected choice; submit disabled until selection; sequence test | td:2 | 4 | `TestFromAC_ResolveModalUX` | FAIL (useState('approved')) |
+| AC4 — multi-word action labels; ≥3 p-text in response selector | td:1 | 3 | `TestFromAC_ResolveModalUX` | FAIL |
+| AC5 — initial focus inside modal (not submit), Escape closes, aria-modal; decision-item-* has focusable semantics AND no tabindex=-1 on same element | td:2 | 4+2 | `TestFromAC_ResolveModalUX` + `TestFromAC_DecisionViewport` | FAIL |
+| AC6 — viewport error has role=alert/status; surfaces message | td:1 | 3 | `TestFromAC_DecisionViewport` | FAIL (import error) |
+| AC7 — RED delta proven against current defects | td:1 | evidence | — | Proven by RED run |
+
+**Total: 42 tests (25 DecisionViewport + 17 ResolveModalUX), all FAIL**

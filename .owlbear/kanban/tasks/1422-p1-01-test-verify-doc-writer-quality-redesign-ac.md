@@ -1,10 +1,10 @@
 ---
 id: 1422
 title: 'P1-01: Test — verify doc-writer quality redesign AC'
-status: in-progress
+status: docs
 priority: needed
 created: 2026-05-08T00:32:15.467895+00:00
-updated: 2026-05-08T19:29:07.413846+00:00
+updated: 2026-05-08T20:39:30.755977+00:00
 tags:
 - phase-1
 - scope:shared
@@ -853,3 +853,88 @@ Architecture review R6 complete. AC1 supplemented with 2 final proof-quality gap
 - Builder skip: test-only retry, implementation already correct — advance directly to review
 - AC coverage: AC1 R6 gaps addressed (gate-rule triple coupling + fast-path trigger), all prior AC2–AC5 unchanged
 - Commit: 4693139e
+[[2026-05-08]]
+## Builder Notes
+- Implementation: no files changed (test-only task; non-implementation pass-through)
+- Tests: 52 passed, 0 failed, 0 skipped (tests/test_doc_writer_quality_1422.py)
+- Coverage: N/A for markdown-artifact assertion scope (coverage_modules=[])
+- ruff: clean (0 violations)
+- Approach: executed a fresh scoped quality-runner gate before handoff.
+- Evidence summary: quality-runner reported failed: [] and clean: true with pytest exit 0 and ruff exit 0.
+- Fixes applied: none
+[[2026-05-08]]
+## Review Evidence
+### Test Results
+- pytest: 52 passed, 0 failed (`tests/test_doc_writer_quality_1422.py`) via `quality-runner`
+
+### Lint
+- ruff: 0 violations on `tests/test_doc_writer_quality_1422.py` via `quality-runner`
+
+### Coverage
+- N/A. `coverage_modules=[]`; this is a markdown-artifact assertion task with no instrumentable source module in scope.
+
+### Pass 1 — Critical
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---|---|---|---|
+| AC1.1 exact mapping row | `test_convention_mapping_exact_src_row_coupled` | Yes. The test requires one Step 1 line to contain BOTH `serve/{pkg}/src/**` and `serve/{pkg}/README.md`, matching the live row at `share/skills/w-doc-update/SKILL.md:30`. | COVERED |
+| AC1.2 exact 4-item checklist with names and discriminators | `test_checklist_exactly_four_items`, `test_item1_name_is_readme_verification`, `test_item2_name_is_external_attribution`, `test_item3_name_is_research_doc`, `test_item4_name_is_deletion_detection`, `test_item1_has_layer1_grep_structural_check`, `test_item1_has_layer2_editorial`, `test_item2_external_attribution_mentions_sources_overview`, `test_item3_research_doc_mentions_verification_language`, `test_item4_deletion_detection_mentions_child_task`, `test_item4_deletion_detection_mentions_dr_protocol` | Yes. Count is pinned, each exact heading is pinned, and each item's required discriminator is asserted against its extracted section. | COVERED |
+| AC1.3-AC1.4 no `Docstring` / no `Diagram` headings | `test_no_docstring_checklist_item`, `test_no_diagram_in_any_checklist_heading` | Yes. Both operate on extracted checklist headings and fail on any forbidden heading drift. | COVERED |
+| AC1.5 verification layers | `test_verification_procedure_layer1_grep_present`, `test_verification_procedure_layer2_editorial_present` | Yes for the refined child AC as written. The live skill contains Layer 1 grep structural and Layer 2 editorial verification at `share/skills/w-doc-update/SKILL.md:94-100`, and the suite proves those layer concepts are present in the skill. | COVERED |
+| AC1.6 TODO marker template | `test_todo_marker_complete_template`, `TestFromAC_TodoMarkerFormat` | Yes. The exact template is present at `share/skills/w-doc-update/SKILL.md:76` and is directly asserted at `tests/test_doc_writer_quality_1422.py:220`. | COVERED |
+| AC1.7 gate rules | `test_gate_rule_task_caused_blocks`, `test_gate_rule_preexisting_passes` | Yes. Both tests scope to the authoritative `Gate rules:` section and require subject + `unverified` + verb coupling on a single line; the live rules at `share/skills/w-doc-update/SKILL.md:91-92` satisfy this. | COVERED |
+| AC1.8 no-impact fast path | `test_no_impact_fast_path_advances` | Yes. The test proves Step 1 contains the `no README` trigger plus `no docs impact`, `with evidence`, and `advance`, matching `share/skills/w-doc-update/SKILL.md:36-37`. | COVERED |
+| AC2 no diagram / Excalidraw refs in `doc-writer.agent.md` | `TestFromAC_DocWriterAgentNoDiagrams` | Yes. Direct absence assertions would fail on any `diagram`, `excalidraw`, or `.excalidraw` reintroduction, and the live file is clean. | COVERED |
+| AC3 prompt includes TODO batch resolution, diagram ownership, describes-based verification | `TestFromAC_DocAuditPromptContent` | Yes for the AC as written. The suite asserts the required TODO batch-resolution, diagram-ownership, and describes-based verification dimensions, and the live prompt contains the corresponding sections at `.owlbear/prompts/doc-audit.prompt.md:46`, `:61`, and `:69`. | COVERED |
+| AC4 no old `Item 5` / `Item 6` refs remain in `w-doc-update` | `TestFromAC_NoOldDiagramItems` | Yes. Whole-file `Item 5` / `Item 6` bans at `tests/test_doc_writer_quality_1422.py:174` and `:181` fail on any reintroduction, and the live skill is clean. | COVERED |
+| AC5 exact TODO marker format | `test_todo_marker_complete_template` | Yes. The exact template is present in the live skill and asserted exactly in the suite. | COVERED |
+
+#### Security Review
+- No issues. Scope is fixed-path local file reads plus string / regex assertions only.
+
+#### Test Integrity
+| Original Test | Change Made | Assessment |
+|---|---|---|
+| `TestFromAC_*` suite in `tests/test_doc_writer_quality_1422.py` | No weakened, removed, skipped, or xfailed assertions are visible in the current snapshot. Commit presence for task-related test-writer hashes was confirmed in `.git/logs/HEAD` at lines `2268`, `2286`, `2314`, `2323`, `2331`, and `2340`, but full additive diff reconstruction and dirty-tree overlap checks were unavailable in this tool surface. | PRESERVED (moderate-confidence) |
+
+#### Test Quality
+| Dimension | Rating | Evidence |
+|---|---|---|
+| Assertion specificity | ADEQUATE | The suite now pins the exact src-row coupling, exact TODO template, gate-rule triple-token coupling, and no-README fast-path trigger. Item 3 could be tightened further around exact `task body` wording, but the current section-scoped verification / linkage check remains within the refined discriminator. |
+| Negative / exclusion coverage | STRONG | AC2 and AC4 use direct absence assertions, and AC1 also bans Docstring / Diagram checklist headings explicitly. |
+| Manual mutation reasoning | ADEQUATE | Repointing the src row, swapping / weakening gate-rule verbs or removing `unverified`, dropping the no-README trigger, or reintroducing old Item 5 / Item 6 references would now fail the suite. |
+| Test independence | STRONG | Tests are isolated `Path.read_text()` assertions with no shared mutable state. |
+| Descriptive names | STRONG | Test names are AC-shaped and readable. |
+
+#### Data Safety
+- No issues.
+
+#### Implementation-Aware Gaps
+- No AC-grounded untested paths remain after the R6 tightenings. Residual robustness concern: Item 3 could assert `task body` more directly, but the refined discriminator requires section-scoped research verification / linkage language rather than exact phrase matching.
+
+#### Builder Process Quality
+| Metric | Value |
+|---|---|
+| Builder Notes sections | 6 |
+| Approach variation | Yes — prior failures produced substantive AC supplements (R3-R6) before the latest retry state |
+| Assessment | FRICTION |
+
+### Pass 2 — Informational
+- There are already five prior `## Review Evidence` sections in `.owlbear/kanban/tasks/1422-p1-01-test-verify-doc-writer-quality-redesign-ac.md` at lines `141`, `213`, `356`, `505`, and `662`; this is the sixth review cycle.
+- `quality-runner` independently reported `52 passed / 0 failed` and `ruff: clean`; the scoped quality gate is green.
+- Broader Step 3-locality and exact-heading concerns were reviewed but not used as blockers because the refined child AC does not require Step 3-scoped assertions or exact prompt heading assertions. Treating those as blocking would invent requirements beyond the task body.
+- Commit presence for task-related test-writer hashes was confirmed via `.git/logs/**`, but the lack of terminal access prevented full diff-scoped immutability and dirty-tree reconstruction.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---|---|---|---|
+| AC1 refined (`.owlbear/kanban/tasks/1422-p1-01-test-verify-doc-writer-quality-redesign-ac.md:54-69`) | The live skill satisfies the child contract at `share/skills/w-doc-update/SKILL.md:30`, `:36-37`, `:43-76`, and `:89-100`. The latest suite now directly proves the prior reviewer gap areas: exact src-row coupling, gate-rule triple-token coupling in the authoritative section, and the no-README fast-path trigger plus output. | `TestFromAC_DocUpdateSkillContent`, `TestFromAC_ChecklistItemNames`, `TestFromAC_ConventionMappingTable`, `TestFromAC_TodoMarkerFormat` | PASS |
+| AC2 | Direct absence tests remain green and the live agent file contains no `diagram`, `excalidraw`, or `.excalidraw` references. | `TestFromAC_DocWriterAgentNoDiagrams` | PASS |
+| AC3 | The prompt contains TODO marker batch resolution, diagram ownership, and describes-based verification sections at `.owlbear/prompts/doc-audit.prompt.md:46`, `:61`, and `:69`, and the task suite proves those dimensions are present. | `TestFromAC_DocAuditPromptContent` | PASS |
+| AC4 | No old `Item 5` / `Item 6` references remain in the live skill, and the suite enforces whole-file bans for both. | `TestFromAC_NoOldDiagramItems` | PASS |
+| AC5 | The exact TODO marker template is present in the live skill and asserted exactly in the suite. | `TestFromAC_TodoMarkerFormat` | PASS |
+
+### Confidence: 0.94
+### Verdict: PASS
+### Action
+- Advance to `docs`. The latest retry closes the prior AC1 proof gaps, and the remaining broader robustness concerns are not binding defects under the refined child AC.
