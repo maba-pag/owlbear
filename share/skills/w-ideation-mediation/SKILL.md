@@ -155,6 +155,7 @@ Apply O15 to every Critic pass. See the Critic Validation section above for the 
 - [ ] Critic findings are triaged as `nonsense`, `minor`, or `material` before presentation.
 - [ ] No bulk Critic acceptance appears in the mediation flow.
 - [ ] The Disclosure Ladder is visible in user-facing translation.
+- [ ] Panelist reviews are introduced by purpose and angle (what is being checked and why), not raw agent name.
 - [ ] `brief.md` is approved before handoff.
 - [ ] Step 1.5 gate evaluated ambiguity (`>=2` viable approaches, no dominant option).
 - [ ] M3.5 and Step 2 were treated as mutually exclusive paths to `synthesis.md`.
