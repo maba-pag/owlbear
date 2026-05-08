@@ -1,7 +1,7 @@
 """Failing tests for task #1296: Dead code sweep — remove Copilot CLI/ACP orchestrator
 and owlbear-project.json infrastructure (integration-level checks).
 
-These tests cover the parent-level AC items not tested by test_core_removal_1297.py.
+These tests cover the parent-level AC items not tested by test_core_removal.py.
 They verify the doc/skill reference cleanup (#1298) and diagram cleanup (#1299) scopes.
 
 All tests must FAIL on the current codebase; they pass once all child tasks are done.

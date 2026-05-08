@@ -12,7 +12,7 @@ AC coverage:
   AC9  → TestFromAC_ErrorCodesPreserved  (exact equality assertions on user_message)
   AC10 → regression evidence via reviewer-accepted durable suites:
           - serve/kanban/tests/test_engine_end_work_1077.py   (end_work matrix)
-          - tests/test_dispatch_gate_port_1214.py             (pick_tasks pipeline)
+      - tests/test_dispatch_gate_port.py                  (pick_tasks pipeline)
           - serve/kanban/tests/test_engine_create_edit_1070.py (semantic no-op)
           - tests/test_engine_create_edit_1072.py             (semantic no-op)
           - tests/test_engine_cockpit_view.py                 (CockpitView omission guards)

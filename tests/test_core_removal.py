@@ -120,11 +120,11 @@ class TestFromAC_CoreRemoval:
         """No .py file under tests/ may contain the string 'serve/orchestrator'."""
         # Exclude files that necessarily contain the literal as test-data strings:
         # - this file: contains the string in the scan expression itself
-        # - test_dead_code_sweep_1296.py: tests that *other* locations don't reference
+        # - test_dead_code_sweep.py: tests that *other* locations don't reference
         #   serve/orchestrator, so the literal appears in its own assertions/docstrings
         excluded = {
             Path(__file__).resolve(),
-            (_REPO_ROOT / "tests" / "test_dead_code_sweep_1296.py").resolve(),
+            (_REPO_ROOT / "tests" / "test_dead_code_sweep.py").resolve(),
         }
         hits = [
             str(p)
