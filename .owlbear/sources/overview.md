@@ -2,6 +2,14 @@
 
 External repos and resources studied during OwlBear development.
 
+## MegaLinter uv.lock Exclusion & Ruff Src Fix (Task #1418)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| MegaLinter — Trivy descriptor | <https://megalinter.io/latest/descriptors/repository_trivy/> | Trivy uses `project` CLI lint mode; FILTER_REGEX_EXCLUDE not applicable | Task #1418 body | 2026-05-08 |
+| MegaLinter — Filtering files | <https://megalinter.io/latest/config-filtering/> | FILTER_REGEX_EXCLUDE "not applicable with linters using CLI lint mode project" | Task #1418 body | 2026-05-08 |
+| MegaLinter — editorconfig-checker descriptor | <https://megalinter.io/latest/descriptors/editorconfig_editorconfig_checker/> | Uses `list_of_files` mode; IS affected by FILTER_REGEX_EXCLUDE | Task #1418 body | 2026-05-08 |
+
 ## AC Quality Skill Schema (Task #1404)
 
 | Source | URL | What | Where Used | Date |
