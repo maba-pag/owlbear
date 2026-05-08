@@ -524,8 +524,16 @@ class TestFromAC_BeforeAfterExamples:
         )
 
     def test_before_after_scenario_categories(self) -> None:
-        """All 6 required before/after scenario categories must have identifiable content in the file."""
+        """All 6 required before/after scenario categories must be present inside ## Communication Patterns.
+
+        Uses _extract_h2_section to scope the search to the Communication Patterns
+        section only, preventing false greens from identical markers outside the section
+        (e.g. '@ideation-mediator' in Handoff Contract, 'early challengers' in
+        Cross-References).
+        """
         content = _SKILL_FILE.read_text(encoding="utf-8")
+        section = _extract_h2_section(content, "## Communication Patterns")
+        assert section is not None, "## Communication Patterns section not found"
         scenario_markers = [
             ("conditional gate narration", "M3.5 gate"),
             ("panel roster introduction", "ideation-architect and ideation-security"),
@@ -535,10 +543,10 @@ class TestFromAC_BeforeAfterExamples:
             ("correction/rerun", "updated constraint"),
         ]
         failures = [
-            label for label, marker in scenario_markers if marker not in content
+            label for label, marker in scenario_markers if marker not in section
         ]
         assert not failures, (
-            "Missing required before/after scenario categories:\n"
+            "Missing required before/after scenario categories in ## Communication Patterns:\n"
             + "\n".join(f"  {label!r}" for label in failures)
         )
 
