@@ -26,8 +26,9 @@ const DR_A: PendingDR = {
   request_type: 'scope-decision',
   created: new Date(Date.now() - 3 * 3_600_000).toISOString(), // 3 h ago
   title: 'Should we refactor the cache layer?',
-  body: '## Context\n\nThe cache layer has grown too complex.',
-  body_preview: 'The cache layer has grown too complex.',
+  // body_preview is NOT a substring of body — discriminating fixture (AC1)
+  body: '## Context\n\nThe cache layer has grown too complex. Multiple refactors are planned.',
+  body_preview: 'Consider architectural simplification for long-term maintainability.',
 }
 
 const DR_B: PendingDR = {
@@ -37,8 +38,9 @@ const DR_B: PendingDR = {
   request_type: 'user-action',
   created: new Date(Date.now() - 25 * 3_600_000).toISOString(), // 25 h ago
   title: 'Confirm scope change for phase 2',
-  body: '## Scope\n\nPhase 2 scope needs confirmation.',
-  body_preview: 'Phase 2 scope needs confirmation.',
+  // body_preview is NOT a substring of body — discriminating fixture (AC1)
+  body: '## Scope\n\nPhase 2 scope needs confirmation from the product owner.',
+  body_preview: 'Confirm the feature boundary before implementation begins.',
 }
 
 // ─── Render helper ────────────────────────────────────────────────────────────
@@ -218,13 +220,16 @@ describe('TestFromAC_DecisionViewport', () => {
     expect(container.querySelector('[data-testid="decision-task-ref-dr-vp-002"]')).not.toBeNull()
   })
 
-  // ─── AC1 (td:2): onItemClick callback ─────────────────────────────────────
+  // ─── AC1 (td:2): onItemClick callback fires from task-id reference ──────────
+  // AC1 requires onItemClick fires when the task-id reference element is clicked
+  // (not just any click on the item container).
 
-  it('calls onItemClick with item id when an item is clicked', () => {
+  it('calls onItemClick with item id when task-id reference element is clicked', () => {
     const onItemClick = vi.fn()
     const { container } = renderViewport({ items: [DR_A], onItemClick })
-    const item = container.querySelector('[data-testid="decision-item-dr-vp-001"]')!
-    fireEvent.click(item)
+    const taskRef = container.querySelector('[data-testid="decision-task-ref-dr-vp-001"]')!
+    expect(taskRef).not.toBeNull()
+    fireEvent.click(taskRef)
     expect(onItemClick).toHaveBeenCalledWith('dr-vp-001')
   })
 
