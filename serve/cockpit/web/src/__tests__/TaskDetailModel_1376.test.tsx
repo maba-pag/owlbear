@@ -1,8 +1,8 @@
 /**
- * RED phase tests for #1376: P2-01 Test Cockpit task detail context model
+ * Tests for #1376: P2-01 Test Cockpit task detail context model
  *
- * All tests FAIL until #1377 implements the extended TaskDetail interface and
- * renders the new fields in DetailTab.
+ * Proves that DetailTab surfaces the backend context fields needed for safe
+ * UI decisions. Implementation was provided by #1377.
  *
  * AC coverage:
  *   AC1: TaskDetail exposes `claimed` (boolean) and `claimed_at` (string|null).
@@ -11,12 +11,13 @@
  *        Existing `parent` and `depends_on` fields are not regressed.
  *   AC3: Absent optional context (`claimed_at: null`, `dep_status: null`) is
  *        represented as an explicit rendered element (not field absence).
+ *        Scope note: `claimed_at` and `dep_status` are required (non-optional)
+ *        fields in TaskDetail, so the null-vs-absent distinction is enforced at
+ *        TypeScript compile time (`npm run tsc`), not at Vitest runtime. Tests
+ *        here prove runtime rendering: explicit null renders as an empty element,
+ *        not as a missing element.
  *   AC4: State matrix — unclaimed, claimed, blocked, dep-constrained tasks
  *        produce the correct data shape (asserting field values, not UI gates).
- *
- * Current fail reason: DetailTab does not render field-claimed, field-claimed-at,
- * or field-dep-status data-testid elements because those fields are absent from
- * the TaskDetail interface. All queries for those elements return null → FAIL.
  */
 import { describe, it, expect, vi } from 'vitest'
 import { render } from '@testing-library/react'
@@ -33,16 +34,14 @@ vi.mock('react-markdown', () => ({
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 //
-// Raw API response shapes (what /api/tasks/{id} returns from the backend).
-// These include the new fields that #1377 will add to the TaskDetail interface:
-//   claimed (bool), claimed_at (string|null), dep_status (string|null).
-//
-// Using untyped objects + cast at render-time to avoid TypeScript errors on
-// excess properties while preserving full runtime field access.
+// Typed API response shapes (what /api/tasks/{id} returns from the backend).
+// Each constant is declared as TaskDetail — TypeScript enforces the full
+// interface contract at compile time, proving the model without runtime
+// reflection.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Unclaimed, unconstrained — all new fields at their null/false defaults. */
-const UNCLAIMED_TASK = {
+/** Unclaimed, unconstrained — all nullable fields at their null/false defaults. */
+const UNCLAIMED_TASK: TaskDetail = {
   id: 42,
   title: 'Fix login bug',
   status: 'todo',
@@ -55,14 +54,13 @@ const UNCLAIMED_TASK = {
   block_reason: null,
   parent: null,
   depends_on: [],
-  // Fields that #1377 will add to TaskDetail:
   claimed: false,
   claimed_at: null,
   dep_status: null,
 }
 
 /** Claimed task — claimed_at holds a non-null ISO timestamp. */
-const CLAIMED_TASK = {
+const CLAIMED_TASK: TaskDetail = {
   ...UNCLAIMED_TASK,
   claimed: true,
   claimed_at: '2026-05-08T10:00:00+00:00',
@@ -70,7 +68,7 @@ const CLAIMED_TASK = {
 }
 
 /** Blocked task — blocked flag set, not claimed. */
-const BLOCKED_TASK = {
+const BLOCKED_TASK: TaskDetail = {
   ...UNCLAIMED_TASK,
   blocked: true,
   block_reason: 'Waiting for dependency #100',
@@ -80,7 +78,7 @@ const BLOCKED_TASK = {
 }
 
 /** Dependency-constrained task — dep_status is "blocked". */
-const DEP_CONSTRAINED_TASK = {
+const DEP_CONSTRAINED_TASK: TaskDetail = {
   ...UNCLAIMED_TASK,
   depends_on: [10, 20],
   claimed: false,
@@ -89,7 +87,7 @@ const DEP_CONSTRAINED_TASK = {
 }
 
 /** Claimed + dep-ready — claimed while dependencies are satisfied. */
-const CLAIMED_DEP_READY_TASK = {
+const CLAIMED_DEP_READY_TASK: TaskDetail = {
   ...UNCLAIMED_TASK,
   depends_on: [10],
   claimed: true,
@@ -98,7 +96,7 @@ const CLAIMED_DEP_READY_TASK = {
 }
 
 /** Claimed + blocked — claimed but workflow-blocked (edge combination). */
-const CLAIMED_BLOCKED_TASK = {
+const CLAIMED_BLOCKED_TASK: TaskDetail = {
   ...UNCLAIMED_TASK,
   blocked: true,
   block_reason: 'Needs design approval',
@@ -110,15 +108,13 @@ const CLAIMED_BLOCKED_TASK = {
 // ─── Render helper ─────────────────────────────────────────────────────────────
 
 /**
- * Render DetailTab with a raw API response fixture.
- *
- * Cast through `unknown` because the new fields are not yet on TaskDetail —
- * #1377 will extend the interface, removing the need for this cast.
+ * Render DetailTab with a typed TaskDetail fixture.
+ * The typed parameter proves the TypeScript contract at compile time.
  */
-function renderDetail(task: Record<string, unknown>) {
+function renderDetail(task: TaskDetail) {
   return render(
     <PorscheDesignSystemProvider>
-      <DetailTab task={task as unknown as TaskDetail} />
+      <DetailTab task={task} />
     </PorscheDesignSystemProvider>,
   )
 }
@@ -134,8 +130,6 @@ describe('TestFromAC_ClaimFieldsOnModel', () => {
     /**
      * AC1: DetailTab must surface the `claimed` boolean from TaskDetail so
      * consumers can read claim state without re-deriving it from claimed_at.
-     *
-     * FAIL reason: DetailTab has no data-testid="field-claimed" element.
      */
     const { container } = renderDetail(UNCLAIMED_TASK)
     const el = container.querySelector('[data-testid="field-claimed"]')
@@ -146,9 +140,8 @@ describe('TestFromAC_ClaimFieldsOnModel', () => {
   it('renders field-claimed-at as empty indicator for an unclaimed task', () => {
     /**
      * AC1 + AC3: claimed_at must be surfaced even when null — the element
-     * must exist with an empty/null representation, not be absent from DOM.
-     *
-     * FAIL reason: DetailTab has no data-testid="field-claimed-at" element.
+     * must exist with an empty representation, not be absent from DOM.
+     * (null renders as empty string; absence-vs-null enforced at tsc level)
      */
     const { container } = renderDetail(UNCLAIMED_TASK)
     const el = container.querySelector('[data-testid="field-claimed-at"]')
@@ -159,8 +152,6 @@ describe('TestFromAC_ClaimFieldsOnModel', () => {
   it('renders field-claimed as "true" for a claimed task', () => {
     /**
      * AC1: claimed must be true when claimed_at is a non-null timestamp.
-     *
-     * FAIL reason: DetailTab has no data-testid="field-claimed" element.
      */
     const { container } = renderDetail(CLAIMED_TASK)
     const el = container.querySelector('[data-testid="field-claimed"]')
@@ -171,8 +162,6 @@ describe('TestFromAC_ClaimFieldsOnModel', () => {
   it('renders field-claimed-at as the ISO timestamp for a claimed task', () => {
     /**
      * AC1: claimed_at must be surfaced as the exact ISO string when set.
-     *
-     * FAIL reason: DetailTab has no data-testid="field-claimed-at" element.
      */
     const { container } = renderDetail(CLAIMED_TASK)
     const el = container.querySelector('[data-testid="field-claimed-at"]')
@@ -189,9 +178,7 @@ describe('TestFromAC_DepStatusOnModel', () => {
   it('renders field-dep-status as empty indicator for an unconstrained task', () => {
     /**
      * AC2: dep_status must be surfaced even when null — the element must exist.
-     * AC3: explicit null representation, not field absence.
-     *
-     * FAIL reason: DetailTab has no data-testid="field-dep-status" element.
+     * AC3: explicit null representation (renders as empty string, not absent DOM node).
      */
     const { container } = renderDetail(UNCLAIMED_TASK)
     const el = container.querySelector('[data-testid="field-dep-status"]')
@@ -203,8 +190,6 @@ describe('TestFromAC_DepStatusOnModel', () => {
     /**
      * AC2: dep_status='blocked' when task dependencies are in earlier pipeline
      * stages. Must be surfaced on the detail model.
-     *
-     * FAIL reason: DetailTab has no data-testid="field-dep-status" element.
      */
     const { container } = renderDetail(DEP_CONSTRAINED_TASK)
     const el = container.querySelector('[data-testid="field-dep-status"]')
@@ -216,8 +201,6 @@ describe('TestFromAC_DepStatusOnModel', () => {
     /**
      * AC2: dep_status='ready' when all dependency tasks have reached the
      * required pipeline stage.
-     *
-     * FAIL reason: DetailTab has no data-testid="field-dep-status" element.
      */
     const { container } = renderDetail(CLAIMED_DEP_READY_TASK)
     const el = container.querySelector('[data-testid="field-dep-status"]')
@@ -233,11 +216,10 @@ describe('TestFromAC_DepStatusOnModel', () => {
 describe('TestFromAC_ExplicitNullRepresentation', () => {
   it('field-claimed-at element is present in DOM even when claimed_at is null', () => {
     /**
-     * AC3: A null claimed_at must not make the element disappear from the DOM.
-     * Missing context must be represented as an explicit empty value so that
-     * a consumer can distinguish "field absent" from "field present, null".
-     *
-     * FAIL reason: DetailTab has no data-testid="field-claimed-at" element at all.
+     * AC3 (runtime rendering scope): A null claimed_at must not make the element
+     * disappear from the DOM. DetailTab must always render the field-claimed-at
+     * element regardless of value. Whether claimed_at is null vs absent is
+     * enforced by the required TaskDetail interface field at tsc compile time.
      */
     const { container } = renderDetail(UNCLAIMED_TASK)
     const el = container.querySelector('[data-testid="field-claimed-at"]')
@@ -247,10 +229,10 @@ describe('TestFromAC_ExplicitNullRepresentation', () => {
 
   it('field-dep-status element is present in DOM even when dep_status is null', () => {
     /**
-     * AC3: A null dep_status must not make the element disappear from the DOM.
-     * Builder must render an always-present element, not a conditional render.
-     *
-     * FAIL reason: DetailTab has no data-testid="field-dep-status" element at all.
+     * AC3 (runtime rendering scope): A null dep_status must not make the element
+     * disappear from the DOM. DetailTab must always render the field-dep-status
+     * element regardless of value. Whether dep_status is null vs absent is
+     * enforced by the required TaskDetail interface field at tsc compile time.
      */
     const { container } = renderDetail(UNCLAIMED_TASK)
     const el = container.querySelector('[data-testid="field-dep-status"]')
@@ -267,9 +249,7 @@ describe('TestFromAC_StateMatrix', () => {
   it('unclaimed unconstrained task: all three new fields present with correct values', () => {
     /**
      * AC4: Full shape check for the base unclaimed/unconstrained state.
-     * claimed=false, claimed_at=null (empty), dep_status=null (empty).
-     *
-     * FAIL reason: none of the three field-* elements exist in DetailTab.
+     * claimed=false, claimed_at=null (renders empty), dep_status=null (renders empty).
      */
     const { container } = renderDetail(UNCLAIMED_TASK)
     expect(container.querySelector('[data-testid="field-claimed"]')?.textContent).toBe('false')
@@ -280,9 +260,7 @@ describe('TestFromAC_StateMatrix', () => {
   it('claimed dep-ready task: claimed=true, claimed_at set, dep_status="ready"', () => {
     /**
      * AC4: Full shape check for a claimed task whose deps are satisfied.
-     * All three new fields must surface their non-null values.
-     *
-     * FAIL reason: none of the three field-* elements exist in DetailTab.
+     * All three fields must surface their non-null values.
      */
     const { container } = renderDetail(CLAIMED_DEP_READY_TASK)
     expect(container.querySelector('[data-testid="field-claimed"]')?.textContent).toBe('true')
@@ -294,10 +272,8 @@ describe('TestFromAC_StateMatrix', () => {
 
   it('blocked task: blocked=true with claim state fields present', () => {
     /**
-     * AC4: Blocked tasks still surface the three new fields alongside the
+     * AC4: Blocked tasks still surface the three fields alongside the
      * existing `blocked` flag. Data shape must include both dimensions.
-     *
-     * FAIL reason: none of the three field-* elements exist in DetailTab.
      */
     const { container } = renderDetail(BLOCKED_TASK)
     // Existing blocked rendering is not regressed:
@@ -311,8 +287,6 @@ describe('TestFromAC_StateMatrix', () => {
     /**
      * AC4: A task whose dependencies are unresolved has dep_status='blocked'
      * AND retains the existing depends_on field.
-     *
-     * FAIL reason: field-dep-status element does not exist in DetailTab.
      */
     const { container } = renderDetail(DEP_CONSTRAINED_TASK)
     expect(container.querySelector('[data-testid="field-dep-status"]')?.textContent).toBe('blocked')
@@ -323,10 +297,8 @@ describe('TestFromAC_StateMatrix', () => {
   it('claimed blocked task: both claimed=true and blocked=true coexist in the model', () => {
     /**
      * AC4 edge: A task can be simultaneously claimed AND blocked. Both the
-     * existing `blocked` field and the new `claimed`/`claimed_at` fields must
+     * existing `blocked` field and the `claimed`/`claimed_at` fields must
      * surface their correct values independently.
-     *
-     * FAIL reason: field-claimed and field-claimed-at elements do not exist.
      */
     const { container } = renderDetail(CLAIMED_BLOCKED_TASK)
     expect(container.querySelector('[data-testid="field-claimed"]')?.textContent).toBe('true')
