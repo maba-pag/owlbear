@@ -25,6 +25,14 @@ class TestFromAC_DocUpdateSkillContent:
             "Convention mapping must show serve/{pkg} → serve/{pkg}/README.md relationship"
         )
 
+    def test_checklist_exactly_four_items(self) -> None:
+        content = SKILL_DOC_UPDATE.read_text()
+        items = re.findall(r"### Item \d+:", content)
+        assert len(items) == 4, (
+            f"SKILL.md must have exactly 4 checklist items under '### Item N:' headings, "
+            f"found {len(items)}: {items}"
+        )
+
     def test_checklist_has_no_diagram_maintenance_item(self) -> None:
         content = SKILL_DOC_UPDATE.read_text()
         assert "Diagram Maintenance" not in content, (
@@ -195,6 +203,13 @@ class TestFromAC_TodoMarkerFormat:
             "w-doc-update/SKILL.md must include a concrete TODO marker example with a category"
         )
 
+    def test_todo_marker_complete_template(self) -> None:
+        content = SKILL_DOC_UPDATE.read_text()
+        complete_template = "> **TODO:** {category} — {description} [#{id}]"
+        assert complete_template in content, (
+            f"SKILL.md must contain the exact complete TODO marker template: {complete_template!r}"
+        )
+
 
 class TestFromAC_ChecklistItemNames:
     """AC1 (tightened, td:2): exact brief-defined item names and required per-item behaviors."""
@@ -303,4 +318,36 @@ class TestFromAC_ChecklistItemNames:
         assert "no docs impact" in content, (
             "SKILL.md must include a no-impact fast path that outputs 'no docs impact' "
             "with evidence when all changed files map to no READMEs"
+        )
+
+
+class TestFromAC_ConventionMappingTable:
+    """AC1 (R3 tightened): convention mapping must be a markdown table with all 5 brief rows."""
+
+    def _step1_section(self) -> str:
+        content = SKILL_DOC_UPDATE.read_text()
+        match = re.search(r"## Step 1.*?## Step 2", content, re.DOTALL)
+        assert match, "Could not find Step 1 (Convention Mapping) section in SKILL.md"
+        return match.group(0)
+
+    def test_convention_mapping_is_table(self) -> None:
+        step1 = self._step1_section()
+        table_rows = [line for line in step1.splitlines() if line.strip().startswith("|")]
+        assert len(table_rows) >= 2, (
+            f"Convention mapping must use a markdown table (at least 2 pipe-delimited rows), "
+            f"found {len(table_rows)} table rows — not just bullets"
+        )
+
+    def test_convention_mapping_has_setup_row(self) -> None:
+        step1 = self._step1_section()
+        assert "setup/**" in step1, (
+            "Convention mapping table must include a row for 'setup/**' "
+            "(maps to setup/setup-guide.md, setup/sharing-guide.md per brief)"
+        )
+
+    def test_convention_mapping_has_share_row(self) -> None:
+        step1 = self._step1_section()
+        assert "share/**" in step1, (
+            "Convention mapping table must include a row for 'share/**' "
+            "(maps to share/README.md, share/WIRING.md per brief)"
         )
