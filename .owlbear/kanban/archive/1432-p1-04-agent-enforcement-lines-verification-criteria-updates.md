@@ -1,10 +1,10 @@
 ---
 id: 1432
 title: 'P1-04: Agent enforcement lines + verification criteria updates'
-status: done
+status: archived
 priority: needed
 created: 2026-05-08T01:00:48.495798+00:00
-updated: 2026-05-08T14:27:05.852442+00:00
+updated: 2026-05-08T14:37:03.485211+00:00
 tags:
 - phase-1
 - scope:shared
@@ -15,7 +15,7 @@ parent: 1428
 depends_on: []
 blocked: false
 block_reason:
-claimed_at: 2026-05-08T14:27:05.852442+00:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -194,3 +194,5 @@ Advance to docs.
 - None (no `1432-*` scratch files found)
 
 Commit: `4b7c9960` (`docs: update diagram footers for ideation/pipeline (#1432, doc-writer)`)
+[[2026-05-08]]
+## Audit\n\n### AC Verification\n| AC Line | Evidence | Status |\n|---------|----------|--------|\n| Mediator vocabulary critical_rule added | ideation-mediator.agent.md:39 — exact text inside critical_rules (lines 33-47) | PASS |\n| Discoverer vocabulary critical_rule added | ideation-discoverer.agent.md:38 — same text inside critical_rules (lines 30-43) | PASS |\n| Discoverer handoff rewritten (purpose-framed, no handle) | ideation-discoverer.agent.md:39 — "End Phase 1 by explaining what was completed and what opens next, then point to the artifact paths for Phase 2." No @ideation-mediator in critical_rules. | PASS |\n| Mediation verification criterion added | w-ideation-mediation/SKILL.md:170 — "Panelist reviews are introduced by purpose and angle (what is being checked and why), not raw agent name." | PASS |\n| All edits inside existing critical_rules sections | Confirmed by line range: mediator 33-47, discoverer 30-43 | PASS |\n\n### Test Results\n- pytest: 2961 passed, 179 failed, 4 skipped, 6 errors (all pre-existing, none in task scope — markdown-only task)\n- ruff: 29 violations (all pre-existing, not applicable to .md files)\n\n### Architect Quality: 4/5\nRevised AC was well-specified with exact line targets, placement constraints, and clean scope reduction. Original AC had 4 problems but architect self-corrected comprehensively in the architecture review.\n\n### Deduction Breakdown\n- Start: 1.00\n- Pre-existing test failures (not in scope): -0.00\n- Pre-existing lint (not applicable to markdown): -0.00\n- All AC lines have file evidence: -0.00\n- AC quality 4/5 (above threshold): -0.00\n- Reviewer evidence present and detailed: -0.00\n\n### Confidence: 0.98\n### Action: Archive\n\n### Commits Verified\n- Builder: 6b66937a (chore: enforce ideation user-facing vocabulary rules)\n- Doc-writer: 4b7c9960 (docs: update diagram footers for ideation/pipeline)
