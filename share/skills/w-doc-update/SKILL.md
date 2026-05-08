@@ -23,12 +23,15 @@ Verify the task is in `docs` status.
 
 ## Step 1 — Convention Mapping
 
-Use convention mapping to determine primary documentation targets:
+Use convention mapping to determine documentation targets:
 
-- Source area pattern: `serve/{pkg}/src/**`
-- Primary documentation target: `serve/{pkg}/README.md`
-- Keep root docs (`README.md`, `README-consumer.md`, `SECURITY.md`) and setup guides
-  as secondary targets only when the task body shows direct impact.
+| Code Path Pattern | Mapped Documentation |
+|---|---|
+| `serve/{pkg}/src/**` | `serve/{pkg}/README.md` |
+| `serve/{pkg}/pyproject.toml`, `serve/{pkg}/tests/**` | `serve/{pkg}/README.md` |
+| `setup/**` | `setup/setup-guide.md`, `setup/sharing-guide.md` |
+| `share/**` | `share/README.md`, `share/WIRING.md` |
+| Any package's public interface changes | `README.md`, `README-consumer.md` (LLM judgment) |
 
 If all changed files map to no READMEs, use the no-impact fast path: write
 "no docs impact" with evidence and advance.
