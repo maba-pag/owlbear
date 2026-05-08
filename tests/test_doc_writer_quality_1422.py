@@ -201,3 +201,103 @@ class TestFromAC_TodoMarkerFormat:
         assert re.search(r"> \*\*TODO:\*\* (stale|inaccurate|missing|unverified)", content), (
             "w-doc-update/SKILL.md must include a concrete TODO marker example with a category"
         )
+
+
+class TestFromAC_ChecklistItemNames:
+    """AC1 (tightened, td:2): exact brief-defined item names and required per-item behaviors."""
+
+    def test_item1_name_is_readme_verification(self) -> None:
+        content = SKILL_DOC_UPDATE.read_text()
+        assert "### Item 1: README Verification" in content, (
+            "SKILL.md Item 1 must be named 'README Verification' per refined AC1 "
+            "(brief §checklist)"
+        )
+
+    def test_item2_name_is_external_attribution(self) -> None:
+        content = SKILL_DOC_UPDATE.read_text()
+        assert "### Item 2: External Attribution" in content, (
+            "SKILL.md Item 2 must be named 'External Attribution' per refined AC1"
+        )
+
+    def test_item3_name_is_research_doc(self) -> None:
+        content = SKILL_DOC_UPDATE.read_text()
+        assert "### Item 3: Research Doc" in content, (
+            "SKILL.md Item 3 must be named 'Research Doc' per refined AC1"
+        )
+
+    def test_item4_name_is_deletion_detection(self) -> None:
+        content = SKILL_DOC_UPDATE.read_text()
+        assert "### Item 4: Deletion Detection" in content, (
+            "SKILL.md Item 4 must be named 'Deletion Detection' per refined AC1"
+        )
+
+    def test_no_docstring_checklist_item(self) -> None:
+        content = SKILL_DOC_UPDATE.read_text()
+        item_headings = re.findall(r"### Item \d+:.*", content)
+        docstring_items = [h for h in item_headings if re.search(r"[Dd]ocstring", h)]
+        assert len(docstring_items) == 0, (
+            f"SKILL.md must not have a docstring checklist item (out of scope per brief); "
+            f"found: {docstring_items}"
+        )
+
+    def test_item1_mentions_convention_mapping(self) -> None:
+        content = SKILL_DOC_UPDATE.read_text()
+        match = re.search(r"### Item 1:.*?(?=### Item 2:)", content, re.DOTALL)
+        assert match, "Could not find Item 1 section in SKILL.md"
+        item1 = match.group(0)
+        assert re.search(r"convention.map|convention map", item1, re.IGNORECASE), (
+            "Item 1 (README Verification) must describe convention-mapped full-file read"
+        )
+
+    def test_item1_has_layer1_grep_structural_check(self) -> None:
+        content = SKILL_DOC_UPDATE.read_text()
+        match = re.search(r"### Item 1:.*?(?=### Item 2:)", content, re.DOTALL)
+        assert match, "Could not find Item 1 section in SKILL.md"
+        item1 = match.group(0)
+        assert re.search(r"[Ll]ayer 1", item1), (
+            "Item 1 (README Verification) must include Layer 1 grep structural check "
+            "for removed symbols"
+        )
+
+    def test_item1_has_layer2_editorial(self) -> None:
+        content = SKILL_DOC_UPDATE.read_text()
+        match = re.search(r"### Item 1:.*?(?=### Item 2:)", content, re.DOTALL)
+        assert match, "Could not find Item 1 section in SKILL.md"
+        item1 = match.group(0)
+        assert re.search(r"[Ll]ayer 2", item1), (
+            "Item 1 (README Verification) must include Layer 2 LLM editorial comparison"
+        )
+
+    def test_item2_external_attribution_mentions_sources_overview(self) -> None:
+        content = SKILL_DOC_UPDATE.read_text()
+        match = re.search(r"### Item 2:.*?(?=### Item 3:)", content, re.DOTALL)
+        assert match, "Could not find Item 2 section in SKILL.md"
+        item2 = match.group(0)
+        assert "sources/overview.md" in item2, (
+            "Item 2 (External Attribution) must reference .owlbear/sources/overview.md"
+        )
+
+    def test_item4_deletion_detection_mentions_child_task(self) -> None:
+        content = SKILL_DOC_UPDATE.read_text()
+        match = re.search(r"### Item 4:.*?(?=## |\Z)", content, re.DOTALL)
+        assert match, "Could not find Item 4 section in SKILL.md"
+        item4 = match.group(0)
+        assert re.search(r"child.task|child task", item4, re.IGNORECASE), (
+            "Item 4 (Deletion Detection) must describe the child-task creation protocol"
+        )
+
+    def test_item4_deletion_detection_mentions_dr_protocol(self) -> None:
+        content = SKILL_DOC_UPDATE.read_text()
+        match = re.search(r"### Item 4:.*?(?=## |\Z)", content, re.DOTALL)
+        assert match, "Could not find Item 4 section in SKILL.md"
+        item4 = match.group(0)
+        assert re.search(r"\bDR\b|[Dd]ecision [Rr]equest", item4), (
+            "Item 4 (Deletion Detection) must reference the DR (decision request) protocol"
+        )
+
+    def test_no_impact_fast_path_present(self) -> None:
+        content = SKILL_DOC_UPDATE.read_text()
+        assert "no docs impact" in content, (
+            "SKILL.md must include a no-impact fast path that outputs 'no docs impact' "
+            "with evidence when all changed files map to no READMEs"
+        )
