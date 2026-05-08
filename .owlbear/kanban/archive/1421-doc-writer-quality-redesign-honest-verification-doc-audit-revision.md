@@ -1,10 +1,10 @@
 ---
 id: 1421
 title: Doc-writer quality redesign — honest verification + doc-audit revision
-status: done
+status: archived
 priority: needed
 created: 2026-05-08T00:30:10.683534+00:00
-updated: 2026-05-08T15:57:54.914939+00:00
+updated: 2026-05-08T16:28:22.765521+00:00
 tags:
 - scope:shared
 - brief:doc-writer-quality
@@ -717,3 +717,40 @@ Architecture Review R4: APPROVE → todo. Implementation verified correct (all 5
 
 ### Scratch Files Cleaned
 - None (no `1421-*` scratch files found)
+[[2026-05-08]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1 (R4): convention mapping TABLE (5 rows), 4 items, no diagrams/docstrings, Layer 1+2, TODO format, gate, fast path | `share/skills/w-doc-update/SKILL.md:28-34` (table), `:43,:52,:58,:63` (items), `:76` (TODO), `:91-92` (gate), `:37` (fast path). 50 tests pass in `tests/test_doc_writer_quality_1422.py` including R4 additions. | PASS |
+| AC2: `doc-writer.agent.md` no diagram/Excalidraw references | File read confirmed — no `diagram` or `excalidraw` tokens present. | PASS |
+| AC3: `doc-audit.prompt.md` TODO batch resolution, diagram ownership, describes verification | `.owlbear/prompts/doc-audit.prompt.md:46-78` contains all three sections. | PASS |
+| AC4: no old items 5/6 in w-doc-update | File read confirmed — only Items 1-4 present. | PASS |
+| AC5: TODO marker format `> **TODO:** {category} — {description} [#{id}]` | Present at `share/skills/w-doc-update/SKILL.md:76`, categories at `:80-83`. | PASS |
+
+### Test Results
+- pytest: 821 passed, 55 failed (full suite). All 55 failures in unrelated files (engine_accessor_migration, mcp_memory_1266, ideation_overhaul_static, memory_models_1268, decisions_1218). Zero failures in task scope.
+- ruff: 29 violations, all in non-task files (.owlbear/scripts/, serve/tools/tests/). Task files clean.
+- Task-scoped tests: 50/50 passed in `tests/test_doc_writer_quality_1422.py`.
+
+### Commit Verification
+10 commits from test-writer/builder across R1-R4 cycles, all properly attributed. Latest: `5de383ce`, `a7a9a679` (test-writer R4), `d41dc0b4` (builder R3 mapping table). No uncommitted changes to deliverable files.
+
+### Architect Quality: 4/5
+AC1 required 4 refinement cycles (R1→R4) to reach sufficient specificity — initial AC was too loose (just "contains the redesign checklist"), allowing implementation drift. Final R4 AC is precise with exact table content, item names, and behavior descriptions. AC2-AC5 were well-specified from the start (all passed first review). The architect was responsive to reviewer feedback and correctly declared a loop-breaker boundary at R4. Minor gap: earlier acceptance of the brief's specificity at face value caused 3 unnecessary cycles.
+
+### Deduction Breakdown
+- AC lines: all 5 with specific evidence → 0
+- Lint violations in task scope: 0 → 0
+- AC quality 4/5 (>3): → 0
+- Reviewer evidence: present, detailed, PASS at 0.95 → 0
+- Full-suite failures in task scope: 0 → 0
+- No deductions applied.
+
+### Confidence: 0.98
+### Action: archive
+
+### Notes
+- Subtask #1422 at `review` — was partially processed (test file lives there). Its lifecycle is independent.
+- R2 arch review noted subtasks #1423-#1425 "should be archived as superseded" — out of scope for this audit; noted for follow-up.
+- Docs gate present in task body: no-impact with evidence.

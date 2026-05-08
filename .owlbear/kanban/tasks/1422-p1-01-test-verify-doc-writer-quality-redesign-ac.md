@@ -1,10 +1,10 @@
 ---
 id: 1422
 title: 'P1-01: Test — verify doc-writer quality redesign AC'
-status: in-progress
+status: review
 priority: needed
 created: 2026-05-08T00:32:15.467895+00:00
-updated: 2026-05-08T15:55:09.195965+00:00
+updated: 2026-05-08T16:06:22.774313+00:00
 tags:
 - phase-1
 - scope:shared
@@ -343,3 +343,12 @@ Architecture review R3 complete. AC1 supplemented with 2 specific discriminator 
 - Pattern: implementation preceded tests (builder completed in #1421); these tests strengthen the suite against future regressions per reviewer R3 required follow-up
 - AC coverage: AC1 (all gaps addressed — src/** Gap 1, with evidence Gap 2), AC2–AC5 unchanged
 - Commit: 5de383ce
+[[2026-05-08]]
+## Builder Notes
+- Implementation: no files changed (task scope is test-only verification)
+- Tests: 51 passed, 0 failed, 0 skipped (`tests/test_doc_writer_quality_1422.py`)
+- Coverage: N/A (no instrumentable source module in scope)
+- ruff: clean (0 violations)
+- Approach: verified latest test-writer retry state with a fresh scoped quality-runner gate before advancing
+- Evidence summary: quality-runner reported pytest exit 0 and ruff exit 0 with `failed: []` and `clean: true`
+- Fixes applied: none

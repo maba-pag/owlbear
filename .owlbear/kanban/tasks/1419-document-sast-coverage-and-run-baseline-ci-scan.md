@@ -1,10 +1,10 @@
 ---
 id: 1419
 title: Document SAST coverage and run baseline CI scan
-status: todo
+status: in-progress
 priority: nice-to-have
 created: 2026-05-07T23:29:18.911471+00:00
-updated: 2026-05-08T15:55:43.848900+00:00
+updated: 2026-05-08T16:21:59.245131+00:00
 tags:
 - scope:infra
 - type:docs
@@ -63,3 +63,8 @@ P3: Same document records MegaLinter baseline evidence: CI trigger configuration
 - All td:0 — Test-writer: SKIP
 - Prerequisite for reviewer rewrite (Brief D2→B1 in `draft-pipeline-review-rethink`)
 - Challenger: skipped (all td:0)
+[[2026-05-08]]
+## Test-Writer Notes
+- Non-implementation task (tagged type:docs) — no tests applicable.
+- All AC lines annotated td:0; architecture review explicitly flagged Test-writer: SKIP.
+- Passing through to builder.

@@ -1,10 +1,10 @@
 ---
 id: 1377
 title: 'P2-02: Implement Cockpit task detail context model'
-status: review
+status: done
 priority: critical
 created: 2026-05-06T01:04:31.145299+00:00
-updated: 2026-05-08T15:40:49.436942+00:00
+updated: 2026-05-08T16:25:13.188737+00:00
 tags:
 - cockpit
 - audit-remediation
@@ -137,3 +137,108 @@ All AC lines are td:0. No implementation or test work needed.
 - Coverage: not applicable (no code changes).
 - ruff: not run (no code changes).
 - Evidence summary: Architecture Review (2nd pass) marked no-op APPROVE; Test-Writer Notes explicitly indicate pass-through to builder.
+[[2026-05-08]]
+## Review Evidence
+### Test Results
+- quality-runner was not executed directly for this review. The latest task-local Architecture Review marks every AC line as `td:0` / already satisfied, and the current scoped quality-runner contract in this workspace does not support a meaningful lint-only td:0 review surface.
+- Supporting historical evidence from archived counterpart task `#1376` remains green:
+  - `.owlbear/kanban/archive/1376-p2-01-test-cockpit-task-detail-context-model.md:378` records a quality-runner scoped frontend run with 63 passed, 0 failed, 0 skipped across `TaskDetailModel_1376.test.tsx` and `DetailTab.test.tsx`.
+  - `.owlbear/kanban/archive/1376-p2-01-test-cockpit-task-detail-context-model.md:384` records ESLint clean for `DetailTab.tsx` and the related tests.
+  - `.owlbear/kanban/archive/1376-p2-01-test-cockpit-task-detail-context-model.md:389` records `DetailTab.tsx` coverage at 92.38% statements and 91.07% lines.
+- Current workspace diagnostics are clean for `serve/cockpit/web/src/components/DetailTab.tsx`, `serve/cockpit/web/src/Shell.tsx`, `serve/cockpit/src/owlbear_cockpit/routes/mutation.py`, `serve/cockpit/src/owlbear_cockpit/view.py`, and `serve/kanban/src/owlbear_kanban/models.py`.
+
+### Lint
+- Not run directly in this td:0 review.
+- Supporting archived `#1376` review evidence is clean, and current workspace diagnostics show no live-file errors in the relevant frontend/backend surfaces.
+
+### Coverage
+- Not applicable for this task cycle; builder notes for `#1377` state `Files changed: none`.
+- Supporting archived `#1376` coverage: `DetailTab.tsx` 92.38% statements, 91.07% lines.
+
+### Pass 1 - CRITICAL
+#### Test-Writer AC Coverage
+- N/A for `#1377` itself. The latest task-local architecture refinement classifies every AC line as `td:0` already satisfied (`.owlbear/kanban/tasks/1377-p2-02-implement-cockpit-task-detail-context-model.md:106-114`). I verified that refined contract against the live frontend/backend code and the archived `#1376` evidence trail.
+
+#### Security Review
+- No security issues found in scope. The live surface is field projection plus read-only rendering only.
+
+#### Test Integrity
+- N/A. `#1377` has no task-local `TestFromAC_*` suite and builder notes report `Files changed: none` in this review cycle (`.owlbear/kanban/tasks/1377-p2-02-implement-cockpit-task-detail-context-model.md:134-139`).
+
+#### Test Quality
+- Supporting `#1376` proof package remains adequate for the underlying implementation: exact-value assertions for `claimed`, `claimed_at`, and `dep_status`, plus a dedicated field-sensitivity test are recorded in the archived task review (`.owlbear/kanban/archive/1376-p2-01-test-cockpit-task-detail-context-model.md:402-406`).
+
+#### Data Safety
+- No data-safety issue found in scope.
+
+#### Implementation-Aware Gaps
+- No significant gap found.
+- Backend read surface: `TaskSummary` exposes `claimed_at`, `claimed`, `dep_status`, `parent`, and `depends_on`, while `_coerce_claimed` explicitly drops `claimed_by` (`serve/kanban/src/owlbear_kanban/models.py:459-503`). `ShowTaskResponse` extends that surface (`serve/kanban/src/owlbear_kanban/models.py:606-616`).
+- Frontend detail model: `TaskDetail` includes `claimed`, `claimed_at`, `dep_status`, `parent`, and `depends_on` (`serve/cockpit/web/src/components/DetailTab.tsx:16-31`).
+- Fetch/state propagation: `Shell` loads `/api/tasks/{id}` and stores the JSON response as `TaskDetail` (`serve/cockpit/web/src/Shell.tsx:85-121`).
+- Edit/move/release response preservation: Cockpit mutation routes all return `SingleTaskResponse`, and `CockpitView._to_single_response()` builds that response from `task.model_dump()` so the expanded detail fields remain on mutation responses (`serve/cockpit/src/owlbear_cockpit/routes/mutation.py:142-173`, `serve/cockpit/src/owlbear_cockpit/routes/mutation.py:272-319`, `serve/cockpit/src/owlbear_cockpit/view.py:67-75`).
+- Optional-state handling: `DetailTab` keeps `claimed_at` / `dep_status` read-only in the UI (`serve/cockpit/web/src/components/DetailTab.tsx:253-255`), does not send them in edit payloads (`serve/cockpit/web/src/components/DetailTab.tsx:157-180`), and only clears `parent` through an explicit `null` produced by `parseParent()` (`serve/cockpit/web/src/components/DetailTab.tsx:96-103`, `serve/cockpit/web/src/components/DetailTab.tsx:162-165`). The backend edit contract distinguishes omit from null in `EditRequest` / `_build_edit_kwargs()` (`serve/cockpit/src/owlbear_cockpit/routes/mutation.py:39-60`, `serve/cockpit/src/owlbear_cockpit/routes/mutation.py:176-210`).
+
+#### Builder Process Quality
+| Metric | Value |
+|--------|-------|
+| Builder Notes sections | 1 |
+| Approach variation | N/A |
+| Assessment | CLEAN |
+
+### Pass 2 - INFORMATIONAL
+- The top-level Problem Evidence in `#1377` is stale, but the latest task-local Architecture Review (2nd pass) refines the binding contract to a td:0 no-op and states a field-by-field comparison against backend `ShowTaskResponse` found zero decision-relevant gaps (`.owlbear/kanban/tasks/1377-p2-02-implement-cockpit-task-detail-context-model.md:102-123`). I treated the stale original framing as a confidence deduction, not a blocking defect.
+
+### AC Compliance
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| The task detail frontend model matches backend task detail fields needed for Cockpit decisions, including claim state | Backend `TaskSummary` / `ShowTaskResponse` expose `claimed_at`, `claimed`, `dep_status`, `parent`, and `depends_on`, and explicitly drop `claimed_by` (`serve/kanban/src/owlbear_kanban/models.py:459-503`, `serve/kanban/src/owlbear_kanban/models.py:606-616`). Frontend `TaskDetail` matches those decision-relevant fields (`serve/cockpit/web/src/components/DetailTab.tsx:16-31`). | PASS |
+| Dependency and parent context from the backend is preserved for UI decisions wherever the backend exposes it | `Shell` fetches `/api/tasks/{id}` into `TaskDetail` (`serve/cockpit/web/src/Shell.tsx:85-121`). `DetailTab` stores `depends_on` and `parent` in component state and sends them back explicitly on save (`serve/cockpit/web/src/components/DetailTab.tsx:59-70`, `serve/cockpit/web/src/components/DetailTab.tsx:157-180`). Mutation routes return `SingleTaskResponse` via `task.model_dump()` (`serve/cockpit/src/owlbear_cockpit/routes/mutation.py:142-173`, `serve/cockpit/src/owlbear_cockpit/routes/mutation.py:272-319`, `serve/cockpit/src/owlbear_cockpit/view.py:67-75`). | PASS |
+| Optional or unavailable context has an explicit state and is not converted into a clearing edit | Backend response models make the optional fields explicit (`claimed_at: str | None`, `dep_status: str | None`, `parent: int | None`, `depends_on: list[int]`) (`serve/kanban/src/owlbear_kanban/models.py:459-503`). Frontend keeps those as nullable/explicit fields (`serve/cockpit/web/src/components/DetailTab.tsx:16-31`), renders `claimed_at` / `dep_status` read-only (`serve/cockpit/web/src/components/DetailTab.tsx:253-255`), and never sends them in edit payloads (`serve/cockpit/web/src/components/DetailTab.tsx:157-180`). `parent` clearing is explicit `null`, not accidental omission (`serve/cockpit/web/src/components/DetailTab.tsx:96-103`, `serve/cockpit/src/owlbear_cockpit/routes/mutation.py:39-60`, `serve/cockpit/src/owlbear_cockpit/routes/mutation.py:176-210`). | PASS |
+| Existing valid task fetch, edit, and move flows continue to work with the expanded model | Read route returns `ShowTaskResponse` (`serve/cockpit/src/owlbear_cockpit/routes/read.py:124-127`). Edit/move/release routes return `SingleTaskResponse` (`serve/cockpit/src/owlbear_cockpit/routes/mutation.py:142-173`, `serve/cockpit/src/owlbear_cockpit/routes/mutation.py:272-319`). Archived `#1376` quality-runner evidence shows 63 passed / 0 failed for the scoped frontend slice and ESLint clean (`.owlbear/kanban/archive/1376-p2-01-test-cockpit-task-detail-context-model.md:378-389`). | PASS |
+| The implementation satisfies `#1376` without adding action-gating or validation behavior owned by later tasks | `#1377` task-local Architecture Review (2nd pass) marks this AC already satisfied (`.owlbear/kanban/tasks/1377-p2-02-implement-cockpit-task-detail-context-model.md:114`). Archived `#1376` builder notes record commit `216061a8` touching only `DetailTab.tsx` (`.owlbear/kanban/archive/1376-p2-01-test-cockpit-task-detail-context-model.md:128`), and the live `claimed` / `claimed_at` / `dep_status` usage is read-only display (`serve/cockpit/web/src/components/DetailTab.tsx:253-255`), not action gating. | PASS |
+
+### Deductions
+- `-0.03` quality-runner was not executed directly for this td:0/no-op review because the current scoped runner contract does not support a meaningful lint-only td:0 invocation; verdict relies on direct artifact inspection plus archived `#1376` runner evidence.
+- `-0.02` the top-level `#1377` task framing is stale even though the latest task-local Architecture Review resolves it to a no-op.
+
+### Confidence
+- 0.95
+
+### Verdict
+- PASS
+- Route: docs
+
+### Action
+- Advanced to docs.
+[[2026-05-08]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | Builder Notes: "Files changed: none." No-op pass-through task. No behavior, API, CLI, or config change. No IN-scope prose docs (READMEs, setup guides, share/README) reference the frontend task detail model. |
+| 2 | Module docstrings | No | N/A | No Python modules created or modified. |
+| 3 | External attribution | No | N/A | Research doc (Section 2) uses only internal workspace sources and archived task records — no external repos, articles, or docs consulted. |
+| 4 | Research doc | Yes | Verified | `.owlbear/research/1377-task-detail-context-model.md` exists (confirmed by file search) and is linked in the task body under `## Research`. Follow-up tasks listed in Section 5. |
+| 5 | Diagram maintenance (describes match) | No | N/A | Changed-files set is empty ("Files changed: none"). `share/diagrams/cockpit.excalidraw` describes `serve/cockpit/src/**, serve/cockpit/web/src/**` but no files in that glob were changed by this task. No match. |
+| 6 | Explicit diagram creation | No | N/A | No explicit diagram creation request in task body. |
+| 7 | Deletion detection | No | N/A | No files deleted. No orphaned IN-scope docs detected. |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| `.owlbear/research/1377-task-detail-context-model.md` | IN | Verified (exists, linked) |
+| `serve/cockpit/web/src/components/DetailTab.tsx` | OUT (source) | N/A |
+| `serve/cockpit/web/src/Shell.tsx` | OUT (source) | N/A |
+| `serve/cockpit/src/owlbear_cockpit/routes/mutation.py` | OUT (source) | N/A |
+| `serve/cockpit/src/owlbear_cockpit/view.py` | OUT (source) | N/A |
+| `serve/kanban/src/owlbear_kanban/models.py` | OUT (source) | N/A |
+
+### Files Updated
+- None
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no `.owlbear/scratch/1377-*` files existed)

@@ -1,10 +1,10 @@
 ---
 id: 1412
 title: 'D1: Pre-end_work scoped commit check — domain-scoped uncommitted file verification'
-status: in-progress
+status: review
 priority: important
 created: 2026-05-07T23:16:25.281801+00:00
-updated: 2026-05-08T15:53:42.397820+00:00
+updated: 2026-05-08T16:06:52.798135+00:00
 tags:
 - pipeline
 - ws-protocol
@@ -311,3 +311,12 @@ REFINE + APPROVE: AC builder domain example corrected from `serve/*/src/` to `se
 - All AC lines are (td:0) per Architecture Review — test-writer skipped.
 - Architecture review corrected the builder-domain AC example (`serve/*/src/` → `serve/`, `share/`). Existing `test_builder_domain_paths_present` already checks `serve/` and is correct/sufficient.
 - Passing through to builder.
+[[2026-05-08]]
+## Builder Notes
+- Non-implementation pass-through after architect AC refinement: live protocol and task-local TestFromAC already align on builder domain (`serve/`, `share/`).
+- Files changed: none.
+- Verification (quality-runner, scoped): `tests/test_pipeline_commit_check_1412.py` -> 8 passed, 0 failed.
+- Lint (quality-runner, scoped): clean (`tests/test_pipeline_commit_check_1412.py`).
+- Coverage: not requested; task is protocol markdown verification and no new implementation was performed.
+- Pre-`end_work` domain-scoped commit check executed for builder domain: `git status --porcelain -- serve/ share/` returned empty output (clean).
+- Evidence summary: no additional code changes required for this builder cycle; task is advanced with validated green state.
