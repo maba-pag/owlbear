@@ -143,10 +143,13 @@ describe('TestFromAC_DecisionViewport', () => {
     expect(ref).not.toBeNull()
   })
 
-  it('task-id reference displays the task_id value', () => {
+  it('task-id reference displays the task_id value — exact numeric match, not substring', () => {
+    // AC1 pass-4: must match /^#?\d+$/ and numeric portion must equal task_id (prevents "142" matching "42")
     const { container } = renderViewport({ items: [DR_A] })
     const ref = container.querySelector('[data-testid="decision-task-ref-dr-vp-001"]')!
-    expect(ref.textContent).toContain('42')
+    const text = ref.textContent?.trim() ?? ''
+    expect(text).toMatch(/^#?\d+$/)
+    expect(Number(text.replace(/^#/, ''))).toBe(DR_A.task_id)
   })
 
   it('task-id reference is a clickable element (button or link)', () => {
@@ -177,23 +180,30 @@ describe('TestFromAC_DecisionViewport', () => {
   // AC1 requires age rendered in a dedicated data-testid="decision-age-{id}" element.
   // Reading from whole-item textContent is not discriminating (other fields differ too).
 
-  it('renders a non-empty age string in a dedicated decision-age-{id} element', () => {
+  it('renders a human-readable relative age string in the dedicated decision-age-{id} element', () => {
+    // AC1 pass-4: age must match relative-time pattern (e.g. "3h ago", "1d ago") — not a raw timestamp
     const { container } = renderViewport({ items: [DR_A] })
     const ageEl = container.querySelector('[data-testid="decision-age-dr-vp-001"]')
     expect(ageEl).not.toBeNull()
-    expect(ageEl!.textContent?.trim().length).toBeGreaterThan(0)
+    const ageText = ageEl!.textContent?.trim() ?? ''
+    expect(ageText).toMatch(/\d+\s*(h|d|m|min|hour|day|week|ago)/i)
   })
 
   it('age string differs between items with different created timestamps (read from dedicated age elements)', () => {
+    // AC1 pass-4: each age element must show a relative-time pattern AND items with distinct
+    // created timestamps must produce different age strings (discriminating proof)
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-05-08T12:00:00.000Z'))
     const recent: PendingDR = { ...DR_A, id: 'dr-recent', created: '2026-05-08T11:00:00.000Z' } // 1h
     const old: PendingDR = { ...DR_B, id: 'dr-old', created: '2026-05-07T12:00:00.000Z' } // 24h
     try {
       const { container } = renderViewport({ items: [recent, old] })
-      const recentAge = container.querySelector('[data-testid="decision-age-dr-recent"]')?.textContent ?? ''
-      const oldAge = container.querySelector('[data-testid="decision-age-dr-old"]')?.textContent ?? ''
-      // Dedicated age elements must show different text — not whole-item textContent (discriminating proof)
+      const recentAge = container.querySelector('[data-testid="decision-age-dr-recent"]')?.textContent?.trim() ?? ''
+      const oldAge = container.querySelector('[data-testid="decision-age-dr-old"]')?.textContent?.trim() ?? ''
+      // Each age element must show a relative-time format — not a raw ISO timestamp
+      expect(recentAge).toMatch(/\d+\s*(h|d|m|min|hour|day|week|ago)/i)
+      expect(oldAge).toMatch(/\d+\s*(h|d|m|min|hour|day|week|ago)/i)
+      // Different timestamps must produce different age strings (not constant output)
       expect(recentAge).not.toBe(oldAge)
     } finally {
       vi.useRealTimers()
@@ -233,6 +243,36 @@ describe('TestFromAC_DecisionViewport', () => {
     expect(taskRef).not.toBeNull()
     fireEvent.click(taskRef)
     expect(onItemClick).toHaveBeenCalledWith('dr-vp-001')
+  })
+
+  // ─── AC1 (td:2): Full per-item metadata/callback for ≥2 items ────────────
+  // AC1 pass-4: full metadata + callback assertions must be proven for ≥2 items,
+  // not just existence checks. A renderer that fully populates only the first item
+  // must still fail.
+
+  it('second item renders agent, request_type, body_preview, age (relative-time), task-id (exact match), and onItemClick', () => {
+    const onItemClick = vi.fn()
+    const { container } = renderViewport({ items: [DR_A, DR_B], onItemClick })
+    const item2 = container.querySelector('[data-testid="decision-item-dr-vp-002"]')
+    expect(item2).not.toBeNull()
+    // agent and request_type
+    expect(item2!.textContent).toContain(DR_B.agent)
+    expect(item2!.textContent).toContain(DR_B.request_type)
+    // body_preview (fixture: body_preview is NOT a substring of body)
+    expect(item2!.textContent).toContain(DR_B.body_preview)
+    // age in dedicated element — must show relative-time pattern
+    const ageEl2 = container.querySelector('[data-testid="decision-age-dr-vp-002"]')
+    expect(ageEl2).not.toBeNull()
+    expect(ageEl2!.textContent?.trim()).toMatch(/\d+\s*(h|d|m|min|hour|day|week|ago)/i)
+    // task-id reference: exact numeric match, not substring (prevents "99" matching "199")
+    const ref2 = container.querySelector('[data-testid="decision-task-ref-dr-vp-002"]')
+    expect(ref2).not.toBeNull()
+    const text2 = ref2!.textContent?.trim() ?? ''
+    expect(text2).toMatch(/^#?\d+$/)
+    expect(Number(text2.replace(/^#/, ''))).toBe(DR_B.task_id)
+    // onItemClick fires from task-id reference of second item
+    fireEvent.click(ref2!)
+    expect(onItemClick).toHaveBeenCalledWith('dr-vp-002')
   })
 
   // ─── AC4 (td:1): PDS components used ─────────────────────────────────────
