@@ -1,10 +1,10 @@
 ---
 id: 1418
 title: Fix uv.lock exclusion in MegaLinter and add mcp-browser to ruff src
-status: done
+status: archived
 priority: needed
 created: 2026-05-07T23:29:04.456182+00:00
-updated: 2026-05-08T15:57:54.339225+00:00
+updated: 2026-05-08T16:26:42.455134+00:00
 tags:
 - scope:infra
 - type:config
@@ -281,3 +281,29 @@ APPROVED #1418 -> todo | AC P2 refined from full-workspace ruff pass to task-sco
 
 ### Scratch Files Cleaned
 - None (no `.owlbear/scratch/1418-*` files found)
+[[2026-05-08]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| P1: `uv.lock` no longer in `FILTER_REGEX_EXCLUDE` | `.mega-linter.yml:37` — regex confirmed, no `uv.lock` | PASS |
+| P1: `.editorconfig` has `[uv.lock]` section | `.editorconfig:34-35` — section present with `max_line_length = unset` | PASS |
+| P1: `serve/mcp-browser/src` in ruff src | `pyproject.toml:47` — entry present | PASS |
+| P2: Scoped ruff check clean | quality-runner: `uv run ruff check serve/mcp-browser/src` exits 0, zero violations | PASS |
+
+### Test Results
+- pytest: 2977 passed, 178 failed (all pre-existing — memory schema, engine accessor migrations, stale decision imports; zero task-caused regressions), 4 skipped
+- ruff: 12 violations in pre-existing files outside task scope (`serve/knowledge/`, `serve/tools/`); zero violations in task-scoped files
+
+### Architect Quality: 3/5
+Original AC P2 required workspace-wide ruff pass when intent was task-scoped lint check. Caused a full extra review/architect cycle. Cycle 2 architect correctly refined P2. Config-edit ACs (P1s) were specific and verifiable.
+
+### Deduction Breakdown
+- AC quality 3/5: -.03
+- All AC lines have specific evidence: -.00
+- Full-suite failures all pre-existing, zero regressions: -.00
+- Builder commit verified (abc38755): -.00
+- Reviewer evidence present and thorough (3 cycles, correctly caught pass-through miss): -.00
+
+### Confidence: 0.97
+### Action: archive
