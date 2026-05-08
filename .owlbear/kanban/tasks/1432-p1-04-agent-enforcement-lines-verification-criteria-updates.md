@@ -1,10 +1,10 @@
 ---
 id: 1432
 title: 'P1-04: Agent enforcement lines + verification criteria updates'
-status: review
+status: done
 priority: needed
 created: 2026-05-08T01:00:48.495798+00:00
-updated: 2026-05-08T13:14:33.456493+00:00
+updated: 2026-05-08T14:27:05.852442+00:00
 tags:
 - phase-1
 - scope:shared
@@ -15,7 +15,7 @@ parent: 1428
 depends_on: []
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-08T14:27:05.852442+00:00
 archival_reason:
 archival_refs: []
 ---
@@ -121,3 +121,76 @@ Architecture review complete. REFINED + APPROVED. Fixed 4 AC problems: (1) AC3 p
 - Scope control: no edits outside revised 3-file architecture scope; all critical_rule changes placed in existing sections.
 - Quality evidence (td:0 markdown-only task): quality-runner lint pass using markdownlint on all changed files (clean, no violations), tests not applicable.
 - Commit: `6b66937a` (`chore: enforce ideation user-facing vocabulary rules (#1432, builder)`).
+[[2026-05-08]]
+## Review Evidence
+### Test Results
+- AC depth: td:0 for all lines per Architecture Review.
+- No task-scoped tests or TestFromAC classes exist for #1432. Test-writer skip was appropriate.
+
+### Lint Results
+- quality-runner scoped lint is not available for this td:0 task because its contract requires non-empty test_paths and this task has no test artifacts.
+- Editor diagnostics report no errors in these reviewed files:
+  - share/agents/ideation-mediator.agent.md
+  - share/agents/ideation-discoverer.agent.md
+  - share/skills/w-ideation-mediation/SKILL.md
+
+### Coverage
+- Not applicable for this td:0 markdown prose task.
+
+### AC Compliance
+| AC Line | Evidence | Status |
+|---|---|---|
+| Mediator critical_rule added | share/agents/ideation-mediator.agent.md:41 contains the exact vocabulary rule. The existing critical_rules section spans lines 33 to 47, so the new line is correctly placed inside it. | PASS |
+| Discoverer vocabulary rule added | share/agents/ideation-discoverer.agent.md:39 contains the same vocabulary rule. The existing critical_rules section spans lines 30 to 43, so the new line is correctly placed inside it. | PASS |
+| Discoverer handoff rule rewritten without handle naming | share/agents/ideation-discoverer.agent.md:40 now says the agent should explain what was completed and what opens next, then point to Phase 2 artifact paths. No remaining "End Phase 1 by naming" text exists in the file. Remaining @ideation-mediator references are outside critical_rules at lines 61, 69, 82, and 99, consistent with the refined AC allowance for internal routing references elsewhere in the file. | PASS |
+| New mediation verification criterion added | share/skills/w-ideation-mediation/SKILL.md:149 starts the Verification Checklist and line 158 adds "Panelist reviews are introduced by purpose and angle (what is being checked and why), not raw agent name." | PASS |
+| Parent brief alignment | .owlbear/briefs/draft-ideation-ux/brief.md:28 and :29 specify the new per-agent critical_rule and the shift from component naming to purpose-based verification. | PASS |
+
+### Additional Checks
+- Commit existence confirmed in .git/logs/refs/heads/dev:2117 and .git/logs/HEAD:2296 for builder commit 6b66937a105ebaea5cf1e12e1c8eb7a8e4aedbda.
+- The new vocabulary rule appears exactly twice across share/agents, matching the two target agent files.
+- Builder loop check: CLEAN. One Builder Notes section and no prior Review Evidence section were present.
+
+### Deductions
+- 0.04 deduction: terminal access was unavailable in this review surface, so I could not independently run git show or git status to confirm exact changed-file diff or dirty-tree overlap.
+- 0.03 deduction: quality-runner has no supported td:0 lint-only path because scoped mode requires test_paths; lint evidence is limited to editor diagnostics plus direct artifact inspection.
+
+### Verdict
+PASS with confidence 0.93. Current repository state satisfies all refined AC lines for #1432. Residual risk is limited to unverified diff and dirty-tree scope, not to the live artifact content.
+
+### Action
+Advance to docs.
+[[2026-05-08]]
+## Docs Gate
+
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | All changed files are OUT-scope agent-executables; no IN-scope prose doc references them by functional contract |
+| 2 | Module docstrings | No | N/A | No Python files changed |
+| 3 | External attribution | No | N/A | Task body and AC contain no external references |
+| 4 | Research doc | No | N/A | No research doc produced for this task |
+| 5 | Diagram maintenance (describes match) | Yes | Updated | `share/diagrams/ideation.excalidraw` describes `share/agents/ideation-*.agent.md` + `share/skills/w-ideation-mediation/**` — both match. `share/diagrams/pipeline.excalidraw` describes `share/agents/*.agent.md` — matches agent files. Both footers updated to `2026-05-08 (331993d7)`. |
+| 6 | Explicit diagram creation | No | N/A | No explicit diagram creation requested |
+| 7 | Deletion detection | No | N/A | No files deleted; no orphaned IN-scope docs |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| share/agents/ideation-mediator.agent.md | OUT | No edit (agent-executable) |
+| share/agents/ideation-discoverer.agent.md | OUT | No edit (agent-executable) |
+| share/skills/w-ideation-mediation/SKILL.md | OUT | No edit (agent-executable) |
+| share/diagrams/ideation.excalidraw | IN | Footer updated |
+| share/diagrams/pipeline.excalidraw | IN | Footer updated |
+
+### Files Updated
+- share/diagrams/ideation.excalidraw (footer: `Last verified: 2026-05-08 (331993d7)`)
+- share/diagrams/pipeline.excalidraw (footer: `Last verified: 2026-05-08 (331993d7)`)
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no `1432-*` scratch files found)
+
+Commit: `4b7c9960` (`docs: update diagram footers for ideation/pipeline (#1432, doc-writer)`)

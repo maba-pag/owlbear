@@ -1,10 +1,10 @@
 ---
 id: 1433
 title: 'P1-05: Panel Output Phrasing section in h-ideation-panel/SKILL.md'
-status: review
+status: backlog
 priority: important
 created: 2026-05-08T01:00:48.510035+00:00
-updated: 2026-05-08T13:12:39.485333+00:00
+updated: 2026-05-08T13:33:41.448114+00:00
 tags:
 - phase-1
 - scope:shared
@@ -223,3 +223,55 @@ Builder skipped. Advancing directly to review.
 - Coverage: not requested (docs-only scope; no Python source change this cycle).
 - ruff: clean on `tests/test_panel_output_phrasing_1433.py`.
 - Evidence summary: verified GREEN on tightened suite, confirmed no additional builder intervention needed, and advanced to review.
+[[2026-05-08]]
+## Review Evidence
+### Test Results
+- quality-runner scoped run on tests/test_panel_output_phrasing_1433.py: 14 passed, 0 failed.
+- Ruff on tests/test_panel_output_phrasing_1433.py: clean.
+- Coverage: not applicable for this docs-only, test-only retry cycle.
+
+### Scope Reconstruction
+- This is the second review cycle. A prior Review Evidence section already exists in .owlbear/kanban/tasks/1433-p1-05-panel-output-phrasing-section-in-h-ideation-panel-skill-md.md:80, so the reviewer loop-breaker applies on any new FAIL.
+- Current implementation evidence is the handbook section at share/skills/h-ideation-panel/SKILL.md:197-204, originally added in builder commit 771c2962 and confirmed in .git/logs/HEAD:2262.
+- Current retry-cycle proof changes are the tightened tests recorded in test-writer commit 279ae988, confirmed in .git/logs/HEAD:2275.
+- Direct git diff and git status were not available in this tool surface, so dirty-tree contamination and commit-level diff ownership are not fully verified. Small confidence deduction applied.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---|---|---|---|
+| AC1: section heading exists | share/skills/h-ideation-panel/SKILL.md:197 | test_panel_output_phrasing_section_exists | PASS |
+| AC2: positive descriptive guidance plus explicit negative contrast with examples | Current wording is correct at share/skills/h-ideation-panel/SKILL.md:199-200, but the strengthened proof still keys on descriptive/protocol-coded token presence and example presence rather than affirmative vs prohibitive semantics at tests/test_panel_output_phrasing_1433.py:148, tests/test_panel_output_phrasing_1433.py:163, tests/test_panel_output_phrasing_1433.py:168, tests/test_panel_output_phrasing_1433.py:175, tests/test_panel_output_phrasing_1433.py:180 | test_section_instructs_descriptive_headers; test_section_discourages_protocol_coded_headers; test_ac2_contrast_both_terms_coexist; test_ac2_positive_side_has_inline_example; test_ac2_negative_side_has_inline_example | FAIL |
+| AC3: mediator quoting and user readability statements | share/skills/h-ideation-panel/SKILL.md:202-203 and same-line co-occurrence assertions at tests/test_panel_output_phrasing_1433.py:189-216 | test_ac3_quoted_and_mediator_same_line; test_ac3_readable_and_without_translation_same_line | PASS |
+| AC4: 5-10 non-blank lines | share/skills/h-ideation-panel/SKILL.md:199-204 is 6 non-blank lines; bounded extraction and count check at tests/test_panel_output_phrasing_1433.py:41-59 and 118-124 | test_section_length_within_bounds | PASS |
+| AC5: preserve all 7 legacy top-level headings, heading count original plus one, and explicit scope-boundary statement | Current handbook satisfies this at share/skills/h-ideation-panel/SKILL.md:11,23,57,117,152,190,197,204,206, but tests only prove substring presence for legacy headings at tests/test_panel_output_phrasing_1433.py:137, count invariant at tests/test_panel_output_phrasing_1433.py:225-233, and phrasing-only phrase at tests/test_panel_output_phrasing_1433.py:239-248. They do not prove each legacy section remains a top-level ## heading or that the scope-boundary line retains the unchanged mechanics and stance-structure clause. | test_new_section_does_not_displace_existing_sections; test_ac5_heading_count_equals_original_plus_one; test_ac5_scope_boundary_phrase_present | FAIL |
+
+### Test-Writer Audit
+| AC Line | Mapped Test | Would fail if AC violated? | Verdict |
+|---|---|---|---|
+| AC1 | test_panel_output_phrasing_section_exists | Yes. Exact heading presence at tests/test_panel_output_phrasing_1433.py:67. | COVERED |
+| AC2 | test_section_instructs_descriptive_headers; test_section_discourages_protocol_coded_headers; test_ac2_contrast_both_terms_coexist; test_ac2_positive_side_has_inline_example; test_ac2_negative_side_has_inline_example | No. The strengthened selectors still match any line containing descriptive or protocol-coded plus an example at tests/test_panel_output_phrasing_1433.py:168 and 180. A reversed-semantics mutation could stay green. | LAX |
+| AC3 | test_ac3_quoted_and_mediator_same_line; test_ac3_readable_and_without_translation_same_line | Yes. Same-line co-occurrence would fail if the quoting or readability statements were removed or split. | COVERED |
+| AC4 | test_section_length_within_bounds | Yes. Exact 5-10 line bound at tests/test_panel_output_phrasing_1433.py:118-124. | COVERED |
+| AC5 | test_new_section_does_not_displace_existing_sections; test_ac5_heading_count_equals_original_plus_one; test_ac5_scope_boundary_phrase_present | No. The suite does not prove each preserved heading remains a top-level ## heading, and the scope-boundary assertion does not require the mechanics and stance-file-structure disclaimer. | LAX |
+
+### Additional Checks
+- Security review: no issues in scope.
+- Data safety: no issues in scope.
+- Test integrity: no weakened or removed TestFromAC assertions visible in the current snapshot; retry-cycle additions are additive.
+- Builder process quality: CLEAN. No implementation loop; this retry was test-only after architect AC tightening.
+
+### Deductions
+- 0.08 AC2 proof remains vulnerable to reversed-semantics mutations.
+- 0.10 AC5 proof does not guarantee preserved top-level headings or the full scope-boundary disclaimer.
+- 0.03 git diff and dirty-tree contamination checks unavailable in current tool surface.
+
+### Verdict
+- FAIL. The implementation text in share/skills/h-ideation-panel/SKILL.md is correct, but the retry-cycle tests still do not prove AC2 and AC5 strongly enough for review sign-off.
+- Confidence: 0.79.
+- Action: reject to backlog under the reviewer loop-breaker rule because this task already had one prior review failure.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Refine AC2 into line-level semantic proof so tests must distinguish affirmative guidance to use descriptive headers from prohibitive guidance to avoid protocol-coded or jargon-first headers. | tests/test_panel_output_phrasing_1433.py | tests/test_panel_output_phrasing_1433.py:148, 163, 168, 175, 180 |
+| 2 | architect | Refine AC5 proof so tests verify each of the seven legacy sections remains a top-level ## heading and the scope-boundary line explicitly preserves unchanged panel mechanics and stance file structure. | tests/test_panel_output_phrasing_1433.py; share/skills/h-ideation-panel/SKILL.md | tests/test_panel_output_phrasing_1433.py:137, 225, 239, 248; share/skills/h-ideation-panel/SKILL.md:204 |

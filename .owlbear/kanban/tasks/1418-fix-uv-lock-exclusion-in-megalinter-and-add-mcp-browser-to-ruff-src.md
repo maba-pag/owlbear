@@ -1,10 +1,10 @@
 ---
 id: 1418
 title: Fix uv.lock exclusion in MegaLinter and add mcp-browser to ruff src
-status: backlog
+status: todo
 priority: needed
 created: 2026-05-07T23:29:04.456182+00:00
-updated: 2026-05-08T12:14:48.064995+00:00
+updated: 2026-05-08T14:18:49.128339+00:00
 tags:
 - scope:infra
 - type:config
@@ -28,7 +28,7 @@ See `.owlbear/research/1413-ci-sast-baseline.md` gaps G3 and G4.
 P1: `uv.lock` is no longer excluded from MegaLinter's `FILTER_REGEX_EXCLUDE` (td:0)
 P1: `.editorconfig` has a `[uv.lock]` section with `max_line_length = unset` (td:0)
 P1: `serve/mcp-browser/src` is listed in `[tool.ruff] src` in `pyproject.toml` (td:0)
-P2: `uv run ruff check` still passes with no new errors after adding mcp-browser src (td:0)
+P2: Adding `serve/mcp-browser/src` to ruff src introduces no new ruff violations (scoped check exits 0) (td:0)
 
 ## Architecture Review
 **Verdict:** APPROVE
@@ -168,3 +168,30 @@ APPROVED — config-only task, all td:0. Added missing AC for `.editorconfig` `[
 |---|-------------|----------------|---------|----------|
 | 1 | architect | Rewrite AC P2 so it matches task-scoped lint evidence or split the repo-wide Ruff baseline cleanup into a separate backlog task | `.owlbear/kanban/tasks/1418.md`, `pyproject.toml` | quality-runner report: workspace-root Ruff exit 1, scoped `serve/mcp-browser/src` exit 0 |
 | 2 | architect | Decide whether this task should require full-workspace Ruff green or only prove that adding `serve/mcp-browser/src` introduces no new Ruff violations | `.owlbear/kanban/tasks/1418.md` | AC P2 text conflicts with independent lint evidence on the current branch |
+[[2026-05-08]]
+
+## Architecture Review (Cycle 2)
+**Verdict:** APPROVE (AC refinement)
+
+**Issue:** AC P2 required full-workspace `uv run ruff check` to pass, but workspace-root ruff exits 1 with 29 pre-existing violations in files outside task scope (`.owlbear/hooks/`, `seed/`, `serve/tools/`). The task-scoped lint evidence shows zero new violations from adding `serve/mcp-browser/src`.
+
+**AC P2 rewrite:** Changed from "uv run ruff check still passes with no new errors after adding mcp-browser src" to "Adding serve/mcp-browser/src to ruff src introduces no new ruff violations (scoped check exits 0)". This matches the actual task intent — proving the new src entry is clean, not fixing unrelated baseline lint debt.
+
+**AC Assessment (Cycle 2):**
+
+| AC line | Assessment | Action |
+|---------|-----------|--------|
+| P1: uv.lock removed from FILTER_REGEX_EXCLUDE | Verified in review cycle 2 | None |
+| P1: .editorconfig [uv.lock] section | Verified in review cycle 2 | None |
+| P1: mcp-browser in ruff src | Verified in review cycle 2 | None |
+| P2: scoped ruff check clean | **Rewritten** — narrowed to task-scoped lint | AC text updated |
+
+**Architecture notes:** No structural changes. AC text correction only. All builder work from cycle 2 remains valid.
+
+**Test-writer:** SKIP — all AC lines remain td:0.
+
+**Challenge:** Skipped — all td:0.
+
+**Confidence:** 0.96
+[[2026-05-08]]
+APPROVED #1418 -> todo | AC P2 refined from full-workspace ruff pass to task-scoped lint check. All builder work from cycle 2 is valid. Test-writer: SKIP (all td:0).

@@ -1,10 +1,10 @@
 ---
 id: 1417
 title: Add SARIF upload to GitHub Code Scanning in MegaLinter workflow
-status: todo
+status: review
 priority: nice-to-have
 created: 2026-05-07T23:28:57.957311+00:00
-updated: 2026-05-08T07:27:39.167991+00:00
+updated: 2026-05-08T14:17:24.445914+00:00
 tags:
 - scope:infra
 - type:config
@@ -70,3 +70,23 @@ P2: Step placed after "Upload MegaLinter reports" artifact step, before "Fail if
 
 ### Verdict: APPROVE
 ### Action Taken: Refined AC from 3 vague lines to 6 precise verifiable lines. Added `type:config` tag for test-writer pass-through. Advanced to `todo`.
+[[2026-05-08]]
+## Test-Writer Notes
+- Non-implementation task (tagged type:config) — no tests applicable.
+- All AC lines annotated (td:0); architect flagged "Test-writer: SKIP (all td:0)".
+- Passing through to builder.
+[[2026-05-08]]
+## Builder Notes
+- Implementation: updated .github/workflows/megalinter.yml
+- Changes applied:
+  - Added job permissions: `actions: read` and `security-events: write`
+  - Added `Upload SARIF to GitHub Code Scanning` step using `github/codeql-action/upload-sarif@68bde559dea0fdcac2102bfdf6230c5f70eb485e` (v4, SHA-pinned)
+  - Step config: `if: always()`, `continue-on-error: true`, `sarif_file: megalinter-reports/megalinter-report.sarif`, `category: megalinter`
+  - Placement: directly after `Upload MegaLinter reports` artifact step (and before terminal fail gate)
+- Tests: N/A (td:0 config task; no TestFromAC classes or test paths)
+- Coverage: N/A (config-only change)
+- Lint: quality-runner invoked; Python ruff is not applicable to YAML workflow files (reported false positives due to file-type mismatch)
+- Evidence summary:
+  - YAML/workflow structure check: no errors reported for .github/workflows/megalinter.yml
+  - Quality-runner report captured non-applicability for pytest/coverage and ruff-on-YAML mismatch
+- Commit: 53fe72ac4e80fc1eb41b79f1fabf03c773db7776

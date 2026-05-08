@@ -1,10 +1,10 @@
 ---
 id: 1435
 title: Add pre-advance commit verification rule to r-pipeline-protocol
-status: review
+status: done
 priority: important
 created: 2026-05-08T06:58:54.587335+00:00
-updated: 2026-05-08T13:12:55.890266+00:00
+updated: 2026-05-08T14:27:05.913514+00:00
 tags:
 - pipeline
 - ws-protocol
@@ -14,7 +14,7 @@ parent: 1403
 depends_on: []
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-08T14:27:05.913514+00:00
 archival_reason:
 archival_refs: []
 ---
@@ -150,3 +150,88 @@ P3: Verification by diff comparison of modified SKILL.md (td:0)
 - Reviewer evidence was precise; targeted the exact stale row set and prevented over-editing.
 - For td:0 protocol updates, in-file AC diff validation first avoids false “already present” assumptions.
 - Keeping the change to a single table block minimized risk and preserved surrounding protocol semantics.
+[[2026-05-08]]
+## Review Evidence
+### Test Results
+- td:0 task; no task-local test suite is expected.
+- quality-runner scoped pass executed with empty `test_paths` and ran 0 tests, which is consistent with td:0 scope.
+
+### Lint Results
+- quality-runner ran ruff against `share/skills/r-pipeline-protocol/SKILL.md` and exited 0.
+- Ruff reported `No Python files found under the given path(s)`, so the markdown file was not actually linted. This is a tool limitation for td:0 markdown tasks, not an AC failure.
+
+### Coverage
+- N/A. The deliverable is markdown in `share/skills/r-pipeline-protocol/SKILL.md`.
+
+### Dirty-Tree Contamination
+- I could not run `git status --porcelain -- share/skills/r-pipeline-protocol/SKILL.md` from the current review tool surface.
+- A General Purpose subagent fallback also lacked terminal access, so exact dirty-scope reconstruction and `git show` diff inspection were unavailable.
+- This is a small confidence deduction only. For this docs-only task, the live artifact plus task history provide sufficient evidence.
+
+### Critical Checks
+#### Test-Writer Audit
+- Skipped. Task 1435 is td:0 and has no task-local `TestFromAC_*` suite.
+
+#### Security Review
+- No issues. The task changes protocol text only.
+
+#### Data Safety
+- No issues.
+
+#### Builder Process Quality
+- CLEAN. There is one prior review failure and one focused builder retry; no loop pattern or repeated identical retries.
+
+#### Implementation Findings
+- The required rule is present at `share/skills/r-pipeline-protocol/SKILL.md:242`.
+- The refined domain-path rows now match the current task contract: test-writer `tests/`, `serve/*/tests/` at `:247`; builder `serve/`, `share/` at `:248`; doc-writer paths plus `.owlbear/sources/` at `:249`; auditor `.owlbear/kanban/` at `:250`.
+- The verification command template is present at `share/skills/r-pipeline-protocol/SKILL.md:252`.
+- The self-heal/continue behavior is present at `share/skills/r-pipeline-protocol/SKILL.md:253`, which satisfies the non-blocking requirement.
+- The prior failed review recorded the older `#1412` table at `.owlbear/kanban/tasks/1435-add-pre-advance-commit-verification-rule-to-r-pipeline-protocol.md:105`. Comparing that recorded stale state against the current rows at `share/skills/r-pipeline-protocol/SKILL.md:247-250` shows the required diff-based correction landed.
+- Builder retry note records commit `dfcd2eec` at `.owlbear/kanban/tasks/1435-add-pre-advance-commit-verification-rule-to-r-pipeline-protocol.md:147`, and git log entries confirm that commit exists at `.git/logs/refs/heads/dev:2115` and `.git/logs/HEAD:2294`.
+
+### Informational
+- quality-runner's canonical td:0 lint dispatch is not sufficient to validate markdown content because ruff only handles Python files.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---|---|---|---|
+| P1: New `Pre-advance verification` rule added to `r-pipeline-protocol` SKILL.md §4 Closing → Who Commits What → Rules | `share/skills/r-pipeline-protocol/SKILL.md:242` | n/a (td:0) | PASS |
+| P2: Rule includes domain-path table mapping each committing agent to its default pathspecs | Task contract at `.owlbear/kanban/tasks/1435-add-pre-advance-commit-verification-rule-to-r-pipeline-protocol.md:25`; live rows at `share/skills/r-pipeline-protocol/SKILL.md:247-250` | n/a (td:0) | PASS |
+| P2: Rule includes verification command template `git status --porcelain -- <domain-paths>` | Task contract at `.owlbear/kanban/tasks/1435-add-pre-advance-commit-verification-rule-to-r-pipeline-protocol.md:26`; live text at `share/skills/r-pipeline-protocol/SKILL.md:252` | n/a (td:0) | PASS |
+| P2: Rule specifies self-heal action: if dirty, commit before `end_work`; not a blocking gate | Task contract at `.owlbear/kanban/tasks/1435-add-pre-advance-commit-verification-rule-to-r-pipeline-protocol.md:27`; live text at `share/skills/r-pipeline-protocol/SKILL.md:253` | n/a (td:0) | PASS |
+| P3: Verification by diff comparison of modified SKILL.md | Prior stale state captured at `.owlbear/kanban/tasks/1435-add-pre-advance-commit-verification-rule-to-r-pipeline-protocol.md:105`; current corrected rows at `share/skills/r-pipeline-protocol/SKILL.md:247-250`; builder retry commit recorded at `.owlbear/kanban/tasks/1435-add-pre-advance-commit-verification-rule-to-r-pipeline-protocol.md:147` and confirmed in `.git/logs/refs/heads/dev:2115` | n/a (td:0) | PASS |
+
+### Deductions
+- -0.03: Exact dirty-scope status could not be verified because terminal/git status access was unavailable in this session.
+- -0.02: quality-runner td:0 lint evidence for markdown is a tooling no-op.
+
+### Confidence: .95
+### Verdict: PASS
+### Action: advance to docs
+[[2026-05-08]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | Only changed file is `share/skills/r-pipeline-protocol/SKILL.md` (OUT-scope agent-executable); no IN-scope prose doc references the pre-advance verification rule |
+| 2 | Module docstrings | No | N/A | No Python modules created or modified |
+| 3 | External attribution | No | N/A | No external patterns cited in builder/review notes |
+| 4 | Research doc | No | N/A | No research doc produced for this task |
+| 5 | Diagram maintenance (describes match) | Yes | Updated | `share/diagrams/pipeline.excalidraw` describes `share/skills/r-pipeline-protocol/**`; footer updated from `2026-05-08 (4b7c9960)` → `2026-05-08 (20f1b7dd)`; committed `2241715d` |
+| 6 | Explicit diagram creation | No | N/A | No explicit diagram creation request in task body |
+| 7 | Deletion detection | No | N/A | No files deleted |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| `share/skills/r-pipeline-protocol/SKILL.md` | OUT | N/A (agent-executable SKILL.md) |
+| `share/diagrams/pipeline.excalidraw` | IN | Footer updated (describes-match) |
+
+### Files Updated
+- `share/diagrams/pipeline.excalidraw` — footer hash updated to `20f1b7dd`
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no `1435-*` scratch files found)
