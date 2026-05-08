@@ -110,21 +110,21 @@ Stubs catch agents editing files without the relevant skill loaded. They do not 
 
 ## Prompts
 
-9 prompt files (`.prompt.md`). Prompts are user-invocable one-shot commands triggered from the VS Code chat command palette. Many accept `${input:...}` variable substitution.
+10 prompt files (`.prompt.md`). Prompts are user-invocable one-shot commands triggered from the VS Code chat command palette. Many accept `${input:...}` variable substitution.
 
 **Naming convention:**
 
 | Pattern | Meaning |
-|---------|---------|
+|---------|----------|
 | `{verb}.prompt.md` | Single-purpose action (e.g., `orchestrate`) |
 | `{scope}-{verb}.prompt.md` | Scoped action (e.g., `frontend-audit`, `memory-audit`) |
 
 **Current prompts:**
 
 | Group | Prompts |
-|-------|---------|
+|-------|--------|
 | Orchestration | `orchestrate` |
-| Audits | `frontend-audit`, `memory-audit` |
+| Audits | `frontend-audit`, `memory-audit`, `legacy-audit` |
 | Frontend | `frontend-normalize`, `frontend-polish`, `design-context` |
 | Ideation | `ideation-discover`, `ideation-mediate` |
 | Curation | `test-curation` |
