@@ -67,3 +67,59 @@ User rejected split: "one problem, holistic solution." The doc-audit prompt is p
 **Decision: add for removal-focused checks only.**
 
 Structural checks (symbol grep, signature comparison) catch stale references to removed or changed symbols. They don't catch missing documentation of new features — that remains LLM editorial judgment.
+
+## D8 — 2026-05-08 16:00 — TODO marker visibility
+
+**Status quo:** Locked outcome says markers are "visible to humans reading the doc" but the panel proposed HTML comments (invisible in rendered markdown).
+**Decision to make:** How should markers appear?
+
+**Options considered:**
+- A: HTML-only (architect, data) — invisible in rendered docs, clean rendering, machine-parseable
+- B: Visible for grep-confirmed removals + HTML for everything else (enduser) — two format variants
+- C: Always visible blockquote markers (user preference)
+
+**Chosen:** C — always visible. One format, no variants:
+```
+> **TODO:** {category} — {description} [#{task_id}]
+```
+
+**Rejected:**
+- A because HTML comments are not "visible to humans" in rendered markdown — the locked claim would be false
+- B because two format variants add complexity for a simple mechanism (user: "harder to clean up and more logic for such a simple thing")
+
+**Source inputs:**
+- User: "what's the problem with always visible? let's just do that"
+- Enduser panel: identified the factual error in the "visible to humans" claim
+- Architect/data concern about wall-of-warnings: acknowledged, user accepts
+
+## D9 — 2026-05-08 16:00 — AST signature comparison
+
+**Status quo:** Data panelist proposed ast.parse for task-changed functions. Architect opposed.
+**Decision to make:** Include AST-based signature comparison?
+
+**Chosen:** No. Grep for removals + LLM editorial is the design. Not staged as "v1" — this is the approach.
+
+**Rejected:**
+- AST comparison because: marginal value when LLM already reads full file + source; adds engineering cost; locked decision already scopes structural verification to "removal-focused checks only"
+
+## D10 — 2026-05-08 16:00 — Marker schema
+
+**Status quo:** Architect proposed 3-field pipe-delimited. Data proposed 4-category with agent namespace.
+**Decision to make:** Marker format complexity.
+
+**Chosen:** Categorized with 4 categories (`stale | inaccurate | missing | unverified`), no agent name:
+```
+> **TODO:** {category} — {description} [#{task_id}]
+```
+
+**Rejected:**
+- Simple 3-field format: loses categorization value for doc-audit triage
+- Agent-namespaced `TODO(doc-writer)`: user explicitly cut the agent name — simpler
+
+## D11 — 2026-05-08 16:00 — Open questions batch
+
+- **Doc-audit cadence:** Manual-only + sync-to-main pre-check as safety net
+- **Sync-to-main enforcement:** Warning (list unresolved markers), not hard gate
+- **Non-Python surface verification:** LLM-only; acceptable
+- **Ruff D100 follow-up:** Separate backlog item, not in this brief
+- **Section boundary:** Heading level (## and ###)
