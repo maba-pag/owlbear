@@ -22,7 +22,7 @@ export async function getResponseErrorMessage(response: Response, fallbackMessag
     const payload = (await response.json()) as unknown
     const fromBody = readMessageField(payload)
     if (fromBody !== null) {
-      return `${fromBody} (${fallbackMessage})`
+      return fromBody
     }
   } catch {
     // Ignore JSON parse failures and continue with fallback.
