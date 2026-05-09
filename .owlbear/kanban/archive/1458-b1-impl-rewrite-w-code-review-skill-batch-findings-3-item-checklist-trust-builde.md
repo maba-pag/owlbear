@@ -2,10 +2,10 @@
 id: 1458
 title: 'B1-impl: Rewrite w-code-review skill — batch findings, 3-item checklist, trust
   builder evidence'
-status: docs
+status: archived
 priority: critical
 created: 2026-05-08T19:47:09.269589+00:00
-updated: 2026-05-09T05:27:56.201615+00:00
+updated: 2026-05-09T06:33:45.344382+00:00
 tags:
 - pipeline
 - ws-reviewer
@@ -189,3 +189,64 @@ Rewrite `share/skills/w-code-review/SKILL.md` per research in `.owlbear/research
 ## Observations
 - The prior review failure in `.owlbear/kanban/tasks/1458-b1-impl-rewrite-w-code-review-skill-batch-findings-3-item-checklist-trust-builde.md:91` was fully addressed by the builder's evidence refresh at `:139-152`; no additional source edits were required.
 - Commit `1a757cd8` is present in repo reflogs and matches the builder note title `docs: rewrite reviewer workflow for D2 trust model (#1458, builder)`.
+[[2026-05-09]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | Only changed file is `share/skills/w-code-review/SKILL.md` (OUT-scope SKILL.md); `share/README.md` has no `w-code-review` reference; no IN-scope prose doc references reviewer workflow internals |
+| 2 | Module docstrings | No | N/A | No Python modules modified |
+| 3 | External attribution | No | N/A | Task consumed internal research (#1407); no external patterns used |
+| 4 | Research doc | No | N/A | No new research doc produced by #1458; `.owlbear/research/1407-reviewer-rewrite.md` belongs to prerequisite #1407 |
+| 5 | Diagram maintenance (describes match) | No | N/A | No diagram `describes` glob matches SKILL.md files |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation request in task body |
+| 7 | Deletion detection | No | N/A | No IN-scope doc references deleted content; SKILL.md was rewritten in-place, not deleted |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| `share/skills/w-code-review/SKILL.md` | OUT | N/A (agent-executable SKILL.md) |
+| `share/skills/r-pipeline-protocol/SKILL.md` | OUT | N/A (agent-executable SKILL.md; not modified in final builder cycle) |
+
+### Files Updated
+- None
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no `.owlbear/scratch/1458-*` files found)
+[[2026-05-09]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Code-reader consumer contract uses 3-item-aligned sections; old 8-section format removed | `w-code-review/SKILL.md:81-84` defines `ac_to_code_mapping`, `test_to_ac_alignment`, `proof_sufficiency`, `observations`; grep confirms no matches for old section names (`test_writer-audit`, `security_review`, `test_integrity`, `test_quality`, `data_safety`, `test_gaps`, `necessity_check`, `informational`) | PASS |
+| Depth-aware dispatch table uses current step numbering only | `w-code-review/SKILL.md:59-63` references current Step 4 flow; grep found no `§5.0` in file | PASS |
+| 3-item checklist is sole operative workflow; no redundant overlapping steps | Lines 98-123 define the three checklist items (4.1 AC→Code, 4.2 Test→AC, 4.3 Proof Sufficiency) as only operative review path | PASS |
+| `r-pipeline-protocol` uses D2 trust-the-builder language; no `never trust self-reports` | `r-pipeline-protocol/SKILL.md:73-77` contains `Reviewer Contract (D2 trust-the-builder)` and `trust-the-builder evidence model`; grep found no `never trust self-reports` | PASS |
+| Skill file ≤200 lines | File is 164 lines | PASS |
+| Output template has exactly `Review Evidence` + `Observations` with PASS confirmation | Lines 146-153: `## Review Evidence` with one-line PASS template at :148, `## Observations` section | PASS |
+
+### Test Results
+- pytest: 4686 passed, 551 failed, 4 skipped — all failures are pre-existing `pydantic_core.ValidationError` on `ListTasksResponse` (schema mismatch from other work); not task-caused (markdown-only change)
+- vitest: 1197 passed, 26 failed — pre-existing failures; not task-caused
+- ruff/eslint: N/A for markdown-only task scope
+- quality-runner env fallback: QR reported environment-inflated failure counts; direct execution confirmed same results
+
+### Architect Quality: 4/5
+AC was specific, verifiable, and traced to research #1407. AC4 was correctly identified as a verification gate (r-pipeline-protocol already had D2 language per architect's own codebase evidence). Minor: noting pre-satisfaction in AC notes would have saved builder effort.
+
+### Deduction Breakdown
+- AC lines without evidence: 0 (all 6 verified) → no deduction
+- Lint violations: N/A (markdown scope) → no deduction
+- AC quality ≤3: no (score 4) → no deduction
+- Missing reviewer evidence: no (present, detailed, two-cycle) → no deduction
+- Full-suite failures in task scope: none (all failures are schema mismatches in cockpit/kanban/mcp — unrelated to markdown skill file) → no deduction
+
+### Confidence: .98
+### Action: archive
+
+### Commit Verification
+- Builder commit `1a757cd8` confirmed in `git log` for `share/skills/w-code-review/SKILL.md`
+- Subsequent commit `1c8aa29b` (#1462) also touched file; current workspace state still satisfies all 6 AC lines
