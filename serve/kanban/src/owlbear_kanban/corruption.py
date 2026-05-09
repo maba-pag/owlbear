@@ -21,6 +21,7 @@ from owlbear_kanban._naming import (
 from owlbear_kanban.errors import KanbanError
 from owlbear_kanban.models import RepairOutcome
 from owlbear_kanban.storage_io import atomic_write
+from owlbear_kanban.topology import PRODUCT_TOPOLOGY
 
 if TYPE_CHECKING:
     from owlbear_kanban.models import BoardConfig
@@ -56,28 +57,14 @@ _SAFE_DEFAULTS: dict[str, object] = {
 }
 
 
-def _configured_statuses(config: BoardConfig) -> list[str]:
-    """Return configured statuses from pipeline, falling back to root legacy data."""
-    try:
-        statuses = config.pipeline.statuses
-    except Exception:  # noqa: BLE001
-        statuses = None
-    if isinstance(statuses, list) and statuses:
-        return statuses
-    fallback = getattr(config, "statuses", [])
-    return fallback if isinstance(fallback, list) else []
+def _configured_statuses(_config: BoardConfig) -> list[str]:
+    """Return canonical product statuses (topology is not board-configurable)."""
+    return list(PRODUCT_TOPOLOGY.statuses)
 
 
-def _configured_priorities(config: BoardConfig) -> list[str]:
-    """Return configured priorities from pipeline, falling back to root legacy data."""
-    try:
-        priorities = config.pipeline.priorities
-    except Exception:  # noqa: BLE001
-        priorities = None
-    if isinstance(priorities, list) and priorities:
-        return priorities
-    fallback = getattr(config, "priorities", [])
-    return fallback if isinstance(fallback, list) else []
+def _configured_priorities(_config: BoardConfig) -> list[str]:
+    """Return canonical product priorities (topology is not board-configurable)."""
+    return list(PRODUCT_TOPOLOGY.priorities)
 
 
 class CorruptionError(KanbanError):

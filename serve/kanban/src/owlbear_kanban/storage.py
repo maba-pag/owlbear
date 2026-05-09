@@ -224,8 +224,7 @@ _TS_RE = re.compile(
 def save_config(config: BoardConfig, kanban_dir: Path) -> None:
     """Write *config* to ``config.yml`` in *kanban_dir* using atomic write.
 
-    Writes the config in grouped schema format (``schema: grouped``) with
-    nested ``paths``, ``pipeline``, ``agents``, and ``policy`` sub-sections.
+    Persists only ``next_id``; topology values are product constants.
 
     Args:
         config:     :class:`BoardConfig` to write.
@@ -234,39 +233,7 @@ def save_config(config: BoardConfig, kanban_dir: Path) -> None:
     from owlbear_kanban.yaml_rt import make_yaml  # noqa: PLC0415
 
     config_path = kanban_dir / "config.yml"
-    data = {
-        "schema": "grouped",
-        "statuses": config.statuses,
-        "priorities": config.priorities,
-        "next_id": config.next_id,
-        "activity_log": config.activity_log,
-        "paths": {
-            "tasks_dir": config.paths.tasks_dir,
-            "archive_dir": config.paths.archive_dir,
-        },
-        "pipeline": {
-            "entry_status": config.pipeline.entry_status,
-            "terminal_status": config.pipeline.terminal_status,
-            "wave_size": config.pipeline.wave_size,
-            "claim_timeout": config.pipeline.claim_timeout,
-            "default_priority": config.pipeline.default_priority,
-        },
-        "agents": {
-            "agent_map": config.agents.agent_map,
-            "agent_types": config.agents.agent_types,
-            "agent_compatibility": config.agents.agent_compatibility,
-        },
-        "policy": {
-            "non_impl_tags": config.policy.non_impl_tags,
-            "archival_reasons": config.policy.archival_reasons,
-            "status_predicates": config.policy.status_predicates,
-        },
-    }
-
-    if config.model_extra:
-        for key, value in config.model_extra.items():
-            if key not in data:
-                data[key] = value
+    data = {"next_id": config.next_id}
 
     data = _yaml_safe_value(data)
 

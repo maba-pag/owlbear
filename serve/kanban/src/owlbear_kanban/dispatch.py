@@ -22,6 +22,8 @@ if TYPE_CHECKING:
     from owlbear_kanban.engine import KanbanEngine
     from owlbear_kanban.models import Task
 
+from owlbear_kanban.topology import PRODUCT_TOPOLOGY
+
 # ---------------------------------------------------------------------------
 # Rank maps — execution priority (intentionally ≠ config display order)
 # ---------------------------------------------------------------------------
@@ -53,19 +55,7 @@ _AC_PATTERN = re.compile(r"(?m)^\s*(-\s|\d+\.\s)")
 
 _CLARITY_STATUSES = frozenset({"todo", "in-progress", "review", "docs", "done"})
 
-_NON_IMPL_TAGS = frozenset(
-    {
-        "research",
-        "docs",
-        "type:config",
-        "type:docs",
-        "test",
-        "type:test",
-        "agent",
-        "quality",
-        "type:user-action",
-    }
-)
+_NON_IMPL_TAGS = PRODUCT_TOPOLOGY.non_impl_tags
 
 _MAX_PRIORITY_RANK = max(PRIORITY_RANK.values())
 _MAX_STATUS_RANK = max(STATUS_RANK.values())
