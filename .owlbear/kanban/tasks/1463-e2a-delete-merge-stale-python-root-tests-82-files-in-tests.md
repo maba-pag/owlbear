@@ -1,10 +1,10 @@
 ---
 id: 1463
 title: 'E2a: Delete/merge stale Python root tests (82 files in tests/)'
-status: in-progress
+status: review
 priority: important
 created: 2026-05-09T03:32:04.142951+00:00
-updated: 2026-05-09T07:24:32.126371+00:00
+updated: 2026-05-09T09:51:01.437520+00:00
 tags:
 - pipeline
 - ws-cleanup
@@ -292,3 +292,49 @@ Delegated to planner. Created 5 sub-tasks with per-target isolation:
 Two cycles of AC refinement have not resolved the core issue: bulk merges mask which target causes regressions. Per-target isolation allows the builder to debug and rollback individual merge groups independently. The 3 high-risk targets (cockpit_decisions_api: 6→1, cockpit_mutation_api: 7→1, mcp_kanban: 7→1) each get their own task.
 
 This task (#1463) is superseded by the 5 sub-tasks above.
+[[2026-05-09]]
+REJECT #1463 -> backlog | superseded by split plan (#1466-#1470) — AC suggestion: keep #1463 as tracking/meta only and execute cleanup in child tasks.
+
+## Builder Notes
+- No code changes made in this build cycle.
+- Validation performed: reviewed current task body plus architect/planner updates and confirmed #1463 is explicitly marked superseded by #1466-#1470.
+- Execution constraint: #1463 combines multiple high-risk merge groups and is no longer the authoritative execution unit.
+- Routing decision: reject to backlog so builders can work atomic child tasks in dependency order (#1466 -> #1467/#1468/#1469 -> #1470).
+- Files changed: none.
+- Tests run: none (no implementation attempted in this cycle).
+[[2026-05-09]]
+## Architecture Re-Review (Cycle 4) — Pass-Through
+
+### Status
+Task is SUPERSEDED by decomposition into #1466-#1470 (created by planner in Cycle 3). The `## Planning` section is the completion artifact. Sub-tasks verified:
+
+| ID | Status | Deps |
+|----|--------|------|
+| #1466 | in-progress | — |
+| #1467 | backlog | #1466 |
+| #1468 | backlog | #1466 |
+| #1469 | backlog | #1466 |
+| #1470 | backlog | #1467, #1468, #1469 |
+
+All sub-tasks parented to #1415 (same as #1463). AC and builder guidance properly transferred. No remaining work on #1463 itself.
+
+### Verdict: APPROVE (pass-through — superseded meta-task)
+Test-writer: SKIP (quality tag, no testable deliverable)
+Builder: SKIP (no implementation — decomposition is the deliverable)
+Reviewer: Verify sub-tasks exist and are properly wired, then advance.
+[[2026-05-09]]
+## Test-Writer Notes
+- All AC lines are (td:0) — test-writer skipped (third pass-through).
+- Task tagged `quality`; AC describes mechanical file rename/merge/delete operations in tests/ with no new testable Python interfaces.
+- Architect Cycle 4 verdict: "Test-writer: SKIP (quality tag, no testable deliverable)".
+- Task is superseded meta-task; execution delegated to child tasks #1466–#1470.
+- No test file created.
+
+DONE #1463 -> in-progress | non-impl pass-through, no tests needed
+[[2026-05-09]]
+## Builder Notes
+- Non-implementation task — no code changes needed in this cycle.
+- Confirmed task body marks this as superseded/meta and already decomposed into child execution tasks #1466-#1470.
+- Validation performed: child task wiring exists and #1466 is active while #1467-#1470 remain queued by dependency.
+- Files changed: none.
+- Tests run: none (pass-through per non-impl workflow gate).

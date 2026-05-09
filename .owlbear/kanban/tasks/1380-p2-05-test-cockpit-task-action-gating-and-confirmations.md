@@ -1,10 +1,10 @@
 ---
 id: 1380
 title: 'P2-05: Test Cockpit task action gating and confirmations'
-status: in-progress
+status: todo
 priority: needed
 created: 2026-05-06T01:04:35.632458+00:00
-updated: 2026-05-09T07:27:47.967076+00:00
+updated: 2026-05-09T09:46:33.710082+00:00
 tags:
 - cockpit
 - audit-remediation
@@ -40,7 +40,7 @@ Write frontend tests for task action visibility, enablement, and action-specific
 - Tests prove Unblock and Move Backward show action-specific confirmation text describing the concrete consequence (e.g. "Move to {targetStatus}?" / "Unblock task?" / "Release claim?") when in a valid state and clicked. Dialog-level textContent matching is sufficient — for move-backward, the description and label share the target status by design, and AC4's exact label proof complements this assertion. (td:2)
 - Tests prove confirmation dialog labels name the concrete action and target state instead of generic "Confirm" text. (td:2)
 - Tests include keyboard/focus expectations: dialog receives focus on open, Escape dismisses without firing a mutation, and focus returns to the triggering button on dismiss. Current ConfirmDialog has no modal semantics — tests assert desired behavior (RED phase). (td:2)
-- Tests prove 409, 404, and 422 responses from action mutations (unblock, unclaim, move-backward) use the frontend error contract: 409 → conflict modal via `setShowConflict`, 404 → `onTaskCleared`, 422 → `serverValidationMessage` via `getResponseErrorMessage`. The 409-refetch sub-behavior is shared via `runMutation` and already proven in `DetailTab.test.tsx`; per the Existing Coverage Note, task-scoped tests assert conflict-modal presence only. (td:2)
+- Tests prove 409, 404, and 422 responses from action mutations (unblock, unclaim, move-backward) use the frontend error contract: 409 → conflict modal via `setShowConflict`, 404 → `onTaskCleared`, 422 → `serverValidationMessage` via `getResponseErrorMessage`. The 409-refetch sub-behavior is shared via `runMutation` and already proven in `DetailTab.test.tsx`; per the Existing Coverage Note, task-scoped tests assert conflict-modal presence only. The 422 test must assert the validation-message element's text content matches the seeded server detail value (e.g. `'invalid status transition'`), proving `getResponseErrorMessage` parsing is exercised end-to-end. (td:2)
 - The test suite fails against the current always-rendered/generic-confirm behavior and is suitable for #1381 to satisfy. (td:1)
 
 ## Existing Coverage Note
@@ -231,3 +231,122 @@ AC3 refined: added "Dialog-level textContent matching is sufficient — for move
   - AC6: 4 tests (error contract)
 - Lint: clean (no changes to test file).
 - Durable suite drift (DetailTab.test.tsx L493) noted by architect — separate test maintenance curation item, not a #1380 blocker.
+[[2026-05-09]]
+## Builder Notes
+- Scope: test-only pass-through for task #1380 (`type:test`); no implementation changes required in this cycle.
+- Files changed: none.
+- Fresh verification run:
+  - `cd serve/cockpit/web && NODE_OPTIONS='--max-old-space-size=2048' npx vitest run --silent=true src/__tests__/DetailTab_1380.test.tsx` -> 22 passed, 0 failed.
+  - `cd serve/cockpit/web && npx eslint src/__tests__/DetailTab_1380.test.tsx src/components/DetailTab.tsx src/components/ConfirmDialog.tsx` -> clean (0 errors, 0 warnings).
+- Coverage spot-check:
+  - `npx vitest run src/__tests__/DetailTab_1380.test.tsx --environment jsdom --coverage.enabled --coverage.provider=v8 --coverage.reporter=text` -> pass, coverage line captured for `DetailTab.tsx`: statements 81.57%, branches 82.84%, functions 44.73%, lines 81.06%.
+  - `ConfirmDialog.tsx` row was not emitted in the captured report output for this scoped run.
+- Evidence summary:
+  - AC-targeted suite remains green in current workspace state.
+  - Scoped lint for the task test and touched implementation files remains clean.
+  - No additional code intervention applied in this pass.
+[[2026-05-09]]
+## Review Evidence
+### Test Results
+- quality-runner scoped frontend run on `DetailTab_1380.test.tsx` + `DetailTab_1344.test.tsx`: 33 passed, 0 failed, 0 skipped.
+- quality-runner broader adjacent regression on `DetailTab_1380.test.tsx` + `DetailTab_1344.test.tsx` + `DetailTab.test.tsx`: 80 passed, 1 failed.
+- Broad-run failure: `serve/cockpit/web/src/__tests__/DetailTab.test.tsx` test `backward move action requires a confirmation dialog` expects `move-backward` to render without a board. This matches the task body's Cycle 3 durable-suite drift note and is treated as informational regression context, not the blocking finding for #1380.
+
+### Lint
+- ESLint clean for `serve/cockpit/web/src/__tests__/DetailTab_1380.test.tsx`, `serve/cockpit/web/src/__tests__/DetailTab_1344.test.tsx`, `serve/cockpit/web/src/__tests__/DetailTab.test.tsx`, `serve/cockpit/web/src/components/DetailTab.tsx`, and `serve/cockpit/web/src/components/ConfirmDialog.tsx`.
+- VS Code diagnostics: no errors in the scoped test/component files.
+
+### Coverage
+- Scoped frontend coverage:
+  - `DetailTab.tsx`: 86.54%
+  - `ConfirmDialog.tsx`: 81.13%
+- Not the blocking issue. Module-level TSX coverage is below 90 overall, but the changed gating, label, dialog, and focus branches are directly exercised by the green scoped suite. The blocker is proof quality on AC6.
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---------|-------------|---------------------------|---------|
+| AC1 | `unclaim_button_absent_from_dom_when_task_not_claimed`; `move_backward_button_absent_when_task_at_first_pipeline_status`; `move_backward_button_absent_when_no_board_provided`; `unblock_button_absent_from_dom_when_task_not_blocked` | Yes — each assertion requires DOM absence for the invalid state. | COVERED |
+| AC2 | `unclaim_button_absent_and_no_release_mutation_fires_when_not_claimed` | Yes — it fails if the button renders or any `/release` call is made. | COVERED |
+| AC3 | `unblock_confirm_dialog_shows_action_specific_description`; `unclaim_confirm_dialog_shows_release_claim_description`; `move_backward_confirm_dialog_shows_target_status_name` | Yes — under the architect's refined AC3, move-backward dialog-level text plus AC4 exact-label proof is sufficient. | COVERED |
+| AC4 | `confirm_button_label_exact_unblock_task_for_unblock_action`; `confirm_button_label_exact_release_claim_for_unclaim_action`; `confirm_button_label_exact_move_target_for_move_backward` | Yes — exact-label assertions fail on any generic `Confirm` text. | COVERED |
+| AC5 | `confirm_dialog_has_modal_role_or_aria_modal_attribute`; `escape_key_dismisses_dialog_without_firing_mutation`; `confirm_dialog_receives_focus_on_open`; `focus_returns_to_trigger_button_after_dialog_cancel`; `escape_key_dismisses_dialog_and_restores_focus_to_trigger` | Yes — these fail if focus is not moved/restored or Escape mutates. | COVERED |
+| AC6 | `unclaim_mutation_404_calls_on_task_cleared`; `move_backward_mutation_404_calls_on_task_cleared`; `unclaim_mutation_409_shows_conflict_modal`; `move_backward_mutation_422_shows_validation_message` | No for the refined 422 contract. The 422 test seeds `detail: 'invalid status transition'` but only checks that `[data-testid="validation-message"]` exists. It stays green if `getResponseErrorMessage` is bypassed and a generic fallback string is rendered instead. | LAX |
+| AC7 | The 22-test task suite targets the formerly always-rendered/generic-confirm behaviors, and the scoped run is green against the implemented gates and dialog semantics. | Yes. | COVERED |
+
+#### Security Review
+- No issues found in `serve/cockpit/web/src/components/DetailTab.tsx` or `serve/cockpit/web/src/components/ConfirmDialog.tsx`. No secrets, injection points, path handling, dynamic eval, or new dependencies were introduced in scope.
+
+#### Test Integrity
+| Original Test | Change Made | Assessment |
+|---------------|-------------|------------|
+| `TestFromAC_*` suite in `serve/cockpit/web/src/__tests__/DetailTab_1380.test.tsx` | Current snapshot shows strengthening additions (exact label checks, combined Escape + focus-return) and no visible weakening. | PRESERVED |
+
+- Confidence deduction: terminal execution was unavailable in this session, so I could not run `git show` / `git status` for a high-confidence immutability or dirty-tree audit. Commit existence for `b899bbb2` and `ee972df5` was confirmed via `.git/logs/HEAD` and `.git/logs/refs/heads/dev`.
+
+#### Test Quality
+| Dimension | Rating | Evidence |
+|-----------|--------|----------|
+| Assertion specificity | WEAK | `move_backward_mutation_422_shows_validation_message` seeds a concrete server detail but only asserts validation-node presence in `serve/cockpit/web/src/__tests__/DetailTab_1380.test.tsx`; it does not assert the extracted message value. |
+| Negative/error-path coverage | ADEQUATE | The suite covers invalid-state absence, Escape no-mutation, 404 `onTaskCleared`, 409 conflict modal, and 422 validation display across the task-owned tests. |
+| Manual mutation reasoning | WEAK | Replacing `setServerValidationMessage(await getResponseErrorMessage(...))` with a generic fallback in `serve/cockpit/web/src/components/DetailTab.tsx` would still satisfy the current 422 test. |
+| Test independence | STRONG | Fresh renders plus `vi.unstubAllGlobals()` isolation per describe block. |
+| Descriptive names | STRONG | Test names encode the exact action, state, and expected outcome. |
+
+#### Data Safety
+- No issues found. State is component-local and the confirm flow is bounded to explicit JSON POSTs and local UI state.
+
+#### Implementation-Aware Gaps
+- Blocking gap: the 422 branch in `serve/cockpit/web/src/components/DetailTab.tsx` routes through `getResponseErrorMessage`, but the task-owned 422 test only proves that some validation element appears. It does not prove the extracted server detail survives parsing/rendering.
+- No other significant in-scope path gaps found. The state gating, exact labels, focus-open, Escape-dismiss, and focus-restore branches are all exercised.
+
+#### Builder Process Quality
+| Metric | Value |
+|--------|-------|
+| Builder Notes sections | 4 |
+| Approach variation | Yes / N/A — one implementation cycle followed by test-only pass-through cycles |
+| Assessment | FRICTION |
+
+### Pass 2 — INFORMATIONAL
+- Adjacent durable suite drift remains real: `serve/cockpit/web/src/__tests__/DetailTab.test.tsx` still expects move-backward to render without a board. The task body's Cycle 3 architecture note already scoped this as separate test-maintenance curation, so I did not use it as the blocking reason for #1380.
+- Comments in `serve/cockpit/web/src/__tests__/DetailTab_1380.test.tsx` still describe pre-fix RED behavior. The executable assertions remain useful, but the prose is stale.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| AC1 | Scoped green run + DOM-absence assertions against gated action renders in `DetailTab.tsx` | 4 gating tests in `DetailTab_1380.test.tsx` | PASS |
+| AC2 | Scoped green run + no `/release` mock-call assertion when `claimed=false` | `unclaim_button_absent_and_no_release_mutation_fires_when_not_claimed` | PASS |
+| AC3 | Scoped green run + action-specific dialog text in `ConfirmDialog.tsx`; architect-refined AC3 accepted dialog-level text for move-backward | 3 dialog-text tests | PASS |
+| AC4 | Scoped green run + exact confirm-label assertions for unblock, unclaim, and move-backward | 3 exact-label tests | PASS |
+| AC5 | Scoped green run + modal role/aria, focus-on-open, Escape-dismiss, cancel/Escape focus-restore assertions | 5 keyboard/focus tests | PASS |
+| AC6 | `runMutation()` 422 branch uses `getResponseErrorMessage`, but the task-owned 422 test only asserts validation-node presence, not the extracted detail value | `move_backward_mutation_422_shows_validation_message` | FAIL |
+| AC7 | Current suite is targeted to the formerly always-rendered/generic-confirm behaviors and remains discriminating against those regressions | Task-owned suite structure + scoped green run | PASS |
+
+### Deductions
+- `-0.09` AC6 422 proof is lax and leaves the named `getResponseErrorMessage` contract unproven.
+- `-0.02` No terminal tool in-session for `git show` / `git status`, so immutability and dirty-tree checks are lower-confidence than normal.
+- `-0.02` Adjacent durable suite still has one known drift failure, though it is explicitly scoped out by the latest architecture note.
+
+### Confidence: 0.87
+### Verdict: FAIL
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Refine and re-dispatch AC6 so the 422 path is proved with a discriminating exact-value assertion for the `getResponseErrorMessage` contract, then send back through test-writing. | `.owlbear/kanban/tasks/1380-p2-05-test-cockpit-task-action-gating-and-confirmations.md`, `serve/cockpit/web/src/__tests__/DetailTab_1380.test.tsx`, `serve/cockpit/web/src/components/DetailTab.tsx` | `move_backward_mutation_422_shows_validation_message` only presence-checks `[data-testid="validation-message"]`, while the implementation path in `runMutation()` explicitly depends on `getResponseErrorMessage` for 422 handling. |
+
+[[2026-05-09]]
+## Architecture Review (Cycle 4 — AC6 422 Assertion Refinement)
+
+### Context
+Fourth review cycle. Reviewer returned to backlog (confidence 0.87) because AC6's 422 test only presence-checks `[data-testid="validation-message"]` without asserting the extracted message value. The test seeds `{ detail: 'invalid status transition' }` but never verifies that text survives through `getResponseErrorMessage` → `setServerValidationMessage` → rendered DOM. Replacing `getResponseErrorMessage` with a generic fallback would leave the test green.
+
+### AC6 Refinement
+**Before:** "...422 → `serverValidationMessage` via `getResponseErrorMessage`."
+**After:** "...422 → `serverValidationMessage` via `getResponseErrorMessage`. The 422 test must assert the validation-message element's text content matches the seeded server detail value (e.g. `'invalid status transition'`), proving `getResponseErrorMessage` parsing is exercised end-to-end."
+
+**Rationale:** The existing test proves the 422 branch activates and renders a validation element, but fails the mutation test — swapping `getResponseErrorMessage` for a hardcoded string would not break it. Adding an exact textContent assertion on the seeded detail value closes this gap with one additional `expect()` call per 422 test.
+
+### Verdict: APPROVE
+Refined AC6 to require exact-value assertion for 422 validation message. All other ACs (1–5, 7) remain proven by the existing 22-test suite across prior cycles. Advanced to todo for test-writer to add the discriminating assertion.
+[[2026-05-09]]
+AC6 refined: added "The 422 test must assert the validation-message element's text content matches the seeded server detail value (e.g. 'invalid status transition'), proving getResponseErrorMessage parsing is exercised end-to-end." Rationale: existing test only presence-checks [data-testid="validation-message"] — swapping getResponseErrorMessage for a hardcoded fallback would not break it. One additional expect() call per 422 test closes the gap. All other ACs (1–5, 7) remain proven by existing 22-test suite. Re-approved for pipeline pass-through.

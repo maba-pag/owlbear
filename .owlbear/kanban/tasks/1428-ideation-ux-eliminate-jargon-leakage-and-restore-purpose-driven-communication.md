@@ -1,10 +1,10 @@
 ---
 id: 1428
 title: 'Ideation UX: eliminate jargon leakage and restore purpose-driven communication'
-status: todo
+status: done
 priority: important
 created: 2026-05-08T00:58:29.125370+00:00
-updated: 2026-05-08T15:20:33.685228+00:00
+updated: 2026-05-09T09:51:28.636346+00:00
 tags:
 - ideation
 - ux
@@ -115,3 +115,95 @@ Parent task decomposed by planner into 5 subtasks (#1429–#1433). Planning sect
 
 ### Verdict: APPROVE
 Decomposition complete. All parent AC deliverables exist in the codebase. Subtask #1433 continues independently for test-quality refinement (implementation already in place).
+[[2026-05-09]]
+## Test-Writer Notes
+- Non-impl pass-through: all AC lines reference only non-Python files (SKILL.md, .agent.md).
+- No Python implementation intent keywords (implement, class, module, src/, .py, API) found in AC.
+- Step 2a heuristic: config/docs only — no tests applicable.
+- Additional signal: architecture review in task body verified all 8 ACs are MET; content-verification tests would pass immediately (RED phase impossible).
+- Passing through to builder.
+[[2026-05-09]]
+## Builder Notes
+- Non-implementation task confirmed from existing `## Test-Writer Notes` section (docs/agent-skill wording only; no source implementation required).
+- Code changes: none.
+- Tests/lint: not run (pass-through path per workflow for non-implementation tasks).
+- Action: advanced task directly to review.
+[[2026-05-09]]
+## Review Evidence
+### Scope
+- Effective td:0 documentation and agent-instruction review. No executable source files or task-local tests are in scope.
+- Parent task reached review as an aggregate of child deliverables. Changed-file scope reconstructed from the task AC, current workspace files, and archived child task records (#1429 to #1433).
+
+### Test Results
+- Not applicable for this task shape. Scope is Markdown and agent instruction content only.
+- quality-runner was not dispatched because there is no executable surface and scoped mode requires task test paths.
+
+### Lint Results
+- Not applicable. No Python or TypeScript files were changed for this parent review scope.
+
+### Coverage
+- Not applicable. No executable module changes in scope.
+
+### AC Compliance
+| AC Line | Evidence | Status |
+|---|---|---|
+| New Communication Patterns section in h-ideation/SKILL.md with vocabulary table, narration principles, transition patterns, boundary heuristic, depth-control cues | share/skills/h-ideation/SKILL.md:182, :184, :257, :266, :277, :286 | PASS |
+| 4 narration directives rewritten with co-located annotations | share/skills/w-ideation-mediation/SKILL.md:50, :61, :70, :99, :117 and share/skills/w-ideation-discovery/SKILL.md:103 | PASS |
+| 6 before/after pairs included as behavioral specification | share/skills/h-ideation/SKILL.md:209, :217, :225, :233, :241, :249 | PASS |
+| One critical_rule line added to both user-facing agent files | share/agents/ideation-mediator.agent.md:41 and share/agents/ideation-discoverer.agent.md:39 | PASS |
+| Verification criteria in both workflow skills updated to purpose-framed checks | share/skills/w-ideation-mediation/SKILL.md:172 and share/skills/w-ideation-discovery/SKILL.md:146 | PASS |
+| Light Panel Output Phrasing section added to h-ideation-panel | share/skills/h-ideation-panel/SKILL.md:197, :200, :201, :203 | PASS |
+| Grep-based check: no protocol codes (M3.5, O15) appear in narration guidance without context | Codes appear with context in share/skills/h-ideation/SKILL.md:197, :201, :212, :236. User-facing narration lines in share/skills/w-ideation-mediation/SKILL.md:50, :61, :70, :99, :117 and share/skills/w-ideation-discovery/SKILL.md:103 do not surface raw protocol codes | PASS |
+| All changes are behavioral-equivalent (same information reaches user, different framing) | Before/after specification in share/skills/h-ideation/SKILL.md:209-256 aligns with the rewritten purpose-framed narration in mediation and discovery evidence above | PASS |
+
+### Test-Writer Audit
+- No TestFromAC classes exist for this task.
+- Test-writer pass-through is appropriate for this docs-only scope because the AC targets wording in Markdown and agent files, not executable behavior.
+
+### Informational Findings
+- The parent task body contains stale child-status notes. It says task record absent for #1429, #1431, and #1432 at .owlbear/kanban/tasks/1428-ideation-ux-eliminate-jargon-leakage-and-restore-purpose-driven-communication.md:98, :100, :101 and says #1433 is backlog at :102.
+- Current board artifacts show those child records archived: .owlbear/kanban/archive/1429-p1-01-communication-patterns-section-vocabulary-table-in-h-ideation-skill-md.md:4, .owlbear/kanban/archive/1431-p1-03-directive-rewrite-tier-presentation-in-w-ideation-discovery-skill-md.md:4, .owlbear/kanban/archive/1432-p1-04-agent-enforcement-lines-verification-criteria-updates.md:4, .owlbear/kanban/archive/1433-p1-05-panel-output-phrasing-section-in-h-ideation-panel-skill-md.md:4.
+- This is non-blocking for the parent AC because the live files satisfy the required content changes.
+
+### Deductions
+- -0.03: no executable quality-runner evidence applicable to docs-only scope
+- -0.02: parent task has no task-local builder commit hash; changed-file ownership reconstructed from scope and archived children
+- -0.01: architecture-review subtask table is stale relative to the archive state
+
+### Verdict
+- PASS
+- Confidence: 0.94
+- Action: advance to docs
+[[2026-05-09]]
+## Docs Gate
+
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | All changed files are OUT-of-scope agent-executable files (SKILL.md, .agent.md); no IN-scope prose docs reference the ideation agent behavior by name |
+| 2 | Module docstrings | No | N/A | No Python files in scope |
+| 3 | External attribution | No | N/A | Task uses no new external patterns; AC mentions behavioral rewrites derived from brief |
+| 4 | Research doc | No | N/A | `.owlbear/research/thinking-companion-framework.md` referenced as prior art in context section — no new research doc produced by this task |
+| 5 | Diagram maintenance (describes match) | Yes | Updated | `share/diagrams/ideation.excalidraw` describes glob covers all 6 changed files; footer updated to `Last verified: 2026-05-09 (3d8a33c4)` |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation requested in task body |
+| 7 | Deletion detection | No | N/A | No files deleted; no orphaned IN-scope docs detected |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| share/skills/h-ideation/SKILL.md | OUT | N/A (agent-executable) |
+| share/skills/w-ideation-mediation/SKILL.md | OUT | N/A (agent-executable) |
+| share/skills/w-ideation-discovery/SKILL.md | OUT | N/A (agent-executable) |
+| share/agents/ideation-mediator.agent.md | OUT | N/A (agent-executable) |
+| share/agents/ideation-discoverer.agent.md | OUT | N/A (agent-executable) |
+| share/skills/h-ideation-panel/SKILL.md | OUT | N/A (agent-executable) |
+| share/diagrams/ideation.excalidraw | IN | Footer updated |
+
+### Files Updated
+- share/diagrams/ideation.excalidraw (footer only: `Last verified: 2026-05-09 (3d8a33c4)`)
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no `.owlbear/scratch/1428-*` files found)

@@ -1,10 +1,10 @@
 ---
 id: 1363
 title: Cockpit audit remediation
-status: review
+status: in-progress
 priority: critical
 created: 2026-05-06T00:58:14.547083+00:00
-updated: 2026-05-09T07:26:11.025458+00:00
+updated: 2026-05-09T10:13:58.531698+00:00
 tags:
 - cockpit
 - audit-remediation
@@ -232,3 +232,113 @@ Duplicate builder pass-through notes (20+ identical entries) trimmed on 2026-05-
 - No source files changed.
 - No tests run (no task-owned implementation/test surface).
 - Completion Contract requires this parent to remain `in-progress` until all child work is complete.
+
+[[2026-05-09]]
+## Review Evidence
+### Test Results
+- Not applicable. Task #1363 is a td:0 live parent-container with no task-owned source or test artifact.
+- quality-runner skipped: there is no executable scope, test path, or coverage target for this task; evidence comes from task-file and board-state inspection.
+- code-reader skipped: td:0 task with no code surface.
+
+### Lint Results
+- Not applicable. No source or test files are owned by this task.
+
+### Coverage
+- Not applicable. No code paths or modules are in scope.
+
+### AC Compliance
+| AC Line | Evidence | Status |
+|---|---|---|
+| All 12 child tasks (#1364–#1375) are parented to this task (td:0) | `grep '^parent: 1363$'` across `.owlbear/kanban/archive/13*.md` matched each phase-1 child file #1364–#1375; examples: `.owlbear/kanban/archive/1364-p1-01-test-cockpit-pds-v4-build-compatibility.md:17` and `.owlbear/kanban/archive/1375-p1-12-implement-cockpit-frontend-error-contract-adoption.md:17` | PASS |
+| Epic remains in-progress as live container until all children reach `done` (td:0) | Parent header is `status: review` at `.owlbear/kanban/tasks/1363-cockpit-audit-remediation.md:4`, while active child tasks remain below done: `.owlbear/kanban/tasks/1380-p2-05-test-cockpit-task-action-gating-and-confirmations.md:4` = `status: in-progress`, `.owlbear/kanban/tasks/1381-p2-06-implement-cockpit-task-action-gating-and-confirmations.md:4` = `status: backlog`, `.owlbear/kanban/tasks/1400-p3-10-update-cockpit-consumer-and-developer-delivery-docs.md:4` = `status: backlog`; those children still point to `parent: 1363` at lines 17, 17, and 18 | FAIL |
+| Epic advances to `review` only after last child reaches `done` (td:0) | Completion Contract says the task stays `in-progress` at `.owlbear/kanban/tasks/1363-cockpit-audit-remediation.md:154` and advances only after all child tasks are done at `.owlbear/kanban/tasks/1363-cockpit-audit-remediation.md:155`; the AC restates that gate at `.owlbear/kanban/tasks/1363-cockpit-audit-remediation.md:161-162`, and the latest builder note repeats it at `.owlbear/kanban/tasks/1363-cockpit-audit-remediation.md:234`, but the task is still `review` at line 4 while children remain active | FAIL |
+
+### Findings
+1. Contract violation: task #1363 is in `review` even though multiple descendant tasks parented to #1363 are still `in-progress` or `backlog`.
+2. This is a repeat review failure. The task already contains one prior `## Review Evidence` section at `.owlbear/kanban/tasks/1363-cockpit-audit-remediation.md:106`, so the pipeline loop-breaker applies and routes a second failure to `backlog`.
+3. No builder-owned code or test change exists to verify here; the failing artifact is the task lifecycle contract itself.
+
+### Deductions
+- -0.03: td:0 container review relied on direct task/board inspection rather than quality-runner because there is no executable surface.
+- -0.04: the Completion Contract still enumerates phase-1 children at `.owlbear/kanban/tasks/1363-cockpit-audit-remediation.md:155` while later children are also parented to #1363, creating mild wording drift even though AC lines 161-162 and live child statuses make the violation explicit.
+
+### Verdict
+- FAIL. Confidence: 0.93.
+- Action: reject to `backlog`. Current board state violates the task’s own live-container contract, and this is the second review failure on the same task.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Rewrite the parent-container completion contract and routing semantics so #1363 cannot enter `review` while any child task parented to 1363 remains below done | `.owlbear/kanban/tasks/1363-cockpit-audit-remediation.md`, `.owlbear/kanban/tasks/1380-p2-05-test-cockpit-task-action-gating-and-confirmations.md`, `.owlbear/kanban/tasks/1381-p2-06-implement-cockpit-task-action-gating-and-confirmations.md`, `.owlbear/kanban/tasks/1400-p3-10-update-cockpit-consumer-and-developer-delivery-docs.md` | Parent status `review` at 1363:4 conflicts with 1363:154-155, 1363:161-162, and active child statuses at 1380:4, 1381:4, 1400:4 |
+| 2 | architect | Reconcile the AC/contract wording with the expanded child set under #1363 so the “all children” completion gate is explicit and current across phases | `.owlbear/kanban/tasks/1363-cockpit-audit-remediation.md`, `.owlbear/kanban/tasks/1380-p2-05-test-cockpit-task-action-gating-and-confirmations.md`, `.owlbear/kanban/tasks/1381-p2-06-implement-cockpit-task-action-gating-and-confirmations.md`, `.owlbear/kanban/tasks/1400-p3-10-update-cockpit-consumer-and-developer-delivery-docs.md` | Completion trigger names #1364–#1375 at 1363:155, while later children remain parented to #1363 at 1380:17, 1381:17, and 1400:18 |
+[[2026-05-09]]
+
+
+## Completion Contract (Supersedes Previous)
+
+This task is a **live parent container** following the #1316 precedent. It does NOT traverse the pipeline as a standalone deliverable.
+
+- **Scope:** ALL tasks with `parent: 1363` across every phase (P1, P2, P3, and any hotfixes). This is a dynamic gate — not a fixed ID range.
+- **Container routing:** This task stays `in-progress` while ANY child task remains below `done`. Test-writer and builder: pass-through with NO status advancement.
+- **Completion trigger:** This task advances to `review` ONLY when every task with `parent: 1363` has reached `done` or been deleted. No exceptions.
+- **Stale planning text note:** The Phase 1/2/3 planning sections above are creation-time snapshots. Child task statuses are live on the board. Do not treat embedded status claims as current state.
+- **no-dispatch tag:** This task is tagged `no-dispatch` and must not be dispatched by orchestrators. Advancement is manual after the completion gate is verified.
+
+## Acceptance Criteria (Supersedes Previous)
+
+- [ ] Every task with `parent: 1363` has reached `done` (or been explicitly deleted) — verified by board query, not by a fixed ID range (td:0)
+- [ ] Epic remains in-progress as live container until the above gate is met (td:0)
+- [ ] Epic advances to `review` only after the completion gate is verified (td:0)
+[[2026-05-09]]
+
+
+## Architecture Review (Pass 3 — Second Reviewer Remediation)
+
+### Context
+Reviewer rejected this task from `review` back to `backlog` a second time with two findings:
+1. Parent entered `review` while children #1380, #1381, #1400 (and others) remain active — violating the Completion Contract.
+2. The Completion Contract and AC referenced only Phase 1 children (#1364–#1375), but the epic now has 33+ children across P1 (#1364–#1375), P2 (#1376–#1390), P3 (#1391–#1400), and hotfix #1436.
+
+### Root Cause
+The Pass 2 Completion Contract and AC used a **fixed ID range** (#1364–#1375). When P2/P3 decomposition added children under the same parent, the contract became stale. Builders checked only the named IDs, found them done (archived), and advanced the parent — correctly per the letter of the contract, but violating its intent.
+
+### Remediation Actions
+1. **Rewrote Completion Contract** — uses dynamic "all tasks with parent: 1363" language instead of fixed ID ranges. Explicitly marked as "Supersedes Previous."
+2. **Rewrote AC** — three generic lines referencing the dynamic gate, not specific task IDs. Explicitly marked as "Supersedes Previous."
+3. **Verified tags** — `no-dispatch` and `parent` already present. No changes needed.
+4. **Current child state** — 13 active children (1 review, 1 todo, 11 backlog), 20+ archived. Completion gate is NOT met.
+
+### Evaluation
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | Pure parent container |
+| Dependency correctness | PASS | No deps on epic itself |
+| Pattern consistency | PASS | Follows #1316 parent-container precedent |
+| Reviewer finding 1 (premature advancement) | FIXED | Contract now uses dynamic child query, not fixed ID range |
+| Reviewer finding 2 (stale AC scope) | FIXED | AC uses "every task with parent: 1363" — auto-includes future children |
+
+### Challenge Results
+- Challenger: SKIPPED — all td:0, parent container, no design decisions
+
+### Test Depth
+- Max depth: 0
+- Test-writer: SKIP (pass-through, no status advancement)
+
+### Verdict: APPROVE
+### Action Taken: Rewrote Completion Contract and AC to use dynamic parent-query gate. Parent container approved to `todo` — stays in-progress as live container per contract. All children advance independently.
+[[2026-05-09]]
+Rewrote Completion Contract and AC to use dynamic parent-query gate (all tasks with parent: 1363) instead of fixed ID range (#1364–#1375). Root cause of repeated review failures: P2/P3 decomposition added children beyond the named range, so builders correctly advanced per the letter but violated the intent. Contract now auto-includes any future children. Tags (no-dispatch, parent) already correct.
+[[2026-05-09]]
+## Test-Writer Notes
+- All AC lines are (td:0) — test-writer skipped.
+- AC: every task with parent: 1363 reaches done (td:0); epic stays in-progress as container (td:0); epic advances to review only after completion gate (td:0).
+- No testable Python interfaces. Live parent container per Completion Contract.
+- Passing through to builder.
+[[2026-05-09]]
+## Builder Notes
+- Pass-through execution for td:0 live parent container task.
+- No source files changed.
+- No tests run (no task-owned implementation/test surface).
+- Completion gate check: 13 active child tasks with `parent: 1363` remain below `done` (todo/backlog/review), so gate is not met.
+- Representative active children: #1380 (`todo`), #1389 (`review`), #1400 (`backlog`).
+- Action in this run: claim/release only with status intentionally unchanged (`in-progress`) per Completion Contract and `no-dispatch` semantics.

@@ -1,10 +1,10 @@
 ---
 id: 1439
 title: 'P4-02: Collapse kanban engine topology into product constants'
-status: backlog
+status: in-progress
 priority: critical
 created: 2026-05-08T19:31:49.034076+00:00
-updated: 2026-05-09T08:16:45.299220+00:00
+updated: 2026-05-09T08:49:19.348328+00:00
 tags:
 - phase-4
 - scope:kanban
@@ -14,6 +14,7 @@ tags:
 parent: 1437
 depends_on:
 - 1438
+- 1476
 blocked: false
 block_reason:
 claimed_at:
@@ -445,3 +446,69 @@ AC was thorough for the positive changes (16 topology categories, backward-compa
 | # | Target Agent | Action Required | File(s) | Evidence |
 |---|-------------|----------------|---------|----------|
 | 1 | architect | Expand AC to include regression remediation: update or remove all test suites broken by the topology refactor. Categorize the 92 failing test files into (a) task-scoped tests for archived tasks whose fixtures need topology-constant alignment, (b) module-level tests needing config API updates, (c) out-of-scope consumer tests (cockpit, MCP) that need follow-up tasks. | 92 failing test files across tests/, serve/kanban/tests/, serve/mcp-kanban/tests/ | Full-suite run: 498 failed, 4233 passed. Sample: test_config_loader.py (3/11 fail), test_engine_init_1067.py, test_engine_move_claim.py, test_cockpit_decisions_api_1190.py |
+[[2026-05-09]]
+
+## AC Amendment (post-audit rejection)
+
+**AC5 (td:2):** `uv run pytest` exits with zero new failures introduced by the topology-constant refactor. Builder updates all test suites broken by: (1) `load_config` returning product defaults instead of raising `FileNotFoundError`, (2) `save_config` persisting only `next_id`, (3) `BoardConfig` topology values being product-fixed, (4) status ordering changes. Scope: `serve/kanban/tests/` (~71 failures), `tests/` (~427 failures), consumer package tests (small count).
+
+## Architecture Re-Review (post-audit, regression gate addition)
+
+### Auditor Finding
+Full suite: 498 failed / 4233 passed across 92 files. AC1-4 satisfied but no regression gate — architect quality 3/5. Root causes: load_config behavioral change, save_config scope change, config field restructuring, status ordering.
+
+### Correction
+Added AC5 as regression gate. Decomposition required — 92 files across 3 domains too large for one builder pass.
+
+### Test Depth
+AC5: td:2
+
+### Verdict: APPROVE → todo (with decomposition)
+
+Needs decomposition:
+Topology-constant regression remediation (#1439 AC5). Implementation for AC1-4 is committed. AC5 requires updating broken test suites across 3 categories:
+- **Category A — Kanban package tests** (`serve/kanban/tests/`): ~71 failures. Update: config loader expectations (no FileNotFoundError on absent config), save_config round-trip assertions (only next_id persists), engine init with custom BoardConfig configs, status ordering assertions. Key files: test_storage.py, test_storage_1050.py, test_storage_io.py, test_engine_coverage_1068.py, test_engine_init_1068.py, test_engine_coverage_1110.py, test_engine_archived_edit_1120.py, test_engine_activity.py, test_engine_atomicity_1104.py, test_engine_storage.py, test_list_sessions.py.
+- **Category B — Root-level tests** (`tests/`): ~427 failures. Durable tests: test_config_loader.py, test_config_authority.py, test_config_schema.py, test_config_grouped.py — update load_config/save_config contract expectations. Task-scoped tests: update BoardConfig fixtures with stale topology values, replace custom status lists with product-topology statuses. Cockpit tests: update config fixture paths.
+- **Category C — Consumer package tests** (`serve/mcp-kanban/tests/`): config fixture alignment and topology expectations.
+All subtasks are type:refactor scope:tests with parent 1439. Tests already exist and fail (RED phase is the refactor itself) — builder updates them to match the new API contract.
+
+[[2026-05-09]]
+
+## Planning
+### Decomposition: topology-constant regression remediation (AC5)
+- Tasks created: 5
+- Dependency layers: 2
+- Phase: 4
+
+### Task List
+| ID | Title | Priority | Depends On | Tags |
+|----|-------|----------|------------|------|
+| 1472 | P4-21: Kanban package test alignment (AC5 Cat-A) | critical | — | phase-4, type:refactor, scope:tests, topology |
+| 1473 | P4-22: Durable config test alignment (AC5 Cat-B1) | critical | — | phase-4, type:refactor, scope:tests, topology |
+| 1474 | P4-23: Task-scoped and cockpit test alignment (AC5 Cat-B2) | critical | — | phase-4, type:refactor, scope:tests, topology |
+| 1475 | P4-24: Consumer package test alignment (AC5 Cat-C) | needed | — | phase-4, type:refactor, scope:tests, topology |
+| 1476 | P4-25: consolidation test: topology-constant regression remediation | critical | 1472, 1473, 1474, 1475 | phase-4, type:test, scope:tests, topology, consolidation-test |
+
+### Dependency Graph
+```mermaid
+graph TD
+    1472["#1472 Cat-A: Kanban pkg tests"] --> 1476["#1476 Consolidation"]
+    1473["#1473 Cat-B1: Durable config tests"] --> 1476
+    1474["#1474 Cat-B2: Task-scoped + cockpit tests"] --> 1476
+    1475["#1475 Cat-C: Consumer pkg tests"] --> 1476
+```
+
+### Notes
+- TDD pairing omitted: these are test-remediation tasks — the failing tests ARE the RED phase. Builder updates expectations to match the new API (GREEN).
+- Layer 1 tasks (#1472–#1475) are independent and can be worked in parallel.
+- Layer 2 (#1476) is the final gate that runs `uv run pytest` to verify full suite passes.
+- #1474 (Cat-B2) is the largest subtask (~390 failures) but patterns are mechanical and repetitive.
+
+[[2026-05-09]]
+## Planning
+Decomposed AC5 regression remediation into 5 subtasks (2 layers):
+- Layer 1 (independent, parallel): #1472 Cat-A kanban pkg tests (~71 failures), #1473 Cat-B1 durable config tests (~30 failures), #1474 Cat-B2 task-scoped+cockpit tests (~390 failures), #1475 Cat-C consumer pkg tests (small count)
+- Layer 2 (consolidation gate): #1476 full-suite verification (depends on all Layer 1 tasks)
+All subtasks at backlog with parent=1439. TDD pairing omitted — failing tests ARE the RED phase; builder updates expectations to GREEN.
+[[2026-05-09]]
+Architecture re-review after auditor rejection (498 failures / 92 files). Added AC5 regression gate: `uv run pytest` exits 0 with zero new failures. Decomposed remediation into 5 subtasks: #1472 (Cat-A: serve/kanban/tests/ ~71 failures), #1473 (Cat-B1: durable config tests), #1474 (Cat-B2: task-scoped + cockpit tests ~390 failures), #1475 (Cat-C: consumer packages), #1476 (consolidation test gating on #1472-#1475). Added #1476 as dependency. All subtasks parent=1439, type:refactor, scope:tests.

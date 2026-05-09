@@ -1,10 +1,10 @@
 ---
 id: 1389
 title: 'P2-14: Implement Cockpit decision viewport and resolution UX'
-status: backlog
+status: review
 priority: needed
 created: 2026-05-06T01:04:52.300671+00:00
-updated: 2026-05-09T07:38:25.163219+00:00
+updated: 2026-05-09T09:45:33.192530+00:00
 tags:
 - cockpit
 - audit-remediation
@@ -350,3 +350,91 @@ Re-review complete. Refined AC v2 addresses all three reviewer rejection finding
 | 1 | architect | Persist a concrete AC2 proof target and route the next test pass to replace word-count checks with keyword-specific outcome assertions for approved, rejected, and needs-info text | `serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx`, `serve/cockpit/web/src/__tests__/ResolveModalUX_1389.test.tsx` | `ResolveModalUX_1388.test.tsx:88-90,113-115,138-140`; `ResolveModalUX_1389.test.tsx:10` |
 | 2 | architect | Persist a concrete AC5 Shell proof target and route the next test pass to assert the open→close cycle, including cancel or Escape removing ResolveModal from the DOM after a DecisionViewport-triggered open | `serve/cockpit/web/src/__tests__/Shell_1389.test.tsx`, `serve/cockpit/web/src/Shell.tsx` | `Shell_1389.test.tsx:297-334`; `Shell.tsx:272-276` |
 | 3 | architect | Decide whether AC6 needs explicit helper-branch assertions for message/detail/fallback or is acceptable as non-blocking debt, then narrow the next gate accordingly | `serve/cockpit/web/src/__tests__/ResolveModal_1193.test.tsx`, `serve/cockpit/web/src/api/errorMessage.ts` | `ResolveModal_1193.test.tsx:207-241`; `api/errorMessage.ts:1-28` |
+[[2026-05-09]]
+
+## Architecture Re-review (v3)
+
+### Context
+Third architect cycle. Two reviewer rejections (both 0.84-0.85 confidence) on proof quality, not implementation correctness. AC2, AC5 proof gaps; AC6 accepted as non-blocking.
+
+### Decisions
+| Follow-up | Decision | Rationale |
+|---|---|---|
+| AC2 keyword assertions | Builder test deliverable | Implementation text already matches keyword patterns (`/proceed\|continue/i`, `/stop\|return\|back/i`, `/wait\|clarif/i`). Test-writer correctly excluded (GREEN from start). Builder must replace word-count assertions with keyword regex in `ResolveModalUX_1388.test.tsx` |
+| AC5 Shell close-cycle | Builder test deliverable | Shell close path wired (`onClose={() => setSelectedDRId(null)}`). Test-writer correctly excluded (GREEN from start). Builder must add close-cycle test to `Shell_1389.test.tsx` |
+| AC6 helper internals | Non-blocking — accept as-is | `getResponseErrorMessage` internals are #1375's test scope. #1389 satisfies "use the contract" by calling the function |
+
+### AC v3
+No AC line text changes from v2. All 8 lines remain as written. Changes are routing-only.
+
+### Test Routing
+AC2 and AC5 require test-file updates that pass immediately against current implementation. These are **builder test deliverables**, not RED-phase tests. Test-writer should pass through with existing GREEN suites.
+
+### Builder Proof-Refinement Deliverables
+1. **AC2 — keyword assertions:** In `serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx`, replace word-count threshold assertions (lines ~88-90, ~113-115, ~138-140) with keyword regex assertions: approved text matches `/proceed|continue/i`, rejected text matches `/stop|return|back/i`, needs-info text matches `/wait|clarif/i`. Remove `wordCount` / `toBeGreaterThanOrEqual` patterns; use `toMatch()` with the regex patterns.
+2. **AC5 — Shell close-cycle:** In `serve/cockpit/web/src/__tests__/Shell_1389.test.tsx`, add a close-cycle test inside the existing `AC8: DecisionViewport onItemClick opens ResolveModal` describe block: (a) stub with DR_A in items, (b) render Shell, (c) click `[data-testid="dv-click-dr-001"]`, (d) assert `[data-testid="resolve-modal"]` present, (e) fire `keydown` Escape on `document`, (f) assert `[data-testid="resolve-modal"]` is null (removed from DOM).
+
+### Challenger
+Skipped — REFINE verdict, narrow scope, 3rd cycle with well-understood proof gaps.
+
+### Verdict: APPROVE (REFINE — proof routing only)
+
+[[2026-05-09]]
+Architecture re-review v3 complete. No AC text changes — routing fix only. Two reviewer proof-gap rejections (AC2 word-count tests, AC5 missing Shell close-cycle) resolved as builder test deliverables: both pass immediately against correct implementation, so test-writer correctly excluded them from RED phase. AC6 helper-internals concern accepted as non-blocking (#1375 scope). Builder guidance: (1) replace word-count assertions with keyword regex in ResolveModalUX_1388, (2) add Escape-to-close cycle test in Shell_1389. Challenger skipped (REFINE, narrow 3rd-cycle scope).
+[[2026-05-09]]
+## Test-Writer Notes
+
+**Retry cycle — pass-through per architecture v3.**
+
+No new RED-phase tests written. The two remaining proof gaps are explicitly classified as **builder test deliverables** by the architect (v3 re-review) because both gaps pass immediately against the current implementation.
+
+**Gap 1 — AC2 keyword assertions (`ResolveModalUX_1388.test.tsx`):**
+- Lines 89–90, 114–115, 139–140 use `wordCount`/`toBeGreaterThanOrEqual` instead of keyword regex.
+- This is a test *modification* (replacing assertions in an existing passing test), not a RED-phase addition.
+- Architect instruction: builder replaces word-count patterns with `/proceed|continue/i` (approved), `/stop|return|back/i` (rejected), `/wait|clarif/i` (needs-info) using `toMatch()`.
+
+**Gap 2 — AC5 Shell close-cycle (`Shell_1389.test.tsx`):**
+- Line 308 checks only that the modal is present; no test verifies cancel or Escape removes `[data-testid="resolve-modal"]` from the DOM.
+- Shell.tsx:272–276 already wires `onClose={() => setSelectedDRId(null)}`; a close-cycle test would pass immediately.
+- Architect instruction: builder adds open→close assertion inside the `AC8: DecisionViewport onItemClick opens ResolveModal` describe block.
+
+**Existing GREEN suites (all passing per prior builder/quality-runner evidence):**
+- `ResolveModalUX_1388.test.tsx`, `ResolveModalUX_1389.test.tsx`, `ResolveModal_1193.test.tsx`
+- `DecisionViewport_1388.test.tsx`, `Shell_1389.test.tsx`, `Shell_1192.test.tsx`
+
+**AC coverage (no gaps in RED tests):**
+| AC Line | Status |
+|---------|--------|
+| AC1 (td:2) | GREEN — `DecisionViewport_1388`, `Shell_1389` |
+| AC2 (td:2) — keyword assertions | Builder test deliverable (test modification, not RED) |
+| AC3 (td:2) | GREEN — `ResolveModalUX_1388` |
+| AC4 (td:2) — PButton variants | GREEN — `ResolveModalUX_1389`, `ResolveModalUX_1388` |
+| AC5 (td:2) — Shell close-cycle | Builder test deliverable (GREEN from start) |
+| AC6 (td:1) | GREEN — `ResolveModal_1193` |
+| AC7 (td:0) | Skipped per td:0 |
+| AC8 (td:2) | GREEN — `Shell_1389` |
+[[2026-05-09]]
+## Builder Notes
+- Scope: proof-refinement cycle per architecture v3; no implementation logic changes.
+- Files changed:
+  - serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx
+  - serve/cockpit/web/src/__tests__/Shell_1389.test.tsx
+- Fixes applied:
+  - AC2 proof update: replaced word-count threshold assertions with outcome-specific keyword regex assertions.
+    - approved description now asserts `/proceed|continue/i`
+    - rejected description now asserts `/stop|return|back/i`
+    - needs-info description now asserts `/wait|clarif/i`
+  - AC5 proof update: added Shell open→Escape→close cycle assertion proving ResolveModal is removed from DOM after DecisionViewport-triggered open.
+- Quality evidence (quality-runner, scoped):
+  - Tests: 85 passed, 0 failed, 0 skipped
+  - Suites:
+    - src/__tests__/ResolveModalUX_1388.test.tsx (17 passed)
+    - src/__tests__/Shell_1389.test.tsx (16 passed)
+    - src/__tests__/ResolveModalUX_1389.test.tsx (6 passed)
+    - src/__tests__/DecisionViewport_1388.test.tsx (26 passed)
+    - src/__tests__/ResolveModal_1193.test.tsx (9 passed)
+    - src/__tests__/Shell_1192.test.tsx (11 passed)
+  - Lint: clean (0 issues) on both changed files
+- Commit:
+  - da70c322 — test: refine AC2/AC5 proof assertions (#1389, builder)
+- Result: AC2 and AC5 proof gaps are now explicitly covered in task-scoped test evidence.
