@@ -334,5 +334,20 @@ describe('TestFromAC_DecisionViewportShellIntegration', () => {
       void capturingSpy
       void capturedIds
     })
+
+    it('pressing Escape after opening ResolveModal removes it from the DOM', () => {
+      stubPendingDRs({ count: 1, items: [DR_A], isLoading: false })
+      const { container } = renderShell()
+
+      const clickBtn = container.querySelector('[data-testid="dv-click-dr-001"]')
+      expect(clickBtn).not.toBeNull()
+      fireEvent.click(clickBtn!)
+
+      expect(container.querySelector('[data-testid="resolve-modal"]')).not.toBeNull()
+
+      fireEvent.keyDown(document, { key: 'Escape', code: 'Escape' })
+
+      expect(container.querySelector('[data-testid="resolve-modal"]')).toBeNull()
+    })
   })
 })

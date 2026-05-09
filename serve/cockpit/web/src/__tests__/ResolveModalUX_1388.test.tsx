@@ -80,14 +80,13 @@ describe('TestFromAC_ResolveModalUX', () => {
     expect(approvedLabel.contains(descEl)).toBe(false)
   })
 
-  it('approved description p-text contains action-oriented content beyond the bare status token', () => {
-    // AC2: ≥2 words beyond the status token (word-count — not char-length)
+  it('approved description p-text uses proceed/continue outcome language', () => {
+    // AC2 v2: approved consequence must explicitly communicate proceeding.
     const { container } = renderModal()
     const optionContainer = container.querySelector('[data-testid="option-approved"]')!
     const descEl = optionContainer.querySelector('p-text')!
-    const text = (descEl.textContent ?? '').replace(/\bapprove[d]?\b/gi, '').trim()
-    const wordCount = text.split(/\s+/).filter(Boolean).length
-    expect(wordCount).toBeGreaterThanOrEqual(2)
+    const text = descEl.textContent ?? ''
+    expect(text).toMatch(/proceed|continue/i)
   })
 
   it('rejected option has a p-text description element structurally separate from its radio label', () => {
@@ -105,14 +104,13 @@ describe('TestFromAC_ResolveModalUX', () => {
     expect(rejectedLabel.contains(descEl)).toBe(false)
   })
 
-  it('rejected description p-text contains action-oriented content beyond the bare status token', () => {
-    // AC2: ≥2 words beyond the status token (word-count — not char-length)
+  it('rejected description p-text uses stop/return/back outcome language', () => {
+    // AC2 v2: rejected consequence must explicitly communicate stopping/returning.
     const { container } = renderModal()
     const optionContainer = container.querySelector('[data-testid="option-rejected"]')!
     const descEl = optionContainer.querySelector('p-text')!
-    const text = (descEl.textContent ?? '').replace(/\breject(?:ed)?\b/gi, '').trim()
-    const wordCount = text.split(/\s+/).filter(Boolean).length
-    expect(wordCount).toBeGreaterThanOrEqual(2)
+    const text = descEl.textContent ?? ''
+    expect(text).toMatch(/stop|return|back/i)
   })
 
   it('needs-info option has a p-text description element structurally separate from its radio label', () => {
@@ -130,14 +128,13 @@ describe('TestFromAC_ResolveModalUX', () => {
     expect(needsInfoLabel.contains(descEl)).toBe(false)
   })
 
-  it('needs-info description p-text contains action-oriented content beyond the bare status token', () => {
-    // AC2: ≥2 words beyond the status token (word-count — not char-length)
+  it('needs-info description p-text uses wait/clarification outcome language', () => {
+    // AC2 v2: needs-info consequence must explicitly communicate waiting for clarity.
     const { container } = renderModal()
     const optionContainer = container.querySelector('[data-testid="option-needs-info"]')!
     const descEl = optionContainer.querySelector('p-text')!
-    const text = (descEl.textContent ?? '').replace(/\bneeds?[-\s]info\b/gi, '').trim()
-    const wordCount = text.split(/\s+/).filter(Boolean).length
-    expect(wordCount).toBeGreaterThanOrEqual(2)
+    const text = descEl.textContent ?? ''
+    expect(text).toMatch(/wait|clarif/i)
   })
 
   // ─── AC3 (td:2): No pre-selected choice; submit disabled until selection ──
