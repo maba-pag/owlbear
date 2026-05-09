@@ -205,6 +205,21 @@ class TestFromAC_CleanupClaimRelease:
         task = engine.show_task("2")
         assert task.claimed_at is not None
 
+    def test_cleanup_clears_expired_claimed_at_on_disk(
+        self, tmp_path: Path
+    ) -> None:
+        """After cleanup, re-reading the expired task proves claimed_at is None on disk."""
+        board = _make_board(tmp_path)
+        _write_task(board, task_id=3, status="todo", claimed_at=_EPOCH_TS)
+        engine = KanbanEngine(board, activity_log=False)
+
+        result = engine.cleanup()  # type: ignore[attr-defined]
+
+        assert 3 in result.released_claim_ids
+        # Re-read from disk to prove CAS write persisted the cleared claimed_at
+        task = engine.show_task("3")
+        assert task.claimed_at is None, "cleanup must clear claimed_at on disk for expired task"
+
 
 # ---------------------------------------------------------------------------
 # AC2 — Archive-move probe
@@ -304,6 +319,19 @@ class TestFromAC_CleanupSafety:
 
         assert source.exists(), "Source task file must not be deleted when skip occurs"
 
+    def test_cleanup_source_file_not_deleted_on_malformed_skip(
+        self, tmp_path: Path
+    ) -> None:
+        """Malformed source file is not deleted when it is added to skipped_items."""
+        board = _make_board(tmp_path)
+        malformed = board / "tasks" / "99-bad.md"
+        malformed.write_text("not valid frontmatter at all\n", encoding="utf-8")
+        engine = KanbanEngine(board, activity_log=False)
+
+        engine.cleanup()  # type: ignore[attr-defined]  # not yet implemented
+
+        assert malformed.exists(), "malformed source file must not be deleted when skipped"
+
 
 # ---------------------------------------------------------------------------
 # AC4 — Single-call aggregation probe
@@ -388,6 +416,23 @@ class TestFromAC_CockpitCleanupContract:
         for item in body.get("skipped_items", []):
             assert "path" in item, "skipped_item missing path field"
             assert "reason" in item, "skipped_item missing reason field"
+
+    def test_post_cleanup_skipped_items_nonempty_with_malformed_file(
+        self, client: TestClient, kanban_dir: Path
+    ) -> None:
+        """skipped_items is non-empty when a malformed file is present; entries are typed."""
+        (kanban_dir / "tasks" / "99-bad.md").write_text(
+            "not valid frontmatter\n", encoding="utf-8"
+        )
+
+        response = client.post("/api/tasks/cleanup")
+
+        assert response.status_code == 200
+        body = response.json()
+        assert len(body["skipped_items"]) >= 1, "malformed file must appear in skipped_items"
+        for item in body["skipped_items"]:
+            assert isinstance(item["path"], str), "skipped_items path must be str"
+            assert isinstance(item["reason"], str), "skipped_items reason must be str"
 
 
 # ---------------------------------------------------------------------------
