@@ -1,10 +1,10 @@
 ---
 id: 1463
 title: 'E2a: Delete/merge stale Python root tests (82 files in tests/)'
-status: done
+status: archived
 priority: important
 created: 2026-05-09T03:32:04.142951+00:00
-updated: 2026-05-09T11:35:09.131339+00:00
+updated: 2026-05-09T13:21:19.529597+00:00
 tags:
 - pipeline
 - ws-cleanup
@@ -411,3 +411,27 @@ DONE #1463 -> in-progress | non-impl pass-through, no tests needed
 
 ### Scratch Files Cleaned
 - None (no `.owlbear/scratch/1463-*` files found)
+[[2026-05-09]]
+## Audit
+### Regression Detection
+- quality-runner mode full: 501 passed, 0 failed, 0 skipped; lint clean
+- regression verdict: PASS
+
+### Intent Verification
+- scope alignment: PASS — superseded meta-task with no code changes; deliverable is decomposition plan (#1466-#1470); all files in `.owlbear/kanban/tasks/` domain
+- purpose match: PASS — 5 child tasks created with correct dependency graph, proper parent (#1415), delta-based AC, collision policies, and per-group verification checkpoints
+- extraneous scope: none
+- boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 3/5
+Needed 4 cycles. Cycle 1 AC gated on absolute suite pass against an already-red baseline (unsatisfiable). Cycle 2 added delta-based gate but kept bulk execution. Two failed builder attempts resulted before Cycle 3 split was approved. Final decomposition is well-structured with proper collision policies and per-target checkpoints, but the upstream gaps cost two full builder cycles.
+
+### Commit Integrity
+- upstream commit presence: PASS — research doc committed (`4002a667`); no source/test deliverables expected (meta-task, "Files changed: none"); child task #1466 archived and committed (`104f002b`)
+- kanban commit packaging: deferred to archival commit below
+
+### Deduction Breakdown
+- AC quality score 3/5: -.03
+
+### Confidence: 0.97
+### Action: archive

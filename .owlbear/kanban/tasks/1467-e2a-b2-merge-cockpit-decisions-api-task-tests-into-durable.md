@@ -4,7 +4,7 @@ title: 'E2a-B2: Merge cockpit_decisions_api task tests into durable'
 status: backlog
 priority: important
 created: 2026-05-09T07:21:35.670259+00:00
-updated: 2026-05-09T07:24:15.251344+00:00
+updated: 2026-05-09T13:17:24.006470+00:00
 tags:
 - pipeline
 - ws-cleanup
@@ -15,7 +15,7 @@ depends_on:
 - 1466
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-09T13:17:24.006470+00:00
 archival_reason:
 archival_refs: []
 ---
