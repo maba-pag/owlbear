@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 # --- merged from tests/test_engine_create_edit_1072.py ---
 """RED-phase tests for AgentView.edit_task — semantic diff / D14 (task #1072).
 
@@ -26,6 +24,8 @@ AC coverage:
   D46  → Not testable as RED: AgentView.edit_task already lacks `expected_updated`.
 """
 
+from __future__ import annotations
+
 
 from pathlib import Path
 
@@ -33,6 +33,7 @@ import pytest
 
 from owlbear_kanban import KanbanEngine
 from owlbear_kanban.engine import AgentView
+from owlbear_kanban.errors import KANBAN_ERROR_CODES
 from owlbear_kanban.models import ValidationError
 
 # ---------------------------------------------------------------------------
@@ -40,35 +41,6 @@ from owlbear_kanban.models import ValidationError
 # ---------------------------------------------------------------------------
 
 _BASE_CONFIG = """\
-statuses:
-  - research
-  - backlog
-  - todo
-  - in-progress
-  - review
-  - done
-priorities:
-  - someday
-  - nice-to-have
-  - important
-  - needed
-  - critical
-entry_status: research
-terminal_status: done
-wave_size: 4
-agent_map:
-  research: researcher
-  backlog: architect
-  todo: builder
-  in-progress: builder
-  review: reviewer
-  done: auditor
-agent_types: {}
-agent_compatibility: {}
-non_impl_tags: [research, docs]
-archival_reasons: [completed, deprecated, dropped, duplicate, wontfix]
-status_predicates: {}
-claim_timeout: 1h
 next_id: 1
 """
 
@@ -362,58 +334,12 @@ Covers:
   AC2 → TestFromAC_EmptyTitleErrorCode.test_create_task_whitespace_title_raises_err_invalid_title
 """
 
-
-from pathlib import Path
-
-import pytest
-
-from owlbear_kanban import KanbanEngine
-from owlbear_kanban.engine import AgentView
-from owlbear_kanban.errors import KANBAN_ERROR_CODES
-from owlbear_kanban.models import ValidationError
-
 # ---------------------------------------------------------------------------
 # Minimal board setup helpers (mirrors test_engine_create_edit_1070.py)
 # ---------------------------------------------------------------------------
 
 _BASE_CONFIG = """\
-schema: grouped
-statuses:
-  - research
-  - backlog
-  - todo
-  - in-progress
-  - review
-  - done
-priorities:
-  - someday
-  - nice-to-have
-  - important
-  - needed
-  - critical
 next_id: 1
-paths:
-    tasks_dir: tasks
-    archive_dir: archive
-pipeline:
-    entry_status: research
-    terminal_status: done
-    wave_size: 4
-    claim_timeout: 1h
-agents:
-    agent_map:
-        research: researcher
-        backlog: architect
-        todo: builder
-        in-progress: builder
-        review: reviewer
-        done: auditor
-    agent_types: {}
-    agent_compatibility: {}
-policy:
-    non_impl_tags: [research, docs]
-    archival_reasons: [completed, deprecated, dropped, duplicate, wontfix]
-    status_predicates: {}
 """
 
 
