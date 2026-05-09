@@ -1,13 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import rehypeSanitize from 'rehype-sanitize'
 import remarkGfm from 'remark-gfm'
-import {
-  PButton,
-  PHeading,
-  PText,
-  PTextarea,
-} from '@porsche-design-system/components-react'
+import { PHeading, PText, PTextarea } from '@porsche-design-system/components-react'
 
 import type { PendingDR } from '../hooks/usePendingDRs'
 import { getResponseErrorMessage } from '../api/errorMessage'
@@ -25,10 +20,13 @@ type ControlValueEvent = {
   detail?: unknown
 }
 
+type ResolveResponse = 'approved' | 'rejected' | 'needs-info' | ''
+
 export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalProps) {
-  const [response, setResponse] = useState('approved')
+  const [response, setResponse] = useState<ResolveResponse>('')
   const [notes, setNotes] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const modalRef = useRef<HTMLDivElement | null>(null)
 
   async function handleSubmit() {
     if (!dr) {
@@ -61,6 +59,30 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
     return null
   }
 
+  useEffect(() => {
+    modalRef.current?.focus()
+  }, [])
+
+  useEffect(() => {
+    function handleDocumentKeyDown(event: KeyboardEvent): void {
+      if (event.key === 'Escape') {
+        onClose()
+      }
+    }
+
+    document.addEventListener('keydown', handleDocumentKeyDown)
+    return () => {
+      document.removeEventListener('keydown', handleDocumentKeyDown)
+    }
+  }, [onClose])
+
+  function handleModalKeyDown(event: { key: string; stopPropagation: () => void }): void {
+    if (event.key === 'Escape') {
+      event.stopPropagation()
+      onClose()
+    }
+  }
+
   function setHeadingTagAttr(element: HTMLElement | null): void {
     element?.setAttribute('tag', 'h3')
   }
@@ -84,42 +106,59 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
   }
 
   return (
-    <div data-testid="resolve-modal" role="dialog" aria-label="Resolve decision request">
+    <div
+      data-testid="resolve-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Resolve decision request"
+      ref={modalRef}
+      tabIndex={-1}
+      onKeyDown={handleModalKeyDown}
+    >
       <PHeading ref={setHeadingTagAttr} tag="h3">{dr.title}</PHeading>
       <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>{dr.body ?? ''}</ReactMarkdown>
 
       <fieldset data-testid="response-selector">
         <legend>Response</legend>
-        <label>
-          <input
-            type="radio"
-            name="resolve-response"
-            value="approved"
-            checked={response === 'approved'}
-            onChange={() => setResponse('approved')}
-          />
-          approved
-        </label>
-        <label>
-          <input
-            type="radio"
-            name="resolve-response"
-            value="rejected"
-            checked={response === 'rejected'}
-            onChange={() => setResponse('rejected')}
-          />
-          rejected
-        </label>
-        <label>
-          <input
-            type="radio"
-            name="resolve-response"
-            value="needs-info"
-            checked={response === 'needs-info'}
-            onChange={() => setResponse('needs-info')}
-          />
-          needs-info
-        </label>
+        <div data-testid="option-approved">
+          <label>
+            <input
+              type="radio"
+              name="resolve-response"
+              value="approved"
+              checked={response === 'approved'}
+              onChange={() => setResponse('approved')}
+            />
+            approved
+          </label>
+          <PText>Proceed with approval and continue implementation.</PText>
+        </div>
+        <div data-testid="option-rejected">
+          <label>
+            <input
+              type="radio"
+              name="resolve-response"
+              value="rejected"
+              checked={response === 'rejected'}
+              onChange={() => setResponse('rejected')}
+            />
+            rejected
+          </label>
+          <PText>Send this request back and stop current progress.</PText>
+        </div>
+        <div data-testid="option-needs-info">
+          <label>
+            <input
+              type="radio"
+              name="resolve-response"
+              value="needs-info"
+              checked={response === 'needs-info'}
+              onChange={() => setResponse('needs-info')}
+            />
+            needs-info
+          </label>
+          <PText>Ask for more details and wait for clarification.</PText>
+        </div>
       </fieldset>
 
       <PTextarea
@@ -131,17 +170,19 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
         onChange={(event) => setNotes(readControlValue(event))}
       />
 
-      <PButton
+      <button
+        type="button"
         data-testid="resolve-submit"
+        disabled={response === ''}
         onClick={() => {
           void handleSubmit()
         }}
       >
-        Submit
-      </PButton>
-      <PButton data-testid="resolve-cancel" variant="secondary" onClick={onClose}>
-        Cancel
-      </PButton>
+        Submit Decision
+      </button>
+      <button type="button" data-testid="resolve-cancel" onClick={onClose}>
+        Close Modal
+      </button>
 
       {error ? <PText data-testid="resolve-error">{error}</PText> : null}
     </div>
