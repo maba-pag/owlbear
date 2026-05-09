@@ -167,6 +167,16 @@ describe('TestFromAC_ActionButtonGating', () => {
     expect(container.querySelector('[data-testid="move-backward"]')).toBeNull()
   })
 
+  it('unblock_button_absent_from_dom_when_task_not_blocked', () => {
+    /**
+     * AC1 (retry gap): Unblock must not render when task.blocked is false.
+     * Implementation: `{t.blocked && <PButton data-testid="unblock-action" ...>}`.
+     * This test was absent from the initial RED suite — reviewer identified the gap.
+     */
+    const { container } = renderDetail(BASE_TASK, BOARD) // blocked=false
+    expect(container.querySelector('[data-testid="unblock-action"]')).toBeNull()
+  })
+
   it('unclaim_button_absent_and_no_release_mutation_fires_when_not_claimed', async () => {
     /**
      * AC2: When claimed=false, the unclaim button is absent from the DOM,
@@ -291,6 +301,66 @@ describe('TestFromAC_ActionSpecificConfirmText', () => {
     const primaryBtn = pButtons[pButtons.length - 1] as HTMLElement
     expect(primaryBtn.textContent?.trim()).not.toBe('Confirm')
   })
+
+  it('confirm_button_label_exact_unblock_task_for_unblock_action', async () => {
+    /**
+     * AC4 (retry gap): Confirm button must show the exact label 'Unblock task', not a
+     * vague negative check. Reviewer identified that negative-only assertions are
+     * insufficient — the contract requires the specific concrete label.
+     */
+    const { container } = renderDetail(TASK_BLOCKED, BOARD)
+    const unblockBtn = container.querySelector('[data-testid="unblock-action"]') as HTMLElement | null
+    expect(unblockBtn).not.toBeNull()
+    fireEvent.click(unblockBtn!)
+    await waitFor(
+      () => expect(container.querySelector('[data-testid="confirm-dialog"]')).not.toBeNull(),
+      { timeout: 500 },
+    )
+    const dialog = container.querySelector('[data-testid="confirm-dialog"]')!
+    const pButtons = Array.from(dialog.querySelectorAll('p-button'))
+    const primaryBtn = pButtons[pButtons.length - 1] as HTMLElement
+    expect(primaryBtn.textContent?.trim()).toBe('Unblock task')
+  })
+
+  it('confirm_button_label_exact_release_claim_for_unclaim_action', async () => {
+    /**
+     * AC4 (retry gap): Confirm button must show the exact label 'Release claim'.
+     * Also proves the unclaim action-label path — previously untested.
+     * Uses TASK_CLAIMED (claimed=true) so the unclaim button is visible.
+     */
+    const { container } = renderDetail(TASK_CLAIMED, BOARD)
+    const unclaimBtn = container.querySelector('[data-testid="unclaim-action"]') as HTMLElement | null
+    expect(unclaimBtn).not.toBeNull()
+    fireEvent.click(unclaimBtn!)
+    await waitFor(
+      () => expect(container.querySelector('[data-testid="confirm-dialog"]')).not.toBeNull(),
+      { timeout: 500 },
+    )
+    const dialog = container.querySelector('[data-testid="confirm-dialog"]')!
+    const pButtons = Array.from(dialog.querySelectorAll('p-button'))
+    const primaryBtn = pButtons[pButtons.length - 1] as HTMLElement
+    expect(primaryBtn.textContent?.trim()).toBe('Release claim')
+  })
+
+  it('confirm_button_label_exact_move_target_for_move_backward', async () => {
+    /**
+     * AC4 (retry gap): Confirm button must show the exact label 'Move to {target}'.
+     * BASE_TASK.status = 'in-progress' → previousStatus = 'todo'.
+     * Label must be 'Move to todo'.
+     */
+    const { container } = renderDetail(BASE_TASK, BOARD)
+    const moveBackBtn = container.querySelector('[data-testid="move-backward"]') as HTMLElement | null
+    expect(moveBackBtn).not.toBeNull()
+    fireEvent.click(moveBackBtn!)
+    await waitFor(
+      () => expect(container.querySelector('[data-testid="confirm-dialog"]')).not.toBeNull(),
+      { timeout: 500 },
+    )
+    const dialog = container.querySelector('[data-testid="confirm-dialog"]')!
+    const pButtons = Array.from(dialog.querySelectorAll('p-button'))
+    const primaryBtn = pButtons[pButtons.length - 1] as HTMLElement
+    expect(primaryBtn.textContent?.trim()).toBe('Move to todo')
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -391,9 +461,156 @@ describe('TestFromAC_ConfirmDialogKeyboard', () => {
     // Focus must have returned to the trigger button
     expect(document.activeElement).toBe(unblockBtn)
   })
+
+  it('escape_key_dismisses_dialog_and_restores_focus_to_trigger', async () => {
+    /**
+     * AC5 (retry gap): The Escape dismiss path must ALSO restore focus to the trigger.
+     * Previous tests proved Escape-closes and Cancel-focus-return independently.
+     * Reviewer identified the combined Escape+focus-return proof was missing.
+     */
+    const { container } = renderDetail(TASK_BLOCKED, BOARD)
+    const unblockBtn = container.querySelector('[data-testid="unblock-action"]') as HTMLElement | null
+    expect(unblockBtn).not.toBeNull()
+    fireEvent.click(unblockBtn!)
+    await waitFor(
+      () => expect(container.querySelector('[data-testid="confirm-dialog"]')).not.toBeNull(),
+      { timeout: 500 },
+    )
+    const dialog = container.querySelector('[data-testid="confirm-dialog"]') as HTMLElement
+    fireEvent.keyDown(dialog, { key: 'Escape', code: 'Escape' })
+    await waitFor(
+      () => expect(container.querySelector('[data-testid="confirm-dialog"]')).toBeNull(),
+      { timeout: 500 },
+    )
+    // Focus must return to the trigger button after Escape dismiss
+    expect(document.activeElement).toBe(unblockBtn)
+  })
 })
 
-// AC6: runMutation error handling is already implemented and verified by
-// existing tests in DetailTab_1344.test.tsx (unblock 409/422) plus the
-// runMutation code path analysis. No additional failing tests are possible
-// for AC6 without duplicating existing covered behavior.
+// ---------------------------------------------------------------------------
+// AC6 (retry): Error-contract coverage for action mutations
+// ---------------------------------------------------------------------------
+
+describe('TestFromAC_ActionMutationErrorContract', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('unclaim_mutation_404_calls_on_task_cleared', async () => {
+    /**
+     * AC6 (retry gap): 404 from an action mutation must call onTaskCleared.
+     * runMutation: `if (res.status === 404) { onTaskCleared?.(); return }`.
+     * No 404 test existed; 1344 only covered unblock 409 and 422.
+     * Uses TASK_CLAIMED so the unclaim button is rendered.
+     */
+    const onTaskCleared = vi.fn()
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: false, status: 404 })))
+    const { container } = render(
+      <PorscheDesignSystemProvider>
+        <DetailTab task={TASK_CLAIMED} board={BOARD} onTaskCleared={onTaskCleared} />
+      </PorscheDesignSystemProvider>,
+    )
+    const unclaimBtn = container.querySelector('[data-testid="unclaim-action"]') as HTMLElement | null
+    expect(unclaimBtn).not.toBeNull()
+    fireEvent.click(unclaimBtn!)
+    await waitFor(
+      () => expect(container.querySelector('[data-testid="confirm-dialog"]')).not.toBeNull(),
+      { timeout: 500 },
+    )
+    const btns = container.querySelectorAll('[data-testid="confirm-dialog"] p-button')
+    fireEvent.click(btns[btns.length - 1] as HTMLElement)
+    await waitFor(() => expect(onTaskCleared).toHaveBeenCalledOnce(), { timeout: 500 })
+  })
+
+  it('move_backward_mutation_404_calls_on_task_cleared', async () => {
+    /**
+     * AC6 (retry gap): 404 from move-backward mutation must call onTaskCleared.
+     * BASE_TASK.status = 'in-progress' with BOARD → move-backward button is rendered.
+     */
+    const onTaskCleared = vi.fn()
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: false, status: 404 })))
+    const { container } = render(
+      <PorscheDesignSystemProvider>
+        <DetailTab task={BASE_TASK} board={BOARD} onTaskCleared={onTaskCleared} />
+      </PorscheDesignSystemProvider>,
+    )
+    const moveBackBtn = container.querySelector('[data-testid="move-backward"]') as HTMLElement | null
+    expect(moveBackBtn).not.toBeNull()
+    fireEvent.click(moveBackBtn!)
+    await waitFor(
+      () => expect(container.querySelector('[data-testid="confirm-dialog"]')).not.toBeNull(),
+      { timeout: 500 },
+    )
+    const btns = container.querySelectorAll('[data-testid="confirm-dialog"] p-button')
+    fireEvent.click(btns[btns.length - 1] as HTMLElement)
+    await waitFor(() => expect(onTaskCleared).toHaveBeenCalledOnce(), { timeout: 500 })
+  })
+
+  it('unclaim_mutation_409_shows_conflict_modal', async () => {
+    /**
+     * AC6 (retry gap): 409 from unclaim mutation must show conflict modal.
+     * Proves the shared 409 contract (refetch + setShowConflict) extends to unclaim,
+     * not just the unblock case already in DetailTab_1344.test.tsx.
+     */
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve({ ok: false, status: 409, json: () => Promise.resolve({ detail: 'conflict' }) }),
+      ),
+    )
+    const { container } = render(
+      <PorscheDesignSystemProvider>
+        <DetailTab task={TASK_CLAIMED} board={BOARD} />
+      </PorscheDesignSystemProvider>,
+    )
+    const unclaimBtn = container.querySelector('[data-testid="unclaim-action"]') as HTMLElement | null
+    expect(unclaimBtn).not.toBeNull()
+    fireEvent.click(unclaimBtn!)
+    await waitFor(
+      () => expect(container.querySelector('[data-testid="confirm-dialog"]')).not.toBeNull(),
+      { timeout: 500 },
+    )
+    const btns = container.querySelectorAll('[data-testid="confirm-dialog"] p-button')
+    fireEvent.click(btns[btns.length - 1] as HTMLElement)
+    await waitFor(
+      () => expect(container.querySelector('[data-testid="conflict-modal"]')).not.toBeNull(),
+      { timeout: 500 },
+    )
+  })
+
+  it('move_backward_mutation_422_shows_validation_message', async () => {
+    /**
+     * AC6 (retry gap): 422 from move-backward mutation must show validation message.
+     * runMutation uses getResponseErrorMessage to extract detail from the JSON body.
+     * Proves the shared 422 contract extends to move-backward, not just unblock.
+     */
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve({
+          ok: false,
+          status: 422,
+          json: () => Promise.resolve({ detail: 'invalid status transition' }),
+        }),
+      ),
+    )
+    const { container } = render(
+      <PorscheDesignSystemProvider>
+        <DetailTab task={BASE_TASK} board={BOARD} />
+      </PorscheDesignSystemProvider>,
+    )
+    const moveBackBtn = container.querySelector('[data-testid="move-backward"]') as HTMLElement | null
+    expect(moveBackBtn).not.toBeNull()
+    fireEvent.click(moveBackBtn!)
+    await waitFor(
+      () => expect(container.querySelector('[data-testid="confirm-dialog"]')).not.toBeNull(),
+      { timeout: 500 },
+    )
+    const btns = container.querySelectorAll('[data-testid="confirm-dialog"] p-button')
+    fireEvent.click(btns[btns.length - 1] as HTMLElement)
+    await waitFor(
+      () => expect(container.querySelector('[data-testid="validation-message"]')).not.toBeNull(),
+      { timeout: 500 },
+    )
+  })
+})
