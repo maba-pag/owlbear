@@ -1,10 +1,10 @@
 ---
 id: 1468
 title: 'E2a-B3: Merge cockpit_mutation_api task tests into durable'
-status: review
+status: backlog
 priority: important
 created: 2026-05-09T07:21:35.681226+00:00
-updated: 2026-05-09T15:39:55.679457+00:00
+updated: 2026-05-09T16:28:08.296114+00:00
 tags:
 - pipeline
 - ws-cleanup
@@ -209,3 +209,60 @@ Key refinements:
 
 - Commit:
   - `ab2aa7bf` — `test: merge cockpit mutation suites (#1468, builder)`
+[[2026-05-09]]
+## Review Evidence
+### Test Results
+- quality-runner scoped run on `tests/test_cockpit_mutation_api.py` collected 158 tests.
+- The quality-runner summary under-reported failures; the raw artifact at `.owlbear/scratch/qr_1468_pytest.txt` shows **138 passed, 20 failed**.
+- Failing clusters in the merged durable file:
+  - 1132 move delegation / error-mapping / response-adaptation tests now fail after relocation into the durable file.
+  - 1135 shared-suite contract guards now fail after relocation into the file they inspect.
+  - 1239 / 1243 move archival pass-through and backwards-compat tests now fail in the durable file.
+- Representative current evidence:
+  - `.owlbear/scratch/qr_1468_pytest.txt:743-754` shows `TestFromAC_MoveSharedSuiteContract::test_shared_suite_move_posts_all_include_updated_token` failing because the moved guard now flags `tests/test_cockpit_mutation_api.py:2058` plus its own inspection lines.
+  - `.owlbear/scratch/qr_1468_pytest.txt:754-776` shows the companion `test_shared_suite_move_posts_source_updated_from_engine_show_task` failing on merged-file callsites.
+  - `.owlbear/scratch/qr_1468_pytest.txt:760-835` shows representative 1239 route failures rooted at `serve/cockpit/src/owlbear_cockpit/routes/mutation.py:147` during merged durable execution.
+  - `.owlbear/scratch/qr_1468_pytest.txt:1580-1600` lists the 20 failing test IDs.
+- Pre-merge evidence shows representative moved tests were green in their original task-scoped files:
+  - `.owlbear/scratch/quality-runner-1164-pytest-full.txt:3321` — `tests/test_cockpit_mutation_api_1132.py::TestFromAC_MoveCockpitViewDelegation::test_move_calls_cockpit_view_move_task` PASSED.
+  - `.owlbear/scratch/quality-runner-1164-pytest-full.txt:5500-5501` — `tests/test_cockpit_mutation_api_1135.py::TestFromAC_MoveSharedSuiteContract::test_shared_suite_move_posts_all_include_updated_token` PASSED.
+  - `.owlbear/scratch/quality-runner-1164-pytest-full.txt:8433-8464` — `tests/test_cockpit_mutation_api_1239.py::TestFromAC_MoveRouteArchivalPassThrough::test_move_route_forwards_archival_reason_to_view` PASSED.
+  - `.owlbear/scratch/1361-pytest-stdout.txt:3953` — `tests/test_cockpit_mutation_api_1243.py::TestFromAC_BackwardsCompatibility::test_route_with_no_archival_fields_still_returns_200` PASSED.
+
+### Lint Results
+- `ruff` on `tests/test_cockpit_mutation_api.py`: clean.
+
+### AC Compliance
+| AC Line | Evidence | Status |
+|---|---|---|
+| All unique `def test_*` from 7 source files present in `tests/test_cockpit_mutation_api.py` | Merge markers present at `tests/test_cockpit_mutation_api.py:1063`, `:1759`, `:1981`, `:2410`, `:2714`, `:3056`, `:3265`; moved test names from each source suite are present in the durable file. | PASS |
+| 4 known duplicate test-name collisions resolved by appending `_{source_task_id}` suffix | Suffixed collisions present at `tests/test_cockpit_mutation_api.py:1337`, `:2255`, `:3156`, `:3216`. | PASS |
+| Fixture collisions: keep target's if identical, rename source's if different | Source-specific fixtures are present and isolated in the durable file, including `mock_view_client` / `mock_view_client_1239` / `mock_view_client_1243` and `kanban_dir` at `tests/test_cockpit_mutation_api.py:1132`, `:2452`, `:2753`, `:3351`. | PASS |
+| All 7 source files deleted after merge | Workspace file search for `tests/test_cockpit_mutation_api*.py` now returns only `tests/test_cockpit_mutation_api.py`. | PASS |
+| Per-target checkpoint collects >= 158 tests | quality-runner scoped artifact collected 158 tests from `tests/test_cockpit_mutation_api.py`. | PASS |
+| Delta verification: post-merge failure count <= pre-task baseline failure count | Representative moved tests that previously passed in their original source files now fail in the merged durable file (`.owlbear/scratch/quality-runner-1164-pytest-full.txt:3321`, `:5500-5501`, `:8433-8464`, `.owlbear/scratch/1361-pytest-stdout.txt:3953` vs `.owlbear/scratch/qr_1468_pytest.txt:1580-1600`). | FAIL |
+| Full suite: `tests/ --collect-only -q` count does not decrease vs pre-task baseline | Prior baseline for the root suite was `3379 collected` in archived task `1467` at `.owlbear/kanban/archive/1467-e2a-b2-merge-cockpit-decisions-api-task-tests-into-durable.md:114`; builder recorded post-merge `3379 collected` in this task body with no contrary evidence found. | PASS |
+| `test_kanban_topology_1439.py` untouched | File still exists at `tests/test_kanban_topology_1439.py:1` and is unrelated to the merged durable suite. Commit-level diff proof was not available in this session. | PASS |
+
+### Builder Process Quality
+- The builder completed the mechanical merge artifacts (single target file, source deletions, collision suffixes).
+- The merged durable file is not behavior-preserving: moved tests that were previously green now fail in their new location.
+- The builder verification note is not reliable enough for acceptance. The task body claims scoped success, but the raw quality-runner artifact for the merged durable file shows 20 failures.
+
+### Deductions
+- -0.50 merge-induced regression surface in the durable suite (20 failing tests)
+- -0.10 prior source-file green evidence contradicted by merged durable failures
+- -0.03 dirty-tree / diff-scoped git evidence unavailable in this session
+
+### Verdict
+- FAIL
+- Confidence: 0.37
+- Route: `backlog`
+- Reason: This task already contains one prior `## Review Evidence` failure section. Under the reviewer loop-breaker rule, a 2nd review failure routes to `backlog` even though the immediate defect is builder-owned.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Re-scope or decompose the merge so moved 1132 / 1135 / 1239 / 1243 tests preserve their original passing behavior after relocation into the durable file | `tests/test_cockpit_mutation_api.py` | Current merged failures at `.owlbear/scratch/qr_1468_pytest.txt:1580-1600` vs pre-merge passes at `.owlbear/scratch/quality-runner-1164-pytest-full.txt:3321`, `:5500-5501`, `:8433-8464`, `.owlbear/scratch/1361-pytest-stdout.txt:3953` |
+| 2 | architect | Define how self-referential source-inspection guards from the 1135 suite must be adapted when moved into the file they inspect | `tests/test_cockpit_mutation_api.py` | The moved guard now flags the intentional missing-updated case at `tests/test_cockpit_mutation_api.py:2058` and even its own inspection lines per `.owlbear/scratch/qr_1468_pytest.txt:743-754` |
+| 3 | architect | Re-establish the delta-failure acceptance method for this cleanup task using independent runner evidence rather than builder self-report | `tests/test_cockpit_mutation_api.py`; `.owlbear/kanban/tasks/1468-e2a-b3-merge-cockpit-mutation-api-task-tests-into-durable.md` | Task note claims scoped success, but raw runner artifact shows `20 failed, 138 passed` at `.owlbear/scratch/qr_1468_pytest.txt:1580-1600` |

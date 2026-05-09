@@ -1,10 +1,10 @@
 ---
 id: 1469
 title: 'E2a-B4: Merge mcp_kanban task tests into durable'
-status: todo
+status: in-progress
 priority: important
 created: 2026-05-09T07:21:35.691519+00:00
-updated: 2026-05-09T15:36:06.063507+00:00
+updated: 2026-05-09T16:29:17.603299+00:00
 tags:
 - pipeline
 - ws-cleanup
@@ -224,3 +224,26 @@ Cycle 1 failure: all AC lines marked td:0, combined with `quality` pass-through 
 
 [[2026-05-09]]
 Architecture re-review (cycle 2). Root cause: all-td:0 + quality tag caused builder pass-through with zero file changes. Fix: raised AC lines 1 (test presence) and 4 (source deletion) to td:1, removed quality tag. Test-writer will write RED verification tests; builder will execute the merge/delete for GREEN. Challenger overridden — confused backlog-approval with completion sign-off. Codebase evidence refreshed: 67 durable + 53 source = 120 expected, 1 test name collision, 2 inter-source fixture collisions confirmed.
+[[2026-05-09]]
+## Test-Writer Notes
+- Test file: `tests/test_mcp_kanban_merge_1469.py`
+- Classes: `TestFromAC_SourceFilesDeleted`, `TestFromAC_AllSourceTestsPresent`
+- Tests per category:
+  - AC4 (source files deleted): 7 parametrized tests (one per source file)
+  - AC1 (test names present in durable): 53 parametrized tests (3+7+1+12+5+8+17)
+- Total: **60 tests, all FAIL** — confirmed via pytest (60 failed in 0.34s)
+- Ruff: clean
+- Commit: 86b7eea9
+
+### AC Coverage
+| AC Line | Tests | Class |
+|---|---|---|
+| AC1 (td:1): all test_* from 7 sources in durable | 53 (parametrized by source + name) | TestFromAC_AllSourceTestsPresent |
+| AC2 (td:0): collision rename | covered by test_edit_task_has_no_status_parameter_1091 assertion in AC1 | TestFromAC_AllSourceTestsPresent |
+| AC4 (td:1): all 7 source files deleted | 7 parametrized | TestFromAC_SourceFilesDeleted |
+| AC2/AC3/AC5/AC6/AC7/AC8 (td:0) | not tested — builder/reviewer verification | — |
+
+### Implementation notes for builder
+- Collision rename: `test_edit_task_has_no_status_parameter` (1091) → `test_edit_task_has_no_status_parameter_1091`
+- Inter-source fixture collisions: `app_ctx_mock` (1091/1092), `app_ctx` (1196/1450) — keep target's if identical, rename source's if different
+- Source files to delete after merge: test_mcp_kanban_1091.py, _1092.py, _1126.py, _1196.py, _1197.py, _1360.py, _1450.py

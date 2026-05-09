@@ -4,7 +4,7 @@ title: 'P2-06: Implement Cockpit task action gating and confirmations'
 status: review
 priority: needed
 created: 2026-05-06T01:04:37.405026+00:00
-updated: 2026-05-09T15:59:41.440878+00:00
+updated: 2026-05-09T16:39:42.623424+00:00
 tags:
 - cockpit
 - audit-remediation
@@ -19,7 +19,7 @@ depends_on:
 - 1380
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-09T16:39:42.623424+00:00
 archival_reason:
 archival_refs: []
 ---

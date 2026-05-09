@@ -1,10 +1,10 @@
 ---
 id: 1477
 title: Normalize stale durable config test identifiers
-status: in-progress
+status: review
 priority: nice-to-have
 created: 2026-05-09T14:12:06.498671+00:00
-updated: 2026-05-09T15:56:25.221295+00:00
+updated: 2026-05-09T16:24:15.361722+00:00
 tags:
 - phase-4
 - topology
@@ -94,3 +94,12 @@ Architecture review complete. AC is clear and verifiable — 4 categories of sta
 - Architecture review confirmed: all AC lines td:0, Test-writer: SKIP.
 - AC2 green-gate (`uv run pytest` exits 0) verified by existing suite — no new assertions needed.
 - Passing through to builder.
+[[2026-05-09]]
+## Builder Notes
+- Implementation: renamed stale pytest-visible identifiers/headings/docstrings only in tests/test_config_loader.py, tests/test_config_authority.py, tests/test_config_schema.py
+- Behavior change: none (assertions and test bodies unchanged)
+- Tests: scoped gate PASS (93 passed, 0 failed, 0 skipped) for `tests/test_config_loader.py tests/test_config_authority.py tests/test_config_schema.py tests/test_config_grouped.py`
+- Coverage: quality-runner reported overall 100% for scoped run; module snapshots included `owlbear_kanban.config_loader` 100%, `owlbear_kanban.models` 86%, `owlbear_kanban.storage` 24%, `owlbear_kanban.migrate` 30%
+- Ruff: clean
+- Commit: f7d83998539455c527b84189240b10b63dc1e943 (`test: normalize stale durable config test identifiers (#1477, builder)`)
+- Evidence summary: AC1 satisfied by removing contradictory naming around vendor/tui preservation, missing-file exception wording, grouped-save emission wording, and root status/priority persistence wording while preserving current topology-constant assertions; AC2 satisfied by green scoped command via quality-runner.

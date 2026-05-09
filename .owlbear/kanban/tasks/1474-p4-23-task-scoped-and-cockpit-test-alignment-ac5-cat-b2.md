@@ -1,10 +1,10 @@
 ---
 id: 1474
 title: 'P4-23: Task-scoped and cockpit test alignment (AC5 Cat-B2)'
-status: backlog
+status: in-progress
 priority: critical
 created: 2026-05-09T08:46:53.940620+00:00
-updated: 2026-05-09T15:57:16.149316+00:00
+updated: 2026-05-09T16:39:47.585295+00:00
 tags:
 - phase-4
 - type:refactor
@@ -15,7 +15,7 @@ parent: 1439
 depends_on: []
 blocked: false
 block_reason:
-claimed_at: 2026-05-09T15:57:16.149316+00:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -297,3 +297,160 @@ Representative AC2 failures (from 19 total):
 | 2 | architect | Publish a fixture-scope-safe AC1 matcher that excludes assertion/doc/message strings and code-inspection literals, or replace grep gate with structural check limited to config fixture constants | tests/test_engine_accessor_migration.py, tests/test_support_migration.py, tests/test_engine_dispatch_validation.py | Current key grep catches non-fixture literals/messages, making AC1 pass criterion non-deterministic |
 | 3 | architect | Split verification into topology-fixture-only suites vs topology-dependent behavioral suites, with explicit include lists and expected verdicts per bucket | tests/test_engine_lazy_agent_map.py, tests/test_dispatch_gate_port.py, tests/test_engine_end_work.py, tests/test_engine_create_edit_1203.py | AC2 “15 files expected to pass” not reachable under current fixture rewrite contract |
 | 4 | architect | Clarify whether mixed-purpose constants in same file (example: compatibility/bucket configs) must be exempted from next_id-only rewrite | tests/test_dispatch_gate_port.py | Post-rewrite regression in bucket compatibility test indicates non-mechanical behavior coupling |
+
+[[2026-05-09]]
+
+
+## AC Revision (Third Architecture Re-Review)
+
+**Supersedes all prior AC sections.** Builder and reviewer: use ONLY the verification command from THIS section.
+
+### Root Cause Analysis (Second Builder Rejection)
+
+Builder applied the mechanical fix to all 21 files. AC2 pytest on 15 files yielded 290 passed / 19 failed. Root cause analysis:
+
+| Category | Files | Failures | Root Cause |
+|----------|-------|----------|------------|
+| Non-default topology | test_engine_lazy_agent_map.py | 12 | Tests incomplete agent_map; PRODUCT_TOPOLOGY always provides complete map. Fundamentally broken. |
+| Non-default topology | test_dispatch_gate_port.py | 1 | Tests agent_compatibility buckets; PRODUCT_TOPOLOGY has agent_compatibility={}. Vacuously passes. |
+| Wrong error code | test_engine_create_edit_1203.py | 2 | RED test for #1203: expects ERR_INVALID_TITLE but create_task uses ERR_INVALID_STATUS (agent_view.py:571). |
+| Stale assertion | test_engine_end_work.py | 1 | Expects skipped=5 (done=idx5); PRODUCT_TOPOLOGY has 7 statuses → done=idx6 → skipped=6. |
+| Decisions integration | test_pick_tasks_resolve.py | 3 | Integration code IS wired (agent_view.py:381-391). Builder may have had stale import cache. Re-include in pass set. |
+| Decisions integration | test_engine_ble001.py | 1 | Code path IS wired; LOGGER imported from engine.py matches test's caplog logger. Re-include in pass set. |
+
+**Actions taken:**
+- Moved test_engine_lazy_agent_map.py, test_dispatch_gate_port.py, test_engine_create_edit_1203.py to exclusion set
+- Reinstated test_pick_tasks_resolve.py and test_engine_ble001.py in pass set (challenger evidence: code paths exist, logger matches)
+- Added assertion fix for test_engine_end_work.py to mechanical pattern
+- Dropped grep gate (AC1 from prior revision) — caused false positives from assertion/message strings
+
+### Revised AC
+
+**AC1 (td:2):** Apply mechanical topology-fixture alignment to all 21 files in the manifest below. For test_engine_end_work.py, also update `_expected_skip_warning("done", "research", 5)` → `_expected_skip_warning("done", "research", 6)` (PRODUCT_TOPOLOGY has 7 statuses; done=idx6, research=idx0, delta=6). Verify:
+```bash
+uv run pytest \
+  tests/test_engine_end_work_fail.py \
+  tests/test_cockpit_launch.py \
+  tests/test_engine_create_edit_1072.py \
+  tests/test_engine_dep_lookup.py \
+  tests/test_engine_occ.py \
+  tests/test_engine_cockpit_view.py \
+  tests/test_support_migration.py \
+  tests/test_engine_release_note.py \
+  tests/test_engine_end_work.py \
+  tests/test_engine_release_task_occ.py \
+  tests/test_pick_tasks_resolve.py \
+  tests/test_engine_ble001.py
+```
+exits 0.
+
+**Bounded latitude (AC1 only):** If up to 2 of the 12 pass-set files still fail after the fix for reasons unrelated to topology fixtures, the builder may exclude them from the AC1 pytest command AND document each with: (a) file name, (b) root cause category, (c) representative failing assertion. These become follow-up tasks. If >2 fail, reject for re-scoping.
+
+### 21-File Manifest
+
+**Fix and verify (12 files — pass set):**
+| # | File | Config constant(s) | Additional fix |
+|---|------|--------------------|----------------|
+| 1 | tests/test_engine_end_work_fail.py | `_BASE_CONFIG` | — |
+| 2 | tests/test_cockpit_launch.py | `_KANBAN_CONFIG` | — |
+| 3 | tests/test_engine_create_edit_1072.py | `_BASE_CONFIG` | — |
+| 4 | tests/test_engine_dep_lookup.py | `_BASE_CONFIG` | — |
+| 5 | tests/test_engine_occ.py | `_BASE_CONFIG` | — |
+| 6 | tests/test_engine_cockpit_view.py | `_BASE_CONFIG` | — |
+| 7 | tests/test_support_migration.py | `_GROUPED_CONFIG` | — |
+| 8 | tests/test_engine_release_note.py | `_BASE_CONFIG` | — |
+| 9 | tests/test_engine_end_work.py | `_BASE_CONFIG` | Update `_expected_skip_warning("done", "research", 5)` → `6` at line 667 |
+| 10 | tests/test_engine_release_task_occ.py | `_BASE_CONFIG` | — |
+| 11 | tests/test_pick_tasks_resolve.py | `_BASE_CONFIG` | — |
+| 12 | tests/test_engine_ble001.py | `_BASE_CONFIG` | — |
+
+**Fix but exclude from pytest gate (9 files):**
+| # | File | Exclusion reason |
+|---|------|-----------------|
+| 13 | tests/test_engine_accessor_migration.py | Tests sub-model access paths (config.pipeline.statuses) not yet implemented |
+| 14 | tests/test_engine_validation_push.py | Tests per-board predicates; PRODUCT_TOPOLOGY has empty status_predicates |
+| 15 | tests/test_engine_dispatch_validation.py | Injects invalid topology via config YAML; load_config now ignores YAML topology |
+| 16 | tests/test_end_work_success.py | RED test for #1336 (unimplemented) |
+| 17 | tests/test_config_cleanup.py | RED test for #1343 (unimplemented) |
+| 18 | tests/test_schema_roundtrip.py | Migration premise broken by topology collapse |
+| 19 | tests/test_engine_lazy_agent_map.py | Tests incomplete agent_map; PRODUCT_TOPOLOGY always provides complete map |
+| 20 | tests/test_dispatch_gate_port.py | Tests agent_compatibility; PRODUCT_TOPOLOGY has empty agent_compatibility |
+| 21 | tests/test_engine_create_edit_1203.py | RED test for #1203: create_task uses ERR_INVALID_STATUS, test expects ERR_INVALID_TITLE |
+
+### Mechanical Pattern
+
+**Config YAML (all 21 files):** Replace all topology fields in config YAML block constants with `next_id: N` only (preserving original next_id value; default to 1 if absent). The constant NAME stays unchanged.
+
+```python
+# BEFORE (any variant: _BASE_CONFIG, _GROUPED_CONFIG, _KANBAN_CONFIG, etc.)
+_BASE_CONFIG = """\
+statuses:
+  - research
+  ...many topology fields...
+next_id: 100
+"""
+
+# AFTER
+_BASE_CONFIG = """\
+next_id: 100
+"""
+```
+
+For files with MULTIPLE config constants (test_dispatch_gate_port.py, test_engine_lazy_agent_map.py), fix ALL constants.
+
+For test_engine_dispatch_validation.py: replace `_CONFIG_TEMPLATE`'s `dedent()` content with `next_id: 1\n`.
+
+**Assertion fix (test_engine_end_work.py only):** At line 667, change:
+```python
+expected_skip = _expected_skip_warning("done", "research", 5)
+```
+to:
+```python
+expected_skip = _expected_skip_warning("done", "research", 6)
+```
+Reason: PRODUCT_TOPOLOGY has 7 statuses. done=idx6, research=idx0, delta=6. The test docstring should also be updated: `(idx=5)` → `(idx=6)` and `delta=5` → `delta=6`.
+
+### Test Depth
+- AC1: td:2 (pytest verification on 12 files)
+- Test-writer: SKIP (pass-through via `test` tag)
+
+### Pipeline Note
+Tests already exist and fail (RED). Builder updates test expectations to match the new topology-constant API contract (GREEN). No separate test-writer step needed.
+
+[[2026-05-09]]
+## Architecture Review (Third Re-Review)
+
+### Evaluation
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | Topology-fixture alignment only — 21 files, one mechanical pattern |
+| Interface clarity | PASS (refined) | Explicit 21-file manifest with config constant names; 12-file pass set with frozen pytest command; 9 exclusions with documented root causes |
+| Dependency correctness | PASS | No dependencies; parent #1439 AC1-4 committed |
+| Module layering | N/A | Test fixtures only |
+| TDD compliance | PASS | Pass-through via `test` tag; tests already exist (RED→GREEN) |
+| KISS/YAGNI | PASS | Mechanical find-replace + one assertion fix, no over-engineering |
+| Premise challenge | PASS | Builder's own proof (5 files, 77 green) confirms pattern; codebase audit narrowed pass set after two builder rejections |
+| Pattern consistency | PASS | Same pattern across all variant config names |
+| Security surface | N/A | Test fixtures only |
+| Single domain | PASS | Kanban topology alignment across all files |
+
+### Challenge Results
+- Challenger: block (confidence 0.34) — raised 5 issues: (1) verification proof gap (pytest gate topology-insensitive), (2) scope accounting (unnamed files), (3) stale exclusion rationale for pick_tasks_resolve.py and ble001.py, (4) excluded-file semantic inconsistency, (5) workspace-state dependency in support_migration.py
+- Architect response:
+  - **ACCEPTED (1):** Valid concern; reviewer verifies diff. Grep gate already proven to have false positives. Pytest gate catches regressions. Proof quality is acceptable given explicit 21-file manifest + reviewer diff check.
+  - **ACCEPTED (2):** All 21 files now listed with explicit numbers (12 pass + 9 excluded = 21).
+  - **ACCEPTED (3):** Reinstated test_pick_tasks_resolve.py and test_engine_ble001.py in pass set. Code paths ARE wired in agent_view.py:381-391. LOGGER imported from engine.py matches test's caplog logger name. Bounded latitude (2 files) provides safety net.
+  - **NOTED (4):** Excluded files (lazy_agent_map, dispatch_gate_port) remain semantically inconsistent. They still get config YAML fixes but need follow-up tasks to rewrite test mechanisms (not this task's scope).
+  - **NOTED (5):** test_support_migration.py in pass set; if it fails for workspace-state reasons, bounded latitude applies.
+
+### Test Depth
+- AC1: td:2 (pytest on 12 files)
+- Test-writer: SKIP (pass-through via `test` tag)
+
+### Verdict: APPROVE → todo
+Third re-review after second builder rejection. Narrowed pass set from 15 to 12 files based on root cause analysis of 19 failures. Key changes: (a) excluded 3 files with non-topology failures (lazy_agent_map — needs non-default agent_map, dispatch_gate_port — needs non-empty agent_compatibility, create_edit_1203 — RED test for #1203), (b) reinstated 2 files per challenger evidence (pick_tasks_resolve and ble001 — code paths wired in agent_view.py), (c) added assertion fix for test_engine_end_work.py (skipped count 5→6 for 7-status PRODUCT_TOPOLOGY), (d) dropped grep gate (false positive prone). Bounded latitude: 2 files max.
+[[2026-05-09]]
+## Test-Writer Notes
+- Non-implementation task (tagged `test`) — no tests applicable. Third pass-through.
+- Passing through to builder.
+- Rationale: tests already exist in `tests/` and fail (RED). Builder applies mechanical topology-fixture alignment to the 21-file manifest per the third architecture re-review AC. All three AC revisions explicitly mark "Test-writer: SKIP (pass-through via `test` tag)". No new test file needed.

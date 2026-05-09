@@ -1,10 +1,10 @@
 ---
 id: 1472
 title: 'P4-21: Kanban package test alignment (AC5 Cat-A)'
-status: done
+status: archived
 priority: critical
 created: 2026-05-09T08:46:53.913029+00:00
-updated: 2026-05-09T15:57:36.585298+00:00
+updated: 2026-05-09T16:56:56.021518+00:00
 tags:
 - phase-4
 - scope:tests
@@ -319,3 +319,38 @@ Added `TestFromAC_CanonicalBoardStatusTuple` to `test_engine_coverage_1068.py` (
 
 ### Scratch Files Cleaned
 - None (no `1472-*` scratch files existed)
+[[2026-05-09]]
+## Audit
+### Regression Detection
+- Full suite run: 3207 tests collected, 3001 passed, 206 failed. All 206 failures are in tests/ (root) and serve/mcp-kanban/tests/ directories, which are explicitly out of scope for this task. None are caused by #1472 (which modified only test files in serve/kanban/tests/ and zero source code).
+- Task-scoped suite: serve/kanban/tests/ returns 1317 passed, 0 failed (pytest exit 0).
+- Dirty-tree note: uncommitted in-progress consolidation from #1464 renamed task-scoped files to module-level names in serve/kanban/tests/. These renames are content-identical and all tests still pass.
+- Regression verdict: PASS
+
+### Intent Verification
+- Scope alignment: PASS. All changes confined to serve/kanban/tests/ (15 files across commits 180c43e4 and 3d249b4c). No source code modified.
+- Purpose match: PASS. Test expectations aligned with topology-constant refactor from parent #1439 as stated in AC.
+- Extraneous scope: none
+- Boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 4/5
+AC is a single clear verifiable gate ("pytest exits 0 on serve/kanban/tests/") with thorough supporting context: breaking changes, key files, mechanical patterns, scope boundaries. Minor gap: single AC for ~71 failures across 15 files is coarse-grained, but appropriate for mechanical remediation. Reviewer iteration (FAIL at 0.74, then PASS at 0.93 after strengthening) shows the pipeline caught proof gaps despite the broad AC, demonstrating pipeline robustness.
+
+### Commit Integrity
+- Upstream commit presence: PASS. Two commits verified:
+  - 180c43e4: test: align kanban tests with topology-constant refactor (#1472, test-writer) 15 files
+  - 3d249b4c: test: strengthen topology-constant proof coverage (#1472, test-writer) 5 files
+  - Both commits touch only serve/kanban/tests/. Proper type prefix, task reference, and attribution.
+- Kanban commit packaging: pending (will commit after archival)
+
+### Deduction Breakdown
+No deductions apply:
+- No intent mismatch (scope/purpose aligned)
+- No evidence integrity concern (reviewer evidence present and thorough)
+- No lint violations (ruff clean per reviewer)
+- AC quality 4/5 (above 3 threshold)
+- Reviewer evidence section present and detailed
+- No regression failures caused by this task
+
+### Confidence: 1.00
+### Action: archive

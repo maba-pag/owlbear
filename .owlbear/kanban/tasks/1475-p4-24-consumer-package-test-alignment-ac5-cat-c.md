@@ -1,10 +1,10 @@
 ---
 id: 1475
 title: 'P4-24: Consumer package test alignment (AC5 Cat-C)'
-status: docs
+status: done
 priority: needed
 created: 2026-05-09T08:46:53.952014+00:00
-updated: 2026-05-09T16:05:38.918400+00:00
+updated: 2026-05-09T16:41:16.632500+00:00
 tags:
 - phase-4
 - scope:tests
@@ -265,3 +265,39 @@ Confirmed both consumer test directories are affected by topology-constant refac
 - PASS -> `docs`
 - Confidence: 0.96
 - Rationale: the full target suites are green under independent directory-scoped runs, and the repaired source plus live discriminating tests resolve the prior false-green findings at the root cause.
+[[2026-05-09]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | Yes | N/A | `serve/mcp-kanban/README.md` reviewed. The `## guidance Field` section accurately describes guidance as advisory metadata — the internal guidance-source fix doesn't change the external contract. `idempotentHint` is tool-annotation metadata not documented in the README. No prose update needed. |
+| 2 | Module docstrings | Yes | N/A | `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py` reviewed. `move_task` docstring (`"Move a task to the specified status column..."`) and `start_work` docstring (`"Claim a task and return its full details."`) remain accurate after the fix. No docstring changes needed. |
+| 3 | External attribution | No | N/A | No external patterns or sources used — mechanical test alignment and internal guidance passthrough fix. |
+| 4 | Research doc | No | N/A | No research document produced for this task. |
+| 5 | Diagram maintenance (describes match) | Yes | Updated | `share/diagrams/kanban.excalidraw` (describes: `serve/mcp-kanban/src/**`) and `share/diagrams/mcp-topology.excalidraw` (describes: `serve/mcp-*/src/**`) both matched. Footer updated from `b4ebbe64` → `86b7eea9` in both. Committed `d6dd8d46`. |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation requested in task body. |
+| 7 | Deletion detection | No | N/A | No files deleted. All changes are modifications to existing test and source files. |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| `serve/mcp-kanban/tests/test_guidance_edit_task_973.py` | OUT (test file) | N/A |
+| `serve/mcp-kanban/tests/test_guidance_end_work_973.py` | OUT (test file) | N/A |
+| `serve/mcp-kanban/tests/test_mcp_guidance_1089.py` | OUT (test file) | N/A |
+| `serve/mcp-kanban/tests/test_tool_annotations_494.py` | OUT (test file) | N/A |
+| `serve/mcp-knowledge/tests/test_outputschema_541.py` | OUT (test file) | N/A |
+| `serve/mcp-knowledge/tests/test_phase_a_config.py` | OUT (test file) | N/A |
+| `serve/mcp-knowledge/tests/test_server.py` | OUT (test file) | N/A |
+| `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py` | IN (Python source — docstrings) | Verified, no changes needed |
+| `share/diagrams/kanban.excalidraw` | IN (diagram) | Footer updated |
+| `share/diagrams/mcp-topology.excalidraw` | IN (diagram) | Footer updated |
+
+### Files Updated
+- `share/diagrams/kanban.excalidraw` — footer: `Last verified: 2026-05-09 (86b7eea9)`
+- `share/diagrams/mcp-topology.excalidraw` — footer: `Last verified: 2026-05-09 (86b7eea9)`
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None found (`ls .owlbear/scratch/1475-*` returned empty)
