@@ -1,10 +1,10 @@
 ---
 id: 1408
 title: 'B2: Loop-breaker protocol update — 2-batch-cycle threshold'
-status: done
+status: archived
 priority: important
 created: 2026-05-07T23:16:25.227004+00:00
-updated: 2026-05-09T05:12:34.061394+00:00
+updated: 2026-05-09T05:57:45.508256+00:00
 tags:
 - pipeline
 - ws-reviewer
@@ -131,3 +131,29 @@ Follow-up: #1462 (B2-impl) at research — covers all 4 files.
 
 ### Scratch Files Cleaned
 - None (no scratch files for #1408)
+[[2026-05-09]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| P1 | `share/skills/r-pipeline-protocol/SKILL.md:113-114` — "Cycle 1 review FAIL" and "Cycle 2+ review FAIL (loop-breaker at 2 batch review cycles)" in Confidence Thresholds table | PASS |
+| P2 | Grep for stale wording (`1st FAIL`, `2nd+ FAIL`, `3 consecutive FAIL`) returned zero matches in target file. New wording expresses batch-cycle semantics. | PASS |
+| P3 | Commit `c9137e7e` verified via `git log --oneline -5 -- share/skills/r-pipeline-protocol/SKILL.md`. Subject: `docs: update loop-breaker batch-cycle wording (#1408, builder)`. Live file content matches builder-reported diff hunk. | PASS |
+
+### Test Results
+- pytest: 4686 passed, 551 failed, 4 skipped (full suite). All 551 failures are in serve/kanban/, serve/mcp-kanban/, serve/mcp-knowledge/, and cockpit cache/SSE test files (90 distinct files). Zero failures in task scope — task changed only a markdown SKILL.md file. Pre-existing background debt.
+- ruff: 12 violations in serve/knowledge/ and serve/tools/ — unrelated to task scope. Zero violations in changed file.
+
+### Architect Quality: 4/5
+AC lines are specific and verifiable: P1 names exact file and section with clear before/after threshold semantics; P2 defines explicit before/after states; P3 specifies verification method. Minor gap: "diff comparison" in P3 is slightly loose, but builder/reviewer handled it well.
+
+### Deduction Breakdown
+- Start: 1.00
+- Reviewer ran at .93 (below auditor .95 threshold) due to terminal unavailability — independently compensated by auditor's direct `git log` and file read verification: -.02
+- No AC lines without evidence: 0
+- No lint violations in task scope: 0
+- AC quality 4/5 (> 3): 0
+- Full-suite failures outside task scope: 0
+
+### Confidence: .98
+### Action: archive

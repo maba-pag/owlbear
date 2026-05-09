@@ -2,10 +2,10 @@
 id: 1462
 title: 'B2-impl: Update loop-breaker terminology to batch-review-cycle and add cycle-3
   escalation'
-status: review
+status: in-progress
 priority: important
 created: 2026-05-09T03:31:13.416517+00:00
-updated: 2026-05-09T05:11:20.813795+00:00
+updated: 2026-05-09T05:47:44.775687+00:00
 tags:
 - pipeline
 - ws-reviewer
@@ -102,3 +102,39 @@ All 4 target files confirmed current state matches research doc:
 - Tests: skipped (td:0 non-implementation pass-through).
 - Lint: skipped (no source changes).
 - Passing through to review per w-tdd-green Step 0a.
+[[2026-05-09]]
+## Review Evidence
+- Verdict: FAIL
+- Test results: N/A (`td:0` task; no executable behavior under review)
+- Lint results: Builder note reports `Lint: skipped (no source changes)`. That evidence is insufficient because the AC requires four markdown-file edits, and direct file inspection shows those edits are absent.
+- Coverage: N/A (`td:0` task)
+- Review-cycle count: First review cycle. The task file contains no prior `## Review Evidence` section.
+- 3-item checklist:
+  - AC->code mapping: FAIL on P1-P6
+  - Test->AC alignment: N/A (`td:0`)
+  - Proof sufficiency: N/A (`td:0`)
+
+| # | AC Line | Finding | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | P1 | `r-pipeline-protocol/SKILL.md` still uses FAIL-based reviewer threshold wording instead of batch-review-cycle wording. | `share/skills/r-pipeline-protocol/SKILL.md:113-114` shows `Cycle 1 review FAIL` and `Cycle 2+ review FAIL`. | `in-progress` |
+| 2 | P2 | The new 3rd+ batch review cycle -> architect escalation row is missing. | `share/skills/r-pipeline-protocol/SKILL.md:114-115` transitions directly from the cycle-2 reviewer row to Auditor rows; no cycle-3 reviewer row exists. | `in-progress` |
+| 3 | P3 | `w-code-review/SKILL.md` still uses review-FAIL wording for the loop-breaker route. | `share/skills/w-code-review/SKILL.md:132` still says `Repeated review failure cycle (2nd+ fail)`. | `in-progress` |
+| 4 | P4 | `reviewer.agent.md` still uses the old loop-breaker wording in `pipeline_position`. | `share/agents/reviewer.agent.md:61` still says `Fail (2nd+)` / `2nd+ review failure on same task`. | `in-progress` |
+| 5 | P5 | `agent-broad-audit.prompt.md` still uses the old FAIL-based reviewer routing label. | `share/prompts/agent-broad-audit.prompt.md:135` still says `2nd+ FAIL`. | `in-progress` |
+| 6 | P6 | The required four-file terminology update and cycle-3 addition did not land. | Builder note says `No code changes made in builder phase`, and current inspection shows all four target files remain in the pre-B2 state described in the research doc. | `in-progress` |
+
+- Confidence: 0.22
+- Action: Reject to `in-progress`
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Update the reviewer confidence-threshold table to use batch-review-cycle terminology and add the missing cycle-3 architect-escalation row. | `share/skills/r-pipeline-protocol/SKILL.md` | P1-P2; lines 113-114 still show FAIL-based wording and the table has no cycle-3 reviewer row before the Auditor rows. |
+| 2 | builder | Replace the loop-breaker routing phrase with batch-review-cycle wording. | `share/skills/w-code-review/SKILL.md` | P3; line 132 still says `Repeated review failure cycle (2nd+ fail)`. |
+| 3 | builder | Replace the `pipeline_position` loop-breaker row wording with batch-review-cycle wording. | `share/agents/reviewer.agent.md` | P4; line 61 still says `2nd+ review failure on same task`. |
+| 4 | builder | Replace the rejection-routing row wording with batch-review-cycle wording. | `share/prompts/agent-broad-audit.prompt.md` | P5; line 135 still says `2nd+ FAIL`. |
+| 5 | builder | Perform the task as an actual implementation pass and update Builder Notes to match the real file changes. | `share/skills/r-pipeline-protocol/SKILL.md`, `share/skills/w-code-review/SKILL.md`, `share/agents/reviewer.agent.md`, `share/prompts/agent-broad-audit.prompt.md` | Current Builder Notes say `No code changes made in builder phase`, which contradicts the scope and leaves P1-P6 unmet. |
+
+## Observations
+- The failure is implementation completeness, not AC ambiguity or test quality. The task already has concrete file targets and explicit replacement intent from the research and architecture-review sections.
+- Because this is the first review cycle, loop-breaker backlog routing does not apply yet.
