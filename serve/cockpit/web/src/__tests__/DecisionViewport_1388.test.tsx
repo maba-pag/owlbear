@@ -1,13 +1,11 @@
 /**
- * RED phase tests for #1388: P2-13 Test Cockpit decision viewport UX
+ * Tests for #1388: P2-13 Test Cockpit decision viewport UX
  *
  * Covers AC1, AC4 (PDS / viewport structure), AC5 (keyboard reachability),
  * and AC6 (viewport-level error indicator).
  *
- * All tests FAIL because DecisionViewport does not yet exist.
- * Import error is valid RED evidence for new-file tasks (test-writer discipline).
- *
- * Builder counterpart: #1389.
+ * GREEN: DecisionViewport is implemented; all tests pass against current implementation.
+ * Shell-level popover replacement (DRStatusIndicator → DecisionViewport) is #1389's scope.
  */
 import { describe, it, expect, vi } from 'vitest'
 import { render, fireEvent } from '@testing-library/react'
@@ -299,13 +297,19 @@ describe('TestFromAC_DecisionViewport', () => {
     }
   })
 
-  it('decision-item elements have no tabindex=-1 — both focusable semantics AND tab-reachability on the same element', () => {
-    // AC5 requires both assertions on the same decision-item-* element (not split across task-ref)
+  it('decision-item elements are keyboard-reachable: natively focusable or explicit tabindex >= 0 on the same element', () => {
+    // AC5 requires: natively focusable (button/a) OR explicit tabindex attribute with value >= 0.
+    // Checking `tabindex !== '-1'` is insufficient — absent tabindex (null) would also pass that check,
+    // leaving a div[role="button"] without tabIndex={0} silently unreachable by keyboard.
     const { container } = renderViewport({ items: [DR_A, DR_B] })
     const items = container.querySelectorAll('[data-testid^="decision-item-"]')
     expect(items.length).toBe(2)
     for (const item of Array.from(items)) {
-      expect(item.getAttribute('tabindex')).not.toBe('-1')
+      const tag = item.tagName.toLowerCase()
+      const isNativelyFocusable = tag === 'button' || tag === 'a'
+      const tabIndexAttr = item.getAttribute('tabindex')
+      const hasExplicitTabIndex = tabIndexAttr !== null && Number(tabIndexAttr) >= 0
+      expect(isNativelyFocusable || hasExplicitTabIndex).toBe(true)
     }
   })
 

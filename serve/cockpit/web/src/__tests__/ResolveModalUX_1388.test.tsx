@@ -1,19 +1,10 @@
 /**
- * RED phase tests for #1388: P2-13 Test Cockpit resolution UX — modal behavior
+ * Tests for #1388: P2-13 Test Cockpit resolution UX — modal behavior
  *
- * Covers AC2, AC3, AC4, and AC5 against the existing ResolveModal.tsx.
+ * Covers AC2, AC3, AC4, and AC5 against ResolveModal.tsx.
  *
- * Current defects (source of failures):
- *   - AC2: no separate p-text description elements — bare label text only
- *           ("approved", "rejected", "needs-info"); no p-text in fieldset
- *   - AC3: `useState('approved')` pre-selects approved by default;
- *           submit button is never disabled
- *   - AC4: action labels "Submit" and "Cancel" are single-word — not multi-word
- *   - AC5: no keyboard/focus management — Escape unhandled, no autoFocus
- *
- * All tests FAIL against the current ResolveModal implementation.
- *
- * Builder counterpart: #1389.
+ * GREEN: ResolveModal UX contract is implemented; all tests pass against current implementation.
+ * Shell-level popover replacement (DRStatusIndicator → DecisionViewport) is #1389's scope.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, fireEvent } from '@testing-library/react'
