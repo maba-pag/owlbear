@@ -143,6 +143,19 @@ class TestFromAC_DimensionReferenceTable:
             "live prompt incorrectly maps D8 to LNK-*"
         )
 
+    def test_d2_rule_family_is_xref5(self) -> None:
+        content = DOC_AUDIT_PROMPT.read_text()
+        # D2 row source cell must be XREF-5, not the invented DUP-* token
+        assert re.search(
+            r"\|\s*D2\s*\|[^|\n]*\|[^|\n]*XREF-5",
+            content,
+            re.IGNORECASE,
+        ), (
+            "D2 (Duplication) row must specify XREF-5 as the source rule family — "
+            "there is no DUP-* rule family in r-doc-standards; "
+            "live prompt incorrectly maps D2 to DUP-*"
+        )
+
 
 class TestFromAC_PreAuditGate:
     """AC6: Pre-audit gate — agent must load r-doc-standards + doc-types.instructions.md
