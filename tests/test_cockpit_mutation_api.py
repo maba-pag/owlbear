@@ -24,6 +24,7 @@ AC coverage:
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import TYPE_CHECKING
 from unittest import mock
@@ -2299,6 +2300,15 @@ class TestFromAC_MoveSharedSuiteContract:
     suite to carry the required OCC token in every move request payload.
     """
 
+    @staticmethod
+    def _find_enclosing_test_name(lines: list[str], index: int) -> str:
+        """Return the nearest enclosing test function name for a source line."""
+        for j in range(index, -1, -1):
+            stripped = lines[j].strip()
+            if stripped.startswith("def test_"):
+                return stripped
+        return ""
+
     def test_shared_suite_move_posts_all_include_updated_token(self) -> None:
         """Source inspection: every /move POST in test_cockpit_mutation_api.py
         carries 'updated' in the json payload.
@@ -2310,17 +2320,22 @@ class TestFromAC_MoveSharedSuiteContract:
         source = Path("tests/test_cockpit_mutation_api.py").read_text(encoding="utf-8")
         lines = source.splitlines()
         violations: list[str] = []
+        client_post_pattern = re.compile(r"client\w*\.post")
 
         for i, line in enumerate(lines):
             # Match lines that contain a /move URL fragment (part of a move POST)
             if "/move" not in line:
+                continue
+            enclosing_test = self._find_enclosing_test_name(lines, i)
+            # Intentionally missing-updated tests are expected to omit OCC token.
+            if "without_updated" in enclosing_test or "missing_updated" in enclosing_test:
                 continue
             # Collect a window covering the enclosing client.post(...) call
             start = max(0, i - 2)
             end = min(len(lines), i + 5)
             window = "\n".join(lines[start:end])
             # Skip lines that are not part of a client.post call
-            if "client.post" not in window:
+            if not client_post_pattern.search(window):
                 continue
             # Flag if 'updated' is absent from the payload context
             if '"updated"' not in window and "'updated'" not in window:
@@ -2346,14 +2361,23 @@ class TestFromAC_MoveSharedSuiteContract:
         source = Path("tests/test_cockpit_mutation_api.py").read_text(encoding="utf-8")
         lines = source.splitlines()
         violations: list[str] = []
+        client_post_pattern = re.compile(r"client\w*\.post")
 
         for i, line in enumerate(lines):
             if "/move" not in line:
                 continue
+            enclosing_test = self._find_enclosing_test_name(lines, i)
+            if (
+                "without_updated" in enclosing_test
+                or "missing_updated" in enclosing_test
+                or "nonexistent_task" in enclosing_test
+                or "null_updated" in enclosing_test
+            ):
+                continue
             start = max(0, i - 8)
             end = min(len(lines), i + 5)
             window = "\n".join(lines[start:end])
-            if "client.post" not in window:
+            if not client_post_pattern.search(window):
                 continue
             # Skip if 'updated' key is absent from actual payload (colon
             # distinguishes dict keys from docstring/comment mentions)
