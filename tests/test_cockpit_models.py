@@ -197,12 +197,12 @@ class TestFromAC_TestReadApiClean:
 
 
 # ---------------------------------------------------------------------------
-# AC2: Dead test class removed from test_occ_frontend_wire_1137.py
+# AC2: Dead test class removed from test_occ_frontend_wire.py
 # ---------------------------------------------------------------------------
 
 
 class TestFromAC_Test1137Clean:
-    """AC2: test_occ_frontend_wire_1137.py must not contain TestFromAC_TaskSummaryOutUpdatedField.
+    """AC2: test_occ_frontend_wire.py must not contain TestFromAC_TaskSummaryOutUpdatedField.
 
     This class tested that TaskSummaryOut.model_fields contains 'updated'.  Since
     TaskSummaryOut is being removed, the entire class is dead and must be deleted.
@@ -210,21 +210,21 @@ class TestFromAC_Test1137Clean:
 
     def test_1137_no_task_summary_out_updated_field_class(self) -> None:
         """TestFromAC_TaskSummaryOutUpdatedField class must not exist in 1137."""
-        source = (_TESTS_DIR / "test_occ_frontend_wire_1137.py").read_text(
+        source = (_TESTS_DIR / "test_occ_frontend_wire.py").read_text(
             encoding="utf-8"
         )
         assert "TestFromAC_TaskSummaryOutUpdatedField" not in source, (
             "Dead class 'TestFromAC_TaskSummaryOutUpdatedField' still present in "
-            "test_occ_frontend_wire_1137.py — remove the entire class (AC2)"
+            "test_occ_frontend_wire.py — remove the entire class (AC2)"
         )
 
     def test_1137_does_not_import_task_summary_out(self) -> None:
-        """test_occ_frontend_wire_1137.py must not import TaskSummaryOut."""
-        source = (_TESTS_DIR / "test_occ_frontend_wire_1137.py").read_text(
+        """test_occ_frontend_wire.py must not import TaskSummaryOut."""
+        source = (_TESTS_DIR / "test_occ_frontend_wire.py").read_text(
             encoding="utf-8"
         )
         assert "import TaskSummaryOut" not in source, (
-            "test_occ_frontend_wire_1137.py still imports TaskSummaryOut — "
+            "test_occ_frontend_wire.py still imports TaskSummaryOut — "
             "remove imports along with the dead class (AC2)"
         )
 
@@ -419,27 +419,27 @@ class TestFromAC_TaskDetailKeysConstantFix:
 
 
 # ---------------------------------------------------------------------------
-# AC3 (Cycle 2): residual 'TaskSummaryOut' in test_occ_frontend_wire_1137.py docstring
+# AC3 (Cycle 2): residual 'TaskSummaryOut' in test_occ_frontend_wire.py docstring
 # ---------------------------------------------------------------------------
 
 
 class TestFromAC_CommentRefs1137DocstringClean:
-    """AC3 (Cycle 2): test_occ_frontend_wire_1137.py module docstring must not name TaskSummaryOut.
+    """AC3 (Cycle 2): test_occ_frontend_wire.py module docstring must not name TaskSummaryOut.
 
     The module docstring's AC1 bullet still references 'TaskSummaryOut (cockpit models.py)'
     which is a dead model after #1146.  The reference must be removed or reworded.
     """
 
     def test_1137_module_docstring_no_task_summary_out(self) -> None:
-        """Module docstring of test_occ_frontend_wire_1137.py must not contain 'TaskSummaryOut'."""
-        source = (_TESTS_DIR / "test_occ_frontend_wire_1137.py").read_text(
+        """Module docstring of test_occ_frontend_wire.py must not contain 'TaskSummaryOut'."""
+        source = (_TESTS_DIR / "test_occ_frontend_wire.py").read_text(
             encoding="utf-8"
         )
         # Extract the module docstring (everything up to and including the closing triple-quote).
         doc_end = source.find('"""', 3)
         module_doc = source[: doc_end + 3]
         assert "TaskSummaryOut" not in module_doc, (
-            "Module docstring of test_occ_frontend_wire_1137.py still references "
+            "Module docstring of test_occ_frontend_wire.py still references "
             "'TaskSummaryOut' — remove or rephrase the AC1 bullet (AC3)"
         )
 

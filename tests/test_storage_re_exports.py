@@ -211,13 +211,13 @@ class TestFromAC_RootTestPatchTargets:
     new import paths (not owlbear_kanban.storage.*)."""
 
     def test_ble001_no_storage_detect_corruption_patch(self) -> None:
-        """test_engine_ble001_1202.py: patch target 'owlbear_kanban.storage.detect_corruption'
+        """test_engine_ble001.py: patch target 'owlbear_kanban.storage.detect_corruption'
         must be replaced with the engine's new import path."""
-        source = (_ROOT_TESTS / "test_engine_ble001_1202.py").read_text(
+        source = (_ROOT_TESTS / "test_engine_ble001.py").read_text(
             encoding="utf-8"
         )
         assert "owlbear_kanban.storage.detect_corruption" not in source, (
-            "test_engine_ble001_1202.py still patches owlbear_kanban.storage.detect_corruption"
+            "test_engine_ble001.py still patches owlbear_kanban.storage.detect_corruption"
         )
 
     def test_cockpit_view_no_storage_compact_activity_log_patch(self) -> None:
@@ -412,12 +412,12 @@ class TestFromAC_RootTestNewPatchTargets:
     new engine-module path (owlbear_kanban.engine.*), not via storage."""
 
     def test_ble001_patches_engine_detect_corruption(self) -> None:
-        """test_engine_ble001_1202.py must patch owlbear_kanban.engine.detect_corruption."""
-        source = (_ROOT_TESTS / "test_engine_ble001_1202.py").read_text(
+        """test_engine_ble001.py must patch owlbear_kanban.engine.detect_corruption."""
+        source = (_ROOT_TESTS / "test_engine_ble001.py").read_text(
             encoding="utf-8"
         )
         assert "owlbear_kanban.engine.detect_corruption" in source, (
-            "test_engine_ble001_1202.py does not patch owlbear_kanban.engine.detect_corruption"
+            "test_engine_ble001.py does not patch owlbear_kanban.engine.detect_corruption"
         )
 
     def test_cockpit_view_patches_engine_compact_activity_log(self) -> None:

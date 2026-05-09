@@ -93,6 +93,18 @@ def _all_element_text(data: dict) -> str:
     return " ".join(parts).lower()
 
 
+def _all_element_texts(data: dict) -> list[str]:
+    """Return all text strings from Excalidraw elements with original casing."""
+    parts: list[str] = []
+    for elem in data.get("elements", []):
+        if isinstance(elem.get("text"), str):
+            parts.append(elem["text"])
+        label = elem.get("label")
+        if isinstance(label, dict) and isinstance(label.get("text"), str):
+            parts.append(label["text"])
+    return parts
+
+
 class TestFromAC_PipelineDiagramFile:
     """AC1: file exists, is valid JSON, has required top-level fields."""
 
@@ -288,3 +300,40 @@ class TestFromAC_DocIndexIntegration:
             assert glob in entry_text, (
                 f"Required glob '{glob}' not found in doc-index entry"
             )
+
+
+class TestFromAC_OrchestratorSupervisoryRole1299:
+    """Promoted unique orchestrator supervisory-role assertions from #1299."""
+
+    def test_orchestrator_supervisory_label_exact_text_present(self) -> None:
+        """Diagram contains exact supervisory role label for orchestrator."""
+        data = json.loads(_DIAGRAM_PATH.read_text())
+        texts = _all_element_texts(data)
+        expected = "orchestrator: supervisory layer (auxiliary)"
+        assert any(expected in text for text in texts), (
+            "No element contains the supervisory/auxiliary role label.\n"
+            f"Expected substring: {expected!r}\n"
+            f"Element texts found: {texts}"
+        )
+
+    def test_orchestrator_label_not_just_plain_name(self) -> None:
+        """Any orchestrator text includes a supervisory/auxiliary qualifier."""
+        data = json.loads(_DIAGRAM_PATH.read_text())
+        texts = _all_element_texts(data)
+        orchestrator_texts = [
+            text
+            for text in texts
+            if "orchestrator" in text.lower() and "stage" not in text.lower()
+        ]
+        assert orchestrator_texts, (
+            "No elements containing 'orchestrator' found — diagram is missing the element."
+        )
+        bare_entries = [
+            text
+            for text in orchestrator_texts
+            if "supervisory" not in text.lower() and "auxiliary" not in text.lower()
+        ]
+        assert not bare_entries, (
+            "Orchestrator element(s) lack supervisory/auxiliary role qualifier:\n"
+            + "\n".join(f"  - {text!r}" for text in bare_entries)
+        )

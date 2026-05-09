@@ -368,9 +368,9 @@ class TestFromAC_TestFileImportUpdates:
     def test_cockpit_read_api_import_updated(self, project_root: Path) -> None:
         self._assert_no_old_import(project_root / "tests" / "test_cockpit_read_api.py")
 
-    def test_cockpit_read_api_1223_import_updated(self, project_root: Path) -> None:
+    def test_cockpit_read_api_import_updated_1223(self, project_root: Path) -> None:
         self._assert_no_old_import(
-            project_root / "tests" / "test_cockpit_read_api_1223.py"
+            project_root / "tests" / "test_cockpit_read_api.py"
         )
 
     # AC4 cycle 3: positive import assertions (new-path string must be present)
@@ -405,10 +405,10 @@ class TestFromAC_TestFileImportUpdates:
             project_root / "tests" / "test_cockpit_read_api.py"
         )
 
-    def test_cockpit_read_api_1223_has_new_import(self, project_root: Path) -> None:
-        """AC4 cycle 3: test_cockpit_read_api_1223.py must positively import from owlbear_cockpit.view."""
+    def test_cockpit_read_api_has_new_import_1223(self, project_root: Path) -> None:
+        """AC4 cycle 3: test_cockpit_read_api.py must positively import from owlbear_cockpit.view."""
         self._assert_new_import_present(
-            project_root / "tests" / "test_cockpit_read_api_1223.py"
+            project_root / "tests" / "test_cockpit_read_api.py"
         )
 
 
