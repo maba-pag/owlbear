@@ -150,17 +150,19 @@ export default function DetailTab({
   const backwardTarget = previousStatus(t.status)
 
   function previousStatus(current: string): string | null {
-    const statuses = board?.statuses.map((status) => status.name) ?? []
+    if (!board) {
+      return null
+    }
+
+    const statuses = board.statuses.map((status) => status.name)
     const currentIndex = statuses.indexOf(current)
-    const valid = board?.valid_transitions[current] ?? []
-    const fromValid = valid.find((candidate) => statuses.indexOf(candidate) === currentIndex - 1)
-    if (fromValid) {
-      return fromValid
+    if (currentIndex <= 0) {
+      return null
     }
-    if (currentIndex > 0) {
-      return statuses[currentIndex - 1]
-    }
-    return null
+
+    const previous = statuses[currentIndex - 1]
+    const valid = board.valid_transitions[current] ?? []
+    return valid.includes(previous) ? previous : null
   }
 
   async function runMutation(url: string, payload: Record<string, unknown>): Promise<void> {
