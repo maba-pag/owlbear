@@ -1,10 +1,10 @@
 ---
 id: 1446
 title: 'P4-09: Probe explicit decision resolver behavior'
-status: docs
+status: archived
 priority: needed
 created: 2026-05-08T19:32:04.227422+00:00
-updated: 2026-05-09T01:12:29.858108+00:00
+updated: 2026-05-09T02:15:02.272476+00:00
 tags:
 - phase-4
 - scope:mcp-kanban
@@ -412,3 +412,59 @@ All td:0. No pytest/vitest code written. Specification probe notes serve as cont
 ### Confidence: 0.96
 ### Verdict: PASS
 ### Action Taken: Advanced to docs. The probe notes are present, accurate against the live pre-#1447 codebase, and aligned with task 1447's downstream contract.
+[[2026-05-09]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | No behavior, API, CLI, config, or package structure changed |
+| 2 | Module docstrings | No | N/A | No Python modules created or modified |
+| 3 | External attribution | No | N/A | No external patterns used |
+| 4 | Research doc | No | N/A | No research doc referenced |
+| 5 | Diagram maintenance (describes match) | No | N/A | No changed files → no describes-match possible |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation request in task body |
+| 7 | Deletion detection | No | N/A | No deleted files |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| (none) | — | No files modified; deliverable is probe notes in task body only |
+
+### Files Updated
+- None
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (reviewer confirmed .owlbear/scratch/**/*1446* is empty)
+[[2026-05-09]]
+## Audit
+### AC Verification (Cycle 2 AC)
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| 1. Current decision-resolution behavior recorded | Probe 1 in task body matches live `decisions.py` L143-192, `agent_view.py` L388; signature, response handling, retry safety, invocation site all verified | PASS |
+| 2. Approved-path resolve_drs spec recorded | Probe 2 present in task body; defines expected MCP tool behavior + structured return shape | PASS |
+| 3. Retry-safety spec recorded | Probe 3 present; no-duplicate-summary idempotency contract via file-move semantics | PASS |
+| 4. Needs-info spec recorded | Probe 4 present; append-once + stay-blocked + move-to-resolved, consistent with `decisions.py` L183-187 | PASS |
+| 5. MCP surface-change spec recorded | Probe 5 present; pre-#1447 surface verified against live `server.py` L316/L511, `agent_view.py` L388, `test_mcp_surface_contract.py` | PASS |
+| 6. No pytest/vitest as proof | Confirmed: no task-scoped test files exist, deliverable is notes-only | PASS |
+
+### Test Results
+- pytest: ALL PASSED (exit 0) — no cross-task regressions
+- ruff: 12 violations — all pre-existing (copilot_auth.py, test_root.py, test_test_root.py), not task-scoped
+- vitest: 17 failures — pre-existing, not task-scoped (zero code changes in #1446)
+- eslint: 1 error + 3 warnings — pre-existing config/import issues, not task-scoped
+
+### Architect Quality: 3/5
+Cycle 1 AC had a significant defect (AC4 assumed resolve_drs existed, contradicting live repo), requiring a full rewrite. Cycle 2 correction was thorough and properly followed the specification-probe pattern matching sibling #1438. The feedback loop worked, but the initial error was avoidable with M3 code reading.
+
+### Deduction Breakdown
+- AC lines: 6/6 with evidence → no deduction
+- Lint: not task-scoped → no deduction
+- AC quality 3/5: -0.03
+- Reviewer evidence: present, detailed, PASS at 0.96 → no deduction
+- Full-suite failures: not task-scoped → no deduction
+
+### Confidence: 0.97
+### Action: archive
