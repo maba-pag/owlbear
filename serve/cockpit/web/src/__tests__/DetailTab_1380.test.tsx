@@ -612,5 +612,9 @@ describe('TestFromAC_ActionMutationErrorContract', () => {
       () => expect(container.querySelector('[data-testid="validation-message"]')).not.toBeNull(),
       { timeout: 500 },
     )
+    // AC6 exact-value: textContent must match the seeded server detail, proving
+    // getResponseErrorMessage is exercised end-to-end (not a generic fallback).
+    const validationEl = container.querySelector('[data-testid="validation-message"]')!
+    expect(validationEl.textContent).toContain('invalid status transition')
   })
 })
