@@ -344,7 +344,7 @@ async def create_dr(
     return {"created": True, "path": relative_path}
 
 
-@mcp.tool(annotations=ToolAnnotations(destructiveHint=False, idempotentHint=False))
+@mcp.tool(annotations=ToolAnnotations(destructiveHint=False, idempotentHint=True))
 async def move_task(
     ctx: Context,
     id: StrId,  # noqa: A002
@@ -371,10 +371,11 @@ async def move_task(
         _map_kanban_error(exc)
     result = _to_single_task_response(record)
     with contextlib.suppress(Exception):
-        status_names = list(app_ctx.engine.board_config().statuses)
-        result.guidance = collect_guidance(
-            "move", before=pre_task, after=result, status_names=status_names
-        )
+        if not result.guidance:
+            status_names = list(app_ctx.engine.board_config().statuses)
+            result.guidance = collect_guidance(
+                "move", before=pre_task, after=result, status_names=status_names
+            )
     return result
 
 
@@ -458,7 +459,8 @@ async def start_work(
         raise ToolError(str(exc)) from exc
     result = _to_single_task_response(record)
     with contextlib.suppress(Exception):
-        result.guidance = collect_guidance("start_work", None, result)
+        if not result.guidance:
+            result.guidance = collect_guidance("start_work", None, result)
     return result
 
 
