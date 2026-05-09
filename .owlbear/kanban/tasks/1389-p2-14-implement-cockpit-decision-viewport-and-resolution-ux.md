@@ -1,10 +1,10 @@
 ---
 id: 1389
 title: 'P2-14: Implement Cockpit decision viewport and resolution UX'
-status: review
+status: docs
 priority: needed
 created: 2026-05-06T01:04:52.300671+00:00
-updated: 2026-05-09T09:45:33.192530+00:00
+updated: 2026-05-09T10:45:49.504525+00:00
 tags:
 - cockpit
 - audit-remediation
@@ -438,3 +438,45 @@ No new RED-phase tests written. The two remaining proof gaps are explicitly clas
 - Commit:
   - da70c322 — test: refine AC2/AC5 proof assertions (#1389, builder)
 - Result: AC2 and AC5 proof gaps are now explicitly covered in task-scoped test evidence.
+[[2026-05-09]]
+## Review Evidence
+### Test Results
+- quality-runner scoped gate on the current retry surface: 85 passed, 0 failed, 0 skipped across `serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx`, `serve/cockpit/web/src/__tests__/ResolveModalUX_1389.test.tsx`, `serve/cockpit/web/src/__tests__/ResolveModal_1193.test.tsx`, `serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx`, `serve/cockpit/web/src/__tests__/Shell_1389.test.tsx`, and `serve/cockpit/web/src/__tests__/Shell_1192.test.tsx`.
+- The first quality-runner attempt failed with a frontend environment error (`document is not defined`). I retried once with an explicit frontend/jsdom hint per pipeline protocol; the retry succeeded and is the gating evidence.
+- code-reader reviewed the same source and test surface. It flagged AC5 cancel-close proof and AC6 helper-branch proof as lax; after direct file review against the latest architecture re-review v3, I treated those two points as non-blocking for this task for the reasons recorded in the AC table below.
+
+### Lint Results
+- ESLint clean on `serve/cockpit/web/src/Shell.tsx`, `serve/cockpit/web/src/components/ResolveModal.tsx`, and the six scoped test files.
+- VS Code diagnostics: no errors in `serve/cockpit/web/src/Shell.tsx`, `serve/cockpit/web/src/components/ResolveModal.tsx`, `serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx`, `serve/cockpit/web/src/__tests__/ResolveModalUX_1389.test.tsx`, or `serve/cockpit/web/src/__tests__/Shell_1389.test.tsx`.
+
+### Coverage
+- `src/components/ResolveModal.tsx`: 94%
+- `src/Shell.tsx`: 73.97%
+- I did not fail on the module-level Shell percentage. This is a narrow frontend task, and the changed Shell paths are directly exercised by `Shell_1389` and adjacent scoped suites.
+
+### Source / Commit Checks
+- Multi-retry task ownership reconstructed from task history plus git log hits for builder commits `41ece747`, `8796bad0`, and `da70c322` in `.git/logs/HEAD` and `.git/logs/refs/heads/dev`.
+- I could not run `git diff` or `git status` in this tool surface, so dirty-tree contamination and TestFromAC immutability remain slightly lower-confidence than a full commit-object audit.
+
+### AC Compliance
+| AC Line | Evidence | Status |
+|---|---|---|
+| AC1: decision UI shows pending decisions with task link/context, agent or request type, age, body or preview content, and clear loading, error, and empty states | `serve/cockpit/web/src/components/DecisionViewport.tsx:32-63`; `serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx:75,99,119,138,164,171,181,213,237`; `serve/cockpit/web/src/Shell.tsx:200-203`; `serve/cockpit/web/src/__tests__/Shell_1389.test.tsx:198-287` | PASS |
+| AC2: each resolution choice has a structurally separate PText consequence description and keyword-specific outcome proof | `serve/cockpit/web/src/components/ResolveModal.tsx:144,157,170`; `serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx:67-137` | PASS |
+| AC3: accidental approval is not the easiest path; no unsafe approved default | `serve/cockpit/web/src/components/ResolveModal.tsx:24,63-67,189`; `serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx:144-188` | PASS |
+| AC4: action labels and modal state are meaningful and PDS-compatible, with PButton primary/secondary controls | `serve/cockpit/web/src/components/ResolveModal.tsx:189-199`; `serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx:190-216`; `serve/cockpit/web/src/__tests__/ResolveModalUX_1389.test.tsx:69-114` | PASS |
+| AC5: keyboard and focus behavior meets #1388 expectations, and Shell proves the open-close cycle | Modal-local focus / Escape / aria-modal proof: `serve/cockpit/web/src/components/ResolveModal.tsx:58-89,122`; `serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx:225-260`. Shell open plus Escape-close DOM-removal proof: `serve/cockpit/web/src/__tests__/Shell_1389.test.tsx:297-350`. Cancel-close remains compositionally covered by `serve/cockpit/web/src/__tests__/ResolveModal_1193.test.tsx:251-261` plus Shell wiring at `serve/cockpit/web/src/Shell.tsx:272-277`. Latest architecture re-review v3 routed the builder proof-refinement specifically to the Escape close-cycle test, which is now present. | PASS |
+| AC6: expected decision errors use the frontend error contract from #1375 | Resolve path uses the helper directly at `serve/cockpit/web/src/components/ResolveModal.tsx:44`. Pending-decision polling continues to route non-OK responses through the same helper at `serve/cockpit/web/src/hooks/usePendingDRs.ts:41-52` and `serve/cockpit/web/src/hooks/usePollingFetch.ts:68-73`, and Shell renders hook errors at `serve/cockpit/web/src/Shell.tsx:176,203`. Latest architecture re-review v3 explicitly treated helper-internal branch assertions as non-blocking for this task. | PASS |
+| AC7: implementation satisfies #1388 without changing backend decision lifecycle semantics | Builder-owned changes in this task history are frontend-only (`serve/cockpit/web/src/Shell.tsx`, `serve/cockpit/web/src/components/ResolveModal.tsx`, and related tests). Commit presence reconstructed from `.git/logs/HEAD` / `.git/logs/refs/heads/dev` for `41ece747`, `8796bad0`, `da70c322`. | PASS |
+| AC8: DecisionViewport is the primary decision listing surface accessible from Shell, showing loading, error, and empty states from usePendingDRs; DRStatusIndicator is no longer the sole listing surface | `serve/cockpit/web/src/Shell.tsx:26,200-203`; `serve/cockpit/web/src/__tests__/DecisionViewport_1388.test.tsx:75,99,119,237`; `serve/cockpit/web/src/__tests__/Shell_1389.test.tsx:198-350` | PASS |
+
+### Deductions
+- `-0.03` No direct `git diff` / `git status` surface here; commit existence was reconstructed from `.git/logs/*` rather than full diff objects.
+- `-0.02` Initial quality-runner pass failed on jsdom environment setup before succeeding on retry, so the test evidence carries a small environment-noise deduction.
+
+### Verdict
+- Confidence: `0.95`
+- PASS. The latest builder cycle closed the previously blocking AC2 and AC5 proof gaps, the PButton migration remains covered, and the remaining code-reader objections are non-blocking after the latest architecture re-review narrowed the gate.
+
+### Action
+- Advance this task to docs.

@@ -1,10 +1,10 @@
 ---
 id: 1461
 title: 'C1-impl: Apply 4-pillar auditor model to w-task-verification and auditor.agent.md'
-status: review
+status: in-progress
 priority: needed
 created: 2026-05-09T03:30:08.726831+00:00
-updated: 2026-05-09T09:45:13.506151+00:00
+updated: 2026-05-09T10:29:44.072460+00:00
 tags:
 - pipeline
 - ws-roles
@@ -106,3 +106,40 @@ P3: Overlap comparison table added to Architecture Review section of task body (
 - Coverage: N/A (no executable module changes).
 - Ruff/Lint: clean.
 - Commit: `372ae79f` — `feat: align auditor 4-pillar verification model (#1461, builder)` (2 files changed).
+[[2026-05-09]]
+## Review Evidence
+- Verdict: FAIL
+- Tests: N/A. All acceptance criteria are `td:0` agent-artifact checks.
+- Lint and diagnostics: Builder notes report scoped lint clean for `share/skills/w-task-verification/SKILL.md` and `share/agents/auditor.agent.md`; current workspace diagnostics report no errors in either file.
+- Coverage: N/A. No executable module changes.
+- Scope and commit evidence: Builder notes and task scope identify `share/skills/w-task-verification/SKILL.md` and `share/agents/auditor.agent.md` as the task files. Commit `372ae79f` is present in `.git/logs/refs/heads/dev:2247` and `.git/logs/HEAD:2432`. I could not run `git diff` or `git status` in this session because terminal execution is unavailable, so file-surface verification is reconstructed from task notes plus direct inspection.
+
+| # | AC Line | Evidence | Status |
+|---|---------|----------|--------|
+| 1 | P1: Step 1 restructured around 4 pillars | `share/skills/w-task-verification/SKILL.md:36`, `:49`, `:55`, `:57`, and `:53` show regression detection, intent verification, architect quality scoring, commit integrity, and the reviewer boundary. | PASS |
+| 2 | P1: Overlap checks removed from Step 1 | No matches for `AC spot-check`, `AC deviations check`, or `file-exists check` in `share/skills/w-task-verification/SKILL.md`; Step 1 now stays inside the 4-pillar boundary. | PASS |
+| 3 | P1: Output template updated to 4-pillar sections | `share/skills/w-task-verification/SKILL.md:140`, `:144`, `:150`, `:151`, `:155`, `:157`, `:158`, and `:159` define the new `Regression Detection`, `Intent Verification`, `Architect Quality`, `Commit Integrity`, deduction, confidence, action, and follow-up sections. No `AC Verification` match exists in the skill file. | PASS |
+| 4 | P2: Scoring rubric updated | `share/skills/w-task-verification/SKILL.md:92-97` contains `Intent mismatch -.05`, `Evidence integrity concern -.05`, `Missing reviewer evidence section -.03`, and `Regression failures -.10`; removed rubric strings are absent. | PASS |
+| 5 | P2: `auditor.agent.md` fully updated with no stale references to removed checks | `share/agents/auditor.agent.md:45-46`, `:82`, `:98`, and `:113-116` align critical rules, output format, boundaries, and examples to the 4-pillar model, but `share/agents/auditor.agent.md:42` still instructs the auditor to perform `AC verification`, and `share/agents/auditor.agent.md:66` still describes Explore usage as `AC verification`. Those are stale references to the removed reviewer-overlap checks. | FAIL |
+| 6 | P2: Intent verification boundary explicit in SKILL.md | `share/skills/w-task-verification/SKILL.md:49-53` defines domain-level intent verification and explicitly forbids function-level behavior review or AC-to-code remapping. | PASS |
+| 7 | P3: Overlap comparison table added in task body Architecture Review section | `.owlbear/kanban/tasks/1461-c1-impl-apply-4-pillar-auditor-model-to-w-task-verification-and-auditor-agent-md.md:83` contains `### Overlap Comparison`, and the comparison table begins at `:85`. | PASS |
+
+- Blocking findings:
+
+| # | AC Line | Finding | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | P2 | `auditor.agent.md` critical rules still tell the auditor to do `AC verification`, which contradicts the new 4-pillar boundary and the removal of reviewer-overlap checks. | `share/agents/auditor.agent.md:42`; AC `.owlbear/kanban/tasks/1461-c1-impl-apply-4-pillar-auditor-model-to-w-task-verification-and-auditor-agent-md.md:33` | in-progress |
+| 2 | P2 | `auditor.agent.md` still labels the Explore use case as `AC verification`, leaving a second stale reference to the removed check model. | `share/agents/auditor.agent.md:66`; AC `.owlbear/kanban/tasks/1461-c1-impl-apply-4-pillar-auditor-model-to-w-task-verification-and-auditor-agent-md.md:33` | in-progress |
+
+- Confidence: 0.87
+- Action: Reject to `in-progress`. This is the first review failure on the task; no prior `## Review Evidence` section exists in the task file.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Remove stale `AC verification` wording from the auditor critical rules and restate the rule in 4-pillar and intent-boundary terms only. | `share/agents/auditor.agent.md` | `share/agents/auditor.agent.md:42`; AC `.owlbear/kanban/tasks/1461-c1-impl-apply-4-pillar-auditor-model-to-w-task-verification-and-auditor-agent-md.md:33` |
+| 2 | builder | Update the Explore-agent description so it refers to auditor intent or scope verification instead of `AC verification`. | `share/agents/auditor.agent.md` | `share/agents/auditor.agent.md:66`; AC `.owlbear/kanban/tasks/1461-c1-impl-apply-4-pillar-auditor-model-to-w-task-verification-and-auditor-agent-md.md:33` |
+
+## Observations
+- `share/skills/w-task-verification/SKILL.md:3` still describes the skill as `AC evidence, confidence scoring, commit integrity`. The Step 1 body now correctly enforces the 4-pillar model, so this looks like residual wording drift rather than a separate blocking defect, but it would be reasonable to harmonize on the builder retry.
+- Builder evidence was otherwise sufficient for a `td:0` review, and current file diagnostics show no markdown or parse errors.

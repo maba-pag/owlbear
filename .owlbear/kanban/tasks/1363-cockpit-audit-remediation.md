@@ -1,7 +1,7 @@
 ---
 id: 1363
 title: Cockpit audit remediation
-status: in-progress
+status: done
 priority: critical
 created: 2026-05-06T00:58:14.547083+00:00
 updated: 2026-05-09T10:13:58.531698+00:00

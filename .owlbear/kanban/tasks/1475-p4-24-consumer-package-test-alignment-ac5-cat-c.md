@@ -1,10 +1,10 @@
 ---
 id: 1475
 title: 'P4-24: Consumer package test alignment (AC5 Cat-C)'
-status: todo
+status: in-progress
 priority: needed
 created: 2026-05-09T08:46:53.952014+00:00
-updated: 2026-05-09T09:47:24.401317+00:00
+updated: 2026-05-09T10:24:40.602411+00:00
 tags:
 - phase-4
 - scope:tests
@@ -73,3 +73,9 @@ APPROVED — mechanical test alignment with clear scope and verifiable AC.
 [[2026-05-09]]
 ## Architecture Review
 Confirmed both consumer test directories are affected by topology-constant refactor. Tightened AC to explicitly include both directories (removed conditional). Changed type:refactor → type:test for pipeline pass-through. Set td:0 — mechanical alignment, test-writer skips. All 10 evaluation criteria PASS. No challenger needed (all td:0).
+[[2026-05-09]]
+## Test-Writer Notes
+- Non-implementation task (tagged type:test) — no new tests applicable.
+- All AC lines are td:0; pipeline note confirms RED tests already exist and fail in serve/mcp-kanban/tests/ and serve/mcp-knowledge/tests/.
+- Builder aligns test expectations to match topology-constant API contract (GREEN phase).
+- Passing through to builder.

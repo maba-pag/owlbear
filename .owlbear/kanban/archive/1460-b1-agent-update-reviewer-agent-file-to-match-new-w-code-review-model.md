@@ -1,10 +1,10 @@
 ---
 id: 1460
 title: 'B1-agent: Update reviewer agent file to match new w-code-review model'
-status: done
+status: archived
 priority: needed
 created: 2026-05-08T19:47:16.726901+00:00
-updated: 2026-05-09T09:42:36.753854+00:00
+updated: 2026-05-09T10:53:05.173592+00:00
 tags:
 - pipeline
 - ws-reviewer
@@ -141,3 +141,27 @@ Update `share/agents/reviewer.agent.md` to align with rewritten w-code-review sk
 
 ### Scratch Files Cleaned
 - None (no `1460-*` scratch files existed)
+[[2026-05-09]]
+## Audit
+### Regression Detection
+- quality-runner mode full: 572 failures reported; all traced to uncommitted WIP test files in serve/kanban/tests/ and serve/mcp-knowledge/tests/ (git diff shows +2698 insertions in 3 uncommitted files). Root tests (tests/): 32 passed, 0 failed. No Python changes since previous audit (e12095fc). Task changed only markdown; cannot cause test regressions.
+- regression verdict: PASS
+
+### Intent Verification
+- scope alignment: PASS (builder commit a5070d64 touches only share/agents/reviewer.agent.md; doc-writer commit acee9200 touches only share/diagrams/pipeline.excalidraw)
+- purpose match: PASS (aligns reviewer agent file with rewritten w-code-review skill per AC)
+- extraneous scope: none
+- boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 4/5
+AC refined from 5 prose items to 7 verifiable checkboxes with section targets. Correctly scoped out sibling #1462. All td:0 appropriate for markdown-only alignment. Minor gap: exact before/after text would improve verifiability, but section+content targeting was sufficient.
+
+### Commit Integrity
+- upstream commit presence: PASS (a5070d64 for builder, acee9200 for doc-writer; both verified via git log)
+- kanban commit packaging: pending (this archive)
+
+### Deduction Breakdown
+No deductions applied. All 4 pillars pass. Review evidence is thorough with 7 AC lines mapped and independent checks documented.
+
+### Confidence: 1.00
+### Action: archive

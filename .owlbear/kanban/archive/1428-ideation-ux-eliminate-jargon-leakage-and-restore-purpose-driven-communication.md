@@ -1,10 +1,10 @@
 ---
 id: 1428
 title: 'Ideation UX: eliminate jargon leakage and restore purpose-driven communication'
-status: done
+status: archived
 priority: important
 created: 2026-05-08T00:58:29.125370+00:00
-updated: 2026-05-09T09:51:28.636346+00:00
+updated: 2026-05-09T10:55:46.454893+00:00
 tags:
 - ideation
 - ux
@@ -207,3 +207,27 @@ Decomposition complete. All parent AC deliverables exist in the codebase. Subtas
 
 ### Scratch Files Cleaned
 - None (no `.owlbear/scratch/1428-*` files found)
+[[2026-05-09]]
+## Audit
+### Regression Detection
+- quality-runner mode full: 572 Python failures, 28 lint errors — ALL from 3 dirty test files (serve/kanban/tests/test_corruption.py, serve/kanban/tests/test_storage.py, serve/mcp-knowledge/tests/test_server.py) uncommitted by other agents' in-progress work. Individual test files pass in isolation. 9 frontend failures in Shell_1344.test.tsx (flaky waitFor timing). Frontend lint clean. No failures attributable to task #1428 (docs-only scope: SKILL.md and .agent.md files).
+- regression verdict: PASS (dirty-tree tolerance per pipeline protocol)
+
+### Intent Verification
+- scope alignment: PASS (all changes in ideation skill/agent domain: h-ideation, w-ideation-mediation, w-ideation-discovery, h-ideation-panel, ideation-mediator.agent.md, ideation-discoverer.agent.md, ideation.excalidraw)
+- purpose match: PASS (vocabulary table, narration rewrites, enforcement rules, verification criteria — all serve stated objective of eliminating jargon leakage)
+- extraneous scope: none
+- boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 4/5
+8 AC lines, all specific with file references and clear deliverables. Decomposition into 5 subtasks with proper dependency graph (#1429 as foundation). Minor subjectivity in AC #8 (behavioral equivalence) mitigated by before/after pairs as specification. Well-structured parent task.
+
+### Commit Integrity
+- upstream commit presence: PASS (5333441d #1429, 5400d210 #1430, 29341853 #1431, 6b66937a #1432, 771c2962 #1433, b5304b89 doc-writer footer)
+- kanban commit packaging: pending (this audit cycle)
+
+### Deduction Breakdown
+No deductions applied. All regression failures attributed to dirty working tree (3 uncommitted test files from other agents). Docs-only task scope has no executable surface.
+
+### Confidence: 1.00
+### Action: archive

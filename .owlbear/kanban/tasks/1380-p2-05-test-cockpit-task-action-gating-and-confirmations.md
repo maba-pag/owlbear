@@ -1,10 +1,10 @@
 ---
 id: 1380
 title: 'P2-05: Test Cockpit task action gating and confirmations'
-status: todo
+status: in-progress
 priority: needed
 created: 2026-05-06T01:04:35.632458+00:00
-updated: 2026-05-09T09:46:33.710082+00:00
+updated: 2026-05-09T10:26:58.154703+00:00
 tags:
 - cockpit
 - audit-remediation
@@ -350,3 +350,20 @@ Fourth review cycle. Reviewer returned to backlog (confidence 0.87) because AC6'
 Refined AC6 to require exact-value assertion for 422 validation message. All other ACs (1–5, 7) remain proven by the existing 22-test suite across prior cycles. Advanced to todo for test-writer to add the discriminating assertion.
 [[2026-05-09]]
 AC6 refined: added "The 422 test must assert the validation-message element's text content matches the seeded server detail value (e.g. 'invalid status transition'), proving getResponseErrorMessage parsing is exercised end-to-end." Rationale: existing test only presence-checks [data-testid="validation-message"] — swapping getResponseErrorMessage for a hardcoded fallback would not break it. One additional expect() call per 422 test closes the gap. All other ACs (1–5, 7) remain proven by existing 22-test suite. Re-approved for pipeline pass-through.
+[[2026-05-09]]
+## Test-Writer Notes (Cycle 5)
+- Retry cycle 5 (architect AC6 422 refinement pass): added 1 discriminating assertion.
+- Test file: `serve/cockpit/web/src/__tests__/DetailTab_1380.test.tsx`
+- Total suite: 22 tests, 22 passed, 0 failed.
+- Lint: clean (0 violations).
+- Commit: `f9ef1a46` (`test: add exact-value assertion for AC6 422 contract (#1380, test-writer)`)
+
+**Gap filled per architect Required Follow-up:**
+| # | Gap | Change | Status |
+|---|-----|--------|--------|
+| 1 | AC6: 422 test only presence-checked `[data-testid="validation-message"]` without asserting extracted message value | Added `expect(validationEl.textContent).toContain('invalid status transition')` after presence check — proves `getResponseErrorMessage` parsing survives end-to-end | PASS ✓ |
+
+**Step 1b.1 — Direct-to-Review Advance:**
+- New assertion passes against current implementation (implementation already routes through `getResponseErrorMessage` correctly).
+- No builder intervention needed.
+- Advancing directly to `review`.
