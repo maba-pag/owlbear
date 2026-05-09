@@ -65,7 +65,7 @@ Dimension reference table (abbreviated; `r-doc-standards` remains canonical):
 | Dimension | Name | Source Rule Family |
 |-----------|------|--------------------|
 | D1 | Structural Conformance | STR-* |
-| D2 | Duplication | DUP-* |
+| D2 | Duplication | XREF-5 |
 | D3 | Placement Integrity | PLC-* |
 | D4 | Accuracy | empirical |
 | D5 | Coverage Integrity | empirical |
