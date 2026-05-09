@@ -1,26 +1,14 @@
-"""RED phase tests — MCP list_tasks filters, tool annotations, and error envelopes (#1450).
+"""Tests — MCP list_tasks filters, tool annotations, and error envelopes (#1450).
 
 AC coverage:
   AC1 (td:2): list_tasks(ids=[]) returns empty tasks list and no missing_ids entry
   AC2 (td:2): list_tasks(archival_reason=duplicate, no status) searches archive storage
+  AC3 (td:2): move_task(status=invalid) and end_work(outcome='reject', move_to=invalid)
+              both surface structured JSON {code, message} error envelopes at MCP boundary
   AC4 (td:1): move_task annotation has idempotentHint=False
-  AC5 (td:2): malformed task ID surfaces structured JSON error envelope {code, message}
-
-AC3 (td:2 — behavioral contract for move_task/end_work structured errors):
-  Already satisfied by current _map_kanban_error implementation (json.dumps payload).
-  No failing tests possible without asserting behaviour that already works correctly.
-  Omitted per w-tdd-red Step 5: tests that pass must be removed or refined.
-
-AC4(b) (pick_tasks readOnlyHint=True and idempotentHint=True):
-  Already declared in the @mcp.tool decorator; assertions would be green immediately.
-  Omitted per w-tdd-red Step 5.
-
-AC5 — invalid status / invalid priority / stale write → JSON:
-  All three cases go through _map_kanban_error which already produces JSON payload.
-  Only the malformed-ID gap is new (parse_task_id raises raw ToolError, not JSON).
-  The other AC5 sub-cases are omitted per w-tdd-red Step 5.
-
-AC6 (td:0): no testable interface — skipped.
+  AC4(b):     pick_tasks annotations have readOnlyHint=True and idempotentHint=True
+  AC5 (td:2): malformed task ID and stale-write errors surface structured JSON error envelopes
+  AC6 (td:0): no testable interface — skipped.
 """
 
 from __future__ import annotations
@@ -33,7 +21,7 @@ import pytest
 from mcp.server.fastmcp.exceptions import ToolError
 
 from owlbear_kanban import KanbanEngine
-from owlbear_kanban.errors import ConcurrencyError, ValidationError
+from owlbear_kanban.errors import ConcurrencyError
 from owlbear_mcp_kanban.server import AppContext, edit_task, end_work, list_tasks, move_task, parse_task_id
 
 # ---------------------------------------------------------------------------
@@ -357,24 +345,18 @@ class TestFromAC_MoveEndWorkEnvelope:
 
     @pytest.mark.asyncio
     async def test_end_work_reject_invalid_move_to_raises_tool_error_with_json_payload(
-        self, tmp_path: Path
+        self, app_ctx: AppContext
     ) -> None:
-        """AC3: end_work(outcome='reject', move_to='badstatus') raises JSON ToolError.
+        """AC3: end_work(outcome='reject', move_to='not-a-real-status') raises JSON ToolError.
 
-        The engine's end_work raises ValidationError for an unrecognised move_to value;
-        _map_kanban_error converts it to a JSON-body ToolError.
+        The live agent_view.end_work validates move_to before the claim-check, so an
+        unclaimed task from app_ctx exercises the reject+invalid-move_to path.
+        ValidationError(ERR_INVALID_STATUS) propagates through _map_kanban_error
+        to ToolError(json.dumps({code, message})).
         """
-        mock_av = MagicMock()
-        mock_av.end_work.side_effect = ValidationError(
-            code="ERR_MOVE_TO_INVALID_STATUS",
-            user_message="invalid move_to: 'badstatus' is not a valid status",
-        )
-        mock_engine = MagicMock()
-        mock_engine.agent_view.return_value = mock_av
-        app_ctx = AppContext(engine=mock_engine, kanban_dir=tmp_path)
         ctx = _make_mcp_ctx(app_ctx)
         with pytest.raises(ToolError) as exc_info:
-            await end_work(ctx, id="1", outcome="reject", move_to="badstatus")
+            await end_work(ctx, id="1", outcome="reject", move_to="not-a-real-status")
         payload = json.loads(str(exc_info.value))
         assert isinstance(payload, dict), (
             f"ToolError message must be JSON; got: {str(exc_info.value)[:80]!r}"
@@ -382,25 +364,22 @@ class TestFromAC_MoveEndWorkEnvelope:
 
     @pytest.mark.asyncio
     async def test_end_work_reject_invalid_move_to_json_has_code_and_message(
-        self, tmp_path: Path
+        self, app_ctx: AppContext
     ) -> None:
-        """AC3: JSON envelope from end_work reject+invalid move_to has 'code' and 'message'."""
-        mock_av = MagicMock()
-        mock_av.end_work.side_effect = ValidationError(
-            code="ERR_MOVE_TO_INVALID_STATUS",
-            user_message="invalid move_to: 'badstatus' is not a valid status",
-        )
-        mock_engine = MagicMock()
-        mock_engine.agent_view.return_value = mock_av
-        app_ctx = AppContext(engine=mock_engine, kanban_dir=tmp_path)
+        """AC3: JSON envelope from end_work reject+invalid move_to has code='ERR_INVALID_STATUS'.
+
+        The live reject-path validation in agent_view.py emits code='ERR_INVALID_STATUS'
+        (not 'ERR_MOVE_TO_INVALID_STATUS', which is only used by the success outcome branch).
+        """
         ctx = _make_mcp_ctx(app_ctx)
         with pytest.raises(ToolError) as exc_info:
-            await end_work(ctx, id="1", outcome="reject", move_to="badstatus")
+            await end_work(ctx, id="1", outcome="reject", move_to="not-a-real-status")
         payload = json.loads(str(exc_info.value))
         assert "code" in payload, "JSON envelope must contain 'code' field"
         assert "message" in payload, "JSON envelope must contain 'message' field"
-        assert payload["code"] == "ERR_MOVE_TO_INVALID_STATUS", (
-            f"Expected code='ERR_MOVE_TO_INVALID_STATUS'; got {payload['code']!r}"
+        assert payload["code"] == "ERR_INVALID_STATUS", (
+            f"Expected code='ERR_INVALID_STATUS' for reject+invalid move_to; "
+            f"got {payload['code']!r}"
         )
 
 
