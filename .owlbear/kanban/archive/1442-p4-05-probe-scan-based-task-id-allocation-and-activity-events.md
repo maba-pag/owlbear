@@ -1,10 +1,10 @@
 ---
 id: 1442
 title: 'P4-05: Probe scan-based task ID allocation and activity events'
-status: done
+status: archived
 priority: needed
 created: 2026-05-08T19:31:56.603397+00:00
-updated: 2026-05-09T01:09:47.334026+00:00
+updated: 2026-05-09T01:46:55.362815+00:00
 tags:
 - phase-4
 - scope:kanban
@@ -300,3 +300,30 @@ Rationale: the earlier review fail was a missing-probe artifact issue. The retry
 
 ### Scratch Files Cleaned
 - None (no `.owlbear/scratch/1442-*` files existed)
+[[2026-05-09]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1 — scratch-board ID probe (active 1&3, archive 2&5, next=6, no config.yml) | Probe section in task body under `### AC1` covers setup, current vs expected behavior, and observable contract. Reviewer verified at lines 150-161. Spot-checked: matches AC requirements. | PASS |
+| AC2 — concurrent-create probe (create lock, distinct prefixes) | Probe section under `### AC2` defines lock mechanism, race sequence, distinct prefixes 6 and 7. Reviewer verified at lines 165-177. | PASS |
+| AC3 — activity probe (6-field ActivityEvent incl. task_status_at_start) | Probe section under `### AC3` tabulates all 6 fields with expected creation-event values. Spot-checked against live `ActivityEvent` model at `serve/kanban/src/owlbear_kanban/models.py:525-536` — all 6 fields present and match. Reviewer verified at lines 181-199. | PASS |
+| AC4 — no pytest/vitest/full-suite execution | AC coverage row at line 210 and builder notes at line 217 confirm no test code or execution. No task-local test files found. | PASS |
+
+### Test Results
+- pytest: 541 passed, 75 failed (all pre-existing — task changed zero source/test files; no cross-task regression possible)
+- ruff: 12 violations in serve/knowledge/ and serve/tools/ (not touched by this task)
+
+### Architect Quality: 5/5
+AC lines are specific, complete, and verifiable. Each probe requirement names exact file prefixes, expected IDs, field sets, and exclusion criteria. Architect refinement caught the missing 6th field (task_status_at_start) for AC3 — proactive quality improvement.
+
+### Deduction Breakdown
+- Start: 1.00
+- AC lines with no evidence: none (all 4 PASS) → 0
+- Lint violations: background debt, not task-scoped → 0
+- AC quality ≤ 3: no (5/5) → 0
+- Missing reviewer evidence: no (present, detailed, PASS at 0.97) → 0
+- Full-suite failures in task scope: none (td:0, zero files changed) → 0
+
+### Confidence: 0.98
+### Action: archive
