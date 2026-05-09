@@ -1,10 +1,10 @@
 ---
 id: 1409
 title: 'C1: Auditor skill research — 4-pillar model definition and overlap analysis'
-status: done
+status: archived
 priority: needed
 created: 2026-05-07T23:16:25.240390+00:00
-updated: 2026-05-09T07:25:50.351977+00:00
+updated: 2026-05-09T07:37:42.246863+00:00
 tags:
 - pipeline
 - ws-roles
@@ -15,7 +15,7 @@ depends_on:
 - 1407
 blocked: false
 block_reason:
-claimed_at: 2026-05-09T07:25:50.351977+00:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -234,3 +234,37 @@ None.
 
 ### Scratch Files Cleaned
 None — no `1409-*` scratch files found.
+[[2026-05-09]]
+## Audit
+### AC Verification (Binding: Refined AC from Architecture Review Cycle 2)
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| P1: 4-pillar auditor model defined with overlap analysis | `.owlbear/research/auditor-skill-update-1409.md` — overlap matrix (lines 24-36), 4-pillar model (lines 38-44) | PASS |
+| P1: Research doc produced with overlap matrix, scoring rubric changes, output template changes | Doc exists, contains overlap matrix, scoring rubric (lines 47-57), output template (lines 59-66) | PASS |
+| P2: Implementation task #1461 created with AC covering w-task-verification and auditor.agent.md | #1461 at backlog, depends on #1409, AC covers both files + no-overlap diff check | PASS |
+
+### Research Task Verification (Step 1a)
+1. Research doc exists at `.owlbear/research/auditor-skill-update-1409.md` ✓
+2. Follow-up #1461 created at backlog ✓
+3. #1461 references research doc in body ✓
+
+### Test Results
+- pytest: 4772 passed, 594 failed (pre-existing, not attributable to td:0 research task with no code changes). quality-runner env fallback: KeyboardInterrupt on two attempts, direct execution used.
+- ruff: not applicable (no Python files changed)
+
+### Commit Integrity
+- Research doc: `2db0ed37 docs: research auditor skill update (#1409, researcher)` ✓
+- No scratch files remaining ✓
+
+### Architect Quality: 4/5
+Original AC (Cycle 1) misaligned scope — required implementation on a research/planning task. Caught by reviewer, corrected cleanly in Cycle 2. Refined AC is specific: named artifacts, named follow-ups, td:0 annotations, proper dependency chain. Minor: superseded AC still visible at top of task body.
+
+### Deduction Breakdown
+- Start: 1.00
+- No AC lines without evidence (0 deductions)
+- Reviewer evidence present and detailed (0 deductions)
+- AC quality 4/5 (no deduction, threshold is ≤3)
+- Full-suite failures pre-existing, not in task scope (0 deductions)
+
+### Confidence: .98
+### Action: archive
