@@ -293,7 +293,7 @@ class TestFromAC_BackwardCompat:
 
 
 # ---------------------------------------------------------------------------
-# AC4 -- save_config writes statuses/priorities at root only (regression guard)
+# AC4 -- save_config writes next_id-only checkpoint (regression guard)
 # ---------------------------------------------------------------------------
 
 
@@ -301,7 +301,7 @@ class TestFromAC_SaveConfigRootOnly:
     """AC4 -- Regression guard: save_config writes only next_id to config.yml;
     all topology fields and pipeline sub-sections are product-owned and not persisted."""
 
-    def test_save_config_has_root_statuses(self, tmp_path: Path) -> None:
+    def test_save_config_writes_next_id_only(self, tmp_path: Path) -> None:
         """save_config writes only next_id at the root level."""
         kanban_dir = _make_kanban_dir(tmp_path)
         _write_grouped_config(kanban_dir)
@@ -311,7 +311,7 @@ class TestFromAC_SaveConfigRootOnly:
         raw = yaml.safe_load((kanban_dir / "config.yml").read_text(encoding="utf-8"))
         assert set(raw.keys()) == {"next_id"}
 
-    def test_save_config_has_root_priorities(self, tmp_path: Path) -> None:
+    def test_save_config_persists_current_next_id(self, tmp_path: Path) -> None:
         """save_config persists the current next_id value."""
         kanban_dir = _make_kanban_dir(tmp_path)
         _write_grouped_config(kanban_dir)
@@ -321,7 +321,7 @@ class TestFromAC_SaveConfigRootOnly:
         raw = yaml.safe_load((kanban_dir / "config.yml").read_text(encoding="utf-8"))
         assert raw == {"next_id": config.next_id}
 
-    def test_save_config_pipeline_has_no_statuses(self, tmp_path: Path) -> None:
+    def test_save_config_omits_pipeline_statuses(self, tmp_path: Path) -> None:
         """save_config must not write pipeline.statuses -- root is the sole location."""
         kanban_dir = _make_kanban_dir(tmp_path)
         _write_grouped_config(kanban_dir)
@@ -332,7 +332,7 @@ class TestFromAC_SaveConfigRootOnly:
         pipeline_section = raw.get("pipeline", {})
         assert "statuses" not in pipeline_section
 
-    def test_save_config_pipeline_has_no_priorities(self, tmp_path: Path) -> None:
+    def test_save_config_omits_pipeline_priorities(self, tmp_path: Path) -> None:
         """save_config must not write pipeline.priorities -- root is the sole location."""
         kanban_dir = _make_kanban_dir(tmp_path)
         _write_grouped_config(kanban_dir)

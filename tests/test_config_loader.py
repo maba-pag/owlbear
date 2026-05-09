@@ -129,7 +129,7 @@ def _make_board(tmp_path: Path, config_yaml: str = _CONFIG_YAML) -> Path:
 class TestFromAC_ConfigLoaderGroupedLoad:
     """Loader-specific grouped-format regression coverage from #1171."""
 
-    def test_load_config_preserves_grouped_vendor_field_at_root(
+    def test_load_config_ignores_grouped_vendor_field_at_root(
         self, tmp_path: Path
     ) -> None:
         """load_config ignores vendor keys from YAML in topology-constant mode."""
@@ -142,7 +142,7 @@ class TestFromAC_ConfigLoaderGroupedLoad:
         )
         assert vendor_val is None
 
-    def test_load_config_preserves_grouped_tui_section_at_root(
+    def test_load_config_ignores_grouped_tui_section_at_root(
         self, tmp_path: Path
     ) -> None:
         """load_config ignores vendor tui sections from YAML in topology-constant mode."""
@@ -223,11 +223,11 @@ class TestFromAC_LoadConfigRegression:
         assert "todo" in config.statuses
         assert "done" in config.statuses
 
-    def test_load_config_raises_on_missing_file(self, tmp_path: Path) -> None:
-      """load_config returns topology defaults when config.yml is absent."""
-      config = load_config(tmp_path / "nonexistent")
-      assert isinstance(config, BoardConfig)
-      assert config.next_id == 1
+    def test_load_config_returns_defaults_on_missing_file(self, tmp_path: Path) -> None:
+        """load_config returns topology defaults when config.yml is absent."""
+        config = load_config(tmp_path / "nonexistent")
+        assert isinstance(config, BoardConfig)
+        assert config.next_id == 1
 
     def test_load_config_reads_persisted_next_id(self, tmp_path: Path) -> None:
         """load_config must return the next_id value written to config.yml, not always 1."""

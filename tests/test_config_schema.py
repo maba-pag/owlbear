@@ -413,18 +413,18 @@ class TestFromAC_DefaultsPriorityMigration:
 
 
 # ---------------------------------------------------------------------------
-# ACs 8-9 — save_config emits grouped format; round-trip preserves data
+# ACs 8-9 — save_config writes next_id-only checkpoint; round-trip preserves data
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_SaveConfigGrouped:
-    """ACs 8-9 — save_config emits schema: grouped; round-trip data intact."""
+class TestFromAC_SaveConfigCheckpointOnly:
+    """ACs 8-9 — save_config writes next_id-only checkpoint; round-trip data intact."""
 
     def _read_yaml(self, path: Path) -> dict:
         """Parse a YAML file and return a plain dict."""
         return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
 
-    def test_save_config_emits_schema_grouped_field(self, tmp_path: Path) -> None:
+    def test_save_config_writes_next_id_checkpoint_only(self, tmp_path: Path) -> None:
         """save_config writes only next_id checkpoint data."""
         kanban_dir = _make_board(tmp_path, _GROUPED_YAML)
         config = load_config(kanban_dir)
@@ -432,7 +432,7 @@ class TestFromAC_SaveConfigGrouped:
         data = self._read_yaml(kanban_dir / "config.yml")
         assert data == {"next_id": config.next_id}
 
-    def test_save_config_emits_paths_sub_section(self, tmp_path: Path) -> None:
+    def test_save_config_omits_paths_sub_section(self, tmp_path: Path) -> None:
         """save_config does not persist paths.* fields."""
         kanban_dir = _make_board(tmp_path, _GROUPED_YAML)
         config = load_config(kanban_dir)
@@ -441,7 +441,7 @@ class TestFromAC_SaveConfigGrouped:
         assert "paths" not in data
         assert data == {"next_id": config.next_id}
 
-    def test_save_config_emits_pipeline_sub_section(self, tmp_path: Path) -> None:
+    def test_save_config_omits_pipeline_sub_section(self, tmp_path: Path) -> None:
         """save_config does not persist pipeline.* fields."""
         kanban_dir = _make_board(tmp_path, _GROUPED_YAML)
         config = load_config(kanban_dir)
@@ -450,7 +450,7 @@ class TestFromAC_SaveConfigGrouped:
         assert "pipeline" not in data
         assert data == {"next_id": config.next_id}
 
-    def test_save_config_emits_agents_and_policy_sub_sections(
+    def test_save_config_omits_agents_and_policy_sub_sections(
         self, tmp_path: Path
     ) -> None:
         """save_config does not persist agents/policy sections."""
