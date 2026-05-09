@@ -24,7 +24,7 @@ import { isValidElement } from 'react'
 // './hooks/EventSourceProvider'` at module load time.
 const capturedCalls: { url: unknown; children: unknown }[] = []
 
-vi.mock('../hooks/EventSourceProvider', () => ({
+vi.mock('./hooks/EventSourceProvider', () => ({
   EventSourceProvider: vi.fn(
     ({ url, children }: { url: unknown; children: unknown }) => {
       capturedCalls.push({ url, children })
@@ -35,7 +35,7 @@ vi.mock('../hooks/EventSourceProvider', () => ({
 }))
 
 // Import App AFTER vi.mock so the mock is in place when App.tsx resolves its deps
-import App from '../App'
+import App from './App'
 
 // ─── Stubs ────────────────────────────────────────────────────────────────────
 
