@@ -659,19 +659,19 @@ def board_dir(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
-def engine(board_dir: Path) -> KanbanEngine:
+def engine_1371(board_dir: Path) -> KanbanEngine:
     eng = KanbanEngine(board_dir)
     eng.list_tasks()
     return eng
 
 
 @pytest.fixture
-def client(engine: KanbanEngine):
+def client_1371(engine_1371: KanbanEngine):
     from fastapi.testclient import TestClient  # noqa: PLC0415
 
     from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
 
-    app.dependency_overrides[get_engine] = lambda: engine
+    app.dependency_overrides[get_engine] = lambda: engine_1371
     try:
         yield TestClient(app)
     finally:
@@ -679,13 +679,13 @@ def client(engine: KanbanEngine):
 
 
 @pytest.fixture
-def envelope_client(engine: KanbanEngine):
+def envelope_client_1371(engine_1371: KanbanEngine):
     """TestClient with raise_server_exceptions=False for unexpected-error handler tests."""
     from fastapi.testclient import TestClient  # noqa: PLC0415
 
     from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
 
-    app.dependency_overrides[get_engine] = lambda: engine
+    app.dependency_overrides[get_engine] = lambda: engine_1371
     try:
         yield TestClient(app, raise_server_exceptions=False)
     finally:
@@ -693,7 +693,7 @@ def envelope_client(engine: KanbanEngine):
 
 
 @pytest.fixture
-def mock_view_client(engine: KanbanEngine):
+def mock_view_client_1371(engine_1371: KanbanEngine):
     """TestClient with CockpitView replaced by a MagicMock.
 
     Yields (client, view_mock) so tests can configure return values before
@@ -705,7 +705,7 @@ def mock_view_client(engine: KanbanEngine):
     from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
 
     view_mock = mock.MagicMock()
-    app.dependency_overrides[get_engine] = lambda: engine
+    app.dependency_overrides[get_engine] = lambda: engine_1371
     app.dependency_overrides[get_view] = lambda: view_mock
     try:
         yield TestClient(app), view_mock
@@ -733,13 +733,13 @@ class TestFromAC_LegacyTestMigration:
     """
 
     def test_edit_concurrency_error_returns_envelope_not_detail(
-        self, client: TestClient, engine: KanbanEngine
+        self, client_1371: TestClient, engine_1371: KanbanEngine
     ) -> None:
         """409 stale-edit response carries {code, message}; no 'detail' field."""
-        task = engine.show_task("1")
+        task = engine_1371.show_task("1")
         exc = ConcurrencyError(code="ERR_STALE", user_message="stale snapshot detected")
-        with mock.patch.object(engine, "edit_task", side_effect=exc):
-            response = client.post(
+        with mock.patch.object(engine_1371, "edit_task", side_effect=exc):
+            response = client_1371.post(
                 "/api/tasks/1/edit",
                 json={"updated": task.updated, "title": "Envelope probe"},
             )
@@ -754,10 +754,10 @@ class TestFromAC_LegacyTestMigration:
         )
 
     def test_move_not_found_returns_envelope_not_detail(
-        self, client: TestClient
+        self, client_1371: TestClient
     ) -> None:
         """404 non-existent-task move response carries {code, message}; no 'detail' field."""
-        response = client.post(
+        response = client_1371.post(
             "/api/tasks/999/move",
             json={"status": "in-progress", "updated": "2025-01-01T00:00:00"},
         )
@@ -772,13 +772,13 @@ class TestFromAC_LegacyTestMigration:
         )
 
     def test_move_concurrency_error_returns_envelope_not_detail(
-        self, client: TestClient, engine: KanbanEngine
+        self, client_1371: TestClient, engine_1371: KanbanEngine
     ) -> None:
         """409 stale-move response carries {code, message}; no 'detail' field."""
-        task = engine.show_task("1")
+        task = engine_1371.show_task("1")
         exc = ConcurrencyError(code="ERR_STALE", user_message="stale write detected")
-        with mock.patch.object(engine, "move_task", side_effect=exc):
-            response = client.post(
+        with mock.patch.object(engine_1371, "move_task", side_effect=exc):
+            response = client_1371.post(
                 "/api/tasks/1/move",
                 json={"status": "in-progress", "updated": task.updated},
             )
@@ -793,10 +793,10 @@ class TestFromAC_LegacyTestMigration:
         )
 
     def test_get_task_not_found_returns_envelope_not_detail(
-        self, client: TestClient
+        self, client_1371: TestClient
     ) -> None:
         """404 task-detail response carries {code, message}; no 'detail' field."""
-        response = client.get("/api/tasks/9999")
+        response = client_1371.get("/api/tasks/9999")
         body = response.json()
         assert response.status_code == 404
         assert "detail" not in body, (
@@ -822,13 +822,13 @@ class TestFromAC_ShowTaskGuidanceForwarding:
     """
 
     def test_show_task_forwards_sentinel_guidance_values(
-        self, mock_view_client, engine: KanbanEngine
+        self, mock_view_client_1371, engine_1371: KanbanEngine
     ) -> None:
         """Sentinel guidance list injected via mocked view appears verbatim in response."""
-        client, view_mock = mock_view_client
+        client_1371, view_mock = mock_view_client_1371
         sentinel = ["sentinel-guidance-alpha", "sentinel-guidance-beta"]
 
-        task = engine.show_task("1")
+        task = engine_1371.show_task("1")
         payload = task.model_dump()
         payload["guidance"] = sentinel
         payload["missing_sections"] = None
@@ -836,7 +836,7 @@ class TestFromAC_ShowTaskGuidanceForwarding:
             payload["body"] = None
         view_mock.show_task.return_value = ShowTaskResponse.model_validate(payload)
 
-        response = client.get("/api/tasks/1")
+        response = client_1371.get("/api/tasks/1")
         body = response.json()
 
         assert response.status_code == 200
@@ -860,10 +860,10 @@ class TestFromAC_DecisionsFrameworkCarveOut:
     """
 
     def test_malformed_decision_id_returns_detail_body_not_domain_envelope(
-        self, client: TestClient
+        self, client_1371: TestClient
     ) -> None:
         """POST /decisions/.hidden/resolve returns {\"detail\": \"Invalid decision id\"}."""
-        response = client.post(
+        response = client_1371.post(
             "/api/decisions/.hidden/resolve",
             json={"response": "approved"},
         )
@@ -901,7 +901,7 @@ class TestFromAC_UnexpectedErrorExactContract:
     """
 
     def test_scan_unexpected_error_returns_exact_cockpit_internal_error_code(
-        self, envelope_client: TestClient
+        self, envelope_client_1371: TestClient
     ) -> None:
         """RuntimeError from scan_corruption → exact code 'COCKPIT_INTERNAL_ERROR'."""
         from owlbear_cockpit.view import CockpitView  # noqa: PLC0415
@@ -911,7 +911,7 @@ class TestFromAC_UnexpectedErrorExactContract:
             "scan_corruption",
             side_effect=RuntimeError("disk I/O failure"),
         ):
-            resp = envelope_client.post("/api/tasks/scan")
+            resp = envelope_client_1371.post("/api/tasks/scan")
 
         assert resp.status_code == 500
         assert resp.headers.get("content-type", "").startswith("application/json"), (
@@ -929,7 +929,7 @@ class TestFromAC_UnexpectedErrorExactContract:
         )
 
     def test_repair_unexpected_error_returns_exact_cockpit_internal_error_message(
-        self, envelope_client: TestClient
+        self, envelope_client_1371: TestClient
     ) -> None:
         """RuntimeError from repair_storage → exact message 'An unexpected error occurred.'."""
         from owlbear_cockpit.view import CockpitView  # noqa: PLC0415
@@ -939,7 +939,7 @@ class TestFromAC_UnexpectedErrorExactContract:
             "repair_storage",
             side_effect=RuntimeError("storage backend unavailable"),
         ):
-            resp = envelope_client.post("/api/tasks/repair")
+            resp = envelope_client_1371.post("/api/tasks/repair")
 
         assert resp.status_code == 500
         assert resp.headers.get("content-type", "").startswith("application/json"), (
@@ -976,11 +976,11 @@ class TestFromAC_ReleaseErrorEnvelope:
     """
 
     def test_release_not_found_returns_envelope_not_detail(
-        self, client: TestClient, engine: KanbanEngine
+        self, client_1371: TestClient, engine_1371: KanbanEngine
     ) -> None:
         """404 release of non-existent task carries {code, message}; no 'detail' field."""
-        token = engine.show_task("1").updated
-        response = client.post("/api/tasks/999/release", json={"updated": token})
+        token = engine_1371.show_task("1").updated
+        response = client_1371.post("/api/tasks/999/release", json={"updated": token})
         body = response.json()
         assert response.status_code == 404
         assert "detail" not in body, (
@@ -994,18 +994,18 @@ class TestFromAC_ReleaseErrorEnvelope:
         )
 
     def test_release_stale_token_returns_envelope_not_detail(
-        self, client: TestClient, engine: KanbanEngine
+        self, client_1371: TestClient, engine_1371: KanbanEngine
     ) -> None:
         """409 stale-release carries {code, message}; no 'detail' field.
 
         Board fixture has task 2 pre-claimed.  Editing bumps 'updated' so the
         saved token is stale when release is attempted.
         """
-        task = engine.show_task("2")
+        task = engine_1371.show_task("2")
         stale_token = task.updated
-        engine.edit_task("2", title="Bumped to make stale token")
+        engine_1371.edit_task("2", title="Bumped to make stale token")
 
-        response = client.post("/api/tasks/2/release", json={"updated": stale_token})
+        response = client_1371.post("/api/tasks/2/release", json={"updated": stale_token})
         body = response.json()
         assert response.status_code == 409, (
             f"Stale release must return 409; got {response.status_code}"
@@ -1021,11 +1021,11 @@ class TestFromAC_ReleaseErrorEnvelope:
         )
 
     def test_release_unclaimed_task_returns_envelope_not_detail(
-        self, client: TestClient, engine: KanbanEngine
+        self, client_1371: TestClient, engine_1371: KanbanEngine
     ) -> None:
         """409 release of unclaimed task carries {code, message}; no 'detail' field."""
-        task = engine.show_task("1")
-        response = client.post("/api/tasks/1/release", json={"updated": task.updated})
+        task = engine_1371.show_task("1")
+        response = client_1371.post("/api/tasks/1/release", json={"updated": task.updated})
         body = response.json()
         assert response.status_code == 409, (
             f"Release of unclaimed task must return 409; got {response.status_code}"
@@ -1058,10 +1058,10 @@ class TestFromAC_PydanticCarveOut:
     """
 
     def test_pydantic_validation_422_retains_detail_list_and_excludes_envelope_keys(
-        self, client: TestClient
+        self, client_1371: TestClient
     ) -> None:
         """Missing required 'updated' in move -> 422 with detail list; no code/message."""
-        response = client.post(
+        response = client_1371.post(
             "/api/tasks/1/move",
             json={"status": "in-progress"},  # 'updated' is required
         )

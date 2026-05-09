@@ -668,7 +668,7 @@ from owlbear_mcp_knowledge.server import app_lifespan, refresh_source
 _NOW = "2026-05-04T00:00:00+00:00"
 
 
-def _make_source(
+def _make_source_1326(
     *,
     source_type: SourceType = SourceType.AUTHENTICATED_WEB,
     fetch_method: str = "http",
@@ -800,7 +800,7 @@ class TestFromAC_InterDocBuilderNoneWiring:
 
         Fails if inter_doc_builder is changed to a non-None value in refresh_source.
         """
-        source = _make_source(fetch_method="http")
+        source = _make_source_1326(fetch_method="http")
 
         refresh_result = MagicMock()
         refresh_result.refreshed = 1
