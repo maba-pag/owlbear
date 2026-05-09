@@ -4468,3 +4468,9 @@ External repos and resources studied during OwlBear development.
 |--------|-----|------|------------|------|
 | Google Eng Practices — Review Standard | <https://google.github.io/eng-practices/review/reviewer/standard.html> | "Nit:" prefix for non-blocking; approve when code health improves; batch feedback | .owlbear/research/1407-reviewer-rewrite.md | 2026-05-08 |
 | Conventional Comments | <https://conventionalcomments.org/> | Formal label taxonomy: issue vs suggestion vs nitpick; blocking vs non-blocking | .owlbear/research/1407-reviewer-rewrite.md | 2026-05-08 |
+
+## Sync-to-Main TODO Warning Research (Task #1426)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| GitHub Actions Workflow Commands | <https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands> | `::warning title=TITLE::message` annotation syntax | .owlbear/research/sync-todo-marker-warning.md | 2026-05-09 |
