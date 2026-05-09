@@ -29,6 +29,7 @@ from owlbear_kanban.config_loader import load_config
 from owlbear_kanban.errors import KANBAN_ERROR_CODES, ConfigError
 from owlbear_kanban.models import BoardConfig
 from owlbear_kanban.storage import save_config
+from owlbear_kanban.topology import PRODUCT_TOPOLOGY
 
 # Provenance: promoted from task-scoped suite for task #1177.
 
@@ -300,26 +301,24 @@ class TestFromAC_SaveConfigRootOnly:
     root YAML level only; no pipeline.statuses or pipeline.priorities in output."""
 
     def test_save_config_has_root_statuses(self, tmp_path: Path) -> None:
-        """save_config emits a root-level 'statuses' key with the correct values."""
+        """save_config writes only next_id at the root level."""
         kanban_dir = _make_kanban_dir(tmp_path)
         _write_grouped_config(kanban_dir)
         config = load_config(kanban_dir)
         save_config(config, kanban_dir)
 
         raw = yaml.safe_load((kanban_dir / "config.yml").read_text(encoding="utf-8"))
-        assert "statuses" in raw
-        assert raw["statuses"] == _STATUSES
+        assert set(raw.keys()) == {"next_id"}
 
     def test_save_config_has_root_priorities(self, tmp_path: Path) -> None:
-        """save_config emits a root-level 'priorities' key with the correct values."""
+        """save_config persists the current next_id value."""
         kanban_dir = _make_kanban_dir(tmp_path)
         _write_grouped_config(kanban_dir)
         config = load_config(kanban_dir)
         save_config(config, kanban_dir)
 
         raw = yaml.safe_load((kanban_dir / "config.yml").read_text(encoding="utf-8"))
-        assert "priorities" in raw
-        assert raw["priorities"] == _PRIORITIES
+        assert raw == {"next_id": config.next_id}
 
     def test_save_config_pipeline_has_no_statuses(self, tmp_path: Path) -> None:
         """save_config must not write pipeline.statuses -- root is the sole location."""
@@ -363,7 +362,7 @@ class TestFromAC_RoundTrip:
         config2 = load_config(kanban_dir)
 
         assert config2.pipeline.statuses == config2.statuses
-        assert config2.statuses == _STATUSES
+        assert config2.statuses == list(PRODUCT_TOPOLOGY.statuses)
 
     def test_round_trip_pipeline_priorities_match_root(self, tmp_path: Path) -> None:
         """After save -> reload, config.pipeline.priorities equals config.priorities."""
@@ -375,4 +374,4 @@ class TestFromAC_RoundTrip:
         config2 = load_config(kanban_dir)
 
         assert config2.pipeline.priorities == config2.priorities
-        assert config2.priorities == _PRIORITIES
+        assert config2.priorities == list(PRODUCT_TOPOLOGY.priorities)

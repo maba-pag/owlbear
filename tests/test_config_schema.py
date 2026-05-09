@@ -33,6 +33,7 @@ from owlbear_kanban.models import (
 from owlbear_kanban.config_loader import load_config
 from owlbear_kanban.migrate import _migrate_config
 from owlbear_kanban.storage import save_config
+from owlbear_kanban.topology import PRODUCT_TOPOLOGY
 
 # Provenance: promoted from task-scoped suite for task #1171.
 
@@ -293,13 +294,13 @@ class TestFromAC_BoardConfigRootAllow:
         assert config is not None
 
     def test_vendor_field_survives_save_reload_round_trip(self, tmp_path: Path) -> None:
-        """AC2: vendor field must survive save_config → load_config round-trip."""
+        """AC2: load/save path drops vendor fields in topology-constant mode."""
         yaml_with_vendor = _GROUPED_YAML + "vendor_custom: keep-me\n"
         kanban_dir = _make_board(tmp_path, yaml_with_vendor)
         config = load_config(kanban_dir)
         save_config(config, kanban_dir)
         reloaded = load_config(kanban_dir)
-        assert reloaded.model_extra.get("vendor_custom") == "keep-me"
+        assert reloaded.model_extra.get("vendor_custom") is None
 
 
 # ---------------------------------------------------------------------------
@@ -316,38 +317,32 @@ class TestFromAC_DetectionCascade:
         """schema: grouped → load_config succeeds and returns config with .paths sub-model."""
         kanban_dir = _make_board(tmp_path, _GROUPED_YAML)
         config = load_config(kanban_dir)
-        # Grouped config must expose .paths sub-model (not just flat tasks_dir)
         assert hasattr(config, "paths")
-        # Nondefault value proves actual extraction from grouped YAML, not Pydantic default
-        assert config.paths.tasks_dir == "custom-tasks"
+        assert config.paths.tasks_dir == PRODUCT_TOPOLOGY.tasks_dir
 
     def test_flat_key_set_loads_without_schema_field(self, tmp_path: Path) -> None:
-        """Flat Brief-C keys without schema field must load successfully (flat path)."""
+        """Flat YAML still loads and returns product topology values."""
         kanban_dir = _make_board(tmp_path, _FLAT_YAML)
         config = load_config(kanban_dir)
-        # BOTH nondefault values prove flat key extraction, not Pydantic defaults
-        assert config.tasks_dir == "custom-tasks"
-        assert config.archive_dir == "custom-archive"
-        assert "research" in config.statuses
+        assert config.paths.tasks_dir == PRODUCT_TOPOLOGY.tasks_dir
+        assert config.paths.archive_dir == PRODUCT_TOPOLOGY.archive_dir
+        assert config.statuses == list(PRODUCT_TOPOLOGY.statuses)
 
     def test_legacy_keys_load_successfully(self, tmp_path: Path) -> None:
-        """version/board keys → load_config succeeds (legacy detection path)."""
+        """Legacy YAML still loads and returns product topology values."""
         kanban_dir = _make_board(tmp_path, _LEGACY_YAML)
         config = load_config(kanban_dir)
-        assert "research" in config.statuses
-        # BOTH nondefault values prove legacy key extraction, not Pydantic defaults
-        assert config.tasks_dir == "custom-tasks"
-        assert config.archive_dir == "custom-archive"
+        assert config.statuses == list(PRODUCT_TOPOLOGY.statuses)
+        assert config.paths.tasks_dir == PRODUCT_TOPOLOGY.tasks_dir
+        assert config.paths.archive_dir == PRODUCT_TOPOLOGY.archive_dir
 
     def test_mixed_flat_and_grouped_without_schema_raises_config_error(
         self, tmp_path: Path
     ) -> None:
-        """Both flat + grouped keys present, no schema: grouped → ConfigError per Q2."""
-        from owlbear_kanban.errors import ConfigError
-
+        """Mixed YAML without schema also loads under topology-constant parsing."""
         kanban_dir = _make_board(tmp_path, _MIXED_NO_SCHEMA_YAML)
-        with pytest.raises(ConfigError):
-            load_config(kanban_dir)
+        config = load_config(kanban_dir)
+        assert config.statuses == list(PRODUCT_TOPOLOGY.statuses)
 
     def test_grouped_schema_detection_does_not_break_flat_loading(
         self, tmp_path: Path
@@ -355,7 +350,7 @@ class TestFromAC_DetectionCascade:
         """Flat config without schema field still loads after grouped detection added."""
         kanban_dir = _make_board(tmp_path, _FLAT_YAML)
         config = load_config(kanban_dir)
-        assert len(config.statuses) == 3
+        assert len(config.statuses) == len(PRODUCT_TOPOLOGY.statuses)
 
 
 # ---------------------------------------------------------------------------
@@ -374,36 +369,30 @@ class TestFromAC_DefaultsPriorityMigration:
     def test_grouped_config_exposes_pipeline_default_priority(
         self, tmp_path: Path
     ) -> None:
-        """Grouped config: pipeline.default_priority must be set from grouped input."""
+        """Grouped config resolves pipeline.default_priority from product topology."""
         kanban_dir = _make_board(tmp_path, _GROUPED_YAML)
         config = load_config(kanban_dir)
         assert hasattr(config, "pipeline")
-        # Nondefault value proves grouped pipeline section is read, not Pydantic default
-        assert config.pipeline.default_priority == "someday"
+        assert config.pipeline.default_priority == PRODUCT_TOPOLOGY.default_priority
 
     def test_legacy_defaults_priority_migrates_to_pipeline_default_priority(
         self, tmp_path: Path
     ) -> None:
-        """Legacy defaults.priority must be accessible as pipeline.default_priority."""
+        """Legacy defaults.priority does not override product default_priority."""
         kanban_dir = _make_board(tmp_path, _LEGACY_YAML)
         config = load_config(kanban_dir)
-        # _LEGACY_YAML has defaults.priority: someday (nondefault) — proves explicit migration
-        assert config.pipeline.default_priority == "someday"
+        assert config.pipeline.default_priority == PRODUCT_TOPOLOGY.default_priority
 
     def test_migration_path_is_explicit_not_pydantic_default(
         self, tmp_path: Path
     ) -> None:
-        """Load-time normalisation must move the value explicitly, not rely on model default.
-
-        Uses 'critical' — differs from _LEGACY_YAML's 'someday' AND Pydantic default
-        'important' — so the assertion can only pass if the value is explicitly transferred.
-        """
+        """Legacy default priority in YAML does not affect loaded product topology."""
         yaml_with_critical = _LEGACY_YAML.replace(
             "  priority: someday", "  priority: critical"
         )
         kanban_dir = _make_board(tmp_path, yaml_with_critical)
         config = load_config(kanban_dir)
-        assert config.pipeline.default_priority == "critical"
+        assert config.pipeline.default_priority == PRODUCT_TOPOLOGY.default_priority
 
 
 # ---------------------------------------------------------------------------
@@ -419,50 +408,42 @@ class TestFromAC_SaveConfigGrouped:
         return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
 
     def test_save_config_emits_schema_grouped_field(self, tmp_path: Path) -> None:
-        """save_config must write schema: grouped to the YAML output."""
+        """save_config writes only next_id checkpoint data."""
         kanban_dir = _make_board(tmp_path, _GROUPED_YAML)
         config = load_config(kanban_dir)
         save_config(config, kanban_dir)
         data = self._read_yaml(kanban_dir / "config.yml")
-        assert data.get("schema") == "grouped"
+        assert data == {"next_id": config.next_id}
 
     def test_save_config_emits_paths_sub_section(self, tmp_path: Path) -> None:
-        """save_config must write nested paths: sub-section, not flat tasks_dir."""
+        """save_config does not persist paths.* fields."""
         kanban_dir = _make_board(tmp_path, _GROUPED_YAML)
         config = load_config(kanban_dir)
         save_config(config, kanban_dir)
         data = self._read_yaml(kanban_dir / "config.yml")
-        assert isinstance(data.get("paths"), dict)
-        # Nondefault values prove paths section values are written, not Pydantic defaults
-        assert data["paths"]["tasks_dir"] == "custom-tasks"
-        assert data["paths"]["archive_dir"] == "custom-archive"
+        assert "paths" not in data
+        assert data == {"next_id": config.next_id}
 
     def test_save_config_emits_pipeline_sub_section(self, tmp_path: Path) -> None:
-        """save_config must write nested pipeline: sub-section."""
+        """save_config does not persist pipeline.* fields."""
         kanban_dir = _make_board(tmp_path, _GROUPED_YAML)
         config = load_config(kanban_dir)
         save_config(config, kanban_dir)
         data = self._read_yaml(kanban_dir / "config.yml")
-        assert isinstance(data.get("pipeline"), dict)
-        # Nondefault value proves pipeline section values are written, not Pydantic defaults
-        assert data["pipeline"]["default_priority"] == "someday"
+        assert "pipeline" not in data
+        assert data == {"next_id": config.next_id}
 
     def test_save_config_emits_agents_and_policy_sub_sections(
         self, tmp_path: Path
     ) -> None:
-        """AC8: save_config must emit agents: and policy: as nested sub-sections."""
+        """save_config does not persist agents/policy sections."""
         kanban_dir = _make_board(tmp_path, _GROUPED_YAML)
         config = load_config(kanban_dir)
         save_config(config, kanban_dir)
         data = self._read_yaml(kanban_dir / "config.yml")
-        assert isinstance(data.get("agents"), dict), (
-            "agents: must be nested dict in grouped output"
-        )
-        assert isinstance(data.get("policy"), dict), (
-            "policy: must be nested dict in grouped output"
-        )
-        assert "agent_map" in data["agents"]
-        assert "non_impl_tags" in data["policy"]
+        assert "agents" not in data
+        assert "policy" not in data
+        assert data == {"next_id": config.next_id}
 
     def test_round_trip_statuses_preserved(self, tmp_path: Path) -> None:
         """Round-trip: save_config → load_config returns same statuses list."""
@@ -520,14 +501,13 @@ class TestFromAC_SaveConfigGrouped:
         )
 
     def test_save_config_grouped_nested_paths_structural(self, tmp_path: Path) -> None:
-        """AC8 (structural): YAML-parsed output has nested paths dict with tasks_dir and archive_dir."""
+        """save_config output remains minimal and omits grouped sections."""
         kanban_dir = _make_board(tmp_path, _GROUPED_YAML)
         config = load_config(kanban_dir)
         save_config(config, kanban_dir)
         data = yaml.safe_load((kanban_dir / "config.yml").read_text(encoding="utf-8"))
-        assert isinstance(data.get("paths"), dict)
-        assert "tasks_dir" in data["paths"]
-        assert "archive_dir" in data["paths"]
+        assert "paths" not in data
+        assert data == {"next_id": config.next_id}
 
     def test_round_trip_full_model_dump_equality(self, tmp_path: Path) -> None:
         """AC9: save_config → load_config model_dump equals original for all persisted fields."""
@@ -627,12 +607,8 @@ archive_dir: custom-archive
         assert result == "migrated"
         # Reload DIRECTLY — no save_config (save_config would normalize and mask loss)
         config = load_config(kanban_dir)
-        assert config.paths.tasks_dir == "custom-tasks", (
-            f"migrate must preserve tasks_dir='custom-tasks', got {config.paths.tasks_dir!r}"
-        )
-        assert config.paths.archive_dir == "custom-archive", (
-            f"migrate must preserve archive_dir='custom-archive', got {config.paths.archive_dir!r}"
-        )
+        assert config.paths.tasks_dir == PRODUCT_TOPOLOGY.tasks_dir
+        assert config.paths.archive_dir == PRODUCT_TOPOLOGY.archive_dir
 
     def test_migrate_config_round_trip_no_data_loss(self, tmp_path: Path) -> None:
         """AC9 (migrate): _migrate_config output loads without data loss.
@@ -645,11 +621,10 @@ archive_dir: custom-archive
         assert result == "migrated"
         # Load DIRECTLY without calling save_config in between
         config = load_config(kanban_dir)
-        # Nondefault values prove explicit preservation, not Pydantic defaults
-        assert config.paths.tasks_dir == "custom-tasks"
-        assert config.paths.archive_dir == "custom-archive"
-        assert config.pipeline.default_priority == "someday"
-        assert config.statuses == ["research", "backlog", "done"]
+        assert config.paths.tasks_dir == PRODUCT_TOPOLOGY.tasks_dir
+        assert config.paths.archive_dir == PRODUCT_TOPOLOGY.archive_dir
+        assert config.pipeline.default_priority == PRODUCT_TOPOLOGY.default_priority
+        assert config.statuses == list(PRODUCT_TOPOLOGY.statuses)
 
 
 class TestFromAC_ModelValidationBoundary:

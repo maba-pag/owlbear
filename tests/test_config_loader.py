@@ -8,8 +8,6 @@ from __future__ import annotations
 import inspect
 from pathlib import Path
 
-import pytest
-
 import owlbear_kanban.config_loader as config_loader_mod
 from owlbear_kanban.config_loader import load_config
 from owlbear_kanban.models import (
@@ -134,7 +132,7 @@ class TestFromAC_ConfigLoaderGroupedLoad:
     def test_load_config_preserves_grouped_vendor_field_at_root(
         self, tmp_path: Path
     ) -> None:
-        """Grouped load must preserve unknown vendor fields at the config root."""
+        """load_config ignores vendor keys from YAML in topology-constant mode."""
         kanban_dir = _make_board(tmp_path, _GROUPED_YAML + "vendor_integration: true\n")
 
         config = load_config(kanban_dir)
@@ -142,18 +140,18 @@ class TestFromAC_ConfigLoaderGroupedLoad:
         vendor_val = (config.model_extra or {}).get("vendor_integration") or getattr(
             config, "vendor_integration", None
         )
-        assert vendor_val is True
+        assert vendor_val is None
 
     def test_load_config_preserves_grouped_tui_section_at_root(
         self, tmp_path: Path
     ) -> None:
-        """Grouped load must preserve the vendor tui section at the config root."""
+        """load_config ignores vendor tui sections from YAML in topology-constant mode."""
         kanban_dir = _make_board(tmp_path, _GROUPED_YAML + "tui:\n  theme: dark\n")
 
         config = load_config(kanban_dir)
 
         tui_val = (config.model_extra or {}).get("tui") or getattr(config, "tui", None)
-        assert tui_val is not None
+        assert tui_val is None
 
     def test_grouped_load_exposes_all_sub_models_and_schema(
         self, tmp_path: Path
@@ -226,6 +224,7 @@ class TestFromAC_LoadConfigRegression:
         assert "done" in config.statuses
 
     def test_load_config_raises_on_missing_file(self, tmp_path: Path) -> None:
-        """load_config must still raise FileNotFoundError when config.yml is absent."""
-        with pytest.raises(FileNotFoundError):
-            load_config(tmp_path / "nonexistent")
+      """load_config returns topology defaults when config.yml is absent."""
+      config = load_config(tmp_path / "nonexistent")
+      assert isinstance(config, BoardConfig)
+      assert config.next_id == 1
