@@ -1,10 +1,10 @@
 ---
 id: 1463
 title: 'E2a: Delete/merge stale Python root tests (82 files in tests/)'
-status: backlog
+status: in-progress
 priority: important
 created: 2026-05-09T03:32:04.142951+00:00
-updated: 2026-05-09T05:24:21.612993+00:00
+updated: 2026-05-09T07:24:32.126371+00:00
 tags:
 - pipeline
 - ws-cleanup
@@ -118,3 +118,177 @@ Verdict: APPROVE → todo
 | 1 | architect | Re-baseline AC for #1463 to use delta-based acceptance (e.g., no additional failures + collected-count floor) or provide a known-green commit SHA as execution base. | `.owlbear/kanban/tasks/1463-e2a-delete-merge-stale-python-root-tests-82-files-in-tests.md` | Baseline gate is already red: `551 failed, 4686 passed, 4 skipped` before cleanup. |
 | 2 | planner | Split #1463 into smaller merge groups with explicit verification checkpoints and conflict policy for duplicate test symbols/fixtures. | `.owlbear/research/1463-python-root-test-cleanup.md`, `tests/` | Large-batch merge attempts caused systemic regressions (`714` and `656` fails) despite rollback. |
 | 3 | test-writer | Provide consolidation contract for multi-file groups: duplicate test-name handling, fixture collision policy, and expected post-merge collection count per target module. | `tests/test_*_{id}.py` merge groups in research §5b/§5c | Collection count dropped from `3277` to `3222` in both merge strategies, indicating unresolved merge semantics. |
+[[2026-05-09]]
+
+## Architecture Re-Review (Cycle 2)
+
+### Problem
+Builder attempted full task twice; both strategies introduced regressions (714/656 failures vs 551 baseline) and lost 55 collected tests (3277 → 3222). Root causes:
+1. P2 AC gated on "full suite passes" but baseline is already red (551 failures pre-cleanup)
+2. No collision policy for duplicate test function names during merges — caused silent test loss
+3. No per-group verification checkpoints — all-at-once approach masked which group caused regressions
+
+### Revised Acceptance Criteria
+_These REPLACE the original P2 AC line "Full Python test suite passes with ≥ 3272 tests collected after cleanup":_
+
+- P2: No new test failures introduced: post-cleanup failure count ≤ pre-cleanup baseline failure count, using identical pytest flags (td:0)
+- P2: Collected test count after cleanup ≥ pre-cleanup collect-only baseline — no test logic may be lost during merges (td:0)
+
+_All other AC lines (P1 renames, P1 merge-delete, P2 multi-file merges, P3 delete 1218) remain unchanged._
+
+### Revised Builder Guidance
+_SUPERSEDES original Builder Guidance section:_
+
+1. **Baseline capture (mandatory first step):** Before any file changes, record:
+   - `uv run pytest tests/ --collect-only -q --ignore=tests/test_decisions_1218.py | tail -1` → collected count
+   - `uv run pytest tests/ -q --tb=no -n 0 --ignore=tests/test_decisions_1218.py | tail -1` → pass/fail counts
+   These are the baseline numbers for delta-based AC verification.
+
+2. **Execution order:** rename (21) → merge-then-delete (22, one target at a time) → multi-file merge (40/16, one group at a time) → delete 1218 → final verification
+
+3. **Per-group verification (mandatory):** After completing each group/target, run collect-only and verify count has not dropped below baseline. If it drops, stop and investigate before continuing.
+
+4. **Duplicate test function names:** When merging files that define identically-named test functions, rename the incoming function to `test_{name}_{task_id}` (using the source file's task ID). Never silently overwrite.
+
+5. **Fixture collisions:** When both source and target define the same fixture:
+   - If identical: keep target's, delete source's
+   - If different: rename source fixture to `{name}_{task_id}` and update its consumers within the merged file
+
+6. **Import reconciliation:** Union all imports. Remove duplicates. If two files import different objects from the same module, merge the import statements.
+
+7. **File lists:** Research doc §5 has exact file-by-file tables for each batch.
+
+### Evaluation (Cycle 2)
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| TDD compliance | REVISED | Delta-based gate replaces unsatisfiable absolute-pass gate |
+| Interface clarity | REVISED | Added explicit collision policy and per-group verification |
+| All other criteria | PASS | See Cycle 1 — no changes |
+
+### Challenge Results
+- Challenger: SKIPPED — all td:0, no architectural decisions changed
+- The refinement addresses operational execution, not design
+
+### Verdict: APPROVE (after refinement)
+### Action Taken (Cycle 2)
+- Replaced P2 "full suite passes" AC with delta-based gate (no new failures + collection count preserved)
+- Added duplicate test-name collision policy (rename incoming to `test_{name}_{task_id}`)
+- Added fixture collision resolution protocol
+- Added mandatory per-group verification checkpoints
+- Added mandatory baseline capture as first step
+- Changed execution order to one-target-at-a-time for merge batches
+
+[[2026-05-09]]
+## Architecture Re-Review (Cycle 2)
+
+Builder bounced after two failed merge attempts. Root cause: P2 AC gated on "full suite passes" but baseline is already red (551 failures). Both merge strategies also lost 55 tests due to duplicate test-name collisions.
+
+**Refined:**
+- P2 AC → delta-based: no new failures + collection count preserved
+- Added mandatory baseline capture step
+- Added duplicate test-name collision policy (`test_{name}_{task_id}`)
+- Added fixture collision resolution protocol
+- Added per-group verification checkpoints (stop-on-drop)
+- Changed merge execution to one-target-at-a-time
+
+All AC lines remain td:0. Test-writer: SKIP.
+
+Verdict: APPROVE → todo
+[[2026-05-09]]
+## Test-Writer Notes
+
+**Verdict: Non-implementation pass-through — no tests written.**
+
+- **Task type:** Mechanical file rename/merge/delete in `tests/` directory
+- **AC coverage:** All 5 AC lines are explicitly `(td:0)` per Architect review (Cycle 1 and Cycle 2)
+- **Testable interfaces:** None — no new Python functions, classes, or modules are introduced
+- **Architecture review verdict (Cycle 2):** "All AC lines remain td:0. Test-writer: SKIP."
+- **Builder gate:** Delta-based AC verification (no new failures + collection count preserved) is a run-time pytest invocation, not a test contract requiring pre-written tests
+- **No test file created**
+
+DONE #1463 -> in-progress | non-impl pass-through, no tests needed
+[[2026-05-09]]
+## Builder Notes
+- Implementation attempt: executed two independent merge strategies for the AC-defined rename/merge/delete cleanup, then fully restored all touched files to `HEAD` after verification failures.
+- Files changed in final workspace state: none (restored).
+- Baseline verification (pre-change):
+  - `uv run pytest tests/ --collect-only -q --ignore=tests/test_decisions_1218.py` -> `3277 tests collected`
+  - `uv run pytest tests/ -q --tb=no -n 0 --ignore=tests/test_decisions_1218.py` -> `427 failed, 2846 passed, 4 skipped`
+- Attempt evidence:
+  - First merge pass: collected count dropped to `3115` (AC violation: test logic loss).
+  - Rebuild-from-HEAD pass: collect restored to `3277`, but failure count increased to `464` (AC violation: new failures introduced).
+- Final state after restore:
+  - collect-only: `3277 tests collected`
+  - failure baseline restored: `427 failed, 2846 passed, 4 skipped`
+  - `git status --porcelain -- tests` clean.
+- Conclusion: current AC/guidance remains under-specified for collision-safe semantic merges across these 62 source files; task cannot be advanced without introducing regressions under the current execution contract.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Replace monolithic merge AC with per-target acceptance checkpoints that define exact expected post-merge invariants per durable file (collection delta + allowed failure delta = 0 for each target). | `.owlbear/kanban/tasks/1463-e2a-delete-merge-stale-python-root-tests-82-files-in-tests.md`, `.owlbear/research/1463-python-root-test-cleanup.md` | Whole-task merge passes either lost tests (`3277 -> 3115`) or introduced regressions (`427 -> 464`). |
+| 2 | planner | Split #1463 into atomic sub-tasks (one durable target per task) to allow isolated merge validation and rollback-free progression. | `tests/` durable targets listed in research §5b/§5c | Bulk execution obscures which target introduces regressions; smaller slices are required for safe progression. |
+| 3 | test-writer | Provide explicit merge-collision contract examples (duplicate fixture/test/class names) for representative groups so builder transformations are deterministic and verifiable. | Merge groups under `tests/test_cockpit_*`, `tests/test_mcp_*`, `tests/test_server*`, `tests/test_decisions*` | Regression increase after collision-handled merge indicates unresolved semantic collision rules.
+[[2026-05-09]]
+## Planning
+
+### Decomposition: Split stale Python root test cleanup into isolated merge batches
+
+- Tasks created: 5
+- Dependency layers: 3
+- TDD exemption: test-file cleanup — suite pass IS the verification gate
+
+### Task List
+
+| ID | Title | Priority | Depends On | Tags |
+|----|-------|----------|------------|------|
+| #1466 | E2a-B1: Safe ops — renames, broken-test delete, low-risk merges | important | — | pipeline, ws-cleanup, scope:tests, quality |
+| #1467 | E2a-B2: Merge cockpit_decisions_api task tests into durable | important | #1466 | pipeline, ws-cleanup, scope:tests, quality |
+| #1468 | E2a-B3: Merge cockpit_mutation_api task tests into durable | important | #1466 | pipeline, ws-cleanup, scope:tests, quality |
+| #1469 | E2a-B4: Merge mcp_kanban task tests into durable | important | #1466 | pipeline, ws-cleanup, scope:tests, quality |
+| #1470 | E2a-B5: Small-group merges — 40 files into 16 new durables | important | #1467, #1468, #1469 | pipeline, ws-cleanup, scope:tests, quality |
+
+### Dependency Graph
+
+```mermaid
+graph TD
+  1466["#1466 B1: Safe ops"]
+  1467["#1467 B2: decisions_api"]
+  1468["#1468 B3: mutation_api"]
+  1469["#1469 B4: mcp_kanban"]
+  1470["#1470 B5: Small-group merges"]
+  1466 --> 1467
+  1466 --> 1468
+  1466 --> 1469
+  1467 --> 1470
+  1468 --> 1470
+  1469 --> 1470
+```
+
+All 5 tasks are children of #1415. #1463 is superseded by these 5 batch tasks.
+[[2026-05-09]]
+## Architecture Re-Review (Cycle 3) — SPLIT
+
+### Problem
+Builder failed twice (Cycle 1 + Cycle 2). Monolithic merge of 62 source files into ~21 targets produces regressions that can't be isolated to specific merge groups. Both attempts either lost tests (3277→3115) or introduced new failures (427→464). Delta-based AC from Cycle 2 was correctly formulated but execution-order and bulk-merge verification are structurally incompatible with safe progression.
+
+### Verdict: SPLIT
+Delegated to planner. Created 5 sub-tasks with per-target isolation:
+
+| ID | Title | Depends On |
+|----|-------|------------|
+| #1466 | E2a-B1: Safe ops — renames, broken-test delete, low-risk merges | — |
+| #1467 | E2a-B2: Merge cockpit_decisions_api task tests into durable | #1466 |
+| #1468 | E2a-B3: Merge cockpit_mutation_api task tests into durable | #1466 |
+| #1469 | E2a-B4: Merge mcp_kanban task tests into durable | #1466 |
+| #1470 | E2a-B5: Small-group merges — 40 files into 16 new durables | #1467, #1468, #1469 |
+
+### AC Corrections Applied to Sub-Tasks
+1. Replaced `pytest -x` (stops at first pre-existing failure) with delta-based verification
+2. Replaced hardcoded `≥ 3272` with dynamic pre-task baseline capture
+3. Fixed collision rename suffix to use source file's original task ID for traceability
+
+### Why Split, Not Refine Again
+Two cycles of AC refinement have not resolved the core issue: bulk merges mask which target causes regressions. Per-target isolation allows the builder to debug and rollback individual merge groups independently. The 3 high-risk targets (cockpit_decisions_api: 6→1, cockpit_mutation_api: 7→1, mcp_kanban: 7→1) each get their own task.
+
+This task (#1463) is superseded by the 5 sub-tasks above.

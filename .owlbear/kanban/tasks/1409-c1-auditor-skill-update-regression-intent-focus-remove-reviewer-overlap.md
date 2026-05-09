@@ -1,10 +1,10 @@
 ---
 id: 1409
 title: 'C1: Auditor skill research — 4-pillar model definition and overlap analysis'
-status: in-progress
+status: done
 priority: needed
 created: 2026-05-07T23:16:25.240390+00:00
-updated: 2026-05-09T05:25:15.487964+00:00
+updated: 2026-05-09T07:25:50.351977+00:00
 tags:
 - pipeline
 - ws-roles
@@ -15,7 +15,7 @@ depends_on:
 - 1407
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-09T07:25:50.351977+00:00
 archival_reason:
 archival_refs: []
 ---
@@ -46,7 +46,12 @@ Created follow-up task: #1461 — "C1-impl: Apply 4-pillar auditor model to w-ta
 
 Single-task shortcut — no TDD pairing required (skill/agent file updates, not feature implementation).
 [[2026-05-09]]
-## Research\n- Research doc: .owlbear/research/auditor-skill-update-1409.md\n- Sources: 5 studied, 5 high-relevance (all codebase — current auditor skill, post-B1 reviewer skill, pipeline protocol, agent def, brief)\n- Recommendation: 4-pillar auditor model (regression detection, intent verification, architect quality scoring, commit integrity). Remove AC spot-check, AC deviations, file-exists, per-AC evidence table — all now reviewer scope post-B1. Updated scoring rubric adds regression/intent deductions, removes AC-line deductions. Confidence: .85\n- Follow-up: #1461 (implementation at backlog)\n- Challenge: skipped (T1 autonomous, overlap analysis mechanical)
+## Research
+- Research doc: .owlbear/research/auditor-skill-update-1409.md
+- Sources: 5 studied, 5 high-relevance (all codebase — current auditor skill, post-B1 reviewer skill, pipeline protocol, agent def, brief)
+- Recommendation: 4-pillar auditor model (regression detection, intent verification, architect quality scoring, commit integrity). Remove AC spot-check, AC deviations, file-exists, per-AC evidence table — all now reviewer scope post-B1. Updated scoring rubric adds regression/intent deductions, removes AC-line deductions. Confidence: .85
+- Follow-up: #1461 (implementation at backlog)
+- Challenge: skipped (T1 autonomous, overlap analysis mechanical)
 [[2026-05-09]]
 ## Test-Writer Notes
 - Non-implementation task (skill/agent file updates) — no tests applicable.
@@ -164,3 +169,68 @@ Reconciled the #1409/#1461 split per reviewer follow-up. #1409's AC rewritten fr
 - Architect confirmed in Architecture Review (Cycle 2): "Test-writer: SKIP (all td:0)".
 - No testable Python interfaces exist — task scope is research, overlap analysis, and planning artifact creation only.
 - Passing through to builder.
+[[2026-05-09]]
+## Builder Notes
+- Non-implementation task — no code changes needed.
+- Scope check: AC is td:0 research/planning only; implementation is deferred to #1461.
+- Tests/Lint/Coverage: not applicable for this markdown planning pass-through.
+- Passing through to review per `w-tdd-green` Step 0a.
+[[2026-05-09]]
+## Review Evidence
+### Test Results
+- quality-runner not dispatched. The binding acceptance criteria for this cycle are all td:0 research/planning artifacts, and the task body marks max depth 0 with test-writer skip at `.owlbear/kanban/tasks/1409-c1-auditor-skill-update-regression-intent-focus-remove-reviewer-overlap.md:150-151` and `.owlbear/kanban/tasks/1409-c1-auditor-skill-update-regression-intent-focus-remove-reviewer-overlap.md:164-171`.
+
+### Lint Results
+- Direct diagnostics check reported no errors in `.owlbear/research/auditor-skill-update-1409.md`, `.owlbear/kanban/tasks/1409-c1-auditor-skill-update-regression-intent-focus-remove-reviewer-overlap.md`, and `.owlbear/kanban/tasks/1461-c1-impl-apply-4-pillar-auditor-model-to-w-task-verification-and-auditor-agent-md.md`.
+
+### Coverage
+- Not applicable for this td:0 research/planning task.
+
+### AC Compliance
+| AC Line | Evidence | Status |
+|---|---|---|
+| P1: 4-pillar auditor model defined with overlap analysis against post-B1 reviewer scope | The binding refined AC are recorded at `.owlbear/kanban/tasks/1409-c1-auditor-skill-update-regression-intent-focus-remove-reviewer-overlap.md:119-123`. The research artifact contains the overlap matrix at `.owlbear/research/auditor-skill-update-1409.md:24-36` and the 4-pillar model at `.owlbear/research/auditor-skill-update-1409.md:38-44`. | PASS |
+| P1: Research doc produced with overlap matrix, scoring rubric changes, and output template changes | The task body points to the research artifact at `.owlbear/kanban/tasks/1409-c1-auditor-skill-update-regression-intent-focus-remove-reviewer-overlap.md:31`. The document includes scoring rubric changes at `.owlbear/research/auditor-skill-update-1409.md:47-57` and output template changes at `.owlbear/research/auditor-skill-update-1409.md:59-66`. | PASS |
+| P2: Implementation task #1461 created with AC covering `w-task-verification` and `auditor.agent.md` updates | The refined AC requires this at `.owlbear/kanban/tasks/1409-c1-auditor-skill-update-regression-intent-focus-remove-reviewer-overlap.md:123`. Task `#1461` exists with implementation AC for `w-task-verification`, `auditor.agent.md`, and the no-overlap check at `.owlbear/kanban/tasks/1461-c1-impl-apply-4-pillar-auditor-model-to-w-task-verification-and-auditor-agent-md.md:28-36`. | PASS |
+
+### Deductions
+- -0.03: The original implementation AC remain at the top of the task file, so the review had to anchor to the later refined AC section explicitly.
+- -0.02: The current builder pass-through note did not include explicit lint evidence, so the review used direct diagnostics on the owned artifacts.
+
+### Confidence
+- 0.95
+
+### Verdict
+- PASS
+
+### Action
+- Advance to docs.
+
+## Observations
+- The brief still defines C1 as the auditor refocus workstream at `.owlbear/briefs/draft-pipeline-review-rethink/brief.md:107`, and the current split is now coherent: task `#1409` owns research/planning while task `#1461` owns the actual skill and agent file updates.
+- Historical fail notes remain in the task body, but the binding contract for this cycle is the refined AC block at `.owlbear/kanban/tasks/1409-c1-auditor-skill-update-regression-intent-focus-remove-reviewer-overlap.md:119-123`.
+[[2026-05-09]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | Research/planning only — no behavior, API, CLI, config, or package structure changed. No IN-scope prose doc references the auditor overlap analysis. |
+| 2 | Module docstrings | No | N/A | No Python files created or modified; builder confirmed pass-through. |
+| 3 | External attribution | No | N/A | All 5 sources in the research doc are internal codebase files (skills, agent def, brief, pipeline protocol). |
+| 4 | Research doc | Yes | Verified | `.owlbear/research/auditor-skill-update-1409.md` exists and contains: overlap matrix (§3), 4-pillar model (§3), scoring rubric changes (§3), output template changes (§3). Linked from task body `## Research` section. Follow-up #1461 created. |
+| 5 | Diagram maintenance (describes match) | No | N/A | `project-overview.excalidraw` (.owlbear/**) and `kanban.excalidraw` (.owlbear/kanban/**) match via broad glob, but matched files are operational records (kanban task files, research doc). No diagram architectural content changed — relevance gate applied, no footer update. |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation requested in task body. |
+| 7 | Deletion detection | No | N/A | No files deleted. |
+
+### Scope Classification
+- IN scope: `.owlbear/research/auditor-skill-update-1409.md` (research doc, created)
+- OUT scope: Kanban task files (operational board records), skill/agent files (not modified this cycle)
+
+### Files Updated
+None — no documentation changes required.
+
+### Child Tasks Created
+None.
+
+### Scratch Files Cleaned
+None — no `1409-*` scratch files found.

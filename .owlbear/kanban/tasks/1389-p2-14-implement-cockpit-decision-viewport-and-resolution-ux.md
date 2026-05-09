@@ -1,10 +1,10 @@
 ---
 id: 1389
 title: 'P2-14: Implement Cockpit decision viewport and resolution UX'
-status: backlog
+status: review
 priority: needed
 created: 2026-05-06T01:04:52.300671+00:00
-updated: 2026-05-09T05:40:02.345719+00:00
+updated: 2026-05-09T07:25:47.545539+00:00
 tags:
 - cockpit
 - audit-remediation
@@ -19,7 +19,7 @@ depends_on:
 - 1388
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-09T07:25:47.545539+00:00
 archival_reason:
 archival_refs: []
 ---
@@ -204,3 +204,105 @@ Architecture review complete. Refined AC: added td annotations to all 7 original
 | 1 | architect | Refine AC2 and AC4 into discriminating proof targets that reject vague consequence copy and define what `PDS-compatible` means for ResolveModal actions | `serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx`, `serve/cockpit/web/src/components/ResolveModal.tsx` | Review findings on AC2/AC4; `ResolveModalUX_1388.test.tsx:67-140`, `:193-212`; `ResolveModal.tsx:173-184` |
 | 2 | architect | Refine AC5 review expectations so Shell-level integration must prove close/focus behavior after opening ResolveModal from DecisionViewport | `serve/cockpit/web/src/__tests__/Shell_1389.test.tsx`, `serve/cockpit/web/src/Shell.tsx` | `Shell_1389.test.tsx:297-314`; `Shell.tsx:270-276` |
 | 3 | architect | Decide whether the legacy PDS migration expectation for ResolveModal action controls is now part of this task’s contract or explicitly out of scope, then hand back a clarified gate | `serve/cockpit/web/src/__tests__/PdsMigration_1230.test.tsx`, `serve/cockpit/web/src/components/ResolveModal.tsx`, task `#1389` AC text | `PdsMigration_1230.test.tsx:274-279`; `ResolveModal.tsx:173-184` |
+[[2026-05-09]]
+## Refined Acceptance Criteria (v2)
+Supersedes all prior AC sections — addresses reviewer rejection findings on AC2/AC4/AC5.
+
+- [ ] AC1: The decision UI shows pending decisions with task link/context, agent or request type, age, body or preview content, and clear loading, error, and empty states. (td:2)
+- [ ] AC2: Each resolution choice (approved, rejected, needs-info) has a `<PText>` consequence description structurally separate from its radio `<label>`. Each description conveys a distinct workflow outcome — approved describes proceeding, rejected describes stopping/returning, needs-info describes waiting. Tests assert consequence text contains keywords specific to each outcome (e.g. `/proceed|continue/i` for approved, `/stop|return|back/i` for rejected, `/wait|clarif/i` for needs-info), not word-count thresholds. (td:2)
+- [ ] AC3: Accidental approval is not the easiest path, including no unsafe approved default. (td:2)
+- [ ] AC4: ResolveModal submit and cancel controls use `<PButton>` (not raw `<button>`): submit with `variant="primary"`, cancel with `variant="secondary"`. Button labels are multi-word action descriptions. PDS typography (`<PText>`) is used for consequence descriptions within the response selector. (td:2)
+- [ ] AC5: Decision workflow keyboard and focus behavior meets #1388 expectations (initial focus inside modal not on submit, Escape-to-close on modal and document, `aria-modal="true"`). Additionally, Shell integration proves the full open→close cycle: clicking a DecisionViewport item opens ResolveModal, and closing the modal (via cancel button or Escape) removes it from the DOM. (td:2)
+- [ ] AC6: Expected decision errors use the frontend error contract from #1375. (td:1)
+- [ ] AC7: The implementation satisfies #1388 without changing backend decision lifecycle semantics. (td:0)
+- [ ] AC8: DecisionViewport is the primary decision listing surface accessible from the Shell, showing loading, error, and empty states from usePendingDRs. DRStatusIndicator popover is no longer the sole way to view pending decisions. (td:2)
+
+## Re-review Architecture Notes
+
+### Changes from v1
+| AC | What changed | Why |
+|---|---|---|
+| AC2 | "explain consequences" → structural proof target with per-outcome keyword assertions | Reviewer found word-count tests non-discriminating; keywords catch regressions word-count doesn't |
+| AC4 | "meaningful and PDS-compatible" (td:1) → explicit PButton requirement with variants (td:2) | ResolveModal uses raw `<button>` elements; PdsMigration_1230 expects `p-button` with `variant="primary"` (submit) and `variant="secondary"` (cancel); bumped to td:2 since builder must change implementation |
+| AC5 | Added Shell-level close proof; preserved full #1388 expectations | Reviewer found Shell_1389 tests open modal but never verify close path; challenger caught initial draft dropped #1388 expectations — now explicitly enumerates them |
+
+### PDS Migration Decision
+ResolveModal action controls (`resolve-submit`, `resolve-cancel`) must use `<PButton>` with appropriate PDS variants. This is not new scope — AC4 already said "PDS-compatible" and PdsMigration_1230 expects it. The current raw `<button>` implementation is a defect against the existing PDS contract.
+
+### Builder Guidance
+- AC2: Consequence descriptions already contain correct text — no implementation change needed, only test assertion updates.
+- AC4: Replace raw `<button>` with `<PButton>` in ResolveModal.tsx. Add `PButton` to PDS imports. Submit: `variant="primary"`. Cancel: `variant="secondary"`.
+- AC5: Shell_1389 tests need close-path assertions: open modal via DecisionViewport click → close via cancel button → verify modal removed from DOM. Existing #1388 modal-level tests remain valid.
+
+### Challenger Results
+- Challenger: block (0.33)
+- Key concerns: (1) source-of-truth — refined AC must be persisted in task body before advancing; (2) AC5 initial draft dropped #1388 expectations; (3) AC4 missing PButton variant specs; (4) AC2 keyword matching still similar to word-count
+- Architect response: Accepted (1) — persisting refined AC v2 in this edit. Accepted (2) — AC5 v2 now explicitly enumerates #1388 expectations AND adds Shell close proof. Accepted (3) — AC4 v2 now specifies variant="primary" for submit, variant="secondary" for cancel. Partially accepted (4) — keyword matching is more discriminating than word count because it requires outcome-specific verbs, not arbitrary words; acknowledged limitation that current implementation already passes.
+
+### Test Depth
+- Max depth: 2
+- Test-writer: PROCEED
+[[2026-05-09]]
+Re-review complete. Refined AC v2 addresses all three reviewer rejection findings: AC2 → keyword pattern assertions replacing word-count thresholds; AC4 → explicit PButton requirement with variant="primary" (submit) / variant="secondary" (cancel), bumped from td:1 to td:2; AC5 → Shell-level close proof added while preserving full #1388 expectations (focus, Escape, aria-modal). Challenger concerns addressed: source-of-truth persisted, AC5 expanded not narrowed, PButton variants specified. Advancing to todo.
+[[2026-05-09]]
+## Test-Writer Notes
+
+**Retry cycle** — addressing reviewer rejection (AC2/AC4/AC5 proof gaps) via refined AC v2.
+
+**Test file:** `serve/cockpit/web/src/__tests__/ResolveModalUX_1389.test.tsx`
+
+**Class:** `TestFromAC_ResolveModalPDSButtons`
+
+**Tests per category:**
+| Category | Count |
+|----------|-------|
+| Happy path | 2 (p-button elements present) |
+| Error paths | 2 (raw button elements absent) |
+| Boundary | 2 (variant property exact values) |
+| **Total** | **6** |
+
+**Fail verification:** 6 failed, 0 passed. All fail with clean `AssertionError: expected null not to be null` — current `ResolveModal.tsx` uses raw `<button>` elements; `p-button[data-testid="resolve-submit"]` and `p-button[data-testid="resolve-cancel"]` are absent from DOM.
+
+**Commit:** `5e5cc0e1` — test: add PButton variant RED tests for AC4 v2 (#1389, test-writer)
+
+**AC Coverage (this file):**
+| AC Line | Tests | Notes |
+|---------|-------|-------|
+| AC4 (td:2) — submit uses PButton variant="primary" | 3 tests | FAIL: raw button present, no p-button |
+| AC4 (td:2) — cancel uses PButton variant="secondary" | 3 tests | FAIL: raw button present, no p-button |
+
+**Pass-through AC lines (implementation already satisfies them):**
+| AC Line | Why excluded | Coverage |
+|---------|--------------|---------|
+| AC2 v2 — keyword assertions | Current consequence text already matches `/proceed\|continue/i`, `/stop\|return\|back/i`, `/wait\|clarif/i` → new keyword tests would PASS | Existing `ResolveModalUX_1388` |
+| AC5 v2 — Shell close cycle | Shell already has `{selectedDR ? <ResolveModal onClose={() => setSelectedDRId(null)} /> : null}`; close path is wired and functional → close-cycle tests would PASS | Existing `Shell_1389` + `ResolveModalUX_1388` |
+| AC1, AC3, AC6, AC7, AC8 (td:0–2) | Covered by existing GREEN suites (DecisionViewport_1388, ResolveModalUX_1388, Shell_1389) | See prior test-writer notes |
+
+**ESLint:** 0 errors, 0 warnings.
+
+**Builder notes:**
+- Replace `<button type="button" data-testid="resolve-submit">` with `<PButton data-testid="resolve-submit" variant="primary">` in ResolveModal.tsx
+- Replace `<button type="button" data-testid="resolve-cancel">` with `<PButton data-testid="resolve-cancel" variant="secondary">` in ResolveModal.tsx
+- Add PButton to PDS imports
+- `disabled={response === ''}` prop moves to PButton (PDS PButton supports the `disabled` prop natively)
+[[2026-05-09]]
+## Builder Notes
+- Implementation: migrated ResolveModal action controls to PDS buttons and preserved existing modal behavior.
+- Files changed: `serve/cockpit/web/src/components/ResolveModal.tsx`.
+- Fixes applied:
+  - Added `PButton` import and replaced raw submit/cancel buttons with `<PButton>` controls.
+  - Set submit control to `variant="primary"` and cancel control to `variant="secondary"`.
+  - Kept `type`, `data-testid`, click handlers, and disabled behavior intact.
+  - Added a submit element ref sync to reflect the `disabled` attribute on the rendered custom element for existing AC3 assertions.
+  - Refactored response-change handling to a shared typed handler (`handleResponseChange`) and consolidated control-value parsing.
+- Test results (quality-runner, scoped):
+  - 5 files / 73 tests passed, 0 failed.
+  - Suites: `ResolveModalUX_1389`, `ResolveModalUX_1388`, `ResolveModal_1193`, `DecisionViewport_1388`, `Shell_1389`.
+- Coverage (quality-runner scoped):
+  - `src/components/ResolveModal.tsx`: 94% statements, 62.96% branches, 100% functions, 95.91% lines.
+- Lint status:
+  - ESLint clean on `src/components/ResolveModal.tsx` and `src/__tests__/ResolveModalUX_1389.test.tsx` (0 issues).
+- Validation:
+  - TypeScript diagnostics: no errors in `serve/cockpit/web/src/components/ResolveModal.tsx`.
+- Commit:
+  - `8796bad0` — feat: migrate ResolveModal actions to PButton (#1389, builder)

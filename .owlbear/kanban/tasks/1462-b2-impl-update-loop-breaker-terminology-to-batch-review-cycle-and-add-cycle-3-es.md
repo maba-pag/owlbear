@@ -2,10 +2,10 @@
 id: 1462
 title: 'B2-impl: Update loop-breaker terminology to batch-review-cycle and add cycle-3
   escalation'
-status: in-progress
+status: done
 priority: important
 created: 2026-05-09T03:31:13.416517+00:00
-updated: 2026-05-09T05:47:44.775687+00:00
+updated: 2026-05-09T07:18:18.178643+00:00
 tags:
 - pipeline
 - ws-reviewer
@@ -138,3 +138,91 @@ All 4 target files confirmed current state matches research doc:
 ## Observations
 - The failure is implementation completeness, not AC ambiguity or test quality. The task already has concrete file targets and explicit replacement intent from the research and architecture-review sections.
 - Because this is the first review cycle, loop-breaker backlog routing does not apply yet.
+[[2026-05-09]]
+## Builder Notes
+- Implemented AC-targeted terminology updates and one new escalation row across exactly 4 files:
+  - `share/skills/r-pipeline-protocol/SKILL.md`
+  - `share/skills/w-code-review/SKILL.md`
+  - `share/agents/reviewer.agent.md`
+  - `share/prompts/agent-broad-audit.prompt.md`
+- `share/skills/r-pipeline-protocol/SKILL.md` updates:
+  - Replaced reviewer FAIL phrasing with batch-review-cycle phrasing.
+  - Split reviewer loop-breaker progression into explicit cycle rows.
+  - Added new row: `Cycle 3+ batch review cycle -> always backlog` with architect escalation for AC refinement.
+- `share/skills/w-code-review/SKILL.md` updates:
+  - Replaced `Repeated review failure cycle (2nd+ fail)` with `Repeated batch review cycle (2nd+ cycle)`.
+- `share/agents/reviewer.agent.md` updates:
+  - Replaced pipeline_position loop-breaker row with batch-review-cycle wording.
+- `share/prompts/agent-broad-audit.prompt.md` updates:
+  - Replaced rejection-routing row label `2nd+ FAIL` with `2nd+ batch review cycle`.
+
+- Verification:
+  - Scope/diff validation: only the 4 AC-targeted files changed for this task.
+  - Quality-runner (scoped, td:0 markdown task):
+    - Tests: 0 passed, 0 failed, 0 skipped (no executable tests in scope)
+    - Lint: clean=true, markdownlint exit code 0, violations=[]
+    - Coverage: N/A (non-executable documentation change)
+
+- Commit:
+  - `1c8aa29b`
+  - `docs: update batch review cycle terminology (#1462, builder)`
+[[2026-05-09]]
+## Review Evidence
+- Verdict: PASS
+- Test results: N/A (`td:0` task; no executable behavior under review)
+- Lint results: quality-runner/code-reader skipped by applicability because every AC line is `td:0` and the scope is four markdown artifacts with no test paths. Editor diagnostics are clean for all four changed files.
+- Coverage: N/A (`td:0` task)
+- Review-cycle count: Second review cycle. One prior `## Review Evidence` section exists in the task body.
+- 3-item checklist:
+  - AC->code mapping: PASS on P1-P6
+  - Test->AC alignment: N/A (`td:0`)
+  - Proof sufficiency: PASS via direct artifact inspection, with deductions noted below for unavailable git-level reproduction
+
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| P1 | `share/skills/r-pipeline-protocol/SKILL.md:113` now uses `Cycle 1 batch review cycle` instead of FAIL-based reviewer wording. | PASS |
+| P2 | `share/skills/r-pipeline-protocol/SKILL.md:115` adds `Cycle 3+ batch review cycle` with `always backlog (loop-breaker: architect escalation for AC refinement)`. | PASS |
+| P3 | `share/skills/w-code-review/SKILL.md:132` now uses `Repeated batch review cycle (2nd+ cycle)`. | PASS |
+| P4 | `share/agents/reviewer.agent.md:61` now uses `Fail (2nd+ batch review cycle)` / `2nd+ batch review cycle on same task`. | PASS |
+| P5 | `share/prompts/agent-broad-audit.prompt.md:135` now uses `2nd+ batch review cycle` for the reviewer rejection-routing row. | PASS |
+| P6 | Direct inspection of the edited locations shows only the AC-targeted terminology replacements and the new cycle-3 row. The builder note ties the change set to commit `1c8aa29b` and the same four files; no contradictory edits were found in surrounding-context reads. | PASS |
+
+- Deductions:
+  - -0.04: this tool surface could not independently run `git diff --name-only 1c8aa29b~1 1c8aa29b` or `git status --porcelain`, so P6 was cleared from current file state plus internally consistent builder notes rather than full git-level reproduction.
+  - -0.02: the builder note cites `quality-runner` + `markdownlint`, but `share/skills/h-quality-runner/SKILL.md:9,70` documents pytest/ruff or vitest/eslint flows with scoped `test_paths`; treated as non-blocking because this `td:0` task was verified directly.
+
+- Confidence: 0.92
+- Action: Advance to `docs`
+
+## Observations
+- The deliverable itself is correct: the live content in all four target files matches the brief/research intent for batch-review-cycle terminology and the cycle-3 architect-escalation row.
+- Future `td:0` builder notes should avoid attributing markdownlint output to `quality-runner`; for markdown-only tasks, direct artifact verification is the reliable evidence path in this tool surface.
+[[2026-05-09]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | All 4 changed files are agent-executable (SKILL.md, .agent.md, .prompt.md) — no IN-scope prose docs reference loop-breaker terminology in reviewer skills/prompts |
+| 2 | Module docstrings | No | N/A | No Python modules modified |
+| 3 | External attribution | No | N/A | Terminology update within codebase; no external patterns used |
+| 4 | Research doc | No | N/A | Research doc `.owlbear/research/loop-breaker-batch-cycle-update.md` linked in task body; no further action needed |
+| 5 | Diagram maintenance (describes match) | No | N/A | No IN-scope diagrams; doc-index not consulted (no IN-scope files to match) |
+| 6 | Explicit diagram creation | No | N/A | No explicit diagram creation request in task body |
+| 7 | Deletion detection | No | N/A | No files deleted; no orphaned IN-scope docs detected |
+
+### Scope Classification
+- `share/skills/r-pipeline-protocol/SKILL.md` → OUT (agent-executable SKILL.md)
+- `share/skills/w-code-review/SKILL.md` → OUT (agent-executable SKILL.md)
+- `share/agents/reviewer.agent.md` → OUT (agent-executable .agent.md)
+- `share/prompts/agent-broad-audit.prompt.md` → OUT (agent-executable .prompt.md)
+
+All changed files are OUT-of-scope. **No docs impact.**
+
+### Files Updated
+None — no-impact case; no IN-scope documentation required updating.
+
+### Child Tasks Created
+None.
+
+### Scratch Files Cleaned
+None found (`.owlbear/scratch/1462-*` — no matches).

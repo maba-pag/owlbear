@@ -1,7 +1,7 @@
 ---
 id: 1316
 title: Knowledge Engine Activation
-status: in-progress
+status: review
 priority: critical
 created: 2026-05-04T05:44:46.924003+00:00
 updated: 2026-05-04T05:54:30.178220+00:00

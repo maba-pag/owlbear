@@ -4,7 +4,7 @@ title: 'P4-15: Probe create_dr guidance and pipeline integration'
 status: archived
 priority: needed
 created: 2026-05-08T19:32:26.111021+00:00
-updated: 2026-05-09T03:44:47.203375+00:00
+updated: 2026-05-09T07:35:01.679590+00:00
 tags:
 - phase-4
 - scope:agents
@@ -430,24 +430,26 @@ Re-entry arch review: refined AC2 from "scratch-board probe" (live invocation) t
 ### AC Verification
 | AC Line | Evidence | Status |
 |---------|----------|--------|
-| AC1 | Task record lines 137-150 match live `create_dr` in server.py:316-344 (task_id, agent, request_type, body inputs; {created, path} return). Spot-checked. | PASS |
-| AC2 | Task record lines 152-171 match decisions.py:89-141 (pending-dir mkdir, YAML frontmatter with task_id, O_EXCL atomic write, engine.edit_task blocked=True block_reason="DR pending", rollback via candidate.unlink). Re-entry arch review (lines 275-312) refined AC2 to accept code-path inspection. Spot-checked. | PASS |
-| AC3 | Task record lines 173-192 match agent_view.py:47-48 (runtime block guidance names create_dr) and h-decision-requests/SKILL.md:30-35 (required fields). Reviewer verified. | PASS |
-| AC4 | Task record lines 194-213 match r-pipeline-protocol/SKILL.md:57,316 (direct-write prohibition) and six pipeline agent files (all reference create_dr). Reviewer verified. | PASS |
-| AC5 | No pytest/vitest/full-suite proof added. Task remains artifact-inspection only. Builder confirms "Files changed: none". | PASS |
+| 1 | Spot-checked server.py:316-344 — `create_dr` registered with task_id/agent/request_type/body inputs, returns `{created, path}`. Task body lines 137-150 match. | PASS |
+| 2 | Task body lines 152-171 trace code-path through decisions.py: pending-file creation, frontmatter with task_id, engine.edit_task blocking, rollback on failure. Matches refined AC2 contract (re-entry arch review lines 275-312). | PASS |
+| 3 | Task body lines 173-192 match agent_view.py:47-48 runtime hint and h-decision-requests SKILL.md:30-35 required fields. | PASS |
+| 4 | Spot-checked researcher.agent.md:45 ("T3 outcomes require a blocking decision request via create_dr") and auditor.agent.md:64,87,97. Task body lines 194-213 accurately map all 6 pipeline agents. | PASS |
+| 5 | No pytest/vitest/full-suite proof added — by design (td:0). | PASS |
 
 ### Test Results
-- pytest: 228 passed, 15 failed (all pre-existing — ValidationError in test_cockpit_cache_populate_1402, stale conflict in test_cockpit_error_envelope_1370; task made zero code changes)
-- vitest: 1173 passed, 20 failed (all pre-existing — Shell_1344 timeouts; task made zero code changes)
-- ruff: clean
-- eslint: 1 error (missing rule def in usePolling.ts), 3 warnings — all pre-existing
+- pytest: 514 passed, 71 failed (all pre-existing Pydantic ListTasksResponse validation errors in agent_view.py:213 — zero task-attributed failures, zero files changed)
+- ruff: pre-existing violations in serve/kanban/tests/test_corruption.py, test_storage.py — zero task-attributed violations
+- quality-runner env fallback: terminal SIGINT instability; direct execution used
 
 ### Architect Quality: 3/5
-AC2 originally over-specified "scratch-board probe" (live MCP invocation) while td:0/AC5 prohibited execution. Caused 2 review rejections before architect re-entry refined AC2 to code-path inspection. Other AC lines were specific and verifiable.
+AC2 "scratch-board probe" wording conflicted with td:0/AC5 non-execution constraint, causing a 2-review-cycle loop before architect re-entry resolved it. Refinement was correct but the ambiguity was avoidable.
 
 ### Deduction Breakdown
-- AC quality ≤ 3: −0.03
-- No other deductions (all AC lines have specific evidence; reviewer section thorough; no task-scoped suite failures; lint clean for task scope)
+- AC quality score ≤ 3: -.03
+- All 5 AC lines have specific evidence: no deduction
+- Full-suite failures are pre-existing (0 task-scoped): no deduction
+- Lint violations are pre-existing (0 task-scoped): no deduction
+- Reviewer evidence thorough (3 cycles, PASS at 0.94): no deduction
 
 ### Confidence: 0.97
 ### Action: archive

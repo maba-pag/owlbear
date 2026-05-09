@@ -1,10 +1,10 @@
 ---
 id: 1439
 title: 'P4-02: Collapse kanban engine topology into product constants'
-status: todo
+status: done
 priority: critical
 created: 2026-05-08T19:31:49.034076+00:00
-updated: 2026-05-09T05:27:35.654526+00:00
+updated: 2026-05-09T07:28:11.371651+00:00
 tags:
 - phase-4
 - scope:kanban
@@ -327,3 +327,90 @@ Test-writer: existing 68 tests are sufficient — no new tests needed for scope 
 AC4 narrowed to engine-backed reads. No code or test changes required — this is a scope clarification only.
 [[2026-05-09]]
 Architecture re-review after reviewer loop-break. Narrowed AC4 scope: "Task frontmatter parsing validates against product-topology" → "Engine-backed task reads validate against product-topology; direct read_task(config=None) on configless boards is out of scope." This matches the existing implementation and tests — no code or test changes required. Scope clarification only. Existing 68 tests are sufficient.
+[[2026-05-09]]
+## Test-Writer Notes
+
+**Retry (architect scope-clarification pass): no new tests added.**
+
+- Architect re-review narrowed AC4: "Engine-backed task reads validate against product-topology; direct `read_task(config=None)` on configless boards is out of scope and retains existing bypass behavior."
+- Architect verdict: "existing 68 tests are sufficient — no new tests needed for scope narrowing."
+- Confirmed: all 68 tests in `tests/test_kanban_topology_1439.py` pass against current implementation (0.56s, exit 0).
+- No lint issues. No code or test changes made.
+- Builder skip: scope-clarification-only retry, all tests green → advancing directly to review.
+[[2026-05-09]]
+## Builder Notes
+- Implementation: no source edits in this cycle (scope-clarification builder-skip verification pass).
+- Files changed: none.
+- Tests:
+  - quality-runner scoped suites: `tests/test_kanban_topology_1439.py` + `tests/test_storage_1205.py` -> 81 passed, 0 failed.
+- Coverage:
+  - overall (scoped): 37%
+  - module breakdown: topology 100%, config_loader 100%, storage 66%, dispatch 34%, corruption 34%.
+- ruff: clean (no violations on scoped lint paths).
+- Evidence summary:
+  - Architect narrowed AC4 to engine-backed read validation scope.
+  - Test-writer confirmed existing task suite already satisfies narrowed AC.
+  - Fresh quality-runner verification confirms GREEN; no additional implementation changes required.
+- Commits: none in this cycle (no file modifications).
+[[2026-05-09]]
+## Review Evidence
+### Test Results
+- `quality-runner` scoped suites: `tests/test_kanban_topology_1439.py` + `tests/test_storage_1205.py` -> 81 passed, 0 failed.
+- Focused adjacent proofs: `serve/kanban/tests/test_storage_1050.py::TestBuilderDiscovered::test_allocate_next_id_returns_current_and_persists_increment` + `serve/kanban/tests/test_corruption.py::TestBuilderDiscovered::test_read_task_invalid_priority_raises_mode9` -> 2 passed, 0 failed.
+- A broader adjacent storage/corruption sweep returned 165 passed, 10 failed, but those failures were out-of-scope baseline reds (path-doubled AST paths in `serve/kanban/tests/test_storage.py`, archive-fixture failures, and unrelated corruption cleanup/API assertions). They do not overlap the narrowed #1439 AC surface. The relevant `allocate_next_id` and invalid-priority proofs were green.
+
+### Lint Results
+- Ruff clean on `serve/kanban/src/owlbear_kanban/topology.py`, `config_loader.py`, `storage.py`, `dispatch.py`, `corruption.py`, plus `tests/test_kanban_topology_1439.py` and `tests/test_storage_1205.py`.
+- VS Code diagnostics: no errors in the reviewed source/test files.
+
+### Coverage
+- Scoped module coverage: `owlbear_kanban.topology` 100%, `owlbear_kanban.config_loader` 100%, `owlbear_kanban.storage` 66%, `owlbear_kanban.dispatch` 34%, `owlbear_kanban.corruption` 34% (overall scoped 37%).
+- Coverage is informational here; the changed paths are additionally backed by focused runtime proofs for `allocate_next_id` and invalid-priority detection.
+
+### Security Review
+- No security findings. YAML usage remains safe and storage writes still use the existing atomic/path-containment discipline.
+
+### Builder Process Quality
+- CLEAN. The latest cycle was architecture-scope clarification plus builder-skip, with no repeated implementation loop.
+- Review is anchored to the latest binding architecture refinement: AC4 applies to engine-backed reads; direct `read_task(config=None)` on configless boards is out of scope.
+
+### Test Integrity
+- No visible weakening of `TestFromAC_*` coverage in the current snapshot. The retry added discriminating AgentView proofs at `tests/test_kanban_topology_1439.py:620`, `:640`, `:684` and strengthened exact-value compatibility assertions at `:860` and `:869`.
+- I could not verify git diff / dirty-tree overlap from this tool surface, so I applied a small confidence deduction.
+
+### AC Compliance
+| AC Line | Evidence | Status |
+|---|---|---|
+| AC1 | `PRODUCT_TOPOLOGY` is defined at `serve/kanban/src/owlbear_kanban/topology.py:32`. The archived #1438 probe table records the same canonical statuses, routing, and non-impl tags at `.owlbear/kanban/archive/1438-p4-01-probe-fixed-kanban-topology-contract.md:105`, `:113`, `:114`. The task suite pins exact statuses, priorities, routing, `activity_log`, archival reasons, non-impl tags, and `decisions_dir` at `tests/test_kanban_topology_1439.py:213`, `:221`, `:250`, `:254`, `:259`, `:263`, `:275`. | PASS |
+| AC2 | `load_config` now initializes `BoardConfig` from product topology at `serve/kanban/src/owlbear_kanban/config_loader.py:27`, and `engine.board_config()` remains a deep-copy read surface at `serve/kanban/src/owlbear_kanban/engine.py:457` and `:463`. No-config engine init and `next_id=1` are proven by `tests/test_kanban_topology_1439.py:300`, `:327`, `:336`, `:345`. | PASS |
+| AC3 | Engine-side override rejection is covered across statuses, priorities, `agent_map`, `tasks_dir`/`archive_dir`, `terminal_status`, `wave_size`, `claim_timeout`, `default_priority`, `non_impl_tags`, and archival reasons at `tests/test_kanban_topology_1439.py:371`, `:395`, `:424`, `:435`, `:443`, `:451`, `:463`, `:474`, `:489`, `:514`, `:526`. The earlier AgentView proof gaps were closed with representative topology-sensitive methods: `list_tasks` / `create_task` / `pick_tasks` / `move_task` at `tests/test_kanban_topology_1439.py:586`, `:620`, `:640`, `:684`. The remaining `list_tasks` assertion is shallow, but the retry now covers the status-validation, entry-status, agent-map/wave, and terminal-status move surfaces that the prior review requested. | PASS |
+| AC4 | `save_config` only persists `next_id` at `serve/kanban/src/owlbear_kanban/storage.py:224` and is directly tested at `tests/test_kanban_topology_1439.py:806`; `allocate_next_id` still works at `serve/kanban/src/owlbear_kanban/storage.py:538` and via focused adjacent proof `serve/kanban/tests/test_storage_1050.py:969`. `board_config` attribute paths are directly exercised at `tests/test_kanban_topology_1439.py:841`, `:851`, `:860`, `:869`, `:878`, `:887`, while the remaining named pipeline/policy values are proven by the override-rejection tests at `:424`, `:435`, `:443`, `:451`, `:489`. `dispatch` now aliases the product constant at `serve/kanban/src/owlbear_kanban/dispatch.py:58` and `tests/test_kanban_topology_1439.py:898`. Engine-backed read validation is enforced because corruption uses product topology at `serve/kanban/src/owlbear_kanban/corruption.py:60` and `:65`, engine `read_task` call sites pass `config=self._config` at `serve/kanban/src/owlbear_kanban/engine.py:601`, `:634`, `:765`, `:783`, `:1129`, `:1780` and are AST-guarded by `tests/test_storage_1205.py:303` and `:328`, and the task/adjacent tests cover invalid status, valid config-overridden priority, tags, blocked, and invalid priority at `tests/test_kanban_topology_1439.py:913`, `:951`, `:982`, `:1010` and `serve/kanban/tests/test_corruption.py:950`. | PASS |
+
+### Deductions
+- `-0.04` residual proof quality: `tests/test_kanban_topology_1439.py:586` still ends in a non-discriminating `list_tasks` assertion, but the retry added the representative AgentView proofs the prior review required.
+- `-0.03` git inspection limitation: this session could not verify dirty-tree overlap or reconstruct a full file-level diff for `TestFromAC` immutability.
+- `-0.02` adjacent-suite noise: the broader storage/corruption sweep contains unrelated baseline reds, so adjacent regression evidence had to be narrowed to focused node IDs.
+
+### Verdict
+- Confidence: 0.91
+- PASS -> `docs`
+- Action: advance to docs. No AC-blocking implementation defect or proof defect remains after the AC4 scope narrowing and the test-writer retry.
+[[2026-05-09]]
+## Docs Gate
+
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 0a | Review Evidence present | Yes | PASS | Three `## Review Evidence` sections present; latest verdict PASS → docs |
+| 0b | Doc-index loaded | Yes | PASS | `.owlbear/doc-index.md` read; no kanban `describes` entries found |
+| 1 | Descriptive prose docs | Yes | UPDATED | `serve/kanban/README.md` Migration section had stale paragraph claiming `agent_map` must be manually populated after `--lane config`; topology is now product-owned so `pick_tasks()` works immediately post-migration. Updated. |
+| 2 | Module docstrings | Yes | PASS | `topology.py` module + class docstrings accurate; `config_loader.py` `load_config` docstring accurately states topology is product-owned; `storage.py` `save_config` docstring says "Persists only `next_id`; topology values are product constants." All changed public APIs documented correctly. |
+| 3 | External attribution | N/A | N/A | No external patterns cited in task body |
+| 4 | Research doc | N/A | N/A | No research doc produced |
+| 5 | Diagram maintenance | N/A | N/A | No `describes` glob matches kanban source files in doc-index |
+| 6 | Explicit diagram creation | N/A | N/A | No diagram creation request in task body |
+| 7 | Deletion detection | N/A | N/A | No files deleted; one new file added (`topology.py`) |
+
+**Files updated:** `serve/kanban/README.md`
+**Commit:** `09d33d75`
+**Child tasks:** none
+**Scratch files:** none created for #1439
