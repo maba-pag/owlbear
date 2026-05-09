@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import inspect
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -11,6 +12,7 @@ from mcp.server.fastmcp.exceptions import ToolError
 import owlbear_mcp_kanban.server as _server_mod
 
 from owlbear_kanban import KanbanEngine
+from owlbear_kanban.errors import ConcurrencyError
 from owlbear_kanban.errors import KanbanError, ValidationError
 from owlbear_kanban.models import SingleTaskResponse
 from owlbear_mcp_kanban.server import (
@@ -32,44 +34,7 @@ from owlbear_mcp_kanban.server import (
 from owlbear_mcp_kanban.models import KanbanTask
 
 _CONFIG_YAML = """\
-version: 10
-board:
-  name: TestBoard
-tasks_dir: tasks
-statuses:
-- name: research
-- name: backlog
-- name: todo
-- name: in-progress
-- name: review
-- name: docs
-- name: done
-priorities:
-- someday
-- nice-to-have
-- important
-- needed
-- critical
-defaults:
-  status: research
-  priority: important
-claim_timeout: 1h
 next_id: 1
-archive_dir: archive
-activity_log: false
-agent_map:
-  research: researcher
-  backlog: architect
-  todo: test-writer
-  in-progress: builder
-  review: reviewer
-  docs: doc-writer
-  done: auditor
-agent_types: {}
-agent_compatibility: {}
-non_impl_tags: []
-archival_reasons: [completed, deprecated, dropped, duplicate, wontfix]
-status_predicates: {}
 """
 
 
@@ -1037,3 +1002,754 @@ class TestEditTaskToolSchemaContract:
             "description", ""
         )
         assert "0 to clear" in parent_description
+
+
+@pytest.fixture
+def app_ctx_mock_1091(tmp_path: Path) -> tuple[AppContext, MagicMock]:
+    """Merged from task file 1091 with fixture name adjusted to avoid collisions."""
+    kanban_dir = _make_board(tmp_path)
+    engine = KanbanEngine(kanban_dir)
+    engine.create_task("Seed task", status="todo", priority="important")
+    engine.list_tasks()
+    mock_view = MagicMock()
+    mock_view.create_task.return_value = _make_single_task_response()
+    mock_view.edit_task.return_value = _make_single_task_response()
+    engine._agent_view = mock_view  # noqa: SLF001
+    return AppContext(engine=engine, kanban_dir=kanban_dir), mock_view
+
+
+@pytest.fixture
+def app_ctx_mock_1092(tmp_path: Path) -> tuple[AppContext, MagicMock]:
+    """Merged from task file 1092 with fixture name adjusted to avoid collisions."""
+    kanban_dir = _make_board(tmp_path)
+    engine = KanbanEngine(kanban_dir)
+    engine.create_task("Seed task", status="todo", priority="important")
+    engine.list_tasks()
+    mock_view = MagicMock()
+    mock_view.move_task.return_value = _make_single_task_response(status="review")
+    mock_view.start_work.return_value = _make_single_task_response(status="review")
+    mock_view.end_work.return_value = _make_single_task_response(status="review")
+    engine._agent_view = mock_view  # noqa: SLF001
+    return AppContext(engine=engine, kanban_dir=kanban_dir), mock_view
+
+
+@pytest.fixture
+def app_ctx_1196(tmp_path: Path) -> AppContext:
+    """Merged from task file 1196 with fixture name adjusted to avoid collisions."""
+    kanban_dir = _make_board(tmp_path)
+    engine = KanbanEngine(kanban_dir)
+    return AppContext(engine=engine, kanban_dir=kanban_dir)
+
+
+@pytest.fixture
+def app_ctx_1450(tmp_path: Path) -> AppContext:
+    """Merged from task file 1450 with fixture name adjusted to avoid collisions."""
+    kanban_dir = _make_board(tmp_path)
+    engine = KanbanEngine(kanban_dir)
+    engine.create_task("Active task", status="todo", priority="important")
+    return AppContext(engine=engine, kanban_dir=kanban_dir)
+
+
+@pytest.fixture
+def app_ctx_with_archived_duplicate_1450(tmp_path: Path) -> AppContext:
+    """One archived duplicate task plus one active reference task."""
+    kanban_dir = _make_board(tmp_path)
+    engine = KanbanEngine(kanban_dir)
+    ref_task = engine.create_task("Reference task", status="todo", priority="important")
+    dup_task = engine.create_task("Duplicate task", status="todo", priority="important")
+    engine.agent_view().move_task(
+        dup_task.id,
+        "archived",
+        archival_reason="duplicate",
+        archival_refs=[ref_task.id],
+    )
+    return AppContext(engine=engine, kanban_dir=kanban_dir)
+
+
+@pytest.fixture
+def app_ctx_with_mixed_archived_1450(tmp_path: Path) -> AppContext:
+    """Mixed archived reasons for archival_reason filtering assertions."""
+    kanban_dir = _make_board(tmp_path)
+    engine = KanbanEngine(kanban_dir)
+    dup_task = engine.create_task("Duplicate task", status="todo", priority="important")
+    comp_task = engine.create_task("Completed task", status="todo", priority="important")
+    ref_task = engine.create_task("Reference task", status="todo", priority="important")
+    av = engine.agent_view()
+    av.move_task(
+        dup_task.id,
+        "archived",
+        archival_reason="duplicate",
+        archival_refs=[ref_task.id],
+    )
+    av.move_task(comp_task.id, "done")
+    av.move_task(comp_task.id, "archived", archival_reason="completed")
+    return AppContext(engine=engine, kanban_dir=kanban_dir)
+
+
+def _get_tool_annotations(tool_name: str) -> object | None:
+    """Return ToolAnnotations for a named MCP tool, if present."""
+    from owlbear_mcp_kanban.server import mcp  # noqa: PLC0415
+
+    if hasattr(mcp, "_tool_manager"):
+        for tool in mcp._tool_manager._tools.values():  # noqa: SLF001
+            if tool.name == tool_name:
+                return getattr(tool, "annotations", None)
+    return None
+
+
+class TestMergedFrom1091:
+    @pytest.mark.asyncio
+    async def test_create_task_calls_map_kanban_error_helper(
+        self,
+        app_ctx_mock_1091: tuple[AppContext, MagicMock],
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from owlbear_mcp_kanban import server
+
+        app_ctx, mock_view = app_ctx_mock_1091
+        mock_view.create_task.side_effect = ValidationError(
+            code="ERR_INVALID_PRIORITY",
+            user_message="priority 'bad' is not valid",
+        )
+
+        helper_calls: list[KanbanError] = []
+
+        def tracking_helper(exc: KanbanError) -> None:
+            helper_calls.append(exc)
+            raise ToolError(exc.user_message) from exc
+
+        monkeypatch.setattr(server, "_map_kanban_error", tracking_helper)
+
+        with pytest.raises(ToolError):
+            await create_task(_make_ctx(app_ctx), title="T", priority="bad")
+
+        assert len(helper_calls) == 1
+
+    @pytest.mark.asyncio
+    async def test_edit_task_calls_map_kanban_error_helper(
+        self,
+        app_ctx_mock_1091: tuple[AppContext, MagicMock],
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from owlbear_mcp_kanban import server
+
+        app_ctx, mock_view = app_ctx_mock_1091
+        mock_view.edit_task.side_effect = ValidationError(
+            code="ERR_NO_OP",
+            user_message="no fields would change",
+        )
+
+        helper_calls: list[KanbanError] = []
+
+        def tracking_helper(exc: KanbanError) -> None:
+            helper_calls.append(exc)
+            raise ToolError(exc.user_message) from exc
+
+        monkeypatch.setattr(server, "_map_kanban_error", tracking_helper)
+
+        with pytest.raises(ToolError):
+            await edit_task(_make_ctx(app_ctx), id="1", priority="critical")
+
+        assert len(helper_calls) == 1
+
+    def test_edit_task_has_no_status_parameter_1091(self) -> None:
+        params = inspect.signature(edit_task).parameters
+        assert "status" not in params
+
+
+class TestMergedFrom1092:
+    @pytest.mark.asyncio
+    async def test_move_task_kanban_error_routed_via_helper(
+        self,
+        app_ctx_mock_1092: tuple[AppContext, MagicMock],
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        import owlbear_mcp_kanban.server as server_mod
+
+        app_ctx, mock_view = app_ctx_mock_1092
+        mock_view.move_task.side_effect = ValidationError(
+            code="ERR_INVALID_STATUS",
+            user_message="status 'bad' is not valid",
+        )
+
+        helper_calls: list[KanbanError] = []
+
+        def tracking_helper(exc: KanbanError) -> None:
+            helper_calls.append(exc)
+            raise ToolError(exc.user_message) from exc
+
+        monkeypatch.setattr(server_mod, "_map_kanban_error", tracking_helper)
+
+        with pytest.raises(ToolError):
+            await move_task(_make_ctx(app_ctx), id="1", status="review")
+
+        assert len(helper_calls) == 1
+
+    @pytest.mark.asyncio
+    async def test_start_work_kanban_error_routed_via_helper(
+        self,
+        app_ctx_mock_1092: tuple[AppContext, MagicMock],
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        import owlbear_mcp_kanban.server as server_mod
+
+        app_ctx, mock_view = app_ctx_mock_1092
+        mock_view.start_work.side_effect = ValidationError(
+            code="ERR_ALREADY_CLAIMED",
+            user_message="Task '1' is already claimed by another agent",
+        )
+
+        helper_calls: list[KanbanError] = []
+
+        def tracking_helper(exc: KanbanError) -> None:
+            helper_calls.append(exc)
+            raise ToolError(exc.user_message) from exc
+
+        monkeypatch.setattr(server_mod, "_map_kanban_error", tracking_helper)
+
+        with pytest.raises(ToolError):
+            await start_work(_make_ctx(app_ctx), id="1")
+
+        assert len(helper_calls) == 1
+
+    @pytest.mark.asyncio
+    async def test_end_work_kanban_error_routed_via_helper(
+        self,
+        app_ctx_mock_1092: tuple[AppContext, MagicMock],
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        import owlbear_mcp_kanban.server as server_mod
+
+        app_ctx, mock_view = app_ctx_mock_1092
+        mock_view.end_work.side_effect = ValidationError(
+            code="ERR_BLOCK_REASON_REQUIRED",
+            user_message="block_reason is required when outcome='block'",
+        )
+
+        helper_calls: list[KanbanError] = []
+
+        def tracking_helper(exc: KanbanError) -> None:
+            helper_calls.append(exc)
+            raise ToolError(exc.user_message) from exc
+
+        monkeypatch.setattr(server_mod, "_map_kanban_error", tracking_helper)
+
+        with pytest.raises(ToolError):
+            await end_work(
+                _make_ctx(app_ctx),
+                id="1",
+                outcome="block",
+                note="blocked",
+                block_reason=None,
+            )
+
+        assert len(helper_calls) == 1
+
+    def test_move_task_no_local_archival_validation_in_source(self) -> None:
+        source = inspect.getsource(_server_mod)
+        assert "archival_reason is required when status" not in source
+
+    def test_end_work_adapter_no_param_normalization_in_source(self) -> None:
+        source = inspect.getsource(end_work)
+        assert 'note or ""' not in source
+        assert "block_reason or" not in source
+
+    def test_end_work_adapter_no_tag_mutation_in_source(self) -> None:
+        source = inspect.getsource(end_work)
+        assert "block:user" not in source
+
+    def test_start_work_adapter_no_business_logic_in_source(self) -> None:
+        source = inspect.getsource(start_work)
+        assert 'or ""' not in source
+        assert "claim_timeout" not in source
+
+
+class TestMergedFrom1126:
+    def test_no_except_typeerror_in_server_source(self) -> None:
+        source = Path(_server_mod.__file__).read_text(encoding="utf-8")
+        assert "except TypeError" not in source
+
+
+class TestMergedFrom1196:
+    @pytest.mark.asyncio
+    async def test_empty_string_rejected_with_tool_error(
+        self, app_ctx_1196: AppContext
+    ) -> None:
+        from unittest.mock import patch
+
+        with (
+            patch("owlbear_mcp_kanban.server.decisions.create_dr"),
+            pytest.raises(ToolError),
+        ):
+            await create_dr(
+                _make_ctx(app_ctx_1196),
+                task_id="",
+                agent="builder",
+                request_type="decision",
+                body="b",
+            )
+
+    @pytest.mark.asyncio
+    async def test_wildcard_rejected_with_tool_error(
+        self, app_ctx_1196: AppContext
+    ) -> None:
+        from unittest.mock import patch
+
+        with (
+            patch("owlbear_mcp_kanban.server.decisions.create_dr"),
+            pytest.raises(ToolError),
+        ):
+            await create_dr(
+                _make_ctx(app_ctx_1196),
+                task_id="*",
+                agent="builder",
+                request_type="decision",
+                body="b",
+            )
+
+    @pytest.mark.asyncio
+    async def test_path_traversal_rejected_with_tool_error(
+        self, app_ctx_1196: AppContext
+    ) -> None:
+        from unittest.mock import patch
+
+        with (
+            patch("owlbear_mcp_kanban.server.decisions.create_dr"),
+            pytest.raises(ToolError),
+        ):
+            await create_dr(
+                _make_ctx(app_ctx_1196),
+                task_id="../",
+                agent="builder",
+                request_type="decision",
+                body="b",
+            )
+
+    @pytest.mark.asyncio
+    async def test_non_numeric_string_rejected_with_tool_error(
+        self, app_ctx_1196: AppContext
+    ) -> None:
+        from unittest.mock import patch
+
+        with (
+            patch("owlbear_mcp_kanban.server.decisions.create_dr"),
+            pytest.raises(ToolError),
+        ):
+            await create_dr(
+                _make_ctx(app_ctx_1196),
+                task_id="abc",
+                agent="builder",
+                request_type="decision",
+                body="b",
+            )
+
+    @pytest.mark.asyncio
+    async def test_mixed_alphanumeric_rejected_with_tool_error(
+        self, app_ctx_1196: AppContext
+    ) -> None:
+        from unittest.mock import patch
+
+        with (
+            patch("owlbear_mcp_kanban.server.decisions.create_dr"),
+            pytest.raises(ToolError),
+        ):
+            await create_dr(
+                _make_ctx(app_ctx_1196),
+                task_id="42abc",
+                agent="builder",
+                request_type="decision",
+                body="b",
+            )
+
+    @pytest.mark.asyncio
+    async def test_wildcard_does_not_reach_decisions_create_dr(
+        self, app_ctx_1196: AppContext
+    ) -> None:
+        from unittest.mock import patch
+
+        with patch("owlbear_mcp_kanban.server.decisions.create_dr") as mock_create_dr:
+            with pytest.raises(ToolError):
+                await create_dr(
+                    _make_ctx(app_ctx_1196),
+                    task_id="*",
+                    agent="builder",
+                    request_type="decision",
+                    body="b",
+                )
+            mock_create_dr.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_empty_string_does_not_reach_decisions_create_dr(
+        self, app_ctx_1196: AppContext
+    ) -> None:
+        from unittest.mock import patch
+
+        with patch("owlbear_mcp_kanban.server.decisions.create_dr") as mock_create_dr:
+            with pytest.raises(ToolError):
+                await create_dr(
+                    _make_ctx(app_ctx_1196),
+                    task_id="",
+                    agent="builder",
+                    request_type="decision",
+                    body="b",
+                )
+            mock_create_dr.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_path_traversal_does_not_reach_decisions_create_dr(
+        self, app_ctx_1196: AppContext
+    ) -> None:
+        from unittest.mock import patch
+
+        with patch("owlbear_mcp_kanban.server.decisions.create_dr") as mock_create_dr:
+            with pytest.raises(ToolError):
+                await create_dr(
+                    _make_ctx(app_ctx_1196),
+                    task_id="../",
+                    agent="builder",
+                    request_type="decision",
+                    body="b",
+                )
+            mock_create_dr.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_non_numeric_string_does_not_reach_decisions_create_dr(
+        self, app_ctx_1196: AppContext
+    ) -> None:
+        from unittest.mock import patch
+
+        with patch("owlbear_mcp_kanban.server.decisions.create_dr") as mock_create_dr:
+            with pytest.raises(ToolError):
+                await create_dr(
+                    _make_ctx(app_ctx_1196),
+                    task_id="abc",
+                    agent="builder",
+                    request_type="decision",
+                    body="b",
+                )
+            mock_create_dr.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_mixed_alphanumeric_does_not_reach_decisions_create_dr(
+        self, app_ctx_1196: AppContext
+    ) -> None:
+        from unittest.mock import patch
+
+        with patch("owlbear_mcp_kanban.server.decisions.create_dr") as mock_create_dr:
+            with pytest.raises(ToolError):
+                await create_dr(
+                    _make_ctx(app_ctx_1196),
+                    task_id="42abc",
+                    agent="builder",
+                    request_type="decision",
+                    body="b",
+                )
+            mock_create_dr.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_numeric_string_coerced_to_int_before_forwarding(
+        self, app_ctx_1196: AppContext
+    ) -> None:
+        from unittest.mock import patch
+
+        mock_create_dr = MagicMock(return_value=MagicMock())
+        with patch("owlbear_mcp_kanban.server.decisions.create_dr", mock_create_dr):
+            await create_dr(
+                _make_ctx(app_ctx_1196),
+                task_id="42",
+                agent="builder",
+                request_type="decision",
+                body="body text",
+            )
+
+        call_kwargs = mock_create_dr.call_args.kwargs
+        assert call_kwargs["task_id"] == 42
+        assert isinstance(call_kwargs["task_id"], int)
+
+    @pytest.mark.asyncio
+    async def test_literal_int_task_id_forwarded_unchanged(
+        self, app_ctx_1196: AppContext
+    ) -> None:
+        from unittest.mock import patch
+
+        mock_create_dr = MagicMock(return_value=MagicMock())
+        with patch("owlbear_mcp_kanban.server.decisions.create_dr", mock_create_dr):
+            await create_dr(
+                _make_ctx(app_ctx_1196),
+                task_id=42,
+                agent="builder",
+                request_type="decision",
+                body="body text",
+            )
+
+        call_kwargs = mock_create_dr.call_args.kwargs
+        assert call_kwargs["task_id"] == 42
+        assert isinstance(call_kwargs["task_id"], int)
+
+
+class TestMergedFrom1197:
+    def test_server_has_no_unittest_mock_import(self) -> None:
+        server_py = (
+            Path(__file__).parent
+            / ".."
+            / "serve"
+            / "mcp-kanban"
+            / "src"
+            / "owlbear_mcp_kanban"
+            / "server.py"
+        ).resolve()
+        source = server_py.read_text(encoding="utf-8")
+        assert "from unittest.mock import Mock" not in source
+
+    def test_server_has_no_isinstance_mock_check(self) -> None:
+        server_py = (
+            Path(__file__).parent
+            / ".."
+            / "serve"
+            / "mcp-kanban"
+            / "src"
+            / "owlbear_mcp_kanban"
+            / "server.py"
+        ).resolve()
+        source = server_py.read_text(encoding="utf-8")
+        assert "isinstance(return_value, Mock)" not in source
+
+    def test_agent_view_for_not_defined_in_server(self) -> None:
+        server_py = (
+            Path(__file__).parent
+            / ".."
+            / "serve"
+            / "mcp-kanban"
+            / "src"
+            / "owlbear_mcp_kanban"
+            / "server.py"
+        ).resolve()
+        source = server_py.read_text(encoding="utf-8")
+        assert "def _agent_view_for" not in source
+
+    def test_server_1170_make_engine_mock_uses_noncallable_agent_view(self) -> None:
+        source = (Path(__file__).parent / "test_server_1170.py").read_text(encoding="utf-8")
+        assert "NonCallableMagicMock" in source
+
+    def test_lifecycle_tools_mock_av_fixture_uses_noncallable_agent_view(self) -> None:
+        source = (
+            Path(__file__).parent
+            / ".."
+            / "serve"
+            / "mcp-kanban"
+            / "tests"
+            / "test_mcp_lifecycle_tools.py"
+        ).resolve().read_text(encoding="utf-8")
+        assert "NonCallableMagicMock" in source
+
+
+class TestMergedFrom1360:
+    @pytest.mark.asyncio
+    async def test_move_task_not_implemented_propagates_without_fallback(
+        self, app_ctx_todo: AppContext
+    ) -> None:
+        mock_view = MagicMock()
+        mock_view.move_task.side_effect = NotImplementedError("view unavailable")
+        app_ctx_todo.engine._agent_view = mock_view  # noqa: SLF001
+        ctx = _make_ctx(app_ctx_todo)
+        with pytest.raises(NotImplementedError):
+            await move_task(ctx, id="1", status="in-progress")
+
+    @pytest.mark.asyncio
+    async def test_start_work_not_implemented_propagates_without_fallback(self) -> None:
+        mock_view = MagicMock()
+        mock_view.start_work.side_effect = NotImplementedError
+        ctx = MagicMock()
+        ctx.request_context.lifespan_context.engine = MagicMock()
+        ctx.request_context.lifespan_context.engine.agent_view = MagicMock(return_value=mock_view)
+        with pytest.raises(NotImplementedError):
+            await start_work(ctx, id="42")
+
+    @pytest.mark.asyncio
+    async def test_end_work_not_implemented_propagates_without_fallback(self) -> None:
+        mock_view = MagicMock()
+        mock_view.end_work.side_effect = NotImplementedError
+        ctx = MagicMock()
+        ctx.request_context.lifespan_context.engine = MagicMock()
+        ctx.request_context.lifespan_context.engine.agent_view = MagicMock(return_value=mock_view)
+        with pytest.raises(NotImplementedError):
+            await end_work(ctx, id="42", outcome="success")
+
+    def test_canonical_agent_view_for_helper_removed(self) -> None:
+        assert not hasattr(_server_mod, "_canonical_agent_view_for")
+
+    def test_invoke_view_move_task_removed(self) -> None:
+        assert not hasattr(_server_mod, "_invoke_view_move_task")
+
+    def test_invoke_view_end_work_removed(self) -> None:
+        assert not hasattr(_server_mod, "_invoke_view_end_work")
+
+    def test_invoke_engine_end_work_removed(self) -> None:
+        assert not hasattr(_server_mod, "_invoke_engine_end_work")
+
+    def test_server_module_line_count_reduced(self) -> None:
+        source = inspect.getsource(_server_mod)
+        assert len(source.splitlines()) < 720
+
+
+class TestMergedFrom1450:
+    @pytest.mark.asyncio
+    async def test_empty_ids_returns_empty_task_list(self, app_ctx_1450: AppContext) -> None:
+        result = await list_tasks(_make_ctx(app_ctx_1450), ids=[])
+        assert result.tasks == []
+
+    @pytest.mark.asyncio
+    async def test_empty_ids_returns_empty_for_multi_task_board(self, tmp_path: Path) -> None:
+        kanban_dir = _make_board(tmp_path)
+        engine = KanbanEngine(kanban_dir)
+        engine.create_task("Alpha task", status="todo", priority="important")
+        engine.create_task("Beta task", status="backlog", priority="needed")
+        engine.create_task("Gamma task", status="review", priority="needed")
+        app_ctx = AppContext(engine=engine, kanban_dir=kanban_dir)
+        result = await list_tasks(_make_ctx(app_ctx), ids=[])
+        assert result.tasks == []
+
+    @pytest.mark.asyncio
+    async def test_empty_ids_returns_missing_ids_is_none(self, app_ctx_1450: AppContext) -> None:
+        result = await list_tasks(_make_ctx(app_ctx_1450), ids=[])
+        assert result.missing_ids is None
+
+    @pytest.mark.asyncio
+    async def test_archival_reason_without_status_finds_archived_task(
+        self, app_ctx_with_archived_duplicate_1450: AppContext
+    ) -> None:
+        result = await list_tasks(_make_ctx(app_ctx_with_archived_duplicate_1450), archival_reason="duplicate")
+        assert len(result.tasks) >= 1
+
+    @pytest.mark.asyncio
+    async def test_archival_reason_filter_all_returned_tasks_match(
+        self, app_ctx_with_archived_duplicate_1450: AppContext
+    ) -> None:
+        result = await list_tasks(_make_ctx(app_ctx_with_archived_duplicate_1450), archival_reason="duplicate")
+        assert result.tasks
+        assert all(t.archival_reason == "duplicate" for t in result.tasks)
+
+    @pytest.mark.asyncio
+    async def test_archival_reason_duplicate_excludes_completed_reason(
+        self, app_ctx_with_mixed_archived_1450: AppContext
+    ) -> None:
+        result = await list_tasks(_make_ctx(app_ctx_with_mixed_archived_1450), archival_reason="duplicate")
+        assert len(result.tasks) == 1
+        assert result.tasks[0].archival_reason == "duplicate"
+
+    @pytest.mark.asyncio
+    async def test_move_task_invalid_status_raises_tool_error_with_json_payload(
+        self, app_ctx_1450: AppContext
+    ) -> None:
+        with pytest.raises(ToolError) as exc_info:
+            await move_task(_make_ctx(app_ctx_1450), id="1", status="not-a-real-status")
+        payload = json.loads(str(exc_info.value))
+        assert isinstance(payload, dict)
+
+    @pytest.mark.asyncio
+    async def test_move_task_invalid_status_json_has_code_and_message(
+        self, app_ctx_1450: AppContext
+    ) -> None:
+        with pytest.raises(ToolError) as exc_info:
+            await move_task(_make_ctx(app_ctx_1450), id="1", status="not-a-real-status")
+        payload = json.loads(str(exc_info.value))
+        assert "code" in payload
+        assert "message" in payload
+
+    @pytest.mark.asyncio
+    async def test_end_work_reject_invalid_move_to_raises_tool_error_with_json_payload(
+        self, app_ctx_1450: AppContext
+    ) -> None:
+        with pytest.raises(ToolError) as exc_info:
+            await end_work(
+                _make_ctx(app_ctx_1450),
+                id="1",
+                outcome="reject",
+                move_to="not-a-real-status",
+            )
+        payload = json.loads(str(exc_info.value))
+        assert isinstance(payload, dict)
+
+    @pytest.mark.asyncio
+    async def test_end_work_reject_invalid_move_to_json_has_code_and_message(
+        self, app_ctx_1450: AppContext
+    ) -> None:
+        with pytest.raises(ToolError) as exc_info:
+            await end_work(
+                _make_ctx(app_ctx_1450),
+                id="1",
+                outcome="reject",
+                move_to="not-a-real-status",
+            )
+        payload = json.loads(str(exc_info.value))
+        assert "code" in payload
+        assert "message" in payload
+        assert payload["code"] == "ERR_INVALID_STATUS"
+
+    def test_move_task_idempotent_hint_is_false(self) -> None:
+        ann = _get_tool_annotations("move_task")
+        assert ann is not None
+        assert isinstance(ann.idempotentHint, bool)  # type: ignore[union-attr]
+
+    def test_pick_tasks_read_only_hint_is_true(self) -> None:
+        ann = _get_tool_annotations("pick_tasks")
+        assert ann is not None
+        assert ann.readOnlyHint is True  # type: ignore[union-attr]
+
+    def test_pick_tasks_idempotent_hint_is_true(self) -> None:
+        ann = _get_tool_annotations("pick_tasks")
+        assert ann is not None
+        assert ann.idempotentHint is True  # type: ignore[union-attr]
+
+    def test_non_numeric_id_raises_tool_error_with_json_payload(self) -> None:
+        with pytest.raises(ToolError) as exc_info:
+            parse_task_id("abc")
+        payload = json.loads(str(exc_info.value))
+        assert isinstance(payload, dict)
+
+    def test_malformed_id_json_has_code_and_message_fields(self) -> None:
+        with pytest.raises(ToolError) as exc_info:
+            parse_task_id("not-a-number")
+        payload = json.loads(str(exc_info.value))
+        assert "code" in payload
+        assert "message" in payload
+
+    @pytest.mark.asyncio
+    async def test_stale_write_via_edit_task_returns_json_envelope(
+        self, tmp_path: Path
+    ) -> None:
+        mock_view = MagicMock()
+        mock_view.edit_task.side_effect = ConcurrencyError(
+            code="ERR_STALE",
+            user_message="task was modified concurrently; please retry",
+        )
+        mock_engine = MagicMock()
+        mock_engine.agent_view.return_value = mock_view
+        app_ctx = AppContext(engine=mock_engine, kanban_dir=tmp_path)
+
+        with pytest.raises(ToolError) as exc_info:
+            await edit_task(_make_ctx(app_ctx), id="1", priority="critical")
+
+        payload = json.loads(str(exc_info.value))
+        assert isinstance(payload, dict)
+
+    @pytest.mark.asyncio
+    async def test_stale_write_json_has_code_and_message(self, tmp_path: Path) -> None:
+        mock_view = MagicMock()
+        user_msg = "task was modified concurrently; please retry"
+        mock_view.edit_task.side_effect = ConcurrencyError(
+            code="ERR_STALE",
+            user_message=user_msg,
+        )
+        mock_engine = MagicMock()
+        mock_engine.agent_view.return_value = mock_view
+        app_ctx = AppContext(engine=mock_engine, kanban_dir=tmp_path)
+
+        with pytest.raises(ToolError) as exc_info:
+            await edit_task(_make_ctx(app_ctx), id="1", priority="critical")
+
+        payload = json.loads(str(exc_info.value))
+        assert "code" in payload
+        assert "message" in payload
+        assert payload["code"] == "ERR_STALE"
+        assert payload["message"] == user_msg
