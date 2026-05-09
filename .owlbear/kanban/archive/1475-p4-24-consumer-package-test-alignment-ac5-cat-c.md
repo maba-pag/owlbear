@@ -1,10 +1,10 @@
 ---
 id: 1475
 title: 'P4-24: Consumer package test alignment (AC5 Cat-C)'
-status: done
+status: archived
 priority: needed
 created: 2026-05-09T08:46:53.952014+00:00
-updated: 2026-05-09T16:41:16.632500+00:00
+updated: 2026-05-09T17:37:13.303926+00:00
 tags:
 - phase-4
 - scope:tests
@@ -301,3 +301,36 @@ Confirmed both consumer test directories are affected by topology-constant refac
 
 ### Scratch Files Cleaned
 - None found (`ls .owlbear/scratch/1475-*` returned empty)
+[[2026-05-09]]
+## Audit
+### Regression Detection
+- quality-runner env fallback (direct execution): full suite 3170 passed, 260 failed, 4 skipped, 5 errors.
+- All 260 failures are pre-existing — none in files touched by #1475. Failing root-level tests (`test_server_1172.py`, `test_mcp_lifecycle.py`, `test_engine_rebind_containment.py`, `test_pick_tasks_resolve.py`, `test_memory_engine_1270.py`, etc.) were last modified by other tasks (#1466, #1270, MegaLinter). The task body explicitly scopes root `tests/` as "Out of scope (Cat-B1/B2)".
+- Scoped AC verification (exact AC command): `uv run pytest serve/mcp-kanban/tests/ serve/mcp-knowledge/tests/` → 504 passed, 0 failed (2.78s).
+- Lint: `ruff check` clean on all task-scoped paths.
+- regression verdict: PASS
+
+### Intent Verification
+- scope alignment: PASS (all changes within declared domain: `serve/mcp-kanban/tests/`, `serve/mcp-knowledge/tests/`, `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py`, `share/diagrams/`)
+- purpose match: PASS (tests aligned with topology-constant refactor; source fix for guidance passthrough discovered via reviewer false-green findings — directly consequential to test alignment work)
+- extraneous scope: none
+- boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 4/5
+AC is clear, verifiable, and single-line with exact pytest command. Scope section well-defined with in/out boundaries. Mechanical patterns section guided builder effectively. Minor gap: didn't anticipate false-green risk in existing test assertions, requiring reviewer rejection and two extra pipeline cycles. Not penalized because this is a subtle observation and AC remained verifiable.
+
+### Commit Integrity
+- upstream commit presence: PASS
+  - `fdda4893` — builder: initial test alignment (7 test files)
+  - `65784bb0` — test-writer: discriminating tests (2 files)
+  - `883094da` — test-writer: reconciliation (2 files)
+  - `c831b7b5` — builder: source fix (1 file: server.py)
+  - `d6dd8d46` — doc-writer: diagram footers (2 files)
+  - All commits properly tagged `#1475` with agent attribution.
+- kanban commit packaging: pending (will commit with archival)
+
+### Deduction Breakdown
+No deductions. Full suite regressions are pre-existing (verified via git log — none in #1475-modified files). Scoped suite green. Lint clean. Reviewer evidence thorough (0.96 confidence). All commits present and properly scoped.
+
+### Confidence: 1.00
+### Action: archive
