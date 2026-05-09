@@ -110,8 +110,8 @@ The pipeline uses three lines of defense. Trust upstream lines' detailed work; f
 | Agent | Threshold | Meaning |
 |-------|-----------|---------|
 | Reviewer | ≥ .90 | PASS |
-| Reviewer | < .90, 1st FAIL | FAIL — reviewer chooses target (in-progress, todo, or backlog) based on issue type |
-| Reviewer | < .90, 2nd+ FAIL | FAIL — always backlog (loop-breaker) |
+| Reviewer | < .90, Cycle 1 review FAIL | FAIL — reviewer chooses target (in-progress, todo, or backlog) based on issue type |
+| Reviewer | < .90, Cycle 2+ review FAIL | FAIL — always backlog (loop-breaker at 2 batch review cycles) |
 | Auditor | ≥ .95 | Archive |
 | Auditor | < .95 | Reject to backlog |
 | Challenger | ≥ 0.80 | `proceed` — caller continues with original verdict |
