@@ -10,6 +10,19 @@ Step-by-step exit gate process (done → archived).
 
 **Kanban operations:** See `h-mcp-kanban` skill — section `## Agent Lifecycle Pattern`.
 
+## Scope
+
+### In Scope
+
+- Run full-suite regression checks and final confidence scoring before archive decisions.
+- Audit intent alignment, architect quality, and commit integrity at the pipeline exit gate.
+
+### Out of Scope
+
+- Authoring or modifying task-scoped tests — test-writer (`w-tdd-red`).
+- Implementing source-code fixes for failing behavior — builder (`w-tdd-green`).
+- Performing primary AC-to-code mapping review for task approval — reviewer (`w-code-review`).
+
 ## Step 0 — Setup
 
 Read the `r-pipeline-protocol` skill if not already loaded.

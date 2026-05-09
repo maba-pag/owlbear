@@ -10,6 +10,19 @@ Break complex features into atomic, test-driven kanban tasks with explicit depen
 
 **Kanban operations:** See `h-mcp-kanban` skill — section `## Agent Lifecycle Pattern`.
 
+## Scope
+
+### In Scope
+
+- Break work into atomic, dependency-aware kanban tasks with testable acceptance criteria.
+- Create follow-up tasks with correct status, tags, and dependency links.
+
+### Out of Scope
+
+- Implementing source code changes for planned tasks — builder (`w-tdd-green`).
+- Writing or fixing tests for planned tasks — test-writer (`w-tdd-red`).
+- Final code-quality review and approval decisions — reviewer (`w-code-review`).
+
 ## Step 0 — Setup
 
 Read `r-pipeline-protocol` skill if not already loaded.

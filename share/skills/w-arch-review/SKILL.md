@@ -10,6 +10,19 @@ Review researched tasks at `backlog`, refine acceptance criteria, ensure archite
 
 **Kanban operations:** See `h-mcp-kanban` skill — section `## Agent Lifecycle Pattern`.
 
+## Scope
+
+### In Scope
+
+- Validate acceptance-criteria quality and architectural feasibility before implementation.
+- Define test-depth routing and decision-ready task direction for downstream agents.
+
+### Out of Scope
+
+- Writing implementation code or applying source fixes — builder (`w-tdd-green`).
+- Performing final code review and merge-readiness checks — reviewer (`w-code-review`).
+- Writing task-scoped tests — test-writer (`w-tdd-red`).
+
 ## Step 0 — Setup
 
 Read `r-pipeline-protocol` skill if not already loaded.

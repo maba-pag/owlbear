@@ -10,6 +10,19 @@ Write failing tests from a task's acceptance criteria. All tests must fail when 
 
 **Kanban operations:** See `h-mcp-kanban` skill — section `## Agent Lifecycle Pattern`.
 
+## Scope
+
+### In Scope
+
+- Translate AC lines into failing `TestFromAC_*` tests with explicit behavioral proof.
+- Verify RED status and route test deliverables to `in-progress` for builder handoff.
+
+### Out of Scope
+
+- Writing or editing production/source implementation code — builder (`w-tdd-green`).
+- Final evidence-based pass/fail review decisions — reviewer (`w-code-review`).
+- Full-suite regression gate ownership — auditor (`w-task-verification`).
+
 ## Step 0 — Setup
 
 Read `r-pipeline-protocol` skill if not already loaded.

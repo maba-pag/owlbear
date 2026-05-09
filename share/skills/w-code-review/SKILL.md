@@ -12,6 +12,19 @@ Review model: batch-all-findings. Gather all blocking findings before issuing PA
 
 **Kanban operations:** See `h-mcp-kanban` skill — section `## Agent Lifecycle Pattern`.
 
+## Scope
+
+### In Scope
+
+- Validate AC-to-code evidence, test adequacy, and proof sufficiency for completed implementation tasks.
+- Route failures to the correct upstream owner with explicit Required Follow-up actions.
+
+### Out of Scope
+
+- Writing missing tests or expanding test suites directly — test-writer (`w-tdd-red`).
+- Fixing implementation defects in source code — builder (`w-tdd-green`).
+- Running full-suite regression as an exit gate — auditor (`w-task-verification`).
+
 ## Step 0 — Setup
 
 Read `r-pipeline-protocol` if not already loaded.

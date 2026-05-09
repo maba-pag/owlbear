@@ -11,6 +11,19 @@ a four-item checklist, convention mapping, and a two-layer verification method.
 
 **Kanban operations:** See `h-mcp-kanban` skill — section `## Agent Lifecycle Pattern`.
 
+## Scope
+
+### In Scope
+
+- Evaluate and update mapped documentation targets using the four-item docs checklist.
+- Verify documentation coherence and structural integrity before advancing tasks to done.
+
+### Out of Scope
+
+- Implementing production code or non-documentation behavior changes — builder (`w-tdd-green`).
+- Writing or repairing task-scoped implementation tests — test-writer (`w-tdd-red`).
+- Performing final archive confidence scoring and full-suite regression gate — auditor (`w-task-verification`).
+
 ## Step 0 — Setup
 
 Read `r-pipeline-protocol` skill if not already loaded.
