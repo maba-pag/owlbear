@@ -1,10 +1,10 @@
 ---
 id: 1381
 title: 'P2-06: Implement Cockpit task action gating and confirmations'
-status: in-progress
+status: review
 priority: needed
 created: 2026-05-06T01:04:37.405026+00:00
-updated: 2026-05-09T15:19:41.961950+00:00
+updated: 2026-05-09T15:59:41.440878+00:00
 tags:
 - cockpit
 - audit-remediation
@@ -106,3 +106,17 @@ The builder on test task #1380 implemented source changes to `DetailTab.tsx` and
 | AC7: non-regression of conflict-resolution + #1380 suite pass | td:1 | `DetailTab_1381.test.tsx` — 1 smoke test | Covered |
 
 **Implementation status note:** All 23 tests PASS. Implementation was pre-committed during #1380's pipeline cycle (commit `b899bbb2`) per builder guidance. The `DetailTab_1380.test.tsx` 22-test suite and the new AC7 smoke test serve as the builder's verification targets. Builder task is a verification pass: run these two suites plus adjacent suites (`DetailTab.test.tsx`, `DetailTab_1344`, `DetailTab_1378`, `DetailTab_1379`) to confirm no regressions.
+[[2026-05-09]]
+## Builder Notes
+- Implementation: verification-only pass; no source edits were required in this task. Existing implementation in `serve/cockpit/web/src/components/DetailTab.tsx` and `serve/cockpit/web/src/components/ConfirmDialog.tsx` already satisfies AC behavior.
+- Tests: 109 passed, 1 skipped across required suites.
+  - `serve/cockpit/web/src/__tests__/DetailTab_1380.test.tsx` (22)
+  - `serve/cockpit/web/src/__tests__/DetailTab_1381_legacy.test.tsx` (1)
+  - `serve/cockpit/web/src/__tests__/DetailTab.test.tsx` (48, 1 skipped)
+  - `serve/cockpit/web/src/__tests__/DetailTab_1344_legacy.test.tsx` (11)
+  - `serve/cockpit/web/src/__tests__/DetailTab_1378_legacy.test.tsx` (24)
+  - `serve/cockpit/web/src/__tests__/DetailTab_1379_legacy.test.tsx` (4)
+- Lint: scoped ESLint run clean (0 violations) for `DetailTab.tsx`, `ConfirmDialog.tsx`, and all six verification test files.
+- Coverage: not run in this scoped frontend verification pass.
+- Evidence summary: action-gating/confirmation suite and AC7 conflict-resolution non-regression guard pass together with adjacent DetailTab suites; no regressions observed in targeted scope.
+- Note on RED verification: task body explicitly marks this as a verification pass with pre-existing implementation provenance from #1380, so TestFromAC failures are not reproducible in current code state.

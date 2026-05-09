@@ -1,15 +1,14 @@
 ---
 id: 1469
 title: 'E2a-B4: Merge mcp_kanban task tests into durable'
-status: backlog
+status: todo
 priority: important
 created: 2026-05-09T07:21:35.691519+00:00
-updated: 2026-05-09T15:08:03.615425+00:00
+updated: 2026-05-09T15:36:06.063507+00:00
 tags:
 - pipeline
 - ws-cleanup
 - scope:tests
-- quality
 parent: 1415
 depends_on:
 - 1466
@@ -160,3 +159,68 @@ Architecture review complete. Refined AC: replaced `pytest -x` with delta-based 
 |---|-------------|----------------|---------|----------|
 | 1 | architect | Rewrite task ownership/scope so the remaining merge-delete work is owned by an executing agent; current td:0 pass-through leaves the task with no implementer | tests/test_mcp_kanban.py; tests/test_mcp_kanban_1091.py; tests/test_mcp_kanban_1092.py; tests/test_mcp_kanban_1126.py; tests/test_mcp_kanban_1196.py; tests/test_mcp_kanban_1197.py; tests/test_mcp_kanban_1360.py; tests/test_mcp_kanban_1450.py | Builder notes say Code changes: none; all seven source files still exist |
 | 2 | architect | Clarify the exact preservation contract for merged test names and enforce the documented collision rename for the 1091 duplicate before the next cycle | tests/test_mcp_kanban.py; tests/test_mcp_kanban_1091.py; tests/test_mcp_kanban_1196.py; tests/test_mcp_kanban_1092.py | No test_edit_task_has_no_status_parameter_1091 exists; source-only names such as test_empty_string_rejected_with_tool_error and test_move_task_kanban_error_routed_via_helper do not appear in the durable file by name |
+[[2026-05-09]]
+
+
+## Architecture Re-Review (Cycle 2)
+
+### Root Cause
+Cycle 1 failure: all AC lines marked td:0, combined with `quality` pass-through tag, caused test-writer SKIP → builder pass-through → zero file changes. The merge/delete work was never executed by any agent.
+
+### Corrective Actions
+1. Raised AC lines 1 and 4 to td:1 (merge presence + source deletion) — test-writer writes RED tests, builder executes merge/delete for GREEN
+2. Removed `quality` tag — this task requires implementation (file editing and deletion)
+3. Preserved collision/fixture resolution as td:0 (naming convention detail, verified by inspection)
+4. Fixed line reference drift: collision at durable L171 (not L208 as originally noted)
+
+### Revised AC (supersedes original AC section)
+- [ ] All unique `def test_*` from 7 source files present in `test_mcp_kanban.py` (td:1)
+- [ ] Duplicate test-name collisions resolved by renaming incoming to `test_{name}_{original_task_id}` (e.g. `test_edit_task_has_no_status_parameter_1091`). Known collision: `test_edit_task_has_no_status_parameter` (durable L171 vs 1091) (td:0)
+- [ ] Fixture collisions (target-vs-source AND source-vs-source): keep target's if identical, rename source's if different. Known inter-source: `app_ctx_mock` (1091 vs 1092), `app_ctx` (1196 vs 1450) (td:0)
+- [ ] All 7 source files deleted after merge (td:1)
+- [ ] Per-target checkpoint: `uv run pytest tests/test_mcp_kanban.py --collect-only -q` collects ≥ 120 tests (67 existing + 53 merged) (td:0)
+- [ ] Post-cleanup failure count ≤ pre-task baseline failure count (capture baseline via `uv run pytest tests/ -q` before any changes) (td:0)
+- [ ] Collected test count ≥ pre-task `--collect-only` baseline (td:0)
+- [ ] `test_kanban_topology_1439.py` untouched (td:0)
+
+### Codebase Evidence (refreshed)
+- Durable `test_mcp_kanban.py`: 67 `def test_` functions confirmed (L118–L995)
+- Source totals verified: 3+7+1+12+5+8+17 = 53 tests across 7 files
+- Fixtures in durable: `app_ctx_with_mock_view`, `app_ctx_todo`, `app_ctx_claimed` — no collision with source fixtures
+- 1 confirmed test name collision: `test_edit_task_has_no_status_parameter` (durable L171 vs 1091 L214)
+- 2 inter-source fixture collisions: `app_ctx_mock` (1091 L86 / 1092 L96), `app_ctx` (1196 L66 / 1450 L68)
+- `test_mcp_kanban_error_mapping.py` and `test_kanban_topology_1439.py` exist as separate durables — not in scope
+
+### Evaluation
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | One concern: merge 7 task-scoped test files into one durable |
+| Interface clarity | PASS | Source files, target file, collision handling, and verification all explicit |
+| Dependency correctness | PASS | #1466 archived — renames completed before this merge |
+| Module layering | N/A | No production code changes — test file manipulation only |
+| TDD compliance | PASS | 2 AC lines at td:1 ensure test-writer writes RED, builder does GREEN |
+| KISS/YAGNI | PASS | Mechanical merge with no abstractions |
+| Premise challenge | PASS | 7 stale files (53 tests) for archived tasks clutter tests/; durable exists with 67 tests |
+| Pattern consistency | PASS | Follows same merge pattern as sibling tasks #1467, #1468 |
+| Security surface | PASS | No new system boundaries |
+| Single domain | PASS | Test infrastructure only |
+
+### Test Depth
+- Max depth: 1
+- Test-writer: PROCEED
+
+### Challenge Results
+- Challenger: reconsider (confidence 0.18)
+- Challenges: "task artifact still shows td:0 / quality tag / source files exist" — conflated backlog-approval with completion sign-off. Source files are EXPECTED to exist at backlog stage; the builder will perform the merge on this cycle.
+- Valid point incorporated: line reference drift (L208 → L171)
+- Architect response: override — challenger evidence pertains to cycle-1 state, not the corrected blueprint being approved for cycle 2
+
+### Verdict: APPROVE
+### Action Taken
+- Removed `quality` tag to prevent builder pass-through
+- Raised AC lines 1 ("all test_* present") and 4 ("all source files deleted") to td:1
+- Fixed collision line reference (L208 → L171)
+- Preserved all other AC content and out-of-scope boundaries from cycle 1
+
+[[2026-05-09]]
+Architecture re-review (cycle 2). Root cause: all-td:0 + quality tag caused builder pass-through with zero file changes. Fix: raised AC lines 1 (test presence) and 4 (source deletion) to td:1, removed quality tag. Test-writer will write RED verification tests; builder will execute the merge/delete for GREEN. Challenger overridden — confused backlog-approval with completion sign-off. Codebase evidence refreshed: 67 durable + 53 source = 120 expected, 1 test name collision, 2 inter-source fixture collisions confirmed.

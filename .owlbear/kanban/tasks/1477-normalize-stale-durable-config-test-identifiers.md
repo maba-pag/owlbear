@@ -1,10 +1,10 @@
 ---
 id: 1477
 title: Normalize stale durable config test identifiers
-status: todo
+status: in-progress
 priority: nice-to-have
 created: 2026-05-09T14:12:06.498671+00:00
-updated: 2026-05-09T15:10:28.380429+00:00
+updated: 2026-05-09T15:56:25.221295+00:00
 tags:
 - phase-4
 - topology
@@ -87,3 +87,10 @@ Rename contradictory pytest-visible class/test identifiers and any remaining AC-
 ### Action Taken: Added stale-identifiers catalog as builder guidance. Advanced to todo.
 [[2026-05-09]]
 Architecture review complete. AC is clear and verifiable — 4 categories of stale naming identified across 3 files, with a detailed catalog of 15 specific identifiers/headings for builder guidance. All td:0 (mechanical rename), challenger skipped. All 13 Step 2 criteria evaluated — all PASS/N/A/SKIP.
+[[2026-05-09]]
+## Test-Writer Notes
+- Non-implementation task (tagged `type:test`, `quality`) — no new tests applicable.
+- Task is a mechanical rename of stale pytest-visible identifiers in 3 existing test files (test_config_loader.py, test_config_authority.py, test_config_schema.py).
+- Architecture review confirmed: all AC lines td:0, Test-writer: SKIP.
+- AC2 green-gate (`uv run pytest` exits 0) verified by existing suite — no new assertions needed.
+- Passing through to builder.

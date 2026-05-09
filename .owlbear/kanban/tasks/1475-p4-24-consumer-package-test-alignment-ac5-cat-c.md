@@ -1,10 +1,10 @@
 ---
 id: 1475
 title: 'P4-24: Consumer package test alignment (AC5 Cat-C)'
-status: review
+status: docs
 priority: needed
 created: 2026-05-09T08:46:53.952014+00:00
-updated: 2026-05-09T15:15:41.608975+00:00
+updated: 2026-05-09T16:05:38.918400+00:00
 tags:
 - phase-4
 - scope:tests
@@ -228,3 +228,40 @@ Confirmed both consumer test directories are affected by topology-constant refac
 - AC verification (quality-runner scoped on required directories): 504 passed, 0 failed, 0 skipped; pytest exit 0 for `serve/mcp-kanban/tests/` + `serve/mcp-knowledge/tests/`; ruff clean.
 - Coverage context (AC verification run): overall 43%; `serve.mcp-kanban.src.owlbear_mcp_kanban.server` 86%, `serve.mcp-kanban.src.owlbear_mcp_kanban.models` 99%, `serve.mcp-kanban.src.owlbear_mcp_kanban.guidance` 98%, `serve.mcp-knowledge.src.owlbear_mcp_knowledge.server` 60%, `serve.mcp-knowledge.src.owlbear_mcp_knowledge.models` 94%.
 - Commit: `c831b7b5` — `fix: preserve guidance passthrough and move_task idempotency (#1475, builder)`
+[[2026-05-09]]
+## Review Evidence
+### Test Results
+- quality-runner scoped run on `serve/mcp-kanban/tests/`: 350 passed, 0 failed, 0 skipped; pytest exit 0; ruff exit 0.
+- quality-runner scoped run on `serve/mcp-knowledge/tests/`: 154 passed, 0 failed, 0 skipped; pytest exit 0; ruff exit 0.
+- An initial combined multi-path quality-runner run reported only 36 passing tests, which under-scoped the declared AC surface. Directory-wise reruns above were used as the authoritative verification and match the builder's 504-pass claim.
+
+### Lint Results
+- `ruff` clean on `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py`, `serve/mcp-kanban/tests/`, and `serve/mcp-knowledge/tests/`.
+- VS Code diagnostics: no errors in `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py`, `serve/mcp-kanban/tests/test_mcp_guidance.py`, or `serve/mcp-kanban/tests/test_tool_annotations.py`.
+
+### Scope / Diff Evidence
+- Task file contains one prior `## Review Evidence` section, so this review closes the second review cycle without invoking the loop-breaker.
+- Builder commit `c831b7b5` and prerequisite task commits `883094da` and `fdda4893` were confirmed via `.git/logs/HEAD` and `.git/logs/refs/heads/dev`.
+- Exact `git diff --name-only` / `git status --porcelain` inspection was not available in this reviewer session, so commit-presence evidence plus live file inspection were used for scope reconstruction.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---|---|---|---|
+| 1. All tests in `serve/mcp-kanban/tests/` and `serve/mcp-knowledge/tests/` pass after aligning with the topology-constant refactor. Verify: `uv run pytest serve/mcp-kanban/tests/ serve/mcp-knowledge/tests/` exits 0. | quality-runner directory runs: `serve/mcp-kanban/tests/` = 350 passed / pytest 0; `serve/mcp-knowledge/tests/` = 154 passed / pytest 0. Root-cause fix present in `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py` at the `move_task` annotation (`:347`) and fallback guards (`:374`, `:462`). | `serve/mcp-kanban/tests/test_mcp_guidance.py` (`:324`, `:343`, `:474`, `:489`, `:616`, `:635`, `:641`, `:667`) and `serve/mcp-kanban/tests/test_tool_annotations.py` (`:134`, `:138`, `:187`, `:200`) | PASS |
+
+### Test Integrity / Quality
+- The previously false-green guidance assertions are now discriminating in live test files. `test_move_task_skip_transition_warning_guidance` asserts the concrete skip warning (`serve/mcp-kanban/tests/test_mcp_guidance.py:343`) while `collect_guidance` is patched to a sentinel, so fallback overwrite would fail the test.
+- `test_start_work_guidance_sentinel_passthrough` now asserts the AgentView sentinel (`serve/mcp-kanban/tests/test_mcp_guidance.py:489`), and the retry tests `test_move_task_skip_warning_survives_disabled_collect_guidance` / `test_start_work_agentview_guidance_not_overwritten_by_collect_guidance` independently prove the same passthrough contract at `serve/mcp-kanban/tests/test_mcp_guidance.py:635` and `serve/mcp-kanban/tests/test_mcp_guidance.py:667`.
+- The tool-annotation contract is internally consistent again: both `test_move_task_idempotent_hint_true` and `test_move_task_idempotent_hint_true_per_original_ac` assert `ann.idempotentHint is True` at `serve/mcp-kanban/tests/test_tool_annotations.py:138` and `serve/mcp-kanban/tests/test_tool_annotations.py:200`.
+- No weakened or contradictory `TestFromAC_*` assertion remains in the current file state.
+
+### Security / Data Safety
+- No new injection, path, serialization, or concurrency risk was introduced by the fix. The source change is narrow: preserve non-empty AgentView guidance instead of overwriting it, and restore `move_task` metadata to the original idempotency contract.
+
+### Deductions
+- `-0.02` exact dirty-tree / commit-diff verification unavailable in this reviewer session; confidence adjusted accordingly.
+
+### Verdict
+- PASS -> `docs`
+- Confidence: 0.96
+- Rationale: the full target suites are green under independent directory-scoped runs, and the repaired source plus live discriminating tests resolve the prior false-green findings at the root cause.

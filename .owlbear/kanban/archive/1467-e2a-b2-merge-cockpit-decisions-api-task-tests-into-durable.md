@@ -1,10 +1,10 @@
 ---
 id: 1467
 title: 'E2a-B2: Merge cockpit_decisions_api task tests into durable'
-status: docs
+status: archived
 priority: important
 created: 2026-05-09T07:21:35.670259+00:00
-updated: 2026-05-09T15:08:08.084349+00:00
+updated: 2026-05-09T16:07:37.695620+00:00
 tags:
 - pipeline
 - ws-cleanup
@@ -162,3 +162,67 @@ APPROVED #1467 → todo. Refined AC: identified exact 3 test name collisions (al
 
 ### Summary
 Task #1467 satisfies the mechanical merge contract. The durable suite now contains the full 82-test surface with the exact three required `_1189` renames, distinct Pattern B helpers/fixtures, deleted source-file cleanup, clean scoped execution/lint, and stable root-suite collection count.
+[[2026-05-09]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | Test-only task; no behavior, API, CLI, config, or package structure changed. No IN-scope prose docs reference test internals. |
+| 2 | Module docstrings | No | N/A | No production Python modules created or modified — only test files. |
+| 3 | External attribution | No | N/A | Mechanical merge of existing tests; no external patterns, repos, or articles used. |
+| 4 | Research doc | Yes | Verified | `.owlbear/research/1463-python-root-test-cleanup.md` exists on disk and is linked in task body (§5b). |
+| 5 | Diagram maintenance (describes match) | No | N/A | Doc-index contains no `describes` glob matching `tests/test_cockpit_decisions_api*.py`. |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation request in task body. |
+| 7 | Deletion detection | No | N/A | 6 deleted files are test files; no IN-scope descriptive doc references any of them. |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| tests/test_cockpit_decisions_api.py | OUT | Test file — no doc edit |
+| tests/test_cockpit_decisions_api_1189.py (deleted) | OUT | Test file — no IN-scope doc references it |
+| tests/test_cockpit_decisions_api_1190.py (deleted) | OUT | Test file — no IN-scope doc references it |
+| tests/test_cockpit_decisions_api_1194.py (deleted) | OUT | Test file — no IN-scope doc references it |
+| tests/test_cockpit_decisions_api_1345.py (deleted) | OUT | Test file — no IN-scope doc references it |
+| tests/test_cockpit_decisions_api_1384.py (deleted) | OUT | Test file — no IN-scope doc references it |
+| tests/test_cockpit_decisions_api_1385.py (deleted) | OUT | Test file — no IN-scope doc references it |
+
+### Files Updated
+- None
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no `.owlbear/scratch/1467-*` files found)
+[[2026-05-09]]
+## Audit
+### Regression Detection
+- quality-runner mode full: 4891 passed, 267 failed, 11 errors, 4 skipped
+- All failures pre-existing (engine accessor migration, memory model, PDS build compat, role gating); zero failures in test_cockpit_decisions_api.py (88/88 pass per reviewer scoped run)
+- Lint: 12 violations, all outside task scope (serve/knowledge, serve/tools)
+- regression verdict: PASS
+
+### Intent Verification
+- scope alignment: PASS (commit cef978f4 touches exactly 7 files: 1 merged target + 6 deleted sources, all in tests/ domain)
+- purpose match: PASS (mechanical merge of task-scoped test files into durable, matching stated purpose)
+- extraneous scope: none
+- boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 4/5
+AC lines are specific and mechanically verifiable: exact collision names with _1189 suffix, two fixture patterns (A/B) documented with structural rationale, numeric gates (82 items, baseline delta), explicit guardrail (topology file). Minor improvement possible on "coexist without name collision" specificity but overall clear.
+
+### Commit Integrity
+- upstream commit presence: PASS (cef978f4 "test: merge durable decisions API suite (#1467, builder)" confirmed via git log)
+- kanban commit packaging: pending (will commit after archival)
+
+### Deduction Breakdown
+No deductions applied:
+- No regression failures attributable to task
+- No intent mismatch
+- No lint violations in task scope
+- AC quality 4/5 (above 3 threshold)
+- Review evidence section present and thorough (0.91 confidence, 10 AC lines verified with line numbers)
+- Commit integrity clean
+
+### Confidence: 1.00
+### Action: archive

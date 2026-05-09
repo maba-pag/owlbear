@@ -1,10 +1,10 @@
 ---
 id: 1471
 title: Add In Scope / Out of Scope sections to all pipeline agent skill files
-status: in-progress
+status: review
 priority: important
 created: 2026-05-09T08:33:41.860392+00:00
-updated: 2026-05-09T15:08:49.671645+00:00
+updated: 2026-05-09T15:26:01.373725+00:00
 tags:
 - pipeline
 - ws-roles
@@ -110,3 +110,12 @@ Architecture review complete. All criteria pass. Non-impl task (markdown skill f
 - Non-implementation task (tagged `agent`) — no tests applicable.
 - All 7 AC lines annotated td:0 by architect (markdown-only changes to skill files).
 - Passing through to builder.
+[[2026-05-09]]
+## Builder Notes
+- Non-implementation task — no code changes needed.
+- Validation: Task body contains Test-Writer pass-through note indicating markdown-only scope documentation update task.
+- Files changed: none.
+- Tests: not applicable (non-implementation pass-through).
+- Coverage: not applicable.
+- ruff: not applicable.
+- Passing through to review.

@@ -4,7 +4,7 @@ title: 'P4-23: Task-scoped and cockpit test alignment (AC5 Cat-B2)'
 status: backlog
 priority: critical
 created: 2026-05-09T08:46:53.940620+00:00
-updated: 2026-05-09T15:18:27.096168+00:00
+updated: 2026-05-09T15:57:16.149316+00:00
 tags:
 - phase-4
 - type:refactor
@@ -15,7 +15,7 @@ parent: 1439
 depends_on: []
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-09T15:57:16.149316+00:00
 archival_reason:
 archival_refs: []
 ---

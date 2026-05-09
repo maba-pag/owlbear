@@ -1,10 +1,10 @@
 ---
 id: 1472
 title: 'P4-21: Kanban package test alignment (AC5 Cat-A)'
-status: docs
+status: done
 priority: critical
 created: 2026-05-09T08:46:53.913029+00:00
-updated: 2026-05-09T15:21:23.255914+00:00
+updated: 2026-05-09T15:57:36.585298+00:00
 tags:
 - phase-4
 - scope:tests
@@ -290,3 +290,32 @@ Added `TestFromAC_CanonicalBoardStatusTuple` to `test_engine_coverage_1068.py` (
 ### Verdict
 - PASS. Confidence 0.93.
 - The retry closes the prior proof-quality gaps. The full kanban package suite is green, lint is clean, and the strengthened assertions now directly prove the topology-constant contracts that were previously only indirectly covered.
+[[2026-05-09]]
+## Docs Gate
+
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | All changed files are test files in `serve/kanban/tests/`. No API, CLI, config, or package-structure changes visible to users. No IN-scope prose doc references test internals. |
+| 2 | Module docstrings | No | N/A | No source `.py` modules were created or modified. |
+| 3 | External attribution | No | N/A | No external patterns or repos cited in task body. |
+| 4 | Research doc | No | N/A | No `.owlbear/research/*.md` produced or referenced. |
+| 5 | Diagram maintenance (describes match) | No | N/A | Doc-index loaded; no `describes` glob matches `serve/kanban/tests/**`. Nearest entry covers `serve/kanban/src/**` — test directory excluded. |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation requested in task body. |
+| 7 | Deletion detection | No | N/A | No deleted files in changed-files set. |
+
+**No docs impact.** All seven items N/A.
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| serve/kanban/tests/* (15 files) | OUT — test files | N/A |
+
+### Files Updated
+- None
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no `1472-*` scratch files existed)

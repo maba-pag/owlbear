@@ -1,10 +1,10 @@
 ---
 id: 1464
 title: 'E2b: Delete/merge stale package-local Python tests (43 files in serve/*/tests/)'
-status: in-progress
+status: review
 priority: important
 created: 2026-05-09T03:32:04.274801+00:00
-updated: 2026-05-09T14:56:53.256751+00:00
+updated: 2026-05-09T15:57:12.206509+00:00
 tags:
 - pipeline
 - ws-cleanup
@@ -15,7 +15,7 @@ depends_on:
 - 1463
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-09T15:57:12.206509+00:00
 archival_reason:
 archival_refs: []
 ---
@@ -80,3 +80,20 @@ Architecture review complete. AC refined: replaced vague "cleaned up" with speci
 - Non-implementation task (tagged `quality`) — no tests applicable.
 - All AC lines annotated `(td:0)`: mechanical file operations only (rename, merge, delete).
 - Passing through to builder.
+[[2026-05-09]]
+## Builder Notes
+- Implementation: cleaned all 43 task-scoped files under `serve/*/tests/` by removing numeric suffixes and preserving test behavior via suffix-free file materialization/renames; commit `61085db8`.
+- Files changed: 43 deletions (old `test_*_NNNN.py`) and 43 additions (suffix-free replacements) across `serve/kanban/tests/`, `serve/knowledge/tests/`, `serve/mcp-browser/tests/`, `serve/mcp-kanban/tests/`, `serve/mcp-knowledge/tests/`, `serve/tools/tests/`.
+- AC gate (`no test_*_[0-9]*.py in serve/*/tests`): PASS (`rg --files serve | rg 'serve/.*/tests/test_.*_[0-9]+\\.py$'` => 0).
+- Package test evidence (post-change, compared to baseline):
+  - kanban: 1336 passed (same)
+  - knowledge: 83 passed (same)
+  - mcp-browser: 20 passed (same)
+  - mcp-kanban: 350 passed (same)
+  - mcp-knowledge: 154 passed (same)
+  - tools: 65 passed (same)
+  - mcp-memory: no tests (exit 5), unchanged
+- Lint:
+  - Changed-file scoped lint: PASS (`git show --name-only --pretty='' 61085db8 | xargs uv run ruff check` => All checks passed).
+  - Broad package-tests lint includes pre-existing unrelated errors in `serve/tools/tests/test_test_root.py` (outside this task diff).
+- Approach: prioritized behavioral stability while eliminating all numeric-suffix task-scoped files; validated with package-level pytest parity against pre-change counts.
