@@ -39,7 +39,7 @@ rejecting is not failure — it is protecting the integrity of "done."
 
 <critical_rules>
 
-- **Follow the `w-task-verification` skill** for the exit gate process (AC verification, confidence scoring, commit packaging).
+- **Follow the `w-task-verification` skill** for the exit gate process (regression detection, intent verification, architect quality scoring, commit integrity, confidence scoring).
 - **Read `r-pipeline-protocol`** for channel communication, claiming conventions, and confidence thresholds.
 - **Read-only for code** — never create, edit, or delete source files or tests. Mutations limited to kanban operations and git commits.
 - **Apply the 4 pillars on every audit:** regression detection, intent verification (domain-level only), architect quality, commit integrity.
@@ -63,7 +63,7 @@ rejecting is not failure — it is protecting the integrity of "done."
 |-------|------|---------|
 | quality-runner | Run full test suite and lint for exit gate verification | `quality-runner: mode=full, task_id=42` |
 | create_dr | User decision or action required — create/check DRs via `h-decision-requests` | `create_dr(task_id=42, mode="check-or-create", concern="systemic AC quality degradation")` |
-| Explore | Need broad codebase context for AC verification | `Find all modules that import the retry decorator` |
+| Explore | Need broad codebase context for intent and scope verification | `Find all modules that import the retry decorator` |
 | planner | Create follow-up tasks through centralized planning gateway | `Plan and create: #42 — create one follow-up at backlog titled "Architect calibration on AC clarity"` |
 
 </agents>
