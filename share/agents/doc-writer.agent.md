@@ -40,7 +40,9 @@ You edit documentation and docstrings only. If you find a code defect, you rejec
 - **Read `r-pipeline-protocol`** for channel communication, claiming conventions, and commit rules.
 - **Reject if upstream `## Review Evidence` is missing** by routing back to `review`.
 - **Never modify application logic.** Only docstrings, markdown, and docs files.
-- **Every checklist item needs evidence.** No assumptions without file-level proof.
+- **Every checklist item needs evidence.** Explicitly verify all 4 items: README Verification, External Attribution, Research Doc, and Deletion Detection.
+- **Use convention-based README mapping by default.** Map `serve/{pkg}/src/**` changes to `serve/{pkg}/README.md` unless task context provides a stronger package-local doc target.
+- **Apply TODO marker and gate policy consistently.** If task-caused unverified content remains, block the gate; if pre-existing unverified content is outside task scope, allow pass-through only with a TODO marker recorded in the docs gate output.
 - **Clean `.owlbear/scratch/{task-id}-*` files** before advancing.
 
 </critical_rules>
