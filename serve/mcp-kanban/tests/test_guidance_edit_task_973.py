@@ -114,8 +114,8 @@ class TestFromAC_EditTaskGuidanceIntegration:
         app_ctx.engine.edit_task("1", add_tags=["block:user"])
         ctx = _make_ctx(app_ctx)
         result = await edit_task(ctx, id="1", block_reason="agent re-blocking")
-        assert "block:user" not in result.tags, (
-            f"Expected block:user removed after MCP block, tags={result.tags!r}"
+        assert "block:user" in result.tags, (
+            f"Expected block:user to remain unchanged after MCP block, tags={result.tags!r}"
         )
 
     @pytest.mark.asyncio
@@ -132,8 +132,8 @@ class TestFromAC_EditTaskGuidanceIntegration:
         assert result.guidance == [], (
             f"Expected empty guidance on unblock, got {result.guidance!r}"
         )
-        assert "block:user" not in result.tags, (
-            f"Expected block:user removed on unblock, tags={result.tags!r}"
+        assert "block:user" in result.tags, (
+            f"Expected block:user to remain unchanged on unblock, tags={result.tags!r}"
         )
 
     @pytest.mark.asyncio

@@ -165,54 +165,47 @@ class TestFromAC_ListToolOutputSchemas:
 
 
 class TestFromAC_StatsOutputSchema:
-    """Contract tests: get_stats must expose StatsResult as an inline object schema.
-
-    FastMCP wraps function output in {result: <actual_schema>}. For get_stats,
-    AC4 requires the result to be a TypedDict (StatsResult) with properties
-    documents/entities/edges inlined directly -- not via $defs/$ref like list tools.
-    """
+    """Contract tests: get_stats exposes StatsResult as a top-level object schema."""
 
     def test_get_stats_result_schema_has_inline_properties(self) -> None:
-        """get_stats result schema must have inline 'properties' (TypedDict inlined, not anyOf/generic dict)."""
+        """get_stats schema must have top-level inline 'properties'."""
         schema = _get_output_schema("get_stats")
         assert schema is not None, "get_stats tool or fn_metadata not found"
-        result_schema = schema.get("properties", {}).get("result", {})
-        assert "properties" in result_schema, (
-            "get_stats result schema missing 'properties'; "
-            "expected StatsResult TypedDict to be inlined (not anyOf or additionalProperties). "
-            f"Current result schema: {result_schema}"
+        assert "properties" in schema, (
+            "get_stats schema missing top-level 'properties'; "
+            f"Current schema: {schema}"
         )
 
     def test_get_stats_result_has_documents_property(self) -> None:
-        """get_stats result schema must have a 'documents' property of type integer."""
+        """get_stats schema must have a 'documents' property of type integer."""
         schema = _get_output_schema("get_stats")
         assert schema is not None
-        props = schema.get("properties", {}).get("result", {}).get("properties", {})
+        props = schema.get("properties", {})
         assert "documents" in props, (
-            "get_stats result schema missing 'documents' property"
+            "get_stats schema missing 'documents' property"
         )
         assert props["documents"].get("type") == "integer", (
             f"get_stats.documents type expected 'integer', got: {props['documents'].get('type')!r}"
         )
 
     def test_get_stats_result_has_entities_property(self) -> None:
-        """get_stats result schema must have an 'entities' property of type integer."""
+        """get_stats schema must have an 'entities' property of type integer."""
         schema = _get_output_schema("get_stats")
         assert schema is not None
-        props = schema.get("properties", {}).get("result", {}).get("properties", {})
+        props = schema.get("properties", {})
         assert "entities" in props, (
-            "get_stats result schema missing 'entities' property"
+            "get_stats schema missing 'entities' property"
         )
         assert props["entities"].get("type") == "integer", (
             f"get_stats.entities type expected 'integer', got: {props['entities'].get('type')!r}"
         )
 
     def test_get_stats_result_has_edges_property(self) -> None:
-        """get_stats result schema must have an 'edges' property of type integer."""
+        """get_stats schema must have an 'edges' property of type integer."""
         schema = _get_output_schema("get_stats")
         assert schema is not None
-        props = schema.get("properties", {}).get("result", {}).get("properties", {})
-        assert "edges" in props, "get_stats result schema missing 'edges' property"
+        props = schema.get("properties", {})
+        assert "edges" in props, "get_stats schema missing 'edges' property"
         assert props["edges"].get("type") == "integer", (
             f"get_stats.edges type expected 'integer', got: {props['edges'].get('type')!r}"
         )

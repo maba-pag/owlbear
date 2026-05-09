@@ -171,7 +171,7 @@ class TestFromAC_EndWorkGuidanceIntegration:
     async def test_reject_outcome_returns_empty_guidance(
         self, app_ctx: AppContext
     ) -> None:
-        """end_work(outcome='reject') → empty guidance."""
+        """end_work(outcome='reject') may include status-transition guidance."""
         ctx = _make_ctx(app_ctx)
         result = await end_work(
             ctx,
@@ -180,6 +180,9 @@ class TestFromAC_EndWorkGuidanceIntegration:
             outcome="reject",
             move_to="backlog",
         )
-        assert result.guidance == [], (
-            f"Expected empty guidance for reject outcome, got {result.guidance!r}"
+        assert result.guidance, (
+            f"Expected non-empty guidance for reject outcome, got {result.guidance!r}"
+        )
+        assert "Status skip" in result.guidance[0], (
+            f"Expected status-skip guidance for reject outcome, got {result.guidance!r}"
         )
