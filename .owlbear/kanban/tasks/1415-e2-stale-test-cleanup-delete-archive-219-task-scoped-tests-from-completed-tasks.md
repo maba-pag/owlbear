@@ -2,10 +2,10 @@
 id: 1415
 title: 'E2: Stale test cleanup — delete/archive 219 task-scoped tests from completed
   tasks'
-status: research
+status: backlog
 priority: important
 created: 2026-05-07T23:16:25.317145+00:00
-updated: 2026-05-07T23:18:14.530966+00:00
+updated: 2026-05-09T03:32:48.397274+00:00
 tags:
 - pipeline
 - ws-cleanup
@@ -35,3 +35,11 @@ P3: Verification by counting remaining `test_*_{task_id}.py` files in `tests/` a
 
 **In scope:** Stale test identification, deletion, coverage consolidation where warranted
 **Out of scope:** Test convention changes (C2), reviewer changes (B1), new test creation beyond consolidation
+[[2026-05-09]]
+## Research
+- Research doc: .owlbear/research/1415-stale-test-cleanup.md
+- Sources: 6 studied, 4 high-relevance
+- Recommendation: Decompose into 3 follow-up tasks by location (root Python 82 files, package-local Python 43 files, frontend TSX 44 files). Start with safe deletes where durable equivalents exist, then rename singles, then merge multi-file groups. (confidence: .85)
+- Actual stale count: 169 files (not 219 as estimated)
+- Follow-up tasks: #1463 (root), #1464 (pkg-local), #1465 (frontend)
+- Challenge: skipped — T1 autonomous cleanup, no architectural decision

@@ -1,10 +1,10 @@
 ---
 id: 1409
 title: 'C1: Auditor skill update — regression + intent focus, remove reviewer overlap'
-status: research
+status: todo
 priority: needed
 created: 2026-05-07T23:16:25.240390+00:00
-updated: 2026-05-07T23:18:14.519704+00:00
+updated: 2026-05-09T03:31:01.620050+00:00
 tags:
 - pipeline
 - ws-roles
@@ -33,3 +33,16 @@ P3: Verification by diff comparison of modified skill file; confirm no overlap w
 
 **In scope:** Auditor skill update, remove reviewer-overlapping checks
 **Out of scope:** Reviewer rewrite (B1), role boundary docs (C3)
+[[2026-05-09]]
+## Planning
+
+Created follow-up task: #1461 — "C1-impl: Apply 4-pillar auditor model to w-task-verification and auditor.agent.md"
+- Status: backlog
+- Priority: needed
+- Parent: #1403
+- Depends on: #1409
+- Tags: pipeline, ws-roles, scope:agents
+
+Single-task shortcut — no TDD pairing required (skill/agent file updates, not feature implementation).
+[[2026-05-09]]
+## Research\n- Research doc: .owlbear/research/auditor-skill-update-1409.md\n- Sources: 5 studied, 5 high-relevance (all codebase — current auditor skill, post-B1 reviewer skill, pipeline protocol, agent def, brief)\n- Recommendation: 4-pillar auditor model (regression detection, intent verification, architect quality scoring, commit integrity). Remove AC spot-check, AC deviations, file-exists, per-AC evidence table — all now reviewer scope post-B1. Updated scoring rubric adds regression/intent deductions, removes AC-line deductions. Confidence: .85\n- Follow-up: #1461 (implementation at backlog)\n- Challenge: skipped (T1 autonomous, overlap analysis mechanical)

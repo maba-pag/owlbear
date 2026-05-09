@@ -1,10 +1,10 @@
 ---
 id: 1450
 title: 'P4-13: Probe MCP list filters, annotations, and error envelopes'
-status: backlog
+status: done
 priority: needed
 created: 2026-05-08T19:32:15.603480+00:00
-updated: 2026-05-09T01:04:08.907238+00:00
+updated: 2026-05-09T03:38:40.803026+00:00
 tags:
 - phase-4
 - scope:mcp-kanban
@@ -18,7 +18,7 @@ parent: 1437
 depends_on: []
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-09T03:38:40.803026+00:00
 archival_reason:
 archival_refs: []
 ---
@@ -282,3 +282,172 @@ Architecture review complete. Refined AC3 (behavioral contract instead of struct
 | # | Target Agent | Action Required | File(s) | Evidence |
 |---|---|---|---|---|
 | 1 | architect | Refine AC3 proof strategy for the second retry: require a live MCP `end_work(outcome='reject', move_to=invalid)` probe that exercises forwarding and asserts the real `{code,message}` envelope, then hand the task back through RED/GREEN with that contract. | [tests/test_mcp_kanban_1450.py](tests/test_mcp_kanban_1450.py#L359), [serve/mcp-kanban/src/owlbear_mcp_kanban/server.py](serve/mcp-kanban/src/owlbear_mcp_kanban/server.py#L482), [serve/kanban/src/owlbear_kanban/agent_view.py](serve/kanban/src/owlbear_kanban/agent_view.py#L1096) | The current retry still mocks `ValidationError(code="ERR_MOVE_TO_INVALID_STATUS", ...)` and never proves the live path, while the live engine reject validation emits `ERR_INVALID_STATUS`. Second-cycle proof-quality failure routes to backlog. |
+[[2026-05-09]]
+
+## Architecture Review (retry cycle)
+
+### Issue
+AC3 `end_work` reject-path tests mock `agent_view.end_work` with fabricated `ValidationError(code="ERR_MOVE_TO_INVALID_STATUS", ...)`, but the live engine reject-path at [agent_view.py L1098](serve/kanban/src/owlbear_kanban/agent_view.py#L1098) emits `ERR_INVALID_STATUS`. The mock bypasses the live boundary entirely, creating a concrete false-green: the test asserts `ERR_MOVE_TO_INVALID_STATUS` while the real code would return `ERR_INVALID_STATUS`.
+
+Key codebase finding: the `move_to` validation at L1098 fires **before** the claim-check at L1165, so a live probe using the existing `app_ctx` fixture (unclaimed task) will correctly exercise the reject+invalid-`move_to` path without needing a claimed task.
+
+### Refined AC3 (supersedes previous)
+3. Test-writer records a contract probe asserting that both `move_task(status=invalid)` and `end_work(outcome='reject', move_to=invalid)` reject unrecognized destination values with a structured error envelope containing `code` and `message` fields. The `end_work` reject-path probe must exercise the live MCP boundary (no mocking of `agent_view` or engine internals) and assert `code='ERR_INVALID_STATUS'`. (td:2)
+
+### Evaluation
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Interface clarity | PASS | AC3 now specifies exact error code and live-boundary requirement |
+| Premise challenge | PASS | `move_task` tests already use live boundary; `end_work` must match |
+| Pattern consistency | PASS | Aligns with existing `move_task` live probe pattern in same file |
+
+### Test Depth
+- AC3 remains td:2
+- Test-writer: PROCEED — replace the two mocked `end_work` tests with live scratch-board probes using `app_ctx` fixture. Assert `code='ERR_INVALID_STATUS'` (not `ERR_MOVE_TO_INVALID_STATUS`).
+
+### Verdict: APPROVE
+AC3 is the only deficiency from the second review cycle. All other ACs are reviewer-confirmed PASS. Refined AC3 with exact error code and live-boundary mandate. Advanced to todo.
+
+[[2026-05-09]]
+Architecture review (retry cycle). Refined AC3: end_work reject-path probe must use live MCP boundary (no engine mocking) and assert code='ERR_INVALID_STATUS' — the actual code from agent_view L1098, not the fabricated ERR_MOVE_TO_INVALID_STATUS. Validation fires before claim-check, so existing app_ctx fixture works. All other ACs confirmed PASS by reviewer. Advanced to todo.
+[[2026-05-09]]
+## Test-Writer Notes (retry cycle 2)
+
+- Test file: tests/test_mcp_kanban_1450.py
+- Commit: ca180b7a
+
+### Changes from prior cycle
+Replaced the two mocked `end_work` reject-path tests in `TestFromAC_MoveEndWorkEnvelope` with live scratch-board probes:
+- `test_end_work_reject_invalid_move_to_raises_tool_error_with_json_payload` — uses `app_ctx` fixture (unclaimed task), calls live MCP `end_work(outcome='reject', move_to='not-a-real-status')`, asserts JSON dict
+- `test_end_work_reject_invalid_move_to_json_has_code_and_message` — same live path, asserts `code='ERR_INVALID_STATUS'` (actual code from agent_view.py L1098 reject branch, not fabricated `ERR_MOVE_TO_INVALID_STATUS`)
+
+Also removed unused `ValidationError` import and updated stale module docstring.
+
+Per w-tdd-red Step 1b.1: builder already implemented the live boundary correctly — tests PASS against current implementation.
+
+### AC Coverage Table
+| AC | Tests | Status |
+|----|-------|--------|
+| AC1 | `test_empty_ids_*` ×3 | PASS ✓ |
+| AC2 | `test_archival_reason_*` ×3 | PASS ✓ |
+| AC3 | `test_move_task_*` ×2, `test_end_work_reject_*` ×2 (live probes) | PASS ✓ |
+| AC4 | `test_move_task_idempotent_hint_is_false` | PASS ✓ |
+| AC4(b) | `test_pick_tasks_*` ×2 | PASS ✓ |
+| AC5 | `test_non_numeric_id_*` ×2, `test_stale_write_*` ×2 | PASS ✓ |
+| AC6 | — | skipped (td:0) |
+
+### Quality
+- Total: 17 tests, all PASS; ruff clean (0 violations)
+- Scoped run (test_mcp_kanban_1450.py + test_mcp_kanban.py + test_mcp_task_id_parser.py): 119 passed, 0 failed
+[[2026-05-09]]
+## Builder Notes
+- Files changed: none in this cycle (verification-only pass).
+- Validation approach: re-ran scoped GREEN gate for task #1450 after retry-cycle-2 test updates.
+- Tests: 119 passed, 0 failed, 0 skipped.
+  - Scope: tests/test_mcp_kanban_1450.py, tests/test_mcp_kanban.py, tests/test_mcp_task_id_parser.py
+- Coverage: 90% on module `owlbear_mcp_kanban.server`.
+- Lint: ruff clean (0 violations) on scoped source + test paths.
+- Evidence summary:
+  - AC1/AC2 probes pass for ids=[] empty behavior and archival_reason archived-search filtering.
+  - AC3 live boundary probes pass for move_task invalid status and end_work reject invalid move_to with structured JSON envelope.
+  - AC4/AC4(b) annotation probes pass (move_task non-idempotent; pick_tasks read-only + idempotent).
+  - AC5 JSON envelope probes pass for malformed ID and stale-write branches.
+  - No implementation delta required; current source behavior already satisfies refined AC set.
+[[2026-05-09]]
+## Review Evidence
+### Scope
+- Retry cycle after two prior `## Review Evidence` sections at [.owlbear/kanban/tasks/1450-p4-13-probe-mcp-list-filters-annotations-and-error-envelopes.md](.owlbear/kanban/tasks/1450-p4-13-probe-mcp-list-filters-annotations-and-error-envelopes.md#L130) and [.owlbear/kanban/tasks/1450-p4-13-probe-mcp-list-filters-annotations-and-error-envelopes.md](.owlbear/kanban/tasks/1450-p4-13-probe-mcp-list-filters-annotations-and-error-envelopes.md#L206).
+- Reviewed live task probe file [tests/test_mcp_kanban_1450.py](tests/test_mcp_kanban_1450.py#L1), MCP adapter [serve/mcp-kanban/src/owlbear_mcp_kanban/server.py](serve/mcp-kanban/src/owlbear_mcp_kanban/server.py#L90), and reject-path validation in [serve/kanban/src/owlbear_kanban/agent_view.py](serve/kanban/src/owlbear_kanban/agent_view.py#L1096).
+- Commit provenance was confirmed in `.git/logs` for builder `b4fabdb6`, retry test-writer `5ef2ab6b`, and retry-cycle-2 test-writer `ca180b7a`; full `git diff` / `git status` contamination checks were not available in this tool surface.
+
+### Test Results
+- quality-runner: 187 passed, 0 failed, 0 skipped across [tests/test_mcp_kanban_1450.py](tests/test_mcp_kanban_1450.py#L1), [tests/test_mcp_kanban.py](tests/test_mcp_kanban.py#L1), [tests/test_mcp_task_id_parser.py](tests/test_mcp_task_id_parser.py#L1), [serve/mcp-kanban/tests/test_mcp_lifecycle_tools.py](serve/mcp-kanban/tests/test_mcp_lifecycle_tools.py#L1), [serve/mcp-kanban/tests/test_mcp_mutation_tools_1087.py](serve/mcp-kanban/tests/test_mcp_mutation_tools_1087.py#L1), and [tests/test_mcp_kanban_error_mapping.py](tests/test_mcp_kanban_error_mapping.py#L1).
+- Ruff: clean on [serve/mcp-kanban/src/owlbear_mcp_kanban/server.py](serve/mcp-kanban/src/owlbear_mcp_kanban/server.py#L1) and the scoped test files.
+- Coverage: `owlbear_mcp_kanban.server` at 90%.
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---|---|---|---|
+| AC1 | [tests/test_mcp_kanban_1450.py](tests/test_mcp_kanban_1450.py#L180), [tests/test_mcp_kanban_1450.py](tests/test_mcp_kanban_1450.py#L193), [tests/test_mcp_kanban_1450.py](tests/test_mcp_kanban_1450.py#L214) | Yes. The server short-circuits explicit `ids=[]` at [serve/mcp-kanban/src/owlbear_mcp_kanban/server.py](serve/mcp-kanban/src/owlbear_mcp_kanban/server.py#L208), and the tests pin both `tasks == []` and `missing_ids is None`. | COVERED |
+| AC2 | [tests/test_mcp_kanban_1450.py](tests/test_mcp_kanban_1450.py#L246), [tests/test_mcp_kanban_1450.py](tests/test_mcp_kanban_1450.py#L262), [tests/test_mcp_kanban_1450.py](tests/test_mcp_kanban_1450.py#L280) | Yes. The adapter forces archived search when `archival_reason` is present at [serve/mcp-kanban/src/owlbear_mcp_kanban/server.py](serve/mcp-kanban/src/owlbear_mcp_kanban/server.py#L212), and the negative-control exact-count probe would fail if non-duplicate archived tasks leaked through. | COVERED |
+| AC3 | [tests/test_mcp_kanban_1450.py](tests/test_mcp_kanban_1450.py#L318), [tests/test_mcp_kanban_1450.py](tests/test_mcp_kanban_1450.py#L335), [tests/test_mcp_kanban_1450.py](tests/test_mcp_kanban_1450.py#L347), [tests/test_mcp_kanban_1450.py](tests/test_mcp_kanban_1450.py#L366) | Yes. `end_work` now exercises the live MCP boundary via [serve/mcp-kanban/src/owlbear_mcp_kanban/server.py](serve/mcp-kanban/src/owlbear_mcp_kanban/server.py#L482), and reject-path destination validation still fires before the unclaimed-task check at [serve/kanban/src/owlbear_kanban/agent_view.py](serve/kanban/src/owlbear_kanban/agent_view.py#L1096) and [serve/kanban/src/owlbear_kanban/agent_view.py](serve/kanban/src/owlbear_kanban/agent_view.py#L1160). The tests require `ERR_INVALID_STATUS`. | COVERED |
+| AC4 | [tests/test_mcp_kanban_1450.py](tests/test_mcp_kanban_1450.py#L402), [tests/test_mcp_kanban_1450.py](tests/test_mcp_kanban_1450.py#L413), [tests/test_mcp_kanban_1450.py](tests/test_mcp_kanban_1450.py#L421) | Yes. Exact annotation booleans match the live registrations at [serve/mcp-kanban/src/owlbear_mcp_kanban/server.py](serve/mcp-kanban/src/owlbear_mcp_kanban/server.py#L347) and [serve/mcp-kanban/src/owlbear_mcp_kanban/server.py](serve/mcp-kanban/src/owlbear_mcp_kanban/server.py#L510). | COVERED |
+| AC5 | [tests/test_mcp_kanban_1450.py](tests/test_mcp_kanban_1450.py#L447), [tests/test_mcp_kanban_1450.py](tests/test_mcp_kanban_1450.py#L459), [tests/test_mcp_kanban_1450.py](tests/test_mcp_kanban_1450.py#L486), [tests/test_mcp_kanban_1450.py](tests/test_mcp_kanban_1450.py#L513), [serve/mcp-kanban/tests/test_mcp_mutation_tools_1087.py](serve/mcp-kanban/tests/test_mcp_mutation_tools_1087.py#L517) | Yes. Malformed IDs are emitted as structured JSON at [serve/mcp-kanban/src/owlbear_mcp_kanban/server.py](serve/mcp-kanban/src/owlbear_mcp_kanban/server.py#L93), mapped Kanban errors are normalized at [serve/mcp-kanban/src/owlbear_mcp_kanban/server.py](serve/mcp-kanban/src/owlbear_mcp_kanban/server.py#L111), stale-write is pinned exactly, and invalid-priority has an exact JSON payload assertion in the durable mutation suite. | COVERED |
+| AC6 | Task-local probe file + task history | Yes. The functional proof in the task artifact remains scratch-board probes and schema inspection; the broader reviewer run was supplemental review evidence, not the task's claimed functional proof. | COVERED |
+
+#### Security Review
+- No issues found in scope. The live changes are validation, filter semantics, tool annotations, and error-envelope mapping only.
+
+#### Test Integrity
+| Original Test | Change Made | Assessment |
+|---|---|---|
+| `TestFromAC_MoveEndWorkEnvelope` reject-path probes | Retry-cycle-2 replaced mocked `agent_view.end_work` tests with live MCP boundary calls asserting `ERR_INVALID_STATUS` at [tests/test_mcp_kanban_1450.py](tests/test_mcp_kanban_1450.py#L347) and [tests/test_mcp_kanban_1450.py](tests/test_mcp_kanban_1450.py#L366). | STRENGTHENED |
+| Remaining `TestFromAC_*` suite | Current snapshot shows no weakened or removed assertions; direct diff against the original TestFromAC body was not available in this tool surface. | PRESERVED |
+
+#### Test Quality
+| Dimension | Rating | Evidence |
+|---|---|---|
+| Assertion specificity | ADEQUATE | Some companion probes are permissive (`len(result.tasks) >= 1`, `isinstance(payload, dict)`), but every AC is paired with exact discriminating assertions such as `missing_ids is None`, exact annotation booleans, exact `ERR_INVALID_STATUS`, and exact `ERR_STALE` / message assertions. |
+| Negative/error-path coverage | STRONG | Invalid status, reject+invalid `move_to`, malformed ID, invalid priority, and stale-write paths are all exercised. |
+| Manual mutation reasoning | STRONG | Removing JSON mapping at [serve/mcp-kanban/src/owlbear_mcp_kanban/server.py](serve/mcp-kanban/src/owlbear_mcp_kanban/server.py#L111) or moving the reject claim-check ahead of destination validation in [serve/kanban/src/owlbear_kanban/agent_view.py](serve/kanban/src/owlbear_kanban/agent_view.py#L1096) / [serve/kanban/src/owlbear_kanban/agent_view.py](serve/kanban/src/owlbear_kanban/agent_view.py#L1160) would break the scoped suite. |
+| Test independence | STRONG | Fresh scratch boards and isolated mocks per fixture in [tests/test_mcp_kanban_1450.py](tests/test_mcp_kanban_1450.py#L73). |
+| Descriptive names | STRONG | Test names are AC-traceable and contract-specific throughout [tests/test_mcp_kanban_1450.py](tests/test_mcp_kanban_1450.py#L180). |
+
+#### Data Safety
+- No issues found.
+
+#### Implementation-Aware Gaps
+- No AC-blocking untested path remains in scope. Invalid-priority envelope proof is adjacent rather than task-local, but it is still exact MCP-boundary JSON evidence via [serve/mcp-kanban/tests/test_mcp_mutation_tools_1087.py](serve/mcp-kanban/tests/test_mcp_mutation_tools_1087.py#L517).
+
+#### Builder Process Quality
+| Metric | Value |
+|---|---|
+| Builder Notes sections | 3 |
+| Approach variation | Yes |
+| Assessment | FRICTION |
+
+### Pass 2 — INFORMATIONAL
+- Several companion probes are intentionally weaker than their paired exact assertions. They are redundant rather than misleading because the exact partner assertions still carry the AC proof.
+- Commit presence for the retry cycles was verified through `.git/logs`, but direct diff / dirty-tree overlap proof was unavailable in this tool surface.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---|---|---|---|
+| AC1 | Explicit `ids=[]` short-circuit at [serve/mcp-kanban/src/owlbear_mcp_kanban/server.py](serve/mcp-kanban/src/owlbear_mcp_kanban/server.py#L208) plus exact task and `missing_ids` assertions in [tests/test_mcp_kanban_1450.py](tests/test_mcp_kanban_1450.py#L180) and [tests/test_mcp_kanban_1450.py](tests/test_mcp_kanban_1450.py#L214). | `TestFromAC_ListTasksEmptyIds` | PASS |
+| AC2 | Archived-search fallback at [serve/mcp-kanban/src/owlbear_mcp_kanban/server.py](serve/mcp-kanban/src/owlbear_mcp_kanban/server.py#L212) plus negative-control exclusion at [tests/test_mcp_kanban_1450.py](tests/test_mcp_kanban_1450.py#L280). | `TestFromAC_ArchivalReasonFilter` | PASS |
+| AC3 | Live forwarding through [serve/mcp-kanban/src/owlbear_mcp_kanban/server.py](serve/mcp-kanban/src/owlbear_mcp_kanban/server.py#L482) and live reject validation code at [serve/kanban/src/owlbear_kanban/agent_view.py](serve/kanban/src/owlbear_kanban/agent_view.py#L1096) are pinned by the task probes at [tests/test_mcp_kanban_1450.py](tests/test_mcp_kanban_1450.py#L347) and [tests/test_mcp_kanban_1450.py](tests/test_mcp_kanban_1450.py#L366). | `TestFromAC_MoveEndWorkEnvelope` | PASS |
+| AC4 | Exact tool-annotation assertions at [tests/test_mcp_kanban_1450.py](tests/test_mcp_kanban_1450.py#L402), [tests/test_mcp_kanban_1450.py](tests/test_mcp_kanban_1450.py#L413), and [tests/test_mcp_kanban_1450.py](tests/test_mcp_kanban_1450.py#L421). | `TestFromAC_MoveTaskAnnotations` | PASS |
+| AC5 | Malformed ID JSON at [serve/mcp-kanban/src/owlbear_mcp_kanban/server.py](serve/mcp-kanban/src/owlbear_mcp_kanban/server.py#L93), stale-write JSON probes at [tests/test_mcp_kanban_1450.py](tests/test_mcp_kanban_1450.py#L486) and [tests/test_mcp_kanban_1450.py](tests/test_mcp_kanban_1450.py#L513), and exact invalid-priority JSON assertion at [serve/mcp-kanban/tests/test_mcp_mutation_tools_1087.py](serve/mcp-kanban/tests/test_mcp_mutation_tools_1087.py#L517). | `TestFromAC_MalformedIdEnvelope`, `TestFromAC_ErrorEnvelopeContract`, durable mutation suite | PASS |
+| AC6 | Task artifact remains scratch-board / schema oriented; reviewer regression run is supplemental only. | task artifact | PASS |
+
+### Deductions
+- `-0.03` Full dirty-tree contamination check was unavailable without `git status` in this tool surface.
+- `-0.02` TestFromAC immutability was verified through task history, current snapshot, and reflog presence rather than a direct diff.
+- `-0.02` AC5 invalid-priority proof is exact but adjacent, not task-local.
+- `-0.01` Some companion assertions are permissive, though paired exact assertions keep the AC proof discriminating.
+
+### Confidence: 0.92
+### Verdict: PASS
+[[2026-05-09]]
+## Docs Gate
+
+| Check | Applies? | Status | Evidence |
+|-------|----------|--------|----------|
+| Step 0a — Review Evidence present | Yes | PASS | Third `## Review Evidence` section present; confidence 0.92, verdict PASS |
+| Step 0b — Doc-index loaded | Yes | PASS | `.owlbear/doc-index.md` loaded |
+| Item 1 — Prose docs | Yes | UPDATED | `serve/mcp-kanban/README.md` — added `## list_tasks Filter Semantics` section documenting `ids=[]` empty-result and `archival_reason`-without-status archived-search behaviors |
+| Item 2 — Docstrings | Yes | PASS | `parse_task_id()`, `list_tasks()`, `move_task()` docstrings are accurate; no update needed |
+| Item 3 — External attribution | N/A | N/A | Probe/test task; no external patterns used |
+| Item 4 — Research doc | N/A | N/A | No research doc in task body |
+| Item 5 — Diagram describes-match | Yes | UPDATED | `share/diagrams/kanban.excalidraw` (describes: `serve/mcp-kanban/src/**`) and `share/diagrams/mcp-topology.excalidraw` (describes: `serve/mcp-*/src/**`) — both footers updated to `Last verified: 2026-05-09 (d0a749f3)` |
+| Item 6 — Explicit diagram creation | N/A | N/A | No explicit diagram creation requested |
+| Item 7 — Deletion detection | N/A | N/A | No files deleted |
+
+**Files updated:** `serve/mcp-kanban/README.md`, `share/diagrams/kanban.excalidraw`, `share/diagrams/mcp-topology.excalidraw`
+
+**Commit:** `9ec60898` — `docs: update mcp-kanban README and diagram footers for #1450 (doc-writer)`
+
+**Scratch files:** None found for task #1450.
+
+**Child tasks created:** None.
