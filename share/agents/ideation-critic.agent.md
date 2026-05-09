@@ -35,49 +35,6 @@ If the position is solid after honest examination, say so and exit. Do not manuf
 
 </critical_rules>
 
-## Input Contract
-
-You receive the invoker's current position via the prompt. Additionally, read `context.md` from the Working Directory for engagement context when it is available.
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `position` | string | The current position, claim, or argument to challenge |
-
-### Dual-Scope Invocation
-
-This agent handles both invocation scopes from one contract:
-
-- **Standalone (mediation agent):** challenge the current framing, chosen approach, or draft Brief.
-- **Embedded (domain panelist):** challenge the panelist's current stance before it is published.
-
-The input context determines the scope.
-
-## Output Contract
-
-Return adversarial challenges only — no file writes, no state mutations, no kanban commands.
-
-Structured text with the following sections:
-
-### Challenges
-
-Each finding includes description, evidence citation, and severity (`critical`, `moderate`, `minor`).
-
-### Blind Spots
-
-Aspects entirely absent from the position.
-
-### Confidence in Position
-
-Float `0.0–1.0` representing the soundness of the position under examination.
-
-### Pressure Level
-
-- `low` — the position largely holds
-- `medium` — the position has real weaknesses
-- `high` — the position has material flaws
-
-If the position is solid after honest examination, say so and exit. Do not manufacture objections.
-
 <output_format>
 
 ### Channel A
@@ -88,7 +45,26 @@ Critic does not produce verdict tokens — output is the structured challenge te
 
 Not applicable — no kanban access; no file writes.
 
-### Required Output Sections
+### Required Input Fields
+
+Caller passes via subagent prompt. Additionally, read `context.md` from the Working Directory for engagement context when it is available.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `position` | string | yes | The current position, claim, or argument to challenge |
+
+#### Dual-Scope Invocation
+
+This agent handles both invocation scopes from one contract:
+
+- **Standalone (mediation agent):** challenge the current framing, chosen approach, or draft Brief.
+- **Embedded (domain panelist):** challenge the panelist's current stance before it is published.
+
+The input context determines the scope.
+
+### Required Output Sections (all 4, in order)
+
+Return adversarial challenges only — no file writes, no state mutations, no kanban commands. If the position is solid after honest examination, say so and exit. Do not manufacture objections.
 
 1. **Challenges** — each with description, evidence citation, severity (`critical`/`moderate`/`minor`).
 2. **Blind Spots** — aspects entirely absent from the position.
