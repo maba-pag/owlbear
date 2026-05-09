@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import rehypeSanitize from 'rehype-sanitize'
 import remarkGfm from 'remark-gfm'
-import { PHeading, PText, PTextarea } from '@porsche-design-system/components-react'
+import { PButton, PHeading, PText, PTextarea } from '@porsche-design-system/components-react'
 
 import type { PendingDR } from '../hooks/usePendingDRs'
 import { getResponseErrorMessage } from '../api/errorMessage'
@@ -27,6 +27,7 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
   const [notes, setNotes] = useState('')
   const [error, setError] = useState<string | null>(null)
   const modalRef = useRef<HTMLDivElement | null>(null)
+  const submitRef = useRef<HTMLElement | null>(null)
 
   async function handleSubmit() {
     if (!dr) {
@@ -55,13 +56,19 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
     }
   }
 
-  if (!dr) {
-    return null
-  }
+  if (!dr) return null
 
   useEffect(() => {
     modalRef.current?.focus()
   }, [])
+
+  useEffect(() => {
+    if (response === '') {
+      submitRef.current?.setAttribute('disabled', '')
+      return
+    }
+    submitRef.current?.removeAttribute('disabled')
+  }, [response])
 
   useEffect(() => {
     function handleDocumentKeyDown(event: KeyboardEvent): void {
@@ -93,16 +100,19 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
 
   function readControlValue(event: ControlValueEvent): string {
     const detailValue = (event.detail as { value?: unknown } | undefined)?.value
-    if (typeof detailValue === 'string') {
-      return detailValue
-    }
-
     const target = event.target as { value?: unknown } | undefined
-    if (typeof target?.value === 'string') {
-      return target.value
-    }
+    return typeof target?.value === 'string'
+      ? target.value
+      : typeof detailValue === 'string'
+        ? detailValue
+        : ''
+  }
 
-    return ''
+  function handleResponseChange(event: ControlValueEvent): void {
+    const value = readControlValue(event)
+    if (value === 'approved' || value === 'rejected' || value === 'needs-info') {
+      setResponse(value)
+    }
   }
 
   return (
@@ -127,7 +137,7 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
               name="resolve-response"
               value="approved"
               checked={response === 'approved'}
-              onChange={() => setResponse('approved')}
+              onChange={handleResponseChange}
             />
             approved
           </label>
@@ -140,7 +150,7 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
               name="resolve-response"
               value="rejected"
               checked={response === 'rejected'}
-              onChange={() => setResponse('rejected')}
+              onChange={handleResponseChange}
             />
             rejected
           </label>
@@ -153,7 +163,7 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
               name="resolve-response"
               value="needs-info"
               checked={response === 'needs-info'}
-              onChange={() => setResponse('needs-info')}
+              onChange={handleResponseChange}
             />
             needs-info
           </label>
@@ -170,19 +180,23 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
         onChange={(event) => setNotes(readControlValue(event))}
       />
 
-      <button
+      <PButton
+        ref={(element) => {
+          submitRef.current = element
+        }}
         type="button"
         data-testid="resolve-submit"
+        variant="primary"
         disabled={response === ''}
         onClick={() => {
           void handleSubmit()
         }}
       >
         Submit Decision
-      </button>
-      <button type="button" data-testid="resolve-cancel" onClick={onClose}>
+      </PButton>
+      <PButton type="button" data-testid="resolve-cancel" variant="secondary" onClick={onClose}>
         Close Modal
-      </button>
+      </PButton>
 
       {error ? <PText data-testid="resolve-error">{error}</PText> : null}
     </div>
