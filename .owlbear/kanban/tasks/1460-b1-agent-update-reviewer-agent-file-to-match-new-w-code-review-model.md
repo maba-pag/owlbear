@@ -1,10 +1,10 @@
 ---
 id: 1460
 title: 'B1-agent: Update reviewer agent file to match new w-code-review model'
-status: todo
+status: in-progress
 priority: needed
 created: 2026-05-08T19:47:16.726901+00:00
-updated: 2026-05-09T07:00:15.311401+00:00
+updated: 2026-05-09T07:39:19.449581+00:00
 tags:
 - pipeline
 - ws-reviewer
@@ -74,3 +74,8 @@ Update `share/agents/reviewer.agent.md` to align with rewritten w-code-review sk
 
 ### Verdict: APPROVE
 ### Action Taken: Refined AC from prose to 7 verifiable checkboxes. Added `agent` pass-through tag. Advanced to todo.
+[[2026-05-09]]
+## Test-Writer Notes
+- Non-implementation task (tagged `agent`) — no tests applicable.
+- Additionally, all AC lines are annotated `(td:0)` — test-writer skipped on both grounds.
+- Passing through to builder.

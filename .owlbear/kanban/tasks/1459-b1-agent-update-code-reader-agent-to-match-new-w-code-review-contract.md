@@ -1,10 +1,10 @@
 ---
 id: 1459
 title: 'B1-agent: Update code-reader agent to match new w-code-review contract'
-status: todo
+status: in-progress
 priority: needed
 created: 2026-05-08T19:47:13.556859+00:00
-updated: 2026-05-09T07:02:28.608766+00:00
+updated: 2026-05-09T07:39:13.728939+00:00
 tags:
 - pipeline
 - ws-reviewer
@@ -64,3 +64,8 @@ Update `share/agents/code-reader.agent.md` to align with the new w-code-review c
 
 ### Verdict: APPROVE
 ### Action Taken: Refined AC with explicit 4-section output contract, scoped file boundaries, and builder guidance. Added `agent` pass-through tag. Advanced to todo.
+[[2026-05-09]]
+## Test-Writer Notes
+- Non-implementation task (tagged `agent`) — no tests applicable.
+- Scope is strictly `share/agents/code-reader.agent.md` (agent file update); no Python or TypeScript interfaces to test.
+- Passing through to builder.

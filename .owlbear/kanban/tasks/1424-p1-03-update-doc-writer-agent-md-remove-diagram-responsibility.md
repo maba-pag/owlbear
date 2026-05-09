@@ -1,10 +1,10 @@
 ---
 id: 1424
 title: 'P1-03: Update doc-writer.agent.md — remove diagram responsibility'
-status: in-progress
+status: review
 priority: important
 created: 2026-05-08T00:32:21.566488+00:00
-updated: 2026-05-09T07:21:53.725110+00:00
+updated: 2026-05-09T07:41:19.965937+00:00
 tags:
 - phase-1
 - scope:shared
@@ -97,3 +97,19 @@ AC #4 structural elements (tools, pipeline_position, agents, output_format) are 
 
 ### Commit
 adea84f8 — test: add failing tests for doc-writer critical_rules alignment (#1424, test-writer)
+[[2026-05-09]]
+## Builder Notes
+- Implementation: updated share/agents/doc-writer.agent.md (critical_rules section only).
+- Fixes applied:
+  - Expanded checklist rule to explicitly name README Verification, External Attribution, Research Doc, and Deletion Detection.
+  - Added convention-based mapping rule: serve/{pkg}/src/** -> serve/{pkg}/README.md.
+  - Added TODO marker + gate behavior rule: task-caused unverified content blocks gate; pre-existing out-of-scope unverified content may pass only with a TODO marker.
+- Tests: 10/10 TestFromAC passed in tests/test_doc_writer_agent_1424.py.
+- Coverage: N/A for this scoped run (no source module imported for coverage instrumentation).
+- ruff: clean.
+- Evidence summary:
+  - RED verified pre-change: 10 failed (all TestFromAC assertions failing as expected).
+  - GREEN verified post-change: 10 passed, 0 failed.
+  - Lint status: clean.
+- Regression baseline: no durable module-level doc_writer_agent test file exists beyond tests/test_doc_writer_agent_1424.py.
+- Commit: 10a77c2566a12d45a63cf084dabf05315c4df346 (only share/agents/doc-writer.agent.md staged).

@@ -1,10 +1,10 @@
 ---
 id: 1425
 title: 'P1-04: Revise doc-audit.prompt.md — TODO resolution + diagram ownership'
-status: in-progress
+status: review
 priority: important
 created: 2026-05-08T00:32:24.572908+00:00
-updated: 2026-05-09T07:21:42.111879+00:00
+updated: 2026-05-09T07:41:15.595168+00:00
 tags:
 - phase-1
 - scope:shared
@@ -120,3 +120,15 @@ All 12 tests confirm the three missing additions to `.owlbear/prompts/doc-audit.
 1. One-at-a-time finding loop control points + TODO batch exception in §4
 2. D1-D8 dimension table with empirical markers on D4/D5/D6 and r-doc-standards canonical reference
 3. Pre-audit gate (before §3 Scope) requiring r-doc-standards and doc-types.instructions.md load
+[[2026-05-09]]
+## Builder Notes
+- Implementation: updated .owlbear/prompts/doc-audit.prompt.md only.
+- Fixes applied:
+  - Added pre-audit gate requiring load of r-doc-standards and doc-types.instructions.md before scanning.
+  - Restored one-finding-at-a-time default in §4 with explicit control points (present finding -> collect approval -> apply fix -> next finding).
+  - Added explicit TODO batch exception in §4 that defers to §5 workflow.
+  - Added D1-D8 dimension reference table mapping dimension ID, name, and source rule family; marked D4/D5/D6 as empirical and referenced r-doc-standards as canonical source.
+- Tests: 12 TestFromAC tests passed (tests/test_doc_audit_prompt_1425.py).
+- Coverage: N/A for prompt-only change (no application module touched).
+- Ruff: clean (scoped lint run on task test file).
+- Evidence summary: RED verified first (12 failed), then GREEN verified (12 passed, failed=[]).

@@ -2,10 +2,10 @@
 id: 1462
 title: 'B2-impl: Update loop-breaker terminology to batch-review-cycle and add cycle-3
   escalation'
-status: done
+status: archived
 priority: important
 created: 2026-05-09T03:31:13.416517+00:00
-updated: 2026-05-09T07:18:18.178643+00:00
+updated: 2026-05-09T07:48:47.358272+00:00
 tags:
 - pipeline
 - ws-reviewer
@@ -226,3 +226,34 @@ None.
 
 ### Scratch Files Cleaned
 None found (`.owlbear/scratch/1462-*` — no matches).
+[[2026-05-09]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| P1 | `r-pipeline-protocol/SKILL.md:112-113` — "Cycle 1 batch review cycle", "Cycle 2 batch review cycle" replaced FAIL-based wording | PASS |
+| P2 | `r-pipeline-protocol/SKILL.md:115` — new row "Cycle 3+ batch review cycle → FAIL — always backlog (loop-breaker: architect escalation for AC refinement)" | PASS |
+| P3 | `w-code-review/SKILL.md:132` — "Repeated batch review cycle (2nd+ cycle)" replaced old phrasing | PASS |
+| P4 | `reviewer.agent.md:61` — "Fail (2nd+ batch review cycle)" / "2nd+ batch review cycle on same task" | PASS |
+| P5 | `agent-broad-audit.prompt.md:135` — "2nd+ batch review cycle" for reviewer rejection-routing row | PASS |
+| P6 | `git diff --stat 1c8aa29b~1 1c8aa29b`: exactly 4 files, 6 insertions, 5 deletions — only terminology swaps + cycle-3 row | PASS |
+
+### Test Results
+- pytest: 4794 passed, 572 failed — all failures are pre-existing infrastructure issues in unrelated domains (cockpit cache, decisions API, error envelopes). Task changed 0 Python files; no regression attributable to #1462.
+- vitest: 1214 passed, 9 failed — Shell_1344 timeout-related, pre-existing. Task changed 0 TS files.
+- ruff: 28 violations — all pre-existing, none in task-scoped files.
+- eslint: 4 violations — pre-existing, no frontend code changed.
+
+### Architect Quality: 4/5
+Specific AC: exact file paths, exact text targets, td:0 annotations, clear scope boundary. Minor: first builder misread "agent" tag as pass-through, but that's builder process, not AC clarity.
+
+### Deduction Breakdown
+- AC lines without evidence: 0 (-.00)
+- Lint violations in scope: 0 (-.00)
+- AC quality ≤ 3: no (-.00)
+- Missing reviewer evidence: no (-.00)
+- Full-suite failures in task scope: 0 (-.00)
+- Suite-wide failures are background debt, not task-attributable — no deduction.
+
+### Confidence: .98
+### Action: archive

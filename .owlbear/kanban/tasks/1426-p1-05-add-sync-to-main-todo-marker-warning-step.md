@@ -1,10 +1,10 @@
 ---
 id: 1426
 title: 'P1-05: Add sync-to-main TODO marker warning step'
-status: in-progress
+status: review
 priority: important
 created: 2026-05-08T00:41:08.358257+00:00
-updated: 2026-05-09T07:17:48.620575+00:00
+updated: 2026-05-09T07:40:20.267777+00:00
 tags:
 - phase-1
 - scope:shared
@@ -84,3 +84,16 @@ Skipped — all AC lines td:0 per Step 2.1/2.5 rule.
 - Non-implementation task (tagged `type:config`) — no tests applicable.
 - All AC lines annotated `td:0`; architect explicitly flagged SKIP.
 - Passing through to builder.
+[[2026-05-09]]
+## Builder Notes
+- Implementation: Added pre-sync workflow step in .github/workflows/sync-to-main.yml to scan README files for `> **TODO:**` markers and emit a warning annotation.
+- Files changed: .github/workflows/sync-to-main.yml
+- Tests: Not applicable (all AC lines are td:0; config-only workflow change)
+- Coverage: N/A (no Python/TS runtime code changed)
+- ruff/eslint: N/A (workflow YAML only)
+- Approach: Inserted the warning step immediately after "Capture dev metadata" and before path validation to satisfy pre-sync placement while ensuring non-blocking behavior.
+- Evidence:
+  - Pattern insertion verified with ripgrep matches at workflow step and warning annotation lines.
+  - YAML parse validation passed via `uv run python` + `yaml.safe_load`.
+  - Summary format implemented as: "⚠️ {n} unresolved TODO markers in {m} files: {list}".
+  - Workflow behavior remains warning-only; no failure path introduced for marker presence.

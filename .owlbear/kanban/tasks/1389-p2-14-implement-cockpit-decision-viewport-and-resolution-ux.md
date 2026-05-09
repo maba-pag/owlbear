@@ -1,10 +1,10 @@
 ---
 id: 1389
 title: 'P2-14: Implement Cockpit decision viewport and resolution UX'
-status: review
+status: backlog
 priority: needed
 created: 2026-05-06T01:04:52.300671+00:00
-updated: 2026-05-09T07:25:47.545539+00:00
+updated: 2026-05-09T07:38:25.163219+00:00
 tags:
 - cockpit
 - audit-remediation
@@ -19,7 +19,7 @@ depends_on:
 - 1388
 blocked: false
 block_reason:
-claimed_at: 2026-05-09T07:25:47.545539+00:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -306,3 +306,47 @@ Re-review complete. Refined AC v2 addresses all three reviewer rejection finding
   - TypeScript diagnostics: no errors in `serve/cockpit/web/src/components/ResolveModal.tsx`.
 - Commit:
   - `8796bad0` — feat: migrate ResolveModal actions to PButton (#1389, builder)
+[[2026-05-09]]
+## Review Evidence
+### Test Results
+- quality-runner scoped gate: 84 passed, 0 failed across `ResolveModalUX_1389`, `ResolveModalUX_1388`, `ResolveModal_1193`, `DecisionViewport_1388`, `Shell_1389`, and `Shell_1192`.
+- code-reader reviewed the current source/test surface for AC1-AC8. No security or data-safety issues were found.
+
+### Lint Results
+- ESLint clean on `serve/cockpit/web/src/Shell.tsx`, `serve/cockpit/web/src/components/ResolveModal.tsx`, and the six scoped test files.
+
+### Coverage
+- `src/components/ResolveModal.tsx`: 94% statements, 62.96% branches, 100% functions, 95.91% lines.
+- `src/Shell.tsx`: 73.46% statements, 77.77% branches, 38.09% functions, 64.96% lines.
+- The Shell module-level percentage is not the gating failure for this narrow task.
+
+### AC Compliance
+| AC Line | Evidence | Status |
+|---|---|---|
+| AC1: decision UI shows pending decisions with context, metadata, body/preview, and loading/error/empty states | `DecisionViewport_1388.test.tsx:75,99,119,237,251` and `Shell_1389.test.tsx:198,208,254,272`; `Shell.tsx:200-204` | PASS |
+| AC2: refined keyword-specific consequence assertions (not word-count thresholds) | `ResolveModalUX_1388.test.tsx:88-90,113-115,138-140` still use `wordCount`; `ResolveModalUX_1389.test.tsx:10` explicitly excludes AC2 v2; implementation text exists in `ResolveModal.tsx`, but the refined proof target is absent | FAIL |
+| AC3: no unsafe approved default | `ResolveModalUX_1388.test.tsx:147,156,165,175`; `ResolveModal.tsx:26` | PASS |
+| AC4: PButton controls, variants, multi-word labels, PText consequence typography | `ResolveModalUX_1389.test.tsx:69,89,98,114`; `ResolveModalUX_1388.test.tsx:193,204,215`; `ResolveModal.tsx:176-198` | PASS |
+| AC5: modal keyboard/focus plus Shell open→close cycle | `ResolveModalUX_1388.test.tsx:228,242,251,258` proves modal-local behavior; `Shell_1389.test.tsx:297-311` proves open only, and `Shell_1389.test.tsx:314-334` only checks callback/no-throw. No Shell assertion proves cancel or Escape removes the modal from the DOM after opening, despite `Shell.tsx:272-276` and `ResolveModal.tsx:67-80,82-88`. | FAIL |
+| AC6: expected decision errors use the frontend error contract from #1375 | `ResolveModal.tsx:44` calls `getResponseErrorMessage`; `api/errorMessage.ts:1-28` implements message/detail/fallback; `ResolveModal_1193.test.tsx:207-241` only proves the error node renders | PASS (low-confidence proof) |
+| AC7: frontend-only implementation without backend lifecycle changes | `ResolveModal.tsx:38-41` and `ResolveModal_1193.test.tsx:132-171` keep the same endpoint/payload; no backend files are in scope | PASS |
+| AC8: DecisionViewport is the primary Shell listing surface | `Shell_1389.test.tsx:198,203,208,254,272,297` and `DecisionViewport_1388.test.tsx:75,99,119`; `Shell.tsx:200-204` | PASS |
+
+### Deductions
+- `-0.08` AC2 still lacks the refined keyword-based outcome assertions and remains a false-green risk.
+- `-0.06` AC5 still lacks Shell-level close-cycle proof after opening ResolveModal from DecisionViewport.
+- `-0.02` AC6 proof is weak: tests only assert error-node presence, not message/detail/fallback behavior.
+
+### Verdict
+- Confidence: `0.84`
+- FAIL. The implementation is largely correct, but the retry did not satisfy refined AC2 and AC5 at the proof level. A prior `## Review Evidence` rejection already exists in this task body, so this is a second review failure and the loop-breaker route is `backlog`.
+
+### Action
+- Reject to `backlog`.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Persist a concrete AC2 proof target and route the next test pass to replace word-count checks with keyword-specific outcome assertions for approved, rejected, and needs-info text | `serve/cockpit/web/src/__tests__/ResolveModalUX_1388.test.tsx`, `serve/cockpit/web/src/__tests__/ResolveModalUX_1389.test.tsx` | `ResolveModalUX_1388.test.tsx:88-90,113-115,138-140`; `ResolveModalUX_1389.test.tsx:10` |
+| 2 | architect | Persist a concrete AC5 Shell proof target and route the next test pass to assert the open→close cycle, including cancel or Escape removing ResolveModal from the DOM after a DecisionViewport-triggered open | `serve/cockpit/web/src/__tests__/Shell_1389.test.tsx`, `serve/cockpit/web/src/Shell.tsx` | `Shell_1389.test.tsx:297-334`; `Shell.tsx:272-276` |
+| 3 | architect | Decide whether AC6 needs explicit helper-branch assertions for message/detail/fallback or is acceptable as non-blocking debt, then narrow the next gate accordingly | `serve/cockpit/web/src/__tests__/ResolveModal_1193.test.tsx`, `serve/cockpit/web/src/api/errorMessage.ts` | `ResolveModal_1193.test.tsx:207-241`; `api/errorMessage.ts:1-28` |
