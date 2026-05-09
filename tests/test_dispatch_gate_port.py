@@ -26,43 +26,7 @@ from owlbear_kanban.models import PickTasksResponse, Task
 # ---------------------------------------------------------------------------
 
 _BASE_CONFIG = """\
-schema: grouped
-statuses:
-  - research
-  - backlog
-  - todo
-  - in-progress
-  - review
-  - done
-priorities:
-  - someday
-  - nice-to-have
-  - important
-  - needed
-  - critical
 next_id: 20
-paths:
-    tasks_dir: tasks
-    archive_dir: archive
-pipeline:
-    entry_status: research
-    terminal_status: done
-    wave_size: 4
-    claim_timeout: 1h
-agents:
-    agent_map:
-        research: researcher
-        backlog: architect
-        todo: builder
-        in-progress: builder
-        review: reviewer
-        done: auditor
-    agent_types: {}
-    agent_compatibility: {}
-policy:
-    non_impl_tags: [research, docs]
-    archival_reasons: [completed, deprecated, dropped, duplicate, wontfix]
-    status_predicates: {}
 """
 
 
@@ -643,45 +607,7 @@ class TestFromAC_ClarityGateDelegation:
 # ---------------------------------------------------------------------------
 
 _BASE_CONFIG_WITH_DOCS = """\
-schema: grouped
-statuses:
-  - research
-  - backlog
-  - todo
-  - in-progress
-  - review
-  - docs
-  - done
-priorities:
-  - someday
-  - nice-to-have
-  - important
-  - needed
-  - critical
 next_id: 20
-paths:
-    tasks_dir: tasks
-    archive_dir: archive
-pipeline:
-    entry_status: research
-    terminal_status: done
-    wave_size: 4
-    claim_timeout: 1h
-agents:
-    agent_map:
-        research: researcher
-        backlog: architect
-        todo: builder
-        in-progress: builder
-        review: reviewer
-        docs: doc-writer
-        done: auditor
-    agent_types: {}
-    agent_compatibility: {}
-policy:
-    non_impl_tags: [research, docs]
-    archival_reasons: [completed, deprecated, dropped, duplicate, wontfix]
-    status_predicates: {}
 """
 
 
@@ -792,47 +718,7 @@ class TestFromAC_ClarityGateStatusCoverage:
 # ---------------------------------------------------------------------------
 
 _BASE_CONFIG_INCOMPATIBLE_BUCKETS = """\
-schema: grouped
-statuses:
-  - research
-  - backlog
-  - todo
-  - in-progress
-  - review
-  - done
-priorities:
-  - someday
-  - nice-to-have
-  - important
-  - needed
-  - critical
 next_id: 20
-paths:
-    tasks_dir: tasks
-    archive_dir: archive
-pipeline:
-    entry_status: research
-    terminal_status: done
-    wave_size: 4
-    claim_timeout: 1h
-agents:
-    agent_map:
-        research: researcher
-        backlog: architect
-        todo: builder
-        in-progress: builder
-        review: reviewer
-        done: auditor
-    agent_types:
-        builder: type-builder
-        reviewer: type-reviewer
-    agent_compatibility:
-        type-builder: [type-builder]
-        type-reviewer: [type-reviewer]
-policy:
-    non_impl_tags: [research, docs]
-    archival_reasons: [completed, deprecated, dropped, duplicate, wontfix]
-    status_predicates: {}
 """
 
 

@@ -29,35 +29,7 @@ from owlbear_kanban import KanbanEngine
 # ---------------------------------------------------------------------------
 
 _BASE_CONFIG = """\
-schema: grouped
-statuses:
-  - research
-  - todo
-  - done
-priorities:
-  - critical
-  - needed
-  - someday
 next_id: 1
-paths:
-    tasks_dir: tasks
-    archive_dir: archive
-pipeline:
-    entry_status: research
-    terminal_status: done
-    wave_size: 4
-    claim_timeout: 1h
-agents:
-    agent_map:
-        research: researcher
-        todo: builder
-        done: auditor
-    agent_types: {}
-    agent_compatibility: {}
-policy:
-    non_impl_tags: [research, docs]
-    archival_reasons: [completed, deprecated, dropped, duplicate, wontfix]
-    status_predicates: {}
 """
 
 

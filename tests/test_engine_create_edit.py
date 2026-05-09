@@ -338,15 +338,15 @@ Covers:
 # Minimal board setup helpers (mirrors test_engine_create_edit_1070.py)
 # ---------------------------------------------------------------------------
 
-_BASE_CONFIG = """\
+_BASE_CONFIG_1203 = """\
 next_id: 1
 """
 
 
-def _make_view(base_dir: Path) -> AgentView:
+def _make_view_1203(base_dir: Path) -> AgentView:
     kanban_dir = base_dir / "board"
     kanban_dir.mkdir(parents=True, exist_ok=True)
-    (kanban_dir / "config.yml").write_text(_BASE_CONFIG, encoding="utf-8")
+    (kanban_dir / "config.yml").write_text(_BASE_CONFIG_1203, encoding="utf-8")
     (kanban_dir / "tasks").mkdir(exist_ok=True)
     (kanban_dir / "archive").mkdir(exist_ok=True)
     engine = KanbanEngine(kanban_dir, activity_log=False)
@@ -371,7 +371,7 @@ class TestFromAC_EmptyTitleErrorCode:
         self, tmp_path: Path
     ) -> None:
         """AC2: create_task with empty title raises ValidationError with code ERR_INVALID_TITLE."""
-        view = _make_view(tmp_path)
+        view = _make_view_1203(tmp_path)
         with pytest.raises(ValidationError) as exc_info:
             view.create_task(title="")
         assert exc_info.value.code == "ERR_INVALID_TITLE"
@@ -381,7 +381,7 @@ class TestFromAC_EmptyTitleErrorCode:
         self, tmp_path: Path
     ) -> None:
         """AC2: create_task with whitespace-only title raises ValidationError(ERR_INVALID_TITLE)."""
-        view = _make_view(tmp_path)
+        view = _make_view_1203(tmp_path)
         with pytest.raises(ValidationError) as exc_info:
             view.create_task(title="   ")
         assert exc_info.value.code == "ERR_INVALID_TITLE"

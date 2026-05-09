@@ -101,33 +101,7 @@ class _MinimalConfig:
 # ---------------------------------------------------------------------------
 
 _GROUPED_CONFIG = """\
-schema: grouped
-statuses:
-  - research
-  - todo
-  - done
-priorities:
-  - needed
-  - critical
 next_id: 1
-activity_log: false
-paths:
-  tasks_dir: tasks
-  archive_dir: archive
-pipeline:
-  entry_status: research
-  terminal_status: done
-  wave_size: 4
-  claim_timeout: 1h
-  default_priority: needed
-agents:
-  agent_map: {}
-  agent_types: {}
-  agent_compatibility: {}
-policy:
-  non_impl_tags: []
-  archival_reasons: [completed, deprecated, dropped, duplicate, wontfix]
-  status_predicates: {}
 """
 
 _TASK_FM = """\

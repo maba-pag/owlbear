@@ -26,48 +26,7 @@ from owlbear_kanban.models import PickTasksResponse
 # ---------------------------------------------------------------------------
 
 _BASE_CONFIG = """\
-schema: grouped
-statuses:
-  - research
-  - backlog
-  - todo
-  - in-progress
-  - review
-  - done
-priorities:
-  - critical
-  - needed
-  - important
-  - nice-to-have
-  - someday
 next_id: 1
-paths:
-    tasks_dir: tasks
-    archive_dir: archive
-pipeline:
-    entry_status: research
-    terminal_status: done
-    wave_size: 4
-    claim_timeout: 1h
-agents:
-    agent_map:
-        research: researcher
-        backlog: architect
-        todo: builder
-        in-progress: builder
-        review: reviewer
-        done: auditor
-    agent_types:
-        researcher: research
-        architect: design
-        builder: impl
-        reviewer: review
-        auditor: audit
-    agent_compatibility: {}
-policy:
-    non_impl_tags: [research, docs]
-    archival_reasons: [completed, deprecated, dropped, duplicate, wontfix]
-    status_predicates: {}
 """
 
 _TASK_TMPL = """\

@@ -35,34 +35,7 @@ from owlbear_kanban.models import ConfigError
 # ---------------------------------------------------------------------------
 
 _CONFIG_TEMPLATE = dedent("""\
-    schema: grouped
-    statuses:
-    {statuses_yaml}
-    priorities:
-    {priorities_yaml}
     next_id: 1
-    paths:
-        tasks_dir: tasks
-        archive_dir: archive
-    pipeline:
-        entry_status: research
-        terminal_status: done
-        wave_size: 4
-        claim_timeout: 1h
-    agents:
-        agent_map:
-            research: researcher
-            backlog: architect
-            todo: builder
-            in-progress: builder
-            review: reviewer
-            done: auditor
-        agent_types: {{}}
-        agent_compatibility: {{}}
-    policy:
-        non_impl_tags: [research, docs]
-        archival_reasons: [completed, deprecated, dropped, duplicate, wontfix]
-        status_predicates: {{}}
     """)
 
 _STANDARD_STATUSES = [

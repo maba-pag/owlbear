@@ -40,44 +40,7 @@ _CODE_SOURCE = _strip_string_literals(_ENGINE_SOURCE)
 # ---------------------------------------------------------------------------
 
 _GROUPED_CONFIG = """\
-schema: grouped
-statuses:
-  - research
-  - backlog
-  - todo
-  - done
-priorities:
-  - someday
-  - important
-  - critical
 next_id: 1
-activity_log: false
-paths:
-  tasks_dir: tasks
-  archive_dir: archive
-pipeline:
-  entry_status: research
-  terminal_status: done
-  wave_size: 4
-  claim_timeout: 1h
-  default_priority: important
-agents:
-  agent_map:
-    research: researcher
-    backlog: architect
-    todo: builder
-    done: auditor
-  agent_types: {}
-  agent_compatibility: {}
-policy:
-  non_impl_tags: []
-  archival_reasons:
-    - completed
-    - deprecated
-    - dropped
-    - duplicate
-    - wontfix
-  status_predicates: {}
 """
 
 
