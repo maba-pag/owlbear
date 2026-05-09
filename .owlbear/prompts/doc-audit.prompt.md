@@ -19,6 +19,12 @@ uv run doc-index
 
 If the command exits non-zero, stop and report the error.
 
+Pre-audit gate (must complete before any scan):
+
+1. Load `r-doc-standards` and use it as the canonical source for audit dimensions and probes.
+2. Load `doc-types.instructions.md` so document-type-specific constraints are active.
+3. Only start scanning after both are loaded.
+
 ## 3. Scope
 
 Scan:
@@ -32,6 +38,17 @@ Do not edit agent-executable files during this prompt loop.
 
 ## 4. Finding Loop Contract
 
+Default mode: process one finding at a time.
+
+Control points for each finding cycle:
+
+1. Present the finding.
+2. Collect user approval.
+3. Apply the approved fix.
+4. Move to the next finding.
+
+Batch exception: TODO marker resolution is handled in batch mode; §5 applies for that flow.
+
 For each finding, provide:
 
 - Severity
@@ -42,6 +59,19 @@ For each finding, provide:
 - Recommendation
 
 Collect explicit user approval before creating a remediation task.
+
+Dimension reference table (abbreviated; `r-doc-standards` remains canonical):
+
+| Dimension | Name | Source Rule Family |
+|-----------|------|--------------------|
+| D1 | Structural Conformance | STR-* |
+| D2 | Duplication | DUP-* |
+| D3 | Placement Integrity | PLC-* |
+| D4 | Accuracy | empirical |
+| D5 | Coverage Integrity | empirical |
+| D6 | Currency/Staleness | empirical |
+| D7 | Audience Fitness | AUD-* |
+| D8 | Link Integrity | LNK-* |
 
 ## 5. TODO Marker Batch Resolution
 
