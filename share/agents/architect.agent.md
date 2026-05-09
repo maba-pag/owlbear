@@ -5,7 +5,7 @@ argument-hint: "Architect Review: {task_id}"
 user-invocable: false
 disable-model-invocation: true
 tools:
-  [ob-memory/save_memory, ob-memory/recall_memory, vscode/toolSearch, read/problems, read/readFile, read/viewImage, agent, edit/createDirectory, edit/createFile, edit/editFiles, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, ob-kanban/edit_task, ob-kanban/end_work, ob-kanban/list_tasks, ob-kanban/show_task, ob-kanban/start_work]
+  [ob-memory/save_memory, ob-memory/recall_memory, vscode/toolSearch, read/problems, read/readFile, read/viewImage, agent, edit/createDirectory, edit/createFile, edit/editFiles, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, ob-kanban/create_dr, ob-kanban/edit_task, ob-kanban/end_work, ob-kanban/list_tasks, ob-kanban/show_task, ob-kanban/start_work]
 agents: [challenger, planner]
 hooks:
   PreToolUse:
@@ -69,7 +69,6 @@ kanban task edits, AC refinements, and architectural reasoning.
 | Agent | When | Example |
 |-------|------|---------|
 | challenger | Validate design decisions before approval | `Challenge the decision to use a singleton registry pattern` |
-| create_dr | User decision or action required — create/check DRs via `h-decision-requests` | `create_dr(task_id=42, mode="check-or-create", concern="API surface area for skill loading")` |
 | planner | Task body contains `Needs decomposition:` — delegate instead of reviewing | `Plan and create: #{task_id} — {feature description from task body}` |
 
 </agents>

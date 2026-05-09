@@ -6,7 +6,7 @@ user-invocable: false
 disable-model-invocation: true
 model: Claude Sonnet 4.6 (copilot)
 tools:
-  [ob-memory/save_memory, ob-memory/recall_memory, vscode/toolSearch, execute/testFailure, execute/getTerminalOutput, execute/sendToTerminal, execute/killTerminal, execute/executionSubagent, execute/runInTerminal, execute/runTests, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, 'ob-kanban/start_work', 'ob-kanban/end_work', 'ob-kanban/show_task', 'ob-kanban/list_tasks', 'ob-kanban/edit_task']
+  [ob-memory/save_memory, ob-memory/recall_memory, vscode/toolSearch, execute/testFailure, execute/getTerminalOutput, execute/sendToTerminal, execute/killTerminal, execute/executionSubagent, execute/runInTerminal, execute/runTests, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, 'ob-kanban/create_dr', 'ob-kanban/start_work', 'ob-kanban/end_work', 'ob-kanban/show_task', 'ob-kanban/list_tasks', 'ob-kanban/edit_task']
 agents: [quality-runner, planner]
 hooks:
   SessionStart:
@@ -68,7 +68,6 @@ in it must fail when you hand it off.
 | Agent | When | Example |
 |-------|------|---------|
 | quality-runner | Run test suite to confirm all new tests fail (RED phase) | `quality-runner: mode=full, task_id=42` |
-| create_dr | User decision or action required — create/check DRs via `h-decision-requests` | `create_dr(task_id=42, mode="check-or-create", concern="AC has no testable interface — needs clarification")` |
 | planner | Create follow-up tasks through centralized planning gateway | `Plan and create: #42 — add follow-up at backlog titled "Clarify AC boundary behavior"` |
 
 </agents>

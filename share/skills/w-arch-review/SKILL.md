@@ -73,7 +73,7 @@ Assess the task against `r-architecture-standards` and general architectural pri
     | CODEPATH | FAILURE MODE | EXCEPTION | HANDLED? | USER IMPACT |
     |----------|--------------|-----------|----------|-------------|
 
-12. **Decision-request verification** — if the task references `.owlbear/research/*.md` or is tagged `research`, query the scribe to check for an approved DR. No approved DR for T3 research = use the REJECT path.
+12. **Decision-request verification** — if the task references `.owlbear/research/*.md` or is tagged `research`, check the task body for a resolved DR (resolution is automatic at pick time). No approved DR for T3 research = use the REJECT path.
 
 13. **User-action detection** — Does this task require a human physical action with no testable Python interface? Apply the M/S/C rule in order:
     - **Counter-signals (C) — exit immediately if ANY present:** (C1) AC defines a function signature, importable module, or assertion target; (C2) AC specifies expected test outcomes; (C3) task already tagged `type:test` or `type:config`
@@ -162,7 +162,7 @@ The architect retains final authority.
 | **SPLIT** | Multiple responsibilities | Delegate to planner with `Plan and create: #{id} — {split scope}` for decomposition, then update deps, edit/delete original, and release |
 | **MERGE** | Two tasks = one logical change | Edit one task, delete redundant, release |
 | **REJECT** | Missing prerequisite or unclear | Move to `research` via `end_work(outcome="reject")`, appending findings |
-| **BLOCK** | `type:user-action` detected (Step 2 criterion 13) | Create AR via scribe (`Scribe: task_id={id}, mode=check-or-create`), tag task `type:user-action` if missing, `end_work(outcome="block")` |
+| **BLOCK** | `type:user-action` detected (Step 2 criterion 13) | Create AR via `create_dr(task_id={id}, request_type="action")`, tag task `type:user-action` if missing, `end_work(outcome="block")` |
 
 <!-- NON_IMPL_TAGS: This is the authoritative list. Secondary copy:
      skills/w-tdd-red/SKILL.md (Step 1 item 3) -->

@@ -48,7 +48,7 @@ lost situational awareness. Trust the instruments, not the narrative.
 - **Follow the `w-orchestration` skill** for the plan-dispatch-verify loop, wave assembly, and rate-limit fallback.
 - **Read `r-pipeline-protocol`** for channel communication, claiming conventions, and agent-signal mapping.
 - **Channel A signals.** Read agent return values for outcome detection: `FAIL` (task failed), `TOOL_UNAVAILABLE` (tool degraded), or success (any other signal). Do not parse signals for task routing — re-plan routing from board state via `pick_tasks` each cycle.
-- **Housekeeping agents.** Do not use decision-resolver or curator output for dispatch decisions. They modify board state directly; `pick_tasks` reads fresh state each cycle. Surface informational signals to the user (e.g., curator deferred count, pending-DR list).
+- **Housekeeping agents.** Do not use agent output for dispatch decisions, they modify board state directly; `pick_tasks` reads fresh state each cycle. Surface informational signals to the user (e.g., curator deferred count, pending-DR list).
 - **ONE task per subagent dispatch.** Never batch multiple tasks into a single subagent call.
 - **Never stop early.** There is no "good stopping point" you may choose. Keep cycling until `pick_tasks` returns an empty list or the user intervenes — those are the only valid stop conditions.
 
@@ -58,7 +58,6 @@ lost situational awareness. Trust the instruments, not the narrative.
 
 | Agent | When | Example |
 |-------|------|---------|
-| decision-resolver | Every cycle start (housekeeping) — resolves responded DRs, unblocks tasks | `resolve_decisions(scope="all")` |
 | planner | Delegated by architect when task body contains `Needs decomposition:` | (not dispatched directly by orchestrator) |
 | researcher | Dispatched per plan — processes research tasks | (dispatched via plan, not directly) |
 | architect | Dispatched per plan — reviews backlog tasks | (dispatched via plan, not directly) |
