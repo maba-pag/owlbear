@@ -3,6 +3,7 @@ import { Routes, Route } from 'react-router'
 import { PButton } from '@porsche-design-system/components-react'
 import KanbanBoard from './KanbanBoard'
 import ActivityTab from './components/ActivityTab'
+import DecisionViewport from './components/DecisionViewport'
 import DetailTab, { type TaskDetail } from './components/DetailTab'
 import DRStatusIndicator from './components/DRStatusIndicator'
 import HealthBadge, { type ScanItem as HealthBadgeItem } from './components/HealthBadge'
@@ -19,7 +20,13 @@ function isHealthBadgeItem(item: ScanPollingItem): item is HealthBadgeItem {
 
 function Shell() {
   const { board, tasks, loading, error, health, refetchTasks, lastDecisionsMtime } = useBoard()
-  const { count: pendingDRCount, items: pendingDRItems, error: pendingDRError, refetch: refetchPendingDRs } = usePendingDRs()
+  const {
+    count: pendingDRCount,
+    items: pendingDRItems,
+    isLoading: pendingDRLoading,
+    error: pendingDRError,
+    refetch: refetchPendingDRs,
+  } = usePendingDRs()
   const { items: scanItems, isLoading, error: scanError, refetch } = useScanPolling()
   const normalizedItems = scanItems.filter(isHealthBadgeItem)
   const statusHealth = scanError ? 'red' : health
@@ -190,6 +197,12 @@ function Shell() {
         </Routes>
       </main>
       <aside className="shell__sidecar" data-region="sidecar">
+        <DecisionViewport
+          items={pendingDRItems}
+          isLoading={pendingDRLoading}
+          error={pendingDRError}
+          onItemClick={setSelectedDRId}
+        />
         <p-tabs ref={tabsRef}>
           <p-tabs-item ref={(el: HTMLElement | null) => el?.setAttribute('label', 'Detail')}>
             <div ref={detailRef} data-tab-content="detail" aria-hidden="false">
