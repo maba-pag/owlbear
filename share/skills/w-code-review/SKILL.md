@@ -26,6 +26,7 @@ Review model: batch-all-findings. Gather all blocking findings before issuing PA
 ### Out of Scope
 
 - Re-executing tests as primary proof source — builder provides evidence (`w-tdd-green`).
+- Writing tests or expanding test suites — test-writer (`w-tdd-red`).
 - Fixing code — builder (`w-tdd-green`).
 - Full-suite regression — auditor (`w-task-verification`).
 - Architect quality scoring — auditor (`w-task-verification`).
