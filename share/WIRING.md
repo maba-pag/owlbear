@@ -23,7 +23,6 @@ Agents marked **(ND3)** may be called at nesting depth ≥3 and require `disable
 | ND3 Agent | DMI | Called by (ND2) |
 |----------|-----|----------------|
 | challenger | `false` | architect, researcher |
-| scribe | `false` | architect, researcher, builder, reviewer, test-writer, doc-writer, auditor |
 | planner | `false` | architect |
 | fix-attempt | `false` | builder |
 | code-reader | `false` | reviewer |
@@ -93,9 +92,6 @@ These are omitted from per-agent rows to avoid noise:
 | **planner** | r-pipeline-protocol | `req` | r-architecture-standards | `body-ref` |
 | | w-task-decomposition | `req` | h-mcp-kanban | `body-ref` |
 | | pipeline-agents.instructions | `applyTo:r-pipeline-protocol/**` | | |
-| **scribe** | r-pipeline-protocol | `req` | — | — |
-| | w-decision-routing | `req` | | |
-| | pipeline-agents.instructions | `applyTo:r-pipeline-protocol/**` | | |
 | **memory-curator** | r-pipeline-protocol | `req` | h-mcp-kanban | `body-ref` |
 | | w-mem-curation | `req` | h-mcp-memory | `companion:w-mem-curation` |
 | | pipeline-agents.instructions | `applyTo:r-pipeline-protocol/**` | h-memory-structure | `directed:w-mem-curation` |
@@ -156,7 +152,7 @@ All 9 agents (critic, pragmatist, simplifier, outsider, ideation-architect, data
 
 | Skill | Regularly (90%+) | Connection | Seldom (<90%) | Connection |
 |-------|-------------------|------------|---------------|------------|
-| **r-pipeline-protocol** | orchestrator, builder, test-writer, reviewer, doc-writer, auditor, architect, researcher, planner, scribe, memory-curator, challenger | `req` | — | — |
+| **r-pipeline-protocol** | orchestrator, builder, test-writer, reviewer, doc-writer, auditor, architect, researcher, planner, memory-curator, challenger | `req` | — | — |
 | **w-orchestration** | orchestrator | `req` | — | — |
 | **w-tdd-green** | builder | `req` | — | — |
 | **w-tdd-red** | test-writer | `req` | — | — |
@@ -166,7 +162,6 @@ All 9 agents (critic, pragmatist, simplifier, outsider, ideation-architect, data
 | **w-arch-review** | architect | `req` | — | — |
 | **w-research** | researcher | `req` | — | — |
 | **w-task-decomposition** | planner | `req` | — | — |
-| **w-decision-routing** | scribe | `req` | — | — |
 | **w-mem-curation** | memory-curator | `req` | — | — |
 | **w-fix-attempt** | fix-attempt | `req` | — | — |
 | **w-test-curation** | test-curator | `req` | — | — |
@@ -238,7 +233,6 @@ Impact analysis: which agents break when a subagent is unavailable.
 | **fix-attempt** | w-tdd-green | builder |
 | **code-reader** | w-code-review | reviewer |
 | **challenger** | w-arch-review, w-research | architect, researcher |
-| **scribe** | w-arch-review, w-research, w-doc-update, w-mem-curation, w-orchestration | architect, researcher, doc-writer, memory-curator, orchestrator |
 | **planner** | w-arch-review, w-ideation-mediation | architect, ideation-mediator |
 | **ideation panelists** | w-ideation-discovery, w-ideation-mediation | ideation-discoverer, ideation-mediator |
 | **memory-curator** | w-orchestration | orchestrator |
@@ -262,7 +256,6 @@ Impact analysis: which agents break when a subagent is unavailable.
 |-------|-------------|-------|
 | **ideation-panel ×9** | 1 skill only (h-ideation-panel) | By design — minimal context, focused role. |
 | **fix-attempt** | 1 skill only (w-fix-attempt) | By design — fresh-context single-shot repair. |
-| **scribe** | 2 skills (r-pipeline-protocol, w-decision-routing) | Sufficient — narrow role. |
 | **code-reader** | 1 skill only (w-code-review) | By design — read-only analysis. |
 
 ### Observation

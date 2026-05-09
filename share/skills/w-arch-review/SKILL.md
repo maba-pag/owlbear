@@ -35,7 +35,7 @@ Verify the task is in `backlog` status. If the task references a research doc (`
 
 **User-action fast-path:** If the task is tagged `type:user-action` AND the body contains a `## Action Completed` section, verify that all AC checkboxes are checked. If complete, advance via `end_work(outcome="success")` — skip Steps 1–3. This task is already resolved.
 
-**Reject placeholders immediately:** `TEMP-*` titles or empty/unscoped bodies — create a DR via scribe explaining the task needs scope, release claim, do not process.
+**Reject placeholders immediately:** `TEMP-*` titles or empty/unscoped bodies — create a DR via `create_dr` explaining the task needs scope, release claim, do not process.
 
 ## Step 1 — Analyze Codebase Context
 

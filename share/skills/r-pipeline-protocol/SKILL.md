@@ -109,10 +109,10 @@ The pipeline uses three lines of defense. Trust upstream lines' detailed work; f
 
 | Agent | Threshold | Meaning |
 |-------|-----------|---------|
-| Reviewer | ≥ .90 | PASS |
-| Reviewer | < .90, Cycle 1 batch review cycle | FAIL — reviewer chooses target (in-progress, todo, or backlog) based on issue type |
-| Reviewer | < .90, Cycle 2 batch review cycle | FAIL — reviewer chooses target (in-progress, todo, or backlog) based on issue type |
-| Reviewer | < .90, Cycle 3+ batch review cycle | FAIL — always backlog (loop-breaker: architect escalation for AC refinement) |
+| Reviewer | All AC mapped, evidence sufficient | PASS |
+| Reviewer | Blocking findings, Cycle 1 | FAIL — reviewer chooses target (in-progress, todo, or backlog) based on issue type |
+| Reviewer | Blocking findings, Cycle 2 | FAIL — reviewer chooses target (in-progress, todo, or backlog) based on issue type |
+| Reviewer | Blocking findings, Cycle 3+ | FAIL — always backlog (loop-breaker: architect escalation for AC refinement) |
 | Auditor | ≥ .95 | Archive |
 | Auditor | < .95 | Reject to backlog |
 | Challenger | ≥ 0.80 | `proceed` — caller continues with original verdict |
@@ -272,11 +272,11 @@ Use `save_memory` for each notable finding. Required parameters: `title`, `conte
 
    | Bullet type | MCP category |
    |-------------|-------------|
-   | problems_faced | knowledge |
-   | workarounds_applied | knowledge |
+   | problems_faced | domain-knowledge |
+   | workarounds_applied | domain-knowledge |
    | patterns_discovered | behaviour |
-   | time_sinks | context |
-   | quality_gaps | context |
+   | time_sinks | env-context |
+   | quality_gaps | env-context |
 
 See `h-mcp-memory` for full tool reference.
 

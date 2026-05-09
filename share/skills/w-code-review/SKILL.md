@@ -127,6 +127,16 @@ Insufficient proof is a blocking finding.
 
 Non-blocking improvements belong in `Observations`.
 
+### 4.4 Safety & Security
+
+For AC lines touching input handling, authentication, data storage, or external integrations:
+
+- No unsanitized user input reaching SQL, shell, template, or path operations (injection surface)
+- No credentials, tokens, or PII hardcoded or logged
+- No new dependencies without justification in builder notes
+
+Any safety violation is a blocking finding regardless of AC coverage.
+
 ## Step 5 — Batch Findings and Decide
 
 Do not stop at first issue. Collect all blocking findings first.
@@ -170,8 +180,9 @@ Return Channel A signal per `r-pipeline-protocol`.
 ## Verification Checklist
 
 - [ ] Batch-all-findings used (no first-failure gating)
-- [ ] Sole operative workflow is 3-item checklist (AC→code, test→AC, proof sufficiency)
+- [ ] Sole operative workflow is 4-item checklist (AC→code, test→AC, proof sufficiency, safety & security)
 - [ ] Code-reader contract uses only 4 output sections (`ac_to_code_mapping`, `test_to_ac_alignment`, `proof_sufficiency`, `observations`)
 - [ ] Builder quality evidence reviewed first; independent rerun only when justified
 - [ ] Evidence map includes every AC line
+- [ ] Safety & security check performed for AC lines touching security-relevant surfaces
 - [ ] Output note uses only `Review Evidence` + `Observations` sections near verdict

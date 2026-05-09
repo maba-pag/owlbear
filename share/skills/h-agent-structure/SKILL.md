@@ -178,7 +178,7 @@ Compact transition table showing what triggers this agent and what it produces:
 ```markdown
 | Agent | When | Example |
 |-------|------|---------|
-| scribe | Decision point requiring user input | `Scribe: task_id=42, mode=check-or-create, concern="..."` |
+| challenger | AC quality review during architecture | `Challenge: task_id=42, proposed_verdict=approve, reasoning="..."` |
 ```
 
 The `<agents>` table must list every agent in the frontmatter `agents:` array and vice versa. This is the **only** source of subagent knowledge at nesting depth ≥2 (VS Code does not inject the agents catalog at that depth). A CI validation script enforces alignment — see `.owlbear/scripts/validate_agents.py`.
@@ -211,7 +211,6 @@ VS Code has a limitation: at nesting depth ≥2 (3rd-level subagents), agents wi
 | Agent | Called by (at L2) |
 |-------|-------------------|
 | challenger | architect, researcher |
-| scribe | architect, researcher, builder, reviewer, test-writer, doc-writer, auditor |
 | planner | architect |
 | fix-attempt | builder |
 | code-reader | reviewer |
