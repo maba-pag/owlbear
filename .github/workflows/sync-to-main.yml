@@ -138,6 +138,19 @@ jobs:
             echo "DATE=$(date -u +"%Y-%m-%d")"
           } >> "$GITHUB_ENV"
 
+      - name: Warn on unresolved TODO markers
+        run: |
+          todo_hits=$(grep -Hn '> \*\*TODO:\*\*' README.md README-consumer.md serve/*/README.md 2>/dev/null || true)
+
+          if [[ -n "$todo_hits" ]]; then
+            todo_count=$(printf '%s\n' "$todo_hits" | wc -l | tr -d ' ')
+            todo_files=$(printf '%s\n' "$todo_hits" | cut -d: -f1 | sort -u)
+            file_count=$(printf '%s\n' "$todo_files" | grep -c . || true)
+            file_list=$(printf '%s\n' "$todo_files" | sed ':a;N;$!ba;s/\n/, /g')
+            summary="⚠️ ${todo_count} unresolved TODO markers in ${file_count} files: ${file_list}"
+            echo "::warning title=Unresolved TODO markers::${summary}"
+          fi
+
       - name: Validate selected paths exist on dev
         env:
           SYNC_SHARE: ${{ inputs.sync_share }}
