@@ -34,35 +34,6 @@ from owlbear_kanban.engine import AgentView
 # ---------------------------------------------------------------------------
 
 _BASE_CONFIG = """\
-statuses:
-  - research
-  - backlog
-  - todo
-  - in-progress
-  - review
-  - done
-priorities:
-  - someday
-  - nice-to-have
-  - important
-  - needed
-  - critical
-entry_status: research
-terminal_status: done
-wave_size: 4
-agent_map:
-  research: researcher
-  backlog: architect
-  todo: test-writer
-  in-progress: builder
-  review: reviewer
-  done: auditor
-agent_types: {}
-agent_compatibility: {}
-non_impl_tags: [research, docs]
-archival_reasons: [completed, deprecated, dropped, duplicate, wontfix]
-status_predicates: {}
-claim_timeout: 1h
 next_id: 1
 """
 
@@ -675,9 +646,9 @@ class TestFromAC_GuidanceExact:
     def test_reject_backwards_multi_step_guidance_exact_list(
         self, tmp_path: Path
     ) -> None:
-        """reject from 'done' (idx=5) to 'research' (idx=0) → guidance == [skip_warning] exactly.
+        """reject from 'done' (idx=6) to 'research' (idx=0) → guidance == [skip_warning] exactly.
 
-        delta=5, include_target_column=True → skipped=5.
+        delta=6, include_target_column=True → skipped=6.
 
         FAIL reason: existing test uses any("skip" in hint …); passes if the
         warning has the wrong count, wrong status names, or wrong structure.
@@ -693,7 +664,7 @@ class TestFromAC_GuidanceExact:
             note="Full restart.",
         )
 
-        expected_skip = _expected_skip_warning("done", "research", 5)
+        expected_skip = _expected_skip_warning("done", "research", 6)
         assert result.guidance == [expected_skip], (
             f"reject(done→research) must produce guidance [{expected_skip!r}];"
             f" got {result.guidance!r}"
