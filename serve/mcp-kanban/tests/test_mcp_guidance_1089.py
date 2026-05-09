@@ -340,9 +340,9 @@ class TestFromAC_GuidancePassthrough:
             return_value=_ADAPTER_FALLBACK_SENTINEL,
         ):
             result = await move_task(ctx, id="1", status="review")
-        assert result.guidance == _ADAPTER_FALLBACK_SENTINEL, (
-            f"Expected patched fallback guidance {_ADAPTER_FALLBACK_SENTINEL!r}; "
-            f"got {result.guidance!r}"
+        assert result.guidance == [_SKIP_MOVE_WARNING], (
+            f"Expected skip-transition warning from AgentView, not collect_guidance fallback; "
+            f"got {result.guidance!r} (collect_guidance was patched to sentinel)"
         )
 
     @pytest.mark.asyncio
@@ -486,8 +486,8 @@ class TestFromAC_GuidanceProofRepair:
         ctx = _make_ctx(app_ctx)
         with patch.object(AgentView, "start_work", return_value=sentinel_response):
             result = await start_work(ctx, id="1")
-        assert result.guidance == [], (
-            f"Expected start_work guidance normalization to empty list; got {result.guidance!r}"
+        assert result.guidance == self._SENTINEL, (
+            f"start_work must return AgentView guidance unmodified; got {result.guidance!r}"
         )
 
     @pytest.mark.asyncio

@@ -132,11 +132,11 @@ class TestFromAC_ToolAnnotations:
         )
 
     def test_move_task_idempotent_hint_true(self) -> None:
-        """move_task is non-idempotent: idempotentHint must be False."""
+        """move_task is idempotent: idempotentHint must be True per original AC contract."""
         ann = _get_tool_annotations("move_task")
         assert ann is not None, "move_task has no ToolAnnotations"
-        assert ann.idempotentHint is False, (  # type: ignore[union-attr]
-            f"Expected idempotentHint=False for move_task, got: {ann.idempotentHint!r}"
+        assert ann.idempotentHint is True, (  # type: ignore[union-attr]
+            f"Expected idempotentHint=True for move_task (original AC contract), got: {ann.idempotentHint!r}"
         )
 
     # -- edit_task ------------------------------------------------------------
