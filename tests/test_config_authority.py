@@ -9,10 +9,11 @@ AC coverage:
               with code ERR_CONFLICT_STATUS
   AC3 (td:1): absent or identical pipeline.statuses/priorities normalise unchanged
               (backward compat regression guard)
-  AC4 (td:1): save_config writes statuses/priorities at root only — no
-              pipeline.statuses or pipeline.priorities in output YAML
+  AC4 (td:1): save_config writes only next_id — topology fields and pipeline
+              sub-sections are product-owned and not persisted to config.yml
               (regression guard)
-  AC5 (td:1): round-trip load -> save -> reload -> config.pipeline.statuses == config.statuses
+  AC5 (td:1): round-trip load -> save -> reload -> config.pipeline.statuses and
+              config.pipeline.priorities equal product-topology values
               (regression guard)
   AC6 (td:0): docstring on _normalise_legacy -- skip
 """
@@ -297,8 +298,8 @@ class TestFromAC_BackwardCompat:
 
 
 class TestFromAC_SaveConfigRootOnly:
-    """AC4 -- Regression guard: save_config must write statuses/priorities at the
-    root YAML level only; no pipeline.statuses or pipeline.priorities in output."""
+    """AC4 -- Regression guard: save_config writes only next_id to config.yml;
+    all topology fields and pipeline sub-sections are product-owned and not persisted."""
 
     def test_save_config_has_root_statuses(self, tmp_path: Path) -> None:
         """save_config writes only next_id at the root level."""

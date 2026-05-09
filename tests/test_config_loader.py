@@ -228,3 +228,13 @@ class TestFromAC_LoadConfigRegression:
       config = load_config(tmp_path / "nonexistent")
       assert isinstance(config, BoardConfig)
       assert config.next_id == 1
+
+    def test_load_config_reads_persisted_next_id(self, tmp_path: Path) -> None:
+        """load_config must return the next_id value written to config.yml, not always 1."""
+        kanban_dir = tmp_path / "board"
+        kanban_dir.mkdir()
+        (kanban_dir / "config.yml").write_text("next_id: 42\n", encoding="utf-8")
+
+        config = load_config(kanban_dir)
+
+        assert config.next_id == 42

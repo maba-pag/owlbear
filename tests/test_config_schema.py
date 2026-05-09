@@ -7,12 +7,16 @@ AC coverage:
        accept valid fields and reject unknown fields (extra='forbid')
   AC2: BoardConfig root-level extra='allow' permits unknown fields
   AC3: schema: grouped field triggers grouped parsing path
-  AC4: Detection cascade: schema field → flat key-set match → legacy keys
-  AC5: Mixed flat+grouped WITHOUT schema field raises ConfigError
+  AC4: Detection cascade: schema field → flat key-set match → legacy keys;
+       all formats return product-topology values via load_config
+  AC5: Mixed flat+grouped WITHOUT schema field raises ConfigError when passed
+       directly to BoardConfig.model_validate(); load_config ignores YAML shape
+       and returns product-topology values regardless
   AC6: Forwarding properties (config.tasks_dir → config.paths.tasks_dir)
   AC7: defaults.priority → pipeline.default_priority migration path
-  AC8: save_config emits grouped format with schema: grouped
-  AC9: Round-trip: save_config output can be re-loaded without loss
+  AC8: save_config emits next_id-only checkpoint; schema, topology fields, and
+       sub-sections are product-owned and not written to disk
+  AC9: Round-trip: save_config → load_config returns same product-topology values
 """
 
 from __future__ import annotations
@@ -336,13 +340,26 @@ class TestFromAC_DetectionCascade:
         assert config.paths.tasks_dir == PRODUCT_TOPOLOGY.tasks_dir
         assert config.paths.archive_dir == PRODUCT_TOPOLOGY.archive_dir
 
-    def test_mixed_flat_and_grouped_without_schema_raises_config_error(
+    def test_load_config_mixed_flat_and_grouped_without_schema_returns_product_topology(
         self, tmp_path: Path
     ) -> None:
-        """Mixed YAML without schema also loads under topology-constant parsing."""
+        """load_config ignores mixed YAML shape and returns product topology regardless."""
         kanban_dir = _make_board(tmp_path, _MIXED_NO_SCHEMA_YAML)
         config = load_config(kanban_dir)
         assert config.statuses == list(PRODUCT_TOPOLOGY.statuses)
+
+    def test_model_validate_mixed_flat_and_grouped_without_schema_raises_config_error(
+        self,
+    ) -> None:
+        """BoardConfig.model_validate rejects mixed flat+grouped input without schema: grouped."""
+        import yaml as _yaml
+        from owlbear_kanban.errors import ConfigError
+        from owlbear_kanban.models import BoardConfig
+
+        data = _yaml.safe_load(_MIXED_NO_SCHEMA_YAML)
+        with pytest.raises(ConfigError) as exc_info:
+            BoardConfig.model_validate(data)
+        assert exc_info.value.code == "ERR_INVALID_STATUS"
 
     def test_grouped_schema_detection_does_not_break_flat_loading(
         self, tmp_path: Path
