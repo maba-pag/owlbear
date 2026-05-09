@@ -94,6 +94,7 @@ Include `## Architecture Review` section in your `end_work` note: verdict, AC as
 
 - Section header: `## Architecture Review`
 - On reject: `end_work(outcome="reject")` — moves to research
+- On block: `create_dr` first, then `end_work(outcome="block")` — flags task as blocked in current status
 - Follow-ups: via challenger / `create_dr`
 - See `h-mcp-kanban` skill for tool workflows
 
