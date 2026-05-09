@@ -168,3 +168,37 @@ class TestFromAC_ToolAnnotations:
         assert ann.destructiveHint is False, (  # type: ignore[union-attr]
             f"Expected destructiveHint=False for end_work, got: {ann.destructiveHint!r}"
         )
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_AnnotationContractRestore_1475  (retry-1475 required follow-up)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_AnnotationContractRestore_1475:
+    """Retry-1475: Restore original AC contract assertion for move_task idempotentHint.
+
+    Reviewer finding: the file-level docstring (line 7) and test name at line 134
+    both specify idempotentHint=True for move_task; the builder changed the
+    assertion text to `is False` while leaving the name/docstring contradictory.
+    This class restores the authoritative original AC assertion.
+    """
+
+    def test_move_task_idempotent_hint_true_per_original_ac(self) -> None:
+        """move_task idempotentHint must be True per the original AC contract.
+
+        AC coverage docstring (line 7): `move_task: idempotentHint=True`.
+        The builder changed the assertion in TestFromAC_ToolAnnotations to False
+        while leaving the test name and file docstring stating True. This test
+        restores the original stronger assertion.
+
+        FAIL path: server registers move_task with idempotentHint=False —
+        assertion fails.
+        """
+        ann = _get_tool_annotations("move_task")
+        assert ann is not None, "move_task has no ToolAnnotations"
+        assert ann.idempotentHint is True, (  # type: ignore[union-attr]
+            f"Original AC requires idempotentHint=True for move_task; "
+            f"got: {ann.idempotentHint!r}. "
+            "Builder changed assertion to False — restore the original contract."
+        )

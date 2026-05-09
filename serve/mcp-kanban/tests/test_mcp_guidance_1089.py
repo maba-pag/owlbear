@@ -589,3 +589,82 @@ class TestFromAC_GuidanceProofRepair:
         assert payload["message"] == user_msg, (
             f"ToolError JSON must carry human-readable user_message; got {payload!r}"
         )
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_GuidanceDiscriminating_1475  (retry-1475 required follow-up)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_GuidanceDiscriminating_1475:
+    """Retry-1475: Discriminating tests for AgentView guidance passthrough.
+
+    Reviewer finding: test_move_task_skip_transition_warning_guidance rubber-stamps
+    collect_guidance fallback (asserts sentinel == sentinel) rather than proving
+    the skip warning originates from AgentView. test_start_work_guidance_sentinel_passthrough
+    rubber-stamps collect_guidance overwriting AgentView guidance (asserts [] when
+    AgentView returned _SENTINEL).
+
+    These tests patch collect_guidance out of the picture and assert that the
+    expected guidance values survive — which they will NOT with the current
+    implementation that unconditionally overwrites from collect_guidance.
+    """
+
+    _SENTINEL: ClassVar[list[str]] = ["__AGENTVIEW_SENTINEL_1475__"]
+
+    @pytest.mark.asyncio
+    async def test_move_task_skip_warning_survives_disabled_collect_guidance(
+        self, app_ctx: AppContext
+    ) -> None:
+        """move_task skip-transition warning must survive even when collect_guidance returns [].
+
+        If the skip-transition warning originates from AgentView.move_task (the
+        authoritative source per the contract), it must appear in result.guidance
+        regardless of what collect_guidance returns. Patching collect_guidance to []
+        exposes whether guidance truly comes from AgentView or only from the fallback.
+
+        FAIL path: The server unconditionally sets result.guidance = collect_guidance(...),
+        which is patched to []. result.guidance == [] != [_SKIP_MOVE_WARNING] — fails.
+        """
+        ctx = _make_ctx(app_ctx)
+        with patch(
+            "owlbear_mcp_kanban.server.collect_guidance",
+            return_value=[],
+        ):
+            result = await move_task(ctx, id="1", status="review")
+        assert result.guidance == [_SKIP_MOVE_WARNING], (
+            f"move_task skip warning must originate from AgentView, not collect_guidance; "
+            f"got {result.guidance!r} (collect_guidance was patched to [])"
+        )
+
+    @pytest.mark.asyncio
+    async def test_start_work_agentview_guidance_not_overwritten_by_collect_guidance(
+        self, app_ctx: AppContext
+    ) -> None:
+        """start_work must return AgentView.start_work guidance unmodified.
+
+        The adapter must NOT unconditionally overwrite guidance from AgentView with
+        collect_guidance output. When AgentView returns non-empty guidance and
+        collect_guidance returns [], the original AgentView guidance must survive
+        in the final response.
+
+        FAIL path: The server calls result.guidance = collect_guidance("start_work", ...)
+        unconditionally, which is patched to []. AgentView sentinel is overwritten.
+        result.guidance == [] != _SENTINEL — assertion fails.
+        """
+        task_data = app_ctx.engine.show_task("1").model_dump()
+        task_data["guidance"] = self._SENTINEL
+        sentinel_response = SingleTaskResponse.model_validate(task_data)
+        ctx = _make_ctx(app_ctx)
+        with (
+            patch.object(AgentView, "start_work", return_value=sentinel_response),
+            patch(
+                "owlbear_mcp_kanban.server.collect_guidance",
+                return_value=[],
+            ),
+        ):
+            result = await start_work(ctx, id="1")
+        assert result.guidance == self._SENTINEL, (
+            f"start_work must pass AgentView guidance unchanged when collect_guidance is []; "
+            f"got {result.guidance!r}"
+        )
