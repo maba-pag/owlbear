@@ -1,10 +1,10 @@
 ---
 id: 1316
 title: Knowledge Engine Activation
-status: in-progress
+status: done
 priority: critical
 created: 2026-05-04T05:44:46.924003+00:00
-updated: 2026-05-09T13:04:48.882278+00:00
+updated: 2026-05-09T14:39:42.705489+00:00
 tags:
 - parent
 - knowledge
@@ -100,3 +100,87 @@ Reviewer-requested AC rewrite to align with kanban archive semantics.
 - Architect explicitly noted: "Test-writer: SKIP (all td:0, mechanical closeout verification only)".
 - Parent container task with no testable Python interfaces.
 - Passing through to builder.
+[[2026-05-09]]
+## Builder Notes
+- Non-implementation task (all AC lines td:0) — no source changes required.
+- Test-writer pass-through confirmed in task body.
+- Advancing parent closeout task to review.
+[[2026-05-09]]
+## Review Evidence
+### Test Results
+- pytest: N/A — td:0 closeout task with no task-scoped tests or executable implementation surface.
+- quality-runner: not dispatched. Scope check found no task-scoped files in `tests/**/*1316*` and no source files in `serve/**/*1316*`; this task is gated by live kanban artifact state only.
+
+### Lint: N/A
+- No source or test files were in scope for this parent closeout task.
+
+### Coverage: N/A
+- No touched module or task-scoped test surface.
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+- Skipped. Both AC lines are `(td:0)` and no task-scoped test file exists for `1316`.
+
+#### Security Review
+- No code, dependency, or runtime interface changes in scope. This review verifies kanban archive/task artifacts only.
+
+#### Test Integrity
+- Skipped. No task-scoped tests exist and the builder reported a non-implementation closeout.
+
+#### Test Quality
+- Skipped. No task-scoped tests were expected or present.
+
+#### Data Safety
+- No mutable data-path changes in scope.
+
+#### Implementation-Aware Gaps
+- None. The only required behavior is archive/tasks state, which was verified directly from live kanban files.
+
+#### Builder Process Quality
+| Metric | Value |
+|---|---|
+| Builder Notes sections | 1 (`.owlbear/kanban/tasks/1316-knowledge-engine-activation.md:104`) |
+| Approach variation | N/A |
+| Assessment | CLEAN |
+
+### Pass 2 — INFORMATIONAL
+- `quality-runner` was not applicable for this td:0 parent closeout; review evidence is direct inspection of `.owlbear/kanban/archive/` and `.owlbear/kanban/tasks/`.
+- No prior `## Review Evidence` section was present in `.owlbear/kanban/tasks/1316-knowledge-engine-activation.md`, so this is the first review cycle.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---|---|---|---|
+| All 20 child tasks (#1317–#1335, #1358) are present in `.owlbear/kanban/archive/` with `parent: 1316` (td:0) | Exact archive-ID scan returned 20 matches at line 2 for the expected child files, and the same file set also matched `parent: 1316` at lines 12–14. Representative verified hits: `.owlbear/kanban/archive/1317-p0-01-tests-mcp-startup-copilot-auth-removal-clean-server-start.md:2`, `.owlbear/kanban/archive/1317-p0-01-tests-mcp-startup-copilot-auth-removal-clean-server-start.md:13`, `.owlbear/kanban/archive/1335-p4-19-tool-surface-cleanup-scope-stubs.md:2`, `.owlbear/kanban/archive/1335-p4-19-tool-surface-cleanup-scope-stubs.md:12`, `.owlbear/kanban/archive/1358-remove-legacy-api-key-branch-from-mcp-knowledge-server-py.md:2`, `.owlbear/kanban/archive/1358-remove-legacy-api-key-branch-from-mcp-knowledge-server-py.md:13`. | N/A (td:0 direct artifact check) | PASS |
+| No active (non-archived) tasks exist with `parent: 1316` in `.owlbear/kanban/tasks/` (td:0) | Frontmatter parent scan across active task files returned 39 `parent:` lines total; observed values were blank, 1363, 1403, 1415, 1421, 1437, and 1439 only — no `parent: 1316`. Representative reads: `.owlbear/kanban/tasks/1316-knowledge-engine-activation.md:13` (`parent:` blank), `.owlbear/kanban/tasks/1380-p2-05-test-cockpit-task-action-gating-and-confirmations.md:17` (`parent: 1363`), `.owlbear/kanban/tasks/1476-p4-25-consolidation-test-topology-constant-regression-remediation.md:14` (`parent: 1439`). | N/A (td:0 direct artifact check) | PASS |
+
+### Deductions
+- -0.03: No automated lint/test run was applicable on this td:0 container task; confidence rests on direct live-artifact inspection.
+
+### Confidence: .97
+### Verdict: PASS
+[[2026-05-09]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | Parent container task — no API, CLI, config, or package-structure changes. No IN-scope docs reference this task. |
+| 2 | Module docstrings | No | N/A | No Python modules created or modified. |
+| 3 | External attribution | No | N/A | No external patterns used in this task. |
+| 4 | Research doc | No | N/A | No research doc produced. |
+| 5 | Diagram maintenance (describes match) | No | N/A | Empty changed-files set — no `describes` glob match possible. |
+| 6 | Explicit diagram creation | No | N/A | No explicit diagram creation request in task body. |
+| 7 | Deletion detection | No | N/A | No deleted files in scope. |
+
+### Scope Classification
+- Changed-files set: EMPTY — architect confirmed "Parent container only — no source code, no interfaces, no implementation surface."
+- All 20 child tasks archived; this task is a mechanical closeout container.
+- All items N/A → **no docs impact**.
+
+### Files Updated
+None.
+
+### Child Tasks Created
+None.
+
+### Scratch Files Cleaned
+None found (`.owlbear/scratch/1316-*` — no matches).

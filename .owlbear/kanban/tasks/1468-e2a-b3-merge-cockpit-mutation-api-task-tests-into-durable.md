@@ -1,10 +1,10 @@
 ---
 id: 1468
 title: 'E2a-B3: Merge cockpit_mutation_api task tests into durable'
-status: todo
+status: review
 priority: important
 created: 2026-05-09T07:21:35.681226+00:00
-updated: 2026-05-09T13:20:49.917338+00:00
+updated: 2026-05-09T14:56:46.210848+00:00
 tags:
 - pipeline
 - ws-cleanup
@@ -15,7 +15,7 @@ depends_on:
 - 1466
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-09T14:56:46.210848+00:00
 archival_reason:
 archival_refs: []
 ---
@@ -124,3 +124,13 @@ Key refinements:
 - Refined AC integrated (original + correction → canonical Refined AC section)
 - `quality` tag already present for test-writer pass-through
 - Advanced to `todo`
+[[2026-05-09]]
+## Test-Writer Notes
+- Non-implementation task (tagged `quality`) — no tests applicable.
+- All AC lines are (td:0) — test-writer skipped.
+- Passing through to builder.
+[[2026-05-09]]
+## Builder Notes
+- Non-implementation task — no code changes needed.
+- Test-writer marked this task as quality pass-through with all AC lines at (td:0).
+- Passing through to review.

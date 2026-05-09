@@ -1,10 +1,10 @@
 ---
 id: 1467
 title: 'E2a-B2: Merge cockpit_decisions_api task tests into durable'
-status: backlog
+status: review
 priority: important
 created: 2026-05-09T07:21:35.670259+00:00
-updated: 2026-05-09T13:17:24.006470+00:00
+updated: 2026-05-09T14:56:54.808520+00:00
 tags:
 - pipeline
 - ws-cleanup
@@ -15,7 +15,7 @@ depends_on:
 - 1466
 blocked: false
 block_reason:
-claimed_at: 2026-05-09T13:17:24.006470+00:00
+claimed_at: 2026-05-09T14:56:54.808520+00:00
 archival_reason:
 archival_refs: []
 ---
@@ -40,27 +40,81 @@ Merge 6 task-scoped files (72 tests) into existing `test_cockpit_decisions_api.p
 
 **Target:** `test_cockpit_decisions_api.py` (existing durable, 10 tests pre-merge)
 
-## AC (td:0)
+### Two fixture/helper patterns
 
-- [ ] All unique `def test_*` from 6 source files present in `test_cockpit_decisions_api.py`
-- [ ] Duplicate test-name collisions resolved by renaming incoming to `test_{name}_1467`
-- [ ] Fixture collisions: keep target's if identical, rename source's if different
-- [ ] All 6 source files deleted after merge
-- [ ] Per-target checkpoint: `uv run pytest tests/test_cockpit_decisions_api.py --collect-only -q` collects ≥ 82 tests (10 existing + 72 merged)
-- [ ] `uv run pytest tests/test_cockpit_decisions_api.py -x` passes
-- [ ] Full suite: `uv run pytest tests/ --collect-only -q` count does not decrease vs pre-task baseline
-- [ ] `uv run pytest tests/ -x` passes with no new failures
-- [ ] `test_kanban_topology_1439.py` untouched
+**Pattern A** (target, 1189, 1190, 1194, 1345): `decisions_dir` is a standalone directory. `engine(tmp_path)` creates a board without decisions dirs. `client(engine, decisions_dir)` overrides both `get_engine` and `get_decisions_dir`. Helpers: `_make_board(base_dir)`, `_write_pending_dr(decisions_dir, ...)`, `_parse_frontmatter`, `_find_dr_file`. All identical across these files — deduplicate to target's version.
+
+**Pattern B** (1384, 1385): decisions live inside `board_dir/decisions/`. `_make_board(board_dir)` also creates decisions subdirs. `_write_pending_dr(board_dir, ...)` writes to `board_dir/decisions/pending/`. `client(engine)` overrides only `get_engine` (no `decisions_dir`). Unique helpers: `_write_resolved_dr`, `_create_blocked_task`, `_read_task_body`, `_is_task_blocked`.
+
+## AC
+
+- [ ] All unique `def test_*` from 6 source files present in `test_cockpit_decisions_api.py` (td:0)
+- [ ] 3 test name collisions resolved by appending source task ID: `test_pending_empty_returns_zero_and_empty_items_1189`, `test_resolve_returns_404_for_unknown_decision_id_1189`, `test_resolve_rejects_invalid_response_enum_1189` (td:0)
+- [ ] Two fixture patterns coexist without name collision: (a) target's Pattern A fixtures remain as module-level defaults; (b) 1384/1385's Pattern B fixtures renamed or class-scoped to avoid shadowing (td:0)
+- [ ] Pattern B's unique helpers (`_write_resolved_dr`, `_create_blocked_task`, `_read_task_body`, `_is_task_blocked`) and its different `_make_board`/`_write_pending_dr` signatures added with distinct names (td:0)
+- [ ] Pattern A helpers from source files dropped (identical to target's existing versions) (td:0)
+- [ ] All 6 source files deleted after merge (td:0)
+- [ ] Per-target checkpoint: `uv run pytest tests/test_cockpit_decisions_api.py --collect-only -q` collects ≥ 82 items (td:0)
+- [ ] Post-cleanup failure count ≤ pre-task baseline failure count (capture baseline with `uv run pytest tests/ -q` before any changes) (td:0)
+- [ ] Full suite: `uv run pytest tests/ --collect-only -q` count does not decrease vs pre-task baseline (td:0)
+- [ ] `test_kanban_topology_1439.py` untouched (td:0)
 
 ## Out of scope
 
 - Other merge targets (mutation_api, mcp_kanban, read_api, pipeline_diagram)
 - Renames — handled in #1466
 
+## Architecture Review
 
-## AC Correction (architect)
-**Replace** all `pytest -x` AC lines with delta-based verification:
-- Post-cleanup failure count ≤ pre-task baseline failure count (capture baseline before any changes)
-- Collected test count ≥ pre-task collect-only baseline
+### Verdict: APPROVE
 
-**Replace** collision rename suffix `_1467` with the source file's original task ID (e.g., `test_{name}_1189` for tests from `_1189.py`) for traceability.
+### AC Assessment
+
+| AC Line | Assessment | Action |
+|---------|-----------|--------|
+| All unique tests present | Clear, verifiable mechanically | None |
+| 3 collision renames | Identified exact 3 collisions from codebase; source-ID suffix for traceability | Rewrote from generic `_1467` to specific `_1189` |
+| Two fixture patterns | Codebase confirms structural difference (separate decisions_dir vs board-integrated) | Added Pattern A/B documentation and merge guidance |
+| Pattern B unique helpers | Identified 4 unique helpers + 2 with different signatures | Added specific helper inventory |
+| Pattern A dedup | Verified all 5 Pattern A files share identical helpers with target | Simplified to "drop source copies" |
+| 6 source files deleted | Clear | None |
+| Collect ≥ 82 | 10 target + 72 source = 82 unique methods; parametrize may yield more collected items | Kept as lower bound |
+| Delta failure count | Replaces brittle `pytest -x` per AC Correction | Integrated |
+| Suite count stable | Clear | None |
+| topology_1439 untouched | Guard rail | None |
+
+### Architecture Notes
+
+- **Dependency #1466** (E2a-B1: renames + safe ops) is archived/done — prerequisite satisfied.
+- **Single responsibility:** PASS — one concern (merge decisions_api task tests into durable).
+- **Module layering:** N/A — test files only, no production code changes.
+- **KISS/YAGNI:** PASS — mechanical merge, no new abstractions.
+- **Pattern consistency:** PASS — follows existing durable test conventions.
+- **Test depth:** All td:0 — mechanical merge requires no new tests.
+
+### Challenge Results
+
+- Challenger: SKIPPED — all AC lines td:0 (mechanical merge, no architectural decisions)
+
+### Test-writer: SKIP
+[[2026-05-09]]
+APPROVED #1467 → todo. Refined AC: identified exact 3 test name collisions (all between target and 1189), documented two structurally different fixture/helper patterns (Pattern A: separate decisions_dir, Pattern B: board-integrated decisions), specified collision rename convention (source task ID suffix), replaced brittle `pytest -x` gates with delta-based verification, added helper inventory for Pattern B's unique utilities. All AC td:0 — Test-writer: SKIP. Challenger: SKIPPED (all td:0).
+[[2026-05-09]]
+## Test-Writer Notes
+- All AC lines are (td:0) — test-writer skipped.
+- Passing through to builder.
+[[2026-05-09]]
+## Builder Notes
+- Implementation: merged all unique `test_*` cases from six task-scoped decisions API files into durable `tests/test_cockpit_decisions_api.py`; added Pattern B helpers/fixtures with distinct `_pattern_b` names so Pattern A defaults remain unshadowed.
+- Collision handling: renamed the 3 required collisions to `test_pending_empty_returns_zero_and_empty_items_1189`, `test_resolve_returns_404_for_unknown_decision_id_1189`, and `test_resolve_rejects_invalid_response_enum_1189`.
+- Helper handling: Pattern A duplicate helpers from source files were not reintroduced; Pattern B unique helpers were added as distinct names: `_write_resolved_dr_pattern_b`, `_create_blocked_task_pattern_b`, `_read_task_body_pattern_b`, `_is_task_blocked_pattern_b`, plus Pattern B board/write helpers.
+- Source cleanup: deleted `tests/test_cockpit_decisions_api_1189.py`, `tests/test_cockpit_decisions_api_1190.py`, `tests/test_cockpit_decisions_api_1194.py`, `tests/test_cockpit_decisions_api_1345.py`, `tests/test_cockpit_decisions_api_1384.py`, `tests/test_cockpit_decisions_api_1385.py`.
+- Commit: `cef978f4` (`test: merge durable decisions API suite (#1467, builder)`).
+
+- Baseline (pre-change): `uv run pytest tests/ -q --tb=short` => 3156 passed, 214 failed, 5 errors; `uv run pytest tests/ --collect-only -q` => 3379 collected.
+- Checkpoint (target collect-only): `uv run pytest tests/test_cockpit_decisions_api.py --collect-only -q` => 88 collected (>= 82 AC gate).
+- Post-cleanup: `uv run pytest tests/ -q --tb=short` => 3162 passed, 208 failed, 5 errors (failure count not increased vs baseline).
+- Post-cleanup collect-only: `uv run pytest tests/ --collect-only -q` => 3379 collected (not decreased vs baseline).
+- Quality-runner (scoped): 88 passed, 0 failed; ruff clean; coverage modules included `owlbear_cockpit.routes.decisions` at 96%.
+
+- Guardrail check: `tests/test_kanban_topology_1439.py` untouched.

@@ -1,10 +1,10 @@
 ---
 id: 1473
 title: 'P4-22: Durable config test alignment (AC5 Cat-B1)'
-status: in-progress
+status: done
 priority: critical
 created: 2026-05-09T08:46:53.927445+00:00
-updated: 2026-05-09T13:08:58.475330+00:00
+updated: 2026-05-09T14:40:02.844430+00:00
 tags:
 - phase-4
 - type:refactor
@@ -175,3 +175,80 @@ Architecture review complete. Refined task: (1) added `type:test` tag for test-w
 ### Quality evidence
 - Scoped run: 93 passed, 0 failed (up from 91). Ruff: clean.
 - Commit: 3a7c9519 — test: add proof-gap tests for persisted next_id and mixed-shape rejection (#1473, test-writer)
+[[2026-05-09]]
+## Builder Notes
+- Non-implementation task — no code changes needed.
+- Verified task body indicates test-writer pass-through context for builder.
+- Passing through to review.
+[[2026-05-09]]
+## Review Evidence
+### Test Results
+- quality-runner scoped run: 93 passed, 0 failed, 0 skipped across [tests/test_config_loader.py](tests/test_config_loader.py), [tests/test_config_authority.py](tests/test_config_authority.py), [tests/test_config_schema.py](tests/test_config_schema.py), and [tests/test_config_grouped.py](tests/test_config_grouped.py).
+
+### Lint Results
+- quality-runner scoped ruff run: clean.
+
+### Coverage
+- quality-runner reported overall 24% across requested modules: [serve/kanban/src/owlbear_kanban/config_loader.py](serve/kanban/src/owlbear_kanban/config_loader.py) 100%, [serve/kanban/src/owlbear_kanban/models.py](serve/kanban/src/owlbear_kanban/models.py) 86%, [serve/kanban/src/owlbear_kanban/migrate.py](serve/kanban/src/owlbear_kanban/migrate.py) 30%, [serve/kanban/src/owlbear_kanban/storage.py](serve/kanban/src/owlbear_kanban/storage.py) 24%.
+- Informational only for this review because task 1473 changed durable tests, not production modules.
+
+### Git Scope
+- Task-related commits were confirmed in reflog: builder `f8637c652fb79535f79006e4f7c1ddaafb257580` (`test: align durable config tests to topology constants (#1473, builder)`) and test-writer `3a7c9519e41a271108c30253cf4e34e2a38bd110` (`test: add proof-gap tests for persisted next_id and mixed-shape rejection (#1473, test-writer)`).
+- Exact dirty-tree contamination check could not be completed in this review environment because terminal/git status access is unavailable. Confidence deduction applied.
+- No direct commit diff was available; changed-file scope was reconstructed from task notes, reflog confirmation, and current file inspection.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---|---|---|---|
+| All tests in the scoped config test files pass after aligning with the topology-constant refactor. | quality-runner proved the scoped command is green (93 passed, 0 failed, 0 skipped, ruff clean). The prior proof gaps are now closed by a persisted `next_id` load proof at [tests/test_config_loader.py](tests/test_config_loader.py#L232) and [tests/test_config_loader.py](tests/test_config_loader.py#L240) against the live loader branch at [serve/kanban/src/owlbear_kanban/config_loader.py](serve/kanban/src/owlbear_kanban/config_loader.py#L45) and [serve/kanban/src/owlbear_kanban/config_loader.py](serve/kanban/src/owlbear_kanban/config_loader.py#L46); mixed flat-plus-grouped behavior is now proven on both paths by the load path at [tests/test_config_schema.py](tests/test_config_schema.py#L343) and [tests/test_config_schema.py](tests/test_config_schema.py#L349) plus the direct rejection path at [tests/test_config_schema.py](tests/test_config_schema.py#L351) and [tests/test_config_schema.py](tests/test_config_schema.py#L362) against the live rejection branch at [serve/kanban/src/owlbear_kanban/models.py](serve/kanban/src/owlbear_kanban/models.py#L255); next_id-only save behavior is still pinned by [tests/test_config_authority.py](tests/test_config_authority.py#L304), [tests/test_config_authority.py](tests/test_config_authority.py#L312), [tests/test_config_authority.py](tests/test_config_authority.py#L314), and [tests/test_config_authority.py](tests/test_config_authority.py#L322) against [serve/kanban/src/owlbear_kanban/storage.py](serve/kanban/src/owlbear_kanban/storage.py#L236). | [tests/test_config_loader.py](tests/test_config_loader.py#L232), [tests/test_config_schema.py](tests/test_config_schema.py#L343), [tests/test_config_schema.py](tests/test_config_schema.py#L351), [tests/test_config_authority.py](tests/test_config_authority.py#L304) | PASS |
+
+### Critical Checks
+- Test-writer audit: PASS. The retry closed the persisted-`next_id` and mixed-shape proof gaps with discriminating assertions.
+- Test integrity: PASS with minor confidence deduction. No weakening is visible in the current `TestFromAC_*` bodies, but exact immutability versus the original revision could not be proven without a direct diff.
+- Security review: PASS. No shell, traversal, secret, or unsafe-deserialization issue appears in scope.
+- Data safety: PASS. Test state is local to temp board directories and bounded YAML fixtures.
+- Test quality: PASS with deduction. Executable assertions are discriminating and branch-complete for task scope. Remaining stale pytest-visible identifiers are traceability debt rather than a blocking proof gap.
+
+### Additional Notes
+- Stale identifiers/headings remain in [tests/test_config_loader.py](tests/test_config_loader.py#L132), [tests/test_config_loader.py](tests/test_config_loader.py#L145), [tests/test_config_loader.py](tests/test_config_loader.py#L226), [tests/test_config_authority.py](tests/test_config_authority.py#L304), [tests/test_config_authority.py](tests/test_config_authority.py#L314), [tests/test_config_schema.py](tests/test_config_schema.py#L420), [tests/test_config_schema.py](tests/test_config_schema.py#L427), [tests/test_config_schema.py](tests/test_config_schema.py#L435), [tests/test_config_schema.py](tests/test_config_schema.py#L444), and [tests/test_config_schema.py](tests/test_config_schema.py#L453). These names still describe legacy semantics even though the bodies now assert the topology-constant contract.
+- This residual traceability issue is tracked as follow-up task `#1477` (`Normalize stale durable config test identifiers`) and is not treated as a blocking AC failure because the executable assertions themselves are now aligned and discriminating.
+
+### Deductions
+- 0.03 exact dirty-tree contamination check unavailable because terminal/git status access was not available in this review environment.
+- 0.02 no direct commit diff available; file ownership was reconstructed from task notes plus reflog confirmation.
+- 0.03 stale pytest-visible identifiers/headings remain in the durable suites; cleanup is tracked separately in `#1477`.
+
+### Verdict
+- Confidence: 0.91
+- PASS. The retry closed the two substantive proof gaps from the prior review, the scoped suite is green, and the remaining identifier drift is non-blocking cleanup debt.
+- Action: advance to docs; follow-up cleanup tracked in `#1477`.
+[[2026-05-09]]
+## Docs Gate
+
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | Test-only alignment task; no API, CLI, config, or package structure changes. |
+| 2 | Module docstrings | No | N/A | No production modules modified. Both builder passes confirm no code changes. Docstring edits mentioned in builder notes are in test file headers, not production .py modules. |
+| 3 | External attribution | No | N/A | No external patterns used. |
+| 4 | Research doc | No | N/A | No research doc produced for this task. |
+| 5 | Diagram maintenance (describes match) | No | N/A | No production file changes; no diagram describes-match possible. |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation requested in task body. |
+| 7 | Deletion detection | No | N/A | No files deleted. |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| tests/test_config_loader.py | OUT | N/A (test file) |
+| tests/test_config_authority.py | OUT | N/A (test file) |
+| tests/test_config_schema.py | OUT | N/A (test file) |
+| tests/test_config_grouped.py | OUT | N/A (test file) |
+
+### Files Updated
+- None
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no 1473-* scratch files found)

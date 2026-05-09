@@ -4,7 +4,7 @@ title: 'P4-21: Kanban package test alignment (AC5 Cat-A)'
 status: review
 priority: critical
 created: 2026-05-09T08:46:53.913029+00:00
-updated: 2026-05-09T13:05:13.971189+00:00
+updated: 2026-05-09T14:40:23.503781+00:00
 tags:
 - phase-4
 - scope:tests
@@ -166,3 +166,89 @@ Builder-mode constraints for this run prohibit modifying `TestFromAC_*` classes.
 - Non-implementation task (`type:test`) with test-only remediation completed by test-writer.
 - No source-code changes required from builder.
 - Passing through to review based on task contract and latest test-writer evidence (`1326 passed, 0 failed`, ruff clean; commit `180c43e4`).
+[[2026-05-09]]
+## Review Evidence
+### Test Results
+- quality-runner scoped pass on `serve/kanban/tests/`: 1326 passed, 0 failed, 0 skipped; pytest exit code 0.
+
+### Lint Results
+- Ruff on `serve/kanban/tests/`: clean; exit code 0.
+
+### Coverage
+- quality-runner reported workspace coverage 65% and `owlbear_kanban` module average 86%.
+- Informational only: this task changed tests, not source modules, so module-level coverage is not the gating signal.
+
+### AC Compliance
+| AC Line | Evidence | Status |
+|---|---|---|
+| AC1: All tests in `serve/kanban/tests/` pass after aligning test expectations with the topology-constant refactor. | Mechanical gate passes: quality-runner is green on the full directory. Alignment proof is incomplete: the live contract is exact canonical board statuses in `serve/kanban/src/owlbear_kanban/topology.py#L28-L36`, PRODUCT_TOPOLOGY-derived fallback in `serve/kanban/src/owlbear_kanban/config_loader.py#L27-L68`, and next_id-only persistence in `serve/kanban/src/owlbear_kanban/storage.py#L224-L242`. The changed tests only assert status membership in `serve/kanban/tests/test_engine_coverage_1068.py#L512-L516`, indirect `read_task(..., config=None)` behavior in `serve/kanban/tests/test_storage.py#L605-L613` and `serve/kanban/tests/test_storage.py#L637-L649`, and `next_id` round-trip in `serve/kanban/tests/test_storage_1050.py#L807-L815`. Those would still pass if `load_config()` returned a non-canonical config on missing `config.yml`, or if `save_config()` incorrectly persisted extra topology fields that `load_config()` ignores. | FAIL |
+
+### Test Integrity And Quality
+- No security or data-safety issues found in the test-only change set.
+- `released` remains a valid session state/filter in the engine, so keeping released-session tests is correct: `serve/kanban/src/owlbear_kanban/engine.py#L107`, `serve/kanban/src/owlbear_kanban/engine.py#L233`, `serve/kanban/src/owlbear_kanban/engine.py#L284`.
+- Weak assertion specificity on the refactor-sensitive contracts:
+  - `serve/kanban/tests/test_engine_coverage_1068.py#L512-L516` checks only that `research` and `done` are present, not the exact seven-status tuple or exclusion of board-status `released`.
+  - `serve/kanban/tests/test_storage_1050.py#L807-L815` proves only `next_id` round-trip; it does not prove that `save_config()` omitted topology fields from `config.yml`.
+  - `serve/kanban/tests/test_storage.py#L605-L613` and `serve/kanban/tests/test_storage.py#L637-L649` prove adjacent `read_task` behavior, not the direct missing-config `load_config()` contract.
+- Lower-confidence immutability concern: two `TestFromAC_*` cases now have failure-oriented names while asserting success paths: `serve/kanban/tests/test_engine_move_claim.py#L308-L340` and `serve/kanban/tests/test_engine_end_work_1077.py#L793-L848`. I could not prove weakening without diff access, so this is a confidence deduction, not a standalone fail trigger.
+
+### Deductions
+- -0.08: no direct test proving missing-config `load_config()` returns PRODUCT_TOPOLOGY-derived config without raising.
+- -0.06: no direct test proving `save_config()` writes only `next_id`.
+- -0.04: no exact proof of the canonical seven-status board tuple / explicit exclusion of board-status `released`.
+- -0.03: commit `180c43e4` exists, but exact diff and dirty-tree overlap could not be verified with available tools.
+
+### Verdict
+- FAIL. Confidence 0.74.
+- The suite is green, but the task AC is not fully proven. This is a first-cycle proof-quality gap with source behavior appearing correct, so the right retry is test strengthening, not builder source changes.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | test-writer | Add a direct `load_config()` missing-config test that asserts PRODUCT_TOPOLOGY-derived statuses/pipeline values and no exception | `serve/kanban/tests/test_storage.py` or `serve/kanban/tests/test_storage_1050.py` | Missing proof against `serve/kanban/src/owlbear_kanban/config_loader.py#L27-L68`; current indirect coverage is only `serve/kanban/tests/test_storage.py#L605-L613` and `serve/kanban/tests/test_storage.py#L637-L649` |
+| 2 | test-writer | Strengthen save-path tests to assert `config.yml` contains only `next_id` after `save_config()` and no topology sections/keys are written | `serve/kanban/tests/test_storage_1050.py` | Current proof is only `next_id` round-trip in `serve/kanban/tests/test_storage_1050.py#L807-L815`; source contract is `serve/kanban/src/owlbear_kanban/storage.py#L224-L242` |
+| 3 | test-writer | Add an exact board-status assertion that pins the canonical seven-status tuple and proves board status `released` is absent while session-state `released` remains valid | `serve/kanban/tests/test_engine_coverage_1068.py` and/or `serve/kanban/tests/test_engine_init_1068.py` | Current assertion is membership-only at `serve/kanban/tests/test_engine_coverage_1068.py#L512-L516`; canonical tuple is in `serve/kanban/src/owlbear_kanban/topology.py#L28-L36`, while session-state `released` remains valid in `serve/kanban/src/owlbear_kanban/engine.py#L107`, `serve/kanban/src/owlbear_kanban/engine.py#L233`, `serve/kanban/src/owlbear_kanban/engine.py#L284` |
+| 4 | test-writer | Rename or re-author repurposed `TestFromAC_*` cases so names/docstrings match the behavior being asserted and the assertions stay discriminating | `serve/kanban/tests/test_engine_move_claim.py`, `serve/kanban/tests/test_engine_end_work_1077.py` | Current names describe predicate failure but assertions prove success paths at `serve/kanban/tests/test_engine_move_claim.py#L308-L340` and `serve/kanban/tests/test_engine_end_work_1077.py#L793-L848` |
+[[2026-05-09]]
+## Test-Writer Notes
+
+**Retry cycle** — addressed all 4 Required Follow-up items from reviewer.
+
+**Files changed:** `serve/kanban/tests/` (5 files, 191 lines net)
+
+### Gap 1 — direct `load_config()` missing-config proof (RF#1)
+Added `TestFromAC_LoadConfigDefaultsWhenMissing` to `test_storage.py` (4 tests):
+- `test_load_config_no_config_yml_does_not_raise` — no FileNotFoundError when config.yml absent
+- `test_load_config_no_config_yml_returns_product_statuses` — statuses match PRODUCT_TOPOLOGY
+- `test_load_config_no_config_yml_returns_product_entry_status` — entry_status matches PRODUCT_TOPOLOGY
+- `test_load_config_no_config_yml_next_id_defaults_to_one` — next_id=1 default
+
+### Gap 2 — `save_config()` writes only `next_id` (RF#2)
+Added `TestFromAC_SaveConfigPersistsOnlyNextId` to `test_storage_1050.py` (3 tests):
+- `test_save_config_config_yml_contains_only_next_id_key` — regex on raw YAML confirms only `next_id` key
+- `test_save_config_omits_topology_sections` — no statuses/priorities/pipeline/agents/policy keys
+- `test_save_config_preserves_next_id_value` — correct value written
+
+### Gap 3 — exact 7-status board tuple / `released` disambiguation (RF#3)
+Added `TestFromAC_CanonicalBoardStatusTuple` to `test_engine_coverage_1068.py` (3 tests):
+- `test_board_config_statuses_exact_seven_tuple` — pins full ordered list vs PRODUCT_TOPOLOGY
+- `test_board_status_released_absent` — proves `released` not a board status
+- `test_session_state_released_valid_from_classify` — proves `_classify_end_work_state("release")` == "released"
+
+### Gap 4 — renamed misleading `TestFromAC_*` methods (RF#4)
+- `test_engine_move_claim.py`: `test_predicate_on_destination_fails_raises_predicate_failed` → `test_product_topology_ignores_config_predicate_move_succeeds`; `test_predicate_on_destination_fails_task_not_moved` → `test_product_topology_ignores_config_predicate_task_is_moved`
+- `test_engine_end_work_1077.py`: `test_success_predicate_fail_claim_not_cleared` → `test_product_topology_ignores_config_predicate_success_claim_cleared`; `test_block_move_to_predicate_fail_blocked_not_set_claim_not_cleared` → `test_product_topology_ignores_config_predicate_block_sets_blocked_clears_claim`
+
+**Result:** 1336 passed, 0 failed (was 1326). Ruff clean. Commit: `3d249b4c`.
+
+**Step 1b.1 applies:** All Required Follow-up items were test-proof gaps only. All 10 new tests PASS against current code (implementation already correct). Advancing directly to `review`.
+[[2026-05-09]]
+## Builder Notes
+- Task type: non-implementation (`type:test`) remediation pass-through; no source-code edits required from builder.
+- Files changed by builder: none.
+- Verification run (quality-runner, scoped): `serve/kanban/tests/`.
+- Tests: 1336 passed, 0 failed, 0 skipped (pytest exit 0).
+- Lint: ruff clean on `serve/kanban/tests/` (exit 0).
+- Coverage snapshot (informational for this test-only task): 89% across `owlbear_kanban` modules in scoped report.
+- Evidence summary: AC mechanical gate is satisfied (`uv run pytest serve/kanban/tests/` equivalent scoped suite is green) and no additional builder implementation was needed.
+- Fixes applied by builder: none (verification + pass-through only).

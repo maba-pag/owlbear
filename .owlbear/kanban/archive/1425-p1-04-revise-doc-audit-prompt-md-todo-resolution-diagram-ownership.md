@@ -1,10 +1,10 @@
 ---
 id: 1425
 title: 'P1-04: Revise doc-audit.prompt.md — TODO resolution + diagram ownership'
-status: review
+status: archived
 priority: important
 created: 2026-05-08T00:32:24.572908+00:00
-updated: 2026-05-09T13:19:18.247226+00:00
+updated: 2026-05-09T15:00:37.934270+00:00
 tags:
 - phase-1
 - scope:shared
@@ -351,3 +351,136 @@ Note: `test_d2_name_is_duplication` was skipped — the D2 name "Duplication" is
 - Coverage: N/A for prompt-only artifact update (no runtime module touched).
 - Evidence summary: single-line prompt-table fix resolved the last AC5 mapping gap; all task assertions now pass.
 - Commit: `c7191f22` (`docs: fix D2 dimension mapping in doc-audit prompt (#1425, builder)`).
+[[2026-05-09]]
+## Review Evidence
+
+### Scope
+- Reviewed task 1425 as a td:1 prompt-only change.
+- Live deliverable: `.owlbear/prompts/doc-audit.prompt.md`.
+- Task suite: `tests/test_doc_audit_prompt_1425.py`.
+- Companion retention suite: `tests/test_doc_writer_quality.py`.
+- Independent execution used `quality-runner` only; builder self-report was not relied on.
+- Builder commit presence confirmed in `.git/logs/HEAD:2456` as `docs: fix D2 dimension mapping in doc-audit prompt (#1425, builder)`.
+- Limitation: direct `git diff` / `git status --porcelain` were not available in this review surface, so changed-file scope and dirty-tree cleanliness could not be verified byte-for-byte. Small confidence deduction applied.
+
+### Test Results
+- pytest: 73 passed, 0 failed, 0 skipped on `tests/test_doc_audit_prompt_1425.py` and `tests/test_doc_writer_quality.py`.
+
+### Lint: clean
+- `ruff check` passed on both task-scoped test files.
+
+### Coverage: N/A
+- Prompt-only markdown artifact; no runtime module changed and td:1 does not require coverage here.
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---------|-------------|---------------------------|---------|
+| AC1 — §5 retains TODO batch workflow/categories/blockquote format | `tests/test_doc_writer_quality.py:114` | Yes. Removing the TODO-marker batch dimension from the live prompt at `.owlbear/prompts/doc-audit.prompt.md:81-87` would break the regex-backed retention check. | COVERED |
+| AC2 — §6 retains diagram ownership for verification/remediation planning | `tests/test_doc_writer_quality.py:124` | Yes. Removing the ownership/responsibility language at `.owlbear/prompts/doc-audit.prompt.md:93-96` would fail the retention check. | COVERED |
+| AC3 — §7 retains describes-based diagram verification referencing `.excalidraw` | `tests/test_doc_writer_quality.py:133` | Yes. Removing the `describes` / `.excalidraw` verification language at `.owlbear/prompts/doc-audit.prompt.md:101-108` would fail the retention check. | COVERED |
+| AC4 — §4 restores one-finding-at-a-time default plus TODO batch exception | `tests/test_doc_audit_prompt_1425.py:13`, `:23`, `:35` | Yes. The default mode and each control point are present at `.owlbear/prompts/doc-audit.prompt.md:41`, `:45-48`, with the batch exception at `:50`; mutating any of those would trip the targeted assertions. | COVERED |
+| AC5 — D1-D8 table with D2=`XREF-5`, D4-D6=`empirical`, D7=`XREF-*`, D8=`AUD-*`, canonical source reference | `tests/test_doc_audit_prompt_1425.py:51`, `:61`, `:68`, `:75`, `:82`, `:89`, `:96`, `:108`, `:121`, `:133`, `:146` | Mostly yes. The suite now pins the previously failing D2/D7/D8 mappings and empirical rows, while the reviewer manually verified the live table at `.owlbear/prompts/doc-audit.prompt.md:67-74` against `share/skills/r-doc-standards/SKILL.md:61`, `:71`, `:73`. | LAX |
+| AC6 — pre-audit gate loads `r-doc-standards` and `doc-types.instructions.md` before scanning | `tests/test_doc_audit_prompt_1425.py:164`, `:171`, `:178` | Yes. The gate is present at `.owlbear/prompts/doc-audit.prompt.md:24-26` and is positioned before `.owlbear/prompts/doc-audit.prompt.md:28`. | COVERED |
+
+#### Security Review
+- No issues. This task changes a markdown prompt only, adds no executable surface, no input handling, no new dependency, and no secret-bearing content.
+
+#### Test Integrity
+| Original Test | Change Made | Assessment |
+|---------------|-------------|------------|
+| `tests/test_doc_audit_prompt_1425.py` (`TestFromAC_*`) | Task history shows test-writer commit `e43af559` added `test_d2_rule_family_is_xref5`; current builder notes state `c7191f22` updated `.owlbear/prompts/doc-audit.prompt.md` only; commit presence confirmed in `.git/logs/HEAD:2456`. | PRESERVED |
+| `tests/test_doc_writer_quality.py` companion retention suite | No task-history evidence of builder edits; current green run still exercises AC1-AC3 retention checks. | PRESERVED |
+
+#### Test Quality
+| Dimension | Rating | Evidence |
+|-----------|--------|----------|
+| Assertion specificity | ADEQUATE | AC4 and AC6 use targeted assertions; AC5 now has exact row checks for D2/D7/D8 and exact empirical-row anchors for D4-D6. |
+| Negative/error-path coverage | ADEQUATE | For a static markdown prompt, the relevant failure mode is missing/wrong contract text; the suite exercises those breakpoints directly. |
+| Manual mutation reasoning | ADEQUATE | Flipping D2 away from `XREF-5`, changing D7/D8 families, removing the pre-audit gate, or deleting the finding-loop control points would fail named tests. |
+| Test independence | STRONG | File-read-only tests with no shared mutable state. |
+| Descriptive test names | STRONG | Test names track the refined AC text precisely. |
+
+#### Data Safety
+- No issues. No persisted data, concurrency, or resource-bound operations are introduced by this prompt edit.
+
+#### Implementation-Aware Gaps
+- No significant untested runtime paths. The artifact is static markdown and the accepted contract is present in the live prompt.
+
+#### Builder Process Quality
+| Metric | Value |
+|-------|-------|
+| Builder Notes sections | 3 |
+| Approach variation | Yes |
+| Assessment | FRICTION |
+
+### Pass 2 — INFORMATIONAL
+- Direct git diff / dirty-tree verification was unavailable in this surface. Commit existence was confirmed from `.git/logs/HEAD`, but changed-file scope still relies partly on task history.
+- AC5 proof is strongest on the rows that previously produced false greens (D2, D7, D8 plus D4-D6 empirical markers). The live abbreviated table is now correct for the reviewed scope.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| 1 | `.owlbear/prompts/doc-audit.prompt.md:81-87` retains the TODO batch format, categories, and workflow. | `tests/test_doc_writer_quality.py:114` | PASS |
+| 2 | `.owlbear/prompts/doc-audit.prompt.md:93-96` retains diagram ownership for verification and remediation planning. | `tests/test_doc_writer_quality.py:124` | PASS |
+| 3 | `.owlbear/prompts/doc-audit.prompt.md:101-108` retains `describes`-based diagram verification with explicit `.excalidraw` reference. | `tests/test_doc_writer_quality.py:133` | PASS |
+| 4 | `.owlbear/prompts/doc-audit.prompt.md:41`, `:45-48`, `:50` restore the one-finding-at-a-time loop and TODO batch exception. | `tests/test_doc_audit_prompt_1425.py:13`, `:23`, `:35` | PASS |
+| 5 | `.owlbear/prompts/doc-audit.prompt.md:67-74` now maps D2 to `XREF-5`, D4-D6 to `empirical`, D7 to `XREF-*`, and D8 to `AUD-*`, consistent with `share/skills/r-doc-standards/SKILL.md:61`, `:71`, `:73`. | `tests/test_doc_audit_prompt_1425.py:51`, `:61`, `:68`, `:75`, `:82`, `:89`, `:96`, `:108`, `:121`, `:133`, `:146` | PASS |
+| 6 | `.owlbear/prompts/doc-audit.prompt.md:24-26` loads `r-doc-standards` and `doc-types.instructions.md` before `.owlbear/prompts/doc-audit.prompt.md:28`. | `tests/test_doc_audit_prompt_1425.py:164`, `:171`, `:178` | PASS |
+
+### Confidence: 0.91
+### Verdict: PASS
+[[2026-05-09]]
+## Docs Gate
+
+### Checklist
+
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | No IN-scope README or descriptive doc references `doc-audit.prompt.md` by name; grep on README.md returned 0 matches |
+| 2 | Module docstrings | No | N/A | No `.py` files changed — prompt-only task |
+| 3 | External attribution | No | N/A | Task used only internal sources (current prompt, pre-rewrite version, brief, test files, r-doc-standards, doc-standards.instructions.md); no external repo patterns |
+| 4 | Research doc | Yes | Verified | `.owlbear/research/doc-audit-prompt-revision-1425.md` exists and is linked from task body under `## Research` |
+| 5 | Diagram maintenance (describes match) | Yes | Updated | `share/diagrams/project-overview.excalidraw` describes `.owlbear/**` which matches `.owlbear/prompts/doc-audit.prompt.md`; footer updated from `2026-05-09 (f8637c65)` → `2026-05-09 (2c78ed43)`; commit `75877249` |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation requested in task body |
+| 7 | Deletion detection | No | N/A | No files deleted; no orphaned IN-scope docs detected |
+
+### Scope Classification
+
+- `.owlbear/prompts/doc-audit.prompt.md` — changed file; agent-executable prompt, OUT of scope for editing (not in `share/prompts/` but `.owlbear/prompts/` — analogous treatment); no prose docs reference it
+- `tests/test_doc_audit_prompt_1425.py` — test file; OUT of scope
+
+### Files Updated
+
+- `share/diagrams/project-overview.excalidraw` — footer updated (commit `75877249`)
+
+### Scratch Files
+
+- No `.owlbear/scratch/1425-*` files found; nothing to clean
+
+### Review Evidence Gate (Step 0a)
+
+Present — two `## Review Evidence` sections both present; second cycle verdict: PASS (confidence 0.91). Gate passed.
+[[2026-05-09]]
+## Audit
+### Regression Detection
+- quality-runner mode full: 88 passed, 0 failed, 0 skipped. Lint: 29 pre-existing violations (hooks, scripts, seed) — none from task scope.
+- regression verdict: PASS
+
+### Intent Verification
+- scope alignment: PASS (changed files: `.owlbear/prompts/doc-audit.prompt.md`, `tests/test_doc_audit_prompt_1425.py`, `share/diagrams/project-overview.excalidraw` — all within prompt-revision domain)
+- purpose match: PASS (prompt revised per AC, dimension table corrected, standards chain restored)
+- extraneous scope: none
+- boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 3/5
+AC5 originally specified "mapping dimension ID → name → source rule family" without explicit constraints for individual dimension mappings, causing D7/D8 (cycle 2) and D2 (cycle 3) false-green passes. Architect responded to reviewer feedback with precise refinements. AC1-4/6 were adequately specified.
+
+### Commit Integrity
+- upstream commit presence: PASS (builder: 7790aa7c, 8c304dd1, c7191f22; test-writer: df7a2fc0, 6b90430b, e43af559; doc-writer: 75877249)
+- kanban commit packaging: pending (this audit)
+
+### Deduction Breakdown
+- AC quality score ≤ 3: -.03
+### Confidence: .97
+### Action: archive
