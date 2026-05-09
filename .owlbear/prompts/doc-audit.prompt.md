@@ -70,8 +70,8 @@ Dimension reference table (abbreviated; `r-doc-standards` remains canonical):
 | D4 | Accuracy | empirical |
 | D5 | Coverage Integrity | empirical |
 | D6 | Currency/Staleness | empirical |
-| D7 | Audience Fitness | AUD-* |
-| D8 | Link Integrity | LNK-* |
+| D7 | Cross-reference Integrity | XREF-* |
+| D8 | Audience Fitness | AUD-* |
 
 ## 5. TODO Marker Batch Resolution
 
