@@ -80,7 +80,7 @@ uv run kanban-migrate [--dry-run] [--lane tasks|archive|config|all] [--kanban-di
 
 Exit code 0 when no files failed; exit code 1 otherwise. Each failed file is reported on stderr as `FAIL {path}: {reason}`.
 
-After `--lane config` runs, `agent_map`, `agent_types`, and `agent_compatibility` are empty stubs that must be populated before calling `pick_tasks()`. The engine starts successfully with an empty `agent_map`, but `pick_tasks()` raises `ConfigError(ERR_INVALID_STATUS)` until the map is complete.
+After `--lane config` runs, topology values (`agent_map`, `agent_types`, `agent_compatibility`, and all pipeline settings) are provided by the product-topology constant and do not need to be set in `config.yml`. `pick_tasks()` works immediately after migration without any manual configuration.
 
 ## Configuration
 
