@@ -58,7 +58,7 @@ the builder can fix it without guessing.
 | Fail (impl issue) | review → in-progress | builder can fix directly |
 | Fail (test gap) | review → todo | tests missing for implemented behavior — test-writer adds coverage |
 | Fail (test/AC quality) | review → backlog | existing tests are weak, gate threshold is structurally infeasible, or AC needs redesign — architect re-evaluates |
-| Fail (2nd+) | review → backlog | loop-breaker — 2nd+ review failure on same task |
+| Fail (2nd+ batch review cycle) | review → backlog | loop-breaker — 2nd+ batch review cycle on same task |
 
 </pipeline_position>
 

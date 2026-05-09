@@ -129,7 +129,7 @@ FAIL routing:
 - Implementation defect -> `in-progress`
 - Missing/weak tests with otherwise-correct implementation -> `todo`
 - AC ambiguity/incorrect contract -> `backlog`
-- Repeated review failure cycle (2nd+ fail) -> `backlog`
+- Repeated batch review cycle (2nd+ cycle) -> `backlog`
 
 ## Step 6 — Advance
 
