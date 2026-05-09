@@ -37,3 +37,28 @@ cross-source candidate pairs and stores consolidation outcomes.
 - Use `get_stats` and `search_knowledge` only for verification and progress checks.
 
 </critical_rules>
+
+<output_format>
+
+### Channel A
+
+Report progress inline: batch count processed, entities extracted, consolidation outcomes.
+
+### Channel B
+
+Not applicable — no kanban integration; output is persisted via `store_enrichment`.
+
+</output_format>
+
+<boundaries>
+
+- No kanban access — this is a standalone enrichment worker.
+- Never modify source documents; only persist derived enrichment data.
+- Do not ingest new sources — use `knowledge-ingestor` for that.
+
+| Rationalization | Response |
+|----------------|----------|
+| "I'll fetch and ingest this new source while enriching." | Out of scope. Use knowledge-ingestor for ingestion. |
+| "The queue is empty, I'll create synthetic work items." | Stop. Queue-driven only — no work = done. |
+
+</boundaries>
