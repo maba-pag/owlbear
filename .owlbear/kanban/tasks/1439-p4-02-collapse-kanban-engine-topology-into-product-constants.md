@@ -1,10 +1,10 @@
 ---
 id: 1439
 title: 'P4-02: Collapse kanban engine topology into product constants'
-status: done
+status: backlog
 priority: critical
 created: 2026-05-08T19:31:49.034076+00:00
-updated: 2026-05-09T07:28:11.371651+00:00
+updated: 2026-05-09T08:16:45.299220+00:00
 tags:
 - phase-4
 - scope:kanban
@@ -414,3 +414,34 @@ Architecture re-review after reviewer loop-break. Narrowed AC4 scope: "Task fron
 **Commit:** `09d33d75`
 **Child tasks:** none
 **Scratch files:** none created for #1439
+[[2026-05-09]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1 | `PRODUCT_TOPOLOGY` at `serve/kanban/src/owlbear_kanban/topology.py:32`; 22 pinning tests in `tests/test_kanban_topology_1439.py` | PASS |
+| AC2 | `load_config` returns topology defaults at `config_loader.py:25`; no-config engine init tested at `test_kanban_topology_1439.py:300` | PASS |
+| AC3 | Override ignoring tested across 16 categories + AgentView create/pick/move paths at `test_kanban_topology_1439.py:371–684` | PASS |
+| AC4 | `save_config` persists only `next_id` at `storage.py:224`; dispatch ref at `dispatch.py:58`; attribute paths tested at `test_kanban_topology_1439.py:841–887` | PASS |
+
+### Test Results
+- pytest (task-scoped): 68 passed, 0 failed
+- pytest (full suite): **4233 passed, 498 failed across 92 distinct test files** — massive cross-task regression
+- ruff: clean on all task source and test files
+
+**Regression detail:** Failures span `serve/kanban/tests/` (71 failed/1255 passed), `tests/` (427 failed/2868 passed), plus `serve/mcp-kanban/tests/` and `serve/mcp-knowledge/tests/`. Root causes: (1) `load_config` no longer raises `FileNotFoundError` — breaks `test_config_loader.py::test_load_config_raises_on_missing_file`; (2) config field restructuring — grouped vendor/tui fields now return `None`; (3) `released` status removed from canonical set — breaks tests referencing it; (4) status ordering changes — assertion mismatches; (5) cockpit decision fixture path resolution failures. Prior full-suite runs (tasks #1440, #1444, #1458) passed with exit code 0, confirming these are task-introduced regressions.
+
+### Architect Quality: 3/5
+AC was thorough for the positive changes (16 topology categories, backward-compat attribute paths, save_config narrowing). However, it completely missed the regression surface: a refactor task AC must include "existing test suites continue to pass" or scope which suites need updates. 498 broken tests across 92 files is a fundamental gap in a refactor AC.
+
+### Deduction Breakdown
+- -0.05 Full-suite test failures in task scope (498 failures across 92 files in kanban domain and dependent consumers)
+- -0.03 AC quality score ≤ 3 (regression surface not addressed)
+
+### Confidence: 0.92
+### Action: reject-to-backlog
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Expand AC to include regression remediation: update or remove all test suites broken by the topology refactor. Categorize the 92 failing test files into (a) task-scoped tests for archived tasks whose fixtures need topology-constant alignment, (b) module-level tests needing config API updates, (c) out-of-scope consumer tests (cockpit, MCP) that need follow-up tasks. | 92 failing test files across tests/, serve/kanban/tests/, serve/mcp-kanban/tests/ | Full-suite run: 498 failed, 4233 passed. Sample: test_config_loader.py (3/11 fail), test_engine_init_1067.py, test_engine_move_claim.py, test_cockpit_decisions_api_1190.py |
