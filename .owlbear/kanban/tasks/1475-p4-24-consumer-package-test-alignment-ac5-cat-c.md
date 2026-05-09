@@ -1,10 +1,10 @@
 ---
 id: 1475
 title: 'P4-24: Consumer package test alignment (AC5 Cat-C)'
-status: in-progress
+status: review
 priority: needed
 created: 2026-05-09T08:46:53.952014+00:00
-updated: 2026-05-09T11:34:05.812141+00:00
+updated: 2026-05-09T11:48:55.847405+00:00
 tags:
 - phase-4
 - scope:tests
@@ -14,7 +14,7 @@ parent: 1439
 depends_on: []
 blocked: false
 block_reason:
-claimed_at: 2026-05-09T11:34:05.812141+00:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -79,3 +79,24 @@ Confirmed both consumer test directories are affected by topology-constant refac
 - All AC lines are td:0; pipeline note confirms RED tests already exist and fail in serve/mcp-kanban/tests/ and serve/mcp-knowledge/tests/.
 - Builder aligns test expectations to match topology-constant API contract (GREEN phase).
 - Passing through to builder.
+[[2026-05-09]]
+## Builder Notes
+- Implementation: aligned consumer-package test expectations in `serve/mcp-kanban/tests/` and `serve/mcp-knowledge/tests/` to current topology-constant and MCP schema contracts.
+- Files changed:
+  - `serve/mcp-kanban/tests/test_guidance_edit_task_973.py`
+  - `serve/mcp-kanban/tests/test_guidance_end_work_973.py`
+  - `serve/mcp-kanban/tests/test_mcp_guidance_1089.py`
+  - `serve/mcp-kanban/tests/test_tool_annotations_494.py`
+  - `serve/mcp-knowledge/tests/test_outputschema_541.py`
+  - `serve/mcp-knowledge/tests/test_phase_a_config.py`
+  - `serve/mcp-knowledge/tests/test_server.py`
+- Test results (quality-runner, scoped): 501 passed, 0 failed, 0 skipped.
+- Coverage (scoped run): overall 43%; touched contract modules include `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py` 86% and `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py` 60%.
+- Lint: clean (`ruff` exit 0) on both scoped test directories.
+- Evidence summary: RED verification showed 27 scoped failures; after alignment, all scoped tests and lint passed under quality-runner.
+- Fixes applied:
+  - Updated stale guidance/tag/idempotency expectations in mcp-kanban consumer tests.
+  - Updated mcp-knowledge schema expectations for top-level `get_stats` output schema.
+  - Corrected skill-doc path assertion to `share/skills/h-knowledge-ops/SKILL.md`.
+  - Repaired corrupted `serve/mcp-knowledge/tests/test_server.py` (mixed imports/duplicated content) to a clean mcp-knowledge wiring/lifespan contract test file.
+- Commit: `fdda4893` — `test: align consumer package tests with topology constants (#1475, builder)`

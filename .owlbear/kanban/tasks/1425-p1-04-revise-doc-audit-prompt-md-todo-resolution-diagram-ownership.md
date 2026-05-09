@@ -1,10 +1,10 @@
 ---
 id: 1425
 title: 'P1-04: Revise doc-audit.prompt.md — TODO resolution + diagram ownership'
-status: backlog
+status: todo
 priority: important
 created: 2026-05-08T00:32:24.572908+00:00
-updated: 2026-05-09T11:01:19.660799+00:00
+updated: 2026-05-09T11:51:15.630009+00:00
 tags:
 - phase-1
 - scope:shared
@@ -27,7 +27,7 @@ Revise `.owlbear/prompts/doc-audit.prompt.md`:
 2. §6 retains diagram ownership section — doc-audit has full responsibility for diagram verification and remediation planning (not creation) (td:0)
 3. §7 retains `describes`-based diagram verification referencing `.excalidraw` artifacts via doc-index metadata (td:0)
 4. §4 Finding Loop: restore one-finding-at-a-time default (present finding → collect approval → apply fix → next finding); add explicit batch exception only for TODO marker resolution (§5 batch workflow applies instead) (td:1)
-5. Add dimension reference table covering all 8 dimensions (D1–D8) from `r-doc-standards` §4, mapping dimension ID → name → source rule family. D4 (Accuracy), D5 (Coverage Integrity), D6 (Currency) use empirical verification — table must note "empirical" instead of a rule ID. Does not duplicate full probes — references `r-doc-standards` as canonical source. (td:1)
+5. Add dimension reference table covering all 8 dimensions (D1–D8) from `r-doc-standards` §4, mapping dimension ID → name → source rule family. D2 (Duplication) must map to `XREF-5` — there is no `DUP-*` rule family. D4 (Accuracy), D5 (Coverage Integrity), D6 (Currency) use empirical verification — table must note "empirical" instead of a rule ID. Does not duplicate full probes — references `r-doc-standards` as canonical source. (td:1)
 6. Add pre-audit gate: agent must load `r-doc-standards` skill and `doc-types.instructions.md` before scanning files. This restores the pre-rewrite standards chain. (td:1)
 
 **In scope:** Prompt file only. Must pass assertions from #1422.
@@ -268,3 +268,46 @@ Added 4 new failing tests to `TestFromAC_DimensionReferenceTable`:
 |---|-------------|----------------|---------|----------|
 | 1 | architect | Refine AC5 so the D2 source cell matches the canonical `r-doc-standards` contract instead of the invented `DUP-*` token, then re-route through RED and GREEN | `.owlbear/prompts/doc-audit.prompt.md`, `share/skills/r-doc-standards/SKILL.md` | Live mismatch at `.owlbear/prompts/doc-audit.prompt.md:68` versus `share/skills/r-doc-standards/SKILL.md:61` and `share/skills/r-doc-standards/SKILL.md:45` |
 | 2 | architect | Tighten the AC5 proof contract so the task-owned TestFromAC suite asserts the D2 row explicitly, or narrow the contract if D2 is intentionally exempt | `tests/test_doc_audit_prompt_1425.py` | quality-runner stayed green with 72 passing tests while a direct search for `Duplication` or `DUP-*` in `tests/test_doc_audit_prompt_1425.py` returned no matches |
+[[2026-05-09]]
+
+## Architecture Review (cycle 3 — loop-breaker)
+
+**Verdict: APPROVE → todo**
+
+### Reviewer Follow-up Resolution
+
+| # | Required Action | Resolution |
+|---|----------------|-----------|
+| 1 | Refine AC5 D2 source cell to match canonical `r-doc-standards` | AC5 refined below — D2 must map to `XREF-5`, not invented `DUP-*` |
+| 2 | Tighten AC5 proof contract for D2 row | Builder guidance added — test-writer must add D2 assertions before builder fixes prompt |
+
+### AC5 Refinement
+
+**Before:** Generic "mapping dimension ID → name → source rule family" — builder and test-writer both missed D2 because no specific constraint was stated.
+
+**After (applied):** AC5 now explicitly specifies D2 → Duplication → XREF-5. This is the only remaining mapping defect; D7/D8 were fixed in cycle 2.
+
+### Refined AC5 Text
+
+> 5. Add dimension reference table covering all 8 dimensions (D1–D8) from `r-doc-standards` §4, mapping dimension ID → name → source rule family. D2 (Duplication) must map to `XREF-5` — there is no `DUP-*` rule family. D4 (Accuracy), D5 (Coverage Integrity), D6 (Currency) use empirical verification — table must note "empirical" instead of a rule ID. Does not duplicate full probes — references `r-doc-standards` as canonical source. (td:1)
+
+### Builder Guidance (cycle 3)
+
+1. **Test-writer:** Add 2 failing tests to `TestFromAC_DimensionReferenceTable` in `tests/test_doc_audit_prompt_1425.py`:
+   - `test_d2_name_is_duplication` — D2 row must contain "Duplication"
+   - `test_d2_rule_family_is_xref5` — D2 row source cell must contain "XREF-5" (not `DUP-*`)
+2. **Builder:** Fix `.owlbear/prompts/doc-audit.prompt.md` line 68: change `DUP-*` to `XREF-5` in the D2 row.
+3. **Scope:** Prompt file only. No other files change.
+
+### Architecture Notes
+
+- Third cycle on the same task. Root cause: AC5 was under-specified for non-empirical dimensions beyond D1.
+- D7/D8 fixed in cycle 2. D2 is the last remaining mapping defect.
+- All 16 existing tests pass. Only the D2 row needs correction + test coverage.
+
+### Challenger
+
+Skipped — this is a REFINE-level AC tightening on an already-approved task with a single table-cell fix. No architectural risk.
+
+[[2026-05-09]]
+APPROVED #1425 → todo (cycle 3). Refined AC5: added explicit D2 → XREF-5 constraint — the invented `DUP-*` token has no canonical backing. Builder guidance specifies surgical fix: 2 new failing tests for D2 row, one table-cell correction in the prompt. Challenger skipped (single table-cell fix, no architectural risk).

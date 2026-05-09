@@ -1,10 +1,10 @@
 ---
 id: 1363
 title: Cockpit audit remediation
-status: backlog
+status: todo
 priority: critical
 created: 2026-05-06T00:58:14.547083+00:00
-updated: 2026-05-09T11:13:01.038666+00:00
+updated: 2026-05-09T11:55:10.486609+00:00
 tags:
 - cockpit
 - audit-remediation
@@ -14,8 +14,10 @@ tags:
 - no-dispatch
 parent:
 depends_on: []
-blocked: false
-block_reason: live parent container — not dispatchable until all children done
+blocked: true
+block_reason: 'Completion gate: active children with parent: 1363 remain below done.
+  Unblock ONLY after running board query to verify zero active children remain. See
+  Completion Contract (Pass 4).'
 claimed_at:
 archival_reason:
 archival_refs: []
@@ -374,3 +376,64 @@ Pass 3 AC rewrite (dynamic parent-query gate, "Supersedes Previous" markers) is 
 |---|-------------|----------------|---------|----------|
 | 1 | architect | Add enforcement mechanism (e.g., board-query gate check in AC) so that no pipeline agent can advance this task while active children remain; this is the third premature advancement | .owlbear/kanban/tasks/1363-cockpit-audit-remediation.md | 13 active children found via `grep -rl '^parent: 1363$' .owlbear/kanban/tasks/` while task at `done` |
 | 2 | orchestrator | Investigate how #1363 reached `done` without a reviewer pass after the Pass 3 remediation — the latest builder note says "claim/release only with status intentionally unchanged" yet the task advanced to done | .owlbear/kanban/tasks/1363-cockpit-audit-remediation.md | No Review Evidence section exists after Pass 3 AR / test-writer / builder notes |
+[[2026-05-09]]
+
+
+## Completion Contract (Pass 4 — Supersedes All Previous)
+
+This task is a **live parent container** following the #1316 precedent. It does NOT traverse the pipeline as a standalone deliverable.
+
+- **Scope:** ALL tasks with `parent: 1363` across every phase (P1, P2, P3, and any hotfixes). This is a dynamic gate — not a fixed ID range.
+- **Enforcement:** This task is **blocked** at the kanban level. The `blocked` flag is a first-class field that pipeline agents and orchestrators check before processing. This replaces the free-text "do not advance" instructions that failed in Passes 1–3.
+- **Completion trigger:** This task may be unblocked ONLY when every task with `parent: 1363` has reached `done` or been deleted — verified by board query (`grep -rl '^parent: 1363$' .owlbear/kanban/tasks/` returns zero results).
+- **Unblock procedure:** Verify zero active children → `edit_task(task_id="1363", unblock=true)` → task resumes normal pipeline flow from `todo`.
+- **no-dispatch tag:** Remains tagged `no-dispatch`. Even after unblocking, advancement is manual verification, not orchestrator dispatch.
+
+## Acceptance Criteria (Pass 4 — Supersedes All Previous)
+
+- [ ] Every task with `parent: 1363` has reached `done` (or been explicitly deleted) — verified by board query, not by a fixed ID range (td:0)
+- [ ] Task remained blocked until completion gate was verified (td:0)
+- [ ] Epic advances through pipeline only after unblocking and gate verification (td:0)
+
+[[2026-05-09]]
+## Architecture Review (Pass 4 — Auditor Remediation)
+
+### Context
+Auditor rejected this task from `done` back to `backlog` (third rejection overall) with two findings:
+1. Task reached `done` while 13 children remain active — third violation of the Completion Contract.
+2. No reviewer evidence section existed for the current (Pass 3) cycle, indicating the task bypassed review entirely.
+
+### Root Cause Analysis
+All three rejections share the same root cause: free-text contract language ("do not advance," "stay in-progress," "no status advancement") has no enforcement mechanism in the kanban tooling. `end_work(outcome="success")` auto-advances status regardless of body text. The `no-dispatch` tag prevents orchestrator dispatch but does not prevent advancement once an agent has claimed the task.
+
+Pass 1: `docs` tag triggered non-impl pass-through → builder advanced.
+Pass 2: Fixed ID range (#1364–#1375) became stale when P2/P3 children added → builder advanced per letter of contract.
+Pass 3: Dynamic parent query was correct but still free-text → task somehow reached `done` without reviewer pass.
+
+### Remediation Action
+**Blocking enforcement:** Task is now `blocked` with a board-level block reason. The `blocked` flag is a first-class kanban field that pipeline agents and orchestrators check before processing. This is the only enforcement mechanism available beyond free-text instructions.
+
+- Completion Contract rewritten (Pass 4) with explicit blocking semantics and unblock procedure.
+- AC rewritten (Pass 4) to reflect blocking enforcement.
+- Previous "Supersedes Previous" sections left intact for audit trail.
+
+### Auditor Follow-up #2 (routing investigation)
+The auditor asked how #1363 reached `done` without a reviewer pass after Pass 3. This is orchestrator-scope investigation — noted but out of architect authority. The blocking enforcement should prevent recurrence regardless of root cause.
+
+### Evaluation
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | Pure parent container |
+| Pattern consistency | PASS | #1316 precedent + blocked enforcement |
+| Auditor finding 1 (premature advancement) | FIXED | `blocked` flag prevents processing while gate unmet |
+| Auditor finding 2 (missing reviewer pass) | NOTED | Routing investigation is orchestrator scope; blocking prevents recurrence |
+
+### Challenge Results
+- Challenger: SKIPPED — all td:0, parent container, no design decisions
+
+### Test Depth
+- Max depth: 0
+- Test-writer: SKIP (pass-through, no status advancement while blocked)
+
+### Verdict: APPROVE
+### Action Taken: Blocked task with completion-gate reason. Completion Contract and AC rewritten (Pass 4) with blocking enforcement and unblock procedure. Parent container approved to `todo` — stays blocked until all children reach `done`.

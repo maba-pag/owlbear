@@ -4,7 +4,7 @@ title: 'P4-21: Kanban package test alignment (AC5 Cat-A)'
 status: todo
 priority: critical
 created: 2026-05-09T08:46:53.913029+00:00
-updated: 2026-05-09T11:18:45.810115+00:00
+updated: 2026-05-09T11:51:53.378247+00:00
 tags:
 - phase-4
 - scope:tests
@@ -14,7 +14,7 @@ parent: 1439
 depends_on: []
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-09T11:51:53.378247+00:00
 archival_reason:
 archival_refs: []
 ---

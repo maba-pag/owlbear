@@ -1,10 +1,10 @@
 ---
 id: 1389
 title: 'P2-14: Implement Cockpit decision viewport and resolution UX'
-status: done
+status: archived
 priority: needed
 created: 2026-05-06T01:04:52.300671+00:00
-updated: 2026-05-09T11:12:33.619741+00:00
+updated: 2026-05-09T11:56:27.035684+00:00
 tags:
 - cockpit
 - audit-remediation
@@ -510,3 +510,5 @@ None found for task #1389.
 
 ### Review Evidence
 Present. Final reviewer confidence: 0.95 — PASS.
+[[2026-05-09]]
+## Audit\n### Regression Detection\n- quality-runner mode full: Python 1255 passed, 71 failed (all in serve/kanban/tests — pre-existing kanban package internal failures, tracked in #1472–#1476); Frontend 2470 tests total, 9 failed (Shell_1344 timeout + DetailTab — known pre-existing instability, not #1389-related). Ruff: 15 violations in files not touched by #1389. ESLint: 4 issues in files not touched by #1389.\n- regression verdict: PASS — no task-caused regressions. All failures are in files outside #1389 scope.\n\n### Intent Verification\n- scope alignment: PASS (all 6 commits touch only cockpit frontend files: Shell.tsx, ResolveModal.tsx, test files, cockpit.excalidraw diagram)\n- purpose match: PASS (decision viewport integration into Shell + PButton migration + proof refinement — matches \"Implement Cockpit decision viewport and resolution UX\")\n- extraneous scope: none\n- boundary check: function-level behavior verification deferred to reviewer\n\n### Architect Quality: 4/5\nOriginal AC had vague terms (\"PDS-compatible\", \"explains consequences\") that caused 2 reviewer rejection cycles. After v2 refinement (keyword patterns, explicit PButton variants, close-cycle proof), AC was specific and effective. v3 was routing-only. Final AC quality is strong but initial vagueness cost pipeline iterations.\n\n### Commit Integrity\n- upstream commit presence: PASS — 6 commits verified via git log: 87b6804b (test-writer), 41ece747 (builder), 5e5cc0e1 (test-writer), 8796bad0 (builder), da70c322 (builder), ca7528fc (doc-writer). All correctly attributed and scoped.\n- kanban commit packaging: PASS (archival commit follows)\n\n### Deduction Breakdown\nNo deductions applied. All regression failures are pre-existing and outside task scope. Intent and scope are clean. Architect quality 4/5 (≥3, no deduction). Review evidence present and thorough (final review at 0.95). Commit integrity verified with full diff objects.\n\n### Confidence: 1.00\n### Action: archive

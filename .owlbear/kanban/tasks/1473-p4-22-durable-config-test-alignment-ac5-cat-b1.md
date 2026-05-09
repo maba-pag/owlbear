@@ -4,7 +4,7 @@ title: 'P4-22: Durable config test alignment (AC5 Cat-B1)'
 status: review
 priority: critical
 created: 2026-05-09T08:46:53.927445+00:00
-updated: 2026-05-09T11:15:03.439799+00:00
+updated: 2026-05-09T11:52:17.717684+00:00
 tags:
 - phase-4
 - type:refactor
@@ -15,7 +15,7 @@ parent: 1439
 depends_on: []
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-09T11:52:17.717684+00:00
 archival_reason:
 archival_refs: []
 ---
