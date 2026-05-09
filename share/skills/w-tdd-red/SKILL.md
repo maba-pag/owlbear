@@ -14,14 +14,19 @@ Write failing tests from a task's acceptance criteria. All tests must fail when 
 
 ### In Scope
 
-- Translate AC lines into failing `TestFromAC_*` tests with explicit behavioral proof.
-- Verify RED status and route test deliverables to `in-progress` for builder handoff.
+- Write failing tests from AC (RED phase).
+- Non-impl pass-through (tag-based).
+- Depth-zero pass-through (all `td:0`).
+- Retry-cycle gap-fill from reviewer findings.
+- Direct-to-review advance for test-only retries when all new tests are green.
 
 ### Out of Scope
 
-- Writing or editing production/source implementation code — builder (`w-tdd-green`).
-- Final evidence-based pass/fail review decisions — reviewer (`w-code-review`).
-- Full-suite regression gate ownership — auditor (`w-task-verification`).
+- Writing or editing source code — builder (`w-tdd-green`).
+- AC quality validation — architect (`w-arch-review`).
+- Code review — reviewer (`w-code-review`).
+- Architecture decisions — architect (`w-arch-review`).
+- Full-suite regression — auditor (`w-task-verification`).
 
 ## Step 0 — Setup
 

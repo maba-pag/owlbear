@@ -15,14 +15,19 @@ a four-item checklist, convention mapping, and a two-layer verification method.
 
 ### In Scope
 
-- Evaluate and update mapped documentation targets using the four-item docs checklist.
-- Verify documentation coherence and structural integrity before advancing tasks to done.
+- Verify README targets via convention mapping.
+- Update external attribution.
+- Verify research-doc linkage.
+- Detect deletion impact and orphaned references.
+- Add TODO markers for pre-existing unresolved documentation issues.
 
 ### Out of Scope
 
-- Implementing production code or non-documentation behavior changes — builder (`w-tdd-green`).
-- Writing or repairing task-scoped implementation tests — test-writer (`w-tdd-red`).
-- Performing final archive confidence scoring and full-suite regression gate — auditor (`w-task-verification`).
+- Fixing runtime code — builder (`w-tdd-green`), routed via reviewer (`w-code-review`).
+- Writing tests — test-writer (`w-tdd-red`).
+- Code review — reviewer (`w-code-review`).
+- Full-suite regression — auditor (`w-task-verification`).
+- AC quality validation — architect (`w-arch-review`).
 
 ## Step 0 — Setup
 

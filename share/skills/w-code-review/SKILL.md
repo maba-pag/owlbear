@@ -16,14 +16,21 @@ Review model: batch-all-findings. Gather all blocking findings before issuing PA
 
 ### In Scope
 
-- Validate AC-to-code evidence, test adequacy, and proof sufficiency for completed implementation tasks.
-- Route failures to the correct upstream owner with explicit Required Follow-up actions.
+- Apply the three-item checklist: AC->code, test->AC, and proof sufficiency.
+- Batch all blocking findings before verdict.
+- Separate findings from opinions (`Review Evidence` vs `Observations`).
+- Dispatch code-reader for `td:2` tasks.
+- Verify builder evidence consistency.
+- Add PASS confirmation statements for auditor traceability.
 
 ### Out of Scope
 
-- Writing missing tests or expanding test suites directly — test-writer (`w-tdd-red`).
-- Fixing implementation defects in source code — builder (`w-tdd-green`).
-- Running full-suite regression as an exit gate — auditor (`w-task-verification`).
+- Re-executing tests as primary proof source — builder provides evidence (`w-tdd-green`).
+- Fixing code — builder (`w-tdd-green`).
+- Full-suite regression — auditor (`w-task-verification`).
+- Architect quality scoring — auditor (`w-task-verification`).
+- Documentation updates — doc-writer (`w-doc-update`).
+- Security scanning — CI/SAST (D2), monitored by auditor (`w-task-verification`).
 
 ## Step 0 — Setup
 

@@ -14,14 +14,19 @@ Break complex features into atomic, test-driven kanban tasks with explicit depen
 
 ### In Scope
 
-- Break work into atomic, dependency-aware kanban tasks with testable acceptance criteria.
-- Create follow-up tasks with correct status, tags, and dependency links.
+- Break features into atomic tasks.
+- Draft AC using `h-ac-quality` rules.
+- Create consolidation-test tasks when two or more implementation siblings exist.
+- Assign priorities and dependency graphs.
+- Route tasks to `backlog` (or `research` for researcher follow-ups).
 
 ### Out of Scope
 
-- Implementing source code changes for planned tasks — builder (`w-tdd-green`).
-- Writing or fixing tests for planned tasks — test-writer (`w-tdd-red`).
-- Final code-quality review and approval decisions — reviewer (`w-code-review`).
+- Architecture evaluation — architect (`w-arch-review`).
+- AC quality validation — architect/challenger (`w-arch-review`, `challenger`).
+- Implementation — builder (`w-tdd-green`).
+- Test writing — test-writer (`w-tdd-red`).
+- Moving tasks to `todo` — architect (`w-arch-review`).
 
 ## Step 0 — Setup
 

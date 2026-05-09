@@ -14,14 +14,19 @@ Implement the minimum code to make all failing tests pass. This is the GREEN pha
 
 ### In Scope
 
-- Implement the minimal production changes needed to satisfy failing `TestFromAC_*` tests.
-- Verify scoped tests, lint, and coverage evidence for GREEN handoff to review.
+- Implement minimal code to pass tests (GREEN phase).
+- Run quality-runner for scoped tests, lint, and coverage.
+- Non-impl pass-through.
+- Reject to test-writer (wrong interface) or architect (wrong AC).
+- Commit source files before advancing.
 
 ### Out of Scope
 
-- Writing new tests or modifying `TestFromAC_*` classes — test-writer (`w-tdd-red`).
-- Updating project documentation as part of docs gate work — doc-writer (`w-doc-update`).
-- Performing final AC-to-code approval and review verdict — reviewer (`w-code-review`).
+- Writing tests — test-writer (`w-tdd-red`).
+- Refactoring unrelated modules — planner/architect for separate task routing (`w-task-decomposition`, `w-arch-review`).
+- AC quality validation — architect (`w-arch-review`).
+- Code review — reviewer (`w-code-review`).
+- Documentation updates — doc-writer (`w-doc-update`).
 
 ## Step 0 — Setup
 

@@ -14,14 +14,21 @@ Review researched tasks at `backlog`, refine acceptance criteria, ensure archite
 
 ### In Scope
 
-- Validate acceptance-criteria quality and architectural feasibility before implementation.
-- Define test-depth routing and decision-ready task direction for downstream agents.
+- Validate AC quality via challenger dispatch.
+- Evaluate architecture against `r-architecture-standards`.
+- Annotate test depth `(td:N)` per AC line.
+- Detect missing consolidation-test tasks as a decomposition backstop.
+- Approve `backlog -> todo`.
+- Run design diverge when two or more valid approaches exist.
 
 ### Out of Scope
 
-- Writing implementation code or applying source fixes — builder (`w-tdd-green`).
-- Performing final code review and merge-readiness checks — reviewer (`w-code-review`).
-- Writing task-scoped tests — test-writer (`w-tdd-red`).
+- AC drafting — planner (`w-task-decomposition`).
+- Writing source code — builder (`w-tdd-green`).
+- Writing tests — test-writer (`w-tdd-red`).
+- Code review — reviewer (`w-code-review`).
+- Running full test suite — auditor (`w-task-verification`).
+- Documentation updates — doc-writer (`w-doc-update`).
 
 ## Step 0 — Setup
 

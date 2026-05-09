@@ -14,14 +14,21 @@ Step-by-step exit gate process (done → archived).
 
 ### In Scope
 
-- Run full-suite regression checks and final confidence scoring before archive decisions.
-- Audit intent alignment, architect quality, and commit integrity at the pipeline exit gate.
+- Run full-suite regression tests (cross-task, not scoped).
+- AC spot-check one to two key items (not full mapping).
+- Architect quality scoring (1-5).
+- Confidence scoring with deduction rubric.
+- Research task verification (doc + follow-ups exist).
+- Commit kanban/decision files after archival.
 
 ### Out of Scope
 
-- Authoring or modifying task-scoped tests — test-writer (`w-tdd-red`).
-- Implementing source-code fixes for failing behavior — builder (`w-tdd-green`).
-- Performing primary AC-to-code mapping review for task approval — reviewer (`w-code-review`).
+- Re-verifying code-level detail — reviewer already did (`w-code-review`).
+- Fixing code — builder (`w-tdd-green`).
+- Writing tests — test-writer (`w-tdd-red`).
+- Documentation updates — doc-writer (`w-doc-update`).
+- AC quality validation — architect (`w-arch-review`).
+- Security scanning — CI/SAST (D2), monitored by auditor (`w-task-verification`).
 
 ## Step 0 — Setup
 
