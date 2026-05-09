@@ -1,10 +1,10 @@
 ---
 id: 1472
 title: 'P4-21: Kanban package test alignment (AC5 Cat-A)'
-status: review
+status: docs
 priority: critical
 created: 2026-05-09T08:46:53.913029+00:00
-updated: 2026-05-09T14:40:23.503781+00:00
+updated: 2026-05-09T15:21:23.255914+00:00
 tags:
 - phase-4
 - scope:tests
@@ -252,3 +252,41 @@ Added `TestFromAC_CanonicalBoardStatusTuple` to `test_engine_coverage_1068.py` (
 - Coverage snapshot (informational for this test-only task): 89% across `owlbear_kanban` modules in scoped report.
 - Evidence summary: AC mechanical gate is satisfied (`uv run pytest serve/kanban/tests/` equivalent scoped suite is green) and no additional builder implementation was needed.
 - Fixes applied by builder: none (verification + pass-through only).
+[[2026-05-09]]
+## Review Evidence
+### Test Results
+- quality-runner scoped pass on serve/kanban/tests/: 1336 passed, 0 failed, 0 skipped; pytest exit code 0.
+- No collection, timeout, or environment issues reported.
+
+### Lint Results
+- Ruff on serve/kanban/tests/: clean; 0 violations; exit code 0.
+- VS Code diagnostics on the 5 retry-touched test files are also clean.
+
+### Coverage
+- quality-runner scoped coverage on owlbear_kanban is low at module level (15% overall in the scoped report; e.g. engine.py 11%, storage.py 18%).
+- Informational only: this is a test-only remediation task. The gating signal is the green full kanban-suite run plus direct proof in the strengthened topology-contract tests, not module-average source coverage.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---|---|---|---|
+| AC1: All tests in serve/kanban/tests/ pass after aligning test expectations with the topology-constant refactor. | Mechanical gate is green via quality-runner on the full directory (1336 passed, 0 failed, 0 skipped). Prior proof gaps are now directly covered by exact assertions: load_config() with missing config.yml in serve/kanban/tests/test_storage.py:830-871 against serve/kanban/src/owlbear_kanban/config_loader.py:25-76; save_config() next_id-only persistence in serve/kanban/tests/test_storage_1050.py:1173-1226 against serve/kanban/src/owlbear_kanban/storage.py:224-242; canonical seven-status tuple / released disambiguation in serve/kanban/tests/test_engine_coverage_1068.py:2466-2503 against serve/kanban/src/owlbear_kanban/topology.py:28-57. The retry also renamed the previously misleading predicate tests in serve/kanban/tests/test_engine_move_claim.py and serve/kanban/tests/test_engine_end_work_1077.py so the names now match the asserted behavior. | TestFromAC_LoadConfigDefaultsWhenMissing; TestFromAC_SaveConfigPersistsOnlyNextId; TestFromAC_CanonicalBoardStatusTuple; renamed topology-predicate tests in test_engine_move_claim.py and test_engine_end_work_1077.py | PASS |
+
+### Test Integrity And Quality
+- No weakening is visible in the current TestFromAC bodies. The retry is additive/strengthening by inspection: new direct topology proofs were added in test_storage.py, test_storage_1050.py, and test_engine_coverage_1068.py.
+- Direct missing-config proof is now discriminating: test_storage.py:830-871 would fail if load_config() raised, returned non-canonical statuses, returned the wrong pipeline.entry_status, or defaulted next_id incorrectly.
+- Direct save_config proof is now discriminating: test_storage_1050.py:1173-1226 would fail if config.yml wrote any topology keys or failed to preserve next_id.
+- Canonical status proof is now discriminating: test_engine_coverage_1068.py:2466-2503 asserts the exact ordered seven-status tuple, explicit absence of board-status released, and continued validity of session-state released via _classify_end_work_state("release").
+- Non-blocking code-reader concern downgraded: serve/kanban/tests/test_storage.py:655-714 only inspects bare read_task(...) AST calls, but the current engine.py call surface imports read_task directly and all 14 live call sites are bare read_task(..., config=self._config). This is unrelated pre-existing structural test debt, not a task-1472 topology-refactor AC failure.
+- Non-blocking code-reader concern downgraded: serve/kanban/tests/test_engine_end_work_1077.py:821-859 does not assert result.status in the no-predicate block path, but that renamed method now correctly proves the behavior it claims (predicate ignored; blocked set; claim cleared). The adjacent test at serve/kanban/tests/test_engine_end_work_1077.py:862-889 separately proves block+move_to updates status to review. Together they are sufficient for this task's topology-constant proof.
+- No security or data-safety issues found in the scoped test-only change set.
+
+### Commit / Scope Checks
+- Commit existence verified from .git/logs: 3d249b4c (`test: strengthen topology-constant proof coverage (#1472, test-writer)`) and earlier 180c43e4 (`test: align kanban tests with topology-constant refactor (#1472, test-writer)`).
+- Exact commit diff and dirty-tree overlap could not be fully reconstructed with available review tools, so confidence is slightly reduced.
+
+### Deductions
+- -0.03: commit presence verified, but exact diff / dirty-tree contamination proof is incomplete without direct git diff/status access.
+
+### Verdict
+- PASS. Confidence 0.93.
+- The retry closes the prior proof-quality gaps. The full kanban package suite is green, lint is clean, and the strengthened assertions now directly prove the topology-constant contracts that were previously only indirectly covered.

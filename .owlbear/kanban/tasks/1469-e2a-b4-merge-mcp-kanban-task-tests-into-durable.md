@@ -1,10 +1,10 @@
 ---
 id: 1469
 title: 'E2a-B4: Merge mcp_kanban task tests into durable'
-status: review
+status: backlog
 priority: important
 created: 2026-05-09T07:21:35.691519+00:00
-updated: 2026-05-09T14:56:56.754394+00:00
+updated: 2026-05-09T15:08:03.615425+00:00
 tags:
 - pipeline
 - ws-cleanup
@@ -15,7 +15,7 @@ depends_on:
 - 1466
 blocked: false
 block_reason:
-claimed_at: 2026-05-09T14:56:56.754394+00:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -112,3 +112,51 @@ Architecture review complete. Refined AC: replaced `pytest -x` with delta-based 
 - Code changes: none.
 - Tests/lint: not run by builder (pass-through workflow for non-impl tasks).
 - Outcome: passing through to review.
+[[2026-05-09]]
+## Review Evidence
+### Test Results
+- quality-runner skipped. This task is all td:0 and the review hinged on direct artifact inspection, not executable behavior.
+- No builder-side pytest evidence was provided in the task body.
+
+### Lint Results
+- Not run. The failure is structural and was established from file state alone.
+
+### Coverage
+- Not applicable for this td:0 merge/delete task.
+
+### AC Compliance
+| AC Line | Evidence | Status |
+|---|---|---|
+| All unique def test_* from 7 source files present in test_mcp_kanban.py | Source [tests/test_mcp_kanban_1196.py](tests/test_mcp_kanban_1196.py#L90) still defines test_empty_string_rejected_with_tool_error, but workspace search found no same-name test in [tests/test_mcp_kanban.py](tests/test_mcp_kanban.py). Source [tests/test_mcp_kanban_1092.py](tests/test_mcp_kanban_1092.py#L132) still defines test_move_task_kanban_error_routed_via_helper, but workspace search found no same-name test in [tests/test_mcp_kanban.py](tests/test_mcp_kanban.py). | FAIL |
+| Duplicate test-name collisions resolved by renaming incoming to test_{name}_{original_task_id} | Source [tests/test_mcp_kanban_1091.py](tests/test_mcp_kanban_1091.py#L214) still defines test_edit_task_has_no_status_parameter. Durable file still has only [tests/test_mcp_kanban.py](tests/test_mcp_kanban.py#L171). Workspace search found no test_edit_task_has_no_status_parameter_1091 anywhere under tests/. | FAIL |
+| Fixture collisions handled during merge | Durable fixtures were already normalized in [tests/test_mcp_kanban.py](tests/test_mcp_kanban.py#L79-L111), but the source collision fixtures still remain in [tests/test_mcp_kanban_1091.py](tests/test_mcp_kanban_1091.py#L86), [tests/test_mcp_kanban_1092.py](tests/test_mcp_kanban_1092.py#L96), [tests/test_mcp_kanban_1196.py](tests/test_mcp_kanban_1196.py#L66), and [tests/test_mcp_kanban_1450.py](tests/test_mcp_kanban_1450.py#L68). The merge/delete work was not completed in this task cycle. | FAIL |
+| All 7 source files deleted after merge | The seven source files still exist: [tests/test_mcp_kanban_1091.py](tests/test_mcp_kanban_1091.py), [tests/test_mcp_kanban_1092.py](tests/test_mcp_kanban_1092.py), [tests/test_mcp_kanban_1126.py](tests/test_mcp_kanban_1126.py), [tests/test_mcp_kanban_1196.py](tests/test_mcp_kanban_1196.py), [tests/test_mcp_kanban_1197.py](tests/test_mcp_kanban_1197.py), [tests/test_mcp_kanban_1360.py](tests/test_mcp_kanban_1360.py), [tests/test_mcp_kanban_1450.py](tests/test_mcp_kanban_1450.py). | FAIL |
+| Per-target checkpoint: collect-only on tests/test_mcp_kanban.py collects >= 120 tests | Not independently executable in this tool surface, and no builder evidence was recorded. Structural failures above already show the merge/delete task is incomplete. | FAIL |
+| Post-cleanup failure count <= pre-task baseline failure count | Not evidenced. Builder notes report no code changes and no test execution for a task whose deliverable is file movement/deletion. | FAIL |
+| Collected test count >= pre-task collect-only baseline | Not evidenced. Builder notes report no code changes and no collect-only run. | FAIL |
+| test_kanban_topology_1439.py untouched | [tests/test_kanban_topology_1439.py](tests/test_kanban_topology_1439.py#L1) still exists, but untouched status was not independently verifiable because the task body provided no commit hash or changed-file list. | NOT VERIFIED |
+
+### Findings
+- The current repo state looks partially pre-consolidated: durable [tests/test_mcp_kanban.py](tests/test_mcp_kanban.py) already contains substantial coverage from the source suites, but the source files were never deleted and the known collision rename was never completed.
+- The task body's latest builder section says "Code changes: none." For this task shape, that is a pipeline/ownership defect, not just a missed implementation detail.
+- This is the first review failure on the task. Routing to backlog is appropriate because the td:0 pass-through contract left real test-file merge/delete work with no owning agent.
+
+### Deductions
+- -0.35: direct AC violation: all seven source files still exist.
+- -0.15: required collision rename missing.
+- -0.08: task design/ownership failure: td:0 pass-through produced no file changes for a file-edit task.
+- -0.05: topology untouched claim not independently verifiable from provided evidence.
+
+### Verdict
+- FAIL
+- Confidence: 0.37
+- Route: backlog
+
+### Action
+- Re-scope this as an implementation-bearing test-cleanup task, or split it into explicit remaining work items (exact-name preservation/rename requirements vs source-file deletion) so a downstream agent actually owns the file edits.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Rewrite task ownership/scope so the remaining merge-delete work is owned by an executing agent; current td:0 pass-through leaves the task with no implementer | tests/test_mcp_kanban.py; tests/test_mcp_kanban_1091.py; tests/test_mcp_kanban_1092.py; tests/test_mcp_kanban_1126.py; tests/test_mcp_kanban_1196.py; tests/test_mcp_kanban_1197.py; tests/test_mcp_kanban_1360.py; tests/test_mcp_kanban_1450.py | Builder notes say Code changes: none; all seven source files still exist |
+| 2 | architect | Clarify the exact preservation contract for merged test names and enforce the documented collision rename for the 1091 duplicate before the next cycle | tests/test_mcp_kanban.py; tests/test_mcp_kanban_1091.py; tests/test_mcp_kanban_1196.py; tests/test_mcp_kanban_1092.py | No test_edit_task_has_no_status_parameter_1091 exists; source-only names such as test_empty_string_rejected_with_tool_error and test_move_task_kanban_error_routed_via_helper do not appear in the durable file by name |

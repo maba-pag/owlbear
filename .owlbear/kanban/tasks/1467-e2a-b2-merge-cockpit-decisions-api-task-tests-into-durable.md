@@ -1,10 +1,10 @@
 ---
 id: 1467
 title: 'E2a-B2: Merge cockpit_decisions_api task tests into durable'
-status: review
+status: docs
 priority: important
 created: 2026-05-09T07:21:35.670259+00:00
-updated: 2026-05-09T14:56:54.808520+00:00
+updated: 2026-05-09T15:08:08.084349+00:00
 tags:
 - pipeline
 - ws-cleanup
@@ -15,7 +15,7 @@ depends_on:
 - 1466
 blocked: false
 block_reason:
-claimed_at: 2026-05-09T14:56:54.808520+00:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -118,3 +118,47 @@ APPROVED #1467 → todo. Refined AC: identified exact 3 test name collisions (al
 - Quality-runner (scoped): 88 passed, 0 failed; ruff clean; coverage modules included `owlbear_cockpit.routes.decisions` at 96%.
 
 - Guardrail check: `tests/test_kanban_topology_1439.py` untouched.
+[[2026-05-09]]
+## Review Evidence
+### Scope
+- First review cycle: no prior `## Review Evidence` section found in `.owlbear/kanban/tasks/1467-e2a-b2-merge-cockpit-decisions-api-task-tests-into-durable.md`.
+- Builder commit presence confirmed in `.git/logs/HEAD:2469` and `.git/logs/refs/heads/dev:2279` for `cef978f43f4713bbea1cea5f5c182bb7604e7941`.
+- Review scope reconstructed as `tests/test_cockpit_decisions_api.py` plus deletion of `tests/test_cockpit_decisions_api_1189.py`, `tests/test_cockpit_decisions_api_1190.py`, `tests/test_cockpit_decisions_api_1194.py`, `tests/test_cockpit_decisions_api_1345.py`, `tests/test_cockpit_decisions_api_1384.py`, and `tests/test_cockpit_decisions_api_1385.py` from task lines 107-117. Explore subagent found no uncommitted overlap with that scope.
+- Builder process quality: one `## Builder Notes` section, no loop pattern.
+
+### Test Results
+- Quality-runner scoped pass on `tests/test_cockpit_decisions_api.py`: 88 passed, 0 failed, 0 skipped.
+- Full root `tests/` check at current HEAD: 3379 collected; 3153 passed, 217 failed, 5 errors, 4 skipped.
+- `get_errors` on `tests/test_cockpit_decisions_api.py`: no diagnostics.
+
+### Lint Results
+- Quality-runner: ruff clean for `tests/test_cockpit_decisions_api.py`.
+
+### Coverage
+- Quality-runner: `owlbear_cockpit.routes.decisions` at 96% statement coverage (102 stmts, 4 missing). Informational only for this td:0 mechanical merge.
+
+### AC Compliance
+| AC Line | Evidence | Status |
+|---|---|---|
+| All unique `def test_*` from 6 source files present in `test_cockpit_decisions_api.py` | `grep "def test_"` found exactly 82 test definitions in `tests/test_cockpit_decisions_api.py`; Explore completeness check matched the six deleted source suites into the durable file; promotion markers present at `tests/test_cockpit_decisions_api.py:3`, `:514`, `:592`, `:1284`, `:1373`, `:1459`, `:1507`, `:1577`, `:1630`, `:1651`, `:1661`, `:1675`, `:1695`. | PASS |
+| 3 collision renames resolved with source task ID suffix | Original durable names remain at `tests/test_cockpit_decisions_api.py:363`, `:482`, `:501`; merged collision variants exist at `:581`, `:657`, `:667` with `_1189` suffix exactly as required. | PASS |
+| Two fixture patterns coexist without name collision | Pattern A module-level fixtures remain at `tests/test_cockpit_decisions_api.py:190`, `:199`, `:205`; Pattern B fixtures are distinct at `:225`, `:233`, `:241`. | PASS |
+| Pattern B unique helpers and distinct `_make_board` / `_write_pending_dr` signatures added | Pattern B helpers present at `tests/test_cockpit_decisions_api.py:129`, `:139`, `:164`, `:254`, `:262`, `:268`. | PASS |
+| Pattern A helpers from source files dropped | Only one Pattern A helper set is present: `_make_board` `:25`, `_write_pending_dr` `:43`, `_parse_frontmatter` `:67`, `_find_dr_file` `:78`; no duplicate Pattern A helper surface found. | PASS |
+| All 6 source files deleted after merge | `file_search` for `tests/test_cockpit_decisions_api_*.py` returned no matches; task body lines 107-117 list the six deleted source files. | PASS |
+| Per-target checkpoint collects ≥ 82 items | Scoped quality-runner executed 88 tests from `tests/test_cockpit_decisions_api.py`, clearing the `>= 82` gate. | PASS |
+| Post-cleanup failure count ≤ pre-task baseline failure count | Task body records baseline `214 failed` at line 114 and post-cleanup `208 failed` at line 116. Reviewer broad rerun at current HEAD produced a different total (`217 failed`), but current workspace also contains unrelated dirty root-test changes outside #1467 scope, so the live broad count is not attributable to this task. No task-scoped regression signal found. | PASS |
+| Full suite collect-only count does not decrease vs pre-task baseline | Reviewer broad rerun collected `3379` tests, matching the task body baseline/post-cleanup counts at lines 114 and 117. | PASS |
+| `test_kanban_topology_1439.py` untouched | `tests/test_kanban_topology_1439.py` exists in HEAD; Explore diff reconstruction found no overlap with commit `cef978f4` and no current overlap with #1467 scope. | PASS |
+
+### Deductions
+- `-0.04` Direct pre/post commit diff for `cef978f4` was not available through reviewer tools, so `TestFromAC_*` immutability is verified from current file shape and scope reconstruction rather than a precise commit diff.
+- `-0.03` Current broad root-suite failure totals are noisy because unrelated dirty root tests exist outside #1467 scope; broad rerun used as context, not as sole gating evidence.
+
+### Verdict
+- PASS
+- Confidence: 0.91
+- Action: advance to `docs`.
+
+### Summary
+Task #1467 satisfies the mechanical merge contract. The durable suite now contains the full 82-test surface with the exact three required `_1189` renames, distinct Pattern B helpers/fixtures, deleted source-file cleanup, clean scoped execution/lint, and stable root-suite collection count.

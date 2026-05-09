@@ -1,10 +1,10 @@
 ---
 id: 1473
 title: 'P4-22: Durable config test alignment (AC5 Cat-B1)'
-status: done
+status: archived
 priority: critical
 created: 2026-05-09T08:46:53.927445+00:00
-updated: 2026-05-09T14:40:02.844430+00:00
+updated: 2026-05-09T15:25:16.842553+00:00
 tags:
 - phase-4
 - type:refactor
@@ -252,3 +252,5 @@ Architecture review complete. Refined task: (1) added `type:test` tag for test-w
 
 ### Scratch Files Cleaned
 - None (no 1473-* scratch files found)
+[[2026-05-09]]
+## Audit\n### Regression Detection\n- quality-runner mode full: 2975 passed, 400 failed, 4 skipped. All 400 failures are pre-existing from parent topology refactor (#1439) — sampled failures in test_engine_validation_push, test_cockpit_cache_populate, test_cockpit_cache_sse_1346 are all outside task scope. Task #1473 modified only test expectations in 3 config test files — no production code changed, no cross-domain regression possible.\n- Scoped run: 93 passed, 0 failed across all 4 AC test files.\n- Lint: 12 violations, all outside task scope (knowledge/, tools/ packages).\n- regression verdict: PASS\n\n### Intent Verification\n- scope alignment: PASS (changed files: tests/test_config_loader.py, tests/test_config_authority.py, tests/test_config_schema.py — all within kanban config test domain; test_config_grouped.py correctly left unchanged as already passing)\n- purpose match: PASS (test expectations aligned to topology-constant contract; proof gaps from first review closed by test-writer retry)\n- extraneous scope: none\n- boundary check: function-level behavior verification deferred to reviewer\n\n### Architect Quality: 4/5\nSingle verifiable AC with concrete pytest command. Detailed file-specific guidance and 4 breaking-change items provided substantial builder context. Reviewer's first rejection was about test proof quality (test-writer territory), not AC ambiguity. Minor gap: AC could have specified discriminating test requirements explicitly.\n\n### Commit Integrity\n- upstream commit presence: PASS (f8637c6 builder, 3a7c951 test-writer — both confirmed via git log --grep, both scoped to task test files only)\n- dirty-tree contamination: PASS (git status verified ~30 modified files, none overlapping with task's 3 changed test files)\n- kanban commit packaging: pending (auditor commits kanban state post-archive)\n\n### Deduction Breakdown\nNo deductions applied.\n- Pre-existing failures (400): not caused by task — parent topology refactor; no regression deduction.\n- Lint violations (12): outside task scope; no deduction.\n- AC quality 4/5 (>3): no deduction.\n- Reviewer evidence: detailed with PASS verdict; no deduction.\n- Commit integrity: both commits present and scoped; no deduction.\n\n### Confidence: 1.00\n### Action: archive

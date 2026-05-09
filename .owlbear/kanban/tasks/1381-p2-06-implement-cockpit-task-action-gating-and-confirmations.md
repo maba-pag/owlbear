@@ -1,10 +1,10 @@
 ---
 id: 1381
 title: 'P2-06: Implement Cockpit task action gating and confirmations'
-status: todo
+status: in-progress
 priority: needed
 created: 2026-05-06T01:04:37.405026+00:00
-updated: 2026-05-09T14:56:16.429025+00:00
+updated: 2026-05-09T15:19:41.961950+00:00
 tags:
 - cockpit
 - audit-remediation
@@ -86,3 +86,23 @@ The builder on test task #1380 implemented source changes to `DetailTab.tsx` and
 
 ### Verdict: APPROVE
 ### Action Taken: Annotated AC with td depths, refined AC7 to include explicit conflict-test non-regression check, added Builder Guidance section documenting existing implementation provenance. Advanced to todo.
+[[2026-05-09]]
+## Test-Writer Notes
+- Test file: `serve/cockpit/web/src/__tests__/DetailTab_1381.test.tsx`
+- Classes: `TestFromAC_ConflictResolutionNonRegression`
+- Tests per category: happy 1, edge 0, error 0, boundary 0
+- Total: 1 test (AC7 non-regression guard)
+- ESLint: clean
+
+**AC coverage:**
+| AC | td | Coverage source | Status |
+|----|----|----------------|--------|
+| AC1: action buttons gated by task state | td:2 | `DetailTab_1380.test.tsx` — 4 tests | Covered |
+| AC2: unclaim absent + no mutation for claimed=false | td:2 | `DetailTab_1380.test.tsx` — 1 test | Covered |
+| AC3: action-specific confirmation text | td:2 | `DetailTab_1380.test.tsx` — 3 tests | Covered |
+| AC4: confirmation labels name concrete action | td:2 | `DetailTab_1380.test.tsx` — 5 tests (incl. exact labels) | Covered |
+| AC5: keyboard/focus behavior | td:2 | `DetailTab_1380.test.tsx` — 5 tests (incl. Escape+restore) | Covered |
+| AC6: 409/404/422 error contract for action mutations | td:2 | `DetailTab_1380.test.tsx` — 4 tests | Covered |
+| AC7: non-regression of conflict-resolution + #1380 suite pass | td:1 | `DetailTab_1381.test.tsx` — 1 smoke test | Covered |
+
+**Implementation status note:** All 23 tests PASS. Implementation was pre-committed during #1380's pipeline cycle (commit `b899bbb2`) per builder guidance. The `DetailTab_1380.test.tsx` 22-test suite and the new AC7 smoke test serve as the builder's verification targets. Builder task is a verification pass: run these two suites plus adjacent suites (`DetailTab.test.tsx`, `DetailTab_1344`, `DetailTab_1378`, `DetailTab_1379`) to confirm no regressions.

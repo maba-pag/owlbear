@@ -1,10 +1,10 @@
 ---
 id: 1474
 title: 'P4-23: Task-scoped and cockpit test alignment (AC5 Cat-B2)'
-status: in-progress
+status: backlog
 priority: critical
 created: 2026-05-09T08:46:53.940620+00:00
-updated: 2026-05-09T14:39:38.509915+00:00
+updated: 2026-05-09T15:18:27.096168+00:00
 tags:
 - phase-4
 - type:refactor
@@ -272,3 +272,28 @@ Refined AC with complete 21-file manifest, frozen verification commands, and bou
 - Non-implementation task (tagged `test`) — no tests applicable. Second pass-through.
 - Passing through to builder.
 - Rationale: tests already exist in `tests/` and fail (RED). Builder applies mechanical topology-fixture alignment to the 21-file manifest (AC1 + AC2). Revised AC explicitly states "Test-writer: SKIP (pass-through via `test` tag)". No new test file needed.
+[[2026-05-09]]
+## Builder Notes
+- Implementation: applied the mechanical topology-fixture alignment across the full 21-file manifest by replacing topology-heavy config fixture blocks/templates with `next_id`-only values (preserving declared `next_id` values where present).
+- AC1 gate: topology-key grep no longer isolates to a clean fixture-only zero state because several files still include key names in assertion/message literals and migration-intent source checks; gate interpretation is ambiguous after mechanical rewrite.
+- AC2 verification command executed on the 15-file pass set: **exit 1**.
+- Test results: **290 passed, 19 failed**.
+- Lint: `ruff` clean on all touched files.
+- Coverage: not reported as gate evidence because AC2 pass gate itself failed.
+- Commit: none (rejected path).
+
+Representative AC2 failures (from 19 total):
+- `tests/test_dispatch_gate_port.py::TestFromAC_BucketCompatibilityRegressionGuard::test_incompatible_agent_buckets_go_to_different_waves`
+- `tests/test_engine_ble001.py::TestFromAC_PickTasksWarningLogs::test_pick_tasks_import_error_is_caught_and_logged`
+- `tests/test_engine_create_edit_1203.py::TestFromAC_EmptyTitleErrorCode::{empty_title,whitespace_title}`
+- `tests/test_pick_tasks_resolve.py::TestFromAC_PickTasksResolveIntegration::{test_resolve_runs_before_task_filtering,test_no_pending_drs_pick_tasks_works,test_no_decisions_directory_pick_tasks_works}`
+- `tests/test_engine_lazy_agent_map.py` (12 failures across `TestFromAC_PickTasksValidatesAgentMap` and `TestFromAC_McpPickTasksRaisesForIncompleteAgentMap`)
+- `tests/test_engine_end_work.py::TestFromAC_GuidanceExact::test_reject_backwards_multi_step_guidance_exact_list`
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Reconcile AC1/AC2 contradiction between “remove topology fields mechanically” and behavior tests that depend on non-default topology semantics (agent_map completeness, bucket compatibility, dispatch/missing-entry error paths) | tests/test_dispatch_gate_port.py, tests/test_engine_lazy_agent_map.py, tests/test_pick_tasks_resolve.py, tests/test_engine_ble001.py | AC2 run: 19 failures after full mechanical rewrite; bounded latitude (>3) exceeded |
+| 2 | architect | Publish a fixture-scope-safe AC1 matcher that excludes assertion/doc/message strings and code-inspection literals, or replace grep gate with structural check limited to config fixture constants | tests/test_engine_accessor_migration.py, tests/test_support_migration.py, tests/test_engine_dispatch_validation.py | Current key grep catches non-fixture literals/messages, making AC1 pass criterion non-deterministic |
+| 3 | architect | Split verification into topology-fixture-only suites vs topology-dependent behavioral suites, with explicit include lists and expected verdicts per bucket | tests/test_engine_lazy_agent_map.py, tests/test_dispatch_gate_port.py, tests/test_engine_end_work.py, tests/test_engine_create_edit_1203.py | AC2 “15 files expected to pass” not reachable under current fixture rewrite contract |
+| 4 | architect | Clarify whether mixed-purpose constants in same file (example: compatibility/bucket configs) must be exempted from next_id-only rewrite | tests/test_dispatch_gate_port.py | Post-rewrite regression in bucket compatibility test indicates non-mechanical behavior coupling |

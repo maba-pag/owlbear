@@ -1,10 +1,10 @@
 ---
 id: 1475
 title: 'P4-24: Consumer package test alignment (AC5 Cat-C)'
-status: in-progress
+status: review
 priority: needed
 created: 2026-05-09T08:46:53.952014+00:00
-updated: 2026-05-09T14:43:04.467445+00:00
+updated: 2026-05-09T15:15:41.608975+00:00
 tags:
 - phase-4
 - scope:tests
@@ -214,3 +214,17 @@ Confirmed both consumer test directories are affected by topology-constant refac
 |---|---|---|
 | 1. Discriminating AgentView guidance passthrough (move_task, start_work) | `test_move_task_skip_transition_warning_guidance`, `test_move_task_skip_warning_survives_disabled_collect_guidance`, `test_start_work_guidance_sentinel_passthrough`, `test_start_work_agentview_guidance_not_overwritten_by_collect_guidance` | RED ✓ |
 | 2. Reconcile stale move_task idempotentHint contract | `test_move_task_idempotent_hint_true`, `test_move_task_idempotent_hint_true_per_original_ac` | RED ✓ |
+[[2026-05-09]]
+## Builder Notes
+- Implementation: aligned `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py` with reconciled test contracts from retry-1475.
+- Files changed:
+  - `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py`
+- Fixes applied:
+  - Set `move_task` ToolAnnotations `idempotentHint=True` (original AC contract restored).
+  - Preserved AgentView guidance in `move_task` by using `collect_guidance` only when `result.guidance` is empty.
+  - Preserved AgentView guidance in `start_work` by using `collect_guidance` only when `result.guidance` is empty.
+- RED verification (quality-runner scoped on retry files): 30 passed, 6 failed, 0 skipped; pytest exit 1; ruff clean.
+- GREEN verification (quality-runner scoped on retry files): 36 passed, 0 failed, 0 skipped; pytest exit 0; ruff clean.
+- AC verification (quality-runner scoped on required directories): 504 passed, 0 failed, 0 skipped; pytest exit 0 for `serve/mcp-kanban/tests/` + `serve/mcp-knowledge/tests/`; ruff clean.
+- Coverage context (AC verification run): overall 43%; `serve.mcp-kanban.src.owlbear_mcp_kanban.server` 86%, `serve.mcp-kanban.src.owlbear_mcp_kanban.models` 99%, `serve.mcp-kanban.src.owlbear_mcp_kanban.guidance` 98%, `serve.mcp-knowledge.src.owlbear_mcp_knowledge.server` 60%, `serve.mcp-knowledge.src.owlbear_mcp_knowledge.models` 94%.
+- Commit: `c831b7b5` — `fix: preserve guidance passthrough and move_task idempotency (#1475, builder)`
