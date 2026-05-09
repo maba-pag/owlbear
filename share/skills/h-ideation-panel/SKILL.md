@@ -8,6 +8,10 @@ user-invocable: false
 
 Reference for panel-facing ideation agents only. The user-facing phase agents should load their workflow skills, not this handbook.
 
+## Universal Constraints
+
+- **No kanban commands.** Ideation agents do not interact with the kanban board or pipeline status transitions.
+
 ## Panel Surface Map
 
 Ideation now has two panel surfaces.
