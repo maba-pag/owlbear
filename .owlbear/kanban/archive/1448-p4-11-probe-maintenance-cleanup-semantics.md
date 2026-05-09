@@ -1,10 +1,10 @@
 ---
 id: 1448
 title: 'P4-11: Probe maintenance cleanup semantics'
-status: done
+status: archived
 priority: needed
 created: 2026-05-08T19:32:09.582469+00:00
-updated: 2026-05-09T03:40:42.831460+00:00
+updated: 2026-05-09T04:21:20.103485+00:00
 tags:
 - phase-4
 - scope:maintenance
@@ -448,3 +448,33 @@ Three reviewer-identified proof gaps filled:
 
 ### Scratch Files Cleaned
 - None (no scratch files existed for #1448)
+[[2026-05-09]]
+## Audit
+### AC Verification (binding: third revision, task body lines 298–304)
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1 — expired claim released, re-read proves claimed_at None | `tests/test_cockpit_mutation_api_1448.py:190` (released_claim_ids), `:206` (live claim untouched), `:221` (re-read proves claimed_at is None on disk) | PASS |
+| AC2 — drift-archived file moved, archived_task_ids | `tests/test_cockpit_mutation_api_1448.py:237` (archived_task_ids), `:250–251` (source removed, archive created) | PASS |
+| AC3 — collision/malformed skipped, both branches assert source exists | `tests/test_cockpit_mutation_api_1448.py:268` (collision skip), `:283–287` (skipped_items shape), `:300–303` (collision source preserved), `:320–322` (malformed source preserved) | PASS |
+| AC4 — single-call aggregation | `tests/test_cockpit_mutation_api_1448.py:344–366` (one cleanup() returns all 3 categories) | PASS |
+| AC5 — POST /api/tasks/cleanup shape, nonempty skipped_items | `tests/test_cockpit_mutation_api_1448.py:388` (200 + field shape), `:399–401` (passthrough), `:417–435` (len≥1 + typed entries) | PASS |
+| AC6 — negative probes: init, pick_tasks, start_work, GET /api/tasks, GET /api/board, SSE | `tests/test_cockpit_mutation_api_1448.py:451–521` (6 tests with mock_cleanup.assert_not_called()) | PASS |
+
+### Test Results
+- pytest (task-scoped): 18 passed, 0 failed
+- pytest (full suite): test-order pollution in `test_cockpit_cache_sse_1346` and `test_cockpit_cache_populate_1402` (Pydantic `ListTasksResponse` validation errors when run in full suite order); all 24 tests pass in isolation — NOT a #1448 regression
+- ruff: clean (QR scoped pass on engine.py, models.py, view.py, mutation.py, test file)
+
+### Commit Verification
+- `43e50f42` feat: implement cleanup maintenance contract (#1448, builder)
+- `5ab030d3` test: add retry proof-gap tests for cleanup contract (#1448, test-writer)
+- `eef20932` docs: update diagram footers for cleanup contract (#1448, doc-writer)
+
+### Architect Quality: 3/5
+Initial scope mismatch (probe-only AC on a type:test task), two reviewer rejections needed to stabilize AC. Final AC (third revision) is specific, testable, and clean. Architect was responsive to reviewer feedback each cycle.
+
+### Deduction Breakdown
+- -.03 AC quality score ≤ 3 (two rejection cycles to stabilize scope and proof requirements)
+
+### Confidence: .97
+### Action: archive

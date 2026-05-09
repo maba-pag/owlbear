@@ -2,10 +2,10 @@
 id: 1462
 title: 'B2-impl: Update loop-breaker terminology to batch-review-cycle and add cycle-3
   escalation'
-status: research
+status: backlog
 priority: important
 created: 2026-05-09T03:31:13.416517+00:00
-updated: 2026-05-09T03:31:30.689453+00:00
+updated: 2026-05-09T03:59:44.613492+00:00
 tags:
 - pipeline
 - ws-reviewer
@@ -43,3 +43,11 @@ P6: Diff of all 4 files shows only loop-breaker terminology changes and cycle-3 
 2. `share/skills/w-code-review/SKILL.md` — FAIL routing section
 3. `share/agents/reviewer.agent.md` — pipeline_position table
 4. `share/prompts/agent-broad-audit.prompt.md` — rejection-routing table
+[[2026-05-09]]
+## Research
+- Research doc: .owlbear/research/loop-breaker-batch-cycle-update.md (pre-existing, validated)
+- Sources: 8 studied, 6 high-relevance (all from brief/synthesis/codebase)
+- Validation: all 4 target files match research doc's "Current" column — no drift since doc was written
+- Recommendation: mechanical text replacement across 4 files + 1 new table row (confidence: 0.90)
+- Challenge: SKIP — trivial terminology update with no design ambiguity
+- No follow-up tasks needed — this IS the follow-up task from research #1408

@@ -1,10 +1,10 @@
 ---
 id: 1380
 title: 'P2-05: Test Cockpit task action gating and confirmations'
-status: todo
+status: review
 priority: needed
 created: 2026-05-06T01:04:35.632458+00:00
-updated: 2026-05-09T03:37:34.324091+00:00
+updated: 2026-05-09T04:14:33.856691+00:00
 tags:
 - cockpit
 - audit-remediation
@@ -195,3 +195,27 @@ Implementation task: #1381.
 | 2 | test-writer | Strengthen confirm-label assertions to exact concrete labels for unblock, unclaim, and move-backward instead of negative not-Confirm checks. | serve/cockpit/web/src/__tests__/DetailTab_1380.test.tsx | [serve/cockpit/web/src/__tests__/DetailTab_1380.test.tsx](serve/cockpit/web/src/__tests__/DetailTab_1380.test.tsx#L255), [serve/cockpit/web/src/components/ConfirmDialog.tsx](serve/cockpit/web/src/components/ConfirmDialog.tsx#L30) |
 | 3 | test-writer | Add dismiss-path proof that Escape both closes the dialog and restores focus to the triggering button. | serve/cockpit/web/src/__tests__/DetailTab_1380.test.tsx | [serve/cockpit/web/src/__tests__/DetailTab_1380.test.tsx](serve/cockpit/web/src/__tests__/DetailTab_1380.test.tsx#L324), [serve/cockpit/web/src/__tests__/DetailTab_1380.test.tsx](serve/cockpit/web/src/__tests__/DetailTab_1380.test.tsx#L369) |
 | 4 | test-writer | Add AC6 error-contract coverage that proves 404 calls onTaskCleared and that 409 and 422 use the shared conflict/message handling on the required task-action surface. | serve/cockpit/web/src/__tests__/DetailTab_1380.test.tsx, serve/cockpit/web/src/__tests__/DetailTab_1344.test.tsx | [serve/cockpit/web/src/__tests__/DetailTab_1380.test.tsx](serve/cockpit/web/src/__tests__/DetailTab_1380.test.tsx#L396), [serve/cockpit/web/src/__tests__/DetailTab_1344.test.tsx](serve/cockpit/web/src/__tests__/DetailTab_1344.test.tsx#L423), [serve/cockpit/web/src/components/DetailTab.tsx](serve/cockpit/web/src/components/DetailTab.tsx#L180) |
+[[2026-05-09]]
+## Test-Writer Notes
+- Retry: added 9 tests for reviewer gaps. All 9 PASS against current impl (Step 1b.1 — builder skip).
+- Test file: `serve/cockpit/web/src/__tests__/DetailTab_1380.test.tsx`
+- Total suite: 22 tests, 22 passed, 0 failed.
+- Lint: clean.
+- Commit: `ee972df5` (`test: add retry tests for action gating gaps (#1380, test-writer)`)
+
+**Gaps filled per reviewer Required Follow-up:**
+| # | Gap | Tests Added | Status |
+|---|-----|-------------|--------|
+| 1 | AC1: blocked=false DOM-absence for unblock | `unblock_button_absent_from_dom_when_task_not_blocked` | PASS ✓ |
+| 2 | AC4: Exact confirm labels (not negative-only) | `confirm_button_label_exact_unblock_task_for_unblock_action`, `confirm_button_label_exact_release_claim_for_unclaim_action`, `confirm_button_label_exact_move_target_for_move_backward` | PASS ✓ |
+| 3 | AC5: Escape dismiss + focus return combined | `escape_key_dismisses_dialog_and_restores_focus_to_trigger` | PASS ✓ |
+| 4 | AC6: 404 → onTaskCleared, 409 conflict, 422 validation (unclaim/move-backward surface) | `unclaim_mutation_404_calls_on_task_cleared`, `move_backward_mutation_404_calls_on_task_cleared`, `unclaim_mutation_409_shows_conflict_modal`, `move_backward_mutation_422_shows_validation_message` | PASS ✓ |
+
+All new tests pass → implementation was already correct. No builder work needed.
+[[2026-05-09]]
+## Builder Notes
+- Non-implementation pass-through: task is test-only (`type:test`) and latest Test-Writer retry indicates builder-skip conditions were met.
+- Verification (scoped quality-runner): `DetailTab_1380.test.tsx` -> 22 passed, 0 failed, 0 skipped.
+- Lint (scoped): clean for `DetailTab.tsx`, `ConfirmDialog.tsx`, and `DetailTab_1380.test.tsx`.
+- Code changes: none by builder in this cycle.
+- Evidence summary: task-owned AC proof suite is green and no further GREEN-phase implementation is required for #1380.

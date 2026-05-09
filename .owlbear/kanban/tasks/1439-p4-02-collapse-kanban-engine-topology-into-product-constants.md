@@ -1,10 +1,10 @@
 ---
 id: 1439
 title: 'P4-02: Collapse kanban engine topology into product constants'
-status: review
+status: in-progress
 priority: critical
 created: 2026-05-08T19:31:49.034076+00:00
-updated: 2026-05-09T03:38:42.259151+00:00
+updated: 2026-05-09T04:18:04.121336+00:00
 tags:
 - phase-4
 - scope:kanban
@@ -16,7 +16,7 @@ depends_on:
 - 1438
 blocked: false
 block_reason:
-claimed_at: 2026-05-09T03:38:42.259151+00:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -164,3 +164,78 @@ Architecture review complete. Refined AC from 5 lines to 4: (1) expanded topolog
   - RED verified before implementation (63 failing tests)
   - GREEN verified after implementation via quality-runner (63 passing)
   - commit: `cca1a625`
+[[2026-05-09]]
+## Review Evidence
+### Test Results
+- `quality-runner` scoped task suite: `tests/test_kanban_topology_1439.py` -> 63 passed, 0 failed.
+- Adjacent contract suite: `tests/test_storage_1205.py` -> 13 passed, 0 failed. This confirms the existing `read_task(config=None)` no-config guard at [tests/test_storage_1205.py](tests/test_storage_1205.py#L285) and the engine call-site contract at [tests/test_storage_1205.py](tests/test_storage_1205.py#L303).
+
+### Lint Results
+- Ruff clean on the reviewed source files and the task test file.
+
+### Coverage
+- Scoped task suite module coverage: `owlbear_kanban.topology` 100%, `owlbear_kanban.config_loader` 100%, `owlbear_kanban.storage` 37%, `owlbear_kanban.dispatch` 28%, `owlbear_kanban.corruption` 34%.
+- Adjacent storage suite module coverage: `owlbear_kanban.config_loader` 100%, `owlbear_kanban.storage` 34%.
+- Module-level coverage is informational here; the blocking issue is proof quality, not a failing runtime path.
+
+### Security Review
+- No security findings in the reviewed diff surface.
+
+### Builder Process Quality
+- CLEAN. One builder cycle in the task body; no retry loop pattern detected.
+
+### Test Integrity
+- No visible weakening of `TestFromAC_*` coverage in the current snapshot.
+- Confidence deduction applied because this session could confirm commit `cca1a625` exists, but could not run `git diff-tree` or `git status` to prove file-level immutability / dirty-tree cleanliness.
+
+### AC Compliance
+| AC Line | Evidence | Status |
+|---|---|---|
+| AC1 | Canonical constant is implemented at [serve/kanban/src/owlbear_kanban/topology.py](serve/kanban/src/owlbear_kanban/topology.py#L32) and the task suite checks exact values from [tests/test_kanban_topology_1439.py](tests/test_kanban_topology_1439.py#L196), [tests/test_kanban_topology_1439.py](tests/test_kanban_topology_1439.py#L213), [tests/test_kanban_topology_1439.py](tests/test_kanban_topology_1439.py#L250), and [tests/test_kanban_topology_1439.py](tests/test_kanban_topology_1439.py#L279). | PASS |
+| AC2 | `load_config()` rebuilds `BoardConfig` from `PRODUCT_TOPOLOGY` in [serve/kanban/src/owlbear_kanban/config_loader.py](serve/kanban/src/owlbear_kanban/config_loader.py#L46), and the no-config engine path is exercised by [tests/test_kanban_topology_1439.py](tests/test_kanban_topology_1439.py#L297), [tests/test_kanban_topology_1439.py](tests/test_kanban_topology_1439.py#L309), [tests/test_kanban_topology_1439.py](tests/test_kanban_topology_1439.py#L345), and [tests/test_kanban_topology_1439.py](tests/test_kanban_topology_1439.py#L352). | PASS |
+| AC3 | Engine-side override ignoring is well covered in [tests/test_kanban_topology_1439.py](tests/test_kanban_topology_1439.py#L367), but the `AgentView` half of the AC is only exercised once at [tests/test_kanban_topology_1439.py](tests/test_kanban_topology_1439.py#L586) with the lax assertion at [tests/test_kanban_topology_1439.py](tests/test_kanban_topology_1439.py#L618). Meanwhile multiple `AgentView` methods consume `board_config()` at [serve/kanban/src/owlbear_kanban/agent_view.py](serve/kanban/src/owlbear_kanban/agent_view.py#L148), [serve/kanban/src/owlbear_kanban/agent_view.py](serve/kanban/src/owlbear_kanban/agent_view.py#L359), [serve/kanban/src/owlbear_kanban/agent_view.py](serve/kanban/src/owlbear_kanban/agent_view.py#L594), [serve/kanban/src/owlbear_kanban/agent_view.py](serve/kanban/src/owlbear_kanban/agent_view.py#L693), [serve/kanban/src/owlbear_kanban/agent_view.py](serve/kanban/src/owlbear_kanban/agent_view.py#L897), and [serve/kanban/src/owlbear_kanban/agent_view.py](serve/kanban/src/owlbear_kanban/agent_view.py#L1041). | FAIL |
+| AC4 | `load_config`, `save_config`, dispatch identity, and status / priority validation are covered by [tests/test_kanban_topology_1439.py](tests/test_kanban_topology_1439.py#L626), [tests/test_kanban_topology_1439.py](tests/test_kanban_topology_1439.py#L661), [tests/test_kanban_topology_1439.py](tests/test_kanban_topology_1439.py#L701), [tests/test_kanban_topology_1439.py](tests/test_kanban_topology_1439.py#L793), [tests/test_kanban_topology_1439.py](tests/test_kanban_topology_1439.py#L808), and [tests/test_kanban_topology_1439.py](tests/test_kanban_topology_1439.py#L846). But several compatibility checks are nondiscriminating at [tests/test_kanban_topology_1439.py](tests/test_kanban_topology_1439.py#L744), [tests/test_kanban_topology_1439.py](tests/test_kanban_topology_1439.py#L762), and [tests/test_kanban_topology_1439.py](tests/test_kanban_topology_1439.py#L771), and the AC-named `tags` / `blocked` fields are only present in fixture text at [tests/test_kanban_topology_1439.py](tests/test_kanban_topology_1439.py#L180) and [tests/test_kanban_topology_1439.py](tests/test_kanban_topology_1439.py#L182), not in a validating test. | FAIL |
+
+### Deductions
+- `-0.08` AC3 proof gap: only one `AgentView` method is exercised, and the assertion at [tests/test_kanban_topology_1439.py](tests/test_kanban_topology_1439.py#L618) would still pass on several wrong behaviors.
+- `-0.04` AC4 proof gap: attribute-path compatibility tests at [tests/test_kanban_topology_1439.py](tests/test_kanban_topology_1439.py#L744), [tests/test_kanban_topology_1439.py](tests/test_kanban_topology_1439.py#L762), and [tests/test_kanban_topology_1439.py](tests/test_kanban_topology_1439.py#L771) are too weak, and `tags` / `blocked` are untested.
+- `-0.02` Git inspection limitation: commit existence was confirmed, but builder diff / dirty-tree overlap could not be verified in this session.
+
+### Verdict
+- Confidence: 0.86
+- FAIL -> `todo`
+- Rationale: the implementation reads as correct on the reviewed paths and adjacent storage contracts still pass, but the task test suite does not prove AC3 and AC4 strongly enough to certify the change.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|---|---|---|---|
+| 1 | test-writer | Add discriminating `AgentView` coverage for additional `board_config()`-dependent methods using exact expected values rather than non-`None` checks. Cover at least one method in each remaining topology-sensitive area: entry-status creation path, wave-size / agent-map dispatch path, and terminal-status / move-or-end-work path. | tests/test_kanban_topology_1439.py | Current AC3 `AgentView` proof is only [tests/test_kanban_topology_1439.py](tests/test_kanban_topology_1439.py#L586) with [tests/test_kanban_topology_1439.py](tests/test_kanban_topology_1439.py#L618); live consumers are at [serve/kanban/src/owlbear_kanban/agent_view.py](serve/kanban/src/owlbear_kanban/agent_view.py#L148), [serve/kanban/src/owlbear_kanban/agent_view.py](serve/kanban/src/owlbear_kanban/agent_view.py#L359), [serve/kanban/src/owlbear_kanban/agent_view.py](serve/kanban/src/owlbear_kanban/agent_view.py#L594), [serve/kanban/src/owlbear_kanban/agent_view.py](serve/kanban/src/owlbear_kanban/agent_view.py#L693), [serve/kanban/src/owlbear_kanban/agent_view.py](serve/kanban/src/owlbear_kanban/agent_view.py#L897), and [serve/kanban/src/owlbear_kanban/agent_view.py](serve/kanban/src/owlbear_kanban/agent_view.py#L1041). |
+| 2 | test-writer | Replace lax attribute-path smoke assertions with exact-value assertions for the consumer-visible compatibility paths named in AC4. | tests/test_kanban_topology_1439.py | [tests/test_kanban_topology_1439.py](tests/test_kanban_topology_1439.py#L744), [tests/test_kanban_topology_1439.py](tests/test_kanban_topology_1439.py#L762), and [tests/test_kanban_topology_1439.py](tests/test_kanban_topology_1439.py#L771) would still pass if the values were wrong. |
+| 3 | test-writer | Add direct AC4 tests for `tags` and `blocked` frontmatter parsing on topology-backed task reads so the named fields are actually exercised. | tests/test_kanban_topology_1439.py | The AC names those fields, but the task suite only mentions them in fixture text at [tests/test_kanban_topology_1439.py](tests/test_kanban_topology_1439.py#L180) and [tests/test_kanban_topology_1439.py](tests/test_kanban_topology_1439.py#L182). |
+
+If the strengthened tests pass against the current implementation, builder-skip is appropriate on the retry.
+[[2026-05-09]]
+## Test-Writer Notes
+
+**Retry: added 5 discriminating tests + strengthened 2 existing assertions. All 68 tests pass against current implementation → builder skip.**
+
+### Changes made (surgical gap-fill only)
+
+**AC3 — 3 new AgentView tests in `TestFromAC_OverridesIgnored`:**
+- `test_agent_view_create_task_uses_product_entry_status_not_config` — config override entry_status='todo'; asserts task.status == 'research' (product constant)
+- `test_agent_view_pick_tasks_agent_map_uses_product_constant_not_config` — config maps all statuses to 'custom-agent'; asserts dispatched agent == 'researcher' (product constant for 'research')
+- `test_agent_view_move_task_terminal_status_uses_product_constant_not_config` — config override terminal_status='review'; asserts task at 'done' can be archived with reason='completed' (product terminal_status='done' → can_mark_completed=True)
+
+**AC4 — 2 strengthened assertions in `TestFromAC_LoadSaveAndDispatch`:**
+- `test_board_config_agents_agent_map_attribute_path_accessible`: `isinstance(..., dict)` → `dict(...) == _EXPECTED_AGENT_MAP`
+- `test_board_config_policy_non_impl_tags_attribute_path_accessible`: `hasattr(...)` → `frozenset(...) == _EXPECTED_NON_IMPL_TAGS`
+
+**AC4 — 2 new frontmatter round-trip tests:**
+- `test_task_tags_are_preserved_on_read` — tags=[scope:backend, type:refactor] round-trips via engine.show_task
+- `test_task_blocked_true_is_preserved_on_read` — blocked=true + block_reason round-trips via engine.show_task
+
+### Outcome
+- **68 tests, all PASS** against current implementation (up from 63)
+- Ruff: clean
+- Commit: 947c9ef1
+- Builder skip: test-only retry, all new tests green against existing implementation

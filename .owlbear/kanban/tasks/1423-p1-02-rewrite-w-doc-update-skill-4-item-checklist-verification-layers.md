@@ -1,10 +1,10 @@
 ---
 id: 1423
 title: 'P1-02: Rewrite w-doc-update skill — 4-item checklist + verification layers'
-status: todo
+status: review
 priority: needed
 created: 2026-05-08T00:32:18.617094+00:00
-updated: 2026-05-09T03:27:53.933213+00:00
+updated: 2026-05-09T04:14:15.777508+00:00
 tags:
 - phase-1
 - scope:shared
@@ -285,3 +285,23 @@ Challenger: SKIPPED — mechanical regex fix, no architectural decision.
 
 [[2026-05-09]]
 REFINE → APPROVE: AC7 refined with explicit assertion contract requiring 'insert' verb in pre-existing clause match. Two-line regex fix in tests/test_doc_writer_quality_1422.py (remove second OR branch from lines ~492 and ~508). All other AC lines unchanged. Advancing to todo.
+[[2026-05-09]]
+## Test-Writer Notes
+- Retry 2: Tightened AC7 pre-existing regex — removed lax OR branch `|pre.existing.*TODO\s+marker` from two patterns in `tests/test_doc_writer_quality_1422.py`.
+- File: `tests/test_doc_writer_quality_1422.py`
+- Changed: `test_item1_preexisting_issues_insert_todo_marker` (line ~492) and `test_item1_has_both_attribution_rules` (line ~508)
+- Both patterns now enforce `pre.existing.*insert.*TODO\s+marker` — a mutation like "reference the TODO marker policy" now correctly fails.
+- Test results: 56 passed, 0 failed (implementation unchanged, assertions tightened).
+- Lint: ruff clean (0 violations).
+- Commit: 5f5be4f8
+- Per Step 1b.1: test-only retry, all tests green against correct implementation — advancing directly to review.
+[[2026-05-09]]
+## Builder Notes
+- Scope: docs-only verification task for `share/skills/w-doc-update/SKILL.md`; implementation already present, no code changes required.
+- Files changed: none.
+- AC7 proof check: confirmed tests now enforce `pre-existing.*insert.*TODO\s+marker` in `tests/test_doc_writer_quality_1422.py` (no lax OR branch remains).
+- Verification (quality-runner, scoped): 56 passed, 0 failed, 0 skipped (`tests/test_doc_writer_quality_1422.py`).
+- Lint (quality-runner, scoped): `ruff` clean on `tests/test_doc_writer_quality_1422.py` (0 violations).
+- Coverage: N/A for this docs-only/test-spec verification pass (no application module coverage emitted).
+- Evidence summary: AC1-AC7 requirements are satisfied in the existing `share/skills/w-doc-update/SKILL.md`; retry objective was proof-quality tightening and is now independently verified GREEN.
+- Fixes applied: none (verification-only cycle).

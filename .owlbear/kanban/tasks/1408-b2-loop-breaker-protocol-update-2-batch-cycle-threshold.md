@@ -1,10 +1,10 @@
 ---
 id: 1408
 title: 'B2: Loop-breaker protocol update — 2-batch-cycle threshold'
-status: todo
+status: in-progress
 priority: important
 created: 2026-05-07T23:16:25.227004+00:00
-updated: 2026-05-09T03:32:00.924610+00:00
+updated: 2026-05-09T04:00:05.616381+00:00
 tags:
 - pipeline
 - ws-reviewer
@@ -50,3 +50,9 @@ Single atomic task — terminology update across 4 .md agent/skill files + cycle
 Key finding: Commit 96ed7280 (April 29) already changed the numeric threshold from 3→2. The remaining work is a terminology update to align wording with the post-B1 batch review model, plus adding the cycle-3 architect escalation from synthesis rec #7.
 
 Follow-up: #1462 (B2-impl) at research — covers all 4 files.
+[[2026-05-09]]
+## Test-Writer Notes
+- Non-impl pass-through: AC references only `share/skills/r-pipeline-protocol/SKILL.md` (a `SKILL.md` file — explicitly non-Python per w-tdd-red Step 2a heuristic).
+- AC lines P1/P2/P3 describe a text/terminology change in a markdown skill file, with verification by diff comparison. No Python functions, classes, endpoints, or modules are involved.
+- Step 2a: no implementation intent found, AC references only non-Python files → heuristic pass-through.
+- Passing through to builder.

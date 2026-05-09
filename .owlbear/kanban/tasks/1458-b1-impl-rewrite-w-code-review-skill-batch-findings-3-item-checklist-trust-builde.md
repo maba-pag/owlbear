@@ -2,10 +2,10 @@
 id: 1458
 title: 'B1-impl: Rewrite w-code-review skill — batch findings, 3-item checklist, trust
   builder evidence'
-status: in-progress
+status: review
 priority: critical
 created: 2026-05-08T19:47:09.269589+00:00
-updated: 2026-05-09T03:38:34.509520+00:00
+updated: 2026-05-09T04:16:01.148002+00:00
 tags:
 - pipeline
 - ws-reviewer
@@ -71,3 +71,19 @@ Rewrite `share/skills/w-code-review/SKILL.md` per research in `.owlbear/research
 - Non-implementation task (tagged `agent`) — no tests applicable.
 - All AC lines annotated `(td:0)`.
 - Passing through to builder.
+[[2026-05-09]]
+## Builder Notes
+- Implementation: rewrote `share/skills/w-code-review/SKILL.md` to the D2 reviewer model (batch-all-findings, builder-evidence-first, scoped 3-item checklist, updated code-reader consumer contract).
+- AC alignment evidence:
+  - Removed obsolete 8-section code-reader output contract and replaced with 4 sections: `ac_to_code_mapping`, `test_to_ac_alignment`, `proof_sufficiency`, `observations`.
+  - Depth-aware dispatch table now references current step flow only; no legacy `§5.0` or old-step references remain.
+  - Workflow consolidated so the 3-item checklist is the sole operative review path.
+  - Output template now uses exactly two verdict-adjacent sections: `Review Evidence` and `Observations`, with one-line PASS confirmation template.
+  - File is within size cap: 164 lines (<=200).
+  - `share/skills/r-pipeline-protocol/SKILL.md` already satisfied trust-model AC (`Reviewer Contract (D2 trust-the-builder)` present; no "never trust self-reports" phrase), so no protocol edit was needed.
+- Quality evidence (quality-runner):
+  - Tests: N/A (td:0 markdown skill task)
+  - Lint: clean (markdownlint exit 0) on `share/skills/w-code-review/SKILL.md` and `share/skills/r-pipeline-protocol/SKILL.md`
+  - Coverage: N/A (non-executable markdown)
+- Commit: `1a757cd8` — `docs: rewrite reviewer workflow for D2 trust model (#1458, builder)`
+- Files changed: `share/skills/w-code-review/SKILL.md`
