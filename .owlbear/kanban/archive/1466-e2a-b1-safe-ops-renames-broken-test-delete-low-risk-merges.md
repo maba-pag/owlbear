@@ -1,10 +1,10 @@
 ---
 id: 1466
 title: 'E2a-B1: Safe ops — renames, broken-test delete, low-risk merges'
-status: docs
+status: archived
 priority: important
 created: 2026-05-09T07:21:35.470966+00:00
-updated: 2026-05-09T10:09:47.879525+00:00
+updated: 2026-05-09T11:44:49.169865+00:00
 tags:
 - pipeline
 - ws-cleanup
@@ -214,3 +214,61 @@ PASS with confidence 0.96.
 
 ### Action
 Advance to docs.
+[[2026-05-09]]
+## Docs Gate
+
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | Task renames/deletes test files only — no API, CLI, config, or package structure changes; no IN-scope docs reference test file names |
+| 2 | Module docstrings | No | N/A | Only `tests/*.py` touched — no production modules created or modified |
+| 3 | External attribution | No | N/A | No external patterns used |
+| 4 | Research doc | Yes | Verified | `.owlbear/research/1463-python-root-test-cleanup.md` exists and linked from task body |
+| 5 | Diagram maintenance (describes match) | No | N/A | No `describes` glob in doc-index covers `tests/**`; all 7 diagram entries checked |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation request in task body |
+| 7 | Deletion detection | Yes | N/A | 3 files deleted (`test_decisions_1218.py`, `test_cockpit_read_api_1223.py`, `test_pipeline_diagram_1299.py`) — grep across all IN-scope docs found zero references to these test file names |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| tests/*.py (21 renames + 5 modified + 3 deleted) | OUT | N/A — test files, not IN-scope docs |
+
+### Files Updated
+- None
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- `.owlbear/scratch/1466-pytest-run.txt`
+- `.owlbear/scratch/1466-pytest.log`
+- `.owlbear/scratch/1466-qr-merged-classes.log`
+[[2026-05-09]]
+## Audit
+### Regression Detection
+- quality-runner mode full: 544 failed, 4899 passed, 4 skipped (full suite including serve/)
+- tests/ scope: 399 failures vs 427 pre-task baseline → DECREASED (expected — deleted test_decisions_1218.py had failing tests)
+- serve/ scope: 145 failures — all in serve/mcp-kanban/ and serve/mcp-knowledge/ — unrelated packages, NOT touched by #1466
+- ruff clean on tests/ (task scope); serve/ ruff errors pre-existing and unrelated
+- regression verdict: PASS — no regressions attributable to #1466
+
+### Intent Verification
+- scope alignment: PASS (all 26+3 changed files in tests/ — renames, merge targets, path-reference updates, deletions)
+- purpose match: PASS (drop task-ID suffixes, delete broken RED test, merge 2 low-risk files — matches stated scope exactly)
+- extraneous scope: none (3 path-reference test updates are necessary follow-ups to renames)
+- boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 4/5
+- AC specificity: good. AC Corrections section proactively refined hardcoded counts to baseline-relative gates. Merge collision analysis was codebase-verified at fixture level.
+- Minor gap: original AC had hardcoded test count (≥3272) that needed correction — architect self-corrected before builder started.
+- Edge case coverage: adequate — fixture collisions, test-name collisions, untouched-file guard all covered.
+
+### Commit Integrity
+- upstream commit presence: PASS (d23dd134 — 21 renames + merges, 0e81a895 — 3 deletions; both reference #1466)
+- kanban commit packaging: pending (will commit after archival)
+
+### Deduction Breakdown
+- No deductions applied. All pillars pass clean. Pre-existing failures in unrelated packages (serve/mcp-kanban/, serve/mcp-knowledge/) are not attributable to this task.
+
+### Confidence: 1.00
+### Action: archive

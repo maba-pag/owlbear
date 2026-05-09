@@ -1,10 +1,10 @@
 ---
 id: 1363
 title: Cockpit audit remediation
-status: done
+status: backlog
 priority: critical
 created: 2026-05-06T00:58:14.547083+00:00
-updated: 2026-05-09T10:13:58.531698+00:00
+updated: 2026-05-09T11:13:01.038666+00:00
 tags:
 - cockpit
 - audit-remediation
@@ -342,3 +342,35 @@ Rewrote Completion Contract and AC to use dynamic parent-query gate (all tasks w
 - Completion gate check: 13 active child tasks with `parent: 1363` remain below `done` (todo/backlog/review), so gate is not met.
 - Representative active children: #1380 (`todo`), #1389 (`review`), #1400 (`backlog`).
 - Action in this run: claim/release only with status intentionally unchanged (`in-progress`) per Completion Contract and `no-dispatch` semantics.
+[[2026-05-09]]
+## Audit
+### Regression Detection
+- quality-runner: SKIPPED — td:0 container with no executable scope, test paths, or coverage targets.
+- regression verdict: N/A (no code surface)
+
+### Intent Verification
+- scope alignment: FAIL — task is at `done` while 13 children with `parent: 1363` remain active (#1380 in-progress, #1389 docs, #1381–#1383, #1391–#1400 backlog). The Completion Contract (Supersedes Previous) states: "This task stays in-progress while ANY child task remains below done."
+- purpose match: FAIL — the task's sole purpose is to gate on child completion. All 3 AC lines fail: (1) not all children at done, (2) epic did not remain in-progress, (3) epic advanced to review/done without gate verification.
+- extraneous scope: none
+- boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 4/5
+Pass 3 AC rewrite (dynamic parent-query gate, "Supersedes Previous" markers) is well-crafted — correctly addresses the fixed-ID-range root cause from prior rejections. Score reflects minor deduction for the task requiring three architecture passes to reach stable contract language, though the final output is clean.
+
+### Commit Integrity
+- upstream commit presence: N/A — td:0 container, no source deliverables expected.
+- kanban commit packaging: N/A — task not archived.
+
+### Deduction Breakdown
+- -.05: Intent mismatch — task at `done` with 13 children below done, violating own Completion Contract.
+- -.05: Evidence integrity — no reviewer evidence section exists for the current (Pass 3) pipeline cycle, yet task advanced from in-progress through review to done.
+- -.03: Missing reviewer evidence section for current cycle.
+
+### Confidence: 0.87
+### Action: reject-to-backlog
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Add enforcement mechanism (e.g., board-query gate check in AC) so that no pipeline agent can advance this task while active children remain; this is the third premature advancement | .owlbear/kanban/tasks/1363-cockpit-audit-remediation.md | 13 active children found via `grep -rl '^parent: 1363$' .owlbear/kanban/tasks/` while task at `done` |
+| 2 | orchestrator | Investigate how #1363 reached `done` without a reviewer pass after the Pass 3 remediation — the latest builder note says "claim/release only with status intentionally unchanged" yet the task advanced to done | .owlbear/kanban/tasks/1363-cockpit-audit-remediation.md | No Review Evidence section exists after Pass 3 AR / test-writer / builder notes |

@@ -1,10 +1,10 @@
 ---
 id: 1474
 title: 'P4-23: Task-scoped and cockpit test alignment (AC5 Cat-B2)'
-status: in-progress
+status: backlog
 priority: critical
 created: 2026-05-09T08:46:53.940620+00:00
-updated: 2026-05-09T10:12:34.867557+00:00
+updated: 2026-05-09T11:33:27.342534+00:00
 tags:
 - phase-4
 - type:refactor
@@ -104,3 +104,30 @@ Tests already exist and fail (RED). Builder updates test expectations to match t
 - Non-implementation task (tagged `test`) — no tests applicable.
 - Pipeline Note confirms: "Tests already exist and fail (RED). Builder updates test expectations to match the new API contract (GREEN). No separate test-writer step needed."
 - Passing through to builder.
+[[2026-05-09]]
+## Builder Notes
+- Implementation attempted (uncommitted):
+  - tests/test_cockpit_cache_populate.py
+  - tests/test_cockpit_cache_sse_1346.py
+  - tests/test_cockpit_cache_sse_1401.py
+  - tests/test_cockpit_decisions_api_1190.py
+  - tests/test_cockpit_error_envelope_1370.py
+- Applied mechanical topology-alignment updates where found:
+  - Converted local fixture config.yml payloads from topology-owned fields to next_id-only format.
+  - Updated #1190 resolve-file assertions to read from decisions/resolved (route behavior) instead of decisions/pending.
+- Scoped verification (targeted changed files):
+  - `uv run pytest tests/test_cockpit_cache_populate.py tests/test_cockpit_cache_sse_1346.py tests/test_cockpit_cache_sse_1401.py tests/test_cockpit_decisions_api_1190.py tests/test_cockpit_error_envelope_1370.py -q -n 0 --tb=short`
+  - Result: 77 passed, 0 failed.
+- AC command verification:
+  - `uv run pytest tests/ --ignore=tests/test_config_loader.py --ignore=tests/test_config_authority.py --ignore=tests/test_config_schema.py --ignore=tests/test_config_grouped.py -q --tb=line -n 0`
+  - Result: 399 failed, 2882 passed, 4 skipped.
+- Evidence summary:
+  - Remaining failures are not isolated to topology-fixture alignment patterns; they include broad API-contract mismatches (error envelope/detail semantics, mutation route status expectations) and non-topology verification suites (e.g., cockpit build/React compiler assertions).
+  - This exceeds the task body’s stated mechanical scope and indicates multi-contract remediation across independent domains.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Split #1474 into contract-scoped subtasks (topology-fixture alignment vs error-envelope/mutation-contract updates vs frontend verification-contract tests) and redefine AC gates per scope | tests/test_cockpit_*.py, tests/test_cockpit_pds_build_compat_1365.py, tests/test_cockpit_react_compiler.py | Full AC run: 399 failed / 2882 passed / 4 skipped; mixed-domain failure set far beyond topology-only patterns |
+| 2 | test-writer | Re-baseline failing cockpit API test expectations to current canonical error envelope contract ({code,message} without detail) where intended, or explicitly mark legacy-detail assertions as out-of-scope for this task | tests/test_cockpit_mutation_api.py, tests/test_cockpit_mutation_api_1132.py, tests/test_cockpit_mutation_api_1134.py, tests/test_cockpit_mutation_api_1135.py, tests/test_cockpit_error_envelope_1371.py | Failure clusters show widespread 404/409/422 expectation mismatches under current route behavior |
+| 3 | architect | Decide whether AC command for #1474 should exclude api/e2e/build-contract suites not causally linked to topology-constant refactor, or keep as explicit multi-domain remediation objective with decomposition | tests/ (global command scope) | AC command currently pulls heterogeneous failure classes outside task’s mechanical topology patterns |

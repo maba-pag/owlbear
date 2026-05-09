@@ -1,10 +1,10 @@
 ---
 id: 1463
 title: 'E2a: Delete/merge stale Python root tests (82 files in tests/)'
-status: review
+status: done
 priority: important
 created: 2026-05-09T03:32:04.142951+00:00
-updated: 2026-05-09T09:51:01.437520+00:00
+updated: 2026-05-09T11:35:09.131339+00:00
 tags:
 - pipeline
 - ws-cleanup
@@ -338,3 +338,76 @@ DONE #1463 -> in-progress | non-impl pass-through, no tests needed
 - Validation performed: child task wiring exists and #1466 is active while #1467-#1470 remain queued by dependency.
 - Files changed: none.
 - Tests run: none (pass-through per non-impl workflow gate).
+[[2026-05-09]]
+## Review Evidence
+### Test Results
+- quality-runner: skipped. Latest binding contract is the td:0 Cycle 4 pass-through review; #1463 has no implementation diff or task-local test artifact to execute, and scoped quality-runner does not support td:0/no-test surfaces.
+
+### Lint Results
+- Skipped. No changed code files are in scope for this review cycle.
+
+### Coverage
+- Skipped. No changed modules are in scope for this review cycle.
+
+### Dirty-Tree / Scope
+- Builder Cycle 4 records a non-implementation pass-through with no code changes and `Files changed: none` in `.owlbear/kanban/tasks/1463-e2a-delete-merge-stale-python-root-tests-82-files-in-tests.md:336-339`.
+- No review-scope code or test files remain attached to #1463 itself; execution moved to child tasks.
+
+### AC Compliance
+| AC / binding contract | Evidence | Status |
+|---|---|---|
+| Cycle 4 makes #1463 a pass-through meta-task and names `## Planning` as the completion artifact | `.owlbear/kanban/tasks/1463-e2a-delete-merge-stale-python-root-tests-82-files-in-tests.md:233` defines `## Planning`; `.owlbear/kanban/tasks/1463-e2a-delete-merge-stale-python-root-tests-82-files-in-tests.md:309` states the task is superseded by #1466-#1470 and that the planning section is the completion artifact | PASS |
+| Reviewer must verify child tasks exist and are properly wired, then advance | `.owlbear/kanban/tasks/1463-e2a-delete-merge-stale-python-root-tests-82-files-in-tests.md:324`; child frontmatter confirms `#1466` is `done`, parent `1415`, deps `[]` at `.owlbear/kanban/tasks/1466-e2a-b1-safe-ops-renames-broken-test-delete-low-risk-merges.md:4,13-14`; `#1467/#1468/#1469` are `backlog`, parent `1415`, dep `1466` at `.owlbear/kanban/tasks/1467-e2a-b2-merge-cockpit-decisions-api-task-tests-into-durable.md:4,13-15`, `.owlbear/kanban/tasks/1468-e2a-b3-merge-cockpit-mutation-api-task-tests-into-durable.md:4,13-15`, `.owlbear/kanban/tasks/1469-e2a-b4-merge-mcp-kanban-task-tests-into-durable.md:4,13-15`; `#1470` is `backlog`, parent `1415`, deps `1467/1468/1469` at `.owlbear/kanban/tasks/1470-e2a-b5-small-group-merges-40-files-into-16-new-durables.md:4,13-17` | PASS |
+| Work was transferred out of #1463 into executable child tasks with their own td:0 AC | `.owlbear/kanban/tasks/1466-e2a-b1-safe-ops-renames-broken-test-delete-low-risk-merges.md:23,60`; `.owlbear/kanban/tasks/1467-e2a-b2-merge-cockpit-decisions-api-task-tests-into-durable.md:24,43`; `.owlbear/kanban/tasks/1468-e2a-b3-merge-cockpit-mutation-api-task-tests-into-durable.md:24,44`; `.owlbear/kanban/tasks/1469-e2a-b4-merge-mcp-kanban-task-tests-into-durable.md:24,44`; `.owlbear/kanban/tasks/1470-e2a-b5-small-group-merges-40-files-into-16-new-durables.md:26,55` all explicitly supersede #1463 and define `## AC (td:0)` sections | PASS |
+| No remaining implementation work belongs on #1463 | `.owlbear/kanban/tasks/1463-e2a-delete-merge-stale-python-root-tests-82-files-in-tests.md:319` says no remaining work on #1463 itself; `.owlbear/kanban/tasks/1463-e2a-delete-merge-stale-python-root-tests-82-files-in-tests.md:323` marks builder skip; `.owlbear/kanban/tasks/1463-e2a-delete-merge-stale-python-root-tests-82-files-in-tests.md:336-339` records non-implementation / no code changes / files changed none | PASS |
+
+### Test-Writer Audit
+- Not applicable. The active Cycle 4 contract is td:0 pass-through only; #1463 has no `TestFromAC_*` surface and no executable implementation contract.
+
+### Security Review
+- Not applicable. No code changes or runtime surface were introduced in this cycle.
+
+### Data Safety
+- Not applicable. No mutable-state or persistence logic changed in this cycle.
+
+### Informational
+- The Cycle 4 status table in #1463 is stale for `#1466` (`in-progress` in the parent snapshot, `done` in the live child task). This is board-snapshot drift, not a routing defect; dependency wiring remains correct.
+
+### Deductions
+- `-0.03` stale child-status snapshot in the parent task body (`#1466` advanced after the Cycle 4 table was written)
+- `-0.02` no quality-runner evidence because this is a td:0 meta-task with no executable review surface
+
+### Verdict
+- PASS -> docs
+- Confidence: 0.95
+
+### Action
+- Advanced to docs. No follow-up required for #1463; remaining cleanup execution lives in #1466-#1470.
+[[2026-05-09]]
+## Docs Gate
+
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | Meta/pass-through task — no behavior, API, CLI, or package structure changed; builder "Files changed: none" |
+| 2 | Module docstrings | No | N/A | No Python modules created or modified |
+| 3 | External attribution | No | N/A | All sources codebase-internal per research doc §4 |
+| 4 | Research doc | Yes | Verified | `.owlbear/research/1463-python-root-test-cleanup.md` exists on disk and is linked from task body; follow-up tasks #1466-#1470 created |
+| 5 | Diagram maintenance (describes match) | No | N/A | No `describes` glob in doc-index covers `tests/**`; nearest match is `serve/`, `share/`, `.owlbear/kanban/` |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation request in task body |
+| 7 | Deletion detection | No | N/A | Builder final state: no files deleted; workspace restored to HEAD |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| `tests/*.py` (rename/merge targets) | OUT | No changes landed; test files are not IN-scope docs |
+| `.owlbear/research/1463-python-root-test-cleanup.md` | IN | Verified — exists, linked, follow-ups created |
+
+### Files Updated
+- None
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no `.owlbear/scratch/1463-*` files found)

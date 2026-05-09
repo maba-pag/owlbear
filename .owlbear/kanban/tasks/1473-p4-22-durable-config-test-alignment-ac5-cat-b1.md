@@ -1,10 +1,10 @@
 ---
 id: 1473
 title: 'P4-22: Durable config test alignment (AC5 Cat-B1)'
-status: in-progress
+status: review
 priority: critical
 created: 2026-05-09T08:46:53.927445+00:00
-updated: 2026-05-09T10:12:39.061451+00:00
+updated: 2026-05-09T11:15:03.439799+00:00
 tags:
 - phase-4
 - type:refactor
@@ -100,3 +100,16 @@ Architecture review complete. Refined task: (1) added `type:test` tag for test-w
 - Non-implementation task (tagged `type:test`) — no new tests to write.
 - Pipeline Note from architect: "Tests already exist and fail (RED). Builder updates test expectations to match the new API contract (GREEN). No separate test-writer step needed."
 - Passing through to builder.
+[[2026-05-09]]
+## Builder Notes
+- Implementation: aligned durable test expectations in `tests/test_config_loader.py`, `tests/test_config_authority.py`, and `tests/test_config_schema.py` to the current topology-constant contract (`load_config` uses product topology; `save_config` persists `next_id` only).
+- Tests: 91 passed, 0 failed, 0 skipped (scoped run over the 4 AC files).
+- Coverage: quality-runner reported overall 24% for requested modules (`config_loader` 100%, `storage` 24%, `migrate` 30%, `models` 86%). This is a test-only alignment task; no production module behavior changes were introduced.
+- Ruff: clean (no violations in scoped lint run).
+- Evidence summary: RED baseline showed 23 failing assertions tied to legacy expectations (vendor-field preservation, schema/detection assumptions, grouped persistence). GREEN run after updates passed all scoped tests and lint.
+- Fixes applied: updated assertions/docstrings to reflect product topology constants, `next_id`-only persistence, and non-preservation of YAML vendor fields in load/save path.
+
+### Post-task Reflection
+- Initial RED signal was highly actionable because failures clustered around two contract shifts; this sped up surgical patching.
+- A patch-introduced indentation syntax error in one test file was caught immediately by quality-runner and corrected before final verification.
+- Keeping changes confined to assertion updates in existing durable tests avoided production churn and matched the task scope exactly.

@@ -1,10 +1,10 @@
 ---
 id: 1425
 title: 'P1-04: Revise doc-audit.prompt.md — TODO resolution + diagram ownership'
-status: review
+status: backlog
 priority: important
 created: 2026-05-08T00:32:24.572908+00:00
-updated: 2026-05-09T09:53:45.804508+00:00
+updated: 2026-05-09T11:01:19.660799+00:00
 tags:
 - phase-1
 - scope:shared
@@ -219,3 +219,52 @@ Added 4 new failing tests to `TestFromAC_DimensionReferenceTable`:
 - Evidence summary: reviewer-reported false-green was resolved by fixing the live prompt mapping without changing tests; all task assertions now pass.
 - Commit: `8c304dd1` (`docs: fix doc-audit dimension table mapping (#1425, builder)`).
 - Note: quality-runner reported requested path `tests/test_doc_writer_quality_1422.py` does not exist and used `tests/test_doc_writer_quality.py`; this does not affect AC4-AC6 task assertions in `tests/test_doc_audit_prompt_1425.py`.
+[[2026-05-09]]
+## Review Evidence
+
+### Scope
+- Reviewed task 1425 as a td:1 prompt-only change.
+- Live deliverable: `.owlbear/prompts/doc-audit.prompt.md`.
+- Task suite: `tests/test_doc_audit_prompt_1425.py`.
+- Companion retention suite: `tests/test_doc_writer_quality.py`.
+- Builder commit presence confirmed in `.git/logs/HEAD:2436` (`docs: fix doc-audit dimension table mapping (#1425, builder)`).
+- Prior review cycle confirmed by the existing `## Review Evidence` section in `.owlbear/kanban/tasks/1425-p1-04-revise-doc-audit-prompt-md-todo-resolution-diagram-ownership.md:136`. This review is the second review cycle, so the loop-breaker route applies on FAIL.
+- Limitation: terminal access was unavailable in this review surface, so `git show` and `git status --porcelain` could not be run. Exact changed-file diff and dirty-tree contamination were not fully verifiable. Small confidence deduction applied.
+
+### Test Results
+- quality-runner pytest: 72 passed, 0 failed, 0 skipped on `tests/test_doc_audit_prompt_1425.py` and `tests/test_doc_writer_quality.py`.
+
+### Lint Results
+- quality-runner ruff: clean on both task-scoped test files.
+
+### Coverage
+- Not applicable. This task changes only a markdown prompt artifact and no runtime module.
+
+### Critical Findings
+1. AC5 implementation remains incorrect for D2. `.owlbear/prompts/doc-audit.prompt.md:68` says `| D2 | Duplication | DUP-* |`, but canonical `r-doc-standards` says D2 Duplication is sourced from `XREF-5` plus project-specific duplication rules at `share/skills/r-doc-standards/SKILL.md:61`, with the duplication rule defined at `share/skills/r-doc-standards/SKILL.md:45`. A workspace search for `DUP-*` found only the live prompt row, so the table still invents a non-canonical source token.
+2. AC5 test proof remains false-green for D2. The task suite covers D1 to D8 presence at `tests/test_doc_audit_prompt_1425.py:51`, D1 mapping at `tests/test_doc_audit_prompt_1425.py:61`, D4 to D6 empirical markers at `tests/test_doc_audit_prompt_1425.py:68`, `tests/test_doc_audit_prompt_1425.py:75`, `tests/test_doc_audit_prompt_1425.py:82`, canonical-source reference at `tests/test_doc_audit_prompt_1425.py:89`, and D7 to D8 mappings at `tests/test_doc_audit_prompt_1425.py:96`, `tests/test_doc_audit_prompt_1425.py:108`, `tests/test_doc_audit_prompt_1425.py:121`, `tests/test_doc_audit_prompt_1425.py:133`. A direct search for `Duplication` or `DUP-*` in `tests/test_doc_audit_prompt_1425.py` returned no matches, so the suite stays green while the live prompt violates AC5.
+
+### AC Compliance
+| AC | Evidence | Mapped Test | Status |
+|---|---|---|---|
+| 1 | `.owlbear/prompts/doc-audit.prompt.md:83` defines the TODO marker blockquote format and `.owlbear/prompts/doc-audit.prompt.md:87` groups TODO entries by the required categories | `tests/test_doc_writer_quality.py:114` | PASS |
+| 2 | `.owlbear/prompts/doc-audit.prompt.md:95` assigns diagram verification and remediation planning to the auditor, and `.owlbear/prompts/doc-audit.prompt.md:96` keeps follow-up-task ownership in the audit flow | `tests/test_doc_writer_quality.py:124` | PASS |
+| 3 | `.owlbear/prompts/doc-audit.prompt.md:101` loads doc-index `describes` metadata, `.owlbear/prompts/doc-audit.prompt.md:105` requires remediation when no match exists, and `.owlbear/prompts/doc-audit.prompt.md:107` requires explicit `.excalidraw` reference | `tests/test_doc_writer_quality.py:133` | PASS |
+| 4 | `.owlbear/prompts/doc-audit.prompt.md:41` restores one-finding-at-a-time as the default, `.owlbear/prompts/doc-audit.prompt.md:45` through `.owlbear/prompts/doc-audit.prompt.md:48` restore the control points, and `.owlbear/prompts/doc-audit.prompt.md:50` adds the TODO batch exception | `tests/test_doc_audit_prompt_1425.py:13`, `tests/test_doc_audit_prompt_1425.py:23`, `tests/test_doc_audit_prompt_1425.py:35` | PASS |
+| 5 | Live D2 row is wrong at `.owlbear/prompts/doc-audit.prompt.md:68`; canonical D2 source is `XREF-5` plus project-specific duplication rules at `share/skills/r-doc-standards/SKILL.md:61` and `share/skills/r-doc-standards/SKILL.md:45`; task suite never asserts D2 mapping | `TestFromAC_DimensionReferenceTable` | FAIL |
+| 6 | `.owlbear/prompts/doc-audit.prompt.md:24` and `.owlbear/prompts/doc-audit.prompt.md:25` load `r-doc-standards` and `doc-types.instructions.md`, `.owlbear/prompts/doc-audit.prompt.md:26` requires the gate before scanning, and the gate appears before `.owlbear/prompts/doc-audit.prompt.md:28` | `tests/test_doc_audit_prompt_1425.py:151`, `tests/test_doc_audit_prompt_1425.py:158`, `tests/test_doc_audit_prompt_1425.py:165` | PASS |
+
+### Deductions
+- `-0.08` Exact git diff and dirty-tree verification were unavailable in this review surface.
+- `-0.10` Live AC5 implementation defect remains in the D2 source mapping.
+- `-0.08` AC5 proof is still false-green because the task suite never asserts the D2 row.
+
+### Verdict
+- Confidence: `0.68`
+- FAIL. The live prompt still violates AC5, and the green task suite does not prove the D2 source mapping. Because one prior review failure already exists, the loop-breaker route is `backlog`.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Refine AC5 so the D2 source cell matches the canonical `r-doc-standards` contract instead of the invented `DUP-*` token, then re-route through RED and GREEN | `.owlbear/prompts/doc-audit.prompt.md`, `share/skills/r-doc-standards/SKILL.md` | Live mismatch at `.owlbear/prompts/doc-audit.prompt.md:68` versus `share/skills/r-doc-standards/SKILL.md:61` and `share/skills/r-doc-standards/SKILL.md:45` |
+| 2 | architect | Tighten the AC5 proof contract so the task-owned TestFromAC suite asserts the D2 row explicitly, or narrow the contract if D2 is intentionally exempt | `tests/test_doc_audit_prompt_1425.py` | quality-runner stayed green with 72 passing tests while a direct search for `Duplication` or `DUP-*` in `tests/test_doc_audit_prompt_1425.py` returned no matches |

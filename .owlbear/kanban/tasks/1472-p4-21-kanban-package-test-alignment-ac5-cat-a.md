@@ -1,10 +1,10 @@
 ---
 id: 1472
 title: 'P4-21: Kanban package test alignment (AC5 Cat-A)'
-status: in-progress
+status: todo
 priority: critical
 created: 2026-05-09T08:46:53.913029+00:00
-updated: 2026-05-09T10:12:34.044906+00:00
+updated: 2026-05-09T11:18:45.810115+00:00
 tags:
 - phase-4
 - scope:tests
@@ -108,3 +108,28 @@ AC is clear and verifiable. Architecture is sound (test-only, well-scoped). Rout
 ## Test-Writer Notes
 - Non-implementation task (tagged type:test) — no tests applicable.
 - Passing through to builder.
+[[2026-05-09]]
+## Builder Notes
+- Claimed task and executed RED verification on `serve/kanban/tests/`.
+- Result: `71 failed, 1255 passed` (pytest), plus `3` ruff violations (F811 import redefinitions) in test files.
+- No source-code changes made.
+- No test changes made.
+
+### Why Rejected
+This task is test-remediation, but the failing set is dominated by obsolete `TestFromAC_*` assertions that now contradict product-owned topology behavior (`load_config` ignores topology in `config.yml`, grouped submodels on `BoardConfig`, canonical statuses include `docs`, no `released`).
+
+Builder-mode constraints for this run prohibit modifying `TestFromAC_*` classes. The required remediation is primarily inside those classes (assertions and expectations), so implementation is infeasible without test-writer ownership.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | test-writer | Rewrite obsolete config-validation assertions to topology-constant contract (no `entry_status`/`terminal_status` root fields; grouped pipeline/policy access; load_config defaults) | serve/kanban/tests/test_engine_init_1067.py, serve/kanban/tests/test_engine_init_1068.py | pytest failures: `DID NOT RAISE ConfigError`, `AttributeError: BoardConfig has no attribute entry_status/terminal_status/archival_reasons` |
+| 2 | test-writer | Replace `released` status expectations with canonical status model and current session/action semantics | serve/kanban/tests/test_engine_coverage_1068.py, serve/kanban/tests/test_list_sessions.py, serve/kanban/tests/test_engine_activity.py | pytest failures: `assert 'release' == 'released'`, `assert 'released' in cfg.statuses` |
+| 3 | test-writer | Update pick_tasks expectations to current dispatch behavior (agent map values, wave assembly, default caps/sorting contracts where changed) | serve/kanban/tests/test_engine_pick_tasks_1074.py, serve/kanban/tests/test_engine_pick_tasks_1076.py | pytest failures across AC22/AC23 assertions showing mismatched expected waves/agents/order |
+| 4 | test-writer | Adjust migration/storage expectations to next_id-only config persistence and current migration summaries | serve/kanban/tests/test_migrate.py, serve/kanban/tests/test_storage.py, serve/kanban/tests/test_storage_1050.py | pytest failures: legacy field expectations, Already/Migrated count assumptions, archive path/file assumptions |
+| 5 | test-writer | Fix lint-only import redefinition violations | serve/kanban/tests/test_corruption.py, serve/kanban/tests/test_storage.py | ruff F811 violations |
+
+### Evidence Summary
+- RED baseline command: `uv run pytest serve/kanban/tests/ -q --tb=line -n 0`
+- Failing nodes: 71 across 15 files.
+- Key categories: obsolete topology validation expectations, removed/relocated BoardConfig fields, non-canonical status `released`, migration output assumptions, and stale fixture path assumptions.

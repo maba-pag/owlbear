@@ -1,10 +1,10 @@
 ---
 id: 1380
 title: 'P2-05: Test Cockpit task action gating and confirmations'
-status: in-progress
+status: review
 priority: needed
 created: 2026-05-06T01:04:35.632458+00:00
-updated: 2026-05-09T10:26:58.154703+00:00
+updated: 2026-05-09T11:35:34.157136+00:00
 tags:
 - cockpit
 - audit-remediation
@@ -367,3 +367,12 @@ AC6 refined: added "The 422 test must assert the validation-message element's te
 - New assertion passes against current implementation (implementation already routes through `getResponseErrorMessage` correctly).
 - No builder intervention needed.
 - Advancing directly to `review`.
+[[2026-05-09]]
+## Builder Notes
+- Scope: test-only pass-through cycle for #1380; no implementation changes required.
+- Files changed: none.
+- Verification (quality-runner, scoped):
+  - Tests: `serve/cockpit/web/src/__tests__/DetailTab_1380.test.tsx` -> 22 passed, 0 failed, 0 skipped.
+  - Lint: clean for `serve/cockpit/web/src/__tests__/DetailTab_1380.test.tsx`, `serve/cockpit/web/src/components/DetailTab.tsx`, `serve/cockpit/web/src/components/ConfirmDialog.tsx`.
+- Coverage: not collected in this scoped pass-through run.
+- Evidence summary: AC-targeted suite is green after Cycle 5 test-writer refinement (exact 422 value assertion). No builder-side code intervention was necessary.

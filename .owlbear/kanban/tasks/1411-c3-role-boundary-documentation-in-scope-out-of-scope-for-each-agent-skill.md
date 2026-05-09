@@ -1,10 +1,10 @@
 ---
 id: 1411
 title: 'C3: Role boundary documentation — in-scope/out-of-scope for each agent skill'
-status: review
+status: done
 priority: important
 created: 2026-05-07T23:16:25.269760+00:00
-updated: 2026-05-09T09:55:08.132459+00:00
+updated: 2026-05-09T11:35:58.697170+00:00
 tags:
 - pipeline
 - ws-roles
@@ -100,3 +100,77 @@ Agents covered: planner (w-task-decomposition), architect (w-arch-review), test-
 - ruff: clean (no violations in scoped lint run).
 - Evidence summary: RED was verified first (59 failed, 14 skipped pre-change), then GREEN confirmed after edits (73 passed).
 - Commit: `550f69de` — docs: add role scope boundaries to pipeline skills (#1411, builder).
+[[2026-05-09]]
+## Review Evidence
+### Test Results
+- quality-runner scoped pass on `tests/test_agent_scope_boundaries_1411.py`: 73 passed, 0 failed, 0 skipped.
+
+### Lint Results
+- quality-runner scoped lint: clean (no violations reported for the task test file or touched skill files).
+
+### Coverage
+- N/A for this docs-only artifact task. The task-local suite verifies markdown artifacts directly rather than executable module behavior.
+
+### Source-Control Checks
+- Test-writer commit present in git logs: `.git/logs/refs/heads/dev:2244` (`90edd62c` — test: add scope-boundary tests for pipeline agent skills).
+- Builder commit present in git logs: `.git/logs/refs/heads/dev:2252` (`550f69de` — docs: add role scope boundaries to pipeline skills).
+- No prior `## Review Evidence` sections found in the task file (first review cycle).
+- Review-scope reconstruction found no overlapping uncommitted changes in the seven skill files or `tests/test_agent_scope_boundaries_1411.py`; only kanban task metadata changed under `.owlbear/kanban/tasks/`.
+
+### AC Compliance
+| AC Line | Evidence | Status |
+|---|---|---|
+| P1: Each pipeline agent skill file contains an explicit "In Scope / Out of Scope" section | `## Scope` / `### In Scope` / `### Out of Scope` blocks present before `## Step 0` in `share/skills/w-task-decomposition/SKILL.md:13-24`, `share/skills/w-arch-review/SKILL.md:13-24`, `share/skills/w-tdd-red/SKILL.md:13-24`, `share/skills/w-tdd-green/SKILL.md:13-24`, `share/skills/w-code-review/SKILL.md:15-26`, `share/skills/w-task-verification/SKILL.md:13-24`, `share/skills/w-doc-update/SKILL.md:14-25`; task suite also passed heading/placement checks. | PASS |
+| P2: Agents covered: planner, architect/challenger, test-writer, builder, reviewer, auditor, doc-writer | `tests/test_agent_scope_boundaries_1411.py` maps all 7 required skill files via `AGENT_SKILLS`; all 7 files contain scope sections and the scoped test run passed 73/73. | PASS |
+| P2: Boundaries are consistent across agents — no overlapping mandates, no uncovered gaps | Direct artifact inspection of the inserted summary sections plus cross-reference to later authoritative workflow rules found no contradiction: planner scope summary at `share/skills/w-task-decomposition/SKILL.md:17-24` aligns with later architect-gated `todo` routing at `:56` and `:161`; architect scope summary at `share/skills/w-arch-review/SKILL.md:17-23` aligns with later challenger/todo authority at `:98`, `:131`, `:153`; reviewer scope summary at `share/skills/w-code-review/SKILL.md:19-26` aligns with later builder-evidence model at `:54`, `:66`, `:100`, `:138`; auditor scope summary at `share/skills/w-task-verification/SKILL.md:17-18` matches the full-suite exit-gate role. | PASS |
+| P2: Boundaries reflect the post-rethink division of responsibilities (A2, A3, B1, C1 changes incorporated) | Task AC and planning bind this task to the rethink workstream (`.owlbear/kanban/tasks/1411-c3-role-boundary-documentation-in-scope-out-of-scope-for-each-agent-skill.md:32`, `:48`). The live scope sections reflect the high-level post-rethink split: planner/architect/test-writer/builder/reviewer/auditor/doc-writer responsibilities are separated without direct conflicts, and the deeper workflow bodies preserve the finer A2/A3/B1/C1 mechanics cited above. | PASS |
+| P3: Verification by artifact inspection of each agent's skill file; cross-reference check for consistency | Verified by direct reads of all seven skill files, the dedicated task test file, the parent brief, and the task research doc; targeted task tests passed and manual cross-file inspection closed the remaining consistency questions. | PASS |
+
+### Deductions
+- `-0.03` Automated proof is narrower than the builder note implies. The task-local suite asserts selected consistency pairings, but not every research-table nuance (for example, planner `todo` ownership and reviewer builder-evidence/security wording); this was resolved by manual artifact inspection rather than by stronger task-local assertions.
+- `-0.04` TestFromAC immutability could not be proven by direct commit diff in this tool surface. Commit-log separation and the clean current review scope reduce the risk, but do not eliminate it entirely.
+
+### Observations
+- The task passes, but the builder note overstates what the task-local tests prove. If the team wants the test suite to mirror research §3.3 more literally, add explicit assertions for the planner `backlog`/`todo` split and the reviewer builder-evidence/security boundaries in a future hardening task.
+
+### Verdict
+- PASS. Confidence: `0.91`.
+
+### Action
+- Advance to `docs`.
+[[2026-05-09]]
+## Docs Gate
+
+### Checklist
+
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | All changed files are SKILL.md (agent-executable OUT-scope); no IN-scope prose doc references pipeline skill scope-section content |
+| 2 | Module docstrings | No | N/A | No Python modules created or modified |
+| 3 | External attribution | No | N/A | Task body notes "Sources: 10 studied (all internal)" — no external patterns used |
+| 4 | Research doc | Yes | Verified | `.owlbear/research/1411-role-boundary-documentation.md` exists (confirmed by file_search); linked in task body under Research section |
+| 5 | Diagram maintenance (describes match) | Yes | Updated | `share/diagrams/project-overview.excalidraw` has `describes: share/**` which matches all 7 changed skill files; footer updated from `87b6804b` to `f8637c65`; committed `e99ae7a0` |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation request in task body |
+| 7 | Deletion detection | No | N/A | No files deleted; no orphaned IN-scope docs detected |
+
+### Scope Classification
+
+| File | Scope | Action |
+|------|-------|--------|
+| share/skills/w-task-decomposition/SKILL.md | OUT | N/A (agent-executable) |
+| share/skills/w-arch-review/SKILL.md | OUT | N/A (agent-executable) |
+| share/skills/w-tdd-red/SKILL.md | OUT | N/A (agent-executable) |
+| share/skills/w-tdd-green/SKILL.md | OUT | N/A (agent-executable) |
+| share/skills/w-code-review/SKILL.md | OUT | N/A (agent-executable) |
+| share/skills/w-task-verification/SKILL.md | OUT | N/A (agent-executable) |
+| share/skills/w-doc-update/SKILL.md | OUT | N/A (agent-executable) |
+| tests/test_agent_scope_boundaries_1411.py | OUT | N/A (test file) |
+
+### Files Updated
+- share/diagrams/project-overview.excalidraw (footer: `Last verified: 2026-05-09 (f8637c65)`)
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no .owlbear/scratch/1411-* files existed)

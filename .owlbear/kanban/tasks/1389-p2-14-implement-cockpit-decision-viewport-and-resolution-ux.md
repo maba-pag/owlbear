@@ -1,10 +1,10 @@
 ---
 id: 1389
 title: 'P2-14: Implement Cockpit decision viewport and resolution UX'
-status: docs
+status: done
 priority: needed
 created: 2026-05-06T01:04:52.300671+00:00
-updated: 2026-05-09T10:45:49.504525+00:00
+updated: 2026-05-09T11:12:33.619741+00:00
 tags:
 - cockpit
 - audit-remediation
@@ -480,3 +480,33 @@ No new RED-phase tests written. The two remaining proof gaps are explicitly clas
 
 ### Action
 - Advance this task to docs.
+[[2026-05-09]]
+## Docs Gate
+
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | Task is frontend-only (Shell.tsx, ResolveModal.tsx, DecisionViewport.tsx). `serve/cockpit/README.md` covers backend API only; no IN-scope prose doc describes the changed UI components. |
+| 2 | Module docstrings | No | N/A | No Python `.py` files modified; all changes are TypeScript/React. |
+| 3 | External attribution | No | N/A | No external patterns referenced in task body; uses existing PDS components and internal hooks. |
+| 4 | Research doc | No | N/A | No `.owlbear/research/` document produced or linked. |
+| 5 | Diagram maintenance (describes match) | Yes | Updated | `share/diagrams/cockpit.excalidraw` describes `serve/cockpit/web/src/**` — matches `Shell.tsx` and `ResolveModal.tsx`. Footer updated from `b4ebbe64` → `4a1f76db`. Commit: `ca7528fc`. |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation request in task body. |
+| 7 | Deletion detection | No | N/A | No files deleted in this task. |
+
+### Scope Classification
+- Changed files: `serve/cockpit/web/src/Shell.tsx`, `serve/cockpit/web/src/components/ResolveModal.tsx`, test files under `serve/cockpit/web/src/__tests__/`
+- All application source: OUT-scope (no edit). Test files: OUT-scope.
+- Diagram `share/diagrams/cockpit.excalidraw`: IN-scope — footer-only update applied.
+
+### Files Updated
+- `share/diagrams/cockpit.excalidraw` — footer timestamp updated (doc-writer commit `ca7528fc`)
+
+### Child Tasks / DRs
+None.
+
+### Scratch Files
+None found for task #1389.
+
+### Review Evidence
+Present. Final reviewer confidence: 0.95 — PASS.

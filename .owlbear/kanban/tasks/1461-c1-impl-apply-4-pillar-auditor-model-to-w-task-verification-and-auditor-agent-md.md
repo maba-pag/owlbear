@@ -1,10 +1,10 @@
 ---
 id: 1461
 title: 'C1-impl: Apply 4-pillar auditor model to w-task-verification and auditor.agent.md'
-status: in-progress
+status: review
 priority: needed
 created: 2026-05-09T03:30:08.726831+00:00
-updated: 2026-05-09T10:29:44.072460+00:00
+updated: 2026-05-09T11:36:12.724343+00:00
 tags:
 - pipeline
 - ws-roles
@@ -143,3 +143,14 @@ P3: Overlap comparison table added to Architecture Review section of task body (
 ## Observations
 - `share/skills/w-task-verification/SKILL.md:3` still describes the skill as `AC evidence, confidence scoring, commit integrity`. The Step 1 body now correctly enforces the 4-pillar model, so this looks like residual wording drift rather than a separate blocking defect, but it would be reasonable to harmonize on the builder retry.
 - Builder evidence was otherwise sufficient for a `td:0` review, and current file diagnostics show no markdown or parse errors.
+[[2026-05-09]]
+## Builder Notes
+- Implementation: updated [share/agents/auditor.agent.md](share/agents/auditor.agent.md) with a surgical one-file fix for the reviewer-blocked stale wording.
+- Fixes applied:
+  - Replaced critical-rules phrasing `AC verification` with 4-pillar-aligned wording: regression detection, intent verification, architect quality scoring, commit integrity, confidence scoring.
+  - Updated the `Explore` usage row from `AC verification` to `intent and scope verification`.
+- Tests: 0 executed (td:0 non-implementation task).
+- Coverage: N/A (no executable module changes).
+- ruff/lint: clean via quality-runner scoped run (`failed: []`, `clean: true`, `violations: []`) on [share/agents/auditor.agent.md](share/agents/auditor.agent.md).
+- Evidence summary: reviewer findings targeted exactly two stale references; both have been removed and no additional overlap wording remains in the edited sections.
+- Commit: `11a31135` — `feat: remove stale AC-verification wording in auditor agent (#1461, builder)`.
