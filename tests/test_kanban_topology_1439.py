@@ -617,6 +617,111 @@ class TestFromAC_OverridesIgnored:
         result = av.list_tasks(status="in-progress")
         assert result is not None
 
+    def test_agent_view_create_task_uses_product_entry_status_not_config(
+        self, tmp_path: Path
+    ) -> None:
+        """AgentView.create_task places new tasks at product entry_status, ignoring config.
+
+        Config override sets entry_status='todo'; product constant is 'research'.
+        After refactor: task.status == 'research'.
+        Before refactor: task.status == 'todo' → assertion FAILS (RED).
+        """
+        board = _make_board_with_override(
+            tmp_path,
+            pipeline={"entry_status": "todo"},
+        )
+        engine = KanbanEngine(board)
+        av = engine.agent_view()
+        result = av.create_task(title="Entry status test task")
+        # After refactor: product entry_status='research'
+        # Before refactor: config entry_status='todo' → assertion FAILS (RED)
+        assert result.status == _EXPECTED_ENTRY_STATUS
+
+    def test_agent_view_pick_tasks_agent_map_uses_product_constant_not_config(
+        self, tmp_path: Path
+    ) -> None:
+        """AgentView.pick_tasks assigns agent from product agent_map, not config override.
+
+        Config override maps all statuses to 'custom-agent'; product constant maps
+        'research' to 'researcher'. After refactor: dispatched entry has agent='researcher'.
+        Before refactor: agent='custom-agent' → assertion FAILS (RED).
+        """
+        custom_map = dict.fromkeys(_EXPECTED_STATUSES, "custom-agent")
+        board = _make_board_with_override(
+            tmp_path,
+            agents={
+                "agent_map": custom_map,
+                "agent_types": {},
+                "agent_compatibility": {},
+            },
+        )
+        tasks_dir = board / "tasks"
+        now = "2026-01-01T00:00:00+00:00"
+        # tag=research (non_impl_tag) → passes TDD gate; bullet → passes clarity gate
+        task_content = (
+            "---\n"
+            "id: 1\n"
+            "title: 'Dispatch test'\n"
+            "status: research\n"
+            "priority: important\n"
+            f"created: {now}\n"
+            f"updated: {now}\n"
+            "tags: [research]\n"
+            "depends_on: []\n"
+            "blocked: false\n"
+            "---\n"
+            "- AC: verify agent dispatch uses product constant\n"
+        )
+        (tasks_dir / "1-dispatch-test.md").write_text(task_content, encoding="utf-8")
+        engine = KanbanEngine(board)
+        av = engine.agent_view()
+        result = av.pick_tasks()
+        # After refactor: agent for 'research' = 'researcher' (product constant)
+        # Before refactor: agent = 'custom-agent' (config override) → FAILS (RED)
+        assert len(result.waves) == 1
+        assert result.waves[0].tasks[0].agent == _EXPECTED_AGENT_MAP["research"]
+
+    def test_agent_view_move_task_terminal_status_uses_product_constant_not_config(
+        self, tmp_path: Path
+    ) -> None:
+        """AgentView.move_task resolves can_mark_completed against product terminal_status.
+
+        Config override sets terminal_status='review'; product constant is 'done'.
+        A task at status='done' must be archivable with reason='completed' because
+        it is at the product terminal status.
+        After refactor: succeeds (can_mark_completed=True).
+        Before refactor: can_mark_completed=False (config says terminal='review')
+        → raises ERR_COMPLETED_REQUIRES_DONE → assertion FAILS (RED).
+        """
+        board = _make_board_with_override(
+            tmp_path,
+            pipeline={"terminal_status": "review"},
+        )
+        tasks_dir = board / "tasks"
+        now = "2026-01-01T00:00:00+00:00"
+        task_content = (
+            "---\n"
+            "id: 1\n"
+            "title: 'Terminal status test'\n"
+            "status: done\n"
+            "priority: important\n"
+            f"created: {now}\n"
+            f"updated: {now}\n"
+            "tags: []\n"
+            "depends_on: []\n"
+            "blocked: false\n"
+            "---\n"
+            "Body.\n"
+        )
+        (tasks_dir / "1-terminal-test.md").write_text(task_content, encoding="utf-8")
+        engine = KanbanEngine(board)
+        av = engine.agent_view()
+        # After refactor: terminal_status='done' (product constant) → can_mark_completed=True
+        # Before refactor: terminal_status='review' (config) → can_mark_completed=False
+        #   → validate_archival raises ERR_COMPLETED_REQUIRES_DONE → FAILS (RED)
+        result = av.move_task(1, "archived", archival_reason="completed")
+        assert result.status == "archived"
+
 
 # ===========================================================================
 # AC4: load_config, save_config, attribute paths, dispatch ref, frontmatter
@@ -755,20 +860,20 @@ class TestFromAC_LoadSaveAndDispatch:
     def test_board_config_agents_agent_map_attribute_path_accessible(
         self, tmp_path: Path
     ) -> None:
-        """board_config().agents.agent_map must be accessible."""
+        """board_config().agents.agent_map must equal product-topology agent_map."""
         board = _make_no_config_board(tmp_path)
         engine = KanbanEngine(board)
         config = engine.board_config()
-        assert isinstance(config.agents.agent_map, dict)
+        assert dict(config.agents.agent_map) == _EXPECTED_AGENT_MAP
 
     def test_board_config_policy_non_impl_tags_attribute_path_accessible(
         self, tmp_path: Path
     ) -> None:
-        """board_config().policy.non_impl_tags must be accessible."""
+        """board_config().policy.non_impl_tags must equal product-topology non_impl_tags."""
         board = _make_no_config_board(tmp_path)
         engine = KanbanEngine(board)
         config = engine.board_config()
-        assert hasattr(config.policy, "non_impl_tags")
+        assert frozenset(config.policy.non_impl_tags) == _EXPECTED_NON_IMPL_TAGS
 
     def test_board_config_paths_tasks_dir_attribute_path_accessible(
         self, tmp_path: Path
@@ -873,3 +978,61 @@ class TestFromAC_LoadSaveAndDispatch:
         task = engine.show_task("1")
         assert task is not None
         assert task.priority == "critical"
+
+    def test_task_tags_are_preserved_on_read(self, tmp_path: Path) -> None:
+        """Task tags are parsed from frontmatter and returned correctly by engine.
+
+        AC4 names tags as a per-task data field validated via the engine's
+        product-topology-backed read path.  After refactor, tags must round-trip.
+        """
+        board = _make_no_config_board(tmp_path)
+        now = "2026-01-01T00:00:00+00:00"
+        task_content = (
+            "---\n"
+            "id: 1\n"
+            "title: 'Tag round-trip test'\n"
+            "status: research\n"
+            "priority: important\n"
+            f"created: {now}\n"
+            f"updated: {now}\n"
+            "tags: [scope:backend, type:refactor]\n"
+            "depends_on: []\n"
+            "blocked: false\n"
+            "---\n"
+            "Body.\n"
+        )
+        (board / "tasks" / "1-tag-round-trip.md").write_text(task_content, encoding="utf-8")
+        engine = KanbanEngine(board)
+        # Currently engine init raises FileNotFoundError → test FAILS (RED)
+        task = engine.show_task("1")
+        assert list(task.tags) == ["scope:backend", "type:refactor"]
+
+    def test_task_blocked_true_is_preserved_on_read(self, tmp_path: Path) -> None:
+        """Task blocked=true is parsed from frontmatter and returned correctly by engine.
+
+        AC4 names blocked as a per-task data field validated via the engine's
+        product-topology-backed read path.  After refactor, blocked must round-trip.
+        """
+        board = _make_no_config_board(tmp_path)
+        now = "2026-01-01T00:00:00+00:00"
+        task_content = (
+            "---\n"
+            "id: 1\n"
+            "title: 'Blocked round-trip test'\n"
+            "status: research\n"
+            "priority: important\n"
+            f"created: {now}\n"
+            f"updated: {now}\n"
+            "tags: []\n"
+            "depends_on: []\n"
+            "blocked: true\n"
+            "block_reason: waiting for upstream\n"
+            "---\n"
+            "Body.\n"
+        )
+        (board / "tasks" / "1-blocked-round-trip.md").write_text(task_content, encoding="utf-8")
+        engine = KanbanEngine(board)
+        # Currently engine init raises FileNotFoundError → test FAILS (RED)
+        task = engine.show_task("1")
+        assert task.blocked is True
+        assert task.block_reason == "waiting for upstream"
