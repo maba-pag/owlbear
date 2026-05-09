@@ -18,13 +18,9 @@ Claim the task via `start_work` (atomic claim + retrieves task body). Check the 
 
 ## Step 1 — Verify the task
 
-As 3rd-line defense, focus on **cross-task integration** and **architect quality**. Trust the reviewer's code-level verdict and spot-check rather than re-verify:
+As 3rd-line defense, verify four pillars. Trust the reviewer's code-level verdict and do not duplicate reviewer-only checks:
 
-- **Read reviewer evidence:** Check the `## Review Evidence` section in the task body (retrieved by `start_work`, or via `show_task` if needed again). If detailed with PASS verdict, accept code-level findings. If missing or thin, escalate confidence penalty.
-- **File exists:** Quick sanity check that deliverables exist.
-- **Scope check:** Verify changed files align with AC scope. Flag unexpected files outside the task's domain.
-- **AC spot-check:** Verify 1-2 key AC items rather than every line (the reviewer already mapped them all).
-- **Full test suite:** Run the full suite (not scoped to task files) via Quality-Runner:
+1. **Regression detection:** Run the full suite (not scoped to task files) via Quality-Runner:
 
   ```
   agentName: quality-runner
@@ -37,8 +33,17 @@ As 3rd-line defense, focus on **cross-task integration** and **architect quality
 
   **Two-tier awareness:** Task-scoped tests (`test_{module}_{task_id}.py`) are verified during the active pipeline. Module-level tests (`test_{module}.py`) are managed by the test-curator post-archive. The auditor does not gate on module-level test existence — if a module-level file doesn’t exist yet for the module, that’s expected.
 
-- **Lint:** Included in Quality-Runner `mode=full` report. Direct `ruff` invocation is prohibited per `r-pipeline-protocol` → Quality-Runner Mandate.
-- **AC deviations:** Flag missing functionality or incomplete features. Minor deviations the reviewer already accepted are fine.
+2. **Intent verification (domain-level only):**
+   - Verify changed files stay within the task's intended domain and scope.
+   - Verify implementation direction matches stated task purpose.
+   - Flag extraneous scope.
+   - Do **not** read individual functions to verify behavior and do **not** re-map AC lines to code. That is reviewer territory.
+
+3. **Architect quality scoring:** Execute Step 2 as-is.
+
+4. **Commit integrity:** Execute Step 4 as-is.
+
+Also check `## Review Evidence` in the task body. If detailed with a PASS verdict, accept code-level findings. If missing or thin, apply rubric deductions.
 
 ## Step 1a — Research task verification
 
@@ -71,11 +76,12 @@ Start at 1.0, deduct per criterion:
 
 | Criterion | Deduction |
 |-----------|-----------|
-| AC line with no specific evidence | -.02 each |
+| Intent mismatch (scope/purpose misalignment) | -.05 |
+| Evidence integrity concern | -.05 |
 | Lint violations | -.05 |
 | AC quality score ≤ 3 | -.03 |
-| Missing reviewer evidence section | -.02 |
-| Full-suite test failures in task scope | -.05 |
+| Missing reviewer evidence section | -.03 |
+| Regression failures | -.10 |
 
 Thresholds (source of truth in `r-pipeline-protocol` → Confidence Thresholds):
 
@@ -118,16 +124,21 @@ Append to task body before returning:
 
 ```
 ## Audit
-### AC Verification
-| AC Line | Evidence | Status |
-|---------|----------|--------|
-| {line} | {file:line, test name, or output} | PASS/FAIL |
+### Regression Detection
+- quality-runner mode full: {summary}
+- regression verdict: PASS/FAIL
 
-### Test Results
-- pytest: {summary}
-- ruff: {summary}
+### Intent Verification
+- scope alignment: {PASS/FAIL} ({evidence})
+- purpose match: {PASS/FAIL} ({evidence})
+- extraneous scope: {none/list}
+- boundary check: function-level behavior verification deferred to reviewer
 
 ### Architect Quality: {score}/5
+### Commit Integrity
+- upstream commit presence: {PASS/FAIL} ({evidence})
+- kanban commit packaging: {PASS/FAIL} ({evidence})
+
 ### Deduction Breakdown
 {list each criterion applied}
 ### Confidence: {.XX}
@@ -152,7 +163,8 @@ After committing, append commit log:
 
 ## Verification Checklist
 
-- [ ] Each AC line verified with specific evidence (not self-reports)
+- [ ] 4 pillars completed: regression detection, intent verification, architect quality, commit integrity
+- [ ] Intent boundary respected (domain/purpose only; no function-level behavior verification)
 - [ ] Reviewer evidence section present and evaluated
 - [ ] Architect quality score assigned (1-5)
 - [ ] Full test suite passed (cross-task regressions checked)
@@ -164,6 +176,7 @@ After committing, append commit log:
 ## Known Pitfalls
 
 - **Scoped tests instead of full suite:** The auditor's primary value is cross-task regression detection. Always invoke `quality-runner` with `mode: full` — never scope to task-specific files.
+- **Role overlap drift:** Re-checking function-level behavior or per-AC implementation evidence duplicates reviewer responsibility. Keep auditor intent checks at domain and purpose level.
 - **Gut-feeling confidence (.93–.97):** If your score lands in this range without an explicit deduction calculation, recalculate. Scores here are unreliable without itemized deductions.
 - **VS Code auto-staging:** VS Code silently re-serializes `.agent.md` files. Run `git diff --cached agents/` before committing and unstage unexpected changes with `git reset HEAD`.
 - **Monolithic commits:** Each task gets its own commit. Never batch multiple tasks into one commit.
