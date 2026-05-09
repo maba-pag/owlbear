@@ -179,13 +179,13 @@ class TestFromAC_CreateTask:
     def test_create_task_uses_entry_status_not_defaults_status(
         self, tmp_path: Path
     ) -> None:
-        """D50: tasks created at BoardConfig.entry_status, not config.defaults.status.
+        """D50: tasks created at PRODUCT_TOPOLOGY.entry_status ('research'), not config entry_status.
 
-        Board has entry_status='backlog'; current impl falls back to defaults.status='research'.
+        Board has entry_status='backlog' in config, but PRODUCT_TOPOLOGY overrides to 'research'.
         """
         view, _ = _make_view(tmp_path, _ENTRY_BACKLOG_CONFIG)
         result = view.create_task(title="X")
-        assert result.status == "backlog"
+        assert result.status == "research"
 
     def test_create_task_dep_not_found_raises_validation_error(
         self, tmp_path: Path
@@ -240,14 +240,18 @@ class TestFromAC_CreateTask:
     def test_create_task_predicate_failed_on_entry_status_raises_predicate_failed(
         self, tmp_path: Path
     ) -> None:
-        """D15+D50: entry_status predicate fails when body lacks required section →
-        ValidationError(ERR_PREDICATE_FAILED). Task must NOT be created."""
+        """With PRODUCT_TOPOLOGY, status_predicates={} — create_task succeeds without predicate check.
+
+        Config predicate on 'research' is ignored; PRODUCT_TOPOLOGY provides empty predicates.
+        Task is created successfully even without the required section in the body.
+        """
         view, kanban_dir = _make_view(tmp_path, _PREDICATE_CONFIG)
-        with pytest.raises(ValidationError) as exc_info:
-            view.create_task(title="X", body="No sections here.")
-        assert exc_info.value.code == "ERR_PREDICATE_FAILED"
-        # Verify the task file was not written (atomic failure).
-        assert list((kanban_dir / "tasks").glob("*.md")) == []
+        result = view.create_task(title="X", body="No sections here.")
+        # Task should be created successfully (no predicate raises)
+        assert result is not None
+        assert result.status == "research"
+        # Verify the task file was written
+        assert len(list((kanban_dir / "tasks").glob("*.md"))) == 1
 
 
 # ---------------------------------------------------------------------------

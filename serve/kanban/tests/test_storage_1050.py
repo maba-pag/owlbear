@@ -506,7 +506,12 @@ class TestFromAC_QuarantineRepair:
         from owlbear_kanban import KanbanEngine
 
         kanban_dir = _make_board(tmp_path)
-        _write_claimed_by_file(kanban_dir / "tasks", task_id=1)
+        # Use a file with missing required fields (ERR_CORRUPT_MISSING_FIELD) — not
+        # claimed_by, which would trigger MigrationRequiredError at engine init.
+        corrupt_file = kanban_dir / "tasks" / "1-test.md"
+        corrupt_file.write_text(
+            "---\nid: 1\ntitle: test task\n---\n\nBody.\n", encoding="utf-8"
+        )
 
         engine = KanbanEngine(kanban_dir=kanban_dir)
         engine.repair_storage()
@@ -527,7 +532,10 @@ class TestFromAC_QuarantineRepair:
         from owlbear_kanban import KanbanEngine
 
         kanban_dir = _make_board(tmp_path)
-        _write_claimed_by_file(kanban_dir / "tasks", task_id=1)
+        corrupt_file = kanban_dir / "tasks" / "1-test.md"
+        corrupt_file.write_text(
+            "---\nid: 1\ntitle: test task\n---\n\nBody.\n", encoding="utf-8"
+        )
 
         engine = KanbanEngine(kanban_dir=kanban_dir)
         engine.repair_storage()
@@ -548,7 +556,10 @@ class TestFromAC_QuarantineRepair:
         from owlbear_kanban import KanbanEngine
 
         kanban_dir = _make_board(tmp_path)
-        _write_claimed_by_file(kanban_dir / "tasks", task_id=1)
+        corrupt_file = kanban_dir / "tasks" / "1-test.md"
+        corrupt_file.write_text(
+            "---\nid: 1\ntitle: test task\n---\n\nBody.\n", encoding="utf-8"
+        )
 
         engine = KanbanEngine(kanban_dir=kanban_dir)
         engine.repair_storage()

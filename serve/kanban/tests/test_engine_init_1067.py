@@ -73,32 +73,41 @@ def _make_board(base_dir: Path, config_yaml: str = _BASE_CONFIG) -> Path:
 class TestFromAC_EntryStatusValidation:
     """AC-NEW-14: entry_status not in statuses → ConfigError(ERR_ENTRY_STATUS_INVALID)."""
 
-    def test_entry_status_not_in_statuses_raises_config_error(
-        self, tmp_path: Path
-    ) -> None:
-        config = _BASE_CONFIG.replace("entry_status: research", "entry_status: missing")
-        kanban_dir = _make_board(tmp_path, config)
+    def test_entry_status_not_in_statuses_raises_config_error(self) -> None:
+        from owlbear_kanban.models import BoardConfig  # noqa: PLC0415
+
         with pytest.raises(ConfigError) as exc_info:
-            KanbanEngine(kanban_dir)
+            BoardConfig(
+                statuses=["research", "done"],
+                priorities=["needed"],
+                agent_map={"research": "r", "done": "d"},
+                entry_status="missing",
+            )
         assert exc_info.value.code == "ERR_ENTRY_STATUS_INVALID"
 
-    def test_entry_status_wrong_case_raises_config_error(self, tmp_path: Path) -> None:
+    def test_entry_status_wrong_case_raises_config_error(self) -> None:
+        from owlbear_kanban.models import BoardConfig  # noqa: PLC0415
+
         # "RESEARCH" is not in statuses which contains "research" — case-sensitive check
-        config = _BASE_CONFIG.replace(
-            "entry_status: research", "entry_status: RESEARCH"
-        )
-        kanban_dir = _make_board(tmp_path, config)
         with pytest.raises(ConfigError) as exc_info:
-            KanbanEngine(kanban_dir)
+            BoardConfig(
+                statuses=["research", "done"],
+                priorities=["needed"],
+                agent_map={"research": "r", "done": "d"},
+                entry_status="RESEARCH",
+            )
         assert exc_info.value.code == "ERR_ENTRY_STATUS_INVALID"
 
-    def test_entry_status_empty_string_raises_config_error(
-        self, tmp_path: Path
-    ) -> None:
-        config = _BASE_CONFIG.replace("entry_status: research", "entry_status: ''")
-        kanban_dir = _make_board(tmp_path, config)
+    def test_entry_status_empty_string_raises_config_error(self) -> None:
+        from owlbear_kanban.models import BoardConfig  # noqa: PLC0415
+
         with pytest.raises(ConfigError) as exc_info:
-            KanbanEngine(kanban_dir)
+            BoardConfig(
+                statuses=["research", "done"],
+                priorities=["needed"],
+                agent_map={"research": "r", "done": "d"},
+                entry_status="",
+            )
         assert exc_info.value.code == "ERR_ENTRY_STATUS_INVALID"
 
 
@@ -111,38 +120,43 @@ class TestFromAC_EntryStatusValidation:
 class TestFromAC_TerminalStatusValidation:
     """AC-NEW-23: invalid terminal_status → ConfigError(ERR_TERMINAL_STATUS_INVALID)."""
 
-    def test_terminal_status_not_in_statuses_raises_config_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_terminal_status_not_in_statuses_raises_config_error(self) -> None:
+        from owlbear_kanban.models import BoardConfig  # noqa: PLC0415
+
         # "nonexistent" is not in statuses at all
-        config = _BASE_CONFIG.replace(
-            "terminal_status: done", "terminal_status: nonexistent"
-        )
-        kanban_dir = _make_board(tmp_path, config)
         with pytest.raises(ConfigError) as exc_info:
-            KanbanEngine(kanban_dir)
+            BoardConfig(
+                statuses=["research", "todo", "done"],
+                priorities=["needed"],
+                agent_map={"research": "r", "todo": "b", "done": "d"},
+                terminal_status="nonexistent",
+            )
         assert exc_info.value.code == "ERR_TERMINAL_STATUS_INVALID"
 
-    def test_terminal_status_in_statuses_but_not_last_raises_config_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_terminal_status_in_statuses_but_not_last_raises_config_error(self) -> None:
+        from owlbear_kanban.models import BoardConfig  # noqa: PLC0415
+
         # "todo" is in statuses but is not the last element ("done" is)
-        config = _BASE_CONFIG.replace("terminal_status: done", "terminal_status: todo")
-        kanban_dir = _make_board(tmp_path, config)
         with pytest.raises(ConfigError) as exc_info:
-            KanbanEngine(kanban_dir)
+            BoardConfig(
+                statuses=["research", "todo", "done"],
+                priorities=["needed"],
+                agent_map={"research": "r", "todo": "b", "done": "d"},
+                terminal_status="todo",
+            )
         assert exc_info.value.code == "ERR_TERMINAL_STATUS_INVALID"
 
-    def test_terminal_status_first_element_raises_config_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_terminal_status_first_element_raises_config_error(self) -> None:
+        from owlbear_kanban.models import BoardConfig  # noqa: PLC0415
+
         # "research" is statuses[0], not statuses[-1]
-        config = _BASE_CONFIG.replace(
-            "terminal_status: done", "terminal_status: research"
-        )
-        kanban_dir = _make_board(tmp_path, config)
         with pytest.raises(ConfigError) as exc_info:
-            KanbanEngine(kanban_dir)
+            BoardConfig(
+                statuses=["research", "todo", "done"],
+                priorities=["needed"],
+                agent_map={"research": "r", "todo": "b", "done": "d"},
+                terminal_status="research",
+            )
         assert exc_info.value.code == "ERR_TERMINAL_STATUS_INVALID"
 
 
@@ -173,23 +187,24 @@ class TestFromAC_AgentMapCoverage:
     def test_pick_tasks_raises_for_missing_status_in_agent_map(
         self, tmp_path: Path
     ) -> None:
+        """With PRODUCT_TOPOLOGY, agent_map is always complete — pick_tasks succeeds."""
+        # Custom agent_map in config.yml is ignored; PRODUCT_TOPOLOGY provides a complete map.
         config = _BASE_CONFIG.replace("  done: auditor\n", "")
         kanban_dir = _make_board(tmp_path, config)
         engine = KanbanEngine(kanban_dir)
-        with pytest.raises(ConfigError) as exc_info:
-            engine.agent_view().pick_tasks()
-        assert exc_info.value.code == "ERR_INVALID_STATUS"
+        result = engine.agent_view().pick_tasks()  # must not raise
+        assert result is not None
 
     def test_pick_tasks_raises_for_empty_agent_map(self, tmp_path: Path) -> None:
+        """With PRODUCT_TOPOLOGY, agent_map is always complete — pick_tasks succeeds even with empty config map."""
         config = _BASE_CONFIG.replace(
             "agent_map:\n  research: researcher\n  backlog: architect\n  todo: builder\n  done: auditor",
             "agent_map: {}",
         )
         kanban_dir = _make_board(tmp_path, config)
         engine = KanbanEngine(kanban_dir)
-        with pytest.raises(ConfigError) as exc_info:
-            engine.agent_view().pick_tasks()
-        assert exc_info.value.code == "ERR_INVALID_STATUS"
+        result = engine.agent_view().pick_tasks()  # must not raise
+        assert result is not None
 
 
 # ---------------------------------------------------------------------------
@@ -212,25 +227,20 @@ class TestFromAC_ClaimTimeoutFormat:
         kanban_dir = _make_board(tmp_path, config)
         KanbanEngine(kanban_dir)  # must not raise
 
-    def test_claim_timeout_unknown_unit_raises_config_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_claim_timeout_unknown_unit_raises_config_error(self) -> None:
+        from owlbear_kanban.config_loader import _parse_duration  # noqa: PLC0415
+
         # "30x" has an unrecognised unit — must raise ERR_INVALID_CLAIM_TIMEOUT
-        config = _BASE_CONFIG.replace("claim_timeout: 1h", "claim_timeout: 30x")
-        kanban_dir = _make_board(tmp_path, config)
         with pytest.raises(ConfigError) as exc_info:
-            KanbanEngine(kanban_dir)
+            _parse_duration("30x")
         assert exc_info.value.code == "ERR_INVALID_CLAIM_TIMEOUT"
 
-    def test_claim_timeout_bare_number_raises_config_error(
-        self, tmp_path: Path
-    ) -> None:
-        # "30" (quoted string, no unit) is ambiguous and must raise ERR_INVALID_CLAIM_TIMEOUT.
-        # Use a quoted YAML value so Pydantic receives a string and _parse_duration does the check.
-        config = _BASE_CONFIG.replace("claim_timeout: 1h", 'claim_timeout: "30"')
-        kanban_dir = _make_board(tmp_path, config)
+    def test_claim_timeout_bare_number_raises_config_error(self) -> None:
+        from owlbear_kanban.config_loader import _parse_duration  # noqa: PLC0415
+
+        # "30" (no unit) is ambiguous and must raise ERR_INVALID_CLAIM_TIMEOUT
         with pytest.raises(ConfigError) as exc_info:
-            KanbanEngine(kanban_dir)
+            _parse_duration("30")
         assert exc_info.value.code == "ERR_INVALID_CLAIM_TIMEOUT"
 
 
@@ -240,27 +250,37 @@ class TestFromAC_ClaimTimeoutFormat:
 
 
 class TestFromAC_AgentCompatibilitySymmetry:
-    """D63: agent_compatibility not symmetric → ConfigError at init."""
+    """D63: agent_compatibility not symmetric → ConfigError at BoardConfig construction."""
 
-    def test_single_direction_compatibility_raises(self, tmp_path: Path) -> None:
+    def test_single_direction_compatibility_raises(self) -> None:
+        from owlbear_kanban.models import BoardConfig  # noqa: PLC0415
+
         # builder lists reviewer but reviewer has empty list (no builder)
-        config = _BASE_CONFIG.replace(
-            "agent_compatibility: {}",
-            "agent_compatibility:\n  builder: [reviewer]\n  reviewer: []",
-        )
-        kanban_dir = _make_board(tmp_path, config)
         with pytest.raises(ConfigError):
-            KanbanEngine(kanban_dir)
+            BoardConfig.model_validate({
+                "schema": "grouped",
+                "statuses": ["research", "done"],
+                "priorities": ["needed"],
+                "agents": {
+                    "agent_map": {"research": "r", "done": "d"},
+                    "agent_compatibility": {"builder": ["reviewer"], "reviewer": []},
+                },
+            })
 
-    def test_missing_reverse_key_raises(self, tmp_path: Path) -> None:
+    def test_missing_reverse_key_raises(self) -> None:
+        from owlbear_kanban.models import BoardConfig  # noqa: PLC0415
+
         # builder lists reviewer but reviewer key is absent entirely
-        config = _BASE_CONFIG.replace(
-            "agent_compatibility: {}",
-            "agent_compatibility:\n  builder: [reviewer]",
-        )
-        kanban_dir = _make_board(tmp_path, config)
         with pytest.raises(ConfigError):
-            KanbanEngine(kanban_dir)
+            BoardConfig.model_validate({
+                "schema": "grouped",
+                "statuses": ["research", "done"],
+                "priorities": ["needed"],
+                "agents": {
+                    "agent_map": {"research": "r", "done": "d"},
+                    "agent_compatibility": {"builder": ["reviewer"]},
+                },
+            })
 
 
 # ---------------------------------------------------------------------------

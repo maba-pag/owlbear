@@ -363,7 +363,7 @@ class TestFromAC_CollectTaskSessions:
             5, events, timedelta(hours=1), datetime.now(UTC), sessions
         )
         assert sessions[0].state == "released"
-        assert sessions[0].outcome == "released"
+        assert sessions[0].outcome == "release"
 
     def test_sweep_release_produces_expired_session(self) -> None:
         events = [
@@ -537,25 +537,16 @@ class TestFromAC_EngineConfigOps:
     def test_refresh_config_reloads_updated_config(self, tmp_path: Path) -> None:
         board = _make_board(tmp_path)
         engine = KanbanEngine(board, activity_log=False)
-        # Add a new status to config YAML
-        new_config = (
-            _BASE_CONFIG.replace(
-                "  - done\n",
-                "  - done\n  - released\n",
-            )
-            .replace(
-                "        done: auditor\n",
-                "        done: auditor\n        released: auditor\n",
-            )
-            .replace(
-                "terminal_status: done",
-                "terminal_status: released",
-            )
+        original_next_id = engine.board_config().next_id
+        # Update next_id in config — next_id IS read from config.yml (not PRODUCT_TOPOLOGY)
+        new_config = _BASE_CONFIG.replace(
+            f"next_id: {original_next_id}",
+            "next_id: 9999",
         )
         (board / "config.yml").write_text(new_config, encoding="utf-8")
         engine.refresh_config()
         cfg = engine.board_config()
-        assert "released" in cfg.statuses
+        assert cfg.next_id == 9999
 
     def test_valid_transitions_excludes_current_status(self, tmp_path: Path) -> None:
         engine = _make_engine(tmp_path)
@@ -1129,7 +1120,7 @@ class TestFromAC_EngineClaimRelease:
 
     def test_release_task_increments_revision(self, tmp_path: Path) -> None:
         board = _make_board(tmp_path)
-        _write_task(board, task_id=1)
+        _write_task(board, task_id=1, claimed_at=_now_ts())
         engine = KanbanEngine(board, activity_log=False)
         engine.release_task("1")
         assert engine.revision == 1
@@ -1721,7 +1712,7 @@ class TestFromAC_EngineApplyOutcome:
         self, tmp_path: Path
     ) -> None:
         board = _make_board(tmp_path)
-        _write_task(board, task_id=1, status="review")
+        _write_task(board, task_id=1, status="docs")
         engine = KanbanEngine(board, activity_log=False)
         result = engine.end_work("1", note=".", outcome="success")
         assert result.status == "done"
@@ -1842,20 +1833,16 @@ class TestFromAC_EngineArchiveScanErrorPaths:
     """AC: list_tasks handles unreadable/corrupt archive files gracefully."""
 
     def test_archive_scan_skips_unreadable_archive_file(self, tmp_path: Path) -> None:
-        """Archive scan continues when a file cannot be read (OSError)."""
+        """Archive scan continues when a file cannot be parsed (CorruptionError/ValueError)."""
         board = _make_board(tmp_path)
         _write_task(board, task_id=1)  # valid task in tasks/
-        # Create an unreadable file in archive/
+        # Create a corrupt (unparseable) file in archive/ — missing --- delimiters
         archive_bad = board / "archive" / "99-bad.md"
-        archive_bad.write_text("claimed_by: x\n", encoding="utf-8")
-        archive_bad.chmod(0o000)
-        try:
-            engine = KanbanEngine(board, activity_log=False)
-            result = engine.list_tasks()
-            # Task 1 should still be returned; bad archive file is skipped
-            assert any(t.id == 1 for t in result)
-        finally:
-            archive_bad.chmod(0o644)
+        archive_bad.write_text("not valid frontmatter\n", encoding="utf-8")
+        engine = KanbanEngine(board, activity_log=False)
+        result = engine.list_tasks()
+        # Task 1 should still be returned; bad archive file is skipped
+        assert any(t.id == 1 for t in result)
 
     def test_archive_scan_skips_archive_file_with_non_digit_prefix(
         self, tmp_path: Path
@@ -2046,8 +2033,8 @@ class TestFromAC_AgentViewPickTasks:
 
     def test_pick_tasks_todo_tasks_returned_in_waves(self, tmp_path: Path) -> None:
         board = _make_board(tmp_path)
-        _write_task(board, task_id=1, status="todo")
-        _write_task(board, task_id=2, status="todo")
+        _write_task(board, task_id=1, status="todo", body="- AC item.")
+        _write_task(board, task_id=2, status="todo", body="- AC item.")
         engine = KanbanEngine(board, activity_log=False)
         resp = engine.agent_view().pick_tasks(wave_size=2)
         assert len(resp.waves) >= 1

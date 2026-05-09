@@ -20,6 +20,7 @@ import contextlib
 # ---------------------------------------------------------------------------
 
 _NEW_CONFIG_YAML = """\
+schema: grouped
 statuses:
   - research
   - backlog
@@ -34,16 +35,24 @@ priorities:
   - important
   - needed
   - critical
-entry_status: research
-wave_size: 4
-agent_map: {}
-agent_types: {}
-agent_compatibility: {}
-non_impl_tags: [research, docs, type:config, type:docs, test, type:test, agent, quality, type:user-action]
-archival_reasons: [completed, deprecated, dropped, duplicate, wontfix]
-status_predicates: {}
-claim_timeout: 1h
 next_id: 1001
+paths:
+    tasks_dir: tasks
+    archive_dir: archive
+pipeline:
+    entry_status: research
+    terminal_status: done
+    wave_size: 4
+    claim_timeout: 1h
+    default_priority: important
+agents:
+    agent_map: {}
+    agent_types: {}
+    agent_compatibility: {}
+policy:
+    non_impl_tags: [research, docs, type:config, type:docs, test, type:test, agent, quality, type:user-action]
+    archival_reasons: [completed, deprecated, dropped, duplicate, wontfix]
+    status_predicates: {}
 """
 
 _LEGACY_CONFIG_YAML = """\
@@ -525,10 +534,7 @@ class TestFromAC_LaneAlgorithms:
         for dropped in (
             "board:",
             "version:",
-            "tasks_dir:",
-            "archive_dir:",
             "defaults:",
-            "activity_log:",
         ):
             assert dropped not in content, f"Legacy field '{dropped}' still present"
 

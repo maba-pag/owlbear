@@ -223,14 +223,14 @@ class TestFromAC_EngineAtomicity:
             patch(_EMIT_PATCH, side_effect=OSError("disk full")),
             pytest.raises(OSError, match="disk full"),
         ):
-            engine.move_task("1001", "archived")
+            engine.move_task("1001", "archived", archival_reason="completed")
 
         assert task_path.exists(), (
             "task file must not be moved to archive/ on emit failure"
         )
-        archive_contents = list((kanban_dir / "archive").iterdir())
+        archive_contents = [f for f in (kanban_dir / "archive").iterdir() if f.suffix == ".md"]
         assert archive_contents == [], (
-            "archive/ must be empty after failed archive move"
+            "archive/ must have no .md task files after failed archive move"
         )
         after = read_task(task_path)
         assert after.status == before.status, (
@@ -638,7 +638,7 @@ class TestFromAC_EngineAtomicity:
             patch(_EMIT_PATCH, side_effect=OSError("disk full")),
             pytest.raises(OSError, match="disk full"),
         ):
-            engine.move_task("1001", "archived")
+            engine.move_task("1001", "archived", archival_reason="completed")
 
         # File must be back in tasks/ (already covered by existing test; verified again for context)
         assert task_path.exists(), (

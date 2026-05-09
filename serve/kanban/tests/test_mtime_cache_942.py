@@ -427,7 +427,7 @@ class TestFromAC_MtimeCache:
             "owlbear_kanban.storage", fromlist=["read_task"]
         ).read_task
 
-        def patched_read(path: Path) -> Task:  # type: ignore[return]
+        def patched_read(path: Path, **_kwargs) -> Task:  # type: ignore[return]
             call_count["n"] += 1
             if call_count["n"] == 1:
                 raise FileNotFoundError(f"Race: file vanished: {path}")
@@ -462,7 +462,7 @@ class TestFromAC_MtimeCache:
             "owlbear_kanban.storage", fromlist=["read_task"]
         ).read_task
 
-        def patched_read(path: Path) -> Task:  # type: ignore[return]
+        def patched_read(path: Path, **_kwargs) -> Task:  # type: ignore[return]
             if path.name == target_name:
                 raise FileNotFoundError(f"Race: {path}")
             return original_read_task(path)

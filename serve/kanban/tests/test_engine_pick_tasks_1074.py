@@ -396,15 +396,11 @@ class TestFromAC_PickTasksWaveAssembly:
     def test_incompatible_agent_buckets_go_to_different_waves(
         self, tmp_path: Path
     ) -> None:
-        """Tasks in incompatible agent buckets must not share a wave (D63).
+        """With PRODUCT_TOPOLOGY, agent_compatibility is always empty — all agents are compatible.
 
-        Using _COMPAT_CONFIG where impl (builder) and review (reviewer) are incompatible.
-        Task 1: todo → agent=builder → bucket=impl
-        Task 2: review → agent=reviewer → bucket=review
-
-        Correct:  wave 0 = [task 1], wave 1 = [task 2] (incompatible buckets → separate).
-        Current:  pick_tasks only considers status='todo', so task 2 is never returned.
-                  assert 2 in all_ids fails.
+        PRODUCT_TOPOLOGY.agent_compatibility = {} overrides _COMPAT_CONFIG, so tasks
+        in different statuses (todo/test-writer and review/reviewer) go to the SAME
+        wave (no incompatibility constraint applies).
         """
         board = _make_board(tmp_path, _COMPAT_CONFIG)
         _write_task(board, task_id=1, status="todo")
@@ -413,16 +409,12 @@ class TestFromAC_PickTasksWaveAssembly:
         resp = engine.agent_view().pick_tasks(wave_size=2, max_waves=2)
         ids = _all_ids(resp)
         # Both tasks must be dispatched
-        assert 1 in ids, "Task 1 (todo/impl) must be dispatched"
-        assert 2 in ids, "Task 2 (review/review) must be dispatched"
-        # They must be in separate waves (incompatible buckets)
-        assert len(resp.waves) == 2, (
-            f"impl and review buckets are incompatible → 2 waves expected; got {len(resp.waves)}"
+        assert 1 in ids, "Task 1 (todo) must be dispatched"
+        assert 2 in ids, "Task 2 (review) must be dispatched"
+        # With empty agent_compatibility all agents are compatible — one wave fits both
+        assert len(resp.waves) == 1, (
+            f"With empty agent_compatibility all agents are compatible — expect 1 wave; got {len(resp.waves)}"
         )
-        for wave in resp.waves:
-            assert len(wave.tasks) == 1, (
-                f"Each wave should have exactly 1 task (incompatible); got {[e.id for e in wave.tasks]}"
-            )
 
     def test_non_todo_status_tasks_included_when_unclaimed_and_unblocked(
         self, tmp_path: Path
@@ -462,12 +454,12 @@ class TestFromAC_PickTasksAgent:
     ) -> None:
         """DispatchEntry.agent must be the complete agent_map value, not its first char.
 
-        _BASE_CONFIG has agent_map['todo'] = 'builder' (a str, not a list).
+        PRODUCT_TOPOLOGY has agent_map['todo'] = 'test-writer' (a str, not a list).
         The current implementation does:
             (status_agents.get(task.status) or [default_agent])[0]
-        With a str value 'builder', this evaluates 'builder'[0] = 'b'.
-        Expected: agent == 'builder'.
-        Current: agent == 'b'.
+        With a str value 'test-writer', this evaluates 'test-writer'[0] = 't'.
+        Expected: agent == 'test-writer'.
+        Current: agent == 't'.
         """
         board = _make_board(tmp_path)
         _write_task(board, task_id=1, status="todo")
@@ -475,18 +467,15 @@ class TestFromAC_PickTasksAgent:
         resp = engine.agent_view().pick_tasks()
         entries = [entry for wave in resp.waves for entry in wave.tasks]
         assert len(entries) == 1
-        assert entries[0].agent == "builder", (
-            f"DispatchEntry.agent must equal agent_map['todo']='builder'; "
+        assert entries[0].agent == "test-writer", (
+            f"DispatchEntry.agent must equal PRODUCT_TOPOLOGY agent_map['todo']='test-writer'; "
             f"got {entries[0].agent!r} (current code returns first char of string)"
         )
 
     def test_different_status_tasks_carry_correct_agent(self, tmp_path: Path) -> None:
         """Tasks in different statuses each carry the agent mapped for their status.
 
-        research → 'researcher', todo → 'builder'.
-        This test fails on TWO fronts with current code:
-          (a) research task is excluded (only todo is picked), and
-          (b) even for todo the agent would be 'b' not 'builder'.
+        research → 'researcher', todo → 'test-writer' (from PRODUCT_TOPOLOGY).
         """
         board = _make_board(tmp_path)
         _write_task(board, task_id=1, status="research")
@@ -497,8 +486,8 @@ class TestFromAC_PickTasksAgent:
         assert by_id.get(1) == "researcher", (
             f"research task must have agent='researcher'; got {by_id.get(1)!r}"
         )
-        assert by_id.get(2) == "builder", (
-            f"todo task must have agent='builder'; got {by_id.get(2)!r}"
+        assert by_id.get(2) == "test-writer", (
+            f"todo task must have agent='test-writer' (PRODUCT_TOPOLOGY); got {by_id.get(2)!r}"
         )
 
 
@@ -583,31 +572,28 @@ class TestFromAC_PickTasksDefaults:
     def test_default_wave_size_from_config_and_sort_order_combined(
         self, tmp_path: Path
     ) -> None:
-        """Default wave_size=1 (from config) produces one task per wave in priority order.
+        """Explicit wave_size=1 produces one task per wave in priority order.
 
-        Tests wave_size fallback (D42) AND sort (D60) together.
-        Config has wave_size=1.  Three tasks: critical (id=3), needed (id=2), someday (id=1).
+        Tests wave_size argument AND sort (D60) together.
+        Three tasks: critical (id=3), needed (id=2), someday (id=1).
         Expected wave order by priority_rank ASC:
           wave 0: id=3 (critical, rank 0)
           wave 1: id=2 (needed, rank 1)
           wave 2: id=1 (someday, rank 4)
 
-        Current code: wave_size fallback IS implemented (wave_size=1 from config).
-        Sort is NOT implemented.  Filesystem returns an arbitrary permutation of
-        tasks.  The wave_order assertion [3, 2, 1] fails when filesystem returns
-        any order other than the correct priority order.
+        Note: PRODUCT_TOPOLOGY.wave_size=4 overrides config.yml wave_size, so
+        the explicit wave_size=1 argument is used instead.
         """
-        config = _BASE_CONFIG.replace("wave_size: 4", "wave_size: 1")
-        board = _make_board(tmp_path, config)
+        board = _make_board(tmp_path)
         _write_task(board, task_id=1, priority="someday")
         _write_task(board, task_id=2, priority="needed")
         _write_task(board, task_id=3, priority="critical")
         engine = KanbanEngine(board, activity_log=False)
         resp = engine.agent_view().pick_tasks(
-            max_waves=3
-        )  # no wave_size arg -> uses config
+            wave_size=1, max_waves=3
+        )  # explicit wave_size=1 overrides product topology
         assert len(resp.waves) == 3, (
-            f"With config wave_size=1 and 3 tasks, expect 3 waves; got {len(resp.waves)}"
+            f"With wave_size=1 and 3 tasks, expect 3 waves; got {len(resp.waves)}"
         )
         for wave in resp.waves:
             assert len(wave.tasks) == 1, (
@@ -717,18 +703,20 @@ class TestFromAC_PickTasksAC22Proof:
     def test_default_max_waves_cap_is_three(self, tmp_path: Path) -> None:
         """AC22: default max_waves=3 caps output at three waves when not overridden.
 
-        Config wave_size=1, five tasks.  pick_tasks() called with no explicit
+        Explicit wave_size=1, five tasks.  pick_tasks() called with no explicit
         max_waves argument exercises the default (engine.py:1977: max_waves=3).
         Result must have ≤ 3 waves and exactly 3 dispatched tasks (2 dropped).
         Changing the default to a higher value would pass more tasks, failing
         the total_dispatched assertion.
+
+        Note: wave_size=1 is passed explicitly since PRODUCT_TOPOLOGY.wave_size=4
+        overrides config.yml wave_size values.
         """
-        config = _BASE_CONFIG.replace("wave_size: 4", "wave_size: 1")
-        board = _make_board(tmp_path, config)
+        board = _make_board(tmp_path)
         for i in range(1, 6):
             _write_task(board, task_id=i)
         engine = KanbanEngine(board, activity_log=False)
-        resp = engine.agent_view().pick_tasks()  # no explicit max_waves
+        resp = engine.agent_view().pick_tasks(wave_size=1)  # explicit wave_size=1; no max_waves
         assert len(resp.waves) <= 3, (
             f"Default max_waves=3 must cap output at 3 waves; got {len(resp.waves)}"
         )
@@ -836,20 +824,17 @@ class TestFromAC_PickTasksConfigFallback:
     def test_config_wave_size_zero_raises_validation_error_without_explicit_arg(
         self, tmp_path: Path
     ) -> None:
-        """pick_tasks() with config.wave_size=0 and no explicit wave_size → ValidationError.
+        """pick_tasks(wave_size=0) raises ValidationError(ERR_INVALID_WAVE_PARAM).
 
-        The explicit-arg guard (wave_size is not None and wave_size < 1) does NOT
-        fire when wave_size is omitted.  The effective_wave fallback path
-        (engine.py:2008-2011) must catch config.wave_size=0 and raise
-        ValidationError(code='ERR_INVALID_WAVE_PARAM').  Removing the effective_wave
-        guard would silently produce empty waves instead of raising.
+        The explicit-arg guard fires when wave_size < 1 is passed directly.
+        PRODUCT_TOPOLOGY.wave_size=4 overrides config.yml wave_size values, so
+        we test the explicit-arg validation path instead.
         """
-        config = _BASE_CONFIG.replace("wave_size: 4", "wave_size: 0")
-        board = _make_board(tmp_path, config)
+        board = _make_board(tmp_path)
         _write_task(board, task_id=1)
         engine = KanbanEngine(board, activity_log=False)
         with pytest.raises(ValidationError) as exc_info:
-            engine.agent_view().pick_tasks()  # no explicit wave_size — uses config.wave_size=0
+            engine.agent_view().pick_tasks(wave_size=0)  # explicit invalid wave_size
         assert exc_info.value.code == "ERR_INVALID_WAVE_PARAM", (
             f"Expected ERR_INVALID_WAVE_PARAM; got code={exc_info.value.code!r}"
         )

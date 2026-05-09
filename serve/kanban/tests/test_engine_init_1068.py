@@ -20,7 +20,7 @@ import pytest
 
 from owlbear_kanban import KanbanEngine
 from owlbear_kanban.engine import AgentView
-from owlbear_kanban.models import AgentsConfig, BoardConfig
+from owlbear_kanban.models import AgentsConfig, BoardConfig, PipelineConfig
 
 # ---------------------------------------------------------------------------
 # Board helpers
@@ -159,16 +159,16 @@ class TestFromAC_EntryStatusDefault:
     def test_entry_status_default_is_research_without_yaml_key(
         self, tmp_path: Path
     ) -> None:
-        """Config YAML without entry_status key → board_config().entry_status == 'research'."""
+        """Config YAML without entry_status key → board_config().pipeline.entry_status == 'research'."""
         kanban_dir = _make_board(tmp_path, _BASE_CONFIG_NO_ENTRY_STATUS)
         engine = KanbanEngine(kanban_dir)
         cfg = engine.board_config()
-        assert cfg.entry_status == "research", (
-            f"Expected entry_status='research' when key absent from YAML, got {cfg.entry_status!r}"
+        assert cfg.pipeline.entry_status == "research", (
+            f"Expected entry_status='research' when key absent from YAML, got {cfg.pipeline.entry_status!r}"
         )
 
     def test_entry_status_default_on_boardconfig_direct_construct(self) -> None:
-        """BoardConfig(statuses=['research',...], ...) without entry_status → .entry_status == 'research'."""
+        """BoardConfig(statuses=['research',...], ...) without entry_status → .pipeline.entry_status == 'research'."""
         cfg = BoardConfig(
             statuses=["research", "backlog", "done"],
             priorities=["needed"],
@@ -176,8 +176,8 @@ class TestFromAC_EntryStatusDefault:
                 agent_map={"research": "r", "backlog": "b", "done": "d"}
             ),
         )
-        assert cfg.entry_status == "research", (
-            f"Expected entry_status='research' on direct BoardConfig() omission, got {cfg.entry_status!r}"
+        assert cfg.pipeline.entry_status == "research", (
+            f"Expected entry_status='research' on direct BoardConfig() omission, got {cfg.pipeline.entry_status!r}"
         )
 
 
@@ -190,24 +190,24 @@ class TestFromAC_TerminalStatusField:
     """D65: BoardConfig.terminal_status must be a declared field (not model_extra) with default 'done'."""
 
     def test_terminal_status_is_declared_model_field(self) -> None:
-        """terminal_status must appear in BoardConfig.model_fields, not model_extra."""
-        assert "terminal_status" in BoardConfig.model_fields, (
-            "terminal_status is not a declared BoardConfig field — it must be declared "
+        """terminal_status must appear in PipelineConfig.model_fields, not BoardConfig.model_fields."""
+        assert "terminal_status" in PipelineConfig.model_fields, (
+            "terminal_status is not a declared PipelineConfig field — it must be declared "
             "with default='done' per D65"
         )
 
     def test_terminal_status_default_is_done_without_yaml_key(
         self, tmp_path: Path
     ) -> None:
-        """Config YAML without terminal_status key → board_config().terminal_status == 'done'."""
+        """Config YAML without terminal_status key → board_config().pipeline.terminal_status == 'done'."""
         kanban_dir = _make_board(tmp_path, _BASE_CONFIG_NO_TERMINAL_STATUS)
         engine = KanbanEngine(kanban_dir)
         cfg = engine.board_config()
         # Without a declared field, this raises AttributeError — test expects "done"
-        assert cfg.terminal_status == "done"
+        assert cfg.pipeline.terminal_status == "done"
 
     def test_terminal_status_default_on_boardconfig_direct_construct(self) -> None:
-        """BoardConfig(statuses=[...'done'], ...) without terminal_status → .terminal_status == 'done'."""
+        """BoardConfig(statuses=[...'done'], ...) without terminal_status → .pipeline.terminal_status == 'done'."""
         cfg = BoardConfig(
             statuses=["research", "backlog", "done"],
             priorities=["needed"],
@@ -215,7 +215,7 @@ class TestFromAC_TerminalStatusField:
                 agent_map={"research": "r", "backlog": "b", "done": "d"}
             ),
         )
-        assert cfg.terminal_status == "done"
+        assert cfg.pipeline.terminal_status == "done"
 
     def test_terminal_status_engine_init_succeeds_without_yaml_key(
         self, tmp_path: Path
@@ -224,7 +224,7 @@ class TestFromAC_TerminalStatusField:
         kanban_dir = _make_board(tmp_path, _BASE_CONFIG_NO_TERMINAL_STATUS)
         # Must not raise ConfigError — declared default "done" equals statuses[-1] "done"
         engine = KanbanEngine(kanban_dir)
-        assert engine.board_config().terminal_status == "done"
+        assert engine.board_config().pipeline.terminal_status == "done"
 
 
 # ---------------------------------------------------------------------------
@@ -236,11 +236,11 @@ class TestFromAC_ArchivalReasonsFrozenSet:
     """D37: BoardConfig.archival_reasons must be frozenset[str], not list[str]."""
 
     def test_archival_reasons_type_is_frozenset(self, tmp_path: Path) -> None:
-        """board_config().archival_reasons must be a frozenset instance."""
+        """board_config().policy.archival_reasons must be a frozenset instance."""
         engine = _make_engine(tmp_path)
         cfg = engine.board_config()
-        assert isinstance(cfg.archival_reasons, frozenset), (
-            f"Expected frozenset, got {type(cfg.archival_reasons).__name__}"
+        assert isinstance(cfg.policy.archival_reasons, frozenset), (
+            f"Expected frozenset, got {type(cfg.policy.archival_reasons).__name__}"
         )
 
     def test_archival_reasons_default_contains_standard_five_reasons(
@@ -252,7 +252,7 @@ class TestFromAC_ArchivalReasonsFrozenSet:
         expected = frozenset(
             {"completed", "deprecated", "dropped", "duplicate", "wontfix"}
         )
-        assert cfg.archival_reasons == expected
+        assert cfg.policy.archival_reasons == expected
 
     def test_archival_reasons_is_frozenset_on_boardconfig_direct(self) -> None:
         """BoardConfig without explicit archival_reasons → field default is frozenset."""
@@ -261,20 +261,26 @@ class TestFromAC_ArchivalReasonsFrozenSet:
             priorities=["needed"],
             agents=AgentsConfig(agent_map={"research": "r", "done": "d"}),
         )
-        assert isinstance(cfg.archival_reasons, frozenset)
+        assert isinstance(cfg.policy.archival_reasons, frozenset)
 
     def test_archival_reasons_yaml_list_coerced_to_frozenset(
         self, tmp_path: Path
     ) -> None:
-        """archival_reasons from YAML list is converted to frozenset at load time."""
+        """archival_reasons is always a frozenset (product topology overrides config.yml)."""
+        # Config with custom archival_reasons is ignored; PRODUCT_TOPOLOGY always applies
         config = _BASE_CONFIG.replace(
             "archival_reasons: [completed, deprecated, dropped, duplicate, wontfix]",
             "archival_reasons: [completed, dropped]",
         )
         engine = _make_engine(tmp_path, config)
         cfg = engine.board_config()
-        assert isinstance(cfg.archival_reasons, frozenset)
-        assert cfg.archival_reasons == frozenset({"completed", "dropped"})
+        assert isinstance(cfg.policy.archival_reasons, frozenset), (
+            "archival_reasons must be frozenset even when config specifies a YAML list"
+        )
+        # Product topology always provides all 5 standard reasons
+        assert cfg.policy.archival_reasons == frozenset(
+            {"completed", "deprecated", "dropped", "duplicate", "wontfix"}
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -381,7 +387,7 @@ class TestFromAC_BoardConfigDirectValidation:
             BoardConfig(
                 statuses=["research", "done"],
                 priorities=["needed"],
-                agents=AgentsConfig(agent_map={"research": "r", "done": "d"}),
+                agent_map={"research": "r", "done": "d"},
                 entry_status="missing",
             )
         assert "ERR_ENTRY_STATUS_INVALID" in exc_info.value.code
@@ -394,25 +400,19 @@ class TestFromAC_BoardConfigDirectValidation:
             BoardConfig(
                 statuses=["research", "todo", "done"],
                 priorities=["needed"],
-                agents=AgentsConfig(
-                    agent_map={"research": "r", "todo": "b", "done": "d"}
-                ),
+                agent_map={"research": "r", "todo": "b", "done": "d"},
                 terminal_status="todo",  # not last
             )
         assert "ERR_TERMINAL_STATUS_INVALID" in exc_info.value.code
 
-    def test_boardconfig_incomplete_agent_map_raises(self) -> None:
-        """Direct BoardConfig() with agent_map missing a status → ConfigError (D24)."""
-        from owlbear_kanban.models import ConfigError
-
-        with pytest.raises(ConfigError):
-            BoardConfig(
-                statuses=["research", "backlog", "done"],
-                priorities=["needed"],
-                agents=AgentsConfig(
-                    agent_map={"research": "r", "done": "d"}
-                ),  # "backlog" missing
-            )
+    def test_boardconfig_incomplete_agent_map_does_not_raise_at_construction(self) -> None:
+        """BoardConfig() with incomplete agent_map is valid at construction — D24 defers validation to pick_tasks."""
+        cfg = BoardConfig(
+            statuses=["research", "backlog", "done"],
+            priorities=["needed"],
+            agent_map={"research": "r", "done": "d"},  # "backlog" missing
+        )
+        assert cfg is not None
 
     def test_boardconfig_invalid_claim_timeout_raises(self) -> None:
         """Direct BoardConfig() with unparseable claim_timeout → ConfigError (D29)."""
@@ -422,7 +422,7 @@ class TestFromAC_BoardConfigDirectValidation:
             BoardConfig(
                 statuses=["research", "done"],
                 priorities=["needed"],
-                agents=AgentsConfig(agent_map={"research": "r", "done": "d"}),
+                agent_map={"research": "r", "done": "d"},
                 claim_timeout="bad_format",
             )
         assert "ERR_INVALID_CLAIM_TIMEOUT" in exc_info.value.code
@@ -432,13 +432,14 @@ class TestFromAC_BoardConfigDirectValidation:
         from owlbear_kanban.models import ConfigError
 
         with pytest.raises(ConfigError):
-            BoardConfig(
-                statuses=["research", "done"],
-                priorities=["needed"],
-                agents=AgentsConfig(
-                    agent_map={"research": "r", "done": "d"},
-                    agent_compatibility={
-                        "builder": ["reviewer"]
-                    },  # reviewer not reciprocating
-                ),
-            )
+            BoardConfig.model_validate({
+                "schema": "grouped",
+                "statuses": ["research", "done"],
+                "priorities": ["needed"],
+                "agents": {
+                    "agent_map": {"research": "r", "done": "d"},
+                    "agent_compatibility": {
+                        "builder": ["reviewer"]  # reviewer not reciprocating
+                    },
+                },
+            })
