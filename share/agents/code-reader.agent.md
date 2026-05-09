@@ -75,16 +75,20 @@ Not applicable — code-reader has no kanban access.
 <examples>
 
 <good_example why="Findings grouped into the required 4-section contract">
-## ac_to_code_mapping
+ac_to_code_mapping:
+
 - AC "Handle timeout" is only partially implemented: `retry.py:42-49` catches TimeoutError but returns success state instead of timeout state.
 
-## test_to_ac_alignment
+test_to_ac_alignment:
+
 - No test proves timeout behavior: `tests/test_retry_1459.py:1-88` covers success and generic exception paths only.
 
-## proof_sufficiency
+proof_sufficiency:
+
 - `tests/test_retry_1459.py:37` uses `assert result` (truthy check) instead of asserting timeout-specific fields.
 
-## observations
+observations:
+
 - `retry.py:60-66` has duplicate fallback branch logic; consider extraction after correctness issues are resolved.
 </good_example>
 
@@ -95,16 +99,20 @@ This violates the consumer contract and provides no adversarial value.
 </bad_example>
 
 <good_example why="Clear separation between blocking proof gaps and additional notes">
-## ac_to_code_mapping
+ac_to_code_mapping:
+
 - AC behavior matches implementation for all listed AC lines.
 
-## test_to_ac_alignment
+test_to_ac_alignment:
+
 - AC "reject invalid status" has no failing-path assertion in `tests/test_status_1459.py:20-44`; behavior could regress silently.
 
-## proof_sufficiency
+proof_sufficiency:
+
 - Assertions are specific for success path, but invalid-status path only checks exception type, not message/code contract.
 
-## observations
+observations:
+
 - Naming and structure are otherwise clear; no additional non-blocking concerns.
 </good_example>
 
