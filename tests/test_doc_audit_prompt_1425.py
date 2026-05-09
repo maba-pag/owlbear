@@ -93,6 +93,56 @@ class TestFromAC_DimensionReferenceTable:
             "table references the skill rather than duplicating full probes"
         )
 
+    def test_d7_name_is_cross_reference_integrity(self) -> None:
+        content = DOC_AUDIT_PROMPT.read_text()
+        # D7 row must name "Cross-reference Integrity" (not "Audience Fitness" or "Link Integrity")
+        assert re.search(
+            r"\|\s*D7\s*\|[^|\n]*Cross.reference\s+Integrity",
+            content,
+            re.IGNORECASE,
+        ), (
+            "D7 row in the dimension table must map to 'Cross-reference Integrity' "
+            "(canonical: r-doc-standards DIM-7); live prompt incorrectly maps D7 to 'Audience Fitness'"
+        )
+
+    def test_d7_rule_family_is_xref(self) -> None:
+        content = DOC_AUDIT_PROMPT.read_text()
+        # D7 row must specify XREF-* as the rule family
+        assert re.search(
+            r"\|\s*D7\s*\|[^|\n]*\|[^|\n]*XREF",
+            content,
+            re.IGNORECASE,
+        ), (
+            "D7 row must specify XREF-* as the source rule family "
+            "(canonical: r-doc-standards DIM-7 uses XREF-1, XREF-2, XREF-3); "
+            "live prompt incorrectly maps D7 to AUD-*"
+        )
+
+    def test_d8_name_is_audience_fitness(self) -> None:
+        content = DOC_AUDIT_PROMPT.read_text()
+        # D8 row must name "Audience Fitness" (not "Link Integrity")
+        assert re.search(
+            r"\|\s*D8\s*\|[^|\n]*Audience\s+Fitness",
+            content,
+            re.IGNORECASE,
+        ), (
+            "D8 row in the dimension table must map to 'Audience Fitness' "
+            "(canonical: r-doc-standards DIM-8); live prompt incorrectly maps D8 to 'Link Integrity'"
+        )
+
+    def test_d8_rule_family_is_aud(self) -> None:
+        content = DOC_AUDIT_PROMPT.read_text()
+        # D8 row must specify AUD-* as the rule family
+        assert re.search(
+            r"\|\s*D8\s*\|[^|\n]*\|[^|\n]*AUD-\*",
+            content,
+            re.IGNORECASE,
+        ), (
+            "D8 row must specify AUD-* as the source rule family "
+            "(canonical: r-doc-standards DIM-8 uses AUD-*); "
+            "live prompt incorrectly maps D8 to LNK-*"
+        )
+
 
 class TestFromAC_PreAuditGate:
     """AC6: Pre-audit gate — agent must load r-doc-standards + doc-types.instructions.md
