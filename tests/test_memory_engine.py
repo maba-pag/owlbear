@@ -21,7 +21,7 @@ from owlbear_mcp_memory.engine import MemoryEngine
 from owlbear_mcp_memory.models import MemoryEntry
 
 _VALID_UUID = "b3c2c30f-1e2f-4a3b-97d6-1234567890ab"
-_TS = "2026-05-02T10:00:00+00:00"
+_TS_1271 = "2026-05-02T10:00:00+00:00"
 
 
 def _make_valid_entry(**kwargs: object) -> MemoryEntry:
@@ -159,8 +159,8 @@ def _make_entry(**kwargs: object) -> MemoryEntry:
         "state": "pending",
         "content": "Test content.",
         "scope_agents": None,
-        "created_at": _TS,
-        "updated_at": _TS,
+        "created_at": _TS_1271,
+        "updated_at": _TS_1271,
     }
     defaults.update(kwargs)
     return MemoryEntry(**defaults)

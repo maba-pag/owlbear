@@ -665,9 +665,6 @@ from owlbear_mcp_knowledge.server import app_lifespan, refresh_source
 # Helpers (mirrors test_browser_fetcher_wiring_1325 for self-contained clarity)
 # ---------------------------------------------------------------------------
 
-_NOW = "2026-05-04T00:00:00+00:00"
-
-
 def _make_source_1326(
     *,
     source_type: SourceType = SourceType.AUTHENTICATED_WEB,
@@ -683,51 +680,6 @@ def _make_source_1326(
         created_at=_NOW,
         updated_at=_NOW,
     )
-
-
-def _lifespan_heavy_patches() -> list[Any]:
-    """Return patch objects for all heavy lifespan dependencies."""
-    return [
-        patch("owlbear_mcp_knowledge.server.init_db"),
-        patch("owlbear_mcp_knowledge.server.GraphStore"),
-        patch("owlbear_mcp_knowledge.server.QdrantVectorStore"),
-        patch("owlbear_mcp_knowledge.server.BgeM3EmbeddingProvider"),
-        patch("owlbear_mcp_knowledge.server.EntityExtractor"),
-        patch("owlbear_mcp_knowledge.server.IntraDocGraphBuilder"),
-        patch("owlbear_mcp_knowledge.server.InterDocGraphBuilder"),
-        patch("owlbear_mcp_knowledge.server.GraphAugmentedRetriever"),
-        patch("owlbear_mcp_knowledge.server.KnowledgeQueryService"),
-        patch("owlbear_mcp_knowledge.server.DocumentStore"),
-        patch("owlbear_mcp_knowledge.server.TextChunker"),
-        patch("owlbear_mcp_knowledge.server.KnowledgeSourceStore"),
-        patch("owlbear_mcp_knowledge.server.ContentInjectionGuard"),
-        patch("owlbear_mcp_knowledge.server.IngestPipeline"),
-        patch("owlbear_mcp_knowledge.server.BookmarkStore"),
-        patch("owlbear_mcp_knowledge.server.SourceEvaluator"),
-        patch("owlbear_mcp_knowledge.server.BookmarkPipeline"),
-        patch("owlbear_mcp_knowledge.server.ConsolidationService"),
-        patch(
-            "owlbear_mcp_knowledge.server.make_evaluate_fn",
-            return_value=AsyncMock(),
-        ),
-    ]
-
-
-class _PatchStack:
-    """Enter a list of context managers and exit them all on __exit__."""
-
-    def __init__(self, managers: list[Any]) -> None:
-        self._managers = managers
-        self._active: list[Any] = []
-
-    def __enter__(self) -> Self:
-        for mgr in self._managers:
-            self._active.append(mgr.__enter__())
-        return self
-
-    def __exit__(self, *exc_info: object) -> None:
-        for mgr in reversed(self._managers):
-            mgr.__exit__(*exc_info)
 
 
 # ---------------------------------------------------------------------------

@@ -385,7 +385,7 @@ import owlbear_kanban.storage as storage_mod
 # Shared board fixture
 # ---------------------------------------------------------------------------
 
-_CONFIG_YAML = """\
+_CONFIG_YAML_1206 = """\
 statuses:
   - research
   - backlog
@@ -404,7 +404,7 @@ agent_map:
 """
 
 
-def _make_board(tmp_path: Path, config_yaml: str = _CONFIG_YAML) -> Path:
+def _make_board(tmp_path: Path, config_yaml: str = _CONFIG_YAML_1206) -> Path:
     kanban_dir = tmp_path / "board"
     kanban_dir.mkdir()
     (kanban_dir / "config.yml").write_text(config_yaml, encoding="utf-8")

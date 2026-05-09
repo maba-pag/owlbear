@@ -171,8 +171,6 @@ from pathlib import Path
 
 import pytest
 
-_WEB = Path(__file__).parent.parent / "serve" / "cockpit" / "web"
-
 # Strip ANSI escape sequences from terminal output.
 _ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 

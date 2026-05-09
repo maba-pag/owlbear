@@ -630,32 +630,6 @@ def _make_dirs(tmp_path: Path) -> tuple[Path, Path, Path]:
     return decisions_dir, pending_dir, resolved_dir
 
 
-def _write_dr(
-    pending_dir: Path,
-    filename: str,
-    response: str,
-    task_id: int = 42,
-) -> Path:
-    """Write a minimal 5-field DR file into pending_dir."""
-    content = (
-        "---\n"
-        f"task_id: {task_id}\n"
-        "agent: builder\n"
-        "request_type: approach-selection\n"
-        "created: '2026-04-30'\n"
-        f"response: {response}\n"
-        "---\n\n## Body\nTest.\n"
-    )
-    path = pending_dir / filename
-    path.write_text(content, encoding="utf-8")
-    return path
-
-
-def _mock_engine() -> MagicMock:
-    """Return a lenient MagicMock suitable for use as a DecisionEngine."""
-    return MagicMock()
-
-
 # ---------------------------------------------------------------------------
 # AC2, AC4, AC5, AC6, AC7 — create_dr
 # ---------------------------------------------------------------------------
@@ -1198,34 +1172,6 @@ from owlbear_kanban.decisions import resolve_pending_drs
 _SENTINEL = "ORIGINAL CONTENT MUST NOT CHANGE"
 
 
-def _make_dirs(tmp_path: Path) -> tuple[Path, Path, Path]:
-    """Return (decisions_dir, pending_dir, resolved_dir) with directories created."""
-    decisions_dir = tmp_path / "decisions"
-    pending_dir = decisions_dir / "pending"
-    resolved_dir = decisions_dir / "resolved"
-    pending_dir.mkdir(parents=True)
-    resolved_dir.mkdir(parents=True)
-    return decisions_dir, pending_dir, resolved_dir
-
-
-def _write_dr(
-    pending_dir: Path, filename: str, response: str, task_id: int = 42
-) -> Path:
-    """Write a minimal DR file into pending_dir with the given response."""
-    content = (
-        "---\n"
-        f"task_id: {task_id}\n"
-        "agent: builder\n"
-        "request_type: approach-selection\n"
-        "created: '2026-04-30'\n"
-        f"response: {response}\n"
-        "---\n\n## Body\nTest.\n"
-    )
-    path = pending_dir / filename
-    path.write_text(content, encoding="utf-8")
-    return path
-
-
 def _write_resolved(
     resolved_dir: Path, filename: str, content: str = _SENTINEL
 ) -> Path:
@@ -1233,10 +1179,6 @@ def _write_resolved(
     path = resolved_dir / filename
     path.write_text(content, encoding="utf-8")
     return path
-
-
-def _mock_engine() -> MagicMock:
-    return MagicMock(spec=KanbanEngine)
 
 
 # ---------------------------------------------------------------------------

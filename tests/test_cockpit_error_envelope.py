@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 # Board fixture helpers
 # ---------------------------------------------------------------------------
 
-_CONFIG_YAML = """\
+_CONFIG_YAML_1371 = """\
 statuses:
     - research
     - backlog
@@ -638,18 +638,18 @@ next_id: 1
 """
 
 
-def _make_board(base_dir: Path) -> Path:
+def _make_board_1371(base_dir: Path) -> Path:
     kanban_dir = base_dir / "board"
     kanban_dir.mkdir(parents=True, exist_ok=True)
-    (kanban_dir / "config.yml").write_text(_CONFIG_YAML, encoding="utf-8")
+    (kanban_dir / "config.yml").write_text(_CONFIG_YAML_1371, encoding="utf-8")
     (kanban_dir / "tasks").mkdir(exist_ok=True)
     (kanban_dir / "archive").mkdir(exist_ok=True)
     return kanban_dir
 
 
 @pytest.fixture
-def board_dir(tmp_path: Path) -> Path:
-    kanban_dir = _make_board(tmp_path)
+def board_dir_1371(tmp_path: Path) -> Path:
+    kanban_dir = _make_board_1371(tmp_path)
     seed = KanbanEngine(kanban_dir)
     seed.create_task("Alpha task", status="todo", priority="important")
     seed.create_task("Beta task", status="in-progress", priority="needed")
@@ -659,8 +659,8 @@ def board_dir(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
-def engine_1371(board_dir: Path) -> KanbanEngine:
-    eng = KanbanEngine(board_dir)
+def engine_1371(board_dir_1371: Path) -> KanbanEngine:
+    eng = KanbanEngine(board_dir_1371)
     eng.list_tasks()
     return eng
 

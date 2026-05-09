@@ -791,7 +791,7 @@ from owlbear_kanban.errors import ValidationError
 # Board helpers
 # ---------------------------------------------------------------------------
 
-_CONFIG_YAML = """\
+_CONFIG_YAML_1240 = """\
 statuses:
     - research
     - backlog
@@ -827,11 +827,11 @@ next_id: 1
 """
 
 
-def _make_board(base_dir: Path) -> Path:
+def _make_board_1240(base_dir: Path) -> Path:
     """Create a minimal kanban board directory."""
     kanban_dir = base_dir / "board"
     kanban_dir.mkdir(parents=True, exist_ok=True)
-    (kanban_dir / "config.yml").write_text(_CONFIG_YAML, encoding="utf-8")
+    (kanban_dir / "config.yml").write_text(_CONFIG_YAML_1240, encoding="utf-8")
     (kanban_dir / "tasks").mkdir(exist_ok=True)
     (kanban_dir / "archive").mkdir(exist_ok=True)
     return kanban_dir
@@ -843,9 +843,9 @@ def _make_board(base_dir: Path) -> Path:
 
 
 @pytest.fixture
-def board_dir(tmp_path: Path) -> Path:
+def board_dir_1240(tmp_path: Path) -> Path:
     """Board with two tasks: one at 'done', one at 'todo'."""
-    kanban_dir = _make_board(tmp_path)
+    kanban_dir = _make_board_1240(tmp_path)
     seed = KanbanEngine(kanban_dir)
     seed.create_task("Done task", status="done", priority="important")
     seed.create_task("Todo task", status="todo", priority="important")
@@ -853,22 +853,22 @@ def board_dir(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
-def engine(board_dir: Path) -> KanbanEngine:
+def engine_1240(board_dir_1240: Path) -> KanbanEngine:
     """KanbanEngine bound to the test board."""
-    eng = KanbanEngine(board_dir)
+    eng = KanbanEngine(board_dir_1240)
     eng.list_tasks()
     return eng
 
 
 @pytest.fixture
-def view(engine: KanbanEngine) -> CockpitView:
+def view(engine_1240: KanbanEngine) -> CockpitView:
     """CockpitView bound to the test engine."""
-    return CockpitView(engine)
+    return CockpitView(engine_1240)
 
 
-def _get_updated(engine: KanbanEngine, task_id: int) -> str:
+def _get_updated_1240(engine_1240: KanbanEngine, task_id: int) -> str:
     """Return the current 'updated' timestamp for the given task ID."""
-    return str(engine.show_task(str(task_id)).updated)
+    return str(engine_1240.show_task(str(task_id)).updated)
 
 
 # ---------------------------------------------------------------------------
@@ -882,7 +882,7 @@ class TestFromAC_CockpitViewArchivalValidation:
     # -- AC1: reason required when status="archived" --
 
     def test_archive_without_reason_raises_archival_reason_required(
-        self, view: CockpitView, engine: KanbanEngine
+        self, view: CockpitView, engine_1240: KanbanEngine
     ) -> None:
         """AC1: move_task(id, "archived", archival_reason=None) must raise
         ERR_ARCHIVAL_REASON_REQUIRED.
@@ -890,7 +890,7 @@ class TestFromAC_CockpitViewArchivalValidation:
         CockpitView currently passes through to engine unconditionally; no
         validation block exists. The call succeeds without raising.
         """
-        updated = _get_updated(engine, 1)
+        updated = _get_updated_1240(engine_1240, 1)
         with pytest.raises(ValidationError) as exc_info:
             view.move_task(
                 1, "archived", expected_updated=updated, archival_reason=None
@@ -900,7 +900,7 @@ class TestFromAC_CockpitViewArchivalValidation:
     # -- AC2-AC4: refs forbidden for completed / dropped / wontfix --
 
     def test_archive_completed_with_refs_raises_archival_refs_forbidden(
-        self, view: CockpitView, engine: KanbanEngine
+        self, view: CockpitView, engine_1240: KanbanEngine
     ) -> None:
         """AC2: move_task with reason='completed' and non-empty refs raises
         ERR_ARCHIVAL_REFS_FORBIDDEN.
@@ -908,7 +908,7 @@ class TestFromAC_CockpitViewArchivalValidation:
         CockpitView has no validation block; the call passes through to the
         engine which stores the fields without error.
         """
-        updated = _get_updated(engine, 1)
+        updated = _get_updated_1240(engine_1240, 1)
         with pytest.raises(ValidationError) as exc_info:
             view.move_task(
                 1,
@@ -920,14 +920,14 @@ class TestFromAC_CockpitViewArchivalValidation:
         assert exc_info.value.code == "ERR_ARCHIVAL_REFS_FORBIDDEN"
 
     def test_archive_dropped_with_refs_raises_archival_refs_forbidden(
-        self, view: CockpitView, engine: KanbanEngine
+        self, view: CockpitView, engine_1240: KanbanEngine
     ) -> None:
         """AC3: move_task with reason='dropped' and non-empty refs raises
         ERR_ARCHIVAL_REFS_FORBIDDEN.
 
         CockpitView has no validation block; refs are silently stored.
         """
-        updated = _get_updated(engine, 1)
+        updated = _get_updated_1240(engine_1240, 1)
         with pytest.raises(ValidationError) as exc_info:
             view.move_task(
                 1,
@@ -939,14 +939,14 @@ class TestFromAC_CockpitViewArchivalValidation:
         assert exc_info.value.code == "ERR_ARCHIVAL_REFS_FORBIDDEN"
 
     def test_archive_wontfix_with_refs_raises_archival_refs_forbidden(
-        self, view: CockpitView, engine: KanbanEngine
+        self, view: CockpitView, engine_1240: KanbanEngine
     ) -> None:
         """AC4: move_task with reason='wontfix' and non-empty refs raises
         ERR_ARCHIVAL_REFS_FORBIDDEN.
 
         CockpitView has no validation block; refs are silently stored.
         """
-        updated = _get_updated(engine, 1)
+        updated = _get_updated_1240(engine_1240, 1)
         with pytest.raises(ValidationError) as exc_info:
             view.move_task(
                 1,
@@ -960,7 +960,7 @@ class TestFromAC_CockpitViewArchivalValidation:
     # -- AC5-AC6: refs required for deprecated / duplicate --
 
     def test_archive_deprecated_without_refs_raises_archival_refs_required(
-        self, view: CockpitView, engine: KanbanEngine
+        self, view: CockpitView, engine_1240: KanbanEngine
     ) -> None:
         """AC5: move_task with reason='deprecated' and empty refs raises
         ERR_ARCHIVAL_REFS_REQUIRED.
@@ -968,7 +968,7 @@ class TestFromAC_CockpitViewArchivalValidation:
         CockpitView has no validation block; the task is archived with
         archival_refs=[] and no error raised.
         """
-        updated = _get_updated(engine, 1)
+        updated = _get_updated_1240(engine_1240, 1)
         with pytest.raises(ValidationError) as exc_info:
             view.move_task(
                 1,
@@ -980,7 +980,7 @@ class TestFromAC_CockpitViewArchivalValidation:
         assert exc_info.value.code == "ERR_ARCHIVAL_REFS_REQUIRED"
 
     def test_archive_duplicate_without_refs_raises_archival_refs_required(
-        self, view: CockpitView, engine: KanbanEngine
+        self, view: CockpitView, engine_1240: KanbanEngine
     ) -> None:
         """AC6: move_task with reason='duplicate' and empty refs raises
         ERR_ARCHIVAL_REFS_REQUIRED.
@@ -988,7 +988,7 @@ class TestFromAC_CockpitViewArchivalValidation:
         CockpitView has no validation block; the task is archived with
         archival_refs=[] and no error raised.
         """
-        updated = _get_updated(engine, 1)
+        updated = _get_updated_1240(engine_1240, 1)
         with pytest.raises(ValidationError) as exc_info:
             view.move_task(
                 1,
@@ -1002,7 +1002,7 @@ class TestFromAC_CockpitViewArchivalValidation:
     # -- AC7: completed requires task.status == "done" --
 
     def test_archive_completed_from_non_done_status_raises_completed_requires_done(
-        self, view: CockpitView, engine: KanbanEngine
+        self, view: CockpitView, engine_1240: KanbanEngine
     ) -> None:
         """AC7: move_task with reason='completed' when task.status != 'done' raises
         ERR_COMPLETED_REQUIRES_DONE.
@@ -1010,7 +1010,7 @@ class TestFromAC_CockpitViewArchivalValidation:
         Task 2 is at 'todo', not 'done'. CockpitView has no validation block;
         the engine stores archival_reason='completed' without checking prior status.
         """
-        updated = _get_updated(engine, 2)
+        updated = _get_updated_1240(engine_1240, 2)
         with pytest.raises(ValidationError) as exc_info:
             view.move_task(
                 2,
@@ -1024,7 +1024,7 @@ class TestFromAC_CockpitViewArchivalValidation:
     # -- AC8: ref ID does not exist on the board --
 
     def test_archive_with_nonexistent_ref_raises_archival_ref_missing(
-        self, view: CockpitView, engine: KanbanEngine
+        self, view: CockpitView, engine_1240: KanbanEngine
     ) -> None:
         """AC8: move_task with archival_refs containing a non-existent task ID raises
         a 422 ValidationError.
@@ -1032,7 +1032,7 @@ class TestFromAC_CockpitViewArchivalValidation:
         Task 99999 does not exist. CockpitView has no validation block; the engine
         silently stores refs=[99999] without verifying existence.
         """
-        updated = _get_updated(engine, 1)
+        updated = _get_updated_1240(engine_1240, 1)
         with pytest.raises(ValidationError) as exc_info:
             view.move_task(
                 1,
@@ -1046,7 +1046,7 @@ class TestFromAC_CockpitViewArchivalValidation:
     # -- AC9: self-reference in archival_refs --
 
     def test_archive_with_self_ref_raises_archival_ref_self(
-        self, view: CockpitView, engine: KanbanEngine
+        self, view: CockpitView, engine_1240: KanbanEngine
     ) -> None:
         """AC9: move_task with archival_refs=[task_id] (self-reference) raises a
         422 ValidationError.
@@ -1054,7 +1054,7 @@ class TestFromAC_CockpitViewArchivalValidation:
         Task 1 references its own ID in refs. CockpitView has no validation
         block; the engine silently stores refs=[1] with no self-reference check.
         """
-        updated = _get_updated(engine, 1)
+        updated = _get_updated_1240(engine_1240, 1)
         with pytest.raises(ValidationError) as exc_info:
             view.move_task(
                 1,
@@ -1110,7 +1110,7 @@ class TestFromAC_CockpitViewArchivalValidation:
     # -- AC11: valid archival persists archival_reason and archival_refs --
 
     def test_valid_archival_persists_reason_and_refs(
-        self, view: CockpitView, engine: KanbanEngine
+        self, view: CockpitView, engine_1240: KanbanEngine
     ) -> None:
         """AC11: move_task on a done task with status='archived',
         reason='completed', and archival_refs=[] succeeds and persists both
@@ -1119,7 +1119,7 @@ class TestFromAC_CockpitViewArchivalValidation:
         Task 1 is seeded at 'done'. reason='completed' requires no refs and
         the task is already at terminal status, so all validation rules pass.
         """
-        updated = _get_updated(engine, 1)
+        updated = _get_updated_1240(engine_1240, 1)
         response = view.move_task(
             1,
             "archived",
@@ -1176,7 +1176,7 @@ from owlbear_kanban import KanbanEngine
 # Board helpers
 # ---------------------------------------------------------------------------
 
-_CONFIG_YAML = """\
+_CONFIG_YAML_1244 = """\
 statuses:
     - research
     - backlog
@@ -1212,11 +1212,11 @@ next_id: 1
 """
 
 
-def _make_board(base_dir: Path) -> Path:
+def _make_board_1244(base_dir: Path) -> Path:
     """Create a minimal kanban board directory."""
     kanban_dir = base_dir / "board"
     kanban_dir.mkdir(parents=True, exist_ok=True)
-    (kanban_dir / "config.yml").write_text(_CONFIG_YAML, encoding="utf-8")
+    (kanban_dir / "config.yml").write_text(_CONFIG_YAML_1244, encoding="utf-8")
     (kanban_dir / "tasks").mkdir(exist_ok=True)
     (kanban_dir / "archive").mkdir(exist_ok=True)
     return kanban_dir
@@ -1230,7 +1230,7 @@ def _make_board(base_dir: Path) -> Path:
 @pytest.fixture
 def board_dir(tmp_path: Path) -> Path:
     """Board with two tasks: task 1 at 'done', task 2 at 'todo'."""
-    kanban_dir = _make_board(tmp_path)
+    kanban_dir = _make_board_1244(tmp_path)
     seed = KanbanEngine(kanban_dir)
     seed.create_task("Done task", status="done", priority="important")
     seed.create_task("Todo task", status="todo", priority="important")

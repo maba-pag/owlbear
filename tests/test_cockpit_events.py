@@ -27,79 +27,12 @@ import pytest
 # Board fixture helpers
 # ---------------------------------------------------------------------------
 
-_CONFIG_YAML = """\
-statuses:
-    - research
-    - backlog
-    - todo
-    - in-progress
-    - review
-    - docs
-    - done
-priorities:
-    - someday
-    - nice-to-have
-    - important
-    - needed
-    - critical
-entry_status: research
-terminal_status: done
-wave_size: 4
-agent_map:
-    research: researcher
-    backlog: architect
-    todo: test-writer
-    in-progress: builder
-    review: reviewer
-    docs: doc-writer
-    done: auditor
-agent_types: {}
-agent_compatibility: {}
-non_impl_tags: [research, docs]
-archival_reasons: [completed, deprecated, dropped, duplicate, wontfix]
-status_predicates: {}
-claim_timeout: 1h
-next_id: 1
-"""
-
-
-def _make_board(base_dir: Path) -> Path:
-    """Create a minimal kanban board directory. Returns kanban_dir."""
-    kanban_dir = base_dir / "board"
-    kanban_dir.mkdir(parents=True, exist_ok=True)
-    (kanban_dir / "config.yml").write_text(_CONFIG_YAML, encoding="utf-8")
-    (kanban_dir / "tasks").mkdir(exist_ok=True)
-    (kanban_dir / "archive").mkdir(exist_ok=True)
-    return kanban_dir
-
-
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
-
-
-@pytest.fixture
-def board_dir(tmp_path: Path) -> Path:
-    """Minimal kanban board with no tasks."""
-    return _make_board(tmp_path)
-
-
-@pytest.fixture
-def engine(board_dir: Path):
-    """KanbanEngine bound to the test board."""
-    from owlbear_kanban import KanbanEngine  # noqa: PLC0415
-
-    return KanbanEngine(board_dir)
-
-
 @pytest.fixture
 def client(engine):
     """FastAPI TestClient with engine injected via dependency_overrides.
 
     Patches awatch to return immediately because Starlette's sync TestClient
-    cannot signal ASGI disconnect on SSE streams (receive waits for
-    response_complete which never fires while more_body=True).
-    Tests using this fixture only check headers/status, not stream content.
+    cannot signal ASGI disconnect on SSE streams (header-only checks).
     """
     from fastapi.testclient import TestClient  # noqa: PLC0415
     from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
@@ -1065,7 +998,7 @@ import pytest
 # Board fixture helpers
 # ---------------------------------------------------------------------------
 
-_CONFIG_YAML = """\
+_CONFIG_YAML_1262 = """\
 statuses:
     - research
     - backlog
@@ -1101,11 +1034,11 @@ next_id: 1
 """
 
 
-def _make_board(base_dir: Path) -> Path:
+def _make_board_1262(base_dir: Path) -> Path:
     """Create a minimal kanban board directory. Returns kanban_dir."""
     kanban_dir = base_dir / "board"
     kanban_dir.mkdir(parents=True, exist_ok=True)
-    (kanban_dir / "config.yml").write_text(_CONFIG_YAML, encoding="utf-8")
+    (kanban_dir / "config.yml").write_text(_CONFIG_YAML_1262, encoding="utf-8")
     (kanban_dir / "tasks").mkdir(exist_ok=True)
     (kanban_dir / "archive").mkdir(exist_ok=True)
     return kanban_dir
@@ -1114,7 +1047,7 @@ def _make_board(base_dir: Path) -> Path:
 @pytest.fixture
 def board_dir(tmp_path: Path) -> Path:
     """Minimal kanban board with no tasks."""
-    return _make_board(tmp_path)
+    return _make_board_1262(tmp_path)
 
 
 @pytest.fixture
@@ -1123,7 +1056,6 @@ def engine(board_dir: Path):
     from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
     return KanbanEngine(board_dir)
-
 
 # ---------------------------------------------------------------------------
 # Async helper: run endpoint and capture awatch call kwargs

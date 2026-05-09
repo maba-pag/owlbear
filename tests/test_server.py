@@ -612,7 +612,7 @@ from owlbear_mcp_kanban.server import AppContext, move_task
 # Board config — post-Brief-C list[str] statuses (flat, no dict-form)
 # ---------------------------------------------------------------------------
 
-_CONFIG_YAML = """\
+_CONFIG_YAML_1198 = """\
 statuses:
   - research
   - backlog
@@ -651,10 +651,10 @@ next_id: 1
 # ---------------------------------------------------------------------------
 
 
-def _make_board(base_dir: Path) -> Path:
+def _make_board_1198(base_dir: Path) -> Path:
     kanban_dir = base_dir / "board"
     kanban_dir.mkdir(parents=True, exist_ok=True)
-    (kanban_dir / "config.yml").write_text(_CONFIG_YAML, encoding="utf-8")
+    (kanban_dir / "config.yml").write_text(_CONFIG_YAML_1198, encoding="utf-8")
     (kanban_dir / "tasks").mkdir(exist_ok=True)
     (kanban_dir / "archive").mkdir(exist_ok=True)
     return kanban_dir
@@ -936,7 +936,7 @@ def _make_ctx(app_ctx: AppContext) -> MagicMock:
 @pytest.fixture
 def app_ctx_1198(tmp_path: Path) -> AppContext:
     """AppContext backed by a real board with one task at 'research'."""
-    kanban_dir = _make_board(tmp_path)
+    kanban_dir = _make_board_1198(tmp_path)
     engine = KanbanEngine(kanban_dir)
     engine.create_task("Probe task", status="research", priority="important")
     engine.list_tasks()  # populate id→filename cache
@@ -1619,7 +1619,7 @@ def _make_llm_mod(llm_cls: MagicMock | None = None) -> ModuleType:
 
 
 @pytest.fixture(autouse=True)
-def mock_lifespan_deps() -> None:
+def mock_lifespan_deps_1358() -> None:
     """Patch I/O-heavy constructors so app_lifespan can run without real resources."""
     with (
         patch("owlbear_mcp_knowledge.server.init_db", return_value=MagicMock()),

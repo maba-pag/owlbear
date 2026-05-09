@@ -1034,52 +1034,6 @@ from owlbear_kanban import KanbanEngine
 # Board config & helpers (self-contained, no shared fixtures from other modules)
 # ---------------------------------------------------------------------------
 
-_CONFIG_YAML = """\
-statuses:
-    - research
-    - backlog
-    - todo
-    - in-progress
-    - review
-    - docs
-    - done
-priorities:
-    - someday
-    - nice-to-have
-    - important
-    - needed
-    - critical
-entry_status: research
-terminal_status: done
-wave_size: 4
-agent_map:
-    research: researcher
-    backlog: architect
-    todo: test-writer
-    in-progress: builder
-    review: reviewer
-    docs: doc-writer
-    done: auditor
-agent_types: {}
-agent_compatibility: {}
-non_impl_tags: [research, docs]
-archival_reasons: [completed, deprecated, dropped, duplicate, wontfix]
-status_predicates: {}
-claim_timeout: 1h
-next_id: 1
-"""
-
-
-def _make_board(base_dir: Path) -> Path:
-    """Create a minimal kanban board directory. Returns kanban_dir."""
-    kanban_dir = base_dir / "board"
-    kanban_dir.mkdir(parents=True, exist_ok=True)
-    (kanban_dir / "config.yml").write_text(_CONFIG_YAML, encoding="utf-8")
-    (kanban_dir / "tasks").mkdir(exist_ok=True)
-    (kanban_dir / "archive").mkdir(exist_ok=True)
-    return kanban_dir
-
-
 # ---------------------------------------------------------------------------
 # AC1 / AC2 / AC3 proof tests
 # ---------------------------------------------------------------------------
