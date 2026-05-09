@@ -271,13 +271,20 @@ describe('TestFromAC_ConflictLocalEditsPreserved', () => {
      *
      * StatefulWrapper reproduces the real parent re-render path.
      * Without it: DetailTab never re-renders on onTaskUpdated → false-green.
+     * Spy closes the false-green path: a builder who suppresses onTaskUpdated?.(latestTask)
+     * avoids the useEffect reset but fails the spy assertion.
      */
     vi.stubGlobal('fetch', mockConflictThenRefetch(SERVER_TASK))
-    const { container } = render(<StatefulWrapper initialTask={BASE_TASK} />)
+    const onTaskUpdatedSpy = vi.fn()
+    const { container } = render(<StatefulWrapper initialTask={BASE_TASK} onTaskUpdated={onTaskUpdatedSpy} />)
 
     editTitle(container, 'My Local Edit Title')
     await triggerConflictModal(container)
 
+    // Spy proves onTaskUpdated was invoked with server's refreshed task (parent re-render path)
+    expect(onTaskUpdatedSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ updated: SERVER_TASK.updated }),
+    )
     // BUG: useEffect resets title to SERVER_TASK.title ('Server Title (Different)')
     // EXPECTED after fix: user's local title preserved
     expect(getFieldValue(container, 'p-input-text[data-field="title"]')).toBe('My Local Edit Title')
@@ -288,13 +295,18 @@ describe('TestFromAC_ConflictLocalEditsPreserved', () => {
      * AC1 (edge): Priority (distinct from title) must also be preserved after re-render.
      * User edits priority to 'someday'; SERVER_TASK.priority is 'critical'.
      * Without fix: useEffect resets to 'critical'.
+     * Spy closes the false-green path: suppressing onTaskUpdated avoids useEffect reset.
      */
     vi.stubGlobal('fetch', mockConflictThenRefetch(SERVER_TASK))
-    const { container } = render(<StatefulWrapper initialTask={BASE_TASK} />)
+    const onTaskUpdatedSpy = vi.fn()
+    const { container } = render(<StatefulWrapper initialTask={BASE_TASK} onTaskUpdated={onTaskUpdatedSpy} />)
 
     editPriority(container, 'someday')
     await triggerConflictModal(container)
 
+    expect(onTaskUpdatedSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ updated: SERVER_TASK.updated }),
+    )
     expect(getFieldValue(container, '[data-field="priority"]')).toBe('someday')
   })
 
@@ -303,13 +315,18 @@ describe('TestFromAC_ConflictLocalEditsPreserved', () => {
      * AC1 (boundary): block_reason on a blocked task must survive the useEffect reset.
      * BLOCKED_SERVER_TASK has a different block_reason + updated timestamp.
      * Without fix: useEffect resets block_reason to BLOCKED_SERVER_TASK.block_reason.
+     * Spy closes the false-green path: suppressing onTaskUpdated avoids useEffect reset.
      */
     vi.stubGlobal('fetch', mockConflictThenRefetch(BLOCKED_SERVER_TASK))
-    const { container } = render(<StatefulWrapper initialTask={BLOCKED_TASK} />)
+    const onTaskUpdatedSpy = vi.fn()
+    const { container } = render(<StatefulWrapper initialTask={BLOCKED_TASK} onTaskUpdated={onTaskUpdatedSpy} />)
 
     editBlockReason(container, 'My local block reason')
     await triggerConflictModal(container)
 
+    expect(onTaskUpdatedSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ updated: BLOCKED_SERVER_TASK.updated }),
+    )
     expect(getFieldValue(container, '[data-field="block_reason"]')).toBe('My local block reason')
   })
 
@@ -343,11 +360,17 @@ describe('TestFromAC_ConflictLocalEditsPreserved', () => {
       // Third call: second save attempt (after user dismisses conflict modal)
       return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(SERVER_TASK_BODY_ONLY) })
     })
+    const onTaskUpdatedSpy = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
-    const { container } = render(<StatefulWrapper initialTask={BASE_TASK} />)
+    const { container } = render(<StatefulWrapper initialTask={BASE_TASK} onTaskUpdated={onTaskUpdatedSpy} />)
 
     editBody(container, 'My Local Edit Body')
     await triggerConflictModal(container)
+
+    // Spy proves onTaskUpdated was invoked with server's refreshed task (parent re-render path)
+    expect(onTaskUpdatedSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ updated: SERVER_TASK_BODY_ONLY.updated }),
+    )
 
     // Dismiss via the available conflict modal affordance
     const dismissBtn = container.querySelector('[data-testid="conflict-refresh"]') as HTMLElement | null
@@ -377,13 +400,18 @@ describe('TestFromAC_ConflictLocalEditsPreserved', () => {
      * AC1 (edge): depends_on must survive the useEffect reset.
      * User sets depends_on to '1, 2'; SERVER_TASK.depends_on is [] → resets to ''.
      * Without fix: useEffect resets dependsOn to ''.
+     * Spy closes the false-green path: suppressing onTaskUpdated avoids useEffect reset.
      */
     vi.stubGlobal('fetch', mockConflictThenRefetch(SERVER_TASK))
-    const { container } = render(<StatefulWrapper initialTask={BASE_TASK} />)
+    const onTaskUpdatedSpy = vi.fn()
+    const { container } = render(<StatefulWrapper initialTask={BASE_TASK} onTaskUpdated={onTaskUpdatedSpy} />)
 
     editDependsOn(container, '1, 2')
     await triggerConflictModal(container)
 
+    expect(onTaskUpdatedSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ updated: SERVER_TASK.updated }),
+    )
     // BUG: useEffect resets depends_on to '' (SERVER_TASK.depends_on = [])
     expect(getFieldValue(container, 'p-input-text[data-field="depends_on"]')).toBe('1, 2')
   })
@@ -393,13 +421,18 @@ describe('TestFromAC_ConflictLocalEditsPreserved', () => {
      * AC1 (edge): parent must survive the useEffect reset.
      * User sets parent to '7'; SERVER_TASK.parent is null → resets to ''.
      * Without fix: useEffect resets parent to ''.
+     * Spy closes the false-green path: suppressing onTaskUpdated avoids useEffect reset.
      */
     vi.stubGlobal('fetch', mockConflictThenRefetch(SERVER_TASK))
-    const { container } = render(<StatefulWrapper initialTask={BASE_TASK} />)
+    const onTaskUpdatedSpy = vi.fn()
+    const { container } = render(<StatefulWrapper initialTask={BASE_TASK} onTaskUpdated={onTaskUpdatedSpy} />)
 
     editParent(container, '7')
     await triggerConflictModal(container)
 
+    expect(onTaskUpdatedSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ updated: SERVER_TASK.updated }),
+    )
     // BUG: useEffect resets parent to '' (SERVER_TASK.parent = null → '')
     expect(getFieldValue(container, 'p-input-text[data-field="parent"]')).toBe('7')
   })
