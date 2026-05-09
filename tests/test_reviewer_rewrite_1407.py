@@ -131,6 +131,8 @@ class TestFromAC_CodeReviewSkillRewrite:
 
         The new model: reviewer reads builder evidence rather than re-running tests.
         Uses a specific phrase absent from the current skill.
+        Negative: must not contain the legacy 'Tests run independently, not trusting builder
+        output' or 'Run tests yourself' guidance that contradicts the trust-the-builder model.
         """
         content = _CODE_REVIEW_SKILL.read_text(encoding="utf-8")
         lower = content.lower()
@@ -145,11 +147,27 @@ class TestFromAC_CodeReviewSkillRewrite:
             "quality-runner output (phrase 'quality-runner output' not found). "
             "Current skill says 'Run tests, lint, and coverage yourself via Quality-Runner'."
         )
+        # Absence of contradictory legacy guidance (new AC line from arch review)
+        assert "Tests run independently, not trusting builder output" not in content, (
+            "w-code-review/SKILL.md must NOT contain the legacy rerun guidance "
+            "'Tests run independently, not trusting builder output' — "
+            "this contradicts the trust-the-builder model."
+        )
+        assert "Run tests yourself" not in content, (
+            "w-code-review/SKILL.md must NOT contain 'Run tests yourself' — "
+            "contradicts the trust-the-builder model (reviewer reads builder evidence)."
+        )
 
     # P2-AC6: scoped 3-item checklist (AC→code mapping, test→AC alignment, proof sufficiency)
 
     def test_w_code_review_three_item_checklist(self) -> None:
-        """w-code-review must contain a scoped 3-item checklist with all three named items."""
+        """w-code-review must contain a scoped 3-item checklist with all three named items.
+
+        Negative: the legacy 'Pass 1' section heading must be absent — it signals that the
+        old multi-pass review scaffold still governs the workflow instead of the 3-item checklist.
+        Note: a stale template placeholder '{Pass 1 check reference}' is acceptable cosmetic
+        drift; only the operative section heading '### Pass 1' triggers this assertion.
+        """
         content = _CODE_REVIEW_SKILL.read_text(encoding="utf-8")
         lower = content.lower()
         # All three checklist items must appear
@@ -165,6 +183,14 @@ class TestFromAC_CodeReviewSkillRewrite:
         )
         assert has_sufficiency, (
             "w-code-review/SKILL.md 3-item checklist must include 'proof sufficiency' — not found."
+        )
+        # Absence of legacy Pass 1 scaffold (new AC line from arch review)
+        # Check the operative section heading; the template placeholder '{Pass 1 check reference}'
+        # is tolerated as cosmetic drift and excluded from this assertion.
+        assert "### Pass 1" not in content, (
+            "w-code-review/SKILL.md must NOT contain the '### Pass 1' section heading — "
+            "its presence means the legacy multi-pass scaffold still governs the workflow "
+            "instead of the scoped 3-item checklist."
         )
 
     # P2-AC7: TestFromAC immutability rule removed from reviewer skill
@@ -211,6 +237,8 @@ class TestFromAC_PipelineProtocolUpdate:
 
         The contract should indicate that the reviewer reads / trusts builder evidence
         rather than independently re-running all checks.
+        Negative: must not contain 'Never trust self-reports' — the legacy blanket-distrust
+        mandate that contradicts the D2 trust-the-builder model for reviewers.
         """
         content = _PIPELINE_PROTOCOL.read_text(encoding="utf-8")
         lower = content.lower()
@@ -224,4 +252,10 @@ class TestFromAC_PipelineProtocolUpdate:
             "r-pipeline-protocol/SKILL.md reviewer contract section must reflect the "
             "D2 trust-the-builder model (e.g. 'trust-the-builder', 'cost-justified', "
             "or 'builder evidence') — not found. Current protocol has no D2 trust model."
+        )
+        # Absence of contradictory legacy blanket-distrust mandate (new AC line from arch review)
+        assert "Never trust self-reports" not in content, (
+            "r-pipeline-protocol/SKILL.md must NOT contain 'Never trust self-reports' — "
+            "this blanket-distrust mandate contradicts the D2 trust-the-builder model "
+            "introduced for reviewers."
         )
