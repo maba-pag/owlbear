@@ -57,6 +57,11 @@ Returned by `pick_tasks` in `waves: list[Wave]`.
 
 Responses include `guidance: list[str]` for operational hints (for example: DR-required block guidance and forward-skip warnings). Treat as advisory metadata.
 
+## list_tasks Filter Semantics
+
+- `ids=[]` (explicit empty list) returns an empty task list with no `missing_ids` entry. `ids=None` (omitted) returns all tasks matching other filters.
+- `archival_reason` without `status` automatically defaults to searching archived tasks.
+
 ## Archival Fields
 
 `archival_reason` supports 5 values:
