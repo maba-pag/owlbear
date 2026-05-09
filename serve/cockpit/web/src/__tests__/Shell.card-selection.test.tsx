@@ -119,8 +119,6 @@ import { usePolling } from '../hooks/usePolling'
 import { useScanPolling } from '../hooks/useScanPolling'
 import { usePendingDRs } from '../hooks/usePendingDRs'
 import KanbanBoard from '../KanbanBoard'
-import DetailTab from '../components/DetailTab'
-import ActivityTab from '../components/ActivityTab'
 import Shell from '../Shell'
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
