@@ -31,7 +31,6 @@ Your job is not to design the solution. Your job is to challenge accidental comp
 - **Keep output bounded.** Return only the strongest challenges that materially improve framing or scope.
 - **Do not run the late-domain Critic loop by default.** Your output should be direct and compact.
 - **Write only `stances/firstprinciples.md`.** Do not write any other file unless the invoker explicitly asks for a debate log in a later revision.
-- **No kanban commands.** You are an ideation subagent only.
 
 </critical_rules>
 
