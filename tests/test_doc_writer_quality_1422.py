@@ -489,7 +489,7 @@ class TestFromAC_AttributionRules:
     def test_item1_preexisting_issues_insert_todo_marker(self) -> None:
         item1 = self._item1_section()
         assert re.search(
-            r"pre.existing.*insert.*TODO\s+marker|pre.existing.*TODO\s+marker",
+            r"pre.existing.*insert.*TODO\s+marker",
             item1,
             re.IGNORECASE,
         ), (
@@ -505,7 +505,7 @@ class TestFromAC_AttributionRules:
         )
         has_preexisting_todo = bool(
             re.search(
-                r"pre.existing.*insert.*TODO\s+marker|pre.existing.*TODO\s+marker",
+                r"pre.existing.*insert.*TODO\s+marker",
                 item1,
                 re.IGNORECASE,
             )
