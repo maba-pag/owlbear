@@ -459,3 +459,81 @@ class TestFromAC_ConventionMappingTable:
             "split checks on each token independently false-green when the src row "
             "points to a different destination (R5 gap)"
         )
+
+
+class TestFromAC_AttributionRules:
+    """AC7: Item 1 must specify attribution rules: task-caused issues fixed inline,
+    pre-existing unresolved issues get a visible TODO marker.
+
+    These tests are discriminating: a mutation that removes or weakens
+    SKILL.md lines 'Fix task-caused issues inline.' and
+    'For pre-existing unresolved issues, insert a visible TODO marker.'
+    from Item 1 must fail these assertions even if the gate rules and
+    global TODO marker section remain intact.
+    """
+
+    def _item1_section(self) -> str:
+        content = SKILL_DOC_UPDATE.read_text()
+        match = re.search(r"### Item 1:.*?(?=### Item 2:)", content, re.DOTALL)
+        assert match, "Could not find Item 1 section in SKILL.md"
+        return match.group(0)
+
+    def test_item1_fix_task_caused_inline(self) -> None:
+        item1 = self._item1_section()
+        assert re.search(r"[Ff]ix\s+task.caused\s+issues\s+inline", item1), (
+            "Item 1 (README Verification) must explicitly state 'Fix task-caused issues inline' "
+            "as a per-item instruction — AC7 attribution rule: task-caused issues → fix inline; "
+            "the gate rules section alone does not satisfy this requirement"
+        )
+
+    def test_item1_preexisting_issues_insert_todo_marker(self) -> None:
+        item1 = self._item1_section()
+        assert re.search(
+            r"pre.existing.*insert.*TODO\s+marker|pre.existing.*TODO\s+marker",
+            item1,
+            re.IGNORECASE,
+        ), (
+            "Item 1 (README Verification) must state that pre-existing unresolved issues "
+            "get a visible TODO marker — AC7 attribution rule: pre-existing → TODO marker; "
+            "this instruction must appear in Item 1 body, not only in the gate rules section"
+        )
+
+    def test_item1_has_both_attribution_rules(self) -> None:
+        item1 = self._item1_section()
+        has_task_caused_inline = bool(
+            re.search(r"[Ff]ix\s+task.caused\s+issues\s+inline", item1)
+        )
+        has_preexisting_todo = bool(
+            re.search(
+                r"pre.existing.*insert.*TODO\s+marker|pre.existing.*TODO\s+marker",
+                item1,
+                re.IGNORECASE,
+            )
+        )
+        assert has_task_caused_inline, (
+            "Item 1 must contain AC7 attribution rule (1): 'Fix task-caused issues inline' — "
+            "removing this rule from Item 1 must fail even if the Gate rules section is intact"
+        )
+        assert has_preexisting_todo, (
+            "Item 1 must contain AC7 attribution rule (2): "
+            "'pre-existing unresolved issues → insert a visible TODO marker' — "
+            "removing this rule from Item 1 must fail even if the Gate rules section is intact"
+        )
+
+    def test_item1_attribution_rules_scoped_to_item1_not_only_gate(self) -> None:
+        content = SKILL_DOC_UPDATE.read_text()
+        item1_match = re.search(r"### Item 1:.*?(?=### Item 2:)", content, re.DOTALL)
+        assert item1_match, "Could not find Item 1 section"
+        item1 = item1_match.group(0)
+        # Both attribution keywords must appear in Item 1 itself — not rely on
+        # the Gate rules section being found after removing them from Item 1.
+        assert "task-caused" in item1, (
+            "The phrase 'task-caused' must appear inside Item 1 body — "
+            "AC7 requires the per-item attribution rule, not just the global gate policy; "
+            "removing it from Item 1 while keeping the Gate rules must still fail"
+        )
+        assert re.search(r"pre.existing", item1, re.IGNORECASE), (
+            "The phrase 'pre-existing' must appear inside Item 1 body — "
+            "AC7 requires the per-item attribution rule, not just the global gate policy; "
+            "removing it from Item 1 while keeping the Gate rules must still fail"
+        )
