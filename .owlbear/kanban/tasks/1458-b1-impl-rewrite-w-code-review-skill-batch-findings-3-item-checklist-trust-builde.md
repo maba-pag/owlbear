@@ -2,10 +2,10 @@
 id: 1458
 title: 'B1-impl: Rewrite w-code-review skill — batch findings, 3-item checklist, trust
   builder evidence'
-status: review
+status: docs
 priority: critical
 created: 2026-05-08T19:47:09.269589+00:00
-updated: 2026-05-09T04:16:01.148002+00:00
+updated: 2026-05-09T05:27:56.201615+00:00
 tags:
 - pipeline
 - ws-reviewer
@@ -87,3 +87,105 @@ Rewrite `share/skills/w-code-review/SKILL.md` per research in `.owlbear/research
   - Coverage: N/A (non-executable markdown)
 - Commit: `1a757cd8` — `docs: rewrite reviewer workflow for D2 trust model (#1458, builder)`
 - Files changed: `share/skills/w-code-review/SKILL.md`
+[[2026-05-09]]
+## Review Evidence
+### Test Results
+- td:0 markdown skill task. No task-scoped executable tests apply.
+
+### Lint Results
+- Builder Notes claim: `quality-runner` reported `markdownlint exit 0` for `share/skills/w-code-review/SKILL.md` and `share/skills/r-pipeline-protocol/SKILL.md`.
+- Reviewer rerun via `quality-runner` reported markdown lint unsupported for this scope.
+- `share/skills/h-quality-runner/SKILL.md:9` defines supported toolchains as `pytest`/`ruff`/coverage or `vitest`/`eslint`/coverage only; supporting lines `44-45`, `75`, and `119-123` describe the same Python/frontend split with no markdown-lint path.
+
+### Coverage
+- N/A for markdown-only task scope.
+
+### AC Compliance
+| AC Line | Evidence | Status |
+|---|---|---|
+| Code-reader consumer contract uses 3-item-checklist-aligned sections and removes old 8-section format | `share/skills/w-code-review/SKILL.md:81-84` defines `ac_to_code_mapping`, `test_to_ac_alignment`, `proof_sufficiency`, `observations`; grep found no remaining matches for `test_writer-audit`, `security_review`, `test_integrity`, `test_quality`, `data_safety`, `test_gaps`, `necessity_check`, or `informational` in the file | PASS |
+| Step 2 depth-aware dispatch table uses current step numbering only | `share/skills/w-code-review/SKILL.md:55-61` references the current step flow; grep found no `§5.0` or obsolete-step references in the file | PASS |
+| No redundant overlapping workflow; 3-item checklist is the operative review path | Step headers at `share/skills/w-code-review/SKILL.md:15`, `:21`, `:41`, `:89`, `:98`, `:117`, and `:134` show the simplified flow; `:98-110` defines the three checklist items; `:11` and `:119` enforce batch-all-findings | PASS |
+| `r-pipeline-protocol` uses D2 trust-the-builder language and removes `never trust self-reports` phrasing | `share/skills/r-pipeline-protocol/SKILL.md:73-75` contains `Reviewer Contract (D2 trust-the-builder)` and `trust-the-builder evidence model`; grep found no `never trust self-reports` match in the file | PASS |
+| `w-code-review` is <=200 lines | The final checklist item is at `share/skills/w-code-review/SKILL.md:164`, so the file is 164 lines long | PASS |
+| Output template has exactly `Review Evidence` + `Observations`, with one-line PASS confirmation | `share/skills/w-code-review/SKILL.md:146-153` contains only `## Review Evidence`, a one-line PASS confirmation at `:148`, and `## Observations` | PASS |
+
+### Blocking Finding
+| # | Area | Finding | Evidence | Route |
+|---|---|---|---|---|
+| 1 | Proof sufficiency / evidence consistency | The submitted review-proof packet is internally inconsistent. Builder Notes claim a `quality-runner` markdownlint pass, but the live `quality-runner` contract and reviewer rerun both show markdown lint is unsupported. The rewritten workflow itself requires builder evidence to be sufficient and internally consistent before PASS. | Builder Notes in task body vs reviewer `quality-runner` report; `share/skills/w-code-review/SKILL.md:41-53` and `:117-124`; `share/skills/h-quality-runner/SKILL.md:9`, `:44-45`, `:75`, `:119-123` | in-progress |
+
+### Deductions
+-0.10 contradictory builder evidence for lint provenance
+-0.02 commit/diff and dirty-tree overlap could not be independently verified in this tool surface
+
+### Verdict
+- FAIL
+- Confidence: 0.86
+- Action: reject to `in-progress`
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Replace the unsupported `quality-runner` markdownlint claim with valid, reproducible lint provenance, or otherwise correct the task evidence packet so it is internally consistent | `share/skills/w-code-review/SKILL.md`; `share/skills/r-pipeline-protocol/SKILL.md`; task body `## Builder Notes` | Builder Notes vs reviewer `quality-runner` report and `share/skills/h-quality-runner/SKILL.md:9,44-45,75,119-123` |
+
+## Observations
+- The live content of `share/skills/w-code-review/SKILL.md` appears to satisfy all six stated AC lines.
+- The rejection is about proof quality, not about the textual rewrite itself.
+- Once the lint evidence is corrected or replaced with a supported provenance, this should be a fast re-review.
+[[2026-05-09]]
+## Builder Notes
+- Scope: review-proof correction only (no source edits required).
+- Files changed this cycle: none.
+- Existing implementation commit remains: `1a757cd8` (`docs: rewrite reviewer workflow for D2 trust model (#1458, builder)`), touching `share/skills/w-code-review/SKILL.md`.
+
+### Evidence Refresh (internally consistent)
+- AC conformance re-verified from workspace state:
+  - `share/skills/w-code-review/SKILL.md` is 164 lines (<=200).
+  - No matches for removed legacy contract terms: `test_writer-audit`, `security_review`, `test_integrity`, `test_quality`, `data_safety`, `test_gaps`, `necessity_check`, `informational`.
+  - No obsolete `§5.0` reference remains.
+  - Output template contains `## Review Evidence` and `## Observations` with one-line PASS confirmation template.
+  - `share/skills/r-pipeline-protocol/SKILL.md` retains D2 trust-the-builder language and no `never trust self-reports` phrase.
+
+### Quality Evidence
+- Tests: N/A (all AC lines are `(td:0)` markdown-skill semantics).
+- Lint: N/A for quality-runner in this scope. Per `share/skills/h-quality-runner/SKILL.md`, supported lint toolchains are `ruff` (Python) and `eslint` (frontend); markdown lint is not part of quality-runner contract.
+- Coverage: N/A (non-executable markdown task).
+
+### Correction Applied
+- Replaced prior inconsistent claim (`quality-runner` markdownlint pass) with contract-aligned evidence classification (`lint: N/A` in this task scope).
+- This retry addresses reviewer finding #1 (proof consistency) without altering previously accepted implementation content.
+[[2026-05-09]]
+## Review Evidence
+### Test Results
+- td:0 markdown skill task. No executable tests apply.
+
+### Lint Results
+- The prior contradiction is resolved. The builder retry now classifies lint as N/A for quality-runner in this scope at `.owlbear/kanban/tasks/1458-b1-impl-rewrite-w-code-review-skill-batch-findings-3-item-checklist-trust-builde.md:152`.
+- That classification is consistent with `share/skills/h-quality-runner/SKILL.md:9` and `:73`, which define quality-runner support around pytest/ruff/coverage (Python) and vitest/eslint/coverage (frontend), with no markdown-lint path.
+
+### Coverage
+- N/A for markdown-only task scope.
+
+### AC Compliance
+| AC Line | Evidence | Status |
+|---|---|---|
+| Code-reader consumer contract in `w-code-review/SKILL.md` defines output sections aligned with the 3-item checklist; old 8-section format removed | `share/skills/w-code-review/SKILL.md:81-84` defines only `ac_to_code_mapping`, `test_to_ac_alignment`, `proof_sufficiency`, and `observations`; grep found no remaining matches for `test_writer-audit`, `security_review`, `test_integrity`, `test_quality`, `data_safety`, `test_gaps`, `necessity_check`, or `informational` in the file | PASS |
+| Depth-aware dispatch table in Step 2 references current step numbering only | `share/skills/w-code-review/SKILL.md:59-63` uses the current Step 4 checklist flow; grep found no `§5.0` match in the file | PASS |
+| No redundant steps; the scoped 3-item checklist is the sole operative review workflow | `share/skills/w-code-review/SKILL.md:41-53` establishes builder-evidence-first gating and `:98-123` defines the only operative checklist as `4.1 AC→Code Mapping`, `4.2 Test→AC Alignment`, and `4.3 Proof Sufficiency` | PASS |
+| `r-pipeline-protocol` Reviewer Contract uses D2 trust-the-builder language; no `never trust self-reports` phrasing remains | `share/skills/r-pipeline-protocol/SKILL.md:73-77` contains `Reviewer Contract (D2 trust-the-builder)` and `trust-the-builder evidence model`; grep found no `never trust self-reports` match in the file | PASS |
+| Skill file is <=200 lines | `share/skills/w-code-review/SKILL.md` ends at line `164` | PASS |
+| Output template has exactly `Review Evidence` and `Observations`, with one-line PASS confirmation | `share/skills/w-code-review/SKILL.md:146-153` contains only `## Review Evidence`, the one-line PASS confirmation template at `:148`, and `## Observations`; the file ends at `:164` | PASS |
+
+### Deductions
+- -0.02 I could verify the cited builder commit exists in `.git/logs/HEAD:2396` and `.git/logs/refs/heads/dev:2211`, but I could not independently run `git diff` / `git status` in this tool surface to confirm dirty-tree overlap.
+
+### Verdict
+- PASS
+- Confidence: 0.96
+- Action: advance to `docs`
+- PASS confirmation: PASS #1458 -> docs | AC mapped to code and evidence sufficient.
+
+## Observations
+- The prior review failure in `.owlbear/kanban/tasks/1458-b1-impl-rewrite-w-code-review-skill-batch-findings-3-item-checklist-trust-builde.md:91` was fully addressed by the builder's evidence refresh at `:139-152`; no additional source edits were required.
+- Commit `1a757cd8` is present in repo reflogs and matches the builder note title `docs: rewrite reviewer workflow for D2 trust model (#1458, builder)`.

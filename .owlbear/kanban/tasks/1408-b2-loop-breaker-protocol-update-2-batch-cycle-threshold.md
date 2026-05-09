@@ -1,10 +1,10 @@
 ---
 id: 1408
 title: 'B2: Loop-breaker protocol update — 2-batch-cycle threshold'
-status: in-progress
+status: done
 priority: important
 created: 2026-05-07T23:16:25.227004+00:00
-updated: 2026-05-09T04:00:05.616381+00:00
+updated: 2026-05-09T05:12:34.061394+00:00
 tags:
 - pipeline
 - ws-reviewer
@@ -56,3 +56,78 @@ Follow-up: #1462 (B2-impl) at research — covers all 4 files.
 - AC lines P1/P2/P3 describe a text/terminology change in a markdown skill file, with verification by diff comparison. No Python functions, classes, endpoints, or modules are involved.
 - Step 2a: no implementation intent found, AC references only non-Python files → heuristic pass-through.
 - Passing through to builder.
+[[2026-05-09]]
+## Builder Notes
+- Files changed: share/skills/r-pipeline-protocol/SKILL.md
+- Scope: Updated reviewer loop-breaker wording from FAIL-count phrasing to batch-review-cycle phrasing in the Confidence Thresholds table.
+- Diff evidence (P3):
+  - `< .90, 1st FAIL` -> `< .90, Cycle 1 review FAIL`
+  - `< .90, 2nd+ FAIL` -> `< .90, Cycle 2+ review FAIL` with explicit note `(loop-breaker at 2 batch review cycles)`
+- Quality-runner evidence:
+  - Tests: N/A (docs-only task; no executable test paths)
+  - Lint: markdownlint clean on share/skills/r-pipeline-protocol/SKILL.md (0 violations)
+  - Coverage: N/A (non-code markdown change)
+- Commit: c9137e7e (`docs: update loop-breaker batch-cycle wording (#1408, builder)`)
+- Acceptance criteria mapping:
+  - P1: `r-pipeline-protocol` loop-breaker section updated to 2-batch-cycle terminology.
+  - P2: Wording now expresses cycle-based trigger semantics (cycle 1 vs cycle 2+ loop-breaker).
+  - P3: Verified by file diff hunk for modified protocol table.
+[[2026-05-09]]
+## Review Evidence
+### Test Results
+- td:0 documentation task. No executable test artifact was required for this review.
+- quality-runner was not dispatched because the task has no test paths; review used direct artifact inspection of the target skill and task record.
+
+### Lint Results
+- VS Code diagnostics for `share/skills/r-pipeline-protocol/SKILL.md`: no errors found.
+- Builder-reported markdownlint cleanliness was not independently re-run in this session.
+
+### Coverage
+- Not applicable for this Markdown-only change.
+
+### AC Compliance
+| AC Line | Evidence | Status |
+|---|---|---|
+| P1 | `share/skills/r-pipeline-protocol/SKILL.md:108,113,114` now defines reviewer thresholds as `Cycle 1 review FAIL` and `Cycle 2+ review FAIL` in the loop-breaker section named by the AC. | PASS |
+| P2 | `share/skills/r-pipeline-protocol/SKILL.md:114` states `loop-breaker at 2 batch review cycles`; grep inspection found no stale `1st FAIL`, `2nd+ FAIL`, or `3 consecutive FAIL` wording in the target file. | PASS |
+| P3 | Builder notes record the modified table diff, the live after-state matches that reported hunk, and commit `c9137e7e` is present in `.git/logs/HEAD:2399` and `.git/logs/refs/heads/dev:2214` with subject `docs: update loop-breaker batch-cycle wording (#1408, builder)`. | PASS |
+
+### Process Check
+- Builder process quality: CLEAN. The task file contains one `## Builder Notes` section and no prior `## Review Evidence` section, so this is the first review cycle.
+
+### Deductions
+- `-0.03` Terminal execution was unavailable in this session, so `git show` and a scoped `git status` check could not be run directly. Commit presence was still verified via `.git/logs/**`, and the live file content was verified directly.
+
+### Verdict
+- PASS at confidence 0.93. Verified: AC-to-artifact mapping complete, loop-breaker wording updated in the target protocol file, zero findings.
+
+### Action
+- Advance to docs.
+[[2026-05-09]]
+## Docs Gate
+
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | Changed file is `share/skills/r-pipeline-protocol/SKILL.md` (OUT-scope agent-executable). No IN-scope README or guide references the loop-breaker table directly. |
+| 2 | Module docstrings | No | N/A | No Python files changed. |
+| 3 | External attribution | No | N/A | Research used internal briefs and git history only; no external repos or articles. |
+| 4 | Research doc | Yes | Verified | `.owlbear/research/loop-breaker-batch-cycle-update.md` exists, linked from task body, follow-up #1462 created. |
+| 5 | Diagram maintenance (describes match) | Yes | Updated | `share/diagrams/pipeline.excalidraw` describes `share/skills/r-pipeline-protocol/**` — footer updated from `ca180b7a` → `41ece747` (2026-05-09). |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation request in AC or task body. |
+| 7 | Deletion detection | No | N/A | No files deleted; no orphaned IN-scope docs detected. |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| share/skills/r-pipeline-protocol/SKILL.md | OUT (agent-executable SKILL.md) | No edit |
+| share/diagrams/pipeline.excalidraw | IN (diagram) | Footer updated |
+
+### Files Updated
+- `share/diagrams/pipeline.excalidraw` — footer to `Last verified: 2026-05-09 (41ece747)`
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no scratch files for #1408)

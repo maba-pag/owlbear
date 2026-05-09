@@ -1,10 +1,10 @@
 ---
 id: 1423
 title: 'P1-02: Rewrite w-doc-update skill — 4-item checklist + verification layers'
-status: review
+status: archived
 priority: needed
 created: 2026-05-08T00:32:18.617094+00:00
-updated: 2026-05-09T04:14:15.777508+00:00
+updated: 2026-05-09T05:44:46.055171+00:00
 tags:
 - phase-1
 - scope:shared
@@ -305,3 +305,124 @@ REFINE → APPROVE: AC7 refined with explicit assertion contract requiring 'inse
 - Coverage: N/A for this docs-only/test-spec verification pass (no application module coverage emitted).
 - Evidence summary: AC1-AC7 requirements are satisfied in the existing `share/skills/w-doc-update/SKILL.md`; retry objective was proof-quality tightening and is now independently verified GREEN.
 - Fixes applied: none (verification-only cycle).
+[[2026-05-09]]
+## Review Evidence
+### Test Results
+- quality-runner scoped run on tests/test_doc_writer_quality_1422.py: 56 passed, 0 failed, 0 skipped.
+- td:1 retry scope confirmed from Architecture Review (Retry 2); code-reader skipped per workflow depth.
+
+### Lint
+- ruff scoped to tests/test_doc_writer_quality_1422.py: clean (0 violations).
+
+### Coverage
+- N/A for this markdown and test-spec retry. The reviewed artifact is share/skills/w-doc-update/SKILL.md and the retry only tightened proof in tests/test_doc_writer_quality_1422.py.
+
+### Loop and Scope
+- Two prior review sections exist in the task history at .owlbear/kanban/tasks/1423-p1-02-rewrite-w-doc-update-skill-4-item-checklist-verification-layers.md:93 and :177.
+- The binding refinement for this retry is Architecture Review (Retry 2) at .owlbear/kanban/tasks/1423-p1-02-rewrite-w-doc-update-skill-4-item-checklist-verification-layers.md:257-265.
+- The refined AC7 contract at task line 263 requires the pre-existing clause matcher to include the verb insert. The live executable matchers now do so at tests/test_doc_writer_quality_1422.py:492 and :508.
+- Reflog confirms task-related test-writer commits 3332b411 (.git/logs/HEAD:2373) and 5f5be4f8 (.git/logs/HEAD:2393). Full dirty-tree and diff-scoped audit were not available in the current tool surface, so confidence is reduced slightly.
+
+### Pass 1 - CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Evidence | Mapped Test | Status |
+|---|---|---|---|
+| 1. Convention mapping table mapping code path patterns to documentation files | share/skills/w-doc-update/SKILL.md:30 contains the src row; setup/share/pyproject/public-interface rows are present in the Step 1 table | tests/test_doc_writer_quality_1422.py:365, :372, :379, :390, :451 | COVERED |
+| 2. Four-item checklist with no diagram items | share/skills/w-doc-update/SKILL.md:43, :52, :58, :63 define exactly four checklist items; no diagram items remain | tests/test_doc_writer_quality_1422.py:28, :36, :42, :231, :238, :244, :250 | COVERED |
+| 3. Verification layers section | share/skills/w-doc-update/SKILL.md:98 and :100 define Layer 1 and Layer 2; Item 1 also references both layers at lines 47-48 | tests/test_doc_writer_quality_1422.py:284, :294 | COVERED |
+| 4. TODO marker format and insertion rules | share/skills/w-doc-update/SKILL.md:76 contains the exact template and lines 79-85 define the allowed categories | tests/test_doc_writer_quality_1422.py:198, :205, :212, :220 | COVERED |
+| 5. Gate-blocking rules | share/skills/w-doc-update/SKILL.md:91-92 state task-caused unverified blocks and pre-existing unverified passes | tests/test_doc_writer_quality_1422.py:405, :419 | COVERED |
+| 6. No-impact fast path | share/skills/w-doc-update/SKILL.md:37 requires no docs impact with evidence and advance | tests/test_doc_writer_quality_1422.py:433 | COVERED |
+| 7. Attribution rules for task-caused fix inline vs pre-existing visible TODO marker | share/skills/w-doc-update/SKILL.md:49-50 contains both Item 1 attribution rules; the executable matchers now require fix task-caused issues inline and pre-existing insert TODO marker | tests/test_doc_writer_quality_1422.py:481, :489, :501, :523 with executable assertions at :483, :492, :504, :508 | COVERED |
+
+#### Security Review
+- No issues. Scope is a markdown skill file plus spec tests; no secrets, injection, path, deserialization, or boundary-handling surface was introduced.
+
+#### Test Integrity
+- Current retry strengthens the TestFromAC suite rather than weakening it. The live file contains the stricter AC7 executable regex and grep search found no remaining lax OR branch for the old pre-existing matcher.
+
+#### Test Quality
+- STRONG for the current task scope. The suite uses discriminating exact-string and scoped-regex assertions for all seven AC lines.
+- AC7 is now provable against the refined contract: removing insert from the pre-existing Item 1 clause would fail tests/test_doc_writer_quality_1422.py:489 and :501, while removing task-caused fix inline would fail :481 and :501.
+
+#### Data Safety
+- No issues in this markdown and test-only scope.
+
+#### Implementation-Aware Gaps
+- None within task scope. The live SKILL.md content matches the acceptance criteria and the retry closed the only prior proof gap.
+
+#### Builder Process Quality
+- CLEAN. Earlier failures were proof-quality findings that were explicitly narrowed and re-issued by Architecture Review (Retry 2); the current retry satisfies that refined contract.
+
+### Pass 2 - INFORMATIONAL
+- The task history still contains stale earlier review notes at lines 93 and 177. They are superseded by the Retry 2 architecture refinement and the current live test file.
+
+### Deductions
+- -0.02: full dirty-tree and diff-scoped audit unavailable in the current tool surface; reflog commit-presence evidence partially mitigates this.
+
+### Verdict
+- PASS
+- Confidence: 0.96
+
+### Action
+- Advance to docs. The current retry resolves the prior AC7 proof failure and the scoped quality-runner evidence is clean.
+[[2026-05-09]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | Task rewrote share/skills/w-doc-update/SKILL.md (agent-executable, OUT scope). No IN-scope README or setup guide references SKILL.md internal structure. |
+| 2 | Module docstrings | No | N/A | No Python modules created or modified. |
+| 3 | External attribution | No | N/A | Builder confirmed files changed: none; task was verification-only pass-through. No new external patterns adopted in this task. |
+| 4 | Research doc | Yes | Verified | .owlbear/research/doc-update-skill-rewrite-1423.md exists and is linked in task body. |
+| 5 | Diagram maintenance (describes match) | Yes | Updated | share/diagrams/project-overview.excalidraw describes: share/**, which matches share/skills/w-doc-update/SKILL.md. Footer updated to 2026-05-09 (87b6804b). Commit: 919cdc31. |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation requested in task body. |
+| 7 | Deletion detection | No | N/A | No deleted files in changed-files set. |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| share/skills/w-doc-update/SKILL.md | OUT (agent-executable) | N/A — diagram maintenance applied via describes-glob match only |
+| tests/test_doc_writer_quality_1422.py | OUT (test file) | N/A |
+| share/diagrams/project-overview.excalidraw | IN (diagram) | Footer updated |
+
+### Files Updated
+- share/diagrams/project-overview.excalidraw (footer: Last verified: 2026-05-09 (87b6804b))
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- No .owlbear/scratch/1423-* files found.
+[[2026-05-09]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| 1. Convention mapping table | `share/skills/w-doc-update/SKILL.md:24-37` — table present with src/pyproject/setup/share/public-interface rows | PASS |
+| 2. 4-item checklist, no diagram items | `share/skills/w-doc-update/SKILL.md:43-63` — 4 items verified by reviewer across 3 cycles | PASS |
+| 3. Verification layers | `share/skills/w-doc-update/SKILL.md:47-48`, `:98-100` — Layer 1 + Layer 2 present | PASS |
+| 4. TODO marker format + categories | `share/skills/w-doc-update/SKILL.md:74-87` — template and categories present | PASS |
+| 5. Gate-blocking rules | `share/skills/w-doc-update/SKILL.md:89-92` — task/pre-existing rules present | PASS |
+| 6. No-impact fast path | `share/skills/w-doc-update/SKILL.md:37` — "no docs impact" with evidence present | PASS |
+| 7. Attribution rules | `share/skills/w-doc-update/SKILL.md:49-50` — fix inline + insert TODO marker; tests enforce `pre.existing.*insert.*TODO\\s+marker` (lax OR branch removed in commit 5f5be4f8) | PASS |
+
+### Test Results
+- pytest (task-scoped): 56 passed, 0 failed
+- pytest (full suite): 4686 passed, 551 failed, 4 skipped — all failures in serve/mcp-kanban/ and serve/mcp-knowledge/ (unrelated background debt)
+- ruff: no violations in task-scoped files
+
+### Architect Quality: 4/5
+AC was specific and testable (52 tests from #1422 cover all 7 items). AC7 required 2 review cycles to refine the proof contract — the architect could have specified the discriminating assertion contract upfront. The Retry 2 refinement was precise and resolved the gap cleanly.
+
+### Deduction Breakdown
+- Start: 1.00
+- AC lines without evidence: 0 → -.00
+- Lint violations in scope: 0 → -.00
+- AC quality (4/5, > 3): -.00
+- Reviewer evidence: present, detailed, 3-cycle PASS → -.00
+- Full-suite failures in task scope: 0 → -.00
+- Confidence: 1.00
+
+### Confidence: 1.00
+### Action: archive

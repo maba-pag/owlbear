@@ -1,10 +1,10 @@
 ---
 id: 1380
 title: 'P2-05: Test Cockpit task action gating and confirmations'
-status: review
+status: in-progress
 priority: needed
 created: 2026-05-06T01:04:35.632458+00:00
-updated: 2026-05-09T04:14:33.856691+00:00
+updated: 2026-05-09T05:26:20.153078+00:00
 tags:
 - cockpit
 - audit-remediation
@@ -40,7 +40,7 @@ Write frontend tests for task action visibility, enablement, and action-specific
 - Tests prove Unblock and Move Backward show action-specific confirmation text describing the concrete consequence (e.g. "Move to {targetStatus}?" / "Unblock task?" / "Release claim?") when in a valid state and clicked. (td:2)
 - Tests prove confirmation dialog labels name the concrete action and target state instead of generic "Confirm" text. (td:2)
 - Tests include keyboard/focus expectations: dialog receives focus on open, Escape dismisses without firing a mutation, and focus returns to the triggering button on dismiss. Current ConfirmDialog has no modal semantics — tests assert desired behavior (RED phase). (td:2)
-- Tests prove 409, 404, and 422 responses from action mutations (unblock, unclaim, move-backward) use the frontend error contract: 409 → refetch + conflict modal via `setShowConflict`, 404 → `onTaskCleared`, 422 → `serverValidationMessage` via `getResponseErrorMessage`. (td:2)
+- Tests prove 409, 404, and 422 responses from action mutations (unblock, unclaim, move-backward) use the frontend error contract: 409 → conflict modal via `setShowConflict`, 404 → `onTaskCleared`, 422 → `serverValidationMessage` via `getResponseErrorMessage`. The 409-refetch sub-behavior is shared via `runMutation` and already proven in `DetailTab.test.tsx`; per the Existing Coverage Note, task-scoped tests assert conflict-modal presence only. (td:2)
 - The test suite fails against the current always-rendered/generic-confirm behavior and is suitable for #1381 to satisfy. (td:1)
 
 ## Existing Coverage Note
@@ -219,3 +219,94 @@ All new tests pass → implementation was already correct. No builder work neede
 - Lint (scoped): clean for `DetailTab.tsx`, `ConfirmDialog.tsx`, and `DetailTab_1380.test.tsx`.
 - Code changes: none by builder in this cycle.
 - Evidence summary: task-owned AC proof suite is green and no further GREEN-phase implementation is required for #1380.
+[[2026-05-09]]
+## Review Evidence
+### Test Results
+- quality-runner scoped frontend run: 37 passed, 0 failed, 0 skipped across DetailTab_1344.test.tsx, DetailTab_1379.test.tsx, and DetailTab_1380.test.tsx.
+- VS Code diagnostics: no editor errors in serve/cockpit/web/src/components/DetailTab.tsx, serve/cockpit/web/src/components/ConfirmDialog.tsx, or serve/cockpit/web/src/__tests__/DetailTab_1380.test.tsx.
+
+### Lint Results
+- quality-runner ESLint: clean.
+
+### Coverage
+- serve/cockpit/web/src/components/DetailTab.tsx: 88.59% statements, 88.75% branches, 60.52% functions, 88.83% lines.
+- serve/cockpit/web/src/components/ConfirmDialog.tsx: 81.13% statements, 54.76% branches, 100% functions, 90.00% lines.
+- Coverage is corroborating context only here. Rejection is based on proof quality for AC6, not raw module percentages.
+
+### Implementation Readout
+- No implementation defect found in the touched frontend code. The gating, confirm labels, modal semantics, and focus behavior are present in the live components.
+- ConfirmDialog has one live caller: serve/cockpit/web/src/components/DetailTab.tsx.
+- The 409 branch in serve/cockpit/web/src/components/DetailTab.tsx still performs a GET refetch before showing conflict: lines 181 and 188.
+- Shared 422 body-message extraction is already proven elsewhere in serve/cockpit/web/src/__tests__/ErrorContract_1374.test.tsx line 384, so 422 is not the blocking issue on this pass.
+
+### AC Compliance
+| AC Line | Evidence | Status |
+|---|---|---|
+| AC1: invalid-state actions absent from DOM | serve/cockpit/web/src/__tests__/DetailTab_1380.test.tsx line 170 adds the missing blocked=false absence check, alongside the existing unclaim and move-backward absence assertions. | PASS |
+| AC2: unclaim absent and no release mutation when claimed=false | serve/cockpit/web/src/__tests__/DetailTab_1380.test.tsx lines 180 to 195 prove both DOM absence and zero release calls. | PASS |
+| AC3: action-specific confirmation text | serve/cockpit/web/src/__tests__/DetailTab_1380.test.tsx lines 208, 227, and 247 exercise unblock, unclaim, and move-backward confirm text. The move-backward assertion is slightly looser than the others because it matches the shared stem, but not enough to block alone. | PASS |
+| AC4: confirm button labels name the concrete action or target | serve/cockpit/web/src/__tests__/DetailTab_1380.test.tsx lines 305, 325, and 345 assert exact labels for unblock, unclaim, and move-backward, matching serve/cockpit/web/src/components/ConfirmDialog.tsx lines 30, 37, and 43. | PASS |
+| AC5: focus and keyboard behavior | serve/cockpit/web/src/__tests__/DetailTab_1380.test.tsx lines 375, 394, 419, 439, and 465 prove modal semantics, focus on open, Escape dismiss without mutation, and focus return on dismiss. | PASS |
+| AC6: action-mutation error contract | The combined suite still does not prove the 409 refetch leg named in the AC. The implementation refetches at serve/cockpit/web/src/components/DetailTab.tsx line 181 before setting conflict at line 188, but the live 409 tests in serve/cockpit/web/src/__tests__/DetailTab.test.tsx lines 312 and 325, serve/cockpit/web/src/__tests__/DetailTab_1344.test.tsx lines 433 and 451, and serve/cockpit/web/src/__tests__/DetailTab_1380.test.tsx lines 549 and 576 assert only conflict-modal presence. Removing the refetch while keeping setShowConflict(true) would still leave those tests green. | FAIL |
+| AC7: suite is suitable for #1381 | The code under test is green, but the suite is still not a complete source-of-truth contract because AC6 remains under-proved on its named 409 behavior. | FAIL |
+
+### Test Integrity
+- No visible weakening or removal found in the current TestFromAC suites.
+- Direct diff-scoped immutability proof was not available from the current tool surface, so confidence is slightly reduced.
+
+### Deductions
+- -0.11 AC6 does not prove the 409 refetch behavior explicitly required by the task and implemented in DetailTab.tsx line 181.
+- -0.03 reduced confidence on TestFromAC immutability because only current-snapshot inspection and reflog evidence were available.
+
+### Verdict
+- FAIL.
+- Confidence: 0.86.
+- Routing: backlog.
+- Reason: this is the second review cycle, and the remaining miss is not a builder defect. The task body explicitly says not to duplicate endpoint-call proofs, but AC6 still names a refetch behavior that the combined suite does not prove. That leaves a test-contract mismatch for architect refinement, not another direct builder retry.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Reconcile AC6 with the Existing Coverage Note by either requiring an explicit 409 refetch assertion on the task-action surface or narrowing AC6 so adjacent-suite reuse is sufficient, then re-issue the task for test work. | .owlbear/kanban/tasks/1380-p2-05-test-cockpit-task-action-gating-and-confirmations.md, serve/cockpit/web/src/components/DetailTab.tsx, serve/cockpit/web/src/__tests__/DetailTab.test.tsx, serve/cockpit/web/src/__tests__/DetailTab_1344.test.tsx, serve/cockpit/web/src/__tests__/DetailTab_1380.test.tsx | AC6 in the task body requires 409 refetch plus conflict; the implementation performs the refetch at DetailTab.tsx line 181; the current 409 tests stop at conflict-modal presence in DetailTab.test.tsx line 325, DetailTab_1344.test.tsx line 451, and DetailTab_1380.test.tsx line 576. |
+[[2026-05-09]]
+
+[[2026-05-09]]
+## Architecture Review (Cycle 2 — AC6 Refinement)
+
+### Context
+Reviewer returned task to backlog after second review cycle. All ACs pass except AC6, which names "409 → refetch + conflict modal" while the Existing Coverage Note prohibits duplicating endpoint-call proofs. The refetch is a shared `runMutation` implementation detail (DetailTab.tsx L181) already proven in DetailTab.test.tsx L560 (3-call sequence: POST→GET refetch→POST force-save). Requiring per-action refetch proofs contradicts the task's own dedup guidance.
+
+### AC6 Refinement
+**Before:** "409 → refetch + conflict modal via `setShowConflict`"
+**After:** "409 → conflict modal via `setShowConflict`" — with explicit note that the refetch sub-behavior is shared via `runMutation` and already proven in `DetailTab.test.tsx`; task-scoped tests assert conflict-modal presence only.
+
+**Rationale:** The refetch at L181 is not action-specific — it's in the shared `runMutation` used by save, unblock, unclaim, and move-backward. The base suite already proves it end-to-end. Adding per-action refetch assertions would be duplicating endpoint-call proofs, which the Existing Coverage Note explicitly prohibits.
+
+### Impact Assessment
+- AC6 with narrowed scope: PASS (conflict modal, 404→onTaskCleared, 422→serverValidationMessage all proven in current test suite)
+- AC7 (suite suitability): PASS (follows from all other ACs passing)
+- No implementation changes needed — existing tests already satisfy the narrowed AC6
+
+### Verdict: APPROVE
+Refined AC6 to resolve test-contract tension. All ACs now provably satisfied by existing test suite (22 tests, all green). Advanced to todo for test-writer pass-through.
+[[2026-05-09]]
+AC6 refined: removed "refetch +" from 409 contract requirement. The refetch is a shared runMutation detail (DetailTab.tsx L181) already proven in DetailTab.test.tsx L560. Per the Existing Coverage Note, task-scoped 409 tests assert conflict-modal presence only. All ACs now provably satisfied by the existing 22-test suite. Re-approved for pipeline pass-through.
+[[2026-05-09]]
+## Test-Writer Notes
+- Retry cycle 3 (architect AC6 refinement pass): no new tests written.
+- Architect narrowed AC6 to remove the "refetch +" sub-requirement (refetch is a shared `runMutation` detail already proven in `DetailTab.test.tsx` L560; per the Existing Coverage Note, task-scoped 409 tests assert conflict-modal presence only).
+- All 22 existing tests confirmed GREEN: `DetailTab_1380.test.tsx` → 22 passed, 0 failed, 0 skipped.
+- Classes: `TestFromAC_ActionButtonGating` (5), `TestFromAC_ActionSpecificConfirmText` (8), `TestFromAC_ConfirmDialogKeyboard` (5), `TestFromAC_ActionMutationErrorContract` (4).
+- AC coverage with refined AC6:
+
+| AC | Status |
+|----|--------|
+| AC1: unclaim/move-backward/unblock DOM absence in invalid states | PASS |
+| AC2: no /release mutation when unclaimed | PASS |
+| AC3: action-specific confirmation text | PASS |
+| AC4: exact confirm button labels (not generic "Confirm") | PASS |
+| AC5: modal semantics, focus on open, Escape dismiss + focus return | PASS |
+| AC6 (refined): 409→conflict modal, 404→onTaskCleared, 422→serverValidationMessage | PASS |
+| AC7: suite suitable for #1381 | PASS |
+
+- Step 1b.1 conditions met: no implementation fixes needed, all tests pass, no new tests required. Advancing directly to review.
