@@ -790,7 +790,7 @@ class TestFromAC_EndWork:
 
     # --- D41 atomicity tests ---
 
-    def test_success_predicate_fail_claim_not_cleared(self, tmp_path: Path) -> None:
+    def test_product_topology_ignores_config_predicate_success_claim_cleared(self, tmp_path: Path) -> None:
         """With PRODUCT_TOPOLOGY, status_predicates={} — end_work succeeds without predicate check.
 
         Config predicate on 'review' is ignored; PRODUCT_TOPOLOGY provides empty predicates.
@@ -818,7 +818,7 @@ class TestFromAC_EndWork:
             "claimed_at must be cleared after successful end_work (no predicate)"
         )
 
-    def test_block_move_to_predicate_fail_blocked_not_set_claim_not_cleared(
+    def test_product_topology_ignores_config_predicate_block_sets_blocked_clears_claim(
         self, tmp_path: Path
     ) -> None:
         """With PRODUCT_TOPOLOGY, status_predicates={} — block+move_to succeeds without predicate check.

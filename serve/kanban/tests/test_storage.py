@@ -804,3 +804,70 @@ class TestFromAC_NoDoubleValidation:
             "storage.py still references _validate_claim_timeout — "
             "the double-validation wrapper has not been removed"
         )
+
+
+# ---------------------------------------------------------------------------
+# load_config defaults when config.yml is absent
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_LoadConfigDefaultsWhenMissing:
+    """AC1 (topology-constant refactor): load_config() returns PRODUCT_TOPOLOGY-derived
+    config and does not raise when config.yml is absent from kanban_dir.
+
+    The reviewer identified that existing tests only cover the config=None path
+    indirectly via read_task; this class provides direct load_config proof.
+    """
+
+    def _make_board_no_config(self, tmp_path: Path) -> Path:
+        """Create kanban_dir with tasks/ and archive/ but without config.yml."""
+        kanban_dir = tmp_path / "board"
+        kanban_dir.mkdir(parents=True)
+        (kanban_dir / "tasks").mkdir()
+        (kanban_dir / "archive").mkdir()
+        return kanban_dir
+
+    def test_load_config_no_config_yml_does_not_raise(self, tmp_path: Path) -> None:
+        """load_config(kanban_dir) must not raise when config.yml is absent."""
+        kanban_dir = self._make_board_no_config(tmp_path)
+        config_path = kanban_dir / "config.yml"
+        assert not config_path.exists(), "Precondition: config.yml must be absent"
+
+        cfg = load_config(kanban_dir)  # must not raise
+        assert cfg is not None
+
+    def test_load_config_no_config_yml_returns_product_statuses(
+        self, tmp_path: Path
+    ) -> None:
+        """load_config() with no config.yml returns statuses from PRODUCT_TOPOLOGY."""
+        from owlbear_kanban.topology import PRODUCT_TOPOLOGY  # noqa: PLC0415
+
+        kanban_dir = self._make_board_no_config(tmp_path)
+        cfg = load_config(kanban_dir)
+        assert cfg.statuses == list(PRODUCT_TOPOLOGY.statuses), (
+            f"Expected PRODUCT_TOPOLOGY statuses {list(PRODUCT_TOPOLOGY.statuses)!r}; "
+            f"got {cfg.statuses!r}"
+        )
+
+    def test_load_config_no_config_yml_returns_product_entry_status(
+        self, tmp_path: Path
+    ) -> None:
+        """load_config() with no config.yml returns pipeline.entry_status from PRODUCT_TOPOLOGY."""
+        from owlbear_kanban.topology import PRODUCT_TOPOLOGY  # noqa: PLC0415
+
+        kanban_dir = self._make_board_no_config(tmp_path)
+        cfg = load_config(kanban_dir)
+        assert cfg.pipeline.entry_status == PRODUCT_TOPOLOGY.entry_status, (
+            f"Expected entry_status={PRODUCT_TOPOLOGY.entry_status!r}; "
+            f"got {cfg.pipeline.entry_status!r}"
+        )
+
+    def test_load_config_no_config_yml_next_id_defaults_to_one(
+        self, tmp_path: Path
+    ) -> None:
+        """load_config() with no config.yml defaults next_id to 1."""
+        kanban_dir = self._make_board_no_config(tmp_path)
+        cfg = load_config(kanban_dir)
+        assert cfg.next_id == 1, (
+            f"Expected next_id=1 when config.yml is absent; got {cfg.next_id!r}"
+        )

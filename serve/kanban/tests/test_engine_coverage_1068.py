@@ -37,6 +37,7 @@ from owlbear_kanban.engine import (
     _state_from_age,
     _validate_session_filter,
 )
+from owlbear_kanban.topology import PRODUCT_TOPOLOGY
 from owlbear_kanban.models import (
     BoardConfig,
     ConfigError,
@@ -2454,3 +2455,51 @@ class TestFromAC_RepairStorage:
         engine = KanbanEngine(board, activity_log=False)
         outcomes = engine.repair_storage()
         assert outcomes == []
+
+
+# ---------------------------------------------------------------------------
+# Canonical board-status tuple and released status disambiguation
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_CanonicalBoardStatusTuple:
+    """AC1 (topology-constant refactor): board statuses are exactly the 7-item
+    PRODUCT_TOPOLOGY tuple; board status 'released' is absent; session state
+    'released' remains a valid _classify_end_work_state output.
+    """
+
+    def test_board_config_statuses_exact_seven_tuple(self, tmp_path: Path) -> None:
+        """board_config().statuses matches the canonical 7-status tuple exactly.
+
+        Proves the full ordered list matches PRODUCT_TOPOLOGY.statuses so that
+        no status can be silently added, removed, or reordered.
+        """
+        engine = _make_engine(tmp_path)
+        cfg = engine.board_config()
+        expected = list(PRODUCT_TOPOLOGY.statuses)
+        assert cfg.statuses == expected, (
+            f"Expected canonical status tuple {expected!r}; got {cfg.statuses!r}"
+        )
+
+    def test_board_status_released_absent(self, tmp_path: Path) -> None:
+        """'released' must NOT be a board status — it is a session lifecycle state only.
+
+        Current membership-only tests allow 'released' to slip in without notice.
+        This test pins the exclusion explicitly.
+        """
+        engine = _make_engine(tmp_path)
+        cfg = engine.board_config()
+        assert "released" not in cfg.statuses, (
+            "'released' must not appear in board statuses; it is a session state only"
+        )
+
+    def test_session_state_released_valid_from_classify(self) -> None:
+        """_classify_end_work_state maps 'release' prefix to session state 'released'.
+
+        Proves the session lifecycle state 'released' remains valid even though
+        board status 'released' is absent. These are distinct concepts.
+        """
+        result = _classify_end_work_state("release")
+        assert result == "released", (
+            f"Session state for 'release' must be 'released'; got {result!r}"
+        )

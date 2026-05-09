@@ -1155,3 +1155,74 @@ class TestFromAC_ClaimListRegression:
         assert 3 in task_ids, (
             "Task claimed via start_work() must appear in list_tasks()"
         )
+
+
+# ---------------------------------------------------------------------------
+# save_config persists only next_id (topology-constant refactor proof)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_SaveConfigPersistsOnlyNextId:
+    """AC1 (topology-constant refactor): save_config() writes only next_id to config.yml.
+
+    The reviewer identified that the existing round-trip test only proves next_id
+    survives; it does not prove topology fields are absent from the written file.
+    These tests provide direct evidence of the next_id-only persistence contract.
+    """
+
+    def test_save_config_config_yml_contains_only_next_id_key(
+        self, tmp_path: Path
+    ) -> None:
+        """config.yml after save_config() has exactly one top-level key: next_id.
+
+        Proves topology sections (statuses, priorities, pipeline, agents, policy)
+        are not written to disk.
+        """
+        import re  # noqa: PLC0415
+
+        from owlbear_kanban.storage import save_config  # noqa: PLC0415
+
+        kanban_dir = _make_board(tmp_path)
+        config = load_config(kanban_dir)
+        config.next_id = 42
+        save_config(config, kanban_dir)
+
+        raw = (kanban_dir / "config.yml").read_text(encoding="utf-8")
+        # Extract top-level YAML keys (lines that start at column 0).
+        top_level_keys = re.findall(r"^([a-z_][a-z0-9_]*):", raw, re.MULTILINE)
+        assert top_level_keys == ["next_id"], (
+            f"config.yml must contain only 'next_id'; found keys: {top_level_keys!r}"
+        )
+
+    def test_save_config_omits_topology_sections(self, tmp_path: Path) -> None:
+        """config.yml after save_config() does not contain topology section keys.
+
+        Checks that 'statuses', 'priorities', 'pipeline', 'agents', and 'policy'
+        are absent from the written file.
+        """
+        from owlbear_kanban.storage import save_config  # noqa: PLC0415
+
+        kanban_dir = _make_board(tmp_path)
+        config = load_config(kanban_dir)
+        save_config(config, kanban_dir)
+
+        raw = (kanban_dir / "config.yml").read_text(encoding="utf-8")
+        for key in ("statuses", "priorities", "pipeline", "agents", "policy"):
+            assert key not in raw, (
+                f"Topology key '{key}' must not appear in config.yml after save_config(); "
+                f"content:\n{raw}"
+            )
+
+    def test_save_config_preserves_next_id_value(self, tmp_path: Path) -> None:
+        """config.yml after save_config(next_id=777) reads back as 777 via load_config."""
+        from owlbear_kanban.storage import save_config  # noqa: PLC0415
+
+        kanban_dir = _make_board(tmp_path)
+        config = load_config(kanban_dir)
+        config.next_id = 777
+        save_config(config, kanban_dir)
+
+        reloaded = load_config(kanban_dir)
+        assert reloaded.next_id == 777, (
+            f"Expected next_id=777 after save_config; got {reloaded.next_id!r}"
+        )

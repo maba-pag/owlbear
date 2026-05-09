@@ -305,7 +305,7 @@ class TestFromAC_MoveTask:
             view.move_task(1, "done", archival_reason="completed")
         assert exc_info.value.code == "ERR_ARCHIVAL_FIELDS_FORBIDDEN"
 
-    def test_predicate_on_destination_fails_raises_predicate_failed(
+    def test_product_topology_ignores_config_predicate_move_succeeds(
         self, tmp_path: Path
     ) -> None:
         """With PRODUCT_TOPOLOGY, status_predicates={} — move_task to 'review' succeeds.
@@ -322,7 +322,7 @@ class TestFromAC_MoveTask:
             f"move_task must succeed (no predicate enforcement); got {result.status!r}"
         )
 
-    def test_predicate_on_destination_fails_task_not_moved(
+    def test_product_topology_ignores_config_predicate_task_is_moved(
         self, tmp_path: Path
     ) -> None:
         """With PRODUCT_TOPOLOGY, status_predicates={} — task IS moved to 'review'.
