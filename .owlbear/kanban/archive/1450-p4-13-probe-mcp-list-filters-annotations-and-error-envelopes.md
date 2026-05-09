@@ -1,10 +1,10 @@
 ---
 id: 1450
 title: 'P4-13: Probe MCP list filters, annotations, and error envelopes'
-status: done
+status: archived
 priority: needed
 created: 2026-05-08T19:32:15.603480+00:00
-updated: 2026-05-09T03:38:40.803026+00:00
+updated: 2026-05-09T03:58:10.274265+00:00
 tags:
 - phase-4
 - scope:mcp-kanban
@@ -18,7 +18,7 @@ parent: 1437
 depends_on: []
 blocked: false
 block_reason:
-claimed_at: 2026-05-09T03:38:40.803026+00:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -451,3 +451,39 @@ Per w-tdd-red Step 1b.1: builder already implemented the live boundary correctly
 **Scratch files:** None found for task #1450.
 
 **Child tasks created:** None.
+[[2026-05-09]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1 — ids=[] returns empty tasks, no missing_ids | `ids=[]` short-circuit at [server.py#L208](serve/mcp-kanban/src/owlbear_mcp_kanban/server.py#L208); 3 tests in `TestFromAC_ListTasksEmptyIds` including `missing_ids is None` assertion | PASS |
+| AC2 — archival_reason without status searches archive | Archived-search fallback at [server.py#L212](serve/mcp-kanban/src/owlbear_mcp_kanban/server.py#L212); 3 tests including negative-control exclusion at [test_mcp_kanban_1450.py#L280](tests/test_mcp_kanban_1450.py#L280) | PASS |
+| AC3 — move_task/end_work structured error envelope | Live MCP boundary probes at [test_mcp_kanban_1450.py#L318-L390](tests/test_mcp_kanban_1450.py#L318); `end_work` reject-path asserts `code='ERR_INVALID_STATUS'` matching [agent_view.py#L1098](serve/kanban/src/owlbear_kanban/agent_view.py#L1098) | PASS |
+| AC4 — move_task idempotentHint=False, pick_tasks readOnly+idempotent | Exact ToolAnnotations assertions at [test_mcp_kanban_1450.py#L402-L421](tests/test_mcp_kanban_1450.py#L402) | PASS |
+| AC5 — malformed ID, stale write → JSON envelope | JSON envelope probes for malformed ID via [server.py#L93](serve/mcp-kanban/src/owlbear_mcp_kanban/server.py#L93), stale-write probes at [test_mcp_kanban_1450.py#L486-L534](tests/test_mcp_kanban_1450.py#L486), invalid-priority in durable suite | PASS |
+| AC6 — no full-suite execution as proof | Task evidence remains scratch-board probes and schema inspection only | PASS |
+
+### Test Results
+- pytest (task-scoped): 17 passed, 0 failed, 0 skipped
+- pytest (full suite): 548 failed, 4684 passed — all failures are from other tasks (primarily #1439 topology refactor at `cca1a625`), none in task scope. `test_tool_annotations_494.py::test_move_task_idempotent_hint_true` failure is a documented planned gap — #1451 (backlog, depends_on #1450) is designated to update it per architecture review.
+- ruff: clean on task-scoped files (quality-runner confirmed)
+- Dirty tree: clean for #1450 deliverables; only unrelated #1439 kanban file and vitest scratch output
+
+### Commit Provenance
+| Commit | Type | Description |
+|--------|------|-------------|
+| f9a9e114 | test | test-writer initial |
+| b4fabdb6 | feat | builder implementation |
+| 5ef2ab6b | test | test-writer retry |
+| ca180b7a | test | test-writer retry cycle 2 (live boundary probes) |
+| 9ec60898 | docs | doc-writer README + diagrams |
+
+### Architect Quality: 4/5
+Original AC3 (structural claim) and AC4 (docstring layer mismatch) required refinement. Architecture review process caught and corrected both, plus AC5 malformed-ID gap. Final refined AC is specific, testable, and well-scoped. Edge case awareness (validation ordering, exact error codes) is strong.
+
+### Deduction Breakdown
+- -.02: Multiple architecture review refinement cycles needed (AC3/AC4/AC5 all revised before implementation)
+- -.01: `test_tool_annotations_494.py` regression is planned but creates a temporarily broken durable test until #1451 completes
+
+### Confidence: 0.97
+### Action: archive
