@@ -1,10 +1,10 @@
 ---
 id: 1380
 title: 'P2-05: Test Cockpit task action gating and confirmations'
-status: review
+status: docs
 priority: needed
 created: 2026-05-06T01:04:35.632458+00:00
-updated: 2026-05-09T11:35:34.157136+00:00
+updated: 2026-05-09T13:16:52.980148+00:00
 tags:
 - cockpit
 - audit-remediation
@@ -376,3 +376,90 @@ AC6 refined: added "The 422 test must assert the validation-message element's te
   - Lint: clean for `serve/cockpit/web/src/__tests__/DetailTab_1380.test.tsx`, `serve/cockpit/web/src/components/DetailTab.tsx`, `serve/cockpit/web/src/components/ConfirmDialog.tsx`.
 - Coverage: not collected in this scoped pass-through run.
 - Evidence summary: AC-targeted suite is green after Cycle 5 test-writer refinement (exact 422 value assertion). No builder-side code intervention was necessary.
+[[2026-05-09]]
+## Review Evidence
+### Test Results
+- quality-runner scoped frontend run on `serve/cockpit/web/src/__tests__/DetailTab_1380.test.tsx` + `serve/cockpit/web/src/__tests__/DetailTab_1344.test.tsx`: 33 passed, 0 failed, 0 skipped.
+- quality-runner adjacent regression on `serve/cockpit/web/src/__tests__/DetailTab.test.tsx`: 47 passed, 1 failed.
+- Adjacent failure remains `serve/cockpit/web/src/__tests__/DetailTab.test.tsx:493` (`backward move action requires a confirmation dialog`), which still expects `move-backward` to render without a board. This matches the task body's Cycle 3 Architecture Review durable-suite drift note and is treated as informational, not blocking, for #1380.
+
+### Lint
+- quality-runner lint: clean for `serve/cockpit/web/src/__tests__/DetailTab_1380.test.tsx`, `serve/cockpit/web/src/components/DetailTab.tsx`, and `serve/cockpit/web/src/components/ConfirmDialog.tsx`.
+- VS Code diagnostics: no errors in `serve/cockpit/web/src/__tests__/DetailTab_1380.test.tsx`, `serve/cockpit/web/src/components/DetailTab.tsx`, `serve/cockpit/web/src/components/ConfirmDialog.tsx`, or `serve/cockpit/web/src/__tests__/DetailTab.test.tsx`.
+
+### Coverage
+- quality-runner scoped coverage:
+  - `serve/cockpit/web/src/components/DetailTab.tsx`: 86.54% statements, 86.98% branches
+  - `serve/cockpit/web/src/components/ConfirmDialog.tsx`: 81.13% statements, 54.76% branches
+- Module-level TSX percentages remain below 90 overall, but the changed gating, confirmation-copy, 409/404/422, focus-open, Escape-dismiss, and focus-restore paths are directly exercised by the green task-owned suite. Per diff-scoped review rules, this is sufficient for the current task.
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---------|-------------|---------------------------|---------|
+| AC1 | `unclaim_button_absent_from_dom_when_task_not_claimed`, `move_backward_button_absent_when_task_at_first_pipeline_status`, `move_backward_button_absent_when_no_board_provided`, `unblock_button_absent_from_dom_when_task_not_blocked` | Yes. These require null DOM nodes and would fail if `backwardTarget`, `t.claimed !== false`, or `t.blocked` gating regressed in `DetailTab.tsx:152`, `DetailTab.tsx:407`, `DetailTab.tsx:416`, or `DetailTab.tsx:425`. | COVERED |
+| AC2 | `unclaim_button_absent_and_no_release_mutation_fires_when_not_claimed` | Yes. It fails if the unclaim trigger renders or any `/release` call is observed. | COVERED |
+| AC3 | `unblock_confirm_dialog_shows_action_specific_description`, `unclaim_confirm_dialog_shows_release_claim_description`, `move_backward_confirm_dialog_shows_target_status_name` | Yes. These prove `ConfirmDialog.tsx:29`, `ConfirmDialog.tsx:36`, and `ConfirmDialog.tsx:42` show action-specific copy under the refined AC3. | COVERED |
+| AC4 | `confirm_button_label_exact_unblock_task_for_unblock_action`, `confirm_button_label_exact_release_claim_for_unclaim_action`, `confirm_button_label_exact_move_target_for_move_backward` | Yes. Exact-label assertions fail on any generic `Confirm` fallback. | COVERED |
+| AC5 | `confirm_dialog_receives_focus_on_open`, `escape_key_dismisses_dialog_without_firing_mutation`, `focus_returns_to_trigger_button_after_dialog_cancel`, `escape_key_dismisses_dialog_and_restores_focus_to_trigger`, plus modal-role assertion | Yes. These exercise `ConfirmDialog.tsx:58-61` and `DetailTab.tsx:78-83` / `DetailTab.tsx:261-268` and fail if dialog semantics or focus restoration regress. | COVERED |
+| AC6 | `unclaim_mutation_404_calls_on_task_cleared`, `move_backward_mutation_404_calls_on_task_cleared`, `unclaim_mutation_409_shows_conflict_modal`, `move_backward_mutation_422_shows_validation_message`, plus unblock 409/422 coverage in `serve/cockpit/web/src/__tests__/DetailTab_1344.test.tsx:423` and `serve/cockpit/web/src/__tests__/DetailTab_1344.test.tsx:457`, and shared 404 branch proof in `serve/cockpit/web/src/__tests__/DetailTab.test.tsx:807` | Yes. The Cycle 5 assertion at `serve/cockpit/web/src/__tests__/DetailTab_1380.test.tsx:618` now proves the seeded 422 detail value survives `getResponseErrorMessage` end-to-end. Under the refined AC6 and Existing Coverage Note, this is sufficient without inventing a 3x3 action/status matrix requirement. | COVERED |
+| AC7 | Task-owned suite structure in `serve/cockpit/web/src/__tests__/DetailTab_1380.test.tsx:1-20` plus the green scoped run | Yes. The suite remains targeted at the formerly always-rendered and generic-confirm regressions and is discriminating against them. | COVERED |
+
+#### Security Review
+- No issues found in `serve/cockpit/web/src/components/DetailTab.tsx` or `serve/cockpit/web/src/components/ConfirmDialog.tsx`. No new dependencies, secrets, injection surfaces, path handling, or dynamic execution were introduced in scope.
+
+#### Test Integrity
+| Original Test | Change Made | Assessment |
+|---------------|-------------|------------|
+| `TestFromAC_*` suite in `serve/cockpit/web/src/__tests__/DetailTab_1380.test.tsx` | Retry cycles added direct unblock-absence proof, exact confirm-label assertions, combined Escape+focus-return proof, and the exact 422 seeded-message assertion at `DetailTab_1380.test.tsx:618`. No weakened or removed assertions are visible in the current snapshot. | STRENGTHENED / PRESERVED |
+
+- Commit existence for task-scoped hashes `b899bbb2`, `ee972df5`, and `f9ef1a46` was confirmed in `.git/logs/HEAD` and `.git/logs/refs/heads/dev`.
+- Full `git show` / `git status --porcelain` evidence was not available in-session because no terminal-capable tool was available to the reviewer. I treated this as a confidence deduction rather than assuming dirty-tree cleanliness.
+
+#### Test Quality
+| Dimension | Rating | Evidence |
+|-----------|--------|----------|
+| Assertion specificity | STRONG | Exact null DOM absence, exact confirm labels, focus assertions, and the exact seeded 422 text assertion at `DetailTab_1380.test.tsx:618`. |
+| Negative/error-path coverage | STRONG | Escape no-mutation, 404 `onTaskCleared`, 409 conflict modal, and 422 validation rendering are all exercised. |
+| Manual mutation reasoning | STRONG | Replacing `getResponseErrorMessage` with a generic fallback now fails the seeded-detail assertion at `DetailTab_1380.test.tsx:618`. |
+| Test independence | STRONG | Fresh renders plus `vi.unstubAllGlobals()` cleanup across describe blocks. |
+| Descriptive names | STRONG | Test names encode the exact action, state, and expected outcome. |
+
+#### Data Safety
+- No issues found. The scoped changes remain within local component state and same-origin JSON mutations.
+
+#### Implementation-Aware Gaps
+- No blocking in-scope gaps found.
+- Non-blocking softness: there is still no direct unblock-specific 404 action test, but the shared 404 branch is independently proven in `serve/cockpit/web/src/__tests__/DetailTab.test.tsx:807`, and the refined AC6 does not require every action/status permutation individually.
+
+#### Builder Process Quality
+| Metric | Value |
+|--------|-------|
+| Builder Notes sections | 5 |
+| Approach variation | Yes — one implementation cycle followed by test-only pass-through cycles, with intervening architecture refinements that changed the proof contract |
+| Assessment | FRICTION |
+
+### Pass 2 — INFORMATIONAL
+- Adjacent durable suite drift persists at `serve/cockpit/web/src/__tests__/DetailTab.test.tsx:493`. The latest architecture note already scoped this to separate test-maintenance curation, so it is not a blocker for #1380.
+- Focus restoration currently leaves `tabindex="-1"` on the trigger after dismiss (`serve/cockpit/web/src/components/DetailTab.tsx:78-83`). The written AC requires focus return, not tab-order cleanup, so this remains informational only.
+- `ConfirmDialog` is only referenced from `DetailTab.tsx`; `vscode_listCodeUsages` found no additional consumer surface that would turn these behavior changes into a broader API-contract regression.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| AC1 | `DetailTab.tsx:407`, `DetailTab.tsx:416`, `DetailTab.tsx:425` gating branches plus green DOM-absence assertions | 4 gating tests in `DetailTab_1380.test.tsx` | PASS |
+| AC2 | Green scoped run plus `/release` non-call assertion when `claimed=false` | `unclaim_button_absent_and_no_release_mutation_fires_when_not_claimed` | PASS |
+| AC3 | `ConfirmDialog.tsx:29`, `ConfirmDialog.tsx:36`, `ConfirmDialog.tsx:42` plus dialog-text assertions | 3 dialog-text tests | PASS |
+| AC4 | `ConfirmDialog.tsx:30-31`, `ConfirmDialog.tsx:37-38`, `ConfirmDialog.tsx:43-44` plus exact-label assertions | 3 exact-label tests | PASS |
+| AC5 | `ConfirmDialog.tsx:58-61`, `DetailTab.tsx:78-83`, `DetailTab.tsx:261-268` plus focus / Escape tests | 5 keyboard/focus tests | PASS |
+| AC6 | `DetailTab.tsx:180-198` error-contract branches; unblock 409/422 in `DetailTab_1344.test.tsx:423` and `:457`; unclaim 404/409 + move-backward 404/422 in `DetailTab_1380.test.tsx:499`, `:549`, `:525`, `:581`; exact seeded 422 value at `DetailTab_1380.test.tsx:618`; shared 404 branch in `DetailTab.test.tsx:807` | Cross-suite action-error tests under refined AC6 | PASS |
+| AC7 | Task-owned suite still discriminates against the old always-rendered / generic-confirm behavior; scoped run is green after implementation | `DetailTab_1380.test.tsx` suite + quality-runner scoped pass | PASS |
+
+### Deductions
+- `-0.03` No in-session terminal access for `git show` / `git status --porcelain`, so commit ownership and dirty-tree contamination were proven only partially via `.git/logs/*` plus current file inspection.
+- `-0.01` Adjacent durable suite still has one scoped-out drift failure.
+
+### Confidence: 0.95
+### Verdict: PASS
+### Action
+- Advance to `docs`. Verified task-scoped proof is now sufficient under the latest architecture refinements.

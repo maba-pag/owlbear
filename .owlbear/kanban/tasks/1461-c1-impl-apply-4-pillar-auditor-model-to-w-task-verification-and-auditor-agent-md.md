@@ -1,10 +1,10 @@
 ---
 id: 1461
 title: 'C1-impl: Apply 4-pillar auditor model to w-task-verification and auditor.agent.md'
-status: review
+status: done
 priority: needed
 created: 2026-05-09T03:30:08.726831+00:00
-updated: 2026-05-09T11:36:12.724343+00:00
+updated: 2026-05-09T13:05:19.638037+00:00
 tags:
 - pipeline
 - ws-roles
@@ -154,3 +154,66 @@ P3: Overlap comparison table added to Architecture Review section of task body (
 - ruff/lint: clean via quality-runner scoped run (`failed: []`, `clean: true`, `violations: []`) on [share/agents/auditor.agent.md](share/agents/auditor.agent.md).
 - Evidence summary: reviewer findings targeted exactly two stale references; both have been removed and no additional overlap wording remains in the edited sections.
 - Commit: `11a31135` — `feat: remove stale AC-verification wording in auditor agent (#1461, builder)`.
+[[2026-05-09]]
+## Review Evidence
+### Test Results
+- quality-runner scoped report for task 1461: tests N/A (`td:0` non-implementation task), lint clean on `share/skills/w-task-verification/SKILL.md` and `share/agents/auditor.agent.md`, coverage N/A, `ruff` exit code `0`.
+- VS Code diagnostics: no errors in either file.
+
+### Scope and Commit Evidence
+- Task scope remains the two in-scope files named in the task body: `share/skills/w-task-verification/SKILL.md` and `share/agents/auditor.agent.md`.
+- Builder commit `372ae79f` is present in `.git/logs/refs/heads/dev:2247` and `.git/logs/HEAD:2432`.
+- Retry commit `11a31135` is present in `.git/logs/refs/heads/dev:2260` and `.git/logs/HEAD:2448`.
+- Direct inspection confirms the retry removed the prior stale `AC verification` wording: `share/agents/auditor.agent.md:42` now names the 4 pillars directly, and `share/agents/auditor.agent.md:66` now says `intent and scope verification`.
+- `git diff` / `git status` were not available in this tool surface, so changed-file verification is reconstructed from task notes, `.git/logs/**` commit-presence evidence, and live file reads.
+
+| # | AC Line | Evidence | Status |
+|---|---------|----------|--------|
+| 1 | P1: `w-task-verification` Step 1 restructured around 4 pillars | `share/skills/w-task-verification/SKILL.md:36`, `:49`, `:55`, and `:57` define regression detection, intent verification, architect quality scoring, and commit integrity. | PASS |
+| 2 | P1: Overlapping checks removed from Step 1 | Current repo search finds no matches in `share/skills/w-task-verification/SKILL.md` for `AC verification`, `AC spot-check`, `AC deviations`, or `file-exists`; Step 1 stays within the 4-pillar boundary. | PASS |
+| 3 | P1: Output template updated to 4-pillar sections | `share/skills/w-task-verification/SKILL.md:140`, `:144`, `:150`, and `:151` define `Regression Detection`, `Intent Verification`, `Architect Quality`, and `Commit Integrity`; current repo search finds no `AC Verification` section in the skill. | PASS |
+| 4 | P2: Scoring rubric in Step 3 updated | `share/skills/w-task-verification/SKILL.md:92`, `:93`, `:96`, and `:97` contain `Intent mismatch`, `Evidence integrity concern`, `Missing reviewer evidence section`, and `Regression failures`; current repo search finds no legacy rubric phrases (`AC line with no specific evidence`, `full-suite test failures in task scope`). | PASS |
+| 5 | P2: `auditor.agent.md` fully updated with no stale references to removed checks | Persona aligns to 4 pillars at `share/agents/auditor.agent.md:23`, `:25`, and `:27`; critical rules at `:42`, `:45`, and `:46`; output format at `:82`; boundaries at `:95`, `:98`, `:104`, and `:106`; examples at `:113`, `:120`, and `:127`. Current repo search finds no `AC verification`, `AC spot-check`, `AC deviations`, or `file-exists` matches in the live agent file. | PASS |
+| 6 | P2: Intent verification boundary explicitly stated in SKILL.md | `share/skills/w-task-verification/SKILL.md:50`, `:51`, `:52`, and `:53` define scope alignment, purpose match, extraneous-scope checks, and the explicit prohibition on function-level behavior review / AC-to-code remapping. | PASS |
+| 7 | P3: Overlap comparison table added to Architecture Review section of task body | `.owlbear/kanban/tasks/1461-c1-impl-apply-4-pillar-auditor-model-to-w-task-verification-and-auditor-agent-md.md:83`, `:87`, `:88`, and `:91` contain the comparison table and the required `KEPT` / `NONE` mappings against `w-code-review`. | PASS |
+
+### Deductions
+- `-.02` confidence deduction: commit presence is verified from `.git/logs/**`, but `git diff` / `git status` were unavailable in this session, so changed-file surface verification is reconstructed rather than direct.
+- `-.02` confidence deduction: `share/skills/w-task-verification/SKILL.md:3` still says `AC evidence` in the frontmatter description even though the workflow body and output template now reflect the 4-pillar model. This is wording drift, not an AC failure.
+
+### Verdict
+- PASS
+- Confidence: `0.96`
+- Action: advance to `docs`
+
+## Observations
+- The previous blocking stale wording in `share/agents/auditor.agent.md` is resolved.
+- Residual wording drift remains at `share/skills/w-task-verification/SKILL.md:3`, but it is outside the explicit failing AC surface and does not justify a second-cycle reject.
+[[2026-05-09]]
+## Docs Gate
+
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | All changed files are OUT-scope agent-executables; no IN-scope prose doc references either file |
+| 2 | Module docstrings | No | N/A | No Python modules changed |
+| 3 | External attribution | No | N/A | Builder notes reference no external repos/articles; no new source pattern adopted |
+| 4 | Research doc | No | N/A | Research file `.owlbear/research/auditor-skill-update-1409.md` was produced by task #1409 (done/archived), not by this task; already linked in task body |
+| 5 | Diagram maintenance (describes match) | No | N/A | Doc-index has no `describes` glob matching `share/skills/w-task-verification/**` or `share/agents/auditor.agent.md` |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation request in task body |
+| 7 | Deletion detection | No | N/A | No deleted files; no orphaned IN-scope docs detected |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| share/skills/w-task-verification/SKILL.md | OUT | N/A (agent-executable: `share/skills/*/SKILL.md`) |
+| share/agents/auditor.agent.md | OUT | N/A (agent-executable: `share/agents/*.agent.md`) |
+
+### Files Updated
+- None
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no `.owlbear/scratch/1461-*` files existed)

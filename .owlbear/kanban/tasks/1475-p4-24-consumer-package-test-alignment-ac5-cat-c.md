@@ -4,7 +4,7 @@ title: 'P4-24: Consumer package test alignment (AC5 Cat-C)'
 status: review
 priority: needed
 created: 2026-05-09T08:46:53.952014+00:00
-updated: 2026-05-09T11:48:55.847405+00:00
+updated: 2026-05-09T13:17:47.638437+00:00
 tags:
 - phase-4
 - scope:tests
@@ -14,7 +14,7 @@ parent: 1439
 depends_on: []
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-09T13:17:47.638437+00:00
 archival_reason:
 archival_refs: []
 ---

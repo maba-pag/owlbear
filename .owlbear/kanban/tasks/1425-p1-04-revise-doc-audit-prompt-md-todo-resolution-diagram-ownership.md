@@ -1,10 +1,10 @@
 ---
 id: 1425
 title: 'P1-04: Revise doc-audit.prompt.md — TODO resolution + diagram ownership'
-status: todo
+status: review
 priority: important
 created: 2026-05-08T00:32:24.572908+00:00
-updated: 2026-05-09T11:51:15.630009+00:00
+updated: 2026-05-09T13:19:18.247226+00:00
 tags:
 - phase-1
 - scope:shared
@@ -311,3 +311,43 @@ Skipped — this is a REFINE-level AC tightening on an already-approved task wit
 
 [[2026-05-09]]
 APPROVED #1425 → todo (cycle 3). Refined AC5: added explicit D2 → XREF-5 constraint — the invented `DUP-*` token has no canonical backing. Builder guidance specifies surgical fix: 2 new failing tests for D2 row, one table-cell correction in the prompt. Challenger skipped (single table-cell fix, no architectural risk).
+[[2026-05-09]]
+## Test-Writer Notes
+
+**Retry cycle 3 — surgical fill mode** (architect approved cycle-3 refinement of AC5 D2 constraint)
+
+**Test file:** `tests/test_doc_audit_prompt_1425.py`
+**Commit:** e43af559
+
+### Changes Made
+
+Added 1 new failing test to `TestFromAC_DimensionReferenceTable`:
+
+| Test | Assertion | Result |
+|------|-----------|--------|
+| `test_d2_rule_family_is_xref5` | D2 row source cell must contain "XREF-5" (not "DUP-*") | FAIL (live: "DUP-*") |
+
+Note: `test_d2_name_is_duplication` was skipped — the D2 name "Duplication" is already correct in the live prompt; the test would pass (existing behavior, per skill rules: remove/skip). Only the invented `DUP-*` rule family is the defect.
+
+### RED Verification
+
+- 16 existing tests: **all PASS** ✓
+- 1 new test: **FAIL** ✓
+- ruff: **clean** ✓
+
+### Reviewer Follow-up Coverage
+
+| # | Required Action | Status |
+|---|----------------|--------|
+| 1 | Add failing assertion for D2 → XREF-5 (not DUP-*) | Done — 1 test, FAILS |
+| 2 | Strengthen dimension-table proof for D2 row | Done — XREF-5 assertion catches the live defect |
+[[2026-05-09]]
+## Builder Notes
+- Implementation: updated `.owlbear/prompts/doc-audit.prompt.md` only.
+- Fix applied: corrected AC5 D2 dimension mapping in the reference table from `DUP-*` to canonical `XREF-5`.
+- Tests (RED before change): `tests/test_doc_audit_prompt_1425.py` had exactly 1 failing TestFromAC assertion (`test_d2_rule_family_is_xref5`), confirming the targeted defect.
+- Tests (GREEN after change): 73 passed, 0 failed, 0 skipped (`tests/test_doc_audit_prompt_1425.py` + `tests/test_doc_writer_quality.py`).
+- Ruff: clean (scoped lint on both task-related test files).
+- Coverage: N/A for prompt-only artifact update (no runtime module touched).
+- Evidence summary: single-line prompt-table fix resolved the last AC5 mapping gap; all task assertions now pass.
+- Commit: `c7191f22` (`docs: fix D2 dimension mapping in doc-audit prompt (#1425, builder)`).

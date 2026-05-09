@@ -1,10 +1,10 @@
 ---
 id: 1316
 title: Knowledge Engine Activation
-status: todo
+status: in-progress
 priority: critical
 created: 2026-05-04T05:44:46.924003+00:00
-updated: 2026-05-09T11:53:37.421087+00:00
+updated: 2026-05-09T13:04:48.882278+00:00
 tags:
 - parent
 - knowledge
@@ -94,3 +94,9 @@ Reviewer-requested AC rewrite to align with kanban archive semantics.
 
 ### Challenge Results
 - Challenger: SKIPPED — all AC lines td:0 per Step 2.1
+[[2026-05-09]]
+## Test-Writer Notes
+- All AC lines are (td:0) — test-writer skipped.
+- Architect explicitly noted: "Test-writer: SKIP (all td:0, mechanical closeout verification only)".
+- Parent container task with no testable Python interfaces.
+- Passing through to builder.

@@ -1,10 +1,10 @@
 ---
 id: 1411
 title: 'C3: Role boundary documentation — in-scope/out-of-scope for each agent skill'
-status: done
+status: archived
 priority: important
 created: 2026-05-07T23:16:25.269760+00:00
-updated: 2026-05-09T11:35:58.697170+00:00
+updated: 2026-05-09T13:22:39.512729+00:00
 tags:
 - pipeline
 - ws-roles
@@ -174,3 +174,33 @@ Agents covered: planner (w-task-decomposition), architect (w-arch-review), test-
 
 ### Scratch Files Cleaned
 - None (no .owlbear/scratch/1411-* files existed)
+[[2026-05-09]]
+## Audit
+### Regression Detection
+- quality-runner mode full: 218 failures, all in unrelated modules (mcp-kanban server, memory engine, cockpit, pick_tasks). Task modifies only markdown SKILL.md files — cannot cause Python test regressions. Task-scoped suite: 73 passed, 0 failed.
+- lint violations (12): all in unrelated Python files (T201, F401, PTH201, D415, PLR2004, ARG002) — not in task-touched markdown files.
+- regression verdict: PASS
+
+### Intent Verification
+- scope alignment: PASS (changed files: 7 × share/skills/w-*/SKILL.md, 1 × tests/test_agent_scope_boundaries_1411.py, 1 × share/diagrams/project-overview.excalidraw — all within pipeline-skills domain)
+- purpose match: PASS (scope sections confirmed present in owlbear-dev workspace with In Scope / Out of Scope subsections and em-dash attribution)
+- extraneous scope: none
+- boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 4/5
+AC lines are specific and testable. P1/P2 coverage, consistency, and post-rethink alignment are all well-scoped. P3 process-level verification is appropriate for a docs task. No significant gaps.
+
+### Commit Integrity
+- upstream commit presence: PASS (test-writer: 90edd62c, builder: 550f69de, doc-writer: e99ae7a0 — all present in git log)
+- kanban commit packaging: PASS (staged below)
+
+### Deduction Breakdown
+No deductions applied:
+- No task-caused regressions (0)
+- Intent match confirmed (0)
+- No task-scoped lint violations (0)
+- Reviewer evidence section present and thorough (0)
+- AC quality 4/5, above ≤3 threshold (0)
+
+### Confidence: 1.00
+### Action: archive

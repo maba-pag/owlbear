@@ -1,10 +1,10 @@
 ---
 id: 1473
 title: 'P4-22: Durable config test alignment (AC5 Cat-B1)'
-status: review
+status: in-progress
 priority: critical
 created: 2026-05-09T08:46:53.927445+00:00
-updated: 2026-05-09T11:52:17.717684+00:00
+updated: 2026-05-09T13:08:58.475330+00:00
 tags:
 - phase-4
 - type:refactor
@@ -15,7 +15,7 @@ parent: 1439
 depends_on: []
 blocked: false
 block_reason:
-claimed_at: 2026-05-09T11:52:17.717684+00:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -113,3 +113,65 @@ Architecture review complete. Refined task: (1) added `type:test` tag for test-w
 - Initial RED signal was highly actionable because failures clustered around two contract shifts; this sped up surgical patching.
 - A patch-introduced indentation syntax error in one test file was caught immediately by quality-runner and corrected before final verification.
 - Keeping changes confined to assertion updates in existing durable tests avoided production churn and matched the task scope exactly.
+[[2026-05-09]]
+## Review Evidence
+### Test Results
+- quality-runner scoped run: 91 passed, 0 failed, 0 skipped across tests/test_config_loader.py, tests/test_config_authority.py, tests/test_config_schema.py, and tests/test_config_grouped.py.
+
+### Lint Results
+- quality-runner scoped ruff run: clean.
+
+### Coverage
+- quality-runner reported overall 24% across requested modules: config_loader 100%, storage 24%, migrate 30%, models 86%.
+- Informational only for this review because task 1473 changed durable tests, not production modules.
+
+### Git Scope
+- Builder commit was reconstructed from reflog as f8637c652fb79535f79006e4f7c1ddaafb257580 with message: test: align durable config tests to topology constants (#1473, builder).
+- Exact dirty-tree contamination check could not be completed because terminal/git status access was unavailable in this review environment. Confidence deduction applied.
+
+### AC Compliance
+| AC Line | Evidence | Status |
+|---|---|---|
+| All tests in the scoped config test files pass after aligning with the topology-constant refactor. | Scoped suite is green, but the current durable assertions no longer prove two live branches: (1) load_config still reads persisted integer next_id at serve/kanban/src/owlbear_kanban/config_loader.py:45-47, yet the scoped suite only proves the missing-file default at tests/test_config_loader.py:226-230; (2) tests/test_config_schema.py:339-345 now asserts successful load for mixed flat-plus-grouped YAML without schema even though BoardConfig still rejects that shape in serve/kanban/src/owlbear_kanban/models.py:232-249. | FAIL |
+
+### Critical Findings
+1. Missing proof for the remaining disk-owned loader branch. The implementation still reads a persisted integer next_id from config.yml at serve/kanban/src/owlbear_kanban/config_loader.py:45-47, but the scoped suite has no non-default load assertion. The only loader next_id check is the missing-file default at tests/test_config_loader.py:226-230, so a regression that hardcodes next_id to 1 would stay green.
+2. A durable negative-path test was converted into a green-path assertion without preserving the live rejection branch. tests/test_config_schema.py:339 still names test_mixed_flat_and_grouped_without_schema_raises_config_error, but the body at tests/test_config_schema.py:342-345 now asserts successful load. The mixed flat-plus-grouped rejection still exists in serve/kanban/src/owlbear_kanban/models.py:232-249, so this change removed meaningful proof rather than replacing it.
+
+### Additional Notes
+- Save-path assertions do correctly match the current writer contract: serve/kanban/src/owlbear_kanban/storage.py:224-236 persists next_id only, and the scoped save tests assert next_id-only output at tests/test_config_authority.py:303-343 and tests/test_config_schema.py:410-446.
+- Several durable headers/docstrings are now stale relative to the asserted contract, especially tests/test_config_schema.py:9-15 and tests/test_config_authority.py:12-17. This supports the proof-quality concern but is not the primary blocker.
+
+### Deductions
+- 0.08 missing discriminating proof for persisted next_id load branch.
+- 0.09 lost proof for mixed flat-plus-grouped rejection path.
+- 0.03 dirty-tree contamination check unavailable because git status could not be executed.
+- 0.02 no direct commit diff available; file ownership reconstructed from task body plus reflog.
+
+### Verdict
+- Confidence: 0.78
+- FAIL. Implementation appears stable, but the durable test contract is not strong enough to approve.
+- Action: reject to todo for test-writer strengthening.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | test-writer | Add a discriminating loader test that writes a non-default integer next_id to config.yml and proves load_config returns that persisted value. | tests/test_config_loader.py | Live branch remains at serve/kanban/src/owlbear_kanban/config_loader.py:45-47; current scoped proof only covers default path at tests/test_config_loader.py:226-230. |
+| 2 | test-writer | Restore coverage for mixed flat-plus-grouped input without schema by directly exercising the rejection path, or split/rename the durable tests so both the success case and the rejection case are explicitly proven. | tests/test_config_schema.py, serve/kanban/src/owlbear_kanban/models.py | Current test name still claims raises_config_error at tests/test_config_schema.py:339, but body now asserts success at tests/test_config_schema.py:342-345 while rejection logic still exists at serve/kanban/src/owlbear_kanban/models.py:232-249. |
+| 3 | test-writer | Update stale durable test headers/docstrings so each TestFromAC section describes the contract it now enforces. | tests/test_config_authority.py, tests/test_config_schema.py | Current file-level AC text still describes grouped save output and root statuses/priorities at tests/test_config_schema.py:9-15 and tests/test_config_authority.py:12-17, but bodies assert next_id-only persistence. |
+[[2026-05-09]]
+## Test-Writer Notes
+- Retry: Step 1b — reviewer cited 2 proof gaps + 1 docstring concern. All addressed.
+
+### Changes made
+- **tests/test_config_loader.py**: Added `test_load_config_reads_persisted_next_id` to `TestFromAC_LoadConfigRegression` — writes `next_id: 42` to config.yml, proves `load_config` returns `config.next_id == 42` (closes gap 1: only the missing-file default was previously proven).
+- **tests/test_config_schema.py**: Renamed `test_mixed_flat_and_grouped_without_schema_raises_config_error` → `test_load_config_mixed_flat_and_grouped_without_schema_returns_product_topology` (name now matches the body's success assertion); added `test_model_validate_mixed_flat_and_grouped_without_schema_raises_config_error` that directly calls `BoardConfig.model_validate` on mixed YAML and asserts `ConfigError(code="ERR_INVALID_STATUS")` (closes gap 2: rejection path in models.py:232-249 now explicitly proven). Updated file-header AC5 and AC8 comments to reflect current topology-constant behavior.
+- **tests/test_config_authority.py**: Updated file-header AC4/AC5 descriptions and `TestFromAC_SaveConfigRootOnly` class docstring to reflect that `save_config` writes only `next_id`, not `statuses/priorities` (closes gap 3).
+
+### Verdict: Step 1b.1 — all new tests PASS
+- Both new tests pass against current code: `load_config` at config_loader.py:45-47 already reads `next_id`; `BoardConfig._normalise_legacy` at models.py:248-254 already raises `ConfigError` for mixed flat+grouped.
+- No implementation work needed. Advancing directly to `review`.
+
+### Quality evidence
+- Scoped run: 93 passed, 0 failed (up from 91). Ruff: clean.
+- Commit: 3a7c9519 — test: add proof-gap tests for persisted next_id and mixed-shape rejection (#1473, test-writer)

@@ -1,10 +1,10 @@
 ---
 id: 1472
 title: 'P4-21: Kanban package test alignment (AC5 Cat-A)'
-status: todo
+status: review
 priority: critical
 created: 2026-05-09T08:46:53.913029+00:00
-updated: 2026-05-09T11:51:53.378247+00:00
+updated: 2026-05-09T13:05:13.971189+00:00
 tags:
 - phase-4
 - scope:tests
@@ -14,7 +14,7 @@ parent: 1439
 depends_on: []
 blocked: false
 block_reason:
-claimed_at: 2026-05-09T11:51:53.378247+00:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -133,3 +133,36 @@ Builder-mode constraints for this run prohibit modifying `TestFromAC_*` classes.
 - RED baseline command: `uv run pytest serve/kanban/tests/ -q --tb=line -n 0`
 - Failing nodes: 71 across 15 files.
 - Key categories: obsolete topology validation expectations, removed/relocated BoardConfig fields, non-canonical status `released`, migration output assumptions, and stale fixture path assumptions.
+
+[[2026-05-09]]
+## Test-Writer Notes
+
+**Test file path:** `serve/kanban/tests/` (15 files edited)
+
+**Nature of task:** Test REMEDIATION — existing tests were failing due to #1439 topology-constant refactor. Fixed all 71 failing tests to align with new API contracts.
+
+**Root cause:** `load_config()` now uses `PRODUCT_TOPOLOGY` constants and ignores all topology fields in config.yml. Tests that assumed config.yml topology fields were respected all failed.
+
+**Changes per category:**
+
+| Category | Files | Count |
+|---|---|---|
+| Nested field access (cfg.entry_status → cfg.pipeline.entry_status, etc.) | test_engine_init_1068.py | 13 |
+| PRODUCT_TOPOLOGY overrides config (predicates, agent_map, wave_size, entry_status) | test_engine_init_1067.py, test_engine_create_edit_1070.py, test_engine_end_work_1077.py, test_engine_move_claim.py, test_engine_pick_tasks_1074.py, test_engine_coverage_1068.py, test_engine_storage.py | 35 |
+| Clarity gate (task body needs bullet item for todo/in-progress/review/docs/done) | test_engine_pick_tasks_1076.py, test_engine_coverage_1068.py | 3 |
+| MigrationRequiredError (is_legacy_schema always False now) | test_engine_storage.py, test_storage_1050.py | 4 |
+| Module moves (corruption._make_yaml → yaml_rt.make_yaml) | test_corruption.py | 1 |
+| New code ERR_CORRUPT_ENCODING | test_corruption.py | 1 |
+| Config format (grouped schema for _NEW_CONFIG_YAML) | test_migrate.py | 5 |
+| API changes (archival_reason required, outcome="release", read_task config kwarg) | test_engine_atomicity_1104.py, test_mtime_cache_942.py, test_engine_coverage_1068.py | 4 |
+| Path/archive fixes | test_storage.py | 3 |
+| repair_storage error type (OSError not RuntimeError) | test_engine_storage.py | 2 |
+
+**Final result:** 1326 tests pass, 0 failures. Ruff clean.
+
+**Commit:** `180c43e4` — test: align kanban tests with topology-constant refactor (#1472, test-writer)
+[[2026-05-09]]
+## Builder Notes
+- Non-implementation task (`type:test`) with test-only remediation completed by test-writer.
+- No source-code changes required from builder.
+- Passing through to review based on task contract and latest test-writer evidence (`1326 passed, 0 failed`, ruff clean; commit `180c43e4`).
