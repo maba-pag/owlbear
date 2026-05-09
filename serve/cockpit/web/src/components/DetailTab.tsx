@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   PButton,
   PInputText,
@@ -52,6 +52,8 @@ export default function DetailTab({
   const [showConflict, setShowConflict] = useState(false)
   const [serverValidationMessage, setServerValidationMessage] = useState<string | null>(null)
   const [confirmType, setConfirmType] = useState<null | 'move-backward' | 'unblock' | 'unclaim'>(null)
+  const [pendingFocusRestore, setPendingFocusRestore] = useState<HTMLElement | null>(null)
+  const confirmTriggerRef = useRef<HTMLElement | null>(null)
   const [showHistory, setShowHistory] = useState(false)
   const [sessions, setSessions] = useState<Session[]>([])
   const [title, setTitle] = useState(task?.title ?? '')
@@ -71,6 +73,16 @@ export default function DetailTab({
     setServerValidationMessage(null)
     setConfirmType(null)
   }, [task?.id, task?.updated])
+
+  useEffect(() => {
+    if (confirmType === null && pendingFocusRestore) {
+      if (!pendingFocusRestore.hasAttribute('tabindex')) {
+        pendingFocusRestore.setAttribute('tabindex', '-1')
+      }
+      pendingFocusRestore.focus()
+      setPendingFocusRestore(null)
+    }
+  }, [confirmType, pendingFocusRestore])
 
   useEffect(() => {
     if (initialSubtab !== 'history' || task === null) {
@@ -135,6 +147,7 @@ export default function DetailTab({
     || (t.blocked && blockReason !== (t.block_reason ?? ''))
 
   const validationMessage = clientValidationMessage ?? serverValidationMessage
+  const backwardTarget = previousStatus(t.status)
 
   function previousStatus(current: string): string | null {
     const statuses = board?.statuses.map((status) => status.name) ?? []
@@ -235,12 +248,24 @@ export default function DetailTab({
       return
     }
     if (confirmType === 'move-backward') {
-      const target = previousStatus(t.status)
+      const target = backwardTarget
       if (target) {
         await runMutation(`/api/tasks/${t.id}/move`, { updated: t.updated, status: target })
       }
       setConfirmType(null)
     }
+  }
+
+  function handleConfirmCancel() {
+    const trigger = confirmTriggerRef.current
+    setPendingFocusRestore(trigger)
+    setConfirmType(null)
+  }
+
+  function openConfirm(type: 'move-backward' | 'unblock' | 'unclaim') {
+    const triggerId = type === 'move-backward' ? 'move-backward' : type === 'unclaim' ? 'unclaim-action' : 'unblock-action'
+    confirmTriggerRef.current = document.querySelector(`[data-testid="${triggerId}"]`) as HTMLElement | null
+    setConfirmType(type)
   }
 
   async function handleHistoryClick() {
@@ -379,14 +404,30 @@ export default function DetailTab({
       <PButton data-testid="save-button" onClick={() => void handleSave()}>
         Save
       </PButton>
-      <PButton data-testid="move-backward" variant="secondary" onClick={() => setConfirmType('move-backward')}>
-        Move Backward
-      </PButton>
-      <PButton data-testid="unclaim-action" variant="secondary" onClick={() => setConfirmType('unclaim')}>
-        Unclaim
-      </PButton>
+      {backwardTarget && (
+        <PButton
+          data-testid="move-backward"
+          variant="secondary"
+          onClick={() => openConfirm('move-backward')}
+        >
+          Move Backward
+        </PButton>
+      )}
+      {t.claimed !== false && (
+        <PButton
+          data-testid="unclaim-action"
+          variant="secondary"
+          onClick={() => openConfirm('unclaim')}
+        >
+          Unclaim
+        </PButton>
+      )}
       {t.blocked && (
-        <PButton data-testid="unblock-action" variant="secondary" onClick={() => setConfirmType('unblock')}>
+        <PButton
+          data-testid="unblock-action"
+          variant="secondary"
+          onClick={() => openConfirm('unblock')}
+        >
           Unblock
         </PButton>
       )}
@@ -415,8 +456,9 @@ export default function DetailTab({
       {confirmType !== null && (
         <ConfirmDialog
           type={confirmType}
+          targetStatus={backwardTarget}
           blockReason={t.block_reason}
-          onCancel={() => setConfirmType(null)}
+          onCancel={handleConfirmCancel}
           onConfirm={() => void handleConfirm()}
         />
       )}
