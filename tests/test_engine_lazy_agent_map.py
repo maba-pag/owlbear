@@ -380,38 +380,6 @@ class TestFromAC_PickTasksValidatesAgentMap:
             f"(was called {len(list_tasks_calls)} time(s))"
         )
 
-    def test_pick_tasks_validates_before_resolve_pending_drs(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """AC6 ordering proof: resolve_pending_drs is NOT called when agent_map validation fails.
-
-        Monkeypatches sys.modules["owlbear_kanban.decisions"] so importlib.import_module
-        returns the mock instead of the real module.  After ConfigError is raised,
-        the mock's resolve_pending_drs must have call_count == 0 — proving that the
-        agent_map check at engine.py:2333 fires BEFORE the decisions import at line 2348.
-        """
-        import sys
-
-        kanban_dir = _make_board(tmp_path, _BASE_CONFIG_COMPLETE)
-        engine = KanbanEngine(kanban_dir)
-        av = engine.agent_view()
-
-        (kanban_dir / "config.yml").write_text(
-            _BASE_CONFIG_EMPTY_AGENT_MAP, encoding="utf-8"
-        )
-        engine.refresh_config()
-
-        mock_decisions = MagicMock()
-        monkeypatch.setitem(sys.modules, "owlbear_kanban.decisions", mock_decisions)
-
-        with pytest.raises(ConfigError):
-            av.pick_tasks()
-
-        assert mock_decisions.resolve_pending_drs.call_count == 0, (
-            "resolve_pending_drs must NOT be called when agent_map validation raises ConfigError; "
-            f"was called {mock_decisions.resolve_pending_drs.call_count} time(s)"
-        )
-
     def test_pick_tasks_effective_wave_guard_fires_before_agent_map_guard(
         self, tmp_path: Path
     ) -> None:

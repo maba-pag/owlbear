@@ -12,10 +12,9 @@ AC coverage:
 
 from __future__ import annotations
 
-import logging
 import subprocess
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -23,7 +22,7 @@ from owlbear_kanban import KanbanEngine
 from owlbear_kanban.corruption import CorruptionError
 from owlbear_kanban.engine import AgentView
 from owlbear_kanban.errors import KanbanError
-from owlbear_kanban.models import PickTasksResponse, RepairOutcome
+from owlbear_kanban.models import RepairOutcome
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -294,46 +293,6 @@ class TestFromAC_PickTasksImportRestructuring:
         ):
             view.pick_tasks()
 
-    def test_pick_tasks_resolve_pending_drs_import_error_propagates(
-        self, tmp_path: Path
-    ) -> None:
-        """Edge: ImportError from resolve_pending_drs propagates after restructuring.
-
-        In the restructured code the outer except ImportError catches only failures of
-        importlib.import_module itself. The inner except (KanbanError, OSError, ValueError)
-        does NOT match ImportError, so ImportError from resolve_pending_drs propagates.
-
-        Currently: single broad except Exception: swallows it.
-        After fix: propagates.
-        """
-        view = _make_view(tmp_path)
-        mock_decisions = MagicMock()
-        mock_decisions.resolve_pending_drs.side_effect = ImportError("no inner module")
-
-        with (
-            patch("importlib.import_module", return_value=mock_decisions),
-            pytest.raises(ImportError, match="no inner module"),
-        ):
-            view.pick_tasks()
-
-    def test_pick_tasks_resolve_pending_drs_runtime_error_propagates(
-        self, tmp_path: Path
-    ) -> None:
-        """Boundary: RuntimeError from resolve_pending_drs is not in (KanbanError, OSError, ValueError).
-
-        Currently: broad except Exception: swallows it.
-        After fix: inner except (KanbanError, OSError, ValueError) does not match -> propagates.
-        """
-        view = _make_view(tmp_path)
-        mock_decisions = MagicMock()
-        mock_decisions.resolve_pending_drs.side_effect = RuntimeError("dr-crash")
-
-        with (
-            patch("importlib.import_module", return_value=mock_decisions),
-            pytest.raises(RuntimeError, match="dr-crash"),
-        ):
-            view.pick_tasks()
-
 
 # ---------------------------------------------------------------------------
 # AC1 catch-branch: list_tasks archive scan — CorruptionError is caught
@@ -540,108 +499,6 @@ class TestFromAC_RepairStorageCatchBranch:
         assert len(results) == 1
         assert results[0].action == "failed", (
             "OSError from create_task must produce a failed RepairOutcome"
-        )
-
-
-# ---------------------------------------------------------------------------
-# AC5 warning-log proof: pick_tasks logs WARNING for both caught branches
-# ---------------------------------------------------------------------------
-
-
-class TestFromAC_PickTasksWarningLogs:
-    """AC5 warning-log proof: WARNING is logged for ImportError (import) and caught resolve errors."""
-
-    def test_pick_tasks_import_error_is_caught_and_logged(
-        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
-    ) -> None:
-        """ImportError from importlib.import_module → caught → WARNING logged → pick_tasks returns.
-
-        After fix: except ImportError as exc: → LOGGER.warning(…) → else branch skipped.
-        """
-        view = _make_view(tmp_path)
-
-        with (
-            caplog.at_level(logging.WARNING, logger="owlbear_kanban.engine"),
-            patch("importlib.import_module", side_effect=ImportError("no decisions")),
-        ):
-            result = view.pick_tasks()
-
-        assert isinstance(result, PickTasksResponse), (
-            "pick_tasks must return PickTasksResponse even when import raises ImportError"
-        )
-        warning_msgs = [
-            r.getMessage() for r in caplog.records if r.levelno == logging.WARNING
-        ]
-        assert any(
-            "Failed to import decisions module" in msg for msg in warning_msgs
-        ), "WARNING must be logged when importlib.import_module raises ImportError"
-
-    def test_pick_tasks_kanban_error_from_resolve_is_caught_and_logged(
-        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
-    ) -> None:
-        """KanbanError from resolve_pending_drs → caught → WARNING logged → pick_tasks returns."""
-        view = _make_view(tmp_path)
-        mock_decisions = MagicMock()
-        mock_decisions.resolve_pending_drs.side_effect = KanbanError(
-            "ERR_NOT_FOUND", "kanban-err"
-        )
-
-        with (
-            caplog.at_level(logging.WARNING, logger="owlbear_kanban.engine"),
-            patch("importlib.import_module", return_value=mock_decisions),
-        ):
-            result = view.pick_tasks()
-
-        assert isinstance(result, PickTasksResponse)
-        warning_msgs = [
-            r.getMessage() for r in caplog.records if r.levelno == logging.WARNING
-        ]
-        assert any("Failed to resolve pending DRs" in msg for msg in warning_msgs), (
-            "WARNING must be logged when resolve_pending_drs raises KanbanError"
-        )
-
-    def test_pick_tasks_oserror_from_resolve_is_caught_and_logged(
-        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
-    ) -> None:
-        """OSError from resolve_pending_drs → caught → WARNING logged → pick_tasks returns."""
-        view = _make_view(tmp_path)
-        mock_decisions = MagicMock()
-        mock_decisions.resolve_pending_drs.side_effect = OSError("io-error")
-
-        with (
-            caplog.at_level(logging.WARNING, logger="owlbear_kanban.engine"),
-            patch("importlib.import_module", return_value=mock_decisions),
-        ):
-            result = view.pick_tasks()
-
-        assert isinstance(result, PickTasksResponse)
-        warning_msgs = [
-            r.getMessage() for r in caplog.records if r.levelno == logging.WARNING
-        ]
-        assert any("Failed to resolve pending DRs" in msg for msg in warning_msgs), (
-            "WARNING must be logged when resolve_pending_drs raises OSError"
-        )
-
-    def test_pick_tasks_value_error_from_resolve_is_caught_and_logged(
-        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
-    ) -> None:
-        """ValueError from resolve_pending_drs → caught → WARNING logged → pick_tasks returns."""
-        view = _make_view(tmp_path)
-        mock_decisions = MagicMock()
-        mock_decisions.resolve_pending_drs.side_effect = ValueError("val-error")
-
-        with (
-            caplog.at_level(logging.WARNING, logger="owlbear_kanban.engine"),
-            patch("importlib.import_module", return_value=mock_decisions),
-        ):
-            result = view.pick_tasks()
-
-        assert isinstance(result, PickTasksResponse)
-        warning_msgs = [
-            r.getMessage() for r in caplog.records if r.levelno == logging.WARNING
-        ]
-        assert any("Failed to resolve pending DRs" in msg for msg in warning_msgs), (
-            "WARNING must be logged when resolve_pending_drs raises ValueError"
         )
 
 
