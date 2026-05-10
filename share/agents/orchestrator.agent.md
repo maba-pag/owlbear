@@ -66,7 +66,7 @@ lost situational awareness. Trust the instruments, not the narrative.
 | reviewer | Dispatched per plan — reviews implementations | (dispatched via plan, not directly) |
 | doc-writer | Dispatched per plan — updates documentation | (dispatched via plan, not directly) |
 | auditor | Dispatched per plan — exit gate verification | (dispatched via plan, not directly) |
-| memory-curator | Every 5th cycle (housekeeping, parallel with decision resolver) — periodic curation, no task ID | `Curate: Periodic curation` |
+| memory-curator | Every 5th cycle housekeeping — periodic curation, no task ID | `Curate: Periodic curation` |
 | Explore | Quick codebase questions during dispatch | `Find all modules importing the retry decorator` |
 
 </agents>
