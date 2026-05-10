@@ -35,6 +35,8 @@ from ruamel.yaml.comments import CommentedMap
 from ruamel.yaml.scalarstring import PlainScalarString
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from ruamel.yaml import YAML
 
 from owlbear_kanban._locking import _exclusive_file_lock
@@ -535,17 +537,47 @@ def move_to_archive(task_id: int, kanban_dir: Path) -> Path:
 # ---------------------------------------------------------------------------
 
 
-def allocate_next_id(kanban_dir: Path) -> int:
-    """Allocate the next task ID from config under exclusive flock (Brief C §3.3)."""
+def allocate_next_id(
+    kanban_dir: Path,
+    *,
+    write_task_fn: Callable[[int], None] | None = None,
+) -> int:
+    """Allocate the next task ID under the shared create lock.
+
+    When ``write_task_fn`` is provided, allocation is scan-based (active+archive
+    max prefix + 1) and the callback is executed while the lock is still held so
+    callers can keep scan+write in one critical section.
+
+    When ``write_task_fn`` is ``None``, this function still uses scan-based
+    allocation and persists the last issued id in ``.next_id.lock`` so repeated
+    allocation-only calls remain distinct under concurrency.
+    """
     lock_path = kanban_dir / ".next_id.lock"
     with _exclusive_file_lock(lock_path):
-        from owlbear_kanban.config_loader import load_config as _load_config  # noqa: PLC0415
+        max_id = 0
+        for path in [*list_task_files(kanban_dir), *list_archive_files(kanban_dir)]:
+            try:
+                file_id = int(path.stem.split("-", 1)[0])
+            except ValueError:
+                continue
+            max_id = max(max_id, file_id)
 
-        config = _load_config(kanban_dir)
-        new_id = config.next_id
-        config.next_id = new_id + 1
-        save_config(config, kanban_dir)
-    return new_id
+        last_allocated = 0
+        try:
+            text = lock_path.read_text(encoding="utf-8").strip()
+            if text:
+                last_allocated = int(text)
+        except (OSError, ValueError):
+            last_allocated = 0
+
+        if write_task_fn is not None:
+            new_id = max_id + 1
+            write_task_fn(new_id)
+            return new_id
+
+        new_id = max(max_id, last_allocated) + 1
+        lock_path.write_text(f"{new_id}\n", encoding="utf-8")
+        return new_id
 
 
 # ---------------------------------------------------------------------------

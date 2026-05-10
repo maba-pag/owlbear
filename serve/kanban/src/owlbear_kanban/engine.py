@@ -344,8 +344,8 @@ class KanbanEngine:
     Args:
         kanban_dir:    Root directory of the kanban board.
         activity_log:  When ``True``, append entries to ``activity.jsonl`` on
-                       every mutation.  When ``None`` (default), reads from
-                       ``config.yml`` ``activity_log`` field.
+                       every mutation.  When ``None`` (default), logging is
+                       enabled.
     """
 
     def __init__(  # noqa: C901
@@ -364,9 +364,7 @@ class KanbanEngine:
         self._agent_name: str = (
             f"{random.choice(ADJECTIVES)}-{random.choice(NOUNS)}"  # noqa: S311
         )
-        effective_activity_log = (
-            activity_log if activity_log is not None else self._config.activity_log
-        )
+        effective_activity_log = activity_log if activity_log is not None else True
         self._activity_log_path: Path | None = (
             kanban_dir / "activity.jsonl" if effective_activity_log else None
         )
@@ -1018,26 +1016,35 @@ class KanbanEngine:
             config=config,
         )
 
-        task_id = _storage_module().allocate_next_id(self._kanban_dir)
-        now = datetime.now(tz=UTC).isoformat()
+        record: Task | None = None
 
-        record = Task(
-            id=task_id,
-            title=title,
-            status=entry_status,
-            priority=priority or config.pipeline.default_priority,
-            created=now,
-            updated=now,
-            body=body,
-            tags=list(tags) if tags else [],
-            parent=parent,
-            depends_on=list(depends_on) if depends_on else [],
-        )
+        def _write_new_task(task_id: int) -> None:
+            nonlocal record
+            now = datetime.now(tz=UTC).isoformat()
+            created_task = Task(
+                id=task_id,
+                title=title,
+                status=entry_status,
+                priority=priority or config.pipeline.default_priority,
+                created=now,
+                updated=now,
+                body=body,
+                tags=list(tags) if tags else [],
+                parent=parent,
+                depends_on=list(depends_on) if depends_on else [],
+            )
+            filename = make_task_filename(task_id, title)
+            task_path = self._tasks_dir / filename
+            validate_path_containment(self._tasks_dir, task_path)
+            write_task(created_task, self._kanban_dir)
+            record = created_task
 
-        filename = make_task_filename(task_id, title)
-        task_path = self._tasks_dir / filename
-        validate_path_containment(self._tasks_dir, task_path)
-        write_task(record, self._kanban_dir)
+        _storage_module().allocate_next_id(self._kanban_dir, write_task_fn=_write_new_task)
+        if record is None:
+            msg = "create_task failed to construct task record"
+            raise RuntimeError(msg)
+
+        created_record = record
         reloaded_config = load_config(self._kanban_dir)
         reloaded_tasks_dir = self._kanban_dir / reloaded_config.paths.tasks_dir
         reloaded_archive_dir = self._kanban_dir / reloaded_config.paths.archive_dir
@@ -1048,8 +1055,15 @@ class KanbanEngine:
         self._tasks_dir = reloaded_tasks_dir
         self._archive_dir = reloaded_archive_dir
 
+        self._emit_event(
+            action="create_task",
+            task_id=created_record.id,
+            detail=created_record.title,
+            task_status_at_start=created_record.status,
+        )
+
         self._revision += 1
-        return record
+        return created_record
 
     def edit_task(  # noqa: PLR0912, PLR0913, PLR0915, C901
         self,
