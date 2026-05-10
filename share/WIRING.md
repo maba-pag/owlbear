@@ -23,11 +23,11 @@ Agents marked **(ND3)** may be called at nesting depth ≥3 and require `disable
 | ND3 Agent | DMI | Called by (ND2) |
 |----------|-----|----------------|
 | challenger | `false` | architect, researcher |
-| planner | `false` | architect |
+| planner | `false` | architect, auditor, builder, doc-writer, researcher, reviewer, test-writer |
 | fix-attempt | `false` | builder |
 | code-reader | `false` | reviewer |
 | ideation-critic | `false` | ideation-architect, ideation-data, ideation-enduser, ideation-security |
-| quality-runner | `false` | builder, reviewer, test-writer, auditor |
+| quality-runner | `false` | auditor, builder, reviewer, test-curator, test-writer |
 
 All other agents keep `disable-model-invocation: true`. Built-in agents (`Explore`, `General Purpose`) resolve at any depth.
 
@@ -124,7 +124,7 @@ All 9 agents (critic, pragmatist, simplifier, outsider, ideation-architect, data
 | | python.instructions | `applyTo:*.py` | | |
 | **fix-attempt** | w-fix-attempt | `req` | — | — |
 | | python.instructions | `applyTo:*.py` | | |
-| **test-curator** | w-test-curation | `req` | h-pytest-and-linting | `companion:w-test-curation` |
+| **test-curator** | w-test-curation | `req` | h-quality-runner | `companion:w-test-curation` |
 | | python.instructions | `applyTo:*.py` | h-python-conventions | `companion:w-test-curation` |
 | **challenger** | r-pipeline-protocol | `req` | python.instructions | `applyTo:*.py` (reads .py) |
 | | pipeline-agents.instructions | `applyTo:r-pipeline-protocol/**` | | |
@@ -133,16 +133,20 @@ All 9 agents (critic, pragmatist, simplifier, outsider, ideation-architect, data
 
 | Prompt | Invokes Agent | Skill References | Connection |
 |--------|---------------|-----------------|------------|
-| **orchestrate** | orchestrator | — | agent invocation |
-| **ideation-discover** | ideation-discoverer | — | agent invocation |
-| **ideation-mediate** | ideation-mediator | — | agent invocation |
-| **test-curation** | test-curator | — | agent invocation |
-| **agent-audit** | (inline, no agent) | h-agent-structure, h-memory-structure, r-pipeline-protocol, r-project-standards | `prompt-ref` |
-| **doc-audit** | (inline, no agent) | r-doc-standards | `prompt-ref` |
+| **agent-broad-audit** | (inline, no agent) | h-agent-structure, h-memory-structure, r-pipeline-protocol, r-project-standards | `prompt-ref` |
+| **agent-deep-audit** | (inline, no agent) | target agent/skill cluster | dynamic prompt scope |
 | **design-context** | (inline, no agent) | h-frontend-design | `prompt-ref` |
 | **frontend-audit** | (inline, no agent) | h-frontend-design | `prompt-ref` |
 | **frontend-normalize** | (inline, no agent) | h-frontend-design | `prompt-ref` |
 | **frontend-polish** | (inline, no agent) | h-frontend-design | `prompt-ref` |
+| **ideation-discover** | ideation-discoverer | — | agent invocation |
+| **ideation-mediate** | ideation-mediator | — | agent invocation |
+| **kb-enrich** | knowledge-enricher | — | agent invocation |
+| **kb-ingest** | knowledge-ingestor | — | agent invocation |
+| **legacy-audit** | (inline, no agent) | — | prompt workflow |
+| **memory-audit** | (inline, no agent) | — | prompt workflow |
+| **orchestrate** | orchestrator | — | agent invocation |
+| **test-curation** | test-curator | — | agent invocation |
 
 ---
 
@@ -169,13 +173,13 @@ All 9 agents (critic, pragmatist, simplifier, outsider, ideation-architect, data
 | **w-ideation-discovery** | ideation-discoverer | `req` | — | — |
 | **w-ideation-mediation** | ideation-mediator | `req` | — | — |
 | **h-ideation-panel** | 9× ideation panel | `req` | — | — |
-| **h-quality-runner** | quality-runner | `req` | — | — |
-| **h-pytest-and-linting** | quality-runner | `req` | test-curator | `companion` |
+| **h-quality-runner** | quality-runner | `req` | test-curator | `companion` |
+| **h-pytest-and-linting** | quality-runner | `req` | — | — |
 | **h-mcp-kanban** | — | — | 12× pipeline agents | `companion:r-pipeline-protocol` |
 | **r-project-standards** | — | — | 12× pipeline agents | `companion:r-pipeline-protocol` |
-| | | | agent-audit prompt | `prompt-ref` |
+| | | | agent-broad-audit prompt | `prompt-ref` |
 | **r-architecture-standards** | — | — | architect (via w-arch-review), planner | `inline-ref` / `body-ref` |
-| **r-doc-standards** | — | — | doc-audit prompt | `prompt-ref` |
+| **r-doc-standards** | — | — | doc-audit prompt (`.owlbear/prompts`) | `prompt-ref` |
 | | | | (any agent editing doc files) | `applyTo` via doc-standards.instructions |
 | **h-python-conventions** | — | — | test-curator (via w-test-curation) | `companion` |
 | **h-frontend-design** | — | — | design-context, frontend-audit, frontend-normalize, frontend-polish prompts | `prompt-ref` |
@@ -183,23 +187,22 @@ All 9 agents (critic, pragmatist, simplifier, outsider, ideation-architect, data
 | **h-excalidraw-diagram** | — | — | doc-writer | `directed` |
 | | | | researcher | `organic` |
 | **h-visual-output** | — | — | researcher | `organic` |
-| **h-knowledge-ops** | — | — | researcher | `organic` |
+| **h-knowledge-ops** | knowledge-enricher, knowledge-ingestor | `req` | researcher | `organic` |
 | **h-mcp-memory** | — | — | memory-curator (via w-mem-curation) | `companion` |
 | **h-memory-structure** | — | — | memory-curator | `directed` |
-| | | | agent-audit prompt | `prompt-ref` |
-| **h-agent-structure** | — | — | agent-audit prompt | `prompt-ref` |
+| | | | agent-broad-audit prompt | `prompt-ref` |
+| **h-agent-structure** | — | — | agent-broad-audit prompt | `prompt-ref` |
 | ~~w-ideation~~ | — | — | — | Does not exist (phantom — only w-ideation-discovery and w-ideation-mediation) |
 
 ### Skills with ZERO regular consumers
 
 | Skill | Only Consumer | Connection |
 |-------|--------------|------------|
-| h-agent-structure | agent-audit prompt | `prompt-ref` |
+| h-agent-structure | agent-broad-audit prompt | `prompt-ref` |
 | h-excalidraw-diagram | doc-writer, researcher | `directed` / `organic` |
 | h-frontend-conventions | (none — stub target only) | `applyTo` stub |
 | h-frontend-design | 4 frontend prompts | `prompt-ref` |
-| h-knowledge-ops | researcher | `organic` |
-| h-memory-structure | memory-curator, agent-audit | `directed` / `prompt-ref` |
+| h-memory-structure | memory-curator, agent-broad-audit | `directed` / `prompt-ref` |
 | h-mcp-kanban | 9 pipeline agents | `body-ref` |
 | h-mcp-memory | memory-curator | `companion` |
 | h-python-conventions | test-curator | `companion` |

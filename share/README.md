@@ -88,7 +88,7 @@ See `h-agent-structure` § Nesting Depth & DMI for the full rule and ND3 agent t
 
 ## Instructions
 
-6 instruction files (`.instructions.md`). Two categories:
+7 instruction files (`.instructions.md`). Two categories:
 
 **Substantive documents** — contain full behavioral specifications:
 
@@ -111,7 +111,7 @@ Stubs catch agents editing files without the relevant skill loaded. They do not 
 
 ## Prompts
 
-10 prompt files (`.prompt.md`). Prompts are user-invocable one-shot commands triggered from the VS Code chat command palette. Many accept `${input:...}` variable substitution.
+14 prompt files (`.prompt.md`). Prompts are user-invocable one-shot commands triggered from the VS Code chat command palette. Many accept `${input:...}` variable substitution.
 
 **Naming convention:**
 
@@ -125,9 +125,11 @@ Stubs catch agents editing files without the relevant skill loaded. They do not 
 | Group | Prompts |
 |-------|--------|
 | Orchestration | `orchestrate` |
+| Agent audits | `agent-broad-audit`, `agent-deep-audit` |
 | Audits | `frontend-audit`, `memory-audit`, `legacy-audit` |
 | Frontend | `frontend-normalize`, `frontend-polish`, `design-context` |
 | Ideation | `ideation-discover`, `ideation-mediate` |
+| Knowledge | `kb-ingest`, `kb-enrich` |
 | Curation | `test-curation` |
 
 ## File Interconnections
