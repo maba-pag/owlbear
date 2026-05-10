@@ -13,12 +13,8 @@ Optional scope input: ${input:scope:Files or feature area to polish (optional)}
 
 1. Read `docs/design-context.md` if it exists. Use it as the source of truth
    for tone, users, accessibility, and design principles.
-2. Read `../../skills/frontend-design/SKILL.md` and these references for targeted
-   checks:
-   - `../../skills/frontend-design/references/spatial-design.md`
-   - `../../skills/frontend-design/references/interaction-design.md`
-   - `../../skills/frontend-design/references/responsive-design.md`
-   - `../../skills/frontend-design/references/ux-writing.md`
+2. Read `../skills/h-frontend-design/SKILL.md` and use its spatial, interaction,
+   responsive, and UX writing sections for targeted checks.
 3. Determine the target surface:
    - Use `${input:scope}` when provided.
    - If no scope is provided, choose one page, route, or component and state it.

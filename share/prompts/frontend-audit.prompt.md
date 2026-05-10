@@ -11,9 +11,8 @@ Optional scope input: ${input:scope:Files or feature area to audit (optional)}
 ## Step 1 - Load context
 
 1. Read `docs/design-context.md` if it exists.
-2. Read `../../skills/frontend-design/SKILL.md`.
-3. Read `../../skills/frontend-design/references/anti-patterns.md` and use its
-   two-tier finding classification: blocker and heuristic.
+2. Read `../skills/h-frontend-design/SKILL.md`.
+3. Use its two-tier anti-pattern classification: blocker and heuristic.
 4. Determine the target surface:
    - Use `${input:scope}` when provided.
    - If no scope is provided, choose one page, route, or component and state it.
