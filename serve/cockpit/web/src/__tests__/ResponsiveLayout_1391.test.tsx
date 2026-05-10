@@ -31,16 +31,19 @@ import { Card } from '../components/Card'
 
 const CARD_TSX = path.resolve(process.cwd(), 'src/components/Card.tsx')
 const SHELL_CSS = path.resolve(process.cwd(), 'src/Shell.css')
+const SHELL_TSX = path.resolve(process.cwd(), 'src/Shell.tsx')
 
 // ─── Shared CSS source ────────────────────────────────────────────────────────
 
 let shellCss = ''
 let cardSource = ''
+let shellTsx = ''
 
 // loaded once for static analysis blocks
 ;(() => {
   shellCss = fs.readFileSync(SHELL_CSS, 'utf-8')
   cardSource = fs.readFileSync(CARD_TSX, 'utf-8')
+  shellTsx = fs.readFileSync(SHELL_TSX, 'utf-8')
 })()
 
 // ─── AC1: Viewport usability — responsive grid adjustments ────────────────────
@@ -228,5 +231,103 @@ describe('TestFromAC_ResponsiveCSS', () => {
   // AC3: Shell.css must have at least one @media rule for responsive layout
   it('Shell.css has at least one @media query for responsive breakpoints', () => {
     expect(shellCss, 'Shell.css must contain at least one @media rule').toMatch(/@media/)
+  })
+})
+
+// ─── AC1/AC2/AC3/AC4 — Discriminating CSS assertions (added in retry, RF1–RF3) ─
+// Previous tests checked only for generic @media presence. These checks require
+// specific responsive patterns that the fix (#1392) must implement.
+// All FAIL against the current Shell.css (zero @media rules).
+
+describe('TestFromAC_ResponsiveCSSDiscriminating', () => {
+  // AC1: Shell.css must target a specific narrow-viewport breakpoint in the 320–800px range.
+  // Current: no @media at all → FAIL.
+  it('Shell.css has @media max-width breakpoint targeting the 320px–800px viewport range', () => {
+    expect(
+      shellCss,
+      'Shell.css must contain @media (max-width: Npx) where N is between 320 and 800 for mobile viewport usability',
+    ).toMatch(/@media[^{(]*\(max-width\s*:\s*[3-8]\d{2}px\)/)
+  })
+
+  // AC2/AC4: Shell.css must include .shell__sidecar inside an @media block to collapse it
+  // at narrow viewports so the board workspace is accessible without horizontal scrolling.
+  // Current: no @media rules → sidecar always 360px → workspace=0px at 320px → FAIL.
+  it('Shell.css places a .shell__sidecar rule inside an @media responsive block', () => {
+    const hasMediaWithSidecar = /@media[^{]*\{[^@]*shell__sidecar/s.test(shellCss)
+    expect(
+      hasMediaWithSidecar,
+      'Shell.css must define a .shell__sidecar rule inside an @media block to collapse the sidecar at mobile viewports',
+    ).toBe(true)
+  })
+
+  // AC3/AC1: Shell.css must override grid-template-columns inside a @media rule so the
+  // fixed 56px 1fr 360px layout is replaced at narrow viewports where workspace=0px.
+  // Current: no @media rules → grid is always fixed → FAIL.
+  it('Shell.css overrides grid-template-columns inside a responsive @media rule', () => {
+    const hasResponsiveGrid = /@media[^{]*\{[^@]*grid-template-columns/s.test(shellCss)
+    expect(
+      hasResponsiveGrid,
+      'Shell.css must override grid-template-columns inside an @media block so the workspace is non-zero at 320px',
+    ).toBe(true)
+  })
+})
+
+// ─── AC5: PDS token usage — Shell.css spacing/color and Shell.tsx controls ─────
+// Shell.css already uses PDS CSS custom properties for spacing and color (PASS).
+// Shell.tsx already uses PButton from Porsche Design System (PASS).
+// These tests document and enforce continued PDS usage per AC5 broader scope (RF4).
+
+describe('TestFromAC_PdsShellTokenUsage', () => {
+  // AC5: Shell.css uses --pds-grid-gap spacing token (already present — documents coverage).
+  it('Shell.css uses --pds-grid-gap spacing token for layout gaps', () => {
+    expect(
+      shellCss,
+      'Shell.css must use var(--pds-grid-gap) for spacing to maintain PDS token usage for spacing',
+    ).toContain('--pds-grid-gap')
+  })
+
+  // AC5: Shell.css uses --pds-grid-margin spacing token (already present).
+  it('Shell.css uses --pds-grid-margin spacing token for layout margins', () => {
+    expect(
+      shellCss,
+      'Shell.css must use var(--pds-grid-margin) for margin spacing to maintain PDS token usage',
+    ).toContain('--pds-grid-margin')
+  })
+
+  // AC5: Shell.css uses --pds-theme-light-background-base color token (already present).
+  it('Shell.css uses --pds-theme-light-background-base color token for page background', () => {
+    expect(
+      shellCss,
+      'Shell.css must use var(--pds-theme-light-background-base) for page background color',
+    ).toContain('--pds-theme-light-background-base')
+  })
+
+  // AC5: Shell.css uses --pds-theme-light-contrast-low color token for borders (already present).
+  it('Shell.css uses --pds-theme-light-contrast-low color token for surface borders', () => {
+    expect(
+      shellCss,
+      'Shell.css must use var(--pds-theme-light-contrast-low) for border colors',
+    ).toContain('--pds-theme-light-contrast-low')
+  })
+
+  // AC5: Shell.tsx imports PButton from @porsche-design-system for PDS-compatible controls
+  // (already present — documents that PDS control components are used where equivalents exist).
+  it('Shell.tsx imports PButton from @porsche-design-system/components-react for PDS controls', () => {
+    expect(
+      shellTsx,
+      'Shell.tsx must import PButton from @porsche-design-system/components-react for PDS-compatible interactive controls',
+    ).toContain("from '@porsche-design-system/components-react'")
+  })
+
+  // AC5: Shell.tsx uses PButton in the nav-rail control surface (already present).
+  it('Shell.tsx uses PButton component in the nav-rail control surface', () => {
+    const navRailIdx = shellTsx.indexOf('shell__nav-rail')
+    expect(navRailIdx, 'Shell.tsx must have a shell__nav-rail element').toBeGreaterThan(-1)
+    // PButton must appear after the nav-rail class reference in the component tree.
+    const pbuttonIdx = shellTsx.indexOf('<PButton', navRailIdx)
+    expect(
+      pbuttonIdx,
+      'Shell.tsx must use <PButton> in the nav-rail surface for PDS-compatible interaction affordances',
+    ).toBeGreaterThan(-1)
   })
 })
