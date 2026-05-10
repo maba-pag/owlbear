@@ -49,16 +49,6 @@ interface ConflictLocalDraft {
   blockReason: string
 }
 
-interface EditMutationPayload {
-  updated: string
-  title: string
-  priority: string
-  body: string
-  depends_on: number[]
-  parent: number | null
-  block_reason: string | null
-}
-
 interface MutationOptions {
   conflictDraft?: ConflictLocalDraft
 }
@@ -316,7 +306,7 @@ export default function DetailTab({
       blockReason,
     }
 
-    const payload: EditMutationPayload = {
+    const payload = {
       updated: t.updated,
       title,
       priority,
