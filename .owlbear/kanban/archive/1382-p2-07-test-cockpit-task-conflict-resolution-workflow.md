@@ -1,10 +1,10 @@
 ---
 id: 1382
 title: 'P2-07: Test Cockpit task conflict resolution workflow'
-status: done
+status: archived
 priority: needed
 created: 2026-05-06T01:04:39.067978+00:00
-updated: 2026-05-10T00:32:32.222879+00:00
+updated: 2026-05-10T00:38:43.090002+00:00
 tags:
 - cockpit
 - audit-remediation
@@ -20,7 +20,7 @@ depends_on:
 - 1375
 blocked: false
 block_reason:
-claimed_at: 2026-05-10T00:32:32.222879+00:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -564,3 +564,33 @@ AC coverage table (refined AC5 per architect cycle-2, AC1/AC2/AC4 per architect 
 - .owlbear/scratch/qr-1382-output.txt
 - .owlbear/scratch/qr-1382-run.txt
 - .owlbear/scratch/qr-1382-scoped.txt
+[[2026-05-10]]
+## Audit
+### Regression Detection
+- quality-runner mode full: Python 4374 passed / 222 failed / 10 errors; Frontend 1194 passed / 23 failed / 9 skipped. The 23 frontend failures are all in DetailTab_1382.test.tsx (intentional RED). The 222 Python failures and 10 import errors are pre-existing — this task changed zero Python files (3 commits all touch only the frontend test file). All 74 other frontend test files pass.
+- regression verdict: PASS
+
+### Intent Verification
+- scope alignment: PASS (3 test-writer commits: 21852627, 618be6ec, 65dbedb2 — each touches only serve/cockpit/web/src/__tests__/DetailTab_1382.test.tsx. 1 doc-writer commit: 4af8d62b — touches only share/diagrams/cockpit.excalidraw. No extraneous files.)
+- purpose match: PASS (RED-phase conflict-resolution tests for the cockpit task detail editor, matching stated purpose)
+- extraneous scope: none
+- boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 4/5
+Initial AC was specific and well-structured with test-depth annotations, false-green prevention guidance, and builder guidance. However, AC5 contained an internal contradiction (requiring both RED-only behavior and a test that would be GREEN against current code), and AC1/AC6 lacked the onTaskUpdated spy requirement to close the false-green path. Both issues required reviewer feedback across 3 architect cycles to resolve. The final refined AC is clean, specific, and complete — scoring 4 for requiring iterative correction rather than delivering a clean contract on first pass.
+
+### Commit Integrity
+- upstream commit presence: PASS (3 test-writer commits verified via git log and git diff --stat; 1 doc-writer commit for diagram footer update; git status --porcelain shows no uncommitted changes)
+- kanban commit packaging: pending (this audit)
+
+### Deduction Breakdown
+No deductions apply:
+- Regression detection: no cross-task regressions (0)
+- Intent verification: clean scope alignment (0)
+- Lint: task file clean; pre-existing violations in unrelated files (0)
+- AC quality: 4/5 (>3 threshold) (0)
+- Reviewer evidence: present and detailed with AC compliance table (0)
+- Commit integrity: all commits verified (0)
+
+### Confidence: 1.00
+### Action: archive
