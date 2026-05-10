@@ -57,7 +57,7 @@ Before gathering sources:
 Find 2+ authoritative sources per claim:
 
 - **Codebase:** search tools for related existing code.
-- **Web:** `fetch-webpage` for docs, articles, GitHub repos.
+- **Web:** use the `web` toolset for direct pages and `ddgs/search_text` / `ddgs/extract_content` for search and extraction; use `markitdown/*` when document conversion is needed.
 - **Clone for deep analysis:** `.owlbear/scratch/research/{repo-name}/` — analyze, then delete when done.
 
 Track: name, URL, what was taken, relevance score (0.0–1.0).

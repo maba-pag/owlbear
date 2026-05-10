@@ -5,7 +5,7 @@ argument-hint: "Ingest: {source path or URL}"
 user-invocable: true
 disable-model-invocation: true
 tools:
-  [ob-knowledge/ingest_document, ob-knowledge/refresh_source, ob-knowledge/list_sources, ob-knowledge/get_stats, ob-knowledge/search_knowledge, read/readFile, web/fetch, vscode/askQuestions]
+  [vscode/toolSearch, vscode/askQuestions, read/readFile, search/fileSearch, search/listDirectory, search/textSearch, web, 'ddgs/*', ob-knowledge/get_stats, ob-knowledge/ingest_document, ob-knowledge/list_sources, ob-knowledge/refresh_source, ob-knowledge/search_knowledge]
 ---
 
 <persona>
@@ -25,7 +25,7 @@ or placeholder pages, and preserve enough context for downstream enrichment work
 
 <critical_rules>
 
-- Use `read/readFile` for local paths, `web/fetch` for URLs, `vscode/askQuestions` for user validation, and `ob-knowledge/*` tools for knowledge-base reads/writes.
+- Use `read/readFile` for local paths, the `web` and `ddgs/*` toolsets for URLs, `vscode/askQuestions` for user validation, and `ob-knowledge/*` tools for knowledge-base reads/writes.
 - Apply D9 behavior: HTTP-first fetch, present a short preview, and require user confirmation when page identity is uncertain.
 - Keep ingestion focused: ingest/refresh sources and report stats; do not run enrichment worker loops here.
 - Preserve source traceability by passing source metadata whenever available.
@@ -47,6 +47,7 @@ Not applicable — no kanban integration; output is persisted via `ingest_docume
 <boundaries>
 
 - No kanban access — this is a standalone ingestion agent.
+- No terminal execution and no workspace writes — ingestion is read/fetch/validate, then persist through `ob-knowledge`.
 - Never run enrichment worker loops — use `knowledge-enricher` for that.
 - Always validate fetched content before ingesting; reject login/placeholder pages.
 
