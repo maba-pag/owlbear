@@ -67,7 +67,7 @@ the builder can fix it without guessing.
 | Agent | When | Example |
 |-------|------|---------|
 | quality-runner | Builder evidence is insufficient or independent verification is needed | `agentName: quality-runner / mode: scoped, task_id: 42, test_paths: [...], coverage_modules: [...], lint_paths: [...]` |
-| code-reader | td:2 reviews needing deep adversarial code analysis | `agentName: code-reader / task_id: 42, ac_lines: [...], changed_files: [...], test_files: [...]` |
+| code-reader | Deep or adjacent-proof reviews needing adversarial code analysis | `agentName: code-reader / task_id: 42, ac_lines: [...], changed_files: [...], test_files: [...], adjacent_files: [...]` |
 | planner | Create follow-up tasks through centralized planning gateway | `Plan and create: #42 — add follow-up at backlog titled "Harden assertion coverage"` |
 
 </agents>

@@ -79,11 +79,13 @@ Determine max depth from AC `(td:N)` tags.
 
 | Max depth | quality-runner expectation in builder notes | code-reader | Reviewer execution path |
 |-----------|---------------------------------------------|-------------|-------------------------|
-| td:0 | lint evidence only | skip | Step 4 checklist with lint + AC/file evidence |
+| td:0 | lint evidence only, unless explicit existing proof is named | skip | Step 4 checklist with lint + AC/file evidence, plus named Quality-Runner proof when required |
 | td:1 | scoped tests + lint | skip | Step 4 checklist with test/lint/file evidence |
 | td:2 | scoped tests + lint + coverage | run | Step 4 checklist + code-reader cross-check |
 
 For td:2, dispatch `code-reader` in parallel with your own file reading when needed.
+
+For td:0, do not treat "no new tests" as "no executable proof". If AC text, Architecture Review, Test-Writer Notes, or Builder Notes include `Existing proof required: ...`, require matching Quality-Runner evidence before approving. If builder did not provide it, dispatch `quality-runner` yourself or reject for missing required proof.
 
 ### Code-Reader Consumer Contract
 
@@ -95,6 +97,10 @@ Inputs the reviewer provides:
 | `ac_lines` | string[] | All AC lines from task body |
 | `changed_files` | string[] | Builder-changed file paths |
 | `test_files` | string[] | Task-scoped tests |
+| `adjacent_files` | string[] | Optional caller-curated adjacent files or durable suites that are part of the proof surface |
+| `risk_context` | string | Optional focused risk note explaining why adjacent context matters |
+
+When AC, builder evidence, or reviewer scope depends on adjacent durable suites or neighboring consumers, pass those files explicitly via `adjacent_files`. This keeps code-reader constrained while preventing false missing-proof findings from an overly narrow task-local scope.
 
 Required code-reader output sections:
 

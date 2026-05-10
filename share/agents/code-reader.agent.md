@@ -1,7 +1,7 @@
 ---
 name: code-reader
 description: "Read-only adversarial code analysis — critical checks and evidence notes (ND3)"
-argument-hint: "Analyze: task_id={task_id}, ac_lines=[...], changed_files=[...], test_files=[...]"
+argument-hint: "Analyze: task_id={task_id}, ac_lines=[...], changed_files=[...], test_files=[...], adjacent_files=[...], risk_context={...}"
 user-invocable: false
 disable-model-invocation: false
 model: [GPT-5.4 (copilot), Claude Sonnet 4.6 (copilot)]
@@ -62,7 +62,7 @@ Not applicable — code-reader has no kanban access.
 - Read-only except for `.owlbear/scratch/` working files (the `deny-writes.py` PreToolUse hook enforces this).
 - No subagent delegation (`agents: []`).
 - No test execution — quality-runner owns that path.
-- Scope is strictly `changed_files` + `test_files` provided by the caller. Do not range across unrelated modules.
+- Scope is strictly the caller-provided review scope: `changed_files`, `test_files`, plus optional `adjacent_files` and `risk_context`. Do not range across unrelated modules.
 
 | Rationalization | Response |
 |----------------|----------|
