@@ -112,7 +112,7 @@ Standard: `h-agent-structure` section Implicit Encoding and section Agent File S
 
 ### D5 - Pipeline Integrity
 
-Standards: `r-pipeline-protocol` section Signal Mapping, `h-agent-structure` section Agent Tiers.
+Standards: `r-pipeline-protocol` section Per-Agent Signal Mapping, `share/README.md` section Agents.
 
 **Positive probes:**
 
