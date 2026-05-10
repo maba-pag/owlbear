@@ -460,6 +460,89 @@ describe('TestFromAC_ConflictLocalEditsPreserved', () => {
     // BUG: useEffect resets parent to '' (SERVER_TASK.parent = null → '')
     expect(getFieldValue(container, 'p-input-text[data-field="parent"]')).toBe('7')
   })
+
+  it('title_preserved_in_form_after_409_refetch_with_delayed_async_gap', async () => {
+    /**
+     * AC1 (async-gap): The conflict draft must survive intermediate renders during the
+     * async refetch window. Uses a deferred (non-immediately-resolving) GET promise to
+     * expose the race between setConflictLocalDraft (fired before await) and
+     * setConflictRemoteTask (fired after await).
+     *
+     * Race mechanism (current bug):
+     *   1. POST → 409 → setConflictLocalDraft(draft) called synchronously before await.
+     *   2. await fetch(GET) suspends the async function; event loop gets a chance to run.
+     *   3. React flushes pending state: conflictLocalDraft=set, conflictRemoteTask=null.
+     *   4. useEffect fires: guard (task && conflictLocalDraft && conflictRemoteTask?.id===task.id)
+     *      fails because conflictRemoteTask is null → falls through to reset path.
+     *   5. Reset path calls setConflictLocalDraft(null) — user draft is lost.
+     *   6. Later: deferred GET resolves → setConflictRemoteTask → re-render.
+     *   7. useEffect fires again: now conflictLocalDraft=null → guard fails again → draft gone.
+     *
+     * EXPECTED after fix: setConflictLocalDraft is moved to batch with setConflictRemoteTask
+     * in a single synchronous block after GET resolves — no intermediate render, guard passes.
+     *
+     * This test closes the false-green path of the existing AC1 tests, which all use
+     * Promise.resolve() (zero-latency refetch). With zero latency, React 18 batches
+     * setConflictLocalDraft and setConflictRemoteTask together before the first render,
+     * so the guard passes trivially — the race is never exercised.
+     */
+    let resolveRefetch!: (value: unknown) => void
+    let callCount = 0
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => {
+        callCount++
+        if (callCount === 1) {
+          // POST save → 409 conflict
+          return Promise.resolve({
+            ok: false,
+            status: 409,
+            json: () => Promise.resolve({ detail: 'conflict' }),
+          })
+        }
+        // GET refetch → deferred; resolveRefetch must be called manually to unblock
+        return new Promise(r => {
+          resolveRefetch = r
+        })
+      }),
+    )
+
+    const onTaskUpdatedSpy = vi.fn()
+    const { container } = render(<StatefulWrapper initialTask={BASE_TASK} onTaskUpdated={onTaskUpdatedSpy} />)
+
+    editTitle(container, 'My Local Edit Title')
+    clickSave(container)
+
+    // Wait until the GET refetch is initiated (POST 409 has been processed)
+    await waitFor(() => expect(callCount).toBeGreaterThanOrEqual(2), { timeout: 500 })
+
+    // Yield to the macrotask queue so React can flush the intermediate state render:
+    // conflictLocalDraft is set, conflictRemoteTask is still null at this point.
+    await new Promise<void>(r => setTimeout(r, 0))
+
+    // Resolve the deferred GET with the server task
+    resolveRefetch({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(SERVER_TASK),
+    })
+
+    // Wait for the conflict modal to appear (proof that GET resolved and setConflictRemoteTask fired)
+    await waitFor(
+      () => expect(container.querySelector('[data-testid="conflict-modal"]')).not.toBeNull(),
+      { timeout: 500 },
+    )
+
+    expect(onTaskUpdatedSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ updated: SERVER_TASK.updated }),
+    )
+
+    // BUG: during the async gap, useEffect reset clears the draft → title resets to BASE_TASK.title
+    // EXPECTED after fix: draft survives because setConflictLocalDraft is batched with
+    // setConflictRemoteTask in a single synchronous block after GET resolves.
+    expect(getFieldValue(container, 'p-input-text[data-field="title"]')).toBe('My Local Edit Title')
+  })
 })
 
 // ---------------------------------------------------------------------------
