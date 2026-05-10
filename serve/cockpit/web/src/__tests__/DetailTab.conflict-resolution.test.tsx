@@ -979,7 +979,7 @@ describe('TestFromAC_ConflictErrorContract', () => {
         return Promise.resolve({
           ok: false,
           status: 404,
-          json: () => Promise.resolve({ detail: 'Task not found' }),
+          json: () => Promise.resolve({ detail: 'No such task: 42' }),
         })
       }),
     )
@@ -992,8 +992,9 @@ describe('TestFromAC_ConflictErrorContract', () => {
       () => expect(container.querySelector('[data-testid="validation-message"]')).not.toBeNull(),
       { timeout: 500 },
     )
-    // Exact message from getResponseErrorMessage: reads {detail} from 404 response body
-    expect(container.querySelector('[data-testid="validation-message"]')!.textContent).toContain('Task not found')
+    // Discriminating proof: getResponseErrorMessage extracts {detail} from 404 response body
+    // (distinct from fallback 'Task not found' so test fails if helper extraction regresses)
+    expect(container.querySelector('[data-testid="validation-message"]')!.textContent).toContain('No such task: 42')
   })
 
   it('force_save_422_shows_server_detail_in_validation_message', async () => {
