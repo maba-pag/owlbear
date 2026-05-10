@@ -1,10 +1,10 @@
 ---
 id: 1478
 title: 'E2-delta: Delete 6 remaining stale task-scoped test files from archived tasks'
-status: in-progress
+status: review
 priority: important
 created: 2026-05-09T20:00:32.661200+00:00
-updated: 2026-05-09T23:05:30.289107+00:00
+updated: 2026-05-10T00:36:11.715412+00:00
 tags:
 - pipeline
 - ws-cleanup
@@ -287,3 +287,13 @@ All 5 AC lines carry `(td:0)`. This is a file-deletion task with no testable Pyt
 - P2 regression gate: `td:0` — scoped durable-suite verification is reviewer evidence, not test-writer work.
 
 No test file created. No pytest run required. Advancing to in-progress.
+[[2026-05-10]]
+## Builder Notes
+- Cycle type: non-implementation pass-through (all AC lines are `td:0`; test-writer marked non-implementation).
+- Code changes: none in this cycle.
+- Filesystem verification: stale files remain deleted (`tests/test_agent_scope_boundaries_1411.py`, `tests/test_doc_writer_agent_1424.py`, `tests/test_doc_audit_prompt_1425.py`, `tests/test_mcp_kanban_merge_1469.py`, `serve/cockpit/web/src/__tests__/DetailTab_1380.test.tsx`, `serve/cockpit/web/src/__tests__/DetailTab_1381.test.tsx`); active exceptions still present (`tests/test_kanban_topology_1439.py`, `serve/cockpit/web/src/__tests__/DetailTab_1382.test.tsx`).
+- Scoped durable-suite quality gate (quality-runner):
+  - Python suites (`tests/test_doc_writer_quality.py`, `tests/test_path_neutrality.py`, `tests/test_mcp_kanban.py`): 182 passed, 3 failed.
+  - Frontend suites (`serve/cockpit/web/src/__tests__/DetailTab.test.tsx`, `serve/cockpit/web/src/__tests__/DetailTab.conflict-nonregression.test.tsx`): 48 passed, 0 failed, 1 skipped.
+  - Lint: ruff clean; eslint clean on named durable paths.
+- Evidence summary: no implementation delta required; this cycle provides verification-only evidence and routes to review for AC adjudication on exemption rationale.

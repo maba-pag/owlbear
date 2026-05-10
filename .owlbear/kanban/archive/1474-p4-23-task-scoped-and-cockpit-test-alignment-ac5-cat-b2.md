@@ -1,10 +1,10 @@
 ---
 id: 1474
 title: 'P4-23: Task-scoped and cockpit test alignment (AC5 Cat-B2)'
-status: done
+status: archived
 priority: critical
 created: 2026-05-09T08:46:53.940620+00:00
-updated: 2026-05-09T23:06:00.565333+00:00
+updated: 2026-05-10T00:38:20.567113+00:00
 tags:
 - phase-4
 - type:refactor
@@ -1586,3 +1586,30 @@ None.
 
 ### Scratch Files Cleaned
 Deleted: `.owlbear/scratch/1474-ac1-9files.txt`, `1474-ac1-adjusted.txt`, `1474-ac1-pytest.txt`.
+[[2026-05-10]]
+## Audit
+### Regression Detection
+- quality-runner mode full: 2807 passed, 220 failed, 4 skipped, 10 errors across tests/. Ruff: 273 violations.
+- AC8 8-file pass set: all green (0 failures in task files).
+- None of the 220 full-suite failures originate in the task's 16 committed manifest files. All failures are pre-existing debt (state-machine, memory engine, knowledge, browser, agent scope, dead code cleanup, etc.). Prior audit reported 457 failures; reduction to 220 reflects other task fixes, not regressions from this task.
+- regression verdict: PASS
+
+### Intent Verification
+- scope alignment: PASS — all 16 changed files are test fixtures in tests/ directory, correct domain (kanban topology alignment under parent #1439).
+- purpose match: PASS — mechanical replacement of config YAML topology blocks with next_id-only matches stated purpose of aligning test fixtures with PRODUCT_TOPOLOGY.
+- extraneous scope: none — 4 out-of-scope files confirmed untouched via git diff (empty output).
+- boundary check: function-level behavior verification deferred to reviewer.
+
+### Architect Quality: 3/5
+8 architecture revisions across 4 reviewer rejections and multiple builder rejections. Each revision addressed real defects: (1) AC too broad, (2) grep gate false positives, (3) pass-set included non-topology failures, (4) false AC2 premise, (5) dispatch_validation weakened semantics, (6) stale file selectors, (7) missing commit gate, (8) vacuous support_migration assertion. Final AC8 is clean with well-defined 8/8/4 file classification. The iteration count reflects insufficient upfront codebase analysis — the architect should have audited config_loader.py behavior and per-file failure modes before the first AC.
+
+### Commit Integrity
+- upstream commit presence: PASS — 3 task commits verified: c2d46412 (skip-warning fix), 152322f6 (create-edit alignment), a5183f5c (manifest packaging). git diff --name-only HEAD on all 16 manifest files returns empty. git status --short tests/ is clean.
+- 4 out-of-scope files: git diff --name-only HEAD returns empty — untouched.
+- kanban commit packaging: included in this audit cycle.
+
+### Deduction Breakdown
+- -.03: AC quality score 3/5 — 8 architecture iterations needed to reach verifiable AC.
+
+### Confidence: .97
+### Action: archive

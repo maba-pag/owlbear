@@ -4,7 +4,7 @@ title: 'P2-07: Test Cockpit task conflict resolution workflow'
 status: done
 priority: needed
 created: 2026-05-06T01:04:39.067978+00:00
-updated: 2026-05-09T23:05:18.945884+00:00
+updated: 2026-05-10T00:32:32.222879+00:00
 tags:
 - cockpit
 - audit-remediation
@@ -20,7 +20,7 @@ depends_on:
 - 1375
 blocked: false
 block_reason:
-claimed_at: 2026-05-09T23:05:18.945884+00:00
+claimed_at: 2026-05-10T00:32:32.222879+00:00
 archival_reason:
 archival_refs: []
 ---
