@@ -13,7 +13,7 @@ Plan-dispatch-loop cycle for the orchestrator. The orchestrator maintains minima
 The orchestrator maintains minimal session state:
 
 - **`rate_limited`** (boolean, default `False`): Set to `True` on any rate-limit error. Once set, all subsequent `pick_tasks` calls use `wave_size=1`. Never reset within a session.
-- **`cycle_count`** (integer, starts at 1): Incremented each cycle. Used to trigger the memory-curator every 5th cycle.
+- **`cycle_count`** (integer, starts at 1): Incremented each cycle. Used to trigger the memory-curator every 10th cycle.
 - **No board state.** `pick_tasks` reads the board each cycle via MCP tool call.
 - **Channel A reading.** Read agent return values for outcome detection: `FAIL` (task failed), `TOOL_UNAVAILABLE` (tool degraded), or success. Do not parse signals for task routing — re-plan from board state each cycle.
 - **Brief context:** Available to pipeline agents via parent task lookup — the orchestrator does not use Brief context directly.
@@ -57,7 +57,7 @@ The Step 2 `pick_tasks` call scans `.owlbear/decisions/pending/`, resolves respo
 
 Dispatch planning uses the fresh board state returned by `pick_tasks`.
 
-**Every 5th cycle — memory-curator** (`cycle_count % 5 == 0`):
+**Every 10th cycle — memory-curator** (`cycle_count % 10 == 0`):
 
 ```
 runSubagent("memory-curator", "Curate: Periodic curation", "Curation")
