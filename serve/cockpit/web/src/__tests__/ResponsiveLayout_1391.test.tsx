@@ -27,11 +27,11 @@ import path from 'node:path'
 import type { Task } from '../hooks/useBoard'
 import { Card } from '../components/Card'
 
-// ─── File paths (resolved from package root — process.cwd() = serve/cockpit/web/) ───
+// ─── File paths (resolved from this test file's directory — independent of cwd) ───
 
-const CARD_TSX = path.resolve(process.cwd(), 'src/components/Card.tsx')
-const SHELL_CSS = path.resolve(process.cwd(), 'src/Shell.css')
-const SHELL_TSX = path.resolve(process.cwd(), 'src/Shell.tsx')
+const CARD_TSX = path.resolve(__dirname, '../components/Card.tsx')
+const SHELL_CSS = path.resolve(__dirname, '../Shell.css')
+const SHELL_TSX = path.resolve(__dirname, '../Shell.tsx')
 
 // ─── Shared CSS source ────────────────────────────────────────────────────────
 
