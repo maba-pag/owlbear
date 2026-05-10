@@ -389,6 +389,20 @@ test.describe('TestFromAC_AllColumnsVisible', () => {
         `workspace (${workspaceBox!.width}px) must exceed sidecar (${sidecarBox!.width}px) at 1024px`,
       ).toBeGreaterThan(sidecarBox!.width)
     })
+
+    // AC3 (2nd loop-breaker): each of the 7 columns must have positive rendered area,
+    // not just DOM presence. Proves no column is zero-width or hidden due to grid constraints.
+    test('each of the 7 status columns has positive rendered area at 1024px', async ({ page }) => {
+      const columns = page.locator('[data-column]')
+      const count = await columns.count()
+      expect(count, 'all 7 status columns must be rendered at 1024px').toBe(7)
+      for (let i = 0; i < count; i++) {
+        await expect(
+          columns.nth(i),
+          `status column ${i + 1} must have positive rendered area (be visible) at 1024px`,
+        ).toBeVisible()
+      }
+    })
   })
 
   // 1440px: workspace=1024px. Columns easily fit → column count and overflow tests
@@ -423,6 +437,19 @@ test.describe('TestFromAC_AllColumnsVisible', () => {
         result.overflow,
         `board column container (scrollWidth=${result.scrollWidth}px, clientWidth=${result.clientWidth}px) must not overflow at 1440px`,
       ).toBe(false)
+    })
+
+    // AC3 (2nd loop-breaker): each of the 7 columns must have positive rendered area at 1440px.
+    test('each of the 7 status columns has positive rendered area at 1440px', async ({ page }) => {
+      const columns = page.locator('[data-column]')
+      const count = await columns.count()
+      expect(count, 'all 7 status columns must be rendered at 1440px').toBe(7)
+      for (let i = 0; i < count; i++) {
+        await expect(
+          columns.nth(i),
+          `status column ${i + 1} must have positive rendered area (be visible) at 1440px`,
+        ).toBeVisible()
+      }
     })
   })
 })
