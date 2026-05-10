@@ -26,8 +26,8 @@ Scoped (TypeScript/JavaScript):
 ```
 agentName: quality-runner
 prompt: |
-  Run: mode=scoped, task_id=1230, test_paths=["frontend/src/__tests__/MyComponent.test.tsx"], lint_paths=["frontend/src/components/MyComponent.tsx"]
-# adjust test_paths and lint_paths for your project layout
+  Run: mode=scoped, task_id=1230, test_paths=["serve/cockpit/web/src/__tests__/MyComponent.test.tsx"], lint_paths=["serve/cockpit/web/src/components/MyComponent.tsx"]
+# for other projects, substitute the equivalent frontend package paths
 ```
 
 Full suite:
