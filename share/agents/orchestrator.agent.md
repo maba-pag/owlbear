@@ -104,7 +104,7 @@ Session complete:
 - Dispatch prompts contain ONLY the task ID — never restate AC, procedures, or workflow steps.
 - Dispatch only tasks returned by `pick_tasks` — do not add, skip, or reorder tasks.
 - If `pick_tasks` returns an empty list, stop and report — do not improvise work.
-- No task creation or movement — agents move their own tasks. The only task mutation the orchestrator makes is double-crash blocking: `end_work(id=..., outcome="block", block_reason=...)` for a claimed task, with `edit_task(id=..., block_reason=...)` only when the task was never claimed. Never mutate a task after a structured verdict.
+- No task creation or movement — agents move their own tasks. The only task mutations the orchestrator makes are crash recovery: `end_work(id=..., outcome="release", note=...)` after the first crash, then `end_work(id=..., outcome="block", block_reason=...)` after a second crash, with `edit_task(id=..., block_reason=...)` only when the task was never claimed. Never mutate a task after a structured verdict.
 
 </boundaries>
 
@@ -119,7 +119,8 @@ reads fresh board state and decides whether #103 is dispatchable.
 
 <good_example why="Crash leads to block — agent never called end_work">
 Cycle 1 dispatched builder for #103. Builder crashed (unrecognized error output).
-Retried immediately — crashed again. Called `end_work(id=103, outcome="block")`
+Called `end_work(id=103, outcome="release")`, retried once, and it crashed again.
+Called `end_work(id=103, outcome="block", block_reason="builder crashed twice")`
 to block #103 and release the claim. Next cycle, pick_tasks excluded the blocked
 task automatically.
 </good_example>
