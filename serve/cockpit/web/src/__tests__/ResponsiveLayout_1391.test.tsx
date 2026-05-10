@@ -10,8 +10,9 @@
  * AC4 (td:2): Surface coverage — Shell.css must provide responsive rules for all major surfaces.
  * AC5 (td:2): PDS-compatible token or component usage expected for priority color presentation.
  *
- * AC1/AC2/AC3/AC4 layout behavior (bounding-box assertions at real viewports) require Playwright
- * and are documented in .owlbear/scratch/1391-e2e.spec.ts for the builder to place in e2e/.
+ * AC1/AC2/AC3/AC4 layout behavior (bounding-box assertions at real viewports) require Playwright.
+ * Builder (#1392) MUST promote the tracked E2E proof per AC7:
+ *   cp .owlbear/scratch/1391-e2e-v2.spec.ts serve/cockpit/web/e2e/responsive-layout-1391.spec.ts
  * These static-analysis tests provide AC1–AC4 coverage that can be verified without a layout engine.
  *
  * All tests FAIL against the current implementation:
