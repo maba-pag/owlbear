@@ -17,7 +17,7 @@ from __future__ import annotations
 import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -139,6 +139,35 @@ class TestFromAC_PickTasksReadOnly:
 
         decisions_mock.resolve_pending_drs.assert_not_called()
 
+    def test_no_engine_write_methods_called(self, tmp_path: Path) -> None:
+        """AC-1 discriminating sentinel: pick_tasks must NOT call sweep, repair_storage,
+        edit_task, or move_task on the engine.
+
+        Patches each named write method on the live engine instance (without wraps)
+        so any invocation would be captured.  The read path (list_tasks, show_task)
+        remains unpatched.
+
+        Proves the reviewer gap: current proof only pinned resolve_pending_drs;
+        this test fails the moment any of the other named helpers is introduced.
+        """
+        board = _make_board(tmp_path)
+        _write_task(board, task_id=1, status="backlog")
+        engine = KanbanEngine(board, activity_log=False)
+        av = engine.agent_view()
+
+        with (
+            patch.object(engine, "sweep") as mock_sweep,
+            patch.object(engine, "repair_storage") as mock_repair,
+            patch.object(engine, "edit_task") as mock_edit,
+            patch.object(engine, "move_task") as mock_move,
+        ):
+            av.pick_tasks()
+
+        mock_sweep.assert_not_called()
+        mock_repair.assert_not_called()
+        mock_edit.assert_not_called()
+        mock_move.assert_not_called()
+
 
 # ---------------------------------------------------------------------------
 # AC-2 (td:2): expired-claim task is dispatched; claimed_at unchanged on disk
@@ -233,6 +262,37 @@ class TestFromAC_PickTasksExpiredClaim:
         returned = _all_ids(resp)
         assert {4, 5, 6}.issubset(returned), (
             "All tasks with expired claimed_at must appear in dispatch waves"
+        )
+
+    def test_expired_claim_respects_configured_timeout(self, tmp_path: Path) -> None:
+        """AC-2 discriminating proof: expired-claim eligibility uses the configured
+        claim_timeout, not a hardcoded 1-hour constant.
+
+        Patches owlbear_kanban.agent_view._parse_duration to return 5 minutes.
+        A task claimed 6 minutes ago is expired under 5 min but would still be
+        active under the default 1h timeout.  The task must appear in waves,
+        proving pick_tasks passes the timeout from _parse_duration to
+        _claim_is_active rather than using a literal timedelta(hours=1).
+        """
+        six_minutes_ago = datetime.now(UTC) - timedelta(minutes=6)
+        board = _make_board(tmp_path)
+        _write_task(
+            board,
+            task_id=20,
+            status="backlog",
+            claimed_at=f'"{six_minutes_ago.isoformat()}"',
+        )
+        engine = KanbanEngine(board, activity_log=False)
+
+        with patch(
+            "owlbear_kanban.agent_view._parse_duration",
+            return_value=timedelta(minutes=5),
+        ):
+            resp = engine.agent_view().pick_tasks()
+
+        assert 20 in _all_ids(resp), (
+            "Task claimed 6 minutes ago must be dispatched when claim_timeout is "
+            "5 minutes; fails if pick_tasks uses a hardcoded 1h timeout"
         )
 
 
