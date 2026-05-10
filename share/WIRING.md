@@ -175,10 +175,13 @@ All 9 agents (critic, pragmatist, simplifier, outsider, ideation-architect, data
 | **h-ideation-panel** | 9× ideation panel | `req` | — | — |
 | **h-quality-runner** | quality-runner | `req` | test-curator | `companion` |
 | **h-pytest-and-linting** | quality-runner | `req` | — | — |
+| **h-vitest-and-linting** | quality-runner | `req` | — | — |
 | **h-mcp-kanban** | — | — | 12× pipeline agents | `companion:r-pipeline-protocol` |
+| **h-decision-requests** | — | — | pipeline agents (via r-pipeline-protocol), architect (via w-arch-review) | `companion` / `body-ref` |
 | **r-project-standards** | — | — | 12× pipeline agents | `companion:r-pipeline-protocol` |
 | | | | agent-broad-audit prompt | `prompt-ref` |
 | **r-architecture-standards** | — | — | architect (via w-arch-review), planner | `inline-ref` / `body-ref` |
+| **h-ac-quality** | architect, challenger, planner | `req` | — | — |
 | **r-doc-standards** | — | — | doc-audit prompt (`.owlbear/prompts`) | `prompt-ref` |
 | | | | (any agent editing doc files) | `applyTo` via doc-standards.instructions |
 | **h-python-conventions** | — | — | test-curator (via w-test-curation) | `companion` |
@@ -202,8 +205,9 @@ All 9 agents (critic, pragmatist, simplifier, outsider, ideation-architect, data
 | h-excalidraw-diagram | doc-writer, researcher | `directed` / `organic` |
 | h-frontend-conventions | (none — stub target only) | `applyTo` stub |
 | h-frontend-design | 4 frontend prompts | `prompt-ref` |
+| h-decision-requests | pipeline agents, architect | `companion` / `body-ref` |
 | h-memory-structure | memory-curator, agent-broad-audit | `directed` / `prompt-ref` |
-| h-mcp-kanban | 9 pipeline agents | `body-ref` |
+| h-mcp-kanban | 12 pipeline agents | `body-ref` |
 | h-mcp-memory | memory-curator | `companion` |
 | h-python-conventions | test-curator | `companion` |
 | h-visual-output | researcher | `organic` |

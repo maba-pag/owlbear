@@ -84,7 +84,7 @@ See `h-agent-structure` § Nesting Depth & DMI for the full rule and ND3 agent t
 |--------|-------|---------|
 | `w-` | 14 | Workflow — step-by-step procedures |
 | `r-` | 4 | Rules — shared conventions |
-| `h-` | 15 | Handbook — domain knowledge |
+| `h-` | 17 | Handbook — domain knowledge |
 
 ## Instructions
 
