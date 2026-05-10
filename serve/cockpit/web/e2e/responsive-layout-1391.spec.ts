@@ -200,6 +200,14 @@ test.describe('TestFromAC_ViewportUsability', () => {
         `workspace (${(pct * 100).toFixed(1)}%) must exceed 50% at 768px`,
       ).toBeGreaterThan(0.5)
     })
+
+    // AC1: 56+1fr+360 fills viewport at 768px (1fr=352px) -> no document overflow.
+    test('shell produces no horizontal overflow at document level at 768px', async ({ page }) => {
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+      )
+      expect(overflow, 'shell must not overflow horizontally at 768px').toBe(false)
+    })
   })
 
   // 1024px: workspace=608px (59.4%) — documents AC1 coverage; workspace proportion PASSES.
@@ -223,6 +231,14 @@ test.describe('TestFromAC_ViewportUsability', () => {
         `workspace (${(pct * 100).toFixed(1)}%) must exceed 50% at 1024px`,
       ).toBeGreaterThan(0.5)
     })
+
+    // AC1: 56+1fr+360 fills viewport at 1024px (1fr=608px) -> no document overflow.
+    test('shell produces no horizontal overflow at document level at 1024px', async ({ page }) => {
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+      )
+      expect(overflow, 'shell must not overflow horizontally at 1024px').toBe(false)
+    })
   })
 
   // 1440px: workspace=1024px (71.1%) — documents AC1 full-viewport coverage.
@@ -245,6 +261,14 @@ test.describe('TestFromAC_ViewportUsability', () => {
         pct,
         `workspace (${(pct * 100).toFixed(1)}%) must exceed 50% at 1440px`,
       ).toBeGreaterThan(0.5)
+    })
+
+    // AC1: 56+1fr+360 fills viewport at 1440px (1fr=1024px) -> no document overflow.
+    test('shell produces no horizontal overflow at document level at 1440px', async ({ page }) => {
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+      )
+      expect(overflow, 'shell must not overflow horizontally at 1440px').toBe(false)
     })
   })
 })
