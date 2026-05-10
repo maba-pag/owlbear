@@ -1,10 +1,10 @@
 ---
 id: 1476
 title: 'P4-25: consolidation test: topology-constant regression remediation'
-status: done
+status: archived
 priority: critical
 created: 2026-05-09T08:46:53.962568+00:00
-updated: 2026-05-10T18:07:39.606647+00:00
+updated: 2026-05-10T18:18:57.355674+00:00
 tags:
 - phase-4
 - type:test
@@ -168,3 +168,30 @@ Architecture review (3rd pass). Replaced unverifiable AC1 ("no #1439-attributabl
 
 ### Scratch Files Cleaned
 - None (no `1476-*` scratch files found)
+[[2026-05-10]]
+## Audit
+### Regression Detection
+- quality-runner mode full: 4370 passed / 226 failed (Python), 1218 passed / 0 failed (frontend)
+- 226 Python failures are all in non-kanban domains (cockpit NameErrors, mcp-memory import errors, vitest timeouts, stale task-scoped test references) — none attributable to #1476
+- Independent bounded-pathset rerun: 1847 passed, 0 failed, exit 0
+- Independent full kanban suite rerun: 1336 passed, 0 failed, exit 0
+- regression verdict: PASS
+
+### Intent Verification
+- scope alignment: PASS (only file changed: `serve/kanban/src/owlbear_kanban/engine.py` — correct kanban domain, 10 insertions / 4 deletions)
+- purpose match: PASS (live-module resolver for `owlbear_kanban.storage` fixes nondeterministic test-order sensitivity, matches stated task purpose)
+- extraneous scope: none (3 call sites + 1 import + 1 helper function, all engine-internal)
+- boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 4/5
+AC was specific and machine-verifiable after 3rd-pass arch review (exact pytest command, exit 0 gate). Minor: required 3 arch iterations to replace unverifiable AC referencing a nonexistent triage file.
+
+### Commit Integrity
+- upstream commit presence: PASS (builder `bb325d67` — 1 file; docs `6c695462` — 2 diagram footers)
+- kanban commit packaging: pending (this audit cycle)
+
+### Deduction Breakdown
+No deductions. Full-suite failures are pre-existing in other domains; bounded pathset and kanban suite fully green; intent aligned; commits present.
+
+### Confidence: 1.00
+### Action: archive
