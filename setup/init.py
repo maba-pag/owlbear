@@ -369,6 +369,15 @@ def init(  # noqa: C901
 
         _write_seed_file(src, dest, replacements)
 
+    board_root = target_dir / ".owlbear" / "kanban"
+    for rel_dir in (
+        Path("tasks"),
+        Path("archive"),
+        Path("decisions") / "pending",
+        Path("decisions") / "resolved",
+    ):
+        (board_root / rel_dir).mkdir(parents=True, exist_ok=True)
+
 
 # ---------------------------------------------------------------------------
 # CLI
