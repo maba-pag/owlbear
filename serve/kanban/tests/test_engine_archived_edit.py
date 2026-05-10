@@ -1037,12 +1037,12 @@ class TestFromAC_StorageCoveragePaths:
     def test_allocate_next_id_returns_current_next_id_and_increments(
         self, tmp_path: Path
     ) -> None:
-        """Lines 547-555: allocate_next_id returns next_id; config advances by 1."""
+        """Scan-based allocate_next_id returns 1 on empty board; config.next_id unchanged."""
         kanban_dir = _make_board(tmp_path)
         expected_id = load_config(kanban_dir).next_id
         allocated = allocate_next_id(kanban_dir)
-        assert allocated == expected_id
-        assert load_config(kanban_dir).next_id == expected_id + 1
+        assert allocated == 1
+        assert load_config(kanban_dir).next_id == expected_id
 
     # ------------------------------------------------------------------
     # write_task: backwards-compat default dir (canonical assertion — AC-2)

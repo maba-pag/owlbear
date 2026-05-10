@@ -1771,7 +1771,7 @@ class TestBuilderDiscovered:
     def test_allocate_next_id_returns_current_and_persists_increment(
         self, tmp_path: Path
     ) -> None:
-        """allocate_next_id returns current next_id and persists incremented config value."""
+        """Scan-based allocate_next_id returns 1 on empty board; config.next_id unchanged."""
         from owlbear_kanban.storage import allocate_next_id
 
         kanban_dir = _make_board(tmp_path)
@@ -1780,8 +1780,8 @@ class TestBuilderDiscovered:
         allocated = allocate_next_id(kanban_dir)
         after = load_config(kanban_dir).next_id
 
-        assert allocated == before
-        assert after == before + 1
+        assert allocated == 1
+        assert after == before
 
     def test_normalize_timestamp_already_has_tz(self) -> None:
         """_normalize_timestamp converts non-UTC offset to UTC per AC-C15 / Brief C §5.3."""
