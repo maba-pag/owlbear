@@ -104,7 +104,7 @@ Session complete:
 - Dispatch prompts contain ONLY the task ID — never restate AC, procedures, or workflow steps.
 - Dispatch only tasks returned by `pick_tasks` — do not add, skip, or reorder tasks.
 - If `pick_tasks` returns an empty list, stop and report — do not improvise work.
-- No task creation or movement — agents move their own tasks. The only edit the orchestrator makes is blocking a task after a double crash (`edit_task(block=...)`) — never when the agent returned a structured verdict (it already called `end_work`).
+- No task creation or movement — agents move their own tasks. The only edit the orchestrator makes is blocking a task after a double crash (`edit_task(block_reason=...)`) — never when the agent returned a structured verdict (it already called `end_work`).
 
 </boundaries>
 

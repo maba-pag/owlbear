@@ -298,13 +298,13 @@ When an agent cannot proceed, route by cause:
 | Design trade-off (T2) | Advisory DR via `create_dr`, then `end_work(outcome="reject", move_to="backlog")` | Auto-resolving — DR expires in 5 days (see Decision Tiers) |
 | Arch / breaking change (T3) | Mandatory DR via `create_dr`, then `end_work(outcome="block", block_reason="DR pending: {file}")` | **Blocks** — user must respond (see Decision Tiers) |
 | User action required | AR via `create_dr`, then `end_work(outcome="block", block_reason="AR pending: {file}")` | **Blocks** — user must act |
-| Stale task (orchestrator triage) | `edit_task(block="reason")` / `edit_task(unblock=True)` | **Blocks** — orchestrator decision |
+| Stale task (orchestrator triage) | `edit_task(block_reason="reason")` / `edit_task(block_reason="")` | **Blocks** — orchestrator decision |
 
 **Block is reserved for T3 decisions, user-action tasks, and orchestrator triage.** Do not block when a reject or dependency gate would suffice. Do not pass through hoping a downstream agent will handle it.
 
 #### DR Required on Agent Block
 
-**Every agent-initiated block requires a Decision Request.** When `end_work(outcome="block")` or `edit_task(block=...)` returns a non-empty `guidance` field, act on it immediately — the first message will direct you to create a DR via `create_dr` (see `h-decision-requests`).
+**Every agent-initiated block requires a Decision Request.** When `end_work(outcome="block")` or `edit_task(block_reason=...)` returns a non-empty `guidance` field, act on it immediately — the first message will direct you to create a DR via `create_dr` (see `h-decision-requests`).
 
 **Exemption — user-driven blocks:** Tasks blocked via the Cockpit carry the `block:user` tag. If `block:user` is present on the task after blocking, the guidance field will be empty — no DR is required. Agents **must not** create DRs for Cockpit-initiated blocks.
 
