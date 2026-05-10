@@ -55,8 +55,9 @@ Running `init.py` writes the following files into your project directory:
 |------------------|---------|-------------|
 | `.vscode/settings.json` | Points VS Code at owlbear agents, skills, and instructions; enables `mermaid-chat.enabled` for Mermaid diagram rendering in chat | Merged (owlbear keys as defaults; your existing keys are preserved) |
 | `.vscode/mcp.json` | Registers 5 MCP servers (3 owlbear stdio + ddgs web search + markitdown) | Merged (owlbear servers as defaults; your existing servers are preserved) |
-| `.owlbear/kanban/config.yml` | Kanban board configuration (fresh `next_id: 1`) | Always written |
 | `.owlbear/kanban/tasks/.gitkeep` | Ensures tasks directory exists in version control | Always written |
+| `.owlbear/kanban/decisions/pending/` | Ensures decisions inbox directory exists | Always created (`mkdir`, `exist_ok=True`) |
+| `.owlbear/kanban/decisions/resolved/` | Ensures decisions resolved directory exists | Always created (`mkdir`, `exist_ok=True`) |
 | `.owlbear/hooks/allow-stances-only.py` | Restricts ideation agents to approved stance outputs | Seeded if missing; differing existing hook files prompt/skip/replace (or require `--replace-hooks` non-interactively) |
 | `.owlbear/hooks/deny-non-doc-writes.py` | Constrains bounded-output non-code roles to doc-adjacent files (`.md`, `.excalidraw`) and scratch | Seeded if missing; differing existing hook files prompt/skip/replace (or require `--replace-hooks` non-interactively) |
 | `.owlbear/hooks/deny-src-writes.py` | Constrains test-only roles to `tests/`, `__tests__/`, and scratch surfaces | Seeded if missing; differing existing hook files prompt/skip/replace (or require `--replace-hooks` non-interactively) |

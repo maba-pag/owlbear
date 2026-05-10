@@ -315,6 +315,8 @@ def init(  # noqa: C901
     Walks the seed/ tree inside *owlbear_dir*, copies static files, and
     replaces ``{{placeholder}}`` tokens in ``.json`` / ``.yml`` templates.
     ``settings.json`` and ``mcp.json`` are deep-merged with existing files.
+    Also creates the four kanban board directories under ``.owlbear/kanban/``
+    (``tasks``, ``archive``, ``decisions/pending``, ``decisions/resolved``).
 
     Args:
         target_dir: Destination project directory.
