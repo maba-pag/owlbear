@@ -84,7 +84,7 @@ Include `## Audit` section in your `end_work` note with 4-pillar evidence: `Regr
 
 - Section header: `## Audit`
 - On reject: `end_work(outcome="reject", move_to="backlog")`
-- Follow-ups: via `create_dr` / Explore agents
+- Follow-up tasks: delegate to `planner` via `Plan and create:`; use Explore only for read-only context and `create_dr` only for blocking decisions/actions
 - See `h-mcp-kanban` skill for tool workflows
 
 </output_format>
