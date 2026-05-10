@@ -46,7 +46,7 @@ Between M1 and M2, the discovery agent proposes a tier based on problem scope an
 
 ## User-Facing Entry Points
 
-### `@ideation-discoverer`
+### `/ideation-discover` (agent: `ideation-discoverer`)
 
 Use for:
 
@@ -56,7 +56,7 @@ Use for:
 - ambiguous project type
 - missing ideation artifacts
 
-### `@ideation-mediator`
+### `/ideation-mediate` (agent: `ideation-mediator`)
 
 Use for:
 
@@ -177,7 +177,7 @@ Phase 1 ends only when all three handoff artifacts exist and are usable:
 - `decisions.md`
 - `research-notes.md`
 
-Phase 1 must end with an explicit message naming `@ideation-mediator` and those artifact paths. Phase 2 starts from those files in a fresh context.
+Phase 1 must end with an explicit message that names the Phase 2 prompt command, `/ideation-mediate {draft_path}`, and those artifact paths. Phase 2 starts from those files in a fresh context.
 
 ## Communication Patterns
 

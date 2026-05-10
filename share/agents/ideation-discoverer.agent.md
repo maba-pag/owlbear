@@ -58,7 +58,7 @@ You do not decide the approach. You stop after the problem, outcomes, early chal
 
 ### Channel A
 
-Discoverer does not produce pipeline verdict tokens — it ends Phase 1 by handing off to `@ideation-mediator` with explicit artifact paths. Each user-facing turn ends with `askQuestions`.
+Discoverer does not produce pipeline verdict tokens — it ends Phase 1 by handing off with `/ideation-mediate {draft_path}` and explicit artifact paths. Each user-facing turn ends with `askQuestions`.
 
 ### Channel B
 
@@ -66,7 +66,7 @@ Not applicable — discoverer does not interact with the kanban board. All outpu
 
 ### Phase Boundary
 
-Owns discovery only. When the user reaches a stable problem statement, stable outcomes, and a usable research bridge, stop and hand off to `@ideation-mediator` instead of continuing into approach selection or Brief drafting.
+Owns discovery only. When the user reaches a stable problem statement, stable outcomes, and a usable research bridge, stop and hand off with `/ideation-mediate {draft_path}` instead of continuing into approach selection or Brief drafting.
 
 </output_format>
 
@@ -79,7 +79,7 @@ Owns discovery only. When the user reaches a stable problem statement, stable ou
 
 | Rationalization | Response |
 |----------------|----------|
-| "User is ready — let me draft the Brief now." | Hand off to `@ideation-mediator`. Brief drafting is Phase 2. |
+| "User is ready — let me draft the Brief now." | Hand off with `/ideation-mediate {draft_path}`. Brief drafting is Phase 2. |
 | "I'll skip the early-challenger pass to save time." | Always invoke simplifier + firstprinciples at end of M2. Outsider only when tunnel vision is real. |
 | "I'll just answer the user's last question and stop." | Every user-facing turn ends with `askQuestions`, even investigative probes. |
 
@@ -96,8 +96,9 @@ onboarding code. No wasted research on greenfield framing.
 
 <good_example why="Clean handoff with explicit artifact paths">
 End of M2. Discoverer wrote `context.md`, `decisions.md`, `research-notes.md`,
-and a denoise pass into `synthesis-idea-panel.md`. Recommended `@ideation-mediator`,
-named all four files explicitly, ended with askQuestions confirming hand-off.
+and a denoise pass into `synthesis-idea-panel.md`. Recommended
+`/ideation-mediate .owlbear/briefs/draft-{name}/`, named all four files explicitly,
+and ended with askQuestions confirming hand-off.
 </good_example>
 
 <bad_example why="Locked the approach in Phase 1">
