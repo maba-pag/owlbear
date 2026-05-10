@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import logging
 import subprocess
+import sys
+from argparse import ArgumentParser
+from collections.abc import Sequence
 from pathlib import Path
 
 import yaml
@@ -52,6 +55,10 @@ def _state_from_file(file_path: Path) -> str | None:
 
 def commit_batch(memory_dir: Path, *, session_type: str) -> str:
     """Commit non-pending memory files in one batch and return commit SHA."""
+    memory_dir = Path(memory_dir).resolve()
+    if not memory_dir.exists():
+        return ""
+
     if session_type not in _SESSION_TO_ACTOR:  # pragma: no cover
         msg = f"Unsupported session_type: {session_type}"
         raise ValueError(msg)
@@ -83,3 +90,35 @@ def commit_batch(memory_dir: Path, *, session_type: str) -> str:
     message = f"chore: memory {session_type} batch (mcp-memory, {actor})"
     _git(repo_dir, "commit", "-m", message, "--", *staged_paths)
     return _git(repo_dir, "rev-parse", "HEAD")
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Run a state-aware memory batch commit from the command line."""
+    parser = ArgumentParser(description="Commit reviewed OwlBear memory entries.")
+    parser.add_argument("session_type", choices=sorted(_SESSION_TO_ACTOR))
+    parser.add_argument(
+        "--memory-dir",
+        default=".owlbear/memory",
+        help="memory markdown directory relative to the current workspace",
+    )
+    args = parser.parse_args(argv)
+
+    try:
+        commit_sha = commit_batch(Path(args.memory_dir), session_type=args.session_type)
+    except subprocess.CalledProcessError as exc:
+        detail = (exc.stderr or exc.stdout or str(exc)).strip()
+        print(f"error: {detail}", file=sys.stderr)
+        return exc.returncode or 1
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+
+    if commit_sha:
+        print(commit_sha)
+    else:
+        print("no memory changes to commit")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

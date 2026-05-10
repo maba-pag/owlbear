@@ -63,7 +63,7 @@ For more detail on what each file does and how to customise see
 | `share/skills/` | Agent skills (`SKILL.md`) — domain knowledge loaded by relevance |
 | `share/instructions/` | Shared instruction files (`*.instructions.md`) |
 | `serve/mcp-kanban/` | MCP server for kanban board operations |
-| `serve/mcp-memory/` | MCP server for persistent agent memory (SQLite-backed) |
+| `serve/mcp-memory/` | MCP server for persistent agent memory (markdown-file backed) |
 | `serve/mcp-knowledge/` | MCP server exposing the knowledge base |
 | `seed/` | Template files copied to new projects during `setup/init.py` |
 | `setup/` | Workspace initialiser (`init.py`), setup guide, and sharing guide |
@@ -81,7 +81,7 @@ After VS Code opens, verify the installation loaded correctly:
 | OwlBear agents loaded | Chat Customizations lists agents from the owlbear `agents/` directory |
 | OwlBear skills loaded | Chat Customizations lists skills from the owlbear `skills/` directory |
 | Instructions loaded | Chat Customizations includes `*.instructions.md` files from owlbear |
-| MCP servers running | Command Palette → `MCP: List Servers` — `ob-kanban` shows `running` |
+| MCP servers running | Command Palette → `MCP: List Servers` — `ob-kanban`, `ob-memory`, and `ob-knowledge` show `running` |
 
 > If agents or skills do not appear, check that `chat.agentFilesLocations` and
 > `chat.agentSkillsLocations` in `.vscode/settings.json` point to the correct relative

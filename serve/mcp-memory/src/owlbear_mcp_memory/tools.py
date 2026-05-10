@@ -17,18 +17,13 @@ if TYPE_CHECKING:
     from owlbear_mcp_memory.engine import MemoryEngine
 
 __all__ = [
-    "approve_entry",
     "approve_memory",
     "curate_memory",
-    "delete_entry",
     "delete_memory",
     "list_memories",
-    "query_memory",
     "read_memory",
     "recall_memory",
     "save_memory",
-    "store_learning",
-    "update_entry",
 ]
 
 
@@ -42,6 +37,59 @@ def _engine_from_ctx(ctx: Context) -> MemoryEngine:
 
 def _now_iso() -> str:
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
+
+
+def _allowed_category_values() -> str:
+    return ", ".join(str(category) for category in MemoryCategory)
+
+
+def _allowed_state_values() -> str:
+    return ", ".join(str(state) for state in MemoryState)
+
+
+def _coerce_categories(
+    categories: list[MemoryCategory | str] | None,
+) -> list[MemoryCategory] | None:
+    if categories is None:
+        return None
+    coerced: list[MemoryCategory] = []
+    for category in categories:
+        try:
+            coerced.append(MemoryCategory(str(category)))
+        except ValueError as exc:
+            msg = f"Unknown category {category!r}. Use one of: {_allowed_category_values()}."
+            raise ToolError(msg) from exc
+    return coerced
+
+
+def _coerce_states(states: list[MemoryState | str] | None) -> list[MemoryState] | None:
+    if states is None:
+        return None
+    coerced: list[MemoryState] = []
+    for state in states:
+        try:
+            coerced.append(MemoryState(str(state)))
+        except ValueError as exc:
+            msg = f"Unknown state {state!r}. Use one of: {_allowed_state_values()}."
+            raise ToolError(msg) from exc
+    return coerced
+
+
+def _coerce_state(state: MemoryState | str | None) -> MemoryState | None:
+    if state is None:
+        return None
+    try:
+        return MemoryState(str(state))
+    except ValueError as exc:
+        msg = f"Unknown state {state!r}. Use one of: {_allowed_state_values()}."
+        raise ToolError(msg) from exc
+
+
+def _validate_limit(limit: int | None) -> int | None:
+    if limit is not None and limit < 0:
+        msg = "Limit must be zero or greater."
+        raise ToolError(msg)
+    return limit
 
 
 def _entry_to_dict(entry: MemoryEntry) -> dict[str, object]:
@@ -94,8 +142,10 @@ def _teaching_validation_message(exc: ValidationError) -> str:
             return "Content exceeds 1024-character limit. Split into focused entries."
         if field == "confidence":
             return "Confidence must be between 0.7 and 1.0."
-        if field == "categories":
-            return "Provide at least one category from the allowed list."
+        if "categories" in location:
+            return f"Provide at least one category from: {_allowed_category_values()}."
+        if field == "source_agent":
+            return "Source agent must be non-empty."
     return str(exc)
 
 
@@ -114,40 +164,8 @@ def _ensure_update_transition(current: MemoryState, target: MemoryState) -> None
     }
     if target in allowed[current]:
         return
-    msg = f"invalid state transition for update_entry: {current} -> {target}"
+    msg = f"invalid state transition for curate_memory: {current} -> {target}"
     raise ToolError(msg)
-
-
-async def store_learning(  # noqa: PLR0913
-    ctx: Context,
-    *,
-    title: str,
-    content: str,
-    categories: list[MemoryCategory],
-    confidence: float,
-    scope_agents: list[str] | None = None,
-) -> dict[str, Any]:
-    """Create a new pending memory entry."""
-    engine = _engine_from_ctx(ctx)
-    now = _now_iso()
-    try:
-        entry = MemoryEntry(
-            id=str(uuid4()),
-            title=title,
-            categories=categories,
-            confidence=confidence,
-            state=MemoryState.PENDING,
-            content=content,
-            scope_agents=scope_agents or [],
-            source_agent="unknown",
-            created_at=now,
-            updated_at=now,
-            approved_at=None,
-        )
-    except ValidationError as exc:
-        raise ToolError(_teaching_validation_message(exc)) from exc
-    engine.write(entry)
-    return _entry_to_dict(entry)
 
 
 async def save_memory(  # noqa: PLR0913
@@ -155,18 +173,19 @@ async def save_memory(  # noqa: PLR0913
     *,
     title: str,
     content: str,
-    categories: list[MemoryCategory],
+    categories: list[MemoryCategory | str],
     confidence: float,
     source_agent: str,
 ) -> dict[str, Any]:
     """Create a pending memory entry with explicit source_agent."""
     engine = _engine_from_ctx(ctx)
     now = _now_iso()
+    coerced_categories = _coerce_categories(categories)
     try:
         entry = MemoryEntry(
             id=str(uuid4()),
             title=title,
-            categories=categories,
+            categories=coerced_categories,
             confidence=confidence,
             state=MemoryState.PENDING,
             content=content,
@@ -188,18 +207,20 @@ async def save_memory(  # noqa: PLR0913
 async def list_memories(
     ctx: Context,
     *,
-    states: list[MemoryState] | None = None,
-    categories: list[MemoryCategory] | None = None,
+    states: list[MemoryState | str] | None = None,
+    categories: list[MemoryCategory | str] | None = None,
     scope_agents: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Return metadata-only entries with pending-first ordering."""
     engine = _engine_from_ctx(ctx)
-    allowed_states = set(states) if states else {
+    coerced_states = _coerce_states(states)
+    coerced_categories = _coerce_categories(categories)
+    allowed_states = set(coerced_states) if coerced_states else {
         MemoryState.PENDING,
         MemoryState.CURATED,
         MemoryState.APPROVED,
     }
-    category_filter = set(categories or [])
+    category_filter = set(coerced_categories or [])
     scope_filter = set(scope_agents or [])
 
     entries = [entry for entry in engine.get_entries() if entry.state in allowed_states]
@@ -230,53 +251,11 @@ async def read_memory(ctx: Context, *, entry_id: str) -> dict[str, Any]:
     return _entry_to_dict(entry)
 
 
-async def query_memory(  # noqa: PLR0913
-    ctx: Context,
-    *,
-    states: list[MemoryState] | None = None,
-    categories: list[MemoryCategory] | None = None,
-    scope_agents: list[str] | None = None,
-    min_confidence: float | None = None,
-    limit: int | None = None,
-) -> list[dict[str, Any]]:
-    """Return memory entries filtered by state and sorted by curation priority."""
-    engine = _engine_from_ctx(ctx)
-    allowed_states = (
-        set(states) if states else {MemoryState.CURATED, MemoryState.APPROVED}
-    )
-    category_filter = set(categories or [])
-    scope_filter = set(scope_agents or [])
-
-    state_rank = {
-        MemoryState.APPROVED: 0,
-        MemoryState.CURATED: 1,
-        MemoryState.PENDING: 2,
-        MemoryState.DELETED: 3,
-    }
-    entries = [e for e in engine.get_entries() if e.state in allowed_states]
-    if category_filter:
-        entries = [
-            e for e in entries if bool(category_filter.intersection(set(e.categories)))
-        ]
-    if scope_filter:
-        entries = [
-            e
-            for e in entries
-            if e.scope_agents and bool(scope_filter.intersection(set(e.scope_agents)))
-        ]
-    if min_confidence is not None:
-        entries = [e for e in entries if e.confidence >= min_confidence]
-    entries.sort(key=lambda e: (state_rank.get(e.state, 99), -e.confidence, e.id))
-    if limit is not None:
-        entries = entries[:limit]
-    return [_entry_to_dict(entry) for entry in entries]
-
-
 async def recall_memory(
     ctx: Context,
     *,
     agent: str,
-    categories: list[MemoryCategory] | None = None,
+    categories: list[MemoryCategory | str] | None = None,
     limit: int | None = None,
 ) -> str:
     """Return body-only recall text for a single scoped agent.
@@ -287,10 +266,13 @@ async def recall_memory(
     if agent == "*":
         msg = 'wildcard agent "*" is not allowed for recall_memory'
         raise ToolError(msg)
+    if not agent.strip():
+        msg = "Agent must be non-empty."
+        raise ToolError(msg)
 
     engine = _engine_from_ctx(ctx)
-    category_filter = set(categories or [])
-    capped_limit = 20 if limit is None else limit
+    category_filter = set(_coerce_categories(categories) or [])
+    capped_limit = 20 if limit is None else _validate_limit(limit)
 
     state_rank = {
         MemoryState.APPROVED: 0,
@@ -319,13 +301,13 @@ async def recall_memory(
     return "\n\n".join(f"## {entry.title}\n{entry.content}" for entry in entries)
 
 
-async def update_entry(  # noqa: PLR0913
+async def _update_entry(  # noqa: PLR0913
     ctx: Context,
     *,
     entry_id: str,
     title: str | None = None,
     content: str | None = None,
-    categories: list[MemoryCategory] | None = None,
+    categories: list[MemoryCategory | str] | None = None,
     confidence: float | None = None,
     state: MemoryState | None = None,
     scope_agents: list[str] | None = None,
@@ -337,6 +319,8 @@ async def update_entry(  # noqa: PLR0913
     """
     engine = _engine_from_ctx(ctx)
     current = _load_entry_or_raise(engine, entry_id)
+    coerced_categories = _coerce_categories(categories)
+    coerced_state = _coerce_state(state)
 
     if current.state == MemoryState.DELETED:
         msg = "update_entry cannot modify deleted entries"
@@ -349,8 +333,8 @@ async def update_entry(  # noqa: PLR0913
 
     if current.state == MemoryState.APPROVED:
         target_state = MemoryState.CURATED
-    elif state is not None:
-        target_state = state
+    elif coerced_state is not None:
+        target_state = coerced_state
     elif current.state == MemoryState.PENDING and bool(next_scope_agents):
         target_state = MemoryState.CURATED
     else:
@@ -362,7 +346,7 @@ async def update_entry(  # noqa: PLR0913
         "id": current.id,
         "title": current.title if title is None else title,
         "content": current.content if content is None else content,
-        "categories": current.categories if categories is None else categories,
+        "categories": current.categories if categories is None else coerced_categories,
         "confidence": current.confidence if confidence is None else confidence,
         "state": target_state,
         "scope_agents": next_scope_agents,
@@ -381,7 +365,7 @@ async def update_entry(  # noqa: PLR0913
     return _entry_to_dict(updated)
 
 
-async def delete_entry(ctx: Context, *, entry_id: str) -> dict[str, Any]:
+async def _delete_entry(ctx: Context, *, entry_id: str) -> dict[str, Any]:
     """Delete an entry.
 
     Pending entries are hard-deleted from disk; curated and approved entries
@@ -391,7 +375,7 @@ async def delete_entry(ctx: Context, *, entry_id: str) -> dict[str, Any]:
     current = _load_entry_or_raise(engine, entry_id)
 
     if current.state == MemoryState.DELETED:
-        msg = "delete_entry cannot delete an entry that is already deleted"
+        msg = "delete_memory cannot delete an entry that is already deleted"
         raise ToolError(msg)
 
     if current.state == MemoryState.PENDING:
@@ -422,22 +406,20 @@ async def curate_memory(  # noqa: PLR0913
     entry_id: str,
     title: str | None = None,
     content: str | None = None,
-    categories: list[MemoryCategory] | None = None,
+    categories: list[MemoryCategory | str] | None = None,
     confidence: float | None = None,
-    state: MemoryState | None = None,
     scope_agents: list[str] | None = None,
 ) -> dict[str, Any]:
-    """Compatibility alias for curation-style updates."""
+    """Curate entries using code-managed lifecycle transitions."""
     engine = _engine_from_ctx(ctx)
     current = _load_entry_or_raise(engine, entry_id)
-    updated = await update_entry(
+    updated = await _update_entry(
         ctx,
         entry_id=entry_id,
         title=title,
         content=content,
         categories=categories,
         confidence=confidence,
-        state=state,
         scope_agents=scope_agents,
     )
     if current.state == MemoryState.PENDING and updated["state"] == str(MemoryState.CURATED):
@@ -453,7 +435,7 @@ async def delete_memory(ctx: Context, *, entry_id: str) -> dict[str, Any]:
     """Compatibility alias for delete semantics."""
     engine = _engine_from_ctx(ctx)
     current = _load_entry_or_raise(engine, entry_id)
-    deleted = await delete_entry(ctx, entry_id=entry_id)
+    deleted = await _delete_entry(ctx, entry_id=entry_id)
     if current.state == MemoryState.PENDING:
         hint = "Hard-delete applied: pending entry removed and never committed."
     else:
@@ -461,13 +443,13 @@ async def delete_memory(ctx: Context, *, entry_id: str) -> dict[str, Any]:
     return _with_hint(deleted, hint)
 
 
-async def approve_entry(ctx: Context, *, entry_id: str) -> dict[str, Any]:
+async def _approve_entry(ctx: Context, *, entry_id: str) -> dict[str, Any]:
     """Promote a curated entry to approved."""
     engine = _engine_from_ctx(ctx)
     current = _load_entry_or_raise(engine, entry_id)
 
     if current.state != MemoryState.CURATED:
-        msg = f"approve_entry requires curated state, got {current.state}"
+        msg = f"approve_memory requires curated state, got {current.state}"
         raise ToolError(msg)
 
     updated = current.model_copy(
@@ -483,5 +465,5 @@ async def approve_entry(ctx: Context, *, entry_id: str) -> dict[str, Any]:
 
 async def approve_memory(ctx: Context, *, entry_id: str) -> dict[str, Any]:
     """Compatibility alias for approving curated memory entries."""
-    approved = await approve_entry(ctx, entry_id=entry_id)
+    approved = await _approve_entry(ctx, entry_id=entry_id)
     return _with_hint(approved, "Entry approved. Now visible to scoped agents.")

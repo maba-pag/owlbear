@@ -193,7 +193,7 @@ Standard: `h-memory-structure` section Entry Shape, section Tier-Content Fit, se
 1. Load all four standards in order.
 2. Discover definitions surface with `file_search`.
 3. Read all files in both surfaces.
-4. Query memory (`query_memory(states=["curated", "approved"])`) when available; otherwise degrade gracefully.
+4. Query memory (`list_memories(states=["curated", "approved"])` for inventory and `recall_memory(agent="{agent_name}")` for scoped context) when available; otherwise degrade gracefully.
 5. Build a severity queue: HIGH, then MED, then LOW.
 
 Call `askQuestions` to present queue summary and confirm before the finding loop.

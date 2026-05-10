@@ -6,12 +6,14 @@ import os
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from owlbear_mcp_memory.engine import MemoryEngine
+from owlbear_mcp_memory.models import MemoryCategory, MemoryState
 from owlbear_mcp_memory.tools import (
     approve_memory as approve_memory_impl,
 )
@@ -37,7 +39,26 @@ from owlbear_mcp_memory.tools import (
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
+__all__ = [
+    "AppContext",
+    "app_lifespan",
+    "approve_memory",
+    "curate_memory",
+    "delete_memory",
+    "list_memories",
+    "mcp",
+    "read_memory",
+    "recall_memory",
+    "save_memory",
+]
+
 _DEFAULT_MEMORY_DIR = Path(".owlbear/memory")
+_Title = Annotated[str, Field(min_length=1)]
+_Content = Annotated[str, Field(max_length=1024)]
+_Confidence = Annotated[float, Field(ge=0.7, le=1.0)]
+_Agent = Annotated[str, Field(min_length=1)]
+_Limit = Annotated[int, Field(ge=0)]
+_Categories = Annotated[list[MemoryCategory], Field(min_length=1)]
 
 
 @dataclass
@@ -59,15 +80,19 @@ async def app_lifespan(
 mcp = FastMCP("owlbear-memory", lifespan=app_lifespan)
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=False))
+@mcp.tool(
+    annotations=ToolAnnotations(
+        readOnlyHint=False, idempotentHint=False, destructiveHint=False
+    )
+)
 async def save_memory(  # noqa: PLR0913
     ctx: Context,
     *,
-    title: str,
-    content: str,
-    categories: list[str],
-    confidence: float,
-    source_agent: str,
+    title: _Title,
+    content: _Content,
+    categories: _Categories,
+    confidence: _Confidence,
+    source_agent: _Agent,
 ) -> dict[str, Any]:  # pragma: no cover
     """Create a new pending memory entry with explicit source agent."""
     return await save_memory_impl(
@@ -80,12 +105,16 @@ async def save_memory(  # noqa: PLR0913
     )
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
+@mcp.tool(
+    annotations=ToolAnnotations(
+        readOnlyHint=True, idempotentHint=True, destructiveHint=False
+    )
+)
 async def list_memories(
     ctx: Context,
     *,
-    states: list[str] | None = None,
-    categories: list[str] | None = None,
+    states: list[MemoryState] | None = None,
+    categories: Annotated[list[MemoryCategory] | None, Field(min_length=1)] = None,
     scope_agents: list[str] | None = None,
 ) -> list[dict[str, Any]]:  # pragma: no cover
     """List memory metadata sorted by curation priority."""
@@ -97,13 +126,17 @@ async def list_memories(
     )
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
+@mcp.tool(
+    annotations=ToolAnnotations(
+        readOnlyHint=True, idempotentHint=True, destructiveHint=False
+    )
+)
 async def recall_memory(
     ctx: Context,
     *,
-    agent: str,
-    categories: list[str] | None = None,
-    limit: int | None = None,
+    agent: _Agent,
+    categories: list[MemoryCategory] | None = None,
+    limit: _Limit | None = None,
 ) -> str:  # pragma: no cover
     """Recall markdown body blocks for entries scoped to a specific agent."""
     return await recall_memory_impl(
@@ -114,7 +147,11 @@ async def recall_memory(
     )
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=False))
+@mcp.tool(
+    annotations=ToolAnnotations(
+        readOnlyHint=True, idempotentHint=True, destructiveHint=False
+    )
+)
 async def read_memory(
     ctx: Context,
     *,
@@ -124,16 +161,19 @@ async def read_memory(
     return await read_memory_impl(ctx, entry_id=entry_id)
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=False))
+@mcp.tool(
+    annotations=ToolAnnotations(
+        readOnlyHint=False, idempotentHint=False, destructiveHint=True
+    )
+)
 async def curate_memory(  # noqa: PLR0913
     ctx: Context,
     *,
     entry_id: str,
-    title: str | None = None,
-    content: str | None = None,
-    categories: list[str] | None = None,
-    confidence: float | None = None,
-    state: str | None = None,
+    title: _Title | None = None,
+    content: _Content | None = None,
+    categories: list[MemoryCategory] | None = None,
+    confidence: _Confidence | None = None,
     scope_agents: list[str] | None = None,
 ) -> dict[str, Any]:  # pragma: no cover
     """Curate and mutate a memory entry."""
@@ -144,12 +184,15 @@ async def curate_memory(  # noqa: PLR0913
         content=content,
         categories=categories,
         confidence=confidence,
-        state=state,
         scope_agents=scope_agents,
     )
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=True))
+@mcp.tool(
+    annotations=ToolAnnotations(
+        readOnlyHint=False, idempotentHint=False, destructiveHint=True
+    )
+)
 async def delete_memory(
     ctx: Context, *, entry_id: str
 ) -> dict[str, Any]:  # pragma: no cover
@@ -157,7 +200,11 @@ async def delete_memory(
     return await delete_memory_impl(ctx, entry_id=entry_id)
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=False))
+@mcp.tool(
+    annotations=ToolAnnotations(
+        readOnlyHint=False, idempotentHint=False, destructiveHint=False
+    )
+)
 async def approve_memory(
     ctx: Context, *, entry_id: str
 ) -> dict[str, Any]:  # pragma: no cover

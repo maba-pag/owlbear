@@ -64,16 +64,16 @@ Per `owlbear-system.instructions.md` § Memory Governance (single source of trut
 
 ## File vs. MCP Relationship
 
-During active migration, both stores are written. After migration, MCP is sole canonical.
+MCP memory is canonical. File-based inbox notes are fallback/migration input only.
 
 | Situation | Action |
 |-----------|--------|
-| Standard post-task reflection | Write MCP first via `save_memory`, then file-based inbox as fallback |
-| MCP tool unavailable or errors | Write file-based inbox only; do not retry MCP |
-| Curation pass | Read both sources (see `w-mem-curation` Step 1); merge into MCP |
-| Pre-flight knowledge load | MCP only (`list_memories` + `read_memory`) — file inbox is write-only for agents |
+| Standard post-task reflection | Write MCP via `save_memory` |
+| MCP tool unavailable or errors | Write file-based inbox fallback only; do not retry MCP |
+| Curation pass | Read MCP pending entries plus file-inbox migration notes; promote durable insights into MCP |
+| Pre-flight knowledge load | MCP only (`recall_memory(agent="{agent_name}")`) — file inbox is write-only for agents |
 
-Dual-write procedure is defined in `r-pipeline-protocol` § Post-task Reflection. Follow it exactly.
+Post-task reflection is defined in `r-pipeline-protocol` § Post-task Reflection. Follow it exactly.
 
 ## State Model
 
@@ -81,7 +81,7 @@ Lifecycle transitions are controlled by MCP tools:
 
 | From | To | Trigger | Tool |
 |------|----|---------|------|
-| `pending` | `curated` | Curator sets scope or explicit state during curation | `curate_memory` |
+| `pending` | `curated` | Curator assigns non-empty scope during curation | `curate_memory` |
 | `curated` | `approved` | User approval | `approve_memory` |
 | `approved` | `curated` | Any curation edit (auto-downgrade) | `curate_memory` |
 | `pending` | `deleted` | Prune noise/duplicates (hard delete from disk) | `delete_memory` |

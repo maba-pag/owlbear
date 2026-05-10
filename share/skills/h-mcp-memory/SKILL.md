@@ -1,12 +1,12 @@
 ---
 name: h-mcp-memory
-description: "Handbook: OwlBear Memory MCP tool reference — 6 shipped tools for agent institutional knowledge"
+description: "Handbook: OwlBear Memory MCP tool reference — 7 shipped tools for agent institutional knowledge"
 user-invocable: false
 ---
 
 # MCP Memory Tool Reference
 
-The `owlbearMemory` MCP server exposes memory operations over stdio. Registered in `.vscode/mcp.json` as `owlbearMemory`.
+The `owlbearMemory` MCP server exposes memory operations over stdio. The FastMCP app name is `owlbear-memory`; VS Code registers it in `.vscode/mcp.json` as `ob-memory`.
 
 For pipeline integration (pre-flight, reflection), see `r-pipeline-protocol`.
 For curation workflow, see `w-mem-curation`.
@@ -17,8 +17,9 @@ For curation workflow, see `w-mem-curation`.
 |------|-------------|----------------|
 | `save_memory` | Create a new `pending` memory entry | `title`, `content`, `categories`, `confidence`, `source_agent` |
 | `list_memories` | List metadata filtered by state/category/scope | `states`, `categories`, `scope_agents` |
+| `recall_memory` | Recall scoped memory blocks for agent pre-flight | `agent`, `categories`, `limit` |
 | `read_memory` | Read one full memory entry by ID | `entry_id` |
-| `curate_memory` | Curator mutation and state transition tool | `entry_id`, optional mutable fields, optional `state`, `scope_agents` |
+| `curate_memory` | Curator mutation and code-managed state transition tool | `entry_id`, optional mutable fields, `scope_agents` |
 | `delete_memory` | Lifecycle-aware deletion with hard/soft semantics | `entry_id` |
 | `approve_memory` | Promote `curated -> approved` | `entry_id` |
 
@@ -63,6 +64,23 @@ Behavior:
 - returns full entry including `content`
 - errors if the entry is in `deleted` state
 
+## recall_memory
+
+Returns body-only markdown blocks scoped to one agent for pre-flight loading.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `agent` | str | (required) | Agent name requesting relevant memory |
+| `categories` | list[str] \| null | `null` | Optional category filter |
+| `limit` | int \| null | `20` | Maximum entries to return; non-negative |
+
+Behavior:
+
+- includes only `curated` and `approved` entries scoped to the agent
+- returns `approved` entries before `curated`
+- returns markdown body blocks, not full entry metadata
+- rejects blank or wildcard agent names
+
 ## curate_memory
 
 Curator update tool for content edits and lifecycle transitions.
@@ -74,8 +92,9 @@ Curator update tool for content edits and lifecycle transitions.
 | `content` | str \| null | `null` | Replace markdown body |
 | `categories` | list[str] \| null | `null` | Replace categories |
 | `confidence` | float \| null | `null` | Replace confidence |
-| `state` | str \| null | `null` | Transition state (restricted rules apply) |
 | `scope_agents` | list[str] \| null | `null` | Replace scope list |
+
+State is code-managed and is not a caller-supplied parameter.
 
 Auto-state behavior:
 
@@ -151,8 +170,21 @@ Allowed category values:
 ### User approval flow
 
 1. Curator leaves entries in `curated`
-2. User runs `approve_memory(entry_id=...)`
+2. User runs the memory audit prompt for guided review
 3. Approved entries become highest-trust retrieval candidates
+
+### Batch commits
+
+Pending entries are not committed. After curation or review, use the state-aware
+helper instead of broad-adding `.owlbear/memory`:
+
+```text
+uv --project ../owlbear run python -m owlbear_mcp_memory.git curation
+uv --project ../owlbear run python -m owlbear_mcp_memory.git review
+```
+
+If the workspace uses a different OwlBear relative path, substitute the
+`--project` value from the `ob-memory` entry in `.vscode/mcp.json`.
 
 ## Examples
 
@@ -170,6 +202,10 @@ save_memory(
 list_memories(states=["pending"], categories=["tool-usage"]) 
 read_memory(entry_id="...")
 curate_memory(entry_id="...", scope_agents=["builder", "reviewer"])
+```
+
+```text
+recall_memory(agent="builder", categories=["pitfall"], limit=10)
 ```
 
 ```text

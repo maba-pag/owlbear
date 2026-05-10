@@ -78,14 +78,15 @@ At the end of the review (or when the user stops), summarize:
 - rejected count
 - skipped count
 
-Then instruct the user to commit all memory mutations in one batch commit:
+Then instruct the user to commit reviewed memory mutations with the state-aware helper:
 
 ```bash
-git add store/memory .owlbear/memory 2>/dev/null || true
-git commit -m "chore: memory review batch update"
+uv --project ../owlbear run python -m owlbear_mcp_memory.git review
 ```
 
-If one of the paths does not exist in the current workspace, proceed with the path that exists.
+If this workspace uses a different OwlBear relative path, substitute the `--project`
+path from the `ob-memory` entry in `.vscode/mcp.json`. Do not broad-add
+`.owlbear/memory`; pending entries must remain uncommitted until curation.
 
 ## 5. Operating Rules
 

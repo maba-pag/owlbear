@@ -5,7 +5,7 @@ argument-hint: "Mediate: {draft path, brief context, or follow-on request after 
 user-invocable: true
 disable-model-invocation: true
 tools:
-  [vscode/memory, vscode/toolSearch, vscode/askQuestions, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/readFile, read/viewImage, agent, edit/createDirectory, edit/createFile, edit/editFiles, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, ob-kanban/create_task, ob-kanban/edit_task, ob-kanban/list_tasks, ob-kanban/move_task, ob-kanban/show_task]
+  [ob-memory/save_memory, ob-memory/recall_memory, vscode/toolSearch, vscode/askQuestions, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/readFile, read/viewImage, agent, edit/createDirectory, edit/createFile, edit/editFiles, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, ob-kanban/create_task, ob-kanban/edit_task, ob-kanban/list_tasks, ob-kanban/move_task, ob-kanban/show_task]
 agents:
   - ideation-critic
   - ideation-pragmatist

@@ -1,6 +1,6 @@
 # owlbear-mcp-memory — Memory MCP Server
 
-MCP server that provides agent institutional memory via a file-based store. Agents record learnings, retrieve relevant knowledge, and curate entries through an approval workflow. Registered in VS Code's MCP configuration as `owlbear-memory`.
+MCP server that provides agent institutional memory via a file-based store. Agents record learnings, retrieve relevant knowledge, and curate entries through an approval workflow. The FastMCP app name is `owlbear-memory`; VS Code registers it in `.vscode/mcp.json` as `ob-memory`.
 
 → Parent: [README.md](../../README.md)
 
@@ -35,6 +35,27 @@ Entries are scoped to an optional agent (`scope_agents` list) and carry a requir
 | Variable | Default | Purpose |
 |----------|---------|--------|
 | `OWLBEAR_MEMORY_DIR` | `.owlbear/memory` | Directory for markdown memory files |
+
+## Batch Commits
+
+Pending entries are intentionally left uncommitted. After curation or review,
+commit only reviewed entries with the state-aware helper:
+
+```bash
+uv run python -m owlbear_mcp_memory.git curation
+uv run python -m owlbear_mcp_memory.git review
+```
+
+From a consumer workspace that launches OwlBear via a sibling clone, use the same
+project path as the `ob-memory` MCP entry, for example:
+
+```bash
+uv --project ../owlbear run python -m owlbear_mcp_memory.git review
+```
+
+The helper stages only non-pending `.owlbear/memory/*.md` files and returns the
+commit SHA, or `no memory changes to commit` when there is nothing reviewed to
+commit.
 
 ## Dependencies
 

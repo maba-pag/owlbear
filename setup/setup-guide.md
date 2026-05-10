@@ -65,7 +65,6 @@ Running `init.py` writes the following files into your project directory:
 | `.owlbear/hooks/session-context.py` | Injects current git branch + recent commits into agent prompts; silently no-ops if `git` is unavailable | Seeded if missing; differing existing hook files prompt/skip/replace (or require `--replace-hooks` non-interactively) |
 | `.owlbear/knowledge/.gitkeep` | Knowledge store placeholder | Always written |
 | `store/knowledge/.gitkeep` | Knowledge store placeholder | Always written |
-| `store/memory/.gitkeep` | Memory store placeholder | Always written |
 | `.github/copilot-instructions.md` | Consumer scaffold for project-specific Copilot instructions — placeholder sections for Project Identity, Directory Structure, Tech Stack, and Resources | Skipped if file already exists |
 | `.editorconfig` | Editor formatting rules | Skipped if file already exists |
 | `.gitattributes` | Git line-ending and diff rules | Skipped if file already exists |
@@ -85,6 +84,10 @@ OwlBear uses two different update models:
 This split is why `git pull` updates shared agents and skills immediately, while copied
 runtime files may need a later `init.py` run to refresh.
 
+MCP memory entries are stored as markdown files under `.owlbear/memory/`. The
+`ob-memory` server creates that directory when it starts or writes the first
+entry, so setup does not seed a separate memory store.
+
 ---
 
 ## Verify It Works
@@ -100,7 +103,7 @@ After opening the project in VS Code, use the **Diagnostics view** to confirm ev
 | OwlBear agents loaded | Chat Customizations shows agents from `../owlbear/share/agents/` |
 | OwlBear skills loaded | Chat Customizations shows skills from `../owlbear/share/skills/` |
 | Instructions loaded | Chat Customizations shows `*.instructions.md` files from `../owlbear/share/instructions/` |
-| MCP servers running | Run `MCP: List Servers` from the Command Palette — ob-kanban should show `running` |
+| MCP servers running | Run `MCP: List Servers` from the Command Palette — `ob-kanban`, `ob-memory`, and `ob-knowledge` should show `running` |
 
 For runtime debugging, use **"Show Agent Debug Logs"** (Chat view ellipsis `…` menu) —
 this shows chronological tool calls, LLM requests, and prompt discovery events.

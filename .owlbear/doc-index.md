@@ -57,6 +57,14 @@
 - ## `6. File Placement`
 - ## `7. Project Layout`
 
+## .owlbear/sast-coverage.md
+- # `SAST Coverage`
+- ## `Tool Coverage Matrix`
+- ## `Production noqa S-rule Suppressions`
+- ## `MegaLinter Baseline Evidence`
+- ### `CI trigger configuration`
+- ### `Baseline execution confirmation`
+
 ## .owlbear/instructions/architecture.instructions.md
 - ## `Architecture Overview`
 - ## `Dependency Rules`
@@ -86,24 +94,12 @@
 - # `Documentation Audit`
 - ## `1. Preamble`
 - ## `2. Setup — Doc-Index Regeneration`
-- ## `3. Audit Surface and Standards`
-- ### `Documentation Surface`
-- ### `Out-of-Scope Files`
-- ### `Standards`
-- ## `4. Eight Audit Dimensions`
-- ### `D1 — Structural (DIM-1)`
-- ### `D2 — Duplication (DIM-2)`
-- ### `D3 — Placement (DIM-3)`
-- ### `D4 — Accuracy (DIM-4)`
-- ### `D5 — Coverage Integrity (DIM-5)`
-- ### `D6 — Currency / Staleness (DIM-6)`
-- ### `D7 — Cross-Reference Integrity (DIM-7)`
-- ### `D8 — Audience Fitness (DIM-8)`
-- ## `5. Process`
-- ### `Phase 1 — Scan`
-- ### `Phase 2 — Finding Loop`
-- ### `Task Emission Contract`
-- ## `6. Verification`
+- ## `3. Scope`
+- ## `4. Finding Loop Contract`
+- ## `5. TODO Marker Batch Resolution`
+- ## `6. Diagram Ownership`
+- ## `7. Describes-Based Diagram Verification`
+- ## `8. Verification and Closeout`
 
 ## .pytest_cache/README.md
 - # `pytest cache directory #`
@@ -139,6 +135,7 @@
 - ### `Mutation routes`
 - #### `Via CockpitView facade`
 - ### `Excluded methods — why`
+- ## `Error Envelope`
 - ## `Decisions API`
 - ## `Work Sessions Model`
 - ### `Derived states`
@@ -152,6 +149,20 @@
 - [README.md](../../README.md)
 - [copilot-instructions.md](../../.github/copilot-instructions.md)
 - [copilot-instructions.md](../../.github/copilot-instructions.md)
+
+## serve/cockpit/web/test-results/bench_959-TestFromAC-Board-06851-00ms-with-700-cards-present-chromium/error-context.md
+- # `Instructions`
+- # `Test info`
+- # `Error details`
+- # `Page snapshot`
+- # `Test source`
+
+## serve/cockpit/web/test-results/kanban-board-TestFromAC-Ka-e5abb--accounts-for-shell-chrome--chromium/error-context.md
+- # `Instructions`
+- # `Test info`
+- # `Error details`
+- # `Page snapshot`
+- # `Test source`
 
 ## serve/kanban/README.md
 - # `owlbear-kanban — Kanban Engine`
@@ -197,6 +208,7 @@
 - ### `TaskFull`
 - ### `DispatchEntry and Wave`
 - ### `guidance Field`
+- ## `list_tasks Filter Semantics`
 - ## `Archival Fields`
 - ## `end_work Outcomes`
 - ## `Usage Examples`
@@ -222,6 +234,7 @@
 - ### `Tools`
 - ### `Entry schema`
 - ## `Configuration`
+- ## `Batch Commits`
 - ## `Dependencies`
 
 ### Outbound links
@@ -360,16 +373,11 @@
 - ### `Output Files`
 
 ## share/agents/ideation-critic.agent.md
-- ## `Input Contract`
-- ### `Dual-Scope Invocation`
-- ## `Output Contract`
-- ### `Challenges`
-- ### `Blind Spots`
-- ### `Confidence in Position`
-- ### `Pressure Level`
 - ### `Channel A`
 - ### `Channel B`
-- ### `Required Output Sections`
+- ### `Required Input Fields`
+- #### `Dual-Scope Invocation`
+- ### `Required Output Sections (all 4, in order)`
 
 ## share/agents/ideation-data.agent.md
 - ### `Channel A`
@@ -417,6 +425,14 @@
 - ### `Channel A`
 - ### `Channel B`
 - ### `Output File`
+
+## share/agents/knowledge-enricher.agent.md
+- ### `Channel A`
+- ### `Channel B`
+
+## share/agents/knowledge-ingestor.agent.md
+- ### `Channel A`
+- ### `Channel B`
 
 ## share/agents/memory-curator.agent.md
 - ### `Channel A`
@@ -468,7 +484,7 @@ describes: serve/kanban/src/**, serve/mcp-kanban/src/**, .owlbear/kanban/**
 describes: serve/mcp-*/src/**, serve/kanban/src/**, serve/knowledge/src/**, .vscode/mcp.json
 
 ## share/diagrams/memory-layers.excalidraw
-describes: serve/mcp-memory/src/**, store/memory/**, share/skills/h-memory-structure/**, share/skills/h-mcp-memory/**, share/instructions/owlbear-system.instructions.md
+describes: serve/mcp-memory/src/**, .owlbear/memory/**, share/skills/h-memory-structure/**, share/skills/h-mcp-memory/**, share/instructions/owlbear-system.instructions.md
 
 ## share/diagrams/pipeline.excalidraw
 describes: share/instructions/owlbear-system.instructions.md, share/skills/r-pipeline-protocol/**, share/agents/*.agent.md
@@ -585,20 +601,22 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ## `What happens`
 - ## `Tips`
 
-## share/prompts/memory-audit.prompt.md
-- # `Memory Audit`
-- ## `1. Preamble`
-- ## `2. Setup — Inventory`
-- ## `3. Audit Dimensions`
-- ### `3.1 Staleness`
-- ### `3.2 Redundancy`
-- ### `3.3 Gaps`
-- ### `3.4 Bloat`
-- ### `3.5 Thematic Drift`
-- ## `4. Findings Loop`
-- ## `5. Summary`
+## share/prompts/kb-enrich.prompt.md
+- ## `Parallel worker option (D7)`
+- ## `Worker phases`
 
-## share/prompts/memory-review.prompt.md
+## share/prompts/kb-ingest.prompt.md
+- ## `What this does`
+
+## share/prompts/legacy-audit.prompt.md
+- # `Legacy Audit`
+- ## `Step 1 - Load context`
+- ## `Step 2 - Execute scan checks`
+- ## `Step 3 - Produce ranked cleanup report`
+- ## `Step 4 - Guardrails and closeout`
+- ## `Guardrails`
+
+## share/prompts/memory-audit.prompt.md
 - # `Memory Review`
 - ## `1. Goal`
 - ## `2. Session Setup`
@@ -610,6 +628,29 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 ## share/prompts/orchestrate.prompt.md
 
 ## share/prompts/test-curation.prompt.md
+
+## share/skills/h-ac-quality/SKILL.md
+- # `AC Quality Schema`
+- ## `Meta-Rule`
+- ## `Tier 1 - Behavior AC (Code Changes)`
+- ### `B1 - Function-Scoped`
+- ### `B2 - Input -> Output Pairs`
+- ### `B3 - No Naked Quantifiers`
+- ## `Tier 2 - Process AC (Workflow Changes)`
+- ### `P1 - Agent/Stage-Scoped`
+- ### `P2 - Observable Artifact or State Change`
+- ### `P3 - Verification Method Stated`
+- ## `Two-Pass Validation`
+- ## `Bad -> Good Transformations`
+- ### `B1 Example (Function-Scoped)`
+- ### `B2 Example (Input -> Output)`
+- ### `B3 Example (No Naked Quantifiers)`
+- ### `P1 Example (Agent/Stage-Scoped)`
+- ### `P2 Example (Observable Artifact/State)`
+- ### `P3 Example (Verification Method)`
+- ## `Validation Checklist`
+- ### `Planner Draft Checklist`
+- ### `Architect/Challenger Validation Checklist`
 
 ## share/skills/h-agent-structure/SKILL.md
 - # `Agent Ecosystem Structure`
@@ -766,10 +807,16 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ### `Decision Turns (Facilitative Mode — M4-M6)`
 - ## `Decision Entry Template`
 - ## `Handoff Contract`
+- ## `Communication Patterns`
+- ### `Narration Principles`
+- ### `Transition Patterns`
+- ### `Boundary Heuristic`
+- ### `Depth-Control Verbal Cues`
 - ## `Cross-References`
 
 ## share/skills/h-ideation-panel/SKILL.md
 - # `Ideation Panel Handbook`
+- ## `Universal Constraints`
 - ## `Panel Surface Map`
 - ## `Early Challenge Lane`
 - ### `Roster`
@@ -791,6 +838,7 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ### ``mode=converge``
 - ### ``mode=compare``
 - ## `Disagreement Resolution`
+- ## `Panel Output Phrasing`
 - ## `Panelist References`
 
 ## share/skills/h-knowledge-ops/SKILL.md
@@ -843,6 +891,7 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ## `save_memory`
 - ## `list_memories`
 - ## `read_memory`
+- ## `recall_memory`
 - ## `curate_memory`
 - ## `delete_memory`
 - ## `approve_memory`
@@ -850,6 +899,7 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ## `Usage Patterns`
 - ### `Curator lifecycle (list -> read -> curate -> delete)`
 - ### `User approval flow`
+- ### `Batch commits`
 - ## `Examples`
 - ## `Reflection Mapping`
 - ## `Configuration`
@@ -866,20 +916,17 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 
 ## share/skills/h-pytest-and-linting/SKILL.md
 - # `pytest, ruff, and coverage Reference`
-- ## `pytest Commands`
-- ### `Scoped runs (builder, reviewer, test-writer)`
+- ## `Commands`
+- ### `Scoped (builder, reviewer, test-writer)`
 - ### `Full suite (auditor)`
+- ### `With coverage`
+- ### `ruff`
 - ### `Default flags`
-- ## `Test Markers`
-- ### `Common `-m` filter recipes`
-- ## `pytest Configuration (pyproject.toml)`
-- ## `Coverage`
-- ### `Flags that DO NOT WORK`
-- ## `ruff`
-- ## `NEVER Pipe `uv run` Output Through PowerShell Cmdlets`
-- ## `File-Capture Fallback (Truncated Output)`
-- ## `pytest Startup Instability (Windows)`
-- ## `Known Gotchas`
+- ## `Markers`
+- ## `No Piping`
+- ## `File-Capture Fallback`
+- ## `Gotchas`
+- ## `Windows-Only Pitfalls`
 
 ## share/skills/h-python-conventions/SKILL.md
 - # `Python Conventions`
@@ -959,6 +1006,7 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ### `Entry-Gate Agents`
 - ## `2. Working Standards`
 - ### `Evidence Principles`
+- ### `Reviewer Contract (D2 trust-the-builder)`
 - ### `Quality-Runner Mandate`
 - ### `Quality-Runner Environment Fallback`
 - ### `Tool Availability`
@@ -997,6 +1045,9 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 
 ## share/skills/w-arch-review/SKILL.md
 - # `Architecture Review`
+- ## `Scope`
+- ### `In Scope`
+- ### `Out of Scope`
 - ## `Step 0 — Setup`
 - ## `Step 1 — Analyze Codebase Context`
 - ## `Step 2 — Evaluate Architecture`
@@ -1010,53 +1061,42 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 
 ## share/skills/w-code-review/SKILL.md
 - # `Code Review`
+- ## `Scope`
+- ### `In Scope`
+- ### `Out of Scope`
 - ## `Step 0 — Setup`
-- ## `Step 1 — Check Source Control Changes`
-- ### `Step 1.1 — Dirty-Tree Contamination Check`
-- ## `Step 2 — Evidence Gathering`
+- ## `Step 1 — Scope the Review`
+- ## `Step 2 — Gather Builder Evidence First`
+- ### `Depth-Aware Dispatch`
 - ### `Code-Reader Consumer Contract`
-- ## `Step 3 — Run Lint`
-- ## `Step 4 — Run Coverage`
-- ## `Step 5 — Pass 1: CRITICAL Checks`
-- ### `5.0 Test-Writer Audit — AC-to-Test Coverage`
-- ### `5.1 Security Review`
-- ### `5.2 Test Integrity — TestFromAC Comparison`
-- ### `5.3 Test Quality`
-- ### `5.4 Data Safety`
-- ### `5.5 Implementation-Aware Test Gap Analysis`
-- ### `5.6 Necessity Check`
-- ### `5.7 Builder Process Quality (Loop Detection)`
-- ## `Step 6 — Pass 2: INFORMATIONAL Checks`
-- ### `6.1 Code Reading — style, type hints, patterns, naming, dead code`
-- ### `6.2 Documentation — missing/stale docstrings, contradictory comments`
-- ### `6.3 Minor Test Improvements — tighter assertions, simplified setup`
-- ### `6.4 Code Structure — flat-vs-nested, function length, extraction opportunities`
-- ### `Suppressions`
-- ## `Step 7 — Verify AC Compliance`
-- ## `Step 8 — Produce Verdict`
+- ## `Step 3 — Build Evidence Packet`
+- ## `Step 4 — Run the 3-Item Checklist`
+- ### `4.1 AC→Code Mapping`
+- ### `4.2 Test→AC Alignment`
+- ### `4.3 Proof Sufficiency`
+- ### `4.4 Safety & Security`
+- ## `Step 5 — Batch Findings and Decide`
+- ## `Step 6 — Advance`
 - ## `Output Template`
 - ## `Verification Checklist`
-- ## `Known Pitfalls`
 
 ## share/skills/w-doc-update/SKILL.md
-- # `Documentation Update (v2)`
+- # `Documentation Update (v3)`
+- ## `Scope`
+- ### `In Scope`
+- ### `Out of Scope`
 - ## `Step 0 — Setup`
-- ### `Step 0a — Verify Upstream Review Evidence`
-- ### `Step 0b — Load Doc-Index`
-- ## `Step 1 — Scope Classification`
-- ## `Step 2 — Relevance-Gated Checklist`
-- ### `Item 1: Descriptive Prose Docs`
-- ### `Item 2: Module Docstrings`
-- ### `Item 3: External Attribution`
-- ### `Item 4: Research Doc`
-- ### `Item 5: Diagram Maintenance`
-- ### `Item 6: Explicit Diagram Creation`
-- ### `Item 7: Deletion Detection`
-- ## `Step 3 — Clean Scratch Files`
-- ## `Step 4 — Commit & Advance`
+- ## `Step 1 — Convention Mapping`
+- ## `Step 2 — Relevance-Gated Checklist (Exactly 4 Items)`
+- ### `Item 1: README Verification`
+- ### `Item 2: External Attribution`
+- ### `Item 3: Research Doc`
+- ### `Item 4: Deletion Detection`
+- ## `Step 3 — Two-Layer Verification`
+- ## `Step 4 — Clean Scratch Files`
+- ## `Step 5 — Commit & Advance`
 - ## `Output Template`
 - ## `Verification Checklist`
-- ## `Known Pitfalls`
 
 ## share/skills/w-fix-attempt/SKILL.md
 - # `Fix-Attempt`
@@ -1109,16 +1149,13 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ## `Architecture`
 - ## `State Machine`
 - ## `Step 0 — Setup`
-- ## `Step 1 — Gather and Inventory`
-- ## `Step 2 — Deduplicate`
-- ## `Step 3 — Assess Signal`
-- ## `Step 4 — Act`
-- ### `Promotion = Merge`
-- ### `CONFLICT/UNCERTAIN handling by mode`
-- ### `Deletions`
-- ## `Step 4b — Consolidation (capacity-triggered)`
-- ## `Step 5 — Return Channel A signal`
-- ## `Step 6 — Done`
+- ## `Step 1 — Gather Candidates`
+- ## `Step 2 — Classify Signal`
+- ## `Step 3 — Assign Scope`
+- ## `Step 4 — Act On MCP Entries`
+- ## `Step 5 — Migrate File-Inbox Notes`
+- ## `Step 6 — Batch Commit MCP Memory`
+- ## `Step 7 — Return Channel A Signal`
 - ## `Verification Checklist`
 - ## `Known Pitfalls`
 
@@ -1158,6 +1195,9 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 
 ## share/skills/w-task-decomposition/SKILL.md
 - # `Task Decomposition`
+- ## `Scope`
+- ### `In Scope`
+- ### `Out of Scope`
 - ## `Step 0 — Setup`
 - ## `Step 1 — Read the Plan`
 - ## `Step 1a — Single-Task Shortcut`
@@ -1177,6 +1217,9 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 
 ## share/skills/w-task-verification/SKILL.md
 - # `Task Verification`
+- ## `Scope`
+- ### `In Scope`
+- ### `Out of Scope`
 - ## `Step 0 — Setup`
 - ## `Step 1 — Verify the task`
 - ## `Step 1a — Research task verification`
@@ -1190,6 +1233,9 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 
 ## share/skills/w-tdd-green/SKILL.md
 - # `TDD GREEN Phase`
+- ## `Scope`
+- ### `In Scope`
+- ### `Out of Scope`
 - ## `Step 0 — Setup`
 - ### `Step 0a — Non-Implementation Pass-Through`
 - ## `Step 1 — Plan the Change`
@@ -1209,6 +1255,9 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 
 ## share/skills/w-tdd-red/SKILL.md
 - # `TDD RED Phase`
+- ## `Scope`
+- ### `In Scope`
+- ### `Out of Scope`
 - ## `Step 0 — Setup`
 - ## `Step 1 — Assess Task Type`
 - ### `Step 1a — Pass-Through for Non-Implementation Tasks`
