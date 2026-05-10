@@ -806,3 +806,41 @@ class TestFromAC_EngineAtomicity:
             "full Task model must be identical to pre-mutation snapshot after reject emit-failure rollback"
         )
         _assert_no_activity_written(kanban_dir)
+
+    # --- create_task emit-failure rollback (AC-7, retry cycle 3) ----------------
+
+    def test_create_task_emit_failure_rollback(self, tmp_path: Path) -> None:
+        """create_task: OSError from emit must propagate; task file must be deleted and no activity written."""
+        kanban_dir = _make_board(tmp_path)
+        _make_task_file(kanban_dir, 1001, status="todo")
+        engine = KanbanEngine(kanban_dir)
+        tasks_before = {f.name for f in (kanban_dir / "tasks").iterdir()}
+
+        with (
+            patch(_EMIT_PATCH, side_effect=OSError("disk full")),
+            pytest.raises(OSError, match="disk full"),
+        ):
+            engine.create_task("Rollback Target")
+
+        tasks_after = {f.name for f in (kanban_dir / "tasks").iterdir()}
+        assert tasks_after == tasks_before, (
+            "tasks/ must have no new file after failed create_task emit"
+        )
+        _assert_no_activity_written(kanban_dir)
+
+    def test_create_task_emit_failure_task_not_in_index(self, tmp_path: Path) -> None:
+        """create_task: after emit-failure rollback, the failed task must not appear in list_tasks()."""
+        kanban_dir = _make_board(tmp_path)
+        engine = KanbanEngine(kanban_dir)
+
+        with (
+            patch(_EMIT_PATCH, side_effect=OSError("disk full")),
+            pytest.raises(OSError, match="disk full"),
+        ):
+            engine.create_task("Ghost Task")
+
+        tasks = engine.list_tasks()
+        task_titles = [t.title for t in tasks]
+        assert "Ghost Task" not in task_titles, (
+            "failed create_task must not leave a ghost entry in the task index"
+        )
