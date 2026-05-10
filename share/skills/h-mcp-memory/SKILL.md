@@ -6,7 +6,7 @@ user-invocable: false
 
 # MCP Memory Tool Reference
 
-The `owlbearMemory` MCP server exposes memory operations over stdio. The FastMCP app name is `owlbear-memory`; VS Code registers it in `.vscode/mcp.json` as `ob-memory`.
+The `ob-memory` MCP server exposes memory operations over stdio. The FastMCP app name is `owlbear-memory`; VS Code registers it in `.vscode/mcp.json` as `ob-memory`.
 
 For pipeline integration (pre-flight, reflection), see `r-pipeline-protocol`.
 For curation workflow, see `w-mem-curation`.

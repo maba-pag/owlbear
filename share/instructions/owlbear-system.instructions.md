@@ -46,7 +46,7 @@ For file placement rules, commit format, priorities, and tags, see `r-project-st
 
 Do NOT store in user memory: architecture decisions (`.owlbear/decisions/`), research findings (`.owlbear/research/`), domain knowledge (project KB via MCP), code snippets, or task-specific context.
 
-Clear boundary: `/memories/` = user-centric tool patterns and process pitfalls; `owlbearMemory` = agent institutional knowledge. See `r-pipeline-protocol` → Knowledge Pre-flight and Post-task Reflection.
+Clear boundary: `/memories/` = user-centric tool patterns and process pitfalls; `ob-memory` = agent institutional knowledge. See `r-pipeline-protocol` → Knowledge Pre-flight and Post-task Reflection.
 
 ## 4. Operational Fundamentals
 

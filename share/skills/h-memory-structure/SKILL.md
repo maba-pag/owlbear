@@ -6,7 +6,7 @@ user-invocable: false
 
 # Memory Entry Structure
 
-Structural standards for project memory entries across file-based (`/memories/`) and MCP (`owlbearMemory`) storage. Covers entry shape, tier selection, deduplication, and quality enforcement.
+Structural standards for project memory entries across file-based (`/memories/`) and MCP (`ob-memory`) storage. Covers entry shape, tier selection, deduplication, and quality enforcement.
 
 For tool syntax, see `h-mcp-memory`. For curation workflow, see `w-mem-curation`. For pipeline integration (pre-flight, reflection), see `r-pipeline-protocol`.
 
@@ -55,7 +55,7 @@ Per `owlbear-system.instructions.md` § Memory Governance (single source of trut
 | Tool patterns, CLI recipes, process pitfalls | User | `/memories/` |
 | Task-specific context, in-progress working state | Session | `/memories/session/` |
 | Agent lessons-learned (curation inbox) | Repo inbox | `/memories/repo/inbox/` |
-| Agent institutional knowledge (queryable) | MCP canonical | `owlbearMemory` |
+| Agent institutional knowledge (queryable) | MCP canonical | `ob-memory` |
 | Architecture decisions | Not memory | `.owlbear/decisions/` |
 | Research findings | Not memory | `.owlbear/research/` |
 | Code snippets, task-specific context | Not memory | Do not record |
@@ -133,7 +133,7 @@ An entry **fails** if any of the following are true:
 ## Anti-Patterns
 
 1. **Storing research findings as memory entries.** Research belongs in `.owlbear/research/`; memory is for agent behavioral learnings.
-2. **Writing to `/memories/` for agent learnings.** User memory is the operator's space. Agent learnings go to `owlbearMemory` and the inbox.
+2. **Writing to `/memories/` for agent learnings.** User memory is the operator's space. Agent learnings go to `ob-memory` and the inbox.
 3. **Recording with `scope_agents=null`.** Global entries flood every agent's pre-flight. Always pass `scope_agents`.
 4. **One entry per task regardless of insight count.** Record 0 entries if nothing notable happened. Record N entries for N distinct insights.
 5. **Confidence below 0.7.** The server rejects it. Do not round up to bypass the floor — raise confidence only when evidence justifies it.
