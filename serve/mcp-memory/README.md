@@ -1,6 +1,8 @@
 # owlbear-mcp-memory — Memory MCP Server
 
-MCP server that provides agent institutional memory via a file-based store. Agents record learnings, retrieve relevant knowledge, and curate entries through an approval workflow. The FastMCP app name is `owlbear-memory`; VS Code registers it in `.vscode/mcp.json` as `ob-memory`.
+MCP server for agent institutional memory. Pipeline and ideation agents record learnings after tasks; a dedicated curator agent reviews, scopes, and promotes entries; the human operator approves. Approved entries surface during agent pre-flight via `recall_memory`.
+
+Storage is file-based: each entry is a markdown file with YAML frontmatter in `.owlbear/memory/`. The FastMCP app name is `owlbear-memory`; VS Code registers it in `.vscode/mcp.json` as `ob-memory`.
 
 → Parent: [README.md](../../README.md)
 
@@ -12,50 +14,89 @@ MCP server that provides agent institutional memory via a file-based store. Agen
 uv run python -m owlbear_mcp_memory
 ```
 
-Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json`.
+Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json` — not invoked directly.
 
-### Tools
+## Architecture
+
+### Modules
+
+| Module | Purpose |
+|--------|---------|
+| `server.py` | FastMCP app definition, tool registration, lifespan wiring |
+| `tools.py` | Tool implementation — validation, state transitions, response formatting |
+| `engine.py` | File I/O layer — read/write/delete/list markdown entries, ID-to-path cache |
+| `models.py` | Pydantic models (`MemoryEntry`, `MemoryCategory`, `MemoryState`) |
+| `git.py` | Batch commit helper — stages non-pending entries by session type |
+| `__main__.py` | Entry point for `python -m owlbear_mcp_memory` |
+
+### State Model
+
+Entries follow a curated-approval lifecycle:
+
+```
+pending ──[curate with scope]──► curated ──[approve]──► approved
+   │                               │  ▲                    │
+   │                               │  └──[curate edit]─────┘
+   └──[delete: hard]               └──[delete: soft → deleted]
+```
+
+- **pending** → invisible to `recall_memory`, not committed to git
+- **curated** → visible to scoped agents, committable
+- **approved** → highest-trust retrieval priority, committable
+- **deleted** → soft-deleted (curated/approved) or hard-deleted from disk (pending)
+
+## Tools
 
 | Tool | Description |
 |------|-------------|
-| `save_memory` | Create a new `pending` memory entry with explicit `source_agent` |
-| `list_memories` | List entry metadata sorted by curation priority (pending first, then by `created_at`); supports optional `states`, `categories`, and `scope_agents` filters |
-| `read_memory` | Read a full memory entry by `entry_id` |
-| `curate_memory` | Update mutable fields on an entry; auto-promotes `pending → curated` when `scope_agents` provided; auto-downgrades `approved → curated`; returns a `hint` describing the transition |
-| `delete_memory` | Delete an entry; hard-deletes `pending` entries (file removed from disk); soft-deletes `curated`/`approved` to `deleted` state; returns a `hint` identifying the deletion type |
-| `recall_memory` | Recall body-only markdown blocks for entries scoped to a specific agent; supports optional `categories` filter and `limit` (default 20); approved entries returned before curated |
-| `approve_memory` | Approve a `curated` entry; returns a `hint` confirming visibility to scoped agents |
+| `save_memory` | Create a `pending` entry; `scope_agents` defaults to `[source_agent]` |
+| `list_memories` | List metadata sorted by curation priority; filters: `states`, `categories`, `scope_agents` |
+| `read_memory` | Read one full entry by `entry_id`; errors on deleted entries |
+| `recall_memory` | Body-only markdown blocks scoped to one agent; approved before curated; default limit 20 |
+| `curate_memory` | Mutate fields + auto-promote `pending→curated` (when scope provided) or auto-downgrade `approved→curated` |
+| `delete_memory` | Hard-delete pending (file removed); soft-delete curated/approved (state→deleted) |
+| `approve_memory` | Promote `curated→approved`; user-initiated only (not exposed to any agent) |
 
-### Entry schema
+All mutating tools return a `hint` field describing the transition or action taken.
 
-Entries are scoped to an optional agent (`scope_agents` list) and carry a required `source_agent` (caller-supplied). Valid categories: `domain-knowledge`, `behaviour`, `pitfall`, `process`, `tool-usage`, `goal`, `personality`, `preference`, `env-context`. Confidence must be in [0.7, 1.0]. States: `pending` (default), `curated`, `approved`, `deleted`.
+## Entry Schema
+
+| Field | Type | Constraint |
+|-------|------|------------|
+| `id` | str | Stable UUID identifier |
+| `title` | str | Required, non-empty |
+| `content` | str | Markdown body (max 1024 chars at MCP layer) |
+| `categories` | list[str] | One or more from: `domain-knowledge`, `behaviour`, `pitfall`, `process`, `tool-usage`, `goal`, `personality`, `preference`, `env-context` |
+| `confidence` | float | `[0.7, 1.0]` inclusive |
+| `state` | str | `pending` (default), `curated`, `approved`, `deleted` |
+| `source_agent` | str | Required; immutable provenance marker |
+| `scope_agents` | list[str] | Agent visibility scope; defaults to `[source_agent]` on creation |
+| `created_at` | str | UTC timestamp |
+| `updated_at` | str | UTC timestamp |
+| `approved_at` | str \| null | Set on approve, cleared on downgrade/delete |
 
 ## Configuration
 
 | Variable | Default | Purpose |
-|----------|---------|--------|
+|----------|---------|---------|
 | `OWLBEAR_MEMORY_DIR` | `.owlbear/memory` | Directory for markdown memory files |
 
 ## Batch Commits
 
-Pending entries are intentionally left uncommitted. After curation or review,
-commit only reviewed entries with the state-aware helper:
+Pending entries are intentionally left uncommitted. After curation or review, commit only reviewed entries with the state-aware helper:
 
 ```bash
 uv run python -m owlbear_mcp_memory.git curation
 uv run python -m owlbear_mcp_memory.git review
 ```
 
-From a consumer workspace that launches OwlBear via a sibling clone, use the same
-project path as the `ob-memory` MCP entry, for example:
+The `--project` path must point to the OwlBear installation root. Find the correct value from the `ob-memory` server entry in `.vscode/mcp.json` (look for the `--project` argument in the `args` array). Example:
 
 ```bash
 uv --project ../owlbear run python -m owlbear_mcp_memory.git review
 ```
 
-The helper stages only non-pending `.owlbear/memory/*.md` files and returns the
-commit SHA, or `no memory changes to commit` when there is nothing reviewed to
-commit.
+The helper stages only non-pending `.owlbear/memory/*.md` files and returns the commit SHA, or `no memory changes to commit` when there is nothing to commit.
 
 ## Dependencies
 
