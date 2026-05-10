@@ -81,17 +81,17 @@ class TestFromAC_EngineCrashSafety:
     #       returns the next sequential ID (burned ID never reused).
     # ------------------------------------------------------------------
 
-    def test_ac1_crash_after_id_allocation_burns_id(self, tmp_path: Path) -> None:
-        """AC-1: OSError in write_task after allocate_next_id; next call skips burned ID.
+    def test_ac1_crash_during_write_does_not_burn_id(self, tmp_path: Path) -> None:
+        """AC-#1443 scan-based: OSError in write_task → no file written → ID recomputed on retry.
 
-        Post-#1062 order:
-          allocate_next_id() → save_config (next_id=1002) → [flock released]
-          write_task() → OSError
+        Scan-based allocation (#1443) replaces the burned-ID contract (#1062):
+          lock acquired → scan dirs (empty: ID=1) → write_task → [OSError] → lock released
+          No file written → next scan also finds no files → allocates ID 1 again (no burn).
 
         Expected state after crash:
-          config.next_id == 1002  (already saved by allocate_next_id)
-          no task file at ID 1001 (write_task never completed)
-          next create_task returns task.id == 1002
+          config.next_id == 1001  (scan-based allocate_next_id must NOT modify config)
+          no task files in tasks/  (write_task never completed)
+          next create_task returns task.id == 1  (same scan result, no burn)
         """
         kanban_dir = _make_board(tmp_path)
         engine = KanbanEngine(kanban_dir)
@@ -114,25 +114,26 @@ class TestFromAC_EngineCrashSafety:
         ):
             engine.create_task("crash-victim")
 
-        # --- Assert: config.next_id already saved by allocate_next_id before crash ---
+        # --- Assert: scan-based allocate_next_id must NOT touch config.next_id ---
         config_after_crash = load_config(kanban_dir)
-        assert config_after_crash.next_id == 1002, (
-            f"Expected config.next_id=1002 after crash (allocate_next_id must save "
-            f"config before write_task is called), got {config_after_crash.next_id}. "
-            "Crash-safety contract violated: next_id was not persisted before write_task."
+        assert config_after_crash.next_id == 1001, (
+            f"Scan-based allocation must not modify config.next_id; "
+            f"expected 1001 (unchanged), got {config_after_crash.next_id}. "
+            "allocate_next_id is still writing config — scan-based refactor not applied."
         )
 
-        # --- Assert: no task file at the burned ID ---
-        burned_files = list((kanban_dir / "tasks").glob("1001-*.md"))
-        assert burned_files == [], (
-            f"Burned ID 1001 must have no task file on disk; found {burned_files}"
+        # --- Assert: no task file created by the failed write ---
+        all_files = list((kanban_dir / "tasks").glob("*.md"))
+        assert all_files == [], (
+            f"No task file must exist after a failed write; found {all_files}."
         )
 
-        # --- Assert: next create_task skips burned ID, returns 1002 ---
+        # --- Assert: retry gets the SAME ID (scan-based: no file → same max+1 = 1) ---
         task = engine.create_task("after-crash")
-        assert task.id == 1002, (
-            f"Expected task.id=1002 (burned slot 1001 skipped), got {task.id}. "
-            "Engine must not re-allocate the burned ID."
+        assert task.id == 1, (
+            f"Scan of empty board after crash → ID must be 1 (no burn, same as first attempt); "
+            f"got {task.id}. ID was consumed despite no file being written — "
+            "old config-based burned-ID semantics still active."
         )
 
     # ------------------------------------------------------------------
@@ -141,11 +142,12 @@ class TestFromAC_EngineCrashSafety:
     #         (save_config inside flock) runs BEFORE write_task.
     # ------------------------------------------------------------------
 
-    def test_ac2_config_saved_before_write_task_executes(self, tmp_path: Path) -> None:
-        """AC-2: config.next_id is 1002 at the moment write_task is invoked.
+    def test_ac2_config_not_modified_when_write_task_executes(self, tmp_path: Path) -> None:
+        """AC-#1443 scan-based: config.next_id must be UNCHANGED when write_task is invoked.
 
-        Intercepts write_task and snapshots config state during that call.
-        Post-#1062: allocate_next_id saves next_id=1002 first; write_task sees 1002.
+        Intercepts write_task and snapshots config.next_id at call time.
+        Scan-based allocation (#1443): allocate_next_id must NOT update config before write_task.
+        config.next_id at write time must equal the initial value (1001, unchanged).
         """
         kanban_dir = _make_board(tmp_path)
         engine = KanbanEngine(kanban_dir)
@@ -166,10 +168,11 @@ class TestFromAC_EngineCrashSafety:
             "write_task must be called exactly once"
         )
         observed_next_id = config_next_id_at_write[0]
-        assert observed_next_id == 1002, (
-            f"config.next_id must be 1002 when write_task executes "
-            f"(allocate_next_id saves config first), got {observed_next_id}. "
-            "write_task observed stale next_id; config persistence ordering is incorrect."
+        assert observed_next_id == 1001, (
+            f"Scan-based allocate_next_id must NOT modify config.next_id before write_task; "
+            f"expected 1001 (unchanged initial value), got {observed_next_id}. "
+            "allocate_next_id is still writing config.next_id before write_task — "
+            "old burned-ID semantics still active."
         )
 
     # ------------------------------------------------------------------
@@ -222,16 +225,22 @@ class TestFromAC_EngineCrashSafety:
         ) as spy:
             task = engine.create_task("regression-task")
 
-        # --- Basic contract --- (core create_task behavior remains stable)
-        assert task.id == 1001
+        # --- Basic contract (scan-based #1443) ---
+        # Empty board → scan finds no files → max=0 → ID=1 (ignores config.next_id=1001)
+        assert task.id == 1, (
+            f"Scan-based empty board must allocate ID 1 (ignores config.next_id=1001); "
+            f"got {task.id}. create_task is still reading config.next_id."
+        )
         assert task.title == "regression-task"
 
-        task_files = list((kanban_dir / "tasks").glob("1001-*.md"))
-        assert len(task_files) == 1, "Task file must be written to tasks/ dir"
+        task_files = list((kanban_dir / "tasks").glob("1-*.md"))
+        assert len(task_files) == 1, "Task file must be written to tasks/ dir with ID 1"
 
         config_after = load_config(kanban_dir)
-        assert config_after.next_id == 1002, (
-            f"config.next_id must be 1002 after create_task; got {config_after.next_id}"
+        assert config_after.next_id == 1001, (
+            f"config.next_id must be unchanged after scan-based create_task; "
+            f"expected 1001 (board initial), got {config_after.next_id}. "
+            "allocate_next_id is still incrementing config.next_id."
         )
 
         # --- Routing assertion ---

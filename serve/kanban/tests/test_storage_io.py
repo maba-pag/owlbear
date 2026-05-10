@@ -438,30 +438,39 @@ class TestFromAC_IDAllocation:
             "per-task lock must be at tasks/.<id>.lock"
         )
 
-    def test_ac_c51_crash_between_save_config_and_write_task(
+    def test_ac_c51_scan_based_allocation_ignores_config_next_id(
         self, tmp_path: Path
     ) -> None:
-        """AC-C51: crash after save_config burns ID N; next allocation is N+1; config ends at N+2."""
-        kanban_dir = _make_board(tmp_path)
-        original_next_id = load_config(kanban_dir).next_id
+        """AC-#1443 scan-based: allocate_next_id ignores config.next_id; no burned-ID concept.
 
-        # Simulate: config advanced (ID burned), but write_task never called
+        Old AC-C51 tested burned-ID semantics (config.next_id incremented before write_task).
+        Task #1443 replaces that with scan-based allocation: config.next_id is never read
+        or written by allocate_next_id. Manually advancing config.next_id has no effect.
+        An empty task board → allocate_next_id returns 1, regardless of config.next_id.
+        """
+        kanban_dir = _make_board(tmp_path)
+        original_next_id = load_config(kanban_dir).next_id  # 1001 from _CONFIG_YAML
+
+        # Simulate old burned-ID state by manually advancing config.next_id
         config = load_config(kanban_dir)
         config_burned = config.model_copy(update={"next_id": original_next_id + 1})
         save_config(config_burned, kanban_dir)
-        # (no write_task — simulating crash; no task file at original_next_id)
+        assert load_config(kanban_dir).next_id == original_next_id + 1
 
-        # Next allocation must yield original_next_id + 1 (burned slot skipped)
+        # Scan-based allocation: empty board → ID 1, ignoring config.next_id entirely
         next_id = allocate_next_id(kanban_dir)
-        assert next_id == original_next_id + 1
+        assert next_id == 1, (
+            f"Scan-based allocate_next_id on empty board must return 1 "
+            f"(ignores config.next_id={original_next_id + 1}); got {next_id}. "
+            "Old config-based burned-ID semantics still active — scan-based not implemented."
+        )
 
-        # After that, config is at original_next_id + 2
+        # allocate_next_id must NOT modify config.next_id
         config_after = load_config(kanban_dir)
-        assert config_after.next_id == original_next_id + 2
-
-        # Burned ID has no task file
-        burned_files = list((kanban_dir / "tasks").glob(f"{original_next_id}-*.md"))
-        assert burned_files == [], f"Burned ID {original_next_id} should have no file"
+        assert config_after.next_id == original_next_id + 1, (
+            f"allocate_next_id must not modify config.next_id (scan-based); "
+            f"expected {original_next_id + 1} (unchanged), got {config_after.next_id}."
+        )
 
 
 # --- merged from serve/kanban/tests/test_storage_io_guards.py ---
