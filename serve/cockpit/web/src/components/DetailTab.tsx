@@ -254,13 +254,13 @@ export default function DetailTab({
     }
 
     if (res.status === 409) {
-      if (options?.conflictDraft) {
-        setConflictLocalDraft(options.conflictDraft)
-      }
-
+      const localDraft = options?.conflictDraft ?? null
       const latestRes = await fetch(`/api/tasks/${t.id}`, { method: 'GET' })
       if (latestRes.ok) {
         const latestTask = (await latestRes.json()) as TaskDetail
+        if (localDraft) {
+          setConflictLocalDraft(localDraft)
+        }
         setConflictRemoteTask(latestTask)
         onTaskUpdated?.(latestTask)
       } else if (latestRes.status === 404) {
@@ -273,7 +273,7 @@ export default function DetailTab({
         onTaskCleared?.(message)
         return
       } else {
-        setConflictLocalDraft(null)
+        setConflictLocalDraft(localDraft)
         setConflictRemoteTask(null)
         // Preserve conflict UX even if the refetch fails (non-404): user can still decide to discard/overwrite local edits.
         setShowConflict(true)
