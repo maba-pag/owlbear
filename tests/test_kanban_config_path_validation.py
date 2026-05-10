@@ -23,46 +23,7 @@ from owlbear_kanban.models import PathsConfig
 # ---------------------------------------------------------------------------
 
 _STORAGE_BOARD_CONFIG_YAML = """\
-schema: grouped
-statuses:
-  - research
-  - backlog
-  - todo
-  - in-progress
-  - review
-  - done
-priorities:
-  - someday
-  - nice-to-have
-  - important
-  - needed
-  - critical
 next_id: 1
-activity_log: false
-paths:
-  tasks_dir: tasks
-  archive_dir: archive
-pipeline:
-  entry_status: research
-  terminal_status: done
-  wave_size: 4
-  claim_timeout: 1h
-agents:
-  agent_map:
-    research: researcher
-    backlog: architect
-    todo: builder
-    in-progress: builder
-    review: reviewer
-    done: auditor
-  agent_types: {}
-  agent_compatibility: {}
-policy:
-  non_impl_tags: []
-  archival_reasons:
-    - completed
-    - dropped
-  status_predicates: {}
 """
 
 

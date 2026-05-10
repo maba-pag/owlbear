@@ -37,31 +37,7 @@ _MCP_KANBAN_TESTS = Path(__file__).parent.parent / "serve" / "mcp-kanban" / "tes
 # ---------------------------------------------------------------------------
 
 _CONFIG_YAML = """\
-version: 10
-board:
-  name: TestBoard
-tasks_dir: tasks
-statuses:
-- name: research
-- name: backlog
-- name: todo
-- name: in-progress
-- name: review
-- name: docs
-- name: done
-priorities:
-- someday
-- nice-to-have
-- important
-- needed
-- critical
-defaults:
-  status: research
-  priority: important
-claim_timeout: 1h
 next_id: 1
-archive_dir: archive
-activity_log: false
 """
 
 

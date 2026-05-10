@@ -44,44 +44,7 @@ from owlbear_mcp_kanban.server import create_dr as mcp_create_dr
 # ---------------------------------------------------------------------------
 
 _CONFIG_YAML = """\
-version: 10
-board:
-  name: TestBoard
-tasks_dir: tasks
-statuses:
-- name: research
-- name: backlog
-- name: todo
-- name: in-progress
-- name: review
-- name: docs
-- name: done
-priorities:
-- someday
-- nice-to-have
-- important
-- needed
-- critical
-defaults:
-  status: research
-  priority: important
-claim_timeout: 1h
 next_id: 1
-archive_dir: archive
-activity_log: false
-agent_map:
-  research: researcher
-  backlog: architect
-  todo: test-writer
-  in-progress: builder
-  review: reviewer
-  docs: doc-writer
-  done: auditor
-agent_types: {}
-agent_compatibility: {}
-non_impl_tags: []
-archival_reasons: [completed, deprecated, dropped, duplicate, wontfix]
-status_predicates: {}
 """
 
 

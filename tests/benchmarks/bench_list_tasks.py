@@ -94,31 +94,7 @@ _VERBS = ["Implement", "Add", "Fix", "Update", "Refactor", "Document"]
 _NOUNS = ["feature", "test", "module", "endpoint", "handler", "schema"]
 
 _CONFIG_YAML = """\
-version: 10
-board:
-  name: BenchBoard
-tasks_dir: tasks
-statuses:
-- name: research
-- name: backlog
-- name: todo
-- name: in-progress
-- name: review
-- name: docs
-- name: done
-priorities:
-- someday
-- nice-to-have
-- important
-- needed
-- critical
-defaults:
-  status: research
-  priority: important
-claim_timeout: 1h
-next_id: {next_id}
-archive_dir: archive
-activity_log: false
+next_id: 1
 """
 
 

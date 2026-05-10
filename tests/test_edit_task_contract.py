@@ -28,34 +28,6 @@ from owlbear_mcp_kanban.server import AppContext, edit_task
 # ---------------------------------------------------------------------------
 
 _CONFIG_YAML = """\
-statuses:
-  - research
-  - backlog
-  - todo
-  - in-progress
-  - review
-  - done
-priorities:
-  - someday
-  - nice-to-have
-  - important
-  - needed
-  - critical
-entry_status: research
-wave_size: 4
-agent_map:
-  research: []
-  backlog: []
-  todo: []
-  in-progress: []
-  review: []
-  done: []
-agent_types: {}
-agent_compatibility: {}
-non_impl_tags: [research, docs]
-archival_reasons: [completed, deprecated, dropped, duplicate, wontfix]
-status_predicates: {}
-claim_timeout: 1h
 next_id: 1
 """
 
