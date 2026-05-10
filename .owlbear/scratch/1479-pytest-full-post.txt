@@ -33,6 +33,11 @@ Frontend (eslint)
 - vitest: 0
 - eslint: 1
 
+## Pytest error clusters (as reported)
+- ImportError cluster: tests/test_mcp_memory.py, tests/test_mcp_memory_tools.py, tests/test_memory_schema.py, tests/test_memory_tools.py, tests/test_state_machine.py
+- Timeout cluster: TestFromAC_ExistingVitestSuites.* (multiple)
+- File-not-found cleanup cluster: tests/test_cockpit_mutation_api_1132.py, serve/kanban/tests/test_engine_init_1067.py, serve/kanban/tests/test_engine_init_1068.py, serve/kanban/tests/test_engine_list_show_1071.py
+
 ## Notes
 - This file is the explicit post-remediation full-suite evidence artifact for task 1479 AC3.
 - Compared against pre-remediation artifact: .owlbear/scratch/1479-pytest-full-pre.txt

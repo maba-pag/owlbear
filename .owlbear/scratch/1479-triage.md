@@ -56,6 +56,7 @@ Interpretation:
 ## Artifact Mapping (AC3 Audit Trail)
 - Pre-remediation full snapshot: `.owlbear/scratch/1479-pytest-full-pre.txt`
 - Post-remediation full snapshot: `.owlbear/scratch/1479-pytest-full-post.txt`
+- Cluster-comparison contract: both artifacts include a `## Pytest error clusters` section with the same named categories for auditable pre/post comparison.
 - Prior mixed artifacts retained for historical context only:
   - `.owlbear/scratch/1479-pytest-full.txt` (legacy post-only full log)
   - `.owlbear/scratch/1479-pytest-collection.txt` (collection-only)
