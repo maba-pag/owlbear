@@ -36,13 +36,15 @@ Claim the task via `start_work` (atomic claim + retrieves task body). Check the 
 
 Verify the task is in `in-progress` status (the test-writer already moved it here).
 
-### Step 0a — Non-Implementation Pass-Through
+### Step 0a — Pass-Through
 
-Check the task body for `## Test-Writer Notes` containing "Non-implementation task" or "non-impl pass-through". If found:
+Check the task body for `## Test-Writer Notes` containing "Non-implementation task", "non-impl pass-through", or "All AC lines are (td:0)". If found:
 
-1. Advance via `end_work(note="## Builder Notes\n- Non-implementation task — no code changes needed.\n- Passing through to review.")` (moves to `review` + releases claim).
-3. Return: `DONE #{id} -> review | non-impl pass-through, no code changes`
-4. **Stop here.**
+If the task body or Test-Writer Notes include `Existing proof required: ...`, run that named proof through Quality-Runner before advancing. Use `mode=scoped` for named test paths and `mode=full` only when the required proof is explicitly full-suite. Record the report summary in Builder Notes. Do not advance while required proof is failing or missing.
+
+1. Advance via `end_work(note="## Builder Notes\n- Test-writer pass-through — no code changes needed.\n- Passing through to review.")` (moves to `review` + releases claim).
+2. Return: `DONE #{id} -> review | pass-through, no code changes`
+3. **Stop here.**
 
 ## Step 1 — Plan the Change
 
@@ -82,19 +84,18 @@ Confirm all `TestFromAC_*` tests appear in the `failed:` list. If any pass, inve
 
 ### Module-Level Test Visibility
 
-After confirming the task-scoped tests fail, also run the module's durable test file (if it exists) to establish a regression baseline:
+After confirming the task-scoped tests fail, also check the module's durable test file (if it exists) through Quality-Runner to establish a regression baseline. Prefer canonical package-local durable tests in `serve/{package}/tests/`, with root `tests/` as a legacy fallback during transition.
 
-```shell
-if [ -f "serve/{package}/tests/test_{module}.py" ]; then
-  uv run pytest serve/{package}/tests/test_{module}.py -q --tb=short
-elif [ -f "tests/test_{module}.py" ]; then
-  uv run pytest tests/test_{module}.py -q --tb=short
-else
-  echo "No module-level test file — skip"
-fi
+```
+agentName: quality-runner
+prompt: |
+  mode: scoped
+  task_id: {id}
+  test_paths: ["serve/{package}/tests/test_{module}.py"]  # or ["tests/test_{module}.py"] if only the legacy root file exists
+  lint_paths: ["serve/{package}/tests/test_{module}.py"]
 ```
 
-This gives early cross-task regression signal without full-suite cost. Prefer canonical package-local durable tests in `serve/{package}/tests/`, with root `tests/` as a legacy fallback during transition.
+If no module-level durable test file exists, record `No module-level test file — skip`. This gives early cross-task regression signal without full-suite cost while preserving the canonical evidence pipeline.
 
 ## Step 3 — Implement Minimal Code (GREEN)
 
@@ -160,16 +161,15 @@ prompt: |
 
 All must pass (`failed: []`, `clean: true`). Target 90% coverage on touched modules.
 
-Also run the module-level durable tests (if they exist) to catch cross-task regressions:
+Also check the module-level durable tests (if they exist) through Quality-Runner to catch cross-task regressions:
 
-```shell
-if [ -f "serve/{package}/tests/test_{module}.py" ]; then
-  uv run pytest serve/{package}/tests/test_{module}.py -q --tb=short
-elif [ -f "tests/test_{module}.py" ]; then
-  uv run pytest tests/test_{module}.py -q --tb=short
-else
-  echo "No module-level test file — skip"
-fi
+```
+agentName: quality-runner
+prompt: |
+  mode: scoped
+  task_id: {id}
+  test_paths: ["serve/{package}/tests/test_{module}.py"]  # or ["tests/test_{module}.py"] if only the legacy root file exists
+  lint_paths: ["serve/{package}/tests/test_{module}.py"]
 ```
 
 **Refactoring check:** If your change renames imports, changes function signatures, or moves mock targets, grep all test files for the old symbol name before proceeding:
@@ -215,7 +215,7 @@ Handle fix-attempt result:
 
 | Verdict | Action |
 |---------|--------|
-| `FIXED` | Re-verify with pytest (all tests must pass) and ruff (lint clean). If pass → proceed to Step 7. If still failing → `end_work(outcome="reject")`: diagnose root cause and route to `todo` (test assumptions wrong) or `backlog` (AC/architecture wrong). Include Required Follow-up table. |
+| `FIXED` | Re-verify via Quality-Runner (all tests must pass, lint clean). If pass → proceed to Step 7. If still failing → `end_work(outcome="reject")`: diagnose root cause and route to `todo` (test assumptions wrong) or `backlog` (AC/architecture wrong). Include Required Follow-up table. |
 | `FAILED` | Diagnose root cause: test assumptions wrong → `end_work(outcome="reject", move_to="todo")`; AC/architecture wrong → `end_work(outcome="reject", move_to="backlog")`. Include Required Follow-up table. Append Channel B notes with same-context retry (Step 6.2) diagnosis and fix-attempt diagnosis — record each source separately. |
 
 ## Step 7 — Commit & Advance
@@ -254,7 +254,7 @@ Append to task body before advancing:
 - [ ] No `TestFromAC_*` classes modified
 - [ ] No tests were added or modified by the builder
 - [ ] Implementation is the minimum code to pass all tests
-- [ ] `pytest` all pass, `ruff` clean
+- [ ] Quality-Runner reports `failed: []` and `clean: true`
 - [ ] Coverage 90% or higher on touched modules
 - [ ] No unrelated files edited
 - [ ] Diff is surgical — smallest change that achieves the AC

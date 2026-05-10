@@ -130,6 +130,8 @@ The pipeline uses three lines of defense. Trust upstream lines' detailed work; f
 
 The architect annotates each AC line with a `(td:N)` suffix during Architecture Review (see `w-arch-review` Step 2.1). This controls test-writer scope, reviewer depth, and subagent dispatch.
 
+**Transition guard:** `(td:0)` means "do not write new tests"; it does not erase explicit existing-proof requirements. If a `(td:0)` AC line or architecture note names existing tests, full-suite proof, quality-runner evidence, or an exit-0 verification, builder/reviewer must treat that named proof as required evidence and run it through `quality-runner`.
+
 | Depth | Suffix | Meaning | Test-writer action |
 |-------|--------|---------|-------------------|
 | 0 | `(td:0)` | No test needed | Skip this AC line |
@@ -140,7 +142,7 @@ The architect annotates each AC line with a `(td:N)` suffix during Architecture 
 
 | Max depth | Test-writer | Challenger | Code-reader | Reviewer scope |
 |-----------|------------|------------|-------------|----------------|
-| td:0 | SKIP (pass-through) | skip | skip | lint only |
+| td:0 | SKIP (pass-through) | skip | skip | lint only, unless explicit existing proof is named |
 | td:1 | writes smoke tests | yes | skip | scoped tests + lint |
 | td:2 | full coverage | yes | yes | full (tests + code-reader + lint) |
 

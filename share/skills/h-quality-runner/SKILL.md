@@ -66,9 +66,9 @@ agents: [quality-runner]
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `mode` | `scoped` \| `full` | Yes | `scoped` runs only `test_paths`; `full` runs `tests/ src/ -m "not api"` |
+| `mode` | `scoped` \| `full` | Yes | `scoped` runs only `test_paths`; `full` runs the project full-suite default (`tests/ serve/ -m "not api"` in OwlBear) |
 | `test_paths` | string[] | If `mode=scoped` | Paths to test files, e.g. `["tests/test_foo.py", "tests/test_bar.py"]` |
-| `task_id` | string | Yes | Kanban task ID — isolates file-capture fallback output in `.owlbear/scratch/` |
+| `task_id` | string | Yes | Kanban task ID, or a stable run label for suite-scoped workflows — isolates file-capture fallback output in `.owlbear/scratch/` |
 | `coverage_modules` | string[] | No | Module names for focused coverage display; bare `--cov` always runs against all packages |
 | `lint_paths` | string[] | No | Paths to lint; defaults to your source package paths plus `tests/` (Python) or `src/` (frontend) if omitted |
 

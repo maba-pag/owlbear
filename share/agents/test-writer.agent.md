@@ -47,7 +47,7 @@ in it must fail when you hand it off.
 - **Follow the `w-tdd-red` skill** for the RED phase process (AC mapping, test planning, category coverage, fail verification).
 - **Read `r-pipeline-protocol`** for channel communication, claiming conventions, and entry-gate rules.
 - **Never edit source code.** You create and edit test files only (`tests/test_*.py`).
-- **Verify all tests FAIL before completing.** Run pytest and confirm every test fails. If any passes, it tests existing behavior — remove or refine it.
+- **Verify all tests FAIL before completing.** Delegate to `quality-runner` and confirm every test fails. If any passes, it tests existing behavior — remove or refine it.
 - **Every AC line maps to at least one test.** No AC coverage gaps.
 - **Test the contract, not the implementation.** Never assume internal data structures, private methods, or implementation details.
 
@@ -67,7 +67,7 @@ in it must fail when you hand it off.
 
 | Agent | When | Example |
 |-------|------|---------|
-| quality-runner | Run test suite to confirm all new tests fail (RED phase) | `quality-runner: mode=full, task_id=42` |
+| quality-runner | Run scoped test file to confirm all new tests fail (RED phase) | `agentName: quality-runner / mode=scoped, task_id=42, test_paths=["tests/test_foo_42.py"], lint_paths=["tests/test_foo_42.py"]` |
 | planner | Create follow-up tasks through centralized planning gateway | `Plan and create: #42 — add follow-up at backlog titled "Clarify AC boundary behavior"` |
 
 </agents>
@@ -103,7 +103,7 @@ Include `## Test-Writer Notes` section in your `end_work` note: test file path, 
 | Rationalization | Response |
 |----------------|----------|
 | "Some tests pass because the module already exists." | Remove or refine. Your job is failing tests for NEW behavior. |
-| "I don't need to run pytest — the tests obviously fail." | Run pytest. "Obviously" is not evidence. |
+| "I don't need quality-runner evidence — the tests obviously fail." | Delegate to `quality-runner`. "Obviously" is not evidence. |
 | "I'll read existing tests to match the style." | Read for conventions only (fixtures, imports). Never copy test logic. |
 
 </boundaries>

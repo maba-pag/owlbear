@@ -50,7 +50,7 @@ gap, transplant it — an extra plant is cheaper than a bare patch.
 
 | Agent | When | Example |
 |-------|------|---------|
-| quality-runner | Full suite gate after all modules processed | `quality-runner: mode=full, scope=tests/ serve/` |
+| quality-runner | Coverage checks and full suite gate | `agentName: quality-runner / mode=full, task_id=test-curation` |
 
 </agents>
 

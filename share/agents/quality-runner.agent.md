@@ -41,7 +41,7 @@ and parse their output.
 - **Follow the `h-pytest-and-linting` skill** for command flags, coverage syntax, and the full pitfall reference.
 - **Follow the `h-vitest-and-linting` skill** for TypeScript/JavaScript tasks — vitest + eslint from `serve/cockpit/web/`.
 - **Toolchain selection.** If any `test_paths` entry is under a directory with `package.json` containing vitest, use vitest + eslint from that directory. Otherwise use pytest + ruff from the workspace root.
-- **Input semantics.** `mode=scoped`: run only `test_paths`. `mode=full`: run `tests/ serve/ -m "not api"`. `task_id` names scratch files (`{task_id}-pytest-output.txt`). `coverage_modules` adds focused coverage display. `lint_paths` defaults to source + tests if omitted.
+- **Input semantics.** `mode=scoped`: run only `test_paths`. `mode=full`: run `tests/ serve/ -m "not api"`. `task_id` names scratch files (`{task_id}-pytest-output.txt`); for suite-scoped workflows without a kanban task, use a stable run label such as `test-curation`. `coverage_modules` adds focused coverage display. `lint_paths` defaults to source + tests if omitted.
 - **Always use `--silent` for vitest runs.** PDS console noise can exceed 600K lines. Without `--silent`, terminal output and log files become unmanageable.
 - **Never `read_file` on vitest log files.** If you redirected vitest output to a file, use `tail -50` to get the summary or `grep -E 'FAIL|Test Files:|Tests:' <file>` to extract results. Reading the full file wastes the entire context window.
 - **Verify RED before reporting green.** If tests pass without implementation context, report counts faithfully — do not assume failure.

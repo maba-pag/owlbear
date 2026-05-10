@@ -69,7 +69,7 @@ If the body contains both `## Test-Writer Notes` and `## Review Evidence`, this 
 
 - **If reviewer cites missing tests:** Write NEW failing tests addressing ONLY the specified gaps. Add them to the existing `TestFromAC_{Feature}` class (or a new `TestFromAC_` class for a distinct AC concern). Do NOT remove or modify existing passing tests. Do NOT do a broad coverage uplift — fill only the reviewer's gaps.
 - **If reviewer cites code quality, weak tests, or security (not missing tests):** Pass through — the builder will address the findings.
-- Run pytest to verify: old tests PASS, new tests FAIL (for the new gaps). If all tests pass (implementation already handles the gap), note this and advance — **the builder pass-through is unnecessary** (see Step 1b.1 below).
+- Delegate to `quality-runner` to verify: old tests PASS, new tests FAIL (for the new gaps). If all tests pass (implementation already handles the gap), note this and advance — **the builder pass-through is unnecessary** (see Step 1b.1 below).
 
 **Advance:** Commit new test files first, then advance:
 
@@ -104,6 +104,8 @@ git add tests/test_{module}_{task_id}.py && git commit -m "test: add retry tests
 ### Step 1c — Depth-Zero Pass-Through
 
 All AC lines are annotated `(td:0)` — no tests needed for this task.
+
+If the Architecture Review verdict or AC text includes `Existing proof required: ...`, copy that line into the Test-Writer Notes. Test-writer still skips new test creation; builder/reviewer own proof execution through Quality-Runner.
 
 1. Advance via `end_work(note="## Test-Writer Notes\n- All AC lines are (td:0) — test-writer skipped.\n- Passing through to builder.")` (moves to `in-progress` + releases claim).
 2. Return: `DONE #{id} -> in-progress | all AC td:0, no tests needed`
@@ -168,7 +170,7 @@ Create `tests/test_{module}_{task_id}.py` with class `TestFromAC_{Feature}`:
 
 ## Step 5 — Verify RED
 
-Run pytest on the test file and confirm **every** test fails via Quality-Runner:
+Run the test file through Quality-Runner and confirm **every** test fails:
 
 ```
 agentName: quality-runner

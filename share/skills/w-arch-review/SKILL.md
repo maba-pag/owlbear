@@ -91,6 +91,8 @@ Annotate each AC line with a test-depth suffix `(td:N)`:
 | 1 | `(td:1)` | Smoke test — one assertion proves it | Simple rename, add a field, single happy-path |
 | 2 | `(td:2)` | Full TDD — multiple paths/edges | New logic, error handling, security boundary |
 
+**Existing-proof guard:** Use `(td:0)` only to skip new test creation. If the AC line says existing tests must pass, a full suite must pass, a quality-runner report is required, or a command must exit 0, include an `Existing proof required: {scope}` note in the Architecture Review verdict. Builder/reviewer must run that proof through `quality-runner` even though test-writer skips new tests.
+
 **Procedure:**
 
 1. For each AC line, assign `(td:N)` based on the line's testability, not the task's overall complexity.
@@ -99,7 +101,7 @@ Annotate each AC line with a test-depth suffix `(td:N)`:
 
 **Pipeline routing:**
 
-- If ALL AC lines are `(td:0)`: append `Test-writer: SKIP` to the Architecture Review verdict section. The test-writer will pass through without writing tests.
+- If ALL AC lines are `(td:0)`: append `Test-writer: SKIP` to the Architecture Review verdict section. The test-writer will pass through without writing tests; existing-proof requirements still apply when named.
 - If ANY line is `(td:1)` or `(td:2)`: test-writer processes the task normally, respecting per-line depth.
 
 **Subagent gating:** If ALL AC lines are `(td:0)`, skip the challenger dispatch in Step 2.5.

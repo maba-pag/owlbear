@@ -23,23 +23,23 @@ For each module in the inventory:
 
 1. Measure coverage using **only** the module-level test file (exclude task-tests):
 
-Resolve the durable test path before running commands:
+Resolve the durable test path before invoking Quality-Runner:
 
 - Canonical target: `serve/{package}/tests/test_{module}.py`
 - Legacy fallback: `tests/test_{module}.py`
 - Package-resolution heuristic: search for `serve/*/tests/test_{module}.py`; if exactly one match exists, use it. If multiple matches exist, choose the package that owns the module under `serve/*/src/` and log the decision. If no canonical match exists, use the root legacy file.
 
-```shell
-if [ -f "serve/{package}/tests/test_{module}.py" ]; then
-  uv run pytest serve/{package}/tests/test_{module}.py --cov=serve --cov-report=term-missing -q --tb=short
-elif [ -f "tests/test_{module}.py" ]; then
-  uv run pytest tests/test_{module}.py --cov=serve --cov-report=term-missing -q --tb=short
-else
-  echo "No module-level test file yet"
-fi
+```
+agentName: quality-runner
+prompt: |
+  mode: scoped
+  task_id: test-curation-{module}
+  test_paths: ["serve/{package}/tests/test_{module}.py"]  # or ["tests/test_{module}.py"] if only the legacy root file exists
+  coverage_modules: ["{module}"]
+  lint_paths: ["serve/{package}/tests/test_{module}.py"]
 ```
 
-2. Record baseline coverage. If neither canonical nor legacy module-level files exist, baseline is 0%.
+2. Record baseline coverage from the Quality-Runner `Coverage` section. If neither canonical nor legacy module-level files exist, baseline is 0%.
 
 ## Step 2 — Classify Modules
 
@@ -67,11 +67,19 @@ For modules below target:
 
 ### Verify
 
-After writing tests for a module:
+After writing tests for a module, verify through Quality-Runner:
 
-```shell
-uv run pytest serve/{package}/tests/test_{module}.py --cov=serve --cov-report=term-missing --cov-fail-under=90 -q --tb=short
 ```
+agentName: quality-runner
+prompt: |
+  mode: scoped
+  task_id: test-curation-{module}
+  test_paths: ["serve/{package}/tests/test_{module}.py"]
+  coverage_modules: ["{module}"]
+  lint_paths: ["serve/{package}/tests/test_{module}.py"]
+```
+
+Gate passes only when tests pass, lint is clean, and the target module coverage is ≥ 90% in the Quality-Runner report.
 
 **Gate failure:** Revert the canonical module file (`git checkout -- serve/{package}/tests/test_{module}.py`), log the failure, move to the next module. Do not block.
 
@@ -87,10 +95,13 @@ Remove all archived task-tests for this module.
 
 ## Step 5 — Full Suite Gate
 
-After all modules are processed:
+After all modules are processed, run the full suite through Quality-Runner:
 
-```shell
-uv run pytest tests/ workspace/ -n auto -q --tb=short
+```
+agentName: quality-runner
+prompt: |
+  mode: full
+  task_id: test-curation
 ```
 
 All tests must pass. If the full suite fails, identify the breaking module and revert it:
@@ -159,5 +170,5 @@ Return Channel A signal per `r-pipeline-protocol`.
 
 | Skill | When to load | Purpose |
 |-------|-------------|---------|
-| `h-pytest-and-linting` | Step 1 (coverage measurement), Step 3 (verify) | Pytest flags, coverage options, known pitfalls |
-| `h-python-conventions` | Step 3 (writing tests), Step 5 (full suite) | Naming, structure, and style for test code |
+| `h-quality-runner` | Step 1 (coverage measurement), Step 3 (verify), Step 5 (full suite) | Structured test, lint, and coverage execution |
+| `h-python-conventions` | Step 3 (writing tests) | Naming, structure, and style for test code |
