@@ -135,7 +135,7 @@ interface WrapperProps {
   initialTask: TaskDetail
   board?: Board | null
   onTaskUpdated?: (task: TaskDetail) => void
-  onTaskCleared?: () => void
+  onTaskCleared?: (message?: string) => void
 }
 
 function StatefulWrapper({ initialTask, board, onTaskUpdated, onTaskCleared }: WrapperProps) {
@@ -151,6 +151,30 @@ function StatefulWrapper({ initialTask, board, onTaskUpdated, onTaskCleared }: W
         }}
         onTaskCleared={onTaskCleared}
       />
+    </PorscheDesignSystemProvider>
+  )
+}
+
+function StatefulShellConflictWrapper({ initialTask }: { initialTask: TaskDetail }) {
+  const [task, setTask] = useState<TaskDetail | null>(initialTask)
+  const [message, setMessage] = useState<string | null>(null)
+
+  return (
+    <PorscheDesignSystemProvider>
+      {task !== null ? (
+        <DetailTab
+          task={task}
+          onTaskUpdated={(nextTask) => {
+            setTask(nextTask)
+            setMessage(null)
+          }}
+          onTaskCleared={(nextMessage) => {
+            setTask(null)
+            setMessage(nextMessage ?? null)
+          }}
+        />
+      ) : null}
+      {message !== null ? <div data-testid="validation-message">{message}</div> : null}
     </PorscheDesignSystemProvider>
   )
 }
@@ -877,11 +901,7 @@ describe('TestFromAC_ConflictErrorContract', () => {
       }),
     )
 
-    const { container } = render(
-      <PorscheDesignSystemProvider>
-        <DetailTab task={BASE_TASK} />
-      </PorscheDesignSystemProvider>,
-    )
+    const { container } = render(<StatefulShellConflictWrapper initialTask={BASE_TASK} />)
 
     clickSave(container)
 
