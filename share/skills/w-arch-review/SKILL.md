@@ -40,7 +40,7 @@ Verify the task is in `backlog` status. If the task references a research doc (`
 
 **Decomposition detection:** If the task body contains `"Needs decomposition:"` but does NOT contain a `"## Planning"` section (which the planner appends after decomposition), delegate to the **planner** agent instead of continuing with architecture review. Pass the task ID and feature description from the body. After the planner returns successfully, call `end_work(outcome="success")` to advance the parent task. The planner's appended `## Planning` section serves as the completion marker — do not modify the body to remove the decomposition marker (this would overwrite the planner's additions).
 
-**User-action fast-path:** If the task is tagged `type:user-action` AND the body contains a `## Action Completed` section, verify that all AC checkboxes are checked. If complete, advance via `end_work(outcome="success")` — skip Steps 1–3. This task is already resolved.
+**User-action fast-path:** If the task is tagged `type:user-action` AND the body contains a `## Decision Request` summary with `response: approved`, verify that all AC checkboxes are checked. If complete, advance via `end_work(outcome="success")` — skip Steps 1–3. This task is already resolved.
 
 **Reject placeholders immediately:** `TEMP-*` titles or empty/unscoped bodies — create a DR via `create_dr` explaining the task needs scope, release claim, do not process.
 

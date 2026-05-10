@@ -49,17 +49,13 @@ Empty `waves` means nothing dispatchable for this cycle.
 
 ## Step 1 — Housekeeping
 
-At the **start of every cycle**, dispatch non-task agents. These agents modify board state (decision resolver unblocks tasks) or maintain institutional memory (curator). Both must complete before `pick_tasks` so the board is up-to-date.
+At the **start of every cycle**, perform lightweight housekeeping. `pick_tasks` handles decision/action request resolution internally before it returns dispatchable work, so the orchestrator does not call a separate decision-resolver tool.
 
-**Every cycle — decision resolver:**
+**Every cycle — decision/action request resolution:**
 
-```
-resolve_decision(scope="all", agent="orchestrator")
-```
+No separate tool call. The Step 2 `pick_tasks` call scans `.owlbear/decisions/pending/`, resolves responded DR/AR files, writes summaries to task bodies, unblocks resolved tasks, moves resolved files, and then returns fresh dispatch waves.
 
-The decision resolver scans `.owlbear/decisions/pending/`, resolves responded DRs (unblocks tasks, writes summaries, moves resolved files, handles 5-day auto-resolution).
-
-The orchestrator does not use housekeeping agent output for dispatch planning — `pick_tasks` reads fresh board state. Surface informational signals to the user (e.g., curator deferred count, pending-DR list).
+The orchestrator does not parse decision housekeeping output separately — `pick_tasks` reads fresh board state and filters blocked tasks.
 
 **Every 5th cycle — memory-curator** (`cycle_count % 5 == 0`):
 
@@ -67,9 +63,9 @@ The orchestrator does not use housekeeping agent output for dispatch planning �
 runSubagent("memory-curator", "Curate: Periodic curation", "Curation")
 ```
 
-Dispatch in parallel with the decision resolver. The curator does not affect board state.
+Dispatch before or alongside the next planning cycle. The curator does not affect board state.
 
-If either agent errors, note it but proceed to Step 2.
+If the curator errors, note it but proceed to Step 2.
 
 ## Step 2 — Plan
 

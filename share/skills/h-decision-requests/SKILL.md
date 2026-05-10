@@ -10,6 +10,8 @@ Use the decision-request helper to create decision and action requests:
 
 - `create_dr(...)`: create pending DR/AR records in `.owlbear/decisions/`
 
+Resolved DR/AR files are handled by the kanban engine before `pick_tasks` returns dispatch waves. `create_dr` has no query mode, and there is no separate resolver MCP call. The resolver appends a `## Decision Request` summary for both decision and action requests; use `response: approved` when a requested user action is complete.
+
 ## When To Create A DR
 
 Create a DR (or AR) when the current agent cannot safely continue without a

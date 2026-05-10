@@ -51,10 +51,10 @@ See `h-mcp-memory` for full tool reference.
 
 After claiming the task, check whether it was previously blocked by a decision or action request:
 
-1. Check the task body for `## Decision Resolved` or `## Action Completed` sections. If present, the user's chosen option and notes are binding constraints.
-2. If no summary in the body, call `create_dr(..., mode="query")` to check for existing DRs.
+1. Check the task body for a `## Decision Request` summary. If present, its `response` and source notes are binding constraints.
+2. If no summary is present, proceed normally; unresolved DR/AR files keep tasks blocked and are filtered out before dispatch.
 3. If user notes contradict the AC or narrow the approach, adjust accordingly. If infeasible, block for clarification.
-4. Never write to `.owlbear/decisions/` directly — always use `create_dr`/`resolve_decision` from `h-decision-requests`.
+4. Never write to `.owlbear/decisions/` directly — always use `create_dr` from `h-decision-requests` when a new decision or action request is required.
 
 ### Entry-Gate Agents
 
@@ -338,12 +338,12 @@ Researcher may provisionally tag `type:user-action` during research; architect c
 1. Architect detects `type:user-action` → creates action request via `create_dr`
 2. Architect calls `end_work(outcome="block", block_reason="AR pending: {filename}")`
 3. `pick_tasks` excludes the blocked task — no agents dispatched
-4. User performs the action → sets `response: completed` in the AR file
-5. Decision resolver runs `resolve_decision`: appends `## Action Completed` to task body, unblocks task
-6. Architect (re-entry): sees `## Action Completed` + `type:user-action` → verifies AC → approves to `todo`
+4. User performs the action → sets `response: approved` in the AR file when the action is complete
+5. The next `pick_tasks` cycle resolves pending responses before dispatch: appends a `## Decision Request` summary to the task body, unblocks task, and moves the AR file to resolved
+6. Architect (re-entry): sees `## Decision Request` with `response: approved` + `type:user-action` → verifies AC → approves to `todo`
 7. Test-writer and builder pass through (tag is in `NON_IMPL_TAGS`)
 
-**Post-completion fast-path:** When a `type:user-action` task re-enters architect review with `## Action Completed` in the body, the architect verifies that AC checkboxes are satisfied, then approves directly without full re-evaluation. This extends the "Resolved Decision Pre-flight" check to action-completed tasks.
+**Post-completion fast-path:** When a `type:user-action` task re-enters architect review with a `## Decision Request` summary whose `response` is `approved`, the architect verifies that AC checkboxes are satisfied, then approves directly without full re-evaluation. This extends the "Resolved Decision Pre-flight" check to completed action requests.
 
 **Dual-nature tasks:** When the same feature requires both user action and code change, split into two tasks: a `type:user-action` task (AR + block) and a code task. The code task sets `depends_on` to the user-action task to enforce ordering.
 
