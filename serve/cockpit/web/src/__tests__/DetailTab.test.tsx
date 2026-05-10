@@ -309,13 +309,19 @@ describe('TestFromAC_DetailTab', () => {
   // ─── 409 conflict detection ───────────────────────────────────────────────
 
   describe('409 conflict detection', () => {
+    function mockConflictWithRefetchSuccess(): ReturnType<typeof vi.fn> {
+      let callCount = 0
+      return vi.fn(() => {
+        callCount += 1
+        if (callCount === 1) {
+          return Promise.resolve({ ok: false, status: 409, json: () => Promise.resolve({}) })
+        }
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(TASK) })
+      })
+    }
+
     it('409 response from save opens a conflict modal', async () => {
-      vi.stubGlobal(
-        'fetch',
-        vi.fn(() =>
-          Promise.resolve({ ok: false, status: 409, json: () => Promise.resolve({}) }),
-        ),
-      )
+      vi.stubGlobal('fetch', mockConflictWithRefetchSuccess())
       const { container } = renderDetail()
       const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
       expect(saveBtn).not.toBeNull()
@@ -329,12 +335,7 @@ describe('TestFromAC_DetailTab', () => {
     })
 
     it('conflict modal offers a refresh (discard local edits) option', async () => {
-      vi.stubGlobal(
-        'fetch',
-        vi.fn(() =>
-          Promise.resolve({ ok: false, status: 409, json: () => Promise.resolve({}) }),
-        ),
-      )
+      vi.stubGlobal('fetch', mockConflictWithRefetchSuccess())
       const { container } = renderDetail()
       const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
       expect(saveBtn).not.toBeNull()
@@ -348,13 +349,8 @@ describe('TestFromAC_DetailTab', () => {
       )
     })
 
-    it('conflict modal offers an overwrite (force save) option', async () => {
-      vi.stubGlobal(
-        'fetch',
-        vi.fn(() =>
-          Promise.resolve({ ok: false, status: 409, json: () => Promise.resolve({}) }),
-        ),
-      )
+    it('conflict modal requires acknowledge before showing overwrite (force save) option', async () => {
+      vi.stubGlobal('fetch', mockConflictWithRefetchSuccess())
       const { container } = renderDetail()
       const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
       expect(saveBtn).not.toBeNull()
@@ -362,6 +358,10 @@ describe('TestFromAC_DetailTab', () => {
       await waitFor(
         () => {
           const modal = container.querySelector('[data-testid="conflict-modal"]')
+          expect(modal?.querySelector('[data-testid="conflict-overwrite"]')).toBeNull()
+          const ack = modal?.querySelector('[data-testid="conflict-acknowledge"]') as HTMLElement | null
+          expect(ack).not.toBeNull()
+          fireEvent.click(ack!)
           expect(modal?.querySelector('[data-testid="conflict-overwrite"]')).not.toBeNull()
         },
         { timeout: 500 },
@@ -602,6 +602,10 @@ describe('TestBuilderDiscovered', () => {
         },
         { timeout: 500 },
       )
+
+      const acknowledgeBtn = container.querySelector('[data-testid="conflict-acknowledge"]') as HTMLElement | null
+      expect(acknowledgeBtn).not.toBeNull()
+      fireEvent.click(acknowledgeBtn!)
 
       // Click force-save
       const overwriteBtn = container.querySelector('[data-testid="conflict-overwrite"]') as HTMLElement | null

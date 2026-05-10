@@ -36,6 +36,7 @@ function Shell() {
   const [selectedTaskSubtab, setSelectedTaskSubtab] = useState<string | null>(null)
   const [selectedTask, setSelectedTask] = useState<TaskDetail | null>(null)
   const [selectedTaskError, setSelectedTaskError] = useState<string | null>(null)
+  const [detailValidationMessage, setDetailValidationMessage] = useState<string | null>(null)
   const [taskFetchNonce, setTaskFetchNonce] = useState(0)
   const selectedDR = pendingDRItems.find((item) => item.id === selectedDRId) ?? null
   const tabsRef = useRef<HTMLElement>(null)
@@ -51,6 +52,7 @@ function Shell() {
     refetchTasks,
     onSelectTask: (taskId: number) => {
       setSelectedTaskId(taskId)
+      setDetailValidationMessage(null)
     },
     selectedId: selectedTaskId,
   }
@@ -209,6 +211,11 @@ function Shell() {
               {selectedTaskId === null
                 ? <div data-testid="detail-placeholder">Select a task to view details.</div>
                 : null}
+              {detailValidationMessage !== null ? (
+                <div data-testid="validation-message" role="status">
+                  {detailValidationMessage}
+                </div>
+              ) : null}
               {selectedTaskId !== null && selectedTaskError !== null ? (
                 <div data-testid="task-fetch-error" role="status">
                   {selectedTaskError}
@@ -231,16 +238,18 @@ function Shell() {
                   setSelectedTaskId(taskId)
                   setSelectedTaskSubtab((current) => subtab ?? current)
                 }}
-                onTaskCleared={() => {
+                onTaskCleared={(message) => {
                   setSelectedTaskId(null)
                   setSelectedTaskSubtab(null)
                   setSelectedTask(null)
                   setSelectedTaskError(null)
+                  setDetailValidationMessage(message ?? null)
                 }}
                 onTaskUpdated={(updatedTask) => {
                   const previousTask = selectedTask
                   setSelectedTask(updatedTask)
                   setSelectedTaskError(null)
+                  setDetailValidationMessage(null)
                   if (
                     previousTask === null ||
                     previousTask.title !== updatedTask.title ||

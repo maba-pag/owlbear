@@ -36,8 +36,31 @@ export interface DetailTabProps {
   board?: Board | null
   onTaskUpdated?: (task: TaskDetail) => void
   onSelectTask?: (taskId: number, subtab?: string) => void
-  onTaskCleared?: () => void
+  onTaskCleared?: (message?: string) => void
   initialSubtab?: string | null
+}
+
+interface ConflictLocalDraft {
+  title: string
+  priority: string
+  body: string
+  dependsOn: string
+  parent: string
+  blockReason: string
+}
+
+interface EditMutationPayload {
+  updated: string
+  title: string
+  priority: string
+  body: string
+  depends_on: number[]
+  parent: number | null
+  block_reason: string | null
+}
+
+interface MutationOptions {
+  conflictDraft?: ConflictLocalDraft
 }
 
 export default function DetailTab({
@@ -50,7 +73,10 @@ export default function DetailTab({
 }: DetailTabProps) {
   const [editBody, setEditBody] = useState(false)
   const [showConflict, setShowConflict] = useState(false)
+  const [showConflictOverwrite, setShowConflictOverwrite] = useState(false)
   const [serverValidationMessage, setServerValidationMessage] = useState<string | null>(null)
+  const [conflictLocalDraft, setConflictLocalDraft] = useState<ConflictLocalDraft | null>(null)
+  const [conflictRemoteTask, setConflictRemoteTask] = useState<TaskDetail | null>(null)
   const [confirmType, setConfirmType] = useState<null | 'move-backward' | 'unblock' | 'unclaim'>(null)
   const [pendingFocusRestore, setPendingFocusRestore] = useState<HTMLElement | null>(null)
   const confirmTriggerRef = useRef<HTMLElement | null>(null)
@@ -64,6 +90,16 @@ export default function DetailTab({
   const [blockReason, setBlockReason] = useState(task?.block_reason ?? '')
 
   useEffect(() => {
+    if (task && conflictLocalDraft && conflictRemoteTask?.id === task.id) {
+      setTitle(conflictLocalDraft.title)
+      setPriority(conflictLocalDraft.priority)
+      setBody(conflictLocalDraft.body)
+      setDependsOn(conflictLocalDraft.dependsOn)
+      setParent(conflictLocalDraft.parent)
+      setBlockReason(conflictLocalDraft.blockReason)
+      return
+    }
+
     setTitle(task?.title ?? '')
     setPriority(task?.priority ?? '')
     setBody(task?.body ?? '')
@@ -72,7 +108,12 @@ export default function DetailTab({
     setBlockReason(task?.block_reason ?? '')
     setServerValidationMessage(null)
     setConfirmType(null)
-  }, [task?.id, task?.updated])
+    if (task?.id !== conflictRemoteTask?.id) {
+      setConflictLocalDraft(null)
+      setConflictRemoteTask(null)
+      setShowConflictOverwrite(false)
+    }
+  }, [task?.id, task?.updated, conflictLocalDraft, conflictRemoteTask])
 
   useEffect(() => {
     if (confirmType === null && pendingFocusRestore) {
@@ -149,6 +190,31 @@ export default function DetailTab({
   const validationMessage = clientValidationMessage ?? serverValidationMessage
   const backwardTarget = previousStatus(t.status)
 
+  const conflictRemoteValues: Record<string, string> = {
+    title: conflictRemoteTask?.title ?? '',
+    priority: conflictRemoteTask?.priority ?? '',
+    body: conflictRemoteTask?.body ?? '',
+    depends_on: (conflictRemoteTask?.depends_on ?? []).join(', '),
+    parent: conflictRemoteTask?.parent !== null && conflictRemoteTask?.parent !== undefined
+      ? String(conflictRemoteTask.parent)
+      : '',
+    block_reason: conflictRemoteTask?.block_reason ?? '',
+  }
+
+  const conflictLocalValues: Record<string, string> = {
+    title: conflictLocalDraft?.title ?? '',
+    priority: conflictLocalDraft?.priority ?? '',
+    body: conflictLocalDraft?.body ?? '',
+    depends_on: conflictLocalDraft?.dependsOn ?? '',
+    parent: conflictLocalDraft?.parent ?? '',
+    block_reason: conflictLocalDraft?.blockReason ?? '',
+  }
+
+  const conflictFields = ['title', 'priority', 'body', 'depends_on', 'parent', 'block_reason']
+  const conflictChangedFields = conflictFields.filter(
+    (field) => conflictRemoteValues[field] !== conflictLocalValues[field],
+  )
+
   function previousStatus(current: string): string | null {
     if (!board) {
       return null
@@ -165,7 +231,11 @@ export default function DetailTab({
     return valid.includes(previous) ? previous : null
   }
 
-  async function runMutation(url: string, payload: Record<string, unknown>): Promise<void> {
+  async function runMutation(
+    url: string,
+    payload: Record<string, unknown>,
+    options?: MutationOptions,
+  ): Promise<void> {
     setServerValidationMessage(null)
     const res = await fetch(url, {
       method: 'POST',
@@ -175,18 +245,46 @@ export default function DetailTab({
 
     if (res.ok) {
       const updatedTask = (await res.json()) as TaskDetail
+      setConflictLocalDraft(null)
+      setConflictRemoteTask(null)
+      setShowConflict(false)
+      setShowConflictOverwrite(false)
       onTaskUpdated?.(updatedTask)
       return
     }
 
     if (res.status === 409) {
+      if (options?.conflictDraft) {
+        setConflictLocalDraft(options.conflictDraft)
+      }
+
       const latestRes = await fetch(`/api/tasks/${t.id}`, { method: 'GET' })
       if (latestRes.ok) {
         const latestTask = (await latestRes.json()) as TaskDetail
+        setConflictRemoteTask(latestTask)
         onTaskUpdated?.(latestTask)
       } else if (latestRes.status === 404) {
-        onTaskCleared?.()
+        const message = await getResponseErrorMessage(latestRes, 'Task not found')
+        setServerValidationMessage(message)
+        setConflictLocalDraft(null)
+        setConflictRemoteTask(null)
+        setShowConflict(false)
+        setShowConflictOverwrite(false)
+        onTaskCleared?.(message)
+        return
+      } else {
+        setConflictLocalDraft(null)
+        setConflictRemoteTask(null)
+        // Preserve conflict UX even if the refetch fails (non-404): user can still decide to discard/overwrite local edits.
+        setShowConflict(true)
+        setShowConflictOverwrite(false)
+        setServerValidationMessage(
+          await getResponseErrorMessage(latestRes, `Request failed with status ${latestRes.status}`),
+        )
+        return
       }
+
+      setShowConflictOverwrite(false)
       setShowConflict(true)
       return
     }
@@ -209,7 +307,16 @@ export default function DetailTab({
       return
     }
 
-    const payload: Record<string, unknown> = {
+    const conflictDraft: ConflictLocalDraft = {
+      title,
+      priority,
+      body,
+      dependsOn,
+      parent,
+      blockReason,
+    }
+
+    const payload: EditMutationPayload = {
       updated: t.updated,
       title,
       priority,
@@ -218,7 +325,7 @@ export default function DetailTab({
       parent: parsedParent.value,
       block_reason: t.blocked ? blockReason : null,
     }
-    await runMutation(`/api/tasks/${t.id}/edit`, payload)
+    await runMutation(`/api/tasks/${t.id}/edit`, payload, { conflictDraft })
   }
 
   async function handleForceSave() {
@@ -226,15 +333,26 @@ export default function DetailTab({
       return
     }
 
-    setShowConflict(false)
-    await runMutation(`/api/tasks/${t.id}/edit`, {
-      updated: t.updated,
+    const draft = conflictLocalDraft ?? {
       title,
       priority,
       body,
-      depends_on: parsedDependsOn.values,
-      parent: parsedParent.value,
-      block_reason: t.blocked ? blockReason : null,
+      dependsOn,
+      parent,
+      blockReason,
+    }
+    const forceDependsOn = parseDependsOn(draft.dependsOn)
+    const forceParent = parseParent(draft.parent)
+
+    setShowConflict(false)
+    await runMutation(`/api/tasks/${t.id}/edit`, {
+      updated: t.updated,
+      title: draft.title,
+      priority: draft.priority,
+      body: draft.body,
+      depends_on: forceDependsOn.values,
+      parent: forceParent.value,
+      block_reason: t.blocked ? draft.blockReason : null,
     })
   }
 
@@ -442,14 +560,34 @@ export default function DetailTab({
       {/* Conflict modal */}
       {showConflict && (
         <div data-testid="conflict-modal">
+          {conflictChangedFields.map((field) => (
+            <div key={field}>
+              <div data-testid={`conflict-remote-${field}`}>{conflictRemoteValues[field]}</div>
+              <div data-testid={`conflict-local-${field}`}>{conflictLocalValues[field]}</div>
+            </div>
+          ))}
+          {!showConflictOverwrite && (
+            <PButton
+              data-testid="conflict-acknowledge"
+              variant="secondary"
+              onClick={() => setShowConflictOverwrite(true)}
+            >
+              Keep my edits
+            </PButton>
+          )}
           <PButton
             data-testid="conflict-refresh"
             variant="secondary"
-            onClick={() => setShowConflict(false)}
+            onClick={() => {
+              setShowConflict(false)
+              setShowConflictOverwrite(false)
+            }}
           >
             Discard changes
           </PButton>
-          <PButton data-testid="conflict-overwrite" onClick={() => void handleForceSave()}>Force save</PButton>
+          {showConflictOverwrite && (
+            <PButton data-testid="conflict-overwrite" onClick={() => void handleForceSave()}>Force save</PButton>
+          )}
         </div>
       )}
       {validationMessage && <div data-testid="validation-message">{validationMessage}</div>}

@@ -407,7 +407,17 @@ describe('TestFromAC_PdsMigration_Buttons', () => {
 
     it('conflict-refresh has variant="secondary" (shown in conflict modal)', async () => {
       const { container } = renderDetailTab()
-      vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: false, status: 409, json: () => Promise.resolve({}) })))
+      let callCount = 0
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(() => {
+          callCount += 1
+          if (callCount === 1) {
+            return Promise.resolve({ ok: false, status: 409, json: () => Promise.resolve({}) })
+          }
+          return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(TASK) })
+        }),
+      )
       const saveBtn = container.querySelector('p-button[data-testid="save-button"]')!
       fireEvent.click(saveBtn)
       await new Promise((r) => setTimeout(r, 0))
@@ -417,9 +427,22 @@ describe('TestFromAC_PdsMigration_Buttons', () => {
 
     it('conflict-overwrite has variant="primary" (default action — no explicit variant prop)', async () => {
       const { container } = renderDetailTab()
-      vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: false, status: 409, json: () => Promise.resolve({}) })))
+      let callCount = 0
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(() => {
+          callCount += 1
+          if (callCount === 1) {
+            return Promise.resolve({ ok: false, status: 409, json: () => Promise.resolve({}) })
+          }
+          return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(TASK) })
+        }),
+      )
       const saveBtn = container.querySelector('p-button[data-testid="save-button"]')!
       fireEvent.click(saveBtn)
+      await new Promise((r) => setTimeout(r, 0))
+      const acknowledge = container.querySelector('p-button[data-testid="conflict-acknowledge"]')!
+      fireEvent.click(acknowledge)
       await new Promise((r) => setTimeout(r, 0))
       const el = container.querySelector('p-button[data-testid="conflict-overwrite"]')
       expect((el as HTMLElement & { variant: string }).variant).toBe('primary')
