@@ -4,7 +4,7 @@ description: "Dispatch loop — plan, dispatch agents, re-plan from fresh board 
 argument-hint: "Orchestrate: {scope_or-filter — e.g., 'phase-2', 'all todos', 'tag:parser'}"
 user-invocable: true
 disable-model-invocation: true
-tools: [ob-memory/save_memory, ob-memory/recall_memory, vscode/toolSearch, read/readFile, agent, ob-kanban/create_task, ob-kanban/edit_task, ob-kanban/end_work, ob-kanban/list_tasks, ob-kanban/move_task, ob-kanban/pick_tasks, ob-kanban/show_task]
+tools: [ob-memory/save_memory, ob-memory/recall_memory, vscode/toolSearch, read/readFile, agent, ob-kanban/edit_task, ob-kanban/end_work, ob-kanban/pick_tasks]
 agents:
   - planner
   - researcher
@@ -104,7 +104,7 @@ Session complete:
 - Dispatch prompts contain ONLY the task ID — never restate AC, procedures, or workflow steps.
 - Dispatch only tasks returned by `pick_tasks` — do not add, skip, or reorder tasks.
 - If `pick_tasks` returns an empty list, stop and report — do not improvise work.
-- No task creation or movement — agents move their own tasks. The only edit the orchestrator makes is blocking a task after a double crash (`edit_task(block_reason=...)`) — never when the agent returned a structured verdict (it already called `end_work`).
+- No task creation or movement — agents move their own tasks. The only task mutation the orchestrator makes is double-crash blocking: `end_work(id=..., outcome="block", block_reason=...)` for a claimed task, with `edit_task(id=..., block_reason=...)` only when the task was never claimed. Never mutate a task after a structured verdict.
 
 </boundaries>
 
@@ -119,8 +119,9 @@ reads fresh board state and decides whether #103 is dispatchable.
 
 <good_example why="Crash leads to block — agent never called end_work">
 Cycle 1 dispatched builder for #103. Builder crashed (unrecognized error output).
-Retried immediately — crashed again. Blocked #103 on the board with the error
-reason. Next cycle, pick_tasks excluded the blocked task automatically.
+Retried immediately — crashed again. Called `end_work(id=103, outcome="block")`
+to block #103 and release the claim. Next cycle, pick_tasks excluded the blocked
+task automatically.
 </good_example>
 
 <good_example why="Rate-limit triggers permanent wave_size=1">

@@ -139,11 +139,12 @@ Classify agent returns top-to-bottom. First match wins.
    - Set `rate_limited = True`. Retry the dispatch once.
    - All subsequent `pick_tasks` calls use `wave_size=1` (one-way transition — no resume to parallel).
 3. **Structured return** (verdict keyword present — including `FAIL`):
-   - The agent called `end_work` and managed its own task state (status, block, release). **Do not override** — no `edit_task(block_reason=...)`, no `move_task`. The task is in the correct state.
+   - The agent called `end_work` and managed its own task state (status, block, release). **Do not override** — no `end_work(...)`, no `edit_task(...)`, no `move_task`. The task is in the correct state.
    - Proceed to the next task in the wave.
 4. **Crash** (no structured return — agent error, timeout, or unrecognized output):
    - Retry the dispatch once.
-   - If the retry also crashes: **block the task** via `edit_task(block_reason="{agent} crashed twice: {reason}")`.
+   - If the retry also crashes: **block the task** via `end_work(id={task_id}, outcome="block", block_reason="{agent} crashed twice: {reason}", note="{agent} crashed twice: {reason}")` so any claim is released.
+   - If `end_work` reports `ERR_NOT_CLAIMED`, the agent crashed before claiming; block the unclaimed task via `edit_task(id={task_id}, block_reason="{agent} crashed twice before claiming: {reason}")`.
    - After blocking, proceed to the next task in the wave.
 
 ## Step 4 — Loop
@@ -183,6 +184,6 @@ Session complete:
 
 ## Known Pitfalls
 
-- **Structured return ≠ needs orchestrator cleanup.** When an agent returns a structured verdict (`DONE`, `FAIL`, `BLOCK`, etc.), it called `end_work` and managed its own task state. Never `edit_task(block_reason=...)` or `move_task` on a task whose agent returned a structured signal — that overwrites the agent's intentional state transition.
+- **Structured return ≠ needs orchestrator cleanup.** When an agent returns a structured verdict (`DONE`, `FAIL`, `BLOCK`, etc.), it called `end_work` and managed its own task state. Never call `end_work`, `edit_task`, or `move_task` on a task whose agent returned a structured signal — that overwrites the agent's intentional state transition.
 - **No dispatch decisions from housekeeping output.** Curator output is informational only; `pick_tasks` reads fresh board state each cycle.
 - **Legacy wave planner drift:** Do not reintroduce manual bucket planning in this skill. `pick_tasks` is the single wave-assembly authority.
