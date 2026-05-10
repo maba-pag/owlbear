@@ -40,7 +40,7 @@ KNOWN_STANDALONE_TOOLS: frozenset[str] = frozenset({"newWorkspace", "selection"}
 # MCP server names whose tools may appear as 'server/tool_name' or 'server/*'.
 # Update this set when a new MCP server is added to the workspace.
 KNOWN_MCP_SERVERS: frozenset[str] = frozenset(
-    {"ob-kanban", "ob-memory", "ddgs", "microsoft"}
+    {"ob-kanban", "ob-knowledge", "ob-memory", "ddgs", "microsoft"}
 )
 
 # Tool names that already produce specific ban errors — skip in unknown-tool check
@@ -66,6 +66,7 @@ ND3_AGENTS: frozenset[str] = frozenset(
 )
 
 _BUILTINS = frozenset({"Explore", "General Purpose"})
+_AGENT_TABLE_MIN_CELLS = 2
 
 
 def _frontmatter_lines(content: str) -> list[str]:
@@ -153,15 +154,15 @@ def _body_agents_table(content: str) -> list[str]:
     if not m:
         return []
     agents: list[str] = []
-    for line in m.group(1).splitlines():
-        line = line.strip()
+    for raw_line in m.group(1).splitlines():
+        line = raw_line.strip()
         if (
             line.startswith("|")
             and not line.startswith("| Agent")
             and not line.startswith("|---")
         ):
             cells = [c.strip() for c in line.split("|")]
-            if len(cells) >= 2 and cells[1] and cells[1] != "Agent":
+            if len(cells) >= _AGENT_TABLE_MIN_CELLS and cells[1] and cells[1] != "Agent":
                 agents.append(cells[1])
     return agents
 
