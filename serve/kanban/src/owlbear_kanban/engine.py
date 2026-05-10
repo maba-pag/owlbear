@@ -943,7 +943,7 @@ class KanbanEngine:
     # Write operations
     # ------------------------------------------------------------------
 
-    def create_task(  # noqa: PLR0913
+    def create_task(  # noqa: PLR0913, PLR0915
         self,
         title: str,
         *,
@@ -954,12 +954,11 @@ class KanbanEngine:
         parent: int | None = None,
         depends_on: list[int] | None = None,
     ) -> Task:
-        """Allocate next_id, then write a new task file.
+        """Allocate a new task ID from board files, then write a new task file.
 
-        ID allocation is delegated to ``storage.allocate_next_id()``, which
-        advances and persists ``config.next_id`` under the shared file lock.
-        If writing the task file fails after allocation, the allocated ID is
-        intentionally burned to preserve crash safety.
+        ID allocation is delegated to ``storage.allocate_next_id()`` in callback
+        mode so allocation scan and task write happen in one lock scope. This
+        path does not read or write ``config.next_id``.
 
         Args:
             title:      Task title (used to generate the filename slug).
@@ -1017,9 +1016,10 @@ class KanbanEngine:
         )
 
         record: Task | None = None
+        created_task_path: Path | None = None
 
         def _write_new_task(task_id: int) -> None:
-            nonlocal record
+            nonlocal record, created_task_path
             now = datetime.now(tz=UTC).isoformat()
             created_task = Task(
                 id=task_id,
@@ -1038,6 +1038,7 @@ class KanbanEngine:
             validate_path_containment(self._tasks_dir, task_path)
             write_task(created_task, self._kanban_dir)
             record = created_task
+            created_task_path = task_path
 
         _storage_module().allocate_next_id(self._kanban_dir, write_task_fn=_write_new_task)
         if record is None:
@@ -1055,12 +1056,20 @@ class KanbanEngine:
         self._tasks_dir = reloaded_tasks_dir
         self._archive_dir = reloaded_archive_dir
 
-        self._emit_event(
-            action="create_task",
-            task_id=created_record.id,
-            detail=created_record.title,
-            task_status_at_start=created_record.status,
-        )
+        try:
+            self._emit_event(
+                action="create_task",
+                task_id=created_record.id,
+                detail=created_record.title,
+                task_status_at_start=created_record.status,
+            )
+        except OSError:
+            with contextlib.suppress(Exception):
+                if created_task_path is not None and created_task_path.exists():
+                    created_task_path.unlink()
+                self._task_cache.pop(created_task_path.name, None)
+                self._id_to_filename.pop(created_record.id, None)
+            raise
 
         self._revision += 1
         return created_record
