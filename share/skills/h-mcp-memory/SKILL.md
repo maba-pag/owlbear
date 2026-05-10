@@ -19,6 +19,7 @@ For curation workflow, see `w-mem-curation`.
 |------|--------|----------------|
 | Pipeline agents (10) | researcher, architect, builder, test-writer, reviewer, doc-writer, auditor, planner, orchestrator, test-curator | `save_memory`, `recall_memory` |
 | Ideation agents (11) | discoverer, outsider, critic, pragmatist, mediator, data, security, architect, enduser, firstprinciples, simplifier | `save_memory`, `recall_memory` |
+| Knowledge workers (2) | knowledge-ingestor, knowledge-enricher | `save_memory`, `recall_memory` |
 | Memory curator (1) | memory-curator | `list_memories`, `read_memory`, `curate_memory`, `delete_memory`, `save_memory` |
 | Utility agents (4) | fix-attempt, quality-runner, code-reader, challenger | None |
 
