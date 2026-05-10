@@ -63,6 +63,54 @@ Returns: `dict[str, int]` — `{"documents": int, "entities": int, "edges": int}
 
 **Resource:** `knowledge://stats` — same format as `get_stats`, readable as MCP resource.
 
+### get_next_batch
+
+Atomically claim a batch of chunks ready for Phase 1 enrichment.
+
+| Param | Type | Default | Notes |
+|-------|------|---------|-------|
+| `limit` | int | 10 | Maximum chunks to claim |
+
+Returns: `list[dict]` — `[{"chunk_id": str, "text": str, "doc_title": str, "section_path": str | null, "source_name": str | null}, ...]`.
+
+Behavior:
+
+- Claims pending chunks, plus stale claimed chunks whose lease is older than 10 minutes.
+- Excludes chunks from sources with enrichment disabled.
+- Updates claimed chunks inside an immediate SQLite transaction.
+- Empty list means no Phase 1 work is currently available.
+
+### get_consolidation_candidates
+
+Return unresolved cross-source entity pairs for Phase 2 consolidation.
+
+| Param | Type | Default | Notes |
+|-------|------|---------|-------|
+| `limit` | int | 20 | Maximum candidates to return; omit or pass null for no SQL limit |
+
+Returns: `list[dict]` — `[{"candidate_id": str, "entity_name": str, "source_a": str, "source_b": str, "source_a_name": str, "source_b_name": str, "source_a_chunk": str, "source_b_chunk": str}, ...]`.
+
+Empty list means no Phase 2 consolidation work is currently available.
+
+### store_enrichment
+
+Persist Phase 1 extraction results or Phase 2 consolidation outcomes.
+
+| Param | Type | Default | Notes |
+|-------|------|---------|-------|
+| `chunk_id` | str | None | Required for Phase 1 chunk enrichment |
+| `entities` | list[dict] | None | Entities to upsert for Phase 1 |
+| `edges` | list[dict] | None | Edges to insert for Phase 1 or Phase 2 |
+| `candidate_id` | str | None | Required for Phase 2 consolidation persistence |
+
+Returns: `None` on success.
+
+Behavior:
+
+- Phase 1: pass `chunk_id` with optional `entities` and `edges`; the chunk is marked `enriched` and its claim is cleared.
+- Phase 2: pass `candidate_id`; if `edges` is non-empty, the edges are stored. If no edges are needed, the pair is marked reviewed so it is not returned again.
+- If neither `candidate_id` nor `chunk_id` is provided, the tool raises `ToolError`.
+
 ### bookmark_source
 
 Bookmark a URL for evaluation and optional ingestion.
@@ -116,6 +164,10 @@ Returns: status string with export counts.
 | List entities in graph | `list_entities` | Filter by `entity_type`, supports pagination |
 | List registered sources | `list_sources` | Filter by `scope` |
 | Get KB statistics | `get_stats` | Also available as resource `knowledge://stats` |
+| Claim Phase 1 enrichment work | `get_next_batch` | Pulls and leases chunks atomically |
+| Store Phase 1 enrichment | `store_enrichment` | Pass `chunk_id`; marks chunk enriched |
+| Claim Phase 2 consolidation work | `get_consolidation_candidates` | Returns unresolved cross-source pairs |
+| Store Phase 2 consolidation | `store_enrichment` | Pass `candidate_id`; stores edges or marks reviewed |
 | Bookmark a URL | `bookmark_source` | Evaluate relevance, optionally ingest |
 | List bookmarks | `list_bookmarks` | Filter by `tag` or `min_score` |
 | Import project KB | `import_scope` | Cross-DB scope import with dedup |
