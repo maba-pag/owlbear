@@ -49,13 +49,13 @@ Empty `waves` means nothing dispatchable for this cycle.
 
 ## Step 1 — Housekeeping
 
-At the **start of every cycle**, perform lightweight housekeeping. `pick_tasks` handles decision/action request resolution internally before it returns dispatchable work, so the orchestrator does not call a separate decision-resolver tool.
+At the **start of every cycle**, perform lightweight housekeeping. Decision/action request resolution is part of the Step 2 `pick_tasks` call.
 
 **Every cycle — decision/action request resolution:**
 
-No separate tool call. The Step 2 `pick_tasks` call scans `.owlbear/decisions/pending/`, resolves responded DR/AR files, writes summaries to task bodies, unblocks resolved tasks, moves resolved files, and then returns fresh dispatch waves.
+The Step 2 `pick_tasks` call scans `.owlbear/decisions/pending/`, resolves responded DR/AR files, writes summaries to task bodies, unblocks resolved tasks, moves resolved files, and then returns fresh dispatch waves.
 
-The orchestrator does not parse decision housekeeping output separately — `pick_tasks` reads fresh board state and filters blocked tasks.
+Dispatch planning uses the fresh board state returned by `pick_tasks`.
 
 **Every 5th cycle — memory-curator** (`cycle_count % 5 == 0`):
 
@@ -151,7 +151,7 @@ Classify agent returns top-to-bottom. First match wins.
 After all dispatches:
 
 1. Increment `cycle_count`.
-2. **Re-plan:** Go to **Step 1**. The decision resolver processes any DRs that were responded during this cycle, then `pick_tasks` reads fresh board state.
+2. **Re-plan:** Go to **Step 1**. The next `pick_tasks` call resolves any responded DR/AR files before returning fresh dispatch waves.
 
 Loop continues until `pick_tasks` returns `waves=[]`. **Do not stop for any other reason.**
 
@@ -184,5 +184,5 @@ Session complete:
 ## Known Pitfalls
 
 - **Structured return ≠ needs orchestrator cleanup.** When an agent returns a structured verdict (`DONE`, `FAIL`, `BLOCK`, etc.), it called `end_work` and managed its own task state. Never `edit_task(block_reason=...)` or `move_task` on a task whose agent returned a structured signal — that overwrites the agent's intentional state transition.
-- **No dispatch decisions from housekeeping agents.** The orchestrator does not use decision-resolver or curator output for dispatch planning. They modify board state directly; `pick_tasks` reads fresh state each cycle. Informational signals (deferred count, pending DRs) are surfaced to the user only.
+- **No dispatch decisions from housekeeping output.** Curator output is informational only; `pick_tasks` reads fresh board state each cycle.
 - **Legacy wave planner drift:** Do not reintroduce manual bucket planning in this skill. `pick_tasks` is the single wave-assembly authority.
