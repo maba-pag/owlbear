@@ -6,6 +6,8 @@ user-invocable: false
 
 # Memory Curation
 
+> **Audience:** The `memory-curator` agent (periodic or manual dispatch). **When:** Orchestrator dispatches a curation cycle, or the user invokes manually for conflict resolution. **Why:** Turns raw `pending` agent reflections into scoped, quality-checked MCP entries that `recall_memory` surfaces.
+
 Maintain institutional memory by turning raw agent learnings into scoped MCP memory entries. MCP memory is the canonical reviewed store; file-based inbox notes are fallback/migration input only.
 
 ## Architecture
@@ -105,7 +107,7 @@ Before returning, commit reviewed MCP memory mutations with the state-aware help
 uv --project ../owlbear run python -m owlbear_mcp_memory.git curation
 ```
 
-If this workspace uses a different OwlBear relative path, substitute the `--project` path from the `ob-memory` entry in `.vscode/mcp.json`. The helper stages only non-pending `.owlbear/memory/*.md` entries; do not broad-add `.owlbear/memory`.
+The `--project` path must point to the OwlBear installation root. Find the correct value from the `ob-memory` server entry in `.vscode/mcp.json` (look for the `--project` argument in the `args` array). The helper stages only non-pending `.owlbear/memory/*.md` entries; do not broad-add `.owlbear/memory`.
 
 ## Step 7 — Return Channel A Signal
 

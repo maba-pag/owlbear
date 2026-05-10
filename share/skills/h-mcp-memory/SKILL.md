@@ -6,10 +6,50 @@ user-invocable: false
 
 # MCP Memory Tool Reference
 
+> **Audience:** Any agent with `save_memory` or `recall_memory` in its tools list (21 pipeline + ideation agents), plus the memory-curator agent. **When:** Pre-flight knowledge loading, post-task reflection, and curation sessions. **Why:** Authoritative reference for all 7 MCP memory tools — parameters, behavior, error cases, and usage patterns.
+
 The `ob-memory` MCP server exposes memory operations over stdio. The FastMCP app name is `owlbear-memory`; VS Code registers it in `.vscode/mcp.json` as `ob-memory`.
 
 For pipeline integration (pre-flight, reflection), see `r-pipeline-protocol`.
 For curation workflow, see `w-mem-curation`.
+
+## Agent Access Matrix
+
+| Role | Agents | Available Tools |
+|------|--------|----------------|
+| Pipeline agents (10) | researcher, architect, builder, test-writer, reviewer, doc-writer, auditor, planner, orchestrator, test-curator | `save_memory`, `recall_memory` |
+| Ideation agents (11) | discoverer, outsider, critic, pragmatist, mediator, data, security, architect, enduser, firstprinciples, simplifier | `save_memory`, `recall_memory` |
+| Memory curator (1) | memory-curator | `list_memories`, `read_memory`, `curate_memory`, `delete_memory`, `save_memory` |
+| Utility agents (4) | fix-attempt, quality-runner, code-reader, challenger | None |
+
+`approve_memory` is not exposed to any agent — user-initiated only via the memory review prompt.
+
+## Usage Patterns
+
+### Curator lifecycle (list -> read -> curate -> delete)
+
+1. `list_memories(states=["pending"])` to find candidates
+2. `read_memory(entry_id=...)` for full content
+3. `curate_memory(...)` to edit/promote with scope
+4. `delete_memory(entry_id=...)` for noise/duplicates
+
+### User approval flow
+
+1. Curator leaves entries in `curated`
+2. User runs the memory audit prompt for guided review
+3. Approved entries become highest-trust retrieval candidates
+
+### Batch commits
+
+Pending entries are not committed. After curation or review, use the state-aware
+helper instead of broad-adding `.owlbear/memory`:
+
+```text
+uv --project ../owlbear run python -m owlbear_mcp_memory.git curation
+uv --project ../owlbear run python -m owlbear_mcp_memory.git review
+```
+
+The `--project` path must point to the OwlBear installation root. Find the correct value from the `ob-memory` server entry in `.vscode/mcp.json` (look for the `--project` argument in the `args` array).
 
 ## Tool Summary
 
@@ -159,34 +199,6 @@ Allowed category values:
 | `preference` | Stable choice preference |
 | `env-context` | Situational or environment constraint |
 
-## Usage Patterns
-
-### Curator lifecycle (list -> read -> curate -> delete)
-
-1. `list_memories(states=["pending"])` to find candidates
-2. `read_memory(entry_id=...)` for full content
-3. `curate_memory(...)` to edit/promote with scope
-4. `delete_memory(entry_id=...)` for noise/duplicates
-
-### User approval flow
-
-1. Curator leaves entries in `curated`
-2. User runs the memory audit prompt for guided review
-3. Approved entries become highest-trust retrieval candidates
-
-### Batch commits
-
-Pending entries are not committed. After curation or review, use the state-aware
-helper instead of broad-adding `.owlbear/memory`:
-
-```text
-uv --project ../owlbear run python -m owlbear_mcp_memory.git curation
-uv --project ../owlbear run python -m owlbear_mcp_memory.git review
-```
-
-If the workspace uses a different OwlBear relative path, substitute the
-`--project` value from the `ob-memory` entry in `.vscode/mcp.json`.
-
 ## Examples
 
 ```text
@@ -231,3 +243,17 @@ Recommended category mapping for post-task reflection bullets:
 | Env var | Default | Description |
 |---------|---------|-------------|
 | `OWLBEAR_MEMORY_DIR` | `.owlbear/memory` | Path to memory markdown entry directory |
+
+## Error Behavior
+
+All tools raise `ToolError` (surfaced as MCP error responses) for invalid operations:
+
+| Error | Trigger | Example |
+|-------|---------|---------|
+| Entry not found | Invalid `entry_id` | `read_memory(entry_id="nonexistent")` |
+| Invalid state transition | Wrong source state | `approve_memory` on a `pending` entry |
+| Deleted entry access | Reading a soft-deleted entry | `read_memory` on `state=deleted` |
+| Validation failure | Bad confidence, empty title, invalid category | `save_memory(confidence=0.5, ...)` |
+| Blank agent | Empty or whitespace-only agent name | `recall_memory(agent="")` |
+
+Tool responses include a `hint` field with human-readable guidance about what happened and suggested next steps.

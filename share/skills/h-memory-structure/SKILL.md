@@ -6,6 +6,8 @@ user-invocable: false
 
 # Memory Entry Structure
 
+> **Audience:** Agents writing post-task reflections and the memory-curator agent. **When:** Before calling `save_memory` (shape, dedup, quality checks) and during curation sessions. **Why:** Ensures entries meet the structural and quality bar for long-lived agent knowledge.
+
 Structural standards for project memory entries across file-based (`/memories/`) and MCP (`ob-memory`) storage. Covers entry shape, tier selection, deduplication, and quality enforcement.
 
 For tool syntax, see `h-mcp-memory`. For curation workflow, see `w-mem-curation`. For pipeline integration (pre-flight, reflection), see `r-pipeline-protocol`.
@@ -36,7 +38,7 @@ Enumerations and ranges used by the schema:
 
 This schema is validated by `MemoryEntry` in the `mcp-memory` package.
 
-**File-based entry shape** (inbox fallback):
+**File-based entry shape** (legacy migration format — used only as fallback when MCP is unavailable):
 
 ```
 # {task-id}-{agent}.md
@@ -74,6 +76,8 @@ MCP memory is canonical. File-based inbox notes are fallback/migration input onl
 | Pre-flight knowledge load | MCP only (`recall_memory(agent="{agent_name}")`) — file inbox is write-only for agents |
 
 Post-task reflection is defined in `r-pipeline-protocol` § Post-task Reflection. Follow it exactly.
+
+See `share/diagrams/memory-layers.excalidraw` for a visual overview of the tier and state model.
 
 ## State Model
 
