@@ -15,7 +15,7 @@ For curation workflow, see `w-mem-curation`.
 
 | Tool | Description | Key parameters |
 |------|-------------|----------------|
-| `save_memory` | Create a new `pending` memory entry | `title`, `content`, `categories`, `confidence`, `source_agent` |
+| `save_memory` | Create a new `pending` memory entry | `title`, `content`, `categories`, `confidence`, `source_agent`, `scope_agents` |
 | `list_memories` | List metadata filtered by state/category/scope | `states`, `categories`, `scope_agents` |
 | `recall_memory` | Recall scoped memory blocks for agent pre-flight | `agent`, `categories`, `limit` |
 | `read_memory` | Read one full memory entry by ID | `entry_id` |
@@ -34,6 +34,7 @@ Creates a new `pending` entry in `.owlbear/memory/*.md`.
 | `categories` | list[str] | (required) | One or more category values |
 | `confidence` | float | (required) | Must be within `[0.7, 1.0]` |
 | `source_agent` | str | (required) | Agent identifier recorded on the entry |
+| `scope_agents` | list[str] \| null | `[source_agent]` | Initial scope; defaults to the source agent |
 
 Returns: full entry object and a guidance hint indicating next-step curation.
 

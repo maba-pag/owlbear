@@ -75,16 +75,6 @@ def _coerce_states(states: list[MemoryState | str] | None) -> list[MemoryState] 
     return coerced
 
 
-def _coerce_state(state: MemoryState | str | None) -> MemoryState | None:
-    if state is None:
-        return None
-    try:
-        return MemoryState(str(state))
-    except ValueError as exc:
-        msg = f"Unknown state {state!r}. Use one of: {_allowed_state_values()}."
-        raise ToolError(msg) from exc
-
-
 def _validate_limit(limit: int | None) -> int | None:
     if limit is not None and limit < 0:
         msg = "Limit must be zero or greater."
@@ -176,11 +166,13 @@ async def save_memory(  # noqa: PLR0913
     categories: list[MemoryCategory | str],
     confidence: float,
     source_agent: str,
+    scope_agents: list[str] | None = None,
 ) -> dict[str, Any]:
     """Create a pending memory entry with explicit source_agent."""
     engine = _engine_from_ctx(ctx)
     now = _now_iso()
     coerced_categories = _coerce_categories(categories)
+    initial_scope = scope_agents if scope_agents is not None else [source_agent]
     try:
         entry = MemoryEntry(
             id=str(uuid4()),
@@ -189,7 +181,7 @@ async def save_memory(  # noqa: PLR0913
             confidence=confidence,
             state=MemoryState.PENDING,
             content=content,
-            scope_agents=[],
+            scope_agents=initial_scope,
             source_agent=source_agent,
             created_at=now,
             updated_at=now,
@@ -198,10 +190,12 @@ async def save_memory(  # noqa: PLR0913
     except ValidationError as exc:
         raise ToolError(_teaching_validation_message(exc)) from exc
     engine.write(entry)
-    return _with_hint(
-        _entry_to_dict(entry),
-        "Saved as pending. Curate with scope_agents to promote to curated.",
+    hint = (
+        "Saved as pending."
+        f" Scoped to {initial_scope}."
+        " Curate to promote to curated and adjust scope if needed."
     )
+    return _with_hint(_entry_to_dict(entry), hint)
 
 
 async def list_memories(
@@ -234,7 +228,11 @@ async def list_memories(
         entries = [
             entry
             for entry in entries
-            if entry.scope_agents and bool(scope_filter.intersection(set(entry.scope_agents)))
+            if entry.scope_agents
+            and bool(
+                scope_filter.intersection(set(entry.scope_agents))
+                or "*" in entry.scope_agents
+            )
         ]
 
     entries.sort(key=lambda entry: (_state_rank_for_list(entry.state), entry.created_at, entry.id))
@@ -304,12 +302,11 @@ async def recall_memory(
 async def _update_entry(  # noqa: PLR0913
     ctx: Context,
     *,
-    entry_id: str,
+    current: MemoryEntry,
     title: str | None = None,
     content: str | None = None,
     categories: list[MemoryCategory | str] | None = None,
     confidence: float | None = None,
-    state: MemoryState | None = None,
     scope_agents: list[str] | None = None,
 ) -> dict[str, Any]:
     """Update mutable fields on an existing entry.
@@ -318,9 +315,7 @@ async def _update_entry(  # noqa: PLR0913
     auto-downgrades approved→curated.
     """
     engine = _engine_from_ctx(ctx)
-    current = _load_entry_or_raise(engine, entry_id)
     coerced_categories = _coerce_categories(categories)
-    coerced_state = _coerce_state(state)
 
     if current.state == MemoryState.DELETED:
         msg = "update_entry cannot modify deleted entries"
@@ -330,12 +325,13 @@ async def _update_entry(  # noqa: PLR0913
     if current.state == MemoryState.PENDING and not next_scope_agents:
         msg = "scope_agents are required when curating pending entries"
         raise ToolError(msg)
+    if current.state != MemoryState.PENDING and scope_agents is not None and not scope_agents:
+        msg = "scope_agents cannot be blanked on curated or approved entries"
+        raise ToolError(msg)
 
-    if current.state == MemoryState.APPROVED:
-        target_state = MemoryState.CURATED
-    elif coerced_state is not None:
-        target_state = coerced_state
-    elif current.state == MemoryState.PENDING and bool(next_scope_agents):
+    if current.state == MemoryState.APPROVED or (
+        current.state == MemoryState.PENDING and bool(next_scope_agents)
+    ):
         target_state = MemoryState.CURATED
     else:
         target_state = current.state
@@ -415,7 +411,7 @@ async def curate_memory(  # noqa: PLR0913
     current = _load_entry_or_raise(engine, entry_id)
     updated = await _update_entry(
         ctx,
-        entry_id=entry_id,
+        current=current,
         title=title,
         content=content,
         categories=categories,

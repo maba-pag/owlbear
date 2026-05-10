@@ -46,7 +46,7 @@ class MemoryEntry(BaseModel):
     categories: list[MemoryCategory] = Field(min_length=1)
     confidence: float = Field(ge=0.7, le=1.0)
     state: MemoryState = MemoryState.PENDING
-    content: str = Field(max_length=1024)
+    content: str
     scope_agents: list[str] = Field(default_factory=list)
     source_agent: str = Field(frozen=True)
     created_at: str

@@ -60,14 +60,18 @@ class MemoryEngine:
         self._memory_dir.mkdir(parents=True, exist_ok=True)
         self._cache = MtimeScanCache(self._memory_dir)
         self._entries: list[MemoryEntry] = []
+        self._id_to_path: dict[str, Path] = {}
 
     def load(self) -> list[MemoryEntry]:
         """Load all markdown entry files from disk."""
         entries: list[MemoryEntry] = []
+        id_to_path: dict[str, Path] = {}
         for file_path in sorted(self._memory_dir.glob("*.md")):
             entry = self._load_file(file_path)
             if entry is not None:
                 entries.append(entry)
+                id_to_path[entry.id] = file_path
+        self._id_to_path = id_to_path
         return entries
 
     def get_entries(self) -> list[MemoryEntry]:
@@ -78,7 +82,7 @@ class MemoryEngine:
 
     def write(self, entry: MemoryEntry) -> Path:
         """Write an entry to disk using YAML frontmatter plus markdown body."""
-        existing = self._path_for_entry_id(entry.id)
+        existing = self._id_to_path.get(entry.id)
         if existing is not None:
             target_path = existing
         else:
@@ -99,7 +103,7 @@ class MemoryEngine:
         }
         content = (
             "---\n"
-            f"{yaml.safe_dump(frontmatter, default_flow_style=False)}"
+            f"{yaml.safe_dump(frontmatter, default_flow_style=False, sort_keys=False)}"
             "---\n\n"
             f"{entry.content}\n"
         )
@@ -116,6 +120,7 @@ class MemoryEngine:
             with suppress(OSError):
                 tmp_path.unlink()
             raise
+        self._id_to_path[entry.id] = target_path
         return target_path
 
     def get_entry(self, entry_id: str) -> MemoryEntry:
@@ -128,21 +133,18 @@ class MemoryEngine:
 
     def delete(self, entry_id: str) -> None:
         """Remove an entry file from disk by ID or raise KeyError if missing."""
-        target = self._path_for_entry_id(entry_id)
+        target = self._id_to_path.get(entry_id)
+        if target is None:
+            self.get_entries()
+            target = self._id_to_path.get(entry_id)
         if target is None:
             msg = f"Entry {entry_id!r} not found"
             raise KeyError(msg)
         target.unlink()
-
-    def _path_for_entry_id(self, entry_id: str) -> Path | None:
-        for file_path in self._memory_dir.glob("*.md"):
-            entry = self._load_file(file_path)
-            if entry is not None and entry.id == entry_id:
-                return file_path
-        return None
+        self._id_to_path.pop(entry_id, None)
 
     def _load_file(self, file_path: Path) -> MemoryEntry | None:
-        raw = file_path.read_text(encoding="utf-8")
+        raw = file_path.read_text(encoding="utf-8-sig")
         parts = raw.split("---", 2)
         if len(parts) < _FRONTMATTER_PARTS:
             _LOGGER.warning(

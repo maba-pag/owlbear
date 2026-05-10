@@ -93,6 +93,7 @@ async def save_memory(  # noqa: PLR0913
     categories: _Categories,
     confidence: _Confidence,
     source_agent: _Agent,
+    scope_agents: list[str] | None = None,
 ) -> dict[str, Any]:  # pragma: no cover
     """Create a new pending memory entry with explicit source agent."""
     return await save_memory_impl(
@@ -102,6 +103,7 @@ async def save_memory(  # noqa: PLR0913
         categories=categories,
         confidence=confidence,
         source_agent=source_agent,
+        scope_agents=scope_agents,
     )
 
 
