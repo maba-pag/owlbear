@@ -30,6 +30,7 @@ import logging
 import os
 import random
 import subprocess
+import sys
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -125,6 +126,11 @@ def _classify_end_work_outcome(detail: str) -> str:
 _CLOSE_ACTIONS: frozenset[str] = frozenset({"end_work", "release", "sweep-release"})
 
 
+def _storage_module() -> object:
+    """Return the live storage module, even if tests force a re-import."""
+    return sys.modules.get("owlbear_kanban.storage", storage)
+
+
 def _compute_duration(claim_ts: str, close_ts: str) -> float:
     """Return (close_dt - claim_dt).total_seconds(), normalising tz-naive timestamps to UTC."""
     claim_dt = datetime.fromisoformat(claim_ts)
@@ -171,7 +177,7 @@ def _restore_snapshot_if_unchanged(
 ) -> None:
     """Best-effort rollback that never overwrites a newer concurrent update."""
     try:
-        storage.write_task_if_unchanged(original, expected_updated, kanban_dir)
+        _storage_module().write_task_if_unchanged(original, expected_updated, kanban_dir)
     except ConcurrencyError as exc:
         if exc.code != "ERR_STALE":
             raise
@@ -1012,7 +1018,7 @@ class KanbanEngine:
             config=config,
         )
 
-        task_id = storage.allocate_next_id(self._kanban_dir)
+        task_id = _storage_module().allocate_next_id(self._kanban_dir)
         now = datetime.now(tz=UTC).isoformat()
 
         record = Task(
@@ -1368,7 +1374,7 @@ class KanbanEngine:
                 cleared.claimed_at = None
                 cleared.updated = effective_now.isoformat()
                 try:
-                    storage.write_task_if_unchanged(
+                    _storage_module().write_task_if_unchanged(
                         cleared,
                         original.updated,
                         self._kanban_dir,
@@ -1388,7 +1394,7 @@ class KanbanEngine:
             record.updated = effective_now.isoformat()
 
             try:
-                storage.write_task_if_unchanged(
+                _storage_module().write_task_if_unchanged(
                     record,
                     expected_for_claim,
                     self._kanban_dir,
