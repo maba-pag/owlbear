@@ -1,10 +1,10 @@
 ---
 id: 1398
 title: 'P3-08: Test Cockpit delivery gate and dist packaging checks'
-status: review
+status: archived
 priority: needed
 created: 2026-05-06T01:09:47.053865+00:00
-updated: 2026-05-11T19:00:29.549002+00:00
+updated: 2026-05-11T19:17:38.495467+00:00
 tags:
 - cockpit
 - audit-remediation
@@ -25,7 +25,7 @@ depends_on:
 - 1397
 blocked: false
 block_reason:
-claimed_at: 2026-05-11T19:00:29.549002+00:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -345,3 +345,104 @@ Refined AC R2 with explicit proof-mechanism language to prevent category-error r
   - ruff on tests/test_cockpit_delivery_gate_1398.py -> clean (exit 0)
 - Coverage: not applicable for this RED workflow-assertion proof handoff.
 - Evidence summary: task remains intentionally RED against current sync-to-main workflow and ready for implementation counterpart #1399 in review routing context.
+[[2026-05-11]]
+## Review Evidence
+### Test Results
+- quality-runner scoped run on `tests/test_cockpit_delivery_gate_1398.py`: `3 failed, 2 passed`; `pytest` exit `1`.
+- The RED failures are the intended current workflow gaps:
+  - `TestFromAC_CockpitDeliveryGateWorkflow::test_sync_workflow_runs_cockpit_vitest_before_commit`
+  - `TestFromAC_CockpitDeliveryGateWorkflow::test_sync_workflow_runs_cockpit_playwright_e2e_distinct_from_excalidraw`
+  - `TestFromAC_CockpitDeliveryGateWorkflow::test_sync_workflow_disallows_build_gate_bypass_when_sync_cockpit_true`
+- The packaging-shape proofs pass:
+  - `TestFromAC_CockpitPackagingShape::test_sync_workflow_asserts_cockpit_dist_index_and_stages_dist_tree`
+  - `TestFromAC_CockpitPackagingShape::test_sync_workflow_prunes_cockpit_web_tree_for_consumer_shape`
+- quality-runner verdict support: the observed `3 fail / 2 pass` signature matches the intended RED proof contract for task `#1398`.
+
+### Lint Results
+- `ruff` on `tests/test_cockpit_delivery_gate_1398.py`: clean; exit `0`.
+
+### Coverage
+- Not applicable. This task owns a workflow-assertion RED proof file only; no production module is under review.
+
+### Scope / Integrity
+- The binding contract for this review is the latest `Acceptance Criteria (Refined R2 — Supersedes All Previous)` at `.owlbear/kanban/tasks/1398-p3-08-test-cockpit-delivery-gate-and-dist-packaging-checks.md:267-272`.
+- The adjacent `Architecture Review (R2 — Loop-Breaker Re-entry)` explicitly states that the current `tests/test_cockpit_delivery_gate_1398.py` already satisfies the R2 AC at task lines `305-310`. Earlier review failures were superseded by that refinement.
+- code-reader raised one stricter-reading concern on AC1: the Vitest and cockpit E2E assertions identify candidate steps by `run` text plus `working-directory`, not by an exact expected step name. I treated that as informational, not blocking, because the R2 task body does not define exact Vitest/E2E step names and the binding R2 architecture note expressly accepts the current proof shape.
+- Dirty-tree contamination and full diff-scoped integrity could not be fully verified in this tool surface because direct `git status` / `git diff` execution was unavailable. Small confidence deduction applied.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---|---|---|---|
+| AC1 — workflow-YAML assertions prove cockpit build, Vitest, and cockpit E2E before `Commit` | The suite pins `Build cockpit SPA` by exact step name and asserts `working-directory: serve/cockpit/web`, `npm run build`, and pre-`Commit` ordering at `tests/test_cockpit_delivery_gate_1398.py:54-64`. It asserts cockpit Vitest via `npm test` + `working-directory == serve/cockpit/web` + pre-`Commit` ordering at `:68-79`, and cockpit E2E via `npm run test:e2e` + `working-directory == serve/cockpit/web` + pre-`Commit` ordering at `:87-100`. The current workflow has `Build cockpit SPA` at `.github/workflows/sync-to-main.yml:351-354`, `Commit` at `:424`, and no cockpit Vitest/E2E step in `serve/cockpit/web`, so the intended RED failures remain valid. | `test_sync_workflow_runs_cockpit_vitest_before_commit`; `test_sync_workflow_runs_cockpit_playwright_e2e_distinct_from_excalidraw` | PASS |
+| AC2 — `Assert SPA bundle exists` after build and references `serve/cockpit/dist/index.html` | The suite asserts `Build cockpit SPA` occurs before `Assert SPA bundle exists` at `tests/test_cockpit_delivery_gate_1398.py:145-148` and asserts the assert-step script references `serve/cockpit/dist/index.html` at `:151-152`. The workflow matches at `.github/workflows/sync-to-main.yml:351-359`. | `test_sync_workflow_asserts_cockpit_dist_index_and_stages_dist_tree` | PASS |
+| AC3 — cockpit quality-gate `if` conditions do not depend on `build_cockpit` when `sync_cockpit` is enabled | The suite checks each gated cockpit step for `inputs.sync_cockpit` and rejects `build_cockpit` in the `if` expression at `tests/test_cockpit_delivery_gate_1398.py:103-131`. This directly fails on the current workflow conditions at `.github/workflows/sync-to-main.yml:343-357` and `:364-365`. | `test_sync_workflow_disallows_build_gate_bypass_when_sync_cockpit_true` | PASS |
+| AC4 — consumer-tree shape is staged `serve/cockpit/dist/` plus pruned `serve/cockpit/web/` | The suite asserts the stage step force-adds `serve/cockpit/dist/` at `tests/test_cockpit_delivery_gate_1398.py:156-157` and the prune step removes `serve/cockpit/web` under `sync_cockpit` at `:166-171`. The workflow matches at `.github/workflows/sync-to-main.yml:364-366` and `:382-392`. | `test_sync_workflow_asserts_cockpit_dist_index_and_stages_dist_tree`; `test_sync_workflow_prunes_cockpit_web_tree_for_consumer_shape` | PASS |
+| AC5 — Vitest, cockpit E2E, and bypass-guard assertions fail on the current workflow and are satisfiable by `#1399` | quality-runner confirms the exact intended RED signature: the two cockpit test-step assertions and the bypass-guard assertion fail today, while the two packaging-shape assertions pass. This matches the R2 architecture note at task lines `305-310`. | all five task tests | PASS |
+
+### Critical Checks
+- Security review: PASS. The test file reads a fixed repo-local YAML path and parses it with `yaml.safe_load`; no shell execution, network access, or untrusted input handling is introduced.
+- Test integrity: PASS with confidence deduction. No weakened or removed `TestFromAC_*` assertions were observed in the live file.
+- Test quality: PASS under the binding R2 contract. The remaining AC1 step-name ambiguity is noted, but it is not a valid fail under the latest architecture interpretation written into the task body.
+- Data safety: PASS. Read-only YAML parsing only.
+- Builder process quality: CLEAN. The current review cycle is a pass-through re-entry with no new file edits.
+
+### Deductions
+- `-0.03` dirty-tree / diff-scoped integrity could not be fully proven in this tool surface.
+- `-0.03` AC1 wording remains slightly looser than the concrete current assertions for Vitest/E2E step identification, but the latest R2 architecture note explicitly accepts the current proof shape.
+
+### Verdict
+- PASS -> docs
+- Confidence: `0.94`
+- Routing rationale: under the latest binding R2 AC and architecture review, the current test file provides the required workflow-YAML proof mechanism and the intended current RED signature. The earlier fail reasons were superseded by the R2 refinement.
+[[2026-05-11]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | No behavior, API, CLI, config, or package structure changed — workflow-YAML assertion test file only |
+| 2 | Module docstrings | No | N/A | No Python modules created or modified; deliverable is `tests/test_cockpit_delivery_gate_1398.py` (test file) |
+| 3 | External attribution | No | N/A | Builder notes reference no external patterns, articles, or repos |
+| 4 | Research doc | No | N/A | No research phase or `.owlbear/research/*.md` file mentioned in task body |
+| 5 | Diagram maintenance (describes match) | No | N/A | Doc-index consulted; no diagram `describes` glob matches test files |
+| 6 | Explicit diagram creation | No | N/A | No explicit diagram creation request in task body |
+| 7 | Deletion detection | No | N/A | No files deleted in this task |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| tests/test_cockpit_delivery_gate_1398.py | OUT | N/A — test file; not an IN-scope doc |
+
+### Files Updated
+- None
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no `.owlbear/scratch/1398-*` files found)
+[[2026-05-11]]
+## Audit
+### Regression Detection
+- quality-runner mode full: ~4422 passed, ~205 failed, 4 skipped, 5 errors (timeouts in test_cockpit_pds_build_compat.py)
+- Baseline comparison against 3 recent full-suite runs (203–206 failures) confirms all failures are pre-existing RED proofs and subprocess timeout errors — none introduced by this task
+- Task deliverable maintains expected RED signature: 3 fail / 2 pass
+- regression verdict: PASS
+
+### Intent Verification
+- scope alignment: PASS (single file `tests/test_cockpit_delivery_gate_1398.py` — cockpit delivery domain)
+- purpose match: PASS (workflow-YAML contract tests for cockpit delivery gate, matching stated task purpose)
+- extraneous scope: none
+- boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 4/5
+Original AC used vague language ("relevant tests", "appropriate lint") requiring two refinement cycles. R2 refinement correctly identified the category error (mutation-testing standards applied to YAML contract tests) and specified explicit proof mechanisms (step-property matching). R2 AC is specific, achievable, and well-reasoned. Minor gap: proof-mechanism language should have been explicit from the start, but this is a novel test domain where the appropriate proof level is non-obvious a priori.
+
+### Commit Integrity
+- upstream commit presence: PASS (`caa3f511` initial RED assertions, `926029e2` strengthened assertions — both `#1398, builder`)
+- kanban commit packaging: pending (this audit cycle)
+
+### Deduction Breakdown
+No deductions applied.
+
+### Confidence: 1.00
+### Action: archive
