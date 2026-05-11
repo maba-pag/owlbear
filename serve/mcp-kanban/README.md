@@ -31,6 +31,14 @@ The server exposes 10 tools:
 | `create_dr` | `create_dr(task_id: str, agent: str, request_type: str, body: str)` |
 | `resolve_drs` | `resolve_drs()` |
 
+### Lifecycle and dispatch semantics
+
+- `pick_tasks` is read-only. It computes dispatch waves from task state and never mutates task files.
+- `start_work` delegates to engine claim logic. If a rival claim is still live, the call fails; if the rival claim is expired, the claim is reclaimed and the task is claimed for the caller.
+- `create_dr` creates decision/action request files linked to a task.
+- `resolve_drs` processes decision request resolutions from the decisions inbox.
+- Cockpit maintenance triggers cleanup via its `POST /tasks/cleanup` route, which calls engine cleanup and releases expired claims plus archives done tasks.
+
 ## Data Projections and Envelopes
 
 ### TaskSummary

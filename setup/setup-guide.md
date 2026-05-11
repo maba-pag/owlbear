@@ -75,6 +75,8 @@ Running `init.py` writes the following files into your project directory:
 | `.markdownlintignore` | Markdown lint exclusion patterns | Skipped if file already exists |
 | `.yamllint.yml` | YAML linting configuration | Always written |
 
+`init.py` creates the kanban board directory structure (`tasks/`, `archive/`, `decisions/pending/`, `decisions/resolved/`) but does not seed or overwrite `.owlbear/kanban/config.yml`.
+
 ## Shared vs Copied
 
 OwlBear uses two different update models:
