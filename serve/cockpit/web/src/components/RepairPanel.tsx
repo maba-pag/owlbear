@@ -40,7 +40,20 @@ export default function RepairPanel({ corruptionCount, onSuccess, files = [] }: 
 
     previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
     dialogRef.current?.focus()
-  }, [phase])
+
+    function handleDocumentKeyDown(event: KeyboardEvent) {
+      if (event.key !== 'Escape') {
+        return
+      }
+      event.preventDefault()
+      cancelRepair()
+    }
+
+    document.addEventListener('keydown', handleDocumentKeyDown)
+    return () => {
+      document.removeEventListener('keydown', handleDocumentKeyDown)
+    }
+  }, [cancelRepair, phase])
 
   if (phase === 'confirming') {
     return (
@@ -55,6 +68,7 @@ export default function RepairPanel({ corruptionCount, onSuccess, files = [] }: 
             return
           }
           event.preventDefault()
+          event.stopPropagation()
           cancelRepair()
         }}
       >
