@@ -49,11 +49,11 @@ Empty `waves` means nothing dispatchable for this cycle.
 
 ## Step 1 — Housekeeping
 
-At the **start of every cycle**, perform lightweight housekeeping. Decision/action request resolution is part of the Step 2 `pick_tasks` call.
+At the **start of every cycle**, perform lightweight housekeeping. Decision/action request resolution is a Cockpit/user operation, not part of orchestration.
 
-**Every cycle — decision/action request resolution:**
+**Every cycle — dispatch planning:**
 
-The Step 2 `pick_tasks` call scans `.owlbear/decisions/pending/`, resolves responded DR/AR files, writes summaries to task bodies, unblocks resolved tasks, moves resolved files, and then returns fresh dispatch waves.
+The Step 2 `pick_tasks` call is read-only. It reads the current board state, excludes blocked tasks, and returns fresh dispatch waves. If a DR/AR was resolved before this cycle, that resolution has already appended the task summary, unblocked the task when appropriate, and moved the file to resolved.
 
 Dispatch planning uses the fresh board state returned by `pick_tasks`.
 
@@ -154,7 +154,7 @@ Classify agent returns top-to-bottom. First match wins.
 After all dispatches:
 
 1. Increment `cycle_count`.
-2. **Re-plan:** Go to **Step 1**. The next `pick_tasks` call resolves any responded DR/AR files before returning fresh dispatch waves.
+2. **Re-plan:** Go to **Step 1**. The next `pick_tasks` call sees any DR/AR resolutions already applied before the cycle and returns fresh dispatch waves.
 
 Loop continues until `pick_tasks` returns `waves=[]`. **Do not stop for any other reason.**
 

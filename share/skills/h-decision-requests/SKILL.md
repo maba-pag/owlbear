@@ -10,7 +10,7 @@ Use the decision-request helper to create decision and action requests:
 
 - `create_dr(...)`: create pending DR/AR records in `.owlbear/decisions/`
 
-Resolved DR/AR files are handled by the kanban engine before `pick_tasks` returns dispatch waves. `create_dr` has no query mode, and there is no separate resolver MCP call. The resolver appends a `## Decision Request` summary for both decision and action requests; use `response: approved` when a requested user action is complete.
+`create_dr` has no query mode, and agents do not resolve DR/AR files. `pick_tasks` is read-only: it excludes blocked tasks and does not apply pending responses. Decision resolution is handled through the Cockpit decision flow, which appends a `## Decision Request` summary for both decision and action requests, unblocks tasks when appropriate, and moves resolved files out of pending. Use `response: approved` when a requested user action is complete.
 
 ## When To Create A DR
 
@@ -68,14 +68,14 @@ DR creation is fire-and-forget:
 
 - Create the request and stop active work on the task.
 - Do not poll or wait in-loop for a response.
-- Release/park per pipeline protocol (task stays blocked).
-- The next orchestration pick-up resolves status after a response is recorded.
+- Release/park per pipeline protocol; the task stays blocked until a user resolves the DR/AR.
+- The next orchestration pick-up sees the task only after resolution has already unblocked it.
 
 Resolution flow:
 
-- A response is written to the DR file.
-- The engine resolves pending responses during the next `pick_tasks` cycle.
-- Tasks are unblocked automatically when the resolution indicates continuation.
+- A user resolves the DR/AR through Cockpit with `approved`, `needs-info`, or `rejected`.
+- Resolution appends the `## Decision Request` summary, moves the file to resolved, and unblocks the task when the response indicates continuation.
+- The next `pick_tasks` cycle can dispatch the unblocked task.
 
 ## Operational Rules
 

@@ -338,16 +338,16 @@ Researcher may provisionally tag `type:user-action` during research; architect c
 1. Architect detects `type:user-action` → creates action request via `create_dr`
 2. Architect calls `end_work(outcome="block", block_reason="AR pending: {filename}")`
 3. `pick_tasks` excludes the blocked task — no agents dispatched
-4. User performs the action → sets `response: approved` in the AR file when the action is complete
-5. The next `pick_tasks` cycle resolves pending responses before dispatch: appends a `## Decision Request` summary to the task body, unblocks task, and moves the AR file to resolved
-6. Architect (re-entry): sees `## Decision Request` with `response: approved` + `type:user-action` → verifies AC → approves to `todo`
+4. User performs the action → resolves the AR as `approved` through the Cockpit decision flow when the action is complete
+5. Decision resolution appends a `## Decision Request` summary to the task body, unblocks the task, and moves the AR file to resolved
+6. Next `pick_tasks` dispatches the unblocked task; architect (re-entry) sees `## Decision Request` with `response: approved` + `type:user-action` → verifies AC → approves to `todo`
 7. Test-writer and builder pass through (tag is in `NON_IMPL_TAGS`)
 
 **Post-completion fast-path:** When a `type:user-action` task re-enters architect review with a `## Decision Request` summary whose `response` is `approved`, the architect verifies that AC checkboxes are satisfied, then approves directly without full re-evaluation. This extends the "Resolved Decision Pre-flight" check to completed action requests.
 
 **Dual-nature tasks:** When the same feature requires both user action and code change, split into two tasks: a `type:user-action` task (AR + block) and a code task. The code task sets `depends_on` to the user-action task to enforce ordering.
 
-**Dry-run scenario — #597-style loop prevented:** Because the task is `blocked` between architect cycles 1 and 2, `pick_tasks` returns nothing for it — the orchestrator dispatches no other agents until `resolve_decision` unblocks. Result: **≤2 architect cycles** vs #597's **4+ futile cycles** with no resolution.
+**Dry-run scenario — #597-style loop prevented:** Because the task is `blocked` between architect cycles 1 and 2, `pick_tasks` returns nothing for it — the orchestrator dispatches no other agents until decision resolution unblocks it. Result: **≤2 architect cycles** vs #597's **4+ futile cycles** with no resolution.
 
 ### Handoff
 
