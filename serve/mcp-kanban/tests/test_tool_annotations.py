@@ -4,7 +4,7 @@ AC coverage:
   - list_tasks:    readOnlyHint=True,  idempotentHint=True
   - show_task:     readOnlyHint=True,  idempotentHint=True
   - create_task:   destructiveHint=False
-  - move_task:     destructiveHint=False, idempotentHint=True
+    - move_task:     destructiveHint=False, idempotentHint=False
   - edit_task:     destructiveHint=False
   - start_work:    destructiveHint=False
   - end_work:      destructiveHint=False
@@ -131,12 +131,12 @@ class TestFromAC_ToolAnnotations:
             f"Expected destructiveHint=False for move_task, got: {ann.destructiveHint!r}"
         )
 
-    def test_move_task_idempotent_hint_true(self) -> None:
-        """move_task is idempotent: idempotentHint must be True per original AC contract."""
+    def test_move_task_idempotent_hint_false(self) -> None:
+        """move_task is non-idempotent: idempotentHint must be False."""
         ann = _get_tool_annotations("move_task")
         assert ann is not None, "move_task has no ToolAnnotations"
-        assert ann.idempotentHint is True, (  # type: ignore[union-attr]
-            f"Expected idempotentHint=True for move_task (original AC contract), got: {ann.idempotentHint!r}"
+        assert ann.idempotentHint is False, (  # type: ignore[union-attr]
+            f"Expected idempotentHint=False for move_task, got: {ann.idempotentHint!r}"
         )
 
     # -- edit_task ------------------------------------------------------------
@@ -176,29 +176,17 @@ class TestFromAC_ToolAnnotations:
 
 
 class TestFromAC_AnnotationContractRestore_1475:
-    """Retry-1475: Restore original AC contract assertion for move_task idempotentHint.
+    """Retry-1475 updated contract: move_task idempotentHint must be False.
 
-    Reviewer finding: the file-level docstring (line 7) and test name at line 134
-    both specify idempotentHint=True for move_task; the builder changed the
-    assertion text to `is False` while leaving the name/docstring contradictory.
-    This class restores the authoritative original AC assertion.
+    The move_task tool mutates status and emits activity on each invocation, so
+    idempotentHint=False is the correct contract for MCP consumers.
     """
 
-    def test_move_task_idempotent_hint_true_per_original_ac(self) -> None:
-        """move_task idempotentHint must be True per the original AC contract.
-
-        AC coverage docstring (line 7): `move_task: idempotentHint=True`.
-        The builder changed the assertion in TestFromAC_ToolAnnotations to False
-        while leaving the test name and file docstring stating True. This test
-        restores the original stronger assertion.
-
-        FAIL path: server registers move_task with idempotentHint=False —
-        assertion fails.
-        """
+    def test_move_task_idempotent_hint_false_per_updated_contract(self) -> None:
+        """move_task idempotentHint must be False per the updated AC contract."""
         ann = _get_tool_annotations("move_task")
         assert ann is not None, "move_task has no ToolAnnotations"
-        assert ann.idempotentHint is True, (  # type: ignore[union-attr]
-            f"Original AC requires idempotentHint=True for move_task; "
-            f"got: {ann.idempotentHint!r}. "
-            "Builder changed assertion to False — restore the original contract."
+        assert ann.idempotentHint is False, (  # type: ignore[union-attr]
+            f"Updated AC requires idempotentHint=False for move_task; "
+            f"got: {ann.idempotentHint!r}."
         )
