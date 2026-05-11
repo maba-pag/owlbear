@@ -106,6 +106,9 @@ const SCAN_ITEMS = [
 // ─── API stub helpers ─────────────────────────────────────────────────────────
 
 async function stubApis(page: Page): Promise<void> {
+  // Catch-all registered first (lowest priority in Playwright LIFO matching).
+  // Specific routes below override it for their paths.
+  await page.route('/api/**', (route) => route.fulfill({ status: 200, json: {} }))
   await page.route('/api/events', (route) =>
     route.fulfill({
       status: 200,
@@ -132,7 +135,6 @@ async function stubApis(page: Page): Promise<void> {
     route.fulfill({ json: { items: SCAN_ITEMS, corruption_count: 1 } }),
   )
   await page.route('/api/scan', (route) => route.fulfill({ json: { items: SCAN_ITEMS } }))
-  await page.route('/api/**', (route) => route.fulfill({ status: 200, json: {} }))
 }
 
 // ─── AC1: axe-core accessibility scans at 1024px ─────────────────────────────
