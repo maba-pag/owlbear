@@ -162,19 +162,26 @@ describe('TestFromAC_CleanupShellWiring', () => {
   // ─── AC 3d: CleanupPanel is separate from HealthBadge ────────────────────
 
   describe('AC 3d: CleanupPanel is a sibling of HealthBadge, not a child', () => {
-    it('cleanup-panel and health-badge-stub share the same parent (status bar)', () => {
+    it('cleanup-panel is not a descendant of health-badge-stub: unconditional sibling check after HealthBadge renders', async () => {
       stubHooks()
+      // Provide a valid scan item so HealthBadge renders (hasLoadedScan=true, item passes isHealthBadgeItem filter)
+      vi.mocked(useScanPolling).mockReturnValue({
+        items: [{ code: 'ERR001', detail: 'found issue', file_path: '/path/to/file.py' }],
+        isLoading: false,
+        error: null,
+        refetch: vi.fn(),
+      } as ReturnType<typeof useScanPolling>)
       const { container } = renderShell()
       const statusBar = container.querySelector('[data-region="status-bar"]')!
+      // Unconditionally wait for HealthBadge — no conditional guard (AC 3d-proof requirement)
+      await waitFor(() => {
+        expect(statusBar.querySelector('[data-testid="health-badge-stub"]')).not.toBeNull()
+      })
+      const badgeEl = statusBar.querySelector('[data-testid="health-badge-stub"]')!
       const cleanupEl = statusBar.querySelector('[data-testid="cleanup-panel-stub"]')
-      const badgeEl = statusBar.querySelector('[data-testid="health-badge-stub"]')
-      // Both must exist and share the same parent — neither is nested inside the other.
       expect(cleanupEl).not.toBeNull()
-      // HealthBadge may be absent when scan is loading — but CleanupPanel must always render.
-      // Verify CleanupPanel is not a descendant of the badge stub.
-      if (badgeEl !== null) {
-        expect(badgeEl.contains(cleanupEl)).toBe(false)
-      }
+      // CleanupPanel must not be a descendant of HealthBadge — they are separate controls
+      expect(badgeEl.contains(cleanupEl)).toBe(false)
     })
   })
 

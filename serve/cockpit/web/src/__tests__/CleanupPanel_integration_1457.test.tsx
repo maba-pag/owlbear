@@ -30,15 +30,18 @@ const RESULT_EMPTY: CleanupResult = {
   skipped_items: [],
 }
 
+// Distinct sentinel counts: released=2, archived=4, skipped=1 — no two categories share
+// the same count so swapping display logic fails the exact-value assertion.
 const RESULT_WITH_SKIPPED: CleanupResult = {
   released_claim_ids: [1, 2],
-  archived_task_ids: [10],
+  archived_task_ids: [10, 20, 30, 40],
   skipped_items: [{ path: '/tasks/T-001.md', reason: 'File locked' }],
 }
 
+// Distinct sentinel counts: released=3, archived=6, skipped=2 — all distinct.
 const RESULT_FULL: CleanupResult = {
   released_claim_ids: [1, 2, 3],
-  archived_task_ids: [10, 20, 30],
+  archived_task_ids: [10, 20, 30, 40, 50, 60],
   skipped_items: [
     { path: '/tasks/T-099.md', reason: 'File locked' },
     { path: '/tasks/T-100.md', reason: 'Parse error' },
@@ -108,8 +111,10 @@ describe('TestFromAC_CleanupPanel_Integration', () => {
       await waitFor(() => {
         expect(container.querySelector('[data-testid="cleanup-released-count"]')).not.toBeNull()
       })
-      expect(container.querySelector('[data-testid="cleanup-released-count"]')!.textContent).toMatch(/0/)
-      expect(container.querySelector('[data-testid="cleanup-skipped-count"]')!.textContent).toMatch(/0/)
+      // Exact-value assertions — swapping any display field would fail the corresponding check
+      expect(container.querySelector('[data-testid="cleanup-released-count"]')!.textContent?.trim()).toBe('Released claims: 0')
+      expect(container.querySelector('[data-testid="cleanup-archived-count"]')!.textContent?.trim()).toBe('Archived tasks: 0')
+      expect(container.querySelector('[data-testid="cleanup-skipped-count"]')!.textContent?.trim()).toBe('Skipped items: 0')
     })
 
     it('shows counts and skipped list with non-empty result', async () => {
@@ -120,7 +125,8 @@ describe('TestFromAC_CleanupPanel_Integration', () => {
       await waitFor(() => {
         expect(container.querySelector('[data-testid="cleanup-skipped-list"]')).not.toBeNull()
       })
-      expect(container.querySelector('[data-testid="cleanup-released-count"]')!.textContent).toMatch(/2/)
+      // Exact-value assertion: sentinel released=2 (archived=4, skipped=1 are distinct)
+      expect(container.querySelector('[data-testid="cleanup-released-count"]')!.textContent?.trim()).toBe('Released claims: 2')
     })
 
     it('shows full result with multiple released, archived, and skipped', async () => {
@@ -131,9 +137,11 @@ describe('TestFromAC_CleanupPanel_Integration', () => {
       await waitFor(() => {
         expect(container.querySelector('[data-testid="cleanup-released-count"]')).not.toBeNull()
       })
-      expect(container.querySelector('[data-testid="cleanup-released-count"]')!.textContent).toMatch(/3/)
-      expect(container.querySelector('[data-testid="cleanup-archived-count"]')!.textContent).toMatch(/3/)
-      expect(container.querySelector('[data-testid="cleanup-skipped-count"]')!.textContent).toMatch(/2/)
+      // Exact-value assertions with distinct sentinels: released=3, archived=6, skipped=2
+      // Swapping released↔archived would fail: 'Released claims: 3' ≠ 'Released claims: 6'
+      expect(container.querySelector('[data-testid="cleanup-released-count"]')!.textContent?.trim()).toBe('Released claims: 3')
+      expect(container.querySelector('[data-testid="cleanup-archived-count"]')!.textContent?.trim()).toBe('Archived tasks: 6')
+      expect(container.querySelector('[data-testid="cleanup-skipped-count"]')!.textContent?.trim()).toBe('Skipped items: 2')
     })
 
     it('skipped list absent when result has no skipped items', async () => {

@@ -28,12 +28,20 @@ import CleanupPanel from '../components/CleanupPanel'
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
+// Distinct sentinel counts: released=5, archived=3, skipped=7 — no two categories share
+// the same value, so swapping display logic in CleanupPanel causes the exact-value
+// assertion for the swapped field to fail.
 const RESULT_WITH_SKIPPED: CleanupResult = {
-  released_claim_ids: [1, 2, 3],
-  archived_task_ids: [10, 20],
+  released_claim_ids: [1, 2, 3, 4, 5],
+  archived_task_ids: [10, 20, 30],
   skipped_items: [
     { path: '/tasks/TASK-099.md', reason: 'File locked' },
     { path: '/tasks/TASK-100.md', reason: 'Parse error' },
+    { path: '/tasks/TASK-101.md', reason: 'Not found' },
+    { path: '/tasks/TASK-102.md', reason: 'Permission denied' },
+    { path: '/tasks/TASK-103.md', reason: 'Timeout' },
+    { path: '/tasks/TASK-104.md', reason: 'Invalid format' },
+    { path: '/tasks/TASK-105.md', reason: 'Corrupt data' },
   ],
 }
 
@@ -173,32 +181,32 @@ describe('TestFromAC_CleanupPanel', () => {
       mockHook({ phase: 'done', results: RESULT_WITH_SKIPPED })
       const { getByTestId } = renderPanel()
       const el = getByTestId('cleanup-released-count')
-      // Must show the count: 3 released claims
-      expect(el.textContent).toMatch(/3/)
+      // Exact-value assertion: sentinel count=5 — swapping to archived (3) or skipped (7) would fail
+      expect(el.textContent?.trim()).toBe('Released claims: 5')
     })
 
     it('shows archived tasks count when phase is done', () => {
       mockHook({ phase: 'done', results: RESULT_WITH_SKIPPED })
       const { getByTestId } = renderPanel()
       const el = getByTestId('cleanup-archived-count')
-      // Must show the count: 2 archived tasks
-      expect(el.textContent).toMatch(/2/)
+      // Exact-value assertion: sentinel count=3 — swapping to released (5) or skipped (7) would fail
+      expect(el.textContent?.trim()).toBe('Archived tasks: 3')
     })
 
     it('shows skipped items count when phase is done', () => {
       mockHook({ phase: 'done', results: RESULT_WITH_SKIPPED })
       const { getByTestId } = renderPanel()
       const el = getByTestId('cleanup-skipped-count')
-      // Must show the count: 2 skipped items
-      expect(el.textContent).toMatch(/2/)
+      // Exact-value assertion: sentinel count=7 — swapping to released (5) or archived (3) would fail
+      expect(el.textContent?.trim()).toBe('Skipped items: 7')
     })
 
     it('shows zero counts correctly when result has empty arrays', () => {
       mockHook({ phase: 'done', results: RESULT_EMPTY })
       const { getByTestId } = renderPanel()
-      expect(getByTestId('cleanup-released-count').textContent).toMatch(/0/)
-      expect(getByTestId('cleanup-archived-count').textContent).toMatch(/0/)
-      expect(getByTestId('cleanup-skipped-count').textContent).toMatch(/0/)
+      expect(getByTestId('cleanup-released-count').textContent?.trim()).toBe('Released claims: 0')
+      expect(getByTestId('cleanup-archived-count').textContent?.trim()).toBe('Archived tasks: 0')
+      expect(getByTestId('cleanup-skipped-count').textContent?.trim()).toBe('Skipped items: 0')
     })
   })
 
