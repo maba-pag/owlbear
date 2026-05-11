@@ -3,6 +3,7 @@ import { Routes, Route } from 'react-router'
 import { PButton } from '@porsche-design-system/components-react'
 import KanbanBoard from './KanbanBoard'
 import ActivityTab from './components/ActivityTab'
+import CleanupPanel from './components/CleanupPanel'
 import DecisionViewport from './components/DecisionViewport'
 import DetailTab, { type TaskDetail } from './components/DetailTab'
 import DRStatusIndicator from './components/DRStatusIndicator'
@@ -152,6 +153,7 @@ function Shell() {
             onRepairSuccess={refetch}
           />
         ) : null}
+        <CleanupPanel onSuccess={refetchTasks} />
         {scanError ? (
           <>
             <span data-testid="scan-error" data-health="error" role="status">
