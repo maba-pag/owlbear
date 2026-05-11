@@ -281,4 +281,21 @@ describe('TestFromAC_CleanupPanel', () => {
       expect(hook.dismissResults).toHaveBeenCalledOnce()
     })
   })
+
+  // ─── AC 3d: onSuccess prop is forwarded to useCleanupFlow hook ───────────
+
+  describe('AC 3d: onSuccess prop is forwarded to the cleanup hook', () => {
+    it('passes the onSuccess callback to useCleanupFlow', () => {
+      const onSuccess = vi.fn()
+      mockHook()
+      renderPanel({ onSuccess })
+      expect(vi.mocked(useCleanupFlow)).toHaveBeenCalledWith({ onSuccess })
+    })
+
+    it('renders without onSuccess prop (prop is optional)', () => {
+      mockHook()
+      expect(() => renderPanel()).not.toThrow()
+      expect(vi.mocked(useCleanupFlow)).toHaveBeenCalledWith({ onSuccess: undefined })
+    })
+  })
 })

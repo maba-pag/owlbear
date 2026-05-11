@@ -261,4 +261,54 @@ describe('TestFromAC_useCleanupFlow', () => {
       expect(result.current.error).toBeNull()
     })
   })
+
+  // ─── AC 3b: running phase is observable before cleanupTasks resolves ─────────
+  // Discriminating tests: must fail if setPhase('running') is removed from
+  // useCleanupFlow.ts before the cleanupTasks await.
+
+  describe('AC 3b: running phase entered before cleanupTasks resolves (discriminating)', () => {
+    it('phase is running while cleanupTasks is in flight', async () => {
+      let resolveCleanup!: (value: CleanupResult) => void
+      vi.mocked(cleanupTasks).mockImplementationOnce(
+        () => new Promise<CleanupResult>((resolve) => { resolveCleanup = resolve }),
+      )
+      const { result } = renderHook(() => useCleanupFlow())
+      act(() => { result.current.requestCleanup() })
+
+      // Start confirmCleanup inside an async act() but do not await the inner promise —
+      // setPhase('running') fires synchronously before the cleanupTasks await,
+      // and await Promise.resolve() lets React flush that batch.
+      await act(async () => {
+        void result.current.confirmCleanup()
+        await Promise.resolve()
+      })
+
+      // If setPhase('running') is removed, this assertion fails because phase
+      // would remain 'confirming' until cleanupTasks resolves.
+      expect(result.current.phase).toBe('running')
+
+      // Complete the deferred cleanup and verify final transition.
+      await act(async () => { resolveCleanup(RESULT_EMPTY) })
+      expect(result.current.phase).toBe('done')
+    })
+
+    it('results remain null while phase is running', async () => {
+      let resolveCleanup!: (value: CleanupResult) => void
+      vi.mocked(cleanupTasks).mockImplementationOnce(
+        () => new Promise<CleanupResult>((resolve) => { resolveCleanup = resolve }),
+      )
+      const { result } = renderHook(() => useCleanupFlow())
+      act(() => { result.current.requestCleanup() })
+
+      await act(async () => {
+        void result.current.confirmCleanup()
+        await Promise.resolve()
+      })
+
+      expect(result.current.phase).toBe('running')
+      expect(result.current.results).toBeNull()
+
+      await act(async () => { resolveCleanup(RESULT_EMPTY) })
+    })
+  })
 })
