@@ -58,6 +58,23 @@ Returned by `pick_tasks` in `waves: list[Wave]`.
 
 Responses include `guidance: list[str]` for operational hints (for example: DR-required block guidance and forward-skip warnings). Treat as advisory metadata.
 
+### Error Envelopes
+
+All tool errors are returned as JSON objects with two fields:
+
+```json
+{"code": "ERR_NOT_FOUND", "message": "Task '99' not found"}
+```
+
+| Code | Trigger |
+|------|---------|
+| `ERR_NOT_FOUND` | Task file not found (FileNotFoundError) |
+| `ERR_PARAM_VALIDATION` | Invalid parameter value or Pydantic validation failure |
+| `ERR_INVALID_ID` | Malformed or non-positive task ID |
+| `ERR_STALE_WRITE` | Concurrent write conflict detected by the engine |
+
+Internal file paths are never included in error messages. `move_task` and `end_work` share a single validation path for archival constraints; errors from either tool use the same codes above.
+
 ## list_tasks Filter Semantics
 
 - `ids=[]` (explicit empty list) returns an empty task list with no `missing_ids` entry. `ids=None` (omitted) returns all tasks matching other filters.
