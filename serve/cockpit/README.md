@@ -35,6 +35,7 @@ All mutation routes go through the `CockpitView` facade.
 | `view.scan_corruption()` | `POST /tasks/scan` | Scans all task files for corruption; returns list of `{code, detail, file_path}` items |
 | `view.repair_storage()` | `POST /tasks/repair` | Repairs corrupted task files; returns list of `RepairOutcome` items |
 | `view.compact_activity()` | `POST /tasks/compact-activity` | Compacts the activity log; returns `ActivityCompactionResult` |
+| `view.cleanup()` | `POST /tasks/cleanup` | Releases expired claims and archives done tasks; returns `CleanupResult` with `released_claim_ids`, `archived_task_ids`, and `skipped_items` |
 
 ### Excluded methods — why
 
