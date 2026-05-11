@@ -52,7 +52,7 @@ Verify the task is in `backlog` status. If the task references a research doc (`
 4. Check `depends_on` — are dependencies actually `done`? Use `show_task` for each dependency if needed.
 5. Identify: existing patterns to follow, interfaces to respect, invariants to maintain.
 6. Check the task body for prior architecture notes, research pointers, and reviewer feedback from previous cycles.
-7. **Brief context (when parent is set):** If the task has a `parent` field, call `show_task(parent_id)` and scan for Brief sections (`## Brief`, `## Problem`, `## Outcomes`, `## Approach`, `## Scope`, `## Investment Tier`). When present, use this context to inform AC evaluation and builder guidance.
+7. **Brief context (when parent is set):** If the task has a `parent` field, call `show_task(id=parent_id)` and scan for Brief sections (`## Brief`, `## Problem`, `## Outcomes`, `## Approach`, `## Scope`, `## Investment Tier`). When present, use this context to inform AC evaluation and builder guidance.
 
 ## Step 2 — Evaluate Architecture
 

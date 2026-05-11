@@ -208,7 +208,7 @@ See .owlbear/scratch/480-reviewer.md for full evidence.
 - **Pipeline agents** (reviewer, doc-writer, auditor): read predecessor sections via task body.
 - **Architect / builder:** read task body for AC, architecture notes, research pointers, and Brief context (via parent task, when present).
 
-To retrieve the full task body, use `show_task(task_id="{id}")` (see `h-mcp-kanban`).
+To retrieve the full task body, use `show_task(id="{id}")` (see `h-mcp-kanban`).
 
 ### Required Follow-up (Negative Signal Format)
 
