@@ -1,5 +1,5 @@
 /**
- * Failing tests for #1344: Fix Cockpit detail edit workflow contract
+ * Workflow behavior tests1344: Fix Cockpit detail edit workflow contract
  *
  * RED phase — all tests must fail until builder implements fixes.
  *

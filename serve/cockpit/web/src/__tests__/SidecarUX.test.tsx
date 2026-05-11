@@ -1,5 +1,5 @@
 /**
- * RED phase tests for #1393: P3-03 Test Cockpit operational sidecar UX and repair safeguards
+ * Workflow behavior tests1393: P3-03 Test Cockpit operational sidecar UX and repair safeguards
  *
  * AC1: Session type nullability — null task_id / null agent must not render "null" text
  * AC2: Filter active state observable + session rows show human-readable durations

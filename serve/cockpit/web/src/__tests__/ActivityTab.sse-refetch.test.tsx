@@ -1,5 +1,5 @@
 /**
- * Failing tests for #1278: Implement ActivityTab SSE live refetch
+ * Workflow behavior tests1278: Implement ActivityTab SSE live refetch
  *
  * Covers:
  *   AC1 — usePollingFetch replaces one-shot fetch (URL, intervalMs, paused flag, onSuccess)

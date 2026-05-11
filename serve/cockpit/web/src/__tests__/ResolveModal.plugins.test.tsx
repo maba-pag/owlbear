@@ -1,5 +1,5 @@
 /**
- * RED phase tests for #1194: P3-06 Implement resolve modal — ResolveModal plugin props.
+ * Workflow behavior tests1194: P3-06 Implement resolve modal — ResolveModal plugin props.
  *
  * Covers:
  *   AC8  — ResolveModal passes remarkGfm to ReactMarkdown's remarkPlugins

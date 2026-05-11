@@ -1,5 +1,5 @@
 /**
- * RED phase tests for #1389: P2-14 Shell integration of DecisionViewport (AC8)
+ * Workflow behavior tests1389: P2-14 Shell integration of DecisionViewport (AC8)
  *
  * AC8 (td:2): DecisionViewport is the primary decision listing surface
  * accessible from the Shell, showing loading, error, and empty states from

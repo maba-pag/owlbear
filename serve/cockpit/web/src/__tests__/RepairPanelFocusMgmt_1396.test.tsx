@@ -1,5 +1,5 @@
 /**
- * RED phase tests for #1396 AC7: RepairPanel confirm-dialog focus management
+ * Workflow behavior tests1396 AC7: RepairPanel confirm-dialog focus management
  *
  * AC7 requires proving the same 4-assertion pattern as DRFocusMgmt_1396.test.tsx
  * for the RepairPanel confirm dialog (data-testid="repair-confirm-dialog"):

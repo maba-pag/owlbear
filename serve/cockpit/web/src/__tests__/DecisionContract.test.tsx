@@ -1,5 +1,5 @@
 /**
- * RED phase tests for #1386: P2-11 Test Cockpit decision data contract and refetch flow
+ * Workflow behavior tests1386: P2-11 Test Cockpit decision data contract and refetch flow
  *
  * Root bug: Shell.tsx onResolved() calls only refetchPendingDRs() — refetchTasks()
  * is never called, so the board task list is stale after decision resolution even

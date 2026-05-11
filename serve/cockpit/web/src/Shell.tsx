@@ -1,4 +1,4 @@
-import { type ReactElement, useRef, useEffect, useState } from 'react'
+import { useRef, useEffect, useState } from 'react'
 import { Routes, Route } from 'react-router'
 import { PButton } from '@porsche-design-system/components-react'
 import KanbanBoard from './KanbanBoard'
@@ -57,13 +57,6 @@ function Shell() {
     },
     selectedId: selectedTaskId,
   }
-  const mockedKanbanBoard = KanbanBoard as unknown as {
-    mock?: unknown
-    (props: typeof kanbanProps, legacyContext?: Record<string, unknown>): ReactElement
-  }
-  const kanbanElement = mockedKanbanBoard.mock
-    ? mockedKanbanBoard(kanbanProps, {})
-    : <KanbanBoard {...kanbanProps} />
 
   useEffect(() => {
     if (!isLoading) {
@@ -212,7 +205,7 @@ function Shell() {
       </nav>
       <main className="shell__workspace" data-region="workspace">
         <Routes>
-          <Route path="/" element={kanbanElement} />
+          <Route path="/" element={<KanbanBoard {...kanbanProps} />} />
         </Routes>
       </main>
       <aside className="shell__sidecar" data-region="sidecar">

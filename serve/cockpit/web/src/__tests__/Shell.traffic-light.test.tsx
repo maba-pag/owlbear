@@ -1,5 +1,5 @@
 /**
- * Failing tests for #966: traffic-light wiring in Shell
+ * Workflow behavior tests966: traffic-light wiring in Shell
  *
  * Shell.tsx must bind useBoard().health
  * to data-health on the [data-testid="traffic-light"] span.

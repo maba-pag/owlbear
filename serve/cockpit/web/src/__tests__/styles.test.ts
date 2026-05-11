@@ -1,5 +1,5 @@
 /**
- * Failing tests for #1226: Frontend — dedup rowStyleForState + delete scratch files
+ * Workflow behavior tests1226: Frontend — dedup rowStyleForState + delete scratch files
  *
  * AC1 (td:2): rowStyleForState extracted to a shared module under src/utils/;
  * all branches (blocked/rejected, stuck, default) return correct style objects.

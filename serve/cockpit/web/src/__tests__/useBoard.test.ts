@@ -1,5 +1,5 @@
 /**
- * Failing tests for #965: useBoard polling + mtime-skip + error states.
+ * Workflow behavior tests965: useBoard polling + mtime-skip + error states.
  *
  * Covers: 3s poll interval, mtime-aware skip (no re-render on same mtime),
  * error/isStale/isFetching traffic-light states, AbortController cleanup on

@@ -1,5 +1,5 @@
 /**
- * RED phase tests for #1374: P1-11 Test Cockpit frontend error-contract adoption
+ * Workflow behavior tests1374: P1-11 Test Cockpit frontend error-contract adoption
  *
  * All tests FAIL until #1375 implements consistent error-envelope parsing.
  *

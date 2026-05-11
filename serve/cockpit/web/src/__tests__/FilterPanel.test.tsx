@@ -1,5 +1,5 @@
 /**
- * RED phase tests for #1250: P2-01 — FilterPanel component tests
+ * Workflow behavior tests1250: P2-01 — FilterPanel component tests
  *
  * Covers all 7 AC lines for FilterPanel:
  *   AC1 (td:2) — renders text input, priority select, tags multi-select,

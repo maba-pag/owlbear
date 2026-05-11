@@ -1,5 +1,5 @@
 /**
- * Failing tests for #1163: RF-01 repairStorage API client
+ * Workflow behavior tests1163: RF-01 repairStorage API client
  *
  * Covers: POST to /api/tasks/repair with no body, typed RepairOutcome[] return,
  * network and HTTP error rejection, and RepairOutcome type schema contract.

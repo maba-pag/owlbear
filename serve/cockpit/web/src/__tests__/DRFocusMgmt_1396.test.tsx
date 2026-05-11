@@ -1,5 +1,5 @@
 /**
- * RED phase tests for #1396: P3-06 Implement Cockpit accessibility and PDS verification gate
+ * Workflow behavior tests1396: P3-06 Implement Cockpit accessibility and PDS verification gate
  *
  * Scope: DRStatusIndicator popover focus management parity with HealthBadge.
  *

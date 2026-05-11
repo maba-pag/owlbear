@@ -1,5 +1,5 @@
 /**
- * RED phase tests for #1158: HealthBadge component
+ * Workflow behavior tests1158: HealthBadge component
  *
  * Covers: green/red indicator states, issue count text, popover toggle,
  * popover item fields, aria-label contract, data-testid, and default export.

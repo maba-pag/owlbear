@@ -1,5 +1,5 @@
 /**
- * Failing tests for #967: useBoard hook extracted to hooks/useBoard.ts.
+ * Workflow behavior tests967: useBoard hook extracted to hooks/useBoard.ts.
  *
  * Covers: 3s setInterval polling, mtime-aware skip (no re-render on same
  * mtime), /api/board single-mount fetch, full return interface including

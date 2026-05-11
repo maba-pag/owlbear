@@ -1,5 +1,5 @@
 /**
- * Failing tests for #1382: P2-07 Test Cockpit task conflict resolution workflow
+ * Workflow behavior tests1382: P2-07 Test Cockpit task conflict resolution workflow
  *
  * RED phase — all tests must fail until builder implements fixes in #1383.
  *

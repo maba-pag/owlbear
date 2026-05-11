@@ -1,5 +1,5 @@
 /**
- * RED phase tests for #1227: usePollingFetch shared polling utility
+ * Workflow behavior tests1227: usePollingFetch shared polling utility
  *
  * AC2 (td:2): Shared polling utility extracted — inFlight guard, boolean
  * coalesce, AbortController cleanup, onSuccess/onError callbacks.

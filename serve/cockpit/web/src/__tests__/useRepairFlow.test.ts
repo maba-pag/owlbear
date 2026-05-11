@@ -1,5 +1,5 @@
 /**
- * Failing tests for #1165: RF-03 useRepairFlow hook state machine
+ * Workflow behavior tests1165: RF-03 useRepairFlow hook state machine
  *
  * Covers: initial idle state, requestRepair → confirming, confirmRepair → repairing,
  * successful repair → done with grouped outcomes (fixed/quarantined/failed buckets),

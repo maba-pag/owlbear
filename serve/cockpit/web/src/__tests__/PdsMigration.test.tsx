@@ -1,5 +1,5 @@
 /**
- * RED phase tests for #1230: Frontend — PDS migration (design system consistency)
+ * Workflow behavior tests1230: Frontend — PDS migration (design system consistency)
  *
  * AC1 (td:1): <button> → <PButton> in ConfirmDialog, ArchivalModal, ActivityTab,
  *              DetailTab, ResolveModal, Shell.tsx

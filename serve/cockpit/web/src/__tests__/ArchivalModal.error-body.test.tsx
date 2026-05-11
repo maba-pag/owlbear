@@ -1,5 +1,5 @@
 /**
- * RED phase tests for #1375: P1-12 Implement Cockpit frontend error-contract adoption
+ * Workflow behavior tests1375: P1-12 Implement Cockpit frontend error-contract adoption
  *
  * ArchivalModal.tsx gaps — handleSubmit reads only payload.detail for 422 errors
  * and uses a status-only fallback for all other non-ok statuses:

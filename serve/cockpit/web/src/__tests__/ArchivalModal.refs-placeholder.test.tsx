@@ -1,5 +1,5 @@
 /**
- * RED phase tests for #1245: ArchivalModal — selector reconciliation + em-dash
+ * Workflow behavior tests1245: ArchivalModal — selector reconciliation + em-dash
  *
  * Covers two (td:1)/(td:2) AC items not yet green:
  *

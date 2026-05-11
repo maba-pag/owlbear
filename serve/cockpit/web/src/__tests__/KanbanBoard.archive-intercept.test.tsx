@@ -1,5 +1,5 @@
 /**
- * RED phase tests for #1242: handleTransitionClick archive intercept (F3)
+ * Workflow behavior tests1242: handleTransitionClick archive intercept (F3)
  *
  * Covers:
  *   AC1 — clicking → archived opens ArchivalModal; no POST /move fires immediately

@@ -1,5 +1,5 @@
 /**
- * RED phase tests for #1191: usePendingDRs polling hook
+ * Workflow behavior tests1191: usePendingDRs polling hook
  *
  * Covers: GET fetch to /api/decisions/pending on mount, configurable
  * intervalMs, state shape (count/items/isLoading/error), empty response,

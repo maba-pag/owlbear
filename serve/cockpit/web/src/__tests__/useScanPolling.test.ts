@@ -1,5 +1,5 @@
 /**
- * Failing tests for #1157: useScanPolling hook
+ * Workflow behavior tests1157: useScanPolling hook
  *
  * Covers: POST fetch on mount, configurable intervalMs (default 60 000 ms),
  * state shape (items/isLoading/error), empty-array response, error paths

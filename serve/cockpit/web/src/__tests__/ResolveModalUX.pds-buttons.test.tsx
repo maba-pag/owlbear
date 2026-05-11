@@ -1,5 +1,5 @@
 /**
- * RED phase tests for #1389 v2: AC4 — PButton controls in ResolveModal
+ * Workflow behavior tests1389 v2: AC4 — PButton controls in ResolveModal
  *
  * AC4 (td:2): ResolveModal submit and cancel controls use <PButton> (not raw
  * <button>): submit with variant="primary", cancel with variant="secondary".

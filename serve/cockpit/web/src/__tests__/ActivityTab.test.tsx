@@ -1,5 +1,5 @@
 /**
- * Failing tests for #935: Sidecar Activity tab
+ * Workflow behavior tests935: Sidecar Activity tab
  *
  * Covers: default active-session filter, filter switches (all / failed-or-rejected /
  * released), session row field rendering, and click-to-detail navigation.

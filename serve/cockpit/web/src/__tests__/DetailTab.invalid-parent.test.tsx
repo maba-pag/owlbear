@@ -1,5 +1,5 @@
 /**
- * Failing tests for #1378: P2-03 Test Cockpit task detail edit validation and dirty state
+ * Workflow behavior tests1378: P2-03 Test Cockpit task detail edit validation and dirty state
  *
  * RED phase — all tests must fail until the builder implements fixes in #1379.
  *

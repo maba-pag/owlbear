@@ -1,5 +1,5 @@
 /**
- * Failing tests for #1156: Cockpit session history polish
+ * Workflow behavior tests1156: Cockpit session history polish
  *
  * Covers: fetch uses filter=all, active-filter predicate fix (running not in-progress),
  * new blocked/stuck filter buttons, data-state visual indicators on ActivityTab rows

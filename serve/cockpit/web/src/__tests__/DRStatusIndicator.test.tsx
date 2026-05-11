@@ -1,5 +1,5 @@
 /**
- * RED phase tests for #1191: DRStatusIndicator component
+ * Workflow behavior tests1191: DRStatusIndicator component
  *
  * Covers: pending DR count rendering, attention/dormant status attribute,
  * popover toggle on indicator click, popover item fields (title, agent,

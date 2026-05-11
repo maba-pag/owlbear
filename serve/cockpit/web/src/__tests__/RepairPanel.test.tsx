@@ -1,5 +1,5 @@
 /**
- * Failing tests for #1167: RF-05 RepairPanel component
+ * Workflow behavior tests1167: RF-05 RepairPanel component
  *
  * Covers: button visibility by corruption count, confirmation dialog content,
  * repair execution trigger, cancel/dismiss flows, loading spinner, grouped

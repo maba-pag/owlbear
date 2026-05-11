@@ -1,5 +1,5 @@
 /**
- * RED phase tests for #1263: Wire usePendingDRs to SSE decisions-changed early-refetch
+ * Workflow behavior tests1263: Wire usePendingDRs to SSE decisions-changed early-refetch
  * Scope: Shell.tsx wiring (AC4 + AC5)
  *
  * AC4 (td:2): Shell.tsx calls refetchPendingDRs() via useEffect when lastDecisionsMtime

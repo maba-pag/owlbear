@@ -1,5 +1,5 @@
 /**
- * Failing tests for #1168: RF-06 RepairPanel wired into HealthBadge
+ * Workflow behavior tests1168: RF-06 RepairPanel wired into HealthBadge
  *
  * AC6 — RepairPanel rendered inside HealthBadge popover (data-testid="health-badge-popover")
  *        below the issue list when corruptionCount > 0

@@ -1,5 +1,5 @@
 /**
- * RED phase tests for #1193: P3-05 ResolveModal component
+ * Workflow behavior tests1193: P3-05 ResolveModal component
  *
  * Covers: markdown DR body rendering, 3-option response selector,
  * optional notes textarea, POST submit payload assertion, modal close

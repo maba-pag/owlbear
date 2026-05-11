@@ -1,5 +1,5 @@
 /**
- * RED phase tests for #1372: P1-09: Test Cockpit health false-OK prevention
+ * Workflow behavior tests1372: P1-09: Test Cockpit health false-OK prevention
  *
  * Exercises the full fetch→render chain at Shell integration level:
  *   window.fetch → usePollingFetch → useScanPolling → Shell → HealthBadge

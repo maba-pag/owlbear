@@ -1,5 +1,5 @@
 /**
- * Failing tests for #935: Sidecar Detail tab
+ * Workflow behavior tests935: Sidecar Detail tab
  *
  * Covers: editable fields, read-only fields, markdown body, edit mode toggle,
  * save with updated snapshot, 409 conflict detection, history subtab, and

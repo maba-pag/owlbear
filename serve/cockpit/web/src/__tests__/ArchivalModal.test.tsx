@@ -1,5 +1,5 @@
 /**
- * RED phase tests for #1241: ArchivalModal component (F1 + F2)
+ * Workflow behavior tests1241: ArchivalModal component (F1 + F2)
  *
  * Covers: ARCHIVAL_REASONS constant ordering, role/aria-modal/aria-labelledby,
  * focus on open, completed-option visibility by taskStatus, refs field visibility
