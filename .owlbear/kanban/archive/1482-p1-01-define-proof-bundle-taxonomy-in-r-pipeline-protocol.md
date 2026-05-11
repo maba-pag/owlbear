@@ -1,10 +1,10 @@
 ---
 id: 1482
 title: 'P1-01: Define proof-bundle taxonomy in r-pipeline-protocol'
-status: done
+status: archived
 priority: critical
 created: 2026-05-11T08:58:34.021832+00:00
-updated: 2026-05-11T11:33:04.261087+00:00
+updated: 2026-05-11T11:43:54.186254+00:00
 tags:
 - pipeline
 - convention
@@ -14,7 +14,7 @@ parent: 1481
 depends_on: []
 blocked: false
 block_reason:
-claimed_at: 2026-05-11T11:33:04.261087+00:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -168,3 +168,27 @@ Brief: see parent #1481
 
 ### Scratch Files Cleaned
 - None (no `1482-*` scratch files existed)
+[[2026-05-11]]
+## Audit
+### Regression Detection
+- quality-runner mode full: 2848 passed, 203 failed (pre-existing), 5 errors (pre-existing), 4 skipped. Task changed only `share/skills/r-pipeline-protocol/SKILL.md` (markdown) — no Python/TS code touched, zero possibility of introducing regressions. Failures span cockpit routes, kanban engine, and review workflow modules — all unrelated to this documentation edit.
+- regression verdict: PASS
+
+### Intent Verification
+- scope alignment: PASS (changed files: `r-pipeline-protocol/SKILL.md` + `pipeline.excalidraw` footer — both in pipeline convention domain)
+- purpose match: PASS (defines proof-bundle taxonomy replacing td:N convention, exactly as AC states)
+- extraneous scope: none
+- boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 5/5
+AC lines name all 5 enum values, all 4 routing-table columns, both modifiers with 3 specific aspects (expansion, normalization, rejection), and legacy mapping. No gaps, no ambiguity, clean implementation path.
+
+### Commit Integrity
+- upstream commit presence: PASS (`3b611d93` builder, `fb38ed83` doc-writer — both verified via `git log`)
+- kanban commit packaging: pending (this audit cycle)
+
+### Deduction Breakdown
+No deductions.
+
+### Confidence: 1.00
+### Action: archive
