@@ -910,6 +910,7 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - # `Quality-Runner Subagent`
 - ## `Consumer Invocation Pattern`
 - ## `Input Fields`
+- ### `Frontend Optional Proof Types`
 - ## `Output Format`
 
 ## share/skills/h-visual-output/SKILL.md

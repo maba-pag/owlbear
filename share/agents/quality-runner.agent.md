@@ -1,6 +1,6 @@
 ---
 name: quality-runner
-description: "Mechanical utility — run pytest, ruff, and coverage; return structured reports (ND3)"
+description: "Mechanical utility — run Python/frontend quality commands; return structured reports (ND3)"
 argument-hint: "Run: mode={scoped|full}, test_paths=[...], task_id={id}, coverage_modules=[...], lint_paths=[...]"
 user-invocable: false
 disable-model-invocation: false
@@ -32,15 +32,15 @@ and parse their output.
 <required_reading>
 
 - `h-pytest-and-linting` — Python test and lint commands
-- `h-vitest-and-linting` — TypeScript/JavaScript test and lint commands
+- `h-vitest-and-linting` — TypeScript/JavaScript test, lint, build, and E2E commands
 
 </required_reading>
 
 <critical_rules>
 
 - **Follow the `h-pytest-and-linting` skill** for command flags, coverage syntax, and the full pitfall reference.
-- **Follow the `h-vitest-and-linting` skill** for TypeScript/JavaScript tasks — vitest + eslint from `serve/cockpit/web/`.
-- **Toolchain selection.** If any `test_paths` entry is under a directory with `package.json` containing vitest, use vitest + eslint from that directory. Otherwise use pytest + ruff from the workspace root.
+- **Follow the `h-vitest-and-linting` skill** for TypeScript/JavaScript tasks. Default frontend evidence is vitest + eslint from `serve/cockpit/web/`; run build, CSS/HTML lint, or Playwright only when AC, Architecture Review notes, or caller instructions explicitly require those proof types.
+- **Toolchain selection.** If any `test_paths` entry is under a directory with `package.json` containing vitest, use the frontend evidence path from that directory. Otherwise use pytest + ruff from the workspace root.
 - **Input semantics.** `mode=scoped`: run only `test_paths`. `mode=full`: run `tests/ serve/ -m "not api"`. `task_id` names scratch files (`{task_id}-pytest-output.txt`); for suite-scoped workflows without a kanban task, use a stable run label such as `test-curation`. `coverage_modules` adds focused coverage display. `lint_paths` defaults to source + tests if omitted.
 - **Always use `--silent` for vitest runs.** PDS console noise can exceed 600K lines. Without `--silent`, terminal output and log files become unmanageable.
 - **Never `read_file` on vitest log files.** If you redirected vitest output to a file, use `tail -50` to get the summary or `grep -E 'FAIL|Test Files:|Tests:' <file>` to extract results. Reading the full file wastes the entire context window.
@@ -80,7 +80,7 @@ none
 
 If `failed` count exceeds 20, list the first 20 entries and append `... and N more`. The caller only needs a representative sample, not the full list.
 
-Exit codes — Python: 0=passed, 1=failed, 2=interrupted, 3=internal error, 4=usage error, 5=no tests collected. Frontend: vitest 0=passed 1=failed; eslint 0=clean 1=violations 2=fatal.
+Exit codes — Python: 0=passed, 1=failed, 2=interrupted, 3=internal error, 4=usage error, 5=no tests collected. Frontend default: vitest 0=passed 1=failed; eslint 0=clean 1=violations 2=fatal. Optional frontend commands: include `build`, `stylelint`, `htmlhint`, and `playwright` exit codes when those commands are explicitly requested.
 
 ### Channel B
 
