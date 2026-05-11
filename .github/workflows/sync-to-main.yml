@@ -32,10 +32,6 @@ name: Sync dev to main
         description: "serve/cockpit/"
         type: boolean
         default: true
-      build_cockpit:
-        description: "Build cockpit SPA (only effective when sync_cockpit is enabled)"
-        type: boolean
-        default: true
       sync_tools:
         description: "serve/tools/"
         type: boolean
