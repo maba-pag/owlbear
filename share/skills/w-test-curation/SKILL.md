@@ -139,9 +139,7 @@ Append one entry per module to `.owlbear/scratch/curator-log.jsonl`:
 git add tests/ && git commit -m "test: curate module tests — {N} task-tests removed, {M} modules improved (test-curator)"
 ```
 
-Then advance via `end_work` (moves to next status + releases claim).
-
-Return Channel A signal per `r-pipeline-protocol`.
+Then return the Channel A signal and Channel B summary. This prompt-run workflow has no kanban lifecycle advance step.
 
 ## Output Template
 
