@@ -33,18 +33,21 @@ import { Card } from '../components/Card'
 const CARD_TSX = path.resolve(__dirname, '../components/Card.tsx')
 const SHELL_CSS = path.resolve(__dirname, '../Shell.css')
 const SHELL_TSX = path.resolve(__dirname, '../Shell.tsx')
+const KANBAN_BOARD_TSX = path.resolve(__dirname, '../KanbanBoard.tsx')
 
 // ─── Shared CSS source ────────────────────────────────────────────────────────
 
 let shellCss = ''
 let cardSource = ''
 let shellTsx = ''
+let kanbanBoardSource = ''
 
 // loaded once for static analysis blocks
 ;(() => {
   shellCss = fs.readFileSync(SHELL_CSS, 'utf-8')
   cardSource = fs.readFileSync(CARD_TSX, 'utf-8')
   shellTsx = fs.readFileSync(SHELL_TSX, 'utf-8')
+  kanbanBoardSource = fs.readFileSync(KANBAN_BOARD_TSX, 'utf-8')
 })()
 
 // ─── AC1: Viewport usability — responsive grid adjustments ────────────────────
@@ -330,5 +333,38 @@ describe('TestFromAC_PdsShellTokenUsage', () => {
       pbuttonIdx,
       'Shell.tsx must use <PButton> in the nav-rail surface for PDS-compatible interaction affordances',
     ).toBeGreaterThan(-1)
+  })
+})
+// ─── AC2/AC3 retry: Mobile board column width discriminator ────────────────────
+// Reviewer RF-retry: toBeVisible() alone does not prove mobile accessibility because
+// repeat(auto-fit, minmax(0, 1fr)) with 7 columns yields ≈45px per column at 320px
+// — technically visible but not meaningfully accessible.
+// These static-analysis tests replace the E2E rendered-width proof that cannot be
+// expressed in Playwright without a running dev server.
+
+describe('TestFromAC_MobileBoardAccessibility', () => {
+  // AC3 (RF-retry): Board grid must not use minmax(0, ...) which allows 7 columns
+  // to collapse to ≈45px each at 320px — technically visible but not accessible.
+  // FAIL: KanbanBoard.tsx uses repeat(auto-fit, minmax(0, 1fr)) (line ≈294).
+  it('KanbanBoard board grid does not use minmax(0) zero-minimum that collapses columns to inaccessible widths at mobile', () => {
+    expect(
+      kanbanBoardSource,
+      'Board grid must not use minmax(0, ...) — at 320px with 7 columns this compresses each to ≈45px (not accessible); use a positive minimum width (e.g., minmax(120px, 1fr)) or responsive column count',
+    ).not.toMatch(/minmax\(\s*0\s*,/)
+  })
+
+  // AC2 (RF-retry): Board grid column minimum must be at least 80px so board columns
+  // have meaningful rendered width at mobile viewports. With a ≥80px minimum the board
+  // either shows fewer columns at 320px or allows internal horizontal scroll — either
+  // approach makes columns meaningfully accessible unlike the current ≈45px columns.
+  // FAIL: current minmax(0, 1fr) has no px minimum, so extracted minimum is 0.
+  it('KanbanBoard board grid specifies a minimum column width of at least 80px per column', () => {
+    // Pattern: repeat(..., minmax(Npx, ...)) where N ≥ 80
+    const match = kanbanBoardSource.match(/repeat\([^)]+,\s*minmax\(\s*(\d+)px/)
+    const minWidth = match ? parseInt(match[1], 10) : 0
+    expect(
+      minWidth,
+      `Board grid column minimum must be ≥80px for mobile usability — current minmax minimum is ${minWidth}px, causing ≈45px columns at 320px with 7 columns (not accessible)`,
+    ).toBeGreaterThanOrEqual(80)
   })
 })
