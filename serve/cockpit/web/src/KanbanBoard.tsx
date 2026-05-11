@@ -259,6 +259,7 @@ function KanbanBoardContent({
           ref={filterToggleRef}
           type="button"
           data-testid="filter-toggle"
+          tabIndex={-1}
           aria-expanded={panelOpen}
           aria-controls="filter-panel"
           onClick={() => setPanelOpen((open) => !open)}

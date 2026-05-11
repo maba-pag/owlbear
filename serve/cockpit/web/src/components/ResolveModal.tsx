@@ -91,7 +91,7 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
   }
 
   function setHeadingTagAttr(element: HTMLElement | null): void {
-    element?.setAttribute('tag', 'h3')
+    element?.setAttribute('tag', 'h2')
   }
 
   function setHideLabelAttr(element: HTMLElement | null): void {
@@ -125,7 +125,7 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
       tabIndex={-1}
       onKeyDown={handleModalKeyDown}
     >
-      <PHeading ref={setHeadingTagAttr} tag="h3">{dr.title}</PHeading>
+      <PHeading ref={setHeadingTagAttr} tag="h2">{dr.title}</PHeading>
       <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>{dr.body ?? ''}</ReactMarkdown>
 
       <fieldset data-testid="response-selector">
@@ -172,10 +172,10 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
       </fieldset>
 
       <PTextarea
+        label="Resolution notes"
         name="resolve-notes"
         ref={setHideLabelAttr}
         data-testid="resolve-notes"
-        hideLabel={true}
         value={notes}
         onChange={(event) => setNotes(readControlValue(event))}
       />

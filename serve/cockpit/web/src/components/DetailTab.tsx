@@ -435,8 +435,8 @@ export default function DetailTab({
       <PInputText
         ref={setHideLabelAttr}
         name="title"
+        label="Title"
         data-field="title"
-        hideLabel={true}
         value={title}
         onChange={(event) => setTitle(readControlValue(event))}
         onInput={(event) => setTitle(readControlValue(event))}
@@ -444,8 +444,8 @@ export default function DetailTab({
       <PSelect
         ref={setHideLabelAttr}
         name="priority"
+        label="Priority"
         data-field="priority"
-        hideLabel={true}
         value={priority}
         onChange={(event) => setPriority(readControlValue(event))}
       >
@@ -463,8 +463,8 @@ export default function DetailTab({
       <PInputText
         ref={setHideLabelAttr}
         name="depends_on"
+        label="Depends on"
         data-field="depends_on"
-        hideLabel={true}
         value={dependsOn}
         onChange={(event) => setDependsOn(readControlValue(event))}
         onInput={(event) => setDependsOn(readControlValue(event))}
@@ -472,8 +472,8 @@ export default function DetailTab({
       <PInputText
         ref={setHideLabelAttr}
         name="parent"
+        label="Parent"
         data-field="parent"
-        hideLabel={true}
         value={parent}
         onChange={(event) => setParent(readControlValue(event))}
         onInput={(event) => setParent(readControlValue(event))}
@@ -482,8 +482,8 @@ export default function DetailTab({
         <PInputText
           ref={setHideLabelAttr}
           name="block_reason"
+          label="Block reason"
           data-field="block_reason"
-          hideLabel={true}
           value={blockReason}
           onChange={(event) => setBlockReason(readControlValue(event))}
           onInput={(event) => setBlockReason(readControlValue(event))}
@@ -495,8 +495,8 @@ export default function DetailTab({
         <PTextarea
           ref={setHideLabelAttr}
           name="body"
+          label="Body"
           data-field="body"
-          hideLabel={true}
           value={body}
           onChange={(event) => setBody(readControlValue(event))}
           onInput={(event) => setBody(readControlValue(event))}

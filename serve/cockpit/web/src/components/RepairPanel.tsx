@@ -1,4 +1,5 @@
 import type { RepairOutcome } from '../api/repair'
+import { useEffect, useRef } from 'react'
 import { PButton, PSpinner, PText } from '@porsche-design-system/components-react'
 import { useRepairFlow } from '../hooks/useRepairFlow'
 
@@ -18,6 +19,8 @@ function renderOutcomeRows(outcomes: RepairOutcome[]) {
 }
 
 export default function RepairPanel({ corruptionCount, onSuccess, files = [] }: RepairPanelProps) {
+  const dialogRef = useRef<HTMLDivElement | null>(null)
+  const previousFocusRef = useRef<HTMLElement | null>(null)
   const {
     phase,
     corruptionCount: requestedCount,
@@ -29,12 +32,31 @@ export default function RepairPanel({ corruptionCount, onSuccess, files = [] }: 
     dismissResults,
   } = useRepairFlow({ onSuccess })
 
+  useEffect(() => {
+    if (phase !== 'confirming') {
+      previousFocusRef.current?.focus()
+      return
+    }
+
+    previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    dialogRef.current?.focus()
+  }, [phase])
+
   if (phase === 'confirming') {
     return (
       <div
+        ref={dialogRef}
         data-testid="repair-confirm-dialog"
         role="dialog"
         aria-label="Confirm storage repair"
+        tabIndex={-1}
+        onKeyDown={(event) => {
+          if (event.key !== 'Escape') {
+            return
+          }
+          event.preventDefault()
+          cancelRepair()
+        }}
       >
         <PText>
           This will attempt to repair {requestedCount} corrupted files. Fixed files are restored,

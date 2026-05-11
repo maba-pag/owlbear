@@ -49,19 +49,17 @@ export default function DecisionViewport({ items, isLoading, error, onItemClick 
     <ul>
       {items.map((item) => (
         <li key={item.id}>
-          <div data-testid={`decision-item-${item.id}`} role="button" tabIndex={0}>
-            <button
-              type="button"
-              data-testid={`decision-task-ref-${item.id}`}
-              onClick={() => onItemClick(item.id)}
-            >
-              {item.task_id}
-            </button>
+          <button
+            type="button"
+            data-testid={`decision-item-${item.id}`}
+            onClick={() => onItemClick(item.id)}
+          >
+            <span data-testid={`decision-task-ref-${item.id}`} role="button">{item.task_id}</span>
             <PText>{item.agent}</PText>
             <PText>{item.request_type}</PText>
             <PText data-testid={`decision-age-${item.id}`}>{formatAge(item.created)}</PText>
             <PText>{item.body_preview}</PText>
-          </div>
+          </button>
         </li>
       ))}
     </ul>

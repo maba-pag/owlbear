@@ -144,6 +144,21 @@ function Shell() {
   return (
     <div className="shell">
       <header className="shell__status-bar" data-region="status-bar">
+        <h1
+          style={{
+            position: 'absolute',
+            width: '1px',
+            height: '1px',
+            padding: 0,
+            margin: '-1px',
+            overflow: 'hidden',
+            clip: 'rect(0, 0, 0, 0)',
+            whiteSpace: 'nowrap',
+            border: 0,
+          }}
+        >
+          OwlBear Cockpit
+        </h1>
         <span data-testid="traffic-light" data-health={statusHealth} />
         <span data-testid="task-count" />
         {hasLoadedScan && !scanError ? (
@@ -182,7 +197,7 @@ function Shell() {
         ) : null}
       </header>
       <nav className="shell__nav-rail" data-region="nav-rail">
-        <PButton data-surface="kanban" aria-current="page" variant="secondary">
+        <PButton data-surface="kanban" aria-current="page" variant="secondary" tabIndex={-1}>
           <svg
             aria-hidden="true"
             viewBox="0 0 16 16"

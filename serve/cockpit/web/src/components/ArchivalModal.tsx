@@ -223,7 +223,7 @@ export default function ArchivalModal({
 
   return (
     <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} onKeyDown={handleKeyDown}>
-      <PHeading ref={setHeadingTagAttr} id={titleId} tag="h3">Archive task</PHeading>
+      <PHeading ref={setHeadingTagAttr} id={titleId} tag="h2">Archive task</PHeading>
 
       <label>
         Reason
