@@ -1878,6 +1878,27 @@ class KanbanEngine:
                 )
                 continue
 
+            # Re-read on-disk state just before moving to avoid archiving based
+            # on stale in-memory data when a concurrent writer mutates the file.
+            try:
+                current = read_task(path, config=self._config)
+            except (FileNotFoundError, ValueError, KeyError, CorruptionError):
+                skipped_items.append(
+                    {
+                        "path": str(path),
+                        "reason": "task changed during cleanup",
+                    }
+                )
+                continue
+            if current.status != "archived" or current.archival_reason is None:
+                skipped_items.append(
+                    {
+                        "path": str(path),
+                        "reason": "task no longer eligible for archiving",
+                    }
+                )
+                continue
+
             dest = self._archive_dir / path.name
             if dest.exists():
                 skipped_items.append(
