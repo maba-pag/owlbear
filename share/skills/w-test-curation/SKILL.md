@@ -81,7 +81,9 @@ prompt: |
 
 Gate passes only when tests pass, lint is clean, and the target module coverage is ≥ 90% in the Quality-Runner report.
 
-**Gate failure:** Revert the canonical module file (`git checkout -- serve/{package}/tests/test_{module}.py`), log the failure, move to the next module. Do not block.
+**Rollback safety:** Before editing a module-level file, record whether it was clean, dirty, or untracked. If it was already dirty or untracked, save a baseline copy under `.owlbear/scratch/test-curation-{module}.baseline` before modifying it. On failure, restore only the curator-created changes; never discard pre-existing edits.
+
+**Gate failure:** Restore the module file to its recorded baseline, log the failure, move to the next module. Do not block. If the curator-created changes cannot be isolated from pre-existing edits, leave the file untouched, keep the task-tests, and log the module as `skip` with a manual follow-up note.
 
 ## Step 4 — Clean Up Task-Tests
 
@@ -104,13 +106,7 @@ prompt: |
   task_id: test-curation
 ```
 
-All tests must pass. If the full suite fails, identify the breaking module and revert it:
-
-```shell
-git checkout -- serve/{package}/tests/test_{module}.py
-```
-
-Re-add its task-tests and log the failure.
+All tests must pass. If the full suite fails, identify the breaking module and apply the same rollback safety contract: restore only curator-created module-file changes, re-add only task-tests removed during this curation pass, and log the failure.
 
 ## Step 6 — Lifecycle Log
 
