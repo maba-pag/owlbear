@@ -310,7 +310,7 @@ def _apply_session_filter(
     return [s for s in sessions if s.state in allowed]
 
 
-def _move_file(src: Path, dest: Path) -> None:
+def _move_file(src: Path, dest: Path, *, no_overwrite: bool = False) -> None:
     """Move *src* to *dest*, preferring ``git mv`` when inside a git repo.
 
     Falls back to :meth:`Path.replace` when ``git`` is unavailable, the file
@@ -333,6 +333,14 @@ def _move_file(src: Path, dest: Path) -> None:
     except (FileNotFoundError, subprocess.TimeoutExpired):
         # git not installed, or timed out (e.g. waiting for index.lock)
         pass
+
+    if no_overwrite:
+        # os.link() is atomic for destination creation and fails if dest exists,
+        # avoiding overwrite when a collision appears after a pre-check.
+        os.link(src, dest)
+        src.unlink()
+        return
+
     src.replace(dest)
 
 
@@ -1882,7 +1890,15 @@ class KanbanEngine:
 
             self._archive_dir.mkdir(parents=True, exist_ok=True)
             try:
-                _move_file(path, dest)
+                _move_file(path, dest, no_overwrite=True)
+            except FileExistsError:
+                skipped_items.append(
+                    {
+                        "path": str(path),
+                        "reason": "archive destination already exists",
+                    }
+                )
+                continue
             except OSError as exc:
                 skipped_items.append({"path": str(path), "reason": str(exc)})
                 continue
