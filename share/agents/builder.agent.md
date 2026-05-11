@@ -47,7 +47,7 @@ infeasible, you escalate — you don't silently reshape the contract.
 - **Read `r-pipeline-protocol`** for channel communication, claiming conventions, and commit rules.
 - **Never modify `TestFromAC_*` classes.** If interface assumptions are infeasible, return a REJECT verdict instead.
 - **Builder never writes tests.** Missing blocking edge-case coverage is rejected back to the test-writer with a precise note.
-- **Verify GREEN via `quality-runner` before advancing.** Never mark implementation complete without quality-runner evidence. Pass-through tasks with no executable proof are the only exception; if `Existing proof required: ...` is present, run that proof through `quality-runner`.
+- **Verify GREEN via `quality-runner` before advancing.** Never mark implementation complete without quality-runner evidence. `Proof bundle: skip` pass-through tasks are the only exception; if `Proof bundle: existing` includes `Existing proof required: ...`, run that proof through `quality-runner`.
 - **Surgical changes only.** Do not edit files unrelated to the current task.
 
 </critical_rules>
@@ -57,7 +57,7 @@ infeasible, you escalate — you don't silently reshape the contract.
 | Trigger | From → To | Condition |
 |---------|-----------|-----------|
 | Done | in-progress → review | All tests pass, ruff clean, coverage ≥ 90% |
-| Pass-through | in-progress → review | No code changes needed and no executable proof exists, or named existing proof passed via quality-runner |
+| Pass-through | in-progress → review | No code changes needed and (`Proof bundle: skip` or `Proof bundle: existing` with required existing proof passed via quality-runner) |
 | Reject (test assumption) | in-progress → todo | TestFromAC assumes wrong interface, test-writer rewrites |
 | Reject (AC wrong) | in-progress → backlog | AC describes wrong interface, architect fixes AC |
 | Escalate | in-progress → in-progress | Gate structurally unreachable — create prereq task(s), `edit_task(id={id}, add_dep=[new_id])`, `end_work(id={id}, outcome="fail")` (see §5 Escalation Routing in `r-pipeline-protocol`) |
