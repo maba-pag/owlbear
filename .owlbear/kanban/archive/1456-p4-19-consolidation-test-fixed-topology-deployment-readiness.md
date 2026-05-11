@@ -1,10 +1,10 @@
 ---
 id: 1456
 title: 'P4-20: consolidation test: fixed-topology deployment readiness'
-status: backlog
+status: archived
 priority: important
 created: 2026-05-08T19:32:35.891593+00:00
-updated: 2026-05-11T18:11:12.452793+00:00
+updated: 2026-05-11T19:07:31.835062+00:00
 tags:
 - phase-4
 - scope:deployment-readiness
@@ -172,3 +172,150 @@ Architecture review complete. REFINE + APPROVE: fixed pipeline-breaking AC (orig
 |---|---|---|---|---|
 | 1 | architect | Reconcile AC5 with the actual MCP contract: either narrow the gate to `status="archived"` / `archival_reason` semantics or create a follow-up implementation task for a real `archived` boolean filter | `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py`; `share/skills/h-mcp-kanban/SKILL.md` | `server.py:226`, `server.py:234`, `server.py:237`, `server.py:262`; `h-mcp-kanban/SKILL.md:17`, `h-mcp-kanban/SKILL.md:22` |
 | 2 | architect | Reconcile AC6 with live guidance: either update the named docs to describe `resolve_drs` or narrow the gate to the current Cockpit-based DR resolution contract | `share/skills/h-mcp-kanban/SKILL.md`; `share/skills/h-decision-requests/SKILL.md`; `share/skills/w-orchestration/SKILL.md`; `share/instructions/pipeline-agents.instructions.md` | `h-mcp-kanban/SKILL.md:17`, `h-mcp-kanban/SKILL.md:22`, `h-decision-requests/SKILL.md:13`; grep found no `resolve_drs` entry across the named guidance files |
+[[2026-05-11]]
+
+## Architecture Review (2nd pass)
+
+### Reconciliation of AC5 and AC6
+
+**AC5 — `archived` filter overclaim:**
+Reviewer correctly identified that MCP `list_tasks` has no `archived` boolean filter. The actual parameter is `archival_reason: str | None`. The AC also omitted real filters (`priority`, `ids`, `parent`, `sort`, `limit`, `reverse`). Rewritten to match the live server signature.
+
+**AC6 — `resolve_drs` guidance overclaim:**
+Reviewer correctly identified that `resolve_drs` is not documented in the named guidance files. `h-mcp-kanban` documents 9 tools (omitting `resolve_drs`), and `h-decision-requests` explicitly routes DR resolution through the Cockpit decision flow, not via agent-callable MCP tools. Rewritten to match the actual guidance contract.
+
+### Revised AC Lines
+
+**AC5 (revised):** MCP `list_tasks` supports `status`, `tag`, `priority`, `archival_reason`, `ids`, `parent`, `search`, `sort`, `unclaimed`, `limit`, `reverse`, `blocked` filters; tool annotations present on all tools; errors use structured `ToolError` responses. Inspect: `server.py` tool definitions and `ListTasksParams` model. (td:0)
+
+**AC6 (revised):** Agent guidance (`h-mcp-kanban`, `w-orchestration`, `h-decision-requests`, `pipeline-agents.instructions.md`) describes `pick_tasks` as read-only, `start_work` as claim-writer, `create_dr` as DR creator. DR resolution is handled through Cockpit decision flow, not via agent-callable MCP tools. No stale references to automatic sweep/DR-resolution in `pick_tasks`. Inspect: named skill/instruction files via grep. (td:0)
+
+### Evaluation
+| Criterion | Assessment |
+|-----------|-----------|
+| AC precision | PASS — AC5 and AC6 reconciled with live codebase contracts |
+| All td:0 | PASS — no change to test depth |
+| Challenger | Skipped — all td:0 |
+
+### Verdict
+REFINE + APPROVE — AC5 and AC6 corrected to match actual MCP server signature and guidance documentation contract. All other AC lines unchanged (passed review on first cycle).
+[[2026-05-11]]
+Architecture review (2nd pass): reconciled AC5 and AC6 with live codebase contracts per reviewer findings. AC5: replaced non-existent `archived` boolean filter with actual `archival_reason` string filter and added omitted parameters. AC6: replaced `resolve_drs` documentation claim with actual Cockpit-based DR resolution contract. All AC lines remain td:0. Test-writer: SKIP.
+[[2026-05-11]]
+## Test-Writer Notes
+- Retry cycle: `## Review Evidence` FAILed AC5 and AC6 as overclaims; architect reconciled both in 2nd pass AR.
+- All 7 AC lines remain `(td:0)` after AC reconciliation — no testable Python interfaces, no tests applicable.
+- `quality` tag + td:0 across all lines → pass-through to builder.
+- No test file created or modified.
+[[2026-05-11]]
+## Builder Notes
+- Non-implementation task (tagged `quality`) — no code changes needed.
+- AC lines remain reviewer-verifiable inspection checks (td:0), so GREEN implementation/testing does not apply.
+- Passing through to review.
+[[2026-05-11]]
+## Review Evidence
+### Test Results
+- quality-runner (td:0 scoped): Tests N/A; Lint clean; Coverage N/A; Exit codes `ruff=0`, `markdownlint=0`; Errors none.
+- Changed files: none. This is a `quality` / `td:0` inspection task; test-writer and builder both passed through, so builder diff scoping and dirty-tree contamination do not apply.
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+- Skipped: td:0 quality gate; no `TestFromAC_*` classes or task-scoped executable surface.
+
+#### Security Review
+- No security issues found in the inspected topology, claim, cleanup, storage, MCP, and Cockpit contract paths.
+
+#### Test Integrity
+- Skipped: no `TestFromAC_*` classes; no task-scoped code/test edits in the pass-through cycle.
+
+#### Test Quality
+- Skipped: td:0 inspection task.
+
+#### Data Safety
+- No issues found in the expired-claim reclaim, cleanup, or decision-resolution paths.
+
+#### Implementation-Aware Gaps
+- No gaps found. The second-pass Architecture Review corrected the original AC5/AC6 overclaims; the live codebase matches the revised contract.
+
+#### Builder Process Quality
+| Metric | Value |
+|---|---|
+| Builder Notes sections | 2 |
+| Approach variation | N/A (both pass-through cycles on a non-implementation quality gate) |
+| Assessment | CLEAN |
+
+### Pass 2 — INFORMATIONAL
+- `share/skills/h-mcp-kanban/SKILL.md:17-30` still summarizes 9 tools while the server registers 10 annotated MCP tools. That drift is outside the revised AC and does not block this gate.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---|---|---|---|
+| 1 | `PRODUCT_TOPOLOGY` is a frozen dataclass export with statuses, priorities, claim_timeout, agent_map, archival_reasons; `load_config()` projects those constants into `BoardConfig`; engine init loads the config. Evidence: `serve/kanban/src/owlbear_kanban/topology.py:1-82`, `serve/kanban/src/owlbear_kanban/config_loader.py:25-78`, `serve/kanban/src/owlbear_kanban/engine.py:367-380` | N/A | PASS |
+| 2 | `AgentView.pick_tasks()` reads via `engine.list_tasks()` / `engine.show_task()` only and contains no write path; MCP `pick_tasks` is annotated `readOnlyHint=True`; `start_work()` delegates to `claim_task()` which clears expired claims via CAS before re-claiming. Evidence: `serve/kanban/src/owlbear_kanban/agent_view.py:299-533`, `serve/kanban/src/owlbear_kanban/agent_view.py:925-969`, `serve/kanban/src/owlbear_kanban/engine.py:1369-1450`, `serve/kanban/src/owlbear_kanban/engine.py:1552-1569`, `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:519-536`, `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:604-626` | N/A | PASS |
+| 3 | MCP registers `create_dr` and `resolve_drs` as separate tools; `pick_tasks` contains no resolve call path; `create_dr()` writes pending DR files and blocks the task. Evidence: `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:364-412`, `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:604-626`, `serve/kanban/src/owlbear_kanban/decisions.py:89-196` | N/A | PASS |
+| 4 | `CleanupResult` exposes `released_claim_ids`, `archived_task_ids`, `skipped_items`; `engine.cleanup()` releases expired claims, archives drifted archived tasks, and returns that model; Cockpit exposes `POST /api/tasks/cleanup`. Evidence: `serve/kanban/src/owlbear_kanban/models.py:571-576`, `serve/kanban/src/owlbear_kanban/engine.py:1809-1943`, `serve/cockpit/src/owlbear_cockpit/routes/mutation.py:329-332` | N/A | PASS |
+| 5 | MCP `list_tasks` exposes `status`, `tag`, `priority`, `archival_reason`, `ids`, `parent`, `search`, `sort`, `unclaimed`, `limit`, `reverse`, `blocked`; all 10 MCP tools have explicit `ToolAnnotations`; `ToolError` payloads are normalized as JSON `{code, message}`. Evidence: `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:50-118`, `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:222-280`, annotated tool decorators at `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:222,322,338,364,395,415,456,519,543,604` | N/A | PASS |
+| 6 | Guidance set matches the revised contract: `start_work` and `create_dr` are documented in `h-mcp-kanban`; `pick_tasks` is explicitly read-only in `h-decision-requests` and `w-orchestration`; DR resolution is described as Cockpit/user flow, not agent-side MCP resolution; targeted grep found only the expected read-only/Cockpit-resolution wording and no stale `pick_tasks` auto-resolution/sweep language. Evidence: `share/skills/h-mcp-kanban/SKILL.md:17-30`, `share/skills/h-mcp-kanban/SKILL.md:117-164`, `share/skills/h-decision-requests/SKILL.md:9-18`, `share/skills/w-orchestration/SKILL.md:52-58`, `share/instructions/pipeline-agents.instructions.md:26-35`, `serve/cockpit/src/owlbear_cockpit/routes/decisions.py:110-187`; grep `pick_tasks.*(resolve|sweep)|resolve.*pick_tasks|sweep.*pick_tasks` across `share/**` returned only `share/skills/h-decision-requests/SKILL.md:13` and `share/skills/w-orchestration/SKILL.md:56` | N/A | PASS |
+| 7 | `setup/init.py` creates `tasks/`, `archive/`, `decisions/pending/`, `decisions/resolved/`; no `seed/**/config.yml` exists to inject topology state; engine task creation delegates ID allocation to `storage.allocate_next_id()`; allocator scans active + archive filename prefixes under the lock and does not use `config.next_id` for creation. Evidence: `setup/init.py:313-381`, workspace search `seed/**/config.yml` -> no matches, `serve/kanban/src/owlbear_kanban/engine.py:975-1060`, `serve/kanban/src/owlbear_kanban/storage.py:540-569` | N/A | PASS |
+
+### Deductions
+- `-0.04`: no builder commit hash / diff surface exists because this is a pass-through td:0 quality gate; verdict relies on live artifact inspection plus lint rather than diff-scoped executable proof.
+
+### Confidence: 0.96
+### Verdict: PASS
+### Action: advance to `docs`.
+[[2026-05-11]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | No behavior/API/CLI/config changes; quality pass-through, no code edits |
+| 2 | Module docstrings | No | N/A | No Python modules created or modified |
+| 3 | External attribution | No | N/A | No external patterns used |
+| 4 | Research doc | No | N/A | No research doc produced for this quality gate |
+| 5 | Diagram maintenance (describes match) | No | N/A | No changed files; no describes-match lookup possible |
+| 6 | Explicit diagram creation | No | N/A | No explicit diagram creation request in task body |
+| 7 | Deletion detection | No | N/A | No deleted files |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| (none) | — | No files changed; test-writer and builder both passed through this quality/td:0 inspection gate |
+
+**Note:** Reviewer Pass 2 flagged `share/skills/h-mcp-kanban/SKILL.md` tool-count drift (documents 9 tools; server registers 10). This file is OUT-of-scope for doc-writer (agent-executable SKILL.md). Not actioned here.
+
+### Files Updated
+- None
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no 1456-* scratch files found)
+[[2026-05-11]]
+## Audit
+### Regression Detection
+- quality-runner mode full: 4419 passed, 208 failed, 4 skipped, 5 errors (timeouts). Lint: ruff clean (exit 0).
+- Baseline comparison: #1455 full-suite run had 206 failed / 4421 passed — essentially identical pre-existing suite debt.
+- Zero changed files in this task (pass-through quality gate) — no task-caused regressions possible.
+- regression verdict: PASS
+
+### Intent Verification
+- scope alignment: PASS (consolidation quality gate for P4 deployment readiness; all 10 dependencies archived; domain is kanban/deployment-readiness)
+- purpose match: PASS (verification-only task correctly processed as pass-through by test-writer and builder; reviewer performed codebase inspection per revised AC)
+- extraneous scope: none
+- boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 3/5
+- AC5 and AC6 overclaimed live codebase contracts (non-existent `archived` boolean filter; `resolve_drs` undocumented in named guidance set). Reviewer caught both at 0.64 confidence rejection. Architect reconciled in 2nd-pass AR. Original AC also had pipeline-breaking `type:test` tag (would cause pass-through at both test-writer AND builder — nobody would execute walkthroughs); architect caught and fixed in 1st AR.
+- Two reconciliation cycles to reach correct AC is notable but not structural — architect responded correctly to reviewer evidence.
+
+### Commit Integrity
+- upstream commit presence: PASS (no builder/test-writer commits expected — both passed through this quality gate; `git log --oneline -10` confirms no #1456 commits)
+- kanban commit packaging: pending (auditor will commit after archival)
+
+### Deduction Breakdown
+- AC quality score 3/5: -.03
+
+### Confidence: 0.97
+### Action: archive
