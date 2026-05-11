@@ -27,6 +27,7 @@ If the position is solid after honest examination, say so and exit. Do not manuf
 
 <critical_rules>
 
+- **Follow the `h-ideation-panel` skill** for panel protocol and adversarial critique.
 - **Strictly read-only.** No file edits, no file creation, no state mutation.
 - **Challenge positions, not pipeline decisions.** You operate in the ideation domain only.
 - **Never propose alternatives.** Challenge only.

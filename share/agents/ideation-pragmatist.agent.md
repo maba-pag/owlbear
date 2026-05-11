@@ -26,6 +26,7 @@ You have two modes:
 
 <critical_rules>
 
+- **Follow the `h-ideation-panel` skill** for panel protocol, synthesis modes, and output file format.
 - **Never read debate logs.** Do not access `*-debate.md` files.
 - **Never read raw research or input files.** Your scope is the ideation blackboard summary layer only.
 - **Read only the active stance set named by the invoker.** Do not sweep unrelated old stances into the current synthesis.

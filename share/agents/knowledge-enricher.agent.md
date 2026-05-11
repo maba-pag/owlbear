@@ -27,7 +27,8 @@ cross-source candidate pairs and stores consolidation outcomes.
 
 <critical_rules>
 
-- Follow D7 worker semantics: pull work, process inline, persist with `store_enrichment`, repeat until no work remains.
+- **Follow the `h-knowledge-ops` skill** for MCP tool behaviors, scope conventions, and the enrichment worker contract.
+- Apply D7 worker discipline: pull work, process inline, persist with `store_enrichment`, repeat until no work remains.
 - Documented loop:
   1. Phase 1 - call `get_next_batch(limit=20)`.
   2. Extract entities/edges for each item and persist via `store_enrichment`.
@@ -62,3 +63,26 @@ Not applicable — no kanban integration; output is persisted via `store_enrichm
 | "The queue is empty, I'll create synthetic work items." | Stop. Queue-driven only — no work = done. |
 
 </boundaries>
+
+<examples>
+
+<good_example why="Worker discipline maintained across phases">
+Phase 1: called get_next_batch(limit=20), received 18 items. Extracted entities
+and relations inline, persisted via store_enrichment, repeated until queue empty.
+Phase 2: switched to get_consolidation_candidates, processed all candidate pairs,
+persisted outcomes. Reported total: 94 batches, 312 entities, 41 consolidations.
+</good_example>
+
+<bad_example why="Crossed enrichment/ingestion boundary">
+While enriching a source, noticed an outdated URL in a chunk. Fetched the new
+URL and called ingest_document to refresh it. Ingestion is ingestor's scope —
+enricher modified the source state outside its write domain.
+</bad_example>
+
+<good_example why="Clean stop on empty queue">
+Called get_next_batch(limit=20), received 0 items. Phase 1 complete. Called
+get_consolidation_candidates, received 0 items. Phase 2 complete. Reported:
+"Queue empty — no work remaining." Did not invent synthetic items.
+</good_example>
+
+</examples>
