@@ -173,6 +173,59 @@ class TestFromAC_ArchiveMove:
             "file must appear in archive/ after cleanup moves it"
         )
 
+    # ---- AC-2 negative branch: archival_reason=None (td:2 upgrade) ----
+
+    def test_archived_without_reason_not_in_archived_task_ids(
+        self, tmp_path: Path
+    ) -> None:
+        """Archived task with archival_reason=None is NOT moved and not in archived_task_ids."""
+        board = _make_board(tmp_path)
+        _write_task(board, task_id=3, status="archived", archival_reason="null")
+        engine = KanbanEngine(board, activity_log=False)
+
+        result = engine.cleanup()
+
+        assert 3 not in result.archived_task_ids, (
+            "task with archival_reason=None must not appear in archived_task_ids"
+        )
+
+    def test_archived_without_reason_file_remains_in_tasks(
+        self, tmp_path: Path
+    ) -> None:
+        """Archived task with archival_reason=None is left in tasks/ — not physically moved."""
+        board = _make_board(tmp_path)
+        source = _write_task(board, task_id=4, status="archived", archival_reason="null")
+        engine = KanbanEngine(board, activity_log=False)
+
+        engine.cleanup()
+
+        assert source.exists(), (
+            "source file with archival_reason=None must remain in tasks/ after cleanup"
+        )
+        assert not (board / "archive" / "4-task.md").exists(), (
+            "file with archival_reason=None must not appear in archive/ after cleanup"
+        )
+
+    def test_archived_without_reason_produces_skipped_item(
+        self, tmp_path: Path
+    ) -> None:
+        """Archived task with archival_reason=None produces one skipped_items entry."""
+        board = _make_board(tmp_path)
+        source = _write_task(board, task_id=5, status="archived", archival_reason="null")
+        engine = KanbanEngine(board, activity_log=False)
+
+        result = engine.cleanup()
+
+        assert len(result.skipped_items) == 1, (
+            "expected exactly one skipped_items entry for the None-reason archived task"
+        )
+        assert result.skipped_items[0]["path"] == str(source), (
+            "skipped_items entry path must match the source file path"
+        )
+        assert isinstance(result.skipped_items[0]["reason"], str), (
+            "skipped_items entry reason must be a str"
+        )
+
 
 # ---------------------------------------------------------------------------
 # AC-3: Skip handling (td:2 — full TDD)
@@ -321,6 +374,76 @@ class TestFromAC_SkipHandling:
 
         assert source.exists(), (
             "source task file must not be deleted when archive collision causes a skip"
+        )
+
+    # ---- AC-3: exact cardinality and exact path value ----
+
+    def test_single_malformed_skipped_item_has_exact_cardinality_and_path(
+        self, tmp_path: Path
+    ) -> None:
+        """Single malformed file produces exactly one skipped_items entry with exact path."""
+        board = _make_board(tmp_path)
+        bad_file = board / "tasks" / "77-bad.md"
+        bad_file.write_text("not valid frontmatter\n", encoding="utf-8")
+        engine = KanbanEngine(board, activity_log=False)
+
+        result = engine.cleanup()
+
+        assert len(result.skipped_items) == 1, (
+            "exactly one skipped_items entry expected for a single malformed file"
+        )
+        assert result.skipped_items[0]["path"] == str(bad_file), (
+            "skipped_items[0].path must equal the actual source file path"
+        )
+
+    def test_single_collision_skipped_item_has_exact_cardinality_and_path(
+        self, tmp_path: Path
+    ) -> None:
+        """Single early collision produces exactly one skipped_items entry with exact path."""
+        board = _make_board(tmp_path)
+        source = _write_task(board, task_id=2, status="archived", archival_reason='"completed"')
+        (board / "archive" / "2-task.md").write_text("sentinel", encoding="utf-8")
+        engine = KanbanEngine(board, activity_log=False)
+
+        result = engine.cleanup()
+
+        assert len(result.skipped_items) == 1, (
+            "exactly one skipped_items entry expected for a single archive collision"
+        )
+        assert result.skipped_items[0]["path"] == str(source), (
+            "skipped_items[0].path must equal the actual source file path"
+        )
+
+    # ---- AC-3: late FileExistsError branch (no_overwrite=True atomic move) ----
+
+    def test_late_file_exists_error_produces_skipped_items_entry(
+        self, tmp_path: Path
+    ) -> None:
+        """Late FileExistsError from _move_file is caught; entry added to skipped_items.
+
+        Simulates a race where dest.exists() pre-check passes (no collision at pre-check
+        time) but os.link() raises FileExistsError because the destination appeared
+        concurrently before the atomic move completed.
+        """
+        board = _make_board(tmp_path)
+        source = _write_task(board, task_id=3, status="archived", archival_reason='"completed"')
+        engine = KanbanEngine(board, activity_log=False)
+
+        # Dest does not exist — pre-check passes — but _move_file raises FileExistsError.
+        with mock.patch("owlbear_kanban.engine._move_file", side_effect=FileExistsError):
+            result = engine.cleanup()
+
+        assert 3 not in result.archived_task_ids, (
+            "late-collision task must NOT appear in archived_task_ids"
+        )
+        assert len(result.skipped_items) == 1, (
+            "exactly one skipped_items entry expected for a single late collision"
+        )
+        assert result.skipped_items[0]["path"] == str(source), (
+            "skipped_items[0].path must equal the actual source file path"
+        )
+        assert source.exists(), (
+            "source file must not be deleted when a late FileExistsError causes a skip"
         )
 
 
