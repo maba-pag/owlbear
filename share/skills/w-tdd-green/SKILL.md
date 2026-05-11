@@ -36,16 +36,18 @@ Claim the task via `start_work` (atomic claim + retrieves task body). Check the 
 
 Verify the task is in `in-progress` status (the test-writer already moved it here).
 
-### Step 0a — Bundle-Based Pass-Through
+### Step 0a — Bundle-Based Routing
 
-Route non-implementation flow from `Proof bundle:` in the task body (see `r-pipeline-protocol` taxonomy). Use legacy `(td:N)` only as compatibility fallback when `Proof bundle:` is absent.
+Route builder verification flow from `Proof bundle:` in the task body (see `r-pipeline-protocol` taxonomy). Use legacy `(td:N)` only as compatibility fallback when `Proof bundle:` is absent.
 
 1. If `Proof bundle: skip`:
    Implement from AC directly (no `TestFromAC_*` pass requirement for this task).
 
-   Advance via `end_work(note="## Builder Notes\n- Proof bundle: skip (non-implementation path).\n- No code changes needed.\n- Passing through to review.")` (moves to `review` + releases claim).
+  Continue the normal builder flow (plan, implement, verify, commit, and advance) without `TestFromAC_*` test-gate requirements.
 
-   Return: `DONE #{id} -> review | proof bundle skip, no code changes`
+  Record in Builder Notes that `Proof bundle: skip` removed `TestFromAC_*` verification only; it did not remove AC implementation obligations.
+
+  Return: `DONE #{id} -> review | proof bundle skip, AC implemented without TestFromAC gate`
 
    **Stop here.**
 
@@ -60,7 +62,7 @@ Route non-implementation flow from `Proof bundle:` in the task body (see `r-pipe
 
    Do not advance while required proof is failing or missing.
 
-   After proof passes, advance via `end_work(note="## Builder Notes\n- Proof bundle: existing (named proof path).\n- Existing proof executed and passing.\n- Passing through to review.")`.
+  After proof passes, continue the normal builder flow (commit and advance with `## Builder Notes` evidence).
 
    Return: `DONE #{id} -> review | proof bundle existing, required proof passed`
 
