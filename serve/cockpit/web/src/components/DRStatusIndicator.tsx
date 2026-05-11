@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { PButton, PText } from '@porsche-design-system/components-react'
 import type { PendingDR } from '../hooks/usePendingDRs'
 
@@ -18,12 +18,38 @@ function formatAge(created: string): string {
 
 export default function DRStatusIndicator({ count, items, onItemClick }: DRStatusIndicatorProps) {
   const [isOpen, setIsOpen] = useState(false)
+  const triggerRef = useRef<HTMLElement | null>(null)
+  const popoverRef = useRef<HTMLDivElement | null>(null)
   const status = count > 0 ? 'attention' : 'dormant'
+
+  useEffect(() => {
+    if (!isOpen) {
+      triggerRef.current?.focus()
+      return
+    }
+
+    popoverRef.current?.focus()
+
+    function handleDocumentKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        setIsOpen(false)
+      }
+    }
+
+    document.addEventListener('keydown', handleDocumentKeyDown)
+    return () => {
+      document.removeEventListener('keydown', handleDocumentKeyDown)
+    }
+  }, [isOpen])
 
   return (
     <div>
       <PButton
         type="button"
+        ref={(element) => {
+          triggerRef.current = element as HTMLElement | null
+        }}
         data-testid="dr-indicator"
         data-status={status}
         aria-label={`Pending decision requests: ${count}`}
@@ -34,7 +60,19 @@ export default function DRStatusIndicator({ count, items, onItemClick }: DRStatu
       </PButton>
 
       {isOpen ? (
-        <div data-testid="dr-popover" role="dialog" aria-label="Pending decision requests">
+        <div
+          ref={popoverRef}
+          data-testid="dr-popover"
+          role="dialog"
+          aria-label="Pending decision requests"
+          tabIndex={-1}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') {
+              event.preventDefault()
+              setIsOpen(false)
+            }
+          }}
+        >
           {items.length === 0 ? (
             <PText>No pending decision requests</PText>
           ) : (
