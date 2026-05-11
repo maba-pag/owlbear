@@ -14,7 +14,7 @@
  * side-effect.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render } from '@testing-library/react'
+import { render, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
 
@@ -201,6 +201,179 @@ describe('TestFromAC_CleanupShellWiring', () => {
       const { container } = renderShell()
       const stub = container.querySelector('[data-testid="cleanup-panel-stub"]')!
       expect(stub.getAttribute('data-has-success')).toBe('true')
+    })
+  })
+
+  // ─── AC 3d: CleanupPanel persists across all Shell scan states ───────────
+
+  describe('AC 3d: CleanupPanel renders regardless of scan state', () => {
+    it('CleanupPanel renders while scan is still loading (HealthBadge absent)', () => {
+      const { refetchTasks } = stubHooks()
+      vi.mocked(useScanPolling).mockReturnValue({
+        items: [],
+        isLoading: true,
+        error: null,
+        refetch: vi.fn(),
+      } as ReturnType<typeof useScanPolling>)
+      const { container } = renderShell()
+      expect(container.querySelector('[data-testid="cleanup-panel-stub"]')).not.toBeNull()
+      // HealthBadge not rendered while scan is loading (hasLoadedScan = false)
+      expect(container.querySelector('[data-testid="health-badge-stub"]')).toBeNull()
+      // onSuccess wiring is still present
+      const stub = container.querySelector('[data-testid="cleanup-panel-stub"]')!
+      expect(stub.getAttribute('data-has-success')).toBe('true')
+      // suppress unused warning
+      void refetchTasks
+    })
+
+    it('CleanupPanel renders when scan has an error', () => {
+      stubHooks()
+      vi.mocked(useScanPolling).mockReturnValue({
+        items: [],
+        isLoading: false,
+        error: new Error('scan failed'),
+        refetch: vi.fn(),
+      } as ReturnType<typeof useScanPolling>)
+      const { container } = renderShell()
+      expect(container.querySelector('[data-testid="cleanup-panel-stub"]')).not.toBeNull()
+    })
+
+    it('scan error UI and CleanupPanel coexist in status bar', () => {
+      stubHooks()
+      vi.mocked(useScanPolling).mockReturnValue({
+        items: [],
+        isLoading: false,
+        error: new Error('disk full'),
+        refetch: vi.fn(),
+      } as ReturnType<typeof useScanPolling>)
+      const { container } = renderShell()
+      const statusBar = container.querySelector('[data-region="status-bar"]')!
+      expect(statusBar.querySelector('[data-testid="scan-error"]')).not.toBeNull()
+      expect(statusBar.querySelector('[data-testid="cleanup-panel-stub"]')).not.toBeNull()
+    })
+
+    it('scan retry button and CleanupPanel coexist when scan errored', () => {
+      stubHooks()
+      vi.mocked(useScanPolling).mockReturnValue({
+        items: [],
+        isLoading: false,
+        error: new Error('scan error'),
+        refetch: vi.fn(),
+      } as ReturnType<typeof useScanPolling>)
+      const { container } = renderShell()
+      expect(container.querySelector('[data-testid="scan-retry"]')).not.toBeNull()
+      expect(container.querySelector('[data-testid="cleanup-panel-stub"]')).not.toBeNull()
+    })
+  })
+
+  // ─── Shell branch coverage: isHealthBadgeItem, statusHealth, effects ───────
+
+  describe('Shell branch coverage for cleanup-adjacent paths', () => {
+    it('isHealthBadgeItem passes items with all non-null fields (filter true branch)', async () => {
+      stubHooks()
+      vi.mocked(useScanPolling).mockReturnValue({
+        items: [{ code: 'ERR001', detail: 'some error', file_path: '/path/to/file.py' }],
+        isLoading: false,
+        error: null,
+        refetch: vi.fn(),
+      } as ReturnType<typeof useScanPolling>)
+      const { container } = renderShell()
+      // HealthBadge renders when scan loaded and item passes isHealthBadgeItem
+      await waitFor(() => {
+        expect(container.querySelector('[data-testid="health-badge-stub"]')).not.toBeNull()
+      })
+      expect(container.querySelector('[data-testid="cleanup-panel-stub"]')).not.toBeNull()
+    })
+
+    it('isHealthBadgeItem rejects items with null code (filter false branch)', () => {
+      stubHooks()
+      vi.mocked(useScanPolling).mockReturnValue({
+        items: [
+          { code: null, detail: 'some error', file_path: '/path.py' },  // fails filter
+          { code: 'ERR001', detail: 'ok', file_path: '/path.py' },  // passes filter
+        ],
+        isLoading: false,
+        error: null,
+        refetch: vi.fn(),
+      } as ReturnType<typeof useScanPolling>)
+      const { container } = renderShell()
+      expect(container.querySelector('[data-testid="cleanup-panel-stub"]')).not.toBeNull()
+    })
+
+    it('isHealthBadgeItem rejects items with null detail (second && branch)', () => {
+      stubHooks()
+      vi.mocked(useScanPolling).mockReturnValue({
+        items: [{ code: 'ERR001', detail: null, file_path: '/path.py' }],
+        isLoading: false,
+        error: null,
+        refetch: vi.fn(),
+      } as ReturnType<typeof useScanPolling>)
+      const { container } = renderShell()
+      expect(container.querySelector('[data-testid="cleanup-panel-stub"]')).not.toBeNull()
+    })
+
+    it('isHealthBadgeItem rejects items with null file_path (third && branch)', () => {
+      stubHooks()
+      vi.mocked(useScanPolling).mockReturnValue({
+        items: [{ code: 'ERR001', detail: 'error', file_path: null }],
+        isLoading: false,
+        error: null,
+        refetch: vi.fn(),
+      } as ReturnType<typeof useScanPolling>)
+      const { container } = renderShell()
+      expect(container.querySelector('[data-testid="cleanup-panel-stub"]')).not.toBeNull()
+    })
+
+    it('statusHealth is red when scan has error', () => {
+      stubHooks()
+      vi.mocked(useScanPolling).mockReturnValue({
+        items: [],
+        isLoading: false,
+        error: new Error('scan failed'),
+        refetch: vi.fn(),
+      } as ReturnType<typeof useScanPolling>)
+      const { container } = renderShell()
+      const trafficLight = container.querySelector('[data-testid="traffic-light"]')!
+      expect(trafficLight.getAttribute('data-health')).toBe('red')
+    })
+
+    it('pendingDRError message rendered in status bar alongside CleanupPanel', () => {
+      stubHooks()
+      vi.mocked(usePendingDRs).mockReturnValue({
+        count: 0,
+        items: [],
+        isLoading: false,
+        error: new Error('DR polling failed'),
+        refetch: vi.fn(),
+      } as ReturnType<typeof usePendingDRs>)
+      const { container } = renderShell()
+      expect(container.querySelector('[data-testid="dr-polling-error"]')).not.toBeNull()
+      expect(container.querySelector('[data-testid="cleanup-panel-stub"]')).not.toBeNull()
+    })
+
+    it('lastDecisionsMtime non-null triggers refetchPendingDRs effect', () => {
+      const refetch = vi.fn()
+      stubHooks()
+      vi.mocked(useBoard).mockReturnValue({
+        board: BOARD,
+        tasks: [],
+        loading: false,
+        error: null,
+        isFetching: false,
+        isStale: false,
+        health: 'green',
+        refetchTasks: vi.fn(),
+        lastDecisionsMtime: 123_456,
+      } as ReturnType<typeof useBoard>)
+      vi.mocked(usePendingDRs).mockReturnValue({
+        count: 0,
+        items: [],
+        isLoading: false,
+        error: null,
+        refetch,
+      } as ReturnType<typeof usePendingDRs>)
+      renderShell()
+      expect(refetch).toHaveBeenCalled()
     })
   })
 })

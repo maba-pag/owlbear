@@ -311,4 +311,20 @@ describe('TestFromAC_useCleanupFlow', () => {
       await act(async () => { resolveCleanup(RESULT_EMPTY) })
     })
   })
+
+  // ─── AC 3b: non-Error rejection (String(caught) branch) ──────────────────
+  // Discriminating test: must fail if the `String(caught)` branch on line 52
+  // is removed (i.e., if only `Error.message` is used).
+
+  describe('AC 3b: non-Error rejection uses String(caught) for error message', () => {
+    it('error message is String(caught) when thrown value is not an Error instance', async () => {
+      vi.mocked(cleanupTasks).mockRejectedValueOnce('raw string rejection')
+      const { result } = renderHook(() => useCleanupFlow())
+      act(() => { result.current.requestCleanup() })
+      await act(async () => { await result.current.confirmCleanup() })
+      expect(result.current.phase).toBe('error')
+      // String('raw string rejection') === 'raw string rejection'
+      expect(result.current.error).toBe('raw string rejection')
+    })
+  })
 })
