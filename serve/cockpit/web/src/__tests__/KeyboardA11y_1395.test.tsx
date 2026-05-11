@@ -240,6 +240,45 @@ describe('TestFromAC_KeyboardMovement', () => {
     // FAILS: no onKeyDown on transition items → Enter does nothing
     expect(onClickSpy).toHaveBeenCalled()
   })
+
+  it('pressing Enter on a context menu transition item invokes the real move API endpoint (AC2)', async () => {
+    // Discriminating proof: Enter on a transition item must trigger the real handleTransitionClick
+    // path in KanbanBoard — not merely fire a test-added DOM listener.
+    // Proof: fetch is called with /api/tasks/{id}/move and method POST.
+    const fetchSpy = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({}),
+    })
+    const originalFetch = globalThis.fetch
+    globalThis.fetch = fetchSpy
+    try {
+      const { container } = renderKanbanBoard()
+      const card = container.querySelector('[data-testid="task-card"]') as HTMLElement
+      expect(card).not.toBeNull()
+
+      // Open context menu via right-click
+      fireEvent.contextMenu(card)
+
+      const menuItems = container.querySelectorAll('[data-testid="transition-item"]')
+      expect(menuItems.length).toBeGreaterThan(0)
+
+      const firstItem = menuItems[0] as HTMLElement
+      firstItem.focus()
+      // Enter triggers onKeyDown → event.currentTarget.click() → onClick → handleTransitionClick → fetch
+      fireEvent.keyDown(firstItem, { key: 'Enter', code: 'Enter' })
+
+      // Verify fetch was called with the real move endpoint
+      await vi.waitFor(() => {
+        expect(fetchSpy).toHaveBeenCalledWith(
+          `/api/tasks/${TASK_FIXTURE.id}/move`,
+          expect.objectContaining({ method: 'POST' }),
+        )
+      })
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+  })
 })
 
 // ─── AC3: TestFromAC_HealthBadgePopoverFocus ──────────────────────────────────
@@ -353,6 +392,30 @@ describe('TestFromAC_HealthBadgePopoverFocus', () => {
     } finally {
       HTMLElement.prototype.focus = origFocus
     }
+  })
+
+  it('HealthBadge trigger button has a non-empty meaningful aria-label (AC3)', () => {
+    // WCAG 2.1 SC 4.1.2: the trigger must carry an accessible name so screen readers
+    // announce its purpose. A label matching /health/i proves it is meaningful.
+    const { container } = renderBadge()
+    const trigger = container.querySelector('[data-testid="health-badge"]')
+    expect(trigger).not.toBeNull()
+    const ariaLabel = trigger!.getAttribute('aria-label')
+    expect(ariaLabel, 'trigger must have a non-empty aria-label').toBeTruthy()
+    expect(ariaLabel, 'aria-label must describe health state').toMatch(/health/i)
+  })
+
+  it('HealthBadge popover has a non-empty meaningful aria-label identifying the health detail region (AC3)', () => {
+    // The popover acts as a dialog region. It must carry an accessible name so
+    // screen readers can identify it when focus enters.
+    const { container } = renderBadge()
+    const trigger = container.querySelector('[data-testid="health-badge"]') as HTMLElement
+    fireEvent.click(trigger)
+    const popover = container.querySelector('[data-testid="health-badge-popover"]')
+    expect(popover, 'popover must be present after clicking trigger').not.toBeNull()
+    const ariaLabel = popover!.getAttribute('aria-label')
+    expect(ariaLabel, 'popover must have a non-empty aria-label').toBeTruthy()
+    expect(ariaLabel!.length, 'popover aria-label must not be empty string').toBeGreaterThan(0)
   })
 })
 
@@ -497,6 +560,60 @@ describe('TestFromAC_ConfirmDialogFocus', () => {
     expect(container.querySelector('[data-testid="confirm-dialog"]')).toBeNull()
 
     // FAILS: no focus-restore mechanism → activeElement is <body>
+    expect(document.activeElement).toBe(triggerBtn)
+  })
+
+  it('ConfirmDialog Cancel button dismisses dialog via click path — no Escape fallback (AC3)', () => {
+    // Discriminating proof: the Cancel <p-button> must be findable and clickable.
+    // Unlike the test above, this test has NO Escape fallback — if the Cancel button
+    // cannot be found or does not invoke onCancel, the test fails here.
+    function WrapperDirect() {
+      const [showDialog, setShowDialog] = useState(false)
+      return (
+        <div>
+          <button
+            data-testid="trigger-direct"
+            type="button"
+            onClick={() => setShowDialog(true)}
+          >
+            Open dialog
+          </button>
+          {showDialog && (
+            <ConfirmDialog
+              type="unclaim"
+              onCancel={() => setShowDialog(false)}
+              onConfirm={() => setShowDialog(false)}
+            />
+          )}
+        </div>
+      )
+    }
+
+    const { container } = render(
+      <PorscheDesignSystemProvider>
+        <WrapperDirect />
+      </PorscheDesignSystemProvider>,
+    )
+
+    const triggerBtn = container.querySelector('[data-testid="trigger-direct"]') as HTMLButtonElement
+    expect(triggerBtn).not.toBeNull()
+    triggerBtn.focus()
+    fireEvent.click(triggerBtn)
+
+    const dialog = container.querySelector('[data-testid="confirm-dialog"]')
+    expect(dialog).not.toBeNull()
+
+    // Must find Cancel button — no Escape fallback permitted.
+    const cancelBtn = container.querySelector(
+      '[data-testid="confirm-dialog"] p-button:first-of-type',
+    ) as HTMLElement | null
+    expect(cancelBtn, 'Cancel p-button must exist in the dialog as first p-button').not.toBeNull()
+
+    fireEvent.click(cancelBtn!)
+
+    // Dialog dismissed via Cancel click path
+    expect(container.querySelector('[data-testid="confirm-dialog"]')).toBeNull()
+    // Focus restored to trigger
     expect(document.activeElement).toBe(triggerBtn)
   })
 })

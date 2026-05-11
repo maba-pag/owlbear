@@ -148,4 +148,18 @@ describe('TestFromAC_PDSHexScan', () => {
     const violations = findHexViolations(syntheticWithHex, 'synthetic-with-hex')
     expect(violations.length).toBeGreaterThan(0)
   })
+
+  it('hex scanner detects hex literals on lines that also contain var(--pds-*) tokens (AC4)', () => {
+    // A line with BOTH a PDS token AND a hardcoded hex literal must NOT be skipped entirely.
+    // The current scanner skips the whole line when var(--pds-) is present, allowing a
+    // trailing hex value to slip through undetected — a false-green.
+    // Fix: strip only the var(--pds-...) segments before scanning, not the whole line.
+    const mixedLine = `  style={{ color: 'var(--pds-theme-light-notification-error)', background: '#ff0000' }}`
+    const violations = findHexViolations(mixedLine, 'synthetic-mixed-token-hex')
+    // FAILS with current scanner: it skips the entire line due to var(--pds-) → returns []
+    expect(
+      violations.length,
+      'scanner must detect the hex literal even when a PDS token appears on the same line',
+    ).toBeGreaterThan(0)
+  })
 })

@@ -25,6 +25,7 @@
     "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.11.3",
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.59.1",
     "@rolldown/plugin-babel": "^0.2.3",
