@@ -338,7 +338,14 @@ def _move_file(src: Path, dest: Path, *, no_overwrite: bool = False) -> None:
         # os.link() is atomic for destination creation and fails if dest exists,
         # avoiding overwrite when a collision appears after a pre-check.
         os.link(src, dest)
-        src.unlink()
+        try:
+            src.unlink()
+        except OSError:
+            # Roll back the destination hard link so partial failures do not
+            # leave a duplicate task file in archive/.
+            with contextlib.suppress(OSError):
+                dest.unlink()
+            raise
         return
 
     src.replace(dest)
