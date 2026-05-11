@@ -44,8 +44,10 @@ repository.
 
 Accessibility and responsive state after #1396:
 
-- Keyboard and focus behavior for core Cockpit flows is verified by the #1395 gate tests.
-- Viewport checks at 320px, 768px, 1024px, and 1440px are part of that verification.
+- #1395 gate tests verify viewport and accessibility scans (including 320px, 768px,
+  1024px, and 1440px checks).
+- Focus-management behavior for decision and repair flows is verified by the #1396
+  regression tests.
 - Documentation here does not treat cache/SSE invalidation work from #1346 as part of
   this delivery bundle.
 
@@ -101,11 +103,15 @@ Decision behavior after #1385 and #1389:
 
 ## Error Envelope
 
-All error responses use a stable JSON envelope. The `detail` field is absent; `guidance` is also absent on error responses.
+Most cockpit routes use a stable JSON error envelope with no `detail` or `guidance` fields:
 
 ```json
 {"code": "<STABLE_CODE>", "message": "<user-facing text>"}
 ```
+
+Decisions API resolve routes are the explicit exception for malformed/unknown
+IDs and duplicate cockpit-resolved IDs; those responses use FastAPI's
+`{"detail": "..."}` envelope for 404/422 cases.
 
 | Domain error | HTTP status | `code` example |
 |---|---|---|
