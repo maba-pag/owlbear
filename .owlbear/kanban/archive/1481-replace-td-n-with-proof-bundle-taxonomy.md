@@ -1,10 +1,10 @@
 ---
 id: 1481
 title: Replace td:N with proof-bundle taxonomy
-status: in-progress
+status: archived
 priority: needed
 created: 2026-05-11T08:54:43.332169+00:00
-updated: 2026-05-11T09:01:09.665404+00:00
+updated: 2026-05-11T09:20:56.604029+00:00
 tags:
 - pipeline
 - convention
@@ -73,5 +73,26 @@ graph TD
 - No TDD pairing: all 8 tasks are pure Markdown convention/documentation changes with no executable code
 - Layer 2 (5 tasks) can execute in parallel once the foundation definition (#1482) is complete
 - Critical path: 1482 → any one of 1483-1487 → 1488 → 1489 (4 layers)
+
 [[2026-05-11]]
-## Planning\n### Decomposition: Replace td:N with proof-bundle taxonomy\n- Tasks: 7 (6 pre-existing + 1 created)\n- Dependency layers: 2\n- Phase: 1\n\n### Task List\n| ID | Title | Priority | Depends On | Tags |\n|----|-------|----------|------------|------|\n| 1482 | P1-01: Define proof-bundle taxonomy in r-pipeline-protocol | critical | — | pipeline, convention, scope:skills |\n| 1483 | P1-02: Add proof-bundle assignment to w-task-decomposition | needed | 1482 | pipeline, convention, scope:skills |\n| 1484 | P1-03: Add proof-bundle validation to w-arch-review | needed | 1482 | pipeline, convention, scope:skills |\n| 1485 | P1-04: Update w-tdd-red gating with proof-bundle | needed | 1482 | pipeline, convention, scope:skills |\n| 1486 | P1-05: Update w-tdd-green handling for skip/existing bundles | needed | 1482 | pipeline, convention, scope:skills |\n| 1487 | P1-06: Update w-code-review routing with proof-bundle | needed | 1482 | pipeline, convention, scope:skills |\n| 1490 | P1-07: Cross-cutting td:N cleanup in instructions and agents | important | 1482-1487 | pipeline, convention, scope:skills |\n\n### Dependency Graph\n```mermaid\ngraph TD\n  1482[P1-01: Taxonomy definition] --> 1483[P1-02: w-task-decomposition]\n  1482 --> 1484[P1-03: w-arch-review]\n  1482 --> 1485[P1-04: w-tdd-red]\n  1482 --> 1486[P1-05: w-tdd-green]\n  1482 --> 1487[P1-06: w-code-review]\n  1483 --> 1490[P1-07: Cross-cutting cleanup]\n  1484 --> 1490\n  1485 --> 1490\n  1486 --> 1490\n  1487 --> 1490\n```\n\n### Notes\n- All tasks are `skip` proof bundle (pure markdown skill-file edits, no executable code)\n- TDD pairing not applicable — no code to test\n- Tasks #1482-1487 pre-existed; #1490 created to cover AC7 + AC9 (instructions/agents cleanup + final td:N sweep)\n- Layer 1 (#1482) is the foundation; Layer 2 (#1483-1487) depends on it; Layer 3 (#1490) depends on all others
+## Audit
+
+### Regression Detection
+No code or test changes — commit `93a4738b` adds only markdown files to `.owlbear/briefs/` and `.owlbear/kanban/`. Zero regression risk; quality-runner skipped per doc-only planning scope.
+
+### Intent Verification
+Epic purpose: plan replacement of td:N with proof-bundle taxonomy. Deliverables:
+- Brief at `.owlbear/briefs/draft-proof-bundle-taxonomy/brief.md` ✓
+- 8 subtasks (1482-1489) created with correct parent linkage, dependencies matching 3-layer graph, and AC covering all 9 epic AC lines ✓
+- All changed files in `.owlbear/` domain — no extraneous scope ✓
+
+### Architect Quality
+AC quality score: 4/5. Nine specific, verifiable criteria each mapping to exactly one subtask. Minor gap: "complete routing table" format left to subtask-level AC (appropriate for epic granularity).
+
+### Commit Integrity
+Single atomic commit `93a4738b` — "ideation: complete Phase 2 mediation for proof-bundle taxonomy". Includes brief, panel stances, decisions, synthesis, all 8 task files, and config update. Clean attribution.
+
+### Confidence
+Start: 1.00 | Deductions: none | Final: **1.00**
+
+Action: archive

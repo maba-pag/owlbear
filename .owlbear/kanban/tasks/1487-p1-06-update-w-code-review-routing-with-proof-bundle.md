@@ -4,11 +4,12 @@ title: 'P1-06: Update w-code-review routing with proof-bundle'
 status: backlog
 priority: needed
 created: 2026-05-11T08:59:01.968663+00:00
-updated: 2026-05-11T08:59:55.564813+00:00
+updated: 2026-05-11T09:03:05.484889+00:00
 tags:
 - pipeline
 - convention
 - scope:skills
+- agent
 parent: 1481
 depends_on:
 - 1482

@@ -4,11 +4,12 @@ title: 'P1-07: Update pipeline-agents.instructions.md and agent files'
 status: backlog
 priority: needed
 created: 2026-05-11T09:00:01.154177+00:00
-updated: 2026-05-11T09:00:27.516428+00:00
+updated: 2026-05-11T09:03:05.494557+00:00
 tags:
 - pipeline
 - convention
 - scope:instructions
+- agent
 parent: 1481
 depends_on:
 - 1483

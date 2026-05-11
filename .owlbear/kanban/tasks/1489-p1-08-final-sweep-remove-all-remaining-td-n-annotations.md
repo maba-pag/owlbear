@@ -4,10 +4,11 @@ title: 'P1-08: Final sweep — remove all remaining td:N annotations'
 status: backlog
 priority: important
 created: 2026-05-11T09:00:01.191773+00:00
-updated: 2026-05-11T09:00:27.534069+00:00
+updated: 2026-05-11T09:03:05.489841+00:00
 tags:
 - pipeline
 - convention
+- agent
 parent: 1481
 depends_on:
 - 1488

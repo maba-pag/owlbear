@@ -4,7 +4,7 @@ title: 'P3-06: Implement Cockpit accessibility and PDS verification gate'
 status: backlog
 priority: critical
 created: 2026-05-06T01:09:43.591872+00:00
-updated: 2026-05-06T01:12:27.925233+00:00
+updated: 2026-05-11T09:19:09.553695+00:00
 tags:
 - cockpit
 - audit-remediation
@@ -21,7 +21,7 @@ depends_on:
 - 1395
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-11T09:19:09.553695+00:00
 archival_reason:
 archival_refs: []
 ---

@@ -4,11 +4,12 @@ title: 'P1-02: Add proof-bundle assignment to w-task-decomposition'
 status: backlog
 priority: needed
 created: 2026-05-11T08:59:01.915026+00:00
-updated: 2026-05-11T08:59:55.534629+00:00
+updated: 2026-05-11T09:03:05.340792+00:00
 tags:
 - pipeline
 - convention
 - scope:skills
+- agent
 parent: 1481
 depends_on:
 - 1482

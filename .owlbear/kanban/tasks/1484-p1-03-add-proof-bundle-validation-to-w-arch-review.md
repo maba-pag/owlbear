@@ -4,11 +4,12 @@ title: 'P1-03: Add proof-bundle validation to w-arch-review'
 status: backlog
 priority: needed
 created: 2026-05-11T08:59:01.930089+00:00
-updated: 2026-05-11T08:59:55.550078+00:00
+updated: 2026-05-11T09:03:05.459048+00:00
 tags:
 - pipeline
 - convention
 - scope:skills
+- agent
 parent: 1481
 depends_on:
 - 1482

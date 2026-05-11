@@ -4,11 +4,12 @@ title: 'P1-04: Update w-tdd-red gating with proof-bundle'
 status: backlog
 priority: needed
 created: 2026-05-11T08:59:01.942836+00:00
-updated: 2026-05-11T08:59:55.551901+00:00
+updated: 2026-05-11T09:03:05.465193+00:00
 tags:
 - pipeline
 - convention
 - scope:skills
+- agent
 parent: 1481
 depends_on:
 - 1482

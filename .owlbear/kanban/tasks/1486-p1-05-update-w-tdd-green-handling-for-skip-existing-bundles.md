@@ -4,11 +4,12 @@ title: 'P1-05: Update w-tdd-green handling for skip/existing bundles'
 status: backlog
 priority: needed
 created: 2026-05-11T08:59:01.954913+00:00
-updated: 2026-05-11T08:59:55.560018+00:00
+updated: 2026-05-11T09:03:05.472243+00:00
 tags:
 - pipeline
 - convention
 - scope:skills
+- agent
 parent: 1481
 depends_on:
 - 1482

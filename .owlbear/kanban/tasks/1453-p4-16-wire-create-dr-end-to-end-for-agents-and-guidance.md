@@ -4,7 +4,7 @@ title: 'P4-16: Wire create_dr end to end for agents and guidance'
 status: backlog
 priority: needed
 created: 2026-05-08T19:32:28.041895+00:00
-updated: 2026-05-08T19:39:58.109290+00:00
+updated: 2026-05-11T09:19:10.136980+00:00
 tags:
 - phase-4
 - scope:agents
@@ -19,7 +19,7 @@ depends_on:
 - 1451
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-11T09:19:10.136980+00:00
 archival_reason:
 archival_refs: []
 ---
