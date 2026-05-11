@@ -663,3 +663,202 @@ class TestCoverageUplift_ServerUtils:
 
         with patch.object(app_ctx.engine, "agent_view", return_value=mock_av), pytest.raises(ToolError):
             await server_mod.end_work(ctx, id="1", note="done", outcome="success")
+
+
+# ---------------------------------------------------------------------------
+# AC-2/AC-3/AC-4: MCP seam tests — real filesystem, spy verification
+# (Reviewer retry Required Follow-up: review cycle 2)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ResolveDrsMcpSeam:
+    """Real-filesystem seam tests: argument correctness, canonical summary count, idempotency.
+
+    Reviewer Required Follow-up items (review cycle 2):
+    1. Spy: verify resolve_drs calls decisions.resolve_pending_drs with the correct
+       decisions dir and engine — wrong arguments cause the assertion to fail.
+    2. Summary count (AC-2, AC-3): prove exactly one canonical summary is appended
+       for approved and needs-info responses at the MCP call path.
+    3. AC-4 real filesystem: prove a second resolve_drs call adds no duplicate summary.
+
+    All tests invoke the real decisions.resolve_pending_drs (no full mock).
+    """
+
+    @pytest.mark.asyncio
+    async def test_seam_passes_correct_decisions_dir_and_engine(
+        self, app_ctx: AppContext
+    ) -> None:
+        """MCP seam: resolve_drs must invoke decisions.resolve_pending_drs with
+        (kanban_dir / 'decisions', engine) — wrong path or wrong engine would fail.
+
+        Uses wraps= spy so the real resolver still runs (returning [] for empty
+        pending/) while call arguments are recorded and asserted.
+        """
+        import owlbear_kanban.decisions as kanban_decisions  # noqa: PLC0415
+        import owlbear_mcp_kanban.server as server_mod  # noqa: PLC0415
+
+        fn = getattr(server_mod, "resolve_drs", None)
+        assert fn is not None, "resolve_drs must be registered"
+
+        ctx = _make_mcp_ctx(app_ctx)
+        with patch(
+            "owlbear_mcp_kanban.server.decisions.resolve_pending_drs",
+            wraps=kanban_decisions.resolve_pending_drs,
+        ) as spy:
+            await fn(ctx)
+
+        spy.assert_called_once_with(
+            app_ctx.kanban_dir / "decisions",
+            app_ctx.engine,
+        )
+
+    @pytest.mark.asyncio
+    async def test_approved_dr_appends_exactly_one_canonical_summary(
+        self, app_ctx: AppContext
+    ) -> None:
+        """AC-2 real filesystem: resolve_drs with an approved DR appends exactly one
+        '## Decision Request' canonical summary to the linked task body.
+
+        Uses real files and the real resolver.  Proves the MCP adapter does not add
+        extra writes beyond the single resolver-level append.
+        """
+        import owlbear_mcp_kanban.server as server_mod  # noqa: PLC0415
+
+        fn = getattr(server_mod, "resolve_drs", None)
+        assert fn is not None, "resolve_drs must be registered"
+
+        view = app_ctx.engine.agent_view()
+        task_resp = view.create_task(title="Task for approved DR seam test")
+        task_id = task_resp.id
+        app_ctx.engine.edit_task(str(task_id), blocked=True, block_reason="DR pending")
+
+        pending_dir = app_ctx.kanban_dir / "decisions" / "pending"
+        (pending_dir / f"{task_id}-decision.md").write_text(
+            f"---\ntask_id: {task_id}\nagent: test-writer\n"
+            "request_type: decision\ncreated: '2026-05-11'\n"
+            "response: approved\n---\n\n## Question\nApprove this change.\n",
+            encoding="utf-8",
+        )
+
+        ctx = _make_mcp_ctx(app_ctx)
+        result = await fn(ctx)
+
+        assert result["count"] == 1, (
+            f"AC-2 seam: one approved DR must yield count=1; got {result['count']!r}"
+        )
+        task_after = app_ctx.engine.show_task(str(task_id))
+        body = task_after.body if isinstance(task_after.body, str) else ""
+        summary_count = body.count("## Decision Request")
+        assert summary_count == 1, (
+            f"AC-2 seam: exactly one '## Decision Request' summary must appear; "
+            f"found {summary_count}. Body:\n{body!r}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_needs_info_dr_appends_exactly_one_canonical_summary(
+        self, app_ctx: AppContext
+    ) -> None:
+        """AC-3 real filesystem: resolve_drs with a needs-info DR appends exactly one
+        '## Decision Request' canonical summary and keeps the task blocked.
+
+        Uses real files and the real resolver.
+        """
+        import owlbear_mcp_kanban.server as server_mod  # noqa: PLC0415
+
+        fn = getattr(server_mod, "resolve_drs", None)
+        assert fn is not None, "resolve_drs must be registered"
+
+        view = app_ctx.engine.agent_view()
+        task_resp = view.create_task(title="Task for needs-info DR seam test")
+        task_id = task_resp.id
+        app_ctx.engine.edit_task(str(task_id), blocked=True, block_reason="DR pending")
+
+        pending_dir = app_ctx.kanban_dir / "decisions" / "pending"
+        (pending_dir / f"{task_id}-clarify.md").write_text(
+            f"---\ntask_id: {task_id}\nagent: test-writer\n"
+            "request_type: decision\ncreated: '2026-05-11'\n"
+            "response: needs-info\n---\n\n## Question\nNeed more info.\n",
+            encoding="utf-8",
+        )
+
+        ctx = _make_mcp_ctx(app_ctx)
+        result = await fn(ctx)
+
+        assert result["count"] == 1, (
+            f"AC-3 seam: needs-info DR must be counted as resolved; got count={result['count']!r}"
+        )
+        task_after = app_ctx.engine.show_task(str(task_id))
+        body = task_after.body if isinstance(task_after.body, str) else ""
+        summary_count = body.count("## Decision Request")
+        assert summary_count == 1, (
+            f"AC-3 seam: exactly one '## Decision Request' summary must appear; "
+            f"found {summary_count}. Body:\n{body!r}"
+        )
+        assert task_after.blocked is True, (
+            "AC-3 seam: needs-info must keep the task blocked; "
+            f"got blocked={task_after.blocked!r}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_ac4_real_filesystem_second_call_no_duplicate_summary(
+        self, app_ctx: AppContext
+    ) -> None:
+        """AC-4 real filesystem: a second resolve_drs call must neither re-resolve the DR
+        nor append a duplicate canonical summary to the linked task body.
+
+        First call moves the approved DR from pending/ to resolved/ and appends one
+        summary.  Second call must find pending/ empty, return moved=[]/count=0, and
+        leave the task body with exactly one summary — not two.
+
+        This is the real-filesystem proof that the existing mocked AC-4 test cannot
+        provide: the mocked test passes even if a duplicate summary were appended.
+        """
+        import owlbear_mcp_kanban.server as server_mod  # noqa: PLC0415
+
+        fn = getattr(server_mod, "resolve_drs", None)
+        assert fn is not None, "resolve_drs must be registered"
+
+        view = app_ctx.engine.agent_view()
+        task_resp = view.create_task(title="Task for idempotency real filesystem test")
+        task_id = task_resp.id
+        app_ctx.engine.edit_task(str(task_id), blocked=True, block_reason="DR pending")
+
+        pending_dir = app_ctx.kanban_dir / "decisions" / "pending"
+        (pending_dir / f"{task_id}-decision.md").write_text(
+            f"---\ntask_id: {task_id}\nagent: test-writer\n"
+            "request_type: decision\ncreated: '2026-05-11'\n"
+            "response: approved\n---\n\n## Question\nApprove for idempotency test.\n",
+            encoding="utf-8",
+        )
+
+        ctx = _make_mcp_ctx(app_ctx)
+
+        # First call: processes the pending DR, appends summary, moves file
+        first_result = await fn(ctx)
+        assert first_result["count"] == 1, (
+            f"AC-4 real: first call must resolve 1 DR; got {first_result!r}"
+        )
+        task_mid = app_ctx.engine.show_task(str(task_id))
+        body_mid = task_mid.body if isinstance(task_mid.body, str) else ""
+        assert body_mid.count("## Decision Request") == 1, (
+            "AC-4 real: first call must produce exactly 1 summary in task body"
+        )
+
+        # Second call: pending/ is empty (DR already moved to resolved/)
+        second_result = await fn(ctx)
+        assert second_result["moved"] == [], (
+            f"AC-4 real: second call must return moved=[]; got {second_result['moved']!r}"
+        )
+        assert second_result["count"] == 0, (
+            f"AC-4 real: second call must return count=0; got {second_result['count']!r}"
+        )
+
+        # Critical: no duplicate summary must have been appended
+        task_after = app_ctx.engine.show_task(str(task_id))
+        body_after = task_after.body if isinstance(task_after.body, str) else ""
+        summary_count = body_after.count("## Decision Request")
+        assert summary_count == 1, (
+            f"AC-4 real: second call must NOT append a duplicate summary; "
+            f"found {summary_count} summaries after second call. "
+            f"Body:\n{body_after!r}"
+        )
