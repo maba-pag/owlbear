@@ -164,7 +164,7 @@ The architect retains final authority.
 | **SPLIT** | Multiple responsibilities | Delegate to planner with `Plan and create: #{id} — {split scope}` for decomposition, then update deps, edit/delete original, and release |
 | **MERGE** | Two tasks = one logical change | Edit one task, delete redundant, release |
 | **REJECT** | Missing prerequisite or unclear | Move to `research` via `end_work(outcome="reject")`, appending findings |
-| **BLOCK** | `type:user-action` detected (Step 2 criterion 13) | Create AR via `create_dr(task_id={id}, request_type="action")`, tag task `type:user-action` if missing, `end_work(outcome="block", block_reason="AR pending: {filename}")` |
+| **BLOCK** | `type:user-action` detected (Step 2 criterion 13) | Create AR via `create_dr(task_id={id}, agent="architect", request_type="action", body="{markdown AR payload}")`, tag task `type:user-action` if missing, `end_work(outcome="block", block_reason="AR pending: {filename}")` |
 
 <!-- NON_IMPL_TAGS: This is the authoritative list. Secondary copy:
      skills/w-tdd-red/SKILL.md (Step 1 item 3) -->
