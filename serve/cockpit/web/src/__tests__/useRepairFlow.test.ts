@@ -1,5 +1,5 @@
 /**
- * Workflow behavior tests1165: RF-03 useRepairFlow hook state machine
+ * RF-03 useRepairFlow hook state machine
  *
  * Covers: initial idle state, requestRepair → confirming, confirmRepair → repairing,
  * successful repair → done with grouped outcomes (fixed/quarantined/failed buckets),
@@ -7,7 +7,6 @@
  * dismissResults → idle (from done and from error), and onSuccess callback triggered
  * after successful repair.
  *
- * All tests are RED (failing) until the builder implements src/hooks/useRepairFlow.ts.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
@@ -390,3 +389,4 @@ describe('TestFromAC_useRepairFlow', () => {
     })
   })
 })
+

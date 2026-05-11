@@ -1,10 +1,9 @@
 /**
- * Workflow behavior tests1226: Frontend — dedup rowStyleForState + delete scratch files
+ * Frontend — dedup rowStyleForState + delete scratch files
  *
  * AC1 (td:2): rowStyleForState extracted to a shared module under src/utils/;
  * all branches (blocked/rejected, stuck, default) return correct style objects.
  *
- * All tests are RED (failing) until the builder implements src/utils/styles.ts.
  */
 import { describe, it, expect } from 'vitest'
 import { rowStyleForState } from '../utils/styles'
@@ -48,3 +47,4 @@ describe('TestFromAC_RowStyleExtraction', () => {
     expect(style).not.toHaveProperty('backgroundColor')
   })
 })
+

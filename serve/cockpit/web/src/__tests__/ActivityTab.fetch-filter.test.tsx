@@ -1,12 +1,11 @@
 /**
- * Workflow behavior tests1156: Cockpit session history polish
+ * Cockpit session history polish
  *
  * Covers: fetch uses filter=all, active-filter predicate fix (running not in-progress),
  * new blocked/stuck filter buttons, data-state visual indicators on ActivityTab rows
  * and HistorySubtab rows, HistorySubtab onSelectTask click-through, DetailTab prop
  * threading, FilterType union alignment, and applyFilter contract.
  *
- * All tests are RED (failing) until the builder implements the changes.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, fireEvent, waitFor } from '@testing-library/react'
@@ -731,3 +730,4 @@ describe('TestFromAC_CoverageProof', () => {
     expect(inputEl?.value).toBe('Blocked by #50')
   })
 })
+

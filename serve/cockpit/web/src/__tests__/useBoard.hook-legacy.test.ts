@@ -1,12 +1,11 @@
 /**
- * Workflow behavior tests967: useBoard hook extracted to hooks/useBoard.ts.
+ * useBoard hook extracted to hooks/useBoard.ts.
  *
  * Covers: 3s setInterval polling, mtime-aware skip (no re-render on same
  * mtime), /api/board single-mount fetch, full return interface including
  * isFetching/isStale/refetchTasks, skip-when-in-flight (AC #5), AbortController
  * on unmount, and error/stale traffic-light states.
  *
- * All tests are RED (failing) until the builder creates hooks/useBoard.ts and
  * updates KanbanBoard.tsx to import from there.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
@@ -489,3 +488,4 @@ describe('TestFromAC_useBoardHook967', () => {
     })
   })
 })
+

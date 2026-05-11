@@ -1,5 +1,5 @@
 /**
- * Workflow behavior tests1245: ArchivalModal — selector reconciliation + em-dash
+ * ArchivalModal — selector reconciliation + em-dash
  *
  * Covers two (td:1)/(td:2) AC items not yet green:
  *
@@ -129,3 +129,4 @@ describe('TestFromAC_ArchivalModal_HintEmDash', () => {
     })
   })
 })
+

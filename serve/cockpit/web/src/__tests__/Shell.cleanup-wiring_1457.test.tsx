@@ -1,5 +1,5 @@
 /**
- * Retry-cycle tests for #1457: P4-19 Expose maintenance cleanup through Cockpit
+ * Expose maintenance cleanup through Cockpit
  *
  * AC 3d (td:1): CleanupPanel is a separate control from HealthBadge.
  * Exact Shell placement at builder discretion.
@@ -384,3 +384,4 @@ describe('TestFromAC_CleanupShellWiring', () => {
     })
   })
 })
+

@@ -1,5 +1,5 @@
 /**
- * Retry tests for #1263: Wire usePendingDRs to SSE decisions-changed early-refetch
+ * Wire usePendingDRs to SSE decisions-changed early-refetch
  * Scope: AC5 — usePendingDRs 60s polling remains active and unchanged.
  *
  * Reviewer gap: the Shell_1263 smoke test mocks usePendingDRs entirely, so it cannot
@@ -84,3 +84,4 @@ describe('TestFromAC_PendingDRsPollingActive', () => {
     expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(3)
   })
 })
+

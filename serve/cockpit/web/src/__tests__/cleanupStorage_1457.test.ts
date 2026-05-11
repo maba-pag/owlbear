@@ -1,5 +1,4 @@
 /**
- * RED phase Vitest tests for #1457: P4-19 Expose maintenance cleanup through Cockpit
  *
  * AC 3a (td:1): API client function POSTs to /api/tasks/cleanup and returns typed
  *               CleanupResult, with error handling following api/repair.ts pattern.
@@ -132,3 +131,4 @@ describe('TestFromAC_cleanupStorage', () => {
     })
   })
 })
+

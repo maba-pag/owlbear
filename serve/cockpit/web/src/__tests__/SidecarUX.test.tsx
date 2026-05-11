@@ -1,5 +1,5 @@
 /**
- * Workflow behavior tests1393: P3-03 Test Cockpit operational sidecar UX and repair safeguards
+ * P3-03 Test Cockpit operational sidecar UX and repair safeguards
  *
  * AC1: Session type nullability — null task_id / null agent must not render "null" text
  * AC2: Filter active state observable + session rows show human-readable durations
@@ -9,7 +9,6 @@
  * AC6: Repair confirmation shows file details, explicit irreversible consequences
  * AC7: Repair error phase has retry mechanism using error contract
  *
- * All tests are RED (failing) until #1394 implements the fixes.
  *
  * Deduplication constraints observed:
  *   - ActivityTab_1156: filter buttons, data-state attrs, click-through → NOT duplicated
@@ -927,3 +926,4 @@ describe('TestFromAC_RepairErrorContractProof', () => {
     expect(fetchSpy).not.toHaveBeenCalled()
   })
 })
+

@@ -1,5 +1,5 @@
 /**
- * Integration tests for #1256: P5-01 — Full board filter flow.
+ * Full board filter flow.
  *
  * End-to-end Vitest integration tests for the complete filter feature.
  * Uses the REAL FilterPanel — no vi.mock('../components/FilterPanel').
@@ -444,3 +444,4 @@ describe('TestFromAC_FilterBoardIntegration', () => {
     })
   })
 })
+

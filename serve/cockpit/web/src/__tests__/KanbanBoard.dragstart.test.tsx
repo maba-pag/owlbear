@@ -1,5 +1,5 @@
 /**
- * Tests for #1229: Frontend — complete drag-and-drop (call move API on drop).
+ * Frontend — complete drag-and-drop (call move API on drop).
  *
  * Covers:
  *   AC1 (td:1) — Dragging a card propagates its taskId + updated token into
@@ -397,3 +397,4 @@ describe('TestFromAC_DropOtherError', () => {
     expect(refetchSpy).not.toHaveBeenCalled()
   })
 })
+

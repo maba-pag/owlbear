@@ -1,5 +1,5 @@
 /**
- * Tests for #1164: RF-02 repairStorage API client (edge cases + retry strengthening)
+ * RF-02 repairStorage API client (edge cases + retry strengthening)
  *
  * Context: api/repair.ts was implemented in #1163 builder run — all happy-path
  * and standard error AC lines are GREEN in repairStorage_1163.test.ts.
@@ -198,3 +198,4 @@ describe('TestFromAC_repairStorage_1164', () => {
     })
   })
 })
+

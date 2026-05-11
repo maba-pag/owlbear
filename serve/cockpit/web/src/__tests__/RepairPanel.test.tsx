@@ -1,11 +1,10 @@
 /**
- * Workflow behavior tests1167: RF-05 RepairPanel component
+ * RF-05 RepairPanel component
  *
  * Covers: button visibility by corruption count, confirmation dialog content,
  * repair execution trigger, cancel/dismiss flows, loading spinner, grouped
  * results display, error state display, and a11y dialog attributes.
  *
- * All tests are RED (failing) until the builder implements RepairPanel.tsx.
  * Hook is fully mocked — component interface is the only contract under test.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -402,7 +401,6 @@ describe('TestFromAC_RepairPanel', () => {
 // the cache-hit and cache-invalidation branches, driving branch coverage to ≥90%.
 //
 // All tests in this suite are GREEN (pass with any correct implementation);
-// they are required for coverage, not for RED-phase failure evidence.
 
 const OUTCOME_FIXED_2: RepairOutcome = {
   task_id: 2,
@@ -610,3 +608,4 @@ describe('TestFromAC_RepairPanel_RenderCoverage', () => {
     })
   })
 })
+

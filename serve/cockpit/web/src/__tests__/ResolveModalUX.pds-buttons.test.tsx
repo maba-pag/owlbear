@@ -1,5 +1,5 @@
 /**
- * Workflow behavior tests1389 v2: AC4 — PButton controls in ResolveModal
+ * v2: AC4 — PButton controls in ResolveModal
  *
  * AC4 (td:2): ResolveModal submit and cancel controls use <PButton> (not raw
  * <button>): submit with variant="primary", cancel with variant="secondary".
@@ -9,7 +9,6 @@
  *
  * AC2 v2 (keyword assertions) and AC5 v2 (Shell close-cycle) are excluded
  * because current implementation already satisfies them — new tests for those
- * lines would pass and are therefore not new RED-phase tests.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render } from '@testing-library/react'
@@ -114,3 +113,4 @@ describe('TestFromAC_ResolveModalPDSButtons', () => {
     expect(pBtn!.variant).toBe('secondary')
   })
 })
+

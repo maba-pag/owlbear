@@ -1,5 +1,5 @@
 /**
- * Tests for #1252: P3-01: RED — KanbanBoard filter integration tests.
+ * RED — KanbanBoard filter integration tests.
  *
  * Covers:
  *   AC1 — Board renders filter toggle button (td:1)
@@ -471,3 +471,4 @@ describe('TestFromAC_FilterIntegration', () => {
     expect(capturedPriorities).toEqual(BOARD.priorities)
   })
 })
+

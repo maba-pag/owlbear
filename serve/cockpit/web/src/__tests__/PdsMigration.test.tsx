@@ -1,5 +1,5 @@
 /**
- * Workflow behavior tests1230: Frontend — PDS migration (design system consistency)
+ * Frontend — PDS migration (design system consistency)
  *
  * AC1 (td:1): <button> → <PButton> in ConfirmDialog, ArchivalModal, ActivityTab,
  *              DetailTab, ResolveModal, Shell.tsx
@@ -10,7 +10,6 @@
  *              ArchivalModal, ResolveModal; hideLabel where no visible label
  * AC5/AC6 (td:0): Card/Column and KanbanBoard context menu — not tested here
  *
- * All tests are RED (failing) until the builder performs the PDS migration.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, fireEvent } from '@testing-library/react'
@@ -901,3 +900,4 @@ describe('TestFromAC_PdsMigration_DetailTabPayload', () => {
     })
   })
 })
+

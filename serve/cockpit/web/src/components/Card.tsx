@@ -79,3 +79,4 @@ export function Card({ task, selected = false, onSelect, onContextMenu, onDragSt
     </div>
   )
 }
+

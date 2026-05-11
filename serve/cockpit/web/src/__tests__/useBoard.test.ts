@@ -1,10 +1,9 @@
 /**
- * Workflow behavior tests965: useBoard polling + mtime-skip + error states.
+ * useBoard polling + mtime-skip + error states.
  *
  * Covers: 3s poll interval, mtime-aware skip (no re-render on same mtime),
  * error/isStale/isFetching traffic-light states, AbortController cleanup on
  * unmount, and /api/board single-mount fetch.
- * All tests are RED (failing) until the builder implements polling in useBoard.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
@@ -438,3 +437,4 @@ describe('TestFromAC_useBoardPolling', () => {
     })
   })
 })
+

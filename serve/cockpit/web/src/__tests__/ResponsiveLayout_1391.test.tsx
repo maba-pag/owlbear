@@ -1,5 +1,4 @@
 /**
- * RED-phase Vitest tests for #1391: Cockpit responsive dashboard — PDS token usage, CSS breakpoints,
  * and viewport-accessible surface infrastructure.
  *
  * AC1 (td:2): Viewport usability at 320px, 768px, 1024px, 1440px — Shell.css must have responsive

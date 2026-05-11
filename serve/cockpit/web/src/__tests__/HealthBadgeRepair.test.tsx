@@ -1,5 +1,5 @@
 /**
- * Workflow behavior tests1168: RF-06 RepairPanel wired into HealthBadge
+ * RF-06 RepairPanel wired into HealthBadge
  *
  * AC6 — RepairPanel rendered inside HealthBadge popover (data-testid="health-badge-popover")
  *        below the issue list when corruptionCount > 0
@@ -10,7 +10,6 @@
  * AC1–AC5 and AC9 are covered by #1167 tests (RepairPanel_1167.test.tsx). This suite
  * adds the integration and PDS-conversion contracts.
  *
- * All tests are RED (failing) until the builder implements AC6–AC8.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, fireEvent } from '@testing-library/react'
@@ -354,3 +353,4 @@ describe('TestFromAC_RepairConfirmCopyExact', () => {
     )
   })
 })
+

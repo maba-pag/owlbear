@@ -20,3 +20,4 @@ export function filterTasks(tasks: Task[], filter: FilterState): Task[] {
     return matchesText && matchesPriority && matchesTags && matchesBlocked
   })
 }
+

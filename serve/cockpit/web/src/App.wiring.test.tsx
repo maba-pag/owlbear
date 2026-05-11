@@ -1,5 +1,4 @@
 /**
- * RED phase tests for #1276 — AC6: App.tsx wiring
  *
  * AC6 (td:1): <EventSourceProvider url="/api/events"> wraps <Shell /> in App.tsx
  *             inside <BrowserRouter>.
@@ -100,3 +99,4 @@ describe('TestFromAC_AppWiring', () => {
     })
   })
 })
+

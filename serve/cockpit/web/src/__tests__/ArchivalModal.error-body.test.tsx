@@ -1,5 +1,5 @@
 /**
- * Workflow behavior tests1375: P1-12 Implement Cockpit frontend error-contract adoption
+ * P1-12 Implement Cockpit frontend error-contract adoption
  *
  * ArchivalModal.tsx gaps — handleSubmit reads only payload.detail for 422 errors
  * and uses a status-only fallback for all other non-ok statuses:
@@ -247,3 +247,4 @@ describe('TestFromAC_ErrorMessageHelperNoDecoration', () => {
     expect(result).toBe('refs not allowed for dropped')
   })
 })
+

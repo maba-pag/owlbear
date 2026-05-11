@@ -1,5 +1,5 @@
 /**
- * Verification tests for #1381: P2-06 Implement Cockpit task action gating and confirmations
+ * Implement Cockpit task action gating and confirmations
  *
  * AC1–AC6 coverage is provided by DetailTab_1380.test.tsx (22 tests).
  * This file provides the AC7 non-regression guard only.
@@ -109,3 +109,4 @@ describe('TestFromAC_ConflictResolutionNonRegression', () => {
     )
   })
 })
+

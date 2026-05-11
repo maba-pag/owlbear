@@ -1,11 +1,9 @@
 /**
- * Workflow behavior tests1158: HealthBadge component
+ * HealthBadge component
  *
  * Covers: green/red indicator states, issue count text, popover toggle,
  * popover item fields, aria-label contract, data-testid, and default export.
- * All tests are RED (failing) until the builder implements HealthBadge.tsx.
  *
- * Builder: move this file to serve/cockpit/web/src/__tests__/HealthBadge.test.tsx
  */
 import { describe, it, expect } from 'vitest'
 import { render, fireEvent } from '@testing-library/react'
@@ -299,3 +297,4 @@ describe('TestFromAC_HealthBadge', () => {
     expect(rows[1].textContent).not.toContain(ITEM_A.detail)
   })
 })
+

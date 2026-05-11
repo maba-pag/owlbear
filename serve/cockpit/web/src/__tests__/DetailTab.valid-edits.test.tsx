@@ -1,5 +1,5 @@
 /**
- * Tests for #1379: P2-04 Implement Cockpit task detail edit validation and dirty state
+ * Implement Cockpit task detail edit validation and dirty state
  *
  * AC1–AC4 are covered by DetailTab_1378.test.tsx (written during #1378 test-writer
  * cycle per architect annotation "Test-writer: tests already written by #1378").
@@ -199,3 +199,4 @@ describe('TestFromAC_NoExtraActionGating', () => {
     )
   })
 })
+

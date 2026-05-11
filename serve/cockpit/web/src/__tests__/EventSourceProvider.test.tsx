@@ -1,5 +1,5 @@
 /**
- * Workflow behavior tests1276: EventSourceProvider context and useSSEEvent hook
+ * EventSourceProvider context and useSSEEvent hook
  *
  * AC1 (td:1): EventSourceProvider + useSSEEvent exported from hooks/EventSourceProvider
  * AC2 (td:2): Provider lifecycle — single EventSource, stall/retry timers, unmount cleanup
@@ -653,3 +653,4 @@ describe('TestFromAC_EventSourceProvider', () => {
     })
   })
 })
+

@@ -1,9 +1,8 @@
 /**
- * Workflow behavior tests935: Sidecar Detail tab
+ * Sidecar Detail tab
  *
  * Covers: editable fields, read-only fields, markdown body, edit mode toggle,
  * save with updated snapshot, 409 conflict detection, history subtab, and
- * oppose-the-flow confirmations. All tests are RED (failing) until the builder
  * implements DetailTab.tsx.
  *
  * react-markdown is mocked here (not yet in package.json). The builder installs
@@ -1004,3 +1003,4 @@ describe('TestBuilderDiscovered', () => {
     })
   })
 })
+

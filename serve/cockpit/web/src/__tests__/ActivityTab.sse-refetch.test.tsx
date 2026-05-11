@@ -1,5 +1,5 @@
 /**
- * Workflow behavior tests1278: Implement ActivityTab SSE live refetch
+ * Implement ActivityTab SSE live refetch
  *
  * Covers:
  *   AC1 — usePollingFetch replaces one-shot fetch (URL, intervalMs, paused flag, onSuccess)
@@ -9,7 +9,6 @@
  *   AC5 — initial mount fetch fires immediately (usePollingFetch called on mount)
  *   AC6 — EventSourceProvider mocked via vi.mock (jsdom lacks native EventSource)
  *
- * All tests are RED (failing) until the builder implements the ActivityTab refactor.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, act, waitFor } from '@testing-library/react'
@@ -293,3 +292,4 @@ describe('TestFromAC_ActivityTabSSE', () => {
     })
   })
 })
+

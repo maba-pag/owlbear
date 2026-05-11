@@ -1,11 +1,10 @@
 /**
- * Workflow behavior tests1193: P3-05 ResolveModal component
+ * P3-05 ResolveModal component
  *
  * Covers: markdown DR body rendering, 3-option response selector,
  * optional notes textarea, POST submit payload assertion, modal close
  * on success, error state on failure, and cancel-without-mutation guard.
  *
- * All tests are RED (failing) until the builder implements ResolveModal.tsx.
  * Component interface: { dr: PendingDRWithBody | null; onClose: () => void; onResolved: () => void }
  * API contract:  POST /api/decisions/{id}/resolve  body: { response, notes }
  */
@@ -263,3 +262,4 @@ describe('TestFromAC_ResolveModal', () => {
     })
   })
 })
+

@@ -1,5 +1,5 @@
 /**
- * Integration proof tests for #1228 — live-component proofs for AC1 and AC2.
+ * live-component proofs for AC1 and AC2.
  *
  * Supplements Shell_1228.test.tsx with reviewer-required live-component evidence:
  *   AC1 (td:2) — clicking a real [data-testid="task-card"] sets data-selected="true"
@@ -340,3 +340,4 @@ describe('TestFromAC_HelloRouteRemoval_Integration', () => {
     expect(workspace!.childElementCount).toBe(0)
   })
 })
+

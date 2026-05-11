@@ -1,5 +1,5 @@
 /**
- * Tests for #1376: P2-01 Test Cockpit task detail context model
+ * Test Cockpit task detail context model
  *
  * Proves that DetailTab surfaces the backend context fields needed for safe
  * UI decisions. Implementation was provided by #1377.
@@ -342,3 +342,4 @@ describe('TestFromAC_StateMatrix', () => {
     expect(container.querySelector('[data-field="block_reason"]')).not.toBeNull()
   })
 })
+

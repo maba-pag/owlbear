@@ -1,5 +1,5 @@
 /**
- * Structural tests for #959: 700-task board performance (Vitest / jsdom)
+ * 700-task board performance (Vitest / jsdom)
  *
  * Validates that the board renders 700 tasks within the structural DOM budget
  * defined by the AC. Tests use a SEED=42 deterministic LCG fixture for
@@ -312,3 +312,4 @@ describe('TestFromAC_Board700Structural', () => {
     })
   })
 })
+

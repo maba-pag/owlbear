@@ -1,12 +1,11 @@
 /**
- * Workflow behavior tests1194: P3-06 Implement resolve modal — ResolveModal plugin props.
+ * P3-06 Implement resolve modal — ResolveModal plugin props.
  *
  * Covers:
  *   AC8  — ResolveModal passes remarkGfm to ReactMarkdown's remarkPlugins
  *   AC10 — ResolveModal passes rehypeSanitize to ReactMarkdown's rehypePlugins
  *
  * ReactMarkdown is mocked so we can inspect the exact props passed. Both tests
- * FAIL (RED phase) because the current ResolveModal uses bare <ReactMarkdown>
  * without any remarkPlugins or rehypePlugins.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest'
@@ -103,3 +102,4 @@ describe('TestFromAC_ResolveModalPlugins', () => {
     })
   })
 })
+

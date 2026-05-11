@@ -1,5 +1,5 @@
 /**
- * Companion hook-level tests for #1386: Decision data contract and refetch flow.
+ * Decision data contract and refetch flow.
  *
  * Separate file because DecisionContract_1386.test.tsx globally mocks usePendingDRs;
  * these tests need the REAL hook with a mocked fetch response to prove the full chain.
@@ -167,3 +167,4 @@ describe('TestFromAC_DecisionPollBodyAndErrorChain', () => {
     expect(result.current.count).toBe(0)
   })
 })
+

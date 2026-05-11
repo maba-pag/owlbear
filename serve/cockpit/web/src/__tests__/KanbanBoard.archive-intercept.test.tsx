@@ -1,5 +1,5 @@
 /**
- * Workflow behavior tests1242: handleTransitionClick archive intercept (F3)
+ * handleTransitionClick archive intercept (F3)
  *
  * Covers:
  *   AC1 — clicking → archived opens ArchivalModal; no POST /move fires immediately
@@ -8,7 +8,6 @@
  *   AC4 — expectedUpdated is frozen at context-menu-open time; not re-read from
  *          a polling-updated task reference after the menu opens
  *
- * All tests are RED (failing) until the builder implements the F3 intercept in
  * KanbanBoard.tsx.
  *
  * Expected KanbanBoard.tsx changes:
@@ -450,3 +449,4 @@ describe('TestFromAC_HandleTransitionClickArchive', () => {
     expect(modal?.getAttribute('data-expected-updated')).toBe(FROZEN_UPDATED)
   })
 })
+

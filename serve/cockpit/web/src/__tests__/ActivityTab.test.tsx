@@ -1,9 +1,8 @@
 /**
- * Workflow behavior tests935: Sidecar Activity tab
+ * Sidecar Activity tab
  *
  * Covers: default active-session filter, filter switches (all / failed-or-rejected /
  * released), session row field rendering, and click-to-detail navigation.
- * All tests are RED (failing) until the builder implements ActivityTab.tsx.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, fireEvent, waitFor } from '@testing-library/react'
@@ -303,3 +302,4 @@ describe('TestFromAC_ActivityTab', () => {
     })
   })
 })
+

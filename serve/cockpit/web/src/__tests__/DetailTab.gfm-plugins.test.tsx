@@ -1,5 +1,5 @@
 /**
- * Gap-specific failing tests for #936: G1 — remark-gfm + rehype-sanitize wiring
+ * G1 — remark-gfm + rehype-sanitize wiring
  *
  * Verifies that DetailTab passes the correct markdown plugins to ReactMarkdown.
  * These tests are RED (failing) until the builder installs remark-gfm and
@@ -110,3 +110,4 @@ describe('TestFromAC_GFMPlugins', () => {
     })
   })
 })
+

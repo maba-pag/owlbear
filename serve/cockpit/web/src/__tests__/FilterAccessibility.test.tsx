@@ -1,5 +1,5 @@
 /**
- * Workflow behavior tests1254: P4-01 — Filter accessibility tests
+ * P4-01 — Filter accessibility tests
  *
  * Covers all 9 AC items for filter accessibility (td:0 "all fail" AC is meta):
  *   AC1 (td:2) — Toggle button has aria-expanded reflecting panelOpen state
@@ -419,3 +419,4 @@ describe('TestFromAC_FilterA11y', () => {
     })
   })
 })
+

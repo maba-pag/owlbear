@@ -28,3 +28,4 @@ describe('TestFromAC_AppShellIntegration', () => {
     expect(container.querySelector('[data-region="contextual"]')).not.toBeNull()
   })
 })
+

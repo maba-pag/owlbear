@@ -1,5 +1,5 @@
 /**
- * Workflow behavior tests1396: P3-06 Implement Cockpit accessibility and PDS verification gate
+ * P3-06 Implement Cockpit accessibility and PDS verification gate
  *
  * Scope: DRStatusIndicator popover focus management parity with HealthBadge.
  *
@@ -167,3 +167,4 @@ describe('TestFromAC_DRStatusIndicatorFocus', () => {
     }
   })
 })
+

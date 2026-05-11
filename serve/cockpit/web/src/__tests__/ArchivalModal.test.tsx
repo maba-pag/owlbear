@@ -1,5 +1,5 @@
 /**
- * Workflow behavior tests1241: ArchivalModal component (F1 + F2)
+ * ArchivalModal component (F1 + F2)
  *
  * Covers: ARCHIVAL_REASONS constant ordering, role/aria-modal/aria-labelledby,
  * focus on open, completed-option visibility by taskStatus, refs field visibility
@@ -7,7 +7,6 @@
  * non-numeric client-side error, 422/409 error display, success close+refresh,
  * focus trap (Tab/Shift+Tab), Escape-close without firing a move.
  *
- * All tests are RED (failing) until the builder implements ArchivalModal.tsx.
  *
  * Expected component interface:
  *   { taskId: number; taskStatus: string; expectedUpdated: string;
@@ -766,3 +765,4 @@ describe('TestFromAC_ArchivalModal', () => {
     })
   })
 })
+

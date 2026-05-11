@@ -13,7 +13,6 @@
 //
 // AC6 note: AC6 explicitly scopes RED tests to "where the audited problems
 //   (clickable-div cards without keyboard semantics, missing keyboard movement alternative)
-//   exist." The hex color problem was resolved by #1392. These tests cannot be RED-phase
 //   tests for the builder because no violations currently exist. They remain in the suite
 //   as ongoing regression coverage for #1396 and future work.
 //
@@ -163,3 +162,4 @@ describe('TestFromAC_PDSHexScan', () => {
     ).toBeGreaterThan(0)
   })
 })
+

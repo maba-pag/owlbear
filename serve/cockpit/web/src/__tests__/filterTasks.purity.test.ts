@@ -1,5 +1,5 @@
 /**
- * Tests for #1249: P1-02 — filterTasks pure function + FilterState type
+ * filterTasks pure function + FilterState type
  *
  * AC coverage from this file:
  *   - Pure function — no React imports, no side effects (td:1)
@@ -118,3 +118,4 @@ describe('TestFromAC_FilterTasksPurity', () => {
     expect(result1).toContainEqual(tasks[0])
   })
 })
+

@@ -1,5 +1,4 @@
 /**
- * RED phase Vitest tests for #1457: P4-19 Expose maintenance cleanup through Cockpit
  *
  * AC 3b (td:2): A cleanup flow hook manages lifecycle phases
  *               (idle → confirming → running → done → error) and exposes
@@ -328,3 +327,4 @@ describe('TestFromAC_useCleanupFlow', () => {
     })
   })
 })
+

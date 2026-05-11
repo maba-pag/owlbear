@@ -1,5 +1,5 @@
 /**
- * Workflow behavior tests1277: Refactor useBoard to consume EventSourceProvider context
+ * Refactor useBoard to consume EventSourceProvider context
  *
  * AC1 (td:1): useBoard calls useSSEEvent('tasks-changed') and useSSEEvent('decisions-changed')
  *   from EventSourceProvider context (not useEventSource).
@@ -315,3 +315,4 @@ describe('TestFromAC_UseBoardSSEContext', () => {
     expect(tasksFetchCount(fetchMock)).toBe(countAfterMount)
   })
 })
+

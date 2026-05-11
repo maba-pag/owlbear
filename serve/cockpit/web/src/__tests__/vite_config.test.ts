@@ -1,5 +1,5 @@
 /**
- * Tests for #936 (retry): AC10 — CSP meta tag via cspPlugin in vite.config.ts
+ * (retry): AC10 — CSP meta tag via cspPlugin in vite.config.ts
  *
  * Reviewer Pass 2 identified missing TestFromAC_CSP coverage.
  * Verifies the production-only cspPlugin injects the correct Content-Security-Policy
@@ -80,3 +80,4 @@ describe('TestFromAC_CSP', () => {
     expect(result).not.toContain('Content-Security-Policy')
   })
 })
+

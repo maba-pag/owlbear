@@ -1,5 +1,5 @@
 /**
- * Workflow behavior tests1254: P4-01 — Filter accessibility tests
+ * P4-01 — Filter accessibility tests
  * Part 2 of 2 — Real FilterPanel (unmocked) for panel-level assertions
  *
  * vi.mock() is hoisted by Vitest — dynamic import() in a file with vi.mock always resolves
@@ -265,3 +265,4 @@ describe('TestFromAC_FilterA11yPanel', () => {
 
   })
 })
+

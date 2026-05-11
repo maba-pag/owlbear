@@ -1,5 +1,4 @@
 /**
- * RED phase Vitest tests for #1457: P4-19 Expose maintenance cleanup through Cockpit
  *
  * AC 3c (td:2): CleanupPanel component renders trigger button, confirmation step,
  *               loading indicator, result display with counts per category and
@@ -317,3 +316,4 @@ describe('TestFromAC_CleanupPanel', () => {
     })
   })
 })
+

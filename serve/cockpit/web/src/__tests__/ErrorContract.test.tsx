@@ -1,5 +1,5 @@
 /**
- * Workflow behavior tests1374: P1-11 Test Cockpit frontend error-contract adoption
+ * P1-11 Test Cockpit frontend error-contract adoption
  *
  * All tests FAIL until #1375 implements consistent error-envelope parsing.
  *
@@ -700,7 +700,6 @@ describe('TestFromAC_FalseOKCoexistence', () => {
   // The body-message extraction (from #1375): scan-error TEXT includes the body message.
   //   → This assertion FAILS against current code (text is status-only).
   //
-  // The combined test therefore FAILS, confirming RED phase.
   it('Shell scan error: false-OK prevented AND scan-error text includes body message field', async () => {
     const errorBody = { code: 'SCAN_FAILED', message: 'board scan failed: task index corrupted' }
     stubShellHooks()
@@ -727,3 +726,4 @@ describe('TestFromAC_FalseOKCoexistence', () => {
     expect(scanError!.textContent).toContain('board scan failed: task index corrupted')
   })
 })
+

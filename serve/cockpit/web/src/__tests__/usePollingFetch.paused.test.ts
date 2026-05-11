@@ -1,5 +1,5 @@
 /**
- * Workflow behavior tests1259: Add paused option to usePollingFetch
+ * Add paused option to usePollingFetch
  *
  * AC1 (td:1): UsePollingFetchOptions adds paused?: boolean (default false) —
  *             UsePollingFetchResult unchanged
@@ -401,3 +401,4 @@ describe('TestFromAC_PausedOption', () => {
     })
   })
 })
+

@@ -22,3 +22,4 @@ export function rowStyleForState(state: string): CSSProperties {
     borderLeft: '4px solid var(--pds-theme-light-contrast-low)',
   }
 }
+

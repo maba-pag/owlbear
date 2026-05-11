@@ -1,11 +1,9 @@
 /**
- * Workflow behavior tests1163: RF-01 repairStorage API client
+ * RF-01 repairStorage API client
  *
  * Covers: POST to /api/tasks/repair with no body, typed RepairOutcome[] return,
  * network and HTTP error rejection, and RepairOutcome type schema contract.
- * All tests are RED (failing) until the builder creates src/api/repair.ts.
  *
- * Builder: move this file to serve/cockpit/web/src/__tests__/repairStorage_1163.test.ts
  */
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { repairStorage } from '../api/repair'
@@ -244,3 +242,4 @@ describe('TestFromAC_repairStorage', () => {
     })
   })
 })
+

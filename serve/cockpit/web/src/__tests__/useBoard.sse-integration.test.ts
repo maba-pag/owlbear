@@ -205,3 +205,4 @@ describe('TestFromAC_UseBoardSSEIntegration', () => {
     expect(['green', 'yellow', 'red']).toContain(result.current.health)
   })
 })
+

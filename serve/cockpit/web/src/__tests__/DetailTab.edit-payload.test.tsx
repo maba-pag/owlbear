@@ -1,7 +1,6 @@
 /**
- * Workflow behavior tests1344: Fix Cockpit detail edit workflow contract
+ * Fix Cockpit detail edit workflow contract
  *
- * RED phase — all tests must fail until builder implements fixes.
  *
  * AC coverage:
  *   AC4: DetailTab controlled inputs; save payload includes depends_on, parent,
@@ -537,3 +536,4 @@ describe('TestFromAC_DetailTabTaskUpdated', () => {
     )
   })
 })
+

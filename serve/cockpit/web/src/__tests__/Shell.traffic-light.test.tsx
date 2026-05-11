@@ -1,9 +1,8 @@
 /**
- * Workflow behavior tests966: traffic-light wiring in Shell
+ * traffic-light wiring in Shell
  *
  * Shell.tsx must bind useBoard().health
  * to data-health on the [data-testid="traffic-light"] span.
- * All tests are RED (failing) until the builder implements the wiring.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render } from '@testing-library/react'
@@ -154,3 +153,4 @@ describe('TestFromAC_TrafficLight', () => {
     })
   })
 })
+

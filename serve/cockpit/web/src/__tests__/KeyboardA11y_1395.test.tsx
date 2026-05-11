@@ -1,5 +1,4 @@
 /**
- * RED phase Vitest tests for #1395: P3-05 Cockpit accessibility and PDS verification gate
  *
  * AC2 (td:2): Keyboard-only workflow checks — task card focus and selection on the board,
  *             task movement via an action menu or keyboard shortcut (not drag-and-drop only),
@@ -625,3 +624,4 @@ describe('TestFromAC_ConfirmDialogFocus', () => {
     expect(document.activeElement).toBe(triggerBtn)
   })
 })
+

@@ -1,5 +1,5 @@
 /**
- * Tests for #1246: Implement handleTransitionClick archive intercept.
+ * Implement handleTransitionClick archive intercept.
  *
  * Covers:
  *   AC1 — handleTransitionClick opens ArchivalModal instead of immediately POSTing
@@ -365,3 +365,4 @@ describe('TestFromAC_ModalLifecycle', () => {
     expect(refetchSpy).toHaveBeenCalledTimes(1)
   })
 })
+

@@ -1,10 +1,9 @@
 /**
- * Workflow behavior tests1191: DRStatusIndicator component
+ * DRStatusIndicator component
  *
  * Covers: pending DR count rendering, attention/dormant status attribute,
  * popover toggle on indicator click, popover item fields (title, agent,
  * task_id, age), item click callback, and empty-state (dormant) behavior.
- * All tests are RED (failing) until the builder implements DRStatusIndicator.tsx.
  */
 import { describe, it, expect, vi } from 'vitest'
 import { render, fireEvent } from '@testing-library/react'
@@ -257,3 +256,4 @@ describe('TestFromAC_DRStatusIndicator', () => {
     expect(() => renderIndicator(1, [DR_A])).not.toThrow()
   })
 })
+

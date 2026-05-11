@@ -1,7 +1,6 @@
 /**
- * Workflow behavior tests1382: P2-07 Test Cockpit task conflict resolution workflow
+ * P2-07 Test Cockpit task conflict resolution workflow
  *
- * RED phase — all tests must fail until builder implements fixes in #1383.
  *
  * AC coverage:
  *   AC1: Local edits (title, priority, body, block_reason, depends_on, parent) are
@@ -1105,3 +1104,4 @@ describe('TestFromAC_ConflictErrorContract', () => {
     )
   })
 })
+

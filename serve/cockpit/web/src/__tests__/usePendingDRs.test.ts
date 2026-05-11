@@ -1,11 +1,10 @@
 /**
- * Workflow behavior tests1191: usePendingDRs polling hook
+ * usePendingDRs polling hook
  *
  * Covers: GET fetch to /api/decisions/pending on mount, configurable
  * intervalMs, state shape (count/items/isLoading/error), empty response,
  * error paths (network failure + non-OK HTTP status), and interval cleanup
  * on unmount.
- * All tests are RED (failing) until the builder implements usePendingDRs.ts.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
@@ -327,3 +326,4 @@ describe('TestFromAC_usePendingDRs', () => {
     })
   })
 })
+

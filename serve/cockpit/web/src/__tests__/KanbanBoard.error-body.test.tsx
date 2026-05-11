@@ -1,5 +1,5 @@
 /**
- * Workflow behavior tests1375: P1-12 Implement Cockpit frontend error-contract adoption
+ * P1-12 Implement Cockpit frontend error-contract adoption
  *
  * KanbanBoard.tsx gaps — handleDrop and handleTransitionClick both hardcode
  * status-only error strings without reading the response body:
@@ -461,3 +461,4 @@ describe('TestFromAC_BoardLoadErrorBodyDiscrimination', () => {
     )
   })
 })
+

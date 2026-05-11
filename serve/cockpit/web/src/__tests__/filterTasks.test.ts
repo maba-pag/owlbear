@@ -1,5 +1,5 @@
 /**
- * Workflow behavior tests1248: P1-01 — filterTasks unit tests
+ * P1-01 — filterTasks unit tests
  *
  * Tests are RED — all assertions fail until the builder provides a real
  * filterTasks implementation in src/utils/filterTasks.ts (task #1249).
@@ -214,3 +214,4 @@ describe('TestFromAC_FilterTasks', () => {
     })
   })
 })
+

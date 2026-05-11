@@ -1,7 +1,6 @@
 /**
- * Workflow behavior tests1378: P2-03 Test Cockpit task detail edit validation and dirty state
+ * P2-03 Test Cockpit task detail edit validation and dirty state
  *
- * RED phase — all tests must fail until the builder implements fixes in #1379.
  *
  * AC coverage:
  *   AC1: Invalid parent input (non-numeric text, negative numbers, floats) produces a
@@ -684,3 +683,4 @@ describe('TestFromAC_ValidationErrorVisibility', () => {
     )
   })
 })
+

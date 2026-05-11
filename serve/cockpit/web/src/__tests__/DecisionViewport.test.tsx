@@ -1,5 +1,5 @@
 /**
- * Tests for #1388: P2-13 Test Cockpit decision viewport UX
+ * Test Cockpit decision viewport UX
  *
  * Covers AC1, AC4 (PDS / viewport structure), AC5 (keyboard reachability),
  * and AC6 (viewport-level error indicator).
@@ -12,7 +12,6 @@ import { render, fireEvent } from '@testing-library/react'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
 import type { PendingDR } from '../hooks/usePendingDRs'
 
-// ─── Component under test (does not exist yet — RED phase) ───────────────────
 import DecisionViewport from '../components/DecisionViewport'
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
@@ -322,3 +321,4 @@ describe('TestFromAC_DecisionViewport', () => {
     expect(['alert', 'status']).toContain(role)
   })
 })
+

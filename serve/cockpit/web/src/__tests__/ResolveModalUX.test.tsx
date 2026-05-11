@@ -1,5 +1,5 @@
 /**
- * Tests for #1388: P2-13 Test Cockpit resolution UX — modal behavior
+ * Test Cockpit resolution UX — modal behavior
  *
  * Covers AC2, AC3, AC4, and AC5 against ResolveModal.tsx.
  *
@@ -260,3 +260,4 @@ describe('TestFromAC_ResolveModalUX', () => {
     expect(modal.getAttribute('aria-modal')).toBe('true')
   })
 })
+

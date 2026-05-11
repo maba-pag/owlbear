@@ -1,10 +1,9 @@
 /**
- * Workflow behavior tests1157: useScanPolling hook
+ * useScanPolling hook
  *
  * Covers: POST fetch on mount, configurable intervalMs (default 60 000 ms),
  * state shape (items/isLoading/error), empty-array response, error paths
  * (network failure + non-OK HTTP status), and interval cleanup on unmount.
- * All tests are RED (failing) until the builder implements useScanPolling.ts.
  */
 import React from 'react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
@@ -445,3 +444,4 @@ describe('TestFromAC_useScanPolling', () => {
     })
   })
 })
+

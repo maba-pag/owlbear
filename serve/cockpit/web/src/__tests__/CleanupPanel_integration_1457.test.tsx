@@ -1,5 +1,5 @@
 /**
- * Integration tests for #1457: P4-19 Expose maintenance cleanup through Cockpit
+ * Expose maintenance cleanup through Cockpit
  *
  * These tests mount the REAL CleanupPanel with the REAL useCleanupFlow hook,
  * mocking only the cleanupTasks API layer. This exercises full React state
@@ -248,3 +248,4 @@ describe('TestFromAC_CleanupPanel_Integration', () => {
     })
   })
 })
+
