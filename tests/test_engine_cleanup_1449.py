@@ -583,3 +583,60 @@ class TestFromAC_StaleStateSkip:
         assert len(result.skipped_items) == 1, (
             "exactly one skipped_items entry expected when on-disk status is no longer archived"
         )
+
+    def test_stale_state_task_is_skipped_when_archival_reason_becomes_none(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-5: cleanup() skips archive move when on-disk archival_reason becomes None after initial read.
+
+        Simulates concurrent state drift: the initial read returns an archived
+        record with archival_reason='completed', then the file is overwritten
+        keeping status='archived' but clearing archival_reason to null before
+        the re-read that cleanup() performs before moving.
+
+        This independently discriminates the ``current.archival_reason is None``
+        guard — if that guard is removed the task would be moved into archive/
+        and this assertion would fail.
+        """
+        import owlbear_kanban.engine as eng_mod
+
+        board = _make_board(tmp_path)
+        source = _write_task(
+            board, task_id=2, status="archived", archival_reason='"completed"'
+        )
+        engine = KanbanEngine(board, activity_log=False)
+
+        real_read_task = eng_mod.read_task
+        per_path_calls: dict = {}
+
+        def read_side_effect(path: Path, *, config=None) -> object:
+            per_path_calls[path] = per_path_calls.get(path, 0) + 1
+            result = real_read_task(path, config=config)
+            if path == source and per_path_calls[path] == 1:
+                # After returning the archived+completed record, rewrite to
+                # simulate a concurrent writer clearing archival_reason while
+                # leaving status as 'archived'.
+                source.write_text(
+                    _TASK_TMPL.format(
+                        task_id=2,
+                        status="archived",
+                        claimed_at="null",
+                        archival_reason="null",
+                    ),
+                    encoding="utf-8",
+                )
+            return result
+
+        with mock.patch("owlbear_kanban.engine.read_task", side_effect=read_side_effect):
+            result = engine.cleanup()
+
+        assert 2 not in result.archived_task_ids, (
+            "task whose archival_reason became None must not appear in archived_task_ids "
+            "— cleanup() must check archival_reason on the re-read"
+        )
+        assert source.exists(), (
+            "source file must remain in tasks/ when cleanup skips due to archival_reason drift"
+        )
+        assert len(result.skipped_items) == 1, (
+            "exactly one skipped_items entry expected when archival_reason becomes None after initial read"
+        )
