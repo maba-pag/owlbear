@@ -201,6 +201,13 @@ class BoardConfig(BaseModel):
     def _normalise_legacy(cls, data: object) -> object:  # noqa: C901, PLR0912, PLR0915
         """Convert legacy schema to new schema before field assignment.
 
+        .. note:: Legacy migration path only.
+
+           In production, ``config_loader.load_config`` constructs ``BoardConfig``
+           from ``PRODUCT_TOPOLOGY`` constants, bypassing this validator entirely.
+           This code is exercised only when loading pre-topology ``config.yml``
+           files (migration) or calling ``BoardConfig.model_validate()`` directly.
+
         Root-level ``statuses`` and ``priorities`` are authoritative. In grouped
         config input, explicit ``pipeline.statuses``/``pipeline.priorities``
         must match root-level values; conflicts are rejected.
