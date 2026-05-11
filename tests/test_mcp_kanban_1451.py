@@ -548,3 +548,37 @@ class TestFromAC_StructuredErrors:
             )
         payload = json.loads(str(exc_info.value))
         assert payload["code"] == "ERR_PARAM_VALIDATION"
+
+    # -- AC-5a: _show_validated path-scrub discrimination (cycle 3) --
+
+    @pytest.mark.asyncio
+    async def test_show_validated_path_like_not_found_scrubs_internal_path(
+        self, tmp_path: Path
+    ) -> None:
+        """_safe_not_found_message must replace path-like FileNotFoundError messages.
+
+        When show_task raises FileNotFoundError whose message contains a filesystem
+        path (e.g. '/var/data/kanban/tasks/99.md'), _show_validated must NOT surface
+        that path in the ToolError envelope — it must return the generic fallback text.
+
+        AC-5a: forces the slash-detection branch in _safe_not_found_message so that
+        removing that branch would cause this test to fail.
+
+        FAIL path: if the scrub branch were removed, the raw path would appear in
+        payload['message'] rather than the sanitised fallback.
+        """
+        kanban_dir = _make_board(tmp_path)
+        engine = KanbanEngine(kanban_dir)
+        engine.show_task = MagicMock(  # type: ignore[method-assign]
+            side_effect=FileNotFoundError("/var/data/kanban/tasks/99.md")
+        )
+        app_ctx = AppContext(engine=engine, kanban_dir=kanban_dir)
+        with pytest.raises(ToolError) as exc_info:
+            await _show_validated(app_ctx, 99)
+        payload = json.loads(str(exc_info.value))
+        assert payload["message"] == "Task '99' not found", (
+            f"Expected fallback message, got: {payload['message']!r}"
+        )
+        assert "/var/" not in payload["message"], (
+            f"Internal path leaked into error message: {payload['message']!r}"
+        )
