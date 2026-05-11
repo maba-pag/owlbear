@@ -42,3 +42,30 @@ _Append-only decision log._
 **Chosen:** Shared — full panel and research bridge required.
 **Rejected:** Production (over-calibrated for internal-only pipeline standards).
 **Source:** User confirmed.
+
+## D5 — 2026-05-11 — Axis Structure
+
+**Status quo:** Phase 1 leading candidate was 2+2 model (2 primary axes + 2 derivable signals).
+**Decision to make:** Single axis (5-value enum) or two axes (test + proof)?
+**Options considered:**
+- Single axis (architect + enduser proposal): One field `proof-bundle: skip|existing|smoke|behavioral|critical` with `+challenge`/`+reader` escalation modifiers. One label = one routing row. Matches 0/10 divergence evidence. Suppression structurally impossible. Confidence: 0.75.
+- Two axes (data + security proposal): `test: none|smoke|full` + `proof: none|existing|scoped|full` with derivation table. More composable but axes don't diverge in practice. Redundant assignment friction. Confidence: 0.45.
+**Chosen:** Single axis — speed driver, 0/10 divergence, YAGNI for axis independence.
+**Rejected:** Two axes — over-dimensioned for observed usage; override modifiers handle escalation without a permanent second axis.
+**Source:** User confirmed at M4.
+
+## D6 — 2026-05-11 — Challenger Threshold for Smoke
+
+**Status quo:** Current td:1 (smoke equivalent) triggers challenger by default.
+**Decision to make:** Should the new `smoke` bundle trigger challenger?
+**Chosen:** Challenger OFF for smoke — speed win; `+challenge` modifier handles exceptions.
+**Rejected:** Challenger ON for smoke — adds subagent dispatch to every smoke-level task, conflicting with the primary speed driver.
+**Source:** User confirmed at M4.
+
+## D7 — 2026-05-11 — File-Path Security Guardrail
+
+**Status quo:** No file-path-based auto-escalation exists. Security panelist proposed it.
+**Decision to make:** Adopt file-path auto-escalation or reject?
+**Chosen:** Not needed — rejected entirely, not deferred.
+**Rejected:** Both "adopt now" and "defer as follow-up."
+**Source:** User stated "not needed" at M4.
