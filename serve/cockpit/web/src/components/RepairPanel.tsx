@@ -103,7 +103,7 @@ export default function RepairPanel({ corruptionCount, onSuccess, files = [] }: 
 
   if (phase === 'repairing') {
     return (
-      <div data-testid="repair-loading">
+      <div data-testid="repair-loading" role="status" aria-live="polite">
         <PSpinner aria={{ 'aria-label': 'Repairing storage' }} />
         <PText>Repairing...</PText>
       </div>

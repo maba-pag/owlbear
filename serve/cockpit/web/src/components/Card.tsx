@@ -22,13 +22,16 @@ export function Card({ task, selected = false, onSelect, onContextMenu, onDragSt
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault()
       onSelect?.(task.id)
+      return
     }
 
-    if (event.key === 'Enter') {
+    if (event.key === 'F10' && event.shiftKey) {
+      event.preventDefault()
+      const rect = event.currentTarget.getBoundingClientRect()
       const syntheticEvent = {
         preventDefault: () => {},
-        clientX: 0,
-        clientY: 0,
+        clientX: rect.left,
+        clientY: rect.bottom,
       } as unknown as React.MouseEvent
       onContextMenu(syntheticEvent, task)
     }
@@ -75,7 +78,7 @@ export function Card({ task, selected = false, onSelect, onContextMenu, onDragSt
           ⛔
         </span>
       )}
-      {task.claimed && <span data-testid="running-indicator">▶</span>}
+      {task.claimed && <span data-testid="running-indicator" aria-label="Task is claimed">▶</span>}
     </div>
   )
 }

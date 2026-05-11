@@ -48,7 +48,7 @@ export default function CleanupPanel({ onSuccess }: CleanupPanelProps) {
 
   if (phase === 'running') {
     return (
-      <div data-testid="cleanup-loading">
+      <div data-testid="cleanup-loading" role="status" aria-live="polite">
         <PSpinner aria={{ 'aria-label': 'Running cleanup' }} />
         <PText>Running cleanup...</PText>
       </div>

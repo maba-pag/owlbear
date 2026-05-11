@@ -54,7 +54,7 @@ export default function DecisionViewport({ items, isLoading, error, onItemClick 
             data-testid={`decision-item-${item.id}`}
             onClick={() => onItemClick(item.id)}
           >
-            <span data-testid={`decision-task-ref-${item.id}`} role="button">{item.task_id}</span>
+            <span data-testid={`decision-task-ref-${item.id}`}>{item.task_id}</span>
             <PText>{item.agent}</PText>
             <PText>{item.request_type}</PText>
             <PText data-testid={`decision-age-${item.id}`}>{formatAge(item.created)}</PText>

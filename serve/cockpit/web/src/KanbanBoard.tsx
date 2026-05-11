@@ -98,6 +98,10 @@ function KanbanBoardContent({
 
     document.addEventListener('mousedown', handleMouseDown)
     document.addEventListener('keydown', handleKeyDown)
+
+    const firstItem = menuRef.current?.querySelector<HTMLElement>('[role="menuitem"]')
+    firstItem?.focus()
+
     return () => {
       document.removeEventListener('mousedown', handleMouseDown)
       document.removeEventListener('keydown', handleKeyDown)
@@ -322,7 +326,7 @@ function KanbanBoardContent({
         })}
       </div>
 
-      {moveError && <div data-testid="move-error">{moveError}</div>}
+      {moveError && <div data-testid="move-error" role="alert">{moveError}</div>}
 
       {archivalModal && (
         <ArchivalModal
@@ -341,6 +345,7 @@ function KanbanBoardContent({
           ref={menuRef}
           data-testid="context-menu"
           role="menu"
+          aria-label="Task actions"
           style={{ position: 'fixed', top: contextMenu.y, left: contextMenu.x }}
         >
           {(board.valid_transitions[contextMenu.taskStatus] ?? []).map((target) => (
@@ -349,13 +354,32 @@ function KanbanBoardContent({
               data-testid="transition-item"
               data-status={target}
               role="menuitem"
-              tabIndex={0}
+              tabIndex={-1}
               onKeyDown={(event) => {
-                if (event.key !== 'Enter' && event.key !== ' ') {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault()
+                  event.currentTarget.click()
                   return
                 }
-                event.preventDefault()
-                event.currentTarget.click()
+
+                const menu = event.currentTarget.parentElement
+                if (!menu) return
+                const items = Array.from(menu.querySelectorAll<HTMLElement>('[role="menuitem"]'))
+                const index = items.indexOf(event.currentTarget)
+
+                if (event.key === 'ArrowDown') {
+                  event.preventDefault()
+                  items[(index + 1) % items.length]?.focus()
+                } else if (event.key === 'ArrowUp') {
+                  event.preventDefault()
+                  items[(index - 1 + items.length) % items.length]?.focus()
+                } else if (event.key === 'Home') {
+                  event.preventDefault()
+                  items[0]?.focus()
+                } else if (event.key === 'End') {
+                  event.preventDefault()
+                  items[items.length - 1]?.focus()
+                }
               }}
               onClick={() =>
                 void handleTransitionClick(

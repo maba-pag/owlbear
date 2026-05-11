@@ -144,6 +144,7 @@ export default function ActivityTab({ onSelectTask }: ActivityTabProps) {
             data-state={s.state}
             role="button"
             tabIndex={0}
+            aria-label={`Session: ${s.agent ?? 'unknown agent'}, task ${s.task_id ?? 'unassigned'}, ${s.state}`}
             onClick={() => navigateToTask(s.task_id)}
             onKeyDown={(event) => {
               if (event.key === 'Enter' || event.key === ' ') {
