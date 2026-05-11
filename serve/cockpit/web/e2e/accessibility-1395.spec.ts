@@ -155,11 +155,12 @@ test.describe('TestFromAC_AxeA11y', () => {
 
   // AC1: board view — primary surface with all task columns and cards
   test('board view has zero axe accessibility violations at 1024px (AC1)', async ({ page }) => {
+    // AC1 addendum: board view must assert at least one task card is visible before scanning.
+    // No error-swallowing is permitted — test must fail if cards do not render.
     await page
       .locator('[data-testid="task-card"]')
       .first()
-      .waitFor({ state: 'attached', timeout: 5_000 })
-      .catch(() => {})
+      .waitFor({ state: 'visible', timeout: 5_000 })
     const results = await new AxeBuilder({ page }).analyze()
     expect(results.violations).toEqual([])
   })
@@ -171,12 +172,12 @@ test.describe('TestFromAC_AxeA11y', () => {
     const card = page.locator('[data-testid="task-card"]').first()
     await card.waitFor({ state: 'visible', timeout: 5_000 })
     await card.click()
-    // Prove task-detail surface rendered: sidecar must show task data, not placeholder.
-    // Test must fail if the sidecar cannot be rendered from stub data.
+    // AC1 addendum: prove task-detail surface rendered by asserting visible task title.
+    // Must verify sidecar content, not only placeholder disappearance.
     await expect(
-      page.locator('[data-testid="detail-placeholder"]'),
-      'sidecar must show task data before axe scan — placeholder must not be visible',
-    ).not.toBeVisible({ timeout: 5_000 })
+      page.locator('[data-field="title"]'),
+      'sidecar must show task title before axe scan — [data-field="title"] must be visible in sidecar',
+    ).toBeVisible({ timeout: 5_000 })
     const results = await new AxeBuilder({ page }).analyze()
     expect(results.violations).toEqual([])
   })
@@ -254,7 +255,6 @@ test.describe('TestFromAC_A11yViewport', () => {
         .locator('[data-testid="task-card"]')
         .first()
         .waitFor({ state: 'attached', timeout: 5_000 })
-        .catch(() => {})
       for (let i = 0; i < 20; i++) {
         await page.keyboard.press('Tab')
       }
@@ -294,7 +294,6 @@ test.describe('TestFromAC_A11yViewport', () => {
         .locator('[data-testid="task-card"]')
         .first()
         .waitFor({ state: 'attached', timeout: 5_000 })
-        .catch(() => {})
       for (let i = 0; i < 20; i++) {
         await page.keyboard.press('Tab')
       }
@@ -330,7 +329,6 @@ test.describe('TestFromAC_A11yViewport', () => {
         .locator('[data-testid="task-card"]')
         .first()
         .waitFor({ state: 'visible', timeout: 5_000 })
-        .catch(() => {})
       for (let i = 0; i < 20; i++) {
         await page.keyboard.press('Tab')
       }
@@ -366,7 +364,6 @@ test.describe('TestFromAC_A11yViewport', () => {
         .locator('[data-testid="task-card"]')
         .first()
         .waitFor({ state: 'visible', timeout: 5_000 })
-        .catch(() => {})
       for (let i = 0; i < 20; i++) {
         await page.keyboard.press('Tab')
       }
