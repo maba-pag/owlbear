@@ -111,7 +111,7 @@ Behavior:
 - Phase 2: pass `candidate_id`; if `edges` is non-empty, the edges are stored. If no edges are needed, the pair is marked reviewed so it is not returned again.
 - If neither `candidate_id` nor `chunk_id` is provided, the tool raises `ToolError`.
 
-`list_entities`, `bookmark_source`, `list_bookmarks`, `update_bookmark_tags`, and `consolidate_knowledge` are no longer registered MCP tools. `import_scope`, `export_scope`, `sync_from_global`, and `sync_to_global` remain internal callable stubs, but agents should not call them as MCP tools.
+Only the tools documented in this reference are agent-callable MCP tools. Treat anything outside this list as unavailable unless this handbook is updated.
 
 ## Decision Tree
 
