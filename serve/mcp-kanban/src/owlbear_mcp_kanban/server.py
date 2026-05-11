@@ -343,7 +343,7 @@ async def create_task(  # noqa: PLR0913
     body: str = "",
     depends_on: list[int] | None = None,
     parent: int | None = None,
-    priority: str = "needed",
+    priority: str = "",
     tags: list[str] | None = None,
 ) -> SingleTaskResponse:
     """Create a new kanban task."""
