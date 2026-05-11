@@ -47,6 +47,7 @@ engine.release_task(42)
 | `refresh_config()` | Reload config from disk |
 | `sweep()` | Release stale claims exceeding `claim_timeout` |
 | `repair_storage()` | Quarantine corrupt task files and create action-required tasks |
+| `cleanup()` | User-triggered maintenance: release expired claims, move drift-archived files to `archive/`, and return a `CleanupResult` with `released_claim_ids`, `archived_task_ids`, and `skipped_items` |
 | `list_sessions(**kwargs)` | Derived `SessionRecord` objects from `activity.jsonl` |
 
 ### AgentView dispatch pipeline
