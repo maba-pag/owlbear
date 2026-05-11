@@ -13,8 +13,9 @@ tags:
 - parent
 - no-dispatch
 parent:
-depends_on: []
-blocked: true
+depends_on:
+- 1400
+blocked: false
 block_reason: 'Completion gate: active children with parent: 1363 remain below done.
   Unblock ONLY after running board query to verify zero active children remain. See
   Completion Contract (Pass 4).'
