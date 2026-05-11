@@ -41,10 +41,11 @@ From the task body retrieved by `start_work`:
 <!-- NON_IMPL_TAGS: Authoritative list at w-arch-review (agent dispatch table). -->
 
 1. Check if this is a **non-implementation task** (tagged `research`, `docs`, `type:config`, `type:docs`, `test`, `type:test`, `agent`, `quality`, or `type:user-action`). If so, go to **Step 1a — Pass-through**.
-2. **Test-depth gate:** Check if ALL AC lines are annotated `(td:0)`. If so, go to **Step 1c — Depth-zero pass-through**.
-3. Check if this is a **retry cycle** (body contains both `## Test-Writer Notes` and `## Review Evidence`). If so, go to **Step 1b — Retry-cycle handling**.
-4. Identify referenced source files, modules, and interfaces in the AC.
-5. Do NOT move task status yet — movement happens in Step 7 after verification.
+2. Check `Proof bundle:` and route per `r-pipeline-protocol` taxonomy: `skip`/`existing` -> **Step 1d — Proof-bundle pass-through**; `smoke` -> continue with smoke-only planning/writing (one smoke test per AC line); `behavioral`/`critical` -> continue with full TDD mapping.
+3. If `Proof bundle:` is absent, use legacy `(td:N)` compatibility from `r-pipeline-protocol` (Step 1e).
+4. Check if this is a **retry cycle** (body contains both `## Test-Writer Notes` and `## Review Evidence`). If so, go to **Step 1b — Retry-cycle handling**.
+5. Identify referenced source files, modules, and interfaces in the AC.
+6. Do NOT move task status yet — movement happens in Step 7 after verification.
 
 ### Step 1a — Pass-Through for Non-Implementation Tasks
 
@@ -111,6 +112,22 @@ If the Architecture Review verdict or AC text includes `Existing proof required:
 2. Return: `DONE #{id} -> in-progress | all AC td:0, no tests needed`
 3. **Stop here.**
 
+### Step 1d — Proof-Bundle Pass-Through
+
+If `Proof bundle:` is `skip` or `existing`, no new RED tests are required.
+
+1. Advance via `end_work(note="## Test-Writer Notes\n- Proof bundle: {value} — no new test writing required.\n- Passing through to builder.")` (moves to `in-progress` + releases claim).
+2. Return: `DONE #{id} -> in-progress | proof bundle {value}, no tests needed`
+3. **Stop here.**
+
+### Step 1e — Legacy `(td:N)` Compatibility (Fallback)
+
+Only run this fallback when `Proof bundle:` is absent.
+
+1. Apply `r-pipeline-protocol` compatibility mapping for legacy `(td:N)` tasks.
+2. If all AC lines are effectively `td:0`, go to **Step 1c — Depth-zero pass-through**.
+3. Otherwise continue with Step 2+ RED workflow using the mapped depth.
+
 ## Step 2 — Search Codebase
 
 Find interfaces, types, and existing patterns referenced in the AC:
@@ -130,11 +147,18 @@ Run this only if Step 2 found no testable interfaces:
 
 ## Step 3 — Plan Test Categories
 
-**Skip `(td:0)` AC lines entirely** — do not plan or write tests for them.
+If `Proof bundle:` is present, use it as the primary routing signal:
 
-For `(td:1)` lines (or lines without annotation — default to td:1), plan a single smoke test per line (one assertion, happy path only).
+- `smoke`: plan one smoke test per AC line (one assertion, happy path only)
+- `behavioral` or `critical`: map each AC line to full TDD categories
 
-For `(td:2)` lines, map each AC line to test categories:
+If `Proof bundle:` is absent, use legacy `(td:N)` fallback behavior:
+
+- Skip `(td:0)` AC lines entirely — do not plan or write tests for them
+- For `(td:1)` lines (or lines without annotation — default to td:1), plan a single smoke test per line
+- For `(td:2)` lines, map each AC line to test categories
+
+Full TDD categories:
 
 - **Happy path** — expected behavior works correctly
 - **Edge cases** — empty inputs, boundary values, concurrent access
