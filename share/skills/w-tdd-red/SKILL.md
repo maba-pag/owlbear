@@ -16,7 +16,6 @@ Write failing tests from a task's acceptance criteria. All tests must fail when 
 
 - Write failing tests from AC (RED phase).
 - Non-impl pass-through (tag-based).
-- Depth-zero pass-through (all `td:0`).
 - Retry-cycle gap-fill from reviewer findings.
 - Direct-to-review advance for test-only retries when all new tests are green.
 
@@ -42,10 +41,9 @@ From the task body retrieved by `start_work`:
 
 1. Check if this is a **non-implementation task** (tagged `research`, `docs`, `type:config`, `type:docs`, `test`, `type:test`, `agent`, `quality`, or `type:user-action`). If so, go to **Step 1a — Pass-through**.
 2. Check `Proof bundle:` and route per `r-pipeline-protocol` taxonomy: `skip`/`existing` -> **Step 1d — Proof-bundle pass-through**; `smoke` -> continue with smoke-only planning/writing (one smoke test per AC line); `behavioral`/`critical` -> continue with full TDD mapping.
-3. If `Proof bundle:` is absent, use legacy `(td:N)` compatibility from `r-pipeline-protocol` (Step 1e).
-4. Check if this is a **retry cycle** (body contains both `## Test-Writer Notes` and `## Review Evidence`). If so, go to **Step 1b — Retry-cycle handling**.
-5. Identify referenced source files, modules, and interfaces in the AC.
-6. Do NOT move task status yet — movement happens in Step 7 after verification.
+3. Check if this is a **retry cycle** (body contains both `## Test-Writer Notes` and `## Review Evidence`). If so, go to **Step 1b — Retry-cycle handling**.
+4. Identify referenced source files, modules, and interfaces in the AC.
+5. Do NOT move task status yet — movement happens in Step 7 after verification.
 
 ### Step 1a — Pass-Through for Non-Implementation Tasks
 
@@ -102,16 +100,6 @@ git add tests/test_{module}_{task_id}.py && git commit -m "test: add retry tests
 - Return: `DONE #{id} -> review | test-only retry, builder skipped`
 - **Stop here.**
 
-### Step 1c — Depth-Zero Pass-Through
-
-All AC lines are annotated `(td:0)` — no tests needed for this task.
-
-If the Architecture Review verdict or AC text includes `Existing proof required: ...`, copy that line into the Test-Writer Notes. Test-writer still skips new test creation; builder/reviewer own proof execution through Quality-Runner.
-
-1. Advance via `end_work(note="## Test-Writer Notes\n- All AC lines are (td:0) — test-writer skipped.\n- Passing through to builder.")` (moves to `in-progress` + releases claim).
-2. Return: `DONE #{id} -> in-progress | all AC td:0, no tests needed`
-3. **Stop here.**
-
 ### Step 1d — Proof-Bundle Pass-Through
 
 If `Proof bundle:` is `skip` or `existing`, no new RED tests are required.
@@ -119,14 +107,6 @@ If `Proof bundle:` is `skip` or `existing`, no new RED tests are required.
 1. Advance via `end_work(note="## Test-Writer Notes\n- Proof bundle: {value} — no new test writing required.\n- Passing through to builder.")` (moves to `in-progress` + releases claim).
 2. Return: `DONE #{id} -> in-progress | proof bundle {value}, no tests needed`
 3. **Stop here.**
-
-### Step 1e — Legacy `(td:N)` Compatibility (Fallback)
-
-Only run this fallback when `Proof bundle:` is absent.
-
-1. Apply `r-pipeline-protocol` compatibility mapping for legacy `(td:N)` tasks.
-2. If all AC lines are effectively `td:0`, go to **Step 1c — Depth-zero pass-through**.
-3. Otherwise continue with Step 2+ RED workflow using the mapped depth.
 
 ## Step 2 — Search Codebase
 
@@ -151,12 +131,6 @@ If `Proof bundle:` is present, use it as the primary routing signal:
 
 - `smoke`: plan one smoke test per AC line (one assertion, happy path only)
 - `behavioral` or `critical`: map each AC line to full TDD categories
-
-If `Proof bundle:` is absent, use legacy `(td:N)` fallback behavior:
-
-- Skip `(td:0)` AC lines entirely — do not plan or write tests for them
-- For `(td:1)` lines (or lines without annotation — default to td:1), plan a single smoke test per line
-- For `(td:2)` lines, map each AC line to test categories
 
 Full TDD categories:
 

@@ -38,7 +38,7 @@ Verify the task is in `in-progress` status (the test-writer already moved it her
 
 ### Step 0a — Bundle-Based Routing
 
-Route builder verification flow from `Proof bundle:` in the task body (see `r-pipeline-protocol` taxonomy). Use legacy `(td:N)` only as compatibility fallback when `Proof bundle:` is absent.
+Route builder verification flow from `Proof bundle:` in the task body (see `r-pipeline-protocol` taxonomy).
 
 1. If `Proof bundle: skip`:
    Implement from AC directly (no `TestFromAC_*` pass requirement for this task).
@@ -68,7 +68,7 @@ Route builder verification flow from `Proof bundle:` in the task body (see `r-pi
 
    **Stop here.**
 
-3. If `Proof bundle:` is absent, apply legacy compatibility mapping from `r-pipeline-protocol` before continuing.
+3. If `Proof bundle:` is absent, continue with the normal builder flow using AC and existing task notes as the routing source.
 
 4. Keep the explicit non-impl pass-through trigger: if Test-Writer Notes contain "Non-implementation task" or "non-impl pass-through", advance with no code changes and pass through to review.
 

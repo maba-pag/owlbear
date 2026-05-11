@@ -152,17 +152,6 @@ Proof-bundle modifiers only escalate checks; they never suppress defaults:
 - Normalization: modifier order is canonicalized alphabetically after bundle; redundant modifiers are accepted and normalized away.
 - Invalid-token rejection: unknown bundle/modifier tokens are rejected at architect assignment time and must be corrected before task advancement.
 
-### Legacy `(td:N)` Compatibility (In-Progress Tasks)
-
-Agents must read `Proof bundle:` first. If absent, map legacy td notation as follows:
-
-| Legacy signal | Compatibility bundle |
-|---------------|----------------------|
-| All AC `(td:0)`, no existing proof named | `skip` |
-| All AC `(td:0)`, existing proof named in verdict | `existing` |
-| Max `(td:1)` | `smoke` |
-| Max `(td:2)` | `critical` |
-
 ### Builder-Skip on Test-Only Retry
 
 When a reviewer FAIL cites only test-proof gaps (no implementation fixes), and the test-writer's retry confirms all new tests PASS against current code, the builder dispatch is redundant. The test-writer advances directly to `review` (see `w-tdd-red` Step 1b.1).
