@@ -1,6 +1,9 @@
-# owlbear-cockpit — Kanban Backend
+# owlbear-cockpit — Steering Cockpit Package
 
-FastAPI backend for the Cockpit kanban UI. Wraps `KanbanEngine` with an HTTP API consumed by the React frontend. For the frontend stack, entry points, and full endpoint list, see [copilot-instructions.md](../../.github/copilot-instructions.md) §3 and §4.
+Cockpit combines a FastAPI backend (`src/owlbear_cockpit/`) with a React frontend (`web/`),
+served as built static assets from `dist/`. The backend wraps `KanbanEngine` with read and
+mutation APIs, and the frontend provides the steering viewport used to view, edit, move,
+archive, inspect activity, and resolve decisions.
 
 → Parent: [README.md](../../README.md)
 
@@ -8,7 +11,49 @@ FastAPI backend for the Cockpit kanban UI. Wraps `KanbanEngine` with an HTTP API
 
 ## Launch / Usage
 
-See [copilot-instructions.md](../../.github/copilot-instructions.md) §4 for launch commands and environment variables (`COCKPIT_PORT`, `COCKPIT_NO_OPEN`, `KANBAN_DIR`).
+Build frontend assets (developer/source workflow):
+
+```bash
+cd serve/cockpit/web
+npm run build
+cd -
+```
+
+Launch Cockpit backend + static frontend:
+
+```bash
+uv run cockpit
+```
+
+`uv run cockpit` serves `serve/cockpit/dist/`, starts on `127.0.0.1:8420` by default,
+and opens a browser unless disabled with `COCKPIT_NO_OPEN=1`.
+
+## Frontend Surface
+
+Frontend source is under `serve/cockpit/web/` and is the only Node/npm package in this
+repository.
+
+| Attribute | Value |
+|-----------|-------|
+| Node requirement | `>=24.15.0` (`web/package.json`) |
+| Stack | React `^19.2.5`, Vite `^8.0.10`, TypeScript `^6.0.3`, React Router `^7.14.2`, Porsche Design System React `^4.0.0`, React Compiler (`babel-plugin-react-compiler` `^1.0.0`) |
+| Test runner | Vitest `^4.1.5` (`npm test`) |
+| E2E runner | Playwright `^1.59.1` (`npm run test:e2e`) |
+| CSS/HTML lint | Stylelint `^17.10.0` (`npm run lint:css`), HTMLHint `^1.9.2` (`npm run lint:html`) |
+| Build output | `serve/cockpit/dist/` via `npm run build` |
+
+Accessibility and responsive state after #1396:
+
+- Keyboard and focus behavior for core Cockpit flows is verified by the #1395 gate tests.
+- Viewport checks at 320px, 768px, 1024px, and 1440px are part of that verification.
+- Documentation here does not treat cache/SSE invalidation work from #1346 as part of
+  this delivery bundle.
+
+## Product Boundary
+
+Cockpit steering owns viewing, editing, moving/archiving, user blocks, health/admin,
+activity, and decision resolution. Task creation and agent lifecycle operations stay in
+agent/planner/MCP flows.
 
 ## Engine Surface — Allowlist
 
@@ -46,6 +91,13 @@ All mutation routes go through the `CockpitView` facade.
 | `refresh_config()` | Managed internally by the engine |
 
 Any route exposing excluded lifecycle methods requires an explicit product brief before implementation.
+
+Decision behavior after #1385 and #1389:
+
+- Backend decision lifecycle is canonical: resolution appends the task summary,
+  moves decision files to `resolved/`, and applies unblock semantics per response.
+- Frontend decision UX is centered on the decision viewport and resolution modal;
+  it is not limited to a small status popover.
 
 ## Error Envelope
 
@@ -108,7 +160,18 @@ Every mutation written to `activity.jsonl` carries a `source` field. Use `source
 
 ## Configuration
 
-See [copilot-instructions.md](../../.github/copilot-instructions.md) §4 for all environment variables.
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `COCKPIT_PORT` | `8420` | Override listen port (1-65535) |
+| `COCKPIT_NO_OPEN` | unset | Set to `1` to suppress browser auto-open |
+| `KANBAN_DIR` | `.owlbear/kanban/` | Override kanban directory path |
+
+## Delivery Packaging
+
+- Developer branch (`dev`): frontend source (`serve/cockpit/web/`) is present and used for
+  build/test/lint workflows.
+- Consumer branch (`main`): sync-to-main builds and stages prebuilt
+  `serve/cockpit/dist/` artifacts; consumers launch Cockpit without Node/npm.
 
 ## Dependencies
 

@@ -65,8 +65,31 @@ For more detail on what each file does and how to customise see
 | `serve/mcp-kanban/` | MCP server for kanban board operations |
 | `serve/mcp-memory/` | MCP server for persistent agent memory (markdown-file backed) |
 | `serve/mcp-knowledge/` | MCP server exposing the knowledge base |
+| `serve/cockpit/` | Cockpit backend package and prebuilt frontend bundle (`dist/`) used by consumers |
 | `seed/` | Template files copied to new projects during `setup/init.py` |
 | `setup/` | Workspace initialiser (`init.py`), setup guide, and sharing guide |
+
+## Cockpit (Consumer Launch)
+
+Consumer installs launch Cockpit from the prebuilt SPA bundle in `serve/cockpit/dist/`.
+The consumer tree does not need `serve/cockpit/web/` and does not require Node/npm to
+run Cockpit.
+
+```powershell
+uv run cockpit
+```
+
+Cockpit starts on `http://127.0.0.1:8420` by default and serves static assets from the
+bundled `dist/` directory.
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `COCKPIT_PORT` | `8420` | Override listen port (1-65535) |
+| `COCKPIT_NO_OPEN` | unset | Set to `1` to suppress browser auto-open |
+| `KANBAN_DIR` | `.owlbear/kanban/` | Override kanban directory path |
+
+If Cockpit fails because `dist/` assets are missing, refresh from the latest `main`
+branch release artifacts (the sync-to-main workflow builds and stages `serve/cockpit/dist/`).
 
 ## Verification
 

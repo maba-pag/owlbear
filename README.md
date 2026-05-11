@@ -62,14 +62,37 @@ board, knowledge base, and persistent agent memory as tools inside VS Code.
 
 ## Cockpit
 
-The Steering Cockpit is a browser-based UI for managing the kanban board. Build the frontend first, then launch the server:
+The Steering Cockpit is a browser-based UI for managing the kanban board.
+
+Developer workflow (source build in `dev`):
 
 ```bash
 cd serve/cockpit/web && npm run build && cd -
 uv run cockpit
 ```
 
-Starts the server on `http://127.0.0.1:8420` and opens it in the default browser. The kanban directory defaults to `.owlbear/kanban/` relative to CWD.
+Requires Node `>=24.15.0` (see `serve/cockpit/web/package.json`) and npm for the
+frontend package in `serve/cockpit/web/`. All non-frontend packages in this repository
+still use `uv`.
+
+Cockpit frontend quality commands (run from `serve/cockpit/web/`):
+
+```bash
+npm test
+npm run test:e2e
+npm run lint:css
+npm run lint:html
+npm run build
+```
+
+`uv run cockpit` starts the server on `http://127.0.0.1:8420` and opens it in the
+default browser. The kanban directory defaults to `.owlbear/kanban/` relative to CWD.
+
+Release packaging boundary:
+
+- `dev` keeps frontend source at `serve/cockpit/web/` for development and quality checks.
+- `main` ships prebuilt `serve/cockpit/dist/` for consumers; consumers launch with
+  `uv run cockpit` and do not need Node/npm.
 
 | Variable | Default | Purpose |
 |----------|---------|--------|
