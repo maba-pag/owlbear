@@ -93,7 +93,7 @@ Document direct execution in the task body: `quality-runner env fallback: {error
 
 ### Tool Availability
 
-When a required tool is unavailable or fails, release via `end_work(outcome="fail")` and return `FAIL #{id} | TOOL_UNAVAILABLE: {tool_name}` as your Channel A signal. Do not improvise with alternative commands, do not block, do not create DRs.
+When a required tool is unavailable or fails, release via `end_work(id={id}, outcome="fail")` and return `FAIL #{id} | TOOL_UNAVAILABLE: {tool_name}` as your Channel A signal. Do not improvise with alternative commands, do not block, do not create DRs.
 
 ### Defense-in-Depth
 
