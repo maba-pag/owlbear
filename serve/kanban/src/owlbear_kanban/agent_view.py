@@ -553,7 +553,7 @@ class AgentView:
         """
         if not title.strip():
             raise ValidationError(
-                code="ERR_INVALID_STATUS",
+                code="ERR_INVALID_TITLE",
                 user_message="title must not be empty",
             )
         self.engine.validate_body_size(body)
