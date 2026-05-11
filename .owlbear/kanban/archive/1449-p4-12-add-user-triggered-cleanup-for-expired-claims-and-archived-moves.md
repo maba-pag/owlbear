@@ -1,10 +1,10 @@
 ---
 id: 1449
 title: 'P4-12: Add user-triggered cleanup for expired claims and archived moves'
-status: in-progress
+status: archived
 priority: needed
 created: 2026-05-08T19:32:12.180001+00:00
-updated: 2026-05-11T07:08:53.635441+00:00
+updated: 2026-05-11T08:06:06.358789+00:00
 tags:
 - phase-4
 - scope:kanban
@@ -894,3 +894,147 @@ Architecture re-review (cycle 5): REFINE → APPROVE. Two reviewer findings addr
 | AC-6: no_overwrite move rolls back dest hard link on src.unlink() failure | 1 | FAIL (impl missing rollback) ✓ |
 
 Builder job: wrap src.unlink() in try/except OSError in _move_file's no_overwrite branch, call dest.unlink() on failure (with contextlib.suppress), then re-raise. Run pytest tests/test_engine_cleanup_1449.py — all 25 should pass.
+[[2026-05-11]]
+## Builder Notes
+- Implementation: hardened `_move_file(..., no_overwrite=True)` rollback behavior in `serve/kanban/src/owlbear_kanban/engine.py`.
+- Files changed: `serve/kanban/src/owlbear_kanban/engine.py`.
+- Commit: `38708a67`.
+- Approach: minimal AC-6 fix only. In the `no_overwrite` path, if `src.unlink()` raises `OSError` after `os.link(src, dest)`, cleanup now removes `dest` best-effort (`contextlib.suppress(OSError)`) and re-raises.
+- Tests (task-scoped, quality-runner): 25 passed, 0 failed, 0 skipped on `tests/test_engine_cleanup_1449.py`.
+- Module-level durable visibility (quality-runner): 29 passed, 0 failed, 0 skipped on `serve/kanban/tests/test_engine_move_claim.py`.
+- Coverage (quality-runner, scoped): `owlbear_kanban.engine` 31% (informational for task-scoped verification).
+- ruff: clean on `serve/kanban/src/owlbear_kanban/engine.py`, `tests/test_engine_cleanup_1449.py`, and `serve/kanban/tests/test_engine_move_claim.py`.
+- Evidence summary:
+  - AC-6 RED failure reproduced in `TestFromAC_MoveRollback::test_move_rollback_removes_dest_on_src_unlink_failure` before patch.
+  - Patch ensures no dual-location state when `src.unlink()` fails in `no_overwrite` path.
+  - Post-fix task-local AC suite is fully GREEN.
+- Fixes applied: one surgical source change; no builder test edits.
+[[2026-05-11]]
+## Review Evidence
+### Changed Scope
+- This task already contains five prior review sections in the live task file, so this pass is the sixth review cycle.
+- Task-owned retry history is corroborated by commit-log entries for 00b1083f, fbd0cbbb, a0502c13, d3ddaa5e, ce87fd09, and 38708a67 in .git/logs/HEAD.
+- Direct git diff and dirty-tree contamination checks were unavailable in this session; that is a small confidence deduction only.
+
+### Test Results
+- quality-runner: 54 passed, 0 failed, 0 skipped on tests/test_engine_cleanup_1449.py and serve/kanban/tests/test_engine_move_claim.py.
+
+### Lint
+- quality-runner: ruff clean on serve/kanban/src/owlbear_kanban/engine.py, tests/test_engine_cleanup_1449.py, and serve/kanban/tests/test_engine_move_claim.py.
+
+### Coverage
+- quality-runner: owlbear_kanban.engine 42%.
+- Informational only for this verification-heavy retry plus adjacent regression run.
+
+### Pass 1 - CRITICAL
+#### Security Review
+- PASS. No injection, traversal, secret-handling, or unsafe-deserialization issue was found in the reviewed scope.
+
+#### Test Integrity
+- PASS with a small confidence deduction. The current snapshot still contains the full TestFromAC surface in tests/test_engine_cleanup_1449.py, and the latest builder note scopes source edits to serve/kanban/src/owlbear_kanban/engine.py only. Exact diff-backed immutability could not be proven in this session.
+
+#### Test Quality
+| Dimension | Rating | Evidence |
+|---|---|---|
+| Assertion specificity | STRONG | The task-local suite uses exact IDs, exact file paths, exact skipped-item cardinality, and explicit file-presence assertions at tests/test_engine_cleanup_1449.py:98, 137, 209, 381, 399, 419, 532, 590, and 661. |
+| Negative and error-path coverage | STRONG | The suite covers missing archival_reason, malformed files, early collision, late FileExistsError, status drift, archival_reason drift, and unlink-failure rollback. |
+| Manual mutation reasoning | ADEQUATE | The current tests would catch the binding AC behaviors. AC-3 late-collision call-shape detail and AC-6 helper-local rollback timing rely partly on source inspection at serve/kanban/src/owlbear_kanban/engine.py:340-347 and serve/kanban/src/owlbear_kanban/engine.py:1921 rather than task-local assertions alone, so this remains adequate rather than strong. |
+| Test independence | STRONG | Each test builds a fresh tmp_path board and does not share mutable state. |
+| Descriptive names | STRONG | Test names map directly to the refined AC branches. |
+
+#### Data Safety
+- PASS. cleanup() re-validates archive eligibility before the move at serve/kanban/src/owlbear_kanban/engine.py:1900, uses _move_file(path, dest, no_overwrite=True) at serve/kanban/src/owlbear_kanban/engine.py:1921, and _move_file rolls back dest on source-unlink failure at serve/kanban/src/owlbear_kanban/engine.py:340-347. No current race or dual-location defect remains in scope.
+
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test(s) | Assessment | Verdict |
+|---|---|---|---|
+| AC-1: cleanup releases expired claimed_at values and returns released_claim_ids | tests/test_engine_cleanup_1449.py:98, 110 | The task-local tests prove released_claim_ids membership and on-disk clearing; source still uses write_task_if_unchanged at serve/kanban/src/owlbear_kanban/engine.py:1859. | COVERED |
+| AC-2: archived+reason-present moves; archived+reason-none skips with skipped_items | tests/test_engine_cleanup_1449.py:137, 154, 209 | The task-local suite proves both the positive move path and the negative missing-reason branch guarded at serve/kanban/src/owlbear_kanban/engine.py:1879. | COVERED |
+| AC-3: malformed files and early or late collisions skip, preserve source, and return exact path or reason shape | tests/test_engine_cleanup_1449.py:381, 399, 419 | The task-local suite proves malformed exact-cardinality or exact-path behavior, early collision exact-cardinality or exact-path behavior, and late FileExistsError handling with preserved source and reason shape. Source inspection confirms the late branch is wired through _move_file(path, dest, no_overwrite=True) at serve/kanban/src/owlbear_kanban/engine.py:1921-1922. | COVERED |
+| AC-4: init, pick_tasks, start_work, and app_lifespan do not call cleanup implicitly | tests/test_engine_cleanup_1449.py:463, 470, 481, 492 | The no-implicit-call tests are discriminating, and MCP startup still calls engine.sweep() at serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:215. | COVERED |
+| AC-5: cleanup re-reads before move and skips on status or archival_reason drift | tests/test_engine_cleanup_1449.py:532, 590 | The task-local suite independently proves both stale-state guards implemented at serve/kanban/src/owlbear_kanban/engine.py:1900. | COVERED |
+| AC-6: _move_file(no_overwrite=True) removes the destination hard link if src.unlink() fails | tests/test_engine_cleanup_1449.py:661 | The rollback test proves no dual-location state remains after source-unlink failure, and the helper now removes dest before re-raising at serve/kanban/src/owlbear_kanban/engine.py:340-347. | COVERED |
+
+### Pass 2 - INFORMATIONAL
+- code-reader identified two proof-hardening opportunities: the AC-3 late-collision test stubs _move_file, and the AC-6 proof exercises cleanup rather than calling _move_file directly. I am not using either as a rejection reason because the binding AC and latest architect guidance accept behavior-level proof here, and the live source explicitly shows the required no_overwrite wiring and rollback branch.
+- The adjacent durable regression in serve/kanban/tests/test_engine_move_claim.py:428 remained green, which helps separate current implementation health from earlier proof-only failures.
+
+### AC Compliance
+| AC Line | Evidence | Status |
+|---|---|---|
+| AC-1 | tests/test_engine_cleanup_1449.py:98, tests/test_engine_cleanup_1449.py:110, serve/kanban/src/owlbear_kanban/engine.py:1859 | PASS |
+| AC-2 | tests/test_engine_cleanup_1449.py:137, tests/test_engine_cleanup_1449.py:209, serve/kanban/src/owlbear_kanban/engine.py:1879 | PASS |
+| AC-3 | tests/test_engine_cleanup_1449.py:381, tests/test_engine_cleanup_1449.py:399, tests/test_engine_cleanup_1449.py:419, serve/kanban/src/owlbear_kanban/engine.py:1921-1922 | PASS |
+| AC-4 | tests/test_engine_cleanup_1449.py:463, tests/test_engine_cleanup_1449.py:470, tests/test_engine_cleanup_1449.py:481, tests/test_engine_cleanup_1449.py:492, serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:215 | PASS |
+| AC-5 | tests/test_engine_cleanup_1449.py:532, tests/test_engine_cleanup_1449.py:590, serve/kanban/src/owlbear_kanban/engine.py:1900 | PASS |
+| AC-6 | tests/test_engine_cleanup_1449.py:661, serve/kanban/src/owlbear_kanban/engine.py:340-347 | PASS |
+
+### Deductions
+- -0.03 direct git diff and dirty-tree contamination could not be verified in this session.
+- -0.02 TestFromAC immutability is snapshot-backed rather than diff-backed.
+- -0.01 AC-3 and AC-6 structural details rely partly on source inspection rather than task-local assertions alone.
+
+### Confidence: 0.94
+### Verdict: PASS
+### Action
+- Advance to docs.
+[[2026-05-11]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | Yes | Updated | `serve/kanban/README.md` KanbanEngine methods table was missing `cleanup()` — added row with full description |
+| 2 | Module docstrings | Yes | N/A (accurate) | `cleanup()` docstring at engine.py:1810 is accurate; `CleanupResult` class docstring at models.py:571 is accurate; no changes needed |
+| 3 | External attribution | No | N/A | No external patterns referenced in task body |
+| 4 | Research doc | No | N/A | No research doc produced |
+| 5 | Diagram maintenance (describes match) | Yes | Updated | `share/diagrams/kanban.excalidraw` describes `serve/kanban/src/**` — footer updated from `(c91a46b6)` to `(3025c84f)` |
+| 6 | Explicit diagram creation | No | N/A | No explicit diagram creation request in task body |
+| 7 | Deletion detection | No | N/A | No files deleted; no orphaned IN-scope docs detected |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| `serve/kanban/src/owlbear_kanban/engine.py` | IN | Docstrings accurate — no edit needed |
+| `serve/kanban/src/owlbear_kanban/models.py` | IN | Docstrings accurate — no edit needed |
+| `tests/test_engine_cleanup_1449.py` | OUT | Test file — no docs action |
+
+### Files Updated
+- `serve/kanban/README.md` — added `cleanup()` row to KanbanEngine methods table
+- `share/diagrams/kanban.excalidraw` — updated footer to `Last verified: 2026-05-11 (3025c84f)`
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no task-scoped scratch files found)
+
+Commit: 53d3eaca
+[[2026-05-11]]
+## Audit
+### Regression Detection
+- quality-runner mode full: 4407 passed, 214 failed, 5 errors (pytest); 1268 passed, 1 failed (vitest)
+- Domain-scoped verification: 1363 kanban tests passed, 0 failed (uv run pytest tests/test_engine_cleanup_1449.py serve/kanban/tests/)
+- Failing tests are in unrelated domains: test_path_neutrality, test_mcp_lifecycle, test_shell_integration, test_cockpit_react_compiler, test_cockpit_pds_build_compat
+- Closest task-adjacent file (test_engine_rebind_containment) passes 5/5 in isolation
+- Task changed only `_move_file` (backward-compatible `no_overwrite` parameter, default False) and `cleanup()` (internal method) — cannot cause regressions in other domains
+- regression verdict: PASS (no task-caused regressions)
+
+### Intent Verification
+- scope alignment: PASS — all 9 task commits touch only: engine.py (3), test_engine_cleanup_1449.py (5), serve/kanban/README.md (1), kanban.excalidraw (1)
+- purpose match: PASS — user-triggered cleanup primitive for expired claims and archived moves, per task scope
+- extraneous scope: none
+- boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 3/5
+AC went through 5 refinement cycles (v1→v5). Original AC-1 included mechanism-level "through compare-and-swap" requirement that caused 2 review cycles before removal. Original AC-2 had vague "product archive-reason contract". Missing coverage for archival_reason=None negative path, collision rollback safety, and stale-state revalidation — all caught by reviewer, not architect. Final v5 is solid, but the path cost 5 architect-review loops. Notable gaps requiring significant downstream iteration.
+
+### Commit Integrity
+- upstream commit presence: PASS — 9 task commits verified via git log: 8d5fd9a8, 00b1083f, fbd0cbbb, a0502c13, d3ddaa5e, ce87fd09, b7526bd6, 38708a67, 53d3eaca
+- dirty-tree contamination: PASS — git diff HEAD shows no uncommitted changes in task files
+- kanban commit packaging: pending (this audit)
+
+### Deduction Breakdown
+- AC quality score 3/5 (≤ 3): -.03
+
+### Confidence: 0.97
+### Action: archive
