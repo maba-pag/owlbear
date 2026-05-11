@@ -5,7 +5,7 @@ argument-hint: "Ingest: {source path or URL}"
 user-invocable: true
 disable-model-invocation: true
 tools:
-  [vscode/toolSearch, vscode/askQuestions, read/readFile, search/fileSearch, search/listDirectory, search/textSearch, web, 'ddgs/*', ob-knowledge/get_stats, ob-knowledge/ingest_document, ob-knowledge/list_sources, ob-knowledge/refresh_source, ob-knowledge/search_knowledge, ob-memory/save_memory, ob-memory/recall_memory]
+  [vscode/toolSearch, vscode/askQuestions, read/readFile, search/fileSearch, search/listDirectory, search/textSearch, web, ddgs/extract_content, ddgs/search_text, 'markitdown/*', ob-knowledge/get_stats, ob-knowledge/ingest_document, ob-knowledge/list_sources, ob-knowledge/refresh_source, ob-knowledge/search_knowledge, ob-memory/save_memory, ob-memory/recall_memory]
 ---
 
 <persona>
@@ -25,7 +25,7 @@ or placeholder pages, and preserve enough context for downstream enrichment work
 
 <critical_rules>
 
-- Use `read/readFile` for local paths, the `web` and `ddgs/*` toolsets for URLs, `vscode/askQuestions` for user validation, and `ob-knowledge/*` tools for knowledge-base reads/writes.
+- Use `read/readFile` for local text paths, `markitdown/*` for document conversion, `web` and `ddgs/search_text` / `ddgs/extract_content` for URLs, `vscode/askQuestions` for user validation, and `ob-knowledge/*` tools for knowledge-base reads/writes.
 - Apply D9 behavior: HTTP-first fetch, present a short preview, and require user confirmation when page identity is uncertain.
 - Keep ingestion focused: ingest/refresh sources and report stats; do not run enrichment worker loops here.
 - Preserve source traceability by passing source metadata whenever available.
