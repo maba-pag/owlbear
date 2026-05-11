@@ -19,7 +19,8 @@ Review model: batch-all-findings. Gather all blocking findings before issuing PA
 - Apply the three-item checklist: AC->code, test->AC, and proof sufficiency.
 - Batch all blocking findings before verdict.
 - Separate findings from opinions (`Review Evidence` vs `Observations`).
-- Dispatch code-reader for `td:2` tasks.
+- Dispatch code-reader for `critical` bundles and any bundle with `+reader`.
+- Dispatch challenger for `behavioral`/`critical` bundles and any bundle with `+challenge`.
 - Verify builder evidence consistency.
 - Add PASS confirmation statements for auditor traceability.
 
@@ -75,17 +76,24 @@ Only run independent reruns when evidence quality is insufficient or inconsisten
 
 ### Depth-Aware Dispatch
 
-Determine max depth from AC `(td:N)` tags.
+Determine review scope from `Proof bundle:` in the task body (per `r-pipeline-protocol` taxonomy).
 
-| Max depth | quality-runner expectation in builder notes | code-reader | Reviewer execution path |
-|-----------|---------------------------------------------|-------------|-------------------------|
-| td:0 | lint evidence only, unless explicit existing proof is named | skip | Step 4 checklist with lint + AC/file evidence, plus named Quality-Runner proof when required |
-| td:1 | scoped tests + lint | skip | Step 4 checklist with test/lint/file evidence |
-| td:2 | scoped tests + lint + coverage | run | Step 4 checklist + code-reader cross-check |
+| Proof bundle | quality-runner expectation in builder notes | code-reader | challenger | Reviewer execution path |
+|--------------|---------------------------------------------|-------------|------------|-------------------------|
+| `skip` | lint evidence | skip | skip | Step 4 checklist with lint + AC/file evidence |
+| `existing` | named tests + lint | skip | skip | Step 4 checklist with named-test/lint/file evidence |
+| `smoke` | scoped tests + lint | skip | skip | Step 4 checklist with test/lint/file evidence |
+| `behavioral` | scoped tests + lint + coverage | skip | run | Step 4 checklist + challenger cross-check |
+| `critical` | full suite + lint + coverage | run | run | Step 4 checklist + code-reader and challenger cross-check |
 
-For td:2, dispatch `code-reader` in parallel with your own file reading when needed.
+Escalation modifiers only add checks and never remove defaults:
 
-For td:0, do not treat "no new tests" as "no executable proof". If AC text, Architecture Review, Test-Writer Notes, or Builder Notes include `Existing proof required: ...`, require matching Quality-Runner evidence before approving. If builder did not provide it, dispatch `quality-runner` yourself or reject for missing required proof.
+- `+reader`: dispatch `code-reader` for any bundle.
+- `+challenge`: dispatch challenger for any bundle.
+
+For `skip`, do not treat "no new tests" as "no executable proof" when existing proof is explicitly required. If AC text, Architecture Review, Test-Writer Notes, or Builder Notes include `Existing proof required: ...`, require matching Quality-Runner evidence before approving. If builder did not provide it, dispatch `quality-runner` yourself or reject for missing required proof.
+
+When challenger is required, dispatch it before final verdicting with: task_id, proposed_verdict, ac_lines, and codebase evidence.
 
 ### Code-Reader Consumer Contract
 
