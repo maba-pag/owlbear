@@ -440,29 +440,26 @@ describe('TestFromAC_ConfirmDialogFocus', () => {
     expect(document.activeElement).toBe(dialog)
   })
 
-  it('ConfirmDialog has an accessible name via aria-label or aria-labelledby on the dialog element', () => {
-    // WCAG 2.1 SC 4.1.2: dialogs must have accessible names so screen readers
-    // can identify them when they receive focus.
-    // Current: ConfirmDialog renders <div role="dialog" aria-modal="true" tabIndex={-1}>
-    // with NO aria-label or aria-labelledby → no accessible name → FAILS.
+  it('ConfirmDialog has a non-empty meaningful accessible name on the dialog element (AC3 addendum 2)', () => {
+    // AC3 addendum 2: must assert aria-label is a truthy, non-empty string.
+    // hasAttribute() alone passes on aria-label="" or a broken aria-labelledby reference.
+    // An empty string or missing attribute must fail this test.
     const { container } = renderConfirmDialog('unclaim')
     const dialog = container.querySelector('[data-testid="confirm-dialog"]')
     expect(dialog).not.toBeNull()
-    const hasAccessibleName =
-      dialog!.hasAttribute('aria-label') || dialog!.hasAttribute('aria-labelledby')
-    // FAILS: neither attribute exists on the dialog element
-    expect(hasAccessibleName).toBe(true)
+    const ariaLabel = dialog!.getAttribute('aria-label')
+    expect(ariaLabel, 'dialog must have a non-empty aria-label').toBeTruthy()
+    expect(ariaLabel!.length, 'aria-label must not be an empty string').toBeGreaterThan(0)
   })
 
-  it('ConfirmDialog "move-backward" type has an accessible name referencing its description', () => {
-    // Same contract as unclaim: both dialog types must have accessible names.
+  it('ConfirmDialog "move-backward" type has a non-empty meaningful accessible name (AC3 addendum 2)', () => {
+    // AC3 addendum 2: same non-empty contract as unclaim — getAttribute must return a truthy string.
     const { container } = renderConfirmDialog('move-backward')
     const dialog = container.querySelector('[data-testid="confirm-dialog"]')
     expect(dialog).not.toBeNull()
-    const hasAccessibleName =
-      dialog!.hasAttribute('aria-label') || dialog!.hasAttribute('aria-labelledby')
-    // FAILS: no aria-label or aria-labelledby
-    expect(hasAccessibleName).toBe(true)
+    const ariaLabel = dialog!.getAttribute('aria-label')
+    expect(ariaLabel, 'dialog must have a non-empty aria-label').toBeTruthy()
+    expect(ariaLabel!.length, 'aria-label must not be an empty string').toBeGreaterThan(0)
   })
 
   it('after ConfirmDialog is dismissed via Escape, focus returns to the triggering element', () => {
