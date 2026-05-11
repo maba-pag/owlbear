@@ -6,7 +6,7 @@ File-based task management for OwlBear, powered by the native kanban engine.
 
 | Path | Purpose |
 | --- | --- |
-| `config.yml` | Board configuration — statuses, task directory |
+| `config.yml` | `next_id` checkpoint (topology is product-defined) |
 | `tasks/` | One Markdown file per task (YAML frontmatter + body) |
 | `activity.jsonl` | Auto-generated activity log |
 
