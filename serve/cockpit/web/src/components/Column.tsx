@@ -54,7 +54,7 @@ export function Column({
         e.preventDefault()
         onDrop(status)
       }}
-      style={{ overflowY: 'auto' }}
+      style={{ overflowY: 'auto', minWidth: 0 }}
     >
       <header>
         <span>{status}</span>

@@ -288,7 +288,16 @@ function KanbanBoardContent({
         }}
       />
 
-      <div style={{ display: 'flex', gap: '16px', overflowX: 'auto', flex: 1, minHeight: 0 }}>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(0, 1fr))',
+          gap: '16px',
+          overflowX: 'hidden',
+          flex: 1,
+          minHeight: 0,
+        }}
+      >
         {board.statuses.map(({ name }) => {
           const colTasks = tasksByStatus[name] ?? []
           return (

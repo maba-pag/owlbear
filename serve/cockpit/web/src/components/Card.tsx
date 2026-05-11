@@ -1,11 +1,11 @@
 import type { Task } from '../hooks/useBoard'
 
 const PRIORITY_COLORS: Record<string, string> = {
-  critical: '#e00000',
-  needed: '#ff8000',
-  important: '#ffcc00',
-  'nice-to-have': '#0066cc',
-  someday: '#888888',
+  critical: 'var(--pds-theme-light-notification-error)',
+  needed: 'var(--pds-theme-light-notification-warning)',
+  important: 'var(--pds-theme-light-notification-info)',
+  'nice-to-have': 'var(--pds-theme-light-notification-info)',
+  someday: 'var(--pds-theme-light-contrast-medium)',
 }
 
 export interface CardProps {
@@ -31,7 +31,7 @@ export function Card({ task, selected = false, onSelect, onContextMenu, onDragSt
       onContextMenu={(e) => onContextMenu(e, task)}
       style={{
         border: selected ? '1px solid var(--pds-theme-light-notification-success)' : '1px solid transparent',
-        borderLeft: `4px solid ${PRIORITY_COLORS[task.priority] ?? '#888888'}`,
+        borderLeft: `4px solid ${PRIORITY_COLORS[task.priority] ?? 'var(--pds-theme-light-contrast-medium)'}`,
         backgroundColor: selected ? 'var(--pds-theme-light-notification-success-soft)' : 'transparent',
         minHeight: '48px',
         maxHeight: '56px',
