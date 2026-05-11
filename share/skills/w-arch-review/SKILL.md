@@ -81,30 +81,34 @@ Assess the task against `r-architecture-standards` and general architectural pri
     - **Signals (S) — ≥1 required:** (S1) AC uses physical-action verbs (Open, Click, Navigate, Configure via GUI, Deploy manually); (S2) AC names external systems (Teams, Azure portal, GitHub UI, browser, dashboards); (S3) AC lists manual steps the user must physically perform
     - **Outcome:** no counter-signal AND M1+M2 AND ≥1 S → `type:user-action` detected → use BLOCK verdict (Step 3)
 
-## Step 2.1 — Test-Depth Annotation
+## Step 2.1 — Proof-Bundle Validation
 
-Annotate each AC line with a test-depth suffix `(td:N)`:
+Validate the planner-assigned `Proof bundle:` field and write the finalized value in the architecture verdict.
 
-| Depth | Suffix | Meaning | Examples |
-|-------|--------|---------|----------|
-| 0 | `(td:0)` | No test needed | Mechanical removal, cosmetic fix, "all tests pass", config-only |
-| 1 | `(td:1)` | Smoke test — one assertion proves it | Simple rename, add a field, single happy-path |
-| 2 | `(td:2)` | Full TDD — multiple paths/edges | New logic, error handling, security boundary |
-
-**Existing-proof guard:** Use `(td:0)` only to skip new test creation. If the AC line says existing tests must pass, a full suite must pass, a quality-runner report is required, or a command must exit 0, include an `Existing proof required: {scope}` note in the Architecture Review verdict. Builder/reviewer must run that proof through `quality-runner` even though test-writer skips new tests.
+| Bundle | Test-writer | Challenger | Code-reader | Reviewer scope |
+|--------|------------|------------|-------------|----------------|
+| `skip` | SKIP | skip | skip | lint only |
+| `existing` | SKIP | skip | skip | named tests + lint |
+| `smoke` | smoke tests | skip | skip | scoped tests + lint |
+| `behavioral` | full TDD | yes | skip | scoped tests + lint + coverage |
+| `critical` | full TDD | yes | yes | full suite + lint + coverage |
 
 **Procedure:**
 
-1. For each AC line, assign `(td:N)` based on the line's testability, not the task's overall complexity.
-2. Default to `(td:1)` when uncertain — depth can be lowered but never raised after approval.
-3. Append the suffix to the AC line text in the task body via `edit_task`.
+1. Read the planner assignment in the task body: `Proof bundle: {value}`.
+2. Confirm or adjust the bundle from Step 2 findings.
+    - Escalate when blast radius or failure modes are higher than planned.
+    - De-escalate when complexity is lower than planned and evidence supports the reduction.
+3. Add escalation modifiers when needed: `+challenge`, `+reader`.
+    - Modifiers escalate checks only; they never suppress defaults.
+    - Combined form is valid (for example: `smoke+challenge+reader`).
+4. If bundle is `existing`, verify `Existing proof scope: {glob/file list}` accurately covers touched codepaths.
+5. Record finalized routing in the Architecture Review verdict:
+    - `Proof bundle: {normalized bundle[+modifiers]}`
+    - `Existing proof scope: ...` (required for `existing`)
+    - `Test-writer: SKIP` when bundle is `skip`.
 
-**Pipeline routing:**
-
-- If ALL AC lines are `(td:0)`: append `Test-writer: SKIP` to the Architecture Review verdict section. The test-writer will pass through without writing tests; existing-proof requirements still apply when named.
-- If ANY line is `(td:1)` or `(td:2)`: test-writer processes the task normally, respecting per-line depth.
-
-**Subagent gating:** If ALL AC lines are `(td:0)`, skip the challenger dispatch in Step 2.5.
+**Subagent gating:** If finalized bundle is `skip`, skip challenger dispatch in Step 2.5.
 
 ## Step 2.3 — Conditional Design Diverge
 
@@ -137,7 +141,7 @@ Build a comparison matrix from returned approaches across the split criteria. Se
 
 ## Step 2.5 — Challenge Proposed Verdict
 
-After Step 2.3 selection (when triggered), challenge APPROVE verdicts using the **challenger** subagent. This is mandatory for APPROVE (unless all AC lines are td:0 — see Step 2.1), optional for REFINE, skip for SPLIT/REJECT.
+After Step 2.3 selection (when triggered), challenge APPROVE verdicts using the **challenger** subagent. This is mandatory for APPROVE (unless the finalized proof bundle is `skip` — see Step 2.1), optional for REFINE, skip for SPLIT/REJECT.
 
 Pass: task_id, proposed_verdict, reasoning, ac_lines, codebase_evidence, selected_or_hybrid_design (from Step 2.3), sibling_tasks (optional), and research-doc reference. When Step 2.3 is skipped, selected_or_hybrid_design should capture the single-pass design being evaluated.
 
@@ -226,12 +230,14 @@ Append to task body before advancing:
 If fallback triggered, include only: `Design-diverge: FALLBACK — {reason}`.
 
 ### Challenge Results
-- Challenger: {proceed/reconsider/reject} (or FALLBACK / SKIPPED — all td:0)
+- Challenger: {proceed/reconsider/reject} (or FALLBACK / SKIPPED — proof bundle `skip`)
 - Architect response: {accepted/rebutted/revised}
 
-### Test Depth
-- Max depth: {0/1/2}
-- Test-writer: {SKIP (all td:0) / PROCEED}
+### Proof-Bundle Validation
+- Planner assignment: {value}
+- Final bundle: {value or value+modifiers}
+- Existing proof scope: {glob/file-list / N/A}
+- Test-writer: {SKIP (bundle `skip`) / SKIP (bundle `existing`) / PROCEED}
 
 ### Verdict: {APPROVE/REFINE/SPLIT/REJECT}
 ### Action Taken: {description}
@@ -246,7 +252,9 @@ If fallback triggered, include only: `Design-diverge: FALLBACK — {reason}`.
 - [ ] For frontend tasks referencing Briefs with design-system components, AC names exact selectors and assertion strategies (not generic HTML elements)
 - [ ] Ran durable-suite health pre-check before defining must-pass suite gates; documented and excluded known unrelated pre-existing failures
 - [ ] All 13 Step 2 criteria evaluated
-- [ ] Each AC line annotated with `(td:N)` (Step 2.1)
+- [ ] Proof bundle validated (confirm/escalate/de-escalate) and recorded in verdict (Step 2.1)
+- [ ] Escalation modifiers (`+challenge`, `+reader`) evaluated and applied when needed
+- [ ] For `existing`, proof-scope glob/file list verified for accuracy
 - [ ] Design-diverge evaluated (triggered / skipped with reason / fallback noted)
 - [ ] Challenger invoked for APPROVE verdicts (or fallback noted)
 - [ ] `type:user-action` tasks blocked (BLOCK verdict) rather than approved
@@ -260,7 +268,7 @@ If fallback triggered, include only: `Design-diverge: FALLBACK — {reason}`.
 - **Missing non-impl tags:** Tasks without pass-through tags cause the test-writer to attempt writing tests for non-code deliverables, wasting a pipeline cycle.
 - **Body content escaping:** `--body` writes literal `\n` instead of newlines. Always use the temp-file pattern for multi-line AC.
 - **T3 research without DR:** If a task originated from T3 research with no approved decision request, reject it. Proceeding without approval risks reversal.
-- **Premise challenge skip:** The challenger is easy to skip but catches real issues. The mandatory trigger on APPROVE exists for a reason.
+- **Premise challenge skip:** The challenger is easy to skip but catches real issues. The mandatory trigger on APPROVE exists for a reason (except finalized bundle `skip`).
 - **#1225 import-shape drift:** Do not author frontend import-path/barrel AC constraints from assumption. Confirm the parent→child import chain in live code first, then write the constraint.
 - **#1225 suite gate debt inheritance:** Do not gate builders on durable suites with known unrelated failures. Pre-check suite health and scope those failures out in AC gate wording.
 - **#1250 PDS contract carry-forward:** When a Brief or research doc specifies design-system components (PDS or equivalent), AC lines must carry exact component contracts into testable criteria. Instead of generic "select" wording, name the exact PDS selector (for example `p-select`). Instead of "populated from priorities prop," specify exact-ordered-match assertions when order matters. Instead of "does not render controls," state whether the proof requires DOM absence or visual/a11y hiding. Instead of "preserving other fields" with one broad check, require per-control verification for each affected control.
