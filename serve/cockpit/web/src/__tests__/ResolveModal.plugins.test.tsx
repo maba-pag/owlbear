@@ -1,5 +1,5 @@
 /**
- * P3-06 Implement resolve modal — ResolveModal plugin props.
+ * Implement resolve modal — ResolveModal plugin props.
  *
  * Covers:
  *   AC8  — ResolveModal passes remarkGfm to ReactMarkdown's remarkPlugins

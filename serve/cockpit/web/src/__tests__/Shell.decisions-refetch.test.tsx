@@ -8,7 +8,6 @@
  * AC5 (td:1): usePendingDRs 60s polling remains active and unchanged — SSE supplements
  *   but does not replace polling.
  *
- * AC4 tests FAIL until builder adds the decisions-changed useEffect to Shell.tsx.
  * AC5 is a regression guard — verifies Shell continues calling usePendingDRs with
  * default options (no intervalMs override).
  */

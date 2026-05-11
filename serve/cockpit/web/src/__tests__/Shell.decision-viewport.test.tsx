@@ -1,12 +1,11 @@
 /**
- * P2-14 Shell integration of DecisionViewport (AC8)
+ * Shell integration of DecisionViewport (AC8)
  *
  * AC8 (td:2): DecisionViewport is the primary decision listing surface
  * accessible from the Shell, showing loading, error, and empty states from
  * usePendingDRs. DRStatusIndicator's popover list is no longer the sole way
  * to view pending decisions.
  *
- * All tests fail until builder integrates DecisionViewport into Shell.tsx:
  *   - Shell must import and render DecisionViewport
  *   - Shell must destructure isLoading from usePendingDRs
  *   - Shell must pass isLoading, error, and items to DecisionViewport

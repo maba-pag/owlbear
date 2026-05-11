@@ -1,5 +1,5 @@
 /**
- * P1-12 Implement Cockpit frontend error-contract adoption
+ * Implement Cockpit frontend error-contract adoption
  *
  * ArchivalModal.tsx gaps — handleSubmit reads only payload.detail for 422 errors
  * and uses a status-only fallback for all other non-ok statuses:
@@ -13,7 +13,6 @@
  * After #1375, getResponseErrorMessage() is adopted in handleArchive so both
  * {code, message} and {detail} shapes surface in the archival-error element.
  *
- * All tests FAIL until #1375 replaces the partial/missing body parsing.
  */
 import { describe, it, expect, vi, beforeAll, afterEach } from 'vitest'
 import { render, fireEvent, waitFor } from '@testing-library/react'
@@ -221,7 +220,6 @@ describe('TestFromAC_ArchivalModalErrorBodyParsing', () => {
 // AC8: when body parsing succeeds, the helper returns the parsed body field alone.
 // The fallback is used ONLY when parsing fails.
 //
-// Both tests FAIL until errorMessage.ts changes:
 //   return `${fromBody} (${fallbackMessage})`  →  return fromBody
 
 describe('TestFromAC_ErrorMessageHelperNoDecoration', () => {

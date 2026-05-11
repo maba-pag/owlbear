@@ -10,7 +10,6 @@
  * 2. Em-dash in hint text: brief F2 line 130 requires the exact string
  *    "Required — enter at least one task ID" (em-dash). The component
  *    currently renders "Required - enter at least one task ID" (hyphen).
- *    These tests are RED until the builder fixes the character.
  *
  * AC coverage:
  *   "Hint text displayed below refs field when visible:

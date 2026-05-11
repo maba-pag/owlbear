@@ -1,5 +1,5 @@
 /**
- * P2-07 Test Cockpit task conflict resolution workflow
+ * Test Cockpit task conflict resolution workflow
  *
  *
  * AC coverage:

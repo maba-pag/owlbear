@@ -1,5 +1,5 @@
 /**
- * P2-03 Test Cockpit task detail edit validation and dirty state
+ * Test Cockpit task detail edit validation and dirty state
  *
  *
  * AC coverage:

@@ -1,5 +1,5 @@
 /**
- * P3-05 ResolveModal component
+ * ResolveModal component
  *
  * Covers: markdown DR body rendering, 3-option response selector,
  * optional notes textarea, POST submit payload assertion, modal close

@@ -1,5 +1,5 @@
 /**
- * P2-01 — FilterPanel component tests
+ * FilterPanel component tests
  *
  * Covers all 7 AC lines for FilterPanel:
  *   AC1 (td:2) — renders text input, priority select, tags multi-select,
@@ -12,7 +12,6 @@
  *   AC6 (td:2) — each control interaction fires onFilterChange with updated FilterState
  *   AC7 (td:1) — does not render controls when open=false — controls absent from DOM
  *
- * All tests FAIL (RED) — FilterPanel.tsx does not exist yet.
  *
  * Expected component interface (architect-reviewed):
  *   interface FilterPanelProps {

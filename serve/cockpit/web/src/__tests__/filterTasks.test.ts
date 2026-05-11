@@ -1,7 +1,6 @@
 /**
- * P1-01 — filterTasks unit tests
+ * filterTasks unit tests
  *
- * Tests are RED — all assertions fail until the builder provides a real
  * filterTasks implementation in src/utils/filterTasks.ts (task #1249).
  *
  * Prerequisites (builder must create before tests can reach assertion-failure RED):

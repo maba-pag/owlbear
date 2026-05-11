@@ -1,5 +1,5 @@
 /**
- * P3-06 Implement Cockpit accessibility and PDS verification gate
+ * Implement Cockpit accessibility and PDS verification gate
  *
  * Scope: DRStatusIndicator popover focus management parity with HealthBadge.
  *

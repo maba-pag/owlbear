@@ -9,7 +9,6 @@
  * AC5 (td:2): SSE-triggered task refetch fires when useSSEEvent('tasks-changed').mtime changes.
  * AC6,AC7,AC8 (td:0): skipped — no tests needed.
  *
- * All tests FAIL until builder refactors hooks/useBoard.ts to consume EventSourceProvider
  * context via useSSEEvent instead of calling useEventSource directly.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'

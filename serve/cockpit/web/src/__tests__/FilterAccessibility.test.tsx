@@ -1,5 +1,5 @@
 /**
- * P4-01 — Filter accessibility tests
+ * Filter accessibility tests
  *
  * Covers all 9 AC items for filter accessibility (td:0 "all fail" AC is meta):
  *   AC1 (td:2) — Toggle button has aria-expanded reflecting panelOpen state
@@ -12,7 +12,6 @@
  *   AC8 (td:2) — Focus returns to toggle button on collapse (programmatic restoration)
  *   AC9 (td:2) — All filter controls have explicit accessible labels (text input, priority select, tags multi-select)
  *
- * All tests FAIL (RED) — no accessibility attributes exist on FilterPanel or the toggle button.
  *
  * Strategy:
  *   - AC1, AC2, AC4, AC5, AC6: KanbanBoard + mocked FilterPanel (for toggle/aria-live/debounce)

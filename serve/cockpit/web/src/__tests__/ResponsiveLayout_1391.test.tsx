@@ -14,7 +14,6 @@
  *   cp .owlbear/scratch/1391-e2e-v2.spec.ts serve/cockpit/web/e2e/responsive-layout-1391.spec.ts
  * These static-analysis tests provide AC1–AC4 coverage that can be verified without a layout engine.
  *
- * All tests FAIL against the current implementation:
  *   - Shell.css has zero @media rules (fixed grid only: 56px 1fr 360px).
  *   - Card.tsx PRIORITY_COLORS uses hardcoded hex values (#e00000, #ff8000, #ffcc00, #0066cc, #888888).
  *

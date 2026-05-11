@@ -4,7 +4,6 @@
  * AC2 (td:2): Shared polling utility extracted — inFlight guard, boolean
  * coalesce, AbortController cleanup, onSuccess/onError callbacks.
  *
- * All tests FAIL until the builder creates hooks/usePollingFetch.ts.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'

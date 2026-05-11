@@ -1,5 +1,5 @@
 /**
- * P1-09: Test Cockpit health false-OK prevention
+ * Test Cockpit health false-OK prevention
  *
  * Exercises the full fetch→render chain at Shell integration level:
  *   window.fetch → usePollingFetch → useScanPolling → Shell → HealthBadge
@@ -10,12 +10,10 @@
  * Error envelope fixture: {"code": "...", "message": "..."} with non-2xx status
  * matches the backend error envelope shape from #1371.
  *
- * Bug being tested (all tests fail until #1373 fixes Shell):
  *   Shell.tsx L22 omits `error` from useScanPolling destructure, so a failed
  *   scan silently produces items=[] → isLoading=false → HealthBadge renders
  *   data-health="green" — a false-OK. No error state is rendered.
  *
- * All tests fail until #1373 implements the fix.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, waitFor, fireEvent } from '@testing-library/react'

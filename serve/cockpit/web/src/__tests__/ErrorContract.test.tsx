@@ -1,13 +1,11 @@
 /**
- * P1-11 Test Cockpit frontend error-contract adoption
+ * Test Cockpit frontend error-contract adoption
  *
- * All tests FAIL until #1375 implements consistent error-envelope parsing.
  *
  * Backend emits two error shapes:
  *   - Domain errors (KanbanError subclasses): {code: string, message: string}
  *   - FastAPI HTTPException:                  {detail: string}
  *
- * Current failing behaviors (all tests fail against pre-#1375 code):
  *   1. usePollingFetch throws status-only error — response body never read
  *   2. DetailTab.runMutation ignores response body for non-422/409/404 status codes
  *   3. ResolveModal hardcodes 'Failed to resolve decision request.' for all errors

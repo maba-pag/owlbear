@@ -1,4 +1,4 @@
-// AC4 regression guard for #1395: P3-05 Cockpit accessibility and PDS verification gate
+// Cockpit accessibility and PDS verification gate
 //
 // AC4 (td:2): PDS verification scans component source files (src/components/ **\/*.tsx,
 //   src/*.tsx) and rejects hardcoded hex color values in JSX style props or

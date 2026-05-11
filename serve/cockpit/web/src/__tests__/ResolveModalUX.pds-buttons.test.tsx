@@ -4,7 +4,6 @@
  * AC4 (td:2): ResolveModal submit and cancel controls use <PButton> (not raw
  * <button>): submit with variant="primary", cancel with variant="secondary".
  *
- * All tests FAIL against the current implementation which uses raw <button>
  * elements. Builder must replace both controls with PDS PButton components.
  *
  * AC2 v2 (keyword assertions) and AC5 v2 (Shell close-cycle) are excluded

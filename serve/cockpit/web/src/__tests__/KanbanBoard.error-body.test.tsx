@@ -1,5 +1,5 @@
 /**
- * P1-12 Implement Cockpit frontend error-contract adoption
+ * Implement Cockpit frontend error-contract adoption
  *
  * KanbanBoard.tsx gaps — handleDrop and handleTransitionClick both hardcode
  * status-only error strings without reading the response body:
@@ -9,7 +9,6 @@
  * After #1375, both handlers adopt getResponseErrorMessage() so the body
  * message/detail field appears in the move-error element.
  *
- * All tests FAIL until #1375 replaces the status-only fallback strings with
  * getResponseErrorMessage() calls.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'

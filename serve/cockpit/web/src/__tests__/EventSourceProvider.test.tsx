@@ -9,7 +9,6 @@
  * AC6 (td:1): App.tsx wiring — covered in App_1276.test.tsx
  * AC7 (td:0): Existing hooks unchanged — no tests needed
  *
- * All 27 tests FAIL until builder creates hooks/EventSourceProvider.tsx.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'

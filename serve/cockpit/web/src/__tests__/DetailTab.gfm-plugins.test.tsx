@@ -2,7 +2,6 @@
  * G1 — remark-gfm + rehype-sanitize wiring
  *
  * Verifies that DetailTab passes the correct markdown plugins to ReactMarkdown.
- * These tests are RED (failing) until the builder installs remark-gfm and
  * rehype-sanitize and wires them into the <ReactMarkdown> call (G1, research doc).
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'

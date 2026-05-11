@@ -1,5 +1,5 @@
 /**
- * P4-01 — Filter accessibility tests
+ * Filter accessibility tests
  * Part 2 of 2 — Real FilterPanel (unmocked) for panel-level assertions
  *
  * vi.mock() is hoisted by Vitest — dynamic import() in a file with vi.mock always resolves
@@ -12,7 +12,6 @@
  *   AC8 (td:2) — Focus returns to toggle button on collapse (programmatic restoration)
  *   AC9 (td:2) — All filter controls have explicit accessible labels
  *
- * All tests FAIL (RED) — no accessibility attributes or behaviors exist yet.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, fireEvent, waitFor } from '@testing-library/react'

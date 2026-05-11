@@ -1,5 +1,5 @@
 /**
- * Third retry cycle for #1457: P4-19 Expose maintenance cleanup through Cockpit
+ * Expose maintenance cleanup through Cockpit
  *
  * Shell.tsx function-coverage uplift — exercises all 13 uncovered anonymous
  * functions identified via coverage-final.json:
