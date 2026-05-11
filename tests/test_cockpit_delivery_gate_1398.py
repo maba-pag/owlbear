@@ -35,16 +35,39 @@ def _step_by_name(steps: list[dict[str, Any]], name: str) -> dict[str, Any]:
     raise AssertionError(f"Expected workflow step named {name!r}.")
 
 
+def _step_index_by_name(steps: list[dict[str, Any]], name: str) -> int:
+    """Return the index of a step by exact display name."""
+    for index, step in enumerate(steps):
+        if step.get("name") == name:
+            return index
+    raise AssertionError(f"Expected workflow step named {name!r}.")
+
+
 class TestFromAC_CockpitDeliveryGateWorkflow:
     """AC1/AC2/AC3/AC5: workflow must enforce cockpit frontend quality gates."""
 
     def test_sync_workflow_runs_cockpit_vitest_before_commit(self) -> None:
-        """AC1/AC5: sync-to-main must run `npm test` in `serve/cockpit/web`."""
+        """AC1/AC5: sync-to-main must run cockpit build and Vitest before commit."""
         workflow = _load_sync_workflow()
         steps = _sync_job_steps(workflow)
+
+        commit_index = _step_index_by_name(steps, "Commit")
+
+        build_step = _step_by_name(steps, "Build cockpit SPA")
+        assert build_step.get("working-directory") == "serve/cockpit/web", (
+            "Build cockpit SPA must run in serve/cockpit/web."
+        )
+        assert "npm run build" in str(build_step.get("run", "")), (
+            "Build cockpit SPA must run `npm run build` for cockpit frontend quality gate."
+        )
+        build_index = _step_index_by_name(steps, "Build cockpit SPA")
+        assert build_index < commit_index, (
+            "Build cockpit SPA must run before the consumer branch commit step."
+        )
+
         vitest_steps = [
-            step
-            for step in steps
+            (index, step)
+            for index, step in enumerate(steps)
             if "npm test" in str(step.get("run", ""))
             and step.get("working-directory") == "serve/cockpit/web"
         ]
@@ -52,15 +75,20 @@ class TestFromAC_CockpitDeliveryGateWorkflow:
             "sync-to-main must run Vitest (`npm test`) inside serve/cockpit/web "
             "before the consumer branch commit."
         )
+        assert all(index < commit_index for index, _ in vitest_steps), (
+            "All cockpit Vitest steps must run before the consumer branch commit step."
+        )
 
     def test_sync_workflow_runs_cockpit_playwright_e2e_distinct_from_excalidraw(self) -> None:
         """AC1/AC5: workflow needs a cockpit `npm run test:e2e` step, not only Excalidraw Playwright."""
         workflow = _load_sync_workflow()
         steps = _sync_job_steps(workflow)
 
+        commit_index = _step_index_by_name(steps, "Commit")
+
         cockpit_e2e_steps = [
-            step
-            for step in steps
+            (index, step)
+            for index, step in enumerate(steps)
             if "npm run test:e2e" in str(step.get("run", ""))
             and step.get("working-directory") == "serve/cockpit/web"
         ]
@@ -68,17 +96,32 @@ class TestFromAC_CockpitDeliveryGateWorkflow:
             "sync-to-main must run cockpit Playwright E2E (`npm run test:e2e`) in "
             "serve/cockpit/web; Excalidraw export Playwright is not a substitute."
         )
+        assert all(index < commit_index for index, _ in cockpit_e2e_steps), (
+            "All cockpit Playwright E2E steps must run before the consumer branch commit step."
+        )
 
     def test_sync_workflow_disallows_build_gate_bypass_when_sync_cockpit_true(self) -> None:
-        """AC3/AC5: cockpit gate conditions must not depend on a bypass input."""
+        """AC3/AC5: cockpit quality gate conditions must not depend on build_cockpit."""
         workflow = _load_sync_workflow()
         steps = _sync_job_steps(workflow)
 
-        gated_step_names = [
+        explicitly_gated = {
+            "Setup Node.js",
             "Build cockpit SPA",
             "Assert SPA bundle exists",
             "Stage built SPA bundle",
-        ]
+        }
+        dynamic_cockpit_test_steps = {
+            str(step.get("name", ""))
+            for step in steps
+            if step.get("working-directory") == "serve/cockpit/web"
+            and (
+                "npm test" in str(step.get("run", ""))
+                or "npm run test:e2e" in str(step.get("run", ""))
+            )
+        }
+        gated_step_names = sorted(explicitly_gated | dynamic_cockpit_test_steps)
+
         for name in gated_step_names:
             step = _step_by_name(steps, name)
             if_expr = str(step.get("if", ""))
@@ -98,6 +141,12 @@ class TestFromAC_CockpitPackagingShape:
         """AC2/AC4: dist index is verified and the dist tree is staged for sync."""
         workflow = _load_sync_workflow()
         steps = _sync_job_steps(workflow)
+
+        build_index = _step_index_by_name(steps, "Build cockpit SPA")
+        assert_index = _step_index_by_name(steps, "Assert SPA bundle exists")
+        assert build_index < assert_index, (
+            "Assert SPA bundle exists must run after Build cockpit SPA."
+        )
 
         assert_step = _step_by_name(steps, "Assert SPA bundle exists")
         assert "serve/cockpit/dist/index.html" in str(assert_step.get("run", "")), (
