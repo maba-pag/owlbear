@@ -232,6 +232,16 @@ describe('TestFromAC_CleanupPanel', () => {
       const { container } = renderPanel()
       expect(container.querySelector('[data-testid="cleanup-skipped-list"]')).toBeNull()
     })
+
+    it('AC 3c-completeness: renders all skipped items — full-list count equals fixture length', () => {
+      // Discriminating test: truncating renderSkippedItems() to first N items would fail.
+      // RESULT_WITH_SKIPPED has 7 items; only TASK-099 and TASK-100 are checked individually
+      // elsewhere — this assertion proves the remaining 5 entries are also rendered.
+      mockHook({ phase: 'done', results: RESULT_WITH_SKIPPED })
+      const { container } = renderPanel()
+      const items = container.querySelectorAll('[data-testid="cleanup-skipped-list"] li')
+      expect(items).toHaveLength(RESULT_WITH_SKIPPED.skipped_items.length) // 7
+    })
   })
 
   // ─── AC 3c: dismiss button in done state ─────────────────────────────────

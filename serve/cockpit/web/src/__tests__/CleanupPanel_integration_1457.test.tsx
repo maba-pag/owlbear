@@ -155,6 +155,20 @@ describe('TestFromAC_CleanupPanel_Integration', () => {
       expect(container.querySelector('[data-testid="cleanup-skipped-list"]')).toBeNull()
     })
 
+    it('AC 3c-completeness: renders all skipped items — full-list count equals fixture length', async () => {
+      // Discriminating test: truncating renderSkippedItems() to first N items would fail.
+      // RESULT_FULL has 2 skipped items; this proves both are rendered.
+      vi.mocked(cleanupTasks).mockResolvedValue(RESULT_FULL)
+      const { container } = renderPanel()
+      fireEvent.click(container.querySelector('[data-testid="cleanup-button"]')!)
+      fireEvent.click(container.querySelector('[data-testid="cleanup-confirm-btn"]')!)
+      await waitFor(() => {
+        expect(container.querySelector('[data-testid="cleanup-skipped-list"]')).not.toBeNull()
+      })
+      const items = container.querySelectorAll('[data-testid="cleanup-skipped-list"] li')
+      expect(items).toHaveLength(RESULT_FULL.skipped_items.length) // 2
+    })
+
     it('dismiss button in done state returns to idle', async () => {
       vi.mocked(cleanupTasks).mockResolvedValue(RESULT_EMPTY)
       const { container } = renderPanel()
