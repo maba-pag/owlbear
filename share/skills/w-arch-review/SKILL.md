@@ -73,7 +73,7 @@ Assess the task against `r-architecture-standards` and general architectural pri
     | CODEPATH | FAILURE MODE | EXCEPTION | HANDLED? | USER IMPACT |
     |----------|--------------|-----------|----------|-------------|
 
-12. **Decision-request verification** — if the task references `.owlbear/research/*.md` or is tagged `research`, check the task body for a resolved DR (resolution is automatic at pick time). No approved DR for T3 research = use the REJECT path.
+12. **Decision-request verification** — if the task references `.owlbear/research/*.md` or is tagged `research`, check the task body for a resolved DR after Cockpit decision resolution applies the response. No approved DR for T3 research = use the REJECT path.
 
 13. **User-action detection** — Does this task require a human physical action with no testable Python interface? Apply the M/S/C rule in order:
     - **Counter-signals (C) — exit immediately if ANY present:** (C1) AC defines a function signature, importable module, or assertion target; (C2) AC specifies expected test outcomes; (C3) task already tagged `type:test` or `type:config`

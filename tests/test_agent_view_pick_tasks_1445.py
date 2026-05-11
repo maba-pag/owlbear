@@ -7,9 +7,8 @@ AC-2 (td:2): Unblocked backlog task with expired claimed_at appears in a wave
 AC-3 (td:1): Pending DR with response=approved stays in decisions/pending;
              linked task body and blocked field are unchanged.
 
-All tests must FAIL against the current implementation and pass once the
-builder removes the resolve_pending_drs call and switches to local
-_claim_is_active filtering.
+These tests pin the read-only dispatch contract and expired-claim filtering
+that were fixed for task #1445.
 """
 
 from __future__ import annotations
@@ -127,8 +126,8 @@ class TestFromAC_PickTasksReadOnly:
         Injects a mock owlbear_kanban.decisions module via sys.modules and
         asserts that resolve_pending_drs is never invoked during pick_tasks.
 
-        FAILS today because the current pick_tasks implementation imports and
-        calls decisions.resolve_pending_drs at lines 384-391 of agent_view.py.
+        Guards against reintroducing a decisions.resolve_pending_drs call into
+        the pick_tasks read path.
         """
         decisions_mock = _stub_decisions_module()
         monkeypatch.setitem(sys.modules, "owlbear_kanban.decisions", decisions_mock)
@@ -185,9 +184,8 @@ class TestFromAC_PickTasksExpiredClaim:
     def test_expired_claim_task_included_in_waves(self, tmp_path: Path) -> None:
         """Happy path: task with claimed_at far in the past appears in a wave.
 
-        FAILS today because list_tasks(unclaimed=True) excludes every task
-        that has a non-null claimed_at, regardless of whether the claim is
-        expired.  The task therefore never enters the dispatch pipeline.
+        Guards against using list_tasks(unclaimed=True), which would exclude
+        every task with a non-null claimed_at before timeout-aware filtering.
         """
         board = _make_board(tmp_path)
         _write_task(board, task_id=1, status="backlog", claimed_at=_EXPIRED_TS)
@@ -206,8 +204,8 @@ class TestFromAC_PickTasksExpiredClaim:
         still carries the original expired timestamp — i.e. pick_tasks did not
         write to the task file.
 
-        FAILS today on the first assertion (expired tasks excluded by current
-        list_tasks(unclaimed=True) call).
+        Guards against expired tasks being excluded before the timeout-aware
+        filter runs.
         """
         expired_ts_raw = "2020-01-01T00:00:00+00:00"
         board = _make_board(tmp_path)
@@ -234,7 +232,7 @@ class TestFromAC_PickTasksExpiredClaim:
         Default claim_timeout is 1h.  A task claimed (1h + 1s) ago must be
         considered expired and returned in a wave.
 
-        FAILS today: the unclaimed=True filter excludes any non-null claimed_at.
+        Guards against filtering solely on claimed_at being non-null.
         """
         just_expired = datetime.now(UTC) - timedelta(hours=1, seconds=1)
         just_expired_quoted = f'"{just_expired.isoformat()}"'
@@ -256,7 +254,7 @@ class TestFromAC_PickTasksExpiredClaim:
         Verifies there is no per-task short-circuit that would stop processing
         after the first expired-claim task.
 
-        FAILS today: all are excluded by list_tasks(unclaimed=True).
+        Guards against per-task short-circuiting or claimed_at-only filtering.
         """
         board = _make_board(tmp_path)
         for tid in (4, 5, 6):
@@ -311,9 +309,8 @@ class TestFromAC_PickTasksDRImmutability:
     def test_approved_dr_stays_in_pending_directory(self, tmp_path: Path) -> None:
         """DR with response=approved must remain in decisions/pending after pick_tasks.
 
-        FAILS today because pick_tasks calls the real resolve_pending_drs, which
-        moves approved DR files from decisions/pending/ to decisions/resolved/ and
-        calls edit_task to clear the linked task's blocked flag.
+        Guards against reintroducing automatic DR resolution into pick_tasks,
+        which must leave decision files and linked task state untouched.
         """
         board = _make_board(tmp_path)
         _write_task(board, task_id=1, blocked="true", claimed_at="null")
@@ -340,9 +337,8 @@ class TestFromAC_PickTasksDRImmutability:
     def test_linked_task_not_modified_by_pick_tasks(self, tmp_path: Path) -> None:
         """Linked task body and blocked field must be unchanged after pick_tasks.
 
-        FAILS today because resolve_pending_drs (called inside pick_tasks) appends
-        a summary to the task body and calls edit_task(task_id, blocked=False),
-        changing the blocked field and the body content.
+        Guards against reintroducing automatic DR resolution into pick_tasks,
+        which would append a summary and clear the linked task's blocked flag.
         """
         board = _make_board(tmp_path)
         task_path = _write_task(board, task_id=2, blocked="true", claimed_at="null")

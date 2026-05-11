@@ -79,6 +79,30 @@ Each task must be:
 - **Small:** ~2 hours of focused work max
 - **TDD paired:** test task before implementation task
 
+### Task Complexity Budget
+
+Draft tasks to fit this budget before asking the architect to refine them:
+
+- **AC target:** 3 acceptance criteria or fewer.
+- **AC hard cap:** 5 acceptance criteria. If a task needs more, split it.
+- **High-proof budget:** at most 2 AC lines that likely require multi-case proof, browser/runtime proof, concurrency proof, rollback proof, migration proof, or broad downstream-impact proof.
+- **Proof-mode budget:** one primary proof mode per task. Split when a task needs more than one of: unit/static proof, integration proof, E2E/browser proof, data-safety/rollback proof, migration/downstream regression proof.
+- **Failure-domain budget:** one failure-domain family per task. Split algorithm changes, config semantics, persistence, event/activity logging, rollback/atomicity, UI layout, accessibility, and documentation into separate tasks unless one is a trivial consequence of the other.
+
+Use an explicit `Complexity waiver:` note only when splitting would make the work less verifiable. The waiver must name the budget exceeded and why the task is still expected to finish inside one pipeline pass.
+
+### Mandatory Split Triggers
+
+Split the planned task when any trigger applies:
+
+- More than 5 AC lines, or more than 3 AC lines with broad surface words such as "dashboard", "coherent experience", "end-to-end", or "all surfaces".
+- More than 2 likely high-proof AC lines.
+- More than one primary proof mode is needed.
+- More than one failure-domain family is present.
+- A proof artifact would be created only in `.owlbear/scratch/`, or the responsible agent cannot write the final tracked location. Create a separate builder-owned promotion/proof task with a concrete tracked deliverable, or choose a proof path the responsible agent can own.
+- A behavior-changing refactor changes existing semantics used by neighboring durable tests. Add a downstream-impact scan to the task body, or split the migration/update work into its own task.
+- An AC line combines behavior plus safety recovery, such as success-path emission and rollback-on-emit-failure. Split success behavior from failure recovery unless the recovery proof is one small smoke assertion.
+
 Ordering heuristic:
 
 1. Model/schema tasks first (data structures)
@@ -91,7 +115,9 @@ Ordering heuristic:
 When drafting AC for planned tasks:
 
 - Validate each AC block against `h-ac-quality` (authoritative checklist) before task creation.
+- Apply the Task Complexity Budget before AC quality validation; clear wording does not make an oversized task acceptable.
 - AC defines behaviors and interfaces, not file paths or implementation details.
+- File paths are allowed for proof artifacts or process deliverables when the path itself is the acceptance surface; avoid prescribing production implementation locations.
 - AC must be understandable without reading the codebase first.
 - Every task must include explicit scope boundaries (in-scope and out-of-scope).
 - No implementation prescriptions: describe WHAT must be true, not HOW to code it.
@@ -120,6 +146,9 @@ Before creating any task, validate every planned task:
 
 - **Reject `TEMP-*` titles** — placeholder artifacts, not legitimate tasks.
 - **Reject empty bodies** — no AC or scoped content means the task is invalid.
+- **Reject oversized tasks** — no task may exceed the Task Complexity Budget unless it has a `Complexity waiver:` note.
+- **Reject scratch-only proof** — if required proof can only live in `.owlbear/scratch/`, split or add a tracked-artifact deliverable owned by an agent that can write it.
+- **Reject hidden downstream impact** — behavior-changing refactors must name affected durable suites/consumers or include a downstream-impact scan task.
 
 If a planned task fails: refine the title and body or stop. Never create a placeholder task.
 
@@ -213,6 +242,10 @@ Append to parent task body (if dispatched with parent ID):
 - [ ] Announced decomposition plan and expected count
 - [ ] Every impl task has a preceding test task with dependency (decomposition mode only)
 - [ ] No task has multiple responsibilities
+- [ ] Every task fits the Task Complexity Budget or has a `Complexity waiver:` note
+- [ ] No task mixes multiple proof modes without being split
+- [ ] No task mixes multiple failure-domain families without being split
+- [ ] Refactor tasks name downstream-impact scope or create a separate scan/update task
 - [ ] Sequence numbers unique and zero-padded (decomposition mode only)
 - [ ] Priority reflects blocking potential
 - [ ] Tags include `phase-{n}` + category (decomposition mode only)
@@ -229,4 +262,6 @@ Append to parent task body (if dispatched with parent ID):
 - **Forgetting TDD pairs:** Every implementation task needs a preceding test task. Missing these causes pipeline violations downstream.
 - **Cross-phase dependencies:** These create long dependency chains that block parallelism. Use only when strictly necessary.
 - **Placeholder tasks:** Never create tasks with vague titles or empty bodies — they accumulate as board noise.
+- **Broad AC piles:** Many clear AC lines can still create an unclear task when they require different proof modes or failure domains. Split by proof burden, not just by wording quality.
+- **Scratch-only proof:** A scratch artifact is not a durable acceptance deliverable. Plan a tracked proof location and responsible owner before task creation.
 - **Body content in `create_task`:** Keep AC concise. For complex multi-line AC, use the temp-file pattern (see `h-mcp-kanban`).
