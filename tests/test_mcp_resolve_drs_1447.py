@@ -478,3 +478,188 @@ class TestFromAC_PickTasksNoResolve:
         assert "resolve_pending_drs" not in src, (
             "AC-5: AgentView.pick_tasks must NOT call resolve_pending_drs"
         )
+
+
+# ---------------------------------------------------------------------------
+# Coverage uplift: server utility paths not reached by AC test classes
+# ---------------------------------------------------------------------------
+
+
+class TestCoverageUplift_ServerUtils:
+    """Coverage uplift tests for server.py utility paths (builder Required Follow-up).
+
+    These tests exercise code paths that are not covered by the AC test classes above
+    and bring owlbear_mcp_kanban.server module coverage from 86% to >=90%.  All tests
+    should PASS since the implementation already exists.
+    """
+
+    def test_coerce_to_str_converts_int_to_string(self) -> None:
+        """_coerce_to_str must convert int input to str (line 48)."""
+        from owlbear_mcp_kanban.server import _coerce_to_str  # noqa: PLC0415
+
+        assert _coerce_to_str(42) == "42"
+        assert isinstance(_coerce_to_str(0), str)
+
+    def test_map_kanban_error_raises_tool_error_with_json_payload(self) -> None:
+        """_map_kanban_error must raise ToolError carrying JSON code+message (lines 137-140)."""
+        import json  # noqa: PLC0415
+
+        from mcp.server.fastmcp.exceptions import ToolError  # noqa: PLC0415
+        from owlbear_kanban.errors import KanbanError  # noqa: PLC0415
+        from owlbear_mcp_kanban.server import _map_kanban_error  # noqa: PLC0415
+
+        exc = KanbanError("ERR_NOT_FOUND", "Task not found")
+        with pytest.raises(ToolError) as exc_info:
+            _map_kanban_error(exc)
+        payload = json.loads(str(exc_info.value))
+        assert payload["code"] == "ERR_NOT_FOUND"
+        assert payload["message"] == "Task not found"
+
+    def test_app_ctx_contains_always_returns_false(
+        self, app_ctx: AppContext
+    ) -> None:
+        """AppContext.__contains__ must always return False (lines 143-146)."""
+        assert "anything" not in app_ctx
+        assert 42 not in app_ctx
+        assert None not in app_ctx
+
+    def test_apply_tool_exclusions_exception_swallowed(self) -> None:
+        """_apply_tool_exclusions must swallow remove_tool failures (lines 160-161)."""
+        from owlbear_mcp_kanban.server import _apply_tool_exclusions  # noqa: PLC0415
+
+        mock_server = MagicMock()
+        mock_server.remove_tool.side_effect = RuntimeError("tool not found")
+
+        with patch.dict("os.environ", {"KANBAN_TOOLS_EXCLUDE": "nonexistent_tool"}):
+            result = _apply_tool_exclusions(mock_server)
+
+        assert result == set(), (
+            "Failed removal must not add tool to excluded set; "
+            f"got {result!r}"
+        )
+
+    def test_to_single_task_response_accepts_kanban_task_input(self) -> None:
+        """_to_single_task_response must handle KanbanTask input (line ~258)."""
+        from owlbear_mcp_kanban.models import KanbanTask  # noqa: PLC0415
+        from owlbear_mcp_kanban.server import _to_single_task_response  # noqa: PLC0415
+
+        task = KanbanTask(
+            id=1,
+            title="Coverage task",
+            status="todo",
+            priority="important",
+            created="2026-01-01T00:00:00+00:00",
+            updated="2026-01-01T00:00:00+00:00",
+        )
+        result = _to_single_task_response(task)
+        assert result.id == 1
+        assert result.title == "Coverage task"
+
+    def test_to_single_task_response_accepts_dict_input(self) -> None:
+        """_to_single_task_response must handle dict input (line ~262)."""
+        from owlbear_mcp_kanban.server import _to_single_task_response  # noqa: PLC0415
+
+        record = {
+            "id": 7,
+            "title": "Dict input task",
+            "status": "research",
+            "priority": "important",
+            "created": "2026-01-01T00:00:00+00:00",
+            "updated": "2026-01-01T00:00:00+00:00",
+            "tags": [],
+            "depends_on": [],
+            "blocked": False,
+            "block_reason": None,
+            "body": None,
+            "parent": None,
+            "guidance": [],
+        }
+        result = _to_single_task_response(record)
+        assert result.id == 7
+        assert result.title == "Dict input task"
+
+    @pytest.mark.asyncio
+    async def test_show_validated_file_not_found_raises_tool_error(
+        self, app_ctx: AppContext
+    ) -> None:
+        """_show_validated must convert FileNotFoundError to ToolError (lines 268-270)."""
+        from mcp.server.fastmcp.exceptions import ToolError  # noqa: PLC0415
+        from owlbear_mcp_kanban.server import _show_validated  # noqa: PLC0415
+
+        with patch.object(
+            app_ctx.engine,
+            "show_task",
+            side_effect=FileNotFoundError("task 999 not found"),
+        ), pytest.raises(ToolError):
+            await _show_validated(app_ctx, 999)
+
+    @pytest.mark.asyncio
+    async def test_resolve_drs_kanban_error_raises_tool_error(
+        self, app_ctx: AppContext
+    ) -> None:
+        """resolve_drs must convert KanbanError to ToolError (lines 380-381)."""
+        import owlbear_mcp_kanban.server as server_mod  # noqa: PLC0415
+
+        from mcp.server.fastmcp.exceptions import ToolError  # noqa: PLC0415
+        from owlbear_kanban.errors import KanbanError  # noqa: PLC0415
+
+        fn = getattr(server_mod, "resolve_drs", None)
+        assert fn is not None, "resolve_drs must be registered"
+
+        ctx = _make_mcp_ctx(app_ctx)
+        with patch(
+            "owlbear_mcp_kanban.server.decisions.resolve_pending_drs",
+            side_effect=KanbanError("ERR_NOT_FOUND", "Decisions dir missing"),
+        ), pytest.raises(ToolError):
+            await fn(ctx)
+
+    @pytest.mark.asyncio
+    async def test_edit_task_kanban_error_raises_tool_error(
+        self, app_ctx: AppContext
+    ) -> None:
+        """edit_task must convert KanbanError to ToolError (lines 479-480)."""
+        import owlbear_mcp_kanban.server as server_mod  # noqa: PLC0415
+
+        from mcp.server.fastmcp.exceptions import ToolError  # noqa: PLC0415
+        from owlbear_kanban.errors import KanbanError  # noqa: PLC0415
+
+        ctx = _make_mcp_ctx(app_ctx)
+        mock_av = MagicMock()
+        mock_av.edit_task.side_effect = KanbanError(
+            "ERR_INVALID_TITLE", "title cannot be empty"
+        )
+
+        with patch.object(app_ctx.engine, "agent_view", return_value=mock_av), pytest.raises(ToolError):
+            await server_mod.edit_task(ctx, id="1", title="x")
+
+    @pytest.mark.asyncio
+    async def test_start_work_value_error_raises_tool_error(
+        self, app_ctx: AppContext
+    ) -> None:
+        """start_work must convert ValueError to ToolError (lines 516-517)."""
+        import owlbear_mcp_kanban.server as server_mod  # noqa: PLC0415
+
+        from mcp.server.fastmcp.exceptions import ToolError  # noqa: PLC0415
+
+        ctx = _make_mcp_ctx(app_ctx)
+        mock_av = MagicMock()
+        mock_av.start_work.side_effect = ValueError("already claimed by another")
+
+        with patch.object(app_ctx.engine, "agent_view", return_value=mock_av), pytest.raises(ToolError):
+            await server_mod.start_work(ctx, id="1")
+
+    @pytest.mark.asyncio
+    async def test_end_work_value_error_raises_tool_error(
+        self, app_ctx: AppContext
+    ) -> None:
+        """end_work must convert ValueError to ToolError (lines 558-559)."""
+        import owlbear_mcp_kanban.server as server_mod  # noqa: PLC0415
+
+        from mcp.server.fastmcp.exceptions import ToolError  # noqa: PLC0415
+
+        ctx = _make_mcp_ctx(app_ctx)
+        mock_av = MagicMock()
+        mock_av.end_work.side_effect = ValueError("outcome mismatch")
+
+        with patch.object(app_ctx.engine, "agent_view", return_value=mock_av), pytest.raises(ToolError):
+            await server_mod.end_work(ctx, id="1", note="done", outcome="success")
