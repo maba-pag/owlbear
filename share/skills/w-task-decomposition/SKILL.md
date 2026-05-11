@@ -140,6 +140,22 @@ Build an explicit dependency graph:
 
 See `r-project-standards` for the full priority scheme and tag taxonomy.
 
+## Step 5c — Assign Proof Bundle
+
+Assign one proof bundle to every planned task before creation.
+
+**Selection guide:**
+
+| Signal | Likely bundle |
+|--------|---------------|
+| Docs/process-only change with no executable behavior change | `skip` |
+| Change validated by pre-existing named tests only | `existing` |
+| Narrow behavior change needing a small focused test slice | `smoke` |
+| New/changed behavior requiring full task-scoped TDD proof | `behavioral` |
+| High-risk/core-path change requiring full-suite scrutiny | `critical` |
+
+If the bundle is `existing`, capture proof boundaries as `Existing proof scope:` using a glob or explicit file list.
+
 ## Step 5a — Validate Planned Tasks
 
 Before creating any task, validate every planned task:
@@ -188,7 +204,7 @@ Call `askQuestions` with two options:
 
 **Shortcut naming:** preserve the caller-provided title verbatim (no phase prefix).
 
-Create each task via `create_task` with title, priority, tags, depends_on, body containing AC, and `parent` when provided by the caller (shortcut mode). Do not pass `status` to `create_task`; tasks are created at `BoardConfig.entry_status`.
+Create each task via `create_task` with title, priority, tags, depends_on, body containing AC, and `parent` when provided by the caller (shortcut mode). In Step 5/6 body assembly, include `Proof bundle: {value}` for every task. If `{value}` is `existing`, also include `Existing proof scope: {glob-or-file-list}`. Do not pass `status` to `create_task`; tasks are created at `BoardConfig.entry_status`.
 
 - Decomposition mode default status: `research`; create and leave at entry status.
 - Shortcut mode status: caller-provided status, default `backlog` (or `research` for researcher follow-ups). For `backlog`, create first, then call `move_task(id={created_id}, status="backlog")`.
