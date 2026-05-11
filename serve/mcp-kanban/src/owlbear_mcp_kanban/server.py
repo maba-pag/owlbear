@@ -557,7 +557,7 @@ async def end_work(  # noqa: PLR0913
     resolved_id = parse_task_id(id, field="id")
 
     target_status: str | None = None
-    if outcome == "reject":
+    if outcome in {"success", "block", "reject"}:
         target_status = move_to
 
     try:
