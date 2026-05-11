@@ -305,7 +305,8 @@ class AgentView:
           1. **Validate** — ensure every status in ``config.pipeline.statuses``
               has an ``agent_map`` entry.
 
-          2. **Filter** — exclude claimed, archived, ``blocked=True``, and
+          2. **Filter** — exclude tasks with an active claim (per configured
+           ``claim_timeout``), archived, ``blocked=True``, and
            ``dep_status="blocked"`` tasks; rehydrate each candidate with
            ``show_task()`` to obtain the full body, skip any whose
            ``status == "archived"`` (post-rehydrate guard), then apply the
