@@ -1,36 +1,36 @@
 /* PDS Design Tokens — Light Theme CSS Custom Properties
- * Mapped from @porsche-design-system/components-react theme exports (themeLight*)
- * Placeholder hex values aligned with PDS v3 light theme; update if PDS ships
- * a static token extract in a future release.
+ * Values extracted from @porsche-design-system/components-react/styles
+ * themeLight object (PDS v4). Regenerate via:
+ *   node -e "const t=require('@porsche-design-system/components-react/styles'); console.log(JSON.stringify(t.themeLight,null,2))"
  */
 :root {
   /* Primary */
-  --pds-theme-light-primary: #010205;
+  --pds-theme-light-primary: hsl(225 66.7% 1.2%);
 
   /* Background */
-  --pds-theme-light-background-base: #ffffff;
-  --pds-theme-light-background-surface: #f2f2f2;
-  --pds-theme-light-background-shading: rgba(1, 2, 5, 0.7);
+  --pds-theme-light-background-base: #fff;
+  --pds-theme-light-background-surface: hsl(240 10% 95%);
+  --pds-theme-light-background-shading: hsl(240 5.3% 14.9% / 0.5);
 
   /* Contrast */
-  --pds-theme-light-contrast-low: #e8e8e8;
-  --pds-theme-light-contrast-medium: #9b9b9b;
-  --pds-theme-light-contrast-high: #323232;
+  --pds-theme-light-contrast-low: hsl(240 5.3% 14.9% / 0.5);
+  --pds-theme-light-contrast-medium: hsl(240 6.1% 7% / 0.6);
+  --pds-theme-light-contrast-high: hsl(240 7.1% 11% / 0.7);
 
   /* Notification */
-  --pds-theme-light-notification-success: #018a16;
-  --pds-theme-light-notification-success-soft: #ebf9ec;
-  --pds-theme-light-notification-warning: #ff9b00;
-  --pds-theme-light-notification-warning-soft: #fff5e5;
-  --pds-theme-light-notification-error: #e00000;
-  --pds-theme-light-notification-error-soft: #fde8e8;
-  --pds-theme-light-notification-info: #0061bd;
-  --pds-theme-light-notification-info-soft: #e5f0fa;
+  --pds-theme-light-notification-success: hsl(115 77.5% 27.8%);
+  --pds-theme-light-notification-success-soft: hsl(109 100% 90% / 0.55);
+  --pds-theme-light-notification-warning: hsl(28 97.7% 34.1%);
+  --pds-theme-light-notification-warning-soft: hsl(40 100% 90% / 0.55);
+  --pds-theme-light-notification-error: hsl(357 78% 41%);
+  --pds-theme-light-notification-error-soft: hsl(0 100% 90% / 0.55);
+  --pds-theme-light-notification-info: hsl(228 83.2% 51%);
+  --pds-theme-light-notification-info-soft: hsl(211 100% 90% / 0.55);
 
   /* State */
-  --pds-theme-light-state-hover: rgba(1, 2, 5, 0.06);
-  --pds-theme-light-state-active: rgba(1, 2, 5, 0.16);
-  --pds-theme-light-state-focus: #010205;
-  --pds-theme-light-state-disabled: rgba(1, 2, 5, 0.3);
+  --pds-theme-light-state-hover: hsl(240 5% 70% / 0.148);
+  --pds-theme-light-state-active: hsl(240 5% 70% / 0.148);
+  --pds-theme-light-state-focus: #1A44EA;
+  --pds-theme-light-state-disabled: hsla(233, 6.6%, 23.9%, 0.412);
 }
 

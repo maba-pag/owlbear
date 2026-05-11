@@ -7,7 +7,6 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict
 
-from owlbear_cockpit import adapter
 from owlbear_cockpit.deps import get_view
 from owlbear_cockpit.view import CockpitView
 from owlbear_kanban.errors import (
@@ -157,7 +156,7 @@ def move_task(task_id: int, req: MoveRequest, view: _View) -> SingleTaskResponse
             user_message="Task was modified since your last load (stale snapshot)",
         )
 
-    transitions = adapter.valid_transitions(view.engine, task.status)
+    transitions = view.engine.valid_transitions(task.status)
     if req.status != "archived" and req.status not in transitions:
         raise ValidationError(
             code="ERR_INVALID_STATUS",
