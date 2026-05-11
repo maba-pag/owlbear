@@ -1200,8 +1200,9 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ## `Step 1a — Research task verification`
 - ## `Step 2 — Architect quality audit`
 - ## `Step 3 — Score and decide`
-- ## `Step 4 — Verify commits and commit task files`
+- ## `Step 4 — Verify upstream commits`
 - ## `Step 5 — Advance`
+- ## `Step 6 — Commit kanban state`
 - ## `Output Template`
 - ## `Verification Checklist`
 - ## `Known Pitfalls`

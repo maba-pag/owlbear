@@ -247,6 +247,7 @@ Rules:
 
 Rules:
 
+- **Status semantics.** `done` is the auditor queue, not closed work. `archived` is the board lifecycle closure. Pipeline agents before auditor must not archive normal tasks; the auditor archives or rejects tasks in `done`. Direct user-requested cleanup tasks created and completed outside the pipeline must not be left in `done` unless the intent is explicit auditor dispatch.
 - **Dirty-tree tolerance.** Never refuse work because of uncommitted changes in the working tree. Other agents' crash residue or kanban task file edits are not your concern. Proceed with your task, stage only your own files, and commit normally. The shared working tree is always potentially dirty — that is expected.
 - **Pre-advance verification.** Before calling `end_work`, verify your own domain for uncommitted files using a path-scoped check:
 
@@ -261,6 +262,7 @@ Rules:
    Use `git status --porcelain -- <domain-paths>` (with `--` pathspec separator). Do not use raw `git status --porcelain` for this check.
    If files appear in your domain, self-heal: stage and commit those files, then continue and call `end_work`.
 - **Commit gates advance.** If you created or modified files, commit them BEFORE calling `end_work`. No commit → no advance. If you have no file deliverables (pass-through, reviewer, orchestrator), skip.
+- **Auditor archive exception.** The auditor cannot commit archive state before `end_work`, because `end_work(outcome="success")` creates the archived task file from `done`. The auditor verifies upstream commits before `end_work`, then commits `.owlbear/kanban/` and any resolved decision files after the archive or reject mutation returns.
 - **Atomic single command.** Run stage + commit as one terminal invocation to prevent interleaving with concurrent agents: `git add <your-files> && git commit -m "type: description (#{id}, role)"`. Never split across separate commands.
 - **Scope to your own files.** Stage only files YOU created or modified in this task. Do not stage files from other agents or unrelated changes. Verify with `git diff --cached --name-only` if uncertain.
 - **Never push.** The user pushes manually.

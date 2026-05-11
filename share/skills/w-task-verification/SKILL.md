@@ -110,13 +110,27 @@ Thresholds (source of truth in `r-pipeline-protocol` → Confidence Thresholds):
 | ≥ .95 | Archive |
 | < .95 | Reject to backlog — if auditor catches it, the gap is structural |
 
-## Step 4 — Verify commits and commit task files
+## Step 4 — Verify upstream commits
 
 Upstream agents should have committed their deliverables before advancing.
 
 **Verify upstream commits:** For each task's deliverable files, confirm they appear in recent commits via `git log --oneline -5 -- <files>`. Uncommitted source deliverables are a quality gap — note in the audit report and flag as a process concern (do NOT silently commit other agents' source code).
 
-**Commit kanban state:** After archival, stage and commit kanban board + archived task files:
+Do not commit kanban state yet. The archive or reject mutation happens in Step 5, and the kanban files do not reflect the final auditor action until `end_work` returns.
+
+## Step 5 — Advance
+
+Include the audit section in your `end_work` note.
+
+Then advance based on confidence:
+
+- **≥ .95 — Archive:** via `end_work` (because the task is already in `done`, this archives it and releases the claim).
+
+- **< .95 — Reject to backlog:** via `end_work(outcome="reject", move_to="backlog")`.
+
+## Step 6 — Commit kanban state
+
+After `end_work` returns, stage and commit kanban board state plus any resolved decision files changed during the audit cycle. For archive, this captures the removed `done` task and the archived task file. For reject, this captures the updated active task file.
 
 ```shell
 git add .owlbear/kanban/ && git commit -m "chore: archive tasks {list} (auditor)"
@@ -125,16 +139,6 @@ git add .owlbear/kanban/ && git commit -m "chore: archive tasks {list} (auditor)
 Include resolved decision files if they changed state during this audit cycle. Stage only kanban/decision files — never source code or test files belonging to upstream agents.
 
 Before committing: verify with `git diff --cached --name-only` that only kanban/decision paths are staged.
-
-## Step 5 — Advance
-
-Include the audit section in your `end_work` note.
-
-Then advance based on confidence:
-
-- **≥ .95 — Archive:** via `end_work` (advances status + releases claim).
-
-- **< .95 — Reject to backlog:** via `end_work(outcome="reject", move_to="backlog")`.
 
 Return Channel A signal as final output — nothing else after it.
 
@@ -172,7 +176,7 @@ Append to task body before returning:
 
 If the audit section exceeds ~1500 tokens, write to `.owlbear/scratch/{id}-auditor.md` and reference it.
 
-After committing, append commit log:
+After committing, include the commit hash in Channel A or the final report. Do not reopen an archived task solely to append commit metadata.
 
 ```
 ## Commits
