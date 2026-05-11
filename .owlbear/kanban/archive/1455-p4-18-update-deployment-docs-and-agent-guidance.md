@@ -4,7 +4,7 @@ title: 'P4-18: Update deployment docs and agent guidance'
 status: archived
 priority: needed
 created: 2026-05-08T19:32:33.602172+00:00
-updated: 2026-05-11T17:35:06.637442+00:00
+updated: 2026-05-11T18:17:42.872320+00:00
 tags:
 - phase-4
 - scope:docs
@@ -363,24 +363,33 @@ Architecture review cycle 2 complete. Added AC6 covering `.owlbear/kanban/README
 [[2026-05-11]]
 ## Audit
 ### Regression Detection
-- quality-runner mode full: 4409 passed, 213 failed, 271 lint violations — all pre-existing background debt. Task changed only .md and .excalidraw files; zero task-caused regressions.
+- quality-runner mode full: 4421 passed, 206 failed, 4 skipped, 5 errors (51.89s)
+- baseline comparison: prior full run showed 203 failed / 5 errors — identical pre-existing background failures
+- task is docs-only (no Python/TS changes); failures are structurally unrelated
 - regression verdict: PASS
 
 ### Intent Verification
-- scope alignment: PASS (all changed files are docs/diagrams within scope:docs domain)
-- purpose match: PASS (deployment docs aligned with fixed-topology code reality per AC1-6)
-- extraneous scope: none
+- scope alignment: PASS (all changed files are docs/guidance: `serve/kanban/README.md`, `serve/mcp-kanban/README.md`, `setup/setup-guide.md`, `share/instructions/owlbear-system.instructions.md`, `.owlbear/kanban/README.md`, 4 diagram footers)
+- purpose match: PASS (task purpose: update deployment docs to reflect fixed topology; all changes directly serve that purpose)
+- extraneous scope: none (diagram footer updates are standard doc-writer practice)
 - boundary check: function-level behavior verification deferred to reviewer
 
 ### Architect Quality: 4/5
-AC1-5 were specific and testable. AC6 gap caught by reviewer in cycle 2 and cleanly addressed by architect re-scope. Minor upstream miss (-1) but handled well.
+- AC1-AC5 named specific content topics and constrained verification method; AC6 added in cycle 2 to close scope gap identified by reviewer
+- Minor gap: `.owlbear/kanban/README.md` was within stated scope but not covered by an explicit AC until reviewer caught it; architect responded promptly with cycle 2 amendment
+- Probe task #1454 provided concrete stale/current/missing checklists — good upstream dependency design
+- Score 4: adequate, minor gap filled by reviewer feedback
 
 ### Commit Integrity
-- upstream commit presence: PASS (fdd74834 builder commit 1: 4 doc files; dcf78c06 builder commit 2: 1 file AC6; 5a71b6f9 doc-writer: 4 diagram footers)
-- kanban commit packaging: pending (auditor will commit after archival)
+- upstream commit presence: PASS (`fdd74834` builder commit 1, `dcf78c06` builder commit 2, `5a71b6f9` doc-writer commit — all verified via `git log` and `git show --name-only`)
+- all commits carry `#1455` task reference in message
+- changed files in commits match docs domain scope exactly
+- kanban commit packaging: pending (this audit cycle)
 
 ### Deduction Breakdown
-No deductions applied.
+- No deductions applied. All pillars clean.
 
 ### Confidence: 1.00
 ### Action: archive
+[[2026-05-11]]
+Audit complete. 4-pillar verification passed. Regression detection clean (pre-existing background failures only). Intent verified — all changes within docs/guidance domain. Architect quality 4/5. Three upstream commits verified. Confidence 1.00, archiving.
