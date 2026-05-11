@@ -511,3 +511,75 @@ class TestFromAC_NoImplicitCleanup:
                 pass
 
         mock_cleanup.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# AC-5: Stale-state skip before archive move (td:1)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_StaleStateSkip:
+    """AC-5: cleanup() re-reads task from disk before archive move.
+
+    If the on-disk status is no longer 'archived' or archival_reason has become
+    None between the initial scan read and the move, cleanup() must skip the
+    file and produce a skipped_items entry instead of moving it.
+    """
+
+    def test_stale_state_task_is_skipped_when_status_changes_before_move(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-5: cleanup() skips archive move when on-disk status changes after initial read.
+
+        Simulates concurrent state drift: the initial read returns an archived
+        record, then the file is overwritten to status=in-progress before the
+        re-read that the new implementation performs immediately before moving.
+
+        Current implementation (no re-read): moves the stale file and adds the
+        task to archived_task_ids — this assertion fails, confirming RED phase.
+
+        New implementation (re-reads before _move_file): catches the drift and
+        produces a skipped_items entry — all assertions pass.
+        """
+        import owlbear_kanban.engine as eng_mod
+
+        board = _make_board(tmp_path)
+        # File starts as archived+completed so the first read_task returns archived state.
+        source = _write_task(
+            board, task_id=1, status="archived", archival_reason='"completed"'
+        )
+        engine = KanbanEngine(board, activity_log=False)
+
+        real_read_task = eng_mod.read_task
+        per_path_calls: dict = {}
+
+        def read_side_effect(path: Path, *, config=None) -> object:
+            per_path_calls[path] = per_path_calls.get(path, 0) + 1
+            result = real_read_task(path, config=config)
+            if path == source and per_path_calls[path] == 1:
+                # After returning the archived record, rewrite to simulate a
+                # concurrent writer changing status to in-progress before re-read.
+                source.write_text(
+                    _TASK_TMPL.format(
+                        task_id=1,
+                        status="in-progress",
+                        claimed_at="null",
+                        archival_reason="null",
+                    ),
+                    encoding="utf-8",
+                )
+            return result
+
+        with mock.patch("owlbear_kanban.engine.read_task", side_effect=read_side_effect):
+            result = engine.cleanup()
+
+        assert 1 not in result.archived_task_ids, (
+            "task whose on-disk status changed to in-progress must not appear "
+            "in archived_task_ids — cleanup() must re-read before moving"
+        )
+        assert source.exists(), (
+            "source file must remain in tasks/ when cleanup skips due to stale-state drift"
+        )
+        assert len(result.skipped_items) == 1, (
+            "exactly one skipped_items entry expected when on-disk status is no longer archived"
+        )
