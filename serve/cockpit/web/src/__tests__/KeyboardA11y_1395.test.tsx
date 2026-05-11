@@ -429,6 +429,17 @@ describe('TestFromAC_ConfirmDialogFocus', () => {
     vi.clearAllMocks()
   })
 
+  it('ConfirmDialog receives DOM focus on mount — document.activeElement is the dialog element (AC3)', () => {
+    // AC3 addendum: after render, document.activeElement must be the dialog element itself.
+    // A focus-call spy or .toHaveBeenCalled() alone is not sufficient — this proves DOM state.
+    // dialogRef.current?.focus() is called in useEffect on mount.
+    const { container } = renderConfirmDialog('unclaim')
+    const dialog = container.querySelector('[data-testid="confirm-dialog"]')
+    expect(dialog).not.toBeNull()
+    // document.activeElement must be the dialog element, not a child or body
+    expect(document.activeElement).toBe(dialog)
+  })
+
   it('ConfirmDialog has an accessible name via aria-label or aria-labelledby on the dialog element', () => {
     // WCAG 2.1 SC 4.1.2: dialogs must have accessible names so screen readers
     // can identify them when they receive focus.
