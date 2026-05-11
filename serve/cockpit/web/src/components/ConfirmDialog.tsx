@@ -17,10 +17,7 @@ export default function ConfirmDialog({
   onConfirm,
 }: ConfirmDialogProps) {
   const dialogRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    dialogRef.current?.focus()
-  }, [])
+  const previousFocusRef = useRef<HTMLElement | null>(null)
 
   const { description, confirmLabel } = useMemo(() => {
     if (type === 'move-backward') {
@@ -44,6 +41,15 @@ export default function ConfirmDialog({
     }
   }, [type, targetStatus])
 
+  useEffect(() => {
+    previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    dialogRef.current?.focus()
+
+    return () => {
+      previousFocusRef.current?.focus()
+    }
+  }, [])
+
   function handleKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
     if (event.key === 'Escape') {
       event.preventDefault()
@@ -57,6 +63,7 @@ export default function ConfirmDialog({
       data-testid="confirm-dialog"
       role="dialog"
       aria-modal="true"
+      aria-label={description}
       tabIndex={-1}
       onKeyDown={handleKeyDown}
     >

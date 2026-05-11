@@ -18,14 +18,34 @@ export interface CardProps {
 }
 
 export function Card({ task, selected = false, onSelect, onContextMenu, onDragStart, onDragEnd }: CardProps) {
+  function handleKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      onSelect?.(task.id)
+    }
+
+    if (event.key === 'Enter') {
+      const syntheticEvent = {
+        preventDefault: () => {},
+        clientX: 0,
+        clientY: 0,
+      } as unknown as React.MouseEvent
+      onContextMenu(syntheticEvent, task)
+    }
+  }
+
   return (
     <div
       data-testid="task-card"
       data-id={task.id}
       data-priority={task.priority}
       data-selected={selected ? 'true' : 'false'}
+      role="button"
+      tabIndex={0}
+      aria-haspopup="menu"
       draggable={true}
       onClick={() => onSelect?.(task.id)}
+      onKeyDown={handleKeyDown}
       onDragStart={() => onDragStart(task.id, task.updated)}
       onDragEnd={onDragEnd}
       onContextMenu={(e) => onContextMenu(e, task)}

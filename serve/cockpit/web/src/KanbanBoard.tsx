@@ -348,6 +348,14 @@ function KanbanBoardContent({
               data-testid="transition-item"
               data-status={target}
               role="menuitem"
+              tabIndex={0}
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter' && event.key !== ' ') {
+                  return
+                }
+                event.preventDefault()
+                event.currentTarget.click()
+              }}
               onClick={() =>
                 void handleTransitionClick(
                   contextMenu.taskId,
