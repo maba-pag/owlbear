@@ -45,6 +45,7 @@ EXPECTED_TOOLS: frozenset[str] = frozenset(
         "show_task",
         "create_task",
         "create_dr",
+        "resolve_drs",
         "move_task",
         "edit_task",
         "start_work",

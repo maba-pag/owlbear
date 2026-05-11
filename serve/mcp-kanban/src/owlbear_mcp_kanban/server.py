@@ -66,6 +66,7 @@ __all__ = [
     "move_task",
     "parse_task_id",
     "pick_tasks",
+    "resolve_drs",
     "show_task",
     "start_work",
 ]
@@ -342,6 +343,26 @@ async def create_dr(
 
     relative_path = created_path.relative_to(app_ctx.kanban_dir).as_posix()
     return {"created": True, "path": relative_path}
+
+
+@mcp.tool(annotations=ToolAnnotations(destructiveHint=False, idempotentHint=True))
+async def resolve_drs(ctx: Context) -> dict[str, object]:
+    """Resolve non-pending DRs and return moved paths relative to the kanban root."""
+    app_ctx: AppContext = ctx.request_context.lifespan_context
+    try:
+        moved_paths = await asyncio.to_thread(
+            decisions.resolve_pending_drs,
+            app_ctx.kanban_dir / "decisions",
+            app_ctx.engine,
+        )
+    except KanbanError as exc:
+        _map_kanban_error(exc)
+
+    moved_relative = [
+        moved_path.relative_to(app_ctx.kanban_dir).as_posix()
+        for moved_path in moved_paths
+    ]
+    return {"moved": moved_relative, "count": len(moved_relative)}
 
 
 @mcp.tool(annotations=ToolAnnotations(destructiveHint=False, idempotentHint=True))
