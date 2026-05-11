@@ -1430,13 +1430,11 @@ class TestFromAC_MoveErrorMapping:
         view.move_task.side_effect = NotFoundError(
             code="ERR_NOT_FOUND", user_message="Task '1' not found"
         )
-        with mock.patch(
-            "owlbear_cockpit.adapter.valid_transitions", return_value={"in-progress"}
-        ):
-            response = client_1132.post(
-                "/api/tasks/1/move",
-                json={"status": "in-progress", "updated": task.updated},
-            )
+        view.engine.valid_transitions.return_value = {"in-progress"}
+        response = client_1132.post(
+            "/api/tasks/1/move",
+            json={"status": "in-progress", "updated": task.updated},
+        )
         assert response.status_code == 404, (
             "NotFoundError from CockpitView.move_task must map to 404 (AC4a)"
         )
@@ -1450,13 +1448,11 @@ class TestFromAC_MoveErrorMapping:
         view.move_task.side_effect = ValidationError(
             code="ERR_INVALID_STATUS", user_message="Invalid status transition"
         )
-        with mock.patch(
-            "owlbear_cockpit.adapter.valid_transitions", return_value={"in-progress"}
-        ):
-            response = client_1132.post(
-                "/api/tasks/1/move",
-                json={"status": "in-progress", "updated": task.updated},
-            )
+        view.engine.valid_transitions.return_value = {"in-progress"}
+        response = client_1132.post(
+            "/api/tasks/1/move",
+            json={"status": "in-progress", "updated": task.updated},
+        )
         assert response.status_code == 422, (
             "ValidationError from CockpitView.move_task must map to 422 (AC4a)"
         )
@@ -1470,13 +1466,11 @@ class TestFromAC_MoveErrorMapping:
         view.move_task.side_effect = ConcurrencyError(
             code="ERR_STALE", user_message="Stale snapshot"
         )
-        with mock.patch(
-            "owlbear_cockpit.adapter.valid_transitions", return_value={"in-progress"}
-        ):
-            response = client_1132.post(
-                "/api/tasks/1/move",
-                json={"status": "in-progress", "updated": task.updated},
-            )
+        view.engine.valid_transitions.return_value = {"in-progress"}
+        response = client_1132.post(
+            "/api/tasks/1/move",
+            json={"status": "in-progress", "updated": task.updated},
+        )
         assert response.status_code == 409, (
             "ConcurrencyError from CockpitView.move_task must map to 409 (AC4a)"
         )
@@ -1635,13 +1629,11 @@ class TestFromAC_ResponseAdaptation:
             updated=task.updated,
         )
         view.move_task.return_value = result
-        with mock.patch(
-            "owlbear_cockpit.adapter.valid_transitions", return_value={"in-progress"}
-        ):
-            response = client_1132.post(
-                "/api/tasks/1/move",
-                json={"status": "in-progress", "updated": task.updated},
-            )
+        view.engine.valid_transitions.return_value = {"in-progress"}
+        response = client_1132.post(
+            "/api/tasks/1/move",
+            json={"status": "in-progress", "updated": task.updated},
+        )
         assert response.status_code == 200, (
             f"_task_to_detail must not raise AttributeError on SingleTaskResponse "
             f"(AC6), got {response.status_code}"
@@ -1666,13 +1658,11 @@ class TestFromAC_ResponseAdaptation:
             claimed_at=None,  # unclaimed → claimed=False
         )
         view.move_task.return_value = result
-        with mock.patch(
-            "owlbear_cockpit.adapter.valid_transitions", return_value={"in-progress"}
-        ):
-            response = client_1132.post(
-                "/api/tasks/1/move",
-                json={"status": "in-progress", "updated": task.updated},
-            )
+        view.engine.valid_transitions.return_value = {"in-progress"}
+        response = client_1132.post(
+            "/api/tasks/1/move",
+            json={"status": "in-progress", "updated": task.updated},
+        )
         assert response.status_code == 200
         assert "claimed" in response.json(), (
             "Move response must include 'claimed' field when handling SingleTaskResponse (AC6)"

@@ -163,12 +163,6 @@ class TestFromAC_CockpitPackageSkeleton:
             f"/health returned {response.status_code} — endpoint must not require auth"
         )
 
-    # -- AC#4: adapter placeholder -------------------------------------------
-
-    def test_adapter_module_importable(self) -> None:
-        """AC#4: owlbear_cockpit.adapter is importable as a placeholder module."""
-        import owlbear_cockpit.adapter  # noqa: F401
-
 
 # ---------------------------------------------------------------------------
 # AC#5: Boundary enforcement (AST scan)
