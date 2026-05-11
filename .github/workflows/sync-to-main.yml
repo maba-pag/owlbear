@@ -32,10 +32,6 @@ name: Sync dev to main
         description: "serve/cockpit/"
         type: boolean
         default: true
-      build_cockpit:
-        description: "Build cockpit SPA (only effective when sync_cockpit is enabled)"
-        type: boolean
-        default: true
       sync_tools:
         description: "serve/tools/"
         type: boolean
@@ -137,6 +133,19 @@ jobs:
             echo "FULL_SHA=$(git rev-parse HEAD)"
             echo "DATE=$(date -u +"%Y-%m-%d")"
           } >> "$GITHUB_ENV"
+
+      - name: Warn on unresolved TODO markers
+        run: |
+          todo_hits=$(grep -Hn '> \*\*TODO:\*\*' README.md README-consumer.md serve/*/README.md 2>/dev/null || true)
+
+          if [[ -n "$todo_hits" ]]; then
+            todo_count=$(printf '%s\n' "$todo_hits" | wc -l | tr -d ' ')
+            todo_files=$(printf '%s\n' "$todo_hits" | cut -d: -f1 | sort -u)
+            file_count=$(printf '%s\n' "$todo_files" | grep -c . || true)
+            file_list=$(printf '%s\n' "$todo_files" | sed ':a;N;$!ba;s/\n/, /g')
+            summary="⚠️ ${todo_count} unresolved TODO markers in ${file_count} files: ${file_list}"
+            echo "::warning title=Unresolved TODO markers::${summary}"
+          fi
 
       - name: Validate selected paths exist on dev
         env:
@@ -328,7 +337,7 @@ jobs:
           fi
 
       - name: Setup Node.js
-        if: ${{ inputs.sync_cockpit && inputs.build_cockpit }}
+        if: ${{ inputs.sync_cockpit || inputs.sync_share }}
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0
         with:
           node-version-file: serve/cockpit/web/.nvmrc
@@ -336,12 +345,27 @@ jobs:
           cache-dependency-path: serve/cockpit/web/package-lock.json
 
       - name: Build cockpit SPA
-        if: ${{ inputs.sync_cockpit && inputs.build_cockpit }}
+        if: ${{ inputs.sync_cockpit }}
         working-directory: serve/cockpit/web
         run: npm ci && npm run build
 
+      - name: Run cockpit Vitest
+        if: ${{ inputs.sync_cockpit }}
+        working-directory: serve/cockpit/web
+        run: npm test
+
+      - name: Install Chromium for cockpit E2E
+        if: ${{ inputs.sync_cockpit }}
+        working-directory: serve/cockpit/web
+        run: npx playwright install chromium --with-deps
+
+      - name: Run cockpit Playwright E2E
+        if: ${{ inputs.sync_cockpit }}
+        working-directory: serve/cockpit/web
+        run: npm run test:e2e
+
       - name: Assert SPA bundle exists
-        if: ${{ inputs.sync_cockpit && inputs.build_cockpit }}
+        if: ${{ inputs.sync_cockpit }}
         run: |
           if [ ! -f serve/cockpit/dist/index.html ]; then
             echo "ERROR: serve/cockpit/dist/index.html not found — build may have failed or outDir is misconfigured."
@@ -349,8 +373,22 @@ jobs:
           fi
 
       - name: Stage built SPA bundle
-        if: ${{ inputs.sync_cockpit && inputs.build_cockpit }}
+        if: ${{ inputs.sync_cockpit }}
         run: git add -f serve/cockpit/dist/
+
+      - name: Export Excalidraw diagrams to PNG
+        if: ${{ inputs.sync_share }}
+        run: |
+          # The export script lives in .owlbear/ (dev-only, not synced to main).
+          # Check it out from dev, run it, then remove the working tree copy.
+          git checkout dev -- .owlbear/scripts/export-diagrams
+          cd .owlbear/scripts/export-diagrams
+          npm ci
+          npx playwright install chromium --with-deps
+          npm run export
+          cd ../../..
+          git add -f share/diagrams/*.png
+          git rm -rf .owlbear --quiet 2>/dev/null || true
 
       - name: Prune dev-only files from consumer tree
         run: |

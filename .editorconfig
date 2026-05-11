@@ -31,6 +31,9 @@ max_line_length = unset
 [.mega-linter.yml]
 max_line_length = unset
 
+[uv.lock]
+max_line_length = unset
+
 # Keep data files minified — do not reformat
 [store/**]
 indent_size = unset
