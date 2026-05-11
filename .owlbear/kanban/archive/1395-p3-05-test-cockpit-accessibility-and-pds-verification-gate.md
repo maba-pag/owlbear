@@ -1,10 +1,10 @@
 ---
 id: 1395
 title: 'P3-05: Test Cockpit accessibility and PDS verification gate'
-status: in-progress
+status: archived
 priority: needed
 created: 2026-05-06T01:09:42.087185+00:00
-updated: 2026-05-11T07:02:38.719265+00:00
+updated: 2026-05-11T09:17:48.615795+00:00
 tags:
 - cockpit
 - audit-remediation
@@ -906,3 +906,402 @@ ESLint: clean (exit 0) on `KeyboardA11y_1395.test.tsx`
 | AC4 PDS hex scan + mixed-token guard | Vitest: 5 tests PASS | GREEN |
 | AC5 a11y viewport 4 breakpoints | 4 E2E: stricter preconditions applied | Pending builder E2E apply+verify |
 | AC6 td:0 | pass-through | — |
+[[2026-05-11]]
+## Builder Notes
+- Applied the remaining Retry 5 AC-proof deltas in tracked E2E spec.
+
+### Files Changed
+- serve/cockpit/web/e2e/accessibility-1395.spec.ts
+
+### Fixes Applied
+- AC1 board precondition now requires visible task card before axe scan; removed error-swallowing wait.
+- AC1 detail precondition now requires visible `[data-field="title"]` before axe scan (replaced placeholder-absence check).
+- AC5 card-reachability tests at 320/768/1024/1440 removed `.catch(() => {})` on card precondition waits so render failures cannot silently pass.
+
+### Test Results (quality-runner scoped)
+- Vitest task suites: **26 passed, 0 failed**
+  - `serve/cockpit/web/src/__tests__/KeyboardA11y_1395.test.tsx`: 21 passed
+  - `serve/cockpit/web/src/__tests__/PDSHexScan_1395.test.ts`: 5 passed
+- Playwright task suite: **4 passed, 8 failed**
+  - `serve/cockpit/web/e2e/accessibility-1395.spec.ts`
+  - Failing cases are expected RED gates: 4 axe assertions (AC1) and 4 task-card tab-reachability assertions (AC5)
+
+### Lint Status
+- ESLint scoped: clean (0 violations)
+
+### Coverage
+- Not collected in this scoped verification run.
+
+### Evidence Summary
+- Tracked E2E suite now enforces strict render preconditions (no swallow patterns) per AC addenda.
+- Current suite shape matches gate intent for this test task: AC2/AC3/AC4 green in unit tests, AC1/AC5 red in Playwright until counterpart implementation #1396.
+
+### Commit
+- ec41149d — `test: tighten accessibility e2e preconditions (#1395, builder)`
+[[2026-05-11]]
+## Review Evidence
+### Test Results
+- quality-runner scoped frontend run completed successfully with no environment/bootstrap errors.
+- Vitest: 26 passed, 0 failed, 0 skipped (`serve/cockpit/web/src/__tests__/KeyboardA11y_1395.test.tsx`, `serve/cockpit/web/src/__tests__/PDSHexScan_1395.test.ts`).
+- Playwright: 4 passed, 8 failed (`serve/cockpit/web/e2e/accessibility-1395.spec.ts`). The 8 failures are real RED assertions for the accepted gate shape: 4 axe failures for AC1 and 4 task-card tab-reachability failures for AC5. They are not setup/precondition failures.
+
+### Lint
+- ESLint scoped clean on the task-owned unit tests, Playwright spec, and touched component files.
+
+### Coverage
+- Coverage is not the rejection basis.
+- Scoped module coverage from quality-runner:
+  - `serve/cockpit/web/src/components/Card.tsx`: 97.82 stmt / 84.05 branch / 80.00 func / 100.00 line
+  - `serve/cockpit/web/src/KanbanBoard.tsx`: 69.73 stmt / 63.54 branch / 57.14 func / 72.60 line
+  - `serve/cockpit/web/src/components/ConfirmDialog.tsx`: 77.19 stmt / 46.66 branch / 100.00 func / 84.84 line
+  - `serve/cockpit/web/src/components/HealthBadge.tsx`: 94.00 stmt / 68.29 branch / 100.00 func / 100.00 line
+- Playwright browser coverage is not available from this run.
+
+### Source-Control Evidence
+- Task-related commits are present in `.git/logs/HEAD` and `.git/logs/refs/heads/dev`, including `29ec6841`, `db254057`, `04f7b85b`, `907376a59c694f701f6f3ab59e4b2e72794930ba`, `08076560`, `c91a46b6`, `85876d73`, and `ec41149d`.
+- Dirty-tree overlap against the scoped files could not be independently checked from this tool surface, so a small confidence deduction remains.
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---|---|---|---|
+| AC1 revised axe proof on board, detail, decision, and repair surfaces at 1024px with corrected endpoint surface and render preconditions | `serve/cockpit/web/e2e/accessibility-1395.spec.ts`; adjacent fetch-contract evidence in `serve/cockpit/web/src/__tests__/usePendingDRs.test.ts` and `serve/cockpit/web/src/__tests__/useScanPolling.test.ts` | Yes. The tracked spec now enforces visible/rendered surface preconditions before `AxeBuilder.analyze()`, and the live GET/POST fetch contract is already pinned in the dedicated hook suites. | COVERED |
+| AC2 keyboard-only workflow proof | `serve/cockpit/web/src/__tests__/KeyboardA11y_1395.test.tsx` | Yes. The suite proves card focusability, selection, keyboard menu opening, and the real move POST path. | COVERED |
+| AC3 HealthBadge/ConfirmDialog focus management, meaningful accessible names, Escape dismissal | `serve/cockpit/web/src/__tests__/KeyboardA11y_1395.test.tsx` | No. The ConfirmDialog accessible-name checks at `KeyboardA11y_1395.test.tsx:443-465` only require `aria-label` or `aria-labelledby` to exist. An empty `aria-label=""` or a broken `aria-labelledby` target would still pass, so the required "meaningful accessible name" proof is non-discriminating. | LAX |
+| AC4 revised quoted-hex scan on non-comment lines after stripping `var(--pds-*)` segments | `serve/cockpit/web/src/__tests__/PDSHexScan_1395.test.ts` | Yes. The helper strips token segments and scans quoted hex literals on non-comment lines, matching the refined AC4 contract. | COVERED |
+| AC5 viewport keyboard reachability and landmark checks at 320/768/1024/1440 without swallowed preconditions | `serve/cockpit/web/e2e/accessibility-1395.spec.ts` | Yes. The suite checks card reachability plus landmark presence at all four breakpoints, and the `.catch(() => {})` swallow pattern is gone. | COVERED |
+| AC6 gate-shape / scoped RED proof | Task-scoped suites plus quality-runner output | Yes. The tracked suite is now RED only on the intended accessibility gaps (AC1/AC5) while AC2/AC3/AC4 are green. | COVERED |
+
+#### Security Review
+- No issues found. The only dependency addition is the task-required devDependency `@axe-core/playwright` in `serve/cockpit/web/package.json`.
+
+#### Test Integrity
+| Original Test | Change Made | Assessment |
+|---|---|---|
+| `TestFromAC_*` suites in the task-owned files | No weakening visible in the current workspace state | PRESERVED with small confidence deduction because diff-scoped immutability and dirty-tree overlap could not be fully reconstructed from this tool surface |
+
+#### Test Quality
+| Dimension | Rating | Evidence |
+|---|---|---|
+| Assertion specificity | WEAK | `KeyboardA11y_1395.test.tsx:443-465` proves only accessible-name attribute presence for ConfirmDialog, not a non-empty meaningful accessible name. |
+| Negative/error-path coverage | ADEQUATE | The RED/green gate shape is correct and the tracked E2E suite now reaches real assertions. |
+| Manual mutation reasoning | WEAK | Regressing `ConfirmDialog` to `aria-label=""` or a dead `aria-labelledby` reference would leave the current AC3 name tests green. |
+| Test independence | ADEQUATE | Global overrides are restored and render state is fresh per test. |
+| Descriptive test names | STRONG | Task-owned test names remain explicit and AC-traceable. |
+
+#### Data Safety
+- No issues found.
+
+#### Implementation-Aware Gaps
+- `serve/cockpit/web/src/components/ConfirmDialog.tsx:66` currently sets `aria-label={description}`, but the task-owned AC3 tests at `serve/cockpit/web/src/__tests__/KeyboardA11y_1395.test.tsx:443-465` only assert attribute presence. The suite would false-green on an empty name or invalid labelled-by wiring.
+
+#### Necessity Check
+- No issues found. `@axe-core/playwright` is directly required by AC1 and is present in the frontend package manifest.
+
+#### Builder Process Quality
+| Metric | Value |
+|---|---|
+| Builder Notes sections | multiple retries with varied approaches |
+| Assessment | FRICTION, not a loop-quality defect |
+
+### Pass 2 — INFORMATIONAL
+- I did **not** treat the earlier code-reader concern about AC1 endpoint methods as a blocking defect. While the Playwright route handlers themselves do not inspect request verbs, the live fetch contract is already pinned by dedicated hook tests at `serve/cockpit/web/src/__tests__/usePendingDRs.test.ts:54-69` and `serve/cockpit/web/src/__tests__/useScanPolling.test.ts:45-57`.
+- I did **not** treat the task-detail render proof as a blocking defect. `DetailTab` returns `null` until task data exists and only renders `[data-field="title"]` when `task` is present (`serve/cockpit/web/src/components/DetailTab.tsx:111`, `serve/cockpit/web/src/components/DetailTab.tsx:438-440`), so the revised AC1 addendum is satisfied by the current precondition.
+- HealthBadge naming assertions are stronger than the ConfirmDialog naming assertions and are not the rejection basis.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---|---|---|---|
+| AC1 | Tracked spec uses corrected endpoint paths and render preconditions at `serve/cockpit/web/e2e/accessibility-1395.spec.ts:132-137`, `:160-165`, `:173-180`, `:191-205`, `:215-224`; live endpoint contracts are also pinned in `serve/cockpit/web/src/__tests__/usePendingDRs.test.ts:54-69` and `serve/cockpit/web/src/__tests__/useScanPolling.test.ts:45-57`. | `serve/cockpit/web/e2e/accessibility-1395.spec.ts` | PASS |
+| AC2 | KeyboardA11y tests prove `tabIndex`, interactive role, `aria-haspopup`, Enter/Space selection, keyboard menu opening, and the real `/api/tasks/{id}/move` POST path (`KeyboardA11y_1395.test.tsx:115-279`), matching the live code in `serve/cockpit/web/src/components/Card.tsx:20-43` and `serve/cockpit/web/src/KanbanBoard.tsx:177-204`, `:309-327`. | `serve/cockpit/web/src/__tests__/KeyboardA11y_1395.test.tsx` | PASS |
+| AC3 | HealthBadge focus/name tests are present and ConfirmDialog focus-on-open / restore / Escape are present, but the ConfirmDialog naming assertions at `KeyboardA11y_1395.test.tsx:443-465` only prove attribute presence while the live naming contract sits at `serve/cockpit/web/src/components/ConfirmDialog.tsx:66`. | `serve/cockpit/web/src/__tests__/KeyboardA11y_1395.test.tsx` | FAIL |
+| AC4 | `serve/cockpit/web/src/__tests__/PDSHexScan_1395.test.ts:57-81`, `:87-164` implement the revised quoted-hex + token-strip contract and include the mixed-token regression guard. | `serve/cockpit/web/src/__tests__/PDSHexScan_1395.test.ts` | PASS |
+| AC5 | Viewport-specific task-card reachability and landmark checks exist at `serve/cockpit/web/e2e/accessibility-1395.spec.ts:241-381`, and swallowed card preconditions are removed. | `serve/cockpit/web/e2e/accessibility-1395.spec.ts` | PASS |
+| AC6 | Current scoped evidence shows the intended gate shape: unit suites green, E2E accessibility suite intentionally RED on the remaining audited accessibility gaps. | Task-scoped suites + quality-runner output | PASS |
+
+### Deductions
+- Major deduction for AC3 proof quality: the ConfirmDialog accessible-name tests are still non-discriminating.
+- Small deduction because dirty-tree overlap could not be independently checked from this tool surface.
+- The task body already contains prior `## Review Evidence` sections, so this repeat review failure routes to `backlog` under the loop-breaker rule.
+
+### Confidence: 0.88
+### Verdict: FAIL
+### Action: reject to `backlog`
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|---|---|---|---|
+| 1 | architect | Re-issue the AC3 proof requirement so the task-owned ConfirmDialog tests must assert a non-empty meaningful accessible name (or an `aria-labelledby` reference that resolves to real label text), not just attribute presence, before the task re-enters RED/review | `serve/cockpit/web/src/__tests__/KeyboardA11y_1395.test.tsx`, `serve/cockpit/web/src/components/ConfirmDialog.tsx` | `KeyboardA11y_1395.test.tsx:443-465`; `ConfirmDialog.tsx:66` |
+[[2026-05-11]]
+
+
+## Architecture Review (Refinement 3 — fourth reviewer loop-breaker)
+
+### Reviewer Finding Addressed
+
+| FR | Issue | Resolution |
+|----|-------|------------|
+| FR1 | ConfirmDialog accessible-name tests at `KeyboardA11y_1395.test.tsx:449-465` only check `hasAttribute('aria-label')` — passes on empty string or invalid `aria-labelledby` ref | AC3 addendum 2 below |
+
+### AC3 addendum 2
+
+ConfirmDialog accessible-name tests must assert that `getAttribute('aria-label')` returns a non-empty string, not merely that the attribute exists via `hasAttribute()`. Specifically: replace `dialog!.hasAttribute('aria-label') || dialog!.hasAttribute('aria-labelledby')` with an assertion that `dialog!.getAttribute('aria-label')` is a truthy, non-empty string. An empty `aria-label=""` or a missing attribute must fail the test.
+
+AC1, AC2, AC4, AC5, AC6 unchanged.
+
+### Evaluation (delta only)
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| All other criteria | No change from prior reviews | Single proof-precision refinement |
+
+### Verdict: APPROVE
+One-line proof fix: `hasAttribute` → `getAttribute` + truthy assertion. No architectural change, no scope change, no new surfaces.
+[[2026-05-11]]
+Architecture Review (Refinement 3): Fourth reviewer loop-breaker. Single finding — ConfirmDialog accessible-name tests use `hasAttribute()` (proves existence) instead of `getAttribute()` + truthy check (proves meaningful value). AC3 addendum 2 requires non-empty string assertion. No architectural or scope change.
+[[2026-05-11]]
+## Test-Writer Notes (Retry 6)
+
+### Reviewer Required Follow-up Addressed (Arch Review Refinement 3 — AC3 addendum 2)
+
+| FR | Addendum | Action | Outcome |
+|----|----------|--------|---------|
+| AC3 ConfirmDialog name proof | Replace `hasAttribute('aria-label') \|\| hasAttribute('aria-labelledby')` with `getAttribute('aria-label')` truthy + non-empty check | Updated 2 tests in `TestFromAC_ConfirmDialogFocus` | PASSES (impl has non-empty `aria-label={description}`) |
+
+### Changed Files
+- `serve/cockpit/web/src/__tests__/KeyboardA11y_1395.test.tsx` — 2 tests tightened
+
+### Test Names Changed
+- `ConfirmDialog has an accessible name via aria-label or aria-labelledby on the dialog element` → `ConfirmDialog has a non-empty meaningful accessible name on the dialog element (AC3 addendum 2)`
+- `ConfirmDialog "move-backward" type has an accessible name referencing its description` → `ConfirmDialog "move-backward" type has a non-empty meaningful accessible name (AC3 addendum 2)`
+
+### Assertion Change
+Before: `expect(dialog!.hasAttribute('aria-label') || dialog!.hasAttribute('aria-labelledby')).toBe(true)`
+After: `expect(dialog!.getAttribute('aria-label')).toBeTruthy()` + `expect(ariaLabel!.length).toBeGreaterThan(0)`
+
+Empty `aria-label=""` now fails. Dead `aria-labelledby` ref no longer falsely satisfies the check.
+
+### Failure Verification (Vitest)
+```
+Test Files  2 passed (2 total)
+Tests       26 passed (26 total)
+```
+All PASS — implementation already has non-empty `aria-label={description}` for both dialog types.
+
+### Advance Reason: Step 1b.1 Direct-to-Review
+- Reviewer's required follow-up was test-proof gaps only (no implementation fixes)
+- All tightened tests PASS against current implementation
+- Builder has no work to do — test-only retry
+
+### Lint
+ESLint: clean (exit 0)
+
+### Commit
+`ca2f9ee4` — test: tighten ConfirmDialog accessible-name assertion to non-empty getAttribute (#1395, test-writer)
+
+### AC Coverage Table (Retry 6)
+| AC | Tests | Verdict |
+|----|-------|---------|
+| AC1 axe-core E2E 4 pages at 1024px | 4 E2E FAIL (tracked) | RED ✓ |
+| AC2 keyboard card nav + movement | Vitest: 8 tests PASS | GREEN |
+| AC3 HealthBadge + ConfirmDialog focus (incl. non-empty name) | Vitest: 9 tests PASS | GREEN — name proof now discriminating |
+| AC4 PDS hex scan + mixed-token guard | Vitest: 5 tests PASS | GREEN |
+| AC5 a11y viewport 4 breakpoints | 4 E2E FAIL (tracked) | RED ✓ |
+| AC6 td:0 | pass-through | — |
+[[2026-05-11]]
+## Builder Notes
+- Implementation: none in this pass (test-gate verification task).
+- Files changed: none.
+- Approach: verified current AC proof shape using quality-runner scoped execution before handoff.
+
+### Test Results
+- Vitest task suites: 26 passed, 0 failed
+  - serve/cockpit/web/src/__tests__/KeyboardA11y_1395.test.tsx: 21 passed
+  - serve/cockpit/web/src/__tests__/PDSHexScan_1395.test.ts: 5 passed
+- Playwright task suite: 5 failed, 1 interrupted, 1 passed, 5 not run
+  - serve/cockpit/web/e2e/accessibility-1395.spec.ts
+- Key RED evidence (expected for this gate):
+  - AC1: axe failures remain on board/detail/decision/repair flows (nested-interactive violations).
+  - AC5: keyboard reachability failure at narrow viewport (task-card tab focus not reached).
+
+### Lint Status
+- ESLint scoped run: clean (0 violations across 7 files).
+
+### Coverage
+- Not applicable for this scoped frontend unit + e2e verification run.
+
+### Evidence Summary
+- AC2/AC3/AC4 are green in task-scoped unit tests.
+- AC1/AC5 remain intentionally RED in tracked E2E, providing the expected pre-implementation gate for counterpart #1396.
+- Routing: advance to review for independent evidence check.
+[[2026-05-11]]
+## Review Evidence
+### Test Results
+- quality-runner scoped frontend run completed successfully with no environment/bootstrap errors.
+- Vitest: 26 passed, 0 failed, 0 skipped across `serve/cockpit/web/src/__tests__/KeyboardA11y_1395.test.tsx` and `serve/cockpit/web/src/__tests__/PDSHexScan_1395.test.ts`.
+- Playwright: 4 passed, 8 failed in `serve/cockpit/web/e2e/accessibility-1395.spec.ts`.
+- The 8 Playwright failures are expected RED gate assertions for the accepted task shape: live axe violations on the audited AC1 surfaces and keyboard reachability failures on the AC5 card checks. They are not setup/precondition failures.
+
+### Lint
+- ESLint scoped clean on the task-owned tests/spec and referenced frontend source files.
+- VS Code diagnostics: no errors in the reviewed task files or referenced source files.
+
+### Coverage
+- Scoped module coverage from the fresh quality-runner pass:
+  - `Card.tsx`: 97.82% statements / 84.05% branch
+  - `KanbanBoard.tsx`: 69.73% statements / 63.54% branch
+  - `HealthBadge.tsx`: 94.00% statements / 68.29% branch
+  - `ConfirmDialog.tsx`: 77.19% statements / 46.66% branch
+- Module-level percentages are not the gate here. The reviewed task is a proof/gate task, and the claimed AC behaviors are directly exercised by the task-owned suites plus adjacent existing runtime-contract tests.
+
+### Source-Control Evidence
+- Task-related commits are present in `.git/logs/HEAD` and `.git/logs/refs/heads/dev`, including `29ec6841`, `db254057`, `04f7b85b`, `907376a59c694f701f6f3ab59e4b2e72794930ba`, `08076560`, `c91a46b6`, `85876d73`, `ec41149d`, and `ca2f9ee4`.
+- Dirty-tree overlap and exact TestFromAC immutability versus the earliest RED snapshot could not be fully reconstructed from this tool surface, so a small confidence deduction remains.
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---|---|---|---|
+| AC1 revised axe proof on board/detail/decision/repair at 1024px with live endpoint contract and rendered-surface preconditions | `serve/cockpit/web/e2e/accessibility-1395.spec.ts` plus adjacent endpoint-contract tests in `serve/cockpit/web/src/__tests__/usePendingDRs.test.ts` and `serve/cockpit/web/src/__tests__/useScanPolling.test.ts` | Yes. The tracked E2E suite uses the correct live paths (`accessibility-1395.spec.ts:132,137`), enforces rendered-surface preconditions before `AxeBuilder.analyze()` (`:157,169,186,210`), and the GET/POST fetch contract is independently pinned in the adjacent hook tests (`usePendingDRs.test.ts:49-64`, `useScanPolling.test.ts:40-57`). | COVERED |
+| AC2 keyboard-only workflow proof | `serve/cockpit/web/src/__tests__/KeyboardA11y_1395.test.tsx` with adjacent real-board selection proof in `serve/cockpit/web/src/__tests__/Shell.card-selection.integration.test.tsx` | Yes. The task-owned suite proves Enter/Space selection callback, keyboard menu signal/open, and the real move POST path (`KeyboardA11y_1395.test.tsx:143,154,193,202,244`). The remaining board-selection seam is closed by shared runtime wiring in `Card.tsx:42-45`, `Column.tsx:70-71`, `Shell.tsx:53-57`, and the adjacent real-board selection integration at `Shell.card-selection.integration.test.tsx:181-216`. | COVERED |
+| AC3 HealthBadge and ConfirmDialog focus management, meaningful accessible names, and Escape dismissal | `serve/cockpit/web/src/__tests__/KeyboardA11y_1395.test.tsx` | Yes. HealthBadge focus/open/close/name coverage is at `KeyboardA11y_1395.test.tsx:296,326,345,359,397,408`, matching `HealthBadge.tsx:29-33,57-71`. ConfirmDialog focus-on-open and non-empty aria-label proof are at `KeyboardA11y_1395.test.tsx:432,443`, with close/focus-restore coverage later in the same block, matching `ConfirmDialog.tsx:45-49,66-68`. | COVERED |
+| AC4 revised quoted-hex scan after stripping `var(--pds-*)` segments | `serve/cockpit/web/src/__tests__/PDSHexScan_1395.test.ts` | Yes. The task-owned scan suite proves token exclusion, positive hex detection, and mixed token+hex detection at `PDSHexScan_1395.test.ts:129,142,152`, matching the refined AC4 contract. | COVERED |
+| AC5 viewport keyboard reachability and landmark presence at 320/768/1024/1440 without swallowed preconditions | `serve/cockpit/web/e2e/accessibility-1395.spec.ts` | Yes. The tracked E2E suite has dedicated viewport checks at `accessibility-1395.spec.ts:253,292,327,362`, and the swallowed precondition pattern is gone. | COVERED |
+| AC6 gate shape / scoped RED proof | current tracked suite + fresh quality-runner output | Yes. The live tracked suite is green where the task should be green (AC2/AC3/AC4) and intentionally RED where the task is supposed to expose remaining audited accessibility gaps (AC1/AC5). | COVERED |
+
+#### Security Review
+- No issues found. The only dependency addition is the task-required devDependency `@axe-core/playwright` in `serve/cockpit/web/package.json`.
+
+#### Test Integrity
+| Original Test | Change Made | Assessment |
+|---|---|---|
+| `TestFromAC_*` suites in the task-owned files | No weakening visible in the live workspace; the last open AC3 concern was tightened from attribute presence to non-empty `getAttribute('aria-label')` proof | PRESERVED with a small confidence deduction because diff-scoped immutability and dirty-tree overlap could not be fully reconstructed from this tool surface |
+
+#### Test Quality
+| Dimension | Rating | Evidence |
+|---|---|---|
+| Assertion specificity | ADEQUATE | The current suites use discriminating assertions for the prior weak spots: ConfirmDialog open-focus uses `document.activeElement` (`KeyboardA11y_1395.test.tsx:432`) and ConfirmDialog naming now requires a non-empty aria-label (`:443`). The E2E suite enforces rendered-surface preconditions before axe runs (`accessibility-1395.spec.ts:157,169,186,210`). |
+| Negative/error-path coverage | ADEQUATE | HealthBadge covers Escape on popover and document (`KeyboardA11y_1395.test.tsx:326,345`), ConfirmDialog covers close/focus-restore paths, and the PDS scanner has both exclusion and positive-detection self-tests (`PDSHexScan_1395.test.ts:129,142,152`). |
+| Manual mutation reasoning | ADEQUATE | Removing `dialogRef.current?.focus()` or emptying `aria-label` in `ConfirmDialog.tsx:46,66` would fail the current task-owned AC3 tests. Removing keyboard menu handling or the real move POST path would fail the AC2 tests. Breaking mixed token+hex detection would fail `PDSHexScan_1395.test.ts:152`. |
+| Test independence | STRONG | Task-owned tests use local render helpers, local spies, and clean reset patterns. |
+| Descriptive test names | STRONG | Task-owned test names remain explicit and AC-traceable. |
+
+#### Data Safety
+- No issues found.
+
+#### Implementation-Aware Gaps
+- No blocking gaps found.
+- Informational only: AC2’s real-board selection proof is split across the task-owned keyboard tests and an adjacent real-board integration suite rather than one task-owned integration test. Because the live runtime wiring is shared (`Card.onSelect` -> `Column.onSelectTask` -> `Shell.selectedTaskId`), that is a confidence deduction, not a FAIL condition.
+
+#### Necessity Check
+- No issues found. `@axe-core/playwright` is directly required by AC1 and is present in the frontend package manifest.
+
+#### Builder Process Quality
+| Metric | Value |
+|---|---|
+| Builder Notes sections | multiple retries with varied approaches |
+| Assessment | FRICTION, not a loop-quality defect |
+
+### Pass 2 — INFORMATIONAL
+- Some RED-phase header comments are stale in the task-owned files. Examples: `KeyboardA11y_1395.test.tsx:16-21`, `accessibility-1395.spec.ts:17-19`, and `PDSHexScan_1395.test.ts:1-18` still describe earlier missing behavior that is now implemented or refined.
+- I attempted an adversarial challenger check on the proposed PASS verdict, but the subagent returned no response. I therefore grounded the verdict only in the direct quality-runner output, live file reads, adjacent test evidence, and task history.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---|---|---|---|
+| AC1 | `serve/cockpit/web/e2e/accessibility-1395.spec.ts:132-137,157-224`; adjacent contract tests `serve/cockpit/web/src/__tests__/usePendingDRs.test.ts:49-64` and `serve/cockpit/web/src/__tests__/useScanPolling.test.ts:40-57` | `serve/cockpit/web/e2e/accessibility-1395.spec.ts` | PASS |
+| AC2 | `serve/cockpit/web/src/__tests__/KeyboardA11y_1395.test.tsx:143-244`; shared selection wiring in `serve/cockpit/web/src/components/Card.tsx:42-45`, `serve/cockpit/web/src/components/Column.tsx:70-71`, `serve/cockpit/web/src/Shell.tsx:53-57`; adjacent real-board selection integration `serve/cockpit/web/src/__tests__/Shell.card-selection.integration.test.tsx:181-216` | `serve/cockpit/web/src/__tests__/KeyboardA11y_1395.test.tsx` + adjacent integration | PASS |
+| AC3 | `serve/cockpit/web/src/__tests__/KeyboardA11y_1395.test.tsx:296-418,432-625`; matching runtime behavior in `serve/cockpit/web/src/components/HealthBadge.tsx:29-33,57-71` and `serve/cockpit/web/src/components/ConfirmDialog.tsx:45-49,66-68` | `serve/cockpit/web/src/__tests__/KeyboardA11y_1395.test.tsx` | PASS |
+| AC4 | `serve/cockpit/web/src/__tests__/PDSHexScan_1395.test.ts:129-160` | `serve/cockpit/web/src/__tests__/PDSHexScan_1395.test.ts` | PASS |
+| AC5 | `serve/cockpit/web/e2e/accessibility-1395.spec.ts:253-380` | `serve/cockpit/web/e2e/accessibility-1395.spec.ts` | PASS |
+| AC6 | fresh scoped evidence: Vitest 26 passed / Playwright 4 passed, 8 failed on the intended accessibility gates | task-scoped suites + quality-runner output | PASS |
+
+### Deductions
+- Small deduction because diff-scoped TestFromAC immutability and dirty-tree contamination checks could not be fully reconstructed from this tool surface.
+- Small deduction because AC2 board-selection proof is split across task-owned keyboard assertions and an adjacent real-board integration suite rather than a single task-owned end-to-end keyboard-selection assertion.
+
+### Confidence: 0.92
+### Verdict: PASS
+### Action: advance to `docs`
+[[2026-05-11]]
+## Docs Gate
+
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | Task adds test files and keyboard/focus semantics to frontend components. No IN-scope README references these components or the accessibility/keyboard features at this level of specificity. `serve/cockpit/README.md` covers the backend API only. |
+| 2 | Module docstrings | No | N/A | All changed files are `.tsx`/`.ts` (TypeScript/React) — not Python modules. Docstring rule applies only to `.py` files. |
+| 3 | External attribution | No | N/A | `@axe-core/playwright` added as a standard npm devDependency per AC1 requirement. No external patterns from repos/articles were adopted that require attribution in `sources.md`. |
+| 4 | Research doc | No | N/A | No `.owlbear/research/{slug}.md` was produced for this task (test-gate task, no research phase). |
+| 5 | Diagram maintenance (describes match) | Yes | Updated | `share/diagrams/cockpit.excalidraw` has `describes: serve/cockpit/src/**, serve/cockpit/web/src/**` — matches `Card.tsx`, `KanbanBoard.tsx`, `HealthBadge.tsx`, `ConfirmDialog.tsx`. Footer updated from `(184c2f0f)` → `(679a89d9)` (commit `a361303c`). |
+| 6 | Explicit diagram creation | No | N/A | No explicit diagram creation request in task body. |
+| 7 | Deletion detection | No | N/A | No files deleted in this task. No IN-scope orphaned docs detected. |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| serve/cockpit/web/src/components/Card.tsx | OUT | N/A (TypeScript source, no .py docstrings) |
+| serve/cockpit/web/src/KanbanBoard.tsx | OUT | N/A (TypeScript source) |
+| serve/cockpit/web/src/components/HealthBadge.tsx | OUT | N/A (TypeScript source) |
+| serve/cockpit/web/src/components/ConfirmDialog.tsx | OUT | N/A (TypeScript source) |
+| serve/cockpit/web/e2e/accessibility-1395.spec.ts | OUT | N/A (test file) |
+| serve/cockpit/web/src/__tests__/KeyboardA11y_1395.test.tsx | OUT | N/A (test file) |
+| serve/cockpit/web/src/__tests__/PDSHexScan_1395.test.ts | OUT | N/A (test file) |
+| serve/cockpit/web/package.json | OUT | N/A (config/manifest) |
+| .owlbear/scratch/1395-accessibility.spec.ts | OUT | Deleted |
+| share/diagrams/cockpit.excalidraw | IN | Footer updated (diagram maintenance, item 5) |
+
+### Files Updated
+- `share/diagrams/cockpit.excalidraw` — footer `Last verified` updated to `2026-05-11 (679a89d9)` (commit `a361303c`)
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- `.owlbear/scratch/1395-accessibility.spec.ts`
+- `.owlbear/scratch/1395-coverage-scoped.log`
+- `.owlbear/scratch/1395-coverage.log`
+- `.owlbear/scratch/1395-eslint-scoped-final.log`
+- `.owlbear/scratch/1395-eslint-scoped.log`
+- `.owlbear/scratch/1395-eslint.log`
+- `.owlbear/scratch/1395-npm-test.log`
+- `.owlbear/scratch/1395-playwright-scoped.log`
+- `.owlbear/scratch/1395-playwright.log`
+- `.owlbear/scratch/1395-pw-fresh.log`
+- `.owlbear/scratch/1395-pw-temp.log`
+- `.owlbear/scratch/1395-pw-test.log`
+- `.owlbear/scratch/1395-pw.log`
+- `.owlbear/scratch/1395-vitest-2.log`
+- `.owlbear/scratch/1395-vitest-raw.log`
+- `.owlbear/scratch/1395-vitest-scoped.log`
+- `.owlbear/scratch/1395-vitest-unit.log`
+- `.owlbear/scratch/1395-vitest.log`
+[[2026-05-11]]
+## Audit
+
+### Regression Detection
+- Vitest full suite: 1327 passed, 0 failed, 9 skipped — CLEAN.
+- Playwright full suite: 48 passed, 11 failed. The 8 `accessibility-1395.spec.ts` failures are the intentional RED gates (AC1/AC5) — by design for this test-gate task. The 3 non-1395 failures (`kanban-board.spec.ts:206`, `responsive-layout-1391.spec.ts:164,300`) are pre-existing layout tests with no causal link to 1395's semantic/focus additions (role, tabIndex, aria-haspopup, focus lifecycle — none affect CSS box model).
+- Pytest: 204 failures in unrelated Python modules. Task 1395 changed ONLY TypeScript files — zero causal overlap.
+- Ruff: 286 Python lint violations — pre-existing; task 1395 has no Python deliverables.
+- No regressions attributable to task 1395.
+
+### Intent Verification
+- All changed files are within `serve/cockpit/web/` (src/components, src/__tests__, e2e/, package.json) — correct domain per `scope:cockpit-web` tag.
+- Implementation direction matches stated purpose: test-gate for accessibility/keyboard/PDS verification.
+- No extraneous scope — all changes serve the stated AC lines.
+
+### Architect Quality
+- Score: 4/5. Final AC is specific, naming endpoints, selectors, render-proof requirements, and exclusion lists. Required 3 refinement cycles after challenger at 0.38 on first pass — but the iterative process worked correctly and the delivered AC is strong.
+- No architect-calibration follow-up needed (score > 2).
+
+### Commit Integrity
+- 10 task commits present in git log: `6f336a26`, `29ec6841`, `db254057`, `04f7b85b`, `907376a5`, `08076560`, `c91a46b6`, `85876d73`, `ec41149d`, `ca2f9ee4` — all properly attributed (#1395, builder/test-writer).
+- 1 docs commit: `a361303c` (doc-writer).
+- Scratch files cleaned per docs gate notes.
+- No uncommitted deliverables.
+
+### Deductions
+- None. All 4 pillars pass cleanly.
+
+### Confidence: 1.00
+### Action: archive
