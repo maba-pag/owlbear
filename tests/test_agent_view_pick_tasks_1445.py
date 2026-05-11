@@ -19,6 +19,8 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import yaml
+
 import pytest
 
 from owlbear_kanban import KanbanEngine
@@ -160,6 +162,7 @@ class TestFromAC_PickTasksReadOnly:
             patch.object(engine, "repair_storage") as mock_repair,
             patch.object(engine, "edit_task") as mock_edit,
             patch.object(engine, "move_task") as mock_move,
+            patch("owlbear_kanban.storage.write_task") as mock_write_task,
         ):
             av.pick_tasks()
 
@@ -167,6 +170,7 @@ class TestFromAC_PickTasksReadOnly:
         mock_repair.assert_not_called()
         mock_edit.assert_not_called()
         mock_move.assert_not_called()
+        mock_write_task.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -216,10 +220,12 @@ class TestFromAC_PickTasksExpiredClaim:
 
         # 1. Task must appear in waves
         assert 2 in _all_ids(resp), "Expired-claim task must be dispatched"
-        # 2. claimed_at must be unchanged on disk
-        content = task_path.read_text(encoding="utf-8")
-        assert expired_ts_raw in content, (
-            "claimed_at must remain unchanged on disk after pick_tasks"
+        # 2. claimed_at must be unchanged on disk — exact field comparison via frontmatter
+        raw = task_path.read_text(encoding="utf-8")
+        parts = raw.split("---")
+        frontmatter = yaml.safe_load(parts[1])
+        assert frontmatter["claimed_at"] == expired_ts_raw, (
+            "claimed_at field must remain exactly unchanged on disk after pick_tasks"
         )
 
     def test_claim_just_expired_beyond_timeout_included(self, tmp_path: Path) -> None:
@@ -268,11 +274,11 @@ class TestFromAC_PickTasksExpiredClaim:
         """AC-2 discriminating proof: expired-claim eligibility uses the configured
         claim_timeout, not a hardcoded 1-hour constant.
 
-        Patches owlbear_kanban.agent_view._parse_duration to return 5 minutes.
-        A task claimed 6 minutes ago is expired under 5 min but would still be
-        active under the default 1h timeout.  The task must appear in waves,
-        proving pick_tasks passes the timeout from _parse_duration to
-        _claim_is_active rather than using a literal timedelta(hours=1).
+        Sets engine._config.pipeline.claim_timeout to '5m' so the real
+        _parse_duration runs with the configured value.  A task claimed 6
+        minutes ago is expired under 5 min but would still be active under the
+        default 1h timeout.  The task must appear in waves, proving pick_tasks
+        reads from config rather than using a literal timedelta(hours=1).
         """
         six_minutes_ago = datetime.now(UTC) - timedelta(minutes=6)
         board = _make_board(tmp_path)
@@ -283,16 +289,14 @@ class TestFromAC_PickTasksExpiredClaim:
             claimed_at=f'"{six_minutes_ago.isoformat()}"',
         )
         engine = KanbanEngine(board, activity_log=False)
+        engine._config.pipeline.claim_timeout = "5m"
 
-        with patch(
-            "owlbear_kanban.agent_view._parse_duration",
-            return_value=timedelta(minutes=5),
-        ):
-            resp = engine.agent_view().pick_tasks()
+        resp = engine.agent_view().pick_tasks()
 
         assert 20 in _all_ids(resp), (
             "Task claimed 6 minutes ago must be dispatched when claim_timeout is "
-            "5 minutes; fails if pick_tasks uses a hardcoded 1h timeout"
+            "5 minutes; fails if pick_tasks hardcodes 1h instead of reading "
+            "config.pipeline.claim_timeout"
         )
 
 
