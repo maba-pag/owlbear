@@ -291,7 +291,7 @@ function KanbanBoardContent({
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(0, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(80px, 1fr))',
           gap: '16px',
           overflowX: 'hidden',
           flex: 1,
