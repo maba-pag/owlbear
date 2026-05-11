@@ -136,8 +136,10 @@ Append one entry per module to `.owlbear/scratch/curator-log.jsonl`:
 **Commit your deliverables** (see `r-pipeline-protocol` → Who Commits What):
 
 ```shell
-git add tests/ && git commit -m "test: curate module tests — {N} task-tests removed, {M} modules improved (test-curator)"
+git add {module_test_paths} {removed_task_test_paths} && git commit -m "test: curate module tests — {N} task-tests removed, {M} modules improved (test-curator)"
 ```
+
+Use exact paths only. Module-level tests may live under `serve/{package}/tests/`, and broad `git add tests/` can miss package-local changes while staging unrelated root tests.
 
 Then return the Channel A signal and Channel B summary. This prompt-run workflow has no kanban lifecycle advance step.
 
