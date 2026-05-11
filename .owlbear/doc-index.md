@@ -150,20 +150,6 @@
 - [copilot-instructions.md](../../.github/copilot-instructions.md)
 - [copilot-instructions.md](../../.github/copilot-instructions.md)
 
-## serve/cockpit/web/test-results/bench_959-TestFromAC-Board-06851-00ms-with-700-cards-present-chromium/error-context.md
-- # `Instructions`
-- # `Test info`
-- # `Error details`
-- # `Page snapshot`
-- # `Test source`
-
-## serve/cockpit/web/test-results/kanban-board-TestFromAC-Ka-e5abb--accounts-for-shell-chrome--chromium/error-context.md
-- # `Instructions`
-- # `Test info`
-- # `Error details`
-- # `Page snapshot`
-- # `Test source`
-
 ## serve/kanban/README.md
 - # `owlbear-kanban — Kanban Engine`
 - ## `Launch / Usage`
@@ -231,8 +217,11 @@
 ## serve/mcp-memory/README.md
 - # `owlbear-mcp-memory — Memory MCP Server`
 - ## `Launch / Usage`
-- ### `Tools`
-- ### `Entry schema`
+- ## `Architecture`
+- ### `Modules`
+- ### `State Model`
+- ## `Tools`
+- ## `Entry Schema`
 - ## `Configuration`
 - ## `Batch Commits`
 - ## `Dependencies`
@@ -559,36 +548,12 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ## `8. Guardrails`
 - ## `9. Final Deliverable Format`
 
-## share/prompts/design-context.prompt.md
-- # `Design-Context Onboarding`
-- ## `Step 1 — Inspect current context`
-- ## `Step 2 — Ask only for missing sections`
-- ### `The 7 sections`
-- ## `Step 3 — Write docs/design-context.md`
-- ## `Rules`
-
 ## share/prompts/frontend-audit.prompt.md
-- # `Frontend Audit`
+- # `Cockpit Frontend Audit`
 - ## `Step 1 - Load context`
 - ## `Step 2 - Plan and scope`
 - ## `Step 3 - Execute audit`
 - ## `Step 4 - Verify and guardrails`
-- ## `Guardrails`
-
-## share/prompts/frontend-normalize.prompt.md
-- # `Frontend Normalize`
-- ## `Step 1 - Load context`
-- ## `Step 2 - Plan before edits`
-- ## `Step 3 - Execute normalization`
-- ## `Step 4 - Verify after changes`
-- ## `Guardrails`
-
-## share/prompts/frontend-polish.prompt.md
-- # `Frontend Polish`
-- ## `Step 1 - Load context`
-- ## `Step 2 - Plan the polish pass`
-- ## `Step 3 - Apply final-detail checks`
-- ## `Step 4 - Verify before completion`
 - ## `Guardrails`
 
 ## share/prompts/ideation-discover.prompt.md
@@ -685,6 +650,7 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 
 ### Outbound links
 - [share/README.md](../../README.md)
+- [share/WIRING.md](../../WIRING.md)
 
 ## share/skills/h-decision-requests/SKILL.md
 - # `Decision Requests Handbook`
@@ -760,6 +726,7 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 ## share/skills/h-frontend-conventions/SKILL.md
 - # `Frontend Conventions`
 - ## `Design System`
+- ### `Cockpit PDS Testing Patterns`
 - ## `Accessibility (a11y)`
 - ## `Component Structure`
 - ## `Responsive Design`
@@ -772,7 +739,7 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 ## share/skills/h-frontend-design/SKILL.md
 - # `Frontend Design Reference`
 - ## `Design Context`
-- ## `Reference Pack`
+- ## `Design Domain Index`
 - ## `Universal Blockers`
 - ## `Design Domains`
 - ### `Typography`
@@ -783,6 +750,7 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ### `Responsive Design`
 - ### `UX Writing`
 - ## `Anti-Pattern Classification`
+- ## `Cockpit Defaults`
 - ## `Known Gotchas`
 
 ## share/skills/h-ideation/SKILL.md
@@ -791,8 +759,8 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ## `Moment Reference`
 - ## `Investment Tier`
 - ## `User-Facing Entry Points`
-- ### ``@ideation-discoverer``
-- ### ``@ideation-mediator``
+- ### ``/ideation-discover` (agent: `ideation-discoverer`)`
+- ### ``/ideation-mediate` (agent: `ideation-mediator`)`
 - ## `Blackboard Artifacts`
 - ## `Shared Artifact Meanings`
 - ### ``context.md``
@@ -846,13 +814,12 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ## `Tool Reference`
 - ### `search_knowledge`
 - ### `ingest_document`
-- ### `list_entities`
 - ### `list_sources`
+- ### `refresh_source`
 - ### `get_stats`
-- ### `bookmark_source`
-- ### `list_bookmarks`
-- ### `import_scope`
-- ### `export_scope`
+- ### `get_next_batch`
+- ### `get_consolidation_candidates`
+- ### `store_enrichment`
 - ## `Decision Tree`
 - ## `Scope Conventions`
 - ## `Domain Reference`
@@ -887,6 +854,11 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 
 ## share/skills/h-mcp-memory/SKILL.md
 - # `MCP Memory Tool Reference`
+- ## `Agent Access Matrix`
+- ## `Usage Patterns`
+- ### `Curator lifecycle (list -> read -> curate -> delete)`
+- ### `User approval flow`
+- ### `Batch commits`
 - ## `Tool Summary`
 - ## `save_memory`
 - ## `list_memories`
@@ -896,13 +868,10 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ## `delete_memory`
 - ## `approve_memory`
 - ## `Categories`
-- ## `Usage Patterns`
-- ### `Curator lifecycle (list -> read -> curate -> delete)`
-- ### `User approval flow`
-- ### `Batch commits`
 - ## `Examples`
 - ## `Reflection Mapping`
 - ## `Configuration`
+- ## `Error Behavior`
 
 ## share/skills/h-memory-structure/SKILL.md
 - # `Memory Entry Structure`
@@ -959,7 +928,7 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - [nicobailon/visual-explainer](https://github.com/nicobailon/visual-explainer)
 
 ## share/skills/h-vitest-and-linting/SKILL.md
-- # `Vitest, ESLint, and Coverage Reference`
+- # `Frontend Test, Lint, and Coverage Reference`
 - ## `Vitest Commands`
 - ### `Working directory`
 - ### `Scoped runs`
@@ -967,9 +936,12 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ### `Default flags`
 - ## `ESLint`
 - ### `Exit codes`
+- ## `CSS and HTML Lint`
+- ## `Build and E2E`
 - ## `Coverage`
 - ## `Vitest Configuration`
 - ### `Setup file (`vitest.setup.ts`)`
+- ### `PDS component testing notes`
 - ## `Known Gotchas`
 
 ## share/skills/r-architecture-standards/SKILL.md
@@ -1203,6 +1175,8 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ## `Step 1a — Single-Task Shortcut`
 - ## `Step 2 — Check Board State`
 - ## `Step 3 — Decompose into Atomic Tasks`
+- ### `Task Complexity Budget`
+- ### `Mandatory Split Triggers`
 - ## `Durability Principles`
 - ## `Step 4 — Build Dependency Graph`
 - ## `Step 5 — Assign Priority and Tags`
@@ -1237,7 +1211,7 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ### `In Scope`
 - ### `Out of Scope`
 - ## `Step 0 — Setup`
-- ### `Step 0a — Non-Implementation Pass-Through`
+- ### `Step 0a — Pass-Through`
 - ## `Step 1 — Plan the Change`
 - ## `Step 2 — Read Existing Tests`
 - ### `Module-Level Test Visibility`

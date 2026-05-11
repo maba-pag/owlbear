@@ -6,7 +6,7 @@ user-invocable: true
 
 # Frontend Design Reference
 
-Design reference for project-authored UI. Adapted from Impeccable (Paul Bakaus) and Anthropic's frontend-design skill. See `NOTICE.md` for attribution.
+Design reference for project-authored UI. Adapted from Impeccable (Paul Bakaus) and Anthropic's frontend-design skill; source tracking lives in `.owlbear/sources/overview.md`.
 
 For frontend component structure, accessibility patterns, and testing conventions, see `h-frontend-conventions`.
 
@@ -19,6 +19,8 @@ Before producing design guidance, establish (or infer) three things:
 3. **Brand personality or tone** — Minimal and technical? Warm and approachable? Playful or serious?
 
 If unknown, state assumptions explicitly and invite correction before proceeding.
+
+For Cockpit, default to an internal developer-operations tool unless a task states otherwise: dense but calm information layout, fast scanning, predictable controls, and minimal decorative treatment.
 
 ## Design Domain Index
 
@@ -87,6 +89,12 @@ Anti-patterns fall into two categories:
 2. **Taste heuristics** — AI-slop signatures like default system-font stacks, purple/cyan color schemes, glassmorphism overuse. These are suggestions, not laws. Label them as such when flagging.
 
 Use this classification directly when producing frontend-audit findings.
+
+## Cockpit Defaults
+
+- Treat Cockpit as a work surface, not a marketing page: prioritize density, hierarchy, keyboard reachability, state clarity, and predictable navigation.
+- Avoid hero/landing-page composition, decorative card stacks, ornamental gradients, and copy that explains the interface instead of improving it.
+- Prefer Porsche Design System components and tokens when they match the interaction. When PDS/web-component behavior conflicts with jsdom, record whether proof belongs in Vitest or Playwright.
 
 ## Known Gotchas
 

@@ -1,14 +1,16 @@
 ---
 name: h-vitest-and-linting
-description: "Handbook: Vitest, ESLint, and coverage commands for the Cockpit frontend"
+description: "Handbook: Vitest, Playwright, ESLint, Stylelint, and coverage commands for the Cockpit frontend"
 user-invocable: false
 ---
 
-# Vitest, ESLint, and Coverage Reference
+# Frontend Test, Lint, and Coverage Reference
 
-All commands below run from the Cockpit frontend package root: `serve/cockpit/web/`. Running from the repo root causes `ReferenceError: HTMLElement is not defined` because the jsdom environment in `vite.config.ts` is not discovered.
+All commands below run from the Cockpit frontend package root: `serve/cockpit/web/`. Running Vitest from the repo root causes `ReferenceError: HTMLElement is not defined` because the jsdom environment in `vite.config.ts` is not discovered.
 
 For other projects, substitute the equivalent frontend package root.
+
+Quality-runner's normal frontend evidence path is Vitest plus ESLint. Use the Playwright, build, CSS, or HTML commands below when AC, Architecture Review notes, or caller instructions explicitly require those proof types.
 
 ## Vitest Commands
 
@@ -68,6 +70,40 @@ ESLint uses a flat config (`eslint.config.js`) with `@eslint/js` + `typescript-e
 | 1 | Lint violations found |
 | 2 | Misconfiguration / fatal error |
 
+## CSS and HTML Lint
+
+CSS lint:
+
+```shell
+cd serve/cockpit/web && npm run lint:css
+```
+
+HTML lint:
+
+```shell
+cd serve/cockpit/web && npm run lint:html
+```
+
+Use these when CSS or `index.html` changed, or when AC names layout/CSS/HTML validity. ESLint does not inspect CSS files.
+
+## Build and E2E
+
+Build:
+
+```shell
+cd serve/cockpit/web && npm run build
+```
+
+Playwright E2E:
+
+```shell
+cd serve/cockpit/web && npm run test:e2e
+```
+
+The Playwright config runs Chromium only and starts through `npm run build && npm run preview` on port 4173. If TypeScript or Vite build fails, Playwright may report a webServer/startup failure before any E2E assertions execute.
+
+Browser binaries are not bundled with `@playwright/test`; one-time setup is `npx playwright install chromium`.
+
 ## Coverage
 
 ```shell
@@ -109,10 +145,18 @@ Imports and shims applied before every test:
 - `EventSource` — closed-by-default stub
 - PDS `ownerDocument` TypeError suppression (global error handler)
 
+### PDS component testing notes
+
+- PDS custom elements are host elements in jsdom. Prefer selectors such as `p-select`, `p-input-text`, and `p-multi-select` when Testing Library roles are unavailable.
+- `PSelect` changes are commonly driven with `CustomEvent('change', { detail: { value }, bubbles: true })`.
+- `PMultiSelect` changes are driven with `CustomEvent('update', { detail: { value: [...] }, bubbles: true })`.
+- If a behavior depends on layout, focus trapping, browser geometry, or actual rendered viewport width, use Playwright instead of Vitest.
+
 ## Known Gotchas
 
 - **Must `cd` to your frontend package root first.** This is the #1 cause of quality-runner frontend failures. Vitest reads `vite.config.ts` from the cwd, so running from the repo root skips the jsdom environment entirely.
   > Example (OwlBear-dev): `cd serve/cockpit/web`
+- **Build failures can mask E2E assertions.** When Playwright fails before tests run, inspect the build output first; the failure may belong to TypeScript/Vite rather than the E2E test body.
 - **PDS console noise.** PDS components emit thousands of `console.error` / `console.warn` lines in jsdom (e.g. `variant 'tertiary'`, `CDN request blocked`). The `--silent` flag suppresses this noise. If you omit `--silent` for debugging, only the vitest summary line (`Test Files: N passed`, `Tests: N passed`) determines pass/fail.
 - **Output volume.** Without `--silent`, PDS noise can produce 600K+ lines. Always use `--silent`. If output is still truncated, use the file-capture fallback: redirect to `.owlbear/scratch/vitest-{task_id}.log` and `grep` or `tail -50` for the summary — **never `read_file` on a vitest log** (they can be hundreds of thousands of lines).
 - **`npx vitest run` vs `npx vitest`.** Always use `run`. Without it, vitest enters watch mode and never exits.

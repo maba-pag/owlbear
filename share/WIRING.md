@@ -135,10 +135,7 @@ All 9 agents (critic, pragmatist, simplifier, outsider, ideation-architect, data
 |--------|---------------|-----------------|------------|
 | **agent-broad-audit** | (inline, no agent) | h-agent-structure, h-memory-structure, r-pipeline-protocol, r-project-standards | `prompt-ref` |
 | **agent-deep-audit** | (inline, no agent) | target agent/skill cluster | dynamic prompt scope |
-| **design-context** | (inline, no agent) | h-frontend-design | `prompt-ref` |
-| **frontend-audit** | (inline, no agent) | h-frontend-design | `prompt-ref` |
-| **frontend-normalize** | (inline, no agent) | h-frontend-design | `prompt-ref` |
-| **frontend-polish** | (inline, no agent) | h-frontend-design | `prompt-ref` |
+| **frontend-audit** | (inline, no agent) | h-frontend-design, h-frontend-conventions, h-vitest-and-linting (conditional) | `prompt-ref` |
 | **ideation-discover** | ideation-discoverer | — | agent invocation |
 | **ideation-mediate** | ideation-mediator | — | agent invocation |
 | **kb-enrich** | knowledge-enricher | — | agent invocation |
@@ -185,8 +182,8 @@ All 9 agents (critic, pragmatist, simplifier, outsider, ideation-architect, data
 | **r-doc-standards** | — | — | doc-audit prompt (`.owlbear/prompts`) | `prompt-ref` |
 | | | | (any agent editing doc files) | `applyTo` via doc-standards.instructions |
 | **h-python-conventions** | — | — | test-curator (via w-test-curation) | `companion` |
-| **h-frontend-design** | — | — | design-context, frontend-audit, frontend-normalize, frontend-polish prompts | `prompt-ref` |
-| **h-frontend-conventions** | — | — | — (only via frontend.instructions stub) | `applyTo` stub target |
+| **h-frontend-design** | — | — | frontend-audit prompt | `prompt-ref` |
+| **h-frontend-conventions** | — | — | frontend-audit prompt; any agent editing frontend files | `prompt-ref` / `applyTo` stub target |
 | **h-excalidraw-diagram** | — | — | doc-writer | `directed` |
 | | | | researcher | `organic` |
 | **h-visual-output** | — | — | researcher | `organic` |
@@ -203,8 +200,8 @@ All 9 agents (critic, pragmatist, simplifier, outsider, ideation-architect, data
 |-------|--------------|------------|
 | h-agent-structure | agent-broad-audit prompt | `prompt-ref` |
 | h-excalidraw-diagram | doc-writer, researcher | `directed` / `organic` |
-| h-frontend-conventions | (none — stub target only) | `applyTo` stub |
-| h-frontend-design | 4 frontend prompts | `prompt-ref` |
+| h-frontend-conventions | frontend-audit prompt; frontend.instructions stub | `prompt-ref` / `applyTo` stub |
+| h-frontend-design | frontend-audit prompt | `prompt-ref` |
 | h-decision-requests | pipeline agents, architect | `companion` / `body-ref` |
 | h-memory-structure | memory-curator, agent-broad-audit | `directed` / `prompt-ref` |
 | h-mcp-kanban | 12 pipeline agents | `body-ref` |
@@ -252,7 +249,7 @@ Impact analysis: which agents break when a subagent is unavailable.
 
 | File | Status | Notes |
 |------|--------|-------|
-| **h-frontend-conventions** | Stub-only | Only referenced as `applyTo` target by frontend.instructions stub. No agent or prompt lists it. By design — fires when frontend files are touched. |
+| **h-frontend-conventions** | Sparse | Referenced by frontend-audit prompt and as `applyTo` target by frontend.instructions stub. By design — fires when frontend files are touched. |
 | **frontend.instructions** | No regular consumer | Only fires for cockpit work (builder/reviewer). Acceptable — suspenders-only safety net. |
 | **doc-standards.instructions** | No regular consumer | Fires when any agent edits doc files (README.md, SECURITY.md, setup/*.md, etc.). Acceptable — suspenders-only. |
 | **agent-ecosystem.instructions** | No regular consumer | Fires when any agent edits share/ or `.owlbear/` ecosystem files. Acceptable — suspenders-only. |
