@@ -128,13 +128,13 @@ async function stubApis(page: Page): Promise<void> {
   await page.route('/api/sessions', (route) =>
     route.fulfill({ json: { sessions: [] } }),
   )
-  await page.route('/api/decisions', (route) =>
-    route.fulfill({ json: { items: PENDING_DRS } }),
+  // Live endpoint: /api/decisions/pending (GET) → {count, items}
+  await page.route('/api/decisions/pending', (route) =>
+    route.fulfill({ json: { count: PENDING_DRS.length, items: PENDING_DRS } }),
   )
-  await page.route('/api/health', (route) =>
-    route.fulfill({ json: { items: SCAN_ITEMS, corruption_count: 1 } }),
-  )
-  await page.route('/api/scan', (route) => route.fulfill({ json: { items: SCAN_ITEMS } }))
+  // Live endpoint: /api/tasks/scan (POST) → ScanItem[]
+  // Registered last so it takes LIFO priority over /api/tasks/* for the /scan path.
+  await page.route('/api/tasks/scan', (route) => route.fulfill({ json: SCAN_ITEMS }))
 }
 
 // ─── AC1: axe-core accessibility scans at 1024px ─────────────────────────────
@@ -169,9 +169,14 @@ test.describe('TestFromAC_AxeA11y', () => {
     page,
   }) => {
     const card = page.locator('[data-testid="task-card"]').first()
-    await card.waitFor({ state: 'visible', timeout: 5_000 }).catch(() => {})
+    await card.waitFor({ state: 'visible', timeout: 5_000 })
     await card.click()
-    await page.waitForTimeout(500)
+    // Prove task-detail surface rendered: sidecar must show task data, not placeholder.
+    // Test must fail if the sidecar cannot be rendered from stub data.
+    await expect(
+      page.locator('[data-testid="detail-placeholder"]'),
+      'sidecar must show task data before axe scan — placeholder must not be visible',
+    ).not.toBeVisible({ timeout: 5_000 })
     const results = await new AxeBuilder({ page }).analyze()
     expect(results.violations).toEqual([])
   })
@@ -180,12 +185,22 @@ test.describe('TestFromAC_AxeA11y', () => {
   test('decision resolution view has zero axe accessibility violations at 1024px (AC1)', async ({
     page,
   }) => {
-    const drRef = page.locator('[data-testid^="decision-task-ref-"]').first()
-    const hasDR = await drRef.count()
-    if (hasDR > 0) {
-      await drRef.click()
-      await page.waitForTimeout(300)
-    }
+    // Prove DR surface rendered: DR indicator must be visible and show count > 0.
+    // Test must fail if /api/decisions/pending did not return items.
+    const drIndicator = page.locator('[data-testid="dr-indicator"]')
+    await drIndicator.waitFor({ state: 'visible', timeout: 5_000 })
+    await expect(
+      drIndicator,
+      'DR indicator must show attention status — /api/decisions/pending must have returned items',
+    ).toHaveAttribute('data-status', 'attention')
+    // Open DR popover and click the first DR item to open ResolveModal.
+    await drIndicator.click()
+    await page.locator('[data-testid="dr-popover"]').waitFor({ state: 'visible', timeout: 3_000 })
+    const drItem = page.locator(`[data-testid="dr-item-${PENDING_DRS[0].id}"]`)
+    await drItem.waitFor({ state: 'visible', timeout: 3_000 })
+    await drItem.click()
+    // ResolveModal must be open before scanning — no conditional skip allowed.
+    await page.locator('[data-testid="resolve-modal"]').waitFor({ state: 'visible', timeout: 3_000 })
     const results = await new AxeBuilder({ page }).analyze()
     expect(results.violations).toEqual([])
   })
@@ -194,12 +209,17 @@ test.describe('TestFromAC_AxeA11y', () => {
   test('repair flow view has zero axe accessibility violations at 1024px (AC1)', async ({
     page,
   }) => {
+    // Prove repair surface rendered: HealthBadge must be visible and show issues.
+    // Test must fail if /api/tasks/scan did not return scan items.
     const badge = page.locator('[data-testid="health-badge"]')
-    const hasBadge = await badge.count()
-    if (hasBadge > 0) {
-      await badge.click()
-      await page.waitForTimeout(300)
-    }
+    await badge.waitFor({ state: 'visible', timeout: 5_000 })
+    await expect(
+      badge,
+      'HealthBadge must show data-health=red — /api/tasks/scan must have returned scan items',
+    ).toHaveAttribute('data-health', 'red')
+    // Open the popover — no conditional skip allowed.
+    await badge.click()
+    await page.locator('[data-testid="health-badge-popover"]').waitFor({ state: 'visible', timeout: 3_000 })
     const results = await new AxeBuilder({ page }).analyze()
     expect(results.violations).toEqual([])
   })
