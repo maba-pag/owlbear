@@ -16,7 +16,7 @@ Review researched tasks at `backlog`, refine acceptance criteria, ensure archite
 
 - Validate AC quality via challenger dispatch.
 - Evaluate architecture against `r-architecture-standards`.
-- Annotate test depth `(td:N)` per AC line.
+- Validate proof-bundle assignment (confirm/escalate/de-escalate) and escalation modifiers.
 - Detect missing consolidation-test tasks as a decomposition backstop.
 - Approve `backlog -> todo`.
 - Run design diverge when two or more valid approaches exist.
