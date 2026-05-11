@@ -36,15 +36,26 @@ Claim the task via `start_work` (atomic claim + retrieves task body). Check the 
 
 Verify the task is in `in-progress` status (the test-writer already moved it here).
 
-### Step 0a — Pass-Through
+### Step 0a — Bundle-Based Pass-Through
 
-Check the task body for `## Test-Writer Notes` containing "Non-implementation task", "non-impl pass-through", or "All AC lines are (td:0)". If found:
+Route non-implementation flow from `Proof bundle:` in the task body (see `r-pipeline-protocol` taxonomy). Use legacy `(td:N)` only as compatibility fallback when `Proof bundle:` is absent.
 
-If the task body or Test-Writer Notes include `Existing proof required: ...`, run that named proof through Quality-Runner before advancing. Use `mode=scoped` for named test paths and `mode=full` only when the required proof is explicitly full-suite. Record the report summary in Builder Notes. Do not advance while required proof is failing or missing.
-
-1. Advance via `end_work(note="## Builder Notes\n- Test-writer pass-through — no code changes needed.\n- Passing through to review.")` (moves to `review` + releases claim).
-2. Return: `DONE #{id} -> review | pass-through, no code changes`
-3. **Stop here.**
+1. If `Proof bundle: skip`:
+  - Implement from AC directly (no `TestFromAC_*` pass requirement for this task).
+  - Advance via `end_work(note="## Builder Notes\n- Proof bundle: skip (non-implementation path).\n- No code changes needed.\n- Passing through to review.")` (moves to `review` + releases claim).
+  - Return: `DONE #{id} -> review | proof bundle skip, no code changes`
+  - **Stop here.**
+2. If `Proof bundle: existing`:
+  - Implement from AC directly (no new tests to write).
+  - Find `Existing proof required: ...` in AC, Architecture Review, or Test-Writer Notes.
+  - Run the named existing proof through Quality-Runner before advancing. Use `mode=scoped` for named test paths and `mode=full` only when the required proof is explicitly full-suite.
+  - Record the Quality-Runner summary in Builder Notes.
+  - Do not advance while required proof is failing or missing.
+  - After proof passes, advance via `end_work(note="## Builder Notes\n- Proof bundle: existing (named proof path).\n- Existing proof executed and passing.\n- Passing through to review.")`.
+  - Return: `DONE #{id} -> review | proof bundle existing, required proof passed`
+  - **Stop here.**
+3. If `Proof bundle:` is absent, apply legacy compatibility mapping from `r-pipeline-protocol` before continuing.
+4. Keep the explicit non-impl pass-through trigger: if Test-Writer Notes contain "Non-implementation task" or "non-impl pass-through", advance with no code changes and pass through to review.
 
 ## Step 1 — Plan the Change
 
