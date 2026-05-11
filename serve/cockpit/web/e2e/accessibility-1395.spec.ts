@@ -248,20 +248,23 @@ test.describe('TestFromAC_A11yViewport', () => {
         .waitFor({ state: 'attached', timeout: 8_000 })
     })
 
-    // Tab through the page 20 times; a task card must receive focus at some point.
-    // Fails: Card <div> has no tabIndex → browser Tab order skips it.
+    // Tab through the page up to 50 times; break as soon as a card receives focus.
+    // Uses early-exit to avoid brittle coupling to tab-order length.
     test('task cards are reachable via Tab key at 320px (AC5)', async ({ page }) => {
       await page
         .locator('[data-testid="task-card"]')
         .first()
         .waitFor({ state: 'attached', timeout: 5_000 })
-      for (let i = 0; i < 20; i++) {
+      let cardFocused = false
+      for (let i = 0; i < 50; i++) {
         await page.keyboard.press('Tab')
+        const focused = await page.locator('[data-testid="task-card"]:focus').count()
+        if (focused > 0) {
+          cardFocused = true
+          break
+        }
       }
-      await expect(
-        page.locator('[data-testid="task-card"]:focus'),
-        'at least one task card must be tab-reachable at 320px',
-      ).toBeVisible()
+      expect(cardFocused, 'at least one task card must be tab-reachable at 320px').toBe(true)
     })
 
     test('at least one ARIA landmark region exists at 320px (AC5)', async ({ page }) => {
@@ -294,13 +297,16 @@ test.describe('TestFromAC_A11yViewport', () => {
         .locator('[data-testid="task-card"]')
         .first()
         .waitFor({ state: 'attached', timeout: 5_000 })
-      for (let i = 0; i < 20; i++) {
+      let cardFocused = false
+      for (let i = 0; i < 50; i++) {
         await page.keyboard.press('Tab')
+        const focused = await page.locator('[data-testid="task-card"]:focus').count()
+        if (focused > 0) {
+          cardFocused = true
+          break
+        }
       }
-      await expect(
-        page.locator('[data-testid="task-card"]:focus'),
-        'at least one task card must be tab-reachable at 768px',
-      ).toBeVisible()
+      expect(cardFocused, 'at least one task card must be tab-reachable at 768px').toBe(true)
     })
 
     test('at least one ARIA landmark region exists at 768px (AC5)', async ({ page }) => {
@@ -329,13 +335,16 @@ test.describe('TestFromAC_A11yViewport', () => {
         .locator('[data-testid="task-card"]')
         .first()
         .waitFor({ state: 'visible', timeout: 5_000 })
-      for (let i = 0; i < 20; i++) {
+      let cardFocused = false
+      for (let i = 0; i < 50; i++) {
         await page.keyboard.press('Tab')
+        const focused = await page.locator('[data-testid="task-card"]:focus').count()
+        if (focused > 0) {
+          cardFocused = true
+          break
+        }
       }
-      await expect(
-        page.locator('[data-testid="task-card"]:focus'),
-        'at least one task card must be tab-reachable at 1024px',
-      ).toBeVisible()
+      expect(cardFocused, 'at least one task card must be tab-reachable at 1024px').toBe(true)
     })
 
     test('at least one ARIA landmark region exists at 1024px (AC5)', async ({ page }) => {
@@ -364,13 +373,16 @@ test.describe('TestFromAC_A11yViewport', () => {
         .locator('[data-testid="task-card"]')
         .first()
         .waitFor({ state: 'visible', timeout: 5_000 })
-      for (let i = 0; i < 20; i++) {
+      let cardFocused = false
+      for (let i = 0; i < 50; i++) {
         await page.keyboard.press('Tab')
+        const focused = await page.locator('[data-testid="task-card"]:focus').count()
+        if (focused > 0) {
+          cardFocused = true
+          break
+        }
       }
-      await expect(
-        page.locator('[data-testid="task-card"]:focus'),
-        'at least one task card must be tab-reachable at 1440px',
-      ).toBeVisible()
+      expect(cardFocused, 'at least one task card must be tab-reachable at 1440px').toBe(true)
     })
 
     test('at least one ARIA landmark region exists at 1440px (AC5)', async ({ page }) => {
