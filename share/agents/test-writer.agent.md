@@ -59,7 +59,7 @@ in it must fail when you hand it off.
 |---------|-----------|-----------|
 | Done | todo → in-progress | All tests written, all fail, ruff clean |
 | Pass-through | todo → in-progress | Non-implementation task, no testable interfaces |
-| Escalate | todo → todo | Gate structurally unreachable — create prereq task(s), `edit_task(add_dep=...)`, `end_work(outcome="fail")` (see §5 Escalation Routing in `r-pipeline-protocol`) |
+| Escalate | todo → todo | Gate structurally unreachable — create prereq task(s), `edit_task(id={id}, add_dep=[new_id])`, `end_work(id={id}, outcome="fail")` (see §5 Escalation Routing in `r-pipeline-protocol`) |
 
 </pipeline_position>
 

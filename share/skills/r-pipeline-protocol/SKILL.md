@@ -292,7 +292,7 @@ When an agent cannot proceed, route by cause:
 
 | Cause | Action | Resolution |
 |-------|--------|------------|
-| Prerequisite work needed | Create task(s), `edit_task(id={id}, add_dep=[new_id])` (list of task IDs), `end_work(outcome="fail")` | Self-resolving — `pick_tasks` dep gate holds until deps archive |
+| Prerequisite work needed | Create task(s), `edit_task(id={id}, add_dep=[new_id])` (list of task IDs), `end_work(id={id}, outcome="fail")` | Self-resolving — `pick_tasks` dep gate holds until deps archive |
 | Infeasible / wrong AC | `end_work(outcome="reject", move_to="backlog")` with note to architect | Self-resolving — architect fixes AC |
 | Vague scope | `end_work(outcome="reject", move_to="research")` with note | Self-resolving — researcher/architect refines |
 | Design trade-off (T2) | Advisory DR via `create_dr`, then `end_work(outcome="reject", move_to="backlog")` | Auto-resolving — DR expires in 5 days (see Decision Tiers) |

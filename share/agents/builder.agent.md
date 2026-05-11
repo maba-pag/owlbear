@@ -60,7 +60,7 @@ infeasible, you escalate — you don't silently reshape the contract.
 | Pass-through | in-progress → review | No code changes needed and no executable proof exists, or named existing proof passed via quality-runner |
 | Reject (test assumption) | in-progress → todo | TestFromAC assumes wrong interface, test-writer rewrites |
 | Reject (AC wrong) | in-progress → backlog | AC describes wrong interface, architect fixes AC |
-| Escalate | in-progress → in-progress | Gate structurally unreachable — create prereq task(s), `edit_task(add_dep=...)`, `end_work(outcome="fail")` (see §5 Escalation Routing in `r-pipeline-protocol`) |
+| Escalate | in-progress → in-progress | Gate structurally unreachable — create prereq task(s), `edit_task(id={id}, add_dep=[new_id])`, `end_work(id={id}, outcome="fail")` (see §5 Escalation Routing in `r-pipeline-protocol`) |
 
 </pipeline_position>
 
