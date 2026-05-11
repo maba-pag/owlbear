@@ -4,7 +4,7 @@ title: 'P3-02: Implement Cockpit responsive dashboard layout and visual design p
 status: archived
 priority: critical
 created: 2026-05-06T01:09:36.552112+00:00
-updated: 2026-05-11T03:29:47.240237+00:00
+updated: 2026-05-11T07:11:24.157034+00:00
 tags:
 - cockpit
 - audit-remediation
@@ -445,25 +445,29 @@ AC2 narrowed to match actual proof surface: structural surfaces proven at deskto
 [[2026-05-11]]
 ## Audit
 ### Regression Detection
-- quality-runner mode full: Python 4347 passed / 200 failed, Vitest 1243 passed / 0 failed, Playwright 46 passed / 1 failed, ruff 286 violations, eslint clean
-- All 200 Python failures and 286 ruff violations are pre-existing background debt — task #1392 only changed CSS/TSX files in serve/cockpit/web/src/. The 1 Playwright failure is in kanban-board.spec.ts (not task-owned). Frontend Vitest suite (which includes the task-owned ResponsiveLayout_1391.test.tsx) passed 1243/1243.
-- regression verdict: PASS (no regressions attributable to this task)
+- quality-runner mode full: pytest 154 passed / 6 failed (all in test_mcp_kanban.py — MCP kanban server, unrelated to frontend), vitest 1269 passed / 0 failed, playwright 50 passed / 9 failed (accessibility-1395.spec.ts — task #1395 suite, not #1392) + 1 failed (kanban-board.spec.ts max-height NaN — pre-existing test from #957, Column.tsx subsequently modified by #1395 commit 29ec6841; #1392's minWidth:0 does not affect max-height), ruff 286 violations (existing debt), eslint clean
+- regression verdict: PASS — no failures attributable to #1392
 
 ### Intent Verification
-- scope alignment: PASS (all 3 commits touch only serve/cockpit/web/src/ — Shell.css, KanbanBoard.tsx, Card.tsx, Column.tsx, ResponsiveLayout_1391.test.tsx)
-- purpose match: PASS (responsive dashboard layout + PDS token adoption matches stated purpose; implementation addresses the fixed 56px/1fr/360px grid problem and hardcoded hex colors)
+- scope alignment: PASS (all changed files in serve/cockpit/web/src/ — Shell.css, KanbanBoard.tsx, Card.tsx, Column.tsx)
+- purpose match: PASS (responsive breakpoints, PDS token adoption, mobile column width fix — matches stated purpose of responsive dashboard layout and visual design pass)
 - extraneous scope: none
 - boundary check: function-level behavior verification deferred to reviewer
 
 ### Architect Quality: 4/5
-AC was refined from subjective prose to measurable, test-gated criteria with td:2 annotations. Required 3 architect cycles to resolve AC2 (desktop transient-state proof gap), indicating initial imprecision in the proof-surface specification. Final AC set is specific, measurable, and aligned with actual test coverage. Edge cases (mobile zero-width columns, minmax(0) collapse) were caught and addressed through the pipeline. Adequate outcome, but the 3-cycle churn could have been avoided with tighter initial scoping.
+AC went through 3 architect cycles. Final AC is specific, measurable, and test-gated (td:2). Initial AC2 was over-broad (claimed desktop visibility for transient states without proof), caught by reviewer, reconciled in Cycle 3. Challenger engaged at 0.41 confidence with 5 concerns — all addressed. Minor gap: multi-cycle refinement was needed to reach clarity, suggesting initial AC could have been tighter.
 
 ### Commit Integrity
-- upstream commit presence: PASS — 3 task commits confirmed via git log: 0a6d00ca (builder, feat), 0214d4c4 (test-writer, retry), 1eb93e1b (builder, retry fix). All scoped to cockpit-web domain.
-- kanban commit packaging: pending (this audit commit)
+- upstream commit presence: PASS (git log confirms 0a6d00ca feat, 1eb93e1b fix, 0214d4c4 test — all reference #1392)
+- kanban commit packaging: pending (this audit cycle)
 
 ### Deduction Breakdown
-- No deductions applied. Regression detection clean for task scope. Intent verification clean. Architect quality 4/5 (no deduction at this score). Commit integrity confirmed. Reviewer evidence present and detailed across 3 review cycles with explicit AC compliance tables. 
+- No regression deduction: 0 failures attributable to #1392
+- No intent deduction: scope and purpose aligned
+- No lint deduction: no task-related violations
+- No AC quality deduction: 4/5 (above ≤3 threshold)
+- No reviewer evidence deduction: present and detailed with PASS verdict
+- -0.02 commit-integrity granularity: git log confirms all commits but terminal-backed diff/status not available to fully verify clean tree
 
-### Confidence: 1.00
+### Confidence: 0.98
 ### Action: archive
