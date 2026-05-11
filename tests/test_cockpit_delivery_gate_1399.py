@@ -105,3 +105,24 @@ class TestFromAC_CockpitDeliveryGateOrdering:
             "Cockpit Playwright E2E must run before 'Prune dev-only files from consumer tree' "
             "because the prune step removes serve/cockpit/web."
         )
+
+    def test_vitest_step_runs_after_build_step(self) -> None:
+        """AC1: Vitest must run after 'Build cockpit SPA' so it tests the freshly built output."""
+        workflow = _load_sync_workflow()
+        steps = _sync_job_steps(workflow)
+
+        build_index = _step_index_by_name(steps, "Build cockpit SPA")
+
+        vitest_steps = [
+            (index, step)
+            for index, step in enumerate(steps)
+            if "npm test" in str(step.get("run", ""))
+            and step.get("working-directory") == "serve/cockpit/web"
+        ]
+        assert vitest_steps, (
+            "sync-to-main must include a Vitest step (`npm test` in serve/cockpit/web)."
+        )
+        assert all(index > build_index for index, _ in vitest_steps), (
+            "Vitest step must run after 'Build cockpit SPA' so tests run against "
+            "the current build output, not a stale or missing dist."
+        )

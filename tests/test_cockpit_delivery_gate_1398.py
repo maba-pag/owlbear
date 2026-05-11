@@ -134,6 +134,27 @@ class TestFromAC_CockpitDeliveryGateWorkflow:
             )
 
 
+    def test_setup_node_condition_preserves_sync_share(self) -> None:
+        """AC3: Setup Node.js must keep inputs.sync_share while requiring sync_cockpit and excluding build_cockpit."""
+        workflow = _load_sync_workflow()
+        steps = _sync_job_steps(workflow)
+
+        step = _step_by_name(steps, "Setup Node.js")
+        if_expr = str(step.get("if", ""))
+        assert "inputs.sync_share" in if_expr, (
+            "Setup Node.js must preserve inputs.sync_share so the Excalidraw export "
+            "path still activates when sync_share is enabled without sync_cockpit."
+        )
+        assert "inputs.sync_cockpit" in if_expr, (
+            "Setup Node.js must be gated by inputs.sync_cockpit so Node.js is "
+            "available for the cockpit build and test steps."
+        )
+        assert "build_cockpit" not in if_expr, (
+            "Setup Node.js condition must not reference build_cockpit; "
+            "that input is no longer a valid gate for Node.js setup."
+        )
+
+
 class TestFromAC_CockpitPackagingShape:
     """AC2/AC4: workflow packaging must keep dist and remove source web tree."""
 
