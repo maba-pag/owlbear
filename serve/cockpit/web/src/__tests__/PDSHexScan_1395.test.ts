@@ -68,12 +68,12 @@ function findHexViolations(source: string, filePath: string): string[] {
     if (trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/*')) {
       continue
     }
-    // Skip var(--pds-...) usage: these are PDS-compliant tokens
-    if (trimmed.includes('var(--pds-')) {
-      continue
-    }
+    // Strip PDS token usages (var(--pds-...)) before checking for hex.
+    // Do NOT skip the entire line — a line with both a PDS token and a hex literal
+    // must still be flagged for the hex literal.
+    const lineToScan = line.replace(/var\(--pds-[^)]*\)/g, '')
 
-    const matches = [...line.matchAll(HEX_LITERAL_PATTERN)]
+    const matches = [...lineToScan.matchAll(HEX_LITERAL_PATTERN)]
     for (const match of matches) {
       violations.push(`${filePath}:${lineIdx + 1}: ${match[0]}`)
     }
