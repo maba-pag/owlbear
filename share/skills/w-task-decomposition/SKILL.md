@@ -162,7 +162,7 @@ Call `askQuestions` with two options:
 Create each task via `create_task` with title, priority, tags, depends_on, body containing AC, and `parent` when provided by the caller (shortcut mode). Do not pass `status` to `create_task`; tasks are created at `BoardConfig.entry_status`.
 
 - Decomposition mode default status: `research`; create and leave at entry status.
-- Shortcut mode status: caller-provided status, default `backlog` (or `research` for researcher follow-ups). For `backlog`, create first, then call `move_task(status="backlog")`.
+- Shortcut mode status: caller-provided status, default `backlog` (or `research` for researcher follow-ups). For `backlog`, create first, then call `move_task(id={created_id}, status="backlog")`.
 - Never create or move tasks to `todo`. `todo` is architect-gated and only reached via `backlog -> todo` promotion.
 
 When decomposition mode yields two or more implementation tasks (excluding test tasks) under a common parent, create exactly one consolidation-test task after creating the implementation siblings:
@@ -170,7 +170,7 @@ When decomposition mode yields two or more implementation tasks (excluding test 
 - Title pattern: `consolidation test: {feature name}`
 - Tags: include `consolidation-test`
 - `depends_on`: all sibling implementation task IDs
-- Status: `backlog` via create, then `move_task(status="backlog")`
+- Status: `backlog` via create, then `move_task(id={created_id}, status="backlog")`
 
 Group by dependency layer (independent first, then dependents). Record created task IDs for the report.
 
