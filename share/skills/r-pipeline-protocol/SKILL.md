@@ -126,27 +126,42 @@ The pipeline uses three lines of defense. Trust upstream lines' detailed work; f
 - **Deliverables are kanban tasks and working code, not documents.** Research docs are supporting artifacts. After research, always create follow-up tasks.
 - **Verify subagent output.** After a subagent reports completion, verify deliverables exist and match AC; re-run independently only when evidence is missing or contradictory.
 
-### Test-Depth Convention
+### Proof-Bundle Taxonomy
 
-The architect annotates each AC line with a `(td:N)` suffix during Architecture Review (see `w-arch-review` Step 2.1). This controls test-writer scope, reviewer depth, and subagent dispatch.
+`Proof bundle:` is a task-level field set by planner/architect and used by downstream agents for routing.
 
-**Transition guard:** `(td:0)` means "do not write new tests"; it does not erase explicit existing-proof requirements. If a `(td:0)` AC line or architecture note names existing tests, full-suite proof, quality-runner evidence, or an exit-0 verification, builder/reviewer must treat that named proof as required evidence and run it through `quality-runner`.
+| Bundle | Test-writer | Challenger | Code-reader | Reviewer scope |
+|--------|------------|------------|-------------|----------------|
+| `skip` | SKIP | skip | skip | lint only |
+| `existing` | SKIP | skip | skip | named tests + lint |
+| `smoke` | smoke tests | skip | skip | scoped tests + lint |
+| `behavioral` | full TDD | yes | skip | scoped tests + lint + coverage |
+| `critical` | full TDD | yes | yes | full suite + lint + coverage |
 
-| Depth | Suffix | Meaning | Test-writer action |
-|-------|--------|---------|-------------------|
-| 0 | `(td:0)` | No test needed | Skip this AC line |
-| 1 | `(td:1)` | Smoke test | 1 assertion per line |
-| 2 | `(td:2)` | Full TDD | Multiple paths/edges (default) |
+### Escalation Modifiers
 
-**Pipeline routing by max depth** (highest td across all AC lines):
+Proof-bundle modifiers only escalate checks; they never suppress defaults:
 
-| Max depth | Test-writer | Challenger | Code-reader | Reviewer scope |
-|-----------|------------|------------|-------------|----------------|
-| td:0 | SKIP (pass-through) | skip | skip | lint only, unless explicit existing proof is named |
-| td:1 | writes smoke tests | yes | skip | scoped tests + lint |
-| td:2 | full coverage | yes | yes | full (tests + code-reader + lint) |
+| Modifier | Effect | Redundant on |
+|----------|--------|-------------|
+| `+challenge` | Force challenger dispatch | `behavioral`, `critical` |
+| `+reader` | Force code-reader dispatch | `critical` |
 
-AC lines without `(td:N)` annotations default to td:1.
+- Expansion rules: `+challenge` always enables challenger; `+reader` always enables code-reader.
+- Combined modifiers are valid: `smoke+challenge+reader`.
+- Normalization: modifier order is canonicalized alphabetically after bundle; redundant modifiers are accepted and normalized away.
+- Invalid-token rejection: unknown bundle/modifier tokens are rejected at architect assignment time and must be corrected before task advancement.
+
+### Legacy `(td:N)` Compatibility (In-Progress Tasks)
+
+Agents must read `Proof bundle:` first. If absent, map legacy td notation as follows:
+
+| Legacy signal | Compatibility bundle |
+|---------------|----------------------|
+| All AC `(td:0)`, no existing proof named | `skip` |
+| All AC `(td:0)`, existing proof named in verdict | `existing` |
+| Max `(td:1)` | `smoke` |
+| Max `(td:2)` | `critical` |
 
 ### Builder-Skip on Test-Only Retry
 
