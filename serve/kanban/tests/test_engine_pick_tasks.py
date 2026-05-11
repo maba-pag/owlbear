@@ -11,6 +11,7 @@ Covers AC22, AC23, AC27, AC28, D60 sort, D62/D63 greedy wave assembly:
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -620,23 +621,26 @@ class TestFromAC_PickTasksAC22Proof:
     """
 
     def test_claimed_task_excluded_from_pick_tasks(self, tmp_path: Path) -> None:
-        """AC22: a task with claimed_at set must be absent from pick_tasks results.
+        """AC22: a task with an active claim must be absent from pick_tasks results.
 
-        Task 1 has claimed_at set to a fixed timestamp (simulating an active
-        claim).  Task 2 is unclaimed (claimed_at=null).
+        Task 1 has claimed_at set to 5 minutes ago (within the default 1h
+        claim_timeout — its claim is still active).  Task 2 is unclaimed
+        (claimed_at=null).
 
-        pick_tasks passes unclaimed=True to list_tasks, which filters to
-        claimed_at is None (engine.py:753).  Removing that flag from the call
-        at engine.py:1999 would include task 1, failing this assertion.
+        pick_tasks uses timeout-aware filtering via _claim_is_active, which
+        excludes tasks whose claim has not yet expired.  Removing the
+        _claim_is_active filter would include task 1, failing this assertion.
         """
+        five_minutes_ago = datetime.now(UTC) - timedelta(minutes=5)
         board = _make_board(tmp_path)
-        _write_task(board, task_id=1, claimed_at='"2026-04-25T10:00:00+00:00"')
+        _write_task(board, task_id=1, claimed_at=f'"{five_minutes_ago.isoformat()}"')
         _write_task(board, task_id=2)  # unclaimed
         engine = KanbanEngine(board, activity_log=False)
         resp = engine.agent_view().pick_tasks()
         ids = _all_ids(resp)
         assert 1 not in ids, (
-            "Task 1 has claimed_at set → must be excluded from pick_tasks (unclaimed=True filter)"
+            "Task 1 has an active claim (claimed 5 min ago, within 1h timeout) → "
+            "must be excluded from pick_tasks (timeout-aware _claim_is_active filter)"
         )
         assert 2 in ids, "Task 2 is unclaimed → must be included"
 

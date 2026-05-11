@@ -297,6 +297,35 @@ class TestFromAC_PickTasksExpiredClaim:
             "config.pipeline.claim_timeout"
         )
 
+    def test_active_claim_excluded_from_waves(self, tmp_path: Path) -> None:
+        """AC-2 complementary path: task with an active claim must NOT appear in waves.
+
+        A task with claimed_at set to 5 minutes ago is well within the default
+        1h claim_timeout — its claim is still active.  pick_tasks must exclude
+        it from all dispatch waves.
+
+        This is the discriminating complement to the expired-claim inclusion
+        tests: removing the _claim_is_active filter at agent_view.py:388 would
+        pass all expired-claim tests but fail this one.
+        """
+        five_minutes_ago = datetime.now(UTC) - timedelta(minutes=5)
+        board = _make_board(tmp_path)
+        _write_task(
+            board,
+            task_id=21,
+            status="backlog",
+            claimed_at=f'"{five_minutes_ago.isoformat()}"',
+        )
+        engine = KanbanEngine(board, activity_log=False)
+
+        resp = engine.agent_view().pick_tasks()
+
+        assert 21 not in _all_ids(resp), (
+            "Task with an active claim (claimed 5 min ago, within 1h timeout) "
+            "must be excluded from dispatch waves; fails if _claim_is_active "
+            "filter is removed from pick_tasks"
+        )
+
 
 # ---------------------------------------------------------------------------
 # AC-3 (td:1): pending DR with approved response is not processed by pick_tasks
