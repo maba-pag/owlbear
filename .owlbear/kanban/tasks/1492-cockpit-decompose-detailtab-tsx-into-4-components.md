@@ -4,13 +4,14 @@ title: 'Cockpit: Decompose DetailTab.tsx into 4 components'
 status: research
 priority: important
 created: 2026-05-11T23:15:07.557623+00:00
-updated: 2026-05-11T23:15:17.994318+00:00
+updated: 2026-05-11T23:20:15.838029+00:00
 tags:
 - cockpit
 - frontend
 - refactor
 parent:
-depends_on: []
+depends_on:
+- 1493
 blocked: false
 block_reason:
 claimed_at:
