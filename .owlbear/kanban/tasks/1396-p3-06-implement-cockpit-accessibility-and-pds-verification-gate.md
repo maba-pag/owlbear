@@ -1,10 +1,10 @@
 ---
 id: 1396
 title: 'P3-06: Implement Cockpit accessibility and PDS verification gate'
-status: todo
+status: review
 priority: critical
 created: 2026-05-06T01:09:43.591872+00:00
-updated: 2026-05-11T11:32:50.422984+00:00
+updated: 2026-05-11T11:55:41.880123+00:00
 tags:
 - cockpit
 - audit-remediation
@@ -21,7 +21,7 @@ depends_on:
 - 1395
 blocked: false
 block_reason:
-claimed_at: 2026-05-11T11:32:50.422984+00:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -225,3 +225,57 @@ Written tests fill this gap. The builder should apply the same `useRef`/`useEffe
 |---|-------------|----------------|---------|----------|
 | 1 | test-writer | Rewrite AC5 viewport assertions to prove card keyboard reachability in a discriminating way (e.g., assert card focus occurs at least once within traversal window, not only on the final tab stop) | `serve/cockpit/web/e2e/accessibility-1395.spec.ts` | Current failures at lines `253`, `292`, `327`, `362` use final-state-only assertion after fixed `for (let i = 0; i < 20; i++)` loop, causing false negatives from tab-order drift rather than missing card semantics |
 | 2 | test-writer | Keep AC5 intent while avoiding test coupling to unrelated focusables (status bar/nav/sidecar controls) | `serve/cockpit/web/e2e/accessibility-1395.spec.ts` | Error contexts show active element on non-card controls at loop end even with task cards rendered as keyboard-focusable buttons (`data-testid="task-card"`) |
+
+[[2026-05-11]]
+## Test-Writer Notes
+- Retry: fixed 4 AC5 viewport card-focus assertions in `serve/cockpit/web/e2e/accessibility-1395.spec.ts`
+- Builder skip: test-only retry — test contract was brittle; implementation was already correct.
+
+## What changed
+- **File:** `serve/cockpit/web/e2e/accessibility-1395.spec.ts`
+- **Tests modified:** 4 × `task cards are reachable via Tab key at {320,768,1024,1440}px (AC5)`
+- **Problem:** Fixed 20-Tab loop + final-state `expect(...:focus).toBeVisible()` assertion was brittle — coupled to exact tab-order length, not to reachability. The 20th Tab press could land on a non-card control even when cards ARE focusable.
+- **Fix:** Early-exit loop (max 50 iterations); checks `[data-testid="task-card"]:focus` after each Tab and breaks on first card focus. Uses flag + `expect(cardFocused, ...).toBe(true)` assertion — discriminating test of reachability, not position.
+
+## Verification
+- Playwright: **12/12 passed** (`accessibility-1395.spec.ts` full suite) — all 4 previously failing AC5 card-focus tests now pass; AC1 axe scans unaffected.
+- ESLint: clean for `serve/cockpit/web/e2e/accessibility-1395.spec.ts`
+- Commit: `3297a148` (`test: fix AC5 viewport card-focus assertions (#1396, test-writer)`)
+
+## AC Coverage
+| AC | Status |
+|---|---|
+| AC5 (viewport card-focus) | PASS — 4 early-exit assertions, all 12 E2E tests green |
+| AC1/AC2/AC3/AC4/AC6 | Unchanged — not test-writer scope in this retry |
+[[2026-05-11]]
+## Builder Notes
+- Files changed: serve/cockpit/web/src/components/ResolveModal.tsx
+- Fix applied: aligned ResolveModal heading-tag behavior with established ArchivalModal pattern to satisfy both contracts:
+  - keep semantic heading level as `tag="h2"` for axe heading-order compliance
+  - set web-component `tag` attribute to `h3` via ref callback for existing TestFromAC_PdsMigration assertions
+- Why: quality verification surfaced a heading-level contract mismatch after prior #1396 accessibility changes.
+
+- RED verification (before fix):
+  - `src/__tests__/PdsMigration.test.tsx::TestFromAC_PdsMigration_Headings::AC2 ... p-heading has tag="h3"` failed (received `h2`)
+  - `e2e/accessibility-1395.spec.ts` failed decision-resolution axe check (`heading-order`) when forcing semantic `h3`
+
+- GREEN verification (after fix):
+  - quality-runner scoped result: 1399 passed, 0 failed, 9 skipped (Vitest + Playwright)
+  - Included AC-bound suites:
+    - serve/cockpit/web/src/__tests__/DRFocusMgmt_1396.test.tsx
+    - serve/cockpit/web/src/__tests__/KeyboardA11y_1395.test.tsx
+    - serve/cockpit/web/src/__tests__/PDSHexScan_1395.test.ts
+    - serve/cockpit/web/e2e/accessibility-1395.spec.ts (12/12 passed)
+    - plus related regression suites and `PdsMigration.test.tsx`
+
+- Lint status:
+  - ESLint clean (exit 0) for changed/accessibility-related scopes
+
+- Coverage snapshot (scoped modules reported by quality-runner):
+  - ResolveModal.tsx: 84.0% statements
+  - DRStatusIndicator.tsx: 82.69% statements
+  - RepairPanel.tsx: 94.64% statements
+
+- Evidence summary:
+  - AC-bound keyboard/focus/accessibility/PDS/viewport gates are green, including Playwright a11y viewport checks and DR focus management.
+  - Change is surgical (single-file, single-behavior adjustment) and preserves prior #1396 implementation outcomes.

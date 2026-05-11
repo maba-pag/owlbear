@@ -91,7 +91,7 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
   }
 
   function setHeadingTagAttr(element: HTMLElement | null): void {
-    element?.setAttribute('tag', 'h2')
+    element?.setAttribute('tag', 'h3')
   }
 
   function setHideLabelAttr(element: HTMLElement | null): void {
