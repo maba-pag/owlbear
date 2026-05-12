@@ -13,6 +13,7 @@ import type { Board, Task } from '../hooks/useBoard'
 import { usePendingDRs } from '../hooks/usePendingDRs'
 import { useScanPolling } from '../hooks/useScanPolling'
 import Shell from '../Shell'
+import { CockpitProvider } from '../hooks/CockpitProvider'
 
 // ─── Module mock ──────────────────────────────────────────────────────────────
 vi.mock('../hooks/useBoard', () => ({
@@ -70,6 +71,7 @@ function stubHealth(health: HealthState) {
     isStale: false,
     health,
     refetchTasks: vi.fn(),
+    lastDecisionsMtime: null,
   } as ReturnType<typeof useBoard>)
 }
 
@@ -94,7 +96,9 @@ function renderShell(route = '/') {
   return render(
     <PorscheDesignSystemProvider>
       <MemoryRouter initialEntries={[route]}>
-        <Shell />
+        <CockpitProvider>
+          <Shell />
+        </CockpitProvider>
       </MemoryRouter>
     </PorscheDesignSystemProvider>,
   )

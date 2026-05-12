@@ -83,6 +83,7 @@ import { useScanPolling } from '../hooks/useScanPolling'
 import DecisionViewport from '../components/DecisionViewport'
 import type { DecisionViewportProps } from '../components/DecisionViewport'
 import Shell from '../Shell'
+import { CockpitProvider } from '../hooks/CockpitProvider'
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -156,7 +157,9 @@ function renderShell() {
   return render(
     <PorscheDesignSystemProvider>
       <MemoryRouter initialEntries={['/']}>
-        <Shell />
+        <CockpitProvider>
+          <Shell />
+        </CockpitProvider>
       </MemoryRouter>
     </PorscheDesignSystemProvider>,
   )

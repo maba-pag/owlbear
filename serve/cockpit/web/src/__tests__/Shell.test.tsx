@@ -3,6 +3,7 @@ import { render, fireEvent } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
 import Shell from '../Shell'
+import { CockpitProvider } from '../hooks/CockpitProvider'
 
 vi.mock('../hooks/EventSourceProvider', () => ({
   useSSEEvent: vi.fn(() => ({ status: 'closed', mtime: null })),
@@ -28,7 +29,9 @@ function renderShell(route = '/') {
   return render(
     <PorscheDesignSystemProvider>
       <MemoryRouter initialEntries={[route]}>
-        <Shell />
+        <CockpitProvider>
+          <Shell />
+        </CockpitProvider>
       </MemoryRouter>
     </PorscheDesignSystemProvider>,
   )

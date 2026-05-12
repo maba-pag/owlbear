@@ -23,6 +23,7 @@ import ResolveModal from '../components/ResolveModal'
 import HealthBadge from '../components/HealthBadge'
 import DRStatusIndicator from '../components/DRStatusIndicator'
 import Shell from '../Shell'
+import { CockpitProvider } from '../hooks/CockpitProvider'
 
 vi.mock('../hooks/EventSourceProvider', () => ({
   useSSEEvent: vi.fn(() => ({ status: 'closed', mtime: null })),
@@ -172,7 +173,9 @@ function renderShell() {
   return render(
     <PorscheDesignSystemProvider>
       <MemoryRouter initialEntries={['/']}>
-        <Shell />
+        <CockpitProvider>
+          <Shell />
+        </CockpitProvider>
       </MemoryRouter>
     </PorscheDesignSystemProvider>,
   )

@@ -88,6 +88,7 @@ import { usePendingDRs } from '../hooks/usePendingDRs'
 import { usePollingFetch } from '../hooks/usePollingFetch'
 import { repairStorage } from '../api/repair'
 import Shell from '../Shell'
+import { CockpitProvider } from '../hooks/CockpitProvider'
 import DetailTab from '../components/DetailTab'
 import ResolveModal from '../components/ResolveModal'
 import type { Board } from '../hooks/useBoard'
@@ -229,7 +230,9 @@ function renderShell() {
   return render(
     <PorscheDesignSystemProvider>
       <MemoryRouter initialEntries={['/']}>
-        <Shell />
+        <CockpitProvider>
+          <Shell />
+        </CockpitProvider>
       </MemoryRouter>
     </PorscheDesignSystemProvider>,
   )

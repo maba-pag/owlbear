@@ -50,6 +50,7 @@ import { useBoard } from '../hooks/useBoard'
 import { useScanPolling } from '../hooks/useScanPolling'
 import { usePendingDRs } from '../hooks/usePendingDRs'
 import Shell from '../Shell'
+import { CockpitProvider } from '../hooks/CockpitProvider'
 import type { Board, Task } from '../hooks/useBoard'
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
@@ -116,6 +117,7 @@ function stubHooks() {
     isStale: false,
     health: 'green',
     refetchTasks: vi.fn(),
+    lastDecisionsMtime: null,
   } as ReturnType<typeof useBoard>)
   vi.mocked(useScanPolling).mockReturnValue({
     items: [],
@@ -157,7 +159,9 @@ function renderShell(route = '/') {
   return render(
     <PorscheDesignSystemProvider>
       <MemoryRouter initialEntries={[route]}>
-        <Shell />
+        <CockpitProvider>
+          <Shell />
+        </CockpitProvider>
       </MemoryRouter>
     </PorscheDesignSystemProvider>,
   )

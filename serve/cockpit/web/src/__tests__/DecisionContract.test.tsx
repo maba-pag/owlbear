@@ -73,6 +73,7 @@ import { useBoard } from '../hooks/useBoard'
 import { usePendingDRs } from '../hooks/usePendingDRs'
 import DRStatusIndicator from '../components/DRStatusIndicator'
 import Shell from '../Shell'
+import { CockpitProvider } from '../hooks/CockpitProvider'
 import type { Board } from '../hooks/useBoard'
 import type { PendingDR } from '../hooks/usePendingDRs'
 
@@ -133,7 +134,9 @@ function renderShell() {
   return render(
     <PorscheDesignSystemProvider>
       <MemoryRouter initialEntries={['/']}>
-        <Shell />
+        <CockpitProvider>
+          <Shell />
+        </CockpitProvider>
       </MemoryRouter>
     </PorscheDesignSystemProvider>,
   )

@@ -51,6 +51,7 @@ import { useBoard } from '../hooks/useBoard'
 import { useScanPolling } from '../hooks/useScanPolling'
 import { usePendingDRs } from '../hooks/usePendingDRs'
 import Shell from '../Shell'
+import { CockpitProvider } from '../hooks/CockpitProvider'
 import type { Board } from '../hooks/useBoard'
 import type { TaskDetail } from '../components/DetailTab'
 
@@ -158,7 +159,9 @@ function renderShell() {
   return render(
     <PorscheDesignSystemProvider>
       <MemoryRouter initialEntries={['/']}>
-        <Shell />
+        <CockpitProvider>
+          <Shell />
+        </CockpitProvider>
       </MemoryRouter>
     </PorscheDesignSystemProvider>,
   )

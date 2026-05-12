@@ -70,6 +70,7 @@ import HistorySubtab from '../components/HistorySubtab'
 import ActivityTab from '../components/ActivityTab'
 import RepairPanel from '../components/RepairPanel'
 import Shell from '../Shell'
+import { CockpitProvider } from '../hooks/CockpitProvider'
 import { MemoryRouter } from 'react-router'
 import { useRepairFlow } from '../hooks/useRepairFlow'
 import { useBoard } from '../hooks/useBoard'
@@ -203,7 +204,9 @@ function renderShell() {
   return render(
     <PorscheDesignSystemProvider>
       <MemoryRouter initialEntries={['/']}>
-        <Shell />
+        <CockpitProvider>
+          <Shell />
+        </CockpitProvider>
       </MemoryRouter>
     </PorscheDesignSystemProvider>,
   )
