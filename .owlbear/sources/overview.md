@@ -2,6 +2,15 @@
 
 External repos and resources studied during OwlBear development.
 
+## PDS Mutation Error Banner Research (Task #1494)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| PDS Banner API (v3) | <https://designsystem.porsche.com/v3/components/banner/api> | Props, events, slots, CSS vars for PBanner component | `.owlbear/research/cockpit-mutation-error-banner.md` | 2026-05-12 |
+| PDS Inline Notification API (v3) | <https://designsystem.porsche.com/v3/components/inline-notification/api> | Props, events including actionLabel/actionIcon for retry | `.owlbear/research/cockpit-mutation-error-banner.md` | 2026-05-12 |
+| PDS Notification Patterns | <https://designsystem.porsche.com/v3/patterns/notifications/introduction> | Component selection criteria: placement, criticality, states | `.owlbear/research/cockpit-mutation-error-banner.md` | 2026-05-12 |
+| PDS Notification Decision Tree | <https://designsystem.porsche.com/v3/patterns/notifications/decision-tree> | Error/warning case → Banner or Inline Notification recommended | `.owlbear/research/cockpit-mutation-error-banner.md` | 2026-05-12 |
+
 ## PDS v4 Local Hosting Research (Task #1495)
 
 | Source | URL | What | Where Used | Date |
