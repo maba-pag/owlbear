@@ -76,7 +76,9 @@ export default function FilterPanel({
   useEffect(() => {
     if (!open) {
       if (wasOpenRef.current && hadFocusInsideRef.current) {
-        const toggle = document.querySelector<HTMLElement>('[data-testid="filter-toggle"], [data-testid="filter-toggle-real"]')
+        const toggle = document.querySelector<HTMLElement>(
+          '[data-testid="filter-toggle"], [data-testid="filter-toggle-real"]',
+        )
         toggle?.focus()
       }
 

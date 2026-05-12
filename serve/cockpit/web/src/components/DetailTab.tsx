@@ -265,7 +265,8 @@ export default function DetailTab({
       } else {
         setConflictLocalDraft(localDraft)
         setConflictRemoteTask(null)
-        // Preserve conflict UX even if the refetch fails (non-404): user can still decide to discard/overwrite local edits.
+        // Preserve conflict UX even if the refetch fails (non-404):
+        // user can still decide to discard/overwrite local edits.
         setShowConflict(true)
         setShowConflictOverwrite(false)
         setServerValidationMessage(
@@ -373,7 +374,12 @@ export default function DetailTab({
   }
 
   function openConfirm(type: 'move-backward' | 'unblock' | 'unclaim') {
-    const triggerId = type === 'move-backward' ? 'move-backward' : type === 'unclaim' ? 'unclaim-action' : 'unblock-action'
+    let triggerId = 'unblock-action'
+    if (type === 'move-backward') {
+      triggerId = 'move-backward'
+    } else if (type === 'unclaim') {
+      triggerId = 'unclaim-action'
+    }
     confirmTriggerRef.current = document.querySelector(`[data-testid="${triggerId}"]`) as HTMLElement | null
     setConfirmType(type)
   }

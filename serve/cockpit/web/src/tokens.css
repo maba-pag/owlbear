@@ -1,7 +1,8 @@
 /* PDS Design Tokens — Light Theme CSS Custom Properties
  * Values extracted from @porsche-design-system/components-react/styles
  * themeLight object (PDS v4). Regenerate via:
- *   node -e "const t=require('@porsche-design-system/components-react/styles'); console.log(JSON.stringify(t.themeLight,null,2))"
+ *   node -e "const t=require('@porsche-design-system/components-react/styles'); \
+ *     console.log(JSON.stringify(t.themeLight,null,2))"
  */
 :root {
   /* Primary */

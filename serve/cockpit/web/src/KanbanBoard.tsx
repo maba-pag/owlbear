@@ -271,7 +271,11 @@ function KanbanBoardContent({
           Filters
           {hasActiveFilters ? ` (${activeFilterCount})` : ''}
         </button>
-        <span data-testid="filter-result-count-live" aria-live="polite" style={{ position: 'absolute', left: '-9999px' }}>
+        <span
+          data-testid="filter-result-count-live"
+          aria-live="polite"
+          style={{ position: 'absolute', left: '-9999px' }}
+        >
           {filterAnnouncement}
         </span>
         {hasActiveFilters ? (
