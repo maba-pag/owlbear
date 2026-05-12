@@ -45,7 +45,6 @@ EXPECTED_TOOLS: frozenset[str] = frozenset(
         "show_task",
         "create_task",
         "create_dr",
-        "resolve_drs",
         "move_task",
         "edit_task",
         "start_work",
@@ -54,9 +53,7 @@ EXPECTED_TOOLS: frozenset[str] = frozenset(
     }
 )
 
-EXPECTED_OUTCOMES: frozenset[str] = frozenset(
-    {"success", "fail", "reject", "block", "release"}
-)
+EXPECTED_OUTCOMES: frozenset[str] = frozenset({"success", "fail", "reject", "block", "release"})
 
 # ---------------------------------------------------------------------------
 # Shared helpers
@@ -157,9 +154,7 @@ class TestFromAC_LifespanStartup:
         monkeypatch.delenv("KANBAN_TOOLS_EXCLUDE", raising=False)
 
         async with app_lifespan(_server_mock()) as ctx:
-            assert isinstance(ctx, AppContext), (
-                f"app_lifespan must yield AppContext, got {type(ctx).__name__!r}"
-            )
+            assert isinstance(ctx, AppContext), f"app_lifespan must yield AppContext, got {type(ctx).__name__!r}"
 
     @pytest.mark.asyncio
     async def test_app_context_exposes_engine_and_resolved_kanban_dir(
@@ -179,8 +174,7 @@ class TestFromAC_LifespanStartup:
                 f"AppContext.engine must be a KanbanEngine, got {type(ctx.engine).__name__!r}"
             )
             assert ctx.kanban_dir == board.resolve(), (
-                f"AppContext.kanban_dir must equal {board.resolve()!r}, "
-                f"got {ctx.kanban_dir!r}"
+                f"AppContext.kanban_dir must equal {board.resolve()!r}, got {ctx.kanban_dir!r}"
             )
 
 
@@ -271,9 +265,7 @@ class TestFromAC_EndWorkOutcomeSchema:
             (t for t in mcp._tool_manager._tools.values() if t.name == "end_work"),  # noqa: SLF001
             None,
         )
-        assert tool is not None, (
-            "end_work must be registered in the MCP tool registry"
-        )
+        assert tool is not None, "end_work must be registered in the MCP tool registry"
 
         outcome_prop = tool.parameters.get("properties", {}).get("outcome", {})
 
@@ -286,9 +278,7 @@ class TestFromAC_EndWorkOutcomeSchema:
                 if "const" in branch and isinstance(branch["const"], str):
                     actual_values.add(branch["const"])
                 if "enum" in branch:
-                    actual_values.update(
-                        v for v in branch["enum"] if isinstance(v, str)
-                    )
+                    actual_values.update(v for v in branch["enum"] if isinstance(v, str))
 
         assert actual_values >= EXPECTED_OUTCOMES, (
             f"end_work outcome schema is missing values: "

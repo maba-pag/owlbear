@@ -307,7 +307,8 @@ class AgentView:
 
           2. **Filter** — exclude tasks with an active claim (per configured
            ``claim_timeout``), archived, ``blocked=True``, and
-           ``dep_status="blocked"`` tasks; rehydrate each candidate with
+           tasks with unresolved active dependencies, archived, ``blocked=True``,
+           and ``dep_status="blocked"`` tasks; rehydrate each candidate with
            ``show_task()`` to obtain the full body, skip any whose
            ``status == "archived"`` (post-rehydrate guard), then apply the
            TDD gate (in-progress tasks require ``## Test-Writer Notes`` or a

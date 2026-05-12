@@ -47,9 +47,7 @@ def _validate_status_and_priority(statuses: list[str], priorities: list[str]) ->
         )
 
 
-def _validate_entry_and_terminal(
-    statuses: list[str], entry_status: str, terminal_status: str
-) -> None:
+def _validate_entry_and_terminal(statuses: list[str], entry_status: str, terminal_status: str) -> None:
     if entry_status not in statuses:
         raise ConfigError(
             code="ERR_ENTRY_STATUS_INVALID",
@@ -58,9 +56,7 @@ def _validate_entry_and_terminal(
     if terminal_status not in statuses or terminal_status != statuses[-1]:
         raise ConfigError(
             code="ERR_TERMINAL_STATUS_INVALID",
-            user_message=(
-                f"terminal_status {terminal_status!r} must equal statuses[-1] ({statuses[-1]!r})"
-            ),
+            user_message=(f"terminal_status {terminal_status!r} must equal statuses[-1] ({statuses[-1]!r})"),
         )
 
 
@@ -81,8 +77,7 @@ def _validate_agent_compatibility(compatibility: dict[str, Any]) -> None:
                 raise ConfigError(
                     code="ERR_INVALID_STATUS",
                     user_message=(
-                        "agent_compatibility must be symmetric: "
-                        f"{agent!r} -> {peer!r} requires {peer!r} -> {agent!r}"
+                        f"agent_compatibility must be symmetric: {agent!r} -> {peer!r} requires {peer!r} -> {agent!r}"
                     ),
                 )
 
@@ -258,9 +253,7 @@ class BoardConfig(BaseModel):
             if has_flat_keys:
                 raise ConfigError(
                     code="ERR_INVALID_STATUS",
-                    user_message=(
-                        "config.yml mixes flat and grouped keys without schema: grouped"
-                    ),
+                    user_message=("config.yml mixes flat and grouped keys without schema: grouped"),
                 )
 
         # Normalise statuses: [{name: ...}, ...] or [{name: ...}, ...] → [str, ...]
@@ -269,9 +262,7 @@ class BoardConfig(BaseModel):
             first = raw_statuses[0]
             if isinstance(first, dict):
                 data["statuses"] = [
-                    s.get("name", next(iter(s.values()), str(s)))
-                    for s in raw_statuses
-                    if isinstance(s, dict)
+                    s.get("name", next(iter(s.values()), str(s))) for s in raw_statuses if isinstance(s, dict)
                 ]
 
         # Legacy passthrough keys are only synthesized for non-grouped input.
@@ -285,14 +276,10 @@ class BoardConfig(BaseModel):
 
             # Legacy boards often omit agent_map entirely; derive a permissive
             # status-complete map only in that case so explicit {} still fails.
-            if "agent_map" not in data and (
-                "version" in data or "board" in data or isinstance(defaults, dict)
-            ):
+            if "agent_map" not in data and ("version" in data or "board" in data or isinstance(defaults, dict)):
                 statuses = data.get("statuses")
                 if isinstance(statuses, list):
-                    data["agent_map"] = {
-                        status: [] for status in statuses if isinstance(status, str)
-                    }
+                    data["agent_map"] = {status: [] for status in statuses if isinstance(status, str)}
 
         if is_grouped_schema:
             paths = data.get("paths")
@@ -331,10 +318,7 @@ class BoardConfig(BaseModel):
                     )
 
                 root_priorities = data.get("priorities")
-                if (
-                    had_pipeline_priorities
-                    and pipeline.get("priorities") != root_priorities
-                ):
+                if had_pipeline_priorities and pipeline.get("priorities") != root_priorities:
                     raise ConfigError(
                         code="ERR_CONFLICT_STATUS",
                         user_message=(
@@ -410,9 +394,7 @@ class BoardConfig(BaseModel):
     def _validate_semantics(self) -> BoardConfig:
         """Validate semantic invariants required by engine and direct model usage."""
         _validate_status_and_priority(self.statuses, self.priorities)
-        _validate_entry_and_terminal(
-            self.statuses, self.pipeline.entry_status, self.pipeline.terminal_status
-        )
+        _validate_entry_and_terminal(self.statuses, self.pipeline.entry_status, self.pipeline.terminal_status)
         _parse_duration(self.pipeline.claim_timeout)
         _validate_agent_compatibility(self.agents.agent_compatibility)
 
@@ -439,9 +421,7 @@ class Task(BaseModel):
     created: str
     updated: str
     # body can be str (raw markdown) or list[Section] (pre-parsed, Brief C in-memory)
-    body: str | list = Field(
-        default=""
-    )  # list[Section] when constructed with parsed sections
+    body: str | list = Field(default="")  # list[Section] when constructed with parsed sections
 
     # Standard optional fields
     tags: list[str] = Field(default_factory=list)
@@ -580,6 +560,7 @@ class CleanupResult(BaseModel):
 
     released_claim_ids: list[int] = Field(default_factory=list)
     archived_task_ids: list[int] = Field(default_factory=list)
+    pruned_lock_paths: list[str] = Field(default_factory=list)
     skipped_items: list[dict[str, str]] = Field(default_factory=list)
 
 

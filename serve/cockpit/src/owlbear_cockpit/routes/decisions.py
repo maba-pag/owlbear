@@ -13,7 +13,7 @@ from ruamel.yaml import YAML
 from ruamel.yaml.error import YAMLError
 
 from owlbear_cockpit.deps import get_decisions_dir, get_engine
-from owlbear_kanban.decisions import canonical_summary, parse_dr
+from owlbear_kanban.decisions import canonical_summary, move_to_resolved, parse_dr
 from owlbear_kanban.errors import ConcurrencyError
 
 router = APIRouter()
@@ -125,23 +125,17 @@ def resolve_decision(
                 resolved_meta, _ = parse_dr(resolved_path)
             except (TypeError, ValueError, YAMLError) as exc:
                 detail = "Invalid decision file format"
-                raise HTTPException(
-                    status_code=422, detail=detail
-                ) from exc
+                raise HTTPException(status_code=422, detail=detail) from exc
 
             # Requests previously resolved through this endpoint are treated as
             # duplicate submissions and keep FastAPI's {detail} 404 envelope.
             if str(resolved_meta.get("resolved_by", "")) == "cockpit-api":
                 detail = f"Decision {decision_id!r} not found"
-                raise HTTPException(
-                    status_code=404, detail=detail
-                )
+                raise HTTPException(status_code=404, detail=detail)
 
             msg = f"Decision {decision_id!r} is already resolved"
             code = "ERR_STALE"
-            raise ConcurrencyError(
-                code, msg
-            )
+            raise ConcurrencyError(code, msg)
 
         detail = f"Decision {decision_id!r} not found"
         raise HTTPException(status_code=404, detail=detail)
@@ -154,17 +148,13 @@ def resolve_decision(
         YAMLError,
     ) as exc:  # pragma: no cover - defensive malformed file guard
         detail = "Invalid decision file format"
-        raise HTTPException(
-            status_code=422, detail=detail
-        ) from exc
+        raise HTTPException(status_code=422, detail=detail) from exc
 
     current_response = str(meta.get("response", "pending"))
     if current_response != "pending":
         msg = f"Decision {decision_id!r} is already resolved"
         code = "ERR_STALE"
-        raise ConcurrencyError(
-            code, msg
-        )
+        raise ConcurrencyError(code, msg)
 
     updated = dict(meta)
     updated["response"] = req.response
@@ -181,7 +171,6 @@ def resolve_decision(
         # Legacy callers may resolve DRs that point to tasks outside this engine.
         pass
 
-    resolved_path.parent.mkdir(parents=True, exist_ok=True)
-    pending_path.replace(resolved_path)
+    move_to_resolved(pending_path, resolved_path.parent)
 
     return {"id": decision_id, "response": req.response}

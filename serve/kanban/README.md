@@ -46,7 +46,7 @@ engine.release_task(42)
 | `valid_transitions(status)` | Set of all statuses except the given one |
 | `refresh_config()` | Reload config from disk |
 | `repair_storage()` | Quarantine corrupt task files and create action-required tasks |
-| `cleanup()` | User-triggered maintenance: release expired claims, move drift-archived files to `archive/`, and return a `CleanupResult` with `released_claim_ids`, `archived_task_ids`, and `skipped_items` |
+| `cleanup()` | User-triggered maintenance: release expired claims, move drift-archived files to `archive/`, prune orphan lock files, and return a `CleanupResult` with `released_claim_ids`, `archived_task_ids`, `pruned_lock_paths`, and `skipped_items` |
 | `list_sessions(**kwargs)` | Derived `SessionRecord` objects from `activity.jsonl` |
 
 ### Product topology (fixed)
@@ -74,7 +74,9 @@ for wave in response.waves:
         ...
 ```
 
-`AgentView.pick_tasks` runs a five-step read-only pipeline: topology validation against fixed product statuses, filter (exclude tasks with a live claim, archived/blocked/dep-blocked tasks; apply TDD gate for in-progress tasks without `## Test-Writer Notes` unless tagged non-impl; apply clarity gate for active statuses without bullet/numbered AC lines; post-rehydrate archived-status guard skips tasks archived between list and show), deterministic sort (priority ASC, age DESC, id ASC), greedy wave assembly (size cap, dep-disjointness, agent-bucket compatibility), and fixed status-to-agent assignment.
+`AgentView.pick_tasks` runs a five-step read-only pipeline: topology validation against fixed product statuses, filter (exclude tasks with a live claim, archived/blocked tasks, and tasks whose `depends_on` entries are still active or otherwise dependency-blocked; apply TDD gate for in-progress tasks without `## Test-Writer Notes` unless tagged non-impl; apply clarity gate for active statuses without bullet/numbered AC lines; post-rehydrate archived-status guard skips tasks archived between list and show), deterministic sort (priority ASC, age DESC, id ASC), greedy wave assembly (size cap, dep-disjointness, agent-bucket compatibility), and fixed status-to-agent assignment.
+
+Task and archive directories may contain zero-byte `.{id}.lock` files. These are persistent runtime lock sentinels used for cross-process filesystem locking; their presence does not mean a task is currently locked. Cleanup prunes only orphan lock files that no longer correspond to an active or archived task record.
 
 ## Migration
 

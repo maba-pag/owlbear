@@ -22,12 +22,12 @@ Exactly 9 tools are exposed:
 | `list_tasks` | `list_tasks(status: str | None = None, priority: str | None = None, tag: str | None = None, archival_reason: str | None = None, ids: list[int] | None = None, unclaimed: bool = False, blocked: bool | None = None, parent: int | None = None, search: str | None = None, sort: str | None = None, reverse: bool = False, limit: int = 0)` |
 | `show_task` | `show_task(id: str | int, section: str | None = None)` |
 | `pick_tasks` | `pick_tasks(wave_size: int | None = None, max_waves: int = 3)` |
-| `create_task` | `create_task(title: str, body: str = "", priority: str = "needed", tags: list[str] | None = None, parent: int | None = None, depends_on: list[int] | None = None)` |
+| `create_task` | `create_task(title: str, body: str = "", priority: str = "", tags: list[str] | None = None, parent: int | None = None, depends_on: list[int] | None = None)` |
 | `edit_task` | `edit_task(id: str | int, title: str | None = None, body: str | None = None, append_body: str | None = None, timestamp: bool = False, priority: str | None = None, parent: int | None = None, add_dep: list[int] | None = None, remove_dep: list[int] | None = None, add_tag: list[str] | None = None, remove_tag: list[str] | None = None, block_reason: str | None = None, archival_reason: str | None = None, archival_refs: list[int] | None = None)` |
 | `move_task` | `move_task(id: str | int, status: str, archival_reason: str | None = None, archival_refs: list[int] | None = None)` |
 | `start_work` | `start_work(id: str | int)` |
 | `end_work` | `end_work(id: str | int, outcome: str, move_to: str | None = None, note: str | None = None, archival_reason: str | None = None, archival_refs: list[int] | None = None, block_reason: str | None = None)` |
-| `create_dr` | `create_dr(task_id: str, agent: str, request_type: str, body: str)` |
+| `create_dr` | `create_dr(task_id: str | int, agent: str, request_type: str, body: str)` |
 <!-- markdownlint-enable MD056 -->
 
 ### Filter and Retrieval Additions
@@ -35,6 +35,10 @@ Exactly 9 tools are exposed:
 - `list_tasks.ids`: direct ID lookup list. Must not be combined with other filter fields.
 - `list_tasks.archival_reason`: filter archived tasks by reason.
 - `show_task.section`: case-insensitive body-section extraction by heading; when missing, returns `body=None` and `missing_sections=[section]`.
+
+### Creation Semantics
+
+- `create_task.priority`: omitted or `""` uses the product topology default priority (`important`). Pass an explicit value when a different priority is intended.
 
 ### edit_task Semantics
 
@@ -53,7 +57,7 @@ List projection with dependency and archival context.
 - Core: `id`, `title`, `status`, `priority`, `updated`
 - Optional/context: `tags`, `blocked`, `block_reason`, `claimed_at`, `claimed`
 - Archival fields: `archival_reason`, `archival_refs`
-- Dependency projection: `dep_status` in `{ok, redirect, blocked}` (or `None` when no dependencies)
+- Dependency projection: `dep_status` in `{ok, redirect, blocked}` (or `None` when no dependencies). `blocked` includes dependencies that are still active, missing, or archived with a blocking archival reason.
 
 ### TaskFull
 

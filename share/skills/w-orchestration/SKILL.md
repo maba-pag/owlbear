@@ -107,7 +107,7 @@ Wave assembly is engine-native and must be sourced from the `pick_tasks` MCP too
 
 `pick_tasks` wave assembly uses this four-step pipeline:
 
-1. **Filter** — exclude claimed, archived, blocked, and dependency-blocked tasks.
+1. **Filter** — exclude claimed, archived, blocked, and dependency-blocked tasks, including tasks whose dependencies are still active.
 2. **Sort** — deterministic order by priority rank, then age (oldest first), then task ID.
 3. **Greedy wave assembly** — place each task into the first wave that satisfies all constraints.
 4. **Return** — `PickTasksResponse(waves, guidance)`; tasks that cannot fit within `max_waves` are dropped for that cycle and reported in guidance.

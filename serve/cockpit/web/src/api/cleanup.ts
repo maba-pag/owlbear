@@ -8,6 +8,7 @@ export interface SkippedCleanupItem {
 export interface CleanupResult {
   released_claim_ids: number[]
   archived_task_ids: number[]
+  pruned_lock_paths?: string[]
   skipped_items: SkippedCleanupItem[]
 }
 
