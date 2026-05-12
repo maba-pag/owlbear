@@ -4,7 +4,7 @@ title: 'Cockpit: Replace PDS appendChild monkeypatch with property trap on docum
 status: in-progress
 priority: important
 created: 2026-05-12T02:37:00.298093+00:00
-updated: 2026-05-12T14:20:51.534318+00:00
+updated: 2026-05-12T15:16:26.328192+00:00
 tags:
   - cockpit
   - frontend
@@ -321,3 +321,65 @@ Rewrote original AC to fix B3 violation ("correctly" banned word in AC-4) and ad
 | 1 | researcher | Complete task #1510 so local PDS assets match npm package version and workspace can render in E2E runtime. | serve/cockpit/web/public/porsche-design-system/** | #1510 status is `research`; AC-4 proof run on `serve/cockpit/web/e2e/pds-runtime-csp.spec.ts` is 0/5 passing with workspace visibility timeouts. |
 | 2 | builder | Re-run scoped AC-4 Playwright proof for #1496 immediately after #1510 is complete; advance only when `serve/cockpit/web/e2e/pds-runtime-csp.spec.ts` passes. | serve/cockpit/web/e2e/pds-runtime-csp.spec.ts | Current quality-runner result: 0 passed, 5 failed, eslint clean. |
 | 3 | architect | Keep #1496 sequencing behind #1510 in dispatch planning to avoid repeated unreachable builder cycles. | .owlbear/kanban/tasks/1496.md | Structural gate (AC-4 executable pass) remains blocked by unresolved dependency.
+2026-05-12T14:54:21+00:00
+## Builder Notes
+
+### Files Changed
+- None
+
+### Verification Run (AC-4 executable proof)
+- quality-runner scoped run executed required Playwright gate:
+  - `serve/cockpit/web/e2e/pds-runtime-csp.spec.ts`
+- Result: 0 passed, 5 failed
+- All failures timeout in `beforeEach` at 30s while waiting for `[data-region="workspace"]` to be visible.
+
+### Failure Details
+1. `TestFromAC_PDSCustomElementsRegistered` — `p-button custom element is defined after workspace renders`
+2. `TestFromAC_PDSCustomElementsRegistered` — `p-icon, p-tabs, and p-tabs-item are defined after workspace renders`
+3. `TestFromAC_NoCDNCSPViolations` — `no securitypolicyviolation fires with blockedURI from cdn.ui.porsche.com`
+4. `TestFromAC_NoCDNCSPViolations` — `no securitypolicyviolation fires with blockedURI from cdn.ui.porsche.cn`
+5. `TestFromAC_PDSShadowRootActivation` — `p-button element has non-empty shadowRoot after page stabilizes`
+
+### Lint/Test Snapshot
+- Playwright exit code: 1
+- ESLint on target spec: clean (exit code 0)
+- Coverage: not applicable for Playwright run
+
+### Dependency State
+- Existing prerequisite remains unresolved: task #1510 is still in `research`.
+- #1496 already depends on #1510.
+
+### Evidence Summary
+- AC-1 through AC-3 remain implemented from prior builder commit (`a615918d`).
+- AC-4 executable gate remains red in current workspace state; task cannot be advanced to review.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | researcher | Complete #1510 so local PDS assets align with npm package runtime expectations and workspace render unblocks. | `serve/cockpit/web/public/porsche-design-system/**` | AC-4 scoped Playwright run for #1496 is 0/5 passing with workspace visibility timeouts. |
+| 2 | builder | Re-run scoped AC-4 Playwright proof after #1510 is complete and only return DONE once the named spec passes. | `serve/cockpit/web/e2e/pds-runtime-csp.spec.ts` | Latest quality-runner evidence: 0 passed, 5 failed; eslint clean. |
+2026-05-12T15:16:26+00:00
+## Builder Notes
+
+### Files Changed
+- None
+
+### Verification Status
+- No new implementation work was possible this cycle.
+- Existing builder implementation for AC-1..AC-3 remains in place from commit `a615918d`.
+- AC-4 requires executable Playwright pass for `serve/cockpit/web/e2e/pds-runtime-csp.spec.ts`.
+
+### Blocking Condition
+- Task #1496 already depends on #1510.
+- Dependency #1510 is still in `research` (not implemented), which keeps AC-4 gate structurally unreachable in current workspace state.
+
+### Evidence Summary
+- Verified current board state directly: #1510 status is `research`.
+- Prior #1496 retries already produced repeated AC-4 executable failures (workspace never stabilizes for the required spec) while dependency remained unresolved.
+- No additional source changes were made in this cycle.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | researcher | Complete and advance #1510 so local PDS assets align with runtime package expectations. | serve/cockpit/web/public/porsche-design-system/** | #1510 currently `research`; #1496 AC-4 depends on that prerequisite. |
+| 2 | builder | Re-run scoped executable AC-4 proof immediately after #1510 lands; only advance #1496 when `serve/cockpit/web/e2e/pds-runtime-csp.spec.ts` passes. | serve/cockpit/web/e2e/pds-runtime-csp.spec.ts | Current cycle confirms prerequisite is still unresolved, so gate remains unreachable. |

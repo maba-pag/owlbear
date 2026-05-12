@@ -4,7 +4,7 @@ title: 'Cockpit: Centralize API client (tasks + decisions)'
 status: in-progress
 priority: needed
 created: 2026-05-11T23:15:20.997863+00:00
-updated: 2026-05-12T14:34:27.912770+00:00
+updated: 2026-05-12T15:04:05.239168+00:00
 tags:
   - cockpit
   - frontend
@@ -707,3 +707,23 @@ Required follow-up:
 |---|-------------|----------------|---------|----------|
 | 1 | planner | Route #1503 through architecture -> test-writer -> builder -> review -> docs -> done. | `.owlbear/kanban/tasks/1503.md` | #1493 AC-3 is dependency-completion based and #1503 is currently `todo`. |
 | 2 | orchestrator | Redispatch #1493 to builder only after #1503 reaches `done` (with #1501/#1502 already archived). | `.owlbear/kanban/tasks/1493.md`, `.owlbear/kanban/tasks/1503.md` | Current dependency snapshot does not satisfy tracker AC completion criteria. |
+2026-05-12T15:04:05+00:00
+## Builder Notes
+- Scope check: #1493 is a parent/tracker task (`Proof bundle: skip`, tracker AC v2) with no direct implementation surface for builder code changes.
+- AC gate status: NOT MET in current board state.
+- Dependency snapshot (live, verified this run):
+  - #1501: `archived`
+  - #1502: `archived`
+  - #1503: `in-progress`
+- Files changed: none.
+- Tests run: none (non-implementation tracker task).
+- Coverage: n/a.
+- Lint: n/a.
+- Evidence summary: tracker AC-3 requires child #1503 to reach `done`; until then #1493 cannot satisfy all tracker AC lines.
+- Fixes applied: none.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Complete #1503 through builder -> review -> docs -> done. | `.owlbear/kanban/tasks/1503.md` | #1493 tracker AC-3 depends on #1503 completion; current status is `in-progress`. |
+| 2 | orchestrator | Redispatch #1493 only after #1503 reaches `done`. | `.owlbear/kanban/tasks/1493.md`, `.owlbear/kanban/tasks/1503.md` | Current dependency snapshot does not satisfy tracker completion criteria. |

@@ -1,10 +1,10 @@
 ---
 id: 1492
 title: 'Cockpit: Decompose DetailTab.tsx into 4 components'
-status: todo
+status: in-progress
 priority: important
 created: 2026-05-11T23:15:07.557623+00:00
-updated: 2026-05-12T14:33:03.165870+00:00
+updated: 2026-05-12T15:02:07.621952+00:00
 tags:
   - cockpit
   - frontend
@@ -243,3 +243,11 @@ Evidence summary: child completion gates unmet; return to `todo` until #1506, #1
 | 1 | builder | Re-run tracker pass-through once child task #1506 reaches `done`. | .owlbear/kanban/tasks/1506-cockpit-extract-useconflictdraft-hook-conflictbanner-component-from-detailtab.md | AC-1 gate unmet (child status `docs`) |
 | 2 | builder | Re-run tracker pass-through once child task #1507 reaches `done`. | .owlbear/kanban/tasks/1507-cockpit-extract-usetaskmutation-hook-taskactions-component-from-detailtab.md | AC-2 gate unmet (child status `docs`) |
 | 3 | builder | Re-run tracker pass-through once child task #1508 reaches `done`. | .owlbear/kanban/tasks/1508-cockpit-extract-taskfieldseditor-reduce-detailtab-to-container.md | AC-3 gate unmet (child status `todo`) |
+2026-05-12T15:02:07+00:00
+## Test-Writer Notes
+- Proof bundle: skip — no new test writing required.
+- Parent/tracker task — all implementation AC lives in child tasks #1506, #1507, #1508.
+- AC-1..AC-3 are child-completion gates (process checks), not testable Python interfaces.
+- Architecture review explicitly: "Test-writer: SKIP".
+- Child status at pass-through: #1506 docs, #1507 docs, #1508 todo.
+- Passing through to builder.

@@ -1,10 +1,10 @@
 ---
 id: 1494
 title: 'Cockpit: Add PDS banner for mutation error feedback'
-status: review
+status: docs
 priority: needed
 created: 2026-05-11T23:15:34.497443+00:00
-updated: 2026-05-12T14:33:44.950409+00:00
+updated: 2026-05-12T15:05:12.727726+00:00
 tags:
   - cockpit
   - frontend
@@ -564,3 +564,18 @@ Architecture review complete. Umbrella task for PDS mutation error feedback feat
     - Shell-level mutation feedback uses `PBanner` in `serve/cockpit/web/src/Shell.tsx`.
     - Modal-level mutation feedback uses `PInlineNotification` in `serve/cockpit/web/src/components/ArchivalModal.tsx` and `serve/cockpit/web/src/components/ResolveModal.tsx`.
 - Routing decision: Parent #1494 completion gate is now reachable and satisfied; advanced to review.
+2026-05-12T15:05:12+00:00
+## Review Evidence
+- Verdict: PASS
+- PASS confirmation: PASS #1494 to docs | AC mapped to code and evidence sufficient.
+- AC evidence map:
+
+| AC Line | Code / Board Evidence | Test / Proof Evidence | Status |
+|---|---|---|---|
+| AC-1 (P2) | Current kanban snapshot for child tasks 1498, 1499, and 1500 shows all three in archived status with archival_reason `completed`, which is terminal completion beyond the parent gate. | Parent proof bundle is `skip`; the parent contract uses child lifecycle completion as its proof surface. | PASS |
+| AC-2 (B1) | `PBanner` is rendered in `serve/cockpit/web/src/Shell.tsx:232`; `PInlineNotification` is rendered in `serve/cockpit/web/src/components/ArchivalModal.tsx:310` and `serve/cockpit/web/src/components/ResolveModal.tsx:237`. | Direct artifact inspection of the current source matches the architect-refined component-adoption contract. | PASS |
+- Blocking findings: none.
+
+## Observations
+- The builder snapshot recorded child task 1500 at `done`; current board state has since advanced it to `archived` with archival_reason `completed`, so the gate is now strictly stronger than the builder snapshot and still satisfied.
+- No independent quality-runner rerun was needed. The parent task has `Proof bundle: skip`, no parent-level code changes, and the builder evidence became sufficient after direct board and source verification.

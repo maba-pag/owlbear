@@ -1,10 +1,10 @@
 ---
 id: 1507
 title: 'Cockpit: Extract useTaskMutation hook + TaskActions component from DetailTab'
-status: done
+status: archived
 priority: needed
 created: 2026-05-12T03:04:44.023243+00:00
-updated: 2026-05-12T14:36:33.984838+00:00
+updated: 2026-05-12T15:31:33.878667+00:00
 tags:
   - cockpit
   - frontend
@@ -15,7 +15,7 @@ depends_on:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 
@@ -306,3 +306,5 @@ Changed files: `serve/cockpit/web/src/components/DetailTab.tsx`, `serve/cockpit/
 
 ### Files Modified
 - None — no docs changes were required.
+2026-05-12T15:31:33+00:00
+## Audit\n### Regression Detection\n- Vitest independent rerun: 1507 passed, 9 skipped, 0 failed (87 files). Full suite clean.\n- Python suite: not scoped (pure frontend task, zero Python files changed). Pre-existing background failures unrelated.\n- Lint: ESLint clean, Stylelint clean (per reviewer evidence).\n- Regression verdict: PASS\n\n### Intent Verification\n- Scope alignment: PASS (all files in serve/cockpit/web/src/ -- correct cockpit frontend domain)\n- Purpose match: PASS (mutation hook + action component extraction from DetailTab, plus keyed-remount fix and regression test)\n- Extraneous scope: none\n- Boundary check: function-level behavior verification deferred to reviewer\n\n### Architect Quality: 4/5\nAC-1 through AC-5 well-specified (types, testids, visibility conditions, lint commands). Implementation guidance for reset/focus split was proactively useful. One gap: initial proof bundle (existing) proved insufficient for task-switch confirm path, requiring architecture re-review that added AC-6. Two review FAIL cycles before pass. Score 4 -- adequate with one re-scope cycle.\n\n### Commit Integrity\n- Upstream commit presence: PASS\n  - f7e28d2f -- refactor: extract task mutation hook/actions from DetailTab (#1507, builder)\n  - 24ce261b -- fix: reset task actions state on task switch (#1507, builder)\n  - 64a90887 -- test: add task-switch confirm-dialog reset regression test (#1507, test-writer)\n- All commits present and properly tagged before done advancement.\n- Kanban commit packaging: pending (this step)\n\n### Deduction Breakdown\nNo deductions applied.\n- Intent mismatch: none\n- Evidence integrity: reviewer evidence detailed with AC-to-code mapping and independent quality-runner rerun\n- Lint violations: none\n- AC quality: 4/5 (above threshold)\n- Reviewer evidence: present and thorough\n- Regression failures: none\n\n### Confidence: 1.00\n### Action: archive

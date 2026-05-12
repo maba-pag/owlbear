@@ -1,10 +1,10 @@
 ---
 id: 1495
 title: 'Cockpit: Research PDS v4 local hosting and scope CDN patch'
-status: docs
+status: done
 priority: important
 created: 2026-05-11T23:15:45.844267+00:00
-updated: 2026-05-12T14:42:21.348973+00:00
+updated: 2026-05-12T15:19:56.529492+00:00
 tags:
   - cockpit
   - frontend
@@ -204,3 +204,23 @@ Rewrote AC to match the actual research-only deliverable. Removed implementation
 
 ## Observations
 - No blocking findings.
+2026-05-12T15:19:56+00:00
+## Docs Gate
+
+**Verdict: DONE #1495 -> done | docs gate passed**
+
+### Checklist
+
+| Item | Result | Evidence |
+|------|--------|----------|
+| 1. README Verification | N/A | Only changed file: `.owlbear/research/1495-pds-v4-local-hosting.md` — no `serve/`, `setup/`, or `share/` path → no README target mapped by convention |
+| 2. External Attribution | FIXED | Two task-1495 source rows were misplaced under the `## Cockpit API Client Centralization Research (Task #1493)` heading in `.owlbear/sources/overview.md` (flagged as observation by reviewer cycle 1). Moved to correct `## PDS v4 Local Hosting Research (Task #1495)` section. |
+| 3. Research Doc | PASS | `.owlbear/research/1495-pds-v4-local-hosting.md` exists and is linked from task body (`Research doc:` line in Research section). Markdownlint: clean (exit 0). |
+| 4. Deletion Detection | N/A | No files deleted in this task. |
+
+### Files Updated
+- `.owlbear/sources/overview.md` — moved 2 misplaced #1495 entries from wrong section; added TODO markers for pre-existing MD024 duplicate headings (Task #970 at line 368/303, Task #969 at line 4500/294) and MD050 strong-style issues at lines 2299, 2948, 3826 (all pre-existing, pass-through per gate policy).
+- Commit: `177098adcb4295d4a5ec0bf2f5d4c9ab99e62519` — 1 file changed, 6 insertions(+), 2 deletions(-)
+
+### Scratch Cleanup
+No `.owlbear/scratch/1495-*` files found — nothing to clean.

@@ -1,10 +1,10 @@
 ---
 id: 1508
 title: 'Cockpit: Extract TaskFieldsEditor + reduce DetailTab to container'
-status: todo
+status: review
 priority: needed
 created: 2026-05-12T03:04:44.051072+00:00
-updated: 2026-05-12T14:13:07.062697+00:00
+updated: 2026-05-12T14:50:46.435312+00:00
 tags:
   - cockpit
   - frontend
@@ -230,3 +230,14 @@ The reviewer correctly identified an internal AC inconsistency: AC-4 requires th
 ### Action Taken: Resolved AC-4 inconsistency identified by reviewer. Upgraded proof bundle from `existing` to `smoke`. AC-4 now explicitly requires a regression assertion for the preview-after-toggle path while preserving the 8-suite pass requirement. Advancing to todo for test-writer to write the regression assertion.
 2026-05-12T14:13:07+00:00
 Re-refined AC-4 to resolve internal inconsistency (unchanged suites vs. regression test requirement). Upgraded proof bundle from existing → smoke so test-writer writes a preview-after-toggle regression assertion. Code fix is already in place.
+2026-05-12T14:50:46+00:00
+## Test-Writer Notes
+- Retry: smoke regression for preview-after-toggle path. All new tests pass against current implementation (Step 1b.1 — builder skipped).
+- Test file: serve/cockpit/web/src/__tests__/DetailTab.body-preview-toggle.1508.test.tsx
+- Classes: TestFromAC_BodyPreviewToggle
+- Tests per category: happy 1, edge 0, error 0, boundary 0
+- Total: 1 test, PASSES against current fixed code
+- ESLint: clean
+- AC coverage: AC-1 / AC-4 (B2) — edit body → toggle out of edit mode → readonly markdown preview shows unsaved local body (not persisted task.body)
+- Commit: 1af205292478aebb71b728ca5f00c1cd97057c4d
+- Builder skip: test-only retry, all tests green (code fix already in place at TaskFieldsEditor.tsx:~242)

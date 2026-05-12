@@ -4,7 +4,7 @@ title: 'Cockpit: Migrate components to centralized API client'
 status: in-progress
 priority: needed
 created: 2026-05-12T02:43:28.748468+00:00
-updated: 2026-05-12T14:35:53.393300+00:00
+updated: 2026-05-12T15:15:56.521916+00:00
 tags:
   - cockpit
   - frontend
@@ -14,7 +14,7 @@ depends_on:
   - 1502
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-12T15:15:56.521916+00:00
 archival_reason:
 archival_refs: []
 ---
