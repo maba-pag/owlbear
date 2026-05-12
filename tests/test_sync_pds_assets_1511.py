@@ -246,3 +246,101 @@ class TestFromAC_SyncPdsAssetsScript:
             kw in error_out.lower()
             for kw in ("chunk-map", "chunk map", "component chunk", "parse")
         ), f"Expected descriptive chunk-map error, got: {error_out[:300]!r}"
+
+    def test_ac9_mock_execution_proves_cleanup_and_output_without_cdn(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-9: Mock-based execution proof — script clears stale sentinels and writes outputs.
+
+        Not marked api/slow — runs in the standard smoke gate.
+        Stubs globalThis.fetch for all four resource classes (core chunk with parseable
+        component map ≥2 entries, ≥2 component chunk bodies, icon chunk with ≥2 icon
+        filename mappings, ≥2 icon SVG bodies). Seeds stale sentinel files in both
+        output directories before execution so cleanup is proven mechanically.
+        """
+        # --- Workspace layout ---
+        esm_dir = (
+            tmp_path
+            / "node_modules"
+            / "@porsche-design-system"
+            / "components-js"
+            / "esm"
+        )
+        esm_dir.mkdir(parents=True)
+        # index.mjs: provides a URL the script can extract via its regex
+        (esm_dir / "index.mjs").write_text(
+            'cdn.url+"/porsche-design-system/components/'
+            'porsche-design-system.v4.1.0.aabbccdd.js"'
+        )
+
+        components_dir = tmp_path / "public" / "porsche-design-system" / "components"
+        icons_dir = tmp_path / "public" / "porsche-design-system" / "icons"
+        components_dir.mkdir(parents=True)
+        icons_dir.mkdir(parents=True)
+
+        # Seed stale sentinel files — must be absent after script runs (AC-6)
+        (components_dir / "stale.js").write_text("// stale")
+        (icons_dir / "stale.svg").write_text("<!-- stale -->")
+
+        # --- Build URL → body map for fetch stub ---
+        cdn = "https://cdn.ui.porsche.com"
+        # Core chunk: parseable .u=e=> component map with icon + button (≥2 entries)
+        core_body = (
+            '.u=e=>"porsche-design-system."+e+"."+'
+            '{"icon":"aaaa1111","button":"bbbb2222"}[e]+".js"'
+        )
+        # Icon chunk: ≥2 icon filename mappings (names and hashes in hex)
+        icon_chunk_body = '"360":"360.abc12345.svg","add":"add.def67890.svg"'
+        component_body = "// component chunk"
+        icon_svg_body = "<svg></svg>"
+
+        url_map = {
+            f"{cdn}/porsche-design-system/components/porsche-design-system.v4.1.0.aabbccdd.js": core_body,
+            f"{cdn}/porsche-design-system/components/porsche-design-system.button.bbbb2222.js": component_body,
+            f"{cdn}/porsche-design-system/components/porsche-design-system.icon.aaaa1111.js": icon_chunk_body,
+            f"{cdn}/porsche-design-system/icons/360.abc12345.svg": icon_svg_body,
+            f"{cdn}/porsche-design-system/icons/add.def67890.svg": icon_svg_body,
+        }
+
+        fetch_lines = ["const _urlMap = {"]
+        for url, body in url_map.items():
+            fetch_lines.append(f"  {json.dumps(url)}: {json.dumps(body)},")
+        fetch_lines += [
+            "};",
+            "globalThis.fetch = async (url) => {",
+            "  const body = _urlMap[url] ?? '';",
+            "  return { ok: true, status: 200, text: async () => body };",
+            "};",
+            f"await import({json.dumps(str(SCRIPT_PATH))});",
+        ]
+        harness = tmp_path / "harness.mjs"
+        harness.write_text("\n".join(fetch_lines) + "\n")
+
+        result = subprocess.run(
+            ["node", str(harness)],
+            capture_output=True,
+            text=True,
+            cwd=str(tmp_path),
+            env={**os.environ},
+            timeout=30,
+        )
+        assert result.returncode == 0, (
+            f"Mock-based script execution failed (exit {result.returncode}):\n"
+            f"stderr: {result.stderr}\nstdout: {result.stdout}"
+        )
+        # Stale sentinel files must be absent — proves AC-6 cleanup is executed, not assumed
+        assert not (components_dir / "stale.js").exists(), (
+            "stale.js still present — script did not clear components/ before writing (AC-6)"
+        )
+        assert not (icons_dir / "stale.svg").exists(), (
+            "stale.svg still present — script did not clear icons/ before writing (AC-6)"
+        )
+        # Output file counts (AC-9: ≥3 .js, ≥2 .svg)
+        js_files = list(components_dir.glob("*.js"))
+        svg_files = list(icons_dir.glob("*.svg"))
+        assert len(js_files) >= 3, (
+            f"Expected ≥3 .js files (1 core + ≥2 component chunks), found {len(js_files)}"
+        )
+        assert len(svg_files) >= 2, (
+            f"Expected ≥2 .svg files, found {len(svg_files)}"
+        )
