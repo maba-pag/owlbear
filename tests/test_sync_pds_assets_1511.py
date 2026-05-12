@@ -11,6 +11,8 @@ import os
 import subprocess
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).parent.parent
 WEB_ROOT = REPO_ROOT / "serve" / "cockpit" / "web"
 SCRIPT_PATH = WEB_ROOT / "scripts" / "sync-pds-assets.mjs"
@@ -118,3 +120,129 @@ class TestFromAC_SyncPdsAssetsScript:
             kw in error_out.lower()
             for kw in ("cdn", "chunk-map", "chunk map", "index.mjs", "parse")
         ), f"Expected descriptive error message from script, got: {error_out[:300]!r}"
+
+    @pytest.mark.api
+    @pytest.mark.slow
+    @pytest.mark.timeout(180)
+    def test_ac_script_execution_creates_outputs_in_isolated_workspace(
+        self, tmp_path: Path
+    ) -> None:
+        """Proof: executing the script creates 59 component files + 290 icons from scratch.
+
+        Runs sync-pds-assets.mjs in an isolated tmpdir with node_modules symlinked from
+        the real workspace. Starts from empty output dirs so pre-committed assets cannot
+        mask a broken or no-op script. Requires CDN access — marked api/slow.
+        """
+        nm_link = tmp_path / "node_modules"
+        nm_link.symlink_to(WEB_ROOT / "node_modules")
+        (tmp_path / "public" / "porsche-design-system" / "components").mkdir(parents=True)
+        (tmp_path / "public" / "porsche-design-system" / "icons").mkdir(parents=True)
+
+        result = subprocess.run(
+            ["node", str(SCRIPT_PATH)],
+            capture_output=True,
+            text=True,
+            cwd=str(tmp_path),
+            timeout=120,
+        )
+        assert result.returncode == 0, (
+            f"Script failed in isolated workspace: {result.stderr}\n{result.stdout}"
+        )
+
+        out_components = tmp_path / "public" / "porsche-design-system" / "components"
+        out_icons = tmp_path / "public" / "porsche-design-system" / "icons"
+        js_files = list(out_components.glob("*.js"))
+        svg_files = list(out_icons.glob("*.svg"))
+        assert len(js_files) == 59, (
+            f"Script produced {len(js_files)} .js files in isolated workspace (expected 59)"
+        )
+        assert len(svg_files) == 290, (
+            f"Script produced {len(svg_files)} .svg files in isolated workspace (expected 290)"
+        )
+
+    def test_ac8_cdn_download_failure_returns_descriptive_error(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-8: Script exits non-zero with descriptive error when CDN download fails (HTTP 503).
+
+        Uses a Node.js harness that stubs globalThis.fetch to return 503 before
+        importing the script. The fetch mock is in place when main() runs so the
+        core-chunk download fails without any real network traffic.
+        """
+        esm_dir = (
+            tmp_path
+            / "node_modules"
+            / "@porsche-design-system"
+            / "components-js"
+            / "esm"
+        )
+        esm_dir.mkdir(parents=True)
+        (esm_dir / "index.mjs").write_text(
+            'cdn.url+"/porsche-design-system/components/'
+            'porsche-design-system.v4.1.0.59dc31ee9c99f5a43eb5.js"'
+        )
+        script_js = json.dumps(str(SCRIPT_PATH))
+        harness = tmp_path / "harness.mjs"
+        harness.write_text(
+            "globalThis.fetch = async () => "
+            "({ ok: false, status: 503, text: async () => 'Service Unavailable' });\n"
+            f"await import({script_js});\n"
+        )
+        result = subprocess.run(
+            ["node", str(harness)],
+            capture_output=True,
+            text=True,
+            cwd=str(tmp_path),
+            env={**os.environ},
+            timeout=30,
+        )
+        assert result.returncode != 0, "Expected non-zero exit when CDN returns HTTP 503"
+        error_out = result.stderr + result.stdout
+        assert any(
+            kw in error_out.lower()
+            for kw in ("cdn", "download", "http")
+        ), f"Expected descriptive CDN-failure error, got: {error_out[:300]!r}"
+
+    def test_ac8_chunk_map_parse_failure_returns_descriptive_error(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-8: Script exits non-zero with descriptive error when component chunk-map parse fails.
+
+        Uses a Node.js harness that stubs globalThis.fetch to return HTTP 200 with
+        content that has no .u=e=> component-map pattern. The script can download the
+        core chunk successfully but parseComponentHashes must fail with a descriptive error.
+        """
+        esm_dir = (
+            tmp_path
+            / "node_modules"
+            / "@porsche-design-system"
+            / "components-js"
+            / "esm"
+        )
+        esm_dir.mkdir(parents=True)
+        (esm_dir / "index.mjs").write_text(
+            'cdn.url+"/porsche-design-system/components/'
+            'porsche-design-system.v4.1.0.59dc31ee9c99f5a43eb5.js"'
+        )
+        # Core chunk fetch succeeds (HTTP 200) but content lacks the .u=e=> chunk-map pattern.
+        script_js = json.dumps(str(SCRIPT_PATH))
+        harness = tmp_path / "harness.mjs"
+        harness.write_text(
+            "globalThis.fetch = async () => "
+            "({ ok: true, status: 200, text: async () => '// no chunk-map pattern here' });\n"
+            f"await import({script_js});\n"
+        )
+        result = subprocess.run(
+            ["node", str(harness)],
+            capture_output=True,
+            text=True,
+            cwd=str(tmp_path),
+            env={**os.environ},
+            timeout=30,
+        )
+        assert result.returncode != 0, "Expected non-zero exit when chunk-map parse fails"
+        error_out = result.stderr + result.stdout
+        assert any(
+            kw in error_out.lower()
+            for kw in ("chunk-map", "chunk map", "component chunk", "parse")
+        ), f"Expected descriptive chunk-map error, got: {error_out[:300]!r}"
