@@ -58,10 +58,11 @@ def mock_flag(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.usefixtures("mock_flag")
 class TestFromAC_BgeM3EmbeddingProvider:
     # ---------------------------------------------------------------- Happy
 
-    def test_embed_returns_list_of_float_lists(self, mock_flag: MagicMock) -> None:  # noqa: ARG002
+    def test_embed_returns_list_of_float_lists(self) -> None:
         """embed() returns list[list[float]] — one inner list per input text."""
         provider = BgeM3EmbeddingProvider()
         result = provider.embed(["hello world"])
@@ -70,10 +71,7 @@ class TestFromAC_BgeM3EmbeddingProvider:
         assert isinstance(result[0], list)
         assert all(isinstance(v, float) for v in result[0])
 
-    def test_embed_hybrid_returns_hybrid_embeddings_with_all_fields(
-        self,
-        mock_flag: MagicMock,  # noqa: ARG002
-    ) -> None:
+    def test_embed_hybrid_returns_hybrid_embeddings_with_all_fields(self) -> None:
         """embed_hybrid() returns list[HybridEmbedding] with dense, sparse, and colbert."""
         provider = BgeM3EmbeddingProvider()
         results = provider.embed_hybrid(["hello world"])
@@ -119,14 +117,14 @@ class TestFromAC_BgeM3EmbeddingProvider:
         provider = BgeM3EmbeddingProvider()
         assert provider._model is None  # noqa: SLF001
 
-    def test_model_loaded_after_embed_call(self, mock_flag: MagicMock) -> None:  # noqa: ARG002
+    def test_model_loaded_after_embed_call(self) -> None:
         """_model is not None after embed() is called — lazy loading succeeded."""
         provider = BgeM3EmbeddingProvider()
         assert provider._model is None  # noqa: SLF001
         provider.embed(["trigger load"])
         assert provider._model is not None  # noqa: SLF001
 
-    def test_unload_sets_model_to_none(self, mock_flag: MagicMock) -> None:  # noqa: ARG002
+    def test_unload_sets_model_to_none(self) -> None:
         """unload() sets _model back to None, releasing the model reference."""
         provider = BgeM3EmbeddingProvider()
         provider.embed(["load model"])
@@ -134,7 +132,7 @@ class TestFromAC_BgeM3EmbeddingProvider:
         provider.unload()
         assert provider._model is None  # noqa: SLF001
 
-    def test_timer_cancelled_on_unload(self, mock_flag: MagicMock) -> None:  # noqa: ARG002
+    def test_timer_cancelled_on_unload(self) -> None:
         """unload() cancels the idle-expiry timer and sets _timer to None."""
         provider = BgeM3EmbeddingProvider(idle_timeout=60.0)
         provider.embed(["load model"])

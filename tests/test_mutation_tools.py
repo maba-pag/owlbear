@@ -981,11 +981,7 @@ class TestFromAC_DeleteMemoryHint:
 
 
 class TestFromAC_ApproveMemory:
-    """AC7: approve_memory only works on curated state; errors on all other states.
-
-    RED: approve_memory does not exist in owlbear_mcp_memory.tools → ImportError
-    (converted to pytest.fail) inside each test method.
-    """
+    """AC7: approve_memory only works on curated state; errors on all other states."""
 
     @pytest.mark.asyncio
     async def test_approve_memory_promotes_curated_to_approved(
