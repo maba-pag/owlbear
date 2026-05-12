@@ -85,14 +85,16 @@ describe('TestFromAC_AppWiring', () => {
       expect(capturedCalls.length).toBeGreaterThan(0)
       expect(capturedCalls[0].url).toBe('/api/events')
 
-      // The children passed to EventSourceProvider must contain the Shell component.
-      // ErrorBoundary is intentionally nested between the provider and Shell so
-      // runtime failures stay inside the Cockpit app surface.
       const children = capturedCalls[0].children
       expect(isValidElement(children)).toBe(true)
-      expect((children as { type: { name?: string } }).type.name).toBe('ErrorBoundary')
+      // Post-#1504: CockpitProvider is between EventSourceProvider and ErrorBoundary.
+      expect((children as { type: { name?: string } }).type.name).toBe('CockpitProvider')
 
-      const boundaryChildren = (children as { props: { children?: unknown } }).props.children
+      const providerChildren = (children as { props: { children?: unknown } }).props.children
+      expect(isValidElement(providerChildren)).toBe(true)
+      expect((providerChildren as { type: { name?: string } }).type.name).toBe('ErrorBoundary')
+
+      const boundaryChildren = (providerChildren as { props: { children?: unknown } }).props.children
       expect(isValidElement(boundaryChildren)).toBe(true)
       expect((boundaryChildren as { type: { name?: string } }).type.name).toBe('Shell')
 

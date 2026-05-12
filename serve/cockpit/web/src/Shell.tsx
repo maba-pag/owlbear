@@ -5,15 +5,12 @@ import KanbanBoard from './KanbanBoard'
 import ActivityTab from './components/ActivityTab'
 import CleanupPanel from './components/CleanupPanel'
 import DecisionViewport from './components/DecisionViewport'
-import DetailTab, { type TaskDetail } from './components/DetailTab'
+import DetailTab from './components/DetailTab'
 import DRStatusIndicator from './components/DRStatusIndicator'
 import HealthBadge, { type ScanItem as HealthBadgeItem } from './components/HealthBadge'
 import ResolveModal from './components/ResolveModal'
-import { getTask } from './api/tasks'
-import { ApiError } from './api/errors'
-import { useBoard } from './hooks/useBoard'
-import { usePendingDRs } from './hooks/usePendingDRs'
-import { type ScanItem as ScanPollingItem, useScanPolling } from './hooks/useScanPolling'
+import { useBoardState, useDRState, useTaskSelection } from './hooks/CockpitProvider'
+import { type ScanItem as ScanPollingItem } from './hooks/useScanPolling'
 import './Shell.css'
 
 function isHealthBadgeItem(item: ScanPollingItem): item is HealthBadgeItem {
@@ -21,35 +18,30 @@ function isHealthBadgeItem(item: ScanPollingItem): item is HealthBadgeItem {
 }
 
 function Shell() {
-  const { board, tasks, loading, error, health, refetchTasks, lastDecisionsMtime } = useBoard()
+  const { board, tasks, loading, error, health, refetchTasks, items: scanItems, isLoading, scanError, refetch } = useBoardState()
   const {
     count: pendingDRCount,
     items: pendingDRItems,
     isLoading: pendingDRLoading,
     error: pendingDRError,
     refetch: refetchPendingDRs,
-  } = usePendingDRs()
-  const { items: scanItems, isLoading, error: scanError, refetch } = useScanPolling()
+    setSelectedDRId,
+    selectedDR,
+  } = useDRState()
+  const { selectedTaskId, selectedTask, selectedTaskError, select, clear, update } = useTaskSelection()
   const normalizedItems = scanItems.filter(isHealthBadgeItem)
   const statusHealth = scanError ? 'red' : health
   const [hasLoadedScan, setHasLoadedScan] = useState(false)
-  const [selectedDRId, setSelectedDRId] = useState<string | null>(null)
-  const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null)
   const [selectedTaskSubtab, setSelectedTaskSubtab] = useState<string | null>(null)
-  const [selectedTask, setSelectedTask] = useState<TaskDetail | null>(null)
-  const [selectedTaskError, setSelectedTaskError] = useState<string | null>(null)
   const [detailValidationMessage, setDetailValidationMessage] = useState<string | null>(null)
   const [bannerError, setBannerError] = useState<{
     heading: string
     description: string
     state: 'error' | 'warning'
   } | null>(null)
-  const [taskFetchNonce, setTaskFetchNonce] = useState(0)
-  const selectedDR = pendingDRItems.find((item) => item.id === selectedDRId) ?? null
   const tabsRef = useRef<HTMLElement>(null)
   const detailRef = useRef<HTMLDivElement>(null)
   const activityRef = useRef<HTMLDivElement>(null)
-  const refetchPendingDRsRef = useRef(refetchPendingDRs)
 
   const kanbanProps = {
     board,
@@ -58,7 +50,7 @@ function Shell() {
     error,
     refetchTasks,
     onSelectTask: (taskId: number) => {
-      setSelectedTaskId(taskId)
+      select(taskId)
       setDetailValidationMessage(null)
     },
     onMutationError: (heading: string, description: string, state: 'error' | 'warning') => {
@@ -87,61 +79,6 @@ function Shell() {
     tabs.addEventListener('tabChange', onTabChange)
     return () => tabs.removeEventListener('tabChange', onTabChange)
   }, [])
-
-  useEffect(() => {
-    refetchPendingDRsRef.current = refetchPendingDRs
-  }, [refetchPendingDRs])
-
-  useEffect(() => {
-    if (lastDecisionsMtime !== null) {
-      refetchPendingDRsRef.current()
-    }
-  }, [lastDecisionsMtime])
-
-  useEffect(() => {
-    if (selectedTaskId === null) {
-      setSelectedTask(null)
-      setSelectedTaskError(null)
-      return
-    }
-
-    // Clear stale detail data immediately when switching tasks.
-    setSelectedTask(null)
-    setSelectedTaskError(null)
-
-    const controller = new AbortController()
-    let cancelled = false
-
-    void (async () => {
-      try {
-        const task = (await getTask(selectedTaskId, { signal: controller.signal })) as TaskDetail
-        if (!cancelled) {
-          setSelectedTask(task)
-          setSelectedTaskError(null)
-        }
-      } catch (error) {
-        if (error instanceof ApiError && !cancelled) {
-          setSelectedTask(null)
-          const fallback = `Task fetch failed with status ${error.status}`
-          const message = error.message === `Get task request failed with status ${error.status}`
-            ? fallback
-            : error.message
-          setSelectedTaskError(message)
-          return
-        }
-
-        if (!(error instanceof DOMException && error.name === 'AbortError') && !cancelled) {
-          setSelectedTask(null)
-          setSelectedTaskError(error instanceof Error ? error.message : 'Task fetch failed')
-        }
-      }
-    })()
-
-    return () => {
-      cancelled = true
-      controller.abort()
-    }
-  }, [selectedTaskId, taskFetchNonce])
 
   return (
     <div className="shell">
@@ -249,7 +186,7 @@ function Shell() {
                     type="button"
                     data-testid="task-fetch-retry"
                     variant="secondary"
-                    onClick={() => setTaskFetchNonce((value) => value + 1)}
+                    onClick={() => update()}
                   >
                     Retry
                   </PButton>
@@ -261,20 +198,17 @@ function Shell() {
                 board={board}
                 initialSubtab={selectedTaskSubtab}
                 onSelectTask={(taskId, subtab) => {
-                  setSelectedTaskId(taskId)
+                  select(taskId)
                   setSelectedTaskSubtab((current) => subtab ?? current)
                 }}
                 onTaskCleared={(message) => {
-                  setSelectedTaskId(null)
+                  clear()
                   setSelectedTaskSubtab(null)
-                  setSelectedTask(null)
-                  setSelectedTaskError(null)
                   setDetailValidationMessage(message ?? null)
                 }}
                 onTaskUpdated={(updatedTask) => {
                   const previousTask = selectedTask
-                  setSelectedTask(updatedTask)
-                  setSelectedTaskError(null)
+                  update(updatedTask)
                   setDetailValidationMessage(null)
                   setBannerError(null)
                   if (
@@ -297,7 +231,7 @@ function Shell() {
             <div ref={activityRef} data-tab-content="activity" aria-hidden="true">
               <ActivityTab
                 onSelectTask={(taskId, subtab) => {
-                  setSelectedTaskId(taskId)
+                  select(taskId)
                   setSelectedTaskSubtab(subtab ?? null)
                 }}
               />
