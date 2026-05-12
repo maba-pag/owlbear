@@ -209,6 +209,7 @@ export default function ArchivalModal({
       })
 
       if (response.ok) {
+        setError(null)
         onRefresh()
         onClose()
         return
