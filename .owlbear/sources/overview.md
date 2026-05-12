@@ -78,6 +78,14 @@ External repos and resources studied during OwlBear development.
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
 | Ruff S-rules / flake8-bandit | <https://pydevtools.com/handbook/how-to/how-to-enable-ruff-security-rules/> | S-rule coverage list; confirmed Ruff S-rules equivalent to Bandit | `.owlbear/research/1413-ci-sast-baseline.md` | 2026-05-08 |
+
+## PDS Asset Version Check Research (Task #1512)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Vite Plugin API docs | <https://vite.dev/guide/api-plugin.html> | buildStart hook fires on both dev server start and build; inline plugin pattern | `.owlbear/research/1512-pds-version-check.md` | 2026-05-12 |
+| Vite buildStart behavior (issue) | <https://github.com/vitejs/vite/issues/19607> | Confirms buildStart called for client env during dev; backward-compat behavior | `.owlbear/research/1512-pds-version-check.md` | 2026-05-12 |
+| npm scripts docs | <https://docs.npmjs.com/cli/v11/using-npm/scripts/> | Pre/post hooks, script chaining options for standalone check approach | `.owlbear/research/1512-pds-version-check.md` | 2026-05-12 |
 | Best SAST Tools for Python 2026 | <https://appsecsanta.com/sast-tools/sast-tools-for-python> | Tool comparison matrix; evaluated Semgrep, Bandit, CodeQL against existing stack | `.owlbear/research/1413-ci-sast-baseline.md` | 2026-05-08 |
 | Semgrep vs Bandit comparison | <https://dev.to/rahulxsingh/semgrep-vs-bandit-python-security-scanning-compared-2026-5e5j> | Taint-analysis trade-offs; basis for "defer Semgrep" decision | `.owlbear/research/1413-ci-sast-baseline.md` | 2026-05-08 |
 
