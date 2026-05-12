@@ -142,4 +142,41 @@ describe('TestFromAC_PdsVersionCheck', () => {
     expect(warnMsg).toContain('PDS version check skipped:')
     expect(warnMsg).toContain('ENOENT: no such file')
   })
+
+  // AC-4 (retry gap): multiple matching filenames — plugin must use first regex match
+  it('AC-4(first-match): uses first regex-matching filename as asset version when multiple matches present', async () => {
+    expect(plugin).toBeDefined()
+    vi.mocked(readFileSync).mockReturnValue(JSON.stringify({ version: '3.21.0' }) as never)
+    // First matching file is v3.19.0; second is v3.21.0 — plugin must pick first
+    vi.mocked(readdirSync).mockReturnValue([
+      'porsche-design-system.v3.19.0.xyz123.js',
+      'porsche-design-system.v3.21.0.abc456.js',
+    ] as never)
+    invokeConfigResolved(plugin!)
+    const buildStart = plugin!.buildStart as () => Promise<void> | void
+
+    await buildStart()
+
+    const warnMsg = (warnSpy.mock.calls[0]?.[0] as string) ?? ''
+    // Warning must reference first-match asset version (3.19.0), not the second (3.21.0 would be silent match)
+    expect(warnMsg).toContain('3.19.0')
+    expect(warnMsg).toContain('3.21.0')
+    expect(warnMsg).toContain('npm run sync:pds')
+  })
+
+  // AC-6 (retry gap): missing-assets warning must explicitly indicate missing/unmatched core asset
+  it('AC-6(missing-indicator): warning explicitly states missing or unmatched core asset (not just sync command)', async () => {
+    expect(plugin).toBeDefined()
+    vi.mocked(readFileSync).mockReturnValue(JSON.stringify({ version: '3.22.0' }) as never)
+    vi.mocked(readdirSync).mockReturnValue(['unrelated-file.js'] as never)
+    invokeConfigResolved(plugin!)
+    const buildStart = plugin!.buildStart as () => Promise<void> | void
+
+    await buildStart()
+
+    const warnMsg = (warnSpy.mock.calls[0]?.[0] as string) ?? ''
+    // Must indicate the asset is missing/unmatched — remediation command alone is insufficient proof
+    expect(warnMsg.toLowerCase()).toMatch(/no matching|missing|not found/)
+    expect(warnMsg).toContain('npm run sync:pds')
+  })
 })
