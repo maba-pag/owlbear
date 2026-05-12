@@ -37,6 +37,7 @@ export interface DetailTabProps {
   onTaskUpdated?: (task: TaskDetail) => void
   onSelectTask?: (taskId: number, subtab?: string) => void
   onTaskCleared?: (message?: string) => void
+  onMutationError?: (heading: string, description: string, state: 'error' | 'warning') => void
   initialSubtab?: string | null
 }
 
@@ -51,6 +52,7 @@ interface ConflictLocalDraft {
 
 interface MutationOptions {
   conflictDraft?: ConflictLocalDraft
+  errorHeading: string
 }
 
 export default function DetailTab({
@@ -59,6 +61,7 @@ export default function DetailTab({
   onTaskUpdated,
   onSelectTask,
   onTaskCleared,
+  onMutationError,
   initialSubtab,
 }: DetailTabProps) {
   const [editBody, setEditBody] = useState(false)
@@ -224,14 +227,22 @@ export default function DetailTab({
   async function runMutation(
     url: string,
     payload: Record<string, unknown>,
-    options?: MutationOptions,
+    options: MutationOptions,
   ): Promise<void> {
     setServerValidationMessage(null)
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    })
+    let res: Response
+    try {
+      res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Network error'
+      setServerValidationMessage(message)
+      onMutationError?.(options.errorHeading, message, 'error')
+      return
+    }
 
     if (res.ok) {
       const updatedTask = (await res.json()) as TaskDetail
@@ -244,7 +255,7 @@ export default function DetailTab({
     }
 
     if (res.status === 409) {
-      const localDraft = options?.conflictDraft ?? null
+      const localDraft = options.conflictDraft ?? null
       const latestRes = await fetch(`/api/tasks/${t.id}`, { method: 'GET' })
       if (latestRes.ok) {
         const latestTask = (await latestRes.json()) as TaskDetail
@@ -286,11 +297,15 @@ export default function DetailTab({
     }
 
     if (res.status === 422) {
-      setServerValidationMessage(await getResponseErrorMessage(res, 'Validation failed'))
+      const message = await getResponseErrorMessage(res, 'Validation failed')
+      setServerValidationMessage(message)
+      onMutationError?.(options.errorHeading, message, 'warning')
       return
     }
 
-    setServerValidationMessage(await getResponseErrorMessage(res, `Request failed with status ${res.status}`))
+    const message = await getResponseErrorMessage(res, `Request failed with status ${res.status}`)
+    setServerValidationMessage(message)
+    onMutationError?.(options.errorHeading, message, 'error')
   }
 
   async function handleSave() {
@@ -316,7 +331,10 @@ export default function DetailTab({
       parent: parsedParent.value,
       block_reason: t.blocked ? blockReason : null,
     }
-    await runMutation(`/api/tasks/${t.id}/edit`, payload, { conflictDraft })
+    await runMutation(`/api/tasks/${t.id}/edit`, payload, {
+      conflictDraft,
+      errorHeading: 'Edit failed',
+    })
   }
 
   async function handleForceSave() {
@@ -344,24 +362,36 @@ export default function DetailTab({
       depends_on: forceDependsOn.values,
       parent: forceParent.value,
       block_reason: t.blocked ? draft.blockReason : null,
-    })
+    }, { errorHeading: 'Edit failed' })
   }
 
   async function handleConfirm() {
     if (confirmType === 'unblock') {
-      await runMutation(`/api/tasks/${t.id}/edit`, { updated: t.updated, block_reason: null })
+      await runMutation(
+        `/api/tasks/${t.id}/edit`,
+        { updated: t.updated, block_reason: null },
+        { errorHeading: 'Unblock failed' },
+      )
       setConfirmType(null)
       return
     }
     if (confirmType === 'unclaim') {
-      await runMutation(`/api/tasks/${t.id}/release`, { updated: t.updated })
+      await runMutation(
+        `/api/tasks/${t.id}/release`,
+        { updated: t.updated },
+        { errorHeading: 'Unclaim failed' },
+      )
       setConfirmType(null)
       return
     }
     if (confirmType === 'move-backward') {
       const target = backwardTarget
       if (target) {
-        await runMutation(`/api/tasks/${t.id}/move`, { updated: t.updated, status: target })
+        await runMutation(
+          `/api/tasks/${t.id}/move`,
+          { updated: t.updated, status: target },
+          { errorHeading: 'Move failed' },
+        )
       }
       setConfirmType(null)
     }

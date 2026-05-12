@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState } from 'react'
 import { Routes, Route } from 'react-router'
-import { PButton } from '@porsche-design-system/components-react'
+import { PBanner, PButton } from '@porsche-design-system/components-react'
 import KanbanBoard from './KanbanBoard'
 import ActivityTab from './components/ActivityTab'
 import CleanupPanel from './components/CleanupPanel'
@@ -38,6 +38,11 @@ function Shell() {
   const [selectedTask, setSelectedTask] = useState<TaskDetail | null>(null)
   const [selectedTaskError, setSelectedTaskError] = useState<string | null>(null)
   const [detailValidationMessage, setDetailValidationMessage] = useState<string | null>(null)
+  const [bannerError, setBannerError] = useState<{
+    heading: string
+    description: string
+    state: 'error' | 'warning'
+  } | null>(null)
   const [taskFetchNonce, setTaskFetchNonce] = useState(0)
   const selectedDR = pendingDRItems.find((item) => item.id === selectedDRId) ?? null
   const tabsRef = useRef<HTMLElement>(null)
@@ -54,6 +59,12 @@ function Shell() {
     onSelectTask: (taskId: number) => {
       setSelectedTaskId(taskId)
       setDetailValidationMessage(null)
+    },
+    onMutationError: (heading: string, description: string, state: 'error' | 'warning') => {
+      setBannerError({ heading, description, state })
+    },
+    onMutationSuccess: () => {
+      setBannerError(null)
     },
     selectedId: selectedTaskId,
   }
@@ -218,6 +229,13 @@ function Shell() {
         <p-tabs ref={tabsRef}>
           <p-tabs-item ref={(el: HTMLElement | null) => el?.setAttribute('label', 'Detail')}>
             <div ref={detailRef} data-tab-content="detail" aria-hidden="false">
+              <PBanner
+                open={bannerError !== null}
+                heading={bannerError?.heading ?? ''}
+                description={bannerError?.description ?? ''}
+                state={bannerError?.state ?? 'error'}
+                onDismiss={() => setBannerError(null)}
+              />
               {selectedTaskId === null
                 ? <div data-testid="detail-placeholder">Select a task to view details.</div>
                 : null}
@@ -260,6 +278,7 @@ function Shell() {
                   setSelectedTask(updatedTask)
                   setSelectedTaskError(null)
                   setDetailValidationMessage(null)
+                  setBannerError(null)
                   if (
                     previousTask === null ||
                     previousTask.title !== updatedTask.title ||
@@ -269,6 +288,9 @@ function Shell() {
                   ) {
                     refetchTasks()
                   }
+                }}
+                onMutationError={(heading, description, state) => {
+                  setBannerError({ heading, description, state })
                 }}
               />
             </div>

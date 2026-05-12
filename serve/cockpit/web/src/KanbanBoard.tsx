@@ -43,6 +43,8 @@ export interface KanbanBoardProps {
   refetchTasks?: () => void
   selectedId?: number | null
   onSelectTask?: (taskId: number) => void
+  onMutationError?: (heading: string, description: string, state: 'error' | 'warning') => void
+  onMutationSuccess?: () => void
 }
 
 interface ResolvedKanbanBoardProps {
@@ -53,6 +55,8 @@ interface ResolvedKanbanBoardProps {
   refetchTasks: () => void
   selectedId: number | null
   onSelectTask?: (taskId: number) => void
+  onMutationError?: (heading: string, description: string, state: 'error' | 'warning') => void
+  onMutationSuccess?: () => void
 }
 
 function KanbanBoardContent({
@@ -63,10 +67,11 @@ function KanbanBoardContent({
   refetchTasks,
   selectedId,
   onSelectTask,
+  onMutationError,
+  onMutationSuccess,
 }: ResolvedKanbanBoardProps) {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   const [archivalModal, setArchivalModal] = useState<ArchivalModalState | null>(null)
-  const [moveError, setMoveError] = useState<string | null>(null)
   const [dragSource, setDragSource] = useState<DragSourceState | null>(null)
   const [filter, setFilter] = useState<FilterState>(EMPTY_FILTER)
   const [panelOpen, setPanelOpen] = useState(false)
@@ -120,7 +125,6 @@ function KanbanBoardContent({
     e.preventDefault()
     const transitions = board?.valid_transitions[task.status] ?? []
     if (transitions.length === 0) return
-    setMoveError(null)
     setContextMenu({
       taskId: task.id,
       taskStatus: task.status,
@@ -144,7 +148,6 @@ function KanbanBoardContent({
     }
 
     const { taskId, taskUpdated } = dragSource
-    setMoveError(null)
     setDragSource(null)
 
     try {
@@ -155,18 +158,17 @@ function KanbanBoardContent({
       })
       if (res.ok) {
         refetchTasks()
+        onMutationSuccess?.()
         return
       }
 
+      const message = await getResponseErrorMessage(res, `Move failed: ${res.status}`)
       if (res.status === 409) {
-        setMoveError('Move failed: stale snapshot (409)')
         refetchTasks()
-        return
       }
-
-      setMoveError(await getResponseErrorMessage(res, `Move failed: ${res.status}`))
+      onMutationError?.('Move failed', message, 'error')
     } catch {
-      setMoveError('Move failed: network error')
+      onMutationError?.('Move failed', 'Move failed: network error', 'error')
     }
   }
 
@@ -192,7 +194,6 @@ function KanbanBoardContent({
 
   async function handleTransitionClick(taskId: number, targetStatus: string, taskStatus: string, updated: string) {
     setContextMenu(null)
-    setMoveError(null)
 
     if (targetStatus === 'archived') {
       setArchivalModal({
@@ -209,19 +210,19 @@ function KanbanBoardContent({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: targetStatus, updated }),
       })
-      if (res.status === 409) {
-        setMoveError('Move failed: stale snapshot (409)')
+      if (res.ok) {
         refetchTasks()
+        onMutationSuccess?.()
         return
       }
 
-      if (!res.ok) {
-        setMoveError(await getResponseErrorMessage(res, `Move failed: ${res.status}`))
-        return
+      const message = await getResponseErrorMessage(res, `Move failed: ${res.status}`)
+      if (res.status === 409) {
+        refetchTasks()
       }
-      refetchTasks()
+      onMutationError?.('Move failed', message, 'error')
     } catch {
-      setMoveError('Move failed: network error')
+      onMutationError?.('Move failed', 'Move failed: network error', 'error')
     }
   }
 
@@ -329,9 +330,6 @@ function KanbanBoardContent({
           )
         })}
       </div>
-
-      {moveError && <div data-testid="move-error" role="alert">{moveError}</div>}
-
       {archivalModal && (
         <ArchivalModal
           taskId={archivalModal.taskId}
@@ -411,6 +409,8 @@ export default function KanbanBoard({
   refetchTasks = () => {},
   selectedId = null,
   onSelectTask,
+  onMutationError,
+  onMutationSuccess,
 }: KanbanBoardProps) {
   return (
     <KanbanBoardContent
@@ -421,6 +421,8 @@ export default function KanbanBoard({
       refetchTasks={refetchTasks}
       selectedId={selectedId}
       onSelectTask={onSelectTask}
+      onMutationError={onMutationError}
+      onMutationSuccess={onMutationSuccess}
     />
   )
 }
