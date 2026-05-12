@@ -1,10 +1,10 @@
 ---
 id: 1508
 title: 'Cockpit: Extract TaskFieldsEditor + reduce DetailTab to container'
-status: in-progress
+status: archived
 priority: needed
 created: 2026-05-12T03:04:44.051072+00:00
-updated: 2026-05-12T16:23:16.949038+00:00
+updated: 2026-05-12T21:31:06.620998+00:00
 tags:
   - cockpit
   - frontend
@@ -13,10 +13,11 @@ parent: 1492
 depends_on:
   - 1506
   - 1507
+  - 1504
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 
@@ -305,3 +306,116 @@ Relaxed AC-4 file-placement constraint to accept standalone task-scoped test sui
 - Existing proof scope: Full Vitest suite (`npm test` in `serve/cockpit/web/`) including `DetailTab.body-preview-toggle.1508.test.tsx` (regression for edit body → toggle out of edit mode → readonly preview shows unsaved local body).
 - Latest Architecture Re-Review (2026-05-12T15:53:11+00:00) de-escalated proof bundle from `smoke` → `existing` after confirming regression test already passes against fixed code. Test-writer: SKIP per arch directive.
 - Passing through to builder.
+2026-05-12T17:04:07+00:00
+## Builder Notes
+- Proof bundle route: `existing` with required proof `npm test` (full Vitest suite) in `serve/cockpit/web/` plus AC lint gates (`npx eslint src/`, `npm run lint:css`).
+- Implementation status: no code changes in this builder cycle; current #1508 code/test artifacts were left intact.
+- Quality-runner evidence (fresh run for this cycle):
+  - Vitest full suite: **failed** (1561 passed, 5 failed, 9 skipped; exit 1).
+  - ESLint (`npx eslint src/`): clean (exit 0).
+  - Stylelint (`npm run lint:css`): clean (exit 0).
+- Failure surface is outside #1508 acceptance criteria implementation and maps to active #1504 provider-wiring work:
+  - `src/App.wiring.test.tsx > TestFromAC_AppWiring > AC6: EventSourceProvider ...`
+  - `src/__tests__/App.wiring.1504.test.tsx > TestFromAC_CockpitProviderWiring > AC-9 ...`
+  - `src/__tests__/CockpitProvider_1504.test.tsx > TestFromAC_CockpitProvider > AC-4 ... aborts in-flight getTask fetch ...`
+- Structural gate assessment: #1508 cannot satisfy its required `existing` full-suite proof until #1504 wiring contracts are green.
+- Board update applied: added dependency `#1504` to #1508 to reflect the proof-gate prerequisite.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Re-run #1508 required proof (`npm test` full suite + lint gates) after #1504 is green, then advance to review if all gates pass. | serve/cockpit/web (full suite); serve/cockpit/web/src (eslint) | quality-runner report in this cycle: 5 Vitest failures, all in App/CockpitProvider wiring tests |
+| 2 | builder | Keep #1508 dependency on #1504 in routing so review is not retried while proof gate is structurally red from upstream task state. | .owlbear/kanban/tasks/1508-cockpit-extract-taskfieldseditor-reduce-detailtab-to-container.md | dependency added in this cycle + same quality-runner failure set |
+
+2026-05-12T17:39:41+00:00
+## Builder Notes
+- No code edits were made in this builder cycle for #1508; implementation remains the previously-fixed state.
+- Required proof bundle (`existing`) was re-run in `serve/cockpit/web`.
+- Quality evidence:
+  - `npm test -- --silent`: FAILED (exit 1). Aggregate summary observed: `15 failed | 74 passed` test files. Failures are concentrated in upstream/frontend wiring and contract suites, including:
+    - `src/App.wiring.test.tsx`
+    - `src/__tests__/CockpitProvider_1504.test.tsx`
+    - `src/__tests__/DecisionContract.test.tsx`
+    - `src/__tests__/ErrorContract.test.tsx`
+    - `src/__tests__/PdsMigration.test.tsx`
+    - `src/__tests__/Shell.callbacks_1457.test.tsx`
+  - `npx eslint src/`: PASS (exit 0, no violations)
+  - `npm run lint:css`: PASS (exit 0)
+- Structural gate result: #1508 cannot advance to review while required full-suite proof is red from upstream task surfaces (notably #1504 wiring area already listed as dependency).
+- Next required action: rerun the same proof bundle after upstream failing suites are green.
+2026-05-12T18:17:24+00:00
+## Builder Notes
+- No code edits in this builder cycle for #1508.
+- Re-ran required `existing` proof bundle via quality-runner for #1508 in `serve/cockpit/web`:
+  - `npm test -- --silent`: FAIL (1534 passed, 1 failed, 11 skipped).
+  - Failing test: `src/App.wiring.test.tsx > TestFromAC_AppWiring > AC6 ...` with assertion `expected 'CockpitProvider' to be 'ErrorBoundary'`.
+  - `npx eslint src/`: PASS (0 violations).
+  - `npm run lint:css`: PASS (0 violations).
+- Structural gate result: #1508 cannot advance while full-suite proof remains red from upstream provider-wiring surface (task #1504 is in-progress and unresolved).
+- Evidence summary: #1508 implementation and its prior regression fix remain intact; only dependency-gated full-suite failure blocks review advancement in this cycle.
+2026-05-12T20:45:25+00:00
+## Builder Notes
+- No code edits were made in this builder cycle for #1508.
+- Required proof bundle (`existing`) was executed via quality-runner in `serve/cockpit/web`:
+  - `npm test -- --silent`: FAIL (1563 passed, 1 failed, 11 skipped).
+  - Current failing test: `src/__tests__/PdsMigration.test.tsx::AC1 variant: DetailTab — save=primary, all other action buttons=secondary (PDS v4: tertiary removed)::conflict-refresh has variant="secondary" (shown in conflict modal)` with `TypeError: Cannot read properties of null (reading 'variant')`.
+  - `npx eslint src/`: PASS (exit 0).
+  - `npm run lint:css`: PASS (exit 0).
+- Instability check:
+  - Scoped rerun of `src/__tests__/CockpitProvider_1504.test.tsx` is green (53 passed, 0 failed), while full-suite failures shift across runs, indicating a cross-suite/full-suite instability outside this task’s touched extraction scope.
+- Structural gate result:
+  - #1508 implementation remains in previously fixed state, but cannot satisfy the required full-suite proof gate while unrelated frontend suites are red/flaky in the current workspace state.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Refine #1508 proof contract to a task-scoped verification surface (DetailTab extraction/regression suites + lint) or explicitly declare upstream full-suite gate ownership for unrelated failures. | .owlbear/kanban/tasks/1508-cockpit-extract-taskfieldseditor-reduce-detailtab-to-container.md | quality-runner full run for #1508: 1 unrelated failure in `src/__tests__/PdsMigration.test.tsx` while lint gates pass |
+| 2 | builder | Re-run #1508 required proof after proof contract is clarified or upstream failing frontend suite is stabilized, then advance to review if all required gates pass. | serve/cockpit/web | same quality-runner evidence in this cycle |
+
+- Evidence summary: full-suite proof is currently structurally blocked by unrelated frontend failure; task-scoped extraction surface and lint remain healthy.
+2026-05-12T20:47:07+00:00
+## Builder Notes
+- Cycle type: pass-through verification for `Proof bundle: existing` (no implementation edits required in this cycle).
+- Files changed: none.
+- Required proof executed via `quality-runner` in `serve/cockpit/web`.
+- Test results: full Vitest suite passed (`1564 passed`, `0 failed`, `11 skipped`).
+- Lint status: `npx eslint src/` clean; `npm run lint:css` clean.
+- Coverage: not required for `existing` proof bundle.
+- Evidence summary: prior upstream/full-suite instability that blocked routing is no longer present in this run; all required gates are green, so task is advanced to review.
+2026-05-12T21:03:20+00:00
+## Review Evidence
+- Verdict: PASS
+- PASS confirmation: PASS #1508 -> docs | AC mapped to code and evidence sufficient.
+- Builder evidence reviewed first: the latest builder note reports full Vitest green (`1564 passed`, `0 failed`, `11 skipped`) and clean ESLint/Stylelint in `.owlbear/kanban/tasks/1508-cockpit-extract-taskfieldseditor-reduce-detailtab-to-container.md:381-382`. Current editor diagnostics on `TaskFieldsEditor.tsx`, `DetailTab.tsx`, `DetailTab.body-preview-toggle.1508.test.tsx`, `Shell.tsx`, and `useTaskMutation.ts` are clean.
+- Blocking findings: none.
+- AC evidence map:
+
+| AC Line | Code Evidence | Test Evidence | Status |
+|---|---|---|---|
+| AC-1 | `TaskFieldsEditor` exports `parseDependsOn`/`parseParent` and owns `editBody`, `body`, `isDirty`, `handleSave`, and readonly preview (`serve/cockpit/web/src/components/TaskFieldsEditor.tsx:33`, `serve/cockpit/web/src/components/TaskFieldsEditor.tsx:54`, `serve/cockpit/web/src/components/TaskFieldsEditor.tsx:106`, `serve/cockpit/web/src/components/TaskFieldsEditor.tsx:109`, `serve/cockpit/web/src/components/TaskFieldsEditor.tsx:137`, `serve/cockpit/web/src/components/TaskFieldsEditor.tsx:146`, `serve/cockpit/web/src/components/TaskFieldsEditor.tsx:242`, `serve/cockpit/web/src/components/TaskFieldsEditor.tsx:250`). | The dedicated regression suite proves `edit body -> toggle out of edit mode -> readonly preview shows unsaved local body` (`serve/cockpit/web/src/__tests__/DetailTab.body-preview-toggle.1508.test.tsx:71`, `serve/cockpit/web/src/__tests__/DetailTab.body-preview-toggle.1508.test.tsx:98`). | PASS |
+| AC-2 | `DetailTab` imports the extracted editor and parser helpers, reuses parsers only for force-save, and renders the extracted editor as the editable-field surface (`serve/cockpit/web/src/components/DetailTab.tsx:6`, `serve/cockpit/web/src/components/DetailTab.tsx:7`, `serve/cockpit/web/src/components/DetailTab.tsx:8`, `serve/cockpit/web/src/components/DetailTab.tsx:113`, `serve/cockpit/web/src/components/DetailTab.tsx:122`, `serve/cockpit/web/src/components/DetailTab.tsx:123`, `serve/cockpit/web/src/components/DetailTab.tsx:163`). No inline field state, parser logic, utility helpers, or field input JSX remain in the container. | Artifact inspection. | PASS |
+| AC-3 | `DetailTabProps` is exported, `TaskDetail` is re-exported, `handleForceSave` stays in the container, and downstream import surfaces still resolve through `DetailTab` (`serve/cockpit/web/src/components/DetailTab.tsx:46`, `serve/cockpit/web/src/components/DetailTab.tsx:113`, `serve/cockpit/web/src/components/DetailTab.tsx:122`, `serve/cockpit/web/src/components/DetailTab.tsx:123`, `serve/cockpit/web/src/Shell.tsx:8`, `serve/cockpit/web/src/hooks/useTaskMutation.ts:12`, `serve/cockpit/web/src/__tests__/DetailTab.pbanner-1498.test.tsx:20`, `serve/cockpit/web/src/__tests__/TaskDetailModel.test.tsx:25`, `serve/cockpit/web/src/__tests__/ErrorContract.test.tsx:95`, `serve/cockpit/web/src/__tests__/Shell.on-task-updated.test.tsx:56`). | Editor diagnostics are clean in the touched compatibility surface. | PASS |
+| AC-4 | The final architecture re-review explicitly allows the standalone regression suite and restores the proof bundle to `existing` (`.owlbear/kanban/tasks/1508-cockpit-extract-taskfieldseditor-reduce-detailtab-to-container.md:285`, `.owlbear/kanban/tasks/1508-cockpit-extract-taskfieldseditor-reduce-detailtab-to-container.md:292`, `.owlbear/kanban/tasks/1508-cockpit-extract-taskfieldseditor-reduce-detailtab-to-container.md:293`, `.owlbear/kanban/tasks/1508-cockpit-extract-taskfieldseditor-reduce-detailtab-to-container.md:306`). | The regression suite asserts the repaired preview branch (`serve/cockpit/web/src/__tests__/DetailTab.body-preview-toggle.1508.test.tsx:71`, `serve/cockpit/web/src/__tests__/DetailTab.body-preview-toggle.1508.test.tsx:98`), and the latest builder note records full Vitest green (`.owlbear/kanban/tasks/1508-cockpit-extract-taskfieldseditor-reduce-detailtab-to-container.md:381`). | PASS |
+| AC-5 | Latest builder note records clean ESLint and Stylelint (`.owlbear/kanban/tasks/1508-cockpit-extract-taskfieldseditor-reduce-detailtab-to-container.md:382`). | Current editor diagnostics on touched files are clean. | PASS |
+
+## Observations
+- AC-2 and AC-3 wording still have minor drift relative to the task’s own implementation guidance. AC-2 literally says `DetailTab.tsx` contains no inline `handleSave` function (`.owlbear/kanban/tasks/1508-cockpit-extract-taskfieldseditor-reduce-detailtab-to-container.md:57`), while the same task body expects `TaskFieldsEditor` to receive an `onSave(payload, conflictDraft)` callback from the container (`.owlbear/kanban/tasks/1508-cockpit-extract-taskfieldseditor-reduce-detailtab-to-container.md:102`). AC-3 also names Shell.tsx as a `TaskDetail` type-import site, but the actual compatibility surface there is the unchanged default `DetailTab` import (`serve/cockpit/web/src/Shell.tsx:8`). These are contract-wording issues, not current implementation defects, so they did not block review.
+- No additional safety or security issues were visible in the scoped files; this remains a frontend extraction with no new network, auth, storage, or dependency surface.
+2026-05-12T21:13:35+00:00
+## Docs Gate
+
+**Verdict:** PASS — no documentation updates required.
+
+### Checklist
+
+| Item | Result | Evidence |
+|------|--------|----------|
+| README Verification | N/A — no impact | `serve/cockpit/README.md` documents backend API surface only. Zero grep matches for `DetailTab`/`TaskFieldsEditor` across all READMEs. Pure internal component extraction — no public API, CLI, or route changes. No drift introduced. |
+| External Attribution | N/A | All sources in task body are internal codebase files (DetailTab.tsx, api/tasks.ts, Shell.tsx, test files). No external sources. |
+| Research Doc | PASS | `.owlbear/research/cockpit-taskfieldseditor-extraction.md` exists; task body references it; research doc links back to #1508 at line 3. |
+| Deletion Detection | N/A | No files deleted. Two files added (TaskFieldsEditor.tsx, DetailTab.body-preview-toggle.1508.test.tsx), one modified (DetailTab.tsx). No orphaned references. |
+
+### Scratch Cleanup
+No `.owlbear/scratch/1508-*` files found — nothing to clean.
+2026-05-12T21:31:06+00:00
+## Audit\n\n### Regression Detection\nQuality-runner full suite: Python 4397 total with 20 failures + 4 errors, all in unrelated domains (test_cockpit_view.py — FileNotFoundError from cleanup tasks; test_engine_accessor_migration.py — #1474 accessor migration; test_server.py — #1470 status names; test_ideation_diagram.py — curation residue). None of these files were modified by #1508 commits. Vitest: 1 env-level failure (requestAnimationFrame in Shell.card-selection.integration.test.tsx — unrelated to DetailTab extraction). ESLint, Stylelint, Ruff all clean. No #1508-caused regressions detected.\n\n### Intent Verification\nChanged files: TaskFieldsEditor.tsx (new component), DetailTab.tsx (reduced to container), DetailTab.body-preview-toggle.1508.test.tsx (regression test). All within cockpit frontend components/ and __tests/ domain. Implementation matches stated purpose: field editing extraction from monolith DetailTab into dedicated component. No extraneous scope.\n\n### Architect Quality\nScore: 3/5. Initial AC-4 (\"all 8 suites pass unchanged\") was internally inconsistent with the proof gap that required a new regression assertion. Required 2 architect re-reviews to resolve the AC-4 wording and proof bundle (existing → smoke → existing). LOC target in original AC was unrealistic (≤100 LOC vs. realistic ~130-150). The architect responded well to reviewer feedback and final AC is solid, but initial drafting gaps caused 3 review cycles of rework.\n\n### Commit Integrity\n4 upstream commits confirmed via `git log`:\n- fd95d0b2 refactor: extract task fields editor from detail tab (#1508, builder)\n- cf3ef28d fix: align task edit payload typing (#1508, builder)\n- 422aa6ab fix: sync readonly body preview with local edit state (#1508, builder)\n- 1af20529 test: add preview-after-toggle regression for body state (#1508, test-writer)\nAll use proper format with task ID and agent attribution.\n\n### Deductions\n| Criterion | Deduction |\n|---|---|\n| AC quality score ≤ 3 | -.03 |\n\n### Confidence: 0.97\n### Action: ARCHIVE
