@@ -20,6 +20,12 @@ External repos and resources studied during OwlBear development.
 | PDS Notification Patterns | <https://designsystem.porsche.com/v3/patterns/notifications/introduction> | Component selection criteria: placement, criticality, states | `.owlbear/research/cockpit-mutation-error-banner.md` | 2026-05-12 |
 | PDS Notification Decision Tree | <https://designsystem.porsche.com/v3/patterns/notifications/decision-tree> | Error/warning case → Banner or Inline Notification recommended | `.owlbear/research/cockpit-mutation-error-banner.md` | 2026-05-12 |
 
+## PBanner Shell Wiring Research (Task #1498)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| PDS Banner examples (v3) | <https://designsystem.porsche.com/v3/components/banner/examples/> | Usage patterns, slot-based heading/description, CSS custom properties | `.owlbear/research/cockpit-wire-pbanner-shell.md` | 2026-05-12 |
+
 ## PDS v4 Local Hosting Research (Task #1495)
 
 | Source | URL | What | Where Used | Date |
