@@ -18,22 +18,30 @@ export interface CardProps {
 }
 
 export function Card({ task, selected = false, onSelect, onContextMenu, onDragStart, onDragEnd }: CardProps) {
+  function openContextMenu(event: React.KeyboardEvent<HTMLDivElement>) {
+    const rect = event.currentTarget.getBoundingClientRect()
+    const syntheticEvent = {
+      preventDefault: () => {},
+      clientX: rect.left,
+      clientY: rect.bottom,
+    } as unknown as React.MouseEvent
+    onContextMenu(syntheticEvent, task)
+  }
+
   function handleKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault()
-      onSelect?.(task.id)
+      if (onSelect) {
+        onSelect(task.id)
+      } else if (event.key === 'Enter') {
+        openContextMenu(event)
+      }
       return
     }
 
     if (event.key === 'F10' && event.shiftKey) {
       event.preventDefault()
-      const rect = event.currentTarget.getBoundingClientRect()
-      const syntheticEvent = {
-        preventDefault: () => {},
-        clientX: rect.left,
-        clientY: rect.bottom,
-      } as unknown as React.MouseEvent
-      onContextMenu(syntheticEvent, task)
+      openContextMenu(event)
     }
   }
 
