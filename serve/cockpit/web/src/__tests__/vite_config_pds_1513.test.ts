@@ -77,7 +77,7 @@ describe('TestFromAC_PdsVersionCheck', () => {
     await buildStart()
 
     expect(vi.mocked(readFileSync)).toHaveBeenCalledWith(
-      expect.stringContaining('@porsche-design-system/components-js/package.json'),
+      '/fake/project/node_modules/@porsche-design-system/components-js/package.json',
       'utf-8',
     )
   })
@@ -93,7 +93,7 @@ describe('TestFromAC_PdsVersionCheck', () => {
     await buildStart()
 
     expect(vi.mocked(readdirSync)).toHaveBeenCalledWith(
-      expect.stringContaining('public/porsche-design-system/components'),
+      '/fake/project/public/porsche-design-system/components',
     )
   })
 
@@ -149,6 +149,7 @@ describe('TestFromAC_PdsVersionCheck', () => {
     vi.mocked(readFileSync).mockReturnValue(JSON.stringify({ version: '3.21.0' }) as never)
     // First matching file is v3.19.0; second is v3.21.0 — plugin must pick first
     vi.mocked(readdirSync).mockReturnValue([
+      'style.css',  // non-match — must be skipped
       'porsche-design-system.v3.19.0.xyz123.js',
       'porsche-design-system.v3.21.0.abc456.js',
     ] as never)
