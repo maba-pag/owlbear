@@ -52,6 +52,7 @@ The `isInjected` flag prevents re-injection of the core chunk `<script>` on seco
 ### Option Details
 
 **Option A — Property trap (recommended).** Before calling `load()`, pre-create `document.porscheDesignSystem` and use `Object.defineProperty` to trap the `cdn` property. The setter accepts writes but always overrides `url` to `window.location.origin`. This way:
+
 - `load()` reads the trapped `cdn.url` → builds core chunk URL pointing to localhost
 - The second `load()` from the provider hits the same trap → no CDN reset
 - All runtime asset URLs read the correct localhost value
