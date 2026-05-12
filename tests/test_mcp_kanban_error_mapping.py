@@ -71,7 +71,9 @@ class TestFromAC_StructuredJsonErrors:
         """AC1/AC4: JSON payload has 'message' key for human-readable text."""
         with pytest.raises(ToolError) as exc_info:
             _map_kanban_error(
-                ValidationError(code="ERR_INVALID_STATUS", user_message="invalid status")
+                ValidationError(
+                    code="ERR_INVALID_STATUS", user_message="invalid status"
+                )
             )
         payload = json.loads(str(exc_info.value))
         assert "message" in payload, "JSON payload must contain 'message' field"
@@ -84,7 +86,9 @@ class TestFromAC_StructuredJsonErrors:
                 NotFoundError(code="ERR_NOT_FOUND", user_message=user_msg)
             )
         payload = json.loads(str(exc_info.value))
-        assert payload["message"] == user_msg, "message field must equal exc.user_message"
+        assert payload["message"] == user_msg, (
+            "message field must equal exc.user_message"
+        )
 
     # -- edge cases --
 

@@ -178,7 +178,9 @@ def _restore_snapshot_if_unchanged(
 ) -> None:
     """Best-effort rollback that never overwrites a newer concurrent update."""
     try:
-        _storage_module().write_task_if_unchanged(original, expected_updated, kanban_dir)
+        _storage_module().write_task_if_unchanged(
+            original, expected_updated, kanban_dir
+        )
     except ConcurrencyError as exc:
         if exc.code != "ERR_STALE":
             raise
@@ -377,9 +379,7 @@ class KanbanEngine:
         self._archive_dir = kanban_dir / self._config.paths.archive_dir
         validate_path_containment(self._kanban_dir, self._tasks_dir)
         validate_path_containment(self._kanban_dir, self._archive_dir)
-        self._agent_name: str = (
-            f"{random.choice(ADJECTIVES)}-{random.choice(NOUNS)}"  # noqa: S311
-        )
+        self._agent_name: str = f"{random.choice(ADJECTIVES)}-{random.choice(NOUNS)}"  # noqa: S311
         effective_activity_log = activity_log if activity_log is not None else True
         self._activity_log_path: Path | None = (
             kanban_dir / "activity.jsonl" if effective_activity_log else None
@@ -1056,7 +1056,9 @@ class KanbanEngine:
             record = created_task
             created_task_path = task_path
 
-        _storage_module().allocate_next_id(self._kanban_dir, write_task_fn=_write_new_task)
+        _storage_module().allocate_next_id(
+            self._kanban_dir, write_task_fn=_write_new_task
+        )
         if record is None:
             msg = "create_task failed to construct task record"
             raise RuntimeError(msg)
@@ -1154,7 +1156,11 @@ class KanbanEngine:
         if body is not None:
             self.validate_body_size(body)
 
-        if parent is not _PARENT_UNSET and parent is not None and not self.task_exists(parent):
+        if (
+            parent is not _PARENT_UNSET
+            and parent is not None
+            and not self.task_exists(parent)
+        ):
             raise ValidationError(
                 code="ERR_PARENT_NOT_FOUND",
                 user_message=f"Parent task '{parent}' not found",

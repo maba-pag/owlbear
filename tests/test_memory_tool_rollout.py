@@ -63,9 +63,7 @@ def _in_scope_paths(project_root: Path) -> list[Path]:
         agents_dir / f"{name}.agent.md"
         for name in (*_PIPELINE_AGENT_NAMES, *_SUBAGENT_NAMES)
     ]
-    paths.append(
-        project_root / "share" / "skills" / "r-pipeline-protocol" / "SKILL.md"
-    )
+    paths.append(project_root / "share" / "skills" / "r-pipeline-protocol" / "SKILL.md")
     return paths
 
 

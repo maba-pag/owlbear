@@ -825,7 +825,11 @@ class TestFromAC_CurateMemoryHint:
 
         hint = result.get("hint", "")
         hint_lower = hint.lower()
-        assert "downgrad" in hint_lower or "re-approv" in hint_lower or "re-approve" in hint_lower, (
+        assert (
+            "downgrad" in hint_lower
+            or "re-approv" in hint_lower
+            or "re-approve" in hint_lower
+        ), (
             f"approved→curated hint must mention downgrade/re-approval to be discriminating, got: {hint!r}"
         )
 

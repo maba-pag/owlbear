@@ -903,6 +903,7 @@ class TestFromAC_StartWork_1075:
             f"Expected 2 CAS calls (stale then succeed); got {cas_call_count}"
         )
 
+
 class TestFromAC_MoveTask_D37_1075:
     """D37 archival-matrix self-ref and cycle tests for AgentView.move_task."""
 
@@ -962,4 +963,3 @@ class TestFromAC_MoveTask_D37_1075:
             f"move_task must reject cycles in archival_refs with "
             f"ERR_ARCHIVAL_REF_CYCLE; got {exc_info.value.code!r}"
         )
-

@@ -17,9 +17,6 @@ AC:   C17, C18, C21, C22
 """
 
 
-
-
-
 # ---------------------------------------------------------------------------
 # Board helpers
 # ---------------------------------------------------------------------------
@@ -1066,6 +1063,7 @@ class TestBuilderDiscovered:
             resolvers = yaml_rt.resolver.yaml_implicit_resolvers[char_key]
             assert all(tag != timestamp_tag for tag, _ in resolvers)
 
+
 """C-12: GREEN — corruption detection & auto-fix failing tests (revised after arch review).
 
 Task: #1057 (Brief C #1043) — paper-c.md §4
@@ -1093,7 +1091,6 @@ This file covers the gap the C-03 suite does not:
     The C-03 taxonomy check uses issubset (permits extra codes); this file enforces
     the exact Brief §4.1 set with no extras.
 """
-
 
 
 # ---------------------------------------------------------------------------
@@ -1174,6 +1171,7 @@ class TestFromAC_CleanupDeadCodes:
             f"ERR_CORRUPT_* is missing Brief §4.1 codes (must be added): {sorted(missing)}"
         )
 
+
 """P1-05: Kanban corruption scanner encoding hardening — failing tests (RED phase).
 
 Task: #1368 — test_corruption_1368
@@ -1187,8 +1185,6 @@ RED phase: ERR_CORRUPT_ENCODING does not exist yet (added by #1369), so tests
 that import it fail with ImportError. The remaining tests fail because the current
 code raises UnicodeDecodeError instead of returning CorruptionError.
 """
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -1349,7 +1345,9 @@ class TestFromAC_EncodingHardening:
 
         result = detect_corruption(bad_file, config)
         assert isinstance(result, CorruptionError)
-        assert result.file_path is not None, "file_path must be set on the CorruptionError"
+        assert result.file_path is not None, (
+            "file_path must be set on the CorruptionError"
+        )
         assert result.file_path == str(bad_file)
 
     def test_non_utf8_in_tasks_dir_detail_is_non_empty(self, tmp_path: Path) -> None:
@@ -1368,9 +1366,7 @@ class TestFromAC_EncodingHardening:
         assert any(
             kw in result.detail.lower()
             for kw in ("encoding", "decode", "utf-8", "utf8", "unicode")
-        ), (
-            f"detail must reference the encoding/decode failure, got {result.detail!r}"
-        )
+        ), f"detail must reference the encoding/decode failure, got {result.detail!r}"
 
     # -----------------------------------------------------------------
     # archive/ directory — AC-1 (no UnicodeDecodeError raised)
@@ -1442,7 +1438,9 @@ class TestFromAC_EncodingHardening:
 
         result = detect_corruption(bad_file, config)
         assert isinstance(result, CorruptionError)
-        assert result.file_path is not None, "file_path must be set on the CorruptionError"
+        assert result.file_path is not None, (
+            "file_path must be set on the CorruptionError"
+        )
         assert result.file_path == str(bad_file)
 
     def test_non_utf8_in_archive_dir_detail_is_non_empty(self, tmp_path: Path) -> None:
@@ -1461,9 +1459,7 @@ class TestFromAC_EncodingHardening:
         assert any(
             kw in result.detail.lower()
             for kw in ("encoding", "decode", "utf-8", "utf8", "unicode")
-        ), (
-            f"detail must reference the encoding/decode failure, got {result.detail!r}"
-        )
+        ), f"detail must reference the encoding/decode failure, got {result.detail!r}"
 
     # -----------------------------------------------------------------
     # Regression guard — AC-3
@@ -1483,6 +1479,4 @@ class TestFromAC_EncodingHardening:
         config = load_config(board_dir)
 
         result = detect_corruption(task_file, config)
-        assert result is None, (
-            f"Expected None for clean UTF-8 file, got {result!r}"
-        )
+        assert result is None, f"Expected None for clean UTF-8 file, got {result!r}"

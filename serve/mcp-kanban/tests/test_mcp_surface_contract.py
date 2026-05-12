@@ -271,9 +271,7 @@ class TestFromAC_EndWorkOutcomeSchema:
             (t for t in mcp._tool_manager._tools.values() if t.name == "end_work"),  # noqa: SLF001
             None,
         )
-        assert tool is not None, (
-            "end_work must be registered in the MCP tool registry"
-        )
+        assert tool is not None, "end_work must be registered in the MCP tool registry"
 
         outcome_prop = tool.parameters.get("properties", {}).get("outcome", {})
 

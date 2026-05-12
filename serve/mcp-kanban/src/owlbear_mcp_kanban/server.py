@@ -315,7 +315,9 @@ async def _show_validated(app_ctx: AppContext, task_id: int) -> KanbanTask:
     try:
         record = app_ctx.engine.show_task(str(task_id))
     except FileNotFoundError as exc:
-        _raise_not_found(_safe_not_found_message(str(exc), f"Task '{task_id}' not found"))
+        _raise_not_found(
+            _safe_not_found_message(str(exc), f"Task '{task_id}' not found")
+        )
     return _record_to_task(record)
 
 

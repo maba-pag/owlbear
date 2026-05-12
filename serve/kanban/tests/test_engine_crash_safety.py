@@ -142,7 +142,9 @@ class TestFromAC_EngineCrashSafety:
     #         (save_config inside flock) runs BEFORE write_task.
     # ------------------------------------------------------------------
 
-    def test_ac2_config_not_modified_when_write_task_executes(self, tmp_path: Path) -> None:
+    def test_ac2_config_not_modified_when_write_task_executes(
+        self, tmp_path: Path
+    ) -> None:
         """AC-#1443 scan-based: config.next_id must be UNCHANGED when write_task is invoked.
 
         Intercepts write_task and snapshots config.next_id at call time.

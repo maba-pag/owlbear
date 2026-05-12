@@ -112,10 +112,15 @@ class TestFromAC_CreateTaskRebindContainment:
             archive_dir_name="archive",
         )
 
-        with patch(
-            "owlbear_kanban.engine.load_config",
-            side_effect=_side_effect_first_real_then_poisoned(real_config, poisoned),
-        ), pytest.raises(PermissionError):
+        with (
+            patch(
+                "owlbear_kanban.engine.load_config",
+                side_effect=_side_effect_first_real_then_poisoned(
+                    real_config, poisoned
+                ),
+            ),
+            pytest.raises(PermissionError),
+        ):
             engine.create_task("Test Task")
 
     # --- error paths: archive_dir escape ---
@@ -142,17 +147,20 @@ class TestFromAC_CreateTaskRebindContainment:
             archive_dir_name="escape_archive",
         )
 
-        with patch(
-            "owlbear_kanban.engine.load_config",
-            side_effect=_side_effect_first_real_then_poisoned(real_config, poisoned),
-        ), pytest.raises(PermissionError):
+        with (
+            patch(
+                "owlbear_kanban.engine.load_config",
+                side_effect=_side_effect_first_real_then_poisoned(
+                    real_config, poisoned
+                ),
+            ),
+            pytest.raises(PermissionError),
+        ):
             engine.create_task("Test Task")
 
     # --- edge: both dirs poisoned simultaneously ---
 
-    def test_both_dirs_poisoned_raises_permission_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_both_dirs_poisoned_raises_permission_error(self, tmp_path: Path) -> None:
         """create_task raises PermissionError when both tasks_dir and archive_dir
         point outside kanban_dir via symlink escape.
 
@@ -172,10 +180,15 @@ class TestFromAC_CreateTaskRebindContainment:
             archive_dir_name="escape_archive",
         )
 
-        with patch(
-            "owlbear_kanban.engine.load_config",
-            side_effect=_side_effect_first_real_then_poisoned(real_config, poisoned),
-        ), pytest.raises(PermissionError):
+        with (
+            patch(
+                "owlbear_kanban.engine.load_config",
+                side_effect=_side_effect_first_real_then_poisoned(
+                    real_config, poisoned
+                ),
+            ),
+            pytest.raises(PermissionError),
+        ):
             engine.create_task("Test Task")
 
     # --- error: regression proof — poison only reaches post-write reload ---
@@ -210,10 +223,13 @@ class TestFromAC_CreateTaskRebindContainment:
                 return real_config
             return poisoned
 
-        with patch(
-            "owlbear_kanban.engine.load_config",
-            side_effect=tracking_side_effect,
-        ), pytest.raises(PermissionError):
+        with (
+            patch(
+                "owlbear_kanban.engine.load_config",
+                side_effect=tracking_side_effect,
+            ),
+            pytest.raises(PermissionError),
+        ):
             engine.create_task("Test Task")
 
         # Both calls happened: pre-write (call 1) and post-write (call 2)
@@ -241,8 +257,13 @@ class TestFromAC_CreateTaskRebindContainment:
             archive_dir_name="archive",
         )
 
-        with patch(
-            "owlbear_kanban.engine.load_config",
-            side_effect=_side_effect_first_real_then_poisoned(real_config, poisoned),
-        ), pytest.raises(PermissionError):
+        with (
+            patch(
+                "owlbear_kanban.engine.load_config",
+                side_effect=_side_effect_first_real_then_poisoned(
+                    real_config, poisoned
+                ),
+            ),
+            pytest.raises(PermissionError),
+        ):
             engine.create_task("Test Task")

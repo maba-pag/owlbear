@@ -122,7 +122,8 @@ class TestFromAC_ResolveDrsRegistration:
     def test_resolve_drs_is_registered_in_mcp_registry(self) -> None:
         """AC-1: resolve_drs must be a registered MCP tool in the server registry."""
         registered_names = [
-            t.name for t in mcp._tool_manager._tools.values()  # noqa: SLF001
+            t.name
+            for t in mcp._tool_manager._tools.values()  # noqa: SLF001
         ]
         assert "resolve_drs" in registered_names, (
             f"resolve_drs must be registered via @mcp.tool(); "
@@ -143,9 +144,7 @@ class TestFromAC_ResolveDrsRegistration:
     def test_resolve_drs_has_destructive_hint_false(self) -> None:
         """AC-1: resolve_drs must have destructiveHint=False in its ToolAnnotations."""
         ann = _get_tool_annotations("resolve_drs")
-        assert ann is not None, (
-            "resolve_drs must have ToolAnnotations; got None"
-        )
+        assert ann is not None, "resolve_drs must have ToolAnnotations; got None"
         assert getattr(ann, "destructiveHint", None) is False, (
             f"resolve_drs must have destructiveHint=False; "
             f"got: {getattr(ann, 'destructiveHint', 'MISSING')!r}"
@@ -346,9 +345,7 @@ class TestFromAC_ResolveDrsNeedsInfo:
         fn = getattr(server_mod, "resolve_drs", None)
         assert fn is not None, "owlbear_mcp_kanban.server.resolve_drs must exist"
 
-        resolved_abs = (
-            app_ctx.kanban_dir / "decisions" / "resolved" / "55-clarify.md"
-        )
+        resolved_abs = app_ctx.kanban_dir / "decisions" / "resolved" / "55-clarify.md"
         ctx = _make_mcp_ctx(app_ctx)
         with patch(
             "owlbear_mcp_kanban.server.decisions.resolve_pending_drs",
@@ -387,9 +384,7 @@ class TestFromAC_ResolveDrsIdempotency:
         assert fn is not None, "owlbear_mcp_kanban.server.resolve_drs must exist"
 
         ctx = _make_mcp_ctx(app_ctx)
-        resolved_abs = (
-            app_ctx.kanban_dir / "decisions" / "resolved" / "10-decision.md"
-        )
+        resolved_abs = app_ctx.kanban_dir / "decisions" / "resolved" / "10-decision.md"
 
         # First call: DR was in pending/, resolve_pending_drs moved it.
         with patch(
@@ -416,9 +411,12 @@ class TestFromAC_ResolveDrsIdempotency:
             f"AC-4: second call must return count=0; got {second_result['count']!r}"
         )
         # Verify resolve_pending_drs was called (not short-circuited by the tool)
-        mock_resolve.assert_called_once(), (
-            "AC-4: resolve_pending_drs must be called on each invocation — "
-            "the tool must not maintain its own state"
+        (
+            mock_resolve.assert_called_once(),
+            (
+                "AC-4: resolve_pending_drs must be called on each invocation — "
+                "the tool must not maintain its own state"
+            ),
         )
 
 
@@ -515,9 +513,7 @@ class TestCoverageUplift_ServerUtils:
         assert payload["code"] == "ERR_NOT_FOUND"
         assert payload["message"] == "Task not found"
 
-    def test_app_ctx_contains_always_returns_false(
-        self, app_ctx: AppContext
-    ) -> None:
+    def test_app_ctx_contains_always_returns_false(self, app_ctx: AppContext) -> None:
         """AppContext.__contains__ must always return False (lines 143-146)."""
         assert "anything" not in app_ctx
         assert 42 not in app_ctx
@@ -534,8 +530,7 @@ class TestCoverageUplift_ServerUtils:
             result = _apply_tool_exclusions(mock_server)
 
         assert result == set(), (
-            "Failed removal must not add tool to excluded set; "
-            f"got {result!r}"
+            f"Failed removal must not add tool to excluded set; got {result!r}"
         )
 
     def test_to_single_task_response_accepts_kanban_task_input(self) -> None:
@@ -586,11 +581,14 @@ class TestCoverageUplift_ServerUtils:
         from mcp.server.fastmcp.exceptions import ToolError  # noqa: PLC0415
         from owlbear_mcp_kanban.server import _show_validated  # noqa: PLC0415
 
-        with patch.object(
-            app_ctx.engine,
-            "show_task",
-            side_effect=FileNotFoundError("task 999 not found"),
-        ), pytest.raises(ToolError):
+        with (
+            patch.object(
+                app_ctx.engine,
+                "show_task",
+                side_effect=FileNotFoundError("task 999 not found"),
+            ),
+            pytest.raises(ToolError),
+        ):
             await _show_validated(app_ctx, 999)
 
     @pytest.mark.asyncio
@@ -607,10 +605,13 @@ class TestCoverageUplift_ServerUtils:
         assert fn is not None, "resolve_drs must be registered"
 
         ctx = _make_mcp_ctx(app_ctx)
-        with patch(
-            "owlbear_mcp_kanban.server.decisions.resolve_pending_drs",
-            side_effect=KanbanError("ERR_NOT_FOUND", "Decisions dir missing"),
-        ), pytest.raises(ToolError):
+        with (
+            patch(
+                "owlbear_mcp_kanban.server.decisions.resolve_pending_drs",
+                side_effect=KanbanError("ERR_NOT_FOUND", "Decisions dir missing"),
+            ),
+            pytest.raises(ToolError),
+        ):
             await fn(ctx)
 
     @pytest.mark.asyncio
@@ -629,7 +630,10 @@ class TestCoverageUplift_ServerUtils:
             "ERR_INVALID_TITLE", "title cannot be empty"
         )
 
-        with patch.object(app_ctx.engine, "agent_view", return_value=mock_av), pytest.raises(ToolError):
+        with (
+            patch.object(app_ctx.engine, "agent_view", return_value=mock_av),
+            pytest.raises(ToolError),
+        ):
             await server_mod.edit_task(ctx, id="1", title="x")
 
     @pytest.mark.asyncio
@@ -645,7 +649,10 @@ class TestCoverageUplift_ServerUtils:
         mock_av = MagicMock()
         mock_av.start_work.side_effect = ValueError("already claimed by another")
 
-        with patch.object(app_ctx.engine, "agent_view", return_value=mock_av), pytest.raises(ToolError):
+        with (
+            patch.object(app_ctx.engine, "agent_view", return_value=mock_av),
+            pytest.raises(ToolError),
+        ):
             await server_mod.start_work(ctx, id="1")
 
     @pytest.mark.asyncio
@@ -661,7 +668,10 @@ class TestCoverageUplift_ServerUtils:
         mock_av = MagicMock()
         mock_av.end_work.side_effect = ValueError("outcome mismatch")
 
-        with patch.object(app_ctx.engine, "agent_view", return_value=mock_av), pytest.raises(ToolError):
+        with (
+            patch.object(app_ctx.engine, "agent_view", return_value=mock_av),
+            pytest.raises(ToolError),
+        ):
             await server_mod.end_work(ctx, id="1", note="done", outcome="success")
 
 

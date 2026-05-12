@@ -28,6 +28,7 @@ import pytest
 # AST scanner helper (AC6) — module-level for reuse and clarity
 # ---------------------------------------------------------------------------
 
+
 def _scan_for_activity_log_imports(pkg_dir: Path) -> list[str]:  # noqa: C901
     """Return violation strings for any activity_log import found in *pkg_dir*.
 
@@ -48,15 +49,11 @@ def _scan_for_activity_log_imports(pkg_dir: Path) -> list[str]:  # noqa: C901
             if isinstance(node, ast.Import):
                 for alias in node.names:
                     if "activity_log" in alias.name:
-                        violations.append(
-                            f"{py_file.name}: import {alias.name}"
-                        )
+                        violations.append(f"{py_file.name}: import {alias.name}")
             elif isinstance(node, ast.ImportFrom):
                 module = node.module or ""
                 if "activity_log" in module:
-                    violations.append(
-                        f"{py_file.name}: from {module} import ..."
-                    )
+                    violations.append(f"{py_file.name}: from {module} import ...")
                 for alias in node.names:
                     if alias.name == "activity_log":
                         violations.append(
@@ -89,6 +86,7 @@ def _extract_audit_trail_section(readme_text: str) -> str:
 # AC2 — activity_log module deleted
 # ---------------------------------------------------------------------------
 
+
 class TestFromAC_ActivityLogDeletion:
     """AC2 — activity_log.py deleted; importing it raises ImportError."""
 
@@ -107,6 +105,7 @@ class TestFromAC_ActivityLogDeletion:
 # ---------------------------------------------------------------------------
 # AC3 — source vocabulary documented in activity_store module docstring
 # ---------------------------------------------------------------------------
+
 
 class TestFromAC_SourceVocabularyDocumented:
     """AC3 — source vocabulary 'engine'|'agent'|'cockpit' in activity_store.__doc__."""
@@ -234,6 +233,7 @@ class TestFromAC_SourceVocabularyDocumented:
 # AC4 — cockpit README audit-trail section uses source, not actor
 # ---------------------------------------------------------------------------
 
+
 class TestFromAC_CockpitReadmeAuditTrail:
     """AC4 — cockpit README audit-trail section uses source contract, not actor."""
 
@@ -244,7 +244,7 @@ class TestFromAC_CockpitReadmeAuditTrail:
         """
         readme = (project_root / "serve/cockpit/README.md").read_text(encoding="utf-8")
         assert 'actor: "cockpit"' not in readme, (
-            'serve/cockpit/README.md still contains \'actor: "cockpit"\' — '
+            "serve/cockpit/README.md still contains 'actor: \"cockpit\"' — "
             "update audit-trail section to use source vocabulary per AC4"
         )
 
@@ -255,16 +255,15 @@ class TestFromAC_CockpitReadmeAuditTrail:
         """
         readme = (project_root / "serve/cockpit/README.md").read_text(encoding="utf-8")
         # Accept both the old and new heading styles (case-insensitive check)
-        has_section = (
-            "## Audit Trail" in readme
-            or "## audit trail" in readme.lower()
-        )
+        has_section = "## Audit Trail" in readme or "## audit trail" in readme.lower()
         assert has_section, (
             "serve/cockpit/README.md must contain an 'Audit Trail' section "
             "documenting the source attribution contract (AC4)"
         )
 
-    def test_audit_trail_source_cockpit_mapping_present(self, project_root: Path) -> None:
+    def test_audit_trail_source_cockpit_mapping_present(
+        self, project_root: Path
+    ) -> None:
         """AC4 (section-scoped, binding): Audit Trail section maps source="cockpit" to UI-initiated.
 
         Scopes the search to the Audit Trail section body only — tokens outside the
@@ -310,7 +309,9 @@ class TestFromAC_CockpitReadmeAuditTrail:
             "purpose (AC4). Purpose swaps or relocations are not accepted."
         )
 
-    def test_audit_trail_source_engine_mapping_present(self, project_root: Path) -> None:
+    def test_audit_trail_source_engine_mapping_present(
+        self, project_root: Path
+    ) -> None:
         """AC4 (section-scoped, binding): Audit Trail section maps source="engine" to internal.
 
         Scopes the search to the Audit Trail section only and asserts the purpose
@@ -336,6 +337,7 @@ class TestFromAC_CockpitReadmeAuditTrail:
 # ---------------------------------------------------------------------------
 # AC6 — structural AST import-inspection guard
 # ---------------------------------------------------------------------------
+
 
 class TestFromAC_ImportGuard:
     """AC6 — structural AST scan: no module in owlbear_kanban/ imports activity_log."""

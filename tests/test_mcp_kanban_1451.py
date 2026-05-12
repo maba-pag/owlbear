@@ -165,7 +165,9 @@ class TestFromAC_SharedArchivalHelper:
         def tracking_helper(*args: object, **kwargs: object) -> None:
             calls.append((args, kwargs))
 
-        monkeypatch.setattr(_server_mod, "_validate_archival_constraints", tracking_helper)
+        monkeypatch.setattr(
+            _server_mod, "_validate_archival_constraints", tracking_helper
+        )
 
         await move_task(_make_ctx(app_ctx), id="1", status="in-progress")
 
@@ -191,7 +193,9 @@ class TestFromAC_SharedArchivalHelper:
         def tracking_helper(*args: object, **kwargs: object) -> None:
             calls.append((args, kwargs))
 
-        monkeypatch.setattr(_server_mod, "_validate_archival_constraints", tracking_helper)
+        monkeypatch.setattr(
+            _server_mod, "_validate_archival_constraints", tracking_helper
+        )
 
         await end_work(
             _make_ctx(app_ctx),
@@ -528,7 +532,8 @@ class TestFromAC_StructuredErrors:
         """
         with pytest.raises(ToolError) as exc_info:
             await pick_tasks(
-                _make_ctx(app_ctx_todo_1451), max_waves="not-a-number"  # type: ignore[arg-type]
+                _make_ctx(app_ctx_todo_1451),
+                max_waves="not-a-number",  # type: ignore[arg-type]
             )
         payload = json.loads(str(exc_info.value))
         assert "code" in payload
@@ -544,7 +549,8 @@ class TestFromAC_StructuredErrors:
         """
         with pytest.raises(ToolError) as exc_info:
             await pick_tasks(
-                _make_ctx(app_ctx_todo_1451), max_waves="not-a-number"  # type: ignore[arg-type]
+                _make_ctx(app_ctx_todo_1451),
+                max_waves="not-a-number",  # type: ignore[arg-type]
             )
         payload = json.loads(str(exc_info.value))
         assert payload["code"] == "ERR_PARAM_VALIDATION"

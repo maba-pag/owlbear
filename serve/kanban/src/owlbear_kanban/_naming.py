@@ -63,7 +63,10 @@ def validate_config_path_containment(path_value: str) -> None:
             user_message="Configured path must be a non-empty board-relative subdirectory.",
         )
 
-    if PurePosixPath(path_value).is_absolute() or PureWindowsPath(path_value).is_absolute():
+    if (
+        PurePosixPath(path_value).is_absolute()
+        or PureWindowsPath(path_value).is_absolute()
+    ):
         raise ConfigError(
             code="ERR_PATH_ESCAPE",
             user_message=(

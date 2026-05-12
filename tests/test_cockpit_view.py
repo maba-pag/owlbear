@@ -371,9 +371,7 @@ class TestFromAC_TestFileImportUpdates:
         self._assert_no_old_import(project_root / "tests" / "test_cockpit_read_api.py")
 
     def test_cockpit_read_api_import_updated_1223(self, project_root: Path) -> None:
-        self._assert_no_old_import(
-            project_root / "tests" / "test_cockpit_read_api.py"
-        )
+        self._assert_no_old_import(project_root / "tests" / "test_cockpit_read_api.py")
 
     # AC4 cycle 3: positive import assertions (new-path string must be present)
 

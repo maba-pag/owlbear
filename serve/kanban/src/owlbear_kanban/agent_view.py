@@ -702,7 +702,11 @@ class AgentView:
         if body_set:
             self.engine.validate_body_size(body)
 
-        if parent_set and parent_value is not None and not self.engine.task_exists(parent_value):
+        if (
+            parent_set
+            and parent_value is not None
+            and not self.engine.task_exists(parent_value)
+        ):
             raise ValidationError(
                 code="ERR_PARENT_NOT_FOUND",
                 user_message=f"Parent task '{parent_value}' not found",
@@ -786,7 +790,9 @@ class AgentView:
         changes_requested = False
         if title_set and title != existing.title:
             changes_requested = True
-        if body_set and _task_body_as_text(body).rstrip("\n") != _task_body_as_text(existing.body).rstrip("\n"):
+        if body_set and _task_body_as_text(body).rstrip("\n") != _task_body_as_text(
+            existing.body
+        ).rstrip("\n"):
             changes_requested = True
         if append_set:
             changes_requested = True

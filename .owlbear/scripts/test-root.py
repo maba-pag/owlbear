@@ -65,7 +65,10 @@ def find_test_root(test_path: str) -> dict[str, str]:
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: uv run .owlbear/scripts/test-root.py <path> [<path> ...]", file=sys.stderr)
+        print(
+            "Usage: uv run .owlbear/scripts/test-root.py <path> [<path> ...]",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     results = [find_test_root(p) for p in sys.argv[1:]]
