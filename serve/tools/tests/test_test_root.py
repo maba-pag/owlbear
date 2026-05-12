@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import importlib.metadata
 import json
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -25,11 +24,15 @@ def frontend_project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     (frontend / "App.test.tsx").write_text("test('renders', () => {})")
 
     pkg = tmp_path / "web" / "package.json"
-    pkg.write_text(json.dumps({
-        "name": "my-frontend",
-        "scripts": {"test": "vitest run"},
-        "devDependencies": {"vitest": "^3.0.0"},
-    }))
+    pkg.write_text(
+        json.dumps(
+            {
+                "name": "my-frontend",
+                "scripts": {"test": "vitest run"},
+                "devDependencies": {"vitest": "^3.0.0"},
+            }
+        )
+    )
 
     # Create a Python test at root
     tests = tmp_path / "tests"
@@ -42,32 +45,26 @@ def frontend_project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 class TestFindTestRoot:
     """Unit tests for find_test_root()."""
 
-    def test_frontend_tsx_resolves_to_vitest(
-        self, frontend_project: Path
-    ) -> None:
+    pytestmark = pytest.mark.usefixtures("frontend_project")
+
+    def test_frontend_tsx_resolves_to_vitest(self) -> None:
         result = find_test_root("web/src/__tests__/App.test.tsx")
         assert result["toolchain"] == "vitest"
         assert result["cwd"] == "web"
         assert result["cmd"] == "npm test"
 
-    def test_python_test_resolves_to_pytest(
-        self, frontend_project: Path
-    ) -> None:
+    def test_python_test_resolves_to_pytest(self) -> None:
         result = find_test_root("tests/test_foo.py")
         assert result["toolchain"] == "pytest"
         assert result["cwd"] == "."
         assert result["cmd"] == "uv run pytest"
 
-    def test_nonexistent_path_falls_back_to_pytest(
-        self, frontend_project: Path
-    ) -> None:
+    def test_nonexistent_path_falls_back_to_pytest(self) -> None:
         result = find_test_root("nonexistent/test_bar.py")
         assert result["toolchain"] == "pytest"
         assert result["cwd"] == "."
 
-    def test_returns_original_test_path(
-        self, frontend_project: Path
-    ) -> None:
+    def test_returns_original_test_path(self) -> None:
         path = "web/src/__tests__/App.test.tsx"
         result = find_test_root(path)
         assert result["test_path"] == path
@@ -81,9 +78,7 @@ class TestCLIEntryPoint:
         names = [ep.name for ep in eps]
         assert "test-root" in names
 
-    def test_single_path_returns_object(
-        self, frontend_project: Path
-    ) -> None:
+    def test_single_path_returns_object(self, frontend_project: Path) -> None:
         result = subprocess.run(
             [sys.executable, "-m", "owlbear_tools.test_root", "tests/test_foo.py"],
             capture_output=True,
@@ -94,12 +89,12 @@ class TestCLIEntryPoint:
         data = json.loads(result.stdout)
         assert data["toolchain"] == "pytest"
 
-    def test_multiple_paths_returns_array(
-        self, frontend_project: Path
-    ) -> None:
+    def test_multiple_paths_returns_array(self, frontend_project: Path) -> None:
         result = subprocess.run(
             [
-                sys.executable, "-m", "owlbear_tools.test_root",
+                sys.executable,
+                "-m",
+                "owlbear_tools.test_root",
                 "tests/test_foo.py",
                 "web/src/__tests__/App.test.tsx",
             ],

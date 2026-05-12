@@ -1096,7 +1096,7 @@ class TestFromAC_CockpitViewArchivalValidation:
         # Now try to archive A via CockpitView with refs=[B.id=2].
         # A → B and B → A: cycle.
         view = CockpitView(eng)
-        updated_a = _get_updated(eng, 1)
+        updated_a = _get_updated_1240(eng, 1)
         with pytest.raises(ValidationError) as exc_info:
             view.move_task(
                 1,

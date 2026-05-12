@@ -35,7 +35,6 @@ max_line_length = unset
 # Excalidraw diagrams — JSON with embedded base64; line length not enforceable
 [*.excalidraw]
 end_of_line = unset
-insert_final_newline = false
 max_line_length = unset
 trim_trailing_whitespace = false
 

@@ -51,11 +51,10 @@ ADDITIONAL_EXCLUDED_DIRECTORIES:
 # ──────────────────────────────────────────────
 
 # Ruff — uses pyproject.toml config (select=["ALL"] includes bandit S-rules)
-# Auto-discovers pyproject.toml from project root; no explicit config path needed.
+# MegaLinter otherwise falls back to its bundled .ruff.toml template.
+PYTHON_RUFF_CONFIG_FILE: pyproject.toml
 PYTHON_RUFF_CLI_LINT_MODE: project
 
-# Ruff format — project mode lets ruff auto-discover pyproject.toml from root.
-# Without this, MegaLinter uses its own bundled .ruff.toml (different settings).
 PYTHON_DEFAULT_STYLE: ruff
 PYTHON_RUFF_FORMAT_CLI_LINT_MODE: project
 

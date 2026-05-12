@@ -158,7 +158,7 @@ class TestFromAC_EventSourceResponseEndpoint:
         from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
-        board_b = _make_board(tmp_path / "board_b")
+        board_b = _make_board_1262(tmp_path / "board_b")
         engine_b = KanbanEngine(board_b)
         awatch_paths: list = []
 
@@ -568,7 +568,7 @@ class TestFromAC_MissingDirGuard:
         from owlbear_cockpit.routes.events import events  # noqa: PLC0415
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
-        kanban_dir = _make_board(tmp_path)
+        kanban_dir = _make_board_1262(tmp_path)
         engine = KanbanEngine(kanban_dir)
         shutil.rmtree(engine.tasks_dir)
         assert not engine.tasks_dir.exists(), "Test setup: tasks_dir must not exist"
@@ -588,7 +588,7 @@ class TestFromAC_MissingDirGuard:
         from owlbear_cockpit.routes.events import events  # noqa: PLC0415
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
-        kanban_dir = _make_board(tmp_path)
+        kanban_dir = _make_board_1262(tmp_path)
         engine = KanbanEngine(kanban_dir)
         shutil.rmtree(engine.tasks_dir)
 
@@ -612,7 +612,7 @@ class TestFromAC_MissingDirGuard:
         from owlbear_cockpit.routes.events import events  # noqa: PLC0415
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
-        kanban_dir = _make_board(tmp_path)
+        kanban_dir = _make_board_1262(tmp_path)
         engine = KanbanEngine(kanban_dir)
         shutil.rmtree(engine.tasks_dir)
         assert not engine.tasks_dir.exists(), "Test setup: tasks_dir must not exist"
@@ -653,7 +653,7 @@ class TestFromAC_MissingDirGuard:
         from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
-        kanban_dir = _make_board(tmp_path)
+        kanban_dir = _make_board_1262(tmp_path)
         engine = KanbanEngine(kanban_dir)
         shutil.rmtree(engine.kanban_dir)
         assert not engine.kanban_dir.exists(), "Test setup: kanban_dir must not exist"

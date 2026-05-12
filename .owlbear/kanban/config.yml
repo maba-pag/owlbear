@@ -1,18 +1,19 @@
+---
 schema: grouped
 statuses:
-- research
-- backlog
-- todo
-- in-progress
-- review
-- docs
-- done
+  - research
+  - backlog
+  - todo
+  - in-progress
+  - review
+  - docs
+  - done
 priorities:
-- someday
-- nice-to-have
-- important
-- needed
-- critical
+  - someday
+  - nice-to-have
+  - important
+  - needed
+  - critical
 next_id: 1496
 activity_log: false
 paths:
@@ -38,11 +39,11 @@ agents:
 policy:
   non_impl_tags: []
   archival_reasons:
-  - completed
-  - deprecated
-  - dropped
-  - duplicate
-  - wontfix
+    - completed
+    - deprecated
+    - dropped
+    - duplicate
+    - wontfix
   status_predicates: {}
 claim_timeout: 1h
 tasks_dir: tasks
@@ -54,11 +55,11 @@ agent_types: {}
 agent_compatibility: {}
 non_impl_tags: []
 archival_reasons:
-- completed
-- deprecated
-- dropped
-- duplicate
-- wontfix
+  - completed
+  - deprecated
+  - dropped
+  - duplicate
+  - wontfix
 status_predicates: {}
 defaults:
   status: research

@@ -6,10 +6,13 @@ import logging
 import subprocess
 import sys
 from argparse import ArgumentParser
-from collections.abc import Sequence
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import yaml
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 _CURATION = "curation"
 _REVIEW = "review"
@@ -107,16 +110,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         commit_sha = commit_batch(Path(args.memory_dir), session_type=args.session_type)
     except subprocess.CalledProcessError as exc:
         detail = (exc.stderr or exc.stdout or str(exc)).strip()
-        print(f"error: {detail}", file=sys.stderr)
+        sys.stderr.write(f"error: {detail}\n")
         return exc.returncode or 1
     except ValueError as exc:
-        print(f"error: {exc}", file=sys.stderr)
+        sys.stderr.write(f"error: {exc}\n")
         return 1
 
     if commit_sha:
-        print(commit_sha)
+        sys.stdout.write(f"{commit_sha}\n")
     else:
-        print("no memory changes to commit")
+        sys.stdout.write("no memory changes to commit\n")
     return 0
 
 

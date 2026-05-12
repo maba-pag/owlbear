@@ -65,15 +65,26 @@ ignore = [
 ".owlbear/hooks/*.py" = [
   "C901",   # hook scripts have inherently complex path-extraction logic
   "INP001", # .owlbear/hooks/ is not a package — direct-run scripts are expected here
+  "PLR0912", # guard scripts branch by path rule category
   "T201",   # print() is the stdout I/O contract for VS Code hook scripts
 ]
 "seed/.owlbear/hooks/*.py" = [
   "C901",   # hook scripts have inherently complex path-extraction logic
   "INP001", # seed/.owlbear/hooks/ is not a package — direct-run scripts are expected here
+  "PLR0912", # guard scripts branch by path rule category
+  "S607",   # hook scripts invoke trusted workspace tooling by conventional names
   "T201",   # print() is the stdout I/O contract for VS Code hook scripts
 ]
 ".owlbear/scripts/*.py" = [
   "INP001", # .owlbear/scripts/ is not a package — direct-run files are expected here
+  "PLR2004", # small CLI scripts use argument-count sentinels inline
+  "PTH201", # scripts compare relative Path('.') for JSON output compatibility
+  "T201",   # print() is intentional in CLI scripts
+]
+"seed/.owlbear/scripts/*.py" = [
+  "INP001", # seed/.owlbear/scripts/ is not a package — direct-run files are expected here
+  "PLR2004", # small CLI scripts use argument-count sentinels inline
+  "PTH201", # scripts compare relative Path('.') for JSON output compatibility
   "T201",   # print() is intentional in CLI scripts
 ]
 ".owlbear/scratch/*.py" = [
@@ -95,8 +106,10 @@ ignore = [
   "ANN",     # type annotations not required in tests
   "D",       # docstring rules not enforced in tests
   "DTZ001",  # naive datetimes used intentionally in negative test cases
+  "E402",    # generated task-test blocks may include late import sections
   "E501",    # long assertion messages in test strings are acceptable
   "EM102",   # f-string in exception message — acceptable in test helpers
+  "F811",    # generated task-test blocks may reuse imported helper names
   "I001",    # isort — pre-existing test-writer files may have non-standard order
   "N801",    # TestFromAC_* class naming convention required by test-writer workflow
   "PERF401", # list comprehension recommendation — readability preference in tests
@@ -122,8 +135,10 @@ ignore = [
   "ANN",     # type annotations not required in tests
   "D",       # docstring rules not enforced in tests
   "DTZ001",  # naive datetimes used intentionally in negative test cases
+  "E402",    # package test blocks may include late import sections
   "E501",    # long assertion messages in test strings are acceptable
   "EM102",   # f-string in exception message — acceptable in test helpers
+  "F811",    # package test blocks may reuse imported helper names
   "I001",    # isort — pre-existing test-writer files may have non-standard order
   "INP001",  # serve/*/tests/ dirs without __init__.py — importlib mode handles discovery
   "N801",    # TestFromAC_* class naming convention required by test-writer workflow
