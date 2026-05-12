@@ -1,5 +1,14 @@
 import { useEffect, useState } from 'react'
-import { getResponseErrorMessage } from '../api/errorMessage'
+import { ApiError } from '../api/errors'
+import {
+  editTask,
+  getTask,
+  moveTask,
+  releaseTask,
+  type EditRequest,
+  type MoveRequest,
+  type ReleaseRequest,
+} from '../api/tasks'
 import type { TaskDetail } from '../components/DetailTab'
 import type { Board } from './useBoard'
 import type { ConflictLocalDraft } from './useConflictDraft'
@@ -57,71 +66,84 @@ export function useTaskMutation(options: UseTaskMutationOptions): UseTaskMutatio
     return valid.includes(previous) ? previous : null
   }
 
+  async function runTaskMutation(url: string, payload: Record<string, unknown>): Promise<TaskDetail> {
+    if (url.endsWith('/edit')) {
+      return (await editTask(options.taskId, payload as unknown as EditRequest)) as TaskDetail
+    }
+
+    if (url.endsWith('/release')) {
+      return (await releaseTask(options.taskId, payload as unknown as ReleaseRequest)) as TaskDetail
+    }
+
+    if (url.endsWith('/move')) {
+      return (await moveTask(options.taskId, payload as unknown as MoveRequest)) as TaskDetail
+    }
+
+    throw new Error(`Unsupported mutation URL: ${url}`)
+  }
+
   async function runMutation(
     url: string,
     payload: Record<string, unknown>,
     mutationOptions: MutationRunOptions,
   ): Promise<void> {
     setServerValidationMessage(null)
-    let res: Response
     try {
-      res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Network error'
-      setServerValidationMessage(message)
-      options.onMutationError?.(mutationOptions.errorHeading, message, 'error')
-      return
-    }
-
-    if (res.ok) {
-      const updatedTask = (await res.json()) as TaskDetail
+      const updatedTask = await runTaskMutation(url, payload)
       options.conflictActions.clearConflict()
       options.onTaskUpdated?.(updatedTask)
       return
-    }
-
-    if (res.status === 409) {
-      const localDraft = mutationOptions.conflictDraft ?? null
-      const latestRes = await fetch(`/api/tasks/${options.taskId}`, { method: 'GET' })
-      if (latestRes.ok) {
-        const latestTask = (await latestRes.json()) as TaskDetail
-        options.conflictActions.setConflictDetected(localDraft, latestTask)
-        options.onTaskUpdated?.(latestTask)
-      } else if (latestRes.status === 404) {
-        const message = await getResponseErrorMessage(latestRes, 'Task not found')
+    } catch (error) {
+      if (!(error instanceof ApiError)) {
+        const message = error instanceof Error ? error.message : 'Network error'
         setServerValidationMessage(message)
-        options.conflictActions.clearConflict()
-        options.onTaskCleared?.(message)
-        return
-      } else {
-        options.conflictActions.setConflictDetectedNoRefetch(localDraft)
-        setServerValidationMessage(
-          await getResponseErrorMessage(latestRes, `Request failed with status ${latestRes.status}`),
-        )
+        options.onMutationError?.(mutationOptions.errorHeading, message, 'error')
         return
       }
-      return
-    }
 
-    if (res.status === 404) {
-      options.onTaskCleared?.()
-      return
-    }
+      if (error.status === 409) {
+        const localDraft = mutationOptions.conflictDraft ?? null
+        try {
+          const latestTask = (await getTask(options.taskId)) as TaskDetail
+          options.conflictActions.setConflictDetected(localDraft, latestTask)
+          options.onTaskUpdated?.(latestTask)
+          return
+        } catch (latestError) {
+          if (latestError instanceof ApiError && latestError.status === 404) {
+            setServerValidationMessage(latestError.message)
+            options.conflictActions.clearConflict()
+            options.onTaskCleared?.(latestError.message)
+            return
+          }
 
-    if (res.status === 422) {
-      const message = await getResponseErrorMessage(res, 'Validation failed')
+          options.conflictActions.setConflictDetectedNoRefetch(localDraft)
+          const message = latestError instanceof Error ? latestError.message : 'Request failed'
+          setServerValidationMessage(message)
+          return
+        }
+      }
+
+      if (error.status === 404) {
+        options.onTaskCleared?.()
+        return
+      }
+
+      if (error.status === 422) {
+        setServerValidationMessage(error.message)
+        options.onMutationError?.(mutationOptions.errorHeading, error.message, 'warning')
+        return
+      }
+
+      const fallbackMessage = `Request failed with status ${error.status}`
+      const message =
+        error.message === `Edit task request failed with status ${error.status}` ||
+        error.message === `Release task request failed with status ${error.status}` ||
+        error.message === `Move task request failed with status ${error.status}`
+          ? fallbackMessage
+          : error.message
       setServerValidationMessage(message)
-      options.onMutationError?.(mutationOptions.errorHeading, message, 'warning')
-      return
+      options.onMutationError?.(mutationOptions.errorHeading, message, 'error')
     }
-
-    const message = await getResponseErrorMessage(res, `Request failed with status ${res.status}`)
-    setServerValidationMessage(message)
-    options.onMutationError?.(mutationOptions.errorHeading, message, 'error')
   }
 
   return {

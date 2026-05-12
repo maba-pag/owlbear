@@ -9,7 +9,8 @@ import DetailTab, { type TaskDetail } from './components/DetailTab'
 import DRStatusIndicator from './components/DRStatusIndicator'
 import HealthBadge, { type ScanItem as HealthBadgeItem } from './components/HealthBadge'
 import ResolveModal from './components/ResolveModal'
-import { getResponseErrorMessage } from './api/errorMessage'
+import { getTask } from './api/tasks'
+import { ApiError } from './api/errors'
 import { useBoard } from './hooks/useBoard'
 import { usePendingDRs } from './hooks/usePendingDRs'
 import { type ScanItem as ScanPollingItem, useScanPolling } from './hooks/useScanPolling'
@@ -113,25 +114,22 @@ function Shell() {
 
     void (async () => {
       try {
-        const response = await fetch(`/api/tasks/${selectedTaskId}`, { signal: controller.signal })
-        if (!response.ok) {
-          if (!cancelled) {
-            setSelectedTask(null)
-            const errorMessage = await getResponseErrorMessage(
-              response,
-              `Task fetch failed with status ${response.status}`,
-            )
-            setSelectedTaskError(errorMessage)
-          }
-          return
-        }
-
-        const task = (await response.json()) as TaskDetail
+        const task = (await getTask(selectedTaskId, { signal: controller.signal })) as TaskDetail
         if (!cancelled) {
           setSelectedTask(task)
           setSelectedTaskError(null)
         }
       } catch (error) {
+        if (error instanceof ApiError && !cancelled) {
+          setSelectedTask(null)
+          const fallback = `Task fetch failed with status ${error.status}`
+          const message = error.message === `Get task request failed with status ${error.status}`
+            ? fallback
+            : error.message
+          setSelectedTaskError(message)
+          return
+        }
+
         if (!(error instanceof DOMException && error.name === 'AbortError') && !cancelled) {
           setSelectedTask(null)
           setSelectedTaskError(error instanceof Error ? error.message : 'Task fetch failed')

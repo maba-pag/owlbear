@@ -7,7 +7,8 @@ import {
   PSelect,
   PText,
 } from '@porsche-design-system/components-react'
-import { getResponseErrorMessage } from '../api/errorMessage'
+import { moveTask } from '../api/tasks'
+import { ApiError } from '../api/errors'
 
 export const ARCHIVAL_REASONS = [
   'completed',
@@ -197,43 +198,36 @@ export default function ArchivalModal({
     }
 
     try {
-      const response = await fetch(`/api/tasks/${taskId}/move`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          status: 'archived',
-          updated: expectedUpdated,
-          archival_reason: reason,
-          archival_refs: refsResult.values,
-        }),
+      await moveTask(taskId, {
+        status: 'archived',
+        updated: expectedUpdated,
+        archival_reason: reason,
+        archival_refs: refsResult.values,
       })
+      setError(null)
+      onRefresh()
+      onClose()
+    } catch (error) {
+      if (error instanceof ApiError) {
+        if (error.status === 409) {
+          setError({ message: 'Task snapshot is stale; refresh and try again.', retryable: false })
+          onRefresh()
+          return
+        }
 
-      if (response.ok) {
-        setError(null)
-        onRefresh()
-        onClose()
+        if (error.status === 422) {
+          setError({ message: error.message, retryable: false })
+          return
+        }
+
+        const fallback = `Archival failed (${error.status}).`
+        const message = error.message === `Move task request failed with status ${error.status}`
+          ? fallback
+          : error.message
+        setError({ message, retryable: error.status >= 500 })
         return
       }
 
-      if (response.status === 409) {
-        setError({ message: 'Task snapshot is stale; refresh and try again.', retryable: false })
-        onRefresh()
-        return
-      }
-
-      if (response.status === 422) {
-        setError({
-          message: await getResponseErrorMessage(response, 'Validation failed.'),
-          retryable: false,
-        })
-        return
-      }
-
-      setError({
-        message: await getResponseErrorMessage(response, `Archival failed (${response.status}).`),
-        retryable: response.status >= 500,
-      })
-    } catch {
       setError({ message: 'Archival failed due to network error.', retryable: true })
     } finally {
       setIsSubmitting(false)

@@ -11,7 +11,8 @@ import {
 } from '@porsche-design-system/components-react'
 
 import type { PendingDR } from '../hooks/usePendingDRs'
-import { getResponseErrorMessage } from '../api/errorMessage'
+import { resolveDR } from '../api/decisions'
+import { ApiError } from '../api/errors'
 
 export type PendingDRWithBody = PendingDR
 
@@ -26,7 +27,7 @@ type ControlValueEvent = {
   detail?: unknown
 }
 
-type ResolveResponse = 'approved' | 'rejected' | 'needs-info' | ''
+type ResolveDecision = 'approved' | 'rejected' | 'needs-info' | ''
 
 interface ResolveErrorState {
   message: string
@@ -39,7 +40,7 @@ interface InlineNotificationHost extends HTMLElement {
 }
 
 export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalProps) {
-  const [response, setResponse] = useState<ResolveResponse>('')
+  const [response, setResponse] = useState<ResolveDecision>('')
   const [notes, setNotes] = useState('')
   const [error, setError] = useState<ResolveErrorState | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -56,23 +57,23 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
     }
     setIsSubmitting(true)
     try {
-      const res = await fetch(`/api/decisions/${dr.id}/resolve`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ response, notes }),
+      await resolveDR(dr.id, {
+        response: response as 'approved' | 'rejected' | 'needs-info',
+        notes,
       })
-      if (!res.ok) {
-        const errorMessage = await getResponseErrorMessage(
-          res,
-          `Failed to resolve decision request (${res.status}).`,
-        )
-        setError({ message: errorMessage, retryable: res.status >= 500 })
-        return
-      }
       setError(null)
       onResolved()
       onClose()
     } catch (caught) {
+      if (caught instanceof ApiError) {
+        const fallback = `Failed to resolve decision request (${caught.status}).`
+        const message = caught.message === `Resolve request failed with status ${caught.status}`
+          ? fallback
+          : caught.message
+        setError({ message, retryable: caught.status >= 500 })
+        return
+      }
+
       if (caught instanceof Error) {
         setError({ message: caught.message, retryable: true })
         return

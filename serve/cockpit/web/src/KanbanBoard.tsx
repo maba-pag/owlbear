@@ -4,7 +4,8 @@ import ArchivalModal from './components/ArchivalModal'
 import FilterPanel from './components/FilterPanel'
 import { filterTasks, type FilterState } from './utils/filterTasks'
 import { type Board, type Task } from './hooks/useBoard'
-import { getResponseErrorMessage } from './api/errorMessage'
+import { moveTask } from './api/tasks'
+import { ApiError } from './api/errors'
 
 // ─── KanbanBoard ──────────────────────────────────────────────────────────────
 
@@ -151,24 +152,24 @@ function KanbanBoardContent({
     setDragSource(null)
 
     try {
-      const res = await fetch(`/api/tasks/${taskId}/move`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: targetStatus, updated: taskUpdated }),
-      })
-      if (res.ok) {
-        refetchTasks()
-        onMutationSuccess?.()
+      await moveTask(taskId, { status: targetStatus, updated: taskUpdated })
+      refetchTasks()
+      onMutationSuccess?.()
+    } catch (error) {
+      if (error instanceof ApiError) {
+        if (error.status === 409) {
+          refetchTasks()
+        }
+        const fallback = `Move failed: ${error.status}`
+        const message = error.message === `Move task request failed with status ${error.status}`
+          ? fallback
+          : error.message
+        onMutationError?.('Move failed', message, 'error')
         return
       }
 
-      const message = await getResponseErrorMessage(res, `Move failed: ${res.status}`)
-      if (res.status === 409) {
-        refetchTasks()
-      }
-      onMutationError?.('Move failed', message, 'error')
-    } catch {
-      onMutationError?.('Move failed', 'Move failed: network error', 'error')
+      const networkMessage = error instanceof Error ? error.message : 'Move failed: network error'
+      onMutationError?.('Move failed', networkMessage, 'error')
     }
   }
 
@@ -205,24 +206,24 @@ function KanbanBoardContent({
     }
 
     try {
-      const res = await fetch(`/api/tasks/${taskId}/move`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: targetStatus, updated }),
-      })
-      if (res.ok) {
-        refetchTasks()
-        onMutationSuccess?.()
+      await moveTask(taskId, { status: targetStatus, updated })
+      refetchTasks()
+      onMutationSuccess?.()
+    } catch (error) {
+      if (error instanceof ApiError) {
+        if (error.status === 409) {
+          refetchTasks()
+        }
+        const fallback = `Move failed: ${error.status}`
+        const message = error.message === `Move task request failed with status ${error.status}`
+          ? fallback
+          : error.message
+        onMutationError?.('Move failed', message, 'error')
         return
       }
 
-      const message = await getResponseErrorMessage(res, `Move failed: ${res.status}`)
-      if (res.status === 409) {
-        refetchTasks()
-      }
-      onMutationError?.('Move failed', message, 'error')
-    } catch {
-      onMutationError?.('Move failed', 'Move failed: network error', 'error')
+      const networkMessage = error instanceof Error ? error.message : 'Move failed: network error'
+      onMutationError?.('Move failed', networkMessage, 'error')
     }
   }
 
