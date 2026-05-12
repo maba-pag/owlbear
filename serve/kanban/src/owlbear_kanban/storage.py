@@ -35,6 +35,8 @@ from ruamel.yaml.comments import CommentedMap
 from ruamel.yaml.scalarstring import PlainScalarString
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from ruamel.yaml import YAML
 
 from owlbear_kanban._locking import _exclusive_file_lock
@@ -224,8 +226,7 @@ _TS_RE = re.compile(
 def save_config(config: BoardConfig, kanban_dir: Path) -> None:
     """Write *config* to ``config.yml`` in *kanban_dir* using atomic write.
 
-    Writes the config in grouped schema format (``schema: grouped``) with
-    nested ``paths``, ``pipeline``, ``agents``, and ``policy`` sub-sections.
+    Persists only ``next_id``; topology values are product constants.
 
     Args:
         config:     :class:`BoardConfig` to write.
@@ -234,39 +235,7 @@ def save_config(config: BoardConfig, kanban_dir: Path) -> None:
     from owlbear_kanban.yaml_rt import make_yaml  # noqa: PLC0415
 
     config_path = kanban_dir / "config.yml"
-    data = {
-        "schema": "grouped",
-        "statuses": config.statuses,
-        "priorities": config.priorities,
-        "next_id": config.next_id,
-        "activity_log": config.activity_log,
-        "paths": {
-            "tasks_dir": config.paths.tasks_dir,
-            "archive_dir": config.paths.archive_dir,
-        },
-        "pipeline": {
-            "entry_status": config.pipeline.entry_status,
-            "terminal_status": config.pipeline.terminal_status,
-            "wave_size": config.pipeline.wave_size,
-            "claim_timeout": config.pipeline.claim_timeout,
-            "default_priority": config.pipeline.default_priority,
-        },
-        "agents": {
-            "agent_map": config.agents.agent_map,
-            "agent_types": config.agents.agent_types,
-            "agent_compatibility": config.agents.agent_compatibility,
-        },
-        "policy": {
-            "non_impl_tags": config.policy.non_impl_tags,
-            "archival_reasons": config.policy.archival_reasons,
-            "status_predicates": config.policy.status_predicates,
-        },
-    }
-
-    if config.model_extra:
-        for key, value in config.model_extra.items():
-            if key not in data:
-                data[key] = value
+    data = {"next_id": config.next_id}
 
     data = _yaml_safe_value(data)
 
@@ -568,17 +537,47 @@ def move_to_archive(task_id: int, kanban_dir: Path) -> Path:
 # ---------------------------------------------------------------------------
 
 
-def allocate_next_id(kanban_dir: Path) -> int:
-    """Allocate the next task ID from config under exclusive flock (Brief C §3.3)."""
+def allocate_next_id(
+    kanban_dir: Path,
+    *,
+    write_task_fn: Callable[[int], None] | None = None,
+) -> int:
+    """Allocate the next task ID under the shared create lock.
+
+    When ``write_task_fn`` is provided, allocation is scan-based (active+archive
+    max prefix + 1) and the callback is executed while the lock is still held so
+    callers can keep scan+write in one critical section.
+
+    When ``write_task_fn`` is ``None``, this function still uses scan-based
+    allocation and persists the last issued id in ``.next_id.lock`` so repeated
+    allocation-only calls remain distinct under concurrency.
+    """
     lock_path = kanban_dir / ".next_id.lock"
     with _exclusive_file_lock(lock_path):
-        from owlbear_kanban.config_loader import load_config as _load_config  # noqa: PLC0415
+        max_id = 0
+        for path in [*list_task_files(kanban_dir), *list_archive_files(kanban_dir)]:
+            try:
+                file_id = int(path.stem.split("-", 1)[0])
+            except ValueError:
+                continue
+            max_id = max(max_id, file_id)
 
-        config = _load_config(kanban_dir)
-        new_id = config.next_id
-        config.next_id = new_id + 1
-        save_config(config, kanban_dir)
-    return new_id
+        last_allocated = 0
+        try:
+            text = lock_path.read_text(encoding="utf-8").strip()
+            if text:
+                last_allocated = int(text)
+        except (OSError, ValueError):
+            last_allocated = 0
+
+        if write_task_fn is not None:
+            new_id = max_id + 1
+            write_task_fn(new_id)
+            return new_id
+
+        new_id = max(max_id, last_allocated) + 1
+        lock_path.write_text(f"{new_id}\n", encoding="utf-8")
+        return new_id
 
 
 # ---------------------------------------------------------------------------

@@ -85,7 +85,7 @@ class TestFromAC_SkillMdUpdate:
 
     def test_skill_md_documents_search_knowledge_mcp_tool(self) -> None:
         """skills/knowledge-ops/SKILL.md mentions the MCP search_knowledge tool by name."""
-        skill_path = _REPO_ROOT / "skills" / "knowledge-ops" / "SKILL.md"
+        skill_path = _REPO_ROOT / "share" / "skills" / "h-knowledge-ops" / "SKILL.md"
         assert skill_path.exists(), f"SKILL.md not found at {skill_path}"
         content = skill_path.read_text(encoding="utf-8")
         assert "search_knowledge" in content, (

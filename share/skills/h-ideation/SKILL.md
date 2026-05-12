@@ -46,7 +46,7 @@ Between M1 and M2, the discovery agent proposes a tier based on problem scope an
 
 ## User-Facing Entry Points
 
-### `@ideation-discoverer`
+### `/ideation-discover` (agent: `ideation-discoverer`)
 
 Use for:
 
@@ -56,7 +56,7 @@ Use for:
 - ambiguous project type
 - missing ideation artifacts
 
-### `@ideation-mediator`
+### `/ideation-mediate` (agent: `ideation-mediator`)
 
 Use for:
 
@@ -177,7 +177,119 @@ Phase 1 ends only when all three handoff artifacts exist and are usable:
 - `decisions.md`
 - `research-notes.md`
 
-Phase 1 must end with an explicit message naming `@ideation-mediator` and those artifact paths. Phase 2 starts from those files in a fresh context.
+Phase 1 must end with an explicit message that names the Phase 2 prompt command, `/ideation-mediate {draft_path}`, and those artifact paths. Phase 2 starts from those files in a fresh context.
+
+## Communication Patterns
+
+| Internal Name | User-Visible Label | First-Mention Pattern |
+|---|---|---|
+| ideation-architect | architecture review | "the architecture review (checking structural soundness)" |
+| ideation-data | data review | "the data review (checking schema and validation)" |
+| ideation-enduser | user experience review | "the user experience review (checking usability)" |
+| ideation-security | security review | "the security review (checking trust boundaries)" |
+| ideation-critic | critical review | "a critical review (stress-testing for weaknesses)" |
+| ideation-simplifier | simplification check | "a simplification check (is this over-engineered?)" |
+| ideation-firstprinciples | first-principles check | "a first-principles check (are we solving the right problem?)" |
+| ideation-pragmatist | *(never surfaced to user)* | *(synthesis agent - user sees only the synthesized result)* |
+| M1 / Understanding | problem framing | "We're in the problem framing phase - what's really going on?" |
+| M2 / Outcomes | outcome definition | "Now let's define what success looks like" |
+| M3 / Landscape | landscape review | "Let me map what exists and what's possible" |
+| M3.5 / Design It Twice | *(never announced - internal gate)* | Result only: "I see two viable approaches, let me get them designed separately" |
+| M4 / Decision | approach decision | "Time to choose a direction" |
+| M5 / Brief | the plan | "Here's the plan" |
+| M6 / Handoff | handoff to pipeline | "Next step: turning this into concrete tasks" |
+| O15 | *(never announced - internal mechanism)* | Result only: "The critical review raised a valid concern about X" |
+| Investment Tier | depth/rigor calibration | "This feels like a [tier] problem - [what that means for the user]. Sound right?" |
+| Disclosure Ladder | depth detail options | "I can keep this at summary level or walk through the evidence" |
+
+**Repeated-mention rule:** First mention uses the full form with parenthetical context. Subsequent mentions use the descriptor only.
+
+Before/After Examples
+
+Pair 1 - Conditional gate narration
+
+**Before:**
+> "M3.5 gate: I see one dominant approach (rewrite skill with convention-based mapping + honest verification + TODO markers). No competing viable alternative. Skipping M3.5, proceeding to stance-mode panel."
+
+**After:**
+> "There's one clear approach here - rewrite the skill with convention-based mapping, honest verification, and TODO markers. I'm going to get it reviewed from multiple angles to make sure it holds up."
+
+Pair 2 - Panel roster introduction
+
+**Before:**
+> "Invoking ideation-architect and ideation-security panelists for the late-domain panel deliberation phase. Selection based on: structural concern + trust boundary signal."
+
+**After:**
+> "I'll run this past two reviews - architecture (structural soundness) and security (trust boundaries) - because this problem has both a design question and a data-exposure question. Want to adjust?"
+
+Pair 3 - Permission-seeking to confident announcement
+
+**Before:**
+> "Should I run the early challengers to validate scope before moving to approach selection?"
+
+**After:**
+> "Before we commit to this scope, I want to pressure-test it for hidden assumptions and over-engineering. If something's off, better to catch it now."
+
+Pair 4 - Status narration to result narration
+
+**Before:**
+> "Invoking ideation-critic with stance payload. O15 verification: checking no panelist premise invalidated by user decision."
+
+**After:**
+> "Let me stress-test this against your earlier decisions to make sure nothing contradicts what the reviews assumed."
+
+Pair 5 - Phase handoff
+
+**Before:**
+> "Phase 1 complete. Handoff to @ideation-mediator. Artifacts: context.md, decisions.md, research-notes.md at .owlbear/briefs/draft-foo/."
+
+**After:**
+> "The problem and outcomes are sharp. Next step: a fresh synthesis session will take these findings and work through approach options with you. Start it with: /ideation-mediate .owlbear/briefs/draft-foo/"
+
+Pair 6 - Non-happy-path: correction/rerun
+
+**Before:**
+> "Re-invoking ideation-architect with updated constraint from D4. Previous stance invalidated by scope change."
+
+**After:**
+> "Your last decision changes what the architecture review assumed. I need to re-run that review with the updated constraint - it'll take one more pass."
+
+### Narration Principles
+
+- **Results, not mechanisms.** Internal verification stays silent; narrate what was found, not protocol machinery.
+- **Conditional gates are never announced.** Surface only the outcome and user relevance, not internal gate names.
+- **Purpose before process.** Explain why this step helps the user before describing what happens next.
+- **Labels stay visible with context (D4).** On first mention, keep labels visible with context so the meaning is immediate.
+- **Attribution by name with explanation (D6).** Attribute findings to the review by name and explain what that review checks.
+- **Compliance is explanation quality.** Strong protocol behavior means clear purpose, plain language, and user benefit.
+
+### Transition Patterns
+
+| Transition | Pattern | Why |
+|---|---|---|
+| Problem clear -> outcomes | "The problem is clear. Now let's define what success looks like - what would make this worth doing, and how would we know it worked?" | Carries momentum while making success criteria explicit. |
+| Outcomes -> challenge | "Before we lock these outcomes, I'm going to pressure-test them from a couple of angles - checking for hidden assumptions and scope that could bite us later." | Introduces challenge work as risk reduction, not ceremony. |
+| Landscape -> decision (one approach) | "There's one clear approach here. I'm going to get it reviewed from multiple angles before we commit." | Keeps confidence grounded by independent review. |
+| Landscape -> decision (alternatives) | "I see two viable directions, each with real trade-offs. Let me lay them out so you can decide which fits." | Sets up a real choice with trade-off framing. |
+| Brief approved -> handoff | "The plan is solid. Next step: I'll turn this into concrete implementation tasks." | Signals execution readiness and immediate next action. |
+| Tier calibration | "This feels like a [Tier] problem - [plain description]. That means I'll [what tier means for depth]. Sound right?" | Aligns rigor with user intent before more work. |
+
+### Boundary Heuristic
+
+| Situation | Agent behavior | Why |
+|---|---|---|
+| Procedural action (reviewing, validating) | Announce with purpose: "I'm going to get this reviewed from three angles." | User does not need to approve quality checks. |
+| Direction/scope change | Offer a genuine choice with trade-offs. | Direction and scope remain user-owned decisions. |
+| Depth change | Signal availability: "I can walk through the reasoning." | Respects time without gatekeeping detail. |
+| Correction | State what happened, what it means, then state intent. | Keeps trust high and next steps clear. |
+
+### Depth-Control Verbal Cues
+
+| Level | Existing name | Verbal cue to signal availability |
+|---|---|---|
+| Default | Default Summary | Always shown - no cue needed. |
+| Concrete | Concrete Specifics | "I can walk through the reasoning / trade-offs." |
+| Verbatim | Inline Verbatim Evidence | "The specific evidence is [source] - I can show it inline." |
 
 ## Cross-References
 

@@ -1,15 +1,15 @@
 # share/ — Agent Ecosystem
 
-OwlBear's agent ecosystem: 28 agents, 33 skills, 7 instructions, 14 prompts. This directory is the single source of truth for agent definitions and their supporting documents.
+OwlBear's agent ecosystem: 28 agents, 35 skills, 7 instructions, 11 prompts. This directory is the single source of truth for agent definitions and their supporting documents.
 
 ## Directory Layout
 
 | Directory | Contents | Count |
 |-----------|----------|-------|
 | `agents/` | Agent definitions (`.agent.md`) | 28 |
-| `skills/` | Reusable domain knowledge (`SKILL.md`) | 33 |
-| `instructions/` | Auto-loaded instruction files (`.instructions.md`) | 6 |
-| `prompts/` | User-invocable one-shot commands (`.prompt.md`) | 14 |
+| `skills/` | Reusable domain knowledge (`SKILL.md`) | 35 |
+| `instructions/` | Auto-loaded instruction files (`.instructions.md`) | 7 |
+| `prompts/` | User-invocable one-shot commands (`.prompt.md`) | 11 |
 | `diagrams/` | Shared visual assets (Excalidraw, SVG) | — |
 
 ## Loading Model
@@ -56,7 +56,7 @@ These load into every agent's context on every turn:
 
 ## Agents
 
-26 agent definitions (`.agent.md` files).
+28 agent definitions (`.agent.md` files).
 
 | Tier | Count | Agents |
 |------|-------|--------|
@@ -64,6 +64,7 @@ These load into every agent's context on every turn:
 | T2 — Pipeline | 7 | researcher, architect, test-writer, builder, reviewer, doc-writer, auditor |
 | T3 — Support | 3 | planner, test-curator, memory-curator |
 | T4 — Tools/Panel | 13 | quality-runner, code-reader, fix-attempt, challenger, ideation-architect, ideation-critic, ideation-data, ideation-enduser, ideation-firstprinciples, ideation-outsider, ideation-pragmatist, ideation-security, ideation-simplifier |
+| T5 — Knowledge | 2 | knowledge-enricher, knowledge-ingestor |
 
 Ideation has two user-facing entrypoints: `ideation-discoverer` (Phase 1 — problem framing) and `ideation-mediator` (Phase 2 — synthesis, decisions, Brief).
 
@@ -77,17 +78,17 @@ See `h-agent-structure` § Nesting Depth & DMI for the full rule and ND3 agent t
 
 ## Skills
 
-33 skill definitions (`share/skills/{name}/SKILL.md`).
+35 skill definitions (`share/skills/{name}/SKILL.md`).
 
 | Prefix | Count | Purpose |
 |--------|-------|---------|
 | `w-` | 14 | Workflow — step-by-step procedures |
 | `r-` | 4 | Rules — shared conventions |
-| `h-` | 15 | Handbook — domain knowledge |
+| `h-` | 17 | Handbook — domain knowledge |
 
 ## Instructions
 
-6 instruction files (`.instructions.md`). Two categories:
+7 instruction files (`.instructions.md`). Two categories:
 
 **Substantive documents** — contain full behavioral specifications:
 
@@ -110,23 +111,24 @@ Stubs catch agents editing files without the relevant skill loaded. They do not 
 
 ## Prompts
 
-9 prompt files (`.prompt.md`). Prompts are user-invocable one-shot commands triggered from the VS Code chat command palette. Many accept `${input:...}` variable substitution.
+11 prompt files (`.prompt.md`). Prompts are user-invocable one-shot commands triggered from the VS Code chat command palette. Many accept `${input:...}` variable substitution.
 
 **Naming convention:**
 
 | Pattern | Meaning |
-|---------|---------|
+|---------|----------|
 | `{verb}.prompt.md` | Single-purpose action (e.g., `orchestrate`) |
 | `{scope}-{verb}.prompt.md` | Scoped action (e.g., `frontend-audit`, `memory-audit`) |
 
 **Current prompts:**
 
 | Group | Prompts |
-|-------|---------|
+|-------|--------|
 | Orchestration | `orchestrate` |
-| Audits | `frontend-audit`, `memory-audit` |
-| Frontend | `frontend-normalize`, `frontend-polish`, `design-context` |
+| Agent audits | `agent-broad-audit`, `agent-deep-audit` |
+| Audits | `frontend-audit`, `memory-audit`, `legacy-audit` |
 | Ideation | `ideation-discover`, `ideation-mediate` |
+| Knowledge | `kb-ingest`, `kb-enrich` |
 | Curation | `test-curation` |
 
 ## File Interconnections

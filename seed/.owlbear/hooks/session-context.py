@@ -37,7 +37,7 @@ def main() -> None:  # noqa: PLR0911
     # Get current branch — return {} if git unavailable or not in a repo
     try:
         branch_result = subprocess.run(
-            ["git", "branch", "--show-current"],  # noqa: S607
+            ["git", "branch", "--show-current"],
             capture_output=True,
             text=True,
             check=False,
@@ -55,7 +55,7 @@ def main() -> None:  # noqa: PLR0911
     # Get recent commits — return {} on git failure
     try:
         log_result = subprocess.run(
-            ["git", "log", "--oneline", "-3", "--no-decorate"],  # noqa: S607
+            ["git", "log", "--oneline", "-3", "--no-decorate"],
             capture_output=True,
             text=True,
             check=False,
@@ -68,9 +68,7 @@ def main() -> None:  # noqa: PLR0911
         print("{}")
         return
 
-    commit_lines = [
-        line.strip() for line in log_result.stdout.splitlines() if line.strip()
-    ]
+    commit_lines = [line.strip() for line in log_result.stdout.splitlines() if line.strip()]
     commits_str = " | ".join(commit_lines)
 
     additional_context = f"Branch: {branch} | Commits: {commits_str}"

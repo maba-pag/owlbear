@@ -4,7 +4,7 @@ description: "Early challenger — strips the problem to its irreducible claims 
 argument-hint: "First-principles check: {problem and outcomes}"
 user-invocable: false
 disable-model-invocation: true
-tools: [edit/createDirectory, edit/createFile, edit/editFiles, read/readFile, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, vscode/memory]
+tools: [ob-memory/save_memory, ob-memory/recall_memory, vscode/toolSearch, edit/createDirectory, edit/createFile, edit/editFiles, read/readFile, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages]
 agents: []
 hooks:
   PreToolUse:
@@ -31,7 +31,6 @@ Your job is not to design the solution. Your job is to challenge accidental comp
 - **Keep output bounded.** Return only the strongest challenges that materially improve framing or scope.
 - **Do not run the late-domain Critic loop by default.** Your output should be direct and compact.
 - **Write only `stances/firstprinciples.md`.** Do not write any other file unless the invoker explicitly asks for a debate log in a later revision.
-- **No kanban commands.** You are an ideation subagent only.
 
 </critical_rules>
 

@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import ssl
+import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -103,7 +104,7 @@ async def request_device_code() -> dict[str, Any]:
         )
         resp.raise_for_status()
         data = resp.json()
-    print(f"Open https://github.com/login/device and enter code: {data.get('user_code')}")  # noqa: T201
+    sys.stderr.write(f"Open https://github.com/login/device and enter code: {data.get('user_code')}\n")
     return data
 
 

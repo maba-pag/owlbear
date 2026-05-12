@@ -1,6 +1,6 @@
 """Corruption detection and repair for kanban task files (Brief C §4).
 
-Defines the 9 ERR_CORRUPT_* codes, CorruptionError, RepairOutcome,
+Defines the 10 ERR_CORRUPT_* codes, CorruptionError, RepairOutcome,
 detect_corruption(), attempt_repair(), and scan_and_fix().
 """
 
@@ -21,6 +21,7 @@ from owlbear_kanban._naming import (
 from owlbear_kanban.errors import KanbanError
 from owlbear_kanban.models import RepairOutcome
 from owlbear_kanban.storage_io import atomic_write
+from owlbear_kanban.topology import PRODUCT_TOPOLOGY
 
 if TYPE_CHECKING:
     from owlbear_kanban.models import BoardConfig
@@ -56,34 +57,20 @@ _SAFE_DEFAULTS: dict[str, object] = {
 }
 
 
-def _configured_statuses(config: BoardConfig) -> list[str]:
-    """Return configured statuses from pipeline, falling back to root legacy data."""
-    try:
-        statuses = config.pipeline.statuses
-    except Exception:  # noqa: BLE001
-        statuses = None
-    if isinstance(statuses, list) and statuses:
-        return statuses
-    fallback = getattr(config, "statuses", [])
-    return fallback if isinstance(fallback, list) else []
+def _configured_statuses(_config: BoardConfig) -> list[str]:
+    """Return canonical product statuses (topology is not board-configurable)."""
+    return list(PRODUCT_TOPOLOGY.statuses)
 
 
-def _configured_priorities(config: BoardConfig) -> list[str]:
-    """Return configured priorities from pipeline, falling back to root legacy data."""
-    try:
-        priorities = config.pipeline.priorities
-    except Exception:  # noqa: BLE001
-        priorities = None
-    if isinstance(priorities, list) and priorities:
-        return priorities
-    fallback = getattr(config, "priorities", [])
-    return fallback if isinstance(fallback, list) else []
+def _configured_priorities(_config: BoardConfig) -> list[str]:
+    """Return canonical product priorities (topology is not board-configurable)."""
+    return list(PRODUCT_TOPOLOGY.priorities)
 
 
 class CorruptionError(KanbanError):
     """Raised when storage detects unrepairable on-disk state.
 
-    Carries one of the 9 ERR_CORRUPT_* codes from §4.1.
+    Carries one of the 10 ERR_CORRUPT_* codes from §4.1.
     Accepts both positional ``detail`` and keyword ``user_message`` to satisfy
     the Brief C AC-C21 constructor contract.
     """
@@ -136,6 +123,7 @@ ERR_CORRUPT_INVALID_STATUS = _make_corruption_code_type("ERR_CORRUPT_INVALID_STA
 ERR_CORRUPT_INVALID_PRIORITY = _make_corruption_code_type(
     "ERR_CORRUPT_INVALID_PRIORITY"
 )
+ERR_CORRUPT_ENCODING = _make_corruption_code_type("ERR_CORRUPT_ENCODING")
 
 
 # _make_yaml removed — dead code; callers use YAML(typ="safe") directly
@@ -220,6 +208,12 @@ def detect_corruption(path: Path, config: BoardConfig) -> CorruptionError | None
     # Mode 1: delimiter check
     try:
         content = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        return CorruptionError(
+            code=ERR_CORRUPT_ENCODING,
+            detail=f"UTF-8 decode error: {exc}",
+            path=path,
+        )
     except OSError:
         return None
 
@@ -346,7 +340,7 @@ def attempt_repair(  # noqa: C901, PLR0911, PLR0912, PLR0915
 
     Args:
         path:   Path to the corrupt file.
-        code:   One of the 9 ERR_CORRUPT_* codes.
+        code:   One of the 10 ERR_CORRUPT_* codes.
         config: Loaded :class:`BoardConfig`.
 
     Returns:

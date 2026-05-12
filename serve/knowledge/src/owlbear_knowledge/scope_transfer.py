@@ -6,7 +6,6 @@ project-local knowledge portability.
 
 from __future__ import annotations
 
-import json
 import os
 import sqlite3
 import uuid
@@ -29,42 +28,14 @@ _TRANSFER_TABLES = ("documents", "document_status", "chunks", "entities", "edges
 
 
 def resolve_global_db_path(cwd: Path) -> Path | str:
-    """Resolve the global knowledge DB path from environment or owlbear-project.json.
+    """Resolve the global knowledge DB path.
 
-    Resolution order:
-    1. ``OWLBEAR_GLOBAL_KB_PATH`` env var — returned as a Path immediately.
-    2. ``owlbear-project.json`` in *cwd* — reads ``owlbear_path`` field and resolves
-       ``{owlbear_path}/store/knowledge/global.db``.
-
-    Returns:
-        A :class:`~pathlib.Path` on success, or an ``"error: "``-prefixed string on
-        failure.
+    The global resolution path depended on owlbear-project.json infrastructure,
+    which has been removed.
     """
-    env_val = os.environ.get("OWLBEAR_GLOBAL_KB_PATH")
-    if env_val:
-        return Path(env_val)
-
-    config_path = cwd / "owlbear-project.json"
-    try:
-        config_text = config_path.read_text(encoding="utf-8")
-    except FileNotFoundError:
-        return "error: owlbear-project.json not found in cwd"
-
-    try:
-        config = json.loads(config_text)
-    except json.JSONDecodeError as exc:
-        return f"error: owlbear-project.json is not valid JSON: {exc}"
-
-    try:
-        owlbear_path_str = config["owlbear_path"]
-    except KeyError:
-        return "error: owlbear_path field missing from owlbear-project.json"
-
-    owlbear_path = Path(owlbear_path_str)
-    if not owlbear_path.exists():
-        return f"error: owlbear_path directory does not exist: {owlbear_path}"
-
-    return owlbear_path / "store" / "knowledge" / "global.db"
+    _ = cwd
+    msg = "global DB path resolution removed — see #1296"
+    raise NotImplementedError(msg)
 
 
 # ---------------------------------------------------------------------------
@@ -81,7 +52,9 @@ def _validate_source(src_path: Path) -> str | None:
         return f"error: source file not found: {src_path}"
     try:
         conn = sqlite3.connect(str(src_path))
-        row = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'").fetchone()
+        row = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'"
+        ).fetchone()
         conn.close()
     except sqlite3.DatabaseError as exc:
         return f"error: source is not a valid SQLite database: {exc}"
@@ -108,7 +81,14 @@ def _insert_documents(
             continue
         dest_conn.execute(
             "INSERT INTO documents (id, title, content, metadata, created_at, scope) VALUES (?, ?, ?, ?, ?, ?)",
-            (doc_id_map[old_id], doc["title"], doc["content"], doc["metadata"], doc["created_at"], target_scope),
+            (
+                doc_id_map[old_id],
+                doc["title"],
+                doc["content"],
+                doc["metadata"],
+                doc["created_at"],
+                target_scope,
+            ),
         )
 
 
@@ -272,7 +252,9 @@ def _do_import(
     # Read source data (snapshots before transaction begins)
     src_conn.row_factory = sqlite3.Row
     if source_scope is not None:
-        docs = src_conn.execute("SELECT * FROM documents WHERE scope = ?", (source_scope,)).fetchall()
+        docs = src_conn.execute(
+            "SELECT * FROM documents WHERE scope = ?", (source_scope,)
+        ).fetchall()
         doc_ids_placeholder = ",".join("?" * len(docs)) if docs else "NULL"
         doc_ids = [doc["id"] for doc in docs]
         doc_statuses: dict[str, sqlite3.Row] = {
@@ -305,7 +287,10 @@ def _do_import(
             edges = []
     else:
         docs = src_conn.execute("SELECT * FROM documents").fetchall()
-        doc_statuses = {row["document_id"]: row for row in src_conn.execute("SELECT * FROM document_status").fetchall()}
+        doc_statuses = {
+            row["document_id"]: row
+            for row in src_conn.execute("SELECT * FROM document_status").fetchall()
+        }
         chunks = src_conn.execute("SELECT * FROM chunks").fetchall()
         entities = src_conn.execute("SELECT * FROM entities").fetchall()
         edges = src_conn.execute("SELECT * FROM edges").fetchall()
@@ -317,7 +302,9 @@ def _do_import(
         old_id = doc["id"]
         status = doc_statuses.get(old_id)
         content = doc["content"] or ""
-        content_hash = status["content_hash"] if status else compute_content_hash(content)
+        content_hash = (
+            status["content_hash"] if status else compute_content_hash(content)
+        )
         if content_hash and content_hash in existing_hashes:
             skipped_doc_ids.add(old_id)
         else:
@@ -327,17 +314,32 @@ def _do_import(
 
     # Build ID maps for child rows (only for non-skipped documents)
     chunk_id_map: dict[str, str] = {
-        chunk["id"]: str(uuid.uuid4()) for chunk in chunks if chunk["document_id"] not in skipped_doc_ids
+        chunk["id"]: str(uuid.uuid4())
+        for chunk in chunks
+        if chunk["document_id"] not in skipped_doc_ids
     }
     entity_id_map: dict[str, str] = {
-        entity["id"]: str(uuid.uuid4()) for entity in entities if entity["document_id"] not in skipped_doc_ids
+        entity["id"]: str(uuid.uuid4())
+        for entity in entities
+        if entity["document_id"] not in skipped_doc_ids
     }
 
     try:
         with dest_conn:
-            _insert_documents(dest_conn, docs, skipped_doc_ids, doc_id_map, target_scope)
-            _insert_document_statuses(dest_conn, doc_statuses, skipped_doc_ids, doc_id_map, target_scope)
-            _insert_chunks(dest_conn, chunks, skipped_doc_ids, doc_id_map, chunk_id_map, target_scope)
+            _insert_documents(
+                dest_conn, docs, skipped_doc_ids, doc_id_map, target_scope
+            )
+            _insert_document_statuses(
+                dest_conn, doc_statuses, skipped_doc_ids, doc_id_map, target_scope
+            )
+            _insert_chunks(
+                dest_conn,
+                chunks,
+                skipped_doc_ids,
+                doc_id_map,
+                chunk_id_map,
+                target_scope,
+            )
             _insert_entities(
                 dest_conn,
                 entities,
@@ -396,7 +398,9 @@ def import_scope(  # noqa: PLR0912
                     resolved_path = _candidate
                     break
             else:
-                return "error: explicit source path required (local DB is the running DB)"
+                return (
+                    "error: explicit source path required (local DB is the running DB)"
+                )
         else:
             return "error: explicit source path required (local DB is the running DB)"
 
@@ -474,5 +478,7 @@ def export_scope(
     except Exception as exc:  # noqa: BLE001
         return f"error: export failed: {exc}"
 
-    doc_count = source_conn.execute("SELECT count(*) FROM documents WHERE scope = ?", (scope,)).fetchone()[0]
+    doc_count = source_conn.execute(
+        "SELECT count(*) FROM documents WHERE scope = ?", (scope,)
+    ).fetchone()[0]
     return f"Exported {doc_count} documents from scope {scope!r} to {out}"

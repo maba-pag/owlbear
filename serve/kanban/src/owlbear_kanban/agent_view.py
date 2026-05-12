@@ -9,6 +9,7 @@ import importlib
 import re
 from datetime import UTC, datetime
 
+from owlbear_kanban._duration import _parse_duration
 from owlbear_kanban.body_parser import parse_body
 from owlbear_kanban.corruption import (
     CorruptionError,
@@ -16,7 +17,6 @@ from owlbear_kanban.corruption import (
 from owlbear_kanban.dispatch import PRIORITY_RANK
 from owlbear_kanban.engine import (
     _BLOCK_REASON_UNSET,
-    LOGGER,
     KanbanEngine,
     _task_body_as_text,
 )
@@ -24,7 +24,6 @@ from owlbear_kanban.models import (
     ConcurrencyError,
     ConfigError,
     DispatchEntry,
-    KanbanError,
     ListTasksResponse,
     NotFoundError,
     PickTasksResponse,
@@ -301,17 +300,13 @@ class AgentView:
     ) -> PickTasksResponse:
         """Select dispatchable tasks and arrange them into dependency-disjoint waves.
 
-          Runs a six-step pipeline:
+          Runs a five-step pipeline:
 
           1. **Validate** — ensure every status in ``config.pipeline.statuses``
               has an ``agent_map`` entry.
 
-          2. **Resolve** — attempt to resolve any pending Decision Requests via
-           ``owlbear_kanban.decisions.resolve_pending_drs``; ``ImportError``
-           and expected runtime errors (``KanbanError``, ``OSError``,
-           ``ValueError``) are suppressed and logged at ``WARNING``; unexpected
-           exception types propagate.
-          3. **Filter** — exclude claimed, archived, ``blocked=True``, and
+          2. **Filter** — exclude tasks with an active claim (per configured
+           ``claim_timeout``), archived, ``blocked=True``, and
            ``dep_status="blocked"`` tasks; rehydrate each candidate with
            ``show_task()`` to obtain the full body, skip any whose
            ``status == "archived"`` (post-rehydrate guard), then apply the
@@ -319,12 +314,12 @@ class AgentView:
            non-impl tag) and the clarity gate (active-status tasks require
            at least one bullet/numbered AC line).  Gate predicates are
            resolved from ``owlbear_kanban.dispatch``.
-          4. **Sort** — deterministic ordering: ``priority_rank ASC``,
+          3. **Sort** — deterministic ordering: ``priority_rank ASC``,
            age (oldest first) ``DESC``, ``id ASC``.
-          5. **Greedy wave assembly** — fill waves respecting three constraints:
+          4. **Greedy wave assembly** — fill waves respecting three constraints:
            wave size cap, dependency disjointness (no intra-wave dep edges),
            and agent-bucket compatibility.
-          6. **Agent assignment** — each :class:`DispatchEntry` carries the full
+          5. **Agent assignment** — each :class:`DispatchEntry` carries the full
            ``BoardConfig.agent_map`` value for the task's status.
 
         Args:
@@ -377,26 +372,16 @@ class AgentView:
                 user_message=f"agent_map missing status entries: {missing_statuses}",
             )
 
-        try:
-            decisions = importlib.import_module("owlbear_kanban.decisions")
-        except ImportError as exc:
-            LOGGER.warning(
-                "Failed to import decisions module before pick_tasks: %s", exc
-            )
-        else:
-            try:
-                decisions.resolve_pending_drs(self.engine)
-            except (KanbanError, OSError, ValueError) as exc:
-                LOGGER.warning(
-                    "Failed to resolve pending DRs before pick_tasks: %s", exc
-                )
+        claim_timeout = _parse_duration(config.pipeline.claim_timeout)
+        dispatch_module = importlib.import_module("owlbear_kanban.dispatch")
+        claim_is_active = dispatch_module._claim_is_active  # noqa: SLF001
 
         active = self.engine.list_tasks(
             archived=False,
             blocked=False,
-            unclaimed=True,
             sort="created",
         )
+        active = [task for task in active if not claim_is_active(task, claim_timeout)]
         # list_tasks computes dep_status against the full active snapshot before
         # filters, so use the projected value directly to avoid reclassifying
         # dependencies based on the filtered subset.
@@ -405,7 +390,6 @@ class AgentView:
             for task in active
             if task.dep_status != "blocked" and task.status != "archived"
         ]
-        dispatch_module = importlib.import_module("owlbear_kanban.dispatch")
         passes_tdd = dispatch_module._passes_tdd_gate  # noqa: SLF001
         passes_clarity = dispatch_module._passes_clarity_gate  # noqa: SLF001
 
@@ -569,7 +553,7 @@ class AgentView:
         """
         if not title.strip():
             raise ValidationError(
-                code="ERR_INVALID_STATUS",
+                code="ERR_INVALID_TITLE",
                 user_message="title must not be empty",
             )
         self.engine.validate_body_size(body)

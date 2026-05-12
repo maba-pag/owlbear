@@ -1,40 +1,36 @@
 ---
 name: w-mem-curation
-description: "Workflow: Memory curation — deduplicate, consolidate, and prune lessons-learned entries"
+description: "Workflow: Memory curation — review, scope, deduplicate, and prune MCP memory entries"
 user-invocable: false
 ---
 
 # Memory Curation
 
-Maintain institutional memory by deduplicating, consolidating, and pruning lessons learned from agent task notes. Process inbox entries and merge high-signal findings into the existing thematic knowledge files.
+> **Audience:** The `memory-curator` agent (periodic or manual dispatch). **When:** Orchestrator dispatches a curation cycle, or the user invokes manually for conflict resolution. **Why:** Turns raw `pending` agent reflections into scoped, quality-checked MCP entries that `recall_memory` surfaces.
+
+Maintain institutional memory by turning raw agent learnings into scoped MCP memory entries. MCP memory is the canonical reviewed store; file-based inbox notes are fallback/migration input only.
 
 ## Architecture
 
-Repo memory (`/memories/repo/`) is organized as **thematic files** — each file answers a specific question an agent would have in a specific role/context. Examples: `reviewer-proof-quality.md`, `builder-pitfalls.md`, `engine-review-patterns.md`.
+The canonical path is:
 
-**The cardinal rule:** promotion means **merge into the right thematic file**, not create a new standalone file. If no existing file fits, create a new thematic file with a descriptive name — but this should be rare.
+```text
+save_memory -> list_memories/read_memory -> curate_memory(scope_agents=[...]) -> recall_memory
+```
 
-**Inbox** (`/memories/repo/inbox/`) holds raw agent field notes awaiting triage. **Deferred** (`/memories/repo/deferred/`) holds conflicts needing manual resolution.
+Curated and approved MCP entries are what future agents recall. Pending entries are unreviewed and invisible to recall. File-based `/memories/repo/inbox/` entries may still appear during migration or tool outages; valuable file notes are migrated into MCP, then the file note is removed or deferred.
 
 ## State Machine
 
-Memory lifecycle transitions are explicit and tool-driven:
-
 | From | To | Trigger | Tool | Actor |
 |------|----|---------|------|-------|
-| `pending` | `curated` | Curator promotes after review | `curate_memory(scope_agents=[...])` | curator agent |
-| `curated` | `approved` | User signs off | `approve_memory` | human user |
-| `approved` | `curated` | Any curator edit (auto-downgrade) | `curate_memory(...)` | curator agent |
-| `pending` | `deleted` | Noise/duplicate pruned | `delete_memory` (hard delete) | curator agent |
-| `curated` | `deleted` | Superseded or invalidated | `delete_memory` (soft delete) | curator agent |
-| `approved` | `deleted` | Obsolete knowledge purged | `delete_memory` (soft delete) | curator agent |
+| `pending` | `curated` | Curator validates content and assigns scope | `curate_memory(scope_agents=[...])` | curator agent |
+| `curated` | `approved` | User signs off in review prompt | `approve_memory` | human user |
+| `approved` | `curated` | Curator edits obsolete or imprecise content | `curate_memory(...)` | curator agent |
+| `pending` | removed | Noise/duplicate pruned before commit | `delete_memory` | curator agent |
+| `curated` / `approved` | `deleted` | Superseded or invalidated guidance retired | `delete_memory` | curator agent |
 
-Purge flow: periodic curation may mark previously approved entries as `deleted` when they become obsolete, stale, or replaced by better guidance.
-
-Tool hints are part of the workflow signal:
-
-- `curate_memory` returns hints describing promotion/downgrade/update path.
-- `delete_memory` returns whether hard-delete (pending) or soft-delete (curated/approved) was applied.
+The curator does not approve entries. Approval is a user decision through the memory review prompt.
 
 ## Step 0 — Setup
 
@@ -42,122 +38,98 @@ Read `r-pipeline-protocol` skill if not already loaded.
 
 **Mode detection:**
 
-- **Periodic mode** — dispatched by the orchestrator. Handle clear-cut entries only. Do NOT call `askQuestions` or block on user input — the orchestrator pipeline stalls if you do. Write CONFLICT/UNCERTAIN entries to the deferred folder (Step 4).
-- **Manual mode** — invoked directly by the user via prompt. Full interactive capabilities: `askQuestions` available. Process both new entries and any items in the deferred folder.
+- **Periodic mode** — dispatched by the orchestrator. Handle clear-cut entries only. Do not call `askQuestions`; defer conflicts and uncertain scope decisions.
+- **Manual mode** — invoked directly by the user. Resolve conflicts and uncertain scope through `askQuestions`.
 
-**Deferred folder:** List `/memories/repo/deferred/`. Count files as `deferred_count`. This count appears in the Channel A return (periodic) and determines whether Step 4 processes deferred items (manual).
+**Deferred queue:** list `/memories/repo/deferred/` and keep `deferred_count` for the return summary.
 
-## Step 1 — Gather and Inventory
+## Step 1 — Gather Candidates
 
-1. **Inventory existing thematic files:** `memory view /memories/repo/` — list all files (excluding `inbox/`, `deferred/`). These are the merge targets. Read each file's heading to understand its scope.
-2. **Capacity check:** count standalone files (not thematic). If any exist, add them to the consolidation queue (Step 4b).
-3. **Primary (MCP):** Call `list_memories(states=["pending"])` to fetch pending entries from the `owlbearMemory` MCP database. See `h-mcp-memory` for full parameter reference.
-4. For each candidate ID, call `read_memory(entry_id=...)` to inspect the full entry content before scoring.
-5. **Secondary (file-based):** List the repo memory inbox: `memory view /memories/repo/inbox/` — read each file.
-6. Scan parent directory for misplaced entries agents wrote to `/memories/repo/` instead of the inbox. Move any unreviewed entries to the inbox first.
-7. Collect all entries from both sources for the remaining steps.
+1. Call `list_memories(states=["pending", "curated", "approved"])`.
+2. Read each pending candidate with `read_memory(entry_id=...)`.
+3. Keep curated/approved metadata nearby for duplicate and conflict checks. Read likely overlaps before deciding.
+4. Inspect `/memories/repo/inbox/` for fallback notes. Treat these as migration candidates, not canonical memory.
+5. Scan `/memories/repo/` for misplaced unreviewed notes. Move or process them as inbox candidates.
 
-## Step 2 — Deduplicate
+## Step 2 — Classify Signal
 
-Group findings by semantic similarity:
+For each MCP pending entry or file-inbox note, classify by meaning:
 
-1. Identify near-duplicates (same core insight, different wording).
-2. For each group, pick the best-worded version as canonical.
-3. Merge supporting evidence from duplicates into the canonical entry.
-4. Mark duplicates for removal.
-5. Track: `dedup_count`.
+| Rating | Meaning | Default action |
+|--------|---------|----------------|
+| PROMOTE | Specific, actionable, non-obvious, and not already covered | Curate into MCP with explicit scope |
+| DEFER | Plausible but lacks enough evidence, scope clarity, or wording quality | Leave pending or write deferred note |
+| DELETE | Generic, empty, obvious, stale, or wrong | Delete/prune |
+| DUPLICATE | Existing curated/approved MCP entry already covers it | Delete pending/file note |
+| CONFLICT | Contradicts existing curated/approved memory or project rules | Defer or resolve manually |
 
-## Step 3 — Assess Signal
+Deduplicate by meaning, not wording. Before deleting as duplicate, read the likely existing MCP entry unless metadata alone is conclusive.
 
-For each unique finding, evaluate:
+## Step 3 — Assign Scope
 
-1. **Actionable?** — Can an agent use this for better decisions? "Tests should be good" = low signal. "Mock pydantic-settings with `MagicMock(spec=...)` and set every field" = high signal.
-2. **Non-obvious?** — Would a competent developer already know this? "Use type hints" = obvious. "Coverage.py MRO crash with dotted module names" = non-obvious.
-3. **Recurring?** — Has this come up more than once? Recurring = stronger signal.
-4. **Already covered?** — Read the target thematic file. If the insight is already there (even in different words), this is a duplicate, not a promotion.
-5. **Contradicts existing?** — Conflicts with a reviewed lesson?
+Every promoted entry needs non-empty `scope_agents`.
 
-Rate each: **HIGH** / **MEDIUM** / **LOW** / **NOISE** / **DUPLICATE** / **CONFLICT**
+| Scope | Use when |
+|-------|----------|
+| `['builder']`, `['reviewer']`, etc. | The learning applies to one or a few roles |
+| `['builder', 'reviewer']` | A shared handoff or quality pattern spans roles |
+| `['*']` | The learning applies to nearly every agent |
 
-## Step 4 — Act
+Prefer targeted scopes. Use `['*']` only for broadly reusable process/tool guidance. Never promote with an empty scope.
 
-| Rating | Action |
-|--------|--------|
-| HIGH (recurring, actionable, non-obvious, not already covered) | **Merge into the matching thematic file** (see Promotion below) |
-| MEDIUM (actionable, single occurrence) | Keep in inbox for next curation cycle |
-| LOW (vaguely useful, not actionable) | Delete |
-| NOISE (obvious, generic, empty) | Delete |
-| DUPLICATE (already in thematic file) | Delete |
-| CONFLICT (contradicts existing rule) | **Periodic:** write to deferred folder. **Manual:** resolve interactively via `askQuestions` |
-| UNCERTAIN (needs user opinion) | **Periodic:** write to deferred folder. **Manual:** resolve interactively via `askQuestions` |
+## Step 4 — Act On MCP Entries
 
-### Promotion = Merge
+| Rating | MCP action |
+|--------|------------|
+| PROMOTE | Call `curate_memory(entry_id=..., scope_agents=[...])`; optionally improve title/content/categories/confidence in the same call |
+| DEFER | Leave pending and, in periodic mode, write a deferred note explaining what is unclear |
+| DELETE / DUPLICATE | Call `delete_memory(entry_id=...)` |
+| CONFLICT | Periodic: write deferred note. Manual: ask the user, then curate/delete according to the decision |
 
-**Never create a new standalone `review-*.md` file.** Instead:
+When editing an approved entry, remember `curate_memory` downgrades it to curated. That is intentional; the user must re-approve later.
 
-1. Identify which thematic file the finding belongs to by matching the agent role and decision context.
-2. Read the target thematic file.
-3. Find the right section within the file (or add a new section heading if needed).
-4. Append the finding as a bullet under that section, matching the file's existing style.
-5. If no thematic file fits AND the finding represents a genuinely new category, create a new thematic file with a descriptive name following the pattern `{role}-{context}.md` (e.g., `reviewer-proof-quality.md`, `builder-pitfalls.md`).
+## Step 5 — Migrate File-Inbox Notes
 
-### CONFLICT/UNCERTAIN handling by mode
+For each valuable file-based note:
 
-- **Periodic mode:** Create a file at `/memories/repo/deferred/{source}-{entry-id}.md` with:
-  - The new entry's content
-  - The existing rule it contradicts (with file path + line reference)
-  - Recommended options (keep new, keep existing, revise existing) with confidence scores
+1. Convert only the durable insight into a focused MCP entry with `save_memory(...)` and `source_agent="memory-curator:file-inbox"`.
+2. Immediately call `curate_memory(...)` with explicit `scope_agents` when the scope is clear.
+3. Delete the file-inbox note after successful MCP curation.
+4. If the note is uncertain or conflicting, write a deferred note and leave the original file until resolved.
 
-  Do NOT auto-resolve. Do NOT call `askQuestions`.
-- **Manual mode:** For each file in `/memories/repo/deferred/`:
-  1. Read the file.
-  2. Present the conflict to the user via `askQuestions` with the options and confidence scores from the file.
-  3. Apply the user's decision (promote the new entry, prune it, or revise the existing rule).
-  4. Delete the deferred file after resolution.
+Do not merge new learnings into thematic `/memories/repo/*.md` files as the promotion path. Existing thematic files are legacy references during migration.
 
-### Deletions
+## Step 6 — Batch Commit MCP Memory
 
-- **MCP entries:** `delete_memory(entry_id)` — pending entries are hard-deleted; curated/approved entries are soft-deleted to `state=deleted`.
-- **File-based inbox entries:** `memory delete /memories/repo/inbox/{filename}`
+Before returning, commit reviewed MCP memory mutations with the state-aware helper:
 
-## Step 4b — Consolidation (capacity-triggered)
+```bash
+uv --project ../owlbear run python -m owlbear_mcp_memory.git curation
+```
 
-If Step 1 found standalone files (not matching the `{role}-{context}.md` thematic pattern), consolidate them:
+The `--project` path must point to the OwlBear installation root. Find the correct value from the `ob-memory` server entry in `.vscode/mcp.json` (look for the `--project` argument in the `args` array). The helper stages only non-pending `.owlbear/memory/*.md` entries; do not broad-add `.owlbear/memory`.
 
-1. Read each standalone file.
-2. Identify which thematic file it belongs to.
-3. Merge its content into the thematic file (following Promotion rules above).
-4. Delete the standalone file.
-5. Track: `consolidated_count`.
-
-In periodic mode, consolidate up to 10 files per cycle to bound execution time. Flag remaining for next cycle.
-
-## Step 5 — Return Channel A signal
+## Step 7 — Return Channel A Signal
 
 Return per `r-pipeline-protocol`:
 
-- Periodic mode: `DONE | {N} merged, {M} pruned` (add `— {K} items need manual curation` when `deferred_count > 0`; add `— {C} consolidated` when `consolidated_count > 0`)
-- Manual mode: summary of actions taken (merges, resolutions, deletions, consolidations)
-
-## Step 6 — Done
-
-Curation actions are the deliverable.
+- Periodic mode: `DONE | {P} promoted, {D} pruned` (add `— {K} deferred` when `deferred_count > 0`; add `— {M} migrated` when file notes were moved into MCP)
+- Manual mode: concise summary of promoted, pruned, migrated, deferred, and resolved entries
 
 ## Verification Checklist
 
-- [ ] Processed all entries in scope
-- [ ] Deduplicated by meaning, not just exact text match
-- [ ] Promotions merged into existing thematic files (no new standalone files created)
-- [ ] Noise removals are truly generic/empty (not just unfamiliar)
-- [ ] Conflicts deferred to `/memories/repo/deferred/` (periodic) or resolved via user input (manual)
-- [ ] Did not fabricate any findings
-- [ ] Checked target thematic file for existing coverage before merging
+- [ ] Every promoted MCP entry has non-empty `scope_agents`
+- [ ] Duplicate checks compared against existing curated/approved MCP entries
+- [ ] Noise removals are truly low-signal, not merely unfamiliar
+- [ ] Conflicts were deferred in periodic mode or resolved with user input in manual mode
+- [ ] File-inbox notes were migrated into MCP before deletion
+- [ ] No broad `git add .owlbear/memory` command was used
+- [ ] Did not call `approve_memory`
 
 ## Known Pitfalls
 
-- **Creating standalone files instead of merging:** The #1 anti-pattern. Every promotion should append to an existing thematic file. New thematic files are only justified for genuinely new categories.
-- **Auto-resolving conflicts:** Conflicting lessons must be deferred to `/memories/repo/deferred/` in periodic mode for manual resolution.
-- **Aggressive pruning:** Unfamiliar findings may be non-obvious signals from a different agent context. Only prune if genuinely low-signal.
-- **Misplaced inbox entries:** Agents sometimes write to `/memories/repo/` instead of `/memories/repo/inbox/`. Scan the parent directory first.
-- **Dedup by exact match only:** Semantic deduplication is needed. "ruff caught an unused import" and "linter flagged unused import" are the same finding.
-- **Already-covered findings:** Before promoting, read the target thematic file. If the insight is already captured, delete the inbox entry as a duplicate.
+- **Promoting to thematic files:** legacy thematic files are not the canonical store. Promotion means MCP curation.
+- **Global scope by habit:** `['*']` floods all agents. Prefer named role scopes unless the learning is truly universal.
+- **Deleting before migration:** file-inbox notes are fallback input. Save and curate the durable insight before removing the file.
+- **Auto-resolving conflicts:** conflicting lessons must be deferred in periodic mode or resolved with the user in manual mode.
+- **Broad memory commits:** use the state-aware helper so pending entries stay uncommitted.

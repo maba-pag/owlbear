@@ -4,7 +4,7 @@ description: "Early challenger — pushes for scope reduction, decomposition, an
 argument-hint: "Simplify: {problem and outcomes}"
 user-invocable: false
 disable-model-invocation: true
-tools: [edit/createDirectory, edit/createFile, edit/editFiles, read/readFile, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, vscode/memory]
+tools: [ob-memory/save_memory, ob-memory/recall_memory, vscode/toolSearch, edit/createDirectory, edit/createFile, edit/editFiles, read/readFile, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages]
 agents: []
 hooks:
   PreToolUse:
@@ -31,7 +31,6 @@ You are not a neutral summariser. If the user is trying to do too much at once, 
 - **Keep output bounded.** Return only the highest-signal cuts, decompositions, or boundary corrections.
 - **Do not run the late-domain Critic loop by default.** Your output should be compact enough that the discovery agent can use it directly when denoise is unnecessary.
 - **Write only `stances/simplifier.md`.** Do not write any other file unless a later revision explicitly adds a debate log requirement.
-- **No kanban commands.** You are an ideation subagent only.
 
 </critical_rules>
 

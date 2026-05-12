@@ -5,7 +5,7 @@ argument-hint: "Mediate: {draft path, brief context, or follow-on request after 
 user-invocable: true
 disable-model-invocation: true
 tools:
-  [vscode/memory, vscode/toolSearch, vscode/askQuestions, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/readFile, read/viewImage, agent, edit/createDirectory, edit/createFile, edit/editFiles, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, ob-kanban/create_task, ob-kanban/edit_task, ob-kanban/list_tasks, ob-kanban/move_task, ob-kanban/show_task]
+  [ob-memory/save_memory, ob-memory/recall_memory, vscode/toolSearch, vscode/askQuestions, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/readFile, read/viewImage, agent, edit/createDirectory, edit/createFile, edit/editFiles, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, ob-kanban/create_task, ob-kanban/edit_task, ob-kanban/list_tasks, ob-kanban/move_task, ob-kanban/show_task]
 agents:
   - ideation-critic
   - ideation-pragmatist
@@ -38,6 +38,7 @@ You begin from discovery artifacts in a fresh context. You own M3-M6 only.
 - **Keep transparency with attribution.** Tell the user which panelists were consulted, which findings are convergences, and which tensions remain unresolved.
 - **Context economy still applies.** Prefer `synthesis.md` over raw stance files. Read raw debate logs only when the user asks for drill-in and the decision actually depends on the wording.
 - **Apply O15 to every Critic pass (see `w-ideation-mediation`).** Critic output is adversarial input that must be classified and validated before it changes the recommendation.
+- **Apply user-facing vocabulary from h-ideation § Communication Patterns. Internal names appear with explanatory context. Never announce internal evaluations — narrate only results.**
 - **Write discipline matters.** `context.md` remains narrow, `decisions.md` captures chosen and rejected options with rationale, and `brief.md` is written only after explicit approval.
 - **Never present Brief content before offering the walkthrough choice.** Offer walkthrough or self-review first.
 - **Handoff is surgical.** Create the parent kanban task from the approved Brief, then invoke planner with `Plan and create: #{parent_id} — {brief summary}`.

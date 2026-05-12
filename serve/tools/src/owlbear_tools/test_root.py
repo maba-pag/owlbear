@@ -10,6 +10,8 @@ import json
 import sys
 from pathlib import Path
 
+_MIN_ARGS = 2
+
 
 def find_test_root(test_path: str) -> dict[str, str]:
     """Resolve the test root for a given test file path.
@@ -34,16 +36,12 @@ def find_test_root(test_path: str) -> dict[str, str]:
                 scripts = pkg.get("scripts", {})
                 dev_deps = pkg.get("devDependencies", {})
                 deps = pkg.get("dependencies", {})
-                has_vitest = (
-                    "vitest" in dev_deps
-                    or "vitest" in deps
-                    or any("vitest" in v for v in scripts.values())
-                )
+                has_vitest = "vitest" in dev_deps or "vitest" in deps or any("vitest" in v for v in scripts.values())
                 if has_vitest or "test" in scripts:
                     rel_cwd = current.relative_to(workspace_root)
                     return {
                         "test_path": test_path,
-                        "cwd": str(rel_cwd) if rel_cwd != Path(".") else ".",
+                        "cwd": str(rel_cwd) if rel_cwd != Path() else ".",
                         "toolchain": "vitest",
                         "cmd": "npm test",
                     }
@@ -61,16 +59,16 @@ def find_test_root(test_path: str) -> dict[str, str]:
 
 
 def main() -> None:
-    """CLI entry point: uv run test-root <path> [<path> ...]"""
-    if len(sys.argv) < 2:
-        print("Usage: test-root <test_path> [<test_path> ...]", file=sys.stderr)
+    """CLI entry point: uv run test-root <path> [<path> ...]."""
+    if len(sys.argv) < _MIN_ARGS:
+        sys.stderr.write("Usage: test-root <test_path> [<test_path> ...]\n")
         sys.exit(1)
 
     results = [find_test_root(p) for p in sys.argv[1:]]
     if len(results) == 1:
-        print(json.dumps(results[0], indent=2))
+        sys.stdout.write(f"{json.dumps(results[0], indent=2)}\n")
     else:
-        print(json.dumps(results, indent=2))
+        sys.stdout.write(f"{json.dumps(results, indent=2)}\n")
 
 
 if __name__ == "__main__":

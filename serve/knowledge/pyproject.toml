@@ -4,24 +4,24 @@ version = "0.1.0"
 requires-python = ">=3.12"
 description = "OwlBear knowledge engine (graph + vector)"
 dependencies = [
-    "pydantic>=2.10.0",
+    "pydantic>=2.13.3",
     "strictyaml>=1.7.3",
 ]
 
 [project.optional-dependencies]
-qdrant = ["qdrant-client>=1.9.0"]
-embedding = ["FlagEmbedding>=1.2.0"]
-intake = ["httpx>=0.27"]
-llm = ["openai>=1.50"]
+qdrant = ["qdrant-client>=1.17.1"]
+embedding = ["FlagEmbedding>=1.4.0"]
+intake = ["httpx>=0.28.1"]
+llm = ["openai>=2.33.0"]
 copilot = [
-    "httpx>=0.27",
+    "httpx>=0.28.1",
     "truststore",
 ]
 full = [
-    "qdrant-client>=1.9.0",
-    "FlagEmbedding>=1.2.0",
-    "httpx>=0.27",
-    "openai>=1.50",
+    "qdrant-client>=1.17.1",
+    "FlagEmbedding>=1.4.0",
+    "httpx>=0.28.1",
+    "openai>=2.33.0",
 ]
 
 [build-system]

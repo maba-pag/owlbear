@@ -1,6 +1,8 @@
 # owlbear-mcp-memory — Memory MCP Server
 
-MCP server that provides agent institutional memory via a SQLite-backed store. Agents record learnings, retrieve relevant knowledge, and curate entries through an approval workflow. Registered in VS Code's MCP configuration as `owlbearMemory`.
+MCP server for agent institutional memory. Pipeline and ideation agents record learnings after tasks; a dedicated curator agent reviews, scopes, and promotes entries; the human operator approves. Approved entries surface during agent pre-flight via `recall_memory`.
+
+Storage is file-based: each entry is a markdown file with YAML frontmatter in `.owlbear/memory/`. The FastMCP app name is `owlbear-memory`; VS Code registers it in `.vscode/mcp.json` as `ob-memory`.
 
 → Parent: [README.md](../../README.md)
 
@@ -12,29 +14,89 @@ MCP server that provides agent institutional memory via a SQLite-backed store. A
 uv run python -m owlbear_mcp_memory
 ```
 
-Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json`.
+Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json` — not invoked directly.
 
-### Tools
+## Architecture
+
+### Modules
+
+| Module | Purpose |
+|--------|---------|
+| `server.py` | FastMCP app definition, tool registration, lifespan wiring |
+| `tools.py` | Tool implementation — validation, state transitions, response formatting |
+| `engine.py` | File I/O layer — read/write/delete/list markdown entries, ID-to-path cache |
+| `models.py` | Pydantic models (`MemoryEntry`, `MemoryCategory`, `MemoryState`) |
+| `git.py` | Batch commit helper — stages non-pending entries by session type |
+| `__main__.py` | Entry point for `python -m owlbear_mcp_memory` |
+
+### State Model
+
+Entries follow a curated-approval lifecycle:
+
+```
+pending ──[curate with scope]──► curated ──[approve]──► approved
+   │                               │  ▲                    │
+   │                               │  └──[curate edit]─────┘
+   └──[delete: hard]               └──[delete: soft → deleted]
+```
+
+- **pending** → invisible to `recall_memory`, not committed to git
+- **curated** → visible to scoped agents, committable
+- **approved** → highest-trust retrieval priority, committable
+- **deleted** → soft-deleted (curated/approved) or hard-deleted from disk (pending)
+
+## Tools
 
 | Tool | Description |
 |------|-------------|
-| `get_knowledge` | Retrieve memory entries for an agent, sorted by scope-specificity |
-| `record_learning` | Store a new memory entry with category, confidence, and scope |
-| `list_entries` | List all entries (including pending and deleted) for curation |
-| `set_approval_state` | Transition entry state (`pending → approved`, `pending → deleted`, `deleted → pending`) |
-| `mark_for_deletion` | Soft-delete an entry by ID |
+| `save_memory` | Create a `pending` entry; `scope_agents` defaults to `[source_agent]` |
+| `list_memories` | List metadata sorted by curation priority; filters: `states`, `categories`, `scope_agents` |
+| `read_memory` | Read one full entry by `entry_id`; errors on deleted entries |
+| `recall_memory` | Body-only markdown blocks scoped to one agent; approved before curated; default limit 20 |
+| `curate_memory` | Mutate fields + auto-promote `pending→curated` (when scope provided) or auto-downgrade `approved→curated` |
+| `delete_memory` | Hard-delete pending (file removed); soft-delete curated/approved (state→deleted) |
+| `approve_memory` | Promote `curated→approved`; user-initiated only (not exposed to any agent) |
 
-### Entry schema
+All mutating tools return a `hint` field describing the transition or action taken.
 
-Entries are scoped to an optional agent and optional project. Valid categories: `preference`, `knowledge`, `context`, `behavior`, `goal`. Confidence must be ≥ 0.7.
+## Entry Schema
+
+| Field | Type | Constraint |
+|-------|------|------------|
+| `id` | str | Stable UUID identifier |
+| `title` | str | Required, non-empty |
+| `content` | str | Markdown body (max 1024 chars at MCP layer) |
+| `categories` | list[str] | One or more from: `domain-knowledge`, `behaviour`, `pitfall`, `process`, `tool-usage`, `goal`, `personality`, `preference`, `env-context` |
+| `confidence` | float | `[0.7, 1.0]` inclusive |
+| `state` | str | `pending` (default), `curated`, `approved`, `deleted` |
+| `source_agent` | str | Required; immutable provenance marker |
+| `scope_agents` | list[str] | Agent visibility scope; defaults to `[source_agent]` on creation |
+| `created_at` | str | UTC timestamp |
+| `updated_at` | str | UTC timestamp |
+| `approved_at` | str \| null | Set on approve, cleared on downgrade/delete |
 
 ## Configuration
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `OWLBEAR_MEMORY_DB_PATH` | `store/memory/memory.db` | Path to the SQLite memory database |
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `OWLBEAR_MEMORY_DIR` | `.owlbear/memory` | Directory for markdown memory files |
 
-The database file and parent directories are created automatically on first launch. The project name is read from `owlbear-project.json` in the working directory (used for project-scoped filtering).
+## Batch Commits
+
+Pending entries are intentionally left uncommitted. After curation or review, commit only reviewed entries with the state-aware helper:
+
+```bash
+uv run python -m owlbear_mcp_memory.git curation
+uv run python -m owlbear_mcp_memory.git review
+```
+
+The `--project` path must point to the OwlBear installation root. Find the correct value from the `ob-memory` server entry in `.vscode/mcp.json` (look for the `--project` argument in the `args` array). Example:
+
+```bash
+uv --project ../owlbear run python -m owlbear_mcp_memory.git review
+```
+
+The helper stages only non-pending `.owlbear/memory/*.md` files and returns the commit SHA, or `no memory changes to commit` when there is nothing to commit.
 
 ## Dependencies
 
@@ -42,3 +104,4 @@ The database file and parent directories are created automatically on first laun
 |---------|---------|
 | `mcp[cli]` | FastMCP server framework |
 | `pydantic` | Model validation |
+| `pyyaml` | YAML frontmatter serialisation for memory files |

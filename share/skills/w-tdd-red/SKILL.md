@@ -10,6 +10,23 @@ Write failing tests from a task's acceptance criteria. All tests must fail when 
 
 **Kanban operations:** See `h-mcp-kanban` skill — section `## Agent Lifecycle Pattern`.
 
+## Scope
+
+### In Scope
+
+- Write failing tests from AC (RED phase).
+- Non-impl pass-through (tag-based).
+- Retry-cycle gap-fill from reviewer findings.
+- Direct-to-review advance for test-only retries when all new tests are green.
+
+### Out of Scope
+
+- Writing or editing source code — builder (`w-tdd-green`).
+- AC quality validation — architect (`w-arch-review`).
+- Code review — reviewer (`w-code-review`).
+- Architecture decisions — architect (`w-arch-review`).
+- Full-suite regression — auditor (`w-task-verification`).
+
 ## Step 0 — Setup
 
 Read `r-pipeline-protocol` skill if not already loaded.
@@ -23,7 +40,7 @@ From the task body retrieved by `start_work`:
 <!-- NON_IMPL_TAGS: Authoritative list at w-arch-review (agent dispatch table). -->
 
 1. Check if this is a **non-implementation task** (tagged `research`, `docs`, `type:config`, `type:docs`, `test`, `type:test`, `agent`, `quality`, or `type:user-action`). If so, go to **Step 1a — Pass-through**.
-2. **Test-depth gate:** Check if ALL AC lines are annotated `(td:0)`. If so, go to **Step 1c — Depth-zero pass-through**.
+2. Check `Proof bundle:` and route per `r-pipeline-protocol` taxonomy: `skip`/`existing` -> **Step 1d — Proof-bundle pass-through**; `smoke` -> continue with smoke-only planning/writing (one smoke test per AC line); `behavioral`/`critical` -> continue with full TDD mapping.
 3. Check if this is a **retry cycle** (body contains both `## Test-Writer Notes` and `## Review Evidence`). If so, go to **Step 1b — Retry-cycle handling**.
 4. Identify referenced source files, modules, and interfaces in the AC.
 5. Do NOT move task status yet — movement happens in Step 7 after verification.
@@ -51,7 +68,7 @@ If the body contains both `## Test-Writer Notes` and `## Review Evidence`, this 
 
 - **If reviewer cites missing tests:** Write NEW failing tests addressing ONLY the specified gaps. Add them to the existing `TestFromAC_{Feature}` class (or a new `TestFromAC_` class for a distinct AC concern). Do NOT remove or modify existing passing tests. Do NOT do a broad coverage uplift — fill only the reviewer's gaps.
 - **If reviewer cites code quality, weak tests, or security (not missing tests):** Pass through — the builder will address the findings.
-- Run pytest to verify: old tests PASS, new tests FAIL (for the new gaps). If all tests pass (implementation already handles the gap), note this and advance — **the builder pass-through is unnecessary** (see Step 1b.1 below).
+- Delegate to `quality-runner` to verify: old tests PASS, new tests FAIL (for the new gaps). If all tests pass (implementation already handles the gap), note this and advance — **the builder pass-through is unnecessary** (see Step 1b.1 below).
 
 **Advance:** Commit new test files first, then advance:
 
@@ -83,12 +100,12 @@ git add tests/test_{module}_{task_id}.py && git commit -m "test: add retry tests
 - Return: `DONE #{id} -> review | test-only retry, builder skipped`
 - **Stop here.**
 
-### Step 1c — Depth-Zero Pass-Through
+### Step 1d — Proof-Bundle Pass-Through
 
-All AC lines are annotated `(td:0)` — no tests needed for this task.
+If `Proof bundle:` is `skip` or `existing`, no new RED tests are required.
 
-1. Advance via `end_work(note="## Test-Writer Notes\n- All AC lines are (td:0) — test-writer skipped.\n- Passing through to builder.")` (moves to `in-progress` + releases claim).
-2. Return: `DONE #{id} -> in-progress | all AC td:0, no tests needed`
+1. Advance via `end_work(note="## Test-Writer Notes\n- Proof bundle: {value} — no new test writing required.\n- Passing through to builder.")` (moves to `in-progress` + releases claim).
+2. Return: `DONE #{id} -> in-progress | proof bundle {value}, no tests needed`
 3. **Stop here.**
 
 ## Step 2 — Search Codebase
@@ -106,15 +123,16 @@ Run this only if Step 2 found no testable interfaces:
 1. **Scan AC for Python implementation intent** — keywords: `implement`, `function`, `method`, `class`, `module`, `src/`, `workspace/`, `.py`, `import`, `endpoint`, `API`.
 2. **If implementation intent found:** proceed to Step 3 (new-module RED phase, ImportError tests expected).
 3. **If NO intent AND AC references only non-Python files** (`.agent.md`, `SKILL.md`, `.instructions.md`, `.yml`, `.yaml`, `.json`, `.md`, `.prompt.md`): heuristic pass-through. Advance via `end_work(note="## Test-Writer Notes\n- Non-impl pass-through: config/docs only")`, return signal, and stop.
-4. **If ambiguous:** default to pass-through with strong warning. Escalate to decision request via scribe only when AC is too ambiguous to determine builder intent.
+4. **If ambiguous:** default to pass-through with strong warning. Escalate to decision request via `create_dr` only when AC is too ambiguous to determine builder intent.
 
 ## Step 3 — Plan Test Categories
 
-**Skip `(td:0)` AC lines entirely** — do not plan or write tests for them.
+If `Proof bundle:` is present, use it as the primary routing signal:
 
-For `(td:1)` lines (or lines without annotation — default to td:1), plan a single smoke test per line (one assertion, happy path only).
+- `smoke`: plan one smoke test per AC line (one assertion, happy path only)
+- `behavioral` or `critical`: map each AC line to full TDD categories
 
-For `(td:2)` lines, map each AC line to test categories:
+Full TDD categories:
 
 - **Happy path** — expected behavior works correctly
 - **Edge cases** — empty inputs, boundary values, concurrent access
@@ -126,24 +144,31 @@ For `(td:2)` lines, map each AC line to test categories:
 Create `tests/test_{module}_{task_id}.py` with class `TestFromAC_{Feature}`:
 
 - Each AC line gets at least one test.
+- Prefer exact-value assertions over pattern matching: use `==` for values, assert exact exception types, and assert exact return values.
+- Use pattern-based assertions (`in`, `>`, regex, partial matches) only when the AC explicitly describes pattern-based behavior.
 - **AC lines stating "X unchanged" / "no modification to Y" / "existing Z unmodified":** Write a direct regression guard test that calls the production code path and asserts the expected result. Do NOT rely on transitive coverage — if another test exercises X as a side-effect, that is not a substitute. A direct `TestFromAC_*` test is required.
 - Test the **contract** described in AC, not a specific implementation.
 - Use `unittest.mock.patch` / `MagicMock` for external dependencies.
 - `from __future__ import annotations` at top of new files.
 - Type hints on test helper functions.
 
-**File naming:** Task-scoped tests use `test_{module}_{task_id}.py` (transient — removed by test-curator post-archive). Module-level `test_{module}.py` files are test-curator-managed and must not be created or edited by the test-writer.
+**File naming:**
+
+- Default: task-scoped tests use `tests/test_{module}_{task_id}.py` (transient — removed by test-curator post-archive).
+- Consolidation exception: when the task is tagged `consolidation-test`, write durable tests in `serve/{package}/tests/test_{module}.py`.
+- Outside `consolidation-test` tasks, durable module-level files are test-curator-managed and must not be created or edited by the test-writer.
 
 **Class naming convention:**
 
 - `TestFromAC_{Feature}` — tests written by the test-writer from AC.
 - `TestBuilderDiscovered` is retired. If builder reports missing blocking edge-case coverage, add the needed tests under the `TestFromAC_` convention.
+- For `consolidation-test` durable files, use descriptive class names (for example, `TestBookmarkPipelineDurable`) and do not use `TestFromAC_`.
 
 **TestFromAC immutability:** During the active pipeline (task creation through archive), `TestFromAC_*` classes are immutable — the builder cannot weaken, remove, or modify them. Post-archive, the test-curator gains authority to promote, consolidate, or remove assertions.
 
 ## Step 5 — Verify RED
 
-Run pytest on the test file and confirm **every** test fails via Quality-Runner:
+Run the test file through Quality-Runner and confirm **every** test fails:
 
 ```
 agentName: quality-runner

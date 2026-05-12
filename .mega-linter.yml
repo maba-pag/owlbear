@@ -22,7 +22,6 @@ ENABLE_LINTERS:
   - ACTION_ACTIONLINT
   - EDITORCONFIG_EDITORCONFIG_CHECKER
   # Security / Repository
-  - REPOSITORY_GITLEAKS
   - REPOSITORY_DEVSKIM
   - REPOSITORY_TRIVY
 
@@ -51,11 +50,10 @@ ADDITIONAL_EXCLUDED_DIRECTORIES:
 # ──────────────────────────────────────────────
 
 # Ruff — uses pyproject.toml config (select=["ALL"] includes bandit S-rules)
-# Auto-discovers pyproject.toml from project root; no explicit config path needed.
+# MegaLinter otherwise falls back to its bundled .ruff.toml template.
+PYTHON_RUFF_CONFIG_FILE: pyproject.toml
 PYTHON_RUFF_CLI_LINT_MODE: project
 
-# Ruff format — project mode lets ruff auto-discover pyproject.toml from root.
-# Without this, MegaLinter uses its own bundled .ruff.toml (different settings).
 PYTHON_DEFAULT_STYLE: ruff
 PYTHON_RUFF_FORMAT_CLI_LINT_MODE: project
 
@@ -86,9 +84,6 @@ JSON_JSONLINT_ARGUMENTS: "--quiet"
 # false-positives on docstring content (2-space RST lists inside 4-space code).
 # Tabs-vs-spaces (indent_style) is still enforced.
 EDITORCONFIG_EDITORCONFIG_CHECKER_ARGUMENTS: "-f github-actions --disable-indent-size"
-
-# Gitleaks — secret detection
-REPOSITORY_GITLEAKS_ARGUMENTS: "--no-banner"
 
 # DevSkim — security anti-pattern detection (all languages)
 REPOSITORY_DEVSKIM_DISABLE_ERRORS: false

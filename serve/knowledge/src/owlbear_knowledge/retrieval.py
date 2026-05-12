@@ -100,7 +100,9 @@ class GraphAugmentedRetriever:
             :class:`RetrievalResult` with vector chunks and graph expansion.
         """
         embedding = self._embed(query)
-        raw_chunks: list[tuple[str, float]] = self._vector_store.search_similar(embedding)
+        raw_chunks: list[tuple[str, float]] = self._vector_store.search_similar(
+            embedding
+        )
         chunks = raw_chunks[:top_k]
 
         if not chunks:
@@ -108,7 +110,9 @@ class GraphAugmentedRetriever:
 
         seeds = self._resolve_seeds(raw_chunks, scopes=scopes)
 
-        expansion_text = self._expand(seeds, scopes=scopes) if self._expansion_enabled else ""
+        expansion_text = (
+            self._expand(seeds, scopes=scopes) if self._expansion_enabled else ""
+        )
 
         return RetrievalResult(
             chunks=chunks,
@@ -132,7 +136,11 @@ class GraphAugmentedRetriever:
         """
         chunk_ids = {chunk_id for chunk_id, _ in chunks}
         all_entities = self._graph_store.list_entities(scopes=scopes)
-        return [e for e in all_entities if e.chunk_id is not None and e.chunk_id in chunk_ids]
+        return [
+            e
+            for e in all_entities
+            if e.chunk_id is not None and e.chunk_id in chunk_ids
+        ]
 
     def _expand(
         self,
@@ -171,7 +179,9 @@ class GraphAugmentedRetriever:
             neighbors = neighbors[: self._max_neighbors_per_entity]
 
             if self._weight_by_importance:
-                neighbors = sorted(neighbors, key=lambda pair: pair[0].importance, reverse=True)
+                neighbors = sorted(
+                    neighbors, key=lambda pair: pair[0].importance, reverse=True
+                )
 
             for neighbor, edge in neighbors:
                 line = f"{seed.name} --[{edge.relation}]--> {neighbor.name}: {neighbor.description}"
@@ -214,7 +224,11 @@ def query_for_context(
     try:
         result = retriever.retrieve(query)
 
-        qualified = [(cid, score) for cid, score in result.chunks if score >= similarity_threshold]
+        qualified = [
+            (cid, score)
+            for cid, score in result.chunks
+            if score >= similarity_threshold
+        ]
         if not qualified:
             return None
 

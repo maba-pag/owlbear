@@ -129,7 +129,9 @@ class BookmarkPipeline:
             return BookmarkResult(url=url)
 
         # Stage 4 — evaluate
-        evaluation: EvaluationResult = await self._evaluator.evaluate(content, project_context=project_context)
+        evaluation: EvaluationResult = await self._evaluator.evaluate(
+            content, project_context=project_context
+        )
 
         # Stage 5 — cancel check before create/ingest
         if cancel is not None and cancel.is_set():
@@ -145,7 +147,9 @@ class BookmarkPipeline:
             and evaluation.worth_ingesting
         ):
             try:
-                ingest_result = await self._ingest_pipeline.ingest_text(content, metadata={"url": url}, scope=scope)
+                ingest_result = await self._ingest_pipeline.ingest_text(
+                    content, metadata={"url": url}, scope=scope
+                )
                 ingested = True
                 document_id = getattr(ingest_result, "document_id", None)
             except Exception:

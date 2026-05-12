@@ -44,9 +44,13 @@ class TextChunker:
     ) -> None:
         self.target_tokens = target_tokens
         self.overlap_tokens = overlap_tokens
-        self.separators = list(separators) if separators is not None else list(_DEFAULT_SEPARATORS)
+        self.separators = (
+            list(separators) if separators is not None else list(_DEFAULT_SEPARATORS)
+        )
 
-    def chunk(self, text: str, *, metadata: dict[str, Any] | None = None) -> list[Chunk]:
+    def chunk(
+        self, text: str, *, metadata: dict[str, Any] | None = None
+    ) -> list[Chunk]:
         """Split *text* into chunks respecting the separator hierarchy."""
         if not text or not text.strip():
             return []

@@ -43,18 +43,21 @@ class KnowledgeSourceStore:
             id=row[0],  # type: ignore[arg-type]
             name=row[1],  # type: ignore[arg-type]
             source_type=SourceType(row[2]),
-            config=self._load_config(row[3]),  # type: ignore[arg-type]
-            scope=row[4],  # type: ignore[arg-type]
-            enabled=bool(row[5]),
-            priority=row[6],  # type: ignore[arg-type]
-            last_refreshed_at=row[7],  # type: ignore[arg-type]
-            last_error=row[8],  # type: ignore[arg-type]
-            created_at=row[9],  # type: ignore[arg-type]
-            updated_at=row[10],  # type: ignore[arg-type]
+            fetch_method=row[3],  # type: ignore[arg-type]
+            enrich=bool(row[4]),
+            config=self._load_config(row[5]),  # type: ignore[arg-type]
+            scope=row[6],  # type: ignore[arg-type]
+            enabled=bool(row[7]),
+            priority=row[8],  # type: ignore[arg-type]
+            last_refreshed_at=row[9],  # type: ignore[arg-type]
+            last_error=row[10],  # type: ignore[arg-type]
+            created_at=row[11],  # type: ignore[arg-type]
+            updated_at=row[12],  # type: ignore[arg-type]
         )
 
     _SELECT_COLS = (
-        "id, name, source_type, config, scope, enabled, priority, last_refreshed_at, last_error, created_at, updated_at"
+        "id, name, source_type, fetch_method, enrich, config, scope, enabled, priority,"
+        " last_refreshed_at, last_error, created_at, updated_at"
     )
 
     def _select_from_sources(self) -> str:
@@ -67,13 +70,15 @@ class KnowledgeSourceStore:
         """Insert *source* into the ``knowledge_sources`` table."""
         self._conn.execute(
             "INSERT INTO knowledge_sources"
-            " (id, name, source_type, config, scope, enabled, priority,"
+            " (id, name, source_type, fetch_method, enrich, config, scope, enabled, priority,"
             "  last_refreshed_at, last_error, created_at, updated_at)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 source.id,
                 source.name,
                 str(source.source_type),
+                source.fetch_method,
+                int(source.enrich),
                 self._dump_config(source.config),
                 source.scope,
                 int(source.enabled),
@@ -116,13 +121,15 @@ class KnowledgeSourceStore:
         """
         cur = self._conn.execute(
             "UPDATE knowledge_sources SET"
-            " name = ?, source_type = ?, config = ?, scope = ?,"
+            " name = ?, source_type = ?, fetch_method = ?, enrich = ?, config = ?, scope = ?,"
             " enabled = ?, priority = ?, last_refreshed_at = ?,"
             " last_error = ?, created_at = ?, updated_at = ?"
             " WHERE id = ?",
             (
                 source.name,
                 str(source.source_type),
+                source.fetch_method,
+                int(source.enrich),
                 self._dump_config(source.config),
                 source.scope,
                 int(source.enabled),
@@ -138,6 +145,24 @@ class KnowledgeSourceStore:
             msg = f"KnowledgeSource {source.id!r} not found"
             raise ValueError(msg)
         self._conn.commit()
+
+    def resolve_by_url(self, url: str) -> KnowledgeSource | None:
+        """Return the first source whose config.url matches *url*, or ``None``."""
+        rows = self._conn.execute(self._select_from_sources()).fetchall()
+        for row in rows:
+            source = self._row_to_model(row)
+            if source.config.get("url") == url:
+                return source
+        return None
+
+    def resolve_by_path(self, path: str) -> KnowledgeSource | None:
+        """Return the first source whose config.path matches *path*, or ``None``."""
+        rows = self._conn.execute(self._select_from_sources()).fetchall()
+        for row in rows:
+            source = self._row_to_model(row)
+            if source.config.get("path") == path:
+                return source
+        return None
 
     def list_enabled(self, scope: str | None = None) -> list[KnowledgeSource]:
         """Return enabled sources, optionally filtered by *scope*, ordered by priority DESC."""
@@ -169,21 +194,31 @@ class KnowledgeSourceStore:
                               → documents (via source_id FK)
                                  → entities, edges, chunks, document_status
         """
-        row = self._conn.execute("SELECT id FROM knowledge_sources WHERE id = ?", (source_id,)).fetchone()
+        row = self._conn.execute(
+            "SELECT id FROM knowledge_sources WHERE id = ?", (source_id,)
+        ).fetchone()
         if row is None:
             return False
 
         # Collect document IDs linked to this source
-        doc_rows = self._conn.execute("SELECT id FROM documents WHERE source_id = ?", (source_id,)).fetchall()
+        doc_rows = self._conn.execute(
+            "SELECT id FROM documents WHERE source_id = ?", (source_id,)
+        ).fetchall()
 
         for (doc_id,) in doc_rows:
             # Delete edges for each entity in the document
-            entity_rows = self._conn.execute("SELECT id FROM entities WHERE document_id = ?", (doc_id,)).fetchall()
+            entity_rows = self._conn.execute(
+                "SELECT id FROM entities WHERE document_id = ?", (doc_id,)
+            ).fetchall()
             for (eid,) in entity_rows:
-                self._conn.execute("DELETE FROM edges WHERE source_id = ? OR target_id = ?", (eid, eid))
+                self._conn.execute(
+                    "DELETE FROM edges WHERE source_id = ? OR target_id = ?", (eid, eid)
+                )
             self._conn.execute("DELETE FROM entities WHERE document_id = ?", (doc_id,))
             self._conn.execute("DELETE FROM chunks WHERE document_id = ?", (doc_id,))
-            self._conn.execute("DELETE FROM document_status WHERE document_id = ?", (doc_id,))
+            self._conn.execute(
+                "DELETE FROM document_status WHERE document_id = ?", (doc_id,)
+            )
 
         self._conn.execute("DELETE FROM documents WHERE source_id = ?", (source_id,))
         self._conn.execute("DELETE FROM source_pages WHERE source_id = ?", (source_id,))

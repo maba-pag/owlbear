@@ -1,3 +1,1 @@
-"""OwlBear MCP memory package."""
-
-from __future__ import annotations
+"""Stub package for owlbear_mcp_memory."""

@@ -10,6 +10,26 @@ Review researched tasks at `backlog`, refine acceptance criteria, ensure archite
 
 **Kanban operations:** See `h-mcp-kanban` skill — section `## Agent Lifecycle Pattern`.
 
+## Scope
+
+### In Scope
+
+- Validate AC quality via challenger dispatch.
+- Evaluate architecture against `r-architecture-standards`.
+- Validate proof-bundle assignment (confirm/escalate/de-escalate) and escalation modifiers.
+- Detect missing consolidation-test tasks as a decomposition backstop.
+- Approve `backlog -> todo`.
+- Run design diverge when two or more valid approaches exist.
+
+### Out of Scope
+
+- AC drafting — planner (`w-task-decomposition`).
+- Writing source code — builder (`w-tdd-green`).
+- Writing tests — test-writer (`w-tdd-red`).
+- Code review — reviewer (`w-code-review`).
+- Running full test suite — auditor (`w-task-verification`).
+- Documentation updates — doc-writer (`w-doc-update`).
+
 ## Step 0 — Setup
 
 Read `r-pipeline-protocol` skill if not already loaded.
@@ -20,9 +40,9 @@ Verify the task is in `backlog` status. If the task references a research doc (`
 
 **Decomposition detection:** If the task body contains `"Needs decomposition:"` but does NOT contain a `"## Planning"` section (which the planner appends after decomposition), delegate to the **planner** agent instead of continuing with architecture review. Pass the task ID and feature description from the body. After the planner returns successfully, call `end_work(outcome="success")` to advance the parent task. The planner's appended `## Planning` section serves as the completion marker — do not modify the body to remove the decomposition marker (this would overwrite the planner's additions).
 
-**User-action fast-path:** If the task is tagged `type:user-action` AND the body contains a `## Action Completed` section, verify that all AC checkboxes are checked. If complete, advance via `end_work(outcome="success")` — skip Steps 1–3. This task is already resolved.
+**User-action fast-path:** If the task is tagged `type:user-action` AND the body contains a `## Decision Request` summary with `response: approved`, verify that all AC checkboxes are checked. If complete, advance via `end_work(outcome="success")` — skip Steps 1–3. This task is already resolved.
 
-**Reject placeholders immediately:** `TEMP-*` titles or empty/unscoped bodies — create a DR via scribe explaining the task needs scope, release claim, do not process.
+**Reject placeholders immediately:** `TEMP-*` titles or empty/unscoped bodies — create a DR via `create_dr` explaining the task needs scope, release claim, do not process.
 
 ## Step 1 — Analyze Codebase Context
 
@@ -32,7 +52,7 @@ Verify the task is in `backlog` status. If the task references a research doc (`
 4. Check `depends_on` — are dependencies actually `done`? Use `show_task` for each dependency if needed.
 5. Identify: existing patterns to follow, interfaces to respect, invariants to maintain.
 6. Check the task body for prior architecture notes, research pointers, and reviewer feedback from previous cycles.
-7. **Brief context (when parent is set):** If the task has a `parent` field, call `show_task(parent_id)` and scan for Brief sections (`## Brief`, `## Problem`, `## Outcomes`, `## Approach`, `## Scope`, `## Investment Tier`). When present, use this context to inform AC evaluation and builder guidance.
+7. **Brief context (when parent is set):** If the task has a `parent` field, call `show_task(id=parent_id)` and scan for Brief sections (`## Brief`, `## Problem`, `## Outcomes`, `## Approach`, `## Scope`, `## Investment Tier`). When present, use this context to inform AC evaluation and builder guidance.
 
 ## Step 2 — Evaluate Architecture
 
@@ -53,7 +73,7 @@ Assess the task against `r-architecture-standards` and general architectural pri
     | CODEPATH | FAILURE MODE | EXCEPTION | HANDLED? | USER IMPACT |
     |----------|--------------|-----------|----------|-------------|
 
-12. **Decision-request verification** — if the task references `.owlbear/research/*.md` or is tagged `research`, query the scribe to check for an approved DR. No approved DR for T3 research = use the REJECT path.
+12. **Decision-request verification** — if the task references `.owlbear/research/*.md` or is tagged `research`, check the task body for a resolved DR after Cockpit decision resolution applies the response. No approved DR for T3 research = use the REJECT path.
 
 13. **User-action detection** — Does this task require a human physical action with no testable Python interface? Apply the M/S/C rule in order:
     - **Counter-signals (C) — exit immediately if ANY present:** (C1) AC defines a function signature, importable module, or assertion target; (C2) AC specifies expected test outcomes; (C3) task already tagged `type:test` or `type:config`
@@ -61,28 +81,34 @@ Assess the task against `r-architecture-standards` and general architectural pri
     - **Signals (S) — ≥1 required:** (S1) AC uses physical-action verbs (Open, Click, Navigate, Configure via GUI, Deploy manually); (S2) AC names external systems (Teams, Azure portal, GitHub UI, browser, dashboards); (S3) AC lists manual steps the user must physically perform
     - **Outcome:** no counter-signal AND M1+M2 AND ≥1 S → `type:user-action` detected → use BLOCK verdict (Step 3)
 
-## Step 2.1 — Test-Depth Annotation
+## Step 2.1 — Proof-Bundle Validation
 
-Annotate each AC line with a test-depth suffix `(td:N)`:
+Validate the planner-assigned `Proof bundle:` field and write the finalized value in the architecture verdict.
 
-| Depth | Suffix | Meaning | Examples |
-|-------|--------|---------|----------|
-| 0 | `(td:0)` | No test needed | Mechanical removal, cosmetic fix, "all tests pass", config-only |
-| 1 | `(td:1)` | Smoke test — one assertion proves it | Simple rename, add a field, single happy-path |
-| 2 | `(td:2)` | Full TDD — multiple paths/edges | New logic, error handling, security boundary |
+| Bundle | Test-writer | Challenger | Code-reader | Reviewer scope |
+|--------|------------|------------|-------------|----------------|
+| `skip` | SKIP | skip | skip | lint only |
+| `existing` | SKIP | skip | skip | named tests + lint |
+| `smoke` | smoke tests | skip | skip | scoped tests + lint |
+| `behavioral` | full TDD | yes | skip | scoped tests + lint + coverage |
+| `critical` | full TDD | yes | yes | full suite + lint + coverage |
 
 **Procedure:**
 
-1. For each AC line, assign `(td:N)` based on the line's testability, not the task's overall complexity.
-2. Default to `(td:1)` when uncertain — depth can be lowered but never raised after approval.
-3. Append the suffix to the AC line text in the task body via `edit_task`.
+1. Read the planner assignment in the task body: `Proof bundle: {value}`.
+2. Confirm or adjust the bundle from Step 2 findings.
+    - Escalate when blast radius or failure modes are higher than planned.
+    - De-escalate when complexity is lower than planned and evidence supports the reduction.
+3. Add escalation modifiers when needed: `+challenge`, `+reader`.
+    - Modifiers escalate checks only; they never suppress defaults.
+    - Combined form is valid (for example: `smoke+challenge+reader`).
+4. If bundle is `existing`, verify `Existing proof scope: {glob/file list}` accurately covers touched codepaths.
+5. Record finalized routing in the Architecture Review verdict:
+    - `Proof bundle: {normalized bundle[+modifiers]}`
+    - `Existing proof scope: ...` (required for `existing`)
+    - `Test-writer: SKIP` when bundle is `skip`.
 
-**Pipeline routing:**
-
-- If ALL AC lines are `(td:0)`: append `Test-writer: SKIP` to the Architecture Review verdict section. The test-writer will pass through without writing tests.
-- If ANY line is `(td:1)` or `(td:2)`: test-writer processes the task normally, respecting per-line depth.
-
-**Subagent gating:** If ALL AC lines are `(td:0)`, skip the challenger dispatch in Step 2.5.
+**Subagent gating:** If finalized bundle is `skip`, skip challenger dispatch in Step 2.5.
 
 ## Step 2.3 — Conditional Design Diverge
 
@@ -115,14 +141,18 @@ Build a comparison matrix from returned approaches across the split criteria. Se
 
 ## Step 2.5 — Challenge Proposed Verdict
 
-After Step 2.3 selection (when triggered), challenge APPROVE verdicts using the **challenger** subagent. This is mandatory for APPROVE (unless all AC lines are td:0 — see Step 2.1), optional for REFINE, skip for SPLIT/REJECT.
+After Step 2.3 selection (when triggered), challenge APPROVE verdicts using the **challenger** subagent. This is mandatory for APPROVE (unless the finalized proof bundle is `skip` — see Step 2.1), optional for REFINE, skip for SPLIT/REJECT.
 
-Pass: task_id, proposed_verdict, reasoning, ac_lines, codebase_evidence, selected_or_hybrid_design (from Step 2.3), and research-doc reference. When Step 2.3 is skipped, selected_or_hybrid_design should capture the single-pass design being evaluated.
+Pass: task_id, proposed_verdict, reasoning, ac_lines, codebase_evidence, selected_or_hybrid_design (from Step 2.3), sibling_tasks (optional), and research-doc reference. When Step 2.3 is skipped, selected_or_hybrid_design should capture the single-pass design being evaluated.
+
+For AC wording quality, require challenger to validate AC lines using `h-ac-quality` rules and surface issues via `ac-quality` findings. For consolidation-test coverage, pass sibling task metadata so challenger can detect a `consolidation-test-gap` when there are 2 or more sibling implementation tasks under the same parent and no sibling consolidation-test task.
 
 | Challenger output | Architect action |
 |-------------------|------------------|
 | `proceed` + confidence ≥ Challenger threshold (`r-pipeline-protocol`) | Continue with original verdict |
 | `reconsider` OR confidence below threshold | Re-evaluate, may revise or justify override |
+| `ac-quality` | REFINE AC wording before approval |
+| `consolidation-test-gap` | Dispatch planner follow-up for consolidation-test coverage before approval |
 | `block` | Strong signal to reject to research; must provide rebuttal if overriding |
 
 The architect retains final authority.
@@ -138,7 +168,7 @@ The architect retains final authority.
 | **SPLIT** | Multiple responsibilities | Delegate to planner with `Plan and create: #{id} — {split scope}` for decomposition, then update deps, edit/delete original, and release |
 | **MERGE** | Two tasks = one logical change | Edit one task, delete redundant, release |
 | **REJECT** | Missing prerequisite or unclear | Move to `research` via `end_work(outcome="reject")`, appending findings |
-| **BLOCK** | `type:user-action` detected (Step 2 criterion 13) | Create AR via scribe (`Scribe: task_id={id}, mode=check-or-create`), tag task `type:user-action` if missing, `end_work(outcome="block")` |
+| **BLOCK** | `type:user-action` detected (Step 2 criterion 13) | Create AR via `create_dr(task_id={id}, agent="architect", request_type="action", body="{markdown AR payload}")`, tag task `type:user-action` if missing, `end_work(outcome="block", block_reason="AR pending: {filename}")` |
 
 <!-- NON_IMPL_TAGS: This is the authoritative list. Secondary copy:
      skills/w-tdd-red/SKILL.md (Step 1 item 3) -->
@@ -200,12 +230,14 @@ Append to task body before advancing:
 If fallback triggered, include only: `Design-diverge: FALLBACK — {reason}`.
 
 ### Challenge Results
-- Challenger: {proceed/reconsider/reject} (or FALLBACK / SKIPPED — all td:0)
+- Challenger: {proceed/reconsider/reject} (or FALLBACK / SKIPPED — proof bundle `skip`)
 - Architect response: {accepted/rebutted/revised}
 
-### Test Depth
-- Max depth: {0/1/2}
-- Test-writer: {SKIP (all td:0) / PROCEED}
+### Proof-Bundle Validation
+- Planner assignment: {value}
+- Final bundle: {value or value+modifiers}
+- Existing proof scope: {glob/file-list / N/A}
+- Test-writer: {SKIP (bundle `skip`) / SKIP (bundle `existing`) / PROCEED}
 
 ### Verdict: {APPROVE/REFINE/SPLIT/REJECT}
 ### Action Taken: {description}
@@ -220,7 +252,9 @@ If fallback triggered, include only: `Design-diverge: FALLBACK — {reason}`.
 - [ ] For frontend tasks referencing Briefs with design-system components, AC names exact selectors and assertion strategies (not generic HTML elements)
 - [ ] Ran durable-suite health pre-check before defining must-pass suite gates; documented and excluded known unrelated pre-existing failures
 - [ ] All 13 Step 2 criteria evaluated
-- [ ] Each AC line annotated with `(td:N)` (Step 2.1)
+- [ ] Proof bundle validated (confirm/escalate/de-escalate) and recorded in verdict (Step 2.1)
+- [ ] Escalation modifiers (`+challenge`, `+reader`) evaluated and applied when needed
+- [ ] For `existing`, proof-scope glob/file list verified for accuracy
 - [ ] Design-diverge evaluated (triggered / skipped with reason / fallback noted)
 - [ ] Challenger invoked for APPROVE verdicts (or fallback noted)
 - [ ] `type:user-action` tasks blocked (BLOCK verdict) rather than approved
@@ -234,7 +268,7 @@ If fallback triggered, include only: `Design-diverge: FALLBACK — {reason}`.
 - **Missing non-impl tags:** Tasks without pass-through tags cause the test-writer to attempt writing tests for non-code deliverables, wasting a pipeline cycle.
 - **Body content escaping:** `--body` writes literal `\n` instead of newlines. Always use the temp-file pattern for multi-line AC.
 - **T3 research without DR:** If a task originated from T3 research with no approved decision request, reject it. Proceeding without approval risks reversal.
-- **Premise challenge skip:** The challenger is easy to skip but catches real issues. The mandatory trigger on APPROVE exists for a reason.
+- **Premise challenge skip:** The challenger is easy to skip but catches real issues. The mandatory trigger on APPROVE exists for a reason (except finalized bundle `skip`).
 - **#1225 import-shape drift:** Do not author frontend import-path/barrel AC constraints from assumption. Confirm the parent→child import chain in live code first, then write the constraint.
 - **#1225 suite gate debt inheritance:** Do not gate builders on durable suites with known unrelated failures. Pre-check suite health and scope those failures out in AC gate wording.
 - **#1250 PDS contract carry-forward:** When a Brief or research doc specifies design-system components (PDS or equivalent), AC lines must carry exact component contracts into testable criteria. Instead of generic "select" wording, name the exact PDS selector (for example `p-select`). Instead of "populated from priorities prop," specify exact-ordered-match assertions when order matters. Instead of "does not render controls," state whether the proof requires DOM absence or visual/a11y hiding. Instead of "preserving other fields" with one broad check, require per-control verification for each affected control.

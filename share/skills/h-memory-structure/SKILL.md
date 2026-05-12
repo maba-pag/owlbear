@@ -6,7 +6,9 @@ user-invocable: false
 
 # Memory Entry Structure
 
-Structural standards for project memory entries across file-based (`/memories/`) and MCP (`owlbearMemory`) storage. Covers entry shape, tier selection, deduplication, and quality enforcement.
+> **Audience:** Agents writing post-task reflections and the memory-curator agent. **When:** Before calling `save_memory` (shape, dedup, quality checks) and during curation sessions. **Why:** Ensures entries meet the structural and quality bar for long-lived agent knowledge.
+
+Structural standards for project memory entries across file-based (`/memories/`) and MCP (`ob-memory`) storage. Covers entry shape, tier selection, deduplication, and quality enforcement.
 
 For tool syntax, see `h-mcp-memory`. For curation workflow, see `w-mem-curation`. For pipeline integration (pre-flight, reflection), see `r-pipeline-protocol`.
 
@@ -36,7 +38,7 @@ Enumerations and ranges used by the schema:
 
 This schema is validated by `MemoryEntry` in the `mcp-memory` package.
 
-**File-based entry shape** (inbox fallback):
+**File-based entry shape** (legacy migration format — used only as fallback when MCP is unavailable):
 
 ```
 # {task-id}-{agent}.md
@@ -55,7 +57,7 @@ Per `owlbear-system.instructions.md` § Memory Governance (single source of trut
 | Tool patterns, CLI recipes, process pitfalls | User | `/memories/` |
 | Task-specific context, in-progress working state | Session | `/memories/session/` |
 | Agent lessons-learned (curation inbox) | Repo inbox | `/memories/repo/inbox/` |
-| Agent institutional knowledge (queryable) | MCP canonical | `owlbearMemory` |
+| Agent institutional knowledge (queryable) | MCP canonical | `ob-memory` |
 | Architecture decisions | Not memory | `.owlbear/decisions/` |
 | Research findings | Not memory | `.owlbear/research/` |
 | Code snippets, task-specific context | Not memory | Do not record |
@@ -64,16 +66,18 @@ Per `owlbear-system.instructions.md` § Memory Governance (single source of trut
 
 ## File vs. MCP Relationship
 
-During active migration, both stores are written. After migration, MCP is sole canonical.
+MCP memory is canonical. File-based inbox notes are fallback/migration input only.
 
 | Situation | Action |
 |-----------|--------|
-| Standard post-task reflection | Write MCP first via `save_memory`, then file-based inbox as fallback |
-| MCP tool unavailable or errors | Write file-based inbox only; do not retry MCP |
-| Curation pass | Read both sources (see `w-mem-curation` Step 1); merge into MCP |
-| Pre-flight knowledge load | MCP only (`list_memories` + `read_memory`) — file inbox is write-only for agents |
+| Standard post-task reflection | Write MCP via `save_memory` |
+| MCP tool unavailable or errors | Write file-based inbox fallback only; do not retry MCP |
+| Curation pass | Read MCP pending entries plus file-inbox migration notes; promote durable insights into MCP |
+| Pre-flight knowledge load | MCP only (`recall_memory(agent="{agent_name}")`) — file inbox is write-only for agents |
 
-Dual-write procedure is defined in `r-pipeline-protocol` § Post-task Reflection. Follow it exactly.
+Post-task reflection is defined in `r-pipeline-protocol` § Post-task Reflection. Follow it exactly.
+
+See `share/diagrams/memory-layers.excalidraw` for a visual overview of the tier and state model.
 
 ## State Model
 
@@ -81,7 +85,7 @@ Lifecycle transitions are controlled by MCP tools:
 
 | From | To | Trigger | Tool |
 |------|----|---------|------|
-| `pending` | `curated` | Curator sets scope or explicit state during curation | `curate_memory` |
+| `pending` | `curated` | Curator assigns non-empty scope during curation | `curate_memory` |
 | `curated` | `approved` | User approval | `approve_memory` |
 | `approved` | `curated` | Any curation edit (auto-downgrade) | `curate_memory` |
 | `pending` | `deleted` | Prune noise/duplicates (hard delete from disk) | `delete_memory` |
@@ -133,7 +137,7 @@ An entry **fails** if any of the following are true:
 ## Anti-Patterns
 
 1. **Storing research findings as memory entries.** Research belongs in `.owlbear/research/`; memory is for agent behavioral learnings.
-2. **Writing to `/memories/` for agent learnings.** User memory is the operator's space. Agent learnings go to `owlbearMemory` and the inbox.
+2. **Writing to `/memories/` for agent learnings.** User memory is the operator's space. Agent learnings go to `ob-memory` and the inbox.
 3. **Recording with `scope_agents=null`.** Global entries flood every agent's pre-flight. Always pass `scope_agents`.
 4. **One entry per task regardless of insight count.** Record 0 entries if nothing notable happened. Record N entries for N distinct insights.
 5. **Confidence below 0.7.** The server rejects it. Do not round up to bypass the floor — raise confidence only when evidence justifies it.

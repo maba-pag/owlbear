@@ -8,8 +8,9 @@ Architecture:
   - list_tasks() scans tasks_dir (or archive dir), applies filters,
     sorts by config-ranked field, and returns list[TaskSummary].
   - show_task() finds a single task file by ID and returns its Task.
-    - create_task() allocates next_id via allocate_next_id
-        (persists config.next_id before write), then writes a new task file.
+    - create_task() allocates the next ID via scan-based allocate_next_id
+        (scans active and archive filename prefixes; no config.next_id mutation),
+        then writes the new task file inside the same lock scope.
   - edit_task() modifies task fields in-place; slug/filename never changes.
   - move_task() changes status; "archived" moves file to archive/.
   - claim_task() marks a task as claimed by this engine's agent_name; rejects
@@ -30,6 +31,7 @@ import logging
 import os
 import random
 import subprocess
+import sys
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -55,6 +57,7 @@ from owlbear_kanban.models import (
     ActivityCompactionResult,
     ActivityEvent,
     BoardConfig,
+    CleanupResult,
     ConcurrencyError,
     ConfigError,
     KanbanError,
@@ -124,6 +127,11 @@ def _classify_end_work_outcome(detail: str) -> str:
 _CLOSE_ACTIONS: frozenset[str] = frozenset({"end_work", "release", "sweep-release"})
 
 
+def _storage_module() -> object:
+    """Return the live storage module, even if tests force a re-import."""
+    return sys.modules.get("owlbear_kanban.storage", storage)
+
+
 def _compute_duration(claim_ts: str, close_ts: str) -> float:
     """Return (close_dt - claim_dt).total_seconds(), normalising tz-naive timestamps to UTC."""
     claim_dt = datetime.fromisoformat(claim_ts)
@@ -170,7 +178,7 @@ def _restore_snapshot_if_unchanged(
 ) -> None:
     """Best-effort rollback that never overwrites a newer concurrent update."""
     try:
-        storage.write_task_if_unchanged(original, expected_updated, kanban_dir)
+        _storage_module().write_task_if_unchanged(original, expected_updated, kanban_dir)
     except ConcurrencyError as exc:
         if exc.code != "ERR_STALE":
             raise
@@ -302,7 +310,7 @@ def _apply_session_filter(
     return [s for s in sessions if s.state in allowed]
 
 
-def _move_file(src: Path, dest: Path) -> None:
+def _move_file(src: Path, dest: Path, *, no_overwrite: bool = False) -> None:
     """Move *src* to *dest*, preferring ``git mv`` when inside a git repo.
 
     Falls back to :meth:`Path.replace` when ``git`` is unavailable, the file
@@ -325,6 +333,21 @@ def _move_file(src: Path, dest: Path) -> None:
     except (FileNotFoundError, subprocess.TimeoutExpired):
         # git not installed, or timed out (e.g. waiting for index.lock)
         pass
+
+    if no_overwrite:
+        # os.link() is atomic for destination creation and fails if dest exists,
+        # avoiding overwrite when a collision appears after a pre-check.
+        os.link(src, dest)
+        try:
+            src.unlink()
+        except OSError:
+            # Roll back the destination hard link so partial failures do not
+            # leave a duplicate task file in archive/.
+            with contextlib.suppress(OSError):
+                dest.unlink()
+            raise
+        return
+
     src.replace(dest)
 
 
@@ -337,8 +360,8 @@ class KanbanEngine:
     Args:
         kanban_dir:    Root directory of the kanban board.
         activity_log:  When ``True``, append entries to ``activity.jsonl`` on
-                       every mutation.  When ``None`` (default), reads from
-                       ``config.yml`` ``activity_log`` field.
+                       every mutation.  When ``None`` (default), logging is
+                       enabled.
     """
 
     def __init__(  # noqa: C901
@@ -357,9 +380,7 @@ class KanbanEngine:
         self._agent_name: str = (
             f"{random.choice(ADJECTIVES)}-{random.choice(NOUNS)}"  # noqa: S311
         )
-        effective_activity_log = (
-            activity_log if activity_log is not None else self._config.activity_log
-        )
+        effective_activity_log = activity_log if activity_log is not None else True
         self._activity_log_path: Path | None = (
             kanban_dir / "activity.jsonl" if effective_activity_log else None
         )
@@ -938,7 +959,7 @@ class KanbanEngine:
     # Write operations
     # ------------------------------------------------------------------
 
-    def create_task(  # noqa: PLR0913
+    def create_task(  # noqa: PLR0913, PLR0915
         self,
         title: str,
         *,
@@ -949,12 +970,11 @@ class KanbanEngine:
         parent: int | None = None,
         depends_on: list[int] | None = None,
     ) -> Task:
-        """Allocate next_id, then write a new task file.
+        """Allocate a new task ID from board files, then write a new task file.
 
-        ID allocation is delegated to ``storage.allocate_next_id()``, which
-        advances and persists ``config.next_id`` under the shared file lock.
-        If writing the task file fails after allocation, the allocated ID is
-        intentionally burned to preserve crash safety.
+        ID allocation is delegated to ``storage.allocate_next_id()`` in callback
+        mode so allocation scan and task write happen in one lock scope. This
+        path does not read or write ``config.next_id``.
 
         Args:
             title:      Task title (used to generate the filename slug).
@@ -1011,26 +1031,37 @@ class KanbanEngine:
             config=config,
         )
 
-        task_id = storage.allocate_next_id(self._kanban_dir)
-        now = datetime.now(tz=UTC).isoformat()
+        record: Task | None = None
+        created_task_path: Path | None = None
 
-        record = Task(
-            id=task_id,
-            title=title,
-            status=entry_status,
-            priority=priority or config.pipeline.default_priority,
-            created=now,
-            updated=now,
-            body=body,
-            tags=list(tags) if tags else [],
-            parent=parent,
-            depends_on=list(depends_on) if depends_on else [],
-        )
+        def _write_new_task(task_id: int) -> None:
+            nonlocal record, created_task_path
+            now = datetime.now(tz=UTC).isoformat()
+            created_task = Task(
+                id=task_id,
+                title=title,
+                status=entry_status,
+                priority=priority or config.pipeline.default_priority,
+                created=now,
+                updated=now,
+                body=body,
+                tags=list(tags) if tags else [],
+                parent=parent,
+                depends_on=list(depends_on) if depends_on else [],
+            )
+            filename = make_task_filename(task_id, title)
+            task_path = self._tasks_dir / filename
+            validate_path_containment(self._tasks_dir, task_path)
+            write_task(created_task, self._kanban_dir)
+            record = created_task
+            created_task_path = task_path
 
-        filename = make_task_filename(task_id, title)
-        task_path = self._tasks_dir / filename
-        validate_path_containment(self._tasks_dir, task_path)
-        write_task(record, self._kanban_dir)
+        _storage_module().allocate_next_id(self._kanban_dir, write_task_fn=_write_new_task)
+        if record is None:
+            msg = "create_task failed to construct task record"
+            raise RuntimeError(msg)
+
+        created_record = record
         reloaded_config = load_config(self._kanban_dir)
         reloaded_tasks_dir = self._kanban_dir / reloaded_config.paths.tasks_dir
         reloaded_archive_dir = self._kanban_dir / reloaded_config.paths.archive_dir
@@ -1041,8 +1072,23 @@ class KanbanEngine:
         self._tasks_dir = reloaded_tasks_dir
         self._archive_dir = reloaded_archive_dir
 
+        try:
+            self._emit_event(
+                action="create_task",
+                task_id=created_record.id,
+                detail=created_record.title,
+                task_status_at_start=created_record.status,
+            )
+        except OSError:
+            with contextlib.suppress(Exception):
+                if created_task_path is not None and created_task_path.exists():
+                    created_task_path.unlink()
+                self._task_cache.pop(created_task_path.name, None)
+                self._id_to_filename.pop(created_record.id, None)
+            raise
+
         self._revision += 1
-        return record
+        return created_record
 
     def edit_task(  # noqa: PLR0912, PLR0913, PLR0915, C901
         self,
@@ -1367,7 +1413,7 @@ class KanbanEngine:
                 cleared.claimed_at = None
                 cleared.updated = effective_now.isoformat()
                 try:
-                    storage.write_task_if_unchanged(
+                    _storage_module().write_task_if_unchanged(
                         cleared,
                         original.updated,
                         self._kanban_dir,
@@ -1387,7 +1433,7 @@ class KanbanEngine:
             record.updated = effective_now.isoformat()
 
             try:
-                storage.write_task_if_unchanged(
+                _storage_module().write_task_if_unchanged(
                     record,
                     expected_for_claim,
                     self._kanban_dir,
@@ -1759,6 +1805,143 @@ class KanbanEngine:
                     released.append(record.id)
 
         return released
+
+    def cleanup(self) -> CleanupResult:  # noqa: C901, PLR0912, PLR0915
+        """Run maintenance cleanup and return aggregate results.
+
+        Cleanup includes three categories in one call:
+        - release expired claims (same semantics as :meth:`sweep`)
+        - move drift-archived task files from tasks/ to archive/
+        - report skipped task files with path+reason when they cannot be processed
+        """
+        released_claim_ids: list[int] = []
+        archived_task_ids: list[int] = []
+        skipped_items: list[dict[str, str]] = []
+        timeout = self._parse_claim_timeout()
+        now = datetime.now(tz=UTC)
+
+        for path in sorted(self._tasks_dir.glob("*.md")):
+            try:
+                record = read_task(path, config=self._config)
+            except (FileNotFoundError, ValueError, KeyError, CorruptionError) as exc:
+                skipped_items.append({"path": str(path), "reason": str(exc)})
+                continue
+
+            issue = detect_corruption(path, self._config)
+            if issue is not None:
+                skipped_items.append(
+                    {
+                        "path": str(path),
+                        "reason": getattr(issue, "user_message", str(issue)),
+                    }
+                )
+                continue
+
+            # Release expired claims via compare-and-swap, mirroring sweep() behavior.
+            if record.claimed_at:
+                try:
+                    claimed_dt = datetime.fromisoformat(record.claimed_at)
+                except ValueError:
+                    skipped_items.append(
+                        {
+                            "path": str(path),
+                            "reason": "invalid claimed_at timestamp",
+                        }
+                    )
+                    continue
+                if claimed_dt.tzinfo is None:
+                    claimed_dt = claimed_dt.replace(tzinfo=UTC)
+                if now >= claimed_dt + timeout:
+                    original = record.model_copy(deep=True)
+                    record.claimed_at = None
+                    record.updated = datetime.now(tz=UTC).isoformat()
+                    try:
+                        storage.write_task_if_unchanged(
+                            record,
+                            original.updated,
+                            self._kanban_dir,
+                        )
+                    except ConcurrencyError as exc:
+                        if exc.code == "ERR_STALE":
+                            skipped_items.append(
+                                {
+                                    "path": str(path),
+                                    "reason": "concurrent update while releasing claim",
+                                }
+                            )
+                            continue
+                        raise
+                    released_claim_ids.append(record.id)
+
+            # Move drift-archived files from tasks/ to archive/ when valid.
+            if record.status != "archived":
+                continue
+            if record.archival_reason is None:
+                skipped_items.append(
+                    {
+                        "path": str(path),
+                        "reason": "missing archival_reason for archived task",
+                    }
+                )
+                continue
+
+            # Re-read on-disk state just before moving to avoid archiving based
+            # on stale in-memory data when a concurrent writer mutates the file.
+            try:
+                current = read_task(path, config=self._config)
+            except (FileNotFoundError, ValueError, KeyError, CorruptionError):
+                skipped_items.append(
+                    {
+                        "path": str(path),
+                        "reason": "task changed during cleanup",
+                    }
+                )
+                continue
+            if current.status != "archived" or current.archival_reason is None:
+                skipped_items.append(
+                    {
+                        "path": str(path),
+                        "reason": "task no longer eligible for archiving",
+                    }
+                )
+                continue
+
+            dest = self._archive_dir / path.name
+            if dest.exists():
+                skipped_items.append(
+                    {
+                        "path": str(path),
+                        "reason": "archive destination already exists",
+                    }
+                )
+                continue
+
+            self._archive_dir.mkdir(parents=True, exist_ok=True)
+            try:
+                _move_file(path, dest, no_overwrite=True)
+            except FileExistsError:
+                skipped_items.append(
+                    {
+                        "path": str(path),
+                        "reason": "archive destination already exists",
+                    }
+                )
+                continue
+            except OSError as exc:
+                skipped_items.append({"path": str(path), "reason": str(exc)})
+                continue
+            self._task_cache.pop(path.name, None)
+            self._id_to_filename.pop(record.id, None)
+            archived_task_ids.append(record.id)
+
+        if released_claim_ids or archived_task_ids:
+            self._revision += 1
+
+        return CleanupResult(
+            released_claim_ids=released_claim_ids,
+            archived_task_ids=archived_task_ids,
+            skipped_items=skipped_items,
+        )
 
     def repair_storage(self) -> list:
         """Quarantine corrupt task files and create action-required tasks (AC-C24, AC-C25, AC-C30).

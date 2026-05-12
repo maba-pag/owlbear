@@ -61,6 +61,7 @@ KANBAN_ERROR_CODES: frozenset[str] = frozenset(
         "ERR_CORRUPT_DUPLICATE_LOCATION",
         "ERR_CORRUPT_INVALID_STATUS",
         "ERR_CORRUPT_INVALID_PRIORITY",
+        "ERR_CORRUPT_ENCODING",
     }
 )
 

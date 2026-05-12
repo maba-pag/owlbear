@@ -157,10 +157,17 @@ class QdrantVectorStore:
             )
         query_filter = qmodels.Filter(must=must_conditions) if must_conditions else None
 
-        if isinstance(query_embedding, HybridEmbedding) and query_embedding.sparse is not None:
+        if (
+            isinstance(query_embedding, HybridEmbedding)
+            and query_embedding.sparse is not None
+        ):
             return self._hybrid_search(query_embedding, top_k, query_filter)
 
-        dense_vec = query_embedding.dense if isinstance(query_embedding, HybridEmbedding) else query_embedding
+        dense_vec = (
+            query_embedding.dense
+            if isinstance(query_embedding, HybridEmbedding)
+            else query_embedding
+        )
         response = self._client.query_points(
             collection_name=self._collection,
             query=dense_vec,

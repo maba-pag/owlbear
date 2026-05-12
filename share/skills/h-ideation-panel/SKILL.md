@@ -8,6 +8,10 @@ user-invocable: false
 
 Reference for panel-facing ideation agents only. The user-facing phase agents should load their workflow skills, not this handbook.
 
+## Universal Constraints
+
+- **No kanban commands.** Ideation agents do not interact with the kanban board or pipeline status transitions.
+
 ## Panel Surface Map
 
 Ideation now has two panel surfaces.
@@ -193,6 +197,15 @@ Use after M3.5 proposal collection in Phase 2.
 - The mediation agent surfaces disagreements with attribution.
 - The user decides.
 - If the user's decision invalidates a core panel premise, the mediation agent should recommend a rerun with updated context.
+
+## Panel Output Phrasing
+
+- Use descriptive section headers that state the issue plainly (for example: Structural Concern: tight coupling between X and Y).
+- Avoid protocol-coded or jargon-first headers (for example: O15-FAIL: coupling violation).
+- Prefer natural language headers rather than internal shorthand so meaning is clear on first read.
+- Stance files may be quoted by the mediator in downstream synthesis.
+- Write headers so they are readable to the user without translation.
+- This guidance affects phrasing only; panel mechanics and stance file structure stay unchanged.
 
 ## Panelist References
 

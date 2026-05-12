@@ -5,7 +5,7 @@ argument-hint: "Architect Review: {task_id}"
 user-invocable: false
 disable-model-invocation: true
 tools:
-  [ob-memory/save_memory, ob-memory/recall_memory, vscode/toolSearch, read/problems, read/readFile, read/viewImage, agent, edit/createDirectory, edit/createFile, edit/editFiles, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, ob-kanban/edit_task, ob-kanban/end_work, ob-kanban/list_tasks, ob-kanban/show_task, ob-kanban/start_work]
+  [ob-memory/save_memory, ob-memory/recall_memory, vscode/toolSearch, read/problems, read/readFile, read/viewImage, agent, edit/createDirectory, edit/createFile, edit/editFiles, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, ob-kanban/create_dr, ob-kanban/edit_task, ob-kanban/end_work, ob-kanban/list_tasks, ob-kanban/show_task, ob-kanban/start_work]
 agents: [challenger, planner]
 hooks:
   PreToolUse:
@@ -34,6 +34,7 @@ kanban task edits, AC refinements, and architectural reasoning.
 
 - `r-pipeline-protocol` — task lifecycle, communication, quality
 - `w-arch-review` — primary workflow
+- `h-ac-quality` — AC wording validation rules consumed via challenger pattern
 
 </required_reading>
 
@@ -46,7 +47,7 @@ kanban task edits, AC refinements, and architectural reasoning.
 - **Atomicity:** if "and" joins unrelated concerns, split the task. Each task gets one responsibility.
 - **Always route to `todo`, never to `in-progress`.** The test-writer must process every task, even non-implementation ones.
 - **Decomposition trigger.** Task body contains `Needs decomposition:` without a following `## Planning` → delegate to `planner` per `w-arch-review` decomposition path. Do not perform architecture review on decomposition tasks.
-- **User-action fast-path trigger.** Task body contains `## Action Completed` (decision resolver writes this on AR resolution) → apply the fast-path approval per `w-arch-review` (skip full review when AC checkboxes still match the completed action).
+- **User-action fast-path trigger.** Task body contains a `## Decision Request` summary with `response: approved` from an action request resolution → apply the fast-path approval per `w-arch-review` (skip full review when AC checkboxes still match the completed action).
 
 </critical_rules>
 
@@ -68,7 +69,6 @@ kanban task edits, AC refinements, and architectural reasoning.
 | Agent | When | Example |
 |-------|------|---------|
 | challenger | Validate design decisions before approval | `Challenge the decision to use a singleton registry pattern` |
-| create_dr | User decision or action required — create/check DRs via `h-decision-requests` | `create_dr(task_id=42, mode="check-or-create", concern="API surface area for skill loading")` |
 | planner | Task body contains `Needs decomposition:` — delegate instead of reviewing | `Plan and create: #{task_id} — {feature description from task body}` |
 
 </agents>
@@ -94,6 +94,7 @@ Include `## Architecture Review` section in your `end_work` note: verdict, AC as
 
 - Section header: `## Architecture Review`
 - On reject: `end_work(outcome="reject")` — moves to research
+- On block: `create_dr` first, then `end_work(outcome="block", block_reason="AR pending: {filename}")` — flags task as blocked in current status
 - Follow-ups: via challenger / `create_dr`
 - See `h-mcp-kanban` skill for tool workflows
 

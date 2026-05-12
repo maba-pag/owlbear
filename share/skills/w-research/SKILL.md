@@ -35,7 +35,7 @@ For trivial tasks (rename, typo, config tweak): items 1–4 get a one-liner `N/A
 
 ## Step 1 — Clarify Scope
 
-**Fail fast on invalid inputs.** `TEMP-*` titles or empty bodies = DR via scribe, release claim.
+**Fail fast on invalid inputs.** `TEMP-*` titles or empty bodies = create a DR via `create_dr`, release claim.
 
 If the task has scoped content but needs clarification:
 
@@ -57,7 +57,7 @@ Before gathering sources:
 Find 2+ authoritative sources per claim:
 
 - **Codebase:** search tools for related existing code.
-- **Web:** `fetch-webpage` for docs, articles, GitHub repos.
+- **Web:** use the `web` toolset for direct pages and `ddgs/search_text` / `ddgs/extract_content` for search and extraction; use `markitdown/*` when document conversion is needed.
 - **Clone for deep analysis:** `.owlbear/scratch/research/{repo-name}/` — analyze, then delete when done.
 
 Track: name, URL, what was taken, relevance score (0.0–1.0).
@@ -109,14 +109,14 @@ Classify every finding before acting:
 | Tier | Category | Action |
 |------|----------|--------|
 | T1 — Autonomous | Bug fix, refactor, config, perf | Proceed directly — create follow-up tasks |
-| T2 — Advisory | Trade-offs, no T3 triggers | Create advisory DR via scribe (5-day auto-resolve) |
-| T3 — Mandatory | New capability, arch/security/breaking change | Create blocking DR via scribe (no auto-resolve) |
+| T2 — Advisory | Trade-offs, no T3 triggers | Create advisory DR via `create_dr` (5-day auto-resolve) |
+| T3 — Mandatory | New capability, arch/security/breaking change | Create blocking DR via `create_dr` (no auto-resolve) |
 
 **T3 triggers (any one makes it T3):** Adds new capability, changes architecture, modifies agent/pipeline behavior, alters security policy, changes user-facing behavior, proposes deprecation.
 
 ### Create Follow-Up Tasks
 
-Delegate follow-up task creation to planner via `Plan and create:` using single-task or decomposition mode as needed, and set status to `research`. For findings requiring user decisions, use the scribe to check/create a decision request.
+Delegate follow-up task creation to planner via `Plan and create:` using single-task or decomposition mode as needed, and set status to `research`. For findings requiring user decisions, create a decision request via `create_dr`.
 
 ## Step 6 — Finalize Artifacts
 
@@ -177,6 +177,6 @@ Append to task body before advancing:
 - **Skipping pre-flight check:** Multiple research cycles have been wasted because existing docs were missed. Always check `.owlbear/research/` first.
 - **Follow-up tasks without AC:** Every follow-up task needs concrete acceptance criteria. "Improve X" without measurable conditions is not actionable.
 - **Forgetting to delete cloned repos:** `.owlbear/scratch/research/` repos accumulate if not cleaned. Delete after analysis.
-- **T3 without DR:** New capabilities and architecture changes MUST go through the scribe for a blocking DR. Proceeding without approval risks reversal.
+- **T3 without DR:** New capabilities and architecture changes MUST have a blocking DR via `create_dr`. Proceeding without approval risks reversal.
 - **Over-long research docs:** 200-line cap exists to force conciseness. If you need more, the analysis is not focused enough.
 - **Forgetting to commit:** The commit in Step 7 is a hard gate — never call `end_work` with uncommitted files. If in doubt, run `git status` to check.

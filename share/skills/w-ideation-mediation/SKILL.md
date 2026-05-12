@@ -37,6 +37,8 @@ When Critic is invoked on the current position, validate findings before they af
 
 Subagent material reaching the user should be disclosed in the lightest form that still supports a good decision.
 
+Use vocabulary and phrasing patterns from `h-ideation` -> `## Communication Patterns`.
+
 ### Default Summary
 
 - situation
@@ -45,6 +47,8 @@ Subagent material reaching the user should be disclosed in the lightest form tha
 - recommendation
 - effect
 
+**Narrate as:** "Here's the summary first, then we can go deeper only where it helps your decision."
+
 ### Concrete Specifics
 
 - names
@@ -52,12 +56,18 @@ Subagent material reaching the user should be disclosed in the lightest form tha
 - mechanism
 - failure modes
 - trade-offs
+- verbal cue: "I can walk through the reasoning and trade-offs."
+
+**Narrate as:** "If you want, I can walk through the reasoning and trade-offs behind this recommendation."
 
 ### Inline Verbatim Evidence
 
 - attributed panel wording
 - raw Critic wording
 - quoted brownfield evidence
+- verbal cue: "The specific evidence is [source] - I can show it inline."
+
+**Narrate as:** "The specific evidence is in the architecture review notes; I can show the exact wording inline."
 
 Use the lightest disclosure level that still supports a good decision. Never hide decision-critical detail behind a file reference alone.
 
@@ -84,7 +94,9 @@ Use the lightest disclosure level that still supports a good decision. Never hid
 2. Trigger M3.5 only when there are at least two viable approaches and no dominant option.
 3. If one approach is clearly dominant, skip M3.5 and continue to Step 2 unchanged.
 4. When M3.5 triggers, skip Step 2 entirely. M3.5 and Step 2 are mutually exclusive paths to `synthesis.md`.
-5. Tell the user you are switching to a proposal comparison path.
+5. Announce the shift as a user-benefit step: what is happening next and why it improves decision quality.
+
+   **Narrate as:** "I see two viable directions, so next I'll have each one designed and compared side by side so you can choose with clearer trade-offs."
 6. Dispatch all four late domain panelists in parallel regardless of the selection matrix:
    - `ideation-architect`
    - `ideation-data`
@@ -100,7 +112,9 @@ Use the lightest disclosure level that still supports a good decision. Never hid
 ## Step 2 — Late Domain Panel Orchestration (Stance Path)
 
 1. Run this step only when Step 1.5 did not trigger.
-2. Tell the user which late-domain panelists you are invoking and why.
+2. Introduce the reviews by purpose and angle (what checks are being run and why those checks matter) rather than by internal roster naming.
+
+   **Narrate as:** "I'll run architecture, data, user-experience, and security reviews here so we can test structural soundness, validation risks, usability impact, and trust boundaries before choosing a direction."
 3. Select panelists using the selection matrix in `h-ideation-panel` (problem signal → panelist combination). State the signal and selected roster explicitly.
 4. Invoke the relevant domain panelists in parallel by default:
    - `ideation-architect`
@@ -155,6 +169,7 @@ Apply O15 to every Critic pass. See the Critic Validation section above for the 
 - [ ] Critic findings are triaged as `nonsense`, `minor`, or `material` before presentation.
 - [ ] No bulk Critic acceptance appears in the mediation flow.
 - [ ] The Disclosure Ladder is visible in user-facing translation.
+- [ ] Panelist reviews are introduced by purpose and angle (what is being checked and why), not raw agent name.
 - [ ] `brief.md` is approved before handoff.
 - [ ] Step 1.5 gate evaluated ambiguity (`>=2` viable approaches, no dominant option).
 - [ ] M3.5 and Step 2 were treated as mutually exclusive paths to `synthesis.md`.

@@ -29,11 +29,11 @@ This is the broad audit pass. Keep full ecosystem coverage while producing SNR a
 | Surface | Weight | What to scan |
 |---|---|---|
 | Definitions | >80% | `.github/copilot-instructions.md`, `share/instructions/*.instructions.md`, `share/agents/*.agent.md`, `share/skills/*/SKILL.md` |
-| Memory | <20% | `/memories/`, `/memories/session/`, `/memories/repo/inbox/`, `owlbearMemory` MCP store |
+| Memory | <20% | `/memories/`, `/memories/session/`, `/memories/repo/inbox/`, `ob-memory` MCP store |
 
 Use `file_search` to discover current files for the definitions surface. Do not assume a fixed count.
 
-**MCP degradation path:** If `owlbearMemory` tools are unavailable, audit file-based memory tiers only and note skipped MCP checks.
+**MCP degradation path:** If `ob-memory` tools are unavailable, audit file-based memory tiers only and note skipped MCP checks.
 
 ### Standards Loading Order
 
@@ -112,7 +112,7 @@ Standard: `h-agent-structure` section Implicit Encoding and section Agent File S
 
 ### D5 - Pipeline Integrity
 
-Standards: `r-pipeline-protocol` section Signal Mapping, `h-agent-structure` section Agent Tiers.
+Standards: `r-pipeline-protocol` section Per-Agent Signal Mapping, `share/README.md` section Agents.
 
 **Positive probes:**
 
@@ -132,7 +132,7 @@ Standards: `r-pipeline-protocol` section Signal Mapping, `h-agent-structure` sec
 | reviewer | Implementation issue | `in-progress` |
 | reviewer | Test gap | `todo` |
 | reviewer | Test/AC quality | `backlog` |
-| reviewer | 2nd+ FAIL | `backlog` |
+| reviewer | 2nd+ batch review cycle | `backlog` |
 | architect | AC wrong | `research` |
 | auditor | Any rejection | `backlog` |
 
@@ -182,9 +182,9 @@ Standard: `h-memory-structure` section Entry Shape, section Tier-Content Fit, se
 - Agent-specific entries with null `scope_agent`
 - Architecture/research artifacts stored as memory entries
 
-**MCP degradation:** If `owlbearMemory` is unavailable, audit file tiers only and note skipped checks.
+**MCP degradation:** If `ob-memory` is unavailable, audit file tiers only and note skipped checks.
 
-**Negative-space probe:** Which learnings in file inbox should be curated into `owlbearMemory`?
+**Negative-space probe:** Which learnings in file inbox should be curated into `ob-memory`?
 
 ## 4. Process
 
@@ -193,7 +193,7 @@ Standard: `h-memory-structure` section Entry Shape, section Tier-Content Fit, se
 1. Load all four standards in order.
 2. Discover definitions surface with `file_search`.
 3. Read all files in both surfaces.
-4. Query memory (`query_memory(states=["curated", "approved"])`) when available; otherwise degrade gracefully.
+4. Query memory (`list_memories(states=["curated", "approved"])` for inventory and `recall_memory(agent="{agent_name}")` for scoped context) when available; otherwise degrade gracefully.
 5. Build a severity queue: HIGH, then MED, then LOW.
 
 Call `askQuestions` to present queue summary and confirm before the finding loop.

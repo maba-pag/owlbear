@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import sqlite3
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypedDict
+from uuid import uuid4
 
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
@@ -18,14 +21,15 @@ from owlbear_knowledge.bookmark_pipeline import BookmarkPipeline
 from owlbear_knowledge.bookmark_store import BookmarkStore
 from owlbear_knowledge.chunker import TextChunker
 from owlbear_knowledge.consolidation import ConsolidationService, TextCompletionFn
+from owlbear_knowledge.content_guard import ContentInjectionGuard
 from owlbear_knowledge.document_store import DocumentStore
 from owlbear_knowledge.embeddings import BgeM3EmbeddingProvider
 from owlbear_knowledge.evaluator import EvaluateFn, EvaluationResult, SourceEvaluator
 from owlbear_knowledge.extractor import EntityExtractor
+from owlbear_knowledge.fetcher import HttpxContentFetcher
 from owlbear_knowledge.graph_builder import IntraDocGraphBuilder
 from owlbear_knowledge.graph_store import GraphStore
 from owlbear_knowledge.ingest import IngestPipeline
-from owlbear_knowledge.inter_doc_graph_builder import InterDocGraphBuilder
 from owlbear_knowledge.models import EntityType
 from owlbear_knowledge.qdrant import QdrantVectorStore
 from owlbear_knowledge.query_service import KnowledgeQueryService
@@ -41,7 +45,29 @@ from owlbear_knowledge.source_store import KnowledgeSourceStore
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
+    from owlbear_knowledge.inter_doc_graph_builder import InterDocGraphBuilder
+    from owlbear_knowledge.protocol import ContentFetcher
+else:
+    InterDocGraphBuilder = Any
+
 _DEFAULT_KB_PATH = ".owlbear/knowledge/local.db"
+_DEFAULT_QDRANT_PATH = ".owlbear/knowledge/vectors"
+
+
+class _BrowserContentFetcher:
+    """Protocol-compatible browser fetcher placeholder.
+
+    The browser MCP server owns Playwright lifecycle. This placeholder preserves
+    fetch-method routing behavior in mcp-knowledge without introducing a direct
+    package dependency on owlbear_browser.
+    """
+
+    async def fetch(self, url: str) -> str:
+        """Raise a clear error until a live browser fetcher is injected."""
+        # Keep protocol signature without leaking URL details into persisted errors.
+        _ = url
+        msg = "browser fetcher selected but no browser session is wired"
+        raise RuntimeError(msg)
 
 
 class SearchResult(TypedDict):
@@ -51,6 +77,32 @@ class SearchResult(TypedDict):
     score: float
     snippet: str
     entity_type: str | None
+    retrieval_path: str
+    entities: list[SearchEntity]
+    related_sources: list[RelatedSource]
+    source: SearchSource
+
+
+class SearchEntity(TypedDict):
+    """A single entity mention attached to a search result."""
+
+    name: str
+    type: str
+
+
+class RelatedSource(TypedDict):
+    """A relationship edge from this result to another source."""
+
+    name: str
+    relationship: str
+    entity: str
+
+
+class SearchSource(TypedDict):
+    """Source metadata attached to a search result."""
+
+    name: str
+    url: str
 
 
 class SourceInfo(TypedDict):
@@ -75,6 +127,419 @@ class StatsResult(TypedDict):
     documents: int
     entities: int
     edges: int
+    total_sources: int
+    total_chunks: int
+    chunks_enriched_ratio: float
+    consolidation_candidates_remaining: int
+
+
+class EnrichmentChunk(TypedDict):
+    """Chunk payload claimed by enrichment workers."""
+
+    chunk_id: str
+    text: str
+    doc_title: str
+    section_path: str | None
+    source_name: str | None
+
+
+class ConsolidationCandidate(TypedDict):
+    """Cross-source entity pair eligible for phase-2 consolidation."""
+
+    candidate_id: str
+    entity_name: str
+    source_a: str
+    source_b: str
+    source_a_name: str
+    source_b_name: str
+    source_a_chunk: str
+    source_b_chunk: str
+
+
+_CANDIDATE_ID_PARTS = 3
+
+
+def _encode_candidate_id(entity_name: str, source_a: str, source_b: str) -> str:
+    """Encode the reviewed-pair identity into an opaque candidate ID."""
+    return json.dumps([entity_name, source_a, source_b], separators=(",", ":"))
+
+
+def _decode_candidate_id(candidate_id: str) -> tuple[str, str, str]:
+    """Decode candidate ID into (entity_name, source_a, source_b)."""
+    try:
+        parsed = json.loads(candidate_id)
+    except (TypeError, ValueError) as exc:
+        msg = "invalid candidate_id"
+        raise ToolError(msg) from exc
+
+    if (
+        not isinstance(parsed, list)
+        or len(parsed) != _CANDIDATE_ID_PARTS
+        or not all(isinstance(part, str) for part in parsed)
+    ):
+        msg = "invalid candidate_id"
+        raise ToolError(msg)
+    return parsed[0], parsed[1], parsed[2]
+
+
+def _fetch_consolidation_candidate_rows(
+    conn: sqlite3.Connection,
+    *,
+    limit: int | None,
+) -> list[tuple[str, str, str, str | None, str | None, str | None, str | None]]:
+    """Return deduplicated candidate rows ordered by entity name."""
+    sql = """
+        WITH pair_candidates AS (
+            SELECT
+                e1.name AS entity_name,
+                CASE
+                    WHEN d1.source_id < d2.source_id THEN d1.source_id
+                    ELSE d2.source_id
+                END AS source_a,
+                CASE
+                    WHEN d1.source_id < d2.source_id THEN d2.source_id
+                    ELSE d1.source_id
+                END AS source_b,
+                CASE
+                    WHEN d1.source_id < d2.source_id THEN ks1.name
+                    ELSE ks2.name
+                END AS source_a_name,
+                CASE
+                    WHEN d1.source_id < d2.source_id THEN ks2.name
+                    ELSE ks1.name
+                END AS source_b_name,
+                CASE
+                    WHEN d1.source_id < d2.source_id THEN c1.content
+                    ELSE c2.content
+                END AS source_a_chunk,
+                CASE
+                    WHEN d1.source_id < d2.source_id THEN c2.content
+                    ELSE c1.content
+                END AS source_b_chunk
+            FROM entities AS e1
+            JOIN entities AS e2 ON e1.name = e2.name AND e1.id < e2.id
+            JOIN documents AS d1 ON d1.id = e1.document_id
+            JOIN documents AS d2 ON d2.id = e2.document_id
+            LEFT JOIN knowledge_sources AS ks1 ON ks1.id = d1.source_id
+            LEFT JOIN knowledge_sources AS ks2 ON ks2.id = d2.source_id
+            LEFT JOIN chunks AS c1 ON c1.id = e1.chunk_id
+            LEFT JOIN chunks AS c2 ON c2.id = e2.chunk_id
+            WHERE d1.source_id IS NOT NULL
+              AND d2.source_id IS NOT NULL
+              AND d1.source_id != d2.source_id
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM edges AS ed
+                  WHERE (ed.source_id = e1.id AND ed.target_id = e2.id)
+                     OR (ed.source_id = e2.id AND ed.target_id = e1.id)
+              )
+        )
+        SELECT
+            pc.entity_name,
+            pc.source_a,
+            pc.source_b,
+            MIN(pc.source_a_name) AS source_a_name,
+            MIN(pc.source_b_name) AS source_b_name,
+            MIN(pc.source_a_chunk) AS source_a_chunk,
+            MIN(pc.source_b_chunk) AS source_b_chunk
+        FROM pair_candidates AS pc
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM reviewed_pairs AS rp
+            WHERE rp.entity_name = pc.entity_name
+              AND (
+                  (rp.source_a = pc.source_a AND rp.source_b = pc.source_b)
+                 OR (rp.source_a = pc.source_b AND rp.source_b = pc.source_a)
+              )
+        )
+        GROUP BY pc.entity_name, pc.source_a, pc.source_b
+        ORDER BY pc.entity_name ASC, pc.source_a ASC, pc.source_b ASC
+    """
+
+    params: tuple[object, ...] = ()
+    if limit is not None:
+        sql += " LIMIT ?"
+        params = (limit,)
+    return conn.execute(sql, params).fetchall()
+
+
+async def get_consolidation_candidates(
+    ctx: Context,
+    limit: int = 20,
+) -> list[ConsolidationCandidate]:
+    """Return unresolved cross-source consolidation candidates."""
+    app_ctx: AppContext = ctx.request_context.lifespan_context
+    conn = app_ctx.conn
+    rows = _fetch_consolidation_candidate_rows(conn, limit=limit)
+    return [
+        {
+            "candidate_id": _encode_candidate_id(row[0], row[1], row[2]),
+            "entity_name": row[0],
+            "source_a": row[1],
+            "source_b": row[2],
+            "source_a_name": row[3] or "",
+            "source_b_name": row[4] or "",
+            "source_a_chunk": row[5] or "",
+            "source_b_chunk": row[6] or "",
+        }
+        for row in rows
+    ]
+
+
+def select_content_fetcher(method: str) -> ContentFetcher:
+    """Return the content fetcher implementation for a persisted fetch method."""
+    normalized = method.strip().lower()
+    if normalized == "browser":
+        return _BrowserContentFetcher()
+    return HttpxContentFetcher()
+
+
+def _extract_section_path(metadata: str | None) -> str | None:
+    """Extract section_path from serialized chunk metadata."""
+    if not metadata:
+        return None
+    try:
+        parsed = json.loads(metadata)
+    except (TypeError, ValueError):
+        return None
+    section_path = parsed.get("section_path")
+    return section_path if isinstance(section_path, str) else None
+
+
+def _serialize_search_entities(value: object) -> list[SearchEntity]:
+    """Normalize result entities to a list of {name, type} objects."""
+    if not isinstance(value, list):
+        return []
+
+    entities: list[SearchEntity] = []
+    for item in value:
+        if isinstance(item, dict):
+            name = item.get("name")
+            entity_type = item.get("type")
+        else:
+            name = getattr(item, "name", None)
+            entity_type = getattr(item, "type", None)
+        if isinstance(name, str) and isinstance(entity_type, str):
+            entities.append({"name": name, "type": entity_type})
+    return entities
+
+
+def _serialize_related_sources(value: object) -> list[RelatedSource]:
+    """Normalize related_sources to {name, relationship, entity} objects."""
+    if not isinstance(value, list):
+        return []
+
+    related_sources: list[RelatedSource] = []
+    for item in value:
+        if isinstance(item, dict):
+            name = item.get("name")
+            relationship = item.get("relationship")
+            entity = item.get("entity")
+        else:
+            name = getattr(item, "name", None)
+            relationship = getattr(item, "relationship", None)
+            entity = getattr(item, "entity", None)
+        if isinstance(name, str) and isinstance(relationship, str) and isinstance(entity, str):
+            related_sources.append({"name": name, "relationship": relationship, "entity": entity})
+    return related_sources
+
+
+def _serialize_source(value: object) -> SearchSource:
+    """Normalize source metadata to a {name, url} object."""
+    name = getattr(value, "name", None)
+    url = getattr(value, "url", None)
+
+    if not isinstance(url, str):
+        config = getattr(value, "config", None)
+        config_url = config.get("url") if isinstance(config, dict) else None
+        if isinstance(config_url, str):
+            url = config_url
+
+    return {
+        "name": name if isinstance(name, str) else "",
+        "url": url if isinstance(url, str) else "",
+    }
+
+
+async def get_next_batch(ctx: Context, limit: int = 10) -> list[EnrichmentChunk]:
+    """Atomically claim a batch of chunks ready for enrichment.
+
+    Chunks are eligible when state is pending, or when a previous claim lease
+    is stale (>10 minutes). Chunks from sources with enrich=0 are excluded.
+    """
+    app_ctx: AppContext = ctx.request_context.lifespan_context
+    conn = app_ctx.conn
+    now = datetime.now(tz=UTC)
+    now_iso = now.isoformat()
+
+    conn.execute("PRAGMA busy_timeout = 5000")
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        rows = conn.execute(
+            """
+            SELECT
+                c.id,
+                c.content,
+                d.title,
+                c.metadata,
+                ks.name
+            FROM chunks AS c
+            JOIN documents AS d ON d.id = c.document_id
+            LEFT JOIN knowledge_sources AS ks ON ks.id = d.source_id
+            WHERE COALESCE(ks.enrich, 1) = 1
+              AND (
+                c.enrichment_state = 'pending'
+                OR (
+                    c.enrichment_state = 'claimed'
+                    AND c.claimed_at IS NOT NULL
+                                        AND (strftime('%s', ?) - strftime('%s', c.claimed_at)) > 600
+                )
+              )
+            ORDER BY c.created_at ASC, c.id ASC
+            LIMIT ?
+            """,
+            (now_iso, limit),
+        ).fetchall()
+
+        if rows:
+            chunk_ids = [row[0] for row in rows]
+            placeholders = ",".join("?" for _ in chunk_ids)
+            update_sql = (
+                "UPDATE chunks SET enrichment_state='claimed', claimed_at=? "  # noqa: S608
+                f"WHERE id IN ({placeholders})"
+            )
+            conn.execute(
+                update_sql,
+                (now_iso, *chunk_ids),
+            )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+
+    return [
+        {
+            "chunk_id": row[0],
+            "text": row[1],
+            "doc_title": row[2],
+            "section_path": _extract_section_path(row[3]),
+            "source_name": row[4],
+        }
+        for row in rows
+    ]
+
+
+async def store_enrichment(
+    ctx: Context,
+    chunk_id: str | None = None,
+    entities: list[dict[str, Any]] | None = None,
+    edges: list[dict[str, Any]] | None = None,
+    candidate_id: str | None = None,
+) -> None:
+    """Persist enrichment results for phase-1 chunks or phase-2 candidates."""
+    app_ctx: AppContext = ctx.request_context.lifespan_context
+    conn = app_ctx.conn
+    now_iso = datetime.now(tz=UTC).isoformat()
+    edge_rows = edges or []
+
+    if candidate_id is not None:
+        entity_name, source_a, source_b = _decode_candidate_id(candidate_id)
+
+        conn.execute("PRAGMA busy_timeout = 5000")
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            if edge_rows:
+                for edge in edge_rows:
+                    conn.execute(
+                        """
+                        INSERT OR IGNORE INTO edges
+                        (id, source_id, target_id, relation, document_id, weight, metadata, created_at, scope)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            edge.get("id") or uuid4().hex,
+                            edge.get("source_id"),
+                            edge.get("target_id"),
+                            edge.get("relation"),
+                            edge.get("document_id"),
+                            edge.get("weight", 1.0),
+                            json.dumps(edge.get("metadata", {})),
+                            now_iso,
+                            edge.get("scope", "global"),
+                        ),
+                    )
+            else:
+                conn.execute(
+                    """
+                    INSERT OR IGNORE INTO reviewed_pairs (entity_name, source_a, source_b)
+                    VALUES (?, ?, ?)
+                    """,
+                    (entity_name, source_a, source_b),
+                )
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        return
+
+    if chunk_id is None:
+        msg = "chunk_id is required for phase-1 store_enrichment"
+        raise ToolError(msg)
+
+    entity_rows = entities or []
+
+    conn.execute("PRAGMA busy_timeout = 5000")
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        for entity in entity_rows:
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO entities
+                (id, name, entity_type, description, metadata, created_at, scope, document_id, chunk_id, importance)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    entity.get("id") or uuid4().hex,
+                    entity.get("name", ""),
+                    entity.get("entity_type", ""),
+                    entity.get("description", ""),
+                    json.dumps(entity.get("metadata", {})),
+                    now_iso,
+                    entity.get("scope", "global"),
+                    entity.get("document_id"),
+                    entity.get("chunk_id"),
+                    entity.get("importance", 0.5),
+                ),
+            )
+
+        for edge in edge_rows:
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO edges
+                (id, source_id, target_id, relation, document_id, weight, metadata, created_at, scope)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    edge.get("id") or uuid4().hex,
+                    edge.get("source_id"),
+                    edge.get("target_id"),
+                    edge.get("relation"),
+                    edge.get("document_id"),
+                    edge.get("weight", 1.0),
+                    json.dumps(edge.get("metadata", {})),
+                    now_iso,
+                    edge.get("scope", "global"),
+                ),
+            )
+
+        conn.execute(
+            "UPDATE chunks SET enrichment_state='enriched', claimed_at=NULL WHERE id = ?",
+            (chunk_id,),
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
 
 
 def init_db(path: str) -> sqlite3.Connection:
@@ -206,7 +671,16 @@ async def _web_read(url: str) -> str | None:
     first_ip = ipaddress.ip_address(addrs[0][4][0])
     ip_host = f"[{first_ip}]" if isinstance(first_ip, ipaddress.IPv6Address) else str(first_ip)
     netloc = f"{ip_host}:{parsed.port}" if parsed.port else ip_host
-    ip_url = urlunparse((parsed.scheme, netloc, parsed.path, parsed.params, parsed.query, parsed.fragment))
+    ip_url = urlunparse(
+        (
+            parsed.scheme,
+            netloc,
+            parsed.path,
+            parsed.params,
+            parsed.query,
+            parsed.fragment,
+        )
+    )
 
     try:
         import httpx  # noqa: PLC0415
@@ -220,53 +694,41 @@ async def _web_read(url: str) -> str | None:
 
 
 @asynccontextmanager
-async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:  # noqa: PLR0915
+async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
     """Initialise knowledge-base services; close the DB connection on exit."""
     global _app_context  # noqa: PLW0603
+    token_path = Path.home() / ".owlbear" / "copilot_token.json"
+    token_path.unlink(missing_ok=True)
     path = os.environ.get("OWLBEAR_LOCAL_KB_PATH") or os.environ.get("OWLBEAR_KB_PATH", _DEFAULT_KB_PATH)
+    qdrant_path = os.environ.get("OWLBEAR_QDRANT_PATH", _DEFAULT_QDRANT_PATH)
     conn = init_db(path)
     try:
         gs = GraphStore(conn)
-        vs = QdrantVectorStore()
+        vs = QdrantVectorStore(location=qdrant_path)
         emb = BgeM3EmbeddingProvider()
         structured_extractor = None
-        api_key = os.environ.get("OWLBEAR_LLM_API_KEY") or os.environ.get("OPENAI_API_KEY")
-        if api_key:
-            try:
-                from owlbear_knowledge.llm_extractor import LLMExtractor  # noqa: PLC0415
-
-                model = os.environ.get("OWLBEAR_LLM_MODEL", "gpt-4o-mini")
-                base_url = os.environ.get("OWLBEAR_LLM_BASE_URL") or os.environ.get("OPENAI_BASE_URL")
-                structured_extractor = LLMExtractor(model=model, api_key=api_key, base_url=base_url)
-            except ImportError:
-                structured_extractor = None
-        else:
-            try:
-                from owlbear_knowledge.copilot_auth import detect_editor_versions, get_copilot_token  # noqa: PLC0415
-                from owlbear_knowledge.llm_extractor import LLMExtractor  # noqa: PLC0415
-
-                copilot_token = await get_copilot_token()
-                model = os.environ.get("OWLBEAR_LLM_MODEL", "gpt-4o-mini")
-                editor_versions = detect_editor_versions()
-                headers = {**editor_versions, "Copilot-Integration-Id": "vscode-chat"}
-                structured_extractor = LLMExtractor(
-                    model=model,
-                    api_key=copilot_token,
-                    default_headers=headers,
-                )
-            except Exception:  # noqa: BLE001
-                structured_extractor = None
         extractor = EntityExtractor(extractor=structured_extractor)
         intra_doc_builder = IntraDocGraphBuilder(extractor=structured_extractor)
-        inter_doc_builder = (
-            InterDocGraphBuilder(structured_extractor, vs, gs) if structured_extractor is not None else None
-        )
+        inter_doc_builder = None
         gar = GraphAugmentedRetriever(vs, gs, emb)
-        qs = KnowledgeQueryService(vector_store=vs, graph_store=gs, embedding_provider=emb, retriever=gar)
+        source_store = KnowledgeSourceStore(conn)
+        qs = KnowledgeQueryService(
+            vector_store=vs,
+            graph_store=gs,
+            embedding_provider=emb,
+            retriever=gar,
+            source_store=source_store,
+        )
         doc_store = DocumentStore(conn, gs, vs, emb)
         chunker = TextChunker()
-        pipeline = IngestPipeline(doc_store, extractor, chunker)
-        source_store = KnowledgeSourceStore(conn)
+        content_guard = ContentInjectionGuard()
+        pipeline = IngestPipeline(
+            doc_store,
+            extractor,
+            chunker,
+            content_guard=content_guard,
+            source_store=source_store,
+        )
         bookmark_store = BookmarkStore(conn)
         evaluator = SourceEvaluator(llm_fn=make_evaluate_fn())
 
@@ -280,6 +742,9 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:  #
             store=source_store,
             pipeline=pipeline,
             workspace_root=Path.cwd(),
+            content_fetcher=select_content_fetcher("http"),
+            inter_doc_builder=inter_doc_builder,
+            graph_store=gs,
         )
         consolidation_service: ConsolidationService | None = ConsolidationService(conn, make_text_completion_fn())
         ctx = AppContext(
@@ -306,6 +771,12 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:  #
 
 mcp = FastMCP("owlbear-knowledge", lifespan=app_lifespan)
 
+get_next_batch = mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))(get_next_batch)
+get_consolidation_candidates = mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))(
+    get_consolidation_candidates
+)
+store_enrichment = mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))(store_enrichment)
+
 __all__ = [
     "AppContext",
     "_apply_tool_exclusions",
@@ -323,6 +794,7 @@ __all__ = [
     "mcp",
     "refresh_source",
     "search_knowledge",
+    "select_content_fetcher",
     "sync_from_global",
     "sync_to_global",
     "update_bookmark_tags",
@@ -345,7 +817,22 @@ async def search_knowledge(
     if qs is None:
         return "error: Knowledge service not available."
     results = await qs.query(query, top_k=limit, scopes=scopes)
-    return [{"title": r.title, "score": r.score, "snippet": r.snippet, "entity_type": r.entity_type} for r in results]
+    serialized: list[SearchResult] = []
+    for r in results:
+        retrieval_path = getattr(r, "retrieval_path", "vector")
+        serialized.append(
+            {
+                "title": r.title,
+                "score": r.score,
+                "snippet": r.snippet,
+                "entity_type": r.entity_type,
+                "retrieval_path": (retrieval_path if isinstance(retrieval_path, str) else "vector"),
+                "entities": _serialize_search_entities(getattr(r, "entities", [])),
+                "related_sources": _serialize_related_sources(getattr(r, "related_sources", [])),
+                "source": _serialize_source(getattr(r, "source", None)),
+            }
+        )
+    return serialized
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
@@ -366,6 +853,7 @@ async def ingest_document(
     text: str,
     metadata: dict[str, Any] | None = None,
     scope: str = "global",
+    source_url: str | None = None,
 ) -> str:
     """Ingest a text document into the knowledge base."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
@@ -373,7 +861,12 @@ async def ingest_document(
     if pipeline is None:
         return "error: ingest pipeline not available"
     try:
-        result = await pipeline.ingest_text(text, metadata=metadata, scope=scope)
+        result = await pipeline.ingest_text(
+            text,
+            metadata=metadata,
+            scope=scope,
+            source_url=source_url,
+        )
     except Exception as exc:  # noqa: BLE001
         return f"error: ingestion failed: {exc}"
     else:
@@ -384,7 +877,6 @@ async def ingest_document(
         )
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
 async def list_entities(
     ctx: Context,
     entity_type: str | None = None,
@@ -417,11 +909,27 @@ async def get_stats(ctx: Context) -> StatsResult:
     """Get knowledge base summary statistics."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     gs = app_ctx.graph_store
+    conn = app_ctx.conn
     if gs is None:
         msg = "graph store not available"
         raise ToolError(msg)
     doc_count, entity_count, edge_count = await asyncio.to_thread(gs.get_counts)
-    return {"documents": doc_count, "entities": entity_count, "edges": edge_count}
+
+    total_sources = conn.execute("SELECT COUNT(*) FROM knowledge_sources").fetchone()[0]
+    total_chunks = conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
+    enriched_chunks = conn.execute("SELECT COUNT(*) FROM chunks WHERE enrichment_state = 'enriched'").fetchone()[0]
+    chunks_enriched_ratio = float(enriched_chunks) / float(total_chunks) if total_chunks else 0.0
+    consolidation_candidates_remaining = len(_fetch_consolidation_candidate_rows(conn, limit=None))
+
+    return {
+        "documents": doc_count,
+        "entities": entity_count,
+        "edges": edge_count,
+        "total_sources": total_sources,
+        "total_chunks": total_chunks,
+        "chunks_enriched_ratio": chunks_enriched_ratio,
+        "consolidation_candidates_remaining": consolidation_candidates_remaining,
+    }
 
 
 async def knowledge_stats(ctx: Context) -> str:
@@ -454,7 +962,6 @@ async def knowledge_stats_resource(ctx: Context | None = None) -> str:
     return f"Knowledge base: {doc_count} documents, {entity_count} entities, {edge_count} edges"
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
 async def bookmark_source(ctx: Context, url: str, reason: str | None = None) -> str:
     """Bookmark a URL: evaluate and optionally ingest into the knowledge base."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
@@ -477,7 +984,6 @@ class BookmarkInfo(TypedDict):
     tags: list[str]
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
 async def list_bookmarks(
     ctx: Context,
     tag: str | None = None,
@@ -489,10 +995,17 @@ async def list_bookmarks(
     if store is None:
         return []
     bookmarks = await asyncio.to_thread(store.list, tag=tag, min_score=min_score)
-    return [{"url": b.url, "title": b.title, "relevance_score": b.relevance_score, "tags": b.tags} for b in bookmarks]
+    return [
+        {
+            "url": b.url,
+            "title": b.title,
+            "relevance_score": b.relevance_score,
+            "tags": b.tags,
+        }
+        for b in bookmarks
+    ]
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True))
 async def update_bookmark_tags(
     ctx: Context,
     url: str,
@@ -510,10 +1023,14 @@ async def update_bookmark_tags(
         msg = f"bookmark not found for URL: {url}"
         raise ToolError(msg)
     await asyncio.to_thread(store.update_tags, bookmark.id, tags)
-    return {"url": bookmark.url, "title": bookmark.title, "relevance_score": bookmark.relevance_score, "tags": tags}
+    return {
+        "url": bookmark.url,
+        "title": bookmark.title,
+        "relevance_score": bookmark.relevance_score,
+        "tags": tags,
+    }
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
 async def import_scope(
     ctx: Context,
     project_name: str,
@@ -536,7 +1053,6 @@ async def import_scope(
     )
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
 async def export_scope(
     ctx: Context,
     scope: str,
@@ -556,16 +1072,18 @@ async def export_scope(
     )
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
 async def sync_from_global(ctx: Context) -> str:
     """Import all documents from the global knowledge DB into the local DB under scope='global'.
 
-    Resolves the global DB path via ``owlbear-project.json`` (or ``OWLBEAR_GLOBAL_KB_PATH``
-    env var).  Duplicate documents (same content hash) are skipped.
+    Global DB path resolution via ``owlbear-project.json`` has been removed (see #1296).
+    This tool always returns an ``error: `` string until a replacement resolver is provided.
 
     Returns a count string on success, or an ``error: `` string on failure.
     """
-    global_path = resolve_global_db_path(Path.cwd())
+    try:
+        global_path = resolve_global_db_path(Path.cwd())
+    except NotImplementedError as exc:
+        return f"error: {exc}"
     if isinstance(global_path, str):
         return "error: global DB path could not be resolved"
 
@@ -592,18 +1110,20 @@ async def sync_from_global(ctx: Context) -> str:
     return await asyncio.to_thread(_run)
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
 async def sync_to_global(ctx: Context) -> str:
     """Export local documents with scope='global' into the global knowledge DB.
 
-    Resolves the global DB path via ``owlbear-project.json`` (or ``OWLBEAR_GLOBAL_KB_PATH``
-    env var).  Creates the global DB file (with schema) if it doesn't exist yet.
+    Global DB path resolution via ``owlbear-project.json`` has been removed (see #1296).
+    This tool always returns an ``error: `` string until a replacement resolver is provided.
     Only documents with ``scope='global'`` in the local DB are exported.
     Duplicate documents (same content hash) are skipped.
 
     Returns a count string on success, or an ``error: `` string on failure.
     """
-    global_path = resolve_global_db_path(Path.cwd())
+    try:
+        global_path = resolve_global_db_path(Path.cwd())
+    except NotImplementedError as exc:
+        return f"error: {exc}"
     if isinstance(global_path, str):
         return f"error: {global_path}"
 
@@ -650,8 +1170,21 @@ async def refresh_source(ctx: Context, source_id: str) -> dict | str:
     orchestrator = app_ctx.refresh_orchestrator
     if orchestrator is None:
         return "error: refresh orchestrator not available"
+    pipeline = app_ctx.ingest_pipeline
+    if pipeline is None:
+        return "error: ingest pipeline not available"
+
+    selected_fetcher = select_content_fetcher(source.fetch_method)
+    run_orchestrator = RefreshOrchestrator(
+        store=store,
+        pipeline=pipeline,
+        workspace_root=Path.cwd(),
+        content_fetcher=selected_fetcher,
+        inter_doc_builder=None,
+        graph_store=app_ctx.graph_store,
+    )
     try:
-        result = await orchestrator.refresh(source)
+        result = await run_orchestrator.refresh(source)
     except ValueError as exc:
         return f"error: {exc}"
     return {
@@ -662,7 +1195,6 @@ async def refresh_source(ctx: Context, source_id: str) -> dict | str:
     }
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
 async def consolidate_knowledge(ctx: Context, batch_size: int = 50) -> str:
     """Trigger cross-document insight synthesis for unconsolidated knowledge chunks.
 

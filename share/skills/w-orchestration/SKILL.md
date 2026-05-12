@@ -13,7 +13,7 @@ Plan-dispatch-loop cycle for the orchestrator. The orchestrator maintains minima
 The orchestrator maintains minimal session state:
 
 - **`rate_limited`** (boolean, default `False`): Set to `True` on any rate-limit error. Once set, all subsequent `pick_tasks` calls use `wave_size=1`. Never reset within a session.
-- **`cycle_count`** (integer, starts at 1): Incremented each cycle. Used to trigger the memory-curator every 5th cycle.
+- **`cycle_count`** (integer, starts at 1): Incremented each cycle. Used to trigger the memory-curator every 10th cycle.
 - **No board state.** `pick_tasks` reads the board each cycle via MCP tool call.
 - **Channel A reading.** Read agent return values for outcome detection: `FAIL` (task failed), `TOOL_UNAVAILABLE` (tool degraded), or success. Do not parse signals for task routing — re-plan from board state each cycle.
 - **Brief context:** Available to pipeline agents via parent task lookup — the orchestrator does not use Brief context directly.
@@ -49,27 +49,23 @@ Empty `waves` means nothing dispatchable for this cycle.
 
 ## Step 1 — Housekeeping
 
-At the **start of every cycle**, dispatch non-task agents. These agents modify board state (decision resolver unblocks tasks) or maintain institutional memory (curator). Both must complete before `pick_tasks` so the board is up-to-date.
+At the **start of every cycle**, perform lightweight housekeeping. Decision/action request resolution is a Cockpit/user operation, not part of orchestration.
 
-**Every cycle — decision resolver:**
+**Every cycle — dispatch planning:**
 
-```
-resolve_decision(scope="all", agent="orchestrator")
-```
+The Step 2 `pick_tasks` call is read-only. It reads the current board state, excludes blocked tasks, and returns fresh dispatch waves. If a DR/AR was resolved before this cycle, that resolution has already appended the task summary, unblocked the task when appropriate, and moved the file to resolved.
 
-The decision resolver scans `.owlbear/decisions/pending/`, resolves responded DRs (unblocks tasks, writes summaries, moves resolved files, handles 5-day auto-resolution).
+Dispatch planning uses the fresh board state returned by `pick_tasks`.
 
-The orchestrator does not use housekeeping agent output for dispatch planning — `pick_tasks` reads fresh board state. Surface informational signals to the user (e.g., curator deferred count, pending-DR list).
-
-**Every 5th cycle — memory-curator** (`cycle_count % 5 == 0`):
+**Every 10th cycle — memory-curator** (`cycle_count % 10 == 0`):
 
 ```
 runSubagent("memory-curator", "Curate: Periodic curation", "Curation")
 ```
 
-Dispatch in parallel with the decision resolver. The curator does not affect board state.
+Dispatch before or alongside the next planning cycle. The curator does not affect board state.
 
-If either agent errors, note it but proceed to Step 2.
+If the curator errors, note it but proceed to Step 2.
 
 ## Step 2 — Plan
 
@@ -143,11 +139,14 @@ Classify agent returns top-to-bottom. First match wins.
    - Set `rate_limited = True`. Retry the dispatch once.
    - All subsequent `pick_tasks` calls use `wave_size=1` (one-way transition — no resume to parallel).
 3. **Structured return** (verdict keyword present — including `FAIL`):
-   - The agent called `end_work` and managed its own task state (status, block, release). **Do not override** — no `edit_task(block=...)`, no `move_task`. The task is in the correct state.
+   - The agent called `end_work` and managed its own task state (status, block, release). **Do not override** — no `end_work(...)`, no `edit_task(...)`, no `move_task`. The task is in the correct state.
    - Proceed to the next task in the wave.
 4. **Crash** (no structured return — agent error, timeout, or unrecognized output):
-   - Retry the dispatch once.
-   - If the retry also crashes: **block the task** via `edit_task(block="{agent} crashed twice: {reason}")`.
+   - Release any claim before retry: `end_work(id={task_id}, outcome="release", note="{agent} crashed once; releasing claim before retry: {reason}")`.
+   - If release reports `ERR_NOT_CLAIMED`, the agent crashed before claiming; continue to the retry.
+   - Re-dispatch the same agent on the same task once.
+   - If the retry also crashes: **block the task** via `end_work(id={task_id}, outcome="block", block_reason="{agent} crashed twice: {reason}", note="{agent} crashed twice: {reason}")` so any claim is released.
+   - If `end_work` reports `ERR_NOT_CLAIMED`, the agent crashed before claiming; block the unclaimed task via `edit_task(id={task_id}, block_reason="{agent} crashed twice before claiming: {reason}")`.
    - After blocking, proceed to the next task in the wave.
 
 ## Step 4 — Loop
@@ -155,7 +154,7 @@ Classify agent returns top-to-bottom. First match wins.
 After all dispatches:
 
 1. Increment `cycle_count`.
-2. **Re-plan:** Go to **Step 1**. The decision resolver processes any DRs that were responded during this cycle, then `pick_tasks` reads fresh board state.
+2. **Re-plan:** Go to **Step 1**. The next `pick_tasks` call sees any DR/AR resolutions already applied before the cycle and returns fresh dispatch waves.
 
 Loop continues until `pick_tasks` returns `waves=[]`. **Do not stop for any other reason.**
 
@@ -180,6 +179,7 @@ Session complete:
 
 ## Verification Checklist
 
+- [ ] If an agent crashed once (no structured verdict), any claim was released before retry
 - [ ] If an agent crashed twice (no structured verdict), the task is blocked on the board with a reason note
 - [ ] If an agent returned a structured verdict (including FAIL), the orchestrator did NOT edit or block the task
 - [ ] If rate-limited at any point, all subsequent `pick_tasks` calls use `wave_size=1`
@@ -187,6 +187,7 @@ Session complete:
 
 ## Known Pitfalls
 
-- **Structured return ≠ needs orchestrator cleanup.** When an agent returns a structured verdict (`DONE`, `FAIL`, `BLOCK`, etc.), it called `end_work` and managed its own task state. Never `edit_task(block=...)` or `move_task` on a task whose agent returned a structured signal — that overwrites the agent's intentional state transition.
-- **No dispatch decisions from housekeeping agents.** The orchestrator does not use decision-resolver or curator output for dispatch planning. They modify board state directly; `pick_tasks` reads fresh state each cycle. Informational signals (deferred count, pending DRs) are surfaced to the user only.
+- **Structured return ≠ needs orchestrator cleanup.** When an agent returns a structured verdict (`DONE`, `FAIL`, `BLOCK`, etc.), it called `end_work` and managed its own task state. Never call `end_work`, `edit_task`, or `move_task` on a task whose agent returned a structured signal — that overwrites the agent's intentional state transition.
+- **Crash retry requires claim release.** A crashed agent may have claimed the task before failing. Release with `end_work(outcome="release")` before retrying, otherwise the retry can hit `ERR_ALREADY_CLAIMED`.
+- **No dispatch decisions from housekeeping output.** Curator output is informational only; `pick_tasks` reads fresh board state each cycle.
 - **Legacy wave planner drift:** Do not reintroduce manual bucket planning in this skill. `pick_tasks` is the single wave-assembly authority.

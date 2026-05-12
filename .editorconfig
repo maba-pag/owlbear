@@ -19,19 +19,44 @@ max_line_length = unset
 [serve/*/tests/**/*.py]
 max_line_length = unset
 
+[serve/cockpit/web/src/__tests__/**/*.ts]
+max_line_length = unset
+
+[serve/cockpit/web/src/__tests__/**/*.tsx]
+max_line_length = unset
+
+[serve/cockpit/web/e2e/**/*.ts]
+max_line_length = unset
+
 [*.md]
 indent_size = unset
 max_line_length = unset
 
 # Excalidraw diagrams — JSON with embedded base64; line length not enforceable
 [*.excalidraw]
+end_of_line = unset
 max_line_length = unset
+trim_trailing_whitespace = false
+
+# Generated Porsche Design System assets — minified vendor output
+[serve/cockpit/web/public/porsche-design-system/**]
+end_of_line = unset
+indent_size = unset
+insert_final_newline = false
+max_line_length = unset
+trim_trailing_whitespace = false
 
 # MegaLinter config — regex patterns cannot be split
 [.mega-linter.yml]
 max_line_length = unset
 
 [uv.lock]
+max_line_length = unset
+
+[package-lock.json]
+max_line_length = unset
+
+[serve/cockpit/web/package-lock.json]
 max_line_length = unset
 
 # Keep data files minified — do not reformat

@@ -16,15 +16,8 @@ if TYPE_CHECKING:
 
 from owlbear_kanban._duration import _parse_duration
 from owlbear_kanban.models import BoardConfig
+from owlbear_kanban.topology import PRODUCT_TOPOLOGY
 from owlbear_kanban.yaml_rt import make_yaml as _make_yaml
-
-_DEFAULT_PRIORITIES = [
-    "someday",
-    "nice-to-have",
-    "important",
-    "needed",
-    "critical",
-]
 
 # ---------------------------------------------------------------------------
 # Public API
@@ -34,36 +27,57 @@ _DEFAULT_PRIORITIES = [
 def load_config(kanban_dir: Path) -> BoardConfig:
     """Load ``config.yml`` from *kanban_dir* and return a :class:`BoardConfig`.
 
+    The board topology is product-owned and not loaded from disk. ``config.yml``
+    is used only as a ``next_id`` checkpoint when present.
+
     Raises:
-        FileNotFoundError: when ``config.yml`` is absent from *kanban_dir*.
         ConfigError: when ``claim_timeout`` is present but cannot be parsed
             as a valid duration string (AC-C50).
     """
+    next_id = 1
     config_path = kanban_dir / "config.yml"
-    if not config_path.exists():
-        raise FileNotFoundError(config_path)
+    if config_path.exists():
+        y = _make_yaml()
+        with config_path.open("r", encoding="utf-8") as fh:
+            raw = y.load(fh)
+        plain = _to_plain(raw)
+        if isinstance(plain, dict):
+            raw_next_id = plain.get("next_id")
+            if isinstance(raw_next_id, int):
+                next_id = raw_next_id
 
-    y = _make_yaml()
-    with config_path.open("r", encoding="utf-8") as fh:
-        raw = y.load(fh)
-
-    plain = _to_plain(raw)
-    if isinstance(plain, dict) and plain.get("schema") == "grouped":
-        if "priorities" not in plain:
-            plain["priorities"] = list(_DEFAULT_PRIORITIES)
-
-        statuses = plain.get("statuses")
-        if isinstance(statuses, list) and statuses:
-            pipeline = plain.get("pipeline")
-            if not isinstance(pipeline, dict):
-                pipeline = {}
-            if "entry_status" not in pipeline:
-                pipeline["entry_status"] = statuses[0]
-            if "terminal_status" not in pipeline:
-                pipeline["terminal_status"] = statuses[-1]
-            plain["pipeline"] = pipeline
-
-    config = BoardConfig.model_validate(plain)
+    config = BoardConfig.model_validate(
+        {
+            "schema": "grouped",
+            "statuses": list(PRODUCT_TOPOLOGY.statuses),
+            "priorities": list(PRODUCT_TOPOLOGY.priorities),
+            "next_id": next_id,
+            "activity_log": PRODUCT_TOPOLOGY.activity_log,
+            "paths": {
+                "tasks_dir": PRODUCT_TOPOLOGY.tasks_dir,
+                "archive_dir": PRODUCT_TOPOLOGY.archive_dir,
+            },
+            "pipeline": {
+                "entry_status": PRODUCT_TOPOLOGY.entry_status,
+                "terminal_status": PRODUCT_TOPOLOGY.terminal_status,
+                "statuses": list(PRODUCT_TOPOLOGY.statuses),
+                "priorities": list(PRODUCT_TOPOLOGY.priorities),
+                "wave_size": PRODUCT_TOPOLOGY.wave_size,
+                "claim_timeout": PRODUCT_TOPOLOGY.claim_timeout,
+                "default_priority": PRODUCT_TOPOLOGY.default_priority,
+            },
+            "agents": {
+                "agent_map": dict(PRODUCT_TOPOLOGY.agent_map),
+                "agent_types": dict(PRODUCT_TOPOLOGY.agent_types),
+                "agent_compatibility": dict(PRODUCT_TOPOLOGY.agent_compatibility),
+            },
+            "policy": {
+                "non_impl_tags": sorted(PRODUCT_TOPOLOGY.non_impl_tags),
+                "archival_reasons": sorted(PRODUCT_TOPOLOGY.archival_reasons),
+                "status_predicates": dict(PRODUCT_TOPOLOGY.status_predicates),
+            },
+        }
+    )
     _validate_claim_timeout(config)
     return config
 

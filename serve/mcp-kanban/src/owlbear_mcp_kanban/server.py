@@ -66,6 +66,7 @@ __all__ = [
     "move_task",
     "parse_task_id",
     "pick_tasks",
+    "resolve_drs",
     "show_task",
     "start_work",
 ]
@@ -90,18 +91,19 @@ def _startup_error(kanban_dir: Path, detail: str) -> RuntimeError:
 def parse_task_id(value: str | int, *, field: str = "task_id") -> int:
     """Parse MCP task identifiers as positive base-10 integers."""
     msg = f"{field} must be a positive integer"
+    payload = json.dumps({"code": "ERR_INVALID_ID", "message": msg})
     if isinstance(value, bool):
-        raise ToolError(msg)
+        raise ToolError(payload)
     if isinstance(value, int):
         parsed = value
     elif isinstance(value, str):
         if not value or value != value.strip() or not value.isdecimal():
-            raise ToolError(msg)
+            raise ToolError(payload)
         parsed = int(value)
     else:
-        raise ToolError(msg)
+        raise ToolError(payload)
     if parsed <= 0:
-        raise ToolError(msg)
+        raise ToolError(payload)
     return parsed
 
 
@@ -109,6 +111,55 @@ def _map_kanban_error(exc: KanbanError) -> None:
     """Raise MCP ToolError with machine-readable code and human-readable message."""
     payload = json.dumps({"code": exc.code, "message": exc.user_message})
     raise ToolError(payload) from exc
+
+
+def _raise_tool_error(code: str, message: str) -> None:
+    """Raise MCP ToolError with normalized JSON payload fields."""
+    raise ToolError(json.dumps({"code": code, "message": message}))
+
+
+def _raise_param_validation(message: str) -> None:
+    """Raise parameter validation errors using the MCP error envelope format."""
+    _raise_tool_error("ERR_PARAM_VALIDATION", message)
+
+
+def _raise_not_found(message: str = "Task not found") -> None:
+    """Raise not-found errors without leaking filesystem paths."""
+    _raise_tool_error("ERR_NOT_FOUND", message)
+
+
+def _safe_not_found_message(raw_message: str, fallback: str) -> str:
+    """Preserve user-facing not-found text while hiding path-like internals."""
+    text = raw_message.strip()
+    if not text:
+        return fallback
+    if "/" in text or "\\" in text:
+        return fallback
+    return text
+
+
+def _validate_archival_constraints(
+    app_ctx: AppContext,
+    *,
+    task_id: int,
+    current_status: str | None,
+    target_status: str | None,
+    archival: tuple[str | None, list[int] | None],
+) -> None:
+    """Validate archival constraints in one shared adapter-level path."""
+    archival_reason, archival_refs = archival
+    if target_status == "archived":
+        config = app_ctx.engine.board_config()
+        app_ctx.engine.validate_archival(
+            task_id=task_id,
+            can_mark_completed=(current_status == "done"),
+            config=config,
+            archival_reason=archival_reason,
+            archival_refs=list(archival_refs or []),
+        )
+    elif archival_reason is not None or archival_refs is not None:
+        # Non-archived cases are validated by AgentView to preserve existing behavior.
+        return
 
 
 @dataclass
@@ -204,8 +255,13 @@ async def list_tasks(  # noqa: PLR0913
                 "blocked": blocked,
             }
         )
+        if params.ids is not None and len(params.ids) == 0:
+            return ListTasksResponse(tasks=[], guidance=[], missing_ids=None)
+        resolved_status = params.status
+        if resolved_status is None and params.archival_reason is not None:
+            resolved_status = "archived"
         return app_ctx.engine.agent_view().list_tasks(
-            status=params.status,
+            status=resolved_status,
             tag=params.tag,
             priority=params.priority,
             archival_reason=params.archival_reason,
@@ -221,7 +277,7 @@ async def list_tasks(  # noqa: PLR0913
     except KanbanError as exc:
         _map_kanban_error(exc)
     except PydanticValidationError as exc:
-        raise ToolError(str(exc)) from exc
+        _raise_param_validation(str(exc))
 
 
 # Set outputSchema for list_tasks (lean task array)
@@ -259,8 +315,7 @@ async def _show_validated(app_ctx: AppContext, task_id: int) -> KanbanTask:
     try:
         record = app_ctx.engine.show_task(str(task_id))
     except FileNotFoundError as exc:
-        msg = str(exc)
-        raise ToolError(msg) from exc
+        _raise_not_found(_safe_not_found_message(str(exc), f"Task '{task_id}' not found"))
     return _record_to_task(record)
 
 
@@ -288,7 +343,7 @@ async def create_task(  # noqa: PLR0913
     body: str = "",
     depends_on: list[int] | None = None,
     parent: int | None = None,
-    priority: str = "needed",
+    priority: str = "",
     tags: list[str] | None = None,
 ) -> SingleTaskResponse:
     """Create a new kanban task."""
@@ -316,8 +371,7 @@ async def create_dr(
 ) -> dict[str, object]:
     """Create a pending decision/action request file and return relative path."""
     if request_type not in {"decision", "action"}:
-        msg = "request_type must be one of: decision, action"
-        raise ToolError(msg)
+        _raise_param_validation("request_type must be one of: decision, action")
 
     app_ctx: AppContext = ctx.request_context.lifespan_context
     parsed_task_id = parse_task_id(task_id, field="task_id")
@@ -339,6 +393,26 @@ async def create_dr(
 
 
 @mcp.tool(annotations=ToolAnnotations(destructiveHint=False, idempotentHint=True))
+async def resolve_drs(ctx: Context) -> dict[str, object]:
+    """Resolve non-pending DRs by mutating DR files and return moved paths."""
+    app_ctx: AppContext = ctx.request_context.lifespan_context
+    try:
+        moved_paths = await asyncio.to_thread(
+            decisions.resolve_pending_drs,
+            app_ctx.kanban_dir / "decisions",
+            app_ctx.engine,
+        )
+    except KanbanError as exc:
+        _map_kanban_error(exc)
+
+    moved_relative = [
+        moved_path.relative_to(app_ctx.kanban_dir).as_posix()
+        for moved_path in moved_paths
+    ]
+    return {"moved": moved_relative, "count": len(moved_relative)}
+
+
+@mcp.tool(annotations=ToolAnnotations(destructiveHint=False, idempotentHint=False))
 async def move_task(
     ctx: Context,
     id: StrId,  # noqa: A002
@@ -346,15 +420,21 @@ async def move_task(
     archival_reason: str | None = None,
     archival_refs: list[int] | None = None,
 ) -> SingleTaskResponse:
-    """Move a task to the specified status column, or archive it when status is "archived"."""
+    """Mutate task status (non-idempotent), including archival when status is "archived"."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     resolved_id = parse_task_id(id, field="id")
     if status is None:
-        msg = "status is required"
-        raise ToolError(msg)
+        _raise_param_validation("status is required")
 
     pre_task = await _show_validated(app_ctx, resolved_id)
     try:
+        _validate_archival_constraints(
+            app_ctx,
+            task_id=resolved_id,
+            current_status=pre_task.status,
+            target_status=status,
+            archival=(archival_reason, archival_refs),
+        )
         record = app_ctx.engine.agent_view().move_task(
             resolved_id,
             status,
@@ -365,10 +445,11 @@ async def move_task(
         _map_kanban_error(exc)
     result = _to_single_task_response(record)
     with contextlib.suppress(Exception):
-        status_names = list(app_ctx.engine.board_config().statuses)
-        result.guidance = collect_guidance(
-            "move", before=pre_task, after=result, status_names=status_names
-        )
+        if not result.guidance:
+            status_names = list(app_ctx.engine.board_config().statuses)
+            result.guidance = collect_guidance(
+                "move", before=pre_task, after=result, status_names=status_names
+            )
     return result
 
 
@@ -448,11 +529,14 @@ async def start_work(
         record = app_ctx.engine.agent_view().start_work(resolved_id)
     except KanbanError as exc:
         _map_kanban_error(exc)
-    except (ValueError, FileNotFoundError) as exc:
-        raise ToolError(str(exc)) from exc
+    except ValueError as exc:
+        _raise_param_validation(str(exc))
+    except FileNotFoundError:
+        _raise_not_found(f"Task '{resolved_id}' not found")
     result = _to_single_task_response(record)
     with contextlib.suppress(Exception):
-        result.guidance = collect_guidance("start_work", None, result)
+        if not result.guidance:
+            result.guidance = collect_guidance("start_work", None, result)
     return result
 
 
@@ -472,7 +556,21 @@ async def end_work(  # noqa: PLR0913
     app_ctx: AppContext = ctx.request_context.lifespan_context
     resolved_id = parse_task_id(id, field="id")
 
+    target_status: str | None = None
+    if outcome in {"success", "block", "reject"}:
+        target_status = move_to
+
     try:
+        current_status: str | None = None
+        if target_status == "archived":
+            current_status = (await _show_validated(app_ctx, resolved_id)).status
+        _validate_archival_constraints(
+            app_ctx,
+            task_id=resolved_id,
+            current_status=current_status,
+            target_status=target_status,
+            archival=(archival_reason, archival_refs),
+        )
         record = app_ctx.engine.agent_view().end_work(
             resolved_id,
             note=note,
@@ -484,8 +582,10 @@ async def end_work(  # noqa: PLR0913
         )
     except KanbanError as exc:
         _map_kanban_error(exc)
-    except (ValueError, FileNotFoundError) as exc:
-        raise ToolError(str(exc)) from exc
+    except ValueError as exc:
+        _raise_param_validation(str(exc))
+    except FileNotFoundError:
+        _raise_not_found(f"Task '{resolved_id}' not found")
     task = _to_single_task_response(record)
     if outcome in {"success", "block", "fail"}:
         with contextlib.suppress(Exception):
@@ -508,7 +608,7 @@ async def pick_tasks(
     wave_size: int | None = None,
     max_waves: int = 3,
 ) -> PickTasksResponse:
-    """Pick dispatchable tasks from AgentView and return wave envelopes.
+    """Read-only task selection for dispatch planning (idempotent).
 
     wave_size defaults to engine configuration when omitted.
     """
@@ -527,7 +627,7 @@ async def pick_tasks(
     except KanbanError as exc:
         _map_kanban_error(exc)
     except PydanticValidationError as exc:
-        raise ToolError(str(exc)) from exc
+        _raise_param_validation(str(exc))
 
 
 # Override outputSchema for mutation/lifecycle tools that return

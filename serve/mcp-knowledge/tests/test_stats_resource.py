@@ -37,7 +37,9 @@ class TestFromAC_KnowledgeStatsResource:
 
         resources = list(resource_manager.list_resources())
         uris = {str(getattr(r, "uri", r)) for r in resources}
-        assert "knowledge://stats" in uris, f"Expected 'knowledge://stats' to be registered as a resource, got: {uris}"
+        assert "knowledge://stats" in uris, (
+            f"Expected 'knowledge://stats' to be registered as a resource, got: {uris}"
+        )
 
     # ------------------------------------------------------------------
     # AC: resource returns "Knowledge base: N documents, N entities, N edges"
@@ -130,7 +132,9 @@ class TestFromAC_StatsResourceNotHardcoded:
         async def real_to_thread(fn, *args, **kwargs):  # type: ignore[no-untyped-def]
             return fn(*args, **kwargs)
 
-        with patch("owlbear_mcp_knowledge.server.asyncio.to_thread", side_effect=real_to_thread):
+        with patch(
+            "owlbear_mcp_knowledge.server.asyncio.to_thread", side_effect=real_to_thread
+        ):
             result = await knowledge_stats_resource(ctx)
 
         assert "3 documents" in result, (
@@ -141,7 +145,9 @@ class TestFromAC_StatsResourceNotHardcoded:
         assert "55 edges" in result
 
     @pytest.mark.asyncio
-    async def test_stats_resource_asyncio_to_thread_called_with_get_counts(self) -> None:
+    async def test_stats_resource_asyncio_to_thread_called_with_get_counts(
+        self,
+    ) -> None:
         """asyncio.to_thread must be invoked with gs.get_counts, not a hardcoded lambda.
 
         Captures what asyncio.to_thread was called with and asserts that the
@@ -161,10 +167,15 @@ class TestFromAC_StatsResourceNotHardcoded:
             captured.append(fn)
             return fn(*args, **kwargs)
 
-        with patch("owlbear_mcp_knowledge.server.asyncio.to_thread", side_effect=capture_to_thread):
+        with patch(
+            "owlbear_mcp_knowledge.server.asyncio.to_thread",
+            side_effect=capture_to_thread,
+        ):
             await knowledge_stats_resource(ctx)
 
-        assert len(captured) == 1, "Expected asyncio.to_thread to be called exactly once."
+        assert len(captured) == 1, (
+            "Expected asyncio.to_thread to be called exactly once."
+        )
         assert captured[0] is mock_gs.get_counts, (
             f"asyncio.to_thread was called with {captured[0]!r}, expected gs.get_counts. "
             "The resource handler must not use a hardcoded lambda."
@@ -209,7 +220,10 @@ class TestFromAC_StatsResourceRegisteredBridge:
             return fn(*args, **kwargs)
 
         with (
-            patch("owlbear_mcp_knowledge.server.asyncio.to_thread", side_effect=real_to_thread),
+            patch(
+                "owlbear_mcp_knowledge.server.asyncio.to_thread",
+                side_effect=real_to_thread,
+            ),
             patch.object(server_module, "_app_context", mock_app_ctx, create=True),
         ):
             result = await server_module._knowledge_stats_bridge()
@@ -224,7 +238,9 @@ class TestFromAC_StatsResourceRegisteredBridge:
         assert "15 edges" in result
 
     @pytest.mark.asyncio
-    async def test_bridge_asyncio_to_thread_callable_is_not_constant_lambda(self) -> None:
+    async def test_bridge_asyncio_to_thread_callable_is_not_constant_lambda(
+        self,
+    ) -> None:
         """asyncio.to_thread in _knowledge_stats_bridge must receive gs.get_counts, not a lambda.
 
         Captures the fn argument passed to asyncio.to_thread, then calls it to check

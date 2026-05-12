@@ -6,13 +6,11 @@ user-invocable: false
 
 # pytest, ruff, and coverage Reference
 
-Command reference, configuration, and troubleshooting for running tests and linters in the OwlBear workspace.
+Command reference and pitfalls for tests and linting. For Python conventions and test patterns, see `h-python-conventions`.
 
-For Python coding conventions and test patterns, see `h-python-conventions`.
+## Commands
 
-## pytest Commands
-
-### Scoped runs (builder, reviewer, test-writer)
+### Scoped (builder, reviewer, test-writer)
 
 ```shell
 uv run pytest tests/test_{module}.py -q --tb=short
@@ -20,142 +18,78 @@ uv run pytest tests/test_{module}.py -q --tb=short
 
 ### Full suite (auditor)
 
-Run against your test directory and your source package directory.
-> Example (OwlBear-dev): `tests/` and `serve/`
-
 ```shell
-uv run pytest tests/ src/ -m "not api" -q --tb=short  # adjust paths for your project layout
+uv run pytest tests/ serve/ -m "not api" -q --tb=short
 ```
 
-For full suite runs, use `mode=async` to avoid output truncation in long-lived terminal sessions. The agent is automatically notified when the command finishes — no manual polling needed:
+Use `mode=async` for full suite runs — output exceeds the 60 KB terminal capture limit:
 
 ```shell
-run_in_terminal(command="uv run pytest tests/ -m 'not api' -q --tb=short", mode=async)
-# Agent receives automatic notification on completion
-# Then: get_terminal_output(id=...) to retrieve the output
-# If the terminal needs input: send_to_terminal(id=..., data="...")
+run_in_terminal(command="uv run pytest tests/ serve/ -m 'not api' -q --tb=short", mode=async)
 ```
 
-`testpaths` in `pyproject.toml` should include both your tests and source packages. Bare `uv run pytest` may already discover both, but passing explicit paths is preferred for clarity.
-
-### Default flags
-
-| Tool | Default flags |
-|------|---------------|
-| pytest | `-q --tb=short` (add `-v` only for specific debugging) |
-| ruff | no extra flags needed |
-
-## Test Markers
-
-| Marker | Meaning |
-|--------|---------|
-| `api` | Requires live API / network — skip in offline runs |
-| `slow` | Long-running — skip in fast-feedback loops |
-| `integration` | Requires `kanban-md` binary — deselect when not installed |
-| `e2e` | Requires `gh` CLI on PATH; spawns real Copilot agent — expensive |
-
-`e2e` tests are excluded from the default run via `addopts = "-m 'not e2e'"` in `pyproject.toml`.
-
-### Common `-m` filter recipes
-
-```shell
-# Skip API tests (standard builder run)
-uv run pytest tests/ src/ -m "not api" -q --tb=short  # adjust paths for your project layout
-
-# Skip API and slow
-uv run pytest tests/ src/ -m "not api and not slow" -q --tb=short  # adjust paths for your project layout
-
-# Only integration tests
-uv run pytest tests/ src/ -m "integration" -q --tb=short  # adjust paths for your project layout
-
-# Run e2e explicitly
-uv run pytest -m e2e -q --tb=short
-```
-
-## pytest Configuration (pyproject.toml)
-
-| Setting | Value | Effect |
-|---------|-------|--------|
-| `import-mode` | `importlib` | Set in `addopts` — no manual flag needed |
-| `asyncio_mode` | `strict` | Every async test **must** carry `@pytest.mark.asyncio` |
-| `norecursedirs` | `["v1"]` | Excludes `v1/` from test discovery |
-| `testpaths` | `["tests", "packages"]` | Discovers tests in both locations |
-| `timeout` | `30` | Per-test timeout via `pytest-timeout` — kills any single test exceeding 30s |
-| `session_timeout` | `300` | Whole-session timeout — kills the entire pytest run after 5 minutes |
-
-## Coverage
+### With coverage
 
 ```shell
 uv run pytest tests/test_{module}.py --cov --cov-report=term-missing --cov-fail-under=0 -q --tb=short
 ```
 
-`--cov-fail-under=0` overrides the global threshold for scoped runs. Target >= 90% on touched modules.
+Only bare `--cov` works — `--cov=module.name` crashes pydantic, `--cov=path/` reports 0%. Coverage reads `source_pkgs` from `pyproject.toml`.
 
-### Flags that DO NOT WORK
-
-| Flag | Problem |
-|------|---------|
-| `--cov=dotted.module.name` | pydantic MRO crash |
-| `--cov=path/to/package/src/` | Reports 0% in src-layout setups |
-| `coverage run --source=...` | Incompatible with pytest-cov config |
-
-Only bare `--cov` works. It reads `[tool.coverage.run] source_pkgs` from `pyproject.toml`, covering all 8 installed packages automatically.
-
-## ruff
+### ruff
 
 ```shell
-uv run ruff check src/ tests/  # adjust paths for your project layout
+uv run ruff check serve/ tests/
 ```
 
-## NEVER Pipe `uv run` Output Through PowerShell Cmdlets
+### Default flags
 
-The terminal tool captures stdout + stderr automatically (60 KB limit). No piping needed.
+| Tool | Flags |
+|------|-------|
+| pytest | `-q --tb=short` (add `-v` only for debugging) |
+| ruff | none needed |
 
-PS 5.1 wraps stderr from `2>&1` in ErrorRecord objects. Every pipe combination corrupts, truncates, or drops output — `Out-File`, `Out-String`, `Select-String`, `Tee-Object`, `ForEach-Object`, redirect operators, and `[IO.File]` with pipeline subexpressions all break.
+## Markers
 
-**Just run the command plain.**
+| Marker | Meaning |
+|--------|---------|
+| `api` | Requires live network — exclude with `-m "not api"` |
+| `slow` | Long-running — exclude with `-m "not slow"` |
+| `integration` | Requires `kanban-md` binary |
+| `e2e` | Excluded by default via `addopts`; include explicitly with `-m e2e` |
 
-## File-Capture Fallback (Truncated Output)
+## No Piping
 
-If the terminal truncates output, use Python as the I/O layer:
+The terminal tool captures stdout + stderr (60 KB limit). Never pipe output — no `| tee`, `2>&1 | cat`, `> file.log`, no redirect operators. **Run commands plain.**
+
+## File-Capture Fallback
+
+When terminal output is truncated, use `uv run python` as the I/O layer. **`uv run python` is load-bearing** — it resolves to `.venv` with all project dependencies. Bare `python3` or heredocs (`python3 << 'EOF'`) resolve to system Python which lacks project packages.
 
 ```shell
-uv run python -c "import subprocess,sys,pathlib; r=subprocess.run([sys.executable,'-m','pytest','tests/','src/','-m','not api','-q','--tb=line'], capture_output=True, text=True); pathlib.Path('.owlbear/scratch/pytest-output.txt').write_text(r.stdout+'\n'+r.stderr); print('exit:', r.returncode)"
+uv run python -c "import subprocess,sys,pathlib; r=subprocess.run([sys.executable,'-m','pytest','tests/','serve/','-m','not api','-q','--tb=line'], capture_output=True, text=True); pathlib.Path('.owlbear/scratch/pytest-output.txt').write_text(r.stdout+'\n'+r.stderr); print('exit:', r.returncode)"
 ```
 
-Adjust the `tests/` and `src/` arguments for your project layout.
+Read `.owlbear/scratch/pytest-output.txt` then delete it.
 
-Then `read_file` on `.owlbear/scratch/pytest-output.txt`. Delete after use.
+## Gotchas
 
-## pytest Startup Instability (Windows)
+- **Stale cache in retry cycles.** `.pytest_cache` can return cached results from prior runs, causing incorrect totals. In retries, clear first: `rm -rf .pytest_cache` or add `-p no:cacheprovider`.
 
-If scoped pytest runs show plugin-load errors or incorrect async behavior, disable auto-loading:
+- **ruff `# noqa` placement.** On multiline signatures, `# noqa: C901` must go on the `def` line, not continuation lines.
 
-```shell
-$env:PYTEST_DISABLE_PLUGIN_AUTOLOAD='1'
-uv run pytest tests/test_{module}.py -q --tb=short -p pytest_asyncio.plugin -p xdist -n 0
-# With coverage:
-uv run pytest tests/test_{module}.py --cov --cov-report=term-missing --cov-fail-under=0 -q -p pytest_asyncio.plugin -p pytest_cov -p xdist -n 0
-```
+- **`asyncio_mode = strict`.** Bare `async def test_*` won't be collected — always add `@pytest.mark.asyncio`.
 
-`-p xdist` is required because `addopts` contains `-n auto --dist loadfile` — without the plugin loaded those flags cause `unrecognized arguments`. `-n 0` overrides xdist parallelism for scoped runs.
+- **Timeouts.** `pytest-timeout` kills individual tests after 30s and the entire session after 300s (configured in `pyproject.toml`).
 
-Restore before returning the terminal: `$env:PYTEST_DISABLE_PLUGIN_AUTOLOAD=''`
+- **Plugin auto-loading disabled.** Some VS Code terminal sessions export `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1`. This hides `pytest-xdist`, `pytest-cov`, `pytest-asyncio`, and `pytest-timeout`, breaking `addopts` flags like `-n auto --dist loadfile`. Fix: use `.venv/bin/pytest` and explicitly load plugins: `-p xdist.plugin -p pytest_cov -p pytest_asyncio.plugin -p pytest_timeout`.
 
-> **Preferred alternative:** Instead of disabling all plugins, selectively disable the known-bad logfire plugins:
->
-> ```shell
-> uv run pytest tests/test_{module}.py -p no:logfire -p no:pytest_logfire -q --tb=short
-> ```
->
-> This keeps all other plugins (xdist, cov, asyncio) working from autoload.
+## Windows-Only Pitfalls
 
-## Known Gotchas
+These apply only when running on Windows with PowerShell.
 
-- **ruff `# noqa` on multiline function signatures must go on the `def` line.** For complexity-rule suppression (e.g., `# noqa: C901`), the comment must appear on the line containing `def`, not on a continuation line. Placing it on a parameter or return-type line is silently ignored by ruff. (Evidence: task 1064 builder)
+- **Startup instability.** If scoped runs show plugin errors, set `$env:PYTEST_DISABLE_PLUGIN_AUTOLOAD='1'` then add `-p pytest_asyncio.plugin -p xdist -n 0`. Or selectively disable logfire: `-p no:logfire -p no:pytest_logfire`.
 
-- **Stale pytest cache in retry cycles.** When running tests in a 2nd or 3rd builder/reviewer attempt, `.pytest_cache` can return cached results from prior runs, causing agents to report incorrect totals — e.g., "0 failed" when a test is actually failing. Two independent occurrences observed in the same sprint (#857 reviewer pass 2, #871 builder cycles 2–3). **Mitigation:** In any retry cycle, clear the cache before running: `Remove-Item -Recurse -Force .pytest_cache -ErrorAction SilentlyContinue; uv run pytest ...` — or add `-p no:cacheprovider` to the pytest command. Never trust a self-reported "N passed, 0 failed" in a retry cycle without cross-checking against terminal output.
+- **WMI + logfire hang.** CPython 3.12+ `platform.uname()` calls WMI which can hang indefinitely. `conftest.py` has a workaround. If pytest still hangs: `Get-Process python*,pytest* | Stop-Process -Force`.
 
-- **WMI + logfire pydantic plugin hang on Windows.** CPython 3.12+ calls `_wmi.exec_query()` inside `platform.uname()`. WMI has no timeout and blocks indefinitely when degraded. logfire triggers this via `platform.system()` at pydantic import. **Mitigation:** `tests/conftest.py` pre-populates the `platform.uname()` cache in a daemon thread with a 3-second timeout. If pytest hangs despite the fix, the WMI cache only works within a single process — check for zombie processes: `Get-Process python*,pytest* -ErrorAction SilentlyContinue | Stop-Process -Force`.
-- **Rich Console flags for CLI ANSI tests.** When testing CLI commands with Rich styling via `CliRunner`, the console must be created inside the command function with `Console(force_terminal=True, color-system="256")`. Module-level `Console()` ignores `FORCE_COLOR` from `CliRunner.invoke(env=...)`.
-- **`asyncio_mode = strict` means bare `async def test_*` won't be collected.** Always add `@pytest.mark.asyncio`.
+- **PowerShell piping.** PS 5.1 wraps stderr in ErrorRecord objects. All pipe combinations corrupt output.

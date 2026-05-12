@@ -51,7 +51,7 @@ Shared rules (interaction turns, decision template, handoff contract) are in `h-
 
 ## Step 1.5 — Investment Tier Check
 
-Between M1 and M2, propose an Investment Tier from the table in `h-ideation` (Scratch / Tool / Shared / Production). Present the 4 tiers as askQuestions options with your recommended tier marked. Record the confirmed tier in `decisions.md`.
+Between M1 and M2, propose an Investment Tier from the table in `h-ideation` (Scratch / Tool / Shared / Production). Present it as a depth calibration from `h-ideation` section `Communication Patterns`: "This feels like a [Tier] problem - [plain description]. That means I'll [what tier means for depth]. Sound right?" Then present the 4 tiers as askQuestions options with your recommended tier marked. Record the confirmed tier in `decisions.md`.
 
 The tier calibrates all subsequent moments:
 
@@ -100,6 +100,10 @@ The tier calibrates all subsequent moments:
      /ideation-mediate .owlbear/briefs/draft-{name}/
      ```
 
+   **Narrate as:** "The problem and outcomes are sharp. Next step: a fresh synthesis session will take these findings and work through approach options with you. Start it with: `/ideation-mediate .owlbear/briefs/draft-{name}/`"
+
+   Use vocabulary from `h-ideation` section `Communication Patterns` and transition style from `Transition Patterns`; describe what is complete, what opens next, and how to start.
+
 **Phase boundary rule:** discovery ends after problem/outcomes lock and research curation. It does not continue into landscape presentation or approach choice.
 
 **Exit criteria:** `context.md`, `decisions.md`, and `research-notes.md` are committed and ready for a fresh-context Phase 2 start.
@@ -139,4 +143,4 @@ The tier calibrates all subsequent moments:
 - [ ] `decisions.md` records rejected options where a real choice occurred.
 - [ ] Early challengers ran with the default set and conditional outsider logic.
 - [ ] `research-notes.md` separates verified findings, candidate implications, and open questions.
-- [ ] Phase 1 ends with an explicit `@ideation-mediator` handoff and artifact paths.
+- [ ] Phase 1 ends with a purpose-framed handoff: what is complete, what starts next, and the Phase 2 command + artifact path.

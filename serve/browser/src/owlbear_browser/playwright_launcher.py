@@ -21,7 +21,9 @@ __all__ = [
 ]
 
 _SSO_EXT_ID = "ppnbnpeolgkicgegkbkbjmhlideopiji"
-_EXT_REL = Path("Google") / "Chrome" / "User Data" / "Default" / "Extensions" / _SSO_EXT_ID
+_EXT_REL = (
+    Path("Google") / "Chrome" / "User Data" / "Default" / "Extensions" / _SSO_EXT_ID
+)
 
 
 def find_sso_extension() -> Path:
@@ -102,7 +104,11 @@ class PlaywrightLauncher:
 
     async def launch(self) -> None:
         """Launch Chromium with the SSO extension and open a persistent context."""
-        sso_ext_path = self._sso_ext_path if self._sso_ext_path is not None else find_sso_extension()
+        sso_ext_path = (
+            self._sso_ext_path
+            if self._sso_ext_path is not None
+            else find_sso_extension()
+        )
         cm = async_playwright()
         self._pw = await cm.__aenter__()
         args = build_playwright_args(sso_ext_path)

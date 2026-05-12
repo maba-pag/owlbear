@@ -3,7 +3,7 @@ name = "owlbear-mcp-memory"
 version = "0.1.0"
 requires-python = ">=3.12"
 description = "OwlBear MCP server — memory operations"
-dependencies = ["mcp[cli]>=1.26", "pydantic>=2.0"]
+dependencies = ["mcp[cli]>=1.27.0", "pydantic>=2.13.3", "pyyaml>=6.0.3"]
 
 [build-system]
 requires = ["hatchling"]

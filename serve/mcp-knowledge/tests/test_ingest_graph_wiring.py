@@ -46,7 +46,10 @@ class TestFromAC_GraphAugmentedRetrieverWiring:
             patch("owlbear_mcp_knowledge.server.QdrantVectorStore"),
             patch("owlbear_mcp_knowledge.server.BgeM3EmbeddingProvider"),
             patch("owlbear_mcp_knowledge.server.KnowledgeQueryService"),
-            patch("owlbear_mcp_knowledge.server.make_evaluate_fn", return_value=AsyncMock()),
+            patch(
+                "owlbear_mcp_knowledge.server.make_evaluate_fn",
+                return_value=AsyncMock(),
+            ),
             patch("owlbear_mcp_knowledge.server.GraphAugmentedRetriever", mock_gar_cls),
         ):
             async with app_lifespan(MagicMock()):
@@ -66,7 +69,10 @@ class TestFromAC_GraphAugmentedRetrieverWiring:
             patch("owlbear_mcp_knowledge.server.QdrantVectorStore"),
             patch("owlbear_mcp_knowledge.server.BgeM3EmbeddingProvider"),
             patch("owlbear_mcp_knowledge.server.KnowledgeQueryService", mock_qs_cls),
-            patch("owlbear_mcp_knowledge.server.make_evaluate_fn", return_value=AsyncMock()),
+            patch(
+                "owlbear_mcp_knowledge.server.make_evaluate_fn",
+                return_value=AsyncMock(),
+            ),
             patch(
                 "owlbear_mcp_knowledge.server.GraphAugmentedRetriever",
                 return_value=mock_gar_instance,
@@ -76,7 +82,9 @@ class TestFromAC_GraphAugmentedRetrieverWiring:
                 pass
 
         _, kwargs = mock_qs_cls.call_args
-        assert "retriever" in kwargs, "KnowledgeQueryService must receive retriever= kwarg"
+        assert "retriever" in kwargs, (
+            "KnowledgeQueryService must receive retriever= kwarg"
+        )
         assert kwargs["retriever"] is mock_gar_instance
 
     @pytest.mark.asyncio
@@ -90,10 +98,18 @@ class TestFromAC_GraphAugmentedRetrieverWiring:
         with (
             patch("owlbear_mcp_knowledge.server.init_db", return_value=MagicMock()),
             patch("owlbear_mcp_knowledge.server.GraphStore", return_value=mock_gs),
-            patch("owlbear_mcp_knowledge.server.QdrantVectorStore", return_value=mock_vs),
-            patch("owlbear_mcp_knowledge.server.BgeM3EmbeddingProvider", return_value=mock_emb),
+            patch(
+                "owlbear_mcp_knowledge.server.QdrantVectorStore", return_value=mock_vs
+            ),
+            patch(
+                "owlbear_mcp_knowledge.server.BgeM3EmbeddingProvider",
+                return_value=mock_emb,
+            ),
             patch("owlbear_mcp_knowledge.server.KnowledgeQueryService"),
-            patch("owlbear_mcp_knowledge.server.make_evaluate_fn", return_value=AsyncMock()),
+            patch(
+                "owlbear_mcp_knowledge.server.make_evaluate_fn",
+                return_value=AsyncMock(),
+            ),
             patch("owlbear_mcp_knowledge.server.GraphAugmentedRetriever", mock_gar_cls),
         ):
             async with app_lifespan(MagicMock()):
@@ -131,10 +147,14 @@ class TestFromAC_SearchKnowledgeEntityType:
 
         assert isinstance(results, list)
         assert len(results) >= 1
-        assert "entity_type" in results[0], "search_knowledge result dicts must include 'entity_type' key"
+        assert "entity_type" in results[0], (
+            "search_knowledge result dicts must include 'entity_type' key"
+        )
 
     @pytest.mark.asyncio
-    async def test_search_knowledge_entity_type_value_matches_source_result(self) -> None:
+    async def test_search_knowledge_entity_type_value_matches_source_result(
+        self,
+    ) -> None:
         """The entity_type value in the response matches StructuredSearchResult.entity_type."""
         mock_result = MagicMock()
         mock_result.title = "Decision Doc"
@@ -153,7 +173,9 @@ class TestFromAC_SearchKnowledgeEntityType:
         assert results[0]["entity_type"] == "decision"
 
     @pytest.mark.asyncio
-    async def test_search_knowledge_entity_type_is_none_when_result_has_none(self) -> None:
+    async def test_search_knowledge_entity_type_is_none_when_result_has_none(
+        self,
+    ) -> None:
         """entity_type is included and set to None in result dict when source result has entity_type=None."""
         mock_result = MagicMock()
         mock_result.title = "Generic Doc"
@@ -169,5 +191,7 @@ class TestFromAC_SearchKnowledgeEntityType:
 
         results = await search_knowledge(mcp_ctx, query="generic")
 
-        assert "entity_type" in results[0], "entity_type key must be present even when value is None"
+        assert "entity_type" in results[0], (
+            "entity_type key must be present even when value is None"
+        )
         assert results[0]["entity_type"] is None

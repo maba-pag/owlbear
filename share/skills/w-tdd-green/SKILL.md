@@ -10,6 +10,24 @@ Implement the minimum code to make all failing tests pass. This is the GREEN pha
 
 **Kanban operations:** See `h-mcp-kanban` skill — section `## Agent Lifecycle Pattern`.
 
+## Scope
+
+### In Scope
+
+- Implement minimal code to pass tests (GREEN phase).
+- Run quality-runner for scoped tests, lint, and coverage.
+- Non-impl pass-through.
+- Reject to test-writer (wrong interface) or architect (wrong AC).
+- Commit source files before advancing.
+
+### Out of Scope
+
+- Writing tests — test-writer (`w-tdd-red`).
+- Refactoring unrelated modules — planner/architect for separate task routing (`w-task-decomposition`, `w-arch-review`).
+- AC quality validation — architect (`w-arch-review`).
+- Code review — reviewer (`w-code-review`).
+- Documentation updates — doc-writer (`w-doc-update`).
+
 ## Step 0 — Setup
 
 Read `r-pipeline-protocol` skill if not already loaded.
@@ -18,13 +36,41 @@ Claim the task via `start_work` (atomic claim + retrieves task body). Check the 
 
 Verify the task is in `in-progress` status (the test-writer already moved it here).
 
-### Step 0a — Non-Implementation Pass-Through
+### Step 0a — Bundle-Based Routing
 
-Check the task body for `## Test-Writer Notes` containing "Non-implementation task" or "non-impl pass-through". If found:
+Route builder verification flow from `Proof bundle:` in the task body (see `r-pipeline-protocol` taxonomy).
 
-1. Advance via `end_work(note="## Builder Notes\n- Non-implementation task — no code changes needed.\n- Passing through to review.")` (moves to `review` + releases claim).
-3. Return: `DONE #{id} -> review | non-impl pass-through, no code changes`
-4. **Stop here.**
+1. If `Proof bundle: skip`:
+   Implement from AC directly (no `TestFromAC_*` pass requirement for this task).
+
+  Continue the normal builder flow (plan, implement, verify, commit, and advance) without `TestFromAC_*` test-gate requirements.
+
+  Record in Builder Notes that `Proof bundle: skip` removed `TestFromAC_*` verification only; it did not remove AC implementation obligations.
+
+  Return: `DONE #{id} -> review | proof bundle skip, AC implemented without TestFromAC gate`
+
+   **Stop here.**
+
+2. If `Proof bundle: existing`:
+   Implement from AC directly (no new tests to write).
+
+   Find `Existing proof required: ...` in AC, Architecture Review, or Test-Writer Notes.
+
+   Run the named existing proof through Quality-Runner before advancing. Use `mode=scoped` for named test paths and `mode=full` only when the required proof is explicitly full-suite.
+
+   Record the Quality-Runner summary in Builder Notes.
+
+   Do not advance while required proof is failing or missing.
+
+  After proof passes, continue the normal builder flow (commit and advance with `## Builder Notes` evidence).
+
+   Return: `DONE #{id} -> review | proof bundle existing, required proof passed`
+
+   **Stop here.**
+
+3. If `Proof bundle:` is absent, continue with the normal builder flow using AC and existing task notes as the routing source.
+
+4. Keep the explicit non-impl pass-through trigger: if Test-Writer Notes contain "Non-implementation task" or "non-impl pass-through", advance with no code changes and pass through to review.
 
 ## Step 1 — Plan the Change
 
@@ -60,17 +106,22 @@ prompt: |
 
 Confirm all `TestFromAC_*` tests appear in the `failed:` list. If any pass, investigate before implementing.
 
-> **Backward compatibility:** When no `TestFromAC_*` classes exist (old-style single-agent TDD), fall back to the full RED+GREEN workflow — write failing tests yourself, then implement.
+> **Missing RED tests:** When no `TestFromAC_*` classes exist and this is not an explicit non-implementation pass-through, reject to `todo` with a Required Follow-up table for test-writer. Builder does not write failing tests.
 
 ### Module-Level Test Visibility
 
-After confirming the task-scoped tests fail, also run the module's durable test file (if it exists) to establish a regression baseline:
+After confirming the task-scoped tests fail, also check the module's durable test file (if it exists) through Quality-Runner to establish a regression baseline. Prefer canonical package-local durable tests in `serve/{package}/tests/`, with root `tests/` as a legacy fallback during transition.
 
-```shell
-uv run pytest tests/test_{module}.py -q --tb=short 2>/dev/null || echo "No module-level test file — skip"
+```
+agentName: quality-runner
+prompt: |
+  mode: scoped
+  task_id: {id}
+  test_paths: ["serve/{package}/tests/test_{module}.py"]  # or ["tests/test_{module}.py"] if only the legacy root file exists
+  lint_paths: ["serve/{package}/tests/test_{module}.py"]
 ```
 
-This gives early cross-task regression signal without full-suite cost. If `tests/test_{module}.py` does not exist, skip with a note — module-level files are test-curator-managed.
+If no module-level durable test file exists, record `No module-level test file — skip`. This gives early cross-task regression signal without full-suite cost while preserving the canonical evidence pipeline.
 
 ## Step 3 — Implement Minimal Code (GREEN)
 
@@ -90,7 +141,7 @@ prompt: |
   mode: scoped
   task_id: {id}
   test_paths: ["tests/test_{module}_{task_id}.py"]
-  lint_paths: ["workspace/{package}/src/", "tests/test_{module}_{task_id}.py"]
+  lint_paths: ["serve/{package}/src/", "tests/test_{module}_{task_id}.py"]
 ```
 
 All tests must pass (`failed: []`), zero failures.
@@ -131,15 +182,20 @@ prompt: |
   task_id: {id}
   test_paths: ["tests/test_{module}_{task_id}.py"]
   coverage_modules: ["{module}"]
-  lint_paths: ["workspace/{package}/src/", "tests/test_{module}_{task_id}.py"]
+  lint_paths: ["serve/{package}/src/", "tests/test_{module}_{task_id}.py"]
 ```
 
 All must pass (`failed: []`, `clean: true`). Target 90% coverage on touched modules.
 
-Also run the module-level durable tests (if they exist) to catch cross-task regressions:
+Also check the module-level durable tests (if they exist) through Quality-Runner to catch cross-task regressions:
 
-```shell
-uv run pytest tests/test_{module}.py -q --tb=short 2>/dev/null || echo "No module-level test file — skip"
+```
+agentName: quality-runner
+prompt: |
+  mode: scoped
+  task_id: {id}
+  test_paths: ["serve/{package}/tests/test_{module}.py"]  # or ["tests/test_{module}.py"] if only the legacy root file exists
+  lint_paths: ["serve/{package}/tests/test_{module}.py"]
 ```
 
 **Refactoring check:** If your change renames imports, changes function signatures, or moves mock targets, grep all test files for the old symbol name before proceeding:
@@ -176,7 +232,7 @@ agentName: fix-attempt
 prompt: |
   task_id: {id}
   test_file: tests/test_{module}_{task_id}.py
-  source_files: workspace/{package}/src/{namespace}/{module}.py
+  source_files: serve/{package}/src/{namespace}/{module}.py
   retry_hint: {extract specific errors from error output; identify which failing tests produced them; provide Reflexion-style verbal diagnosis — what went wrong, which failing test(s) are blocked, and the suggested fix direction. Not generic "tests failed".}
   error_summary: {condensed pytest failure output, max 500 tokens}
 ```
@@ -185,7 +241,7 @@ Handle fix-attempt result:
 
 | Verdict | Action |
 |---------|--------|
-| `FIXED` | Re-verify with pytest (all tests must pass) and ruff (lint clean). If pass → proceed to Step 7. If still failing → `end_work(outcome="reject")`: diagnose root cause and route to `todo` (test assumptions wrong) or `backlog` (AC/architecture wrong). Include Required Follow-up table. |
+| `FIXED` | Re-verify via Quality-Runner (all tests must pass, lint clean). If pass → proceed to Step 7. If still failing → `end_work(outcome="reject")`: diagnose root cause and route to `todo` (test assumptions wrong) or `backlog` (AC/architecture wrong). Include Required Follow-up table. |
 | `FAILED` | Diagnose root cause: test assumptions wrong → `end_work(outcome="reject", move_to="todo")`; AC/architecture wrong → `end_work(outcome="reject", move_to="backlog")`. Include Required Follow-up table. Append Channel B notes with same-context retry (Step 6.2) diagnosis and fix-attempt diagnosis — record each source separately. |
 
 ## Step 7 — Commit & Advance
@@ -195,7 +251,7 @@ Include builder notes in your `end_work` note.
 **Commit your deliverables** (see `r-pipeline-protocol` → Who Commits What):
 
 ```shell
-git add workspace/{package}/src/{namespace}/{module}.py && git commit -m "feat: implement {feature} (#{id}, builder)"
+git add serve/{package}/src/{namespace}/{module}.py && git commit -m "feat: implement {feature} (#{id}, builder)"
 ```
 
 Stage only files you created or modified. Verify with `git diff --cached --name-only` if uncertain.
@@ -224,7 +280,7 @@ Append to task body before advancing:
 - [ ] No `TestFromAC_*` classes modified
 - [ ] No tests were added or modified by the builder
 - [ ] Implementation is the minimum code to pass all tests
-- [ ] `pytest` all pass, `ruff` clean
+- [ ] Quality-Runner reports `failed: []` and `clean: true`
 - [ ] Coverage 90% or higher on touched modules
 - [ ] No unrelated files edited
 - [ ] Diff is surgical — smallest change that achieves the AC

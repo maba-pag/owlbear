@@ -114,13 +114,21 @@
       "strokeStyle": "solid",
       "roughness": 0,
       "opacity": 100,
-      "roundness": { "type": 3 },
+      "roundness": {
+        "type": 3
+      },
       "seed": 2002001,
       "versionNonce": 2002002,
       "groupIds": [],
       "boundElements": [
-        { "id": "s2_research_text", "type": "text" },
-        { "id": "s2_arr1", "type": "arrow" }
+        {
+          "id": "s2_research_text",
+          "type": "text"
+        },
+        {
+          "id": "s2_arr1",
+          "type": "arrow"
+        }
       ],
       "isDeleted": false
     },
@@ -169,14 +177,25 @@
       "strokeStyle": "solid",
       "roughness": 0,
       "opacity": 100,
-      "roundness": { "type": 3 },
+      "roundness": {
+        "type": 3
+      },
       "seed": 2003001,
       "versionNonce": 2003002,
       "groupIds": [],
       "boundElements": [
-        { "id": "s2_backlog_text", "type": "text" },
-        { "id": "s2_arr1", "type": "arrow" },
-        { "id": "s2_arr2", "type": "arrow" }
+        {
+          "id": "s2_backlog_text",
+          "type": "text"
+        },
+        {
+          "id": "s2_arr1",
+          "type": "arrow"
+        },
+        {
+          "id": "s2_arr2",
+          "type": "arrow"
+        }
       ],
       "isDeleted": false
     },
@@ -225,14 +244,25 @@
       "strokeStyle": "solid",
       "roughness": 0,
       "opacity": 100,
-      "roundness": { "type": 3 },
+      "roundness": {
+        "type": 3
+      },
       "seed": 2004001,
       "versionNonce": 2004002,
       "groupIds": [],
       "boundElements": [
-        { "id": "s2_todo_text", "type": "text" },
-        { "id": "s2_arr2", "type": "arrow" },
-        { "id": "s2_arr3", "type": "arrow" }
+        {
+          "id": "s2_todo_text",
+          "type": "text"
+        },
+        {
+          "id": "s2_arr2",
+          "type": "arrow"
+        },
+        {
+          "id": "s2_arr3",
+          "type": "arrow"
+        }
       ],
       "isDeleted": false
     },
@@ -281,14 +311,25 @@
       "strokeStyle": "solid",
       "roughness": 0,
       "opacity": 100,
-      "roundness": { "type": 3 },
+      "roundness": {
+        "type": 3
+      },
       "seed": 2005001,
       "versionNonce": 2005002,
       "groupIds": [],
       "boundElements": [
-        { "id": "s2_inprogress_text", "type": "text" },
-        { "id": "s2_arr3", "type": "arrow" },
-        { "id": "s2_arr4", "type": "arrow" }
+        {
+          "id": "s2_inprogress_text",
+          "type": "text"
+        },
+        {
+          "id": "s2_arr3",
+          "type": "arrow"
+        },
+        {
+          "id": "s2_arr4",
+          "type": "arrow"
+        }
       ],
       "isDeleted": false
     },
@@ -337,14 +378,25 @@
       "strokeStyle": "solid",
       "roughness": 0,
       "opacity": 100,
-      "roundness": { "type": 3 },
+      "roundness": {
+        "type": 3
+      },
       "seed": 2006001,
       "versionNonce": 2006002,
       "groupIds": [],
       "boundElements": [
-        { "id": "s2_review_text", "type": "text" },
-        { "id": "s2_arr4", "type": "arrow" },
-        { "id": "s2_arr5", "type": "arrow" }
+        {
+          "id": "s2_review_text",
+          "type": "text"
+        },
+        {
+          "id": "s2_arr4",
+          "type": "arrow"
+        },
+        {
+          "id": "s2_arr5",
+          "type": "arrow"
+        }
       ],
       "isDeleted": false
     },
@@ -393,14 +445,25 @@
       "strokeStyle": "solid",
       "roughness": 0,
       "opacity": 100,
-      "roundness": { "type": 3 },
+      "roundness": {
+        "type": 3
+      },
       "seed": 2007001,
       "versionNonce": 2007002,
       "groupIds": [],
       "boundElements": [
-        { "id": "s2_docs_text", "type": "text" },
-        { "id": "s2_arr5", "type": "arrow" },
-        { "id": "s2_arr6", "type": "arrow" }
+        {
+          "id": "s2_docs_text",
+          "type": "text"
+        },
+        {
+          "id": "s2_arr5",
+          "type": "arrow"
+        },
+        {
+          "id": "s2_arr6",
+          "type": "arrow"
+        }
       ],
       "isDeleted": false
     },
@@ -449,13 +512,21 @@
       "strokeStyle": "solid",
       "roughness": 0,
       "opacity": 100,
-      "roundness": { "type": 3 },
+      "roundness": {
+        "type": 3
+      },
       "seed": 2008001,
       "versionNonce": 2008002,
       "groupIds": [],
       "boundElements": [
-        { "id": "s2_done_text", "type": "text" },
-        { "id": "s2_arr6", "type": "arrow" }
+        {
+          "id": "s2_done_text",
+          "type": "text"
+        },
+        {
+          "id": "s2_arr6",
+          "type": "arrow"
+        }
       ],
       "isDeleted": false
     },
@@ -509,10 +580,27 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "points": [[0, 0], [20, 0]],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          20,
+          0
+        ]
+      ],
       "lastCommittedPoint": null,
-      "startBinding": { "elementId": "s2_research_rect", "focus": 0, "gap": 4 },
-      "endBinding": { "elementId": "s2_backlog_rect", "focus": 0, "gap": 4 },
+      "startBinding": {
+        "elementId": "s2_research_rect",
+        "focus": 0,
+        "gap": 4
+      },
+      "endBinding": {
+        "elementId": "s2_backlog_rect",
+        "focus": 0,
+        "gap": 4
+      },
       "startArrowhead": null,
       "endArrowhead": "arrow"
     },
@@ -536,10 +624,27 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "points": [[0, 0], [20, 0]],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          20,
+          0
+        ]
+      ],
       "lastCommittedPoint": null,
-      "startBinding": { "elementId": "s2_backlog_rect", "focus": 0, "gap": 4 },
-      "endBinding": { "elementId": "s2_todo_rect", "focus": 0, "gap": 4 },
+      "startBinding": {
+        "elementId": "s2_backlog_rect",
+        "focus": 0,
+        "gap": 4
+      },
+      "endBinding": {
+        "elementId": "s2_todo_rect",
+        "focus": 0,
+        "gap": 4
+      },
       "startArrowhead": null,
       "endArrowhead": "arrow"
     },
@@ -563,10 +668,27 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "points": [[0, 0], [20, 0]],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          20,
+          0
+        ]
+      ],
       "lastCommittedPoint": null,
-      "startBinding": { "elementId": "s2_todo_rect", "focus": 0, "gap": 4 },
-      "endBinding": { "elementId": "s2_inprogress_rect", "focus": 0, "gap": 4 },
+      "startBinding": {
+        "elementId": "s2_todo_rect",
+        "focus": 0,
+        "gap": 4
+      },
+      "endBinding": {
+        "elementId": "s2_inprogress_rect",
+        "focus": 0,
+        "gap": 4
+      },
       "startArrowhead": null,
       "endArrowhead": "arrow"
     },
@@ -590,10 +712,27 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "points": [[0, 0], [20, 0]],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          20,
+          0
+        ]
+      ],
       "lastCommittedPoint": null,
-      "startBinding": { "elementId": "s2_inprogress_rect", "focus": 0, "gap": 4 },
-      "endBinding": { "elementId": "s2_review_rect", "focus": 0, "gap": 4 },
+      "startBinding": {
+        "elementId": "s2_inprogress_rect",
+        "focus": 0,
+        "gap": 4
+      },
+      "endBinding": {
+        "elementId": "s2_review_rect",
+        "focus": 0,
+        "gap": 4
+      },
       "startArrowhead": null,
       "endArrowhead": "arrow"
     },
@@ -617,10 +756,27 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "points": [[0, 0], [20, 0]],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          20,
+          0
+        ]
+      ],
       "lastCommittedPoint": null,
-      "startBinding": { "elementId": "s2_review_rect", "focus": 0, "gap": 4 },
-      "endBinding": { "elementId": "s2_docs_rect", "focus": 0, "gap": 4 },
+      "startBinding": {
+        "elementId": "s2_review_rect",
+        "focus": 0,
+        "gap": 4
+      },
+      "endBinding": {
+        "elementId": "s2_docs_rect",
+        "focus": 0,
+        "gap": 4
+      },
       "startArrowhead": null,
       "endArrowhead": "arrow"
     },
@@ -644,10 +800,27 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "points": [[0, 0], [20, 0]],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          20,
+          0
+        ]
+      ],
       "lastCommittedPoint": null,
-      "startBinding": { "elementId": "s2_docs_rect", "focus": 0, "gap": 4 },
-      "endBinding": { "elementId": "s2_done_rect", "focus": 0, "gap": 4 },
+      "startBinding": {
+        "elementId": "s2_docs_rect",
+        "focus": 0,
+        "gap": 4
+      },
+      "endBinding": {
+        "elementId": "s2_done_rect",
+        "focus": 0,
+        "gap": 4
+      },
       "startArrowhead": null,
       "endArrowhead": "arrow"
     },
@@ -671,7 +844,10 @@
       "versionNonce": 3001002,
       "groupIds": [],
       "boundElements": [
-        { "id": "s5_sync_arrow", "type": "arrow" }
+        {
+          "id": "s5_sync_arrow",
+          "type": "arrow"
+        }
       ],
       "isDeleted": false
     },
@@ -720,12 +896,17 @@
       "strokeStyle": "solid",
       "roughness": 0,
       "opacity": 100,
-      "roundness": { "type": 3 },
+      "roundness": {
+        "type": 3
+      },
       "seed": 3002001,
       "versionNonce": 3002002,
       "groupIds": [],
       "boundElements": [
-        { "id": "s3_serve_text", "type": "text" }
+        {
+          "id": "s3_serve_text",
+          "type": "text"
+        }
       ],
       "isDeleted": false
     },
@@ -774,12 +955,17 @@
       "strokeStyle": "solid",
       "roughness": 0,
       "opacity": 100,
-      "roundness": { "type": 3 },
+      "roundness": {
+        "type": 3
+      },
       "seed": 3003001,
       "versionNonce": 3003002,
       "groupIds": [],
       "boundElements": [
-        { "id": "s3_share_text", "type": "text" }
+        {
+          "id": "s3_share_text",
+          "type": "text"
+        }
       ],
       "isDeleted": false
     },
@@ -828,12 +1014,17 @@
       "strokeStyle": "solid",
       "roughness": 0,
       "opacity": 100,
-      "roundness": { "type": 3 },
+      "roundness": {
+        "type": 3
+      },
       "seed": 3004001,
       "versionNonce": 3004002,
       "groupIds": [],
       "boundElements": [
-        { "id": "s3_setup_text", "type": "text" }
+        {
+          "id": "s3_setup_text",
+          "type": "text"
+        }
       ],
       "isDeleted": false
     },
@@ -882,12 +1073,17 @@
       "strokeStyle": "solid",
       "roughness": 0,
       "opacity": 100,
-      "roundness": { "type": 3 },
+      "roundness": {
+        "type": 3
+      },
       "seed": 3005001,
       "versionNonce": 3005002,
       "groupIds": [],
       "boundElements": [
-        { "id": "s3_owlbear_text", "type": "text" }
+        {
+          "id": "s3_owlbear_text",
+          "type": "text"
+        }
       ],
       "isDeleted": false
     },
@@ -936,12 +1132,17 @@
       "strokeStyle": "solid",
       "roughness": 0,
       "opacity": 100,
-      "roundness": { "type": 3 },
+      "roundness": {
+        "type": 3
+      },
       "seed": 3006001,
       "versionNonce": 3006002,
       "groupIds": [],
       "boundElements": [
-        { "id": "s3_store_text", "type": "text" }
+        {
+          "id": "s3_store_text",
+          "type": "text"
+        }
       ],
       "isDeleted": false
     },
@@ -990,12 +1191,17 @@
       "strokeStyle": "solid",
       "roughness": 0,
       "opacity": 100,
-      "roundness": { "type": 3 },
+      "roundness": {
+        "type": 3
+      },
       "seed": 3007001,
       "versionNonce": 3007002,
       "groupIds": [],
       "boundElements": [
-        { "id": "s3_tests_text", "type": "text" }
+        {
+          "id": "s3_tests_text",
+          "type": "text"
+        }
       ],
       "isDeleted": false
     },
@@ -1074,12 +1280,17 @@
       "strokeStyle": "solid",
       "roughness": 0,
       "opacity": 100,
-      "roundness": { "type": 3 },
+      "roundness": {
+        "type": 3
+      },
       "seed": 4002001,
       "versionNonce": 4002002,
       "groupIds": [],
       "boundElements": [
-        { "id": "s4_mcp_kanban_text", "type": "text" }
+        {
+          "id": "s4_mcp_kanban_text",
+          "type": "text"
+        }
       ],
       "isDeleted": false
     },
@@ -1128,12 +1339,17 @@
       "strokeStyle": "solid",
       "roughness": 0,
       "opacity": 100,
-      "roundness": { "type": 3 },
+      "roundness": {
+        "type": 3
+      },
       "seed": 4003001,
       "versionNonce": 4003002,
       "groupIds": [],
       "boundElements": [
-        { "id": "s4_mcp_knowledge_text", "type": "text" }
+        {
+          "id": "s4_mcp_knowledge_text",
+          "type": "text"
+        }
       ],
       "isDeleted": false
     },
@@ -1182,12 +1398,17 @@
       "strokeStyle": "solid",
       "roughness": 0,
       "opacity": 100,
-      "roundness": { "type": 3 },
+      "roundness": {
+        "type": 3
+      },
       "seed": 4004001,
       "versionNonce": 4004002,
       "groupIds": [],
       "boundElements": [
-        { "id": "s4_mcp_memory_text", "type": "text" }
+        {
+          "id": "s4_mcp_memory_text",
+          "type": "text"
+        }
       ],
       "isDeleted": false
     },
@@ -1236,12 +1457,17 @@
       "strokeStyle": "solid",
       "roughness": 0,
       "opacity": 100,
-      "roundness": { "type": 3 },
+      "roundness": {
+        "type": 3
+      },
       "seed": 4005001,
       "versionNonce": 4005002,
       "groupIds": [],
       "boundElements": [
-        { "id": "s4_mcp_browser_text", "type": "text" }
+        {
+          "id": "s4_mcp_browser_text",
+          "type": "text"
+        }
       ],
       "isDeleted": false
     },
@@ -1320,12 +1546,17 @@
       "strokeStyle": "solid",
       "roughness": 0,
       "opacity": 100,
-      "roundness": { "type": 3 },
+      "roundness": {
+        "type": 3
+      },
       "seed": 4007001,
       "versionNonce": 4007002,
       "groupIds": [],
       "boundElements": [
-        { "id": "s4_agents_text", "type": "text" }
+        {
+          "id": "s4_agents_text",
+          "type": "text"
+        }
       ],
       "isDeleted": false
     },
@@ -1374,12 +1605,17 @@
       "strokeStyle": "solid",
       "roughness": 0,
       "opacity": 100,
-      "roundness": { "type": 3 },
+      "roundness": {
+        "type": 3
+      },
       "seed": 4008001,
       "versionNonce": 4008002,
       "groupIds": [],
       "boundElements": [
-        { "id": "s4_skills_text", "type": "text" }
+        {
+          "id": "s4_skills_text",
+          "type": "text"
+        }
       ],
       "isDeleted": false
     },
@@ -1493,7 +1729,10 @@
       "versionNonce": 5001002,
       "groupIds": [],
       "boundElements": [
-        { "id": "s5_sync_arrow", "type": "arrow" }
+        {
+          "id": "s5_sync_arrow",
+          "type": "arrow"
+        }
       ],
       "isDeleted": false
     },
@@ -1542,12 +1781,17 @@
       "strokeStyle": "solid",
       "roughness": 0,
       "opacity": 100,
-      "roundness": { "type": 3 },
+      "roundness": {
+        "type": 3
+      },
       "seed": 5002001,
       "versionNonce": 5002002,
       "groupIds": [],
       "boundElements": [
-        { "id": "s5_share_main_text", "type": "text" }
+        {
+          "id": "s5_share_main_text",
+          "type": "text"
+        }
       ],
       "isDeleted": false
     },
@@ -1596,12 +1840,17 @@
       "strokeStyle": "solid",
       "roughness": 0,
       "opacity": 100,
-      "roundness": { "type": 3 },
+      "roundness": {
+        "type": 3
+      },
       "seed": 5003001,
       "versionNonce": 5003002,
       "groupIds": [],
       "boundElements": [
-        { "id": "s5_serve_main_text", "type": "text" }
+        {
+          "id": "s5_serve_main_text",
+          "type": "text"
+        }
       ],
       "isDeleted": false
     },
@@ -1650,12 +1899,17 @@
       "strokeStyle": "solid",
       "roughness": 0,
       "opacity": 100,
-      "roundness": { "type": 3 },
+      "roundness": {
+        "type": 3
+      },
       "seed": 5004001,
       "versionNonce": 5004002,
       "groupIds": [],
       "boundElements": [
-        { "id": "s5_seed_main_text", "type": "text" }
+        {
+          "id": "s5_seed_main_text",
+          "type": "text"
+        }
       ],
       "isDeleted": false
     },
@@ -1704,12 +1958,17 @@
       "strokeStyle": "solid",
       "roughness": 0,
       "opacity": 100,
-      "roundness": { "type": 3 },
+      "roundness": {
+        "type": 3
+      },
       "seed": 5005001,
       "versionNonce": 5005002,
       "groupIds": [],
       "boundElements": [
-        { "id": "s5_setup_main_text", "type": "text" }
+        {
+          "id": "s5_setup_main_text",
+          "type": "text"
+        }
       ],
       "isDeleted": false
     },
@@ -1793,10 +2052,27 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "points": [[0, 0], [60, 0]],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          60,
+          0
+        ]
+      ],
       "lastCommittedPoint": null,
-      "startBinding": { "elementId": "s3_dev_box", "focus": 0, "gap": 4 },
-      "endBinding": { "elementId": "s5_consumer_box", "focus": 0, "gap": 4 },
+      "startBinding": {
+        "elementId": "s3_dev_box",
+        "focus": 0,
+        "gap": 4
+      },
+      "endBinding": {
+        "elementId": "s5_consumer_box",
+        "focus": 0,
+        "gap": 4
+      },
       "startArrowhead": null,
       "endArrowhead": "arrow"
     },
@@ -1852,8 +2128,8 @@
       "isDeleted": false,
       "fontSize": 14,
       "fontFamily": 1,
-      "text": "Last verified: 2026-05-05 (f7592274)",
-      "originalText": "Last verified: 2026-05-05 (f7592274)",
+      "text": "Last verified: 2026-05-11 (66cae7f5)",
+      "originalText": "Last verified: 2026-05-11 (66cae7f5)",
       "textAlign": "left",
       "verticalAlign": "top",
       "lineHeight": 1.25,

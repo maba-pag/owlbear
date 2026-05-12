@@ -76,7 +76,9 @@ class TestFromAC_QdrantVectorStore:
         assert len(result) == DENSE_DIM
         assert all(isinstance(v, float) for v in result)
 
-    def test_store_embedding_hybrid_and_retrieve_dense(self, store: QdrantVectorStore) -> None:
+    def test_store_embedding_hybrid_and_retrieve_dense(
+        self, store: QdrantVectorStore
+    ) -> None:
         """store_embedding with HybridEmbedding; get_embedding retrieves the dense component."""
         h = _hybrid()
         store.store_embedding("ent1", h, "entity")
@@ -84,7 +86,9 @@ class TestFromAC_QdrantVectorStore:
         assert result is not None
         assert len(result) == DENSE_DIM
 
-    def test_search_similar_returns_top_k_sorted_by_score(self, store: QdrantVectorStore) -> None:
+    def test_search_similar_returns_top_k_sorted_by_score(
+        self, store: QdrantVectorStore
+    ) -> None:
         """search_similar returns ≤ top_k results; results are sorted descending by score."""
         for i in range(5):
             store.store_embedding(f"doc{i}", _dense(0.1 * (i + 1)), "document")
@@ -102,18 +106,24 @@ class TestFromAC_QdrantVectorStore:
         assert id_ == "my-doc"
         assert isinstance(score, float)
 
-    def test_delete_embedding_existing_returns_true(self, store: QdrantVectorStore) -> None:
+    def test_delete_embedding_existing_returns_true(
+        self, store: QdrantVectorStore
+    ) -> None:
         """delete_embedding returns True for an ID that was successfully deleted."""
         store.store_embedding("doc1", _dense(), "document")
         assert store.delete_embedding("doc1") is True
 
     # ----------------------------------------------------------------- Edge
 
-    def test_get_embedding_missing_id_returns_none(self, store: QdrantVectorStore) -> None:
+    def test_get_embedding_missing_id_returns_none(
+        self, store: QdrantVectorStore
+    ) -> None:
         """get_embedding returns None when the ID has never been stored."""
         assert store.get_embedding("nonexistent") is None
 
-    def test_delete_embedding_missing_id_returns_false(self, store: QdrantVectorStore) -> None:
+    def test_delete_embedding_missing_id_returns_false(
+        self, store: QdrantVectorStore
+    ) -> None:
         """delete_embedding returns False when the ID does not exist."""
         assert store.delete_embedding("ghost") is False
 
@@ -137,7 +147,9 @@ class TestFromAC_QdrantVectorStore:
         results = store.search_similar(v2, top_k=10)
         assert [id_ for id_, _ in results].count("doc1") == 1
 
-    def test_search_similar_embedding_type_filter(self, store: QdrantVectorStore) -> None:
+    def test_search_similar_embedding_type_filter(
+        self, store: QdrantVectorStore
+    ) -> None:
         """search_similar with embedding_type='document' excludes entity embeddings."""
         store.store_embedding("doc1", _dense(), "document")
         store.store_embedding("ent1", _dense(), "entity")
@@ -159,7 +171,10 @@ class TestFromAC_QdrantVectorStore:
 
     def test_importerror_when_qdrant_client_missing(self) -> None:
         """QdrantVectorStore raises ImportError with actionable message when qdrant-client absent."""
-        with patch("owlbear_knowledge.qdrant.QdrantClient", None), pytest.raises(ImportError, match="qdrant-client"):
+        with (
+            patch("owlbear_knowledge.qdrant.QdrantClient", None),
+            pytest.raises(ImportError, match="qdrant-client"),
+        ):
             QdrantVectorStore()
 
     # --------------------------------------------------------------- Boundary
@@ -169,12 +184,16 @@ class TestFromAC_QdrantVectorStore:
         fresh_store = QdrantVectorStore(location=":memory:")
         assert fresh_store._initialized is False  # noqa: SLF001
 
-    def test_ensure_collection_initialized_after_store_embedding(self, store: QdrantVectorStore) -> None:
+    def test_ensure_collection_initialized_after_store_embedding(
+        self, store: QdrantVectorStore
+    ) -> None:
         """_initialized becomes True after the first store_embedding call."""
         store.store_embedding("doc1", _dense(), "document")
         assert store._initialized is True  # noqa: SLF001
 
-    def test_ensure_collection_idempotent_multiple_ops(self, store: QdrantVectorStore) -> None:
+    def test_ensure_collection_idempotent_multiple_ops(
+        self, store: QdrantVectorStore
+    ) -> None:
         """Repeated store_embedding calls do not fail due to collection already existing."""
         for i in range(4):
             store.store_embedding(f"doc{i}", _dense(), "document")  # must not raise

@@ -23,7 +23,7 @@ applyTo: "**"
 | Language | Python 3.12+ | `uv` package manager, never bare `pip` |
 | Agents | VS Code / Copilot custom agents | `.agent.md` files, subagent delegation |
 | MCP servers | 4 (3 custom stdio + 1 GitHub remote) | mcp-kanban, mcp-knowledge, mcp-memory, github |
-| Task board | kanban-md v0.33 (via MCP) | `.owlbear/kanban/config.yml`, `.owlbear/kanban/tasks/*.md` |
+| Task board | kanban-md v0.33 (via MCP) | Fixed product topology in code; storage under `.owlbear/kanban/tasks/*.md`, `.owlbear/kanban/archive/*.md`, `.owlbear/kanban/decisions/` |
 | Safety | Git safety net + audit log | Review/revert as operational safety |
 | Distribution | Clone = install | `setup/init.py` wires workspace config |
 
@@ -46,7 +46,7 @@ For file placement rules, commit format, priorities, and tags, see `r-project-st
 
 Do NOT store in user memory: architecture decisions (`.owlbear/decisions/`), research findings (`.owlbear/research/`), domain knowledge (project KB via MCP), code snippets, or task-specific context.
 
-Clear boundary: `/memories/` = user-centric tool patterns and process pitfalls; `owlbearMemory` = agent institutional knowledge. See `r-pipeline-protocol` → Knowledge Pre-flight and Post-task Reflection.
+Clear boundary: `/memories/` = user-centric tool patterns and process pitfalls; `ob-memory` = agent institutional knowledge. See `r-pipeline-protocol` → Knowledge Pre-flight and Post-task Reflection.
 
 ## 4. Operational Fundamentals
 

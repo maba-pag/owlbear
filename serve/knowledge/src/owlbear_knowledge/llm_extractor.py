@@ -91,7 +91,9 @@ class LLMExtractor:
     ) -> None:
         self._model = model
         self._system_prompt = system_prompt
-        self._client = AsyncOpenAI(api_key=api_key, base_url=base_url, default_headers=default_headers)
+        self._client = AsyncOpenAI(
+            api_key=api_key, base_url=base_url, default_headers=default_headers
+        )
         self._requests_per_minute = requests_per_minute
         self._rpm_window_start: float = 0.0
         self._rpm_count: int = 0

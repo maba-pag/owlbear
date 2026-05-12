@@ -4,7 +4,7 @@ description: "Early challenger — reframes the problem through analogous domain
 argument-hint: "Outsider lens: {problem and outcomes}"
 user-invocable: false
 disable-model-invocation: true
-tools: [edit/createDirectory, edit/createFile, edit/editFiles, read/readFile, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, vscode/memory]
+tools: [ob-memory/save_memory, ob-memory/recall_memory, vscode/toolSearch, edit/createDirectory, edit/createFile, edit/editFiles, read/readFile, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages]
 agents: []
 hooks:
   PreToolUse:
@@ -31,7 +31,6 @@ You are conditional by design. If the framing is already broad and grounded, say
 - **Keep output bounded.** Return only the strongest analogies, reframes, or audience corrections that materially change the framing.
 - **Do not run the late-domain Critic loop by default.** Your output is a compact outsider lens, not a long adversarial exchange.
 - **Write only `stances/outsider.md`.** Do not write any other file unless a later revision explicitly adds a debate log requirement.
-- **No kanban commands.** You are an ideation subagent only.
 
 </critical_rules>
 

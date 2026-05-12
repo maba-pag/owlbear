@@ -124,6 +124,8 @@ On failure: raises `ToolError` (MCP `isError: true`).
 
 Counterpart to `start_work`. Appends a timestamped note, resolves the task based on `outcome`, and releases the claim.
 
+`done` is the pipeline's terminal status, not the archive. In the normal pipeline, the doc-writer advances to `done`; the auditor claims that task and `end_work(outcome="success")` archives it because `done` is the last configured status. For direct user-directed cleanup outside the pipeline, do not report a task as closed while it remains in `done`; either leave it intentionally for auditor dispatch or archive it explicitly before calling the work complete.
+
 Required outcomes to use in agent workflows:
 
 | Outcome | Behaviour |

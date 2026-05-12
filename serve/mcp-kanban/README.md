@@ -16,7 +16,7 @@ Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json
 
 ### Tools
 
-The server exposes 9 tools:
+The server exposes 10 tools:
 
 | Tool | Signature |
 |------|-----------|
@@ -29,6 +29,15 @@ The server exposes 9 tools:
 | `start_work` | `start_work(id: str \| int)` |
 | `end_work` | `end_work(id: str \| int, outcome: str, move_to: str \| None = None, note: str \| None = None, archival_reason: str \| None = None, archival_refs: list[int] \| None = None, block_reason: str \| None = None)` |
 | `create_dr` | `create_dr(task_id: str, agent: str, request_type: str, body: str)` |
+| `resolve_drs` | `resolve_drs()` |
+
+### Lifecycle and dispatch semantics
+
+- `pick_tasks` is read-only. It computes dispatch waves from task state and never mutates task files.
+- `start_work` delegates to engine claim logic. If a rival claim is still live, the call fails; if the rival claim is expired, the claim is reclaimed and the task is claimed for the caller.
+- `create_dr` creates decision/action request files linked to a task.
+- `resolve_drs` processes decision request resolutions from the decisions inbox.
+- Cockpit maintenance triggers cleanup via its `POST /tasks/cleanup` route, which calls engine cleanup and releases expired claims plus archives done tasks.
 
 ## Data Projections and Envelopes
 
@@ -56,6 +65,28 @@ Returned by `pick_tasks` in `waves: list[Wave]`.
 ### guidance Field
 
 Responses include `guidance: list[str]` for operational hints (for example: DR-required block guidance and forward-skip warnings). Treat as advisory metadata.
+
+### Error Envelopes
+
+All tool errors are returned as JSON objects with two fields:
+
+```json
+{"code": "ERR_NOT_FOUND", "message": "Task '99' not found"}
+```
+
+| Code | Trigger |
+|------|---------|
+| `ERR_NOT_FOUND` | Task file not found (FileNotFoundError) |
+| `ERR_PARAM_VALIDATION` | Invalid parameter value or Pydantic validation failure |
+| `ERR_INVALID_ID` | Malformed or non-positive task ID |
+| `ERR_STALE_WRITE` | Concurrent write conflict detected by the engine |
+
+Internal file paths are never included in error messages. `move_task` and `end_work` share a single validation path for archival constraints; errors from either tool use the same codes above.
+
+## list_tasks Filter Semantics
+
+- `ids=[]` (explicit empty list) returns an empty task list with no `missing_ids` entry. `ids=None` (omitted) returns all tasks matching other filters.
+- `archival_reason` without `status` automatically defaults to searching archived tasks.
 
 ## Archival Fields
 

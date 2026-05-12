@@ -6,7 +6,7 @@ user-invocable: false
 
 # Quality-Runner Subagent
 
-Consumer reference for invoking the `quality-runner` utility subagent. Quality-Runner runs pytest, ruff, and coverage (Python) or vitest, eslint, and coverage (TypeScript/JavaScript), returning a structured report. It is a mechanical utility agent — it does not edit files, interact with kanban, or make judgments.
+Consumer reference for invoking the `quality-runner` utility subagent. Quality-Runner runs pytest, ruff, and coverage (Python) or frontend quality commands from the nearest package root, returning a structured report. The default frontend path is vitest + eslint; build, CSS/HTML lint, and Playwright run only when AC, Architecture Review notes, or caller instructions explicitly require them. It is a mechanical utility agent — it does not edit files, interact with kanban, or make judgments.
 
 ## Consumer Invocation Pattern
 
@@ -26,8 +26,17 @@ Scoped (TypeScript/JavaScript):
 ```
 agentName: quality-runner
 prompt: |
-  Run: mode=scoped, task_id=1230, test_paths=["frontend/src/__tests__/MyComponent.test.tsx"], lint_paths=["frontend/src/components/MyComponent.tsx"]
-# adjust test_paths and lint_paths for your project layout
+  Run: mode=scoped, task_id=1230, test_paths=["serve/cockpit/web/src/__tests__/MyComponent.test.tsx"], lint_paths=["serve/cockpit/web/src/components/MyComponent.tsx"]
+# for other projects, substitute the equivalent frontend package paths
+```
+
+Scoped with explicit frontend proof:
+
+```
+agentName: quality-runner
+prompt: |
+  Run: mode=scoped, task_id=1392, test_paths=["serve/cockpit/web/e2e/responsive-layout-1391.spec.ts"], lint_paths=["serve/cockpit/web/src/Shell.css"]
+  Also run the Cockpit frontend build, Playwright E2E, and CSS lint because the AC names viewport/layout proof and CSS validity.
 ```
 
 Full suite:
@@ -41,7 +50,7 @@ prompt: |
 Quality-runner selects the toolchain and execution cwd by resolving the nearest package manifest from each test path:
 
 1. Walk up from the test file's directory toward the workspace root.
-2. If you encounter `package.json` containing a `test` script or vitest dependency, that directory is the **frontend cwd** — use vitest + eslint (see `h-vitest-and-linting`).
+2. If you encounter `package.json` containing a `test` script or vitest dependency, that directory is the **frontend cwd**. Use vitest + eslint by default; use build, CSS/HTML lint, or Playwright only when explicitly required (see `h-vitest-and-linting`).
 3. Otherwise, use pytest + ruff from the workspace root (see `h-pytest-and-linting`).
 
 > Example (OwlBear-dev): `serve/cockpit/web/src/__tests__/Foo.test.tsx` → walk up → `serve/cockpit/web/package.json` found → cwd is `serve/cockpit/web/`, toolchain is vitest.
@@ -66,14 +75,27 @@ agents: [quality-runner]
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `mode` | `scoped` \| `full` | Yes | `scoped` runs only `test_paths`; `full` runs `tests/ src/ -m "not api"` |
+| `mode` | `scoped` \| `full` | Yes | `scoped` runs only `test_paths`; `full` runs the project full-suite default (`tests/ serve/ -m "not api"` in OwlBear) |
 | `test_paths` | string[] | If `mode=scoped` | Paths to test files, e.g. `["tests/test_foo.py", "tests/test_bar.py"]` |
-| `task_id` | string | Yes | Kanban task ID — isolates file-capture fallback output in `.owlbear/scratch/` |
+| `task_id` | string | Yes | Kanban task ID, or a stable run label for suite-scoped workflows — isolates file-capture fallback output in `.owlbear/scratch/` |
 | `coverage_modules` | string[] | No | Module names for focused coverage display; bare `--cov` always runs against all packages |
 | `lint_paths` | string[] | No | Paths to lint; defaults to your source package paths plus `tests/` (Python) or `src/` (frontend) if omitted |
 
-**Frontend detection:** When any `test_paths` entry resolves to a directory containing `package.json` with vitest (via the manifest-walk above), switch to frontend mode (vitest + eslint). See `h-vitest-and-linting`.
+**Frontend detection:** When any `test_paths` entry resolves to a directory containing `package.json` with vitest (via the manifest-walk above), switch to frontend mode. Default to vitest + eslint; add build, CSS/HTML lint, or Playwright only when the caller explicitly asks or the task evidence requires it. See `h-vitest-and-linting`.
 > Example (OwlBear-dev): `serve/cockpit/web/src/__tests__/MyComponent.test.tsx` → cwd `serve/cockpit/web/`
+
+### Frontend Optional Proof Types
+
+Use these only when named by AC, Architecture Review, Test-Writer Notes, Builder/Reviewer request, or caller instructions:
+
+| Proof type | Cockpit command | When required |
+|------------|-----------------|---------------|
+| Build | `npm run build` | TypeScript/Vite/build-output proof, Playwright startup failures, or explicit build AC |
+| CSS lint | `npm run lint:css` | CSS files changed, stylelint proof requested, or CSS validity AC |
+| HTML lint | `npm run lint:html` | `index.html` changed or HTML validity AC |
+| Playwright | `npm run test:e2e` | E2E/browser geometry, viewport, focus-trap, or layout proof |
+
+Do not run optional frontend proof types merely because the project is frontend. Extra commands increase runtime and noise; the caller owns proof scope.
 
 ## Output Format
 
@@ -121,3 +143,13 @@ none
 | eslint | 0 | No violations |
 | eslint | 1 | Violations found |
 | eslint | 2 | Fatal/config error |
+| build | 0 | Build passed |
+| build | nonzero | Build failed |
+| stylelint | 0 | CSS lint clean |
+| stylelint | nonzero | CSS lint failed |
+| htmlhint | 0 | HTML lint clean |
+| htmlhint | nonzero | HTML lint failed |
+| playwright | 0 | E2E passed |
+| playwright | nonzero | E2E failed or webServer/build failed |
+
+When optional frontend commands run, include their exit codes in the `Exit Codes` section using the keys above. Report command failures under `Tests`, `Lint`, or `Errors` depending on which section best matches the command output; do not add a sixth output section.

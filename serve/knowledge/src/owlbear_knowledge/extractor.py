@@ -87,7 +87,9 @@ class EntityExtractor:
         if not text or not text.strip():
             return ExtractionResult()
         if self._extractor is None:
-            logger.debug("EntityExtractor.extract called — returning empty result (no-op)")
+            logger.debug(
+                "EntityExtractor.extract called — returning empty result (no-op)"
+            )
             return ExtractionResult()
         prompt = text
         if metadata:

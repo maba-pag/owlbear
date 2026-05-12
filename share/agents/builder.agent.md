@@ -6,7 +6,7 @@ user-invocable: false
 disable-model-invocation: true
 model: [GPT-5.3-Codex (copilot), Claude Sonnet 4.6 (copilot)]
 tools:
-  [ob-memory/save_memory, ob-memory/recall_memory, vscode/toolSearch, execute/executionSubagent, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, edit/rename, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, ob-kanban/edit_task, ob-kanban/end_work, ob-kanban/list_tasks, ob-kanban/show_task, ob-kanban/start_work]
+  [ob-memory/save_memory, ob-memory/recall_memory, vscode/toolSearch, execute/executionSubagent, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, edit/rename, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, ob-kanban/create_dr, ob-kanban/edit_task, ob-kanban/end_work, ob-kanban/list_tasks, ob-kanban/show_task, ob-kanban/start_work]
 agents: [fix-attempt, quality-runner, planner]
 hooks:
   SessionStart:
@@ -47,7 +47,7 @@ infeasible, you escalate — you don't silently reshape the contract.
 - **Read `r-pipeline-protocol`** for channel communication, claiming conventions, and commit rules.
 - **Never modify `TestFromAC_*` classes.** If interface assumptions are infeasible, return a REJECT verdict instead.
 - **Builder never writes tests.** Missing blocking edge-case coverage is rejected back to the test-writer with a precise note.
-- **Verify GREEN via `quality-runner` before advancing.** Never mark complete without quality-runner evidence.
+- **Verify GREEN via `quality-runner` before advancing.** Never mark implementation complete without quality-runner evidence. `Proof bundle: skip` pass-through tasks are the only exception; if `Proof bundle: existing` includes `Existing proof required: ...`, run that proof through `quality-runner`.
 - **Surgical changes only.** Do not edit files unrelated to the current task.
 
 </critical_rules>
@@ -57,9 +57,10 @@ infeasible, you escalate — you don't silently reshape the contract.
 | Trigger | From → To | Condition |
 |---------|-----------|-----------|
 | Done | in-progress → review | All tests pass, ruff clean, coverage ≥ 90% |
+| Pass-through | in-progress → review | No code changes needed and (`Proof bundle: skip` or `Proof bundle: existing` with required existing proof passed via quality-runner) |
 | Reject (test assumption) | in-progress → todo | TestFromAC assumes wrong interface, test-writer rewrites |
 | Reject (AC wrong) | in-progress → backlog | AC describes wrong interface, architect fixes AC |
-| Escalate | in-progress → in-progress | Gate structurally unreachable — create prereq task(s), `edit_task(add_dep=...)`, `end_work(outcome="fail")` (see §5 Escalation Routing in `r-pipeline-protocol`) |
+| Escalate | in-progress → in-progress | Gate structurally unreachable — create prereq task(s), `edit_task(id={id}, add_dep=[new_id])`, `end_work(id={id}, outcome="fail")` (see §5 Escalation Routing in `r-pipeline-protocol`) |
 
 </pipeline_position>
 
@@ -67,9 +68,8 @@ infeasible, you escalate — you don't silently reshape the contract.
 
 | Agent | When | Example |
 |-------|------|---------|
-| quality-runner | Run test suite and lint for GREEN verification | `quality-runner: mode=full, task_id=42` |
+| quality-runner | Run scoped tests, lint, and coverage for GREEN verification | `agentName: quality-runner / mode=scoped, task_id=42, test_paths=["tests/test_foo_42.py"], coverage_modules=["foo"], lint_paths=["serve/pkg/src/", "tests/test_foo_42.py"]` |
 | fix-attempt | Fresh-context retry when local fixes fail | `Fix: task_id=42 test_file=tests/test_foo.py source_files=src/foo.py` |
-| create_dr | User decision or action required — create/check DRs via `h-decision-requests` | `create_dr(task_id=42, mode="check-or-create", concern="retry strategy has UX implications")` |
 | planner | Create follow-up tasks through centralized planning gateway | `Plan and create: #42 — add follow-up at backlog titled "Tighten AC wording"` |
 
 </agents>

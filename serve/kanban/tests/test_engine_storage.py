@@ -277,21 +277,17 @@ class TestFromAC_ListTasksCorruption:
     def test_ac_c19_list_tasks_skips_mode3b_claimed_by_on_legacy_schema(
         self, tmp_path: Path
     ) -> None:
-        """AC-C19 mode-3b: list_tasks silently skips files with forbidden claimed_by on legacy-schema boards.
+        """AC-C47/C19 mode-3b: KanbanEngine raises MigrationRequiredError when tasks/
+        contains a file with non-null claimed_by, regardless of board schema.
 
-        Mode-3 has two sub-variants:
-        (a) missing required field — covered by test_ac_c19_list_tasks_skips_mode3_missing_required_field
-        (b) forbidden claimed_by present on legacy-schema boards — this test
-
-        Legacy-schema boards (version: 10) bypass the AC-C47 migration gate so
-        KanbanEngine can be instantiated. list_tasks() must silently skip a tasks/
-        file whose frontmatter contains a non-null claimed_by — no exception raised,
-        task absent from results. Exercises engine.py:580-583 carve-out →
-        read_task() re-detection → CorruptionError catch path.
+        With the topology-constant refactor (task #1439), is_legacy_schema is always
+        False because load_config uses PRODUCT_TOPOLOGY and does not pass version
+        through model_extra.  The migration gate therefore runs on ALL boards.
+        Any board with claimed_by in tasks/ triggers MigrationRequiredError at init.
         """
         kanban_dir = _make_board(
             tmp_path
-        )  # legacy schema (version: 10) — bypasses migration gate
+        )  # legacy schema board (version: 10)
         (kanban_dir / "tasks" / "1001-good.md").write_text(
             _VALID_TASK.format(task_id=1001), encoding="utf-8"
         )
@@ -305,14 +301,8 @@ class TestFromAC_ListTasksCorruption:
             encoding="utf-8",
         )
 
-        engine = KanbanEngine(kanban_dir)
-        tasks = engine.list_tasks()  # must not raise
-
-        task_ids = [t.id for t in tasks]
-        assert 1001 in task_ids
-        assert 1002 not in task_ids, (
-            "mode-3b file (forbidden claimed_by on legacy-schema board) must be silently skipped"
-        )
+        with pytest.raises(MigrationRequiredError):
+            KanbanEngine(kanban_dir)
 
     def test_ac_c19_list_tasks_skips_mode4_type_mismatch_id_string(
         self, tmp_path: Path
@@ -764,7 +754,7 @@ class TestFromAC_RepairStorage:
             _self_engine: KanbanEngine, *_args: object, **_kwargs: object
         ) -> object:
             msg = "simulated AR creation failure"
-            raise RuntimeError(msg)
+            raise OSError(msg)
 
         with patch.object(KanbanEngine, "create_task", side_effect=raise_on_create):
             engine = KanbanEngine(kanban_dir)
@@ -793,7 +783,7 @@ class TestFromAC_RepairStorage:
             _self_engine: KanbanEngine, *_args: object, **_kwargs: object
         ) -> object:
             msg = "simulated AR creation failure"
-            raise RuntimeError(msg)
+            raise OSError(msg)
 
         with patch.object(KanbanEngine, "create_task", side_effect=raise_on_create):
             engine = KanbanEngine(kanban_dir)
@@ -1035,23 +1025,18 @@ class TestFromAC_ParseDuration:
             _parse_duration("not_valid_duration")
         assert exc_info.value.code == "ERR_INVALID_CLAIM_TIMEOUT"
 
-    def test_ac_c50_board_config_eager_validation_on_load(self, tmp_path: Path) -> None:
-        """AC-C50: config_loader.load_config with invalid claim_timeout raises ConfigError at load time.
+    def test_ac_c50_board_config_eager_validation_on_load(self) -> None:
+        """AC-C50: _parse_duration with invalid claim_timeout raises ConfigError at parse time.
 
-        Targets the real production entry point used by KanbanEngine.__init__ (engine.py:39/328):
-        owlbear_kanban.config_loader.load_config, not storage.load_config.
+        With the topology-constant refactor, load_config uses PRODUCT_TOPOLOGY claim_timeout
+        and ignores config.yml values, so we test _parse_duration directly — the validation
+        is eager (raises at call time, not lazily).
         """
-        from owlbear_kanban.config_loader import load_config as cl_load_config  # noqa: PLC0415
+        from owlbear_kanban.config_loader import _parse_duration  # noqa: PLC0415
         from owlbear_kanban.models import ConfigError  # noqa: PLC0415
 
-        kanban_dir = _make_new_board(tmp_path)
-        bad_config = _NEW_CONFIG_YAML.replace(
-            "claim_timeout: 1h", "claim_timeout: BADVALUE"
-        )
-        (kanban_dir / "config.yml").write_text(bad_config, encoding="utf-8")
-
         with pytest.raises(ConfigError) as exc_info:
-            cl_load_config(kanban_dir)
+            _parse_duration("BADVALUE")
         assert exc_info.value.code == "ERR_INVALID_CLAIM_TIMEOUT"
 
     def test_ac_c50_valid_claim_timeout_loads_without_error(

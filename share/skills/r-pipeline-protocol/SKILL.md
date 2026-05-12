@@ -51,10 +51,10 @@ See `h-mcp-memory` for full tool reference.
 
 After claiming the task, check whether it was previously blocked by a decision or action request:
 
-1. Check the task body for `## Decision Resolved` or `## Action Completed` sections. If present, the user's chosen option and notes are binding constraints.
-2. If no summary in the body, call `create_dr(..., mode="query")` to check for existing DRs.
+1. Check the task body for a `## Decision Request` summary. If present, its `response` and source notes are binding constraints.
+2. If no summary is present, proceed normally; unresolved DR/AR files keep tasks blocked and are filtered out before dispatch.
 3. If user notes contradict the AC or narrow the approach, adjust accordingly. If infeasible, block for clarification.
-4. Never write to `.owlbear/decisions/` directly — always use `create_dr`/`resolve_decision` from `h-decision-requests`.
+4. Never write to `.owlbear/decisions/` directly — always use `create_dr` from `h-decision-requests` when a new decision or action request is required.
 
 ### Entry-Gate Agents
 
@@ -67,8 +67,14 @@ Researcher, architect, and planner must reject invalid task inputs immediately:
 
 ### Evidence Principles
 
-- Never trust self-reports. Verify deliverables yourself — run tests, read files, check the board.
+- Upstream evidence is valid input. Verify through independent checks only when cost-justified. The auditor serves as the pipeline-end integrity gate.
 - Cite specifics: file paths, line numbers, test names, command output. "It looks fine" is never acceptable.
+
+### Reviewer Contract (D2 trust-the-builder)
+
+- Reviewer follows a trust-the-builder evidence model by default.
+- Start from builder evidence (especially quality-runner output and scoped AC mapping) and verify completeness/consistency.
+- Escalate to independent reruns only when evidence is missing, contradictory, or otherwise cost-justified.
 
 ### Quality-Runner Mandate
 
@@ -80,14 +86,14 @@ Exception: the `quality-runner` agent itself runs the underlying tools — that'
 
 When quality-runner reports an **environment error** (not a test/lint failure) — e.g. `HTMLElement is not defined`, tool hang, SIGINT, or instrument error — the calling agent may:
 
-1. **Retry once** with an explicit hint: `hint="frontend — cd workspace/cockpit/web before all commands"`
+1. **Retry once** with an explicit hint: `hint="frontend — cd serve/cockpit/web before all commands"`
 2. If the retry also fails with an environment error, **execute the commands directly** as a last resort.
 
 Document direct execution in the task body: `quality-runner env fallback: {error}`. This is not a TOOL_UNAVAILABLE — do not release with fail.
 
 ### Tool Availability
 
-When a required tool is unavailable or fails, release via `end_work(outcome="fail")` and return `FAIL #{id} | TOOL_UNAVAILABLE: {tool_name}` as your Channel A signal. Do not improvise with alternative commands, do not block, do not create DRs.
+When a required tool is unavailable or fails, release via `end_work(id={id}, outcome="fail")` and return `FAIL #{id} | TOOL_UNAVAILABLE: {tool_name}` as your Channel A signal. Do not improvise with alternative commands, do not block, do not create DRs.
 
 ### Defense-in-Depth
 
@@ -103,9 +109,10 @@ The pipeline uses three lines of defense. Trust upstream lines' detailed work; f
 
 | Agent | Threshold | Meaning |
 |-------|-----------|---------|
-| Reviewer | ≥ .90 | PASS |
-| Reviewer | < .90, 1st FAIL | FAIL — reviewer chooses target (in-progress, todo, or backlog) based on issue type |
-| Reviewer | < .90, 2nd+ FAIL | FAIL — always backlog (loop-breaker) |
+| Reviewer | All AC mapped, evidence sufficient | PASS |
+| Reviewer | Blocking findings, Cycle 1 | FAIL — reviewer chooses target (in-progress, todo, or backlog) based on issue type |
+| Reviewer | Blocking findings, Cycle 2 | FAIL — reviewer chooses target (in-progress, todo, or backlog) based on issue type |
+| Reviewer | Blocking findings, Cycle 3+ | FAIL — always backlog (loop-breaker: architect escalation for AC refinement) |
 | Auditor | ≥ .95 | Archive |
 | Auditor | < .95 | Reject to backlog |
 | Challenger | ≥ 0.80 | `proceed` — caller continues with original verdict |
@@ -117,27 +124,33 @@ The pipeline uses three lines of defense. Trust upstream lines' detailed work; f
 - **TDD by default.** Write the test first, watch it fail, then implement. Target ≥ 90% coverage per phase gate.
 - **State confidence at decision points.** Score 0.0–1.0. When multiple valid approaches exist, present trade-offs using `(bp:)` for best-practice and `(rec:)` for recommendation.
 - **Deliverables are kanban tasks and working code, not documents.** Research docs are supporting artifacts. After research, always create follow-up tasks.
-- **Verify subagent output.** After a subagent reports completion, verify deliverables exist and match AC. Run tests yourself.
+- **Verify subagent output.** After a subagent reports completion, verify deliverables exist and match AC; re-run independently only when evidence is missing or contradictory.
 
-### Test-Depth Convention
+### Proof-Bundle Taxonomy
 
-The architect annotates each AC line with a `(td:N)` suffix during Architecture Review (see `w-arch-review` Step 2.1). This controls test-writer scope, reviewer depth, and subagent dispatch.
+`Proof bundle:` is a task-level field set by planner/architect and used by downstream agents for routing.
 
-| Depth | Suffix | Meaning | Test-writer action |
-|-------|--------|---------|-------------------|
-| 0 | `(td:0)` | No test needed | Skip this AC line |
-| 1 | `(td:1)` | Smoke test | 1 assertion per line |
-| 2 | `(td:2)` | Full TDD | Multiple paths/edges (default) |
+| Bundle | Test-writer | Challenger | Code-reader | Reviewer scope |
+|--------|------------|------------|-------------|----------------|
+| `skip` | SKIP | skip | skip | lint only |
+| `existing` | SKIP | skip | skip | named tests + lint |
+| `smoke` | smoke tests | skip | skip | scoped tests + lint |
+| `behavioral` | full TDD | yes | skip | scoped tests + lint + coverage |
+| `critical` | full TDD | yes | yes | full suite + lint + coverage |
 
-**Pipeline routing by max depth** (highest td across all AC lines):
+### Escalation Modifiers
 
-| Max depth | Test-writer | Challenger | Code-reader | Reviewer scope |
-|-----------|------------|------------|-------------|----------------|
-| td:0 | SKIP (pass-through) | skip | skip | lint only |
-| td:1 | writes smoke tests | yes | skip | scoped tests + lint |
-| td:2 | full coverage | yes | yes | full (tests + code-reader + lint) |
+Proof-bundle modifiers only escalate checks; they never suppress defaults:
 
-AC lines without `(td:N)` annotations default to td:1.
+| Modifier | Effect | Redundant on |
+|----------|--------|-------------|
+| `+challenge` | Force challenger dispatch | `behavioral`, `critical` |
+| `+reader` | Force code-reader dispatch | `critical` |
+
+- Expansion rules: `+challenge` always enables challenger; `+reader` always enables code-reader.
+- Combined modifiers are valid: `smoke+challenge+reader`.
+- Normalization: modifier order is canonicalized alphabetically after bundle; redundant modifiers are accepted and normalized away.
+- Invalid-token rejection: unknown bundle/modifier tokens are rejected at architect assignment time and must be corrected before task advancement.
 
 ### Builder-Skip on Test-Only Retry
 
@@ -199,7 +212,7 @@ See .owlbear/scratch/480-reviewer.md for full evidence.
 - **Pipeline agents** (reviewer, doc-writer, auditor): read predecessor sections via task body.
 - **Architect / builder:** read task body for AC, architecture notes, research pointers, and Brief context (via parent task, when present).
 
-To retrieve the full task body, use `show_task(task_id="{id}")` (see `h-mcp-kanban`).
+To retrieve the full task body, use `show_task(id="{id}")` (see `h-mcp-kanban`).
 
 ### Required Follow-up (Negative Signal Format)
 
@@ -238,8 +251,22 @@ Rules:
 
 Rules:
 
+- **Status semantics.** `done` is the auditor queue, not closed work. `archived` is the board lifecycle closure. Pipeline agents before auditor must not archive normal tasks; the auditor archives or rejects tasks in `done`. Direct user-requested cleanup tasks created and completed outside the pipeline must not be left in `done` unless the intent is explicit auditor dispatch.
 - **Dirty-tree tolerance.** Never refuse work because of uncommitted changes in the working tree. Other agents' crash residue or kanban task file edits are not your concern. Proceed with your task, stage only your own files, and commit normally. The shared working tree is always potentially dirty — that is expected.
+- **Pre-advance verification.** Before calling `end_work`, verify your own domain for uncommitted files using a path-scoped check:
+
+   | Agent | Domain paths to verify before `end_work` |
+   |-------|------------------------------------------|
+   | Researcher | `.owlbear/research/`, `.owlbear/sources/` |
+   | Test-writer | `tests/`, `serve/*/tests/` |
+   | Builder | `serve/`, `share/` |
+   | Doc-writer | `README.md`, `README-consumer.md`, `SECURITY.md`, `setup/*.md`, `serve/*/README.md`, `.owlbear/sources/` |
+   | Auditor | `.owlbear/kanban/` |
+
+   Use `git status --porcelain -- <domain-paths>` (with `--` pathspec separator). Do not use raw `git status --porcelain` for this check.
+   If files appear in your domain, self-heal: stage and commit those files, then continue and call `end_work`.
 - **Commit gates advance.** If you created or modified files, commit them BEFORE calling `end_work`. No commit → no advance. If you have no file deliverables (pass-through, reviewer, orchestrator), skip.
+- **Auditor archive exception.** The auditor cannot commit archive state before `end_work`, because `end_work(outcome="success")` creates the archived task file from `done`. The auditor verifies upstream commits before `end_work`, then commits `.owlbear/kanban/` and any resolved decision files after the archive or reject mutation returns.
 - **Atomic single command.** Run stage + commit as one terminal invocation to prevent interleaving with concurrent agents: `git add <your-files> && git commit -m "type: description (#{id}, role)"`. Never split across separate commands.
 - **Scope to your own files.** Stage only files YOU created or modified in this task. Do not stage files from other agents or unrelated changes. Verify with `git diff --cached --name-only` if uncertain.
 - **Never push.** The user pushes manually.
@@ -253,11 +280,11 @@ Use `save_memory` for each notable finding. Required parameters: `title`, `conte
 
    | Bullet type | MCP category |
    |-------------|-------------|
-   | problems_faced | knowledge |
-   | workarounds_applied | knowledge |
+   | problems_faced | domain-knowledge |
+   | workarounds_applied | domain-knowledge |
    | patterns_discovered | behaviour |
-   | time_sinks | context |
-   | quality_gaps | context |
+   | time_sinks | env-context |
+   | quality_gaps | env-context |
 
 See `h-mcp-memory` for full tool reference.
 
@@ -271,19 +298,19 @@ When an agent cannot proceed, route by cause:
 
 | Cause | Action | Resolution |
 |-------|--------|------------|
-| Prerequisite work needed | Create task(s), `edit_task(add_dep="{new_id}")`, `end_work(outcome="fail")` | Self-resolving — `pick_tasks` dep gate holds until deps archive |
+| Prerequisite work needed | Create task(s), `edit_task(id={id}, add_dep=[new_id])` (list of task IDs), `end_work(id={id}, outcome="fail")` | Self-resolving — `pick_tasks` dep gate holds until deps archive |
 | Infeasible / wrong AC | `end_work(outcome="reject", move_to="backlog")` with note to architect | Self-resolving — architect fixes AC |
 | Vague scope | `end_work(outcome="reject", move_to="research")` with note | Self-resolving — researcher/architect refines |
 | Design trade-off (T2) | Advisory DR via `create_dr`, then `end_work(outcome="reject", move_to="backlog")` | Auto-resolving — DR expires in 5 days (see Decision Tiers) |
 | Arch / breaking change (T3) | Mandatory DR via `create_dr`, then `end_work(outcome="block", block_reason="DR pending: {file}")` | **Blocks** — user must respond (see Decision Tiers) |
 | User action required | AR via `create_dr`, then `end_work(outcome="block", block_reason="AR pending: {file}")` | **Blocks** — user must act |
-| Stale task (orchestrator triage) | `edit_task(block="reason")` / `edit_task(unblock=True)` | **Blocks** — orchestrator decision |
+| Stale task (orchestrator triage) | `edit_task(block_reason="reason")` / `edit_task(block_reason="")` | **Blocks** — orchestrator decision |
 
 **Block is reserved for T3 decisions, user-action tasks, and orchestrator triage.** Do not block when a reject or dependency gate would suffice. Do not pass through hoping a downstream agent will handle it.
 
 #### DR Required on Agent Block
 
-**Every agent-initiated block requires a Decision Request.** When `end_work(outcome="block")` or `edit_task(block=...)` returns a non-empty `guidance` field, act on it immediately — the first message will direct you to create a DR via `create_dr` (see `h-decision-requests`).
+**Every agent-initiated block requires a Decision Request.** When `end_work(outcome="block")` or `edit_task(block_reason=...)` returns a non-empty `guidance` field, act on it immediately — the first message will direct you to create a DR via `create_dr` (see `h-decision-requests`).
 
 **Exemption — user-driven blocks:** Tasks blocked via the Cockpit carry the `block:user` tag. If `block:user` is present on the task after blocking, the guidance field will be empty — no DR is required. Agents **must not** create DRs for Cockpit-initiated blocks.
 
@@ -317,16 +344,16 @@ Researcher may provisionally tag `type:user-action` during research; architect c
 1. Architect detects `type:user-action` → creates action request via `create_dr`
 2. Architect calls `end_work(outcome="block", block_reason="AR pending: {filename}")`
 3. `pick_tasks` excludes the blocked task — no agents dispatched
-4. User performs the action → sets `response: completed` in the AR file
-5. Decision resolver runs `resolve_decision`: appends `## Action Completed` to task body, unblocks task
-6. Architect (re-entry): sees `## Action Completed` + `type:user-action` → verifies AC → approves to `todo`
+4. User performs the action → resolves the AR as `approved` through the Cockpit decision flow when the action is complete
+5. Decision resolution appends a `## Decision Request` summary to the task body, unblocks the task, and moves the AR file to resolved
+6. Next `pick_tasks` dispatches the unblocked task; architect (re-entry) sees `## Decision Request` with `response: approved` + `type:user-action` → verifies AC → approves to `todo`
 7. Test-writer and builder pass through (tag is in `NON_IMPL_TAGS`)
 
-**Post-completion fast-path:** When a `type:user-action` task re-enters architect review with `## Action Completed` in the body, the architect verifies that AC checkboxes are satisfied, then approves directly without full re-evaluation. This extends the "Resolved Decision Pre-flight" check to action-completed tasks.
+**Post-completion fast-path:** When a `type:user-action` task re-enters architect review with a `## Decision Request` summary whose `response` is `approved`, the architect verifies that AC checkboxes are satisfied, then approves directly without full re-evaluation. This extends the "Resolved Decision Pre-flight" check to completed action requests.
 
 **Dual-nature tasks:** When the same feature requires both user action and code change, split into two tasks: a `type:user-action` task (AR + block) and a code task. The code task sets `depends_on` to the user-action task to enforce ordering.
 
-**Dry-run scenario — #597-style loop prevented:** Because the task is `blocked` between architect cycles 1 and 2, `pick_tasks` returns nothing for it — the orchestrator dispatches no other agents until `resolve_decision` unblocks. Result: **≤2 architect cycles** vs #597's **4+ futile cycles** with no resolution.
+**Dry-run scenario — #597-style loop prevented:** Because the task is `blocked` between architect cycles 1 and 2, `pick_tasks` returns nothing for it — the orchestrator dispatches no other agents until decision resolution unblocks it. Result: **≤2 architect cycles** vs #597's **4+ futile cycles** with no resolution.
 
 ### Handoff
 

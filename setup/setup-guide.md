@@ -55,8 +55,9 @@ Running `init.py` writes the following files into your project directory:
 |------------------|---------|-------------|
 | `.vscode/settings.json` | Points VS Code at owlbear agents, skills, and instructions; enables `mermaid-chat.enabled` for Mermaid diagram rendering in chat | Merged (owlbear keys as defaults; your existing keys are preserved) |
 | `.vscode/mcp.json` | Registers 5 MCP servers (3 owlbear stdio + ddgs web search + markitdown) | Merged (owlbear servers as defaults; your existing servers are preserved) |
-| `.owlbear/kanban/config.yml` | Kanban board configuration (fresh `next_id: 1`) | Always written |
 | `.owlbear/kanban/tasks/.gitkeep` | Ensures tasks directory exists in version control | Always written |
+| `.owlbear/kanban/decisions/pending/` | Ensures decisions inbox directory exists | Always created (`mkdir`, `exist_ok=True`) |
+| `.owlbear/kanban/decisions/resolved/` | Ensures decisions resolved directory exists | Always created (`mkdir`, `exist_ok=True`) |
 | `.owlbear/hooks/allow-stances-only.py` | Restricts ideation agents to approved stance outputs | Seeded if missing; differing existing hook files prompt/skip/replace (or require `--replace-hooks` non-interactively) |
 | `.owlbear/hooks/deny-non-doc-writes.py` | Constrains bounded-output non-code roles to doc-adjacent files (`.md`, `.excalidraw`) and scratch | Seeded if missing; differing existing hook files prompt/skip/replace (or require `--replace-hooks` non-interactively) |
 | `.owlbear/hooks/deny-src-writes.py` | Constrains test-only roles to `tests/`, `__tests__/`, and scratch surfaces | Seeded if missing; differing existing hook files prompt/skip/replace (or require `--replace-hooks` non-interactively) |
@@ -65,7 +66,6 @@ Running `init.py` writes the following files into your project directory:
 | `.owlbear/hooks/session-context.py` | Injects current git branch + recent commits into agent prompts; silently no-ops if `git` is unavailable | Seeded if missing; differing existing hook files prompt/skip/replace (or require `--replace-hooks` non-interactively) |
 | `.owlbear/knowledge/.gitkeep` | Knowledge store placeholder | Always written |
 | `store/knowledge/.gitkeep` | Knowledge store placeholder | Always written |
-| `store/memory/.gitkeep` | Memory store placeholder | Always written |
 | `.github/copilot-instructions.md` | Consumer scaffold for project-specific Copilot instructions — placeholder sections for Project Identity, Directory Structure, Tech Stack, and Resources | Skipped if file already exists |
 | `.editorconfig` | Editor formatting rules | Skipped if file already exists |
 | `.gitattributes` | Git line-ending and diff rules | Skipped if file already exists |
@@ -74,6 +74,8 @@ Running `init.py` writes the following files into your project directory:
 | `.markdownlint.json` | Markdown linting rules | Skipped if file already exists |
 | `.markdownlintignore` | Markdown lint exclusion patterns | Skipped if file already exists |
 | `.yamllint.yml` | YAML linting configuration | Always written |
+
+`init.py` creates the kanban board directory structure (`tasks/`, `archive/`, `decisions/pending/`, `decisions/resolved/`) but does not seed or overwrite `.owlbear/kanban/config.yml`.
 
 ## Shared vs Copied
 
@@ -84,6 +86,10 @@ OwlBear uses two different update models:
 
 This split is why `git pull` updates shared agents and skills immediately, while copied
 runtime files may need a later `init.py` run to refresh.
+
+MCP memory entries are stored as markdown files under `.owlbear/memory/`. The
+`ob-memory` server creates that directory when it starts or writes the first
+entry, so setup does not seed a separate memory store.
 
 ---
 
@@ -100,7 +106,7 @@ After opening the project in VS Code, use the **Diagnostics view** to confirm ev
 | OwlBear agents loaded | Chat Customizations shows agents from `../owlbear/share/agents/` |
 | OwlBear skills loaded | Chat Customizations shows skills from `../owlbear/share/skills/` |
 | Instructions loaded | Chat Customizations shows `*.instructions.md` files from `../owlbear/share/instructions/` |
-| MCP servers running | Run `MCP: List Servers` from the Command Palette — ob-kanban should show `running` |
+| MCP servers running | Run `MCP: List Servers` from the Command Palette — `ob-kanban`, `ob-memory`, and `ob-knowledge` should show `running` |
 
 For runtime debugging, use **"Show Agent Debug Logs"** (Chat view ellipsis `…` menu) —
 this shows chronological tool calls, LLM requests, and prompt discovery events.

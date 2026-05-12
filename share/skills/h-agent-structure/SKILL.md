@@ -178,7 +178,7 @@ Compact transition table showing what triggers this agent and what it produces:
 ```markdown
 | Agent | When | Example |
 |-------|------|---------|
-| scribe | Decision point requiring user input | `Scribe: task_id=42, mode=check-or-create, concern="..."` |
+| challenger | AC quality review during architecture | `Challenge: task_id=42, proposed_verdict=approve, reasoning="..."` |
 ```
 
 The `<agents>` table must list every agent in the frontmatter `agents:` array and vice versa. This is the **only** source of subagent knowledge at nesting depth ≥2 (VS Code does not inject the agents catalog at that depth). A CI validation script enforces alignment — see `.owlbear/scripts/validate_agents.py`.
@@ -206,17 +206,9 @@ VS Code has a limitation: at nesting depth ≥2 (3rd-level subagents), agents wi
 3. **Every dispatching agent** must have an `<agents>` body section listing all agents from its frontmatter `agents:` array — this is the only discovery mechanism at depth ≥2.
 4. ND3 agents are tagged with `(ND3)` in their `description` field for identification.
 
-**Current ND3 agents:**
+**Current ND3 agents:** challenger, planner, fix-attempt, code-reader, ideation-critic, quality-runner.
 
-| Agent | Called by (at L2) |
-|-------|-------------------|
-| challenger | architect, researcher |
-| scribe | architect, researcher, builder, reviewer, test-writer, doc-writer, auditor |
-| planner | architect |
-| fix-attempt | builder |
-| code-reader | reviewer |
-| ideation-critic | ideation-architect, ideation-data, ideation-enduser, ideation-security |
-| quality-runner | builder, reviewer, test-writer, auditor |
+Caller inventory is intentionally not duplicated here. The source of truth for caller → subagent relationships is each caller's frontmatter `agents:` array plus its `<agents>` body table; see [share/WIRING.md](../../WIRING.md) for the inverse ecosystem map. When adding a new caller, update the caller's agent file. When adding a new ND3 agent, set `disable-model-invocation: false`, tag the description with `(ND3)`, and add it to this list.
 
 Built-in agents (`Explore`, `General Purpose`) resolve at any depth regardless of settings.
 
@@ -326,7 +318,7 @@ Current stubs:
 | `frontend.instructions.md` | `"**/*.tsx,**/*.jsx,**/*.vue,**/*.svelte,**/*.css,**/*.scss"` | `h-frontend-conventions` |
 | `research-docs.instructions.md` | `".owlbear/research/*.md"` | `w-research` |
 | `agent-ecosystem.instructions.md` | `"share/agents/**,share/skills/**,share/instructions/**,share/prompts/**,.owlbear/agents/**,.owlbear/skills/**,.owlbear/instructions/**,.owlbear/prompts/**"` | `share/README.md` + `h-agent-structure` |
-| `doc-standards.instructions.md` | `"README.md,README-consumer.md,SECURITY.md,workspace/*/README.md,share/README.md,setup/*.md"` | `r-doc-standards` |
+| `doc-standards.instructions.md` | `"README.md,README-consumer.md,SECURITY.md,serve/*/README.md,share/README.md,setup/*.md"` | `r-doc-standards` |
 
 ### Authority Files — Embedded Rules
 

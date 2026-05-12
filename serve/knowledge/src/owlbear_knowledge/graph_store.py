@@ -337,7 +337,9 @@ class GraphStore:
             edges += self.list_edges(target_id=current_id, scopes=scopes)
 
             for edge in edges:
-                neighbor_id = edge.target_id if edge.source_id == current_id else edge.source_id
+                neighbor_id = (
+                    edge.target_id if edge.source_id == current_id else edge.source_id
+                )
                 if neighbor_id in visited:
                     continue
                 visited.add(neighbor_id)
@@ -446,7 +448,11 @@ class GraphStore:
         Returns:
             A three-tuple of (document count, entity count, edge count).
         """
-        doc_count: int = self._conn.execute("SELECT COUNT(*) FROM documents").fetchone()[0]
-        entity_count: int = self._conn.execute("SELECT COUNT(*) FROM entities").fetchone()[0]
+        doc_count: int = self._conn.execute(
+            "SELECT COUNT(*) FROM documents"
+        ).fetchone()[0]
+        entity_count: int = self._conn.execute(
+            "SELECT COUNT(*) FROM entities"
+        ).fetchone()[0]
         edge_count: int = self._conn.execute("SELECT COUNT(*) FROM edges").fetchone()[0]
         return (doc_count, entity_count, edge_count)

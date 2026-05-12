@@ -30,20 +30,10 @@ Ingest a text document into the knowledge base.
 |-------|------|---------|-------|
 | `text` | str | required | Text content to ingest |
 | `metadata` | dict | None | Optional metadata dict |
+| `scope` | str | `global` | Knowledge scope for ingested document |
+| `source_url` | str | None | Optional source URL for attribution |
 
 Returns: document ID, chunk count, entity count, edge count, and status.
-
-### list_entities
-
-List entities in the knowledge graph.
-
-| Param | Type | Default | Notes |
-|-------|------|---------|-------|
-| `entity_type` | str | None | Filter by entity type |
-| `offset` | int | 0 | Pagination offset |
-| `limit` | int | 50 | Max results |
-
-Returns: `list[dict]` — `[{"name": str, "entity_type": str, "description": str}, ...]`; `[]` if no results; error string if invalid `entity_type`.
 
 ### list_sources
 
@@ -55,6 +45,16 @@ List all registered knowledge sources.
 
 Returns: `list[dict]` — `[{"name": str, "source_type": str, "scope": str}, ...]`; `[]` if no sources.
 
+### refresh_source
+
+Trigger re-ingestion of a registered knowledge source by source ID.
+
+| Param | Type | Default | Notes |
+|-------|------|---------|-------|
+| `source_id` | str | required | Registered source ID to refresh |
+
+Returns: refresh count dict on success, or an `error: ...` string when refresh infrastructure is unavailable. Raises `ToolError` when the source store is unavailable or the source ID is unknown.
+
 ### get_stats
 
 Get knowledge base summary statistics. No parameters.
@@ -63,49 +63,55 @@ Returns: `dict[str, int]` — `{"documents": int, "entities": int, "edges": int}
 
 **Resource:** `knowledge://stats` — same format as `get_stats`, readable as MCP resource.
 
-### bookmark_source
+### get_next_batch
 
-Bookmark a URL for evaluation and optional ingestion.
-
-| Param | Type | Default | Notes |
-|-------|------|---------|-------|
-| `url` | str | required | URL to bookmark |
-| `reason` | str | None | Why this URL is relevant |
-
-Returns: status string describing outcome (bookmarked, ingested, or error).
-
-### list_bookmarks
-
-List bookmarked URLs with optional filters.
+Atomically claim a batch of chunks ready for Phase 1 enrichment.
 
 | Param | Type | Default | Notes |
 |-------|------|---------|-------|
-| `tag` | str | None | Filter by tag |
-| `min_score` | float | None | Minimum relevance score |
+| `limit` | int | 10 | Maximum chunks to claim |
 
-Returns: `list[dict]` — bookmark entries with URL, title, tags, and score.
+Returns: `list[dict]` — `[{"chunk_id": str, "text": str, "doc_title": str, "section_path": str | null, "source_name": str | null}, ...]`.
 
-### import_scope
+Behavior:
 
-Import a project-local knowledge base into the global scope.
+- Claims pending chunks, plus stale claimed chunks whose lease is older than 10 minutes.
+- Excludes chunks from sources with enrichment disabled.
+- Updates claimed chunks inside an immediate SQLite transaction.
+- Empty list means no Phase 1 work is currently available.
 
-| Param | Type | Default | Notes |
-|-------|------|---------|-------|
-| `project_name` | str | required | Project name to import from |
-| `path` | str | None | Custom path to project DB |
+### get_consolidation_candidates
 
-Returns: status string with import counts.
-
-### export_scope
-
-Export a scope to a portable SQLite file.
+Return unresolved cross-source entity pairs for Phase 2 consolidation.
 
 | Param | Type | Default | Notes |
 |-------|------|---------|-------|
-| `scope` | str | required | Scope to export |
-| `output_path` | str | required | Path for the output SQLite file |
+| `limit` | int | 20 | Maximum candidates to return; omit or pass null for no SQL limit |
 
-Returns: status string with export counts.
+Returns: `list[dict]` — `[{"candidate_id": str, "entity_name": str, "source_a": str, "source_b": str, "source_a_name": str, "source_b_name": str, "source_a_chunk": str, "source_b_chunk": str}, ...]`.
+
+Empty list means no Phase 2 consolidation work is currently available.
+
+### store_enrichment
+
+Persist Phase 1 extraction results or Phase 2 consolidation outcomes.
+
+| Param | Type | Default | Notes |
+|-------|------|---------|-------|
+| `chunk_id` | str | None | Required for Phase 1 chunk enrichment |
+| `entities` | list[dict] | None | Entities to upsert for Phase 1 |
+| `edges` | list[dict] | None | Edges to insert for Phase 1 or Phase 2 |
+| `candidate_id` | str | None | Required for Phase 2 consolidation persistence |
+
+Returns: `None` on success.
+
+Behavior:
+
+- Phase 1: pass `chunk_id` with optional `entities` and `edges`; the chunk is marked `enriched` and its claim is cleared.
+- Phase 2: pass `candidate_id`; if `edges` is non-empty, the edges are stored. If no edges are needed, the pair is marked reviewed so it is not returned again.
+- If neither `candidate_id` nor `chunk_id` is provided, the tool raises `ToolError`.
+
+Only the tools documented in this reference are agent-callable MCP tools. Treat anything outside this list as unavailable unless this handbook is updated.
 
 ## Decision Tree
 
@@ -113,13 +119,13 @@ Returns: status string with export counts.
 |--------------|------|-------|
 | Search the knowledge base | `search_knowledge` | Natural-language query, returns ranked snippets |
 | Ingest a document | `ingest_document` | Pass text content + optional metadata |
-| List entities in graph | `list_entities` | Filter by `entity_type`, supports pagination |
 | List registered sources | `list_sources` | Filter by `scope` |
+| Refresh a registered source | `refresh_source` | Re-ingests one source by source ID |
 | Get KB statistics | `get_stats` | Also available as resource `knowledge://stats` |
-| Bookmark a URL | `bookmark_source` | Evaluate relevance, optionally ingest |
-| List bookmarks | `list_bookmarks` | Filter by `tag` or `min_score` |
-| Import project KB | `import_scope` | Cross-DB scope import with dedup |
-| Export scope | `export_scope` | Portable SQLite export |
+| Claim Phase 1 enrichment work | `get_next_batch` | Pulls and leases chunks atomically |
+| Store Phase 1 enrichment | `store_enrichment` | Pass `chunk_id`; marks chunk enriched |
+| Claim Phase 2 consolidation work | `get_consolidation_candidates` | Returns unresolved cross-source pairs |
+| Store Phase 2 consolidation | `store_enrichment` | Pass `candidate_id`; stores edges or marks reviewed |
 
 ## Scope Conventions
 
@@ -170,7 +176,7 @@ Six-step process for adding, updating, and removing knowledge sources. See `.owl
 2. **Check delta** — content-hash comparison skips unchanged documents
 3. **Ingest** — `ingest_document` to chunk, extract entities, and store
 4. **Track status** — pipeline records ingestion state and content hash
-5. **Verify** — `search-knowledge` to spot-check search relevance
+5. **Verify** — `search_knowledge` to spot-check search relevance
 6. **Remove stale** — delete source + cascade to clean up decommissioned content
 
 ## Configuration
@@ -180,10 +186,9 @@ Six-step process for adding, updating, and removing knowledge sources. See `.owl
 | `OWLBEAR_KB_PATH` | `store/knowledge/knowledge.db` | Path to SQLite knowledge database |
 | `KNOWLEDGE_TOOLS_EXCLUDE` | _(unset)_ | Comma-separated tool names to remove |
 
-`KNOWLEDGE_TOOLS_EXCLUDE` accepts: `search_knowledge`, `ingest_document`, `list_entities`, `list_sources`, `get_stats`, `bookmark_source`, `list_bookmarks`, `import_scope`, `export_scope`. Unknown names silently ignored.
+`KNOWLEDGE_TOOLS_EXCLUDE` accepts registered tool names such as `search_knowledge`, `ingest_document`, `list_sources`, `get_stats`, `refresh_source`, `get_next_batch`, `get_consolidation_candidates`, and `store_enrichment`. Unknown names silently ignored.
 
 ## Known Gotchas
 
 - **Always set `scope`** to `project:{id}` when a project is active; use `global` otherwise.
-- **`config_json` must be valid JSON as a string**, not a dict.
 - **Search before ingesting** to avoid duplicates — the dedup is by content hash, not by topic.

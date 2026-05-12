@@ -51,7 +51,12 @@ entities list empty — only return edges.
 
 def _stamp_intra_edge(edge: Edge) -> Edge:
     """Return a copy of *edge* stamped with intra-doc weight and source."""
-    return edge.model_copy(update={"weight": _INTRA_WEIGHT, "metadata": {**edge.metadata, "source": _INTRA_SOURCE}})
+    return edge.model_copy(
+        update={
+            "weight": _INTRA_WEIGHT,
+            "metadata": {**edge.metadata, "source": _INTRA_SOURCE},
+        }
+    )
 
 
 def _build_intra_prompt(entities: list[Entity], scope: str, document_id: str) -> str:
@@ -161,5 +166,7 @@ class InterDocGraphBuilder:
                 _search([0.0] * 1024, top_k=1)
                 break  # one representative call is sufficient
 
-        logger.debug("InterDocGraphBuilder.build called — returning empty result (no-op)")
+        logger.debug(
+            "InterDocGraphBuilder.build called — returning empty result (no-op)"
+        )
         return GraphBuildResult()

@@ -23,11 +23,23 @@ For each module in the inventory:
 
 1. Measure coverage using **only** the module-level test file (exclude task-tests):
 
-```shell
-uv run pytest tests/test_{module}.py --cov=serve --cov-report=term-missing -q --tb=short 2>/dev/null || echo "No module-level test file yet"
+Resolve the durable test path before invoking Quality-Runner:
+
+- Canonical target: `serve/{package}/tests/test_{module}.py`
+- Legacy fallback: `tests/test_{module}.py`
+- Package-resolution heuristic: search for `serve/*/tests/test_{module}.py`; if exactly one match exists, use it. If multiple matches exist, choose the package that owns the module under `serve/*/src/` and log the decision. If no canonical match exists, use the root legacy file.
+
+```
+agentName: quality-runner
+prompt: |
+  mode: scoped
+  task_id: test-curation-{module}
+  test_paths: ["serve/{package}/tests/test_{module}.py"]  # or ["tests/test_{module}.py"] if only the legacy root file exists
+  coverage_modules: ["{module}"]
+  lint_paths: ["serve/{package}/tests/test_{module}.py"]
 ```
 
-2. Record baseline coverage. If no `test_{module}.py` exists, baseline is 0%.
+2. Record baseline coverage from the Quality-Runner `Coverage` section. If neither canonical nor legacy module-level files exist, baseline is 0%.
 
 ## Step 2 — Classify Modules
 
@@ -35,7 +47,7 @@ uv run pytest tests/test_{module}.py --cov=serve --cov-report=term-missing -q --
 |-------------|----------|--------|
 | At or above target (≥ 90%) | Good | **Fast path** — delete all archived task-tests for this module (Step 4) |
 | Below target | Gap | **Mine path** — proceed to Step 3 for this module |
-| No module-level file (0%) | Missing | **Mine path** — create `test_{module}.py`, proceed to Step 3 |
+| No module-level file (0%) | Missing | **Mine path** — create `serve/{package}/tests/test_{module}.py`, proceed to Step 3 |
 
 ## Step 3 — Mine Coverage Gaps
 
@@ -44,7 +56,7 @@ For modules below target:
 1. Read the coverage report from Step 1. Identify uncovered lines/branches.
 2. Read all archived task-tests for this module.
 3. Find assertions in the task-tests that exercise the uncovered paths.
-4. Write those assertions into `test_{module}.py`:
+4. Write those assertions into `serve/{package}/tests/test_{module}.py`:
    - Use descriptive class/method names (not `TestFromAC_` — those are task-scoped).
    - Add provenance comment: `# From task #{task_id}: {behavior description}`.
    - Adjust imports/fixtures for the module-level context.
@@ -55,13 +67,23 @@ For modules below target:
 
 ### Verify
 
-After writing tests for a module:
+After writing tests for a module, verify through Quality-Runner:
 
-```shell
-uv run pytest tests/test_{module}.py --cov=serve --cov-report=term-missing --cov-fail-under=90 -q --tb=short
+```
+agentName: quality-runner
+prompt: |
+  mode: scoped
+  task_id: test-curation-{module}
+  test_paths: ["serve/{package}/tests/test_{module}.py"]
+  coverage_modules: ["{module}"]
+  lint_paths: ["serve/{package}/tests/test_{module}.py"]
 ```
 
-**Gate failure:** Revert the module file (`git checkout -- tests/test_{module}.py`), log the failure, move to the next module. Do not block.
+Gate passes only when tests pass, lint is clean, and the target module coverage is ≥ 90% in the Quality-Runner report.
+
+**Rollback safety:** Before editing a module-level file, record whether it was clean, dirty, or untracked. If it was already dirty or untracked, save a baseline copy under `.owlbear/scratch/test-curation-{module}.baseline` before modifying it. On failure, restore only the curator-created changes; never discard pre-existing edits.
+
+**Gate failure:** Restore the module file to its recorded baseline, log the failure, move to the next module. Do not block. If the curator-created changes cannot be isolated from pre-existing edits, leave the file untouched, keep the task-tests, and log the module as `skip` with a manual follow-up note.
 
 ## Step 4 — Clean Up Task-Tests
 
@@ -75,19 +97,16 @@ Remove all archived task-tests for this module.
 
 ## Step 5 — Full Suite Gate
 
-After all modules are processed:
+After all modules are processed, run the full suite through Quality-Runner:
 
-```shell
-uv run pytest tests/ workspace/ -n auto -q --tb=short
+```
+agentName: quality-runner
+prompt: |
+  mode: full
+  task_id: test-curation
 ```
 
-All tests must pass. If the full suite fails, identify the breaking module and revert it:
-
-```shell
-git checkout -- tests/test_{module}.py
-```
-
-Re-add its task-tests and log the failure.
+All tests must pass. If the full suite fails, identify the breaking module and apply the same rollback safety contract: restore only curator-created module-file changes, re-add only task-tests removed during this curation pass, and log the failure.
 
 ## Step 6 — Lifecycle Log
 
@@ -113,12 +132,12 @@ Append one entry per module to `.owlbear/scratch/curator-log.jsonl`:
 **Commit your deliverables** (see `r-pipeline-protocol` → Who Commits What):
 
 ```shell
-git add tests/ && git commit -m "test: curate module tests — {N} task-tests removed, {M} modules improved (test-curator)"
+git add {module_test_paths} {removed_task_test_paths} && git commit -m "test: curate module tests — {N} task-tests removed, {M} modules improved (test-curator)"
 ```
 
-Then advance via `end_work` (moves to next status + releases claim).
+Use exact paths only. Module-level tests may live under `serve/{package}/tests/`, and broad `git add tests/` can miss package-local changes while staging unrelated root tests.
 
-Return Channel A signal per `r-pipeline-protocol`.
+Then return the Channel A signal and Channel B summary. This prompt-run workflow has no kanban lifecycle advance step.
 
 ## Output Template
 
@@ -147,5 +166,5 @@ Return Channel A signal per `r-pipeline-protocol`.
 
 | Skill | When to load | Purpose |
 |-------|-------------|---------|
-| `h-pytest-and-linting` | Step 1 (coverage measurement), Step 3 (verify) | Pytest flags, coverage options, known pitfalls |
-| `h-python-conventions` | Step 3 (writing tests), Step 5 (full suite) | Naming, structure, and style for test code |
+| `h-quality-runner` | Step 1 (coverage measurement), Step 3 (verify), Step 5 (full suite) | Structured test, lint, and coverage execution |
+| `h-python-conventions` | Step 3 (writing tests) | Naming, structure, and style for test code |

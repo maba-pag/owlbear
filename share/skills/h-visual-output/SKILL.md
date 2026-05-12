@@ -8,6 +8,8 @@ user-invocable: true
 
 Produce high-quality, self-contained visual output (diagrams, tables, architecture maps) for delivery via browser or Kroki render.
 
+Boundary: this skill is for explanatory artifacts, reports, and diagrams. It is not the source of truth for production frontend app design; use `h-frontend-design` and `h-frontend-conventions` for Cockpit UI work.
+
 > Adapted from [nicobailon/visual-explainer](https://github.com/nicobailon/visual-explainer) (MIT).
 
 For Excalidraw-specific diagrams, see `h-excalidraw-diagram`.
@@ -50,7 +52,7 @@ For Excalidraw-specific diagrams, see `h-excalidraw-diagram`.
 For styled HTML pages, tables, CSS Grid layouts, Mermaid-embedded diagrams:
 
 1. **Write** — `create_file` to `.owlbear/scratch/{name}.html` (self-contained, inline CSS)
-2. **Open** — `open_browser-page` to preview
+2. **Open** — `open_browser_page` to preview
 
 ### Path B: Kroki (quick diagrams)
 

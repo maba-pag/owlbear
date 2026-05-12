@@ -4,13 +4,30 @@ description: "Workflow: Documentation update — verify and update docs for comp
 user-invocable: false
 ---
 
-# Documentation Update (v2)
+# Documentation Update (v3)
 
-Verify and update documentation for a task that has passed review. The doc-writer classifies
-scope, applies relevance gating, runs the checklist against IN-scope affected docs, handles
-diagram maintenance, and proposes deletions via child tasks. Advances to `done`.
+Verify and update documentation for a task that has passed review. This revision uses
+a four-item checklist, convention mapping, and a two-layer verification method.
 
 **Kanban operations:** See `h-mcp-kanban` skill — section `## Agent Lifecycle Pattern`.
+
+## Scope
+
+### In Scope
+
+- Verify README targets via convention mapping.
+- Update external attribution.
+- Verify research-doc linkage.
+- Detect deletion impact and orphaned references.
+- Add TODO markers for pre-existing unresolved documentation issues.
+
+### Out of Scope
+
+- Fixing runtime code — builder (`w-tdd-green`), routed via reviewer (`w-code-review`).
+- Writing tests — test-writer (`w-tdd-red`).
+- Code review — reviewer (`w-code-review`).
+- Full-suite regression — auditor (`w-task-verification`).
+- AC quality validation — architect (`w-arch-review`).
 
 ## Step 0 — Setup
 
@@ -22,170 +39,116 @@ Decision Pre-flight.
 
 Verify the task is in `docs` status.
 
-### Step 0a — Verify Upstream Review Evidence
+## Step 1 — Convention Mapping
 
-Check the task body for a `## Review Evidence` section. If **absent**, the reviewer skipped
-this mandatory section — reject via `end_work(outcome="reject", move_to="review",
-note="Missing ## Review Evidence section")`.
+Use convention mapping to determine documentation targets:
 
-This is a recurring pipeline gap. Enforcing it here catches the defect one stage earlier
-than the auditor.
+| Code Path Pattern | Mapped Documentation |
+|---|---|
+| `serve/{pkg}/src/**` | `serve/{pkg}/README.md` |
+| `serve/{pkg}/pyproject.toml`, `serve/{pkg}/tests/**` | `serve/{pkg}/README.md` |
+| `setup/**` | `setup/setup-guide.md`, `setup/sharing-guide.md` |
+| `share/**` | `share/README.md`, `share/WIRING.md` |
+| Any package's public interface changes | `README.md`, `README-consumer.md` (LLM judgment) |
 
-### Step 0b — Load Doc-Index
+If all changed files map to no READMEs, use the no-impact fast path: write
+"no docs impact" with evidence and advance.
 
-Read `.owlbear/doc-index.md`. If the file is missing or a `uv run doc-index` regen fails,
-log the failure and continue with a stale or empty index (advisory — do not block). The
-index is used for scope classification and `describes` glob lookups in later steps.
+## Step 2 — Relevance-Gated Checklist (Exactly 4 Items)
 
-## Step 1 — Scope Classification
+Evaluate only applicable checks.
 
-Build the **changed-files set** from the task body: scan `## Files`, `## Builder Notes`,
-and `## Review Evidence` sections for file paths mentioned.
+### Item 1: README Verification
 
-Classify each file as **IN-scope** or **OUT-scope**:
+- Use convention mapping to identify each `serve/{pkg}/README.md` target.
+- Perform a full-file read for every mapped README.
+- Layer 1: run grep-based structural checks for removed symbols/commands/flags.
+- Layer 2: perform LLM editorial comparison for coherence and contradictions.
+- Fix task-caused issues inline.
+- For pre-existing unresolved issues, insert a visible TODO marker.
 
-**IN scope (edit + deletion-proposal):**
+### Item 2: External Attribution
 
-- Root: `README.md`, `README-consumer.md`, `SECURITY.md`
-- Package READMEs: `workspace/*/README.md` (9 files)
-- Setup guides: `setup/setup-guide.md`, `setup/sharing-guide.md`
-- Share ecosystem doc: `share/README.md`
-- Diagrams: `share/diagrams/*.excalidraw`
-- Research and sources: `.owlbear/research/*.md`, `.owlbear/sources/*.md`
-- Docstrings in `.py` files
+- If external sources influenced implementation, add/update
+  `.owlbear/sources/overview.md`.
+- If no external sources were used: record "N/A — no external attribution needed".
 
-**OUT scope (no edit, no deletion-proposal):**
+### Item 3: Research Doc
 
-- `share/agents/*.agent.md` (agent-executable)
-- `share/skills/*/SKILL.md` (agent-executable)
-- `share/instructions/*.instructions.md` (agent-executable)
-- `share/prompts/*.prompt.md` (agent-executable)
-- `share/skills/*/references/*.md` (agent-executable)
-- `.github/copilot-instructions.md` (agent-executable)
-- All application source code (except docstrings)
+- If a research file exists, verify it is linked from the task body.
+- If no research artifact exists: record "N/A — no research doc linkage needed".
 
-If all changed files are OUT-scope or non-doc source files, proceed to the no-impact check
-at the end of Step 2.
+### Item 4: Deletion Detection
 
-## Step 2 — Relevance-Gated Checklist
+- Detect when source files were deleted in this task and whether mapped docs now
+  contain orphaned references.
+- When deletion impact needs coordinated remediation, create a child task for the
+  follow-up doc update.
+- Open a DR (Decision Request) when ownership, sequencing, or scope is ambiguous.
+- If no deletion impact exists: record "N/A — no deletion impact".
 
-Evaluate only the items relevant to the IN-scope changed files. Not every item applies to
-every task.
+Apply visible TODO markers for unresolved documentation issues so they remain reviewable.
 
-### Item 1: Descriptive Prose Docs
+TODO marker format (always visible and greppable):
 
-- Did the task change behavior, API, CLI commands, configuration, or package structure?
-- Identify which IN-scope descriptive docs reference the changed area.
-- If yes and IN-scope docs are affected: read each affected doc, verify accuracy, update
-  as needed.
-- If no IN-scope docs reference the changed area: note "no prose docs affected."
+> **TODO:** {category} — {description} [#{id}]
 
-### Item 2: Module Docstrings
+Allowed categories:
 
-- Did the task create or modify Python modules?
-- If yes: read source files, verify all public classes and functions have accurate
-  docstrings.
-- Edit `.py` files for docstrings ONLY — never change application logic.
+- `stale`
+- `inaccurate`
+- `missing`
+- `unverified`
 
-### Item 3: External Attribution
+Concrete example:
 
-- Did the task use patterns from external repos, articles, or docs?
-- If yes: add a row to `.owlbear/sources/overview.md` (see `r-project-standards` →
-  Attribution).
+> **TODO:** stale — update outdated CLI flag description [#{id}]
 
-### Item 4: Research Doc
+Gate rules:
 
-- Did the research phase produce a `.owlbear/research/{slug}.md`?
-- If yes: verify it exists and is linked from the task body. Verify follow-up tasks were
-  created.
+- task-caused unverified content blocks the gate.
+- pre-existing unverified content passes the gate.
 
-### Item 5: Diagram Maintenance
+## Step 3 — Two-Layer Verification
 
-- Consult the doc-index for `describes` entries. Does any IN-scope diagram have a
-  `describes` glob that matches one or more changed files?
-- If yes: update that diagram's footer text element to
-  `Last verified: <today's date> (<current short commit hash>)`. Do not modify diagram
-  content beyond the footer.
-- If no match: note "no diagram describes-match found."
+Run both layers for every documentation update pass.
 
-### Item 6: Explicit Diagram Creation
+- Layer 1 — grep-based structural verification:
+  confirm removed phrases are absent and required markers (like `> **TODO:**`) are present.
+- Layer 2 — LLM editorial verification:
+  perform a full-file editorial read for coherence, audience fitness, and contradictions.
 
-- Does the task body contain an explicit request to create a new diagram
-  (e.g., "Create a share/diagrams/X.excalidraw diagram…")?
-- If yes: create the diagram using the `h-excalidraw-diagram` skill. Include a footer
-  text element: `Last verified: <today's date> (<current short commit hash>)`. Trigger
-  doc-index regeneration after creation (`uv run doc-index`).
-- If no: note "no explicit diagram creation request."
+Both layers must be documented in the task note with concrete evidence.
 
-### Item 7: Deletion Detection
-
-- Does the changed-files set include **deleted** files? Do any IN-scope descriptive docs
-  reference the deleted features or files?
-- If yes (deletion candidate detected):
-  1. Do **not** delete or modify the IN-scope doc directly.
-  2. Delegate child-task creation to planner:
-     `Plan and create: #<current_task_id> — create one follow-up at backlog titled "Delete stale docs in <path>" with parent #<current_task_id>`.
-  3. Block the child: `ob-kanban/edit_task(task_id=<child_id>, blocked=true,
-block_reason="awaiting deletion DR")`.
-  4. Invoke scribe: `Scribe: task_id=<current_task_id>, mode=check-or-create,
-concern="delete stale <path> — references deleted <feature>"`. Scribe writes a DR to
-     `.owlbear/decisions/pending/`.
-  5. Record the child task id in `## Docs Gate`.
-  6. **The current task advances to `done` without waiting for DR resolution.**
-- If no deletion candidates: note "no orphaned IN-scope docs detected."
-
-**No-impact case:** If all seven items resolve to N/A, write "no docs impact" explicitly
-in the `## Docs Gate` section and advance — no busywork.
-
-## Step 3 — Clean Scratch Files
+## Step 4 — Clean Scratch Files
 
 Look for `.owlbear/scratch/{task-id}-*` files and delete any that exist.
 
-## Step 4 — Commit & Advance
+## Step 5 — Commit & Advance
 
-If you created or modified files in Step 2, **commit them** (see `r-pipeline-protocol` → Who Commits What):
-
-```shell
-git add {updated_files} && git commit -m "docs: update docs for {feature} (#{id}, doc-writer)"
-```
-
-Stage only documentation files — no application code, no test files. Include diagrams and doc-index if updated. Skip commit if no files were changed.
-
-Include the docs gate report in your `end_work` note.
+If you created or modified files, commit them before advancing.
 
 Then advance via `end_work` (moves to `done` + releases claim).
-
-Return Channel A signal per `r-pipeline-protocol`.
-
-**Rejection:** If untested behavior is found, reject via
-`end_work(outcome="reject", move_to="review")`.
 
 ## Output Template
 
 Append to task body before advancing:
 
-```
+```markdown
 ## Docs Gate
 ### Checklist
 | # | Check | Applies? | Status | Evidence |
 |---|-------|----------|--------|----------|
-| 1 | Descriptive prose docs | {Yes/No} | {Updated/N/A} | {details} |
-| 2 | Module docstrings | {Yes/No} | {Updated/N/A} | {details} |
-| 3 | External attribution | {Yes/No} | {Updated/N/A} | {details} |
-| 4 | Research doc | {Yes/No} | {Verified/N/A} | {details} |
-| 5 | Diagram maintenance (describes match) | {Yes/No} | {Updated/N/A} | {details} |
-| 6 | Explicit diagram creation | {Yes/No} | {Created/N/A} | {details} |
-| 7 | Deletion detection | {Yes/No} | {Child task created/N/A} | {details} |
+| 1 | README verification | {Yes/No} | {Updated/N/A} | {details} |
+| 2 | External attribution | {Yes/No} | {Updated/N/A} | {details} |
+| 3 | Research doc | {Yes/No} | {Updated/N/A} | {details} |
+| 4 | Deletion detection | {Yes/No} | {Updated/N/A} | {details} |
 
-### Scope Classification
-| File | Scope | Action |
-|------|-------|--------|
-| {path} | IN/OUT | {Updated / N/A / Child task #{id}} |
+### Verification Layers
+- Layer 1 — {grep structural evidence}
+- Layer 2 — {LLM editorial evidence}
 
 ### Files Updated
-- {list or "None"}
-
-### Child Tasks Created
 - {list or "None"}
 
 ### Scratch Files Cleaned
@@ -195,29 +158,13 @@ Append to task body before advancing:
 ## Verification Checklist
 
 - [ ] Task is in `docs` status
-- [ ] Upstream `## Review Evidence` present (rejected if missing)
-- [ ] Doc-index loaded (advisory; continue on failure)
-- [ ] Changed-files set built from task body; each file classified IN/OUT scope
-- [ ] All checklist items (1–7) evaluated with evidence for IN-scope files
-- [ ] For N/A items, explained why they don't apply
-- [ ] For updated items, actually made the edits
-- [ ] Did NOT change application logic — only docstrings and documentation
-- [ ] Did NOT edit any OUT-of-scope agent-executable file
-- [ ] Diagram maintenance applied only where `describes` glob matched
-- [ ] Deletion candidates handled via child task + DR, not direct modification
-- [ ] Scratch files cleaned (`.owlbear/scratch/{task-id}-*`)
+- [ ] Checklist has exactly 4 items evaluated with evidence
+- [ ] Convention mapping `serve/{pkg}/src/**` → `serve/{pkg}/README.md` applied
+- [ ] Layer 1 structural grep verification completed
+- [ ] Layer 2 editorial verification completed
+- [ ] TODO marker format enforced where needed
+- [ ] task-caused unverified content blocks
+- [ ] pre-existing unverified content passes
+- [ ] No application logic changes
+- [ ] Scratch cleanup complete
 - [ ] Documentation changes committed before advancing
-
-## Known Pitfalls
-
-- **Missing Review Evidence upstream:** Most common rejection at the docs gate. Check
-  first to avoid wasted work.
-- **Scope creep into agent-executable files:** SKILL.md, .agent.md, .instructions.md,
-  .prompt.md, and `.github/copilot-instructions.md` are OUT of scope. Never edit them.
-- **Editing application logic:** Doc-writer edits docstrings and documentation only.
-- **Forgetting scratch cleanup:** Always check `.owlbear/scratch/{task-id}-*`.
-- **Stale docstrings:** Read the actual code behavior; a docstring matching the pre-task
-  behavior is stale even if it looks plausible.
-- **Deleting docs directly:** Always create a child task + DR. Never delete autonomously.
-- **False-positive diagram trigger:** Only update a diagram if a `describes` glob match
-  exists in the doc-index. Do not autonomously decide a diagram needs updating.
