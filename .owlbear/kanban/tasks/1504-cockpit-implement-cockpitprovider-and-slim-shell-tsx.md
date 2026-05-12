@@ -1,10 +1,10 @@
 ---
 id: 1504
 title: 'Cockpit: Implement CockpitProvider and slim Shell.tsx'
-status: research
+status: backlog
 priority: important
 created: 2026-05-12T02:59:59.210772+00:00
-updated: 2026-05-12T03:00:21.864987+00:00
+updated: 2026-05-12T10:47:41.434551+00:00
 tags:
   - cockpit
   - frontend
@@ -36,3 +36,5 @@ Extract all state management from Shell.tsx into a CockpitProvider context compo
 
 ## Source
 Research: .owlbear/research/1491-cockpit-provider-extraction.md
+2026-05-12T10:47:41+00:00
+Advanced from research to backlog. Research phase complete — full AC present from researcher. Ready for independent architecture review.

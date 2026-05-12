@@ -1,10 +1,10 @@
 ---
 id: 1494
 title: 'Cockpit: Add PDS banner for mutation error feedback'
-status: in-progress
+status: review
 priority: needed
 created: 2026-05-11T23:15:34.497443+00:00
-updated: 2026-05-12T09:40:28.092057+00:00
+updated: 2026-05-12T14:33:44.950409+00:00
 tags:
   - cockpit
   - frontend
@@ -451,3 +451,116 @@ Architecture review complete. Umbrella task for PDS mutation error feedback feat
 |---|-------------|----------------|---------|----------|
 | 1 | test-writer/builder/reviewer/docs/auditor pipeline | Advance child task #1500 from `todo` through implementation/test lifecycle to terminal completion. | .owlbear/kanban/tasks/1500-cockpit-tests-for-mutation-error-banner-and-inline-notification.md | Parent AC-1 dependency remains unmet while #1500 is not terminal-complete. |
 | 2 | builder/reviewer | Re-run parent #1494 completion gate only after #1500 reaches terminal completion and AC-2 artifact checks are reconfirmed. | .owlbear/kanban/tasks/1494-cockpit-add-pds-banner-for-mutation-error-feedback.md | AC-1 in parent body is a hard child-completion gate; #1498/#1499 are already complete. |
+2026-05-12T10:01:54+00:00
+## Builder Notes
+- Implementation: none (umbrella parent task; no direct source changes)
+- Tests: not run (parent-level non-implementation scope; `Proof bundle: skip` does not bypass AC-1 child-completion gate)
+- Coverage: N/A
+- ruff: N/A
+- Evidence summary: Parent AC-1 requires child tasks #1498, #1499, and #1500 to reach `done` before #1494 can advance. Current dependency snapshot: #1498=`archived` (completed), #1499=`archived` (completed), #1500=`in-progress` (not complete).
+- Routing decision: Parent completion gate remains structurally unreachable in builder scope; released claim with fail routing so prerequisite child task #1500 can complete first.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder/reviewer/docs/auditor pipeline | Complete child task #1500 from `in-progress` through terminal completion. | .owlbear/kanban/tasks/1500-cockpit-tests-for-mutation-error-banner-and-inline-notification.md | Parent AC-1 dependency remains unmet while #1500 is not terminal-complete. |
+| 2 | builder/reviewer | Re-run parent #1494 completion gate only after #1500 reaches terminal completion and AC-2 artifact checks are reconfirmed. | .owlbear/kanban/tasks/1494-cockpit-add-pds-banner-for-mutation-error-feedback.md | AC-1 in parent body is a hard child-completion gate; #1498/#1499 are already complete. |
+2026-05-12T10:46:15+00:00
+## Builder Notes
+- Implementation: none (umbrella parent task; no direct source changes)
+- Tests: not run (parent-level non-implementation scope; `Proof bundle: skip` does not bypass AC-1 child-completion gate)
+- Coverage: N/A
+- ruff: N/A
+- Evidence summary: Parent AC-1 requires child tasks #1498, #1499, and #1500 to reach `done` before #1494 can advance. Current dependency snapshot: #1498=`archived` (completed), #1499=`archived` (completed), #1500=`review` (not terminal-complete).
+- Routing decision: Parent completion gate remains structurally unreachable in builder scope; released claim with fail routing so prerequisite child task #1500 can complete first.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | reviewer/docs/auditor pipeline | Complete child task #1500 from `review` through terminal completion. | .owlbear/kanban/tasks/1500-cockpit-tests-for-mutation-error-banner-and-inline-notification.md | Parent AC-1 dependency remains unmet while #1500 is not terminal-complete. |
+| 2 | builder/reviewer | Re-run parent #1494 completion gate only after #1500 reaches terminal completion and AC-2 artifact checks are reconfirmed. | .owlbear/kanban/tasks/1494-cockpit-add-pds-banner-for-mutation-error-feedback.md | AC-1 in parent body is a hard child-completion gate; #1498/#1499 are already complete. |
+2026-05-12T11:25:59+00:00
+## Builder Notes
+- Implementation: none (umbrella parent task; no direct source changes)
+- Tests: not run (parent-level non-implementation scope; `Proof bundle: skip` does not bypass AC-1 child-completion gate)
+- Coverage: N/A
+- ruff: N/A
+- Evidence summary: Parent AC-1 requires child tasks #1498, #1499, and #1500 to reach `done` before #1494 can advance. Current dependency snapshot: #1498=`archived` (completed), #1499=`archived` (completed), #1500=`backlog` (not terminal-complete).
+- Routing decision: Parent completion gate remains structurally unreachable in builder scope; released claim with fail routing so prerequisite child task #1500 can complete first.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect/test-writer/builder/reviewer/docs/auditor pipeline | Advance child task #1500 from `backlog` through implementation/test lifecycle to terminal completion. | .owlbear/kanban/tasks/1500-cockpit-tests-for-mutation-error-banner-and-inline-notification.md | Parent AC-1 dependency remains unmet while #1500 is not terminal-complete. |
+| 2 | builder/reviewer | Re-run parent #1494 completion gate only after #1500 reaches terminal completion and AC-2 artifact checks are reconfirmed. | .owlbear/kanban/tasks/1494-cockpit-add-pds-banner-for-mutation-error-feedback.md | AC-1 in parent body is a hard child-completion gate; #1498/#1499 are already complete. |
+2026-05-12T11:53:15+00:00
+## Builder Notes
+- Implementation: none (umbrella parent task; no direct source changes)
+- Tests: not run (parent-level non-implementation scope; `Proof bundle: skip` does not bypass AC-1 child-completion gate)
+- Coverage: N/A
+- ruff: N/A
+- Evidence summary: Parent AC-1 requires child tasks #1498, #1499, and #1500 to reach `done` before #1494 can advance. Current dependency snapshot: #1498=`archived` (completed), #1499=`archived` (completed), #1500=`todo` (not terminal-complete).
+- Routing decision: Parent completion gate remains structurally unreachable in builder scope; released claim with fail routing so prerequisite child task #1500 can complete first.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | test-writer/builder/reviewer/docs/auditor pipeline | Advance child task #1500 from `todo` through implementation/test lifecycle to terminal completion. | .owlbear/kanban/tasks/1500-cockpit-tests-for-mutation-error-banner-and-inline-notification.md | Parent AC-1 dependency remains unmet while #1500 is not terminal-complete. |
+| 2 | builder/reviewer | Re-run parent #1494 completion gate only after #1500 reaches terminal completion and AC-2 artifact checks are reconfirmed. | .owlbear/kanban/tasks/1494-cockpit-add-pds-banner-for-mutation-error-feedback.md | AC-1 in parent body is a hard child-completion gate; #1498/#1499 are already complete. |
+2026-05-12T12:33:47+00:00
+## Builder Notes
+- Implementation: none (umbrella parent task; no direct source changes)
+- Tests: not run (parent-level non-implementation scope; `Proof bundle: skip` does not bypass AC-1 child-completion gate)
+- Coverage: N/A
+- ruff: N/A
+- Evidence summary: Parent AC-1 requires child tasks #1498, #1499, and #1500 to reach `done` before #1494 can advance. Current dependency snapshot: #1498=`archived` (completed), #1499=`archived` (completed), #1500=`in-progress` (not terminal-complete).
+- Artifact verification: AC-2 adoption remains satisfied in code — Shell renders `PBanner` for mutation errors (`serve/cockpit/web/src/Shell.tsx`), and modal-level errors use `PInlineNotification` (`serve/cockpit/web/src/components/ArchivalModal.tsx`, `serve/cockpit/web/src/components/ResolveModal.tsx`).
+- Routing decision: Parent completion gate remains structurally unreachable in builder scope; released claim with fail routing so prerequisite child task #1500 can complete first.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder/reviewer/docs/auditor pipeline | Complete child task #1500 from `in-progress` through terminal completion (`done`/`archived` per board policy). | .owlbear/kanban/tasks/1500-cockpit-tests-for-mutation-error-banner-and-inline-notification.md | Parent AC-1 dependency remains unmet while #1500 is not terminal-complete. |
+| 2 | builder/reviewer | Re-run parent #1494 completion gate only after #1500 reaches terminal completion; reconfirm AC-2 artifact adoption before advancing. | .owlbear/kanban/tasks/1494-cockpit-add-pds-banner-for-mutation-error-feedback.md | AC-1 in parent body is a hard child-completion gate; AC-2 artifacts verified in current source files. |
+2026-05-12T13:06:17+00:00
+## Builder Notes
+- Implementation: none (umbrella parent task; no direct source changes)
+- Tests: not run (parent-level non-implementation scope; `Proof bundle: skip` does not bypass AC-1 child-completion gate)
+- Coverage: N/A
+- ruff: N/A
+- Evidence summary: Parent AC-1 requires child tasks #1498, #1499, and #1500 to reach `done` before #1494 can advance. Current dependency snapshot: #1498=`archived` (completed), #1499=`archived` (completed), #1500=`review` (not terminal-complete).
+- Artifact verification: AC-2 adoption remains satisfied in code — Shell renders `PBanner` for mutation errors (`serve/cockpit/web/src/Shell.tsx`), and modal-level errors use `PInlineNotification` (`serve/cockpit/web/src/components/ArchivalModal.tsx`, `serve/cockpit/web/src/components/ResolveModal.tsx`).
+- Routing decision: Parent completion gate remains structurally unreachable in builder scope; released claim with fail routing so prerequisite child task #1500 can complete first.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | reviewer/docs/auditor pipeline | Complete child task #1500 from `review` through terminal completion (`done`/`archived` per board policy). | .owlbear/kanban/tasks/1500-cockpit-tests-for-mutation-error-banner-and-inline-notification.md | Parent AC-1 dependency remains unmet while #1500 is not terminal-complete. |
+| 2 | builder/reviewer | Re-run parent #1494 completion gate only after #1500 reaches terminal completion and AC-2 artifact checks are reconfirmed. | .owlbear/kanban/tasks/1494-cockpit-add-pds-banner-for-mutation-error-feedback.md | AC-1 in parent body is a hard child-completion gate; AC-2 artifacts are currently satisfied in source files. |
+2026-05-12T13:37:25+00:00
+## Builder Notes
+- Implementation: none (umbrella parent task; no direct source changes)
+- Tests: not run (parent-level non-implementation scope; `Proof bundle: skip` does not bypass AC-1 child-completion gate)
+- Coverage: N/A
+- ruff: N/A
+- Evidence summary: Parent AC-1 requires child tasks #1498, #1499, and #1500 to reach `done` before #1494 can advance. Current dependency snapshot from kanban list: #1498=`archived` (completed), #1499=`archived` (completed), #1500=`docs` (not terminal-complete and not `done`).
+- Artifact verification: AC-2 adoption remains satisfied in source (Shell-level `PBanner` and modal-level `PInlineNotification` already present), but AC-1 remains unmet.
+- Routing decision: Parent completion gate remains structurally unreachable in builder scope; released claim with fail routing so prerequisite child task #1500 can complete first.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | doc-writer/auditor pipeline | Complete child task #1500 from `docs` through terminal completion (`done`/`archived` per board policy). | .owlbear/kanban/tasks/1500-cockpit-tests-for-mutation-error-banner-and-inline-notification.md | Parent AC-1 dependency remains unmet while #1500 is `docs`. |
+| 2 | builder/reviewer | Re-run parent #1494 completion gate only after #1500 reaches terminal completion and AC-2 artifact checks are reconfirmed. | .owlbear/kanban/tasks/1494-cockpit-add-pds-banner-for-mutation-error-feedback.md | AC-1 in parent body is a hard child-completion gate; #1498/#1499 are already complete. |
+2026-05-12T14:33:44+00:00
+## Builder Notes
+- Implementation: none (umbrella parent task; no direct source changes)
+- Tests: not run (parent-level non-implementation scope; `Proof bundle: skip`)
+- Coverage: N/A
+- ruff: N/A
+- Evidence summary:
+  - AC-1 child-completion gate is now satisfied by board state: #1498=`archived` (completed), #1499=`archived` (completed), #1500=`done` (completed).
+  - AC-2 artifact adoption remains satisfied in source:
+    - Shell-level mutation feedback uses `PBanner` in `serve/cockpit/web/src/Shell.tsx`.
+    - Modal-level mutation feedback uses `PInlineNotification` in `serve/cockpit/web/src/components/ArchivalModal.tsx` and `serve/cockpit/web/src/components/ResolveModal.tsx`.
+- Routing decision: Parent #1494 completion gate is now reachable and satisfied; advanced to review.

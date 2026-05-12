@@ -1,10 +1,10 @@
 ---
 id: 1505
 title: 'Cockpit: Update Shell test suites for CockpitProvider hooks'
-status: research
+status: backlog
 priority: important
 created: 2026-05-12T02:59:59.249161+00:00
-updated: 2026-05-12T03:00:21.888854+00:00
+updated: 2026-05-12T10:47:41.395484+00:00
 tags:
   - cockpit
   - frontend
@@ -31,3 +31,5 @@ Update 8 Shell test files to mock CockpitProvider consumer hooks instead of curr
 
 ## Source
 Research: .owlbear/research/1491-cockpit-provider-extraction.md
+2026-05-12T10:47:41+00:00
+Advanced from research to backlog. Research phase complete — full AC present from researcher. Ready for independent architecture review (after #1504).

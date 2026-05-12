@@ -1,10 +1,10 @@
 ---
 id: 1492
 title: 'Cockpit: Decompose DetailTab.tsx into 4 components'
-status: in-progress
+status: todo
 priority: important
 created: 2026-05-11T23:15:07.557623+00:00
-updated: 2026-05-12T09:12:06.902548+00:00
+updated: 2026-05-12T14:33:03.165870+00:00
 tags:
   - cockpit
   - frontend
@@ -111,3 +111,135 @@ Architecture review complete. REFINE + APPROVE: Rewrote implementation-level AC 
 - Proof bundle: skip — no new test writing required.
 - Parent/tracker task — all implementation AC lives in child tasks #1506, #1507, #1508.
 - Passing through to builder.
+2026-05-12T09:54:51+00:00
+## Builder Notes
+
+Tracker/pass-through task (`Proof bundle: skip`) evaluated with no code changes.
+
+AC gate check for #1492:
+- AC-1 requires child #1506 at `done` -> current status: `in-progress`
+- AC-2 requires child #1507 at `done` -> current status: `in-progress`
+- AC-3 requires child #1508 at `done` -> current status: `research`
+
+Result: AC not yet satisfiable, so builder cannot advance #1492 to review.
+
+Files changed: none
+Tests run: none (pass-through tracker task)
+Lint: not run (no code changes)
+Evidence summary: child completion gate unmet; return to `todo` until #1506, #1507, #1508 reach `done`.
+2026-05-12T10:09:16+00:00
+## Test-Writer Notes
+- Proof bundle: skip — no new test writing required.
+- Parent/tracker task — all implementation AC lives in child tasks #1506, #1507, #1508.
+- Child status at pass-through: #1506 review, #1507 in-progress, #1508 backlog.
+- Passing through to builder.
+2026-05-12T10:56:38+00:00
+## Builder Notes
+
+Tracker/pass-through task (`Proof bundle: skip`) evaluated with no code changes.
+
+AC gate check for #1492:
+- AC-1 requires child #1506 at `done` -> current status: `in-progress`
+- AC-2 requires child #1507 at `done` -> current status: `review`
+- AC-3 requires child #1508 at `done` -> current status: `todo`
+
+Result: AC not yet satisfiable, so builder cannot advance #1492 to review.
+
+Files changed: none
+Tests run: none (pass-through tracker task)
+Lint: not run (no code changes)
+Evidence summary: child completion gates unmet; return to `todo` until #1506, #1507, #1508 reach `done`.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Re-run tracker pass-through once child task #1506 reaches `done` | .owlbear/kanban/tasks/1506.md | #1492 AC-1 gate unmet (child status `in-progress`) |
+| 2 | builder | Re-run tracker pass-through once child task #1507 reaches `done` | .owlbear/kanban/tasks/1507.md | #1492 AC-2 gate unmet (child status `review`) |
+| 3 | builder | Re-run tracker pass-through once child task #1508 reaches `done` | .owlbear/kanban/tasks/1508.md | #1492 AC-3 gate unmet (child status `todo`) |
+2026-05-12T11:31:38+00:00
+## Test-Writer Notes
+- Proof bundle: skip — no new test writing required.
+- Parent/tracker task — all implementation AC lives in child tasks #1506, #1507, #1508.
+- Child status at pass-through: #1506 in-progress (builder returned), #1507 review, #1508 todo.
+- Passing through to builder.
+2026-05-12T12:00:19+00:00
+## Builder Notes
+
+Tracker/pass-through task (`Proof bundle: skip`) evaluated with no code changes.
+
+AC gate check for #1492:
+- AC-1 requires child #1506 at `done` -> current status: `backlog`
+- AC-2 requires child #1507 at `done` -> current status: `review`
+- AC-3 requires child #1508 at `done` -> current status: `review`
+
+Result: AC not yet satisfiable, so builder cannot advance #1492 to review.
+
+Files changed: none
+Tests run: none (pass-through tracker task)
+Lint: not run (no code changes)
+Evidence summary: child completion gates unmet; return to `todo` until #1506, #1507, #1508 reach `done`.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Re-run tracker pass-through once child task #1506 reaches `done` | .owlbear/kanban/tasks/1506.md | #1492 AC-1 gate unmet (child status `backlog`) |
+| 2 | builder | Re-run tracker pass-through once child task #1507 reaches `done` | .owlbear/kanban/tasks/1507.md | #1492 AC-2 gate unmet (child status `review`) |
+| 3 | builder | Re-run tracker pass-through once child task #1508 reaches `done` | .owlbear/kanban/tasks/1508.md | #1492 AC-3 gate unmet (child status `review`) |
+2026-05-12T12:39:59+00:00
+## Test-Writer Notes
+- Proof bundle: skip — no new test writing required.
+- Parent/tracker task — all implementation AC lives in child tasks #1506, #1507, #1508.
+- Child status at pass-through: #1506 backlog, #1507 review, #1508 review.
+- Passing through to builder.
+2026-05-12T13:10:22+00:00
+## Builder Notes
+
+Tracker/pass-through task (`Proof bundle: skip`) evaluated with no code changes.
+
+AC gate check for #1492:
+- AC-1 requires child #1506 at `done` -> current status: `review`
+- AC-2 requires child #1507 at `done` -> current status: `todo`
+- AC-3 requires child #1508 at `done` -> current status: `review`
+
+Result: AC not yet satisfiable, so builder cannot advance #1492 to review.
+
+Files changed: none
+Tests run: none (pass-through tracker task)
+Lint: not run (no code changes)
+Evidence summary: child completion gates unmet; return to `todo` until #1506, #1507, #1508 reach `done`.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Re-run tracker pass-through once child task #1506 reaches `done`. | .owlbear/kanban/tasks/1506-cockpit-extract-useconflictdraft-hook-conflictbanner-component-from-detailtab.md | AC-1 gate unmet (child status `review`) |
+| 2 | builder | Re-run tracker pass-through once child task #1507 reaches `done`. | .owlbear/kanban/tasks/1507-cockpit-extract-usetaskmutation-hook-taskactions-component-from-detailtab.md | AC-2 gate unmet (child status `todo`) |
+| 3 | builder | Re-run tracker pass-through once child task #1508 reaches `done`. | .owlbear/kanban/tasks/1508-cockpit-extract-taskfieldseditor-reduce-detailtab-to-container.md | AC-3 gate unmet (child status `review`) |
+2026-05-12T13:43:47+00:00
+## Test-Writer Notes
+- Proof bundle: skip — no new test writing required.
+- Parent/tracker task — all implementation AC lives in child tasks #1506, #1507, #1508.
+- Child status at pass-through: #1506 review, #1507 todo, #1508 review.
+- Passing through to builder.
+2026-05-12T14:33:03+00:00
+## Builder Notes
+
+Tracker/pass-through task (`Proof bundle: skip`) evaluated with no code changes.
+
+AC gate check for #1492:
+- AC-1 requires child #1506 at `done` -> current status: `docs`
+- AC-2 requires child #1507 at `done` -> current status: `docs`
+- AC-3 requires child #1508 at `done` -> current status: `todo`
+
+Result: AC not yet satisfiable, so builder cannot advance #1492 to review.
+
+Files changed: none
+Tests run: none (pass-through tracker task)
+Lint: not run (no code changes)
+Evidence summary: child completion gates unmet; return to `todo` until #1506, #1507, #1508 each reach `done`.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Re-run tracker pass-through once child task #1506 reaches `done`. | .owlbear/kanban/tasks/1506-cockpit-extract-useconflictdraft-hook-conflictbanner-component-from-detailtab.md | AC-1 gate unmet (child status `docs`) |
+| 2 | builder | Re-run tracker pass-through once child task #1507 reaches `done`. | .owlbear/kanban/tasks/1507-cockpit-extract-usetaskmutation-hook-taskactions-component-from-detailtab.md | AC-2 gate unmet (child status `docs`) |
+| 3 | builder | Re-run tracker pass-through once child task #1508 reaches `done`. | .owlbear/kanban/tasks/1508-cockpit-extract-taskfieldseditor-reduce-detailtab-to-container.md | AC-3 gate unmet (child status `todo`) |
