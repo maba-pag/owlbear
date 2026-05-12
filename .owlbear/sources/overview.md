@@ -26,6 +26,12 @@ External repos and resources studied during OwlBear development.
 |--------|-----|------|------------|------|
 | PDS Banner examples (v3) | <https://designsystem.porsche.com/v3/components/banner/examples/> | Usage patterns, slot-based heading/description, CSS custom properties | `.owlbear/research/cockpit-wire-pbanner-shell.md` | 2026-05-12 |
 
+## PInlineNotification Modal Error Research (Task #1499)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| PDS Inline Notification examples (v3) | <https://designsystem.porsche.com/v3/components/inline-notification/examples/> | Usage patterns for actionLabel/actionIcon retry affordance and onDismiss binding | `.owlbear/research/cockpit-inline-notification-modal.md` | 2026-05-12 |
+
 ## PDS v4 Local Hosting Research (Task #1495)
 
 | Source | URL | What | Where Used | Date |
