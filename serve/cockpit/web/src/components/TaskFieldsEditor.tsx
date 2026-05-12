@@ -11,7 +11,7 @@ import rehypeSanitize from 'rehype-sanitize'
 import type { TaskDetail } from './DetailTab'
 import type { ConflictLocalDraft } from '../hooks/useConflictDraft'
 
-export interface TaskEditPayload {
+export type TaskEditPayload = Record<string, unknown> & {
   updated: string
   title: string
   priority: string
