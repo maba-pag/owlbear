@@ -30,8 +30,8 @@
  *   (element as any).onAction   — () => void
  *   (element as any).onDismiss  — () => void
  */
-import { beforeAll, describe, it, expect, vi, afterEach, act } from 'vitest'
-import { render, fireEvent, waitFor } from '@testing-library/react'
+import { beforeAll, describe, it, expect, vi, afterEach } from 'vitest'
+import { render, fireEvent, waitFor, act } from '@testing-library/react'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
 import ArchivalModal from '../components/ArchivalModal'
 import ResolveModal from '../components/ResolveModal'
