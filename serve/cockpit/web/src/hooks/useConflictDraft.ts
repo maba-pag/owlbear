@@ -97,12 +97,17 @@ export function useConflictDraft(): UseConflictDraftResult {
   }, [])
 
   const clearConflictIfTaskChanged = useCallback((taskId: number | undefined): void => {
-    if (taskId === conflictRemoteTask?.id) {
+    if (conflictRemoteTask === null) {
+      return
+    }
+
+    if (taskId === conflictRemoteTask.id) {
       return
     }
 
     setConflictLocalDraft(null)
     setConflictRemoteTask(null)
+    setShowConflict(false)
     setShowConflictOverwrite(false)
   }, [conflictRemoteTask?.id])
 
