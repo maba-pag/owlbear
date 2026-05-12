@@ -39,6 +39,8 @@ External repos and resources studied during OwlBear development.
 | PDS v4 CDN docs | <https://designsystem.porsche.com/v4/must-know/performance/cdn/> | CDN architecture, China CDN config — confirms only `auto`/`cn` options | `.owlbear/research/1495-pds-v4-local-hosting.md` | 2026-05-12 |
 | PDS v4 migration guide | <https://designsystem.porsche.com/v4/news/migration-guide/porsche-design-system/> | Breaking changes in v4: removed `getInitialStyles()`, mandatory global styles | `.owlbear/research/1495-pds-v4-local-hosting.md` | 2026-05-12 |
 | PDS GitHub `load()` source | <https://github.com/porsche-design-system/porsche-design-system/blob/main/packages/components-js/projects/components-manager-cli/library-entry/with-prefix.ts> | Load function internals: hardcoded CDN URLs, cdn.url assignment | `.owlbear/research/1495-pds-v4-local-hosting.md` | 2026-05-12 |
+| PDS GitHub issue #2701 | <https://github.com/porsche-design-system/porsche-design-system/issues/2701> | "Make Components-JS Prod Build configurable" — open since 2023, confirming no self-hosting support | `.owlbear/research/1495-pds-v4-local-hosting.md` | 2026-05-12 |
+| PDS `getCDNBaseURL` utility | <https://github.com/porsche-design-system/porsche-design-system/blob/main/packages/components/src/utils/getCDNBaseURL.ts> | Compile-time replaced with `document.porscheDesignSystem.cdn.url` in production builds | `.owlbear/research/1495-pds-v4-local-hosting.md` | 2026-05-12 |
 
 ## Cockpit API Client Centralization Research (Task #1493)
 
@@ -46,8 +48,6 @@ External repos and resources studied during OwlBear development.
 |--------|-----|------|------------|------|
 | Kent C. Dodds — Replace axios with a simple custom fetch wrapper | <https://kentcdodds.com/blog/replace-axios-with-a-simple-custom-fetch-wrapper> | Validates plain async function wrappers for same-origin SPAs | `.owlbear/research/cockpit-api-client-centralization.md` | 2026-05-12 |
 | dev.to — Building a Type-Safe API Client in TypeScript | <https://dev.to/limacodes/building-a-type-safe-api-client-in-typescript-beyond-axios-vs-fetch-4a3i> | Typed wrapper functions eliminate fetch duplication | `.owlbear/research/cockpit-api-client-centralization.md` | 2026-05-12 |
-| PDS GitHub issue #2701 | <https://github.com/porsche-design-system/porsche-design-system/issues/2701> | "Make Components-JS Prod Build configurable" — open since 2023, confirming no self-hosting support | `.owlbear/research/1495-pds-v4-local-hosting.md` | 2026-05-12 |
-| PDS `getCDNBaseURL` utility | <https://github.com/porsche-design-system/porsche-design-system/blob/main/packages/components/src/utils/getCDNBaseURL.ts> | Compile-time replaced with `document.porscheDesignSystem.cdn.url` in production builds | `.owlbear/research/1495-pds-v4-local-hosting.md` | 2026-05-12 |
 
 ## PDS Property Trap Validation (Task #1496)
 
@@ -364,6 +364,8 @@ External repos and resources studied during OwlBear development.
 | Bundlephobia: react-virtuoso | <https://bundlephobia.com/package/react-virtuoso@4.18.5> | Bundle composition: 100% self, tree-shakeable, side-effect free | `.owlbear/research/959-frontend-perf-virtualization.md` | 2026-04-18 |
 | Bundlephobia: react-window | <https://bundlephobia.com/package/react-window@2.2.7> | Bundle composition: 100% self, tree-shakeable | `.owlbear/research/959-frontend-perf-virtualization.md` | 2026-04-18 |
 | Vitest bench API | <https://vitest.dev/api/#bench> | Experimental Tinybench-based benchmarking, `bench()` function, statistical output | `.owlbear/research/959-frontend-perf-virtualization.md` | 2026-04-18 |
+
+> **TODO:** stale — duplicate section heading for Task #970 (MD024); merge with first occurrence above [#1495]
 
 ## React Compiler + PDS Interop (Task #970)
 
@@ -4492,6 +4494,8 @@ External repos and resources studied during OwlBear development.
 | Playwright webServer docs | <https://playwright.dev/docs/test-webserver> | webServer config: command, url, reuseExistingServer, timeout, auto-start dev server | .owlbear/research/956-playwright-e2e-infrastructure.md | 2026-04-18 |
 | Playwright config reference | <https://playwright.dev/docs/test-configuration> | testDir, projects, reporters, fullyParallel, forbidOnly, workers | .owlbear/research/956-playwright-e2e-infrastructure.md | 2026-04-18 |
 | Vite preview options | <https://vite.dev/config/preview-options.html> | Default port 4173, strictPort, host options for vite preview | .owlbear/research/956-playwright-e2e-infrastructure.md | 2026-04-18 |
+
+> **TODO:** stale — duplicate section heading for Task #969 (MD024); merge with first occurrence above [#1495]
 
 ## React Compiler Evaluation (Task #969)
 
