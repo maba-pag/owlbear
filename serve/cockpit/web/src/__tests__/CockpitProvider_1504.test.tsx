@@ -64,9 +64,9 @@ const DEFAULT_SCAN_STATE = {
   refetch: mockScanRefetch,
 }
 
-const mockUseBoard = vi.hoisted(() => vi.fn().mockReturnValue(DEFAULT_BOARD_STATE))
-const mockUsePendingDRs = vi.hoisted(() => vi.fn().mockReturnValue(DEFAULT_DR_STATE))
-const mockUseScanPolling = vi.hoisted(() => vi.fn().mockReturnValue(DEFAULT_SCAN_STATE))
+const mockUseBoard = vi.hoisted(() => vi.fn())
+const mockUsePendingDRs = vi.hoisted(() => vi.fn())
+const mockUseScanPolling = vi.hoisted(() => vi.fn())
 
 // ─── Module mocks ─────────────────────────────────────────────────────────────
 
