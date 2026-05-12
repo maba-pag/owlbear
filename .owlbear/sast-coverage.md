@@ -8,7 +8,6 @@
 | Tool | Category | Scan Scope | Determinism |
 |------|----------|------------|-------------|
 | Ruff S-rules | Python SAST | Python source under `serve/*/src/` (plus tests/scripts in CI runs) | Yes |
-| Gitleaks | Secret detection | Full repository content and commit history as scanned by MegaLinter | Yes |
 | DevSkim | Pattern-based SAST | Source files across the repository | Yes |
 | Trivy | Dependency and configuration security scan | Repository filesystem and dependency manifests | Mostly (depends on vuln DB version) |
 

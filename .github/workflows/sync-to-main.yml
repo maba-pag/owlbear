@@ -188,7 +188,6 @@ jobs:
           fi
           if [[ "$SYNC_INFRA" == "true" ]]; then
             paths="$paths .github .vscode .editorconfig .gitattributes .gitignore"
-            paths="$paths .gitleaks.toml .gitleaksignore"
             paths="$paths .markdownlint-cli2.jsonc .markdownlint.json .markdownlintignore"
             paths="$paths .mega-linter.yml .pre-commit-config.yaml .python-version"
             paths="$paths .yamllint.yml pyproject.toml SECURITY.md uv.lock"
@@ -258,7 +257,6 @@ jobs:
             git checkout dev -- \
               share serve setup seed \
               .github .vscode .editorconfig .gitattributes .gitignore \
-              .gitleaks.toml .gitleaksignore \
               .markdownlint-cli2.jsonc .markdownlint.json .markdownlintignore \
               .mega-linter.yml .pre-commit-config.yaml .python-version \
               .yamllint.yml pyproject.toml SECURITY.md uv.lock \
@@ -327,7 +325,6 @@ jobs:
               git rm -rf .github .vscode --quiet 2>/dev/null || true
               git checkout dev -- \
                 .github .vscode .editorconfig .gitattributes .gitignore \
-                .gitleaks.toml .gitleaksignore \
                 .markdownlint-cli2.jsonc .markdownlint.json .markdownlintignore \
                 .mega-linter.yml .pre-commit-config.yaml .python-version \
                 .yamllint.yml pyproject.toml SECURITY.md uv.lock \
