@@ -18,6 +18,13 @@ External repos and resources studied during OwlBear development.
 | PDS v4 CDN docs | <https://designsystem.porsche.com/v4/must-know/performance/cdn/> | CDN architecture, China CDN config — confirms only `auto`/`cn` options | `.owlbear/research/1495-pds-v4-local-hosting.md` | 2026-05-12 |
 | PDS v4 migration guide | <https://designsystem.porsche.com/v4/news/migration-guide/porsche-design-system/> | Breaking changes in v4: removed `getInitialStyles()`, mandatory global styles | `.owlbear/research/1495-pds-v4-local-hosting.md` | 2026-05-12 |
 | PDS GitHub `load()` source | <https://github.com/porsche-design-system/porsche-design-system/blob/main/packages/components-js/projects/components-manager-cli/library-entry/with-prefix.ts> | Load function internals: hardcoded CDN URLs, cdn.url assignment | `.owlbear/research/1495-pds-v4-local-hosting.md` | 2026-05-12 |
+
+## Cockpit API Client Centralization Research (Task #1493)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Kent C. Dodds — Replace axios with a simple custom fetch wrapper | <https://kentcdodds.com/blog/replace-axios-with-a-simple-custom-fetch-wrapper> | Validates plain async function wrappers for same-origin SPAs | `.owlbear/research/cockpit-api-client-centralization.md` | 2026-05-12 |
+| dev.to — Building a Type-Safe API Client in TypeScript | <https://dev.to/limacodes/building-a-type-safe-api-client-in-typescript-beyond-axios-vs-fetch-4a3i> | Typed wrapper functions eliminate fetch duplication | `.owlbear/research/cockpit-api-client-centralization.md` | 2026-05-12 |
 | PDS GitHub issue #2701 | <https://github.com/porsche-design-system/porsche-design-system/issues/2701> | "Make Components-JS Prod Build configurable" — open since 2023, confirming no self-hosting support | `.owlbear/research/1495-pds-v4-local-hosting.md` | 2026-05-12 |
 | PDS `getCDNBaseURL` utility | <https://github.com/porsche-design-system/porsche-design-system/blob/main/packages/components/src/utils/getCDNBaseURL.ts> | Compile-time replaced with `document.porscheDesignSystem.cdn.url` in production builds | `.owlbear/research/1495-pds-v4-local-hosting.md` | 2026-05-12 |
 
