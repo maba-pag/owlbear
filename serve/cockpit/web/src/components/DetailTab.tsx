@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   PButton,
   PInputText,
@@ -9,14 +9,14 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeSanitize from 'rehype-sanitize'
 import HistorySubtab, { type Session } from './HistorySubtab'
-import ConfirmDialog from './ConfirmDialog'
 import ConflictBanner from './ConflictBanner'
+import TaskActions from './TaskActions'
 import type { Board } from '../hooks/useBoard'
-import { getResponseErrorMessage } from '../api/errorMessage'
 import {
   useConflictDraft,
   type ConflictLocalDraft,
 } from '../hooks/useConflictDraft'
+import { useTaskMutation } from '../hooks/useTaskMutation'
 
 export interface TaskDetail {
   id: number
@@ -46,11 +46,6 @@ export interface DetailTabProps {
   initialSubtab?: string | null
 }
 
-interface MutationOptions {
-  conflictDraft?: ConflictLocalDraft
-  errorHeading: string
-}
-
 export default function DetailTab({
   task,
   board,
@@ -75,10 +70,25 @@ export default function DetailTab({
     dismissConflict,
     clearConflictIfTaskChanged,
   } = useConflictDraft()
-  const [serverValidationMessage, setServerValidationMessage] = useState<string | null>(null)
-  const [confirmType, setConfirmType] = useState<null | 'move-backward' | 'unblock' | 'unclaim'>(null)
-  const [pendingFocusRestore, setPendingFocusRestore] = useState<HTMLElement | null>(null)
-  const confirmTriggerRef = useRef<HTMLElement | null>(null)
+  const {
+    serverValidationMessage,
+    previousStatus,
+    runMutation,
+  } = useTaskMutation({
+    taskId: task?.id ?? 0,
+    taskUpdated: task?.updated ?? '',
+    board,
+    conflictActions: {
+      clearConflict,
+      setConflictDetected,
+      setConflictDetectedNoRefetch: (localDraft) => {
+        setConflictDetected(localDraft, null)
+      },
+    },
+    onTaskUpdated,
+    onTaskCleared,
+    onMutationError,
+  })
   const [showHistory, setShowHistory] = useState(false)
   const [sessions, setSessions] = useState<Session[]>([])
   const [title, setTitle] = useState(task?.title ?? '')
@@ -105,20 +115,8 @@ export default function DetailTab({
     setDependsOn(task?.depends_on.join(', ') ?? '')
     setParent(task?.parent !== null ? String(task?.parent) : '')
     setBlockReason(task?.block_reason ?? '')
-    setServerValidationMessage(null)
-    setConfirmType(null)
     clearConflictIfTaskChanged(task?.id)
   }, [task?.id, task?.updated, conflictLocalDraft, conflictRemoteTask, clearConflictIfTaskChanged])
-
-  useEffect(() => {
-    if (confirmType === null && pendingFocusRestore) {
-      if (!pendingFocusRestore.hasAttribute('tabindex')) {
-        pendingFocusRestore.setAttribute('tabindex', '-1')
-      }
-      pendingFocusRestore.focus()
-      setPendingFocusRestore(null)
-    }
-  }, [confirmType, pendingFocusRestore])
 
   useEffect(() => {
     if (initialSubtab !== 'history' || task === null) {
@@ -185,91 +183,6 @@ export default function DetailTab({
   const validationMessage = clientValidationMessage ?? serverValidationMessage
   const backwardTarget = previousStatus(t.status)
 
-  function previousStatus(current: string): string | null {
-    if (!board) {
-      return null
-    }
-
-    const statuses = board.statuses.map((status) => status.name)
-    const currentIndex = statuses.indexOf(current)
-    if (currentIndex <= 0) {
-      return null
-    }
-
-    const previous = statuses[currentIndex - 1]
-    const valid = board.valid_transitions[current] ?? []
-    return valid.includes(previous) ? previous : null
-  }
-
-  async function runMutation(
-    url: string,
-    payload: Record<string, unknown>,
-    options: MutationOptions,
-  ): Promise<void> {
-    setServerValidationMessage(null)
-    let res: Response
-    try {
-      res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Network error'
-      setServerValidationMessage(message)
-      onMutationError?.(options.errorHeading, message, 'error')
-      return
-    }
-
-    if (res.ok) {
-      const updatedTask = (await res.json()) as TaskDetail
-      clearConflict()
-      onTaskUpdated?.(updatedTask)
-      return
-    }
-
-    if (res.status === 409) {
-      const localDraft = options.conflictDraft ?? null
-      const latestRes = await fetch(`/api/tasks/${t.id}`, { method: 'GET' })
-      if (latestRes.ok) {
-        const latestTask = (await latestRes.json()) as TaskDetail
-        setConflictDetected(localDraft, latestTask)
-        onTaskUpdated?.(latestTask)
-      } else if (latestRes.status === 404) {
-        const message = await getResponseErrorMessage(latestRes, 'Task not found')
-        setServerValidationMessage(message)
-        clearConflict()
-        onTaskCleared?.(message)
-        return
-      } else {
-        setConflictDetected(localDraft, null)
-        // Preserve conflict UX even if the refetch fails (non-404):
-        // user can still decide to discard/overwrite local edits.
-        setServerValidationMessage(
-          await getResponseErrorMessage(latestRes, `Request failed with status ${latestRes.status}`),
-        )
-        return
-      }
-      return
-    }
-
-    if (res.status === 404) {
-      onTaskCleared?.()
-      return
-    }
-
-    if (res.status === 422) {
-      const message = await getResponseErrorMessage(res, 'Validation failed')
-      setServerValidationMessage(message)
-      onMutationError?.(options.errorHeading, message, 'warning')
-      return
-    }
-
-    const message = await getResponseErrorMessage(res, `Request failed with status ${res.status}`)
-    setServerValidationMessage(message)
-    onMutationError?.(options.errorHeading, message, 'error')
-  }
-
   async function handleSave() {
     if (clientValidationMessage !== null) {
       return
@@ -325,55 +238,6 @@ export default function DetailTab({
       parent: forceParent.value,
       block_reason: t.blocked ? draft.blockReason : null,
     }, { errorHeading: 'Edit failed' })
-  }
-
-  async function handleConfirm() {
-    if (confirmType === 'unblock') {
-      await runMutation(
-        `/api/tasks/${t.id}/edit`,
-        { updated: t.updated, block_reason: null },
-        { errorHeading: 'Unblock failed' },
-      )
-      setConfirmType(null)
-      return
-    }
-    if (confirmType === 'unclaim') {
-      await runMutation(
-        `/api/tasks/${t.id}/release`,
-        { updated: t.updated },
-        { errorHeading: 'Unclaim failed' },
-      )
-      setConfirmType(null)
-      return
-    }
-    if (confirmType === 'move-backward') {
-      const target = backwardTarget
-      if (target) {
-        await runMutation(
-          `/api/tasks/${t.id}/move`,
-          { updated: t.updated, status: target },
-          { errorHeading: 'Move failed' },
-        )
-      }
-      setConfirmType(null)
-    }
-  }
-
-  function handleConfirmCancel() {
-    const trigger = confirmTriggerRef.current
-    setPendingFocusRestore(trigger)
-    setConfirmType(null)
-  }
-
-  function openConfirm(type: 'move-backward' | 'unblock' | 'unclaim') {
-    let triggerId = 'unblock-action'
-    if (type === 'move-backward') {
-      triggerId = 'move-backward'
-    } else if (type === 'unclaim') {
-      triggerId = 'unclaim-action'
-    }
-    confirmTriggerRef.current = document.querySelector(`[data-testid="${triggerId}"]`) as HTMLElement | null
-    setConfirmType(type)
   }
 
   async function handleHistoryClick() {
@@ -512,33 +376,11 @@ export default function DetailTab({
       <PButton data-testid="save-button" onClick={() => void handleSave()}>
         Save
       </PButton>
-      {backwardTarget && (
-        <PButton
-          data-testid="move-backward"
-          variant="secondary"
-          onClick={() => openConfirm('move-backward')}
-        >
-          Move Backward
-        </PButton>
-      )}
-      {t.claimed !== false && (
-        <PButton
-          data-testid="unclaim-action"
-          variant="secondary"
-          onClick={() => openConfirm('unclaim')}
-        >
-          Unclaim
-        </PButton>
-      )}
-      {t.blocked && (
-        <PButton
-          data-testid="unblock-action"
-          variant="secondary"
-          onClick={() => openConfirm('unblock')}
-        >
-          Unblock
-        </PButton>
-      )}
+      <TaskActions
+        task={t}
+        backwardTarget={backwardTarget}
+        runMutation={runMutation}
+      />
 
       {/* History subtab */}
       {(showHistory || initialSubtab === 'history') && (
@@ -558,16 +400,6 @@ export default function DetailTab({
       />
       {validationMessage && <div data-testid="validation-message">{validationMessage}</div>}
 
-      {/* Confirm dialog */}
-      {confirmType !== null && (
-        <ConfirmDialog
-          type={confirmType}
-          targetStatus={backwardTarget}
-          blockReason={t.block_reason}
-          onCancel={handleConfirmCancel}
-          onConfirm={() => void handleConfirm()}
-        />
-      )}
     </div>
   )
 }
