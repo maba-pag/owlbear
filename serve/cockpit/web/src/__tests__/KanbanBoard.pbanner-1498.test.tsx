@@ -208,6 +208,21 @@ describe('TestFromAC_KanbanBoardMutationCallbacks', () => {
       })
     })
 
+    it('handleTransitionClick calls onMutationError with "Move failed" on 409 response', async () => {
+      stubMoveFetch({ status: 409 })
+      const spy = vi.fn()
+      const { container } = renderBoard({ onMutationError: spy })
+
+      await openContextMenu(container)
+      fireEvent.click(
+        container.querySelector('[data-testid="transition-item"][data-status="todo"]')!,
+      )
+
+      await waitFor(() => {
+        expect(spy).toHaveBeenCalledWith('Move failed', expect.any(String), 'error')
+      })
+    })
+
     it('handleTransitionClick calls onMutationError with "Move failed" on network error', async () => {
       stubMoveFetch({ network: true })
       const spy = vi.fn()
