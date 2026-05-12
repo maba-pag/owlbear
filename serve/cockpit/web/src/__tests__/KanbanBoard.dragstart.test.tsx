@@ -88,7 +88,7 @@ function stubMoveFetch(opts: MoveFetchOptions = {}) {
 // --- Render helper ------------------------------------------------------------
 // Passes board + tasks as props; refetchSpy is tracked directly for AC3/AC4/AC5.
 
-function renderBoard(refetchSpy = vi.fn()) {
+function renderBoard(refetchSpy = vi.fn(), onMutationError?: (heading: string, description: string, state: 'error' | 'warning') => void) {
   return render(
     <PorscheDesignSystemProvider>
       <MemoryRouter>
@@ -98,6 +98,7 @@ function renderBoard(refetchSpy = vi.fn()) {
           loading={false}
           error={null}
           refetchTasks={refetchSpy}
+          onMutationError={onMutationError}
         />
       </MemoryRouter>
     </PorscheDesignSystemProvider>,
@@ -273,37 +274,29 @@ describe('TestFromAC_Drop409', () => {
     vi.unstubAllGlobals()
   })
 
-  // Happy (error condition): 409 -> moveError element appears.
-  it('on 409 response, displays a move-error message', async () => {
+  // Happy (error condition): 409 -> onMutationError called.
+  it('on 409 response, calls onMutationError with error state', async () => {
     stubMoveFetch({ moveStatus: 409 })
-    const { container } = renderBoard()
+    const mutationErrorSpy = vi.fn()
+    const { container } = renderBoard(vi.fn(), mutationErrorSpy)
     await waitAndDragCard(container)
     dropOnTodo(container)
 
     await waitFor(() => {
-      const errorEl = container.querySelector('[data-testid="move-error"]')
-      expect(errorEl).not.toBeNull()
-      expect((errorEl?.textContent ?? '').length).toBeGreaterThan(0)
+      expect(mutationErrorSpy).toHaveBeenCalledWith('Move failed', expect.any(String), 'error')
     })
   })
 
-  // Edge: 409 error message specifically indicates a stale / snapshot / conflict.
-  it('on 409 response, error text indicates a stale-snapshot conflict', async () => {
+  // Edge: 409 triggers onMutationError (conflict is shown via PBanner callback contract).
+  it('on 409 response, onMutationError is called (conflict shown via Shell PBanner)', async () => {
     stubMoveFetch({ moveStatus: 409 })
-    const { container } = renderBoard()
+    const mutationErrorSpy = vi.fn()
+    const { container } = renderBoard(vi.fn(), mutationErrorSpy)
     await waitAndDragCard(container)
     dropOnTodo(container)
 
     await waitFor(() => {
-      const errorEl = container.querySelector('[data-testid="move-error"]')
-      expect(errorEl).not.toBeNull()
-      const text = (errorEl?.textContent ?? '').toLowerCase()
-      expect(
-        text.includes('stale') ||
-          text.includes('snapshot') ||
-          text.includes('outdated') ||
-          text.includes('conflict'),
-      ).toBe(true)
+      expect(mutationErrorSpy).toHaveBeenCalledWith('Move failed', expect.any(String), 'error')
     })
   })
 
@@ -325,15 +318,16 @@ describe('TestFromAC_Drop409', () => {
   // branch is intentionally distinct from generic error handling (AC5 contract).
   // Direct spy assertion: stronger than a timing-window fetch-count check and
   // catches early (pre-error-render) refetch calls that a baseline approach would miss.
-  it('on 422 response, displays error but does NOT call refetchTasks() (unlike 409)', async () => {
+  it('on 422 response, calls onMutationError but does NOT call refetchTasks() (unlike 409)', async () => {
     stubMoveFetch({ moveStatus: 422 })
     const refetchSpy = vi.fn()
-    const { container } = renderBoard(refetchSpy)
+    const mutationErrorSpy = vi.fn()
+    const { container } = renderBoard(refetchSpy, mutationErrorSpy)
     await waitAndDragCard(container)
     dropOnTodo(container)
 
     await waitFor(() => {
-      expect(container.querySelector('[data-testid="move-error"]')).not.toBeNull()
+      expect(mutationErrorSpy).toHaveBeenCalledWith('Move failed', expect.any(String), 'error')
     })
 
     // Allow extra ticks; refetchTasks() must never be called for a 422.
@@ -349,28 +343,30 @@ describe('TestFromAC_DropOtherError', () => {
     vi.unstubAllGlobals()
   })
 
-  // Smoke: 500 -> moveError element appears.
-  it('on 500 response, displays a move-error message', async () => {
+  // Smoke: 500 -> onMutationError called.
+  it('on 500 response, calls onMutationError with error state', async () => {
     stubMoveFetch({ moveStatus: 500 })
-    const { container } = renderBoard()
+    const mutationErrorSpy = vi.fn()
+    const { container } = renderBoard(vi.fn(), mutationErrorSpy)
     await waitAndDragCard(container)
     dropOnTodo(container)
 
     await waitFor(() => {
-      expect(container.querySelector('[data-testid="move-error"]')).not.toBeNull()
+      expect(mutationErrorSpy).toHaveBeenCalledWith('Move failed', expect.any(String), 'error')
     })
   })
 
-  // Error: network failure -> moveError element appears; refetchTasks() NOT called.
-  it('on network failure, displays a move-error message and does NOT call refetchTasks()', async () => {
+  // Error: network failure -> onMutationError called; refetchTasks() NOT called.
+  it('on network failure, calls onMutationError and does NOT call refetchTasks()', async () => {
     stubMoveFetch({ moveNetwork: true })
     const refetchSpy = vi.fn()
-    const { container } = renderBoard(refetchSpy)
+    const mutationErrorSpy = vi.fn()
+    const { container } = renderBoard(refetchSpy, mutationErrorSpy)
     await waitAndDragCard(container)
     dropOnTodo(container)
 
     await waitFor(() => {
-      expect(container.querySelector('[data-testid="move-error"]')).not.toBeNull()
+      expect(mutationErrorSpy).toHaveBeenCalledWith('Move failed', expect.any(String), 'error')
     })
 
     // Allow extra ticks; refetchTasks() must never be called for a network error.
@@ -381,15 +377,16 @@ describe('TestFromAC_DropOtherError', () => {
   // Boundary: 500 must NOT trigger refetchTasks() -- polling handles eventual
   // consistency. Direct spy assertion catches early refetch calls that a
   // timing-window fetch-count baseline approach would miss.
-  it('on 500 response, displays error and does NOT call refetchTasks()', async () => {
+  it('on 500 response, calls onMutationError and does NOT call refetchTasks()', async () => {
     stubMoveFetch({ moveStatus: 500 })
     const refetchSpy = vi.fn()
-    const { container } = renderBoard(refetchSpy)
+    const mutationErrorSpy = vi.fn()
+    const { container } = renderBoard(refetchSpy, mutationErrorSpy)
     await waitAndDragCard(container)
     dropOnTodo(container)
 
     await waitFor(() => {
-      expect(container.querySelector('[data-testid="move-error"]')).not.toBeNull()
+      expect(mutationErrorSpy).toHaveBeenCalledWith('Move failed', expect.any(String), 'error')
     })
 
     // Allow extra ticks; refetchTasks() must never be called for a 500.

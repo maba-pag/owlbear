@@ -116,6 +116,7 @@ interface RenderBoardOptions {
   loading?: boolean
   error?: string | null
   fetchOnMount?: boolean
+  onMutationError?: (heading: string, description: string, state: 'error' | 'warning') => void
 }
 
 function renderBoard(options: RenderBoardOptions = {}) {
@@ -125,6 +126,7 @@ function renderBoard(options: RenderBoardOptions = {}) {
     loading = false,
     error = null,
     fetchOnMount = true,
+    onMutationError,
   } = options
 
   function Harness() {
@@ -171,6 +173,7 @@ function renderBoard(options: RenderBoardOptions = {}) {
         loading={loading}
         error={error}
         refetchTasks={refetchTasks}
+        onMutationError={onMutationError}
       />
     )
   }
@@ -691,31 +694,33 @@ describe('TestFromAC_ContextMenuMove', () => {
     })
   })
 
-  // ─── AC3: error shown on HTTP 422 ────────────────────────────────────────
+  // ─── AC3: onMutationError called on HTTP 422 ──────────────────────────────
 
-  it('shows move-error element when POST /move returns HTTP 422', async () => {
+  it('calls onMutationError when POST /move returns HTTP 422', async () => {
     stubFetchWithMoveError('422')
-    const { container } = renderBoard()
+    const onMutationError = vi.fn()
+    const { container } = renderBoard({ onMutationError })
     await openContextMenuForCard1(container)
     fireEvent.click(
       container.querySelector('[data-testid="transition-item"][data-status="todo"]')!,
     )
     await waitFor(() => {
-      expect(container.querySelector('[data-testid="move-error"]')).not.toBeNull()
+      expect(onMutationError).toHaveBeenCalledWith('Move failed', expect.any(String), 'error')
     })
   })
 
-  // ─── AC4: error shown on network failure ─────────────────────────────────
+  // ─── AC4: onMutationError called on network failure ───────────────────────
 
-  it('shows move-error element when POST /move fails with network error', async () => {
+  it('calls onMutationError when POST /move fails with network error', async () => {
     stubFetchWithMoveError('network')
-    const { container } = renderBoard()
+    const onMutationError = vi.fn()
+    const { container } = renderBoard({ onMutationError })
     await openContextMenuForCard1(container)
     fireEvent.click(
       container.querySelector('[data-testid="transition-item"][data-status="todo"]')!,
     )
     await waitFor(() => {
-      expect(container.querySelector('[data-testid="move-error"]')).not.toBeNull()
+      expect(onMutationError).toHaveBeenCalledWith('Move failed', expect.any(String), 'error')
     })
   })
 

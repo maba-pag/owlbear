@@ -298,4 +298,25 @@ describe('TestFromAC_DetailTabMutationCallbacks', () => {
     })
 
   })
+
+  // ─── AC-4: 409→refetch→404 calls onTaskCleared; banner NOT triggered ─────
+
+  describe('AC-4: 409→refetch→404 calls onTaskCleared and does NOT call onMutationError', () => {
+    it('handleSave 409→refetch→404 fires onTaskCleared and does NOT call onMutationError', async () => {
+      stub409ThenFetch({ status: 404 })
+      const mutationErrorSpy = vi.fn()
+      const taskClearedSpy = vi.fn()
+      const { container } = renderDetail(TASK, {
+        onMutationError: mutationErrorSpy,
+        onTaskCleared: taskClearedSpy,
+      })
+
+      fireEvent.click(container.querySelector('[data-testid="save-button"]')!)
+
+      await waitFor(() => {
+        expect(taskClearedSpy).toHaveBeenCalled()
+      })
+      expect(mutationErrorSpy).not.toHaveBeenCalled()
+    })
+  })
 })

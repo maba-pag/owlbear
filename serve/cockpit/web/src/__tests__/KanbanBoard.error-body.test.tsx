@@ -109,7 +109,7 @@ function makeJsonFetch(status: number, body: unknown) {
   )
 }
 
-function renderBoard() {
+function renderBoard(onMutationError?: (heading: string, description: string, state: 'error' | 'warning') => void) {
   return render(
     <PorscheDesignSystemProvider>
       <MemoryRouter>
@@ -119,6 +119,7 @@ function renderBoard() {
           loading={false}
           error={null}
           refetchTasks={vi.fn()}
+          onMutationError={onMutationError}
         />
       </MemoryRouter>
     </PorscheDesignSystemProvider>,
@@ -131,13 +132,14 @@ function renderBoard() {
 // EXPECTED: getResponseErrorMessage() is called; move-error includes body text.
 
 describe('TestFromAC_KanbanBoardDragDropErrorBodyParsing', () => {
-  // FAILS: move-error text is "Move failed: 500" — body message field never read.
-  // After fix, text contains "move failed: quota exceeded" from response body.
-  it('handleDrop non-ok {code,message}: move-error contains response body message field', async () => {
+  // FAILS: move-error DOM element no longer exists; onMutationError callback not called with body text.
+  // After fix, onMutationError is called with description containing 'move failed: quota exceeded'.
+  it('handleDrop non-ok {code,message}: onMutationError called with response body message field', async () => {
     const errorBody = { code: 'QUOTA_ERROR', message: 'move failed: quota exceeded' }
     vi.stubGlobal('fetch', makeJsonFetch(500, errorBody))
 
-    const { container } = renderBoard()
+    const mutationErrorSpy = vi.fn()
+    const { container } = renderBoard(mutationErrorSpy)
 
     const card = container.querySelector('[data-testid="task-card"][data-id="1"]')!
     fireEvent.dragStart(card)
@@ -147,21 +149,24 @@ describe('TestFromAC_KanbanBoardDragDropErrorBodyParsing', () => {
 
     await waitFor(
       () => {
-        const err = container.querySelector('[data-testid="move-error"]')
-        expect(err).not.toBeNull()
-        expect(err!.textContent).toContain('move failed: quota exceeded')
+        expect(mutationErrorSpy).toHaveBeenCalledWith(
+          'Move failed',
+          expect.stringContaining('quota exceeded'),
+          'error',
+        )
       },
       { timeout: 1000 },
     )
   })
 
-  // FAILS: same root cause — status-only error discards {detail} body shape.
-  // After fix, text contains "task lock expired during move" from response body.
-  it('handleDrop non-ok {detail}: move-error contains response body detail field', async () => {
+  // FAILS: same root cause — onMutationError not called with body detail field.
+  // After fix, description contains 'task lock expired during move' from response body.
+  it('handleDrop non-ok {detail}: onMutationError called with response body detail field', async () => {
     const errorBody = { detail: 'task lock expired during move' }
     vi.stubGlobal('fetch', makeJsonFetch(422, errorBody))
 
-    const { container } = renderBoard()
+    const mutationErrorSpy = vi.fn()
+    const { container } = renderBoard(mutationErrorSpy)
 
     const card = container.querySelector('[data-testid="task-card"][data-id="1"]')!
     fireEvent.dragStart(card)
@@ -171,22 +176,24 @@ describe('TestFromAC_KanbanBoardDragDropErrorBodyParsing', () => {
 
     await waitFor(
       () => {
-        const err = container.querySelector('[data-testid="move-error"]')
-        expect(err).not.toBeNull()
-        expect(err!.textContent).toContain('task lock expired during move')
+        expect(mutationErrorSpy).toHaveBeenCalledWith(
+          'Move failed',
+          expect.stringContaining('task lock expired during move'),
+          'error',
+        )
       },
       { timeout: 1000 },
     )
   })
 
-  // FAILS: move-error text IS the status-only string "Move failed: 500".
-  // not.toBe fails because current text exactly equals the status-only fallback.
-  // After fix, text includes the body message appended to (or replacing) the fallback.
-  it('handleDrop non-ok: move-error text is not the bare status-only fallback string', async () => {
+  // FAILS: onMutationError not called at all; no body text parsed.
+  // After fix, description is not the bare status-only fallback string.
+  it('handleDrop non-ok: onMutationError description is not the bare status-only fallback string', async () => {
     const errorBody = { code: 'ENGINE_LOCK', message: 'engine lock held by builder' }
     vi.stubGlobal('fetch', makeJsonFetch(500, errorBody))
 
-    const { container } = renderBoard()
+    const mutationErrorSpy = vi.fn()
+    const { container } = renderBoard(mutationErrorSpy)
 
     const card = container.querySelector('[data-testid="task-card"][data-id="1"]')!
     fireEvent.dragStart(card)
@@ -196,10 +203,9 @@ describe('TestFromAC_KanbanBoardDragDropErrorBodyParsing', () => {
 
     await waitFor(
       () => {
-        const err = container.querySelector('[data-testid="move-error"]')
-        expect(err).not.toBeNull()
-        // FAILS: current text is exactly "Move failed: 500"
-        expect(err!.textContent).not.toBe('Move failed: 500')
+        expect(mutationErrorSpy).toHaveBeenCalled()
+        const [[, description]] = mutationErrorSpy.mock.calls as [[string, string, string]]
+        expect(description).not.toBe('Move failed: 500')
       },
       { timeout: 1000 },
     )
@@ -212,13 +218,14 @@ describe('TestFromAC_KanbanBoardDragDropErrorBodyParsing', () => {
 // EXPECTED: getResponseErrorMessage() is called; move-error includes body text.
 
 describe('TestFromAC_KanbanBoardContextMenuErrorBodyParsing', () => {
-  // FAILS: move-error text is "Move failed: 500" — body message never read.
-  // After fix, text contains "transition blocked: reviewer lock active" from body.
-  it('handleTransitionClick non-ok {code,message}: move-error contains response body message field', async () => {
+  // FAILS: move-error DOM element no longer exists; onMutationError not called with body text.
+  // After fix, onMutationError is called with description containing body message.
+  it('handleTransitionClick non-ok {code,message}: onMutationError called with response body message field', async () => {
     const errorBody = { code: 'LOCK_ERROR', message: 'transition blocked: reviewer lock active' }
     vi.stubGlobal('fetch', makeJsonFetch(500, errorBody))
 
-    const { container } = renderBoard()
+    const mutationErrorSpy = vi.fn()
+    const { container } = renderBoard(mutationErrorSpy)
 
     // Open context menu on the todo task (has in-progress transition)
     const card = container.querySelector('[data-testid="task-card"][data-id="2"]')!
@@ -236,21 +243,24 @@ describe('TestFromAC_KanbanBoardContextMenuErrorBodyParsing', () => {
 
     await waitFor(
       () => {
-        const err = container.querySelector('[data-testid="move-error"]')
-        expect(err).not.toBeNull()
-        expect(err!.textContent).toContain('transition blocked: reviewer lock active')
+        expect(mutationErrorSpy).toHaveBeenCalledWith(
+          'Move failed',
+          expect.stringContaining('transition blocked: reviewer lock active'),
+          'error',
+        )
       },
       { timeout: 1000 },
     )
   })
 
-  // FAILS: status-only error discards {detail} body shape.
-  // After fix, text contains "concurrent modification: task updated elsewhere" from body.
-  it('handleTransitionClick non-ok {detail}: move-error contains response body detail field', async () => {
+  // FAILS: same root cause — onMutationError not called with detail field.
+  // After fix, description contains 'concurrent modification: task updated elsewhere'.
+  it('handleTransitionClick non-ok {detail}: onMutationError called with response body detail field', async () => {
     const errorBody = { detail: 'concurrent modification: task updated elsewhere' }
     vi.stubGlobal('fetch', makeJsonFetch(422, errorBody))
 
-    const { container } = renderBoard()
+    const mutationErrorSpy = vi.fn()
+    const { container } = renderBoard(mutationErrorSpy)
 
     const card = container.querySelector('[data-testid="task-card"][data-id="2"]')!
     fireEvent.contextMenu(card)
@@ -266,22 +276,24 @@ describe('TestFromAC_KanbanBoardContextMenuErrorBodyParsing', () => {
 
     await waitFor(
       () => {
-        const err = container.querySelector('[data-testid="move-error"]')
-        expect(err).not.toBeNull()
-        expect(err!.textContent).toContain('concurrent modification: task updated elsewhere')
+        expect(mutationErrorSpy).toHaveBeenCalledWith(
+          'Move failed',
+          expect.stringContaining('concurrent modification: task updated elsewhere'),
+          'error',
+        )
       },
       { timeout: 1000 },
     )
   })
 
-  // FAILS: move-error text IS "Move failed: 500" — not.toBe fails because
-  // current text exactly equals the status-only fallback.
-  // After fix, text includes the body message from getResponseErrorMessage().
-  it('handleTransitionClick non-ok: move-error text is not the bare status-only fallback string', async () => {
+  // FAILS: onMutationError not called; no body parsing.
+  // After fix, description is not the bare status-only fallback string.
+  it('handleTransitionClick non-ok: onMutationError description is not the bare status-only fallback string', async () => {
     const errorBody = { code: 'INTERNAL', message: 'engine timeout on move' }
     vi.stubGlobal('fetch', makeJsonFetch(500, errorBody))
 
-    const { container } = renderBoard()
+    const mutationErrorSpy = vi.fn()
+    const { container } = renderBoard(mutationErrorSpy)
 
     const card = container.querySelector('[data-testid="task-card"][data-id="2"]')!
     fireEvent.contextMenu(card)
@@ -297,10 +309,9 @@ describe('TestFromAC_KanbanBoardContextMenuErrorBodyParsing', () => {
 
     await waitFor(
       () => {
-        const err = container.querySelector('[data-testid="move-error"]')
-        expect(err).not.toBeNull()
-        // FAILS: current text is exactly "Move failed: 500"
-        expect(err!.textContent).not.toBe('Move failed: 500')
+        expect(mutationErrorSpy).toHaveBeenCalled()
+        const [[, description]] = mutationErrorSpy.mock.calls as [[string, string, string]]
+        expect(description).not.toBe('Move failed: 500')
       },
       { timeout: 1000 },
     )
@@ -315,13 +326,14 @@ describe('TestFromAC_KanbanBoardContextMenuErrorBodyParsing', () => {
 // body parsing works (the body-parsing assertion is what makes this FAIL now).
 
 describe('TestFromAC_HealthPreservation', () => {
-  // FAILS: move-error text does not include body message (status-only fallback).
-  // The health-independence claim holds structurally; the body-parsing half fails.
-  it('KanbanBoard move error is independent of health scan; move-error contains body text', async () => {
+  // FAILS: move-error DOM element no longer exists; onMutationError not called with body text.
+  // After fix, onMutationError is called with description containing body message field.
+  it('KanbanBoard move error is independent of health scan; onMutationError called with body text', async () => {
     const errorBody = { code: 'MOVE_FAIL', message: 'board move rejected: index locked' }
     vi.stubGlobal('fetch', makeJsonFetch(500, errorBody))
 
-    const { container } = renderBoard()
+    const mutationErrorSpy = vi.fn()
+    const { container } = renderBoard(mutationErrorSpy)
 
     // Board renders without a health indicator (health is Shell-level, not KanbanBoard-level)
     expect(container.querySelector('[data-health]')).toBeNull()
@@ -335,10 +347,11 @@ describe('TestFromAC_HealthPreservation', () => {
 
     await waitFor(
       () => {
-        const err = container.querySelector('[data-testid="move-error"]')
-        expect(err).not.toBeNull()
-        // FAILS: current text is "Move failed: 500" — body field not parsed
-        expect(err!.textContent).toContain('board move rejected: index locked')
+        expect(mutationErrorSpy).toHaveBeenCalledWith(
+          'Move failed',
+          expect.stringContaining('board move rejected: index locked'),
+          'error',
+        )
       },
       { timeout: 1000 },
     )
