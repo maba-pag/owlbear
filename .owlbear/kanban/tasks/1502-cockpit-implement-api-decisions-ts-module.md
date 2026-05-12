@@ -1,10 +1,10 @@
 ---
 id: 1502
 title: 'Cockpit: Implement api/decisions.ts module'
-status: todo
+status: in-progress
 priority: needed
 created: 2026-05-12T02:43:28.721141+00:00
-updated: 2026-05-12T09:11:08.972127+00:00
+updated: 2026-05-12T09:31:39.708532+00:00
 tags:
   - cockpit
   - frontend
@@ -94,3 +94,16 @@ Original AC had B3 violations ("Function is typed" — vague, "Unit tests cover 
 
 ### Verdict: APPROVE (REFINE + approve)
 ### Action Taken: Refined AC (B3 fix, numbering, challenger-driven contract precision), assigned proof bundle behavioral, advanced to todo
+2026-05-12T09:31:39+00:00
+## Test-Writer Notes
+- Test file: serve/cockpit/web/src/__tests__/decisions_1502.test.ts
+- Classes: TestFromAC_ResolveDR, TestFromAC_ResolveRequest, TestFromAC_ResolveResponse
+- Tests per category: happy 7, edge 2, error 9, boundary/structural 5
+- Total: 23 tests, all FAIL (suite fails to load — import resolution error for `api/decisions.ts` and `api/errors.ts`; expected RED phase behavior)
+- ruff: N/A (TypeScript); eslint: clean
+- AC coverage:
+  - AC-1 (resolveDR function, POST /api/decisions/{id}/resolve, JSON body, 2xx → ResolveResponse, throws ApiError on non-ok): covered by TestFromAC_ResolveDR happy + error tests
+  - AC-2 (ResolveRequest: response union + optional notes): covered by TestFromAC_ResolveRequest (6 tests)
+  - AC-3 (ResolveResponse: id string + response union): covered by TestFromAC_ResolveResponse (5 tests)
+  - AC-4 (getResponseErrorMessage for error extraction, network errors propagate unwrapped): covered by 4 dedicated AC-4 tests in TestFromAC_ResolveDR
+  - AC-5 (imports ApiError from api/errors.ts): covered by structural import test in TestFromAC_ResolveDR

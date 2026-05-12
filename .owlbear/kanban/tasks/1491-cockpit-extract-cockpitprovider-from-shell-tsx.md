@@ -1,10 +1,10 @@
 ---
 id: 1491
 title: 'Cockpit: Extract CockpitProvider from Shell.tsx'
-status: in-progress
+status: review
 priority: important
 created: 2026-05-11T23:14:53.705441+00:00
-updated: 2026-05-12T09:12:05.167177+00:00
+updated: 2026-05-12T09:40:11.193439+00:00
 tags:
   - cockpit
   - frontend
@@ -111,3 +111,13 @@ Children #1504 and #1505 are in `research` with full AC — they need to advance
 - Proof bundle: skip — no new test writing required.
 - Parent/scope task (tagged `research`); implementation delegated to children #1504 and #1505.
 - Passing through to builder.
+2026-05-12T09:40:11+00:00
+## Builder Notes
+- Files changed: none (pass-through scope task)
+- Test results: not applicable for this task (`Proof bundle: skip`)
+- Lint status: not applicable for this task (`Proof bundle: skip`)
+- Coverage: not applicable for this task (`Proof bundle: skip`)
+- Evidence summary:
+  - Task body explicitly marks `Proof bundle: skip` and `Parent/scope task (tagged research); implementation delegated to children #1504 and #1505`.
+  - Acceptance criteria for #1491 are satisfied by research/architecture outputs already present in task notes.
+  - No source implementation is required at parent scope; implementation and validation belong to child tasks #1504 (builder) and #1505 (test updates).

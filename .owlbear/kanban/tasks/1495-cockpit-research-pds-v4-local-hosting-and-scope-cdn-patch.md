@@ -1,10 +1,10 @@
 ---
 id: 1495
 title: 'Cockpit: Research PDS v4 local hosting and scope CDN patch'
-status: in-progress
+status: review
 priority: important
 created: 2026-05-11T23:15:45.844267+00:00
-updated: 2026-05-12T08:19:21.159794+00:00
+updated: 2026-05-12T09:28:13.654705+00:00
 tags:
   - cockpit
   - frontend
@@ -52,3 +52,15 @@ Both parented to #1495. No dependencies between them — they can be worked inde
 ## Test-Writer Notes
 - Non-implementation task (tagged research) — no tests applicable.
 - Passing through to builder.
+2026-05-12T09:28:13+00:00
+## Builder Notes
+- Classification: Non-implementation pass-through (from Test-Writer Notes in task body).
+- Files changed: none.
+- Tests run: none (not applicable for research-only pass-through).
+- Lint status: not run (not applicable; no code or test modifications).
+- Coverage: not applicable.
+- Evidence summary:
+  - Task objective and AC are research/documentation scoped.
+  - Research artifact already produced: `.owlbear/research/1495-pds-v4-local-hosting.md`.
+  - Test-writer explicitly marked: "Non-implementation task (tagged research) — no tests applicable. Passing through to builder."
+- Fixes applied: none required in builder phase.

@@ -1,10 +1,10 @@
 ---
 id: 1501
 title: 'Cockpit: Implement api/tasks.ts module'
-status: in-progress
+status: review
 priority: needed
 created: 2026-05-12T02:43:28.689799+00:00
-updated: 2026-05-12T09:17:04.227196+00:00
+updated: 2026-05-12T09:48:21.696518+00:00
 tags:
   - cockpit
   - frontend
@@ -103,3 +103,28 @@ Original AC had B3 violations ("All functions"), no numbering, vague "match back
 - Total: 65 tests, all FAIL (module resolution error — api/errors.ts and api/tasks.ts do not exist)
 - eslint: clean
 - AC coverage: AC-1 (8 tests), AC-2 (12 tests), AC-3 (8 tests), AC-4 (8 tests), AC-5 (8 tests), AC-6 covered in each function group, AC-7 (5 tests), AC-8 (14 tests)
+2026-05-12T09:48:21+00:00
+## Builder Notes
+- Files changed:
+  - serve/cockpit/web/src/api/errors.ts
+  - serve/cockpit/web/src/api/tasks.ts
+- Implementation summary:
+  - Added `ApiError` class in `api/errors.ts` with readonly `status` and Error inheritance behavior per AC-1.
+  - Added `api/tasks.ts` exporting `TaskDetail`, `MoveRequest`, `EditRequest`, `ReleaseRequest`, and async functions `getTask`, `moveTask`, `editTask`, `releaseTask`.
+  - All four API functions call `getResponseErrorMessage(response, fallback)` on non-ok HTTP responses, then throw `ApiError(status, message)`.
+  - Network errors are not wrapped (no try/catch around fetch), so fetch rejections propagate as-is per AC-6.
+  - `getTask` forwards optional `options.signal` to fetch; mutation functions post JSON bodies to expected endpoints.
+- RED verification (quality-runner):
+  - tests: 0 passed, import-phase failure confirmed for missing `../api/errors` and `../api/tasks`
+  - lint: clean
+- GREEN verification (quality-runner):
+  - tests: 65 passed, 0 failed, 0 skipped (`serve/cockpit/web/src/__tests__/tasks_1501.test.ts`)
+  - coverage: overall 90.32%; `src/api/tasks.ts` 100%, `src/api/errors.ts` 100%
+  - lint: clean (no violations)
+- Module-level durable test visibility:
+  - No durable module-level tasks API test file found; task-scoped behavioral suite used as required proof.
+- Commit:
+  - 2147d78ff451262c5546aeef36265193606a85ee
+  - feat: implement cockpit tasks api client (#1501, builder)
+- Evidence summary:
+  - AC-1..AC-8 implemented and validated by passing TestFromAC suite and clean lint/coverage gates.

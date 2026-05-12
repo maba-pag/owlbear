@@ -1,10 +1,10 @@
 ---
 id: 1493
 title: 'Cockpit: Centralize API client (tasks + decisions)'
-status: in-progress
+status: todo
 priority: needed
 created: 2026-05-11T23:15:20.997863+00:00
-updated: 2026-05-12T09:12:34.139821+00:00
+updated: 2026-05-12T09:40:48.978707+00:00
 tags:
   - cockpit
   - frontend
@@ -541,3 +541,24 @@ Required follow-up:
 | 1 | planner | Dispatch #1501 and #1502 through architecture -> test-writer -> builder -> review until each reaches `done`. | `.owlbear/kanban/tasks/1501.md`, `.owlbear/kanban/tasks/1502.md` | #1493 AC is dependency-completion based and both implementation children remain incomplete (`todo`). |
 | 2 | planner | Dispatch #1503 only after #1501/#1502 are done, then run full pipeline to `done`. | `.owlbear/kanban/tasks/1503.md` | #1503 depends on #1501 + #1502 and is still `backlog`. |
 | 3 | orchestrator | Redispatch #1493 only after #1501, #1502, and #1503 are all `done`. | `.owlbear/kanban/tasks/1493.md` | Parent tracker AC v2 cannot pass until all three children are complete. |
+2026-05-12T09:40:48+00:00
+## Builder Notes
+- Scope check: #1493 is a parent/tracker task with `Proof bundle: skip` and tracker AC v2; there is no implementation surface for builder code edits.
+- AC gate status: NOT MET. Tracker AC-1..AC-3 require child tasks #1501, #1502, #1503 to reach `done`.
+- Live dependency snapshot (verified this run):
+  - #1501: `in-progress`
+  - #1502: `in-progress`
+  - #1503: `backlog`
+- Files changed: none.
+- Tests run: none (non-implementation tracker task).
+- Coverage: n/a.
+- Lint: n/a.
+- Evidence summary: Parent tracker completion remains structurally unreachable until all three child tasks complete and reach `done`.
+- Fixes applied: none.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Complete #1501 and #1502 through builder+review to `done`. | `.owlbear/kanban/tasks/1501.md`, `.owlbear/kanban/tasks/1502.md` | Both required dependencies remain `in-progress`. |
+| 2 | planner | Dispatch #1503 only after #1501 and #1502 are `done`, then route #1503 through full pipeline to `done`. | `.owlbear/kanban/tasks/1503.md` | #1503 depends on #1501 + #1502 and remains `backlog`. |
+| 3 | orchestrator | Redispatch #1493 only when #1501, #1502, and #1503 are all `done`. | `.owlbear/kanban/tasks/1493.md` | Tracker AC v2 is dependency-completion based and cannot pass earlier. |

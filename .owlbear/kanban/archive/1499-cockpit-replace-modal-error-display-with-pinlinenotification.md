@@ -1,10 +1,10 @@
 ---
 id: 1499
 title: 'Cockpit: Replace modal error display with PInlineNotification'
-status: done
+status: archived
 priority: needed
 created: 2026-05-12T02:38:27.712681+00:00
-updated: 2026-05-12T09:16:00.314725+00:00
+updated: 2026-05-12T09:53:15.758801+00:00
 tags:
   - cockpit
   - frontend
@@ -14,7 +14,7 @@ depends_on: []
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 
@@ -380,3 +380,5 @@ No scratch files created for this task.
 
 ### Upstream Review Evidence
 Present: `## Review Evidence` PASS verdict at end of task body. All AC-1 through AC-8 mapped.
+2026-05-12T09:53:15+00:00
+## Audit\n### Regression Detection\n- quality-runner mode full: Frontend 1444 passed, 9 skipped, 1 suite failed (decisions_1502.test.ts — RED-phase import error for task #1502, not #1499). Python 781 passed, 5 failed — all pre-existing and unrelated to #1499 (frontend-only task: missing file references in test_cockpit_view/test_mcp_kanban, assertion text mismatch in test_ideation_diagram, TypeError in test_server, mock issue in test_cockpit_mutation_api). Lint clean (ruff exit 0, eslint exit 0).\n- regression verdict: PASS\n\n### Intent Verification\n- scope alignment: PASS (all changes in serve/cockpit/web/ — ArchivalModal.tsx, ResolveModal.tsx, PInlineNotification.modal-1499.test.tsx, AC-8 migration updates to durable test suites, .owlbear/sources/overview.md attribution)\n- purpose match: PASS (replaces PText error rendering with PInlineNotification in both modals, adds retry/dismiss/loading state per AC)\n- extraneous scope: none\n- boundary check: function-level behavior verification deferred to reviewer\n\n### Architect Quality: 4/5\nInitial AC had notable gaps: 409 incorrectly classified as retryable, missing focus trap AC, vague ResolveModal scope, underspecified test migration surface. Challenger caught all issues; architect refined comprehensively. AC-6 required cycle-3 split into 6a-6d after two reviewer rejections for test-proof insufficiency. Final AC precise with status-code matrices, component-scoped naming, explicit DOM-absence proof requirements. Score 4: adequate — iterative refinement worked but initial draft needed significant rework.\n\n### Commit Integrity\n- upstream commit presence: PASS (builder: 09110656, 253b3d2a; test-writer: cd876897, c23a25de; doc-writer: d3969adb; all verified via git log)\n- kanban commit packaging: pending (this audit cycle)\n\n### Deduction Breakdown\nNo deductions applied:\n- Regression: PASS (0 task-attributable failures)\n- Intent: PASS (correct domain, no extraneous scope)\n- Lint: PASS (clean)\n- AC quality: 4/5 (>3, no deduction)\n- Reviewer evidence: present and thorough (cycle 3 PASS with full AC mapping)\n- Evidence integrity: no concerns\n\n### Confidence: 1.00\n### Action: archive

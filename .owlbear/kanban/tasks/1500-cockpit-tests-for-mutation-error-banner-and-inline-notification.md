@@ -1,10 +1,10 @@
 ---
 id: 1500
 title: 'Cockpit: Tests for mutation error banner and inline notification'
-status: todo
+status: in-progress
 priority: needed
 created: 2026-05-12T02:38:27.742252+00:00
-updated: 2026-05-12T09:17:12.095789+00:00
+updated: 2026-05-12T09:41:36.103852+00:00
 tags:
   - cockpit
   - frontend
@@ -95,3 +95,10 @@ All 5 Vitest AC items from #1500 are already covered by existing suites (56 test
 
 2026-05-12T09:17:12+00:00
 Architecture review complete. All 5 Vitest ACs pre-satisfied by #1498/#1499 TDD cycles (64 tests across 4 files). Playwright E2E AC correctly split to #1509. Proof bundle: existing. Tagged `test` for pass-through. Advanced backlog → todo.
+2026-05-12T09:41:36+00:00
+## Test-Writer Notes
+- Non-implementation task (tagged `test`) — no tests applicable.
+- Proof bundle: existing — no new test writing required.
+- All 5 Vitest ACs pre-satisfied by #1498/#1499 TDD cycles (64 tests across 4 files: Shell.pbanner-1498.test.tsx, KanbanBoard.pbanner-1498.test.tsx, DetailTab.pbanner-1498.test.tsx, PInlineNotification.modal-1499.test.tsx).
+- Playwright E2E gap correctly extracted to #1509.
+- Passing through to builder.
