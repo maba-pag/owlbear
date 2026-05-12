@@ -108,8 +108,8 @@ describe('TestFromAC_PdsVersionCheck', () => {
     await buildStart()
 
     const warnMsg = (warnSpy.mock.calls[0]?.[0] as string) ?? ''
-    expect(warnMsg).toContain('3.21.0')
-    expect(warnMsg).toContain('3.22.0')
+    expect(warnMsg).toContain('assets=3.21.0')
+    expect(warnMsg).toContain('npm=3.22.0')
     expect(warnMsg).toContain('npm run sync:pds')
   })
 
@@ -158,9 +158,9 @@ describe('TestFromAC_PdsVersionCheck', () => {
     await buildStart()
 
     const warnMsg = (warnSpy.mock.calls[0]?.[0] as string) ?? ''
-    // Warning must reference first-match asset version (3.19.0), not the second (3.21.0 would be silent match)
-    expect(warnMsg).toContain('3.19.0')
-    expect(warnMsg).toContain('3.21.0')
+    // Warning must reference first-match asset version (3.19.0) in labeled format — falsifies raw-filename regression
+    expect(warnMsg).toContain('assets=3.19.0')
+    expect(warnMsg).toContain('npm=3.21.0')
     expect(warnMsg).toContain('npm run sync:pds')
   })
 
