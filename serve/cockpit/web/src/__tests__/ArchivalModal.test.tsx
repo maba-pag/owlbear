@@ -380,7 +380,9 @@ describe('TestFromAC_ArchivalModal', () => {
       await waitFor(() => {
         const errorEl = container.querySelector('[data-testid="archival-error"]')
         expect(errorEl).not.toBeNull()
-        expect(errorEl?.textContent?.trim().length).toBeGreaterThan(0)
+        expect(
+          ((errorEl as HTMLElement & { description?: string }).description ?? '').trim().length,
+        ).toBeGreaterThan(0)
       })
 
       expect(fetchMock).not.toHaveBeenCalled()
@@ -443,7 +445,7 @@ describe('TestFromAC_ArchivalModal', () => {
       await waitFor(() => {
         const errorEl = container.querySelector('[data-testid="archival-error"]')
         expect(errorEl).not.toBeNull()
-        expect(errorEl?.textContent).toBe(errorDetail)
+        expect((errorEl as HTMLElement & { description?: string }).description).toBe(errorDetail)
       })
 
       expect(onClose).not.toHaveBeenCalled()
@@ -472,7 +474,9 @@ describe('TestFromAC_ArchivalModal', () => {
       await waitFor(() => {
         const errorEl = container.querySelector('[data-testid="archival-error"]')
         expect(errorEl).not.toBeNull()
-        expect(errorEl?.textContent).toBe('Task snapshot is stale; refresh and try again.')
+        expect((errorEl as HTMLElement & { description?: string }).description).toBe(
+          'Task snapshot is stale; refresh and try again.',
+        )
       })
 
       expect(onClose).not.toHaveBeenCalled()
@@ -497,7 +501,9 @@ describe('TestFromAC_ArchivalModal', () => {
       await waitFor(() => {
         const errorEl = container.querySelector('[data-testid="archival-error"]')
         expect(errorEl).not.toBeNull()
-        expect(errorEl?.textContent).toBe('Task snapshot is stale; refresh and try again.')
+        expect((errorEl as HTMLElement & { description?: string }).description).toBe(
+          'Task snapshot is stale; refresh and try again.',
+        )
       })
     })
   })
@@ -731,7 +737,9 @@ describe('TestFromAC_ArchivalModal', () => {
       await waitFor(() => {
         const errorEl = container.querySelector('[data-testid="archival-error"]')
         expect(errorEl).not.toBeNull()
-        expect(errorEl?.textContent).toBe('Archival failed (404).')
+        expect((errorEl as HTMLElement & { description?: string }).description).toBe(
+          'Archival failed (404).',
+        )
       })
 
       expect(onClose).not.toHaveBeenCalled()
@@ -756,7 +764,9 @@ describe('TestFromAC_ArchivalModal', () => {
       await waitFor(() => {
         const errorEl = container.querySelector('[data-testid="archival-error"]')
         expect(errorEl).not.toBeNull()
-        expect(errorEl?.textContent).toBe('Archival failed due to network error.')
+        expect((errorEl as HTMLElement & { description?: string }).description).toBe(
+          'Archival failed due to network error.',
+        )
       })
 
       expect(onClose).not.toHaveBeenCalled()

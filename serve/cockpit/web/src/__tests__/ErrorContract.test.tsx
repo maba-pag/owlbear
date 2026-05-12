@@ -404,7 +404,9 @@ describe('TestFromAC_ErrorEnvelopeParsing', () => {
         () => {
           const errEl = container.querySelector('[data-testid="resolve-error"]')
           expect(errEl).not.toBeNull()
-          expect(errEl!.textContent).toContain('decision already resolved by another agent')
+          expect((errEl as HTMLElement & { description?: string }).description ?? '').toContain(
+            'decision already resolved by another agent',
+          )
         },
         { timeout: 1000 },
       )
@@ -424,7 +426,9 @@ describe('TestFromAC_ErrorEnvelopeParsing', () => {
         () => {
           const errEl = container.querySelector('[data-testid="resolve-error"]')
           expect(errEl).not.toBeNull()
-          expect(errEl!.textContent).toContain('invalid decision id format: missing prefix')
+          expect((errEl as HTMLElement & { description?: string }).description ?? '').toContain(
+            'invalid decision id format: missing prefix',
+          )
         },
         { timeout: 1000 },
       )
@@ -659,7 +663,9 @@ describe('TestFromAC_NoSilentErrors', () => {
       () => {
         const errEl = container.querySelector('[data-testid="resolve-error"]')
         expect(errEl).not.toBeNull()
-        expect(errEl!.textContent).not.toBe('Failed to resolve decision request.')
+        expect((errEl as HTMLElement & { description?: string }).description).not.toBe(
+          'Failed to resolve decision request.',
+        )
       },
       { timeout: 1000 },
     )

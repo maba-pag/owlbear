@@ -536,8 +536,8 @@ describe('TestFromAC_PdsMigration_Text', () => {
     vi.resetAllMocks()
   })
 
-  describe('AC3: ArchivalModal error message uses PText', () => {
-    it('renders p-text[data-testid="archival-error"] for submission errors', async () => {
+  describe('AC3: ArchivalModal error message uses PInlineNotification', () => {
+    it('renders p-inline-notification[data-testid="archival-error"] for submission errors', async () => {
       vi.stubGlobal(
         'fetch',
         vi.fn(() =>
@@ -551,12 +551,14 @@ describe('TestFromAC_PdsMigration_Text', () => {
       const submitBtn = container.querySelector('[data-testid="archival-submit"]')
       if (submitBtn) fireEvent.click(submitBtn)
 
-      // After migration the error paragraph must be p-text
+      // After migration the error host must be p-inline-notification
       await new Promise((r) => setTimeout(r, 0))
-      expect(container.querySelector('p-text[data-testid="archival-error"]')).not.toBeNull()
+      expect(
+        container.querySelector('p-inline-notification[data-testid="archival-error"]'),
+      ).not.toBeNull()
     })
 
-    it('renders no raw <p data-testid="archival-error"> (replaced by PText)', async () => {
+    it('renders no p-text[data-testid="archival-error"] (replaced by PInlineNotification)', async () => {
       vi.stubGlobal(
         'fetch',
         vi.fn(() =>
@@ -570,7 +572,7 @@ describe('TestFromAC_PdsMigration_Text', () => {
       if (submitBtn) fireEvent.click(submitBtn)
 
       await new Promise((r) => setTimeout(r, 0))
-      expect(container.querySelector('p[data-testid="archival-error"]')).toBeNull()
+      expect(container.querySelector('p-text[data-testid="archival-error"]')).toBeNull()
     })
   })
 

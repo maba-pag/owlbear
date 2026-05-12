@@ -216,7 +216,9 @@ describe('TestFromAC_ResolveModal', () => {
 
       await waitFor(
         () => {
-          expect(container.querySelector('[data-testid="resolve-error"]')).not.toBeNull()
+          expect(
+            container.querySelector('p-inline-notification[data-testid="resolve-error"]'),
+          ).not.toBeNull()
         },
         { timeout: 500 },
       )
@@ -237,7 +239,9 @@ describe('TestFromAC_ResolveModal', () => {
 
       await waitFor(
         () => {
-          expect(container.querySelector('[data-testid="resolve-error"]')).not.toBeNull()
+          expect(
+            container.querySelector('p-inline-notification[data-testid="resolve-error"]'),
+          ).not.toBeNull()
         },
         { timeout: 500 },
       )

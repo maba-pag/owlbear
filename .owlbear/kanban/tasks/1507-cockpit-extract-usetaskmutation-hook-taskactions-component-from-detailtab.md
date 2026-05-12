@@ -1,10 +1,10 @@
 ---
 id: 1507
 title: 'Cockpit: Extract useTaskMutation hook + TaskActions component from DetailTab'
-status: research
+status: backlog
 priority: needed
 created: 2026-05-12T03:04:44.023243+00:00
-updated: 2026-05-12T03:05:16.531733+00:00
+updated: 2026-05-12T08:56:42.827553+00:00
 tags:
   - cockpit
   - frontend
@@ -35,3 +35,17 @@ Parent: #1492 — DetailTab decomposition
 - [ ] `DetailTab.tsx` imports and delegates to both new modules
 - [ ] All 7 existing DetailTab test files pass unchanged
 - [ ] No new lint warnings from ESLint or Stylelint
+2026-05-12T08:56:35+00:00
+## Research
+- Research doc: .owlbear/research/cockpit-mutation-hook-extraction.md
+- Sources: 6 studied, 4 high-relevance (DetailTab.tsx, useRepairFlow/useCleanupFlow patterns, #1506 research, ConfirmDialog)
+- Recommendation: Extract using action-callback pattern for conflict coupling, matching useRepairFlow/useCleanupFlow precedent — confidence 0.88
+- T1 classification — pure refactoring, no architectural change
+- Follow-up tasks: none needed — #1507 is the implementation task, sibling #1508 exists
+- Decision requests: none
+
+## Challenge Results
+- Challenge: skipped — T1 pure refactoring, no option selection, established in-repo patterns
+- Key findings: runMutation couples to conflict state via 3 action callbacks (clearConflict, setConflictDetected, setConflictDetectedNoRefetch); TaskActions owns confirmType state + focus management + ConfirmDialog wiring; ~80 LOC each
+2026-05-12T08:56:42+00:00
+Research complete. Identified precise extraction boundaries for useTaskMutation hook (~80 LOC: serverValidationMessage state, previousStatus function, runMutation with conflict action callbacks) and TaskActions component (~80 LOC: confirmType state, focus management, 3 action buttons, ConfirmDialog wiring). T1 pure refactoring following established patterns. Confidence 0.88. Doc: .owlbear/research/cockpit-mutation-hook-extraction.md

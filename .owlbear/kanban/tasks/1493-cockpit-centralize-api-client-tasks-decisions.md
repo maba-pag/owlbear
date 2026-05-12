@@ -4,7 +4,7 @@ title: 'Cockpit: Centralize API client (tasks + decisions)'
 status: in-progress
 priority: needed
 created: 2026-05-11T23:15:20.997863+00:00
-updated: 2026-05-12T05:29:42.196356+00:00
+updated: 2026-05-12T09:12:34.139821+00:00
 tags:
   - cockpit
   - frontend
@@ -283,3 +283,261 @@ Routing note: returning #1493 to `todo` pending completion of children #1501/#15
 |---|-------------|----------------|----------|
 | 1 | planner | Dispatch #1501, #1502, #1503 through architecture -> test-writer -> builder -> review until `done`, then re-dispatch #1493. | Tracker AC v2 is dependency-completion based; all three dependencies are currently `backlog`. |
 | 2 | architect | Keep #1493 tracker-only AC/proof semantics and avoid assigning implementation checks to this parent task while child work remains pending. | Prior routing loops were caused by tracker-vs-implementation mismatch and unmet child dependencies. |
+2026-05-12T05:40:29+00:00
+## Builder Notes
+- Scope check: #1493 is a parent/tracker task (`Proof bundle: skip`, tracker AC v2).
+- AC gate status: NOT MET. AC-1..AC-3 require child tasks #1501, #1502, #1503 to be `done`.
+- Live dependency snapshot (verified now):
+  - #1501: `backlog`
+  - #1502: `backlog`
+  - #1503: `backlog`
+- Files changed: none.
+- Tests run: none (non-implementation tracker task).
+- Coverage: n/a (no touched modules).
+- Lint: n/a (no code changes).
+- Evidence summary: completion for #1493 is structurally unreachable until child implementation tasks complete the pipeline and reach `done`.
+- Fixes applied: none.
+
+### Required Follow-up
+| # | Target Agent | Action Required | Evidence |
+|---|-------------|----------------|----------|
+| 1 | planner | Dispatch #1501, #1502, #1503 through architecture -> test-writer -> builder -> review until `done`, then re-dispatch #1493. | Tracker AC v2 is dependency-completion based; all three dependencies are currently `backlog`. |
+| 2 | architect | Keep #1493 tracker-only AC/proof semantics and avoid assigning implementation checks to this parent while child implementation remains pending. | Prior routing loops were caused by tracker-vs-implementation mismatch and unmet child dependencies. |
+2026-05-12T05:53:44+00:00
+## Builder Notes
+- Scope check: #1493 is a parent/tracker task (`Proof bundle: skip`, tracker AC v2) and has no implementation surface for builder code changes.
+- AC gate status: NOT MET. Tracker AC-1..AC-3 require child tasks #1501, #1502, #1503 to be `done`.
+- Live dependency snapshot (verified in this run):
+  - #1501: `backlog`
+  - #1502: `backlog`
+  - #1503: `backlog`
+- Files changed: none.
+- Tests run: none (non-implementation tracker task).
+- Coverage: n/a (no touched modules).
+- Lint: n/a (no code changes).
+- Evidence summary: completion for #1493 is structurally unreachable until child implementation tasks complete the full pipeline and reach `done`.
+- Fixes applied: none.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | planner | Dispatch #1501, #1502, #1503 through architecture -> test-writer -> builder -> review until `done`, then re-dispatch #1493. | `.owlbear/kanban/tasks/1493.md`, `.owlbear/kanban/tasks/1501.md`, `.owlbear/kanban/tasks/1502.md`, `.owlbear/kanban/tasks/1503.md` | Tracker AC v2 completion depends on child completion; all three children are currently `backlog`. |
+| 2 | architect | Keep #1493 tracker-only AC/proof semantics and prevent implementation-scope dispatch while child implementation tasks remain incomplete. | `.owlbear/kanban/tasks/1493.md` | Repeated builder passes show unchanged dependency state and no executable implementation scope in parent task. |
+2026-05-12T06:10:25+00:00
+## Builder Notes
+- Scope check: #1493 is a parent/tracker task (`Proof bundle: skip`, tracker AC v2) with no implementation surface for builder code changes.
+- AC gate status: NOT MET. Tracker AC-1..AC-3 require child tasks #1501, #1502, #1503 to reach `done`.
+- Live dependency snapshot (verified this run):
+  - #1501: `backlog`
+  - #1502: `backlog`
+  - #1503: `backlog`
+- Files changed: none.
+- Tests run: none (non-implementation tracker task).
+- Coverage: n/a (no touched modules).
+- Lint: n/a (no code changes).
+- Evidence summary: completion for #1493 is structurally unreachable until child implementation tasks complete the full pipeline and reach `done`.
+- Fixes applied: none.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | planner | Dispatch #1501, #1502, #1503 through architecture -> test-writer -> builder -> review until `done`, then re-dispatch #1493. | `.owlbear/kanban/tasks/1493.md`, `.owlbear/kanban/tasks/1501.md`, `.owlbear/kanban/tasks/1502.md`, `.owlbear/kanban/tasks/1503.md` | Tracker AC v2 is dependency-completion based; all three dependencies remain `backlog`. |
+| 2 | architect | Preserve #1493 as tracker-only AC/proof scope and keep implementation obligations on child tasks. | `.owlbear/kanban/tasks/1493.md`, `.owlbear/kanban/tasks/1501.md`, `.owlbear/kanban/tasks/1502.md`, `.owlbear/kanban/tasks/1503.md` | Repeated builder cycles show no executable implementation scope in parent task while children are incomplete. |
+2026-05-12T06:21:48+00:00
+## Builder Notes
+- Scope check: #1493 is a parent/tracker task with `Proof bundle: skip` and tracker AC v2.
+- AC gate status: NOT MET. AC-1..AC-3 require child tasks #1501, #1502, #1503 to be `done`.
+- Live dependency snapshot (verified this run):
+  - #1501: `backlog`
+  - #1502: `backlog`
+  - #1503: `backlog`
+- Files changed: none.
+- Tests run: none (non-implementation tracker task).
+- Coverage: n/a (no touched modules).
+- Lint: n/a (no code changes).
+- Evidence summary: completion for #1493 is structurally unreachable until child implementation tasks complete the full pipeline and reach `done`.
+- Fixes applied: none.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | planner | Dispatch #1501, #1502, #1503 through architecture -> test-writer -> builder -> review until `done`, then re-dispatch #1493. | `.owlbear/kanban/tasks/1493.md`, `.owlbear/kanban/tasks/1501.md`, `.owlbear/kanban/tasks/1502.md`, `.owlbear/kanban/tasks/1503.md` | Tracker AC v2 is dependency-completion based; all three dependencies remain `backlog`. |
+2026-05-12T06:32:45+00:00
+## Builder Notes
+- Scope check: #1493 is a parent/tracker task with Proof bundle: skip and tracker AC v2.
+- AC gate status: NOT MET. AC-1..AC-3 require child tasks #1501, #1502, #1503 to reach done.
+- Live dependency snapshot (verified this run):
+  - #1501: backlog
+  - #1502: backlog
+  - #1503: backlog
+- Files changed: none.
+- Tests run: none (non-implementation tracker task).
+- Coverage: n/a (no touched modules).
+- Lint: n/a (no code changes).
+- Evidence summary: completion for #1493 is structurally unreachable until child implementation tasks complete the full pipeline and reach done.
+- Fixes applied: none.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | planner | Dispatch #1501, #1502, #1503 through architecture -> test-writer -> builder -> review until done, then re-dispatch #1493. | .owlbear/kanban/tasks/1493.md, .owlbear/kanban/tasks/1501.md, .owlbear/kanban/tasks/1502.md, .owlbear/kanban/tasks/1503.md | Tracker AC v2 is dependency-completion based; all three dependencies remain backlog. |
+| 2 | architect | Preserve #1493 as tracker-only AC/proof scope and keep implementation obligations on child tasks. | .owlbear/kanban/tasks/1493.md, .owlbear/kanban/tasks/1501.md, .owlbear/kanban/tasks/1502.md, .owlbear/kanban/tasks/1503.md | Repeated builder cycles show no executable implementation scope in parent task while children are incomplete. |
+2026-05-12T06:39:12+00:00
+## Builder Notes
+- Scope check: #1493 is a parent/tracker task (`Proof bundle: skip`, tracker AC v2) with no implementation surface for builder code changes.
+- AC gate status: NOT MET. Tracker AC-1..AC-3 require child tasks #1501, #1502, #1503 to be `done`.
+- Live dependency snapshot (verified this run):
+  - #1501: `backlog`
+  - #1502: `backlog`
+  - #1503: `backlog`
+- Files changed: none.
+- Tests run: none (non-implementation tracker task).
+- Coverage: n/a (no touched modules).
+- Lint: n/a (no code changes).
+- Evidence summary: completion for #1493 is structurally unreachable until child implementation tasks complete and reach `done`.
+- Fixes applied: none.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | planner | Dispatch #1501, #1502, #1503 through architecture -> test-writer -> builder -> review until `done`, then re-dispatch #1493. | .owlbear/kanban/tasks/1493.md, .owlbear/kanban/tasks/1501.md, .owlbear/kanban/tasks/1502.md, .owlbear/kanban/tasks/1503.md | Tracker AC v2 is dependency-completion based; all three dependencies remain `backlog`. |
+| 2 | architect | Keep #1493 tracker-only AC/proof semantics and preserve implementation ownership on child tasks. | .owlbear/kanban/tasks/1493.md, .owlbear/kanban/tasks/1501.md, .owlbear/kanban/tasks/1502.md, .owlbear/kanban/tasks/1503.md | Parent task has no executable implementation scope while child tasks are incomplete. |
+2026-05-12T06:46:24+00:00
+## Builder Notes
+- Scope check: #1493 is a parent/tracker task (`Proof bundle: skip`, tracker AC v2) with no implementation surface for builder code changes.
+- AC gate status: STRUCTURALLY UNREACHABLE in current state. AC-1..AC-3 require child tasks #1501, #1502, #1503 to be `done` before this tracker can pass.
+- Dependency snapshot (verified this run):
+  - #1501: `backlog`
+  - #1502: `backlog`
+  - #1503: `backlog`
+- Files changed: none.
+- Tests run: none (non-implementation tracker task).
+- Coverage: n/a.
+- Lint: n/a.
+- Evidence summary: builder cannot satisfy tracker AC while prerequisite child tasks remain incomplete.
+- Fixes applied: none.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | planner | Route #1501, #1502, and #1503 through architecture -> test-writer -> builder -> review until each reaches `done`, then redispatch #1493. | .owlbear/kanban/tasks/1493.md, .owlbear/kanban/tasks/1501.md, .owlbear/kanban/tasks/1502.md, .owlbear/kanban/tasks/1503.md | Tracker AC v2 requires dependency completion; all three dependencies are currently `backlog`. |
+| 2 | architect | Keep #1493 scoped as tracker-only AC/proof and keep implementation obligations in child tasks to prevent further builder-loop redispatches before dependency completion. | .owlbear/kanban/tasks/1493.md, .owlbear/kanban/tasks/1501.md, .owlbear/kanban/tasks/1502.md, .owlbear/kanban/tasks/1503.md | Parent task contains no executable implementation scope while dependencies are incomplete. |
+2026-05-12T07:05:58+00:00
+## Builder Notes
+- Scope check: #1493 is a parent/tracker task (`Proof bundle: skip`, tracker AC v2) with no implementation surface for builder code changes.
+- AC gate status: STRUCTURALLY UNREACHABLE in current state. AC-1..AC-3 require child tasks #1501, #1502, #1503 to be `done` before this tracker can pass.
+- Dependency snapshot (verified this run):
+  - #1501: `backlog`
+  - #1502: `backlog`
+  - #1503: `backlog`
+- Files changed: none.
+- Tests run: none (non-implementation tracker task).
+- Coverage: n/a.
+- Lint: n/a.
+- Evidence summary: builder cannot satisfy tracker AC while prerequisite child tasks remain incomplete.
+- Fixes applied: none.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | planner | Route #1501, #1502, and #1503 through architecture -> test-writer -> builder -> review until each reaches `done`, then redispatch #1493. | .owlbear/kanban/tasks/1493.md, .owlbear/kanban/tasks/1501.md, .owlbear/kanban/tasks/1502.md, .owlbear/kanban/tasks/1503.md | Tracker AC v2 requires dependency completion; all three dependencies are currently `backlog`. |
+| 2 | architect | Keep #1493 scoped as tracker-only AC/proof and keep implementation obligations in child tasks to prevent further builder-loop redispatches before dependency completion. | .owlbear/kanban/tasks/1493.md, .owlbear/kanban/tasks/1501.md, .owlbear/kanban/tasks/1502.md, .owlbear/kanban/tasks/1503.md | Parent task contains no executable implementation scope while dependencies are incomplete. |
+2026-05-12T07:09:55+00:00
+## Builder Notes
+- Scope check: #1493 is a parent/tracker task (`Proof bundle: skip`, tracker AC v2) with no implementation surface for builder code changes.
+- AC gate status: STRUCTURALLY UNREACHABLE in current state. AC-1..AC-3 require child tasks #1501, #1502, #1503 to be `done` before this tracker can pass.
+- Dependency snapshot (verified this run):
+  - #1501: `backlog`
+  - #1502: `backlog`
+  - #1503: `backlog`
+- Files changed: none.
+- Tests run: none (non-implementation tracker task).
+- Coverage: n/a.
+- Lint: n/a.
+- Evidence summary: builder cannot satisfy tracker AC while prerequisite child tasks remain incomplete.
+- Fixes applied: none.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | planner | Route #1501, #1502, and #1503 through architecture -> test-writer -> builder -> review until each reaches `done`, then redispatch #1493. | .owlbear/kanban/tasks/1493.md, .owlbear/kanban/tasks/1501.md, .owlbear/kanban/tasks/1502.md, .owlbear/kanban/tasks/1503.md | Tracker AC v2 requires dependency completion; all three dependencies are currently `backlog`. |
+| 2 | architect | Keep #1493 scoped as tracker-only AC/proof and keep implementation obligations in child tasks to prevent further builder-loop redispatches before dependency completion. | .owlbear/kanban/tasks/1493.md, .owlbear/kanban/tasks/1501.md, .owlbear/kanban/tasks/1502.md, .owlbear/kanban/tasks/1503.md | Parent task contains no executable implementation scope while dependencies are incomplete. |
+2026-05-12T07:21:29+00:00
+## Builder Notes
+- Scope check: #1493 is a parent/tracker task with Proof bundle: skip and tracker AC v2; no implementation surface exists for builder edits.
+- AC gate status: STRUCTURALLY UNREACHABLE in current state.
+- Dependency snapshot (live):
+  - #1501: backlog
+  - #1502: backlog
+  - #1503: backlog
+- Files changed: none.
+- Tests run: none (no code scope).
+- Coverage: n/a.
+- Lint: n/a.
+- Evidence summary: AC-1..AC-3 require child tasks #1501/#1502/#1503 to reach done before #1493 can pass.
+- Fixes applied: none.
+
+Required follow-up:
+1) Planner routes #1501, #1502, and #1503 through architecture -> test-writer -> builder -> review until done.
+2) Redispatch #1493 only after child completion is verified.
+2026-05-12T07:33:36+00:00
+## Builder Notes
+- Scope check: #1493 is a parent/tracker task (`Proof bundle: skip`, tracker AC v2) with no implementation surface for builder code changes.
+- AC gate status: STRUCTURALLY UNREACHABLE in current state.
+- Live dependency snapshot (verified this run):
+  - #1501: `backlog`
+  - #1502: `backlog`
+  - #1503: `backlog`
+- Files changed: none.
+- Tests run: none (non-implementation tracker task).
+- Coverage: n/a.
+- Lint: n/a.
+- Evidence summary: AC-1..AC-3 require child tasks #1501, #1502, and #1503 to reach `done` before #1493 can pass.
+- Fixes applied: none.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | planner | Route #1501, #1502, and #1503 through architecture -> test-writer -> builder -> review until each reaches `done`, then redispatch #1493. | `.owlbear/kanban/tasks/1493.md`, `.owlbear/kanban/tasks/1501.md`, `.owlbear/kanban/tasks/1502.md`, `.owlbear/kanban/tasks/1503.md` | Tracker AC v2 is dependency-completion based; all three dependencies remain `backlog`. |
+| 2 | architect | Preserve #1493 as tracker-only AC/proof scope and keep implementation obligations in child tasks to prevent premature builder redispatch before dependency completion. | `.owlbear/kanban/tasks/1493.md`, `.owlbear/kanban/tasks/1501.md`, `.owlbear/kanban/tasks/1502.md`, `.owlbear/kanban/tasks/1503.md` | Parent tracker has no executable implementation scope while dependencies are incomplete. |
+2026-05-12T08:19:42+00:00
+## Builder Notes
+- Scope check: #1493 is a parent/tracker task with `Proof bundle: skip` and tracker AC v2; there is no executable implementation surface for builder code changes.
+- AC gate status: STRUCTURALLY UNREACHABLE in current state.
+- Live dependency snapshot (verified this run):
+  - #1501: `backlog`
+  - #1502: `backlog`
+  - #1503: `backlog`
+- Files changed: none.
+- Tests run: none (non-implementation tracker task).
+- Coverage: n/a.
+- Lint: n/a.
+- Evidence summary: AC-1..AC-3 require child tasks #1501, #1502, and #1503 to reach `done` before #1493 can pass.
+- Fixes applied: none.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | planner | Route #1501, #1502, and #1503 through architecture -> test-writer -> builder -> review until each reaches `done`, then redispatch #1493. | `.owlbear/kanban/tasks/1493.md`, `.owlbear/kanban/tasks/1501.md`, `.owlbear/kanban/tasks/1502.md`, `.owlbear/kanban/tasks/1503.md` | Tracker AC v2 is dependency-completion based; all three dependencies remain `backlog`. |
+| 2 | architect | Preserve #1493 as tracker-only AC/proof scope and keep implementation obligations in child tasks to prevent premature builder redispatch before dependency completion. | `.owlbear/kanban/tasks/1493.md`, `.owlbear/kanban/tasks/1501.md`, `.owlbear/kanban/tasks/1502.md`, `.owlbear/kanban/tasks/1503.md` | Parent tracker has no executable implementation scope while dependencies are incomplete. |
+2026-05-12T09:12:34+00:00
+## Builder Notes
+- Scope check: #1493 is a parent/tracker task with `Proof bundle: skip` and tracker AC v2; there is no implementation surface for builder code edits.
+- AC gate status: STRUCTURALLY UNREACHABLE in current state.
+- Live dependency snapshot (verified this run):
+  - #1501: `todo`
+  - #1502: `todo`
+  - #1503: `backlog`
+- Files changed: none.
+- Tests run: none (non-implementation tracker task).
+- Coverage: n/a.
+- Lint: n/a.
+- Evidence summary: AC-1..AC-3 require child tasks #1501, #1502, #1503 to reach `done` before #1493 can satisfy tracker completion criteria.
+- Fixes applied: none.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | planner | Dispatch #1501 and #1502 through architecture -> test-writer -> builder -> review until each reaches `done`. | `.owlbear/kanban/tasks/1501.md`, `.owlbear/kanban/tasks/1502.md` | #1493 AC is dependency-completion based and both implementation children remain incomplete (`todo`). |
+| 2 | planner | Dispatch #1503 only after #1501/#1502 are done, then run full pipeline to `done`. | `.owlbear/kanban/tasks/1503.md` | #1503 depends on #1501 + #1502 and is still `backlog`. |
+| 3 | orchestrator | Redispatch #1493 only after #1501, #1502, and #1503 are all `done`. | `.owlbear/kanban/tasks/1493.md` | Parent tracker AC v2 cannot pass until all three children are complete. |

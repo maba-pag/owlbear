@@ -19,6 +19,18 @@ archival_reason:
 archival_refs: []
 ---
 
-## Objective\nReplace all raw `fetch()` calls to `/api/tasks` and `/api/decisions` endpoints in component files with imported functions from `api/tasks.ts` and `api/decisions.ts`.\n\n## Acceptance Criteria\n- No raw `fetch()` to `/api/tasks/*` or `/api/decisions/*` remains in component files (KanbanBoard, DetailTab, ArchivalModal, ResolveModal, Shell)\n- All existing tests pass without modification (behavioral preservation)\n- Abort signal support, conflict resolution, and error handling behavior unchanged\n- No new dependencies introduced beyond the api/ modules\n\n## Implementation Notes\n- Preserve all existing behavior exactly — this is a refactor, not a feature change\n- Components: KanbanBoard, DetailTab, ArchivalModal, ResolveModal, Shell\n- Verify abort signals are threaded through correctly
+## Objective
+Replace all raw `fetch()` calls to `/api/tasks` and `/api/decisions` endpoints in component files with imported functions from `api/tasks.ts` and `api/decisions.ts`.
+
+## Acceptance Criteria
+- No raw `fetch()` to `/api/tasks/*` or `/api/decisions/*` remains in component files (KanbanBoard, DetailTab, ArchivalModal, ResolveModal, Shell)
+- All existing tests pass without modification (behavioral preservation)
+- Abort signal support, conflict resolution, and error handling behavior unchanged
+- No new dependencies introduced beyond the api/ modules
+
+## Implementation Notes
+- Preserve all existing behavior exactly — this is a refactor, not a feature change
+- Components: KanbanBoard, DetailTab, ArchivalModal, ResolveModal, Shell
+- Verify abort signals are threaded through correctly
 2026-05-12T04:24:15+00:00
 Moved to backlog for architecture review. Task was placed in `todo` directly by researcher without arch review or proof-bundle assignment. AC has B3 violations ("All existing tests") and banned word "No" used as naked quantifier. Proof bundle needs assignment.

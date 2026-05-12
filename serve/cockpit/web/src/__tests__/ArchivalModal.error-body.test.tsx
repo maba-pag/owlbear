@@ -118,7 +118,9 @@ describe('TestFromAC_ArchivalModalErrorBodyParsing', () => {
         const errEl = container.querySelector('[data-testid="archival-error"]')
         expect(errEl).not.toBeNull()
         // FAILS: current text is "Validation failed." — body message not read for 422
-        expect(errEl!.textContent).toContain('priority field is required')
+        expect((errEl as HTMLElement & { description?: string }).description ?? '').toContain(
+          'priority field is required',
+        )
       },
       { timeout: 1000 },
     )
@@ -139,7 +141,9 @@ describe('TestFromAC_ArchivalModalErrorBodyParsing', () => {
         const errEl = container.querySelector('[data-testid="archival-error"]')
         expect(errEl).not.toBeNull()
         // FAILS: current text IS "Validation failed."
-        expect(errEl!.textContent).not.toBe('Validation failed.')
+        expect((errEl as HTMLElement & { description?: string }).description).not.toBe(
+          'Validation failed.',
+        )
       },
       { timeout: 1000 },
     )
@@ -161,7 +165,9 @@ describe('TestFromAC_ArchivalModalErrorBodyParsing', () => {
         const errEl = container.querySelector('[data-testid="archival-error"]')
         expect(errEl).not.toBeNull()
         // FAILS: current text is "Archival failed (500)." — body not read
-        expect(errEl!.textContent).toContain('archival failed: disk quota exceeded')
+        expect((errEl as HTMLElement & { description?: string }).description ?? '').toContain(
+          'archival failed: disk quota exceeded',
+        )
       },
       { timeout: 1000 },
     )
@@ -182,7 +188,9 @@ describe('TestFromAC_ArchivalModalErrorBodyParsing', () => {
         const errEl = container.querySelector('[data-testid="archival-error"]')
         expect(errEl).not.toBeNull()
         // FAILS: current text is "Archival failed (503)." — body not read
-        expect(errEl!.textContent).toContain('service temporarily unavailable: storage backend offline')
+        expect((errEl as HTMLElement & { description?: string }).description ?? '').toContain(
+          'service temporarily unavailable: storage backend offline',
+        )
       },
       { timeout: 1000 },
     )
@@ -204,7 +212,9 @@ describe('TestFromAC_ArchivalModalErrorBodyParsing', () => {
         const errEl = container.querySelector('[data-testid="archival-error"]')
         expect(errEl).not.toBeNull()
         // FAILS: current text IS "Archival failed (500)."
-        expect(errEl!.textContent).not.toBe('Archival failed (500).')
+        expect((errEl as HTMLElement & { description?: string }).description).not.toBe(
+          'Archival failed (500).',
+        )
       },
       { timeout: 1000 },
     )

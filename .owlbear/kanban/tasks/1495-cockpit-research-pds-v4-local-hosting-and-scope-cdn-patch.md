@@ -1,10 +1,10 @@
 ---
 id: 1495
 title: 'Cockpit: Research PDS v4 local hosting and scope CDN patch'
-status: todo
+status: in-progress
 priority: important
 created: 2026-05-11T23:15:45.844267+00:00
-updated: 2026-05-12T02:37:53.791965+00:00
+updated: 2026-05-12T08:19:21.159794+00:00
 tags:
   - cockpit
   - frontend
@@ -48,3 +48,7 @@ Both parented to #1495. No dependencies between them — they can be worked inde
 - Challenge: block on original "scoped appendChild" approach (0.23) — revised to property trap after challenger identified double-load timing bug, core chunk caching, and readiness boundary issues
 - Follow-ups: #1496 (property trap implementation), #1497 (remove dead pdsPartialsPlugin)
 - Key finding: PDS v4 has NO native self-hosting config; load() only accepts cdn: 'auto' | 'cn'
+2026-05-12T08:19:21+00:00
+## Test-Writer Notes
+- Non-implementation task (tagged research) — no tests applicable.
+- Passing through to builder.
