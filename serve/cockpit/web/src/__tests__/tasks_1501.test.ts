@@ -611,3 +611,128 @@ describe('TestFromAC_TaskDetailInterface', () => {
     expect(Array.isArray(result.depends_on)).toBe(true)
   })
 })
+
+// ─── AC-7 (revised): EditRequest per-field serialization semantics ─────────
+//
+// Revised AC-7 specifies per-field omit/null/empty semantics matching the
+// backend _build_edit_kwargs Pydantic model_fields_set logic:
+//   - Omit (undefined) → field absent from JSON → backend no-op for that field
+//   - null              → field present as null   → field-specific backend behaviour
+//   - ""  / []          → field present as empty  → backend "clear" signal
+// Tests here document the correct JSON serialisation for each case.
+// All pass against current implementation (JSON.stringify behaviour is correct).
+
+describe('TestFromAC_EditRequestFieldSemantics', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  async function captureEditBody(req: EditRequest): Promise<Record<string, unknown>> {
+    const fetchMock = makeSuccessFetch(TASK_DETAIL)
+    vi.stubGlobal('fetch', fetchMock)
+    await editTask(42, req)
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    return JSON.parse(init.body as string) as Record<string, unknown>
+  }
+
+  // ── Omit = no change: undefined fields must be absent from serialised body ──
+
+  it('AC-7: omitting title (undefined) excludes it from the serialised request body', async () => {
+    const body = await captureEditBody({ updated: '2026-05-12T00:00:00Z' })
+    expect('title' in body).toBe(false)
+  })
+
+  it('AC-7: omitting tags (undefined) excludes it from the serialised request body', async () => {
+    const body = await captureEditBody({ updated: '2026-05-12T00:00:00Z' })
+    expect('tags' in body).toBe(false)
+  })
+
+  it('AC-7: omitting depends_on (undefined) excludes it from the serialised request body', async () => {
+    const body = await captureEditBody({ updated: '2026-05-12T00:00:00Z' })
+    expect('depends_on' in body).toBe(false)
+  })
+
+  it('AC-7: omitting priority (undefined) excludes it from the serialised request body', async () => {
+    const body = await captureEditBody({ updated: '2026-05-12T00:00:00Z' })
+    expect('priority' in body).toBe(false)
+  })
+
+  it('AC-7: omitting parent (undefined) excludes it from the serialised request body', async () => {
+    const body = await captureEditBody({ updated: '2026-05-12T00:00:00Z' })
+    expect('parent' in body).toBe(false)
+  })
+
+  it('AC-7: omitting block_reason (undefined) excludes it from the serialised request body', async () => {
+    const body = await captureEditBody({ updated: '2026-05-12T00:00:00Z' })
+    expect('block_reason' in body).toBe(false)
+  })
+
+  it('AC-7: omitting body field (undefined) excludes it from the serialised request body', async () => {
+    const body = await captureEditBody({ updated: '2026-05-12T00:00:00Z' })
+    expect('body' in body).toBe(false)
+  })
+
+  // ── body: ""  = clear signal; body: null = no-op ──────────────────────────
+
+  it('AC-7: body="" serialises as empty string — backend clear-body signal', async () => {
+    const body = await captureEditBody({ updated: '2026-05-12T00:00:00Z', body: '' })
+    expect('body' in body).toBe(true)
+    expect(body.body).toBe('')
+  })
+
+  it('AC-7: body=null serialises as null — backend no-op (not same as empty string)', async () => {
+    const body = await captureEditBody({ updated: '2026-05-12T00:00:00Z', body: null })
+    expect('body' in body).toBe(true)
+    expect(body.body).toBeNull()
+  })
+
+  // ── parent: null = clear parent ───────────────────────────────────────────
+
+  it('AC-7: parent=null serialises as null — backend clear-parent signal', async () => {
+    const body = await captureEditBody({ updated: '2026-05-12T00:00:00Z', parent: null })
+    expect('parent' in body).toBe(true)
+    expect(body.parent).toBeNull()
+  })
+
+  // ── block_reason: null / "" = unblock ─────────────────────────────────────
+
+  it('AC-7: block_reason=null serialises as null — backend unblock signal', async () => {
+    const body = await captureEditBody({ updated: '2026-05-12T00:00:00Z', block_reason: null })
+    expect('block_reason' in body).toBe(true)
+    expect(body.block_reason).toBeNull()
+  })
+
+  it('AC-7: block_reason="" serialises as empty string — backend unblock signal', async () => {
+    const body = await captureEditBody({ updated: '2026-05-12T00:00:00Z', block_reason: '' })
+    expect('block_reason' in body).toBe(true)
+    expect(body.block_reason).toBe('')
+  })
+
+  // ── tags: [] = remove all; tags: null = no-op ─────────────────────────────
+
+  it('AC-7: tags=[] serialises as empty array — backend remove-all-tags signal', async () => {
+    const body = await captureEditBody({ updated: '2026-05-12T00:00:00Z', tags: [] })
+    expect('tags' in body).toBe(true)
+    expect(body.tags).toEqual([])
+  })
+
+  it('AC-7: tags=null serialises as null — backend no-op (distinct from empty array)', async () => {
+    const body = await captureEditBody({ updated: '2026-05-12T00:00:00Z', tags: null })
+    expect('tags' in body).toBe(true)
+    expect(body.tags).toBeNull()
+  })
+
+  // ── depends_on: [] = remove all; depends_on: null = no-op ─────────────────
+
+  it('AC-7: depends_on=[] serialises as empty array — backend remove-all-deps signal', async () => {
+    const body = await captureEditBody({ updated: '2026-05-12T00:00:00Z', depends_on: [] })
+    expect('depends_on' in body).toBe(true)
+    expect(body.depends_on).toEqual([])
+  })
+
+  it('AC-7: depends_on=null serialises as null — backend no-op (distinct from empty array)', async () => {
+    const body = await captureEditBody({ updated: '2026-05-12T00:00:00Z', depends_on: null })
+    expect('depends_on' in body).toBe(true)
+    expect(body.depends_on).toBeNull()
+  })
+})
