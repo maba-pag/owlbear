@@ -4515,3 +4515,10 @@ External repos and resources studied during OwlBear development.
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
 | GitHub Actions Workflow Commands | <https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands> | `::warning title=TITLE::message` annotation syntax | .owlbear/research/sync-todo-marker-warning.md | 2026-05-09 |
+
+## Modal PInlineNotification Research (Task #1499)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| PDS Inline Notification API (v3) | <https://designsystem.porsche.com/v3/components/inline-notification/api/> | Full prop/event/slot reference for PInlineNotification | .owlbear/research/cockpit-inline-notification-modal.md | 2026-05-12 |
+| PDS Inline Notification Examples (v3) | <https://designsystem.porsche.com/v3/components/inline-notification/examples/> | Event handling and action button patterns | .owlbear/research/cockpit-inline-notification-modal.md | 2026-05-12 |
