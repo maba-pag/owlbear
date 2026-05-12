@@ -106,7 +106,7 @@ export default function TaskFieldsEditor({
   const [editBody, setEditBody] = useState(false)
   const [title, setTitle] = useState(task.title)
   const [priority, setPriority] = useState(task.priority)
-  const [body, setBody] = useState(task.body)
+  const [body, setBody] = useState(task.body ?? '')
   const [dependsOn, setDependsOn] = useState(task.depends_on.join(', '))
   const [parent, setParent] = useState(task.parent !== null ? String(task.parent) : '')
   const [blockReason, setBlockReason] = useState(task.block_reason ?? '')
@@ -124,7 +124,7 @@ export default function TaskFieldsEditor({
 
     setTitle(task.title)
     setPriority(task.priority)
-    setBody(task.body)
+    setBody(task.body ?? '')
     setDependsOn(task.depends_on.join(', '))
     setParent(task.parent !== null ? String(task.parent) : '')
     setBlockReason(task.block_reason ?? '')
@@ -137,7 +137,7 @@ export default function TaskFieldsEditor({
   const isDirty =
     title !== task.title
     || priority !== task.priority
-    || body !== task.body
+    || body !== (task.body ?? '')
     || dependsOn !== task.depends_on.join(', ')
     || parent !== (task.parent !== null ? String(task.parent) : '')
     || (task.blocked && blockReason !== (task.block_reason ?? ''))

@@ -13,7 +13,7 @@ export interface ConflictRemoteTask {
   id: number
   title: string
   priority: string
-  body: string
+  body: string | null
   depends_on: number[]
   parent: number | null
   block_reason: string | null

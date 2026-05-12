@@ -20,7 +20,7 @@ interface TaskDetail {
   title: string
   status: string
   priority: string
-  body: string
+  body: string | null
   updated: string
   created: string
   tags: string[]
