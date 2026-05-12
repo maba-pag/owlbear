@@ -8,12 +8,11 @@ import sys
 import threading
 import webbrowser
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
-from starlette.staticfiles import StaticFiles
+from fastapi.staticfiles import StaticFiles
 
 from owlbear_cockpit.deps import get_engine  # noqa: F401 — re-exported for test DI
 from owlbear_cockpit.routes.decisions import router as decisions_router
@@ -27,9 +26,6 @@ from owlbear_kanban.errors import (
     NotFoundError,
     ValidationError,
 )
-
-if TYPE_CHECKING:
-    from starlette.requests import Request
 
 _DEFAULT_PORT = 8420
 _MAX_PORT = 65535

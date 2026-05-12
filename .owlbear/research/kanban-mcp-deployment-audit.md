@@ -271,9 +271,5 @@ Implement all designed validation checks. All 15 tests in test_engine_init_1067.
 
 ### Dependencies
 
-<<<<<<< HEAD
-None. All 8 tasks are independent — they touch different subsystems and can be parallelized or executed in any order.
-=======
 - #1339 depends_on #1343 (config validation must be complete before lifecycle reconciliation)
 - All others are independent and can be parallelized
->>>>>>> b7a1eb8c (docs: add findings on pick_tasks wave assembly and engine config validation issues)

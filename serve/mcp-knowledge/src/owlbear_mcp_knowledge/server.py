@@ -624,89 +624,10 @@ def make_evaluate_fn() -> EvaluateFn:
     return _evaluate
 
 
-def _is_blocked_ip(ip_str: str) -> bool:
-    """Return True if *ip_str* is a private/loopback/link-local/reserved address."""
-    import ipaddress  # noqa: PLC0415
-
-    try:
-        addr = ipaddress.ip_address(ip_str)
-    except ValueError:
-        return True  # unparseable → block
-    # Unwrap IPv4-mapped IPv6 (e.g. ::ffff:127.0.0.1) before checking.
-    # ipv4_mapped is only present on IPv6Address.
-    check: ipaddress.IPv4Address | ipaddress.IPv6Address
-    if isinstance(addr, ipaddress.IPv6Address) and addr.ipv4_mapped is not None:
-        check = addr.ipv4_mapped
-    else:
-        check = addr
-    return (
-        check.is_loopback
-        or check.is_private
-        or check.is_link_local
-        or check.is_reserved
-        or check.is_unspecified
-    )
-
-
 async def _web_read(url: str) -> str | None:
-    """Fetch a URL via httpx with SSRF protection (CWE-918).
-
-    Resolves the hostname asynchronously before making the HTTP request.
-    Blocks loopback, private, link-local, reserved, and unspecified addresses.
-    Rewrites the request URL to the resolved IP to prevent DNS rebinding.
-    """
-    import socket  # noqa: PLC0415
-    from urllib.parse import urlparse, urlunparse  # noqa: PLC0415
-
-    parsed = urlparse(url)
-    if parsed.scheme.lower() not in {"http", "https"}:
-        return None
-
-    hostname = parsed.hostname  # strips [] from IPv6 literals
-    if not hostname:
-        return None
-
-    port = parsed.port or (443 if parsed.scheme.lower() == "https" else 80)
-
+    """Fetch a URL with the knowledge package's SSRF-safe HTTP fetcher."""
     try:
-        addrs = await asyncio.to_thread(
-            socket.getaddrinfo, hostname, port, 0, socket.AF_UNSPEC
-        )
-    except OSError:
-        return None
-
-    for _family, _socktype, _proto, _canon, sockaddr in addrs:
-        if _is_blocked_ip(sockaddr[0]):
-            return None
-
-    # Rewrite URL to the resolved IP to prevent DNS rebinding TOCTOU
-    import ipaddress  # noqa: PLC0415
-
-    first_ip = ipaddress.ip_address(addrs[0][4][0])
-    ip_host = (
-        f"[{first_ip}]"
-        if isinstance(first_ip, ipaddress.IPv6Address)
-        else str(first_ip)
-    )
-    netloc = f"{ip_host}:{parsed.port}" if parsed.port else ip_host
-    ip_url = urlunparse(
-        (
-            parsed.scheme,
-            netloc,
-            parsed.path,
-            parsed.params,
-            parsed.query,
-            parsed.fragment,
-        )
-    )
-
-    try:
-        import httpx  # noqa: PLC0415
-
-        async with httpx.AsyncClient(follow_redirects=False, timeout=30) as client:
-            resp = await client.get(ip_url, headers={"Host": hostname})
-            resp.raise_for_status()
-            return resp.text
+        return await HttpxContentFetcher().fetch(url)
     except Exception:  # noqa: BLE001
         return None
 

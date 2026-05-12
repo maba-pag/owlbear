@@ -5,6 +5,22 @@ import { vi } from 'vitest'
 
 skipPorscheDesignSystemCDNRequestsDuringTests()
 
+if (typeof globalThis.requestAnimationFrame === 'undefined') {
+  globalThis.requestAnimationFrame = (callback: FrameRequestCallback): number =>
+    setTimeout(() => callback(Date.now()), 0) as unknown as number
+}
+
+if (typeof globalThis.cancelAnimationFrame === 'undefined') {
+  globalThis.cancelAnimationFrame = (handle: number): void => {
+    clearTimeout(handle)
+  }
+}
+
+if (typeof window !== 'undefined') {
+  window.requestAnimationFrame = globalThis.requestAnimationFrame
+  window.cancelAnimationFrame = globalThis.cancelAnimationFrame
+}
+
 // PDS global keydown handler (hideAllPopoversUntil) throws TypeError when
 // accessing ownerDocument on a null element in jsdom. This is a known PDS/jsdom
 // incompatibility: document.ownerDocument is null (document IS the document).
@@ -34,9 +50,10 @@ if (typeof HTMLDialogElement !== 'undefined') {
   }
 }
 
-// jsdom does not implement attachInternals (needed by some PDS form components)
-// attachInternals lives on HTMLElement, not Element
-if (typeof HTMLElement !== 'undefined' && !HTMLElement.prototype.attachInternals) {
+// PDS form components need a complete ElementInternals surface. Newer jsdom
+// exposes a partial attachInternals implementation that lacks setFormValue, so
+// use a deterministic test shim rather than only filling the missing method.
+if (typeof HTMLElement !== 'undefined') {
   ;(HTMLElement.prototype as unknown as Record<string, unknown>)['attachInternals'] = vi.fn(
     () => ({
       setFormValue: vi.fn(),

@@ -85,11 +85,16 @@ describe('TestFromAC_AppWiring', () => {
       expect(capturedCalls.length).toBeGreaterThan(0)
       expect(capturedCalls[0].url).toBe('/api/events')
 
-      // The children passed to EventSourceProvider must be the Shell component.
-      // This proves Shell is directly nested inside EventSourceProvider, not a sibling.
+      // The children passed to EventSourceProvider must contain the Shell component.
+      // ErrorBoundary is intentionally nested between the provider and Shell so
+      // runtime failures stay inside the Cockpit app surface.
       const children = capturedCalls[0].children
       expect(isValidElement(children)).toBe(true)
-      expect((children as { type: { name?: string } }).type.name).toBe('Shell')
+      expect((children as { type: { name?: string } }).type.name).toBe('ErrorBoundary')
+
+      const boundaryChildren = (children as { props: { children?: unknown } }).props.children
+      expect(isValidElement(boundaryChildren)).toBe(true)
+      expect((boundaryChildren as { type: { name?: string } }).type.name).toBe('Shell')
 
       // BrowserRouter wraps the provider — Shell uses Routes/Route which require
       // router context. Rendering completes without a router context error,
