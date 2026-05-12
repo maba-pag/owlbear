@@ -2,6 +2,15 @@
 
 External repos and resources studied during OwlBear development.
 
+## CockpitProvider Extraction Research (Task #1491)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| React createContext docs | <https://react.dev/reference/react/createContext> | Context provider pattern, consumer re-render semantics | `.owlbear/research/1491-cockpit-provider-extraction.md` | 2026-05-12 |
+| React Compiler intro | <https://react.dev/learn/react-compiler/introduction> | Auto-memoization behavior, useMemo escape hatch | `.owlbear/research/1491-cockpit-provider-extraction.md` | 2026-05-12 |
+| wisp.blog Nest/Merge Providers | <https://www.wisp.blog/blog/should-i-nest-or-merge-multiple-context-providers-in-react> | Single vs split provider trade-offs, hybrid pattern | `.owlbear/research/1491-cockpit-provider-extraction.md` | 2026-05-12 |
+| LogRocket Context Pitfalls | <https://blog.logrocket.com/pitfalls-of-overusing-react-context/> | Split context recommendation, consumer re-render risks | `.owlbear/research/1491-cockpit-provider-extraction.md` | 2026-05-12 |
+
 ## PDS Mutation Error Banner Research (Task #1494)
 
 | Source | URL | What | Where Used | Date |
