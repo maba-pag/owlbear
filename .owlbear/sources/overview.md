@@ -49,6 +49,14 @@ External repos and resources studied during OwlBear development.
 | Kent C. Dodds — Replace axios with a simple custom fetch wrapper | <https://kentcdodds.com/blog/replace-axios-with-a-simple-custom-fetch-wrapper> | Validates plain async function wrappers for same-origin SPAs | `.owlbear/research/cockpit-api-client-centralization.md` | 2026-05-12 |
 | dev.to — Building a Type-Safe API Client in TypeScript | <https://dev.to/limacodes/building-a-type-safe-api-client-in-typescript-beyond-axios-vs-fetch-4a3i> | Typed wrapper functions eliminate fetch duplication | `.owlbear/research/cockpit-api-client-centralization.md` | 2026-05-12 |
 
+## PDS Asset Sync Research (Task #1510)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| PDS CDN core chunk (v4.1.0) | `https://cdn.ui.porsche.com/porsche-design-system/components/porsche-design-system.v4.1.0.59dc31ee9c99f5a43eb5.js` | Webpack chunk mapping (58 component → filename entries), Stencil lazy-load architecture | `.owlbear/research/1510-pds-asset-sync.md` | 2026-05-12 |
+| PDS icon component chunk (v4.1.0) | `https://cdn.ui.porsche.com/porsche-design-system/components/porsche-design-system.icon.a77dc30fd842f982a230.js` | Icon name → filename mapping (290 entries) | `.owlbear/research/1510-pds-asset-sync.md` | 2026-05-12 |
+| PDS vue-offline sample repo | <https://github.com/porsche-design-system/sample-integration-vue-offline> | Official offline hosting pattern (v3): patched npm package + `public/assets/` + postinstall; v4 offline support not yet available | `.owlbear/research/1510-pds-asset-sync.md` | 2026-05-12 |
+
 ## PDS Property Trap Validation (Task #1496)
 
 | Source | URL | What | Where Used | Date |
