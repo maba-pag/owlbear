@@ -1,10 +1,10 @@
 ---
 id: 1492
 title: 'Cockpit: Decompose DetailTab.tsx into 4 components'
-status: in-progress
+status: archived
 priority: important
 created: 2026-05-11T23:15:07.557623+00:00
-updated: 2026-05-12T16:22:57.101710+00:00
+updated: 2026-05-12T21:54:51.989772+00:00
 tags:
   - cockpit
   - frontend
@@ -15,7 +15,7 @@ depends_on: []
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 
@@ -280,3 +280,254 @@ Evidence summary: child completion gate unmet (#1508 not done).
 - Architecture review explicitly: "Test-writer: SKIP".
 - Child status at pass-through: #1506 archived (completed), #1507 archived (completed), #1508 backlog.
 - Passing through to builder.
+2026-05-12T16:59:18+00:00
+## Builder Notes
+
+Tracker/pass-through task (`Proof bundle: skip`) evaluated with no code changes.
+
+AC gate check for #1492:
+- AC-1 requires child #1506 to have reached `done` -> current status: `archived` (`archival_reason: completed`)
+- AC-2 requires child #1507 to have reached `done` -> current status: `archived` (`archival_reason: completed`)
+- AC-3 requires child #1508 to have reached `done` -> current status: `in-progress`
+
+Result: AC-3 is not yet satisfiable, so builder cannot advance #1492 to `review`.
+
+Files changed: none
+Tests run: none (tracker pass-through task)
+Lint: not run (no code changes)
+Evidence summary: child completion gate unmet (#1508 not done).
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Re-run tracker pass-through for #1492 after child task #1508 reaches `done` (or `archived` with `archival_reason: completed`). | .owlbear/kanban/tasks/1508-cockpit-extract-taskfieldseditor-reduce-detailtab-to-container.md | #1492 AC-3 gate unmet (current status `in-progress`). |
+2026-05-12T17:34:39+00:00
+## Test-Writer Notes
+- Proof bundle: skip — no new test writing required.
+- Parent/tracker task — all implementation AC lives in child tasks #1506, #1507, #1508.
+- AC-1..AC-3 are child-completion gates (process checks), not testable Python interfaces.
+- Architecture review explicitly: "Test-writer: SKIP".
+- Child status at pass-through: #1506 archived (completed), #1507 archived (completed), #1508 in-progress.
+- Passing through to builder.
+2026-05-12T18:15:28+00:00
+## Builder Notes
+
+Tracker/pass-through task (`Proof bundle: skip`) evaluated with no code changes.
+
+AC gate check for #1492:
+- AC-1 requires child #1506 to have reached `done` -> current status: `archived` (`archival_reason: completed`)
+- AC-2 requires child #1507 to have reached `done` -> current status: `archived` (`archival_reason: completed`)
+- AC-3 requires child #1508 to have reached `done` -> current status: `in-progress`
+
+Result: AC-3 is not yet satisfiable, so builder cannot advance #1492 to `review`.
+
+Files changed: none
+Tests run: none (tracker pass-through task)
+Lint: not run (no code changes)
+Evidence summary: child completion gate unmet (#1508 not done).
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Re-run tracker pass-through for #1492 after child task #1508 reaches `done` (or `archived` with `archival_reason: completed`). | .owlbear/kanban/tasks/1508-cockpit-extract-taskfieldseditor-reduce-detailtab-to-container.md | #1492 AC-3 gate unmet (current status `in-progress`). |
+2026-05-12T19:20:53+00:00
+## Test-Writer Notes
+- Proof bundle: skip — no new test writing required.
+- Parent/tracker task — all implementation AC lives in child tasks #1506, #1507, #1508.
+- AC-1..AC-3 are child-completion gates (process checks), not testable Python interfaces.
+- Architecture review explicitly: "Test-writer: SKIP".
+- Child status at pass-through: #1506 archived (completed), #1507 archived (completed), #1508 in-progress.
+- Passing through to builder.
+2026-05-12T19:45:40+00:00
+## Builder Notes
+
+Tracker/pass-through task (`Proof bundle: skip`) evaluated with no code changes.
+
+AC gate check for #1492:
+- AC-1 requires child #1506 to have reached `done` -> current status: `archived` (`archival_reason: completed`) [satisfied]
+- AC-2 requires child #1507 to have reached `done` -> current status: `archived` (`archival_reason: completed`) [satisfied]
+- AC-3 requires child #1508 to have reached `done` -> current status: `in-progress` [not yet satisfied]
+
+Result: AC-3 is not yet satisfiable, so builder cannot advance #1492 to `review`.
+
+Files changed: none
+Tests run: none (tracker pass-through task)
+Coverage: not run (no code changes)
+Lint: not run (no code changes)
+Evidence summary: child completion gate unmet (#1508 not done).
+
+### Required Follow-up
+1. Re-run tracker pass-through for #1492 after child task #1508 reaches `done` (or `archived` with `archival_reason: completed`).
+2026-05-12T20:02:12+00:00
+## Test-Writer Notes
+- Proof bundle: skip — no new test writing required.
+- Parent/tracker task — all implementation AC lives in child tasks #1506, #1507, #1508.
+- AC-1..AC-3 are child-completion gates (process checks), not testable Python interfaces.
+- Architecture review explicitly: "Test-writer: SKIP".
+- Child status at pass-through: #1506 archived (completed), #1507 archived (completed), #1508 in-progress.
+- Passing through to builder.
+2026-05-12T20:25:25+00:00
+## Builder Notes
+
+Tracker/pass-through task (`Proof bundle: skip`) evaluated with no code changes.
+
+AC gate check for #1492:
+- AC-1 requires child #1506 to have reached `done` -> current status: `archived` (`archival_reason: completed`) [satisfied]
+- AC-2 requires child #1507 to have reached `done` -> current status: `archived` (`archival_reason: completed`) [satisfied]
+- AC-3 requires child #1508 to have reached `done` -> current status: `in-progress` [not yet satisfied]
+
+Result: AC-3 is not yet satisfiable, so builder cannot advance #1492 to `review`.
+
+Files changed: none
+Tests run: none (tracker pass-through task)
+Coverage: not run (no code changes)
+Lint: not run (no code changes)
+Evidence summary: child completion gate unmet (#1508 not done).
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Re-run tracker pass-through for #1492 after child task #1508 reaches `done` or `archived` with `archival_reason: completed`. | .owlbear/kanban/tasks/1508-cockpit-extract-taskfieldseditor-reduce-detailtab-to-container.md | #1492 AC-3 gate unmet; `show/list task` now reports #1508 status `in-progress`. |
+2026-05-12T20:26:05+00:00
+## Test-Writer Notes
+- Proof bundle: skip — no new test writing required.
+- Parent/tracker task — all implementation AC lives in child tasks #1506, #1507, #1508.
+- AC-1..AC-3 are child-completion gates (process checks), not testable Python interfaces.
+- Architecture review explicitly: "Test-writer: SKIP".
+- Child status at pass-through: #1506 archived (completed), #1507 archived (completed), #1508 in-progress.
+- Passing through to builder.
+2026-05-12T20:41:51+00:00
+## Builder Notes
+
+Tracker/pass-through task (`Proof bundle: skip`) evaluated with no code changes.
+
+AC gate check for #1492:
+- AC-1 requires child #1506 to have reached `done` -> current status: `archived` (`archival_reason: completed`) [satisfied]
+- AC-2 requires child #1507 to have reached `done` -> current status: `archived` (`archival_reason: completed`) [satisfied]
+- AC-3 requires child #1508 to have reached `done` -> current status: `in-progress` [not yet satisfied]
+
+Result: AC-3 is not yet satisfiable, so builder cannot advance #1492 to `review`.
+
+Files changed: none
+Tests run: none (tracker pass-through task)
+Coverage: not run (no code changes)
+Lint: not run (no code changes)
+Evidence summary: child completion gate unmet (#1508 not done).
+
+### Required Follow-up
+1. Re-run tracker pass-through for #1492 after child task #1508 reaches `done` (or `archived` with `archival_reason: completed`).
+2026-05-12T20:46:13+00:00
+## Test-Writer Notes
+- Proof bundle: skip — no new test writing required.
+- Parent/tracker task — all implementation AC lives in child tasks #1506, #1507, #1508.
+- AC-1..AC-3 are child-completion gates (process checks), not testable Python interfaces.
+- Architecture review explicitly: "Test-writer: SKIP".
+- Child status at pass-through: #1506 archived (completed), #1507 archived (completed), #1508 in-progress.
+- Passing through to builder.
+2026-05-12T20:52:23+00:00
+## Builder Notes
+
+Tracker/pass-through task (`Proof bundle: skip`) evaluated with no code changes.
+
+AC gate check for #1492:
+- AC-1 requires child #1506 to have reached `done` -> current status: `archived` (`archival_reason: completed`) [satisfied]
+- AC-2 requires child #1507 to have reached `done` -> current status: `archived` (`archival_reason: completed`) [satisfied]
+- AC-3 requires child #1508 to have reached `done` -> current status: `review` [not yet satisfied]
+
+Result: AC-3 is not yet satisfiable, so builder cannot advance #1492 to `review`.
+
+Files changed: none
+Tests run: none (tracker pass-through task)
+Coverage: not run (no code changes)
+Lint: not run (no code changes)
+Evidence summary: child completion gate unmet (#1508 not done).
+
+### Required Follow-up
+1. Re-run tracker pass-through for #1492 after child task #1508 reaches `done` (or `archived` with `archival_reason: completed`).
+2026-05-12T21:12:29+00:00
+## Test-Writer Notes
+- Proof bundle: skip — no new test writing required.
+- Parent/tracker task — all implementation AC lives in child tasks #1506, #1507, #1508.
+- AC-1..AC-3 are child-completion gates (process checks), not testable Python interfaces.
+- Architecture review explicitly: "Test-writer: SKIP".
+- Child status at pass-through: #1506 archived (completed), #1507 archived (completed), #1508 review.
+- Passing through to builder.
+2026-05-12T21:25:34+00:00
+## Builder Notes
+
+Tracker/pass-through task (Proof bundle: skip) evaluated with no code changes.
+
+AC gate check for #1492:
+- AC-1 requires child #1506 to have reached done -> current status: archived (archival_reason: completed) [satisfied]
+- AC-2 requires child #1507 to have reached done -> current status: archived (archival_reason: completed) [satisfied]
+- AC-3 requires child #1508 to have reached done -> current status: done [satisfied]
+
+Result: all child completion gates satisfied; advancing #1492 to review.
+
+Files changed: none
+Tests run: none (tracker pass-through task)
+Coverage: not run (no code changes)
+Lint: not run (no code changes)
+Evidence summary: child completion gates satisfied across #1506, #1507, #1508.
+2026-05-12T21:39:57+00:00
+## Review Evidence
+- Verdict: PASS
+- PASS confirmation (one line): PASS #1492 -> docs | Tracker AC mapped to live child-task completion evidence; all gates satisfied.
+- Builder evidence review: Sufficient for `Proof bundle: skip`. This parent tracker task produced no code changes, so the operative proof surface is child-task completion state rather than test/lint/coverage output.
+
+| AC Line | Evidence | Status |
+|---|---|---|
+| AC-1 | `mcp_ob-kanban_list_tasks(ids=[1506,1507,1508])` reports child #1506 as `archived` with `archival_reason: completed`, which satisfies the tracker requirement that the child reached `done`. | PASS |
+| AC-2 | `mcp_ob-kanban_list_tasks(ids=[1506,1507,1508])` reports child #1507 as `archived` with `archival_reason: completed`, which satisfies the tracker requirement that the child reached `done`. | PASS |
+| AC-3 | `mcp_ob-kanban_list_tasks(ids=[1506,1507,1508])` reports child #1508 as `archived` with `archival_reason: completed`, which satisfies the tracker requirement that the child reached `done`. | PASS |
+
+- Blocking findings: none.
+
+## Observations
+- The live board state is newer than the last builder note: builder recorded #1508 as `done`, while the current board state shows `archived` with `archival_reason: completed`. That strengthens rather than contradicts the completion evidence.
+- No independent `quality-runner` rerun was required. For a `Proof bundle: skip` tracker with no file changes, current child-task state is the relevant proof surface.
+2026-05-12T21:45:17+00:00
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | README verification | No | N/A | Tracker task: zero code changes produced; all implementation in children #1506/#1507/#1508 with their own docs gates. `serve/cockpit/README.md` contains no internal component names (DetailTab, TaskFieldsEditor, ConflictBanner, TaskActions) — no updates needed. |
+| 2 | External attribution | No | N/A | Task body sources are all internal codebase references (DetailTab.tsx, useCleanupFlow pattern, #1493 research, ConfirmDialog precedent) — no external sources. |
+| 3 | Research doc | Yes | N/A (linked) | `.owlbear/research/cockpit-detailtab-decomposition.md` exists and is linked in task body line 56. |
+| 4 | Deletion detection | No | N/A | No files deleted by this tracker task. |
+
+### Verification Layers
+- Layer 1 — `grep_search` on `serve/cockpit/README.md` for DetailTab/TaskFieldsEditor/ConflictBanner/TaskActions: 0 matches (no stale refs). `file_search` for `.owlbear/scratch/1492-*`: 0 results.
+- Layer 2 — Editorial: README documents public API surface (endpoints, launch config, test scope). Internal component decomposition is not README-worthy. No drift detected.
+
+### Files Updated
+- None
+
+### Scratch Files Cleaned
+- None (no `1492-*` scratch files existed)
+2026-05-12T21:54:51+00:00
+## Audit
+
+### Regression Detection
+- quality-runner mode full: 4405 passed, 204 failed, lint clean
+- All 204 failures confirmed pre-existing from prior tasks (#1224, #1170, #1173, #1174, #1034); none related to cockpit DetailTab decomposition
+- regression verdict: PASS
+
+### Intent Verification
+- scope alignment: PASS (tracker task with 3 child-completion gates; all children archived/completed in cockpit frontend domain)
+- purpose match: PASS (children's commits show extraction of ConflictBanner, TaskActions, TaskFieldsEditor from DetailTab.tsx as intended)
+- extraneous scope: none
+- boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 4/5
+AC refined from implementation-level to tracker-level process criteria (child-completion gates). Clear, verifiable, appropriate for tracker pattern. Minor gap: original AC needed arch refinement, but handled well.
+
+### Commit Integrity
+- upstream commit presence: PASS (children #1506, #1507, #1508 all have builder commits in serve/cockpit/web/src/; children individually archived through full pipeline)
+- kanban commit packaging: pending (this commit)
+
+### Deduction Breakdown
+No deductions applied.
+
+### Confidence: 1.00
+### Action: archive
