@@ -1,10 +1,10 @@
 ---
 id: 1494
 title: 'Cockpit: Add PDS banner for mutation error feedback'
-status: docs
+status: archived
 priority: needed
 created: 2026-05-11T23:15:34.497443+00:00
-updated: 2026-05-12T15:05:12.727726+00:00
+updated: 2026-05-12T16:28:05.495397+00:00
 tags:
   - cockpit
   - frontend
@@ -18,7 +18,7 @@ depends_on:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 
@@ -579,3 +579,27 @@ Architecture review complete. Umbrella task for PDS mutation error feedback feat
 ## Observations
 - The builder snapshot recorded child task 1500 at `done`; current board state has since advanced it to `archived` with archival_reason `completed`, so the gate is now strictly stronger than the builder snapshot and still satisfied.
 - No independent quality-runner rerun was needed. The parent task has `Proof bundle: skip`, no parent-level code changes, and the builder evidence became sufficient after direct board and source verification.
+2026-05-12T15:53:26+00:00
+## Docs Gate
+
+### Checklist
+
+**Item 1: README Verification**
+N/A — umbrella parent task; all builder notes confirm "Implementation: none (umbrella parent task; no direct source changes)". Code changes were made entirely in child tasks #1498, #1499, #1500 through their own pipeline stages including individual docs gates. `serve/cockpit/README.md` describes stack/launch/API surface — no implementation-level error-display detail belongs there; no update needed.
+
+**Item 2: External Attribution**
+PASS — `.owlbear/sources/overview.md` already contains 4 entries for external PDS sources (PDS Banner API, PDS Inline Notification API, PDS Notification Patterns, PDS Notification Decision Tree) all linked to `.owlbear/research/cockpit-mutation-error-banner.md`. Local sources (codebase, node_modules) require no external attribution.
+
+**Item 3: Research Doc**
+PASS — Research doc `.owlbear/research/cockpit-mutation-error-banner.md` exists and is explicitly linked in the task body ("Research doc: .owlbear/research/cockpit-mutation-error-banner.md").
+
+**Item 4: Deletion Detection**
+N/A — No file deletions at parent task level; umbrella task had no direct source changes.
+
+### Files Updated
+None — no docs impact from parent-level task scope.
+
+### Scratch Cleanup
+No `1494-*` scratch files found.
+2026-05-12T16:28:05+00:00
+## Audit\n### Regression Detection\n- quality-runner mode full: pytest 4418 passed / 208 failed, vitest 1375 passed / 138 failed, ruff clean, eslint 1 violation\n- All failures are pre-existing background debt — umbrella parent task made zero direct code changes; all three children (#1498, #1499, #1500) passed their own full pipeline audits before archival\n- ESLint violation (`selectedDRId` unused in Shell.tsx) belongs to a separate DR feature, not this task scope\n- regression verdict: PASS (no task-attributed regressions)\n\n### Intent Verification\n- scope alignment: PASS (umbrella parent correctly delegates implementation to children; no extraneous scope)\n- purpose match: PASS (AC-1 child-completion gate verified: #1498=archived/completed, #1499=archived/completed, #1500=archived/completed; AC-2 artifact adoption verified: PBanner in Shell.tsx, PInlineNotification in ArchivalModal.tsx and ResolveModal.tsx)\n- extraneous scope: none\n- boundary check: function-level behavior verification deferred to reviewer\n\n### Architect Quality: 4/5\n- Original AC was feature-level and needed refinement, but the architect cleanly refined to P2/B1 verifiable criteria and decomposed into 3 focused children with appropriate parent/child structure\n- Challenge: confirmed PDS modal stacking concern justified dual-layer approach\n- Minor gap: original AC could have been written at P2/B1 level from the start, requiring fewer pipeline round-trips\n\n### Commit Integrity\n- upstream commit presence: PASS (#1498: 374bef91, 51fbd12e, e691ffd3; #1499: 253b3d2a, 09110656, 48fa5e8d; #1500: 08f14137; archival commits: 761c8ab0, 52f8c84e, 7f678dee)\n- kanban commit packaging: pending (this audit cycle)\n\n### Deduction Breakdown\nNo deductions applied.\n- Regression: 0 (no task-attributed regressions)\n- Intent mismatch: 0\n- Evidence integrity: 0\n- Lint violations: 0 (not attributable to task scope)\n- AC quality ≤3: not applicable (score=4)\n- Missing reviewer evidence: 0 (present and detailed)\n\n### Confidence: 1.00\n### Action: archive
