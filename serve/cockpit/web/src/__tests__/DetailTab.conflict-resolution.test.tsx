@@ -1105,3 +1105,65 @@ describe('TestFromAC_ConflictErrorContract', () => {
   })
 })
 
+// ---------------------------------------------------------------------------
+// AC6: ConflictBanner disappears when the active task switches to a different id
+// ---------------------------------------------------------------------------
+
+describe('TestFromAC_ConflictBannerTaskSwitch', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('conflict_banner_disappears_when_active_task_switches_to_different_id', async () => {
+    /**
+     * AC6 (smoke — task-switch cleanup): When a conflict is active for task A
+     * (conflict-modal visible), switching the active task to task B (different id)
+     * must clear the conflict banner (conflict-modal absent from DOM).
+     *
+     * Implementation path: TaskFieldsEditor useEffect fires on task.id change →
+     * calls clearConflictIfTaskChanged(taskB.id) → hook detects id mismatch vs
+     * conflictRemoteTask.id → clears showConflict → ConflictBanner returns null.
+     *
+     * Verifies the fix in useConflictDraft.ts that was missing in the first builder
+     * attempt (clearConflictIfTaskChanged left showConflict true).
+     */
+    const TASK_B: TaskDetail = {
+      ...BASE_TASK,
+      id: 99,
+      title: 'Task B Title',
+      updated: '2026-05-01T12:00:00+00:00',
+    }
+
+    function TaskSwitchWrapper() {
+      const [task, setTask] = useState<TaskDetail>(BASE_TASK)
+      return (
+        <PorscheDesignSystemProvider>
+          <button data-testid="switch-task" onClick={() => setTask(TASK_B)} />
+          <DetailTab
+            task={task}
+            onTaskUpdated={(t) => setTask(t)}
+          />
+        </PorscheDesignSystemProvider>
+      )
+    }
+
+    vi.stubGlobal('fetch', mockConflictThenRefetch(SERVER_TASK))
+    const { container } = render(<TaskSwitchWrapper />)
+
+    editTitle(container, 'My Local Edit')
+    await triggerConflictModal(container)
+
+    // Precondition: banner is visible for task A
+    expect(container.querySelector('[data-testid="conflict-modal"]')).not.toBeNull()
+
+    // Switch to task B (different id) — simulates Shell selecting a new task
+    fireEvent.click(container.querySelector('[data-testid="switch-task"]') as HTMLElement)
+
+    // AC6: banner must disappear after task switch
+    await waitFor(
+      () => expect(container.querySelector('[data-testid="conflict-modal"]')).toBeNull(),
+      { timeout: 500 },
+    )
+  })
+})
+
