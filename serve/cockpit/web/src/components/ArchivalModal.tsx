@@ -2,6 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import {
   PButton,
   PHeading,
+  PInlineNotification,
   PInputText,
   PSelect,
   PText,
@@ -54,6 +55,16 @@ type ControlValueEvent = {
   detail?: unknown
 }
 
+interface ArchivalErrorState {
+  message: string
+  retryable: boolean
+}
+
+interface InlineNotificationHost extends HTMLElement {
+  onAction?: () => void
+  onDismiss?: () => void
+}
+
 export default function ArchivalModal({
   taskId,
   taskStatus,
@@ -67,8 +78,9 @@ export default function ArchivalModal({
 
   const [reason, setReason] = useState<ArchivalReason | ''>('')
   const [refsRaw, setRefsRaw] = useState('')
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<ArchivalErrorState | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const inlineNotificationRef = useRef<InlineNotificationHost | null>(null)
 
   const requiresRefs = reason !== '' && REASONS_REQUIRING_REFS.has(reason)
   const hasRefs = refsRaw.trim().length > 0
@@ -117,7 +129,7 @@ export default function ArchivalModal({
     return Array.from(
       root.querySelectorAll<HTMLElement>(
         'p-button:not([disabled]), p-input-text:not([disabled]), p-select:not([disabled]), ' +
-          'p-textarea:not([disabled]), button:not([disabled]), [href], input:not([disabled]), ' +
+          'p-textarea:not([disabled]), p-inline-notification, button:not([disabled]), [href], input:not([disabled]), ' +
           'select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
       ),
     )
@@ -168,19 +180,21 @@ export default function ArchivalModal({
     }
   }
 
-  async function handleSubmit() {
+  async function handleSubmit(retrying = false) {
     if (submitDisabled || reason === '') {
       return
     }
 
     const refsResult = parseRefsInput(refsRaw)
     if (refsResult.invalid) {
-      setError('Refs must contain only numeric task IDs.')
+      setError({ message: 'Refs must contain only numeric task IDs.', retryable: false })
       return
     }
 
     setIsSubmitting(true)
-    setError(null)
+    if (!retrying) {
+      setError(null)
+    }
 
     try {
       const response = await fetch(`/api/tasks/${taskId}/move`, {
@@ -201,24 +215,36 @@ export default function ArchivalModal({
       }
 
       if (response.status === 409) {
-        setError('Task snapshot is stale; refresh and try again.')
+        setError({ message: 'Task snapshot is stale; refresh and try again.', retryable: false })
         onRefresh()
         return
       }
 
       if (response.status === 422) {
-        setError(await getResponseErrorMessage(response, 'Validation failed.'))
+        setError({
+          message: await getResponseErrorMessage(response, 'Validation failed.'),
+          retryable: false,
+        })
         return
       }
 
-      setError(
-        await getResponseErrorMessage(response, `Archival failed (${response.status}).`),
-      )
+      setError({
+        message: await getResponseErrorMessage(response, `Archival failed (${response.status}).`),
+        retryable: response.status >= 500,
+      })
     } catch {
-      setError('Archival failed due to network error.')
+      setError({ message: 'Archival failed due to network error.', retryable: true })
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  const retryArchival = () => {
+    void handleSubmit(true)
+  }
+
+  const dismissError = () => {
+    setError(null)
   }
 
   return (
@@ -279,7 +305,26 @@ export default function ArchivalModal({
         Cancel
       </PButton>
 
-      {error ? <PText data-testid="archival-error">{error}</PText> : null}
+      {error ? (
+        <PInlineNotification
+          ref={(element) => {
+            inlineNotificationRef.current = element as InlineNotificationHost | null
+            if (!inlineNotificationRef.current) {
+              return
+            }
+            inlineNotificationRef.current.onAction = retryArchival
+            inlineNotificationRef.current.onDismiss = dismissError
+          }}
+          data-testid="archival-error"
+          state="error"
+          description={error.message}
+          actionLabel={error.retryable ? 'Retry' : undefined}
+          actionIcon={error.retryable ? 'reset' : undefined}
+          onAction={error.retryable ? retryArchival : undefined}
+          actionLoading={isSubmitting}
+          onDismiss={dismissError}
+        />
+      ) : null}
     </div>
   )
 }

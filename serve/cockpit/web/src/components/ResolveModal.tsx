@@ -2,7 +2,13 @@ import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import rehypeSanitize from 'rehype-sanitize'
 import remarkGfm from 'remark-gfm'
-import { PButton, PHeading, PText, PTextarea } from '@porsche-design-system/components-react'
+import {
+  PButton,
+  PHeading,
+  PInlineNotification,
+  PText,
+  PTextarea,
+} from '@porsche-design-system/components-react'
 
 import type { PendingDR } from '../hooks/usePendingDRs'
 import { getResponseErrorMessage } from '../api/errorMessage'
@@ -22,18 +28,33 @@ type ControlValueEvent = {
 
 type ResolveResponse = 'approved' | 'rejected' | 'needs-info' | ''
 
+interface ResolveErrorState {
+  message: string
+  retryable: boolean
+}
+
+interface InlineNotificationHost extends HTMLElement {
+  onAction?: () => void
+  onDismiss?: () => void
+}
+
 export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalProps) {
   const [response, setResponse] = useState<ResolveResponse>('')
   const [notes, setNotes] = useState('')
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<ResolveErrorState | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const modalRef = useRef<HTMLDivElement | null>(null)
   const submitRef = useRef<HTMLElement | null>(null)
+  const inlineNotificationRef = useRef<InlineNotificationHost | null>(null)
 
-  async function handleSubmit() {
-    if (!dr) {
+  async function handleSubmit(retrying = false) {
+    if (!dr || isSubmitting) {
       return
     }
-    setError(null)
+    if (!retrying) {
+      setError(null)
+    }
+    setIsSubmitting(true)
     try {
       const res = await fetch(`/api/decisions/${dr.id}/resolve`, {
         method: 'POST',
@@ -41,19 +62,33 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
         body: JSON.stringify({ response, notes }),
       })
       if (!res.ok) {
-        const errorMessage = await getResponseErrorMessage(res, 'Failed to resolve decision request.')
-        setError(errorMessage)
+        const errorMessage = await getResponseErrorMessage(
+          res,
+          `Failed to resolve decision request (${res.status}).`,
+        )
+        setError({ message: errorMessage, retryable: res.status >= 500 })
         return
       }
+      setError(null)
       onResolved()
       onClose()
     } catch (caught) {
       if (caught instanceof Error) {
-        setError(caught.message)
+        setError({ message: caught.message, retryable: true })
         return
       }
-      setError('Failed to resolve decision request.')
+      setError({ message: 'Failed to resolve decision request.', retryable: true })
+    } finally {
+      setIsSubmitting(false)
     }
+  }
+
+  const retryResolve = () => {
+    void handleSubmit(true)
+  }
+
+  const dismissError = () => {
+    setError(null)
   }
 
   if (!dr) return null
@@ -198,7 +233,26 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
         Close Modal
       </PButton>
 
-      {error ? <PText data-testid="resolve-error">{error}</PText> : null}
+      {error ? (
+        <PInlineNotification
+          ref={(element) => {
+            inlineNotificationRef.current = element as InlineNotificationHost | null
+            if (!inlineNotificationRef.current) {
+              return
+            }
+            inlineNotificationRef.current.onAction = retryResolve
+            inlineNotificationRef.current.onDismiss = dismissError
+          }}
+          data-testid="resolve-error"
+          state="error"
+          description={error.message}
+          actionLabel={error.retryable ? 'Retry' : undefined}
+          actionIcon={error.retryable ? 'reset' : undefined}
+          onAction={error.retryable ? retryResolve : undefined}
+          actionLoading={isSubmitting}
+          onDismiss={dismissError}
+        />
+      ) : null}
     </div>
   )
 }
