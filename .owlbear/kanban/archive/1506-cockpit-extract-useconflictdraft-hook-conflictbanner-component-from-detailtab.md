@@ -1,10 +1,10 @@
 ---
 id: 1506
 title: 'Cockpit: Extract useConflictDraft hook + ConflictBanner component from DetailTab'
-status: done
+status: archived
 priority: needed
 created: 2026-05-12T03:04:43.984524+00:00
-updated: 2026-05-12T14:32:53.515207+00:00
+updated: 2026-05-12T15:14:22.586246+00:00
 tags:
   - cockpit
   - frontend
@@ -14,7 +14,7 @@ depends_on: []
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 
@@ -292,3 +292,27 @@ No `.owlbear/scratch/1506-*` files found.
 
 ### Upstream Evidence
 Review Evidence present — PASS verdict with full AC-by-AC table and independent `quality-runner` confirmation (126 passed, 0 failed, 1 skipped, eslint=0, stylelint=0).
+2026-05-12T15:14:22+00:00
+## Audit
+### Regression Detection
+- quality-runner env fallback (2x no-response): Python 4421 passed / 205 failed (pre-existing: cockpit_view, ideation_diagram, server, engine_accessor_migration — all unrelated to frontend refactor) / ruff clean; Frontend 1507 passed / 0 failed / 9 skipped / ESLint clean / Stylelint clean
+- regression verdict: PASS — zero task-attributable failures
+
+### Intent Verification
+- scope alignment: PASS (4 files changed, all within serve/cockpit/web/src/ — components, hooks, tests)
+- purpose match: PASS (conflict state/UI extracted from DetailTab into useConflictDraft hook + ConflictBanner component; task-switch cleanup bug fixed; regression test added)
+- extraneous scope: none
+- boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 4/5
+AC-1 through AC-6 are specific with B1/B2 levels, enumerated fields, data-testid attributes, and file paths. One gap: initial proof bundle `existing` with "without modification" constraint was too restrictive, blocking the regression test that the reviewer correctly identified as needed. Architect re-scoped promptly (existing → smoke, added AC-6). Design guidance (useEffect split, action-function pattern) was helpful. Score: 4/5 — adequate, one re-scoping cycle needed.
+
+### Commit Integrity
+- upstream commit presence: PASS — 3 commits verified: d140cfec (refactor: extract conflict draft hook/banner, builder), 4ee3e058 (fix: clear conflict banner on task switch, builder), 0ff7e139 (test: add task-switch cleanup regression test, test-writer)
+- kanban commit packaging: pending (this audit cycle)
+
+### Deduction Breakdown
+No deductions applied.
+
+### Confidence: 1.00
+### Action: archive
