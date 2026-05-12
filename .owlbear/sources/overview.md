@@ -43,6 +43,14 @@ External repos and resources studied during OwlBear development.
 | PDS GitHub issue #2701 | <https://github.com/porsche-design-system/porsche-design-system/issues/2701> | "Make Components-JS Prod Build configurable" — open since 2023, confirming no self-hosting support | `.owlbear/research/1495-pds-v4-local-hosting.md` | 2026-05-12 |
 | PDS `getCDNBaseURL` utility | <https://github.com/porsche-design-system/porsche-design-system/blob/main/packages/components/src/utils/getCDNBaseURL.ts> | Compile-time replaced with `document.porscheDesignSystem.cdn.url` in production builds | `.owlbear/research/1495-pds-v4-local-hosting.md` | 2026-05-12 |
 
+## PDS Property Trap Validation (Task #1496)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| PDS GitHub issue #2701 | <https://github.com/porsche-design-system/porsche-design-system/issues/2701> | Still "to be refined" — no native self-hosting config coming | `.owlbear/research/1496-pds-property-trap.md` | 2026-05-12 |
+| MDN Object.defineProperty | <https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/defineProperty> | Getter/setter descriptor spec, configurable flag behavior | `.owlbear/research/1496-pds-property-trap.md` | 2026-05-12 |
+| MDN Reflect.set | <https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Reflect/set> | Reflect.set respects target's defineProperty setters | `.owlbear/research/1496-pds-property-trap.md` | 2026-05-12 |
+
 ## CI/SAST Baseline Research (Task #1413)
 
 | Source | URL | What | Where Used | Date |
