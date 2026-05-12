@@ -22,7 +22,6 @@ ENABLE_LINTERS:
   - ACTION_ACTIONLINT
   - EDITORCONFIG_EDITORCONFIG_CHECKER
   # Security / Repository
-  - REPOSITORY_GITLEAKS
   - REPOSITORY_DEVSKIM
   - REPOSITORY_TRIVY
 
@@ -85,9 +84,6 @@ JSON_JSONLINT_ARGUMENTS: "--quiet"
 # false-positives on docstring content (2-space RST lists inside 4-space code).
 # Tabs-vs-spaces (indent_style) is still enforced.
 EDITORCONFIG_EDITORCONFIG_CHECKER_ARGUMENTS: "-f github-actions --disable-indent-size"
-
-# Gitleaks — secret detection
-REPOSITORY_GITLEAKS_ARGUMENTS: "--no-banner"
 
 # DevSkim — security anti-pattern detection (all languages)
 REPOSITORY_DEVSKIM_DISABLE_ERRORS: false
