@@ -377,6 +377,7 @@ export default function DetailTab({
         Save
       </PButton>
       <TaskActions
+        key={`${t.id}:${t.updated}`}
         task={t}
         backwardTarget={backwardTarget}
         runMutation={runMutation}
