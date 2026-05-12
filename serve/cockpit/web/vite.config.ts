@@ -1,6 +1,8 @@
 import { defineConfig } from 'vitest/config'
 import react, { reactCompilerPreset } from '@vitejs/plugin-react'
 import babel from '@rolldown/plugin-babel'
+import * as fs from 'node:fs'
+import { join } from 'node:path'
 
 function cspPlugin() {
   const policy = [
@@ -19,8 +21,47 @@ function cspPlugin() {
   }
 }
 
+function pdsVersionCheckPlugin() {
+  let rootDir = ''
+
+  return {
+    name: 'pds-version-check',
+    configResolved(config: { root: string }) {
+      rootDir = config.root
+    },
+    buildStart() {
+      try {
+        const packageJsonPath = join(rootDir, 'node_modules/@porsche-design-system/components-js/package.json')
+        const packageVersion = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8')) as { version?: string }
+        const npmVersion = packageVersion.version ?? ''
+
+        const assetsDir = join(rootDir, 'public/porsche-design-system/components')
+        const files = fs.readdirSync(assetsDir)
+        const coreChunk = files.find((file) => /^porsche-design-system\.v(\d+\.\d+\.\d+)\./.test(file))
+
+        if (!coreChunk) {
+          console.warn('PDS version check: no matching core asset found. Run npm run sync:pds')
+          return
+        }
+
+        const match = coreChunk.match(/^porsche-design-system\.v(\d+\.\d+\.\d+)\./)
+        const assetVersion = match?.[1] ?? ''
+
+        if (assetVersion !== npmVersion) {
+          console.warn(
+            `PDS version mismatch: assets=${assetVersion}, npm=${npmVersion}. Run npm run sync:pds`,
+          )
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        console.warn(`PDS version check skipped: ${message}`)
+      }
+    },
+  }
+}
+
 export default defineConfig({
-  plugins: [react(), babel({ presets: [reactCompilerPreset()] }), cspPlugin()],
+  plugins: [react(), babel({ presets: [reactCompilerPreset()] }), pdsVersionCheckPlugin(), cspPlugin()],
   build: {
     outDir: '../dist',
     emptyOutDir: true,
