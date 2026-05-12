@@ -57,6 +57,14 @@ External repos and resources studied during OwlBear development.
 | PDS icon component chunk (v4.1.0) | `https://cdn.ui.porsche.com/porsche-design-system/components/porsche-design-system.icon.a77dc30fd842f982a230.js` | Icon name → filename mapping (290 entries) | `.owlbear/research/1510-pds-asset-sync.md` | 2026-05-12 |
 | PDS vue-offline sample repo | <https://github.com/porsche-design-system/sample-integration-vue-offline> | Official offline hosting pattern (v3): patched npm package + `public/assets/` + postinstall; v4 offline support not yet available | `.owlbear/research/1510-pds-asset-sync.md` | 2026-05-12 |
 
+## Playwright Mutation Error Banner E2E Research (Task #1509)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| PDS `banner.tsx` source | <https://github.com/porsche-design-system/porsche-design-system/blob/main/packages/components/src/components/banner/banner.tsx> | Shadow DOM structure, dismiss event, open prop | `.owlbear/research/1509-playwright-mutation-error-banner.md` | 2026-05-12 |
+| PDS `banner.e2e.ts` | <https://github.com/porsche-design-system/porsche-design-system/blob/main/packages/components-js/tests/e2e/specs/banner.e2e.ts> | Playwright selectors for dismiss button, event testing patterns | `.owlbear/research/1509-playwright-mutation-error-banner.md` | 2026-05-12 |
+| PDS Banner configurator (v3) | <https://designsystem.porsche.com/v3/components/banner/configurator/> | open/dismiss controlled pattern, dismiss event listener | `.owlbear/research/1509-playwright-mutation-error-banner.md` | 2026-05-12 |
+
 ## PDS Property Trap Validation (Task #1496)
 
 | Source | URL | What | Where Used | Date |
