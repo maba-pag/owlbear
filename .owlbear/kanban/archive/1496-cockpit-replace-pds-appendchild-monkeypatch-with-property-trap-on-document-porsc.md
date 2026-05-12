@@ -1,10 +1,10 @@
 ---
 id: 1496
 title: 'Cockpit: Replace PDS appendChild monkeypatch with property trap on document.porscheDesignSystem.cdn'
-status: in-progress
+status: archived
 priority: important
 created: 2026-05-12T02:37:00.298093+00:00
-updated: 2026-05-12T16:38:37.258672+00:00
+updated: 2026-05-12T21:32:45.953826+00:00
 tags:
   - cockpit
   - frontend
@@ -14,7 +14,7 @@ depends_on:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 
@@ -451,3 +451,164 @@ All five Playwright tests timed out in `beforeEach` waiting for `[data-region="w
 |---|-------------|----------------|---------|----------|
 | 1 | builder | Implement and land task #1511 (PDS asset sync script + synced assets) so local runtime assets match installed PDS package version. | serve/cockpit/web/scripts/sync-pds-assets.mjs; serve/cockpit/web/public/porsche-design-system/** | #1496 scoped Playwright run remains 0/5 with workspace visibility timeouts. |
 | 2 | builder | Re-run scoped AC-4 executable proof for #1496 and advance only when `serve/cockpit/web/e2e/pds-runtime-csp.spec.ts` passes. | serve/cockpit/web/e2e/pds-runtime-csp.spec.ts | Current quality-runner evidence: 0 passed, 5 failed; lint clean. |
+2026-05-12T17:07:44+00:00
+## Builder Notes
+
+### Files Changed
+- None
+
+### Verification Run (AC-4 executable proof)
+- quality-runner scoped run on `serve/cockpit/web/e2e/pds-runtime-csp.spec.ts`
+- Retry with environment hint (`frontend — cd serve/cockpit/web before all commands`) executed fully
+- Result: 0 passed, 5 failed
+- All five tests time out in `beforeEach` at 30s waiting for `[data-region="workspace"]` visibility
+
+### Failure Details
+1. `p-button custom element is defined after workspace renders`
+2. `p-icon, p-tabs, and p-tabs-item are defined after workspace renders`
+3. `no securitypolicyviolation fires with blockedURI from cdn.ui.porsche.com`
+4. `no securitypolicyviolation fires with blockedURI from cdn.ui.porsche.cn`
+5. `p-button element has non-empty shadowRoot after page stabilizes`
+
+### Environment/Dependency Evidence
+- `@porsche-design-system/components-js` version: `^4.1.0`
+- `serve/cockpit/web/public/porsche-design-system/components/` contains 59 JS files, but versioned core still `porsche-design-system.v4.0.0.9faf55bc815263bee13d.js`
+- required v4.1.0 core chunk `porsche-design-system.v4.1.0.59dc31ee9c99f5a43eb5.js` does not exist
+- `serve/cockpit/web/public/porsche-design-system/icons/` contains only 1 SVG file
+- #1496 already depends on #1511; #1511 is currently `todo`
+
+### Lint/Test Snapshot
+- Playwright: failed (exit 1)
+- ESLint on target spec: clean (exit 0)
+- Coverage: N/A for Playwright
+
+### Evidence Summary
+- AC-1..AC-3 remain implemented from prior commit `a615918d`.
+- AC-4 executable proof remains structurally unreachable in current workspace state until #1511 lands.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Complete #1511 (sync PDS local assets + script) so runtime assets align with installed v4.1.0 package. | serve/cockpit/web/scripts/sync-pds-assets.mjs; serve/cockpit/web/public/porsche-design-system/** | Missing v4.1.0 core chunk and icon inventory (1/290) keep workspace from rendering in E2E runtime. |
+| 2 | builder | Re-run scoped AC-4 executable proof for #1496 (`serve/cockpit/web/e2e/pds-runtime-csp.spec.ts`) immediately after #1511 is complete; advance only on real Playwright pass. | serve/cockpit/web/e2e/pds-runtime-csp.spec.ts | Current run is 0/5 passing with workspace visibility timeouts. |
+2026-05-12T17:42:31+00:00
+## Builder Notes
+
+### Files Changed
+- None
+
+### Verification Run (AC-4 executable proof)
+- quality-runner scoped run on `serve/cockpit/web/e2e/pds-runtime-csp.spec.ts`
+- Result: failed (`playwright: 1`, `eslint: 0`)
+- Reported failure: `TestFromAC_PDSCustomElementsRegistered › p-button custom element is defined after workspace renders`
+- Error: 30s timeout in `beforeEach` while waiting for `[data-region="workspace"]` visibility
+
+### Dependency Evidence Snapshot
+- `@porsche-design-system/components-js`: `^4.1.0`
+- `public/porsche-design-system/components/*.js`: `59` files
+- Missing required v4.1.0 core chunk:
+  - `serve/cockpit/web/public/porsche-design-system/components/porsche-design-system.v4.1.0.59dc31ee9c99f5a43eb5.js` = not present
+- Present core file is still v4.0.0:
+  - `serve/cockpit/web/public/porsche-design-system/components/porsche-design-system.v4.0.0.9faf55bc815263bee13d.js`
+- `public/porsche-design-system/icons/*.svg`: `1` file
+
+### Evidence Summary
+- AC-1..AC-3 remain implemented from prior builder commit `a615918d`.
+- AC-4 executable gate remains red and structurally blocked by unresolved asset-sync dependency.
+- Task already depends on #1511, which is the implementation path to align local PDS assets with installed runtime version.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Complete #1511 (sync PDS local assets script + output) so local runtime assets include the v4.1.0 core chunk and full icon set. | serve/cockpit/web/scripts/sync-pds-assets.mjs; serve/cockpit/web/public/porsche-design-system/** | #1496 AC-4 Playwright run times out before workspace render; v4.1.0 core chunk missing and icons count remains 1. |
+| 2 | builder | Re-run scoped executable AC-4 proof for #1496 and advance only when `serve/cockpit/web/e2e/pds-runtime-csp.spec.ts` passes. | serve/cockpit/web/e2e/pds-runtime-csp.spec.ts | Current quality-runner evidence: Playwright failed, ESLint clean. |
+2026-05-12T18:31:11+00:00
+## Builder Notes
+
+### Files Changed
+- serve/cockpit/web/src/components/DetailTab.tsx
+- serve/cockpit/web/src/components/TaskFieldsEditor.tsx
+- serve/cockpit/web/src/hooks/useConflictDraft.ts
+
+### Why these changes were required
+- AC-4 requires executable proof from `serve/cockpit/web/e2e/pds-runtime-csp.spec.ts`.
+- The Playwright webServer startup path (`npm run build && npm run preview`) was blocked by frontend type contract drift around nullable task body fields, preventing reliable AC-4 execution.
+- Applied the minimal type-alignment fix so build succeeds and the named Playwright gate can run to completion.
+
+### Fixes Applied
+1. `DetailTab` task model now matches API nullability for `body`:
+   - `body: string | null`
+2. `TaskFieldsEditor` now normalizes nullable `task.body` into local string edit state:
+   - initialize/reset body via `task.body ?? ''`
+   - dirty-check compares against `(task.body ?? '')`
+3. `useConflictDraft` remote task model now matches nullable body shape:
+   - `ConflictRemoteTask.body: string | null`
+
+### Verification (quality-runner)
+- Scoped AC-4 executable proof:
+  - test path: `serve/cockpit/web/e2e/pds-runtime-csp.spec.ts`
+  - result: **5 passed, 0 failed**
+  - playwright exit code: **0**
+- Scoped lint:
+  - paths:
+    - `serve/cockpit/web/src/components/DetailTab.tsx`
+    - `serve/cockpit/web/src/components/TaskFieldsEditor.tsx`
+    - `serve/cockpit/web/src/hooks/useConflictDraft.ts`
+    - `serve/cockpit/web/e2e/pds-runtime-csp.spec.ts`
+  - result: **clean** (`eslint: 0`)
+
+### AC Evidence Summary
+- AC-1/AC-2/AC-3: remain satisfied by prior implementation commit `a615918d` (`main.tsx` trap migration).
+- AC-4: now satisfied with executable proof — named Playwright spec passes unmodified.
+
+### Commit
+- `821df8cf` — fix: align nullable task body types for e2e build gate (#1496, builder)
+- Shortstat: 3 files changed, 5 insertions(+), 5 deletions(-)
+2026-05-12T21:05:20+00:00
+## Review Evidence
+- Verdict: PASS
+- PASS confirmation: PASS #1496 -> docs | AC mapped to code and evidence sufficient.
+- AC evidence:
+
+| AC Line | Code Evidence | Test Evidence | Status |
+|---|---|---|---|
+| AC-1 | [serve/cockpit/web/src/main.tsx](serve/cockpit/web/src/main.tsx#L9-L47) contains the trap-based bootstrap path only; legacy rewrite identifiers are absent on file inspection. | [serve/cockpit/web/src/__tests__/main_pds_trap_1496.test.ts](serve/cockpit/web/src/__tests__/main_pds_trap_1496.test.ts#L66-L78) passed in the scoped reviewer rerun. | PASS |
+| AC-2 | [serve/cockpit/web/src/main.tsx](serve/cockpit/web/src/main.tsx#L14-L37) defines the `cdn` accessor and installs it before `load()`. | [serve/cockpit/web/src/__tests__/main_pds_trap_1496.test.ts](serve/cockpit/web/src/__tests__/main_pds_trap_1496.test.ts#L132), [serve/cockpit/web/src/__tests__/main_pds_trap_1496.test.ts](serve/cockpit/web/src/__tests__/main_pds_trap_1496.test.ts#L161), and [serve/cockpit/web/src/__tests__/main_pds_trap_1496.test.ts](serve/cockpit/web/src/__tests__/main_pds_trap_1496.test.ts#L190) passed in the scoped reviewer rerun. | PASS |
+| AC-3 | [serve/cockpit/web/src/main.tsx](serve/cockpit/web/src/main.tsx#L34-L47) bootstraps directly from trap install to `load()` to element wait to render, with no post-bootstrap namespace reassignment block remaining. | [serve/cockpit/web/src/__tests__/main_pds_trap_1496.test.ts](serve/cockpit/web/src/__tests__/main_pds_trap_1496.test.ts#L100) passed in the scoped reviewer rerun. | PASS |
+| AC-4 | [serve/cockpit/web/e2e/pds-runtime-csp.spec.ts](serve/cockpit/web/e2e/pds-runtime-csp.spec.ts#L95), [serve/cockpit/web/e2e/pds-runtime-csp.spec.ts](serve/cockpit/web/e2e/pds-runtime-csp.spec.ts#L101), [serve/cockpit/web/e2e/pds-runtime-csp.spec.ts](serve/cockpit/web/e2e/pds-runtime-csp.spec.ts#L134), [serve/cockpit/web/e2e/pds-runtime-csp.spec.ts](serve/cockpit/web/e2e/pds-runtime-csp.spec.ts#L148), and [serve/cockpit/web/e2e/pds-runtime-csp.spec.ts](serve/cockpit/web/e2e/pds-runtime-csp.spec.ts#L174) remain the real executable assertions; the task guard still checks the spec stays intact at [serve/cockpit/web/src/__tests__/main_pds_trap_1496.test.ts](serve/cockpit/web/src/__tests__/main_pds_trap_1496.test.ts#L221), [serve/cockpit/web/src/__tests__/main_pds_trap_1496.test.ts](serve/cockpit/web/src/__tests__/main_pds_trap_1496.test.ts#L228), and [serve/cockpit/web/src/__tests__/main_pds_trap_1496.test.ts](serve/cockpit/web/src/__tests__/main_pds_trap_1496.test.ts#L233). | Builder quality-runner evidence for the named Playwright gate is 5 passed, 0 failed, eslint clean on serve/cockpit/web/e2e/pds-runtime-csp.spec.ts. | PASS |
+
+- Collateral-file proof: reviewer quality-runner rerun on [serve/cockpit/web/src/__tests__/main_pds_trap_1496.test.ts](serve/cockpit/web/src/__tests__/main_pds_trap_1496.test.ts), [serve/cockpit/web/src/__tests__/DetailTab.edit-payload.test.tsx](serve/cockpit/web/src/__tests__/DetailTab.edit-payload.test.tsx), [serve/cockpit/web/src/__tests__/DetailTab.conflict-resolution.test.tsx](serve/cockpit/web/src/__tests__/DetailTab.conflict-resolution.test.tsx), [serve/cockpit/web/src/__tests__/DetailTab.body-preview-toggle.1508.test.tsx](serve/cockpit/web/src/__tests__/DetailTab.body-preview-toggle.1508.test.tsx), and [serve/cockpit/web/src/__tests__/tasks_1501.test.ts](serve/cockpit/web/src/__tests__/tasks_1501.test.ts) reported 130 passed, 0 failed, lint clean. Coverage for the touched proof surface: [serve/cockpit/web/src/main.tsx](serve/cockpit/web/src/main.tsx) 100%, [serve/cockpit/web/src/components/DetailTab.tsx](serve/cockpit/web/src/components/DetailTab.tsx) 84.21%, [serve/cockpit/web/src/components/TaskFieldsEditor.tsx](serve/cockpit/web/src/components/TaskFieldsEditor.tsx) 92.25%, [serve/cockpit/web/src/hooks/useConflictDraft.ts](serve/cockpit/web/src/hooks/useConflictDraft.ts) 97.29%, [serve/cockpit/web/src/api/tasks.ts](serve/cockpit/web/src/api/tasks.ts) 100%.
+- Nullable-body alignment is consistent with the existing read/edit contract: [serve/cockpit/web/src/api/tasks.ts](serve/cockpit/web/src/api/tasks.ts#L7-L15) and [serve/cockpit/web/src/api/tasks.ts](serve/cockpit/web/src/api/tasks.ts#L29-L37) already allow `body: string | null`; backend mutation semantics keep `body: null` as no-op in [serve/cockpit/src/owlbear_cockpit/routes/mutation.py](serve/cockpit/src/owlbear_cockpit/routes/mutation.py#L53) and [serve/cockpit/src/owlbear_cockpit/routes/mutation.py](serve/cockpit/src/owlbear_cockpit/routes/mutation.py#L187); the UI only normalizes null at the local edit/conflict boundary in [serve/cockpit/web/src/components/DetailTab.tsx](serve/cockpit/web/src/components/DetailTab.tsx#L15-L23), [serve/cockpit/web/src/components/TaskFieldsEditor.tsx](serve/cockpit/web/src/components/TaskFieldsEditor.tsx#L109-L140), and [serve/cockpit/web/src/hooks/useConflictDraft.ts](serve/cockpit/web/src/hooks/useConflictDraft.ts#L10-L16).
+
+## Observations
+- Challenger cross-check returned proceed; no blocking contradiction surfaced between the final Playwright proof and the current repo state.
+- I could not perform the path-scoped dirty-tree contamination check from reviewer Step 1 because git/terminal tools are not available in this tool surface.
+2026-05-12T21:13:43+00:00
+## Docs Gate
+
+### Checklist
+
+**Item 1: README Verification**
+- Convention mapping: `serve/cockpit/web/src/**` → `serve/cockpit/README.md`
+- Changed files: `main.tsx` (PDS CDN property trap), `DetailTab.tsx`, `TaskFieldsEditor.tsx`, `useConflictDraft.ts` (nullable body alignment)
+- Layer 1 grep: no documentation references to `installPdsRuntimeScriptRewrite`, `PDS_CDN_SCRIPT`, `installPdsCdnTrap`, or `appendChild` monkeypatch found in any `.md` file. No orphaned symbols.
+- Layer 2 editorial: Full README read confirmed accurate. The PDS boot-time interception is an internal implementation detail not documented at README level. The nullable `body` type alignment is a UI-internal normalization consistent with the already-documented API contract ("tri-state field semantics: `body: null`/omitted = no change"). No README updates required.
+- Verdict: **no docs impact** — implementation-level internal changes only.
+
+**Item 2: External Attribution**
+- Research doc lists 3 external sources: PDS GitHub issue #2701, MDN Object.defineProperty, MDN Reflect.set.
+- All three present in `.owlbear/sources/overview.md` under "## PDS Property Trap Validation (Task #1496)" (lines 68-74). ✓
+
+**Item 3: Research Doc**
+- Research doc `.owlbear/research/1496-pds-property-trap.md` exists and is linked from task body. ✓
+
+**Item 4: Deletion Detection**
+- No source files were deleted. `main.tsx` was edited in place; collateral files were type-contract fixes, not removals. N/A — no deletion impact.
+
+### Files Updated
+- None (no docs impact)
+
+### Scratch Cleanup
+- Deleted: `serve/.owlbear/scratch/1496-coverage.txt`, `serve/.owlbear/scratch/1496-vitest-output.txt`, `serve/.owlbear/scratch/1496-eslint-output.txt`
+2026-05-12T21:32:45+00:00
+## Audit\n### Regression Detection\n- quality-runner mode full: 2127 passed, 88 failed, lint clean\n- All 88 failures are pre-existing background test debt (test_cockpit_view.py FileNotFoundError, test_engine_accessor_migration.py accessor patterns, test_server.py NoneType, test_ideation_diagram.py bridge elements) — all Python tests in kanban/server/ideation domains\n- #1496 changed only cockpit frontend TypeScript files; no mechanism for TS changes to cause Python test failures\n- Baseline comparison: prior full run (1511 audit) showed 201 failures in the same categories\n- regression verdict: PASS\n\n### Intent Verification\n- scope alignment: PASS (all changes in serve/cockpit/web/src/ — main.tsx, DetailTab.tsx, TaskFieldsEditor.tsx, useConflictDraft.ts)\n- purpose match: PASS (replaced Element.prototype.appendChild monkeypatch with Object.defineProperty trap on document.porscheDesignSystem.cdn; collateral nullable body type fix enabled E2E build gate)\n- extraneous scope: none — type alignment fix is minimal and directly required for AC-4 proof\n- boundary check: function-level behavior verification deferred to reviewer\n\n### Architect Quality: 4/5\n- AC-1..AC-3 specific: named concrete function, regex, mechanism, timing, line references\n- AC-4 clear regression gate on named E2E spec\n- Minor gap: AC didn't anticipate pre-existing environment blocker (#1510/#1511) that delayed AC-4 proof, but this is a pre-existing condition not an AC quality issue\n- Challenger engagement at both research and arch-review stages with documented rebuttals\n\n### Commit Integrity\n- upstream commit presence: PASS\n  - 347b1a4e docs: research (#1496, researcher)\n  - 85a42972 test: TDD RED tests (#1496, test-writer)\n  - a615918d feat: replace PDS monkeypatch with cdn property trap (#1496, builder)\n  - 821df8cf fix: align nullable task body types for e2e build gate (#1496, builder)\n- kanban commit packaging: pending (this step)\n\n### Deduction Breakdown\n- No deductions applied\n- Regression: no task-caused regressions (pre-existing background debt)\n- Intent: all changes in cockpit frontend domain, matching stated purpose\n- Lint: clean\n- AC quality: 4/5 (threshold for deduction is ≤3)\n- Reviewer evidence: detailed PASS verdict with AC mapping and collateral coverage\n\n### Confidence: 1.00\n### Action: archive
