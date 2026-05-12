@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "sync:pds": "node scripts/sync-pds-assets.mjs",
     "lint:css": "stylelint --config .stylelintrc.json \"src/**/*.css\"",
     "lint:html": "htmlhint --config .htmlhintrc index.html",
     "preview": "vite preview",
