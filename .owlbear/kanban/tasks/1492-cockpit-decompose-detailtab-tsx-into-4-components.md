@@ -4,7 +4,7 @@ title: 'Cockpit: Decompose DetailTab.tsx into 4 components'
 status: in-progress
 priority: important
 created: 2026-05-11T23:15:07.557623+00:00
-updated: 2026-05-12T15:02:07.621952+00:00
+updated: 2026-05-12T16:22:57.101710+00:00
 tags:
   - cockpit
   - frontend
@@ -250,4 +250,33 @@ Evidence summary: child completion gates unmet; return to `todo` until #1506, #1
 - AC-1..AC-3 are child-completion gates (process checks), not testable Python interfaces.
 - Architecture review explicitly: "Test-writer: SKIP".
 - Child status at pass-through: #1506 docs, #1507 docs, #1508 todo.
+- Passing through to builder.
+2026-05-12T15:52:49+00:00
+## Builder Notes
+
+Tracker/pass-through task (`Proof bundle: skip`) evaluated with no code changes.
+
+AC gate check for #1492:
+- AC-1 requires child #1506 to have reached `done` -> current status: `archived` (`archival_reason: completed`)
+- AC-2 requires child #1507 to have reached `done` -> current status: `archived` (`archival_reason: completed`)
+- AC-3 requires child #1508 to have reached `done` -> current status: `backlog`
+
+Result: AC-3 is not yet satisfiable, so builder cannot advance #1492 to `review`.
+
+Files changed: none
+Tests run: none (tracker pass-through task)
+Lint: not run (no code changes)
+Evidence summary: child completion gate unmet (#1508 not done).
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Re-run tracker pass-through for #1492 after child task #1508 reaches `done` (or `archived` with `archival_reason: completed`). | .owlbear/kanban/tasks/1508-cockpit-extract-taskfieldseditor-reduce-detailtab-to-container.md | #1492 AC-3 gate unmet (current status `backlog`). |
+2026-05-12T16:22:57+00:00
+## Test-Writer Notes
+- Proof bundle: skip — no new test writing required.
+- Parent/tracker task — all implementation AC lives in child tasks #1506, #1507, #1508.
+- AC-1..AC-3 are child-completion gates (process checks), not testable Python interfaces.
+- Architecture review explicitly: "Test-writer: SKIP".
+- Child status at pass-through: #1506 archived (completed), #1507 archived (completed), #1508 backlog.
 - Passing through to builder.

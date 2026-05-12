@@ -1,10 +1,10 @@
 ---
 id: 1508
 title: 'Cockpit: Extract TaskFieldsEditor + reduce DetailTab to container'
-status: review
+status: in-progress
 priority: needed
 created: 2026-05-12T03:04:44.051072+00:00
-updated: 2026-05-12T14:50:46.435312+00:00
+updated: 2026-05-12T16:23:16.949038+00:00
 tags:
   - cockpit
   - frontend
@@ -241,3 +241,67 @@ Re-refined AC-4 to resolve internal inconsistency (unchanged suites vs. regressi
 - AC coverage: AC-1 / AC-4 (B2) — edit body → toggle out of edit mode → readonly markdown preview shows unsaved local body (not persisted task.body)
 - Commit: 1af205292478aebb71b728ca5f00c1cd97057c4d
 - Builder skip: test-only retry, all tests green (code fix already in place at TaskFieldsEditor.tsx:~242)
+2026-05-12T15:38:11+00:00
+## Review Evidence
+- Verdict: FAIL
+- FAIL #1508 -> backlog | The preview-after-toggle regression exists and the current frontend gates are green, but AC-4 requires that regression to land in DetailTab.test.tsx or DetailTab.valid-edits.test.tsx, and the retry put it in a new standalone suite instead.
+- Upstream evidence reviewed first: the retry note identifies `serve/cockpit/web/src/__tests__/DetailTab.body-preview-toggle.1508.test.tsx` as the added smoke-proof artifact (`.owlbear/kanban/tasks/1508-cockpit-extract-taskfieldseditor-reduce-detailtab-to-container.md:236`). Because the retry note did not include fresh full-suite proof after adding that file, I independently verified the current workspace state with `quality-runner`: `npm test` -> 1507 passed, 0 failed, 9 skipped; `npx eslint src/` -> 0 violations; `npm run lint:css` -> 0 violations.
+- Commit presence confirmed in `.git/logs/**`: builder commits `fd95d0b2caa4d332c473af2938331b4629edaaf1`, `cf3ef28dd46a7173693d3725fc24ebd51bf35ef6`, `422aa6ab3f12b61cfc48e97b9fe6bc14d3dde1d9` and test-writer commit `1af205292478aebb71b728ca5f00c1cd97057c4d` appear in `.git/logs/HEAD:2805-2807,2816` and `.git/logs/refs/heads/dev:2604-2606,2615`.
+- AC evidence map:
+
+| AC Line | Code Evidence | Test Evidence | Status |
+|---|---|---|---|
+| AC-1 | `TaskFieldsEditor` owns local `editBody` and `body` state and renders readonly markdown from local `body` (`serve/cockpit/web/src/components/TaskFieldsEditor.tsx:106`, `serve/cockpit/web/src/components/TaskFieldsEditor.tsx:109`, `serve/cockpit/web/src/components/TaskFieldsEditor.tsx:242`, `serve/cockpit/web/src/components/TaskFieldsEditor.tsx:244`). | The regression test exercises edit -> toggle -> preview in `serve/cockpit/web/src/__tests__/DetailTab.body-preview-toggle.1508.test.tsx:71-98`, proving the repaired branch would fail if it reverted to persisted task data. | PASS |
+| AC-2 | `DetailTab` remains a container that imports parser helpers and renders the extracted editor (`serve/cockpit/web/src/components/DetailTab.tsx:122`, `serve/cockpit/web/src/components/DetailTab.tsx:123`, `serve/cockpit/web/src/components/DetailTab.tsx:163`). | Artifact inspection. | PASS |
+| AC-3 | `DetailTabProps` is exported (`serve/cockpit/web/src/components/DetailTab.tsx:36`), `TaskDetail` is re-exported (`serve/cockpit/web/src/components/DetailTab.tsx:46`), and downstream imports still target `DetailTab` (`serve/cockpit/web/src/Shell.tsx:8`, `serve/cockpit/web/src/hooks/useTaskMutation.ts:12`, `serve/cockpit/web/src/__tests__/DetailTab.pbanner-1498.test.tsx:20`, `serve/cockpit/web/src/__tests__/TaskDetailModel.test.tsx:25`, `serve/cockpit/web/src/__tests__/ErrorContract.test.tsx:91`, `serve/cockpit/web/src/__tests__/ErrorContract.test.tsx:94`, `serve/cockpit/web/src/__tests__/Shell.on-task-updated.test.tsx:55`). | No diagnostics in touched files. | PASS |
+| AC-4 | The refined contract requires one of the existing suites (`DetailTab.test.tsx` or `DetailTab.valid-edits.test.tsx`) to gain the regression assertion (`.owlbear/kanban/tasks/1508-cockpit-extract-taskfieldseditor-reduce-detailtab-to-container.md:210`). The retry instead added a new standalone suite (`.owlbear/kanban/tasks/1508-cockpit-extract-taskfieldseditor-reduce-detailtab-to-container.md:236`), and workspace search for the assertion-specific text only returns that new file (`serve/cockpit/web/src/__tests__/DetailTab.body-preview-toggle.1508.test.tsx:2`, `serve/cockpit/web/src/__tests__/DetailTab.body-preview-toggle.1508.test.tsx:12`, `serve/cockpit/web/src/__tests__/DetailTab.body-preview-toggle.1508.test.tsx:66`, `serve/cockpit/web/src/__tests__/DetailTab.body-preview-toggle.1508.test.tsx:71`, `serve/cockpit/web/src/__tests__/DetailTab.body-preview-toggle.1508.test.tsx:98`). | Independent `quality-runner` verification shows the full Vitest suite is green in the current workspace state (1507 passed, 0 failed, 9 skipped), but the proof landed in the wrong surface for the refined AC. | FAIL |
+| AC-5 | Independent `quality-runner` verification shows `npx eslint src/` and `npm run lint:css` both exit 0, and editor diagnostics on touched files are clean. | `quality-runner` + editor diagnostics. | PASS |
+
+- Blocking findings:
+
+| # | AC Line | Finding | Evidence | Route |
+|---|---|---|---|---|
+| 1 | AC-4 | The retry does not satisfy the refined proof contract because the preview-after-toggle regression lives in a new task-scoped suite instead of one of the named existing DetailTab suites. The behavior is proven and the suite is green, but the acceptance criterion is still unmet. | `.owlbear/kanban/tasks/1508-cockpit-extract-taskfieldseditor-reduce-detailtab-to-container.md:210`; `.owlbear/kanban/tasks/1508-cockpit-extract-taskfieldseditor-reduce-detailtab-to-container.md:236`; `serve/cockpit/web/src/__tests__/DetailTab.body-preview-toggle.1508.test.tsx:71-98` | backlog |
+| 2 | Review routing | This is a repeated review failure on the same task after earlier reviewer rejects at `.owlbear/kanban/tasks/1508-cockpit-extract-taskfieldseditor-reduce-detailtab-to-container.md:130` and `.owlbear/kanban/tasks/1508-cockpit-extract-taskfieldseditor-reduce-detailtab-to-container.md:174`, so reviewer routing requires a return to backlog rather than another direct downstream retry. | `.owlbear/kanban/tasks/1508-cockpit-extract-taskfieldseditor-reduce-detailtab-to-container.md:130`; `.owlbear/kanban/tasks/1508-cockpit-extract-taskfieldseditor-reduce-detailtab-to-container.md:174`; `.owlbear/kanban/tasks/1508-cockpit-extract-taskfieldseditor-reduce-detailtab-to-container.md:204` | backlog |
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Decide whether AC-4 remains strict about placing the regression in `DetailTab.test.tsx` or `DetailTab.valid-edits.test.tsx`, or whether the contract should explicitly allow a standalone suite, then re-route the task accordingly. | .owlbear/kanban/tasks/1508-cockpit-extract-taskfieldseditor-reduce-detailtab-to-container.md; serve/cockpit/web/src/__tests__/DetailTab.body-preview-toggle.1508.test.tsx; serve/cockpit/web/src/__tests__/DetailTab.test.tsx; serve/cockpit/web/src/__tests__/DetailTab.valid-edits.test.tsx | Findings #1-2 |
+| 2 | architect | Re-scope the next retry as an AC/proof-surface correction, not as a builder code-fix retry, because the implementation and independent runtime gates are already green. | .owlbear/kanban/tasks/1508-cockpit-extract-taskfieldseditor-reduce-detailtab-to-container.md | Findings #1-2 |
+
+## Observations
+- The code-side defect from the first review is resolved: the readonly preview now renders local `body` state in `TaskFieldsEditor` (`serve/cockpit/web/src/components/TaskFieldsEditor.tsx:242`).
+- Independent verification shows the current repo state is otherwise clean for this task surface: full Vitest passes, ESLint is clean, and Stylelint is clean.
+- I could confirm commit presence via `.git/logs/**`, but the current tool surface still does not expose a path-scoped `git status`/diff check for contamination; that is a residual evidence limitation, not a blocker for the finding above.
+2026-05-12T15:53:11+00:00
+## Architecture Re-Review (AC-4 Wording Fix)
+
+### Reviewer Feedback Summary
+Third review correctly identified that AC-4 constrains the regression assertion to `DetailTab.test.tsx` or `DetailTab.valid-edits.test.tsx`, but the test-writer placed it in `DetailTab.body-preview-toggle.1508.test.tsx`. The code fix and regression test are both in place and green (1507 passed, 0 failed). The only gap is an overly prescriptive AC wording about file placement.
+
+### AC-4 Refinement (replaces previous AC-4)
+- AC-4 (B2): The 8 original DetailTab test suites plus the added `DetailTab.body-preview-toggle.1508.test.tsx` regression suite pass `npm test` in `serve/cockpit/web/`. The regression suite verifies: input = user edits body text + toggles editBody to false; output = readonly markdown preview renders the unsaved local body content (not the persisted `task.body` value). Builder may add assertions in existing or new task-scoped suites.
+
+### Rationale
+The standalone suite follows project convention (`DetailTab.{concern}.{task-id}.test.tsx`) and isolates the regression concern. Forcing a merge into an existing suite adds no engineering value — the behavior is proven, the suite is green, and the standalone file will be curated into a durable module suite during test curation.
+
+### Proof Bundle Change
+- Previous: `smoke` (test-writer writes regression)
+- Revised: `existing` (regression already written and passing)
+- Existing proof scope: Full Vitest suite (`npm test` in `serve/cockpit/web/`) including `DetailTab.body-preview-toggle.1508.test.tsx`
+- Test-writer: SKIP (bundle `existing`)
+
+### Challenge Results
+- Challenger: SKIPPED — mechanical AC wording fix with no design decision; proof bundle de-escalation is justified by existing green regression
+
+### Verdict: APPROVE (re-refined)
+### Action Taken: Relaxed AC-4 file-placement constraint to accept standalone task-scoped test suites. De-escalated proof bundle from smoke → existing since regression test already exists and passes. Advancing to todo.
+2026-05-12T15:53:14+00:00
+Relaxed AC-4 file-placement constraint to accept standalone task-scoped test suites. De-escalated proof bundle from smoke → existing since regression test already exists and passes. Advancing to todo.
+2026-05-12T16:23:16+00:00
+## Test-Writer Notes
+- Proof bundle: existing — no new test writing required.
+- Existing proof scope: Full Vitest suite (`npm test` in `serve/cockpit/web/`) including `DetailTab.body-preview-toggle.1508.test.tsx` (regression for edit body → toggle out of edit mode → readonly preview shows unsaved local body).
+- Latest Architecture Re-Review (2026-05-12T15:53:11+00:00) de-escalated proof bundle from `smoke` → `existing` after confirming regression test already passes against fixed code. Test-writer: SKIP per arch directive.
+- Passing through to builder.

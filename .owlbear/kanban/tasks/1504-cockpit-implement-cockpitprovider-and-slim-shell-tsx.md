@@ -1,10 +1,10 @@
 ---
 id: 1504
 title: 'Cockpit: Implement CockpitProvider and slim Shell.tsx'
-status: todo
+status: in-progress
 priority: important
 created: 2026-05-12T02:59:59.210772+00:00
-updated: 2026-05-12T15:01:09.610057+00:00
+updated: 2026-05-12T16:32:40.885715+00:00
 tags:
   - cockpit
   - frontend
@@ -93,3 +93,79 @@ Research: .owlbear/research/1491-cockpit-provider-extraction.md
 
 ### Verdict: APPROVE
 ### Action Taken: Refined AC (B1/B2 quality pass), assigned proof bundle behavioral, advanced backlog → todo
+2026-05-12T15:50:57+00:00
+## Test-Writer Notes
+- Test files:
+  - `serve/cockpit/web/src/__tests__/CockpitProvider_1504.test.tsx` — unit contract tests
+  - `serve/cockpit/web/src/__tests__/App.wiring.1504.test.tsx` — App tree + Shell import guards
+- Classes: `TestFromAC_CockpitProvider`, `TestFromAC_CockpitProviderWiring`
+- Tests per category:
+  - happy: 24 (exports, field presence, flow-through, initial state)
+  - edge: 10 (boundary values, selectedDR derivation, scan items flow, lastDecisionsMtime sequence)
+  - error: 8 (ApiError handling, throw-outside-provider, scan error flow)
+  - boundary: 13 (AbortController abort-on-switch, abort-on-unmount, signal presence, update() re-fetch, AC-9 spy assertions, AC-8 tree structure)
+- Total: 55 tests (49 in CockpitProvider_1504 + 6 in App.wiring.1504), all FAIL
+- ruff: N/A (TypeScript); ESLint: clean (exit 0)
+
+### AC Coverage
+| AC | Tests | Notes |
+|----|-------|-------|
+| AC-1 | 4 | Named exports verified |
+| AC-2 | 3 | vi.importActual regression guards for useBoard/usePendingDRs/useScanPolling |
+| AC-3 | 12 | All return fields checked; scan error field tested flexibly (builder may use `scanError`) |
+| AC-4 | 12 | select/clear/update actions; AbortController abort-on-switch + abort-on-unmount; getTask signal |
+| AC-5 | 10 | count/items/isLoading/error/refetch/selectedDRId/setSelectedDRId/selectedDR |
+| AC-6 | 3 | null no-trigger + non-null trigger + subsequent triggers |
+| AC-7 | 1 | useConnectionHealth absent from CockpitProvider module exports |
+| AC-8 | 3 | App renders CockpitProvider; ErrorBoundary child; Shell grandchild |
+| AC-9 | 3 | Shell does not call useBoard/usePendingDRs/useScanPolling (spy assertions) |
+| AC-10 | — | Meta-AC (test suite passes overall); covered by AC-8/AC-9 |
+| AC-11 | 4 | useBoardState/useTaskSelection/useDRState throw outside CockpitProvider; error message matches /CockpitProvider/i |
+
+### Design notes for builder
+- AC-3 scan error: AC lists two fields both named `error`. Tests check for a `scanError` field (most natural disambiguation). If builder uses a nested `scan` sub-object, adjust accordingly.
+- AC-9 tests rely on CockpitProvider mock (pass-through) providing stub values for useBoardState/useTaskSelection/useDRState — Shell must consume these in GREEN.
+- Commit: aeb31984
+2026-05-12T16:04:22+00:00
+## Builder Notes
+- Implementation attempted (uncommitted due reject):
+  - serve/cockpit/web/src/hooks/CockpitProvider.tsx (new)
+  - serve/cockpit/web/src/App.tsx (provider tree wiring)
+  - serve/cockpit/web/src/Shell.tsx (consumes `useBoardState`, `useTaskSelection`, `useDRState`; removed direct `useBoard`/`usePendingDRs`/`useScanPolling` calls)
+- RED baseline (quality-runner): task tests failed as expected before implementation.
+- GREEN verification (quality-runner): BLOCKED by a test initialization defect in `src/__tests__/CockpitProvider_1504.test.tsx`.
+  - Failing error: `ReferenceError: Cannot access 'DEFAULT_BOARD_STATE' before initialization` at line 67 in hoisted mock setup.
+  - Result: 6 passed, 1 failed (suite blocked before reliable coverage capture).
+- Lint evidence from same run:
+  - `src/Shell.tsx:39` reported unused `selectedDRId` in current in-progress implementation draft.
+- Commit status: no source commit created because proof gate could not be reached with current TestFromAC setup.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | test-writer | Fix hoisted mock initialization ordering so `DEFAULT_BOARD_STATE` is not referenced before declaration (e.g., initialize hoisted return without TDZ reference or hoist defaults too). | serve/cockpit/web/src/__tests__/CockpitProvider_1504.test.tsx | quality-runner failure: `ReferenceError: Cannot access 'DEFAULT_BOARD_STATE' before initialization` (line 67) |
+| 2 | test-writer | Re-run and confirm the corrected `TestFromAC_CockpitProvider` suite executes end-to-end (no initialization crash) so builder can complete GREEN proof. | serve/cockpit/web/src/__tests__/CockpitProvider_1504.test.tsx, serve/cockpit/web/src/__tests__/App.wiring.1504.test.tsx | quality-runner report for #1504: tests blocked with 1 failing suite due init error; coverage not collectible |
+| 3 | builder | After test fix lands, remove unused `selectedDRId` local destructure in Shell during final GREEN pass if still present. | serve/cockpit/web/src/Shell.tsx | eslint warning in quality-runner report: `@typescript-eslint/no-unused-vars` at line 39 |
+2026-05-12T16:20:45+00:00
+\n\n## Merge Note\n#1505 merged into this task — Shell test mock-path updates are already required by AC-10 (`npm test` passes — including updated Shell test mocks). 9 Shell.*.test.tsx files need mock-path updates (not 8 — Shell.scan-health.test.tsx also mocks useBoard/usePendingDRs). Shell.scan-health.test.tsx requires special attention: it intentionally does NOT mock useScanPolling for integration testing of the fetch→scan→render chain.
+2026-05-12T16:32:40+00:00
+## Test-Writer Notes
+- Retry: fixed TDZ initialization in `CockpitProvider_1504.test.tsx`
+- Fix: `mockUseBoard`, `mockUsePendingDRs`, `mockUseScanPolling` were calling `.mockReturnValue(DEFAULT_*)` inside `vi.hoisted()` closures; `DEFAULT_*` constants are module-scope (not hoisted), causing `ReferenceError: Cannot access 'DEFAULT_BOARD_STATE' before initialization`. Removed initial return values from hoisted closures — `beforeEach` already sets them.
+- Suite now executes end-to-end: 59 tests run, 58 pass (builder's uncommitted impl handles them), 1 fails: `aborts in-flight getTask fetch when selectedTaskId changes (task switch)` — legitimate RED contract test for AC-4 abort-on-switch.
+- `App.wiring.1504.test.tsx`: 6/6 pass (App wiring + Shell AC-9 guards).
+- ESLint: clean (exit 0). Commit: 4f858316.
+
+### AC Coverage (unchanged from prior pass)
+| AC | Tests |
+|----|-------|
+| AC-1 | 4 |
+| AC-2 | 3 |
+| AC-3 | 12 |
+| AC-4 | 12 |
+| AC-5 | 10 |
+| AC-6 | 3 |
+| AC-7 | 1 |
+| AC-8 | 3 |
+| AC-9 | 3 |
+| AC-11 | 4 |

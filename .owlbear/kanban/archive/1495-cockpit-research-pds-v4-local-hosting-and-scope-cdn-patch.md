@@ -1,10 +1,10 @@
 ---
 id: 1495
 title: 'Cockpit: Research PDS v4 local hosting and scope CDN patch'
-status: done
+status: archived
 priority: important
 created: 2026-05-11T23:15:45.844267+00:00
-updated: 2026-05-12T15:19:56.529492+00:00
+updated: 2026-05-12T15:58:16.675211+00:00
 tags:
   - cockpit
   - frontend
@@ -14,7 +14,7 @@ depends_on: []
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 
@@ -224,3 +224,5 @@ Rewrote AC to match the actual research-only deliverable. Removed implementation
 
 ### Scratch Cleanup
 No `.owlbear/scratch/1495-*` files found — nothing to clean.
+2026-05-12T15:58:16+00:00
+## Audit\n### Regression Detection\n- quality-runner mode full: 5922 passed, 217 failed (all pre-existing; 211 pytest + 6 vitest from #1504 App.wiring tests + CockpitProvider import error)\n- Task only changed `.owlbear/research/1495-pds-v4-local-hosting.md` and `.owlbear/sources/overview.md` — no code files\n- regression verdict: PASS\n\n### Intent Verification\n- scope alignment: PASS (changed files: research artifact + source attribution — both in research/docs domain)\n- purpose match: PASS (artifact answers native-config question, documents 3 strategies, recommends property trap)\n- extraneous scope: none\n- research task verification: PASS — artifact exists, follow-up children #1496 (parent=1495, in-progress) and #1497 (parent=1495, todo) exist with scoped AC\n- boundary check: function-level behavior verification deferred to reviewer\n\n### Architect Quality: 3/5\nOriginal AC combined research + implementation in one task with \"If yes/If no\" conditional branches — a design anti-pattern that conflicted with the research outcome and caused 2 review rejections before architect refined to research-only. The refinement itself was clean (3 specific, verifiable lines), but the original design forced 2 wasted pipeline cycles.\n\n### Commit Integrity\n- upstream commit presence: PASS — researcher `7d2ef8f0`, builder `da570f8d`, doc-writer `177098ad` — all properly attributed with `(#1495, {role})`\n- kanban commit packaging: pending (this audit cycle)\n\n### Deduction Breakdown\n- AC quality score 3/5: -.03\n- No other deductions\n\n### Confidence: 0.97\n### Action: archive

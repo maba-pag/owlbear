@@ -4,7 +4,7 @@ title: 'Cockpit: Centralize API client (tasks + decisions)'
 status: in-progress
 priority: needed
 created: 2026-05-11T23:15:20.997863+00:00
-updated: 2026-05-12T15:04:05.239168+00:00
+updated: 2026-05-12T16:23:11.167332+00:00
 tags:
   - cockpit
   - frontend
@@ -727,3 +727,30 @@ Required follow-up:
 |---|-------------|----------------|---------|----------|
 | 1 | builder | Complete #1503 through builder -> review -> docs -> done. | `.owlbear/kanban/tasks/1503.md` | #1493 tracker AC-3 depends on #1503 completion; current status is `in-progress`. |
 | 2 | orchestrator | Redispatch #1493 only after #1503 reaches `done`. | `.owlbear/kanban/tasks/1493.md`, `.owlbear/kanban/tasks/1503.md` | Current dependency snapshot does not satisfy tracker completion criteria. |
+2026-05-12T15:52:52+00:00
+## Builder Notes
+- Scope check: #1493 is a parent/tracker task (`Proof bundle: skip`, tracker AC v2) with no direct implementation surface for builder code changes.
+- AC gate status: NOT MET in current board state.
+- Live dependency snapshot (verified this run):
+  - #1501: `archived`
+  - #1502: `archived`
+  - #1503: `review`
+- Files changed: none.
+- Tests run: none (non-implementation tracker task).
+- Coverage: n/a.
+- Lint: n/a.
+- Evidence summary: tracker AC-3 requires child #1503 to reach `done`; until then #1493 cannot satisfy all tracker AC lines.
+- Fixes applied: none.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | reviewer | Complete #1503 review and route it forward (or fail with actionable findings) so it can progress toward `done`. | `.owlbear/kanban/tasks/1503.md` | #1493 tracker AC-3 depends on #1503 completion; current status is `review`. |
+| 2 | doc-writer/auditor | After #1503 review pass, complete remaining downstream stages to `done`/`archived` and then redispatch #1493. | `.owlbear/kanban/tasks/1503.md`, `.owlbear/kanban/tasks/1493.md` | Parent tracker completion is dependency-based and currently blocked only by #1503 not yet complete. |
+2026-05-12T16:23:11+00:00
+## Test-Writer Notes
+- Proof bundle: skip — no new test writing required.
+- Task tagged `quality` (non-implementation pass-through tag).
+- Parent/tracker task (AC v2); implementation lives in #1501 (archived), #1502 (archived), #1503 (review).
+- No testable Python interfaces exist in this tracker task.
+- Passing through to builder.

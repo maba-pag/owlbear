@@ -4,13 +4,13 @@ title: 'Cockpit: Replace PDS appendChild monkeypatch with property trap on docum
 status: in-progress
 priority: important
 created: 2026-05-12T02:37:00.298093+00:00
-updated: 2026-05-12T15:16:26.328192+00:00
+updated: 2026-05-12T16:38:37.258672+00:00
 tags:
   - cockpit
   - frontend
 parent: 1495
 depends_on:
-  - 1510
+  - 1511
 blocked: false
 block_reason:
 claimed_at:
@@ -383,3 +383,71 @@ Rewrote original AC to fix B3 violation ("correctly" banned word in AC-4) and ad
 |---|-------------|----------------|---------|----------|
 | 1 | researcher | Complete and advance #1510 so local PDS assets align with runtime package expectations. | serve/cockpit/web/public/porsche-design-system/** | #1510 currently `research`; #1496 AC-4 depends on that prerequisite. |
 | 2 | builder | Re-run scoped executable AC-4 proof immediately after #1510 lands; only advance #1496 when `serve/cockpit/web/e2e/pds-runtime-csp.spec.ts` passes. | serve/cockpit/web/e2e/pds-runtime-csp.spec.ts | Current cycle confirms prerequisite is still unresolved, so gate remains unreachable. |
+2026-05-12T16:12:35+00:00
+## Builder Notes
+
+### Files Changed
+- None
+
+### Verification Run (AC-4 executable proof)
+- quality-runner scoped run on `serve/cockpit/web/e2e/pds-runtime-csp.spec.ts`
+- Result: 0 passed, 5 failed
+- All failures timeout at 30s in `beforeEach` waiting for `[data-region="workspace"]` visibility.
+
+### Failure Details
+1. `TestFromAC_PDSCustomElementsRegistered` — `p-button custom element is defined after workspace renders`
+2. `TestFromAC_PDSCustomElementsRegistered` — `p-icon, p-tabs, and p-tabs-item are defined after workspace renders`
+3. `TestFromAC_NoCDNCSPViolations` — `no securitypolicyviolation fires with blockedURI from cdn.ui.porsche.com`
+4. `TestFromAC_NoCDNCSPViolations` — `no securitypolicyviolation fires with blockedURI from cdn.ui.porsche.cn`
+5. `TestFromAC_PDSShadowRootActivation` — `p-button element has non-empty shadowRoot after page stabilizes`
+
+### Environment Evidence (dependency still unresolved)
+- Installed PDS packages in lockfile: `@porsche-design-system/components-js@4.1.0`, `@porsche-design-system/components-react@4.1.0`
+- Local public core asset still at v4.0.0: `public/porsche-design-system/components/porsche-design-system.v4.0.0.9faf55bc815263bee13d.js`
+- Required v4.1.0 runtime chunk missing: `public/porsche-design-system/components/porsche-design-system.v4.1.0.59dc31ee9c99f5a43eb5.js` (not found)
+- Icon inventory still incomplete: `ICON_SVG_COUNT=1`
+
+### Lint/Test Snapshot
+- Playwright exit code: 1
+- ESLint on target spec: clean (exit code 0)
+- Coverage: not applicable for Playwright run
+
+### Evidence Summary
+- AC-1 through AC-3 remain implemented from prior commit `a615918d`.
+- AC-4 executable gate remains unreachable in current workspace state because dependency #1510 (PDS asset sync) is not implemented yet.
+
+### Required Follow-up
+1. Complete dependency #1510 (asset sync implementation) so public PDS assets match runtime package versions.
+2. Re-run scoped executable AC-4 proof for #1496 (`serve/cockpit/web/e2e/pds-runtime-csp.spec.ts`) immediately after #1510 lands; advance only on real Playwright pass.
+2026-05-12T16:38:37+00:00
+## Builder Notes
+
+### Files Changed
+- None
+
+### Verification Run (AC-4 executable proof)
+- quality-runner scoped run on `serve/cockpit/web/e2e/pds-runtime-csp.spec.ts`
+- Result: 0 passed, 5 failed
+- Lint: clean
+
+### Failure Details
+All five Playwright tests timed out in `beforeEach` waiting for `[data-region="workspace"]` to be visible:
+1. `p-button custom element is defined after workspace renders`
+2. `p-icon, p-tabs, and p-tabs-item are defined after workspace renders`
+3. `no securitypolicyviolation fires with blockedURI from cdn.ui.porsche.com`
+4. `no securitypolicyviolation fires with blockedURI from cdn.ui.porsche.cn`
+5. `DOM structure in shadowed p-button matches design token shape`
+
+### Dependency Alignment
+- Updated #1496 dependency from #1510 to #1511.
+- Reason: #1510 is research complete; #1511 is the implementation task that actually syncs local PDS assets required for workspace render stability.
+
+### Evidence Summary
+- AC-1 through AC-3 remain implemented from prior commit `a615918d`.
+- AC-4 executable gate remains red in current workspace state and is structurally unreachable until #1511 lands.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Implement and land task #1511 (PDS asset sync script + synced assets) so local runtime assets match installed PDS package version. | serve/cockpit/web/scripts/sync-pds-assets.mjs; serve/cockpit/web/public/porsche-design-system/** | #1496 scoped Playwright run remains 0/5 with workspace visibility timeouts. |
+| 2 | builder | Re-run scoped AC-4 executable proof for #1496 and advance only when `serve/cockpit/web/e2e/pds-runtime-csp.spec.ts` passes. | serve/cockpit/web/e2e/pds-runtime-csp.spec.ts | Current quality-runner evidence: 0 passed, 5 failed; lint clean. |

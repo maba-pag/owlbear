@@ -1,10 +1,10 @@
 ---
 id: 1503
 title: 'Cockpit: Migrate components to centralized API client'
-status: in-progress
+status: backlog
 priority: needed
 created: 2026-05-12T02:43:28.748468+00:00
-updated: 2026-05-12T15:15:56.521916+00:00
+updated: 2026-05-12T16:54:48.671744+00:00
 tags:
   - cockpit
   - frontend
@@ -14,7 +14,7 @@ depends_on:
   - 1502
 blocked: false
 block_reason:
-claimed_at: 2026-05-12T15:15:56.521916+00:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -106,3 +106,56 @@ Original AC had B3 violations ("No" as naked quantifier, "All existing tests"), 
 - Proof bundle: existing — no new test writing required.
 - Existing proof scope: `serve/cockpit/web/src/__tests__/KanbanBoard.*.test.tsx`, `serve/cockpit/web/src/__tests__/ArchivalModal.*.test.tsx`, `serve/cockpit/web/src/__tests__/ResolveModal.test.tsx`, `serve/cockpit/web/src/__tests__/DetailTab.*.test.tsx`, `serve/cockpit/web/src/__tests__/Shell.*.test.tsx`, `serve/cockpit/web/e2e/*.spec.ts`
 - Passing through to builder.
+2026-05-12T15:31:45+00:00
+## Builder Notes
+- Implementation: migrated raw `/api/tasks` and `/api/decisions` fetch usage to centralized API helpers in `serve/cockpit/web/src/KanbanBoard.tsx`, `serve/cockpit/web/src/Shell.tsx`, `serve/cockpit/web/src/components/ArchivalModal.tsx`, `serve/cockpit/web/src/components/ResolveModal.tsx`, and `serve/cockpit/web/src/hooks/useTaskMutation.ts`.
+- Behavior preservation: kept status-specific conflict/validation handling and callback flows; restored legacy fallback error-message text where tests assert exact strings.
+- Proof bundle: `existing` verified via quality-runner.
+- Tests: scoped existing-proof suite passed (`748 passed, 0 failed, 9 skipped`).
+- Lint: clean (`eslint` scoped paths passed).
+- Build: `npm build` passed (exit 0).
+- Structural check (AC-6): `rg "fetch\(.*\/api\/(tasks|decisions)" serve/cockpit/web/src -g "*.ts" -g "*.tsx"` returned matches only in `src/api/*` and `src/__tests__/*`; no matches in component/hook source.
+- Commit: `1097ac61fffcc4d6b7ecd16462a5eef3cd30fb15` (`5 files changed, 159 insertions(+), 143 deletions(-)`).
+2026-05-12T16:10:51+00:00
+## Review Evidence
+- Verdict: FAIL
+- FAIL routing: FAIL #1503 -> in-progress | review surface is contaminated by uncommitted #1504 Shell/CockpitProvider changes, and the declared existing-proof suite is currently red.
+- Blocking findings:
+
+| # | AC Line | Finding | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | AC-2 | The current Shell review surface is overlapped by uncommitted #1504 refactor work, so #1503 can no longer be verified against the file ownership promised in its AC. | #1503 still requires a Shell task-detail effect and `Shell.*` proof scope (`.owlbear/kanban/tasks/1503-cockpit-migrate-components-to-centralized-api-client.md`:43,52). #1504 records uncommitted changes to `serve/cockpit/web/src/Shell.tsx` and `serve/cockpit/web/src/hooks/CockpitProvider.tsx` with no source commit (`.owlbear/kanban/tasks/1504-cockpit-implement-cockpitprovider-and-slim-shell-tsx.md`:131-141). Current `serve/cockpit/web/src/Shell.tsx` imports provider hooks at lines 12, 32, 42, and 50, while `serve/cockpit/web/src/hooks/CockpitProvider.tsx` now owns the `AbortController`/`getTask` effect at lines 82, 87, and 113. | in-progress |
+| 2 | AC-7 | The builder proof packet is contradicted by reviewer rerun on the declared existing-proof scope, so behavioral preservation is not currently established on the workspace state under review. | #1503 builder notes claim `748 passed, 0 failed, 9 skipped` and a green quality-runner packet (`.owlbear/kanban/tasks/1503-cockpit-migrate-components-to-centralized-api-client.md`:114-118), but reviewer `quality-runner` on `serve/cockpit/web/src/__tests__/Shell.callbacks_1457.test.tsx` reported 21 failures with `Cockpit hooks must be used within CockpitProvider`. The same scoped run also found adjacent `serve/cockpit/web/src/__tests__/CockpitProvider_1504.test.tsx` blocked by `ReferenceError: Cannot access 'DEFAULT_BOARD_STATE' before initialization`. | in-progress |
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Recreate a clean #1503 review surface by removing or isolating the uncommitted #1504 Shell/CockpitProvider refactor from #1503-scoped files, then resubmit with evidence against that same committed file set. | serve/cockpit/web/src/Shell.tsx, serve/cockpit/web/src/hooks/CockpitProvider.tsx, .owlbear/kanban/tasks/1503-cockpit-migrate-components-to-centralized-api-client.md, .owlbear/kanban/tasks/1504-cockpit-implement-cockpitprovider-and-slim-shell-tsx.md | #1504 records uncommitted changes to Shell/CockpitProvider with no source commit, while #1503 AC-2 still assigns the task-detail effect and proof scope to Shell. |
+| 2 | builder | Rerun the declared existing-proof suite for #1503 after scope cleanup and attach a corrected quality-runner report showing the `Shell.*` proof files pass on the resubmitted tree. | serve/cockpit/web/src/__tests__/Shell.callbacks_1457.test.tsx, .owlbear/kanban/tasks/1503-cockpit-migrate-components-to-centralized-api-client.md | Reviewer scoped rerun found 21 `Shell.callbacks_1457` failures, contradicting the builder note that the existing-proof suite passed `748` tests with `0` failures. |
+
+## Observations
+- The migrated non-Shell surfaces currently look structurally aligned with centralized API helpers: `serve/cockpit/web/src/KanbanBoard.tsx`, `serve/cockpit/web/src/components/ArchivalModal.tsx`, `serve/cockpit/web/src/components/ResolveModal.tsx`, and `serve/cockpit/web/src/hooks/useTaskMutation.ts` all call `api/tasks.ts` or `api/decisions.ts` helpers rather than raw `/api/tasks` or `/api/decisions` fetches.
+- The reviewer structural scan for `fetch\(.*\/api\/(tasks|decisions)` in `serve/cockpit/web/src/**/*.{ts,tsx}` found matches only in `serve/cockpit/web/src/api/tasks.ts`, `serve/cockpit/web/src/api/decisions.ts`, `serve/cockpit/web/src/api/repair.ts`, `serve/cockpit/web/src/api/cleanup.ts`, and `serve/cockpit/web/src/__tests__/*`.
+- If #1504 is intended to land before #1503 is retried, #1503's contract/proof scope will need re-alignment because `serve/cockpit/web/src/Shell.tsx` no longer owns the task-detail fetch behavior; the provider-based behavior is covered by `serve/cockpit/web/src/__tests__/App.wiring.1504.test.tsx` and `serve/cockpit/web/src/__tests__/CockpitProvider_1504.test.tsx`.
+2026-05-12T16:54:48+00:00
+## Builder Notes
+- Claim + context: reviewed prior reviewer fail and re-verified current workspace state.
+- Source intervention: restored `serve/cockpit/web/src/Shell.tsx` to committed #1503 state (no net diff vs `HEAD` now) to isolate #1503 from uncommitted #1504 Shell/provider refactor overlap.
+- Structural AC check (AC-6): PASS.
+  - `rg "fetch\(.*\/api\/(tasks|decisions)" serve/cockpit/web/src -g "*.ts" -g "*.tsx"` matches only in `src/api/{tasks,decisions,repair,cleanup}.ts` and `src/__tests__/...`; no component/hook raw fetch matches.
+- Existing-proof scoped verification (quality-runner): PASS.
+  - `KanbanBoard.*`, `ArchivalModal.*`, `ResolveModal*`, `DetailTab*`, `Shell*` => `393 passed, 0 failed, 3 skipped`, eslint clean.
+- AC-7 full gate verification (quality-runner mode=full): FAIL due cross-task contract drift.
+  - Vitest failures are #1504-provider wiring expectations that conflict with #1503 AC-2 Shell-owned effect requirement:
+    1) `src/__tests__/App.wiring.1504.test.tsx` expects Shell to avoid direct `useBoard/usePendingDRs/useScanPolling`.
+    2) `src/App.wiring.test.tsx` EventSourceProvider wiring assertion failed on current mixed surface.
+    3) `src/__tests__/CockpitProvider_1504.test.tsx` provider abort-case assertion failed.
+- Lint on touched frontend files: clean in scoped run.
+- Coverage: not requested by proof bundle `existing`.
+- Commit: none (no net source changes for #1503 after isolation attempt).
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Reconcile #1503 AC-2/AC-7 with current #1504 provider contract, then reissue a single non-conflicting ownership boundary (Shell-owned task fetch vs provider-owned task fetch) before redispatching builder. | `serve/cockpit/web/src/Shell.tsx`, `serve/cockpit/web/src/hooks/CockpitProvider.tsx`, `.owlbear/kanban/tasks/1503-cockpit-migrate-components-to-centralized-api-client.md`, `.owlbear/kanban/tasks/1504-cockpit-implement-cockpitprovider-and-slim-shell-tsx.md` | Scoped #1503 proof passes, but full gate fails on #1504 wiring assertions (`App.wiring.1504.test.tsx`) incompatible with #1503 AC-2 Shell effect ownership. |
+| 2 | architect | Re-scope AC-7 proof statement to a verifiable bundle for mixed-task worktree conditions (or sequence #1504 dependency explicitly), then route back to builder/test-writer with aligned proof scope. | `.owlbear/kanban/tasks/1503-cockpit-migrate-components-to-centralized-api-client.md` | quality-runner mode=full reports unrelated cross-task failures while #1503 scoped existing proof remains green (`393/0`). |

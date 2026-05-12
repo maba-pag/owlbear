@@ -4,7 +4,7 @@ title: 'Cockpit: Playwright E2E test for mutation error banner'
 status: research
 priority: nice-to-have
 created: 2026-05-12T08:33:03.181002+00:00
-updated: 2026-05-12T08:33:22.244580+00:00
+updated: 2026-05-12T16:55:21.446592+00:00
 tags:
   - cockpit
   - frontend
@@ -13,7 +13,7 @@ parent: 1494
 depends_on: []
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-12T16:55:21.446592+00:00
 archival_reason:
 archival_refs: []
 ---
