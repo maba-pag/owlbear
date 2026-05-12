@@ -474,13 +474,8 @@ class TestFromAC_MoveTask:
 #   - blocked task → ERR_BLOCKED_NOT_CLAIMABLE
 #   - archived task → ERR_ARCHIVED_NOT_CLAIMABLE
 #
-# All tests are RED:
-#   - blocked: engine raises ValueError("...is blocked..."), AgentView re-raises
-#     as ValidationError(ERR_INVALID_STATUS) — wrong code, should be
-#     ERR_BLOCKED_NOT_CLAIMABLE
-#   - archived: engine raises FileNotFoundError (task not in tasks_dir), AgentView
-#     re-raises as NotFoundError(ERR_NOT_FOUND) — wrong type and code, should be
-#     ValidationError(ERR_ARCHIVED_NOT_CLAIMABLE)
+# The assertions below preserve the resolved claim-guard behavior for blocked,
+# archived, missing, and already-claimed tasks.
 # ---------------------------------------------------------------------------
 
 
@@ -490,10 +485,8 @@ class TestFromAC_StartWork:
     def test_blocked_task_raises_blocked_not_claimable(self, tmp_path: Path) -> None:
         """start_work on a blocked task → ValidationError(ERR_BLOCKED_NOT_CLAIMABLE).
 
-        The engine raises ValueError("Task '1' is blocked and cannot be claimed").
-        AgentView.start_work currently catches this as a generic ValueError and
-        re-raises it as ValidationError(ERR_INVALID_STATUS) — wrong code.
-        The correct code is ERR_BLOCKED_NOT_CLAIMABLE.
+        The engine raises ValueError("Task '1' is blocked and cannot be claimed"),
+        and AgentView.start_work translates it to ERR_BLOCKED_NOT_CLAIMABLE.
         """
         view, kanban_dir = _make_view(tmp_path)
         _write_task(
@@ -510,11 +503,8 @@ class TestFromAC_StartWork:
     def test_archived_task_raises_archived_not_claimable(self, tmp_path: Path) -> None:
         """start_work on an archived task → ValidationError(ERR_ARCHIVED_NOT_CLAIMABLE).
 
-        Archived tasks live in archive/, not tasks/. engine.claim_task raises
-        FileNotFoundError (task not found in tasks_dir). AgentView.start_work
-        currently converts FileNotFoundError to NotFoundError(ERR_NOT_FOUND) —
-        wrong exception type and wrong code.
-        The correct error is ValidationError(ERR_ARCHIVED_NOT_CLAIMABLE).
+        Archived tasks live in archive/, not tasks/. AgentView.start_work checks
+        archived storage and reports ERR_ARCHIVED_NOT_CLAIMABLE.
         """
         view, kanban_dir = _make_view(tmp_path)
         _write_task(

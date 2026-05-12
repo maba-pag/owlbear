@@ -16,27 +16,27 @@ Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json
 
 ### Tools
 
-The server exposes 10 tools:
+The server exposes 9 tools:
 
 | Tool | Signature |
 |------|-----------|
 | `list_tasks` | `list_tasks(status: str \| None = None, priority: str \| None = None, tag: str \| None = None, archival_reason: str \| None = None, ids: list[int] \| None = None, unclaimed: bool = False, blocked: bool \| None = None, parent: int \| None = None, search: str \| None = None, sort: str \| None = None, reverse: bool = False, limit: int = 0)` |
 | `show_task` | `show_task(id: str \| int, section: str \| None = None)` |
 | `pick_tasks` | `pick_tasks(wave_size: int \| None = None, max_waves: int = 3)` |
-| `create_task` | `create_task(title: str, body: str = "", priority: str = "needed", tags: list[str] \| None = None, parent: int \| None = None, depends_on: list[int] \| None = None)` |
+| `create_task` | `create_task(title: str, body: str = "", priority: str = "", tags: list[str] \| None = None, parent: int \| None = None, depends_on: list[int] \| None = None)` |
 | `edit_task` | `edit_task(id: str \| int, title: str \| None = None, body: str \| None = None, append_body: str \| None = None, timestamp: bool = False, priority: str \| None = None, parent: int \| None = None, add_dep: list[int] \| None = None, remove_dep: list[int] \| None = None, add_tag: list[str] \| None = None, remove_tag: list[str] \| None = None, block_reason: str \| None = None, archival_reason: str \| None = None, archival_refs: list[int] \| None = None)` |
 | `move_task` | `move_task(id: str \| int, status: str, archival_reason: str \| None = None, archival_refs: list[int] \| None = None)` |
 | `start_work` | `start_work(id: str \| int)` |
 | `end_work` | `end_work(id: str \| int, outcome: str, move_to: str \| None = None, note: str \| None = None, archival_reason: str \| None = None, archival_refs: list[int] \| None = None, block_reason: str \| None = None)` |
-| `create_dr` | `create_dr(task_id: str, agent: str, request_type: str, body: str)` |
-| `resolve_drs` | `resolve_drs()` |
+| `create_dr` | `create_dr(task_id: str \| int, agent: str, request_type: str, body: str)` |
 
 ### Lifecycle and dispatch semantics
+
+- `create_task.priority`: omitted or `""` uses the product topology default priority (`important`). Pass an explicit value when a different priority is intended.
 
 - `pick_tasks` is read-only. It computes dispatch waves from task state and never mutates task files.
 - `start_work` delegates to engine claim logic. If a rival claim is still live, the call fails; if the rival claim is expired, the claim is reclaimed and the task is claimed for the caller.
 - `create_dr` creates decision/action request files linked to a task.
-- `resolve_drs` processes decision request resolutions from the decisions inbox.
 - Cockpit maintenance triggers cleanup via its `POST /tasks/cleanup` route, which calls engine cleanup and releases expired claims plus archives done tasks.
 
 ## Data Projections and Envelopes

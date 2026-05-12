@@ -66,7 +66,6 @@ __all__ = [
     "move_task",
     "parse_task_id",
     "pick_tasks",
-    "resolve_drs",
     "show_task",
     "start_work",
 ]
@@ -83,9 +82,7 @@ def _resolve_kanban_dir() -> Path:
 
 def _startup_error(kanban_dir: Path, detail: str) -> RuntimeError:
     """Build a startup error with board path and KANBAN_DIR remediation guidance."""
-    return RuntimeError(
-        f"{detail}: {kanban_dir}. Set KANBAN_DIR to a valid kanban board directory."
-    )
+    return RuntimeError(f"{detail}: {kanban_dir}. Set KANBAN_DIR to a valid kanban board directory.")
 
 
 def parse_task_id(value: str | int, *, field: str = "task_id") -> int:
@@ -392,26 +389,6 @@ async def create_dr(
     return {"created": True, "path": relative_path}
 
 
-@mcp.tool(annotations=ToolAnnotations(destructiveHint=False, idempotentHint=True))
-async def resolve_drs(ctx: Context) -> dict[str, object]:
-    """Resolve non-pending DRs by mutating DR files and return moved paths."""
-    app_ctx: AppContext = ctx.request_context.lifespan_context
-    try:
-        moved_paths = await asyncio.to_thread(
-            decisions.resolve_pending_drs,
-            app_ctx.kanban_dir / "decisions",
-            app_ctx.engine,
-        )
-    except KanbanError as exc:
-        _map_kanban_error(exc)
-
-    moved_relative = [
-        moved_path.relative_to(app_ctx.kanban_dir).as_posix()
-        for moved_path in moved_paths
-    ]
-    return {"moved": moved_relative, "count": len(moved_relative)}
-
-
 @mcp.tool(annotations=ToolAnnotations(destructiveHint=False, idempotentHint=False))
 async def move_task(
     ctx: Context,
@@ -447,9 +424,7 @@ async def move_task(
     with contextlib.suppress(Exception):
         if not result.guidance:
             status_names = list(app_ctx.engine.board_config().statuses)
-            result.guidance = collect_guidance(
-                "move", before=pre_task, after=result, status_names=status_names
-            )
+            result.guidance = collect_guidance("move", before=pre_task, after=result, status_names=status_names)
     return result
 
 
@@ -590,9 +565,7 @@ async def end_work(  # noqa: PLR0913
     if outcome in {"success", "block", "fail"}:
         with contextlib.suppress(Exception):
             if not task.guidance:
-                task.guidance = collect_guidance(
-                    "end_work", None, task, outcome=outcome
-                )
+                task.guidance = collect_guidance("end_work", None, task, outcome=outcome)
     return task
 
 
@@ -673,9 +646,7 @@ _patch_params(
         "tag": {"description": "Filter by tag, e.g. 'phase-2'"},
         "search": {"description": "Full-text search in titles and bodies"},
         "sort": {"enum": _SORT_FIELDS},
-        "blocked": {
-            "description": "true = only blocked, false = only unblocked, null = all"
-        },
+        "blocked": {"description": "true = only blocked, false = only unblocked, null = all"},
     },
 )
 
@@ -692,9 +663,7 @@ _patch_params(
 _patch_params(
     "move_task",
     {
-        "status": {
-            "description": "Target status name, or 'archived' to archive the task"
-        },
+        "status": {"description": "Target status name, or 'archived' to archive the task"},
     },
 )
 
@@ -702,20 +671,12 @@ _patch_params(
     "edit_task",
     {
         "title": {"description": "Replace task title (must be non-empty)"},
-        "body": {
-            "description": "Replace task body; empty string clears, null/omitted = no change"
-        },
+        "body": {"description": "Replace task body; empty string clears, null/omitted = no change"},
         "append_body": {"description": "Append to body (preserves existing content)"},
         "timestamp": {"description": "Prepend [[date]] timestamp to appended body"},
-        "add_dep": {
-            "description": "Add dependency task IDs (JSON array, e.g. [601, 602])"
-        },
-        "remove_dep": {
-            "description": "Remove dependency task IDs (JSON array, e.g. [601, 602])"
-        },
-        "parent": {
-            "description": "Parent task ID for subtask hierarchy; use 0 to clear parent"
-        },
+        "add_dep": {"description": "Add dependency task IDs (JSON array, e.g. [601, 602])"},
+        "remove_dep": {"description": "Remove dependency task IDs (JSON array, e.g. [601, 602])"},
+        "parent": {"description": "Parent task ID for subtask hierarchy; use 0 to clear parent"},
     },
 )
 

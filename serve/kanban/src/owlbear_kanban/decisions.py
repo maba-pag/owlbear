@@ -62,16 +62,10 @@ def parse_dr(path: Path) -> tuple[dict[str, object], str]:
 
 def canonical_summary(response: str, body: str) -> str:
     """Return canonical decision summary appended to the linked task."""
-    return (
-        "## Decision Request\n"
-        f"- response: {response}\n"
-        f"- source: {body.strip() or '(no body)'}"
-    )
+    return f"## Decision Request\n- response: {response}\n- source: {body.strip() or '(no body)'}"
 
 
-def _append_summary(
-    engine: DecisionEngine, task_id: int | str, response: str, body: str
-) -> None:
+def _append_summary(engine: DecisionEngine, task_id: int | str, response: str, body: str) -> None:
     """Append a compact DR summary to the task body."""
     summary = canonical_summary(response, body)
     engine.edit_task(task_id, append_body=summary)
@@ -84,6 +78,34 @@ def _resolve_decisions_dir(engine: DecisionEngine) -> Path:
         msg = "Cannot infer decisions directory from engine"
         raise ValueError(msg)
     return Path(kanban_dir) / "decisions"
+
+
+def _resolved_candidate(base_path: Path, counter: int) -> Path:
+    """Return the nth collision-safe resolved path candidate."""
+    if counter == 1:
+        return base_path
+    return base_path.with_name(f"{base_path.stem}-{counter}{base_path.suffix}")
+
+
+def move_to_resolved(path: Path, resolved_dir: Path) -> Path:
+    """Move *path* into resolved_dir without overwriting prior resolutions."""
+    resolved_dir.mkdir(parents=True, exist_ok=True)
+    base_path = resolved_dir / path.name
+    counter = 1
+    while True:
+        candidate = _resolved_candidate(base_path, counter)
+        try:
+            os.link(path, candidate)
+        except FileExistsError:
+            counter += 1
+            continue
+        try:
+            path.unlink()
+        except OSError:
+            if candidate.exists():
+                candidate.unlink()
+            raise
+        return candidate
 
 
 def create_dr(  # noqa: PLR0913
@@ -118,9 +140,7 @@ def create_dr(  # noqa: PLR0913
     slug = _slugify(request_type)
     counter = 1
     while True:
-        filename = (
-            f"{task_id}-{slug}.md" if counter == 1 else f"{task_id}-{slug}-{counter}.md"
-        )
+        filename = f"{task_id}-{slug}.md" if counter == 1 else f"{task_id}-{slug}-{counter}.md"
         candidate = pending_dir / filename
         try:
             fd = os.open(candidate, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
@@ -175,16 +195,14 @@ def resolve_pending_drs(
                 task_id = meta.get("task_id")
                 _append_summary(engine, task_id, response, body)
                 engine.edit_task(task_id, blocked=False)
-                dest = resolved_dir / path.name
-                path.replace(dest)
+                dest = move_to_resolved(path, resolved_dir)
                 moved.append(dest)
                 continue
 
             if response == "needs-info":
                 task_id = meta.get("task_id")
                 _append_summary(engine, task_id, response, body)
-                dest = resolved_dir / path.name
-                path.replace(dest)
+                dest = move_to_resolved(path, resolved_dir)
                 moved.append(dest)
                 continue
 
