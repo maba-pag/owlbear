@@ -738,6 +738,8 @@ describe('TestFromAC_PInlineNotificationModals', () => {
 
       // On success, onClose is called and error is cleared
       await waitFor(() => expect(onClose).toHaveBeenCalled(), { timeout: 2000 })
+      // AC-6a: notification element absent from DOM after successful retry
+      await waitFor(() => expect(getArchivalError(container)).toBeNull(), { timeout: 2000 })
     })
 
     it('ArchivalModal: error element absent after onDismiss fires (setError(null))', async () => {
@@ -806,6 +808,8 @@ describe('TestFromAC_PInlineNotificationModals', () => {
       })
 
       await waitFor(() => expect(onResolved).toHaveBeenCalled(), { timeout: 2000 })
+      // AC-6b: notification element absent from DOM after successful retry
+      await waitFor(() => expect(getResolveError(container)).toBeNull(), { timeout: 2000 })
     })
 
     it('ResolveModal: error element absent after onDismiss fires (setError(null))', async () => {
