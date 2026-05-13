@@ -569,3 +569,55 @@ class TestFromAC_ToolDescriptions:
     def test_edit_task_description_mentions_escape_convention(self) -> None:
         text = self._tool_text("edit_task")
         assert "escape" in text or "\\\\n" in text or "literal" in text
+
+
+# ── 9. Durable regression gate ────────────────────────────────────────────────
+
+
+class TestFromAC_ExistingDurableTestsUnchanged:
+    """Refined AC 7: no new failures in tests/test_mcp_kanban.py beyond the two
+    known pre-existing failures (both predate the normalization feature):
+      - TestMergedFrom1360::test_server_module_line_count_reduced
+        (720-line cap outdated after legitimate feature growth)
+      - TestMergedFrom1197::test_server_1170_make_engine_mock_uses_noncallable_agent_view
+        (referenced test_server_1170.py file no longer exists)
+    Provides the falsifiable regression gate required by the reviewer.
+    """
+
+    def test_durable_mcp_kanban_suite_no_new_failures(self) -> None:
+        """Run the durable MCP kanban suite excluding the two known pre-existing failures.
+
+        Fails if the normalization feature introduced any regression in existing
+        MCP kanban tool behaviors.
+        """
+        import os
+        import subprocess
+        import sys
+        from pathlib import Path
+
+        repo_root = Path(__file__).resolve().parent.parent
+        # Strip PYTEST_DISABLE_PLUGIN_AUTOLOAD so the subprocess gets the full
+        # plugin suite (pytest-asyncio, pytest-xdist, etc.).
+        env = {k: v for k, v in os.environ.items() if k != "PYTEST_DISABLE_PLUGIN_AUTOLOAD"}
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "pytest",
+                "tests/test_mcp_kanban.py",
+                "--deselect=tests/test_mcp_kanban.py::TestMergedFrom1360::test_server_module_line_count_reduced",
+                "--deselect=tests/test_mcp_kanban.py::TestMergedFrom1197::test_server_1170_make_engine_mock_uses_noncallable_agent_view",
+                "--override-ini=addopts=",
+                "-q",
+                "--no-header",
+                "--tb=short",
+            ],
+            capture_output=True,
+            text=True,
+            cwd=str(repo_root),
+            env=env,
+        )
+        assert result.returncode == 0, (
+            "Durable MCP kanban suite has unexpected failures — normalization feature "
+            f"may have introduced a regression:\n{result.stdout}\n{result.stderr}"
+        )
