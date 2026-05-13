@@ -118,8 +118,8 @@ class TestFromAC_ProofBundleUserMessage:
             engine.create_task(title="T", proof_bundle="bogus")
         msg = exc_info.value.user_message
         for member in VALID_PROOF_BUNDLES:
-            assert member in msg, (
-                f"Expected VALID_PROOF_BUNDLES member {member!r} in user_message, got: {msg!r}"
+            assert repr(member) in msg, (
+                f"Expected quoted token {member!r} in user_message, got: {msg!r}"
             )
 
     def test_edit_task_invalid_proof_bundle_user_message_contains_all_valid_bundles(
@@ -132,6 +132,6 @@ class TestFromAC_ProofBundleUserMessage:
             engine.edit_task("1", proof_bundle="not-a-bundle")
         msg = exc_info.value.user_message
         for member in VALID_PROOF_BUNDLES:
-            assert member in msg, (
-                f"Expected VALID_PROOF_BUNDLES member {member!r} in user_message, got: {msg!r}"
+            assert repr(member) in msg, (
+                f"Expected quoted token {member!r} in user_message, got: {msg!r}"
             )
