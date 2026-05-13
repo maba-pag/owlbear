@@ -1,9 +1,9 @@
 [project]
 name = "owlbear-mcp-knowledge"
 version = "0.1.0"
-requires-python = ">=3.12"
+requires-python = ">=3.12.13"
 description = "OwlBear MCP server — knowledge operations"
-dependencies = ["mcp[cli]>=1.27.0", "owlbear-knowledge[full]"]
+dependencies = ["mcp[cli]>=1.27.1", "owlbear-knowledge[full]"]
 
 [tool.uv.sources]
 owlbear-knowledge = { workspace = true }

@@ -1,7 +1,7 @@
 [project]
 name = "owlbear-tools"
 version = "0.1.0"
-requires-python = ">=3.12"
+requires-python = ">=3.12.13"
 description = "OwlBear utility tools — doc-index and related scripts"
 dependencies = []
 
