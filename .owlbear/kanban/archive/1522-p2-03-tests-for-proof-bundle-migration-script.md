@@ -1,10 +1,10 @@
 ---
 id: 1522
 title: 'P2-03: Tests for proof_bundle migration script'
-status: done
+status: archived
 priority: needed
 created: 2026-05-13T02:29:59.211402+00:00
-updated: 2026-05-13T05:31:47.895962+00:00
+updated: 2026-05-13T05:38:13.992114+00:00
 tags:
   - phase-2
   - scope:kanban
@@ -16,8 +16,8 @@ depends_on:
   - 1516
 blocked: false
 block_reason:
-claimed_at: 2026-05-13T05:31:47.895962+00:00
-archival_reason:
+claimed_at:
+archival_reason: completed
 archival_refs: []
 ---
 Brief: see parent #1514
@@ -250,3 +250,5 @@ None — no documentation impact.
 
 ### Scratch Cleanup
 No `.owlbear/scratch/1522-*` files found.
+2026-05-13T05:38:13+00:00
+## Audit\n### Regression Detection\n- quality-runner mode full: 4482 Python passed, 212 failed, 1573 vitest passed; lint clean (ruff + eslint)\n- 212 failures are pre-existing in unrelated modules (test_cockpit_view, test_server, test_engine_accessor_migration, test_ideation_diagram) confirmed via independent scoped rerun\n- Task-scoped verification: 95 passed (24 task + 71 module baseline), 0 failed\n- regression verdict: PASS (no 1522-related regressions)\n\n### Intent Verification\n- scope alignment: PASS (changed files: serve/kanban/src/owlbear_kanban/migrate.py, tests/test_migrate_1522.py, both in scope:kanban domain)\n- purpose match: PASS (tests for proof_bundle migration function, matches task title and AC)\n- extraneous scope: none (4 commits touch exactly 2 files)\n- boundary check: function-level behavior verification deferred to reviewer\n\n### Architect Quality: 3/5\nInitial AC was functionally adequate but lacked proof-quality specification for test assertions (substring vs exact-value). This caused 2 full review-cycle rejections before architect re-review tightened AC1/AC2 to mandate YAML-parsed exact-value and line-level assertions. Final AC is strong, but pipeline cost was notable.\n\n### Commit Integrity\n- upstream commits present: PASS\n  - 12fcf14f test: add failing tests for proof_bundle migration (#1522, test-writer)\n  - 6aa8b807 feat: migrate proof_bundle body field (#1522, builder)\n  - 90fa7379 test: add differentiated-value multi-match tests for AC1/AC2 (#1522, test-writer)\n  - 87cad468 test: add exact-assertion retry tests for #1522 AC1/AC2 proof gaps (test-writer)\n- All commits reference #1522, follow convention\n- kanban commit packaging: pending (this commit)\n\n### Reviewer Evidence\nDetailed PASS verdict with challenger cross-check (confidence 0.83). All 3 AC lines mapped with code and test evidence. Prior review cycles documented proof-quality gaps; final cycle confirmed closures.\n\n### Deduction Breakdown\n- AC quality score 3 (lte 3): -0.03\n- No other deductions\n\n### Confidence: 0.97\n### Action: archive
