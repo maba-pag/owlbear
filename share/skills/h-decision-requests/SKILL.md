@@ -8,7 +8,7 @@ user-invocable: false
 
 Use the decision-request helper to create decision and action requests:
 
-- `create_dr(...)`: create pending DR/AR records in `.owlbear/decisions/`
+- `create_dr(...)`: create pending DR/AR records in `.owlbear/kanban/decisions/`
 
 `create_dr` has no query mode, and agents do not resolve DR/AR files. `pick_tasks` is read-only: it excludes blocked tasks and does not apply pending responses. Decision resolution is handled through the Cockpit decision flow, which appends a `## Decision Request` summary for both decision and action requests, unblocks tasks when appropriate, and moves resolved files out of pending. Use `response: approved` when a requested user action is complete.
 
@@ -36,7 +36,7 @@ Use `create_dr` with these required parameters:
 - `request_type`: one of `decision` or `action`.
 - `body`: markdown payload with context, options, and explicit question.
 
-The helper writes a pending file under `.owlbear/decisions/pending/` and
+The helper writes a pending file under `.owlbear/kanban/decisions/pending/` and
 blocks the task with reason `DR pending`.
 
 ## Body Format
@@ -79,6 +79,6 @@ Resolution flow:
 
 ## Operational Rules
 
-- Never write `.owlbear/decisions/` files directly.
+- Never write `.owlbear/kanban/decisions/` files directly.
 - Use helper operations to keep DR lifecycle behavior consistent.
 - Use `create_dr` for both advisory and mandatory requests.

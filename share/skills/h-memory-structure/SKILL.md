@@ -58,7 +58,7 @@ Per `owlbear-system.instructions.md` § Memory Governance (single source of trut
 | Task-specific context, in-progress working state | Session | `/memories/session/` |
 | Agent lessons-learned (curation inbox) | Repo inbox | `/memories/repo/inbox/` |
 | Agent institutional knowledge (queryable) | MCP canonical | `ob-memory` |
-| Architecture decisions | Not memory | `.owlbear/decisions/` |
+| Architecture decisions | Not memory | `.owlbear/kanban/decisions/` |
 | Research findings | Not memory | `.owlbear/research/` |
 | Code snippets, task-specific context | Not memory | Do not record |
 

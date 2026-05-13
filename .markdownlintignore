@@ -1,7 +1,7 @@
 .owlbear/briefs/*/
-.owlbear/decisions
 .owlbear/doc-index.md
 .owlbear/kanban/archive
+.owlbear/kanban/decisions
 .owlbear/kanban/tasks
 .owlbear/research
 .owlbear/scratch

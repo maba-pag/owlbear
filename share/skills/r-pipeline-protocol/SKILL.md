@@ -54,7 +54,7 @@ After claiming the task, check whether it was previously blocked by a decision o
 1. Check the task body for a `## Decision Request` summary. If present, its `response` and source notes are binding constraints.
 2. If no summary is present, proceed normally; unresolved DR/AR files keep tasks blocked and are filtered out before dispatch.
 3. If user notes contradict the AC or narrow the approach, adjust accordingly. If infeasible, block for clarification.
-4. Never write to `.owlbear/decisions/` directly — always use `create_dr` from `h-decision-requests` when a new decision or action request is required.
+4. Never write to `.owlbear/kanban/decisions/` directly — always use `create_dr` from `h-decision-requests` when a new decision or action request is required.
 
 ### Entry-Gate Agents
 
@@ -322,7 +322,7 @@ When an agent cannot proceed, route by cause:
 | T2 — Advisory | Trade-offs, no T3 triggers | Advisory DR via `create_dr` (5-day auto-resolve) |
 | T3 — Mandatory | New capability, arch/security/breaking change | Blocking DR via `create_dr` (no auto-resolve) |
 
-All DR/AR creation goes through `create_dr`. Never write to `.owlbear/decisions/` directly. If in doubt, create the DR — the cost is lower than guessing.
+All DR/AR creation goes through `create_dr`. Never write to `.owlbear/kanban/decisions/` directly. If in doubt, create the DR — the cost is lower than guessing.
 
 ### User-Action Tasks
 

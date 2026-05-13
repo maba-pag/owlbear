@@ -35,7 +35,7 @@ entries = parse_index(index_content)  # list[DocEntry]
 
 ### Excluded directories
 
-The following paths are never indexed: `.owlbear/scratch`, `.owlbear/research`, `.owlbear/kanban`, `.owlbear/decisions`, `.owlbear/briefs`, `.owlbear/sources`, `store`, `tests`, `node_modules`, `.git`, `dist`, `build`.
+The following paths are never indexed: `.owlbear/scratch`, `.owlbear/research`, `.owlbear/kanban`, `.owlbear/briefs`, `.owlbear/sources`, `store`, `tests`, `node_modules`, `.git`, `dist`, `build`.
 
 ## Configuration
 
