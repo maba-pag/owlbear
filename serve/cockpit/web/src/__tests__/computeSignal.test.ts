@@ -85,6 +85,12 @@ describe('TestFromAC_ComputeSignal', () => {
       expect(result).toBe('dr-pending')
     })
 
+    it('blocked alone: "blocked" when blocked=true with no pending DR and no other active signal', () => {
+      const task = makeTask({ id: 1, blocked: true })
+      const result = computeSignal(task, noDRs)
+      expect(result).toBe('blocked')
+    })
+
     it('blocked beats claimed: "blocked" wins when blocked=true and claimed=true (no DR)', () => {
       const task = makeTask({ id: 1, blocked: true, claimed: true })
       const result = computeSignal(task, noDRs)
