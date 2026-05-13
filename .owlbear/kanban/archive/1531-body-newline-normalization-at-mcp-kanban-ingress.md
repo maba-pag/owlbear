@@ -1,10 +1,10 @@
 ---
 id: 1531
 title: Body newline normalization at MCP kanban ingress
-status: review
+status: archived
 priority: important
 created: 2026-05-13T12:28:14.408067+00:00
-updated: 2026-05-13T15:27:22.744890+00:00
+updated: 2026-05-13T15:55:08.596336+00:00
 tags:
   - type:feature
   - scope:mcp-kanban
@@ -12,8 +12,8 @@ parent:
 depends_on: []
 blocked: false
 block_reason:
-claimed_at: 2026-05-13T15:27:22.744890+00:00
-archival_reason:
+claimed_at:
+archival_reason: completed
 archival_refs: []
 ---
 ## Summary
@@ -86,3 +86,33 @@ Both named in AC 7 authoritative exclusion set.
 - ruff: clean
 - AC coverage: AC 1 (helper unit) ✓, AC 2 (5-param integration) ✓, AC 3 (guidance message) ✓, AC 4 (guidance ordering) ✓, AC 5 (escape convention all 5 params) ✓, AC 6 (parameter descriptions) ✓ (builder commit ec29dd79), AC 7 (durable gate) ✓
 - Direct-to-review advance: implementation committed in ec29dd79 (#1531, builder); builder already shipped; no RED/GREEN cycle gap; all tests verify the contract
+2026-05-13T15:44:10+00:00
+## Review Evidence
+- Verdict: PASS
+- PASS confirmation: PASS #1531 -> docs | AC mapped to code and evidence sufficient.
+- AC 1: `_normalize_escaped_newlines()` implements the required tuple return and three-step protect/normalize/restore flow at `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:87-92`; helper tests cover empty/plain/newline/literal `\\n`/escaped `\\\\n`/mixed/sentinel cases at `tests/test_mcp_kanban_newline_norm_1531.py:133-189`.
+- AC 2-5: ingress normalization, guidance append, ordering, and escape-convention wiring are present in `create_task` (`serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:375-391`), `create_dr` (`serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:411-426`), `edit_task` (`serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:508-554`), and `end_work` (`serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:600-639`); task-local integration tests cover all 5 parameters plus ordering and passthrough at `tests/test_mcp_kanban_newline_norm_1531.py:198-589`.
+- AC 6: shared `_NORM_PARAM_DESC` documents normalization plus the escape convention at `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:700-703` and is applied to `create_task.body` (`serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:734`), `edit_task.body` (`serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:757-758`), `edit_task.append_body` (`serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:762`), `end_work.note` (`serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:781`), and `create_dr.body` (`serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:801`).
+- AC 7: durable gate exists at `tests/test_mcp_kanban_newline_norm_1531.py:553-589`; because the parent task lacked a dedicated builder proof packet, reviewer independently reran scoped proof via `quality-runner`: `tests/test_mcp_kanban_newline_norm_1531.py` PASS (35), `ruff` clean for the touched source/test files, coverage 54% for `owlbear_mcp_kanban.server`, and no environment fallback.
+
+## Observations
+- Builder evidence on the parent task was incomplete, so this PASS relies on reviewer-run quality evidence rather than a builder-supplied proof packet.
+- An adjacent check in `tests/test_server.py::TestFromAC_OutputSchemaPreserved::test_patch_params_applies_enum_and_description` still contains stale schema expectations and currently fails earlier on `move_task.status["enum"]`; it was treated as unrelated neighboring test debt, not blocking evidence against #1531.
+- AC 6 is implemented as a shared source-of-truth metadata string, but durable contract tests for the exact published wording remain partial; this is a proof-strength note rather than a blocker for this task.
+2026-05-13T15:46:32+00:00
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | README verification | Yes | Updated | `serve/mcp-kanban/README.md` — `guidance Field` updated to include normalization notices; new `Body text normalization` subsection added listing all 5 parameters, escape convention, and guidance message text |
+| 2 | External attribution | No | N/A | No external sources referenced in review evidence |
+| 3 | Research doc | No | N/A | No research artifact for this task |
+| 4 | Deletion detection | No | N/A | No files deleted in this task |
+
+### Verification Layers
+- Layer 1 — grep confirmed `normalization` appears at lines 68, 128, 135 in `serve/mcp-kanban/README.md`; `guidance` section updated; `Body text normalization` section present
+- Layer 2 — Editorial read: `guidance Field` coherent and accurate; normalization section correctly enumerates all 5 params (`create_task.body`, `edit_task.body`, `edit_task.append_body`, `end_work.note`, `create_dr.body`), escape convention matches `_NORM_PARAM_DESC` and `_NORM_GUIDANCE` constants in `server.py`; no contradictions
+- Commit: `118f8e1e` — `docs(mcp-kanban): document body newline normalization and escape convention (#1531)`
+- Scratch cleanup: no `1531-*` scratch files found
+2026-05-13T15:55:08+00:00
+## Audit\n### Regression Detection\n- quality-runner mode full: 4599 passed, 209+ failed, 14 skipped\n- All 209 failures in unrelated domains (ideation, engine accessor migration, cockpit, decisions, config path validation, support module migration). Zero failures in task files.\n- Task-scoped rerun: tests/test_mcp_kanban_newline_norm_1531.py 35/35 PASS\n- test_server.py failures (StatusNamesDictFormBug, OutputSchemaPreserved) confirmed pre-existing and unrelated to normalization feature\n- regression verdict: PASS\n\n### Intent Verification\n- scope alignment: PASS (builder commit ec29dd79 changed only serve/mcp-kanban/src/owlbear_mcp_kanban/server.py; docs commit 118f8e1e changed serve/mcp-kanban/README.md; both in scope:mcp-kanban domain)\n- purpose match: PASS (ingress newline normalization matches stated task purpose)\n- extraneous scope: none\n- boundary check: function-level behavior verification deferred to reviewer\n\n### Architect Quality: 4/5\nAC refined through 3 architecture passes. Final AC is specific: exact function signature, all 5 params enumerated, escape convention documented, pre-existing exclusion set named. Initial drafts had type mismatch and wording defects caught by challenger, which is healthy process but indicates first-draft quality was sub-par.\n\n### Commit Integrity\n- upstream commit presence: PASS (builder ec29dd79, test-writer 8e934af5/990dfb8c/c8627663/77766c94/66da8e32, docs 118f8e1e)\n- kanban commit packaging: pending (will commit after archival)\n\n### Deduction Breakdown\nNo deductions applied.\n- Regression failures: 0 (all failures pre-existing, none in task domain)\n- Intent mismatch: 0\n- Evidence integrity: 0\n- Lint violations: 0\n- AC quality 4/5 (above 3 threshold): 0\n- Reviewer evidence section: present and detailed with line-level citations\n\n### Confidence: 1.00\n### Action: archive
