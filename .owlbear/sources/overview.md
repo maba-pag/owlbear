@@ -106,6 +106,15 @@ External repos and resources studied during OwlBear development.
 | Knip — JS/TS unused code finder | <https://github.com/webpro-nl/knip> | Finds unused files, dependencies, exports; category-based scan structure | `.owlbear/research/1414-legacy-audit-prompt.md` | 2026-05-08 |
 | Ruff F401 — unused import rule | <https://github.com/astral-sh/ruff/issues/872> | Discussion of vulture-like dead code detection in ruff; confirms F401 covers imports | `.owlbear/research/1414-legacy-audit-prompt.md` | 2026-05-08 |
 
+## Theme Bootstrap + useTheme Hook Testing Research (Task #1537)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| next-themes test suite | <https://github.com/pacocoursey/next-themes/blob/main/next-themes/__tests__/index.test.tsx> | localStorage mock, matchMedia mock, data-theme assertions, renderHook patterns | `.owlbear/research/theme-bootstrap-usetheme-testing.md` | 2026-05-13 |
+| next-themes inline script | <https://github.com/pacocoursey/next-themes/blob/main/next-themes/src/script.ts> | Canonical bootstrap pattern: localStorage → validate → OS fallback → set attribute | `.owlbear/research/theme-bootstrap-usetheme-testing.md` | 2026-05-13 |
+| tanstack-themes FOUC prevention | <https://deepwiki.com/juliusmarminge/tanstack-themes/3.3-theme-detection-and-fouc-prevention> | Synchronous script injection architecture, mode resolution logic | `.owlbear/research/theme-bootstrap-usetheme-testing.md` | 2026-05-13 |
+| vitest-matchmedia-mock | <https://www.npmjs.com/package/vitest-matchmedia-mock> | Alternative matchMedia mock library; evaluated but not recommended (adds dependency) | `.owlbear/research/theme-bootstrap-usetheme-testing.md` | 2026-05-13 |
+
 ## MegaLinter uv.lock Exclusion & Ruff Src Fix (Task #1418)
 
 | Source | URL | What | Where Used | Date |
