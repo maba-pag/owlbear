@@ -97,8 +97,12 @@ describe('TestFromAC_TokenArchitecture_1535', () => {
     const rootBlock = extractSelectorBlock(css, ':root')
     const rootDeclarations = parseDeclarations(rootBlock)
 
-    const actualColorTokens = [...rootDeclarations.keys()].filter((token) =>
-      EXPECTED_COLOR_TOKENS.includes(token as (typeof EXPECTED_COLOR_TOKENS)[number]),
+    // Exact-set check: all --pds-* tokens that are not in the known non-color set must be exactly the 19 expected color tokens.
+    // Extra agnostic color tokens would appear here and cause the assertion to fail.
+    const actualColorTokens = [...rootDeclarations.keys()].filter(
+      (token) =>
+        token.startsWith('--pds-') &&
+        !EXPECTED_NON_COLOR_TOKENS.includes(token as (typeof EXPECTED_NON_COLOR_TOKENS)[number]),
     )
 
     expect(actualColorTokens.sort()).toEqual([...EXPECTED_COLOR_TOKENS].sort())
