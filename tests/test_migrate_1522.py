@@ -13,6 +13,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import yaml
+
 from owlbear_kanban.migrate import _migrate_proof_bundle_field
 
 
@@ -321,3 +323,51 @@ class TestFromAC_ProofBundleMigration:
         body_part = _body_section(content)
         assert "Proof bundle: smoke" not in body_part
         assert "Proof bundle: behavioral" in body_part
+
+    # -----------------------------------------------------------------------
+    # AC1+AC2 — exact-assertion variants: YAML-parse and line-list membership
+    # (Closes proof gaps from second review: substring checks were insufficient)
+    # -----------------------------------------------------------------------
+
+    def test_frontmatter_proof_bundle_exact_yaml_value_first_match(
+        self, tmp_path: Path
+    ) -> None:
+        """AC1: YAML-parsed frontmatter proof_bundle equals 'smoke' exactly.
+
+        Body has 'smoke' first, 'behavioral' later. Asserts the written
+        frontmatter value is exactly 'smoke' (not a substring match) —
+        falsifies any-match or wrong-match extraction.
+        """
+        fm = "id: 1044\ntitle: Test\nstatus: todo\n"
+        body = (
+            "Proof bundle: smoke\n"
+            "## Builder Notes\n"
+            "Proof bundle: behavioral\n"
+        )
+        path = _make_task_file(tmp_path, fm, body, filename="1044.md")
+        _migrate_proof_bundle_field(path)
+        content = path.read_text(encoding="utf-8")
+        parsed = yaml.safe_load(_fm_section(content))
+        assert parsed["proof_bundle"] == "smoke"
+
+    def test_first_match_line_absent_later_line_present_exact_lines(
+        self, tmp_path: Path
+    ) -> None:
+        """AC2: line-list membership proves first 'smoke' line removed and 'behavioral' line preserved.
+
+        Body has 'smoke' first, 'behavioral' later. Splits body into lines
+        and checks list membership — falsifies substring-only preservation
+        that would pass even if the later line's content were corrupted.
+        """
+        fm = "id: 1045\ntitle: Test\nstatus: todo\n"
+        body = (
+            "Proof bundle: smoke\n"
+            "## Builder Notes\n"
+            "Proof bundle: behavioral\n"
+        )
+        path = _make_task_file(tmp_path, fm, body, filename="1045.md")
+        _migrate_proof_bundle_field(path)
+        content = path.read_text(encoding="utf-8")
+        body_lines = _body_section(content).splitlines()
+        assert "Proof bundle: smoke" not in body_lines
+        assert "Proof bundle: behavioral" in body_lines
