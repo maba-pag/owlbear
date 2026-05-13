@@ -67,3 +67,29 @@
 - Hard block because it forces escape-hatch complexity and incentivizes workarounds.
 - Upstream orchestrator check because the user IS the orchestrator in manual assignment — can't validate against yourself.
 - Kill the idea because the gap is real and the cost is ~5 LoC.
+
+## D5 — 2026-05-13 — Implementation Design (M4 convergence)
+
+**Status quo:** Architecture and UX reviews fully converged on a single approach.
+**Decision to make:** Confirm implementation design: inline vs extract, placement, wording.
+
+**Options considered:**
+
+- A: Inline dep iteration, compute after claim, proposed wording with ⚠️ emoji fix
+- B: Extract shared helper for dep iteration
+
+**Chosen:** A — inline, after claim, proposed wording.
+
+- Inline: 2 consumers below extraction threshold; extract at 3 per project convention.
+- After claim: skip wasted I/O on failure paths; enrichment failure degrades to today's behavior (no guidance).
+- Wording: `"⚠️ This task has unresolved dependencies (IDs: ...). Review and confirm with the user that starting this work is intentional."`
+- Operational: consolidation test for exception tuple, MCP-layer exact-value assertions, format treated as wire contract.
+
+**Rejected:**
+
+- B because extracting inflates diff 30-40% beyond tool-tier budget for only 2 call sites.
+
+**Source inputs:**
+
+- Architecture review: inline wins on tier budget, containment, threshold rule
+- UX review: wording well-calibrated; only fix is emoji consistency (⚠️ not bare ⚠)
