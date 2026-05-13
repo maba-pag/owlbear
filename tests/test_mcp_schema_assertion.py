@@ -87,11 +87,11 @@ class TestFromAC_DependencyVersionPin:
             data = tomllib.load(fh)
 
         deps: list[str] = data.get("project", {}).get("dependencies", [])
-        assert deps, "serve/mcp-kanban/pyproject.toml must declare [project.dependencies]"
+        assert deps, (
+            "serve/mcp-kanban/pyproject.toml must declare [project.dependencies]"
+        )
 
-        mcp_deps = [
-            dep for dep in deps if dep.lower().startswith(("mcp", "fastmcp"))
-        ]
+        mcp_deps = [dep for dep in deps if dep.lower().startswith(("mcp", "fastmcp"))]
         assert mcp_deps, (
             "serve/mcp-kanban/pyproject.toml must list a dependency on 'mcp' or 'fastmcp'. "
             f"Current dependencies: {deps}"
@@ -237,7 +237,14 @@ class TestFromAC_PatchedParameterDescriptions:
             "Expected enum values: priority, updated, id, title, status, created"
         )
         enum_values: list[str] = sort_prop["enum"]  # type: ignore[index]
-        assert set(enum_values) >= {"priority", "updated", "id", "title", "status", "created"}, (
+        assert set(enum_values) >= {
+            "priority",
+            "updated",
+            "id",
+            "title",
+            "status",
+            "created",
+        }, (
             f"list_tasks 'sort' enum must include all sort field names. Got: {enum_values}"
         )
 

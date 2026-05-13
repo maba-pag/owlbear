@@ -172,8 +172,7 @@ class TestFromAC_StatsOutputSchema:
         schema = _get_output_schema("get_stats")
         assert schema is not None, "get_stats tool or fn_metadata not found"
         assert "properties" in schema, (
-            "get_stats schema missing top-level 'properties'; "
-            f"Current schema: {schema}"
+            f"get_stats schema missing top-level 'properties'; Current schema: {schema}"
         )
 
     def test_get_stats_result_has_documents_property(self) -> None:
@@ -181,9 +180,7 @@ class TestFromAC_StatsOutputSchema:
         schema = _get_output_schema("get_stats")
         assert schema is not None
         props = schema.get("properties", {})
-        assert "documents" in props, (
-            "get_stats schema missing 'documents' property"
-        )
+        assert "documents" in props, "get_stats schema missing 'documents' property"
         assert props["documents"].get("type") == "integer", (
             f"get_stats.documents type expected 'integer', got: {props['documents'].get('type')!r}"
         )
@@ -193,9 +190,7 @@ class TestFromAC_StatsOutputSchema:
         schema = _get_output_schema("get_stats")
         assert schema is not None
         props = schema.get("properties", {})
-        assert "entities" in props, (
-            "get_stats schema missing 'entities' property"
-        )
+        assert "entities" in props, "get_stats schema missing 'entities' property"
         assert props["entities"].get("type") == "integer", (
             f"get_stats.entities type expected 'integer', got: {props['entities'].get('type')!r}"
         )

@@ -285,9 +285,7 @@ class TestFromAC_ListTasksCorruption:
         through model_extra.  The migration gate therefore runs on ALL boards.
         Any board with claimed_by in tasks/ triggers MigrationRequiredError at init.
         """
-        kanban_dir = _make_board(
-            tmp_path
-        )  # legacy schema board (version: 10)
+        kanban_dir = _make_board(tmp_path)  # legacy schema board (version: 10)
         (kanban_dir / "tasks" / "1001-good.md").write_text(
             _VALID_TASK.format(task_id=1001), encoding="utf-8"
         )

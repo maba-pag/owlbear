@@ -109,7 +109,9 @@ class TestFromAC_PanelOutputPhrasing:
         """Headers must be described as readable to the user without translation."""
         body = _extract_section_body(_read_skill())
         assert body is not None, "Section not found — AC1 prerequisite"
-        assert re.search(r"\buser\b|\breadable\b|\btranslation\b", body, re.IGNORECASE), (
+        assert re.search(
+            r"\buser\b|\breadable\b|\btranslation\b", body, re.IGNORECASE
+        ), (
             "Section must convey that headers should be readable to the user without translation"
         )
 
@@ -153,8 +155,12 @@ class TestFromAC_PanelOutputPhrasing:
         body = _extract_section_body(_read_skill())
         assert body is not None, "Section not found — AC1 prerequisite"
         has_descriptive = bool(re.search(r"\bdescriptive\b", body, re.IGNORECASE))
-        has_negative_term = bool(re.search(r"\bprotocol.coded\b|\bjargon\b", body, re.IGNORECASE))
-        assert has_descriptive, "Section must contain 'descriptive' guidance (positive side of contrast)"
+        has_negative_term = bool(
+            re.search(r"\bprotocol.coded\b|\bjargon\b", body, re.IGNORECASE)
+        )
+        assert has_descriptive, (
+            "Section must contain 'descriptive' guidance (positive side of contrast)"
+        )
         assert has_negative_term, (
             "Section must contain 'protocol-coded' or 'jargon' to establish the contrast — "
             "having 'avoid' alone is insufficient; the specific anti-pattern term is required"
@@ -165,9 +171,16 @@ class TestFromAC_PanelOutputPhrasing:
         body = _extract_section_body(_read_skill())
         assert body is not None, "Section not found — AC1 prerequisite"
         lines = body.splitlines()
-        descriptive_lines = [ln for ln in lines if re.search(r"\bdescriptive\b", ln, re.IGNORECASE)]
-        assert descriptive_lines, "No line containing 'descriptive' found in section body"
-        assert any(re.search(r"for example|e\.g\.", ln, re.IGNORECASE) for ln in descriptive_lines), (
+        descriptive_lines = [
+            ln for ln in lines if re.search(r"\bdescriptive\b", ln, re.IGNORECASE)
+        ]
+        assert descriptive_lines, (
+            "No line containing 'descriptive' found in section body"
+        )
+        assert any(
+            re.search(r"for example|e\.g\.", ln, re.IGNORECASE)
+            for ln in descriptive_lines
+        ), (
             "The descriptive-header guidance must include an inline 'for example' so "
             "panelists know what a good header looks like"
         )
@@ -177,9 +190,17 @@ class TestFromAC_PanelOutputPhrasing:
         body = _extract_section_body(_read_skill())
         assert body is not None, "Section not found — AC1 prerequisite"
         lines = body.splitlines()
-        negative_lines = [ln for ln in lines if re.search(r"\bprotocol.coded\b|\bjargon\b", ln, re.IGNORECASE)]
-        assert negative_lines, "No line referencing 'protocol-coded' or 'jargon' found in section body"
-        assert any(re.search(r"for example|e\.g\.", ln, re.IGNORECASE) for ln in negative_lines), (
+        negative_lines = [
+            ln
+            for ln in lines
+            if re.search(r"\bprotocol.coded\b|\bjargon\b", ln, re.IGNORECASE)
+        ]
+        assert negative_lines, (
+            "No line referencing 'protocol-coded' or 'jargon' found in section body"
+        )
+        assert any(
+            re.search(r"for example|e\.g\.", ln, re.IGNORECASE) for ln in negative_lines
+        ), (
             "The protocol-coded-header guidance must include an inline negative example "
             "so panelists know what pattern to avoid"
         )
@@ -196,7 +217,8 @@ class TestFromAC_PanelOutputPhrasing:
         assert body is not None, "Section not found — AC1 prerequisite"
         lines = body.splitlines()
         assert any(
-            re.search(r"\bquoted\b", ln, re.IGNORECASE) and re.search(r"\bmediator\b", ln, re.IGNORECASE)
+            re.search(r"\bquoted\b", ln, re.IGNORECASE)
+            and re.search(r"\bmediator\b", ln, re.IGNORECASE)
             for ln in lines
         ), (
             "No single line contains both 'quoted' and 'mediator' — "
@@ -213,7 +235,8 @@ class TestFromAC_PanelOutputPhrasing:
         assert body is not None, "Section not found — AC1 prerequisite"
         lines = body.splitlines()
         assert any(
-            re.search(r"\breadable\b", ln, re.IGNORECASE) and re.search(r"without translation", ln, re.IGNORECASE)
+            re.search(r"\breadable\b", ln, re.IGNORECASE)
+            and re.search(r"without translation", ln, re.IGNORECASE)
             for ln in lines
         ), (
             "No single line contains both 'readable' and 'without translation' — "
@@ -245,7 +268,9 @@ class TestFromAC_PanelOutputPhrasing:
         """
         body = _extract_section_body(_read_skill())
         assert body is not None, "Section not found — AC1 prerequisite"
-        assert re.search(r"phrasing only|phrasing-only|only phrasing", body, re.IGNORECASE), (
+        assert re.search(
+            r"phrasing only|phrasing-only|only phrasing", body, re.IGNORECASE
+        ), (
             "Section must include a scope-boundary statement containing 'phrasing only' "
             "or equivalent to confirm it does not alter panel mechanics or stance file structure"
         )
@@ -266,13 +291,16 @@ class TestFromAC_PanelOutputPhrasing:
         body = _extract_section_body(_read_skill())
         assert body is not None, "Section not found — AC1 prerequisite"
         lines = body.splitlines()
-        affirmative_lines = [ln for ln in lines if re.match(r"[-*]\s+(Use|Prefer)\b", ln)]
+        affirmative_lines = [
+            ln for ln in lines if re.match(r"[-*]\s+(Use|Prefer)\b", ln)
+        ]
         assert affirmative_lines, (
             "Section must contain a bullet starting with 'Use' or 'Prefer' "
             "(affirmative positive guidance)"
         )
         target_lines = [
-            ln for ln in affirmative_lines
+            ln
+            for ln in affirmative_lines
             if re.search(r"\bdescriptive\b", ln, re.IGNORECASE)
             and re.search(r"\bheaders?\b", ln, re.IGNORECASE)
         ]
@@ -280,7 +308,9 @@ class TestFromAC_PanelOutputPhrasing:
             "The affirmative bullet must co-occur with 'descriptive' and 'header(s)' "
             "to target the correct guidance surface"
         )
-        assert any(re.search(r"for example|e\.g\.", ln, re.IGNORECASE) for ln in target_lines), (
+        assert any(
+            re.search(r"for example|e\.g\.", ln, re.IGNORECASE) for ln in target_lines
+        ), (
             "The affirmative descriptive-header guidance must include an inline 'for example' "
             "so panelists know what a good header looks like"
         )
@@ -302,7 +332,8 @@ class TestFromAC_PanelOutputPhrasing:
             "Section must contain a bullet starting with 'Avoid' (prohibitive guidance)"
         )
         target_lines = [
-            ln for ln in prohibitive_lines
+            ln
+            for ln in prohibitive_lines
             if re.search(r"\bprotocol.coded\b|\bjargon\b", ln, re.IGNORECASE)
             and re.search(r"\bheaders?\b", ln, re.IGNORECASE)
         ]
@@ -310,7 +341,9 @@ class TestFromAC_PanelOutputPhrasing:
             "The 'Avoid' bullet must co-occur with 'protocol-coded' or 'jargon' "
             "and 'header(s)' to target the correct anti-pattern"
         )
-        assert any(re.search(r"for example|e\.g\.", ln, re.IGNORECASE) for ln in target_lines), (
+        assert any(
+            re.search(r"for example|e\.g\.", ln, re.IGNORECASE) for ln in target_lines
+        ), (
             "The prohibitive header guidance must include an inline negative example "
             "so panelists know what pattern to avoid"
         )
@@ -324,7 +357,9 @@ class TestFromAC_PanelOutputPhrasing:
         This verifies each name appears as a line beginning with '^## ' (line-start regex).
         """
         content = _read_skill()
-        top_level = {line.rstrip() for line in content.splitlines() if re.match(r"^## ", line)}
+        top_level = {
+            line.rstrip() for line in content.splitlines() if re.match(r"^## ", line)
+        }
         missing = [h for h in _EXPECTED_EXISTING_SECTIONS if h not in top_level]
         assert not missing, (
             f"These sections are no longer top-level '## ' headings (AC5 violation): {missing}"
@@ -343,7 +378,8 @@ class TestFromAC_PanelOutputPhrasing:
         assert body is not None, "Section not found — AC1 prerequisite"
         lines = body.splitlines()
         boundary_lines = [
-            ln for ln in lines
+            ln
+            for ln in lines
             if re.search(r"phrasing only|phrasing-only", ln, re.IGNORECASE)
         ]
         assert boundary_lines, (

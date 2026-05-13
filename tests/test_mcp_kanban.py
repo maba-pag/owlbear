@@ -370,9 +370,7 @@ class TestApplyToolExclusions:
         result = _apply_tool_exclusions(server)
         assert "no_such_tool" not in result
 
-    def test_valid_tool_name_is_excluded(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_valid_tool_name_is_excluded(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from mcp.server.fastmcp import FastMCP
 
         server = FastMCP("test-exclude")
@@ -516,9 +514,7 @@ class TestListTasks:
 
 class TestPickTasks:
     @pytest.mark.asyncio
-    async def test_happy_path_returns_response(
-        self, app_ctx_todo: AppContext
-    ) -> None:
+    async def test_happy_path_returns_response(self, app_ctx_todo: AppContext) -> None:
         from owlbear_kanban.models import PickTasksResponse
 
         ctx = _make_ctx(app_ctx_todo)
@@ -548,7 +544,9 @@ class TestShowTask:
         ctx = _make_ctx(app_ctx_todo)
         result = await show_task(ctx, id=1)
         assert isinstance(result, ShowTaskResponse)
-        assert result.id == 1  # confirms correct task was returned, not an arbitrary result
+        assert (
+            result.id == 1
+        )  # confirms correct task was returned, not an arbitrary result
 
     @pytest.mark.asyncio
     async def test_with_section_parameter(self, app_ctx_todo: AppContext) -> None:
@@ -572,9 +570,7 @@ class TestShowTask:
             await show_task(ctx, id=1)
 
     @pytest.mark.asyncio
-    async def test_zero_id_raises_before_engine(
-        self, app_ctx_todo: AppContext
-    ) -> None:
+    async def test_zero_id_raises_before_engine(self, app_ctx_todo: AppContext) -> None:
         ctx = _make_ctx(app_ctx_todo)
         with pytest.raises(ToolError):
             await show_task(ctx, id=0)
@@ -605,7 +601,9 @@ class TestCreateDRExtraBranches:
         with (
             patch(
                 "owlbear_mcp_kanban.server.decisions.create_dr",
-                side_effect=KanbanError(code="ERR_NOT_FOUND", user_message="dr create failed"),
+                side_effect=KanbanError(
+                    code="ERR_NOT_FOUND", user_message="dr create failed"
+                ),
             ),
             pytest.raises(ToolError, match="dr create failed"),
         ):
@@ -628,9 +626,7 @@ class TestMoveTaskDirectPath:
         assert result.status == "in-progress"
 
     @pytest.mark.asyncio
-    async def test_no_status_raises_tool_error(
-        self, app_ctx_todo: AppContext
-    ) -> None:
+    async def test_no_status_raises_tool_error(self, app_ctx_todo: AppContext) -> None:
         ctx = _make_ctx(app_ctx_todo)
         with pytest.raises(ToolError, match="status is required"):
             await move_task(ctx, id="1")
@@ -786,9 +782,7 @@ class TestEndWorkDirectPath:
     """end_work uses engine.agent_view() directly — no engine fallback (#1360)."""
 
     @pytest.mark.asyncio
-    async def test_direct_path_advances_task(
-        self, app_ctx_claimed: AppContext
-    ) -> None:
+    async def test_direct_path_advances_task(self, app_ctx_claimed: AppContext) -> None:
         ctx = _make_ctx(app_ctx_claimed)
         result = await end_work(ctx, id="1", outcome="success", note="done")
         assert result.id == 1
@@ -847,7 +841,9 @@ class TestEditTaskContractDurable:
         assert persisted.body == "updated"
 
     @pytest.mark.asyncio
-    async def test_edit_task_omitted_body_keeps_existing_body(self, tmp_path: Path) -> None:
+    async def test_edit_task_omitted_body_keeps_existing_body(
+        self, tmp_path: Path
+    ) -> None:
         board = _make_board(tmp_path)
         engine = KanbanEngine(board)
         task = engine.create_task(
@@ -855,7 +851,9 @@ class TestEditTaskContractDurable:
         )
         app_ctx = AppContext(engine=engine, kanban_dir=board)
 
-        result = await edit_task(_make_ctx(app_ctx), id=str(task.id), priority="critical")
+        result = await edit_task(
+            _make_ctx(app_ctx), id=str(task.id), priority="critical"
+        )
 
         assert result.body == "keep-me"
         persisted = engine.show_task(str(task.id))
@@ -863,7 +861,9 @@ class TestEditTaskContractDurable:
         assert persisted.priority == "critical"
 
     @pytest.mark.asyncio
-    async def test_edit_task_null_body_keeps_existing_body(self, tmp_path: Path) -> None:
+    async def test_edit_task_null_body_keeps_existing_body(
+        self, tmp_path: Path
+    ) -> None:
         board = _make_board(tmp_path)
         engine = KanbanEngine(board)
         task = engine.create_task(
@@ -910,7 +910,10 @@ class TestEditTaskContractDurable:
         board = _make_board(tmp_path)
         engine = KanbanEngine(board)
         task = engine.create_task(
-            "Contract Task", body="existing content", status="todo", priority="important"
+            "Contract Task",
+            body="existing content",
+            status="todo",
+            priority="important",
         )
         app_ctx = AppContext(engine=engine, kanban_dir=board)
 
@@ -942,14 +945,18 @@ class TestEditTaskContractDurable:
         task = engine.create_task("Original Title", status="todo", priority="important")
         app_ctx = AppContext(engine=engine, kanban_dir=board)
 
-        result = await edit_task(_make_ctx(app_ctx), id=str(task.id), title="Updated Title")
+        result = await edit_task(
+            _make_ctx(app_ctx), id=str(task.id), title="Updated Title"
+        )
 
         assert result.title == "Updated Title"
         persisted = engine.show_task(str(task.id))
         assert persisted.title == "Updated Title"
 
     @pytest.mark.asyncio
-    async def test_edit_task_empty_title_raises_tool_error(self, tmp_path: Path) -> None:
+    async def test_edit_task_empty_title_raises_tool_error(
+        self, tmp_path: Path
+    ) -> None:
         board = _make_board(tmp_path)
         engine = KanbanEngine(board)
         task = engine.create_task("My Task", status="todo", priority="important")
@@ -959,7 +966,9 @@ class TestEditTaskContractDurable:
             await edit_task(_make_ctx(app_ctx), id=str(task.id), title="")
 
     @pytest.mark.asyncio
-    async def test_edit_task_whitespace_title_raises_tool_error(self, tmp_path: Path) -> None:
+    async def test_edit_task_whitespace_title_raises_tool_error(
+        self, tmp_path: Path
+    ) -> None:
         board = _make_board(tmp_path)
         engine = KanbanEngine(board)
         task = engine.create_task("My Task", status="todo", priority="important")
@@ -985,7 +994,9 @@ class TestEditTaskContractDurable:
 class TestEditTaskToolSchemaContract:
     def test_edit_task_tool_schema_keeps_body_optional_and_nullable(self) -> None:
         tool = next(
-            t for t in _server_mod.mcp._tool_manager._tools.values() if t.name == "edit_task"
+            t
+            for t in _server_mod.mcp._tool_manager._tools.values()
+            if t.name == "edit_task"
         )
         required_fields = set(tool.parameters.get("required", []))
         body_schema = tool.parameters["properties"]["body"]
@@ -996,7 +1007,9 @@ class TestEditTaskToolSchemaContract:
 
     def test_edit_task_parent_description_documents_clear_sentinel(self) -> None:
         tool = next(
-            t for t in _server_mod.mcp._tool_manager._tools.values() if t.name == "edit_task"
+            t
+            for t in _server_mod.mcp._tool_manager._tools.values()
+            if t.name == "edit_task"
         )
         parent_description = tool.parameters["properties"]["parent"].get(
             "description", ""
@@ -1072,7 +1085,9 @@ def app_ctx_with_mixed_archived_1450(tmp_path: Path) -> AppContext:
     kanban_dir = _make_board(tmp_path)
     engine = KanbanEngine(kanban_dir)
     dup_task = engine.create_task("Duplicate task", status="todo", priority="important")
-    comp_task = engine.create_task("Completed task", status="todo", priority="important")
+    comp_task = engine.create_task(
+        "Completed task", status="todo", priority="important"
+    )
     ref_task = engine.create_task("Reference task", status="todo", priority="important")
     av = engine.agent_view()
     av.move_task(
@@ -1528,18 +1543,24 @@ class TestMergedFrom1197:
         assert "def _agent_view_for" not in source
 
     def test_server_1170_make_engine_mock_uses_noncallable_agent_view(self) -> None:
-        source = (Path(__file__).parent / "test_server_1170.py").read_text(encoding="utf-8")
+        source = (Path(__file__).parent / "test_server_1170.py").read_text(
+            encoding="utf-8"
+        )
         assert "NonCallableMagicMock" in source
 
     def test_lifecycle_tools_mock_av_fixture_uses_noncallable_agent_view(self) -> None:
         source = (
-            Path(__file__).parent
-            / ".."
-            / "serve"
-            / "mcp-kanban"
-            / "tests"
-            / "test_mcp_lifecycle_tools.py"
-        ).resolve().read_text(encoding="utf-8")
+            (
+                Path(__file__).parent
+                / ".."
+                / "serve"
+                / "mcp-kanban"
+                / "tests"
+                / "test_mcp_lifecycle_tools.py"
+            )
+            .resolve()
+            .read_text(encoding="utf-8")
+        )
         assert "NonCallableMagicMock" in source
 
 
@@ -1561,7 +1582,9 @@ class TestMergedFrom1360:
         mock_view.start_work.side_effect = NotImplementedError
         ctx = MagicMock()
         ctx.request_context.lifespan_context.engine = MagicMock()
-        ctx.request_context.lifespan_context.engine.agent_view = MagicMock(return_value=mock_view)
+        ctx.request_context.lifespan_context.engine.agent_view = MagicMock(
+            return_value=mock_view
+        )
         with pytest.raises(NotImplementedError):
             await start_work(ctx, id="42")
 
@@ -1571,7 +1594,9 @@ class TestMergedFrom1360:
         mock_view.end_work.side_effect = NotImplementedError
         ctx = MagicMock()
         ctx.request_context.lifespan_context.engine = MagicMock()
-        ctx.request_context.lifespan_context.engine.agent_view = MagicMock(return_value=mock_view)
+        ctx.request_context.lifespan_context.engine.agent_view = MagicMock(
+            return_value=mock_view
+        )
         with pytest.raises(NotImplementedError):
             await end_work(ctx, id="42", outcome="success")
 
@@ -1594,12 +1619,16 @@ class TestMergedFrom1360:
 
 class TestMergedFrom1450:
     @pytest.mark.asyncio
-    async def test_empty_ids_returns_empty_task_list(self, app_ctx_1450: AppContext) -> None:
+    async def test_empty_ids_returns_empty_task_list(
+        self, app_ctx_1450: AppContext
+    ) -> None:
         result = await list_tasks(_make_ctx(app_ctx_1450), ids=[])
         assert result.tasks == []
 
     @pytest.mark.asyncio
-    async def test_empty_ids_returns_empty_for_multi_task_board(self, tmp_path: Path) -> None:
+    async def test_empty_ids_returns_empty_for_multi_task_board(
+        self, tmp_path: Path
+    ) -> None:
         kanban_dir = _make_board(tmp_path)
         engine = KanbanEngine(kanban_dir)
         engine.create_task("Alpha task", status="todo", priority="important")
@@ -1610,7 +1639,9 @@ class TestMergedFrom1450:
         assert result.tasks == []
 
     @pytest.mark.asyncio
-    async def test_empty_ids_returns_missing_ids_is_none(self, app_ctx_1450: AppContext) -> None:
+    async def test_empty_ids_returns_missing_ids_is_none(
+        self, app_ctx_1450: AppContext
+    ) -> None:
         result = await list_tasks(_make_ctx(app_ctx_1450), ids=[])
         assert result.missing_ids is None
 
@@ -1618,14 +1649,18 @@ class TestMergedFrom1450:
     async def test_archival_reason_without_status_finds_archived_task(
         self, app_ctx_with_archived_duplicate_1450: AppContext
     ) -> None:
-        result = await list_tasks(_make_ctx(app_ctx_with_archived_duplicate_1450), archival_reason="duplicate")
+        result = await list_tasks(
+            _make_ctx(app_ctx_with_archived_duplicate_1450), archival_reason="duplicate"
+        )
         assert len(result.tasks) >= 1
 
     @pytest.mark.asyncio
     async def test_archival_reason_filter_all_returned_tasks_match(
         self, app_ctx_with_archived_duplicate_1450: AppContext
     ) -> None:
-        result = await list_tasks(_make_ctx(app_ctx_with_archived_duplicate_1450), archival_reason="duplicate")
+        result = await list_tasks(
+            _make_ctx(app_ctx_with_archived_duplicate_1450), archival_reason="duplicate"
+        )
         assert result.tasks
         assert all(t.archival_reason == "duplicate" for t in result.tasks)
 
@@ -1633,7 +1668,9 @@ class TestMergedFrom1450:
     async def test_archival_reason_duplicate_excludes_completed_reason(
         self, app_ctx_with_mixed_archived_1450: AppContext
     ) -> None:
-        result = await list_tasks(_make_ctx(app_ctx_with_mixed_archived_1450), archival_reason="duplicate")
+        result = await list_tasks(
+            _make_ctx(app_ctx_with_mixed_archived_1450), archival_reason="duplicate"
+        )
         assert len(result.tasks) == 1
         assert result.tasks[0].archival_reason == "duplicate"
 

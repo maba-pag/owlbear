@@ -65,9 +65,7 @@ def _make_enriched_result(  # noqa: PLR0913
     r.entity_type = "concept"
     r.retrieval_path = retrieval_path
     r.entities = (
-        entities
-        if entities is not None
-        else [{"name": "Python", "type": "technology"}]
+        entities if entities is not None else [{"name": "Python", "type": "technology"}]
     )
     r.related_sources = (
         related_sources
@@ -113,7 +111,9 @@ class TestFromAC_SearchProvenanceFields:
     async def test_retrieval_path_key_present_in_result(self) -> None:
         """search_knowledge result dict includes 'retrieval_path' key."""
         qs = AsyncMock()
-        qs.query = AsyncMock(return_value=[_make_enriched_result(retrieval_path="vector")])
+        qs.query = AsyncMock(
+            return_value=[_make_enriched_result(retrieval_path="vector")]
+        )
         ctx = _make_ctx(qs)
 
         result = await search_knowledge(ctx, query="test")
@@ -125,7 +125,9 @@ class TestFromAC_SearchProvenanceFields:
     async def test_retrieval_path_value_is_vector(self) -> None:
         """retrieval_path serialized as 'vector' when mock result has retrieval_path='vector'."""
         qs = AsyncMock()
-        qs.query = AsyncMock(return_value=[_make_enriched_result(retrieval_path="vector")])
+        qs.query = AsyncMock(
+            return_value=[_make_enriched_result(retrieval_path="vector")]
+        )
         ctx = _make_ctx(qs)
 
         result = await search_knowledge(ctx, query="test")
@@ -136,7 +138,9 @@ class TestFromAC_SearchProvenanceFields:
     async def test_retrieval_path_value_is_graph(self) -> None:
         """retrieval_path serialized as 'graph' when mock result has retrieval_path='graph'."""
         qs = AsyncMock()
-        qs.query = AsyncMock(return_value=[_make_enriched_result(retrieval_path="graph")])
+        qs.query = AsyncMock(
+            return_value=[_make_enriched_result(retrieval_path="graph")]
+        )
         ctx = _make_ctx(qs)
 
         result = await search_knowledge(ctx, query="test")
@@ -166,7 +170,9 @@ class TestFromAC_SearchProvenanceFields:
         qs = AsyncMock()
         qs.query = AsyncMock(
             return_value=[
-                _make_enriched_result(entities=[{"name": "Python", "type": "technology"}])
+                _make_enriched_result(
+                    entities=[{"name": "Python", "type": "technology"}]
+                )
             ]
         )
         ctx = _make_ctx(qs)
@@ -212,7 +218,11 @@ class TestFromAC_SearchProvenanceFields:
             return_value=[
                 _make_enriched_result(
                     related_sources=[
-                        {"name": "other-doc", "relationship": "cites", "entity": "Python"}
+                        {
+                            "name": "other-doc",
+                            "relationship": "cites",
+                            "entity": "Python",
+                        }
                     ]
                 )
             ]
@@ -232,7 +242,11 @@ class TestFromAC_SearchProvenanceFields:
             return_value=[
                 _make_enriched_result(
                     related_sources=[
-                        {"name": "doc-b", "relationship": "references", "entity": "API"},
+                        {
+                            "name": "doc-b",
+                            "relationship": "references",
+                            "entity": "API",
+                        },
                         {"name": "doc-c", "relationship": "cites", "entity": "REST"},
                     ]
                 )
@@ -314,7 +328,9 @@ class TestFromAC_SearchProvenanceUnenrichedState:
         """'source' key is present in result dict even when entities/related_sources are empty."""
         qs = AsyncMock()
         qs.query = AsyncMock(
-            return_value=[_make_unenriched_result(source=_make_source("KB", "https://kb.local"))]
+            return_value=[
+                _make_unenriched_result(source=_make_source("KB", "https://kb.local"))
+            ]
         )
         ctx = _make_ctx(qs)
 
@@ -332,7 +348,12 @@ class TestFromAC_SearchProvenanceUnenrichedState:
 class TestFromAC_SearchProvenanceDeterminism:
     """All provenance keys present in every result dict regardless of enrichment state."""
 
-    _PROVENANCE_KEYS: ClassVar[set[str]] = {"retrieval_path", "entities", "related_sources", "source"}
+    _PROVENANCE_KEYS: ClassVar[set[str]] = {
+        "retrieval_path",
+        "entities",
+        "related_sources",
+        "source",
+    }
 
     # ------------------------------------------------------------------
     # AC: all provenance keys present when enriched
@@ -348,7 +369,9 @@ class TestFromAC_SearchProvenanceDeterminism:
         result = await search_knowledge(ctx, query="test")
 
         for key in self._PROVENANCE_KEYS:
-            assert key in result[0], f"missing provenance key '{key}' in enriched result"
+            assert key in result[0], (
+                f"missing provenance key '{key}' in enriched result"
+            )
 
     # ------------------------------------------------------------------
     # AC: all provenance keys present when unenriched
@@ -364,7 +387,9 @@ class TestFromAC_SearchProvenanceDeterminism:
         result = await search_knowledge(ctx, query="test")
 
         for key in self._PROVENANCE_KEYS:
-            assert key in result[0], f"missing provenance key '{key}' in unenriched result"
+            assert key in result[0], (
+                f"missing provenance key '{key}' in unenriched result"
+            )
 
     @pytest.mark.asyncio
     async def test_entities_empty_not_absent_in_unenriched_result(self) -> None:
@@ -398,7 +423,9 @@ class TestFromAC_SearchProvenanceDeterminism:
         qs = AsyncMock()
         qs.query = AsyncMock(
             return_value=[
-                _make_enriched_result(source=_make_source("KnowledgeBase", "https://kb.example.com"))
+                _make_enriched_result(
+                    source=_make_source("KnowledgeBase", "https://kb.example.com")
+                )
             ]
         )
         ctx = _make_ctx(qs)
@@ -415,7 +442,9 @@ class TestFromAC_SearchProvenanceDeterminism:
         """source['name'] in result dict is a str."""
         qs = AsyncMock()
         qs.query = AsyncMock(
-            return_value=[_make_enriched_result(source=_make_source("MySource", "https://x.com"))]
+            return_value=[
+                _make_enriched_result(source=_make_source("MySource", "https://x.com"))
+            ]
         )
         ctx = _make_ctx(qs)
 
@@ -428,7 +457,9 @@ class TestFromAC_SearchProvenanceDeterminism:
         """source['url'] in result dict is a str."""
         qs = AsyncMock()
         qs.query = AsyncMock(
-            return_value=[_make_enriched_result(source=_make_source("S", "https://s.com"))]
+            return_value=[
+                _make_enriched_result(source=_make_source("S", "https://s.com"))
+            ]
         )
         ctx = _make_ctx(qs)
 
@@ -441,7 +472,11 @@ class TestFromAC_SearchProvenanceDeterminism:
         """source['name'] in result dict matches the name from the mock result object."""
         qs = AsyncMock()
         qs.query = AsyncMock(
-            return_value=[_make_enriched_result(source=_make_source("Exact-Name", "https://x.com"))]
+            return_value=[
+                _make_enriched_result(
+                    source=_make_source("Exact-Name", "https://x.com")
+                )
+            ]
         )
         ctx = _make_ctx(qs)
 
@@ -455,7 +490,9 @@ class TestFromAC_SearchProvenanceDeterminism:
         qs = AsyncMock()
         qs.query = AsyncMock(
             return_value=[
-                _make_enriched_result(source=_make_source("S", "https://exact-url.example.com"))
+                _make_enriched_result(
+                    source=_make_source("S", "https://exact-url.example.com")
+                )
             ]
         )
         ctx = _make_ctx(qs)
@@ -492,7 +529,9 @@ class TestFromAC_MCPBoundarySourceProof:
     @pytest.mark.asyncio
     async def test_source_url_serialized_from_config_dict_not_bare_attr(self) -> None:
         """search_knowledge serializes URL from config['url'] for a real KnowledgeSource."""
-        real_ks = _real_ks_source(name="RealSource", url="https://config-dict.example.com/")
+        real_ks = _real_ks_source(
+            name="RealSource", url="https://config-dict.example.com/"
+        )
 
         qs = AsyncMock()
         qs.query = AsyncMock(return_value=[_make_enriched_result(source=real_ks)])

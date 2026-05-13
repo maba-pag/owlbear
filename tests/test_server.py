@@ -116,7 +116,6 @@ def _make_ctx_from_engine(engine: MagicMock) -> MagicMock:
     return ctx
 
 
-
 # ---------------------------------------------------------------------------
 # TestFromAC_AppContextHelpers — line 89
 # ---------------------------------------------------------------------------
@@ -1628,7 +1627,9 @@ def mock_lifespan_deps_1358() -> None:
         patch("owlbear_mcp_knowledge.server.BgeM3EmbeddingProvider"),
         patch("owlbear_mcp_knowledge.server.KnowledgeQueryService"),
         patch("owlbear_mcp_knowledge.server.GraphAugmentedRetriever"),
-        patch("owlbear_mcp_knowledge.server.make_evaluate_fn", return_value=AsyncMock()),
+        patch(
+            "owlbear_mcp_knowledge.server.make_evaluate_fn", return_value=AsyncMock()
+        ),
     ):
         yield
 
@@ -1652,7 +1653,10 @@ class TestFromAC_ApiKeyBranchRemoved:
         """
         monkeypatch.setenv("OWLBEAR_LLM_API_KEY", "sk-should-be-ignored")
         mock_llm_cls = MagicMock(name="LLMExtractorCls", return_value=MagicMock())
-        with patch.dict(sys.modules, {"owlbear_knowledge.llm_extractor": _make_llm_mod(mock_llm_cls)}):
+        with patch.dict(
+            sys.modules,
+            {"owlbear_knowledge.llm_extractor": _make_llm_mod(mock_llm_cls)},
+        ):
             async with app_lifespan(MagicMock()) as ctx:
                 assert ctx.structured_extractor is None  # noqa: S101
 
@@ -1667,7 +1671,10 @@ class TestFromAC_ApiKeyBranchRemoved:
         monkeypatch.delenv("OWLBEAR_LLM_API_KEY", raising=False)
         monkeypatch.setenv("OPENAI_API_KEY", "sk-openai-should-be-ignored")
         mock_llm_cls = MagicMock(name="LLMExtractorCls", return_value=MagicMock())
-        with patch.dict(sys.modules, {"owlbear_knowledge.llm_extractor": _make_llm_mod(mock_llm_cls)}):
+        with patch.dict(
+            sys.modules,
+            {"owlbear_knowledge.llm_extractor": _make_llm_mod(mock_llm_cls)},
+        ):
             async with app_lifespan(MagicMock()) as ctx:
                 assert ctx.structured_extractor is None  # noqa: S101
 
@@ -1682,7 +1689,10 @@ class TestFromAC_ApiKeyBranchRemoved:
         monkeypatch.setenv("OWLBEAR_LLM_API_KEY", "sk-primary")
         monkeypatch.setenv("OPENAI_API_KEY", "sk-fallback")
         mock_llm_cls = MagicMock(name="LLMExtractorCls")
-        with patch.dict(sys.modules, {"owlbear_knowledge.llm_extractor": _make_llm_mod(mock_llm_cls)}):
+        with patch.dict(
+            sys.modules,
+            {"owlbear_knowledge.llm_extractor": _make_llm_mod(mock_llm_cls)},
+        ):
             async with app_lifespan(MagicMock()):
                 pass
         mock_llm_cls.assert_not_called()
@@ -1797,7 +1807,10 @@ class TestFromAC_NoRegression:
         monkeypatch.setenv("OWLBEAR_LLM_API_KEY", "sk-test-key")
         mock_llm_cls = MagicMock(name="LLMExtractorCls", return_value=MagicMock())
         with (
-            patch.dict(sys.modules, {"owlbear_knowledge.llm_extractor": _make_llm_mod(mock_llm_cls)}),
+            patch.dict(
+                sys.modules,
+                {"owlbear_knowledge.llm_extractor": _make_llm_mod(mock_llm_cls)},
+            ),
             patch("owlbear_mcp_knowledge.server.EntityExtractor") as mock_ee,
         ):
             async with app_lifespan(MagicMock()):
@@ -1818,7 +1831,10 @@ class TestFromAC_NoRegression:
         monkeypatch.setenv("OWLBEAR_LLM_API_KEY", "sk-test-key")
         mock_llm_cls = MagicMock(name="LLMExtractorCls", return_value=MagicMock())
         with (
-            patch.dict(sys.modules, {"owlbear_knowledge.llm_extractor": _make_llm_mod(mock_llm_cls)}),
+            patch.dict(
+                sys.modules,
+                {"owlbear_knowledge.llm_extractor": _make_llm_mod(mock_llm_cls)},
+            ),
             patch("owlbear_mcp_knowledge.server.IntraDocGraphBuilder") as mock_idb,
         ):
             async with app_lifespan(MagicMock()):

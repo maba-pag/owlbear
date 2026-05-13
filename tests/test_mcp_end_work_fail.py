@@ -714,7 +714,9 @@ class TestFromAC_BlockMoveToMatrix:
         engine implementation and the full lifecycle matrix.
         """
         bullet = self._readme_block_bullet()
-        assert bullet, "- `block` bullet not found in README.md end_work Outcomes section."
+        assert bullet, (
+            "- `block` bullet not found in README.md end_work Outcomes section."
+        )
         assert "move_to" in bullet, (
             f"README 'block' outcome bullet does not mention 'move_to'.\n"
             f"Current bullet: {bullet!r}\n"
@@ -765,9 +767,7 @@ class TestFromAC_SkillDocReleaseRowExactWording:
         """
         row = self._skill_release_row()
         assert row, "| `release` | row not found in SKILL.md end_work Outcome table."
-        expected = (
-            "Release claim, no status change (note appended if provided; no-op when unclaimed)"
-        )
+        expected = "Release claim, no status change (note appended if provided; no-op when unclaimed)"
         assert expected in row, (
             f"SKILL.md 'release' row behavior text does not match the established contract.\n"
             f"Current row: {row!r}\n"

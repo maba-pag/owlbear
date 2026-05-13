@@ -665,6 +665,7 @@ from owlbear_mcp_knowledge.server import app_lifespan, refresh_source
 # Helpers (mirrors test_browser_fetcher_wiring_1325 for self-contained clarity)
 # ---------------------------------------------------------------------------
 
+
 def _make_source_1326(
     *,
     source_type: SourceType = SourceType.AUTHENTICATED_WEB,
@@ -775,7 +776,9 @@ class TestFromAC_InterDocBuilderNoneWiring:
         mcp_ctx = MagicMock()
         mcp_ctx.request_context.lifespan_context = app_ctx
 
-        with patch("owlbear_mcp_knowledge.server.RefreshOrchestrator", orchestrator_cls):
+        with patch(
+            "owlbear_mcp_knowledge.server.RefreshOrchestrator", orchestrator_cls
+        ):
             await refresh_source(mcp_ctx, source_id=source.id)
 
         orchestrator_cls.assert_called_once()

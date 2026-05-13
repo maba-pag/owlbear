@@ -269,7 +269,9 @@ class TestFromAC_RouteExclusionGuardrail:
             "/api/tasks/123/end-work",
         ],
     )
-    def test_excluded_lifecycle_post_routes_not_available(self, client, path: str) -> None:
+    def test_excluded_lifecycle_post_routes_not_available(
+        self, client, path: str
+    ) -> None:
         """POST lifecycle routes must return 404/405 to enforce product boundary."""
         response = client.post(path)
         assert response.status_code in (404, 405), (

@@ -258,7 +258,10 @@ class TestFromAC_TopologyConstant:
 
     def test_archival_reasons_contains_canonical_set(self) -> None:
         mod = importlib.import_module("owlbear_kanban.topology")
-        assert frozenset(mod.PRODUCT_TOPOLOGY.archival_reasons) == _EXPECTED_ARCHIVAL_REASONS
+        assert (
+            frozenset(mod.PRODUCT_TOPOLOGY.archival_reasons)
+            == _EXPECTED_ARCHIVAL_REASONS
+        )
 
     def test_activity_log_is_true(self) -> None:
         mod = importlib.import_module("owlbear_kanban.topology")
@@ -306,9 +309,7 @@ class TestFromAC_EngineNoConfig:
         engine = KanbanEngine(board)
         assert engine is not None
 
-    def test_board_config_statuses_match_product_constant(
-        self, tmp_path: Path
-    ) -> None:
+    def test_board_config_statuses_match_product_constant(self, tmp_path: Path) -> None:
         """board_config().statuses must equal product-topology statuses."""
         board = _make_no_config_board(tmp_path)
         engine = KanbanEngine(board)
@@ -421,7 +422,9 @@ class TestFromAC_OverridesIgnored:
         # Currently returns "todo" → assertion FAILS (RED)
         assert config.pipeline.entry_status == _EXPECTED_ENTRY_STATUS
 
-    def test_terminal_status_override_in_config_is_ignored(self, tmp_path: Path) -> None:
+    def test_terminal_status_override_in_config_is_ignored(
+        self, tmp_path: Path
+    ) -> None:
         """pipeline.terminal_status must be product-constant despite config override."""
         board = _make_board_with_override(
             tmp_path,
@@ -464,7 +467,12 @@ class TestFromAC_OverridesIgnored:
         """agents.agent_map must be product-constant despite config override."""
         custom_map = dict.fromkeys(_EXPECTED_STATUSES, "custom-agent")
         board = _make_board_with_override(
-            tmp_path, agents={"agent_map": custom_map, "agent_types": {}, "agent_compatibility": {}}
+            tmp_path,
+            agents={
+                "agent_map": custom_map,
+                "agent_types": {},
+                "agent_compatibility": {},
+            },
         )
         engine = KanbanEngine(board)
         config = engine.board_config()
@@ -558,7 +566,10 @@ class TestFromAC_OverridesIgnored:
             agents={
                 "agent_map": dict(_EXPECTED_AGENT_MAP),
                 "agent_types": {},
-                "agent_compatibility": {"builder": ["reviewer"], "reviewer": ["builder"]},
+                "agent_compatibility": {
+                    "builder": ["reviewer"],
+                    "reviewer": ["builder"],
+                },
             },
         )
         engine = KanbanEngine(board)
@@ -741,9 +752,7 @@ class TestFromAC_LoadSaveAndDispatch:
         config = load_config(board)
         assert config is not None
 
-    def test_load_config_absent_returns_product_statuses(
-        self, tmp_path: Path
-    ) -> None:
+    def test_load_config_absent_returns_product_statuses(self, tmp_path: Path) -> None:
         """load_config on absent config.yml returns product-topology statuses."""
         board = _make_no_config_board(tmp_path)
         config = load_config(board)
@@ -763,9 +772,7 @@ class TestFromAC_LoadSaveAndDispatch:
         config = load_config(board)
         assert config.next_id == 1
 
-    def test_load_config_with_next_id_file_reads_next_id(
-        self, tmp_path: Path
-    ) -> None:
+    def test_load_config_with_next_id_file_reads_next_id(self, tmp_path: Path) -> None:
         """load_config reads next_id from config.yml when file is present."""
         board = _make_no_config_board(tmp_path)
         (board / "config.yml").write_text("next_id: 99\n", encoding="utf-8")
@@ -803,9 +810,7 @@ class TestFromAC_LoadSaveAndDispatch:
         assert "agents" not in raw
         assert "agent_map" not in raw
 
-    def test_save_config_output_contains_only_next_id_key(
-        self, tmp_path: Path
-    ) -> None:
+    def test_save_config_output_contains_only_next_id_key(self, tmp_path: Path) -> None:
         """After save_config, config.yml must contain next_id and no topology fields."""
         board = tmp_path / "board"
         board.mkdir()
@@ -1001,7 +1006,9 @@ class TestFromAC_LoadSaveAndDispatch:
             "---\n"
             "Body.\n"
         )
-        (board / "tasks" / "1-tag-round-trip.md").write_text(task_content, encoding="utf-8")
+        (board / "tasks" / "1-tag-round-trip.md").write_text(
+            task_content, encoding="utf-8"
+        )
         engine = KanbanEngine(board)
         # Currently engine init raises FileNotFoundError → test FAILS (RED)
         task = engine.show_task("1")
@@ -1030,7 +1037,9 @@ class TestFromAC_LoadSaveAndDispatch:
             "---\n"
             "Body.\n"
         )
-        (board / "tasks" / "1-blocked-round-trip.md").write_text(task_content, encoding="utf-8")
+        (board / "tasks" / "1-blocked-round-trip.md").write_text(
+            task_content, encoding="utf-8"
+        )
         engine = KanbanEngine(board)
         # Currently engine init raises FileNotFoundError → test FAILS (RED)
         task = engine.show_task("1")

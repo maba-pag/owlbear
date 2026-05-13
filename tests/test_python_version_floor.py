@@ -50,11 +50,11 @@ _SYNCED_SOURCES: dict[str, pathlib.Path] = {
 
 # Python 3.13+/3.14+ exclusive feature patterns (broad audit)
 _PY313_PLUS_PATTERNS = [
-    r"\bTypeIs\b",              # PEP 742 — typing.TypeIs (Python 3.13+)
-    r"\btyping\.ReadOnly\b",   # PEP 705 — typing.ReadOnly (Python 3.13+)
-    r"\btyping\.deprecated\b", # PEP 702 — typing.deprecated (Python 3.13+)
+    r"\bTypeIs\b",  # PEP 742 — typing.TypeIs (Python 3.13+)
+    r"\btyping\.ReadOnly\b",  # PEP 705 — typing.ReadOnly (Python 3.13+)
+    r"\btyping\.deprecated\b",  # PEP 702 — typing.deprecated (Python 3.13+)
     r"\bwarnings\.deprecated\b",  # PEP 702 — warnings.deprecated (Python 3.13+)
-    r"\bTypeForm\b",            # PEP 747 — typing.TypeForm (Python 3.14+)
+    r"\bTypeForm\b",  # PEP 747 — typing.TypeForm (Python 3.14+)
 ]
 
 # Prerequisite doc files that must state the Python 3.12 floor (AC4)
@@ -62,7 +62,8 @@ _PREREQUISITE_DOCS: dict[str, pathlib.Path] = {
     "README.md": _ROOT / "README.md",
     "README-consumer.md": _ROOT / "README-consumer.md",
     "setup/setup-guide.md": _ROOT / "setup/setup-guide.md",
-    "owlbear-system.instructions.md": _ROOT / "share/instructions/owlbear-system.instructions.md",
+    "owlbear-system.instructions.md": _ROOT
+    / "share/instructions/owlbear-system.instructions.md",
 }
 
 _UV_LOCK = _ROOT / "uv.lock"
@@ -91,7 +92,9 @@ class TestFromAC_AllPackagesRequiresPythonFloor:
         for pkg, pyproject in _SYNCED_PACKAGES.items():
             req = _read_requires_python(pyproject)
             if req != ">=3.12":
-                failures.append(f"  serve/{pkg}/pyproject.toml: requires-python={req!r}")
+                failures.append(
+                    f"  serve/{pkg}/pyproject.toml: requires-python={req!r}"
+                )
         assert not failures, (
             "These synced packages have wrong requires-python (expected '>=3.12'):\n"
             + "\n".join(failures)
@@ -102,7 +105,9 @@ class TestFromAC_AllPackagesRequiresPythonFloor:
         for pkg, pyproject in _SYNCED_PACKAGES.items():
             req = _read_requires_python(pyproject)
             if re.search(r"3\.14", req):
-                failures.append(f"  serve/{pkg}/pyproject.toml: requires-python={req!r}")
+                failures.append(
+                    f"  serve/{pkg}/pyproject.toml: requires-python={req!r}"
+                )
         assert not failures, (
             "These synced packages pin to Python 3.14 without documented justification:\n"
             + "\n".join(failures)
@@ -147,10 +152,7 @@ class TestFromAC_RenovatePythonPolicy:
     def test_renovate_has_python_package_rule(self) -> None:
         data = json.loads(_RENOVATE_JSON.read_text())
         rules = data.get("packageRules", [])
-        python_rules = [
-            r for r in rules
-            if "python" in r.get("matchPackageNames", [])
-        ]
+        python_rules = [r for r in rules if "python" in r.get("matchPackageNames", [])]
         assert python_rules, (
             "No Renovate package rule targeting the 'python' package found in "
             ".github/renovate.json — AC5 requires a rule that suppresses automated "
@@ -160,10 +162,7 @@ class TestFromAC_RenovatePythonPolicy:
     def test_renovate_python_rule_has_allowed_versions(self) -> None:
         data = json.loads(_RENOVATE_JSON.read_text())
         rules = data.get("packageRules", [])
-        python_rules = [
-            r for r in rules
-            if "python" in r.get("matchPackageNames", [])
-        ]
+        python_rules = [r for r in rules if "python" in r.get("matchPackageNames", [])]
         has_allowed_versions = any("allowedVersions" in r for r in python_rules)
         assert has_allowed_versions, (
             "No Renovate python rule with 'allowedVersions' found — "
@@ -174,10 +173,7 @@ class TestFromAC_RenovatePythonPolicy:
     def test_renovate_python_rule_targets_pep621_or_uv_manager(self) -> None:
         data = json.loads(_RENOVATE_JSON.read_text())
         rules = data.get("packageRules", [])
-        python_rules = [
-            r for r in rules
-            if "python" in r.get("matchPackageNames", [])
-        ]
+        python_rules = [r for r in rules if "python" in r.get("matchPackageNames", [])]
         relevant_managers = {"pep621", "uv"}
         has_relevant_manager = any(
             bool(set(r.get("matchManagers", [])) & relevant_managers)
@@ -256,7 +252,9 @@ class TestFromAC_PrerequisiteDocsAlignment:
         )
 
     def test_system_instructions_states_python_3_12_floor(self) -> None:
-        content = (_ROOT / "share/instructions/owlbear-system.instructions.md").read_text()
+        content = (
+            _ROOT / "share/instructions/owlbear-system.instructions.md"
+        ).read_text()
         assert re.search(r"Python 3\.12", content), (
             "share/instructions/owlbear-system.instructions.md does not mention "
             "'Python 3.12' — AC4 requires this synced prerequisite reference to be "

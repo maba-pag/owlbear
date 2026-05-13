@@ -403,7 +403,6 @@ class TestFromAC_ResolveDecisions:
             ("approved", "Looks good."),
             ("needs-info", None),
             ("rejected", "Not aligned with scope."),
-
         ],
     )
     def test_resolve_accepts_valid_responses_and_optional_notes(
@@ -1284,65 +1283,96 @@ class TestFromAC_ApprovedResolution:
     """Coverage promoted from #1384 for approved resolution lifecycle."""
 
     def test_approve_moves_dr_from_pending_to_resolved(
-        self, client_pattern_b: TestClient, engine_pattern_b: KanbanEngine, board_dir_pattern_b: Path
+        self,
+        client_pattern_b: TestClient,
+        engine_pattern_b: KanbanEngine,
+        board_dir_pattern_b: Path,
     ) -> None:
         task_id = _create_blocked_task_pattern_b(engine_pattern_b, "Approve move task")
         stem = f"{task_id}-scope-decision"
-        pending_path = _write_pending_dr_pattern_b(board_dir_pattern_b, stem=stem, task_id=task_id)
+        pending_path = _write_pending_dr_pattern_b(
+            board_dir_pattern_b, stem=stem, task_id=task_id
+        )
 
-        client_pattern_b.post(f"/api/decisions/{stem}/resolve", json={"response": "approved"})
+        client_pattern_b.post(
+            f"/api/decisions/{stem}/resolve", json={"response": "approved"}
+        )
 
         assert not pending_path.exists(), (
             "DR file must be removed from pending/ after approval"
         )
 
     def test_approve_places_dr_in_resolved(
-        self, client_pattern_b: TestClient, engine_pattern_b: KanbanEngine, board_dir_pattern_b: Path
+        self,
+        client_pattern_b: TestClient,
+        engine_pattern_b: KanbanEngine,
+        board_dir_pattern_b: Path,
     ) -> None:
-        task_id = _create_blocked_task_pattern_b(engine_pattern_b, "Approve to resolved task")
+        task_id = _create_blocked_task_pattern_b(
+            engine_pattern_b, "Approve to resolved task"
+        )
         stem = f"{task_id}-scope-resolved"
         _write_pending_dr_pattern_b(board_dir_pattern_b, stem=stem, task_id=task_id)
         resolved_path = board_dir_pattern_b / "decisions" / "resolved" / f"{stem}.md"
 
-        client_pattern_b.post(f"/api/decisions/{stem}/resolve", json={"response": "approved"})
-
-        assert resolved_path.exists(), (
-            "DR file must appear in resolved/ after approval"
+        client_pattern_b.post(
+            f"/api/decisions/{stem}/resolve", json={"response": "approved"}
         )
 
+        assert resolved_path.exists(), "DR file must appear in resolved/ after approval"
+
     def test_approve_unblocks_the_associated_task(
-        self, client_pattern_b: TestClient, engine_pattern_b: KanbanEngine, board_dir_pattern_b: Path
+        self,
+        client_pattern_b: TestClient,
+        engine_pattern_b: KanbanEngine,
+        board_dir_pattern_b: Path,
     ) -> None:
-        task_id = _create_blocked_task_pattern_b(engine_pattern_b, "Approve unblock task")
+        task_id = _create_blocked_task_pattern_b(
+            engine_pattern_b, "Approve unblock task"
+        )
         stem = f"{task_id}-scope-unblock"
         _write_pending_dr_pattern_b(board_dir_pattern_b, stem=stem, task_id=task_id)
         assert _is_task_blocked_pattern_b(engine_pattern_b, task_id)
 
-        client_pattern_b.post(f"/api/decisions/{stem}/resolve", json={"response": "approved"})
+        client_pattern_b.post(
+            f"/api/decisions/{stem}/resolve", json={"response": "approved"}
+        )
 
         assert not _is_task_blocked_pattern_b(engine_pattern_b, task_id), (
             "Task must be unblocked after approval"
         )
 
     def test_approve_appends_canonical_summary_to_task_body(
-        self, client_pattern_b: TestClient, engine_pattern_b: KanbanEngine, board_dir_pattern_b: Path
+        self,
+        client_pattern_b: TestClient,
+        engine_pattern_b: KanbanEngine,
+        board_dir_pattern_b: Path,
     ) -> None:
-        task_id = _create_blocked_task_pattern_b(engine_pattern_b, "Approve summary task")
+        task_id = _create_blocked_task_pattern_b(
+            engine_pattern_b, "Approve summary task"
+        )
         stem = f"{task_id}-scope-summary"
         _write_pending_dr_pattern_b(
             board_dir_pattern_b, stem=stem, task_id=task_id, body="Summary body text."
         )
 
-        client_pattern_b.post(f"/api/decisions/{stem}/resolve", json={"response": "approved"})
+        client_pattern_b.post(
+            f"/api/decisions/{stem}/resolve", json={"response": "approved"}
+        )
 
         body = _read_task_body_pattern_b(engine_pattern_b, task_id)
         assert "## Decision Request" in body
         assert "approved" in body
 
     def test_approve_response_body_shape(
-        self, client_pattern_b: TestClient, engine_pattern_b: KanbanEngine, board_dir_pattern_b: Path
+        self,
+        client_pattern_b: TestClient,
+        engine_pattern_b: KanbanEngine,
+        board_dir_pattern_b: Path,
     ) -> None:
-        task_id = _create_blocked_task_pattern_b(engine_pattern_b, "Approve response shape task")
+        task_id = _create_blocked_task_pattern_b(
+            engine_pattern_b, "Approve response shape task"
+        )
         stem = f"{task_id}-approve-shape"
         _write_pending_dr_pattern_b(board_dir_pattern_b, stem=stem, task_id=task_id)
 
@@ -1355,15 +1385,22 @@ class TestFromAC_ApprovedResolution:
         assert data == {"id": stem, "response": "approved"}
 
     def test_approve_summary_includes_source_line(
-        self, client_pattern_b: TestClient, engine_pattern_b: KanbanEngine, board_dir_pattern_b: Path
+        self,
+        client_pattern_b: TestClient,
+        engine_pattern_b: KanbanEngine,
+        board_dir_pattern_b: Path,
     ) -> None:
-        task_id = _create_blocked_task_pattern_b(engine_pattern_b, "Approve source line task")
+        task_id = _create_blocked_task_pattern_b(
+            engine_pattern_b, "Approve source line task"
+        )
         stem = f"{task_id}-approve-source"
         _write_pending_dr_pattern_b(
             board_dir_pattern_b, stem=stem, task_id=task_id, body="Decide the scope."
         )
 
-        client_pattern_b.post(f"/api/decisions/{stem}/resolve", json={"response": "approved"})
+        client_pattern_b.post(
+            f"/api/decisions/{stem}/resolve", json={"response": "approved"}
+        )
 
         body = _read_task_body_pattern_b(engine_pattern_b, task_id)
         assert "- source:" in body
@@ -1373,62 +1410,95 @@ class TestFromAC_RejectedResolution:
     """Coverage promoted from #1384 for rejected resolution lifecycle."""
 
     def test_reject_moves_dr_from_pending_to_resolved(
-        self, client_pattern_b: TestClient, engine_pattern_b: KanbanEngine, board_dir_pattern_b: Path
+        self,
+        client_pattern_b: TestClient,
+        engine_pattern_b: KanbanEngine,
+        board_dir_pattern_b: Path,
     ) -> None:
         task_id = _create_blocked_task_pattern_b(engine_pattern_b, "Reject move task")
         stem = f"{task_id}-reject-move"
-        pending_path = _write_pending_dr_pattern_b(board_dir_pattern_b, stem=stem, task_id=task_id)
+        pending_path = _write_pending_dr_pattern_b(
+            board_dir_pattern_b, stem=stem, task_id=task_id
+        )
 
-        client_pattern_b.post(f"/api/decisions/{stem}/resolve", json={"response": "rejected"})
+        client_pattern_b.post(
+            f"/api/decisions/{stem}/resolve", json={"response": "rejected"}
+        )
 
         assert not pending_path.exists(), (
             "DR file must be removed from pending/ after rejection"
         )
 
     def test_reject_places_dr_in_resolved(
-        self, client_pattern_b: TestClient, engine_pattern_b: KanbanEngine, board_dir_pattern_b: Path
+        self,
+        client_pattern_b: TestClient,
+        engine_pattern_b: KanbanEngine,
+        board_dir_pattern_b: Path,
     ) -> None:
-        task_id = _create_blocked_task_pattern_b(engine_pattern_b, "Reject to resolved task")
+        task_id = _create_blocked_task_pattern_b(
+            engine_pattern_b, "Reject to resolved task"
+        )
         stem = f"{task_id}-reject-resolved"
         _write_pending_dr_pattern_b(board_dir_pattern_b, stem=stem, task_id=task_id)
         resolved_path = board_dir_pattern_b / "decisions" / "resolved" / f"{stem}.md"
 
-        client_pattern_b.post(f"/api/decisions/{stem}/resolve", json={"response": "rejected"})
+        client_pattern_b.post(
+            f"/api/decisions/{stem}/resolve", json={"response": "rejected"}
+        )
 
         assert resolved_path.exists(), (
             "DR file must appear in resolved/ after rejection"
         )
 
     def test_reject_unblocks_the_associated_task(
-        self, client_pattern_b: TestClient, engine_pattern_b: KanbanEngine, board_dir_pattern_b: Path
+        self,
+        client_pattern_b: TestClient,
+        engine_pattern_b: KanbanEngine,
+        board_dir_pattern_b: Path,
     ) -> None:
-        task_id = _create_blocked_task_pattern_b(engine_pattern_b, "Reject unblock task")
+        task_id = _create_blocked_task_pattern_b(
+            engine_pattern_b, "Reject unblock task"
+        )
         stem = f"{task_id}-reject-unblock"
         _write_pending_dr_pattern_b(board_dir_pattern_b, stem=stem, task_id=task_id)
 
-        client_pattern_b.post(f"/api/decisions/{stem}/resolve", json={"response": "rejected"})
+        client_pattern_b.post(
+            f"/api/decisions/{stem}/resolve", json={"response": "rejected"}
+        )
 
         assert not _is_task_blocked_pattern_b(engine_pattern_b, task_id), (
             "Task must be unblocked after rejection"
         )
 
     def test_reject_appends_canonical_summary_to_task_body(
-        self, client_pattern_b: TestClient, engine_pattern_b: KanbanEngine, board_dir_pattern_b: Path
+        self,
+        client_pattern_b: TestClient,
+        engine_pattern_b: KanbanEngine,
+        board_dir_pattern_b: Path,
     ) -> None:
-        task_id = _create_blocked_task_pattern_b(engine_pattern_b, "Reject summary task")
+        task_id = _create_blocked_task_pattern_b(
+            engine_pattern_b, "Reject summary task"
+        )
         stem = f"{task_id}-reject-summary"
         _write_pending_dr_pattern_b(board_dir_pattern_b, stem=stem, task_id=task_id)
 
-        client_pattern_b.post(f"/api/decisions/{stem}/resolve", json={"response": "rejected"})
+        client_pattern_b.post(
+            f"/api/decisions/{stem}/resolve", json={"response": "rejected"}
+        )
 
         body = _read_task_body_pattern_b(engine_pattern_b, task_id)
         assert "## Decision Request" in body
         assert "rejected" in body
 
     def test_reject_response_body_shape(
-        self, client_pattern_b: TestClient, engine_pattern_b: KanbanEngine, board_dir_pattern_b: Path
+        self,
+        client_pattern_b: TestClient,
+        engine_pattern_b: KanbanEngine,
+        board_dir_pattern_b: Path,
     ) -> None:
-        task_id = _create_blocked_task_pattern_b(engine_pattern_b, "Reject response shape task")
+        task_id = _create_blocked_task_pattern_b(
+            engine_pattern_b, "Reject response shape task"
+        )
         stem = f"{task_id}-reject-shape"
         _write_pending_dr_pattern_b(board_dir_pattern_b, stem=stem, task_id=task_id)
 
@@ -1441,15 +1511,22 @@ class TestFromAC_RejectedResolution:
         assert data == {"id": stem, "response": "rejected"}
 
     def test_reject_summary_includes_source_line(
-        self, client_pattern_b: TestClient, engine_pattern_b: KanbanEngine, board_dir_pattern_b: Path
+        self,
+        client_pattern_b: TestClient,
+        engine_pattern_b: KanbanEngine,
+        board_dir_pattern_b: Path,
     ) -> None:
-        task_id = _create_blocked_task_pattern_b(engine_pattern_b, "Reject source line task")
+        task_id = _create_blocked_task_pattern_b(
+            engine_pattern_b, "Reject source line task"
+        )
         stem = f"{task_id}-reject-source"
         _write_pending_dr_pattern_b(
             board_dir_pattern_b, stem=stem, task_id=task_id, body="Decide the scope."
         )
 
-        client_pattern_b.post(f"/api/decisions/{stem}/resolve", json={"response": "rejected"})
+        client_pattern_b.post(
+            f"/api/decisions/{stem}/resolve", json={"response": "rejected"}
+        )
 
         body = _read_task_body_pattern_b(engine_pattern_b, task_id)
         assert "- source:" in body
@@ -1459,22 +1536,36 @@ class TestFromAC_NeedsInfoResolution:
     """Coverage promoted from #1384 for needs-info lifecycle."""
 
     def test_needs_info_moves_dr_to_resolved(
-        self, client_pattern_b: TestClient, engine_pattern_b: KanbanEngine, board_dir_pattern_b: Path
+        self,
+        client_pattern_b: TestClient,
+        engine_pattern_b: KanbanEngine,
+        board_dir_pattern_b: Path,
     ) -> None:
-        task_id = _create_blocked_task_pattern_b(engine_pattern_b, "Needs-info move task")
+        task_id = _create_blocked_task_pattern_b(
+            engine_pattern_b, "Needs-info move task"
+        )
         stem = f"{task_id}-needs-info-move"
-        pending_path = _write_pending_dr_pattern_b(board_dir_pattern_b, stem=stem, task_id=task_id)
+        pending_path = _write_pending_dr_pattern_b(
+            board_dir_pattern_b, stem=stem, task_id=task_id
+        )
         resolved_path = board_dir_pattern_b / "decisions" / "resolved" / f"{stem}.md"
 
-        client_pattern_b.post(f"/api/decisions/{stem}/resolve", json={"response": "needs-info"})
+        client_pattern_b.post(
+            f"/api/decisions/{stem}/resolve", json={"response": "needs-info"}
+        )
 
         assert not pending_path.exists(), "DR must leave pending/ on needs-info"
         assert resolved_path.exists(), "DR must arrive in resolved/ on needs-info"
 
     def test_needs_info_task_remains_blocked(
-        self, client_pattern_b: TestClient, engine_pattern_b: KanbanEngine, board_dir_pattern_b: Path
+        self,
+        client_pattern_b: TestClient,
+        engine_pattern_b: KanbanEngine,
+        board_dir_pattern_b: Path,
     ) -> None:
-        task_id = _create_blocked_task_pattern_b(engine_pattern_b, "Needs-info blocked task")
+        task_id = _create_blocked_task_pattern_b(
+            engine_pattern_b, "Needs-info blocked task"
+        )
         stem = f"{task_id}-needs-info-blocked"
         _write_pending_dr_pattern_b(board_dir_pattern_b, stem=stem, task_id=task_id)
         resolved_path = board_dir_pattern_b / "decisions" / "resolved" / f"{stem}.md"
@@ -1490,13 +1581,20 @@ class TestFromAC_NeedsInfoResolution:
         )
 
     def test_needs_info_appends_canonical_summary_to_task_body(
-        self, client_pattern_b: TestClient, engine_pattern_b: KanbanEngine, board_dir_pattern_b: Path
+        self,
+        client_pattern_b: TestClient,
+        engine_pattern_b: KanbanEngine,
+        board_dir_pattern_b: Path,
     ) -> None:
-        task_id = _create_blocked_task_pattern_b(engine_pattern_b, "Needs-info summary task")
+        task_id = _create_blocked_task_pattern_b(
+            engine_pattern_b, "Needs-info summary task"
+        )
         stem = f"{task_id}-needs-info-summary"
         _write_pending_dr_pattern_b(board_dir_pattern_b, stem=stem, task_id=task_id)
 
-        client_pattern_b.post(f"/api/decisions/{stem}/resolve", json={"response": "needs-info"})
+        client_pattern_b.post(
+            f"/api/decisions/{stem}/resolve", json={"response": "needs-info"}
+        )
 
         body = _read_task_body_pattern_b(engine_pattern_b, task_id)
         assert "## Decision Request" in body
@@ -1507,9 +1605,14 @@ class TestFromAC_AlreadyResolved:
     """Coverage promoted from #1384 for already-resolved 409 behavior."""
 
     def test_dr_already_in_resolved_returns_409(
-        self, client_pattern_b: TestClient, engine_pattern_b: KanbanEngine, board_dir_pattern_b: Path
+        self,
+        client_pattern_b: TestClient,
+        engine_pattern_b: KanbanEngine,
+        board_dir_pattern_b: Path,
     ) -> None:
-        task_id = _create_blocked_task_pattern_b(engine_pattern_b, "Already resolved task")
+        task_id = _create_blocked_task_pattern_b(
+            engine_pattern_b, "Already resolved task"
+        )
         stem = f"{task_id}-already-resolved"
         _write_resolved_dr_pattern_b(
             board_dir_pattern_b, stem=stem, task_id=task_id, response="approved"
@@ -1522,9 +1625,14 @@ class TestFromAC_AlreadyResolved:
         assert resp.status_code == 409
 
     def test_dr_already_in_resolved_returns_domain_error_envelope(
-        self, client_pattern_b: TestClient, engine_pattern_b: KanbanEngine, board_dir_pattern_b: Path
+        self,
+        client_pattern_b: TestClient,
+        engine_pattern_b: KanbanEngine,
+        board_dir_pattern_b: Path,
     ) -> None:
-        task_id = _create_blocked_task_pattern_b(engine_pattern_b, "Already resolved envelope task")
+        task_id = _create_blocked_task_pattern_b(
+            engine_pattern_b, "Already resolved envelope task"
+        )
         stem = f"{task_id}-already-resolved-envelope"
         _write_resolved_dr_pattern_b(
             board_dir_pattern_b, stem=stem, task_id=task_id, response="rejected"
@@ -1540,9 +1648,14 @@ class TestFromAC_AlreadyResolved:
         assert "message" in body
 
     def test_dr_in_pending_with_non_pending_frontmatter_returns_409(
-        self, client_pattern_b: TestClient, engine_pattern_b: KanbanEngine, board_dir_pattern_b: Path
+        self,
+        client_pattern_b: TestClient,
+        engine_pattern_b: KanbanEngine,
+        board_dir_pattern_b: Path,
     ) -> None:
-        task_id = _create_blocked_task_pattern_b(engine_pattern_b, "In-place already answered task")
+        task_id = _create_blocked_task_pattern_b(
+            engine_pattern_b, "In-place already answered task"
+        )
         stem = f"{task_id}-already-answered"
         _write_pending_dr_pattern_b(
             board_dir_pattern_b, stem=stem, task_id=task_id, response="approved"
@@ -1555,9 +1668,14 @@ class TestFromAC_AlreadyResolved:
         assert resp.status_code == 409
 
     def test_already_resolved_409_uses_domain_envelope(
-        self, client_pattern_b: TestClient, engine_pattern_b: KanbanEngine, board_dir_pattern_b: Path
+        self,
+        client_pattern_b: TestClient,
+        engine_pattern_b: KanbanEngine,
+        board_dir_pattern_b: Path,
     ) -> None:
-        task_id = _create_blocked_task_pattern_b(engine_pattern_b, "In-place envelope check task")
+        task_id = _create_blocked_task_pattern_b(
+            engine_pattern_b, "In-place envelope check task"
+        )
         stem = f"{task_id}-in-place-envelope"
         _write_pending_dr_pattern_b(
             board_dir_pattern_b, stem=stem, task_id=task_id, response="needs-info"
@@ -1577,9 +1695,14 @@ class TestFromAC_DuplicateResponse:
     """Coverage promoted from #1384 for duplicate-response behavior."""
 
     def test_second_resolve_returns_404(
-        self, client_pattern_b: TestClient, engine_pattern_b: KanbanEngine, board_dir_pattern_b: Path
+        self,
+        client_pattern_b: TestClient,
+        engine_pattern_b: KanbanEngine,
+        board_dir_pattern_b: Path,
     ) -> None:
-        task_id = _create_blocked_task_pattern_b(engine_pattern_b, "Duplicate resolve task")
+        task_id = _create_blocked_task_pattern_b(
+            engine_pattern_b, "Duplicate resolve task"
+        )
         stem = f"{task_id}-dup-resolve"
         _write_pending_dr_pattern_b(board_dir_pattern_b, stem=stem, task_id=task_id)
 
@@ -1594,13 +1717,20 @@ class TestFromAC_DuplicateResponse:
         assert second.status_code == 404
 
     def test_second_resolve_uses_fastapi_detail_format(
-        self, client_pattern_b: TestClient, engine_pattern_b: KanbanEngine, board_dir_pattern_b: Path
+        self,
+        client_pattern_b: TestClient,
+        engine_pattern_b: KanbanEngine,
+        board_dir_pattern_b: Path,
     ) -> None:
-        task_id = _create_blocked_task_pattern_b(engine_pattern_b, "Duplicate format task")
+        task_id = _create_blocked_task_pattern_b(
+            engine_pattern_b, "Duplicate format task"
+        )
         stem = f"{task_id}-dup-format"
         _write_pending_dr_pattern_b(board_dir_pattern_b, stem=stem, task_id=task_id)
 
-        client_pattern_b.post(f"/api/decisions/{stem}/resolve", json={"response": "rejected"})
+        client_pattern_b.post(
+            f"/api/decisions/{stem}/resolve", json={"response": "rejected"}
+        )
 
         resp = client_pattern_b.post(
             f"/api/decisions/{stem}/resolve", json={"response": "rejected"}
@@ -1611,13 +1741,20 @@ class TestFromAC_DuplicateResponse:
         assert "detail" in body
 
     def test_second_resolve_different_response_also_404(
-        self, client_pattern_b: TestClient, engine_pattern_b: KanbanEngine, board_dir_pattern_b: Path
+        self,
+        client_pattern_b: TestClient,
+        engine_pattern_b: KanbanEngine,
+        board_dir_pattern_b: Path,
     ) -> None:
-        task_id = _create_blocked_task_pattern_b(engine_pattern_b, "Duplicate diff response task")
+        task_id = _create_blocked_task_pattern_b(
+            engine_pattern_b, "Duplicate diff response task"
+        )
         stem = f"{task_id}-dup-diff"
         _write_pending_dr_pattern_b(board_dir_pattern_b, stem=stem, task_id=task_id)
 
-        client_pattern_b.post(f"/api/decisions/{stem}/resolve", json={"response": "approved"})
+        client_pattern_b.post(
+            f"/api/decisions/{stem}/resolve", json={"response": "approved"}
+        )
 
         resp = client_pattern_b.post(
             f"/api/decisions/{stem}/resolve", json={"response": "needs-info"}
@@ -1630,11 +1767,18 @@ class TestFromAC_ImmediateEffects:
     """Coverage promoted from #1384 for immediate side-effects visibility."""
 
     def test_file_move_and_unblock_visible_without_sweep(
-        self, client_pattern_b: TestClient, engine_pattern_b: KanbanEngine, board_dir_pattern_b: Path
+        self,
+        client_pattern_b: TestClient,
+        engine_pattern_b: KanbanEngine,
+        board_dir_pattern_b: Path,
     ) -> None:
-        task_id = _create_blocked_task_pattern_b(engine_pattern_b, "Immediate effects task")
+        task_id = _create_blocked_task_pattern_b(
+            engine_pattern_b, "Immediate effects task"
+        )
         stem = f"{task_id}-immediate"
-        pending_path = _write_pending_dr_pattern_b(board_dir_pattern_b, stem=stem, task_id=task_id)
+        pending_path = _write_pending_dr_pattern_b(
+            board_dir_pattern_b, stem=stem, task_id=task_id
+        )
         resolved_path = board_dir_pattern_b / "decisions" / "resolved" / f"{stem}.md"
 
         resp = client_pattern_b.post(

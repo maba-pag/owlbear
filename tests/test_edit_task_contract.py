@@ -70,7 +70,9 @@ class TestFromAC_BodyClearSemantics:
         The call also raises ERR_NO_OP because no kwargs are built.
         """
         engine = _make_engine(tmp_path)
-        task = engine.create_task("T", body="original content", status="todo", priority="needed")
+        task = engine.create_task(
+            "T", body="original content", status="todo", priority="needed"
+        )
         task_id = task.id
 
         result = engine.agent_view().edit_task(task_id, body="")
@@ -89,7 +91,9 @@ class TestFromAC_BodyClearSemantics:
         ERR_NO_OP raised before any engine call.
         """
         engine = _make_engine(tmp_path)
-        task = engine.create_task("T", body="has content", status="todo", priority="needed")
+        task = engine.create_task(
+            "T", body="has content", status="todo", priority="needed"
+        )
         task_id = task.id
 
         # Must not raise — body="" is a clear operation, not a no-op
@@ -108,7 +112,9 @@ class TestFromAC_BodyClearSemantics:
         The test never reaches the second call.
         """
         engine = _make_engine(tmp_path)
-        task = engine.create_task("T", body="initial text", status="todo", priority="needed")
+        task = engine.create_task(
+            "T", body="initial text", status="todo", priority="needed"
+        )
         task_id = task.id
 
         # Step 1: clear the body (AC2 — must succeed)
@@ -133,7 +139,9 @@ class TestFromAC_BodyClearSemantics:
         """
         board = _make_board(tmp_path)
         engine = KanbanEngine(board, activity_log=False)
-        task = engine.create_task("T", body="original", status="todo", priority="needed")
+        task = engine.create_task(
+            "T", body="original", status="todo", priority="needed"
+        )
         task_id = task.id
         app_ctx = AppContext(engine=engine, kanban_dir=board)
         ctx = _make_mcp_ctx(app_ctx)
@@ -321,7 +329,9 @@ class TestFromAC_InvalidCombinationValidation:
         The call proceeds with only append_body, silently ignoring the clear intent.
         """
         engine = _make_engine(tmp_path)
-        task = engine.create_task("T", body="existing", status="todo", priority="needed")
+        task = engine.create_task(
+            "T", body="existing", status="todo", priority="needed"
+        )
         task_id = task.id
 
         with pytest.raises(ValidationError) as exc_info:
@@ -342,7 +352,9 @@ class TestFromAC_InvalidCombinationValidation:
         """
         board = _make_board(tmp_path)
         engine = KanbanEngine(board, activity_log=False)
-        task = engine.create_task("T", body="existing", status="todo", priority="needed")
+        task = engine.create_task(
+            "T", body="existing", status="todo", priority="needed"
+        )
         task_id = task.id
         app_ctx = AppContext(engine=engine, kanban_dir=board)
         ctx = _make_mcp_ctx(app_ctx)

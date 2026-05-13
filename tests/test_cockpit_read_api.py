@@ -623,7 +623,9 @@ class TestFromAC_SessionsEnvelope1223:
         )
         assert "sessions" in body, f"Response missing 'sessions' key: {body!r}"
 
-    def test_sessions_empty_board_wraps_empty_list(self, client_1223: TestClient) -> None:
+    def test_sessions_empty_board_wraps_empty_list(
+        self, client_1223: TestClient
+    ) -> None:
         """Edge: board with no sessions returns {'sessions': []}, not []."""
         response = client_1223.get("/api/sessions", params={"filter": "all"})
         assert response.status_code == 200
@@ -1032,7 +1034,9 @@ class TestFromAC_MtimeScanCacheUnit:
         )
         assert result > 0, "scan() must return positive mtime_ns when files are present"
 
-    def test_scan_returns_robust_signature_not_raw_max_mtime(self, tmp_path: Path) -> None:
+    def test_scan_returns_robust_signature_not_raw_max_mtime(
+        self, tmp_path: Path
+    ) -> None:
         """Post-1346 AC1: MtimeScanCache.scan() returns a directory signature (hash)
         that captures file-name set changes, NOT the raw maximum mtime_ns.
 

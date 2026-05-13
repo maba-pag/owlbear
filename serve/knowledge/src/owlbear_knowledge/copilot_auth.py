@@ -104,7 +104,9 @@ async def request_device_code() -> dict[str, Any]:
         )
         resp.raise_for_status()
         data = resp.json()
-    sys.stderr.write(f"Open https://github.com/login/device and enter code: {data.get('user_code')}\n")
+    sys.stderr.write(
+        f"Open https://github.com/login/device and enter code: {data.get('user_code')}\n"
+    )
     return data
 
 

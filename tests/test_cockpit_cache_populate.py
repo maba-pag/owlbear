@@ -119,7 +119,9 @@ class TestFromAC_CachePopulateOrdering:
         assert cache.last_mtime == sig_a, "Precondition: cache primed with sig_a."
 
         mock_view = MagicMock(spec=CockpitView)
-        mock_view.list_tasks.side_effect = CorruptionError("ERR_CORRUPT_DUPLICATE_ID", "duplicate task IDs")
+        mock_view.list_tasks.side_effect = CorruptionError(
+            "ERR_CORRUPT_DUPLICATE_ID", "duplicate task IDs"
+        )
 
         app.dependency_overrides[get_engine] = lambda: engine
         app.dependency_overrides[get_cache] = lambda: cache
@@ -181,9 +183,13 @@ class TestFromAC_CachePopulateOrdering:
 
         mock_view = MagicMock(spec=CockpitView)
         mock_view.list_tasks.side_effect = [
-            prime_resp,                                                    # Request 1 (prime): succeeds
-            CorruptionError("ERR_CORRUPT_YAML_PARSE", "parse error"),      # Request 2 (sig_b): fails
-            CorruptionError("ERR_CORRUPT_YAML_PARSE", "still broken"),     # Request 3 (sig_b): still fails
+            prime_resp,  # Request 1 (prime): succeeds
+            CorruptionError(
+                "ERR_CORRUPT_YAML_PARSE", "parse error"
+            ),  # Request 2 (sig_b): fails
+            CorruptionError(
+                "ERR_CORRUPT_YAML_PARSE", "still broken"
+            ),  # Request 3 (sig_b): still fails
         ]
 
         app.dependency_overrides[get_engine] = lambda: engine
@@ -340,9 +346,11 @@ class TestFromAC_WarmCacheFailureRecovery:
 
         mock_view = MagicMock(spec=CockpitView)
         mock_view.list_tasks.side_effect = [
-            prime_response,                                                  # (a) prime: 1 task
-            CorruptionError("ERR_CORRUPT_DUPLICATE_ID", "duplicate IDs"),  # (c) fail: raises
-            fresh_response,                                                  # (d) retry: 2 tasks
+            prime_response,  # (a) prime: 1 task
+            CorruptionError(
+                "ERR_CORRUPT_DUPLICATE_ID", "duplicate IDs"
+            ),  # (c) fail: raises
+            fresh_response,  # (d) retry: 2 tasks
         ]
 
         app.dependency_overrides[get_engine] = lambda: eng
@@ -424,7 +432,9 @@ class TestFromAC_WarmCacheFailureRecovery:
         assert cache.has_cached_tasks, "Precondition: warm cache."
 
         mock_view = MagicMock(spec=CockpitView)
-        mock_view.list_tasks.side_effect = CorruptionError("ERR_CORRUPT_YAML_PARSE", "engine error")
+        mock_view.list_tasks.side_effect = CorruptionError(
+            "ERR_CORRUPT_YAML_PARSE", "engine error"
+        )
 
         app.dependency_overrides[get_engine] = lambda: engine
         app.dependency_overrides[get_cache] = lambda: cache

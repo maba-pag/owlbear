@@ -408,7 +408,9 @@ def write_task(task: Task, kanban_dir: Path, *, target_dir: Path | None = None) 
     # Vendor extras (AC-C15 applies to all timestamp-looking values).
     for key, val in data.items():
         if key not in _CANONICAL_FIELD_SET and key != "claimed_by":
-            normalized_val = _as_plain_timestamp_scalar(val) if isinstance(val, str) else val
+            normalized_val = (
+                _as_plain_timestamp_scalar(val) if isinstance(val, str) else val
+            )
             ordered[key] = normalized_val
 
     stream = io.StringIO()

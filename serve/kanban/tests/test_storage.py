@@ -28,8 +28,6 @@ All tests FAIL (RED phase — storage.py not yet implemented).
 """
 
 
-
-
 # ---------------------------------------------------------------------------
 # Board helpers
 # ---------------------------------------------------------------------------
@@ -641,6 +639,7 @@ class TestFromAC_Quarantine:
         ar_tasks = [t for t in all_tasks if "type:user-action" in (t.tags or [])]
         assert ar_tasks
 
+
 """RED-phase tests for threading cached config through read_task hot path (#1205).
 
 AC1 (td:1) → TestFromAC_ReadTaskCachedConfig.test_ac1_accepts_config_keyword_arg
@@ -657,9 +656,6 @@ AC3 (td:2) → TestFromAC_ReadTaskCachedConfig.test_ac3_corrupt_task_no_config_y
 AC4 (td:1) → TestFromAC_ReadTaskCachedConfig.test_ac4_engine_all_call_sites_pass_config
 AC4 (td:1) → TestFromAC_ReadTaskCachedConfig.test_ac4_engine_call_sites_value_is_self_config
 """
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -936,9 +932,7 @@ class TestFromAC_ReadTaskCachedConfig:
 
     def test_ac4_engine_all_call_sites_pass_config(self) -> None:
         """AC4: every read_task() call in engine.py must include config= keyword arg."""
-        engine_py = (
-            Path(__file__).parent.parent / "src/owlbear_kanban/engine.py"
-        )
+        engine_py = Path(__file__).parent.parent / "src/owlbear_kanban/engine.py"
         source = engine_py.read_text(encoding="utf-8")
         tree = ast.parse(source, filename=str(engine_py))
 
@@ -966,9 +960,7 @@ class TestFromAC_ReadTaskCachedConfig:
         Catches cases like config=None or config=load_config(...) which would pass
         test_ac4_engine_all_call_sites_pass_config but violate the contract.
         """
-        engine_py = (
-            Path(__file__).parent.parent / "src/owlbear_kanban/engine.py"
-        )
+        engine_py = Path(__file__).parent.parent / "src/owlbear_kanban/engine.py"
         source = engine_py.read_text(encoding="utf-8")
         tree = ast.parse(source, filename=str(engine_py))
 
@@ -997,6 +989,7 @@ class TestFromAC_ReadTaskCachedConfig:
             f"self._config (attribute access on self)."
         )
 
+
 """Tests for #1206: Remove storage.load_config wrapper / clean up double-validation.
 
 AC coverage:
@@ -1005,8 +998,6 @@ AC coverage:
   AC5: No double _validate_claim_timeout call in any load path (td:1)
        — config_loader.load_config invokes _validate_claim_timeout exactly once
 """
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -1200,6 +1191,7 @@ archive_dir: archive
 activity_log: false
 """
 
+
 def _minimal_task(task_id: int = 1) -> Task:
     """Return a minimal valid Task with explicit UTC timestamps."""
     return Task(
@@ -1210,6 +1202,7 @@ def _minimal_task(task_id: int = 1) -> Task:
         created="2026-04-20T10:00:00+00:00",
         updated="2026-04-20T10:00:00+00:00",
     )
+
 
 def _write_claimed_by_file(directory: Path, task_id: int = 1) -> Path:
     """Write a task file containing the forbidden claimed_by field into *directory*."""
@@ -1234,6 +1227,7 @@ def _write_claimed_by_file(directory: Path, task_id: int = 1) -> Path:
     path.write_text(content, encoding="utf-8")
     return path
 
+
 def _extract_frontmatter_keys(path: Path) -> list[str]:
     """Parse a task file and return the ordered list of frontmatter keys."""
     content = path.read_text(encoding="utf-8")
@@ -1245,6 +1239,7 @@ def _extract_frontmatter_keys(path: Path) -> list[str]:
         for line in frontmatter.splitlines()
         if ":" in line and not line.startswith(" ")
     ]
+
 
 class TestFromAC_CorruptionDetection:
     """AC-C16: detect_corruption identifies claimed_by as mode-3 corruption in tasks/."""
@@ -1298,6 +1293,7 @@ class TestFromAC_CorruptionDetection:
 
         # Archive files are exempt from claimed_by corruption rule
         assert error is None
+
 
 class TestFromAC_QuarantineRepair:
     """AC-C30: repair_storage() AR task has type:user-action tag and ## Quarantined file body."""
@@ -1385,6 +1381,7 @@ class TestFromAC_QuarantineRepair:
         assert f"quarantined to {expected_quarantine_path}" in body, (
             f"Expected detail value not found in AR body:\n{body}"
         )
+
 
 class TestFromAC_ArchiveExemption:
     """AC-C48: Archive files with claimed_by read successfully; field silently stripped."""
@@ -1486,6 +1483,7 @@ class TestFromAC_ArchiveExemption:
 
         assert dumped.get("claimed_by") is None, "claimed_by must be stripped"
         assert dumped.get("class") == "epic", "vendor field 'class' must be preserved"
+
 
 class TestBuilderDiscovered:
     """Edge cases discovered during implementation; complementary to TestFromAC_* coverage."""
@@ -1864,6 +1862,7 @@ class TestBuilderDiscovered:
         assert 77 in archived
         assert archived[77].claimed is False
 
+
 class TestFromAC_ClaimListRegression:
     """AC-REGR: list_tasks() must not silently drop actively-claimed tasks.
 
@@ -1941,6 +1940,7 @@ class TestFromAC_ClaimListRegression:
             "Task claimed via start_work() must appear in list_tasks()"
         )
 
+
 class TestFromAC_SaveConfigPersistsOnlyNextId:
     """AC1 (topology-constant refactor): save_config() writes only next_id to config.yml.
 
@@ -2007,13 +2007,14 @@ class TestFromAC_SaveConfigPersistsOnlyNextId:
         )
 
 
-
 # --- merged from serve/kanban/tests/test_storage_imports.py ---
 _KANBAN_SRC = Path(__file__).parent.parent / "src" / "owlbear_kanban"
+
 
 def _read_source(filename: str) -> str:
     """Return source text of *filename* from the owlbear_kanban package."""
     return (_KANBAN_SRC / filename).read_text(encoding="utf-8")
+
 
 class TestFromAC_TaskIoRemoved:
     """task_io.py must be deleted; the module must not be importable."""
@@ -2044,6 +2045,7 @@ class TestFromAC_TaskIoRemoved:
             f"These files still reference task_io and must be redirected to storage: {offenders}"
         )
 
+
 class TestFromAC_StorageClean:
     """storage.py must not reference task_io in its source (all logic inlined)."""
 
@@ -2054,6 +2056,7 @@ class TestFromAC_StorageClean:
             "storage.py still imports from task_io; "
             "it must be self-contained per AC: all imports redirected to storage"
         )
+
 
 class TestFromAC_EngineRedirected:
     """engine.py must import from owlbear_kanban.storage, not from task_io."""
@@ -2085,6 +2088,7 @@ class TestFromAC_EngineRedirected:
             "engine.py write_task must come from storage, not task_io"
         )
 
+
 class TestFromAC_DispatchRedirected:
     """dispatch.py must not import task_io and must avoid direct storage imports."""
 
@@ -2105,6 +2109,7 @@ class TestFromAC_DispatchRedirected:
         )
         assert "show_task" in source, "dispatch.py must resolve reads via engine"
 
+
 class TestFromAC_CorruptionRedirected:
     """corruption.py must not import from task_io (lazy or otherwise)."""
 
@@ -2115,6 +2120,7 @@ class TestFromAC_CorruptionRedirected:
             "corruption.py still imports from task_io; "
             "redirect to owlbear_kanban.storage per AC"
         )
+
 
 class TestFromAC_QuarantineContainment:
     """move_to_quarantine must call validate_path_containment and reject paths outside kanban_dir."""
@@ -2166,6 +2172,7 @@ class TestFromAC_QuarantineContainment:
         assert not (kanban_dir / "quarantine").exists(), (
             "quarantine/ must not be created when path containment is rejected"
         )
+
 
 class TestFromAC_VendorExtraTimestamps:
     """AC-C15 end-to-end proof for vendor extra fields through write_task().
@@ -2299,4 +2306,3 @@ class TestFromAC_VendorExtraTimestamps:
         assert "JIRA-42" in ext_ref_line, (
             f"AC-C15: non-timestamp vendor extra value must survive unchanged: {ext_ref_line.rstrip()!r}"
         )
-

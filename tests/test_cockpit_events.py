@@ -27,6 +27,7 @@ import pytest
 # Board fixture helpers
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def client(engine):
     """FastAPI TestClient with engine injected via dependency_overrides.
@@ -228,12 +229,15 @@ class TestFromAC_WatchFilter:
             tasks_dir.parent / "decisions" / "pending",
             tasks_dir.parent / "activity.jsonl",
         )
-        assert watch_filter(None, "/home/user/.owlbear/kanban/tasks/42-title.md") is True
+        assert (
+            watch_filter(None, "/home/user/.owlbear/kanban/tasks/42-title.md") is True
+        )
 
     def test_filter_rejects_tmp_prefix_md_file(self) -> None:
         """Filter must return False for .md files starting with .tmp-."""
         assert (
-            self._make_filter()(None, "/fake/kanban/tasks/.tmp-1234-my-task.md") is False
+            self._make_filter()(None, "/fake/kanban/tasks/.tmp-1234-my-task.md")
+            is False
         )
 
     def test_filter_rejects_non_md_file(self) -> None:
@@ -247,9 +251,7 @@ class TestFromAC_WatchFilter:
     def test_filter_accepts_md_with_tmp_in_middle_of_name(self) -> None:
         """Rejection is prefix-specific: 'task-tmp-123.md' (no leading dot) must pass."""
         # 'tmp' in the middle of the filename is not the .tmp- prefix pattern
-        assert (
-            self._make_filter()(None, "/fake/kanban/tasks/task-tmp-123.md") is True
-        )
+        assert self._make_filter()(None, "/fake/kanban/tasks/task-tmp-123.md") is True
 
     def test_filter_rejects_minimal_tmp_prefix(self) -> None:
         """Boundary: file named exactly '.tmp-.md' must be rejected."""
@@ -443,7 +445,9 @@ class TestFromAC_EventPayload:
             f"Got events: {event_names!r}. "
             f"Old contract said 'skip deleted paths' — new contract requires emission."
         )
-        assert data_payloads, "No data payload received for deleted-file tasks-changed event"
+        assert data_payloads, (
+            "No data payload received for deleted-file tasks-changed event"
+        )
         payload = json.loads(data_payloads[0])
         assert isinstance(payload.get("mtime"), int), (
             f"mtime must be an integer (synthetic time.time_ns()); got {payload!r}"
@@ -1056,6 +1060,7 @@ def engine(board_dir: Path):
     from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
     return KanbanEngine(board_dir)
+
 
 # ---------------------------------------------------------------------------
 # Async helper: run endpoint and capture awatch call kwargs

@@ -50,7 +50,8 @@ def _registered_tool_names() -> frozenset[str]:
     """Return frozenset of names registered in the FastMCP tool manager at import time."""
     if hasattr(mcp, "_tool_manager"):
         return frozenset(
-            getattr(t, "name", "") for t in mcp._tool_manager.list_tools()  # noqa: SLF001
+            getattr(t, "name", "")
+            for t in mcp._tool_manager.list_tools()  # noqa: SLF001
         )
     return frozenset()
 
@@ -182,6 +183,4 @@ class TestFromAC_ToolSurfaceValidation:
                 failures.append(
                     f"  {name!r}: registered as MCP tool — remove @mcp.tool() decorator (AC5)"
                 )
-        assert not failures, (
-            "Scope stub check failures:\n" + "\n".join(failures)
-        )
+        assert not failures, "Scope stub check failures:\n" + "\n".join(failures)

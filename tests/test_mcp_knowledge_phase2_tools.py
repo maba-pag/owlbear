@@ -349,7 +349,9 @@ class TestFromAC_GetConsolidationCandidates:
         doc_b = _insert_document(conn, source_id=source_b)
         _insert_entity(conn, name="Keras", document_id=doc_a)
         _insert_entity(conn, name="Keras", document_id=doc_b)
-        _insert_reviewed_pair(conn, entity_name="Keras", source_a=source_a, source_b=source_b)
+        _insert_reviewed_pair(
+            conn, entity_name="Keras", source_a=source_a, source_b=source_b
+        )
 
         ctx = _make_mcp_ctx(conn)
         candidates = await get_consolidation_candidates(ctx, limit=20)
@@ -371,7 +373,9 @@ class TestFromAC_GetConsolidationCandidates:
         # Dismissed entity
         _insert_entity(conn, name="Dismissed", document_id=doc_a)
         _insert_entity(conn, name="Dismissed", document_id=doc_b)
-        _insert_reviewed_pair(conn, entity_name="Dismissed", source_a=source_a, source_b=source_b)
+        _insert_reviewed_pair(
+            conn, entity_name="Dismissed", source_a=source_a, source_b=source_b
+        )
         # Other entity that should still appear
         _insert_entity(conn, name="Active", document_id=doc_a)
         _insert_entity(conn, name="Active", document_id=doc_b)
@@ -441,15 +445,21 @@ class TestFromAC_GetConsolidationCandidates:
         candidates = await get_consolidation_candidates(ctx, limit=20)
 
         assert len(candidates) >= 1, "Expected at least one candidate for 'TensorFlow'"
-        tf_candidates = [c for c in candidates if _get_field(c, "entity_name") == "TensorFlow"]
+        tf_candidates = [
+            c for c in candidates if _get_field(c, "entity_name") == "TensorFlow"
+        ]
         assert tf_candidates, "Expected 'TensorFlow' in candidates"
         candidate = tf_candidates[0]
 
         # The candidate must carry context from BOTH sources — check via serialized form
         candidate_str = str(candidate)
-        assert "Source A" in candidate_str or "source_a" in candidate_str.lower() or any(
-            "source" in str(_get_field(candidate, k)).lower()
-            for k in (candidate.keys() if isinstance(candidate, dict) else [])
+        assert (
+            "Source A" in candidate_str
+            or "source_a" in candidate_str.lower()
+            or any(
+                "source" in str(_get_field(candidate, k)).lower()
+                for k in (candidate.keys() if isinstance(candidate, dict) else [])
+            )
         ), (
             "Expected candidate to contain source information from both sources, "
             f"got: {candidate}"
@@ -466,10 +476,18 @@ class TestFromAC_GetConsolidationCandidates:
         source_b = _insert_source(conn, name="Source B")
         doc_a = _insert_document(conn, source_id=source_a)
         doc_b = _insert_document(conn, source_id=source_b)
-        chunk_a = _insert_chunk(conn, document_id=doc_a, content="Chunk text from Source A only")
-        chunk_b = _insert_chunk(conn, document_id=doc_b, content="Chunk text from Source B only")
-        _insert_entity(conn, name="TensorFlowExact", document_id=doc_a, chunk_id=chunk_a)
-        _insert_entity(conn, name="TensorFlowExact", document_id=doc_b, chunk_id=chunk_b)
+        chunk_a = _insert_chunk(
+            conn, document_id=doc_a, content="Chunk text from Source A only"
+        )
+        chunk_b = _insert_chunk(
+            conn, document_id=doc_b, content="Chunk text from Source B only"
+        )
+        _insert_entity(
+            conn, name="TensorFlowExact", document_id=doc_a, chunk_id=chunk_a
+        )
+        _insert_entity(
+            conn, name="TensorFlowExact", document_id=doc_b, chunk_id=chunk_b
+        )
 
         ctx = _make_mcp_ctx(conn)
         candidates = await get_consolidation_candidates(ctx, limit=20)
@@ -522,7 +540,9 @@ class TestFromAC_StoreEnrichmentPhase2:
         ctx = _make_mcp_ctx(conn)
         # get_consolidation_candidates returns the candidate with its candidate_id
         candidates = await get_consolidation_candidates(ctx, limit=20)
-        jax_candidates = [c for c in candidates if _get_field(c, "entity_name") == "JAX"]
+        jax_candidates = [
+            c for c in candidates if _get_field(c, "entity_name") == "JAX"
+        ]
         assert jax_candidates, "Expected 'JAX' to be a candidate"
         candidate_id = _get_field(jax_candidates[0], "candidate_id")
 
@@ -563,16 +583,22 @@ class TestFromAC_StoreEnrichmentPhase2:
 
         ctx = _make_mcp_ctx(conn)
         candidates = await get_consolidation_candidates(ctx, limit=20)
-        scipy_candidates = [c for c in candidates if _get_field(c, "entity_name") == "SciPy"]
+        scipy_candidates = [
+            c for c in candidates if _get_field(c, "entity_name") == "SciPy"
+        ]
         assert scipy_candidates, "Expected 'SciPy' to be a candidate"
         candidate_id = _get_field(scipy_candidates[0], "candidate_id")
 
-        reviewed_before = conn.execute("SELECT COUNT(*) FROM reviewed_pairs").fetchone()[0]
+        reviewed_before = conn.execute(
+            "SELECT COUNT(*) FROM reviewed_pairs"
+        ).fetchone()[0]
 
         # Phase 2 dismissal: empty edges
         await store_enrichment(ctx, candidate_id=candidate_id, edges=[])
 
-        reviewed_after = conn.execute("SELECT COUNT(*) FROM reviewed_pairs").fetchone()[0]
+        reviewed_after = conn.execute("SELECT COUNT(*) FROM reviewed_pairs").fetchone()[
+            0
+        ]
         assert reviewed_after == reviewed_before + 1, (
             f"Expected 1 new reviewed_pairs row after dismissal, "
             f"before={reviewed_before}, after={reviewed_after}"
@@ -592,7 +618,9 @@ class TestFromAC_StoreEnrichmentPhase2:
 
         ctx = _make_mcp_ctx(conn)
         candidates = await get_consolidation_candidates(ctx, limit=20)
-        mpl_candidates = [c for c in candidates if _get_field(c, "entity_name") == "Matplotlib"]
+        mpl_candidates = [
+            c for c in candidates if _get_field(c, "entity_name") == "Matplotlib"
+        ]
         assert mpl_candidates, "Expected 'Matplotlib' to be a candidate"
         candidate_id = _get_field(mpl_candidates[0], "candidate_id")
 
@@ -619,7 +647,9 @@ class TestFromAC_StoreEnrichmentPhase2:
         _insert_entity(conn, name="Pandas", document_id=doc_a)
         _insert_entity(conn, name="Pandas", document_id=doc_b)
         # Dismiss the (A, B) pair for "Pandas"
-        _insert_reviewed_pair(conn, entity_name="Pandas", source_a=source_a, source_b=source_b)
+        _insert_reviewed_pair(
+            conn, entity_name="Pandas", source_a=source_a, source_b=source_b
+        )
 
         # Add a new source C with the same entity
         source_c = _insert_source(conn, name="Source C")
@@ -646,7 +676,9 @@ class TestFromAC_StoreEnrichmentPhase2:
         doc_b = _insert_document(conn, source_id=source_b)
         _insert_entity(conn, name="Seaborn", document_id=doc_a)
         _insert_entity(conn, name="Seaborn", document_id=doc_b)
-        _insert_reviewed_pair(conn, entity_name="Seaborn", source_a=source_a, source_b=source_b)
+        _insert_reviewed_pair(
+            conn, entity_name="Seaborn", source_a=source_a, source_b=source_b
+        )
 
         source_c = _insert_source(conn, name="Source C")
         doc_c = _insert_document(conn, source_id=source_c)
@@ -677,7 +709,9 @@ class TestFromAC_StoreEnrichmentPhase2:
         doc_b = _insert_document(conn, source_id=source_b)
         _insert_entity(conn, name="Bokeh", document_id=doc_a)
         _insert_entity(conn, name="Bokeh", document_id=doc_b)
-        _insert_reviewed_pair(conn, entity_name="Bokeh", source_a=source_a, source_b=source_b)
+        _insert_reviewed_pair(
+            conn, entity_name="Bokeh", source_a=source_a, source_b=source_b
+        )
 
         # Add source C — generates new (Bokeh, ?, C) pair, but (A, B) stays dismissed
         source_c = _insert_source(conn, name="Source C")
@@ -688,7 +722,9 @@ class TestFromAC_StoreEnrichmentPhase2:
         candidates = await get_consolidation_candidates(ctx, limit=20)
 
         # There should be at most 2 "Bokeh" candidate pairs (A-C and B-C), but NOT A-B
-        bokeh_candidates = [c for c in candidates if _get_field(c, "entity_name") == "Bokeh"]
+        bokeh_candidates = [
+            c for c in candidates if _get_field(c, "entity_name") == "Bokeh"
+        ]
         # Verify: no candidate has source_a, source_b that match the dismissed pair
         # The key assertion: only NEW pairs appear, not the dismissed (A, B) pair
         # If the implementation encodes source info in the candidate, check directly:
@@ -768,7 +804,9 @@ class TestFromAC_GetStatsExpansion:
         """AC7 happy: 'documents' field still present and matches graph_store count."""
         ctx = _make_mcp_ctx_with_graph(conn, doc_count=7, entity_count=0, edge_count=0)
         result = await get_stats(ctx)
-        assert "documents" in result, f"Expected 'documents' key in stats, got: {result}"
+        assert "documents" in result, (
+            f"Expected 'documents' key in stats, got: {result}"
+        )
         assert result["documents"] == 7, (
             f"Expected documents=7 from graph_store.get_counts(), got: {result['documents']}"
         )
@@ -939,7 +977,9 @@ class TestFromAC_GetStatsExpansion:
         doc_b = _insert_document(conn, source_id=source_b)
         _insert_entity(conn, name="Arrow", document_id=doc_a)
         _insert_entity(conn, name="Arrow", document_id=doc_b)
-        _insert_reviewed_pair(conn, entity_name="Arrow", source_a=source_a, source_b=source_b)
+        _insert_reviewed_pair(
+            conn, entity_name="Arrow", source_a=source_a, source_b=source_b
+        )
 
         ctx = _make_mcp_ctx_with_graph(conn)
         result = await get_stats(ctx)
@@ -1050,8 +1090,12 @@ class TestFromAC_ExactProofs:
             f"Expected edge row (source_id={entity_a_id!r}, "
             f"target_id={entity_b_id!r}, relation='exact_match_proof') — not found in DB"
         )
-        assert row[0] == entity_a_id, f"source_id mismatch: {row[0]!r} != {entity_a_id!r}"
-        assert row[1] == entity_b_id, f"target_id mismatch: {row[1]!r} != {entity_b_id!r}"
+        assert row[0] == entity_a_id, (
+            f"source_id mismatch: {row[0]!r} != {entity_a_id!r}"
+        )
+        assert row[1] == entity_b_id, (
+            f"target_id mismatch: {row[1]!r} != {entity_b_id!r}"
+        )
         assert row[2] == "exact_match_proof", f"relation mismatch: {row[2]!r}"
 
     @pytest.mark.asyncio
@@ -1071,7 +1115,9 @@ class TestFromAC_ExactProofs:
         ctx = _make_mcp_ctx(conn)
         candidates = await get_consolidation_candidates(ctx, limit=20)
         target = next(
-            c for c in candidates if _get_field(c, "entity_name") == "ExactDismissalEntity"
+            c
+            for c in candidates
+            if _get_field(c, "entity_name") == "ExactDismissalEntity"
         )
         candidate_id = _get_field(target, "candidate_id")
 
@@ -1331,7 +1377,11 @@ import pytest
 
 from mcp.server.fastmcp.exceptions import ToolError
 from owlbear_knowledge.schema import init_db
-from owlbear_mcp_knowledge.server import get_consolidation_candidates, get_stats, store_enrichment
+from owlbear_mcp_knowledge.server import (
+    get_consolidation_candidates,
+    get_stats,
+    store_enrichment,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -1358,9 +1408,7 @@ class TestFromAC_GetConsolidationCandidates_1330:
         ctx = _make_mcp_ctx(conn)
         candidates = await get_consolidation_candidates(ctx, limit=20)
 
-        assert isinstance(candidates, list), (
-            f"Expected list, got {type(candidates)}"
-        )
+        assert isinstance(candidates, list), f"Expected list, got {type(candidates)}"
         assert len(candidates) == 0, (
             f"Expected empty list for empty DB, got: {candidates}"
         )
@@ -1385,7 +1433,9 @@ class TestFromAC_GetConsolidationCandidates_1330:
         ctx = _make_mcp_ctx(conn)
         candidates = await get_consolidation_candidates(ctx, limit=20)
 
-        nce = [c for c in candidates if _get_field(c, "entity_name") == "NullChunkEntity"]
+        nce = [
+            c for c in candidates if _get_field(c, "entity_name") == "NullChunkEntity"
+        ]
         assert nce, "Expected 'NullChunkEntity' in candidates"
         candidate = nce[0]
 
@@ -1464,7 +1514,9 @@ class TestFromAC_StoreEnrichmentPhase2_1330:
         ctx = _make_mcp_ctx(conn)
         candidates = await get_consolidation_candidates(ctx, limit=20)
 
-        multi_cands = [c for c in candidates if _get_field(c, "entity_name") == "MultiEdge"]
+        multi_cands = [
+            c for c in candidates if _get_field(c, "entity_name") == "MultiEdge"
+        ]
         assert multi_cands, "Expected 'MultiEdge' to be a candidate"
         candidate_id = _get_field(multi_cands[0], "candidate_id")
 
@@ -1475,8 +1527,16 @@ class TestFromAC_StoreEnrichmentPhase2_1330:
             candidate_id=candidate_id,
             edges=[
                 {"source_id": entity_a1, "target_id": entity_b1, "relation": "same_as"},
-                {"source_id": entity_a2, "target_id": entity_b2, "relation": "related_to"},
-                {"source_id": entity_b1, "target_id": entity_a2, "relation": "references"},
+                {
+                    "source_id": entity_a2,
+                    "target_id": entity_b2,
+                    "relation": "related_to",
+                },
+                {
+                    "source_id": entity_b1,
+                    "target_id": entity_a2,
+                    "relation": "references",
+                },
             ],
         )
 
@@ -1504,7 +1564,9 @@ class TestFromAC_StoreEnrichmentPhase2_1330:
 
         ctx = _make_mcp_ctx(conn)
         candidates = await get_consolidation_candidates(ctx, limit=20)
-        ie_cands = [c for c in candidates if _get_field(c, "entity_name") == "IdempotentEntity"]
+        ie_cands = [
+            c for c in candidates if _get_field(c, "entity_name") == "IdempotentEntity"
+        ]
         assert ie_cands, "Expected 'IdempotentEntity' to be a candidate"
         candidate_id = _get_field(ie_cands[0], "candidate_id")
 

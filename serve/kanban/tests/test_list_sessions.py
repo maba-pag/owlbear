@@ -1378,11 +1378,13 @@ claimed_at:
 Task body.
 """
 
+
 def _write_task(kanban_dir: Path, task_id: int, status: str = "todo") -> None:
     """Write a synthetic task file into the board's tasks directory."""
     content = _TASK_TEMPLATE.format(task_id=task_id, status=status)
     slug = f"{task_id}-task-{task_id}.md"
     (kanban_dir / "tasks" / slug).write_text(content, encoding="utf-8")
+
 
 def _last_end_work_detail(log_path: Path) -> str:
     """Return the detail field of the last end_work entry in the activity log."""
@@ -1394,6 +1396,7 @@ def _last_end_work_detail(log_path: Path) -> str:
     end_work_entries = [e for e in entries if e.get("action") == "end_work"]
     assert end_work_entries, "No end_work entry found in activity log"
     return end_work_entries[-1]["detail"]
+
 
 class TestFromAC_EndWorkDetailPrefix:
     """Verifies end_work() detail prefix contract per task #952 AC."""
@@ -1574,4 +1577,3 @@ class TestFromAC_EndWorkDetailPrefix:
         assert detail == "blocked: external dependency", (
             f"Expected 'blocked: external dependency' but got: {detail!r}"
         )
-

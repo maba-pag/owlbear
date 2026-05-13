@@ -394,20 +394,26 @@ class TestFromAC_BodyOnlyFormat:
         assert result == "## Format Pin Test\nPinned body text."
         # Assert ALL metadata field names absent
         for field_name in (
-            "id", "state", "confidence", "categories",
-            "scope_agents", "approved_at", "created_at", "updated_at",
+            "id",
+            "state",
+            "confidence",
+            "categories",
+            "scope_agents",
+            "approved_at",
+            "created_at",
+            "updated_at",
         ):
             assert field_name not in result, (
                 f"metadata field {field_name!r} leaked into output"
             )
         # Assert metadata values absent
-        assert _uuid(99) not in result                  # id value
-        assert "curated" not in result                  # state value
-        assert "0.92" not in result                     # confidence value
-        assert "domain-knowledge" not in result         # category value
-        assert "recall-scope-tester" not in result      # scope_agents value
-        assert "2026-01-15T08:30:00Z" not in result     # created_at value
-        assert "2026-02-20T14:15:00Z" not in result     # updated_at value
+        assert _uuid(99) not in result  # id value
+        assert "curated" not in result  # state value
+        assert "0.92" not in result  # confidence value
+        assert "domain-knowledge" not in result  # category value
+        assert "recall-scope-tester" not in result  # scope_agents value
+        assert "2026-01-15T08:30:00Z" not in result  # created_at value
+        assert "2026-02-20T14:15:00Z" not in result  # updated_at value
 
     @pytest.mark.asyncio
     async def test_two_entries_joined_with_double_newline_separator(
@@ -585,20 +591,24 @@ class TestFromAC_PriorityOrdering:
 
         engine = MemoryEngine(memory_dir=tmp_path)
         for i, title in enumerate(curated_titles, start=10):
-            engine.write(_make_entry(
-                id=_uuid(i),
-                title=title,
-                state="curated",
-                scope_agents=["builder"],
-            ))
+            engine.write(
+                _make_entry(
+                    id=_uuid(i),
+                    title=title,
+                    state="curated",
+                    scope_agents=["builder"],
+                )
+            )
         for i, title in enumerate(approved_titles, start=20):
-            engine.write(_make_entry(
-                id=_uuid(i),
-                title=title,
-                state="approved",
-                scope_agents=["builder"],
-                approved_at=_TS,
-            ))
+            engine.write(
+                _make_entry(
+                    id=_uuid(i),
+                    title=title,
+                    state="approved",
+                    scope_agents=["builder"],
+                    approved_at=_TS,
+                )
+            )
         ctx = _make_ctx(engine)
 
         result = await _recall(ctx, agent="builder", limit=4)
