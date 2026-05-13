@@ -46,6 +46,7 @@
     ".owlbear/prompts": true
   },
   "chat.subagents.allowInvocationsFromSubagents": true,
+  "chat.tools.compressOutput.enabled": true,
   "chat.tools.terminal.autoApprove": {
     "Test-Path": true,
     "uv run coverage": true,
