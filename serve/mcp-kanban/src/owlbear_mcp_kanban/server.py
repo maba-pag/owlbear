@@ -346,18 +346,25 @@ async def create_task(  # noqa: PLR0913
     parent: int | None = None,
     priority: str = "",
     tags: list[str] | None = None,
+    ac: list[str] | None = None,
+    proof_bundle: str | None = None,
 ) -> SingleTaskResponse:
     """Create a new kanban task."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
+    kwargs: dict[str, object] = {
+        "title": title,
+        "body": body,
+        "priority": priority,
+        "tags": tags,
+        "parent": parent,
+        "depends_on": depends_on,
+    }
+    if ac is not None:
+        kwargs["ac"] = ac
+    if proof_bundle is not None:
+        kwargs["proof_bundle"] = proof_bundle
     try:
-        return app_ctx.engine.agent_view().create_task(
-            title=title,
-            body=body,
-            priority=priority,
-            tags=tags,
-            parent=parent,
-            depends_on=depends_on,
-        )
+        return app_ctx.engine.agent_view().create_task(**kwargs)
     except KanbanError as exc:
         _map_kanban_error(exc)
 
@@ -445,6 +452,10 @@ async def edit_task(  # noqa: PLR0912, PLR0913, C901
     timestamp: bool = False,
     priority: str | None = None,
     parent: int | None = None,
+    ac: list[str] | None = None,
+    add_ac: list[str] | None = None,
+    remove_ac: list[str] | None = None,
+    proof_bundle: str | None = None,
     add_dep: list[int] | None = None,
     remove_dep: list[int] | None = None,
     add_tag: list[str] | None = None,
@@ -472,6 +483,14 @@ async def edit_task(  # noqa: PLR0912, PLR0913, C901
         kwargs["priority"] = priority
     if parent is not None:
         kwargs["parent"] = parent
+    if ac is not None:
+        kwargs["ac"] = ac
+    if add_ac is not None:
+        kwargs["add_ac"] = add_ac
+    if remove_ac is not None:
+        kwargs["remove_ac"] = remove_ac
+    if proof_bundle is not None:
+        kwargs["proof_bundle"] = proof_bundle
     if add_dep is not None:
         kwargs["add_dep"] = add_dep
     if remove_dep is not None:
