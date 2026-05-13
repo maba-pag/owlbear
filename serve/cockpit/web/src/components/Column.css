@@ -1,0 +1,15 @@
+.column {
+  min-width: 0;
+}
+
+.column-body {
+  overflow-y: auto;
+  min-width: 0;
+}
+
+.column-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
