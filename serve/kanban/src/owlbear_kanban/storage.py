@@ -27,7 +27,7 @@ import io
 import re
 from datetime import UTC, datetime
 from pathlib import Path  # noqa: TC003
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import yaml
 from pydantic import ValidationError
@@ -91,6 +91,22 @@ def _make_yaml() -> YAML:
     return make_yaml()
 
 
+def _load_yaml12_frontmatter(frontmatter_str: str, *, path: Path) -> dict[str, Any]:
+    """Load task frontmatter with the task-safe PyYAML loader."""
+    loader = YAML12SafeLoader(frontmatter_str)
+    try:
+        data = loader.get_single_data()
+    finally:
+        loader.dispose()
+
+    if data is None:
+        return {}
+    if not isinstance(data, dict):
+        msg = f"Task frontmatter must be a YAML mapping: {path}"
+        raise yaml.YAMLError(msg)
+    return cast("dict[str, Any]", data)
+
+
 def _parse_task_file(path: Path) -> dict[str, Any]:
     """Parse a markdown task file into a frontmatter/body dictionary."""
     try:
@@ -114,7 +130,7 @@ def _parse_task_file(path: Path) -> dict[str, Any]:
 
     frontmatter_str = "\n".join(lines[1:closing_idx])
     body = "\n".join(lines[closing_idx + 1 :])
-    data: dict[str, Any] = yaml.load(frontmatter_str, Loader=YAML12SafeLoader) or {}  # noqa: S506
+    data = _load_yaml12_frontmatter(frontmatter_str, path=path)
     data["body"] = body
     return data
 
