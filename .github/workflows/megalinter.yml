@@ -7,8 +7,8 @@ name: MegaLinter
       - dev
   workflow_dispatch:
     inputs:
-      fix:
-        description: "Apply autofixes after linting"
+      skip_fixes:
+        description: "Skip applying autofixes after linting"
         type: boolean
         default: false
       fix_mode:
@@ -32,9 +32,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      APPLY_FIXES: ${{ inputs.fix && 'all' || 'none' }}
+      APPLY_FIXES: ${{ inputs.skip_fixes && 'none' || 'all' }}
       APPLY_FIXES_EVENT: all
-      APPLY_FIXES_MODE: ${{ inputs.fix_mode }}
+      APPLY_FIXES_MODE: ${{ inputs.fix_mode || 'pull_request' }}
 
     permissions:
       actions: read
@@ -115,7 +115,10 @@ jobs:
       - name: Create pull request with applied fixes
         id: fix_pr
         if: >-
-          ${{ inputs.fix && inputs.fix_mode == 'pull_request' && steps.megalinter.outputs.has_updated_sources == '1' }}
+          ${{ !inputs.skip_fixes &&
+              steps.megalinter.outputs.has_updated_sources == '1' &&
+              (inputs.fix_mode || 'pull_request') == 'pull_request' &&
+              (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1  # v8.1.1
         with:
           token: ${{ secrets.PAT || secrets.GITHUB_TOKEN }}
@@ -130,12 +133,18 @@ jobs:
           delete-branch: true
 
       - name: Prepare fix commit
-        if: ${{ inputs.fix && inputs.fix_mode == 'commit' && steps.megalinter.outputs.has_updated_sources == '1' }}
+        if: >-
+          ${{ !inputs.skip_fixes &&
+              steps.megalinter.outputs.has_updated_sources == '1' &&
+              inputs.fix_mode == 'commit' }}
         run: sudo chown -Rc "$UID" .git/
 
       - name: Commit and push applied fixes
         id: fix_commit
-        if: ${{ inputs.fix && inputs.fix_mode == 'commit' && steps.megalinter.outputs.has_updated_sources == '1' }}
+        if: >-
+          ${{ !inputs.skip_fixes &&
+              steps.megalinter.outputs.has_updated_sources == '1' &&
+              inputs.fix_mode == 'commit' }}
         uses: stefanzweifel/git-auto-commit-action@04702edda442b2e678b25b537cec683a1493fcb9  # v7.1.0
         with:
           branch: ${{ github.ref_name }}
@@ -147,9 +156,9 @@ jobs:
         if: always()
         shell: bash
         env:
-          INPUT_FIX: ${{ inputs.fix }}
-          INPUT_FIX_MODE: ${{ inputs.fix_mode }}
-          FIX_MODE_DISPLAY: ${{ inputs.fix && inputs.fix_mode || 'disabled' }}
+          INPUT_SKIP_FIXES: ${{ inputs.skip_fixes }}
+          INPUT_FIX_MODE: ${{ inputs.fix_mode || 'pull_request' }}
+          FIX_MODE_DISPLAY: ${{ inputs.skip_fixes && 'disabled' || (inputs.fix_mode || 'pull_request') }}
           GITHUB_REF_NAME: ${{ github.ref_name }}
           MEGALINTER_HAS_UPDATED_SOURCES: ${{ steps.megalinter.outputs.has_updated_sources }}
           FIX_PR_OUTCOME: ${{ steps.fix_pr.outcome }}
@@ -166,10 +175,10 @@ jobs:
           {
             echo "## MegaLinter Results"
             echo ""
-            echo "Auto-fix enabled: $INPUT_FIX"
+            echo "Auto-fix skipped: $INPUT_SKIP_FIXES"
             echo "Auto-fix mode: $FIX_MODE_DISPLAY"
             echo ""
-            if [ "$INPUT_FIX" = "true" ] && [ "$MEGALINTER_HAS_UPDATED_SOURCES" = "1" ]; then
+            if [ "$INPUT_SKIP_FIXES" != "true" ] && [ "$MEGALINTER_HAS_UPDATED_SOURCES" = "1" ]; then
               if [ "$INPUT_FIX_MODE" = "pull_request" ] && [ "$FIX_PR_OUTCOME" = "success" ]; then
                 echo "Created or updated fix PR: $FIX_PR_URL"
               elif [ "$FIX_COMMIT_OUTCOME" = "success" ]; then
@@ -178,7 +187,7 @@ jobs:
                 echo "MegaLinter updated files, but publishing those fixes did not complete."
               fi
               echo ""
-            elif [ "$INPUT_FIX" = "true" ]; then
+            elif [ "$INPUT_SKIP_FIXES" != "true" ]; then
               echo "Auto-fix was enabled, but MegaLinter did not report updated files."
               echo ""
             fi
