@@ -273,3 +273,51 @@ class TestFromAC_ProofBundleMigration:
         # Empty value should not produce proof_bundle: '' in frontmatter
         # Acceptable: 'already' (treated as no-op) or 'failed'
         assert result in {"already", "failed"}
+
+    # -----------------------------------------------------------------------
+    # AC1+AC2 — differentiated multi-match: different values prove first-match
+    # semantics for both frontmatter population and body removal
+    # -----------------------------------------------------------------------
+
+    def test_frontmatter_value_comes_from_first_match_not_later(
+        self, tmp_path: Path
+    ) -> None:
+        """AC1+AC2: first body line has 'smoke', later line has 'behavioral'.
+
+        Frontmatter proof_bundle must be 'smoke' (first match), not 'behavioral'.
+        This test distinguishes first-match extraction from any-match extraction.
+        """
+        fm = "id: 1042\ntitle: Test\nstatus: todo\n"
+        body = (
+            "Proof bundle: smoke\n"
+            "## Builder Notes\n"
+            "Proof bundle: behavioral\n"
+        )
+        path = _make_task_file(tmp_path, fm, body, filename="1042.md")
+        _migrate_proof_bundle_field(path)
+        content = path.read_text(encoding="utf-8")
+        fm_text = _fm_section(content)
+        assert "proof_bundle: smoke" in fm_text
+        assert "proof_bundle: behavioral" not in fm_text
+
+    def test_first_match_line_removed_not_later_match_line(
+        self, tmp_path: Path
+    ) -> None:
+        """AC2: first body line has 'smoke', later line has 'behavioral'.
+
+        After migration: 'Proof bundle: smoke' is removed from body;
+        'Proof bundle: behavioral' remains in body.
+        This test distinguishes first-line removal from any-line removal.
+        """
+        fm = "id: 1043\ntitle: Test\nstatus: todo\n"
+        body = (
+            "Proof bundle: smoke\n"
+            "## Builder Notes\n"
+            "Proof bundle: behavioral\n"
+        )
+        path = _make_task_file(tmp_path, fm, body, filename="1043.md")
+        _migrate_proof_bundle_field(path)
+        content = path.read_text(encoding="utf-8")
+        body_part = _body_section(content)
+        assert "Proof bundle: smoke" not in body_part
+        assert "Proof bundle: behavioral" in body_part
