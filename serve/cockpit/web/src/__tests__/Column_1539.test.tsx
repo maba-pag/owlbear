@@ -121,16 +121,17 @@ describe('TestFromAC_ColumnStructure', () => {
 // RED: column-body does not exist (2a fails); Column.css does not exist (2b fails with ENOENT).
 
 describe('TestFromAC_ColumnOverflow', () => {
-  // AC-2a: body container must have a CSS class — proves CSS wiring, not just inline style.
-  // FAIL: data-testid="column-body" does not exist in current Column.tsx.
-  it('column-body container has at least one CSS class on its classList', () => {
+  // AC-2a: body container must carry the expected CSS class 'column-body' on its classList.
+  // Naming the class proves CSS wiring: the overflow-y rule is attached to THIS selector,
+  // not just any selector in the file.
+  it('column-body container has the CSS class "column-body" on its classList', () => {
     const { container } = renderColumn('todo', [makeTask(1, 'todo'), makeTask(2, 'todo')])
     const body = container.querySelector('[data-testid="column-body"]') as HTMLElement | null
     expect(body, 'column-body must exist').not.toBeNull()
     expect(
-      body!.classList.length,
-      'column-body must have a CSS class (the class is what carries overflow-y: auto from Column.css)',
-    ).toBeGreaterThan(0)
+      body!.classList.contains('column-body'),
+      'column-body element must have class "column-body" so the overflow-y: auto rule from Column.css is applied',
+    ).toBe(true)
   })
 
   // AC-2b: Column.css file must exist alongside Column.tsx.
@@ -142,14 +143,16 @@ describe('TestFromAC_ColumnOverflow', () => {
     ).toBe(true)
   })
 
-  // AC-2b: Column.css must declare overflow-y: auto for the scrollable body class.
+  // AC-2b: Column.css must declare overflow-y: auto WITHIN the .column-body selector block,
+  // not just somewhere in the file. This prevents false-green if overflow moves to another selector.
   // FAIL: Column.css does not exist → fs.readFileSync throws ENOENT.
-  it('Column.css contains overflow-y: auto declaration for the body/scroll container class', () => {
+  it('Column.css declares overflow-y: auto inside the .column-body selector block', () => {
     const css = fs.readFileSync(COLUMN_CSS, 'utf-8')
+    const hasOverflowOnBodyClass = /\.column-body\s*\{[^}]*overflow-y\s*:\s*auto/s.test(css)
     expect(
-      css,
-      'Column.css must contain overflow-y: auto for the body container class',
-    ).toMatch(/overflow-y\s*:\s*auto/)
+      hasOverflowOnBodyClass,
+      'Column.css must have overflow-y: auto inside the .column-body { } rule — not just anywhere in the file',
+    ).toBe(true)
   })
 })
 
@@ -191,15 +194,19 @@ describe('TestFromAC_ColumnEmptyState', () => {
     expect(emptyEl!.textContent).toBe('No in-progress tasks')
   })
 
-  // AC-3b: Column.css must have centering declarations on the empty-state class.
+  // AC-3b: Column.css must have centering declarations WITHIN the .column-empty selector block.
+  // File-wide matches could false-green on unrelated centered selectors.
   // FAIL: Column.css does not exist → fs.readFileSync throws ENOENT.
-  it('Column.css contains centering declarations on the empty-state class', () => {
+  it('Column.css declares centering inside the .column-empty selector block', () => {
     const css = fs.readFileSync(COLUMN_CSS, 'utf-8')
-    const hasFlex = /display\s*:\s*flex/.test(css) && /align-items\s*:\s*center/.test(css)
-    const hasTextAlign = /text-align\s*:\s*center/.test(css)
+    // flex centering: display:flex + align-items:center inside .column-empty { ... }
+    const hasFlexCentering =
+      /\.column-empty\s*\{[^}]*display\s*:\s*flex[^}]*align-items\s*:\s*center/s.test(css)
+    // fallback: text-align:center inside .column-empty { ... }
+    const hasTextAlignCentering = /\.column-empty\s*\{[^}]*text-align\s*:\s*center/s.test(css)
     expect(
-      hasFlex || hasTextAlign,
-      'Column.css must contain centering declarations (flex align-items: center, or text-align: center) on the empty-state class',
+      hasFlexCentering || hasTextAlignCentering,
+      'Column.css must have centering declarations (flex+align-items:center, or text-align:center) inside the .column-empty { } rule — not just anywhere in the file',
     ).toBe(true)
   })
 })
