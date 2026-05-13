@@ -122,6 +122,14 @@ External repos and resources studied during OwlBear development.
 | Knip — JS/TS unused code finder | <https://github.com/webpro-nl/knip> | Finds unused files, dependencies, exports; category-based scan structure | `.owlbear/research/1414-legacy-audit-prompt.md` | 2026-05-08 |
 | Ruff F401 — unused import rule | <https://github.com/astral-sh/ruff/issues/872> | Discussion of vulture-like dead code detection in ruff; confirms F401 covers imports | `.owlbear/research/1414-legacy-audit-prompt.md` | 2026-05-08 |
 
+## Theme Toggle UI Test Research (Task #1540)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| OneUptime — Unit Test React with Vitest | <https://oneuptime.com/blog/post/2026-01-15-unit-test-react-vitest-testing-library/view> | ThemeToggle test example: vi.mock Context, click toggle, assert text reflects state | `.owlbear/research/1540-theme-toggle-ui-test-approach.md` | 2026-05-13 |
+| next-themes issue #21 — testing implementations | <https://github.com/pacocoursey/next-themes/issues/21> | ThemeSpy pattern, data-testid convention, fireEvent on toggle | `.owlbear/research/1540-theme-toggle-ui-test-approach.md` | 2026-05-13 |
+| Stack Overflow — test theme toggler with RTL | <https://stackoverflow.com/questions/72561602> | userEvent.click toggle, assert visual state change | `.owlbear/research/1540-theme-toggle-ui-test-approach.md` | 2026-05-13 |
+
 ## Theme Bootstrap + useTheme Hook Testing Research (Task #1537)
 
 | Source | URL | What | Where Used | Date |
