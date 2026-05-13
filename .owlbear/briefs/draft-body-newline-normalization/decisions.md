@@ -49,3 +49,27 @@
 ## D5 — 2026-05-13 — Layer Placement
 
 **Chosen:** MCP server layer — error originates from agents only, never direct API/engine consumers. Even though "real logic in MCP feels wrong," it's the correct place for agent-specific input sanitization + feedback.
+
+## D6 — 2026-05-13 — Implementation Mechanics
+
+**Status quo:** Two viable designs: simple `.replace()` vs. three-step protect/normalize/restore.
+**Decision to make:** Which normalization implementation?
+
+**Options considered:**
+
+- A: Simple replace — `text.replace("\\n", "\n")`, one-liner, no escape path possible
+- B: Three-step — protect `\\n` → normalize `\n` → restore, enables functional escape convention
+
+**Chosen:** B — Three-step protection
+
+**Rejected:**
+
+- A because the user chose to reference a functional escape convention in guidance messaging; simple replace cannot honor any escape convention (the byte sequence is destroyed regardless of agent encoding)
+
+## D7 — 2026-05-13 — `create_dr` Response Shape
+
+**Chosen:** Add optional `guidance` key to the `create_dr` dict response. Additive change — existing consumers ignore unknown keys. Keeps notification contract consistent across all 4 tools.
+
+## D8 — 2026-05-13 — Guidance Message Content
+
+**Chosen:** Guidance references the escape convention. Message indicates normalization occurred and documents that agents can use `\\\\n` in JSON parameters to preserve intentional literal `\n` on first write. Documented limitation: re-edit by unaware agents may degrade preserved literals.
