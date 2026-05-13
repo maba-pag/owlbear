@@ -213,6 +213,21 @@ class TestFromAC_ProofBundleValidation:
                 f"Expected '{base}+challenge+reader' in VALID_PROOF_BUNDLES"
             )
 
+    def test_valid_proof_bundles_exact_set(self) -> None:
+        """AC1: VALID_PROOF_BUNDLES equals exactly the 20-member set (5 bases x 4 modifier subsets).
+
+        Guards against extra invalid members that subset checks would miss.
+        """
+        from owlbear_kanban.engine import VALID_PROOF_BUNDLES  # noqa: PLC0415
+        bases = ("skip", "existing", "smoke", "behavioral", "critical")
+        expected: frozenset[str] = frozenset(
+            set(bases)
+            | {f"{base}+challenge" for base in bases}
+            | {f"{base}+reader" for base in bases}
+            | {f"{base}+challenge+reader" for base in bases}
+        )
+        assert expected == VALID_PROOF_BUNDLES
+
 
 # ---------------------------------------------------------------------------
 # AC2 — edit_task ac/add_ac/remove_ac contract + mutual exclusivity
@@ -328,6 +343,22 @@ class TestFromAC_EditTaskAddAcDuplicates:
             engine.edit_task("1", add_ac=["dup", "new item"])
         assert exc_info.value.code == "ERR_AC_DUPLICATE"
 
+    def test_edit_task_add_ac_multi_duplicate_error_lists_all_duplicates(
+        self, tmp_path: Path
+    ) -> None:
+        """AC3: ValidationError lists ALL existing duplicates when multiple are provided."""
+        engine, kanban_dir = _make_engine(tmp_path)
+        _write_task(
+            kanban_dir,
+            task_id=1,
+            extra_fields='ac:\n  - "dup one"\n  - "dup two"\n',
+        )
+        with pytest.raises(ValidationError) as exc_info:
+            engine.edit_task("1", add_ac=["dup one", "dup two", "genuinely new"])
+        assert exc_info.value.code == "ERR_AC_DUPLICATE"
+        assert "dup one" in exc_info.value.user_message
+        assert "dup two" in exc_info.value.user_message
+
 
 # ---------------------------------------------------------------------------
 # AC4 — AC guardrails: max 20 items, 500-char limit
@@ -412,6 +443,23 @@ class TestFromAC_AcGuardrails:
         with pytest.raises(ValidationError) as exc_info:
             engine.edit_task("1", add_ac=["x" * 501])
         assert exc_info.value.code == "ERR_AC_ITEM_TOO_LONG"
+
+    def test_edit_task_exactly_20_ac_items_replace_succeeds(self, tmp_path: Path) -> None:
+        """AC4: edit_task(ac=[20 items]) is accepted - positive boundary for edit_task replace."""
+        engine, kanban_dir = _make_engine(tmp_path)
+        _write_task(kanban_dir, task_id=1)
+        ac_items = [f"AC{i}: boundary item" for i in range(20)]
+        task = engine.edit_task("1", ac=ac_items)
+        assert len(task.ac) == 20
+
+    def test_edit_task_ac_item_exactly_500_chars_replace_succeeds(
+        self, tmp_path: Path
+    ) -> None:
+        """AC4: edit_task(ac=['x' * 500]) is accepted - positive boundary for edit_task replace."""
+        engine, kanban_dir = _make_engine(tmp_path)
+        _write_task(kanban_dir, task_id=1)
+        task = engine.edit_task("1", ac=["x" * 500])
+        assert len(task.ac[0]) == 500
 
 
 # ---------------------------------------------------------------------------
@@ -503,3 +551,30 @@ class TestFromAC_ListTasksAcSearch:
         )
         results = engine.list_tasks(search="targetword")
         assert any(t.id == 1 for t in results)
+
+    def test_list_tasks_search_ac_non_matching_task_excluded(self, tmp_path: Path) -> None:
+        """AC5: task with no ac/title/body matching the keyword is excluded from results.
+
+        Proves the search actually filters — an implementation returning all tasks for
+        any non-empty search would fail here.
+        """
+        engine, kanban_dir = _make_engine(tmp_path)
+        # Task 1: keyword in ac → must be included
+        _write_task(
+            kanban_dir,
+            task_id=1,
+            title="unrelated title",
+            body="unrelated body",
+            extra_fields='ac:\n  - "contains exclusionword here"\n',
+        )
+        # Task 2: keyword absent from title, body, and ac → must be excluded
+        _write_task(
+            kanban_dir,
+            task_id=2,
+            title="another unrelated task",
+            body="another unrelated body",
+        )
+        results = engine.list_tasks(search="exclusionword")
+        ids = {t.id for t in results}
+        assert 1 in ids
+        assert 2 not in ids
