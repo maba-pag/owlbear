@@ -446,6 +446,8 @@ class Task(BaseModel):
     tags: list[str] = Field(default_factory=list)
     parent: int | None = None
     depends_on: list[int] = Field(default_factory=list)
+    ac: list[str] = Field(default_factory=list)
+    proof_bundle: str | None = None
     blocked: bool = False
     block_reason: str | None = None
 
@@ -464,6 +466,34 @@ class Task(BaseModel):
             data = dict(data)
             data.pop("dep_status", None)
         return data
+
+    @field_validator("proof_bundle")
+    @classmethod
+    def _normalize_proof_bundle(cls, value: str | None) -> str | None:
+        """Normalize proof bundle casing and canonical modifier ordering."""
+        if value is None:
+            return None
+        parts = [part.strip().lower() for part in value.split("+") if part.strip()]
+        if not parts:
+            return ""
+        if len(parts) == 1:
+            return parts[0]
+
+        base_rank = {
+            "skip": 0,
+            "existing": 1,
+            "smoke": 2,
+            "behavioral": 3,
+            "critical": 4,
+        }
+        bundle_tokens = [part for part in parts if part in base_rank]
+        if bundle_tokens:
+            base = max(bundle_tokens, key=lambda token: base_rank[token])
+            parts.remove(base)
+        else:
+            base = parts.pop(0)
+
+        return "+".join([base, *sorted(parts)])
 
 
 class TaskSummary(BaseModel):
@@ -492,6 +522,7 @@ class TaskSummary(BaseModel):
     dep_status: str | None = None
     parent: int | None = None
     depends_on: list[int] = Field(default_factory=list)
+    proof_bundle: str | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -594,6 +625,7 @@ class TaskFull(TaskSummary):
     created: str
     updated: str
     body: str | None = None
+    ac: list[str] = Field(default_factory=list)
 
 
 class DispatchEntry(BaseModel):
@@ -606,6 +638,7 @@ class DispatchEntry(BaseModel):
     priority: str
     title: str
     tags: list[str] = Field(default_factory=list)
+    proof_bundle: str | None = None
     agent: str
 
 

@@ -219,6 +219,8 @@ _CANONICAL_FIELDS: list[str] = [
     "tags",
     "parent",
     "depends_on",
+    "ac",
+    "proof_bundle",
     "blocked",
     "block_reason",
     "claimed_at",
@@ -410,6 +412,10 @@ def write_task(task: Task, kanban_dir: Path, *, target_dir: Path | None = None) 
     data: dict[str, Any] = task.model_dump()
     data.pop("body", None)
     data.pop("claimed_by", None)  # Never write claimed_by (AC-C13)
+    if data.get("ac") == []:
+        data.pop("ac", None)
+    if data.get("proof_bundle") is None:
+        data.pop("proof_bundle", None)
     body: str = task.body or ""
 
     # Build ordered frontmatter (AC-C13)
