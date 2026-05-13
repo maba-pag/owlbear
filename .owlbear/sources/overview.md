@@ -36,6 +36,13 @@ External repos and resources studied during OwlBear development.
 | PDS v4 Border Tokens | <https://designsystem.porsche.com/v4/tokens/border/> | Radius token values: xs through 4xl + full | `.owlbear/research/1535-token-architecture-test-approach.md` | 2026-05-13 |
 | PDS v4 Spacing Tokens | <https://designsystem.porsche.com/v4/tokens/spacing/> | Spacing token values: fluid and static families | `.owlbear/research/1535-token-architecture-test-approach.md` | 2026-05-13 |
 
+## Column CSS Test Research (Task #1539)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| SO: vitest CSS styling test | <https://stackoverflow.com/questions/76571158/vitest-cannot-test-for-presence-of-specific-styling> | jsdom CSS cascade not implemented; use class presence or E2E | `.owlbear/research/1539-column-css-test-approach.md` | 2026-05-13 |
+| jsdom CSS cascade PR | <https://github.com/jsdom/jsdom/pull/2690> | CSS cascade implementation status in jsdom | `.owlbear/research/1539-column-css-test-approach.md` | 2026-05-13 |
+
 ## Sidecar Collapse Toggle Test Research (Task #1541)
 
 | Source | URL | What | Where Used | Date |
