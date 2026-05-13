@@ -26,6 +26,16 @@ External repos and resources studied during OwlBear development.
 |--------|-----|------|------------|------|
 | PDS Banner examples (v3) | <https://designsystem.porsche.com/v3/components/banner/examples/> | Usage patterns, slot-based heading/description, CSS custom properties | `.owlbear/research/cockpit-wire-pbanner-shell.md` | 2026-05-12 |
 
+## Token Architecture Test Research (Task #1535)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| PDS v4 Migration Guide | <https://designsystem.porsche.com/v4/news/migration-guide/porsche-design-system/> | PDS v4 theme system: light-dark() CSS function, color-scheme property, scheme-* classes | `.owlbear/research/1535-token-architecture-test-approach.md` | 2026-05-13 |
+| PDS v4 CSS Variables | <https://designsystem.porsche.com/v4/stylesheets/css-variables/introduction/> | Full CSS variable reference: --p-color-*, --p-shadow-*, --p-radius-*, --p-spacing-* | `.owlbear/research/1535-token-architecture-test-approach.md` | 2026-05-13 |
+| PDS v4 Shadow Tokens | <https://designsystem.porsche.com/v4/tokens/shadow/> | Shadow token values: sm, md, lg | `.owlbear/research/1535-token-architecture-test-approach.md` | 2026-05-13 |
+| PDS v4 Border Tokens | <https://designsystem.porsche.com/v4/tokens/border/> | Radius token values: xs through 4xl + full | `.owlbear/research/1535-token-architecture-test-approach.md` | 2026-05-13 |
+| PDS v4 Spacing Tokens | <https://designsystem.porsche.com/v4/tokens/spacing/> | Spacing token values: fluid and static families | `.owlbear/research/1535-token-architecture-test-approach.md` | 2026-05-13 |
+
 ## PInlineNotification Modal Error Research (Task #1499)
 
 | Source | URL | What | Where Used | Date |
