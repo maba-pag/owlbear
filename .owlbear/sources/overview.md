@@ -42,6 +42,13 @@ External repos and resources studied during OwlBear development.
 |--------|-----|------|------------|------|
 | WAI-ARIA aria-expanded guide | <https://www.webability.io/glossary/aria-expanded> | Disclosure widget pattern: aria-expanded + CSS state synchronization | `.owlbear/research/1541-sidecar-collapse-toggle-test-approach.md` | 2026-05-13 |
 
+## Card Component CSS Test Research (Task #1538)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Vitest issue #1689 (getComputedStyle) | <https://github.com/vitest-dev/vitest/issues/1689> | Confirms JSDOM doesn't apply imported CSS to getComputedStyle | `.owlbear/research/1538-card-css-test-approach.md` | 2026-05-13 |
+| SO: vitest cannot test for specific styling | <https://stackoverflow.com/questions/76571158/vitest-cannot-test-for-presence-of-specific-styling> | Community consensus: use E2E for computed styles, not jsdom | `.owlbear/research/1538-card-css-test-approach.md` | 2026-05-13 |
+
 ## PInlineNotification Modal Error Research (Task #1499)
 
 | Source | URL | What | Where Used | Date |
