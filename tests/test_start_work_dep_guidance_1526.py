@@ -194,19 +194,21 @@ class TestFromAC_DepGuidanceBlocked:
         )
         assert resp.guidance[0] == expected
 
-    def test_multiple_blocked_deps_guidance_lists_all_ids(
+    def test_multiple_blocked_deps_guidance_exact_format(
         self, tmp_path: Path
     ) -> None:
-        """Two active deps → guidance mentions both dep IDs."""
+        """Two active deps → guidance is exactly the AC1 format with comma-separated IDs."""
         board = _make_board(tmp_path)
         _write_task(board, task_id=1, depends_on="[98, 99]")
         _write_task(board, task_id=98, status="todo")
         _write_task(board, task_id=99, status="in-progress")
         engine = KanbanEngine(board, activity_log=False)
         resp = engine.agent_view().start_work(1)
-        assert len(resp.guidance) == 1
-        assert "98" in resp.guidance[0]
-        assert "99" in resp.guidance[0]
+        expected = (
+            "⚠️ This task has unresolved dependencies (IDs: 98, 99). "
+            "Review and confirm with the user that starting this work is intentional."
+        )
+        assert resp.guidance == [expected]
 
 
 # ---------------------------------------------------------------------------
@@ -327,3 +329,23 @@ class TestFromAC_DepGuidanceResilience:
         assert isinstance(resp, SingleTaskResponse)
         assert resp.claimed_at is not None
         assert resp.guidance == []
+
+    def test_mixed_dep_one_fails_one_blocked_guidance_lists_surviving_dep(
+        self, tmp_path: Path
+    ) -> None:
+        """One dep raises FileNotFoundError (skipped), other dep is active blocked.
+
+        Verifies that start_work() continues processing remaining deps after a
+        failing lookup and emits guidance only for the surviving blocked dep.
+        """
+        board = _make_board(tmp_path)
+        _write_task(board, task_id=1, depends_on="[98, 99]")
+        # task 98 intentionally absent → FileNotFoundError, silently skipped
+        _write_task(board, task_id=99, status="todo")
+        engine = KanbanEngine(board, activity_log=False)
+        resp = engine.agent_view().start_work(1)
+        expected = (
+            "⚠️ This task has unresolved dependencies (IDs: 99). "
+            "Review and confirm with the user that starting this work is intentional."
+        )
+        assert resp.guidance == [expected]
