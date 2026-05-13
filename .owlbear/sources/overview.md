@@ -68,6 +68,12 @@ External repos and resources studied during OwlBear development.
 |--------|-----|------|------------|------|
 | PDS v4 CDN docs | <https://designsystem.porsche.com/v4/must-know/performance/cdn/> | CDN architecture, China CDN config — confirms only `auto`/`cn` options | `.owlbear/research/1495-pds-v4-local-hosting.md` | 2026-05-12 |
 | PDS v4 migration guide | <https://designsystem.porsche.com/v4/news/migration-guide/porsche-design-system/> | Breaking changes in v4: removed `getInitialStyles()`, mandatory global styles | `.owlbear/research/1495-pds-v4-local-hosting.md` | 2026-05-12 |
+
+## Shell + Secondary CSS Test Research (Task #1542)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Vitest issue #1689 (getComputedStyle) | <https://github.com/vitest-dev/vitest/issues/1689> | Confirms jsdom doesn't apply imported CSS; file-based testing required | `.owlbear/research/1542-shell-secondary-css-test-approach.md` | 2026-05-13 |
 | PDS GitHub `load()` source | <https://github.com/porsche-design-system/porsche-design-system/blob/main/packages/components-js/projects/components-manager-cli/library-entry/with-prefix.ts> | Load function internals: hardcoded CDN URLs, cdn.url assignment | `.owlbear/research/1495-pds-v4-local-hosting.md` | 2026-05-12 |
 | PDS GitHub issue #2701 | <https://github.com/porsche-design-system/porsche-design-system/issues/2701> | "Make Components-JS Prod Build configurable" — open since 2023, confirming no self-hosting support | `.owlbear/research/1495-pds-v4-local-hosting.md` | 2026-05-12 |
 | PDS `getCDNBaseURL` utility | <https://github.com/porsche-design-system/porsche-design-system/blob/main/packages/components/src/utils/getCDNBaseURL.ts> | Compile-time replaced with `document.porscheDesignSystem.cdn.url` in production builds | `.owlbear/research/1495-pds-v4-local-hosting.md` | 2026-05-12 |
