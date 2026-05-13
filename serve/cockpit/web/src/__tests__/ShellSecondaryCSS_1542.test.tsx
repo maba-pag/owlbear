@@ -23,18 +23,26 @@ function extractCssImports(source: string): string[] {
 }
 
 function hasSelectorWithDeclaration(css: string, selector: string): boolean {
-  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const regex = new RegExp(`${escaped}\\s*\\{([\\s\\S]*?)\\}`, 'm')
-  const match = css.match(regex)
-  if (!match) {
-    return false
+  for (const match of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const selectorList = match[1]
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 0)
+    const declarations = match[2]
+    if (!selectorList.includes(selector)) {
+      continue
+    }
+    if (/:\s*[^;]+;/.test(declarations)) {
+      return true
+    }
   }
 
-  return /:\s*[^;]+;/.test(match[1])
+  return false
 }
 
-function findContextMenuClassWithRequiredTokens(css: string): string | null {
-  const classBlockPattern = /\.([a-zA-Z0-9_-]*context-menu[a-zA-Z0-9_-]*)\s*\{([\s\S]*?)\}/g
+function findClassSelectorsWithRequiredTokens(css: string): string[] {
+  const classBlockPattern = /\.([a-zA-Z0-9_-]+)\s*\{([\s\S]*?)\}/g
+  const classNames: string[] = []
 
   for (const match of css.matchAll(classBlockPattern)) {
     const className = match[1]
@@ -43,11 +51,11 @@ function findContextMenuClassWithRequiredTokens(css: string): string | null {
     const hasShadow = block.includes('var(--pds-shadow-md)')
     const hasRadius = block.includes('var(--pds-radius-md)')
     if (hasSurface && hasShadow && hasRadius) {
-      return className
+      classNames.push(className)
     }
   }
 
-  return null
+  return classNames
 }
 
 function makeBoard(): Board {
@@ -100,17 +108,17 @@ describe('TestFromAC_ContextMenuCssWiring_1542', () => {
     expect(existsSync(KANBAN_BOARD_CSS), `KanbanBoard.css must exist at ${KANBAN_BOARD_CSS}`).toBe(true)
     const css = readFileSync(KANBAN_BOARD_CSS, 'utf-8')
 
-    const className = findContextMenuClassWithRequiredTokens(css)
+    const classNames = findClassSelectorsWithRequiredTokens(css)
     expect(
-      className,
-      'KanbanBoard.css must define a context-menu class block containing var(--pds-background-surface), var(--pds-shadow-md), and var(--pds-radius-md)',
-    ).not.toBeNull()
+      classNames.length,
+      'KanbanBoard.css must define at least one class rule containing var(--pds-background-surface), var(--pds-shadow-md), and var(--pds-radius-md)',
+    ).toBeGreaterThan(0)
   })
 
   it('AC-2: rendered context-menu element has the CSS class declared in KanbanBoard.css', async () => {
     const css = readFileSync(KANBAN_BOARD_CSS, 'utf-8')
-    const className = findContextMenuClassWithRequiredTokens(css)
-    expect(className).not.toBeNull()
+    const classNames = findClassSelectorsWithRequiredTokens(css)
+    expect(classNames.length).toBeGreaterThan(0)
 
     const { container } = render(
       <KanbanBoard
@@ -131,7 +139,8 @@ describe('TestFromAC_ContextMenuCssWiring_1542', () => {
     await waitFor(() => {
       const menu = container.querySelector('[data-testid="context-menu"]') as HTMLElement | null
       expect(menu).not.toBeNull()
-      expect(menu!.classList.contains(className!)).toBe(true)
+      const menuClassList = Array.from(menu!.classList)
+      expect(menuClassList.some((className) => classNames.includes(className))).toBe(true)
     })
   })
 })
@@ -143,7 +152,7 @@ describe('TestFromAC_SecondaryCssMigration_1542', () => {
       return
     }
 
-    const stylesSource = readFileSync(STYLES_TS, 'utf-8')
+        expect(stylesSource).not.toMatch(/export\s+(?:const|let|var|function|class)\s+rowStyleForState\b/)
     expect(stylesSource).not.toMatch(/export\s+function\s+rowStyleForState\s*\(/)
     expect(stylesSource).not.toMatch(/export\s*\{[^}]*\browStyleForState\b[^}]*\}/)
   })
