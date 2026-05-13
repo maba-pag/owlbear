@@ -411,6 +411,10 @@ class TestFromAC_GuidancePositioning:
         result = await edit_task(_make_ctx(app_ctx), id="1", body="line1\\nline2")
         assert any(g == "existing reminder" for g in result.guidance)
         assert _has_norm_guidance(result.guidance)
+        # Assert relative order: existing reminder must precede normalization guidance.
+        existing_idx = next(i for i, g in enumerate(result.guidance) if g == "existing reminder")
+        norm_idx = next(i for i, g in enumerate(result.guidance) if _NORM_SUBSTR in g)
+        assert existing_idx < norm_idx, "normalization guidance must come AFTER existing guidance"
 
     @pytest.mark.asyncio
     async def test_end_work_existing_and_norm_guidance_both_present(
@@ -428,3 +432,76 @@ class TestFromAC_GuidancePositioning:
         )
         assert any(g == "existing reminder" for g in result.guidance)
         assert _has_norm_guidance(result.guidance)
+        # Assert relative order: existing reminder must precede normalization guidance.
+        existing_idx = next(i for i, g in enumerate(result.guidance) if g == "existing reminder")
+        norm_idx = next(i for i, g in enumerate(result.guidance) if _NORM_SUBSTR in g)
+        assert existing_idx < norm_idx, "normalization guidance must come AFTER existing guidance"
+
+
+# ── 7. Passthrough: no normalization when no literal \n in input ─────────────
+
+
+class TestFromAC_PassthroughNoNormalization:
+    """AC 6: when input has no literal \\n, no normalization occurs and no guidance is emitted.
+    Tool-boundary tests for all 5 affected parameters."""
+
+    @pytest.mark.asyncio
+    async def test_create_task_body_passthrough_no_normalization(
+        self, mock_view_ctx: tuple[AppContext, MagicMock]
+    ) -> None:
+        app_ctx, mock_view = mock_view_ctx
+        result = await create_task(_make_ctx(app_ctx), title="T", body="clean body no escapes")
+        body_passed = mock_view.create_task.call_args.kwargs["body"]
+        assert body_passed == "clean body no escapes"
+        assert not _has_norm_guidance(result.guidance)
+
+    @pytest.mark.asyncio
+    async def test_edit_task_body_passthrough_no_normalization(
+        self, mock_view_ctx: tuple[AppContext, MagicMock]
+    ) -> None:
+        app_ctx, mock_view = mock_view_ctx
+        result = await edit_task(_make_ctx(app_ctx), id="1", body="clean body no escapes")
+        body_passed = mock_view.edit_task.call_args.kwargs["body"]
+        assert body_passed == "clean body no escapes"
+        assert not _has_norm_guidance(result.guidance)
+
+    @pytest.mark.asyncio
+    async def test_edit_task_append_body_passthrough_no_normalization(
+        self, mock_view_ctx: tuple[AppContext, MagicMock]
+    ) -> None:
+        app_ctx, mock_view = mock_view_ctx
+        result = await edit_task(_make_ctx(app_ctx), id="1", append_body="clean append no escapes")
+        append_passed = mock_view.edit_task.call_args.kwargs["append_body"]
+        assert append_passed == "clean append no escapes"
+        assert not _has_norm_guidance(result.guidance)
+
+    @pytest.mark.asyncio
+    async def test_end_work_note_passthrough_no_normalization(
+        self, mock_view_ctx: tuple[AppContext, MagicMock]
+    ) -> None:
+        app_ctx, mock_view = mock_view_ctx
+        result = await end_work(
+            _make_ctx(app_ctx), id="1", outcome="success", note="clean note no escapes"
+        )
+        note_passed = mock_view.end_work.call_args.kwargs["note"]
+        assert note_passed == "clean note no escapes"
+        assert not _has_norm_guidance(result.guidance)
+
+    @pytest.mark.asyncio
+    async def test_create_dr_body_passthrough_no_normalization(
+        self, dr_ctx: AppContext, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        captured: dict = {}
+        monkeypatch.setattr(
+            "owlbear_mcp_kanban.server.decisions",
+            _fake_decisions(captured),
+        )
+        result = await create_dr(
+            _make_ctx(dr_ctx),
+            task_id="1",
+            agent="test-agent",
+            request_type="action",
+            body="clean body no escapes",
+        )
+        assert captured["body"] == "clean body no escapes"
+        assert not _has_norm_guidance(result.get("guidance", []))
