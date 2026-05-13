@@ -979,6 +979,7 @@ class AgentView:
                 agent (``ERR_ALREADY_CLAIMED``).
             :class:`NotFoundError`: No task matching *task_id*.
         """
+        guidance: list[str] = []
         try:
             task_record = self.engine.show_task(str(task_id))
             if task_record.status == "archived":
@@ -986,6 +987,38 @@ class AgentView:
                     code="ERR_ARCHIVED_NOT_CLAIMABLE",
                     user_message=f"Task '{task_id}' is archived and cannot be claimed",
                 )
+
+            active_ids: set[int] = set()
+            archived_reasons: dict[int, str | None] = {}
+            for dep_id in task_record.depends_on or []:
+                try:
+                    dep_task = self.engine.show_task(str(dep_id))
+                except (FileNotFoundError, CorruptionError, ValueError, KeyError):
+                    continue
+
+                if dep_task.status == "archived":
+                    archived_reasons[dep_id] = dep_task.archival_reason
+                else:
+                    active_ids.add(dep_id)
+
+            dep_status = self.engine._compute_dep_status(  # noqa: SLF001
+                task_record,
+                active_ids=active_ids,
+                archived_reasons=archived_reasons,
+            )
+
+            if dep_status == "blocked" and active_ids:
+                dep_ids = ", ".join(
+                    str(dep_id)
+                    for dep_id in (task_record.depends_on or [])
+                    if dep_id in active_ids
+                )
+                guidance.append(
+                    "⚠️ This task has unresolved dependencies "
+                    f"(IDs: {dep_ids}). "
+                    "Review and confirm with the user that starting this work is intentional."
+                )
+
             task = self.engine.start_work(str(task_id))
         except FileNotFoundError as exc:
             raise self._wrap_not_found(task_id) from exc
@@ -1011,7 +1044,7 @@ class AgentView:
                     user_message=f"Task '{task_id}' is blocked and cannot be claimed",
                 ) from exc
             raise ValidationError(code="ERR_INVALID_STATUS", user_message=msg) from exc
-        return self._to_single_response(task)
+        return self._to_single_response(task, guidance)
 
     def end_work(  # noqa: C901, PLR0912, PLR0913, PLR0915
         self,
