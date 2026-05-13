@@ -1,10 +1,10 @@
 ---
 id: 1535
 title: 'P1-01: test — token architecture: agnostic rename + expansion + dark overrides'
-status: done
+status: archived
 priority: critical
 created: 2026-05-13T18:41:58.189617+00:00
-updated: 2026-05-13T22:37:57.671752+00:00
+updated: 2026-05-13T23:13:03.081498+00:00
 tags:
   - phase-1
   - scope:cockpit
@@ -16,7 +16,7 @@ depends_on: []
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 Brief: see parent #1534 (`.owlbear/briefs/draft-board-visual-design/brief.md`)
@@ -217,3 +217,27 @@ Research doc: `.owlbear/research/1535-token-architecture-test-approach.md`
 
 **Files updated:** none  
 **Scratch cleanup:** no `.owlbear/scratch/1535-*` files found
+2026-05-13T23:13:03+00:00
+## Audit
+### Regression Detection
+- quality-runner mode full: 6224 passed; failures are pre-existing baseline (corruption, symlink, sync-workflow, pds-build-compat, integration tests — same 214+ pattern as task 1536 baseline run). 4 TokenArchitecture_1535 failures are expected RED. ESLint violation in `computeSignal.test.ts` is unrelated to this task.
+- regression verdict: PASS
+
+### Intent Verification
+- scope alignment: PASS (both commits touch only `serve/cockpit/web/src/__tests__/TokenArchitecture_1535.test.ts` — cockpit frontend test domain matches `scope:cockpit`, `css`, `test`, `frontend` tags)
+- purpose match: PASS (RED Vitest tests for token architecture rename/expansion/dark overrides per AC-1/2/3)
+- extraneous scope: none
+- boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 4/5
+AC was refined through two challenger rounds. Exhaustive 19-token enumeration, OS-dark fallback, non-empty value checks all specified. Minor gap: AC-1 didn't originally enforce exact-set semantics, requiring a reviewer-driven retry cycle to strengthen the assertion from subset to exact-set. Overall adequate.
+
+### Commit Integrity
+- upstream commit presence: PASS (`db8d89c8` builder, `c7ef94a1` test-writer retry — both scoped to single test file)
+- kanban commit packaging: pending (this audit cycle)
+
+### Deduction Breakdown
+No deductions applied.
+
+### Confidence: 1.00
+### Action: archive
