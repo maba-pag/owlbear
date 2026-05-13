@@ -1,0 +1,43 @@
+.card {
+  border: 1px solid transparent;
+  border-left: 4px solid transparent;
+  background: transparent;
+  min-height: 48px;
+  max-height: 56px;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  box-sizing: border-box;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+[data-signal="dr-pending"] {
+  border-left-color: var(--pds-notification-warning);
+}
+
+[data-signal="blocked"] {
+  border-left-color: var(--pds-notification-error);
+}
+
+[data-signal="claimed"] {
+  border-left-color: var(--pds-signal-claimed);
+}
+
+[data-signal="deps-unmet"] {
+  border-left-color: var(--pds-contrast-medium);
+}
+
+[data-selected="true"] {
+  box-shadow: inset 0 0 0 1px var(--pds-notification-success);
+  background: var(--pds-notification-success-soft);
+}
+
+.card:hover {
+  background: var(--pds-state-hover);
+}
+
+.card:focus-visible {
+  outline: 2px solid var(--pds-state-focus);
+  outline-offset: 1px;
+}

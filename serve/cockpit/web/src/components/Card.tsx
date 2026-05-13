@@ -1,4 +1,7 @@
 import type { Task } from '../hooks/useBoard'
+import './Card.css'
+
+type CardSignal = 'dr-pending' | 'blocked' | 'claimed' | 'deps-unmet' | 'ready'
 
 const PRIORITY_COLORS: Record<string, string> = {
   critical: 'var(--pds-theme-light-notification-error)',
@@ -10,6 +13,7 @@ const PRIORITY_COLORS: Record<string, string> = {
 
 export interface CardProps {
   task: Task
+  pendingDRIds?: Set<number>
   selected?: boolean
   onSelect?: (taskId: number) => void
   onContextMenu: (e: React.MouseEvent, task: Task) => void
@@ -17,7 +21,36 @@ export interface CardProps {
   onDragEnd: () => void
 }
 
-export function Card({ task, selected = false, onSelect, onContextMenu, onDragStart, onDragEnd }: CardProps) {
+function resolveSignal(task: Task, pendingDRIds: Set<number>): CardSignal {
+  const taskWithDeps = task as Task & { dep_status?: string | null }
+
+  if (pendingDRIds.has(task.id)) {
+    return 'dr-pending'
+  }
+  if (task.blocked) {
+    return 'blocked'
+  }
+  if (task.claimed) {
+    return 'claimed'
+  }
+  if (taskWithDeps.dep_status === 'blocked') {
+    return 'deps-unmet'
+  }
+
+  return 'ready'
+}
+
+export function Card({
+  task,
+  pendingDRIds = new Set<number>(),
+  selected = false,
+  onSelect,
+  onContextMenu,
+  onDragStart,
+  onDragEnd,
+}: CardProps) {
+  const signal = resolveSignal(task, pendingDRIds)
+
   function openContextMenu(event: React.KeyboardEvent<HTMLDivElement>) {
     const rect = event.currentTarget.getBoundingClientRect()
     const syntheticEvent = {
@@ -51,28 +84,18 @@ export function Card({ task, selected = false, onSelect, onContextMenu, onDragSt
       data-id={task.id}
       data-priority={task.priority}
       data-selected={selected ? 'true' : 'false'}
+      data-signal={signal}
       role="button"
       tabIndex={0}
       aria-haspopup="menu"
+      className="card"
       draggable={true}
       onClick={() => onSelect?.(task.id)}
       onKeyDown={handleKeyDown}
       onDragStart={() => onDragStart(task.id, task.updated)}
       onDragEnd={onDragEnd}
       onContextMenu={(e) => onContextMenu(e, task)}
-      style={{
-        border: selected ? '1px solid var(--pds-theme-light-notification-success)' : '1px solid transparent',
-        borderLeft: `4px solid ${PRIORITY_COLORS[task.priority] ?? 'var(--pds-theme-light-contrast-medium)'}`,
-        backgroundColor: selected ? 'var(--pds-theme-light-notification-success-soft)' : 'transparent',
-        minHeight: '48px',
-        maxHeight: '56px',
-        display: 'flex',
-        alignItems: 'center',
-        padding: '0 8px',
-        boxSizing: 'border-box',
-        overflow: 'hidden',
-        cursor: 'pointer',
-      }}
+      style={{ borderLeft: `4px solid ${PRIORITY_COLORS[task.priority] ?? 'var(--pds-theme-light-contrast-medium)'}` }}
     >
       <span data-testid="card-title" title={task.title}>
         {task.title}
