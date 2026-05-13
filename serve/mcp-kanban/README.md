@@ -23,8 +23,8 @@ The server exposes 9 tools:
 | `list_tasks` | `list_tasks(status: str \| None = None, priority: str \| None = None, tag: str \| None = None, archival_reason: str \| None = None, ids: list[int] \| None = None, unclaimed: bool = False, blocked: bool \| None = None, parent: int \| None = None, search: str \| None = None, sort: str \| None = None, reverse: bool = False, limit: int = 0)` |
 | `show_task` | `show_task(id: str \| int, section: str \| None = None)` |
 | `pick_tasks` | `pick_tasks(wave_size: int \| None = None, max_waves: int = 3)` |
-| `create_task` | `create_task(title: str, body: str = "", priority: str = "", tags: list[str] \| None = None, parent: int \| None = None, depends_on: list[int] \| None = None)` |
-| `edit_task` | `edit_task(id: str \| int, title: str \| None = None, body: str \| None = None, append_body: str \| None = None, timestamp: bool = False, priority: str \| None = None, parent: int \| None = None, add_dep: list[int] \| None = None, remove_dep: list[int] \| None = None, add_tag: list[str] \| None = None, remove_tag: list[str] \| None = None, block_reason: str \| None = None, archival_reason: str \| None = None, archival_refs: list[int] \| None = None)` |
+| `create_task` | `create_task(title: str, body: str = "", priority: str = "", tags: list[str] \| None = None, parent: int \| None = None, depends_on: list[int] \| None = None, ac: list[str] \| None = None, proof_bundle: str \| None = None)` |
+| `edit_task` | `edit_task(id: str \| int, title: str \| None = None, body: str \| None = None, append_body: str \| None = None, timestamp: bool = False, priority: str \| None = None, parent: int \| None = None, ac: list[str] \| None = None, add_ac: list[str] \| None = None, remove_ac: list[str] \| None = None, proof_bundle: str \| None = None, add_dep: list[int] \| None = None, remove_dep: list[int] \| None = None, add_tag: list[str] \| None = None, remove_tag: list[str] \| None = None, block_reason: str \| None = None, archival_reason: str \| None = None, archival_refs: list[int] \| None = None)` |
 | `move_task` | `move_task(id: str \| int, status: str, archival_reason: str \| None = None, archival_refs: list[int] \| None = None)` |
 | `start_work` | `start_work(id: str \| int)` |
 | `end_work` | `end_work(id: str \| int, outcome: str, move_to: str \| None = None, note: str \| None = None, archival_reason: str \| None = None, archival_refs: list[int] \| None = None, block_reason: str \| None = None)` |
@@ -46,6 +46,7 @@ The server exposes 9 tools:
 Returned by `list_tasks` in `tasks: list[TaskSummary]`.
 
 - Includes `dep_status` projection and archival metadata (`archival_reason`, `archival_refs`)
+- Includes `proof_bundle` (normalized string or `null`)
 - Excludes full body content
 
 ### TaskFull
@@ -53,14 +54,14 @@ Returned by `list_tasks` in `tasks: list[TaskSummary]`.
 Returned by `show_task` and single-task mutation/lifecycle responses.
 
 - Extends `TaskSummary`
-- Adds `created` and `body`
+- Adds `created`, `body`, and `ac: list[str]` (acceptance-criteria lines)
 
 ### DispatchEntry and Wave
 
 Returned by `pick_tasks` in `waves: list[Wave]`.
 
 - `Wave`: `index`, `tasks`
-- `DispatchEntry`: `id`, `status`, `priority`, `title`, `tags`, `agent`
+- `DispatchEntry`: `id`, `status`, `priority`, `title`, `tags`, `proof_bundle`, `agent`
 
 ### guidance Field
 
