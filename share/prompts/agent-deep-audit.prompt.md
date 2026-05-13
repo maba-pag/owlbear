@@ -20,11 +20,11 @@ Your mission is to evaluate one target in context, not in isolation:
 
 This is a surgical review. You are not running a broad ecosystem sweep.
 
-Conservative bias is mandatory:
+### Analytical Stance
 
-- When uncertain, keep existing instruction content.
-- Protect procedural sequences unless they are clearly harmful.
-- Protect institutional memory and workspace-specific constraints unless demonstrably stale.
+- Conservative on deletions: protect procedural sequences, institutional memory, and workspace-specific constraints unless evidence supports change.
+- Aggressive on questioning value: every section must justify its context-window cost. For every block, ask: "if an agent loads this, what decision does this section enable that it couldn't make without it?" If no answer, the section is a deletion candidate regardless of correctness.
+- Ground before proposing: never propose keep/delete/compress on a feature-specific section without checking whether the feature is exercised in practice (task archive, git history, real tool usage).
 
 ## 2. Shared Noise Taxonomy (Inline Reference)
 
@@ -48,6 +48,9 @@ Use this taxonomy for per-sentence signal-to-noise analysis. A sentence may matc
 6. Stale institutional memory
    - Legacy process references no longer grounded in current workflow.
    - Compression action: rewrite to current verified behavior or remove.
+7. Speculative infrastructure
+   - Guidance for features or workflows designed but never exercised in practice.
+   - Compression action: remove from protocol; preserve in research docs or companion skill if retrieval is needed later.
 
 ## 3. Scope Modes
 
@@ -93,15 +96,33 @@ Resulting unit: one skill in real consumer context.
 
 Do not evaluate until this pre-analysis is complete.
 
-1. Build the dependency cluster map.
-   - Nodes: files in scope.
-   - Edges: references, required_reading links, and consumer relationships.
+### 4.1 Cluster Loading
+
+1. Build the dependency cluster map (nodes = files, edges = references/required_reading/consumers).
 2. Load every file in the cluster.
 3. Summarize the target unit's operational purpose in 5-10 lines.
 4. Identify where each critical behavior is defined (agent vs skill vs instruction).
 5. Call out uncertainty boundaries before scoring quality.
 
 If cluster loading is incomplete, stop and report the missing files.
+
+### 4.2 Real-World Grounding
+
+Before proposing changes to any feature-specific section, verify actual usage:
+
+- Check kanban archive and active tasks for evidence the feature was exercised (tags applied, tools called, workflows triggered).
+- Check git history for commits that exercised the described mechanism.
+- Report findings per section as: **Exercised** (N instances), **Partially exercised** (mechanism used, not fully), or **Never exercised** (zero evidence).
+
+Sections describing never-exercised features are candidates for taxonomy category 7 regardless of textual correctness.
+
+### 4.3 Consumer-Impact Framing
+
+For every section in the target, answer:
+
+> "When agent X loads this skill at step Y, what decision does this section enable that X couldn't make without it?"
+
+For clusters with ≥5 files, present the consumer-impact framing and grounding results to the user via `askQuestions` before generating proposals. For smaller clusters, proceed directly but include the framing in proposal rationale.
 
 ## 5. Core Analysis Dimensions
 
@@ -133,7 +154,7 @@ Evaluate the cluster across all dimensions below.
 
 ### 5.5 Signal-to-Noise (Per Sentence)
 
-- Apply the 6-category taxonomy sentence-by-sentence.
+- Apply the 7-category taxonomy sentence-by-sentence.
 - For each flagged sentence, propose one action:
   - keep
   - terse rewrite
@@ -147,9 +168,9 @@ Evaluate the cluster across all dimensions below.
 - Identify contradictions between target and consumers.
 - Propose authoritative placement when duplication exists.
 
-## 6. Output Contract (Single Structured Proposal Per Target)
+## 6. Output Contract (Structured Decision Per Proposal)
 
-Produce one proposal package in this exact order.
+Produce one proposal package in this exact order:
 
 1. Structural Proposals (first)
    - Flow fixes, completeness fixes, and content moves between files.
@@ -158,20 +179,33 @@ Produce one proposal package in this exact order.
 3. Issues (third)
    - Broken links, missing tools, naming mismatches, unresolved references.
 
-Each proposal item must include:
+### 6.1 Decision Format (Required Per Proposal)
 
-- File path
-- Section
-- Current text excerpt
-- Proposed change
-- Rationale
-- Confidence (0.0-1.0)
+Each section-level proposal must use this structure:
+
+```
+**Status quo:** What exists, where, and its current role.
+**Problem:** Why this is a candidate for change (audience mismatch, redundancy, staleness, zero behavioral impact, speculative infrastructure).
+**Options:**
+  - (a) Keep as-is — Pro: {}, Con: {}, Risk: {} — Confidence: X
+  - (b) Compress/rewrite — Pro: {}, Con: {}, Risk: {} — Confidence: X
+  - (c) Delete — Pro: {}, Con: {}, Risk: {} — Confidence: X
+  - (d) Move to {file} — Pro: {}, Con: {}, Risk: {} — Confidence: X
+**Recommendation:** Option (X) because {reasoning}.
+**Expected outcome:** After this change, when agent {A} loads this skill at step {S}, it will {concrete behavioral description of what's different for the consumer}.
+```
+
+Not every proposal needs 4 options. Simple fixes (broken paths, typos) need only a fix description and confidence. Section-level and subsection-level decisions always need the full format.
+
+### 6.2 Proposal Grouping
+
+Group related proposals into coherent decision units. When a subsection deletion subsumes individual sentence-level edits, present the subsection decision first and note which lower-level proposals it absorbs.
 
 ## 7. Interaction Model (Approval Loop)
 
 Use section-by-section approval via `askQuestions`, grouped by file.
 
-Per file, present grouped proposals and ask:
+Per file, present grouped proposals (using §6.1 format inline in chat above the askQuestions call) and ask:
 
 - Approve all in this file
 - Approve selected items
@@ -186,6 +220,8 @@ After two consecutive files are approved without edits, offer a batch-approve es
 
 Never apply unapproved changes. Keep a running ledger of approved/rejected/deferred items.
 
+After applying changes, verify downstream references still resolve before continuing to the next file.
+
 ## 8. Guardrails
 
 - Do not broaden scope beyond the selected target cluster.
@@ -193,6 +229,7 @@ Never apply unapproved changes. Keep a running ledger of approved/rejected/defer
 - Do not claim all files need compression; no-change outcomes are valid.
 - Prefer precise cuts over broad rewrites.
 - Preserve procedural fidelity and institutional memory unless evidence supports change.
+- Do not propose changes based solely on text analysis — verify real-world grounding for feature-specific sections.
 
 ## 9. Final Deliverable Format
 
@@ -208,3 +245,14 @@ At completion, output:
 6. Residual risks and recommended next command
 
 If the user stops early, output the current ledger and remaining queue.
+
+## 10. Continuation Protocol
+
+After delivering §9, do not stop. Use `askQuestions` to offer:
+
+- Commit the changes (with proposed commit message)
+- Run another target through the audit
+- Revisit a deferred or rejected proposal with new framing
+- End session
+
+Never terminate without explicit user confirmation that the session is complete.

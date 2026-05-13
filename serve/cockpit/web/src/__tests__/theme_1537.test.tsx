@@ -7,10 +7,10 @@ type MatchMediaMock = (query: string) => MediaQueryList
 const VALID_THEME_VALUES = ['dark', 'light'] as const
 const THEME_STORAGE_KEY = 'owlbear-theme'
 
-function setMatchMedia(matches: boolean): void {
+function setMatchMedia(darkPreferred: boolean): void {
   const mock: MatchMediaMock = (query: string) => {
     const mediaQueryList: MediaQueryList = {
-      matches,
+      matches: darkPreferred && query === '(prefers-color-scheme: dark)',
       media: query,
       onchange: null,
       addEventListener: () => {},
@@ -69,6 +69,15 @@ describe('TestFromAC_ThemeBootstrap_1537', () => {
     applyTheme()
 
     expect(document.documentElement.dataset.theme).toBe('light')
+  })
+
+  it('AC-3: applyTheme falls back to OS dark when localStorage contains invalid value and OS prefers dark', () => {
+    setMatchMedia(true)
+    localStorage.setItem(THEME_STORAGE_KEY, 'sepia')
+
+    applyTheme()
+
+    expect(document.documentElement.dataset.theme).toBe('dark')
   })
 
   it('AC-3: applyTheme falls back to OS light when localStorage key is absent and OS prefers light', () => {
@@ -155,6 +164,7 @@ describe('TestFromAC_UseThemeHook_1537', () => {
     })
 
     expect(result.current.theme).toBe('dark')
+    expect(result.current.isDark).toBe(true)
     expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('dark')
     expect(document.documentElement.dataset.theme).toBe('dark')
 
@@ -164,6 +174,7 @@ describe('TestFromAC_UseThemeHook_1537', () => {
     })
 
     expect(result.current.theme).toBe('auto')
+    expect(result.current.isDark).toBe(false)
     expect(localStorage.getItem(THEME_STORAGE_KEY)).toBeNull()
     expect(document.documentElement.dataset.theme).toBe('light')
 
@@ -173,6 +184,7 @@ describe('TestFromAC_UseThemeHook_1537', () => {
     })
 
     expect(result.current.theme).toBe('light')
+    expect(result.current.isDark).toBe(false)
     expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('light')
     expect(document.documentElement.dataset.theme).toBe('light')
   })
