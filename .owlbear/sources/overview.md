@@ -72,6 +72,13 @@ External repos and resources studied during OwlBear development.
 | PDS GitHub issue #2701 | <https://github.com/porsche-design-system/porsche-design-system/issues/2701> | "Make Components-JS Prod Build configurable" — open since 2023, confirming no self-hosting support | `.owlbear/research/1495-pds-v4-local-hosting.md` | 2026-05-12 |
 | PDS `getCDNBaseURL` utility | <https://github.com/porsche-design-system/porsche-design-system/blob/main/packages/components/src/utils/getCDNBaseURL.ts> | Compile-time replaced with `document.porscheDesignSystem.cdn.url` in production builds | `.owlbear/research/1495-pds-v4-local-hosting.md` | 2026-05-12 |
 
+## Empty State Illustration Prompts Research (Task #1551)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| UX Planet — Empty State Design Guide | <https://uxplanet.org/empty-state-design-a-practical-guide-94ad0adbda45> | Empty state patterns, structure, and design best practices | `.owlbear/research/1551-empty-state-illustration-prompts.md` | 2026-05-13 |
+| Mockplus — 25 Best Empty State Examples | <https://www.mockplus.com/blog/post/empty-state-ui-design> | Inspiring empty state UI examples and templates | `.owlbear/research/1551-empty-state-illustration-prompts.md` | 2026-05-13 |
+
 ## Cockpit API Client Centralization Research (Task #1493)
 
 | Source | URL | What | Where Used | Date |
