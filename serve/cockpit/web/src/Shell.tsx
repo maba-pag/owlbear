@@ -18,7 +18,18 @@ function isHealthBadgeItem(item: ScanPollingItem): item is HealthBadgeItem {
 }
 
 function Shell() {
-  const { board, tasks, loading, error, health, refetchTasks, items: scanItems, isLoading, scanError, refetch } = useBoardState()
+  const {
+    board,
+    tasks,
+    loading,
+    error,
+    health,
+    refetchTasks,
+    items: scanItems,
+    isLoading,
+    scanError,
+    refetch,
+  } = useBoardState()
   const {
     count: pendingDRCount,
     items: pendingDRItems,

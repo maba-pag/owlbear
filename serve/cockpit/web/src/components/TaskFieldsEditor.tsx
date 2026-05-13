@@ -239,9 +239,15 @@ export default function TaskFieldsEditor({
           onInput={(event) => setBody(readControlValue(event))}
         />
       ) : (
-        <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>{body}</ReactMarkdown>
+        <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>
+          {body}
+        </ReactMarkdown>
       )}
-      <PButton data-testid="body-edit-toggle" variant="secondary" onClick={() => setEditBody((v) => !v)}>
+      <PButton
+        data-testid="body-edit-toggle"
+        variant="secondary"
+        onClick={() => setEditBody((v) => !v)}
+      >
         Edit
       </PButton>
 

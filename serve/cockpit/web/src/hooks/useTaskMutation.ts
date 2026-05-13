@@ -19,7 +19,10 @@ export interface UseTaskMutationOptions {
   board?: Board | null
   conflictActions: {
     clearConflict: () => void
-    setConflictDetected: (localDraft: ConflictLocalDraft | null, remoteTask: TaskDetail | null) => void
+    setConflictDetected: (
+      localDraft: ConflictLocalDraft | null,
+      remoteTask: TaskDetail | null,
+    ) => void
     setConflictDetectedNoRefetch: (localDraft: ConflictLocalDraft | null) => void
   }
   onTaskUpdated?: (task: TaskDetail) => void

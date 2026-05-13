@@ -79,7 +79,9 @@ export default function TaskActions({
     } else if (type === 'unclaim') {
       triggerId = 'unclaim-action'
     }
-    confirmTriggerRef.current = document.querySelector(`[data-testid="${triggerId}"]`) as HTMLElement | null
+    confirmTriggerRef.current = document.querySelector(
+      `[data-testid="${triggerId}"]`,
+    ) as HTMLElement | null
     setConfirmType(type)
   }
 

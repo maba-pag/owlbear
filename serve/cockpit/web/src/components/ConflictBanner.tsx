@@ -29,8 +29,12 @@ export default function ConflictBanner({
     <div data-testid="conflict-modal">
       {conflictChangedFields.map((field) => (
         <div key={field}>
-          <div data-testid={`conflict-remote-${field}`}>{conflictRemoteValues[field]}</div>
-          <div data-testid={`conflict-local-${field}`}>{conflictLocalValues[field]}</div>
+          <div data-testid={`conflict-remote-${field}`}>
+            {conflictRemoteValues[field]}
+          </div>
+          <div data-testid={`conflict-local-${field}`}>
+            {conflictLocalValues[field]}
+          </div>
         </div>
       ))}
       {!showConflictOverwrite && (
@@ -42,11 +46,17 @@ export default function ConflictBanner({
           Keep my edits
         </PButton>
       )}
-      <PButton data-testid="conflict-refresh" variant="secondary" onClick={onDiscardChanges}>
+      <PButton
+        data-testid="conflict-refresh"
+        variant="secondary"
+        onClick={onDiscardChanges}
+      >
         Discard changes
       </PButton>
       {showConflictOverwrite && (
-        <PButton data-testid="conflict-overwrite" onClick={onForceSave}>Force save</PButton>
+        <PButton data-testid="conflict-overwrite" onClick={onForceSave}>
+          Force save
+        </PButton>
       )}
     </div>
   )

@@ -45,25 +45,32 @@ export function useConflictDraft(): UseConflictDraftResult {
   const [conflictLocalDraft, setConflictLocalDraft] = useState<ConflictLocalDraft | null>(null)
   const [conflictRemoteTask, setConflictRemoteTask] = useState<ConflictRemoteTask | null>(null)
 
-  const conflictRemoteValues = useMemo<Record<string, string>>(() => ({
-    title: conflictRemoteTask?.title ?? '',
-    priority: conflictRemoteTask?.priority ?? '',
-    body: conflictRemoteTask?.body ?? '',
-    depends_on: (conflictRemoteTask?.depends_on ?? []).join(', '),
-    parent: conflictRemoteTask?.parent !== null && conflictRemoteTask?.parent !== undefined
-      ? String(conflictRemoteTask.parent)
-      : '',
-    block_reason: conflictRemoteTask?.block_reason ?? '',
-  }), [conflictRemoteTask])
+  const conflictRemoteValues = useMemo<Record<string, string>>(
+    () => ({
+      title: conflictRemoteTask?.title ?? '',
+      priority: conflictRemoteTask?.priority ?? '',
+      body: conflictRemoteTask?.body ?? '',
+      depends_on: (conflictRemoteTask?.depends_on ?? []).join(', '),
+      parent:
+        conflictRemoteTask?.parent !== null && conflictRemoteTask?.parent !== undefined
+          ? String(conflictRemoteTask.parent)
+          : '',
+      block_reason: conflictRemoteTask?.block_reason ?? '',
+    }),
+    [conflictRemoteTask],
+  )
 
-  const conflictLocalValues = useMemo<Record<string, string>>(() => ({
-    title: conflictLocalDraft?.title ?? '',
-    priority: conflictLocalDraft?.priority ?? '',
-    body: conflictLocalDraft?.body ?? '',
-    depends_on: conflictLocalDraft?.dependsOn ?? '',
-    parent: conflictLocalDraft?.parent ?? '',
-    block_reason: conflictLocalDraft?.blockReason ?? '',
-  }), [conflictLocalDraft])
+  const conflictLocalValues = useMemo<Record<string, string>>(
+    () => ({
+      title: conflictLocalDraft?.title ?? '',
+      priority: conflictLocalDraft?.priority ?? '',
+      body: conflictLocalDraft?.body ?? '',
+      depends_on: conflictLocalDraft?.dependsOn ?? '',
+      parent: conflictLocalDraft?.parent ?? '',
+      block_reason: conflictLocalDraft?.blockReason ?? '',
+    }),
+    [conflictLocalDraft],
+  )
 
   const conflictChangedFields = useMemo(
     () => CONFLICT_FIELDS.filter((field) => conflictRemoteValues[field] !== conflictLocalValues[field]),
