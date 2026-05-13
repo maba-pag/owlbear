@@ -526,6 +526,8 @@ class AgentView:
         tags: list[str] | None = None,
         parent: int | None = None,
         depends_on: list[int] | None = None,
+        ac: list[str] | None = None,
+        proof_bundle: str | None = None,
     ) -> SingleTaskResponse:
         """Create a new task at the board's entry_status.
 
@@ -540,6 +542,8 @@ class AgentView:
             tags:       Initial tag list.
             parent:     Optional parent task ID; must refer to an existing task.
             depends_on: Optional dependency task IDs; each must refer to an existing task.
+            ac:         Optional acceptance-criteria list to persist on the task.
+            proof_bundle: Optional proof-bundle value to persist on the task.
 
         Returns:
             :class:`SingleTaskResponse` for the newly created task, including
@@ -593,6 +597,8 @@ class AgentView:
                 tags=tags,
                 parent=parent,
                 depends_on=depends_on,
+                ac=ac,
+                proof_bundle=proof_bundle,
             )
         except ValueError as exc:
             raise ValidationError(
@@ -614,6 +620,10 @@ class AgentView:
         timestamp: bool = False,
         priority: str | None = None,
         parent: int | None = None,
+        ac: list[str] | None = None,
+        add_ac: list[str] | None = None,
+        remove_ac: list[str] | None = None,
+        proof_bundle: str | None = None,
         add_dep: list[int] | None = None,
         remove_dep: list[int] | None = None,
         add_tag: list[str] | None = None,
@@ -648,6 +658,10 @@ class AgentView:
             timestamp:      When ``True``, prepend an ISO-8601 datestamp to *append_body*.
             priority:       Replace task priority.
             parent:         Replace parent task ID (``0`` clears parent).
+            ac:             Replace the task acceptance-criteria list.
+            add_ac:         Append acceptance-criteria items to the existing list.
+            remove_ac:      Remove acceptance-criteria items from the existing list.
+            proof_bundle:   Replace proof-bundle value.
             add_dep:        Dependency IDs to add.
             remove_dep:     Dependency IDs to remove.
             add_tag:        Tags to add.
@@ -762,6 +776,14 @@ class AgentView:
             kwargs["priority"] = priority
         if parent_set:
             kwargs["parent"] = parent_value
+        if ac is not None:
+            kwargs["ac"] = ac
+        if add_ac is not None:
+            kwargs["add_ac"] = add_ac
+        if remove_ac is not None:
+            kwargs["remove_ac"] = remove_ac
+        if proof_bundle is not None:
+            kwargs["proof_bundle"] = proof_bundle
         if add_dep is not None:
             kwargs["add_deps"] = add_dep
         if remove_dep is not None:
@@ -800,6 +822,14 @@ class AgentView:
         if priority is not None and priority != existing.priority:
             changes_requested = True
         if parent_set and parent_value != existing.parent:
+            changes_requested = True
+        if ac is not None and list(ac) != list(existing.ac):
+            changes_requested = True
+        if add_ac is not None and any(item not in existing.ac for item in add_ac):
+            changes_requested = True
+        if remove_ac is not None and any(item in existing.ac for item in remove_ac):
+            changes_requested = True
+        if proof_bundle is not None and proof_bundle != existing.proof_bundle:
             changes_requested = True
         if add_dep is not None and any(
             dep_id not in existing.depends_on for dep_id in add_dep
