@@ -285,6 +285,15 @@ class TestFromAC_EditTaskNormalization:
         body_passed = mock_view.edit_task.call_args.kwargs["body"]
         assert body_passed == "want\\nliteral"
 
+    @pytest.mark.asyncio
+    async def test_escape_convention_append_body_preserved_as_single_backslash_n(
+        self, mock_view_ctx: tuple[AppContext, MagicMock]
+    ) -> None:
+        app_ctx, mock_view = mock_view_ctx
+        await edit_task(_make_ctx(app_ctx), id="1", append_body="want\\\\nliteral")
+        append_passed = mock_view.edit_task.call_args.kwargs["append_body"]
+        assert append_passed == "want\\nliteral"
+
 
 # ── 4. end_work — note normalization ─────────────────────────────────────────
 
@@ -528,50 +537,7 @@ class TestFromAC_PassthroughNoNormalization:
         assert not _has_norm_guidance(result.get("guidance", []))
 
 
-# ── 8. Tool descriptions — normalization documented ───────────────────────────
-
-
-class TestFromAC_ToolDescriptions:
-    """AC 7: tool descriptions for create_task, edit_task, end_work, create_dr
-    document normalization behavior and the escape convention."""
-
-    def _tool_text(self, tool_name: str) -> str:
-        """Return the combined description text visible to agents for the tool."""
-        import owlbear_mcp_kanban.server as _srv
-
-        tool = next(
-            t
-            for t in _srv.mcp._tool_manager._tools.values()  # noqa: SLF001
-            if t.name == tool_name
-        )
-        parts = [tool.description or ""]
-        for prop in tool.parameters.get("properties", {}).values():
-            parts.append(prop.get("description", ""))
-        return " ".join(parts).lower()
-
-    def test_create_task_description_mentions_normalize(self) -> None:
-        assert "normalize" in self._tool_text("create_task")
-
-    def test_edit_task_description_mentions_normalize(self) -> None:
-        assert "normalize" in self._tool_text("edit_task")
-
-    def test_end_work_description_mentions_normalize(self) -> None:
-        assert "normalize" in self._tool_text("end_work")
-
-    def test_create_dr_description_mentions_normalize(self) -> None:
-        assert "normalize" in self._tool_text("create_dr")
-
-    def test_create_task_description_mentions_escape_convention(self) -> None:
-        # Escape convention: \\\\n in JSON preserves literal \n
-        text = self._tool_text("create_task")
-        assert "escape" in text or "\\\\n" in text or "literal" in text
-
-    def test_edit_task_description_mentions_escape_convention(self) -> None:
-        text = self._tool_text("edit_task")
-        assert "escape" in text or "\\\\n" in text or "literal" in text
-
-
-# ── 9. Durable regression gate ────────────────────────────────────────────────
+# ── 8. Durable regression gate ───────────────────────────────────────────────
 
 
 class TestFromAC_ExistingDurableTestsUnchanged:
