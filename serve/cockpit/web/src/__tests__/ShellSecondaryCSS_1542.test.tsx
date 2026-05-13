@@ -152,7 +152,9 @@ describe('TestFromAC_SecondaryCssMigration_1542', () => {
       return
     }
 
-        expect(stylesSource).not.toMatch(/export\s+(?:const|let|var|function|class)\s+rowStyleForState\b/)
+    const stylesSource = readFileSync(STYLES_TS, 'utf-8')
+
+    expect(stylesSource).not.toMatch(/export\s+(?:const|let|var|function|class)\s+rowStyleForState\b/)
     expect(stylesSource).not.toMatch(/export\s+function\s+rowStyleForState\s*\(/)
     expect(stylesSource).not.toMatch(/export\s*\{[^}]*\browStyleForState\b[^}]*\}/)
   })
