@@ -75,6 +75,17 @@ def _make_kanban_dir(base_dir: Path) -> Path:
     return kanban_dir
 
 
+def _load_with_yaml12_loader(document: str) -> object:
+    """Parse a YAML snippet with the direct YAML12SafeLoader path."""
+    from owlbear_kanban.storage import YAML12SafeLoader
+
+    loader = YAML12SafeLoader(document)
+    try:
+        return loader.get_single_data()
+    finally:
+        loader.dispose()
+
+
 # ---------------------------------------------------------------------------
 # TestFromAC_YAML12SafeLoader — class definition & parsing contract
 # ---------------------------------------------------------------------------
@@ -135,12 +146,8 @@ class TestFromAC_YAML12SafeLoader:
 
     def test_timestamp_7digit_fractional_preserved_as_string(self) -> None:
         """7-digit (Go nanosecond) timestamps must be returned as str, not datetime."""
-        import yaml
-
-        from owlbear_kanban.storage import YAML12SafeLoader
-
         ts = "2026-04-09T03:24:26.6974428+02:00"
-        result = yaml.load(f"created: {ts}", Loader=YAML12SafeLoader)
+        result = _load_with_yaml12_loader(f"created: {ts}")
 
         assert isinstance(result["created"], str), (
             f"7-digit timestamp must parse as str, got {type(result['created']).__name__}"
@@ -149,12 +156,8 @@ class TestFromAC_YAML12SafeLoader:
 
     def test_timestamp_6digit_fractional_preserved_as_string(self) -> None:
         """6-digit (Python microsecond) timestamps must be returned as str, not datetime."""
-        import yaml
-
-        from owlbear_kanban.storage import YAML12SafeLoader
-
         ts = "2026-04-17T20:16:32.171661+00:00"
-        result = yaml.load(f"updated: {ts}", Loader=YAML12SafeLoader)
+        result = _load_with_yaml12_loader(f"updated: {ts}")
 
         assert isinstance(result["updated"], str), (
             f"6-digit timestamp must parse as str, got {type(result['updated']).__name__}"
@@ -165,44 +168,28 @@ class TestFromAC_YAML12SafeLoader:
 
     def test_yaml11_yes_parses_as_string(self) -> None:
         """Unquoted 'yes' must parse as str 'yes', not bool True (YAML 1.2 semantics)."""
-        import yaml
-
-        from owlbear_kanban.storage import YAML12SafeLoader
-
-        result = yaml.load("value: yes", Loader=YAML12SafeLoader)
+        result = _load_with_yaml12_loader("value: yes")
 
         assert not isinstance(result["value"], bool), "yes must not be coerced to bool"
         assert result["value"] == "yes"
 
     def test_yaml11_no_parses_as_string(self) -> None:
         """Unquoted 'no' must parse as str 'no', not bool False (YAML 1.2 semantics)."""
-        import yaml
-
-        from owlbear_kanban.storage import YAML12SafeLoader
-
-        result = yaml.load("value: no", Loader=YAML12SafeLoader)
+        result = _load_with_yaml12_loader("value: no")
 
         assert not isinstance(result["value"], bool), "no must not be coerced to bool"
         assert result["value"] == "no"
 
     def test_yaml11_on_parses_as_string(self) -> None:
         """Unquoted 'on' must parse as str 'on', not bool True (YAML 1.2 semantics)."""
-        import yaml
-
-        from owlbear_kanban.storage import YAML12SafeLoader
-
-        result = yaml.load("value: on", Loader=YAML12SafeLoader)
+        result = _load_with_yaml12_loader("value: on")
 
         assert not isinstance(result["value"], bool), "on must not be coerced to bool"
         assert result["value"] == "on"
 
     def test_yaml11_off_parses_as_string(self) -> None:
         """Unquoted 'off' must parse as str 'off', not bool False (YAML 1.2 semantics)."""
-        import yaml
-
-        from owlbear_kanban.storage import YAML12SafeLoader
-
-        result = yaml.load("value: off", Loader=YAML12SafeLoader)
+        result = _load_with_yaml12_loader("value: off")
 
         assert not isinstance(result["value"], bool), "off must not be coerced to bool"
         assert result["value"] == "off"
@@ -211,41 +198,25 @@ class TestFromAC_YAML12SafeLoader:
 
     def test_yaml12_lowercase_true_parses_as_bool(self) -> None:
         """YAML 1.2 'true' must parse as Python bool True."""
-        import yaml
-
-        from owlbear_kanban.storage import YAML12SafeLoader
-
-        result = yaml.load("blocked: true", Loader=YAML12SafeLoader)
+        result = _load_with_yaml12_loader("blocked: true")
 
         assert result["blocked"] is True
 
     def test_yaml12_lowercase_false_parses_as_bool(self) -> None:
         """YAML 1.2 'false' must parse as Python bool False."""
-        import yaml
-
-        from owlbear_kanban.storage import YAML12SafeLoader
-
-        result = yaml.load("blocked: false", Loader=YAML12SafeLoader)
+        result = _load_with_yaml12_loader("blocked: false")
 
         assert result["blocked"] is False
 
     def test_yaml12_title_case_true_parses_as_bool(self) -> None:
         """YAML 1.2 'True' (title-case) must parse as Python bool True."""
-        import yaml
-
-        from owlbear_kanban.storage import YAML12SafeLoader
-
-        result = yaml.load("blocked: True", Loader=YAML12SafeLoader)
+        result = _load_with_yaml12_loader("blocked: True")
 
         assert result["blocked"] is True
 
     def test_yaml12_all_caps_false_parses_as_bool(self) -> None:
         """YAML 1.2 'FALSE' (all-caps) must parse as Python bool False."""
-        import yaml
-
-        from owlbear_kanban.storage import YAML12SafeLoader
-
-        result = yaml.load("blocked: FALSE", Loader=YAML12SafeLoader)
+        result = _load_with_yaml12_loader("blocked: FALSE")
 
         assert result["blocked"] is False
 
@@ -253,11 +224,7 @@ class TestFromAC_YAML12SafeLoader:
 
     def test_null_value_preserved_as_none(self) -> None:
         """null YAML values must parse as Python None (null resolver must not be stripped)."""
-        import yaml
-
-        from owlbear_kanban.storage import YAML12SafeLoader
-
-        result = yaml.load("parent: null\nblock_reason: null", Loader=YAML12SafeLoader)
+        result = _load_with_yaml12_loader("parent: null\nblock_reason: null")
 
         assert result["parent"] is None
         assert result["block_reason"] is None

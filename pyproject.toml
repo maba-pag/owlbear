@@ -145,7 +145,6 @@ ignore = [
   "RUF100",  # unused noqa — pre-existing marker suppression in test files
   "S101",    # assert is fine in tests
   "S105",    # token/password false positives in test assertions
-  "S506",    # yaml.load with custom SafeLoader subclass — YAML12SafeLoader IS safe
   "S106",    # hardcoded password in function args — test fixtures
   "S603",    # subprocess security — test-controlled inputs
   "S607",    # partial executable path — test-controlled commands
