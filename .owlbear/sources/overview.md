@@ -36,6 +36,15 @@ External repos and resources studied during OwlBear development.
 | PDS v4 Border Tokens | <https://designsystem.porsche.com/v4/tokens/border/> | Radius token values: xs through 4xl + full | `.owlbear/research/1535-token-architecture-test-approach.md` | 2026-05-13 |
 | PDS v4 Spacing Tokens | <https://designsystem.porsche.com/v4/tokens/spacing/> | Spacing token values: fluid and static families | `.owlbear/research/1535-token-architecture-test-approach.md` | 2026-05-13 |
 
+## Token Architecture Impl Research (Task #1543)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| MDN prefers-color-scheme | <https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/At-rules/@media/prefers-color-scheme> | CSS spec: media query for OS dark mode detection | `.owlbear/research/1543-token-architecture-impl.md` | 2026-05-14 |
+| PDS v4 themeDark export | `@porsche-design-system/components-react/styles` (npm) | Authoritative dark HSL values for all color tokens | `.owlbear/research/1543-token-architecture-impl.md` | 2026-05-14 |
+| PDS v4 shadow/radius/spacing exports | `@porsche-design-system/components-react/styles` (npm) | Non-color token reference values | `.owlbear/research/1543-token-architecture-impl.md` | 2026-05-14 |
+| PDS v4 colorSchemeStyles | `@porsche-design-system/components-react/styles` (npm) | PDS native theme switching CSS structure, confirms dark values | `.owlbear/research/1543-token-architecture-impl.md` | 2026-05-14 |
+
 ## Column CSS Test Research (Task #1539)
 
 | Source | URL | What | Where Used | Date |
