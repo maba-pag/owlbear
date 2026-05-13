@@ -36,6 +36,12 @@ External repos and resources studied during OwlBear development.
 | PDS v4 Border Tokens | <https://designsystem.porsche.com/v4/tokens/border/> | Radius token values: xs through 4xl + full | `.owlbear/research/1535-token-architecture-test-approach.md` | 2026-05-13 |
 | PDS v4 Spacing Tokens | <https://designsystem.porsche.com/v4/tokens/spacing/> | Spacing token values: fluid and static families | `.owlbear/research/1535-token-architecture-test-approach.md` | 2026-05-13 |
 
+## Sidecar Collapse Toggle Test Research (Task #1541)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| WAI-ARIA aria-expanded guide | <https://www.webability.io/glossary/aria-expanded> | Disclosure widget pattern: aria-expanded + CSS state synchronization | `.owlbear/research/1541-sidecar-collapse-toggle-test-approach.md` | 2026-05-13 |
+
 ## PInlineNotification Modal Error Research (Task #1499)
 
 | Source | URL | What | Where Used | Date |
