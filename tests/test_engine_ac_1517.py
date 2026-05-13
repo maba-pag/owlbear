@@ -297,6 +297,44 @@ class TestFromAC_EditTaskAcMutation:
             engine.edit_task("1", ac=["item"], remove_ac=["existing"])
         assert exc_info.value.code == "ERR_AC_EXCLUSIVE"
 
+    def test_edit_task_add_ac_appends_new_items_at_the_end(self, tmp_path: Path) -> None:
+        """AC2: add_ac appends items at the end, preserving existing order.
+
+        Positional assertion — existing items retain their indices; new items
+        follow at the tail. Membership-only checks (``in``) cannot prove this.
+        """
+        engine, kanban_dir = _make_engine(tmp_path)
+        _write_task(
+            kanban_dir,
+            task_id=1,
+            extra_fields='ac:\n  - "first item"\n  - "second item"\n',
+        )
+        task = engine.edit_task("1", add_ac=["appended item"])
+        assert task.ac == ["first item", "second item", "appended item"]
+
+    def test_edit_task_remove_ac_exact_match_preserves_near_collision_item(
+        self, tmp_path: Path
+    ) -> None:
+        """AC2: remove_ac uses exact string equality — a near-collision item sharing
+        a common substring with the removed item is NOT removed.
+
+        Control item "item to remove extended" shares the substring "item to remove"
+        with the target; it must survive the removal.
+        """
+        engine, kanban_dir = _make_engine(tmp_path)
+        _write_task(
+            kanban_dir,
+            task_id=1,
+            extra_fields=(
+                'ac:\n'
+                '  - "item to remove"\n'
+                '  - "item to remove extended"\n'
+                '  - "unrelated item"\n'
+            ),
+        )
+        task = engine.edit_task("1", remove_ac=["item to remove"])
+        assert task.ac == ["item to remove extended", "unrelated item"]
+
 
 # ---------------------------------------------------------------------------
 # AC3 — edit_task add_ac duplicate rejection
