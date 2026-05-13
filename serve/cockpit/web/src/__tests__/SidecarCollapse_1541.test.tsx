@@ -41,11 +41,17 @@ function getCollapseToggle(container: HTMLElement): HTMLElement {
   return toggle as HTMLElement
 }
 
+function sidecarIsCollapsed(container: HTMLElement): boolean {
+  const sidecar = container.querySelector('[data-region="sidecar"]')
+  return sidecar === null || sidecar.hasAttribute('hidden')
+}
+
 describe('TestFromAC_SidecarCollapse_1541', () => {
   it('AC-1: sidecar collapse toggle exposes disclosure ARIA and flips aria-expanded to false on click', () => {
     const { container } = renderShell()
     const toggle = getCollapseToggle(container)
 
+    expect(toggle.tagName).toBe('BUTTON')
     expect(toggle.getAttribute('aria-expanded')).toBe('true')
 
     const ariaControlsId = toggle.getAttribute('aria-controls')
@@ -57,6 +63,7 @@ describe('TestFromAC_SidecarCollapse_1541', () => {
     fireEvent.click(toggle)
 
     expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(sidecarIsCollapsed(container)).toBe(true)
   })
 
   it('AC-2: collapsed state persists after rerender', () => {
@@ -78,5 +85,6 @@ describe('TestFromAC_SidecarCollapse_1541', () => {
 
     const persistedToggle = getCollapseToggle(container)
     expect(persistedToggle.getAttribute('aria-expanded')).toBe('false')
+    expect(sidecarIsCollapsed(container)).toBe(true)
   })
 })
