@@ -78,7 +78,29 @@ _BLOCK_REASON_UNSET = object()
 _PARENT_UNSET = object()
 _MAX_CLAIM_STALE_RETRIES = 4
 _MAX_BODY_BYTES = 500 * 1024
+_MAX_AC_ITEMS = 20
+_MAX_AC_ITEM_CHARS = 500
 LOGGER = logging.getLogger(__name__)
+
+_PROOF_BUNDLE_BASES: tuple[str, ...] = (
+    "skip",
+    "existing",
+    "smoke",
+    "behavioral",
+    "critical",
+)
+VALID_PROOF_BUNDLES: frozenset[str] = frozenset(
+    set(_PROOF_BUNDLE_BASES)
+    | {
+        f"{base}+challenge" for base in _PROOF_BUNDLE_BASES
+    }
+    | {
+        f"{base}+reader" for base in _PROOF_BUNDLE_BASES
+    }
+    | {
+        f"{base}+challenge+reader" for base in _PROOF_BUNDLE_BASES
+    }
+)
 
 
 if TYPE_CHECKING:
@@ -146,6 +168,61 @@ def _compute_duration(claim_ts: str, close_ts: str) -> float:
 def _task_body_as_text(body: object) -> str:
     """Return a string body for task mutation operations."""
     return body if isinstance(body, str) else ""
+
+
+def _normalize_proof_bundle(value: str) -> str:
+    """Normalize proof bundle value to canonical base+sorted-modifiers form."""
+    parts = [part.strip().lower() for part in value.split("+") if part.strip()]
+    if not parts:
+        return ""
+    if len(parts) == 1:
+        return parts[0]
+
+    base_rank = {
+        "skip": 0,
+        "existing": 1,
+        "smoke": 2,
+        "behavioral": 3,
+        "critical": 4,
+    }
+    bundle_tokens = [part for part in parts if part in base_rank]
+    if bundle_tokens:
+        base = max(bundle_tokens, key=lambda token: base_rank[token])
+        parts.remove(base)
+    else:
+        base = parts.pop(0)
+
+    return "+".join([base, *sorted(parts)])
+
+
+def _validate_proof_bundle(proof_bundle: str | None) -> str | None:
+    """Validate proof bundle against engine-supported canonical values."""
+    if proof_bundle is None:
+        return None
+
+    normalized = _normalize_proof_bundle(proof_bundle)
+    if normalized not in VALID_PROOF_BUNDLES:
+        raise ValidationError(
+            code="ERR_PROOF_BUNDLE_INVALID",
+            user_message=f"proof_bundle must be one of {sorted(VALID_PROOF_BUNDLES)}",
+        )
+    return normalized
+
+
+def _validate_ac_items(ac: list[str]) -> None:
+    """Validate AC guardrails for item count and per-item length."""
+    if len(ac) > _MAX_AC_ITEMS:
+        raise ValidationError(
+            code="ERR_AC_LIMIT",
+            user_message=f"ac must contain at most {_MAX_AC_ITEMS} items",
+        )
+
+    too_long = next((item for item in ac if len(item) > _MAX_AC_ITEM_CHARS), None)
+    if too_long is not None:
+        raise ValidationError(
+            code="ERR_AC_ITEM_TOO_LONG",
+            user_message=f"ac items must be at most {_MAX_AC_ITEM_CHARS} characters",
+        )
 
 
 def _validate_dispatch_rank_coverage(config: BoardConfig) -> None:
@@ -758,7 +835,9 @@ class KanbanEngine:
             tasks = [
                 t
                 for t in tasks
-                if needle in t.title.lower() or needle in t.body.lower()
+                if needle in t.title.lower()
+                or needle in t.body.lower()
+                or any(needle in ac_item.lower() for ac_item in t.ac)
             ]
 
         # --- Sort ---
@@ -1014,6 +1093,8 @@ class KanbanEngine:
         status: str = "",
         parent: int | None = None,
         depends_on: list[int] | None = None,
+        ac: list[str] | None = None,
+        proof_bundle: str | None = None,
     ) -> Task:
         """Allocate a new task ID from board files, then write a new task file.
 
@@ -1029,6 +1110,8 @@ class KanbanEngine:
             status:     Task status; defaults to config defaults.status.
             parent:     Optional parent task ID.
             depends_on: Optional list of dependency task IDs.
+            ac:         Optional acceptance-criteria items persisted on the task.
+            proof_bundle: Optional proof-bundle routing value.
 
         Returns:
             The newly created :class:`Task`.
@@ -1051,6 +1134,9 @@ class KanbanEngine:
             raise ValueError(msg)
 
         self.validate_body_size(body)
+        ac_items = list(ac or [])
+        _validate_ac_items(ac_items)
+        normalized_proof_bundle = _validate_proof_bundle(proof_bundle)
 
         if parent is not None and not self.task_exists(parent):
             raise ValidationError(
@@ -1093,6 +1179,8 @@ class KanbanEngine:
                 tags=list(tags) if tags else [],
                 parent=parent,
                 depends_on=list(depends_on) if depends_on else [],
+                ac=ac_items,
+                proof_bundle=normalized_proof_bundle,
             )
             filename = make_task_filename(task_id, title)
             task_path = self._tasks_dir / filename
@@ -1146,6 +1234,10 @@ class KanbanEngine:
         priority: str | None = None,
         status: str | None = None,
         parent: int | None | object = _PARENT_UNSET,
+        ac: list[str] | None = None,
+        add_ac: list[str] | None = None,
+        remove_ac: list[str] | None = None,
+        proof_bundle: str | None = None,
         add_tags: list[str] | None = None,
         remove_tags: list[str] | None = None,
         add_deps: list[int] | None = None,
@@ -1169,6 +1261,10 @@ class KanbanEngine:
             priority:    Replace priority.
             status:      Replace status.
             parent:      Replace parent ID.
+            ac:          Replace acceptance-criteria list.
+            add_ac:      Append acceptance-criteria items.
+            remove_ac:   Remove acceptance-criteria items by exact match.
+            proof_bundle: Replace proof-bundle routing value.
             add_tags:    Tags to add (merged with existing).
             remove_tags: Tags to remove.
             add_deps:    Dependency IDs to add.
@@ -1200,6 +1296,19 @@ class KanbanEngine:
 
         if body is not None:
             self.validate_body_size(body)
+
+        if ac is not None and (add_ac is not None or remove_ac is not None):
+            raise ValidationError(
+                code="ERR_AC_EXCLUSIVE",
+                user_message="ac cannot be combined with add_ac or remove_ac",
+            )
+
+        normalized_proof_bundle = _validate_proof_bundle(proof_bundle)
+
+        if ac is not None:
+            _validate_ac_items(ac)
+        if add_ac is not None:
+            _validate_ac_items(add_ac)
 
         if (
             parent is not _PARENT_UNSET
@@ -1235,6 +1344,29 @@ class KanbanEngine:
             record.status = status
         if parent is not _PARENT_UNSET:
             record.parent = parent
+
+        if ac is not None:
+            record.ac = list(ac)
+        else:
+            if add_ac:
+                duplicates = sorted({item for item in add_ac if item in record.ac})
+                if duplicates:
+                    raise ValidationError(
+                        code="ERR_AC_DUPLICATE",
+                        user_message=(
+                            "add_ac contains items already present in ac: "
+                            + ", ".join(duplicates)
+                        ),
+                    )
+                record.ac.extend(add_ac)
+            if remove_ac:
+                to_remove = set(remove_ac)
+                record.ac = [item for item in record.ac if item not in to_remove]
+
+        _validate_ac_items(record.ac)
+
+        if proof_bundle is not None:
+            record.proof_bundle = normalized_proof_bundle
 
         if add_tags:
             for t in add_tags:
