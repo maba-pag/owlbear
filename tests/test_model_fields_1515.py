@@ -97,6 +97,17 @@ class TestFromAC_TaskModelFields:
         restored = Task.model_validate(task.model_dump())
         assert restored.ac == ["AC1: foo must pass", "AC2: bar must work"]
 
+    def test_proof_bundle_round_trip_preserves_non_default_value(self) -> None:
+        """AC1: non-default proof_bundle survives model_dump() → model_validate().
+
+        Discriminating test: a regression that drops or alters proof_bundle during
+        revalidation would still pass without this assertion.
+        """
+        assert "proof_bundle" in Task.model_fields  # gate: must be declared typed field
+        task = Task(**_BASE_TASK_KWARGS, proof_bundle="behavioral+challenge")
+        restored = Task.model_validate(task.model_dump())
+        assert restored.proof_bundle == "behavioral+challenge"
+
 
 # ---------------------------------------------------------------------------
 # AC2 — Projection field presence across TaskSummary, DispatchEntry, TaskFull
@@ -140,6 +151,22 @@ class TestFromAC_ProjectionFields:
             ac=["- must pass"],
         )
         assert full.ac == ["- must pass"]
+
+    def test_task_summary_does_not_have_ac_field(self) -> None:
+        """AC2: 'ac' is absent from TaskSummary — regression guard.
+
+        AC2 requires proof_bundle but NOT ac in summaries. Without this assertion
+        a regression adding ac to TaskSummary would still pass all other tests.
+        """
+        assert "ac" not in TaskSummary.model_fields
+
+    def test_dispatch_entry_does_not_have_ac_field(self) -> None:
+        """AC2: 'ac' is absent from DispatchEntry — regression guard.
+
+        AC2 requires proof_bundle but NOT ac in dispatch entries. Without this
+        assertion a regression adding ac to DispatchEntry would still pass.
+        """
+        assert "ac" not in DispatchEntry.model_fields
 
 
 # ---------------------------------------------------------------------------
