@@ -65,7 +65,7 @@ Returned by `pick_tasks` in `waves: list[Wave]`.
 
 ### guidance Field
 
-Responses include `guidance: list[str]` for operational hints (for example: DR-required block guidance and forward-skip warnings). Treat as advisory metadata.
+Responses include `guidance: list[str]` for operational hints (for example: DR-required block guidance, forward-skip warnings, and body-newline normalization notices). Treat as advisory metadata.
 
 ### Error Envelopes
 
@@ -124,6 +124,15 @@ Documented lifecycle outcomes for agent routing:
 
 - `body`: omitted or `null` means no change, `""` clears, non-empty text replaces body
 - `parent`: positive ID sets parent, `0` clears parent, omitted or `null` means no change
+
+### Body text normalization
+
+The following text body parameters are normalized at the MCP ingress boundary before any write:
+`create_task.body`, `edit_task.body`, `edit_task.append_body`, `end_work.note`, `create_dr.body`.
+
+- Literal `\n` sequences are converted to actual newlines.
+- To keep a literal `\n` in the stored file, send `\\n` in JSON input.
+- When normalization occurs a guidance entry is appended to the response: _"Literal \n sequences were normalized to actual newlines."_
 
 ```json
 {"tool":"list_tasks","arguments":{"status":"in-progress","blocked":false,"limit":20}}
