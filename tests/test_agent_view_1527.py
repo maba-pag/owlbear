@@ -11,7 +11,7 @@ AC coverage table:
   AC1 → test_dep_in_inprogress_status_triggers_guidance
          test_dep_in_review_status_triggers_guidance
          test_three_deps_two_active_one_archived_guidance_lists_both_active
-  AC2 → test_null_depends_on_returns_no_guidance
+  AC2 → test_dep_archived_wontfix_returns_no_guidance
          test_two_completed_deps_return_no_guidance
          test_dep_archived_dropped_returns_no_guidance
   AC3 → test_exception_dep_skipped_active_dep_still_triggers_guidance
