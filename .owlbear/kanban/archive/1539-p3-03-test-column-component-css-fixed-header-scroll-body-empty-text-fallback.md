@@ -2,10 +2,10 @@
 id: 1539
 title: 'P3-03: test — column component CSS: fixed header, scroll body, empty text
   fallback'
-status: done
+status: archived
 priority: important
 created: 2026-05-13T18:41:58.306824+00:00
-updated: 2026-05-13T22:28:31.239570+00:00
+updated: 2026-05-13T23:04:13.726561+00:00
 tags:
   - phase-3
   - scope:cockpit
@@ -17,7 +17,7 @@ depends_on: []
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 Brief: see parent #1534 (`.owlbear/briefs/draft-board-visual-design/brief.md`)
@@ -209,3 +209,38 @@ Proof bundle: behavioral
 
 ### Scratch Cleanup
 No `.owlbear/scratch/1539-*` files found — nothing to clean.
+2026-05-13T23:04:13+00:00
+## Audit
+### Regression Detection
+- quality-runner mode full: Python 4605 passed / 209 failed, Frontend 1625 passed / 16 failed, lint clean (ruff/eslint/stylelint all pass)
+- All 225 failures are pre-existing and unrelated to #1539: Python failures in test_cockpit_view.py, test_ideation_diagram.py, test_server.py, test_engine_accessor_migration.py (kanban accessor migration, cockpit view cleanup); Frontend failures in TokenArchitecture_1535, ShellSecondaryCSS_1542, SidecarCollapse_1541, ThemeToggle, PdsMigration, ResponsiveLayout_1391, KanbanBoard filter/both-or-nothing (other in-flight tasks' RED tests and pre-existing issues)
+- Column_1539.test.tsx: 10 passed / 0 failed
+- regression verdict: PASS
+
+### Intent Verification
+- scope alignment: PASS (changed files: Column.tsx, Column.css, Column_1539.test.tsx — all in serve/cockpit/web/src/, cockpit frontend domain)
+- purpose match: PASS (task adds structural separation tests and CSS contract proofs for column component — matches stated purpose)
+- extraneous scope: none
+- boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 4/5
+ACs were specific after refinement (dual-proof with classList + CSS regex). Initial "on that class" wording was clear in intent but didn't prescribe selector-scoped regex patterns; reviewer caught this test-proof gap on first pass, test-writer tightened in retry. Challenge results were properly incorporated at both research and arch review stages. Builder guidance was helpful and specific.
+
+### Commit Integrity
+- upstream commit presence: PASS
+  - 140111b0 test: add failing tests for Column CSS structure (#1539, test-writer) — 1 file
+  - 20bbecb4 feat: implement column body split and empty-state css fallback (#1539, builder) — 2 files
+  - 8c241c96 test: tighten AC-2/AC-3 CSS selector-scoped assertions (#1539, test-writer) — 1 file
+  - All three commits properly scoped to task files only
+- kanban commit packaging: pending (this audit)
+
+### Deduction Breakdown
+- Regression failures: -.00 (all 225 failures pre-existing, unrelated to task)
+- Intent mismatch: -.00
+- Evidence integrity: -.00
+- Lint violations: -.00
+- AC quality ≤ 3: -.00 (scored 4/5)
+- Missing reviewer evidence: -.00 (detailed, two-cycle review with AC mapping)
+
+### Confidence: 1.00
+### Action: archive
