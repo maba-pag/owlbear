@@ -442,13 +442,18 @@ class TestFromAC_GuidancePositioning:
 
 
 class TestFromAC_PassthroughNoNormalization:
-    """AC 6: when input has no literal \\n, no normalization occurs and no guidance is emitted.
-    Tool-boundary tests for all 5 affected parameters."""
+    """AC 6 (AC 5 in brief): when input has no literal \\n, no normalization occurs and no
+    guidance is emitted. Each test imports _normalize_escaped_newlines directly so it fails
+    with ImportError until the implementation ships (RED anchor)."""
 
     @pytest.mark.asyncio
     async def test_create_task_body_passthrough_no_normalization(
         self, mock_view_ctx: tuple[AppContext, MagicMock]
     ) -> None:
+        from owlbear_mcp_kanban.server import _normalize_escaped_newlines  # RED anchor
+
+        _, changed = _normalize_escaped_newlines("clean body no escapes")
+        assert not changed
         app_ctx, mock_view = mock_view_ctx
         result = await create_task(_make_ctx(app_ctx), title="T", body="clean body no escapes")
         body_passed = mock_view.create_task.call_args.kwargs["body"]
@@ -459,6 +464,10 @@ class TestFromAC_PassthroughNoNormalization:
     async def test_edit_task_body_passthrough_no_normalization(
         self, mock_view_ctx: tuple[AppContext, MagicMock]
     ) -> None:
+        from owlbear_mcp_kanban.server import _normalize_escaped_newlines  # RED anchor
+
+        _, changed = _normalize_escaped_newlines("clean body no escapes")
+        assert not changed
         app_ctx, mock_view = mock_view_ctx
         result = await edit_task(_make_ctx(app_ctx), id="1", body="clean body no escapes")
         body_passed = mock_view.edit_task.call_args.kwargs["body"]
@@ -469,6 +478,10 @@ class TestFromAC_PassthroughNoNormalization:
     async def test_edit_task_append_body_passthrough_no_normalization(
         self, mock_view_ctx: tuple[AppContext, MagicMock]
     ) -> None:
+        from owlbear_mcp_kanban.server import _normalize_escaped_newlines  # RED anchor
+
+        _, changed = _normalize_escaped_newlines("clean append no escapes")
+        assert not changed
         app_ctx, mock_view = mock_view_ctx
         result = await edit_task(_make_ctx(app_ctx), id="1", append_body="clean append no escapes")
         append_passed = mock_view.edit_task.call_args.kwargs["append_body"]
@@ -479,6 +492,10 @@ class TestFromAC_PassthroughNoNormalization:
     async def test_end_work_note_passthrough_no_normalization(
         self, mock_view_ctx: tuple[AppContext, MagicMock]
     ) -> None:
+        from owlbear_mcp_kanban.server import _normalize_escaped_newlines  # RED anchor
+
+        _, changed = _normalize_escaped_newlines("clean note no escapes")
+        assert not changed
         app_ctx, mock_view = mock_view_ctx
         result = await end_work(
             _make_ctx(app_ctx), id="1", outcome="success", note="clean note no escapes"
@@ -491,6 +508,10 @@ class TestFromAC_PassthroughNoNormalization:
     async def test_create_dr_body_passthrough_no_normalization(
         self, dr_ctx: AppContext, monkeypatch: pytest.MonkeyPatch
     ) -> None:
+        from owlbear_mcp_kanban.server import _normalize_escaped_newlines  # RED anchor
+
+        _, changed = _normalize_escaped_newlines("clean body no escapes")
+        assert not changed
         captured: dict = {}
         monkeypatch.setattr(
             "owlbear_mcp_kanban.server.decisions",
@@ -505,3 +526,46 @@ class TestFromAC_PassthroughNoNormalization:
         )
         assert captured["body"] == "clean body no escapes"
         assert not _has_norm_guidance(result.get("guidance", []))
+
+
+# ── 8. Tool descriptions — normalization documented ───────────────────────────
+
+
+class TestFromAC_ToolDescriptions:
+    """AC 7: tool descriptions for create_task, edit_task, end_work, create_dr
+    document normalization behavior and the escape convention."""
+
+    def _tool_text(self, tool_name: str) -> str:
+        """Return the combined description text visible to agents for the tool."""
+        import owlbear_mcp_kanban.server as _srv
+
+        tool = next(
+            t
+            for t in _srv.mcp._tool_manager._tools.values()  # noqa: SLF001
+            if t.name == tool_name
+        )
+        parts = [tool.description or ""]
+        for prop in tool.parameters.get("properties", {}).values():
+            parts.append(prop.get("description", ""))
+        return " ".join(parts).lower()
+
+    def test_create_task_description_mentions_normalize(self) -> None:
+        assert "normalize" in self._tool_text("create_task")
+
+    def test_edit_task_description_mentions_normalize(self) -> None:
+        assert "normalize" in self._tool_text("edit_task")
+
+    def test_end_work_description_mentions_normalize(self) -> None:
+        assert "normalize" in self._tool_text("end_work")
+
+    def test_create_dr_description_mentions_normalize(self) -> None:
+        assert "normalize" in self._tool_text("create_dr")
+
+    def test_create_task_description_mentions_escape_convention(self) -> None:
+        # Escape convention: \\\\n in JSON preserves literal \n
+        text = self._tool_text("create_task")
+        assert "escape" in text or "\\\\n" in text or "literal" in text
+
+    def test_edit_task_description_mentions_escape_convention(self) -> None:
+        text = self._tool_text("edit_task")
+        assert "escape" in text or "\\\\n" in text or "literal" in text
