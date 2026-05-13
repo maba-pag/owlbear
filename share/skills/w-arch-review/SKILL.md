@@ -36,6 +36,16 @@ Read `r-pipeline-protocol` skill if not already loaded.
 
 Claim the task via `start_work` (atomic claim + retrieves task body). Check the retrieved body for resolved decision/action requests per pipeline-protocol → Task Setup → Resolved Decision Pre-flight.
 
+Then call `show_task(id={id})` to read frontmatter fields used in review routing:
+
+- `proof_bundle` (authoritative when non-null)
+- `ac` (authoritative when non-null)
+
+Legacy fallback when either field is null:
+
+- Parse `Proof bundle:` from the task body.
+- Parse AC lines from the `## Acceptance Criteria` section in the task body.
+
 Verify the task is in `backlog` status. If the task references a research doc (`.owlbear/research/{slug}.md`), read it.
 
 **Decomposition detection:** If the task body contains `"Needs decomposition:"` but does NOT contain a `"## Planning"` section (which the planner appends after decomposition), delegate to the **planner** agent instead of continuing with architecture review. Pass the task ID and feature description from the body. After the planner returns successfully, call `end_work(outcome="success")` to advance the parent task. The planner's appended `## Planning` section serves as the completion marker — do not modify the body to remove the decomposition marker (this would overwrite the planner's additions).
@@ -95,7 +105,7 @@ Validate the planner-assigned `Proof bundle:` field and write the finalized valu
 
 **Procedure:**
 
-1. Read the planner assignment in the task body: `Proof bundle: {value}`.
+1. Read planner assignment from frontmatter `proof_bundle` (authoritative when non-null); if null, use legacy body fallback `Proof bundle: {value}`.
 2. Confirm or adjust the bundle from Step 2 findings.
     - Escalate when blast radius or failure modes are higher than planned.
     - De-escalate when complexity is lower than planned and evidence supports the reduction.

@@ -33,14 +33,24 @@ Read `r-pipeline-protocol` skill if not already loaded.
 
 Claim the task via `start_work` (atomic claim + retrieves task body). Check the retrieved body for resolved decision/action requests per pipeline-protocol → Task Setup → Resolved Decision Pre-flight.
 
+Then call `show_task(id={id})` to read frontmatter fields for routing:
+
+- `proof_bundle` (authoritative when non-null)
+- `ac` (authoritative when non-null)
+
+Legacy fallback when either field is null:
+
+- Parse `Proof bundle:` from the task body.
+- Parse AC lines from the `## Acceptance Criteria` section in the task body.
+
 ## Step 1 — Assess Task Type
 
-From the task body retrieved by `start_work`:
+From `show_task` (frontmatter first, body fallback):
 
 <!-- NON_IMPL_TAGS: Authoritative list at w-arch-review (agent dispatch table). -->
 
 1. Check if this is a **non-implementation task** (tagged `research`, `docs`, `type:config`, `type:docs`, `test`, `type:test`, `agent`, `quality`, or `type:user-action`). If so, go to **Step 1a — Pass-through**.
-2. Check `Proof bundle:` and route per `r-pipeline-protocol` taxonomy: `skip`/`existing` -> **Step 1d — Proof-bundle pass-through**; `smoke` -> continue with smoke-only planning/writing (one smoke test per AC line); `behavioral`/`critical` -> continue with full TDD mapping.
+2. Read `proof_bundle` from `show_task` frontmatter and route per `r-pipeline-protocol` taxonomy: `skip`/`existing` -> **Step 1d — Proof-bundle pass-through**; `smoke` -> continue with smoke-only planning/writing (one smoke test per AC line); `behavioral`/`critical` -> continue with full TDD mapping.
 3. Check if this is a **retry cycle** (body contains both `## Test-Writer Notes` and `## Review Evidence`). If so, go to **Step 1b — Retry-cycle handling**.
 4. Identify referenced source files, modules, and interfaces in the AC.
 5. Do NOT move task status yet — movement happens in Step 7 after verification.
@@ -102,7 +112,7 @@ git add tests/test_{module}_{task_id}.py && git commit -m "test: add retry tests
 
 ### Step 1d — Proof-Bundle Pass-Through
 
-If `Proof bundle:` is `skip` or `existing`, no new RED tests are required.
+If frontmatter `proof_bundle` is `skip` or `existing` (or the legacy body fallback resolves to those values), no new RED tests are required.
 
 1. Advance via `end_work(note="## Test-Writer Notes\n- Proof bundle: {value} — no new test writing required.\n- Passing through to builder.")` (moves to `in-progress` + releases claim).
 2. Return: `DONE #{id} -> in-progress | proof bundle {value}, no tests needed`
@@ -127,7 +137,7 @@ Run this only if Step 2 found no testable interfaces:
 
 ## Step 3 — Plan Test Categories
 
-If `Proof bundle:` is present, use it as the primary routing signal:
+Use frontmatter `proof_bundle` as the primary routing signal. If null, fall back to the body `Proof bundle:` line:
 
 - `smoke`: plan one smoke test per AC line (one assertion, happy path only)
 - `behavioral` or `critical`: map each AC line to full TDD categories

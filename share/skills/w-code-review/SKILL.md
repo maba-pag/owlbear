@@ -38,7 +38,7 @@ Review model: batch-all-findings. Gather all blocking findings before issuing PA
 
 Read `r-pipeline-protocol` if not already loaded.
 
-Claim the task via `start_work` and note every AC line from the task body.
+Claim the task via `start_work`, then call `show_task(id={id})` and load AC from frontmatter `ac` (authoritative when non-null). For legacy tasks where `ac` is null, parse AC lines from `## Acceptance Criteria` in the body.
 
 ## Step 1 — Scope the Review
 
@@ -76,7 +76,7 @@ Only run independent reruns when evidence quality is insufficient or inconsisten
 
 ### Depth-Aware Dispatch
 
-Determine review scope from `Proof bundle:` in the task body (per `r-pipeline-protocol` taxonomy).
+Determine review scope from frontmatter `proof_bundle` (authoritative when non-null). For legacy tasks where `proof_bundle` is null, fall back to the body `Proof bundle:` line (per `r-pipeline-protocol` taxonomy).
 
 | Proof bundle | quality-runner expectation in builder notes | code-reader | challenger | Reviewer execution path |
 |--------------|---------------------------------------------|-------------|------------|-------------------------|
@@ -102,7 +102,7 @@ Inputs the reviewer provides:
 | Field | Type | Description |
 |-------|------|-------------|
 | `task_id` | string | Kanban task id |
-| `ac_lines` | string[] | All AC lines from task body |
+| `ac_lines` | string[] | All AC lines from frontmatter `ac` (fallback: body `## Acceptance Criteria`) |
 | `changed_files` | string[] | Builder-changed file paths |
 | `test_files` | string[] | Task-scoped tests |
 | `adjacent_files` | string[] | Optional caller-curated adjacent files or durable suites that are part of the proof surface |
