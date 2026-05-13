@@ -30,7 +30,6 @@ This file covers the gap the C-03 suite does not:
 """
 
 
-
 # ---------------------------------------------------------------------------
 # TestFromAC_CleanupDeadCodes — AC-CLEANUP: remove codes with no Brief §4.1 authority
 # ---------------------------------------------------------------------------
@@ -288,7 +287,9 @@ class TestFromAC_EncodingHardening:
 
         result = detect_corruption(bad_file, config)
         assert isinstance(result, CorruptionError)
-        assert result.file_path is not None, "file_path must be set on the CorruptionError"
+        assert result.file_path is not None, (
+            "file_path must be set on the CorruptionError"
+        )
         assert result.file_path == str(bad_file)
 
     def test_non_utf8_in_tasks_dir_detail_is_non_empty(self, tmp_path: Path) -> None:
@@ -307,9 +308,7 @@ class TestFromAC_EncodingHardening:
         assert any(
             kw in result.detail.lower()
             for kw in ("encoding", "decode", "utf-8", "utf8", "unicode")
-        ), (
-            f"detail must reference the encoding/decode failure, got {result.detail!r}"
-        )
+        ), f"detail must reference the encoding/decode failure, got {result.detail!r}"
 
     # -----------------------------------------------------------------
     # archive/ directory — AC-1 (no UnicodeDecodeError raised)
@@ -381,7 +380,9 @@ class TestFromAC_EncodingHardening:
 
         result = detect_corruption(bad_file, config)
         assert isinstance(result, CorruptionError)
-        assert result.file_path is not None, "file_path must be set on the CorruptionError"
+        assert result.file_path is not None, (
+            "file_path must be set on the CorruptionError"
+        )
         assert result.file_path == str(bad_file)
 
     def test_non_utf8_in_archive_dir_detail_is_non_empty(self, tmp_path: Path) -> None:
@@ -400,9 +401,7 @@ class TestFromAC_EncodingHardening:
         assert any(
             kw in result.detail.lower()
             for kw in ("encoding", "decode", "utf-8", "utf8", "unicode")
-        ), (
-            f"detail must reference the encoding/decode failure, got {result.detail!r}"
-        )
+        ), f"detail must reference the encoding/decode failure, got {result.detail!r}"
 
     # -----------------------------------------------------------------
     # Regression guard — AC-3
@@ -422,6 +421,4 @@ class TestFromAC_EncodingHardening:
         config = load_config(board_dir)
 
         result = detect_corruption(task_file, config)
-        assert result is None, (
-            f"Expected None for clean UTF-8 file, got {result!r}"
-        )
+        assert result is None, f"Expected None for clean UTF-8 file, got {result!r}"

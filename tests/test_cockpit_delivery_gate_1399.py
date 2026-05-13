@@ -40,7 +40,9 @@ class TestFromAC_CockpitDeliveryGateOrdering:
         workflow = _load_sync_workflow()
         steps = _sync_job_steps(workflow)
 
-        prune_index = _step_index_by_name(steps, "Prune dev-only files from consumer tree")
+        prune_index = _step_index_by_name(
+            steps, "Prune dev-only files from consumer tree"
+        )
 
         vitest_steps = [
             (index, step)
@@ -75,9 +77,7 @@ class TestFromAC_CockpitDeliveryGateOrdering:
         e2e_index = cockpit_e2e_steps[0][0]
         # Collect all run text from steps at or before the first E2E step
         run_text = " ".join(
-            str(step.get("run", ""))
-            for _, step in enumerate(steps)
-            if _ <= e2e_index
+            str(step.get("run", "")) for _, step in enumerate(steps) if _ <= e2e_index
         )
         assert "playwright install" in run_text, (
             "A `playwright install chromium` (or equivalent) command must appear "
@@ -89,7 +89,9 @@ class TestFromAC_CockpitDeliveryGateOrdering:
         workflow = _load_sync_workflow()
         steps = _sync_job_steps(workflow)
 
-        prune_index = _step_index_by_name(steps, "Prune dev-only files from consumer tree")
+        prune_index = _step_index_by_name(
+            steps, "Prune dev-only files from consumer tree"
+        )
 
         cockpit_e2e_steps = [
             (index, step)

@@ -228,7 +228,9 @@ class TestFromAC_EngineAtomicity:
         assert task_path.exists(), (
             "task file must not be moved to archive/ on emit failure"
         )
-        archive_contents = [f for f in (kanban_dir / "archive").iterdir() if f.suffix == ".md"]
+        archive_contents = [
+            f for f in (kanban_dir / "archive").iterdir() if f.suffix == ".md"
+        ]
         assert archive_contents == [], (
             "archive/ must have no .md task files after failed archive move"
         )

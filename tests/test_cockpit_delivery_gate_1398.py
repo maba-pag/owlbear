@@ -79,7 +79,9 @@ class TestFromAC_CockpitDeliveryGateWorkflow:
             "All cockpit Vitest steps must run before the consumer branch commit step."
         )
 
-    def test_sync_workflow_runs_cockpit_playwright_e2e_distinct_from_excalidraw(self) -> None:
+    def test_sync_workflow_runs_cockpit_playwright_e2e_distinct_from_excalidraw(
+        self,
+    ) -> None:
         """AC1/AC5: workflow needs a cockpit `npm run test:e2e` step, not only Excalidraw Playwright."""
         workflow = _load_sync_workflow()
         steps = _sync_job_steps(workflow)
@@ -100,7 +102,9 @@ class TestFromAC_CockpitDeliveryGateWorkflow:
             "All cockpit Playwright E2E steps must run before the consumer branch commit step."
         )
 
-    def test_sync_workflow_disallows_build_gate_bypass_when_sync_cockpit_true(self) -> None:
+    def test_sync_workflow_disallows_build_gate_bypass_when_sync_cockpit_true(
+        self,
+    ) -> None:
         """AC3/AC5: cockpit quality gate conditions must not depend on build_cockpit."""
         workflow = _load_sync_workflow()
         steps = _sync_job_steps(workflow)
@@ -133,7 +137,6 @@ class TestFromAC_CockpitDeliveryGateWorkflow:
                 "bypassing cockpit quality gates while sync_cockpit is enabled."
             )
 
-
     def test_setup_node_condition_preserves_sync_share(self) -> None:
         """AC3: Setup Node.js must keep inputs.sync_share while requiring sync_cockpit and excluding build_cockpit."""
         workflow = _load_sync_workflow()
@@ -158,7 +161,9 @@ class TestFromAC_CockpitDeliveryGateWorkflow:
 class TestFromAC_CockpitPackagingShape:
     """AC2/AC4: workflow packaging must keep dist and remove source web tree."""
 
-    def test_sync_workflow_asserts_cockpit_dist_index_and_stages_dist_tree(self) -> None:
+    def test_sync_workflow_asserts_cockpit_dist_index_and_stages_dist_tree(
+        self,
+    ) -> None:
         """AC2/AC4: dist index is verified and the dist tree is staged for sync."""
         workflow = _load_sync_workflow()
         steps = _sync_job_steps(workflow)

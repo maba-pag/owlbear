@@ -575,6 +575,7 @@ class TestFromAC_ListFilesFilesOnly:
             f"list_archive_files returned non-file entries: {[p.name for p in non_files]}"
         )
 
+
 class TestFromAC_QuarantineLockHygiene:
     """AC-C4b2: move_to_quarantine no-ops on lock files matching .<digits>.lock.
 
@@ -637,6 +638,7 @@ class TestFromAC_QuarantineLockHygiene:
         assert not (kanban_dir / "quarantine").exists(), (
             "quarantine/ must not be created when move_to_quarantine no-ops on a lock file"
         )
+
 
 class TestFromAC_ArchiveLockHygiene:
     """AC-C4b3: move_to_archive acquires both tasks/.<id>.lock and archive/.<id>.lock.
@@ -708,4 +710,3 @@ class TestFromAC_ArchiveLockHygiene:
             f"Both task and archive lock files must exist after move_to_archive; "
             f"missing: {[p.name for p in missing]}"
         )
-

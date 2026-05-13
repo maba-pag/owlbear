@@ -196,6 +196,7 @@ def http_client(two_task_engine: KanbanEngine, two_task_cache: MtimeScanCache):
 # Helper: run events route with a mock awatch, collect yielded SSE items
 # ---------------------------------------------------------------------------
 
+
 async def _collect_sse(
     engine: KanbanEngine,
     mock_awatch_batches: list,
@@ -287,9 +288,7 @@ class TestFromAC_CacheDirSignature:
             "staleness goes undetected."
         )
 
-    def test_tmp_prefixed_files_excluded_from_signature(
-        self, board_dir: Path
-    ) -> None:
+    def test_tmp_prefixed_files_excluded_from_signature(self, board_dir: Path) -> None:
         """Adding a .tmp-* file to tasks_dir must NOT change the signature.
 
         Current scan() uses os.scandir with is_file() only — it counts .tmp- files.
@@ -649,9 +648,7 @@ class TestFromAC_SSEDeletedPathEvent:
     must be a positive integer (numeric, not zero or missing)."""
 
     @pytest.mark.asyncio
-    async def test_delete_only_batch_emits_tasks_changed(
-        self, board_dir: Path
-    ) -> None:
+    async def test_delete_only_batch_emits_tasks_changed(self, board_dir: Path) -> None:
         """A watch batch containing only a deleted task path must emit tasks-changed.
 
         Current events.py catches FileNotFoundError on stat() and skips the path,
@@ -733,7 +730,7 @@ class TestFromAC_SSEDeletedPathEvent:
         assert not os.path.exists(deleted_task)  # noqa: ASYNC240,PTH110
 
         batch = {
-            ("deleted", deleted_task),          # task-classified, file gone
+            ("deleted", deleted_task),  # task-classified, file gone
             ("modified", str(decisions_file)),  # decisions-classified, file exists
         }
         collected = await _collect_sse(engine, [batch])
@@ -1047,9 +1044,7 @@ class TestFromAC_EditReleaseCacheInvalidation:
     the relevant field equals the post-mutation value.
     """
 
-    def test_get_tasks_reflects_title_after_edit_route(
-        self, tmp_path: Path
-    ) -> None:
+    def test_get_tasks_reflects_title_after_edit_route(self, tmp_path: Path) -> None:
         """AC1: GET /api/tasks reflects title changes after POST /api/tasks/{id}/edit.
 
         After editing a task's title via the cockpit edit route, a subsequent
@@ -1111,9 +1106,7 @@ class TestFromAC_EditReleaseCacheInvalidation:
         finally:
             app.dependency_overrides.clear()
 
-    def test_get_tasks_reflects_tags_after_edit_route(
-        self, tmp_path: Path
-    ) -> None:
+    def test_get_tasks_reflects_tags_after_edit_route(self, tmp_path: Path) -> None:
         """AC2: GET /api/tasks reflects exact tag replacement after POST /api/tasks/{id}/edit.
 
         After replacing tags via the cockpit edit route, a subsequent GET /api/tasks

@@ -277,9 +277,7 @@ class TestFromAC_EndpointBoundaryProofs:
     """
 
     @pytest.mark.asyncio
-    async def test_move_task_rejects_path_traversal(
-        self, app_ctx: AppContext
-    ) -> None:
+    async def test_move_task_rejects_path_traversal(self, app_ctx: AppContext) -> None:
         """AC1/AC3/AC4 endpoint: move_task rejects '../etc/passwd' with clear ToolError.
 
         FAIL (RED): current move_task calls int('../etc/passwd') → ValueError
@@ -290,9 +288,7 @@ class TestFromAC_EndpointBoundaryProofs:
             await mcp_move_task(ctx, id="../etc/passwd", status="todo")
 
     @pytest.mark.asyncio
-    async def test_edit_task_rejects_shell_injection(
-        self, app_ctx: AppContext
-    ) -> None:
+    async def test_edit_task_rejects_shell_injection(self, app_ctx: AppContext) -> None:
         """AC1/AC3/AC4 endpoint: edit_task rejects '1; rm -rf' with clear ToolError.
 
         FAIL (RED): current edit_task calls int('1; rm -rf') → ValueError propagates;
@@ -416,8 +412,7 @@ class TestFromAC_NoSideEffects:
 
         post_task = app_ctx.engine.show_task(str(task_id))
         assert post_task.body == original_body, (
-            f"Task body modified after rejected edit_task; "
-            f"body now: {post_task.body!r}"
+            f"Task body modified after rejected edit_task; body now: {post_task.body!r}"
         )
 
     @pytest.mark.asyncio
@@ -510,8 +505,10 @@ class TestFromAC_ValidIdsRegression:
         await mcp_move_task(ctx, id="1", status="in-progress")
         mock_view.move_task.assert_called_once()
         call_args = mock_view.move_task.call_args
-        assert call_args.args[0] == 1 or call_args.kwargs.get("task_id") == 1 or (
-            call_args.args and call_args.args[0] == 1
+        assert (
+            call_args.args[0] == 1
+            or call_args.kwargs.get("task_id") == 1
+            or (call_args.args and call_args.args[0] == 1)
         ), f"move_task not called with int 1; args={call_args}"
 
     @pytest.mark.asyncio
@@ -527,9 +524,13 @@ class TestFromAC_ValidIdsRegression:
         await mcp_edit_task(ctx, id="1", append_body="ok")
         mock_view.edit_task.assert_called_once()
         call_args = mock_view.edit_task.call_args
-        task_id_arg = call_args.args[0] if call_args.args else call_args.kwargs.get("task_id")
+        task_id_arg = (
+            call_args.args[0] if call_args.args else call_args.kwargs.get("task_id")
+        )
         assert task_id_arg == 1, f"edit_task must receive int 1; got {task_id_arg!r}"
-        assert isinstance(task_id_arg, int), f"task_id must be int, got {type(task_id_arg)}"
+        assert isinstance(task_id_arg, int), (
+            f"task_id must be int, got {type(task_id_arg)}"
+        )
 
     @pytest.mark.asyncio
     async def test_start_work_valid_int_id_reaches_engine(
@@ -544,9 +545,13 @@ class TestFromAC_ValidIdsRegression:
         await mcp_start_work(ctx, id="1")
         mock_view.start_work.assert_called_once()
         call_args = mock_view.start_work.call_args
-        task_id_arg = call_args.args[0] if call_args.args else call_args.kwargs.get("task_id")
+        task_id_arg = (
+            call_args.args[0] if call_args.args else call_args.kwargs.get("task_id")
+        )
         assert task_id_arg == 1, f"start_work must receive int 1; got {task_id_arg!r}"
-        assert isinstance(task_id_arg, int), f"task_id must be int, got {type(task_id_arg)}"
+        assert isinstance(task_id_arg, int), (
+            f"task_id must be int, got {type(task_id_arg)}"
+        )
 
     @pytest.mark.asyncio
     async def test_end_work_valid_int_id_reaches_engine(
@@ -561,9 +566,13 @@ class TestFromAC_ValidIdsRegression:
         await mcp_end_work(ctx, id="1", note="done")
         mock_view.end_work.assert_called_once()
         call_args = mock_view.end_work.call_args
-        task_id_arg = call_args.args[0] if call_args.args else call_args.kwargs.get("task_id")
+        task_id_arg = (
+            call_args.args[0] if call_args.args else call_args.kwargs.get("task_id")
+        )
         assert task_id_arg == 1, f"end_work must receive int 1; got {task_id_arg!r}"
-        assert isinstance(task_id_arg, int), f"task_id must be int, got {type(task_id_arg)}"
+        assert isinstance(task_id_arg, int), (
+            f"task_id must be int, got {type(task_id_arg)}"
+        )
 
     @pytest.mark.asyncio
     async def test_show_task_valid_int_id_reaches_engine(
@@ -578,9 +587,17 @@ class TestFromAC_ValidIdsRegression:
         await mcp_show_task(ctx, id=1)
         mock_view.show_task.assert_called_once()
         call_args = mock_view.show_task.call_args
-        task_id_arg = call_args.kwargs.get("task_id") if call_args.kwargs else (call_args.args[0] if call_args.args else None)
-        assert task_id_arg == 1, f"show_task must receive task_id=1; got {task_id_arg!r}"
-        assert isinstance(task_id_arg, int), f"task_id must be int, got {type(task_id_arg)}"
+        task_id_arg = (
+            call_args.kwargs.get("task_id")
+            if call_args.kwargs
+            else (call_args.args[0] if call_args.args else None)
+        )
+        assert task_id_arg == 1, (
+            f"show_task must receive task_id=1; got {task_id_arg!r}"
+        )
+        assert isinstance(task_id_arg, int), (
+            f"task_id must be int, got {type(task_id_arg)}"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -636,9 +653,7 @@ class TestFromAC_ShowTaskStringBoundary:
             await mcp_show_task(ctx, id="../foo")  # type: ignore[arg-type]
 
     @pytest.mark.asyncio
-    async def test_show_task_rejects_alpha_string(
-        self, app_ctx: AppContext
-    ) -> None:
+    async def test_show_task_rejects_alpha_string(self, app_ctx: AppContext) -> None:
         """AC4/AC7: show_task("abc") must raise field-specific ToolError.
 
         FAIL (current): generic Pydantic error lacks "positive".
@@ -648,9 +663,7 @@ class TestFromAC_ShowTaskStringBoundary:
             await mcp_show_task(ctx, id="abc")  # type: ignore[arg-type]
 
     @pytest.mark.asyncio
-    async def test_show_task_rejects_empty_string(
-        self, app_ctx: AppContext
-    ) -> None:
+    async def test_show_task_rejects_empty_string(self, app_ctx: AppContext) -> None:
         """AC4/AC7: show_task("") must raise field-specific ToolError.
 
         FAIL (current): generic Pydantic error lacks "positive".

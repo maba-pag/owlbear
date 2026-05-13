@@ -833,4 +833,3 @@ class TestFromAC_HttpxContentFetcherSSRF:
             result = await fetcher.fetch("http://example.com/")
         assert result == "hello world"
         mock_dns.assert_called_once()
-

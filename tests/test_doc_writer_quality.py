@@ -47,15 +47,15 @@ class TestFromAC_DocUpdateSkillContent:
 
     def test_verification_procedure_layer1_grep_present(self) -> None:
         content = SKILL_DOC_UPDATE.read_text()
-        assert re.search(r"[Ll]ayer 1|Layer 1 —|grep.*structural|structural.*grep", content), (
-            "SKILL.md must document Layer 1 (grep-based structural) verification"
-        )
+        assert re.search(
+            r"[Ll]ayer 1|Layer 1 —|grep.*structural|structural.*grep", content
+        ), "SKILL.md must document Layer 1 (grep-based structural) verification"
 
     def test_verification_procedure_layer2_editorial_present(self) -> None:
         content = SKILL_DOC_UPDATE.read_text()
-        assert re.search(r"[Ll]ayer 2|Layer 2 —|LLM.*editorial|editorial.*LLM", content), (
-            "SKILL.md must document Layer 2 (LLM editorial) verification"
-        )
+        assert re.search(
+            r"[Ll]ayer 2|Layer 2 —|LLM.*editorial|editorial.*LLM", content
+        ), "SKILL.md must document Layer 2 (LLM editorial) verification"
 
     def test_todo_marker_insertion_rules_present(self) -> None:
         content = SKILL_DOC_UPDATE.read_text()
@@ -71,9 +71,9 @@ class TestFromAC_DocUpdateSkillContent:
 
     def test_gate_rule_task_caused_content_blocks(self) -> None:
         content = SKILL_DOC_UPDATE.read_text()
-        assert re.search(r"task.caused|task.introduced|task.content", content, re.IGNORECASE), (
-            "SKILL.md must document that task-caused unverified content blocks the gate"
-        )
+        assert re.search(
+            r"task.caused|task.introduced|task.content", content, re.IGNORECASE
+        ), "SKILL.md must document that task-caused unverified content blocks the gate"
 
     def test_gate_rule_preexisting_content_passes(self) -> None:
         content = SKILL_DOC_UPDATE.read_text()
@@ -117,9 +117,7 @@ class TestFromAC_DocAuditPromptContent:
             r"TODO.*marker.*resol|resol.*TODO.*marker|TODO marker.*batch|batch.*TODO marker",
             content,
             re.IGNORECASE,
-        ), (
-            "doc-audit.prompt.md must include a TODO marker batch resolution dimension"
-        )
+        ), "doc-audit.prompt.md must include a TODO marker batch resolution dimension"
 
     def test_diagram_ownership_section_present(self) -> None:
         content = DOC_AUDIT_PROMPT.read_text()
@@ -213,7 +211,9 @@ class TestFromAC_TodoMarkerFormat:
         content = SKILL_DOC_UPDATE.read_text()
         # The skill must show that the format is greppable (> **TODO:** prefix is consistent)
         # A concrete example like "> **TODO:** stale — ..." must appear
-        assert re.search(r"> \*\*TODO:\*\* (stale|inaccurate|missing|unverified)", content), (
+        assert re.search(
+            r"> \*\*TODO:\*\* (stale|inaccurate|missing|unverified)", content
+        ), (
             "w-doc-update/SKILL.md must include a concrete TODO marker example with a category"
         )
 
@@ -356,7 +356,9 @@ class TestFromAC_ConventionMappingTable:
 
     def test_convention_mapping_is_table(self) -> None:
         step1 = self._step1_section()
-        table_rows = [line for line in step1.splitlines() if line.strip().startswith("|")]
+        table_rows = [
+            line for line in step1.splitlines() if line.strip().startswith("|")
+        ]
         assert len(table_rows) >= 2, (
             f"Convention mapping must use a markdown table (at least 2 pipe-delimited rows), "
             f"found {len(table_rows)} table rows — not just bullets"

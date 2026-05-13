@@ -242,24 +242,33 @@ class TestFromAC_GetNextBatch:
         begin_idx = next(
             (i for i, s in enumerate(upper_trace) if "BEGIN IMMEDIATE" in s), None
         )
-        assert begin_idx is not None, f"BEGIN IMMEDIATE not found in SQL trace: {sql_trace}"
+        assert begin_idx is not None, (
+            f"BEGIN IMMEDIATE not found in SQL trace: {sql_trace}"
+        )
 
         select_idx = next(
-            (i for i, s in enumerate(upper_trace) if "SELECT" in s and i > begin_idx), None
+            (i for i, s in enumerate(upper_trace) if "SELECT" in s and i > begin_idx),
+            None,
         )
         assert select_idx is not None, (
             f"SELECT not found after BEGIN IMMEDIATE in SQL trace: {sql_trace}"
         )
 
         update_idx = next(
-            (i for i, s in enumerate(upper_trace) if s.startswith("UPDATE") and i > begin_idx), None
+            (
+                i
+                for i, s in enumerate(upper_trace)
+                if s.startswith("UPDATE") and i > begin_idx
+            ),
+            None,
         )
         assert update_idx is not None, (
             f"UPDATE not found after BEGIN IMMEDIATE in SQL trace: {sql_trace}"
         )
 
         commit_idx = next(
-            (i for i, s in enumerate(upper_trace) if s == "COMMIT" and i > begin_idx), None
+            (i for i, s in enumerate(upper_trace) if s == "COMMIT" and i > begin_idx),
+            None,
         )
         assert commit_idx is not None, (
             f"COMMIT not found after BEGIN IMMEDIATE in SQL trace: {sql_trace}"
@@ -271,7 +280,8 @@ class TestFromAC_GetNextBatch:
 
         # Discriminating: no COMMIT may appear between SELECT and UPDATE
         intermediate_commits = [
-            i for i, s in enumerate(upper_trace)
+            i
+            for i, s in enumerate(upper_trace)
             if s == "COMMIT" and select_idx < i < update_idx
         ]
         assert not intermediate_commits, (
@@ -327,7 +337,9 @@ class TestFromAC_GetNextBatch:
 
         assert len(result) == 1
         item = result[0]
-        assert _has_chunk_field(item, "doc_title"), "Result item missing doc_title field"
+        assert _has_chunk_field(item, "doc_title"), (
+            "Result item missing doc_title field"
+        )
         assert _get_chunk_field(item, "doc_title") == "My Document Title"
 
     @pytest.mark.asyncio
@@ -466,7 +478,9 @@ class TestFromAC_GetNextBatch:
         )
 
     @pytest.mark.asyncio
-    async def test_all_pending_claimed_then_empty(self, conn: sqlite3.Connection) -> None:
+    async def test_all_pending_claimed_then_empty(
+        self, conn: sqlite3.Connection
+    ) -> None:
         """With 3 pending chunks and limit=10, first call returns all 3; second returns 0."""
         source_id = _insert_source(conn)
         doc_id = _insert_document(conn, source_id=source_id)
@@ -757,7 +771,9 @@ class TestFromAC_StoreEnrichment:
             "WHERE source_id=? AND target_id=? AND relation=? AND document_id=?",
             (ent_a, ent_b, "causes", doc_id),
         ).fetchone()[0]
-        assert count == 1, f"Expected exactly 1 edge row after duplicate insert, got {count}"
+        assert count == 1, (
+            f"Expected exactly 1 edge row after duplicate insert, got {count}"
+        )
 
     # --- AC7: updates enrichment_state to 'enriched' (td:1) ---
 
@@ -768,9 +784,7 @@ class TestFromAC_StoreEnrichment:
         """After store_enrichment, the chunk's enrichment_state is 'enriched'."""
         source_id = _insert_source(conn)
         doc_id = _insert_document(conn, source_id=source_id)
-        chunk_id = _insert_chunk(
-            conn, document_id=doc_id, enrichment_state="claimed"
-        )
+        chunk_id = _insert_chunk(conn, document_id=doc_id, enrichment_state="claimed")
 
         ctx = _make_mcp_ctx(conn)
         await store_enrichment(ctx, chunk_id=chunk_id, entities=[], edges=[])

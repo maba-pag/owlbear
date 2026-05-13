@@ -65,9 +65,7 @@ class TestFromAC_RemoveAgentNameParam:
             f"parameter; parameters found: {list(sig.parameters)}"
         )
 
-    def test_passing_agent_name_string_raises_type_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_passing_agent_name_string_raises_type_error(self, tmp_path: Path) -> None:
         """KanbanEngine(kanban_dir, agent_name='cockpit') must raise TypeError.
 
         RED: currently succeeds — agent_name='cockpit' is silently accepted and
@@ -77,9 +75,7 @@ class TestFromAC_RemoveAgentNameParam:
         with pytest.raises(TypeError):
             KanbanEngine(kanban_dir, agent_name="cockpit")
 
-    def test_passing_agent_name_none_raises_type_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_passing_agent_name_none_raises_type_error(self, tmp_path: Path) -> None:
         """KanbanEngine(kanban_dir, agent_name=None) must raise TypeError.
 
         None must not be treated as a silent no-op (use-random-name fallback).

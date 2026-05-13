@@ -35,6 +35,7 @@ Each AC line states a concrete input condition and a concrete observable output.
 AC lines must not use ambiguous quantifier or quality words without exhaustive enumeration.
 
 Banned words (7):
+
 - all
 - every
 - correctly
@@ -68,6 +69,7 @@ Each AC line describes a before -> after difference in an inspectable artifact o
 Each AC line states how downstream agents verify completion.
 
 Allowed methods:
+
 - artifact inspection
 - stage-transition audit
 - field-presence check
@@ -78,11 +80,13 @@ Allowed methods:
 Run validation in order:
 
 1. Mechanical lint pass
+
 - Check B3 banned words are absent unless exhaustively enumerated.
 - Check P1 agent/stage token is present for Tier 2 lines.
 - Check AC numbering is present and stable.
 
 2. Semantic review pass
+
 - Confirm each line has sufficient detail for independent verification.
 - Confirm scope is not split across multiple hidden assumptions.
 - Confirm pass/fail is objective and does not require author interpretation.

@@ -388,8 +388,9 @@ class TestFromAC_StartupValidation:
         monkeypatch.chdir(tmp_path)
         monkeypatch.setenv("KANBAN_DIR", str(nonexistent))
 
-        with patch("owlbear_mcp_kanban.server.KanbanEngine") as mock_cls, pytest.raises(
-            Exception, match=str(nonexistent)
+        with (
+            patch("owlbear_mcp_kanban.server.KanbanEngine") as mock_cls,
+            pytest.raises(Exception, match=str(nonexistent)),
         ):
             async with app_lifespan(_server_mock()) as _ctx:
                 pass

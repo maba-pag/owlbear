@@ -271,7 +271,9 @@ class TestFromAC_ErrorEnvelopeShape:
         with mock.patch.object(
             CockpitView,
             "edit_task",
-            side_effect=ConfigError("ERR_INVALID_STATUS", "invalid board configuration"),
+            side_effect=ConfigError(
+                "ERR_INVALID_STATUS", "invalid board configuration"
+            ),
         ):
             resp = client.post(
                 f"/api/tasks/{task.id}/edit",
@@ -355,7 +357,9 @@ class TestFromAC_ErrorCoverage:
         with mock.patch.object(
             CockpitView,
             "edit_task",
-            side_effect=ConfigError("ERR_INVALID_STATUS", "invalid board configuration"),
+            side_effect=ConfigError(
+                "ERR_INVALID_STATUS", "invalid board configuration"
+            ),
         ):
             resp = client.post(
                 f"/api/tasks/{task.id}/edit",
@@ -363,7 +367,9 @@ class TestFromAC_ErrorCoverage:
             )
         body = resp.json()
         assert resp.status_code == 500
-        assert "code" in body  # FAILS: currently {"detail": "Invalid board configuration"}
+        assert (
+            "code" in body
+        )  # FAILS: currently {"detail": "Invalid board configuration"}
         assert "message" in body  # FAILS
         assert "detail" not in body  # FAILS — FastAPI detail still present
 
@@ -381,7 +387,9 @@ class TestFromAC_ErrorCoverage:
             resp = client.post("/api/tasks/scan")
         assert resp.status_code == 500
         # Pre-#1371: Starlette returns plain text; post-#1371: JSON envelope
-        assert resp.headers.get("content-type", "").startswith("application/json")  # FAILS
+        assert resp.headers.get("content-type", "").startswith(
+            "application/json"
+        )  # FAILS
         body = resp.json()
         assert "code" in body
         assert "message" in body
@@ -401,7 +409,9 @@ class TestFromAC_ErrorCoverage:
             resp = client.post("/api/tasks/repair")
         assert resp.status_code == 500
         # Pre-#1371: Starlette returns plain text; post-#1371: JSON envelope
-        assert resp.headers.get("content-type", "").startswith("application/json")  # FAILS
+        assert resp.headers.get("content-type", "").startswith(
+            "application/json"
+        )  # FAILS
         body = resp.json()
         assert "code" in body
         assert "message" in body
@@ -513,7 +523,9 @@ class TestFromAC_GuidancePolicy:
             resp = cache_client.get("/api/tasks")
         body = resp.json()
         assert resp.status_code == 200
-        assert body["guidance"] == sentinel_guidance  # proves forwarding, not hardcoded []
+        assert (
+            body["guidance"] == sentinel_guidance
+        )  # proves forwarding, not hardcoded []
 
     def test_list_cache_hit_guidance_is_empty_list(
         self, cache_client: TestClient
@@ -1005,7 +1017,9 @@ class TestFromAC_ReleaseErrorEnvelope:
         stale_token = task.updated
         engine_1371.edit_task("2", title="Bumped to make stale token")
 
-        response = client_1371.post("/api/tasks/2/release", json={"updated": stale_token})
+        response = client_1371.post(
+            "/api/tasks/2/release", json={"updated": stale_token}
+        )
         body = response.json()
         assert response.status_code == 409, (
             f"Stale release must return 409; got {response.status_code}"
@@ -1016,16 +1030,16 @@ class TestFromAC_ReleaseErrorEnvelope:
         assert body.get("code") == "ERR_STALE", (
             f"Expected code 'ERR_STALE'; got {body.get('code')!r}"
         )
-        assert "message" in body, (
-            f"Domain 409 must include 'message' key; got {body!r}"
-        )
+        assert "message" in body, f"Domain 409 must include 'message' key; got {body!r}"
 
     def test_release_unclaimed_task_returns_envelope_not_detail(
         self, client_1371: TestClient, engine_1371: KanbanEngine
     ) -> None:
         """409 release of unclaimed task carries {code, message}; no 'detail' field."""
         task = engine_1371.show_task("1")
-        response = client_1371.post("/api/tasks/1/release", json={"updated": task.updated})
+        response = client_1371.post(
+            "/api/tasks/1/release", json={"updated": task.updated}
+        )
         body = response.json()
         assert response.status_code == 409, (
             f"Release of unclaimed task must return 409; got {response.status_code}"
@@ -1033,12 +1047,8 @@ class TestFromAC_ReleaseErrorEnvelope:
         assert "detail" not in body, (
             f"Domain 409 must NOT include 'detail' key; got {body!r}"
         )
-        assert "code" in body, (
-            f"Domain 409 must include 'code' key; got {body!r}"
-        )
-        assert "message" in body, (
-            f"Domain 409 must include 'message' key; got {body!r}"
-        )
+        assert "code" in body, f"Domain 409 must include 'code' key; got {body!r}"
+        assert "message" in body, f"Domain 409 must include 'message' key; got {body!r}"
 
 
 # ---------------------------------------------------------------------------

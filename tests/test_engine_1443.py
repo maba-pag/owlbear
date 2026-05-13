@@ -66,7 +66,9 @@ class TestFromAC_ScanBasedIdAllocation:
     # AC-1: scan-based allocation with lock held through write
     # ------------------------------------------------------------------
 
-    def test_ac1_empty_board_returns_id_1_ignoring_config_next_id(self, tmp_path: Path) -> None:
+    def test_ac1_empty_board_returns_id_1_ignoring_config_next_id(
+        self, tmp_path: Path
+    ) -> None:
         """AC-1: no task files → first create_task allocates ID 1 regardless of config.next_id.
 
         Board has config.yml with next_id=500 but no task files. Scan-based allocation
@@ -193,7 +195,6 @@ class TestFromAC_ScanBasedIdAllocation:
             "scan-based allocation not yet implemented."
         )
 
-
     # ------------------------------------------------------------------
     # AC-2: create_task does not read or write config.next_id
     # ------------------------------------------------------------------
@@ -209,7 +210,9 @@ class TestFromAC_ScanBasedIdAllocation:
         assert task.id == 1
         assert task.title == "scratch-task"
         task_files = list((kanban_dir / "tasks").glob("1-*.md"))
-        assert len(task_files) == 1, "Task file must be written to tasks/ on scratch board"
+        assert len(task_files) == 1, (
+            "Task file must be written to tasks/ on scratch board"
+        )
         assert not (kanban_dir / "config.yml").exists(), (
             "create_task must not create config.yml on a scratch board "
             "(scan-based allocation must not call save_config)."
@@ -229,7 +232,9 @@ class TestFromAC_ScanBasedIdAllocation:
             "allocate_next_id is still calling save_config — replace with scan-based logic."
         )
 
-    def test_ac2_config_next_id_unchanged_after_create_task(self, tmp_path: Path) -> None:
+    def test_ac2_config_next_id_unchanged_after_create_task(
+        self, tmp_path: Path
+    ) -> None:
         """AC-2: config.next_id must not be incremented by create_task."""
         kanban_dir = _make_scratch_board(tmp_path)
         (kanban_dir / "config.yml").write_text("next_id: 999\n", encoding="utf-8")
@@ -315,7 +320,9 @@ class TestFromAC_ScanBasedIdAllocation:
         for t in threads:
             t.join()
 
-        assert errors == [], f"Concurrent create_task raised unexpected errors: {errors}"
+        assert errors == [], (
+            f"Concurrent create_task raised unexpected errors: {errors}"
+        )
         assert len(results) == n, f"Expected {n} tasks created; got {len(results)}"
         assert len(set(results)) == n, (
             f"All {n} concurrent creates must have distinct IDs; "
@@ -350,7 +357,9 @@ class TestFromAC_ScanBasedIdAllocation:
             f"found: {config_path}. scan-based allocate_next_id must not write config."
         )
 
-    def test_ac4_config_yml_unchanged_after_concurrent_creates(self, tmp_path: Path) -> None:
+    def test_ac4_config_yml_unchanged_after_concurrent_creates(
+        self, tmp_path: Path
+    ) -> None:
         """AC-4: concurrent creates on board with config.yml leave config.next_id unchanged."""
         kanban_dir = _make_scratch_board(tmp_path)
         (kanban_dir / "config.yml").write_text("next_id: 42\n", encoding="utf-8")
@@ -377,7 +386,9 @@ class TestFromAC_ScanBasedIdAllocation:
     # AC-5: activity logging defaults and create_task event emission
     # ------------------------------------------------------------------
 
-    def test_ac5_activity_log_default_none_enables_logging(self, tmp_path: Path) -> None:
+    def test_ac5_activity_log_default_none_enables_logging(
+        self, tmp_path: Path
+    ) -> None:
         """AC-5: KanbanEngine(kanban_dir) with no activity_log arg → logging enabled.
 
         The default must be True, applied directly — not via reading config.activity_log.
@@ -408,7 +419,9 @@ class TestFromAC_ScanBasedIdAllocation:
             "create_task does not yet call _emit_event."
         )
 
-    def test_ac5_activity_event_has_all_six_required_fields(self, tmp_path: Path) -> None:
+    def test_ac5_activity_event_has_all_six_required_fields(
+        self, tmp_path: Path
+    ) -> None:
         """AC-5: ActivityEvent from create_task contains all 6 required model fields."""
         kanban_dir = _make_scratch_board(tmp_path)
         engine = KanbanEngine(kanban_dir, activity_log=True)

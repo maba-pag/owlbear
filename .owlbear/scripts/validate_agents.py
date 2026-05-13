@@ -162,7 +162,11 @@ def _body_agents_table(content: str) -> list[str]:
             and not line.startswith("|---")
         ):
             cells = [c.strip() for c in line.split("|")]
-            if len(cells) >= _AGENT_TABLE_MIN_CELLS and cells[1] and cells[1] != "Agent":
+            if (
+                len(cells) >= _AGENT_TABLE_MIN_CELLS
+                and cells[1]
+                and cells[1] != "Agent"
+            ):
                 agents.append(cells[1])
     return agents
 

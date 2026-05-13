@@ -258,30 +258,37 @@ class TestFromAC_AgentCompatibilitySymmetry:
 
         # builder lists reviewer but reviewer has empty list (no builder)
         with pytest.raises(ConfigError):
-            BoardConfig.model_validate({
-                "schema": "grouped",
-                "statuses": ["research", "done"],
-                "priorities": ["needed"],
-                "agents": {
-                    "agent_map": {"research": "r", "done": "d"},
-                    "agent_compatibility": {"builder": ["reviewer"], "reviewer": []},
-                },
-            })
+            BoardConfig.model_validate(
+                {
+                    "schema": "grouped",
+                    "statuses": ["research", "done"],
+                    "priorities": ["needed"],
+                    "agents": {
+                        "agent_map": {"research": "r", "done": "d"},
+                        "agent_compatibility": {
+                            "builder": ["reviewer"],
+                            "reviewer": [],
+                        },
+                    },
+                }
+            )
 
     def test_missing_reverse_key_raises(self) -> None:
         from owlbear_kanban.models import BoardConfig  # noqa: PLC0415
 
         # builder lists reviewer but reviewer key is absent entirely
         with pytest.raises(ConfigError):
-            BoardConfig.model_validate({
-                "schema": "grouped",
-                "statuses": ["research", "done"],
-                "priorities": ["needed"],
-                "agents": {
-                    "agent_map": {"research": "r", "done": "d"},
-                    "agent_compatibility": {"builder": ["reviewer"]},
-                },
-            })
+            BoardConfig.model_validate(
+                {
+                    "schema": "grouped",
+                    "statuses": ["research", "done"],
+                    "priorities": ["needed"],
+                    "agents": {
+                        "agent_map": {"research": "r", "done": "d"},
+                        "agent_compatibility": {"builder": ["reviewer"]},
+                    },
+                }
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -394,9 +401,11 @@ policy:
     status_predicates: {}
 """
 
+
 def _make_engine(base_dir: Path, config_yaml: str = _BASE_CONFIG) -> KanbanEngine:
     kanban_dir = _make_board(base_dir, config_yaml)
     return KanbanEngine(kanban_dir)
+
 
 class TestFromAC_EntryStatusDefault:
     """AC: entry_status defaults to 'research' — omission-path proof required.
@@ -429,6 +438,7 @@ class TestFromAC_EntryStatusDefault:
         assert cfg.pipeline.entry_status == "research", (
             f"Expected entry_status='research' on direct BoardConfig() omission, got {cfg.pipeline.entry_status!r}"
         )
+
 
 class TestFromAC_TerminalStatusField:
     """D65: BoardConfig.terminal_status must be a declared field (not model_extra) with default 'done'."""
@@ -469,6 +479,7 @@ class TestFromAC_TerminalStatusField:
         # Must not raise ConfigError — declared default "done" equals statuses[-1] "done"
         engine = KanbanEngine(kanban_dir)
         assert engine.board_config().pipeline.terminal_status == "done"
+
 
 class TestFromAC_ArchivalReasonsFrozenSet:
     """D37: BoardConfig.archival_reasons must be frozenset[str], not list[str]."""
@@ -520,6 +531,7 @@ class TestFromAC_ArchivalReasonsFrozenSet:
             {"completed", "deprecated", "dropped", "duplicate", "wontfix"}
         )
 
+
 class TestFromAC_AgentViewMethodStubs:
     """AgentView must expose the required agent-facing methods.
 
@@ -564,6 +576,7 @@ class TestFromAC_AgentViewMethodStubs:
         view = AgentView(_make_engine(tmp_path))
         assert callable(getattr(view, "end_work", None)), "AgentView.end_work missing"
 
+
 class TestFromAC_RoleViewAccessors:
     """AC: AgentView constructed at init and accessible via engine accessor."""
 
@@ -591,6 +604,7 @@ class TestFromAC_RoleViewAccessors:
         assert view.engine is engine, (
             "AgentView.engine must reference the engine that constructed it"
         )
+
 
 class TestFromAC_BoardConfigDirectValidation:
     """AC: BoardConfig is Pydantic model with all fields validated at init.
@@ -625,7 +639,9 @@ class TestFromAC_BoardConfigDirectValidation:
             )
         assert "ERR_TERMINAL_STATUS_INVALID" in exc_info.value.code
 
-    def test_boardconfig_incomplete_agent_map_does_not_raise_at_construction(self) -> None:
+    def test_boardconfig_incomplete_agent_map_does_not_raise_at_construction(
+        self,
+    ) -> None:
         """BoardConfig() with incomplete agent_map is valid at construction — D24 defers validation to pick_tasks."""
         cfg = BoardConfig(
             statuses=["research", "backlog", "done"],
@@ -652,15 +668,16 @@ class TestFromAC_BoardConfigDirectValidation:
         from owlbear_kanban.models import ConfigError
 
         with pytest.raises(ConfigError):
-            BoardConfig.model_validate({
-                "schema": "grouped",
-                "statuses": ["research", "done"],
-                "priorities": ["needed"],
-                "agents": {
-                    "agent_map": {"research": "r", "done": "d"},
-                    "agent_compatibility": {
-                        "builder": ["reviewer"]  # reviewer not reciprocating
+            BoardConfig.model_validate(
+                {
+                    "schema": "grouped",
+                    "statuses": ["research", "done"],
+                    "priorities": ["needed"],
+                    "agents": {
+                        "agent_map": {"research": "r", "done": "d"},
+                        "agent_compatibility": {
+                            "builder": ["reviewer"]  # reviewer not reciprocating
+                        },
                     },
-                },
-            })
-
+                }
+            )

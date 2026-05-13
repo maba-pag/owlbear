@@ -233,7 +233,9 @@ class TestFromAC_RuntimeDefense:
         outside_dir.mkdir()
         (kanban_dir / "tasks").mkdir()
         (kanban_dir / "archive").mkdir()
-        (kanban_dir / "config.yml").write_text(_STORAGE_BOARD_CONFIG_YAML, encoding="utf-8")
+        (kanban_dir / "config.yml").write_text(
+            _STORAGE_BOARD_CONFIG_YAML, encoding="utf-8"
+        )
 
         engine = KanbanEngine(kanban_dir, activity_log=False)
 
@@ -305,12 +307,17 @@ class TestFromAC_BoardConfigIntegration:
         """AC1 — BoardConfig with '../tasks' in paths.tasks_dir raises ConfigError."""
         from owlbear_kanban.models import BoardConfig  # noqa: PLC0415
 
-        data = {**self._BASE, "paths": {"tasks_dir": "../tasks", "archive_dir": "archive"}}
+        data = {
+            **self._BASE,
+            "paths": {"tasks_dir": "../tasks", "archive_dir": "archive"},
+        }
         with pytest.raises(ConfigError) as exc_info:
             BoardConfig(**data)
         assert exc_info.value.code == "ERR_PATH_ESCAPE"
 
-    def test_list_task_files_with_nondefault_relative_path(self, tmp_path: Path) -> None:
+    def test_list_task_files_with_nondefault_relative_path(
+        self, tmp_path: Path
+    ) -> None:
         """AC5 — list_task_files works end-to-end when tasks_dir is a nested relative subdir.
 
         Proves path derivation for non-default relative subdirectories: list_task_files
@@ -323,9 +330,7 @@ class TestFromAC_BoardConfigIntegration:
         kanban_dir.mkdir()
         config_yaml = _STORAGE_BOARD_CONFIG_YAML.replace(
             "  tasks_dir: tasks", "  tasks_dir: sub/tasks"
-        ).replace(
-            "  archive_dir: archive", "  archive_dir: sub/archive"
-        )
+        ).replace("  archive_dir: archive", "  archive_dir: sub/archive")
         (kanban_dir / "config.yml").write_text(config_yaml, encoding="utf-8")
         # sub/tasks is intentionally absent — list_task_files must return [] not raise.
 

@@ -976,7 +976,9 @@ class TestFromAC_EditBodyParentSemantics:
         assert response.status_code == 200
         body = response.json()
         assert body["blocked"] is False, "empty block_reason must unblock the task"
-        assert "block:user" not in (body.get("tags") or []), "block:user tag must be removed"
+        assert "block:user" not in (body.get("tags") or []), (
+            "block:user tag must be removed"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -1059,6 +1061,7 @@ class TestFromAC_EditListClearOmit:
         )
         assert response.status_code == 200
         assert 3 in (response.json()["depends_on"] or [])
+
 
 # ---------------------------------------------------------------------------
 # Merged from test_cockpit_mutation_api_1132.py (task #1132)
@@ -1178,7 +1181,9 @@ class TestFromAC_GetViewDependency:
 
         assert get_view is not None, "get_view must be importable and not None (AC1)"
 
-    def test_get_view_returns_cockpit_view_instance(self, engine_1132: KanbanEngine) -> None:
+    def test_get_view_returns_cockpit_view_instance(
+        self, engine_1132: KanbanEngine
+    ) -> None:
         """get_view(engine_1132) returns a CockpitView instance — not a raw engine_1132 or other type (AC1)."""
         from owlbear_cockpit.deps import get_view  # noqa: PLC0415
 
@@ -1335,7 +1340,9 @@ class TestFromAC_ReleaseRequestModel:
         with pytest.raises(pydantic.ValidationError):
             ReleaseRequest(updated="2025-01-01T00:00:00", unknown_field="bad")
 
-    def test_release_without_body_returns_422_1132(self, client_1132: TestClient) -> None:
+    def test_release_without_body_returns_422_1132(
+        self, client_1132: TestClient
+    ) -> None:
         """POST /release without body returns 422 — ReleaseRequest.updated is required (AC3/AC8)."""
         response = client_1132.post("/api/tasks/2/release")  # no body
         assert response.status_code == 422, (
@@ -1507,7 +1514,9 @@ class TestFromAC_ReleaseErrorMapping:
         view.release_task.side_effect = NotFoundError(
             code="ERR_NOT_FOUND", user_message="Task '2' not found"
         )
-        response = client_1132.post("/api/tasks/2/release", json={"updated": task.updated})
+        response = client_1132.post(
+            "/api/tasks/2/release", json={"updated": task.updated}
+        )
         assert response.status_code == 404, (
             "NotFoundError from CockpitView.release_task must map to 404 (AC4b)"
         )
@@ -1534,7 +1543,9 @@ class TestFromAC_ReleaseErrorMapping:
         view.release_task.side_effect = ConcurrencyError(
             code="ERR_STALE", user_message="Stale snapshot"
         )
-        response = client_1132.post("/api/tasks/2/release", json={"updated": task.updated})
+        response = client_1132.post(
+            "/api/tasks/2/release", json={"updated": task.updated}
+        )
         assert response.status_code == 409, (
             "ConcurrencyError from CockpitView.release_task must map to 409 (AC4b)"
         )
@@ -1561,7 +1572,9 @@ class TestFromAC_ReleaseClaim:
         assert task.claimed_at is not None, (
             "Precondition: task 2 must have claimed_at on disk"
         )
-        response = client_1132.post("/api/tasks/2/release", json={"updated": task.updated})
+        response = client_1132.post(
+            "/api/tasks/2/release", json={"updated": task.updated}
+        )
         assert response.status_code == 200, (
             f"Genuinely claimed task (claimed_at set) must return 200 after G3 fix (AC5), "
             f"got {response.status_code}"
@@ -1572,7 +1585,9 @@ class TestFromAC_ReleaseClaim:
     ) -> None:
         """Release 200 response has all required task-detail fields."""
         task = engine_1132.show_task("2")
-        response = client_1132.post("/api/tasks/2/release", json={"updated": task.updated})
+        response = client_1132.post(
+            "/api/tasks/2/release", json={"updated": task.updated}
+        )
         assert response.status_code == 200
         body = response.json()
         for field in (
@@ -1591,7 +1606,9 @@ class TestFromAC_ReleaseClaim:
     ) -> None:
         """Release 200 response has claimed=False (claim cleared by release)."""
         task = engine_1132.show_task("2")
-        response = client_1132.post("/api/tasks/2/release", json={"updated": task.updated})
+        response = client_1132.post(
+            "/api/tasks/2/release", json={"updated": task.updated}
+        )
         assert response.status_code == 200
         assert response.json()["claimed"] is False, (
             "Release response must show claimed=False after claim is cleared (AC5)"
@@ -1691,7 +1708,9 @@ class TestFromAC_ReleaseStaleToken:
         # Advance task's updated timestamp so stale_token is now outdated
         engine_1132.edit_task("2", title="Modified to advance updated timestamp")
 
-        response = client_1132.post("/api/tasks/2/release", json={"updated": stale_token})
+        response = client_1132.post(
+            "/api/tasks/2/release", json={"updated": stale_token}
+        )
         assert response.status_code == 409
         body = response.json()
         assert "detail" not in body
@@ -1706,7 +1725,9 @@ class TestFromAC_ReleaseStaleToken:
     ) -> None:
         """Claimed task + fresh updated token → 200 (contrast with stale-token 409, AC7)."""
         task = engine_1132.show_task("2")
-        response = client_1132.post("/api/tasks/2/release", json={"updated": task.updated})
+        response = client_1132.post(
+            "/api/tasks/2/release", json={"updated": task.updated}
+        )
         assert response.status_code == 200, (
             f"Claimed task with fresh updated token must return 200 (AC7 contrast), "
             f"got {response.status_code}"
@@ -1726,7 +1747,9 @@ class TestFromAC_ReleaseActivityLogging:
     ) -> None:
         """Release success (200) produces activity.jsonl entry with source='cockpit'."""
         task = engine_1132.show_task("2")
-        response = client_1132.post("/api/tasks/2/release", json={"updated": task.updated})
+        response = client_1132.post(
+            "/api/tasks/2/release", json={"updated": task.updated}
+        )
         assert response.status_code == 200, (
             f"Precondition: release must return 200 to verify activity logging (AC10), "
             f"got {response.status_code}"
@@ -1819,7 +1842,9 @@ class TestFromAC_EditCASEngagement:
         must appear in the captured call kwargs, engaging the engine_1134 CAS.
         """
         task = engine_1134.show_task("1")
-        with mock.patch.object(engine_1134, "edit_task", wraps=engine_1134.edit_task) as mocked:
+        with mock.patch.object(
+            engine_1134, "edit_task", wraps=engine_1134.edit_task
+        ) as mocked:
             response = client_1134.post(
                 "/api/tasks/1/edit",
                 json={"updated": task.updated, "title": "CAS probe"},
@@ -1841,7 +1866,9 @@ class TestFromAC_EditCASEngagement:
         a different value would defeat the CAS purpose.
         """
         task = engine_1134.show_task("1")
-        with mock.patch.object(engine_1134, "edit_task", wraps=engine_1134.edit_task) as mocked:
+        with mock.patch.object(
+            engine_1134, "edit_task", wraps=engine_1134.edit_task
+        ) as mocked:
             response = client_1134.post(
                 "/api/tasks/1/edit",
                 json={"updated": task.updated, "title": "CAS value probe"},
@@ -1896,9 +1923,7 @@ class TestFromAC_ConcurrencyErrorHandler:
         body = response.json()
         assert "detail" not in body
         assert body.get("code") == "ERR_STALE"
-        assert body.get("message") == "stale", (
-            f"Envelope message mismatch: {body!r}"
-        )
+        assert body.get("message") == "stale", f"Envelope message mismatch: {body!r}"
 
     def test_edit_concurrency_error_not_propagated_as_500(
         self, client_1134, engine_1134: KanbanEngine
@@ -2112,7 +2137,9 @@ class TestFromAC_MovePrecheck:
         engine_1135.move_task without expected_updated — this test proves the gap.
         """
         task = engine_1135.show_task("1")
-        with mock.patch.object(engine_1135, "move_task", wraps=engine_1135.move_task) as mocked:
+        with mock.patch.object(
+            engine_1135, "move_task", wraps=engine_1135.move_task
+        ) as mocked:
             response = client_1135.post(
                 "/api/tasks/1/move",
                 json={"status": "in-progress", "updated": task.updated},
@@ -2155,7 +2182,9 @@ class TestFromAC_MovePrecheck:
         task = engine_1135.show_task("1")
         stale_timestamp = task.updated
         engine_1135.edit_task("1", title="Bump updated for precheck test")
-        with mock.patch.object(engine_1135, "move_task", wraps=engine_1135.move_task) as mocked:
+        with mock.patch.object(
+            engine_1135, "move_task", wraps=engine_1135.move_task
+        ) as mocked:
             response = client_1135.post(
                 "/api/tasks/1/move",
                 json={"status": "in-progress", "updated": stale_timestamp},
@@ -2198,7 +2227,9 @@ class TestFromAC_MoveConcurrencyError:
                 user_message="stale write detected",
             )
 
-        with mock.patch.object(engine_1135, "move_task", side_effect=_raise_concurrency):
+        with mock.patch.object(
+            engine_1135, "move_task", side_effect=_raise_concurrency
+        ):
             response = client_1135.post(
                 "/api/tasks/1/move",
                 json={"status": "in-progress", "updated": task.updated},
@@ -2220,7 +2251,9 @@ class TestFromAC_MoveConcurrencyError:
                 user_message="stale write detected",
             )
 
-        with mock.patch.object(engine_1135, "move_task", side_effect=_raise_concurrency):
+        with mock.patch.object(
+            engine_1135, "move_task", side_effect=_raise_concurrency
+        ):
             response = client_1135.post(
                 "/api/tasks/1/move",
                 json={"status": "in-progress", "updated": task.updated},
@@ -2243,7 +2276,9 @@ class TestFromAC_MoveStaleUpdated:
     HTTP move with stale token → 409.
     """
 
-    def test_move_stale_updated_returns_409_1135(self, client_1135, engine_1135: KanbanEngine) -> None:
+    def test_move_stale_updated_returns_409_1135(
+        self, client_1135, engine_1135: KanbanEngine
+    ) -> None:
         """Stale 'updated' token causes move route to return 409.
 
         Follows the pattern from test_edit_stale_updated_returns_409 in
@@ -2318,7 +2353,10 @@ class TestFromAC_MoveSharedSuiteContract:
                 continue
             enclosing_test = self._find_enclosing_test_name(lines, i)
             # Intentionally missing-updated tests are expected to omit OCC token.
-            if "without_updated" in enclosing_test or "missing_updated" in enclosing_test:
+            if (
+                "without_updated" in enclosing_test
+                or "missing_updated" in enclosing_test
+            ):
                 continue
             # Collect a window covering the enclosing client.post(...) call
             start = max(0, i - 2)
@@ -3247,8 +3285,7 @@ class TestFromAC_EditBodyContract:
         )
         assert response.status_code == 200
         assert response.json()["body"] == "", (
-            "body: '' must clear the task body, "
-            f"got: {response.json()['body']!r}"
+            f"body: '' must clear the task body, got: {response.json()['body']!r}"
         )
 
     def test_body_empty_string_does_not_return_unchanged_body(
@@ -3422,9 +3459,7 @@ class TestFromAC_CleanupClaimRelease:
         task = engine_1448.show_task("2")
         assert task.claimed_at is not None
 
-    def test_cleanup_clears_expired_claimed_at_on_disk(
-        self, tmp_path: Path
-    ) -> None:
+    def test_cleanup_clears_expired_claimed_at_on_disk(self, tmp_path: Path) -> None:
         """After cleanup, re-reading the expired task proves claimed_at is None on disk."""
         board = _make_board_1448(tmp_path)
         _write_task_1448(board, task_id=3, status="todo", claimed_at=_EPOCH_TS)
@@ -3435,7 +3470,9 @@ class TestFromAC_CleanupClaimRelease:
         assert 3 in result.released_claim_ids
         # Re-read from disk to prove CAS write persisted the cleared claimed_at
         task = engine_1448.show_task("3")
-        assert task.claimed_at is None, "cleanup must clear claimed_at on disk for expired task"
+        assert task.claimed_at is None, (
+            "cleanup must clear claimed_at on disk for expired task"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -3547,7 +3584,9 @@ class TestFromAC_CleanupSafety:
 
         engine_1448.cleanup()  # type: ignore[attr-defined]  # not yet implemented
 
-        assert malformed.exists(), "malformed source file must not be deleted when skipped"
+        assert malformed.exists(), (
+            "malformed source file must not be deleted when skipped"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -3646,7 +3685,9 @@ class TestFromAC_CockpitCleanupContract:
 
         assert response.status_code == 200
         body = response.json()
-        assert len(body["skipped_items"]) >= 1, "malformed file must appear in skipped_items"
+        assert len(body["skipped_items"]) >= 1, (
+            "malformed file must appear in skipped_items"
+        )
         for item in body["skipped_items"]:
             assert isinstance(item["path"], str), "skipped_items path must be str"
             assert isinstance(item["reason"], str), "skipped_items reason must be str"
@@ -3723,6 +3764,7 @@ class TestFromAC_CleanupNegativeProbe:
     ) -> None:
         """SSE /api/events must not invoke cleanup() before streaming begins."""
         assert hasattr(engine_1448, "cleanup"), "KanbanEngine.cleanup() must exist"
+
         # Patch awatch to prevent actual filesystem watching (avoids SSE deadlock)
         async def _noop_awatch(*_args, **_kwargs):  # noqa: RUF029
             return
@@ -3736,4 +3778,3 @@ class TestFromAC_CleanupNegativeProbe:
             with client_1448.stream("GET", "/api/events") as resp:
                 assert resp.status_code == 200
             mock_cleanup.assert_not_called()
-

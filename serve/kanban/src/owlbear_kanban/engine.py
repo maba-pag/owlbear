@@ -150,12 +150,16 @@ def _task_body_as_text(body: object) -> str:
 
 def _validate_dispatch_rank_coverage(config: BoardConfig) -> None:
     """Ensure dispatch rank maps cover every configured priority and status."""
-    unranked_priorities = [value for value in config.priorities if value not in PRIORITY_RANK]
+    unranked_priorities = [
+        value for value in config.priorities if value not in PRIORITY_RANK
+    ]
     if unranked_priorities:
         names = ", ".join(unranked_priorities)
         raise ConfigError(
             code="ERR_DISPATCH_PRIORITY_MISMATCH",
-            user_message=(f"dispatch priority ranks missing configured values: {names}"),
+            user_message=(
+                f"dispatch priority ranks missing configured values: {names}"
+            ),
         )
 
     unranked_statuses = [value for value in config.statuses if value not in STATUS_RANK]
@@ -174,7 +178,9 @@ def _restore_snapshot_if_unchanged(
 ) -> None:
     """Best-effort rollback that never overwrites a newer concurrent update."""
     try:
-        _storage_module().write_task_if_unchanged(original, expected_updated, kanban_dir)
+        _storage_module().write_task_if_unchanged(
+            original, expected_updated, kanban_dir
+        )
     except ConcurrencyError as exc:
         if exc.code != "ERR_STALE":
             raise
@@ -296,7 +302,9 @@ def _validate_session_filter(session_filter: str) -> None:
     raise ValueError(msg)
 
 
-def _apply_session_filter(sessions: list[SessionRecord], session_filter: str) -> list[SessionRecord]:
+def _apply_session_filter(
+    sessions: list[SessionRecord], session_filter: str
+) -> list[SessionRecord]:
     """Return *sessions* filtered by *filter* name."""
     if session_filter == "all":
         return sessions
@@ -418,7 +426,9 @@ class KanbanEngine:
         validate_path_containment(self._kanban_dir, self._archive_dir)
         self._agent_name: str = f"{random.choice(ADJECTIVES)}-{random.choice(NOUNS)}"  # noqa: S311
         effective_activity_log = activity_log if activity_log is not None else True
-        self._activity_log_path: Path | None = kanban_dir / "activity.jsonl" if effective_activity_log else None
+        self._activity_log_path: Path | None = (
+            kanban_dir / "activity.jsonl" if effective_activity_log else None
+        )
         self._revision: int = 0
         self._task_cache: dict[str, tuple[int, Task]] = {}
         self._archive_cache: dict[str, tuple[int, Task]] = {}
@@ -430,7 +440,8 @@ class KanbanEngine:
         # AC-C47: migration gate — new-schema boards only (no 'version' field)
         # Legacy boards used claimed_by; new-schema boards must not have it.
         is_legacy_schema = bool(
-            getattr(self._config, "version", None) or (self._config.model_extra or {}).get("version")
+            getattr(self._config, "version", None)
+            or (self._config.model_extra or {}).get("version")
         )
         if not is_legacy_schema and self._tasks_dir.exists():
             for p in self._tasks_dir.glob("*.md"):
@@ -462,7 +473,9 @@ class KanbanEngine:
                     continue
 
                 claimed_by = frontmatter["claimed_by"]
-                is_cleared = claimed_by is None or (isinstance(claimed_by, str) and not claimed_by.strip())
+                is_cleared = claimed_by is None or (
+                    isinstance(claimed_by, str) and not claimed_by.strip()
+                )
                 if is_cleared:
                     continue
 
@@ -678,7 +691,8 @@ class KanbanEngine:
                         corruption = detect_corruption(path, self._config)
                         if corruption is not None and not (
                             corruption.code == "ERR_CORRUPT_MISSING_FIELD"
-                            and corruption.detail == "forbidden field claimed_by present"
+                            and corruption.detail
+                            == "forbidden field claimed_by present"
                         ):
                             cache.pop(entry.name, None)
                             continue
@@ -718,7 +732,10 @@ class KanbanEngine:
 
         if not archived:
             self._id_to_filename = dict(
-                sorted((cached_task.id, filename) for filename, (_, cached_task) in self._task_cache.items())
+                sorted(
+                    (cached_task.id, filename)
+                    for filename, (_, cached_task) in self._task_cache.items()
+                )
             )
 
         all_active_ids = {task.id for task in tasks}
@@ -738,7 +755,11 @@ class KanbanEngine:
             tasks = [t for t in tasks if t.claimed_at is None]
         if search:
             needle = search.lower()
-            tasks = [t for t in tasks if needle in t.title.lower() or needle in t.body.lower()]
+            tasks = [
+                t
+                for t in tasks
+                if needle in t.title.lower() or needle in t.body.lower()
+            ]
 
         # --- Sort ---
         if sort:
@@ -820,7 +841,10 @@ class KanbanEngine:
                 del self._id_to_filename[int_id]
                 return read_task(archive_path, config=self._config)
 
-            if filename in self._task_cache and self._task_cache[filename][0] == mtime_ns:
+            if (
+                filename in self._task_cache
+                and self._task_cache[filename][0] == mtime_ns
+            ):
                 return self._task_cache[filename][1]
             task = read_task(path, config=self._config)
             self._task_cache[filename] = (mtime_ns, task)
@@ -846,7 +870,11 @@ class KanbanEngine:
             for part in parse_body(body)
             if part.heading is not None and part.heading.strip()
         }
-        required = {section.strip().lstrip("#").strip().casefold() for section in sections if section.strip()}
+        required = {
+            section.strip().lstrip("#").strip().casefold()
+            for section in sections
+            if section.strip()
+        }
         return required.issubset(present)
 
     def task_exists(self, task_id: int) -> bool:
@@ -903,17 +931,23 @@ class KanbanEngine:
         if archival_reason not in config.policy.archival_reasons:
             raise ValidationError(
                 code="ERR_ARCHIVAL_REASON_INVALID",
-                user_message=(f"archival_reason must be one of {sorted(config.policy.archival_reasons)}"),
+                user_message=(
+                    f"archival_reason must be one of {sorted(config.policy.archival_reasons)}"
+                ),
             )
         if archival_reason in {"deprecated", "duplicate"} and not archival_refs:
             raise ValidationError(
                 code="ERR_ARCHIVAL_REFS_REQUIRED",
-                user_message=(f"archival_refs required for archival_reason='{archival_reason}'"),
+                user_message=(
+                    f"archival_refs required for archival_reason='{archival_reason}'"
+                ),
             )
         if archival_reason in {"completed", "dropped", "wontfix"} and archival_refs:
             raise ValidationError(
                 code="ERR_ARCHIVAL_REFS_FORBIDDEN",
-                user_message=(f"archival_refs forbidden for archival_reason='{archival_reason}'"),
+                user_message=(
+                    f"archival_refs forbidden for archival_reason='{archival_reason}'"
+                ),
             )
         if archival_reason == "completed" and not can_mark_completed:
             raise ValidationError(
@@ -955,11 +989,15 @@ class KanbanEngine:
             return
 
         sections = predicate_spec.get("sections")
-        required = [str(section) for section in sections] if isinstance(sections, list) else []
+        required = (
+            [str(section) for section in sections] if isinstance(sections, list) else []
+        )
         if not self._required_sections_passes(body, required):
             raise ValidationError(
                 code="ERR_PREDICATE_FAILED",
-                user_message=(f"Task body does not satisfy predicate for status '{target_status}'"),
+                user_message=(
+                    f"Task body does not satisfy predicate for status '{target_status}'"
+                ),
             )
 
     # ------------------------------------------------------------------
@@ -1063,7 +1101,9 @@ class KanbanEngine:
             record = created_task
             created_task_path = task_path
 
-        _storage_module().allocate_next_id(self._kanban_dir, write_task_fn=_write_new_task)
+        _storage_module().allocate_next_id(
+            self._kanban_dir, write_task_fn=_write_new_task
+        )
         if record is None:
             msg = "create_task failed to construct task record"
             raise RuntimeError(msg)
@@ -1161,7 +1201,11 @@ class KanbanEngine:
         if body is not None:
             self.validate_body_size(body)
 
-        if parent is not _PARENT_UNSET and parent is not None and not self.task_exists(parent):
+        if (
+            parent is not _PARENT_UNSET
+            and parent is not None
+            and not self.task_exists(parent)
+        ):
             raise ValidationError(
                 code="ERR_PARENT_NOT_FOUND",
                 user_message=f"Parent task '{parent}' not found",
@@ -1174,7 +1218,9 @@ class KanbanEngine:
                     user_message=f"Dependency task '{dep_id}' not found",
                 )
 
-        task_path = self._find_task_path(task_id, self._tasks_dir, include_archive_fallback=True)
+        task_path = self._find_task_path(
+            task_id, self._tasks_dir, include_archive_fallback=True
+        )
         target_dir = task_path.parent
         record = read_task(task_path, config=self._config)
         original = record.model_copy(deep=True)
@@ -1292,7 +1338,8 @@ class KanbanEngine:
                 task_id=record.id,
                 archival_reason=archival_reason,
                 archival_refs=archival_refs or [],
-                can_mark_completed=record.status == self._config.pipeline.terminal_status,
+                can_mark_completed=record.status
+                == self._config.pipeline.terminal_status,
                 config=self._config,
             )
         elif archival_reason is not None or archival_refs is not None:
@@ -1313,7 +1360,9 @@ class KanbanEngine:
             record.status = "archived"
             record.claimed_at = None
             record.archival_reason = archival_reason
-            record.archival_refs = list(archival_refs) if archival_refs is not None else []
+            record.archival_refs = (
+                list(archival_refs) if archival_refs is not None else []
+            )
             record.updated = datetime.now(tz=UTC).isoformat()
             if expected_updated is not None:
                 storage.write_task_if_unchanged(
@@ -1418,7 +1467,10 @@ class KanbanEngine:
                         self._kanban_dir,
                     )
                 except ConcurrencyError as exc:
-                    if exc.code == "ERR_STALE" and stale_retries < _MAX_CLAIM_STALE_RETRIES:
+                    if (
+                        exc.code == "ERR_STALE"
+                        and stale_retries < _MAX_CLAIM_STALE_RETRIES
+                    ):
                         stale_retries += 1
                         continue
                     raise
@@ -1579,7 +1631,9 @@ class KanbanEngine:
         """
         if outcome == "success":
             statuses = list(self._config.pipeline.statuses)
-            current_idx = statuses.index(record.status) if record.status in statuses else -1
+            current_idx = (
+                statuses.index(record.status) if record.status in statuses else -1
+            )
             if move_to is not None:
                 record.status = move_to
             elif current_idx == len(statuses) - 1:
@@ -1718,7 +1772,9 @@ class KanbanEngine:
             "release": "release",
         }
         try:
-            self._emit_event("end_work", record.id, _end_work_details[outcome], source=source)
+            self._emit_event(
+                "end_work", record.id, _end_work_details[outcome], source=source
+            )
         except OSError:
             with contextlib.suppress(Exception):
                 if needs_archive and dest.exists():
@@ -1783,7 +1839,9 @@ class KanbanEngine:
                             continue
                         raise
                     try:
-                        self._emit_event("sweep-release", record.id, "expired claim released")
+                        self._emit_event(
+                            "sweep-release", record.id, "expired claim released"
+                        )
                     except OSError:
                         with contextlib.suppress(Exception):
                             _restore_snapshot_if_unchanged(
@@ -1939,7 +1997,12 @@ class KanbanEngine:
 
         pruned_lock_paths = self._cleanup_orphan_lock_files()
 
-        if released_claim_ids or archived_task_ids or closed_session_ids or pruned_lock_paths:
+        if (
+            released_claim_ids
+            or archived_task_ids
+            or closed_session_ids
+            or pruned_lock_paths
+        ):
             self._revision += 1
 
         return CleanupResult(
@@ -1972,7 +2035,9 @@ class KanbanEngine:
         final_outcomes = []
         for outcome in outcomes:
             if outcome.action == "quarantined":
-                quarantine_path = self._kanban_dir / "quarantine" / _Path(outcome.file_path).name
+                quarantine_path = (
+                    self._kanban_dir / "quarantine" / _Path(outcome.file_path).name
+                )
                 body = (
                     "## Quarantined file\n\n"
                     f"- code: {outcome.code}\n"

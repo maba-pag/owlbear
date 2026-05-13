@@ -127,9 +127,7 @@ def _make_engine(base_dir, config_yaml: str = _BASE_CONFIG) -> KanbanEngine:
     return KanbanEngine(kanban_dir, activity_log=False)
 
 
-def _make_view(
-    base_dir, config_yaml: str = _BASE_CONFIG
-) -> tuple[AgentView, object]:
+def _make_view(base_dir, config_yaml: str = _BASE_CONFIG) -> tuple[AgentView, object]:
     """Create an AgentView (and its underlying engine) backed by a fresh board."""
     kanban_dir = _make_board(base_dir, config_yaml)
     engine = KanbanEngine(kanban_dir, activity_log=False)
@@ -271,7 +269,9 @@ class TestFromAC_SuccessAtTerminalStatus:
     - the file stays in tasks/ (not moved to archive/)
     """
 
-    def test_success_at_terminal_returns_archival_reason_completed(self, tmp_path) -> None:
+    def test_success_at_terminal_returns_archival_reason_completed(
+        self, tmp_path
+    ) -> None:
         """AC3: success from 'done' sets archival_reason='completed' on the returned task.
 
         FAIL reason: current code sets status to 'research' (buggy default move_to);
@@ -440,7 +440,9 @@ class TestFromAC_CustomConfigAdvancement:
     (stock idx 3→4).  Config-driven logic correctly advances to backlog (idx 0→1).
     """
 
-    def test_success_from_first_custom_status_advances_to_second(self, tmp_path) -> None:
+    def test_success_from_first_custom_status_advances_to_second(
+        self, tmp_path
+    ) -> None:
         """AC1: success from 'in-progress' (idx=0) advances to 'backlog' (idx=1) on custom board.
 
         Discriminating: stock-order code would advance in-progress → review (stock idx 3→4).
@@ -457,7 +459,9 @@ class TestFromAC_CustomConfigAdvancement:
             f"(config idx 0→1); got {result.status!r} — stock-order code would give 'review'"
         )
 
-    def test_success_from_second_custom_status_advances_to_third(self, tmp_path) -> None:
+    def test_success_from_second_custom_status_advances_to_third(
+        self, tmp_path
+    ) -> None:
         """AC1: success from 'backlog' (idx=1) advances to 'review' (idx=2) on custom board.
 
         Discriminating: proves advancement reads the second custom position,

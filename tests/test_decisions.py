@@ -1072,9 +1072,7 @@ class TestFromAC_ResolvePendingDrs_1181:
 
     # --- AC5: rejected path appends summary (retry gap fill) ---
 
-    def test_ac5_rejected_path_appends_summary_to_task(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac5_rejected_path_appends_summary_to_task(self, tmp_path: Path) -> None:
         """AC5 boundary: rejected DR must append_body to task before unblock and move."""
         decisions_dir, pending_dir, _resolved_dir = _make_dirs(tmp_path)
         _write_dr(

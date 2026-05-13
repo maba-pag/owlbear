@@ -83,9 +83,7 @@ class TestFromAC_SyncPdsAssetsScript:
         assert len(js_files) == 59, (
             f"Expected 59 .js files in components/, found {len(js_files)}"
         )
-        assert len(svg_files) == 290, (
-            f"Expected 290 .svg files, found {len(svg_files)}"
-        )
+        assert len(svg_files) == 290, f"Expected 290 .svg files, found {len(svg_files)}"
 
     def test_ac8_exits_nonzero_with_descriptive_error_on_parse_failure(
         self, tmp_path: Path
@@ -135,7 +133,9 @@ class TestFromAC_SyncPdsAssetsScript:
         """
         nm_link = tmp_path / "node_modules"
         nm_link.symlink_to(WEB_ROOT / "node_modules")
-        (tmp_path / "public" / "porsche-design-system" / "components").mkdir(parents=True)
+        (tmp_path / "public" / "porsche-design-system" / "components").mkdir(
+            parents=True
+        )
         (tmp_path / "public" / "porsche-design-system" / "icons").mkdir(parents=True)
 
         result = subprocess.run(
@@ -196,12 +196,13 @@ class TestFromAC_SyncPdsAssetsScript:
             env={**os.environ},
             timeout=30,
         )
-        assert result.returncode != 0, "Expected non-zero exit when CDN returns HTTP 503"
+        assert result.returncode != 0, (
+            "Expected non-zero exit when CDN returns HTTP 503"
+        )
         error_out = result.stderr + result.stdout
-        assert any(
-            kw in error_out.lower()
-            for kw in ("cdn", "download", "http")
-        ), f"Expected descriptive CDN-failure error, got: {error_out[:300]!r}"
+        assert any(kw in error_out.lower() for kw in ("cdn", "download", "http")), (
+            f"Expected descriptive CDN-failure error, got: {error_out[:300]!r}"
+        )
 
     def test_ac8_chunk_map_parse_failure_returns_descriptive_error(
         self, tmp_path: Path
@@ -240,7 +241,9 @@ class TestFromAC_SyncPdsAssetsScript:
             env={**os.environ},
             timeout=30,
         )
-        assert result.returncode != 0, "Expected non-zero exit when chunk-map parse fails"
+        assert result.returncode != 0, (
+            "Expected non-zero exit when chunk-map parse fails"
+        )
         error_out = result.stderr + result.stdout
         assert any(
             kw in error_out.lower()
@@ -341,6 +344,4 @@ class TestFromAC_SyncPdsAssetsScript:
         assert len(js_files) >= 3, (
             f"Expected ≥3 .js files (1 core + ≥2 component chunks), found {len(js_files)}"
         )
-        assert len(svg_files) >= 2, (
-            f"Expected ≥2 .svg files, found {len(svg_files)}"
-        )
+        assert len(svg_files) >= 2, f"Expected ≥2 .svg files, found {len(svg_files)}"

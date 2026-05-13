@@ -151,9 +151,7 @@ class TestFromAC_ArchiveMove:
 
         assert 1 in result.archived_task_ids
 
-    def test_drift_archived_task_is_moved_to_archive_dir(
-        self, tmp_path: Path
-    ) -> None:
+    def test_drift_archived_task_is_moved_to_archive_dir(self, tmp_path: Path) -> None:
         """Drift-archived file is physically moved from tasks/ to archive/ by cleanup()."""
         board = _make_board(tmp_path)
         _write_task(
@@ -194,7 +192,9 @@ class TestFromAC_ArchiveMove:
     ) -> None:
         """Archived task with archival_reason=None is left in tasks/ — not physically moved."""
         board = _make_board(tmp_path)
-        source = _write_task(board, task_id=4, status="archived", archival_reason="null")
+        source = _write_task(
+            board, task_id=4, status="archived", archival_reason="null"
+        )
         engine = KanbanEngine(board, activity_log=False)
 
         engine.cleanup()
@@ -211,7 +211,9 @@ class TestFromAC_ArchiveMove:
     ) -> None:
         """Archived task with archival_reason=None produces one skipped_items entry."""
         board = _make_board(tmp_path)
-        source = _write_task(board, task_id=5, status="archived", archival_reason="null")
+        source = _write_task(
+            board, task_id=5, status="archived", archival_reason="null"
+        )
         engine = KanbanEngine(board, activity_log=False)
 
         result = engine.cleanup()
@@ -301,9 +303,7 @@ class TestFromAC_SkipHandling:
 
     # ---- boundary: source file preserved on malformed skip ----
 
-    def test_malformed_source_file_not_deleted_on_skip(
-        self, tmp_path: Path
-    ) -> None:
+    def test_malformed_source_file_not_deleted_on_skip(self, tmp_path: Path) -> None:
         """Source file with malformed frontmatter is left in tasks/ after skip."""
         board = _make_board(tmp_path)
         malformed = board / "tasks" / "99-bad.md"
@@ -337,9 +337,7 @@ class TestFromAC_SkipHandling:
         )
         assert len(result.skipped_items) >= 1
 
-    def test_collision_skipped_item_has_path_and_reason(
-        self, tmp_path: Path
-    ) -> None:
+    def test_collision_skipped_item_has_path_and_reason(self, tmp_path: Path) -> None:
         """skipped_items entry for a collision has both 'path' and 'reason' str fields."""
         board = _make_board(tmp_path)
         _write_task(board, task_id=1, status="archived", archival_reason='"completed"')
@@ -357,9 +355,7 @@ class TestFromAC_SkipHandling:
 
     # ---- boundary: source file preserved on collision skip ----
 
-    def test_collision_source_file_not_deleted_on_skip(
-        self, tmp_path: Path
-    ) -> None:
+    def test_collision_source_file_not_deleted_on_skip(self, tmp_path: Path) -> None:
         """Source task file is left in tasks/ when an archive collision causes a skip."""
         board = _make_board(tmp_path)
         source = _write_task(
@@ -401,7 +397,9 @@ class TestFromAC_SkipHandling:
     ) -> None:
         """Single early collision produces exactly one skipped_items entry with exact path."""
         board = _make_board(tmp_path)
-        source = _write_task(board, task_id=2, status="archived", archival_reason='"completed"')
+        source = _write_task(
+            board, task_id=2, status="archived", archival_reason='"completed"'
+        )
         (board / "archive" / "2-task.md").write_text("sentinel", encoding="utf-8")
         engine = KanbanEngine(board, activity_log=False)
 
@@ -426,11 +424,15 @@ class TestFromAC_SkipHandling:
         concurrently before the atomic move completed.
         """
         board = _make_board(tmp_path)
-        source = _write_task(board, task_id=3, status="archived", archival_reason='"completed"')
+        source = _write_task(
+            board, task_id=3, status="archived", archival_reason='"completed"'
+        )
         engine = KanbanEngine(board, activity_log=False)
 
         # Dest does not exist — pre-check passes — but _move_file raises FileExistsError.
-        with mock.patch("owlbear_kanban.engine._move_file", side_effect=FileExistsError):
+        with mock.patch(
+            "owlbear_kanban.engine._move_file", side_effect=FileExistsError
+        ):
             result = engine.cleanup()
 
         assert 3 not in result.archived_task_ids, (
@@ -489,9 +491,7 @@ class TestFromAC_NoImplicitCleanup:
             mock_cleanup.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_mcp_app_lifespan_does_not_call_cleanup(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_mcp_app_lifespan_does_not_call_cleanup(self, tmp_path: Path) -> None:
         """MCP server app_lifespan must not call cleanup() during startup.
 
         app_lifespan calls engine.sweep() (claim-only) — this is a distinct
@@ -573,7 +573,9 @@ class TestFromAC_StaleStateSkip:
                 )
             return result
 
-        with mock.patch("owlbear_kanban.engine.read_task", side_effect=read_side_effect):
+        with mock.patch(
+            "owlbear_kanban.engine.read_task", side_effect=read_side_effect
+        ):
             result = engine.cleanup()
 
         assert 1 not in result.archived_task_ids, (
@@ -630,7 +632,9 @@ class TestFromAC_StaleStateSkip:
                 )
             return result
 
-        with mock.patch("owlbear_kanban.engine.read_task", side_effect=read_side_effect):
+        with mock.patch(
+            "owlbear_kanban.engine.read_task", side_effect=read_side_effect
+        ):
             result = engine.cleanup()
 
         assert 2 not in result.archived_task_ids, (
@@ -686,9 +690,7 @@ class TestFromAC_MoveRollback:
         with mock.patch.object(Path, "unlink", failing_unlink):
             result = engine.cleanup()
 
-        assert source.exists(), (
-            "source must remain in tasks/ when src.unlink() fails"
-        )
+        assert source.exists(), "source must remain in tasks/ when src.unlink() fails"
         assert not dest.exists(), (
             "destination hard link must be rolled back when src.unlink() fails; "
             "no dual-location state is permitted"
