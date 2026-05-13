@@ -1,27 +1,27 @@
 [project]
 name = "owlbear-knowledge"
 version = "0.1.0"
-requires-python = ">=3.12"
+requires-python = ">=3.12.13"
 description = "OwlBear knowledge engine (graph + vector)"
 dependencies = [
-    "pydantic>=2.13.3",
+    "pydantic>=2.13.4",
     "strictyaml>=1.7.3",
 ]
 
 [project.optional-dependencies]
-qdrant = ["qdrant-client>=1.17.1"]
+qdrant = ["qdrant-client>=1.18.0"]
 embedding = ["FlagEmbedding>=1.4.0"]
 intake = ["httpx>=0.28.1"]
-llm = ["openai>=2.33.0"]
+llm = ["openai>=2.36.0"]
 copilot = [
     "httpx>=0.28.1",
     "truststore",
 ]
 full = [
-    "qdrant-client>=1.17.1",
+    "qdrant-client>=1.18.0",
     "FlagEmbedding>=1.4.0",
     "httpx>=0.28.1",
-    "openai>=2.33.0",
+    "openai>=2.36.0",
 ]
 
 [build-system]

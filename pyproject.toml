@@ -6,7 +6,7 @@ members = ["serve/*"]
 
 [dependency-groups]
 dev = [
-  "ddgs[mcp]>=9.14.1,<10",
+  "ddgs[mcp]>=9.14.2,<10",
   "pytest>=9.0.3",
   "pytest-asyncio>=1.3.0",
   "pytest-cov>=7.1.0",

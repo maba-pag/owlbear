@@ -1,9 +1,9 @@
 [project]
 name = "owlbear-mcp-kanban"
 version = "0.1.0"
-requires-python = ">=3.12"
+requires-python = ">=3.12.13"
 description = "OwlBear MCP server — kanban operations"
-dependencies = ["mcp[cli]>=1.27.0,<2.0", "owlbear-kanban", "pydantic>=2.13.3"]
+dependencies = ["mcp[cli]>=1.27.1,<2.0", "owlbear-kanban", "pydantic>=2.13.4"]
 
 [build-system]
 requires = ["hatchling"]
