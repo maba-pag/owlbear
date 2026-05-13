@@ -1,10 +1,10 @@
 ---
 id: 1538
 title: 'P3-01: test — card component CSS: signal border, hover, focus, selected states'
-status: done
+status: backlog
 priority: important
 created: 2026-05-13T18:41:58.279132+00:00
-updated: 2026-05-13T22:36:49.117396+00:00
+updated: 2026-05-13T22:51:24.608252+00:00
 tags:
   - phase-3
   - scope:cockpit
@@ -15,7 +15,7 @@ parent: 1534
 depends_on: []
 blocked: false
 block_reason:
-claimed_at: 2026-05-13T22:36:49.117396+00:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -226,3 +226,45 @@ Proof bundle: behavioral
 **Item 4 — Deletion Detection:** No files deleted. Builder added Card.css and two test files, modified Card.tsx. N/A — no deletion impact.
 
 **Scratch cleanup:** No .owlbear/scratch/1538-* files found.
+2026-05-13T22:51:24+00:00
+## Audit
+### Regression Detection
+- quality-runner mode full: Python 208 failed (pre-existing/other tasks), Vitest 16 failed (mix of RED-phase sibling tasks and #1538 regressions)
+- #1538-specific regressions: 2 tests in `KanbanBoard.both-or-nothing.test.tsx` — `card has a non-empty borderLeft style` and `different priorities yield different left border colors` both assert `style.borderLeft` is truthy, but the builder's second pass replaced inline `borderLeft` with CSS custom property `--card-priority-border` (JSDOM cannot resolve CSS variables to `style.borderLeft`)
+- These tests were not in the builder/reviewer scoped verification set (79 tests across 6 files; `KanbanBoard.both-or-nothing` was excluded)
+- Other Vitest failures are from sibling RED-phase tasks: ThemeToggle (#1540), TokenArchitecture (#1535), SidecarCollapse (#1541), ShellSecondaryCSS (#1542)
+- regression verdict: FAIL (2 existing tests broken by #1538)
+
+### Intent Verification
+- scope alignment: PASS (Card.tsx, Card.css — correct domain for card CSS signal states)
+- purpose match: PASS (signal border, hover, focus, selected states match task purpose)
+- extraneous scope: none
+- boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 4/5
+- ACs were specific and well-refined through challenger and architect review
+- Minor gap: no consideration of existing tests relying on inline borderLeft pattern; builder's fix for reviewer FAIL broke established tests not covered in scoped verification
+
+### Commit Integrity
+- upstream commit presence: FAIL
+  - 3 #1538 commits found: f6efa6c1 (researcher), 44f47c7d (test-writer), c0ad8fc5 (builder first pass)
+  - Builder's second pass (resolving reviewer blocking findings: inline borderLeft removal, token alias additions) was NEVER COMMITTED
+  - `git status --porcelain -- serve/cockpit/web/src/components/Card.tsx serve/cockpit/web/src/components/Card.css` shows both files as modified in working tree
+  - Committed code (`c0ad8fc5`) still has the reviewer's original FAIL defects (inline borderLeft overrides CSS selectors, unresolved token names)
+  - The code that received the reviewer's second PASS exists only in the working tree
+- kanban commit packaging: N/A (reject — no archive commit)
+
+### Deduction Breakdown
+| Criterion | Deduction |
+|-----------|-----------|
+| Regression failures (2 tests in KanbanBoard.both-or-nothing broken by borderLeft→CSS variable migration) | -.10 |
+| Evidence integrity concern (builder second pass uncommitted; committed code has reviewer-FAIL'd defects) | -.05 |
+
+### Confidence: 0.85
+### Action: reject-to-backlog
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Commit the second-pass fix (Card.tsx + Card.css changes currently in working tree) as a proper git commit before advancing | serve/cockpit/web/src/components/Card.tsx; serve/cockpit/web/src/components/Card.css | `git status --porcelain` shows uncommitted modifications |
+| 2 | builder | Update or replace the 2 borderLeft tests in KanbanBoard.both-or-nothing.test.tsx to work with the new CSS custom property approach (--card-priority-border), or ensure the priority border is still testable via inline style | serve/cockpit/web/src/__tests__/KanbanBoard.both-or-nothing.test.tsx:289-314 | Tests assert `style.borderLeft` truthy; Card now sets `--card-priority-border` CSS var instead |
