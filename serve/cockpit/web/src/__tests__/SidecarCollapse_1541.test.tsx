@@ -47,7 +47,12 @@ describe('TestFromAC_SidecarCollapse_1541', () => {
     const toggle = getCollapseToggle(container)
 
     expect(toggle.getAttribute('aria-expanded')).toBe('true')
-    expect(toggle.getAttribute('aria-controls')).toBeTruthy()
+
+    const ariaControlsId = toggle.getAttribute('aria-controls')
+    expect(ariaControlsId).toBeTruthy()
+    const sidecarRegion = container.querySelector('[data-region="sidecar"]')
+    expect(sidecarRegion).not.toBeNull()
+    expect(sidecarRegion!.getAttribute('id')).toBe(ariaControlsId)
 
     fireEvent.click(toggle)
 
