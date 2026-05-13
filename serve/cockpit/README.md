@@ -19,6 +19,19 @@ npm run build
 cd -
 ```
 
+Sync Porsche Design System runtime assets from CDN (run once after PDS version bumps):
+
+```bash
+cd serve/cockpit/web
+npm run sync:pds
+cd -
+```
+
+This downloads the core chunk, 58 component chunks, and 290 icon SVGs from
+`cdn.ui.porsche.com` into `public/porsche-design-system/` and commits them for offline
+use. Assets are version-pinned to the installed `@porsche-design-system/components-js`
+version; re-run after any PDS upgrade.
+
 Launch Cockpit backend + static frontend:
 
 ```bash

@@ -120,6 +120,13 @@ def run() -> None:
 
     # --- static file mount and SPA catch-all (inside run() for test isolation) ---
     app.mount("/assets", StaticFiles(directory=dist_dir / "assets"), name="assets")
+    pds_dir = dist_dir / "porsche-design-system"
+    if pds_dir.is_dir():
+        app.mount(
+            "/porsche-design-system",
+            StaticFiles(directory=pds_dir),
+            name="porsche-design-system",
+        )
 
     @app.get("/{path:path}")
     def _spa_catchall(path: str) -> HTMLResponse:  # noqa: ARG001
