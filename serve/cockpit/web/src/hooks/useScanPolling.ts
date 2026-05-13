@@ -59,4 +59,3 @@ export function useScanPolling(options?: UseScanPollingOptions): UseScanPollingR
     refetch,
   }
 }
-

@@ -23,4 +23,3 @@ export function useConnectionHealth() {
 
   return { health, markHealthy, updateHealth }
 }
-
