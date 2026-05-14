@@ -4,10 +4,10 @@ import babel from '@rolldown/plugin-babel'
 import { Features } from 'lightningcss'
 import * as fs from 'node:fs'
 import { join } from 'node:path'
-import { fileURLToPath } from 'node:url'
 
-const pdsColorSchemeCssPath = fileURLToPath(
-  new URL('./node_modules/@porsche-design-system/components-js/global-styles/color-scheme.css', import.meta.url),
+const pdsColorSchemeCssPath = join(
+  process.cwd(),
+  'node_modules/@porsche-design-system/components-js/global-styles/color-scheme.css',
 )
 
 function cspPlugin() {
