@@ -1,0 +1,107 @@
+/**
+ * Card CSS supplemental tests — task #1546
+ *
+ * Covers AC-3 and AC-4 (CSS side) plus AC-1 base-token correctness.
+ * The existing Card.css.test.ts (from #1538) covers signal selectors and
+ * selected/hover/focus states but does not cover:
+ *   AC-1: base border uses agnostic var(--pds-contrast-medium), no legacy token shadowing
+ *   AC-3: overflow-wrap: break-word, no max-height constraint
+ *   AC-4: [data-dragging="true"] selector with opacity: 0.5
+ *
+ * All tests fail RED against current Card.css until builder #1546 applies:
+ *   - overflow-wrap: break-word on .card
+ *   - Removal of max-height: 56px
+ *   - Removal of legacy --pds-theme-light-* token overrides inside .card
+ *   - border-left using var(--pds-contrast-medium) directly
+ *   - [data-dragging="true"] { opacity: 0.5 } selector
+ */
+import { describe, it, expect } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { resolve, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+
+const CARD_CSS_PATH = resolve(__dirname, '..', 'components', 'Card.css')
+
+/**
+ * Extract the declaration block content for an exact CSS selector.
+ * Returns null when the selector is not found.
+ */
+function getCSSBlock(css: string, selector: string): string | null {
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const pattern = new RegExp(`${escaped}\\s*\\{([^}]*)\\}`)
+  const match = css.match(pattern)
+  return match ? match[1] : null
+}
+
+// ─── AC-3: overflow-wrap and height constraint ────────────────────────────────
+
+describe('TestFromAC_CardCSSTextOverflow', () => {
+  it('.card block declares overflow-wrap: break-word (AC-3)', () => {
+    const css = readFileSync(CARD_CSS_PATH, 'utf-8')
+    const block = getCSSBlock(css, '.card')
+    expect(block).not.toBeNull()
+    expect(block).toMatch(/overflow-wrap\s*:\s*break-word/)
+  })
+
+  it('.card block does not declare max-height — fixed height constraint removed per AC-3', () => {
+    const css = readFileSync(CARD_CSS_PATH, 'utf-8')
+    const block = getCSSBlock(css, '.card')
+    expect(block).not.toBeNull()
+    expect(block).not.toMatch(/max-height/)
+  })
+})
+
+// ─── AC-1: base border uses agnostic PDS token, no legacy shadowing ──────────
+
+describe('TestFromAC_CardCSSBaseToken', () => {
+  it('.card border-left references var(--pds-contrast-medium) directly for theme-aware base (AC-1)', () => {
+    const css = readFileSync(CARD_CSS_PATH, 'utf-8')
+    const block = getCSSBlock(css, '.card')
+    expect(block).not.toBeNull()
+    // After builder fix: border-left: 4px solid var(--pds-contrast-medium)
+    // Currently uses --card-priority-border intermediate → test FAILS RED.
+    expect(block).toMatch(/border-left\s*:[^;]*var\(--pds-contrast-medium\)/)
+  })
+
+  it('.card block does not shadow --pds-contrast-medium with a theme-light override (AC-1 dark mode)', () => {
+    const css = readFileSync(CARD_CSS_PATH, 'utf-8')
+    const block = getCSSBlock(css, '.card')
+    expect(block).not.toBeNull()
+    // Builder removes all 7 legacy token-shadow lines inside .card.
+    // Currently --pds-contrast-medium: var(--pds-theme-light-contrast-medium) is present → FAILS RED.
+    expect(block).not.toMatch(/--pds-contrast-medium\s*:\s*var\(--pds-theme-light-contrast-medium\)/)
+  })
+
+  it('.card block does not shadow --pds-notification-warning with a theme-light override (AC-1 dark mode)', () => {
+    const css = readFileSync(CARD_CSS_PATH, 'utf-8')
+    const block = getCSSBlock(css, '.card')
+    expect(block).not.toBeNull()
+    expect(block).not.toMatch(/--pds-notification-warning\s*:\s*var\(--pds-theme-light-notification-warning\)/)
+  })
+
+  it('.card block does not shadow --pds-notification-error with a theme-light override (AC-1 dark mode)', () => {
+    const css = readFileSync(CARD_CSS_PATH, 'utf-8')
+    const block = getCSSBlock(css, '.card')
+    expect(block).not.toBeNull()
+    expect(block).not.toMatch(/--pds-notification-error\s*:\s*var\(--pds-theme-light-notification-error\)/)
+  })
+})
+
+// ─── AC-4: Drag state CSS selector ────────────────────────────────────────────
+
+describe('TestFromAC_CardCSSDragState', () => {
+  it('[data-dragging="true"] selector exists in Card.css (AC-4)', () => {
+    const css = readFileSync(CARD_CSS_PATH, 'utf-8')
+    expect(css).toMatch(/\[data-dragging="true"\]/)
+  })
+
+  it('[data-dragging="true"] selector applies opacity: 0.5 (AC-4)', () => {
+    const css = readFileSync(CARD_CSS_PATH, 'utf-8')
+    const block = getCSSBlock(css, '[data-dragging="true"]')
+    expect(block).not.toBeNull()
+    expect(block).toMatch(/opacity\s*:\s*0\.5/)
+  })
+})
