@@ -56,16 +56,32 @@ export default function DecisionViewport({ items, isLoading, error, onItemClick 
           >
             {item.task_id}
           </button>
-          <button
-            type="button"
+          <article
             data-testid={`decision-item-${item.id}`}
+            role="button"
+            tabIndex={0}
             onClick={() => onItemClick(item.id)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault()
+                onItemClick(item.id)
+              }
+            }}
           >
-            <PText>{item.agent}</PText>
-            <PText>{item.request_type}</PText>
-            <PText data-testid={`decision-age-${item.id}`}>{formatAge(item.created)}</PText>
+            <PText>
+              <strong>Agent:</strong> {item.agent}
+            </PText>
+            <PText>
+              <strong>Request type:</strong> {item.request_type}
+            </PText>
+            <PText data-testid={`decision-age-${item.id}`}>
+              <strong>Age:</strong> {formatAge(item.created)}
+            </PText>
+            <PText>
+              <strong>Task:</strong> {item.task_id}
+            </PText>
             <PText>{item.body_preview}</PText>
-          </button>
+          </article>
         </li>
       ))}
     </ul>

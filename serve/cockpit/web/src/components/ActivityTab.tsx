@@ -90,7 +90,7 @@ export default function ActivityTab({ onSelectTask }: ActivityTabProps) {
 
   return (
     <div>
-      <div>
+      <div role="toolbar" aria-label="Activity filters">
         <PButton
           data-testid="filter-active"
           variant="secondary"
@@ -138,27 +138,20 @@ export default function ActivityTab({ onSelectTask }: ActivityTabProps) {
           <div data-testid="activity-empty">No sessions for this filter.</div>
         ) : null}
         {displayed.map((s, i) => (
-          <div
+          <button
+            type="button"
             key={i}
             data-testid="session-row"
             data-state={s.state}
             role="button"
-            tabIndex={0}
             aria-label={`Session: ${s.agent ?? 'unknown agent'}, task ${s.task_id ?? 'unassigned'}, ${s.state}`}
             onClick={() => navigateToTask(s.task_id)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' || event.key === ' ') {
-                event.preventDefault()
-                navigateToTask(s.task_id)
-              }
-            }}
-            style={{ cursor: 'pointer' }}
           >
             <span data-testid="session-agent">{s.agent ?? 'unknown agent'}</span>
             <span data-testid="session-task">{s.task_id ?? 'unassigned'}</span>
             <span data-testid="session-state">{s.state}</span>
             <span data-testid="session-duration">{formatDuration(s.duration)}</span>
-          </div>
+          </button>
         ))}
       </div>
     </div>

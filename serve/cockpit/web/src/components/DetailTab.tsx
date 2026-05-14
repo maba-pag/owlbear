@@ -148,33 +148,57 @@ export default function DetailTab({
   return (
     <div>
       {/* History tab button — always visible */}
-      <PButton data-testid="history-tab" variant="secondary" onClick={() => void handleHistoryClick()}>
-        History
-      </PButton>
+      <section data-region="history">
+        <PButton data-testid="history-tab" variant="secondary" onClick={() => void handleHistoryClick()}>
+          History
+        </PButton>
+      </section>
 
       {/* Read-only fields */}
-      <span data-testid="field-id">{t.id}</span>
-      <span data-testid="field-status">{t.status}</span>
-      <span data-testid="field-created">{t.created}</span>
-      <span data-testid="field-claimed">{String(t.claimed)}</span>
-      <span data-testid="field-claimed-at">{t.claimed_at ?? ''}</span>
-      <span data-testid="field-dep-status">{t.dep_status ?? ''}</span>
+      <div data-region="sidecar-metadata">
+        <p>
+          <strong>ID:</strong> <span data-testid="field-id">{t.id}</span>
+        </p>
+        <p>
+          <strong>Status:</strong> <span data-testid="field-status">{t.status}</span>
+        </p>
+        <p>
+          <strong>Priority:</strong> <span data-testid="field-priority">{t.priority}</span>
+        </p>
+        <p>
+          <strong>Created:</strong> <span data-testid="field-created">{t.created}</span>
+        </p>
+        <p>
+          <strong>Claimed:</strong> <span data-testid="field-claimed">{String(t.claimed)}</span>
+        </p>
+        <p>
+          <strong>Claimed at:</strong> <span data-testid="field-claimed-at">{t.claimed_at ?? ''}</span>
+        </p>
+        <p>
+          <strong>Dependency status:</strong> <span data-testid="field-dep-status">{t.dep_status ?? ''}</span>
+        </p>
+      </div>
 
-      <TaskFieldsEditor
-        task={t}
-        conflictLocalDraft={conflictLocalDraft}
-        conflictRemoteTaskId={conflictRemoteTask?.id ?? null}
-        serverValidationMessage={serverValidationMessage}
-        clearConflictIfTaskChanged={clearConflictIfTaskChanged}
-        onSave={handleSave}
-      />
+      <section data-region="sidecar-body">
+        <TaskFieldsEditor
+          task={t}
+          conflictLocalDraft={conflictLocalDraft}
+          conflictRemoteTaskId={conflictRemoteTask?.id ?? null}
+          serverValidationMessage={serverValidationMessage}
+          clearConflictIfTaskChanged={clearConflictIfTaskChanged}
+          onSave={handleSave}
+        />
+      </section>
 
-      <TaskActions
-        key={`${t.id}:${t.updated}`}
-        task={t}
-        backwardTarget={backwardTarget}
-        runMutation={runMutation}
-      />
+      <section data-region="actions">
+        <h3>Actions</h3>
+        <TaskActions
+          key={`${t.id}:${t.updated}`}
+          task={t}
+          backwardTarget={backwardTarget}
+          runMutation={runMutation}
+        />
+      </section>
 
       {/* History subtab */}
       {(showHistory || initialSubtab === 'history') && (

@@ -41,6 +41,11 @@ function Shell() {
     selectedDR,
   } = useDRState()
   const { selectedTaskId, selectedTask, selectedTaskError, select, clear, update } = useTaskSelection()
+  const selectedTaskHeading = selectedTask
+    ? `${selectedTask.title || `#${selectedTask.id}`}`
+    : selectedTaskId !== null
+      ? `#${selectedTaskId}`
+      : 'No task selected'
   const normalizedItems = scanItems.filter(isHealthBadgeItem)
   const statusHealth = scanError ? 'red' : health
   const [hasLoadedScan, setHasLoadedScan] = useState(false)
@@ -97,19 +102,7 @@ function Shell() {
   return (
     <div className="shell" data-sidecar-collapsed={isSidecarCollapsed || undefined}>
       <header className="shell__status-bar" data-region="status-bar">
-        <h1
-          style={{
-            position: 'absolute',
-            width: '1px',
-            height: '1px',
-            padding: 0,
-            margin: '-1px',
-            overflow: 'hidden',
-            clip: 'rect(0, 0, 0, 0)',
-            whiteSpace: 'nowrap',
-            border: 0,
-          }}
-        >
+        <h1 className="shell__product-identity">
           OwlBear Cockpit
         </h1>
         <span data-testid="traffic-light" data-health={statusHealth} />
@@ -151,7 +144,14 @@ function Shell() {
         ) : null}
       </header>
       <nav className="shell__nav-rail" data-region="nav-rail">
-        <PButton data-surface="kanban" aria-current="page" variant="secondary" tabIndex={-1}>
+        <PButton
+          data-surface="kanban"
+          aria-current="page"
+          aria-label="Kanban"
+          variant="secondary"
+          className="shell__nav-button"
+          tabIndex={-1}
+        >
           <svg
             aria-hidden="true"
             viewBox="0 0 16 16"
@@ -161,7 +161,6 @@ function Shell() {
           >
             <path d="M2 3h5v4H2V3zm7 0h5v4H9V3zM2 9h5v4H2V9zm7 0h5v4H9V9z" fill="currentColor" />
           </svg>
-          Kanban
         </PButton>
       </nav>
       <main className="shell__workspace" data-region="workspace">
@@ -181,6 +180,9 @@ function Shell() {
           {isSidecarCollapsed ? 'Expand sidecar' : 'Collapse sidecar'}
         </button>
         <div id="shell-sidecar-content" aria-hidden={isSidecarCollapsed ? 'true' : undefined}>
+          <section data-region="sidecar-header" aria-live="polite">
+            <h2>{selectedTaskHeading}</h2>
+          </section>
           <DecisionViewport
             items={pendingDRItems}
             isLoading={pendingDRLoading}
