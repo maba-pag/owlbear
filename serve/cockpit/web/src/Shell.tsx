@@ -93,7 +93,7 @@ function Shell() {
   }, [])
 
   return (
-    <div className="shell">
+    <div className="shell" data-sidecar-collapsed={isSidecarCollapsed || undefined}>
       <header className="shell__status-bar" data-region="status-bar">
         <h1
           style={{
