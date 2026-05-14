@@ -6,6 +6,7 @@
 - ## `Prerequisites`
 - ## `Quick Start`
 - ## `Directory Layout`
+- ## `Cockpit (Consumer Launch)`
 - ## `Verification`
 - ## `Updates`
 - ## `Sharing with Teammates`
@@ -82,6 +83,24 @@
 - ## `2. Placement Mapping`
 - ## `3. Audience Targets`
 
+## .owlbear/memory/cross-check-refined-red-test-ac-against--3g8evt.md
+
+## .owlbear/memory/direct-proof-for-named-consumer-branch-a0ampe.md
+
+## .owlbear/memory/explicit-button-wording-requires-semanti-ogo41i.md
+
+## .owlbear/memory/pairwise-precedence-tests-need-positive--d95h79.md
+
+## .owlbear/memory/refined-child-task-may-retain-stale-pare-kh1z3f.md
+
+## .owlbear/memory/reviewer-class-specific-css-acs-need-sel-1ni0bj.md
+
+## .owlbear/memory/reviewer-css-contract-tests-must-prove-d-7dbqrw.md
+
+## .owlbear/memory/reviewer-should-reconcile-stricter-readi-l0uxlh.md
+
+## .owlbear/memory/shared-exception-tuple-reduces-matrix-dp9dg8.md
+
 ## .owlbear/prompts/arch-audit.prompt.md
 - # `Architecture Module Quality Audit`
 - ## `Step 1 - Load the standard first`
@@ -128,8 +147,10 @@
 - [README.md](../../README.md)
 
 ## serve/cockpit/README.md
-- # `owlbear-cockpit — Kanban Backend`
+- # `owlbear-cockpit — Steering Cockpit Package`
 - ## `Launch / Usage`
+- ## `Frontend Surface`
+- ## `Product Boundary`
 - ## `Engine Surface — Allowlist`
 - ### `Via adapter`
 - ### `Mutation routes`
@@ -142,18 +163,71 @@
 - ### `Filter vocabulary`
 - ## `Audit Trail — source Attribution Contract`
 - ## `Configuration`
+- ## `Delivery Packaging`
 - ## `Dependencies`
 
 ### Outbound links
-- [copilot-instructions.md](../../.github/copilot-instructions.md)
 - [README.md](../../README.md)
-- [copilot-instructions.md](../../.github/copilot-instructions.md)
-- [copilot-instructions.md](../../.github/copilot-instructions.md)
+
+## serve/cockpit/web/test-results/bench_959-TestFromAC-Board-06851-00ms-with-700-cards-present-chromium/error-context.md
+- # `Instructions`
+- # `Test info`
+- # `Error details`
+- # `Page snapshot`
+- # `Test source`
+
+## serve/cockpit/web/test-results/bench_959-TestFromAC-Board-9c92e-op-changes-and-5-long-tasks-chromium/error-context.md
+- # `Instructions`
+- # `Test info`
+- # `Error details`
+- # `Page snapshot`
+- # `Test source`
+
+## serve/cockpit/web/test-results/bench_959-TestFromAC-Board-a520c-s-overflow-y-auto-or-scroll-chromium/error-context.md
+- # `Instructions`
+- # `Test info`
+- # `Error details`
+- # `Page snapshot`
+- # `Test source`
+
+## serve/cockpit/web/test-results/kanban-board-TestFromAC-Ka-23454-ceives-data-drag-over-true--chromium/error-context.md
+- # `Instructions`
+- # `Test info`
+- # `Error details`
+- # `Test source`
+
+## serve/cockpit/web/test-results/kanban-board-TestFromAC-Ka-25357-target-done-not-highlighted-chromium/error-context.md
+- # `Instructions`
+- # `Test info`
+- # `Error details`
+- # `Test source`
+
+## serve/cockpit/web/test-results/kanban-board-TestFromAC-Ka-e5abb--accounts-for-shell-chrome--chromium/error-context.md
+- # `Instructions`
+- # `Test info`
+- # `Error details`
+- # `Page snapshot`
+- # `Test source`
+
+## serve/cockpit/web/test-results/responsive-layout-1391-Tes-18bea-rizontal-scrolling-at-320px-chromium/error-context.md
+- # `Instructions`
+- # `Test info`
+- # `Error details`
+- # `Page snapshot`
+- # `Test source`
+
+## serve/cockpit/web/test-results/responsive-layout-1391-Tes-1a5ce--at-document-level-at-320px-chromium/error-context.md
+- # `Instructions`
+- # `Test info`
+- # `Error details`
+- # `Page snapshot`
+- # `Test source`
 
 ## serve/kanban/README.md
 - # `owlbear-kanban — Kanban Engine`
 - ## `Launch / Usage`
 - ### `KanbanEngine methods`
+- ### `Product topology (fixed)`
 - ### `AgentView dispatch pipeline`
 - ## `Migration`
 - ## `Configuration`
@@ -189,15 +263,18 @@
 - # `owlbear-mcp-kanban — Kanban MCP Server`
 - ## `Launch / Usage`
 - ### `Tools`
+- ### `Lifecycle and dispatch semantics`
 - ## `Data Projections and Envelopes`
 - ### `TaskSummary`
 - ### `TaskFull`
 - ### `DispatchEntry and Wave`
 - ### `guidance Field`
+- ### `Error Envelopes`
 - ## `list_tasks Filter Semantics`
 - ## `Archival Fields`
 - ## `end_work Outcomes`
 - ## `Usage Examples`
+- ### `Body text normalization`
 - ## `Configuration`
 - ## `Dependencies`
 
@@ -507,6 +584,7 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 ## share/prompts/agent-broad-audit.prompt.md
 - # `Agent Ecosystem Broad Audit`
 - ## `1. Preamble`
+- ### `Interaction Protocol`
 - ## `2. Audit Surface and Standards`
 - ### `Two Surfaces`
 - ### `Standards Loading Order`
@@ -517,7 +595,7 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ### `D4 - Quality`
 - ### `D5 - Pipeline Integrity`
 - ### `D6 - Signal-to-Noise Ratio (SNR) Broad Triage`
-- #### `6-Category Noise Taxonomy (inline definitions)`
+- #### `7-Category Noise Taxonomy (inline definitions)`
 - #### `Positive probes`
 - #### `Attention flag format`
 - #### `Negative-space probe`
@@ -531,11 +609,17 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 ## share/prompts/agent-deep-audit.prompt.md
 - # `Agent Deep Audit`
 - ## `1. Preamble`
+- ### `Analytical Stance`
 - ## `2. Shared Noise Taxonomy (Inline Reference)`
+- ## `2.1 Interaction Protocol`
 - ## `3. Scope Modes`
 - ### `3.1 Agent Mode`
 - ### `3.2 Skill Mode`
+- ### `3.3 Prompt Mode`
 - ## `4. Pre-Analysis (Required Before Any Judgments)`
+- ### `4.1 Cluster Loading`
+- ### `4.2 Real-World Grounding`
+- ### `4.3 Consumer-Impact Framing`
 - ## `5. Core Analysis Dimensions`
 - ### `5.1 Correctness`
 - ### `5.2 Completeness`
@@ -543,13 +627,17 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ### `5.4 Value Per Instruction`
 - ### `5.5 Signal-to-Noise (Per Sentence)`
 - ### `5.6 Cross-File Coherence`
-- ## `6. Output Contract (Single Structured Proposal Per Target)`
+- ## `6. Output Contract (Structured Decision Per Proposal)`
+- ### `6.1 Decision Format (Required Per Proposal)`
+- ### `6.2 Proposal Grouping`
 - ## `7. Interaction Model (Approval Loop)`
 - ## `8. Guardrails`
 - ## `9. Final Deliverable Format`
+- ## `10. Continuation Protocol`
 
 ## share/prompts/frontend-audit.prompt.md
 - # `Cockpit Frontend Audit`
+- ## `Interaction Protocol`
 - ## `Step 1 - Load context`
 - ## `Step 2 - Plan and scope`
 - ## `Step 3 - Execute audit`
@@ -557,24 +645,29 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ## `Guardrails`
 
 ## share/prompts/ideation-discover.prompt.md
+- ## `Interaction Protocol`
 - ## `When to use this`
 - ## `What happens`
 - ## `Tips`
 
 ## share/prompts/ideation-mediate.prompt.md
+- ## `Interaction Protocol`
 - ## `When to use this`
 - ## `What happens`
 - ## `Tips`
 
 ## share/prompts/kb-enrich.prompt.md
+- ## `Interaction Protocol`
 - ## `Parallel worker option (D7)`
 - ## `Worker phases`
 
 ## share/prompts/kb-ingest.prompt.md
+- ## `Interaction Protocol`
 - ## `What this does`
 
 ## share/prompts/legacy-audit.prompt.md
 - # `Legacy Audit`
+- ## `Interaction Protocol`
 - ## `Step 1 - Load context`
 - ## `Step 2 - Execute scan checks`
 - ## `Step 3 - Produce ranked cleanup report`
@@ -583,16 +676,31 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 
 ## share/prompts/memory-audit.prompt.md
 - # `Memory Review`
-- ## `1. Goal`
-- ## `2. Session Setup`
-- ## `3. Review Loop (list -> read -> decide)`
-- ### `3.1 Action Details`
-- ## `4. End of Session (Batch Commit)`
-- ## `5. Operating Rules`
+- ## `Interaction Protocol`
+- ## `0. Tool Bootstrap`
+- ## `1. Authority And Boundaries`
+- ## `2. Session Preflight`
+- ## `3. Per-Entry Context Bundle`
+- ### `3.1 Read The Entry`
+- ### `3.2 Recover Source Task Context`
+- ### `3.3 Load Agent And Skill Context`
+- ### `3.4 Check Nearby Memories`
+- ## `4. Understandability And Quality Rating`
+- ### `4.1 Provenance Gate`
+- ## `5. Review Card`
+- ## `6. Actions`
+- ### `Approve`
+- ### `Edit Before Approval`
+- ### `Reject Or Retire`
+- ### `Skip`
+- ## `7. Continuation And Batch Review Helper`
+- ## `8. Tool Failure Rules`
 
 ## share/prompts/orchestrate.prompt.md
+- ## `Interaction Protocol`
 
 ## share/prompts/test-curation.prompt.md
+- ## `Interaction Protocol`
 
 ## share/skills/h-ac-quality/SKILL.md
 - # `AC Quality Schema`
@@ -658,7 +766,6 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ## `create_dr Contract`
 - ## `Body Format`
 - ## `Fire-And-Forget Semantics`
-- ## `Operational Rules`
 
 ## share/skills/h-excalidraw-diagram/SKILL.md
 - # `Excalidraw Diagram Reference`
@@ -834,6 +941,7 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - # `MCP Kanban Tool Reference`
 - ## `Tool Summary`
 - ### `Filter and Retrieval Additions`
+- ### `Creation Semantics`
 - ### `edit_task Semantics`
 - ## `Projection Schemas`
 - ### `TaskSummary`
@@ -986,7 +1094,8 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ### `Defense-in-Depth`
 - ### `Confidence Thresholds (source of truth)`
 - ### `Process Habits`
-- ### `Test-Depth Convention`
+- ### `Proof-Bundle Taxonomy`
+- ### `Escalation Modifiers`
 - ### `Builder-Skip on Test-Only Retry`
 - ### `Follow-up Task Quality`
 - ## `3. Communication`
@@ -1003,8 +1112,6 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ### `Escalation Routing`
 - #### `DR Required on Agent Block`
 - ### `Decision Tiers`
-- ### `User-Action Tasks`
-- ### `Handoff`
 
 ## share/skills/r-project-standards/SKILL.md
 - # `Project Standards`
@@ -1024,7 +1131,7 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ## `Step 0 — Setup`
 - ## `Step 1 — Analyze Codebase Context`
 - ## `Step 2 — Evaluate Architecture`
-- ## `Step 2.1 — Test-Depth Annotation`
+- ## `Step 2.1 — Proof-Bundle Validation`
 - ## `Step 2.3 — Conditional Design Diverge`
 - ## `Step 2.5 — Challenge Proposed Verdict`
 - ## `Step 3 — Decide and Act`
@@ -1181,6 +1288,7 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ## `Durability Principles`
 - ## `Step 4 — Build Dependency Graph`
 - ## `Step 5 — Assign Priority and Tags`
+- ## `Step 5c — Assign Proof Bundle`
 - ## `Step 5a — Validate Planned Tasks`
 - ## `Step 5b — Approval (user mode only)`
 - ## `Step 6 — Create Tasks`
@@ -1213,7 +1321,7 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ### `In Scope`
 - ### `Out of Scope`
 - ## `Step 0 — Setup`
-- ### `Step 0a — Pass-Through`
+- ### `Step 0a — Bundle-Based Routing`
 - ## `Step 1 — Plan the Change`
 - ## `Step 2 — Read Existing Tests`
 - ### `Module-Level Test Visibility`
@@ -1239,7 +1347,7 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ### `Step 1a — Pass-Through for Non-Implementation Tasks`
 - ### `Step 1b — Retry-Cycle Handling (Surgical Fill Mode)`
 - #### `Step 1b.1 — Direct-to-Review Advance (Test-Only Retry)`
-- ### `Step 1c — Depth-Zero Pass-Through`
+- ### `Step 1d — Proof-Bundle Pass-Through`
 - ## `Step 2 — Search Codebase`
 - ### `Step 2a — Non-Implementation Assessment`
 - ## `Step 3 — Plan Test Categories`
