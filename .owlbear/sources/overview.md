@@ -4683,3 +4683,11 @@ External repos and resources studied during OwlBear development.
 | CanIUse: grid-template-columns animation | <https://caniuse.com/mdn-css_properties_grid-template-columns_animation> | Browser support: 93%+ global, all major browsers since Chrome 107, Firefox 66, Safari 16 | .owlbear/research/1549-sidecar-collapse-toggle-impl.md | 2026-05-14 |
 | CodePen: CSS Grid sidebar expand | <https://codepen.io/mrdanielschwarz/pen/BaPjKrP> | Working demo of `transition: 300ms` on `grid-template-columns` for sidebar | .owlbear/research/1549-sidecar-collapse-toggle-impl.md | 2026-05-14 |
 | Codidact: CSS grid with expanding cells | <https://software.codidact.com/posts/287970> | Animated grid cells via dynamic `grid-template-columns`/`rows` with transition | .owlbear/research/1549-sidecar-collapse-toggle-impl.md | 2026-05-14 |
+
+## PDS Color-Scheme Bridge Research (Task #1555)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| PDS v4 Theme docs | <https://designsystem.porsche.com/v4/must-know/theme/> | color-scheme classes on `<html>`, hierarchical scoping | `.owlbear/research/1555-pds-color-scheme-bridge.md` | 2026-05-14 |
+| PDS v4 Color Scheme Stylesheet docs | <https://designsystem.porsche.com/v4/stylesheets/color-scheme/introduction/> | Import path, lightningcss exclusion requirement, polyfill setup | `.owlbear/research/1555-pds-color-scheme-bridge.md` | 2026-05-14 |
+| PDS GitHub Issue #4257 | <https://github.com/porsche-design-system/porsche-design-system/issues/4257> | lightningcss broken `light-dark()` polyfill in Vite 8 | `.owlbear/research/1555-pds-color-scheme-bridge.md` | 2026-05-14 |
