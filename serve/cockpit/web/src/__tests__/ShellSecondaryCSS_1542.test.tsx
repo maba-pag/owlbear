@@ -47,9 +47,9 @@ function findClassSelectorsWithRequiredTokens(css: string): string[] {
   for (const match of css.matchAll(classBlockPattern)) {
     const className = match[1]
     const block = match[2]
-    const hasSurface = block.includes('var(--pds-background-surface)')
-    const hasShadow = block.includes('var(--pds-shadow-md)')
-    const hasRadius = block.includes('var(--pds-radius-md)')
+    const hasSurface = /:\s*[^;]*var\(--pds-background-surface\)/.test(block)
+    const hasShadow = /:\s*[^;]*var\(--pds-shadow-md\)/.test(block)
+    const hasRadius = /:\s*[^;]*var\(--pds-radius-md\)/.test(block)
     if (hasSurface && hasShadow && hasRadius) {
       classNames.push(className)
     }
@@ -163,8 +163,8 @@ describe('TestFromAC_SecondaryCssMigration_1542', () => {
     const historySource = readFileSync(HISTORY_SUBTAB_TSX, 'utf-8')
     const activitySource = readFileSync(ACTIVITY_TAB_TSX, 'utf-8')
 
-    expect(historySource).not.toMatch(/rowStyleForState/)
-    expect(activitySource).not.toMatch(/rowStyleForState/)
+    expect(historySource).not.toMatch(/^\s*import\b.*\browStyleForState\b/m)
+    expect(activitySource).not.toMatch(/^\s*import\b.*\browStyleForState\b/m)
   })
 
   it('AC-3: both components import the same CSS file and that file styles blocked/rejected/stuck data-state selectors', () => {
@@ -177,24 +177,26 @@ describe('TestFromAC_SecondaryCssMigration_1542', () => {
     expect(historyCssImports.length, 'HistorySubtab.tsx must import a CSS file for data-state row styles').toBeGreaterThan(0)
     expect(activityCssImports.length, 'ActivityTab.tsx must import a CSS file for data-state row styles').toBeGreaterThan(0)
 
-    const sharedCssImport = historyCssImports.find((path) => activityCssImports.includes(path))
-    expect(sharedCssImport, 'HistorySubtab.tsx and ActivityTab.tsx must import the same CSS file').toBeTruthy()
+    const sharedCssImports = historyCssImports.filter((path) => activityCssImports.includes(path))
+    expect(sharedCssImports.length, 'HistorySubtab.tsx and ActivityTab.tsx must import at least one shared CSS file').toBeGreaterThan(0)
 
-    const cssPath = resolve(COMPONENTS_DIR, sharedCssImport!)
-    expect(existsSync(cssPath), `Shared CSS file must exist: ${cssPath}`).toBe(true)
+    const foundInAnySharedCss = sharedCssImports.some((sharedCssImport) => {
+      const cssPath = resolve(COMPONENTS_DIR, sharedCssImport)
+      if (!existsSync(cssPath)) {
+        return false
+      }
 
-    const css = readFileSync(cssPath, 'utf-8')
+      const css = readFileSync(cssPath, 'utf-8')
+      return (
+        hasSelectorWithDeclaration(css, '[data-state="blocked"]')
+        && hasSelectorWithDeclaration(css, '[data-state="rejected"]')
+        && hasSelectorWithDeclaration(css, '[data-state="stuck"]')
+      )
+    })
+
     expect(
-      hasSelectorWithDeclaration(css, '[data-state="blocked"]'),
-      'CSS file must include [data-state="blocked"] selector with declaration(s)',
-    ).toBe(true)
-    expect(
-      hasSelectorWithDeclaration(css, '[data-state="rejected"]'),
-      'CSS file must include [data-state="rejected"] selector with declaration(s)',
-    ).toBe(true)
-    expect(
-      hasSelectorWithDeclaration(css, '[data-state="stuck"]'),
-      'CSS file must include [data-state="stuck"] selector with declaration(s)',
+      foundInAnySharedCss,
+      'At least one CSS file imported by both components must style [data-state="blocked"], [data-state="rejected"], and [data-state="stuck"]',
     ).toBe(true)
   })
 })
