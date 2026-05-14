@@ -1,10 +1,10 @@
 ---
 id: 1553
 title: 'P4-03: PDS component dark-mode compatibility verification'
-status: docs
+status: archived
 priority: important
 created: 2026-05-13T18:43:53.233186+00:00
-updated: 2026-05-14T06:38:00.557940+00:00
+updated: 2026-05-14T06:54:56.324628+00:00
 tags:
   - phase-4
   - scope:cockpit
@@ -17,7 +17,7 @@ depends_on:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 Brief: see parent #1534 (`.owlbear/briefs/draft-board-visual-design/brief.md`)
@@ -148,3 +148,57 @@ Confirmed PDS component usage via grep of `serve/cockpit/web/src/`:
 
 ## Observations
 - The verification method is split across the task body's `Research` and `Architecture Review` sections instead of being restated directly inside the `## AC-2: Components needing additional treatment` section. That is still adequate for the refined AC, but future artifact-only verification tasks would be easier to audit if result and method were kept adjacent in the same section.
+2026-05-14T06:47:25+00:00
+## Docs Gate
+
+**Verdict:** PASS — advancing to done.
+
+### Checklist
+
+| Item | Result | Evidence |
+|------|--------|----------|
+| Item 1: README Verification | N/A (fast path) | Non-implementation task; no source files changed. No README target via convention mapping. |
+| Item 2: External Attribution | PASS | 6 external sources recorded in `.owlbear/sources/overview.md` under "PDS Dark-Mode Compatibility Research (Task #1553)". Source #7 (local codebase) is internal — no attribution entry needed. |
+| Item 3: Research Doc | PASS | `.owlbear/research/1553-pds-dark-mode-compat.md` exists and is explicitly linked in task body `## Research` section. |
+| Item 4: Deletion Detection | N/A | No files deleted in this task. |
+
+### Files Updated
+None — docs gate is a no-op for this non-implementation task.
+
+### Scratch Cleanup
+No `.owlbear/scratch/1553-*` files found.
+2026-05-14T06:54:56+00:00
+## Audit
+### Regression Detection
+- quality-runner mode full: Python 4602 passed / 212 failed / 5 errors; Frontend 1590 passed / 156 failed. Lint clean (ruff + eslint).
+- Task #1553 is a non-implementation research task with ZERO code changes. All test failures are pre-existing background issues from other in-flight tasks, unrelated to this task's research doc commit (ea08d351).
+- regression verdict: PASS (no regressions attributable to this task)
+
+### Research Task Verification
+- Research doc exists: .owlbear/research/1553-pds-dark-mode-compat.md
+- Follow-up task #1555 created at research status, depends on #1553
+- Follow-up references research findings and parent #1534
+
+### Intent Verification
+- scope alignment: PASS (cockpit frontend theming domain, consistent with task tags and parent #1534)
+- purpose match: PASS (verify PDS dark-mode compat, document findings, create follow-up: all achieved)
+- extraneous scope: none
+- boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 4/5
+- AC-1 refined to cover both positive and negative outcomes (originally assumed positive)
+- AC-2 tightened to require follow-up task as inspectable artifact
+- Proof bundle correctly de-escalated from behavioral to skip
+- All PDS components enumerated explicitly (B3 compliance)
+- Minor gap: original AC needed refinement (architect caught and fixed it)
+
+### Commit Integrity
+- upstream commit presence: PASS (ea08d351 covers research doc and sources)
+- No other commits expected for pass-through task (architect/test-writer/builder/reviewer/doc-writer all pass-through with task-body-only contributions)
+- kanban commit packaging: pending (this archival)
+
+### Deduction Breakdown
+- No deductions applied. Task is clean across all criteria.
+
+### Confidence: 1.00
+### Action: archive

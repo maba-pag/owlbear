@@ -1,10 +1,10 @@
 ---
 id: 1548
 title: 'P3-06: impl — theme toggle UI: status bar button'
-status: docs
+status: done
 priority: important
 created: 2026-05-13T18:43:23.870309+00:00
-updated: 2026-05-14T06:41:21.241358+00:00
+updated: 2026-05-14T06:49:37.211445+00:00
 tags:
   - phase-3
   - scope:cockpit
@@ -16,7 +16,7 @@ depends_on:
   - 1545
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-14T06:49:37.211445+00:00
 archival_reason:
 archival_refs: []
 ---
@@ -156,3 +156,19 @@ Commit: a3dde802
 ## Observations
 - Builder proof packet should include coverage on the first pass for `behavioral` tasks so reviewer reruns are unnecessary.
 - `Shell.tsx` whole-file coverage remains modest because the file is large and the task-scoped tests intentionally exercise only the status-bar placement contract. That is acceptable for AC-4, but it should not be treated as broader Shell regression proof.
+2026-05-14T06:48:00+00:00
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | README verification | Yes | N/A | `serve/cockpit/README.md` read in full. No mentions of theme, ThemeToggle, or Shell status bar components — README documents stack, APIs, config vars, and domain boundaries, not individual UI components. Task added a frontend-internal UI control; no README drift caused. |
+| 2 | External attribution | Yes | N/A — already complete | `sources/overview.md` line 101: `## Theme Toggle Button Research (Task #1548)` with web.dev and next-themes entries. No update needed. |
+| 3 | Research doc | Yes | N/A — linked | `.owlbear/research/1548-theme-toggle-button.md` exists and is cited in task body under `## Scope` / Research block. |
+| 4 | Deletion detection | No | N/A | Builder added `ThemeToggle.tsx` (new) and modified `Shell.tsx` (addition only). No files deleted; no orphaned references possible. |
+
+### Verification Layers
+- Layer 1 — grep: `grep_search` on `serve/cockpit/README.md` for `theme`, `ThemeToggle`, `dark`, `light` — 0 matches. No stale references to remove or add.
+- Layer 2 — editorial: README Product Boundary section lists "viewing, editing, moving/archiving, user blocks, health/admin, activity, and decision resolution." ThemeToggle is a self-contained UI control; no product boundary description warrants update for a status-bar button addition.
+
+### Scratch Cleanup
+No `.owlbear/scratch/1548-*` files found.
