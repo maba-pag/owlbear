@@ -1,10 +1,10 @@
 ---
 id: 1555
 title: Bridge PDS v4 color-scheme with data-theme toggle
-status: backlog
+status: archived
 priority: important
 created: 2026-05-14T05:57:42.186424+00:00
-updated: 2026-05-14T09:06:43.912182+00:00
+updated: 2026-05-14T09:50:31.978183+00:00
 tags:
   - phase-4
   - scope:cockpit
@@ -16,7 +16,7 @@ depends_on:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Context
@@ -42,6 +42,7 @@ Research ref: #1553
 - [ ] AC-5: Playwright e2e test confirms at least one PDS shadow-DOM component (e.g. `p-button`) renders with dark-mode color values when `.scheme-dark` is active on `<html>`. Verification: e2e assertion on computed style or screenshot comparison.
 - [ ] AC-6: Existing theme tests (`theme_1537.test.tsx`, `ThemeBootstrap_1545.test.ts`) continue to pass without modification. Verification: test suite green.
 - [ ] AC-7: No app-authored `color-scheme` CSS property declarations exist outside the imported PDS vendor stylesheet (prevents specificity conflicts with `.scheme-*` classes). Verification: grep/lint assertion across `src/**/*.css`.
+- [ ] AC-8: `vite.config.ts` is importable without `TypeError` in Vitest test runner context; `resolve.alias` entry mapping `@porsche-design-system/components-react/global-styles/color-scheme.css` to the `components-js` package CSS file resolves correctly at both build time and vitest import time. Verification: `vite_config.test.ts` and `vite_config_pds_1513.test.ts` pass in vitest run.
 
 Proof bundle: behavioral
 
@@ -347,3 +348,180 @@ AC lines were specific with exact file paths, import paths, 3 mutation sites enu
 | # | Target Agent | Action Required | File(s) | Evidence |
 |---|-------------|----------------|---------|----------|
 | 1 | builder | Fix module-level `fileURLToPath(new URL(..., import.meta.url))` in vite.config.ts to be test-environment-safe (Vitest import.meta.url does not use file:// scheme); verify vite_config.test.ts and vite_config_pds_1513.test.ts pass after fix | serve/cockpit/web/vite.config.ts | TypeError at vite.config.ts:9; tests authored by #1513/#1397 |
+2026-05-14T09:15:42+00:00
+
+## Architecture Review (Re-review — Audit Rejection)
+
+### Context
+Auditor rejected #1555 from `done` back to `backlog` at confidence .90. Regression: commit `99c15e2a` added module-level `fileURLToPath(new URL('./node_modules/...', import.meta.url))` at `vite.config.ts:9-11` which throws `TypeError: The URL must be of scheme file` when imported by `vite_config.test.ts` and `vite_config_pds_1513.test.ts` in Vitest. Both test files were authored by earlier tasks (#1513/#1397) and passed before this commit.
+
+### AC Refinement
+Added AC-8 to cover the regression fix:
+- **AC-8**: `vite.config.ts` is importable without `TypeError` in Vitest test runner context; `resolve.alias` entry mapping `@porsche-design-system/components-react/global-styles/color-scheme.css` to the `components-js` package CSS file resolves correctly at both build time and vitest import time. Verification: `vite_config.test.ts` and `vite_config_pds_1513.test.ts` pass in vitest run.
+
+AC-1 through AC-7 unchanged — already verified in prior review cycle.
+
+### Evaluation (delta only — prior full evaluation stands)
+
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | Regression fix is same concern (vite config for PDS theme bridge) |
+| TDD compliance | PASS | Existing failing tests serve as RED phase for AC-8 |
+| Pattern consistency | PASS | Other vite config tests mock top-level imports; fix should follow that pattern or make resolution lazy |
+
+### Challenge Results
+- Challenger: reconsider (confidence 0.69)
+- Findings addressed:
+  - "without modification" clause → ACCEPTED: dropped solution constraint from AC-8; fix may update test mocks or implementation
+  - jsdom overfit → ACCEPTED: broadened to "Vitest test runner context"
+  - Alias as implementation detail → PARTIALLY ACCEPTED: alias exists in committed code and must work; AC-8 covers importability + resolution correctness
+  - AC-4 enumeration concern → DISMISSED: canonical task body already enumerates all 3 sites with line numbers
+- Architect response: accepted 2 of 3 wording refinements, rebutted AC-4 concern with canonical evidence
+
+### Proof-Bundle Validation
+- Prior assignment: behavioral
+- Final bundle: behavioral
+- Rationale: unchanged — regression fix is within same behavioral scope; existing failing tests provide RED phase evidence
+- Test-writer: PROCEED (existing `vite_config.test.ts` and `vite_config_pds_1513.test.ts` serve as RED for AC-8; test-writer evaluates whether additional test coverage is needed)
+
+### Verdict: APPROVE
+### Action Taken: Added AC-8 for vite config regression fix; advanced to todo for second pipeline cycle
+2026-05-14T09:16:02+00:00
+Re-review after audit rejection. Added AC-8 for vite config regression fix (module-level fileURLToPath breaks in Vitest). Challenger accepted: dropped "without modification" constraint, broadened environment language. Proof bundle stays behavioral. Advancing to todo for second pipeline cycle.
+2026-05-14T09:20:01+00:00
+## Test-Writer Notes (Retry — AC-8 alias gap)
+
+**Required Follow-up addressed:** AC-8 alias-resolution half — `resolve.alias` PDS color-scheme mapping not covered by existing failing tests.
+
+**New test file:** `serve/cockpit/web/src/__tests__/ViteConfigAlias_1555.test.ts`
+
+**Class:** `TestFromAC_ViteConfigAlias_1555` (3 tests)
+
+**Existing RED coverage (already failing, auditor-confirmed):**
+- `vite_config.test.ts` — covers AC-8 "importable without TypeError" (TestFromAC_CSP)
+- `vite_config_pds_1513.test.ts` — covers AC-8 "importable without TypeError" (TestFromAC_PdsVersionCheck)
+
+**New tests — AC-8 alias-resolution gap:**
+
+| # | Test | Falsifiable because |
+|---|------|---------------------|
+| 1 | AC-8: resolve.alias contains the PDS color-scheme.css key | Fails now (TypeError at import) — PASS only when importable AND alias key present |
+| 2 | AC-8: resolve.alias PDS color-scheme.css value is a non-empty string | Fails now (TypeError at import) — PASS only when alias value is a string |
+| 3 | AC-8: resolve.alias PDS color-scheme.css value ends with color-scheme.css | Fails now (TypeError at import) — PASS only when alias resolves to correct CSS file |
+
+**Tests per category:** 3 happy/contract (alias-resolution guards)
+
+**Total: 3 FAIL (all fail with TypeError: The URL must be of scheme file at vite.config.ts:9)**
+
+**Evidence:** vitest exit 1, ESLint exit 0 — all 3 tests RED confirmed.
+
+**AC coverage:**
+| AC | Tests |
+|----|-------|
+| AC-1..7 | Covered by prior cycle (all pass) |
+| AC-8 (importable) | vite_config.test.ts + vite_config_pds_1513.test.ts (existing, failing) |
+| AC-8 (alias resolution) | 3 new tests in ViteConfigAlias_1555.test.ts (failing) |
+
+**Commit:** 566959e5 — test: add AC-8 alias-resolution tests for vite config pds bridge (#1555, test-writer)
+2026-05-14T09:23:53+00:00
+## Builder Notes
+- Files changed:
+  - serve/cockpit/web/vite.config.ts
+
+- Fixes applied:
+  - AC-8 regression fix: replaced module-level `fileURLToPath(new URL(..., import.meta.url))` alias resolution with a test-safe path built from `join(process.cwd(), 'node_modules/.../color-scheme.css')`.
+  - Preserved alias key and target semantics while removing `import.meta.url` scheme dependency that caused Vitest import failure.
+
+- RED verification (quality-runner, scoped):
+  - `serve/cockpit/web/src/__tests__/vite_config.test.ts`
+  - `serve/cockpit/web/src/__tests__/vite_config_pds_1513.test.ts`
+  - `serve/cockpit/web/src/__tests__/ViteConfigAlias_1555.test.ts`
+  - Result before fix: module-load failure (`TypeError: The URL must be of scheme file` at `vite.config.ts:9:31`) in all 3 suites.
+
+- GREEN verification (quality-runner, scoped):
+  - AC-8 targeted run:
+    - Tests: 18 passed, 0 failed
+    - Lint: clean
+  - Sanity run for 1555 coverage surface:
+    - `PdsColorSchemeBridge_1555.test.ts`
+    - `theme_1537.test.tsx`
+    - `ThemeBootstrap_1545.test.ts`
+    - `ViteConfigAlias_1555.test.ts`
+    - `vite_config.test.ts`
+    - `vite_config_pds_1513.test.ts`
+    - Tests: 80 passed, 0 failed
+    - Lint: clean
+
+- Lint status:
+  - eslint clean on scoped paths including `serve/cockpit/web/vite.config.ts`.
+
+- Evidence summary:
+  - AC-8 importability is restored in Vitest context.
+  - AC-8 alias contract checks (`resolve.alias` key/value/value suffix) pass.
+  - Previously passing 1555 unit/theme config suites remain green after fix.
+
+- Commit:
+  - `7dbd0e0ad30e9d783f766daa39a2200a1630178a` — `fix: make vite config alias test-safe in vitest (#1555, builder)`
+2026-05-14T09:41:45+00:00
+## Review Evidence
+- Verdict: PASS
+- PASS confirmation: PASS #1555 -> docs | AC mapped to code and evidence sufficient.
+- Blocking findings: none.
+
+| AC | Code Evidence | Test / Proof Evidence | Status |
+|---|---|---|---|
+| AC-1 | Prior accepted mapping remains unchanged at `serve/cockpit/web/src/main.tsx:4`; the second-cycle builder retry changed only `serve/cockpit/web/vite.config.ts` (`.owlbear/kanban/tasks/1555-bridge-pds-v4-color-scheme-with-data-theme-toggle.md:428`). | Prior accepted proof remains valid at `.owlbear/kanban/tasks/1555-bridge-pds-v4-color-scheme-with-data-theme-toggle.md:289`. | PASS |
+| AC-2 | Current config still excludes `Features.LightDark` at `serve/cockpit/web/vite.config.ts:83`; current retry touched the same file but preserved this contract. | Prior unit proof remains valid at `serve/cockpit/web/src/__tests__/PdsColorSchemeBridge_1555.test.ts:137-147`; builder sanity rerun stayed green at `.owlbear/kanban/tasks/1555-bridge-pds-v4-color-scheme-with-data-theme-toggle.md:452`. | PASS |
+| AC-3 | Prior accepted bootstrap mapping remains unchanged at `.owlbear/kanban/tasks/1555-bridge-pds-v4-color-scheme-with-data-theme-toggle.md:291`; current retry changed only `vite.config.ts` (`.owlbear/kanban/tasks/1555-bridge-pds-v4-color-scheme-with-data-theme-toggle.md:428`). | Prior accepted unit proof remains valid at `.owlbear/kanban/tasks/1555-bridge-pds-v4-color-scheme-with-data-theme-toggle.md:291`. | PASS |
+| AC-4 | Prior accepted `useTheme.ts` mapping remains unchanged at `.owlbear/kanban/tasks/1555-bridge-pds-v4-color-scheme-with-data-theme-toggle.md:292`; current retry changed only `vite.config.ts` (`.owlbear/kanban/tasks/1555-bridge-pds-v4-color-scheme-with-data-theme-toggle.md:428`). | Prior accepted unit proof remains valid at `.owlbear/kanban/tasks/1555-bridge-pds-v4-color-scheme-with-data-theme-toggle.md:292`. | PASS |
+| AC-5 | Prior accepted computed-style bridge proof remains unchanged at `.owlbear/kanban/tasks/1555-bridge-pds-v4-color-scheme-with-data-theme-toggle.md:293`; current retry changed only `vite.config.ts` (`.owlbear/kanban/tasks/1555-bridge-pds-v4-color-scheme-with-data-theme-toggle.md:428`). | Prior accepted Playwright proof remains valid at `.owlbear/kanban/tasks/1555-bridge-pds-v4-color-scheme-with-data-theme-toggle.md:272` and `.owlbear/kanban/tasks/1555-bridge-pds-v4-color-scheme-with-data-theme-toggle.md:293`. | PASS |
+| AC-6 | No source in the existing theme suites was touched in the second cycle; prior accepted unchanged-suite evidence remains valid (`.owlbear/kanban/tasks/1555-bridge-pds-v4-color-scheme-with-data-theme-toggle.md:294`). | Existing-theme-suite proof remains valid: `39 passed, 0 failed` at `.owlbear/kanban/tasks/1555-bridge-pds-v4-color-scheme-with-data-theme-toggle.md:294`. | PASS |
+| AC-7 | No CSS files were touched in the second cycle; prior accepted no-conflicting-`color-scheme` evidence remains valid (`.owlbear/kanban/tasks/1555-bridge-pds-v4-color-scheme-with-data-theme-toggle.md:295`). | Prior constraint-guard proof remains valid at `.owlbear/kanban/tasks/1555-bridge-pds-v4-color-scheme-with-data-theme-toggle.md:295`. | PASS |
+| AC-8 | Current fix replaces the audited module-level `import.meta.url` path with a test-safe alias path rooted at `process.cwd()` in `serve/cockpit/web/vite.config.ts:8-10`, preserves the alias key/value wiring at `serve/cockpit/web/vite.config.ts:73-74`, and keeps the pre-existing plugin surface intact at `serve/cockpit/web/vite.config.ts:22` and `serve/cockpit/web/vite.config.ts:34`. | RED was the audited TypeError recorded at `.owlbear/kanban/tasks/1555-bridge-pds-v4-color-scheme-with-data-theme-toggle.md:325`, `.owlbear/kanban/tasks/1555-bridge-pds-v4-color-scheme-with-data-theme-toggle.md:356`, `.owlbear/kanban/tasks/1555-bridge-pds-v4-color-scheme-with-data-theme-toggle.md:414`, and `.owlbear/kanban/tasks/1555-bridge-pds-v4-color-scheme-with-data-theme-toggle.md:439`. GREEN now includes alias-contract tests at `serve/cockpit/web/src/__tests__/ViteConfigAlias_1555.test.ts:39`, `serve/cockpit/web/src/__tests__/ViteConfigAlias_1555.test.ts:52`, `serve/cockpit/web/src/__tests__/ViteConfigAlias_1555.test.ts:62`, and `serve/cockpit/web/src/__tests__/ViteConfigAlias_1555.test.ts:70`, importability through `serve/cockpit/web/src/__tests__/vite_config.test.ts:21` and `serve/cockpit/web/src/__tests__/vite_config_pds_1513.test.ts:24`, builder scoped GREEN at `.owlbear/kanban/tasks/1555-bridge-pds-v4-color-scheme-with-data-theme-toggle.md:443`, builder sanity GREEN at `.owlbear/kanban/tasks/1555-bridge-pds-v4-color-scheme-with-data-theme-toggle.md:452`, and reviewer independent quality-runner verification: Vitest 18 passed / 0 failed, `npm run build` exit 0, ESLint exit 0. | PASS |
+
+- Safety and security check: no new auth, input handling, shell/path injection surface, secret handling, or dependency additions were introduced by the retry; no blocking safety issue found.
+
+## Observations
+- Challenger initially flagged missing explicit build-side proof for AC-8. I closed that gap with an independent quality-runner rerun: the AC-8 Vitest proof surface passed and `npm run build` completed successfully from `serve/cockpit/web`.
+- The new alias path depends on `process.cwd()`. In this repo that is acceptable evidence-wise because the documented and CI entry points for cockpit frontend commands run from `serve/cockpit/web` (`README.md:70`, `README.md:81`, `README.md:85`, `.github/workflows/sync-to-main.yml:352-358`).
+- I could not independently run the git dirty-tree contamination check because terminal/git commands are not available in this tool surface. That did not affect the verdict because the current retry scope is a single file and the blocking audit regression is directly closed by current proof.
+2026-05-14T09:44:09+00:00
+## Docs Gate (Second Cycle)
+
+### Checklist
+
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | README Verification | Yes | PASS — no-impact | `serve/cockpit/README.md` read in full; covers API surface, mutation routes, launch, stack, sessions — no mention of theme mechanism, vite alias, or color-scheme internals. Stack row (PDS `^4.0.0`, Vite `^8.0.10`) unchanged. Second cycle touched only `vite.config.ts` alias path internals — no public surface change. Layer 1 grep: no `theme\|color-scheme\|lightningcss\|useTheme\|theme-bootstrap` matches in README. Layer 2 editorial: coherent, accurate. |
+| 2 | External Attribution | Yes | PASS | `.owlbear/sources/overview.md` line 4687 has `## PDS Color-Scheme Bridge Research (Task #1555)` with 3 sources (PDS v4 Theme docs, Color Scheme Stylesheet docs, PDS GitHub Issue #4257). Updated in first cycle — valid for second cycle (no new external sources used in AC-8 fix). |
+| 3 | Research Doc | Yes | PASS | `.owlbear/research/1555-pds-color-scheme-bridge.md` confirmed present; linked from task body under Research section. |
+| 4 | Deletion Detection | N/A | N/A | No source files deleted in either pipeline cycle. 5 files modified/added in cycle 1; 1 file modified (`vite.config.ts`) + 1 test file added in cycle 2. |
+
+**Files updated:** none (no-impact verified)
+**Scratch cleanup:** no `.owlbear/scratch/1555-*` files found
+2026-05-14T09:50:31+00:00
+## Audit
+
+### Regression Detection
+- quality-runner mode full: Python 4602 passed / 212 failed (all pre-existing, unrelated domains: engine_accessor, cockpit_view cleanup, server StatusNames, ideation_diagram); Frontend vitest 1769 passed / 3 failed (ResponsiveLayout_1391 attributed to #1549/#1542, KanbanBoard.filter-e2e unrelated)
+- Critical prior regression (vite_config.test.ts + vite_config_pds_1513.test.ts TypeError) is RESOLVED by AC-8 fix in commit 7dbd0e0a
+- Regression verdict: PASS (no failures attributable to this task)
+
+### Intent Verification
+- Scope alignment: PASS (all changed files in serve/cockpit/web/ - main.tsx, vite.config.ts, theme-bootstrap.js, useTheme.ts, e2e spec, unit tests)
+- Purpose match: PASS (bridge PDS color-scheme with data-theme toggle, implementation addresses stated purpose across two pipeline cycles)
+- Extraneous scope: none
+- Boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 4/5
+AC lines were specific with exact file paths, import paths, 3 mutation sites enumerated, and verification methods per line. Retroactive AC-8 addition after audit rejection was well-scoped and addressed the regression gap. Minor gap: initial AC set did not anticipate vite config test compatibility, though that is arguably builder/reviewer territory.
+
+### Commit Integrity
+- Upstream commit presence: PASS (builder cycle 1: 99c15e2a, test-writer e2e fix: 7e26851e, test-writer AC-8: 566959e5, builder cycle 2: 7dbd0e0a, all on dev)
+- Kanban commit packaging: deferred to Step 6
+
+### Deduction Breakdown
+- No deductions. All criteria pass.
+
+### Confidence: 1.00
+### Action: archive
