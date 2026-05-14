@@ -1,8 +1,19 @@
 .column {
-  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-width: 200px;
+  background: var(--pds-background-surface);
+  border: 1px solid var(--pds-contrast-low);
+  border-radius: var(--pds-radius-md);
+}
+
+.column header {
+  flex-shrink: 0;
 }
 
 .column-body {
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   min-width: 0;
 }
@@ -12,4 +23,8 @@
   align-items: center;
   justify-content: center;
   text-align: center;
+}
+
+.column[data-drag-over="true"] {
+  background: var(--pds-state-hover);
 }
