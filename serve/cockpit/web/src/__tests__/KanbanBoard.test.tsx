@@ -42,6 +42,7 @@ const TASKS = {
       blocked: false,
       block_reason: null,
       claimed: false,
+      dep_status: null,
     },
     {
       id: 2,
@@ -53,6 +54,7 @@ const TASKS = {
       blocked: true,
       block_reason: 'Waiting for API',
       claimed: false,
+      dep_status: null,
     },
     {
       id: 3,
@@ -64,6 +66,7 @@ const TASKS = {
       blocked: false,
       block_reason: null,
       claimed: true,
+      dep_status: null,
     },
     {
       id: 4,
@@ -75,6 +78,7 @@ const TASKS = {
       blocked: false,
       block_reason: null,
       claimed: false,
+      dep_status: null,
     },
     {
       id: 5,
@@ -86,6 +90,7 @@ const TASKS = {
       blocked: false,
       block_reason: null,
       claimed: false,
+      dep_status: null,
     },
   ],
   mtime: 1713456000,
@@ -314,25 +319,19 @@ describe('TestFromAC_KanbanBoard', () => {
       })
     })
 
-    it('blocked card shows block badge', async () => {
+    it('blocked card has data-signal set to "blocked"', async () => {
       const { container } = renderBoard()
       await waitFor(() => {
         const card = container.querySelector('[data-testid="task-card"][data-id="2"]')
-        expect(card?.querySelector('[data-testid="block-badge"]')).not.toBeNull()
+        expect(card?.getAttribute('data-signal')).toBe('blocked')
       })
     })
 
-    it('block badge exposes block_reason text via title or aria-label', async () => {
+    it('blocked card does not render a block-badge element (AC-3: badge removed)', async () => {
       const { container } = renderBoard()
       await waitFor(() => {
         const card = container.querySelector('[data-testid="task-card"][data-id="2"]')
-        const badge = card?.querySelector('[data-testid="block-badge"]')
-        const reason =
-          badge?.getAttribute('title') ??
-          badge?.getAttribute('aria-label') ??
-          badge?.textContent ??
-          ''
-        expect(reason).toContain('Waiting for API')
+        expect(card?.querySelector('[data-testid="block-badge"]')).toBeNull()
       })
     })
 
@@ -344,11 +343,11 @@ describe('TestFromAC_KanbanBoard', () => {
       })
     })
 
-    it('claimed card shows running indicator', async () => {
+    it('claimed card has data-signal set to "claimed"', async () => {
       const { container } = renderBoard()
       await waitFor(() => {
         const card = container.querySelector('[data-testid="task-card"][data-id="3"]')
-        expect(card?.querySelector('[data-testid="running-indicator"]')).not.toBeNull()
+        expect(card?.getAttribute('data-signal')).toBe('claimed')
       })
     })
 

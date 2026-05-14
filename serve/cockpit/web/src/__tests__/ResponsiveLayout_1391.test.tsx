@@ -163,6 +163,7 @@ function makeTask(priority: string): Task {
     blocked: false,
     block_reason: null,
     claimed: false,
+    dep_status: null,
   }
 }
 
@@ -200,10 +201,10 @@ describe('TestFromAC_PdsTokenUsage', () => {
     expect(cardSource).not.toContain('#888888')
   })
 
-  // AC5: Card renders priority border using PDS CSS variable, not raw color
-  // Rendered inline style should contain var(--pds-...) for the borderLeft property.
+  // AC5: Card must not apply an inline priority-border style now that PRIORITY_COLORS is removed.
+  // PDS CSS variable-based border will be implemented in #1546 (Card CSS task).
   // RED: Card.tsx inlines PRIORITY_COLORS hex → element style has hardcoded color.
-  it('Card renders critical priority borderLeft using a PDS CSS variable', () => {
+  it('Card does not apply an inline priority-border style (PRIORITY_COLORS removed, PDS CSS deferred to #1546)', () => {
     const { container } = render(
       <Card
         task={makeTask('critical')}
@@ -214,13 +215,9 @@ describe('TestFromAC_PdsTokenUsage', () => {
     )
     const card = container.querySelector('[data-testid="task-card"]') as HTMLElement
     expect(card).not.toBeNull()
-
-    // borderLeft must reference a PDS CSS custom property, not a hex literal or rgb value.
-    // After fix: style contains 'var(--pds-theme-light-notification-error)'.
-    // Currently: style contains 'rgb(224, 0, 0)' (normalized from #e00000) → no var().
     const rawStyle = card.getAttribute('style') ?? ''
-    expect(rawStyle, 'borderLeft should use a PDS CSS variable (var(--pds-...))').toMatch(
-      /var\(--pds-/,
+    expect(rawStyle, 'Card must not have an inline priority-border style (PRIORITY_COLORS removed)').not.toMatch(
+      /border/,
     )
   })
 })
