@@ -4,7 +4,7 @@ title: 'consolidation test: board visual design'
 status: backlog
 priority: important
 created: 2026-05-13T18:43:53.303013+00:00
-updated: 2026-05-13T18:44:16.517721+00:00
+updated: 2026-05-14T07:21:26.327598+00:00
 tags:
   - phase-5
   - scope:cockpit
@@ -20,6 +20,7 @@ depends_on:
   - 1548
   - 1549
   - 1550
+  - 1555
 blocked: false
 block_reason:
 claimed_at:
