@@ -13,12 +13,13 @@
  *     — All tests in TestFromAC_CardBadgesRemoved and TestFromAC_CardPriorityColorsRemoved
  *       FAIL until builder removes these from src/components/Card.tsx.
  */
-import { describe, it, expect } from 'vitest'
-import { render } from '@testing-library/react'
+import { describe, it, expect, vi, afterEach } from 'vitest'
+import { render, renderHook, act } from '@testing-library/react'
 import { readFileSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Card } from '../components/Card'
+import { useBoard } from '../hooks/useBoard'
 import type { Task } from '../hooks/useBoard'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -65,6 +66,109 @@ describe('TestFromAC_TaskDepStatus', () => {
     expect(match).not.toBeNull()
     const interfaceBody = match![1]
     expect(interfaceBody).toMatch(/dep_status\s*:\s*string\s*\|\s*null/)
+  })
+})
+
+// ─── AC-1 (retry): Hook-level dep_status propagation proof ─────────────────────
+// Verifies that dep_status survives the /api/tasks → useBoard() → tasks pipeline.
+// These tests PASS when the Task interface and hook correctly propagate the field.
+
+const MOCK_BOARD = {
+  statuses: [{ name: 'todo' }],
+  priorities: ['needed'],
+  valid_transitions: { todo: [] } as Record<string, string[]>,
+}
+
+vi.mock('../hooks/EventSourceProvider', () => ({
+  useSSEEvent: vi.fn(() => ({ mtime: null, status: 'closed' as const })),
+}))
+
+describe('TestFromAC_DepStatusPropagation', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+
+  it('dep_status "blocked" from /api/tasks is preserved in useBoard().tasks', async () => {
+    vi.useFakeTimers()
+    const tasksResponse = {
+      tasks: [{
+        id: 99,
+        title: 'Signal Task',
+        status: 'todo',
+        priority: 'needed',
+        tags: [],
+        blocked: false,
+        block_reason: null,
+        claimed: false,
+        dep_status: 'blocked',
+      }],
+      mtime: 9999,
+    }
+    vi.stubGlobal('fetch', vi.fn((url: string) => {
+      if ((url as string).includes('/api/board')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(MOCK_BOARD) })
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(tasksResponse) })
+    }))
+    const { result } = renderHook(() => useBoard())
+    await act(async () => { vi.advanceTimersByTime(0) })
+    expect(result.current.tasks[0]?.dep_status).toBe('blocked')
+  })
+
+  it('dep_status null from /api/tasks is preserved as null in useBoard().tasks', async () => {
+    vi.useFakeTimers()
+    const tasksResponse = {
+      tasks: [{
+        id: 100,
+        title: 'No-dep Task',
+        status: 'todo',
+        priority: 'needed',
+        tags: [],
+        blocked: false,
+        block_reason: null,
+        claimed: false,
+        dep_status: null,
+      }],
+      mtime: 10000,
+    }
+    vi.stubGlobal('fetch', vi.fn((url: string) => {
+      if ((url as string).includes('/api/board')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(MOCK_BOARD) })
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(tasksResponse) })
+    }))
+    const { result } = renderHook(() => useBoard())
+    await act(async () => { vi.advanceTimersByTime(0) })
+    expect(result.current.tasks[0]?.dep_status).toBeNull()
+  })
+
+  it('dep_status "ok" from /api/tasks is preserved in useBoard().tasks', async () => {
+    vi.useFakeTimers()
+    const tasksResponse = {
+      tasks: [{
+        id: 101,
+        title: 'Ok-dep Task',
+        status: 'todo',
+        priority: 'needed',
+        tags: [],
+        blocked: false,
+        block_reason: null,
+        claimed: false,
+        dep_status: 'ok',
+      }],
+      mtime: 10001,
+    }
+    vi.stubGlobal('fetch', vi.fn((url: string) => {
+      if ((url as string).includes('/api/board')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(MOCK_BOARD) })
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(tasksResponse) })
+    }))
+    const { result } = renderHook(() => useBoard())
+    await act(async () => { vi.advanceTimersByTime(0) })
+    expect(result.current.tasks[0]?.dep_status).toBe('ok')
   })
 })
 

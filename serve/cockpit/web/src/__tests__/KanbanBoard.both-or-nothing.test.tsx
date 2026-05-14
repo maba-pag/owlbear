@@ -39,6 +39,7 @@ const TASKS = {
       blocked: false,
       block_reason: null,
       claimed: false,
+      dep_status: null,
     },
   ],
   mtime: 1713456000,
@@ -120,6 +121,7 @@ function stubFetchSuccessMulti() {
         blocked: false,
         block_reason: null,
         claimed: false,
+        dep_status: null,
       },
       {
         id: 2,
@@ -130,6 +132,7 @@ function stubFetchSuccessMulti() {
         blocked: false,
         block_reason: null,
         claimed: false,
+        dep_status: null,
       },
     ],
     mtime: 1713456000,
@@ -286,30 +289,5 @@ describe('TestBuilderDiscovered', () => {
     })
   })
 
-  it('card has a non-empty borderLeft style (priority-coded left border)', async () => {
-    stubFetchSuccessMulti()
-    const { container } = renderBoard()
-    await waitFor(() => {
-      const card = container.querySelector('[data-testid="task-card"][data-id="1"]')
-      expect(card).not.toBeNull()
-      expect((card as HTMLElement | null)?.style.borderLeft).toBeTruthy()
-    })
-  })
-
-  it('different priorities yield different left border colors', async () => {
-    stubFetchSuccessMulti()
-    const { container } = renderBoard()
-    await waitFor(() => {
-      const criticalCard = container.querySelector('[data-testid="task-card"][data-id="1"]')
-      const somedayCard = container.querySelector('[data-testid="task-card"][data-id="2"]')
-      expect(criticalCard).not.toBeNull()
-      expect(somedayCard).not.toBeNull()
-      const criticalBorder = (criticalCard as HTMLElement | null)?.style.borderLeft
-      const somedayBorder = (somedayCard as HTMLElement | null)?.style.borderLeft
-      expect(criticalBorder).toBeTruthy()
-      expect(somedayBorder).toBeTruthy()
-      expect(criticalBorder).not.toBe(somedayBorder)
-    })
-  })
 })
 

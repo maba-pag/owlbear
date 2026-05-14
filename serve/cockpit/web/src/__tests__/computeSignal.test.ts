@@ -12,7 +12,7 @@
  *   AC-3: dep_status mapping — "blocked" → deps-unmet; "ok"/"redirect"/null → no deps-unmet
  */
 import { describe, it, expect } from 'vitest'
-import { computeSignal, type CardSignal } from '../utils/computeSignal'
+import { computeSignal } from '../utils/computeSignal'
 
 // ─── Fixture factory ─────────────────────────────────────────────────────────
 
