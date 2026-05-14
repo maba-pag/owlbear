@@ -183,6 +183,15 @@ External repos and resources studied during OwlBear development.
 | MegaLinter — Filtering files | <https://megalinter.io/latest/config-filtering/> | FILTER_REGEX_EXCLUDE "not applicable with linters using CLI lint mode project" | Task #1418 body | 2026-05-08 |
 | MegaLinter — editorconfig-checker descriptor | <https://megalinter.io/latest/descriptors/editorconfig_editorconfig_checker/> | Uses `list_of_files` mode; IS affected by FILTER_REGEX_EXCLUDE | Task #1418 body | 2026-05-08 |
 
+## Theme Bootstrap Script Implementation Research (Task #1545)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Static Signal — Dark Mode Without the Flash | <https://staticsignal.io/posts/dark-mode-without-the-flash/> | Canonical inline blocking script pattern, 3-piece architecture (vars + script + toggle) | `.owlbear/research/1545-theme-bootstrap-impl.md` | 2026-05-14 |
+| dev.to (gaisdav) — Prevent Theme Flash in React | <https://dev.to/gaisdav/how-to-prevent-theme-flash-in-a-react-instant-dark-mode-switching-o20> | Vite/React implementation, localStorage + matchMedia + data-theme inline script | `.owlbear/research/1545-theme-bootstrap-impl.md` | 2026-05-14 |
+| next-themes script.ts | <https://github.com/pacocoursey/next-themes/blob/main/next-themes/src/script.ts> | Production bootstrap: localStorage → validate → system fallback → updateDOM | `.owlbear/research/1545-theme-bootstrap-impl.md` | 2026-05-14 |
+| next-themes index.tsx (ThemeScript injection) | <https://github.com/pacocoursey/next-themes/blob/main/next-themes/src/index.tsx#L165-L215> | Injection mechanism: dangerouslySetInnerHTML IIFE, nonce support | `.owlbear/research/1545-theme-bootstrap-impl.md` | 2026-05-14 |
+
 ## Pre-end_work Scoped Commit Check (Task #1412)
 
 | Source | URL | What | Where Used | Date |
