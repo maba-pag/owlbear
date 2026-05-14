@@ -252,6 +252,7 @@ class DocumentStore:
                             **edge.metadata,
                             "pipeline_name": pipeline_name,
                             "document_id": document_id,
+                            "scope": scope,
                             "chunk_id": assigned_chunk_id,
                         },
                     }
