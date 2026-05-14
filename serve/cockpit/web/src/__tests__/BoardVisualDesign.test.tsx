@@ -21,7 +21,7 @@
  *
  * Dependencies (all archived): #1543 #1544 #1545 #1546 #1547 #1548 #1549 #1550 #1555
  */
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render } from '@testing-library/react'
 import { readFileSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
@@ -32,6 +32,25 @@ import KanbanBoard from '../KanbanBoard'
 import { Card } from '../components/Card'
 import ThemeToggle from '../components/ThemeToggle'
 import type { Board, Task } from '../hooks/useBoard'
+import type { PendingDR } from '../hooks/usePendingDRs'
+
+// ─── Hoisted mock stubs for Shell-level integration tests ─────────────────────
+const mockUseBoardState = vi.hoisted(() => vi.fn())
+const mockUseTaskSelection = vi.hoisted(() => vi.fn())
+const mockUseDRState = vi.hoisted(() => vi.fn())
+
+vi.mock('../hooks/CockpitProvider', () => ({
+  CockpitProvider: ({ children }: { children: unknown }) => children,
+  useBoardState: mockUseBoardState,
+  useTaskSelection: mockUseTaskSelection,
+  useDRState: mockUseDRState,
+}))
+
+vi.mock('../hooks/EventSourceProvider', () => ({
+  useSSEEvent: vi.fn(() => ({ status: 'closed', mtime: null })),
+}))
+
+import Shell from '../Shell'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -109,9 +128,10 @@ function renderCard(task: Task, pendingDRIds: Set<number> = new Set()) {
 // ─── CSS helpers ───────────────────────────────────────────────────────────────
 
 function getCSSBlock(css: string, selector: string): string | null {
+  const stripped = css.replace(/\/\*[\s\S]*?\*\//g, '')
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const pattern = new RegExp(`${escaped}\\s*\\{([^}]*)\\}`)
-  const match = css.match(pattern)
+  const match = stripped.match(pattern)
   return match ? match[1] : null
 }
 
@@ -297,7 +317,7 @@ describe('DarkThemeTokenCoverage', () => {
 describe('ComponentCSSTokensOnly', () => {
   // Match hardcoded hex codes and color functions. Does NOT flag `transparent` or
   // `currentColor` which are CSS semantic keywords, not design-token violations.
-  const HARDCODED_COLOR_RE = /#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(/
+  const HARDCODED_COLOR_RE = /#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(/i
 
   it('Card.css contains no hardcoded hex or rgb()/hsl() color literals', () => {
     const css = readFileSync(CARD_CSS_PATH, 'utf-8')
@@ -363,5 +383,126 @@ describe('CardSignalBorderMapping', () => {
     const block = getCSSBlock(css, '[data-signal="deps-unmet"]')
     expect(block, '[data-signal="deps-unmet"] block must exist').not.toBeNull()
     expect(block).toMatch(/border-left-color\s*:\s*var\(--pds-contrast-medium\)/)
+  })
+})
+
+// ─── AC-1(c): Shell-level integration — ThemeToggle and DRStatusIndicator ─────
+//
+// Reviewer finding: ThemeToggle was tested in isolation (not Shell-level), so Shell
+// could drop ThemeToggle while the suite stayed green. DR routing only proved the
+// negative path (Column non-propagation); positive Shell→DRStatusIndicator routing
+// was never exercised. These tests close both proof gaps.
+//
+// Strategy: render Shell with CockpitProvider hooks stubbed via vi.mock (hoisted
+// above), following the App.wiring.1504.test.tsx pattern. Assert on DOM elements
+// present in Shell's status bar header — the region Shell alone controls.
+
+describe('ShellLevelIntegration', () => {
+  const STUB_DR_ITEMS: PendingDR[] = [
+    {
+      id: 'dr-1',
+      task_id: 10,
+      agent: 'builder',
+      request_type: 'decision',
+      created: '2026-01-01T00:00:00Z',
+      title: 'DR 1',
+      body: 'body',
+      body_preview: 'preview',
+    },
+    {
+      id: 'dr-2',
+      task_id: 11,
+      agent: 'reviewer',
+      request_type: 'action',
+      created: '2026-01-01T00:00:00Z',
+      title: 'DR 2',
+      body: 'body',
+      body_preview: 'preview',
+    },
+  ]
+
+  function stubDRState(count: number, items: PendingDR[] = []) {
+    mockUseDRState.mockReturnValue({
+      count,
+      items,
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+      selectedDRId: null,
+      setSelectedDRId: vi.fn(),
+      selectedDR: null,
+    })
+  }
+
+  beforeEach(() => {
+    mockUseBoardState.mockReturnValue({
+      board: null,
+      tasks: [],
+      loading: false,
+      error: null,
+      health: 'yellow',
+      refetchTasks: vi.fn(),
+      items: [],
+      isLoading: false,
+      scanError: null,
+      refetch: vi.fn(),
+    })
+    mockUseTaskSelection.mockReturnValue({
+      selectedTaskId: null,
+      selectedTask: null,
+      selectedTaskError: null,
+      select: vi.fn(),
+      clear: vi.fn(),
+      update: vi.fn(),
+    })
+    stubDRState(0)
+    vi.stubGlobal('fetch', vi.fn(() => new Promise<never>(() => {})))
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.clearAllMocks()
+  })
+
+  function renderShell() {
+    return render(
+      <PorscheDesignSystemProvider>
+        <MemoryRouter>
+          <Shell />
+        </MemoryRouter>
+      </PorscheDesignSystemProvider>,
+    )
+  }
+
+  it('Shell status bar renders data-testid="theme-toggle" button (ThemeToggle mounted in Shell, not only in isolation)', () => {
+    const { container } = renderShell()
+    const toggle = container.querySelector('[data-testid="theme-toggle"]')
+    expect(
+      toggle,
+      'Shell status bar must contain data-testid="theme-toggle" — ThemeToggle must be wired into Shell, not just tested as a standalone component',
+    ).not.toBeNull()
+    expect(toggle!.tagName.toLowerCase()).toBe('button')
+  })
+
+  it('Shell status bar renders data-testid="dr-indicator" with data-status="attention" when useDRState returns count=2 with items (positive DR routing proof)', () => {
+    stubDRState(2, STUB_DR_ITEMS)
+    const { container } = renderShell()
+    const indicator = container.querySelector('[data-testid="dr-indicator"]')
+    expect(
+      indicator,
+      'Shell must render data-testid="dr-indicator" — DRStatusIndicator must be wired into Shell status bar',
+    ).not.toBeNull()
+    expect(indicator!.getAttribute('data-status')).toBe('attention')
+  })
+
+  it('Shell status bar renders data-testid="dr-indicator" with data-status="dormant" when useDRState returns count=0 (baseline)', () => {
+    stubDRState(0)
+    const { container } = renderShell()
+    const indicator = container.querySelector('[data-testid="dr-indicator"]')
+    expect(
+      indicator,
+      'Shell must render data-testid="dr-indicator" even when count=0',
+    ).not.toBeNull()
+    expect(indicator!.getAttribute('data-status')).toBe('dormant')
   })
 })
