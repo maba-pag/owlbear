@@ -77,6 +77,14 @@ describe('TestFromAC_SidecarCollapse_1541', () => {
     expect(controlled.getAttribute('aria-hidden')).not.toBe('true')
   })
 
+  it('AC-1: controlled element does not contain the toggle (containment proof)', () => {
+    const { container } = renderShell()
+    const toggle = getCollapseToggle(container)
+    const controlled = getControlledElement(container, toggle)
+
+    expect(controlled.contains(toggle)).toBe(false)
+  })
+
   it('AC-1: clicking toggle sets aria-expanded="false" and controlled element aria-hidden="true"', () => {
     const { container } = renderShell()
     const toggle = getCollapseToggle(container)
@@ -86,6 +94,19 @@ describe('TestFromAC_SidecarCollapse_1541', () => {
 
     expect(toggle.getAttribute('aria-expanded')).toBe('false')
     expect(controlled.getAttribute('aria-hidden')).toBe('true')
+  })
+
+  it('AC-1: after collapse, re-queried toggle is in DOM and not a descendant of any aria-hidden="true" element (reopenability proof)', () => {
+    const { container } = renderShell()
+    const toggle = getCollapseToggle(container)
+    fireEvent.click(toggle)
+
+    const freshToggle = getCollapseToggle(container)
+    let ancestor = freshToggle.parentElement
+    while (ancestor) {
+      expect(ancestor.getAttribute('aria-hidden')).not.toBe('true')
+      ancestor = ancestor.parentElement
+    }
   })
 
   it('AC-1 round-trip: second click restores aria-expanded="true" and controlled element is no longer aria-hidden', () => {
@@ -125,5 +146,29 @@ describe('TestFromAC_SidecarCollapse_1541', () => {
     const persistedControlled = getControlledElement(container, persistedToggle)
     expect(persistedToggle.getAttribute('aria-expanded')).toBe('false')
     expect(persistedControlled.getAttribute('aria-hidden')).toBe('true')
+  })
+
+  it('AC-2: after rerender, re-queried toggle is not a descendant of any aria-hidden="true" element (reopenability persists)', () => {
+    const { container, rerender } = renderShell()
+    const toggle = getCollapseToggle(container)
+
+    fireEvent.click(toggle)
+
+    rerender(
+      <PorscheDesignSystemProvider>
+        <MemoryRouter initialEntries={['/']}>
+          <CockpitProvider>
+            <Shell />
+          </CockpitProvider>
+        </MemoryRouter>
+      </PorscheDesignSystemProvider>,
+    )
+
+    const persistedToggle = getCollapseToggle(container)
+    let ancestor = persistedToggle.parentElement
+    while (ancestor) {
+      expect(ancestor.getAttribute('aria-hidden')).not.toBe('true')
+      ancestor = ancestor.parentElement
+    }
   })
 })
