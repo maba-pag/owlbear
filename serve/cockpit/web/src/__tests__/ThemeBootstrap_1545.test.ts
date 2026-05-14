@@ -1,5 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { act, renderHook } from '@testing-library/react'
 import { existsSync, readFileSync } from 'node:fs'
+import { useTheme } from '../hooks/useTheme'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -37,6 +39,41 @@ function setMatchMedia(darkPreferred: boolean): void {
 function runBootstrapScript(): void {
   const content = readFileSync(BOOTSTRAP_PATH, 'utf-8')
   new Function(content)()
+}
+
+// ─── AC-4: OS preference listener helpers ─────────────────────────────────────
+
+interface SpiedMQL extends MediaQueryList {
+  simulateChange: (newMatches: boolean) => void
+}
+
+function createSpiedMQL(initialMatches: boolean): SpiedMQL {
+  const changeListeners: Array<(e: MediaQueryListEvent) => void> = []
+  const mql = {
+    matches: initialMatches,
+    media: '(prefers-color-scheme: dark)',
+    onchange: null,
+    addEventListener: vi.fn((type: string, handler: (e: MediaQueryListEvent) => void) => {
+      if (type === 'change') changeListeners.push(handler)
+    }),
+    removeEventListener: vi.fn(),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    dispatchEvent: vi.fn(() => true),
+    simulateChange(newMatches: boolean): void {
+      mql.matches = newMatches
+      changeListeners.forEach((h) => h({ matches: newMatches } as unknown as MediaQueryListEvent))
+    },
+  } as SpiedMQL
+  return mql
+}
+
+function installSpiedMQL(mql: SpiedMQL): void {
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    writable: true,
+    value: (_query: string) => mql,
+  })
 }
 
 // ─── AC-1: file existence ─────────────────────────────────────────────────────
@@ -156,11 +193,18 @@ describe('TestFromAC_IndexHtmlBootstrap_1545', () => {
     expect(indexHtml).toContain('src="/theme-bootstrap.js"')
   })
 
-  it('AC-1: theme-bootstrap.js script tag is located inside <head>', () => {
-    const headMatch = indexHtml.match(/<head[^>]*>([\s\S]*?)<\/head>/i)
+  it('AC-1: theme-bootstrap.js script is first child of <body>, not in <head>, before <div id="root">', () => {
+    const bodyMatch = indexHtml.match(/<body[^>]*>([\s\S]*?)<\/body>/i)
+    expect(bodyMatch).not.toBeNull()
+    const bodyContent = bodyMatch![1]
+    const scriptPos = bodyContent.indexOf('/theme-bootstrap.js')
+    const rootDivPos = bodyContent.indexOf('<div id="root">')
 
-    expect(headMatch).not.toBeNull()
-    expect(headMatch![1]).toContain('theme-bootstrap.js')
+    expect(scriptPos).toBeGreaterThanOrEqual(0) // script must be inside <body>
+    expect(scriptPos).toBeLessThan(rootDivPos) // must appear before <div id="root">
+
+    const headMatch = indexHtml.match(/<head[^>]*>([\s\S]*?)<\/head>/i)
+    expect(headMatch?.[1]).not.toContain('theme-bootstrap.js') // must NOT be in <head>
   })
 
   it('AC-1: theme-bootstrap.js script tag does not carry type="module" attribute', () => {
@@ -169,5 +213,133 @@ describe('TestFromAC_IndexHtmlBootstrap_1545', () => {
 
     expect(bootstrapLine).toBeDefined()
     expect(bootstrapLine).not.toContain('type="module"')
+  })
+})
+
+// ─── AC-4: OS preference listener lifecycle ───────────────────────────────────
+
+describe('TestFromAC_OsListenerBehavior_1545', () => {
+  let mql: SpiedMQL
+
+  beforeEach(() => {
+    localStorage.clear()
+    document.documentElement.removeAttribute('data-theme')
+    mql = createSpiedMQL(false)
+    installSpiedMQL(mql)
+  })
+
+  afterEach(() => {
+    localStorage.clear()
+    document.documentElement.removeAttribute('data-theme')
+  })
+
+  // Happy path — listener registration
+
+  it('AC-4 happy: when theme=auto, addEventListener("change") is called on the matchMedia result', () => {
+    const { unmount } = renderHook(() => useTheme())
+
+    expect(mql.addEventListener).toHaveBeenCalledWith('change', expect.any(Function))
+
+    unmount()
+  })
+
+  it('AC-4 happy: when theme=auto and OS changes to dark, data-theme becomes dark', async () => {
+    const { unmount } = renderHook(() => useTheme())
+
+    await act(async () => {
+      mql.simulateChange(true)
+    })
+
+    expect(document.documentElement.dataset.theme).toBe('dark')
+
+    unmount()
+  })
+
+  it('AC-4 happy: when theme=auto (OS dark initial) and OS changes to light, data-theme becomes light', async () => {
+    mql = createSpiedMQL(true)
+    installSpiedMQL(mql)
+
+    const { unmount } = renderHook(() => useTheme())
+
+    await act(async () => {
+      mql.simulateChange(false)
+    })
+
+    expect(document.documentElement.dataset.theme).toBe('light')
+
+    unmount()
+  })
+
+  it('AC-4 happy: when OS changes to dark while theme=auto, isDark becomes true', async () => {
+    const { result, unmount } = renderHook(() => useTheme())
+
+    expect(result.current.isDark).toBe(false)
+
+    await act(async () => {
+      mql.simulateChange(true)
+    })
+
+    expect(result.current.isDark).toBe(true)
+
+    unmount()
+  })
+
+  // Edge cases — stable reference and cleanup
+
+  it('AC-4 edge: addEventListener and removeEventListener target the same MediaQueryList instance (stable reference)', () => {
+    const instances: SpiedMQL[] = []
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      writable: true,
+      value: (_query: string) => {
+        const inst = createSpiedMQL(false)
+        instances.push(inst)
+        return inst
+      },
+    })
+
+    const { unmount } = renderHook(() => useTheme())
+
+    const addInstance = instances.find((i) => (i.addEventListener as ReturnType<typeof vi.fn>).mock.calls.length > 0)
+    expect(addInstance).toBeDefined()
+
+    unmount()
+
+    expect(addInstance!.removeEventListener).toHaveBeenCalled()
+  })
+
+  it('AC-4 edge: when theme transitions from auto to dark, removeEventListener is called on the MQL instance', async () => {
+    const { result, unmount } = renderHook(() => useTheme())
+
+    await act(async () => {
+      result.current.toggle() // auto → light
+    })
+
+    await act(async () => {
+      result.current.toggle() // light → dark
+    })
+
+    await act(async () => {
+      result.current.toggle() // dark → auto
+    })
+
+    // Listener must be registered now (theme=auto)
+    expect(mql.addEventListener).toHaveBeenCalledWith('change', expect.any(Function))
+
+    await act(async () => {
+      result.current.toggle() // auto → light: listener must be removed
+    })
+
+    expect(mql.removeEventListener).toHaveBeenCalledWith('change', expect.any(Function))
+
+    unmount()
+  })
+
+  it('AC-4 edge: when component unmounts with theme=auto, change listener is removed from MQL instance', () => {
+    const { unmount } = renderHook(() => useTheme())
+
+    unmount()
+
+    expect(mql.removeEventListener).toHaveBeenCalledWith('change', expect.any(Function))
   })
 })
