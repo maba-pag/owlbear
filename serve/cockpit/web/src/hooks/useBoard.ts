@@ -26,6 +26,7 @@ export interface Task {
   blocked: boolean
   block_reason: string | null
   claimed: boolean
+  dep_status: string | null
 }
 
 interface TasksResponse {

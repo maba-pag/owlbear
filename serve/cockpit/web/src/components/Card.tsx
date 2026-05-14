@@ -3,14 +3,6 @@ import './Card.css'
 
 type CardSignal = 'dr-pending' | 'blocked' | 'claimed' | 'deps-unmet' | 'ready'
 
-const PRIORITY_COLORS: Record<string, string> = {
-  critical: 'var(--pds-theme-light-notification-error)',
-  needed: 'var(--pds-theme-light-notification-warning)',
-  important: 'var(--pds-theme-light-notification-info)',
-  'nice-to-have': 'var(--pds-theme-light-notification-info)',
-  someday: 'var(--pds-theme-light-contrast-medium)',
-}
-
 export interface CardProps {
   task: Task
   pendingDRIds?: Set<number>
@@ -22,8 +14,6 @@ export interface CardProps {
 }
 
 function resolveSignal(task: Task, pendingDRIds: Set<number>): CardSignal {
-  const taskWithDeps = task as Task & { dep_status?: string | null }
-
   if (pendingDRIds.has(task.id)) {
     return 'dr-pending'
   }
@@ -33,7 +23,7 @@ function resolveSignal(task: Task, pendingDRIds: Set<number>): CardSignal {
   if (task.claimed) {
     return 'claimed'
   }
-  if (taskWithDeps.dep_status === 'blocked') {
+  if (task.dep_status === 'blocked') {
     return 'deps-unmet'
   }
 
@@ -50,11 +40,6 @@ export function Card({
   onDragEnd,
 }: CardProps) {
   const signal = resolveSignal(task, pendingDRIds)
-  const cardStyle = {
-    borderLeft: `4px solid var(--card-priority-border, ${
-      PRIORITY_COLORS[task.priority] ?? 'var(--pds-theme-light-contrast-medium)'
-    })`,
-  } as React.CSSProperties
 
   function openContextMenu(event: React.KeyboardEvent<HTMLDivElement>) {
     const rect = event.currentTarget.getBoundingClientRect()
@@ -100,21 +85,10 @@ export function Card({
       onDragStart={() => onDragStart(task.id, task.updated)}
       onDragEnd={onDragEnd}
       onContextMenu={(e) => onContextMenu(e, task)}
-      style={cardStyle}
     >
       <span data-testid="card-title" title={task.title}>
         {task.title}
       </span>
-      {task.blocked && (
-        <span
-          data-testid="block-badge"
-          title={task.block_reason ?? ''}
-          aria-label={task.block_reason ?? ''}
-        >
-          ⛔
-        </span>
-      )}
-      {task.claimed && <span data-testid="running-indicator" aria-label="Task is claimed">▶</span>}
     </div>
   )
 }
