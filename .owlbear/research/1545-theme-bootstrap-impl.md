@@ -86,6 +86,10 @@ Key properties: IIFE (no globals), `try/catch` (Safari private mode safety), val
 
 ## 4. Recommendation
 
+> **⚠ Superseded by pipeline refinements.** This recommendation was written before the
+> CSP/HTMLHint constraints were discovered during task execution. The final implemented
+> approach differs from Option A below. See Section 6.
+
 **Proceed with Option A: inline IIFE in `<head>`** (confidence: 0.90)
 
 - Proven pattern across next-themes (7.5K stars), multiple authoritative articles
@@ -104,3 +108,22 @@ No additional follow-up tasks needed. The existing task decomposition under #153
 - #1548 (theme toggle UI) depends on #1545
 - #1553 (PDS dark-mode verification) depends on #1545
 - Tests already exist in `theme_1537.test.tsx`
+
+## 6. Outcome Note (post-implementation)
+
+The pipeline refined the implementation approach in two cycles after this research was written:
+
+- **Arch cycle 1 (CSP conflict):** The `cspPlugin` in `vite.config.ts` injects
+  `script-src 'self'` at build time. An inline `<script>` block would be blocked in
+  production. The approach was changed to an **external file `public/theme-bootstrap.js`**
+  loaded via `<script src="/theme-bootstrap.js">`, which satisfies `'self'` without CSP
+  relaxation.
+
+- **Arch cycle 2 (HTMLHint conflict):** The `.htmlhintrc` rule `head-script-disabled`
+  forbids scripts in `<head>`. The script placement was moved to **first child of `<body>`**
+  (before `<div id="root">`). A synchronous blocking script at `<body>` start still
+  executes before any visible element paints, so the FOUC-prevention goal is preserved.
+
+**Final implementation:** `public/theme-bootstrap.js` (external synchronous script) +
+`index.html` wiring as `<body>`'s first child. Option A's inline `<head>` approach from
+this research doc was not used. The task AC is authoritative.
