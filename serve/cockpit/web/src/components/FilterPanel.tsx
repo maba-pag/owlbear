@@ -6,6 +6,8 @@ import {
   PSelect,
 } from '@porsche-design-system/components-react'
 
+import './FilterPanel.css'
+
 import type { FilterState } from '../utils/filterTasks'
 
 export interface FilterPanelProps {
@@ -135,6 +137,7 @@ export default function FilterPanel({
     <div
       ref={panelRef}
       id="filter-panel"
+      className="filter-panel"
       role="region"
       aria-label="Task filters"
       onKeyDown={(event) => {

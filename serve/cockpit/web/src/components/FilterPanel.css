@@ -1,0 +1,5 @@
+.filter-panel {
+  background: var(--pds-background-surface);
+  border: 1px solid var(--pds-border-default);
+  padding: var(--pds-spacing-md);
+}

@@ -304,8 +304,8 @@ function KanbanBoardContent({
         style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(80px, 1fr))',
-          gap: '16px',
-          overflowX: 'hidden',
+          gap: 'var(--pds-spacing-md)',
+          overflowX: 'auto',
           flex: 1,
           minHeight: 0,
         }}
