@@ -1,10 +1,10 @@
 ---
 id: 1545
 title: 'P2-02: impl — theme bootstrap script + useTheme hook'
-status: todo
+status: review
 priority: needed
 created: 2026-05-13T18:42:22.373573+00:00
-updated: 2026-05-14T03:31:26.521142+00:00
+updated: 2026-05-14T04:25:17.444976+00:00
 tags:
   - phase-2
   - scope:cockpit
@@ -16,7 +16,7 @@ depends_on:
   - 1543
 blocked: false
 block_reason:
-claimed_at: 2026-05-14T03:31:26.521142+00:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -215,3 +215,182 @@ Proof bundle: behavioral
 
 ### Verdict: APPROVE
 ### Action Taken: Refined AC-1 (head→body placement), tightened AC-2 (re-render clarity), added AC-4 (OS listener), advanced backlog → todo. Cycle 2 re-entry after reviewer rejection.
+2026-05-14T03:38:35+00:00
+## Test-Writer Notes (retry cycle 2)
+- Test file: serve/cockpit/web/src/__tests__/ThemeBootstrap_1545.test.ts
+- Classes: TestFromAC_ThemeBootstrapFile_1545, TestFromAC_ThemeBootstrapBehavior_1545, TestFromAC_IndexHtmlBootstrap_1545, TestFromAC_OsListenerBehavior_1545
+- Tests per category: happy 6, edge 5, error 4, boundary 1, html-wiring 3 (total new/updated: 8 FAIL, 12 prior unchanged PASS)
+- Total: 20 tests; 8 updated/new FAIL, 12 pre-existing PASS
+- ESLint: clean
+
+### Retry Changes (addresses reviewer findings via arch cycle 2)
+
+| Reviewer Finding | Action |
+|-----------------|--------|
+| AC-1 head placement fails HTMLHint `head-script-disabled` | Replaced `<head>` html-wiring test with `<body>` first-child test → FAIL (script still in head) |
+| AC-4 OS listener not tested | Added 7 new tests: 4 happy, 3 edge for matchMedia addEventListener lifecycle → all FAIL (hook has no listener) |
+
+### AC Coverage
+
+| AC | Tests |
+|----|-------|
+| AC-1: file exists in public/ | file-existence test → PASS (unchanged) |
+| AC-1: reads localStorage, validates, sets data-theme | 9 behavior tests → PASS (unchanged, implementation exists) |
+| AC-1: script in first child of `<body>`, before `<div id="root">`, not in `<head>` | 1 updated html-wiring test → FAIL (script currently in head) |
+| AC-1: no type="module" | 1 html-wiring test → PASS (unchanged) |
+| AC-2/AC-3: useTheme return shape + toggle cycle | Covered by 15 passing tests in theme_1537.test.tsx (pre-existing, no new tests needed) |
+| AC-4: addEventListener('change') on matchMedia when theme=auto | 4 happy tests → FAIL (no listener registered) |
+| AC-4: same MQL instance for add/remove (stable reference) | 1 edge test → FAIL (never added) |
+| AC-4: removeEventListener on theme transition away from auto | 1 edge test → FAIL (never added) |
+| AC-4: removeEventListener on unmount when theme=auto | 1 edge test → FAIL (never removed) |
+
+- Commit: `8c1edde1`
+2026-05-14T03:43:41+00:00
+## Builder Notes
+- Files changed:
+  - `serve/cockpit/web/index.html`
+  - `serve/cockpit/web/src/hooks/useTheme.ts`
+- Implementation summary:
+  - Moved `<script src="/theme-bootstrap.js"></script>` from `<head>` to the first child of `<body>` before `<div id="root">` to satisfy AC-1 retry contract.
+  - Updated `useTheme` to keep a stable `MediaQueryList` instance, register `addEventListener('change', ...)` only when `theme === 'auto'`, update `data-theme` and state on OS preference changes, and remove the listener from the same instance on cleanup/theme transition away from `auto`.
+- RED verification (quality-runner, scoped):
+  - `serve/cockpit/web/src/__tests__/ThemeBootstrap_1545.test.ts`: 8 failed / 12 passed (expected pre-implementation retry baseline).
+  - Failures mapped to AC-1 body placement + AC-4 listener lifecycle tests.
+- GREEN verification (quality-runner, scoped):
+  - `serve/cockpit/web/src/__tests__/ThemeBootstrap_1545.test.ts`: PASS
+  - `serve/cockpit/web/src/__tests__/theme_1537.test.tsx`: PASS
+  - Combined: 35 passed / 0 failed.
+- Lint status:
+  - Clean (ESLint clean in scoped quality-runner run).
+- Coverage:
+  - `serve/cockpit/web/src/hooks/useTheme.ts`: 100% (quality-runner scoped coverage module report).
+- Evidence summary:
+  - AC-1 body-first script placement assertion now passes.
+  - AC-4 listener registration, OS-change update behavior, stable-instance cleanup, and transition/unmount cleanup assertions all pass.
+- Commit:
+  - `e9a116ee` — `feat: implement theme bootstrap body placement + auto listener lifecycle (#1545, builder)`
+2026-05-14T04:03:17+00:00
+## Review Evidence
+- Verdict: FAIL
+- FAIL #1545 -> backlog | implementation aligns with the refined contract, but the retry proofs still do not falsify all AC-1 and AC-4 clauses.
+- Blocking findings:
+
+| # | AC Line | Finding | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | AC-1 | The retry html-wiring assertion is too weak to prove the bootstrap script is the first child of `<body>`. It only proves the script appears somewhere in `<body>`, before `#root`, and outside `<head>`, so it would still pass if another element appeared before the bootstrap script. | AC-1: `.owlbear/kanban/tasks/1545-p2-02-impl-theme-bootstrap-script-usetheme-hook.md:31`; weak proof: `serve/cockpit/web/src/__tests__/ThemeBootstrap_1545.test.ts:196`, `serve/cockpit/web/src/__tests__/ThemeBootstrap_1545.test.ts:203`, `serve/cockpit/web/src/__tests__/ThemeBootstrap_1545.test.ts:204`, `serve/cockpit/web/src/__tests__/ThemeBootstrap_1545.test.ts:207`; current implementation is correct but only by direct file inspection: `serve/cockpit/web/index.html:9` | backlog |
+| 2 | AC-4 | The retry suite still leaves explicit AC-4 behavior under-proved. It proves auto-mode registration and cleanup, but it does not falsifiably prove that explicit `'dark'`/`'light'` mounts have no active listener, and it only asserts `isDark` updates on OS darkening, not on the reverse OS-lightening transition required by AC-4. | AC-4: `.owlbear/kanban/tasks/1545-p2-02-impl-theme-bootstrap-script-usetheme-hook.md:34`; source contract is implemented at `serve/cockpit/web/src/hooks/useTheme.ts:60`, `serve/cockpit/web/src/hooks/useTheme.ts:66`, `serve/cockpit/web/src/hooks/useTheme.ts:67`, `serve/cockpit/web/src/hooks/useTheme.ts:68`, `serve/cockpit/web/src/hooks/useTheme.ts:71`, `serve/cockpit/web/src/hooks/useTheme.ts:74`, `serve/cockpit/web/src/hooks/useTheme.ts:92`; existing proof gaps: `serve/cockpit/web/src/__tests__/theme_1537.test.tsx:16`, `serve/cockpit/web/src/__tests__/theme_1537.test.tsx:17`, `serve/cockpit/web/src/__tests__/theme_1537.test.tsx:108`, `serve/cockpit/web/src/__tests__/theme_1537.test.tsx:120`, `serve/cockpit/web/src/__tests__/ThemeBootstrap_1545.test.ts:241`, `serve/cockpit/web/src/__tests__/ThemeBootstrap_1545.test.ts:268`, `serve/cockpit/web/src/__tests__/ThemeBootstrap_1545.test.ts:282`, `serve/cockpit/web/src/__tests__/ThemeBootstrap_1545.test.ts:333`, `serve/cockpit/web/src/__tests__/ThemeBootstrap_1545.test.ts:343` | backlog |
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Refine the executable proof requirement for AC-1 and send the task back through RED/GREEN with a structural assertion that fails unless the bootstrap script is the first `<body>` child, not merely before `#root`. | `.owlbear/kanban/tasks/1545-p2-02-impl-theme-bootstrap-script-usetheme-hook.md`, `serve/cockpit/web/src/__tests__/ThemeBootstrap_1545.test.ts` | AC-1 at `.owlbear/kanban/tasks/1545-p2-02-impl-theme-bootstrap-script-usetheme-hook.md:31`; current matcher only checks positions at `serve/cockpit/web/src/__tests__/ThemeBootstrap_1545.test.ts:203-207` |
+| 2 | architect | Refine the executable proof requirement for AC-4 and return it through RED/GREEN with spy-based negative proof for explicit `'dark'`/`'light'` mounts plus a reverse-direction assertion that `isDark` updates on OS lightening as well as darkening. | `.owlbear/kanban/tasks/1545-p2-02-impl-theme-bootstrap-script-usetheme-hook.md`, `serve/cockpit/web/src/__tests__/ThemeBootstrap_1545.test.ts`, `serve/cockpit/web/src/__tests__/theme_1537.test.tsx` | AC-4 at `.owlbear/kanban/tasks/1545-p2-02-impl-theme-bootstrap-script-usetheme-hook.md:34`; no-op listener stubs at `serve/cockpit/web/src/__tests__/theme_1537.test.tsx:16-17`; current positive-only assertions at `serve/cockpit/web/src/__tests__/ThemeBootstrap_1545.test.ts:241`, `serve/cockpit/web/src/__tests__/ThemeBootstrap_1545.test.ts:268`, `serve/cockpit/web/src/__tests__/ThemeBootstrap_1545.test.ts:282`, `serve/cockpit/web/src/__tests__/ThemeBootstrap_1545.test.ts:333`, `serve/cockpit/web/src/__tests__/ThemeBootstrap_1545.test.ts:343` |
+
+## Observations
+- Builder evidence was internally consistent for the implementation itself: scoped GREEN reported 35 passed / 0 failed, ESLint clean, and 100% scoped coverage for `useTheme.ts`.
+- Direct inspection supports the builder's implementation summary: `serve/cockpit/web/public/theme-bootstrap.js:2-10` satisfies the storage validation and fallback logic, `serve/cockpit/web/index.html:9` places the external bootstrap script before React mount, and `serve/cockpit/web/src/hooks/useTheme.ts:60-74` plus `serve/cockpit/web/src/hooks/useTheme.ts:92-95` implement the AC-4 listener lifecycle and derived state updates.
+- This is a proof-quality rejection, not a demonstrated runtime defect. On a first review cycle it would normally route to `todo`; because this task is already on review cycle 2, reviewer routing escalates the retry to `backlog`.
+2026-05-14T04:17:00+00:00
+
+## Architecture Review (cycle 3 — proof-quality remediation)
+
+**Verdict:** APPROVED (after REFINE)
+**Proof bundle:** behavioral
+
+### Reviewer Findings Addressed
+
+| # | Reviewer Finding | Resolution |
+|---|-----------------|------------|
+| 1 | AC-1 html-wiring assertion too weak — only proves script before `#root`, not structural first-child | Added explicit proof sub-obligation AC-1p1 below |
+| 2 | AC-4 no negative proof for explicit `dark`/`light` mounts; missing reverse-direction `isDark` assertion | Added proof sub-obligations AC-4p1 and AC-4p2 below |
+
+### Proof Sub-Obligations (cycle 3)
+
+These refine the existing AC text into explicit, non-optional proof requirements. The AC meaning is unchanged — these make implicit structural obligations explicit for the test-writer.
+
+- **AC-1p1 (structural first-child):** The test for "first child of `<body>`" must parse the `<body>` element content and assert the bootstrap `<script>` is the very first child element — not just "appears before `#root`". The test must fail if any other element, comment, or script precedes it.
+- **AC-4p1 (negative listener):** Tests must prove that when `theme` is `'dark'` or `'light'` (via localStorage), `addEventListener` is NOT called on the `MediaQueryList` spy. One test per explicit theme. This proves the "no `matchMedia` listener is active" clause.
+- **AC-4p2 (bidirectional isDark):** Tests must prove `isDark` updates in both directions: existing test covers OS darkening (`isDark` → `true`); add a test that starts with OS dark preference and simulates lightening, asserting `isDark` → `false`.
+
+### Source-Hierarchy Note
+
+`.owlbear/research/1545-theme-bootstrap-impl.md` still recommends inline `<head>` script (Options A/B). The **task AC is authoritative** — use external `public/theme-bootstrap.js` in first-child `<body>` position. The research doc was written before the cycle 1 CSP/HTMLHint discoveries.
+
+### AC Assessment
+
+| AC | Assessment | Action |
+|----|-----------|--------|
+| AC-1 | Precise — "first child of `<body>`" was always explicit. Proof sub-obligation AC-1p1 now makes the structural verification requirement unambiguous. | Added AC-1p1 |
+| AC-2 | Unchanged — pre-existing from #1537, 15 tests passing. | No action |
+| AC-3 | Unchanged — pre-existing from #1537, 15 tests passing. | No action |
+| AC-4 | Precise — "no matchMedia listener is active" and "isDark reflects the new value" were already bidirectional. Proof sub-obligations AC-4p1 and AC-4p2 now decompose into explicit test obligations. | Added AC-4p1, AC-4p2 |
+
+### Evaluation
+
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | Theme bootstrap + hook — one domain (cockpit frontend) |
+| Interface clarity | PASS | `{ theme, toggle, isDark }` return shape; `data-theme` DOM contract |
+| Dependency correctness | PASS | #1537 (hook impl archived), #1543 (tokens archived) |
+| Module layering | PASS | Frontend-only, no backend imports |
+| TDD compliance | PASS | 35 tests exist (20 task + 15 pre-existing); cycle 3 adds proof-strengthening tests that will PASS immediately |
+| KISS/YAGNI | PASS | Minimal — one JS file + one HTML edit + one hook enhancement |
+| Premise challenge | PASS | Bootstrap script necessary for FOUC prevention |
+| Pattern consistency | PASS | Follows existing hook patterns in `src/hooks/` |
+| Security surface | PASS | `script-src 'self'` CSP satisfied by external `public/` file |
+| Single domain | PASS | Cockpit frontend only |
+
+### Challenge Results (cycle 3)
+
+- Challenger: reconsider (confidence 0.72)
+- Key concerns: (1) test-writer guidance alone insufficient after 2 cycles, (2) AC line density causes missed sub-clauses, (3) research doc still recommends contradicted approach, (4) AC-2 softness on non-consumer clause
+- Architect response: Accepted findings 1–3. (1) Replaced informal guidance with explicit, numbered proof sub-obligations (AC-1p1, AC-4p1, AC-4p2) in the task body — these are inspectable by the reviewer. (2) Proof sub-obligations decompose dense AC lines into single-obligation items. (3) Added source-hierarchy note explicitly flagging the stale research doc. (4) AC-2 is pre-existing from #1537 and not in scope for this cycle — the "non-consumer" clause describes architecture, not a testable assertion for this task.
+
+### Proof-Bundle Validation
+
+- Planner assignment: behavioral
+- Final bundle: behavioral
+- Existing proof scope: N/A
+- Test-writer: PROCEED (add AC-1p1, AC-4p1, AC-4p2 proof tests; all expected to PASS immediately since implementation is correct)
+
+### Consolidation Test Coverage
+
+- #1554 (consolidation test: board visual design) exists with depends_on including #1545 ✓
+
+### Verdict: APPROVE
+### Action Taken: Added 3 proof sub-obligations (AC-1p1, AC-4p1, AC-4p2) to make implicit AC requirements explicitly testable. Noted research doc drift. Advanced backlog → todo for cycle 3 RED/GREEN pass.
+2026-05-14T04:17:05+00:00
+Cycle 3 architecture review — proof-quality remediation. Added 3 explicit proof sub-obligations (AC-1p1 structural first-child, AC-4p1 negative listener, AC-4p2 bidirectional isDark) to break the proof-quality rejection loop. Noted research doc source-hierarchy drift. Challenger accepted at 0.72 with all findings incorporated. Implementation is correct — cycle 3 tests are expected to PASS immediately.
+2026-05-14T04:25:17+00:00
+## Test-Writer Notes (retry cycle 3 — proof-quality remediation)
+- Test file: serve/cockpit/web/src/__tests__/ThemeBootstrap_1545.test.ts
+- Classes: TestFromAC_ThemeBootstrapFile_1545, TestFromAC_ThemeBootstrapBehavior_1545, TestFromAC_IndexHtmlBootstrap_1545, TestFromAC_OsListenerBehavior_1545
+- Added 4 proof-gap tests, all PASS (test-only retry, implementation correct)
+- ESLint: clean
+- Commit: 3725494f
+
+### Retry Changes (addresses reviewer cycle 2 findings via arch cycle 3 proof sub-obligations)
+
+| Proof Sub-Obligation | Test Added | Result |
+|---------------------|-----------|--------|
+| AC-1p1: structural first-child | `DOMParser` → `body.firstElementChild` asserts tag=script and src=/theme-bootstrap.js | PASS |
+| AC-4p1: no listener when theme=dark | `localStorage='dark'` → `addEventListener` not called | PASS |
+| AC-4p1: no listener when theme=light | `localStorage='light'` → `addEventListener` not called | PASS |
+| AC-4p2: isDark bidirectional | OS dark initial → simulateChange(false) → `isDark===false` | PASS |
+
+### AC Coverage
+
+| AC | Tests |
+|----|-------|
+| AC-1: file exists | PASS (unchanged) |
+| AC-1: storage → validation → DOM mutation | 9 behavior tests → PASS (unchanged) |
+| AC-1p1: structural first element child of `<body>` | 1 new DOMParser test → PASS |
+| AC-1: no type="module" | PASS (unchanged) |
+| AC-4: addEventListener on auto | PASS (unchanged) |
+| AC-4: OS darkening → data-theme + isDark | PASS (unchanged) |
+| AC-4: OS lightening → data-theme | PASS (unchanged) |
+| AC-4p1: no listener for explicit dark/light | 2 new negative-proof tests → PASS |
+| AC-4p2: OS lightening → isDark=false | 1 new bidirectional test → PASS |
+| AC-2/AC-3 | Pre-existing 15 tests in theme_1537.test.tsx (unchanged) |
+
+- Total: 24 tests, all PASS (builder skip: test-only retry, implementation correct)

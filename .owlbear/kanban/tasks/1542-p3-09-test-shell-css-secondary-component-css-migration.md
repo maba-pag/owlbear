@@ -1,10 +1,10 @@
 ---
 id: 1542
 title: 'P3-09: test — Shell.css + secondary component CSS migration'
-status: in-progress
+status: backlog
 priority: important
 created: 2026-05-13T18:41:58.403715+00:00
-updated: 2026-05-14T03:34:02.862348+00:00
+updated: 2026-05-14T04:21:45.878611+00:00
 tags:
   - phase-3
   - scope:cockpit
@@ -15,7 +15,7 @@ parent: 1534
 depends_on: []
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-14T04:21:45.878611+00:00
 archival_reason:
 archival_refs: []
 ---
@@ -147,3 +147,61 @@ The **only** change needed is adding AC-3(e) coverage to `serve/cockpit/web/src/
   1. Add constant at line 18 (after `STYLES_TS`): `const STYLES_TEST_TS = resolve(__dirname, 'styles.test.ts')`
   2. Add inside `TestFromAC_SecondaryCssMigration_1542` describe: `it('AC-3(e): __tests__/styles.test.ts does not exist', () => { expect(existsSync(STYLES_TEST_TS)).toBe(false) })`
 - Passing through to builder.
+2026-05-14T03:40:22+00:00
+## Builder Notes
+- No source changes made in this cycle.
+- Task is blocked by pipeline role boundary: the required fix is to add a missing assertion in `serve/cockpit/web/src/__tests__/ShellSecondaryCSS_1542.test.tsx` inside `TestFromAC_SecondaryCssMigration_1542`.
+- In builder mode, I must not modify `TestFromAC_*` classes or write tests.
+- Therefore this retry must return to test-writer for test-suite correction, then re-enter builder if implementation changes are still needed.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | test-writer | Add AC-3(e) Vitest proof to `TestFromAC_SecondaryCssMigration_1542`: define `STYLES_TEST_TS` path and assert `existsSync(STYLES_TEST_TS) === false` in a dedicated `it()` block. | serve/cockpit/web/src/__tests__/ShellSecondaryCSS_1542.test.tsx | Task body Architecture Review (6th cycle) + Test-Writer Notes explicitly identify this as the remaining gap. |
+2026-05-14T03:56:34+00:00
+## Test-Writer Notes
+- Retry (Step 1b.1 — direct-to-review): builder could not modify `TestFromAC_*` classes; routed back to test-writer.
+- Test file: `serve/cockpit/web/src/__tests__/ShellSecondaryCSS_1542.test.tsx`
+- Classes: `TestFromAC_ShellTokenMigration_1542`, `TestFromAC_ContextMenuCssWiring_1542`, `TestFromAC_SecondaryCssMigration_1542`
+- Change: added `STYLES_TEST_TS` path constant + `it('AC-3(e): __tests__/styles.test.ts does not exist')` block inside `TestFromAC_SecondaryCssMigration_1542`
+- AC coverage:
+  | AC Line | Tests |
+  |---------|-------|
+  | AC-1    | 1 (existing, passing) |
+  | AC-2    | 3 (existing, passing) |
+  | AC-3(a-d) | 3 (existing, passing) |
+  | AC-3(e) | 1 (NEW — passes: file already deleted) |
+- Total: 8 tests, all PASS (Step 1b.1 — implementation already handles gap)
+- ruff/eslint: clean
+- Builder skip: test-only retry, all tests green — no implementation changes needed.
+2026-05-14T04:20:37+00:00
+## Review Evidence
+- Verdict: FAIL
+- Routing: FAIL #1542 -> backlog | The task-owned AC suite is now green, but the architect-required broad durable regression surface still fails in ResponsiveLayout_1391 on stale legacy Shell.css token expectations.
+- Upstream evidence reviewed first: the retry notes correctly added AC-3(e) coverage to `serve/cockpit/web/src/__tests__/ShellSecondaryCSS_1542.test.tsx` and reported 8 passing tests. Because the architect's 6th-cycle proof surface still required a broad Vitest regression check, I independently verified both the task suite and adjacent durable suites with quality-runner.
+- Independent verification summary:
+  - Scoped task suite: `serve/cockpit/web/src/__tests__/ShellSecondaryCSS_1542.test.tsx` -> 8 passed, 0 failed, ESLint clean.
+  - Adjacent durable suites: `ResponsiveLayout_1391.test.tsx`, `SidecarCollapse_1549.test.tsx`, `KanbanBoard.test.tsx`, `ActivityTab.fetch-filter.test.tsx` -> 113 passed, 2 failed, ESLint clean.
+
+| Scope | Code Evidence | Test Evidence | Status |
+|---|---|---|---|
+| AC-1 | `serve/cockpit/web/src/Shell.css:12` uses `var(--pds-background-base)` and `serve/cockpit/web/src/Shell.css:27` uses `var(--pds-border-default)` in the migrated file. | `serve/cockpit/web/src/__tests__/ShellSecondaryCSS_1542.test.tsx:89` encodes the zero-legacy-token / >=5 `--pds-*` assertion. | PASS |
+| AC-2 | `serve/cockpit/web/src/KanbanBoard.css:2`, `:3`, `:4` contain the required surface/shadow/radius tokens; `serve/cockpit/web/src/KanbanBoard.tsx:9` imports `./KanbanBoard.css`; `serve/cockpit/web/src/KanbanBoard.tsx:350` renders `className="kanban-context-menu"`. | `serve/cockpit/web/src/__tests__/ShellSecondaryCSS_1542.test.tsx:103` and adjacent AC-2 tests in the same suite verify import, tokenized class rule, and rendered class wiring. | PASS |
+| AC-3(a-e) | `serve/cockpit/web/src/utils/styles.ts:1` has no `rowStyleForState`; `serve/cockpit/web/src/components/HistorySubtab.tsx:1` and `serve/cockpit/web/src/components/ActivityTab.tsx:6` import `./SessionRows.css`; `serve/cockpit/web/src/components/SessionRows.css:7`, `:8`, `:13` contain the bare state selectors; `serve/cockpit/web/src/__tests__/styles.test.ts` is absent from workspace. | `serve/cockpit/web/src/__tests__/ShellSecondaryCSS_1542.test.tsx:150`, `:163`, `:171`, `:204`, `:205` now encode the styles export removal, import cleanup, shared CSS selector proof, and explicit `styles.test.ts` absence assertion. | PASS |
+| Architect-required broad durable proof surface | The migrated Shell.css intentionally uses agnostic tokens (`serve/cockpit/web/src/Shell.css:12`, `:27`) after this task's migration. | `serve/cockpit/web/src/__tests__/ResponsiveLayout_1391.test.tsx:297`, `:301`, `:305`, `:309` still assert legacy `--pds-theme-light-background-base` and `--pds-theme-light-contrast-low` names. Quality-runner rerun failed exactly those two assertions. | FAIL |
+
+- Blocking findings:
+| # | AC Line | Finding | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | AC-1 / architect broad-run proof surface | The task-owned suite now proves the Shell.css migration and the AC-3(e) retry fix, but the broader proof surface required by the architect is still red. `ResponsiveLayout_1391.test.tsx` asserts legacy Shell.css token names that no longer match the migrated file, so the task does not yet satisfy the required durable regression check. Because this is a repeated review cycle, route to backlog for scope reconciliation instead of another blind retry. | quality-runner adjacent durable rerun: 2 failures in `ResponsiveLayout_1391.test.tsx`; stale expectations at `serve/cockpit/web/src/__tests__/ResponsiveLayout_1391.test.tsx:297-309` vs migrated tokens at `serve/cockpit/web/src/Shell.css:12,27` | backlog |
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Reconcile this task's proof surface with the durable Shell.css regression suite: either fold the `ResponsiveLayout_1391.test.tsx` legacy-token expectation updates into this task or split an explicit follow-up, then re-queue test-writer with the broadened proof set. | `serve/cockpit/web/src/__tests__/ResponsiveLayout_1391.test.tsx`, `serve/cockpit/web/src/Shell.css` | Review finding #1 + quality-runner adjacent durable rerun |
+
+## Observations
+- The previous blocker is fixed: `serve/cockpit/web/src/__tests__/ShellSecondaryCSS_1542.test.tsx:18` defines `STYLES_TEST_TS`, and `:204-205` asserts `existsSync(STYLES_TEST_TS) === false`.
+- File search confirms `serve/cockpit/web/src/__tests__/styles.test.ts` is absent.
+- Non-blocking adjacent suites in the same rerun were green: `SidecarCollapse_1549.test.tsx` 6/6, `KanbanBoard.test.tsx` 35/35, `ActivityTab.fetch-filter.test.tsx` 49/49.
+- I could not independently complete a git dirty-tree contamination check in this tool surface because terminal git inspection was unavailable; that did not affect the blocking finding above, which is already evidenced by current file reads plus quality-runner output.
