@@ -9,6 +9,7 @@ import DetailTab from './components/DetailTab'
 import DRStatusIndicator from './components/DRStatusIndicator'
 import HealthBadge, { type ScanItem as HealthBadgeItem } from './components/HealthBadge'
 import ResolveModal from './components/ResolveModal'
+import ThemeToggle from './components/ThemeToggle'
 import { useBoardState, useDRState, useTaskSelection } from './hooks/CockpitProvider'
 import { type ScanItem as ScanPollingItem } from './hooks/useScanPolling'
 import './Shell.css'
@@ -141,6 +142,7 @@ function Shell() {
           items={pendingDRItems}
           onItemClick={setSelectedDRId}
         />
+        <ThemeToggle />
         {pendingDRError ? (
           <span data-testid="dr-polling-error" role="status">
             {pendingDRError.message}
