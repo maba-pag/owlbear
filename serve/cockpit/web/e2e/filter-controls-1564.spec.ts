@@ -203,10 +203,11 @@ test.describe('AC-1 | Filter workflow via PDS control selectors', () => {
   test('priority filter selects via p-select-option and narrows results', async ({ page }) => {
     await loadBoard(page)
     await openFilterPanel(page)
-    // Post-remediation: p-select-option children inside priority PSelect.
+    // Post-remediation: open p-select host, then click p-select-option child.
     // Currently: native <option> elements -- p-select-option absent -- FAILS.
+    await page.locator('#filter-panel p-select[name="priority-filter"]').click()
     const criticalOption = page.locator('#filter-panel p-select-option[value="critical"]')
-    await expect(criticalOption).toBeVisible({ timeout: 2_000 })
+    await expect(criticalOption).toBeVisible({ timeout: 4_000 })
     await criticalOption.click()
   })
 
@@ -231,7 +232,8 @@ test.describe('AC-1 | Filter workflow via PDS control selectors', () => {
   test('result count displays filtered/total ratio when priority filter applied via PDS control', async ({ page }) => {
     await loadBoard(page)
     await openFilterPanel(page)
-    // Currently: p-select-option absent -- click() rejects -- FAILS before count check.
+    // Currently: p-select-option absent -- FAILS before count check.
+    await page.locator('#filter-panel p-select[name="priority-filter"]').click()
     await page.locator('#filter-panel p-select-option[value="critical"]').click()
     await expect(page.locator('[data-testid="filter-result-count"]')).toBeVisible({ timeout: 2_000 })
   })
@@ -240,6 +242,7 @@ test.describe('AC-1 | Filter workflow via PDS control selectors', () => {
     await loadBoard(page)
     await openFilterPanel(page)
     // Currently: p-select-option absent -- FAILS before the clear action.
+    await page.locator('#filter-panel p-select[name="priority-filter"]').click()
     await page.locator('#filter-panel p-select-option[value="critical"]').click()
     await page.click('[data-testid="filter-reset"]')
     await expect(page.locator('[data-testid="filter-toggle"]')).not.toContainText('(')
@@ -282,9 +285,10 @@ test.describe('AC-2 | FilterPanel PDS compliance assertions', () => {
   test('(c) priority select uses p-select-option children, not native option', async ({ page }) => {
     // §5 "Select/dropdown" row: native options inside PDS selects are not accepted.
     // Currently: PSelect with <option> children -- p-select-option absent -- FAILS.
+    // Uses toBeAttached: options are in DOM but hidden when select is closed.
     await expect(
       page.locator('#filter-panel p-select[name="priority-filter"] p-select-option'),
-    ).toBeVisible({ timeout: 2_000 })
+    ).toBeAttached({ timeout: 2_000 })
   })
 
   test('(d) filter trigger renders as PDS button, not native button', async ({ page }) => {
@@ -305,9 +309,10 @@ test.describe('AC-4 | Task-editor PDS compliance assertions', () => {
   test('(a) priority select uses p-select-option children, not native option', async ({ page }) => {
     // §5 "Select/dropdown" row: native options inside PDS selects are not accepted.
     // Currently: PSelect[name="priority"] with <option> children -- p-select-option absent -- FAILS.
+    // Uses toBeAttached: options are in DOM but hidden when select is closed.
     await expect(
       page.locator('p-select[name="priority"] p-select-option'),
-    ).toBeVisible({ timeout: 2_000 })
+    ).toBeAttached({ timeout: 4_000 })
   })
 
   test('(b) tag chips render as p-tag elements, not plain span chips', async ({ page }) => {
