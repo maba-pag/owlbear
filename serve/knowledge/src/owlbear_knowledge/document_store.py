@@ -132,7 +132,7 @@ class DocumentStore:
         chunks_or_texts: list[Chunk] | list[str],
         embeddings: list[HybridEmbedding] | None = None,
         *,
-        scope: str = "global",  # noqa: ARG002 - reserved for future scoped vector store routing
+        scope: str = "global",
     ) -> None:
         """Store embeddings for document chunks.
 
@@ -152,6 +152,7 @@ class DocumentStore:
                     entity_or_doc_id=f"{document_id_or_chunk_ids}_{chunk.index}",  # type: ignore[union-attr]
                     embedding=embedding,
                     embedding_type="document",
+                    scope=scope,
                 )
         else:
             # Legacy API: (chunk_ids, chunk_texts)
@@ -165,6 +166,7 @@ class DocumentStore:
                     entity_or_doc_id=cid,
                     embedding=emb,
                     embedding_type="document",
+                    scope=scope,
                 )
 
     def store_entity_embeddings(

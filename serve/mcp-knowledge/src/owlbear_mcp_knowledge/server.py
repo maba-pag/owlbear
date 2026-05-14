@@ -824,6 +824,8 @@ async def ingest_document(
     except Exception as exc:  # noqa: BLE001
         return f"error: ingestion failed: {exc}"
     else:
+        if result.status == "failed":
+            return f"error: ingestion failed for document {result.document_id}"
         return (
             f"Ingested: {result.document_id}, {result.chunk_count} chunks, "
             f"{result.entity_count} entities, {result.edge_count} edges "

@@ -83,7 +83,7 @@ class IngestPipeline:
         self._injection_mode = injection_mode
         self._source_store = source_store
 
-    async def ingest_text(
+    async def ingest_text(  # noqa: C901, PLR0912
         self,
         text: str,
         *,
@@ -100,6 +100,7 @@ class IngestPipeline:
         from owlbear_knowledge.models import Document  # noqa: PLC0415
 
         doc_id = uuid4().hex
+        created_source_id: str | None = None
         try:
             _meta: dict[str, object] = dict(metadata or {})
             chunks = await asyncio.to_thread(self._chunker.chunk, text, metadata=_meta)
@@ -141,17 +142,18 @@ class IngestPipeline:
                     )
 
                     now = datetime.now(tz=UTC).isoformat()
-                    created_source = self._source_store.create(
-                        KnowledgeSource(
-                            name=source_url,
-                            source_type=SourceType.AUTHENTICATED_WEB,
-                            fetch_method="url",
-                            enrich=False,
-                            config={"url": source_url},
-                            created_at=now,
-                            updated_at=now,
-                        )
+                    new_source = KnowledgeSource(
+                        name=source_url,
+                        source_type=SourceType.AUTHENTICATED_WEB,
+                        fetch_method="url",
+                        enrich=True,
+                        config={"url": source_url},
+                        scope=scope,
+                        created_at=now,
+                        updated_at=now,
                     )
+                    created_source_id = new_source.id
+                    created_source = self._source_store.create(new_source)
                     # Store implementation returns None; test doubles may return the source.
                     if created_source is not None:
                         resolved_source = created_source
@@ -159,6 +161,15 @@ class IngestPipeline:
                         resolved_source = self._source_store.resolve_by_url(source_url)
                 if resolved_source is not None:
                     resolved_source_id = resolved_source.id
+
+            doc = Document(
+                id=doc_id,
+                title=str(_meta.get("title") or doc_id),
+                content=text,
+                metadata=_meta,
+                scope=scope,
+                source_id=resolved_source_id,
+            )
 
             await asyncio.to_thread(
                 self._docs.insert_document,
@@ -170,12 +181,14 @@ class IngestPipeline:
                 self._docs.store_chunks,
                 doc_id,
                 chunks,  # type: ignore[union-attr]
+                scope=scope,
             )
             chunk_texts = [c.text for c in chunks]
             await asyncio.to_thread(
                 self._docs.store_embeddings,
                 chunk_ids,
                 chunk_texts,  # type: ignore[union-attr]
+                scope=scope,
             )
 
             extraction_results = await asyncio.gather(
@@ -185,10 +198,24 @@ class IngestPipeline:
             valid_extractions = [
                 r for r in extraction_results if not isinstance(r, BaseException)
             ]
-            entity_count, edge_count = self._docs.store_extractions(valid_extractions)  # type: ignore[union-attr]
+            entity_count, edge_count = self._docs.store_extractions(  # type: ignore[union-attr]
+                valid_extractions,
+                scope=scope,
+                document_id=doc_id,
+                chunk_ids=chunk_ids,
+            )
 
         except Exception:  # catch-all for unexpected ingest failures
             logger.exception("ingest_text failed for doc_id=%s", doc_id)
+            try:
+                await asyncio.to_thread(self._docs.delete_document_data, doc_id)  # type: ignore[union-attr]
+            except Exception:  # noqa: BLE001
+                logger.debug("cleanup of failed ingest document failed", exc_info=True)
+            if created_source_id is not None and self._source_store is not None:
+                try:
+                    await asyncio.to_thread(self._source_store.delete, created_source_id)
+                except Exception:  # noqa: BLE001
+                    logger.debug("cleanup of failed ingest source failed", exc_info=True)
             return IngestResult(
                 document_id=doc_id,
                 chunk_count=0,
@@ -210,6 +237,7 @@ class IngestPipeline:
         intake: IntakeResult,
         *,
         scope: str = "global",
+        source_id: str | None = None,
         content_cleaner: Callable[[str], str] | None = None,
     ) -> IngestResult:
         """Ingest an IntakeResult with delta detection and cancellation support.
@@ -231,6 +259,7 @@ class IngestPipeline:
         Args:
             intake: Content to ingest, as produced by read_file/read_url/read_text.
             scope: Scope tag applied to all stored objects.  Defaults to ``'global'``.
+            source_id: Optional source UUID to persist on the document row.
             content_cleaner: Optional callable applied to raw content before hashing.
                 When provided, delta detection compares hashes of the *cleaned* output
                 rather than the raw content, so cosmetic HTML changes do not trigger
@@ -276,7 +305,12 @@ class IngestPipeline:
             if existing_id is not None:
                 self._docs.delete_document_data(existing_id)  # type: ignore[union-attr]
 
-            self._docs.insert_document(doc_id, intake, scope=scope)  # type: ignore[union-attr]
+            self._docs.insert_document(  # type: ignore[union-attr]
+                doc_id,
+                intake,
+                scope=scope,
+                source_id=source_id,
+            )
 
             chunk_ids: list[str] = self._docs.store_chunks(doc_id, chunks, scope=scope)  # type: ignore[union-attr]
             chunk_texts = [c.text for c in chunks]
@@ -314,6 +348,7 @@ class IngestPipeline:
                 self._docs.store_embeddings,
                 chunk_ids,
                 chunk_texts,  # type: ignore[union-attr]
+                scope=scope,
             )
             all_results = await asyncio.gather(
                 embed_coro, *extract_coros, return_exceptions=True
