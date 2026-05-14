@@ -156,6 +156,20 @@ describe('TestFromAC_TokenArchitecture_1543', () => {
     }
   })
 
+  it('AC-2 edge: PDS-identical tokens in media fallback equal [data-theme="dark"] values', () => {
+    const css = readFileSync(TOKENS_CSS_PATH, 'utf-8')
+    const darkDeclarations = parseDeclarations(extractSelectorBlock(css, '[data-theme="dark"]'))
+    const mediaBody = extractAtRuleBody(css, '@media (prefers-color-scheme: dark)')
+    const mediaDeclarations = parseDeclarations(extractSelectorBlock(mediaBody, ':root:not([data-theme])'))
+    for (const token of PDS_IDENTICAL_IN_ALL_THEMES) {
+      const darkValue = darkDeclarations.get(token)
+      const mediaValue = mediaDeclarations.get(token)
+      expect(darkValue, `Missing token in [data-theme="dark"]: ${token}`).toBeTruthy()
+      expect(mediaValue, `Missing token in media fallback: ${token}`).toBeTruthy()
+      expect(mediaValue, `Media fallback value for ${token} must equal [data-theme="dark"] value`).toBe(darkValue)
+    }
+  })
+
   it('AC-2 error: media fallback block contains no legacy --pds-theme-* token names', () => {
     const css = readFileSync(TOKENS_CSS_PATH, 'utf-8')
     const mediaBody = extractAtRuleBody(css, '@media (prefers-color-scheme: dark)')
