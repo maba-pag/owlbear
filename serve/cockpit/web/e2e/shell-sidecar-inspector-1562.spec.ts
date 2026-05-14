@@ -264,6 +264,26 @@ test.describe('TestFromAC_SidecarInspectorComposition', () => {
     )
     await expect(activityRegion).toBeVisible()
   })
+
+  test('sidecar has identifiable actions region separate from activity/history — AC-1(d) actions proof', async ({
+    page,
+  }) => {
+    // AC-1(d): BOTH the activity/history region AND the actions region must be individually
+    //          identifiable. The prior test proves activity/history; this test proves actions.
+    //
+    // A build omitting the actions section would still pass the prior test.
+    // This test closes that gap by asserting [data-region="actions"] or equivalent heading.
+    // Use .first() because the combined locator may match both the section and
+    // an h3 heading inside it — Playwright strict mode requires a single match.
+    const actionsRegion = page
+      .locator(
+        '[data-region="sidecar"] [data-region="actions"], ' +
+          '[data-region="sidecar"] h2:has-text("Actions"), ' +
+          '[data-region="sidecar"] h3:has-text("Actions")',
+      )
+      .first()
+    await expect(actionsRegion).toBeVisible()
+  })
 })
 
 // ─── AC-2: Decision queue composition ────────────────────────────────────────
@@ -313,6 +333,19 @@ test.describe('TestFromAC_DecisionQueueComposition', () => {
       .locator('[data-testid^="decision-item-"]')
       .getByText('Agent:', { exact: true })
     await expect(agentLabel).toBeVisible()
+  })
+
+  test('decision items contain labeled Request type, Age, and Task reference fields — AC-2 completion', async ({
+    page,
+  }) => {
+    // AC-2: All four labeled fields must be separately visible in each decision item:
+    //       Agent:, Request type:, Age:, and Task: — not just Agent:.
+    //
+    // Prior spec proved only "Agent:" was present. This test closes the remaining gap.
+    const item = page.locator('[data-testid^="decision-item-"]').first()
+    await expect(item.getByText('Request type:', { exact: true })).toBeVisible()
+    await expect(item.getByText('Age:', { exact: true })).toBeVisible()
+    await expect(item.getByText('Task:', { exact: true })).toBeVisible()
   })
 })
 
@@ -438,6 +471,33 @@ test.describe('TestFromAC_StatusBarNavHierarchy', () => {
     await expect(labeledControls).not.toHaveCount(0)
   })
 
+  test('each named status-bar control has an individually distinguishable accessible name — per-control AC-4(c)', async ({
+    page,
+  }) => {
+    // AC-4(c): EACH named control must independently have a distinguishing accessible name.
+    //          Prior spec only checked "at least one labeled element" — a single labeled
+    //          control would satisfy it even if health, cleanup, or theme were unlabeled.
+    //
+    // DR count indicator — aria-label="Pending decision requests: N"
+    const drIndicator = page.locator('[data-testid="dr-indicator"]')
+    await expect(drIndicator).toBeVisible()
+    await expect(drIndicator).toHaveAttribute('aria-label', /Pending decision requests/)
+
+    // Theme toggle — aria-label="Theme mode: ..."
+    const themeToggle = page.locator('[data-testid="theme-toggle"]')
+    await expect(themeToggle).toBeVisible()
+    await expect(themeToggle).toHaveAttribute('aria-label', /Theme mode/)
+
+    // Cleanup trigger button — visible with text "Cleanup" as accessible name
+    const cleanupButton = page.locator('[data-testid="cleanup-button"]')
+    await expect(cleanupButton).toBeVisible()
+
+    // Health badge — conditionally rendered when scan completes; aria-label reflects health
+    const healthBadge = page.locator('[data-testid="health-badge"]')
+    await expect(healthBadge).toBeVisible({ timeout: 8_000 })
+    await expect(healthBadge).toHaveAttribute('aria-label', /Health/)
+  })
+
   test('nav rail text fits within nav-rail container with no horizontal overflow — regression guard', async ({
     page,
   }) => {
@@ -551,5 +611,39 @@ test.describe('TestFromAC_ActivityRowsAndFilters', () => {
 
     // RED: no ARIA grouping ancestor found (count=0) → expect >0 fails
     expect(groupingRoleCount).toBeGreaterThan(0)
+  })
+
+  test('activity session rows have a distinct outcome child element — RED: no session-outcome element', async ({
+    page,
+  }) => {
+    // AC-5(a): Each session row must have distinct child elements for agent, duration, AND outcome.
+    //          Prior spec only banned div[role="button"] rows — it never asserted an outcome child.
+    //          Current ActivityTab.tsx has session-agent, session-task, session-state, and
+    //          session-duration, but has no session-outcome element.
+    //
+    // RED: [data-testid="session-outcome"] is absent from ActivityTab session rows.
+    //      The running session in the fixture has outcome: null — the builder must render
+    //      a child element (e.g. "—" or the value) for outcome regardless of null vs set.
+
+    // Wait for session rows to attach
+    await page.locator('[data-testid="session-row"]').first().waitFor({
+      state: 'attached',
+      timeout: 10_000,
+    })
+
+    // Precondition: at least one row exists
+    const rowCount = await page.evaluate(
+      () => document.querySelectorAll('[data-testid="session-row"]').length,
+    )
+    expect(rowCount).toBeGreaterThan(0)
+
+    const firstRow = page.locator('[data-testid="session-row"]').first()
+
+    // Agent and duration children are present (sanity check)
+    await expect(firstRow.locator('[data-testid="session-agent"]')).toBeAttached()
+    await expect(firstRow.locator('[data-testid="session-duration"]')).toBeAttached()
+
+    // RED: outcome child does not exist — toBeAttached() fails
+    await expect(firstRow.locator('[data-testid="session-outcome"]')).toBeAttached()
   })
 })
