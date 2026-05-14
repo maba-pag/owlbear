@@ -4642,3 +4642,10 @@ External repos and resources studied during OwlBear development.
 |--------|-----|------|------------|------|
 | PDS Inline Notification API (v3) | <https://designsystem.porsche.com/v3/components/inline-notification/api/> | Full prop/event/slot reference for PInlineNotification | .owlbear/research/cockpit-inline-notification-modal.md | 2026-05-12 |
 | PDS Inline Notification Examples (v3) | <https://designsystem.porsche.com/v3/components/inline-notification/examples/> | Event handling and action button patterns | .owlbear/research/cockpit-inline-notification-modal.md | 2026-05-12 |
+
+## Column CSS Implementation Research (Task #1547)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| SO: Scrolling a flexbox with overflowing content | <https://stackoverflow.com/questions/21515042> | Fixed-header scrollable-body pattern: flex-direction column + min-height 0 + overflow-y auto | .owlbear/research/1547-column-css-impl.md | 2026-05-14 |
+| PDS v4 SCSS Introduction | <https://designsystem.porsche.com/v4/scss/introduction/> | PDS design token naming conventions and usage patterns | .owlbear/research/1547-column-css-impl.md | 2026-05-14 |
