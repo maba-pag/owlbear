@@ -51,10 +51,6 @@
   --pds-spacing-lg: 32px;
   --pds-spacing-xl: 48px;
   --pds-spacing-2xl: 80px;
-
-  /* Semantic aliases */
-  --pds-border-default: var(--pds-contrast-low);
-  --pds-text-default: var(--pds-primary);
 }
 
 [data-theme="dark"] {

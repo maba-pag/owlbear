@@ -1,15 +1,18 @@
 .card {
   border: 1px solid transparent;
   border-left: 4px solid var(--pds-contrast-medium);
-  background: transparent;
+  border-radius: var(--pds-radius-sm);
+  background: var(--pds-background-base);
+  box-shadow: var(--pds-shadow-sm);
   min-height: 48px;
   display: flex;
   align-items: center;
-  padding: 0 8px;
+  padding: var(--pds-spacing-xs) var(--pds-spacing-sm) var(--pds-spacing-xs) var(--pds-spacing-xs);
   box-sizing: border-box;
   overflow: hidden;
   overflow-wrap: break-word;
   cursor: pointer;
+  transition: box-shadow 120ms ease;
 }
 
 [data-signal="dr-pending"] {

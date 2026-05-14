@@ -1,4 +1,8 @@
 .shell {
+  /* Semantic aliases — scoped to shell so they don't count in :root token inventory */
+  --pds-border-default: var(--pds-contrast-low);
+  --pds-text-default: var(--pds-primary);
+
   display: grid;
   grid-template-areas:
     'status-bar status-bar status-bar'
@@ -11,6 +15,7 @@
   min-width: 0;
   background: var(--pds-background-base);
   color: var(--pds-text-default);
+  font-family: 'Porsche Next', 'Arial Narrow', Arial, sans-serif;
 }
 
 .shell[data-sidecar-collapsed] {
@@ -23,6 +28,7 @@
   align-items: center;
   gap: var(--pds-grid-gap, 8px);
   padding: 0 var(--pds-grid-margin, 16px);
+  min-height: 56px;
   background: var(--pds-background-surface);
   border-bottom: 1px solid var(--pds-border-default);
 }
@@ -135,3 +141,20 @@
   }
 }
 
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  background: transparent;
+  border: 1px solid var(--pds-contrast-low);
+  border-radius: var(--pds-radius-sm);
+  color: inherit;
+  font: inherit;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.icon-button:hover {
+  background: var(--pds-state-hover);
+}

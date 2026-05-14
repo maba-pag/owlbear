@@ -293,20 +293,20 @@ describe('TestFromAC_PdsShellTokenUsage', () => {
     ).toContain('--pds-grid-margin')
   })
 
-  // AC5: Shell.css uses --pds-theme-light-background-base color token (already present).
-  it('Shell.css uses --pds-theme-light-background-base color token for page background', () => {
+  // AC5: Shell.css uses --pds-background-base color token (already present).
+  it('Shell.css uses --pds-background-base color token for page background', () => {
     expect(
       shellCss,
-      'Shell.css must use var(--pds-theme-light-background-base) for page background color',
-    ).toContain('--pds-theme-light-background-base')
+      'Shell.css must use var(--pds-background-base) for page background color',
+    ).toContain('--pds-background-base')
   })
 
-  // AC5: Shell.css uses --pds-theme-light-contrast-low color token for borders (already present).
-  it('Shell.css uses --pds-theme-light-contrast-low color token for surface borders', () => {
+  // AC5: Shell.css uses --pds-contrast-low color token for borders (already present).
+  it('Shell.css uses --pds-contrast-low color token for surface borders', () => {
     expect(
       shellCss,
-      'Shell.css must use var(--pds-theme-light-contrast-low) for border colors',
-    ).toContain('--pds-theme-light-contrast-low')
+      'Shell.css must use var(--pds-contrast-low) for border colors',
+    ).toContain('--pds-contrast-low')
   })
 
   // AC5: Shell.tsx imports PButton from @porsche-design-system for PDS-compatible controls

@@ -172,6 +172,7 @@ function Shell() {
       <aside className="shell__sidecar" data-region="sidecar">
         <button
           type="button"
+          className="icon-button"
           data-testid="sidecar-collapse"
           aria-expanded={!isSidecarCollapsed}
           aria-controls="shell-sidecar-content"

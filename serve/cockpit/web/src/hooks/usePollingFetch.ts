@@ -116,11 +116,13 @@ export function usePollingFetch<TPayload = unknown>(
     }
   }, [intervalMs, poll])
 
+  const stableRefetch = useCallback(() => {
+    void poll()
+  }, [poll])
+
   return {
     isFetching,
     hasFetched,
-    refetch: () => {
-      void poll()
-    },
+    refetch: stableRefetch,
   }
 }

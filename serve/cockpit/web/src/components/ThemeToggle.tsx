@@ -3,15 +3,15 @@ import { useTheme } from '../hooks/useTheme'
 const THEME_LABELS = {
   light: {
     ariaLabel: 'Theme mode: light',
-    text: 'Theme: Light',
+    text: 'Light',
   },
   dark: {
     ariaLabel: 'Theme mode: dark',
-    text: 'Theme: Dark',
+    text: 'Dark',
   },
   auto: {
-    ariaLabel: 'Theme mode: auto',
-    text: 'Theme: Auto',
+    ariaLabel: 'Theme mode: auto (OS)',
+    text: 'Auto',
   },
 } as const
 
@@ -22,6 +22,7 @@ export default function ThemeToggle() {
   return (
     <button
       type="button"
+      className="icon-button"
       data-testid="theme-toggle"
       aria-label={label.ariaLabel}
       onClick={toggle}

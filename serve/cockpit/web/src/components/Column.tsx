@@ -61,7 +61,7 @@ export function Column({
     >
       <header>
         <span>{status}</span>
-        <span data-testid="column-count">{tasks.length}</span>
+        <span className="column-count" data-testid="column-count">{tasks.length}</span>
       </header>
       <div className="column-body" data-testid="column-body">
         {sorted.length === 0 ? (
