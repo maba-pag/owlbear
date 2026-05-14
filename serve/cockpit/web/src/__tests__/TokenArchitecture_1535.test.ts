@@ -27,6 +27,7 @@ const EXPECTED_COLOR_TOKENS = [
   '--pds-state-active',
   '--pds-state-focus',
   '--pds-state-disabled',
+  '--pds-signal-claimed',
 ] as const
 
 const EXPECTED_NON_COLOR_TOKENS = [
@@ -97,12 +98,12 @@ function extractAtRuleBody(css: string, atRulePrefix: string): string {
 }
 
 describe('TestFromAC_TokenArchitecture_1535', () => {
-  it('AC-1: :root declares exactly the 19 agnostic --pds-* color tokens and no --pds-theme-light-* names', () => {
+  it('AC-1: :root declares exactly the 20 agnostic --pds-* color tokens and no --pds-theme-light-* names', () => {
     const css = readFileSync(TOKENS_CSS_PATH, 'utf-8')
     const rootBlock = extractSelectorBlock(css, ':root')
     const rootDeclarations = parseDeclarations(rootBlock)
 
-    // Exact-set check: all --pds-* tokens that are not in the known non-color set must be exactly the 19 expected color tokens.
+    // Exact-set check: all --pds-* tokens that are not in the known non-color set must be exactly the 20 expected color tokens.
     // Extra agnostic color tokens would appear here and cause the assertion to fail.
     const actualColorTokens = [...rootDeclarations.keys()].filter(
       (token) =>
@@ -116,7 +117,7 @@ describe('TestFromAC_TokenArchitecture_1535', () => {
     expect(legacyNames).toEqual([])
   })
 
-  it('AC-2: [data-theme="dark"] overrides all 19 color tokens with non-empty values different from :root values', () => {
+  it('AC-2: [data-theme="dark"] overrides all 20 color tokens with non-empty values different from :root values', () => {
     const css = readFileSync(TOKENS_CSS_PATH, 'utf-8')
     const rootDeclarations = parseDeclarations(extractSelectorBlock(css, ':root'))
     const darkDeclarations = parseDeclarations(extractSelectorBlock(css, '[data-theme="dark"]'))
@@ -134,7 +135,7 @@ describe('TestFromAC_TokenArchitecture_1535', () => {
     }
   })
 
-  it('AC-2: @media (prefers-color-scheme: dark) fallback declares the same 19 color token overrides', () => {
+  it('AC-2: @media (prefers-color-scheme: dark) fallback declares the same 20 color token overrides', () => {
     const css = readFileSync(TOKENS_CSS_PATH, 'utf-8')
     const mediaBlock = extractAtRuleBody(css, '@media (prefers-color-scheme: dark)')
     const mediaDeclarations = parseDeclarations(mediaBlock)

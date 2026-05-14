@@ -27,6 +27,7 @@ const EXPECTED_COLOR_TOKENS = [
   '--pds-state-active',
   '--pds-state-focus',
   '--pds-state-disabled',
+  '--pds-signal-claimed',
 ] as const
 
 const EXPECTED_NON_COLOR_TOKENS = [
@@ -106,7 +107,7 @@ describe('TestFromAC_TokenArchitecture_1543', () => {
     ).toBe(true)
   })
 
-  it('AC-2 happy: :root:not([data-theme]) block inside media query declares all 19 color tokens', () => {
+  it('AC-2 happy: :root:not([data-theme]) block inside media query declares all 20 color tokens', () => {
     const css = readFileSync(TOKENS_CSS_PATH, 'utf-8')
     const mediaBody = extractAtRuleBody(css, '@media (prefers-color-scheme: dark)')
     const innerBlock = extractSelectorBlock(mediaBody, ':root:not([data-theme])')
@@ -115,14 +116,14 @@ describe('TestFromAC_TokenArchitecture_1543', () => {
     expect(actualColorTokens.sort()).toEqual([...EXPECTED_COLOR_TOKENS].sort())
   })
 
-  it('AC-2 boundary: :root:not([data-theme]) block declares exactly 19 tokens — no extras, no legacy names', () => {
+  it('AC-2 boundary: :root:not([data-theme]) block declares exactly 20 tokens — no extras, no legacy names', () => {
     const css = readFileSync(TOKENS_CSS_PATH, 'utf-8')
     const mediaBody = extractAtRuleBody(css, '@media (prefers-color-scheme: dark)')
     const innerBlock = extractSelectorBlock(mediaBody, ':root:not([data-theme])')
     const declarations = parseDeclarations(innerBlock)
     const legacyNames = [...declarations.keys()].filter((token) => token.startsWith('--pds-theme-'))
     expect(legacyNames, 'No legacy --pds-theme-* names in media fallback block').toEqual([])
-    expect([...declarations.keys()]).toHaveLength(19)
+    expect([...declarations.keys()]).toHaveLength(20)
   })
 
   it('AC-2 happy: media fallback values match [data-theme="dark"] overrides for the 17 non-identical tokens', () => {
