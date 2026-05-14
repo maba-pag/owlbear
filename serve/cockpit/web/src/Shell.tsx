@@ -73,6 +73,7 @@ function Shell() {
       setBannerError(null)
     },
     selectedId: selectedTaskId,
+    pendingDRIds: new Set(pendingDRItems.map((dr) => dr.task_id)),
   }
 
   useEffect(() => {

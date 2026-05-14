@@ -8,6 +8,7 @@ export interface ColumnProps {
   tasks: Task[]
   priorities: string[]
   selectedId?: number | null
+  pendingDRIds?: Set<number>
   onSelectTask?: (taskId: number) => void
   onContextMenu: (e: React.MouseEvent, task: Task) => void
   onDragStart: (status: string, taskId: number, updated: string) => void
@@ -21,6 +22,7 @@ export function Column({
   tasks,
   priorities,
   selectedId,
+  pendingDRIds,
   onSelectTask,
   onContextMenu,
   onDragStart,
@@ -70,6 +72,7 @@ export function Column({
               key={task.id}
               task={task}
               selected={selectedId === task.id}
+              pendingDRIds={pendingDRIds}
               onSelect={onSelectTask}
               onContextMenu={onContextMenu}
               onDragStart={handleCardDragStart}
@@ -81,4 +84,3 @@ export function Column({
     </div>
   )
 }
-

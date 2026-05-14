@@ -44,6 +44,7 @@ export interface KanbanBoardProps {
   error?: string | null
   refetchTasks?: () => void
   selectedId?: number | null
+  pendingDRIds?: Set<number>
   onSelectTask?: (taskId: number) => void
   onMutationError?: (heading: string, description: string, state: 'error' | 'warning') => void
   onMutationSuccess?: () => void
@@ -56,6 +57,7 @@ interface ResolvedKanbanBoardProps {
   error: string | null
   refetchTasks: () => void
   selectedId: number | null
+  pendingDRIds: Set<number>
   onSelectTask?: (taskId: number) => void
   onMutationError?: (heading: string, description: string, state: 'error' | 'warning') => void
   onMutationSuccess?: () => void
@@ -68,6 +70,7 @@ function KanbanBoardContent({
   error,
   refetchTasks,
   selectedId,
+  pendingDRIds,
   onSelectTask,
   onMutationError,
   onMutationSuccess,
@@ -319,6 +322,7 @@ function KanbanBoardContent({
               tasks={colTasks}
               priorities={board.priorities}
               selectedId={selectedId}
+              pendingDRIds={pendingDRIds}
               onSelectTask={onSelectTask}
               onContextMenu={handleContextMenu}
               onDragStart={handleDragStart}
@@ -411,6 +415,7 @@ export default function KanbanBoard({
   error = null,
   refetchTasks = () => {},
   selectedId = null,
+  pendingDRIds = new Set<number>(),
   onSelectTask,
   onMutationError,
   onMutationSuccess,
@@ -423,6 +428,7 @@ export default function KanbanBoard({
       error={error}
       refetchTasks={refetchTasks}
       selectedId={selectedId}
+      pendingDRIds={pendingDRIds}
       onSelectTask={onSelectTask}
       onMutationError={onMutationError}
       onMutationSuccess={onMutationSuccess}

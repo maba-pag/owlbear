@@ -97,7 +97,8 @@ const ALL_SIGNAL_TASKS: Task[] = [TASK_READY, TASK_BLOCKED, TASK_CLAIMED, TASK_D
 
 // ─── Render helpers ────────────────────────────────────────────────────────────
 
-function renderBoard(tasks: Task[] = ALL_SIGNAL_TASKS) {
+function renderBoard(tasks: Task[] = ALL_SIGNAL_TASKS, opts: { pendingDRIds?: Set<number> } = {}) {
+  const { pendingDRIds = new Set<number>() } = opts
   return render(
     <PorscheDesignSystemProvider>
       <MemoryRouter>
@@ -107,6 +108,7 @@ function renderBoard(tasks: Task[] = ALL_SIGNAL_TASKS) {
           loading={false}
           error={null}
           refetchTasks={() => {}}
+          pendingDRIds={pendingDRIds}
         />
       </MemoryRouter>
     </PorscheDesignSystemProvider>,
@@ -231,17 +233,17 @@ describe('CardDRPendingDirectRender', () => {
     expect(card!.getAttribute('data-signal')).toBe('dr-pending')
   })
 
-  it('Column does NOT propagate pendingDRIds to Cards — dr-pending requires explicit Card-level prop', () => {
-    // A task that WOULD show dr-pending if pendingDRIds were passed renders as "ready"
-    // through the board because Column never passes pendingDRIds to Card.
-    // Shell routes DR data to DRStatusIndicator, not through KanbanBoard→Column→Card.
-    const { container } = renderBoard([
-      makeTask({ id: 77, status: 'todo', blocked: false, claimed: false, dep_status: null }),
-    ])
+  it('Column propagates pendingDRIds to Cards — card shows dr-pending signal when task ID is in the set', () => {
+    // When pendingDRIds is passed through KanbanBoard → Column → Card,
+    // a task whose ID is in the set must render with data-signal="dr-pending".
+    const pendingDRIds = new Set([77])
+    const { container } = renderBoard(
+      [makeTask({ id: 77, status: 'todo', blocked: false, claimed: false, dep_status: null })],
+      { pendingDRIds },
+    )
     const card = container.querySelector('[data-testid="task-card"][data-id="77"]')
     expect(card, 'Board must render task 77').not.toBeNull()
-    // pendingDRIds is never propagated through board, so even task 77 shows "ready"
-    expect(card!.getAttribute('data-signal')).toBe('ready')
+    expect(card!.getAttribute('data-signal')).toBe('dr-pending')
   })
 })
 
