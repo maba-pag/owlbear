@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { load } from '@porsche-design-system/components-js'
+import '@porsche-design-system/components-react/global-styles/color-scheme.css'
 import './tokens.css'
 import App from './App'
 

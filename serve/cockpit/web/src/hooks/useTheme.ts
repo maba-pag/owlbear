@@ -19,11 +19,18 @@ function readStoredTheme(): Theme {
   return isResolvedTheme(stored) ? stored : 'auto'
 }
 
+function setDocumentTheme(resolved: ResolvedTheme): void {
+  const root = document.documentElement
+  root.dataset.theme = resolved
+  root.classList.remove('scheme-dark', 'scheme-light')
+  root.classList.add(resolved === 'dark' ? 'scheme-dark' : 'scheme-light')
+}
+
 export function applyTheme(): ResolvedTheme {
   const stored = localStorage.getItem(THEME_STORAGE_KEY)
   const resolved = isResolvedTheme(stored) ? stored : (prefersDark() ? 'dark' : 'light')
 
-  document.documentElement.dataset.theme = resolved
+  setDocumentTheme(resolved)
   return resolved
 }
 
@@ -53,7 +60,7 @@ export function useTheme(): UseThemeResult {
       localStorage.setItem(THEME_STORAGE_KEY, theme)
     }
 
-    document.documentElement.dataset.theme = resolved
+    setDocumentTheme(resolved)
   }, [theme, systemPrefersDark])
 
   useEffect(() => {
@@ -65,7 +72,7 @@ export function useTheme(): UseThemeResult {
 
     const handleChange = (event: MediaQueryListEvent): void => {
       setSystemPrefersDark(event.matches)
-      document.documentElement.dataset.theme = event.matches ? 'dark' : 'light'
+      setDocumentTheme(event.matches ? 'dark' : 'light')
     }
 
     mediaQueryList.addEventListener('change', handleChange)

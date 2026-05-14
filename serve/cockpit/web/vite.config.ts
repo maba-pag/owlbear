@@ -1,8 +1,14 @@
 import { defineConfig } from 'vitest/config'
 import react, { reactCompilerPreset } from '@vitejs/plugin-react'
 import babel from '@rolldown/plugin-babel'
+import { Features } from 'lightningcss'
 import * as fs from 'node:fs'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const pdsColorSchemeCssPath = fileURLToPath(
+  new URL('./node_modules/@porsche-design-system/components-js/global-styles/color-scheme.css', import.meta.url),
+)
 
 function cspPlugin() {
   const policy = [
@@ -62,9 +68,20 @@ function pdsVersionCheckPlugin() {
 
 export default defineConfig({
   plugins: [react(), babel({ presets: [reactCompilerPreset()] }), pdsVersionCheckPlugin(), cspPlugin()],
+  resolve: {
+    alias: {
+      '@porsche-design-system/components-react/global-styles/color-scheme.css':
+        pdsColorSchemeCssPath,
+    },
+  },
   build: {
     outDir: '../dist',
     emptyOutDir: true,
+  },
+  css: {
+    lightningcss: {
+      exclude: Features.LightDark,
+    },
   },
   test: {
     environment: 'jsdom',

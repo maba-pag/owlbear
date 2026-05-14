@@ -8,5 +8,8 @@
       ? 'dark'
       : 'light'
 
-  window.document.documentElement.dataset.theme = resolved
+  var root = window.document.documentElement
+  root.dataset.theme = resolved
+  root.classList.remove('scheme-dark', 'scheme-light')
+  root.classList.add(resolved === 'dark' ? 'scheme-dark' : 'scheme-light')
 })()
