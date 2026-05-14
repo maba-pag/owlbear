@@ -360,7 +360,7 @@ describe('TestFromAC_OsListenerBehavior_1545', () => {
 
     const { unmount } = renderHook(() => useTheme())
 
-    expect(mql.addEventListener).not.toHaveBeenCalledWith('change', expect.any(Function))
+    expect(mql.addEventListener).not.toHaveBeenCalled()
 
     unmount()
   })
@@ -370,7 +370,7 @@ describe('TestFromAC_OsListenerBehavior_1545', () => {
 
     const { unmount } = renderHook(() => useTheme())
 
-    expect(mql.addEventListener).not.toHaveBeenCalledWith('change', expect.any(Function))
+    expect(mql.addEventListener).not.toHaveBeenCalled()
 
     unmount()
   })
