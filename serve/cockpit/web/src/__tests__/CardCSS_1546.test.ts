@@ -66,6 +66,15 @@ describe('TestFromAC_CardCSSBaseToken', () => {
     expect(block).toMatch(/border-left\s*:[^;]*var\(--pds-contrast-medium\)/)
   })
 
+  it('.card border-left declaration specifies 4px width — falsifiable against 1px or 8px (AC-1)', () => {
+    // Reviewer gap: previous test proved token reference but not the 4px width.
+    // A border-left: 1px solid var(--pds-contrast-medium) would have passed before.
+    const css = readFileSync(CARD_CSS_PATH, 'utf-8')
+    const block = getCSSBlock(css, '.card')
+    expect(block).not.toBeNull()
+    expect(block).toMatch(/border-left\s*:\s*4px/)
+  })
+
   it('.card block does not shadow --pds-contrast-medium with a theme-light override (AC-1 dark mode)', () => {
     const css = readFileSync(CARD_CSS_PATH, 'utf-8')
     const block = getCSSBlock(css, '.card')

@@ -112,6 +112,18 @@ describe('TestFromAC_CardCSSSelectedState', () => {
     // Must reference PDS success token (green) — distinct from the left-border signal color.
     expect(block).toMatch(/var\(--pds-notification-success\)/)
   })
+
+  it('[data-selected] block does not introduce border-left-color — selected state is additive to signal border (AC-2)', () => {
+    // Reviewer gap: a selected rule that also set border-left-color would override the signal
+    // color and still pass the separate signal-color tests.
+    // This test falsifies that regression: the selected block must NOT contain border-left-color.
+    const css = readFileSync(CARD_CSS_PATH, 'utf-8')
+    const block =
+      getCSSBlock(css, '[data-selected="true"]') ??
+      getCSSBlock(css, '[data-selected]')
+    expect(block).not.toBeNull()
+    expect(block).not.toMatch(/border-left-color/)
+  })
 })
 
 // ─── AC-4: Hover and focus-visible pseudo-selector styling ───────────────────
