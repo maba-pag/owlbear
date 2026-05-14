@@ -21,6 +21,23 @@ if (typeof window !== 'undefined') {
   window.cancelAnimationFrame = globalThis.cancelAnimationFrame
 }
 
+if (typeof window !== 'undefined') {
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    writable: true,
+    value: (query: string): MediaQueryList => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => true,
+    }),
+  })
+}
+
 // PDS global keydown handler (hideAllPopoversUntil) throws TypeError when
 // accessing ownerDocument on a null element in jsdom. This is a known PDS/jsdom
 // incompatibility: document.ownerDocument is null (document IS the document).
