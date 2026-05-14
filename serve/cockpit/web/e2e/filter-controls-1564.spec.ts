@@ -206,10 +206,7 @@ test.describe('AC-1 | Filter workflow via PDS control selectors', () => {
   test('priority filter selects via p-select-option and narrows results', async ({ page }) => {
     await loadBoard(page)
     await openFilterPanel(page)
-    // Verify p-select-option is present in light DOM (PDS compliance).
-    await expect(
-      page.locator('#filter-panel p-select[name="priority-filter"] p-select-option[value="critical"]'),
-    ).toBeAttached({ timeout: 2_000 })
+    // AC-2(c) already verifies p-select-option presence; no duplicate here.
     // Trigger PDS select via evaluate: set value + dispatch 'input' event.
     // Correct implementation handles onInput reading e.target.value to update filter state.
     // Currently: no onInput handler on p-select -- filter unchanged -- task-card-2 remains visible -- FAILS.
