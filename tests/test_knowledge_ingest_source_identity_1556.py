@@ -26,10 +26,11 @@ import pytest
 
 from owlbear_knowledge.chunker import TextChunker
 from owlbear_knowledge.document_store import DocumentStore
-from owlbear_knowledge.extractor import EntityExtractor
+from owlbear_knowledge.extractor import EntityExtractor, ExtractionResult
 from owlbear_knowledge.graph_store import GraphStore
 from owlbear_knowledge.ingest import IngestPipeline
 from owlbear_knowledge.intake import IntakeResult
+from owlbear_knowledge.models import Edge, Entity, EntityType, RelationType
 from owlbear_knowledge.schema import init_db
 from owlbear_knowledge.source_store import KnowledgeSourceStore
 from owlbear_mcp_knowledge.server import (
@@ -676,4 +677,360 @@ class TestFromAC_SearchResultProvenance:
         assert source["url"] == "https://example.test/a", (
             "source.url must come from KnowledgeSource config.url "
             f"('https://example.test/a'), got {source['url']!r}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_RefreshEntityEdgeProvenance  (AC-2 additions — retry cycle 2)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_RefreshEntityEdgeProvenance:
+    """AC-2 proof: refresh entity/edge provenance and return-value contract.
+
+    Reviewer gap (cycle 2): both existing refresh tests discard the refresh_source
+    return value and wire a no-op EntityExtractor, so entity/edge persistence is
+    never exercised and the return contract (source_id, refreshed=1) is unproven.
+
+    These tests wire a mock extractor that returns one entity and one edge,
+    then assert the provenance stamping contract (scope, document_id, chunk_id)
+    and the refresh_source return dict.
+    """
+
+    def _seed_url_list_source(self, conn: sqlite3.Connection) -> None:
+        now = _now_iso()
+        conn.execute(
+            "INSERT INTO knowledge_sources"
+            " (id, name, source_type, fetch_method, enrich, config, scope, enabled,"
+            "  priority, created_at, updated_at)"
+            " VALUES ('src-a', 'Source A', 'url_list', 'http', 1, ?, 'team-a', 1, 0, ?, ?)",
+            (json.dumps({"urls": ["https://example.test/doc"]}), now, now),
+        )
+        conn.commit()
+
+    def _make_extraction(self) -> ExtractionResult:
+        """Return an ExtractionResult with two entities and one edge."""
+        e1 = Entity(
+            name="concept-alpha",
+            entity_type=EntityType.CONCEPT,
+            description="alpha concept",
+        )
+        e2 = Entity(
+            name="concept-beta",
+            entity_type=EntityType.CONCEPT,
+            description="beta concept",
+        )
+        edge = Edge(source_id=e1.id, target_id=e2.id, relation=RelationType.RELATED_TO)
+        return ExtractionResult(entities=[e1, e2], edges=[edge])
+
+    @pytest.mark.asyncio
+    async def test_refresh_return_value_has_source_id_and_refreshed_count(
+        self, conn: sqlite3.Connection, app_ctx: AppContext
+    ) -> None:
+        """refresh_source must return dict with source_id='src-a' and refreshed=1.
+
+        Proof gap: both existing refresh tests discard the return value without
+        asserting the source_id and refreshed fields required by AC-2.
+        """
+        self._seed_url_list_source(conn)
+        fake_intake = IntakeResult(
+            content="some refreshed content",
+            source="https://example.test/doc",
+            metadata={"source_type": "url_list"},
+        )
+        ctx = _make_mcp_ctx(app_ctx)
+        with patch("owlbear_knowledge.intake.read_url", new=AsyncMock(return_value=fake_intake)):
+            result = await refresh_source(ctx, source_id="src-a")
+        assert isinstance(result, dict), (
+            f"refresh_source must return a dict on success, got {result!r}"
+        )
+        assert result["source_id"] == "src-a", (
+            f"result['source_id'] must be 'src-a', got {result.get('source_id')!r}"
+        )
+        assert result["refreshed"] == 1, (
+            f"result['refreshed'] must be 1 (one URL ingested), got {result.get('refreshed')!r}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_refresh_persisted_entity_has_source_scope_and_document_id(
+        self,
+        conn: sqlite3.Connection,
+        app_ctx: AppContext,
+    ) -> None:
+        """Entities persisted after refresh must have scope='team-a' and document_id
+        matching the refresh document row.
+
+        Proof gap: no-op extractor means no entities are ever persisted, so the
+        entity provenance stamping code path (scope, document_id) was never exercised.
+        """
+        self._seed_url_list_source(conn)
+        fake_intake = IntakeResult(
+            content="content with extractable entities",
+            source="https://example.test/doc",
+            metadata={"source_type": "url_list"},
+        )
+        extraction = self._make_extraction()
+        ctx = _make_mcp_ctx(app_ctx)
+        with (
+            patch.object(EntityExtractor, "extract", new=AsyncMock(return_value=extraction)),
+            patch("owlbear_knowledge.intake.read_url", new=AsyncMock(return_value=fake_intake)),
+        ):
+            await refresh_source(ctx, source_id="src-a")
+        doc_row = conn.execute("SELECT id FROM documents").fetchone()
+        assert doc_row is not None, "No document row created by refresh"
+        doc_id = doc_row[0]
+        entity_rows = conn.execute(
+            "SELECT scope, document_id FROM entities WHERE document_id = ?", (doc_id,)
+        ).fetchall()
+        assert entity_rows, (
+            f"No entities with document_id={doc_id!r} were persisted after refresh"
+        )
+        scopes = [r[0] for r in entity_rows]
+        assert all(s == "team-a" for s in scopes), (
+            "All persisted entities must have scope='team-a' (from source scope), "
+            f"but got scopes: {scopes}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_refresh_persisted_entity_has_chunk_id_provenance(
+        self,
+        conn: sqlite3.Connection,
+        app_ctx: AppContext,
+    ) -> None:
+        """Entities persisted after refresh must have chunk_id referencing a chunk
+        created during that refresh.
+
+        Proof gap: no-op extractor means no entities are persisted, so chunk_id
+        provenance stamping was never proven.
+        """
+        self._seed_url_list_source(conn)
+        fake_intake = IntakeResult(
+            content="content with extractable entities",
+            source="https://example.test/doc",
+            metadata={"source_type": "url_list"},
+        )
+        extraction = self._make_extraction()
+        ctx = _make_mcp_ctx(app_ctx)
+        with (
+            patch.object(EntityExtractor, "extract", new=AsyncMock(return_value=extraction)),
+            patch("owlbear_knowledge.intake.read_url", new=AsyncMock(return_value=fake_intake)),
+        ):
+            await refresh_source(ctx, source_id="src-a")
+        chunk_ids = {r[0] for r in conn.execute("SELECT id FROM chunks").fetchall()}
+        assert chunk_ids, "No chunks were created by refresh"
+        entity_chunk_ids = {
+            r[0]
+            for r in conn.execute("SELECT chunk_id FROM entities").fetchall()
+            if r[0] is not None
+        }
+        assert entity_chunk_ids, (
+            "Entities must have chunk_id set after refresh, but all chunk_ids are NULL"
+        )
+        assert entity_chunk_ids.issubset(chunk_ids), (
+            "Entity chunk_ids must reference actual chunks created during refresh, "
+            f"got entity chunk_ids {entity_chunk_ids!r} not in chunks {chunk_ids!r}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_refresh_persisted_edge_has_document_provenance_in_metadata(
+        self,
+        conn: sqlite3.Connection,
+        app_ctx: AppContext,
+    ) -> None:
+        """Edges persisted after refresh must have document_id, scope, and chunk_id
+        provenance fields inside their metadata dict.
+
+        Proof gap: no-op extractor means no edges are persisted, so edge provenance
+        stamping (metadata.scope, metadata.document_id, metadata.chunk_id) was
+        never exercised.
+        """
+        self._seed_url_list_source(conn)
+        fake_intake = IntakeResult(
+            content="content with extractable entities",
+            source="https://example.test/doc",
+            metadata={"source_type": "url_list"},
+        )
+        extraction = self._make_extraction()
+        ctx = _make_mcp_ctx(app_ctx)
+        with (
+            patch.object(EntityExtractor, "extract", new=AsyncMock(return_value=extraction)),
+            patch("owlbear_knowledge.intake.read_url", new=AsyncMock(return_value=fake_intake)),
+        ):
+            await refresh_source(ctx, source_id="src-a")
+        doc_row = conn.execute("SELECT id FROM documents").fetchone()
+        assert doc_row is not None, "No document row created by refresh"
+        doc_id = doc_row[0]
+        edge_rows = conn.execute(
+            "SELECT document_id, metadata FROM edges WHERE document_id = ?", (doc_id,)
+        ).fetchall()
+        assert edge_rows, (
+            f"No edges with document_id={doc_id!r} were persisted after refresh"
+        )
+        for _row_doc_id, meta_json in edge_rows:
+            meta = json.loads(meta_json) if meta_json else {}
+            assert "document_id" in meta, (
+                "Edge metadata must contain 'document_id' provenance field, "
+                f"but got metadata: {meta!r}"
+            )
+            assert meta["document_id"] == doc_id, (
+                f"Edge metadata['document_id'] must be {doc_id!r}, "
+                f"got {meta.get('document_id')!r}"
+            )
+            assert "scope" in meta, (
+                "Edge metadata must contain 'scope' provenance field, "
+                f"but got metadata keys: {list(meta)!r}"
+            )
+            assert meta["scope"] == "team-a", (
+                f"Edge metadata['scope'] must be 'team-a', got {meta.get('scope')!r}"
+            )
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_LateFailureAtomicCleanup  (AC-3 additions — retry cycle 2)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_LateFailureAtomicCleanup:
+    """AC-3 proof: failed direct ingest cleans up chunks and vector payloads even
+    when failure occurs AFTER store_embeddings has already written data.
+
+    Reviewer gap (cycle 2): existing AC-3 tests inject failure at store_chunks
+    (before embeddings), so chunks and vector payloads never exist at failure
+    time — the cleanup code for those is never exercised.
+
+    These tests inject failure at store_extractions (after store_chunks and
+    store_embeddings succeed) and assert that the cleanup removes all partial
+    persistence from chunks, vector payloads, entities, and edges.
+    """
+
+    @pytest.mark.asyncio
+    async def test_late_failure_after_embeddings_leaves_no_chunks(
+        self,
+        conn: sqlite3.Connection,
+        app_ctx: AppContext,
+        store_components: dict,
+    ) -> None:
+        """After a failure at store_extractions, no chunks must remain in the DB.
+
+        Injection point: store_extractions — chunks have been written by
+        store_chunks and embeddings by store_embeddings before failure.
+        delete_document_data must remove the orphaned chunk rows.
+        """
+        ctx = _make_mcp_ctx(app_ctx)
+        with patch.object(
+            store_components["doc_store"],
+            "store_extractions",
+            side_effect=RuntimeError("forced late extraction failure"),
+        ):
+            result = await ingest_document(
+                ctx,
+                text="content for late-failure cleanup test",
+                metadata={"title": "LateFailDoc"},
+                scope="team-a",
+                source_url="https://example.test/late-fail",
+            )
+        assert isinstance(result, str), f"ingest_document must return a string, got {result!r}"
+        assert result.startswith("error:"), (
+            f"Must return 'error:...' on late-stage failure, got: {result!r}"
+        )
+        count = conn.execute("SELECT count(*) FROM chunks").fetchone()[0]
+        assert count == 0, (
+            "Failed ingest must leave no chunk rows after late-stage cleanup "
+            f"(failure at store_extractions), found {count} row(s)"
+        )
+
+    @pytest.mark.asyncio
+    async def test_late_failure_after_embeddings_triggers_vector_cleanup(
+        self,
+        app_ctx: AppContext,
+        store_components: dict,
+        mock_vs: MagicMock,
+    ) -> None:
+        """After a failure at store_extractions, delete_chunk_embeddings must be
+        called to clean up vector payloads written by store_embeddings.
+
+        Injection point: store_extractions — vector payloads were submitted to
+        mock_vs before the failure. delete_chunk_embeddings must call
+        mock_vs.delete_embedding for each chunk that was embedded.
+        """
+        ctx = _make_mcp_ctx(app_ctx)
+        with patch.object(
+            store_components["doc_store"],
+            "store_extractions",
+            side_effect=RuntimeError("forced late extraction failure"),
+        ):
+            await ingest_document(
+                ctx,
+                text="content for late-failure cleanup test",
+                metadata={"title": "LateFailDoc"},
+                scope="team-a",
+                source_url="https://example.test/late-fail",
+            )
+        delete_calls = mock_vs.delete_embedding.call_args_list
+        assert delete_calls, (
+            "delete_embedding must be called at least once to clean up vector "
+            "payloads that were written before the late-stage failure at "
+            "store_extractions"
+        )
+
+    @pytest.mark.asyncio
+    async def test_late_failure_after_embeddings_leaves_no_entities(
+        self,
+        conn: sqlite3.Connection,
+        app_ctx: AppContext,
+        store_components: dict,
+    ) -> None:
+        """After a failure at store_extractions, no entity rows must remain.
+
+        Injection point: store_extractions — failure occurs before any entity
+        writes, so entities never exist; delete_document_data must also cover
+        any that could have been written in a partial-write scenario.
+        """
+        ctx = _make_mcp_ctx(app_ctx)
+        with patch.object(
+            store_components["doc_store"],
+            "store_extractions",
+            side_effect=RuntimeError("forced late extraction failure"),
+        ):
+            await ingest_document(
+                ctx,
+                text="content for late-failure cleanup test",
+                metadata={"title": "LateFailDoc"},
+                scope="team-a",
+                source_url="https://example.test/late-fail",
+            )
+        count = conn.execute("SELECT count(*) FROM entities").fetchone()[0]
+        assert count == 0, (
+            f"Failed ingest must leave no entity rows, found {count} row(s)"
+        )
+
+    @pytest.mark.asyncio
+    async def test_late_failure_after_embeddings_leaves_no_edges(
+        self,
+        conn: sqlite3.Connection,
+        app_ctx: AppContext,
+        store_components: dict,
+    ) -> None:
+        """After a failure at store_extractions, no edge rows must remain.
+
+        Injection point: store_extractions — failure occurs before any edge
+        writes, so edges never exist; delete_document_data must cascade-delete
+        any that could survive a partial-write scenario.
+        """
+        ctx = _make_mcp_ctx(app_ctx)
+        with patch.object(
+            store_components["doc_store"],
+            "store_extractions",
+            side_effect=RuntimeError("forced late extraction failure"),
+        ):
+            await ingest_document(
+                ctx,
+                text="content for late-failure cleanup test",
+                metadata={"title": "LateFailDoc"},
+                scope="team-a",
+                source_url="https://example.test/late-fail",
+            )
+        count = conn.execute("SELECT count(*) FROM edges").fetchone()[0]
+        assert count == 0, (
+            f"Failed ingest must leave no edge rows, found {count} row(s)"
         )
