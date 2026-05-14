@@ -50,6 +50,11 @@ export function Card({
   onDragEnd,
 }: CardProps) {
   const signal = resolveSignal(task, pendingDRIds)
+  const cardStyle = {
+    borderLeft: `4px solid var(--card-priority-border, ${
+      PRIORITY_COLORS[task.priority] ?? 'var(--pds-theme-light-contrast-medium)'
+    })`,
+  } as React.CSSProperties
 
   function openContextMenu(event: React.KeyboardEvent<HTMLDivElement>) {
     const rect = event.currentTarget.getBoundingClientRect()
@@ -95,7 +100,7 @@ export function Card({
       onDragStart={() => onDragStart(task.id, task.updated)}
       onDragEnd={onDragEnd}
       onContextMenu={(e) => onContextMenu(e, task)}
-      style={{ borderLeft: `4px solid ${PRIORITY_COLORS[task.priority] ?? 'var(--pds-theme-light-contrast-medium)'}` }}
+      style={cardStyle}
     >
       <span data-testid="card-title" title={task.title}>
         {task.title}

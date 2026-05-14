@@ -1,7 +1,15 @@
 .card {
   border: 1px solid transparent;
-  border-left: 4px solid transparent;
+  border-left: 4px solid var(--card-priority-border, var(--pds-theme-light-contrast-medium));
   background: transparent;
+  --pds-notification-warning: var(--pds-theme-light-notification-warning);
+  --pds-notification-error: var(--pds-theme-light-notification-error);
+  --pds-notification-success: var(--pds-theme-light-notification-success);
+  --pds-notification-success-soft: var(--pds-theme-light-notification-success-soft);
+  --pds-contrast-medium: var(--pds-theme-light-contrast-medium);
+  --pds-state-hover: var(--pds-theme-light-state-hover);
+  --pds-state-focus: var(--pds-theme-light-state-focus);
+  --pds-signal-claimed: hsl(270 58% 46%);
   min-height: 48px;
   max-height: 56px;
   display: flex;
@@ -13,18 +21,22 @@
 }
 
 [data-signal="dr-pending"] {
+  --card-priority-border: var(--pds-notification-warning);
   border-left-color: var(--pds-notification-warning);
 }
 
 [data-signal="blocked"] {
+  --card-priority-border: var(--pds-notification-error);
   border-left-color: var(--pds-notification-error);
 }
 
 [data-signal="claimed"] {
+  --card-priority-border: var(--pds-signal-claimed);
   border-left-color: var(--pds-signal-claimed);
 }
 
 [data-signal="deps-unmet"] {
+  --card-priority-border: var(--pds-contrast-medium);
   border-left-color: var(--pds-contrast-medium);
 }
 
