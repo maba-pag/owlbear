@@ -2,10 +2,10 @@
 id: 1534
 title: Board Visual Design — PDS token architecture, card signal model, dark 
   theme, component styling
-status: in-progress
+status: archived
 priority: needed
 created: 2026-05-13T18:37:36.137975+00:00
-updated: 2026-05-13T20:49:21.311966+00:00
+updated: 2026-05-14T13:46:28.033972+00:00
 tags:
   - frontend
   - cockpit
@@ -34,7 +34,7 @@ depends_on:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Objective
@@ -180,3 +180,75 @@ graph TD
 |---|-------------|----------------|---------|----------|
 | 1 | builder | Complete and advance implementation and verification child tasks #1543-#1554 (with their paired test tasks) through pipeline to done/archived status before retrying parent closure. | .owlbear/kanban/tasks/1534-board-visual-design-pds-token-architecture-card-signal-model-dark-theme-componen.md | `list_tasks(parent=1534)` shows open child graph and no done/archived children at time of routing. |
 | 2 | builder | When child graph is complete, append a child-status closure summary to this parent task and then re-advance to review. | .owlbear/kanban/tasks/1534-board-visual-design-pds-token-architecture-card-signal-model-dark-theme-componen.md | Reviewer routing note in task body requires parent closure evidence before review progression. |
+2026-05-14T13:34:31+00:00
+## Builder Notes
+- Scope assessment: Parent coordination task only; no direct implementation/code surface.
+- Pass-through basis: Test-Writer Notes explicitly classify this task as non-implementation pass-through with all build/test work delegated to child tasks.
+- Child-status closure summary: 20/20 delegated children (#1535–#1554) are now archived with `archival_reason=completed`.
+- Consolidation gate: Child task #1554 (consolidation test: board visual design) is archived/completed, satisfying the phase-5 closure check defined in parent decomposition.
+- Files changed: none.
+- Tests run: none at parent level (coordination-only task; executable proof owned by child tasks and consolidation task).
+- Lint status: not run at parent level (no code changes).
+- Evidence summary: Parent closure condition from prior review failure is now satisfied because delegated implementation, verification, and consolidation subtasks are complete.
+- Fixes applied: workflow/state closure only (no source modifications).
+2026-05-14T13:37:07+00:00
+## Review Evidence
+- Verdict: PASS
+- PASS confirmation: PASS #1534 -> docs | Delegated child graph is complete and the parent coordination closure gate is satisfied.
+- Builder evidence review: The latest builder packet claimed 20/20 delegated children (#1535-#1554) are archived with `archival_reason=completed` and that consolidation task #1554 is complete. I verified that claim directly against live board state because this parent task has no code surface of its own.
+- Independent verification: `list_tasks(parent=1534)` returned no active children. `list_tasks(ids=[1535,1536,1537,1538,1539,1540,1541,1542,1543,1544,1545,1546,1547,1548,1549,1550,1551,1552,1553,1554])` returned 20 child tasks, each with `status=archived`, `archival_reason=completed`, and `parent=1534`. `show_task(1554)` confirmed the phase-5 consolidation task is archived/completed.
+- Safety and security: No new code, dependency, input-handling, auth, storage, shell, or path surface exists on this parent coordination task.
+- AC evidence map:
+| AC Line | Code Evidence | Test Evidence | Status |
+|---|---|---|---|
+| Objective; Key Deliverables 1-10 | Parent task depends on delegated child set `#1535-#1554`; live board query `list_tasks(ids=[1535,1536,1537,1538,1539,1540,1541,1542,1543,1544,1545,1546,1547,1548,1549,1550,1551,1552,1553,1554])` shows 20/20 archived/completed children under parent `1534` | Child `#1554` (`consolidation test: board visual design`) is archived/completed via `show_task(1554)` and its archived task body records PASS at review, docs, and audit | PASS |
+| Scope Boundaries | All delegated child records remain in the cockpit/frontend surface (`scope:cockpit`, `frontend`, css/theme/data/test/docs tags) and no open child work remains | Verification and docs subtasks are themselves archived/completed (`#1551`, `#1552`, `#1553`, `#1554`) | PASS |
+| Prior review closure gate | Latest builder note adds the required child-status closure summary, and live board checks match it exactly | Prior reviewer requirement was to keep parent out of review until children closed and consolidation completed; both conditions are now satisfied | PASS |
+
+## Observations
+- No quality-runner dispatch was warranted. The gating question on this parent was lifecycle closure, not executable proof on changed files.
+- `list_tasks(parent=1534)` returning no active children was supportive but not sufficient by itself; the decisive check was the full ID-set verification across `#1535-#1554`.
+2026-05-14T13:38:16+00:00
+## Docs Gate
+
+**Verdict:** DONE — no docs impact
+
+### Checklist
+
+| # | Item | Result | Evidence |
+|---|------|--------|----------|
+| 1 | README Verification | N/A | No files changed on this coordination task; zero convention-mapped README targets |
+| 2 | External Attribution | N/A | No external sources used; parent task only coordinates child lifecycle |
+| 3 | Research Doc | N/A | No research artifact exists for this task |
+| 4 | Deletion Detection | N/A | No files deleted |
+
+### No-Impact Basis
+Parent coordination task with no direct code surface. All product deliverables (token architecture, card signal model, theme system, per-component CSS, verification tests, consolidation) were delegated to child tasks #1535–#1554, each of which passed through their own pipeline stages. Builder notes across all passes confirm: files changed = none, tests run = none, lint not run.
+
+### Scratch Cleanup
+No `.owlbear/scratch/1534-*` files existed.
+2026-05-14T13:46:28+00:00
+## Audit
+### Regression Detection
+- quality-runner mode full: pytest 4600 passed / 214 failed / 5 errors; vitest 1795 passed / 4 failed; ruff clean
+- All failures traced to unrelated tasks (#1398, #1399, #1457, module-level path_neutrality) — zero files changed by #1534
+- regression verdict: PASS (no regressions attributable to this task)
+
+### Intent Verification
+- scope alignment: PASS (parent coordination task, no files changed, stays within cockpit/frontend domain per tags and child set)
+- purpose match: PASS (task purpose was to coordinate Board Visual Design delivery; 20/20 children archived/completed)
+- extraneous scope: none
+- boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 4/5
+Good decomposition: 20 tasks across 5 phases with proper TDD pairing, acyclic dependency graph, consolidation gate (#1554), and migration verification (#1552). Minor gap: parent closure gate was implicit (caused one rejection cycle before builder encoded deps), but decomposition itself was solid.
+
+### Commit Integrity
+- upstream commit presence: PASS (no source files expected for parent coordination task; child commits verified in individual audits; ideation commit a451f8a3 exists)
+- kanban commit packaging: PASS (will commit after archival)
+
+### Deduction Breakdown
+- No deductions applied. Background test failures are pre-existing and unrelated to this zero-change coordination task.
+
+### Confidence: 1.00
+### Action: archive
