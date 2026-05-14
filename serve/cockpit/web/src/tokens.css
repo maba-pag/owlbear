@@ -25,6 +25,7 @@
   --pds-notification-error-soft: hsl(0 100% 90% / 0.55);
   --pds-notification-info: hsl(228 83.2% 51%);
   --pds-notification-info-soft: hsl(211 100% 90% / 0.55);
+  --pds-signal-claimed: hsl(270 58% 46%);
 
   /* State */
   --pds-state-hover: hsl(240 5% 70% / 0.148);
@@ -71,6 +72,7 @@
   --pds-notification-error-soft: hsl(0 79% 20% / 0.66);
   --pds-notification-info: hsl(210 100% 54.5%);
   --pds-notification-info-soft: hsl(210 79% 20% / 0.66);
+  --pds-signal-claimed: hsl(270 80% 70%);
 
   --pds-state-hover: hsl(240 2% 43% / 0.228);
   --pds-state-active: hsl(240 2% 43% / 0.228);
@@ -98,6 +100,7 @@
     --pds-notification-error-soft: hsl(0 79% 20% / 0.66);
     --pds-notification-info: hsl(210 100% 54.5%);
     --pds-notification-info-soft: hsl(210 79% 20% / 0.66);
+    --pds-signal-claimed: hsl(270 80% 70%);
 
     --pds-state-hover: hsl(240 2% 43% / 0.228);
     --pds-state-active: hsl(240 2% 43% / 0.228);

@@ -1,7 +1,7 @@
+import { useState } from 'react'
 import type { Task } from '../hooks/useBoard'
+import { computeSignal } from '../utils/computeSignal'
 import './Card.css'
-
-type CardSignal = 'dr-pending' | 'blocked' | 'claimed' | 'deps-unmet' | 'ready'
 
 export interface CardProps {
   task: Task
@@ -13,23 +13,6 @@ export interface CardProps {
   onDragEnd: () => void
 }
 
-function resolveSignal(task: Task, pendingDRIds: Set<number>): CardSignal {
-  if (pendingDRIds.has(task.id)) {
-    return 'dr-pending'
-  }
-  if (task.blocked) {
-    return 'blocked'
-  }
-  if (task.claimed) {
-    return 'claimed'
-  }
-  if (task.dep_status === 'blocked') {
-    return 'deps-unmet'
-  }
-
-  return 'ready'
-}
-
 export function Card({
   task,
   pendingDRIds = new Set<number>(),
@@ -39,9 +22,11 @@ export function Card({
   onDragStart,
   onDragEnd,
 }: CardProps) {
-  const signal = resolveSignal(task, pendingDRIds)
+  const signal = computeSignal(task, pendingDRIds)
+  const [dragging, setDragging] = useState(false)
 
   function openContextMenu(event: React.KeyboardEvent<HTMLDivElement>) {
+    event.preventDefault()
     const rect = event.currentTarget.getBoundingClientRect()
     const syntheticEvent = {
       preventDefault: () => {},
@@ -63,7 +48,6 @@ export function Card({
     }
 
     if (event.key === 'F10' && event.shiftKey) {
-      event.preventDefault()
       openContextMenu(event)
     }
   }
@@ -75,6 +59,7 @@ export function Card({
       data-priority={task.priority}
       data-selected={selected ? 'true' : 'false'}
       data-signal={signal}
+      data-dragging={dragging ? 'true' : 'false'}
       role="button"
       tabIndex={0}
       aria-haspopup="menu"
@@ -82,8 +67,14 @@ export function Card({
       draggable={true}
       onClick={() => onSelect?.(task.id)}
       onKeyDown={handleKeyDown}
-      onDragStart={() => onDragStart(task.id, task.updated)}
-      onDragEnd={onDragEnd}
+      onDragStart={() => {
+        setDragging(true)
+        onDragStart(task.id, task.updated)
+      }}
+      onDragEnd={() => {
+        setDragging(false)
+        onDragEnd()
+      }}
       onContextMenu={(e) => onContextMenu(e, task)}
     >
       <span data-testid="card-title" title={task.title}>
