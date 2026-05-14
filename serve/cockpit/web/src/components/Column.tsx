@@ -17,6 +17,18 @@ export interface ColumnProps {
   isValidDragTarget: boolean
 }
 
+function toDisplayStatus(status: string): string {
+  const normalized = status.replace(/-/g, ' ').trim()
+  if (!normalized) {
+    return ''
+  }
+
+  return normalized
+    .split(/\s+/)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ')
+}
+
 export function Column({
   status,
   tasks,
@@ -31,6 +43,7 @@ export function Column({
   isValidDragTarget,
 }: ColumnProps) {
   const [isDragOver, setIsDragOver] = useState(false)
+  const displayStatus = toDisplayStatus(status)
 
   const sorted = [...tasks].sort((a, b) => priorities.indexOf(b.priority) - priorities.indexOf(a.priority))
 
@@ -60,12 +73,12 @@ export function Column({
       }}
     >
       <header>
-        <span>{status}</span>
+        <span>{displayStatus}</span>
         <span className="column-count" data-testid="column-count">{tasks.length}</span>
       </header>
-      <div className="column-body" data-testid="column-body">
+      <div className="column-body" data-testid="column-body" tabIndex={0}>
         {sorted.length === 0 ? (
-          <div className="column-empty" data-testid="empty-column">{`No ${status} tasks`}</div>
+          <div className="column-empty" data-testid="empty-column">{`No ${displayStatus} tasks`}</div>
         ) : (
           sorted.map((task) => (
             <Card
