@@ -74,6 +74,15 @@
   border-left: 1px solid var(--pds-border-default);
 }
 
+.shell__sidecar p-sheet {
+  display: block;
+}
+
+.shell__mobile-sheet {
+  display: block;
+  visibility: visible;
+}
+
 .shell__contextual {
   display: none;
 }
@@ -103,6 +112,19 @@
 
   .shell__sidecar {
     border-left: none;
+    border-top: 1px solid var(--pds-border-default);
+  }
+
+  .shell__mobile-sheet {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 20;
+    display: block !important;
+    max-height: min(70vh, 560px);
+    overflow: auto;
+    background: var(--pds-background-surface);
     border-top: 1px solid var(--pds-border-default);
   }
 }

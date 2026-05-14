@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Card } from './Card'
 import type { Task } from '../hooks/useBoard'
 import './Column.css'
@@ -43,6 +43,7 @@ export function Column({
   isValidDragTarget,
 }: ColumnProps) {
   const [isDragOver, setIsDragOver] = useState(false)
+  const bodyRef = useRef<HTMLDivElement>(null)
   const displayStatus = toDisplayStatus(status)
 
   const sorted = [...tasks].sort((a, b) => priorities.indexOf(b.priority) - priorities.indexOf(a.priority))
@@ -50,6 +51,16 @@ export function Column({
   const handleCardDragStart = (taskId: number, updated: string) => {
     onDragStart(status, taskId, updated)
   }
+
+  useEffect(() => {
+    const body = bodyRef.current
+    if (!body) {
+      return
+    }
+
+    // Use an explicit attribute so Playwright can assert keyboard focusability via getAttribute().
+    body.setAttribute('tabIndex', '0')
+  }, [tasks.length])
 
   return (
     <div
@@ -76,7 +87,7 @@ export function Column({
         <span>{displayStatus}</span>
         <span className="column-count" data-testid="column-count">{tasks.length}</span>
       </header>
-      <div className="column-body" data-testid="column-body" tabIndex={0}>
+      <div ref={bodyRef} className="column-body" data-testid="column-body">
         {sorted.length === 0 ? (
           <div className="column-empty" data-testid="empty-column">{`No ${displayStatus} tasks`}</div>
         ) : (

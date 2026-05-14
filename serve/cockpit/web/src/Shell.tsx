@@ -50,6 +50,7 @@ function Shell() {
   const statusHealth = scanError ? 'red' : health
   const [hasLoadedScan, setHasLoadedScan] = useState(false)
   const [isSidecarCollapsed, setIsSidecarCollapsed] = useState(false)
+  const [isMobileViewport, setIsMobileViewport] = useState(false)
   const [selectedTaskSubtab, setSelectedTaskSubtab] = useState<string | null>(null)
   const [detailValidationMessage, setDetailValidationMessage] = useState<string | null>(null)
   const [bannerError, setBannerError] = useState<{
@@ -97,6 +98,20 @@ function Shell() {
     }
     tabs.addEventListener('tabChange', onTabChange)
     return () => tabs.removeEventListener('tabChange', onTabChange)
+  }, [])
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(max-width: 767px)')
+    const handleViewportChange = () => {
+      setIsMobileViewport(window.innerWidth <= 767 || mediaQuery.matches)
+    }
+
+    handleViewportChange()
+    mediaQuery.addEventListener('change', handleViewportChange)
+
+    return () => {
+      mediaQuery.removeEventListener('change', handleViewportChange)
+    }
   }, [])
 
   return (
@@ -179,94 +194,187 @@ function Shell() {
         >
           {isSidecarCollapsed ? 'Expand sidecar' : 'Collapse sidecar'}
         </button>
-        <div id="shell-sidecar-content" aria-hidden={isSidecarCollapsed ? 'true' : undefined}>
-          <section data-region="sidecar-header" aria-live="polite">
-            <h2>{selectedTaskHeading}</h2>
-          </section>
-          <DecisionViewport
-            items={pendingDRItems}
-            isLoading={pendingDRLoading}
-            error={pendingDRError}
-            onItemClick={setSelectedDRId}
-          />
-          <p-tabs ref={tabsRef}>
-            <p-tabs-item ref={(el: HTMLElement | null) => el?.setAttribute('label', 'Detail')}>
-              <div ref={detailRef} data-tab-content="detail" aria-hidden="false">
-                <PBanner
-                  open={bannerError !== null}
-                  heading={bannerError?.heading ?? ''}
-                  description={bannerError?.description ?? ''}
-                  state={bannerError?.state ?? 'error'}
-                  onDismiss={() => setBannerError(null)}
-                />
-                {selectedTaskId === null
-                  ? <div data-testid="detail-placeholder">Select a task to view details.</div>
-                  : null}
-                {detailValidationMessage !== null ? (
-                  <div data-testid="validation-message" role="status">
-                    {detailValidationMessage}
+        {isMobileViewport ? (
+          <p-sheet open className="shell__mobile-sheet">
+            <div id="shell-sidecar-content" aria-hidden={isSidecarCollapsed ? 'true' : undefined}>
+              <section data-region="sidecar-header" aria-live="polite">
+                <h2>{selectedTaskHeading}</h2>
+              </section>
+              <DecisionViewport
+                items={pendingDRItems}
+                isLoading={pendingDRLoading}
+                error={pendingDRError}
+                onItemClick={setSelectedDRId}
+              />
+              <p-tabs ref={tabsRef}>
+                <p-tabs-item ref={(el: HTMLElement | null) => el?.setAttribute('label', 'Detail')}>
+                  <div ref={detailRef} data-tab-content="detail" aria-hidden="false">
+                    <PBanner
+                      open={bannerError !== null}
+                      heading={bannerError?.heading ?? ''}
+                      description={bannerError?.description ?? ''}
+                      state={bannerError?.state ?? 'error'}
+                      onDismiss={() => setBannerError(null)}
+                    />
+                    {selectedTaskId === null
+                      ? <div data-testid="detail-placeholder">Select a task to view details.</div>
+                      : null}
+                    {detailValidationMessage !== null ? (
+                      <div data-testid="validation-message" role="status">
+                        {detailValidationMessage}
+                      </div>
+                    ) : null}
+                    {selectedTaskId !== null && selectedTaskError !== null ? (
+                      <div data-testid="task-fetch-error" role="status">
+                        {selectedTaskError}
+                        <PButton
+                          type="button"
+                          data-testid="task-fetch-retry"
+                          variant="secondary"
+                          onClick={() => update()}
+                        >
+                          Retry
+                        </PButton>
+                      </div>
+                    ) : null}
+                    <DetailTab
+                      key={selectedTaskId ?? -1}
+                      task={selectedTask}
+                      board={board}
+                      initialSubtab={selectedTaskSubtab}
+                      onSelectTask={(taskId, subtab) => {
+                        select(taskId)
+                        setSelectedTaskSubtab((current) => subtab ?? current)
+                      }}
+                      onTaskCleared={(message) => {
+                        clear()
+                        setSelectedTaskSubtab(null)
+                        setDetailValidationMessage(message ?? null)
+                      }}
+                      onTaskUpdated={(updatedTask) => {
+                        const previousTask = selectedTask
+                        update(updatedTask)
+                        setDetailValidationMessage(null)
+                        setBannerError(null)
+                        if (
+                          previousTask === null ||
+                          previousTask.title !== updatedTask.title ||
+                          previousTask.priority !== updatedTask.priority ||
+                          previousTask.status !== updatedTask.status ||
+                          previousTask.blocked !== updatedTask.blocked
+                        ) {
+                          refetchTasks()
+                        }
+                      }}
+                      onMutationError={(heading, description, state) => {
+                        setBannerError({ heading, description, state })
+                      }}
+                    />
                   </div>
-                ) : null}
-                {selectedTaskId !== null && selectedTaskError !== null ? (
-                  <div data-testid="task-fetch-error" role="status">
-                    {selectedTaskError}
-                    <PButton
-                      type="button"
-                      data-testid="task-fetch-retry"
-                      variant="secondary"
-                      onClick={() => update()}
-                    >
-                      Retry
-                    </PButton>
+                </p-tabs-item>
+                <p-tabs-item ref={(el: HTMLElement | null) => el?.setAttribute('label', 'Activity')}>
+                  <div ref={activityRef} data-tab-content="activity" aria-hidden="true">
+                    <ActivityTab
+                      onSelectTask={(taskId, subtab) => {
+                        select(taskId)
+                        setSelectedTaskSubtab(subtab ?? null)
+                      }}
+                    />
                   </div>
-                ) : null}
-                <DetailTab
-                  key={selectedTaskId ?? -1}
-                  task={selectedTask}
-                  board={board}
-                  initialSubtab={selectedTaskSubtab}
-                  onSelectTask={(taskId, subtab) => {
-                    select(taskId)
-                    setSelectedTaskSubtab((current) => subtab ?? current)
-                  }}
-                  onTaskCleared={(message) => {
-                    clear()
-                    setSelectedTaskSubtab(null)
-                    setDetailValidationMessage(message ?? null)
-                  }}
-                  onTaskUpdated={(updatedTask) => {
-                    const previousTask = selectedTask
-                    update(updatedTask)
-                    setDetailValidationMessage(null)
-                    setBannerError(null)
-                    if (
-                      previousTask === null ||
-                      previousTask.title !== updatedTask.title ||
-                      previousTask.priority !== updatedTask.priority ||
-                      previousTask.status !== updatedTask.status ||
-                      previousTask.blocked !== updatedTask.blocked
-                    ) {
-                      refetchTasks()
-                    }
-                  }}
-                  onMutationError={(heading, description, state) => {
-                    setBannerError({ heading, description, state })
-                  }}
-                />
-              </div>
-            </p-tabs-item>
-            <p-tabs-item ref={(el: HTMLElement | null) => el?.setAttribute('label', 'Activity')}>
-              <div ref={activityRef} data-tab-content="activity" aria-hidden="true">
-                <ActivityTab
-                  onSelectTask={(taskId, subtab) => {
-                    select(taskId)
-                    setSelectedTaskSubtab(subtab ?? null)
-                  }}
-                />
-              </div>
-            </p-tabs-item>
-          </p-tabs>
-        </div>
+                </p-tabs-item>
+              </p-tabs>
+            </div>
+          </p-sheet>
+        ) : (
+          <div id="shell-sidecar-content" aria-hidden={isSidecarCollapsed ? 'true' : undefined}>
+            <section data-region="sidecar-header" aria-live="polite">
+              <h2>{selectedTaskHeading}</h2>
+            </section>
+            <DecisionViewport
+              items={pendingDRItems}
+              isLoading={pendingDRLoading}
+              error={pendingDRError}
+              onItemClick={setSelectedDRId}
+            />
+            <p-tabs ref={tabsRef}>
+              <p-tabs-item ref={(el: HTMLElement | null) => el?.setAttribute('label', 'Detail')}>
+                <div ref={detailRef} data-tab-content="detail" aria-hidden="false">
+                  <PBanner
+                    open={bannerError !== null}
+                    heading={bannerError?.heading ?? ''}
+                    description={bannerError?.description ?? ''}
+                    state={bannerError?.state ?? 'error'}
+                    onDismiss={() => setBannerError(null)}
+                  />
+                  {selectedTaskId === null
+                    ? <div data-testid="detail-placeholder">Select a task to view details.</div>
+                    : null}
+                  {detailValidationMessage !== null ? (
+                    <div data-testid="validation-message" role="status">
+                      {detailValidationMessage}
+                    </div>
+                  ) : null}
+                  {selectedTaskId !== null && selectedTaskError !== null ? (
+                    <div data-testid="task-fetch-error" role="status">
+                      {selectedTaskError}
+                      <PButton
+                        type="button"
+                        data-testid="task-fetch-retry"
+                        variant="secondary"
+                        onClick={() => update()}
+                      >
+                        Retry
+                      </PButton>
+                    </div>
+                  ) : null}
+                  <DetailTab
+                    key={selectedTaskId ?? -1}
+                    task={selectedTask}
+                    board={board}
+                    initialSubtab={selectedTaskSubtab}
+                    onSelectTask={(taskId, subtab) => {
+                      select(taskId)
+                      setSelectedTaskSubtab((current) => subtab ?? current)
+                    }}
+                    onTaskCleared={(message) => {
+                      clear()
+                      setSelectedTaskSubtab(null)
+                      setDetailValidationMessage(message ?? null)
+                    }}
+                    onTaskUpdated={(updatedTask) => {
+                      const previousTask = selectedTask
+                      update(updatedTask)
+                      setDetailValidationMessage(null)
+                      setBannerError(null)
+                      if (
+                        previousTask === null ||
+                        previousTask.title !== updatedTask.title ||
+                        previousTask.priority !== updatedTask.priority ||
+                        previousTask.status !== updatedTask.status ||
+                        previousTask.blocked !== updatedTask.blocked
+                      ) {
+                        refetchTasks()
+                      }
+                    }}
+                    onMutationError={(heading, description, state) => {
+                      setBannerError({ heading, description, state })
+                    }}
+                  />
+                </div>
+              </p-tabs-item>
+              <p-tabs-item ref={(el: HTMLElement | null) => el?.setAttribute('label', 'Activity')}>
+                <div ref={activityRef} data-tab-content="activity" aria-hidden="true">
+                  <ActivityTab
+                    onSelectTask={(taskId, subtab) => {
+                      select(taskId)
+                      setSelectedTaskSubtab(subtab ?? null)
+                    }}
+                  />
+                </div>
+              </p-tabs-item>
+            </p-tabs>
+          </div>
+        )}
       </aside>
       {selectedDR ? (
         <ResolveModal
