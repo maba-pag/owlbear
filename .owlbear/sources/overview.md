@@ -4649,3 +4649,12 @@ External repos and resources studied during OwlBear development.
 |--------|-----|------|------------|------|
 | SO: Scrolling a flexbox with overflowing content | <https://stackoverflow.com/questions/21515042> | Fixed-header scrollable-body pattern: flex-direction column + min-height 0 + overflow-y auto | .owlbear/research/1547-column-css-impl.md | 2026-05-14 |
 | PDS v4 SCSS Introduction | <https://designsystem.porsche.com/v4/scss/introduction/> | PDS design token naming conventions and usage patterns | .owlbear/research/1547-column-css-impl.md | 2026-05-14 |
+
+## Sidecar Collapse Toggle Implementation Research (Task #1549)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| CSS-Tricks: Animating CSS Grid | <https://css-tricks.com/animating-css-grid-how-to-examples/> | Grid column animation technique, `0fr` collapse pattern, `:has()` parent selector | .owlbear/research/1549-sidecar-collapse-toggle-impl.md | 2026-05-14 |
+| CanIUse: grid-template-columns animation | <https://caniuse.com/mdn-css_properties_grid-template-columns_animation> | Browser support: 93%+ global, all major browsers since Chrome 107, Firefox 66, Safari 16 | .owlbear/research/1549-sidecar-collapse-toggle-impl.md | 2026-05-14 |
+| CodePen: CSS Grid sidebar expand | <https://codepen.io/mrdanielschwarz/pen/BaPjKrP> | Working demo of `transition: 300ms` on `grid-template-columns` for sidebar | .owlbear/research/1549-sidecar-collapse-toggle-impl.md | 2026-05-14 |
+| Codidact: CSS grid with expanding cells | <https://software.codidact.com/posts/287970> | Animated grid cells via dynamic `grid-template-columns`/`rows` with transition | .owlbear/research/1549-sidecar-collapse-toggle-impl.md | 2026-05-14 |
