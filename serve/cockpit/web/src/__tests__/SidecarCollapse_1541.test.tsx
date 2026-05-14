@@ -41,13 +41,17 @@ function getCollapseToggle(container: HTMLElement): HTMLElement {
   return toggle as HTMLElement
 }
 
-function sidecarIsCollapsed(container: HTMLElement): boolean {
-  const sidecar = container.querySelector('[data-region="sidecar"]')
-  return sidecar === null || sidecar.hasAttribute('hidden')
+/** Resolve the element controlled by the toggle via its aria-controls id. */
+function getControlledElement(container: HTMLElement, toggle: HTMLElement): HTMLElement {
+  const id = toggle.getAttribute('aria-controls')
+  if (!id) throw new Error('toggle missing aria-controls attribute')
+  const el = container.querySelector(`#${id}`)
+  if (!el) throw new Error(`controlled element #${id} not found in DOM`)
+  return el as HTMLElement
 }
 
 describe('TestFromAC_SidecarCollapse_1541', () => {
-  it('AC-1: sidecar collapse toggle exposes disclosure ARIA and flips aria-expanded to false on click', () => {
+  it('AC-1: toggle is a native <button> with aria-expanded="true" and aria-controls within sidecar', () => {
     const { container } = renderShell()
     const toggle = getCollapseToggle(container)
 
@@ -56,17 +60,51 @@ describe('TestFromAC_SidecarCollapse_1541', () => {
 
     const ariaControlsId = toggle.getAttribute('aria-controls')
     expect(ariaControlsId).toBeTruthy()
+
+    const controlled = container.querySelector(`#${ariaControlsId}`)
+    expect(controlled).not.toBeNull()
+
     const sidecarRegion = container.querySelector('[data-region="sidecar"]')
     expect(sidecarRegion).not.toBeNull()
-    expect(sidecarRegion!.getAttribute('id')).toBe(ariaControlsId)
+    expect(sidecarRegion!.contains(controlled) || sidecarRegion === controlled).toBe(true)
+  })
+
+  it('AC-1: controlled element does not have aria-hidden="true" in default state (panel starts open)', () => {
+    const { container } = renderShell()
+    const toggle = getCollapseToggle(container)
+    const controlled = getControlledElement(container, toggle)
+
+    expect(controlled.getAttribute('aria-hidden')).not.toBe('true')
+  })
+
+  it('AC-1: clicking toggle sets aria-expanded="false" and controlled element aria-hidden="true"', () => {
+    const { container } = renderShell()
+    const toggle = getCollapseToggle(container)
+    const controlled = getControlledElement(container, toggle)
 
     fireEvent.click(toggle)
 
     expect(toggle.getAttribute('aria-expanded')).toBe('false')
-    expect(sidecarIsCollapsed(container)).toBe(true)
+    expect(controlled.getAttribute('aria-hidden')).toBe('true')
   })
 
-  it('AC-2: collapsed state persists after rerender', () => {
+  it('AC-1 round-trip: second click restores aria-expanded="true" and controlled element is no longer aria-hidden', () => {
+    const { container } = renderShell()
+    const toggle = getCollapseToggle(container)
+    const controlled = getControlledElement(container, toggle)
+
+    // collapse
+    fireEvent.click(toggle)
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(controlled.getAttribute('aria-hidden')).toBe('true')
+
+    // expand
+    fireEvent.click(toggle)
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    expect(controlled.getAttribute('aria-hidden')).not.toBe('true')
+  })
+
+  it('AC-2: collapsed state persists after rerender — aria-expanded="false" and controlled element aria-hidden="true"', () => {
     const { container, rerender } = renderShell()
     const toggle = getCollapseToggle(container)
 
@@ -84,7 +122,8 @@ describe('TestFromAC_SidecarCollapse_1541', () => {
     )
 
     const persistedToggle = getCollapseToggle(container)
+    const persistedControlled = getControlledElement(container, persistedToggle)
     expect(persistedToggle.getAttribute('aria-expanded')).toBe('false')
-    expect(sidecarIsCollapsed(container)).toBe(true)
+    expect(persistedControlled.getAttribute('aria-hidden')).toBe('true')
   })
 })
