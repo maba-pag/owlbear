@@ -1,10 +1,10 @@
 ---
 id: 1548
 title: 'P3-06: impl — theme toggle UI: status bar button'
-status: done
+status: backlog
 priority: important
 created: 2026-05-13T18:43:23.870309+00:00
-updated: 2026-05-14T06:49:37.211445+00:00
+updated: 2026-05-14T06:58:55.563272+00:00
 tags:
   - phase-3
   - scope:cockpit
@@ -16,7 +16,7 @@ depends_on:
   - 1545
 blocked: false
 block_reason:
-claimed_at: 2026-05-14T06:49:37.211445+00:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -172,3 +172,35 @@ Commit: a3dde802
 
 ### Scratch Cleanup
 No `.owlbear/scratch/1548-*` files found.
+2026-05-14T06:58:55+00:00
+## Audit
+### Regression Detection
+- quality-runner mode full: 6192 passed (Python+frontend combined), 156 frontend tests failed across 83 test files
+- Root cause: adding `<ThemeToggle />` to Shell.tsx imports `useTheme` hook → `window.matchMedia().addEventListener()` which jsdom does not implement. Task-scoped tests (11/11) pass because they mock useTheme/ThemeToggle; pre-existing Shell tests do not mock this dependency.
+- Failing test groups: TestFromAC_AppShellIntegration, Shell.callbacks, Shell.cleanup-wiring, Shell.decision-viewport, Shell.decisions-refetch, Shell.pbanner, Shell.scan-health, Shell.on-task-updated, ShellSecondaryCSS, plus integration tests that render Shell.
+- Python failures (test_python_version_floor, test_path_neutrality, test_engine_lazy_agent_map, test_end_work_success, test_reviewer_rewrite) are unrelated to this frontend-only task.
+- regression verdict: FAIL
+
+### Intent Verification
+- scope alignment: PASS (Shell.tsx + ThemeToggle.tsx — both cockpit frontend domain)
+- purpose match: PASS (theme toggle button in status bar, exactly as AC describes)
+- extraneous scope: none (2 files, 34 lines added)
+- boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 4/5
+AC lines are clear, testable, and properly split after challenger feedback. Minor gap: no architectural note about ensuring test compatibility with existing Shell tests or providing a matchMedia mock for jsdom environments.
+
+### Commit Integrity
+- upstream commit presence: PASS (builder: 55e8d70d, test-writer: a3dde802, researcher: 9f3c15c)
+- kanban commit packaging: PASS
+
+### Deduction Breakdown
+- Regression failures (156 frontend tests broken): -.10
+
+### Confidence: 0.90
+### Action: reject-to-backlog
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Add `window.matchMedia` mock or `vi.mock('../hooks/useTheme')` to Shell test infrastructure so existing Shell tests survive ThemeToggle import | `serve/cockpit/web/src/__tests__/Shell*.test.tsx`, `serve/cockpit/web/src/hooks/useTheme.ts` | TypeError: mediaQueryList.addEventListener is not a function at useTheme.ts:71 — 83 test files affected |
