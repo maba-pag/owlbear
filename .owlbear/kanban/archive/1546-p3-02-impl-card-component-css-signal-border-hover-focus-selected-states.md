@@ -1,10 +1,10 @@
 ---
 id: 1546
 title: 'P3-02: impl — card component CSS: signal border, hover, focus, selected states'
-status: backlog
+status: archived
 priority: important
 created: 2026-05-13T18:43:23.784270+00:00
-updated: 2026-05-14T04:57:30.740880+00:00
+updated: 2026-05-14T05:57:16.395452+00:00
 tags:
   - phase-3
   - scope:cockpit
@@ -18,7 +18,7 @@ depends_on:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 Brief: see parent #1534 (`.owlbear/briefs/draft-board-visual-design/brief.md`)
@@ -229,3 +229,116 @@ ACs are specific with named CSS selectors, exact data attributes, and concrete v
 | # | Target Agent | Action Required | File(s) | Evidence |
 |---|-------------|----------------|---------|----------|
 | 1 | builder | Update TokenArchitecture_1535.test.ts EXPECTED_COLOR_TOKENS to include --pds-signal-claimed (20 tokens); update TokenArchitecture_1543.test.ts boundary assertion from 19 to 20 tokens in both media-query and data-theme dark blocks | serve/cockpit/web/src/__tests__/TokenArchitecture_1535.test.ts, serve/cockpit/web/src/__tests__/TokenArchitecture_1543.test.ts | Regression detection: 3 failures caused by adding --pds-signal-claimed to tokens.css without updating existing token-count assertions |
+2026-05-14T04:59:34+00:00
+
+## Architecture Re-Review (Audit Return)
+
+### Context
+Auditor rejected to backlog: 3 token-architecture test regressions caused by builder guidance #3 (moving `--pds-signal-claimed` to `tokens.css`). Implementation and original ACs remain sound — reviewer PASS, docs PASS, audit PASS on intent/scope. Only gap: sibling token-count assertions not updated.
+
+### Evaluation
+- Regression root cause is mechanical: `EXPECTED_COLOR_TOKENS` in `TokenArchitecture_1535.test.ts` has 19 entries, missing `--pds-signal-claimed`; `TokenArchitecture_1543.test.ts` asserts `19` tokens in boundary check.
+- No AC change needed — original AC-1 through AC-4 remain valid and verified.
+- No new architectural risk — updating test expectations to reflect the actual token set.
+
+### Builder Guidance (Audit Fix)
+10. **Fix token-architecture test regressions** — Add `'--pds-signal-claimed'` to `EXPECTED_COLOR_TOKENS` in `serve/cockpit/web/src/__tests__/TokenArchitecture_1535.test.ts` (19 → 20 entries). Update the "declares exactly 19 tokens" assertion in `serve/cockpit/web/src/__tests__/TokenArchitecture_1543.test.ts` to 20, in both the media-query and data-theme boundary checks. Run the full card + token test suites to confirm zero regressions.
+
+### Proof-Bundle Validation
+- Bundle: behavioral (unchanged)
+- Test-writer: SKIP for this return — fix is to existing test expectations, not new RED tests.
+
+### Verdict: APPROVE (re-review)
+### Action Taken: Added builder guidance #10 for token-architecture test regression fix. Advanced to todo.
+2026-05-14T04:59:38+00:00
+Re-review after audit rejection. 3 token-architecture test regressions (TokenArchitecture_1535, TokenArchitecture_1543) caused by builder guidance #3 adding --pds-signal-claimed to tokens.css without updating expected token counts. Added builder guidance #10 for the mechanical fix. Original ACs, implementation, and review evidence remain valid. Test-writer SKIP — no new RED tests needed, only test expectation updates.
+2026-05-14T05:10:46+00:00
+## Test-Writer Notes
+- Pass-through per architect re-review: no new RED tests required.
+- Fix is updating existing token-count expectations in `TokenArchitecture_1535.test.ts` and `TokenArchitecture_1543.test.ts` (19 → 20), not writing new RED tests.
+- Passing through to builder for guidance #10.
+2026-05-14T05:16:18+00:00
+## Builder Notes
+- Scope: applied architect audit-fix guidance #10 only (token-architecture expectation updates).
+- Files changed:
+  - `serve/cockpit/web/src/__tests__/TokenArchitecture_1535.test.ts`
+  - `serve/cockpit/web/src/__tests__/TokenArchitecture_1543.test.ts`
+- RED verification (quality-runner, scoped before edits): 9 passed / 3 failed / 0 skipped.
+  - Failures were exactly the expected regressions:
+    - `TokenArchitecture_1535` AC-1 exact token set mismatch (extra `--pds-signal-claimed`)
+    - `TokenArchitecture_1543` AC-2 happy exact token set mismatch (extra `--pds-signal-claimed`)
+    - `TokenArchitecture_1543` AC-2 boundary expected 19 vs actual 20
+- Fixes applied:
+  - Added `--pds-signal-claimed` to `EXPECTED_COLOR_TOKENS` in both token-architecture suites.
+  - Updated token-count assertions/messages from 19 to 20 where applicable.
+- GREEN verification (quality-runner, scoped card+token suites): 35 passed / 0 failed / 0 skipped.
+  - Tests run: `TokenArchitecture_1535.test.ts`, `TokenArchitecture_1543.test.ts`, `CardCSS_1546.test.ts`, `CardDrag_1546.test.tsx`, `Card.css.test.ts`
+- Lint status (quality-runner, scoped lint-compatible rerun): clean (`eslint` clean, no violations).
+- Coverage: not required for this mechanical test-expectation correction; no source implementation changes.
+- Commit: `8ca1dfb188ee9813fcb77f77ab325d3d7e9f5243` (`fix: update token architecture counts for claimed signal token (#1546, builder)`).
+2026-05-14T05:34:22+00:00
+## Review Evidence
+- Verdict: PASS
+- PASS confirmation: PASS #1546 -> docs | audit-return regression fix verified; AC mapped to code and evidence sufficient.
+- Builder evidence reviewed first: the audit-return builder note scoped this retry to `serve/cockpit/web/src/__tests__/TokenArchitecture_1535.test.ts` and `serve/cockpit/web/src/__tests__/TokenArchitecture_1543.test.ts`, with RED verification `9 passed / 3 failed / 0 skipped` before edits, GREEN verification `35 passed / 0 failed / 0 skipped` across the token+card suites after edits, and ESLint clean.
+- Current-cycle evidence map:
+
+| Review Item | Evidence | Status |
+|---|---|---|
+| Audit regression fix | `serve/cockpit/web/src/tokens.css:28`, `serve/cockpit/web/src/tokens.css:75`, and `serve/cockpit/web/src/tokens.css:103` declare `--pds-signal-claimed` in `:root`, `[data-theme="dark"]`, and the dark-media fallback. `serve/cockpit/web/src/__tests__/TokenArchitecture_1535.test.ts:30`, `serve/cockpit/web/src/__tests__/TokenArchitecture_1535.test.ts:101`, `serve/cockpit/web/src/__tests__/TokenArchitecture_1535.test.ts:120`, `serve/cockpit/web/src/__tests__/TokenArchitecture_1543.test.ts:30`, `serve/cockpit/web/src/__tests__/TokenArchitecture_1543.test.ts:110`, `serve/cockpit/web/src/__tests__/TokenArchitecture_1543.test.ts:119`, and `serve/cockpit/web/src/__tests__/TokenArchitecture_1543.test.ts:126` now encode the 20-token contract that previously failed at audit. | PASS |
+| Original task ACs | The prior reviewer PASS for AC-1 through AC-4 remains intact because this return changed only token-architecture tests and introduced no new implementation edits; I found no contradiction between that retained Card evidence and the current regression fix. | PASS |
+- Challenger cross-check: proceed (confidence 0.83). Strongest concern was scoped retry breadth after a full-audit catch, but no new blocking defect was proven.
+- Blocking findings: none.
+
+## Observations
+- The retry evidence is narrower than the original full-audit run, but it covers the exact suites that failed (`TokenArchitecture_1535`, `TokenArchitecture_1543`) plus the related card suites, which is proportionate for this mechanical expectation update.
+- AC-3 transparent-background proof and broader selected-state shorthand guards remain non-blocking hardening opportunities already recorded in the earlier review cycle; I am not re-opening scope on the same unchanged AC reading.
+- No scoped editor diagnostics were present in `serve/cockpit/web/src/__tests__/TokenArchitecture_1535.test.ts`, `serve/cockpit/web/src/__tests__/TokenArchitecture_1543.test.ts`, or `serve/cockpit/web/src/tokens.css`.
+2026-05-14T05:41:00+00:00
+## Docs Gate (Audit-Return)
+
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | README verification | Yes | N/A | Audit-return builder changed only `TokenArchitecture_1535.test.ts` and `TokenArchitecture_1543.test.ts` — mechanical token-count expectation update (19→20). Grep on `signal-claimed`, `TokenArchitecture`, `token count` in `serve/cockpit/README.md` returned no matches. No task-caused drift. |
+| 2 | External attribution | N/A | N/A — no external attribution needed | Audit-return fix required no external sources; mechanical test expectation update only. |
+| 3 | Research doc | N/A | N/A — no research doc linkage needed | No new research artifact for this retry cycle. Prior research doc `.owlbear/research/card-css-impl-1546.md` already linked in task body from first cycle. |
+| 4 | Deletion detection | N/A | N/A — no deletion impact | No files deleted in audit-return builder scope. |
+
+### Verification Layers
+- Layer 1 — grep: `serve/cockpit/README.md` contains no references to `--pds-signal-claimed`, `TokenArchitecture`, token count values, or any of the changed test symbols. Confirmed clean.
+- Layer 2 — editorial: Cockpit README is API/stack/launch-scoped; token-count test expectations are internal verification detail not documented at this level. Consistent with prior docs gate pass.
+
+### Scratch cleanup
+No `.owlbear/scratch/1546-*` files found — nothing to clean.
+2026-05-14T05:57:16+00:00
+## Audit (Re-audit)
+### Regression Detection
+- quality-runner mode full: Python 4587 passed / 20 failed, Frontend vitest instrument failure (pdsVersionCheckPlugin CSS asset verification, pre-existing environment issue), lint clean (ruff exit 0, eslint exit 0)
+- All 20 Python failures are in unrelated domains: engine accessor migration (7), cockpit view cleanup (3), ideation diagram (1), server status (1), engine rebind containment (1), dep guidance (1), lazy agent map (1), edit task contract (1), react compiler build (1), engine dispatch validation (1), cockpit react compiler (1). None in card CSS or token architecture domain.
+- Prior audit's 3 token-architecture regressions (TokenArchitecture_1535, TokenArchitecture_1543) are now resolved: zero failures in those suites.
+- Vitest environment failure is pre-existing (pdsVersionCheckPlugin buildStart hook), not caused by #1546. Builder scoped frontend runs confirmed 35 passed / 0 failed across card+token suites.
+- Regression verdict: PASS
+
+### Intent Verification
+- Scope alignment: PASS (changed files: Card.tsx, Card.css, tokens.css, TokenArchitecture_1535.test.ts, TokenArchitecture_1543.test.ts, Card.css.test.ts, CardCSS_1546.test.ts, CardDrag_1546.test.tsx -- all cockpit frontend domain)
+- Purpose match: PASS (card CSS signal borders, hover/focus/selected states, drag opacity, computeSignal consolidation, token-count test fix -- matches AC intent and audit-return guidance)
+- Extraneous scope: none
+- Boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 4/5
+ACs are specific with named CSS selectors, exact data attributes, and concrete values. Challenger engagement produced useful refinements (AC-4 wording, computeSignal scope addition). Minor gap: guidance #3 directed adding a token to tokens.css without flagging downstream impact on token-architecture test suites, causing first-cycle audit rejection. Addressed in re-review with guidance #10. Score 4: adequate, minor gap identified and corrected in cycle.
+
+### Commit Integrity
+- Upstream commit presence: PASS (test-writer: be2b24ab, d0e81c31; builder: 4a680f66, 8ca1dfb1 -- all verified via git log)
+- Kanban commit packaging: PASS (auditor will commit kanban state after end_work)
+
+### Deduction Breakdown
+- No task-related regressions: no deduction
+- Intent aligned, no extraneous scope: no deduction
+- Reviewer evidence present and detailed (two review cycles with explicit AC mapping): no deduction
+- Lint clean: no deduction
+- AC quality 4/5 (above 3): no deduction
+
+### Confidence: 1.00
+### Action: archive
