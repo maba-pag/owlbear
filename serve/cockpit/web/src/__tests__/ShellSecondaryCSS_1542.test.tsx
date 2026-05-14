@@ -15,6 +15,7 @@ const SHELL_CSS = resolve(SRC_DIR, 'Shell.css')
 const KANBAN_BOARD_TSX = resolve(SRC_DIR, 'KanbanBoard.tsx')
 const KANBAN_BOARD_CSS = resolve(SRC_DIR, 'KanbanBoard.css')
 const STYLES_TS = resolve(SRC_DIR, 'utils', 'styles.ts')
+const STYLES_TEST_TS = resolve(__dirname, 'styles.test.ts')
 const HISTORY_SUBTAB_TSX = resolve(COMPONENTS_DIR, 'HistorySubtab.tsx')
 const ACTIVITY_TAB_TSX = resolve(COMPONENTS_DIR, 'ActivityTab.tsx')
 
@@ -198,5 +199,9 @@ describe('TestFromAC_SecondaryCssMigration_1542', () => {
       foundInAnySharedCss,
       'At least one CSS file imported by both components must style [data-state="blocked"], [data-state="rejected"], and [data-state="stuck"]',
     ).toBe(true)
+  })
+
+  it('AC-3(e): __tests__/styles.test.ts does not exist', () => {
+    expect(existsSync(STYLES_TEST_TS)).toBe(false)
   })
 })
