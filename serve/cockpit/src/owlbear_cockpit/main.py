@@ -11,7 +11,7 @@ from pathlib import Path
 
 import uvicorn
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from owlbear_cockpit.deps import get_engine  # noqa: F401 — re-exported for test DI
@@ -126,6 +126,13 @@ def run() -> None:
             "/porsche-design-system",
             StaticFiles(directory=pds_dir),
             name="porsche-design-system",
+        )
+
+    @app.get("/theme-bootstrap.js")
+    def _theme_bootstrap() -> FileResponse:
+        return FileResponse(
+            dist_dir / "theme-bootstrap.js",
+            media_type="application/javascript",
         )
 
     @app.get("/{path:path}")
