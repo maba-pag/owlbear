@@ -866,6 +866,12 @@ class TestFromAC_RefreshEntityEdgeProvenance:
         assert edge_rows, (
             f"No edges with document_id={doc_id!r} were persisted after refresh"
         )
+        chunk_ids = {
+            r[0]
+            for r in conn.execute(
+                "SELECT id FROM chunks WHERE document_id = ?", (doc_id,)
+            ).fetchall()
+        }
         for _row_doc_id, meta_json in edge_rows:
             meta = json.loads(meta_json) if meta_json else {}
             assert "document_id" in meta, (
@@ -882,6 +888,20 @@ class TestFromAC_RefreshEntityEdgeProvenance:
             )
             assert meta["scope"] == "team-a", (
                 f"Edge metadata['scope'] must be 'team-a', got {meta.get('scope')!r}"
+            )
+            assert "chunk_id" in meta, (
+                "Edge metadata must contain 'chunk_id' provenance field, "
+                f"but got metadata keys: {list(meta)!r}"
+            )
+            assert isinstance(meta["chunk_id"], str), (
+                f"Edge metadata['chunk_id'] must be a string, got {type(meta['chunk_id'])!r}"
+            )
+            assert meta["chunk_id"], (
+                f"Edge metadata['chunk_id'] must be non-empty, got {meta.get('chunk_id')!r}"
+            )
+            assert meta["chunk_id"] in chunk_ids, (
+                "Edge metadata['chunk_id'] must reference an actual chunk created "
+                f"during this refresh, got {meta.get('chunk_id')!r} not in {chunk_ids!r}"
             )
 
 
