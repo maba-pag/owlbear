@@ -83,7 +83,80 @@ class IngestPipeline:
         self._injection_mode = injection_mode
         self._source_store = source_store
 
-    async def ingest_text(  # noqa: C901, PLR0912
+    def _resolve_source_by_url(
+        self,
+        source_url: str,
+        scope: str,
+    ) -> object | None:
+        if self._source_store is None:
+            return None
+        if scope == "global":
+            return self._source_store.resolve_by_url(source_url)
+        return self._source_store.resolve_by_url(source_url, scope=scope)
+
+    def _resolve_or_create_source_id(
+        self,
+        source_url: str,
+        scope: str,
+    ) -> tuple[str | None, str | None]:
+        if self._source_store is None:
+            return None, None
+
+        created_source_id: str | None = None
+        resolved_source = self._resolve_source_by_url(source_url, scope)
+        if resolved_source is None:
+            from owlbear_knowledge.models import KnowledgeSource, SourceType  # noqa: PLC0415
+
+            now = datetime.now(tz=UTC).isoformat()
+            new_source = KnowledgeSource(
+                name=source_url,
+                source_type=SourceType.AUTHENTICATED_WEB,
+                fetch_method="url",
+                enrich=True,
+                config={"url": source_url},
+                scope=scope,
+                created_at=now,
+                updated_at=now,
+            )
+            created_source_id = new_source.id
+            created_source = self._source_store.create(new_source)
+            # Store implementation returns None; test doubles may return the source.
+            resolved_source = (
+                created_source
+                if created_source is not None
+                else self._resolve_source_by_url(source_url, scope)
+            )
+
+        resolved_source_id = getattr(resolved_source, "id", None)
+        return resolved_source_id, created_source_id
+
+    async def _cleanup_failed_ingest(
+        self,
+        doc_id: str,
+        chunk_ids: list[str],
+        created_source_id: str | None,
+    ) -> None:
+        try:
+            await asyncio.to_thread(self._docs.delete_document_data, doc_id)  # type: ignore[union-attr]
+        except Exception:  # noqa: BLE001
+            logger.debug("cleanup of failed ingest document failed", exc_info=True)
+
+        if chunk_ids:
+            try:
+                await asyncio.to_thread(self._docs.delete_chunk_embeddings, chunk_ids)  # type: ignore[union-attr]
+            except Exception:  # noqa: BLE001
+                logger.debug(
+                    "cleanup of failed ingest embeddings failed",
+                    exc_info=True,
+                )
+
+        if created_source_id is not None and self._source_store is not None:
+            try:
+                await asyncio.to_thread(self._source_store.delete, created_source_id)
+            except Exception:  # noqa: BLE001
+                logger.debug("cleanup of failed ingest source failed", exc_info=True)
+
+    async def ingest_text(
         self,
         text: str,
         *,
@@ -101,6 +174,7 @@ class IngestPipeline:
 
         doc_id = uuid4().hex
         created_source_id: str | None = None
+        chunk_ids: list[str] = []
         try:
             _meta: dict[str, object] = dict(metadata or {})
             chunks = await asyncio.to_thread(self._chunker.chunk, text, metadata=_meta)
@@ -134,33 +208,10 @@ class IngestPipeline:
 
             resolved_source_id = source_id
             if source_url is not None and self._source_store is not None:
-                resolved_source = self._source_store.resolve_by_url(source_url)
-                if resolved_source is None:
-                    from owlbear_knowledge.models import (  # noqa: PLC0415
-                        KnowledgeSource,
-                        SourceType,
-                    )
-
-                    now = datetime.now(tz=UTC).isoformat()
-                    new_source = KnowledgeSource(
-                        name=source_url,
-                        source_type=SourceType.AUTHENTICATED_WEB,
-                        fetch_method="url",
-                        enrich=True,
-                        config={"url": source_url},
-                        scope=scope,
-                        created_at=now,
-                        updated_at=now,
-                    )
-                    created_source_id = new_source.id
-                    created_source = self._source_store.create(new_source)
-                    # Store implementation returns None; test doubles may return the source.
-                    if created_source is not None:
-                        resolved_source = created_source
-                    else:
-                        resolved_source = self._source_store.resolve_by_url(source_url)
-                if resolved_source is not None:
-                    resolved_source_id = resolved_source.id
+                resolved_source_id, created_source_id = self._resolve_or_create_source_id(
+                    source_url,
+                    scope,
+                )
 
             doc = Document(
                 id=doc_id,
@@ -177,7 +228,7 @@ class IngestPipeline:
                 source_id=resolved_source_id,
             )  # type: ignore[union-attr]
 
-            chunk_ids: list[str] = await asyncio.to_thread(
+            chunk_ids = await asyncio.to_thread(
                 self._docs.store_chunks,
                 doc_id,
                 chunks,  # type: ignore[union-attr]
@@ -207,15 +258,7 @@ class IngestPipeline:
 
         except Exception:  # catch-all for unexpected ingest failures
             logger.exception("ingest_text failed for doc_id=%s", doc_id)
-            try:
-                await asyncio.to_thread(self._docs.delete_document_data, doc_id)  # type: ignore[union-attr]
-            except Exception:  # noqa: BLE001
-                logger.debug("cleanup of failed ingest document failed", exc_info=True)
-            if created_source_id is not None and self._source_store is not None:
-                try:
-                    await asyncio.to_thread(self._source_store.delete, created_source_id)
-                except Exception:  # noqa: BLE001
-                    logger.debug("cleanup of failed ingest source failed", exc_info=True)
+            await self._cleanup_failed_ingest(doc_id, chunk_ids, created_source_id)
             return IngestResult(
                 document_id=doc_id,
                 chunk_count=0,

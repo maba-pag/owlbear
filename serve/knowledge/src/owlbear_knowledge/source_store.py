@@ -146,13 +146,21 @@ class KnowledgeSourceStore:
             raise ValueError(msg)
         self._conn.commit()
 
-    def resolve_by_url(self, url: str) -> KnowledgeSource | None:
-        """Return the first source whose config.url matches *url*, or ``None``."""
+    def resolve_by_url(
+        self,
+        url: str,
+        *,
+        scope: str | None = None,
+    ) -> KnowledgeSource | None:
+        """Return the first source matching *url* and optional *scope*, or ``None``."""
         rows = self._conn.execute(self._select_from_sources()).fetchall()
         for row in rows:
             source = self._row_to_model(row)
-            if source.config.get("url") == url:
-                return source
+            if source.config.get("url") != url:
+                continue
+            if scope is not None and source.scope != scope:
+                continue
+            return source
         return None
 
     def resolve_by_path(self, path: str) -> KnowledgeSource | None:

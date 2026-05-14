@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from owlbear_knowledge.status_store import StatusStore
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     import sqlite3
@@ -242,9 +245,30 @@ class DocumentStore:
                 self._graph.insert_entity(stamped)
                 entity_count += 1
             for edge in result.edges:  # type: ignore[union-attr]
-                self._graph.insert_edge(edge)
+                stamped_edge = edge.model_copy(
+                    update={
+                        "scope": scope,
+                        "metadata": {
+                            **edge.metadata,
+                            "pipeline_name": pipeline_name,
+                            "document_id": document_id,
+                            "chunk_id": assigned_chunk_id,
+                        },
+                    }
+                )
+                self._graph.insert_edge(stamped_edge, document_id=document_id)
                 edge_count += 1
         return entity_count, edge_count
+
+    def delete_chunk_embeddings(self, chunk_ids: list[str]) -> None:
+        """Best-effort deletion of vector payloads for chunk IDs."""
+        if not chunk_ids:
+            return
+        for chunk_id in chunk_ids:
+            try:
+                self._vector.delete_embedding(chunk_id)  # type: ignore[union-attr]
+            except Exception:  # noqa: BLE001
+                logger.debug("chunk embedding cleanup failed", exc_info=True)
 
     # ── Cascade delete ────────────────────────────────────────────────────
 

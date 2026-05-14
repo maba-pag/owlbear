@@ -195,17 +195,23 @@ class GraphStore:
 
     # ── Edge operations ────────────────────────────────────────────────────
 
-    def insert_edge(self, edge: Edge) -> None:
+    def insert_edge(self, edge: Edge, *, document_id: str | None = None) -> None:
         """Insert *edge* into the ``edges`` table."""
+        resolved_document_id = document_id
+        if resolved_document_id is None:
+            meta_document_id = edge.metadata.get("document_id")
+            if isinstance(meta_document_id, str):
+                resolved_document_id = meta_document_id
         self._conn.execute(
             "INSERT INTO edges "
-            "(id, source_id, target_id, relation, weight, metadata, created_at, scope) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            "(id, source_id, target_id, relation, document_id, weight, metadata, created_at, scope) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 edge.id,
                 edge.source_id,
                 edge.target_id,
                 str(edge.relation),
+                resolved_document_id,
                 edge.weight,
                 self._dump_meta(edge.metadata),
                 self._now(),
