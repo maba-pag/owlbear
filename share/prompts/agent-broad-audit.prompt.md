@@ -18,9 +18,32 @@ This is the broad audit pass. Keep full ecosystem coverage while producing SNR a
 - Rejection is safe. Skip low-confidence findings instead of producing false positives.
 - Keep evidence inline. Quote exact triggering text and file.
 - Process one finding at a time. Complete approval + implementation + verification before moving on.
-- Allow pause or bail at any finding. If bailing, summarize remaining queue.
+- Allow user-requested pause or exit at any finding. If the user exits, summarize the remaining queue.
 
-**Trust signals:** If uncertain, say so and explain the ambiguity. Include confidence scores (0.0-1.0) on every finding and every option.
+**Trust signals:** If uncertain, say so and explain the ambiguity. Include confidence scores (.0-1.0) on every finding and every option.
+
+### Interaction Protocol
+
+Use the user's language unless they ask otherwise.
+
+Keep working until the user explicitly tells you to stop, pause, or end the session. Do not treat a report, summary, empty subqueue, or completed tool call as permission to stop; move to the next queued item or ask exactly one continuation decision.
+
+Maintain an internal queue, but present exactly **one** user-facing finding, proposal, or next-step decision at a time. Never list multiple findings and ask for a bulk decision.
+
+For each decision item, present this card inline before calling `askQuestions`:
+
+```markdown
+**Status quo:** {what exists, where, and its current role}
+**Problem:** {why this deserves attention}
+**Options:**
+- (a) {option} - Pro: {pro}; Con: {con}; Risk: {risk}; Confidence: {.0-1.0 scale}
+- (bp:) {best-practice option} - Pro: {pro}; Con: {con}; Risk: {risk}; Confidence: {.0-1.0 scale}
+- (rec:) {recommended option} - Pro: {pro}; Con: {con}; Risk: {risk}; Confidence: {.0-1.0 scale}
+**Recommendation:** {one option or combination, with reason}
+**Expected outcome:** {concrete behavior after the change}
+```
+
+Then call `askQuestions` for that one item only. After the user answers, apply or record that decision, update the ledger, verify references when files changed, and then present the next item.
 
 ## 2. Audit Surface and Standards
 
@@ -28,21 +51,23 @@ This is the broad audit pass. Keep full ecosystem coverage while producing SNR a
 
 | Surface | Weight | What to scan |
 |---|---|---|
-| Definitions | >80% | `.github/copilot-instructions.md`, `share/instructions/*.instructions.md`, `share/agents/*.agent.md`, `share/skills/*/SKILL.md` |
-| Memory | <20% | `/memories/`, `/memories/session/`, `/memories/repo/inbox/`, `ob-memory` MCP store |
+| Definitions | >80% | `.github/copilot-instructions.md`, `share/instructions/*.instructions.md`, `share/agents/*.agent.md`, `share/skills/*/SKILL.md`, `share/prompts/*.prompt.md` |
+| Memory | <20% | OwlBear `ob-memory` MCP entries relevant to the audited agents/skills/prompts; file-based `/memories/` tiers only as legacy/fallback governance evidence |
 
 Use `file_search` to discover current files for the definitions surface. Do not assume a fixed count.
 
-**MCP degradation path:** If `ob-memory` tools are unavailable, audit file-based memory tiers only and note skipped MCP checks.
+**MCP degradation path:** If `ob-memory` tools are unavailable, audit file-based memory tiers only as fallback evidence and note skipped MCP checks.
 
 ### Standards Loading Order
 
 Load in this exact order before evaluating any file:
 
-1. `h-agent-structure`
-2. `h-memory-structure`
-3. `r-pipeline-protocol`
-4. `r-project-standards`
+1. `share/README.md`
+2. `share/WIRING.md`
+3. `h-agent-structure`
+4. `h-memory-structure`
+5. `r-pipeline-protocol`
+6. `r-project-standards`
 
 **References, not restates.** Findings must cite specific rules from these skills. If you cannot cite a rule, reconsider the finding.
 
@@ -60,7 +85,8 @@ Standards: `h-agent-structure` section Agent File Structure, section Skill File 
 - Agent file containing forbidden content (procedures, shared rules, command templates)
 - Skill category mismatch (`h-` versus `w-`)
 - Naming convention violations
-- Instruction file that is not a 3-line stub
+- Stub instruction containing substantive rules instead of a pointer
+- Authority instruction that fails the authority-file criteria in `h-agent-structure`
 
 **Boundary-fitness sub-probe:**
 
@@ -123,18 +149,7 @@ Standards: `r-pipeline-protocol` section Per-Agent Signal Mapping, `share/README
 - Tool allowlist missing required tools or including out-of-tier tools
 - Agent naming inconsistency (`planner`, `doc-writer`)
 
-**Rejection-routing table:**
-
-| Agent | Rejection cause | Target status |
-|---|---|---|
-| builder | Test assumption wrong | `todo` |
-| builder | AC describes wrong interface | `backlog` |
-| reviewer | Implementation issue | `in-progress` |
-| reviewer | Test gap | `todo` |
-| reviewer | Test/AC quality | `backlog` |
-| reviewer | 2nd+ batch review cycle | `backlog` |
-| architect | AC wrong | `research` |
-| auditor | Any rejection | `backlog` |
+**Routing source-of-truth check:** Compare every routing claim against the current `r-pipeline-protocol` confidence thresholds and escalation routing. Do not rely on copied routing rows in this prompt.
 
 **Rule:** `BLOCK` is valid only for architect user-action/AR blocking paths. Other agents must route by status instead of blocking.
 
@@ -144,7 +159,7 @@ Standards: `r-pipeline-protocol` section Per-Agent Signal Mapping, `share/README
 
 Perform a quick triage scan that detects likely compression targets and prioritizes deep-dive attention without doing per-sentence rewrites.
 
-#### 6-Category Noise Taxonomy (inline definitions)
+#### 7-Category Noise Taxonomy (inline definitions)
 
 1. **Verbose prose wrappers** - framing text that repeats what nearby directives already state.
 2. **Over-specification** - excessive constraints/examples beyond what is required for correct execution.
@@ -152,19 +167,21 @@ Perform a quick triage scan that detects likely compression targets and prioriti
 4. **Prescriptive message templates** - rigid response phrasing that can be replaced by simpler outcome constraints.
 5. **Cross-reference ceremony** - link-heavy procedural overhead with low steering value.
 6. **Stale institutional memory** - legacy cautions/workarounds no longer relevant to current system behavior.
+7. **Speculative infrastructure** - guidance for features or workflows designed but not exercised in practice.
 
 #### Positive probes
 
-- Scan each file for all six categories; record category hits and short evidence snippets.
+- Scan each file for all seven categories; record category hits and short evidence snippets.
 - Emit progressive attention flags during the audit loop when a file accumulates multiple category hits.
 - Mark universal files (`applyTo: **`) as highest-leverage attention class by default.
 - Prefer terse, actionable flag text: category, why it matters, and deep-dive priority signal.
+- Before promoting stale or speculative feature guidance to an actionable finding, check task/archive evidence and git history. If no evidence exists, keep it as a low-confidence triage flag or candidate for deep audit, not an immediate deletion.
 
 #### Attention flag format
 
 Use this lightweight flag when detected:
 
-`SNR-FLAG | {file} | {category-list} | leverage={universal|high|normal} | confidence={0.0-1.0}`
+`SNR-FLAG | {file} | {category-list} | leverage={universal|high|normal} | confidence={.0-1.0}`
 
 #### Negative-space probe
 
@@ -184,23 +201,25 @@ Standard: `h-memory-structure` section Entry Shape, section Tier-Content Fit, se
 
 **MCP degradation:** If `ob-memory` is unavailable, audit file tiers only and note skipped checks.
 
+**Memory mutation guard:** Broad audit may fetch relevant OwlBear MCP memories and review them in context with the agent/skill/prompt definitions, but direct memory mutation requires explicit entry-level approval naming the exact entry ID and action. If the issue is the memory-audit workflow itself or requires contextual memory redesign, create a follow-up instead of bulk-editing memory from this prompt.
+
 **Negative-space probe:** Which learnings in file inbox should be curated into `ob-memory`?
 
 ## 4. Process
 
 ### Phase 1 - Scan
 
-1. Load all four standards in order.
+1. Load the standards and wiring context in order.
 2. Discover definitions surface with `file_search`.
 3. Read all files in both surfaces.
-4. Query memory (`list_memories(states=["curated", "approved"])` for inventory and `recall_memory(agent="{agent_name}")` for scoped context) when available; otherwise degrade gracefully.
+4. Query OwlBear memory MCP (`list_memories(states=["curated", "approved"])` for inventory and `recall_memory(agent="{agent_name}")` for scoped context) when available; otherwise degrade gracefully.
 5. Build a severity queue: HIGH, then MED, then LOW.
 
-Call `askQuestions` to present queue summary and confirm before the finding loop.
+Call `askQuestions` with counts and top-level coverage only before the finding loop. Do not list the queued findings yet.
 
 ### Phase 2 - Finding Loop
 
-For each finding, present a finding card, then call `askQuestions` to approve before implementing.
+For each finding, present exactly one decision card using the Interaction Protocol, then call `askQuestions` to approve before implementing.
 
 **Finding card format:**
 
@@ -209,15 +228,12 @@ For each finding, present a finding card, then call `askQuestions` to approve be
 
 **File:** {path}
 **Rule:** {skill-name} section {section}
-
-**Evidence:**
-> {exact quoted text}
-
-**Options:** (only when ambiguous)
-- A: {description} - confidence: {0.0-1.0} - {trade-off}
-- B: {description} - confidence: {0.0-1.0} - {trade-off}
-
-**Recommendation:** {description} - confidence: {0.0-1.0}
+**Evidence:** {exact quoted text}
+**Status quo:** {what exists and why it exists}
+**Problem:** {why this is a real issue}
+**Options:** {one option per line with Pro, Con, Risk, Confidence; include `(bp:)` and `(rec:)` when useful}
+**Recommendation:** {recommended option with reason}
+**Expected outcome:** {what changes for the next agent/prompt run}
 ```
 
 **Severity guidelines:**
@@ -266,4 +282,10 @@ Ranking rule: high context-budget files with moderate noise can outrank low-budg
 - Total SNR flags emitted: {count}
 ```
 
-Call `askQuestions` with coverage summary plus: "Run from the top again?"
+Call `askQuestions` with one continuation decision at a time. Offer concrete options such as:
+
+- Commit approved changes with a proposed commit message.
+- Run `/agent-deep-audit` on one ranked target.
+- Rerun the broad audit from the top.
+- Revisit one deferred finding.
+- End the session.

@@ -5,7 +5,7 @@ argument-hint: "Run: mode={scoped|full}, test_paths=[...], task_id={id}, coverag
 user-invocable: false
 disable-model-invocation: false
 model: [Claude Haiku 4.5 (copilot), GPT-5.4 mini (copilot)]
-tools: [execute/runInTerminal, execute/getTerminalOutput, execute/sendToTerminal, execute/killTerminal, read/readFile, read/terminalLastCommand, execute/testFailure]
+tools: [vscode/toolSearch, execute/runInTerminal, execute/getTerminalOutput, execute/sendToTerminal, execute/killTerminal, read/readFile, read/terminalLastCommand, execute/testFailure]
 agents: []
 hooks:
   PreToolUse:

@@ -1,13 +1,13 @@
 ---
-description: "Run a deep dependency-cluster audit on one agent or one skill, then propose structural and compression changes with section-by-section approval"
+description: "Run a deep dependency-cluster audit on one agent, skill, or prompt, then process structural and compression proposals one at a time"
 ---
 
 # Agent Deep Audit
 
 Run a deep, target-by-target audit of one instruction unit and its dependency cluster.
 
-Input mode: ${input:mode:Choose mode: agent or skill}
-Input target: ${input:target:Agent name or skill name to audit}
+Input mode: ${input:mode:Choose mode: agent, skill, or prompt}
+Input target: ${input:target:Agent, skill, or prompt name/path to audit}
 
 ## 1. Preamble
 
@@ -17,6 +17,7 @@ Your mission is to evaluate one target in context, not in isolation:
 
 - Agent mode: audit one agent plus all skills it references.
 - Skill mode: audit one skill plus the agents that consume it.
+- Prompt mode: audit one prompt plus invoked agents, referenced skills, and sibling prompts when relevant.
 
 This is a surgical review. You are not running a broad ecosystem sweep.
 
@@ -52,6 +53,18 @@ Use this taxonomy for per-sentence signal-to-noise analysis. A sentence may matc
    - Guidance for features or workflows designed but never exercised in practice.
    - Compression action: remove from protocol; preserve in research docs or companion skill if retrieval is needed later.
 
+## 2.1 Interaction Protocol
+
+Use the user's language unless they ask otherwise.
+
+Keep working until the user explicitly tells you to stop, pause, or end the session. Do not treat a report, summary, empty subqueue, or completed tool call as permission to stop; move to the next queued item or ask exactly one continuation decision.
+
+Maintain an internal proposal queue, but present exactly **one** user-facing finding, proposal, or next-step decision at a time. Never list multiple findings and ask for a bulk decision.
+
+For each decision item, present the required decision card inline before calling `askQuestions`. The options list should include viable choices with Pro, Con, Risk, and Confidence. Include `(bp:)` for the best-practice option and `(rec:)` for your recommendation when useful.
+
+Then call `askQuestions` for that one item only. After the user answers, apply or record that decision, update the ledger, verify references when files changed, and then present the next item.
+
 ## 3. Scope Modes
 
 Validate `${input:mode}` first.
@@ -60,6 +73,7 @@ Allowed values:
 
 - `agent`
 - `skill`
+- `prompt`
 
 Reject any other value and request correction before analysis.
 
@@ -92,6 +106,20 @@ Load:
 
 Resulting unit: one skill in real consumer context.
 
+### 3.3 Prompt Mode
+
+Target is one prompt file.
+
+Load:
+
+- The target prompt file.
+- The invoked agent file when prompt frontmatter contains `agent:`.
+- Skills explicitly referenced by the prompt.
+- Sibling prompts in the same folder when the user asks for cross-prompt comparison or the target prompt depends on their conventions.
+- Relevant instruction stubs triggered by touched files when needed for correctness checks.
+
+Resulting unit: one prompt plus its effective invocation and reference surface.
+
 ## 4. Pre-Analysis (Required Before Any Judgments)
 
 Do not evaluate until this pre-analysis is complete.
@@ -104,7 +132,7 @@ Do not evaluate until this pre-analysis is complete.
 4. Identify where each critical behavior is defined (agent vs skill vs instruction).
 5. Call out uncertainty boundaries before scoring quality.
 
-If cluster loading is incomplete, stop and report the missing files.
+If cluster loading is incomplete, report the missing files, explain the impact, and ask one continuation decision about whether to proceed with partial context, narrow the scope, or pause.
 
 ### 4.2 Real-World Grounding
 
@@ -120,9 +148,9 @@ Sections describing never-exercised features are candidates for taxonomy categor
 
 For every section in the target, answer:
 
-> "When agent X loads this skill at step Y, what decision does this section enable that X couldn't make without it?"
+> "When the consumer loads this unit at this workflow step, what decision does this section enable that the consumer couldn't make without it?"
 
-For clusters with ≥5 files, present the consumer-impact framing and grounding results to the user via `askQuestions` before generating proposals. For smaller clusters, proceed directly but include the framing in proposal rationale.
+For clusters with ≥5 files, present the consumer-impact framing and grounding results to the user via `askQuestions` before generating proposals. Present only the scope decision, not the full proposal queue. For smaller clusters, proceed directly but include the framing in proposal rationale.
 
 ## 5. Core Analysis Dimensions
 
@@ -160,7 +188,7 @@ Evaluate the cluster across all dimensions below.
   - terse rewrite
   - delete
   - move
-- Always include reason and confidence (0.0-1.0).
+- Always include reason and confidence (.0-1.0).
 
 ### 5.6 Cross-File Coherence
 
@@ -170,7 +198,7 @@ Evaluate the cluster across all dimensions below.
 
 ## 6. Output Contract (Structured Decision Per Proposal)
 
-Produce one proposal package in this exact order:
+Build an internal proposal queue in this exact order:
 
 1. Structural Proposals (first)
    - Flow fixes, completeness fixes, and content moves between files.
@@ -178,6 +206,8 @@ Produce one proposal package in this exact order:
    - Section-level and sentence-level reductions with taxonomy labels.
 3. Issues (third)
    - Broken links, missing tools, naming mismatches, unresolved references.
+
+Do not dump the full queue to the user. Present and decide one item at a time using §6.1.
 
 ### 6.1 Decision Format (Required Per Proposal)
 
@@ -192,7 +222,7 @@ Each section-level proposal must use this structure:
   - (c) Delete — Pro: {}, Con: {}, Risk: {} — Confidence: X
   - (d) Move to {file} — Pro: {}, Con: {}, Risk: {} — Confidence: X
 **Recommendation:** Option (X) because {reasoning}.
-**Expected outcome:** After this change, when agent {A} loads this skill at step {S}, it will {concrete behavioral description of what's different for the consumer}.
+**Expected outcome:** After this change, when {consumer or prompt run} loads this unit at {step}, it will {concrete behavioral description of what's different}.
 ```
 
 Not every proposal needs 4 options. Simple fixes (broken paths, typos) need only a fix description and confidence. Section-level and subsection-level decisions always need the full format.
@@ -203,24 +233,19 @@ Group related proposals into coherent decision units. When a subsection deletion
 
 ## 7. Interaction Model (Approval Loop)
 
-Use section-by-section approval via `askQuestions`, grouped by file.
+Use one-proposal-at-a-time approval via `askQuestions`.
 
-Per file, present grouped proposals (using §6.1 format inline in chat above the askQuestions call) and ask:
+For each proposal, present exactly one §6.1 decision card inline in chat above the `askQuestions` call and ask for that item only:
 
-- Approve all in this file
-- Approve selected items
-- Reject selected items
-- Request rewrite of selected items
-- Skip file for now
-
-After two consecutive files are approved without edits, offer a batch-approve escape hatch:
-
-- Batch-approve all remaining low-risk compression items
-- Continue section-by-section
+- Approve recommended option
+- Choose another listed option
+- Request rewrite
+- Defer this item
+- Reject this item
 
 Never apply unapproved changes. Keep a running ledger of approved/rejected/deferred items.
 
-After applying changes, verify downstream references still resolve before continuing to the next file.
+After applying an approved change, verify downstream references still resolve before presenting the next proposal.
 
 ## 8. Guardrails
 

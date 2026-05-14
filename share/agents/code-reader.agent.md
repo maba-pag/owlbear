@@ -5,7 +5,7 @@ argument-hint: "Analyze: task_id={task_id}, ac_lines=[...], changed_files=[...],
 user-invocable: false
 disable-model-invocation: false
 model: [GPT-5.4 (copilot), Claude Sonnet 4.6 (copilot)]
-tools: [read/readFile, read/viewImage, read/problems, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages]
+tools: [vscode/toolSearch, read/readFile, read/viewImage, read/problems, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages]
 agents: []
 hooks:
   PreToolUse:

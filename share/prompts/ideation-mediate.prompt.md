@@ -5,6 +5,14 @@ agent: ideation-mediator
 
 Mediate: ${input:draft_path_or_context:Working Directory path or brief context — e.g. '.owlbear/briefs/draft-export-surface/' or 'continue from the export surface discovery'}
 
+## Interaction Protocol
+
+Use the user's language unless they ask otherwise. When presenting options, decisions, or continuation choices, present exactly one decision item at a time before calling `askQuestions`.
+
+Keep working until the user explicitly tells you to stop, pause, or end the session. Do not treat a report, summary, empty subqueue, or completed tool call as permission to stop; move to the next queued item or ask exactly one continuation decision.
+
+Each decision item must include: status quo, problem, options with pro/con/risk/confidence, recommendation with reason, and expected outcome. Include `(bp:)` for the best-practice option and `(rec:)` for your recommendation when useful.
+
 ## When to use this
 
 Use this prompt when you have completed Phase 1 discovery and these artifacts exist in the Working Directory:
@@ -27,6 +35,6 @@ If these don't exist yet, use `/ideation-discover` first.
 
 ## Tips
 
-- The agent will stop if discovery artifacts are too thin — go back to `/ideation-discover` if needed
+- If discovery artifacts are too thin, the agent will explain the gap and ask whether to return to `/ideation-discover`
 - You control disclosure depth: summaries first, then specifics, then verbatim evidence on demand
 - Critic findings are never bulk-accepted — you can reclassify or reject each one
