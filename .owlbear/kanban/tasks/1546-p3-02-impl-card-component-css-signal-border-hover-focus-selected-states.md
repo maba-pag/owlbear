@@ -1,10 +1,10 @@
 ---
 id: 1546
 title: 'P3-02: impl — card component CSS: signal border, hover, focus, selected states'
-status: review
+status: backlog
 priority: important
 created: 2026-05-13T18:43:23.784270+00:00
-updated: 2026-05-14T04:21:33.084046+00:00
+updated: 2026-05-14T04:57:30.740880+00:00
 tags:
   - phase-3
   - scope:cockpit
@@ -17,7 +17,7 @@ depends_on:
   - 1544
 blocked: false
 block_reason:
-claimed_at: 2026-05-14T04:21:33.084046+00:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -160,3 +160,72 @@ Note: AC-2 (hover/focus/selected states) is already covered by Card.css.test.ts 
 
 **Quality-runner (scoped):** 23 passed / 0 failed across CardCSS_1546, Card.css, CardDrag_1546 — all pre-existing + new tests green against current impl. ESLint clean.
 **Commit:** d0e81c31 (test: add retry tests for card CSS border width and selected additivity (#1546, test-writer))
+2026-05-14T04:37:26+00:00
+## Review Evidence
+- Verdict: PASS
+- PASS confirmation: PASS #1546 -> docs | AC mapped to code and evidence sufficient.
+- Builder evidence reviewed first: task body reports scoped quality-runner evidence of 116 passed / 0 failed, lint clean, and 90.9% coverage for Card.tsx; the test-writer retry reports 23 passed / 0 failed across CardCSS_1546, Card.css, and CardDrag_1546 with ESLint clean.
+- AC evidence map:
+
+| AC | Code Evidence | Test Evidence | Status |
+|---|---|---|---|
+| AC-1 | `serve/cockpit/web/src/components/Card.css:3` keeps the 4px base border; `serve/cockpit/web/src/components/Card.tsx:61` emits `data-signal`; signal-specific selectors remain in `serve/cockpit/web/src/components/Card.css:13-29`. | `serve/cockpit/web/src/__tests__/CardCSS_1546.test.ts:69` proves the 4px width; `serve/cockpit/web/src/__tests__/Card.css.test.ts:53`, `:60`, `:67`, `:74`, `:81` cover the signal-color selector contract; durable DOM proof in `serve/cockpit/web/src/__tests__/Card.signal.test.tsx:73`, `:81`, `:89`, `:97`, `:105` proves runtime `data-signal` emission. | PASS |
+| AC-2 | `serve/cockpit/web/src/components/Card.tsx:60` emits `data-selected`; selected styling is additive in `serve/cockpit/web/src/components/Card.css:31`; hover/focus rules are present at `serve/cockpit/web/src/components/Card.css:36` and `:40`. | `serve/cockpit/web/src/__tests__/Card.css.test.ts:101` proves selected styling uses the success token and `:116` closes the previously requested additivity gap; `serve/cockpit/web/src/__tests__/Card.css.test.ts:132` and `:139` cover hover/focus token usage; durable runtime `data-selected` proof exists in `serve/cockpit/web/src/__tests__/Shell.card-selection.integration.test.tsx:185` and `:212`. | PASS |
+| AC-3 | Base rule keeps `background: transparent` at `serve/cockpit/web/src/components/Card.css:4` and `overflow-wrap: break-word` with no `max-height` in the same block. | `serve/cockpit/web/src/__tests__/CardCSS_1546.test.ts:42` proves `overflow-wrap: break-word`; `serve/cockpit/web/src/__tests__/CardCSS_1546.test.ts:49` proves the fixed-height constraint was removed. | PASS |
+| AC-4 | `serve/cockpit/web/src/components/Card.tsx:62`, `:70`, and `:74` implement the `data-dragging` lifecycle; `serve/cockpit/web/src/components/Card.css:45` applies the drag opacity rule. | `serve/cockpit/web/src/__tests__/CardCSS_1546.test.ts:110` proves `[data-dragging="true"] { opacity: 0.5 }`; `serve/cockpit/web/src/__tests__/CardDrag_1546.test.tsx:53`, `:69`, `:89`, and `:112` prove the JSX drag lifecycle. | PASS |
+- Challenger cross-check: a stronger second-cycle FAIL was not supported. The retry satisfied the previously assigned proof gaps, and the durable frontend suites already cover the runtime `data-signal` / `data-selected` hooks.
+- Blocking findings: none.
+
+## Observations
+- `serve/cockpit/web/src/components/Card.css:4` is source-aligned for the transparent base background, but there is still no direct named assertion for that declaration. I am not treating that as a blocker on this retry because the prior review explicitly routed only the 4px-width and selected-additivity gaps, and those gaps are now closed.
+- `serve/cockpit/web/src/__tests__/Card.css.test.ts:132` and `:139` are not selector-scoped to `.card:hover` / `.card:focus-visible`; they are acceptable for this task, but a future proof-hardening pass could make those assertions more specific.
+- `serve/cockpit/web/src/__tests__/Card.css.test.ts:116` guards against `border-left-color` overrides in the selected rule. If the team wants a stronger long-term regression net, a later follow-up could also reject `border-left` / `border` shorthand in that block.
+- No scoped editor diagnostics were present in `Card.css`, `Card.tsx`, `tokens.css`, or the reviewed test files.
+2026-05-14T04:39:08+00:00
+## Docs Gate
+
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | README verification | Yes | N/A | `serve/cockpit/README.md` covers API, stack, and launch — no card CSS implementation details documented there. Grep on `resolveSignal`, `data-dragging`, `data-signal`, `Card.css`, `computeSignal` returned no matches in the README. No task-caused drift detected. |
+| 2 | External attribution | Yes | N/A — already updated | `sources/overview.md` already contains a "Card CSS Implementation Research (Task #1546)" section at lines 97–102 with 2 entries (MDN drag-and-drop, Penpot design tokens). No further update needed. |
+| 3 | Research doc | Yes | N/A | Research file `.owlbear/research/card-css-impl-1546.md` exists and is linked in the task body under "Research". |
+| 4 | Deletion detection | Yes | N/A | No source files deleted — only code within `Card.tsx`, `Card.css`, and `tokens.css` was modified. No orphaned references. |
+
+### Verification Layers
+- Layer 1 — grep: `serve/cockpit/README.md` contains no references to the changed symbols (`resolveSignal`, `computeSignal`, `data-dragging`, `data-signal`, `Card.css`). `sources/overview.md` already carries the #1546 attribution block.
+- Layer 2 — editorial: The cockpit README is API/stack/launch-scoped; internal component CSS states are implementation details not documented at this level. Consistent with adjacent tasks (#1538, #1543, #1544) which also added no README entries for CSS-level changes.
+
+### Scratch cleanup
+No `.owlbear/scratch/1546-*` files found — nothing to clean.
+2026-05-14T04:57:30+00:00
+## Audit
+### Regression Detection
+- quality-runner mode full: Python 6301 passed / 10 failed, Frontend 20 passed / 10 failed, lint clean
+- 3 failures confirmed as regressions introduced by #1546: `TokenArchitecture_1535.test.ts` (AC-1: :root declares 19 tokens) and `TokenArchitecture_1543.test.ts` (AC-2 happy: media query block, AC-2 boundary: exactly 19 tokens). Root cause: builder guidance #3 moved `--pds-signal-claimed` to `tokens.css`, bumping color token count from 19 to 20, but neither builder nor test-writer updated the sibling token-architecture tests.
+- Remaining 17 failures are pre-existing (cockpit_view kanban cleanup, ideation diagram, server status, engine accessor migration, ThemeToggle, ResponsiveLayout shell tokens, KanbanBoard filter) — unrelated to card CSS domain.
+- regression verdict: FAIL
+
+### Intent Verification
+- scope alignment: PASS (changed files: Card.tsx, Card.css, tokens.css — all cockpit frontend component domain)
+- purpose match: PASS (card CSS signal borders, hover/focus/selected states, drag opacity, computeSignal consolidation — matches AC intent)
+- extraneous scope: none
+- boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 4/5
+ACs are specific with named CSS selectors, exact data attributes, and concrete values. Challenger engagement produced useful refinements (AC-4 wording, computeSignal scope addition). Minor gap: architect guidance #3 directed adding a token to tokens.css but didn't flag the downstream impact on TokenArchitecture test suites from #1535/#1543. Score 4 — adequate, minor gap filled at audit.
+
+### Commit Integrity
+- upstream commit presence: PASS (builder: 4a680f66, test-writer: be2b24ab + d0e81c31 — all verified via git log)
+- kanban commit packaging: PASS (auditor will commit kanban state after end_work)
+
+### Deduction Breakdown
+- Regression failures (3 token architecture tests broken by #1546): -.10
+
+### Confidence: 0.90
+### Action: reject-to-backlog
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Update TokenArchitecture_1535.test.ts EXPECTED_COLOR_TOKENS to include --pds-signal-claimed (20 tokens); update TokenArchitecture_1543.test.ts boundary assertion from 19 to 20 tokens in both media-query and data-theme dark blocks | serve/cockpit/web/src/__tests__/TokenArchitecture_1535.test.ts, serve/cockpit/web/src/__tests__/TokenArchitecture_1543.test.ts | Regression detection: 3 failures caused by adding --pds-signal-claimed to tokens.css without updating existing token-count assertions |
