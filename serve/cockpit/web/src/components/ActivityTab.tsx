@@ -151,6 +151,7 @@ export default function ActivityTab({ onSelectTask }: ActivityTabProps) {
             <span data-testid="session-task">{s.task_id ?? 'unassigned'}</span>
             <span data-testid="session-state">{s.state}</span>
             <span data-testid="session-duration">{formatDuration(s.duration)}</span>
+            <span data-testid="session-outcome">{s.outcome ?? '\u2014'}</span>
           </button>
         ))}
       </div>
