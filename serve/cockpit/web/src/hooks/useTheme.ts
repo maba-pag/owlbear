@@ -14,14 +14,6 @@ function prefersDark(): boolean {
   return window.matchMedia('(prefers-color-scheme: dark)').matches
 }
 
-function resolveTheme(theme: Theme): ResolvedTheme {
-  if (theme === 'auto') {
-    return prefersDark() ? 'dark' : 'light'
-  }
-
-  return theme
-}
-
 function readStoredTheme(): Theme {
   const stored = localStorage.getItem(THEME_STORAGE_KEY)
   return isResolvedTheme(stored) ? stored : 'auto'
@@ -42,10 +34,18 @@ interface UseThemeResult {
 }
 
 export function useTheme(): UseThemeResult {
+  const mediaQueryList = useMemo(
+    () => window.matchMedia('(prefers-color-scheme: dark)'),
+    [],
+  )
   const [theme, setTheme] = useState<Theme>(() => readStoredTheme())
+  const [systemPrefersDark, setSystemPrefersDark] = useState<boolean>(
+    () => mediaQueryList.matches,
+  )
 
   useEffect(() => {
-    const resolved = resolveTheme(theme)
+    const resolved =
+      theme === 'auto' ? (systemPrefersDark ? 'dark' : 'light') : theme
 
     if (theme === 'auto') {
       localStorage.removeItem(THEME_STORAGE_KEY)
@@ -54,7 +54,26 @@ export function useTheme(): UseThemeResult {
     }
 
     document.documentElement.dataset.theme = resolved
-  }, [theme])
+  }, [theme, systemPrefersDark])
+
+  useEffect(() => {
+    if (theme !== 'auto') {
+      return
+    }
+
+    setSystemPrefersDark(mediaQueryList.matches)
+
+    const handleChange = (event: MediaQueryListEvent): void => {
+      setSystemPrefersDark(event.matches)
+      document.documentElement.dataset.theme = event.matches ? 'dark' : 'light'
+    }
+
+    mediaQueryList.addEventListener('change', handleChange)
+
+    return () => {
+      mediaQueryList.removeEventListener('change', handleChange)
+    }
+  }, [theme, mediaQueryList])
 
   const toggle = (): void => {
     setTheme((current) => {
@@ -71,8 +90,8 @@ export function useTheme(): UseThemeResult {
   }
 
   const isDark = useMemo(
-    () => theme === 'dark' || (theme === 'auto' && prefersDark()),
-    [theme],
+    () => theme === 'dark' || (theme === 'auto' && systemPrefersDark),
+    [theme, systemPrefersDark],
   )
 
   return { theme, toggle, isDark }
