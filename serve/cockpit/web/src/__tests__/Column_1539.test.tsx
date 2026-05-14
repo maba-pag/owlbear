@@ -164,34 +164,38 @@ describe('TestFromAC_ColumnOverflow', () => {
 //      Column.css does not exist → 3b test fails with ENOENT.
 
 describe('TestFromAC_ColumnEmptyState', () => {
-  // AC-3a: empty todo column must display "No todo tasks".
-  // FAIL: current Column.tsx renders "No tasks" (static), not "No todo tasks".
-  it('renders "No todo tasks" when status is "todo" and tasks array is empty', () => {
+  // AC-3a: empty todo column must display polished label "No Todo tasks".
+  // Updated in retry (#1574): #1574 AC-2 supersedes the raw-string contract —
+  // implementation normalizes status labels (hyphens→spaces, Title Case) before
+  // composing empty-state text, so "todo" → "Todo".
+  it('renders "No Todo tasks" when status is "todo" and tasks array is empty', () => {
     const { container } = renderColumn('todo', [])
     const emptyEl = container.querySelector('[data-testid="empty-column"]')
     expect(emptyEl, 'empty-column element must exist for empty todo column').not.toBeNull()
     expect(
       emptyEl!.textContent,
-      'empty state text must be parameterized: "No todo tasks" not the static "No tasks"',
-    ).toBe('No todo tasks')
+      'empty state text must use polished label: "No Todo tasks" — #1574 AC-2 requires JS-normalized status in empty text',
+    ).toBe('No Todo tasks')
   })
 
-  // AC-3a: empty research column must display "No research tasks".
-  // FAIL: current Column.tsx renders "No tasks" (static).
-  it('renders "No research tasks" when status is "research" and tasks array is empty', () => {
+  // AC-3a: empty research column must display polished label "No Research tasks".
+  // Updated in retry (#1574): polished label contract.
+  it('renders "No Research tasks" when status is "research" and tasks array is empty', () => {
     const { container } = renderColumn('research', [])
     const emptyEl = container.querySelector('[data-testid="empty-column"]')
     expect(emptyEl, 'empty-column element must exist for empty research column').not.toBeNull()
-    expect(emptyEl!.textContent).toBe('No research tasks')
+    expect(emptyEl!.textContent).toBe('No Research tasks')
   })
 
-  // AC-3a: empty in-progress column must display "No in-progress tasks" (hyphenated status).
-  // FAIL: current Column.tsx renders "No tasks" (static).
-  it('renders "No in-progress tasks" when status is "in-progress" and tasks array is empty', () => {
+  // AC-3a: empty in-progress column must display polished label "No In Progress tasks".
+  // Updated in retry (#1574): hyphens → spaces, Title Case — "in-progress" → "In Progress".
+  // CSS text-transform: capitalize cannot produce "In Progress" from "in-progress";
+  // JS normalization is required and applied before composing empty-state text.
+  it('renders "No In Progress tasks" when status is "in-progress" and tasks array is empty', () => {
     const { container } = renderColumn('in-progress', [])
     const emptyEl = container.querySelector('[data-testid="empty-column"]')
     expect(emptyEl, 'empty-column element must exist for empty in-progress column').not.toBeNull()
-    expect(emptyEl!.textContent).toBe('No in-progress tasks')
+    expect(emptyEl!.textContent).toBe('No In Progress tasks')
   })
 
   // AC-3b: Column.css must have centering declarations WITHIN the .column-empty selector block.
