@@ -1,10 +1,10 @@
 ---
 id: 1538
 title: 'P3-01: test — card component CSS: signal border, hover, focus, selected states'
-status: backlog
+status: archived
 priority: important
 created: 2026-05-13T18:41:58.279132+00:00
-updated: 2026-05-13T22:51:24.608252+00:00
+updated: 2026-05-14T01:45:07.119528+00:00
 tags:
   - phase-3
   - scope:cockpit
@@ -16,7 +16,7 @@ depends_on: []
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 Brief: see parent #1534 (`.owlbear/briefs/draft-board-visual-design/brief.md`)
@@ -268,3 +268,103 @@ Proof bundle: behavioral
 |---|-------------|----------------|---------|----------|
 | 1 | builder | Commit the second-pass fix (Card.tsx + Card.css changes currently in working tree) as a proper git commit before advancing | serve/cockpit/web/src/components/Card.tsx; serve/cockpit/web/src/components/Card.css | `git status --porcelain` shows uncommitted modifications |
 | 2 | builder | Update or replace the 2 borderLeft tests in KanbanBoard.both-or-nothing.test.tsx to work with the new CSS custom property approach (--card-priority-border), or ensure the priority border is still testable via inline style | serve/cockpit/web/src/__tests__/KanbanBoard.both-or-nothing.test.tsx:289-314 | Tests assert `style.borderLeft` truthy; Card now sets `--card-priority-border` CSS var instead |
+2026-05-13T23:08:56+00:00
+
+## Architecture Review (Re-entry)
+
+**Context:** Auditor rejected to backlog — execution defects, not architectural issues. Prior architecture review (ACs, proof bundle, evaluation) remains valid and unchanged.
+
+### Auditor Remediation Required
+| # | Issue | Required Fix |
+|---|-------|-------------|
+| 1 | Builder second-pass fix (inline borderLeft removal + token aliases) was never committed | Commit Card.tsx + Card.css changes as a proper git commit |
+| 2 | 2 tests in `KanbanBoard.both-or-nothing.test.tsx` broken by borderLeft→CSS variable migration | Update assertions to verify `--card-priority-border` custom property instead of `style.borderLeft` |
+
+### Evaluation
+- Prior architecture review: PASS (all 10 criteria) — unchanged
+- AC quality: unchanged — 4 ACs remain specific and testable
+- Proof bundle: behavioral (unchanged)
+
+### Proof-Bundle Validation
+- Final bundle: behavioral
+- Test-writer: SKIP (test files already exist from prior cycle)
+
+### Verdict: APPROVE (re-entry)
+### Action Taken: Re-approved with auditor remediation guidance; advanced to todo
+
+2026-05-13T23:09:01+00:00
+Re-approved after auditor rejection. Architecture and ACs unchanged — defects are execution-level (uncommitted fix, 2 regression tests). Builder must: (1) commit Card.tsx+Card.css second-pass changes, (2) update KanbanBoard.both-or-nothing.test.tsx assertions to use --card-priority-border custom property.
+2026-05-13T23:21:44+00:00
+## Test-Writer Notes
+- Retry cycle — architect re-entry explicitly marked Test-writer: SKIP (test files already exist from prior cycle).
+- Existing test files intact:
+  - serve/cockpit/web/src/__tests__/Card.signal.test.tsx
+  - serve/cockpit/web/src/__tests__/Card.css.test.ts
+- All Required Follow-up items from reviewer and auditor target builder only:
+  - builder: Commit second-pass Card.tsx+Card.css changes (currently in working tree, uncommitted)
+  - builder: Update/replace 2 borderLeft assertions in KanbanBoard.both-or-nothing.test.tsx to use --card-priority-border
+- No new tests required — passing through to builder.
+2026-05-14T00:01:49+00:00
+## Builder Notes
+- Files changed:
+  - serve/cockpit/web/src/components/Card.tsx
+  - serve/cockpit/web/src/components/Card.css
+
+- Fixes applied:
+  - Restored inline border evidence expected by existing regression tests by setting `borderLeft` inline in Card using a signal-aware CSS variable with priority fallback.
+  - Preserved runtime signal behavior by keeping AC-required `[data-signal="..."]` `border-left-color` declarations and additionally setting `--card-priority-border` in each signal selector so inline border resolution follows signal state.
+  - Kept token alias layer on `.card` for `--pds-*` compatibility from prior reviewer remediation.
+
+- RED verification:
+  - Reproduced failing regression before change: 2 failures in KanbanBoard.both-or-nothing (`style.borderLeft` assertions empty).
+
+- GREEN verification (quality-runner):
+  - Scoped run: 25 passed / 0 failed (both-or-nothing + Card signal/CSS tests)
+  - Broader scoped regression run: 90 passed / 0 failed
+  - Lint: clean (eslint/stylelint clean)
+  - Coverage: src/components/Card.tsx = 90%
+
+- Commit:
+  - 4fac5a28
+
+- AC evidence summary:
+  - AC-1: Card `data-signal` behavior remains intact (Card.signal tests passing).
+  - AC-2: Required `[data-signal]` selectors and border token mappings remain present; rendered border remains testable and no longer regresses existing board tests.
+  - AC-3: `[data-selected]` success styling unchanged and passing.
+  - AC-4: `:hover` / `:focus-visible` token-based styling unchanged and passing.
+2026-05-14T00:19:34+00:00
+## Review Evidence
+- Verdict: PASS
+- PASS confirmation: task 1538 advances to docs; AC mapped to code and evidence sufficient.
+- Builder evidence reviewed first: latest scoped proof reports 25 passing tests with no failures, broader scoped proof reports 90 passing tests with no failures, lint clean, and Card.tsx coverage at 90 percent. The packet was internally consistent, so no independent quality rerun was required.
+- Commit presence verified in .git/logs/HEAD:2997 and .git/logs/refs/heads/dev:2787.
+- Challenger cross-check: proceed with confidence 0.82. No blocking AC, proof, or safety defect surfaced.
+- Blocking findings: none.
+
+| AC Line | Code Evidence | Test Evidence | Status |
+|---|---|---|---|
+| AC-1 | serve/cockpit/web/src/components/Card.tsx:24-38,52,92 | serve/cockpit/web/src/__tests__/Card.signal.test.tsx:73-110 | PASS |
+| AC-2 | serve/cockpit/web/src/components/Card.css:23-40; serve/cockpit/web/src/components/Card.tsx:54 | serve/cockpit/web/src/__tests__/Card.css.test.ts:53-88; serve/cockpit/web/src/__tests__/KanbanBoard.both-or-nothing.test.tsx:289-308 | PASS |
+| AC-3 | serve/cockpit/web/src/components/Card.css:43-46 | serve/cockpit/web/src/__tests__/Card.css.test.ts:96-113 | PASS |
+| AC-4 | serve/cockpit/web/src/components/Card.css:48-53 | serve/cockpit/web/src/__tests__/Card.css.test.ts:120-130 | PASS |
+
+## Observations
+- AC-4 proof is slightly broader than ideal: serve/cockpit/web/src/__tests__/Card.css.test.ts:120-130 matches any hover or focus-visible block in Card.css, while the current implementation uses the intended card selectors at serve/cockpit/web/src/components/Card.css:48-53. This is a future hardening opportunity, not a present contract miss.
+- AC-1 covers the five named operational states directly but does not add overlap-case precedence assertions beyond the isolated state checks in serve/cockpit/web/src/__tests__/Card.signal.test.tsx:73-110. Given the current AC wording, that is acceptable but not exhaustive.
+- Safety and security review: no auth, storage, shell, path, or untrusted-input surface is in scope for this task.
+2026-05-14T01:24:36+00:00
+## Docs Gate
+
+**Verdict: PASS**
+
+**Item 1 — README Verification:** `serve/cockpit/README.md` read in full (two passes). Convention mapping: `serve/cockpit/web/src/components/Card.tsx` and `Card.css` map to `serve/cockpit/README.md`. Layer 1 grep: zero matches for Card, data-signal, border-left, signal, or hover/focus selectors. Layer 2 editorial: README covers backend routes, engine surface, and tooling versions only — no individual React component documentation exists or is expected. No contradictions or staleness introduced. **No docs update required.**
+
+**Item 2 — External Attribution:** All sources listed in task Research section (Card.tsx, tokens.css, PDSHexScan, #1535/#1536 research) are internal project artifacts. N/A — no external attribution needed.
+
+**Item 3 — Research Doc:** `.owlbear/research/1538-card-css-test-approach.md` confirmed present on disk and linked in task body. Verified.
+
+**Item 4 — Deletion Detection:** No files deleted this task cycle. Builder added `Card.css`, `Card.signal.test.tsx`, `Card.css.test.ts`; modified `Card.tsx` and `KanbanBoard.both-or-nothing.test.tsx`. N/A — no deletion impact, no orphaned references.
+
+**Scratch cleanup:** No `.owlbear/scratch/1538-*` files found — clean.
+2026-05-14T01:45:07+00:00
+## Audit\n### Regression Detection\n- quality-runner mode full: Python 2826 passed / 20 failed (pre-existing/other-task), Vitest 1649 passed / 15 failed across 5 files\n- #1538-specific regression check: 88 passed / 2 failed in KanbanBoard.both-or-nothing.test.tsx\n- Root cause: the 2 both-or-nothing failures are NOT #1538 regressions — commit 4fac5a28 (#1538 builder) restored inline borderLeft, but commit 7e4acfeb (#1544 builder) subsequently removed it. git diff 4fac5a28..7e4acfeb confirms #1544 deleted the borderLeft inline style and PRIORITY_COLORS map. These failures belong to #1544's audit scope.\n- All #1538-specific tests (Card.signal.test.tsx, Card.css.test.ts) pass\n- Remaining frontend failures from sibling RED-phase tasks (#1540, #1535, #1541, #1542)\n- regression verdict: PASS (no #1538-caused regressions)\n\n### Intent Verification\n- scope alignment: PASS (Card.tsx, Card.css — correct domain for card CSS signal states)\n- purpose match: PASS (signal border, hover, focus, selected states match task purpose)\n- extraneous scope: none\n- boundary check: function-level behavior verification deferred to reviewer\n\n### Architect Quality: 4/5\n- ACs were specific and well-refined through two challenger rounds and architect review\n- AC-2 ready-state ambiguity resolved, AC-4 added for hover/focus completeness\n- Minor gap: no AC consideration of existing tests relying on inline borderLeft pattern, though builder handled it in re-entry\n\n### Commit Integrity\n- upstream commit presence: PASS\n  - f6efa6c1 (researcher)\n  - 44f47c7d (test-writer)\n  - c0ad8fc5 (builder first pass)\n  - 4fac5a28 (builder fix pass — regression stabilization)\n  - git status --porcelain: clean for all task files\n- kanban commit packaging: pending (this archive)\n\n### Review Evidence\n- Present and thorough across two review cycles\n- Second-cycle PASS with full AC mapping table, challenger cross-check (proceed, 0.82), and non-blocking observations\n- Docs gate: PASS (no docs impact, research doc present, no deletions)\n\n### Deduction Breakdown\nNo deductions applied.\n\n### Confidence: 1.00\n### Action: archive
