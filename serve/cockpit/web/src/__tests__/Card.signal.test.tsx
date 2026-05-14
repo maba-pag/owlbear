@@ -13,7 +13,7 @@
  *   src/components/Card.tsx — accept pendingDRIds: Set<number>, render data-signal
  *   src/hooks/useBoard.ts — Task type extended with dep_status: string | null (#1544)
  */
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render } from '@testing-library/react'
 import { Card } from '../components/Card'
 import type { Task } from '../hooks/useBoard'
@@ -108,5 +108,182 @@ describe('TestFromAC_CardSignalAttribute', () => {
     const card = container.querySelector('[data-testid="task-card"]')
     expect(card).not.toBeNull()
     expect(card!.getAttribute('data-signal')).toBe('ready')
+  })
+})
+
+// ─── AC-1 (density retry): Card metadata chips — id, priority, updated ────────
+
+describe('TestFromAC_CardDensityElements', () => {
+  it('card renders id chip showing #{task.id}', () => {
+    const task = makeTask({ id: 42 })
+    const { container } = renderCard(task)
+    const idChip = container.querySelector('[data-testid="card-id"]')
+    expect(idChip).not.toBeNull()
+    expect(idChip!.textContent).toContain('#42')
+  })
+
+  it('card renders priority chip showing task.priority value', () => {
+    const task = makeTask({ id: 1, priority: 'critical' })
+    const { container } = renderCard(task)
+    const priorityChip = container.querySelector('[data-testid="card-priority"]')
+    expect(priorityChip).not.toBeNull()
+    expect(priorityChip!.textContent).toContain('critical')
+  })
+
+  it('card renders updated chip with non-empty text', () => {
+    const task = makeTask({ id: 1, updated: '2026-05-15T10:00:00Z' })
+    const { container } = renderCard(task)
+    const updatedChip = container.querySelector('[data-testid="card-updated"]')
+    expect(updatedChip).not.toBeNull()
+    expect(updatedChip!.textContent?.trim().length).toBeGreaterThan(0)
+  })
+})
+
+// ─── AC-4 (density retry): Update recency branches via formatUpdatedAge ───────
+// Uses vi.useFakeTimers() to control Date.now() so branch outputs are deterministic.
+// "now" = 2026-05-15T12:00:00Z for all tests in this block.
+
+describe('TestFromAC_UpdateRecencyBranches', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-05-15T12:00:00Z'))
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('renders minutes-ago label for timestamp 10 minutes before now', () => {
+    // 2026-05-15T11:50:00Z → 10 minutes ago → "10m ago"
+    const task = makeTask({ id: 1, updated: '2026-05-15T11:50:00Z' })
+    const { container } = renderCard(task)
+    const chip = container.querySelector('[data-testid="card-updated"]')
+    expect(chip).not.toBeNull()
+    expect(chip!.textContent).toBe('10m ago')
+  })
+
+  it('renders hours-ago label for timestamp 2 hours before now', () => {
+    // 2026-05-15T10:00:00Z → 120 minutes → "2h ago"
+    const task = makeTask({ id: 1, updated: '2026-05-15T10:00:00Z' })
+    const { container } = renderCard(task)
+    const chip = container.querySelector('[data-testid="card-updated"]')
+    expect(chip).not.toBeNull()
+    expect(chip!.textContent).toBe('2h ago')
+  })
+
+  it('renders days-ago label for timestamp 3 days before now', () => {
+    // 2026-05-12T12:00:00Z → 72 hours = 4320 minutes → "3d ago"
+    const task = makeTask({ id: 1, updated: '2026-05-12T12:00:00Z' })
+    const { container } = renderCard(task)
+    const chip = container.querySelector('[data-testid="card-updated"]')
+    expect(chip).not.toBeNull()
+    expect(chip!.textContent).toBe('3d ago')
+  })
+
+  it('renders fallback label for invalid updated timestamp', () => {
+    // Non-parseable date → formatUpdatedAge returns "Updated recently"
+    const task = makeTask({ id: 1, updated: 'not-a-date' })
+    const { container } = renderCard(task)
+    const chip = container.querySelector('[data-testid="card-updated"]')
+    expect(chip).not.toBeNull()
+    expect(chip!.textContent).toBe('Updated recently')
+  })
+
+  it('stale task (months old) renders different recency text than a recent task', () => {
+    // Constant-label guard: proves formatUpdatedAge output varies with updated.
+    // A constant non-ISO label (e.g. "Updated recently") would pass non-empty / non-ISO
+    // checks but fails here because the two timestamps must produce different outputs.
+    const recentTask = makeTask({ id: 1, updated: '2026-05-15T11:50:00Z' }) // 10m ago
+    const staleTask = makeTask({ id: 2, updated: '2026-01-01T00:00:00Z' })  // 134d ago
+
+    const { container: recentContainer } = renderCard(recentTask)
+    const { container: staleContainer } = renderCard(staleTask)
+
+    const recentText = recentContainer.querySelector('[data-testid="card-updated"]')!.textContent
+    const staleText = staleContainer.querySelector('[data-testid="card-updated"]')!.textContent
+    expect(recentText).not.toEqual(staleText)
+  })
+})
+
+// ─── AC-1/AC-2 (density retry): Cue element rendering and accessibility ───────
+
+describe('TestFromAC_CardCueRendering', () => {
+  it('blocked card renders card-blocked-cue element with accessible text', () => {
+    const task = makeTask({ id: 1, blocked: true })
+    const { container } = renderCard(task)
+    const cue = container.querySelector('[data-testid="card-blocked-cue"]')
+    expect(cue).not.toBeNull()
+    expect(cue!.textContent?.toLowerCase()).toContain('blocked')
+  })
+
+  it('non-blocked card does not render card-blocked-cue element', () => {
+    const task = makeTask({ id: 1, blocked: false })
+    const { container } = renderCard(task)
+    expect(container.querySelector('[data-testid="card-blocked-cue"]')).toBeNull()
+  })
+
+  it('claimed card renders card-claimed-cue element with accessible text', () => {
+    const task = makeTask({ id: 1, claimed: true })
+    const { container } = renderCard(task)
+    const cue = container.querySelector('[data-testid="card-claimed-cue"]')
+    expect(cue).not.toBeNull()
+    expect(cue!.textContent?.toLowerCase()).toContain('claimed')
+  })
+
+  it('non-claimed card does not render card-claimed-cue element', () => {
+    const task = makeTask({ id: 1, claimed: false })
+    const { container } = renderCard(task)
+    expect(container.querySelector('[data-testid="card-claimed-cue"]')).toBeNull()
+  })
+
+  it('deps-unmet card (dep_status=blocked) renders card-deps-unmet-cue element', () => {
+    const task = makeTask({ id: 1, dep_status: 'blocked' })
+    const { container } = renderCard(task)
+    const cue = container.querySelector('[data-testid="card-deps-unmet-cue"]')
+    expect(cue).not.toBeNull()
+    expect(cue!.textContent?.toLowerCase()).toMatch(/deps|blocked|depend/)
+  })
+
+  it('task with dep_status=null does not render card-deps-unmet-cue element', () => {
+    const task = makeTask({ id: 1, dep_status: null })
+    const { container } = renderCard(task)
+    expect(container.querySelector('[data-testid="card-deps-unmet-cue"]')).toBeNull()
+  })
+
+  it('dr-pending card (task.id in pendingDRIds) renders card-dr-pending-cue element', () => {
+    const task = makeTask({ id: 7 })
+    const { container } = renderCard(task, new Set([7]))
+    const cue = container.querySelector('[data-testid="card-dr-pending-cue"]')
+    expect(cue).not.toBeNull()
+    expect(cue!.textContent?.toLowerCase()).toMatch(/decision|dr|pending/)
+  })
+
+  it('task not in pendingDRIds does not render card-dr-pending-cue element', () => {
+    const task = makeTask({ id: 8 })
+    const { container } = renderCard(task, new Set([99]))
+    expect(container.querySelector('[data-testid="card-dr-pending-cue"]')).toBeNull()
+  })
+
+  it('task with no tags does not render card-tags element', () => {
+    const task = makeTask({ id: 1, tags: [] })
+    const { container } = renderCard(task)
+    expect(container.querySelector('[data-testid="card-tags"]')).toBeNull()
+  })
+
+  it('task with 1–3 tags renders card-tags element without overflow indicator', () => {
+    const task = makeTask({ id: 1, tags: ['frontend', 'backend'] })
+    const { container } = renderCard(task)
+    expect(container.querySelector('[data-testid="card-tags"]')).not.toBeNull()
+    expect(container.querySelector('[data-testid="card-tag-overflow"]')).toBeNull()
+  })
+
+  it('task with more than 3 tags renders card-tag-overflow indicator with correct count', () => {
+    // TAG_PREVIEW_LIMIT = 3 → 5 tags → overflow = 5 - 3 = 2
+    const task = makeTask({ id: 1, tags: ['a', 'b', 'c', 'd', 'e'] })
+    const { container } = renderCard(task)
+    expect(container.querySelector('[data-testid="card-tags"]')).not.toBeNull()
+    const overflow = container.querySelector('[data-testid="card-tag-overflow"]')
+    expect(overflow).not.toBeNull()
+    expect(overflow!.textContent).toContain('+2')
   })
 })
