@@ -20,6 +20,17 @@ External repos and resources studied during OwlBear development.
 | PDS Notification Patterns | <https://designsystem.porsche.com/v3/patterns/notifications/introduction> | Component selection criteria: placement, criticality, states | `.owlbear/research/cockpit-mutation-error-banner.md` | 2026-05-12 |
 | PDS Notification Decision Tree | <https://designsystem.porsche.com/v3/patterns/notifications/decision-tree> | Error/warning case → Banner or Inline Notification recommended | `.owlbear/research/cockpit-mutation-error-banner.md` | 2026-05-12 |
 
+## PDS Dark-Mode Compatibility Research (Task #1553)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| PDS v4 Migration Guide | <https://designsystem.porsche.com/v4/news/migration-guide/porsche-design-system/> | color-scheme mechanism, theme prop removal, .scheme-* classes | `.owlbear/research/1553-pds-dark-mode-compat.md` | 2026-05-14 |
+| PDS v4 Theme docs | <https://designsystem.porsche.com/v4/must-know/theme/> | color-scheme foundation, light-dark() CSS function | `.owlbear/research/1553-pds-dark-mode-compat.md` | 2026-05-14 |
+| PDS v4 Color Scheme stylesheet | <https://designsystem.porsche.com/v4/stylesheets/color-scheme/introduction/> | .scheme-* utility classes, polyfill setup | `.owlbear/research/1553-pds-dark-mode-compat.md` | 2026-05-14 |
+| PDS GitHub color-scheme build | <https://github.com/porsche-design-system/porsche-design-system/tree/main/packages/styles/projects/global-styles/scripts/buildColorSchemeCss.ts> | .scheme-* → color-scheme mapping, light-dark() polyfill | `.owlbear/research/1553-pds-dark-mode-compat.md` | 2026-05-14 |
+| PDS GitHub Issue #1185 | <https://github.com/porsche-design-system/porsche-design-system/issues/1185> | Provider-level theme prop history (closed, shipped in v3) | `.owlbear/research/1553-pds-dark-mode-compat.md` | 2026-05-14 |
+| PDS CHANGELOG v4.0.0-beta.0 | <https://github.com/porsche-design-system/porsche-design-system/tree/main/packages/components/CHANGELOG.md#L765> | Theme prop removal confirmation | `.owlbear/research/1553-pds-dark-mode-compat.md` | 2026-05-14 |
+
 ## PBanner Shell Wiring Research (Task #1498)
 
 | Source | URL | What | Where Used | Date |
