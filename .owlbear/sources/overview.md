@@ -94,6 +94,13 @@ External repos and resources studied during OwlBear development.
 | UX Planet — Empty State Design Guide | <https://uxplanet.org/empty-state-design-a-practical-guide-94ad0adbda45> | Empty state patterns, structure, and design best practices | `.owlbear/research/1551-empty-state-illustration-prompts.md` | 2026-05-13 |
 | Mockplus — 25 Best Empty State Examples | <https://www.mockplus.com/blog/post/empty-state-ui-design> | Inspiring empty state UI examples and templates | `.owlbear/research/1551-empty-state-illustration-prompts.md` | 2026-05-13 |
 
+## Card CSS Implementation Research (Task #1546)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| MDN: Kanban board with drag and drop | <https://developer.mozilla.org/en-US/docs/Web/API/HTML_Drag_and_Drop_API/Kanban_board> | Drag opacity pattern: `opacity: 0.2` on original element during drag | `.owlbear/research/card-css-impl-1546.md` | 2026-05-14 |
+| Penpot: Design tokens and CSS variables guide | <https://penpot.app/blog/the-developers-guide-to-design-tokens-and-css-variables/> | `:root` token architecture pattern, custom property inheritance | `.owlbear/research/card-css-impl-1546.md` | 2026-05-14 |
+
 ## Cockpit API Client Centralization Research (Task #1493)
 
 | Source | URL | What | Where Used | Date |
