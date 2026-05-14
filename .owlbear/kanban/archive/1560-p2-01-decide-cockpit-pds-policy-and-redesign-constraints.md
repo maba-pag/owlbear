@@ -1,10 +1,10 @@
 ---
 id: 1560
 title: 'P2-01: Decide Cockpit PDS policy and redesign constraints'
-status: in-progress
+status: archived
 priority: critical
 created: 2026-05-14T18:25:57.129252+00:00
-updated: 2026-05-14T19:04:29.868488+00:00
+updated: 2026-05-14T20:02:04.225804+00:00
 tags:
   - phase-2
   - scope:cockpit
@@ -16,8 +16,8 @@ parent: 1559
 depends_on: []
 blocked: false
 block_reason:
-claimed_at: 2026-05-14T19:04:29.868488+00:00
-archival_reason:
+claimed_at:
+archival_reason: completed
 archival_refs: []
 ---
 <!-- markdownlint-disable MD013 MD022 MD032 MD031 MD040 MD047 MD060 -->
@@ -110,3 +110,78 @@ Policy gate completed. User selected the recommended #1560 package in chat: full
 - AC-2 substantive policy coverage is present in .owlbear/research/1560-cockpit-design-policy.md: the artifact maps PPopover, PModal, PSheet, PInputSearch, PSwitch or PCheckbox, PSelect plus PSelectOption, PTag, and PSegmentedControl to Cockpit use cases and exception patterns at lines 45-58.
 - AC-3 current board state matches the gating requirement: list_tasks(ids=[1562,1563,1564,1565,1566,1574]) returned status=backlog, depends_on=[1560], and dep_status=blocked for each listed child.
 - AC-4 and AC-5 substantive content is present in .owlbear/research/1560-cockpit-design-policy.md: visual target and rubric at lines 31 and 38-41, screenshot states at lines 94-104, mobile contract at line 86, and local pinned asset mode at line 90.
+2026-05-14T19:11:50+00:00
+## Builder Notes
+- Implementation: updated `.owlbear/research/1560-cockpit-design-policy.md` and `.owlbear/kanban/tasks/1560-p2-01-decide-cockpit-pds-policy-and-redesign-constraints.md`.
+- Proof bundle: skip (no TestFromAC gate required for this docs/design-policy task).
+- AC-1 fix: replaced stale pending DR references with resolved DR path `.owlbear/kanban/decisions/resolved/1534-decision.md` in task evidence.
+- AC-4/AC-5 fix: added explicit audit section references (sections 4, 7, 8, 9) in the policy artifact.
+- Lint evidence: quality-runner returned instrument failure (`markdownlint 0.48.0 prints help text instead of processing files; no file analysis`).
+- quality-runner env fallback: ran direct scoped lint command `npx --yes markdownlint-cli2 --no-globs -- "/Users/markus/Projects/owlbear-dev/.owlbear/research/1560-cockpit-design-policy.md" "/Users/markus/Projects/owlbear-dev/.owlbear/kanban/tasks/1560-p2-01-decide-cockpit-pds-policy-and-redesign-constraints.md"` -> `Linting: 2 file(s)`, `Summary: 0 error(s)`.
+- Tests: 0 (docs task).
+- Coverage: N/A (docs task).
+- Commit: `1310bc0a` (`docs: fix 1560 policy evidence and lint gating (#1560, builder)`).
+2026-05-14T19:23:17+00:00
+## Review Evidence
+- Verdict: PASS
+- PASS confirmation (one line): PASS #1560 -> docs | AC mapped to code and evidence sufficient.
+- Builder evidence reviewed first: `Proof bundle: skip` with scoped markdown lint only. Builder documented a `quality-runner` instrument failure for markdownlint and an allowed env fallback via direct `markdownlint-cli2` on the two scoped files with `Summary: 0 error(s)`. Current editor diagnostics on the same files are also clean.
+
+| AC Line | Code / Artifact Evidence | Proof | Status |
+|---|---|---|---|
+| AC-1 | [.owlbear/kanban/tasks/1560-p2-01-decide-cockpit-pds-policy-and-redesign-constraints.md](.owlbear/kanban/tasks/1560-p2-01-decide-cockpit-pds-policy-and-redesign-constraints.md#L27) records the resolved DR path, [.owlbear/kanban/tasks/1560-p2-01-decide-cockpit-pds-policy-and-redesign-constraints.md](.owlbear/kanban/tasks/1560-p2-01-decide-cockpit-pds-policy-and-redesign-constraints.md#L60) and [.owlbear/kanban/tasks/1560-p2-01-decide-cockpit-pds-policy-and-redesign-constraints.md](.owlbear/kanban/tasks/1560-p2-01-decide-cockpit-pds-policy-and-redesign-constraints.md#L64) through [.owlbear/kanban/tasks/1560-p2-01-decide-cockpit-pds-policy-and-redesign-constraints.md](.owlbear/kanban/tasks/1560-p2-01-decide-cockpit-pds-policy-and-redesign-constraints.md#L68) record the chosen package, and [.owlbear/kanban/decisions/resolved/1534-decision.md](.owlbear/kanban/decisions/resolved/1534-decision.md#L6) plus [.owlbear/kanban/decisions/resolved/1534-decision.md](.owlbear/kanban/decisions/resolved/1534-decision.md#L35) show the approved DR response. | Artifact inspection of task body and resolved DR. | PASS |
+| AC-2 | [.owlbear/kanban/tasks/1560-p2-01-decide-cockpit-pds-policy-and-redesign-constraints.md](.owlbear/kanban/tasks/1560-p2-01-decide-cockpit-pds-policy-and-redesign-constraints.md#L78) records the tracked artifact. [.owlbear/research/1560-cockpit-design-policy.md](.owlbear/research/1560-cockpit-design-policy.md#L52) defines the policy section, [.owlbear/research/1560-cockpit-design-policy.md](.owlbear/research/1560-cockpit-design-policy.md#L54) requires named reasons and test strategy for exceptions, and [.owlbear/research/1560-cockpit-design-policy.md](.owlbear/research/1560-cockpit-design-policy.md#L60) through [.owlbear/research/1560-cockpit-design-policy.md](.owlbear/research/1560-cockpit-design-policy.md#L67) map `PPopover`, `PModal`, `PSheet`, `PInputSearch`, `PSwitch` or `PCheckbox`, `PSelect` plus `PSelectOption`, `PTag`, and `PSegmentedControl` to Cockpit use cases. | Artifact inspection. | PASS |
+| AC-3 | [.owlbear/kanban/tasks/1560-p2-01-decide-cockpit-pds-policy-and-redesign-constraints.md](.owlbear/kanban/tasks/1560-p2-01-decide-cockpit-pds-policy-and-redesign-constraints.md#L87) records the board-state audit. `list_tasks(ids=[1562,1563,1564,1565,1566,1574])` returns each child in `backlog` with `depends_on=[1560]` and `dep_status=blocked`. | Board-state audit. | PASS |
+| AC-4 | [.owlbear/research/1560-cockpit-design-policy.md](.owlbear/research/1560-cockpit-design-policy.md#L25) through [.owlbear/research/1560-cockpit-design-policy.md](.owlbear/research/1560-cockpit-design-policy.md#L30) add the required audit section 4, 7, 8, and 9 references. [.owlbear/research/1560-cockpit-design-policy.md](.owlbear/research/1560-cockpit-design-policy.md#L40) and [.owlbear/research/1560-cockpit-design-policy.md](.owlbear/research/1560-cockpit-design-policy.md#L44) through [.owlbear/research/1560-cockpit-design-policy.md](.owlbear/research/1560-cockpit-design-policy.md#L50) define the audience, density target, typography hierarchy, surface or elevation rules, empty-state tone, and icon or action rules. [.owlbear/research/1560-cockpit-design-policy.md](.owlbear/research/1560-cockpit-design-policy.md#L105) through [.owlbear/research/1560-cockpit-design-policy.md](.owlbear/research/1560-cockpit-design-policy.md#L113) list the screenshot states reviewers must compare. | Artifact inspection. | PASS |
+| AC-5 | [.owlbear/research/1560-cockpit-design-policy.md](.owlbear/research/1560-cockpit-design-policy.md#L99) keeps local pinned PDS runtime assets and rejects live CDN as a remediation shortcut; [.owlbear/kanban/tasks/1560-p2-01-decide-cockpit-pds-policy-and-redesign-constraints.md](.owlbear/kanban/tasks/1560-p2-01-decide-cockpit-pds-policy-and-redesign-constraints.md#L68) mirrors the same recorded decision. | Artifact inspection. | PASS |
+
+- Duplicate DR check: `file_search` for `.owlbear/kanban/decisions/**/1534-decision.md` returned one file, the resolved decision artifact.
+- Blocking findings: none.
+- Safety and security: no security-relevant code path changes; docs/design-policy scope only.
+
+## Observations
+- The prior review blockers are closed: the task body now references the resolved DR path, the policy artifact includes explicit section 4, 7, 8, and 9 audit mapping, and scoped markdown diagnostics are clean.
+- No non-blocking follow-up is required for review routing.
+2026-05-14T19:33:32+00:00
+## Docs Gate
+
+**Verdict:** DONE #1560 → done | docs gate passed
+
+### Checklist
+
+| # | Item | Result | Evidence |
+|---|------|--------|----------|
+| 1 | README Verification | N/A | Changed files are `.owlbear/research/1560-cockpit-design-policy.md` and `.owlbear/kanban/tasks/1560-…md` — neither maps to `serve/{pkg}/src/**` or any README by convention. No README targets. |
+| 2 | External Attribution | N/A | Policy artifact cites "PDS v4 docs listed in `.owlbear/sources/overview.md`". All PDS URLs were already recorded in `sources/overview.md` under the cockpit-visual-audit task (lines 9–12). No new external sources consumed. |
+| 3 | Research Doc | PASS | `.owlbear/research/1560-cockpit-design-policy.md` exists and is referenced throughout the task body (AC-2/AC-4/AC-5 evidence section, board-state audit note, builder notes). |
+| 4 | Deletion Detection | N/A | No files deleted. Two files changed: policy artifact created, task body updated. No orphaned references introduced. |
+
+### Files Updated
+None — convention mapping found no README targets and attribution was already recorded.
+
+### Scratch Cleanup
+No `.owlbear/scratch/1560-*` files found.
+2026-05-14T20:02:04+00:00
+## Audit
+### Regression Detection
+- quality-runner mode full: 1945 passed, 0 failed, 11 skipped; lint clean (ruff, vitest, eslint, stylelint, htmlhint all exit 0)
+- regression verdict: PASS
+
+### Intent Verification
+- scope alignment: PASS (2 files changed: `.owlbear/research/1560-cockpit-design-policy.md` and `.owlbear/kanban/tasks/1560-…md` — both within docs/design-policy domain)
+- purpose match: PASS (builder commit fixes DR traceability, audit section references, and lint violations — all reviewer-identified gaps in a design-policy deliverable)
+- extraneous scope: none
+- boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 4/5
+AC lines were specific and verifiable. Evidence expectations named exact audit sections and DR paths. Planner amendment (AC-4, AC-5) strengthened the visual-target gate. Minor gap: initial task body had the correct resolved DR path in Context but stale pending references in evidence — reviewer caught this via AC-1 verification.
+
+### Commit Integrity
+- upstream commit presence: PASS (`1310bc0a docs: fix 1560 policy evidence and lint gating (#1560, builder)` — 2 files, 40 insertions, 8 deletions)
+- kanban commit packaging: pending (this audit cycle)
+
+### Deduction Breakdown
+No deductions applied.
+
+### Confidence: 1.00
+### Action: archive
