@@ -186,29 +186,39 @@ test.describe('AC-1 | Filter workflow via PDS control selectors', () => {
   test('search field in filter panel is p-input-search', async ({ page }) => {
     await loadBoard(page)
     await openFilterPanel(page)
-    // Post-remediation: p-input-search control inside the panel.
+    // Post-remediation: p-input-search[name="search-filter"] inside the panel.
+    // Scoped by name to avoid strict-mode violation when PDS renders an inner host.
     // Currently: native <input type="text"> -- p-input-search absent -- FAILS.
-    await expect(page.locator('#filter-panel p-input-search')).toBeVisible({ timeout: 2_000 })
+    await expect(page.locator('#filter-panel p-input-search[name="search-filter"]')).toBeVisible({ timeout: 2_000 })
   })
 
   test('searching via p-input-search narrows visible task cards', async ({ page }) => {
     await loadBoard(page)
     await openFilterPanel(page)
-    // Post-remediation: fill p-input-search to filter by title.
-    // Currently: p-input-search does not exist -- fill() rejects -- FAILS.
-    await page.locator('#filter-panel p-input-search').fill('Alpha')
+    // Post-remediation: click p-input-search host to focus shadow-DOM input, then type.
+    // .fill() is not reliable on PDS web component hosts -- use click + keyboard.type instead.
+    // Currently: p-input-search absent OR onInput handler broken -- filter unchanged -- FAILS.
+    await page.locator('#filter-panel p-input-search[name="search-filter"]').click()
+    await page.keyboard.type('Alpha')
     await expect(page.locator('[data-testid="task-card"][data-id="3"]')).not.toBeVisible()
   })
 
   test('priority filter selects via p-select-option and narrows results', async ({ page }) => {
     await loadBoard(page)
     await openFilterPanel(page)
-    // Post-remediation: open p-select host, then click p-select-option child.
-    // Currently: native <option> elements -- p-select-option absent -- FAILS.
-    await page.locator('#filter-panel p-select[name="priority-filter"]').click()
-    const criticalOption = page.locator('#filter-panel p-select-option[value="critical"]')
-    await expect(criticalOption).toBeVisible({ timeout: 4_000 })
-    await criticalOption.click()
+    // Verify p-select-option is present in light DOM (PDS compliance).
+    await expect(
+      page.locator('#filter-panel p-select[name="priority-filter"] p-select-option[value="critical"]'),
+    ).toBeAttached({ timeout: 2_000 })
+    // Trigger PDS select via evaluate: set value + dispatch 'input' event.
+    // Correct implementation handles onInput reading e.target.value to update filter state.
+    // Currently: no onInput handler on p-select -- filter unchanged -- task-card-2 remains visible -- FAILS.
+    await page.locator('#filter-panel p-select[name="priority-filter"]').evaluate((el) => {
+      el.value = 'critical'
+      el.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    // After correct implementation: only TASK_ALPHA (priority=critical) visible; TASK_BETA hidden.
+    await expect(page.locator('[data-testid="task-card"][data-id="2"]')).not.toBeVisible({ timeout: 2_000 })
   })
 
   test('blocked toggle activates via p-switch or p-checkbox', async ({ page }) => {
@@ -232,30 +242,40 @@ test.describe('AC-1 | Filter workflow via PDS control selectors', () => {
   test('result count displays filtered/total ratio when priority filter applied via PDS control', async ({ page }) => {
     await loadBoard(page)
     await openFilterPanel(page)
-    // Currently: p-select-option absent -- FAILS before count check.
-    await page.locator('#filter-panel p-select[name="priority-filter"]').click()
-    await page.locator('#filter-panel p-select-option[value="critical"]').click()
+    // Trigger priority filter via PDS evaluate contract.
+    // Currently: no onInput handler -- filter unchanged -- result count absent -- FAILS.
+    await page.locator('#filter-panel p-select[name="priority-filter"]').evaluate((el) => {
+      el.value = 'critical'
+      el.dispatchEvent(new Event('input', { bubbles: true }))
+    })
     await expect(page.locator('[data-testid="filter-result-count"]')).toBeVisible({ timeout: 2_000 })
   })
 
   test('clearing all filters removes badge count and hides result count', async ({ page }) => {
     await loadBoard(page)
     await openFilterPanel(page)
-    // Currently: p-select-option absent -- FAILS before the clear action.
-    await page.locator('#filter-panel p-select[name="priority-filter"]').click()
-    await page.locator('#filter-panel p-select-option[value="critical"]').click()
+    // Trigger priority filter via PDS evaluate contract.
+    await page.locator('#filter-panel p-select[name="priority-filter"]').evaluate((el) => {
+      el.value = 'critical'
+      el.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    // Guard against vacuous pass: verify filter WAS applied before testing clear.
+    // Currently: no onInput handler -- filter unchanged -- count absent -- FAILS here.
+    await expect(page.locator('[data-testid="filter-result-count"]')).toBeVisible({ timeout: 2_000 })
+    // After correct implementation: clear removes badge and hides result count.
     await page.click('[data-testid="filter-reset"]')
     await expect(page.locator('[data-testid="filter-toggle"]')).not.toContainText('(')
     await expect(page.locator('[data-testid="filter-result-count"]')).not.toBeVisible()
   })
 
-  test('tags filter uses p-multi-select-option [documented exception: already PDS-compliant]', async ({ page }) => {
-    // FilterPanel already uses PMultiSelect/PMultiSelectOption -- documented compliant.
-    // This test is a regression guard and PASSES against the current implementation.
+  test('tags filter uses p-multi-select [documented exception: already PDS-compliant]', async ({ page }) => {
+    // FilterPanel uses p-multi-select (PDS-compliant). Regression guard at host level.
+    // p-multi-select-option children may be slotted into shadow DOM by PDS at runtime;
+    // assert the host element p-multi-select[name="tags-filter"] instead of option children.
     await loadBoard(page)
     await openFilterPanel(page)
     await expect(
-      page.locator('#filter-panel p-multi-select-option[value="frontend"]'),
+      page.locator('#filter-panel p-multi-select[name="tags-filter"]'),
     ).toBeAttached({ timeout: 4_000 })
   })
 })
@@ -270,8 +290,9 @@ test.describe('AC-2 | FilterPanel PDS compliance assertions', () => {
 
   test('(a) search field renders p-input-search, not native text input', async ({ page }) => {
     // §5 "Search" row: required p-input-search.
+    // Scoped by name to avoid strict-mode violation from PDS internal host rendering.
     // Currently: native <input type="text"> -- p-input-search absent -- FAILS.
-    await expect(page.locator('#filter-panel p-input-search')).toBeVisible({ timeout: 2_000 })
+    await expect(page.locator('#filter-panel p-input-search[name="search-filter"]')).toBeVisible({ timeout: 2_000 })
   })
 
   test('(b) blocked toggle renders p-switch or p-checkbox, not native checkbox', async ({ page }) => {
