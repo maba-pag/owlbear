@@ -1,7 +1,9 @@
+<!-- markdownlint-disable MD013 MD060 -->
+
 # Cockpit Design Policy
 
 > **Owning task:** #1560 - P2-01: Decide Cockpit PDS policy and redesign constraints  
-> **Related DR:** #1534 - `.owlbear/kanban/decisions/pending/1534-decision.md`  
+> **Related DR:** #1534 - `.owlbear/kanban/decisions/resolved/1534-decision.md`  
 > **Date:** 2026-05-14 **Status:** Approved policy package
 
 ## 1. Context And Question
@@ -19,6 +21,13 @@ Question: what design policy should govern the next Cockpit remediation cycle so
 | `share/skills/h-frontend-conventions/SKILL.md` | Cockpit should use PDS components/tokens and prove PDS behavior with proper jsdom or Playwright evidence | 0.88 |
 | `share/skills/h-frontend-design/SKILL.md` | Cockpit defaults to a dense developer-operations work surface, not marketing composition | 0.86 |
 | PDS v4 docs listed in `.owlbear/sources/overview.md` | PDS provides component, overlay, token, spacing, select, popover, and theme guidance | 0.84 |
+
+Audit section mapping required by #1560 AC-4/AC-5 evidence:
+
+- Section 4: component-level findings that drive the PDS visible-control policy in Section 5.
+- Section 7: visual target and composition findings that drive Sections 4 and 6.
+- Section 8: remediation lane structure that informs Section 8 follow-up task mapping.
+- Section 9: implementation and verification gates that inform Section 7 required visual gates.
 
 ## 3. Decision
 

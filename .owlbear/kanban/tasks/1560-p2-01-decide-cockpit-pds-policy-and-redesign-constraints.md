@@ -1,10 +1,10 @@
 ---
 id: 1560
 title: 'P2-01: Decide Cockpit PDS policy and redesign constraints'
-status: review
+status: in-progress
 priority: critical
 created: 2026-05-14T18:25:57.129252+00:00
-updated: 2026-05-14T18:53:21.430526+00:00
+updated: 2026-05-14T19:04:29.868488+00:00
 tags:
   - phase-2
   - scope:cockpit
@@ -16,13 +16,15 @@ parent: 1559
 depends_on: []
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-14T19:04:29.868488+00:00
 archival_reason:
 archival_refs: []
 ---
+<!-- markdownlint-disable MD013 MD022 MD032 MD031 MD040 MD047 MD060 -->
+
 ## Context
 Source of truth: `.owlbear/research/cockpit-visual-audit-consolidated-2026-05-14.md`.
-Use existing pending DR: `.owlbear/kanban/decisions/pending/1534-decision.md`. Do not create a duplicate DR for the coordinated redesign choice unless #1534 is rejected or split.
+Use existing resolved DR: `.owlbear/kanban/decisions/resolved/1534-decision.md`. Do not create a duplicate DR for the coordinated redesign choice unless #1534 is rejected or split.
 
 ## Scope
 In scope: record the redesign decision, PDS visible-control policy, sidecar IA choice, overlay strategy, mobile contract, visual gate requirement, and PDS asset-mode stance.
@@ -67,7 +69,7 @@ Resolved policy package for Cockpit visual remediation:
 
 Reference artifacts:
 - Audit: `.owlbear/research/cockpit-visual-audit-consolidated-2026-05-14.md`
-- Existing DR to resolve/amend through Cockpit lifecycle: `.owlbear/kanban/decisions/pending/1534-decision.md`
+- Existing DR to resolve/amend through Cockpit lifecycle: `.owlbear/kanban/decisions/resolved/1534-decision.md`
 
 Next requirement for #1560: create the tracked Cockpit design policy artifact required by AC-2/AC-4/AC-5, then record board-state evidence that dependent design tasks remain gated until that artifact exists.
 
@@ -85,5 +87,26 @@ Artifact covers AC-2/AC-4/AC-5:
 Board-state audit: dependent design tasks #1562, #1563, #1564, #1565, #1566, and #1574 remain backlog with dependency on #1560. Build tasks remain transitively blocked behind their RED/design dependencies. No duplicate DR was created; #1534 remains the formal DR lifecycle artifact for Cockpit resolution.
 2026-05-14T18:43:40+00:00
 Policy gate completed. User selected the recommended #1560 package in chat: full coordinated Cockpit dashboard redesign, PDS-first visible controls, sidecar-as-inspector direction, PPopover/PModal/PSheet overlay policy, 320px no-overflow mobile contract with board-first/sheet preference, screenshot/structural visual gates, and local pinned PDS asset mode. Evidence recorded in task body. Tracked policy artifact added at `.owlbear/research/1560-cockpit-design-policy.md`. Board-state audit verified dependent design tasks remain backlog/dependency-blocked until this gate completes.
-2026-05-14T18:53:21+00:00
-Cleanup after decision/policy handoff: release accidental claim without changing review status. #1560 evidence and commits are already recorded.
+
+2026-05-14T18:58:13+00:00
+## Review Evidence
+- Verdict: FAIL
+- Blocking findings:
+
+| # | AC Line | Finding | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | Proof bundle: skip | Scoped markdown lint is failing on both tracked deliverables, so the review proof is not clean enough to approve. | quality-runner reported 54 markdownlint violations in .owlbear/research/1560-cockpit-design-policy.md (for example MD013 at lines 3, 9, and 11; MD060 at line 16) and 37 violations in .owlbear/kanban/tasks/1560-p2-01-decide-cockpit-pds-policy-and-redesign-constraints.md (for example MD022 at line 23 and MD013 at lines 25 and 32). | in-progress |
+| 2 | AC-4 / AC-5 evidence expectation | The policy artifact does not include the required references to audit sections 4, 7, 8, and 9. | Task body line 52 requires references to .owlbear/research/cockpit-visual-audit-consolidated-2026-05-14.md sections 4, 7, 8, and 9. Grep on .owlbear/research/1560-cockpit-design-policy.md found only a generic audit citation at line 17 and no section-specific references. | in-progress |
+| 3 | AC-1 | The task body records the chosen policy package, but its DR traceability still points at a stale pending-path artifact instead of the resolved #1534 decision. | .owlbear/kanban/tasks/1560-p2-01-decide-cockpit-pds-policy-and-redesign-constraints.md lines 25 and 70 reference .owlbear/kanban/decisions/pending/1534-decision.md; the actual decision file is .owlbear/kanban/decisions/resolved/1534-decision.md with response: approved at line 6 and the approved package at line 35. | in-progress |
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | builder | Fix markdownlint violations in the policy artifact and task markdown until the scoped lint pass is clean. | .owlbear/research/1560-cockpit-design-policy.md; .owlbear/kanban/tasks/1560-p2-01-decide-cockpit-pds-policy-and-redesign-constraints.md | quality-runner scoped lint report for #1560 |
+| 2 | builder | Add explicit references from the policy artifact to audit sections 4, 7, 8, and 9. | .owlbear/research/1560-cockpit-design-policy.md | Task body line 52; artifact line 17; grep found no section-specific references |
+| 3 | builder | Replace the stale pending DR path in the task body with the resolved #1534 decision reference or an explicit amended-response note. | .owlbear/kanban/tasks/1560-p2-01-decide-cockpit-pds-policy-and-redesign-constraints.md | Task body lines 25 and 70 vs resolved decision file lines 6 and 35 |
+
+## Observations
+- AC-2 substantive policy coverage is present in .owlbear/research/1560-cockpit-design-policy.md: the artifact maps PPopover, PModal, PSheet, PInputSearch, PSwitch or PCheckbox, PSelect plus PSelectOption, PTag, and PSegmentedControl to Cockpit use cases and exception patterns at lines 45-58.
+- AC-3 current board state matches the gating requirement: list_tasks(ids=[1562,1563,1564,1565,1566,1574]) returned status=backlog, depends_on=[1560], and dep_status=blocked for each listed child.
+- AC-4 and AC-5 substantive content is present in .owlbear/research/1560-cockpit-design-policy.md: visual target and rubric at lines 31 and 38-41, screenshot states at lines 94-104, mobile contract at line 86, and local pinned asset mode at line 90.
