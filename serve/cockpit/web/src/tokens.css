@@ -1,37 +1,108 @@
-/* PDS Design Tokens — Light Theme CSS Custom Properties
- * Values extracted from @porsche-design-system/components-react/styles
- * themeLight object (PDS v4). Regenerate via:
- *   node -e "const t=require('@porsche-design-system/components-react/styles'); \
- *     console.log(JSON.stringify(t.themeLight,null,2))"
+/* PDS Design Tokens (v4)
+ * Light defaults live in :root.
+ * Dark values are applied via [data-theme="dark"] and OS-level fallback.
  */
 :root {
   /* Primary */
-  --pds-theme-light-primary: hsl(225 66.7% 1.2%);
+  --pds-primary: hsl(225 66.7% 1.2%);
 
   /* Background */
-  --pds-theme-light-background-base: #fff;
-  --pds-theme-light-background-surface: hsl(240 10% 95%);
-  --pds-theme-light-background-shading: hsl(240 5.3% 14.9% / 0.5);
+  --pds-background-base: #fff;
+  --pds-background-surface: hsl(240 10% 95%);
+  --pds-background-shading: hsl(240 5.3% 14.9% / 0.5);
 
   /* Contrast */
-  --pds-theme-light-contrast-low: hsl(240 5.3% 14.9% / 0.5);
-  --pds-theme-light-contrast-medium: hsl(240 6.1% 7% / 0.6);
-  --pds-theme-light-contrast-high: hsl(240 7.1% 11% / 0.7);
+  --pds-contrast-low: hsl(240 5.3% 14.9% / 0.5);
+  --pds-contrast-medium: hsl(240 6.1% 7% / 0.6);
+  --pds-contrast-high: hsl(240 7.1% 11% / 0.7);
 
   /* Notification */
-  --pds-theme-light-notification-success: hsl(115 77.5% 27.8%);
-  --pds-theme-light-notification-success-soft: hsl(109 100% 90% / 0.55);
-  --pds-theme-light-notification-warning: hsl(28 97.7% 34.1%);
-  --pds-theme-light-notification-warning-soft: hsl(40 100% 90% / 0.55);
-  --pds-theme-light-notification-error: hsl(357 78% 41%);
-  --pds-theme-light-notification-error-soft: hsl(0 100% 90% / 0.55);
-  --pds-theme-light-notification-info: hsl(228 83.2% 51%);
-  --pds-theme-light-notification-info-soft: hsl(211 100% 90% / 0.55);
+  --pds-notification-success: hsl(115 77.5% 27.8%);
+  --pds-notification-success-soft: hsl(109 100% 90% / 0.55);
+  --pds-notification-warning: hsl(28 97.7% 34.1%);
+  --pds-notification-warning-soft: hsl(40 100% 90% / 0.55);
+  --pds-notification-error: hsl(357 78% 41%);
+  --pds-notification-error-soft: hsl(0 100% 90% / 0.55);
+  --pds-notification-info: hsl(228 83.2% 51%);
+  --pds-notification-info-soft: hsl(211 100% 90% / 0.55);
 
   /* State */
-  --pds-theme-light-state-hover: hsl(240 5% 70% / 0.148);
-  --pds-theme-light-state-active: hsl(240 5% 70% / 0.148);
-  --pds-theme-light-state-focus: #1A44EA;
-  --pds-theme-light-state-disabled: hsla(233, 6.6%, 23.9%, 0.412);
+  --pds-state-hover: hsl(240 5% 70% / 0.148);
+  --pds-state-active: hsl(240 5% 70% / 0.148);
+  --pds-state-focus: #1A44EA;
+  --pds-state-disabled: hsla(233, 6.6%, 23.9%, 0.412);
+
+  /* Shadow */
+  --pds-shadow-sm: 0px 3px 8px rgba(0, 0, 0, 0.16);
+  --pds-shadow-md: 0px 4px 16px rgba(0, 0, 0, 0.16);
+  --pds-shadow-lg: 0px 8px 40px rgba(0, 0, 0, 0.16);
+
+  /* Radius */
+  --pds-radius-sm: 4px;
+  --pds-radius-md: 6px;
+  --pds-radius-lg: 8px;
+  --pds-radius-xl: 12px;
+
+  /* Spacing */
+  --pds-spacing-xs: 4px;
+  --pds-spacing-sm: 8px;
+  --pds-spacing-md: 16px;
+  --pds-spacing-lg: 32px;
+  --pds-spacing-xl: 48px;
+  --pds-spacing-2xl: 80px;
+}
+
+[data-theme="dark"] {
+  --pds-primary: hsl(225 100% 99%);
+
+  --pds-background-base: hsl(225 66.7% 1.2%);
+  --pds-background-surface: hsl(240 2% 10%);
+  --pds-background-shading: hsl(240 5.3% 14.9% / 0.5);
+
+  --pds-contrast-low: hsl(240 12.5% 96.9% / 0.45);
+  --pds-contrast-medium: hsl(240 12.5% 96.9% / 0.56);
+  --pds-contrast-high: hsl(240 12.5% 96.9% / 0.67);
+
+  --pds-notification-success: hsl(157 84.9% 41.6%);
+  --pds-notification-success-soft: hsl(157 79% 20% / 0.66);
+  --pds-notification-warning: hsl(28 90.2% 56.1%);
+  --pds-notification-warning-soft: hsl(52 79% 20% / 0.66);
+  --pds-notification-error: hsl(0 96.9% 62%);
+  --pds-notification-error-soft: hsl(0 79% 20% / 0.66);
+  --pds-notification-info: hsl(210 100% 54.5%);
+  --pds-notification-info-soft: hsl(210 79% 20% / 0.66);
+
+  --pds-state-hover: hsl(240 2% 43% / 0.228);
+  --pds-state-active: hsl(240 2% 43% / 0.228);
+  --pds-state-focus: #1A44EA;
+  --pds-state-disabled: hsla(240, 1.5%, 61.8%, 0.302);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --pds-primary: hsl(225 100% 99%);
+
+    --pds-background-base: hsl(225 66.7% 1.2%);
+    --pds-background-surface: hsl(240 2% 10%);
+    --pds-background-shading: hsl(240 5.3% 14.9% / 0.5);
+
+    --pds-contrast-low: hsl(240 12.5% 96.9% / 0.45);
+    --pds-contrast-medium: hsl(240 12.5% 96.9% / 0.56);
+    --pds-contrast-high: hsl(240 12.5% 96.9% / 0.67);
+
+    --pds-notification-success: hsl(157 84.9% 41.6%);
+    --pds-notification-success-soft: hsl(157 79% 20% / 0.66);
+    --pds-notification-warning: hsl(28 90.2% 56.1%);
+    --pds-notification-warning-soft: hsl(52 79% 20% / 0.66);
+    --pds-notification-error: hsl(0 96.9% 62%);
+    --pds-notification-error-soft: hsl(0 79% 20% / 0.66);
+    --pds-notification-info: hsl(210 100% 54.5%);
+    --pds-notification-info-soft: hsl(210 79% 20% / 0.66);
+
+    --pds-state-hover: hsl(240 2% 43% / 0.228);
+    --pds-state-active: hsl(240 2% 43% / 0.228);
+    --pds-state-focus: #1A44EA;
+    --pds-state-disabled: hsla(240, 1.5%, 61.8%, 0.302);
+  }
 }
 

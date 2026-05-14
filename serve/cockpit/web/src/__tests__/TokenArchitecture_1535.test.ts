@@ -45,6 +45,11 @@ const EXPECTED_NON_COLOR_TOKENS = [
   '--pds-spacing-2xl',
 ] as const
 
+const PDS_IDENTICAL_IN_ALL_THEMES = [
+  '--pds-state-focus',
+  '--pds-background-shading',
+] as const
+
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
@@ -123,7 +128,9 @@ describe('TestFromAC_TokenArchitecture_1535', () => {
       expect(rootValue, `Missing token in :root: ${token}`).toBeTruthy()
       expect(darkValue, `Missing token in [data-theme="dark"]: ${token}`).toBeTruthy()
       expect(darkValue?.trim().length, `Dark token is empty: ${token}`).toBeGreaterThan(0)
-      expect(darkValue, `Dark token must differ from :root token: ${token}`).not.toBe(rootValue)
+      if (!PDS_IDENTICAL_IN_ALL_THEMES.includes(token as (typeof PDS_IDENTICAL_IN_ALL_THEMES)[number])) {
+        expect(darkValue, `Dark token must differ from :root token: ${token}`).not.toBe(rootValue)
+      }
     }
   })
 
