@@ -87,6 +87,13 @@ External repos and resources studied during OwlBear development.
 | PDS GitHub issue #2701 | <https://github.com/porsche-design-system/porsche-design-system/issues/2701> | "Make Components-JS Prod Build configurable" — open since 2023, confirming no self-hosting support | `.owlbear/research/1495-pds-v4-local-hosting.md` | 2026-05-12 |
 | PDS `getCDNBaseURL` utility | <https://github.com/porsche-design-system/porsche-design-system/blob/main/packages/components/src/utils/getCDNBaseURL.ts> | Compile-time replaced with `document.porscheDesignSystem.cdn.url` in production builds | `.owlbear/research/1495-pds-v4-local-hosting.md` | 2026-05-12 |
 
+## Theme Toggle Button Research (Task #1548)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| web.dev — Building a theme switch component | <https://web.dev/articles/building/a-theme-switch-component> | Canonical button + SVG + aria-label pattern, accessibility (aria-live), sun/moon animation | `.owlbear/research/1548-theme-toggle-button.md` | 2026-05-14 |
+| next-themes (pacocoursey) | <https://github.com/pacocoursey/next-themes> | aria-label set to current theme value, 3-state toggle patterns | `.owlbear/research/1548-theme-toggle-button.md` | 2026-05-14 |
+
 ## Empty State Illustration Prompts Research (Task #1551)
 
 | Source | URL | What | Where Used | Date |
