@@ -1,0 +1,16 @@
+[data-testid='history-session-row'],
+[data-testid='session-row'] {
+  cursor: pointer;
+  border-left: 4px solid var(--pds-border-default);
+}
+
+[data-state="blocked"],
+[data-state="rejected"] {
+  border-left: 4px solid var(--pds-notification-error-color);
+  background: var(--pds-notification-error-soft-color);
+}
+
+[data-state="stuck"] {
+  border-left: 4px solid var(--pds-notification-warning-color);
+  background: var(--pds-notification-warning-soft-color);
+}

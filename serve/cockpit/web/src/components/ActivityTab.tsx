@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { PButton } from '@porsche-design-system/components-react'
 import { type Session } from './HistorySubtab'
-import { rowStyleForState } from '../utils/styles'
 import { usePollingFetch } from '../hooks/usePollingFetch'
 import { useSSEEvent } from '../hooks/EventSourceProvider'
+import './SessionRows.css'
 
 export interface ActivityTabProps {
   onSelectTask?: (taskId: number, subtab?: string) => void
@@ -152,7 +152,7 @@ export default function ActivityTab({ onSelectTask }: ActivityTabProps) {
                 navigateToTask(s.task_id)
               }
             }}
-            style={rowStyleForState(s.state)}
+            style={{ cursor: 'pointer' }}
           >
             <span data-testid="session-agent">{s.agent ?? 'unknown agent'}</span>
             <span data-testid="session-task">{s.task_id ?? 'unassigned'}</span>

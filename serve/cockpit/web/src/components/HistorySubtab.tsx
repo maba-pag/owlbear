@@ -1,4 +1,4 @@
-import { rowStyleForState } from '../utils/styles'
+import './SessionRows.css'
 
 export interface Session {
   task_id: number | null
@@ -55,7 +55,7 @@ export default function HistorySubtab({ sessions, onSelectTask }: HistorySubtabP
               navigateToTask(s.task_id)
             }
           }}
-          style={rowStyleForState(s.state)}
+          style={{ cursor: 'pointer' }}
         >
           <span data-testid="session-agent">{s.agent ?? 'unknown agent'}</span>
           <span data-testid="session-duration">{formatDuration(s.duration)}</span>

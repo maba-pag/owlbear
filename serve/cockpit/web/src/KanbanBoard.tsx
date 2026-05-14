@@ -6,6 +6,7 @@ import { filterTasks, type FilterState } from './utils/filterTasks'
 import { type Board, type Task } from './hooks/useBoard'
 import { moveTask } from './api/tasks'
 import { ApiError } from './api/errors'
+import './KanbanBoard.css'
 
 // ─── KanbanBoard ──────────────────────────────────────────────────────────────
 
@@ -346,6 +347,7 @@ function KanbanBoardContent({
       {contextMenu && (
         <div
           ref={menuRef}
+          className="kanban-context-menu"
           data-testid="context-menu"
           role="menu"
           aria-label="Task actions"
