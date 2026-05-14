@@ -4,7 +4,7 @@ title: 'P2-01: Decide Cockpit PDS policy and redesign constraints'
 status: review
 priority: critical
 created: 2026-05-14T18:25:57.129252+00:00
-updated: 2026-05-14T18:43:40.596850+00:00
+updated: 2026-05-14T18:53:21.430526+00:00
 tags:
   - phase-2
   - scope:cockpit
@@ -85,3 +85,5 @@ Artifact covers AC-2/AC-4/AC-5:
 Board-state audit: dependent design tasks #1562, #1563, #1564, #1565, #1566, and #1574 remain backlog with dependency on #1560. Build tasks remain transitively blocked behind their RED/design dependencies. No duplicate DR was created; #1534 remains the formal DR lifecycle artifact for Cockpit resolution.
 2026-05-14T18:43:40+00:00
 Policy gate completed. User selected the recommended #1560 package in chat: full coordinated Cockpit dashboard redesign, PDS-first visible controls, sidecar-as-inspector direction, PPopover/PModal/PSheet overlay policy, 320px no-overflow mobile contract with board-first/sheet preference, screenshot/structural visual gates, and local pinned PDS asset mode. Evidence recorded in task body. Tracked policy artifact added at `.owlbear/research/1560-cockpit-design-policy.md`. Board-state audit verified dependent design tasks remain backlog/dependency-blocked until this gate completes.
+2026-05-14T18:53:21+00:00
+Cleanup after decision/policy handoff: release accidental claim without changing review status. #1560 evidence and commits are already recorded.
