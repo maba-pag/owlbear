@@ -1392,9 +1392,10 @@ class KanbanEngine:
         if append_body is not None:
             prefix = ""
             if timestamp:
-                date_str = datetime.now(tz=UTC).strftime("%Y-%m-%d")
+                date_str = datetime.now().astimezone().strftime("%Y-%m-%d")
                 prefix = f"[[{date_str}]]\n"
-            record.body = record.body + "\n" + prefix + append_body
+            existing = record.body.rstrip("\n")
+            record.body = f"{existing}\n\n{prefix}{append_body}\n"
             self.validate_body_size(record.body)
 
         if archival_reason is not None:
@@ -1649,9 +1650,9 @@ class KanbanEngine:
         """Append an ISO timestamp line and note line to ``record.body`` when provided."""
         if note is None:
             return
-        body = _task_body_as_text(record.body)
-        stamp = now.replace(microsecond=0).isoformat()
-        record.body = body + "\n" + stamp + "\n" + note
+        body = _task_body_as_text(record.body).rstrip("\n")
+        local_stamp = now.astimezone().replace(microsecond=0).isoformat()
+        record.body = f"{body}\n\n[[{local_stamp}]]\n{note}\n"
 
     def release_task(
         self,
