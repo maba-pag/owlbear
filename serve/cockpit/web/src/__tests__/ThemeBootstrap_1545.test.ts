@@ -214,6 +214,16 @@ describe('TestFromAC_IndexHtmlBootstrap_1545', () => {
     expect(bootstrapLine).toBeDefined()
     expect(bootstrapLine).not.toContain('type="module"')
   })
+
+  it('AC-1p1: bootstrap script is the structural first element child of <body>', () => {
+    const parser = new DOMParser()
+    const doc = parser.parseFromString(indexHtml, 'text/html')
+    const firstBodyChild = doc.body.firstElementChild
+
+    expect(firstBodyChild).not.toBeNull()
+    expect(firstBodyChild!.tagName.toLowerCase()).toBe('script')
+    expect(firstBodyChild!.getAttribute('src')).toBe('/theme-bootstrap.js')
+  })
 })
 
 // ─── AC-4: OS preference listener lifecycle ───────────────────────────────────
@@ -341,5 +351,46 @@ describe('TestFromAC_OsListenerBehavior_1545', () => {
     unmount()
 
     expect(mql.removeEventListener).toHaveBeenCalledWith('change', expect.any(Function))
+  })
+
+  // Negative proof — no listener for explicit themes (AC-4p1)
+
+  it('AC-4p1: when theme=dark (from localStorage), addEventListener is NOT called on the MQL spy', () => {
+    localStorage.setItem(THEME_STORAGE_KEY, 'dark')
+
+    const { unmount } = renderHook(() => useTheme())
+
+    expect(mql.addEventListener).not.toHaveBeenCalledWith('change', expect.any(Function))
+
+    unmount()
+  })
+
+  it('AC-4p1: when theme=light (from localStorage), addEventListener is NOT called on the MQL spy', () => {
+    localStorage.setItem(THEME_STORAGE_KEY, 'light')
+
+    const { unmount } = renderHook(() => useTheme())
+
+    expect(mql.addEventListener).not.toHaveBeenCalledWith('change', expect.any(Function))
+
+    unmount()
+  })
+
+  // Bidirectional isDark (AC-4p2)
+
+  it('AC-4p2: when theme=auto and OS changes from dark to light, isDark becomes false', async () => {
+    mql = createSpiedMQL(true)
+    installSpiedMQL(mql)
+
+    const { result, unmount } = renderHook(() => useTheme())
+
+    expect(result.current.isDark).toBe(true)
+
+    await act(async () => {
+      mql.simulateChange(false)
+    })
+
+    expect(result.current.isDark).toBe(false)
+
+    unmount()
   })
 })
