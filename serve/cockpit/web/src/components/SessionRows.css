@@ -6,11 +6,11 @@
 
 [data-state="blocked"],
 [data-state="rejected"] {
-  border-left: 4px solid var(--pds-notification-error-color);
-  background: var(--pds-notification-error-soft-color);
+  border-left: 4px solid var(--pds-notification-error);
+  background: var(--pds-notification-error-soft);
 }
 
 [data-state="stuck"] {
-  border-left: 4px solid var(--pds-notification-warning-color);
-  background: var(--pds-notification-warning-soft-color);
+  border-left: 4px solid var(--pds-notification-warning);
+  background: var(--pds-notification-warning-soft);
 }
