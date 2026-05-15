@@ -54,7 +54,7 @@ CREATE TABLE IF NOT EXISTS entities (
     metadata    TEXT,
     created_at  TEXT,
     scope       TEXT DEFAULT 'global',
-    document_id TEXT,
+    document_id TEXT NOT NULL,
     chunk_id    TEXT,
     importance  REAL DEFAULT 0.5
 )
@@ -66,7 +66,7 @@ CREATE TABLE IF NOT EXISTS edges (
     source_id  TEXT REFERENCES entities(id),
     target_id  TEXT REFERENCES entities(id),
     relation   TEXT,
-    document_id TEXT,
+    document_id TEXT NOT NULL,
     weight     REAL,
     metadata   TEXT,
     created_at TEXT,
@@ -361,7 +361,7 @@ def init_db(conn: sqlite3.Connection) -> None:
         conn (sqlite3.Connection): An open :class:`sqlite3.Connection`.  Works with both
             file-backed and ``:memory:`` databases.
     """
-    conn.execute("PRAGMA foreign_keys = OFF")
+    conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA journal_mode = WAL")
 
     conn.execute(_CREATE_DOCUMENTS)
