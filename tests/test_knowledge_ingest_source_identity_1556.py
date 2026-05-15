@@ -1845,3 +1845,181 @@ class TestFromAC_SQLiteThreadSafety:
             f"(check_same_thread=True), but got status={result.status!r}. "
             "This indicates asyncio.to_thread() operations raised ProgrammingError."
         )
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_RefreshEmbeddingFailurePropagation  (AC-2 retry-11)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_RefreshEmbeddingFailurePropagation:
+    """AC-2 (retry-11): Embedding failure inside IngestPipeline.ingest() must
+    propagate as status='failed' so RefreshOrchestrator counts it as 'failed',
+    not 'refreshed'.
+
+    Bug: asyncio.gather(embed_coro, ..., return_exceptions=True) captures the
+    embedding exception in all_results[0], but ingest() only checks all_results[1:]
+    for extraction exceptions.  all_results[0] is never inspected.  The method
+    continues to set_status('ok') and returns IngestResult(status='ok'), causing
+    the refresh handler to increment refreshed += 1 even though no vectors were
+    stored.
+    """
+
+    def _seed_url_list_source(self, conn: sqlite3.Connection) -> None:
+        """Insert a URL-list source with id='src-a', scope='team-a'."""
+        now = _now_iso()
+        conn.execute(
+            "INSERT INTO knowledge_sources"
+            " (id, name, source_type, fetch_method, enrich, config, scope, enabled,"
+            "  priority, created_at, updated_at)"
+            " VALUES ('src-a', 'Source A', 'url_list', 'http', 1, ?, 'team-a', 1, 0, ?, ?)",
+            (json.dumps({"urls": ["https://example.test/doc"]}), now, now),
+        )
+        conn.commit()
+
+    @pytest.mark.asyncio
+    async def test_embedding_failure_in_ingest_yields_zero_refreshed(
+        self,
+        conn: sqlite3.Connection,
+        store_components: dict,
+        app_ctx: AppContext,
+    ) -> None:
+        """refresh_source must report refreshed=0, failed>=1 when store_embeddings raises.
+
+        Fails because ingest() captures the embedding RuntimeError in all_results[0]
+        via return_exceptions=True but never checks it — the call continues to
+        set_status('ok') and returns IngestResult(status='ok'), so the refresh
+        handler increments refreshed=1 instead of failed=1.
+        """
+        self._seed_url_list_source(conn)
+        fake_intake = IntakeResult(
+            content="content that will fail to embed",
+            source="https://example.test/doc",
+            metadata={"source_type": "url_list"},
+        )
+        ctx = _make_mcp_ctx(app_ctx)
+
+        def _embedding_explodes(*_args: object, **_kwargs: object) -> None:
+            msg = "forced embedding failure"
+            raise RuntimeError(msg)
+
+        with (
+            patch(
+                "owlbear_knowledge.intake.read_url",
+                new=AsyncMock(return_value=fake_intake),
+            ),
+            patch.object(
+                store_components["doc_store"],
+                "store_embeddings",
+                side_effect=_embedding_explodes,
+            ),
+        ):
+            result = await refresh_source(ctx, source_id="src-a")
+
+        assert isinstance(result, dict), (
+            f"refresh_source must return a dict, got {result!r}"
+        )
+        assert result.get("refreshed") == 0, (
+            "refreshed must be 0 when store_embeddings raises — embedding failure "
+            "must propagate as failed, not refreshed. "
+            f"Got: {result}"
+        )
+        assert result.get("failed", 0) >= 1, (
+            "failed must be >= 1 when store_embeddings raises. "
+            f"Got: {result}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_ReplaceOnChangeFailureCleanup  (AC-8 retry-11)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ReplaceOnChangeFailureCleanup:
+    """AC-8 (retry-11): IngestPipeline.ingest() must clean up the partially
+    written replacement document when a persistence failure occurs after
+    delete_document_data(existing_id) has already executed.
+
+    Bug: ingest() calls delete_document_data(existing_id) then insert_document()
+    (which commits the replacement doc row), then store_chunks() — if store_chunks
+    raises, the except Exception block returns status='failed' but performs NO
+    cleanup of the committed replacement document row.  The orphaned document row
+    violates the AC guarantee: 'persistence contains no document row for the
+    replacement doc_id'.
+    """
+
+    def _seed_url_list_source(self, conn: sqlite3.Connection) -> None:
+        """Insert a URL-list source with id='src-a', scope='team-a'."""
+        now = _now_iso()
+        conn.execute(
+            "INSERT INTO knowledge_sources"
+            " (id, name, source_type, fetch_method, enrich, config, scope, enabled,"
+            "  priority, created_at, updated_at)"
+            " VALUES ('src-a', 'Source A', 'url_list', 'http', 1, ?, 'team-a', 1, 0, ?, ?)",
+            (json.dumps({"urls": ["https://example.test/doc"]}), now, now),
+        )
+        conn.commit()
+
+    @pytest.mark.asyncio
+    async def test_replace_on_change_failure_leaves_no_orphaned_document(
+        self,
+        conn: sqlite3.Connection,
+        store_components: dict,
+    ) -> None:
+        """Replacement document row must be cleaned up when store_chunks fails.
+
+        Fails because ingest() commits the replacement document row via
+        insert_document() before store_chunks() is called.  When store_chunks
+        raises, the except Exception block returns status='failed' but does not
+        call delete_document_data(replacement_doc_id) — leaving an orphaned row
+        in the documents table.  AC-8: 'persistence contains no document row for
+        the replacement doc_id'.
+        """
+        self._seed_url_list_source(conn)
+        pipeline: IngestPipeline = store_components["pipeline"]
+
+        intake_v1 = IntakeResult(
+            content="Version 1 content — original document",
+            source="https://example.test/doc",
+            metadata={"source_type": "url_list"},
+        )
+        # First ingest: must succeed so a content hash is recorded in document_status.
+        result_v1 = await pipeline.ingest(intake_v1, scope="team-a", source_id="src-a")
+        assert result_v1.status == "ok", (
+            f"First ingest must succeed for replace-on-change to trigger on second "
+            f"call, but got status={result_v1.status!r}"
+        )
+        assert conn.execute("SELECT count(*) FROM documents").fetchone()[0] == 1, (
+            "Expected exactly 1 document row after first successful ingest"
+        )
+
+        intake_v2 = IntakeResult(
+            content="Version 2 content — completely different to trigger replace-on-change",
+            source="https://example.test/doc",  # same URL → triggers replace-on-change
+            metadata={"source_type": "url_list"},
+        )
+        # Second ingest: check_content_changed returns (True, existing_id) because
+        # content differs.  delete_document_data(v1) executes, then insert_document(v2)
+        # commits, then store_chunks raises.  The except block returns 'failed' but
+        # does NOT clean up the committed v2 document row.
+        with patch.object(
+            store_components["doc_store"],
+            "store_chunks",
+            side_effect=RuntimeError("forced store_chunks failure"),
+        ):
+            result_v2 = await pipeline.ingest(
+                intake_v2, scope="team-a", source_id="src-a"
+            )
+
+        assert result_v2.status == "failed", (
+            f"ingest() must return status='failed' when store_chunks raises, "
+            f"got {result_v2.status!r}"
+        )
+        doc_count = conn.execute("SELECT count(*) FROM documents").fetchone()[0]
+        assert doc_count == 0, (
+            "After replace-on-change failure, documents table must be empty — "
+            "the original document was deleted by delete_document_data() and the "
+            "replacement document row (committed by insert_document before "
+            f"store_chunks raised) must be cleaned up, but found {doc_count} row(s). "
+            "AC-8: 'persistence contains no document row for the replacement doc_id'."
+        )
