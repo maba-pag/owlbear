@@ -88,7 +88,7 @@ Filters need a designed toolbar/panel, not a raw inline block. Use PDS search/se
 
 ### Cards And Columns
 
-Cards must support scanning beyond title-only content: task ID, title, priority/status tag, first tags with overflow behavior, blocked/claimed indicator, and non-color signal text or icon. Columns must use polished labels, count badges, focusable scroll regions, and intentional empty states.
+Cards must support scanning beyond title-only content: task ID, title, priority/status tag, first tags with overflow behavior, blocked/claimed indicator, compact age or update-recency signal, and non-color signal text or icon. Columns must use polished labels, count badges, focusable scroll regions, and intentional empty states.
 
 ### Responsive Contract
 
@@ -118,6 +118,7 @@ Structural gates must also reject:
 - In-flow popovers/dialogs that expand the status bar or board.
 - Raw native controls in core visible flows without documented exception.
 - Scrollable regions without keyboard focusability.
+- Core visible controls removed from normal tab order without a documented focus-management exception.
 - Color-only task state signaling.
 
 ## 8. Follow-Up Task Mapping
