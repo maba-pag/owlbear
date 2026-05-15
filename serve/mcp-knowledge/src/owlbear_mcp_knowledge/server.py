@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import os
 import sqlite3
@@ -144,12 +145,17 @@ class EnrichmentChunk(TypedDict):
     doc_title: str
     section_path: str | None
     source_name: str | None
+    document_id: str
+    source_id: str
+    scope: str
 
 
 class ConsolidationCandidate(TypedDict):
     """Cross-source entity pair eligible for phase-2 consolidation."""
 
     candidate_id: str
+    entity_id_a: str
+    entity_id_b: str
     entity_name: str
     source_a: str
     source_b: str
@@ -189,12 +195,32 @@ def _fetch_consolidation_candidate_rows(
     conn: sqlite3.Connection,
     *,
     limit: int | None,
-) -> list[tuple[str, str, str, str | None, str | None, str | None, str | None]]:
+) -> list[
+    tuple[
+        str,
+        str,
+        str,
+        str,
+        str,
+        str | None,
+        str | None,
+        str | None,
+        str | None,
+    ]
+]:
     """Return deduplicated candidate rows ordered by entity name."""
     sql = """
         WITH pair_candidates AS (
             SELECT
                 e1.name AS entity_name,
+                CASE
+                    WHEN d1.source_id < d2.source_id THEN e1.id
+                    ELSE e2.id
+                END AS entity_id_a,
+                CASE
+                    WHEN d1.source_id < d2.source_id THEN e2.id
+                    ELSE e1.id
+                END AS entity_id_b,
                 CASE
                     WHEN d1.source_id < d2.source_id THEN d1.source_id
                     ELSE d2.source_id
@@ -239,6 +265,8 @@ def _fetch_consolidation_candidate_rows(
         )
         SELECT
             pc.entity_name,
+            pc.entity_id_a,
+            pc.entity_id_b,
             pc.source_a,
             pc.source_b,
             MIN(pc.source_a_name) AS source_a_name,
@@ -255,7 +283,7 @@ def _fetch_consolidation_candidate_rows(
                  OR (rp.source_a = pc.source_b AND rp.source_b = pc.source_a)
               )
         )
-        GROUP BY pc.entity_name, pc.source_a, pc.source_b
+        GROUP BY pc.entity_name, pc.entity_id_a, pc.entity_id_b, pc.source_a, pc.source_b
         ORDER BY pc.entity_name ASC, pc.source_a ASC, pc.source_b ASC
     """
 
@@ -276,17 +304,351 @@ async def get_consolidation_candidates(
     rows = _fetch_consolidation_candidate_rows(conn, limit=limit)
     return [
         {
-            "candidate_id": _encode_candidate_id(row[0], row[1], row[2]),
+            "candidate_id": _encode_candidate_id(row[0], row[3], row[4]),
             "entity_name": row[0],
-            "source_a": row[1],
-            "source_b": row[2],
-            "source_a_name": row[3] or "",
-            "source_b_name": row[4] or "",
-            "source_a_chunk": row[5] or "",
-            "source_b_chunk": row[6] or "",
+            "entity_id_a": row[1],
+            "entity_id_b": row[2],
+            "source_a": row[3],
+            "source_b": row[4],
+            "source_a_name": row[5] or "",
+            "source_b_name": row[6] or "",
+            "source_a_chunk": row[7] or "",
+            "source_b_chunk": row[8] or "",
         }
         for row in rows
     ]
+
+
+def _candidate_entity_ids(
+    conn: sqlite3.Connection,
+    *,
+    entity_name: str,
+    source_a: str,
+    source_b: str,
+) -> tuple[str, str] | None:
+    """Resolve candidate endpoint IDs in source_a/source_b order."""
+    row = conn.execute(
+        """
+        SELECT
+            CASE
+                WHEN d1.source_id < d2.source_id THEN e1.id
+                ELSE e2.id
+            END AS entity_id_a,
+            CASE
+                WHEN d1.source_id < d2.source_id THEN e2.id
+                ELSE e1.id
+            END AS entity_id_b
+        FROM entities AS e1
+        JOIN entities AS e2 ON e1.name = e2.name AND e1.id < e2.id
+        JOIN documents AS d1 ON d1.id = e1.document_id
+        JOIN documents AS d2 ON d2.id = e2.document_id
+        WHERE e1.name = ?
+          AND (
+                (d1.source_id = ? AND d2.source_id = ?)
+                OR (d1.source_id = ? AND d2.source_id = ?)
+          )
+        ORDER BY entity_id_a ASC, entity_id_b ASC
+        LIMIT 1
+        """,
+        (entity_name, source_a, source_b, source_b, source_a),
+    ).fetchone()
+    if row is None or row[0] is None or row[1] is None:
+        return None
+    return row[0], row[1]
+
+
+def _extract_relation(edge: dict[str, Any]) -> str:
+    """Read edge relation from documented aliases and validate it."""
+    relation = edge.get("relation")
+    if not isinstance(relation, str) or not relation.strip():
+        relationship = edge.get("relationship")
+        if isinstance(relationship, str) and relationship.strip():
+            relation = relationship
+    if not isinstance(relation, str) or not relation.strip():
+        msg = "edge relation is required (use 'relation' or 'relationship')"
+        raise ToolError(msg)
+    return relation.strip()
+
+
+def _stable_edge_id(*parts: str) -> str:
+    """Return a deterministic edge row ID for idempotent retries."""
+    return hashlib.sha256("\x1f".join(parts).encode("utf-8")).hexdigest()
+
+
+@dataclass(frozen=True, slots=True)
+class _ChunkProvenance:
+    """Server-derived provenance for phase-1 enrichment persistence."""
+
+    document_id: str
+    source_id: str
+    scope: str
+    state: str
+    chunk_id: str
+
+
+def _resolve_or_create_chunk_entity(
+    conn: sqlite3.Connection,
+    *,
+    now_iso: str,
+    provenance: _ChunkProvenance,
+    name: str,
+) -> str:
+    """Resolve an entity by chunk/name, creating a placeholder if needed."""
+    existing = conn.execute(
+        """
+        SELECT id FROM entities
+        WHERE name = ? AND document_id = ? AND chunk_id = ? AND scope = ?
+        ORDER BY created_at ASC, id ASC
+        LIMIT 1
+        """,
+        (name, provenance.document_id, provenance.chunk_id, provenance.scope),
+    ).fetchone()
+    if existing is not None and isinstance(existing[0], str):
+        return existing[0]
+
+    entity_id = uuid4().hex
+    conn.execute(
+        """
+        INSERT OR REPLACE INTO entities
+        (id, name, entity_type, description, metadata, created_at, scope, document_id, chunk_id, importance)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            entity_id,
+            name,
+            "",
+            "",
+            json.dumps({}),
+            now_iso,
+            provenance.scope,
+            provenance.document_id,
+            provenance.chunk_id,
+            0.5,
+        ),
+    )
+    return entity_id
+
+
+def _resolve_phase1_edge_endpoints(
+    conn: sqlite3.Connection,
+    *,
+    edge: dict[str, Any],
+    now_iso: str,
+    provenance: _ChunkProvenance,
+    default_source_id: str | None,
+) -> tuple[str, str]:
+    """Resolve edge endpoints using IDs, names, and chunk-local fallbacks."""
+    source_id = edge.get("source_id") if isinstance(edge.get("source_id"), str) else None
+    target_id = edge.get("target_id") if isinstance(edge.get("target_id"), str) else None
+
+    if source_id is None:
+        source_name = edge.get("source_name")
+        if isinstance(source_name, str) and source_name.strip():
+            source_id = _resolve_or_create_chunk_entity(
+                conn,
+                now_iso=now_iso,
+                provenance=provenance,
+                name=source_name.strip(),
+            )
+        elif default_source_id is not None:
+            source_id = default_source_id
+
+    if target_id is None:
+        target_name = edge.get("target_name")
+        if isinstance(target_name, str) and target_name.strip():
+            target_id = _resolve_or_create_chunk_entity(
+                conn,
+                now_iso=now_iso,
+                provenance=provenance,
+                name=target_name.strip(),
+            )
+
+    if source_id is None or target_id is None:
+        msg = "unable to resolve edge endpoints from provided payload"
+        raise ToolError(msg)
+
+    return source_id, target_id
+
+
+def _load_chunk_provenance(conn: sqlite3.Connection, *, chunk_id: str) -> _ChunkProvenance:
+    """Load chunk/document/source identity required for phase-1 persistence."""
+    row = conn.execute(
+        """
+        SELECT d.id, d.source_id, d.scope, c.enrichment_state
+        FROM chunks AS c
+        JOIN documents AS d ON d.id = c.document_id
+        JOIN knowledge_sources AS ks ON ks.id = d.source_id
+        WHERE c.id = ?
+        """,
+        (chunk_id,),
+    ).fetchone()
+    if row is None:
+        msg = "chunk_id does not resolve to an enrich-enabled source-linked chunk"
+        raise ToolError(msg)
+    if row[3] == "enriched":
+        msg = "chunk is already enriched"
+        raise ToolError(msg)
+    if not isinstance(row[0], str) or not isinstance(row[1], str):
+        msg = "chunk provenance could not be resolved"
+        raise ToolError(msg)
+
+    scope = row[2] if isinstance(row[2], str) and row[2] else "global"
+    state = row[3] if isinstance(row[3], str) else "pending"
+    return _ChunkProvenance(
+        document_id=row[0],
+        source_id=row[1],
+        scope=scope,
+        state=state,
+        chunk_id=chunk_id,
+    )
+
+
+def _persist_phase2_enrichment(
+    conn: sqlite3.Connection,
+    *,
+    candidate_id: str,
+    edges: list[dict[str, Any]],
+    now_iso: str,
+) -> None:
+    """Persist phase-2 consolidation review or edge output."""
+    entity_name, source_a, source_b = _decode_candidate_id(candidate_id)
+    entity_ids = _candidate_entity_ids(
+        conn,
+        entity_name=entity_name,
+        source_a=source_a,
+        source_b=source_b,
+    )
+    if entity_ids is None:
+        msg = "candidate_id does not resolve to persisted entity endpoints"
+        raise ToolError(msg)
+    entity_id_a, entity_id_b = entity_ids
+
+    if edges:
+        for edge in edges:
+            relation = _extract_relation(edge)
+            metadata = edge.get("metadata")
+            edge_metadata = metadata if isinstance(metadata, dict) else {}
+            source_id = edge.get("source_id")
+            target_id = edge.get("target_id")
+
+            resolved_source_id = source_id if isinstance(source_id, str) else entity_id_a
+            resolved_target_id = target_id if isinstance(target_id, str) else entity_id_b
+
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO edges
+                (id, source_id, target_id, relation, document_id, weight, metadata, created_at, scope)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    edge.get("id")
+                    or _stable_edge_id(
+                        "phase2",
+                        candidate_id,
+                        resolved_source_id,
+                        resolved_target_id,
+                        relation,
+                    ),
+                    resolved_source_id,
+                    resolved_target_id,
+                    relation,
+                    edge.get("document_id"),
+                    edge.get("weight", 1.0),
+                    json.dumps(edge_metadata),
+                    now_iso,
+                    edge.get("scope", "global"),
+                ),
+            )
+
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO reviewed_pairs (entity_name, source_a, source_b)
+        VALUES (?, ?, ?)
+        """,
+        (entity_name, source_a, source_b),
+    )
+
+
+def _persist_phase1_enrichment(
+    conn: sqlite3.Connection,
+    *,
+    chunk_id: str,
+    entities: list[dict[str, Any]],
+    edges: list[dict[str, Any]],
+    now_iso: str,
+) -> None:
+    """Persist phase-1 extraction output using server-derived provenance."""
+    provenance = _load_chunk_provenance(conn, chunk_id=chunk_id)
+
+    first_entity_id: str | None = None
+    for entity in entities:
+        entity_name = entity.get("name")
+        if not isinstance(entity_name, str) or not entity_name.strip():
+            msg = "entity name is required"
+            raise ToolError(msg)
+        entity_type = entity.get("entity_type")
+        if not isinstance(entity_type, str):
+            entity_type_alias = entity.get("type")
+            entity_type = entity_type_alias if isinstance(entity_type_alias, str) else ""
+
+        entity_id = entity.get("id") if isinstance(entity.get("id"), str) else uuid4().hex
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO entities
+            (id, name, entity_type, description, metadata, created_at, scope, document_id, chunk_id, importance)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                entity_id,
+                entity_name.strip(),
+                entity_type,
+                entity.get("description", ""),
+                json.dumps(entity.get("metadata", {})),
+                now_iso,
+                provenance.scope,
+                provenance.document_id,
+                provenance.chunk_id,
+                entity.get("importance", 0.5),
+            ),
+        )
+        if first_entity_id is None:
+            first_entity_id = entity_id
+
+    for edge in edges:
+        relation = _extract_relation(edge)
+        endpoint_source_id, endpoint_target_id = _resolve_phase1_edge_endpoints(
+            conn,
+            edge=edge,
+            now_iso=now_iso,
+            provenance=provenance,
+            default_source_id=first_entity_id,
+        )
+        metadata = edge.get("metadata")
+        edge_metadata = metadata.copy() if isinstance(metadata, dict) else {}
+        edge_metadata.setdefault("chunk_id", chunk_id)
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO edges
+            (id, source_id, target_id, relation, document_id, weight, metadata, created_at, scope)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                edge.get("id") or uuid4().hex,
+                endpoint_source_id,
+                endpoint_target_id,
+                relation,
+                provenance.document_id,
+                edge.get("weight", 1.0),
+                json.dumps(edge_metadata),
+                now_iso,
+                provenance.scope,
+            ),
+        )
+
+    conn.execute(
+        "UPDATE chunks SET enrichment_state='enriched', claimed_at=NULL WHERE id = ?",
+        (chunk_id,),
+    )
 
 
 def select_content_fetcher(method: str) -> ContentFetcher:
@@ -391,11 +753,14 @@ async def get_next_batch(ctx: Context, limit: int = 10) -> list[EnrichmentChunk]
                 c.content,
                 d.title,
                 c.metadata,
-                ks.name
+                ks.name,
+                d.id,
+                d.source_id,
+                d.scope
             FROM chunks AS c
             JOIN documents AS d ON d.id = c.document_id
-            LEFT JOIN knowledge_sources AS ks ON ks.id = d.source_id
-            WHERE COALESCE(ks.enrich, 1) = 1
+            JOIN knowledge_sources AS ks ON ks.id = d.source_id
+            WHERE ks.enrich = 1
               AND (
                 c.enrichment_state = 'pending'
                 OR (
@@ -433,6 +798,9 @@ async def get_next_batch(ctx: Context, limit: int = 10) -> list[EnrichmentChunk]
             "doc_title": row[2],
             "section_path": _extract_section_path(row[3]),
             "source_name": row[4],
+            "document_id": row[5],
+            "source_id": row[6],
+            "scope": row[7],
         }
         for row in rows
     ]
@@ -451,104 +819,39 @@ async def store_enrichment(
     now_iso = datetime.now(tz=UTC).isoformat()
     edge_rows = edges or []
 
-    if candidate_id is not None:
-        entity_name, source_a, source_b = _decode_candidate_id(candidate_id)
-
-        conn.execute("PRAGMA busy_timeout = 5000")
-        conn.execute("BEGIN IMMEDIATE")
-        try:
-            if edge_rows:
-                for edge in edge_rows:
-                    conn.execute(
-                        """
-                        INSERT OR IGNORE INTO edges
-                        (id, source_id, target_id, relation, document_id, weight, metadata, created_at, scope)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """,
-                        (
-                            edge.get("id") or uuid4().hex,
-                            edge.get("source_id"),
-                            edge.get("target_id"),
-                            edge.get("relation"),
-                            edge.get("document_id"),
-                            edge.get("weight", 1.0),
-                            json.dumps(edge.get("metadata", {})),
-                            now_iso,
-                            edge.get("scope", "global"),
-                        ),
-                    )
-            else:
-                conn.execute(
-                    """
-                    INSERT OR IGNORE INTO reviewed_pairs (entity_name, source_a, source_b)
-                    VALUES (?, ?, ?)
-                    """,
-                    (entity_name, source_a, source_b),
-                )
-            conn.commit()
-        except Exception:
-            conn.rollback()
-            raise
-        return
-
     if chunk_id is None:
+        if candidate_id is not None:
+            conn.execute("PRAGMA busy_timeout = 5000")
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                _persist_phase2_enrichment(
+                    conn,
+                    candidate_id=candidate_id,
+                    edges=edge_rows,
+                    now_iso=now_iso,
+                )
+            except Exception:
+                conn.rollback()
+                raise
+            conn.commit()
+            return
         msg = "chunk_id is required for phase-1 store_enrichment"
         raise ToolError(msg)
-
-    entity_rows = entities or []
 
     conn.execute("PRAGMA busy_timeout = 5000")
     conn.execute("BEGIN IMMEDIATE")
     try:
-        for entity in entity_rows:
-            conn.execute(
-                """
-                INSERT OR REPLACE INTO entities
-                (id, name, entity_type, description, metadata, created_at, scope, document_id, chunk_id, importance)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    entity.get("id") or uuid4().hex,
-                    entity.get("name", ""),
-                    entity.get("entity_type", ""),
-                    entity.get("description", ""),
-                    json.dumps(entity.get("metadata", {})),
-                    now_iso,
-                    entity.get("scope", "global"),
-                    entity.get("document_id"),
-                    entity.get("chunk_id"),
-                    entity.get("importance", 0.5),
-                ),
-            )
-
-        for edge in edge_rows:
-            conn.execute(
-                """
-                INSERT OR IGNORE INTO edges
-                (id, source_id, target_id, relation, document_id, weight, metadata, created_at, scope)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    edge.get("id") or uuid4().hex,
-                    edge.get("source_id"),
-                    edge.get("target_id"),
-                    edge.get("relation"),
-                    edge.get("document_id"),
-                    edge.get("weight", 1.0),
-                    json.dumps(edge.get("metadata", {})),
-                    now_iso,
-                    edge.get("scope", "global"),
-                ),
-            )
-
-        conn.execute(
-            "UPDATE chunks SET enrichment_state='enriched', claimed_at=NULL WHERE id = ?",
-            (chunk_id,),
+        _persist_phase1_enrichment(
+            conn,
+            chunk_id=chunk_id,
+            entities=entities or [],
+            edges=edge_rows,
+            now_iso=now_iso,
         )
-        conn.commit()
     except Exception:
         conn.rollback()
         raise
+    conn.commit()
 
 
 def init_db(path: str) -> sqlite3.Connection:
