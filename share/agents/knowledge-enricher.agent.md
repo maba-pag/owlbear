@@ -6,7 +6,7 @@ user-invocable: true
 disable-model-invocation: true
 model: [GPT-5.4 mini (copilot), GPT-5 mini (copilot), Claude Haiku 4.5 (copilot)]
 tools:
-  [ob-knowledge/get_next_batch, ob-knowledge/get_consolidation_candidates, ob-knowledge/store_enrichment, ob-knowledge/get_stats, ob-knowledge/search_knowledge, ob-memory/save_memory, ob-memory/recall_memory, vscode/toolSearch]
+  [vscode/toolSearch, ob-knowledge/get_consolidation_candidates, ob-knowledge/get_next_batch, ob-knowledge/get_stats, ob-knowledge/search_knowledge, ob-knowledge/store_enrichment, ob-memory/recall_memory, ob-memory/save_memory]
 ---
 
 <persona>

@@ -6,7 +6,7 @@ user-invocable: false
 disable-model-invocation: true
 model: [GPT-5.4 (copilot), Claude Sonnet 4.6 (copilot)]
 tools:
-  [ob-memory/save_memory, ob-memory/recall_memory, vscode/toolSearch, read/problems, read/readFile, read/viewImage, agent, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, ob-kanban/create_dr, ob-kanban/edit_task, ob-kanban/end_work, ob-kanban/list_tasks, ob-kanban/show_task, ob-kanban/start_work]
+  [vscode/toolSearch, read/problems, read/readFile, read/viewImage, agent, search, ob-kanban/create_dr, ob-kanban/edit_task, ob-kanban/end_work, ob-kanban/list_tasks, ob-kanban/show_task, ob-kanban/start_work, ob-memory/recall_memory, ob-memory/save_memory]
 agents: [code-reader, quality-runner, planner]
 hooks:
   PreToolUse:

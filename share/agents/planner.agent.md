@@ -5,7 +5,7 @@ argument-hint: "Plan: {description}  |  Plan and create: #{id} — {description}
 user-invocable: true
 disable-model-invocation: false
 tools:
-  [ob-memory/save_memory, ob-memory/recall_memory, vscode/toolSearch, vscode/askQuestions, read/problems, read/readFile, read/viewImage, edit/createDirectory, edit/createFile, edit/editFiles, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, ob-kanban/create_task, ob-kanban/edit_task, ob-kanban/end_work, ob-kanban/list_tasks, ob-kanban/move_task, ob-kanban/show_task, ob-kanban/start_work]
+  [vscode/toolSearch, vscode/askQuestions, read/problems, read/readFile, read/viewImage, edit/createDirectory, edit/createFile, edit/editFiles, search, 'ob-kanban/*', ob-memory/recall_memory, ob-memory/save_memory]
 agents: []
 ---
 

@@ -4,7 +4,7 @@ description: "Phase-aware pragmatist synthesis subagent — converges the late d
 argument-hint: "Synthesize: {working directory path and mode}"
 user-invocable: false
 disable-model-invocation: true
-tools: [ob-memory/save_memory, ob-memory/recall_memory, vscode/toolSearch, read/readFile, edit/createFile, edit/editFiles, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages]
+tools: [vscode/toolSearch, read/readFile, edit/createFile, edit/editFiles, search, ob-memory/recall_memory, ob-memory/save_memory]
 agents: []
 ---
 

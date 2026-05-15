@@ -1,6 +1,6 @@
 ---
 description: "Review MCP memory entries with lifecycle context, source grounding, and guided approve/edit/reject decisions"
-tools: [ob-memory/list_memories, ob-memory/read_memory, ob-memory/approve_memory, ob-memory/curate_memory, ob-memory/delete_memory, vscode/toolSearch, vscode/askQuestions, read/readFile, search/fileSearch, search/textSearch, search/listDirectory, execute/runInTerminal]
+tools: [vscode/toolSearch, vscode/askQuestions, execute/runInTerminal, read/readFile, search/fileSearch, search/listDirectory, search/textSearch, ob-memory/approve_memory, ob-memory/curate_memory, ob-memory/delete_memory, ob-memory/list_memories, ob-memory/read_memory]
 ---
 
 # Memory Review
