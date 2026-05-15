@@ -58,8 +58,38 @@ export function Column({
       return
     }
 
-    // Use an explicit attribute so Playwright can assert keyboard focusability via getAttribute().
-    body.setAttribute('tabIndex', '0')
+    const syncFocusableState = () => {
+      // Keep column-body focusable only while vertical overflow exists.
+      if (body.scrollHeight > body.clientHeight) {
+        body.setAttribute('tabIndex', '0')
+      } else {
+        body.removeAttribute('tabIndex')
+      }
+    }
+
+    syncFocusableState()
+
+    const observer = new ResizeObserver(() => {
+      syncFocusableState()
+    })
+
+    const onWindowResize = () => {
+      syncFocusableState()
+    }
+
+    const styleObserver = new MutationObserver(() => {
+      syncFocusableState()
+    })
+
+    observer.observe(body)
+    window.addEventListener('resize', onWindowResize)
+    styleObserver.observe(document.head, { childList: true, subtree: true })
+
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', onWindowResize)
+      styleObserver.disconnect()
+    }
   }, [tasks.length])
 
   return (

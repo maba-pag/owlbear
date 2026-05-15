@@ -95,6 +95,19 @@
       'sidecar';
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto auto minmax(0, 1fr) minmax(0, 0.7fr);
+    overflow-x: clip;
+  }
+
+  .shell__status-bar {
+    flex-wrap: wrap;
+    row-gap: 4px;
+    padding-top: 4px;
+    padding-bottom: 4px;
+  }
+
+  .shell__product-identity {
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
 
   .shell__nav-rail {
