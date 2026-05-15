@@ -1,7 +1,9 @@
-"""LLM extraction prompt constants and LLMExtractor implementation.
+"""DEFERRED: LLM extraction prompt constants and LLMExtractor implementation.
 
-Contains the system prompt used for structured entity/relationship extraction
-and the :class:`LLMExtractor` concrete implementation using the openai SDK.
+This module remains intentionally inactive until future LLMExtractor server
+activation. It contains the system prompt used for structured
+entity/relationship extraction and the :class:`LLMExtractor` concrete
+implementation using the openai SDK.
 """
 
 from __future__ import annotations

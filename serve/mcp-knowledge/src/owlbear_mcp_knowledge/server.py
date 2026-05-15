@@ -1298,6 +1298,8 @@ async def list_entities(
     limit: int = 50,
     scopes: list[str] | None = None,
 ) -> list[EntityInfo] | str:
+    # DEFERRED: kept as an internal helper; not exposed as an MCP tool until
+    # thread-safety review is completed.
     """List entities in the knowledge graph."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     gs = app_ctx.graph_store

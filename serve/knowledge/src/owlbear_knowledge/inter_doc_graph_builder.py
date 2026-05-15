@@ -1,4 +1,7 @@
-"""Inter-document graph builder — DI-based implementation.
+"""DEFERRED: Inter-document graph builder — DI-based implementation.
+
+This module is intentionally deferred and remains inactive until
+StructuredExtractor integration is activated in the ingest lifecycle.
 
 :class:`InterDocGraphBuilder` uses vector pre-filtering and canonical-name
 blocking to find candidate entity pairs across documents, prioritises
