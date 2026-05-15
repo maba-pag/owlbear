@@ -1254,6 +1254,125 @@ class TestFromAC_LateFailureAtomicCleanup:
             f"cleanup, found {source_count} row(s)"
         )
 
+    @pytest.mark.asyncio
+    async def test_committed_edge_row_cleaned_up_after_second_insert_edge_failure(
+        self,
+        conn: sqlite3.Connection,
+        app_ctx: AppContext,
+        store_components: dict,
+    ) -> None:
+        """An edge row committed by the first insert_edge call is cleaned up when
+        a second insert_edge call raises — proving edge cleanup is non-vacuous.
+
+        Reviewer gap (cycle 9): test_partial_extraction_write_leaves_no_entities_or_edges
+        patches insert_edge to raise on its FIRST call, so no edge is ever committed
+        — edges=0 is vacuously true regardless of cleanup correctness.
+
+        This test:
+        1. Wires a stub extractor returning 1 entity + 2 edges.
+        2. Wraps insert_edge to call the REAL insert_edge on the FIRST call
+           (commits edge1 to SQLite), then raise RuntimeError on the SECOND call.
+        3. Asserts edge_call_count >= 2 (proves the committed-edge state was reached,
+           not vacuous — first call was a real commit, second raised).
+        4. Asserts edges=0 after cleanup (delete_document_data removed the committed edge).
+        5. Continues asserting the existing contract: error: prefix, entities=0,
+           chunks=0, documents=0, sources=0.
+        """
+        entity1 = Entity(
+            name="committed-edge-entity-1",
+            entity_type=EntityType.CONCEPT,
+            description="first entity for committed-edge cleanup test",
+        )
+        entity2 = Entity(
+            name="committed-edge-entity-2",
+            entity_type=EntityType.CONCEPT,
+            description="second entity for committed-edge cleanup test",
+        )
+        # Two edges so the second insert_edge call is reachable after the first commits.
+        edge1 = Edge(
+            source_id=entity1.id,
+            target_id=entity2.id,
+            relation=RelationType.RELATED_TO,
+        )
+        edge2 = Edge(
+            source_id=entity2.id,
+            target_id=entity1.id,
+            relation=RelationType.RELATED_TO,
+        )
+        extraction = ExtractionResult(entities=[entity1, entity2], edges=[edge1, edge2])
+
+        edge_call_count = 0
+        real_insert_edge = store_components["graph_store"].insert_edge
+
+        def wrapping_insert_edge(edge: Edge, *, document_id: str | None = None) -> None:
+            nonlocal edge_call_count
+            edge_call_count += 1
+            if edge_call_count == 1:
+                # First call: real insert so edge1 is committed to SQLite.
+                real_insert_edge(edge, document_id=document_id)
+            else:
+                # Second call: raise to simulate late partial-write failure.
+                _msg = "forced second edge-write failure for committed-edge cleanup test"
+                raise RuntimeError(_msg)
+
+        ctx = _make_mcp_ctx(app_ctx)
+        with (
+            patch.object(
+                store_components["pipeline"]._extractor,
+                "extract",
+                new=AsyncMock(return_value=extraction),
+            ),
+            patch.object(
+                store_components["graph_store"],
+                "insert_edge",
+                side_effect=wrapping_insert_edge,
+            ),
+        ):
+            result = await ingest_document(
+                ctx,
+                text="content for committed-edge cleanup test",
+                metadata={"title": "CommittedEdgeDoc"},
+                scope="team-a",
+                source_url="https://example.test/committed-edge",
+            )
+
+        assert isinstance(result, str), (
+            f"ingest_document must return a string, got {result!r}"
+        )
+        assert result.startswith("error:"), (
+            f"Must return 'error:...' when second edge insert fails, got: {result!r}"
+        )
+        assert edge_call_count >= 2, (  # noqa: PLR2004
+            "insert_edge must be called ≥2 times (first call commits edge1, second raises) "
+            f"to prove the committed-edge state was reached (got {edge_call_count} calls); "
+            "if this is 1, only one edge was produced — use 2 edges in the extraction stub"
+        )
+        edge_count = conn.execute("SELECT count(*) FROM edges").fetchone()[0]
+        assert edge_count == 0, (
+            "Failed ingest must leave no edge rows — delete_document_data must clean up "
+            f"the committed edge row, found {edge_count} row(s)"
+        )
+        entity_count = conn.execute("SELECT count(*) FROM entities").fetchone()[0]
+        assert entity_count == 0, (
+            "Failed ingest must leave no entity rows after cleanup, "
+            f"found {entity_count} row(s)"
+        )
+        chunk_count = conn.execute("SELECT count(*) FROM chunks").fetchone()[0]
+        assert chunk_count == 0, (
+            "Failed ingest must leave no chunk rows after cleanup, "
+            f"found {chunk_count} row(s)"
+        )
+        doc_count = conn.execute("SELECT count(*) FROM documents").fetchone()[0]
+        assert doc_count == 0, (
+            "Failed ingest must leave no document rows after cleanup, "
+            f"found {doc_count} row(s)"
+        )
+        source_count = conn.execute("SELECT count(*) FROM knowledge_sources").fetchone()[0]
+        assert source_count == 0, (
+            "Failed ingest must leave no source rows after cleanup, "
+            f"found {source_count} row(s)"
+        )
+
 
 # ---------------------------------------------------------------------------
 # _TrackingVectorStore — stateful stub for AC-6 tests
