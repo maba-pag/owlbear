@@ -1,10 +1,10 @@
 ---
-description: "Review MCP memory entries with lifecycle context, source grounding, and guided approve/edit/reject decisions"
+description: "Review MCP memory entries with a skeptical retention gate and guided approve/edit/reject decisions"
 ---
 
 # Memory Review
 
-Run a guided MCP memory review session. This prompt is the user approval surface for curated entries, with enough task, agent, skill, and nearby-memory context for the user to judge whether future agents will understand and use each entry correctly.
+Run a guided MCP memory review session. This prompt is the user approval surface for curated entries, and it should behave like a skeptical memory gatekeeper rather than a curator trying to rescue every entry.
 
 ## Interaction Protocol
 
@@ -14,7 +14,28 @@ Keep working until the user explicitly tells you to stop, pause, or end the sess
 
 Present exactly one memory entry or decision item at a time before calling `askQuestions`. Do not list multiple entries and ask for one bulk decision.
 
-Each decision item must include: status quo, problem, options with pro/con/risk/confidence, recommendation with reason, and expected outcome. Include `(bp:)` for the best-practice option and `(rec:)` for your recommendation when useful.
+Role: skeptical memory gatekeeper.
+
+Motivation: approved entries compete for scarce recall budget. A false keep usually does more damage than a false reject. Treat deletion as normal maintenance, not failure.
+
+Truth is necessary but not sufficient. A true entry can still be too local, too obvious, too stale, too overfit, or too low-value to keep.
+
+Use one keep-value rating and one review-confidence number. Do not print a full option matrix by default. Let `askQuestions` carry the full action menu.
+
+Treat `does this solve a non-obvious recurring problem?` as the first review question.
+
+Do not add filler sections. If there is no real issue with scope, provenance, duplication, or ambiguity, omit that line instead of writing a low-value placeholder.
+
+Keep the prose tight. Prefer one sharp sentence over two soft ones. Skip generic lead-ins and reviewer boilerplate.
+
+For option analysis:
+
+- `Pro` means the real benefit that would follow from choosing that option.
+- `Con` means the real downside or cost of choosing that option.
+- `Risk` means how plausible and costly that downside is.
+- `Confidence` means how confident you are that the option is the best choice.
+
+Do not treat minor wording polish as a meaningful reason to edit unless it materially improves correctness, scope, retrieval, or next-action clarity.
 
 ## 0. Tool Bootstrap
 
@@ -62,11 +83,11 @@ Boundary rules:
 
 If there are no curated entries, do not stop. Present the pending and approved counts, explain the next useful modes, and ask one continuation decision.
 
-## 3. Per-Entry Context Bundle
+## 3. Review Workflow
 
-For each selected entry, build the context bundle before asking for an action. If a context source is unavailable, say exactly what was unavailable and continue with a lower context confidence instead of stopping.
+For each selected entry, start light. Do not load deep context by default.
 
-### 3.1 Read The Entry
+### 3.1 Base Read
 
 Call `ob-memory/read_memory` for the exact entry ID. Capture:
 
@@ -79,96 +100,140 @@ Call `ob-memory/read_memory` for the exact entry ID. Capture:
 - scope_agents
 - created_at, updated_at, approved_at
 
-### 3.2 Recover Source Task Context
+Compare the entry against nearby `curated` and `approved` metadata from preflight. Do not read overlaps yet unless you suspect a duplicate, conflict, or superseded entry.
 
-Try to identify the task or work item that produced the memory:
+### 3.2 Keep Test
 
-1. Parse task IDs from title and content using patterns such as `#1234`, `task #1234`, `Task #1234`, and `{id}-` filenames.
-2. If a task ID is found, search `.owlbear/kanban/tasks/` and `.owlbear/kanban/archive/` for that ID. Include ignored files if the search tool supports it.
-3. If no task ID is found, search task/archive text for distinctive title words plus `source_agent` and relevant file/tool names from the content.
-4. Read the best matching task file when found. Extract only the context needed to judge the memory: title, acceptance criteria or objective, changed/reviewed files, audit/review notes, and outcome.
-5. If no task is found, mark `source task: not found` and lower the context-confidence note. Do not invent provenance.
+Rate the entry as `Keep`, `Salvage`, or `Drop`.
 
-### 3.3 Load Agent And Skill Context
+- `Keep` = true enough, durable enough, and worth future retrieval for the stated scope.
+- `Salvage` = real signal exists, but the current title/content/scope/category/confidence is not good enough for approval.
+- `Drop` = false, stale, duplicate, obvious, overfit, misleading, or not worth recall cost.
 
-Read the agent definitions that explain how the entry will be used:
+Run these gates in order:
 
-1. Read `share/agents/{source_agent}.agent.md` when it exists.
-2. Read definitions for scoped agents in `scope_agents` when there are three or fewer scoped agents.
-3. When there are more than three scoped agents, read the source agent plus the two scoped agents most directly named or implied by the entry content, and state which scoped agents were not loaded.
-4. From loaded agent definitions, capture persona, critical rules, boundaries, and direct `required_reading` skill names that shape whether the memory is actionable.
-5. Read up to three relevant direct skills from `required_reading`, prioritizing workflow/rules skills mentioned by the entry content, source task, or categories. Do not load transitive skill chains unless a direct skill says they are required for understanding this entry.
+1. **Still true now?** If false or stale, `Drop`.
+2. **Worth retrieval?** If obvious, one-off, too local, or too tied to a single fix note, `Drop`.
+3. **Right scope?** If the core lesson is good but the scope is too wide, too narrow, or unclear, `Salvage`.
+4. **Durable enough?** If it is likely to save future cycles for the stated consumers, `Keep`.
+5. **Too close to call?** Load more context before deciding.
 
-### 3.4 Check Nearby Memories
+Truth is folded into keep value. Do not separately reward an entry just for being true.
 
-Use the preflight metadata to find likely duplicates, conflicts, and superseded entries:
+### 3.3 Context Escalation
 
-1. Compare title, categories, source_agent, and scope_agents against `curated` and `approved` metadata.
-2. Read likely overlaps before calling something a duplicate or conflict.
-3. Treat approved entries as stronger evidence than curated entries, unless the current entry is newer and clearly corrects the old one.
+Only load deeper context when one of these is true:
 
-## 4. Understandability And Quality Rating
+- truth or staleness is uncertain
+- scope_agents look suspicious
+- a duplicate or conflict is likely
+- `Keep` vs `Salvage` or `Salvage` vs `Drop` is close
+- the user challenges the recommendation
 
-Before presenting action options, rate whether a future scoped agent could understand and apply the entry.
+When deeper context is needed, load only the minimum necessary:
 
-Use this 1-5 **agent readability** scale:
+1. Recover source task context from `.owlbear/kanban/tasks/` or `.owlbear/kanban/archive/`.
+2. Read likely overlapping memories before calling something duplicate or conflicting.
+3. Read `share/agents/{source_agent}.agent.md` when the source role matters.
+4. Read scoped agent definitions only when scope is part of the decision.
+5. Read up to three direct skills only when they materially affect truth, scope, or durability.
 
-| Rating | Meaning |
-|--------|---------|
-| 5 | Standalone, cites task/file/tool context, directly actionable for scoped agents. |
-| 4 | Mostly standalone; minor context helps but the action is clear. |
-| 3 | Understandable only after source task or agent context is loaded. |
-| 2 | Ambiguous action, scope, or evidence; needs rewrite before approval. |
-| 1 | Not usable as memory; generic, contextless, duplicate, stale, or misleading. |
+If no source task is found and the entry also lacks independently checkable evidence such as exact files, tools, tests, or commands, lower review confidence. Do not fill provenance gaps with optimism.
 
-Also check the `h-memory-structure` quality bar:
+### 3.4 Approved Re-Audit Adversarial Lane
 
-- specific task ID, file path, or tool name
-- actionable in the next 30 seconds
-- non-obvious
-- single insight
-- correct scope_agents for intended consumers
-- category fit
-- confidence calibration
+When auditing already approved entries, do not rely on self-critique alone.
 
-### 4.1 Provenance Gate
+For any provisional `Keep` verdict in approved maintenance mode:
 
-Treat provenance as an approval gate, not a decorative note.
+1. Call the `challenger` subagent first.
+2. Ask it to make the strongest serious case for `Drop` or `Salvage`.
+3. If the challenger clearly wins, downgrade the verdict.
+4. If the challenger lands a real hit but the item still may survive, call `General Purpose` to argue the strongest real `Keep` case.
+5. Present both sides briefly before asking the user.
 
-- If a source task is found, use it to judge whether the memory accurately captures a durable lesson from that task.
-- If no source task is found but the entry cites exact files, tools, tests, commands, or task-like evidence that makes the lesson independently checkable, it may still reach readability 4.
-- If no source task is found and the entry lacks equivalent exact evidence, cap agent readability at 3 and recommend `Edit before approval` or `Skip for now`, not `Approve`.
-- When editing for provenance, prefer adding the missing task ID or exact file/tool/test context to the content rather than adding generic explanation.
-- If provenance cannot be recovered, record that in the review card and explain what future agents would be unable to verify.
+Do not call the pro lane on obvious drops, obvious salvages, or clear keeps that the challenger fails to meaningfully weaken.
+
+## 4. Ratings
+
+Keep value is the rating. Review confidence is confidence in that keep-value judgment, not in the entry itself.
+
+### 4.1 Keep Value
+
+- `Keep` = approve is likely right
+- `Salvage` = edit is likely right
+- `Drop` = reject is likely right
+
+### 4.2 Review Confidence
+
+Use only these four values:
+
+- `0.95` = clear call; the alternative is weak
+- `0.80` = strong call; a real alternative exists, but it is clearly worse
+- `0.60` = close call; borderline, usually edit or gather more context
+- `0.40` = weak call; not enough certainty to push hard, prefer more context or skip
+
+Do not use other numbers unless the user explicitly asks for finer granularity.
+
+`0.95` should be rare. `0.80` is the normal strong score. `0.60` should appear often on borderline entries.
+
+In approved re-audit mode:
+
+- `0.95` only if the challenger misses and the keep case still looks strong
+- `0.80` only if the challenger lands a real point but the keep case clearly survives
+- `0.60` when the challenger makes the verdict genuinely close
+- `0.40` when the entry still feels unresolved after adversarial review
 
 ## 5. Review Card
 
-Present exactly one review card for the current entry, then call `askQuestions`.
+Present exactly one lean review card for the current entry, then call `askQuestions`.
+
+For normal curated approval review:
+
+- Use `ref = entry_id[:5]` as the displayed identifier. Keep the full ID internal for tool calls.
+- Do not show a lifecycle-state line for the curated approval queue.
+- Put `source_agent` first, then `scope_agents`, then `categories` on the metadata line.
+- Show the stored entry confidence on the entry line so it is not confused with review confidence.
+- Do not print a full action option matrix in prose. The action menu belongs in `askQuestions`.
 
 Use this structure:
 
 ```markdown
-**Entry:** {id} - {title}
-**Lifecycle state:** {state}; source={source_agent}; scope={scope_agents}; categories={categories}; confidence={confidence}
-**Source task context:** {task title/objective/outcome or "not found"}
-**Agent context:** {loaded source/scoped agents and the role rules that matter}
-**Skill context:** {loaded relevant skills or "none needed beyond memory authorities"}
-**Nearby memories:** {duplicates/conflicts/superseded candidates or "none found"}
-**Agent readability:** {1-5}/5 - {reason}
-**Status quo:** {what this memory currently says and who would recall it}
-**Problem:** {approval blocker, edit need, duplicate/staleness concern, or "none"}
-**Options:**
-- Approve - Pro: {...}; Con: {...}; Risk: {...}; Confidence: {...}
-- Edit before approval - Pro: {...}; Con: {...}; Risk: {...}; Confidence: {...}
-- Reject/retire - Pro: {...}; Con: {...}; Risk: {...}; Confidence: {...}
-- Skip for now - Pro: {...}; Con: {...}; Risk: {...}; Confidence: {...}
-**Recommendation:** {one option, with reason}
-**Expected outcome:** {state/content change and effect on future recall}
+**Entry:** {ref} | {title} | stored {entry_confidence}
+**Meta:** source: {source_agent} | scope: {scope_agents} | categories: {categories}
+> {content}
+**Keep value:** {Keep|Salvage|Drop}
+**Review confidence:** {0.95|0.80|0.60|0.40}
+**Deciding factor:** {one sharp sentence stating the main keep, salvage, or drop reason}
+**Scope note:** {include only if scope_agents looks too wide, too narrow, or misaligned}
+**Evidence note:** {include only when provenance, nearby memories, or agent context materially changes the call}
+**Recommended action:** {Approve|Request changes|Reject|Skip} - {one-line reason}
+**Alternative:** {include only when there is a real second-best path}
 ```
 
-Place `(bp:)` and `(rec:)` only on the option justified by the context bundle, provenance gate, and readability rating. Do not mark `Approve` as recommended unless the entry meets the provenance gate and readability is at least 4.
+The user should be able to answer two questions quickly:
 
-Do not recommend approval for entries rated below 4 unless the user explicitly accepts the risk after seeing the context gap.
+1. Is this worth keeping at all?
+2. If yes, is it already shaped well enough to approve?
+
+If a line does not change the decision, omit it.
+
+For approved re-audit mode, use this structure instead:
+
+```markdown
+**Entry:** {ref} | {title} | stored {entry_confidence}
+**Meta:** source: {source_agent} | scope: {scope_agents} | categories: {categories}
+> {content}
+**Save case:** {the strongest concrete reason this memory would save future mistakes, retries, or false results}
+**Drop case:** {the strongest concrete reason this memory might be clutter, overfit, stale, or not worth retrieval}
+**Challenger note:** {include when challenger lands a substantive hit}
+**Pro note:** {include only when General Purpose was used to defend a close survivor}
+**Verdict:** {Keep|Salvage|Drop}
+**Review confidence:** {0.95|0.80|0.60|0.40}
+**Recommended action:** {Keep approved|Request changes|Reject|Skip} - {one-line reason}
+```
+
+The approved re-audit card must show real negative pressure. Do not recommend `Keep approved` unless the item survives a serious drop case.
 
 ## 6. Actions
 
@@ -191,7 +256,7 @@ After the user answers, perform exactly the selected action for the current entr
 ### Reject Or Retire
 
 - Treat this as destructive.
-- If the user did not explicitly confirm deletion/retirement in their answer, ask one confirmation decision naming the exact entry ID and reason.
+- If the user did not explicitly confirm deletion/retirement in their answer, ask one confirmation decision naming the displayed short ref, title, and reason.
 - Call `ob-memory/delete_memory` only after confirmation.
 - Record whether the tool reported hard-delete or soft-delete semantics.
 
