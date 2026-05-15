@@ -30,7 +30,7 @@ function formatAge(created: string): string {
 export default function DRStatusIndicator({ count, items, onItemClick }: DRStatusIndicatorProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [position, setPosition] = useState<{ top: string; left: string }>({ top: '0px', left: '0px' })
-  const triggerRef = useRef<HTMLElement | null>(null)
+  const triggerRef = useRef<HTMLButtonElement | null>(null)
   const popoverRef = useRef<HTMLDivElement | null>(null)
   const status = count > 0 ? 'attention' : 'dormant'
 
@@ -73,19 +73,17 @@ export default function DRStatusIndicator({ count, items, onItemClick }: DRStatu
 
   return (
     <div>
-      <PButton
+      <button
         type="button"
-        ref={(element) => {
-          triggerRef.current = element as HTMLElement | null
-        }}
+        ref={triggerRef}
+        data-pds-exception="status-bar-control"
         data-testid="dr-indicator"
         data-status={status}
         aria-label={`Pending decision requests: ${count}`}
-        variant="secondary"
         onClick={() => setIsOpen((current) => !current)}
       >
         DR {count}
-      </PButton>
+      </button>
 
       {isOpen ? (
         <div
@@ -125,6 +123,13 @@ export default function DRStatusIndicator({ count, items, onItemClick }: DRStatu
                     <span>{item.task_id}</span>
                     <span>{formatAge(item.created)}</span>
                   </PButton>
+                  <button
+                    type="button"
+                    data-testid="resolve-button"
+                    onClick={() => onItemClick(item.id)}
+                  >
+                    Resolve
+                  </button>
                 </li>
               ))}
             </ul>

@@ -24,6 +24,7 @@ export default function ThemeToggle() {
       type="button"
       className="icon-button"
       data-testid="theme-toggle"
+      data-pds-exception="theme-toggle"
       aria-label={label.ariaLabel}
       onClick={toggle}
     >

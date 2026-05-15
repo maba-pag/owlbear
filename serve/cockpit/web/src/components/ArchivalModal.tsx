@@ -254,6 +254,7 @@ export default function ArchivalModal({
   return (
     <div
       ref={dialogRef}
+      data-testid="archival-modal"
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}

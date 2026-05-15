@@ -280,7 +280,6 @@ function KanbanBoardContent({
           ref={filterToggleRef}
           type="button"
           data-testid="filter-toggle"
-          tabIndex={-1}
           aria-expanded={panelOpen ? 'true' : 'false'}
           aria-controls="filter-panel"
           variant="secondary"
@@ -413,9 +412,24 @@ function KanbanBoardContent({
                 )
               }
             >
-              → {target}
+              Move to {target}
             </div>
           ))}
+          {(board.valid_transitions[contextMenu.taskStatus] ?? []).includes('archived') ? null : (
+            <div
+              role="menuitem"
+              onClick={() =>
+                void handleTransitionClick(
+                  contextMenu.taskId,
+                  'archived',
+                  tasks.find((task) => task.id === contextMenu.taskId)?.status ?? contextMenu.taskStatus,
+                  contextMenu.taskUpdated,
+                )
+              }
+            >
+              Archive
+            </div>
+          )}
         </div>
       )}
     </div>

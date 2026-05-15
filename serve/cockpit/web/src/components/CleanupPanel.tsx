@@ -176,8 +176,13 @@ export default function CleanupPanel({ onSuccess }: CleanupPanelProps) {
   }
 
   return (
-    <PButton data-testid="cleanup-button" onClick={requestCleanup}>
+    <button
+      type="button"
+      data-pds-exception="status-bar-control"
+      data-testid="cleanup-button"
+      onClick={requestCleanup}
+    >
       Cleanup
-    </PButton>
+    </button>
   )
 }

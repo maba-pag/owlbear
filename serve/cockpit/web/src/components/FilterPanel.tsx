@@ -181,6 +181,8 @@ export default function FilterPanel({
     <div
       ref={panelRef}
       id="filter-panel"
+      data-testid="filter-panel"
+      data-region="filter-panel"
       className="filter-panel"
       role="region"
       aria-label="Task filters"

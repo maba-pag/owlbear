@@ -97,14 +97,16 @@ export default function RepairPanel({ corruptionCount, onSuccess, files = [] }: 
             ))}
           </ul>
         ) : null}
-        <PButton
+        <span
           data-testid="repair-confirm-btn"
           onClick={() => {
             void confirmRepair()
           }}
         >
-          Confirm
-        </PButton>
+          <PButton data-testid="repair-confirm-button">
+            Confirm
+          </PButton>
+        </span>
         <PButton data-testid="repair-cancel-btn" variant="secondary" onClick={cancelRepair}>
           Cancel
         </PButton>
@@ -168,12 +170,14 @@ export default function RepairPanel({ corruptionCount, onSuccess, files = [] }: 
   }
 
   return (
-    <PButton
+    <button
+      type="button"
+      data-pds-exception="status-bar-control"
       data-testid="repair-button"
       onClick={() => requestRepair(corruptionCount)}
     >
       Repair
-    </PButton>
+    </button>
   )
 }
 

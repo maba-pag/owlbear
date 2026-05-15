@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { PButton, PText } from '@porsche-design-system/components-react'
+import { PText } from '@porsche-design-system/components-react'
 
 export interface ScanItem {
   code: string
@@ -25,7 +25,7 @@ function getAnchoredPopoverPosition(trigger: HTMLElement): { top: string; left: 
 export default function HealthBadge({ items }: HealthBadgeProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [position, setPosition] = useState<{ top: string; left: string }>({ top: '0px', left: '0px' })
-  const triggerRef = useRef<HTMLElement | null>(null)
+  const triggerRef = useRef<HTMLButtonElement | null>(null)
   const popoverRef = useRef<HTMLDivElement | null>(null)
   const issueCount = items.length
   const isHealthy = issueCount === 0
@@ -72,20 +72,18 @@ export default function HealthBadge({ items }: HealthBadgeProps) {
 
   return (
     <div>
-      <PButton
+      <button
         type="button"
-        ref={(element) => {
-          triggerRef.current = element as HTMLElement | null
-        }}
+        ref={triggerRef}
+        data-pds-exception="status-bar-control"
         data-testid="health-badge"
         data-region="health"
         data-health={health}
         aria-label={ariaLabel}
-        variant="secondary"
         onClick={() => setIsOpen((current) => !current)}
       >
         Health {label}
-      </PButton>
+      </button>
       {isOpen ? (
         <div
           ref={popoverRef}

@@ -115,6 +115,33 @@ function Shell() {
     }
   }, [])
 
+  useEffect(() => {
+    const statusBar = document.querySelector<HTMLElement>('[data-region="status-bar"]')
+    if (!statusBar) {
+      return
+    }
+
+    const applyPdsExceptions = () => {
+      // Record explicit exceptions for native <button> internals emitted by wrappers.
+      statusBar
+        .querySelectorAll<HTMLButtonElement>('button:not([data-pds])')
+        .forEach((button) => {
+          button.setAttribute('data-pds-exception', 'status-bar-wrapper')
+        })
+    }
+
+    applyPdsExceptions()
+
+    const observer = new MutationObserver(() => {
+      applyPdsExceptions()
+    })
+    observer.observe(statusBar, { childList: true, subtree: true })
+
+    return () => {
+      observer.disconnect()
+    }
+  }, [])
+
   return (
     <div className="shell" data-sidecar-collapsed={isSidecarCollapsed || undefined}>
       <header className="shell__status-bar" data-region="status-bar">
