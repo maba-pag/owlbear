@@ -291,6 +291,81 @@ test.describe('AC-1 | Filter workflow via PDS control selectors', () => {
     await expect(page.locator('[data-testid="task-card"][data-id="1"]')).not.toBeVisible({ timeout: 2_000 })
     await expect(page.locator('[data-testid="task-card"][data-id="3"]')).not.toBeVisible({ timeout: 2_000 })
   })
+
+  test('search: task 1 (Alpha) remains visible and task 2 (Beta) also hidden after searching "Alpha"', async ({ page }) => {
+    // Surviving-set assertion: existing test only hides task 3. Prove task 1 survives and task 2 is
+    // also hidden ("Beta blocked task" does not match "Alpha"). A bug that over-filters all tasks
+    // would pass the one-sided check but fail here.
+    await loadBoard(page)
+    await openFilterPanel(page)
+    await page.locator('#filter-panel p-input-search[name="search-filter"]').click()
+    await page.keyboard.type('Alpha')
+    await expect(page.locator('[data-testid="task-card"][data-id="1"]')).toBeVisible({ timeout: 2_000 })
+    await expect(page.locator('[data-testid="task-card"][data-id="2"]')).not.toBeVisible({ timeout: 2_000 })
+  })
+
+  test('priority filter: task 1 (critical) remains visible and task 3 (someday) is hidden', async ({ page }) => {
+    // Surviving-set assertion: existing test hides only task 2. Prove task 1 survives and task 3
+    // (someday) is also hidden. Prevents false-green from partial or over-filtered results.
+    await loadBoard(page)
+    await openFilterPanel(page)
+    await page.locator('#filter-panel p-select[name="priority-filter"]').evaluate((el) => {
+      el.value = 'critical'
+      el.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await expect(page.locator('[data-testid="task-card"][data-id="1"]')).toBeVisible({ timeout: 2_000 })
+    await expect(page.locator('[data-testid="task-card"][data-id="3"]')).not.toBeVisible({ timeout: 2_000 })
+  })
+
+  test('blocked filter: task 2 (blocked) remains visible while tasks 1 and 3 are hidden', async ({ page }) => {
+    // Full surviving-set: badge test only checks control + count. Prove the correct card set:
+    // only task 2 (blocked=true) survives; tasks 1 and 3 (blocked=false) are hidden.
+    await loadBoard(page)
+    await openFilterPanel(page)
+    await page.locator('#filter-panel').locator('p-switch, p-checkbox').click()
+    await expect(page.locator('[data-testid="task-card"][data-id="2"]')).toBeVisible({ timeout: 2_000 })
+    await expect(page.locator('[data-testid="task-card"][data-id="1"]')).not.toBeVisible({ timeout: 2_000 })
+    await expect(page.locator('[data-testid="task-card"][data-id="3"]')).not.toBeVisible({ timeout: 2_000 })
+  })
+
+  test('tags filter: task 2 (backend tag) remains visible after tags=backend filter', async ({ page }) => {
+    // Surviving-set assertion: existing behavioral test hides tasks 1 and 3 but never asserts
+    // task 2 (frontend+backend) remains visible after selecting the backend tag.
+    await loadBoard(page)
+    await openFilterPanel(page)
+    await page.locator('#filter-panel p-multi-select[name="tags-filter"]').evaluate((el) => {
+      el.dispatchEvent(new CustomEvent('update', { detail: { value: ['backend'] }, bubbles: true }))
+    })
+    await expect(page.locator('[data-testid="task-card"][data-id="2"]')).toBeVisible({ timeout: 2_000 })
+  })
+
+  test('clearing filters restores previously hidden task cards to visible', async ({ page }) => {
+    // Clear test must prove filtered-out cards reappear, not just that badge/count disappear.
+    // Apply priority=critical (hides tasks 2 and 3), clear, then assert tasks 2 and 3 reappear.
+    await loadBoard(page)
+    await openFilterPanel(page)
+    await page.locator('#filter-panel p-select[name="priority-filter"]').evaluate((el) => {
+      el.value = 'critical'
+      el.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    // Guard: verify filter was active before testing clear.
+    await expect(page.locator('[data-testid="task-card"][data-id="3"]')).not.toBeVisible({ timeout: 2_000 })
+    await page.click('[data-testid="filter-reset"]')
+    await expect(page.locator('[data-testid="task-card"][data-id="2"]')).toBeVisible({ timeout: 2_000 })
+    await expect(page.locator('[data-testid="task-card"][data-id="3"]')).toBeVisible({ timeout: 2_000 })
+  })
+
+  test('result count text shows correct ratio value, not just presence', async ({ page }) => {
+    // Existing test only asserts toBeVisible. Assert the displayed text is the correct ratio.
+    // priority=critical: 1 matching task (task 1) out of 3 total → "1 / 3 tasks".
+    await loadBoard(page)
+    await openFilterPanel(page)
+    await page.locator('#filter-panel p-select[name="priority-filter"]').evaluate((el) => {
+      el.value = 'critical'
+      el.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await expect(page.locator('[data-testid="filter-result-count"]')).toContainText('1 / 3 tasks', { timeout: 2_000 })
+  })
 })
 
 // --- AC-2 | FilterPanel PDS compliance assertions ---------------------------
@@ -314,6 +389,22 @@ test.describe('AC-2 | FilterPanel PDS compliance assertions', () => {
     await expect(
       page.locator('#filter-panel').locator('p-switch, p-checkbox'),
     ).toBeVisible({ timeout: 2_000 })
+  })
+
+  test('(a.2) search field: no native input[type="text"] present in filter panel (dual-render falsifiability)', async ({ page }) => {
+    // Absence assertion for AC-2(a): PDS host presence alone is not falsifiable against a
+    // dual-render state. FilterPanel.tsx keeps an aria-hidden native input[type="text"] fallback
+    // alongside p-input-search. Both must be absent for the contract to hold.
+    // FAILS until builder removes the hidden native text input.
+    await expect(page.locator('#filter-panel input[type="text"]')).toHaveCount(0, { timeout: 2_000 })
+  })
+
+  test('(b.2) blocked toggle: no native input[type="checkbox"] present in filter panel (dual-render falsifiability)', async ({ page }) => {
+    // Absence assertion for AC-2(b): PDS host presence alone is not falsifiable against a
+    // dual-render state. FilterPanel.tsx keeps an aria-hidden native input[type="checkbox"] fallback
+    // alongside p-checkbox. Both must be absent for the contract to hold.
+    // FAILS until builder removes the hidden native checkbox fallback.
+    await expect(page.locator('#filter-panel input[type="checkbox"]')).toHaveCount(0, { timeout: 2_000 })
   })
 
   test('(c) priority select uses p-select-option children, not native option', async ({ page }) => {
