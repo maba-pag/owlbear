@@ -560,7 +560,10 @@ def _resolve_phase1_edge_endpoints(
     target_id = edge.get("target_id") if isinstance(edge.get("target_id"), str) else None
 
     def _entity_id_exists(entity_id: str) -> bool:
-        row = conn.execute("SELECT 1 FROM entities WHERE id = ? LIMIT 1", (entity_id,)).fetchone()
+        row = conn.execute(
+            "SELECT 1 FROM entities WHERE id = ? AND scope = ? LIMIT 1",
+            (entity_id, provenance.scope),
+        ).fetchone()
         return row is not None
 
     if source_id is None:
