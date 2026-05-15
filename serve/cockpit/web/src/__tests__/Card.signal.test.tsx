@@ -137,6 +137,20 @@ describe('TestFromAC_CardDensityElements', () => {
     expect(updatedChip).not.toBeNull()
     expect(updatedChip!.textContent?.trim().length).toBeGreaterThan(0)
   })
+
+  it('card renders visible title element with correct task title text (AC-1 title fixture)', () => {
+    // AC-1 explicitly requires E2E rendering fixtures for task title.
+    // Architect refinement (second review cycle): task-local proof for card-title
+    // required — re-dispatched to test-writer/builder.
+    // Note: path guard prevents test-writer from writing to e2e/; this Vitest test
+    // provides unit-level AC-1 title proof. Builder must add the companion E2E
+    // assertion to serve/cockpit/web/e2e/card-density-1565.spec.ts (see Builder Notes).
+    const task = makeTask({ id: 1, title: 'My specific task title' })
+    const { container } = renderCard(task)
+    const titleEl = container.querySelector('[data-testid="card-title"]')
+    expect(titleEl).not.toBeNull()
+    expect(titleEl!.textContent?.trim()).toBe('My specific task title')
+  })
 })
 
 // ─── AC-4 (density retry): Update recency branches via formatUpdatedAge ───────
