@@ -384,6 +384,16 @@ test.describe('TestFromAC_DecisionQueueComposition', () => {
     expect(indices.every((i) => i >= 0)).toBe(true)
     // All 4 must be in DISTINCT child elements
     expect(new Set(indices).size).toBe(4)
+
+    // Value-content proof: each labeled field must render a value, not just the label.
+    // A label-only decision card would pass the distinct-child check but have no value.
+    const texts = await item.evaluate((el: HTMLElement) => {
+      return Array.from(el.children).map((c) => c.textContent ?? '')
+    })
+    expect(texts[indices[0]]).toContain('builder')
+    expect(texts[indices[1]]).toContain('scope-decision')
+    expect(texts[indices[2]!]).toMatch(/Age:\s*.+/)
+    expect(texts[indices[3]]).toContain('1')
   })
 })
 
