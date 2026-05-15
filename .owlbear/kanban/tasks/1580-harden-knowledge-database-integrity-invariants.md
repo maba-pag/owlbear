@@ -4,16 +4,18 @@ title: Harden knowledge database integrity invariants
 status: backlog
 priority: important
 created: 2026-05-15T02:08:03.693696+00:00
-updated: 2026-05-15T02:08:05.950967+00:00
+updated: 2026-05-15T18:51:56.569620+00:00
 tags:
   - scope:knowledge
   - type:build
   - db-integrity
   - hardening
+  - quality
 parent:
 depends_on:
   - 1556
   - 1557
+  - 1589
 blocked: false
 block_reason:
 claimed_at:
@@ -42,3 +44,33 @@ AC-5: Proof must create at least one invalid/orphan scenario and show that the i
 
 Dependencies:
 Wait for source/document/vector identity repair and manual enrichment persistence repair so this task hardens the final intended model, not today’s broken intermediate state.
+2026-05-15T16:25:23+00:00
+## Planning
+### Decomposition: Harden knowledge database integrity invariants
+- Tasks created: 5
+- Dependency layers: 4
+- Phase: 1
+
+### Task List
+| ID | Title | Priority | Depends On | Tags |
+|----|-------|----------|------------|------|
+| #1585 | P1-01: Tests — knowledge schema constraint enforcement | critical | — | phase-1, scope:knowledge, type:test, db-integrity |
+| #1586 | P1-02: Knowledge schema constraint enforcement | critical | #1585 | phase-1, scope:knowledge, type:build, db-integrity, hardening |
+| #1587 | P1-03: Tests — knowledge integrity audit function | needed | #1586 | phase-1, scope:knowledge, type:test, db-integrity |
+| #1588 | P1-04: Knowledge integrity audit function | needed | #1587 | phase-1, scope:knowledge, type:build, db-integrity |
+| #1589 | Consolidation test: knowledge DB integrity hardening | important | #1586, #1588 | consolidation-test, scope:knowledge, type:test, db-integrity |
+
+### Dependency Graph
+```mermaid
+graph TD
+    T1["#1585 Tests: schema constraints"] --> I1["#1586 Schema constraints impl"]
+    I1 --> T2["#1587 Tests: integrity audit"]
+    T2 --> I2["#1588 Integrity audit impl"]
+    I1 --> C["#1589 Consolidation test"]
+    I2 --> C
+```
+
+### Design Rationale
+- **FK enablement before audit**: Schema constraints (#1586) must land first so the audit function (#1588) operates against the hardened schema. The audit function catches pre-existing violations and states that FK enforcement alone cannot detect (e.g., databases migrated from pre-v12).
+- **NOT NULL scope**: Migration v12 targets `entities.document_id` and `edges.document_id` — provenance columns that must be populated after #1556/#1557. `documents.source_id` left nullable (ad-hoc documents without sources are legitimate).
+- **Orphan injection in tests**: Audit and consolidation tests inject orphans via direct SQL with `PRAGMA foreign_keys = OFF` to simulate pre-migration data or edge-case corruption.

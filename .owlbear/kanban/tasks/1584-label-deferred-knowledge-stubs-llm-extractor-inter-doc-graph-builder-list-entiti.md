@@ -1,0 +1,94 @@
+---
+id: 1584
+title: Label deferred knowledge stubs (llm_extractor, inter_doc_graph_builder, 
+  list_entities)
+status: review
+priority: nice-to-have
+created: 2026-05-15T16:22:28.292693+00:00
+updated: 2026-05-15T19:30:48.376120+00:00
+tags:
+  - scope:knowledge
+  - type:cleanup
+  - maintainability
+  - docs
+parent:
+depends_on:
+  - 1576
+blocked: false
+block_reason:
+claimed_at:
+archival_reason:
+archival_refs: []
+---
+Context: Research #1576 classified llm_extractor.py, inter_doc_graph_builder.py, and the list_entities function as document-as-stub.
+
+Objective: Add clear DEFERRED header docstrings so future developers know these are intentional stubs, not forgotten code.
+
+Proof bundle: skip
+
+Acceptance Criteria:
+- [ ] llm_extractor.py module docstring updated to include DEFERRED status and descriptive reference to future LLMExtractor server activation (not stale task number).
+- [ ] inter_doc_graph_builder.py module docstring updated to include DEFERRED status and note that activation depends on StructuredExtractor integration.
+- [ ] list_entities function in server.py gets a brief comment marking it as deferred (not exposed as MCP tool pending thread-safety review).
+- [ ] No functional changes to any code.
+2026-05-15T19:06:30+00:00
+## Research
+- Research doc: .owlbear/research/label-deferred-knowledge-stubs.md
+- Sources: 5 studied, 3 high-relevance (the target files themselves)
+- Recommendation: Trivial docstring/comment labeling, no functional changes (confidence: 0.90)
+- Key finding: AC-1 references task #875 which no longer exists on the board. Implementer should use a descriptive reference ("LLMExtractor server activation") instead of the stale task number.
+- All three targets verified: llm_extractor.py (full LLMExtractor class, not imported by active code), inter_doc_graph_builder.py (full InterDocGraphBuilder, set to None in lifespan), list_entities function in server.py (complete async function, no @mcp.tool decorator).
+- Challenge: SKIPPED — trivial cleanup, no alternatives to challenge.
+- Follow-ups: none needed — #1584 is itself the follow-up from #1576.
+- Commit: c9501e8d
+2026-05-15T19:09:26+00:00
+## Architecture Review
+### Evaluation
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | One concern: label three deferred stubs |
+| Interface clarity | PASS | AC names exact files and function targets |
+| Dependency correctness | PASS | #1576 archived (complete) |
+| Module layering | PASS | No import or structural changes |
+| TDD compliance | PASS | Proof bundle `skip`; `docs` tag added for test-writer pass-through |
+| KISS/YAGNI | PASS | Minimal docstring/comment additions only |
+| Premise challenge | PASS | Reasonable follow-up from #1576 research classification |
+| Pattern consistency | PASS | Standard Python docstring conventions |
+| Security surface | PASS | No security implications |
+| Single domain | PASS | All targets within `scope:knowledge` |
+
+### AC Refinement
+- AC-1: Replaced stale task #875 reference with descriptive "LLMExtractor server activation" per research recommendation.
+- AC-2: Clarified StructuredExtractor dependency wording.
+- Added `Proof bundle: skip` field.
+- Added `docs` tag for test-writer pass-through (docstring-only changes produce no testable behavior).
+
+### Challenge Results
+- Challenger: SKIPPED — proof bundle `skip`
+
+### Proof-Bundle Validation
+- Planner assignment: (none)
+- Final bundle: skip
+- Existing proof scope: N/A
+- Test-writer: SKIP (bundle `skip`)
+
+### Verdict: APPROVE
+### Action Taken: Refined AC-1 (stale task ref), added proof bundle and `docs` tag, advanced backlog → todo.
+2026-05-15T19:19:20+00:00
+## Test-Writer Notes
+- Proof bundle: skip — no new test writing required.
+- Task tagged `docs`: AC covers docstring/comment additions only (llm_extractor.py, inter_doc_graph_builder.py, list_entities in server.py). No testable Python interfaces — pure label changes.
+- Passing through to builder.
+2026-05-15T19:30:48+00:00
+## Builder Notes
+- Implementation: Updated deferred labeling in `serve/knowledge/src/owlbear_knowledge/llm_extractor.py`, `serve/knowledge/src/owlbear_knowledge/inter_doc_graph_builder.py`, and `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py`.
+- Scope: Docstring/comment-only edits per AC; no functional or behavioral changes.
+- Proof bundle: skip (no TestFromAC gate required).
+- Tests: 0 executed (docs-only task, proof-bundle skip).
+- Coverage: N/A for docs-only task.
+- Lint: clean via quality-runner scoped lint on all 3 changed files (ruff exit 0, violations none).
+- Evidence summary: 
+  - `llm_extractor.py` module docstring now explicitly marked `DEFERRED` and references future "LLMExtractor server activation".
+  - `inter_doc_graph_builder.py` module docstring now explicitly marked `DEFERRED` and states activation depends on StructuredExtractor integration.
+  - `list_entities` in `server.py` now has a brief deferred comment noting it is intentionally not exposed as an MCP tool pending thread-safety review.
+- Commit: `daa10dc0` (`docs: label deferred knowledge stubs (#1584, builder)`).
