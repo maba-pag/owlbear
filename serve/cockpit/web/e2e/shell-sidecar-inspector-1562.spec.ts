@@ -255,6 +255,15 @@ test.describe('TestFromAC_SidecarInspectorComposition', () => {
         '[data-region="sidecar"] h3:has-text("Body")',
     )
     await expect(bodySection).toBeVisible()
+
+    // AC-1(c) refined: the body section must contain the task's description content —
+    // not just a visible wrapper or heading.
+    // TaskFieldsEditor renders body as ReactMarkdown by default (editBody=false).
+    // PTextarea (edit mode) uses PDS shadow DOM so native textarea is not accessible
+    // via standard CSS selectors. The correct proof is content visibility.
+    await expect(page.locator('[data-region="sidecar-body"]')).toContainText(
+      'Cache implementation details',
+    )
   })
 
   test('sidecar has identifiable activity and actions regions — RED: no sub-region markers', async ({
@@ -358,15 +367,21 @@ test.describe('TestFromAC_DecisionQueueComposition', () => {
     await expect(item.getByText('Age:', { exact: true })).toBeVisible()
     await expect(item.getByText('Task:', { exact: true })).toBeVisible()
 
-    // Child-structure proof: each labeled field must be a distinct direct child element,
-    // not concatenated text in a single node.
-    // AC-2 refined: a flat non-button container with all labels in one node must not pass.
-    // DecisionViewport renders each field as a separate <PText> direct child of <article>.
-    for (const label of ['Agent:', 'Request type:', 'Age:', 'Task:']) {
-      await expect(
-        item.locator(':scope > *').filter({ hasText: label }),
-      ).toHaveCount(1)
-    }
+    // Child-structure proof: each labeled field must be a DISTINCT direct child element.
+    // The prior per-label filter({ hasText }).toHaveCount(1) loop is insufficient —
+    // a single child containing all labels would yield count=1 for each, false-greening.
+    // This page.evaluate approach collects textContent from every direct child into an
+    // array and asserts that the 4 required labels map to 4 DIFFERENT array indices.
+    const indices = await item.evaluate((el: HTMLElement) => {
+      const children = Array.from(el.children)
+      const texts = children.map((c) => c.textContent ?? '')
+      const labels = ['Agent:', 'Request type:', 'Age:', 'Task:']
+      return labels.map((l) => texts.findIndex((t) => t.includes(l)))
+    })
+    // All 4 labels must be found in some direct child (no -1)
+    expect(indices.every((i) => i >= 0)).toBe(true)
+    // All 4 must be in DISTINCT child elements
+    expect(new Set(indices).size).toBe(4)
   })
 })
 
@@ -429,6 +444,12 @@ test.describe('TestFromAC_KeyboardCollapseExpand', () => {
     //      Collapse works (AC-3(a) passes) but the header state-preservation check fails
     //      because the header region itself does not exist.
     const collapseToggle = page.locator('[data-testid="sidecar-collapse"]')
+    const sidecarHeader = page.locator('[data-region="sidecar-header"]')
+
+    // Capture header text BEFORE collapse — state-preservation proof requires a
+    // before/after comparison, not just a post-expand regex match.
+    const beforeText = await sidecarHeader.textContent()
+    expect(beforeText).toBeTruthy()
 
     // Collapse via keyboard
     await collapseToggle.focus()
@@ -439,14 +460,14 @@ test.describe('TestFromAC_KeyboardCollapseExpand', () => {
     await page.keyboard.press('Enter')
     await expect(page.locator('#shell-sidecar-content')).not.toHaveAttribute('aria-hidden', 'true')
 
-    // Assert sidecar-header region is visible and shows task title/ID (state preserved)
+    // Assert sidecar-header region is visible after expand (state preserved)
     // RED: no [data-region="sidecar-header"] exists → toBeVisible() fails.
-    const sidecarHeader = page.locator('[data-region="sidecar-header"]')
     await expect(sidecarHeader).toBeVisible()
 
-    // Verify the header contains the task title or ID (not an empty placeholder)
-    const headerText = await sidecarHeader.textContent()
-    expect(headerText).toMatch(/Implement cache layer|#?1\b/)
+    // State-preservation check: header must display the SAME text as before collapse.
+    // Prior regex check was insufficient — it couldn't prove the exact same content.
+    const afterText = await sidecarHeader.textContent()
+    expect(afterText).toBe(beforeText)
   })
 })
 
@@ -484,6 +505,10 @@ test.describe('TestFromAC_StatusBarNavHierarchy', () => {
     // A visible product-identity element should be significantly wider than 1px.
     // SR-only h1 (width:1px via clip) fails this threshold.
     expect(box!.width).toBeGreaterThan(50)
+    // AC-4(a) refined: also check non-zero height — SR-only clipping sets height:1px,
+    // display:none gives 0×0, and clip:rect(0,0,0,0) still reports a ~1px box.
+    // Both thresholds together exclude all common visual-hiding techniques.
+    expect(box!.height).toBeGreaterThan(10)
   })
 
   test('nav rail active surface has aria-current="page" — regression guard', async ({ page }) => {
