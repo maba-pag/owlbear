@@ -35,6 +35,7 @@ from owlbear_knowledge.graph_store import GraphStore
 from owlbear_knowledge.ingest import IngestPipeline
 from owlbear_knowledge.intake import IntakeResult
 from owlbear_knowledge.models import Edge, Entity, EntityType, RelationType
+from owlbear_knowledge.query_service import KnowledgeQueryService
 from owlbear_knowledge.schema import init_db
 from owlbear_knowledge.source_store import KnowledgeSourceStore
 from owlbear_mcp_knowledge.server import (
@@ -1219,6 +1220,169 @@ class TestFromAC_DeleteDocumentDataVectorCleanup:
                 "delete_document_data cleaned up the vector payloads, "
                 "but it returned True (embedding was never removed)"
             )
+
+
+# ---------------------------------------------------------------------------
+# _SearchableVectorStore — stateful stub with search_similar for AC-5 tests
+# ---------------------------------------------------------------------------
+
+
+class _SearchableVectorStore(_TrackingVectorStore):
+    """Stateful vector store stub that supports search_similar.
+
+    Inherits ``store_embedding`` and ``delete_embedding`` from
+    ``_TrackingVectorStore``.  Adds ``search_similar`` so that the real
+    ``KnowledgeQueryService`` resolution chain can be exercised without a live
+    Qdrant instance — the test focuses on chunk→document→source resolution,
+    not semantic similarity.
+    """
+
+    def search_similar(
+        self,
+        _query_embedding: object,
+        top_k: int = 5,
+        _embedding_type: object = None,
+        **_kwargs: object,  # absorbs scopes, recency_weight, decay_rate
+    ) -> list[tuple[str, float]]:
+        """Return stored chunk IDs with score 1.0 (ignores actual query similarity)."""
+        ids = sorted(self.stored_ids)[:top_k]  # deterministic order
+        return [(id_, 1.0) for id_ in ids]
+
+    def get_embedding(self, _entity_or_doc_id: str) -> list[float] | None:
+        return None
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_EndToEndSearchResolution  (AC-5 proof — retry cycle 6)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_EndToEndSearchResolution:
+    """AC-5 proof: real vector→chunk→document→source resolution chain.
+
+    Reviewer gap (cycle 5): existing AC-5 tests mock query_service.query
+    entirely, so the real KnowledgeQueryService resolution chain is never
+    exercised. These tests wire the real KnowledgeQueryService with a
+    stateful vector stub and assert the full resolution contract.
+
+    Architect proof plan (cycle 5 return):
+    - (a) Chunk IDs in chunks table match IDs stored in vector stub (ID continuity).
+    - (b) Query result resolves to ingested document (title matches).
+    - (c) Query result has source.name and source.config['url'] from KnowledgeSource row.
+    - (d) Result carries source scope, not 'global'.
+    """
+
+    @pytest.mark.asyncio
+    async def test_chunk_ids_in_db_match_vector_store_ids(
+        self, conn: sqlite3.Connection
+    ) -> None:
+        """Chunk IDs persisted in the chunks table must equal IDs in the vector store.
+
+        ID continuity contract: store_chunks() generates UUID chunk IDs;
+        store_embeddings() must forward those same IDs to store_embedding().
+        Proves the live direct-ingest path uses actual chunk row IDs (not synthetic
+        IDs from the dormant alternate-API branch).
+        """
+        svs = _SearchableVectorStore()
+        mock_emb_local: MagicMock = MagicMock()
+        mock_emb_local.embed = MagicMock(return_value=[[0.1] * 10, [0.2] * 10])
+
+        graph_store = GraphStore(conn)
+        source_store = KnowledgeSourceStore(conn)
+        doc_store = DocumentStore(conn, graph_store, svs, mock_emb_local)
+        pipeline = IngestPipeline(
+            doc_store, EntityExtractor(), TextChunker(), source_store=source_store
+        )
+
+        result = await pipeline.ingest_text(
+            text="chunk id continuity content for direct ingest path",
+            metadata={"title": "ID Continuity Doc"},
+            scope="team-a",
+            source_url="https://example.test/id-continuity",
+        )
+        assert result.status == "ok", f"Ingest must succeed, got status={result.status!r}"
+
+        db_chunk_ids = {r[0] for r in conn.execute("SELECT id FROM chunks").fetchall()}
+        assert db_chunk_ids, "Ingest must create chunk rows in the database"
+        assert db_chunk_ids == svs.stored_ids, (
+            "Chunk IDs in the database must exactly match IDs stored in the vector "
+            "store — the live ingest path must forward chunk row UUIDs to "
+            "store_embedding(), not synthetic IDs. "
+            f"DB chunk IDs: {db_chunk_ids!r}, vector store IDs: {svs.stored_ids!r}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_query_resolves_ingested_document_source_and_scope(
+        self, conn: sqlite3.Connection
+    ) -> None:
+        """KnowledgeQueryService.query() must resolve source name, URL, and scope
+        for a document ingested via the live direct-ingest path.
+
+        Exercises the full resolution chain without mocking:
+        vector search → chunk_id → document_id → Document → KnowledgeSource.
+        Asserts title, source.name, source.config['url'], and scope (not 'global').
+        """
+        svs = _SearchableVectorStore()
+        mock_emb_local: MagicMock = MagicMock()
+        mock_emb_local.embed = MagicMock(return_value=[[0.1] * 10, [0.2] * 10])
+
+        graph_store = GraphStore(conn)
+        source_store = KnowledgeSourceStore(conn)
+        doc_store = DocumentStore(conn, graph_store, svs, mock_emb_local)
+        pipeline = IngestPipeline(
+            doc_store, EntityExtractor(), TextChunker(), source_store=source_store
+        )
+
+        ingest_result = await pipeline.ingest_text(
+            text="end to end resolution test document content",
+            metadata={"title": "E2E Resolution Doc"},
+            scope="team-a",
+            source_url="https://example.test/e2e",
+        )
+        assert ingest_result.status == "ok", (
+            f"Ingest must succeed before query test, got status={ingest_result.status!r}"
+        )
+
+        query_service = KnowledgeQueryService(
+            vector_store=svs,
+            graph_store=graph_store,
+            embedding_provider=mock_emb_local,
+            source_store=source_store,
+            similarity_threshold=0.3,
+        )
+
+        hits = await query_service.query("resolution test")
+        assert hits, (
+            "KnowledgeQueryService.query must return at least one result for a "
+            "freshly ingested document when the vector store returns its chunk IDs"
+        )
+
+        hit = hits[0]
+
+        # (b) document title resolves via chunk_id → document_id → Document
+        assert hit.title == "E2E Resolution Doc", (
+            f"hit.title must be 'E2E Resolution Doc', got {hit.title!r}"
+        )
+
+        # (c) source from linked KnowledgeSource row (not None)
+        assert hit.source is not None, (
+            "hit.source must be a KnowledgeSource object — the resolution chain "
+            "must find the linked source via document.source_id"
+        )
+        assert hit.source.name == "https://example.test/e2e", (
+            "hit.source.name must be 'https://example.test/e2e' (auto-created source "
+            f"name equals source_url), got {hit.source.name!r}"
+        )
+        source_config_url = (hit.source.config or {}).get("url")
+        assert source_config_url == "https://example.test/e2e", (
+            "hit.source.config['url'] must be 'https://example.test/e2e', "
+            f"got {source_config_url!r}"
+        )
+
+        # (d) scope must be source scope ('team-a'), not the default 'global'
+        assert hit.scope == "team-a", (
+            f"hit.scope must be 'team-a' (source scope, not 'global'), got {hit.scope!r}"
+        )
 
 
 # ---------------------------------------------------------------------------
