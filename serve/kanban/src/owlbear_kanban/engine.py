@@ -2117,6 +2117,40 @@ class KanbanEngine:
             self._id_to_filename.pop(record.id, None)
             archived_task_ids.append(record.id)
 
+        # Remove stale duplicate task files whose ID already exists in archive/.
+        # These occur when a file is re-introduced to tasks/ after archival
+        # (e.g. via git staging accidents). AC-C19 mode 7 hides them from
+        # list_tasks, but the physical file remains until this cleanup.
+        duplicate_removed_ids: list[int] = []
+        archive_ids_on_disk: set[int] = set()
+        if self._archive_dir.exists():
+            for archive_path in sorted(self._archive_dir.glob("*.md")):
+                aid = _task_id_from_filename(archive_path)
+                if aid is not None:
+                    archive_ids_on_disk.add(aid)
+        for path in sorted(self._tasks_dir.glob("*.md")):
+            tid = _task_id_from_filename(path)
+            if tid is not None and tid in archive_ids_on_disk:
+                # Only remove non-archived duplicates. Files with status=archived
+                # are handled by the drift-archive section above; if that section
+                # skipped them (e.g. archive collision), they need manual resolution.
+                try:
+                    dup_record = read_task(path, config=self._config)
+                except (FileNotFoundError, ValueError, KeyError, CorruptionError):
+                    continue
+                if dup_record.status == "archived":
+                    continue
+                try:
+                    path.unlink()
+                except OSError as exc:
+                    skipped_items.append(
+                        {"path": str(path), "reason": f"duplicate removal failed: {exc}"}
+                    )
+                    continue
+                self._task_cache.pop(path.name, None)
+                self._id_to_filename.pop(tid, None)
+                duplicate_removed_ids.append(tid)
+
         try:
             closed_session_ids = self._close_stale_active_sessions()
         except OSError as exc:
@@ -2133,6 +2167,7 @@ class KanbanEngine:
         if (
             released_claim_ids
             or archived_task_ids
+            or duplicate_removed_ids
             or closed_session_ids
             or pruned_lock_paths
         ):
@@ -2141,6 +2176,7 @@ class KanbanEngine:
         return CleanupResult(
             released_claim_ids=released_claim_ids,
             archived_task_ids=archived_task_ids,
+            duplicate_removed_ids=duplicate_removed_ids,
             pruned_lock_paths=pruned_lock_paths,
             skipped_items=skipped_items,
         )
