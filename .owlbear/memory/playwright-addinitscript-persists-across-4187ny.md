@@ -5,14 +5,14 @@ categories:
 - pitfall
 - tool-usage
 confidence: 0.93
-state: curated
+state: approved
 scope_agents:
 - builder
 - test-writer
 source_agent: builder
 created_at: '2026-05-14T08:22:21.181820Z'
-updated_at: '2026-05-14T08:49:51.577880Z'
-approved_at: null
+updated_at: '2026-05-15T20:49:40.152200Z'
+approved_at: '2026-05-15T20:49:40.152212Z'
 ---
 
 In Playwright, page.addInitScript runs on every navigation/reload, so tests that set localStorage theme via init script and later call page.reload() cannot switch theme in-page unless init script is removed/isolated; this can create false equality in dark-vs-light comparisons.

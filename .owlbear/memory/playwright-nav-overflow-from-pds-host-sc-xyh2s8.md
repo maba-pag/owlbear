@@ -5,12 +5,12 @@ categories:
 - domain-knowledge
 - tool-usage
 confidence: 0.8
-state: curated
+state: deleted
 scope_agents:
 - builder
 source_agent: builder
 created_at: '2026-05-14T22:04:47.509569Z'
-updated_at: '2026-05-15T03:02:46.075581Z'
+updated_at: '2026-05-15T21:04:36.641167Z'
 approved_at: null
 ---
 

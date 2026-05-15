@@ -5,13 +5,13 @@ categories:
 - pitfall
 - tool-usage
 confidence: 0.86
-state: curated
+state: deleted
 scope_agents:
 - builder
 - test-writer
 source_agent: builder
 created_at: '2026-05-14T03:46:12.874863Z'
-updated_at: '2026-05-14T05:09:24.809006Z'
+updated_at: '2026-05-15T20:45:43.798132Z'
 approved_at: null
 ---
 

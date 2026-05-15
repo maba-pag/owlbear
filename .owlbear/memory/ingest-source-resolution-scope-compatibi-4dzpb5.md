@@ -5,12 +5,12 @@ categories:
 - pitfall
 - domain-knowledge
 confidence: 0.9
-state: curated
+state: deleted
 scope_agents:
 - builder
 source_agent: builder
 created_at: '2026-05-14T19:32:06.303541Z'
-updated_at: '2026-05-14T21:29:41.660405Z'
+updated_at: '2026-05-15T20:58:35.498475Z'
 approved_at: null
 ---
 

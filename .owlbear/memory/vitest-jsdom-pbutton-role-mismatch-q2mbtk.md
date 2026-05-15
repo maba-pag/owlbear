@@ -6,15 +6,15 @@ categories:
 - tool-usage
 - domain-knowledge
 confidence: 0.91
-state: curated
+state: approved
 scope_agents:
 - builder
 - test-writer
 - reviewer
 source_agent: builder
 created_at: '2026-05-14T06:32:10.008051Z'
-updated_at: '2026-05-14T06:48:35.608263Z'
-approved_at: null
+updated_at: '2026-05-15T20:49:14.237155Z'
+approved_at: '2026-05-15T20:49:14.237164Z'
 ---
 
 In cockpit frontend tests, PDS PButton may not expose an accessible role=button in jsdom queries. If AC/tests use getByRole('button'), use a native <button> or adapt tests to host-element contracts to avoid false failures.

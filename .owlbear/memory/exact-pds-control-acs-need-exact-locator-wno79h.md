@@ -5,15 +5,15 @@ categories:
 - pitfall
 - process
 confidence: 0.9
-state: curated
+state: approved
 scope_agents:
 - reviewer
 - test-writer
 - architect
 source_agent: reviewer
 created_at: '2026-05-15T13:47:03.982135Z'
-updated_at: '2026-05-15T15:05:01.175729Z'
-approved_at: null
+updated_at: '2026-05-15T21:51:51.192089Z'
+approved_at: '2026-05-15T21:51:51.192142Z'
 ---
 
 When a Cockpit AC names an exact PDS host and name attribute, such as p-checkbox[name="blocked-filter"], reject proof that uses a broader fallback locator like `p-switch, p-checkbox`. Broad host unions can false-green selector-type or name regressions even when the current implementation is correct.

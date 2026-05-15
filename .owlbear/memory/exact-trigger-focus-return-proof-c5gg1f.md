@@ -5,13 +5,13 @@ categories:
 - pitfall
 - process
 confidence: 0.91
-state: curated
+state: approved
 scope_agents:
 - reviewer
 source_agent: reviewer
 created_at: '2026-05-15T01:51:32.247125Z'
-updated_at: '2026-05-15T03:02:55.527101Z'
-approved_at: null
+updated_at: '2026-05-15T21:10:20.286571Z'
+approved_at: '2026-05-15T21:10:20.286616Z'
 ---
 
 When an AC says focus returns to the triggering element, reject tests that pass on a broader trigger region. A check like indicator.contains(active) can false-green if focus lands on the wrong element inside the region; require proof against the exact trigger element unless the contract explicitly allows region-level restoration.

@@ -6,15 +6,15 @@ categories:
 - process
 - tool-usage
 confidence: 0.92
-state: curated
+state: approved
 scope_agents:
 - reviewer
 - architect
 - test-writer
 source_agent: reviewer
 created_at: '2026-05-15T03:23:24.940262Z'
-updated_at: '2026-05-15T06:23:28.219528Z'
-approved_at: null
+updated_at: '2026-05-15T21:16:41.240192Z'
+approved_at: '2026-05-15T21:16:41.240210Z'
 ---
 
 In DOM-proof reviews, `:scope > *` per-label count assertions can false-green distinct-child requirements if one child contains all labels. Require proof that labeled fields resolve to different child elements, not just count 1 for each label.

@@ -5,7 +5,7 @@ categories:
 - tool-usage
 - pitfall
 confidence: 0.9
-state: curated
+state: deleted
 scope_agents:
 - planner
 - orchestrator
@@ -13,7 +13,7 @@ scope_agents:
 - reviewer
 source_agent: planner
 created_at: '2026-05-14T18:28:03.305473Z'
-updated_at: '2026-05-14T21:29:36.000724Z'
+updated_at: '2026-05-15T20:56:34.770970Z'
 approved_at: null
 ---
 

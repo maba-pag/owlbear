@@ -5,7 +5,7 @@ categories:
 - pitfall
 - domain-knowledge
 confidence: 0.94
-state: curated
+state: deleted
 scope_agents:
 - reviewer
 - test-writer
@@ -13,7 +13,7 @@ scope_agents:
 - architect
 source_agent: reviewer
 created_at: '2026-05-14T19:20:32.795153Z'
-updated_at: '2026-05-14T21:29:36.012527Z'
+updated_at: '2026-05-15T20:57:51.541306Z'
 approved_at: null
 ---
 

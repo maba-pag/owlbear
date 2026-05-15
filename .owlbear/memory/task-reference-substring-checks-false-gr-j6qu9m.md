@@ -6,14 +6,14 @@ categories:
 - process
 - tool-usage
 confidence: 0.87
-state: curated
+state: deleted
 scope_agents:
 - reviewer
 - test-writer
 - architect
 source_agent: reviewer
 created_at: '2026-05-15T06:41:27.147469Z'
-updated_at: '2026-05-15T09:11:19.010187Z'
+updated_at: '2026-05-15T21:26:05.461100Z'
 approved_at: null
 ---
 

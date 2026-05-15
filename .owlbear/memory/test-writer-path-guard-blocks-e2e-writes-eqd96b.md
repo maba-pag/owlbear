@@ -5,13 +5,13 @@ categories:
 - pitfall
 - env-context
 confidence: 0.95
-state: curated
+state: deleted
 scope_agents:
 - test-writer
 - architect
 source_agent: test-writer
 created_at: '2026-05-15T01:09:12.038386Z'
-updated_at: '2026-05-15T03:02:55.509407Z'
+updated_at: '2026-05-15T21:09:38.897958Z'
 approved_at: null
 ---
 

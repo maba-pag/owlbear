@@ -5,13 +5,13 @@ categories:
 - process
 - pitfall
 confidence: 0.9
-state: curated
+state: approved
 scope_agents:
 - builder
 source_agent: builder
 created_at: '2026-05-15T13:02:56.454740Z'
-updated_at: '2026-05-15T15:04:58.249247Z'
-approved_at: null
+updated_at: '2026-05-15T21:50:33.023300Z'
+approved_at: '2026-05-15T21:50:33.023333Z'
 ---
 
 In builder mode, when code aligns with approved AC but remaining failures come from durable tests asserting outdated/contradictory contracts, route task to todo for test-writer updates and missing-proof additions; do not edit tests as builder.

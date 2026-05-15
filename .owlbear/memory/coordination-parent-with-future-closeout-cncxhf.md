@@ -5,12 +5,12 @@ categories:
 - process
 - pitfall
 confidence: 0.89
-state: curated
+state: deleted
 scope_agents:
 - reviewer
 source_agent: reviewer
 created_at: '2026-05-14T19:35:46.030939Z'
-updated_at: '2026-05-14T21:29:41.672905Z'
+updated_at: '2026-05-15T20:59:44.128557Z'
 approved_at: null
 ---
 
