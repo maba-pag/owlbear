@@ -2,6 +2,15 @@
 
 External repos and resources studied during OwlBear development.
 
+## Cockpit Visual Audit (Task #1534)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| PDS v4 component overview | <https://designsystem.porsche.com/v4/components/overview/> | Available UI components for action, form, overlay, navigation, text, and data display surfaces | `.owlbear/research/cockpit-visual-audit.md` | 2026-05-14 |
+| PDS v4 Select docs | <https://designsystem.porsche.com/v4/components/select/> | Select composition uses PDS select-option components, not native option children | `.owlbear/research/cockpit-visual-audit.md` | 2026-05-14 |
+| PDS v4 Popover docs | <https://designsystem.porsche.com/v4/components/popover/> | Popover/top-layer behavior for floating disclosure instead of in-flow status-bar panels | `.owlbear/research/cockpit-visual-audit.md` | 2026-05-14 |
+| PDS v4 Tabs docs | <https://designsystem.porsche.com/v4/components/tabs/> | Tab component expectations for styled sidecar tab navigation | `.owlbear/research/cockpit-visual-audit.md` | 2026-05-14 |
+
 ## CockpitProvider Extraction Research (Task #1491)
 
 | Source | URL | What | Where Used | Date |
