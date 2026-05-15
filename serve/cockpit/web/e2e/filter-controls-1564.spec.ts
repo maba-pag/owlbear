@@ -449,14 +449,16 @@ test.describe('AC-4 | Task-editor PDS compliance assertions', () => {
   })
 
   test('(a.2) task-editor priority p-select contains no native option children (dual-render falsifiability)', async ({ page }) => {
-    // AC-4(a) falsifiability guard: same dual-assertion contract as AC-2(c).
-    // TaskFieldsEditor.tsx p-select[name="priority"] must contain only p-select-option children;
-    // no native <option> elements allowed per §5 "Select/dropdown" policy.
-    // Current state: TaskFieldsEditor has p-select-option only (no native option) — regression guard.
+    // AC-4(a) falsifiability guard: CSS `> option` is a confirmed false-green — PDS absorbs
+    // light-DOM native <option> children so the CSS child combinator cannot reach them at runtime.
+    // Fix: use page.evaluate() on el.children (raw DOM children collection) to count OPTION nodes
+    // directly without going through the CSS selector engine — same mechanism as AC-2(c.2).
+    // TaskFieldsEditor.tsx L182-192: only p-select-option present, no native <option> — regression guard.
     // Fails if builder accidentally introduces native <option> children during GREEN phase.
-    await expect(
-      page.locator('p-select[name="priority"] > option'),
-    ).toHaveCount(0, { timeout: 4_000 })
+    const nativeOptionCount = await page
+      .locator('p-select[name="priority"]')
+      .evaluate((el) => Array.from(el.children).filter((c) => c.tagName === 'OPTION').length)
+    expect(nativeOptionCount).toBe(0)
   })
 
   test('(b) tag chips render as p-tag elements, not plain span chips', async ({ page }) => {
