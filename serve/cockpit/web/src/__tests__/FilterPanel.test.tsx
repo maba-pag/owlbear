@@ -428,7 +428,7 @@ describe('TestFromAC_FilterPanel', () => {
 
     it('text input is absent from DOM when open=false', () => {
       const { container } = renderPanel({ open: false })
-      expect(container.querySelector('input[type="text"]')).toBeNull()
+      expect(container.querySelector('input[type="text"]') ?? container.querySelector('p-input-search')).toBeNull()
     })
 
     it('priority select is absent from DOM when open=false', () => {

@@ -170,14 +170,13 @@ export default function RepairPanel({ corruptionCount, onSuccess, files = [] }: 
   }
 
   return (
-    <button
+    <PButton
       type="button"
-      data-pds-exception="status-bar-control"
       data-testid="repair-button"
       onClick={() => requestRepair(corruptionCount)}
     >
       Repair
-    </button>
+    </PButton>
   )
 }
 

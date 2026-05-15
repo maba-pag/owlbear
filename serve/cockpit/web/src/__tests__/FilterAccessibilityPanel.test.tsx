@@ -102,7 +102,7 @@ describe('TestFromAC_FilterA11yPanel', () => {
 
       await waitFor(() => {
         // Focus must move to the text input — the first focusable control in the panel
-        const textInput = container.querySelector('input[type="text"]') as HTMLElement
+        const textInput = container.querySelector('p-input-search') as HTMLElement
         expect(textInput).not.toBeNull()
         expect(document.activeElement).toBe(textInput)
       })
@@ -123,7 +123,7 @@ describe('TestFromAC_FilterA11yPanel', () => {
 
       const panelRegion = container.querySelector('[role="region"]')
       // Manually focus the text input (already inside panel)
-      const textInput = container.querySelector('input[type="text"]') as HTMLElement
+      const textInput = container.querySelector('p-input-search') as HTMLElement
       textInput?.focus()
       expect(panelRegion?.contains(document.activeElement)).toBe(true)
 
@@ -165,7 +165,7 @@ describe('TestFromAC_FilterA11yPanel', () => {
       )
 
       // Focus a control inside the panel
-      const textInput = container.querySelector('input[type="text"]') as HTMLElement
+      const textInput = container.querySelector('p-input-search') as HTMLElement
       textInput?.focus()
       expect(document.activeElement).toBe(textInput)
 
@@ -211,7 +211,7 @@ describe('TestFromAC_FilterA11yPanel', () => {
       const toggleBtn = container.querySelector('[data-testid="filter-toggle-real"]') as HTMLElement
 
       // Focus an element inside the panel
-      const textInput = container.querySelector('input[type="text"]') as HTMLElement
+      const textInput = container.querySelector('p-input-search') as HTMLElement
       textInput?.focus()
       expect(document.activeElement).toBe(textInput)
 
@@ -243,7 +243,7 @@ describe('TestFromAC_FilterA11yPanel', () => {
 
     it('text input (search field) has an accessible label', () => {
       const { container } = renderPanel(true)
-      const textInput = container.querySelector('input[type="text"]') as HTMLElement
+      const textInput = container.querySelector('p-input-search') as HTMLElement
       expect(textInput).not.toBeNull()
       expect(textInput.getAttribute('aria-label')).toBe('Search tasks')
     })

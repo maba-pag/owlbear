@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { fireEvent, render, waitFor } from '@testing-library/react'
+import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
 import KanbanBoard from '../KanbanBoard'
 import type { Board, Task } from '../hooks/useBoard'
 
@@ -122,12 +123,14 @@ describe('TestFromAC_ContextMenuCssWiring_1542', () => {
     expect(classNames.length).toBeGreaterThan(0)
 
     const { container } = render(
-      <KanbanBoard
-        board={makeBoard()}
-        tasks={[makeTask()]}
-        loading={false}
-        error={null}
-      />,
+      <PorscheDesignSystemProvider>
+        <KanbanBoard
+          board={makeBoard()}
+          tasks={[makeTask()]}
+          loading={false}
+          error={null}
+        />
+      </PorscheDesignSystemProvider>,
     )
 
     await waitFor(() => {

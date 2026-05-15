@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import {
   PButton,
+  PInputSearch,
   PMultiSelect,
   PMultiSelectOption,
 } from '@porsche-design-system/components-react'
@@ -192,7 +193,7 @@ export default function FilterPanel({
         }
       }}
     >
-      <p-input-search
+      <PInputSearch
         ref={searchRef}
         name="search-filter"
         aria-label="Search tasks"

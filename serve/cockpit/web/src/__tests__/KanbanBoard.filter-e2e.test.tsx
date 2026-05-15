@@ -98,8 +98,8 @@ async function openFilterPanel(container: HTMLElement): Promise<void> {
   })
 }
 
-function getTextInput(container: HTMLElement): HTMLInputElement {
-  return container.querySelector('input[type="text"]') as HTMLInputElement
+function getTextInput(container: HTMLElement): HTMLElement {
+  return container.querySelector('p-input-search') as HTMLElement
 }
 
 function getPrioritySelect(container: HTMLElement): Element {
