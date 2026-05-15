@@ -148,6 +148,8 @@ All mutation routes go through the `CockpitView` facade.
 | `view.compact_activity()` | `POST /tasks/compact-activity` | Compacts the activity log; returns `ActivityCompactionResult` |
 | `view.cleanup()` | `POST /tasks/cleanup` | Releases expired claims, archives done tasks, and prunes orphan lock files; returns `CleanupResult` with `released_claim_ids`, `archived_task_ids`, `pruned_lock_paths`, and `skipped_items` |
 
+> **TODO:** stale — `view.cleanup()` row claims `pruned_lock_paths` return field and "prunes orphan lock files" behavior; both were removed by the flock-infrastructure removal. `CleanupResult` now returns `released_claim_ids`, `archived_task_ids`, `duplicate_removed_ids`, `skipped_items`. [#1571]
+
 ### Excluded methods — why
 
 | Method | Reason excluded |
