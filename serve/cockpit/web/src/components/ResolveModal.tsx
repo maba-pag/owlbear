@@ -45,6 +45,7 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
   const [error, setError] = useState<ResolveErrorState | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const modalRef = useRef<HTMLDivElement | null>(null)
+  const previousFocusRef = useRef<HTMLElement | null>(null)
   const submitRef = useRef<HTMLElement | null>(null)
   const inlineNotificationRef = useRef<InlineNotificationHost | null>(null)
 
@@ -95,7 +96,12 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
   if (!dr) return null
 
   useEffect(() => {
+    previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
     modalRef.current?.focus()
+
+    return () => {
+      previousFocusRef.current?.focus()
+    }
   }, [])
 
   useEffect(() => {
@@ -119,10 +125,50 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
     }
   }, [onClose])
 
-  function handleModalKeyDown(event: { key: string; stopPropagation: () => void }): void {
+  function getFocusableElements(): HTMLElement[] {
+    const root = modalRef.current
+    if (!root) {
+      return []
+    }
+
+    return Array.from(
+      root.querySelectorAll<HTMLElement>(
+        'p-button:not([disabled]), button:not([disabled]), [href], input:not([disabled]), ' +
+          'select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ),
+    )
+  }
+
+  function handleModalKeyDown(event: React.KeyboardEvent<HTMLDivElement>): void {
     if (event.key === 'Escape') {
+      event.preventDefault()
       event.stopPropagation()
       onClose()
+      return
+    }
+
+    if (event.key !== 'Tab') {
+      return
+    }
+
+    const focusable = getFocusableElements()
+    if (focusable.length < 2) {
+      return
+    }
+
+    const first = focusable[0]
+    const last = focusable[focusable.length - 1]
+    const active = document.activeElement
+
+    if (event.shiftKey && active === first) {
+      event.preventDefault()
+      last.focus()
+      return
+    }
+
+    if (!event.shiftKey && active === last) {
+      event.preventDefault()
+      first.focus()
     }
   }
 

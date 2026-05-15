@@ -85,6 +85,8 @@ function KanbanBoardContent({
   const menuRef = useRef<HTMLDivElement | null>(null)
   const filterToggleRef = useRef<HTMLElement | null>(null)
   const announcementTimerRef = useRef<number | null>(null)
+  const contextMenuOriginRef = useRef<HTMLElement | null>(null)
+  const archivalReturnFocusRef = useRef<HTMLElement | null>(null)
 
   const filteredTasks = filterTasks(tasks, filter)
   const availableTags = [...new Set(tasks.flatMap((task) => task.tags))]
@@ -101,10 +103,14 @@ function KanbanBoardContent({
     function handleMouseDown(e: MouseEvent) {
       if (menuRef.current && menuRef.current.contains(e.target as Node)) return
       setContextMenu(null)
+      contextMenuOriginRef.current?.focus()
     }
 
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') setContextMenu(null)
+      if (e.key === 'Escape') {
+        setContextMenu(null)
+        contextMenuOriginRef.current?.focus()
+      }
     }
 
     document.addEventListener('mousedown', handleMouseDown)
@@ -131,6 +137,7 @@ function KanbanBoardContent({
     e.preventDefault()
     const transitions = board?.valid_transitions[task.status] ?? []
     if (transitions.length === 0) return
+    contextMenuOriginRef.current = e.currentTarget as HTMLElement
     setContextMenu({
       taskId: task.id,
       taskStatus: task.status,
@@ -202,6 +209,9 @@ function KanbanBoardContent({
     setContextMenu(null)
 
     if (targetStatus === 'archived') {
+      archivalReturnFocusRef.current = document.querySelector<HTMLElement>(
+        `[data-testid="task-card"][data-id="${taskId}"]`,
+      )
       setArchivalModal({
         taskId,
         taskStatus,
@@ -344,6 +354,7 @@ function KanbanBoardContent({
           taskId={archivalModal.taskId}
           taskStatus={archivalModal.taskStatus}
           expectedUpdated={archivalModal.expectedUpdated}
+          returnFocusTo={archivalReturnFocusRef.current}
           onClose={() => {
             setArchivalModal(null)
           }}

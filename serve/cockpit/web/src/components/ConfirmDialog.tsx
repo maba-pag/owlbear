@@ -50,10 +50,49 @@ export default function ConfirmDialog({
     }
   }, [])
 
+  function getFocusableElements(): HTMLElement[] {
+    const root = dialogRef.current
+    if (!root) {
+      return []
+    }
+
+    return Array.from(
+      root.querySelectorAll<HTMLElement>(
+        'p-button:not([disabled]), button:not([disabled]), [href], input:not([disabled]), ' +
+          'select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ),
+    )
+  }
+
   function handleKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
     if (event.key === 'Escape') {
       event.preventDefault()
       onCancel()
+      return
+    }
+
+    if (event.key !== 'Tab') {
+      return
+    }
+
+    const focusable = getFocusableElements()
+    if (focusable.length < 2) {
+      return
+    }
+
+    const first = focusable[0]
+    const last = focusable[focusable.length - 1]
+    const active = document.activeElement
+
+    if (event.shiftKey && active === first) {
+      event.preventDefault()
+      last.focus()
+      return
+    }
+
+    if (!event.shiftKey && active === last) {
+      event.preventDefault()
+      first.focus()
     }
   }
 

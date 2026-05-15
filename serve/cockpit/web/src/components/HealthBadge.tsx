@@ -68,6 +68,13 @@ export default function HealthBadge({ items, corruptionCount = 0, onRepairSucces
           role="dialog"
           aria-label="Health details"
           tabIndex={-1}
+          style={{
+            position: 'fixed',
+            top: '72px',
+            right: '16px',
+            zIndex: 1000,
+            maxWidth: '420px',
+          }}
           onKeyDown={(event) => {
             if (event.key === 'Escape') {
               event.preventDefault()

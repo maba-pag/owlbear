@@ -27,7 +27,21 @@ export default function CleanupPanel({ onSuccess }: CleanupPanelProps) {
 
   if (phase === 'confirming') {
     return (
-      <div data-testid="cleanup-confirm-dialog" role="dialog" aria-label="Confirm task cleanup">
+      <div
+        data-testid="cleanup-confirm-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Confirm task cleanup"
+        tabIndex={-1}
+        style={{
+          position: 'fixed',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          zIndex: 1000,
+          maxWidth: '560px',
+        }}
+      >
         <PText>
           This will run maintenance cleanup to release stale claims and archive completed tasks.
         </PText>

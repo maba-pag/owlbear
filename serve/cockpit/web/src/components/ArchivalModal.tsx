@@ -24,6 +24,7 @@ interface ArchivalModalProps {
   taskId: number
   taskStatus: string
   expectedUpdated: string
+  returnFocusTo?: HTMLElement | null
   onClose: () => void
   onRefresh: () => void
 }
@@ -70,12 +71,14 @@ export default function ArchivalModal({
   taskId,
   taskStatus,
   expectedUpdated,
+  returnFocusTo = null,
   onClose,
   onRefresh,
 }: ArchivalModalProps) {
   const titleId = useId()
   const dialogRef = useRef<HTMLDivElement | null>(null)
   const reasonSelectRef = useRef<HTMLElement | null>(null)
+  const previousFocusRef = useRef<HTMLElement | null>(null)
 
   const [reason, setReason] = useState<ArchivalReason | ''>('')
   const [refsRaw, setRefsRaw] = useState('')
@@ -100,8 +103,14 @@ export default function ArchivalModal({
   }, [hasRefs, isSubmitting, reason, requiresRefs])
 
   useEffect(() => {
+    previousFocusRef.current = returnFocusTo
+      ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null)
     reasonSelectRef.current?.focus()
-  }, [])
+
+    return () => {
+      previousFocusRef.current?.focus()
+    }
+  }, [returnFocusTo])
 
   function setHeadingTagAttr(element: HTMLElement | null): void {
     element?.setAttribute('tag', 'h3')

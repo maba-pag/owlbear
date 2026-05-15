@@ -66,6 +66,13 @@ export default function DRStatusIndicator({ count, items, onItemClick }: DRStatu
           role="dialog"
           aria-label="Pending decision requests"
           tabIndex={-1}
+          style={{
+            position: 'fixed',
+            top: '72px',
+            right: '16px',
+            zIndex: 1000,
+            maxWidth: '420px',
+          }}
           onKeyDown={(event) => {
             if (event.key === 'Escape') {
               event.preventDefault()
