@@ -409,6 +409,58 @@ test.describe('AC2_StructuralGates', () => {
       'status-bar must not contain raw <button> elements without PDS wrapper',
     ).toBe(0)
   })
+
+  // AC-2c-v2: Non-circular enumeration gate — supersedes the circular data-pds-exception proof.
+  // Shell.tsx MutationObserver auto-stamps ALL native buttons in status-bar with data-pds-exception
+  // on mount, making the NOT([data-pds-exception]) locator always return 0 (circular self-certification).
+  // This v2 test enumerates ALL native <button> and <input> elements across the full rendered page
+  // (base state, no overlays), excludes only true PDS internals ([data-pds]), and validates each
+  // control against the known exception set by testId rather than by a marker that the app stamps
+  // automatically. Any new native control without a documented testId causes failure.
+  test('ac2c_v2_native_controls_match_documented_exception_set', async ({ page }) => {
+    // Ensure scan-dependent controls (HealthBadge, RepairPanel) have rendered.
+    await waitForHealthBadge(page)
+
+    const controls = await page.evaluate(() => {
+      const elements = document.querySelectorAll<HTMLElement>(
+        'button:not([data-pds]), input:not([data-pds])',
+      )
+      return Array.from(elements).map((el) => ({
+        tag: el.tagName.toLowerCase(),
+        testId: el.getAttribute('data-testid'),
+        region: el.closest('[data-region]')?.getAttribute('data-region') ?? null,
+      }))
+    })
+
+    // Known documented exception set — the ONLY native controls the PDS policy allows.
+    // Each entry corresponds to a component with an architectural exception record.
+    const KNOWN_EXCEPTION_TEST_IDS = new Set([
+      'health-badge',    // HealthBadge trigger — status-bar overlay launcher
+      'dr-indicator',    // DRStatusIndicator trigger — status-bar overlay launcher
+      'cleanup-button',  // CleanupPanel trigger — status-bar action launcher
+      'repair-button',   // RepairPanel trigger — status-bar action launcher (visible when corruption > 0)
+      'theme-toggle',    // ThemeToggle — icon-only status-bar control, no PDS icon-button equivalent
+      'sidecar-collapse', // Shell sidecar toggle — layout control, no PDS equivalent
+    ])
+
+    // (a) Total count must not exceed the documented exception ceiling.
+    expect(
+      controls.length,
+      `Native controls must not exceed the exception ceiling of ${KNOWN_EXCEPTION_TEST_IDS.size}. ` +
+        `Found (${controls.length}): ${JSON.stringify(controls)}`,
+    ).toBeLessThanOrEqual(KNOWN_EXCEPTION_TEST_IDS.size)
+
+    // (b) Each native control must carry a testId from the known exception set.
+    // A control without a matching testId means an undocumented native element was added.
+    for (const control of controls) {
+      expect(
+        control.testId !== null && KNOWN_EXCEPTION_TEST_IDS.has(control.testId),
+        `Native <${control.tag}> with testId="${String(control.testId)}" is not in the documented ` +
+          `exception set. All native buttons/inputs must use PDS components or appear in: ` +
+          `[${[...KNOWN_EXCEPTION_TEST_IDS].join(', ')}]. Full list: ${JSON.stringify(controls)}`,
+      ).toBe(true)
+    }
+  })
 })
 
 // ─── AC-4: Column visual regression + scrollable-region-focusable ─────────────
@@ -651,6 +703,185 @@ test.describe('AC7_KeyboardReachability', () => {
           `Reached controls: ${[...reachedTestIds].join(', ')}`,
       ).toBe(true)
     }
+  })
+
+  // AC-7-v2 traversal (a): Tab traversal in BASE STATE with a task selected in sidecar.
+  // Strengthens the prior proof in three ways:
+  //   1. Selects a task first so sidecar content (detail + decisions + activity) is populated.
+  //   2. Requires ≥ 3 DISTINCT status-bar trigger testIds (not just the region) — prevents
+  //      a single trigger registering multiple times and satisfying a "3 region" check.
+  //   3. Requires at least one interactive element INSIDE sidecar content (decision item,
+  //      activity row, or task action) beyond the sidecar-collapse toggle itself.
+  test('ac7_v2_tab_traversal_base_state_with_sidecar_content', async ({ page }) => {
+    // Select a task to populate sidecar with decision viewport, detail, and activity controls.
+    await page.locator('[data-testid="card-title"]').first().click()
+    // DecisionViewport renders pending DRs immediately (always present once Shell mounts).
+    await page
+      .locator('[data-testid="decision-task-ref-dr-visual-001"]')
+      .waitFor({ state: 'visible', timeout: 6_000 })
+    // Ensure scan-dependent status-bar controls (HealthBadge, RepairPanel) are rendered.
+    await waitForHealthBadge(page)
+
+    await page.locator('body').focus()
+
+    const statusBarTriggers = new Set<string>()  // distinct testIds in status-bar region
+    const reachedRegions = new Set<string>()
+    const reachedTestIds = new Set<string>()
+    // sidecarContentTestIds: testIds in sidecar region OTHER than 'sidecar-collapse'
+    const sidecarContentTestIds = new Set<string>()
+
+    for (let i = 0; i < 120; i++) {
+      await page.keyboard.press('Tab')
+      const info = await page.evaluate(() => {
+        const el = document.activeElement
+        if (!el || el === document.body) return null
+        const region = el.closest('[data-region]')?.getAttribute('data-region') ?? null
+        const testId =
+          el.getAttribute('data-testid') ??
+          el.closest('[data-testid]')?.getAttribute('data-testid') ??
+          null
+        return { region, testId, tag: el.tagName.toLowerCase() }
+      })
+      if (info?.region) reachedRegions.add(info.region)
+      if (info?.testId) reachedTestIds.add(info.testId)
+      if (info?.region === 'status-bar' && info.testId) {
+        statusBarTriggers.add(info.testId)
+      }
+      if (info?.region === 'sidecar' && info.testId && info.testId !== 'sidecar-collapse') {
+        sidecarContentTestIds.add(info.testId)
+      }
+    }
+
+    // Require ≥ 3 distinct status-bar trigger controls (not just the region).
+    expect(
+      statusBarTriggers.size,
+      `Tab traversal must reach ≥ 3 distinct status-bar triggers. ` +
+        `Reached: ${[...statusBarTriggers].join(', ')}`,
+    ).toBeGreaterThanOrEqual(3)
+
+    for (const region of ['nav-rail', 'workspace'] as const) {
+      expect(
+        reachedRegions.has(region),
+        `Tab must reach layout region '${region}'. Reached: ${[...reachedRegions].join(', ')}`,
+      ).toBe(true)
+    }
+
+    for (const controlId of ['filter-toggle', 'sidecar-collapse'] as const) {
+      expect(
+        reachedTestIds.has(controlId),
+        `Tab must reach control '${controlId}'. Reached: ${[...reachedTestIds].join(', ')}`,
+      ).toBe(true)
+    }
+
+    // At least one interactive element inside sidecar CONTENT must be reachable
+    // (decision item, activity filter button, or task action — not just sidecar-collapse).
+    expect(
+      sidecarContentTestIds.size,
+      `Tab must reach ≥ 1 interactive element inside sidecar content (beyond sidecar-collapse). ` +
+        `Sidecar content elements reached: ${[...sidecarContentTestIds].join(', ')}. ` +
+        `All testIds reached: ${[...reachedTestIds].join(', ')}`,
+    ).toBeGreaterThanOrEqual(1)
+  })
+
+  // AC-7-v2 traversal (b): Tab traversal with FILTER PANEL OPEN reaches filter controls.
+  // The prior traversal proof ran only in base state (filter closed); filter controls were
+  // absent from the DOM and therefore untested. This test opens the filter panel first
+  // and asserts that Tab reaches the search input AND at least one select/checkbox control.
+  test('ac7_v2_tab_traversal_filter_open_reaches_filter_controls', async ({ page }) => {
+    // Open the filter panel so p-input-search, p-select, p-multi-select, p-checkbox are in the DOM.
+    await page.locator('[data-testid="filter-toggle"]').first().click()
+    await page
+      .locator('[data-testid="filter-panel"]')
+      .waitFor({ state: 'visible', timeout: 6_000 })
+
+    await page.locator('body').focus()
+
+    const reachedTags = new Set<string>()
+    const reachedRegions = new Set<string>()
+
+    for (let i = 0; i < 100; i++) {
+      await page.keyboard.press('Tab')
+      const info = await page.evaluate(() => {
+        const el = document.activeElement
+        if (!el || el === document.body) return null
+        const region = el.closest('[data-region]')?.getAttribute('data-region') ?? null
+        return { tag: el.tagName.toLowerCase(), region }
+      })
+      if (info?.tag) reachedTags.add(info.tag)
+      if (info?.region) reachedRegions.add(info.region)
+    }
+
+    // Filter panel region must be reachable.
+    expect(
+      reachedRegions.has('filter-panel'),
+      `Tab traversal must reach filter-panel region. Reached regions: ${[...reachedRegions].join(', ')}`,
+    ).toBe(true)
+
+    // Filter search input (p-input-search) must be reachable.
+    expect(
+      reachedTags.has('p-input-search'),
+      `Tab traversal must reach filter search input (p-input-search host). ` +
+        `Reached tags: ${[...reachedTags].join(', ')}`,
+    ).toBe(true)
+
+    // At least one filter select or checkbox control must be reachable.
+    const hasSelectOrCheckbox =
+      reachedTags.has('p-select') ||
+      reachedTags.has('p-multi-select') ||
+      reachedTags.has('p-checkbox') ||
+      reachedTags.has('p-text-field-wrapper')
+    expect(
+      hasSelectOrCheckbox,
+      `Tab traversal must reach ≥ 1 filter select/checkbox control (p-select, p-multi-select, or p-checkbox). ` +
+        `Reached tags: ${[...reachedTags].join(', ')}`,
+    ).toBe(true)
+  })
+
+  // AC-7-v2 DOM audit (c): audit in BASE STATE (filter panel closed).
+  // The existing test (ac7_no_undocumented_negative_tabindex_including_pds_controls) opens the
+  // filter panel — this test covers the complementary base state where filter controls are absent
+  // from the DOM. Together they cover both states required by AC-7-v2(c).
+  test('ac7_v2_dom_audit_base_state', async ({ page }) => {
+    // Base state: no filter panel open. Filter controls (p-input-search, p-select, p-checkbox)
+    // are not in the DOM and do not participate in this audit pass.
+
+    const violations = await page.evaluate(() => {
+      const nativeSelectors =
+        'a, button, input, select, textarea, [role="button"], [role="link"], [role="menuitem"], [role="tab"]'
+      const pdsSelectors =
+        'p-button, p-input-search, p-select, p-multi-select, p-checkbox, p-text-field-wrapper'
+
+      const allElements = [
+        ...Array.from(document.querySelectorAll<HTMLElement>(nativeSelectors)),
+        ...Array.from(document.querySelectorAll<HTMLElement>(pdsSelectors)),
+      ]
+
+      return allElements
+        .filter((el) => {
+          const tabIdx = el.tabIndex
+          if (tabIdx >= 0) return false
+          const hasTrapException = el.closest(
+            '[data-focus-trap], [role="dialog"], [aria-modal="true"]',
+          )
+          const hasRovingException = el.closest('[role="menu"], [role="menubar"], [role="tablist"]')
+          const hasProgrammaticException = el.hasAttribute('data-focus-target')
+          return !hasTrapException && !hasRovingException && !hasProgrammaticException
+        })
+        .map((el) => ({
+          tag: el.tagName.toLowerCase(),
+          testId:
+            el.getAttribute('data-testid') ??
+            el.closest('[data-testid]')?.getAttribute('data-testid') ??
+            '',
+          tabIndex: el.tabIndex,
+          text: (el.textContent ?? '').trim().slice(0, 40),
+        }))
+    })
+
+    expect(
+      violations,
+      `Base state: Found interactive/PDS elements with undocumented negative tabIndex:\n${JSON.stringify(violations, null, 2)}`,
+    ).toHaveLength(0)
   })
 
   // AC-7 DOM audit: no undocumented negative tabIndex on interactive elements,
