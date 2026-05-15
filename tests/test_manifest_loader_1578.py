@@ -28,6 +28,7 @@ from owlbear_knowledge.graph_store import GraphStore
 from owlbear_knowledge.ingest import IngestPipeline
 from owlbear_knowledge.intake import IntakeResult
 from owlbear_knowledge.loader import LoadSummary, load_manifest_file, main, parse_manifest
+from owlbear_mcp_knowledge.server import search_knowledge
 
 from owlbear_knowledge.query_service import KnowledgeQueryService
 from owlbear_knowledge.schema import init_db
@@ -1025,3 +1026,350 @@ class TestFromAC_MainCliExitCode:
             result = main(["--manifest", str(manifest)])
 
         assert result == 0
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_SearchKnowledgeMCPBoundary  (AC-3 retry — Finding 1)
+# Calls search_knowledge() MCP function directly instead of qs.query()
+# ---------------------------------------------------------------------------
+
+
+def _make_search_ctx(query_service: object) -> MagicMock:
+    """Return a minimal mock Context whose lifespan_context.query_service is set."""
+    ctx = MagicMock()
+    ctx.request_context.lifespan_context = MagicMock(query_service=query_service)
+    return ctx
+
+
+class TestFromAC_SearchKnowledgeMCPBoundary:
+    """AC-3 retry (Finding 1): search_knowledge() MCP tool returns source.name after loader ingest.
+
+    The reviewer required the proof to cross the MCP boundary by calling
+    search_knowledge() — not just KnowledgeQueryService.query(). This class
+    exercises the full path: load_manifest_file → DB → KnowledgeQueryService →
+    search_knowledge serialization → SearchResult["source"]["name"].
+    """
+
+    @pytest.mark.asyncio
+    async def test_search_knowledge_returns_source_name_after_loader_ingest(
+        self, real_pipeline: dict, tmp_path: Path
+    ) -> None:
+        """search_knowledge() MCP function must return source.name for loader-ingested docs.
+
+        Fails because load_manifest_file omits source_id= from pipeline.ingest() →
+        documents.source_id=NULL → query_service returns source=None →
+        _serialize_source(None) → result["source"]["name"]="" ≠ "Pilot Source".
+        """
+        content_file = tmp_path / "pilot.md"
+        content_file.write_text(
+            "# Pilot Document\n\n"
+            "This is a pilot knowledge document. "
+            "It has enough text for the chunker to produce at least one chunk, "
+            "so the query service can retrieve it via the mocked vector search.\n"
+        )
+        manifest = tmp_path / "manifest.yaml"
+        _write_single_source_manifest(manifest, name="Pilot Source", scope="pilot")
+
+        conn: sqlite3.Connection = real_pipeline["conn"]
+        graph_store: GraphStore = real_pipeline["graph_store"]
+        source_store: KnowledgeSourceStore = real_pipeline["source_store"]
+        pipeline: IngestPipeline = real_pipeline["pipeline"]
+
+        await load_manifest_file(
+            manifest_path=manifest,
+            workspace_root=tmp_path,
+            source_store=source_store,
+            pipeline=pipeline,
+        )
+
+        # Fetch the first chunk_id so the mock vector store can return it.
+        chunk_row = conn.execute("SELECT id FROM chunks LIMIT 1").fetchone()
+        assert chunk_row is not None, "No chunks were created by load_manifest_file"
+        chunk_id = chunk_row[0]
+
+        # Build a query-service mock vector store that returns our chunk.
+        query_vs = MagicMock()
+        query_vs.search_similar = MagicMock(return_value=[(chunk_id, 0.9)])
+        query_emb = MagicMock()
+        query_emb.embed = MagicMock(return_value=[[0.1] * 10])
+
+        qs = KnowledgeQueryService(
+            vector_store=query_vs,
+            graph_store=graph_store,
+            embedding_provider=query_emb,
+            source_store=source_store,
+            similarity_threshold=0.0,
+        )
+
+        # Call the actual MCP tool function through the mock context boundary.
+        ctx = _make_search_ctx(qs)
+        result = await search_knowledge(ctx, query="pilot document")
+
+        assert isinstance(result, list), (
+            f"search_knowledge() must return a list; got: {type(result)!r}"
+        )
+        assert result, (
+            f"search_knowledge() must return a non-empty list; got: {result!r}"
+        )
+        source_name = result[0].get("source", {}).get("name", "")
+        assert source_name == "Pilot Source", (
+            f"search_knowledge() result[0]['source']['name'] must be 'Pilot Source'; "
+            f"got {source_name!r}. "
+            "This proves the full loader→DB→MCP serialization chain works. "
+            "Fails because documents.source_id=NULL when load_manifest_file omits source_id=."
+        )
+
+    @pytest.mark.asyncio
+    async def test_search_knowledge_source_name_empty_when_source_id_null(
+        self, real_pipeline: dict, tmp_path: Path
+    ) -> None:
+        """Regression: documents with source_id=NULL produce source.name='' in MCP response.
+
+        This documents the BROKEN behaviour: after the buggy load_manifest_file,
+        searching via search_knowledge() returns result["source"]["name"]="" because
+        source_id=NULL on the document row prevents source lookup.
+
+        Passes only after the fix sets source_id correctly so this assertion holds:
+        source_name must NOT be empty — it must match the manifest source name.
+        """
+        (tmp_path / "content.md").write_text(
+            "# Knowledge Article\n\n"
+            "Content for chunk production and source-linkage assertion.\n"
+        )
+        manifest = tmp_path / "manifest.yaml"
+        _write_single_source_manifest(manifest, name="Article Source", scope="articles")
+
+        conn: sqlite3.Connection = real_pipeline["conn"]
+        graph_store: GraphStore = real_pipeline["graph_store"]
+        source_store: KnowledgeSourceStore = real_pipeline["source_store"]
+        pipeline: IngestPipeline = real_pipeline["pipeline"]
+
+        await load_manifest_file(
+            manifest_path=manifest,
+            workspace_root=tmp_path,
+            source_store=source_store,
+            pipeline=pipeline,
+        )
+
+        chunk_row = conn.execute("SELECT id FROM chunks LIMIT 1").fetchone()
+        assert chunk_row is not None, "No chunks created"
+        chunk_id = chunk_row[0]
+
+        query_vs = MagicMock()
+        query_vs.search_similar = MagicMock(return_value=[(chunk_id, 0.85)])
+        query_emb = MagicMock()
+        query_emb.embed = MagicMock(return_value=[[0.2] * 10])
+
+        qs = KnowledgeQueryService(
+            vector_store=query_vs,
+            graph_store=graph_store,
+            embedding_provider=query_emb,
+            source_store=source_store,
+            similarity_threshold=0.0,
+        )
+
+        ctx = _make_search_ctx(qs)
+        result = await search_knowledge(ctx, query="article")
+
+        assert isinstance(result, list), (
+            f"search_knowledge() must return a list; got: {type(result)!r}"
+        )
+        assert result, (
+            f"search_knowledge() returned no results: {result!r}"
+        )
+        source_name = result[0].get("source", {}).get("name", "")
+        # After fix: source_name must equal "Article Source" (not empty string).
+        assert source_name == "Article Source", (
+            f"search_knowledge() result[0]['source']['name'] must be 'Article Source' "
+            f"after loader fix; got {source_name!r}. "
+            "Currently empty because load_manifest_file does not pass source_id= to ingest."
+        )
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_ChunkLinkageViaJoin  (AC-1 + AC-3 retry — Finding 2)
+# Direct DB assertions: knowledge_sources → documents → chunks JOIN chain with scope
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ChunkLinkageViaJoin:
+    """AC-1+AC-3 retry (Finding 2): DB-level JOIN proof of source→document→chunk linkage.
+
+    The reviewer required direct inspection of knowledge_sources, documents, and
+    chunks rows demonstrating the three-table JOIN works (source_id FK is set) and
+    scope values match through the chain.
+    """
+
+    @pytest.mark.asyncio
+    async def test_three_table_join_returns_rows_after_loader_ingest(
+        self, real_pipeline: dict, tmp_path: Path
+    ) -> None:
+        """knowledge_sources JOIN documents JOIN chunks must return rows after load_manifest_file.
+
+        The JOIN `documents d ON d.source_id = ks.id` only succeeds when
+        documents.source_id is non-NULL. Currently it is NULL because
+        load_manifest_file omits source_id= from pipeline.ingest().
+
+        Fails: JOIN returns zero rows (documents.source_id=NULL breaks linkage).
+        Passes after fix: documents.source_id = knowledge_sources.id → JOIN succeeds.
+        """
+        (tmp_path / "linked.md").write_text(
+            "# Linked Document\n\n"
+            "This document should be traceable from chunk back to source "
+            "via the source_id foreign key on the documents table.\n"
+        )
+        manifest = tmp_path / "manifest.yaml"
+        _write_single_source_manifest(manifest, name="Linked Source", scope="linked-scope")
+
+        conn: sqlite3.Connection = real_pipeline["conn"]
+        source_store: KnowledgeSourceStore = real_pipeline["source_store"]
+        pipeline: IngestPipeline = real_pipeline["pipeline"]
+
+        await load_manifest_file(
+            manifest_path=manifest,
+            workspace_root=tmp_path,
+            source_store=source_store,
+            pipeline=pipeline,
+        )
+
+        row = conn.execute(
+            """
+            SELECT c.id, d.id, ks.id
+            FROM knowledge_sources AS ks
+            JOIN documents AS d ON d.source_id = ks.id
+            JOIN chunks AS c ON c.document_id = d.id
+            LIMIT 1
+            """
+        ).fetchone()
+        assert row is not None, (
+            "Three-table JOIN (knowledge_sources → documents → chunks) returned no rows. "
+            "This means documents.source_id is NULL — load_manifest_file must pass "
+            "source_id=source.id to pipeline.ingest() so the FK chain is intact."
+        )
+        chunk_id, doc_id, source_id = row
+        assert isinstance(chunk_id, str), "chunk_id must be a string"
+        assert chunk_id, "chunk_id must be non-empty"
+        assert isinstance(doc_id, str), "document_id must be a string"
+        assert doc_id, "document_id must be non-empty"
+        assert isinstance(source_id, str), "source_id must be a string"
+        assert source_id, "source_id must be non-empty"
+
+    @pytest.mark.asyncio
+    async def test_chunk_scope_matches_manifest_scope_via_db_join(
+        self, real_pipeline: dict, tmp_path: Path
+    ) -> None:
+        """Chunks linked via JOIN must carry the scope declared in the manifest.
+
+        Proves: knowledge_sources.scope = manifest scope AND documents.source_id links
+        to that source, so the chunk can be traced to the correct scoped source.
+
+        Fails because the 3-table JOIN yields no rows (documents.source_id=NULL);
+        the scope assertion is therefore unreachable — the JOIN itself already fails.
+        """
+        (tmp_path / "scoped.md").write_text(
+            "# Scoped Article\n\n"
+            "Content that should be scoped to 'research-scope' via its manifest source.\n"
+        )
+        manifest = tmp_path / "manifest.yaml"
+        _write_single_source_manifest(
+            manifest, name="Research Source", scope="research-scope"
+        )
+
+        conn: sqlite3.Connection = real_pipeline["conn"]
+        source_store: KnowledgeSourceStore = real_pipeline["source_store"]
+        pipeline: IngestPipeline = real_pipeline["pipeline"]
+
+        await load_manifest_file(
+            manifest_path=manifest,
+            workspace_root=tmp_path,
+            source_store=source_store,
+            pipeline=pipeline,
+        )
+
+        # Query: find chunks whose document is linked to a knowledge_source with
+        # the expected scope. This JOIN only works when source_id is set.
+        row = conn.execute(
+            """
+            SELECT ks.scope, ks.name, d.source_id, c.id
+            FROM knowledge_sources AS ks
+            JOIN documents AS d ON d.source_id = ks.id
+            JOIN chunks AS c ON c.document_id = d.id
+            WHERE ks.scope = ?
+            LIMIT 1
+            """,
+            ("research-scope",),
+        ).fetchone()
+
+        assert row is not None, (
+            "No chunks found linked to the 'research-scope' source via 3-table JOIN. "
+            "Failing because documents.source_id=NULL → JOIN returns no rows → "
+            "manifest scope='research-scope' is never reachable from chunks."
+        )
+        ks_scope, ks_name, doc_source_id, _ = row
+        assert ks_scope == "research-scope", (
+            f"knowledge_sources.scope must be 'research-scope', got {ks_scope!r}"
+        )
+        assert ks_name == "Research Source", (
+            f"knowledge_sources.name must be 'Research Source', got {ks_name!r}"
+        )
+        assert doc_source_id is not None, (
+            "documents.source_id must not be NULL for the JOIN to have returned a row"
+        )
+
+    @pytest.mark.asyncio
+    async def test_all_chunks_from_loader_document_link_to_same_source(
+        self, real_pipeline: dict, tmp_path: Path
+    ) -> None:
+        """Every chunk produced from a loader-ingested file must trace to the same source.
+
+        Verifies that all chunk rows whose document links to a knowledge_source
+        share a consistent source_id — no chunks are orphaned from the source chain.
+
+        Fails because documents.source_id=NULL means the JOIN selects no rows;
+        the count assertion (`>= 1`) then fails.
+        """
+        (tmp_path / "multi.md").write_text(
+            "# Multi-Chunk Document\n\n"
+            "## Section One\n\n"
+            "First section content. Long enough text to produce multiple chunks when "
+            "the TextChunker splits by section headings or character count.\n\n"
+            "## Section Two\n\n"
+            "Second section with additional content. More text ensures the chunker "
+            "creates at least one chunk per section so we can test multi-chunk linkage.\n"
+        )
+        manifest = tmp_path / "manifest.yaml"
+        _write_single_source_manifest(manifest, name="Multi Source", scope="multi-scope")
+
+        conn: sqlite3.Connection = real_pipeline["conn"]
+        source_store: KnowledgeSourceStore = real_pipeline["source_store"]
+        pipeline: IngestPipeline = real_pipeline["pipeline"]
+
+        await load_manifest_file(
+            manifest_path=manifest,
+            workspace_root=tmp_path,
+            source_store=source_store,
+            pipeline=pipeline,
+        )
+
+        rows = conn.execute(
+            """
+            SELECT c.id, d.source_id, ks.id AS ks_id
+            FROM knowledge_sources AS ks
+            JOIN documents AS d ON d.source_id = ks.id
+            JOIN chunks AS c ON c.document_id = d.id
+            WHERE ks.name = ?
+            """,
+            ("Multi Source",),
+        ).fetchall()
+
+        assert len(rows) >= 1, (
+            "Expected at least one chunk linked to 'Multi Source' via 3-table JOIN; "
+            "got 0. documents.source_id=NULL breaks the JOIN — load_manifest_file "
+            "must forward source_id=source.id to pipeline.ingest()."
+        )
+        # All chunks must share the same source_id (consistent FK chain).
+        source_ids = {row[1] for row in rows}
+        assert len(source_ids) == 1, (
+            f"All chunks from the same source must share one source_id; "
+            f"got multiple distinct values: {source_ids}"
+        )
