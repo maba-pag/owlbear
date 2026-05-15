@@ -339,6 +339,10 @@ test.describe('TestFromAC_DecisionQueueComposition', () => {
     // Fails because current count is 1 (one DR in fixture).
     const buttonItems = page.locator('button[data-testid^="decision-item-"]')
     await expect(buttonItems).toHaveCount(0)
+    // Positive tag assertion: decision-item must be an article element, not just any non-button tag.
+    // A regression to <div> or <section> would still pass the not-a-button check above.
+    const item = page.locator('[data-testid^="decision-item-"]').first()
+    expect(await item.evaluate((el) => el.tagName)).toBe('ARTICLE')
   })
 
   test('decision items contain separately labeled fields for agent, type, age, and task reference — RED: no labeled structure', async ({
@@ -393,7 +397,9 @@ test.describe('TestFromAC_DecisionQueueComposition', () => {
     expect(texts[indices[0]]).toContain('builder')
     expect(texts[indices[1]]).toContain('scope-decision')
     expect(texts[indices[2]!]).toMatch(/Age:\s*.+/)
-    expect(texts[indices[3]]).toContain('1')
+    // Exact task-reference proof: toContain('1') false-greens on '10', '21', etc.
+    // Regex end-anchor ensures the task reference is exactly '1'.
+    expect(texts[indices[3]]).toMatch(/Task:\s+1$/)
   })
 })
 
