@@ -697,6 +697,122 @@ class TestFromAC_StoreEnrichmentRejection:
             f"got '{state_row[0]}'"
         )
 
+    @pytest.mark.asyncio
+    async def test_foreign_scope_explicit_source_id_raises_tool_error(
+        self, conn: sqlite3.Connection
+    ) -> None:
+        """Explicit source_id from a foreign scope must be rejected — zero edges, chunk not enriched.
+
+        PO-6 negative (AC-3): _resolve_phase1_edge_endpoints currently checks only
+        WHERE id = ? (global lookup), so a caller can supply a source_id belonging to
+        a team-b entity while enriching a team-a chunk. The persisted edge would carry
+        team-a provenance but point at a team-b entity, leaking it through scoped
+        graph traversal. After the fix, the check must be WHERE id = ? AND scope = ?,
+        so a foreign-scope explicit ID is treated as unresolvable and raises ToolError.
+        """
+        # team-b entity — exists in DB but wrong scope
+        _insert_source(conn, source_id="src-b", name="Source B", enrich=1, scope="team-b")
+        _insert_document(conn, doc_id="doc-b", title="Doc B", source_id="src-b", scope="team-b")
+        _insert_entity(
+            conn,
+            entity_id="foreign-ent-1",
+            name="ForeignEntity",
+            doc_id="doc-b",
+            scope="team-b",
+        )
+        # team-a chunk that will be enriched
+        _insert_source(conn, source_id="src-a", name="Source A", enrich=1, scope="team-a")
+        _insert_document(
+            conn, doc_id="doc-a", title="Doc A", source_id="src-a", scope="team-a"
+        )
+        _insert_chunk(conn, chunk_id="chk-po6-neg", doc_id="doc-a", state="claimed")
+        ctx = _make_ctx(conn)
+
+        with pytest.raises(ToolError):
+            await store_enrichment(
+                ctx,
+                chunk_id="chk-po6-neg",
+                entities=[{"name": "LocalEntity", "type": "concept"}],
+                edges=[
+                    {
+                        "relationship": "mentions",
+                        "source_id": "foreign-ent-1",  # exists but wrong scope
+                        "target_name": "LocalEntity",
+                    }
+                ],
+            )
+
+        edge_count = conn.execute("SELECT COUNT(*) FROM edges").fetchone()[0]
+        assert edge_count == 0, (
+            f"Foreign-scope explicit source_id must not insert any edge, got {edge_count} — "
+            "entity IDs must be validated within the claimed chunk's scope"
+        )
+
+        state_row = conn.execute(
+            "SELECT enrichment_state FROM chunks WHERE id='chk-po6-neg'"
+        ).fetchone()
+        assert state_row is not None
+        assert state_row[0] != "enriched", (
+            f"Chunk must not be marked 'enriched' when explicit source_id is from a "
+            f"foreign scope, got '{state_row[0]}'"
+        )
+
+    @pytest.mark.asyncio
+    async def test_same_scope_cross_document_explicit_source_id_accepted(
+        self, conn: sqlite3.Connection
+    ) -> None:
+        """Same-scope entity ID from a different document must be accepted (inter-document graph).
+
+        PO-6 positive (AC-3): cross-document references within the same scope are the
+        purpose of explicit IDs in Phase 1 — agents reference entities from prior enrichment
+        of other chunks/documents in the same scope to build the inter-document graph.
+        After the fix adds scope-binding, this must still succeed: edge persisted with
+        non-NULL endpoints, source_id matching the cross-document entity's row ID.
+        """
+        # Same scope, but two different documents
+        _insert_source(conn, source_id="src-a", name="Source A", enrich=1, scope="team-a")
+        _insert_document(
+            conn, doc_id="doc-a1", title="Doc A1", source_id="src-a", scope="team-a"
+        )
+        _insert_document(
+            conn, doc_id="doc-a2", title="Doc A2", source_id="src-a", scope="team-a"
+        )
+        # E2: existing entity from doc-a1 (team-a scope, different document)
+        _insert_entity(
+            conn,
+            entity_id="cross-doc-ent-1",
+            name="CrossDocEntity",
+            doc_id="doc-a1",
+            scope="team-a",
+        )
+        # Chunk in doc-a2 (same scope, different document)
+        _insert_chunk(conn, chunk_id="chk-po6-pos", doc_id="doc-a2", state="claimed")
+        ctx = _make_ctx(conn)
+
+        await store_enrichment(
+            ctx,
+            chunk_id="chk-po6-pos",
+            entities=[{"name": "LocalEntity", "type": "concept"}],
+            edges=[
+                {
+                    "relationship": "mentions",
+                    "source_id": "cross-doc-ent-1",  # same scope, different doc
+                    "target_name": "LocalEntity",
+                }
+            ],
+        )
+
+        edge_row = conn.execute(
+            "SELECT source_id, target_id FROM edges"
+        ).fetchone()
+        assert edge_row is not None, "Edge must be persisted for same-scope cross-document reference"
+        assert edge_row[0] is not None, "Persisted edge must have non-NULL source_id"
+        assert edge_row[1] is not None, "Persisted edge must have non-NULL target_id"
+        assert edge_row[0] == "cross-doc-ent-1", (
+            f"Edge source_id must match the cross-document entity ID 'cross-doc-ent-1', "
+            f"got '{edge_row[0]}'"
+        )
+
 
 # ---------------------------------------------------------------------------
 # TestFromAC_ConsolidationCandidateIdentifiers  (AC-4)
