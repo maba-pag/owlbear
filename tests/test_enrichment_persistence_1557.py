@@ -640,6 +640,63 @@ class TestFromAC_StoreEnrichmentRejection:
             f"got '{state_row[0]}'"
         )
 
+    @pytest.mark.asyncio
+    async def test_bogus_explicit_phase1_source_id_raises_tool_error(
+        self, conn: sqlite3.Connection
+    ) -> None:
+        """Explicit source_id that doesn't match any persisted entity → ToolError, zero edges.
+
+        PO-4 (AC-3): when an edge payload supplies an explicit source_id string that
+        does not correspond to an existing entity row in the database,
+        _resolve_phase1_edge_endpoints must reject the payload, raise ToolError,
+        insert no edge, and leave the chunk not marked 'enriched'.
+
+        Currently FAILS: the function accepts any non-None string as a resolved ID
+        without performing a DB existence check, so the edge is persisted with a
+        dangling source_id reference despite FK enforcement being off.
+        """
+        _insert_source(conn, source_id="src-1", name="S1", enrich=1)
+        _insert_document(conn, doc_id="doc-a", title="D", source_id="src-1")
+        _insert_chunk(conn, chunk_id="chk-po4", doc_id="doc-a", state="claimed")
+        # Insert a real entity so target_name can resolve, while source_id is bogus
+        _insert_entity(
+            conn,
+            entity_id="real-ent-1",
+            name="RealEntity",
+            doc_id="doc-a",
+            chunk_id="chk-po4",
+        )
+        ctx = _make_ctx(conn)
+
+        with pytest.raises(ToolError):
+            await store_enrichment(
+                ctx,
+                chunk_id="chk-po4",
+                entities=[{"name": "RealEntity", "type": "concept"}],
+                edges=[
+                    {
+                        "relationship": "mentions",
+                        "source_id": "nonexistent-entity-id",
+                        "target_name": "RealEntity",
+                    }
+                ],
+            )
+
+        edge_count = conn.execute("SELECT COUNT(*) FROM edges").fetchone()[0]
+        assert edge_count == 0, (
+            f"Bogus explicit source_id must not insert any edge, got {edge_count} — "
+            "explicit IDs must be validated against persisted entity rows before insert"
+        )
+
+        state_row = conn.execute(
+            "SELECT enrichment_state FROM chunks WHERE id='chk-po4'"
+        ).fetchone()
+        assert state_row is not None
+        assert state_row[0] != "enriched", (
+            f"Chunk must not be marked 'enriched' when explicit source_id is bogus, "
+            f"got '{state_row[0]}'"
+        )
+
 
 # ---------------------------------------------------------------------------
 # TestFromAC_ConsolidationCandidateIdentifiers  (AC-4)

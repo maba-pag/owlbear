@@ -577,3 +577,99 @@ class TestFromAC_MigrationUpgradePath:
         assert row[0] == "pending", (
             f"Post-upgrade chunk insert must default enrichment_state='pending', got {row[0]!r}"
         )
+
+
+# ---------------------------------------------------------------------------
+# Upgrade path: legacy reviewed_pairs 3-col PK → 5-col PK with data preserved
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ReviewedPairsUpgradePath:
+    """PO-5 (AC-4/AC-5): reviewed_pairs 3-col PK upgrades to 5-col PK with legacy rows intact.
+
+    Verifies that init_db() on a DB with the old reviewed_pairs schema (entity_name,
+    source_a, source_b PRIMARY KEY) rebuilds the table to the 5-col PK shape and
+    preserves existing rows with entity_id_a='' and entity_id_b=''.
+    """
+
+    @pytest.fixture()
+    def legacy_reviewed_pairs_conn(self) -> sqlite3.Connection:
+        """In-memory DB with reviewed_pairs on the old 3-column PRIMARY KEY."""
+        c = sqlite3.connect(":memory:")
+        c.execute(
+            """\
+CREATE TABLE reviewed_pairs (
+    entity_name TEXT NOT NULL,
+    source_a    TEXT NOT NULL,
+    source_b    TEXT NOT NULL,
+    PRIMARY KEY (entity_name, source_a, source_b)
+)"""
+        )
+        c.execute(
+            "INSERT INTO reviewed_pairs (entity_name, source_a, source_b) VALUES (?, ?, ?)",
+            ("E", "S1", "S2"),
+        )
+        c.commit()
+        return c
+
+    def test_upgrade_adds_entity_id_a_column(
+        self, legacy_reviewed_pairs_conn: sqlite3.Connection
+    ) -> None:
+        """init_db on legacy reviewed_pairs must produce entity_id_a column."""
+        init_db(legacy_reviewed_pairs_conn)
+        cols = _column_names(legacy_reviewed_pairs_conn, "reviewed_pairs")
+        assert "entity_id_a" in cols, (
+            "init_db did not add entity_id_a column to legacy reviewed_pairs table"
+        )
+
+    def test_upgrade_adds_entity_id_b_column(
+        self, legacy_reviewed_pairs_conn: sqlite3.Connection
+    ) -> None:
+        """init_db on legacy reviewed_pairs must produce entity_id_b column."""
+        init_db(legacy_reviewed_pairs_conn)
+        cols = _column_names(legacy_reviewed_pairs_conn, "reviewed_pairs")
+        assert "entity_id_b" in cols, (
+            "init_db did not add entity_id_b column to legacy reviewed_pairs table"
+        )
+
+    def test_upgrade_rebuilds_to_five_column_pk(
+        self, legacy_reviewed_pairs_conn: sqlite3.Connection
+    ) -> None:
+        """After init_db, reviewed_pairs must have the 5-col PRIMARY KEY."""
+        init_db(legacy_reviewed_pairs_conn)
+        pk_cols = [
+            row[1]
+            for row in legacy_reviewed_pairs_conn.execute(
+                "PRAGMA table_info(reviewed_pairs)"
+            ).fetchall()
+            if row[5] > 0
+        ]
+        assert pk_cols == [
+            "entity_name",
+            "source_a",
+            "source_b",
+            "entity_id_a",
+            "entity_id_b",
+        ], (
+            f"Expected 5-col PK after upgrade, got {pk_cols!r}"
+        )
+
+    def test_upgrade_preserves_legacy_row(
+        self, legacy_reviewed_pairs_conn: sqlite3.Connection
+    ) -> None:
+        """Legacy row must survive the PK rebuild with empty entity_id_a/entity_id_b."""
+        init_db(legacy_reviewed_pairs_conn)
+        row = legacy_reviewed_pairs_conn.execute(
+            "SELECT entity_name, source_a, source_b, entity_id_a, entity_id_b"
+            " FROM reviewed_pairs"
+        ).fetchone()
+        assert row is not None, "Legacy row must be preserved after reviewed_pairs PK rebuild"
+        assert row[0] == "E", f"entity_name mismatch: expected 'E', got {row[0]!r}"
+        assert row[1] == "S1", f"source_a mismatch: expected 'S1', got {row[1]!r}"
+        assert row[2] == "S2", f"source_b mismatch: expected 'S2', got {row[2]!r}"
+        assert row[3] == "", (
+            f"entity_id_a must default to '' for legacy rows after upgrade, got {row[3]!r}"
+        )
+        assert row[4] == "", (
+            f"entity_id_b must default to '' for legacy rows after upgrade, got {row[4]!r}"
+        )
