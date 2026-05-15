@@ -6,20 +6,20 @@ sources:
   - name: "Research docs"
     type: file_glob
     config:
-      glob: "docs/research/*.md"
+      glob: ".owlbear/research/*.md"
     scope: global
     enabled: true
 
   - name: "Skills"
     type: file_glob
     config:
-      glob: "skills/*/SKILL.md"
+      glob: "share/skills/*/SKILL.md"
     scope: global
     enabled: true
 
   - name: "Instructions"
     type: file_glob
     config:
-      glob: "instructions/*.md"
+      glob: "share/instructions/*.md"
     scope: global
     enabled: true
