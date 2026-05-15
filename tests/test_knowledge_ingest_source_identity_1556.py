@@ -7,6 +7,10 @@ TDD RED phase — all 14 tests fail until the builder repairs the five confirmed
   4. No transaction boundary → on failure, source/doc rows persist (AC-3)
   5. store_embeddings legacy path ignores scope → vector payloads always get scope="global"
 
+Retry cycle 5 adds:
+  AC-6: delete_document_data must delete vector embeddings for chunk IDs, not only relational rows
+  AC-7: ingest_text must succeed with a default SQLite connection (no check_same_thread=False)
+
 Covers:
   AC-1: ingest_document creates source row with scope/enrich + document has source_id
   AC-2: refresh_source document has source_id + vector payloads carry source scope
@@ -1053,4 +1057,225 @@ class TestFromAC_LateFailureAtomicCleanup:
         count = conn.execute("SELECT count(*) FROM edges").fetchone()[0]
         assert count == 0, (
             f"Failed ingest must leave no edge rows, found {count} row(s)"
+        )
+
+
+# ---------------------------------------------------------------------------
+# _TrackingVectorStore — stateful stub for AC-6 tests
+# ---------------------------------------------------------------------------
+
+
+class _TrackingVectorStore:
+    """Minimal stateful vector store stub.
+
+    Tracks which IDs have been stored via ``store_embedding`` and reflects
+    true delete semantics: ``delete_embedding`` returns True on the first
+    call (embedding found and removed) and False on subsequent calls
+    (embedding already gone).
+    """
+
+    def __init__(self) -> None:
+        self.stored_ids: set[str] = set()
+
+    def store_embedding(
+        self,
+        entity_or_doc_id: str,
+        **_kwargs: object,
+    ) -> None:
+        self.stored_ids.add(entity_or_doc_id)
+
+    def delete_embedding(self, entity_or_doc_id: str) -> bool:
+        if entity_or_doc_id in self.stored_ids:
+            self.stored_ids.discard(entity_or_doc_id)
+            return True
+        return False
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_DeleteDocumentDataVectorCleanup  (AC-6)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_DeleteDocumentDataVectorCleanup:
+    """AC-6: delete_document_data must delete vector embeddings for chunk IDs,
+    not only relational rows (entities, edges, chunks, document_status, documents).
+
+    Currently, delete_document_data does not call delete_chunk_embeddings, so
+    vector payloads are left as orphaned Qdrant entries that search_similar
+    can still return even after the document is removed from SQLite.
+    """
+
+    @pytest.mark.asyncio
+    async def test_delete_document_data_calls_delete_embedding_for_each_chunk_id(
+        self,
+        conn: sqlite3.Connection,
+        app_ctx: AppContext,
+        store_components: dict,
+        mock_vs: MagicMock,
+    ) -> None:
+        """delete_document_data must invoke delete_embedding for every chunk_id
+        associated with the deleted document.
+
+        Fails because delete_document_data only deletes relational rows and does
+        NOT call delete_chunk_embeddings, leaving orphaned vector payloads.
+        """
+        ctx = _make_mcp_ctx(app_ctx)
+        await ingest_document(
+            ctx,
+            text="content for vector cleanup test",
+            metadata={"title": "CleanupDoc"},
+            scope="team-a",
+            source_url="https://example.test/cleanup",
+        )
+        doc_row = conn.execute("SELECT id FROM documents").fetchone()
+        assert doc_row is not None, "No document row created by ingest"
+        doc_id = doc_row[0]
+        chunk_ids = [
+            r[0]
+            for r in conn.execute(
+                "SELECT id FROM chunks WHERE document_id = ?", (doc_id,)
+            ).fetchall()
+        ]
+        assert chunk_ids, "No chunks created — cannot verify vector cleanup"
+
+        # Reset so only calls from delete_document_data are observed.
+        mock_vs.delete_embedding.reset_mock()
+        store_components["doc_store"].delete_document_data(doc_id)
+
+        called_ids = [
+            c.args[0] if c.args else c.kwargs.get("entity_or_doc_id")
+            for c in mock_vs.delete_embedding.call_args_list
+        ]
+        for chunk_id in chunk_ids:
+            assert chunk_id in called_ids, (
+                f"delete_document_data must call delete_embedding for "
+                f"chunk_id={chunk_id!r}, but delete_embedding was only called "
+                f"for: {called_ids!r}"
+            )
+
+    @pytest.mark.asyncio
+    async def test_delete_document_data_second_delete_embedding_returns_false(
+        self, conn: sqlite3.Connection
+    ) -> None:
+        """After delete_document_data, subsequent delete_embedding calls for
+        former chunk IDs must return False (embeddings were already removed).
+
+        Uses a stateful tracking vector store so the test reflects true
+        delete semantics: first call returns True (found + removed), second
+        call returns False (already gone).
+
+        Fails because delete_document_data does not call delete_chunk_embeddings,
+        so embeddings remain in the tracking store and a second delete_embedding
+        call still returns True.
+        """
+        tvs = _TrackingVectorStore()
+        mock_emb = MagicMock()
+        mock_emb.embed = MagicMock(return_value=[[0.1] * 10, [0.2] * 10])
+
+        graph_store = GraphStore(conn)
+        source_store = KnowledgeSourceStore(conn)
+        doc_store = DocumentStore(conn, graph_store, tvs, mock_emb)
+        chunker = TextChunker()
+        extractor = EntityExtractor()
+        pipeline = IngestPipeline(
+            doc_store, extractor, chunker, source_store=source_store
+        )
+
+        result = await pipeline.ingest_text(
+            text="content for tracking vector store cleanup test",
+            metadata={"title": "TrackingDoc"},
+            scope="team-a",
+            source_url="https://example.test/tracking",
+        )
+        assert result.status == "ok", (
+            f"ingest_text must return status='ok', got {result.status!r}"
+        )
+
+        doc_row = conn.execute("SELECT id FROM documents").fetchone()
+        assert doc_row is not None, "No document row created"
+        doc_id = doc_row[0]
+        chunk_ids = [
+            r[0]
+            for r in conn.execute(
+                "SELECT id FROM chunks WHERE document_id = ?", (doc_id,)
+            ).fetchall()
+        ]
+        assert chunk_ids, "No chunks created — cannot verify vector cleanup"
+
+        stored_before = set(tvs.stored_ids)
+        assert any(cid in stored_before for cid in chunk_ids), (
+            "Tracking VS must have stored embeddings for chunk IDs during ingest"
+        )
+
+        # delete_document_data should call delete_chunk_embeddings internally,
+        # removing chunk_ids from tvs.stored_ids.
+        doc_store.delete_document_data(doc_id)
+
+        # A second delete_embedding call must return False — embeddings gone.
+        for chunk_id in chunk_ids:
+            second_result = tvs.delete_embedding(chunk_id)
+            assert second_result is False, (
+                f"delete_embedding({chunk_id!r}) must return False after "
+                "delete_document_data cleaned up the vector payloads, "
+                "but it returned True (embedding was never removed)"
+            )
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_SQLiteThreadSafety  (AC-7)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_SQLiteThreadSafety:
+    """AC-7: IngestPipeline.ingest_text must succeed with a default-configured
+    SQLite connection (no check_same_thread=False workaround).
+
+    The existing conn fixture uses check_same_thread=False to mask a threading
+    bug: asyncio.to_thread() moves SQLite operations onto a worker thread, but
+    the connection was created on the main thread. A default sqlite3.connect()
+    has check_same_thread=True, which raises ProgrammingError in this scenario.
+    """
+
+    @pytest.mark.asyncio
+    async def test_ingest_text_does_not_raise_with_default_sqlite_connection(
+        self,
+    ) -> None:
+        """ingest_text must return status='ok' when the pipeline's DocumentStore
+        is backed by a connection from sqlite3.connect(path) with default threading
+        parameters (check_same_thread=True by default).
+
+        Fails because ingest_text wraps all SQLite writes in asyncio.to_thread(),
+        which executes them on a worker thread. A default-configured SQLite
+        connection raises ProgrammingError: "SQLite objects created in a thread
+        can only be used in that same thread." The pipeline catches this and
+        returns IngestResult(status='failed'), making the status assertion fail.
+        """
+        # Deliberate: no check_same_thread=False to match production init_db.
+        default_conn = sqlite3.connect(":memory:")
+        init_db(default_conn)
+
+        mock_vs: MagicMock = MagicMock()
+        mock_vs.store_embedding = MagicMock()
+        mock_emb: MagicMock = MagicMock()
+        mock_emb.embed = MagicMock(return_value=[[0.1] * 10])
+
+        graph_store = GraphStore(default_conn)
+        source_store = KnowledgeSourceStore(default_conn)
+        doc_store = DocumentStore(default_conn, graph_store, mock_vs, mock_emb)
+        chunker = TextChunker()
+        extractor = EntityExtractor()
+        pipeline = IngestPipeline(
+            doc_store, extractor, chunker, source_store=source_store
+        )
+
+        result = await pipeline.ingest_text(
+            text="t",
+            metadata={"title": "T"},
+            scope="s",
+            source_url="https://example.test/t",
+        )
+        assert result.status == "ok", (
+            "ingest_text must return status='ok' with a default SQLite connection "
+            f"(check_same_thread=True), but got status={result.status!r}. "
+            "This indicates asyncio.to_thread() operations raised ProgrammingError."
         )
