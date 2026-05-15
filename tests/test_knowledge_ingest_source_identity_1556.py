@@ -1151,6 +1151,109 @@ class TestFromAC_LateFailureAtomicCleanup:
             f"Failed ingest must leave no edge rows, found {count} row(s)"
         )
 
+    @pytest.mark.asyncio
+    async def test_partial_extraction_write_leaves_no_entities_or_edges(
+        self,
+        conn: sqlite3.Connection,
+        app_ctx: AppContext,
+        store_components: dict,
+    ) -> None:
+        """Entity rows committed before edge-write failure are cleaned up by failed-ingest path.
+
+        Reviewer gap (cycle 8): existing tests patch store_extractions itself to
+        raise before any graph writes, so insert_entity is never called and the
+        entity/edge cleanup assertions are vacuously true.
+
+        This test wires a stub extractor returning 1 entity + 1 edge, patches
+        GraphStore.insert_edge to raise RuntimeError on its first call (allowing
+        all insert_entity calls to commit first), then asserts that:
+        - insert_entity was called ≥1 time (partial-write state reached, not vacuous)
+        - entities=0 and edges=0 after cleanup (delete_document_data removed them)
+        - existing contract: error: prefix, no chunks, no document, no source row
+        """
+        entity = Entity(
+            name="partial-write-entity",
+            entity_type=EntityType.CONCEPT,
+            description="entity committed before edge insertion fails",
+        )
+        edge = Edge(
+            source_id=entity.id,
+            target_id=entity.id,
+            relation=RelationType.RELATED_TO,
+        )
+        extraction = ExtractionResult(entities=[entity], edges=[edge])
+
+        entity_call_count = 0
+        real_insert_entity = store_components["graph_store"].insert_entity
+
+        def counting_insert_entity(ent: Entity) -> None:
+            nonlocal entity_call_count
+            entity_call_count += 1
+            real_insert_entity(ent)
+
+        ctx = _make_mcp_ctx(app_ctx)
+        with (
+            patch.object(
+                store_components["pipeline"]._extractor,
+                "extract",
+                new=AsyncMock(return_value=extraction),
+            ),
+            patch.object(
+                store_components["graph_store"],
+                "insert_entity",
+                side_effect=counting_insert_entity,
+            ),
+            patch.object(
+                store_components["graph_store"],
+                "insert_edge",
+                side_effect=RuntimeError("forced edge-write failure for partial-write test"),
+            ),
+        ):
+            result = await ingest_document(
+                ctx,
+                text="content for partial-write cleanup test",
+                metadata={"title": "PartialWriteDoc"},
+                scope="team-a",
+                source_url="https://example.test/partial-write",
+            )
+
+        assert isinstance(result, str), (
+            f"ingest_document must return a string, got {result!r}"
+        )
+        assert result.startswith("error:"), (
+            f"Must return 'error:...' when extraction partially fails, got: {result!r}"
+        )
+        assert entity_call_count >= 1, (
+            "insert_entity must be called ≥1 time before edge-write failure to prove "
+            f"the partial-write state was reached (got {entity_call_count} calls); "
+            "if this is 0, the extractor stub or patch did not wire correctly"
+        )
+        entity_count = conn.execute("SELECT count(*) FROM entities").fetchone()[0]
+        assert entity_count == 0, (
+            "Failed ingest must leave no entity rows after partial extraction-write "
+            f"cleanup via delete_document_data, found {entity_count} row(s)"
+        )
+        edge_count = conn.execute("SELECT count(*) FROM edges").fetchone()[0]
+        assert edge_count == 0, (
+            "Failed ingest must leave no edge rows after partial extraction-write "
+            f"cleanup via delete_document_data, found {edge_count} row(s)"
+        )
+        chunk_count = conn.execute("SELECT count(*) FROM chunks").fetchone()[0]
+        assert chunk_count == 0, (
+            "Failed ingest must leave no chunk rows after partial extraction-write "
+            f"cleanup, found {chunk_count} row(s)"
+        )
+        doc_count = conn.execute("SELECT count(*) FROM documents").fetchone()[0]
+        assert doc_count == 0, (
+            "Failed ingest must leave no document rows after partial extraction-write "
+            f"cleanup, found {doc_count} row(s)"
+        )
+        source_count = conn.execute("SELECT count(*) FROM knowledge_sources").fetchone()[0]
+        assert source_count == 0, (
+            "Failed ingest must leave no source rows after partial extraction-write "
+            f"cleanup, found {source_count} row(s)"
+        )
+
 
 # ---------------------------------------------------------------------------
 # _TrackingVectorStore — stateful stub for AC-6 tests
