@@ -80,6 +80,13 @@ Accessibility and responsive state after #1396:
   320x800, 768x1024, and 1024x768 in `e2e/responsive-contract-1566.spec.ts`. Mobile
   task detail renders in a `p-sheet` custom element at 320x800 (post-#1560 board-first
   contract) with click-dependent selection signals.
+- #1568 restores sequential keyboard reachability for the nav-rail: the `<PButton
+  data-surface="kanban">` in `Shell.tsx` no longer carries `tabIndex={-1}`, so the
+  persistent nav control is reachable via Tab. Modal/popover containers
+  (`role="dialog"`) retain their `tabIndex={-1}` for focus-management; only the
+  persistent nav control was changed. Verified in
+  `e2e/nav-rail-taborder-1568.spec.ts` (2 E2E assertions) and
+  `tests/test_cockpit_shell_sidecar_1568.py` (source inspection).
 - Documentation here does not treat cache/SSE invalidation work from #1346 as part of
   this delivery bundle.
 
