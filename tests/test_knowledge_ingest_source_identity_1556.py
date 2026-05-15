@@ -374,6 +374,49 @@ class TestFromAC_RefreshIngestSourceIdentity:
             f"but got scopes: {scopes_used}"
         )
 
+    @pytest.mark.asyncio
+    async def test_refresh_chunks_carry_source_scope(
+        self, conn: sqlite3.Connection, app_ctx: AppContext
+    ) -> None:
+        """Chunks persisted after refresh must carry scope='team-a' (the source scope).
+
+        Proof gap (cycle 7 review): existing refresh tests assert vector scope and
+        entity scope but never query the chunks table's scope column. A regression
+        that drops the scope parameter from store_chunks() would still pass all
+        prior tests.
+        """
+        self._seed_url_list_source(conn)
+        fake_intake = IntakeResult(
+            content="chunk scope verification content",
+            source="https://example.test/doc",
+            metadata={"source_type": "url_list"},
+        )
+        ctx = _make_mcp_ctx(app_ctx)
+        with patch(
+            "owlbear_knowledge.intake.read_url",
+            new=AsyncMock(return_value=fake_intake),
+        ):
+            await refresh_source(ctx, source_id="src-a")
+
+        doc_row = conn.execute("SELECT id FROM documents").fetchone()
+        assert doc_row is not None, "No document row created after refresh"
+        doc_id = doc_row[0]
+
+        chunk_scopes = [
+            r[0]
+            for r in conn.execute(
+                "SELECT scope FROM chunks WHERE document_id = ?", (doc_id,)
+            ).fetchall()
+        ]
+        assert chunk_scopes, (
+            f"No chunks found for document {doc_id!r} after refresh — "
+            "refresh must persist at least one chunk"
+        )
+        assert all(s == "team-a" for s in chunk_scopes), (
+            "All chunks persisted by refresh must have scope='team-a' (source scope), "
+            f"but got chunk scopes: {chunk_scopes}"
+        )
+
 
 # ---------------------------------------------------------------------------
 # TestFromAC_FailedIngestAtomicCleanup  (AC-3)
@@ -1428,6 +1471,95 @@ class TestFromAC_EndToEndSearchResolution:
         )
 
         # (d) scope must be source scope ('team-a'), not the default 'global'
+        assert hit.scope == "team-a", (
+            f"hit.scope must be 'team-a' (source scope, not 'global'), got {hit.scope!r}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_refresh_path_query_resolves_source_name_url_and_scope(
+        self, conn: sqlite3.Connection
+    ) -> None:
+        """KnowledgeQueryService.query() must resolve source name, URL, and scope
+        for a document ingested via the refresh-equivalent path (IngestPipeline.ingest).
+
+        Architect proof plan (cycle 7 return): both direct and refresh ingest paths
+        must prove end-to-end search resolution. This test covers the refresh half.
+        A pre-seeded source with config.url is used so the serializer resolves a URL;
+        url_list multi-URL serialization is deferred as separate product-design debt.
+        """
+        svs = _SearchableVectorStore()
+        mock_emb_local: MagicMock = MagicMock()
+        mock_emb_local.embed = MagicMock(return_value=[[0.1] * 10, [0.2] * 10])
+
+        graph_store = GraphStore(conn)
+        source_store = KnowledgeSourceStore(conn)
+        doc_store = DocumentStore(conn, graph_store, svs, mock_emb_local)
+        pipeline = IngestPipeline(
+            doc_store, EntityExtractor(), TextChunker(), source_store=source_store
+        )
+
+        # Pre-seed a source with config.url so the query serializer can resolve source.url.
+        _insert_source_direct(
+            conn,
+            source_id="refresh-src-e2e",
+            name="Refresh Source",
+            enrich=1,
+            scope="team-a",
+            url="https://example.test/refresh",
+        )
+
+        # Ingest via the refresh pipeline path (ingest() not ingest_text()).
+        intake = IntakeResult(
+            content="refresh path end to end resolution document content",
+            source="https://example.test/refresh",
+            metadata={"title": "Refresh E2E Doc", "source_type": "url_list"},
+        )
+        ingest_result = await pipeline.ingest(
+            intake,
+            scope="team-a",
+            source_id="refresh-src-e2e",
+        )
+        assert ingest_result.status == "ok", (
+            f"Refresh-path ingest must succeed, got status={ingest_result.status!r}"
+        )
+
+        query_service = KnowledgeQueryService(
+            vector_store=svs,
+            graph_store=graph_store,
+            embedding_provider=mock_emb_local,
+            source_store=source_store,
+            similarity_threshold=0.3,
+        )
+
+        hits = await query_service.query("refresh resolution")
+        assert hits, (
+            "KnowledgeQueryService.query must return at least one result for a "
+            "document ingested via the refresh pipeline path"
+        )
+
+        hit = hits[0]
+
+        # (b) document was found — resolve via chunk_id -> document_id -> Document.
+        # The ingest() path uses intake.source (URL) as the document title.
+        assert hit.title == "https://example.test/refresh", (
+            f"hit.title must be 'https://example.test/refresh' (intake.source), got {hit.title!r}"
+        )
+
+        # (c) source from the linked KnowledgeSource row
+        assert hit.source is not None, (
+            "hit.source must be a KnowledgeSource object — the refresh ingest path "
+            "must link the document to its source via document.source_id"
+        )
+        assert hit.source.name == "Refresh Source", (
+            f"hit.source.name must be 'Refresh Source', got {hit.source.name!r}"
+        )
+        source_config_url = (hit.source.config or {}).get("url")
+        assert source_config_url == "https://example.test/refresh", (
+            "hit.source.config['url'] must be 'https://example.test/refresh', "
+            f"got {source_config_url!r}"
+        )
+
+        # (d) scope must be 'team-a', not 'global'
         assert hit.scope == "team-a", (
             f"hit.scope must be 'team-a' (source scope, not 'global'), got {hit.scope!r}"
         )
