@@ -127,7 +127,11 @@ export function Card({
               {previewTags.join(', ')}
             </span>
             {overflowTags > 0 ? (
-              <span data-testid="card-tag-overflow" className="card-chip card-tag-overflow" aria-label={`${overflowTags} more tags`}>
+              <span
+                data-testid="card-tag-overflow"
+                className="card-chip card-tag-overflow"
+                aria-label={`${overflowTags} more tags`}
+              >
                 +{overflowTags}
               </span>
             ) : null}
