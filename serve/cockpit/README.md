@@ -112,6 +112,20 @@ Accessibility and responsive state after #1396:
   pass) and `serve/cockpit/web/src/__tests__/OverlayAnchoring_1569.test.tsx` (13 unit
   tests covering trigger-anchored positioning and CleanupPanel modal-equivalence
   semantics).
+- #1572 completes the cockpit responsive contract: `Shell.css` eliminates 320px
+  document-level horizontal overflow via `overflow-x: clip` on `.shell`, wrapping on
+  `.shell__status-bar` with compact vertical padding, and `min-width: 0` /
+  `overflow-wrap: anywhere` on the product-identity text. `Column.tsx` makes
+  `tabIndex="0"` conditional on `scrollHeight > clientHeight` via `ResizeObserver`,
+  `window.resize`, and `MutationObserver`-based re-sync, removing the attribute when
+  the column body is not scrollable. Responsive proof coverage:
+  `e2e/responsive-layout-1391.spec.ts` (42 tests) proves 320px overflow elimination
+  and last-column reachability via board-container `scrollIntoView`, 768px tablet
+  workspace/sidecar sizing, and 1024px/1440px desktop layout with exactly 7 visible
+  columns and no board-container vertical overflow; `e2e/responsive-contract-1566.spec.ts`
+  (39 tests) proves the conditional `tabIndex` both-branch contract (scrollable column
+  bodies gain the attribute; non-scrollable column bodies lack it) and mobile `p-sheet`
+  heading identity (exact selected task title) after task selection at 320×800.
 - Documentation here does not treat cache/SSE invalidation work from #1346 as part of
   this delivery bundle.
 
