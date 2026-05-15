@@ -75,6 +75,16 @@ Accessibility and responsive state after #1396:
   (width > 50px, height > 10px); each named status-bar control carries an individually
   asserted accessible name. Verified in `e2e/shell-sidecar-inspector-1562.spec.ts`
   (18 tests).
+- #1564 adds filter and form control PDS compliance verification: 34 Playwright E2E
+  tests in `e2e/filter-controls-1564.spec.ts` cover the filter-panel workflow (toggle
+  open via `p-button[data-testid="filter-toggle"]`, search, priority selection via
+  `CustomEvent('change', { detail: { value } })`, tags selection via
+  `CustomEvent('update', { detail: { value: [...] } })`, blocked toggle, badge and
+  result-count updates, and clear-all via `p-button[data-testid="filter-reset"]`) and
+  task-editor controls (priority `p-select-option` children, `p-tag` tag chips, and
+  action buttons). Tests use PDS-host-scoped selectors and dual-render guards
+  (native-element count-0 absence checks using `page.evaluate()` on `el.children`)
+  per PDS policy §5 from #1560.
 - #1566 extends the responsive contract: `[data-testid="column-body"]` receives
   `tabIndex="0"` when scrollable (axe `scrollable-region-focusable`), verified at
   320x800, 768x1024, and 1024x768 in `e2e/responsive-contract-1566.spec.ts`. Mobile
