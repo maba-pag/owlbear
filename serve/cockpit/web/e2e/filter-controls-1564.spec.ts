@@ -163,7 +163,10 @@ async function loadBoard(page: Page): Promise<void> {
 }
 
 async function openFilterPanel(page: Page): Promise<void> {
-  await page.click('[data-testid="filter-toggle"]')
+  // AC-1: filter-panel opening must use PDS-host-scoped selector (Cycle 8 fix).
+  // Generic [data-testid="filter-toggle"] click is not acceptable because a native button
+  // reusing the same test-id would drive the workflow green without proving PDS identity.
+  await page.click('p-button[data-testid="filter-toggle"]')
   await page.locator('#filter-panel').waitFor({ state: 'visible', timeout: 4_000 })
 }
 
@@ -428,10 +431,21 @@ test.describe('AC-2 | FilterPanel PDS compliance assertions', () => {
     expect(nativeOptionCount).toBe(0)
   })
 
-  test('(d) filter trigger renders as PDS button, not native button', async ({ page }) => {
+  test('(d.1) filter trigger: p-button[data-testid="filter-toggle"] is visible', async ({ page }) => {
+    // AC-2(d) dual-assertion — positive half.
     // §5 "Primary/secondary command" row: required PButton (p-button).
-    // Currently: native <button data-testid="filter-toggle"> -- FAILS.
+    // Currently: native <button data-testid="filter-toggle"> -- p-button absent -- FAILS.
     await expect(page.locator('p-button[data-testid="filter-toggle"]')).toBeVisible({ timeout: 2_000 })
+  })
+
+  test('(d.2) filter trigger: no native button[data-testid="filter-toggle"] survives (dual-render falsifiability)', async ({ page }) => {
+    // AC-2(d) dual-assertion — negative half.
+    // A positive-only check on p-button cannot falsify a surviving native button sharing the same
+    // test-id. This assertion closes that gap, matching the dual-render guards for search/blocked
+    // controls (filter-controls-1564.spec.ts:392-405).
+    // KanbanBoard.tsx L269-281: toggle renders <PButton data-testid="filter-toggle"> only.
+    // Fails if builder introduces a parallel native <button data-testid="filter-toggle">.
+    await expect(page.locator('button[data-testid="filter-toggle"]')).toHaveCount(0)
   })
 })
 
