@@ -426,49 +426,82 @@ test.describe('TestFromAC_BlockingDialogSemantics', () => {
     await expect(modal).toHaveAttribute('aria-modal', 'true')
   })
 
-  // AC-2, ConfirmDialog: Tab must cycle within the dialog.
-  // RED: ConfirmDialog has no Tab handler — Tab escapes after cycling through the
-  // Cancel and Confirm PButtons (dialog div is tabIndex={-1}, not in tab order).
+  // AC-2, ConfirmDialog: Tab must cycle within the dialog (focus trap).
+  // RED: ConfirmDialog has no Tab handler — Tab escapes the dialog.
+  // Wrap assertion: focus last focusable (Confirm PButton) → Tab → first (Cancel) must be focused;
+  // focus first (Cancel) → Shift+Tab → last (Confirm) must be focused.
+  // FAILS: no Tab trap → Tab/Shift+Tab escape the dialog instead of wrapping.
   test('confirm_dialog_tab_focus_cycles_within_dialog', async ({ page }) => {
     await openConfirmDialog(page)
-    await expect(page.locator('[data-testid="confirm-dialog"]')).toBeVisible()
+    const dialog = page.locator('[data-testid="confirm-dialog"]')
+    await expect(dialog).toBeVisible()
 
-    // Tab through all focusable children: Cancel, Confirm, and one more for the wrap.
-    await page.keyboard.press('Tab')
-    await page.keyboard.press('Tab')
-    await page.keyboard.press('Tab')
+    // ConfirmDialog renders: Cancel PButton (first), Confirm PButton (last, dynamic label).
+    const cancelBtn = dialog.locator('p-button').nth(0)
+    const confirmBtn = dialog.locator('p-button').nth(1)
+    await cancelBtn.waitFor({ state: 'visible', timeout: 5_000 })
+    await confirmBtn.waitFor({ state: 'visible', timeout: 5_000 })
 
-    // Focus must still be inside the dialog after cycling.
-    // FAILS: no focus trap → 3rd Tab moves focus outside the dialog.
-    const focusIsInside = await page.evaluate(() => {
-      const dialogEl = document.querySelector('[data-testid="confirm-dialog"]')
-      return dialogEl !== null && dialogEl.contains(document.activeElement)
-    })
-    expect(focusIsInside, 'Tab focus must stay inside ConfirmDialog (no trap currently)').toBe(true)
+    // Forward wrap: focus last focusable (Confirm), press Tab, assert first (Cancel) is focused.
+    // FAILS: ConfirmDialog has no Tab handler → Tab escapes the dialog entirely.
+    await confirmBtn.focus()
+    await page.keyboard.press('Tab')
+    await expect(
+      cancelBtn,
+      'Tab from last focusable (Confirm) must wrap to first focusable (Cancel) — no trap currently',
+    ).toBeFocused()
+
+    // Backward wrap: focus first focusable (Cancel), press Shift+Tab, assert last (Confirm) is focused.
+    // FAILS: no Tab trap → Shift+Tab escapes the dialog entirely.
+    await cancelBtn.focus()
+    await page.keyboard.press('Shift+Tab')
+    await expect(
+      confirmBtn,
+      'Shift+Tab from first focusable (Cancel) must wrap to last focusable (Confirm) — no trap currently',
+    ).toBeFocused()
   })
 
-  // AC-2, ResolveModal: Tab must cycle within the modal.
-  // RED: ResolveModal has no Tab handler — Tab escapes after all focusable elements
-  // (fieldset options, textarea, submit button, cancel button, and any PDS internals).
+  // AC-2, ResolveModal: Tab must cycle within the modal (focus trap).
+  // RED: ResolveModal has no Tab handler — Tab escapes the modal.
+  // Wrap assertion: focus last focusable (Close PButton) → Tab → first (approved radio) must be focused;
+  // focus first (approved radio) → Shift+Tab → last (Close) must be focused.
+  // FAILS: no Tab trap → Tab/Shift+Tab escape the modal instead of wrapping.
   test('resolve_modal_tab_focus_cycles_within_modal', async ({ page }) => {
     // Open DRStatusIndicator popover and click the DR item to open ResolveModal.
     await page.click('[data-testid="dr-indicator"]')
     await page.locator('[data-testid="dr-popover"]').waitFor({ state: 'visible' })
     await page.click('[data-testid="dr-item-dr-overlay-001"]')
-    await page.locator('[data-testid="resolve-modal"]').waitFor({ state: 'visible', timeout: 5_000 })
+    const modal = page.locator('[data-testid="resolve-modal"]')
+    await modal.waitFor({ state: 'visible', timeout: 5_000 })
 
-    // Tab through all focusable children; 7 presses should wrap if a trap exists.
-    for (let i = 0; i < 7; i++) {
-      await page.keyboard.press('Tab')
-    }
+    // First focusable: approved radio inside response-selector.
+    // Last focusable: Close/Cancel PButton [data-testid="resolve-cancel"].
+    const firstFocusable = modal.locator('[data-testid="response-selector"] input[value="approved"]')
+    const lastFocusable = page.locator('[data-testid="resolve-cancel"]')
+    await firstFocusable.waitFor({ state: 'visible', timeout: 5_000 })
+    await lastFocusable.waitFor({ state: 'visible', timeout: 5_000 })
 
-    // Focus must still be inside the modal after cycling.
-    // FAILS: no focus trap → Tab eventually moves focus outside the modal.
-    const focusIsInside = await page.evaluate(() => {
-      const modalEl = document.querySelector('[data-testid="resolve-modal"]')
-      return modalEl !== null && modalEl.contains(document.activeElement)
+    // Forward wrap: focus last (Close), press Tab, assert first (approved radio) is focused.
+    // FAILS: ResolveModal has no Tab trap → Tab escapes the modal.
+    await lastFocusable.focus()
+    await page.keyboard.press('Tab')
+    const approvedFocused = await page.evaluate(() => {
+      const el = document.querySelector('[data-testid="response-selector"] input[value="approved"]')
+      return document.activeElement === el
     })
-    expect(focusIsInside, 'Tab focus must stay inside ResolveModal (no trap currently)').toBe(true)
+    expect(
+      approvedFocused,
+      'Tab from last focusable (Close) must wrap to first focusable (approved radio) — no trap currently',
+    ).toBe(true)
+
+    // Backward wrap: focus first (approved radio), press Shift+Tab, assert Close is focused.
+    // FAILS: no Tab trap → Shift+Tab escapes the modal.
+    await firstFocusable.focus()
+    await page.keyboard.press('Shift+Tab')
+    await expect(
+      lastFocusable,
+      'Shift+Tab from first focusable (approved radio) must wrap to last (Close) — no trap currently',
+    ).toBeFocused()
   })
 
   // AC-2, ResolveModal: focus must return to the triggering element after close.
@@ -505,7 +538,9 @@ test.describe('TestFromAC_BlockingDialogSemantics', () => {
 
   // AC-2, ArchivalModal: Tab must cycle within the modal.
   // GREEN (regression guard): ArchivalModal.tsx handleKeyDown traps Tab using getFocusableElements().
-  // This is a task-local E2E check required by AC-2 (carry-forward documentation alone is not sufficient).
+  // Wrap assertion: focus last focusable (Cancel PButton) → Tab → first (PSelect) must be focused;
+  // focus first (PSelect) → Shift+Tab → last (Cancel) must be focused.
+  // PASSES: handleKeyDown wraps first→last and last→first via getFocusableElements().
   test('archival_modal_tab_focus_cycles_within_modal', async ({ page }) => {
     const card = page.locator('[data-testid="task-card"][data-id="1"]')
     await card.waitFor({ state: 'visible', timeout: 8_000 })
@@ -515,19 +550,37 @@ test.describe('TestFromAC_BlockingDialogSemantics', () => {
     await page.click('[data-testid="transition-item"][data-status="archived"]')
     await page.locator('[data-testid="archival-submit"]').waitFor({ state: 'visible', timeout: 5_000 })
 
-    // Tab through focusable elements many times — focus must stay inside the modal.
-    for (let i = 0; i < 10; i++) {
-      await page.keyboard.press('Tab')
-    }
+    // Scope selectors to the modal root (context menu is gone at this point).
+    const archivalModal = page.locator('[role="dialog"][aria-modal="true"]')
+    // First focusable (from getFocusableElements() in document order): PSelect[name="archival-reason"].
+    // Last focusable: Cancel PButton (third focusable after PSelect and Archive PButton).
+    const archivalSelect = page.locator('[name="archival-reason"]')
+    const cancelBtn = archivalModal.locator('p-button').filter({ hasText: 'Cancel' })
+    await archivalSelect.waitFor({ state: 'visible', timeout: 5_000 })
+    await cancelBtn.waitFor({ state: 'visible', timeout: 5_000 })
 
-    // GREEN: ArchivalModal.tsx handleKeyDown wraps Tab at first/last focusable element.
-    const focusIsInside = await page.evaluate(() => {
-      const submit = document.querySelector('[data-testid="archival-submit"]')
-      if (!submit) return false
-      const modalRoot = submit.closest('[role="dialog"]')
-      return modalRoot !== null && modalRoot.contains(document.activeElement)
+    // Forward wrap: focus last focusable (Cancel), press Tab, assert first (PSelect) is focused.
+    // GREEN: handleKeyDown detects active===last and calls first.focus() → PSelect gets focus.
+    // Use page.evaluate for PDS shadow-DOM focus delegation on p-select.
+    await cancelBtn.focus()
+    await page.keyboard.press('Tab')
+    const selectFocusedAfterTab = await page.evaluate(() => {
+      const el = document.querySelector('[name="archival-reason"]')
+      return el !== null && (document.activeElement === el || el.contains(document.activeElement))
     })
-    expect(focusIsInside, 'Tab focus must stay inside ArchivalModal (Tab trap via handleKeyDown)').toBe(true)
+    expect(
+      selectFocusedAfterTab,
+      'Tab from last focusable (Cancel) must wrap to first focusable (PSelect) — handleKeyDown traps',
+    ).toBe(true)
+
+    // Backward wrap: focus first focusable (PSelect), press Shift+Tab, assert Cancel is focused.
+    // GREEN: handleKeyDown detects active===first and calls last.focus() → Cancel gets focus.
+    await archivalSelect.focus()
+    await page.keyboard.press('Shift+Tab')
+    await expect(
+      cancelBtn,
+      'Shift+Tab from first focusable (PSelect) must wrap to last focusable (Cancel) — handleKeyDown traps',
+    ).toBeFocused()
   })
 
   // AC-2, ConfirmDialog: focus must return to the triggering element after close.
@@ -590,16 +643,16 @@ test.describe('TestFromAC_BlockingDialogSemantics', () => {
     await cancelBtn.click()
     await archivalSubmit.waitFor({ state: 'hidden', timeout: 5_000 })
 
-    // Assert focus returned to the originating task card.
+    // Assert focus returned to the exact originating task card element.
+    // Target: card host element ([data-testid="task-card"][data-id="1"]) — the menuitem
+    // that opened the modal is torn down (setContextMenu(null) at KanbanBoard.tsx:202)
+    // before the modal opens, so ARIA APG focus-return falls back to this card element.
     // FAILS: ArchivalModal does not track or restore previous focus on close.
-    const focusOnCard = await page.evaluate(() => {
-      const cardEl = document.querySelector('[data-testid="task-card"][data-id="1"]')
-      return cardEl !== null && cardEl.contains(document.activeElement)
-    })
-    expect(
-      focusOnCard,
-      'Focus must return to the originating task card after ArchivalModal closes',
-    ).toBe(true)
+    const cardEl = page.locator('[data-testid="task-card"][data-id="1"]')
+    await expect(
+      cardEl,
+      'Focus must return to the exact originating task card after ArchivalModal closes',
+    ).toBeFocused()
   })
 })
 
