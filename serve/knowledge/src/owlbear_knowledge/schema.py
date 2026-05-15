@@ -174,7 +174,9 @@ CREATE TABLE IF NOT EXISTS reviewed_pairs (
     entity_name TEXT NOT NULL,
     source_a    TEXT NOT NULL,
     source_b    TEXT NOT NULL,
-    PRIMARY KEY (entity_name, source_a, source_b)
+    entity_id_a TEXT NOT NULL DEFAULT '',
+    entity_id_b TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY (entity_name, source_a, source_b, entity_id_a, entity_id_b)
 )
 """
 
@@ -373,6 +375,56 @@ def init_db(conn: sqlite3.Connection) -> None:
     conn.execute(_CREATE_SOURCE_PAGES)
     conn.execute(_CREATE_REVIEWED_PAIRS)
     conn.execute(_CREATE_SCHEMA_VERSION)
+
+    with contextlib.suppress(sqlite3.OperationalError):
+        conn.execute(
+            "ALTER TABLE reviewed_pairs ADD COLUMN entity_id_a TEXT NOT NULL DEFAULT ''"
+        )
+    with contextlib.suppress(sqlite3.OperationalError):
+        conn.execute(
+            "ALTER TABLE reviewed_pairs ADD COLUMN entity_id_b TEXT NOT NULL DEFAULT ''"
+        )
+
+    reviewed_pairs_pk = [
+        row[1]
+        for row in conn.execute("PRAGMA table_info(reviewed_pairs)").fetchall()
+        if row[5] > 0
+    ]
+    desired_reviewed_pairs_pk = [
+        "entity_name",
+        "source_a",
+        "source_b",
+        "entity_id_a",
+        "entity_id_b",
+    ]
+    if reviewed_pairs_pk != desired_reviewed_pairs_pk:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS reviewed_pairs_rebuilt (
+                entity_name TEXT NOT NULL,
+                source_a    TEXT NOT NULL,
+                source_b    TEXT NOT NULL,
+                entity_id_a TEXT NOT NULL DEFAULT '',
+                entity_id_b TEXT NOT NULL DEFAULT '',
+                PRIMARY KEY (entity_name, source_a, source_b, entity_id_a, entity_id_b)
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO reviewed_pairs_rebuilt
+            (entity_name, source_a, source_b, entity_id_a, entity_id_b)
+            SELECT
+                entity_name,
+                source_a,
+                source_b,
+                COALESCE(entity_id_a, ''),
+                COALESCE(entity_id_b, '')
+            FROM reviewed_pairs
+            """
+        )
+        conn.execute("DROP TABLE reviewed_pairs")
+        conn.execute("ALTER TABLE reviewed_pairs_rebuilt RENAME TO reviewed_pairs")
 
     row = conn.execute("SELECT count(*) FROM schema_version").fetchone()
     if row is None or row[0] == 0:

@@ -165,16 +165,26 @@ class ConsolidationCandidate(TypedDict):
     source_b_chunk: str
 
 
-_CANDIDATE_ID_PARTS = 3
+_CANDIDATE_ID_BASE_PARTS = 3
+_CANDIDATE_ID_EXTENDED_PARTS = 5
 
 
-def _encode_candidate_id(entity_name: str, source_a: str, source_b: str) -> str:
+def _encode_candidate_id(
+    entity_name: str,
+    source_a: str,
+    source_b: str,
+    entity_id_a: str,
+    entity_id_b: str,
+) -> str:
     """Encode the reviewed-pair identity into an opaque candidate ID."""
-    return json.dumps([entity_name, source_a, source_b], separators=(",", ":"))
+    return json.dumps(
+        [entity_name, source_a, source_b, entity_id_a, entity_id_b],
+        separators=(",", ":"),
+    )
 
 
-def _decode_candidate_id(candidate_id: str) -> tuple[str, str, str]:
-    """Decode candidate ID into (entity_name, source_a, source_b)."""
+def _decode_candidate_id(candidate_id: str) -> tuple[str, str, str, str | None, str | None]:
+    """Decode candidate ID into (entity_name, source_a, source_b, entity_id_a, entity_id_b)."""
     try:
         parsed = json.loads(candidate_id)
     except (TypeError, ValueError) as exc:
@@ -183,12 +193,14 @@ def _decode_candidate_id(candidate_id: str) -> tuple[str, str, str]:
 
     if (
         not isinstance(parsed, list)
-        or len(parsed) != _CANDIDATE_ID_PARTS
+        or len(parsed) not in {_CANDIDATE_ID_BASE_PARTS, _CANDIDATE_ID_EXTENDED_PARTS}
         or not all(isinstance(part, str) for part in parsed)
     ):
         msg = "invalid candidate_id"
         raise ToolError(msg)
-    return parsed[0], parsed[1], parsed[2]
+    if len(parsed) == _CANDIDATE_ID_BASE_PARTS:
+        return parsed[0], parsed[1], parsed[2], None, None
+    return parsed[0], parsed[1], parsed[2], parsed[3], parsed[4]
 
 
 def _fetch_consolidation_candidate_rows(
@@ -277,11 +289,31 @@ def _fetch_consolidation_candidate_rows(
         WHERE NOT EXISTS (
             SELECT 1
             FROM reviewed_pairs AS rp
-            WHERE rp.entity_name = pc.entity_name
-              AND (
-                  (rp.source_a = pc.source_a AND rp.source_b = pc.source_b)
-                 OR (rp.source_a = pc.source_b AND rp.source_b = pc.source_a)
-              )
+            WHERE (
+                (
+                    rp.entity_name = pc.entity_name
+                    AND (
+                        (rp.source_a = pc.source_a AND rp.source_b = pc.source_b)
+                        OR (rp.source_a = pc.source_b AND rp.source_b = pc.source_a)
+                    )
+                    AND COALESCE(rp.entity_id_a, '') = ''
+                    AND COALESCE(rp.entity_id_b, '') = ''
+                )
+                OR (
+                    (
+                        rp.source_a = pc.source_a
+                        AND rp.source_b = pc.source_b
+                        AND rp.entity_id_a = pc.entity_id_a
+                        AND rp.entity_id_b = pc.entity_id_b
+                    )
+                    OR (
+                        rp.source_a = pc.source_b
+                        AND rp.source_b = pc.source_a
+                        AND rp.entity_id_a = pc.entity_id_b
+                        AND rp.entity_id_b = pc.entity_id_a
+                    )
+                )
+            )
         )
         GROUP BY pc.entity_name, pc.entity_id_a, pc.entity_id_b, pc.source_a, pc.source_b
         ORDER BY pc.entity_name ASC, pc.source_a ASC, pc.source_b ASC
@@ -304,7 +336,7 @@ async def get_consolidation_candidates(
     rows = _fetch_consolidation_candidate_rows(conn, limit=limit)
     return [
         {
-            "candidate_id": _encode_candidate_id(row[0], row[3], row[4]),
+            "candidate_id": _encode_candidate_id(row[0], row[3], row[4], row[1], row[2]),
             "entity_name": row[0],
             "entity_id_a": row[1],
             "entity_id_b": row[2],
@@ -355,6 +387,92 @@ def _candidate_entity_ids(
     if row is None or row[0] is None or row[1] is None:
         return None
     return row[0], row[1]
+
+
+def _resolve_candidate_identity(
+    conn: sqlite3.Connection,
+    *,
+    candidate_id: str,
+) -> tuple[str, str, str, str, str]:
+    """Resolve candidate identity to a durable row pair and source pair."""
+    entity_name, source_a, source_b, id_a, id_b = _decode_candidate_id(candidate_id)
+    if id_a is not None and id_b is not None:
+        row = conn.execute(
+            """
+            SELECT
+                e1.id,
+                e2.id,
+                d1.source_id,
+                d2.source_id,
+                e1.name,
+                e2.name
+            FROM entities AS e1
+            JOIN entities AS e2 ON e2.id = ?
+            JOIN documents AS d1 ON d1.id = e1.document_id
+            JOIN documents AS d2 ON d2.id = e2.document_id
+            WHERE e1.id = ?
+            """,
+            (id_b, id_a),
+        ).fetchone()
+        if (
+            row is None
+            or not isinstance(row[0], str)
+            or not isinstance(row[1], str)
+            or not isinstance(row[2], str)
+            or not isinstance(row[3], str)
+            or row[4] != entity_name
+            or row[5] != entity_name
+            or row[2] != source_a
+            or row[3] != source_b
+        ):
+            msg = "candidate_id does not resolve to persisted entity endpoints"
+            raise ToolError(msg)
+        return row[4], row[2], row[3], row[0], row[1]
+
+    entity_ids = _candidate_entity_ids(
+        conn,
+        entity_name=entity_name,
+        source_a=source_a,
+        source_b=source_b,
+    )
+    if entity_ids is None:
+        msg = "candidate_id does not resolve to persisted entity endpoints"
+        raise ToolError(msg)
+    return entity_name, source_a, source_b, entity_ids[0], entity_ids[1]
+
+
+def _resolve_phase2_edge_endpoints(
+    edge: dict[str, Any],
+    *,
+    entity_id_a: str,
+    entity_id_b: str,
+) -> tuple[str, str]:
+    """Resolve and validate phase-2 endpoints against the candidate pair."""
+    pair = {entity_id_a, entity_id_b}
+    source_value = edge.get("source_id")
+    target_value = edge.get("target_id")
+    source_id = source_value if isinstance(source_value, str) else None
+    target_id = target_value if isinstance(target_value, str) else None
+
+    if source_id is None and target_id is None:
+        return entity_id_a, entity_id_b
+
+    if source_id is None:
+        if target_id not in pair:
+            msg = "edge endpoints must match candidate entity row identifiers"
+            raise ToolError(msg)
+        return (entity_id_b if target_id == entity_id_a else entity_id_a), target_id
+
+    if target_id is None:
+        if source_id not in pair:
+            msg = "edge endpoints must match candidate entity row identifiers"
+            raise ToolError(msg)
+        return source_id, (entity_id_b if source_id == entity_id_a else entity_id_a)
+
+    if source_id == target_id or {source_id, target_id} != pair:
+        msg = "edge endpoints must match candidate entity row identifiers"
+        raise ToolError(msg)
+    return source_id, target_id
 
 
 def _extract_relation(edge: dict[str, Any]) -> str:
@@ -503,6 +621,22 @@ def _load_chunk_provenance(conn: sqlite3.Connection, *, chunk_id: str) -> _Chunk
     )
 
 
+def _clear_failed_chunk_claim(conn: sqlite3.Connection, *, chunk_id: str) -> None:
+    """Release stale claim for a failed phase-1 write attempt."""
+    row = conn.execute(
+        "SELECT enrichment_state FROM chunks WHERE id = ?",
+        (chunk_id,),
+    ).fetchone()
+    if row is None:
+        return
+    if row[0] != "claimed":
+        return
+    conn.execute(
+        "UPDATE chunks SET enrichment_state='failed', claimed_at=NULL WHERE id = ?",
+        (chunk_id,),
+    )
+
+
 def _persist_phase2_enrichment(
     conn: sqlite3.Connection,
     *,
@@ -511,28 +645,21 @@ def _persist_phase2_enrichment(
     now_iso: str,
 ) -> None:
     """Persist phase-2 consolidation review or edge output."""
-    entity_name, source_a, source_b = _decode_candidate_id(candidate_id)
-    entity_ids = _candidate_entity_ids(
+    entity_name, source_a, source_b, entity_id_a, entity_id_b = _resolve_candidate_identity(
         conn,
-        entity_name=entity_name,
-        source_a=source_a,
-        source_b=source_b,
+        candidate_id=candidate_id,
     )
-    if entity_ids is None:
-        msg = "candidate_id does not resolve to persisted entity endpoints"
-        raise ToolError(msg)
-    entity_id_a, entity_id_b = entity_ids
 
     if edges:
         for edge in edges:
             relation = _extract_relation(edge)
             metadata = edge.get("metadata")
             edge_metadata = metadata if isinstance(metadata, dict) else {}
-            source_id = edge.get("source_id")
-            target_id = edge.get("target_id")
-
-            resolved_source_id = source_id if isinstance(source_id, str) else entity_id_a
-            resolved_target_id = target_id if isinstance(target_id, str) else entity_id_b
+            resolved_source_id, resolved_target_id = _resolve_phase2_edge_endpoints(
+                edge,
+                entity_id_a=entity_id_a,
+                entity_id_b=entity_id_b,
+            )
 
             conn.execute(
                 """
@@ -562,10 +689,11 @@ def _persist_phase2_enrichment(
 
     conn.execute(
         """
-        INSERT OR IGNORE INTO reviewed_pairs (entity_name, source_a, source_b)
-        VALUES (?, ?, ?)
+        INSERT OR IGNORE INTO reviewed_pairs
+        (entity_name, source_a, source_b, entity_id_a, entity_id_b)
+        VALUES (?, ?, ?, ?, ?)
         """,
-        (entity_name, source_a, source_b),
+        (entity_name, source_a, source_b, entity_id_a, entity_id_b),
     )
 
 
@@ -848,8 +976,14 @@ async def store_enrichment(
             edges=edge_rows,
             now_iso=now_iso,
         )
-    except Exception:
+    except (sqlite3.Error, ToolError, TypeError, ValueError):
         conn.rollback()
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            _clear_failed_chunk_claim(conn, chunk_id=chunk_id)
+            conn.commit()
+        except sqlite3.Error:
+            conn.rollback()
         raise
     conn.commit()
 
