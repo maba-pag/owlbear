@@ -281,6 +281,12 @@ class DocumentStore:
         Args:
             document_id: The document to delete.
         """
+        chunk_rows = self._conn.execute(
+            "SELECT id FROM chunks WHERE document_id = ?", (document_id,)
+        ).fetchall()
+        chunk_ids = [row[0] for row in chunk_rows]
+        self.delete_chunk_embeddings(chunk_ids)
+
         # Delete entities and their edges for this document
         entity_rows = self._conn.execute(
             "SELECT id FROM entities WHERE document_id = ?", (document_id,)

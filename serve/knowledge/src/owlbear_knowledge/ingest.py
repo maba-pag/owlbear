@@ -137,13 +137,13 @@ class IngestPipeline:
         created_source_id: str | None,
     ) -> None:
         try:
-            await asyncio.to_thread(self._docs.delete_document_data, doc_id)  # type: ignore[union-attr]
+            self._docs.delete_document_data(doc_id)  # type: ignore[union-attr]
         except Exception:  # noqa: BLE001
             logger.debug("cleanup of failed ingest document failed", exc_info=True)
 
         if chunk_ids:
             try:
-                await asyncio.to_thread(self._docs.delete_chunk_embeddings, chunk_ids)  # type: ignore[union-attr]
+                self._docs.delete_chunk_embeddings(chunk_ids)  # type: ignore[union-attr]
             except Exception:  # noqa: BLE001
                 logger.debug(
                     "cleanup of failed ingest embeddings failed",
@@ -152,7 +152,7 @@ class IngestPipeline:
 
         if created_source_id is not None and self._source_store is not None:
             try:
-                await asyncio.to_thread(self._source_store.delete, created_source_id)
+                self._source_store.delete(created_source_id)
             except Exception:  # noqa: BLE001
                 logger.debug("cleanup of failed ingest source failed", exc_info=True)
 
@@ -222,23 +222,20 @@ class IngestPipeline:
                 source_id=resolved_source_id,
             )
 
-            await asyncio.to_thread(
-                self._docs.insert_document,
+            self._docs.insert_document(  # type: ignore[union-attr]
                 doc,
                 source_id=resolved_source_id,
-            )  # type: ignore[union-attr]
+            )
 
-            chunk_ids = await asyncio.to_thread(
-                self._docs.store_chunks,
+            chunk_ids = self._docs.store_chunks(  # type: ignore[union-attr]
                 doc_id,
-                chunks,  # type: ignore[union-attr]
+                chunks,
                 scope=scope,
             )
             chunk_texts = [c.text for c in chunks]
-            await asyncio.to_thread(
-                self._docs.store_embeddings,
+            self._docs.store_embeddings(  # type: ignore[union-attr]
                 chunk_ids,
-                chunk_texts,  # type: ignore[union-attr]
+                chunk_texts,
                 scope=scope,
             )
 
