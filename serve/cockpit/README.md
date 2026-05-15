@@ -61,6 +61,11 @@ Accessibility and responsive state after #1396:
   1024px, and 1440px checks).
 - Focus-management behavior for decision and repair flows is verified by the #1396
   regression tests.
+- #1566 extends the responsive contract: `[data-testid="column-body"]` receives
+  `tabIndex="0"` when scrollable (axe `scrollable-region-focusable`), verified at
+  320x800, 768x1024, and 1024x768 in `e2e/responsive-contract-1566.spec.ts`. Mobile
+  task detail renders in a `p-sheet` custom element at 320x800 (post-#1560 board-first
+  contract) with click-dependent selection signals.
 - Documentation here does not treat cache/SSE invalidation work from #1346 as part of
   this delivery bundle.
 
