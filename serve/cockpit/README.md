@@ -66,6 +66,15 @@ Accessibility and responsive state after #1396:
   (`Blocked`, `Claimed`, `Dependencies blocked`, `Decision pending`) for all four state
   signals. State cues are perceivable without relying on rail color alone, verified by
   Playwright locator/text assertions in `e2e/card-density-1565.spec.ts` (AC-2).
+- #1562 adds shell/sidecar inspector semantic structure: `[data-region="sidecar-header"]`
+  renders the selected task identity outside the tab content area; metadata fields render
+  `Status:` and `Priority:` labels paired with their values; body, history, and actions
+  regions are distinctly identified by `data-region`; decision queue items are `<article>`
+  elements with separately labeled Agent/Request type/Age/Task fields; filter controls are
+  grouped in `role="toolbar"`; the product-identity `<h1>` has non-zero visible dimensions
+  (width > 50px, height > 10px); each named status-bar control carries an individually
+  asserted accessible name. Verified in `e2e/shell-sidecar-inspector-1562.spec.ts`
+  (18 tests).
 - #1566 extends the responsive contract: `[data-testid="column-body"]` receives
   `tabIndex="0"` when scrollable (axe `scrollable-region-focusable`), verified at
   320x800, 768x1024, and 1024x768 in `e2e/responsive-contract-1566.spec.ts`. Mobile
