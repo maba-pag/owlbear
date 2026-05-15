@@ -49,6 +49,7 @@ export function Card({
   const previewTags = task.tags.slice(0, TAG_PREVIEW_LIMIT)
   const overflowTags = task.tags.length - previewTags.length
   const updatedAge = formatUpdatedAge(task.updated)
+  const hasStateCue = task.blocked || task.claimed || task.dep_status === 'blocked' || signal === 'dr-pending'
 
   function openContextMenu(event: React.KeyboardEvent<HTMLDivElement>) {
     event.preventDefault()
@@ -133,28 +134,30 @@ export function Card({
           </div>
         ) : null}
 
-        <div className="card-cues-row" aria-label="Task state cues">
-          {task.blocked ? (
-            <span data-testid="card-blocked-cue" className="card-chip card-cue card-cue-blocked">
-              Blocked
-            </span>
-          ) : null}
-          {task.claimed ? (
-            <span data-testid="card-claimed-cue" className="card-chip card-cue card-cue-claimed">
-              Claimed
-            </span>
-          ) : null}
-          {task.dep_status === 'blocked' ? (
-            <span data-testid="card-deps-unmet-cue" className="card-chip card-cue card-cue-deps">
-              Dependencies blocked
-            </span>
-          ) : null}
-          {signal === 'dr-pending' ? (
-            <span data-testid="card-dr-pending-cue" className="card-chip card-cue card-cue-dr">
-              Decision pending
-            </span>
-          ) : null}
-        </div>
+        {hasStateCue ? (
+          <div className="card-cues-row" aria-label="Task state cues">
+            {task.blocked ? (
+              <span data-testid="card-blocked-cue" className="card-chip card-cue card-cue-blocked">
+                Blocked
+              </span>
+            ) : null}
+            {task.claimed ? (
+              <span data-testid="card-claimed-cue" className="card-chip card-cue card-cue-claimed">
+                Claimed
+              </span>
+            ) : null}
+            {task.dep_status === 'blocked' ? (
+              <span data-testid="card-deps-unmet-cue" className="card-chip card-cue card-cue-deps">
+                Dependencies blocked
+              </span>
+            ) : null}
+            {signal === 'dr-pending' ? (
+              <span data-testid="card-dr-pending-cue" className="card-chip card-cue card-cue-dr">
+                Decision pending
+              </span>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     </div>
   )
