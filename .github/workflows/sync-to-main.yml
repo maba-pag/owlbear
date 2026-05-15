@@ -135,17 +135,59 @@ jobs:
           } >> "$GITHUB_ENV"
 
       - name: Warn on unresolved TODO markers
+        env:
+          SYNC_SHARE: ${{ inputs.sync_share }}
+          SYNC_BROWSER: ${{ inputs.sync_browser }}
+          SYNC_KANBAN: ${{ inputs.sync_kanban }}
+          SYNC_KNOWLEDGE: ${{ inputs.sync_knowledge }}
+          SYNC_COCKPIT: ${{ inputs.sync_cockpit }}
+          SYNC_TOOLS: ${{ inputs.sync_tools }}
+          SYNC_MCP_MEMORY: ${{ inputs.sync_mcp_memory }}
+          SYNC_SETUP: ${{ inputs.sync_setup }}
+          SYNC_INFRA: ${{ inputs.sync_infra }}
         run: |
-          todo_hits=$(grep -Hn '> \*\*TODO:\*\*' README.md README-consumer.md serve/*/README.md 2>/dev/null || true)
-
-          if [[ -n "$todo_hits" ]]; then
-            todo_count=$(printf '%s\n' "$todo_hits" | wc -l | tr -d ' ')
-            todo_files=$(printf '%s\n' "$todo_hits" | cut -d: -f1 | sort -u)
-            file_count=$(printf '%s\n' "$todo_files" | grep -c . || true)
-            file_list=$(printf '%s\n' "$todo_files" | sed ':a;N;$!ba;s/\n/, /g')
-            summary="⚠️ ${todo_count} unresolved TODO markers in ${file_count} files: ${file_list}"
-            echo "::warning title=Unresolved TODO markers::${summary}"
+          # Build path list from selected sync scopes
+          paths=""
+          if [[ "$SYNC_SHARE" == "true" ]]; then paths="$paths share"; fi
+          if [[ "$SYNC_BROWSER" == "true" ]]; then paths="$paths serve/browser serve/mcp-browser"; fi
+          if [[ "$SYNC_KANBAN" == "true" ]]; then paths="$paths serve/kanban serve/mcp-kanban"; fi
+          if [[ "$SYNC_KNOWLEDGE" == "true" ]]; then paths="$paths serve/knowledge serve/mcp-knowledge"; fi
+          if [[ "$SYNC_COCKPIT" == "true" ]]; then paths="$paths serve/cockpit"; fi
+          if [[ "$SYNC_TOOLS" == "true" ]]; then paths="$paths serve/tools"; fi
+          if [[ "$SYNC_MCP_MEMORY" == "true" ]]; then paths="$paths serve/mcp-memory"; fi
+          if [[ "$SYNC_SETUP" == "true" ]]; then paths="$paths setup seed"; fi
+          if [[ "$SYNC_INFRA" == "true" ]]; then
+            paths="$paths .github pyproject.toml SECURITY.md README.md README-consumer.md"
           fi
+
+          if [[ -z "$paths" ]]; then
+            echo "No paths to scan for TODO markers."
+            exit 0
+          fi
+
+          # shellcheck disable=SC2086
+          todo_hits=$(grep -rHnI '> \*\*TODO:\*\*' $paths 2>/dev/null || true)
+
+          if [[ -z "$todo_hits" ]]; then
+            echo "No unresolved TODO markers in synced paths."
+            exit 0
+          fi
+
+          # Print grouped by file
+          todo_count=$(printf '%s\n' "$todo_hits" | wc -l | tr -d ' ')
+          current_file=""
+          while IFS=: read -r file line content; do
+            if [[ "$file" != "$current_file" ]]; then
+              current_file="$file"
+              printf '\n%s:\n' "$file"
+            fi
+            printf '  - %s: %s\n' "$line" "$content"
+          done <<< "$todo_hits"
+
+          file_count=$(printf '%s\n' "$todo_hits" | cut -d: -f1 | sort -u | grep -c . || true)
+          echo ""
+          summary="⚠️ ${todo_count} unresolved TODO markers in ${file_count} files (synced scopes only)"
+          echo "::warning title=Unresolved TODO markers::${summary}"
 
       - name: Validate selected paths exist on dev
         env:
@@ -210,6 +252,10 @@ jobs:
       - name: Install uv for MCP dev-source gate
         if: ${{ inputs.sync_kanban }}
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # v8.1.0
+
+      - name: Install Python (uv managed)
+        if: ${{ inputs.sync_kanban }}
+        run: uv python install
 
       - name: Verify MCP surface contract from dev source
         if: ${{ inputs.sync_kanban }}
