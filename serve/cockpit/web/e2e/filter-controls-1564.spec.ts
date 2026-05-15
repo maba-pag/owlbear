@@ -207,12 +207,11 @@ test.describe('AC-1 | Filter workflow via PDS control selectors', () => {
     await loadBoard(page)
     await openFilterPanel(page)
     // AC-2(c) already verifies p-select-option presence; no duplicate here.
-    // Trigger PDS select via evaluate: set value + dispatch 'input' event.
-    // Correct implementation handles onInput reading e.target.value to update filter state.
+    // Trigger PDS select via evaluate: dispatch CustomEvent('change', { detail: { value } }).
+    // Matches PDS p-select emission contract (readStringValue reads detail.value first).
     // Currently: no onInput handler on p-select -- filter unchanged -- task-card-2 remains visible -- FAILS.
     await page.locator('#filter-panel p-select[name="priority-filter"]').evaluate((el) => {
-      el.value = 'critical'
-      el.dispatchEvent(new Event('input', { bubbles: true }))
+      el.dispatchEvent(new CustomEvent('change', { detail: { value: 'critical' }, bubbles: true }))
     })
     // After correct implementation: only TASK_ALPHA (priority=critical) visible; TASK_BETA hidden.
     await expect(page.locator('[data-testid="task-card"][data-id="2"]')).not.toBeVisible({ timeout: 2_000 })
@@ -242,8 +241,7 @@ test.describe('AC-1 | Filter workflow via PDS control selectors', () => {
     // Trigger priority filter via PDS evaluate contract.
     // Currently: no onInput handler -- filter unchanged -- result count absent -- FAILS.
     await page.locator('#filter-panel p-select[name="priority-filter"]').evaluate((el) => {
-      el.value = 'critical'
-      el.dispatchEvent(new Event('input', { bubbles: true }))
+      el.dispatchEvent(new CustomEvent('change', { detail: { value: 'critical' }, bubbles: true }))
     })
     await expect(page.locator('[data-testid="filter-result-count"]')).toBeVisible({ timeout: 2_000 })
   })
@@ -253,8 +251,7 @@ test.describe('AC-1 | Filter workflow via PDS control selectors', () => {
     await openFilterPanel(page)
     // Trigger priority filter via PDS evaluate contract.
     await page.locator('#filter-panel p-select[name="priority-filter"]').evaluate((el) => {
-      el.value = 'critical'
-      el.dispatchEvent(new Event('input', { bubbles: true }))
+      el.dispatchEvent(new CustomEvent('change', { detail: { value: 'critical' }, bubbles: true }))
     })
     // Guard against vacuous pass: verify filter WAS applied before testing clear.
     // Currently: no onInput handler -- filter unchanged -- count absent -- FAILS here.
@@ -310,8 +307,7 @@ test.describe('AC-1 | Filter workflow via PDS control selectors', () => {
     await loadBoard(page)
     await openFilterPanel(page)
     await page.locator('#filter-panel p-select[name="priority-filter"]').evaluate((el) => {
-      el.value = 'critical'
-      el.dispatchEvent(new Event('input', { bubbles: true }))
+      el.dispatchEvent(new CustomEvent('change', { detail: { value: 'critical' }, bubbles: true }))
     })
     await expect(page.locator('[data-testid="task-card"][data-id="1"]')).toBeVisible({ timeout: 2_000 })
     await expect(page.locator('[data-testid="task-card"][data-id="3"]')).not.toBeVisible({ timeout: 2_000 })
@@ -345,8 +341,7 @@ test.describe('AC-1 | Filter workflow via PDS control selectors', () => {
     await loadBoard(page)
     await openFilterPanel(page)
     await page.locator('#filter-panel p-select[name="priority-filter"]').evaluate((el) => {
-      el.value = 'critical'
-      el.dispatchEvent(new Event('input', { bubbles: true }))
+      el.dispatchEvent(new CustomEvent('change', { detail: { value: 'critical' }, bubbles: true }))
     })
     // Guard: verify filter was active before testing clear.
     await expect(page.locator('[data-testid="task-card"][data-id="3"]')).not.toBeVisible({ timeout: 2_000 })
@@ -361,8 +356,7 @@ test.describe('AC-1 | Filter workflow via PDS control selectors', () => {
     await loadBoard(page)
     await openFilterPanel(page)
     await page.locator('#filter-panel p-select[name="priority-filter"]').evaluate((el) => {
-      el.value = 'critical'
-      el.dispatchEvent(new Event('input', { bubbles: true }))
+      el.dispatchEvent(new CustomEvent('change', { detail: { value: 'critical' }, bubbles: true }))
     })
     await expect(page.locator('[data-testid="filter-result-count"]')).toContainText('1 / 3 tasks', { timeout: 2_000 })
   })
@@ -417,14 +411,17 @@ test.describe('AC-2 | FilterPanel PDS compliance assertions', () => {
   })
 
   test('(c.2) priority-filter p-select contains no native option children (dual-render falsifiability)', async ({ page }) => {
-    // AC-2(c) falsifiability guard: the presence assertion alone is not falsifiable against the
-    // dual-render state in FilterPanel.tsx where both native <option> AND <p-select-option>
-    // exist as direct children of p-select[name="priority-filter"].
-    // FilterPanel.tsx L209-219: native <option value=""> + native <option> per priority value.
+    // AC-2(c) falsifiability guard: CSS `> option` is a confirmed false-green — PDS absorbs
+    // light-DOM native <option> children so the CSS child combinator cannot reach them at runtime
+    // (FilterPanel.tsx L206-214 has native <option> children but the CSS test passed green).
+    // Fix: use page.evaluate() on el.children (raw DOM children collection) to count OPTION nodes
+    // directly without going through the CSS selector engine.
+    // FilterPanel.tsx L206-214: native <option value=""> + native <option> per priority value.
     // This test FAILS until builder removes all native <option> children from the p-select.
-    await expect(
-      page.locator('#filter-panel p-select[name="priority-filter"] > option'),
-    ).toHaveCount(0, { timeout: 2_000 })
+    const nativeOptionCount = await page
+      .locator('#filter-panel p-select[name="priority-filter"]')
+      .evaluate((el) => Array.from(el.children).filter((c) => c.tagName === 'OPTION').length)
+    expect(nativeOptionCount).toBe(0)
   })
 
   test('(d) filter trigger renders as PDS button, not native button', async ({ page }) => {
