@@ -61,6 +61,11 @@ Accessibility and responsive state after #1396:
   1024px, and 1440px checks).
 - Focus-management behavior for decision and repair flows is verified by the #1396
   regression tests.
+- #1565 adds card information density cues: task cards now render id, priority tag,
+  tag preview with overflow indicator, update-recency metadata, and explicit text cues
+  (`Blocked`, `Claimed`, `Dependencies blocked`, `Decision pending`) for all four state
+  signals. State cues are perceivable without relying on rail color alone, verified by
+  Playwright locator/text assertions in `e2e/card-density-1565.spec.ts` (AC-2).
 - #1566 extends the responsive contract: `[data-testid="column-body"]` receives
   `tabIndex="0"` when scrollable (axe `scrollable-region-focusable`), verified at
   320x800, 768x1024, and 1024x768 in `e2e/responsive-contract-1566.spec.ts`. Mobile
