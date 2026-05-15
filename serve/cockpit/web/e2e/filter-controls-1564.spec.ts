@@ -275,6 +275,22 @@ test.describe('AC-1 | Filter workflow via PDS control selectors', () => {
       page.locator('#filter-panel p-multi-select[name="tags-filter"]'),
     ).toBeAttached({ timeout: 4_000 })
   })
+
+  test('tags behavioral: PDS update event selection narrows visible task cards', async ({ page }) => {
+    // AC-1 behavioral requirement: host-presence-only (toBeAttached) is insufficient.
+    // Must dispatch PDS 'update' CustomEvent with fixture tag value and assert task visibility narrows.
+    // readStringArrayValue in FilterPanel.tsx reads detail.value: string[] from the CustomEvent.
+    // Fixture: TASK_ALPHA tags=['frontend'] (id=1), TASK_BETA tags=['frontend','backend'] (id=2), TASK_GAMMA tags=[] (id=3).
+    // Selecting 'backend' must hide TASK_ALPHA (id=1) and TASK_GAMMA (id=3); TASK_BETA (id=2) remains visible.
+    // Fails until builder correctly wires the update event filter state through to task-card visibility.
+    await loadBoard(page)
+    await openFilterPanel(page)
+    await page.locator('#filter-panel p-multi-select[name="tags-filter"]').evaluate((el) => {
+      el.dispatchEvent(new CustomEvent('update', { detail: { value: ['backend'] }, bubbles: true }))
+    })
+    await expect(page.locator('[data-testid="task-card"][data-id="1"]')).not.toBeVisible({ timeout: 2_000 })
+    await expect(page.locator('[data-testid="task-card"][data-id="3"]')).not.toBeVisible({ timeout: 2_000 })
+  })
 })
 
 // --- AC-2 | FilterPanel PDS compliance assertions ---------------------------
@@ -309,6 +325,17 @@ test.describe('AC-2 | FilterPanel PDS compliance assertions', () => {
     ).toBeAttached({ timeout: 2_000 })
   })
 
+  test('(c.2) priority-filter p-select contains no native option children (dual-render falsifiability)', async ({ page }) => {
+    // AC-2(c) falsifiability guard: the presence assertion alone is not falsifiable against the
+    // dual-render state in FilterPanel.tsx where both native <option> AND <p-select-option>
+    // exist as direct children of p-select[name="priority-filter"].
+    // FilterPanel.tsx L209-219: native <option value=""> + native <option> per priority value.
+    // This test FAILS until builder removes all native <option> children from the p-select.
+    await expect(
+      page.locator('#filter-panel p-select[name="priority-filter"] > option'),
+    ).toHaveCount(0, { timeout: 2_000 })
+  })
+
   test('(d) filter trigger renders as PDS button, not native button', async ({ page }) => {
     // §5 "Primary/secondary command" row: required PButton (p-button).
     // Currently: native <button data-testid="filter-toggle"> -- FAILS.
@@ -331,6 +358,17 @@ test.describe('AC-4 | Task-editor PDS compliance assertions', () => {
     await expect(
       page.locator('p-select[name="priority"] p-select-option'),
     ).toBeAttached({ timeout: 4_000 })
+  })
+
+  test('(a.2) task-editor priority p-select contains no native option children (dual-render falsifiability)', async ({ page }) => {
+    // AC-4(a) falsifiability guard: same dual-assertion contract as AC-2(c).
+    // TaskFieldsEditor.tsx p-select[name="priority"] must contain only p-select-option children;
+    // no native <option> elements allowed per §5 "Select/dropdown" policy.
+    // Current state: TaskFieldsEditor has p-select-option only (no native option) — regression guard.
+    // Fails if builder accidentally introduces native <option> children during GREEN phase.
+    await expect(
+      page.locator('p-select[name="priority"] > option'),
+    ).toHaveCount(0, { timeout: 4_000 })
   })
 
   test('(b) tag chips render as p-tag elements, not plain span chips', async ({ page }) => {
