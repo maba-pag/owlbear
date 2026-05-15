@@ -1373,3 +1373,128 @@ class TestFromAC_ChunkLinkageViaJoin:
             f"All chunks from the same source must share one source_id; "
             f"got multiple distinct values: {source_ids}"
         )
+
+    @pytest.mark.asyncio
+    async def test_document_scope_column_equals_manifest_scope_via_join(
+        self, real_pipeline: dict, tmp_path: Path
+    ) -> None:
+        """documents.scope must equal the manifest scope — not just knowledge_sources.scope.
+
+        Reviewer finding (cycle 2): existing test only asserts ks.scope. A regression
+        where pipeline.ingest() stops passing scope= to insert_document() would be
+        invisible to the prior assertion but would fail here, because d.scope would
+        fall back to the DEFAULT 'global' while ks.scope remained correct.
+
+        This test reads d.scope directly from the documents table via a JOIN and
+        asserts it equals the manifest entry scope value.
+
+        Proves: AC-1 + verification guidance (documents.scope propagation on loader path).
+        """
+        manifest_scope = "doc-scope-proof"
+        (tmp_path / "document.md").write_text(
+            "# Document Scope Proof\n\n"
+            "Content for verifying that documents.scope is set from manifest entry scope.\n"
+        )
+        manifest = tmp_path / "manifest.yaml"
+        _write_single_source_manifest(
+            manifest, name="Doc Scope Source", scope=manifest_scope
+        )
+
+        conn: sqlite3.Connection = real_pipeline["conn"]
+        source_store: KnowledgeSourceStore = real_pipeline["source_store"]
+        pipeline: IngestPipeline = real_pipeline["pipeline"]
+
+        await load_manifest_file(
+            manifest_path=manifest,
+            workspace_root=tmp_path,
+            source_store=source_store,
+            pipeline=pipeline,
+        )
+
+        rows = conn.execute(
+            """
+            SELECT ks.scope AS ks_scope, d.scope AS d_scope
+            FROM knowledge_sources AS ks
+            JOIN documents AS d ON d.source_id = ks.id
+            WHERE ks.name = ?
+            """,
+            ("Doc Scope Source",),
+        ).fetchall()
+
+        assert len(rows) >= 1, (
+            "JOIN (knowledge_sources → documents) returned no rows; "
+            "documents.source_id=NULL or documents.scope was never set."
+        )
+        for ks_scope, d_scope in rows:
+            assert ks_scope == manifest_scope, (
+                f"knowledge_sources.scope must be {manifest_scope!r}, got {ks_scope!r}"
+            )
+            assert d_scope == manifest_scope, (
+                f"documents.scope must equal manifest scope {manifest_scope!r}, "
+                f"got {d_scope!r}. Proves pipeline.ingest() forwards scope= to "
+                f"insert_document() for loader-path documents."
+            )
+
+    @pytest.mark.asyncio
+    async def test_chunk_scope_column_equals_manifest_scope_via_join(
+        self, real_pipeline: dict, tmp_path: Path
+    ) -> None:
+        """chunks.scope must equal the manifest scope — not just knowledge_sources.scope.
+
+        Reviewer finding (cycle 2): existing test only asserts ks.scope. A regression
+        where pipeline.ingest() stops passing scope= to store_chunks() would be
+        invisible to the prior assertion but would fail here, because c.scope would
+        fall back to DEFAULT 'global' while ks.scope remained correct.
+
+        This test reads d.scope and c.scope directly from the full 3-table JOIN and
+        asserts both equal the manifest entry scope value, satisfying the revised
+        verification guidance from the architecture re-review (cycle 3).
+
+        Proves: AC-1 + AC-3 + verification guidance (d.scope AND c.scope propagation).
+        """
+        manifest_scope = "chunk-scope-proof"
+        (tmp_path / "chunks.md").write_text(
+            "# Chunk Scope Proof\n\n"
+            "Content for verifying that chunks.scope is set from manifest entry scope.\n"
+        )
+        manifest = tmp_path / "manifest.yaml"
+        _write_single_source_manifest(
+            manifest, name="Chunk Scope Source", scope=manifest_scope
+        )
+
+        conn: sqlite3.Connection = real_pipeline["conn"]
+        source_store: KnowledgeSourceStore = real_pipeline["source_store"]
+        pipeline: IngestPipeline = real_pipeline["pipeline"]
+
+        await load_manifest_file(
+            manifest_path=manifest,
+            workspace_root=tmp_path,
+            source_store=source_store,
+            pipeline=pipeline,
+        )
+
+        rows = conn.execute(
+            """
+            SELECT ks.scope AS ks_scope, d.scope AS d_scope, c.scope AS c_scope
+            FROM knowledge_sources AS ks
+            JOIN documents AS d ON d.source_id = ks.id
+            JOIN chunks AS c ON c.document_id = d.id
+            WHERE ks.name = ?
+            """,
+            ("Chunk Scope Source",),
+        ).fetchall()
+
+        assert len(rows) >= 1, (
+            "3-table JOIN (knowledge_sources → documents → chunks) returned no rows; "
+            "documents.source_id=NULL or no chunks were produced."
+        )
+        for _, d_scope, c_scope in rows:
+            assert d_scope == manifest_scope, (
+                f"documents.scope must equal manifest scope {manifest_scope!r}, "
+                f"got {d_scope!r}."
+            )
+            assert c_scope == manifest_scope, (
+                f"chunks.scope must equal manifest scope {manifest_scope!r}, "
+                f"got {c_scope!r}. Proves store_chunks() receives scope= from "
+                f"the loader-path ingest call."
+            )
