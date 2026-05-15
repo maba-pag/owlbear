@@ -197,6 +197,8 @@ test.describe('TestFromAC_SidecarInspectorComposition', () => {
     //          position — a build that moves the header inside <p-tabs> would fail here.
     const sidecarHeader = page.locator('[data-region="sidecar-header"]')
     await expect(sidecarHeader).toBeVisible()
+    // Identity proof: header must show the selected task title, not a static placeholder.
+    await expect(sidecarHeader).toContainText('Implement cache layer')
 
     // DOM-hierarchy guard: sidecar-header must NOT be a descendant of p-tabs.
     // If the header were inside <p-tabs>, this count would be 1 not 0.
@@ -450,6 +452,8 @@ test.describe('TestFromAC_KeyboardCollapseExpand', () => {
     // before/after comparison, not just a post-expand regex match.
     const beforeText = await sidecarHeader.textContent()
     expect(beforeText).toBeTruthy()
+    // Identity check before collapse: must contain fixture task title, not a static heading.
+    expect(beforeText).toContain('Implement cache layer')
 
     // Collapse via keyboard
     await collapseToggle.focus()
