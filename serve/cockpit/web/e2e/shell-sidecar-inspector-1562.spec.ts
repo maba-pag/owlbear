@@ -221,6 +221,21 @@ test.describe('TestFromAC_SidecarInspectorComposition', () => {
       .locator('[data-region="sidecar"]')
       .getByText('Priority:', { exact: true })
     await expect(priorityLabel).toBeVisible()
+
+    // Pairing proof: label and value must coexist in the same parent container.
+    // AC-1(b) refined: a detached label elsewhere in the sidecar must not pass.
+    // DetailTab renders <p><strong>Status:</strong> <span data-testid="field-status">…</span></p>
+    const statusContainer = page
+      .locator('[data-region="sidecar"]')
+      .locator('p', { hasText: 'Status:' })
+      .first()
+    await expect(statusContainer.locator('[data-testid="field-status"]')).toBeVisible()
+
+    const priorityContainer = page
+      .locator('[data-region="sidecar"]')
+      .locator('p', { hasText: 'Priority:' })
+      .first()
+    await expect(priorityContainer.locator('[data-testid="field-priority"]')).toBeVisible()
   })
 
   test('sidecar has distinct body section for task description — RED: no sidecar-body region or Description heading', async ({
@@ -342,6 +357,16 @@ test.describe('TestFromAC_DecisionQueueComposition', () => {
     await expect(item.getByText('Request type:', { exact: true })).toBeVisible()
     await expect(item.getByText('Age:', { exact: true })).toBeVisible()
     await expect(item.getByText('Task:', { exact: true })).toBeVisible()
+
+    // Child-structure proof: each labeled field must be a distinct direct child element,
+    // not concatenated text in a single node.
+    // AC-2 refined: a flat non-button container with all labels in one node must not pass.
+    // DecisionViewport renders each field as a separate <PText> direct child of <article>.
+    for (const label of ['Agent:', 'Request type:', 'Age:', 'Task:']) {
+      await expect(
+        item.locator(':scope > *').filter({ hasText: label }),
+      ).toHaveCount(1)
+    }
   })
 })
 
