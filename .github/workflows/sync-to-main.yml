@@ -173,21 +173,14 @@ jobs:
             exit 0
           fi
 
-          # Print grouped by file
+          # Emit one ::warning per hit with file and line metadata
           todo_count=$(printf '%s\n' "$todo_hits" | wc -l | tr -d ' ')
-          current_file=""
           while IFS=: read -r file line content; do
-            if [[ "$file" != "$current_file" ]]; then
-              current_file="$file"
-              printf '\n%s:\n' "$file"
-            fi
-            printf '  - %s: %s\n' "$line" "$content"
+            echo "::warning file=${file},line=${line},title=Unresolved TODO marker::${content}"
           done <<< "$todo_hits"
 
-          file_count=$(printf '%s\n' "$todo_hits" | cut -d: -f1 | sort -u | grep -c . || true)
           echo ""
-          summary="⚠️ ${todo_count} unresolved TODO markers in ${file_count} files (synced scopes only)"
-          echo "::warning title=Unresolved TODO markers::${summary}"
+          echo "⚠️ ${todo_count} unresolved TODO marker(s) in synced scopes."
 
       - name: Validate selected paths exist on dev
         env:
