@@ -206,6 +206,14 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
       ref={modalRef}
       tabIndex={-1}
       onKeyDown={handleModalKeyDown}
+      style={{
+        position: 'fixed',
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -50%)',
+        zIndex: 1000,
+        maxWidth: '720px',
+      }}
     >
       <PHeading ref={setHeadingTagAttr} tag="h2">{dr.title}</PHeading>
       <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>{dr.body ?? ''}</ReactMarkdown>

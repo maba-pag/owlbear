@@ -8,6 +8,7 @@ import DecisionViewport from './components/DecisionViewport'
 import DetailTab from './components/DetailTab'
 import DRStatusIndicator from './components/DRStatusIndicator'
 import HealthBadge, { type ScanItem as HealthBadgeItem } from './components/HealthBadge'
+import RepairPanel from './components/RepairPanel'
 import ResolveModal from './components/ResolveModal'
 import ThemeToggle from './components/ThemeToggle'
 import { useBoardState, useDRState, useTaskSelection } from './hooks/CockpitProvider'
@@ -125,8 +126,13 @@ function Shell() {
         {hasLoadedScan && !scanError ? (
           <HealthBadge
             items={normalizedItems}
+          />
+        ) : null}
+        {hasLoadedScan && !scanError ? (
+          <RepairPanel
             corruptionCount={normalizedItems.length}
-            onRepairSuccess={refetch}
+            files={normalizedItems}
+            onSuccess={refetch}
           />
         ) : null}
         <CleanupPanel onSuccess={refetchTasks} />

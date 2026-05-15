@@ -105,6 +105,14 @@ export default function ConfirmDialog({
       aria-label={description}
       tabIndex={-1}
       onKeyDown={handleKeyDown}
+      style={{
+        position: 'fixed',
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -50%)',
+        zIndex: 1000,
+        maxWidth: '560px',
+      }}
     >
       <p>{description}</p>
       {type === 'unblock' && blockReason && <span>{blockReason}</span>}

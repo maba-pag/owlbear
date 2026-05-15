@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import { PButton, PText } from '@porsche-design-system/components-react'
-import RepairPanel from './RepairPanel'
 
 export interface ScanItem {
   code: string
@@ -10,12 +9,22 @@ export interface ScanItem {
 
 export interface HealthBadgeProps {
   items: ScanItem[]
-  corruptionCount?: number
-  onRepairSuccess?: () => void
 }
 
-export default function HealthBadge({ items, corruptionCount = 0, onRepairSuccess }: HealthBadgeProps) {
+function getAnchoredPopoverPosition(trigger: HTMLElement): { top: string; left: string } {
+  const rect = trigger.getBoundingClientRect()
+  const viewportPadding = 16
+  const top = Math.round(rect.bottom + 8)
+  const left = Math.round(Math.max(viewportPadding, rect.left))
+  return {
+    top: `${top}px`,
+    left: `${left}px`,
+  }
+}
+
+export default function HealthBadge({ items }: HealthBadgeProps) {
   const [isOpen, setIsOpen] = useState(false)
+  const [position, setPosition] = useState<{ top: string; left: string }>({ top: '0px', left: '0px' })
   const triggerRef = useRef<HTMLElement | null>(null)
   const popoverRef = useRef<HTMLDivElement | null>(null)
   const issueCount = items.length
@@ -30,6 +39,11 @@ export default function HealthBadge({ items, corruptionCount = 0, onRepairSucces
       return
     }
 
+    const trigger = triggerRef.current
+    if (trigger) {
+      setPosition(getAnchoredPopoverPosition(trigger))
+    }
+
     popoverRef.current?.focus()
 
     function handleDocumentKeyDown(event: KeyboardEvent) {
@@ -39,9 +53,20 @@ export default function HealthBadge({ items, corruptionCount = 0, onRepairSucces
       }
     }
 
+    function updatePosition() {
+      if (!triggerRef.current) {
+        return
+      }
+      setPosition(getAnchoredPopoverPosition(triggerRef.current))
+    }
+
     document.addEventListener('keydown', handleDocumentKeyDown)
+    window.addEventListener('resize', updatePosition)
+    window.addEventListener('scroll', updatePosition, true)
     return () => {
       document.removeEventListener('keydown', handleDocumentKeyDown)
+      window.removeEventListener('resize', updatePosition)
+      window.removeEventListener('scroll', updatePosition, true)
     }
   }, [isOpen])
 
@@ -70,8 +95,8 @@ export default function HealthBadge({ items, corruptionCount = 0, onRepairSucces
           tabIndex={-1}
           style={{
             position: 'fixed',
-            top: '72px',
-            right: '16px',
+            top: position.top,
+            left: position.left,
             zIndex: 1000,
             maxWidth: '420px',
           }}
@@ -95,9 +120,6 @@ export default function HealthBadge({ items, corruptionCount = 0, onRepairSucces
               ))}
             </ul>
           )}
-          {corruptionCount > 0 ? (
-            <RepairPanel corruptionCount={corruptionCount} onSuccess={onRepairSuccess} files={items} />
-          ) : null}
         </div>
       ) : null}
     </div>

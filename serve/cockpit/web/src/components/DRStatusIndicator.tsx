@@ -8,6 +8,17 @@ export interface DRStatusIndicatorProps {
   onItemClick: (id: string) => void
 }
 
+function getAnchoredPopoverPosition(trigger: HTMLElement): { top: string; left: string } {
+  const rect = trigger.getBoundingClientRect()
+  const viewportPadding = 16
+  const top = Math.round(rect.bottom + 8)
+  const left = Math.round(Math.max(viewportPadding, rect.left))
+  return {
+    top: `${top}px`,
+    left: `${left}px`,
+  }
+}
+
 function formatAge(created: string): string {
   const parsedCreatedAt = Date.parse(created)
   const createdAt = Number.isFinite(parsedCreatedAt) ? parsedCreatedAt : Date.now()
@@ -18,6 +29,7 @@ function formatAge(created: string): string {
 
 export default function DRStatusIndicator({ count, items, onItemClick }: DRStatusIndicatorProps) {
   const [isOpen, setIsOpen] = useState(false)
+  const [position, setPosition] = useState<{ top: string; left: string }>({ top: '0px', left: '0px' })
   const triggerRef = useRef<HTMLElement | null>(null)
   const popoverRef = useRef<HTMLDivElement | null>(null)
   const status = count > 0 ? 'attention' : 'dormant'
@@ -26,6 +38,11 @@ export default function DRStatusIndicator({ count, items, onItemClick }: DRStatu
     if (!isOpen) {
       triggerRef.current?.focus()
       return
+    }
+
+    const trigger = triggerRef.current
+    if (trigger) {
+      setPosition(getAnchoredPopoverPosition(trigger))
     }
 
     popoverRef.current?.focus()
@@ -37,9 +54,20 @@ export default function DRStatusIndicator({ count, items, onItemClick }: DRStatu
       }
     }
 
+    function updatePosition() {
+      if (!triggerRef.current) {
+        return
+      }
+      setPosition(getAnchoredPopoverPosition(triggerRef.current))
+    }
+
     document.addEventListener('keydown', handleDocumentKeyDown)
+    window.addEventListener('resize', updatePosition)
+    window.addEventListener('scroll', updatePosition, true)
     return () => {
       document.removeEventListener('keydown', handleDocumentKeyDown)
+      window.removeEventListener('resize', updatePosition)
+      window.removeEventListener('scroll', updatePosition, true)
     }
   }, [isOpen])
 
@@ -68,8 +96,8 @@ export default function DRStatusIndicator({ count, items, onItemClick }: DRStatu
           tabIndex={-1}
           style={{
             position: 'fixed',
-            top: '72px',
-            right: '16px',
+            top: position.top,
+            left: position.left,
             zIndex: 1000,
             maxWidth: '420px',
           }}

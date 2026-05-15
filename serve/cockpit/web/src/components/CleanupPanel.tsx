@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { PButton, PSpinner, PText } from '@porsche-design-system/components-react'
 import { useCleanupFlow } from '../hooks/useCleanupFlow'
 
@@ -15,6 +16,8 @@ function renderSkippedItems(skippedItems: Array<{ path: string; reason: string }
 }
 
 export default function CleanupPanel({ onSuccess }: CleanupPanelProps) {
+  const dialogRef = useRef<HTMLDivElement | null>(null)
+  const previousFocusRef = useRef<HTMLElement | null>(null)
   const {
     phase,
     results,
@@ -25,14 +28,72 @@ export default function CleanupPanel({ onSuccess }: CleanupPanelProps) {
     dismissResults,
   } = useCleanupFlow({ onSuccess })
 
+  useEffect(() => {
+    if (phase !== 'confirming') {
+      previousFocusRef.current?.focus()
+      return
+    }
+
+    previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    dialogRef.current?.focus()
+  }, [phase])
+
+  function getFocusableElements(): HTMLElement[] {
+    const root = dialogRef.current
+    if (!root) {
+      return []
+    }
+
+    return Array.from(
+      root.querySelectorAll<HTMLElement>(
+        'p-button:not([disabled]), button:not([disabled]), [href], input:not([disabled]), ' +
+          'select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ),
+    )
+  }
+
+  function handleConfirmDialogKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      cancelCleanup()
+      return
+    }
+
+    if (event.key !== 'Tab') {
+      return
+    }
+
+    const focusable = getFocusableElements()
+    if (focusable.length < 2) {
+      return
+    }
+
+    const first = focusable[0]
+    const last = focusable[focusable.length - 1]
+    const active = document.activeElement
+
+    if (event.shiftKey && active === first) {
+      event.preventDefault()
+      last.focus()
+      return
+    }
+
+    if (!event.shiftKey && active === last) {
+      event.preventDefault()
+      first.focus()
+    }
+  }
+
   if (phase === 'confirming') {
     return (
       <div
+        ref={dialogRef}
         data-testid="cleanup-confirm-dialog"
         role="dialog"
         aria-modal="true"
         aria-label="Confirm task cleanup"
         tabIndex={-1}
+        onKeyDown={handleConfirmDialogKeyDown}
         style={{
           position: 'fixed',
           top: '50%',

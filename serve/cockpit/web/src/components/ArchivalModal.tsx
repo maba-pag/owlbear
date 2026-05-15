@@ -252,7 +252,21 @@ export default function ArchivalModal({
   }
 
   return (
-    <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} onKeyDown={handleKeyDown}>
+    <div
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+      onKeyDown={handleKeyDown}
+      style={{
+        position: 'fixed',
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -50%)',
+        zIndex: 1000,
+        maxWidth: '560px',
+      }}
+    >
       <PHeading ref={setHeadingTagAttr} id={titleId} tag="h2">Archive task</PHeading>
 
       <label>
