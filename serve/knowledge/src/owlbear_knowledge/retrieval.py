@@ -101,7 +101,9 @@ class GraphAugmentedRetriever:
         """
         embedding = self._embed(query)
         raw_chunks: list[tuple[str, float]] = self._vector_store.search_similar(
-            embedding
+            embedding,
+            top_k=top_k,
+            scopes=scopes,
         )
         chunks = raw_chunks[:top_k]
 
@@ -234,7 +236,8 @@ def query_for_context(
 
         content_parts: list[str] = []
         for chunk_id, _ in qualified:
-            doc = graph_store.get_document(chunk_id)
+            doc_id = graph_store.get_document_id_for_chunk(chunk_id) or chunk_id
+            doc = graph_store.get_document(doc_id)
             if doc is not None:
                 content_parts.append(f"## {doc.title}\n{doc.content}")
 
