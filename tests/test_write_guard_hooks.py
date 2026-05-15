@@ -158,6 +158,26 @@ class TestDenySrcWrites:
         }
         assert _is_allowed(_invoke(deny_src_module, payload))
 
+    def test_allows_e2e_file(self, deny_src_module: types.ModuleType) -> None:
+        payload = {
+            "tool_name": "create_file",
+            "tool_input": {
+                "filePath": "serve/cockpit/web/e2e/filter-controls.spec.ts"
+            },
+        }
+        assert _is_allowed(_invoke(deny_src_module, payload))
+
+    def test_allows_apply_patch_in_e2e(
+        self, deny_src_module: types.ModuleType
+    ) -> None:
+        payload = {
+            "tool_name": "apply_patch",
+            "tool_input": {
+                "input": "*** Begin Patch\n*** Update File: serve/cockpit/web/e2e/hook.spec.ts\n@@\n-old\n+new\n*** End Patch"
+            },
+        }
+        assert _is_allowed(_invoke(deny_src_module, payload))
+
     def test_denies_apply_patch_in_source(
         self, deny_src_module: types.ModuleType
     ) -> None:
