@@ -2215,3 +2215,126 @@ class TestFromAC_ReplaceOnChangeFailureCleanup:
             f"edges table must be empty after failed late-stage replace-on-change, "
             f"found {edge_count} row(s)"
         )
+
+    @pytest.mark.asyncio
+    async def test_replace_on_change_v2_chunk_ids_specifically_deleted_from_vector_store(
+        self,
+        conn: sqlite3.Connection,
+        store_components: dict,
+        mock_vs: MagicMock,
+    ) -> None:
+        """_cleanup_failed_ingest must call delete_embedding for each v2 replacement
+        chunk ID specifically, not just any chunk (e.g., v1 cleanup from
+        delete_document_data(existing_id) also calls delete_embedding).
+
+        Reviewer gap (cycle 12, Finding 1): the sibling test asserts
+        call_count >= 1 after resetting the mock, but v1 cleanup (triggered by
+        delete_document_data(existing_id) inside the replace-on-change branch)
+        also calls delete_embedding — so a regression that skips v2 vector cleanup
+        still satisfies call_count >= 1.
+
+        This test captures v2 chunk IDs via a store_chunks spy and asserts that
+        each appears in delete_embedding's call_args_list, falsifying any regression
+        in replacement-vector cleanup.
+
+        AC-8 contract: 'persistence contains no document, chunk, vector payload,
+        entity, or edge rows for the replacement doc_id'.
+        """
+        self._seed_url_list_source(conn)
+        pipeline: IngestPipeline = store_components["pipeline"]
+
+        intake_v1 = IntakeResult(
+            content="Version 1 content for per-chunk-id vector cleanup proof",
+            source="https://example.test/doc",
+            metadata={"source_type": "url_list"},
+        )
+        result_v1 = await pipeline.ingest(intake_v1, scope="team-a", source_id="src-a")
+        assert result_v1.status == "ok", (
+            f"First ingest must succeed for replace-on-change to fire on v2, "
+            f"got status={result_v1.status!r}"
+        )
+
+        # Spy on store_chunks to capture v2 replacement chunk IDs.
+        # v1 ingest already completed, so the spy only captures v2 calls.
+        v2_chunk_ids: list[str] = []
+        real_store_chunks = store_components["doc_store"].store_chunks
+
+        def _capturing_store_chunks(
+            document_id: str, chunks: list[object], **kwargs: object
+        ) -> list[str]:
+            ids = real_store_chunks(document_id, chunks, **kwargs)
+            v2_chunk_ids.extend(ids)
+            return ids
+
+        intake_v2 = IntakeResult(
+            content="Version 2 content — triggers replace-on-change via same URL",
+            source="https://example.test/doc",  # same URL → replace-on-change branch
+            metadata={"source_type": "url_list"},
+        )
+        # Inject failure at store_extractions AFTER v2 chunks + embeddings are committed.
+        with (
+            patch.object(
+                store_components["doc_store"],
+                "store_chunks",
+                side_effect=_capturing_store_chunks,
+            ),
+            patch.object(
+                store_components["doc_store"],
+                "store_extractions",
+                side_effect=RuntimeError(
+                    "forced failure after v2 chunks+embeddings committed"
+                ),
+            ),
+        ):
+            result_v2 = await pipeline.ingest(
+                intake_v2, scope="team-a", source_id="src-a"
+            )
+
+        assert result_v2.status == "failed", (
+            f"ingest() must return status='failed' when store_extractions raises, "
+            f"got {result_v2.status!r}"
+        )
+
+        # Non-vacuous precondition: spy must have captured at least one v2 chunk ID.
+        assert v2_chunk_ids, (
+            "store_chunks spy captured no v2 chunk IDs — replace-on-change branch "
+            "did not call store_chunks for v2, so per-ID assertion below is vacuous"
+        )
+
+        # Per-chunk-ID falsification: each v2 replacement chunk ID must appear in
+        # delete_embedding's call_args_list.  This proves _cleanup_failed_ingest
+        # cleaned up v2 replacement vector payloads specifically, not just v1 chunks.
+        called_ids = {
+            (c.args[0] if c.args else c.kwargs.get("entity_or_doc_id"))
+            for c in mock_vs.delete_embedding.call_args_list
+        }
+        for chunk_id in v2_chunk_ids:
+            assert chunk_id in called_ids, (
+                f"delete_embedding must be called for v2 replacement "
+                f"chunk_id={chunk_id!r} by _cleanup_failed_ingest, but was only "
+                f"called for: {called_ids!r}. A regression that skips v2 vector "
+                "cleanup passes 'call_count >= 1' because v1 cleanup also calls "
+                "delete_embedding — this per-ID check prevents that."
+            )
+
+        # Existing AC-8 contract: no relational rows survive after failed replace-on-change.
+        doc_count = conn.execute("SELECT count(*) FROM documents").fetchone()[0]
+        assert doc_count == 0, (
+            f"documents table must be empty after failed replace-on-change, "
+            f"found {doc_count} row(s). AC-8 contract."
+        )
+        chunk_count = conn.execute("SELECT count(*) FROM chunks").fetchone()[0]
+        assert chunk_count == 0, (
+            f"chunks table must be empty after failed replace-on-change, "
+            f"found {chunk_count} row(s). AC-8 contract."
+        )
+        entity_count = conn.execute("SELECT count(*) FROM entities").fetchone()[0]
+        assert entity_count == 0, (
+            f"entities table must be empty after failed replace-on-change, "
+            f"found {entity_count} row(s). AC-8 contract."
+        )
+        edge_count = conn.execute("SELECT count(*) FROM edges").fetchone()[0]
+        assert edge_count == 0, (
+            f"edges table must be empty after failed replace-on-change, "
+            f"found {edge_count} row(s). AC-8 contract."
+        )
