@@ -220,12 +220,12 @@ test.describe('AC-1 | Filter workflow via PDS control selectors', () => {
     await expect(page.locator('[data-testid="task-card"][data-id="2"]')).not.toBeVisible({ timeout: 2_000 })
   })
 
-  test('blocked toggle activates via p-switch or p-checkbox', async ({ page }) => {
+  test('blocked toggle activates via p-checkbox[name="blocked-filter"]', async ({ page }) => {
     await loadBoard(page)
     await openFilterPanel(page)
-    // Post-remediation: p-switch or p-checkbox for the blocked filter.
-    // Currently: native <input type="checkbox" role="switch"> -- FAILS.
-    const blockedControl = page.locator('#filter-panel').locator('p-switch, p-checkbox')
+    // AC-1 exact contract: must be p-checkbox with name="blocked-filter", not p-switch.
+    // Fails if control type drifts to p-switch or name attribute changes.
+    const blockedControl = page.locator('#filter-panel p-checkbox[name="blocked-filter"]')
     await expect(blockedControl).toBeVisible({ timeout: 2_000 })
     await blockedControl.click()
   })
@@ -233,8 +233,8 @@ test.describe('AC-1 | Filter workflow via PDS control selectors', () => {
   test('active filter badge count increments after applying blocked filter via PDS control', async ({ page }) => {
     await loadBoard(page)
     await openFilterPanel(page)
-    // Currently: p-switch absent -- click() rejects -- FAILS before badge check.
-    await page.locator('#filter-panel').locator('p-switch, p-checkbox').click()
+    // AC-1 exact contract: click p-checkbox[name="blocked-filter"]; fails if name/type drifts.
+    await page.locator('#filter-panel p-checkbox[name="blocked-filter"]').click()
     await expect(page.locator('[data-testid="filter-toggle"]')).toContainText('(1)')
   })
 
@@ -321,9 +321,10 @@ test.describe('AC-1 | Filter workflow via PDS control selectors', () => {
   test('blocked filter: task 2 (blocked) remains visible while tasks 1 and 3 are hidden', async ({ page }) => {
     // Full surviving-set: badge test only checks control + count. Prove the correct card set:
     // only task 2 (blocked=true) survives; tasks 1 and 3 (blocked=false) are hidden.
+    // AC-1 exact contract: click p-checkbox[name="blocked-filter"]; fails if name/type drifts.
     await loadBoard(page)
     await openFilterPanel(page)
-    await page.locator('#filter-panel').locator('p-switch, p-checkbox').click()
+    await page.locator('#filter-panel p-checkbox[name="blocked-filter"]').click()
     await expect(page.locator('[data-testid="task-card"][data-id="2"]')).toBeVisible({ timeout: 2_000 })
     await expect(page.locator('[data-testid="task-card"][data-id="1"]')).not.toBeVisible({ timeout: 2_000 })
     await expect(page.locator('[data-testid="task-card"][data-id="3"]')).not.toBeVisible({ timeout: 2_000 })
@@ -384,11 +385,11 @@ test.describe('AC-2 | FilterPanel PDS compliance assertions', () => {
     await expect(page.locator('#filter-panel p-input-search[name="search-filter"]')).toBeVisible({ timeout: 2_000 })
   })
 
-  test('(b) blocked toggle renders p-switch or p-checkbox, not native checkbox', async ({ page }) => {
-    // §5 "Binary filter/setting" row: required p-switch or p-checkbox.
-    // Currently: <input type="checkbox" role="switch"> -- FAILS.
+  test('(b) blocked toggle renders p-checkbox[name="blocked-filter"], not p-switch or native checkbox', async ({ page }) => {
+    // AC-1 exact contract: must be p-checkbox with name="blocked-filter".
+    // Fails if control type changes to p-switch or name attribute drifts.
     await expect(
-      page.locator('#filter-panel').locator('p-switch, p-checkbox'),
+      page.locator('#filter-panel p-checkbox[name="blocked-filter"]'),
     ).toBeVisible({ timeout: 2_000 })
   })
 
