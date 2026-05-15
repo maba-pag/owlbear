@@ -63,7 +63,10 @@ def validate_config_path_containment(path_value: str) -> None:
             user_message="Configured path must be a non-empty board-relative subdirectory.",
         )
 
-    if PurePosixPath(path_value).is_absolute() or PureWindowsPath(path_value).is_absolute():
+    if (
+        PurePosixPath(path_value).is_absolute()
+        or PureWindowsPath(path_value).is_absolute()
+    ):
         raise ConfigError(
             code="ERR_PATH_ESCAPE",
             user_message=(
@@ -86,9 +89,6 @@ def validate_config_path_containment(path_value: str) -> None:
 
 def move_to_quarantine(task_path: Path, kanban_dir: Path) -> Path:
     """Move *task_path* to ``quarantine/``, creating the dir if absent."""
-    if task_path.name.startswith(".") and task_path.name.endswith(".lock"):
-        return task_path
-
     validate_path_containment(kanban_dir, task_path)
 
     quarantine_dir = kanban_dir / "quarantine"

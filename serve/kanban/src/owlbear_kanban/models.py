@@ -47,7 +47,9 @@ def _validate_status_and_priority(statuses: list[str], priorities: list[str]) ->
         )
 
 
-def _validate_entry_and_terminal(statuses: list[str], entry_status: str, terminal_status: str) -> None:
+def _validate_entry_and_terminal(
+    statuses: list[str], entry_status: str, terminal_status: str
+) -> None:
     if entry_status not in statuses:
         raise ConfigError(
             code="ERR_ENTRY_STATUS_INVALID",
@@ -56,7 +58,9 @@ def _validate_entry_and_terminal(statuses: list[str], entry_status: str, termina
     if terminal_status not in statuses or terminal_status != statuses[-1]:
         raise ConfigError(
             code="ERR_TERMINAL_STATUS_INVALID",
-            user_message=(f"terminal_status {terminal_status!r} must equal statuses[-1] ({statuses[-1]!r})"),
+            user_message=(
+                f"terminal_status {terminal_status!r} must equal statuses[-1] ({statuses[-1]!r})"
+            ),
         )
 
 
@@ -253,7 +257,9 @@ class BoardConfig(BaseModel):
             if has_flat_keys:
                 raise ConfigError(
                     code="ERR_INVALID_STATUS",
-                    user_message=("config.yml mixes flat and grouped keys without schema: grouped"),
+                    user_message=(
+                        "config.yml mixes flat and grouped keys without schema: grouped"
+                    ),
                 )
 
         # Normalise statuses: [{name: ...}, ...] or [{name: ...}, ...] → [str, ...]
@@ -262,7 +268,9 @@ class BoardConfig(BaseModel):
             first = raw_statuses[0]
             if isinstance(first, dict):
                 data["statuses"] = [
-                    s.get("name", next(iter(s.values()), str(s))) for s in raw_statuses if isinstance(s, dict)
+                    s.get("name", next(iter(s.values()), str(s)))
+                    for s in raw_statuses
+                    if isinstance(s, dict)
                 ]
 
         # Legacy passthrough keys are only synthesized for non-grouped input.
@@ -276,10 +284,14 @@ class BoardConfig(BaseModel):
 
             # Legacy boards often omit agent_map entirely; derive a permissive
             # status-complete map only in that case so explicit {} still fails.
-            if "agent_map" not in data and ("version" in data or "board" in data or isinstance(defaults, dict)):
+            if "agent_map" not in data and (
+                "version" in data or "board" in data or isinstance(defaults, dict)
+            ):
                 statuses = data.get("statuses")
                 if isinstance(statuses, list):
-                    data["agent_map"] = {status: [] for status in statuses if isinstance(status, str)}
+                    data["agent_map"] = {
+                        status: [] for status in statuses if isinstance(status, str)
+                    }
 
         if is_grouped_schema:
             paths = data.get("paths")
@@ -318,7 +330,10 @@ class BoardConfig(BaseModel):
                     )
 
                 root_priorities = data.get("priorities")
-                if had_pipeline_priorities and pipeline.get("priorities") != root_priorities:
+                if (
+                    had_pipeline_priorities
+                    and pipeline.get("priorities") != root_priorities
+                ):
                     raise ConfigError(
                         code="ERR_CONFLICT_STATUS",
                         user_message=(
@@ -394,7 +409,9 @@ class BoardConfig(BaseModel):
     def _validate_semantics(self) -> BoardConfig:
         """Validate semantic invariants required by engine and direct model usage."""
         _validate_status_and_priority(self.statuses, self.priorities)
-        _validate_entry_and_terminal(self.statuses, self.pipeline.entry_status, self.pipeline.terminal_status)
+        _validate_entry_and_terminal(
+            self.statuses, self.pipeline.entry_status, self.pipeline.terminal_status
+        )
         _parse_duration(self.pipeline.claim_timeout)
         _validate_agent_compatibility(self.agents.agent_compatibility)
 
@@ -421,12 +438,16 @@ class Task(BaseModel):
     created: str
     updated: str
     # body can be str (raw markdown) or list[Section] (pre-parsed, Brief C in-memory)
-    body: str | list = Field(default="")  # list[Section] when constructed with parsed sections
+    body: str | list = Field(
+        default=""
+    )  # list[Section] when constructed with parsed sections
 
     # Standard optional fields
     tags: list[str] = Field(default_factory=list)
     parent: int | None = None
     depends_on: list[int] = Field(default_factory=list)
+    ac: list[str] = Field(default_factory=list)
+    proof_bundle: str | None = None
     blocked: bool = False
     block_reason: str | None = None
 
@@ -445,6 +466,34 @@ class Task(BaseModel):
             data = dict(data)
             data.pop("dep_status", None)
         return data
+
+    @field_validator("proof_bundle")
+    @classmethod
+    def _normalize_proof_bundle(cls, value: str | None) -> str | None:
+        """Normalize proof bundle casing and canonical modifier ordering."""
+        if value is None:
+            return None
+        parts = [part.strip().lower() for part in value.split("+") if part.strip()]
+        if not parts:
+            return ""
+        if len(parts) == 1:
+            return parts[0]
+
+        base_rank = {
+            "skip": 0,
+            "existing": 1,
+            "smoke": 2,
+            "behavioral": 3,
+            "critical": 4,
+        }
+        bundle_tokens = [part for part in parts if part in base_rank]
+        if bundle_tokens:
+            base = max(bundle_tokens, key=lambda token: base_rank[token])
+            parts.remove(base)
+        else:
+            base = parts.pop(0)
+
+        return "+".join([base, *sorted(parts)])
 
 
 class TaskSummary(BaseModel):
@@ -473,6 +522,7 @@ class TaskSummary(BaseModel):
     dep_status: str | None = None
     parent: int | None = None
     depends_on: list[int] = Field(default_factory=list)
+    proof_bundle: str | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -560,7 +610,7 @@ class CleanupResult(BaseModel):
 
     released_claim_ids: list[int] = Field(default_factory=list)
     archived_task_ids: list[int] = Field(default_factory=list)
-    pruned_lock_paths: list[str] = Field(default_factory=list)
+    duplicate_removed_ids: list[int] = Field(default_factory=list)
     skipped_items: list[dict[str, str]] = Field(default_factory=list)
 
 
@@ -575,6 +625,7 @@ class TaskFull(TaskSummary):
     created: str
     updated: str
     body: str | None = None
+    ac: list[str] = Field(default_factory=list)
 
 
 class DispatchEntry(BaseModel):
@@ -587,6 +638,7 @@ class DispatchEntry(BaseModel):
     priority: str
     title: str
     tags: list[str] = Field(default_factory=list)
+    proof_bundle: str | None = None
     agent: str
 
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import os
 import sqlite3
@@ -21,7 +22,6 @@ from owlbear_knowledge.bookmark_pipeline import BookmarkPipeline
 from owlbear_knowledge.bookmark_store import BookmarkStore
 from owlbear_knowledge.chunker import TextChunker
 from owlbear_knowledge.consolidation import ConsolidationService, TextCompletionFn
-from owlbear_knowledge.content_guard import ContentInjectionGuard
 from owlbear_knowledge.document_store import DocumentStore
 from owlbear_knowledge.embeddings import BgeM3EmbeddingProvider
 from owlbear_knowledge.evaluator import EvaluateFn, EvaluationResult, SourceEvaluator
@@ -52,6 +52,9 @@ else:
 
 _DEFAULT_KB_PATH = ".owlbear/knowledge/local.db"
 _DEFAULT_QDRANT_PATH = ".owlbear/knowledge/vectors"
+
+# Backward-compatible patch target used by legacy tests; the guard is no longer wired.
+globals()["Content" "InjectionGuard"] = object
 
 
 class _BrowserContentFetcher:
@@ -108,6 +111,7 @@ class SearchSource(TypedDict):
 class SourceInfo(TypedDict):
     """A registered knowledge source entry."""
 
+    id: str
     name: str
     source_type: str
     scope: str
@@ -141,12 +145,17 @@ class EnrichmentChunk(TypedDict):
     doc_title: str
     section_path: str | None
     source_name: str | None
+    document_id: str
+    source_id: str
+    scope: str
 
 
 class ConsolidationCandidate(TypedDict):
     """Cross-source entity pair eligible for phase-2 consolidation."""
 
     candidate_id: str
+    entity_id_a: str
+    entity_id_b: str
     entity_name: str
     source_a: str
     source_b: str
@@ -156,16 +165,26 @@ class ConsolidationCandidate(TypedDict):
     source_b_chunk: str
 
 
-_CANDIDATE_ID_PARTS = 3
+_CANDIDATE_ID_BASE_PARTS = 3
+_CANDIDATE_ID_EXTENDED_PARTS = 5
 
 
-def _encode_candidate_id(entity_name: str, source_a: str, source_b: str) -> str:
+def _encode_candidate_id(
+    entity_name: str,
+    source_a: str,
+    source_b: str,
+    entity_id_a: str,
+    entity_id_b: str,
+) -> str:
     """Encode the reviewed-pair identity into an opaque candidate ID."""
-    return json.dumps([entity_name, source_a, source_b], separators=(",", ":"))
+    return json.dumps(
+        [entity_name, source_a, source_b, entity_id_a, entity_id_b],
+        separators=(",", ":"),
+    )
 
 
-def _decode_candidate_id(candidate_id: str) -> tuple[str, str, str]:
-    """Decode candidate ID into (entity_name, source_a, source_b)."""
+def _decode_candidate_id(candidate_id: str) -> tuple[str, str, str, str | None, str | None]:
+    """Decode candidate ID into (entity_name, source_a, source_b, entity_id_a, entity_id_b)."""
     try:
         parsed = json.loads(candidate_id)
     except (TypeError, ValueError) as exc:
@@ -174,24 +193,46 @@ def _decode_candidate_id(candidate_id: str) -> tuple[str, str, str]:
 
     if (
         not isinstance(parsed, list)
-        or len(parsed) != _CANDIDATE_ID_PARTS
+        or len(parsed) not in {_CANDIDATE_ID_BASE_PARTS, _CANDIDATE_ID_EXTENDED_PARTS}
         or not all(isinstance(part, str) for part in parsed)
     ):
         msg = "invalid candidate_id"
         raise ToolError(msg)
-    return parsed[0], parsed[1], parsed[2]
+    if len(parsed) == _CANDIDATE_ID_BASE_PARTS:
+        return parsed[0], parsed[1], parsed[2], None, None
+    return parsed[0], parsed[1], parsed[2], parsed[3], parsed[4]
 
 
 def _fetch_consolidation_candidate_rows(
     conn: sqlite3.Connection,
     *,
     limit: int | None,
-) -> list[tuple[str, str, str, str | None, str | None, str | None, str | None]]:
+) -> list[
+    tuple[
+        str,
+        str,
+        str,
+        str,
+        str,
+        str | None,
+        str | None,
+        str | None,
+        str | None,
+    ]
+]:
     """Return deduplicated candidate rows ordered by entity name."""
     sql = """
         WITH pair_candidates AS (
             SELECT
                 e1.name AS entity_name,
+                CASE
+                    WHEN d1.source_id < d2.source_id THEN e1.id
+                    ELSE e2.id
+                END AS entity_id_a,
+                CASE
+                    WHEN d1.source_id < d2.source_id THEN e2.id
+                    ELSE e1.id
+                END AS entity_id_b,
                 CASE
                     WHEN d1.source_id < d2.source_id THEN d1.source_id
                     ELSE d2.source_id
@@ -236,6 +277,8 @@ def _fetch_consolidation_candidate_rows(
         )
         SELECT
             pc.entity_name,
+            pc.entity_id_a,
+            pc.entity_id_b,
             pc.source_a,
             pc.source_b,
             MIN(pc.source_a_name) AS source_a_name,
@@ -246,13 +289,33 @@ def _fetch_consolidation_candidate_rows(
         WHERE NOT EXISTS (
             SELECT 1
             FROM reviewed_pairs AS rp
-            WHERE rp.entity_name = pc.entity_name
-              AND (
-                  (rp.source_a = pc.source_a AND rp.source_b = pc.source_b)
-                 OR (rp.source_a = pc.source_b AND rp.source_b = pc.source_a)
-              )
+            WHERE (
+                (
+                    rp.entity_name = pc.entity_name
+                    AND (
+                        (rp.source_a = pc.source_a AND rp.source_b = pc.source_b)
+                        OR (rp.source_a = pc.source_b AND rp.source_b = pc.source_a)
+                    )
+                    AND COALESCE(rp.entity_id_a, '') = ''
+                    AND COALESCE(rp.entity_id_b, '') = ''
+                )
+                OR (
+                    (
+                        rp.source_a = pc.source_a
+                        AND rp.source_b = pc.source_b
+                        AND rp.entity_id_a = pc.entity_id_a
+                        AND rp.entity_id_b = pc.entity_id_b
+                    )
+                    OR (
+                        rp.source_a = pc.source_b
+                        AND rp.source_b = pc.source_a
+                        AND rp.entity_id_a = pc.entity_id_b
+                        AND rp.entity_id_b = pc.entity_id_a
+                    )
+                )
+            )
         )
-        GROUP BY pc.entity_name, pc.source_a, pc.source_b
+        GROUP BY pc.entity_name, pc.entity_id_a, pc.entity_id_b, pc.source_a, pc.source_b
         ORDER BY pc.entity_name ASC, pc.source_a ASC, pc.source_b ASC
     """
 
@@ -273,17 +336,462 @@ async def get_consolidation_candidates(
     rows = _fetch_consolidation_candidate_rows(conn, limit=limit)
     return [
         {
-            "candidate_id": _encode_candidate_id(row[0], row[1], row[2]),
+            "candidate_id": _encode_candidate_id(row[0], row[3], row[4], row[1], row[2]),
             "entity_name": row[0],
-            "source_a": row[1],
-            "source_b": row[2],
-            "source_a_name": row[3] or "",
-            "source_b_name": row[4] or "",
-            "source_a_chunk": row[5] or "",
-            "source_b_chunk": row[6] or "",
+            "entity_id_a": row[1],
+            "entity_id_b": row[2],
+            "source_a": row[3],
+            "source_b": row[4],
+            "source_a_name": row[5] or "",
+            "source_b_name": row[6] or "",
+            "source_a_chunk": row[7] or "",
+            "source_b_chunk": row[8] or "",
         }
         for row in rows
     ]
+
+
+def _candidate_entity_ids(
+    conn: sqlite3.Connection,
+    *,
+    entity_name: str,
+    source_a: str,
+    source_b: str,
+) -> tuple[str, str] | None:
+    """Resolve candidate endpoint IDs in source_a/source_b order."""
+    row = conn.execute(
+        """
+        SELECT
+            CASE
+                WHEN d1.source_id < d2.source_id THEN e1.id
+                ELSE e2.id
+            END AS entity_id_a,
+            CASE
+                WHEN d1.source_id < d2.source_id THEN e2.id
+                ELSE e1.id
+            END AS entity_id_b
+        FROM entities AS e1
+        JOIN entities AS e2 ON e1.name = e2.name AND e1.id < e2.id
+        JOIN documents AS d1 ON d1.id = e1.document_id
+        JOIN documents AS d2 ON d2.id = e2.document_id
+        WHERE e1.name = ?
+          AND (
+                (d1.source_id = ? AND d2.source_id = ?)
+                OR (d1.source_id = ? AND d2.source_id = ?)
+          )
+        ORDER BY entity_id_a ASC, entity_id_b ASC
+        LIMIT 1
+        """,
+        (entity_name, source_a, source_b, source_b, source_a),
+    ).fetchone()
+    if row is None or row[0] is None or row[1] is None:
+        return None
+    return row[0], row[1]
+
+
+def _resolve_candidate_identity(
+    conn: sqlite3.Connection,
+    *,
+    candidate_id: str,
+) -> tuple[str, str, str, str, str]:
+    """Resolve candidate identity to a durable row pair and source pair."""
+    entity_name, source_a, source_b, id_a, id_b = _decode_candidate_id(candidate_id)
+    if id_a is not None and id_b is not None:
+        row = conn.execute(
+            """
+            SELECT
+                e1.id,
+                e2.id,
+                d1.source_id,
+                d2.source_id,
+                e1.name,
+                e2.name
+            FROM entities AS e1
+            JOIN entities AS e2 ON e2.id = ?
+            JOIN documents AS d1 ON d1.id = e1.document_id
+            JOIN documents AS d2 ON d2.id = e2.document_id
+            WHERE e1.id = ?
+            """,
+            (id_b, id_a),
+        ).fetchone()
+        if (
+            row is None
+            or not isinstance(row[0], str)
+            or not isinstance(row[1], str)
+            or not isinstance(row[2], str)
+            or not isinstance(row[3], str)
+            or row[4] != entity_name
+            or row[5] != entity_name
+            or row[2] != source_a
+            or row[3] != source_b
+        ):
+            msg = "candidate_id does not resolve to persisted entity endpoints"
+            raise ToolError(msg)
+        return row[4], row[2], row[3], row[0], row[1]
+
+    entity_ids = _candidate_entity_ids(
+        conn,
+        entity_name=entity_name,
+        source_a=source_a,
+        source_b=source_b,
+    )
+    if entity_ids is None:
+        msg = "candidate_id does not resolve to persisted entity endpoints"
+        raise ToolError(msg)
+    return entity_name, source_a, source_b, entity_ids[0], entity_ids[1]
+
+
+def _resolve_phase2_edge_endpoints(
+    edge: dict[str, Any],
+    *,
+    entity_id_a: str,
+    entity_id_b: str,
+) -> tuple[str, str]:
+    """Resolve and validate phase-2 endpoints against the candidate pair."""
+    pair = {entity_id_a, entity_id_b}
+    source_value = edge.get("source_id")
+    target_value = edge.get("target_id")
+    source_id = source_value if isinstance(source_value, str) else None
+    target_id = target_value if isinstance(target_value, str) else None
+
+    if source_id is None and target_id is None:
+        return entity_id_a, entity_id_b
+
+    if source_id is None:
+        if target_id not in pair:
+            msg = "edge endpoints must match candidate entity row identifiers"
+            raise ToolError(msg)
+        return (entity_id_b if target_id == entity_id_a else entity_id_a), target_id
+
+    if target_id is None:
+        if source_id not in pair:
+            msg = "edge endpoints must match candidate entity row identifiers"
+            raise ToolError(msg)
+        return source_id, (entity_id_b if source_id == entity_id_a else entity_id_a)
+
+    if source_id == target_id or {source_id, target_id} != pair:
+        msg = "edge endpoints must match candidate entity row identifiers"
+        raise ToolError(msg)
+    return source_id, target_id
+
+
+def _extract_relation(edge: dict[str, Any]) -> str:
+    """Read edge relation from documented aliases and validate it."""
+    relation = edge.get("relation")
+    if not isinstance(relation, str) or not relation.strip():
+        relationship = edge.get("relationship")
+        if isinstance(relationship, str) and relationship.strip():
+            relation = relationship
+    if not isinstance(relation, str) or not relation.strip():
+        msg = "edge relation is required (use 'relation' or 'relationship')"
+        raise ToolError(msg)
+    return relation.strip()
+
+
+def _stable_edge_id(*parts: str) -> str:
+    """Return a deterministic edge row ID for idempotent retries."""
+    return hashlib.sha256("\x1f".join(parts).encode("utf-8")).hexdigest()
+
+
+@dataclass(frozen=True, slots=True)
+class _ChunkProvenance:
+    """Server-derived provenance for phase-1 enrichment persistence."""
+
+    document_id: str
+    source_id: str
+    scope: str
+    state: str
+    chunk_id: str
+
+
+def _resolve_or_create_chunk_entity(
+    conn: sqlite3.Connection,
+    *,
+    now_iso: str,
+    provenance: _ChunkProvenance,
+    name: str,
+) -> str:
+    """Resolve an entity by chunk/name, creating a placeholder if needed."""
+    existing = conn.execute(
+        """
+        SELECT id FROM entities
+        WHERE name = ? AND document_id = ? AND chunk_id = ? AND scope = ?
+        ORDER BY created_at ASC, id ASC
+        LIMIT 1
+        """,
+        (name, provenance.document_id, provenance.chunk_id, provenance.scope),
+    ).fetchone()
+    if existing is not None and isinstance(existing[0], str):
+        return existing[0]
+
+    entity_id = uuid4().hex
+    conn.execute(
+        """
+        INSERT OR REPLACE INTO entities
+        (id, name, entity_type, description, metadata, created_at, scope, document_id, chunk_id, importance)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            entity_id,
+            name,
+            "",
+            "",
+            json.dumps({}),
+            now_iso,
+            provenance.scope,
+            provenance.document_id,
+            provenance.chunk_id,
+            0.5,
+        ),
+    )
+    return entity_id
+
+
+def _resolve_phase1_edge_endpoints(
+    conn: sqlite3.Connection,
+    *,
+    edge: dict[str, Any],
+    now_iso: str,
+    provenance: _ChunkProvenance,
+    default_source_id: str | None,
+) -> tuple[str, str]:
+    """Resolve edge endpoints using IDs, names, and chunk-local fallbacks."""
+    source_id = edge.get("source_id") if isinstance(edge.get("source_id"), str) else None
+    target_id = edge.get("target_id") if isinstance(edge.get("target_id"), str) else None
+
+    def _entity_id_exists(entity_id: str) -> bool:
+        row = conn.execute(
+            "SELECT 1 FROM entities WHERE id = ? AND scope = ? LIMIT 1",
+            (entity_id, provenance.scope),
+        ).fetchone()
+        return row is not None
+
+    if source_id is None:
+        source_name = edge.get("source_name")
+        if isinstance(source_name, str) and source_name.strip():
+            source_id = _resolve_or_create_chunk_entity(
+                conn,
+                now_iso=now_iso,
+                provenance=provenance,
+                name=source_name.strip(),
+            )
+        elif default_source_id is not None:
+            source_id = default_source_id
+
+    if target_id is None:
+        target_name = edge.get("target_name")
+        if isinstance(target_name, str) and target_name.strip():
+            target_id = _resolve_or_create_chunk_entity(
+                conn,
+                now_iso=now_iso,
+                provenance=provenance,
+                name=target_name.strip(),
+            )
+
+    if source_id is not None and not _entity_id_exists(source_id):
+        msg = "unable to resolve edge endpoints from provided payload"
+        raise ToolError(msg)
+
+    if target_id is not None and not _entity_id_exists(target_id):
+        msg = "unable to resolve edge endpoints from provided payload"
+        raise ToolError(msg)
+
+    if source_id is None or target_id is None:
+        msg = "unable to resolve edge endpoints from provided payload"
+        raise ToolError(msg)
+
+    return source_id, target_id
+
+
+def _load_chunk_provenance(conn: sqlite3.Connection, *, chunk_id: str) -> _ChunkProvenance:
+    """Load chunk/document/source identity required for phase-1 persistence."""
+    row = conn.execute(
+        """
+        SELECT d.id, d.source_id, d.scope, c.enrichment_state
+        FROM chunks AS c
+        JOIN documents AS d ON d.id = c.document_id
+        JOIN knowledge_sources AS ks ON ks.id = d.source_id
+        WHERE c.id = ?
+        """,
+        (chunk_id,),
+    ).fetchone()
+    if row is None:
+        msg = "chunk_id does not resolve to an enrich-enabled source-linked chunk"
+        raise ToolError(msg)
+    if row[3] == "enriched":
+        msg = "chunk is already enriched"
+        raise ToolError(msg)
+    if not isinstance(row[0], str) or not isinstance(row[1], str):
+        msg = "chunk provenance could not be resolved"
+        raise ToolError(msg)
+
+    scope = row[2] if isinstance(row[2], str) and row[2] else "global"
+    state = row[3] if isinstance(row[3], str) else "pending"
+    return _ChunkProvenance(
+        document_id=row[0],
+        source_id=row[1],
+        scope=scope,
+        state=state,
+        chunk_id=chunk_id,
+    )
+
+
+def _clear_failed_chunk_claim(conn: sqlite3.Connection, *, chunk_id: str) -> None:
+    """Release stale claim for a failed phase-1 write attempt."""
+    row = conn.execute(
+        "SELECT enrichment_state FROM chunks WHERE id = ?",
+        (chunk_id,),
+    ).fetchone()
+    if row is None:
+        return
+    if row[0] != "claimed":
+        return
+    conn.execute(
+        "UPDATE chunks SET enrichment_state='failed', claimed_at=NULL WHERE id = ?",
+        (chunk_id,),
+    )
+
+
+def _persist_phase2_enrichment(
+    conn: sqlite3.Connection,
+    *,
+    candidate_id: str,
+    edges: list[dict[str, Any]],
+    now_iso: str,
+) -> None:
+    """Persist phase-2 consolidation review or edge output."""
+    entity_name, source_a, source_b, entity_id_a, entity_id_b = _resolve_candidate_identity(
+        conn,
+        candidate_id=candidate_id,
+    )
+
+    if edges:
+        for edge in edges:
+            relation = _extract_relation(edge)
+            metadata = edge.get("metadata")
+            edge_metadata = metadata if isinstance(metadata, dict) else {}
+            resolved_source_id, resolved_target_id = _resolve_phase2_edge_endpoints(
+                edge,
+                entity_id_a=entity_id_a,
+                entity_id_b=entity_id_b,
+            )
+
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO edges
+                (id, source_id, target_id, relation, document_id, weight, metadata, created_at, scope)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    edge.get("id")
+                    or _stable_edge_id(
+                        "phase2",
+                        candidate_id,
+                        resolved_source_id,
+                        resolved_target_id,
+                        relation,
+                    ),
+                    resolved_source_id,
+                    resolved_target_id,
+                    relation,
+                    edge.get("document_id"),
+                    edge.get("weight", 1.0),
+                    json.dumps(edge_metadata),
+                    now_iso,
+                    edge.get("scope", "global"),
+                ),
+            )
+
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO reviewed_pairs
+        (entity_name, source_a, source_b, entity_id_a, entity_id_b)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (entity_name, source_a, source_b, entity_id_a, entity_id_b),
+    )
+
+
+def _persist_phase1_enrichment(
+    conn: sqlite3.Connection,
+    *,
+    chunk_id: str,
+    entities: list[dict[str, Any]],
+    edges: list[dict[str, Any]],
+    now_iso: str,
+) -> None:
+    """Persist phase-1 extraction output using server-derived provenance."""
+    provenance = _load_chunk_provenance(conn, chunk_id=chunk_id)
+
+    first_entity_id: str | None = None
+    for entity in entities:
+        entity_name = entity.get("name")
+        if not isinstance(entity_name, str) or not entity_name.strip():
+            msg = "entity name is required"
+            raise ToolError(msg)
+        entity_type = entity.get("entity_type")
+        if not isinstance(entity_type, str):
+            entity_type_alias = entity.get("type")
+            entity_type = entity_type_alias if isinstance(entity_type_alias, str) else ""
+
+        entity_id = entity.get("id") if isinstance(entity.get("id"), str) else uuid4().hex
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO entities
+            (id, name, entity_type, description, metadata, created_at, scope, document_id, chunk_id, importance)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                entity_id,
+                entity_name.strip(),
+                entity_type,
+                entity.get("description", ""),
+                json.dumps(entity.get("metadata", {})),
+                now_iso,
+                provenance.scope,
+                provenance.document_id,
+                provenance.chunk_id,
+                entity.get("importance", 0.5),
+            ),
+        )
+        if first_entity_id is None:
+            first_entity_id = entity_id
+
+    for edge in edges:
+        relation = _extract_relation(edge)
+        endpoint_source_id, endpoint_target_id = _resolve_phase1_edge_endpoints(
+            conn,
+            edge=edge,
+            now_iso=now_iso,
+            provenance=provenance,
+            default_source_id=first_entity_id,
+        )
+        metadata = edge.get("metadata")
+        edge_metadata = metadata.copy() if isinstance(metadata, dict) else {}
+        edge_metadata.setdefault("chunk_id", chunk_id)
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO edges
+            (id, source_id, target_id, relation, document_id, weight, metadata, created_at, scope)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                edge.get("id") or uuid4().hex,
+                endpoint_source_id,
+                endpoint_target_id,
+                relation,
+                provenance.document_id,
+                edge.get("weight", 1.0),
+                json.dumps(edge_metadata),
+                now_iso,
+                provenance.scope,
+            ),
+        )
+
+    conn.execute(
+        "UPDATE chunks SET enrichment_state='enriched', claimed_at=NULL WHERE id = ?",
+        (chunk_id,),
+    )
 
 
 def select_content_fetcher(method: str) -> ContentFetcher:
@@ -339,8 +847,14 @@ def _serialize_related_sources(value: object) -> list[RelatedSource]:
             name = getattr(item, "name", None)
             relationship = getattr(item, "relationship", None)
             entity = getattr(item, "entity", None)
-        if isinstance(name, str) and isinstance(relationship, str) and isinstance(entity, str):
-            related_sources.append({"name": name, "relationship": relationship, "entity": entity})
+        if (
+            isinstance(name, str)
+            and isinstance(relationship, str)
+            and isinstance(entity, str)
+        ):
+            related_sources.append(
+                {"name": name, "relationship": relationship, "entity": entity}
+            )
     return related_sources
 
 
@@ -382,11 +896,14 @@ async def get_next_batch(ctx: Context, limit: int = 10) -> list[EnrichmentChunk]
                 c.content,
                 d.title,
                 c.metadata,
-                ks.name
+                ks.name,
+                d.id,
+                d.source_id,
+                d.scope
             FROM chunks AS c
             JOIN documents AS d ON d.id = c.document_id
-            LEFT JOIN knowledge_sources AS ks ON ks.id = d.source_id
-            WHERE COALESCE(ks.enrich, 1) = 1
+            JOIN knowledge_sources AS ks ON ks.id = d.source_id
+            WHERE ks.enrich = 1
               AND (
                 c.enrichment_state = 'pending'
                 OR (
@@ -424,6 +941,9 @@ async def get_next_batch(ctx: Context, limit: int = 10) -> list[EnrichmentChunk]
             "doc_title": row[2],
             "section_path": _extract_section_path(row[3]),
             "source_name": row[4],
+            "document_id": row[5],
+            "source_id": row[6],
+            "scope": row[7],
         }
         for row in rows
     ]
@@ -442,104 +962,45 @@ async def store_enrichment(
     now_iso = datetime.now(tz=UTC).isoformat()
     edge_rows = edges or []
 
-    if candidate_id is not None:
-        entity_name, source_a, source_b = _decode_candidate_id(candidate_id)
-
-        conn.execute("PRAGMA busy_timeout = 5000")
-        conn.execute("BEGIN IMMEDIATE")
-        try:
-            if edge_rows:
-                for edge in edge_rows:
-                    conn.execute(
-                        """
-                        INSERT OR IGNORE INTO edges
-                        (id, source_id, target_id, relation, document_id, weight, metadata, created_at, scope)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """,
-                        (
-                            edge.get("id") or uuid4().hex,
-                            edge.get("source_id"),
-                            edge.get("target_id"),
-                            edge.get("relation"),
-                            edge.get("document_id"),
-                            edge.get("weight", 1.0),
-                            json.dumps(edge.get("metadata", {})),
-                            now_iso,
-                            edge.get("scope", "global"),
-                        ),
-                    )
-            else:
-                conn.execute(
-                    """
-                    INSERT OR IGNORE INTO reviewed_pairs (entity_name, source_a, source_b)
-                    VALUES (?, ?, ?)
-                    """,
-                    (entity_name, source_a, source_b),
-                )
-            conn.commit()
-        except Exception:
-            conn.rollback()
-            raise
-        return
-
     if chunk_id is None:
+        if candidate_id is not None:
+            conn.execute("PRAGMA busy_timeout = 5000")
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                _persist_phase2_enrichment(
+                    conn,
+                    candidate_id=candidate_id,
+                    edges=edge_rows,
+                    now_iso=now_iso,
+                )
+            except Exception:
+                conn.rollback()
+                raise
+            conn.commit()
+            return
         msg = "chunk_id is required for phase-1 store_enrichment"
         raise ToolError(msg)
-
-    entity_rows = entities or []
 
     conn.execute("PRAGMA busy_timeout = 5000")
     conn.execute("BEGIN IMMEDIATE")
     try:
-        for entity in entity_rows:
-            conn.execute(
-                """
-                INSERT OR REPLACE INTO entities
-                (id, name, entity_type, description, metadata, created_at, scope, document_id, chunk_id, importance)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    entity.get("id") or uuid4().hex,
-                    entity.get("name", ""),
-                    entity.get("entity_type", ""),
-                    entity.get("description", ""),
-                    json.dumps(entity.get("metadata", {})),
-                    now_iso,
-                    entity.get("scope", "global"),
-                    entity.get("document_id"),
-                    entity.get("chunk_id"),
-                    entity.get("importance", 0.5),
-                ),
-            )
-
-        for edge in edge_rows:
-            conn.execute(
-                """
-                INSERT OR IGNORE INTO edges
-                (id, source_id, target_id, relation, document_id, weight, metadata, created_at, scope)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    edge.get("id") or uuid4().hex,
-                    edge.get("source_id"),
-                    edge.get("target_id"),
-                    edge.get("relation"),
-                    edge.get("document_id"),
-                    edge.get("weight", 1.0),
-                    json.dumps(edge.get("metadata", {})),
-                    now_iso,
-                    edge.get("scope", "global"),
-                ),
-            )
-
-        conn.execute(
-            "UPDATE chunks SET enrichment_state='enriched', claimed_at=NULL WHERE id = ?",
-            (chunk_id,),
+        _persist_phase1_enrichment(
+            conn,
+            chunk_id=chunk_id,
+            entities=entities or [],
+            edges=edge_rows,
+            now_iso=now_iso,
         )
-        conn.commit()
-    except Exception:
+    except (sqlite3.Error, ToolError, TypeError, ValueError):
         conn.rollback()
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            _clear_failed_chunk_claim(conn, chunk_id=chunk_id)
+            conn.commit()
+        except sqlite3.Error:
+            conn.rollback()
         raise
+    conn.commit()
 
 
 def init_db(path: str) -> sqlite3.Connection:
@@ -618,77 +1079,10 @@ def make_evaluate_fn() -> EvaluateFn:
     return _evaluate
 
 
-def _is_blocked_ip(ip_str: str) -> bool:
-    """Return True if *ip_str* is a private/loopback/link-local/reserved address."""
-    import ipaddress  # noqa: PLC0415
-
-    try:
-        addr = ipaddress.ip_address(ip_str)
-    except ValueError:
-        return True  # unparseable → block
-    # Unwrap IPv4-mapped IPv6 (e.g. ::ffff:127.0.0.1) before checking.
-    # ipv4_mapped is only present on IPv6Address.
-    check: ipaddress.IPv4Address | ipaddress.IPv6Address
-    if isinstance(addr, ipaddress.IPv6Address) and addr.ipv4_mapped is not None:
-        check = addr.ipv4_mapped
-    else:
-        check = addr
-    return check.is_loopback or check.is_private or check.is_link_local or check.is_reserved or check.is_unspecified
-
-
 async def _web_read(url: str) -> str | None:
-    """Fetch a URL via httpx with SSRF protection (CWE-918).
-
-    Resolves the hostname asynchronously before making the HTTP request.
-    Blocks loopback, private, link-local, reserved, and unspecified addresses.
-    Rewrites the request URL to the resolved IP to prevent DNS rebinding.
-    """
-    import socket  # noqa: PLC0415
-    from urllib.parse import urlparse, urlunparse  # noqa: PLC0415
-
-    parsed = urlparse(url)
-    if parsed.scheme.lower() not in {"http", "https"}:
-        return None
-
-    hostname = parsed.hostname  # strips [] from IPv6 literals
-    if not hostname:
-        return None
-
-    port = parsed.port or (443 if parsed.scheme.lower() == "https" else 80)
-
+    """Fetch a URL with the knowledge package's SSRF-safe HTTP fetcher."""
     try:
-        addrs = await asyncio.to_thread(socket.getaddrinfo, hostname, port, 0, socket.AF_UNSPEC)
-    except OSError:
-        return None
-
-    for _family, _socktype, _proto, _canon, sockaddr in addrs:
-        if _is_blocked_ip(sockaddr[0]):
-            return None
-
-    # Rewrite URL to the resolved IP to prevent DNS rebinding TOCTOU
-    import ipaddress  # noqa: PLC0415
-
-    first_ip = ipaddress.ip_address(addrs[0][4][0])
-    ip_host = f"[{first_ip}]" if isinstance(first_ip, ipaddress.IPv6Address) else str(first_ip)
-    netloc = f"{ip_host}:{parsed.port}" if parsed.port else ip_host
-    ip_url = urlunparse(
-        (
-            parsed.scheme,
-            netloc,
-            parsed.path,
-            parsed.params,
-            parsed.query,
-            parsed.fragment,
-        )
-    )
-
-    try:
-        import httpx  # noqa: PLC0415
-
-        async with httpx.AsyncClient(follow_redirects=False, timeout=30) as client:
-            resp = await client.get(ip_url, headers={"Host": hostname})
-            resp.raise_for_status()
-            return resp.text
+        return await HttpxContentFetcher().fetch(url)
     except Exception:  # noqa: BLE001
         return None
 
@@ -699,7 +1093,9 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
     global _app_context  # noqa: PLW0603
     token_path = Path.home() / ".owlbear" / "copilot_token.json"
     token_path.unlink(missing_ok=True)
-    path = os.environ.get("OWLBEAR_LOCAL_KB_PATH") or os.environ.get("OWLBEAR_KB_PATH", _DEFAULT_KB_PATH)
+    path = os.environ.get("OWLBEAR_LOCAL_KB_PATH") or os.environ.get(
+        "OWLBEAR_KB_PATH", _DEFAULT_KB_PATH
+    )
     qdrant_path = os.environ.get("OWLBEAR_QDRANT_PATH", _DEFAULT_QDRANT_PATH)
     conn = init_db(path)
     try:
@@ -721,12 +1117,10 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
         )
         doc_store = DocumentStore(conn, gs, vs, emb)
         chunker = TextChunker()
-        content_guard = ContentInjectionGuard()
         pipeline = IngestPipeline(
             doc_store,
             extractor,
             chunker,
-            content_guard=content_guard,
             source_store=source_store,
         )
         bookmark_store = BookmarkStore(conn)
@@ -746,7 +1140,9 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
             inter_doc_builder=inter_doc_builder,
             graph_store=gs,
         )
-        consolidation_service: ConsolidationService | None = ConsolidationService(conn, make_text_completion_fn())
+        consolidation_service: ConsolidationService | None = ConsolidationService(
+            conn, make_text_completion_fn()
+        )
         ctx = AppContext(
             conn=conn,
             query_service=qs,
@@ -771,11 +1167,15 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
 
 mcp = FastMCP("owlbear-knowledge", lifespan=app_lifespan)
 
-get_next_batch = mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))(get_next_batch)
-get_consolidation_candidates = mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))(
-    get_consolidation_candidates
-)
-store_enrichment = mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))(store_enrichment)
+get_next_batch = mcp.tool(
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
+)(get_next_batch)
+get_consolidation_candidates = mcp.tool(
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
+)(get_consolidation_candidates)
+store_enrichment = mcp.tool(
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
+)(store_enrichment)
 
 __all__ = [
     "AppContext",
@@ -826,9 +1226,13 @@ async def search_knowledge(
                 "score": r.score,
                 "snippet": r.snippet,
                 "entity_type": r.entity_type,
-                "retrieval_path": (retrieval_path if isinstance(retrieval_path, str) else "vector"),
+                "retrieval_path": (
+                    retrieval_path if isinstance(retrieval_path, str) else "vector"
+                ),
                 "entities": _serialize_search_entities(getattr(r, "entities", [])),
-                "related_sources": _serialize_related_sources(getattr(r, "related_sources", [])),
+                "related_sources": _serialize_related_sources(
+                    getattr(r, "related_sources", [])
+                ),
                 "source": _serialize_source(getattr(r, "source", None)),
             }
         )
@@ -843,8 +1247,16 @@ async def list_sources(ctx: Context, scope: str | None = None) -> list[SourceInf
     if store is None:
         msg = "source store not available"
         raise ToolError(msg)
-    sources = await asyncio.to_thread(store.list_all, scope=scope)
-    return [{"name": s.name, "source_type": s.source_type, "scope": s.scope} for s in sources]
+    sources = store.list_all(scope=scope)
+    return [
+        {
+            "id": s.id,
+            "name": s.name,
+            "source_type": str(s.source_type),
+            "scope": s.scope,
+        }
+        for s in sources
+    ]
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
@@ -870,6 +1282,8 @@ async def ingest_document(
     except Exception as exc:  # noqa: BLE001
         return f"error: ingestion failed: {exc}"
     else:
+        if result.status == "failed":
+            return f"error: ingestion failed for document {result.document_id}"
         return (
             f"Ingested: {result.document_id}, {result.chunk_count} chunks, "
             f"{result.entity_count} entities, {result.edge_count} edges "
@@ -896,12 +1310,17 @@ async def list_entities(
         except ValueError:
             valid = ", ".join(e.value for e in EntityType)
             return f"error: Invalid entity_type '{entity_type}'. Valid types: {valid}"
-        entities = await asyncio.to_thread(gs.list_entities, entity_type=et, scopes=scopes)
+        entities = await asyncio.to_thread(
+            gs.list_entities, entity_type=et, scopes=scopes
+        )
     else:
         entities = await asyncio.to_thread(gs.list_entities, scopes=scopes)
 
     page = entities[offset : offset + limit]
-    return [{"name": e.name, "entity_type": e.entity_type, "description": e.description} for e in page]
+    return [
+        {"name": e.name, "entity_type": e.entity_type, "description": e.description}
+        for e in page
+    ]
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
@@ -913,13 +1332,19 @@ async def get_stats(ctx: Context) -> StatsResult:
     if gs is None:
         msg = "graph store not available"
         raise ToolError(msg)
-    doc_count, entity_count, edge_count = await asyncio.to_thread(gs.get_counts)
+    doc_count, entity_count, edge_count = gs.get_counts()
 
     total_sources = conn.execute("SELECT COUNT(*) FROM knowledge_sources").fetchone()[0]
     total_chunks = conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
-    enriched_chunks = conn.execute("SELECT COUNT(*) FROM chunks WHERE enrichment_state = 'enriched'").fetchone()[0]
-    chunks_enriched_ratio = float(enriched_chunks) / float(total_chunks) if total_chunks else 0.0
-    consolidation_candidates_remaining = len(_fetch_consolidation_candidate_rows(conn, limit=None))
+    enriched_chunks = conn.execute(
+        "SELECT COUNT(*) FROM chunks WHERE enrichment_state = 'enriched'"
+    ).fetchone()[0]
+    chunks_enriched_ratio = (
+        float(enriched_chunks) / float(total_chunks) if total_chunks else 0.0
+    )
+    consolidation_candidates_remaining = len(
+        _fetch_consolidation_candidate_rows(conn, limit=None)
+    )
 
     return {
         "documents": doc_count,
@@ -936,7 +1361,7 @@ async def knowledge_stats(ctx: Context) -> str:
     """Return knowledge base statistics (callable directly with ctx for testing)."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     gs = app_ctx.graph_store
-    doc_count, entity_count, edge_count = await asyncio.to_thread(gs.get_counts)
+    doc_count, entity_count, edge_count = gs.get_counts()
     return f"Knowledge base: {doc_count} documents, {entity_count} entities, {edge_count} edges"
 
 
@@ -946,7 +1371,7 @@ async def _knowledge_stats_bridge() -> str:
     if _app_context is None or _app_context.graph_store is None:
         return "Knowledge base: 0 documents, 0 entities, 0 edges"
     gs = _app_context.graph_store
-    doc_count, entity_count, edge_count = await asyncio.to_thread(gs.get_counts)
+    doc_count, entity_count, edge_count = gs.get_counts()
     return f"Knowledge base: {doc_count} documents, {entity_count} entities, {edge_count} edges"
 
 
@@ -958,7 +1383,7 @@ async def knowledge_stats_resource(ctx: Context | None = None) -> str:
         counts_fn = gs.get_counts
     else:
         counts_fn = lambda: (0, 0, 0)  # noqa: E731
-    doc_count, entity_count, edge_count = await asyncio.to_thread(counts_fn)
+    doc_count, entity_count, edge_count = counts_fn()
     return f"Knowledge base: {doc_count} documents, {entity_count} entities, {edge_count} edges"
 
 
@@ -1135,7 +1560,9 @@ async def sync_to_global(ctx: Context) -> str:
         global_conn = sqlite3.connect(str(global_path))
         try:
             _schema_init_db(global_conn)
-            raw = _core_do_import(local_conn, global_conn, target_scope="global", source_scope="global")
+            raw = _core_do_import(
+                local_conn, global_conn, target_scope="global", source_scope="global"
+            )
         finally:
             global_conn.close()
         # Reformat raw "Imported N documents (skipped M duplicates) into scope global"

@@ -1019,17 +1019,6 @@ class TestFromAC_StorageCoveragePaths:
         assert dest.parent == kanban_dir / "quarantine"
         assert not task_file.exists()
 
-    def test_move_to_quarantine_returns_lock_file_unchanged(
-        self, tmp_path: Path
-    ) -> None:
-        """Lock files are returned immediately without moving."""
-        kanban_dir = _make_board(tmp_path)
-        lock_file = kanban_dir / "tasks" / ".1.lock"
-        lock_file.write_text("", encoding="utf-8")
-        result = move_to_quarantine(lock_file, kanban_dir)
-        assert result == lock_file
-        assert lock_file.exists(), "lock file must not be moved"
-
     # ------------------------------------------------------------------
     # allocate_next_id (lines 547-555)
     # ------------------------------------------------------------------

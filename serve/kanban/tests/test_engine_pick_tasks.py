@@ -720,7 +720,9 @@ class TestFromAC_PickTasksAC22Proof:
         for i in range(1, 6):
             _write_task(board, task_id=i)
         engine = KanbanEngine(board, activity_log=False)
-        resp = engine.agent_view().pick_tasks(wave_size=1)  # explicit wave_size=1; no max_waves
+        resp = engine.agent_view().pick_tasks(
+            wave_size=1
+        )  # explicit wave_size=1; no max_waves
         assert len(resp.waves) <= 3, (
             f"Default max_waves=3 must cap output at 3 waves; got {len(resp.waves)}"
         )
@@ -852,6 +854,7 @@ def _ordered_ids(resp: PickTasksResponse) -> list[int]:
         result.extend(entry.id for entry in wave.tasks)
     return result
 
+
 _ARCHIVED_IN_TASKS_TMPL = """\
 ---
 id: {task_id}
@@ -872,6 +875,7 @@ archival_refs: []
 - AC item.
 """
 
+
 def _write_archived_in_tasks_dir(
     board: Path,
     task_id: int,
@@ -885,6 +889,7 @@ def _write_archived_in_tasks_dir(
         created=created,
     )
     (board / "tasks" / f"{task_id}-task.md").write_text(content, encoding="utf-8")
+
 
 class TestFromAC_PickTasksAgeSortPrecedence:
     """age DESC must take precedence over id ASC within the same priority group.
@@ -1021,6 +1026,7 @@ class TestFromAC_PickTasksAgeSortPrecedence:
             f"got {ordered} — broken id-ASC fallback yields [5, 10, 2, 8]"
         )
 
+
 class TestFromAC_PickTasksArchivedInTasksDir:
     """pick_tasks defensively excludes status=='archived' tasks from tasks/ dir.
 
@@ -1104,4 +1110,3 @@ class TestFromAC_PickTasksArchivedInTasksDir:
         assert 3 in all_dispatched, (
             f"Someday-priority active task (id=3) must be dispatched; got {all_dispatched}"
         )
-

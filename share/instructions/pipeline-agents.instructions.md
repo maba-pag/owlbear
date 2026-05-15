@@ -33,4 +33,4 @@ All agents should recognise — but only some must act on — `type:user-action`
 | test-writer / builder / reviewer | Pass-through | `NON_IMPL_TAGS` exempts from TDD gate; process normally after unblock |
 | auditor | Convention verification | Confirm AR was created, block was issued, and a `## Decision Request` summary with `response: approved` appears in task body |
 
-See r-pipeline-protocol §5 — User-Action Tasks for the full blocking flow, fast-path, and dry-run scenario.
+See `w-arch-review` step 13 for detection heuristics (M/S/C rule) and `h-decision-requests` for the `create_dr` contract.

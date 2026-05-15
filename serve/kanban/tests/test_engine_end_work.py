@@ -790,7 +790,9 @@ class TestFromAC_EndWork:
 
     # --- D41 atomicity tests ---
 
-    def test_product_topology_ignores_config_predicate_success_claim_cleared(self, tmp_path: Path) -> None:
+    def test_product_topology_ignores_config_predicate_success_claim_cleared(
+        self, tmp_path: Path
+    ) -> None:
         """With PRODUCT_TOPOLOGY, status_predicates={} — end_work succeeds without predicate check.
 
         Config predicate on 'review' is ignored; PRODUCT_TOPOLOGY provides empty predicates.
@@ -806,7 +808,9 @@ class TestFromAC_EndWork:
         )
 
         # No predicate fires — operation succeeds and task advances to 'review'
-        result = view.end_work(1, outcome="success", note="Advancing without predicate.")
+        result = view.end_work(
+            1, outcome="success", note="Advancing without predicate."
+        )
 
         assert result.status == "review", (
             f"Task must advance to 'review' (no predicate enforcement); got {result.status!r}"

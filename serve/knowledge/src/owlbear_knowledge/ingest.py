@@ -16,7 +16,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from owlbear_knowledge.chunker import TextChunker
-    from owlbear_knowledge.content_guard import ContentInjectionGuard
     from owlbear_knowledge.extractor import EntityExtractor
     from owlbear_knowledge.intake import IntakeResult
     from owlbear_knowledge.source_store import KnowledgeSourceStore
@@ -53,13 +52,7 @@ class IngestPipeline:
         entity_extractor: Entity extraction component.
         text_chunker: Text splitting component.
         cancel_signal: Optional threading.Event; if set, ingest returns cancelled.
-        content_guard: Optional ContentInjectionGuard; when set, every chunk's
-            text is scanned for prompt-injection phrases before entity
-            extraction — no ``source_type`` value is exempt.  Strict/warn
-            behaviour is controlled by the guard's own ``strict_mode``
-            parameter.
-        injection_mode: Unused; strict/warn behaviour is delegated to the guard's
-            ``strict_mode``.  Reserved for future pipeline-level mode override.
+        injection_mode: Reserved for future pipeline-level mode override.
         source_store: Optional KnowledgeSourceStore; when supplied, ingest_text
             resolves or creates a KnowledgeSource record by URL and forwards its
             UUID as the document's source_id FK before chunk storage.
@@ -71,7 +64,6 @@ class IngestPipeline:
         entity_extractor: EntityExtractor,
         text_chunker: TextChunker,
         cancel_signal: object | None = None,
-        content_guard: ContentInjectionGuard | None = None,
         injection_mode: Literal["strict", "warn"] = "warn",
         source_store: KnowledgeSourceStore | None = None,
     ) -> None:
@@ -79,9 +71,86 @@ class IngestPipeline:
         self._extractor = entity_extractor
         self._chunker = text_chunker
         self._cancel_signal = cancel_signal
-        self._content_guard = content_guard
         self._injection_mode = injection_mode
         self._source_store = source_store
+
+    def _resolve_source_by_url(
+        self,
+        source_url: str,
+        scope: str,
+    ) -> object | None:
+        if self._source_store is None:
+            return None
+        if scope == "global":
+            return self._source_store.resolve_by_url(source_url)
+        return self._source_store.resolve_by_url(source_url, scope=scope)
+
+    @staticmethod
+    def _raise_if_exception(result: object) -> None:
+        if isinstance(result, BaseException):
+            raise result
+
+    def _resolve_or_create_source_id(
+        self,
+        source_url: str,
+        scope: str,
+    ) -> tuple[str | None, str | None]:
+        if self._source_store is None:
+            return None, None
+
+        created_source_id: str | None = None
+        resolved_source = self._resolve_source_by_url(source_url, scope)
+        if resolved_source is None:
+            from owlbear_knowledge.models import KnowledgeSource, SourceType  # noqa: PLC0415
+
+            now = datetime.now(tz=UTC).isoformat()
+            new_source = KnowledgeSource(
+                name=source_url,
+                source_type=SourceType.AUTHENTICATED_WEB,
+                fetch_method="url",
+                enrich=True,
+                config={"url": source_url},
+                scope=scope,
+                created_at=now,
+                updated_at=now,
+            )
+            created_source_id = new_source.id
+            created_source = self._source_store.create(new_source)
+            # Store implementation returns None; test doubles may return the source.
+            resolved_source = (
+                created_source
+                if created_source is not None
+                else self._resolve_source_by_url(source_url, scope)
+            )
+
+        resolved_source_id = getattr(resolved_source, "id", None)
+        return resolved_source_id, created_source_id
+
+    async def _cleanup_failed_ingest(
+        self,
+        doc_id: str,
+        chunk_ids: list[str],
+        created_source_id: str | None,
+    ) -> None:
+        try:
+            self._docs.delete_document_data(doc_id)  # type: ignore[union-attr]
+        except Exception:  # noqa: BLE001
+            logger.debug("cleanup of failed ingest document failed", exc_info=True)
+
+        if chunk_ids:
+            try:
+                self._docs.delete_chunk_embeddings(chunk_ids)  # type: ignore[union-attr]
+            except Exception:  # noqa: BLE001
+                logger.debug(
+                    "cleanup of failed ingest embeddings failed",
+                    exc_info=True,
+                )
+
+        if created_source_id is not None and self._source_store is not None:
+            try:
+                self._source_store.delete(created_source_id)
+            except Exception:  # noqa: BLE001
+                logger.debug("cleanup of failed ingest source failed", exc_info=True)
 
     async def ingest_text(
         self,
@@ -100,28 +169,12 @@ class IngestPipeline:
         from owlbear_knowledge.models import Document  # noqa: PLC0415
 
         doc_id = uuid4().hex
+        created_source_id: str | None = None
+        chunk_ids: list[str] = []
         try:
             _meta: dict[str, object] = dict(metadata or {})
             chunks = await asyncio.to_thread(self._chunker.chunk, text, metadata=_meta)
             chunk_count = len(chunks)
-
-            if self._content_guard is not None:
-                for chunk in chunks:
-                    check = self._content_guard.scan(chunk.text)
-                    if check.blocked:
-                        return IngestResult(
-                            document_id=doc_id,
-                            chunk_count=chunk_count,
-                            entity_count=0,
-                            edge_count=0,
-                            status="blocked",
-                        )
-                    if check.threat:
-                        logger.warning(
-                            "Content injection detected while ingesting doc_id=%s: %s",
-                            doc_id,
-                            check.reason,
-                        )
 
             doc = Document(
                 id=doc_id,
@@ -133,49 +186,35 @@ class IngestPipeline:
 
             resolved_source_id = source_id
             if source_url is not None and self._source_store is not None:
-                resolved_source = self._source_store.resolve_by_url(source_url)
-                if resolved_source is None:
-                    from owlbear_knowledge.models import (  # noqa: PLC0415
-                        KnowledgeSource,
-                        SourceType,
-                    )
+                resolved_source_id, created_source_id = self._resolve_or_create_source_id(
+                    source_url,
+                    scope,
+                )
 
-                    now = datetime.now(tz=UTC).isoformat()
-                    created_source = self._source_store.create(
-                        KnowledgeSource(
-                            name=source_url,
-                            source_type=SourceType.AUTHENTICATED_WEB,
-                            fetch_method="url",
-                            enrich=False,
-                            config={"url": source_url},
-                            created_at=now,
-                            updated_at=now,
-                        )
-                    )
-                    # Store implementation returns None; test doubles may return the source.
-                    if created_source is not None:
-                        resolved_source = created_source
-                    else:
-                        resolved_source = self._source_store.resolve_by_url(source_url)
-                if resolved_source is not None:
-                    resolved_source_id = resolved_source.id
+            doc = Document(
+                id=doc_id,
+                title=str(_meta.get("title") or doc_id),
+                content=text,
+                metadata=_meta,
+                scope=scope,
+                source_id=resolved_source_id,
+            )
 
-            await asyncio.to_thread(
-                self._docs.insert_document,
+            self._docs.insert_document(  # type: ignore[union-attr]
                 doc,
                 source_id=resolved_source_id,
-            )  # type: ignore[union-attr]
+            )
 
-            chunk_ids: list[str] = await asyncio.to_thread(
-                self._docs.store_chunks,
+            chunk_ids = self._docs.store_chunks(  # type: ignore[union-attr]
                 doc_id,
-                chunks,  # type: ignore[union-attr]
+                chunks,
+                scope=scope,
             )
             chunk_texts = [c.text for c in chunks]
-            await asyncio.to_thread(
-                self._docs.store_embeddings,
+            self._docs.store_embeddings(  # type: ignore[union-attr]
                 chunk_ids,
-                chunk_texts,  # type: ignore[union-attr]
+                chunk_texts,
+                scope=scope,
             )
 
             extraction_results = await asyncio.gather(
@@ -185,10 +224,16 @@ class IngestPipeline:
             valid_extractions = [
                 r for r in extraction_results if not isinstance(r, BaseException)
             ]
-            entity_count, edge_count = self._docs.store_extractions(valid_extractions)  # type: ignore[union-attr]
+            entity_count, edge_count = self._docs.store_extractions(  # type: ignore[union-attr]
+                valid_extractions,
+                scope=scope,
+                document_id=doc_id,
+                chunk_ids=chunk_ids,
+            )
 
         except Exception:  # catch-all for unexpected ingest failures
             logger.exception("ingest_text failed for doc_id=%s", doc_id)
+            await self._cleanup_failed_ingest(doc_id, chunk_ids, created_source_id)
             return IngestResult(
                 document_id=doc_id,
                 chunk_count=0,
@@ -210,6 +255,7 @@ class IngestPipeline:
         intake: IntakeResult,
         *,
         scope: str = "global",
+        source_id: str | None = None,
         content_cleaner: Callable[[str], str] | None = None,
     ) -> IngestResult:
         """Ingest an IntakeResult with delta detection and cancellation support.
@@ -231,6 +277,7 @@ class IngestPipeline:
         Args:
             intake: Content to ingest, as produced by read_file/read_url/read_text.
             scope: Scope tag applied to all stored objects.  Defaults to ``'global'``.
+            source_id: Optional source UUID to persist on the document row.
             content_cleaner: Optional callable applied to raw content before hashing.
                 When provided, delta detection compares hashes of the *cleaned* output
                 rather than the raw content, so cosmetic HTML changes do not trigger
@@ -240,6 +287,7 @@ class IngestPipeline:
             IngestResult with status: ok | skipped | cancelled | failed | blocked.
         """
         doc_id = uuid4().hex
+        chunk_ids: list[str] = []
         try:
             if self._cancel_signal is not None and self._cancel_signal.is_set():  # type: ignore[union-attr]
                 return IngestResult(
@@ -276,30 +324,17 @@ class IngestPipeline:
             if existing_id is not None:
                 self._docs.delete_document_data(existing_id)  # type: ignore[union-attr]
 
-            self._docs.insert_document(doc_id, intake, scope=scope)  # type: ignore[union-attr]
+            self._docs.insert_document(  # type: ignore[union-attr]
+                doc_id,
+                intake,
+                scope=scope,
+                source_id=source_id,
+            )
 
-            chunk_ids: list[str] = self._docs.store_chunks(doc_id, chunks, scope=scope)  # type: ignore[union-attr]
+            chunk_ids = self._docs.store_chunks(doc_id, chunks, scope=scope)  # type: ignore[union-attr]
             chunk_texts = [c.text for c in chunks]
 
             _should_wrap = should_wrap(_meta.get("source_type"))  # type: ignore[arg-type]
-
-            if self._content_guard is not None and _should_wrap:
-                for _chunk in chunks:
-                    _check = self._content_guard.scan(_chunk.text)
-                    if _check.blocked:
-                        return IngestResult(
-                            document_id=doc_id,
-                            chunk_count=chunk_count,
-                            entity_count=0,
-                            edge_count=0,
-                            status="blocked",
-                        )
-                    if _check.threat:
-                        logger.warning(
-                            "Content injection detected in content from %s: %s",
-                            intake.source,
-                            _check.reason,
-                        )
 
             extract_coros = [
                 self._extractor.extract(
@@ -314,10 +349,13 @@ class IngestPipeline:
                 self._docs.store_embeddings,
                 chunk_ids,
                 chunk_texts,  # type: ignore[union-attr]
+                scope=scope,
             )
             all_results = await asyncio.gather(
                 embed_coro, *extract_coros, return_exceptions=True
             )
+            self._raise_if_exception(all_results[0])
+
             extraction_results = [
                 r for r in all_results[1:] if not isinstance(r, BaseException)
             ]
@@ -332,6 +370,7 @@ class IngestPipeline:
 
         except Exception:
             logger.exception("ingest failed for doc_id=%s", doc_id)
+            await self._cleanup_failed_ingest(doc_id, chunk_ids, None)
             return IngestResult(
                 document_id=doc_id,
                 chunk_count=0,

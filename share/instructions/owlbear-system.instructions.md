@@ -44,7 +44,7 @@ For file placement rules, commit format, priorities, and tags, see `r-project-st
 | Repo inbox | `/memories/repo/inbox/` | Agent lessons-learned (legacy, dual-write) |
 | Canonical | mcp-memory `ob-memory` | Agent institutional knowledge (queryable) |
 
-Do NOT store in user memory: architecture decisions (`.owlbear/decisions/`), research findings (`.owlbear/research/`), domain knowledge (project KB via MCP), code snippets, or task-specific context.
+Do NOT store in user memory: architecture decisions (`.owlbear/kanban/decisions/`), research findings (`.owlbear/research/`), domain knowledge (project KB via MCP), code snippets, or task-specific context.
 
 Clear boundary: `/memories/` = user-centric tool patterns and process pitfalls; `ob-memory` = agent institutional knowledge. See `r-pipeline-protocol` → Knowledge Pre-flight and Post-task Reflection.
 

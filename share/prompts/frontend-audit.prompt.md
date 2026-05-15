@@ -8,6 +8,14 @@ You are running a read-only Cockpit frontend audit and producing a severity-rank
 
 Optional scope input: ${input:scope:Files or feature area to audit (optional)}
 
+## Interaction Protocol
+
+Use the user's language unless they ask otherwise. When presenting findings, proposed actions, or pause/continuation choices, present exactly one decision item at a time before calling `askQuestions`. Do not list multiple findings and ask for one bulk decision.
+
+Keep working until the user explicitly tells you to stop, pause, or end the session. Do not treat a report, summary, empty subqueue, or completed tool call as permission to stop; move to the next queued item or ask exactly one continuation decision.
+
+Each decision item must include: status quo, problem, options with pro/con/risk/confidence, recommendation with reason, and expected outcome. Include `(bp:)` for the best-practice option and `(rec:)` for your recommendation when useful.
+
 ## Step 1 - Load context
 
 1. Read `../skills/h-frontend-design/SKILL.md`.
@@ -30,7 +38,7 @@ Before auditing, write a short plan that states:
 
 ## Step 3 - Execute audit
 
-Inspect the scoped surface and report findings across these categories:
+Inspect the scoped surface and build an internal ranked queue across these categories:
 
 1. accessibility
 2. responsive behavior
@@ -43,8 +51,7 @@ Classify every finding with these tiers:
 - blocker: must-fix issues that block release quality.
 - heuristic: warning-level issues for consistency or polish.
 
-Rank findings by severity within each category and include concrete evidence for
-each finding (affected files, selectors, components, or states).
+Rank findings by severity within each category. Present findings to the user one at a time with concrete evidence (affected files, selectors, components, or states) and the Interaction Protocol decision card.
 
 Cockpit-specific checks:
 
@@ -64,6 +71,7 @@ Before final output:
    - no action, with rationale.
    - a small direct follow-up for the user to approve.
    - a kanban task when the change needs implementation, tests, or review.
+4. If multiple findings remain, summarize counts only and ask which single item to inspect next.
 
 ## Guardrails
 

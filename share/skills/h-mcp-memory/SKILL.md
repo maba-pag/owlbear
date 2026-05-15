@@ -204,11 +204,11 @@ Allowed category values:
 
 ```text
 save_memory(
-	title="MCP server labels must stay <=13 chars",
-	content="Tool prefix truncation broke matching in task #1307...",
-	categories=["tool-usage", "pitfall"],
-	confidence=0.8,
-	source_agent="builder"
+ title="MCP server labels must stay <=13 chars",
+ content="Tool prefix truncation broke matching in task #1307...",
+ categories=["tool-usage", "pitfall"],
+ confidence=0.8,
+ source_agent="builder"
 )
 ```
 

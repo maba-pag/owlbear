@@ -168,7 +168,9 @@ class RefreshOrchestrator:
             try:
                 intake_result = await _intake.read_url(url)
                 ingest_result: IngestResult = await self._pipeline.ingest(
-                    intake_result, scope=source.scope
+                    intake_result,
+                    scope=source.scope,
+                    source_id=source.id,
                 )
                 if ingest_result.status == "ok":
                     refreshed += 1
@@ -222,7 +224,9 @@ class RefreshOrchestrator:
                     safe_path, workspace_root=self._workspace_root
                 )
                 ingest_result: IngestResult = await self._pipeline.ingest(
-                    intake_result, scope=source.scope
+                    intake_result,
+                    scope=source.scope,
+                    source_id=source.id,
                 )
                 if ingest_result.status == "ok":
                     refreshed += 1
@@ -284,7 +288,11 @@ class RefreshOrchestrator:
                     source=url,
                     metadata={"source_type": "authenticated_web"},
                 )
-                ingest_call = self._pipeline.ingest(intake_result, scope=source.scope)
+                ingest_call = self._pipeline.ingest(
+                    intake_result,
+                    scope=source.scope,
+                    source_id=source.id,
+                )
                 if inspect.isawaitable(ingest_call):
                     ingest_result: IngestResult = await ingest_call
                 else:

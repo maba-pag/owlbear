@@ -204,7 +204,7 @@ Call `askQuestions` with two options:
 
 **Shortcut naming:** preserve the caller-provided title verbatim (no phase prefix).
 
-Create each task via `create_task` with title, priority, tags, depends_on, body containing AC, and `parent` when provided by the caller (shortcut mode). In Step 5/6 body assembly, include `Proof bundle: {value}` for every task. If `{value}` is `existing`, also include `Existing proof scope: {glob-or-file-list}`. Do not pass `status` to `create_task`; tasks are created at `BoardConfig.entry_status`.
+Create each task via `create_task` with title, priority, tags, depends_on, `ac`, `proof_bundle`, body (supporting context only), and `parent` when provided by the caller (shortcut mode). Do not embed `Proof bundle: {value}` as a body line. If `{value}` is `existing`, include `Existing proof scope: {glob-or-file-list}` in the body. Do not pass `status` to `create_task`; tasks are created at `BoardConfig.entry_status`.
 
 - Decomposition mode default status: `research`; create and leave at entry status.
 - Shortcut mode status: caller-provided status, default `backlog` (or `research` for researcher follow-ups). For `backlog`, create first, then call `move_task(id={created_id}, status="backlog")`.

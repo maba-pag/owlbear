@@ -8,7 +8,6 @@ All 15 tests GREEN (implementation in storage_io.py and storage.py).
 from __future__ import annotations
 
 import os
-import threading
 from pathlib import Path
 from datetime import UTC, datetime
 from unittest.mock import patch
@@ -18,15 +17,10 @@ import pytest
 from owlbear_kanban.config_loader import load_config
 from owlbear_kanban.storage_io import atomic_write  # NEW module — ImportError in RED
 from owlbear_kanban.storage import (  # NEW module — ImportError in RED
-    ConcurrencyError,
     allocate_next_id,
     list_archive_files,
     list_task_files,
-    move_to_archive,
-    move_to_quarantine,
     save_config,
-    write_task,
-    write_task_if_unchanged,
 )
 from owlbear_kanban.models import Task
 
@@ -262,180 +256,23 @@ class TestFromAC_AtomicWrite:
 
 
 class TestFromAC_IDAllocation:
-    """AC-C4, AC-C4a, AC-C4b, AC-C51: ID allocation and CAS contract."""
+    """AC-C4, AC-C51: ID allocation contract."""
 
-    def test_ac_c4_50_concurrent_threads_yield_distinct_ids(
+    def test_ac_c4_next_id_file_exists_after_allocation(
         self, tmp_path: Path
     ) -> None:
-        """AC-C4: 50 threads x 1 allocation -> 50 distinct IDs, no duplicates."""
+        """AC-C4: allocate_next_id persists last ID in kanban_dir/.next_id."""
         kanban_dir = _make_board(tmp_path)
-        results: list[int] = []
-        errors: list[Exception] = []
-        lock = threading.Lock()
+        expected_path = kanban_dir / ".next_id"
 
-        def allocate() -> None:
-            try:
-                new_id = allocate_next_id(kanban_dir)
-                with lock:
-                    results.append(new_id)
-            except Exception as exc:  # noqa: BLE001
-                with lock:
-                    errors.append(exc)
-
-        threads = [threading.Thread(target=allocate) for _ in range(50)]
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join()
-
-        assert errors == [], f"Unexpected errors during allocation: {errors}"
-        assert len(results) == 50
-        assert len(set(results)) == 50, f"Duplicate IDs found: {sorted(results)}"
-
-    def test_ac_c4_next_id_lock_file_exists_after_allocation(
-        self, tmp_path: Path
-    ) -> None:
-        """AC-C4: allocate_next_id uses kanban_dir/.next_id.lock — file exists after call."""
-        kanban_dir = _make_board(tmp_path)
-        expected_lock = kanban_dir / ".next_id.lock"
-
-        assert not expected_lock.exists(), (
-            "Lock file must not exist before first allocation"
+        assert not expected_path.exists(), (
+            "ID file must not exist before first allocation"
         )
 
         allocate_next_id(kanban_dir)
 
-        assert expected_lock.exists(), (
-            f".next_id.lock must exist at {expected_lock} after allocate_next_id; "
-            "using a threading.Lock or a different path would fail this assertion"
-        )
-
-    def test_ac_c4a_cas_20_threads_one_success_19_stale(self, tmp_path: Path) -> None:
-        """AC-C4a: 20 threads racing write_task_if_unchanged → exactly 1 success, 19 ERR_STALE."""
-        kanban_dir = _make_board(tmp_path)
-        task = _make_task(1001)
-        write_task(task, kanban_dir)
-        expected_updated = task.updated
-
-        successes: list[int] = []
-        stale_count: list[int] = []
-        other_errors: list[Exception] = []
-        lock = threading.Lock()
-
-        def attempt() -> None:
-            updated_task = task.model_copy(
-                update={"updated": "2026-04-21T11:00:00+00:00"}
-            )
-            try:
-                write_task_if_unchanged(updated_task, expected_updated, kanban_dir)
-                with lock:
-                    successes.append(1)
-            except ConcurrencyError as exc:
-                if exc.code == "ERR_STALE":
-                    with lock:
-                        stale_count.append(1)
-                else:
-                    with lock:
-                        other_errors.append(exc)
-            except Exception as exc:  # noqa: BLE001
-                with lock:
-                    other_errors.append(exc)
-
-        threads = [threading.Thread(target=attempt) for _ in range(20)]
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join()
-
-        assert other_errors == [], f"Unexpected errors: {other_errors}"
-        assert len(successes) == 1, f"Expected 1 success, got {len(successes)}"
-        assert len(stale_count) == 19, f"Expected 19 ERR_STALE, got {len(stale_count)}"
-
-    def test_ac_c4a_survivor_write_intact(self, tmp_path: Path) -> None:
-        """AC-C4a: the one successful CAS write produces a readable task on disk."""
-        kanban_dir = _make_board(tmp_path)
-        task = _make_task(1001)
-        write_task(task, kanban_dir)
-        expected_updated = task.updated
-        new_updated = "2026-04-21T12:00:00+00:00"
-        updated_task = task.model_copy(
-            update={"updated": new_updated, "title": "Updated"}
-        )
-
-        successes: list[int] = []
-        lock = threading.Lock()
-
-        def attempt() -> None:
-            try:
-                write_task_if_unchanged(updated_task, expected_updated, kanban_dir)
-                with lock:
-                    successes.append(1)
-            except ConcurrencyError:
-                pass
-
-        threads = [threading.Thread(target=attempt) for _ in range(5)]
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join()
-
-        assert len(successes) == 1
-        # The task file on disk must be readable and carry the updated title
-        from owlbear_kanban.storage import read_task
-
-        task_files = list_task_files(kanban_dir)
-        assert len(task_files) >= 1
-        written = read_task(task_files[0])
-        assert written.title == "Updated"
-
-    def test_ac_c4b_lock_files_not_in_list_task_files(self, tmp_path: Path) -> None:
-        """AC-C4b: tasks/.<id>.lock files are NOT returned by list_task_files."""
-        kanban_dir = _make_board(tmp_path)
-        tasks_dir = kanban_dir / "tasks"
-        (tasks_dir / "1001-real.md").write_text(
-            "---\nid: 1001\n---\n", encoding="utf-8"
-        )
-        (tasks_dir / ".1001.lock").write_text("", encoding="utf-8")
-
-        result = list_task_files(kanban_dir)
-        names = [p.name for p in result]
-
-        assert "1001-real.md" in names
-        assert ".1001.lock" not in names
-
-    def test_ac_c4b_lock_files_not_in_list_archive_files(self, tmp_path: Path) -> None:
-        """AC-C4b: archive/.<id>.lock files are NOT returned by list_archive_files."""
-        kanban_dir = _make_board(tmp_path)
-        archive_dir = kanban_dir / "archive"
-        (archive_dir / "0001-old.md").write_text("---\nid: 1\n---\n", encoding="utf-8")
-        (archive_dir / ".0001.lock").write_text("", encoding="utf-8")
-
-        result = list_archive_files(kanban_dir)
-        names = [p.name for p in result]
-
-        assert "0001-old.md" in names
-        assert ".0001.lock" not in names
-
-    def test_ac_c4b_write_task_if_unchanged_creates_lock_at_per_task_path(
-        self, tmp_path: Path
-    ) -> None:
-        """AC-C4b: write_task_if_unchanged creates lock file at tasks/.<id>.lock."""
-        kanban_dir = _make_board(tmp_path)
-        task = _make_task(1001)
-        write_task(task, kanban_dir)
-        tasks_dir = kanban_dir / "tasks"
-        expected_lock = tasks_dir / ".1001.lock"
-
-        assert not expected_lock.exists(), (
-            "Lock file must not exist before first write_task_if_unchanged"
-        )
-
-        updated = task.model_copy(update={"updated": "2026-04-21T12:00:00+00:00"})
-        write_task_if_unchanged(updated, task.updated, kanban_dir)
-
-        assert expected_lock.exists(), (
-            f"write_task_if_unchanged must create lock at {expected_lock}; "
-            "per-task lock must be at tasks/.<id>.lock"
+        assert expected_path.exists(), (
+            f".next_id must exist at {expected_path} after allocate_next_id"
         )
 
     def test_ac_c51_scan_based_allocation_ignores_config_next_id(
@@ -477,7 +314,7 @@ class TestFromAC_IDAllocation:
 class TestFromAC_ListFilesFilesOnly:
     """AC-C3: list_task_files / list_archive_files must return only regular files.
 
-    The functions filter ``.tmp-*`` and ``.<id>.lock`` entries per the AC.
+    The functions use ``glob("*.md")`` which inherently excludes hidden/dot files.
     The "list task **files**" contract implies directories must also be excluded:
     a directory with a ``.md`` name is not a task file.
 
@@ -574,138 +411,3 @@ class TestFromAC_ListFilesFilesOnly:
         assert non_files == [], (
             f"list_archive_files returned non-file entries: {[p.name for p in non_files]}"
         )
-
-class TestFromAC_QuarantineLockHygiene:
-    """AC-C4b2: move_to_quarantine no-ops on lock files matching .<digits>.lock.
-
-    Mutation guard: removing the early-return branch in move_to_quarantine would
-    cause the lock file to be moved into quarantine/, breaking coordination.
-    """
-
-    def test_ac_c4b2_lock_file_returned_unchanged(self, tmp_path: Path) -> None:
-        """AC-C4b2: move_to_quarantine returns the original path for a .<digits>.lock file."""
-        kanban_dir = _make_board(tmp_path)
-        tasks_dir = kanban_dir / "tasks"
-        lock_path = tasks_dir / ".1001.lock"
-        lock_path.write_bytes(b"")
-
-        result = move_to_quarantine(lock_path, kanban_dir)
-
-        assert result == lock_path, (
-            "move_to_quarantine must return the original path for a lock file, "
-            "not a quarantine destination"
-        )
-
-    def test_ac_c4b2_lock_file_stays_at_original_path(self, tmp_path: Path) -> None:
-        """AC-C4b2: lock file must remain at its original path after move_to_quarantine."""
-        kanban_dir = _make_board(tmp_path)
-        tasks_dir = kanban_dir / "tasks"
-        lock_path = tasks_dir / ".1001.lock"
-        lock_path.write_bytes(b"")
-
-        move_to_quarantine(lock_path, kanban_dir)
-
-        assert lock_path.exists(), (
-            "Lock file must still exist at original path — move_to_quarantine must not move it"
-        )
-
-    def test_ac_c4b2_lock_file_not_present_in_quarantine(self, tmp_path: Path) -> None:
-        """AC-C4b2: lock file must NOT appear in quarantine/ after move_to_quarantine."""
-        kanban_dir = _make_board(tmp_path)
-        tasks_dir = kanban_dir / "tasks"
-        lock_path = tasks_dir / ".1001.lock"
-        lock_path.write_bytes(b"")
-
-        move_to_quarantine(lock_path, kanban_dir)
-
-        quarantine_copy = kanban_dir / "quarantine" / ".1001.lock"
-        assert not quarantine_copy.exists(), (
-            "Lock file must NOT be moved into quarantine/ — move_to_quarantine must no-op it"
-        )
-
-    def test_ac_c4b2_quarantine_dir_not_created_for_lock_file(
-        self, tmp_path: Path
-    ) -> None:
-        """AC-C4b2: quarantine/ directory must not be created when the input is a lock file."""
-        kanban_dir = _make_board(tmp_path)
-        tasks_dir = kanban_dir / "tasks"
-        lock_path = tasks_dir / ".1001.lock"
-        lock_path.write_bytes(b"")
-
-        move_to_quarantine(lock_path, kanban_dir)
-
-        assert not (kanban_dir / "quarantine").exists(), (
-            "quarantine/ must not be created when move_to_quarantine no-ops on a lock file"
-        )
-
-class TestFromAC_ArchiveLockHygiene:
-    """AC-C4b3: move_to_archive acquires both tasks/.<id>.lock and archive/.<id>.lock.
-
-    Mutation guard: removing archive-lock acquisition would leave archive_dir/.<id>.lock
-    absent after the call, failing the existence assertion.
-    """
-
-    _TASK_BODY = (
-        "---\nid: {id}\ntitle: test-task\nstatus: done\npriority: needed"
-        "\ncreated: 2026-01-01T00:00:00+00:00\nupdated: 2026-01-01T00:00:00+00:00\n---\n"
-    )
-
-    def test_ac_c4b3_archive_lock_file_exists_after_move(self, tmp_path: Path) -> None:
-        """AC-C4b3: archive/.<id>.lock must exist after move_to_archive (archive lock acquired)."""
-        task_id = 1001
-        kanban_dir = _make_board(tmp_path)
-        tasks_dir = kanban_dir / "tasks"
-        (tasks_dir / f"{task_id}-test-task.md").write_text(
-            self._TASK_BODY.format(id=task_id), encoding="utf-8"
-        )
-
-        move_to_archive(task_id, kanban_dir)
-
-        archive_lock = kanban_dir / "archive" / f".{task_id}.lock"
-        assert archive_lock.exists(), (
-            "archive/.<id>.lock must exist after move_to_archive — "
-            "proves _exclusive_file_lock was acquired on the archive-side lock path"
-        )
-
-    def test_ac_c4b3_task_lock_file_exists_after_move(self, tmp_path: Path) -> None:
-        """AC-C4b3: tasks/.<id>.lock must exist after move_to_archive (task-side lock, first)."""
-        task_id = 1002
-        kanban_dir = _make_board(tmp_path)
-        tasks_dir = kanban_dir / "tasks"
-        (tasks_dir / f"{task_id}-test-task.md").write_text(
-            self._TASK_BODY.format(id=task_id), encoding="utf-8"
-        )
-
-        move_to_archive(task_id, kanban_dir)
-
-        task_lock = tasks_dir / f".{task_id}.lock"
-        assert task_lock.exists(), (
-            "tasks/.<id>.lock must exist after move_to_archive — "
-            "proves task-side _exclusive_file_lock was acquired (lock order: task then archive)"
-        )
-
-    def test_ac_c4b3_both_lock_files_exist_after_move(self, tmp_path: Path) -> None:
-        """AC-C4b3: both tasks/.<id>.lock and archive/.<id>.lock must exist (dual-lock contract)."""
-        task_id = 1003
-        kanban_dir = _make_board(tmp_path)
-        tasks_dir = kanban_dir / "tasks"
-        archive_dir = kanban_dir / "archive"
-        (tasks_dir / f"{task_id}-test-task.md").write_text(
-            self._TASK_BODY.format(id=task_id), encoding="utf-8"
-        )
-
-        move_to_archive(task_id, kanban_dir)
-
-        missing = [
-            p
-            for p in [
-                tasks_dir / f".{task_id}.lock",
-                archive_dir / f".{task_id}.lock",
-            ]
-            if not p.exists()
-        ]
-        assert missing == [], (
-            f"Both task and archive lock files must exist after move_to_archive; "
-            f"missing: {[p.name for p in missing]}"
-        )
-

@@ -2586,9 +2586,11 @@ next_id: 1
 
 _EPOCH_CLAIMED_AT = '"2026-01-01T00:00:00+00:00"'  # always expired (> 1 h ago)
 
+
 def _active_claimed_at() -> str:
     """Return a quoted ISO timestamp that is always within the 1 h claim window."""
     return f'"{datetime.now(UTC).isoformat()}"'
+
 
 class TestFromAC_EngineListTasksFilters:
     """AC: list_tasks filter/sort branches; covers tag, priority, blocked,
@@ -2651,6 +2653,7 @@ class TestFromAC_EngineListTasksFilters:
         engine = KanbanEngine(board, activity_log=False)
         result = engine.list_tasks(search="needle")
         assert [t.id for t in result] == [1]
+
 
 class TestFromAC_EngineListTasksSortAndPage:
     """AC: list_tasks sort, reverse, and limit branches."""
@@ -2741,6 +2744,7 @@ class TestFromAC_EngineListTasksSortAndPage:
         assert len(result) == 2
         assert [t.id for t in result] == [1, 2]
 
+
 class TestFromAC_EngineListTasksArchived:
     """AC: list_tasks archived=True sets claimed_by to None."""
 
@@ -2771,6 +2775,7 @@ class TestFromAC_EngineListTasksArchived:
         assert len(result) == 1
         assert result[0].claimed is False
 
+
 class TestFromAC_EngineListTasksParseErrors:
     """AC: list_tasks silently skips files that fail to parse."""
 
@@ -2785,6 +2790,7 @@ class TestFromAC_EngineListTasksParseErrors:
         ids = [t.id for t in result]
         assert 1 in ids
         assert 99 not in ids
+
 
 class TestFromAC_EngineComputeDuration:
     """AC: _compute_duration normalises tz-naive timestamps to UTC."""
@@ -2806,6 +2812,7 @@ class TestFromAC_EngineComputeDuration:
     def test_both_tz_naive_computed_correctly(self) -> None:
         result = _compute_duration("2026-04-23T10:00:00", "2026-04-23T11:30:00")
         assert result == 5400.0
+
 
 class TestFromAC_EngineListSessionsSpecialActions:
     """AC: list_sessions reflects release, sweep-release, and double-claim events
@@ -2903,6 +2910,7 @@ class TestFromAC_EngineListSessionsSpecialActions:
         states = {s.state for s in sessions}
         assert states & {"running", "stuck"}
 
+
 class TestFromAC_EngineInitMigrationGateEdgeCases:
     """AC: __init__ migration gate handles OSError, no frontmatter, no closing
     fence, and cleared claimed_by without raising."""
@@ -2956,6 +2964,7 @@ class TestFromAC_EngineInitMigrationGateEdgeCases:
         engine = KanbanEngine(board, activity_log=False)
         assert engine is not None
 
+
 class TestFromAC_EngineEndWorkValidation:
     """AC: end_work raises ValueError for unknown outcome and invalid move_to."""
 
@@ -2999,6 +3008,7 @@ class TestFromAC_EngineEndWorkValidation:
         result = engine.end_work("1", note="attempt failed", outcome="fail")
         assert result.status == "in-progress"
 
+
 class TestFromAC_EngineClaimTaskGuards:
     """AC: claim_task rejects blocked tasks and active rival claims."""
 
@@ -3025,6 +3035,7 @@ class TestFromAC_EngineClaimTaskGuards:
         task = engine.claim_task("1")
         assert task.claimed_at is not None
 
+
 class TestFromAC_EngineEditTaskMutationPaths:
     """AC: edit_task blocked=False clears block_reason; append_body with
     timestamp=True prepends [[YYYY-MM-DD]] to the note."""
@@ -3046,6 +3057,7 @@ class TestFromAC_EngineEditTaskMutationPaths:
         task = engine.edit_task("1", append_body="My note content", timestamp=True)
         assert re.search(r"\[\[20\d{2}-\d{2}-\d{2}\]\]", task.body)
         assert "My note content" in task.body
+
 
 class TestFromAC_EngineEditTaskRollback:
     """AC: edit_task() rollback path (engine.py:899-901) — when _emit_event raises
@@ -3083,6 +3095,7 @@ class TestFromAC_EngineEditTaskRollback:
         assert "extra appended text" not in restored.body
         assert "original body content" in restored.body
 
+
 class TestFromAC_EngineCreateTaskValidation:
     """AC: create_task raises ValueError for invalid status and priority."""
 
@@ -3098,6 +3111,7 @@ class TestFromAC_EngineCreateTaskValidation:
         with pytest.raises(ValueError, match="Invalid priority"):
             engine.create_task("My task", priority="ultra-critical")
 
+
 class TestFromAC_EngineMoveTaskValidation:
     """AC: move_task raises ValueError for an invalid target status."""
 
@@ -3107,6 +3121,7 @@ class TestFromAC_EngineMoveTaskValidation:
         engine = KanbanEngine(board, activity_log=False)
         with pytest.raises(ValueError, match="Invalid status"):
             engine.move_task("1", "nonexistent-status")
+
 
 class TestFromAC_EngineReadLogEntriesErrors:
     """AC: _read_log_entries handles OSError, invalid JSON, and bad timestamps."""
@@ -3244,6 +3259,7 @@ class TestFromAC_EngineReadLogEntriesErrors:
         assert len(result) == 1
         assert result[0].task_id == 1
 
+
 class TestFromAC_EngineDeriveSessionsNonIntTaskId:
     """AC: _derive_sessions skips entries with non-integer task_id."""
 
@@ -3267,6 +3283,7 @@ class TestFromAC_EngineDeriveSessionsNonIntTaskId:
         engine = KanbanEngine(board, activity_log=True)
         result = engine.list_sessions(filter="all")
         assert result == []
+
 
 class TestFromAC_EngineEndWorkRollback:
     """AC: end_work() rollback path (engine.py:1204-1208) — when _emit_event raises
@@ -3328,4 +3345,3 @@ class TestFromAC_EngineEndWorkRollback:
         assert not archive_file.exists(), (
             "archive file was not moved back during rollback"
         )
-

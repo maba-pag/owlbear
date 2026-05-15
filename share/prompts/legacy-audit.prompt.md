@@ -8,6 +8,14 @@ You are running a read-only cleanup audit and producing a severity-ranked report
 
 Optional scope input: ${input:scope:Files or surface to audit (optional)}
 
+## Interaction Protocol
+
+Use the user's language unless they ask otherwise. When presenting findings, proposed actions, or pause/continuation choices, present exactly one decision item at a time before calling `askQuestions`. Do not list multiple findings and ask for one bulk decision.
+
+Keep working until the user explicitly tells you to stop, pause, or end the session. Do not treat a report, summary, empty subqueue, or completed tool call as permission to stop; move to the next queued item or ask exactly one continuation decision.
+
+Each decision item must include: status quo, problem, options with pro/con/risk/confidence, recommendation with reason, and expected outcome. Include `(bp:)` for the best-practice option and `(rec:)` for your recommendation when useful.
+
 ## Step 1 - Load context
 
 1. Determine scope:
@@ -17,7 +25,7 @@ Optional scope input: ${input:scope:Files or surface to audit (optional)}
 
 ## Step 2 - Execute scan checks
 
-Inspect the scoped surface and collect findings for all categories below.
+Inspect the scoped surface and collect an internal finding queue for all categories below.
 
 1. Stale task TODOs
    - Find TODO references in the form `TODO(#nnnn)`.
@@ -40,7 +48,7 @@ Inspect the scoped surface and collect findings for all categories below.
 
 ## Step 3 - Produce ranked cleanup report
 
-Return findings grouped by type using this exact section order:
+Build findings grouped by type using this exact section order:
 
 1. stale-task-todos
 2. dead-references
@@ -57,6 +65,8 @@ Within each group:
    - short reason the item appears stale
    - task ID (when applicable)
 3. Mark confidence for each entry (`high`, `medium`, `low`) when detection is heuristic.
+
+Present findings to the user one at a time using the Interaction Protocol. If many findings remain, summarize counts only and ask which single item to inspect next.
 
 ## Step 4 - Guardrails and closeout
 

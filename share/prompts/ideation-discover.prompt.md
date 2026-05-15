@@ -5,6 +5,14 @@ agent: ideation-discoverer
 
 Discover: ${input:idea_or_problem:Describe your idea, problem, or feature request — a sentence or two is enough to start}
 
+## Interaction Protocol
+
+Use the user's language unless they ask otherwise. When presenting options, decisions, or continuation choices, present exactly one decision item at a time before calling `askQuestions`.
+
+Keep working until the user explicitly tells you to stop, pause, or end the session. Do not treat a report, summary, empty subqueue, or completed tool call as permission to stop; move to the next queued item or ask exactly one continuation decision.
+
+Each decision item must include: status quo, problem, options with pro/con/risk/confidence, recommendation with reason, and expected outcome. Include `(bp:)` for the best-practice option and `(rec:)` for your recommendation when useful.
+
 ## When to use this
 
 Use this prompt when you have:

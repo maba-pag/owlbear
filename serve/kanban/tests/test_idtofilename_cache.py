@@ -841,4 +841,3 @@ class TestFromAC_IdToFilenameCache_944:
         with patch.object(type(archive_dir), "glob") as mock_glob:
             warm_engine._find_task_path(task_id, warm_engine._tasks_dir)
             mock_glob.assert_not_called()
-

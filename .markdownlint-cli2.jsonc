@@ -2,9 +2,9 @@
   // For local markdownlint runs. Keep aligned with FILTER_REGEX_EXCLUDE in .mega-linter.yml.
   "ignores": [
     ".owlbear/briefs/**",
-    ".owlbear/decisions/**",
     ".owlbear/doc-index.md",
     ".owlbear/kanban/archive/**",
+    ".owlbear/kanban/decisions/**",
     ".owlbear/kanban/tasks/**",
     ".owlbear/research/**",
     ".owlbear/scratch/**",

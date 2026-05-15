@@ -39,15 +39,17 @@ engine.release_task(42)
 | `move_task(task_id, status, *, archival_reason=None, archival_refs=None)` | Change task status; `"archived"` moves file to `archive/` and requires a valid `archival_reason` |
 | `claim_task(task_id)` | Mark task claimed by this engine's `agent_name`; rejects blocked/rival claims |
 | `release_task(task_id, *, note=None)` | Clear claim unconditionally; appends a timestamped note to the body when `note` is provided |
-| `start_work(task_id)` | Claim the task for this agent (no status advancement); if an existing rival claim is expired, it is reclaimed first |
+| `start_work(task_id)` | Claim the task for this agent (no status advancement); if an existing rival claim is expired, it is reclaimed first. Returns `SingleTaskResponse` with a `guidance` list: one warning string when unresolved active dependencies are detected, empty otherwise |
 | `end_work(task_id, …)` | Finalise a work session: append timestamped note and apply outcome (success, fail, block, or reject) |
 | `board_config()` | Defensive copy of the current `BoardConfig` |
 | `agent_view()` | Return the cached `AgentView` facade for agent-facing operations |
 | `valid_transitions(status)` | Set of all statuses except the given one |
 | `refresh_config()` | Reload config from disk |
 | `repair_storage()` | Quarantine corrupt task files and create action-required tasks |
-| `cleanup()` | User-triggered maintenance: release expired claims, move drift-archived files to `archive/`, prune orphan lock files, and return a `CleanupResult` with `released_claim_ids`, `archived_task_ids`, `pruned_lock_paths`, and `skipped_items` |
+| `cleanup()` | User-triggered maintenance: release expired claims, move drift-archived files to `archive/`, remove tasks/ duplicates of archived records, and return a `CleanupResult` with `released_claim_ids`, `archived_task_ids`, `duplicate_removed_ids`, and `skipped_items` |
 | `list_sessions(**kwargs)` | Derived `SessionRecord` objects from `activity.jsonl` |
+
+The `guidance` list in `SingleTaskResponse` from `start_work()` carries dependency warnings. When the task has at least one unresolved active dependency (a `depends_on` entry whose task is not archived), exactly one string is emitted: `"⚠️ This task has unresolved dependencies (IDs: {id, …}). Review and confirm with the user that starting this work is intentional."` Callers should surface this to the user before proceeding. When all dependencies are archived or the `depends_on` list is empty, `guidance` is `[]`. Dep-lookup exceptions are swallowed silently; failed lookups are excluded from the active-ID set.
 
 ### Product topology (fixed)
 
@@ -76,7 +78,7 @@ for wave in response.waves:
 
 `AgentView.pick_tasks` runs a five-step read-only pipeline: topology validation against fixed product statuses, filter (exclude tasks with a live claim, archived/blocked tasks, and tasks whose `depends_on` entries are still active or otherwise dependency-blocked; apply TDD gate for in-progress tasks without `## Test-Writer Notes` unless tagged non-impl; apply clarity gate for active statuses without bullet/numbered AC lines; post-rehydrate archived-status guard skips tasks archived between list and show), deterministic sort (priority ASC, age DESC, id ASC), greedy wave assembly (size cap, dep-disjointness, agent-bucket compatibility), and fixed status-to-agent assignment.
 
-Task and archive directories may contain zero-byte `.{id}.lock` files. These are persistent runtime lock sentinels used for cross-process filesystem locking; their presence does not mean a task is currently locked. Cleanup prunes only orphan lock files that no longer correspond to an active or archived task record.
+Concurrency is handled via optimistic concurrency control (OCC): `write_task_if_unchanged` compares the task's `updated` timestamp before writing and raises `ConcurrencyError` on stale reads.
 
 ## Migration
 

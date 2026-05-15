@@ -22,8 +22,8 @@ Exactly 9 tools are exposed:
 | `list_tasks` | `list_tasks(status: str | None = None, priority: str | None = None, tag: str | None = None, archival_reason: str | None = None, ids: list[int] | None = None, unclaimed: bool = False, blocked: bool | None = None, parent: int | None = None, search: str | None = None, sort: str | None = None, reverse: bool = False, limit: int = 0)` |
 | `show_task` | `show_task(id: str | int, section: str | None = None)` |
 | `pick_tasks` | `pick_tasks(wave_size: int | None = None, max_waves: int = 3)` |
-| `create_task` | `create_task(title: str, body: str = "", priority: str = "", tags: list[str] | None = None, parent: int | None = None, depends_on: list[int] | None = None)` |
-| `edit_task` | `edit_task(id: str | int, title: str | None = None, body: str | None = None, append_body: str | None = None, timestamp: bool = False, priority: str | None = None, parent: int | None = None, add_dep: list[int] | None = None, remove_dep: list[int] | None = None, add_tag: list[str] | None = None, remove_tag: list[str] | None = None, block_reason: str | None = None, archival_reason: str | None = None, archival_refs: list[int] | None = None)` |
+| `create_task` | `create_task(title: str, body: str = "", priority: str = "", tags: list[str] | None = None, parent: int | None = None, depends_on: list[int] | None = None, ac: list[str] | None = None, proof_bundle: str | None = None)` |
+| `edit_task` | `edit_task(id: str | int, title: str | None = None, body: str | None = None, append_body: str | None = None, timestamp: bool = False, priority: str | None = None, parent: int | None = None, ac: list[str] | None = None, add_ac: list[str] | None = None, remove_ac: list[str] | None = None, proof_bundle: str | None = None, add_dep: list[int] | None = None, remove_dep: list[int] | None = None, add_tag: list[str] | None = None, remove_tag: list[str] | None = None, block_reason: str | None = None, archival_reason: str | None = None, archival_refs: list[int] | None = None)` |
 | `move_task` | `move_task(id: str | int, status: str, archival_reason: str | None = None, archival_refs: list[int] | None = None)` |
 | `start_work` | `start_work(id: str | int)` |
 | `end_work` | `end_work(id: str | int, outcome: str, move_to: str | None = None, note: str | None = None, archival_reason: str | None = None, archival_refs: list[int] | None = None, block_reason: str | None = None)` |
@@ -45,6 +45,9 @@ Exactly 9 tools are exposed:
 - `title`: replaces task title; empty or whitespace-only values are rejected.
 - `body`: omitted or `null` means no change, `""` clears body, non-empty text replaces body.
 - `parent`: positive ID sets parent; `0` clears parent; omitted or `null` means no change.
+- `ac`: full replacement of the AC list. Mutually exclusive with `add_ac`/`remove_ac`.
+- `add_ac` / `remove_ac`: atomic add/remove of individual AC items. Mutually exclusive with `ac`.
+- `proof_bundle`: normalized (lowercase, modifiers sorted) by model; validated against known values by engine.
 
 ## Projection Schemas
 
@@ -58,19 +61,20 @@ List projection with dependency and archival context.
 - Optional/context: `tags`, `blocked`, `block_reason`, `claimed_at`, `claimed`
 - Archival fields: `archival_reason`, `archival_refs`
 - Dependency projection: `dep_status` in `{ok, redirect, blocked}` (or `None` when no dependencies). `blocked` includes dependencies that are still active, missing, or archived with a blocking archival reason.
+- `proof_bundle`: normalized string or `null`
 
 ### TaskFull
 
 Full projection for show/update operations.
 
 - Inherits `TaskSummary`
-- Adds `created`, `body`
+- Adds `created`, `body`, `ac: list[str]` (acceptance-criteria lines)
 
 ### DispatchEntry
 
 Dispatch projection used by `pick_tasks` waves.
 
-- `id`, `status`, `priority`, `title`, `tags`, `agent`
+- `id`, `status`, `priority`, `title`, `tags`, `proof_bundle`, `agent`
 
 ### Wave
 

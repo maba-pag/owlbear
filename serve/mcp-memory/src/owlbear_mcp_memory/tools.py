@@ -209,11 +209,15 @@ async def list_memories(
     engine = _engine_from_ctx(ctx)
     coerced_states = _coerce_states(states)
     coerced_categories = _coerce_categories(categories)
-    allowed_states = set(coerced_states) if coerced_states else {
-        MemoryState.PENDING,
-        MemoryState.CURATED,
-        MemoryState.APPROVED,
-    }
+    allowed_states = (
+        set(coerced_states)
+        if coerced_states
+        else {
+            MemoryState.PENDING,
+            MemoryState.CURATED,
+            MemoryState.APPROVED,
+        }
+    )
     category_filter = set(coerced_categories or [])
     scope_filter = set(scope_agents or [])
 
@@ -235,7 +239,13 @@ async def list_memories(
             )
         ]
 
-    entries.sort(key=lambda entry: (_state_rank_for_list(entry.state), entry.created_at, entry.id))
+    entries.sort(
+        key=lambda entry: (
+            _state_rank_for_list(entry.state),
+            entry.created_at,
+            entry.id,
+        )
+    )
     return [_metadata_dict(entry) for entry in entries]
 
 
@@ -293,7 +303,9 @@ async def recall_memory(
             for entry in entries
             if bool(category_filter.intersection(set(entry.categories)))
         ]
-    entries.sort(key=lambda entry: (state_rank[entry.state], -entry.confidence, entry.id))
+    entries.sort(
+        key=lambda entry: (state_rank[entry.state], -entry.confidence, entry.id)
+    )
     entries = entries[:capped_limit]
 
     return "\n\n".join(f"## {entry.title}\n{entry.content}" for entry in entries)
@@ -325,7 +337,11 @@ async def _update_entry(  # noqa: PLR0913
     if current.state == MemoryState.PENDING and not next_scope_agents:
         msg = "scope_agents are required when curating pending entries"
         raise ToolError(msg)
-    if current.state != MemoryState.PENDING and scope_agents is not None and not scope_agents:
+    if (
+        current.state != MemoryState.PENDING
+        and scope_agents is not None
+        and not scope_agents
+    ):
         msg = "scope_agents cannot be blanked on curated or approved entries"
         raise ToolError(msg)
 
@@ -418,9 +434,13 @@ async def curate_memory(  # noqa: PLR0913
         confidence=confidence,
         scope_agents=scope_agents,
     )
-    if current.state == MemoryState.PENDING and updated["state"] == str(MemoryState.CURATED):
+    if current.state == MemoryState.PENDING and updated["state"] == str(
+        MemoryState.CURATED
+    ):
         hint = "Promoted from pending to curated with explicit scope."
-    elif current.state == MemoryState.APPROVED and updated["state"] == str(MemoryState.CURATED):
+    elif current.state == MemoryState.APPROVED and updated["state"] == str(
+        MemoryState.CURATED
+    ):
         hint = "Downgraded from approved to curated; re-approve after review."
     else:
         hint = "Curated entry updated."

@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from owlbear_knowledge.status_store import StatusStore
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     import sqlite3
@@ -132,7 +135,7 @@ class DocumentStore:
         chunks_or_texts: list[Chunk] | list[str],
         embeddings: list[HybridEmbedding] | None = None,
         *,
-        scope: str = "global",  # noqa: ARG002 - reserved for future scoped vector store routing
+        scope: str = "global",
     ) -> None:
         """Store embeddings for document chunks.
 
@@ -152,6 +155,7 @@ class DocumentStore:
                     entity_or_doc_id=f"{document_id_or_chunk_ids}_{chunk.index}",  # type: ignore[union-attr]
                     embedding=embedding,
                     embedding_type="document",
+                    scope=scope,
                 )
         else:
             # Legacy API: (chunk_ids, chunk_texts)
@@ -165,6 +169,7 @@ class DocumentStore:
                     entity_or_doc_id=cid,
                     embedding=emb,
                     embedding_type="document",
+                    scope=scope,
                 )
 
     def store_entity_embeddings(
@@ -240,9 +245,31 @@ class DocumentStore:
                 self._graph.insert_entity(stamped)
                 entity_count += 1
             for edge in result.edges:  # type: ignore[union-attr]
-                self._graph.insert_edge(edge)
+                stamped_edge = edge.model_copy(
+                    update={
+                        "scope": scope,
+                        "metadata": {
+                            **edge.metadata,
+                            "pipeline_name": pipeline_name,
+                            "document_id": document_id,
+                            "scope": scope,
+                            "chunk_id": assigned_chunk_id,
+                        },
+                    }
+                )
+                self._graph.insert_edge(stamped_edge, document_id=document_id)
                 edge_count += 1
         return entity_count, edge_count
+
+    def delete_chunk_embeddings(self, chunk_ids: list[str]) -> None:
+        """Best-effort deletion of vector payloads for chunk IDs."""
+        if not chunk_ids:
+            return
+        for chunk_id in chunk_ids:
+            try:
+                self._vector.delete_embedding(chunk_id)  # type: ignore[union-attr]
+            except Exception:  # noqa: BLE001
+                logger.debug("chunk embedding cleanup failed", exc_info=True)
 
     # ── Cascade delete ────────────────────────────────────────────────────
 
@@ -254,6 +281,12 @@ class DocumentStore:
         Args:
             document_id: The document to delete.
         """
+        chunk_rows = self._conn.execute(
+            "SELECT id FROM chunks WHERE document_id = ?", (document_id,)
+        ).fetchall()
+        chunk_ids = [row[0] for row in chunk_rows]
+        self.delete_chunk_embeddings(chunk_ids)
+
         # Delete entities and their edges for this document
         entity_rows = self._conn.execute(
             "SELECT id FROM entities WHERE document_id = ?", (document_id,)

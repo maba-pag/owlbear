@@ -5,7 +5,7 @@ argument-hint: "Challenge: task_id={task_id}, proposed_verdict={verdict}, reason
 user-invocable: false
 disable-model-invocation: false
 model: GPT-5.4 (copilot)
-tools: [read/readFile, read/viewImage, read/problems, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages]
+tools: [vscode/toolSearch, read/problems, read/readFile, read/viewImage, search]
 agents: []
 hooks:
   PreToolUse:

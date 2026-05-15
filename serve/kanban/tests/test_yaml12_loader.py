@@ -8,7 +8,7 @@ AC coverage:
   5.  timestamp resolver (tag:yaml.org,2002:timestamp) stripped from YAML12SafeLoader
   6.  YAML 1.1 bool aliases (yes/no/on/off) stripped — parse as strings under YAML12SafeLoader
   7.  YAML 1.2 bool resolver re-added — true/False/TRUE/FALSE all parse as Python bool
-  8.  read_task() calls yaml.load() with Loader=YAML12SafeLoader (pyyaml, not ruamel)
+  8.  read_task() delegates frontmatter parsing to a YAML12SafeLoader-backed helper
   9.  _to_plain() removed from task_io (dead code after read path switch to PyYAML)
   10. pyyaml>=6.0.3 declared in serve/kanban/pyproject.toml [project.dependencies]
   11. Regression: 7-digit (Go-style) timestamps preserved as strings through read_task()
@@ -24,6 +24,8 @@ from __future__ import annotations
 
 import tomllib
 from pathlib import Path
+
+import pytest
 
 _CONFIG_YAML = """\
 statuses:
@@ -71,6 +73,17 @@ def _make_kanban_dir(base_dir: Path) -> Path:
     (kanban_dir / "tasks").mkdir(exist_ok=True)
     (kanban_dir / "archive").mkdir(exist_ok=True)
     return kanban_dir
+
+
+def _load_with_yaml12_loader(document: str) -> object:
+    """Parse a YAML snippet with the direct YAML12SafeLoader path."""
+    from owlbear_kanban.storage import YAML12SafeLoader
+
+    loader = YAML12SafeLoader(document)
+    try:
+        return loader.get_single_data()
+    finally:
+        loader.dispose()
 
 
 # ---------------------------------------------------------------------------
@@ -133,12 +146,8 @@ class TestFromAC_YAML12SafeLoader:
 
     def test_timestamp_7digit_fractional_preserved_as_string(self) -> None:
         """7-digit (Go nanosecond) timestamps must be returned as str, not datetime."""
-        import yaml
-
-        from owlbear_kanban.storage import YAML12SafeLoader
-
         ts = "2026-04-09T03:24:26.6974428+02:00"
-        result = yaml.load(f"created: {ts}", Loader=YAML12SafeLoader)
+        result = _load_with_yaml12_loader(f"created: {ts}")
 
         assert isinstance(result["created"], str), (
             f"7-digit timestamp must parse as str, got {type(result['created']).__name__}"
@@ -147,12 +156,8 @@ class TestFromAC_YAML12SafeLoader:
 
     def test_timestamp_6digit_fractional_preserved_as_string(self) -> None:
         """6-digit (Python microsecond) timestamps must be returned as str, not datetime."""
-        import yaml
-
-        from owlbear_kanban.storage import YAML12SafeLoader
-
         ts = "2026-04-17T20:16:32.171661+00:00"
-        result = yaml.load(f"updated: {ts}", Loader=YAML12SafeLoader)
+        result = _load_with_yaml12_loader(f"updated: {ts}")
 
         assert isinstance(result["updated"], str), (
             f"6-digit timestamp must parse as str, got {type(result['updated']).__name__}"
@@ -163,44 +168,28 @@ class TestFromAC_YAML12SafeLoader:
 
     def test_yaml11_yes_parses_as_string(self) -> None:
         """Unquoted 'yes' must parse as str 'yes', not bool True (YAML 1.2 semantics)."""
-        import yaml
-
-        from owlbear_kanban.storage import YAML12SafeLoader
-
-        result = yaml.load("value: yes", Loader=YAML12SafeLoader)
+        result = _load_with_yaml12_loader("value: yes")
 
         assert not isinstance(result["value"], bool), "yes must not be coerced to bool"
         assert result["value"] == "yes"
 
     def test_yaml11_no_parses_as_string(self) -> None:
         """Unquoted 'no' must parse as str 'no', not bool False (YAML 1.2 semantics)."""
-        import yaml
-
-        from owlbear_kanban.storage import YAML12SafeLoader
-
-        result = yaml.load("value: no", Loader=YAML12SafeLoader)
+        result = _load_with_yaml12_loader("value: no")
 
         assert not isinstance(result["value"], bool), "no must not be coerced to bool"
         assert result["value"] == "no"
 
     def test_yaml11_on_parses_as_string(self) -> None:
         """Unquoted 'on' must parse as str 'on', not bool True (YAML 1.2 semantics)."""
-        import yaml
-
-        from owlbear_kanban.storage import YAML12SafeLoader
-
-        result = yaml.load("value: on", Loader=YAML12SafeLoader)
+        result = _load_with_yaml12_loader("value: on")
 
         assert not isinstance(result["value"], bool), "on must not be coerced to bool"
         assert result["value"] == "on"
 
     def test_yaml11_off_parses_as_string(self) -> None:
         """Unquoted 'off' must parse as str 'off', not bool False (YAML 1.2 semantics)."""
-        import yaml
-
-        from owlbear_kanban.storage import YAML12SafeLoader
-
-        result = yaml.load("value: off", Loader=YAML12SafeLoader)
+        result = _load_with_yaml12_loader("value: off")
 
         assert not isinstance(result["value"], bool), "off must not be coerced to bool"
         assert result["value"] == "off"
@@ -209,41 +198,25 @@ class TestFromAC_YAML12SafeLoader:
 
     def test_yaml12_lowercase_true_parses_as_bool(self) -> None:
         """YAML 1.2 'true' must parse as Python bool True."""
-        import yaml
-
-        from owlbear_kanban.storage import YAML12SafeLoader
-
-        result = yaml.load("blocked: true", Loader=YAML12SafeLoader)
+        result = _load_with_yaml12_loader("blocked: true")
 
         assert result["blocked"] is True
 
     def test_yaml12_lowercase_false_parses_as_bool(self) -> None:
         """YAML 1.2 'false' must parse as Python bool False."""
-        import yaml
-
-        from owlbear_kanban.storage import YAML12SafeLoader
-
-        result = yaml.load("blocked: false", Loader=YAML12SafeLoader)
+        result = _load_with_yaml12_loader("blocked: false")
 
         assert result["blocked"] is False
 
     def test_yaml12_title_case_true_parses_as_bool(self) -> None:
         """YAML 1.2 'True' (title-case) must parse as Python bool True."""
-        import yaml
-
-        from owlbear_kanban.storage import YAML12SafeLoader
-
-        result = yaml.load("blocked: True", Loader=YAML12SafeLoader)
+        result = _load_with_yaml12_loader("blocked: True")
 
         assert result["blocked"] is True
 
     def test_yaml12_all_caps_false_parses_as_bool(self) -> None:
         """YAML 1.2 'FALSE' (all-caps) must parse as Python bool False."""
-        import yaml
-
-        from owlbear_kanban.storage import YAML12SafeLoader
-
-        result = yaml.load("blocked: FALSE", Loader=YAML12SafeLoader)
+        result = _load_with_yaml12_loader("blocked: FALSE")
 
         assert result["blocked"] is False
 
@@ -251,11 +224,7 @@ class TestFromAC_YAML12SafeLoader:
 
     def test_null_value_preserved_as_none(self) -> None:
         """null YAML values must parse as Python None (null resolver must not be stripped)."""
-        import yaml
-
-        from owlbear_kanban.storage import YAML12SafeLoader
-
-        result = yaml.load("parent: null\nblock_reason: null", Loader=YAML12SafeLoader)
+        result = _load_with_yaml12_loader("parent: null\nblock_reason: null")
 
         assert result["parent"] is None
         assert result["block_reason"] is None
@@ -267,7 +236,7 @@ class TestFromAC_YAML12SafeLoader:
 
 
 class TestFromAC_ReadTaskPyYAML:
-    """Verifies read_task() uses yaml.load + YAML12SafeLoader and _to_plain is removed."""
+    """Verifies read_task() uses the YAML12SafeLoader path and _to_plain is removed."""
 
     # -- AC 8a: task_io imports yaml module -----------------------------------
 
@@ -279,13 +248,13 @@ class TestFromAC_ReadTaskPyYAML:
             "task_io must import yaml (pyyaml) at module level so read_task() can use it"
         )
 
-    # -- AC 8b: read_task calls yaml.load with YAML12SafeLoader ---------------
+    # -- AC 8b: read_task delegates to YAML12SafeLoader-backed helper ---------
 
-    def test_read_task_calls_yaml_load_with_yaml12_loader(self, tmp_path: Path) -> None:
-        """read_task() must call yaml.load(fm, Loader=YAML12SafeLoader), not ruamel's load."""
+    def test_read_task_uses_yaml12_frontmatter_helper(self, tmp_path: Path) -> None:
+        """read_task() must delegate frontmatter parsing to the YAML12SafeLoader helper."""
         from unittest.mock import patch
 
-        from owlbear_kanban.storage import YAML12SafeLoader, read_task
+        from owlbear_kanban.storage import read_task
 
         content = (
             "---\n"
@@ -299,8 +268,16 @@ class TestFromAC_ReadTaskPyYAML:
         task_file = tmp_path / "1-test-task.md"
         task_file.write_text(content, encoding="utf-8")
 
-        with patch("owlbear_kanban.storage.yaml") as mock_yaml:
-            mock_yaml.load.return_value = {
+        expected_frontmatter = (
+            "id: 1\ntitle: Test Task\nstatus: todo\npriority: needed\n"
+            "created: 2026-04-09T03:24:26.6974428+02:00\n"
+            "updated: 2026-04-17T20:16:32.171661+00:00\n"
+            "blocked: false\ntags: []\ndepends_on: []\nparent: null\n"
+            "block_reason: null\nclaimed_by: null\nclaimed_at: null"
+        )
+
+        with patch("owlbear_kanban.storage._load_yaml12_frontmatter") as mock_loader:
+            mock_loader.return_value = {
                 "id": 1,
                 "title": "Test Task",
                 "status": "todo",
@@ -317,14 +294,23 @@ class TestFromAC_ReadTaskPyYAML:
             }
             read_task(task_file)
 
-        assert mock_yaml.load.called, "yaml.load must be called in read_task()"
-        call_args = mock_yaml.load.call_args
-        loader_arg = call_args.kwargs.get("Loader") or (
-            call_args.args[1] if len(call_args.args) > 1 else None
+        mock_loader.assert_called_once_with(expected_frontmatter, path=task_file)
+
+    def test_read_task_rejects_non_mapping_frontmatter(self, tmp_path: Path) -> None:
+        """read_task() must surface non-mapping frontmatter as YAML corruption."""
+        from owlbear_kanban.corruption import CorruptionError
+        from owlbear_kanban.storage import read_task
+
+        task_file = tmp_path / "2-frontmatter-list.md"
+        task_file.write_text(
+            "---\n- id: 2\n- title: not-a-mapping\n---\n",
+            encoding="utf-8",
         )
-        assert loader_arg is YAML12SafeLoader, (
-            f"yaml.load must be called with Loader=YAML12SafeLoader, got Loader={loader_arg!r}"
-        )
+
+        with pytest.raises(CorruptionError) as exc_info:
+            read_task(task_file)
+
+        assert exc_info.value.code == "ERR_CORRUPT_YAML_PARSE"
 
     # -- AC 9: _to_plain removed ----------------------------------------------
 

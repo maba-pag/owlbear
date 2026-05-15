@@ -27,7 +27,7 @@ import io
 import re
 from datetime import UTC, datetime
 from pathlib import Path  # noqa: TC003
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import yaml
 from pydantic import ValidationError
@@ -39,7 +39,6 @@ if TYPE_CHECKING:
 
     from ruamel.yaml import YAML
 
-from owlbear_kanban._locking import _exclusive_file_lock
 from owlbear_kanban._naming import (
     generate_slug,  # noqa: F401
     make_task_filename,
@@ -91,6 +90,22 @@ def _make_yaml() -> YAML:
     return make_yaml()
 
 
+def _load_yaml12_frontmatter(frontmatter_str: str, *, path: Path) -> dict[str, Any]:
+    """Load task frontmatter with the task-safe PyYAML loader."""
+    loader = YAML12SafeLoader(frontmatter_str)
+    try:
+        data = loader.get_single_data()
+    finally:
+        loader.dispose()
+
+    if data is None:
+        return {}
+    if not isinstance(data, dict):
+        msg = f"Task frontmatter must be a YAML mapping: {path}"
+        raise yaml.YAMLError(msg)
+    return cast("dict[str, Any]", data)
+
+
 def _parse_task_file(path: Path) -> dict[str, Any]:
     """Parse a markdown task file into a frontmatter/body dictionary."""
     try:
@@ -114,7 +129,7 @@ def _parse_task_file(path: Path) -> dict[str, Any]:
 
     frontmatter_str = "\n".join(lines[1:closing_idx])
     body = "\n".join(lines[closing_idx + 1 :])
-    data: dict[str, Any] = yaml.load(frontmatter_str, Loader=YAML12SafeLoader) or {}  # noqa: S506
+    data = _load_yaml12_frontmatter(frontmatter_str, path=path)
     data["body"] = body
     return data
 
@@ -203,6 +218,8 @@ _CANONICAL_FIELDS: list[str] = [
     "tags",
     "parent",
     "depends_on",
+    "ac",
+    "proof_bundle",
     "blocked",
     "block_reason",
     "claimed_at",
@@ -394,6 +411,10 @@ def write_task(task: Task, kanban_dir: Path, *, target_dir: Path | None = None) 
     data: dict[str, Any] = task.model_dump()
     data.pop("body", None)
     data.pop("claimed_by", None)  # Never write claimed_by (AC-C13)
+    if data.get("ac") == []:
+        data.pop("ac", None)
+    if data.get("proof_bundle") is None:
+        data.pop("proof_bundle", None)
     body: str = task.body or ""
 
     # Build ordered frontmatter (AC-C13)
@@ -408,7 +429,9 @@ def write_task(task: Task, kanban_dir: Path, *, target_dir: Path | None = None) 
     # Vendor extras (AC-C15 applies to all timestamp-looking values).
     for key, val in data.items():
         if key not in _CANONICAL_FIELD_SET and key != "claimed_by":
-            normalized_val = _as_plain_timestamp_scalar(val) if isinstance(val, str) else val
+            normalized_val = (
+                _as_plain_timestamp_scalar(val) if isinstance(val, str) else val
+            )
             ordered[key] = normalized_val
 
     stream = io.StringIO()
@@ -445,22 +468,19 @@ def write_task_if_unchanged(
     config = _load_config(kanban_dir)
     tasks_dir = kanban_dir / config.paths.tasks_dir
     archive_dir = kanban_dir / config.paths.archive_dir
-    lock_path = tasks_dir / f".{task.id}.lock"
-    archive_lock_path = archive_dir / f".{task.id}.lock"
 
-    with _exclusive_file_lock(lock_path), _exclusive_file_lock(archive_lock_path):
-        matches = list(tasks_dir.glob(f"{task.id}-*.md"))
-        if not matches:
-            matches = list(archive_dir.glob(f"{task.id}-*.md"))
-        if not matches:
-            msg = f"Task file for id={task.id} not found"
-            raise FileNotFoundError(msg)
-        task_path = matches[0]
-        current = read_task(task_path)
-        if current.updated != expected_updated:
-            msg = f"task {task.id} changed since read; reload and retry"
-            raise ConcurrencyError(code="ERR_STALE", user_message=msg)
-        return write_task(task, kanban_dir, target_dir=task_path.parent)
+    matches = list(tasks_dir.glob(f"{task.id}-*.md"))
+    if not matches:
+        matches = list(archive_dir.glob(f"{task.id}-*.md"))
+    if not matches:
+        msg = f"Task file for id={task.id} not found"
+        raise FileNotFoundError(msg)
+    task_path = matches[0]
+    current = read_task(task_path)
+    if current.updated != expected_updated:
+        msg = f"task {task.id} changed since read; reload and retry"
+        raise ConcurrencyError(code="ERR_STALE", user_message=msg)
+    return write_task(task, kanban_dir, target_dir=task_path.parent)
 
 
 # ---------------------------------------------------------------------------
@@ -469,7 +489,7 @@ def write_task_if_unchanged(
 
 
 def list_task_files(kanban_dir: Path) -> list[Path]:
-    """Return sorted list of all task ``.md`` files, excluding temp/lock files."""
+    """Return sorted list of all task ``.md`` files, excluding temp/hidden files."""
     from owlbear_kanban.config_loader import load_config as _load_config  # noqa: PLC0415
 
     config = _load_config(kanban_dir)
@@ -487,7 +507,7 @@ def list_task_files(kanban_dir: Path) -> list[Path]:
 
 
 def list_archive_files(kanban_dir: Path) -> list[Path]:
-    """Return sorted list of all archive ``.md`` files, excluding temp/lock files."""
+    """Return sorted list of all archive ``.md`` files, excluding temp/hidden files."""
     from owlbear_kanban.config_loader import load_config as _load_config  # noqa: PLC0415
 
     config = _load_config(kanban_dir)
@@ -517,19 +537,15 @@ def move_to_archive(task_id: int, kanban_dir: Path) -> Path:
     tasks_dir = kanban_dir / config.paths.tasks_dir
     archive_dir = kanban_dir / config.paths.archive_dir
     archive_dir.mkdir(parents=True, exist_ok=True)
-    task_lock_path = tasks_dir / f".{task_id}.lock"
-    archive_lock_path = archive_dir / f".{task_id}.lock"
 
-    # Keep lock order consistent with write_task_if_unchanged to avoid deadlocks.
-    with _exclusive_file_lock(task_lock_path), _exclusive_file_lock(archive_lock_path):
-        matches = list(tasks_dir.glob(f"{task_id}-*.md"))
-        if not matches:
-            msg = f"No task file found for id={task_id}"
-            raise FileNotFoundError(msg)
-        src = matches[0]
-        dest = archive_dir / src.name
-        src.replace(dest)
-        return dest
+    matches = list(tasks_dir.glob(f"{task_id}-*.md"))
+    if not matches:
+        msg = f"No task file found for id={task_id}"
+        raise FileNotFoundError(msg)
+    src = matches[0]
+    dest = archive_dir / src.name
+    src.replace(dest)
+    return dest
 
 
 # ---------------------------------------------------------------------------
@@ -542,42 +558,40 @@ def allocate_next_id(
     *,
     write_task_fn: Callable[[int], None] | None = None,
 ) -> int:
-    """Allocate the next task ID under the shared create lock.
+    """Allocate the next task ID via scan-based allocation.
 
-    When ``write_task_fn`` is provided, allocation is scan-based (active+archive
-    max prefix + 1) and the callback is executed while the lock is still held so
-    callers can keep scan+write in one critical section.
+    When ``write_task_fn`` is provided, allocation finds active+archive max
+    prefix + 1 and the callback is executed immediately so callers get
+    scan+write in one call.
 
-    When ``write_task_fn`` is ``None``, this function still uses scan-based
-    allocation and persists the last issued id in ``.next_id.lock`` so repeated
-    allocation-only calls remain distinct under concurrency.
+    When ``write_task_fn`` is ``None``, the function persists the last issued
+    id in ``.next_id`` so repeated allocation-only calls remain distinct.
     """
-    lock_path = kanban_dir / ".next_id.lock"
-    with _exclusive_file_lock(lock_path):
-        max_id = 0
-        for path in [*list_task_files(kanban_dir), *list_archive_files(kanban_dir)]:
-            try:
-                file_id = int(path.stem.split("-", 1)[0])
-            except ValueError:
-                continue
-            max_id = max(max_id, file_id)
-
-        last_allocated = 0
+    id_path = kanban_dir / ".next_id"
+    max_id = 0
+    for path in [*list_task_files(kanban_dir), *list_archive_files(kanban_dir)]:
         try:
-            text = lock_path.read_text(encoding="utf-8").strip()
-            if text:
-                last_allocated = int(text)
-        except (OSError, ValueError):
-            last_allocated = 0
+            file_id = int(path.stem.split("-", 1)[0])
+        except ValueError:
+            continue
+        max_id = max(max_id, file_id)
 
-        if write_task_fn is not None:
-            new_id = max_id + 1
-            write_task_fn(new_id)
-            return new_id
+    last_allocated = 0
+    try:
+        text = id_path.read_text(encoding="utf-8").strip()
+        if text:
+            last_allocated = int(text)
+    except (OSError, ValueError):
+        last_allocated = 0
 
-        new_id = max(max_id, last_allocated) + 1
-        lock_path.write_text(f"{new_id}\n", encoding="utf-8")
+    if write_task_fn is not None:
+        new_id = max_id + 1
+        write_task_fn(new_id)
         return new_id
+
+    new_id = max(max_id, last_allocated) + 1
+    id_path.write_text(f"{new_id}\n", encoding="utf-8")
+    return new_id
 
 
 # ---------------------------------------------------------------------------

@@ -273,7 +273,8 @@ class KnowledgeQueryService:
 
             lines: list[str] = []
             for chunk_id, _ in chunks:
-                doc = self._graph.get_document(chunk_id)
+                doc_id = self._graph.get_document_id_for_chunk(chunk_id) or chunk_id
+                doc = self._graph.get_document(doc_id)
                 if doc is not None:
                     lines.append(f"- {doc.title}: {doc.content}")
 

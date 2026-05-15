@@ -6,8 +6,7 @@ members = ["serve/*"]
 
 [dependency-groups]
 dev = [
-  "ddgs[mcp]>=9.14.1,<10",
-  "msal>=1.36.0",
+  "ddgs[mcp]>=9.14.2,<10",
   "pytest>=9.0.3",
   "pytest-asyncio>=1.3.0",
   "pytest-cov>=7.1.0",
@@ -16,9 +15,6 @@ dev = [
   "pyyaml>=6.0.3",
   "ruff>=0.15.12",
   "strictyaml>=1.7.3",
-]
-validation = [
-  "skills-ref==0.1.1",
 ]
 
 [tool.pytest.ini_options]
@@ -149,7 +145,6 @@ ignore = [
   "RUF100",  # unused noqa — pre-existing marker suppression in test files
   "S101",    # assert is fine in tests
   "S105",    # token/password false positives in test assertions
-  "S506",    # yaml.load with custom SafeLoader subclass — YAML12SafeLoader IS safe
   "S106",    # hardcoded password in function args — test fixtures
   "S603",    # subprocess security — test-controlled inputs
   "S607",    # partial executable path — test-controlled commands

@@ -4,7 +4,7 @@ description: "Security domain panelist — reads problem context, identifies acc
 argument-hint: "Security: {problem and outcome context for security analysis}"
 user-invocable: false
 disable-model-invocation: true
-tools: [ob-memory/save_memory, ob-memory/recall_memory, vscode/toolSearch, edit/createDirectory, edit/createFile, edit/editFiles, read/readFile, read/viewImage, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, agent]
+tools: [vscode/toolSearch, read/readFile, read/viewImage, agent, edit/createDirectory, edit/createFile, edit/editFiles, search, ob-memory/recall_memory, ob-memory/save_memory]
 agents: [ideation-critic]
 hooks:
   PreToolUse:

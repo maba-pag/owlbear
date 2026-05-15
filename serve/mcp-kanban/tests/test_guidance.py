@@ -28,7 +28,11 @@ from mcp.server.fastmcp.exceptions import ToolError
 from owlbear_kanban import KanbanEngine
 from owlbear_kanban.engine import AgentView
 from owlbear_kanban.errors import ConfigError
-from owlbear_kanban.models import ListTasksResponse, ShowTaskResponse, SingleTaskResponse
+from owlbear_kanban.models import (
+    ListTasksResponse,
+    ShowTaskResponse,
+    SingleTaskResponse,
+)
 from owlbear_mcp_kanban.server import (
     AppContext,
     create_task,
@@ -272,6 +276,7 @@ archive_dir: archive
 activity_log: false
 """
 
+
 def _make_board(base_dir: Path) -> Path:
     kanban_dir = base_dir / "board"
     kanban_dir.mkdir(parents=True, exist_ok=True)
@@ -280,10 +285,12 @@ def _make_board(base_dir: Path) -> Path:
     (kanban_dir / "archive").mkdir(exist_ok=True)
     return kanban_dir
 
+
 def _make_ctx(app_ctx: AppContext) -> MagicMock:
     ctx = MagicMock()
     ctx.request_context.lifespan_context = app_ctx
     return ctx
+
 
 @pytest.fixture
 def app_ctx(tmp_path: Path) -> AppContext:
@@ -293,6 +300,7 @@ def app_ctx(tmp_path: Path) -> AppContext:
     engine.create_task("Alpha task", status="todo", priority="important")
     engine.list_tasks()  # populate id→filename cache
     return AppContext(engine=engine, kanban_dir=kanban_dir)
+
 
 class TestFromAC_EditTaskGuidanceIntegration:
     """Integration tests for guidance wiring in MCP edit_task tool (AC #985).
@@ -353,7 +361,6 @@ class TestFromAC_EditTaskGuidanceIntegration:
         assert result.guidance == [], (
             f"Expected empty guidance for title change, got {result.guidance!r}"
         )
-
 
 
 # --- merged from serve/mcp-kanban/tests/test_guidance_end_work.py ---
@@ -458,7 +465,6 @@ class TestFromAC_EndWorkGuidanceIntegration:
         )
 
 
-
 # --- merged from serve/mcp-kanban/tests/test_guidance_move_task.py ---
 @pytest.fixture
 def app_ctx_move(tmp_path: Path) -> AppContext:
@@ -545,7 +551,6 @@ class TestFromAC_MoveTaskGuidanceIntegration:
         assert "todo" in result.guidance[0], (
             f"Expected 'todo' in skip message, got {result.guidance[0]!r}"
         )
-
 
 
 # --- merged from serve/mcp-kanban/tests/test_guidance_rules.py ---
@@ -695,7 +700,6 @@ class TestFromAC_CollectGuidanceNewAPI:
         assert result == [], f"Expected [] when before=None for move, got {result!r}"
 
 
-
 # --- merged from serve/mcp-kanban/tests/test_guidance_rules_extra.py ---
 class TestFromAC_BlockDRRuleOperationIndependence:
     """Block DR rule fires for any operation when after.blocked is True.
@@ -762,6 +766,7 @@ class TestFromAC_BlockDRRuleOperationIndependence:
             f"Got {result!r}"
         )
 
+
 class TestFromAC_MultiRuleCofiring:
     """Arch review refinement #4: all matching rules fire; no early return.
 
@@ -797,7 +802,6 @@ class TestFromAC_MultiRuleCofiring:
         )
 
 
-
 # --- merged from serve/mcp-kanban/tests/test_guidance_server.py ---
 @pytest.fixture
 def app_ctx_edit(tmp_path: Path) -> AppContext:
@@ -808,6 +812,7 @@ def app_ctx_edit(tmp_path: Path) -> AppContext:
     engine.list_tasks()
     return AppContext(engine=engine, kanban_dir=kanban_dir)
 
+
 @pytest.fixture
 def app_ctx_end(tmp_path: Path) -> AppContext:
     """AppContext with one claimed task at in-progress — for end_work tests."""
@@ -817,6 +822,7 @@ def app_ctx_end(tmp_path: Path) -> AppContext:
     engine.list_tasks()
     engine.claim_task("1")
     return AppContext(engine=engine, kanban_dir=kanban_dir)
+
 
 class TestFromAC_GuidanceSuppressContract:
     """Verify that guidance exceptions are suppressed and never block tool success.
@@ -861,6 +867,7 @@ class TestFromAC_GuidanceSuppressContract:
             f"Expected empty guidance when collect_guidance raises, got {result.guidance!r}"
         )
 
+
 class TestFromAC_GuidanceCallWiring:
     """Verify collect_guidance is called with correct operation and kwargs.
 
@@ -904,6 +911,7 @@ class TestFromAC_GuidanceCallWiring:
             await end_work(ctx, id="1", note="failed", outcome="fail")
         mock_cg.assert_called_once_with("end_work", None, ANY, outcome="fail")
 
+
 class TestFromAC_BlockUserTagOrderingInEndWork:
     """Verify block:user removal happens BEFORE guidance collection in end_work(block).
 
@@ -943,7 +951,6 @@ class TestFromAC_BlockUserTagOrderingInEndWork:
         )
 
 
-
 # --- merged from serve/mcp-kanban/tests/test_mcp_guidance.py ---
 _LARGE_BODY = "x" * (100 * 1024 + 1)  # 100 KB + 1 byte
 
@@ -981,6 +988,7 @@ _BLOCK_AR_HINT = (
 
 _ADAPTER_FALLBACK_SENTINEL = ["__ADAPTER_FALLBACK_SENTINEL__"]
 
+
 @pytest.fixture
 def app_ctx_with_section_task(tmp_path: Path) -> AppContext:
     """AppContext with a task whose body contains ## Audit twice."""
@@ -995,6 +1003,7 @@ def app_ctx_with_section_task(tmp_path: Path) -> AppContext:
     engine.list_tasks()
     return AppContext(engine=engine, kanban_dir=kanban_dir)
 
+
 @pytest.fixture
 def app_ctx_multi(tmp_path: Path) -> AppContext:
     """AppContext with 3 unclaimed tasks at todo — enough to trigger dispatch hints."""
@@ -1006,6 +1015,7 @@ def app_ctx_multi(tmp_path: Path) -> AppContext:
     engine.list_tasks()
     return AppContext(engine=engine, kanban_dir=kanban_dir)
 
+
 @pytest.fixture
 def app_ctx_claimed(tmp_path: Path) -> AppContext:
     """AppContext with one claimed task at in-progress."""
@@ -1015,6 +1025,7 @@ def app_ctx_claimed(tmp_path: Path) -> AppContext:
     engine.list_tasks()
     engine.claim_task("1")
     return AppContext(engine=engine, kanban_dir=kanban_dir)
+
 
 class TestFromAC_GuidancePassthrough:
     """AgentView response guidance passes through the MCP adapter unmodified."""
@@ -1206,6 +1217,7 @@ class TestFromAC_GuidancePassthrough:
             f"Expected AR/DR hint from AgentView.end_work; got {result.guidance!r}"
         )
 
+
 class TestFromAC_ErrorMapping:
     """KanbanError subclasses raised by AgentView → ToolError with user_message only."""
 
@@ -1229,6 +1241,7 @@ class TestFromAC_ErrorMapping:
         assert payload["message"] == "title must not be empty", (
             f"ToolError JSON must carry human-readable message; got {payload!r}"
         )
+
 
 class TestFromAC_GuidanceProofRepair:
     """Proof-repair tests: exact-value guidance field assertions for list_tasks, start_work, end_work(success).
@@ -1381,6 +1394,7 @@ class TestFromAC_GuidanceProofRepair:
             f"ToolError JSON must carry human-readable user_message; got {payload!r}"
         )
 
+
 class TestFromAC_GuidanceDiscriminating_1475:
     """Retry-1475: Discriminating tests for AgentView guidance passthrough.
 
@@ -1453,4 +1467,3 @@ class TestFromAC_GuidanceDiscriminating_1475:
             f"start_work must pass AgentView guidance unchanged when collect_guidance is []; "
             f"got {result.guidance!r}"
         )
-

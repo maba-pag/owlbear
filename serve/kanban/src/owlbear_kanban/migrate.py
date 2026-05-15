@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import io
 import os
+import re
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -81,6 +82,7 @@ _ACTIVE_TASK_DEFAULTS: dict[str, Any] = {
     "archival_reason": None,
     "archival_refs": [],
 }
+_PROOF_BUNDLE_LINE_RE = re.compile(r"^Proof bundle:\s*(.*)$")
 
 
 def _make_yaml_rt() -> YAML:
@@ -237,6 +239,78 @@ def _migrate_task_file(  # noqa: C901, PLR0911, PLR0912
     stream = io.StringIO()
     y_rt.dump(ordered, stream)
     yaml_str = stream.getvalue()
+    new_content = f"---\n{yaml_str}---\n{body_text}"
+
+    try:
+        atomic_write(path, new_content)
+    except OSError as exc:
+        return "failed", str(exc)
+
+    return "migrated", None
+
+
+def _migrate_proof_bundle_field(  # noqa: C901, PLR0911, PLR0912
+    path: Path,
+    *,
+    dry_run: bool = False,
+) -> tuple[str, str | None]:
+    """Extract first body ``Proof bundle:`` line into frontmatter ``proof_bundle``."""
+    try:
+        content = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        return "failed", str(exc)
+
+    if not content.startswith("---"):
+        return "failed", "missing --- delimiter"
+
+    lines = content.split("\n")
+    closing = None
+    for i, line in enumerate(lines[1:], start=1):
+        if line == "---":
+            closing = i
+            break
+    if closing is None:
+        return "failed", "no closing ---"
+
+    fm_text = "\n".join(lines[1:closing])
+    body_lines = lines[closing + 1 :]
+
+    try:
+        y_safe = _make_yaml_safe()
+        fm: dict = y_safe.load(fm_text) or {}
+    except Exception as exc:  # noqa: BLE001
+        return "failed", f"YAML parse error: {exc}"
+
+    if fm.get("proof_bundle") is not None:
+        return "already", None
+
+    match_index = None
+    extracted_value: str | None = None
+    for index, line in enumerate(body_lines):
+        match = _PROOF_BUNDLE_LINE_RE.match(line)
+        if match is None:
+            continue
+        value = match.group(1).strip()
+        if not value:
+            return "already", None
+        match_index = index
+        extracted_value = value
+        break
+
+    if match_index is None or extracted_value is None:
+        return "already", None
+
+    fm["proof_bundle"] = extracted_value
+    body_lines.pop(match_index)
+
+    if dry_run:
+        return "migrated", None
+
+    y_rt = _make_yaml_rt()
+    stream = io.StringIO()
+    y_rt.dump(CommentedMap(fm), stream)
+    yaml_str = stream.getvalue()
+    body_text = "\n".join(body_lines)
     new_content = f"---\n{yaml_str}---\n{body_text}"
 
     try:

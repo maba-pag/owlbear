@@ -34,11 +34,21 @@ Read `r-pipeline-protocol` skill if not already loaded.
 
 Claim the task via `start_work` (atomic claim + retrieves task body). Check the retrieved body for resolved decision/action requests per pipeline-protocol → Task Setup → Resolved Decision Pre-flight.
 
+Then call `show_task(id={id})` to read frontmatter fields for routing:
+
+- `proof_bundle` (authoritative when non-null)
+- `ac` (authoritative when non-null)
+
+Legacy fallback when either field is null:
+
+- Parse `Proof bundle:` from the task body.
+- Parse AC lines from the `## Acceptance Criteria` section in the task body.
+
 Verify the task is in `in-progress` status (the test-writer already moved it here).
 
 ### Step 0a — Bundle-Based Routing
 
-Route builder verification flow from `Proof bundle:` in the task body (see `r-pipeline-protocol` taxonomy).
+Route builder verification flow from frontmatter `proof_bundle` (see `r-pipeline-protocol` taxonomy). If `proof_bundle` is null, fall back to the body `Proof bundle:` line for legacy tasks.
 
 1. If `Proof bundle: skip`:
    Implement from AC directly (no `TestFromAC_*` pass requirement for this task).
@@ -68,7 +78,7 @@ Route builder verification flow from `Proof bundle:` in the task body (see `r-pi
 
    **Stop here.**
 
-3. If `Proof bundle:` is absent, continue with the normal builder flow using AC and existing task notes as the routing source.
+3. If frontmatter `proof_bundle` and the body fallback are both absent, continue with the normal builder flow using AC and existing task notes as the routing source.
 
 4. Keep the explicit non-impl pass-through trigger: if Test-Writer Notes contain "Non-implementation task" or "non-impl pass-through", advance with no code changes and pass through to review.
 

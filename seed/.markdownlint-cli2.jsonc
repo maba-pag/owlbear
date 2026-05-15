@@ -2,9 +2,9 @@
   "ignores": [
     ".owlbear/doc-index.md",
     ".owlbear/briefs/**",
-    ".owlbear/decisions/**",
     ".owlbear/hooks/**",
     ".owlbear/kanban/archive/**",
+    ".owlbear/kanban/decisions/**",
     ".owlbear/kanban/tasks/**",
     ".owlbear/research/**",
     ".owlbear/scratch/**",

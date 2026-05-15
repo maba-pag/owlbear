@@ -1,10 +1,10 @@
 [project]
 name = "owlbear-mcp-browser"
 version = "0.1.0"
-requires-python = ">=3.12"
+requires-python = ">=3.12.13"
 description = "OwlBear MCP browser server — authenticated content fetching via Edge CDP"
 dependencies = [
-    "mcp[cli]>=1.27.0",
+    "mcp[cli]>=1.27.1",
     "owlbear-browser",
 ]
 

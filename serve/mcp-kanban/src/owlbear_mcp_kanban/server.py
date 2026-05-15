@@ -71,6 +71,10 @@ __all__ = [
 ]
 
 _DEFAULT_KANBAN_DIR = Path(".owlbear/kanban")
+_NORM_GUIDANCE = (
+    "Literal \\n sequences were normalized to actual newlines. "
+    "To keep a literal \\n in files, send \\\\n in JSON input."
+)
 
 
 def _resolve_kanban_dir() -> Path:
@@ -80,9 +84,28 @@ def _resolve_kanban_dir() -> Path:
     return selected.resolve()
 
 
+def _normalize_escaped_newlines(text: str) -> tuple[str, bool]:
+    r"""Protect ``\\n``, normalize ``\n`` to newlines, then restore ``\n``."""
+    sentinel = "\x00OBK_NL_SENTINEL\x00"
+    protected = text.replace("\\\\n", sentinel)
+    normalized = protected.replace("\\n", "\n")
+    restored = normalized.replace(sentinel, "\\n")
+    return restored, restored != text
+
+
+def _append_norm_guidance(guidance: list[str] | None, *, changed: bool) -> list[str]:
+    """Append normalization guidance only when newline normalization occurred."""
+    merged = list(guidance or [])
+    if changed:
+        merged.append(_NORM_GUIDANCE)
+    return merged
+
+
 def _startup_error(kanban_dir: Path, detail: str) -> RuntimeError:
     """Build a startup error with board path and KANBAN_DIR remediation guidance."""
-    return RuntimeError(f"{detail}: {kanban_dir}. Set KANBAN_DIR to a valid kanban board directory.")
+    return RuntimeError(
+        f"{detail}: {kanban_dir}. Set KANBAN_DIR to a valid kanban board directory."
+    )
 
 
 def parse_task_id(value: str | int, *, field: str = "task_id") -> int:
@@ -312,7 +335,9 @@ async def _show_validated(app_ctx: AppContext, task_id: int) -> KanbanTask:
     try:
         record = app_ctx.engine.show_task(str(task_id))
     except FileNotFoundError as exc:
-        _raise_not_found(_safe_not_found_message(str(exc), f"Task '{task_id}' not found"))
+        _raise_not_found(
+            _safe_not_found_message(str(exc), f"Task '{task_id}' not found")
+        )
     return _record_to_task(record)
 
 
@@ -342,20 +367,31 @@ async def create_task(  # noqa: PLR0913
     parent: int | None = None,
     priority: str = "",
     tags: list[str] | None = None,
+    ac: list[str] | None = None,
+    proof_bundle: str | None = None,
 ) -> SingleTaskResponse:
     """Create a new kanban task."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
+    normalized_body, body_changed = _normalize_escaped_newlines(body)
+    kwargs: dict[str, object] = {
+        "title": title,
+        "body": normalized_body,
+        "priority": priority,
+        "tags": tags,
+        "parent": parent,
+        "depends_on": depends_on,
+    }
+    if ac is not None:
+        kwargs["ac"] = ac
+    if proof_bundle is not None:
+        kwargs["proof_bundle"] = proof_bundle
     try:
-        return app_ctx.engine.agent_view().create_task(
-            title=title,
-            body=body,
-            priority=priority,
-            tags=tags,
-            parent=parent,
-            depends_on=depends_on,
-        )
+        response = app_ctx.engine.agent_view().create_task(**kwargs)
     except KanbanError as exc:
         _map_kanban_error(exc)
+    result = _to_single_task_response(response)
+    result.guidance = _append_norm_guidance(result.guidance, changed=body_changed)
+    return result
 
 
 @mcp.tool(annotations=ToolAnnotations(destructiveHint=False))
@@ -372,6 +408,7 @@ async def create_dr(
 
     app_ctx: AppContext = ctx.request_context.lifespan_context
     parsed_task_id = parse_task_id(task_id, field="task_id")
+    normalized_body, body_changed = _normalize_escaped_newlines(body)
     try:
         created_path = await asyncio.to_thread(
             decisions.create_dr,
@@ -380,13 +417,16 @@ async def create_dr(
             task_id=parsed_task_id,
             agent=agent,
             request_type=request_type,
-            body=body,
+            body=normalized_body,
         )
     except KanbanError as exc:
         _map_kanban_error(exc)
 
     relative_path = created_path.relative_to(app_ctx.kanban_dir).as_posix()
-    return {"created": True, "path": relative_path}
+    response: dict[str, object] = {"created": True, "path": relative_path}
+    if body_changed:
+        response["guidance"] = [_NORM_GUIDANCE]
+    return response
 
 
 @mcp.tool(annotations=ToolAnnotations(destructiveHint=False, idempotentHint=False))
@@ -424,12 +464,14 @@ async def move_task(
     with contextlib.suppress(Exception):
         if not result.guidance:
             status_names = list(app_ctx.engine.board_config().statuses)
-            result.guidance = collect_guidance("move", before=pre_task, after=result, status_names=status_names)
+            result.guidance = collect_guidance(
+                "move", before=pre_task, after=result, status_names=status_names
+            )
     return result
 
 
 @mcp.tool(annotations=ToolAnnotations(destructiveHint=False, idempotentHint=False))
-async def edit_task(  # noqa: PLR0912, PLR0913, C901
+async def edit_task(  # noqa: PLR0912, PLR0913, PLR0915, C901
     ctx: Context,
     *,
     id: StrId,  # noqa: A002
@@ -439,6 +481,10 @@ async def edit_task(  # noqa: PLR0912, PLR0913, C901
     timestamp: bool = False,
     priority: str | None = None,
     parent: int | None = None,
+    ac: list[str] | None = None,
+    add_ac: list[str] | None = None,
+    remove_ac: list[str] | None = None,
+    proof_bundle: str | None = None,
     add_dep: list[int] | None = None,
     remove_dep: list[int] | None = None,
     add_tag: list[str] | None = None,
@@ -451,21 +497,35 @@ async def edit_task(  # noqa: PLR0912, PLR0913, C901
     app_ctx: AppContext = ctx.request_context.lifespan_context
     resolved_id = parse_task_id(id, field="id")
     kwargs: dict[str, object] = {}
+    body_changed = False
+    append_body_changed = False
     # FastMCP maps both omitted optional params and explicit JSON null to Python None.
     # We intentionally use None defaults for tri-state fields: None=no-change,
     # empty string/value clears where supported by AgentView, non-empty sets.
     if title is not None:
         kwargs["title"] = title
     if body is not None:
-        kwargs["body"] = body
+        normalized_body, body_changed = _normalize_escaped_newlines(body)
+        kwargs["body"] = normalized_body
     if append_body:
-        kwargs["append_body"] = append_body
+        normalized_append_body, append_body_changed = _normalize_escaped_newlines(
+            append_body
+        )
+        kwargs["append_body"] = normalized_append_body
     if timestamp:
         kwargs["timestamp"] = True
     if priority is not None:
         kwargs["priority"] = priority
     if parent is not None:
         kwargs["parent"] = parent
+    if ac is not None:
+        kwargs["ac"] = ac
+    if add_ac is not None:
+        kwargs["add_ac"] = add_ac
+    if remove_ac is not None:
+        kwargs["remove_ac"] = remove_ac
+    if proof_bundle is not None:
+        kwargs["proof_bundle"] = proof_bundle
     if add_dep is not None:
         kwargs["add_dep"] = add_dep
     if remove_dep is not None:
@@ -488,6 +548,10 @@ async def edit_task(  # noqa: PLR0912, PLR0913, C901
     with contextlib.suppress(Exception):
         if not result.guidance:
             result.guidance = collect_guidance("edit_task", None, result)
+    result.guidance = _append_norm_guidance(
+        result.guidance,
+        changed=body_changed or append_body_changed,
+    )
     return result
 
 
@@ -530,6 +594,10 @@ async def end_work(  # noqa: PLR0913
     """Release a task: append note, advance or resolve status, release claim."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     resolved_id = parse_task_id(id, field="id")
+    normalized_note = note
+    note_changed = False
+    if note is not None:
+        normalized_note, note_changed = _normalize_escaped_newlines(note)
 
     target_status: str | None = None
     if outcome in {"success", "block", "reject"}:
@@ -548,7 +616,7 @@ async def end_work(  # noqa: PLR0913
         )
         record = app_ctx.engine.agent_view().end_work(
             resolved_id,
-            note=note,
+            note=normalized_note,
             outcome=outcome,
             block_reason=block_reason,
             move_to=move_to,
@@ -565,7 +633,10 @@ async def end_work(  # noqa: PLR0913
     if outcome in {"success", "block", "fail"}:
         with contextlib.suppress(Exception):
             if not task.guidance:
-                task.guidance = collect_guidance("end_work", None, task, outcome=outcome)
+                task.guidance = collect_guidance(
+                    "end_work", None, task, outcome=outcome
+                )
+    task.guidance = _append_norm_guidance(task.guidance, changed=note_changed)
     return task
 
 
@@ -626,6 +697,10 @@ for _tool_name in (
 # FastMCP auto-generates titles from argument names but has no descriptions.
 # ---------------------------------------------------------------------------
 _SORT_FIELDS = ["priority", "updated", "id", "title", "status", "created"]
+_NORM_PARAM_DESC = (
+    "Literal \\n is normalized to a newline; send \\\\n in JSON to preserve a "
+    "literal \\n."
+)
 
 
 def _patch_params(
@@ -646,14 +721,18 @@ _patch_params(
         "tag": {"description": "Filter by tag, e.g. 'phase-2'"},
         "search": {"description": "Full-text search in titles and bodies"},
         "sort": {"enum": _SORT_FIELDS},
-        "blocked": {"description": "true = only blocked, false = only unblocked, null = all"},
+        "blocked": {
+            "description": "true = only blocked, false = only unblocked, null = all"
+        },
     },
 )
 
 _patch_params(
     "create_task",
     {
-        "body": {"description": "Markdown body (objectives, AC, context)"},
+        "body": {
+            "description": f"Markdown body (objectives, AC, context). {_NORM_PARAM_DESC}"
+        },
         "depends_on": {"description": "JSON array of dependency task IDs"},
         "parent": {"description": "Parent task ID for subtask hierarchy"},
         "tags": {"description": "JSON array of tags"},
@@ -663,7 +742,9 @@ _patch_params(
 _patch_params(
     "move_task",
     {
-        "status": {"description": "Target status name, or 'archived' to archive the task"},
+        "status": {
+            "description": "Target status name, or 'archived' to archive the task"
+        },
     },
 )
 
@@ -671,19 +752,34 @@ _patch_params(
     "edit_task",
     {
         "title": {"description": "Replace task title (must be non-empty)"},
-        "body": {"description": "Replace task body; empty string clears, null/omitted = no change"},
-        "append_body": {"description": "Append to body (preserves existing content)"},
+        "body": {
+            "description": (
+                "Replace task body; empty string clears, null/omitted = no change. "
+                f"{_NORM_PARAM_DESC}"
+            )
+        },
+        "append_body": {
+            "description": f"Append to body (preserves existing content). {_NORM_PARAM_DESC}"
+        },
         "timestamp": {"description": "Prepend [[date]] timestamp to appended body"},
-        "add_dep": {"description": "Add dependency task IDs (JSON array, e.g. [601, 602])"},
-        "remove_dep": {"description": "Remove dependency task IDs (JSON array, e.g. [601, 602])"},
-        "parent": {"description": "Parent task ID for subtask hierarchy; use 0 to clear parent"},
+        "add_dep": {
+            "description": "Add dependency task IDs (JSON array, e.g. [601, 602])"
+        },
+        "remove_dep": {
+            "description": "Remove dependency task IDs (JSON array, e.g. [601, 602])"
+        },
+        "parent": {
+            "description": "Parent task ID for subtask hierarchy; use 0 to clear parent"
+        },
     },
 )
 
 _patch_params(
     "end_work",
     {
-        "note": {"description": "Summary note appended to task body"},
+        "note": {
+            "description": f"Summary note appended to task body. {_NORM_PARAM_DESC}"
+        },
         "outcome": {
             "description": (
                 "success = advance, fail = record failure and release claim, "
@@ -694,6 +790,15 @@ _patch_params(
         "block_reason": {"description": "Required when outcome=block"},
         "move_to": {
             "description": "Target status when outcome=reject; optional status move when outcome=success or block",
+        },
+    },
+)
+
+_patch_params(
+    "create_dr",
+    {
+        "body": {
+            "description": f"Decision/action request body. {_NORM_PARAM_DESC}"
         },
     },
 )
