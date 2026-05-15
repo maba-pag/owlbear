@@ -417,6 +417,97 @@ class TestFromAC_RefreshIngestSourceIdentity:
             f"but got chunk scopes: {chunk_scopes}"
         )
 
+    @pytest.mark.asyncio
+    async def test_replace_on_change_preserves_source_id_and_scope(
+        self,
+        conn: sqlite3.Connection,
+        store_components: dict,
+        mock_vs: MagicMock,
+    ) -> None:
+        """Replace-on-change ingest (second call with different content) must preserve
+        source_id='src-a' on the replacement document and stamp chunks + vector
+        payloads with scope='team-a'.
+
+        Proof gap (cycle 11 review, Finding 1): all existing refresh tests exercise
+        first-time ingest only — check_content_changed returns (False, None) on the
+        first call because no content hash exists yet. The replace-on-change branch
+        (existing_id is not None → delete_document_data(existing_id) → insert
+        replacement document) is never exercised on the success path. A regression
+        breaking source_id or scope threading in that branch would still pass all
+        prior tests.
+        """
+        self._seed_url_list_source(conn)
+        pipeline: IngestPipeline = store_components["pipeline"]
+
+        intake_v1 = IntakeResult(
+            content="Version 1 content — original document for replace-on-change test",
+            source="https://example.test/doc",
+            metadata={"source_type": "url_list"},
+        )
+        result_v1 = await pipeline.ingest(intake_v1, scope="team-a", source_id="src-a")
+        assert result_v1.status == "ok", (
+            f"First ingest must succeed for replace-on-change to fire on second call, "
+            f"got status={result_v1.status!r}"
+        )
+
+        # Reset so only v2 store_embedding calls are observed.
+        mock_vs.store_embedding.reset_mock()
+
+        intake_v2 = IntakeResult(
+            content="Version 2 content — different to trigger replace-on-change branch",
+            source="https://example.test/doc",  # same URL → check_content_changed returns (True, v1_id)
+            metadata={"source_type": "url_list"},
+        )
+        result_v2 = await pipeline.ingest(intake_v2, scope="team-a", source_id="src-a")
+        assert result_v2.status == "ok", (
+            f"Replace-on-change ingest must succeed, got status={result_v2.status!r}"
+        )
+
+        # (a) Exactly 1 document row: old document was replaced, not doubled.
+        doc_count = conn.execute("SELECT count(*) FROM documents").fetchone()[0]
+        assert doc_count == 1, (  # noqa: PLR2004
+            f"Replace-on-change must leave exactly 1 document row (old replaced), "
+            f"found {doc_count} row(s)"
+        )
+
+        # (b) Replacement document source_id preserved as 'src-a'.
+        doc_source_id = conn.execute("SELECT source_id FROM documents").fetchone()[0]
+        assert doc_source_id == "src-a", (
+            "Replacement document source_id must be 'src-a' (identity preserved "
+            f"through replace-on-change branch), got {doc_source_id!r}"
+        )
+
+        # (c) Replacement chunks carry scope='team-a'.
+        new_doc_id = conn.execute("SELECT id FROM documents").fetchone()[0]
+        chunk_scopes = [
+            r[0]
+            for r in conn.execute(
+                "SELECT scope FROM chunks WHERE document_id = ?", (new_doc_id,)
+            ).fetchall()
+        ]
+        assert chunk_scopes, (
+            "Replace-on-change must persist at least one chunk for the replacement document"
+        )
+        assert all(s == "team-a" for s in chunk_scopes), (
+            "All replacement chunks must have scope='team-a', "
+            f"but got chunk scopes: {chunk_scopes}"
+        )
+
+        # (d) Replacement vector payloads carry scope='team-a'.
+        embed_calls = mock_vs.store_embedding.call_args_list
+        assert embed_calls, (
+            "store_embedding must be called for replacement document chunks after "
+            "replace-on-change succeeds"
+        )
+        scopes_used = [
+            c.kwargs.get("scope") or (c.args[3] if len(c.args) > 3 else None)
+            for c in embed_calls
+        ]
+        assert all(s == "team-a" for s in scopes_used), (
+            "store_embedding must be called with scope='team-a' for all replacement "
+            f"chunks, but got scopes: {scopes_used}"
+        )
+
 
 # ---------------------------------------------------------------------------
 # TestFromAC_FailedIngestAtomicCleanup  (AC-3)
@@ -2022,4 +2113,105 @@ class TestFromAC_ReplaceOnChangeFailureCleanup:
             "replacement document row (committed by insert_document before "
             f"store_chunks raised) must be cleaned up, but found {doc_count} row(s). "
             "AC-8: 'persistence contains no document row for the replacement doc_id'."
+        )
+
+    @pytest.mark.asyncio
+    async def test_replace_on_change_late_failure_leaves_no_chunks_or_vectors(
+        self,
+        conn: sqlite3.Connection,
+        store_components: dict,
+        mock_vs: MagicMock,
+    ) -> None:
+        """When store_extractions raises AFTER delete_document_data(v1) +
+        insert_document(v2) + store_chunks(v2) + store_embeddings(v2) have all
+        committed, _cleanup_failed_ingest must remove the replacement chunks and
+        vector payloads.
+
+        Reviewer gap (cycle 11, Finding 2): the existing AC-8 test injects failure at
+        store_chunks (before any replacement chunks, vector payloads, entities, or
+        edges can exist), so the cleanup assertions over those surfaces are vacuously
+        true. This test injects failure at store_extractions so that replacement
+        chunks and embeddings are committed before the failure, proving that
+        _cleanup_failed_ingest handles the later failure point.
+
+        AC-8 contract: 'persistence contains no document, chunk, vector payload,
+        entity, or edge rows for the replacement doc_id'.
+        """
+        self._seed_url_list_source(conn)
+        pipeline: IngestPipeline = store_components["pipeline"]
+
+        intake_v1 = IntakeResult(
+            content="Version 1 content for late-failure cleanup test",
+            source="https://example.test/doc",
+            metadata={"source_type": "url_list"},
+        )
+        result_v1 = await pipeline.ingest(intake_v1, scope="team-a", source_id="src-a")
+        assert result_v1.status == "ok", (
+            f"First ingest must succeed for replace-on-change to fire on second call, "
+            f"got status={result_v1.status!r}"
+        )
+
+        # Reset so only v2-related mock calls are observed.
+        mock_vs.delete_embedding.reset_mock()
+
+        intake_v2 = IntakeResult(
+            content="Version 2 content — different to trigger replace-on-change branch",
+            source="https://example.test/doc",  # same URL triggers replace-on-change
+            metadata={"source_type": "url_list"},
+        )
+        # Inject failure at store_extractions — AFTER the following have committed:
+        #   delete_document_data(v1_id), insert_document(v2_id), store_chunks(v2_id),
+        #   store_embeddings(v2_chunks). store_extractions raises before entity/edge writes.
+        with patch.object(
+            store_components["doc_store"],
+            "store_extractions",
+            side_effect=RuntimeError(
+                "forced late-stage extraction failure in replace-on-change"
+            ),
+        ):
+            result_v2 = await pipeline.ingest(
+                intake_v2, scope="team-a", source_id="src-a"
+            )
+
+        assert result_v2.status == "failed", (
+            f"ingest() must return status='failed' when store_extractions raises, "
+            f"got {result_v2.status!r}"
+        )
+
+        # (a) documents=0: v1 deleted by replace-on-change; v2 cleaned by _cleanup_failed_ingest.
+        doc_count = conn.execute("SELECT count(*) FROM documents").fetchone()[0]
+        assert doc_count == 0, (
+            "After late-failure in replace-on-change, documents table must be empty — "
+            "v1 was deleted by delete_document_data(existing_id) and the replacement "
+            "v2 document row must be cleaned up by _cleanup_failed_ingest, "
+            f"but found {doc_count} row(s). AC-8 contract."
+        )
+
+        # (b) chunks=0: v2 chunks committed by store_chunks must be cleaned up.
+        chunk_count = conn.execute("SELECT count(*) FROM chunks").fetchone()[0]
+        assert chunk_count == 0, (
+            "After late-failure in replace-on-change, chunks table must be empty — "
+            "v2 replacement chunks (committed by store_chunks before store_extractions "
+            f"raised) must be cleaned up by _cleanup_failed_ingest, found {chunk_count} row(s)"
+        )
+
+        # (c) Vector cleanup: delete_embedding called for v2 replacement chunk payloads.
+        #     Note: delete_embedding is also called for v1 during the replace step itself,
+        #     so call_count >= 1 is sufficient to prove vector cleanup ran.
+        assert mock_vs.delete_embedding.call_count >= 1, (
+            "delete_embedding must be called at least once after late-failure replace-on-change "
+            "— _cleanup_failed_ingest must invoke vector cleanup for the v2 replacement "
+            f"chunk IDs, got {mock_vs.delete_embedding.call_count} calls"
+        )
+
+        # (d) entities=0, edges=0: store_extractions raised before any writes.
+        entity_count = conn.execute("SELECT count(*) FROM entities").fetchone()[0]
+        assert entity_count == 0, (
+            f"entities table must be empty after failed late-stage replace-on-change, "
+            f"found {entity_count} row(s)"
+        )
+        edge_count = conn.execute("SELECT count(*) FROM edges").fetchone()[0]
+        assert edge_count == 0, (
+            f"edges table must be empty after failed late-stage replace-on-change, "
+            f"found {edge_count} row(s)"
         )
