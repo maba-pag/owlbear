@@ -461,11 +461,22 @@ test.describe('AC-4 | Task-editor PDS compliance assertions', () => {
     expect(nativeOptionCount).toBe(0)
   })
 
-  test('(b) tag chips render as p-tag elements, not plain span chips', async ({ page }) => {
+  test('(b.1) tag chips render as p-tag[data-testid="tag-chip"] elements', async ({ page }) => {
     // §5 "Metadata/status chip" row: required p-tag.
+    // RED-phase evidence (spec line 32): legacy chip was <span data-testid="tag-chip">{tag}</span>.
     // Currently: <span data-testid="tag-chip"> for each tag -- p-tag absent -- FAILS.
     // TASK_BETA has tags ["frontend", "backend"] so chip elements will render.
-    await expect(page.locator('p-tag')).toBeVisible({ timeout: 2_000 })
+    await expect(page.locator('p-tag[data-testid="tag-chip"]')).toBeVisible({ timeout: 2_000 })
+  })
+
+  test('(b.2) no legacy span[data-testid="tag-chip"] chips survive (dual-render falsifiability)', async ({ page }) => {
+    // AC-4(b) falsifiability guard: a visibility-only assertion on p-tag is insufficient because
+    // a dual-render state (both p-tag and a surviving legacy <span data-testid="tag-chip">) would
+    // pass green. This test proves no plain span chip exists alongside any p-tag.
+    // Legacy chip identity documented at spec line 32: <span data-testid="tag-chip">{tag}</span>.
+    // TaskFieldsEditor.tsx L192: impl renders <p-tag data-testid="tag-chip"> with no legacy spans.
+    // Fails if builder accidentally introduces or re-introduces plain span chips.
+    await expect(page.locator('span[data-testid="tag-chip"]')).toHaveCount(0)
   })
 
   test('[presence] title field: p-input-text[name="title"] is in the DOM', async ({ page }) => {
