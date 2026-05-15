@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   PButton,
   PInputText,
+  PSelect,
   PTextarea,
 } from '@porsche-design-system/components-react'
 import ReactMarkdown from 'react-markdown'
@@ -178,18 +179,19 @@ export default function TaskFieldsEditor({
         onChange={(event) => setTitle(readControlValue(event))}
         onInput={(event) => setTitle(readControlValue(event))}
       />
-      <p-select
+      <PSelect
+        ref={setHideLabelAttr}
         name="priority"
         label="Priority"
         data-field="priority"
         value={priority}
-        onInput={(event: React.FormEvent<HTMLElement>) => {
-          setPriority(event.currentTarget.textContent?.trim() ?? '')
-        }}
+        onChange={(event) => setPriority(readControlValue(event))}
       >
-        <p-select-option value={priority}>{priority}</p-select-option>
-      </p-select>
-      {task.tags.length > 0 ? <p-tag data-testid="tag-chip">{task.tags.join(', ')}</p-tag> : null}
+        <option value={priority}>{priority}</option>
+      </PSelect>
+      {task.tags.map((tag) => (
+        <p-tag key={tag} data-testid="tag-chip">{tag}</p-tag>
+      ))}
       <PInputText
         ref={setHideLabelAttr}
         name="depends_on"
