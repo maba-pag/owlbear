@@ -1500,16 +1500,16 @@ class TestFromAC_StoreEnrichmentPhase2_1330:
     async def test_phase2_multiple_edges_writes_all_edges(
         self, conn: sqlite3.Connection
     ) -> None:
-        """AC3 boundary: Phase 2 store_enrichment with edges=[e1, e2, e3] writes
-        exactly 3 new rows to the edges table, not just the first."""
+        """AC3 boundary: Phase 2 store_enrichment with edges=[e1, e2] writes
+        exactly 2 new rows to the edges table. Both edges use endpoints that
+        match the reviewed candidate pair — cross-pair endpoints are rejected
+        by AC-5 hardening."""
         source_a = _insert_source(conn, name="Source A")
         source_b = _insert_source(conn, name="Source B")
         doc_a = _insert_document(conn, source_id=source_a)
         doc_b = _insert_document(conn, source_id=source_b)
         entity_a1 = _insert_entity(conn, name="MultiEdge", document_id=doc_a)
-        entity_a2 = _insert_entity(conn, name="MultiEdge2", document_id=doc_a)
         entity_b1 = _insert_entity(conn, name="MultiEdge", document_id=doc_b)
-        entity_b2 = _insert_entity(conn, name="MultiEdge2", document_id=doc_b)
 
         ctx = _make_mcp_ctx(conn)
         candidates = await get_consolidation_candidates(ctx, limit=20)
@@ -1527,22 +1527,13 @@ class TestFromAC_StoreEnrichmentPhase2_1330:
             candidate_id=candidate_id,
             edges=[
                 {"source_id": entity_a1, "target_id": entity_b1, "relation": "same_as"},
-                {
-                    "source_id": entity_a2,
-                    "target_id": entity_b2,
-                    "relation": "related_to",
-                },
-                {
-                    "source_id": entity_b1,
-                    "target_id": entity_a2,
-                    "relation": "references",
-                },
+                {"source_id": entity_b1, "target_id": entity_a1, "relation": "related_to"},
             ],
         )
 
         edges_after = conn.execute("SELECT COUNT(*) FROM edges").fetchone()[0]
-        assert edges_after == edges_before + 3, (
-            f"Expected 3 new edges after Phase 2 call with 3-edge list, "
+        assert edges_after == edges_before + 2, (
+            f"Expected 2 new edges after Phase 2 call with 2-edge list using valid pair endpoints, "
             f"before={edges_before}, after={edges_after}"
         )
 

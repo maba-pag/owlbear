@@ -365,28 +365,22 @@ class TestFromAC_GetNextBatch:
     async def test_source_name_is_none_for_document_without_knowledge_source(
         self, conn: sqlite3.Connection
     ) -> None:
-        """Document with no linked knowledge_source (source_id=NULL) still returns chunk with source_name=None.
+        """Chunk from a document with no linked knowledge_source must NOT be returned.
 
-        Discriminating proof for LEFT JOIN: replacing LEFT JOIN with INNER JOIN would
-        drop the document and chunk entirely — this test would FAIL in that case.
+        AC-6 compliance: get_next_batch uses INNER JOIN to knowledge_sources so that
+        orphan chunks (NULL source_id documents) are excluded — provenance cannot be
+        derived for them and they must not be claimed for enrichment.
         """
         doc_id = _insert_document(conn, title="Sourceless Doc", source_id=None)
-        chunk_id = _insert_chunk(conn, document_id=doc_id, content="sourceless chunk")
+        _insert_chunk(conn, document_id=doc_id, content="sourceless chunk")
 
         ctx = _make_mcp_ctx(conn)
         result = await get_next_batch(ctx, limit=10)
 
-        returned_ids = {_get_chunk_field(r, "chunk_id") for r in result}
-        assert chunk_id in returned_ids, (
-            "Chunk from a document with no linked knowledge_source must still be returned "
-            "(LEFT JOIN must not drop sourceless documents)"
-        )
-
-        item = next(r for r in result if _get_chunk_field(r, "chunk_id") == chunk_id)
-        actual_source_name = _get_chunk_field(item, "source_name")
-        assert actual_source_name is None, (
-            f"source_name must be None for a document with no linked knowledge_source, "
-            f"got {actual_source_name!r}"
+        assert len(result) == 0, (
+            "Chunk from a document with no linked knowledge_source must NOT be returned "
+            "by get_next_batch (INNER JOIN must exclude orphan documents). "
+            f"Got {len(result)} item(s)."
         )
 
     @pytest.mark.asyncio

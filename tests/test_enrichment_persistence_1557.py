@@ -516,6 +516,89 @@ class TestFromAC_StoreEnrichmentRejection:
             "endpoint names must be resolved to entity row IDs before insert"
         )
 
+    @pytest.mark.asyncio
+    async def test_already_enriched_chunk_raises_tool_error(
+        self, conn: sqlite3.Connection
+    ) -> None:
+        """store_enrichment on an already-enriched chunk must raise or return an error.
+
+        AC-3: the call must reject and leave the chunk in its 'enriched' state;
+        no new entity rows may be inserted.
+        """
+        _insert_source(conn, source_id="src-1", name="S1", enrich=1)
+        _insert_document(conn, doc_id="doc-a", title="D", source_id="src-1")
+        _insert_chunk(conn, chunk_id="enr-chk", doc_id="doc-a", state="enriched")
+        ctx = _make_ctx(conn)
+
+        entity_count_before = conn.execute("SELECT COUNT(*) FROM entities").fetchone()[0]
+
+        raised = False
+        try:
+            await store_enrichment(
+                ctx,
+                chunk_id="enr-chk",
+                entities=[{"name": "ShouldNotBeInserted", "type": "concept"}],
+            )
+        except Exception:  # noqa: BLE001
+            raised = True
+
+        assert raised, (
+            "store_enrichment on already-enriched chunk must raise (e.g. ToolError)"
+        )
+        entity_count_after = conn.execute("SELECT COUNT(*) FROM entities").fetchone()[0]
+        assert entity_count_after == entity_count_before, (
+            "store_enrichment on already-enriched chunk must not insert new entity rows"
+        )
+
+        state_row = conn.execute(
+            "SELECT enrichment_state FROM chunks WHERE id='enr-chk'"
+        ).fetchone()
+        assert state_row is not None
+        assert state_row[0] == "enriched", (
+            f"Already-enriched chunk state must remain 'enriched', got '{state_row[0]}'"
+        )
+
+    @pytest.mark.asyncio
+    async def test_claimed_chunk_state_becomes_failed_on_rejected_phase1_write(
+        self, conn: sqlite3.Connection
+    ) -> None:
+        """On rejected Phase 1 write from a claimed chunk, state becomes 'failed' and claimed_at clears.
+
+        AC-3: a claimed chunk whose provenance cannot be resolved must not remain
+        stuck in 'claimed' state — store_enrichment must recover it to 'failed'
+        and clear claimed_at so get_next_batch can reclaim it (stale-lease expiry).
+        """
+        # Orphan doc (NULL source_id) so provenance resolution fails, but chunk IS in DB
+        _insert_document(conn, doc_id="orphan-doc2", title="Orphan2", source_id=None)
+        now_iso = _now_iso()
+        conn.execute(
+            "INSERT INTO chunks"
+            " (id, document_id, chunk_index, content, metadata, created_at, enrichment_state, claimed_at)"
+            " VALUES (?, ?, 0, 'content', '{}', ?, 'claimed', ?)",
+            ("claimed-chk", "orphan-doc2", now_iso, now_iso),
+        )
+        conn.commit()
+
+        ctx = _make_ctx(conn)
+
+        with contextlib.suppress(Exception):
+            await store_enrichment(
+                ctx,
+                chunk_id="claimed-chk",
+                entities=[{"name": "AnyEntity", "type": "concept"}],
+            )
+
+        row = conn.execute(
+            "SELECT enrichment_state, claimed_at FROM chunks WHERE id='claimed-chk'"
+        ).fetchone()
+        assert row is not None
+        assert row[0] == "failed", (
+            f"Claimed chunk must become 'failed' after rejected Phase 1 write, got '{row[0]}'"
+        )
+        assert row[1] is None, (
+            f"claimed_at must be cleared (NULL) after rejected Phase 1 write, got '{row[1]}'"
+        )
+
 
 # ---------------------------------------------------------------------------
 # TestFromAC_ConsolidationCandidateIdentifiers  (AC-4)
