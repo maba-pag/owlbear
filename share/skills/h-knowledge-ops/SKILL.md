@@ -116,7 +116,7 @@ Edge payload schema:
 
 - `relation` (preferred) or `relationship` (accepted alias): required non-empty string.
 - Phase 1 endpoint fields:
-    - `source_id`/`target_id`: optional when provided directly.
+    - `source_id`/`target_id`: optional direct entity IDs; when supplied, must match a persisted entity row **within the claimed chunk's scope** — cross-scope explicit IDs are unresolvable and raise `ToolError`. Cross-document references within the same scope are allowed.
     - `source_name`/`target_name`: optional name-based endpoint resolution when IDs are omitted.
     - If endpoints cannot be resolved, the call raises `ToolError` and inserts no malformed edge row.
 - Phase 1 provenance fields on edges (`document_id`, `scope`): server-derived from the chunk's document/source.
