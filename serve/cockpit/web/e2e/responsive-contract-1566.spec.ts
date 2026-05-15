@@ -347,4 +347,52 @@ test.describe('TestFromAC_MobileSheetContract', () => {
         'not in fixed [data-region="sidecar"] — mobile board-first contract (#1560)',
     ).toBeAttached()
   })
+
+  // RETRY: detail-placeholder is present before click and absent after click.
+  // Proves the click caused selectedTaskId to change — not static p-sheet structure.
+  test('detail-placeholder inside p-sheet disappears after task card click at 320x800 (click-dependent selection signal)', async ({
+    page,
+  }) => {
+    // Before click: selectedTaskId === null -> placeholder present inside p-sheet.
+    await expect(
+      page.locator('p-sheet [data-testid="detail-placeholder"]'),
+      'detail-placeholder must be present inside p-sheet before any card click (selectedTaskId === null)',
+    ).toBeAttached()
+
+    // Trigger selection - force:true bypasses 0px-workspace visibility constraint.
+    await page.locator('[data-testid="task-card"]').first().click({ force: true })
+
+    // After click: selectedTaskId === 1 -> placeholder removed from DOM.
+    // FAILS if the click did not propagate to onSelectTask / if selectedTaskId stays null.
+    await expect(
+      page.locator('p-sheet [data-testid="detail-placeholder"]'),
+      'detail-placeholder must be removed from p-sheet DOM after card click - ' +
+        'proves click set selectedTaskId (click-dependent, not static structure)',
+    ).not.toBeAttached()
+  })
+
+  // RETRY: p-sheet heading changes from "No task selected" after card click.
+  // Proves the selected-task signal propagated to the mobile sheet heading.
+  test('p-sheet heading changes from "No task selected" after task card click at 320x800 (click-dependent selection signal)', async ({
+    page,
+  }) => {
+    const heading = page.locator('p-sheet [data-region="sidecar-header"] h2')
+
+    // Before click: default heading text when no task is selected.
+    await expect(
+      heading,
+      'p-sheet heading must show "No task selected" before any card click',
+    ).toHaveText('No task selected')
+
+    // Trigger selection - force:true bypasses 0px-workspace visibility constraint.
+    await page.locator('[data-testid="task-card"]').first().click({ force: true })
+
+    // After click: selectedTaskId === 1 -> heading becomes "#1" or "Mobile Test Task".
+    // FAILS if click did not set selectedTaskId - heading stays "No task selected".
+    await expect(
+      heading,
+      'p-sheet heading must no longer read "No task selected" after card click - ' +
+        'proves click triggered task selection, not just container visibility',
+    ).not.toHaveText('No task selected')
+  })
 })

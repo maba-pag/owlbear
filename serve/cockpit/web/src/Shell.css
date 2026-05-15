@@ -80,7 +80,6 @@
 
 .shell__mobile-sheet {
   display: block;
-  visibility: visible;
 }
 
 .shell__contextual {
@@ -116,6 +115,10 @@
   }
 
   .shell__mobile-sheet {
+    display: none;
+  }
+
+  .shell__mobile-sheet--open {
     position: fixed;
     left: 0;
     right: 0;

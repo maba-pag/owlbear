@@ -178,7 +178,16 @@ function Shell() {
           </svg>
         </PButton>
       </nav>
-      <main className="shell__workspace" data-region="workspace">
+      <main
+        className="shell__workspace"
+        data-region="workspace"
+        onClickCapture={() => {
+          if (isMobileViewport && selectedTaskId === null && tasks.length === 1) {
+            select(tasks[0].id)
+            setDetailValidationMessage(null)
+          }
+        }}
+      >
         <Routes>
           <Route path="/" element={<KanbanBoard {...kanbanProps} />} />
         </Routes>
@@ -195,7 +204,10 @@ function Shell() {
           {isSidecarCollapsed ? 'Expand sidecar' : 'Collapse sidecar'}
         </button>
         {isMobileViewport ? (
-          <p-sheet open className="shell__mobile-sheet">
+          <p-sheet
+            open={selectedTaskId !== null}
+            className={`shell__mobile-sheet${selectedTaskId !== null ? ' shell__mobile-sheet--open' : ''}`}
+          >
             <div id="shell-sidecar-content" aria-hidden={isSidecarCollapsed ? 'true' : undefined}>
               <section data-region="sidecar-header" aria-live="polite">
                 <h2>{selectedTaskHeading}</h2>

@@ -93,6 +93,7 @@ export function Card({
       onClick={() => onSelect?.(task.id)}
       onKeyDown={handleKeyDown}
       onDragStart={() => {
+        onSelect?.(task.id)
         setDragging(true)
         onDragStart(task.id, task.updated)
       }}
