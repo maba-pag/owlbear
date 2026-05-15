@@ -62,7 +62,6 @@ export default function FilterPanel({
   const searchRef = useRef<HTMLElement | null>(null)
   const priorityRef = useRef<HTMLElement | null>(null)
   const panelRef = useRef<HTMLDivElement | null>(null)
-  const textInputRef = useRef<HTMLInputElement | null>(null)
   const wasOpenRef = useRef(open)
   const hadFocusInsideRef = useRef(false)
 
@@ -145,7 +144,7 @@ export default function FilterPanel({
       return
     }
 
-    textInputRef.current?.focus()
+    searchRef.current?.focus()
     hadFocusInsideRef.current = true
     wasOpenRef.current = true
   }, [open])
@@ -198,16 +197,6 @@ export default function FilterPanel({
         role="textbox"
       />
 
-      <input
-        ref={textInputRef}
-        type="text"
-        aria-hidden="true"
-        tabIndex={-1}
-        value={filter.text}
-        onChange={(event) => onFilterChange({ ...filter, text: readStringValue(event) })}
-        onInput={(event) => onFilterChange({ ...filter, text: readStringValue(event) })}
-      />
-
       <p-select
         ref={priorityRef}
         name="priority-filter"
@@ -255,15 +244,6 @@ export default function FilterPanel({
       >
         Show only blocked tasks
       </p-checkbox>
-
-      <input
-        type="checkbox"
-        role="switch"
-        aria-hidden="true"
-        tabIndex={-1}
-        checked={filter.blocked}
-        onChange={() => onFilterChange({ ...filter, blocked: !filter.blocked })}
-      />
 
       {isFilterActive ? (
         <PButton data-testid="filter-reset" variant="secondary" onClick={() => onFilterChange(EMPTY_FILTER)}>
