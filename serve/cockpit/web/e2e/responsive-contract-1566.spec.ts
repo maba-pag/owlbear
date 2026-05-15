@@ -151,25 +151,35 @@ test.describe('TestFromAC_ScrollableRegionFocusability', () => {
         .waitFor({ state: 'attached', timeout: 10_000 })
     })
 
-    // RED: no tabIndex="0" on scrollable column-bodies — Column.tsx has no dynamic logic.
+    // AC-4 both-branch: scrollable → tabIndex="0", non-scrollable → no tabIndex.
     test('column-body with scrollHeight > clientHeight has tabIndex="0" at 320x800 (scrollable-region-focusable)', async ({
       page,
     }) => {
-      // Force overflow: constrain column-body to 100px so 10 task cards exceed it.
+      // Scope injection: todo column-body forced to 100px (overflow) while other column-bodies
+      // are forced to 200px so their 120px content (min-height from .column-empty) fits without
+      // scrolling — guarantees both states are observed at all viewport sizes.
       await page.addStyleTag({
         content:
-          '[data-testid="column-body"] { max-height: 100px !important; overflow-y: auto !important; }',
+          '[data-column="todo"] [data-testid="column-body"] { max-height: 100px !important; overflow-y: auto !important; } ' +
+          '[data-column]:not([data-column="todo"]) [data-testid="column-body"] { min-height: 200px !important; max-height: 200px !important; height: 200px !important; }',
       })
 
       const result = await page.evaluate(() => {
         const bodies = Array.from(document.querySelectorAll('[data-testid="column-body"]'))
         const scrollable = bodies.filter((el) => el.scrollHeight > el.clientHeight)
-        const focusable = scrollable.filter((el) => el.getAttribute('tabIndex') === '0')
+        const nonScrollable = bodies.filter((el) => el.scrollHeight <= el.clientHeight)
+        const scrollableFocusable = scrollable.filter((el) => el.getAttribute('tabIndex') === '0')
+        const nonScrollableWithTabIndex = nonScrollable.filter(
+          (el) => el.getAttribute('tabIndex') !== null,
+        )
         return {
           totalColumnBodies: bodies.length,
           scrollableCount: scrollable.length,
-          focusableCount: focusable.length,
-          tabIndexValues: scrollable.map((el) => el.getAttribute('tabIndex')),
+          nonScrollableCount: nonScrollable.length,
+          scrollableFocusableCount: scrollableFocusable.length,
+          nonScrollableWithTabIndexCount: nonScrollableWithTabIndex.length,
+          scrollableTabIndexValues: scrollable.map((el) => el.getAttribute('tabIndex')),
+          nonScrollableTabIndexValues: nonScrollable.map((el) => el.getAttribute('tabIndex')),
         }
       })
 
@@ -177,18 +187,29 @@ test.describe('TestFromAC_ScrollableRegionFocusability', () => {
         result.totalColumnBodies,
         '[data-testid="column-body"] elements must be in DOM',
       ).toBeGreaterThan(0)
-      // Guard: ensures the test is not vacuously true
+      // Guard: both states must be observed in the same test run (AC-4 dual-branch)
       expect(
         result.scrollableCount,
-        'After max-height CSS injection, at least one column-body must have scrollHeight > clientHeight',
+        'After scoped max-height injection on todo column, at least one column-body must be scrollable',
       ).toBeGreaterThan(0)
-      // RED assertion: Column.tsx sets no tabIndex → focusableCount = 0 ≠ scrollableCount
       expect(
-        result.focusableCount,
+        result.nonScrollableCount,
+        'Empty columns must remain non-scrollable after scoped injection (AC-4 both-branch guard)',
+      ).toBeGreaterThan(0)
+      // Positive branch: scrollable column-bodies must carry tabIndex="0"
+      expect(
+        result.scrollableFocusableCount,
         `All scrollable column-bodies must have tabIndex="0" for keyboard access; ` +
-          `found ${result.scrollableCount} scrollable, ${result.focusableCount} with tabIndex="0". ` +
-          `Actual tabIndex values: ${JSON.stringify(result.tabIndexValues)}`,
+          `found ${result.scrollableCount} scrollable, ${result.scrollableFocusableCount} focusable. ` +
+          `Actual tabIndex values: ${JSON.stringify(result.scrollableTabIndexValues)}`,
       ).toBe(result.scrollableCount)
+      // Negative branch: non-scrollable column-bodies must NOT carry tabIndex
+      expect(
+        result.nonScrollableWithTabIndexCount,
+        `Non-scrollable column-bodies must not carry tabIndex; ` +
+          `found ${result.nonScrollableWithTabIndexCount} with tabIndex out of ${result.nonScrollableCount} non-scrollable. ` +
+          `Actual values: ${JSON.stringify(result.nonScrollableTabIndexValues)}`,
+      ).toBe(0)
     })
   })
 
@@ -205,24 +226,32 @@ test.describe('TestFromAC_ScrollableRegionFocusability', () => {
         .waitFor({ state: 'attached', timeout: 10_000 })
     })
 
-    // RED: same as 320px — tabIndex logic absent from Column.tsx.
+    // AC-4 both-branch: scrollable → tabIndex="0", non-scrollable → no tabIndex.
     test('column-body with scrollHeight > clientHeight has tabIndex="0" at 768x1024 (scrollable-region-focusable)', async ({
       page,
     }) => {
       await page.addStyleTag({
         content:
-          '[data-testid="column-body"] { max-height: 100px !important; overflow-y: auto !important; }',
+          '[data-column="todo"] [data-testid="column-body"] { max-height: 100px !important; overflow-y: auto !important; } ' +
+          '[data-column]:not([data-column="todo"]) [data-testid="column-body"] { min-height: 200px !important; max-height: 200px !important; height: 200px !important; }',
       })
 
       const result = await page.evaluate(() => {
         const bodies = Array.from(document.querySelectorAll('[data-testid="column-body"]'))
         const scrollable = bodies.filter((el) => el.scrollHeight > el.clientHeight)
-        const focusable = scrollable.filter((el) => el.getAttribute('tabIndex') === '0')
+        const nonScrollable = bodies.filter((el) => el.scrollHeight <= el.clientHeight)
+        const scrollableFocusable = scrollable.filter((el) => el.getAttribute('tabIndex') === '0')
+        const nonScrollableWithTabIndex = nonScrollable.filter(
+          (el) => el.getAttribute('tabIndex') !== null,
+        )
         return {
           totalColumnBodies: bodies.length,
           scrollableCount: scrollable.length,
-          focusableCount: focusable.length,
-          tabIndexValues: scrollable.map((el) => el.getAttribute('tabIndex')),
+          nonScrollableCount: nonScrollable.length,
+          scrollableFocusableCount: scrollableFocusable.length,
+          nonScrollableWithTabIndexCount: nonScrollableWithTabIndex.length,
+          scrollableTabIndexValues: scrollable.map((el) => el.getAttribute('tabIndex')),
+          nonScrollableTabIndexValues: nonScrollable.map((el) => el.getAttribute('tabIndex')),
         }
       })
 
@@ -232,14 +261,24 @@ test.describe('TestFromAC_ScrollableRegionFocusability', () => {
       ).toBeGreaterThan(0)
       expect(
         result.scrollableCount,
-        'After max-height CSS injection, at least one column-body must have scrollHeight > clientHeight',
+        'After scoped max-height injection on todo column, at least one column-body must be scrollable',
       ).toBeGreaterThan(0)
       expect(
-        result.focusableCount,
+        result.nonScrollableCount,
+        'Empty columns must remain non-scrollable after scoped injection (AC-4 both-branch guard)',
+      ).toBeGreaterThan(0)
+      expect(
+        result.scrollableFocusableCount,
         `All scrollable column-bodies must have tabIndex="0" for keyboard access; ` +
-          `found ${result.scrollableCount} scrollable, ${result.focusableCount} with tabIndex="0". ` +
-          `Actual tabIndex values: ${JSON.stringify(result.tabIndexValues)}`,
+          `found ${result.scrollableCount} scrollable, ${result.scrollableFocusableCount} focusable. ` +
+          `Actual tabIndex values: ${JSON.stringify(result.scrollableTabIndexValues)}`,
       ).toBe(result.scrollableCount)
+      expect(
+        result.nonScrollableWithTabIndexCount,
+        `Non-scrollable column-bodies must not carry tabIndex; ` +
+          `found ${result.nonScrollableWithTabIndexCount} with tabIndex out of ${result.nonScrollableCount} non-scrollable. ` +
+          `Actual values: ${JSON.stringify(result.nonScrollableTabIndexValues)}`,
+      ).toBe(0)
     })
   })
 
@@ -256,24 +295,32 @@ test.describe('TestFromAC_ScrollableRegionFocusability', () => {
         .waitFor({ state: 'attached', timeout: 10_000 })
     })
 
-    // RED: same as 320px and 768px — tabIndex logic absent from Column.tsx.
+    // AC-4 both-branch: scrollable → tabIndex="0", non-scrollable → no tabIndex.
     test('column-body with scrollHeight > clientHeight has tabIndex="0" at 1024x768 (scrollable-region-focusable)', async ({
       page,
     }) => {
       await page.addStyleTag({
         content:
-          '[data-testid="column-body"] { max-height: 100px !important; overflow-y: auto !important; }',
+          '[data-column="todo"] [data-testid="column-body"] { max-height: 100px !important; overflow-y: auto !important; } ' +
+          '[data-column]:not([data-column="todo"]) [data-testid="column-body"] { min-height: 200px !important; max-height: 200px !important; height: 200px !important; }',
       })
 
       const result = await page.evaluate(() => {
         const bodies = Array.from(document.querySelectorAll('[data-testid="column-body"]'))
         const scrollable = bodies.filter((el) => el.scrollHeight > el.clientHeight)
-        const focusable = scrollable.filter((el) => el.getAttribute('tabIndex') === '0')
+        const nonScrollable = bodies.filter((el) => el.scrollHeight <= el.clientHeight)
+        const scrollableFocusable = scrollable.filter((el) => el.getAttribute('tabIndex') === '0')
+        const nonScrollableWithTabIndex = nonScrollable.filter(
+          (el) => el.getAttribute('tabIndex') !== null,
+        )
         return {
           totalColumnBodies: bodies.length,
           scrollableCount: scrollable.length,
-          focusableCount: focusable.length,
-          tabIndexValues: scrollable.map((el) => el.getAttribute('tabIndex')),
+          nonScrollableCount: nonScrollable.length,
+          scrollableFocusableCount: scrollableFocusable.length,
+          nonScrollableWithTabIndexCount: nonScrollableWithTabIndex.length,
+          scrollableTabIndexValues: scrollable.map((el) => el.getAttribute('tabIndex')),
+          nonScrollableTabIndexValues: nonScrollable.map((el) => el.getAttribute('tabIndex')),
         }
       })
 
@@ -283,14 +330,24 @@ test.describe('TestFromAC_ScrollableRegionFocusability', () => {
       ).toBeGreaterThan(0)
       expect(
         result.scrollableCount,
-        'After max-height CSS injection, at least one column-body must have scrollHeight > clientHeight',
+        'After scoped max-height injection on todo column, at least one column-body must be scrollable',
       ).toBeGreaterThan(0)
       expect(
-        result.focusableCount,
+        result.nonScrollableCount,
+        'Empty columns must remain non-scrollable after scoped injection (AC-4 both-branch guard)',
+      ).toBeGreaterThan(0)
+      expect(
+        result.scrollableFocusableCount,
         `All scrollable column-bodies must have tabIndex="0" for keyboard access; ` +
-          `found ${result.scrollableCount} scrollable, ${result.focusableCount} with tabIndex="0". ` +
-          `Actual tabIndex values: ${JSON.stringify(result.tabIndexValues)}`,
+          `found ${result.scrollableCount} scrollable, ${result.scrollableFocusableCount} focusable. ` +
+          `Actual tabIndex values: ${JSON.stringify(result.scrollableTabIndexValues)}`,
       ).toBe(result.scrollableCount)
+      expect(
+        result.nonScrollableWithTabIndexCount,
+        `Non-scrollable column-bodies must not carry tabIndex; ` +
+          `found ${result.nonScrollableWithTabIndexCount} with tabIndex out of ${result.nonScrollableCount} non-scrollable. ` +
+          `Actual values: ${JSON.stringify(result.nonScrollableTabIndexValues)}`,
+      ).toBe(0)
     })
   })
 })
@@ -405,12 +462,12 @@ test.describe('TestFromAC_MobileSheetContract', () => {
     // Trigger selection - force:true bypasses 0px-workspace visibility constraint.
     await page.locator('[data-testid="task-card"]').first().click({ force: true })
 
-    // After click: selectedTaskId === 1 -> heading becomes "#1" or "Mobile Test Task".
-    // FAILS if click did not set selectedTaskId - heading stays "No task selected".
+    // After click: selectedTaskId === 1 -> heading derives from selected task title.
+    // FAILS if click did not set selectedTaskId or heading is not task-identity-specific.
     await expect(
       heading,
-      'p-sheet heading must no longer read "No task selected" after card click - ' +
-        'proves click triggered task selection, not just container visibility',
-    ).not.toHaveText('No task selected')
+      'p-sheet heading must display selected task title "Mobile Test Task" after card click — ' +
+        'proves exact task identity propagated to mobile sheet, not just state change from placeholder',
+    ).toHaveText('Mobile Test Task')
   })
 })
