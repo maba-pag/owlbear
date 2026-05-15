@@ -126,6 +126,21 @@ Accessibility and responsive state after #1396:
   (39 tests) proves the conditional `tabIndex` both-branch contract (scrollable column
   bodies gain the attribute; non-scrollable column bodies lack it) and mobile `p-sheet`
   heading identity (exact selected task title) after task selection at 320×800.
+- #1573 adds cross-cutting visual-regression and structural consolidation coverage for
+  the phase-2 visual remediation lane: 19 screenshot baselines committed across desktop
+  board, selected-task sidecar, filter panel, context menu, Health popover, DR popover,
+  Cleanup dialog, Resolve modal, Archive modal, Repair confirm, dark mode, tablet 768px,
+  and mobile 320px states (`e2e/visual-remediation-1573.spec.ts`). Structural gates
+  include non-reflow proof (overlay surfaces do not expand parent containers), 320px
+  horizontal-overflow guard, and a non-circular PDS native-control gate
+  (`ac2c_v2_native_controls_match_documented_exception_set`) that enumerates all native
+  `<button>` elements in the rendered board view and fails if any fall outside the
+  six-item documented exception set. Keyboard reachability gates (AC-7-v2) verify Tab
+  traversal reaches the status bar, nav-rail, workspace, filter-toggle, sidecar-collapse,
+  and sidecar-content controls in base state and filter-panel-open state; DOM audit covers
+  both states and PDS custom-element hosts. `DecisionViewport` task-reference links were
+  converted from native `<button>` to anchor elements to keep the native-control count
+  within the documented exception ceiling.
 - Documentation here does not treat cache/SSE invalidation work from #1346 as part of
   this delivery bundle.
 
