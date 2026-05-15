@@ -165,7 +165,6 @@ function Shell() {
           aria-label="Kanban"
           variant="secondary"
           className="shell__nav-button"
-          tabIndex={-1}
         >
           <svg
             aria-hidden="true"
