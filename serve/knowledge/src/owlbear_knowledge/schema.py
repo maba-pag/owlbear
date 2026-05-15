@@ -1,8 +1,8 @@
 """DDL and database initialization for the knowledge graph.
 
 Creates all relational tables required by the knowledge graph: documents,
-entities, edges, chunks, document_status, knowledge_sources, bookmarks,
-consolidations, source_pages, and a schema version tracker.
+entities, edges, chunks, document_status, knowledge_sources, source_pages,
+and a schema version tracker.
 Calling ``init_db`` multiple times is safe (idempotent).
 """
 
@@ -16,7 +16,7 @@ from datetime import UTC, datetime
 # Constants
 # ---------------------------------------------------------------------------
 
-_SCHEMA_VERSION: int = 11
+_SCHEMA_VERSION: int = 12
 """Current schema version written to the ``schema_version`` table."""
 
 _SCOPE_TABLES: tuple[str, ...] = (
@@ -120,34 +120,6 @@ CREATE TABLE IF NOT EXISTS knowledge_sources (
 )
 """
 
-_CREATE_BOOKMARKS = """\
-CREATE TABLE IF NOT EXISTS bookmarks (
-    id              TEXT PRIMARY KEY,
-    url             TEXT NOT NULL,
-    title           TEXT NOT NULL,
-    description     TEXT,
-    tags            TEXT NOT NULL DEFAULT '[]',
-    relevance_score REAL NOT NULL DEFAULT 0.0,
-    reason          TEXT,
-    scope           TEXT NOT NULL DEFAULT 'global',
-    document_id     TEXT,
-    content_hash    TEXT,
-    created_at      TEXT NOT NULL,
-    updated_at      TEXT NOT NULL
-)
-"""
-
-_CREATE_CONSOLIDATIONS = """\
-CREATE TABLE IF NOT EXISTS consolidations (
-    id         TEXT PRIMARY KEY,
-    source_ids TEXT NOT NULL,
-    summary    TEXT,
-    insight    TEXT,
-    created_at TEXT,
-    scope      TEXT DEFAULT 'global'
-)
-"""
-
 _CREATE_SCHEMA_VERSION = """\
 CREATE TABLE IF NOT EXISTS schema_version (
     version    INTEGER,
@@ -248,7 +220,24 @@ def _migrate_v5_to_v6(conn: sqlite3.Connection) -> None:
 
 def _migrate_v6_to_v7(conn: sqlite3.Connection) -> None:
     """Migrate a v6 database to v7 — adds bookmarks table."""
-    conn.execute(_CREATE_BOOKMARKS)
+    conn.execute(
+        """\
+CREATE TABLE IF NOT EXISTS bookmarks (
+    id              TEXT PRIMARY KEY,
+    url             TEXT NOT NULL,
+    title           TEXT NOT NULL,
+    description     TEXT,
+    tags            TEXT NOT NULL DEFAULT '[]',
+    relevance_score REAL NOT NULL DEFAULT 0.0,
+    reason          TEXT,
+    scope           TEXT NOT NULL DEFAULT 'global',
+    document_id     TEXT,
+    content_hash    TEXT,
+    created_at      TEXT NOT NULL,
+    updated_at      TEXT NOT NULL
+)
+"""
+    )
     conn.execute(
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_bookmarks_url_scope ON bookmarks(url, scope)"
     )
@@ -265,7 +254,18 @@ def _migrate_v7_to_v8(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE entities ADD COLUMN importance REAL DEFAULT 0.5")
     with contextlib.suppress(sqlite3.OperationalError):
         conn.execute("ALTER TABLE chunks ADD COLUMN consolidated INTEGER DEFAULT 0")
-    conn.execute(_CREATE_CONSOLIDATIONS)
+    conn.execute(
+        """\
+CREATE TABLE IF NOT EXISTS consolidations (
+    id         TEXT PRIMARY KEY,
+    source_ids TEXT NOT NULL,
+    summary    TEXT,
+    insight    TEXT,
+    created_at TEXT,
+    scope      TEXT DEFAULT 'global'
+)
+"""
+    )
     conn.execute(
         "UPDATE schema_version SET version = ?, applied_at = ?",
         (8, datetime.now(tz=UTC).isoformat()),
@@ -324,6 +324,16 @@ def _migrate_v10_to_v11(conn: sqlite3.Connection) -> None:
     )
 
 
+def _migrate_v11_to_v12(conn: sqlite3.Connection) -> None:
+    """Migrate a v11 database to v12 — drops retired bookmarks/consolidations tables."""
+    conn.execute("DROP TABLE IF EXISTS bookmarks")
+    conn.execute("DROP TABLE IF EXISTS consolidations")
+    conn.execute(
+        "UPDATE schema_version SET version = ?, applied_at = ?",
+        (12, datetime.now(tz=UTC).isoformat()),
+    )
+
+
 def _apply_migrations(conn: sqlite3.Connection, current: int) -> None:
     """Apply all pending schema migrations starting from *current* version."""
     migrations: tuple[tuple[int, callable], ...] = (
@@ -337,6 +347,7 @@ def _apply_migrations(conn: sqlite3.Connection, current: int) -> None:
         (9, _migrate_v8_to_v9),
         (10, _migrate_v9_to_v10),
         (11, _migrate_v10_to_v11),
+        (12, _migrate_v11_to_v12),
     )
     for target_version, migration in migrations:
         if current < target_version:
@@ -355,7 +366,7 @@ def init_db(conn: sqlite3.Connection) -> None:
     connection is safe and will not duplicate data or raise errors.
 
     If the database contains an older schema, it is automatically migrated
-    through v2-v11.
+    through v2-v12.
 
     Args:
         conn (sqlite3.Connection): An open :class:`sqlite3.Connection`.  Works with both
@@ -370,8 +381,6 @@ def init_db(conn: sqlite3.Connection) -> None:
     conn.execute(_CREATE_CHUNKS)
     conn.execute(_CREATE_DOCUMENT_STATUS)
     conn.execute(_CREATE_KNOWLEDGE_SOURCES)
-    conn.execute(_CREATE_BOOKMARKS)
-    conn.execute(_CREATE_CONSOLIDATIONS)
     conn.execute(_CREATE_SOURCE_PAGES)
     conn.execute(_CREATE_REVIEWED_PAIRS)
     conn.execute(_CREATE_SCHEMA_VERSION)
@@ -449,10 +458,6 @@ def init_db(conn: sqlite3.Connection) -> None:
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_knowledge_sources_scope ON knowledge_sources(scope)"
     )
-    conn.execute(
-        "CREATE UNIQUE INDEX IF NOT EXISTS idx_bookmarks_url_scope ON bookmarks(url, scope)"
-    )
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_bookmarks_scope ON bookmarks(scope)")
     conn.execute(
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_edges_d17_unique "
         "ON edges(source_id, target_id, relation, document_id)"

@@ -171,6 +171,7 @@ async def load_manifest_file(
             name=entry.name,
             source_type=SourceType(entry.type),
             config=entry.config,
+            scope=entry.scope,
             created_at=now,
             updated_at=now,
         )
@@ -195,7 +196,11 @@ async def load_manifest_file(
                 intake_result = await intake_mod.read_file(
                     file_path, workspace_root=workspace_root
                 )
-                result = await pipeline.ingest(intake_result, scope=entry.scope)
+                result = await pipeline.ingest(
+                    intake_result,
+                    scope=entry.scope,
+                    source_id=source.id,
+                )
                 if result.status == "skipped":
                     summary.skipped += 1
                 elif result.status == "failed":
@@ -257,7 +262,8 @@ def main(args: list[str] | None = None) -> int:
     conn = sqlite3.connect(str(db_file))
     _init_db(conn)
     gs = GraphStore(conn)
-    vs = QdrantVectorStore()
+    qdrant_path = os.environ.get("OWLBEAR_QDRANT_PATH", ".owlbear/knowledge/vectors")
+    vs = QdrantVectorStore(location=qdrant_path)
     emb = BgeM3EmbeddingProvider()
     doc_store = DocumentStore(conn, gs, vs, emb)
     extractor = EntityExtractor()
