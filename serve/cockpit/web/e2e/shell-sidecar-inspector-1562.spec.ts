@@ -191,20 +191,16 @@ test.describe('TestFromAC_SidecarInspectorComposition', () => {
   test('sidecar header region exists outside tabs when task is selected — RED: no sidecar-header region', async ({
     page,
   }) => {
-    // AC-1(a): [data-region="sidecar-header"] (or equivalent heading) must appear
-    //          outside <p-tabs> in the sidecar, showing the selected task title/ID.
-    //
-    // RED: Shell.tsx sidecar structure contains no header region:
-    //   <aside data-region="sidecar">
-    //     <button data-testid="sidecar-collapse">
-    //     <div id="shell-sidecar-content">
-    //       <DecisionViewport>
-    //       <p-tabs> ... </p-tabs>
-    //     </div>
-    //   </aside>
-    // [data-region="sidecar-header"] is absent → toBeVisible() fails.
+    // AC-1(a): [data-region="sidecar-header"] must appear outside <p-tabs> in the sidecar,
+    //          showing the selected task title/ID. The DOM-hierarchy assertion (toHaveCount(0)
+    //          for 'p-tabs [data-region="sidecar-header"]') mechanically proves outside-tab
+    //          position — a build that moves the header inside <p-tabs> would fail here.
     const sidecarHeader = page.locator('[data-region="sidecar-header"]')
     await expect(sidecarHeader).toBeVisible()
+
+    // DOM-hierarchy guard: sidecar-header must NOT be a descendant of p-tabs.
+    // If the header were inside <p-tabs>, this count would be 1 not 0.
+    await expect(page.locator('p-tabs [data-region="sidecar-header"]')).toHaveCount(0)
   })
 
   test('sidecar metadata fields have visible Status and Priority labels — RED: unlabeled spans', async ({
@@ -365,14 +361,33 @@ test.describe('TestFromAC_KeyboardCollapseExpand', () => {
   test('sidecar collapse toggle hides content when activated via keyboard Enter — regression guard', async ({
     page,
   }) => {
-    // AC-3(a): Focus sidecar-collapse button and press Enter.
-    //          Assert #shell-sidecar-content gets aria-hidden="true".
+    // AC-3(a): Reach sidecar-collapse button via sequential Tab presses from a reset
+    //          starting point (not .focus() shortcut) — proving real Tab reachability.
+    //          Then activate via Enter; assert #shell-sidecar-content gets aria-hidden="true".
     //
     // REGRESSION GUARD: Shell.tsx collapse button toggles isSidecarCollapsed →
     //   <div id="shell-sidecar-content" aria-hidden={isSidecarCollapsed ? 'true' : undefined}>
     // Expected to pass with current implementation.
-    const collapseToggle = page.locator('[data-testid="sidecar-collapse"]')
-    await collapseToggle.focus()
+
+    // Reset focus to document root before tabbing
+    await page.locator('body').click()
+
+    // Tab through focusable elements until sidecar-collapse is focused
+    let reached = false
+    for (let i = 0; i < 30; i++) {
+      await page.keyboard.press('Tab')
+      const isFocused = await page.evaluate(
+        () => document.activeElement?.getAttribute('data-testid') === 'sidecar-collapse',
+      )
+      if (isFocused) {
+        reached = true
+        break
+      }
+    }
+    expect(reached, 'sidecar-collapse toggle must be reachable via sequential Tab navigation').toBe(
+      true,
+    )
+
     await page.keyboard.press('Enter')
 
     const sidecarContent = page.locator('#shell-sidecar-content')
@@ -488,9 +503,15 @@ test.describe('TestFromAC_StatusBarNavHierarchy', () => {
     await expect(themeToggle).toBeVisible()
     await expect(themeToggle).toHaveAttribute('aria-label', /Theme mode/)
 
-    // Cleanup trigger button — visible with text "Cleanup" as accessible name
+    // Cleanup trigger button — proves accessible name by role + name lookup.
+    // PDS <p-button> slotted text is in shadow DOM so toHaveAccessibleName() returns
+    // empty on the host; getByRole finds the button via its computed accessible name.
     const cleanupButton = page.locator('[data-testid="cleanup-button"]')
     await expect(cleanupButton).toBeVisible()
+    // Accessible name comes from slotted text "Cleanup" visible in the rendered button
+    await expect(
+      page.locator('[data-region="status-bar"]').getByRole('button', { name: /Cleanup/i }),
+    ).toBeVisible()
 
     // Health badge — conditionally rendered when scan completes; aria-label reflects health
     const healthBadge = page.locator('[data-testid="health-badge"]')
