@@ -1,22 +1,18 @@
 /**
- * RF-06 RepairPanel wired into HealthBadge
+ * RF-06 RepairPanel contract coverage after extraction from HealthBadge
  *
- * AC6 — RepairPanel rendered inside HealthBadge popover (data-testid="health-badge-popover")
- *        below the issue list when corruptionCount > 0
- * AC7 — useScanPolling exposes refetch(); RepairPanel accepts onSuccess prop threaded from
- *        caller (Shell/HealthBadge) via useScanPolling.refetch
+ * AC7 — useScanPolling exposes refetch(); RepairPanel accepts onSuccess prop directly
  * AC8 — RepairPanel uses PDS components throughout (p-button, p-spinner, p-text)
  *
  * AC1–AC5 and AC9 are covered by #1167 tests (RepairPanel_1167.test.tsx). This suite
- * adds the integration and PDS-conversion contracts.
+ * covers remaining hook and RepairPanel contracts.
  *
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, fireEvent } from '@testing-library/react'
+import { render } from '@testing-library/react'
 import { renderHook, act } from '@testing-library/react'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
 import type { UseRepairFlowResult } from '../hooks/useRepairFlow'
-import type { ScanItem } from '../components/HealthBadge'
 
 // ─── Module mocks ─────────────────────────────────────────────────────────────
 // useRepairFlow mocked at file scope so RepairPanel can be rendered without
@@ -30,22 +26,9 @@ vi.mock('../hooks/useRepairFlow', () => ({
 
 import { useRepairFlow } from '../hooks/useRepairFlow'
 import RepairPanel from '../components/RepairPanel'
-import HealthBadge from '../components/HealthBadge'
 import { useScanPolling } from '../hooks/useScanPolling'
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
-
-const ITEM_A: ScanItem = {
-  code: 'E001',
-  detail: 'Missing required field',
-  file_path: '/tasks/TASK-001.md',
-}
-
-const ITEM_B: ScanItem = {
-  code: 'CORRUPT_YAML',
-  detail: 'YAML parse error',
-  file_path: '/tasks/TASK-007.md',
-}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -70,16 +53,6 @@ function mockHook(overrides: Partial<UseRepairFlowResult> = {}): UseRepairFlowRe
 
 // Renders HealthBadge with extra props forwarded (allows testing new builder-added props
 // such as corruptionCount without TypeScript compile gating these RED tests).
-function renderBadge(items: ScanItem[], extra: Record<string, unknown> = {}) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const props = { items, ...(extra as any) }
-  return render(
-    <PorscheDesignSystemProvider>
-      <HealthBadge {...props} />
-    </PorscheDesignSystemProvider>,
-  )
-}
-
 // Renders RepairPanel with extra props forwarded (allows testing new builder-added props
 // such as onSuccess without TypeScript compile gating these RED tests).
 function renderPanel(corruptionCount: number, extra: Record<string, unknown> = {}) {
@@ -91,65 +64,6 @@ function renderPanel(corruptionCount: number, extra: Record<string, unknown> = {
     </PorscheDesignSystemProvider>,
   )
 }
-
-// ─── AC6: RepairPanel inside HealthBadge popover ──────────────────────────────
-
-describe('TestFromAC_HealthBadgePopoverRepair', () => {
-  beforeEach(() => {
-    vi.resetAllMocks()
-    mockHook()
-  })
-
-  // Happy path: corruptionCount > 0 → repair button appears in popover
-
-  it('popover contains repair-button when corruptionCount is 1', () => {
-    const { container } = renderBadge([ITEM_A], { corruptionCount: 1 })
-    fireEvent.click(container.querySelector('[data-testid="health-badge"]')!)
-    const popover = container.querySelector('[data-testid="health-badge-popover"]')
-    expect(popover?.querySelector('[data-testid="repair-button"]')).not.toBeNull()
-  })
-
-  it('popover contains repair-button when corruptionCount is large (10)', () => {
-    const { container } = renderBadge([ITEM_A, ITEM_B], { corruptionCount: 10 })
-    fireEvent.click(container.querySelector('[data-testid="health-badge"]')!)
-    const popover = container.querySelector('[data-testid="health-badge-popover"]')
-    expect(popover?.querySelector('[data-testid="repair-button"]')).not.toBeNull()
-  })
-
-  // Edge: corruptionCount boundary — 1 is the minimum that shows the panel
-
-  it('popover contains repair-button when corruptionCount is exactly 1 (boundary minimum)', () => {
-    const { container } = renderBadge([ITEM_B], { corruptionCount: 1 })
-    fireEvent.click(container.querySelector('[data-testid="health-badge"]')!)
-    const popover = container.querySelector('[data-testid="health-badge-popover"]')
-    expect(popover?.querySelector('[data-testid="repair-button"]')).not.toBeNull()
-  })
-
-  // Structural: RepairPanel must appear BELOW the issue list
-
-  it('repair-button appears after the issue list (ul) in the popover DOM order', () => {
-    const { container } = renderBadge([ITEM_A], { corruptionCount: 1 })
-    fireEvent.click(container.querySelector('[data-testid="health-badge"]')!)
-    const popover = container.querySelector('[data-testid="health-badge-popover"]')!
-    const ul = popover.querySelector('ul')
-    const repairBtn = popover.querySelector('[data-testid="repair-button"]')
-    expect(ul).not.toBeNull()
-    expect(repairBtn).not.toBeNull()
-    // DOCUMENT_POSITION_FOLLOWING (4) means repairBtn comes after ul in document order
-    const position = ul!.compareDocumentPosition(repairBtn!)
-    expect(position & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-  })
-
-  // Negative boundary: corruptionCount 0 must not render the repair panel inside the popover
-
-  it('repair panel is absent from popover when corruptionCount is 0', () => {
-    const { container } = renderBadge([ITEM_A], { corruptionCount: 0 })
-    fireEvent.click(container.querySelector('[data-testid="health-badge"]')!)
-    const popover = container.querySelector('[data-testid="health-badge-popover"]')
-    expect(popover?.querySelector('[data-testid="repair-button"]')).toBeNull()
-  })
-
-})
 
 // ─── AC7: useScanPolling refetch interface ─────────────────────────────────────
 
@@ -269,56 +183,6 @@ describe('TestFromAC_RepairPanelPDS', () => {
     const { container } = renderPanel(2)
     // PDS PText renders as <p-text>. Proves AC8 p-text coverage explicitly.
     expect(container.querySelector('p-text')).not.toBeNull()
-  })
-})
-
-// ─── AC7 (integration): HealthBadge → RepairPanel → useRepairFlow callback chain ──
-
-describe('TestFromAC_HealthBadgeRepairPropChain', () => {
-  beforeEach(() => {
-    vi.resetAllMocks()
-  })
-
-  // Happy path: HealthBadge threads onRepairSuccess all the way into useRepairFlow opts
-
-  it('HealthBadge threads onRepairSuccess into useRepairFlow opts.onSuccess via RepairPanel', () => {
-    let capturedOnSuccess: (() => void) | undefined
-    vi.mocked(useRepairFlow).mockImplementation((opts: { onSuccess?: () => void } | undefined) => {
-      capturedOnSuccess = opts?.onSuccess
-      return hookDefaults()
-    })
-
-    const onRepairSuccessSpy = vi.fn()
-    const { container } = renderBadge([ITEM_A], {
-      corruptionCount: 1,
-      onRepairSuccess: onRepairSuccessSpy,
-    })
-    // Open popover — triggers RepairPanel render, which calls useRepairFlow
-    fireEvent.click(container.querySelector('[data-testid="health-badge"]')!)
-
-    expect(capturedOnSuccess).toBeDefined()
-    expect(capturedOnSuccess).toBe(onRepairSuccessSpy)
-  })
-
-  // Integration: calling the captured onSuccess propagates back to the original handler
-
-  it('invoking useRepairFlow opts.onSuccess calls the HealthBadge onRepairSuccess handler', () => {
-    let capturedOnSuccess: (() => void) | undefined
-    vi.mocked(useRepairFlow).mockImplementation((opts: { onSuccess?: () => void } | undefined) => {
-      capturedOnSuccess = opts?.onSuccess
-      return hookDefaults()
-    })
-
-    const onRepairSuccessSpy = vi.fn()
-    const { container } = renderBadge([ITEM_A], {
-      corruptionCount: 1,
-      onRepairSuccess: onRepairSuccessSpy,
-    })
-    fireEvent.click(container.querySelector('[data-testid="health-badge"]')!)
-
-    expect(capturedOnSuccess).toBeDefined()
-    capturedOnSuccess!()
-    expect(onRepairSuccessSpy).toHaveBeenCalledOnce()
   })
 })
 
