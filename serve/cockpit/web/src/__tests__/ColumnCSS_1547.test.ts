@@ -163,11 +163,11 @@ describe('TestFromAC_ColumnDragOver', () => {
 // A regression from var(--pds-spacing-*) to raw pixel values must cause these to fail.
 
 describe('TestFromAC_ColumnSpacingTokens', () => {
-  it('.column header padding uses PDS spacing token var(--pds-spacing-sm)', () => {
+  it('.column header padding uses PDS spacing token var(--pds-spacing-sm) on both axes', () => {
     const css = readFileSync(COLUMN_CSS_PATH, 'utf-8')
     const block = getCSSBlock(css, '.column header')
     expect(block).not.toBeNull()
-    expect(block).toMatch(/padding\s*:\s*var\(--pds-spacing-sm\)/)
+    expect(block).toMatch(/padding\s*:\s*var\(--pds-spacing-sm\)\s+var\(--pds-spacing-sm\)/)
   })
 
   it('.column-body padding uses PDS spacing token var(--pds-spacing-xs)', () => {
