@@ -346,6 +346,34 @@ test.describe('TestFromAC_MobileReachability', () => {
     ).toBeLessThanOrEqual(viewportWidth)
   })
 
+  // AC-1 (cycle-4 addition): last-column reachability via board-container scrollIntoView.
+  // Proves the board container (scrollable parent of [data-column]) can bring the last column
+  // into the viewport without introducing document-level horizontal overflow.
+  test('last board column reachable via board-container scrollIntoView at 320px without document horizontal overflow', async ({
+    page,
+  }) => {
+    const lastCol = page.locator('[data-column]').last()
+    await lastCol.waitFor({ state: 'attached', timeout: 5_000 })
+    // Scroll last column into view using the board container as the scroll surface.
+    await page.evaluate(() => {
+      const cols = Array.from(document.querySelectorAll('[data-column]'))
+      if (cols.length === 0) return
+      const lastColumn = cols[cols.length - 1] as HTMLElement
+      lastColumn.scrollIntoView({ behavior: 'instant', block: 'nearest', inline: 'nearest' })
+    })
+    await expect(
+      lastCol,
+      'last board column must be in viewport after board-container scrollIntoView at 320px',
+    ).toBeInViewport()
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+    )
+    expect(
+      overflow,
+      'document must not have horizontal overflow after last-column scrollIntoView at 320px',
+    ).toBe(false)
+  })
+
   // RF2: task-detail surface (Shell.tsx: detail-placeholder when no task selected) lives
   // inside sidecar. At 320px sidecar is off-screen → task-detail not reachable.
   // Proves the sidecar/task-detail surface is a hidden horizontal-scroll-only failure.
@@ -414,6 +442,29 @@ test.describe('TestFromAC_AllColumnsVisible', () => {
       ).toBeGreaterThan(sidecarBox!.width)
     })
 
+    // AC-3 (cycle-4 addition): board container must not overflow vertically.
+    // With repeat(auto-fit, minmax(200px, 1fr)) at 1024px, columns may wrap to multiple rows.
+    // scrollHeight ≤ clientHeight proves all rows fit without vertical scrolling required.
+    test('board column container has no vertical overflow at 1024px (scrollHeight ≤ clientHeight)', async ({
+      page,
+    }) => {
+      const result = await page.evaluate(() => {
+        const cols = Array.from(document.querySelectorAll('[data-column]'))
+        if (cols.length === 0) return { overflow: true, scrollHeight: 0, clientHeight: 0 }
+        const container = cols[0].parentElement
+        if (!container) return { overflow: true, scrollHeight: 0, clientHeight: 0 }
+        return {
+          overflow: container.scrollHeight > container.clientHeight,
+          scrollHeight: container.scrollHeight,
+          clientHeight: container.clientHeight,
+        }
+      })
+      expect(
+        result.overflow,
+        `board column container (scrollHeight=${result.scrollHeight}px, clientHeight=${result.clientHeight}px) must not require vertical scrolling at 1024px`,
+      ).toBe(false)
+    })
+
     // AC3 (2nd loop-breaker): each of the 7 columns must have positive rendered area,
     // not just DOM presence. Proves no column is zero-width or hidden due to grid constraints.
     test('each of the 7 status columns has positive rendered area at 1024px', async ({ page }) => {
@@ -460,6 +511,27 @@ test.describe('TestFromAC_AllColumnsVisible', () => {
       expect(
         result.overflow,
         `board column container (scrollWidth=${result.scrollWidth}px, clientWidth=${result.clientWidth}px) must not overflow at 1440px`,
+      ).toBe(false)
+    })
+
+    // AC-3 (cycle-4 addition): board container must not overflow vertically at 1440px.
+    test('board column container has no vertical overflow at 1440px (scrollHeight ≤ clientHeight)', async ({
+      page,
+    }) => {
+      const result = await page.evaluate(() => {
+        const cols = Array.from(document.querySelectorAll('[data-column]'))
+        if (cols.length === 0) return { overflow: true, scrollHeight: 0, clientHeight: 0 }
+        const container = cols[0].parentElement
+        if (!container) return { overflow: true, scrollHeight: 0, clientHeight: 0 }
+        return {
+          overflow: container.scrollHeight > container.clientHeight,
+          scrollHeight: container.scrollHeight,
+          clientHeight: container.clientHeight,
+        }
+      })
+      expect(
+        result.overflow,
+        `board column container (scrollHeight=${result.scrollHeight}px, clientHeight=${result.clientHeight}px) must not require vertical scrolling at 1440px`,
       ).toBe(false)
     })
 
