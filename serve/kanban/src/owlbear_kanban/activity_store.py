@@ -14,20 +14,13 @@ The canonical source vocabulary for activity attribution is:
 from __future__ import annotations
 
 import json
-import sys
-from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path  # noqa: TC003
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from collections.abc import Generator
 
 from owlbear_kanban.models import ActivityCompactionResult, ActivityEvent
 from owlbear_kanban.storage_io import atomic_write
 
 _ACTIVITY_FILE = "activity.jsonl"
-_ACTIVITY_LOCK_FILE = ".activity.lock"
 _HARD_FLOOR = 500  # always keep the last N entries
 
 
@@ -42,10 +35,7 @@ def append_activity_event(event: ActivityEvent, kanban_dir: Path) -> None:
     """
     activity_path = kanban_dir / _ACTIVITY_FILE
     line = json.dumps(event.model_dump()) + "\n"
-    with (
-        _exclusive_activity_lock(kanban_dir),
-        activity_path.open("a", encoding="utf-8") as fh,
-    ):
+    with activity_path.open("a", encoding="utf-8") as fh:
         fh.write(line)
 
 
@@ -149,110 +139,84 @@ def compact_activity_log(
         records_compacted counts.
     """
     activity_path = kanban_dir / _ACTIVITY_FILE
-    with _exclusive_activity_lock(kanban_dir):
-        if not activity_path.exists():
-            return ActivityCompactionResult(
-                before_bytes=0, after_bytes=0, records_compacted=0
-            )
-
-        before_bytes = activity_path.stat().st_size
-        text = activity_path.read_text(encoding="utf-8")
-        all_lines = [line for line in text.splitlines() if line.strip()]
-
-        if not all_lines:
-            return ActivityCompactionResult(
-                before_bytes=before_bytes, after_bytes=before_bytes, records_compacted=0
-            )
-
-        # Parse all events
-        parsed: list[tuple[str, dict]] = []
-        for line in all_lines:
-            try:
-                data = json.loads(line)
-                if isinstance(data, dict):
-                    parsed.append((line, data))
-            except json.JSONDecodeError:
-                parsed.append((line, {}))
-
-        # Resolve cutoff: use before_dt or ended_at of last closed session
-        auto_cutoff = before_dt is None
-        if auto_cutoff:
-            before_dt = _find_last_closed_session_dt(parsed)
-
-        # Identify currently open claim cycles by their starting row index.
-        open_session_starts = _find_open_session_starts(parsed)
-
-        # Determine which entries to keep
-        to_keep: list[str] = []
-        for index, (entry_line, entry_data) in enumerate(parsed):
-            entry_dt = _parse_dt(entry_data.get("timestamp"))
-            in_open_session = _entry_in_open_session(
-                index, entry_data, open_session_starts
-            )
-
-            if (
-                before_dt is None
-                or entry_dt is None
-                or entry_dt >= before_dt
-                or in_open_session
-            ):
-                to_keep.append(entry_line)
-
-        # Hard floor: keep the most recent entries by timestamp for all compaction modes.
-        floor_count = min(_HARD_FLOOR, len(all_lines))
-
-        if floor_count > 0 and len(to_keep) < floor_count:
-            min_dt = datetime.min.replace(tzinfo=UTC)
-            parsed_by_ts = sorted(
-                parsed,
-                key=lambda item: _parse_dt(item[1].get("timestamp")) or min_dt,
-            )
-            floor_lines = [line for line, _ in parsed_by_ts[-floor_count:]]
-            # Merge: union of to_keep and floor_lines, preserving order
-            floor_set = set(floor_lines)
-            keep_set = set(to_keep)
-            to_keep_final = [
-                line for line, _ in parsed if line in keep_set or line in floor_set
-            ]
-        else:
-            to_keep_final = to_keep
-
-        records_compacted = len(all_lines) - len(to_keep_final)
-
-        new_content = "\n".join(to_keep_final) + ("\n" if to_keep_final else "")
-        atomic_write(activity_path, new_content)
-
-        after_bytes = activity_path.stat().st_size
+    if not activity_path.exists():
         return ActivityCompactionResult(
-            before_bytes=before_bytes,
-            after_bytes=after_bytes,
-            records_compacted=records_compacted,
+            before_bytes=0, after_bytes=0, records_compacted=0
         )
 
+    before_bytes = activity_path.stat().st_size
+    text = activity_path.read_text(encoding="utf-8")
+    all_lines = [line for line in text.splitlines() if line.strip()]
 
-@contextmanager
-def _exclusive_activity_lock(kanban_dir: Path) -> Generator[None, None, None]:
-    """Serialize append/compact operations across processes for ``activity.jsonl``."""
-    lock_path = kanban_dir / _ACTIVITY_LOCK_FILE
-    with lock_path.open("a+b") as fh:
-        if sys.platform == "win32":
-            import msvcrt  # noqa: PLC0415
+    if not all_lines:
+        return ActivityCompactionResult(
+            before_bytes=before_bytes, after_bytes=before_bytes, records_compacted=0
+        )
 
-            fh.seek(0)
-            msvcrt.locking(fh.fileno(), msvcrt.LK_LOCK, 1)
-            try:
-                yield
-            finally:
-                fh.seek(0)
-                msvcrt.locking(fh.fileno(), msvcrt.LK_UNLCK, 1)
-        else:
-            import fcntl  # noqa: PLC0415
+    # Parse all events
+    parsed: list[tuple[str, dict]] = []
+    for line in all_lines:
+        try:
+            data = json.loads(line)
+            if isinstance(data, dict):
+                parsed.append((line, data))
+        except json.JSONDecodeError:
+            parsed.append((line, {}))
 
-            fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
-            try:
-                yield
-            finally:
-                fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
+    # Resolve cutoff: use before_dt or ended_at of last closed session
+    auto_cutoff = before_dt is None
+    if auto_cutoff:
+        before_dt = _find_last_closed_session_dt(parsed)
+
+    # Identify currently open claim cycles by their starting row index.
+    open_session_starts = _find_open_session_starts(parsed)
+
+    # Determine which entries to keep
+    to_keep: list[str] = []
+    for index, (entry_line, entry_data) in enumerate(parsed):
+        entry_dt = _parse_dt(entry_data.get("timestamp"))
+        in_open_session = _entry_in_open_session(
+            index, entry_data, open_session_starts
+        )
+
+        if (
+            before_dt is None
+            or entry_dt is None
+            or entry_dt >= before_dt
+            or in_open_session
+        ):
+            to_keep.append(entry_line)
+
+    # Hard floor: keep the most recent entries by timestamp for all compaction modes.
+    floor_count = min(_HARD_FLOOR, len(all_lines))
+
+    if floor_count > 0 and len(to_keep) < floor_count:
+        min_dt = datetime.min.replace(tzinfo=UTC)
+        parsed_by_ts = sorted(
+            parsed,
+            key=lambda item: _parse_dt(item[1].get("timestamp")) or min_dt,
+        )
+        floor_lines = [line for line, _ in parsed_by_ts[-floor_count:]]
+        # Merge: union of to_keep and floor_lines, preserving order
+        floor_set = set(floor_lines)
+        keep_set = set(to_keep)
+        to_keep_final = [
+            line for line, _ in parsed if line in keep_set or line in floor_set
+        ]
+    else:
+        to_keep_final = to_keep
+
+    records_compacted = len(all_lines) - len(to_keep_final)
+
+    new_content = "\n".join(to_keep_final) + ("\n" if to_keep_final else "")
+    atomic_write(activity_path, new_content)
+
+    after_bytes = activity_path.stat().st_size
+    return ActivityCompactionResult(
+        before_bytes=before_bytes,
+        after_bytes=after_bytes,
+        records_compacted=records_compacted,
+    )
 
 
 def _parse_dt(ts: object) -> datetime | None:

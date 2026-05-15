@@ -39,7 +39,6 @@ if TYPE_CHECKING:
 
     from ruamel.yaml import YAML
 
-from owlbear_kanban._locking import _exclusive_file_lock
 from owlbear_kanban._naming import (
     generate_slug,  # noqa: F401
     make_task_filename,
@@ -469,22 +468,19 @@ def write_task_if_unchanged(
     config = _load_config(kanban_dir)
     tasks_dir = kanban_dir / config.paths.tasks_dir
     archive_dir = kanban_dir / config.paths.archive_dir
-    lock_path = tasks_dir / f".{task.id}.lock"
-    archive_lock_path = archive_dir / f".{task.id}.lock"
 
-    with _exclusive_file_lock(lock_path), _exclusive_file_lock(archive_lock_path):
-        matches = list(tasks_dir.glob(f"{task.id}-*.md"))
-        if not matches:
-            matches = list(archive_dir.glob(f"{task.id}-*.md"))
-        if not matches:
-            msg = f"Task file for id={task.id} not found"
-            raise FileNotFoundError(msg)
-        task_path = matches[0]
-        current = read_task(task_path)
-        if current.updated != expected_updated:
-            msg = f"task {task.id} changed since read; reload and retry"
-            raise ConcurrencyError(code="ERR_STALE", user_message=msg)
-        return write_task(task, kanban_dir, target_dir=task_path.parent)
+    matches = list(tasks_dir.glob(f"{task.id}-*.md"))
+    if not matches:
+        matches = list(archive_dir.glob(f"{task.id}-*.md"))
+    if not matches:
+        msg = f"Task file for id={task.id} not found"
+        raise FileNotFoundError(msg)
+    task_path = matches[0]
+    current = read_task(task_path)
+    if current.updated != expected_updated:
+        msg = f"task {task.id} changed since read; reload and retry"
+        raise ConcurrencyError(code="ERR_STALE", user_message=msg)
+    return write_task(task, kanban_dir, target_dir=task_path.parent)
 
 
 # ---------------------------------------------------------------------------
@@ -493,7 +489,7 @@ def write_task_if_unchanged(
 
 
 def list_task_files(kanban_dir: Path) -> list[Path]:
-    """Return sorted list of all task ``.md`` files, excluding temp/lock files."""
+    """Return sorted list of all task ``.md`` files, excluding temp/hidden files."""
     from owlbear_kanban.config_loader import load_config as _load_config  # noqa: PLC0415
 
     config = _load_config(kanban_dir)
@@ -511,7 +507,7 @@ def list_task_files(kanban_dir: Path) -> list[Path]:
 
 
 def list_archive_files(kanban_dir: Path) -> list[Path]:
-    """Return sorted list of all archive ``.md`` files, excluding temp/lock files."""
+    """Return sorted list of all archive ``.md`` files, excluding temp/hidden files."""
     from owlbear_kanban.config_loader import load_config as _load_config  # noqa: PLC0415
 
     config = _load_config(kanban_dir)
@@ -541,19 +537,15 @@ def move_to_archive(task_id: int, kanban_dir: Path) -> Path:
     tasks_dir = kanban_dir / config.paths.tasks_dir
     archive_dir = kanban_dir / config.paths.archive_dir
     archive_dir.mkdir(parents=True, exist_ok=True)
-    task_lock_path = tasks_dir / f".{task_id}.lock"
-    archive_lock_path = archive_dir / f".{task_id}.lock"
 
-    # Keep lock order consistent with write_task_if_unchanged to avoid deadlocks.
-    with _exclusive_file_lock(task_lock_path), _exclusive_file_lock(archive_lock_path):
-        matches = list(tasks_dir.glob(f"{task_id}-*.md"))
-        if not matches:
-            msg = f"No task file found for id={task_id}"
-            raise FileNotFoundError(msg)
-        src = matches[0]
-        dest = archive_dir / src.name
-        src.replace(dest)
-        return dest
+    matches = list(tasks_dir.glob(f"{task_id}-*.md"))
+    if not matches:
+        msg = f"No task file found for id={task_id}"
+        raise FileNotFoundError(msg)
+    src = matches[0]
+    dest = archive_dir / src.name
+    src.replace(dest)
+    return dest
 
 
 # ---------------------------------------------------------------------------
@@ -566,42 +558,40 @@ def allocate_next_id(
     *,
     write_task_fn: Callable[[int], None] | None = None,
 ) -> int:
-    """Allocate the next task ID under the shared create lock.
+    """Allocate the next task ID via scan-based allocation.
 
-    When ``write_task_fn`` is provided, allocation is scan-based (active+archive
-    max prefix + 1) and the callback is executed while the lock is still held so
-    callers can keep scan+write in one critical section.
+    When ``write_task_fn`` is provided, allocation finds active+archive max
+    prefix + 1 and the callback is executed immediately so callers get
+    scan+write in one call.
 
-    When ``write_task_fn`` is ``None``, this function still uses scan-based
-    allocation and persists the last issued id in ``.next_id.lock`` so repeated
-    allocation-only calls remain distinct under concurrency.
+    When ``write_task_fn`` is ``None``, the function persists the last issued
+    id in ``.next_id`` so repeated allocation-only calls remain distinct.
     """
-    lock_path = kanban_dir / ".next_id.lock"
-    with _exclusive_file_lock(lock_path):
-        max_id = 0
-        for path in [*list_task_files(kanban_dir), *list_archive_files(kanban_dir)]:
-            try:
-                file_id = int(path.stem.split("-", 1)[0])
-            except ValueError:
-                continue
-            max_id = max(max_id, file_id)
-
-        last_allocated = 0
+    id_path = kanban_dir / ".next_id"
+    max_id = 0
+    for path in [*list_task_files(kanban_dir), *list_archive_files(kanban_dir)]:
         try:
-            text = lock_path.read_text(encoding="utf-8").strip()
-            if text:
-                last_allocated = int(text)
-        except (OSError, ValueError):
-            last_allocated = 0
+            file_id = int(path.stem.split("-", 1)[0])
+        except ValueError:
+            continue
+        max_id = max(max_id, file_id)
 
-        if write_task_fn is not None:
-            new_id = max_id + 1
-            write_task_fn(new_id)
-            return new_id
+    last_allocated = 0
+    try:
+        text = id_path.read_text(encoding="utf-8").strip()
+        if text:
+            last_allocated = int(text)
+    except (OSError, ValueError):
+        last_allocated = 0
 
-        new_id = max(max_id, last_allocated) + 1
-        lock_path.write_text(f"{new_id}\n", encoding="utf-8")
+    if write_task_fn is not None:
+        new_id = max_id + 1
+        write_task_fn(new_id)
         return new_id
+
+    new_id = max(max_id, last_allocated) + 1
+    id_path.write_text(f"{new_id}\n", encoding="utf-8")
+    return new_id
 
 
 # ---------------------------------------------------------------------------

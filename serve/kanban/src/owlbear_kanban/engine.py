@@ -42,7 +42,6 @@ from ruamel.yaml.error import YAMLError
 
 from owlbear_kanban import storage
 from owlbear_kanban._duration import _parse_duration
-from owlbear_kanban._locking import _exclusive_file_lock  # noqa: F401
 from owlbear_kanban.activity_store import compact_activity_log, list_activity_events
 from owlbear_kanban.agent_names import ADJECTIVES, NOUNS
 from owlbear_kanban.body_parser import parse_body
@@ -389,49 +388,12 @@ def _apply_session_filter(
     return [s for s in sessions if s.state in allowed]
 
 
-def _task_id_from_lock_path(lock_path: Path) -> int | None:
-    """Return task ID encoded in a ``.{id}.lock`` path, when present."""
-    name = lock_path.name
-    if not (name.startswith(".") and name.endswith(".lock")):
-        return None
-    raw_id = name[1:-5]
-    try:
-        return int(raw_id)
-    except ValueError:
-        return None
-
-
 def _task_id_from_filename(path: Path) -> int | None:
     """Return task ID encoded in a canonical task/archive filename."""
     try:
         return int(path.stem.split("-", 1)[0])
     except ValueError:
         return None
-
-
-def _try_unlink_idle_lock_file(lock_path: Path) -> bool:
-    """Remove a POSIX lock file only when no process currently holds it."""
-    if sys.platform == "win32":
-        return False
-
-    import fcntl  # noqa: PLC0415
-
-    try:
-        with lock_path.open("a+b") as handle:
-            try:
-                fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except OSError:
-                return False
-            try:
-                lock_path.unlink()
-            except (FileNotFoundError, OSError):
-                return False
-            else:
-                return True
-            finally:
-                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
-    except FileNotFoundError:
-        return False
 
 
 def _move_file(src: Path, dest: Path, *, no_overwrite: bool = False) -> None:
@@ -1993,12 +1955,10 @@ class KanbanEngine:
         Cleanup includes four categories in one call:
         - release expired claims (same semantics as :meth:`sweep`)
         - move drift-archived task files from tasks/ to archive/
-        - prune orphan task/archive lock files with no matching task record
         - report skipped task files with path+reason when they cannot be processed
         """
         released_claim_ids: list[int] = []
         archived_task_ids: list[int] = []
-        pruned_lock_paths: list[str] = []
         skipped_items: list[dict[str, str]] = []
         timeout = self._parse_claim_timeout()
         now = datetime.now(tz=UTC)
@@ -2162,14 +2122,11 @@ class KanbanEngine:
                 }
             )
 
-        pruned_lock_paths = self._cleanup_orphan_lock_files()
-
         if (
             released_claim_ids
             or archived_task_ids
             or duplicate_removed_ids
             or closed_session_ids
-            or pruned_lock_paths
         ):
             self._revision += 1
 
@@ -2177,7 +2134,6 @@ class KanbanEngine:
             released_claim_ids=released_claim_ids,
             archived_task_ids=archived_task_ids,
             duplicate_removed_ids=duplicate_removed_ids,
-            pruned_lock_paths=pruned_lock_paths,
             skipped_items=skipped_items,
         )
 
@@ -2379,29 +2335,6 @@ class KanbanEngine:
             if session.task_id is not None:
                 closed.append(session.task_id)
         return closed
-
-    def _cleanup_orphan_lock_files(self) -> list[str]:
-        """Prune task/archive lock sentinels with no matching task file."""
-        known_ids: set[int] = set()
-        for directory in (self._tasks_dir, self._archive_dir):
-            if not directory.exists():
-                continue
-            for task_path in directory.glob("*.md"):
-                task_id = _task_id_from_filename(task_path)
-                if task_id is not None:
-                    known_ids.add(task_id)
-
-        pruned_paths: list[str] = []
-        for directory in (self._tasks_dir, self._archive_dir):
-            if not directory.exists():
-                continue
-            for lock_path in sorted(directory.glob(".*.lock")):
-                task_id = _task_id_from_lock_path(lock_path)
-                if task_id is None or task_id in known_ids:
-                    continue
-                if _try_unlink_idle_lock_file(lock_path):
-                    pruned_paths.append(str(lock_path))
-        return pruned_paths
 
     def _read_log_entries(self) -> list[dict]:
         """Parse activity.jsonl; skip malformed and incomplete lines."""

@@ -89,9 +89,6 @@ def validate_config_path_containment(path_value: str) -> None:
 
 def move_to_quarantine(task_path: Path, kanban_dir: Path) -> Path:
     """Move *task_path* to ``quarantine/``, creating the dir if absent."""
-    if task_path.name.startswith(".") and task_path.name.endswith(".lock"):
-        return task_path
-
     validate_path_containment(kanban_dir, task_path)
 
     quarantine_dir = kanban_dir / "quarantine"

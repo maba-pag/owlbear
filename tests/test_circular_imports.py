@@ -81,22 +81,6 @@ def _intra_pkg_imports(source: str, pkg_prefix: str = "owlbear_kanban") -> list[
     return modules
 
 
-def _locking_imports_inside_function(source: str, funcname: str) -> list[int]:
-    """Return line numbers of deferred owlbear_kanban._locking imports inside funcname."""
-    tree = ast.parse(source)
-    for node in ast.walk(tree):
-        if isinstance(node, ast.FunctionDef) and node.name == funcname:
-            result = []
-            for child in ast.walk(node):
-                if (
-                    isinstance(child, ast.ImportFrom)
-                    and child.module == "owlbear_kanban._locking"
-                ):
-                    result.append(child.lineno)
-            return result
-    return []
-
-
 def _module_level_imports_from(source: str, module: str) -> list[str]:
     """Return names imported at module-level scope (direct Module children) from module."""
     tree = ast.parse(source)
@@ -159,69 +143,8 @@ class TestFromAC_DurationModule:
 
 
 # ===========================================================================
-# AC2 — _locking.py: exists, exports _exclusive_file_lock as contextmanager,
-#        zero intra-package imports
-# ===========================================================================
-
-
-class TestFromAC_LockingModule:
-    """AC2: _locking.py exists as a true leaf module with zero intra-pkg imports."""
-
-    def test_locking_module_importable(self) -> None:
-        """_locking module must be importable from owlbear_kanban."""
-        import owlbear_kanban._locking  # noqa: F401
-
-    def test_exclusive_file_lock_exported(self) -> None:
-        """_locking must export _exclusive_file_lock as a callable."""
-        from owlbear_kanban._locking import _exclusive_file_lock
-
-        assert callable(_exclusive_file_lock)
-
-    def test_exclusive_file_lock_is_context_manager(self, tmp_path: Path) -> None:
-        """_exclusive_file_lock must work as a context manager (contextlib.contextmanager)."""
-        from owlbear_kanban._locking import _exclusive_file_lock
-
-        lock_path = tmp_path / ".test.lock"
-        with _exclusive_file_lock(lock_path):
-            pass  # must not raise
-
-    def test_zero_intra_pkg_imports(self) -> None:
-        """_locking.py must have zero intra-package imports."""
-        src = _source("_locking.py")
-        intra = _intra_pkg_imports(src)
-        assert not intra, (
-            f"_locking.py must have zero intra-package imports; found: {intra}"
-        )
-
-    def test_exclusive_file_lock_has_contextmanager_decorator_structurally(
-        self,
-    ) -> None:
-        """_exclusive_file_lock must carry @contextlib.contextmanager in its AST decorator_list."""
-        src = _source("_locking.py")
-        tree = ast.parse(src)
-        for node in ast.iter_child_nodes(tree):
-            if (
-                isinstance(node, ast.FunctionDef)
-                and node.name == "_exclusive_file_lock"
-            ):
-                for dec in node.decorator_list:
-                    if (
-                        isinstance(dec, ast.Attribute) and dec.attr == "contextmanager"
-                    ) or (isinstance(dec, ast.Name) and dec.id == "contextmanager"):
-                        return
-                pytest.fail(
-                    "_exclusive_file_lock has no @contextlib.contextmanager decorator "
-                    "in its AST decorator_list — structural proof failed"
-                )
-                return
-        pytest.fail(
-            "_exclusive_file_lock not found as a module-level FunctionDef in _locking.py"
-        )
-
-
-# ===========================================================================
-# AC3 — engine.py: local definitions of _parse_duration, _DURATION_RE,
-#        _exclusive_file_lock removed; imports them from leaf modules
+# AC3 — engine.py: local definitions of _parse_duration, _DURATION_RE
+#        removed; imports them from leaf modules
 # ===========================================================================
 
 
@@ -244,14 +167,6 @@ class TestFromAC_EngineDefinitionsRemoved:
             "must be removed and imported from _duration"
         )
 
-    def test_exclusive_file_lock_not_defined_locally_in_engine(self) -> None:
-        """engine.py must NOT contain a module-level def _exclusive_file_lock."""
-        src = _source("engine.py")
-        assert not _has_top_level_function(src, "_exclusive_file_lock"), (
-            "engine.py still defines _exclusive_file_lock as a module-level function — "
-            "must be removed and imported from _locking"
-        )
-
     def test_engine_imports_parse_duration_from_duration(self) -> None:
         """engine.py must import _parse_duration from owlbear_kanban._duration."""
         src = _source("engine.py")
@@ -262,19 +177,6 @@ class TestFromAC_EngineDefinitionsRemoved:
         )
         assert found, (
             "engine.py must import _parse_duration from owlbear_kanban._duration; "
-            "import not found"
-        )
-
-    def test_engine_imports_exclusive_file_lock_from_locking(self) -> None:
-        """engine.py must import _exclusive_file_lock from owlbear_kanban._locking."""
-        src = _source("engine.py")
-        imports = _module_imports(src)
-        found = any(
-            mod == "owlbear_kanban._locking" and "_exclusive_file_lock" in names
-            for mod, names in imports
-        )
-        assert found, (
-            "engine.py must import _exclusive_file_lock from owlbear_kanban._locking; "
             "import not found"
         )
 
@@ -325,33 +227,18 @@ class TestFromAC_ConfigLoaderImport:
 
 
 # ===========================================================================
-# AC5 — storage.py: imports _exclusive_file_lock from _locking (not engine),
-#        all 3 call sites updated, no deferred engine import
+# AC5 — storage.py: no deferred engine import (avoids circular dependency)
 # ===========================================================================
 
 
 class TestFromAC_StorageImport:
-    """AC5: storage.py imports _exclusive_file_lock from _locking, no deferred engine import."""
+    """AC5: storage.py has no imports from owlbear_kanban.engine (avoids circular dep)."""
 
     def test_storage_has_no_deferred_engine_import(self) -> None:
         """storage.py must have no inline/deferred import from owlbear_kanban.engine."""
         src = _source("storage.py")
         assert "owlbear_kanban.engine" not in src, (
-            "storage.py still contains deferred imports from owlbear_kanban.engine; "
-            "all 3 call sites must be updated to import from owlbear_kanban._locking"
-        )
-
-    def test_storage_imports_exclusive_file_lock_from_locking(self) -> None:
-        """storage.py must import _exclusive_file_lock from owlbear_kanban._locking."""
-        src = _source("storage.py")
-        imports = _module_imports(src)
-        found = any(
-            mod == "owlbear_kanban._locking" and "_exclusive_file_lock" in names
-            for mod, names in imports
-        )
-        assert found, (
-            "storage.py must import _exclusive_file_lock from owlbear_kanban._locking; "
-            "import not found"
+            "storage.py still contains deferred imports from owlbear_kanban.engine"
         )
 
     def test_storage_no_engine_import_at_any_level(self) -> None:
@@ -359,77 +246,8 @@ class TestFromAC_StorageImport:
         src = _source("storage.py")
         occurrences = src.count("owlbear_kanban.engine")
         assert occurrences == 0, (
-            f"storage.py still references owlbear_kanban.engine {occurrences} time(s); "
-            "all 3 deferred import call sites must be updated"
+            f"storage.py still references owlbear_kanban.engine {occurrences} time(s)"
         )
-
-    def test_storage_locking_imported_at_module_level(self) -> None:
-        """storage.py must import _exclusive_file_lock from _locking at module-level scope."""
-        src = _source("storage.py")
-        names = _module_level_imports_from(src, "owlbear_kanban._locking")
-        assert "_exclusive_file_lock" in names, (
-            "storage.py has no module-level 'from owlbear_kanban._locking import "
-            "_exclusive_file_lock'; the import is deferred inside function bodies — "
-            "must be hoisted to module scope (AC5 refined)"
-        )
-
-    def test_storage_write_task_if_unchanged_no_deferred_locking_import(self) -> None:
-        """write_task_if_unchanged must not import _locking inside its body."""
-        src = _source("storage.py")
-        lines = _locking_imports_inside_function(src, "write_task_if_unchanged")
-        assert not lines, (
-            f"write_task_if_unchanged has deferred owlbear_kanban._locking import(s) "
-            f"at line(s) {lines}; all 3 call sites must use the module-level name"
-        )
-
-    def test_storage_move_to_archive_no_deferred_locking_import(self) -> None:
-        """move_to_archive must not import _locking inside its body."""
-        src = _source("storage.py")
-        lines = _locking_imports_inside_function(src, "move_to_archive")
-        assert not lines, (
-            f"move_to_archive has deferred owlbear_kanban._locking import(s) "
-            f"at line(s) {lines}; all 3 call sites must use the module-level name"
-        )
-
-    def test_storage_allocate_next_id_no_deferred_locking_import(self) -> None:
-        """allocate_next_id must not import _locking inside its body."""
-        src = _source("storage.py")
-        lines = _locking_imports_inside_function(src, "allocate_next_id")
-        assert not lines, (
-            f"allocate_next_id has deferred owlbear_kanban._locking import(s) "
-            f"at line(s) {lines}; all 3 call sites must use the module-level name"
-        )
-
-    def test_storage_three_functions_call_exclusive_file_lock(self) -> None:
-        """write_task_if_unchanged, move_to_archive, and allocate_next_id must each
-        contain a Call node invoking _exclusive_file_lock by name (not just import it)."""
-        src = _source("storage.py")
-        tree = ast.parse(src)
-
-        def _calls_in_funcdef(funcname: str) -> list[str]:
-            for node in ast.walk(tree):
-                if isinstance(node, ast.FunctionDef) and node.name == funcname:
-                    return [
-                        child.func.id  # type: ignore[attr-defined]
-                        for child in ast.walk(node)
-                        if (
-                            isinstance(child, ast.Call)
-                            and isinstance(child.func, ast.Name)
-                            and child.func.id == "_exclusive_file_lock"
-                        )
-                    ]
-            return []
-
-        for funcname in (
-            "write_task_if_unchanged",
-            "move_to_archive",
-            "allocate_next_id",
-        ):
-            calls = _calls_in_funcdef(funcname)
-            assert calls, (
-                f"{funcname} in storage.py does not call _exclusive_file_lock(…); "
-                "a dead module-level import does not satisfy AC5 — the lock must be used"
-            )
 
 
 # ===========================================================================
@@ -560,33 +378,6 @@ class TestFromAC_ModelsDuplicateRemoved:
 class TestFromAC_TestFileImportUpdates:
     """AC7: Downstream test files updated to import from new leaf modules."""
 
-    def test_coverage_1068_imports_parse_duration_from_duration(self) -> None:
-        """test_engine_coverage_1068.py must import _parse_duration from _duration, not engine."""
-        src = _test_source("test_engine_coverage_1068.py")
-        # Must NOT import _parse_duration from engine
-        tree = ast.parse(src)
-        for node in ast.walk(tree):
-            if (
-                isinstance(node, ast.ImportFrom)
-                and node.module == "owlbear_kanban.engine"
-            ):
-                names = [alias.name for alias in node.names]
-                assert "_parse_duration" not in names, (
-                    "test_engine_coverage_1068.py still imports _parse_duration from "
-                    "owlbear_kanban.engine — must be updated to owlbear_kanban._duration"
-                )
-        # Must import from _duration
-        found = any(
-            isinstance(node, ast.ImportFrom)
-            and node.module == "owlbear_kanban._duration"
-            and any(alias.name == "_parse_duration" for alias in node.names)
-            for node in ast.walk(tree)
-        )
-        assert found, (
-            "test_engine_coverage_1068.py must import _parse_duration from "
-            "owlbear_kanban._duration; import not found"
-        )
-
     def test_engine_storage_imports_parse_duration_from_duration(self) -> None:
         """test_engine_storage.py must import _parse_duration from _duration, not engine."""
         src = _test_source("test_engine_storage.py")
@@ -610,46 +401,4 @@ class TestFromAC_TestFileImportUpdates:
         assert found, (
             "test_engine_storage.py must import _parse_duration from "
             "owlbear_kanban._duration; import not found"
-        )
-
-    def test_dead_code_1112_reads_locking_source_not_engine(self) -> None:
-        """test_engine_dead_code_1112.py must use _locking.py (not engine.py) for _exclusive_file_lock assertions."""
-        src = _root_test_source("test_engine_dead_code_1112.py")
-        # Must reference _locking (the new module)
-        assert "_locking" in src, (
-            "test_engine_dead_code_1112.py must reference _locking to locate "
-            "_exclusive_file_lock source; still points to engine.py only"
-        )
-
-    def test_dead_code_1112_win32_assertion_targets_locking(self) -> None:
-        """test_engine_dead_code_1112.py win32-branch tests must read _locking.py source."""
-        src = _root_test_source("test_engine_dead_code_1112.py")
-        # Should NOT search engine source for _exclusive_file_lock definition
-        # (it should be in _locking source)
-        assert "owlbear_kanban._locking" in src or "_locking" in src, (
-            "test_engine_dead_code_1112.py must be updated to read _locking.py "
-            "for the _exclusive_file_lock / win32-branch structural assertions"
-        )
-
-    def test_dead_code_1112_win32_class_reads_locking_lines_structurally(self) -> None:
-        """TestFromAC_Win32PragmaAnnotation must reference _LOCKING_LINES or _LOCKING_SOURCE."""
-        src = _root_test_source("test_engine_dead_code_1112.py")
-        tree = ast.parse(src)
-        src_lines = src.splitlines()
-        for node in ast.walk(tree):
-            if (
-                isinstance(node, ast.ClassDef)
-                and node.name == "TestFromAC_Win32PragmaAnnotation"
-            ):
-                class_src = "\n".join(src_lines[node.lineno - 1 : node.end_lineno])
-                assert (
-                    "_LOCKING_LINES" in class_src or "_LOCKING_SOURCE" in class_src
-                ), (
-                    "TestFromAC_Win32PragmaAnnotation does not reference _LOCKING_LINES "
-                    "or _LOCKING_SOURCE — win32 branch structural proof must read "
-                    "_locking.py source, not engine.py source"
-                )
-                return
-        pytest.fail(
-            "TestFromAC_Win32PragmaAnnotation class not found in test_engine_dead_code_1112.py"
         )

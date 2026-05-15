@@ -611,7 +611,6 @@ class CleanupResult(BaseModel):
     released_claim_ids: list[int] = Field(default_factory=list)
     archived_task_ids: list[int] = Field(default_factory=list)
     duplicate_removed_ids: list[int] = Field(default_factory=list)
-    pruned_lock_paths: list[str] = Field(default_factory=list)
     skipped_items: list[dict[str, str]] = Field(default_factory=list)
 
 
