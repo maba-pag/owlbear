@@ -305,7 +305,7 @@ test.describe('AC-2 | FilterPanel PDS compliance assertions', () => {
     // Currently: PSelect with <option> children -- p-select-option absent -- FAILS.
     // Uses toBeAttached: options are in DOM but hidden when select is closed.
     await expect(
-      page.locator('#filter-panel p-select[name="priority-filter"] p-select-option'),
+      page.locator('#filter-panel p-select[name="priority-filter"] p-select-option').first(),
     ).toBeAttached({ timeout: 2_000 })
   })
 
