@@ -87,6 +87,21 @@ const ONE_TASK = [
 
 const MANY_TASKS = makeManyTasksInOneColumn()
 
+/**
+ * Complete task-detail payload for ONE_TASK[0] — returned by /api/tasks/1 after card click.
+ * Required fields prevent TaskFieldsEditor from crashing on depends_on.join() when the
+ * detail tab renders after task selection at 320px (AC-5 mobile-sheet contract).
+ */
+const ONE_TASK_DETAIL = {
+  ...ONE_TASK[0],
+  body: null,
+  created: '2026-05-14T00:00:00+00:00',
+  claimed_at: null,
+  dep_status: null,
+  parent: null,
+  depends_on: [] as number[],
+}
+
 // ─── API stub helper ───────────────────────────────────────────────────────────
 
 /**
@@ -298,6 +313,9 @@ test.describe('TestFromAC_MobileSheetContract', () => {
 
   test.beforeEach(async ({ page }) => {
     await stubApis(page, ONE_TASK)
+    // Stub /api/tasks/1 detail route so task selection doesn't crash on depends_on.join().
+    // Registered after stubApis() catch-all so LIFO gives this route precedence.
+    await page.route('/api/tasks/1', (route) => route.fulfill({ json: ONE_TASK_DETAIL }))
     await page.goto('/')
     // Wait for task card to be in DOM (state: 'attached' — card is 0px wide at 320px
     // because workspace is 0px with current Shell.css grid)
