@@ -203,12 +203,6 @@ export default function FilterPanel({
         aria-label="Priority"
         value={filter.priority}
       >
-        <option value="">All priorities</option>
-        {priorities.map((priority) => (
-          <option key={`native-${priority}`} value={priority}>
-            {priority}
-          </option>
-        ))}
         <p-select-option value="">All priorities</p-select-option>
         {priorities.map((priority) => (
           <p-select-option key={`pds-${priority}`} value={priority}>

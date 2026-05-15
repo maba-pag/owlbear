@@ -85,8 +85,29 @@ function getTagsControl(container: HTMLElement): Element | null {
 }
 
 function getBlockedControl(container: HTMLElement): Element | null {
-  // PDS switch renders as role="switch" or a native checkbox in jsdom
-  return container.querySelector('[role="switch"]') ?? container.querySelector('input[type="checkbox"]')
+  return (
+    container.querySelector('p-checkbox') ??
+    container.querySelector('p-switch') ??
+    container.querySelector('p-checkbox[name="blocked-filter"]') ??
+    container.querySelector('[role="switch"]') ??
+    container.querySelector('input[type="checkbox"]')
+  )
+}
+
+function getPriorityOptions(container: HTMLElement): string[] {
+  const pSelect = getPrioritySelect(container)
+  if (!pSelect) {
+    return []
+  }
+
+  return Array.from(pSelect.querySelectorAll('p-select-option')).map((option) => {
+    const withValue = option as Element & { value?: unknown }
+    if (typeof withValue.value === 'string') {
+      return withValue.value
+    }
+
+    return option.getAttribute('value') ?? ''
+  })
 }
 
 function getResetButton(container: HTMLElement): HTMLButtonElement | null {
@@ -146,8 +167,7 @@ describe('TestFromAC_FilterPanel', () => {
 
     it('priority select contains all option values from the priorities prop', () => {
       const { container } = renderPanel({ priorities: PRIORITIES })
-      const pSelect = getPrioritySelect(container)!
-      const optionValues = Array.from(pSelect.querySelectorAll('option')).map((o) => (o as HTMLOptionElement).value)
+      const optionValues = getPriorityOptions(container)
       for (const p of PRIORITIES) {
         expect(optionValues).toContain(p)
       }
@@ -156,26 +176,24 @@ describe('TestFromAC_FilterPanel', () => {
     it('priority select has exactly priorities.length options (plus at most one empty placeholder)', () => {
       const custom = ['low', 'medium', 'high']
       const { container } = renderPanel({ priorities: custom })
-      const pSelect = getPrioritySelect(container)!
-      const options = Array.from(pSelect.querySelectorAll('option')) as HTMLOptionElement[]
+      const options = getPriorityOptions(container)
       // Total must be exactly custom.length or custom.length+1 (one empty placeholder at most)
       expect(options.length).toBeGreaterThanOrEqual(custom.length)
       expect(options.length).toBeLessThanOrEqual(custom.length + 1)
       // Non-placeholder options must be an exact ordered match to the priorities prop
-      const nonEmptyValues = options.filter((o) => o.value !== '').map((o) => o.value)
+      const nonEmptyValues = options.filter((value) => value !== '')
       expect(nonEmptyValues).toHaveLength(custom.length)
       expect(nonEmptyValues).toEqual(custom)
       // If a placeholder exists it must be at index 0 with an empty string value
       if (options.length > custom.length) {
-        expect(options[0].value).toBe('')
+        expect(options[0]).toBe('')
       }
     })
 
     it('priority select reflects a custom priorities list', () => {
       const custom = ['low', 'high']
       const { container } = renderPanel({ priorities: custom })
-      const pSelect = getPrioritySelect(container)!
-      const optionValues = Array.from(pSelect.querySelectorAll('option')).map((o) => (o as HTMLOptionElement).value)
+      const optionValues = getPriorityOptions(container)
       expect(optionValues).toContain('low')
       expect(optionValues).toContain('high')
     })
@@ -469,14 +487,20 @@ describe('TestFromAC_FilterPanel', () => {
 
     it('blocked checkbox checked state reflects filter.blocked true', () => {
       const { container } = renderPanel({ filter: { ...emptyFilter, blocked: true } })
-      const blocked = getBlockedControl(container) as HTMLInputElement
-      expect(blocked.checked).toBe(true)
+      const blocked = getBlockedControl(container)
+      expect(blocked).not.toBeNull()
+      const ariaChecked = blocked?.getAttribute('aria-checked')
+      const isChecked = ariaChecked === 'true' || ariaChecked === ''
+      expect(isChecked).toBe(true)
     })
 
     it('blocked checkbox checked state reflects filter.blocked false', () => {
       const { container } = renderPanel({ filter: { ...emptyFilter, blocked: false } })
-      const blocked = getBlockedControl(container) as HTMLInputElement
-      expect(blocked.checked).toBe(false)
+      const blocked = getBlockedControl(container)
+      expect(blocked).not.toBeNull()
+      const ariaChecked = blocked?.getAttribute('aria-checked')
+      const isChecked = ariaChecked === 'true' || ariaChecked === ''
+      expect(isChecked).toBe(false)
     })
 
     it('tags multi-select value prop reflects filter.tags', () => {
