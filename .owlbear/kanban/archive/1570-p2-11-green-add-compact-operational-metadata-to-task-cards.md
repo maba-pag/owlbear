@@ -1,10 +1,10 @@
 ---
 id: 1570
 title: 'P2-11 GREEN: Add compact operational metadata to task cards'
-status: done
+status: archived
 priority: needed
 created: 2026-05-14T18:26:42.531941+00:00
-updated: 2026-05-15T12:40:09.034400+00:00
+updated: 2026-05-15T12:56:42.238804+00:00
 tags:
   - phase-2
   - scope:cockpit
@@ -17,8 +17,8 @@ depends_on:
   - 1565
 blocked: false
 block_reason:
-claimed_at: 2026-05-15T12:40:09.034400+00:00
-archival_reason:
+claimed_at:
+archival_reason: completed
 archival_refs: []
 ---
 ## Context
@@ -237,3 +237,30 @@ Architecture Review Cycle 5: Refined AC-1, AC-2, AC-4 to close reviewer's three 
 **Item 4 — Deletion Detection:** No files deleted. N/A.
 
 **Scratch cleanup:** No `.owlbear/scratch/1570-*` files found — nothing to clean.
+2026-05-15T12:56:42+00:00
+## Audit
+### Regression Detection
+- quality-runner mode full: 6371 passed, 20 failed, lint clean
+- All 20 failures are in unrelated modules (DetailTab conflict-resolution, FilterAccessibilityPanel, PdsMigration, ShellSecondaryCSS, engine rebind containment, MCP lifecycle, CI workflow checks, react-compiler/pds-build-compat timeouts). None in card-rendering domain.
+- Task proof suite (Card.signal, Card.css, KeyboardA11y, KanbanBoard.performance-700, card-density E2E) all passed.
+- Regression verdict: PASS (no task-introduced regressions)
+
+### Intent Verification
+- Scope alignment: PASS (only test files in cockpit card domain touched)
+- Purpose match: PASS (GREEN pass-through for #1565 implementation; gap-fill tests close reviewer proof findings)
+- Extraneous scope: none
+- Boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 3/5
+AC went through 5 architecture review cycles. Cycles 4 and 5 addressed reviewer findings about AC overclaim vs proof coverage. Final ACs are specific and testable, but the pattern of asserting unverifiable properties (title visibility "without hiding", tag "preview text", "without crowding") across multiple cycles reflects insufficient initial proof-surface awareness.
+
+### Commit Integrity
+- Upstream commit presence: PASS (test-writer commit dae112c0 verified; builder correctly had no source changes since implementation was in #1565)
+- Kanban commit packaging: pending (this audit step)
+
+### Deduction Breakdown
+- AC quality score 3: -.03
+- No other deductions (no regressions, no intent mismatch, no lint issues, no missing reviewer evidence, no evidence integrity concern)
+
+### Confidence: .97
+### Action: archive
