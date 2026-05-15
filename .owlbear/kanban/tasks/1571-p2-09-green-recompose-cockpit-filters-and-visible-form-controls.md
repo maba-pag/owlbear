@@ -4,7 +4,7 @@ title: 'P2-09 GREEN: Recompose Cockpit filters and visible form controls'
 status: backlog
 priority: needed
 created: 2026-05-14T18:26:50.109551+00:00
-updated: 2026-05-14T18:27:14.742302+00:00
+updated: 2026-05-14T20:11:17.324043+00:00
 tags:
   - phase-2
   - scope:cockpit
@@ -39,3 +39,11 @@ Proof bundle: behavioral
 
 ## Evidence Expectations
 Passing #1564 tests and policy exception evidence when used.
+
+
+## Content Audit Amendment — Task Editor Form Controls
+Implementation must apply the #1560 visible-control policy to task-editor form controls, not only the filter panel.
+
+Additional AC-4: Task-editor visible form controls are grouped, labeled, keyboard-reachable, and implemented with mapped PDS controls or recorded exceptions for title/body fields, status/priority controls, tags/dependencies, and confirm/destructive actions; verify with the named #1564 tests.
+
+Evidence expectation: passing editor/form-control tests plus screenshot evidence for an edit/detail workflow with visible form controls.

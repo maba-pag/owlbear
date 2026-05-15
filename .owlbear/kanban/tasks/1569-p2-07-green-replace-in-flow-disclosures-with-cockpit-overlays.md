@@ -4,7 +4,7 @@ title: 'P2-07 GREEN: Replace in-flow disclosures with Cockpit overlays'
 status: backlog
 priority: needed
 created: 2026-05-14T18:26:42.474114+00:00
-updated: 2026-05-14T18:35:46.763981+00:00
+updated: 2026-05-14T20:10:26.318208+00:00
 tags:
   - phase-2
   - scope:cockpit
@@ -45,3 +45,11 @@ Implementation must satisfy #1563 AC-4 in addition to the original overlay ACs.
 Additional AC-4: The task context menu / transition menu is treated as a composed overlay surface with stable layering, item spacing, hover/focus treatment, keyboard navigation, and no board reflow.
 
 Evidence expectation: context-menu screenshot and named #1563 test output.
+
+
+## Content Audit Amendment — RepairPanel Coverage
+Implementation must satisfy #1563 RepairPanel overlay coverage in addition to Health, DR, Cleanup, ConfirmDialog, ResolveModal, ArchivalModal, and the task context menu.
+
+Additional AC-5: `RepairPanel` confirmation/loading/result/error states are recomposed through the chosen overlay policy with stable focus behavior, no status-bar reflow, and PDS-consistent action/result treatment; verify with the named #1563 tests.
+
+Evidence expectation: repair-flow screenshot/state evidence plus passing #1563 RepairPanel checks.

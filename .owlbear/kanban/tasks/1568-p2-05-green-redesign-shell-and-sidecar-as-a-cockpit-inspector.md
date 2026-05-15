@@ -4,7 +4,7 @@ title: 'P2-05 GREEN: Redesign shell and sidecar as a Cockpit inspector'
 status: backlog
 priority: needed
 created: 2026-05-14T18:26:42.445078+00:00
-updated: 2026-05-14T18:35:17.768383+00:00
+updated: 2026-05-14T20:10:59.703127+00:00
 tags:
   - phase-2
   - scope:cockpit
@@ -47,3 +47,11 @@ Additional AC-4: Status bar and nav rail use the #1560 visual target: visible pr
 Additional AC-5: Activity/history rows and filters are recomposed as designed operational controls/rows that match the sidecar hierarchy and PDS policy.
 
 Evidence expectation: desktop and sidecar screenshots showing chrome, selected detail, and activity/history hierarchy.
+
+
+## Content Audit Amendment — Tab-Order Reachability
+Implementation must satisfy #1562 tab-order reachability checks.
+
+Additional AC-6: Shell/status/nav/sidecar controls are keyboard-reachable in normal tab order unless a documented focus-management exception applies to a modal, sheet, or popover. Custom `tabIndex={-1}` use on visible persistent controls must be removed or justified in task evidence.
+
+Evidence expectation: passing #1562 keyboard traversal plus notes for any intentional focus-management exceptions.

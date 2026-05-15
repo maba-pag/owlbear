@@ -4,7 +4,7 @@ title: 'P2-11 GREEN: Add compact operational metadata to task cards'
 status: backlog
 priority: needed
 created: 2026-05-14T18:26:42.531941+00:00
-updated: 2026-05-14T18:27:14.734428+00:00
+updated: 2026-05-14T20:09:18.148333+00:00
 tags:
   - phase-2
   - scope:cockpit
@@ -37,3 +37,11 @@ Proof bundle: behavioral
 
 ## Evidence Expectations
 Passing #1565 card tests and card-state screenshot evidence.
+
+
+## Content Audit Amendment — Age / Recency Signal
+Implementation must satisfy the card age/recency requirement from #1565 and the Cockpit design policy.
+
+Additional AC-4: Given a task has created/updated timestamps or stale-work state available in card data, the card displays a compact age or update-recency signal without hiding the title or crowding priority/tag metadata; verify with the named #1565 card fixture.
+
+Evidence expectation: passing #1565 age/recency test plus screenshot evidence for a mixed card set.

@@ -4,7 +4,7 @@ title: Bridge PDS v4 color-scheme with data-theme toggle
 status: done
 priority: important
 created: 2026-05-14T05:57:42.186424+00:00
-updated: 2026-05-14T09:44:53.389037+00:00
+updated: 2026-05-14T17:46:15.891772+00:00
 tags:
   - phase-4
   - scope:cockpit
@@ -15,7 +15,7 @@ depends_on:
   - 1553
 blocked: false
 block_reason:
-claimed_at: 2026-05-14T09:44:53.389037+00:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---

@@ -4,7 +4,7 @@ title: 'P2-13 GREEN: Implement the Cockpit responsive contract'
 status: backlog
 priority: needed
 created: 2026-05-14T18:26:54.868007+00:00
-updated: 2026-05-14T18:36:15.336076+00:00
+updated: 2026-05-14T20:09:39.235609+00:00
 tags:
   - phase-2
   - scope:cockpit
@@ -48,3 +48,11 @@ Passing #1566 responsive tests and viewport screenshot evidence.
 Responsive implementation now also waits on #1575 because column body focusability, empty-state sizing, and column/card spacing affect the 320px/tablet contract.
 
 Additional AC-4: Responsive proof includes the polished column/empty-state behavior from #1575 at 320px, tablet, desktop, and dark-mode smoke screenshots.
+
+
+## Content Audit Amendment — Mobile Contract Priority
+Implementation must follow the #1560 preferred responsive direction unless an explicit task note records a fallback decision.
+
+Additional AC-5: At 320px, Cockpit implements the board-first mobile contract with selected-task/detail in a sheet by default. A controlled unsupported/narrow-view state is acceptable only when paired with an explicit note explaining why the sheet contract was rejected; compressed desktop overflow is never acceptable.
+
+Evidence expectation: passing #1566 contract test plus screenshot evidence for the selected branch.

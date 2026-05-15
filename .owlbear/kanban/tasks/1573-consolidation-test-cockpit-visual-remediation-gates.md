@@ -4,7 +4,7 @@ title: 'consolidation test: Cockpit visual remediation gates'
 status: backlog
 priority: needed
 created: 2026-05-14T18:27:04.901264+00:00
-updated: 2026-05-14T18:36:01.538743+00:00
+updated: 2026-05-14T20:10:59.711376+00:00
 tags:
   - phase-2
   - scope:cockpit
@@ -53,3 +53,19 @@ Additional AC-4: Consolidation includes column header labels, count badges, empt
 Additional AC-5: Consolidation includes the task context menu / transition menu as a required visual state and structural overlay gate.
 
 Evidence expectation: reviewer records evidence rows for columns/empty states and context menu, in addition to the original AC-1 visual states.
+
+
+## Content Audit Amendment — RepairPanel Visual Gate
+Consolidation must include the repair flow because the audit lists `RepairPanel` as part of the overlay remediation lane.
+
+Additional AC-6: Consolidation evidence includes at least one repair-flow visual state, covering confirmation plus either loading/result/error, and verifies it follows the same overlay policy as Health/DR/Cleanup/resolve/archive surfaces.
+
+Evidence expectation: reviewer records a RepairPanel evidence row alongside the other required overlay visual states.
+
+
+## Content Audit Amendment — Keyboard Reachability Gate
+Consolidation must guard against repeating the audit finding where visible controls were removed from normal tab flow.
+
+Additional AC-7: Structural gates fail when core visible controls in shell, status bar, nav rail, sidecar, filters, cards, or overlays are unreachable by keyboard tab navigation, unless a `tabIndex={-1}` usage is explicitly documented as focus-management for a modal/sheet/popover.
+
+Evidence expectation: reviewer records a keyboard reachability evidence row or links the named Playwright traversal test.
