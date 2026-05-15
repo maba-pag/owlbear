@@ -157,3 +157,37 @@ describe('TestFromAC_ColumnDragOver', () => {
     expect(block).toMatch(/background\s*:\s*var\(--pds-state-hover\)/)
   })
 })
+
+// ─── AC-4 (spacing): Header / body / empty-state spacing tokens ───────────────
+// Retry #1575: reviewer gap — AC-4 proof did not assert spacing token usage.
+// A regression from var(--pds-spacing-*) to raw pixel values must cause these to fail.
+
+describe('TestFromAC_ColumnSpacingTokens', () => {
+  it('.column header padding uses PDS spacing token var(--pds-spacing-sm)', () => {
+    const css = readFileSync(COLUMN_CSS_PATH, 'utf-8')
+    const block = getCSSBlock(css, '.column header')
+    expect(block).not.toBeNull()
+    expect(block).toMatch(/padding\s*:\s*var\(--pds-spacing-sm\)/)
+  })
+
+  it('.column-body padding uses PDS spacing token var(--pds-spacing-xs)', () => {
+    const css = readFileSync(COLUMN_CSS_PATH, 'utf-8')
+    const block = getCSSBlock(css, '.column-body')
+    expect(block).not.toBeNull()
+    expect(block).toMatch(/padding\s*:\s*var\(--pds-spacing-xs\)/)
+  })
+
+  it('.column-body gap uses PDS spacing token var(--pds-spacing-xs)', () => {
+    const css = readFileSync(COLUMN_CSS_PATH, 'utf-8')
+    const block = getCSSBlock(css, '.column-body')
+    expect(block).not.toBeNull()
+    expect(block).toMatch(/gap\s*:\s*var\(--pds-spacing-xs\)/)
+  })
+
+  it('.column-empty padding uses PDS spacing token var(--pds-spacing-md)', () => {
+    const css = readFileSync(COLUMN_CSS_PATH, 'utf-8')
+    const block = getCSSBlock(css, '.column-empty')
+    expect(block).not.toBeNull()
+    expect(block).toMatch(/padding\s*:\s*var\(--pds-spacing-md\)/)
+  })
+})
