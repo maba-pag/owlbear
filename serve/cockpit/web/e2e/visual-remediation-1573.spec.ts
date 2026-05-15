@@ -429,13 +429,13 @@ test.describe('AC4_ColumnVisual', () => {
     await expect(inProgressColumn).toHaveScreenshot('ac4-column-header-in-progress.png')
   })
 
-  // AC-4 visual: empty column placeholder (done has one task only — use research which is empty)
-  test('ac4_empty_column_done', async ({ page }) => {
-    // In our fixture, 'done' column has id=3 task. Use a column with no tasks for empty-state.
-    // 'research' status has no tasks in the fixture → shows empty placeholder.
-    const doneColumn = page.locator('[data-column="done"]')
-    await doneColumn.waitFor({ state: 'visible', timeout: 6_000 })
-    await expect(doneColumn).toHaveScreenshot('ac4-empty-column-done.png')
+  // AC-4 visual: empty column placeholder — 'research' has zero tasks in the fixture.
+  // 'done' was previously used but its baseline captured task id=3 (a populated card),
+  // never exercising the empty-state placeholder branch. Fix: use 'research' (0 tasks).
+  test('ac4_empty_column_research', async ({ page }) => {
+    const researchColumn = page.locator('[data-column="research"]')
+    await researchColumn.waitFor({ state: 'visible', timeout: 6_000 })
+    await expect(researchColumn).toHaveScreenshot('ac4-empty-column-research.png')
   })
 
   // AC-4 structural gate: scrollable column bodies must be keyboard-focusable.
@@ -603,55 +603,100 @@ test.describe('AC7_KeyboardReachability', () => {
     await waitForBoard(page)
   })
 
-  // AC-7 traversal: Tab navigation reaches each major UI region.
-  test('ac7_tab_traversal_reaches_main_regions', async ({ page }) => {
-    // Start from body and tab through the UI.
+  // AC-7 traversal: Tab navigation reaches EACH required region and control surface explicitly.
+  // Previous proof only required "any 3 distinct regions" — too weak to catch regressions.
+  // This test names every required surface and fails if any is unreachable.
+  test('ac7_tab_traversal_reaches_required_surfaces', async ({ page }) => {
     await page.locator('body').focus()
 
-    // Collect focused elements across multiple Tab presses.
-    const focusedRegions = new Set<string>()
-    for (let i = 0; i < 30; i++) {
+    const reachedRegions = new Set<string>()
+    const reachedTestIds = new Set<string>()
+
+    for (let i = 0; i < 80; i++) {
       await page.keyboard.press('Tab')
-      const region = await page.evaluate(() => {
+      const info = await page.evaluate(() => {
         const el = document.activeElement
         if (!el || el === document.body) return null
-        // Identify region by data-region, data-testid, or role.
-        const region = el.closest('[data-region]')?.getAttribute('data-region')
-        const testId = el.closest('[data-testid]')?.getAttribute('data-testid')
-        const role = el.closest('[role="navigation"]') ? 'nav' : null
-        return region ?? testId ?? role ?? el.tagName.toLowerCase()
+        const region = el.closest('[data-region]')?.getAttribute('data-region') ?? null
+        // Walk up from the focused element (or shadow host) to find data-testid.
+        const testId =
+          el.getAttribute('data-testid') ??
+          el.closest('[data-testid]')?.getAttribute('data-testid') ??
+          null
+        return { region, testId }
       })
-      if (region) focusedRegions.add(region)
+      if (info?.region) reachedRegions.add(info.region)
+      if (info?.testId) reachedTestIds.add(info.testId)
     }
 
-    // At minimum, Tab navigation must reach: nav rail, board columns, and status-bar controls.
-    // The exact regions depend on implementation; we assert at least 3 distinct focusable regions.
-    expect(
-      focusedRegions.size,
-      `Tab navigation must reach at least 3 distinct UI regions; reached: ${[...focusedRegions].join(', ')}`,
-    ).toBeGreaterThanOrEqual(3)
+    // Each required layout region must be individually reachable by Tab.
+    const REQUIRED_REGIONS = ['status-bar', 'nav-rail', 'workspace'] as const
+    for (const region of REQUIRED_REGIONS) {
+      expect(
+        reachedRegions.has(region),
+        `Tab navigation must reach layout region '${region}'. ` +
+          `Reached regions: ${[...reachedRegions].join(', ')}`,
+      ).toBe(true)
+    }
+
+    // Each required named interactive control must be individually reachable by Tab.
+    // These surfaces are the regression targets from the visual-remediation audit:
+    //   filter-toggle   — was incorrectly excluded with tabIndex={-1} (#1573 builder fix)
+    //   sidecar-collapse — shell sidecar toggle button
+    const REQUIRED_CONTROLS = ['filter-toggle', 'sidecar-collapse'] as const
+    for (const controlId of REQUIRED_CONTROLS) {
+      expect(
+        reachedTestIds.has(controlId),
+        `Tab navigation must reach control '${controlId}'. ` +
+          `Reached controls: ${[...reachedTestIds].join(', ')}`,
+      ).toBe(true)
+    }
   })
 
-  // AC-7 DOM audit: no undocumented negative tabIndex on interactive elements.
-  // Documented exceptions: (a) modal/sheet/popover trap, (b) menu roving-tabindex,
-  // (c) programmatic focus targets (e.g. sheet content after open).
-  test('ac7_no_undocumented_negative_tabindex', async ({ page }) => {
+  // AC-7 DOM audit: no undocumented negative tabIndex on interactive elements,
+  // INCLUDING PDS/custom-element hosts used by the filter panel.
+  // Previous proof omitted PDS custom elements (p-button, p-input-search, p-select, etc.);
+  // this test opens the filter panel so those controls are in the DOM before auditing.
+  // Documented exceptions: (a) modal/sheet/popover trap, (b) menu/menubar/tablist roving-tabindex
+  //   per WAI-ARIA APG, (c) programmatic focus target (data-focus-target attribute).
+  test('ac7_no_undocumented_negative_tabindex_including_pds_controls', async ({ page }) => {
+    // Open filter panel so p-input-search, p-select, p-multi-select, p-checkbox are in the DOM.
+    const filterToggle = page.locator('[data-testid="filter-toggle"]').first()
+    await filterToggle.click()
+    await page.locator('[data-testid="filter-panel"]').waitFor({ state: 'visible', timeout: 6_000 })
+
     const violations = await page.evaluate(() => {
-      const interactiveSelectors = 'a, button, input, select, textarea, [role="button"], [role="link"], [role="menuitem"], [role="tab"]'
-      const interactive = Array.from(document.querySelectorAll<HTMLElement>(interactiveSelectors))
-      return interactive
+      // Native interactive elements.
+      const nativeSelectors =
+        'a, button, input, select, textarea, [role="button"], [role="link"], [role="menuitem"], [role="tab"]'
+      // PDS custom-element hosts that participate in keyboard reachability.
+      // Hosts with tabindex=-1 prevent their entire shadow-DOM subtree from receiving focus.
+      const pdsSelectors =
+        'p-button, p-input-search, p-select, p-multi-select, p-checkbox, p-text-field-wrapper'
+
+      const allElements = [
+        ...Array.from(document.querySelectorAll<HTMLElement>(nativeSelectors)),
+        ...Array.from(document.querySelectorAll<HTMLElement>(pdsSelectors)),
+      ]
+
+      return allElements
         .filter((el) => {
           const tabIdx = el.tabIndex
-          if (tabIdx >= 0) return false // positive or zero tabIndex — fine
-          // Check for documented exception markers.
-          const hasTrapException = el.closest('[data-focus-trap], [role="dialog"], [aria-modal="true"]')
+          if (tabIdx >= 0) return false // zero or positive — in normal tab flow
+          // Documented exception markers.
+          const hasTrapException = el.closest(
+            '[data-focus-trap], [role="dialog"], [aria-modal="true"]',
+          )
           const hasRovingException = el.closest('[role="menu"], [role="menubar"], [role="tablist"]')
           const hasProgrammaticException = el.hasAttribute('data-focus-target')
           return !hasTrapException && !hasRovingException && !hasProgrammaticException
         })
         .map((el) => ({
-          tag: el.tagName,
-          testId: el.getAttribute('data-testid') ?? el.closest('[data-testid]')?.getAttribute('data-testid') ?? '',
+          tag: el.tagName.toLowerCase(),
+          testId:
+            el.getAttribute('data-testid') ??
+            el.closest('[data-testid]')?.getAttribute('data-testid') ??
+            '',
           tabIndex: el.tabIndex,
           text: (el.textContent ?? '').trim().slice(0, 40),
         }))
@@ -659,7 +704,7 @@ test.describe('AC7_KeyboardReachability', () => {
 
     expect(
       violations,
-      `Found interactive elements with undocumented negative tabIndex: ${JSON.stringify(violations, null, 2)}`,
+      `Found interactive/PDS elements with undocumented negative tabIndex:\n${JSON.stringify(violations, null, 2)}`,
     ).toHaveLength(0)
   })
 })
