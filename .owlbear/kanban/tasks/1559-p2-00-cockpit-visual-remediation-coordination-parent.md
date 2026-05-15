@@ -13,8 +13,11 @@ tags:
   - visual-remediation
   - docs
 parent:
-depends_on: []
-blocked: true
+depends_on:
+- 1561
+- 1573
+- 1574
+blocked: false
 block_reason: AC-3 requires all child remediation tasks (#1560–#1575) to be 
   archived before this parent can advance. Children are currently active. 
   Unblock and re-dispatch when all children reach archived status.
