@@ -19,6 +19,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from mcp.server.fastmcp.exceptions import ToolError
+
 from owlbear_knowledge.schema import init_db
 from owlbear_mcp_knowledge.server import (
     AppContext,
@@ -599,6 +601,45 @@ class TestFromAC_StoreEnrichmentRejection:
             f"claimed_at must be cleared (NULL) after rejected Phase 1 write, got '{row[1]}'"
         )
 
+    @pytest.mark.asyncio
+    async def test_truly_unresolvable_edge_raises_tool_error(
+        self, conn: sqlite3.Connection
+    ) -> None:
+        """entities=[] edge with no source/target fields → ToolError, zero edges, chunk not enriched.
+
+        PO-1 (AC-3): when no entities are provided and the edge dict contains no source_name,
+        target_name, source_id, or target_id, both endpoint resolution sides return None and
+        server.py:_resolve_phase1_edge_endpoints must raise ToolError. No edge row may be
+        inserted and the chunk enrichment_state must not become 'enriched'.
+        """
+        _insert_source(conn, source_id="src-1", name="S1", enrich=1)
+        _insert_document(conn, doc_id="doc-a", title="D", source_id="src-1")
+        _insert_chunk(conn, chunk_id="chk-x", doc_id="doc-a", state="claimed")
+        ctx = _make_ctx(conn)
+
+        with pytest.raises(ToolError):
+            await store_enrichment(
+                ctx,
+                chunk_id="chk-x",
+                entities=[],
+                edges=[{"relationship": "mentions"}],
+            )
+
+        edge_count = conn.execute("SELECT COUNT(*) FROM edges").fetchone()[0]
+        assert edge_count == 0, (
+            f"store_enrichment with truly unresolvable edge endpoints must insert zero edges, "
+            f"got {edge_count}"
+        )
+
+        state_row = conn.execute(
+            "SELECT enrichment_state FROM chunks WHERE id='chk-x'"
+        ).fetchone()
+        assert state_row is not None
+        assert state_row[0] != "enriched", (
+            f"Chunk must not be marked 'enriched' when edge endpoint resolution fails, "
+            f"got '{state_row[0]}'"
+        )
+
 
 # ---------------------------------------------------------------------------
 # TestFromAC_ConsolidationCandidateIdentifiers  (AC-4)
@@ -795,6 +836,142 @@ class TestFromAC_StoreEnrichmentPhase2Edges:
         assert candidate_id not in ids_in_next, (
             "Candidate whose edge was stored must not appear in the next "
             "get_consolidation_candidates batch"
+        )
+
+    @pytest.mark.asyncio
+    async def test_phase2_two_sided_mismatched_endpoints_rejected(
+        self, conn: sqlite3.Connection
+    ) -> None:
+        """Both source_id and target_id explicitly wrong → ToolError, zero edges.
+
+        PO-2 (AC-5): when both explicit endpoint fields do not match either candidate
+        entity row ID, _resolve_phase2_edge_endpoints must raise ToolError and
+        store_enrichment must not insert any edge.
+        """
+        _setup_cross_source_entities(conn)
+        ctx = _make_ctx(conn)
+
+        candidates = await get_consolidation_candidates(ctx, limit=1)
+        assert len(candidates) == 1
+        candidate_id = candidates[0]["candidate_id"]
+
+        with pytest.raises(ToolError):
+            await store_enrichment(
+                ctx,
+                candidate_id=candidate_id,
+                edges=[{"relationship": "same_as", "source_id": "wrong-id", "target_id": "also-wrong-id"}],
+            )
+
+        edge_count = conn.execute("SELECT COUNT(*) FROM edges").fetchone()[0]
+        assert edge_count == 0, (
+            f"Two-sided mismatched explicit endpoints must not insert any edge, got {edge_count}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_phase2_one_sided_invalid_target_rejected(
+        self, conn: sqlite3.Connection
+    ) -> None:
+        """Only target_id explicitly wrong (source_id omitted) → ToolError, zero edges.
+
+        PO-2 (AC-5): when only target_id is supplied and does not match either candidate
+        entity row ID, _resolve_phase2_edge_endpoints must raise ToolError.
+        """
+        _setup_cross_source_entities(conn)
+        ctx = _make_ctx(conn)
+
+        candidates = await get_consolidation_candidates(ctx, limit=1)
+        assert len(candidates) == 1
+        candidate_id = candidates[0]["candidate_id"]
+
+        with pytest.raises(ToolError):
+            await store_enrichment(
+                ctx,
+                candidate_id=candidate_id,
+                edges=[{"relationship": "same_as", "target_id": "wrong-id"}],
+            )
+
+        edge_count = conn.execute("SELECT COUNT(*) FROM edges").fetchone()[0]
+        assert edge_count == 0, (
+            f"One-sided invalid target_id must not insert any edge, got {edge_count}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_phase2_one_sided_invalid_source_rejected(
+        self, conn: sqlite3.Connection
+    ) -> None:
+        """Only source_id explicitly wrong (target_id omitted) → ToolError, zero edges.
+
+        PO-2 (AC-5): when only source_id is supplied and does not match either candidate
+        entity row ID, _resolve_phase2_edge_endpoints must raise ToolError.
+        """
+        _setup_cross_source_entities(conn)
+        ctx = _make_ctx(conn)
+
+        candidates = await get_consolidation_candidates(ctx, limit=1)
+        assert len(candidates) == 1
+        candidate_id = candidates[0]["candidate_id"]
+
+        with pytest.raises(ToolError):
+            await store_enrichment(
+                ctx,
+                candidate_id=candidate_id,
+                edges=[{"relationship": "same_as", "source_id": "wrong-id"}],
+            )
+
+        edge_count = conn.execute("SELECT COUNT(*) FROM edges").fetchone()[0]
+        assert edge_count == 0, (
+            f"One-sided invalid source_id must not insert any edge, got {edge_count}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_reviewed_without_edge_excludes_candidate_and_persists_pair_identity(
+        self, conn: sqlite3.Connection
+    ) -> None:
+        """store_enrichment(edges=[]) marks candidate reviewed and excludes it from next batch.
+
+        PO-3 (AC-5): reviewed-without-edge action must:
+        (a) cause get_consolidation_candidates to no longer return that candidate,
+        (b) write a reviewed_pairs row whose entity_id_a and entity_id_b match the
+            candidate's actual entity row PKs (non-empty, durable pair identity).
+        """
+        ent_a, ent_b = _setup_cross_source_entities(conn)
+        ctx = _make_ctx(conn)
+
+        candidates = await get_consolidation_candidates(ctx, limit=10)
+        assert len(candidates) == 1, "Expected one candidate before reviewed-without-edge"
+        cand = candidates[0]
+        candidate_id = cand["candidate_id"]
+        expected_ids = {ent_a, ent_b}
+
+        # Reviewed-without-edge: edges=[] means no edge inserted but candidate is dismissed
+        await store_enrichment(ctx, candidate_id=candidate_id, edges=[])
+
+        # (a) candidate absent from next batch
+        next_candidates = await get_consolidation_candidates(ctx, limit=10)
+        ids_in_next = [c["candidate_id"] for c in next_candidates]
+        assert candidate_id not in ids_in_next, (
+            "Reviewed-without-edge candidate must not reappear in next get_consolidation_candidates batch"
+        )
+
+        # (b) reviewed_pairs row has durable pair identity
+        row = conn.execute(
+            "SELECT entity_id_a, entity_id_b FROM reviewed_pairs"
+        ).fetchone()
+        assert row is not None, (
+            "reviewed_pairs must contain a row after reviewed-without-edge store_enrichment"
+        )
+        assert row[0], f"reviewed_pairs.entity_id_a must be non-empty, got {row[0]!r}"
+        assert row[0] != "", f"reviewed_pairs.entity_id_a must be non-empty, got {row[0]!r}"
+        assert row[1], f"reviewed_pairs.entity_id_b must be non-empty, got {row[1]!r}"
+        assert row[1] != "", f"reviewed_pairs.entity_id_b must be non-empty, got {row[1]!r}"
+        assert row[0] in expected_ids, (
+            f"reviewed_pairs.entity_id_a {row[0]!r} must match one of the candidate entity PKs {expected_ids}"
+        )
+        assert row[1] in expected_ids, (
+            f"reviewed_pairs.entity_id_b {row[1]!r} must match one of the candidate entity PKs {expected_ids}"
+        )
+        assert row[0] != row[1], (
+            "reviewed_pairs.entity_id_a and entity_id_b must differ"
         )
 
 
