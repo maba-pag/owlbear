@@ -300,4 +300,30 @@ describe('TestFromAC_CardCueRendering', () => {
     expect(overflow).not.toBeNull()
     expect(overflow!.textContent).toContain('+2')
   })
+
+  // AC-2 retry gap-fill (#1570): tag preview text contains actual tag names
+  // Reviewer Finding #2: tests proved card-tags element presence but never
+  // asserted the preview text rendered from previewTags.join(', ').
+  it('task with multiple tags renders card-tags element with tag names as text content', () => {
+    const task = makeTask({ id: 1, tags: ['frontend', 'backend'] })
+    const { container } = renderCard(task)
+    const tagsEl = container.querySelector('[data-testid="card-tags"]')
+    expect(tagsEl).not.toBeNull()
+    expect(tagsEl!.textContent).toContain('frontend')
+    expect(tagsEl!.textContent).toContain('backend')
+  })
+
+  it('task with 5 tags renders card-tags element showing only first 3 tag names in text content', () => {
+    // TAG_PREVIEW_LIMIT = 3 → previewTags = ['a', 'b', 'c']; 'd' and 'e' are overflow-only
+    const task = makeTask({ id: 1, tags: ['a', 'b', 'c', 'd', 'e'] })
+    const { container } = renderCard(task)
+    const tagsEl = container.querySelector('[data-testid="card-tags"]')
+    expect(tagsEl).not.toBeNull()
+    const text = tagsEl!.textContent ?? ''
+    expect(text).toContain('a')
+    expect(text).toContain('b')
+    expect(text).toContain('c')
+    expect(text).not.toContain('d')
+    expect(text).not.toContain('e')
+  })
 })

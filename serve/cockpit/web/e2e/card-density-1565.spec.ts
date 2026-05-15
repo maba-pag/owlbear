@@ -314,6 +314,35 @@ test.describe('AC-1 | Card rendering fixtures — id, priority, tags, state cues
     await card.waitFor({ state: 'visible', timeout: 6_000 })
     await expect(card.locator('[data-testid="card-dr-pending-cue"]')).toBeVisible({ timeout: 2_000 })
   })
+
+  // AC-1 retry gap-fill (#1570): title element visible + correct text in browser
+  test('card title element is browser-visible with correct text content', async ({ page }) => {
+    await loadBoard(page)
+    // Reviewer Finding #1: unit proof existed but no E2E assertion confirmed title
+    // visible under the denser metadata layout. This test closes that gap.
+    const card = page.locator('[data-testid="task-card"][data-id="1"]')
+    await card.waitFor({ state: 'visible', timeout: 6_000 })
+    const title = card.locator('[data-testid="card-title"]')
+    await expect(title).toBeVisible({ timeout: 2_000 })
+    const text = await title.textContent()
+    expect(text?.trim()).toBe('Ready task')
+  })
+
+  // AC-2 retry gap-fill (#1570): tag preview text contains actual tag names
+  test('card tag preview element shows actual tag names in text content', async ({ page }) => {
+    await loadBoard(page)
+    // TASK_MANY_TAGS (id=6): tags=['frontend','backend','phase-2','scope:cockpit','type:test']
+    // TAG_PREVIEW_LIMIT=3 → previewTags = first 3 → card-tags text = "frontend, backend, phase-2"
+    // Reviewer Finding #2: tests proved card-tags visible but never asserted preview text.
+    const card = page.locator('[data-testid="task-card"][data-id="6"]')
+    await card.waitFor({ state: 'visible', timeout: 6_000 })
+    const tagsEl = card.locator('[data-testid="card-tags"]')
+    await expect(tagsEl).toBeVisible({ timeout: 2_000 })
+    const text = await tagsEl.textContent() ?? ''
+    expect(text).toContain('frontend')
+    expect(text).toContain('backend')
+    expect(text).toContain('phase-2')
+  })
 })
 
 // --- AC-2 | Accessibility — state cues perceivable without rail color --------
