@@ -85,6 +85,11 @@ class IngestPipeline:
             return self._source_store.resolve_by_url(source_url)
         return self._source_store.resolve_by_url(source_url, scope=scope)
 
+    @staticmethod
+    def _raise_if_exception(result: object) -> None:
+        if isinstance(result, BaseException):
+            raise result
+
     def _resolve_or_create_source_id(
         self,
         source_url: str,
@@ -282,6 +287,7 @@ class IngestPipeline:
             IngestResult with status: ok | skipped | cancelled | failed | blocked.
         """
         doc_id = uuid4().hex
+        chunk_ids: list[str] = []
         try:
             if self._cancel_signal is not None and self._cancel_signal.is_set():  # type: ignore[union-attr]
                 return IngestResult(
@@ -325,7 +331,7 @@ class IngestPipeline:
                 source_id=source_id,
             )
 
-            chunk_ids: list[str] = self._docs.store_chunks(doc_id, chunks, scope=scope)  # type: ignore[union-attr]
+            chunk_ids = self._docs.store_chunks(doc_id, chunks, scope=scope)  # type: ignore[union-attr]
             chunk_texts = [c.text for c in chunks]
 
             _should_wrap = should_wrap(_meta.get("source_type"))  # type: ignore[arg-type]
@@ -348,6 +354,8 @@ class IngestPipeline:
             all_results = await asyncio.gather(
                 embed_coro, *extract_coros, return_exceptions=True
             )
+            self._raise_if_exception(all_results[0])
+
             extraction_results = [
                 r for r in all_results[1:] if not isinstance(r, BaseException)
             ]
@@ -362,6 +370,7 @@ class IngestPipeline:
 
         except Exception:
             logger.exception("ingest failed for doc_id=%s", doc_id)
+            await self._cleanup_failed_ingest(doc_id, chunk_ids, None)
             return IngestResult(
                 document_id=doc_id,
                 chunk_count=0,
