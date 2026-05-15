@@ -260,6 +260,20 @@ class TestFromAC_EdgeUniqueConstraint:
         edge_id_2 = str(uuid.uuid4())
         now = _now()
 
+        # Seed document and entities required for FK-enforced inserts.
+        conn.execute(
+            "INSERT INTO documents (id, created_at) VALUES (?, ?)",
+            ("doc-X", now),
+        )
+        conn.execute(
+            "INSERT INTO entities (id, document_id, created_at) VALUES (?, ?, ?)",
+            ("entity-A", "doc-X", now),
+        )
+        conn.execute(
+            "INSERT INTO entities (id, document_id, created_at) VALUES (?, ?, ?)",
+            ("entity-B", "doc-X", now),
+        )
+
         common = {
             "source_id": "entity-A",
             "target_id": "entity-B",
@@ -299,6 +313,25 @@ class TestFromAC_EdgeUniqueConstraint:
     ) -> None:
         """Same source/target/relation but different document_id must NOT conflict."""
         now = _now()
+
+        # Seed documents and entities required for FK-enforced inserts.
+        conn.execute(
+            "INSERT INTO documents (id, created_at) VALUES (?, ?)",
+            ("doc-1", now),
+        )
+        conn.execute(
+            "INSERT INTO documents (id, created_at) VALUES (?, ?)",
+            ("doc-2", now),
+        )
+        conn.execute(
+            "INSERT INTO entities (id, document_id, created_at) VALUES (?, ?, ?)",
+            ("entity-A", "doc-1", now),
+        )
+        conn.execute(
+            "INSERT INTO entities (id, document_id, created_at) VALUES (?, ?, ?)",
+            ("entity-B", "doc-1", now),
+        )
+
         conn.execute(
             "INSERT INTO edges (id, source_id, target_id, relation, document_id, created_at)"
             " VALUES (?, ?, ?, ?, ?, ?)",
