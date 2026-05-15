@@ -257,7 +257,9 @@ test.describe('AC-1 | Filter workflow via PDS control selectors', () => {
     // Currently: no onInput handler -- filter unchanged -- count absent -- FAILS here.
     await expect(page.locator('[data-testid="filter-result-count"]')).toBeVisible({ timeout: 2_000 })
     // After correct implementation: clear removes badge and hides result count.
-    await page.click('[data-testid="filter-reset"]')
+    // PDS-host-scoped selector required: generic [data-testid="filter-reset"] would pass green
+    // against a native button reusing the same test-id.
+    await page.click('p-button[data-testid="filter-reset"]')
     await expect(page.locator('[data-testid="filter-toggle"]')).not.toContainText('(')
     await expect(page.locator('[data-testid="filter-result-count"]')).not.toBeVisible()
   })
@@ -345,7 +347,9 @@ test.describe('AC-1 | Filter workflow via PDS control selectors', () => {
     })
     // Guard: verify filter was active before testing clear.
     await expect(page.locator('[data-testid="task-card"][data-id="3"]')).not.toBeVisible({ timeout: 2_000 })
-    await page.click('[data-testid="filter-reset"]')
+    // PDS-host-scoped selector required: generic [data-testid="filter-reset"] would pass green
+    // against a native button reusing the same test-id.
+    await page.click('p-button[data-testid="filter-reset"]')
     await expect(page.locator('[data-testid="task-card"][data-id="2"]')).toBeVisible({ timeout: 2_000 })
     await expect(page.locator('[data-testid="task-card"][data-id="3"]')).toBeVisible({ timeout: 2_000 })
   })
@@ -503,5 +507,13 @@ test.describe('AC-4 | Task-editor PDS compliance assertions', () => {
   test('[presence] save button: p-button[data-testid="save-button"] is in the DOM', async ({ page }) => {
     // Already PDS-compliant -- regression guard. Passes against current implementation.
     await expect(page.locator('p-button[data-testid="save-button"]')).toBeAttached({ timeout: 4_000 })
+  })
+
+  test('[presence] edit toggle: p-button[data-testid="body-edit-toggle"] is in the DOM', async ({ page }) => {
+    // AC-4 action-button clause: already-compliant action buttons require individual presence
+    // assertions. A native button with data-testid="body-edit-toggle" would pass green without
+    // this PDS-host-scoped assertion. Matching the save-button pattern established above.
+    // TaskFieldsEditor.tsx L238-239: renders <PButton data-testid="body-edit-toggle">.
+    await expect(page.locator('p-button[data-testid="body-edit-toggle"]')).toBeAttached({ timeout: 4_000 })
   })
 })
