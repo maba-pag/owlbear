@@ -118,6 +118,54 @@ describe('TestFromAC_ColumnHeaderLabel', () => {
     expect(labelSpan, 'header label span must exist').not.toBeNull()
     expect(labelSpan!.textContent).toBe('Done')
   })
+
+  // AC-1: status "backlog" → DOM textContent must be "Backlog" (not "backlog").
+  // Required by AC-1: "each board status" — backlog is one of the 7 canonical statuses.
+  it('renders "Backlog" as header label textContent for status "backlog" (Title Case)', () => {
+    const { container } = renderColumn('backlog', [makeTask(1, 'backlog')])
+    const labelSpan = container.querySelector('[data-column="backlog"] header span:first-child')
+    expect(labelSpan, 'header label span must exist').not.toBeNull()
+    expect(
+      labelSpan!.textContent,
+      'header label must be JS-normalized: "backlog" → "Backlog" in DOM textContent',
+    ).toBe('Backlog')
+  })
+
+  // AC-1: status "research" → DOM textContent must be "Research" (not "research").
+  // Required by AC-1: "each board status" — research is one of the 7 canonical statuses.
+  it('renders "Research" as header label textContent for status "research" (Title Case)', () => {
+    const { container } = renderColumn('research', [makeTask(1, 'research')])
+    const labelSpan = container.querySelector('[data-column="research"] header span:first-child')
+    expect(labelSpan, 'header label span must exist').not.toBeNull()
+    expect(
+      labelSpan!.textContent,
+      'header label must be JS-normalized: "research" → "Research" in DOM textContent',
+    ).toBe('Research')
+  })
+
+  // AC-1: status "review" → DOM textContent must be "Review" (not "review").
+  // Required by AC-1: "each board status" — review is one of the 7 canonical statuses.
+  it('renders "Review" as header label textContent for status "review" (Title Case)', () => {
+    const { container } = renderColumn('review', [makeTask(1, 'review')])
+    const labelSpan = container.querySelector('[data-column="review"] header span:first-child')
+    expect(labelSpan, 'header label span must exist').not.toBeNull()
+    expect(
+      labelSpan!.textContent,
+      'header label must be JS-normalized: "review" → "Review" in DOM textContent',
+    ).toBe('Review')
+  })
+
+  // AC-1: status "docs" → DOM textContent must be "Docs" (not "docs").
+  // Required by AC-1: "each board status" — docs is one of the 7 canonical statuses.
+  it('renders "Docs" as header label textContent for status "docs" (Title Case)', () => {
+    const { container } = renderColumn('docs', [makeTask(1, 'docs')])
+    const labelSpan = container.querySelector('[data-column="docs"] header span:first-child')
+    expect(labelSpan, 'header label span must exist').not.toBeNull()
+    expect(
+      labelSpan!.textContent,
+      'header label must be JS-normalized: "docs" → "Docs" in DOM textContent',
+    ).toBe('Docs')
+  })
 })
 
 // ─── AC-2: Empty state — polished label, data-testid, CSS font-size ───────────

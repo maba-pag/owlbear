@@ -155,10 +155,16 @@ test.describe('TestFromAC_ColumnBodyFocusability', () => {
     ).toEqual([])
   })
 
-  // AC-3 scope guard: at least one column-body must be scanned — prevents false-green
-  // from axe finding no matching elements and reporting 0 violations vacuously.
-  // FAIL: violations present on overflowing in-progress column.
-  test('board renders at least one [data-testid="column-body"] scannable by axe (AC-3 scope guard)', async ({
+  // AC-3 scope guard (non-vacuous): at least one column-body must be provably scrollable
+  // before the axe scan runs — prevents false-green where axe reports zero violations
+  // trivially because no scanned element has scrollHeight > clientHeight (non-scrollable
+  // regions never trigger scrollable-region-focusable).
+  //
+  // Pattern from responsive-contract-1566.spec.ts: inject max-height CSS to force
+  // overflow, then evaluate DOM scrollHeight vs clientHeight, then assert scrollableCount > 0.
+  // The axe scan then runs on regions that are provably scrollable.
+  // FAIL: in-progress column body has no tabindex → axe flags the violation.
+  test('at least one [data-testid="column-body"] is scrollable before axe scan — non-vacuous AC-3 scope guard', async ({
     page,
   }) => {
     await page
@@ -172,7 +178,29 @@ test.describe('TestFromAC_ColumnBodyFocusability', () => {
       'at least one [data-testid="column-body"] must be present for axe scope to be non-empty',
     ).toBeGreaterThanOrEqual(1)
 
-    // Full scoped scan — FAIL: in-progress column body scrolls and has no tabindex.
+    // Force overflow via CSS injection so scrollability check is reliable regardless
+    // of viewport rendering and natural content height.
+    await page.addStyleTag({
+      content:
+        '[data-testid="column-body"] { max-height: 100px !important; overflow-y: auto !important; }',
+    })
+
+    // Evaluate actual DOM scrollability: at least one column-body must have
+    // scrollHeight > clientHeight — guards against vacuous zero-violation axe result.
+    const scrollableCount = await page.evaluate(() => {
+      const bodies = Array.from(document.querySelectorAll('[data-testid="column-body"]'))
+      return bodies.filter((el) => el.scrollHeight > el.clientHeight).length
+    })
+
+    expect(
+      scrollableCount,
+      'After max-height CSS injection, at least one [data-testid="column-body"] must ' +
+        'have scrollHeight > clientHeight — ensures axe scrollable-region-focusable ' +
+        'rule has actual scrollable targets and zero violations cannot be vacuously true (AC-3)',
+    ).toBeGreaterThan(0)
+
+    // Scoped axe scan on provably-scrollable column-bodies.
+    // FAIL: in-progress column body has overflow but no tabindex → axe violation.
     const results = await new AxeBuilder({ page })
       .include('[data-testid="column-body"]')
       .withRules(['scrollable-region-focusable'])
@@ -180,7 +208,8 @@ test.describe('TestFromAC_ColumnBodyFocusability', () => {
 
     expect(
       results.violations,
-      `scrollable-region-focusable scoped to ${count} column-body element(s): ` +
+      `scrollable-region-focusable scoped to ${count} column-body element(s) ` +
+        `(${scrollableCount} scrollable after CSS injection): ` +
         `${results.violations.length} violation(s) found`,
     ).toEqual([])
   })
