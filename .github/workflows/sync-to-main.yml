@@ -452,6 +452,75 @@ jobs:
             git rm -rf serve/cockpit/web --quiet 2>/dev/null || true
           fi
 
+      - name: Prune stale files not present on dev
+        env:
+          SYNC_SHARE: ${{ inputs.sync_share }}
+          SYNC_BROWSER: ${{ inputs.sync_browser }}
+          SYNC_KANBAN: ${{ inputs.sync_kanban }}
+          SYNC_KNOWLEDGE: ${{ inputs.sync_knowledge }}
+          SYNC_COCKPIT: ${{ inputs.sync_cockpit }}
+          SYNC_TOOLS: ${{ inputs.sync_tools }}
+          SYNC_MCP_MEMORY: ${{ inputs.sync_mcp_memory }}
+          SYNC_SETUP: ${{ inputs.sync_setup }}
+          SYNC_INFRA: ${{ inputs.sync_infra }}
+        run: |
+          # Remove tracked files on main that no longer exist on dev.
+          # Only prunes within synced scopes and truly orphaned paths.
+          # Files in unsynced scopes are left untouched.
+
+          declare -A scope_map=(
+            ["share/"]="$SYNC_SHARE"
+            ["serve/browser/"]="$SYNC_BROWSER"
+            ["serve/mcp-browser/"]="$SYNC_BROWSER"
+            ["serve/kanban/"]="$SYNC_KANBAN"
+            ["serve/mcp-kanban/"]="$SYNC_KANBAN"
+            ["serve/knowledge/"]="$SYNC_KNOWLEDGE"
+            ["serve/mcp-knowledge/"]="$SYNC_KNOWLEDGE"
+            ["serve/cockpit/"]="$SYNC_COCKPIT"
+            ["serve/tools/"]="$SYNC_TOOLS"
+            ["serve/mcp-memory/"]="$SYNC_MCP_MEMORY"
+            ["setup/"]="$SYNC_SETUP"
+            ["seed/"]="$SYNC_SETUP"
+            [".github/"]="$SYNC_INFRA"
+          )
+
+          stale_count=0
+          while IFS= read -r file; do
+            # Skip build artifacts
+            case "$file" in
+              serve/cockpit/dist/*) continue ;;
+            esac
+
+            # Check if file belongs to a known scope
+            in_known_scope=false
+            scope_synced=false
+            for prefix in "${!scope_map[@]}"; do
+              if [[ "$file" == "$prefix"* ]]; then
+                in_known_scope=true
+                [[ "${scope_map[$prefix]}" == "true" ]] && scope_synced=true
+                break
+              fi
+            done
+
+            # Don't touch files in scopes that weren't synced this run
+            if [[ "$in_known_scope" == "true" && "$scope_synced" == "false" ]]; then
+              continue
+            fi
+
+            # Remove if not present on dev
+            if ! git cat-file -e "dev:$file" 2>/dev/null; then
+              git rm --quiet "$file" 2>/dev/null || true
+              echo "  Removed stale: $file"
+              stale_count=$((stale_count + 1))
+            fi
+          done < <(git ls-files)
+
+          if [ $stale_count -gt 0 ]; then
+            echo "Pruned $stale_count stale file(s) from consumer branch."
+          else
+            echo "No stale files found."
+          fi
+
       - name: Detect changes
         run: |
           if [ "$MAIN_EXISTS" = "true" ] && git diff --staged --quiet HEAD 2>/dev/null; then
