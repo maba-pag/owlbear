@@ -97,6 +97,21 @@ Accessibility and responsive state after #1396:
   persistent nav control was changed. Verified in
   `e2e/nav-rail-taborder-1568.spec.ts` (2 E2E assertions) and
   `tests/test_cockpit_shell_sidecar_1568.py` (source inspection).
+- #1569 converts in-flow disclosure and confirmation surfaces to out-of-flow overlay
+  containers across seven components. `HealthBadge` and `DRStatusIndicator` disclosures
+  become trigger-anchored fixed-position popovers (coordinates derived from
+  `getBoundingClientRect()`, not hard-coded viewport values). `CleanupPanel`,
+  `ConfirmDialog`, `ResolveModal`, and `ArchivalModal` confirmations become
+  fixed-position modal containers with `role="dialog"`, `aria-modal="true"`,
+  Tab/Shift+Tab focus-trap cycling between first and last focusable elements, and
+  focus-return to the triggering element on close. `RepairPanel` is extracted from the
+  `HealthBadge` disclosure and mounted as an independent sibling control in `Shell.tsx`.
+  The context-menu overlay contract (`position:fixed`, `role="menu"`, arrow-key
+  navigation, Escape focus-return to the originating task card) is preserved unchanged.
+  Verified by `serve/cockpit/web/e2e/overlay-behavior-1563.spec.ts` (19 E2E tests, all
+  pass) and `serve/cockpit/web/src/__tests__/OverlayAnchoring_1569.test.tsx` (13 unit
+  tests covering trigger-anchored positioning and CleanupPanel modal-equivalence
+  semantics).
 - Documentation here does not treat cache/SSE invalidation work from #1346 as part of
   this delivery bundle.
 
