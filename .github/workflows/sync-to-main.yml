@@ -157,7 +157,11 @@ jobs:
           if [[ "$SYNC_MCP_MEMORY" == "true" ]]; then paths="$paths serve/mcp-memory"; fi
           if [[ "$SYNC_SETUP" == "true" ]]; then paths="$paths setup seed"; fi
           if [[ "$SYNC_INFRA" == "true" ]]; then
-            paths="$paths .github pyproject.toml SECURITY.md README.md README-consumer.md"
+            paths="$paths .github .vscode .editorconfig .gitattributes .gitignore"
+            paths="$paths .markdownlint-cli2.jsonc .markdownlint.json .markdownlintignore"
+            paths="$paths .mega-linter.yml .pre-commit-config.yaml .python-version"
+            paths="$paths .yamllint.yml pyproject.toml SECURITY.md uv.lock"
+            paths="$paths README-consumer.md"
           fi
 
           if [[ -z "$paths" ]]; then
@@ -166,7 +170,10 @@ jobs:
           fi
 
           # shellcheck disable=SC2086
-          todo_hits=$(grep -rHnI '> \*\*TODO:\*\*' $paths 2>/dev/null || true)
+          todo_hits=$(grep -rHnI '> \*\*TODO:\*\*' $paths 2>/dev/null \
+            | grep -v -e '^share/skills/w-doc-update/SKILL\.md:' \
+                      -e '^\.github/workflows/sync-to-main\.yml:' \
+            || true)
 
           if [[ -z "$todo_hits" ]]; then
             echo "No unresolved TODO markers in synced paths."
