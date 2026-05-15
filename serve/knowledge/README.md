@@ -47,14 +47,16 @@ results: list[StructuredSearchResult] = service.search("What is OwlBear?")
 
 | Group | Key exports |
 |-------|-------------|
-| Data stores | `DocumentStore`, `GraphStore`, `StatusStore`, `KnowledgeSourceStore`, `BookmarkStore` |
+| Data stores | `DocumentStore`, `GraphStore`, `StatusStore`, `KnowledgeSourceStore` |
 | Ingestion | `IngestPipeline`, `IngestResult`, `TextChunker` |
 | Retrieval | `GraphAugmentedRetriever`, `KnowledgeQueryService`, `RetrievalResult`, `StructuredSearchResult` |
 | Embeddings | `BgeM3EmbeddingProvider`, `EmbeddingProvider` |
 | Graph | `IntraDocGraphBuilder`, `InterDocGraphBuilder` |
-| Utilities | `CancelSignal`, `ConsolidationService`, `SourceEvaluator`, `import_scope`, `export_scope` |
+| Utilities | `CancelSignal`, `SourceEvaluator` |
 
-All 23+ public modules are importable without optional dependencies installed.
+Active operational API is intentionally narrow. Inactive bookmark, scope-transfer,
+and consolidation surfaces are retained in code only as cleanup/deferred targets and
+are not part of the operational contract.
 
 ## Configuration
 
