@@ -197,6 +197,7 @@ export default function FilterPanel({
         name="search-filter"
         aria-label="Search tasks"
         role="textbox"
+        tabIndex={0}
       />
 
       <p-select
@@ -204,6 +205,7 @@ export default function FilterPanel({
         name="priority-filter"
         aria-label="Priority"
         value={filter.priority}
+        tabIndex={0}
       >
         <p-select-option value="">All priorities</p-select-option>
         {priorities.map((priority) => (
@@ -220,6 +222,7 @@ export default function FilterPanel({
           aria-label="Tags"
           data-testid="filter-tags"
           value={filter.tags}
+          tabIndex={0}
           ref={(element) => {
             tagsRef.current = element as unknown as HTMLElement | null
           }}
@@ -236,6 +239,7 @@ export default function FilterPanel({
         name="blocked-filter"
         label="Show only blocked tasks"
         aria-checked={filter.blocked}
+        tabIndex={0}
         onClick={() => onFilterChange({ ...filter, blocked: !filter.blocked })}
       >
         Show only blocked tasks

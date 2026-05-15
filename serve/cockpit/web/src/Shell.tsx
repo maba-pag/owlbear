@@ -194,6 +194,7 @@ function Shell() {
       <nav className="shell__nav-rail" data-region="nav-rail">
         <PButton
           data-surface="kanban"
+          tabIndex={0}
           aria-current="page"
           aria-label="Kanban"
           variant="secondary"

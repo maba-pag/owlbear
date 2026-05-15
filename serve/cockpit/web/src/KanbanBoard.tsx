@@ -280,6 +280,7 @@ function KanbanBoardContent({
           ref={filterToggleRef}
           type="button"
           data-testid="filter-toggle"
+          tabIndex={0}
           aria-expanded={panelOpen ? 'true' : 'false'}
           aria-controls="filter-panel"
           variant="secondary"

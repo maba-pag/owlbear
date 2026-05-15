@@ -93,6 +93,7 @@ export default function ActivityTab({ onSelectTask }: ActivityTabProps) {
       <div role="toolbar" aria-label="Activity filters">
         <PButton
           data-testid="filter-active"
+          tabIndex={0}
           variant="secondary"
           aria-pressed={isFilterActive('active') ? 'true' : 'false'}
           onClick={() => setFilter('active')}
@@ -101,6 +102,7 @@ export default function ActivityTab({ onSelectTask }: ActivityTabProps) {
         </PButton>
         <PButton
           data-testid="filter-all"
+          tabIndex={0}
           variant="secondary"
           aria-pressed={isFilterActive('all') ? 'true' : 'false'}
           onClick={() => setFilter('all')}
@@ -109,6 +111,7 @@ export default function ActivityTab({ onSelectTask }: ActivityTabProps) {
         </PButton>
         <PButton
           data-testid="filter-blocked"
+          tabIndex={0}
           variant="secondary"
           aria-pressed={isFilterActive('blocked') ? 'true' : 'false'}
           onClick={() => setFilter('blocked')}
@@ -117,6 +120,7 @@ export default function ActivityTab({ onSelectTask }: ActivityTabProps) {
         </PButton>
         <PButton
           data-testid="filter-stuck"
+          tabIndex={0}
           variant="secondary"
           aria-pressed={isFilterActive('stuck') ? 'true' : 'false'}
           onClick={() => setFilter('stuck')}
@@ -125,6 +129,7 @@ export default function ActivityTab({ onSelectTask }: ActivityTabProps) {
         </PButton>
         <PButton
           data-testid="filter-released"
+          tabIndex={0}
           variant="secondary"
           aria-pressed={isFilterActive('released') ? 'true' : 'false'}
           onClick={() => setFilter('released')}
