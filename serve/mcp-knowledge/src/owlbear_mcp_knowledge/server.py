@@ -559,6 +559,10 @@ def _resolve_phase1_edge_endpoints(
     source_id = edge.get("source_id") if isinstance(edge.get("source_id"), str) else None
     target_id = edge.get("target_id") if isinstance(edge.get("target_id"), str) else None
 
+    def _entity_id_exists(entity_id: str) -> bool:
+        row = conn.execute("SELECT 1 FROM entities WHERE id = ? LIMIT 1", (entity_id,)).fetchone()
+        return row is not None
+
     if source_id is None:
         source_name = edge.get("source_name")
         if isinstance(source_name, str) and source_name.strip():
@@ -580,6 +584,14 @@ def _resolve_phase1_edge_endpoints(
                 provenance=provenance,
                 name=target_name.strip(),
             )
+
+    if source_id is not None and not _entity_id_exists(source_id):
+        msg = "unable to resolve edge endpoints from provided payload"
+        raise ToolError(msg)
+
+    if target_id is not None and not _entity_id_exists(target_id):
+        msg = "unable to resolve edge endpoints from provided payload"
+        raise ToolError(msg)
 
     if source_id is None or target_id is None:
         msg = "unable to resolve edge endpoints from provided payload"
