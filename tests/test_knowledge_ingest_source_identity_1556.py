@@ -243,6 +243,54 @@ class TestFromAC_DirectIngestSourceIdentity:
             f"Auto-created source enrich must be 1 (True), got {row[0]!r}"
         )
 
+    @pytest.mark.asyncio
+    async def test_cross_scope_same_url_does_not_link_to_foreign_scope_source(
+        self, conn: sqlite3.Connection, app_ctx: AppContext
+    ) -> None:
+        """Direct ingest into team-a must NOT bind to an existing team-b source
+        that shares the same URL — a new team-a source must be created instead.
+
+        Falsifies the scope-qualified URL resolution contract (AC-1): a regression
+        back to URL-only resolution would link the document to the team-b row and
+        leave only one knowledge_sources row, causing both assertions to fail.
+        """
+        # Seed a pre-existing source with the same URL but a different scope.
+        _insert_source_direct(
+            conn,
+            source_id="src-team-b",
+            name="Team B Source",
+            enrich=1,
+            scope="team-b",
+            url="https://example.test/a",
+        )
+        ctx = _make_mcp_ctx(app_ctx)
+        await ingest_document(
+            ctx,
+            text="alpha beta",
+            metadata={"title": "Doc A"},
+            scope="team-a",
+            source_url="https://example.test/a",
+        )
+        # There must now be two distinct sources — one per scope.
+        source_rows = conn.execute(
+            "SELECT id, scope FROM knowledge_sources ORDER BY scope"
+        ).fetchall()
+        assert len(source_rows) == 2, (  # noqa: PLR2004
+            f"Expected 2 knowledge_sources rows (team-a + team-b), found {len(source_rows)}: "
+            f"{source_rows}"
+        )
+        scopes = {r[1] for r in source_rows}
+        assert scopes == {"team-a", "team-b"}, (
+            f"Expected scopes {{'team-a', 'team-b'}}, got {scopes}"
+        )
+        # The document must link to the team-a source, not the team-b source.
+        doc_source_id = conn.execute("SELECT source_id FROM documents").fetchone()[0]
+        team_a_source_id = next(r[0] for r in source_rows if r[1] == "team-a")
+        assert doc_source_id == team_a_source_id, (
+            f"document.source_id must reference the team-a source ({team_a_source_id!r}), "
+            f"but got {doc_source_id!r} (team-b id is 'src-team-b')"
+        )
+
 
 # ---------------------------------------------------------------------------
 # TestFromAC_RefreshIngestSourceIdentity  (AC-2)
