@@ -49,13 +49,16 @@ export default function DecisionViewport({ items, isLoading, error, onItemClick 
     <ul>
       {items.map((item) => (
         <li key={item.id}>
-          <button
-            type="button"
+          <a
+            href={`#task-${item.task_id}`}
             data-testid={`decision-task-ref-${item.id}`}
-            onClick={() => onItemClick(item.id)}
+            onClick={(event) => {
+              event.preventDefault()
+              onItemClick(item.id)
+            }}
           >
             {item.task_id}
-          </button>
+          </a>
           <article
             data-testid={`decision-item-${item.id}`}
             role="button"
