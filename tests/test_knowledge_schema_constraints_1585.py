@@ -1,16 +1,19 @@
 """Failing tests for task #1585: Knowledge schema constraint enforcement.
 
-TDD RED phase — all 6 tests must fail until builder implements migration v12:
+TDD RED phase — all 8 tests must fail until builder implements migration v12:
   1. init_db() currently sets PRAGMA foreign_keys = OFF (AC-1 fails)
   2. chunks.document_id FK not enforced because FK is OFF (AC-2a fails)
   3. edges.source_id FK not enforced because FK is OFF (AC-2b fails)
-  4. entities.document_id is nullable — no NOT NULL constraint (AC-3a fails)
-  5. edges.document_id is nullable — no NOT NULL constraint (AC-3b fails)
+  4. edges.target_id FK not enforced because FK is OFF (AC-2c fails)
+  5. entities.document_id is nullable — no NOT NULL constraint (AC-3a fails)
+  6. edges.document_id is nullable — no NOT NULL constraint (AC-3b fails)
+  7-8. Valid write path test checks FK=1 first — fails because FK is currently OFF (AC-4)
 
 Covers:
   AC-1: init_db() enables PRAGMA foreign_keys = 1
-  AC-2: FK violations on chunks.document_id and edges.source_id raise IntegrityError
+  AC-2: FK violations on chunks.document_id, edges.source_id, edges.target_id raise IntegrityError
   AC-3: NULL in entities.document_id and edges.document_id raises IntegrityError
+  AC-4: Valid documents/chunks/entities/edges inserts succeed under FK enforcement
 """
 
 from __future__ import annotations
@@ -161,3 +164,63 @@ class TestFromAC_NotNullProvenanceColumns:
                 " created_at) VALUES (?, ?, ?, ?, ?, ?)",
                 ("edge-1", "entity-a", "entity-b", "relates_to", None, _now()),
             )
+
+
+# ---------------------------------------------------------------------------
+# AC-4: Valid write path accepted under FK enforcement
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ValidWritePathAccepted:
+    """Valid rows inserting correct FKs and non-NULL provenance must not raise."""
+
+    def test_valid_write_path_accepted_with_fk_enforced(self) -> None:
+        """Full positive write path must succeed with FK enforcement active.
+
+        Pre-condition: FK enforcement must be ON (fails currently because
+        init_db() sets PRAGMA foreign_keys = OFF).  After builder implements
+        migration v12 this becomes 1 and all inserts complete without error.
+        """
+        conn = sqlite3.connect(":memory:")
+        init_db(conn)
+
+        # Pre-condition: FK enforcement must be enabled for the test to be meaningful.
+        fk_status = conn.execute("PRAGMA foreign_keys").fetchone()[0]
+        assert fk_status == 1, (
+            f"PRAGMA foreign_keys must be 1 (enabled) after init_db(), got {fk_status!r}"
+        )
+
+        # Valid documents row.
+        conn.execute(
+            "INSERT INTO documents (id, title, content, created_at, source_id)"
+            " VALUES (?, ?, ?, ?, ?)",
+            ("doc-v", "Valid Doc", "content", _now(), "src-v"),
+        )
+
+        # Valid chunks row referencing the document.
+        conn.execute(
+            "INSERT INTO chunks (id, document_id, chunk_index, created_at)"
+            " VALUES (?, ?, ?, ?)",
+            ("chunk-v", "doc-v", 0, _now()),
+        )
+
+        # Valid entities row with non-NULL document_id.
+        conn.execute(
+            "INSERT INTO entities (id, name, entity_type, created_at, document_id)"
+            " VALUES (?, ?, ?, ?, ?)",
+            ("entity-v1", "Alpha", "concept", _now(), "doc-v"),
+        )
+        conn.execute(
+            "INSERT INTO entities (id, name, entity_type, created_at, document_id)"
+            " VALUES (?, ?, ?, ?, ?)",
+            ("entity-v2", "Beta", "concept", _now(), "doc-v"),
+        )
+
+        # Valid edges row with existing source_id, target_id, and non-NULL document_id.
+        conn.execute(
+            "INSERT INTO edges (id, source_id, target_id, relation, document_id,"
+            " created_at) VALUES (?, ?, ?, ?, ?, ?)",
+            ("edge-v", "entity-v1", "entity-v2", "relates_to", "doc-v", _now()),
+        )
+
+        conn.commit()
