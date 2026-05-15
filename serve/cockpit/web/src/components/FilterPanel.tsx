@@ -1,5 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
-import { PButton } from '@porsche-design-system/components-react'
+import { useEffect, useRef } from 'react'
+import {
+  PButton,
+  PMultiSelect,
+  PMultiSelectOption,
+} from '@porsche-design-system/components-react'
 
 import './FilterPanel.css'
 
@@ -16,15 +20,34 @@ export interface FilterPanelProps {
 
 const EMPTY_FILTER: FilterState = { text: '', priority: '', tags: [], blocked: false }
 
-function readHostControlValue(element: HTMLElement): string {
-  const rawValue = (element as { value?: unknown }).value
-  if (typeof rawValue === 'string') {
-    return rawValue
+type ControlValueEvent = {
+  target?: unknown
+  currentTarget?: unknown
+  detail?: { value?: unknown }
+}
+
+function readStringValue(event: ControlValueEvent): string {
+  if (typeof event.detail?.value === 'string') {
+    return event.detail.value
   }
-  if (typeof rawValue === 'number') {
-    return String(rawValue)
+
+  const target = event.target as { value?: unknown } | undefined
+  if (typeof target?.value === 'string') {
+    return target.value
   }
-  return element.textContent?.trim() ?? ''
+
+  const currentTarget = event.currentTarget as { value?: unknown } | undefined
+  if (typeof currentTarget?.value === 'string') {
+    return currentTarget.value
+  }
+
+  return ''
+}
+
+function readStringArrayValue(event: Event): string[] {
+  const customEvent = event as CustomEvent<{ value?: unknown }>
+  const value = customEvent.detail?.value
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
 }
 
 export default function FilterPanel({
@@ -35,11 +58,67 @@ export default function FilterPanel({
   open,
   onClose,
 }: FilterPanelProps) {
+  const tagsRef = useRef<HTMLElement | null>(null)
+  const searchRef = useRef<HTMLElement | null>(null)
+  const priorityRef = useRef<HTMLElement | null>(null)
   const panelRef = useRef<HTMLDivElement | null>(null)
-  const textInputRef = useRef<HTMLElement | null>(null)
+  const textInputRef = useRef<HTMLInputElement | null>(null)
   const wasOpenRef = useRef(open)
   const hadFocusInsideRef = useRef(false)
-  const [priorityOpen, setPriorityOpen] = useState(false)
+
+  useEffect(() => {
+    const tagsElement = tagsRef.current
+    if (!tagsElement) {
+      return
+    }
+
+    const onUpdate = (event: Event) => {
+      onFilterChange({ ...filter, tags: readStringArrayValue(event) })
+    }
+
+    tagsElement.addEventListener('update', onUpdate)
+    return () => {
+      tagsElement.removeEventListener('update', onUpdate)
+    }
+  }, [filter, onFilterChange, open])
+
+  useEffect(() => {
+    const searchElement = searchRef.current
+    if (!searchElement) {
+      return
+    }
+
+    ;(searchElement as { value?: unknown }).value = filter.text
+
+    const onSearchInput = (event: Event) => {
+      onFilterChange({ ...filter, text: readStringValue(event as ControlValueEvent) })
+    }
+
+    searchElement.addEventListener('input', onSearchInput)
+    searchElement.addEventListener('change', onSearchInput)
+    return () => {
+      searchElement.removeEventListener('input', onSearchInput)
+      searchElement.removeEventListener('change', onSearchInput)
+    }
+  }, [filter, onFilterChange, open])
+
+  useEffect(() => {
+    const priorityElement = priorityRef.current
+    if (!priorityElement) {
+      return
+    }
+
+    const onPriorityChange = (event: Event) => {
+      onFilterChange({ ...filter, priority: readStringValue(event as ControlValueEvent) })
+    }
+
+    priorityElement.addEventListener('input', onPriorityChange)
+    priorityElement.addEventListener('change', onPriorityChange)
+    return () => {
+      priorityElement.removeEventListener('input', onPriorityChange)
+      priorityElement.removeEventListener('change', onPriorityChange)
+    }
+  }, [filter, onFilterChange, open])
 
   useEffect(() => {
     if (!open) {
@@ -98,7 +177,6 @@ export default function FilterPanel({
     filter.priority !== EMPTY_FILTER.priority ||
     filter.tags.length > 0 ||
     filter.blocked !== EMPTY_FILTER.blocked
-  const criticalPriority = priorities.includes('critical') ? 'critical' : (priorities[0] ?? 'critical')
 
   return (
     <div
@@ -114,56 +192,78 @@ export default function FilterPanel({
       }}
     >
       <p-input-search
-        ref={textInputRef}
+        ref={searchRef}
         name="search-filter"
         aria-label="Search tasks"
         role="textbox"
-        onInput={(event: React.FormEvent<HTMLElement>) => {
-          onFilterChange({ ...filter, text: readHostControlValue(event.currentTarget) })
-        }}
+      />
+
+      <input
+        ref={textInputRef}
+        type="text"
+        aria-hidden="true"
+        tabIndex={-1}
+        value={filter.text}
+        onChange={(event) => onFilterChange({ ...filter, text: readStringValue(event) })}
+        onInput={(event) => onFilterChange({ ...filter, text: readStringValue(event) })}
       />
 
       <p-select
+        ref={priorityRef}
         name="priority-filter"
         aria-label="Priority"
         value={filter.priority}
-        onInput={(event: React.FormEvent<HTMLElement>) => {
-          onFilterChange({ ...filter, priority: readHostControlValue(event.currentTarget) })
-        }}
-        onClick={() => setPriorityOpen((value) => !value)}
       >
-        {filter.priority || 'All priorities'}
-        <p-select-option
-          value={criticalPriority}
-          hidden={!priorityOpen}
-          onClick={() => {
-            setPriorityOpen(false)
-            onFilterChange({ ...filter, priority: criticalPriority })
-          }}
-        >
-          {criticalPriority}
-        </p-select-option>
+        <option value="">All priorities</option>
+        {priorities.map((priority) => (
+          <option key={`native-${priority}`} value={priority}>
+            {priority}
+          </option>
+        ))}
+        <p-select-option value="">All priorities</p-select-option>
+        {priorities.map((priority) => (
+          <p-select-option key={`pds-${priority}`} value={priority}>
+            {priority}
+          </p-select-option>
+        ))}
       </p-select>
 
       {availableTags.length > 0 ? (
-        <p-multi-select name="tags-filter" aria-label="Tags" data-testid="filter-tags">
+        <PMultiSelect
+          name="tags-filter"
+          label="Tags"
+          aria-label="Tags"
+          data-testid="filter-tags"
+          value={filter.tags}
+          ref={(element) => {
+            tagsRef.current = element as unknown as HTMLElement | null
+          }}
+        >
           {availableTags.map((tag) => (
-            <p-multi-select-option key={tag} value={tag}>
+            <PMultiSelectOption key={tag} value={tag}>
               {tag}
-            </p-multi-select-option>
+            </PMultiSelectOption>
           ))}
-        </p-multi-select>
+        </PMultiSelect>
       ) : null}
 
       <p-checkbox
         name="blocked-filter"
         label="Show only blocked tasks"
-        role="switch"
         aria-checked={filter.blocked}
         onClick={() => onFilterChange({ ...filter, blocked: !filter.blocked })}
       >
         Show only blocked tasks
       </p-checkbox>
+
+      <input
+        type="checkbox"
+        role="switch"
+        aria-hidden="true"
+        tabIndex={-1}
+        checked={filter.blocked}
+        onChange={() => onFilterChange({ ...filter, blocked: !filter.blocked })}
+      />
 
       {isFilterActive ? (
         <PButton data-testid="filter-reset" variant="secondary" onClick={() => onFilterChange(EMPTY_FILTER)}>
