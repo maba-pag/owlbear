@@ -27,7 +27,7 @@ from owlbear_knowledge.extractor import EntityExtractor
 from owlbear_knowledge.graph_store import GraphStore
 from owlbear_knowledge.ingest import IngestPipeline
 from owlbear_knowledge.intake import IntakeResult
-from owlbear_knowledge.loader import load_manifest_file, main
+from owlbear_knowledge.loader import LoadSummary, load_manifest_file, main, parse_manifest
 
 from owlbear_knowledge.query_service import KnowledgeQueryService
 from owlbear_knowledge.schema import init_db
@@ -714,3 +714,314 @@ class TestFromAC_LoaderCliVectorPath:
             f"loader main() default Qdrant path must match server.py _DEFAULT_QDRANT_PATH "
             f"({server_default!r}); got {actual_location!r}"
         )
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_ParseManifestBranches  (coverage expansion — parse_manifest paths)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ParseManifestBranches:
+    """Coverage for parse_manifest branches not exercised by the primary AC tests."""
+
+    def test_null_sources_field_returns_empty_list(self) -> None:
+        """parse_manifest('sources:\\n') with a null sources field returns []."""
+        result = parse_manifest("sources:\n")
+        assert result == []
+
+    def test_inline_empty_sequence_normalised_to_empty_list(self) -> None:
+        """parse_manifest('sources: []') normalises via regex and returns []."""
+        result = parse_manifest("sources: []\n")
+        assert result == []
+
+    def test_invalid_type_enum_raises_yaml_validation_error(self) -> None:
+        """An unknown 'type' value in the manifest raises YAMLValidationError."""
+        import strictyaml as sy  # noqa: PLC0415
+
+        yaml_text = (
+            "sources:\n"
+            "  - name: Bad Source\n"
+            "    type: totally_wrong\n"
+            "    config:\n"
+            "      glob: '*.md'\n"
+        )
+        with pytest.raises(sy.YAMLValidationError):
+            parse_manifest(yaml_text)
+
+    def test_disabled_entry_parsed_with_enabled_false(self) -> None:
+        """An entry with 'enabled: false' produces ManifestEntry.enabled=False."""
+        entries = parse_manifest(
+            "sources:\n"
+            "  - name: Disabled Source\n"
+            "    type: file_glob\n"
+            "    config:\n"
+            "      glob: '*.md'\n"
+            "    enabled: false\n"
+        )
+        assert len(entries) == 1
+        assert entries[0].enabled is False
+
+    def test_entry_without_scope_defaults_to_global(self) -> None:
+        """An entry without a 'scope' key defaults to ManifestEntry.scope='global'."""
+        entries = parse_manifest(
+            "sources:\n"
+            "  - name: No Scope\n"
+            "    type: file_glob\n"
+            "    config:\n"
+            "      glob: '*.md'\n"
+        )
+        assert len(entries) == 1
+        assert entries[0].scope == "global"
+
+    def test_non_yaml_error_wrapped_as_yaml_validation_error(self) -> None:
+        """A non-YAMLValidationError from sy.load is caught and re-raised as YAMLValidationError."""
+        import strictyaml as sy  # noqa: PLC0415
+
+        with (
+            patch("strictyaml.load", side_effect=RuntimeError("unexpected boom")),
+            pytest.raises(sy.YAMLValidationError),
+        ):
+            parse_manifest("sources:\n")
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_LoaderBranchCoverage  (coverage expansion — load_manifest_file paths)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_LoaderBranchCoverage:
+    """Coverage for load_manifest_file branches not hit by the primary AC tests."""
+
+    @pytest.mark.asyncio
+    async def test_disabled_source_entry_not_ingested(
+        self, conn: sqlite3.Connection, tmp_path: Path
+    ) -> None:
+        """A source entry with enabled=false must not call pipeline.ingest()."""
+        (tmp_path / "doc.md").write_text("Some content.")
+        manifest = tmp_path / "manifest.yaml"
+        manifest.write_text(
+            "sources:\n"
+            "  - name: Disabled\n"
+            "    type: file_glob\n"
+            "    config:\n"
+            '      glob: "*.md"\n'
+            "    enabled: false\n"
+        )
+        source_store = KnowledgeSourceStore(conn)
+        mock_pipeline = MagicMock()
+        mock_pipeline.ingest = AsyncMock(return_value=_stub_ingest_result())
+
+        summary = await load_manifest_file(
+            manifest_path=manifest,
+            workspace_root=tmp_path,
+            source_store=source_store,
+            pipeline=mock_pipeline,
+        )
+
+        mock_pipeline.ingest.assert_not_called()
+        assert summary.ingested == 0
+
+    @pytest.mark.asyncio
+    async def test_glob_matching_no_files_skips_ingest(
+        self, conn: sqlite3.Connection, tmp_path: Path
+    ) -> None:
+        """When a glob matches no files, no ingest call is made and counters stay zero."""
+        manifest = tmp_path / "manifest.yaml"
+        _write_single_source_manifest(manifest, glob="*.nonexistent_extension")
+        source_store = KnowledgeSourceStore(conn)
+        mock_pipeline = MagicMock()
+        mock_pipeline.ingest = AsyncMock(return_value=_stub_ingest_result())
+
+        summary = await load_manifest_file(
+            manifest_path=manifest,
+            workspace_root=tmp_path,
+            source_store=source_store,
+            pipeline=mock_pipeline,
+        )
+
+        mock_pipeline.ingest.assert_not_called()
+        assert summary.ingested == 0
+        assert summary.failed == 0
+
+    @pytest.mark.asyncio
+    async def test_skipped_status_increments_summary_skipped(
+        self, conn: sqlite3.Connection, tmp_path: Path
+    ) -> None:
+        """result.status == 'skipped' increments summary.skipped, not summary.ingested."""
+        (tmp_path / "doc.md").write_text("Content.")
+        manifest = tmp_path / "manifest.yaml"
+        _write_single_source_manifest(manifest, glob="*.md")
+
+        source_store = KnowledgeSourceStore(conn)
+        skipped_result = MagicMock()
+        skipped_result.status = "skipped"
+        mock_pipeline = MagicMock()
+        mock_pipeline.ingest = AsyncMock(return_value=skipped_result)
+
+        summary = await load_manifest_file(
+            manifest_path=manifest,
+            workspace_root=tmp_path,
+            source_store=source_store,
+            pipeline=mock_pipeline,
+        )
+
+        assert summary.skipped == 1
+        assert summary.ingested == 0
+        assert summary.failed == 0
+
+    @pytest.mark.asyncio
+    async def test_failed_status_increments_summary_failed(
+        self, conn: sqlite3.Connection, tmp_path: Path
+    ) -> None:
+        """result.status == 'failed' increments summary.failed (not ingested or skipped)."""
+        (tmp_path / "doc.md").write_text("Content.")
+        manifest = tmp_path / "manifest.yaml"
+        _write_single_source_manifest(manifest, glob="*.md")
+
+        source_store = KnowledgeSourceStore(conn)
+        failed_result = MagicMock()
+        failed_result.status = "failed"
+        mock_pipeline = MagicMock()
+        mock_pipeline.ingest = AsyncMock(return_value=failed_result)
+
+        summary = await load_manifest_file(
+            manifest_path=manifest,
+            workspace_root=tmp_path,
+            source_store=source_store,
+            pipeline=mock_pipeline,
+        )
+
+        assert summary.failed == 1
+        assert summary.ingested == 0
+        assert summary.skipped == 0
+
+    @pytest.mark.asyncio
+    async def test_ingest_exception_increments_failed(
+        self, conn: sqlite3.Connection, tmp_path: Path
+    ) -> None:
+        """An exception raised by pipeline.ingest() increments summary.failed."""
+        (tmp_path / "doc.md").write_text("Content.")
+        manifest = tmp_path / "manifest.yaml"
+        _write_single_source_manifest(manifest, glob="*.md")
+
+        source_store = KnowledgeSourceStore(conn)
+        mock_pipeline = MagicMock()
+        mock_pipeline.ingest = AsyncMock(side_effect=RuntimeError("ingest error"))
+
+        summary = await load_manifest_file(
+            manifest_path=manifest,
+            workspace_root=tmp_path,
+            source_store=source_store,
+            pipeline=mock_pipeline,
+        )
+
+        assert summary.failed == 1
+        assert summary.ingested == 0
+
+    @pytest.mark.asyncio
+    async def test_all_files_failed_sets_all_source_ok_false(
+        self, conn: sqlite3.Connection, tmp_path: Path
+    ) -> None:
+        """When every file in a source fails, summary.all_source_ok becomes False."""
+        (tmp_path / "a.md").write_text("File A.")
+        manifest = tmp_path / "manifest.yaml"
+        _write_single_source_manifest(manifest, glob="*.md")
+
+        source_store = KnowledgeSourceStore(conn)
+        failed_result = MagicMock()
+        failed_result.status = "failed"
+        mock_pipeline = MagicMock()
+        mock_pipeline.ingest = AsyncMock(return_value=failed_result)
+
+        summary = await load_manifest_file(
+            manifest_path=manifest,
+            workspace_root=tmp_path,
+            source_store=source_store,
+            pipeline=mock_pipeline,
+        )
+
+        assert summary.all_source_ok is False
+
+    @pytest.mark.asyncio
+    async def test_partial_failure_preserves_all_source_ok_true(
+        self, conn: sqlite3.Connection, tmp_path: Path
+    ) -> None:
+        """When only some files fail (not all), all_source_ok remains True."""
+        (tmp_path / "ok.md").write_text("OK content.")
+        (tmp_path / "fail.md").write_text("Fail content.")
+        manifest = tmp_path / "manifest.yaml"
+        _write_single_source_manifest(manifest, glob="*.md")
+
+        source_store = KnowledgeSourceStore(conn)
+        ok_result = _stub_ingest_result()
+        failed_result = MagicMock()
+        failed_result.status = "failed"
+        call_count = 0
+
+        async def alternate_ingest(_intake: object, **_kwargs: object) -> MagicMock:
+            nonlocal call_count
+            call_count += 1
+            return ok_result if call_count % 2 == 1 else failed_result
+
+        mock_pipeline = MagicMock()
+        mock_pipeline.ingest = alternate_ingest
+
+        summary = await load_manifest_file(
+            manifest_path=manifest,
+            workspace_root=tmp_path,
+            source_store=source_store,
+            pipeline=mock_pipeline,
+        )
+
+        assert summary.all_source_ok is True
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_MainCliExitCode  (coverage expansion — main() return value paths)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_MainCliExitCode:
+    """Coverage for main() return-code paths (0 and 1)."""
+
+    def test_main_returns_one_when_all_source_ok_false(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """main() returns exit code 1 when summary.all_source_ok is False."""
+        manifest = tmp_path / "manifest.yaml"
+        manifest.write_text("sources:\n")
+        monkeypatch.setenv("OWLBEAR_KB_PATH", str(tmp_path / "local.db"))
+        monkeypatch.delenv("OWLBEAR_QDRANT_PATH", raising=False)
+
+        async def _fake_load(*_args: object, **_kwargs: object) -> LoadSummary:
+            return LoadSummary(all_source_ok=False)
+
+        with (
+            patch("owlbear_knowledge.loader.load_manifest_file", side_effect=_fake_load),
+            patch("owlbear_knowledge.qdrant.QdrantVectorStore"),
+            patch("owlbear_knowledge.embeddings.BgeM3EmbeddingProvider"),
+        ):
+            result = main(["--manifest", str(manifest)])
+
+        assert result == 1
+
+    def test_main_returns_zero_when_all_source_ok_true(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """main() returns exit code 0 when summary.all_source_ok is True."""
+        manifest = tmp_path / "manifest.yaml"
+        manifest.write_text("sources:\n")
+        monkeypatch.setenv("OWLBEAR_KB_PATH", str(tmp_path / "local.db"))
+        monkeypatch.delenv("OWLBEAR_QDRANT_PATH", raising=False)
+
+        async def _fake_load(*_args: object, **_kwargs: object) -> LoadSummary:
+            return LoadSummary(all_source_ok=True)
+
+        with (
+            patch("owlbear_knowledge.loader.load_manifest_file", side_effect=_fake_load),
+            patch("owlbear_knowledge.qdrant.QdrantVectorStore"),
+            patch("owlbear_knowledge.embeddings.BgeM3EmbeddingProvider"),
+        ):
+            result = main(["--manifest", str(manifest)])
+
+        assert result == 0
