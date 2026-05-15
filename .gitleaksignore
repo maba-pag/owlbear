@@ -1,5 +1,0 @@
-# Gitleaks allowlist — test fixtures containing mock/dummy secrets
-# These are not real credentials; they are test-only values used in unit tests.
-#
-# Fingerprints will be populated after running gitleaks locally with --report-path.
-# Until then, suppression is handled via .gitleaks.toml commit-level allowlist.
