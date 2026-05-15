@@ -194,7 +194,7 @@ describe('TestFromAC_FilterBoardIntegration', () => {
       const todoColumn = container.querySelector('[data-column="todo"]')!
       const emptyPlaceholder = todoColumn.querySelector('[data-testid="empty-column"]')
       expect(emptyPlaceholder).not.toBeNull()
-      expect(emptyPlaceholder!.textContent).toBe('No todo tasks')
+      expect(emptyPlaceholder!.textContent).toBe('No Todo tasks')
     })
   })
 
