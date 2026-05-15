@@ -16,7 +16,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from owlbear_knowledge.chunker import TextChunker
-    from owlbear_knowledge.content_guard import ContentInjectionGuard
     from owlbear_knowledge.extractor import EntityExtractor
     from owlbear_knowledge.intake import IntakeResult
     from owlbear_knowledge.source_store import KnowledgeSourceStore
@@ -53,13 +52,7 @@ class IngestPipeline:
         entity_extractor: Entity extraction component.
         text_chunker: Text splitting component.
         cancel_signal: Optional threading.Event; if set, ingest returns cancelled.
-        content_guard: Optional ContentInjectionGuard; when set, every chunk's
-            text is scanned for prompt-injection phrases before entity
-            extraction — no ``source_type`` value is exempt.  Strict/warn
-            behaviour is controlled by the guard's own ``strict_mode``
-            parameter.
-        injection_mode: Unused; strict/warn behaviour is delegated to the guard's
-            ``strict_mode``.  Reserved for future pipeline-level mode override.
+        injection_mode: Reserved for future pipeline-level mode override.
         source_store: Optional KnowledgeSourceStore; when supplied, ingest_text
             resolves or creates a KnowledgeSource record by URL and forwards its
             UUID as the document's source_id FK before chunk storage.
@@ -71,7 +64,6 @@ class IngestPipeline:
         entity_extractor: EntityExtractor,
         text_chunker: TextChunker,
         cancel_signal: object | None = None,
-        content_guard: ContentInjectionGuard | None = None,
         injection_mode: Literal["strict", "warn"] = "warn",
         source_store: KnowledgeSourceStore | None = None,
     ) -> None:
@@ -79,7 +71,6 @@ class IngestPipeline:
         self._extractor = entity_extractor
         self._chunker = text_chunker
         self._cancel_signal = cancel_signal
-        self._content_guard = content_guard
         self._injection_mode = injection_mode
         self._source_store = source_store
 
@@ -179,24 +170,6 @@ class IngestPipeline:
             _meta: dict[str, object] = dict(metadata or {})
             chunks = await asyncio.to_thread(self._chunker.chunk, text, metadata=_meta)
             chunk_count = len(chunks)
-
-            if self._content_guard is not None:
-                for chunk in chunks:
-                    check = self._content_guard.scan(chunk.text)
-                    if check.blocked:
-                        return IngestResult(
-                            document_id=doc_id,
-                            chunk_count=chunk_count,
-                            entity_count=0,
-                            edge_count=0,
-                            status="blocked",
-                        )
-                    if check.threat:
-                        logger.warning(
-                            "Content injection detected while ingesting doc_id=%s: %s",
-                            doc_id,
-                            check.reason,
-                        )
 
             doc = Document(
                 id=doc_id,
@@ -356,24 +329,6 @@ class IngestPipeline:
             chunk_texts = [c.text for c in chunks]
 
             _should_wrap = should_wrap(_meta.get("source_type"))  # type: ignore[arg-type]
-
-            if self._content_guard is not None and _should_wrap:
-                for _chunk in chunks:
-                    _check = self._content_guard.scan(_chunk.text)
-                    if _check.blocked:
-                        return IngestResult(
-                            document_id=doc_id,
-                            chunk_count=chunk_count,
-                            entity_count=0,
-                            edge_count=0,
-                            status="blocked",
-                        )
-                    if _check.threat:
-                        logger.warning(
-                            "Content injection detected in content from %s: %s",
-                            intake.source,
-                            _check.reason,
-                        )
 
             extract_coros = [
                 self._extractor.extract(

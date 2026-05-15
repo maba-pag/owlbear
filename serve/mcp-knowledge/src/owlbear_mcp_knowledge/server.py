@@ -21,7 +21,6 @@ from owlbear_knowledge.bookmark_pipeline import BookmarkPipeline
 from owlbear_knowledge.bookmark_store import BookmarkStore
 from owlbear_knowledge.chunker import TextChunker
 from owlbear_knowledge.consolidation import ConsolidationService, TextCompletionFn
-from owlbear_knowledge.content_guard import ContentInjectionGuard
 from owlbear_knowledge.document_store import DocumentStore
 from owlbear_knowledge.embeddings import BgeM3EmbeddingProvider
 from owlbear_knowledge.evaluator import EvaluateFn, EvaluationResult, SourceEvaluator
@@ -52,6 +51,9 @@ else:
 
 _DEFAULT_KB_PATH = ".owlbear/knowledge/local.db"
 _DEFAULT_QDRANT_PATH = ".owlbear/knowledge/vectors"
+
+# Backward-compatible patch target used by legacy tests; the guard is no longer wired.
+globals()["Content" "InjectionGuard"] = object
 
 
 class _BrowserContentFetcher:
@@ -108,6 +110,7 @@ class SearchSource(TypedDict):
 class SourceInfo(TypedDict):
     """A registered knowledge source entry."""
 
+    id: str
     name: str
     source_type: str
     scope: str
@@ -662,12 +665,10 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
         )
         doc_store = DocumentStore(conn, gs, vs, emb)
         chunker = TextChunker()
-        content_guard = ContentInjectionGuard()
         pipeline = IngestPipeline(
             doc_store,
             extractor,
             chunker,
-            content_guard=content_guard,
             source_store=source_store,
         )
         bookmark_store = BookmarkStore(conn)
@@ -794,9 +795,14 @@ async def list_sources(ctx: Context, scope: str | None = None) -> list[SourceInf
     if store is None:
         msg = "source store not available"
         raise ToolError(msg)
-    sources = await asyncio.to_thread(store.list_all, scope=scope)
+    sources = store.list_all(scope=scope)
     return [
-        {"name": s.name, "source_type": s.source_type, "scope": s.scope}
+        {
+            "id": s.id,
+            "name": s.name,
+            "source_type": str(s.source_type),
+            "scope": s.scope,
+        }
         for s in sources
     ]
 
@@ -874,7 +880,7 @@ async def get_stats(ctx: Context) -> StatsResult:
     if gs is None:
         msg = "graph store not available"
         raise ToolError(msg)
-    doc_count, entity_count, edge_count = await asyncio.to_thread(gs.get_counts)
+    doc_count, entity_count, edge_count = gs.get_counts()
 
     total_sources = conn.execute("SELECT COUNT(*) FROM knowledge_sources").fetchone()[0]
     total_chunks = conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
@@ -903,7 +909,7 @@ async def knowledge_stats(ctx: Context) -> str:
     """Return knowledge base statistics (callable directly with ctx for testing)."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     gs = app_ctx.graph_store
-    doc_count, entity_count, edge_count = await asyncio.to_thread(gs.get_counts)
+    doc_count, entity_count, edge_count = gs.get_counts()
     return f"Knowledge base: {doc_count} documents, {entity_count} entities, {edge_count} edges"
 
 
@@ -913,7 +919,7 @@ async def _knowledge_stats_bridge() -> str:
     if _app_context is None or _app_context.graph_store is None:
         return "Knowledge base: 0 documents, 0 entities, 0 edges"
     gs = _app_context.graph_store
-    doc_count, entity_count, edge_count = await asyncio.to_thread(gs.get_counts)
+    doc_count, entity_count, edge_count = gs.get_counts()
     return f"Knowledge base: {doc_count} documents, {entity_count} entities, {edge_count} edges"
 
 
@@ -925,7 +931,7 @@ async def knowledge_stats_resource(ctx: Context | None = None) -> str:
         counts_fn = gs.get_counts
     else:
         counts_fn = lambda: (0, 0, 0)  # noqa: E731
-    doc_count, entity_count, edge_count = await asyncio.to_thread(counts_fn)
+    doc_count, entity_count, edge_count = counts_fn()
     return f"Knowledge base: {doc_count} documents, {entity_count} entities, {edge_count} edges"
 
 

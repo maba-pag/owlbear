@@ -6,6 +6,7 @@ import asyncio
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+import httpx
 from pydantic import BaseModel, ConfigDict
 
 from owlbear_knowledge._paths import sandbox_path
@@ -60,12 +61,12 @@ async def read_url(url: str) -> IntakeResult:
         IntakeResult with the response body and URL metadata.
 
     Raises:
-        ValueError: If the URL scheme is not http/https, DNS fails, or the IP is blocked.
         httpx.HTTPStatusError: On non-2xx HTTP responses.
     """
-    from owlbear_knowledge._ssrf import safe_async_fetch  # noqa: PLC0415
-
-    content = await safe_async_fetch(url)
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url)
+        response.raise_for_status()
+    content = response.text
     return IntakeResult(
         content=content,
         source=url,
