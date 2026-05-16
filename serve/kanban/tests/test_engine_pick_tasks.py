@@ -248,9 +248,7 @@ class TestFromAC_PickTasksFilter:
         engine = KanbanEngine(board, activity_log=False)
         resp = engine.agent_view().pick_tasks()
         ids = _all_ids(resp)
-        assert 1 not in ids, (
-            "Task 1 has dep_status='blocked' (dep on wontfix-archived #99) — must be excluded"
-        )
+        assert 1 not in ids, "Task 1 has dep_status='blocked' (dep on wontfix-archived #99) — must be excluded"
         assert 2 in ids, "Task 2 has no blocking dep — must be included"
 
     def test_no_intra_wave_dep_edges_across_all_waves(self, tmp_path: Path) -> None:
@@ -324,8 +322,7 @@ class TestFromAC_PickTasksSort:
         assert len(resp.waves) == 1, f"Expected 1 wave; got {len(resp.waves)}"
         ordered = [entry.id for entry in resp.waves[0].tasks]
         assert ordered == [11, 12, 3, 5, 1], (
-            f"Expected sort order [11,12,3,5,1] by "
-            f"(priority_rank ASC, age DESC, id ASC); got {ordered}"
+            f"Expected sort order [11,12,3,5,1] by (priority_rank ASC, age DESC, id ASC); got {ordered}"
         )
 
 
@@ -337,9 +334,7 @@ class TestFromAC_PickTasksSort:
 class TestFromAC_PickTasksWaveAssembly:
     """Greedy wave assembly enforces size, dep-disjointness, and agent-compat constraints."""
 
-    def test_dep_disjointness_splits_dependent_tasks_into_different_waves(
-        self, tmp_path: Path
-    ) -> None:
+    def test_dep_disjointness_splits_dependent_tasks_into_different_waves(self, tmp_path: Path) -> None:
         """No wave contains a task and its dependency simultaneously (dep-disjointness).
 
         Setup: task 1 depends on task 2 (both todo, no dep_status blocker since
@@ -356,13 +351,9 @@ class TestFromAC_PickTasksWaveAssembly:
         assert {1, 2} == _all_ids(resp), "Both tasks should be dispatched"
         for wave in resp.waves:
             wave_ids = {e.id for e in wave.tasks}
-            assert not ({1, 2} <= wave_ids), (
-                f"Dep-disjointness violated: tasks 1 and 2 are in same wave {wave_ids}"
-            )
+            assert not ({1, 2} <= wave_ids), f"Dep-disjointness violated: tasks 1 and 2 are in same wave {wave_ids}"
 
-    def test_task_dropped_when_dep_conflict_and_max_waves_exhausted(
-        self, tmp_path: Path
-    ) -> None:
+    def test_task_dropped_when_dep_conflict_and_max_waves_exhausted(self, tmp_path: Path) -> None:
         """A task not fitting any wave due to dep conflict is dropped when max_waves reached.
 
         Setup: task 1 depends on task 2 (both todo).  Task 3 has no deps.
@@ -387,16 +378,10 @@ class TestFromAC_PickTasksWaveAssembly:
         assert len(resp.waves) == 1
         wave_ids = {e.id for e in resp.waves[0].tasks}
         # Task 2 must be dropped; task 3 must be in wave with task 1
-        assert 2 not in wave_ids, (
-            f"Task 2 should be dropped (dep conflict, max_waves exhausted); got wave {wave_ids}"
-        )
-        assert 3 in wave_ids, (
-            f"Task 3 has no dep conflict and should fill the remaining slot; got {wave_ids}"
-        )
+        assert 2 not in wave_ids, f"Task 2 should be dropped (dep conflict, max_waves exhausted); got wave {wave_ids}"
+        assert 3 in wave_ids, f"Task 3 has no dep conflict and should fill the remaining slot; got {wave_ids}"
 
-    def test_incompatible_agent_buckets_go_to_different_waves(
-        self, tmp_path: Path
-    ) -> None:
+    def test_incompatible_agent_buckets_go_to_different_waves(self, tmp_path: Path) -> None:
         """With PRODUCT_TOPOLOGY, agent_compatibility is always empty — all agents are compatible.
 
         PRODUCT_TOPOLOGY.agent_compatibility = {} overrides _COMPAT_CONFIG, so tasks
@@ -417,9 +402,7 @@ class TestFromAC_PickTasksWaveAssembly:
             f"With empty agent_compatibility all agents are compatible — expect 1 wave; got {len(resp.waves)}"
         )
 
-    def test_non_todo_status_tasks_included_when_unclaimed_and_unblocked(
-        self, tmp_path: Path
-    ) -> None:
+    def test_non_todo_status_tasks_included_when_unclaimed_and_unblocked(self, tmp_path: Path) -> None:
         """Filter step (§1.3) excludes only archived/claimed/blocked tasks, not by status.
 
         A 'research' status task that is unclaimed, not dep_blocked, and not flagged
@@ -450,9 +433,7 @@ class TestFromAC_PickTasksWaveAssembly:
 class TestFromAC_PickTasksAgent:
     """AC23: each DispatchEntry.agent equals the full string from BoardConfig.agent_map."""
 
-    def test_agent_is_full_agent_map_value_not_first_character(
-        self, tmp_path: Path
-    ) -> None:
+    def test_agent_is_full_agent_map_value_not_first_character(self, tmp_path: Path) -> None:
         """DispatchEntry.agent must be the complete agent_map value, not its first char.
 
         PRODUCT_TOPOLOGY has agent_map['todo'] = 'test-writer' (a str, not a list).
@@ -484,9 +465,7 @@ class TestFromAC_PickTasksAgent:
         engine = KanbanEngine(board, activity_log=False)
         resp = engine.agent_view().pick_tasks()
         by_id = {entry.id: entry.agent for wave in resp.waves for entry in wave.tasks}
-        assert by_id.get(1) == "researcher", (
-            f"research task must have agent='researcher'; got {by_id.get(1)!r}"
-        )
+        assert by_id.get(1) == "researcher", f"research task must have agent='researcher'; got {by_id.get(1)!r}"
         assert by_id.get(2) == "test-writer", (
             f"todo task must have agent='test-writer' (PRODUCT_TOPOLOGY); got {by_id.get(2)!r}"
         )
@@ -529,9 +508,7 @@ class TestFromAC_PickTasksArchivedDeps:
             "Task 1 has dep on dropped-archived #99 → dep_status='blocked' → must be excluded"
         )
 
-    def test_ac27_blocked_excluded_ac28_redirect_included_simultaneously(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac27_blocked_excluded_ac28_redirect_included_simultaneously(self, tmp_path: Path) -> None:
         """AC27 and AC28 together: wontfix dep excluded, deprecated dep included.
 
         Task 1 depends on wontfix-archived #98 → dep_status='blocked' → excluded.
@@ -543,22 +520,14 @@ class TestFromAC_PickTasksArchivedDeps:
         board = _make_board(tmp_path)
         _write_archived_task(board, task_id=98, archival_reason="wontfix")
         _write_archived_task(board, task_id=99, archival_reason="deprecated")
-        _write_task(
-            board, task_id=1, status="todo", depends_on="[98]"
-        )  # blocked → excluded
-        _write_task(
-            board, task_id=2, status="todo", depends_on="[99]"
-        )  # redirect → included
+        _write_task(board, task_id=1, status="todo", depends_on="[98]")  # blocked → excluded
+        _write_task(board, task_id=2, status="todo", depends_on="[99]")  # redirect → included
         _write_task(board, task_id=3, status="todo")  # clean → included
         engine = KanbanEngine(board, activity_log=False)
         resp = engine.agent_view().pick_tasks()
         ids = _all_ids(resp)
-        assert 1 not in ids, (
-            "Task 1 dep on wontfix #98 → dep_status='blocked' → must be excluded"
-        )
-        assert 2 in ids, (
-            "Task 2 dep on deprecated #99 → dep_status='redirect' → must NOT be excluded"
-        )
+        assert 1 not in ids, "Task 1 dep on wontfix #98 → dep_status='blocked' → must be excluded"
+        assert 2 in ids, "Task 2 dep on deprecated #99 → dep_status='redirect' → must NOT be excluded"
         assert 3 in ids, "Task 3 has no dep -> must be included"
 
 
@@ -570,9 +539,7 @@ class TestFromAC_PickTasksArchivedDeps:
 class TestFromAC_PickTasksDefaults:
     """Default wave_size from BoardConfig.wave_size and max_waves cardinality."""
 
-    def test_default_wave_size_from_config_and_sort_order_combined(
-        self, tmp_path: Path
-    ) -> None:
+    def test_default_wave_size_from_config_and_sort_order_combined(self, tmp_path: Path) -> None:
         """Explicit wave_size=1 produces one task per wave in priority order.
 
         Tests wave_size argument AND sort (D60) together.
@@ -593,17 +560,11 @@ class TestFromAC_PickTasksDefaults:
         resp = engine.agent_view().pick_tasks(
             wave_size=1, max_waves=3
         )  # explicit wave_size=1 overrides product topology
-        assert len(resp.waves) == 3, (
-            f"With wave_size=1 and 3 tasks, expect 3 waves; got {len(resp.waves)}"
-        )
+        assert len(resp.waves) == 3, f"With wave_size=1 and 3 tasks, expect 3 waves; got {len(resp.waves)}"
         for wave in resp.waves:
-            assert len(wave.tasks) == 1, (
-                f"wave_size=1 -> each wave has 1 task; got {[e.id for e in wave.tasks]}"
-            )
+            assert len(wave.tasks) == 1, f"wave_size=1 -> each wave has 1 task; got {[e.id for e in wave.tasks]}"
         wave_order = [wave.tasks[0].id for wave in resp.waves]
-        assert wave_order == [3, 2, 1], (
-            f"Expected sort order [3 (critical), 2 (needed), 1 (someday)]; got {wave_order}"
-        )
+        assert wave_order == [3, 2, 1], f"Expected sort order [3 (critical), 2 (needed), 1 (someday)]; got {wave_order}"
 
 
 # ---------------------------------------------------------------------------
@@ -659,9 +620,7 @@ class TestFromAC_PickTasksAC22Proof:
         engine = KanbanEngine(board, activity_log=False)
         resp = engine.agent_view().pick_tasks()
         ids = _all_ids(resp)
-        assert 1 not in ids, (
-            "Task 1 has blocked=true → must be excluded from pick_tasks (blocked=False filter)"
-        )
+        assert 1 not in ids, "Task 1 has blocked=true → must be excluded from pick_tasks (blocked=False filter)"
         assert 2 in ids, "Task 2 has blocked=false → must be included"
 
     def test_archived_task_absent_from_dispatchable_pool(self, tmp_path: Path) -> None:
@@ -680,9 +639,7 @@ class TestFromAC_PickTasksAC22Proof:
         engine = KanbanEngine(board, activity_log=False)
         resp = engine.agent_view().pick_tasks()
         ids = _all_ids(resp)
-        assert 1 not in ids, (
-            "Task 1 is archived (completed) → must not appear in dispatchable pool"
-        )
+        assert 1 not in ids, "Task 1 is archived (completed) → must not appear in dispatchable pool"
         assert 2 in ids, "Task 2 is active → must be included"
 
     def test_missing_dependency_makes_task_dep_blocked(self, tmp_path: Path) -> None:
@@ -699,9 +656,7 @@ class TestFromAC_PickTasksAC22Proof:
         engine = KanbanEngine(board, activity_log=False)
         resp = engine.agent_view().pick_tasks()
         ids = _all_ids(resp)
-        assert 1 not in ids, (
-            "Task 1 depends on missing ID 999 → dep_status='blocked' → must be excluded"
-        )
+        assert 1 not in ids, "Task 1 depends on missing ID 999 → dep_status='blocked' → must be excluded"
         assert 2 in ids, "Task 2 has no deps → must be included"
 
     def test_default_max_waves_cap_is_three(self, tmp_path: Path) -> None:
@@ -720,16 +675,10 @@ class TestFromAC_PickTasksAC22Proof:
         for i in range(1, 6):
             _write_task(board, task_id=i)
         engine = KanbanEngine(board, activity_log=False)
-        resp = engine.agent_view().pick_tasks(
-            wave_size=1
-        )  # explicit wave_size=1; no max_waves
-        assert len(resp.waves) <= 3, (
-            f"Default max_waves=3 must cap output at 3 waves; got {len(resp.waves)}"
-        )
+        resp = engine.agent_view().pick_tasks(wave_size=1)  # explicit wave_size=1; no max_waves
+        assert len(resp.waves) <= 3, f"Default max_waves=3 must cap output at 3 waves; got {len(resp.waves)}"
         total_dispatched = sum(len(w.tasks) for w in resp.waves)
-        assert total_dispatched == 3, (
-            f"wave_size=1 x max_waves=3 -> exactly 3 tasks dispatched; got {total_dispatched}"
-        )
+        assert total_dispatched == 3, f"wave_size=1 x max_waves=3 -> exactly 3 tasks dispatched; got {total_dispatched}"
 
 
 # ---------------------------------------------------------------------------
@@ -771,9 +720,7 @@ class TestFromAC_PickTasksDepStatusString:
     dep_status='redirect' from dep_status='ok' by inclusion alone.
     """
 
-    def test_wontfix_archived_dep_sets_dep_status_blocked_string(
-        self, tmp_path: Path
-    ) -> None:
+    def test_wontfix_archived_dep_sets_dep_status_blocked_string(self, tmp_path: Path) -> None:
         """AC27 string contract: show_task returns dep_status='blocked' for wontfix-archived dep.
 
         Task 1 depends on wontfix-archived task 99.  show_task(1) must return
@@ -791,9 +738,7 @@ class TestFromAC_PickTasksDepStatusString:
             f"dep_status='blocked' but got {resp.dep_status!r}"
         )
 
-    def test_deprecated_archived_dep_sets_dep_status_redirect_string(
-        self, tmp_path: Path
-    ) -> None:
+    def test_deprecated_archived_dep_sets_dep_status_redirect_string(self, tmp_path: Path) -> None:
         """AC28 string contract: show_task returns dep_status='redirect' for deprecated-archived dep.
 
         Task 2 depends on deprecated-archived task 99.  show_task(2) must return
@@ -827,9 +772,7 @@ class TestFromAC_PickTasksConfigFallback:
     an explicit wave_size argument.
     """
 
-    def test_config_wave_size_zero_raises_validation_error_without_explicit_arg(
-        self, tmp_path: Path
-    ) -> None:
+    def test_config_wave_size_zero_raises_validation_error_without_explicit_arg(self, tmp_path: Path) -> None:
         """pick_tasks(wave_size=0) raises ValidationError(ERR_INVALID_WAVE_PARAM).
 
         The explicit-arg guard fires when wave_size < 1 is passed directly.
@@ -926,12 +869,8 @@ class TestFromAC_PickTasksAgeSortPrecedence:
         the secondary sort falls through to task.id ASC, yielding [3, 5].
         """
         board = _make_board(tmp_path)
-        _write_task(
-            board, task_id=5, priority="critical", created='"2026-01-01T00:00:00+00:00"'
-        )
-        _write_task(
-            board, task_id=3, priority="critical", created='"2026-03-01T00:00:00+00:00"'
-        )
+        _write_task(board, task_id=5, priority="critical", created='"2026-01-01T00:00:00+00:00"')
+        _write_task(board, task_id=3, priority="critical", created='"2026-03-01T00:00:00+00:00"')
         engine = KanbanEngine(board, activity_log=False)
         resp = engine.agent_view().pick_tasks(wave_size=2, max_waves=1)
         ordered = _ordered_ids(resp)
@@ -941,9 +880,7 @@ class TestFromAC_PickTasksAgeSortPrecedence:
             f"got {ordered} — broken sort degenerates to id ASC → [3, 5]"
         )
 
-    def test_three_tasks_same_priority_ages_and_ids_anti_correlated(
-        self, tmp_path: Path
-    ) -> None:
+    def test_three_tasks_same_priority_ages_and_ids_anti_correlated(self, tmp_path: Path) -> None:
         """age DESC order is the exact inverse of id ASC order — maximally adversarial case.
 
         Board:
@@ -960,15 +897,9 @@ class TestFromAC_PickTasksAgeSortPrecedence:
         of the required [9, 6, 3].
         """
         board = _make_board(tmp_path)
-        _write_task(
-            board, task_id=9, priority="needed", created='"2026-01-01T00:00:00+00:00"'
-        )
-        _write_task(
-            board, task_id=6, priority="needed", created='"2026-02-01T00:00:00+00:00"'
-        )
-        _write_task(
-            board, task_id=3, priority="needed", created='"2026-03-01T00:00:00+00:00"'
-        )
+        _write_task(board, task_id=9, priority="needed", created='"2026-01-01T00:00:00+00:00"')
+        _write_task(board, task_id=6, priority="needed", created='"2026-02-01T00:00:00+00:00"')
+        _write_task(board, task_id=3, priority="needed", created='"2026-03-01T00:00:00+00:00"')
         engine = KanbanEngine(board, activity_log=False)
         resp = engine.agent_view().pick_tasks(wave_size=3, max_waves=1)
         ordered = _ordered_ids(resp)
@@ -977,9 +908,7 @@ class TestFromAC_PickTasksAgeSortPrecedence:
             f"got {ordered} — broken sort yields [3, 6, 9] (id ASC fallback)"
         )
 
-    def test_age_sort_preserved_across_multiple_priority_groups(
-        self, tmp_path: Path
-    ) -> None:
+    def test_age_sort_preserved_across_multiple_priority_groups(self, tmp_path: Path) -> None:
         """age DESC applies independently within each priority group, not just across them.
 
         Board (wave_size=4, max_waves=1 — all tasks in one wave):
@@ -1009,15 +938,9 @@ class TestFromAC_PickTasksAgeSortPrecedence:
             priority="critical",
             created='"2026-01-01T00:00:00+00:00"',
         )
-        _write_task(
-            board, task_id=5, priority="critical", created='"2026-03-01T00:00:00+00:00"'
-        )
-        _write_task(
-            board, task_id=8, priority="someday", created='"2026-01-01T00:00:00+00:00"'
-        )
-        _write_task(
-            board, task_id=2, priority="someday", created='"2026-03-01T00:00:00+00:00"'
-        )
+        _write_task(board, task_id=5, priority="critical", created='"2026-03-01T00:00:00+00:00"')
+        _write_task(board, task_id=8, priority="someday", created='"2026-01-01T00:00:00+00:00"')
+        _write_task(board, task_id=2, priority="someday", created='"2026-03-01T00:00:00+00:00"')
         engine = KanbanEngine(board, activity_log=False)
         resp = engine.agent_view().pick_tasks(wave_size=4, max_waves=1)
         ordered = _ordered_ids(resp)
@@ -1053,9 +976,7 @@ class TestFromAC_PickTasksArchivedInTasksDir:
     the current implementation at engine.py:2054.
     """
 
-    def test_archived_status_in_tasks_dir_excluded_from_dispatch(
-        self, tmp_path: Path
-    ) -> None:
+    def test_archived_status_in_tasks_dir_excluded_from_dispatch(self, tmp_path: Path) -> None:
         """Status=='archived' task in tasks/ dir is excluded from pick_tasks dispatch pool.
 
         Board:
@@ -1081,9 +1002,7 @@ class TestFromAC_PickTasksArchivedInTasksDir:
             f"'task.status != \"archived\"' filter at the dispatchable comprehension"
         )
 
-    def test_archived_status_high_priority_does_not_enter_dispatch_pool(
-        self, tmp_path: Path
-    ) -> None:
+    def test_archived_status_high_priority_does_not_enter_dispatch_pool(self, tmp_path: Path) -> None:
         """Critical-priority archived-status task in tasks/ must not preempt valid tasks.
 
         Board:
@@ -1107,6 +1026,4 @@ class TestFromAC_PickTasksArchivedInTasksDir:
             f"Critical-priority archived-status task (id=10) must be excluded from pool; "
             f"got {all_dispatched} — priority rank does not override the archived filter"
         )
-        assert 3 in all_dispatched, (
-            f"Someday-priority active task (id=3) must be dispatched; got {all_dispatched}"
-        )
+        assert 3 in all_dispatched, f"Someday-priority active task (id=3) must be dispatched; got {all_dispatched}"

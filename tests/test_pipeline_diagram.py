@@ -137,26 +137,20 @@ class TestFromAC_PipelineStagesAndAgents:
         assert stage in all_text, f"Stage '{stage}' not found in diagram text"
 
     @pytest.mark.parametrize("agent", _STAGE_AGENTS)
-    def test_stage_transition_agent_label_present(
-        self, diagram_data: dict, agent: str
-    ) -> None:
+    def test_stage_transition_agent_label_present(self, diagram_data: dict, agent: str) -> None:
         all_text = _all_element_text(diagram_data)
         assert agent in all_text, f"Agent '{agent}' not found in diagram text"
 
     def test_planner_appears_as_auxiliary_annotation(self, diagram_data: dict) -> None:
         all_text = _all_element_text(diagram_data)
         assert "planner" in all_text, (
-            "planner must appear as an auxiliary annotation "
-            "(backlog→todo decomposition), not be absent"
+            "planner must appear as an auxiliary annotation (backlog→todo decomposition), not be absent"
         )
 
-    def test_orchestrator_appears_as_auxiliary_annotation(
-        self, diagram_data: dict
-    ) -> None:
+    def test_orchestrator_appears_as_auxiliary_annotation(self, diagram_data: dict) -> None:
         all_text = _all_element_text(diagram_data)
         assert "orchestrator" in all_text, (
-            "orchestrator must appear as an auxiliary supervisory annotation, "
-            "not be absent"
+            "orchestrator must appear as an auxiliary supervisory annotation, not be absent"
         )
 
     def test_stage_order_left_to_right(self, diagram_data: dict) -> None:
@@ -171,9 +165,7 @@ class TestFromAC_PipelineStagesAndAgents:
         ordered = sorted(stage_positions.items(), key=lambda kv: kv[1])
         ordered_stages = [key for key, _ in ordered]
         assert ordered_stages == _REQUIRED_STAGES, (
-            f"Stage elements not in pipeline order.\n"
-            f"Expected: {_REQUIRED_STAGES}\n"
-            f"Got (left→right): {ordered_stages}"
+            f"Stage elements not in pipeline order.\nExpected: {_REQUIRED_STAGES}\nGot (left→right): {ordered_stages}"
         )
 
 
@@ -190,19 +182,13 @@ class TestFromAC_DescribesField:
         assert len(diagram_data.get("describes", [])) > 0
 
     @pytest.mark.parametrize("glob", _REQUIRED_DESCRIBES_GLOBS)
-    def test_required_glob_present_in_describes(
-        self, diagram_data: dict, glob: str
-    ) -> None:
+    def test_required_glob_present_in_describes(self, diagram_data: dict, glob: str) -> None:
         describes: list = diagram_data.get("describes", [])
-        assert glob in describes, (
-            f"Required glob '{glob}' not found in describes: {describes}"
-        )
+        assert glob in describes, f"Required glob '{glob}' not found in describes: {describes}"
 
     def test_volatile_kanban_glob_absent(self, diagram_data: dict) -> None:
         describes: list = diagram_data.get("describes", [])
-        assert _VOLATILE_GLOB not in describes, (
-            f"Volatile glob '{_VOLATILE_GLOB}' must be excluded from describes"
-        )
+        assert _VOLATILE_GLOB not in describes, f"Volatile glob '{_VOLATILE_GLOB}' must be excluded from describes"
 
 
 class TestFromAC_FooterElement:
@@ -210,15 +196,12 @@ class TestFromAC_FooterElement:
 
     def test_footer_element_contains_last_verified(self, diagram_data: dict) -> None:
         all_text = _all_element_text(diagram_data)
-        assert "last verified:" in all_text, (
-            "No element contains 'Last verified:' — footer element missing"
-        )
+        assert "last verified:" in all_text, "No element contains 'Last verified:' — footer element missing"
 
     def test_footer_text_matches_date_hash_pattern(self, diagram_data: dict) -> None:
         all_text = _all_element_text(diagram_data)
         assert _FOOTER_RE.search(all_text), (
-            f"Footer does not match pattern {_FOOTER_RE.pattern!r}.\n"
-            f"All diagram text (lowercased): {all_text[:400]}"
+            f"Footer does not match pattern {_FOOTER_RE.pattern!r}.\nAll diagram text (lowercased): {all_text[:400]}"
         )
 
 
@@ -238,18 +221,14 @@ class TestFromAC_ExcalidrawConventions:
         violators = [
             elem.get("id", f"idx:{index}")
             for index, elem in enumerate(elements)
-            if elem.get("type") == "text"
-            and isinstance(elem.get("fontSize"), (int, float))
-            and elem["fontSize"] < 16
+            if elem.get("type") == "text" and isinstance(elem.get("fontSize"), (int, float)) and elem["fontSize"] < 16
         ]
         assert not violators, f"Text elements with fontSize < 16px: {violators}"
 
     def test_arrow_elements_have_bindings(self, diagram_data: dict) -> None:
         elements = diagram_data.get("elements", [])
         arrows = [elem for elem in elements if elem.get("type") == "arrow"]
-        assert len(arrows) > 0, (
-            "Diagram has no arrow elements — stages must be connected"
-        )
+        assert len(arrows) > 0, "Diagram has no arrow elements — stages must be connected"
         floating = [
             elem.get("id", f"idx:{index}")
             for index, elem in enumerate(arrows)
@@ -275,12 +254,8 @@ class TestFromAC_DocIndexIntegration:
         )
         entry_start = text.index("## share/diagrams/pipeline.excalidraw")
         next_entry = text.find("\n## ", entry_start + 1)
-        entry_text = (
-            text[entry_start:] if next_entry == -1 else text[entry_start:next_entry]
-        )
-        assert "describes:" in entry_text, (
-            "No 'describes:' line in pipeline.excalidraw doc-index entry"
-        )
+        entry_text = text[entry_start:] if next_entry == -1 else text[entry_start:next_entry]
+        assert "describes:" in entry_text, "No 'describes:' line in pipeline.excalidraw doc-index entry"
 
     def test_doc_index_entry_includes_all_required_globs(self, tmp_path: Path) -> None:
         dest = tmp_path / "share" / "diagrams" / "pipeline.excalidraw"
@@ -293,13 +268,9 @@ class TestFromAC_DocIndexIntegration:
 
         entry_start = text.index("## share/diagrams/pipeline.excalidraw")
         next_entry = text.find("\n## ", entry_start + 1)
-        entry_text = (
-            text[entry_start:] if next_entry == -1 else text[entry_start:next_entry]
-        )
+        entry_text = text[entry_start:] if next_entry == -1 else text[entry_start:next_entry]
         for glob in _REQUIRED_DESCRIBES_GLOBS:
-            assert glob in entry_text, (
-                f"Required glob '{glob}' not found in doc-index entry"
-            )
+            assert glob in entry_text, f"Required glob '{glob}' not found in doc-index entry"
 
 
 class TestFromAC_OrchestratorSupervisoryRole1299:
@@ -320,20 +291,11 @@ class TestFromAC_OrchestratorSupervisoryRole1299:
         """Any orchestrator text includes a supervisory/auxiliary qualifier."""
         data = json.loads(_DIAGRAM_PATH.read_text())
         texts = _all_element_texts(data)
-        orchestrator_texts = [
-            text
-            for text in texts
-            if "orchestrator" in text.lower() and "stage" not in text.lower()
-        ]
-        assert orchestrator_texts, (
-            "No elements containing 'orchestrator' found — diagram is missing the element."
-        )
+        orchestrator_texts = [text for text in texts if "orchestrator" in text.lower() and "stage" not in text.lower()]
+        assert orchestrator_texts, "No elements containing 'orchestrator' found — diagram is missing the element."
         bare_entries = [
-            text
-            for text in orchestrator_texts
-            if "supervisory" not in text.lower() and "auxiliary" not in text.lower()
+            text for text in orchestrator_texts if "supervisory" not in text.lower() and "auxiliary" not in text.lower()
         ]
-        assert not bare_entries, (
-            "Orchestrator element(s) lack supervisory/auxiliary role qualifier:\n"
-            + "\n".join(f"  - {text!r}" for text in bare_entries)
+        assert not bare_entries, "Orchestrator element(s) lack supervisory/auxiliary role qualifier:\n" + "\n".join(
+            f"  - {text!r}" for text in bare_entries
         )

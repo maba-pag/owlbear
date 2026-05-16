@@ -117,11 +117,7 @@ class TestFromAC_Frontmatter:
         lines = content.split("\n")
         assert lines[0] == "---"
         end_idx = lines.index("---", 1)
-        fm_keys = [
-            line.split(":")[0].strip()
-            for line in lines[1:end_idx]
-            if ":" in line and not line.startswith(" ")
-        ]
+        fm_keys = [line.split(":")[0].strip() for line in lines[1:end_idx] if ":" in line and not line.startswith(" ")]
 
         for i, expected_key in enumerate(_CANONICAL_FRONTMATTER_KEYS):
             pos = next((j for j, k in enumerate(fm_keys) if k == expected_key), None)
@@ -129,13 +125,9 @@ class TestFromAC_Frontmatter:
             if i > 0:
                 prev_key = _CANONICAL_FRONTMATTER_KEYS[i - 1]
                 prev_pos = next((j for j, k in enumerate(fm_keys) if k == prev_key), -1)
-                assert prev_pos < pos, (
-                    f"Key '{expected_key}' appears before '{prev_key}' — wrong order"
-                )
+                assert prev_pos < pos, f"Key '{expected_key}' appears before '{prev_key}' — wrong order"
 
-    def test_ac_c14_task_model_extra_allow_vendor_fields_survive(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac_c14_task_model_extra_allow_vendor_fields_survive(self, tmp_path: Path) -> None:
         """AC-C14: Task model has extra='allow' — vendor fields survive round-trip."""
         kanban_dir = _make_board(tmp_path)
         # Write a task file with vendor fields (class, started, completed — legacy archive shape)
@@ -181,13 +173,9 @@ content
 
         # Both created and updated must end with +00:00
         for field in ("created", "updated"):
-            matching = [
-                line for line in content.splitlines() if line.startswith(f"{field}:")
-            ]
+            matching = [line for line in content.splitlines() if line.startswith(f"{field}:")]
             assert matching, f"Field '{field}' not found in frontmatter"
-            assert "+00:00" in matching[0], (
-                f"Field '{field}' is not UTC+00:00: {matching[0]}"
-            )
+            assert "+00:00" in matching[0], f"Field '{field}' is not UTC+00:00: {matching[0]}"
 
     def test_ac_c15_claimed_at_utc_when_set(self, tmp_path: Path) -> None:
         """AC-C15: claimed_at timestamp also uses +00:00 when not null."""
@@ -205,15 +193,11 @@ content
         path = write_task(task, kanban_dir)
         content = path.read_text(encoding="utf-8")
 
-        matching = [
-            line for line in content.splitlines() if line.startswith("claimed_at:")
-        ]
+        matching = [line for line in content.splitlines() if line.startswith("claimed_at:")]
         assert matching
         assert "+00:00" in matching[0]
 
-    def test_written_frontmatter_fields_in_canonical_order(
-        self, tmp_path: Path
-    ) -> None:
+    def test_written_frontmatter_fields_in_canonical_order(self, tmp_path: Path) -> None:
         """AC-C13: Canonical keys in the written file appear in canonical order."""
         kanban_dir = _make_board(tmp_path)
         task = _minimal_task(1)
@@ -227,9 +211,7 @@ content
         expected_order = [k for k in _CANONICAL_FIELD_ORDER if k in keys]
         assert written_canonical == expected_order
 
-    def test_vendor_extra_fields_appear_after_canonical_fields(
-        self, tmp_path: Path
-    ) -> None:
+    def test_vendor_extra_fields_appear_after_canonical_fields(self, tmp_path: Path) -> None:
         """AC-C13 edge: extra fields are not interleaved with canonical fields."""
         kanban_dir = _make_board(tmp_path)
         task = Task(
@@ -247,12 +229,8 @@ content
         assert len(files) == 1
 
         keys = _extract_frontmatter_keys(files[0])
-        canonical_positions = [
-            i for i, k in enumerate(keys) if k in _CANONICAL_FIELD_ORDER
-        ]
-        vendor_positions = [
-            i for i, k in enumerate(keys) if k not in _CANONICAL_FIELD_ORDER
-        ]
+        canonical_positions = [i for i, k in enumerate(keys) if k in _CANONICAL_FIELD_ORDER]
+        vendor_positions = [i for i, k in enumerate(keys) if k not in _CANONICAL_FIELD_ORDER]
 
         if canonical_positions and vendor_positions:
             assert max(canonical_positions) < min(vendor_positions), (
@@ -274,9 +252,7 @@ content
         assert dumped.get("class") == "epic"
         assert dumped.get("started") == "2026-04-20"
 
-    def test_vendor_extra_fields_survive_write_read_round_trip(
-        self, tmp_path: Path
-    ) -> None:
+    def test_vendor_extra_fields_survive_write_read_round_trip(self, tmp_path: Path) -> None:
         """AC-C14: Vendor fields survive storage.write_task -> storage.read_task round-trip."""
         kanban_dir = _make_board(tmp_path)
         task = Task(
@@ -310,9 +286,7 @@ content
         ts_re = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}")
         for line in frontmatter.splitlines():
             if ts_re.search(line):
-                assert line.rstrip().endswith("+00:00"), (
-                    f"Timestamp line missing +00:00 suffix: {line.rstrip()!r}"
-                )
+                assert line.rstrip().endswith("+00:00"), f"Timestamp line missing +00:00 suffix: {line.rstrip()!r}"
 
     def test_naive_timestamps_stored_with_utc_offset(self, tmp_path: Path) -> None:
         """AC-C15 boundary: naive timestamp strings are written as UTC +00:00."""
@@ -335,13 +309,9 @@ content
         ts_re = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}")
         for line in frontmatter.splitlines():
             if ts_re.search(line):
-                assert line.rstrip().endswith("+00:00"), (
-                    f"Expected +00:00 suffix on naive timestamp: {line.rstrip()!r}"
-                )
+                assert line.rstrip().endswith("+00:00"), f"Expected +00:00 suffix on naive timestamp: {line.rstrip()!r}"
 
-    def test_non_utc_offset_timestamps_are_converted_to_utc(
-        self, tmp_path: Path
-    ) -> None:
+    def test_non_utc_offset_timestamps_are_converted_to_utc(self, tmp_path: Path) -> None:
         """AC-C15 boundary: non-UTC offset fields are converted to UTC +00:00."""
         kanban_dir = _make_board(tmp_path)
         task = Task(
@@ -363,9 +333,7 @@ content
         ts_re = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}")
         for line in frontmatter.splitlines():
             if ts_re.search(line):
-                assert line.rstrip().endswith("+00:00"), (
-                    f"Non-UTC offset not converted to +00:00: {line.rstrip()!r}"
-                )
+                assert line.rstrip().endswith("+00:00"), f"Non-UTC offset not converted to +00:00: {line.rstrip()!r}"
         assert "2026-04-20T08:00:00+00:00" in frontmatter
         assert "2026-04-20T10:00:00+00:00" in frontmatter
 
@@ -378,9 +346,7 @@ content
 class TestFromAC_ClaimedByDetection:
     """AC-C16, AC-C48: claimed_by in tasks/ is corruption; in archive/ silently stripped."""
 
-    def test_ac_c16_tasks_file_with_claimed_by_reports_mode3(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac_c16_tasks_file_with_claimed_by_reports_mode3(self, tmp_path: Path) -> None:
         """AC-C16: detect_corruption on tasks/ file with claimed_by → ERR_CORRUPT_MISSING_FIELD, mode 3."""
         kanban_dir = _make_board(tmp_path)
         bad_file = kanban_dir / "tasks" / "1001-legacy.md"
@@ -397,9 +363,7 @@ class TestFromAC_ClaimedByDetection:
         assert err.code == "ERR_CORRUPT_MISSING_FIELD"
         assert "claimed_by" in (err.detail or "").lower()
 
-    def test_ac_c48_archive_file_with_claimed_by_reads_successfully(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac_c48_archive_file_with_claimed_by_reads_successfully(self, tmp_path: Path) -> None:
         """AC-C48: archive file with claimed_by is read without CorruptionError; field stripped."""
         kanban_dir = _make_board(tmp_path)
         archive_file = kanban_dir / "archive" / "1001-old.md"
@@ -417,9 +381,7 @@ class TestFromAC_ClaimedByDetection:
         # claimed_by stripped from model
         assert not hasattr(task, "claimed_by") or task.claimed_by is None  # type: ignore[union-attr]
 
-    def test_ac_c48_archive_with_claimed_by_no_migration_required_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac_c48_archive_with_claimed_by_no_migration_required_error(self, tmp_path: Path) -> None:
         """AC-C48: KanbanEngine init does NOT raise MigrationRequiredError when claimed_by is only in archive/."""
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
@@ -499,9 +461,7 @@ class TestFromAC_Quarantine:
         ar_tasks = [t for t in all_tasks if "type:user-action" in (t.tags or [])]
         assert ar_tasks, "Expected an AR task with type:user-action tag"
 
-    def test_ac_c30_ar_task_body_has_quarantined_file_section(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac_c30_ar_task_body_has_quarantined_file_section(self, tmp_path: Path) -> None:
         """AC-C30: AR task body contains '## Quarantined file' section with code, path, detail."""
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
@@ -529,9 +489,7 @@ class TestFromAC_Quarantine:
 
         assert (kanban_dir / "quarantine").is_dir()
 
-    def test_move_to_quarantine_no_error_when_dir_already_exists(
-        self, tmp_path: Path
-    ) -> None:
+    def test_move_to_quarantine_no_error_when_dir_already_exists(self, tmp_path: Path) -> None:
         """AC-C28 edge: quarantine/ pre-existing - no error raised."""
         kanban_dir = _make_board(tmp_path)
         (kanban_dir / "quarantine").mkdir()
@@ -539,9 +497,7 @@ class TestFromAC_Quarantine:
         task_path = _write_claimed_by_file(kanban_dir / "tasks", task_id=99)
         move_to_quarantine(task_path, kanban_dir)
 
-    def test_move_to_quarantine_returns_quarantine_subpath(
-        self, tmp_path: Path
-    ) -> None:
+    def test_move_to_quarantine_returns_quarantine_subpath(self, tmp_path: Path) -> None:
         """AC-C29: Return value is quarantine/{original-filename}."""
         kanban_dir = _make_board(tmp_path)
         task_path = _write_claimed_by_file(kanban_dir / "tasks", task_id=7)
@@ -551,9 +507,7 @@ class TestFromAC_Quarantine:
 
         assert result_path == kanban_dir / "quarantine" / original_name
 
-    def test_move_to_quarantine_file_exists_at_returned_path(
-        self, tmp_path: Path
-    ) -> None:
+    def test_move_to_quarantine_file_exists_at_returned_path(self, tmp_path: Path) -> None:
         """AC-C29: Quarantined file physically exists at quarantine/{original-filename}."""
         kanban_dir = _make_board(tmp_path)
         task_path = _write_claimed_by_file(kanban_dir / "tasks", task_id=8)
@@ -584,9 +538,7 @@ class TestFromAC_Quarantine:
 
         assert result_path.read_text(encoding="utf-8") == original_content
 
-    def test_ac_c28_creates_quarantine_dir_if_absent_frontmatter_variant(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac_c28_creates_quarantine_dir_if_absent_frontmatter_variant(self, tmp_path: Path) -> None:
         """Parity check for merged frontmatter variant of AC-C28."""
         kanban_dir = _make_board(tmp_path)
         quarantine_dir = kanban_dir / "quarantine"
@@ -601,9 +553,7 @@ class TestFromAC_Quarantine:
         move_to_quarantine(task_file, kanban_dir)
         assert quarantine_dir.exists()
 
-    def test_ac_c29_quarantined_file_at_expected_path_frontmatter_variant(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac_c29_quarantined_file_at_expected_path_frontmatter_variant(self, tmp_path: Path) -> None:
         """Parity check for merged frontmatter variant of AC-C29."""
         kanban_dir = _make_board(tmp_path)
         original_name = "2002-corrupt.md"
@@ -620,9 +570,7 @@ class TestFromAC_Quarantine:
         assert quarantined_path.exists()
         assert not task_file.exists()
 
-    def test_ac_c30_ar_task_has_type_user_action_tag_frontmatter_variant(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac_c30_ar_task_has_type_user_action_tag_frontmatter_variant(self, tmp_path: Path) -> None:
         """Parity check for merged frontmatter variant of AC-C30 tag behavior."""
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
@@ -812,9 +760,7 @@ class TestFromAC_ReadTaskCachedConfig:
     # AC2 — when config provided, detection runs unconditionally
     # ------------------------------------------------------------------
 
-    def test_ac2_happy_valid_task_no_config_yml_config_provided(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac2_happy_valid_task_no_config_yml_config_provided(self, tmp_path: Path) -> None:
         """AC2: valid task + config provided + no config.yml → task returned cleanly."""
         task_path = _make_task_no_config_yml(tmp_path, corrupt=False)
         config = _make_config()
@@ -823,9 +769,7 @@ class TestFromAC_ReadTaskCachedConfig:
         task = read_task(task_path, config=config)  # TypeError pre-impl
         assert task.id == 1
 
-    def test_ac2_edge_corrupt_task_no_config_yml_config_provided_raises(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac2_edge_corrupt_task_no_config_yml_config_provided_raises(self, tmp_path: Path) -> None:
         """AC2 edge: corrupt task + config provided + no config.yml → CorruptionError.
 
         The config.yml absence guard is skipped because config is pre-resolved.
@@ -839,9 +783,7 @@ class TestFromAC_ReadTaskCachedConfig:
             read_task(task_path, config=config)
         assert exc_info.value.code == ERR_CORRUPT_INVALID_STATUS
 
-    def test_ac2_error_corrupt_task_config_yml_present_config_provided_raises(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac2_error_corrupt_task_config_yml_present_config_provided_raises(self, tmp_path: Path) -> None:
         """AC2 error: corrupt task + config.yml present + config provided → CorruptionError."""
         board_dir, _ = _make_board_with_task(tmp_path)
         tasks_dir = board_dir / "tasks"
@@ -852,9 +794,7 @@ class TestFromAC_ReadTaskCachedConfig:
             read_task(corrupt_path, config=config)  # TypeError pre-impl
         assert exc_info.value.code == ERR_CORRUPT_INVALID_STATUS
 
-    def test_ac2_boundary_detection_runs_even_when_config_yml_absent(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac2_boundary_detection_runs_even_when_config_yml_absent(self, tmp_path: Path) -> None:
         """AC2 boundary: config.yml absent + config provided → CorruptionError, not silent skip.
 
         Without the guard bypass, missing config.yml would silently skip detection
@@ -883,9 +823,7 @@ class TestFromAC_ReadTaskCachedConfig:
     def test_ac3_explicit_none_calls_load_config(self, tmp_path: Path) -> None:
         """AC3: when config=None, load_config is still called from disk."""
         _, task_path = _make_board_with_task(tmp_path)
-        with patch(
-            "owlbear_kanban.config_loader.load_config", wraps=load_config
-        ) as mock_load:
+        with patch("owlbear_kanban.config_loader.load_config", wraps=load_config) as mock_load:
             # Pre-impl: TypeError before mock can capture the call
             read_task(task_path, config=None)
         mock_load.assert_called_once()
@@ -895,9 +833,7 @@ class TestFromAC_ReadTaskCachedConfig:
     # absent config.yml guard skips detection
     # ------------------------------------------------------------------
 
-    def test_ac3_corrupt_task_config_yml_present_none_raises(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac3_corrupt_task_config_yml_present_none_raises(self, tmp_path: Path) -> None:
         """AC3 td:2: corrupt task + config.yml present + config=None → CorruptionError.
 
         Proves detect_corruption fires on corrupt input in the config=None path.
@@ -912,9 +848,7 @@ class TestFromAC_ReadTaskCachedConfig:
             read_task(corrupt_path, config=None)
         assert exc_info.value.code == ERR_CORRUPT_INVALID_STATUS
 
-    def test_ac3_corrupt_task_no_config_yml_config_none_returns_task(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac3_corrupt_task_no_config_yml_config_none_returns_task(self, tmp_path: Path) -> None:
         """AC3 td:2: corrupt task + no config.yml + config=None → task returned.
 
         Proves the config_path.exists() guard works: when config.yml is absent
@@ -938,11 +872,7 @@ class TestFromAC_ReadTaskCachedConfig:
 
         violations: list[int] = []
         for node in ast.walk(tree):
-            if (
-                isinstance(node, ast.Call)
-                and isinstance(node.func, ast.Name)
-                and node.func.id == "read_task"
-            ):
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "read_task":
                 kwarg_names = [kw.arg for kw in node.keywords]
                 if "config" not in kwarg_names:
                     violations.append(node.lineno)
@@ -966,11 +896,7 @@ class TestFromAC_ReadTaskCachedConfig:
 
         violations: list[int] = []
         for node in ast.walk(tree):
-            if (
-                isinstance(node, ast.Call)
-                and isinstance(node.func, ast.Name)
-                and node.func.id == "read_task"
-            ):
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "read_task":
                 for kw in node.keywords:
                     if kw.arg == "config":
                         val = kw.value
@@ -1074,8 +1000,7 @@ class TestFromAC_NoDoubleValidation:
 
         source = inspect.getsource(storage_mod)
         assert "_validate_claim_timeout" not in source, (
-            "storage.py still references _validate_claim_timeout — "
-            "the double-validation wrapper has not been removed"
+            "storage.py still references _validate_claim_timeout — the double-validation wrapper has not been removed"
         )
 
 
@@ -1109,41 +1034,31 @@ class TestFromAC_LoadConfigDefaultsWhenMissing:
         cfg = load_config(kanban_dir)  # must not raise
         assert cfg is not None
 
-    def test_load_config_no_config_yml_returns_product_statuses(
-        self, tmp_path: Path
-    ) -> None:
+    def test_load_config_no_config_yml_returns_product_statuses(self, tmp_path: Path) -> None:
         """load_config() with no config.yml returns statuses from PRODUCT_TOPOLOGY."""
         from owlbear_kanban.topology import PRODUCT_TOPOLOGY  # noqa: PLC0415
 
         kanban_dir = self._make_board_no_config(tmp_path)
         cfg = load_config(kanban_dir)
         assert cfg.statuses == list(PRODUCT_TOPOLOGY.statuses), (
-            f"Expected PRODUCT_TOPOLOGY statuses {list(PRODUCT_TOPOLOGY.statuses)!r}; "
-            f"got {cfg.statuses!r}"
+            f"Expected PRODUCT_TOPOLOGY statuses {list(PRODUCT_TOPOLOGY.statuses)!r}; got {cfg.statuses!r}"
         )
 
-    def test_load_config_no_config_yml_returns_product_entry_status(
-        self, tmp_path: Path
-    ) -> None:
+    def test_load_config_no_config_yml_returns_product_entry_status(self, tmp_path: Path) -> None:
         """load_config() with no config.yml returns pipeline.entry_status from PRODUCT_TOPOLOGY."""
         from owlbear_kanban.topology import PRODUCT_TOPOLOGY  # noqa: PLC0415
 
         kanban_dir = self._make_board_no_config(tmp_path)
         cfg = load_config(kanban_dir)
         assert cfg.pipeline.entry_status == PRODUCT_TOPOLOGY.entry_status, (
-            f"Expected entry_status={PRODUCT_TOPOLOGY.entry_status!r}; "
-            f"got {cfg.pipeline.entry_status!r}"
+            f"Expected entry_status={PRODUCT_TOPOLOGY.entry_status!r}; got {cfg.pipeline.entry_status!r}"
         )
 
-    def test_load_config_no_config_yml_next_id_defaults_to_one(
-        self, tmp_path: Path
-    ) -> None:
+    def test_load_config_no_config_yml_next_id_defaults_to_one(self, tmp_path: Path) -> None:
         """load_config() with no config.yml defaults next_id to 1."""
         kanban_dir = self._make_board_no_config(tmp_path)
         cfg = load_config(kanban_dir)
-        assert cfg.next_id == 1, (
-            f"Expected next_id=1 when config.yml is absent; got {cfg.next_id!r}"
-        )
+        assert cfg.next_id == 1, f"Expected next_id=1 when config.yml is absent; got {cfg.next_id!r}"
 
 
 # --- merged from serve/kanban/tests/test_storage_frontmatter.py ---
@@ -1234,11 +1149,7 @@ def _extract_frontmatter_keys(path: Path) -> list[str]:
     assert content.startswith("---\n"), f"Missing opening --- in {path}"
     closing_idx = content.index("---\n", 4)
     frontmatter = content[4:closing_idx]
-    return [
-        line.split(":")[0].strip()
-        for line in frontmatter.splitlines()
-        if ":" in line and not line.startswith(" ")
-    ]
+    return [line.split(":")[0].strip() for line in frontmatter.splitlines() if ":" in line and not line.startswith(" ")]
 
 
 class TestFromAC_CorruptionDetection:
@@ -1255,9 +1166,7 @@ class TestFromAC_CorruptionDetection:
         assert error is not None
         assert error.code == "ERR_CORRUPT_MISSING_FIELD"
 
-    def test_detect_corruption_claimed_by_detail_exact_string(
-        self, tmp_path: Path
-    ) -> None:
+    def test_detect_corruption_claimed_by_detail_exact_string(self, tmp_path: Path) -> None:
         """AC-C16: detail attribute is exactly 'forbidden field claimed_by present'."""
         kanban_dir = _make_board(tmp_path)
         config = load_config(kanban_dir)
@@ -1281,9 +1190,7 @@ class TestFromAC_CorruptionDetection:
         result = detect_corruption(files[0], config)
         assert result is None
 
-    def test_detect_corruption_archive_file_with_claimed_by_returns_none(
-        self, tmp_path: Path
-    ) -> None:
+    def test_detect_corruption_archive_file_with_claimed_by_returns_none(self, tmp_path: Path) -> None:
         """AC-C16 / AC-C48: claimed_by in archive/ is NOT flagged as corruption."""
         kanban_dir = _make_board(tmp_path)
         config = load_config(kanban_dir)
@@ -1298,9 +1205,7 @@ class TestFromAC_CorruptionDetection:
 class TestFromAC_QuarantineRepair:
     """AC-C30: repair_storage() AR task has type:user-action tag and ## Quarantined file body."""
 
-    def test_repair_storage_ar_task_has_type_user_action_tag(
-        self, tmp_path: Path
-    ) -> None:
+    def test_repair_storage_ar_task_has_type_user_action_tag(self, tmp_path: Path) -> None:
         """AC-C30: AR task created by repair_storage() carries tag type:user-action."""
         from owlbear_kanban import KanbanEngine
 
@@ -1308,76 +1213,50 @@ class TestFromAC_QuarantineRepair:
         # Use a file with missing required fields (ERR_CORRUPT_MISSING_FIELD) — not
         # claimed_by, which would trigger MigrationRequiredError at engine init.
         corrupt_file = kanban_dir / "tasks" / "1-test.md"
-        corrupt_file.write_text(
-            "---\nid: 1\ntitle: test task\n---\n\nBody.\n", encoding="utf-8"
-        )
+        corrupt_file.write_text("---\nid: 1\ntitle: test task\n---\n\nBody.\n", encoding="utf-8")
 
         engine = KanbanEngine(kanban_dir=kanban_dir)
         engine.repair_storage()
 
-        ar_tasks = [
-            engine.show_task(task_id=t.id)
-            for t in engine.list_tasks()
-            if "type:user-action" in (t.tags or [])
-        ]
+        ar_tasks = [engine.show_task(task_id=t.id) for t in engine.list_tasks() if "type:user-action" in (t.tags or [])]
         assert len(ar_tasks) >= 1
         for ar_task in ar_tasks:
             assert "type:user-action" in ar_task.tags
 
-    def test_repair_storage_ar_body_contains_quarantined_file_section(
-        self, tmp_path: Path
-    ) -> None:
+    def test_repair_storage_ar_body_contains_quarantined_file_section(self, tmp_path: Path) -> None:
         """AC-C30: AR task body contains a ## Quarantined file section."""
         from owlbear_kanban import KanbanEngine
 
         kanban_dir = _make_board(tmp_path)
         corrupt_file = kanban_dir / "tasks" / "1-test.md"
-        corrupt_file.write_text(
-            "---\nid: 1\ntitle: test task\n---\n\nBody.\n", encoding="utf-8"
-        )
+        corrupt_file.write_text("---\nid: 1\ntitle: test task\n---\n\nBody.\n", encoding="utf-8")
 
         engine = KanbanEngine(kanban_dir=kanban_dir)
         engine.repair_storage()
 
-        ar_tasks = [
-            engine.show_task(task_id=t.id)
-            for t in engine.list_tasks()
-            if "type:user-action" in (t.tags or [])
-        ]
+        ar_tasks = [engine.show_task(task_id=t.id) for t in engine.list_tasks() if "type:user-action" in (t.tags or [])]
         assert len(ar_tasks) >= 1
         for ar_task in ar_tasks:
             assert "## Quarantined file" in ar_task.body
 
-    def test_repair_storage_ar_body_has_code_path_detail_fields(
-        self, tmp_path: Path
-    ) -> None:
+    def test_repair_storage_ar_body_has_code_path_detail_fields(self, tmp_path: Path) -> None:
         """AC-C30: AR body ## Quarantined file section contains code, path, and detail."""
         from owlbear_kanban import KanbanEngine
 
         kanban_dir = _make_board(tmp_path)
         corrupt_file = kanban_dir / "tasks" / "1-test.md"
-        corrupt_file.write_text(
-            "---\nid: 1\ntitle: test task\n---\n\nBody.\n", encoding="utf-8"
-        )
+        corrupt_file.write_text("---\nid: 1\ntitle: test task\n---\n\nBody.\n", encoding="utf-8")
 
         engine = KanbanEngine(kanban_dir=kanban_dir)
         engine.repair_storage()
 
-        ar_tasks = [
-            engine.show_task(task_id=t.id)
-            for t in engine.list_tasks()
-            if "type:user-action" in (t.tags or [])
-        ]
+        ar_tasks = [engine.show_task(task_id=t.id) for t in engine.list_tasks() if "type:user-action" in (t.tags or [])]
         assert len(ar_tasks) >= 1
         body = ar_tasks[0].body
 
         expected_quarantine_path = str(kanban_dir / "quarantine" / "1-test.md")
-        assert "ERR_CORRUPT_MISSING_FIELD" in body, (
-            f"Expected error code not found in AR body:\n{body}"
-        )
-        assert expected_quarantine_path in body, (
-            f"Expected quarantine path not found in AR body:\n{body}"
-        )
+        assert "ERR_CORRUPT_MISSING_FIELD" in body, f"Expected error code not found in AR body:\n{body}"
+        assert expected_quarantine_path in body, f"Expected quarantine path not found in AR body:\n{body}"
         assert f"quarantined to {expected_quarantine_path}" in body, (
             f"Expected detail value not found in AR body:\n{body}"
         )
@@ -1386,9 +1265,7 @@ class TestFromAC_QuarantineRepair:
 class TestFromAC_ArchiveExemption:
     """AC-C48: Archive files with claimed_by read successfully; field silently stripped."""
 
-    def test_archive_file_with_claimed_by_reads_without_exception(
-        self, tmp_path: Path
-    ) -> None:
+    def test_archive_file_with_claimed_by_reads_without_exception(self, tmp_path: Path) -> None:
         """AC-C48: No CorruptionError when reading archive file containing claimed_by."""
         kanban_dir = _make_board(tmp_path)
         archive_path = _write_claimed_by_file(kanban_dir / "archive", task_id=5)
@@ -1398,9 +1275,7 @@ class TestFromAC_ArchiveExemption:
         assert task is not None
         assert task.id == 5
 
-    def test_archive_claimed_by_stripped_from_returned_task(
-        self, tmp_path: Path
-    ) -> None:
+    def test_archive_claimed_by_stripped_from_returned_task(self, tmp_path: Path) -> None:
         """AC-C48: claimed_by is absent (or None) in the Task returned from archive read."""
         kanban_dir = _make_board(tmp_path)
         archive_path = _write_claimed_by_file(kanban_dir / "archive", task_id=5)
@@ -1410,9 +1285,7 @@ class TestFromAC_ArchiveExemption:
 
         assert dumped.get("claimed_by") is None
 
-    def test_archive_claimed_by_does_not_raise_corruption_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_archive_claimed_by_does_not_raise_corruption_error(self, tmp_path: Path) -> None:
         """AC-C48: Reading archive file with claimed_by does NOT raise CorruptionError."""
         kanban_dir = _make_board(tmp_path)
         archive_path = _write_claimed_by_file(kanban_dir / "archive", task_id=5)
@@ -1425,9 +1298,7 @@ class TestFromAC_ArchiveExemption:
 
         assert task is not None
 
-    def test_engine_init_with_archive_claimed_by_no_migration_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_engine_init_with_archive_claimed_by_no_migration_error(self, tmp_path: Path) -> None:
         """AC-C48: KanbanEngine.__init__ does NOT raise MigrationRequiredError for archive files.
 
         Uses a new-schema board (no 'version' field) so the migration gate at
@@ -1439,9 +1310,7 @@ class TestFromAC_ArchiveExemption:
         # New-schema board: gate is active (legacy boards bypass it entirely)
         kanban_dir = tmp_path / "board"
         kanban_dir.mkdir(parents=True)
-        (kanban_dir / "config.yml").write_text(
-            _NEW_SCHEMA_CONFIG_YAML, encoding="utf-8"
-        )
+        (kanban_dir / "config.yml").write_text(_NEW_SCHEMA_CONFIG_YAML, encoding="utf-8")
         (kanban_dir / "tasks").mkdir()
         (kanban_dir / "archive").mkdir()
         # Only archive/ has claimed_by — tasks/ is intentionally clean
@@ -1451,15 +1320,11 @@ class TestFromAC_ArchiveExemption:
         try:
             engine = KanbanEngine(kanban_dir=kanban_dir)
         except MigrationRequiredError:
-            pytest.fail(
-                "MigrationRequiredError raised for engine init with claimed_by only in archive/"
-            )
+            pytest.fail("MigrationRequiredError raised for engine init with claimed_by only in archive/")
 
         assert engine is not None
 
-    def test_archive_vendor_fields_preserved_when_claimed_by_stripped(
-        self, tmp_path: Path
-    ) -> None:
+    def test_archive_vendor_fields_preserved_when_claimed_by_stripped(self, tmp_path: Path) -> None:
         """AC-C48 edge: Stripping claimed_by does not affect other vendor extra fields."""
         kanban_dir = _make_board(tmp_path)
         archive_path = kanban_dir / "archive" / "5-vendor.md"
@@ -1504,9 +1369,7 @@ class TestBuilderDiscovered:
 
         assert _normalize_timestamp(None) is None
 
-    def test_read_task_missing_field_maps_to_missing_field_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_read_task_missing_field_maps_to_missing_field_error(self, tmp_path: Path) -> None:
         """read_task maps missing required fields to ERR_CORRUPT_MISSING_FIELD."""
         kanban_dir = _make_board(tmp_path)
         bad_file = kanban_dir / "tasks" / "501-missing-updated.md"
@@ -1526,9 +1389,7 @@ class TestBuilderDiscovered:
 
         assert exc_info.value.code == "ERR_CORRUPT_MISSING_FIELD"
 
-    def test_read_task_type_mismatch_maps_to_type_mismatch_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_read_task_type_mismatch_maps_to_type_mismatch_error(self, tmp_path: Path) -> None:
         """read_task maps type errors to ERR_CORRUPT_TYPE_MISMATCH."""
         kanban_dir = _make_board(tmp_path)
         bad_file = kanban_dir / "tasks" / "502-bad-id-type.md"
@@ -1549,9 +1410,7 @@ class TestBuilderDiscovered:
 
         assert exc_info.value.code == "ERR_CORRUPT_TYPE_MISMATCH"
 
-    def test_read_task_missing_delimiters_maps_to_delimiters_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_read_task_missing_delimiters_maps_to_delimiters_error(self, tmp_path: Path) -> None:
         """read_task maps delimiter errors to ERR_CORRUPT_DELIMITERS."""
         kanban_dir = _make_board(tmp_path)
         bad_file = kanban_dir / "tasks" / "503-no-delimiters.md"
@@ -1562,25 +1421,19 @@ class TestBuilderDiscovered:
 
         assert exc_info.value.code == "ERR_CORRUPT_DELIMITERS"
 
-    def test_detect_corruption_file_missing_closing_delimiter_returns_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_detect_corruption_file_missing_closing_delimiter_returns_error(self, tmp_path: Path) -> None:
         """detect_corruption on a file missing the closing '---' returns ERR_CORRUPT_DELIMITERS."""
         kanban_dir = _make_board(tmp_path)
         config = load_config(kanban_dir)
         bad_file = kanban_dir / "tasks" / "99-no-close.md"
-        bad_file.write_text(
-            "---\nid: 99\ntitle: broken\nclaimed_by: agent\n", encoding="utf-8"
-        )
+        bad_file.write_text("---\nid: 99\ntitle: broken\nclaimed_by: agent\n", encoding="utf-8")
 
         result = detect_corruption(bad_file, config)
 
         assert result is not None
         assert result.code == "ERR_CORRUPT_DELIMITERS"
 
-    def test_detect_corruption_file_without_frontmatter_returns_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_detect_corruption_file_without_frontmatter_returns_error(self, tmp_path: Path) -> None:
         """detect_corruption on a plain-text file (no '---') returns ERR_CORRUPT_DELIMITERS."""
         kanban_dir = _make_board(tmp_path)
         config = load_config(kanban_dir)
@@ -1603,9 +1456,7 @@ class TestBuilderDiscovered:
         reloaded = load_config(kanban_dir)
         assert reloaded.next_id == 9999
 
-    def test_write_task_reuses_existing_filename_for_same_id(
-        self, tmp_path: Path
-    ) -> None:
+    def test_write_task_reuses_existing_filename_for_same_id(self, tmp_path: Path) -> None:
         """write_task keeps filename stable when a file for the same ID already exists."""
         kanban_dir = _make_board(tmp_path)
         original = Task(
@@ -1636,9 +1487,7 @@ class TestBuilderDiscovered:
         assert dest.parent.name == "archive"
         assert not (kanban_dir / "tasks" / dest.name).exists()
 
-    def test_move_to_archive_missing_task_raises_file_not_found(
-        self, tmp_path: Path
-    ) -> None:
+    def test_move_to_archive_missing_task_raises_file_not_found(self, tmp_path: Path) -> None:
         """move_to_archive raises FileNotFoundError when task file does not exist."""
         from owlbear_kanban.storage import move_to_archive
 
@@ -1647,9 +1496,7 @@ class TestBuilderDiscovered:
         with pytest.raises(FileNotFoundError):
             move_to_archive(9999, kanban_dir)
 
-    def test_write_task_if_unchanged_writes_when_timestamp_matches(
-        self, tmp_path: Path
-    ) -> None:
+    def test_write_task_if_unchanged_writes_when_timestamp_matches(self, tmp_path: Path) -> None:
         """write_task_if_unchanged writes successfully when expected_updated matches disk."""
         from owlbear_kanban.storage import write_task_if_unchanged
 
@@ -1671,9 +1518,7 @@ class TestBuilderDiscovered:
         assert written_path.exists()
         assert read_task(written_path).title == "OCC updated"
 
-    def test_write_task_if_unchanged_raises_stale_on_timestamp_mismatch(
-        self, tmp_path: Path
-    ) -> None:
+    def test_write_task_if_unchanged_raises_stale_on_timestamp_mismatch(self, tmp_path: Path) -> None:
         """write_task_if_unchanged raises ERR_STALE on optimistic-concurrency mismatch."""
         from owlbear_kanban.storage import ConcurrencyError, write_task_if_unchanged
 
@@ -1695,9 +1540,7 @@ class TestBuilderDiscovered:
 
         assert exc_info.value.code == "ERR_STALE"
 
-    def test_write_task_if_unchanged_raises_file_not_found_when_missing(
-        self, tmp_path: Path
-    ) -> None:
+    def test_write_task_if_unchanged_raises_file_not_found_when_missing(self, tmp_path: Path) -> None:
         """write_task_if_unchanged raises FileNotFoundError for missing task files."""
         from owlbear_kanban.storage import write_task_if_unchanged
 
@@ -1711,9 +1554,7 @@ class TestBuilderDiscovered:
                 kanban_dir=kanban_dir,
             )
 
-    def test_list_task_files_returns_only_visible_markdown_files(
-        self, tmp_path: Path
-    ) -> None:
+    def test_list_task_files_returns_only_visible_markdown_files(self, tmp_path: Path) -> None:
         """list_task_files includes only visible .md files and excludes temp/hidden files."""
         from owlbear_kanban.storage import list_task_files
 
@@ -1728,9 +1569,7 @@ class TestBuilderDiscovered:
 
         assert [p.name for p in files] == [written.name]
 
-    def test_list_task_files_returns_empty_when_tasks_dir_missing(
-        self, tmp_path: Path
-    ) -> None:
+    def test_list_task_files_returns_empty_when_tasks_dir_missing(self, tmp_path: Path) -> None:
         """list_task_files returns [] when the configured tasks directory is absent."""
         from owlbear_kanban.storage import list_task_files
 
@@ -1739,9 +1578,7 @@ class TestBuilderDiscovered:
 
         assert list_task_files(kanban_dir) == []
 
-    def test_list_archive_files_returns_only_visible_markdown_files(
-        self, tmp_path: Path
-    ) -> None:
+    def test_list_archive_files_returns_only_visible_markdown_files(self, tmp_path: Path) -> None:
         """list_archive_files includes only visible .md files and excludes temp/hidden files."""
         from owlbear_kanban.storage import list_archive_files
 
@@ -1755,9 +1592,7 @@ class TestBuilderDiscovered:
 
         assert [p.name for p in files] == [kept.name]
 
-    def test_list_archive_files_returns_empty_when_archive_dir_missing(
-        self, tmp_path: Path
-    ) -> None:
+    def test_list_archive_files_returns_empty_when_archive_dir_missing(self, tmp_path: Path) -> None:
         """list_archive_files returns [] when the configured archive directory is absent."""
         from owlbear_kanban.storage import list_archive_files
 
@@ -1766,9 +1601,7 @@ class TestBuilderDiscovered:
 
         assert list_archive_files(kanban_dir) == []
 
-    def test_allocate_next_id_returns_current_and_persists_increment(
-        self, tmp_path: Path
-    ) -> None:
+    def test_allocate_next_id_returns_current_and_persists_increment(self, tmp_path: Path) -> None:
         """Scan-based allocate_next_id returns 1 on empty board; config.next_id unchanged."""
         from owlbear_kanban.storage import allocate_next_id
 
@@ -1786,18 +1619,13 @@ class TestBuilderDiscovered:
         from owlbear_kanban.storage import _normalize_timestamp
 
         # +02:00 input → UTC equivalent 08:00+00:00
-        assert (
-            _normalize_timestamp("2026-04-20T10:00:00+02:00")
-            == "2026-04-20T08:00:00+00:00"
-        )
+        assert _normalize_timestamp("2026-04-20T10:00:00+02:00") == "2026-04-20T08:00:00+00:00"
 
     def test_normalize_timestamp_z_suffix_is_normalized_to_explicit_utc(self) -> None:
         """_normalize_timestamp rewrites Z-suffix timestamps to +00:00."""
         from owlbear_kanban.storage import _normalize_timestamp
 
-        assert (
-            _normalize_timestamp("2026-04-20T10:00:00Z") == "2026-04-20T10:00:00+00:00"
-        )
+        assert _normalize_timestamp("2026-04-20T10:00:00Z") == "2026-04-20T10:00:00+00:00"
 
     def test_normalize_timestamp_non_matching_format(self) -> None:
         """_normalize_timestamp returns ts unchanged when regex does not match."""
@@ -1806,9 +1634,7 @@ class TestBuilderDiscovered:
         ts = "not-a-timestamp"
         assert _normalize_timestamp(ts) == ts
 
-    def test_attempt_repair_mode9_invalid_priority_auto_fixes(
-        self, tmp_path: Path
-    ) -> None:
+    def test_attempt_repair_mode9_invalid_priority_auto_fixes(self, tmp_path: Path) -> None:
         """attempt_repair for ERR_CORRUPT_INVALID_PRIORITY coerces priority to first configured."""
         from owlbear_kanban.corruption import (
             attempt_repair,
@@ -1826,9 +1652,7 @@ class TestBuilderDiscovered:
         outcome = attempt_repair(bad_file, ERR_CORRUPT_INVALID_PRIORITY, config)
         assert outcome.action == "fixed"
 
-    def test_attempt_repair_mode6_id_filename_mismatch_renames(
-        self, tmp_path: Path
-    ) -> None:
+    def test_attempt_repair_mode6_id_filename_mismatch_renames(self, tmp_path: Path) -> None:
         """attempt_repair for ERR_CORRUPT_ID_FILENAME_MISMATCH renames the file."""
         from owlbear_kanban.corruption import (
             attempt_repair,
@@ -1847,9 +1671,7 @@ class TestBuilderDiscovered:
         assert outcome.action == "fixed"
         assert not bad_file.exists()
 
-    def test_engine_list_tasks_archived_strips_legacy_claimed_by(
-        self, tmp_path: Path
-    ) -> None:
+    def test_engine_list_tasks_archived_strips_legacy_claimed_by(self, tmp_path: Path) -> None:
         """Archived list summaries should not surface legacy claimed_by as claimed=True."""
         from owlbear_kanban import KanbanEngine
 
@@ -1877,17 +1699,13 @@ class TestFromAC_ClaimListRegression:
         """Return a new-schema board with one clean task in tasks/."""
         kanban_dir = tmp_path / "board"
         kanban_dir.mkdir(parents=True)
-        (kanban_dir / "config.yml").write_text(
-            _NEW_SCHEMA_CONFIG_YAML, encoding="utf-8"
-        )
+        (kanban_dir / "config.yml").write_text(_NEW_SCHEMA_CONFIG_YAML, encoding="utf-8")
         (kanban_dir / "tasks").mkdir()
         (kanban_dir / "archive").mkdir()
         write_task(_minimal_task(task_id), kanban_dir)
         return kanban_dir
 
-    def test_claimed_task_remains_in_list_tasks_same_engine(
-        self, tmp_path: Path
-    ) -> None:
+    def test_claimed_task_remains_in_list_tasks_same_engine(self, tmp_path: Path) -> None:
         """AC-REGR: claim_task() then list_tasks() on same engine — task must be visible."""
         from owlbear_kanban import KanbanEngine
 
@@ -1897,13 +1715,9 @@ class TestFromAC_ClaimListRegression:
 
         task_ids = {t.id for t in engine.list_tasks()}
 
-        assert 1 in task_ids, (
-            "Claimed task must appear in list_tasks() after claim_task()"
-        )
+        assert 1 in task_ids, "Claimed task must appear in list_tasks() after claim_task()"
 
-    def test_claimed_task_remains_in_list_tasks_after_cache_miss(
-        self, tmp_path: Path
-    ) -> None:
+    def test_claimed_task_remains_in_list_tasks_after_cache_miss(self, tmp_path: Path) -> None:
         """AC-REGR: Warm cache, then claim_task() triggers mtime change — task must survive cache miss.
 
         Flow: list_tasks() (warms cache) → claim_task() (file mtime changes)
@@ -1922,9 +1736,7 @@ class TestFromAC_ClaimListRegression:
 
         task_ids = {t.id for t in engine.list_tasks()}
 
-        assert 2 in task_ids, (
-            "Claimed task must appear in list_tasks() after cache miss"
-        )
+        assert 2 in task_ids, "Claimed task must appear in list_tasks() after cache miss"
 
     def test_start_work_then_list_tasks_includes_task(self, tmp_path: Path) -> None:
         """AC-REGR: start_work() is the public API for claiming — task must stay in list."""
@@ -1936,9 +1748,7 @@ class TestFromAC_ClaimListRegression:
 
         task_ids = {t.id for t in engine.list_tasks()}
 
-        assert 3 in task_ids, (
-            "Task claimed via start_work() must appear in list_tasks()"
-        )
+        assert 3 in task_ids, "Task claimed via start_work() must appear in list_tasks()"
 
 
 class TestFromAC_SaveConfigPersistsOnlyNextId:
@@ -1949,9 +1759,7 @@ class TestFromAC_SaveConfigPersistsOnlyNextId:
     These tests provide direct evidence of the next_id-only persistence contract.
     """
 
-    def test_save_config_config_yml_contains_only_next_id_key(
-        self, tmp_path: Path
-    ) -> None:
+    def test_save_config_config_yml_contains_only_next_id_key(self, tmp_path: Path) -> None:
         """config.yml after save_config() has exactly one top-level key: next_id.
 
         Proves topology sections (statuses, priorities, pipeline, agents, policy)
@@ -1969,9 +1777,7 @@ class TestFromAC_SaveConfigPersistsOnlyNextId:
         raw = (kanban_dir / "config.yml").read_text(encoding="utf-8")
         # Extract top-level YAML keys (lines that start at column 0).
         top_level_keys = re.findall(r"^([a-z_][a-z0-9_]*):", raw, re.MULTILINE)
-        assert top_level_keys == ["next_id"], (
-            f"config.yml must contain only 'next_id'; found keys: {top_level_keys!r}"
-        )
+        assert top_level_keys == ["next_id"], f"config.yml must contain only 'next_id'; found keys: {top_level_keys!r}"
 
     def test_save_config_omits_topology_sections(self, tmp_path: Path) -> None:
         """config.yml after save_config() does not contain topology section keys.
@@ -1988,8 +1794,7 @@ class TestFromAC_SaveConfigPersistsOnlyNextId:
         raw = (kanban_dir / "config.yml").read_text(encoding="utf-8")
         for key in ("statuses", "priorities", "pipeline", "agents", "policy"):
             assert key not in raw, (
-                f"Topology key '{key}' must not appear in config.yml after save_config(); "
-                f"content:\n{raw}"
+                f"Topology key '{key}' must not appear in config.yml after save_config(); content:\n{raw}"
             )
 
     def test_save_config_preserves_next_id_value(self, tmp_path: Path) -> None:
@@ -2002,9 +1807,7 @@ class TestFromAC_SaveConfigPersistsOnlyNextId:
         save_config(config, kanban_dir)
 
         reloaded = load_config(kanban_dir)
-        assert reloaded.next_id == 777, (
-            f"Expected next_id=777 after save_config; got {reloaded.next_id!r}"
-        )
+        assert reloaded.next_id == 777, f"Expected next_id=777 after save_config; got {reloaded.next_id!r}"
 
 
 # --- merged from serve/kanban/tests/test_storage_imports.py ---
@@ -2023,8 +1826,7 @@ class TestFromAC_TaskIoRemoved:
         """task_io.py file must not exist in the owlbear_kanban source directory."""
         task_io_path = _KANBAN_SRC / "task_io.py"
         assert not task_io_path.exists(), (
-            f"task_io.py still present at {task_io_path}; "
-            "it must be deleted per AC: task_io.py removed"
+            f"task_io.py still present at {task_io_path}; it must be deleted per AC: task_io.py removed"
         )
 
     def test_storage_module_is_importable(self) -> None:
@@ -2041,9 +1843,7 @@ class TestFromAC_TaskIoRemoved:
                 continue  # the file itself is the thing to delete
             if "task_io" in py_file.read_text(encoding="utf-8"):
                 offenders.append(py_file.name)
-        assert offenders == [], (
-            f"These files still reference task_io and must be redirected to storage: {offenders}"
-        )
+        assert offenders == [], f"These files still reference task_io and must be redirected to storage: {offenders}"
 
 
 class TestFromAC_StorageClean:
@@ -2053,8 +1853,7 @@ class TestFromAC_StorageClean:
         """storage.py source must not contain 'task_io'."""
         source = _read_source("storage.py")
         assert "task_io" not in source, (
-            "storage.py still imports from task_io; "
-            "it must be self-contained per AC: all imports redirected to storage"
+            "storage.py still imports from task_io; it must be self-contained per AC: all imports redirected to storage"
         )
 
 
@@ -2065,8 +1864,7 @@ class TestFromAC_EngineRedirected:
         """engine.py source must not contain 'task_io'."""
         source = _read_source("engine.py")
         assert "task_io" not in source, (
-            "engine.py still imports from task_io; "
-            "redirect to owlbear_kanban.storage per AC"
+            "engine.py still imports from task_io; redirect to owlbear_kanban.storage per AC"
         )
 
     def test_engine_imports_read_task_from_storage(self) -> None:
@@ -2077,16 +1875,12 @@ class TestFromAC_EngineRedirected:
             "engine.py must use 'from owlbear_kanban.storage import ...' for its I/O calls"
         )
         # And must NOT fall back to task_io for any of those
-        assert "task_io" not in source, (
-            "engine.py still references task_io; all I/O must come from storage"
-        )
+        assert "task_io" not in source, "engine.py still references task_io; all I/O must come from storage"
 
     def test_engine_imports_write_task_from_storage(self) -> None:
         """engine.py must resolve write_task via owlbear_kanban.storage, not task_io."""
         source = _read_source("engine.py")
-        assert "task_io" not in source, (
-            "engine.py write_task must come from storage, not task_io"
-        )
+        assert "task_io" not in source, "engine.py write_task must come from storage, not task_io"
 
 
 class TestFromAC_DispatchRedirected:
@@ -2096,16 +1890,14 @@ class TestFromAC_DispatchRedirected:
         """dispatch.py source must not contain 'task_io'."""
         source = _read_source("dispatch.py")
         assert "task_io" not in source, (
-            "dispatch.py still imports from task_io; "
-            "redirect to owlbear_kanban.storage per AC"
+            "dispatch.py still imports from task_io; redirect to owlbear_kanban.storage per AC"
         )
 
     def test_dispatch_imports_read_task_from_storage(self) -> None:
         """dispatch.py must avoid direct storage imports while still resolving reads."""
         source = _read_source("dispatch.py")
         assert "owlbear_kanban.storage" not in source, (
-            "dispatch.py must not import from owlbear_kanban.storage directly; "
-            "only engine.py may import storage"
+            "dispatch.py must not import from owlbear_kanban.storage directly; only engine.py may import storage"
         )
         assert "show_task" in source, "dispatch.py must resolve reads via engine"
 
@@ -2117,17 +1909,14 @@ class TestFromAC_CorruptionRedirected:
         """corruption.py source must not contain 'task_io'."""
         source = _read_source("corruption.py")
         assert "task_io" not in source, (
-            "corruption.py still imports from task_io; "
-            "redirect to owlbear_kanban.storage per AC"
+            "corruption.py still imports from task_io; redirect to owlbear_kanban.storage per AC"
         )
 
 
 class TestFromAC_QuarantineContainment:
     """move_to_quarantine must call validate_path_containment and reject paths outside kanban_dir."""
 
-    def test_move_to_quarantine_rejects_path_outside_kanban_dir(
-        self, tmp_path: Path
-    ) -> None:
+    def test_move_to_quarantine_rejects_path_outside_kanban_dir(self, tmp_path: Path) -> None:
         """PermissionError raised when task_path resolves outside kanban_dir."""
         from owlbear_kanban.storage import move_to_quarantine
 
@@ -2139,9 +1928,7 @@ class TestFromAC_QuarantineContainment:
         with pytest.raises(PermissionError):
             move_to_quarantine(outside_file, kanban_dir)
 
-    def test_move_to_quarantine_rejects_sibling_directory_path(
-        self, tmp_path: Path
-    ) -> None:
+    def test_move_to_quarantine_rejects_sibling_directory_path(self, tmp_path: Path) -> None:
         """PermissionError raised when task_path is in a sibling directory of kanban_dir."""
         from owlbear_kanban.storage import move_to_quarantine
 
@@ -2155,9 +1942,7 @@ class TestFromAC_QuarantineContainment:
         with pytest.raises(PermissionError):
             move_to_quarantine(sibling_file, kanban_dir)
 
-    def test_move_to_quarantine_does_not_create_quarantine_dir_on_rejection(
-        self, tmp_path: Path
-    ) -> None:
+    def test_move_to_quarantine_does_not_create_quarantine_dir_on_rejection(self, tmp_path: Path) -> None:
         """quarantine/ directory must NOT be created when the path is rejected."""
         from owlbear_kanban.storage import move_to_quarantine
 
@@ -2185,9 +1970,7 @@ class TestFromAC_VendorExtraTimestamps:
     These tests provide the required direct write-side proof.
     """
 
-    def test_vendor_extra_naive_timestamp_written_with_utc_offset(
-        self, tmp_path: Path
-    ) -> None:
+    def test_vendor_extra_naive_timestamp_written_with_utc_offset(self, tmp_path: Path) -> None:
         """AC-C15: vendor extra naive timestamp → +00:00 suffix on disk via write_task()."""
         from owlbear_kanban.models import Task
         from owlbear_kanban.storage import write_task
@@ -2211,11 +1994,7 @@ class TestFromAC_VendorExtraTimestamps:
         frontmatter = content[4:closing_idx]
 
         released_at_line = next(
-            (
-                line
-                for line in frontmatter.splitlines()
-                if line.startswith("released_at:")
-            ),
+            (line for line in frontmatter.splitlines() if line.startswith("released_at:")),
             None,
         )
         assert released_at_line is not None, (
@@ -2226,9 +2005,7 @@ class TestFromAC_VendorExtraTimestamps:
             f"{released_at_line.rstrip()!r}"
         )
 
-    def test_vendor_extra_z_suffix_timestamp_converted_to_plus_zero(
-        self, tmp_path: Path
-    ) -> None:
+    def test_vendor_extra_z_suffix_timestamp_converted_to_plus_zero(self, tmp_path: Path) -> None:
         """AC-C15: vendor extra timestamp with Z suffix → +00:00 on disk (Z replaced)."""
         from owlbear_kanban.models import Task
         from owlbear_kanban.storage import write_task
@@ -2251,16 +2028,10 @@ class TestFromAC_VendorExtraTimestamps:
         frontmatter = content[4:closing_idx]
 
         synced_at_line = next(
-            (
-                line
-                for line in frontmatter.splitlines()
-                if line.startswith("synced_at:")
-            ),
+            (line for line in frontmatter.splitlines() if line.startswith("synced_at:")),
             None,
         )
-        assert synced_at_line is not None, (
-            "synced_at vendor extra field was not written to frontmatter by write_task()"
-        )
+        assert synced_at_line is not None, "synced_at vendor extra field was not written to frontmatter by write_task()"
         assert "+00:00" in synced_at_line, (
             f"AC-C15: vendor extra Z timestamp not converted to +00:00: {synced_at_line.rstrip()!r}"
         )
@@ -2268,9 +2039,7 @@ class TestFromAC_VendorExtraTimestamps:
             f"AC-C15: Z suffix must be replaced with +00:00, not kept as-is: {synced_at_line.rstrip()!r}"
         )
 
-    def test_vendor_extra_non_timestamp_string_written_unchanged(
-        self, tmp_path: Path
-    ) -> None:
+    def test_vendor_extra_non_timestamp_string_written_unchanged(self, tmp_path: Path) -> None:
         """AC-C15 boundary: non-timestamp vendor extra strings pass through write_task() unmodified."""
         from owlbear_kanban.models import Task
         from owlbear_kanban.storage import write_task
@@ -2293,11 +2062,7 @@ class TestFromAC_VendorExtraTimestamps:
         frontmatter = content[4:closing_idx]
 
         ext_ref_line = next(
-            (
-                line
-                for line in frontmatter.splitlines()
-                if line.startswith("external_ref:")
-            ),
+            (line for line in frontmatter.splitlines() if line.startswith("external_ref:")),
             None,
         )
         assert ext_ref_line is not None, (

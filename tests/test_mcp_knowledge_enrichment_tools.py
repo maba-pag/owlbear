@@ -200,9 +200,7 @@ class TestFromAC_GetNextBatch:
         )
 
     @pytest.mark.asyncio
-    async def test_immediate_transaction_used_when_no_pending_chunks(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_immediate_transaction_used_when_no_pending_chunks(self, conn: sqlite3.Connection) -> None:
         """BEGIN IMMEDIATE is used even when no pending chunks exist (atomicity guarantee)."""
         sql_trace: list[str] = []
         conn.set_trace_callback(sql_trace.append)
@@ -216,9 +214,7 @@ class TestFromAC_GetNextBatch:
         )
 
     @pytest.mark.asyncio
-    async def test_select_and_update_within_single_immediate_transaction(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_select_and_update_within_single_immediate_transaction(self, conn: sqlite3.Connection) -> None:
         """SQL trace must show BEGIN IMMEDIATE → SELECT → UPDATE → COMMIT with no COMMIT between SELECT and UPDATE.
 
         Discriminating proof: a split-transaction implementation (BEGIN→SELECT→COMMIT,
@@ -239,51 +235,33 @@ class TestFromAC_GetNextBatch:
 
         upper_trace = [s.upper().strip() for s in sql_trace]
 
-        begin_idx = next(
-            (i for i, s in enumerate(upper_trace) if "BEGIN IMMEDIATE" in s), None
-        )
-        assert begin_idx is not None, (
-            f"BEGIN IMMEDIATE not found in SQL trace: {sql_trace}"
-        )
+        begin_idx = next((i for i, s in enumerate(upper_trace) if "BEGIN IMMEDIATE" in s), None)
+        assert begin_idx is not None, f"BEGIN IMMEDIATE not found in SQL trace: {sql_trace}"
 
         select_idx = next(
             (i for i, s in enumerate(upper_trace) if "SELECT" in s and i > begin_idx),
             None,
         )
-        assert select_idx is not None, (
-            f"SELECT not found after BEGIN IMMEDIATE in SQL trace: {sql_trace}"
-        )
+        assert select_idx is not None, f"SELECT not found after BEGIN IMMEDIATE in SQL trace: {sql_trace}"
 
         update_idx = next(
-            (
-                i
-                for i, s in enumerate(upper_trace)
-                if s.startswith("UPDATE") and i > begin_idx
-            ),
+            (i for i, s in enumerate(upper_trace) if s.startswith("UPDATE") and i > begin_idx),
             None,
         )
-        assert update_idx is not None, (
-            f"UPDATE not found after BEGIN IMMEDIATE in SQL trace: {sql_trace}"
-        )
+        assert update_idx is not None, f"UPDATE not found after BEGIN IMMEDIATE in SQL trace: {sql_trace}"
 
         commit_idx = next(
             (i for i, s in enumerate(upper_trace) if s == "COMMIT" and i > begin_idx),
             None,
         )
-        assert commit_idx is not None, (
-            f"COMMIT not found after BEGIN IMMEDIATE in SQL trace: {sql_trace}"
-        )
+        assert commit_idx is not None, f"COMMIT not found after BEGIN IMMEDIATE in SQL trace: {sql_trace}"
 
         # Discriminating: both SELECT and UPDATE precede the COMMIT
         assert select_idx < commit_idx, "SELECT must occur before COMMIT"
         assert update_idx < commit_idx, "UPDATE must occur before COMMIT"
 
         # Discriminating: no COMMIT may appear between SELECT and UPDATE
-        intermediate_commits = [
-            i
-            for i, s in enumerate(upper_trace)
-            if s == "COMMIT" and select_idx < i < update_idx
-        ]
+        intermediate_commits = [i for i, s in enumerate(upper_trace) if s == "COMMIT" and select_idx < i < update_idx]
         assert not intermediate_commits, (
             "COMMIT must not occur between SELECT and UPDATE — "
             f"found intermediate commits at positions {intermediate_commits} in trace: {sql_trace}"
@@ -307,9 +285,7 @@ class TestFromAC_GetNextBatch:
         assert _get_chunk_field(item, "chunk_id") == chunk_id
 
     @pytest.mark.asyncio
-    async def test_returns_text_field_with_chunk_content(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_returns_text_field_with_chunk_content(self, conn: sqlite3.Connection) -> None:
         """Each result item carries a text field containing the chunk's content."""
         source_id = _insert_source(conn)
         doc_id = _insert_document(conn, source_id=source_id)
@@ -324,9 +300,7 @@ class TestFromAC_GetNextBatch:
         assert _get_chunk_field(item, "text") == "the quick brown fox"
 
     @pytest.mark.asyncio
-    async def test_returns_doc_title_from_documents_join(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_returns_doc_title_from_documents_join(self, conn: sqlite3.Connection) -> None:
         """doc_title field reflects the title from the joined documents row."""
         source_id = _insert_source(conn)
         doc_id = _insert_document(conn, title="My Document Title", source_id=source_id)
@@ -337,15 +311,11 @@ class TestFromAC_GetNextBatch:
 
         assert len(result) == 1
         item = result[0]
-        assert _has_chunk_field(item, "doc_title"), (
-            "Result item missing doc_title field"
-        )
+        assert _has_chunk_field(item, "doc_title"), "Result item missing doc_title field"
         assert _get_chunk_field(item, "doc_title") == "My Document Title"
 
     @pytest.mark.asyncio
-    async def test_returns_source_name_from_knowledge_sources_join(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_returns_source_name_from_knowledge_sources_join(self, conn: sqlite3.Connection) -> None:
         """source_name field reflects the name from the joined knowledge_sources row."""
         source_id = _insert_source(conn, name="My Knowledge Source")
         doc_id = _insert_document(conn, source_id=source_id)
@@ -356,15 +326,11 @@ class TestFromAC_GetNextBatch:
 
         assert len(result) == 1
         item = result[0]
-        assert _has_chunk_field(item, "source_name"), (
-            "Result item missing source_name field"
-        )
+        assert _has_chunk_field(item, "source_name"), "Result item missing source_name field"
         assert _get_chunk_field(item, "source_name") == "My Knowledge Source"
 
     @pytest.mark.asyncio
-    async def test_source_name_is_none_for_document_without_knowledge_source(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_source_name_is_none_for_document_without_knowledge_source(self, conn: sqlite3.Connection) -> None:
         """Chunk from a document with no linked knowledge_source must NOT be returned.
 
         AC-6 compliance: get_next_batch uses INNER JOIN to knowledge_sources so that
@@ -395,14 +361,10 @@ class TestFromAC_GetNextBatch:
 
         assert len(result) == 1
         item = result[0]
-        assert _has_chunk_field(item, "section_path"), (
-            "Result item missing section_path field"
-        )
+        assert _has_chunk_field(item, "section_path"), "Result item missing section_path field"
 
     @pytest.mark.asyncio
-    async def test_section_path_round_trip_from_metadata_json(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_section_path_round_trip_from_metadata_json(self, conn: sqlite3.Connection) -> None:
         """section_path is parsed from chunks.metadata JSON — insert a known value and assert exact round-trip.
 
         Discriminating proof: a constant/None section_path would fail this test because
@@ -429,14 +391,11 @@ class TestFromAC_GetNextBatch:
         item = result[0]
         actual_section_path = _get_chunk_field(item, "section_path")
         assert actual_section_path == "Introduction/Background", (
-            f"section_path round-trip failed: expected 'Introduction/Background', "
-            f"got {actual_section_path!r}"
+            f"section_path round-trip failed: expected 'Introduction/Background', got {actual_section_path!r}"
         )
 
     @pytest.mark.asyncio
-    async def test_limit_parameter_caps_returned_items(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_limit_parameter_caps_returned_items(self, conn: sqlite3.Connection) -> None:
         """get_next_batch(limit=2) returns at most 2 items when 5 are pending."""
         source_id = _insert_source(conn)
         doc_id = _insert_document(conn, source_id=source_id)
@@ -451,9 +410,7 @@ class TestFromAC_GetNextBatch:
     # --- AC3: claimed chunks not returned in subsequent calls (td:1) ---
 
     @pytest.mark.asyncio
-    async def test_claimed_chunks_not_returned_in_second_call(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_claimed_chunks_not_returned_in_second_call(self, conn: sqlite3.Connection) -> None:
         """A chunk returned by get_next_batch is not returned again on the next call."""
         source_id = _insert_source(conn)
         doc_id = _insert_document(conn, source_id=source_id)
@@ -467,14 +424,10 @@ class TestFromAC_GetNextBatch:
         second_ids = {_get_chunk_field(r, "chunk_id") for r in second}
 
         assert chunk_id in first_ids, "Pending chunk should appear in first call"
-        assert chunk_id not in second_ids, (
-            "Claimed chunk must not appear in subsequent get_next_batch call"
-        )
+        assert chunk_id not in second_ids, "Claimed chunk must not appear in subsequent get_next_batch call"
 
     @pytest.mark.asyncio
-    async def test_all_pending_claimed_then_empty(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_all_pending_claimed_then_empty(self, conn: sqlite3.Connection) -> None:
         """With 3 pending chunks and limit=10, first call returns all 3; second returns 0."""
         source_id = _insert_source(conn)
         doc_id = _insert_document(conn, source_id=source_id)
@@ -491,9 +444,7 @@ class TestFromAC_GetNextBatch:
     # --- AC4: lease expiry — stale claims (>10 min) revert to pending (td:2) ---
 
     @pytest.mark.asyncio
-    async def test_stale_claimed_chunk_returned_after_lease_expiry(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_stale_claimed_chunk_returned_after_lease_expiry(self, conn: sqlite3.Connection) -> None:
         """A chunk claimed 11 min ago is returned by get_next_batch (treated as pending)."""
         source_id = _insert_source(conn)
         doc_id = _insert_document(conn, source_id=source_id)
@@ -509,14 +460,10 @@ class TestFromAC_GetNextBatch:
         result = await get_next_batch(ctx, limit=10)
 
         returned_ids = {_get_chunk_field(r, "chunk_id") for r in result}
-        assert chunk_id in returned_ids, (
-            "Stale claimed chunk (11 min) should be re-returned as expired lease"
-        )
+        assert chunk_id in returned_ids, "Stale claimed chunk (11 min) should be re-returned as expired lease"
 
     @pytest.mark.asyncio
-    async def test_fresh_claimed_chunk_not_returned(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_fresh_claimed_chunk_not_returned(self, conn: sqlite3.Connection) -> None:
         """A chunk claimed 5 min ago (within lease window) is NOT returned."""
         source_id = _insert_source(conn)
         doc_id = _insert_document(conn, source_id=source_id)
@@ -532,14 +479,10 @@ class TestFromAC_GetNextBatch:
         result = await get_next_batch(ctx, limit=10)
 
         returned_ids = {_get_chunk_field(r, "chunk_id") for r in result}
-        assert chunk_id not in returned_ids, (
-            "Freshly claimed chunk (5 min) must not be returned before lease expires"
-        )
+        assert chunk_id not in returned_ids, "Freshly claimed chunk (5 min) must not be returned before lease expires"
 
     @pytest.mark.asyncio
-    async def test_exactly_10_min_boundary_not_expired(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_exactly_10_min_boundary_not_expired(self, conn: sqlite3.Connection) -> None:
         """A chunk claimed exactly 10 min ago is NOT returned (boundary: >10 min required)."""
         source_id = _insert_source(conn)
         doc_id = _insert_document(conn, source_id=source_id)
@@ -560,9 +503,7 @@ class TestFromAC_GetNextBatch:
         )
 
     @pytest.mark.asyncio
-    async def test_enriched_chunks_not_returned_even_with_stale_claimed_at(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_enriched_chunks_not_returned_even_with_stale_claimed_at(self, conn: sqlite3.Connection) -> None:
         """Chunks in 'enriched' state are never returned, even with old claimed_at."""
         source_id = _insert_source(conn)
         doc_id = _insert_document(conn, source_id=source_id)
@@ -578,16 +519,12 @@ class TestFromAC_GetNextBatch:
         result = await get_next_batch(ctx, limit=10)
 
         returned_ids = {_get_chunk_field(r, "chunk_id") for r in result}
-        assert chunk_id not in returned_ids, (
-            "Enriched chunks must never be returned, even with stale claimed_at"
-        )
+        assert chunk_id not in returned_ids, "Enriched chunks must never be returned, even with stale claimed_at"
 
     # --- AC9: excludes chunks from sources with enrich=false (td:1) ---
 
     @pytest.mark.asyncio
-    async def test_excludes_chunks_from_non_enrich_sources(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_excludes_chunks_from_non_enrich_sources(self, conn: sqlite3.Connection) -> None:
         """Chunks whose source has enrich=0 are not returned by get_next_batch."""
         no_enrich_source = _insert_source(conn, name="NoEnrich Source", enrich=0)
         doc_id = _insert_document(conn, source_id=no_enrich_source)
@@ -597,14 +534,10 @@ class TestFromAC_GetNextBatch:
         result = await get_next_batch(ctx, limit=10)
 
         returned_ids = {_get_chunk_field(r, "chunk_id") for r in result}
-        assert chunk_id not in returned_ids, (
-            "Chunks from sources with enrich=0 must be excluded from get_next_batch"
-        )
+        assert chunk_id not in returned_ids, "Chunks from sources with enrich=0 must be excluded from get_next_batch"
 
     @pytest.mark.asyncio
-    async def test_includes_chunks_from_enrich_true_sources(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_includes_chunks_from_enrich_true_sources(self, conn: sqlite3.Connection) -> None:
         """Chunks whose source has enrich=1 ARE returned by get_next_batch."""
         enrich_source = _insert_source(conn, name="EnrichSource", enrich=1)
         doc_id = _insert_document(conn, source_id=enrich_source)
@@ -614,14 +547,10 @@ class TestFromAC_GetNextBatch:
         result = await get_next_batch(ctx, limit=10)
 
         returned_ids = {_get_chunk_field(r, "chunk_id") for r in result}
-        assert chunk_id in returned_ids, (
-            "Chunks from sources with enrich=1 must be included in get_next_batch"
-        )
+        assert chunk_id in returned_ids, "Chunks from sources with enrich=1 must be included in get_next_batch"
 
     @pytest.mark.asyncio
-    async def test_mixed_sources_only_enrich_true_chunks_returned(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_mixed_sources_only_enrich_true_chunks_returned(self, conn: sqlite3.Connection) -> None:
         """With mixed enrich=0 and enrich=1 sources, only enrich=1 chunks are returned."""
         good_source = _insert_source(conn, name="GoodSource", enrich=1)
         bad_source = _insert_source(conn, name="BadSource", enrich=0)
@@ -649,16 +578,12 @@ class TestFromAC_StoreEnrichment:
     # --- AC5: UPSERT entities via INSERT OR REPLACE (td:1) ---
 
     @pytest.mark.asyncio
-    async def test_upsert_replaces_existing_entity_on_same_id(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_upsert_replaces_existing_entity_on_same_id(self, conn: sqlite3.Connection) -> None:
         """Calling store_enrichment with an existing entity id updates it (single row)."""
         source_id = _insert_source(conn)
         doc_id = _insert_document(conn, source_id=source_id)
         chunk_id = _insert_chunk(conn, document_id=doc_id)
-        entity_id = _insert_entity(
-            conn, name="OriginalName", document_id=doc_id, chunk_id=chunk_id
-        )
+        entity_id = _insert_entity(conn, name="OriginalName", document_id=doc_id, chunk_id=chunk_id)
 
         entities = [
             {
@@ -673,18 +598,12 @@ class TestFromAC_StoreEnrichment:
         ctx = _make_mcp_ctx(conn)
         await store_enrichment(ctx, chunk_id=chunk_id, entities=entities, edges=[])
 
-        rows = conn.execute(
-            "SELECT name FROM entities WHERE id = ?", (entity_id,)
-        ).fetchall()
+        rows = conn.execute("SELECT name FROM entities WHERE id = ?", (entity_id,)).fetchall()
         assert len(rows) == 1, f"UPSERT must produce exactly one row, got {len(rows)}"
-        assert rows[0][0] == "UpdatedName", (
-            f"Entity name should be 'UpdatedName' after UPSERT, got {rows[0][0]!r}"
-        )
+        assert rows[0][0] == "UpdatedName", f"Entity name should be 'UpdatedName' after UPSERT, got {rows[0][0]!r}"
 
     @pytest.mark.asyncio
-    async def test_new_entity_inserted_by_store_enrichment(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_new_entity_inserted_by_store_enrichment(self, conn: sqlite3.Connection) -> None:
         """store_enrichment creates a new entity row that did not exist before."""
         source_id = _insert_source(conn)
         doc_id = _insert_document(conn, source_id=source_id)
@@ -704,18 +623,14 @@ class TestFromAC_StoreEnrichment:
         ctx = _make_mcp_ctx(conn)
         await store_enrichment(ctx, chunk_id=chunk_id, entities=entities, edges=[])
 
-        row = conn.execute(
-            "SELECT name FROM entities WHERE id = ?", (new_entity_id,)
-        ).fetchone()
+        row = conn.execute("SELECT name FROM entities WHERE id = ?", (new_entity_id,)).fetchone()
         assert row is not None, "New entity must be inserted by store_enrichment"
         assert row[0] == "BrandNewEntity"
 
     # --- AC6: INSERT OR IGNORE edges with UNIQUE constraint (td:1) ---
 
     @pytest.mark.asyncio
-    async def test_duplicate_edge_does_not_raise_error(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_duplicate_edge_does_not_raise_error(self, conn: sqlite3.Connection) -> None:
         """Inserting a duplicate edge (same source_id, target_id, relation, document_id) raises no error."""
         source_id = _insert_source(conn)
         doc_id = _insert_document(conn, source_id=source_id)
@@ -738,9 +653,7 @@ class TestFromAC_StoreEnrichment:
         await store_enrichment(ctx, chunk_id=chunk_b, entities=[], edges=[edge])
 
     @pytest.mark.asyncio
-    async def test_duplicate_edge_results_in_single_row(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_duplicate_edge_results_in_single_row(self, conn: sqlite3.Connection) -> None:
         """After two store_enrichment calls with the same edge, exactly one edge row exists."""
         source_id = _insert_source(conn)
         doc_id = _insert_document(conn, source_id=source_id)
@@ -761,20 +674,15 @@ class TestFromAC_StoreEnrichment:
         await store_enrichment(ctx, chunk_id=chunk_b, entities=[], edges=[edge])
 
         count = conn.execute(
-            "SELECT count(*) FROM edges "
-            "WHERE source_id=? AND target_id=? AND relation=? AND document_id=?",
+            "SELECT count(*) FROM edges WHERE source_id=? AND target_id=? AND relation=? AND document_id=?",
             (ent_a, ent_b, "causes", doc_id),
         ).fetchone()[0]
-        assert count == 1, (
-            f"Expected exactly 1 edge row after duplicate insert, got {count}"
-        )
+        assert count == 1, f"Expected exactly 1 edge row after duplicate insert, got {count}"
 
     # --- AC7: updates enrichment_state to 'enriched' (td:1) ---
 
     @pytest.mark.asyncio
-    async def test_store_enrichment_sets_state_to_enriched(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_store_enrichment_sets_state_to_enriched(self, conn: sqlite3.Connection) -> None:
         """After store_enrichment, the chunk's enrichment_state is 'enriched'."""
         source_id = _insert_source(conn)
         doc_id = _insert_document(conn, source_id=source_id)
@@ -783,18 +691,12 @@ class TestFromAC_StoreEnrichment:
         ctx = _make_mcp_ctx(conn)
         await store_enrichment(ctx, chunk_id=chunk_id, entities=[], edges=[])
 
-        row = conn.execute(
-            "SELECT enrichment_state FROM chunks WHERE id=?", (chunk_id,)
-        ).fetchone()
+        row = conn.execute("SELECT enrichment_state FROM chunks WHERE id=?", (chunk_id,)).fetchone()
         assert row is not None
-        assert row[0] == "enriched", (
-            f"Expected enrichment_state='enriched', got {row[0]!r}"
-        )
+        assert row[0] == "enriched", f"Expected enrichment_state='enriched', got {row[0]!r}"
 
     @pytest.mark.asyncio
-    async def test_enriched_chunk_not_returned_by_get_next_batch(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_enriched_chunk_not_returned_by_get_next_batch(self, conn: sqlite3.Connection) -> None:
         """After store_enrichment, the chunk does not appear in get_next_batch results."""
         source_id = _insert_source(conn)
         doc_id = _insert_document(conn, source_id=source_id)
@@ -805,16 +707,12 @@ class TestFromAC_StoreEnrichment:
         result = await get_next_batch(ctx, limit=10)
 
         returned_ids = {_get_chunk_field(r, "chunk_id") for r in result}
-        assert chunk_id not in returned_ids, (
-            "Enriched chunk must not appear in get_next_batch results"
-        )
+        assert chunk_id not in returned_ids, "Enriched chunk must not appear in get_next_batch results"
 
     # --- AC8: WAL concurrent write safety (td:2) ---
 
     @pytest.mark.asyncio
-    async def test_concurrent_store_enrichment_no_operational_error(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_concurrent_store_enrichment_no_operational_error(self, tmp_path: Path) -> None:
         """Two concurrent store_enrichment calls on a WAL file-backed DB succeed without error."""
         db_path = str(tmp_path / "wal_concurrent.db")
 
@@ -861,9 +759,7 @@ class TestFromAC_StoreEnrichment:
             c.execute("PRAGMA journal_mode=WAL")
             ctx = _make_mcp_ctx(c)
             try:
-                asyncio.run(
-                    store_enrichment(ctx, chunk_id=chunk_id, entities=[], edges=[])
-                )
+                asyncio.run(store_enrichment(ctx, chunk_id=chunk_id, entities=[], edges=[]))
             except Exception as exc:  # noqa: BLE001
                 errors.append(exc)
             finally:
@@ -879,9 +775,7 @@ class TestFromAC_StoreEnrichment:
         assert not errors, f"Concurrent WAL writes raised errors: {errors}"
 
     @pytest.mark.asyncio
-    async def test_concurrent_writes_both_chunks_become_enriched(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_concurrent_writes_both_chunks_become_enriched(self, tmp_path: Path) -> None:
         """After concurrent store_enrichment, both chunks are in 'enriched' state."""
         db_path = str(tmp_path / "wal_both_enriched.db")
 
@@ -927,9 +821,7 @@ class TestFromAC_StoreEnrichment:
             c.execute("PRAGMA journal_mode=WAL")
             ctx = _make_mcp_ctx(c)
             try:
-                asyncio.run(
-                    store_enrichment(ctx, chunk_id=chunk_id, entities=[], edges=[])
-                )
+                asyncio.run(store_enrichment(ctx, chunk_id=chunk_id, entities=[], edges=[]))
             except Exception as exc:  # noqa: BLE001
                 errors.append(exc)
             finally:
@@ -952,9 +844,5 @@ class TestFromAC_StoreEnrichment:
         verify_conn.close()
 
         states = {row[0]: row[1] for row in rows}
-        assert states.get(chunk_id_a) == "enriched", (
-            f"chunk_a expected 'enriched', got {states.get(chunk_id_a)!r}"
-        )
-        assert states.get(chunk_id_b) == "enriched", (
-            f"chunk_b expected 'enriched', got {states.get(chunk_id_b)!r}"
-        )
+        assert states.get(chunk_id_a) == "enriched", f"chunk_a expected 'enriched', got {states.get(chunk_id_a)!r}"
+        assert states.get(chunk_id_b) == "enriched", f"chunk_b expected 'enriched', got {states.get(chunk_id_b)!r}"

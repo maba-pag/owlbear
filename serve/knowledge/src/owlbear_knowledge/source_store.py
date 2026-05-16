@@ -202,31 +202,21 @@ class KnowledgeSourceStore:
                               → documents (via source_id FK)
                                  → entities, edges, chunks, document_status
         """
-        row = self._conn.execute(
-            "SELECT id FROM knowledge_sources WHERE id = ?", (source_id,)
-        ).fetchone()
+        row = self._conn.execute("SELECT id FROM knowledge_sources WHERE id = ?", (source_id,)).fetchone()
         if row is None:
             return False
 
         # Collect document IDs linked to this source
-        doc_rows = self._conn.execute(
-            "SELECT id FROM documents WHERE source_id = ?", (source_id,)
-        ).fetchall()
+        doc_rows = self._conn.execute("SELECT id FROM documents WHERE source_id = ?", (source_id,)).fetchall()
 
         for (doc_id,) in doc_rows:
             # Delete edges for each entity in the document
-            entity_rows = self._conn.execute(
-                "SELECT id FROM entities WHERE document_id = ?", (doc_id,)
-            ).fetchall()
+            entity_rows = self._conn.execute("SELECT id FROM entities WHERE document_id = ?", (doc_id,)).fetchall()
             for (eid,) in entity_rows:
-                self._conn.execute(
-                    "DELETE FROM edges WHERE source_id = ? OR target_id = ?", (eid, eid)
-                )
+                self._conn.execute("DELETE FROM edges WHERE source_id = ? OR target_id = ?", (eid, eid))
             self._conn.execute("DELETE FROM entities WHERE document_id = ?", (doc_id,))
             self._conn.execute("DELETE FROM chunks WHERE document_id = ?", (doc_id,))
-            self._conn.execute(
-                "DELETE FROM document_status WHERE document_id = ?", (doc_id,)
-            )
+            self._conn.execute("DELETE FROM document_status WHERE document_id = ?", (doc_id,))
 
         self._conn.execute("DELETE FROM documents WHERE source_id = ?", (source_id,))
         self._conn.execute("DELETE FROM source_pages WHERE source_id = ?", (source_id,))

@@ -45,8 +45,7 @@ class TestFromAC_DRSkillReplacement:
         """share/skills/h-decision-requests/SKILL.md must exist."""
         skill_path = _REPO_ROOT / "share/skills/h-decision-requests/SKILL.md"
         assert skill_path.exists(), (
-            f"Expected {skill_path} to exist but it does not. "
-            "Create h-decision-requests skill as part of P2."
+            f"Expected {skill_path} to exist but it does not. Create h-decision-requests skill as part of P2."
         )
 
     def test_h_decision_requests_skill_has_valid_frontmatter(self) -> None:
@@ -54,36 +53,26 @@ class TestFromAC_DRSkillReplacement:
         skill_path = _REPO_ROOT / "share/skills/h-decision-requests/SKILL.md"
         text = skill_path.read_text(encoding="utf-8")
         fm = _parse_frontmatter(text)
-        assert "name" in fm, (
-            "h-decision-requests/SKILL.md frontmatter missing 'name' field. "
-            f"Parsed frontmatter: {fm}"
-        )
+        assert "name" in fm, f"h-decision-requests/SKILL.md frontmatter missing 'name' field. Parsed frontmatter: {fm}"
         assert "description" in fm, (
-            "h-decision-requests/SKILL.md frontmatter missing 'description' field. "
-            f"Parsed frontmatter: {fm}"
+            f"h-decision-requests/SKILL.md frontmatter missing 'description' field. Parsed frontmatter: {fm}"
         )
         assert fm["name"], "h-decision-requests/SKILL.md 'name' field must be non-empty"
-        assert fm["description"], (
-            "h-decision-requests/SKILL.md 'description' field must be non-empty"
-        )
+        assert fm["description"], "h-decision-requests/SKILL.md 'description' field must be non-empty"
 
     # AC2 — scribe.agent.md does NOT exist
 
     def test_scribe_agent_does_not_exist(self) -> None:
         """share/agents/scribe.agent.md must be deleted in P2."""
         scribe_path = _REPO_ROOT / "share/agents/scribe.agent.md"
-        assert not scribe_path.exists(), (
-            f"{scribe_path} still exists. Delete scribe.agent.md as part of P2."
-        )
+        assert not scribe_path.exists(), f"{scribe_path} still exists. Delete scribe.agent.md as part of P2."
 
     # AC3 — w-decision-routing/SKILL.md does NOT exist
 
     def test_w_decision_routing_skill_does_not_exist(self) -> None:
         """share/skills/w-decision-routing/SKILL.md must be deleted in P2."""
         routing_path = _REPO_ROOT / "share/skills/w-decision-routing/SKILL.md"
-        assert not routing_path.exists(), (
-            f"{routing_path} still exists. Delete w-decision-routing skill as part of P2."
-        )
+        assert not routing_path.exists(), f"{routing_path} still exists. Delete w-decision-routing skill as part of P2."
 
     # AC4 — no "scribe" references in any share/agents/*.agent.md
 
@@ -103,9 +92,8 @@ class TestFromAC_DRSkillReplacement:
                     if _scribe_word.search(line)
                 ]
                 offenders.append(f"{agent_file.name}:\n" + "\n".join(lines))
-        assert not offenders, (
-            "Found 'scribe' references in agent files (must be removed in P2):\n"
-            + "\n".join(offenders)
+        assert not offenders, "Found 'scribe' references in agent files (must be removed in P2):\n" + "\n".join(
+            offenders
         )
 
     # AC5 — r-pipeline-protocol/SKILL.md contains "create_dr", not "scribe"

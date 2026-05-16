@@ -52,9 +52,7 @@ def _validate_source(src_path: Path) -> str | None:
         return f"error: source file not found: {src_path}"
     try:
         conn = sqlite3.connect(str(src_path))
-        row = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'"
-        ).fetchone()
+        row = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'").fetchone()
         conn.close()
     except sqlite3.DatabaseError as exc:
         return f"error: source is not a valid SQLite database: {exc}"
@@ -252,9 +250,7 @@ def _do_import(
     # Read source data (snapshots before transaction begins)
     src_conn.row_factory = sqlite3.Row
     if source_scope is not None:
-        docs = src_conn.execute(
-            "SELECT * FROM documents WHERE scope = ?", (source_scope,)
-        ).fetchall()
+        docs = src_conn.execute("SELECT * FROM documents WHERE scope = ?", (source_scope,)).fetchall()
         doc_ids_placeholder = ",".join("?" * len(docs)) if docs else "NULL"
         doc_ids = [doc["id"] for doc in docs]
         doc_statuses: dict[str, sqlite3.Row] = {
@@ -287,10 +283,7 @@ def _do_import(
             edges = []
     else:
         docs = src_conn.execute("SELECT * FROM documents").fetchall()
-        doc_statuses = {
-            row["document_id"]: row
-            for row in src_conn.execute("SELECT * FROM document_status").fetchall()
-        }
+        doc_statuses = {row["document_id"]: row for row in src_conn.execute("SELECT * FROM document_status").fetchall()}
         chunks = src_conn.execute("SELECT * FROM chunks").fetchall()
         entities = src_conn.execute("SELECT * FROM entities").fetchall()
         edges = src_conn.execute("SELECT * FROM edges").fetchall()
@@ -302,9 +295,7 @@ def _do_import(
         old_id = doc["id"]
         status = doc_statuses.get(old_id)
         content = doc["content"] or ""
-        content_hash = (
-            status["content_hash"] if status else compute_content_hash(content)
-        )
+        content_hash = status["content_hash"] if status else compute_content_hash(content)
         if content_hash and content_hash in existing_hashes:
             skipped_doc_ids.add(old_id)
         else:
@@ -314,24 +305,16 @@ def _do_import(
 
     # Build ID maps for child rows (only for non-skipped documents)
     chunk_id_map: dict[str, str] = {
-        chunk["id"]: str(uuid.uuid4())
-        for chunk in chunks
-        if chunk["document_id"] not in skipped_doc_ids
+        chunk["id"]: str(uuid.uuid4()) for chunk in chunks if chunk["document_id"] not in skipped_doc_ids
     }
     entity_id_map: dict[str, str] = {
-        entity["id"]: str(uuid.uuid4())
-        for entity in entities
-        if entity["document_id"] not in skipped_doc_ids
+        entity["id"]: str(uuid.uuid4()) for entity in entities if entity["document_id"] not in skipped_doc_ids
     }
 
     try:
         with dest_conn:
-            _insert_documents(
-                dest_conn, docs, skipped_doc_ids, doc_id_map, target_scope
-            )
-            _insert_document_statuses(
-                dest_conn, doc_statuses, skipped_doc_ids, doc_id_map, target_scope
-            )
+            _insert_documents(dest_conn, docs, skipped_doc_ids, doc_id_map, target_scope)
+            _insert_document_statuses(dest_conn, doc_statuses, skipped_doc_ids, doc_id_map, target_scope)
             _insert_chunks(
                 dest_conn,
                 chunks,
@@ -398,9 +381,7 @@ def import_scope(  # noqa: PLR0912
                     resolved_path = _candidate
                     break
             else:
-                return (
-                    "error: explicit source path required (local DB is the running DB)"
-                )
+                return "error: explicit source path required (local DB is the running DB)"
         else:
             return "error: explicit source path required (local DB is the running DB)"
 
@@ -478,7 +459,5 @@ def export_scope(
     except Exception as exc:  # noqa: BLE001
         return f"error: export failed: {exc}"
 
-    doc_count = source_conn.execute(
-        "SELECT count(*) FROM documents WHERE scope = ?", (scope,)
-    ).fetchone()[0]
+    doc_count = source_conn.execute("SELECT count(*) FROM documents WHERE scope = ?", (scope,)).fetchone()[0]
     return f"Exported {doc_count} documents from scope {scope!r} to {out}"

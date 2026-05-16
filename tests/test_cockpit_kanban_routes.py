@@ -154,18 +154,14 @@ class TestFromAC_CockpitRouteEnvelopes:
         body = response.json()
         assert "guidance" in body
 
-    def test_show_task_response_has_missing_sections_field(
-        self, client: TestClient
-    ) -> None:
+    def test_show_task_response_has_missing_sections_field(self, client: TestClient) -> None:
         """GET /api/tasks/{id} exposes missing_sections from ShowTaskResponse."""
         response = client.get("/api/tasks/1")
         assert response.status_code == 200
         body = response.json()
         assert "missing_sections" in body
 
-    def test_move_response_has_guidance_field(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_move_response_has_guidance_field(self, client: TestClient, engine: KanbanEngine) -> None:
         """POST /api/tasks/{id}/move preserves SingleTaskResponse.guidance."""
         task = engine.show_task("1")
         response = client.post(
@@ -176,9 +172,7 @@ class TestFromAC_CockpitRouteEnvelopes:
         body = response.json()
         assert "guidance" in body
 
-    def test_release_response_has_guidance_field(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_release_response_has_guidance_field(self, client: TestClient, engine: KanbanEngine) -> None:
         """POST /api/tasks/{id}/release preserves SingleTaskResponse.guidance."""
         task = engine.show_task("2")
         response = client.post(
@@ -249,9 +243,7 @@ class TestFromAC_CockpitEditDelegation:
 
         assert response.status_code == 200
         call_kwargs = view_mock.edit_task.call_args.kwargs
-        assert "expected_updated" in call_kwargs, (
-            "expected_updated not forwarded to CockpitView.edit_task"
-        )
+        assert "expected_updated" in call_kwargs, "expected_updated not forwarded to CockpitView.edit_task"
         assert call_kwargs["expected_updated"] == expected_updated
 
     def test_edit_stale_token_from_cockpit_view_returns_409(
@@ -354,9 +346,7 @@ class TestFromAC_CockpitMutationViewRouting:
 
         assert response.status_code == 200
         call_kwargs = view_mock.move_task.call_args.kwargs
-        assert "expected_updated" in call_kwargs, (
-            "expected_updated not forwarded to CockpitView.move_task"
-        )
+        assert "expected_updated" in call_kwargs, "expected_updated not forwarded to CockpitView.move_task"
         assert call_kwargs["expected_updated"] == expected_updated
 
     def test_release_passes_exact_expected_updated_to_cockpit_view(
@@ -378,9 +368,7 @@ class TestFromAC_CockpitMutationViewRouting:
 
         assert response.status_code == 200
         call_kwargs = view_mock.release_task.call_args.kwargs
-        assert "expected_updated" in call_kwargs, (
-            "expected_updated not forwarded to CockpitView.release_task"
-        )
+        assert "expected_updated" in call_kwargs, "expected_updated not forwarded to CockpitView.release_task"
         assert call_kwargs["expected_updated"] == expected_updated
 
     def test_move_stale_token_from_cockpit_view_returns_409(
@@ -497,18 +485,14 @@ class TestFromAC_CockpitMutationViewRouting:
 class TestFromAC_CockpitActivityAndSweepRoutes:
     """List-based route contracts for activity and sweep endpoints."""
 
-    def test_get_activity_returns_list_of_event_objects(
-        self, client: TestClient
-    ) -> None:
+    def test_get_activity_returns_list_of_event_objects(self, client: TestClient) -> None:
         """GET /api/activity returns a JSON list of activity records."""
         response = client.get("/api/activity")
         assert response.status_code == 200
         data = response.json()
         assert isinstance(data, list)
 
-    def test_get_activity_filter_by_task_id_scopes_results(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_get_activity_filter_by_task_id_scopes_results(self, client: TestClient, engine: KanbanEngine) -> None:
         """GET /api/activity?task_id=1 returns only task-1 events."""
         engine.claim_task("1")
         response = client.get("/api/activity?task_id=1")
@@ -517,9 +501,7 @@ class TestFromAC_CockpitActivityAndSweepRoutes:
         assert isinstance(data, list)
         assert all(event.get("task_id") == 1 for event in data)
 
-    def test_list_activity_with_limit_filter(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_list_activity_with_limit_filter(self, client: TestClient, engine: KanbanEngine) -> None:
         """GET /api/activity?limit=1 returns at most one event."""
         engine.claim_task("1")
         response = client.get("/api/activity?limit=1")
@@ -588,9 +570,7 @@ class TestFromAC_CockpitAdminRoutes:
         assert item["detail"] == "file does not start with ---"
         assert item["file_path"] == "tasks/9999-corrupt-sentinel.md"
 
-    def test_di_scan_observes_overridden_board_not_default(
-        self, tmp_path: Path
-    ) -> None:
+    def test_di_scan_observes_overridden_board_not_default(self, tmp_path: Path) -> None:
         """Overriding get_engine routes scan to the overridden board."""
         from fastapi.testclient import TestClient  # noqa: PLC0415
         from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
@@ -654,9 +634,7 @@ class TestFromAC_CockpitAdminRoutes:
         item = data[0]
         assert item["detail"] == "required field 'id' absent"
 
-    def test_di_repair_observes_overridden_board_not_default(
-        self, tmp_path: Path
-    ) -> None:
+    def test_di_repair_observes_overridden_board_not_default(self, tmp_path: Path) -> None:
         """Overriding get_engine routes repair to the overridden board."""
         from fastapi.testclient import TestClient  # noqa: PLC0415
         from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
@@ -675,9 +653,7 @@ class TestFromAC_CockpitAdminRoutes:
         finally:
             app.dependency_overrides.clear()
 
-    def test_compact_activity_response_has_required_fields(
-        self, client: TestClient
-    ) -> None:
+    def test_compact_activity_response_has_required_fields(self, client: TestClient) -> None:
         """POST /api/tasks/compact-activity returns compaction result fields."""
         response = client.post("/api/tasks/compact-activity")
         assert response.status_code == 200
@@ -723,9 +699,7 @@ class TestFromAC_CockpitAdminRoutes:
         assert body["after_bytes"] == 1024
         assert body["records_compacted"] == 5
 
-    def test_di_compact_observes_overridden_board_not_default(
-        self, tmp_path: Path
-    ) -> None:
+    def test_di_compact_observes_overridden_board_not_default(self, tmp_path: Path) -> None:
         """Overriding get_engine routes compact-activity through the injected engine."""
         from owlbear_cockpit.view import CockpitView as _RealCockpitView  # noqa: PLC0415
         from fastapi.testclient import TestClient  # noqa: PLC0415
@@ -749,9 +723,7 @@ class TestFromAC_CockpitAdminRoutes:
                 test_client = TestClient(app)
                 response = test_client.post("/api/tasks/compact-activity")
             assert response.status_code == 200
-            assert len(captured_engines) >= 1, (
-                "CockpitView was never constructed through the dependency chain"
-            )
+            assert len(captured_engines) >= 1, "CockpitView was never constructed through the dependency chain"
             assert captured_engines[-1] is alt_engine
         finally:
             app.dependency_overrides.clear()

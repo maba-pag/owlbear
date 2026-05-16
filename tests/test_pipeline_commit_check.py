@@ -77,19 +77,15 @@ class TestFromAC_PreAdvanceCommitCheck:
         """P2: Test-writer's domain path (tests/) is listed in the domain table."""
         content = _read_skill()
         # The domain table should map test-writer → tests/
-        assert re.search(
-            r"test.writer.*tests/|tests/.*test.writer", content, re.IGNORECASE
-        ), (
-            "Domain table must map 'test-writer' to 'tests/' "
-            "so the test-writer knows which files to check"
+        assert re.search(r"test.writer.*tests/|tests/.*test.writer", content, re.IGNORECASE), (
+            "Domain table must map 'test-writer' to 'tests/' so the test-writer knows which files to check"
         )
 
     def test_builder_domain_paths_present(self) -> None:
         """P2: Builder's domain path (serve/) is listed in the domain table."""
         content = _read_skill()
         assert re.search(r"[Bb]uilder.*serve/|serve/.*[Bb]uilder", content), (
-            "Domain table must map 'builder' to 'serve/' "
-            "so the builder knows which files to check"
+            "Domain table must map 'builder' to 'serve/' so the builder knows which files to check"
         )
 
     def test_doc_writer_domain_paths_present(self) -> None:

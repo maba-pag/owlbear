@@ -85,9 +85,7 @@ class TestFromAC_CockpitLaunch:
 
     # ---- AC #2 — default port 8420, host 127.0.0.1 --------------------------
 
-    def test_run_invokes_uvicorn_with_default_port(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_run_invokes_uvicorn_with_default_port(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """uvicorn is called with port=8420 when COCKPIT_PORT is not set."""
         kanban_dir = _make_kanban_dir(tmp_path)
         monkeypatch.setenv("KANBAN_DIR", str(kanban_dir))
@@ -103,9 +101,7 @@ class TestFromAC_CockpitLaunch:
         call_kwargs = mock_uvicorn_run.call_args[1]
         assert call_kwargs.get("port") == 8420
 
-    def test_run_binds_to_localhost(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_run_binds_to_localhost(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """uvicorn is called with host='127.0.0.1' (never 0.0.0.0)."""
         kanban_dir = _make_kanban_dir(tmp_path)
         monkeypatch.setenv("KANBAN_DIR", str(kanban_dir))
@@ -120,9 +116,7 @@ class TestFromAC_CockpitLaunch:
         call_kwargs = mock_uvicorn_run.call_args[1]
         assert call_kwargs.get("host") == "127.0.0.1"
 
-    def test_run_uses_cockpit_port_env_var(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_run_uses_cockpit_port_env_var(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """COCKPIT_PORT=9999 causes uvicorn to bind on port 9999."""
         kanban_dir = _make_kanban_dir(tmp_path)
         monkeypatch.setenv("KANBAN_DIR", str(kanban_dir))
@@ -139,9 +133,7 @@ class TestFromAC_CockpitLaunch:
 
     # ---- AC #2 (revised) — port validation -----------------------------------
 
-    def test_run_exits_on_non_integer_port(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_run_exits_on_non_integer_port(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """COCKPIT_PORT='notaport' causes sys.exit with a non-zero exit code."""
         monkeypatch.setenv("COCKPIT_PORT", "notaport")
         monkeypatch.setenv("COCKPIT_NO_OPEN", "1")
@@ -177,9 +169,7 @@ class TestFromAC_CockpitLaunch:
 
         assert exc_info.value.code != 0
 
-    def test_run_accepts_port_boundary_low(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_run_accepts_port_boundary_low(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Port 1 is the lower boundary of 1-65535 and must be accepted."""
         kanban_dir = _make_kanban_dir(tmp_path)
         monkeypatch.setenv("KANBAN_DIR", str(kanban_dir))
@@ -194,9 +184,7 @@ class TestFromAC_CockpitLaunch:
         mock_uvicorn_run.assert_called_once()
         assert mock_uvicorn_run.call_args[1].get("port") == 1
 
-    def test_run_accepts_port_boundary_high(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_run_accepts_port_boundary_high(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Port 65535 is the upper boundary of 1-65535 and must be accepted."""
         kanban_dir = _make_kanban_dir(tmp_path)
         monkeypatch.setenv("KANBAN_DIR", str(kanban_dir))
@@ -225,19 +213,12 @@ class TestFromAC_CockpitLaunch:
         import owlbear_cockpit.main as _m  # noqa: PLC0415
 
         assert callable(run)  # run() must exist
-        static_routes = [
-            r
-            for r in _m.app.routes
-            if hasattr(r, "app") and isinstance(r.app, StaticFiles)
-        ]
+        static_routes = [r for r in _m.app.routes if hasattr(r, "app") and isinstance(r.app, StaticFiles)]
         assert static_routes == [], (
-            "Static files must not be mounted at import time — "
-            "only inside run() to preserve TestClient isolation."
+            "Static files must not be mounted at import time — only inside run() to preserve TestClient isolation."
         )
 
-    def test_static_files_mounted_after_run(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_static_files_mounted_after_run(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """After run() executes, at least one StaticFiles mount is on the app."""
         kanban_dir = _make_kanban_dir(tmp_path)
         monkeypatch.setenv("KANBAN_DIR", str(kanban_dir))
@@ -250,11 +231,7 @@ class TestFromAC_CockpitLaunch:
 
         from starlette.staticfiles import StaticFiles  # noqa: PLC0415
 
-        static_routes = [
-            r
-            for r in app.routes
-            if hasattr(r, "app") and isinstance(r.app, StaticFiles)
-        ]
+        static_routes = [r for r in app.routes if hasattr(r, "app") and isinstance(r.app, StaticFiles)]
         assert len(static_routes) >= 1
 
     # ---- AC #4 — catch-all route serves index.html for SPA paths --------------
@@ -288,9 +265,7 @@ class TestFromAC_CockpitLaunch:
 
     # ---- AC #5 — browser auto-opens on startup --------------------------------
 
-    def test_browser_opens_on_startup(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_browser_opens_on_startup(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """webbrowser.open is called with http://127.0.0.1:{port}/ on startup."""
         kanban_dir = _make_kanban_dir(tmp_path)
         monkeypatch.setenv("KANBAN_DIR", str(kanban_dir))
@@ -299,9 +274,7 @@ class TestFromAC_CockpitLaunch:
 
         # Simulate Timer firing immediately so we can verify the callback.
         class _ImmediateTimer:
-            def __init__(
-                self, _delay: float, fn: object, *_args: object, **_kwargs: object
-            ) -> None:
+            def __init__(self, _delay: float, fn: object, *_args: object, **_kwargs: object) -> None:
                 self._fn = fn
 
             def start(self) -> None:
@@ -324,9 +297,7 @@ class TestFromAC_CockpitLaunch:
         assert "127.0.0.1" in url
         assert "8420" in url
 
-    def test_cockpit_no_open_suppresses_browser(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_cockpit_no_open_suppresses_browser(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """COCKPIT_NO_OPEN=1 prevents webbrowser.open from being called."""
         kanban_dir = _make_kanban_dir(tmp_path)
         monkeypatch.setenv("KANBAN_DIR", str(kanban_dir))
@@ -342,18 +313,14 @@ class TestFromAC_CockpitLaunch:
 
         mock_open.assert_not_called()
 
-    def test_browser_failure_does_not_crash_server(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_browser_failure_does_not_crash_server(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """webbrowser.open raising an exception must not prevent uvicorn from starting."""
         kanban_dir = _make_kanban_dir(tmp_path)
         monkeypatch.setenv("KANBAN_DIR", str(kanban_dir))
         monkeypatch.delenv("COCKPIT_NO_OPEN", raising=False)
 
         class _ImmediateTimer:
-            def __init__(
-                self, _delay: float, fn: object, *_args: object, **_kwargs: object
-            ) -> None:
+            def __init__(self, _delay: float, fn: object, *_args: object, **_kwargs: object) -> None:
                 self._fn = fn
 
             def start(self) -> None:
@@ -411,9 +378,7 @@ class TestFromAC_CockpitLaunch:
 
     # ---- AC #8 — KanbanEngine init, app.state.engine, kanban dir missing -----
 
-    def test_engine_initialized_from_kanban_dir_env_var(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_engine_initialized_from_kanban_dir_env_var(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """KANBAN_DIR env var is used as the kanban directory for KanbanEngine."""
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
@@ -428,9 +393,7 @@ class TestFromAC_CockpitLaunch:
 
         assert isinstance(app.state.engine, KanbanEngine)
 
-    def test_engine_initialized_from_cwd_owlbear_kanban(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_engine_initialized_from_cwd_owlbear_kanban(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Without KANBAN_DIR, run() resolves .owlbear/kanban/ from CWD."""
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
@@ -461,18 +424,14 @@ class TestFromAC_CockpitLaunch:
         def _check_state(*_args: object, **_kwargs: object) -> None:
             from owlbear_cockpit.main import app as _app  # noqa: PLC0415
 
-            engine_present_at_start.append(
-                isinstance(getattr(_app.state, "engine", None), KanbanEngine)
-            )
+            engine_present_at_start.append(isinstance(getattr(_app.state, "engine", None), KanbanEngine))
 
         with patch("uvicorn.run", side_effect=_check_state):
             from owlbear_cockpit.main import run  # noqa: PLC0415
 
             run()
 
-        assert engine_present_at_start == [True], (
-            "app.state.engine must be a KanbanEngine before uvicorn.run is called"
-        )
+        assert engine_present_at_start == [True], "app.state.engine must be a KanbanEngine before uvicorn.run is called"
 
     def test_run_exits_with_error_if_kanban_dir_missing(
         self,

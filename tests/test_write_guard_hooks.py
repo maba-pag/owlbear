@@ -76,15 +76,11 @@ class TestDenyWrites:
         }
         assert _is_allowed(_invoke(deny_writes_module, payload))
 
-    def test_denies_non_scratch_file(
-        self, deny_writes_module: types.ModuleType
-    ) -> None:
+    def test_denies_non_scratch_file(self, deny_writes_module: types.ModuleType) -> None:
         payload = {"tool_name": "create_file", "tool_input": {"filePath": "README.md"}}
         assert _is_denied(_invoke(deny_writes_module, payload))
 
-    def test_allows_apply_patch_in_scratch(
-        self, deny_writes_module: types.ModuleType
-    ) -> None:
+    def test_allows_apply_patch_in_scratch(self, deny_writes_module: types.ModuleType) -> None:
         payload = {
             "tool_name": "apply_patch",
             "tool_input": {
@@ -93,14 +89,10 @@ class TestDenyWrites:
         }
         assert _is_allowed(_invoke(deny_writes_module, payload))
 
-    def test_denies_apply_patch_outside_scratch(
-        self, deny_writes_module: types.ModuleType
-    ) -> None:
+    def test_denies_apply_patch_outside_scratch(self, deny_writes_module: types.ModuleType) -> None:
         payload = {
             "tool_name": "apply_patch",
-            "tool_input": {
-                "input": "*** Begin Patch\n*** Update File: README.md\n@@\n-old\n+new\n*** End Patch"
-            },
+            "tool_input": {"input": "*** Begin Patch\n*** Update File: README.md\n@@\n-old\n+new\n*** End Patch"},
         }
         assert _is_denied(_invoke(deny_writes_module, payload))
 
@@ -127,9 +119,7 @@ class TestDenySrcWrites:
         }
         assert _is_denied(_invoke(deny_src_module, payload))
 
-    def test_allows_apply_patch_in_tests(
-        self, deny_src_module: types.ModuleType
-    ) -> None:
+    def test_allows_apply_patch_in_tests(self, deny_src_module: types.ModuleType) -> None:
         payload = {
             "tool_name": "apply_patch",
             "tool_input": {
@@ -141,15 +131,11 @@ class TestDenySrcWrites:
     def test_allows_dunder_tests_file(self, deny_src_module: types.ModuleType) -> None:
         payload = {
             "tool_name": "create_file",
-            "tool_input": {
-                "filePath": "serve/cockpit/web/src/__tests__/useScanPolling.test.ts"
-            },
+            "tool_input": {"filePath": "serve/cockpit/web/src/__tests__/useScanPolling.test.ts"},
         }
         assert _is_allowed(_invoke(deny_src_module, payload))
 
-    def test_allows_apply_patch_in_dunder_tests(
-        self, deny_src_module: types.ModuleType
-    ) -> None:
+    def test_allows_apply_patch_in_dunder_tests(self, deny_src_module: types.ModuleType) -> None:
         payload = {
             "tool_name": "apply_patch",
             "tool_input": {
@@ -161,15 +147,11 @@ class TestDenySrcWrites:
     def test_allows_e2e_file(self, deny_src_module: types.ModuleType) -> None:
         payload = {
             "tool_name": "create_file",
-            "tool_input": {
-                "filePath": "serve/cockpit/web/e2e/filter-controls.spec.ts"
-            },
+            "tool_input": {"filePath": "serve/cockpit/web/e2e/filter-controls.spec.ts"},
         }
         assert _is_allowed(_invoke(deny_src_module, payload))
 
-    def test_allows_apply_patch_in_e2e(
-        self, deny_src_module: types.ModuleType
-    ) -> None:
+    def test_allows_apply_patch_in_e2e(self, deny_src_module: types.ModuleType) -> None:
         payload = {
             "tool_name": "apply_patch",
             "tool_input": {
@@ -178,13 +160,9 @@ class TestDenySrcWrites:
         }
         assert _is_allowed(_invoke(deny_src_module, payload))
 
-    def test_denies_apply_patch_in_source(
-        self, deny_src_module: types.ModuleType
-    ) -> None:
+    def test_denies_apply_patch_in_source(self, deny_src_module: types.ModuleType) -> None:
         payload = {
             "tool_name": "apply_patch",
-            "tool_input": {
-                "input": "*** Begin Patch\n*** Update File: serve/app.py\n@@\n-old\n+new\n*** End Patch"
-            },
+            "tool_input": {"input": "*** Begin Patch\n*** Update File: serve/app.py\n@@\n-old\n+new\n*** End Patch"},
         }
         assert _is_denied(_invoke(deny_src_module, payload))

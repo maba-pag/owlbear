@@ -51,9 +51,7 @@ class TestFromAC_SystemInstructionNeutrality:
 
         violations: list[str] = []
         for md_file in sorted(instructions_dir.rglob("*.md")):
-            for lineno, line in enumerate(
-                md_file.read_text(encoding="utf-8").splitlines(), start=1
-            ):
+            for lineno, line in enumerate(md_file.read_text(encoding="utf-8").splitlines(), start=1):
                 if line.strip().startswith("applyTo:"):
                     continue
                 sanitized = re.sub(r"mcp-\S+", "", line)
@@ -78,18 +76,15 @@ class TestFromAC_SystemInstructionNeutrality:
         instructions_dir = project_root / "share" / "instructions"
         violations: list[str] = []
         for md_file in sorted(instructions_dir.rglob("*.md")):
-            for lineno, line in enumerate(
-                md_file.read_text(encoding="utf-8").splitlines(), start=1
-            ):
+            for lineno, line in enumerate(md_file.read_text(encoding="utf-8").splitlines(), start=1):
                 if line.strip().startswith("applyTo:"):
                     continue
                 sanitized = re.sub(r"mcp-\S+", "", line)
                 if "serve/" in sanitized:
                     rel = md_file.relative_to(project_root)
                     violations.append(f"{rel}:{lineno}: {line.strip()!r}")
-        assert not violations, (
-            f"Found {len(violations)} serve/ reference(s) in share/instructions/:\n"
-            + "\n".join(violations)
+        assert not violations, f"Found {len(violations)} serve/ reference(s) in share/instructions/:\n" + "\n".join(
+            violations
         )
 
 
@@ -103,21 +98,15 @@ class TestFromAC_CopilotInstructionsDirectoryStructure:
 
     def test_has_directory_structure_heading(self, project_root: Path) -> None:
         """copilot-instructions.md contains a '## Directory Structure' heading."""
-        content = (project_root / ".github" / "copilot-instructions.md").read_text(
-            encoding="utf-8"
-        )
-        headings = [
-            line.strip() for line in content.splitlines() if line.startswith("## ")
-        ]
+        content = (project_root / ".github" / "copilot-instructions.md").read_text(encoding="utf-8")
+        headings = [line.strip() for line in content.splitlines() if line.startswith("## ")]
         assert any("Directory Structure" in h for h in headings), (
             f"No '## Directory Structure' heading found. Headings present: {headings}"
         )
 
     def test_has_table_row_in_directory_section(self, project_root: Path) -> None:
         """copilot-instructions.md has at least one table row under Directory Structure."""
-        content = (project_root / ".github" / "copilot-instructions.md").read_text(
-            encoding="utf-8"
-        )
+        content = (project_root / ".github" / "copilot-instructions.md").read_text(encoding="utf-8")
         lines = content.splitlines()
         in_dir_section = False
         table_rows: list[str] = []
@@ -130,9 +119,7 @@ class TestFromAC_CopilotInstructionsDirectoryStructure:
                     break
                 if line.startswith("|") and not set(line.strip()) <= set("|-: "):
                     table_rows.append(line)
-        assert table_rows, (
-            "No Markdown table rows found under '## Directory Structure' section."
-        )
+        assert table_rows, "No Markdown table rows found under '## Directory Structure' section."
 
 
 # ---------------------------------------------------------------------------
@@ -143,72 +130,42 @@ class TestFromAC_CopilotInstructionsDirectoryStructure:
 class TestFromAC_InitScaffold:
     """AC4: init() generates .github/copilot-instructions.md with directory section."""
 
-    def test_generates_copilot_instructions(
-        self, project_root: Path, tmp_path: Path
-    ) -> None:
+    def test_generates_copilot_instructions(self, project_root: Path, tmp_path: Path) -> None:
         """init() creates .github/copilot-instructions.md in target_dir."""
         module = _load_init(project_root)
         module.init(tmp_path, project_root)
         generated = tmp_path / ".github" / "copilot-instructions.md"
-        assert generated.exists(), (
-            f".github/copilot-instructions.md was not created in {tmp_path}"
-        )
+        assert generated.exists(), f".github/copilot-instructions.md was not created in {tmp_path}"
 
-    def test_has_directory_section_heading(
-        self, project_root: Path, tmp_path: Path
-    ) -> None:
+    def test_has_directory_section_heading(self, project_root: Path, tmp_path: Path) -> None:
         """Generated copilot-instructions.md has a directory/path-mapping heading."""
         module = _load_init(project_root)
         module.init(tmp_path, project_root)
-        content = (tmp_path / ".github" / "copilot-instructions.md").read_text(
-            encoding="utf-8"
-        )
-        headings = [
-            line.strip() for line in content.splitlines() if line.startswith("#")
-        ]
-        has_dir_heading = any(
-            any(kw in h.lower() for kw in ("directory", "path", "structure"))
-            for h in headings
-        )
-        assert has_dir_heading, (
-            f"No directory/path-mapping section heading found. "
-            f"Found headings: {headings}"
-        )
+        content = (tmp_path / ".github" / "copilot-instructions.md").read_text(encoding="utf-8")
+        headings = [line.strip() for line in content.splitlines() if line.startswith("#")]
+        has_dir_heading = any(any(kw in h.lower() for kw in ("directory", "path", "structure")) for h in headings)
+        assert has_dir_heading, f"No directory/path-mapping section heading found. Found headings: {headings}"
 
     def test_has_path_entry(self, project_root: Path, tmp_path: Path) -> None:
         """Generated copilot-instructions.md has at least one path entry (table row)."""
         module = _load_init(project_root)
         module.init(tmp_path, project_root)
-        content = (tmp_path / ".github" / "copilot-instructions.md").read_text(
-            encoding="utf-8"
-        )
+        content = (tmp_path / ".github" / "copilot-instructions.md").read_text(encoding="utf-8")
         table_rows = [
-            line
-            for line in content.splitlines()
-            if line.startswith("|") and not set(line.strip()) <= set("|-: ")
+            line for line in content.splitlines() if line.startswith("|") and not set(line.strip()) <= set("|-: ")
         ]
-        assert table_rows, (
-            "Generated copilot-instructions.md has no Markdown table rows with path entries."
-        )
+        assert table_rows, "Generated copilot-instructions.md has no Markdown table rows with path entries."
 
     def test_idempotent(self, project_root: Path, tmp_path: Path) -> None:
         """init() called twice produces identical copilot-instructions.md content."""
         module = _load_init(project_root)
         module.init(tmp_path, project_root)
-        first = (tmp_path / ".github" / "copilot-instructions.md").read_text(
-            encoding="utf-8"
-        )
+        first = (tmp_path / ".github" / "copilot-instructions.md").read_text(encoding="utf-8")
         module.init(tmp_path, project_root)
-        second = (tmp_path / ".github" / "copilot-instructions.md").read_text(
-            encoding="utf-8"
-        )
-        assert first == second, (
-            "copilot-instructions.md content changed on second init() call."
-        )
+        second = (tmp_path / ".github" / "copilot-instructions.md").read_text(encoding="utf-8")
+        assert first == second, "copilot-instructions.md content changed on second init() call."
 
-    def test_path_entry_within_directory_section(
-        self, project_root: Path, tmp_path: Path
-    ) -> None:
+    def test_path_entry_within_directory_section(self, project_root: Path, tmp_path: Path) -> None:
         """Generated file has path-entry table rows inside the directory section.
 
         The heading check and path-entry check must be section-local: at least one
@@ -218,16 +175,12 @@ class TestFromAC_InitScaffold:
         """
         module = _load_init(project_root)
         module.init(tmp_path, project_root)
-        content = (tmp_path / ".github" / "copilot-instructions.md").read_text(
-            encoding="utf-8"
-        )
+        content = (tmp_path / ".github" / "copilot-instructions.md").read_text(encoding="utf-8")
         lines = content.splitlines()
         in_dir_section = False
         section_table_rows: list[str] = []
         for line in lines:
-            if line.startswith("## ") and any(
-                kw in line.lower() for kw in ("directory", "path", "structure")
-            ):
+            if line.startswith("## ") and any(kw in line.lower() for kw in ("directory", "path", "structure")):
                 in_dir_section = True
                 continue
             if in_dir_section:
@@ -256,16 +209,10 @@ class TestFromAC_NoDanglingCrossRefs:
         """Every '§ SectionName' reference to owlbear-system.instructions.md exists."""
         owlbear_system = project_root / _OWLBEAR_SYSTEM_REL
         system_text = owlbear_system.read_text(encoding="utf-8")
-        headings = {
-            line.lstrip("#").strip()
-            for line in system_text.splitlines()
-            if line.startswith("#")
-        }
+        headings = {line.lstrip("#").strip() for line in system_text.splitlines() if line.startswith("#")}
 
         # Match: owlbear-system.instructions.md (optional punctuation) § SectionName
-        ref_pattern = re.compile(
-            r"owlbear-system\.instructions\.md[`'\" ]*§\s*([^(\n\]`]+)"
-        )
+        ref_pattern = re.compile(r"owlbear-system\.instructions\.md[`'\" ]*§\s*([^(\n\]`]+)")
         cross_ref_files = [
             project_root / "share" / "README.md",
             project_root / "share" / "WIRING.md",
@@ -282,8 +229,6 @@ class TestFromAC_NoDanglingCrossRefs:
                 section_name = match.group(1).strip().rstrip(")(,. ")
                 if not any(section_name in h for h in headings):
                     rel = ref_file.relative_to(project_root)
-                    missing.append(
-                        f"{rel}: § {section_name!r} not found in owlbear-system.instructions.md"
-                    )
+                    missing.append(f"{rel}: § {section_name!r} not found in owlbear-system.instructions.md")
 
         assert not missing, "Dangling section references found:\n" + "\n".join(missing)

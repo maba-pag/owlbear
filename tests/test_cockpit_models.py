@@ -18,9 +18,7 @@ from pathlib import Path
 import pytest
 
 _TESTS_DIR = Path(__file__).parent
-_COCKPIT_SRC = (
-    Path(__file__).parent.parent / "serve" / "cockpit" / "src" / "owlbear_cockpit"
-)
+_COCKPIT_SRC = Path(__file__).parent.parent / "serve" / "cockpit" / "src" / "owlbear_cockpit"
 
 # Provenance: promoted from task-scoped suite for task #1146.
 
@@ -70,9 +68,7 @@ class TestFromAC_DeadModelsRemoved:
         import owlbear_cockpit.models as m  # noqa: PLC0415
 
         model_classes = [
-            v
-            for _k, v in inspect.getmembers(m, inspect.isclass)
-            if issubclass(v, BaseModel) and v is not BaseModel
+            v for _k, v in inspect.getmembers(m, inspect.isclass) if issubclass(v, BaseModel) and v is not BaseModel
         ]
         assert len(model_classes) == 1, (
             f"Expected exactly 1 BaseModel subclass (BoardOut), "
@@ -85,14 +81,10 @@ class TestFromAC_DeadModelsRemoved:
         import owlbear_cockpit.models as m  # noqa: PLC0415
 
         model_classes = [
-            v
-            for _k, v in inspect.getmembers(m, inspect.isclass)
-            if issubclass(v, BaseModel) and v is not BaseModel
+            v for _k, v in inspect.getmembers(m, inspect.isclass) if issubclass(v, BaseModel) and v is not BaseModel
         ]
         names = [c.__name__ for c in model_classes]
-        assert names == ["BoardOut"], (
-            f"Remaining model must be exactly ['BoardOut'], got {names}"
-        )
+        assert names == ["BoardOut"], f"Remaining model must be exactly ['BoardOut'], got {names}"
 
 
 # ---------------------------------------------------------------------------
@@ -111,16 +103,13 @@ class TestFromAC_ModelsImportsClean:
     def test_models_py_does_not_import_field(self) -> None:
         """models.py source must not import Field from pydantic."""
         source = (_COCKPIT_SRC / "models.py").read_text(encoding="utf-8")
-        assert "Field" not in source, (
-            "models.py still imports or uses 'Field' — remove it along with dead models (AC1)"
-        )
+        assert "Field" not in source, "models.py still imports or uses 'Field' — remove it along with dead models (AC1)"
 
     def test_models_py_does_not_import_model_validator(self) -> None:
         """models.py source must not import model_validator from pydantic."""
         source = (_COCKPIT_SRC / "models.py").read_text(encoding="utf-8")
         assert "model_validator" not in source, (
-            "models.py still imports or uses 'model_validator' — remove it along with "
-            "dead models (AC1)"
+            "models.py still imports or uses 'model_validator' — remove it along with dead models (AC1)"
         )
 
 
@@ -187,10 +176,7 @@ class TestFromAC_TestReadApiClean:
     def test_read_api_no_dead_method_null_claimed_by(self) -> None:
         """test_cockpit_read_api.py must not contain test_task_detail_out_model_null_claimed_by_yields_claimed_false."""
         source = (_TESTS_DIR / "test_cockpit_read_api.py").read_text(encoding="utf-8")
-        assert (
-            "test_task_detail_out_model_null_claimed_by_yields_claimed_false"
-            not in source
-        ), (
+        assert "test_task_detail_out_model_null_claimed_by_yields_claimed_false" not in source, (
             "Dead test method 'test_task_detail_out_model_null_claimed_by_yields_claimed_false' "
             "still present in test_cockpit_read_api.py — remove it (AC2)"
         )
@@ -220,8 +206,7 @@ class TestFromAC_Test1137Clean:
         """test_occ_frontend_wire.py must not import TaskSummaryOut."""
         source = (_TESTS_DIR / "test_occ_frontend_wire.py").read_text(encoding="utf-8")
         assert "import TaskSummaryOut" not in source, (
-            "test_occ_frontend_wire.py still imports TaskSummaryOut — "
-            "remove imports along with the dead class (AC2)"
+            "test_occ_frontend_wire.py still imports TaskSummaryOut — remove imports along with the dead class (AC2)"
         )
 
 
@@ -239,9 +224,7 @@ class TestFromAC_CommentRefs1131Clean:
 
     def test_1131_module_docstring_no_task_detail_out(self) -> None:
         """Module docstring of test_cockpit_mutation_race.py must not reference 'TaskDetailOut'."""
-        source = (_TESTS_DIR / "test_cockpit_mutation_race.py").read_text(
-            encoding="utf-8"
-        )
+        source = (_TESTS_DIR / "test_cockpit_mutation_race.py").read_text(encoding="utf-8")
         # Module docstring is the first triple-quoted string in the file.
         # It currently contains "AC5a/AC5b: ... all 14 TaskDetailOut keys".
         module_doc_end = source.find('"""', 3)
@@ -253,15 +236,11 @@ class TestFromAC_CommentRefs1131Clean:
 
     def test_1131_task_detail_keys_comment_no_task_detail_out(self) -> None:
         """_TASK_DETAIL_KEYS comment context must not reference 'TaskDetailOut'."""
-        source = (_TESTS_DIR / "test_cockpit_mutation_race.py").read_text(
-            encoding="utf-8"
-        )
+        source = (_TESTS_DIR / "test_cockpit_mutation_race.py").read_text(encoding="utf-8")
         # Find the _TASK_DETAIL_KEYS constant and inspect the surrounding 3 lines
         # (the comment typically appears on the line immediately before).
         idx = source.find("_TASK_DETAIL_KEYS")
-        assert idx != -1, (
-            "_TASK_DETAIL_KEYS constant not found in test_cockpit_mutation_race.py"
-        )
+        assert idx != -1, "_TASK_DETAIL_KEYS constant not found in test_cockpit_mutation_race.py"
         # Walk back to find up to 3 preceding newlines for context.
         context_start = source.rfind("\n", 0, idx)
         context_start = source.rfind("\n", 0, max(0, context_start - 1))
@@ -284,9 +263,7 @@ class TestFromAC_CommentRefs1132Clean:
 
     def test_1132_no_task_detail_out_docstring(self) -> None:
         """test_cockpit_mutation_api.py docstrings must not reference 'TaskDetailOut'."""
-        source = (_TESTS_DIR / "test_cockpit_mutation_api.py").read_text(
-            encoding="utf-8"
-        )
+        source = (_TESTS_DIR / "test_cockpit_mutation_api.py").read_text(encoding="utf-8")
         assert "TaskDetailOut" not in source, (
             "test_cockpit_mutation_api.py still references 'TaskDetailOut' — "
             "update or remove the stale docstring/comment (AC3)"
@@ -303,9 +280,7 @@ class TestFromAC_CommentRefsMutationApiClean:
 
     def test_mutation_api_no_task_detail_out_shape_comment(self) -> None:
         """test_cockpit_mutation_api.py must not reference 'TaskDetailOut'."""
-        source = (_TESTS_DIR / "test_cockpit_mutation_api.py").read_text(
-            encoding="utf-8"
-        )
+        source = (_TESTS_DIR / "test_cockpit_mutation_api.py").read_text(encoding="utf-8")
         assert "TaskDetailOut" not in source, (
             "test_cockpit_mutation_api.py still references 'TaskDetailOut' — "
             "update the stale release response shape comment (AC3)"
@@ -325,42 +300,30 @@ class TestFromAC_CommentRefsCockpitKanbanRoutesClean:
 
     def test_kanban_routes_no_task_list_out_in_comments(self) -> None:
         """test_cockpit_kanban_routes.py must not reference 'TaskListOut'."""
-        source = (_TESTS_DIR / "test_cockpit_kanban_routes.py").read_text(
-            encoding="utf-8"
-        )
+        source = (_TESTS_DIR / "test_cockpit_kanban_routes.py").read_text(encoding="utf-8")
         assert "TaskListOut" not in source, (
-            "test_cockpit_kanban_routes.py still references 'TaskListOut' — "
-            "update the stale comment (AC3)"
+            "test_cockpit_kanban_routes.py still references 'TaskListOut' — update the stale comment (AC3)"
         )
 
     def test_kanban_routes_no_task_detail_out_in_comments(self) -> None:
         """test_cockpit_kanban_routes.py must not reference 'TaskDetailOut'."""
-        source = (_TESTS_DIR / "test_cockpit_kanban_routes.py").read_text(
-            encoding="utf-8"
-        )
+        source = (_TESTS_DIR / "test_cockpit_kanban_routes.py").read_text(encoding="utf-8")
         assert "TaskDetailOut" not in source, (
-            "test_cockpit_kanban_routes.py still references 'TaskDetailOut' — "
-            "update the stale comments (AC3)"
+            "test_cockpit_kanban_routes.py still references 'TaskDetailOut' — update the stale comments (AC3)"
         )
 
     def test_kanban_routes_no_session_list_out_in_comments(self) -> None:
         """test_cockpit_kanban_routes.py must not reference 'SessionListOut'."""
-        source = (_TESTS_DIR / "test_cockpit_kanban_routes.py").read_text(
-            encoding="utf-8"
-        )
+        source = (_TESTS_DIR / "test_cockpit_kanban_routes.py").read_text(encoding="utf-8")
         assert "SessionListOut" not in source, (
-            "test_cockpit_kanban_routes.py still references 'SessionListOut' — "
-            "update the stale comment (AC3)"
+            "test_cockpit_kanban_routes.py still references 'SessionListOut' — update the stale comment (AC3)"
         )
 
     def test_kanban_routes_no_session_out_in_comments(self) -> None:
         """test_cockpit_kanban_routes.py must not reference 'SessionOut'."""
-        source = (_TESTS_DIR / "test_cockpit_kanban_routes.py").read_text(
-            encoding="utf-8"
-        )
+        source = (_TESTS_DIR / "test_cockpit_kanban_routes.py").read_text(encoding="utf-8")
         assert "SessionOut" not in source, (
-            "test_cockpit_kanban_routes.py still references 'SessionOut' — "
-            "update the stale comment (AC3)"
+            "test_cockpit_kanban_routes.py still references 'SessionOut' — update the stale comment (AC3)"
         )
 
 
@@ -379,13 +342,9 @@ class TestFromAC_TaskDetailKeysConstantFix:
 
     def test_task_detail_keys_does_not_contain_claimed_by(self) -> None:
         """_TASK_DETAIL_KEYS frozenset must not include 'claimed_by'."""
-        source = (_TESTS_DIR / "test_cockpit_mutation_race.py").read_text(
-            encoding="utf-8"
-        )
+        source = (_TESTS_DIR / "test_cockpit_mutation_race.py").read_text(encoding="utf-8")
         start = source.find("_TASK_DETAIL_KEYS = frozenset({")
-        assert start != -1, (
-            "_TASK_DETAIL_KEYS constant not found in test_cockpit_mutation_race.py"
-        )
+        assert start != -1, "_TASK_DETAIL_KEYS constant not found in test_cockpit_mutation_race.py"
         end = source.find("})", start)
         constant_block = source[start : end + 2]
         assert '"claimed_by"' not in constant_block, (
@@ -399,9 +358,7 @@ class TestFromAC_TaskDetailKeysConstantFix:
 
     def test_task_detail_keys_preceding_comment_does_not_reference_14(self) -> None:
         """The comment immediately before _TASK_DETAIL_KEYS must not say '14'."""
-        source = (_TESTS_DIR / "test_cockpit_mutation_race.py").read_text(
-            encoding="utf-8"
-        )
+        source = (_TESTS_DIR / "test_cockpit_mutation_race.py").read_text(encoding="utf-8")
         idx = source.find("_TASK_DETAIL_KEYS = frozenset")
         assert idx != -1, "_TASK_DETAIL_KEYS not found in test_cockpit_mutation_race.py"
         # Walk back one newline to find the preceding line.
@@ -409,8 +366,7 @@ class TestFromAC_TaskDetailKeysConstantFix:
         preceding_line_start = source.rfind("\n", 0, line_end) + 1
         preceding_line = source[preceding_line_start:line_end]
         assert "14" not in preceding_line, (
-            f"Comment before _TASK_DETAIL_KEYS still references '14': {preceding_line!r}\n"
-            "— update to '13' (AC3)"
+            f"Comment before _TASK_DETAIL_KEYS still references '14': {preceding_line!r}\n— update to '13' (AC3)"
         )
 
 

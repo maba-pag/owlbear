@@ -66,9 +66,7 @@ def get_board(engine: _Engine) -> BoardOut:
     """Return board config: statuses, priorities, and valid_transitions map."""
     config = engine.board_config()
     status_names = config.status_names
-    valid_transitions = {
-        name: sorted(engine.valid_transitions(name)) for name in status_names
-    }
+    valid_transitions = {name: sorted(engine.valid_transitions(name)) for name in status_names}
     return BoardOut(
         statuses=[{"name": s} for s in status_names],
         priorities=config.priorities,

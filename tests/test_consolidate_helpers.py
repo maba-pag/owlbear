@@ -45,10 +45,7 @@ def _source(filename: str) -> str:
 def _has_top_level_function(source: str, funcname: str) -> bool:
     """Return True if *source* has a module-level FunctionDef named *funcname*."""
     tree = ast.parse(source)
-    return any(
-        isinstance(node, ast.FunctionDef) and node.name == funcname
-        for node in ast.iter_child_nodes(tree)
-    )
+    return any(isinstance(node, ast.FunctionDef) and node.name == funcname for node in ast.iter_child_nodes(tree))
 
 
 def _has_class_method(source: str, classname: str, methodname: str) -> bool:
@@ -65,15 +62,10 @@ def _has_class_method(source: str, classname: str, methodname: str) -> bool:
 def _imports_from(source: str, module: str) -> bool:
     """Return True if *source* contains ``from {module} import ...``."""
     tree = ast.parse(source)
-    return any(
-        isinstance(node, ast.ImportFrom) and node.module == module
-        for node in ast.walk(tree)
-    )
+    return any(isinstance(node, ast.ImportFrom) and node.module == module for node in ast.walk(tree))
 
 
-def _class_method_calls_attr(
-    source: str, classname: str, methodname: str, callee_attr: str
-) -> bool:
+def _class_method_calls_attr(source: str, classname: str, methodname: str, callee_attr: str) -> bool:
     """Return True if any method in *classname* contains a call to .{callee_attr}(...)."""
     tree = ast.parse(source)
     for node in ast.walk(tree):
@@ -98,9 +90,7 @@ def _imported_names_from(source: str, module: str) -> set[str]:
     return names
 
 
-def _method_calls_engine_attr(
-    source: str, classname: str, methodname: str, attr: str
-) -> bool:
+def _method_calls_engine_attr(source: str, classname: str, methodname: str, attr: str) -> bool:
     """Return True if classname.methodname contains a call to self.engine.{attr}(...)."""
     tree = ast.parse(source)
     for node in ast.walk(tree):
@@ -133,16 +123,12 @@ class TestFromAC_NamingLeafModule:
     def test_naming_module_exists(self) -> None:
         """AC1: _naming.py must exist inside owlbear_kanban package."""
         naming_path = _PKG_DIR / "_naming.py"
-        assert naming_path.exists(), (
-            "_naming.py does not exist in owlbear_kanban package"
-        )
+        assert naming_path.exists(), "_naming.py does not exist in owlbear_kanban package"
 
     def test_naming_module_has_generate_slug(self) -> None:
         """AC1: _naming.py must define generate_slug at module level."""
         src = _source("_naming.py")
-        assert _has_top_level_function(src, "generate_slug"), (
-            "_naming.py missing top-level function: generate_slug"
-        )
+        assert _has_top_level_function(src, "generate_slug"), "_naming.py missing top-level function: generate_slug"
 
     def test_naming_module_has_make_task_filename(self) -> None:
         """AC1: _naming.py must define make_task_filename at module level."""
@@ -177,9 +163,7 @@ class TestFromAC_StorageReexports:
     def test_storage_imports_from_naming(self) -> None:
         """AC2: storage.py must have 'from owlbear_kanban._naming import ...'."""
         src = _source("storage.py")
-        assert _imports_from(src, "owlbear_kanban._naming"), (
-            "storage.py does not import from owlbear_kanban._naming"
-        )
+        assert _imports_from(src, "owlbear_kanban._naming"), "storage.py does not import from owlbear_kanban._naming"
 
     def test_storage_generate_slug_no_local_body(self) -> None:
         """AC2: generate_slug must NOT have a function body in storage.py (re-export only)."""
@@ -253,9 +237,7 @@ class TestFromAC_CorruptionImportsFromNaming:
     def test_corruption_imports_from_naming(self) -> None:
         """AC3: corruption.py must have 'from owlbear_kanban._naming import ...'."""
         src = _source("corruption.py")
-        assert _imports_from(src, "owlbear_kanban._naming"), (
-            "corruption.py does not import from owlbear_kanban._naming"
-        )
+        assert _imports_from(src, "owlbear_kanban._naming"), "corruption.py does not import from owlbear_kanban._naming"
 
     def test_corruption_no_private_generate_slug(self) -> None:
         """AC3: Private copy _generate_slug must be deleted from corruption.py."""
@@ -315,9 +297,7 @@ class TestFromAC_AgentViewDelegation:
     def test_agentview_no_dep_effect_method(self) -> None:
         """AC4: AgentView must NOT define _dep_effect_from_archival_reason as its own method."""
         src = _source("engine.py")
-        assert not _has_class_method(
-            src, "AgentView", "_dep_effect_from_archival_reason"
-        ), (
+        assert not _has_class_method(src, "AgentView", "_dep_effect_from_archival_reason"), (
             "AgentView still has its own _dep_effect_from_archival_reason; must delegate to KanbanEngine"
         )
 
@@ -331,18 +311,14 @@ class TestFromAC_AgentViewDelegation:
     def test_kanbanengine_has_dep_effect_method(self) -> None:
         """AC4: KanbanEngine must have _dep_effect_from_archival_reason as the canonical location."""
         src = _source("engine.py")
-        assert _has_class_method(
-            src, "KanbanEngine", "_dep_effect_from_archival_reason"
-        ), (
+        assert _has_class_method(src, "KanbanEngine", "_dep_effect_from_archival_reason"), (
             "KanbanEngine missing _dep_effect_from_archival_reason; canonical location must exist"
         )
 
     def test_agentview_show_task_delegates_compute_dep_status(self) -> None:
         """AC5: AgentView.show_task() must call self.engine._compute_dep_status(...)."""
         src = _source("agent_view.py")
-        assert _method_calls_engine_attr(
-            src, "AgentView", "show_task", "_compute_dep_status"
-        ), (
+        assert _method_calls_engine_attr(src, "AgentView", "show_task", "_compute_dep_status"), (
             "AgentView.show_task() does not delegate to self.engine._compute_dep_status(...)"
         )
 
@@ -367,9 +343,7 @@ class TestFromAC_NoCircularImports:
         import importlib  # noqa: PLC0415
 
         mod = importlib.import_module("owlbear_kanban._naming")
-        assert callable(getattr(mod, "generate_slug", None)), (
-            "owlbear_kanban._naming.generate_slug not callable"
-        )
+        assert callable(getattr(mod, "generate_slug", None)), "owlbear_kanban._naming.generate_slug not callable"
 
     def test_storage_generate_slug_comes_from_naming(self) -> None:
         """AC2+AC6: generate_slug imported into storage must originate from _naming module."""

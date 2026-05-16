@@ -28,14 +28,7 @@ from owlbear_kanban.models import RepairOutcome
 # Paths
 # ---------------------------------------------------------------------------
 
-_ENGINE_PY = (
-    Path(__file__).parents[1]
-    / "serve"
-    / "kanban"
-    / "src"
-    / "owlbear_kanban"
-    / "engine.py"
-)
+_ENGINE_PY = Path(__file__).parents[1] / "serve" / "kanban" / "src" / "owlbear_kanban" / "engine.py"
 _SERVE_KANBAN = Path(__file__).parents[1] / "serve" / "kanban"
 _PROJECT_ROOT = Path(__file__).parents[1]
 
@@ -76,9 +69,7 @@ def _make_view(base_dir: Path) -> AgentView:
 class TestFromAC_ListTasksArchiveScanExceptions:
     """AC1: Non-CorruptionError from read_task in archive scan must propagate after narrowing."""
 
-    def test_archive_scan_non_narrowed_exception_propagates(
-        self, tmp_path: Path
-    ) -> None:
+    def test_archive_scan_non_narrowed_exception_propagates(self, tmp_path: Path) -> None:
         """Error path: RuntimeError from read_task is NOT caught by except CorruptionError:.
 
         Currently: caught by broad except Exception: -> list_tasks returns normally.
@@ -104,9 +95,7 @@ class TestFromAC_ListTasksArchiveScanExceptions:
         engine = KanbanEngine(board, activity_log=False)
 
         with (
-            patch(
-                "owlbear_kanban.engine.read_task", side_effect=AttributeError("attr")
-            ),
+            patch("owlbear_kanban.engine.read_task", side_effect=AttributeError("attr")),
             pytest.raises(AttributeError),
         ):
             engine.list_tasks()
@@ -137,9 +126,7 @@ class TestFromAC_ListTasksMainScanExceptions:
 
         with (
             patch("owlbear_kanban.engine.detect_corruption", return_value=None),
-            patch(
-                "owlbear_kanban.engine.read_task", side_effect=RuntimeError("scan-err")
-            ),
+            patch("owlbear_kanban.engine.read_task", side_effect=RuntimeError("scan-err")),
             pytest.raises(RuntimeError, match="scan-err"),
         ):
             engine.list_tasks()
@@ -182,9 +169,7 @@ class TestFromAC_SweepExceptions:
         engine = KanbanEngine(board, activity_log=False)
 
         with (
-            patch(
-                "owlbear_kanban.engine.read_task", side_effect=RuntimeError("sweep-err")
-            ),
+            patch("owlbear_kanban.engine.read_task", side_effect=RuntimeError("sweep-err")),
             pytest.raises(RuntimeError, match="sweep-err"),
         ):
             engine.sweep()
@@ -227,9 +212,7 @@ class TestFromAC_RepairStorageExceptions:
             detail="test delimiter missing",
         )
 
-    def test_repair_storage_runtime_error_from_create_task_propagates(
-        self, tmp_path: Path
-    ) -> None:
+    def test_repair_storage_runtime_error_from_create_task_propagates(self, tmp_path: Path) -> None:
         """Error path: RuntimeError from create_task propagates.
 
         Currently: except Exception as _exc: -> creates failure RepairOutcome (no propagation).
@@ -240,16 +223,12 @@ class TestFromAC_RepairStorageExceptions:
 
         with (
             patch("owlbear_kanban.corruption.scan_and_fix", return_value=[outcome]),
-            patch.object(
-                KanbanEngine, "create_task", side_effect=RuntimeError("ct-err")
-            ),
+            patch.object(KanbanEngine, "create_task", side_effect=RuntimeError("ct-err")),
             pytest.raises(RuntimeError, match="ct-err"),
         ):
             engine.repair_storage()
 
-    def test_repair_storage_type_error_from_create_task_propagates(
-        self, tmp_path: Path
-    ) -> None:
+    def test_repair_storage_type_error_from_create_task_propagates(self, tmp_path: Path) -> None:
         """Boundary: TypeError also propagates -- not in (ValueError, KanbanError, OSError).
 
         Currently: absorbed into failure RepairOutcome.
@@ -260,9 +239,7 @@ class TestFromAC_RepairStorageExceptions:
 
         with (
             patch("owlbear_kanban.corruption.scan_and_fix", return_value=[outcome]),
-            patch.object(
-                KanbanEngine, "create_task", side_effect=TypeError("type-err")
-            ),
+            patch.object(KanbanEngine, "create_task", side_effect=TypeError("type-err")),
             pytest.raises(TypeError, match="type-err"),
         ):
             engine.repair_storage()
@@ -319,9 +296,7 @@ class TestFromAC_ListTasksArchiveScanCatchBranch:
         ):
             result = engine.list_tasks()  # must not raise
 
-        assert isinstance(result, list), (
-            "list_tasks must return a list when archive scan hits CorruptionError"
-        )
+        assert isinstance(result, list), "list_tasks must return a list when archive scan hits CorruptionError"
 
 
 # ---------------------------------------------------------------------------
@@ -348,9 +323,7 @@ class TestFromAC_ListTasksMainScanCatchBranch:
         ):
             result = engine.list_tasks()  # must not raise
 
-        assert isinstance(result, list), (
-            "list_tasks must return a list when main scan hits CorruptionError"
-        )
+        assert isinstance(result, list), "list_tasks must return a list when main scan hits CorruptionError"
 
 
 # ---------------------------------------------------------------------------
@@ -435,9 +408,7 @@ class TestFromAC_RepairStorageCatchBranch:
             detail="test delimiter missing",
         )
 
-    def test_repair_storage_value_error_creates_failed_outcome(
-        self, tmp_path: Path
-    ) -> None:
+    def test_repair_storage_value_error_creates_failed_outcome(self, tmp_path: Path) -> None:
         """ValueError from create_task → failed RepairOutcome appended (not propagated).
 
         Currently: except Exception as _exc: -> creates failure RepairOutcome.
@@ -449,21 +420,15 @@ class TestFromAC_RepairStorageCatchBranch:
 
         with (
             patch("owlbear_kanban.corruption.scan_and_fix", return_value=[outcome]),
-            patch.object(
-                KanbanEngine, "create_task", side_effect=ValueError("bad title")
-            ),
+            patch.object(KanbanEngine, "create_task", side_effect=ValueError("bad title")),
         ):
             results = engine.repair_storage()
 
         assert len(results) == 1
-        assert results[0].action == "failed", (
-            "ValueError from create_task must produce a failed RepairOutcome"
-        )
+        assert results[0].action == "failed", "ValueError from create_task must produce a failed RepairOutcome"
         assert "AR creation failed" in (results[0].detail or "")
 
-    def test_repair_storage_kanban_error_creates_failed_outcome(
-        self, tmp_path: Path
-    ) -> None:
+    def test_repair_storage_kanban_error_creates_failed_outcome(self, tmp_path: Path) -> None:
         """KanbanError from create_task → failed RepairOutcome appended (not propagated)."""
         engine = _make_engine(tmp_path)
         outcome = self._fake_quarantine_outcome()
@@ -479,13 +444,9 @@ class TestFromAC_RepairStorageCatchBranch:
             results = engine.repair_storage()
 
         assert len(results) == 1
-        assert results[0].action == "failed", (
-            "KanbanError from create_task must produce a failed RepairOutcome"
-        )
+        assert results[0].action == "failed", "KanbanError from create_task must produce a failed RepairOutcome"
 
-    def test_repair_storage_oserror_creates_failed_outcome(
-        self, tmp_path: Path
-    ) -> None:
+    def test_repair_storage_oserror_creates_failed_outcome(self, tmp_path: Path) -> None:
         """OSError from create_task → failed RepairOutcome appended (not propagated)."""
         engine = _make_engine(tmp_path)
         outcome = self._fake_quarantine_outcome()
@@ -497,9 +458,7 @@ class TestFromAC_RepairStorageCatchBranch:
             results = engine.repair_storage()
 
         assert len(results) == 1
-        assert results[0].action == "failed", (
-            "OSError from create_task must produce a failed RepairOutcome"
-        )
+        assert results[0].action == "failed", "OSError from create_task must produce a failed RepairOutcome"
 
 
 # ---------------------------------------------------------------------------
@@ -554,6 +513,4 @@ class TestFromAC_RuffClean:
             text=True,
             cwd=_PROJECT_ROOT,
         )
-        assert result.returncode == 0, (
-            f"ruff BLE001 check (--no-noqa) failed:\n{result.stdout}\n{result.stderr}"
-        )
+        assert result.returncode == 0, f"ruff BLE001 check (--no-noqa) failed:\n{result.stdout}\n{result.stderr}"

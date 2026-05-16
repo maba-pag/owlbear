@@ -63,11 +63,7 @@ class TestFromAC_SearchKnowledgeV2:
     async def test_returns_bullet_list_for_valid_query(self) -> None:
         """search_knowledge returns a list of result dicts when results are found."""
         qs = AsyncMock()
-        qs.query = AsyncMock(
-            return_value=[
-                _make_result(title="Alpha", score=0.9, snippet="alpha content")
-            ]
-        )
+        qs.query = AsyncMock(return_value=[_make_result(title="Alpha", score=0.9, snippet="alpha content")])
         ctx = _make_ctx(qs)
 
         result = await search_knowledge(ctx, query="alpha")
@@ -83,11 +79,7 @@ class TestFromAC_SearchKnowledgeV2:
     async def test_bullet_format_title_score_snippet(self) -> None:
         """Result dict contains title, score, and snippet fields with correct values."""
         qs = AsyncMock()
-        qs.query = AsyncMock(
-            return_value=[
-                _make_result(title="MyDoc", score=0.75, snippet="relevant text")
-            ]
-        )
+        qs.query = AsyncMock(return_value=[_make_result(title="MyDoc", score=0.75, snippet="relevant text")])
         ctx = _make_ctx(qs)
 
         result = await search_knowledge(ctx, query="test")
@@ -102,11 +94,7 @@ class TestFromAC_SearchKnowledgeV2:
         """Full snippet is returned in the dict (no truncation in structured output)."""
         long_snippet = "A" * 300
         qs = AsyncMock()
-        qs.query = AsyncMock(
-            return_value=[
-                _make_result(title="LongDoc", score=0.8, snippet=long_snippet)
-            ]
-        )
+        qs.query = AsyncMock(return_value=[_make_result(title="LongDoc", score=0.8, snippet=long_snippet)])
         ctx = _make_ctx(qs)
 
         result = await search_knowledge(ctx, query="test")
@@ -232,9 +220,7 @@ class TestFromAC_SearchKnowledgeStructuredReturn:
     async def test_each_dict_has_title_score_snippet_keys(self) -> None:
         """Each result dict contains 'title', 'score', and 'snippet' keys."""
         qs = AsyncMock()
-        qs.query = AsyncMock(
-            return_value=[_make_result(title="T", score=0.9, snippet="S")]
-        )
+        qs.query = AsyncMock(return_value=[_make_result(title="T", score=0.9, snippet="S")])
         ctx = _make_ctx(qs)
 
         result = await search_knowledge(ctx, query="keys")
@@ -281,9 +267,7 @@ class TestFromAC_SearchKnowledgeStructuredReturn:
     async def test_dict_values_match_source_result_fields(self) -> None:
         """title, score, snippet values come from the StructuredSearchResult fields."""
         qs = AsyncMock()
-        qs.query = AsyncMock(
-            return_value=[_make_result(title="Alpha", score=0.95, snippet="alpha snip")]
-        )
+        qs.query = AsyncMock(return_value=[_make_result(title="Alpha", score=0.95, snippet="alpha snip")])
         ctx = _make_ctx(qs)
 
         result = await search_knowledge(ctx, query="values")

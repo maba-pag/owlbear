@@ -51,9 +51,7 @@ class TestFromAC_QdrantFilesystemPersistence:
     """AC1: QdrantVectorStore must be constructed with a filesystem path."""
 
     @pytest.mark.asyncio
-    async def test_qdrant_vector_store_uses_filesystem_path_by_default(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_qdrant_vector_store_uses_filesystem_path_by_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """app_lifespan constructs QdrantVectorStore with the default filesystem path.
 
         Currently FAILS: QdrantVectorStore() is called with no args, defaulting
@@ -86,20 +84,14 @@ class TestFromAC_QdrantFilesystemPersistence:
         args, kwargs = qdrant_cls.call_args
         # Must NOT default to :memory: — must use a filesystem path
         location = kwargs.get("location") or (args[0] if args else None)
-        assert location is not None, (
-            "QdrantVectorStore must be called with an explicit location= argument"
-        )
-        assert location != ":memory:", (
-            f"QdrantVectorStore must use filesystem path, got: {location!r}"
-        )
+        assert location is not None, "QdrantVectorStore must be called with an explicit location= argument"
+        assert location != ":memory:", f"QdrantVectorStore must use filesystem path, got: {location!r}"
         assert ".owlbear/knowledge/vectors" in location, (
             f"Default path must include .owlbear/knowledge/vectors, got: {location!r}"
         )
 
     @pytest.mark.asyncio
-    async def test_qdrant_path_uses_env_var_when_set(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_qdrant_path_uses_env_var_when_set(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """OWLBEAR_QDRANT_PATH env var controls the QdrantVectorStore location.
 
         Currently FAILS: QdrantVectorStore() ignores OWLBEAR_QDRANT_PATH because
@@ -152,9 +144,7 @@ class TestFromAC_IngestDocumentSourceUrl:
         with no source_url parameter.
         """
         sig = inspect.signature(ingest_document)
-        assert "source_url" in sig.parameters, (
-            "ingest_document must have a source_url parameter"
-        )
+        assert "source_url" in sig.parameters, "ingest_document must have a source_url parameter"
 
     def test_ingest_document_source_url_defaults_to_none(self) -> None:
         """source_url parameter defaults to None (backwards-compatible).
@@ -164,9 +154,7 @@ class TestFromAC_IngestDocumentSourceUrl:
         sig = inspect.signature(ingest_document)
         param = sig.parameters.get("source_url")
         assert param is not None, "source_url parameter missing"
-        assert param.default is None, (
-            f"source_url should default to None, got: {param.default!r}"
-        )
+        assert param.default is None, f"source_url should default to None, got: {param.default!r}"
 
     @pytest.mark.asyncio
     async def test_ingest_document_forwards_source_url_to_pipeline(self) -> None:
@@ -198,9 +186,7 @@ class TestFromAC_IngestDocumentSourceUrl:
 
         mock_pipeline.ingest_text.assert_called_once()
         _, call_kwargs = mock_pipeline.ingest_text.call_args
-        assert "source_url" in call_kwargs, (
-            "ingest_text must be called with source_url= kwarg"
-        )
+        assert "source_url" in call_kwargs, "ingest_text must be called with source_url= kwarg"
         assert call_kwargs["source_url"] == "https://example.com/doc", (
             f"source_url not forwarded correctly, got: {call_kwargs['source_url']!r}"
         )
@@ -231,9 +217,7 @@ class TestFromAC_IngestDocumentSourceUrl:
         mock_pipeline.ingest_text.assert_called_once()
         _, call_kwargs = mock_pipeline.ingest_text.call_args
         # source_url must be passed (even as None) so pipeline can skip resolution
-        assert "source_url" in call_kwargs, (
-            "ingest_text must receive source_url= kwarg (None by default)"
-        )
+        assert "source_url" in call_kwargs, "ingest_text must receive source_url= kwarg (None by default)"
         assert call_kwargs["source_url"] is None, (
             f"source_url must be None when not provided, got: {call_kwargs['source_url']!r}"
         )
@@ -375,9 +359,7 @@ class TestFromAC_SourceResolutionByUrl:
         mock_pipeline.ingest_text.assert_called_once()
         _, call_kwargs = mock_pipeline.ingest_text.call_args
         # source_url=None must be explicitly passed so pipeline skips resolution
-        assert "source_url" in call_kwargs, (
-            "ingest_text must be called with source_url= kwarg (None when not provided)"
-        )
+        assert "source_url" in call_kwargs, "ingest_text must be called with source_url= kwarg (None when not provided)"
         assert call_kwargs["source_url"] is None, (
             f"source_url must be None when not given, got: {call_kwargs['source_url']!r}"
         )

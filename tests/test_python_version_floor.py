@@ -62,8 +62,7 @@ _PREREQUISITE_DOCS: dict[str, pathlib.Path] = {
     "README.md": _ROOT / "README.md",
     "README-consumer.md": _ROOT / "README-consumer.md",
     "setup/setup-guide.md": _ROOT / "setup/setup-guide.md",
-    "owlbear-system.instructions.md": _ROOT
-    / "share/instructions/owlbear-system.instructions.md",
+    "owlbear-system.instructions.md": _ROOT / "share/instructions/owlbear-system.instructions.md",
 }
 
 _UV_LOCK = _ROOT / "uv.lock"
@@ -92,12 +91,9 @@ class TestFromAC_AllPackagesRequiresPythonFloor:
         for pkg, pyproject in _SYNCED_PACKAGES.items():
             req = _read_requires_python(pyproject)
             if req != ">=3.12":
-                failures.append(
-                    f"  serve/{pkg}/pyproject.toml: requires-python={req!r}"
-                )
-        assert not failures, (
-            "These synced packages have wrong requires-python (expected '>=3.12'):\n"
-            + "\n".join(failures)
+                failures.append(f"  serve/{pkg}/pyproject.toml: requires-python={req!r}")
+        assert not failures, "These synced packages have wrong requires-python (expected '>=3.12'):\n" + "\n".join(
+            failures
         )
 
     def test_no_synced_package_pins_to_3_14(self) -> None:
@@ -105,12 +101,9 @@ class TestFromAC_AllPackagesRequiresPythonFloor:
         for pkg, pyproject in _SYNCED_PACKAGES.items():
             req = _read_requires_python(pyproject)
             if re.search(r"3\.14", req):
-                failures.append(
-                    f"  serve/{pkg}/pyproject.toml: requires-python={req!r}"
-                )
-        assert not failures, (
-            "These synced packages pin to Python 3.14 without documented justification:\n"
-            + "\n".join(failures)
+                failures.append(f"  serve/{pkg}/pyproject.toml: requires-python={req!r}")
+        assert not failures, "These synced packages pin to Python 3.14 without documented justification:\n" + "\n".join(
+            failures
         )
 
 
@@ -126,12 +119,10 @@ class TestFromAC_NoUnjustifiedVersionBump:
                 req = _read_requires_python(pyproject)
                 if req != ">=3.12":
                     failures.append(
-                        f"  serve/{pkg}: no Python 3.13+ syntax found but "
-                        f"requires-python={req!r} (must be '>=3.12')"
+                        f"  serve/{pkg}: no Python 3.13+ syntax found but requires-python={req!r} (must be '>=3.12')"
                     )
         assert not failures, (
-            "Packages with requires-python > '>=3.12' but no 3.13+ syntax justification:\n"
-            + "\n".join(failures)
+            "Packages with requires-python > '>=3.12' but no 3.13+ syntax justification:\n" + "\n".join(failures)
         )
 
 
@@ -175,10 +166,7 @@ class TestFromAC_RenovatePythonPolicy:
         rules = data.get("packageRules", [])
         python_rules = [r for r in rules if "python" in r.get("matchPackageNames", [])]
         relevant_managers = {"pep621", "uv"}
-        has_relevant_manager = any(
-            bool(set(r.get("matchManagers", [])) & relevant_managers)
-            for r in python_rules
-        )
+        has_relevant_manager = any(bool(set(r.get("matchManagers", [])) & relevant_managers) for r in python_rules)
         assert has_relevant_manager, (
             "No Renovate python rule targets 'pep621' or 'uv' managers — "
             "AC5 requires matchManagers to include 'pep621' or 'uv' so the rule "
@@ -217,13 +205,10 @@ class TestFromAC_DependencyFloorAudit:
                 for pattern in _PY313_PLUS_PATTERNS:
                     if re.search(pattern, text):
                         rel = py_file.relative_to(_ROOT)
-                        violations.append(
-                            f"  {rel}: matches pattern {pattern!r} (3.13+/3.14+ exclusive)"
-                        )
+                        violations.append(f"  {rel}: matches pattern {pattern!r} (3.13+/3.14+ exclusive)")
         assert not violations, (
             "Python 3.13+/3.14+ exclusive features detected in synced source files.\n"
-            "Either raise the project floor to match or replace with 3.12-compatible code:\n"
-            + "\n".join(violations)
+            "Either raise the project floor to match or replace with 3.12-compatible code:\n" + "\n".join(violations)
         )
 
 
@@ -252,9 +237,7 @@ class TestFromAC_PrerequisiteDocsAlignment:
         )
 
     def test_system_instructions_states_python_3_12_floor(self) -> None:
-        content = (
-            _ROOT / "share/instructions/owlbear-system.instructions.md"
-        ).read_text()
+        content = (_ROOT / "share/instructions/owlbear-system.instructions.md").read_text()
         assert re.search(r"Python 3\.12", content), (
             "share/instructions/owlbear-system.instructions.md does not mention "
             "'Python 3.12' — AC4 requires this synced prerequisite reference to be "

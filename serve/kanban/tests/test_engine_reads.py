@@ -205,9 +205,7 @@ class TestFromAC_ListTasksValidation:
             view.list_tasks(priority="ultra-mega")
         assert exc_info.value.code == "ERR_INVALID_PRIORITY"
 
-    def test_invalid_archival_reason_raises_err_archival_reason_invalid(
-        self, tmp_path: Path
-    ) -> None:
+    def test_invalid_archival_reason_raises_err_archival_reason_invalid(self, tmp_path: Path) -> None:
         """Non-existent archival_reason value → ERR_ARCHIVAL_REASON_INVALID.
         Note: archival_reason parameter does not yet exist on AgentView.list_tasks.
         """
@@ -242,9 +240,7 @@ class TestFromAC_ListTasksArchivedReads:
         )
         view = _make_view(kanban_dir)
         resp = view.list_tasks(status="archived")
-        assert 2 in [t.id for t in resp.tasks], (
-            "Archived task must appear when status='archived'"
-        )
+        assert 2 in [t.id for t in resp.tasks], "Archived task must appear when status='archived'"
 
     def test_status_archived_excludes_active_tasks(self, tmp_path: Path) -> None:
         """AC2: active tasks must not appear when status='archived'."""
@@ -404,19 +400,10 @@ class TestFromAC_ShowTaskSectionConcat:
     D56 requires: all matches serialized back to markdown and concatenated.
     """
 
-    def test_multiple_section_matches_body_contains_all_content(
-        self, tmp_path: Path
-    ) -> None:
+    def test_multiple_section_matches_body_contains_all_content(self, tmp_path: Path) -> None:
         """Body must include content from every matching heading section."""
         kanban_dir = _make_board(tmp_path)
-        body = (
-            "## Goals\n"
-            "First goal content.\n\n"
-            "## Notes\n"
-            "Unrelated note.\n\n"
-            "## Goals\n"
-            "Second goal content.\n"
-        )
+        body = "## Goals\nFirst goal content.\n\n## Notes\nUnrelated note.\n\n## Goals\nSecond goal content.\n"
         _write_task(kanban_dir, task_id=10, title="Multi-Section", body=body)
         view = _make_view(kanban_dir)
         view.engine.list_tasks()  # warm id→filename index
@@ -424,8 +411,7 @@ class TestFromAC_ShowTaskSectionConcat:
         assert resp.body is not None
         assert "First goal content." in resp.body
         assert "Second goal content." in resp.body, (
-            "D56 requires ALL matches concatenated in document order; "
-            "current impl returns only the first section."
+            "D56 requires ALL matches concatenated in document order; current impl returns only the first section."
         )
         assert "Unrelated note." not in resp.body, (
             "Section filter must exclude non-matching headings from concatenated result"
@@ -445,9 +431,7 @@ class TestFromAC_DepStatus:
     not just those passing the current status filter.
     """
 
-    def test_dep_status_ok_when_dep_active_in_different_status(
-        self, tmp_path: Path
-    ) -> None:
+    def test_dep_status_ok_when_dep_active_in_different_status(self, tmp_path: Path) -> None:
         """Task A (todo) depends on task B (research). Both active.
 
         list_tasks(status='todo') must return A with dep_status='ok'.
@@ -465,8 +449,7 @@ class TestFromAC_DepStatus:
         task_a = next((t for t in resp.tasks if t.id == 1), None)
         assert task_a is not None, "Task A (todo) must appear in filtered result"
         assert task_a.dep_status == "ok", (
-            f"Dep B is active (research); §3.3 requires dep_status='ok' "
-            f"but got {task_a.dep_status!r}"
+            f"Dep B is active (research); §3.3 requires dep_status='ok' but got {task_a.dep_status!r}"
         )
 
     def test_dep_status_blocked_when_dep_archived_dropped(self, tmp_path: Path) -> None:
@@ -486,13 +469,10 @@ class TestFromAC_DepStatus:
         task_a = next((t for t in resp.tasks if t.id == 1), None)
         assert task_a is not None, "Task A must appear in todo result"
         assert task_a.dep_status == "blocked", (
-            f"Dep B archived with 'dropped'; §3.3 requires dep_status='blocked' "
-            f"but got {task_a.dep_status!r}"
+            f"Dep B archived with 'dropped'; §3.3 requires dep_status='blocked' but got {task_a.dep_status!r}"
         )
 
-    def test_dep_status_redirect_when_dep_archived_duplicate(
-        self, tmp_path: Path
-    ) -> None:
+    def test_dep_status_redirect_when_dep_archived_duplicate(self, tmp_path: Path) -> None:
         """dep_status='redirect' when dep is archived with reason 'duplicate' (§3.3)."""
         kanban_dir = _make_board(tmp_path)
         _write_task(kanban_dir, task_id=1, title="A", status="todo", depends_on="[2]")
@@ -509,8 +489,7 @@ class TestFromAC_DepStatus:
         task_a = next((t for t in resp.tasks if t.id == 1), None)
         assert task_a is not None, "Task A must appear in todo result"
         assert task_a.dep_status == "redirect", (
-            f"Dep B archived with 'duplicate'; §3.3 requires dep_status='redirect' "
-            f"but got {task_a.dep_status!r}"
+            f"Dep B archived with 'duplicate'; §3.3 requires dep_status='redirect' but got {task_a.dep_status!r}"
         )
 
     def test_dep_status_none_when_task_has_no_deps(self, tmp_path: Path) -> None:
@@ -521,21 +500,15 @@ class TestFromAC_DepStatus:
         resp = view.list_tasks(status="todo")
         task = next((t for t in resp.tasks if t.id == 1), None)
         assert task is not None
-        assert task.dep_status is None, (
-            f"No deps → dep_status must be None but got {task.dep_status!r}"
-        )
+        assert task.dep_status is None, f"No deps → dep_status must be None but got {task.dep_status!r}"
 
-    def test_dep_status_blocked_beats_redirect_with_mixed_deps(
-        self, tmp_path: Path
-    ) -> None:
+    def test_dep_status_blocked_beats_redirect_with_mixed_deps(self, tmp_path: Path) -> None:
         """Task with two deps: one archived/dropped (→blocked), one archived/duplicate (→redirect).
 
         §3.3 precedence: blocked > redirect → result must be 'blocked'.
         """
         kanban_dir = _make_board(tmp_path)
-        _write_task(
-            kanban_dir, task_id=1, title="A", status="todo", depends_on="[2, 3]"
-        )
+        _write_task(kanban_dir, task_id=1, title="A", status="todo", depends_on="[2, 3]")
         _write_task(
             kanban_dir,
             task_id=2,
@@ -567,9 +540,7 @@ class TestFromAC_DepStatus:
         §3.3 precedence: redirect > ok → result must be 'redirect'.
         """
         kanban_dir = _make_board(tmp_path)
-        _write_task(
-            kanban_dir, task_id=1, title="A", status="todo", depends_on="[2, 3]"
-        )
+        _write_task(kanban_dir, task_id=1, title="A", status="todo", depends_on="[2, 3]")
         _write_task(
             kanban_dir,
             task_id=2,
@@ -584,8 +555,7 @@ class TestFromAC_DepStatus:
         task_a = next((t for t in resp.tasks if t.id == 1), None)
         assert task_a is not None
         assert task_a.dep_status == "redirect", (
-            f"Mixed deps (duplicate+active); §3.3 redirect > ok → "
-            f"expected 'redirect' but got {task_a.dep_status!r}"
+            f"Mixed deps (duplicate+active); §3.3 redirect > ok → expected 'redirect' but got {task_a.dep_status!r}"
         )
 
 
@@ -661,9 +631,7 @@ class TestFromAC_ListTasksIdsExact:
         )
         view = _make_view(kanban_dir)
         resp = view.list_tasks(ids=[1, 2, 999])
-        assert len(resp.tasks) == 2, (
-            f"Expected exactly 2 tasks (active + archived), got {len(resp.tasks)}"
-        )
+        assert len(resp.tasks) == 2, f"Expected exactly 2 tasks (active + archived), got {len(resp.tasks)}"
 
     def test_ids_missing_ids_exact_equality(self, tmp_path: Path) -> None:
         """AC3: missing_ids is exactly [999] — no extra ids, correct value."""
@@ -679,9 +647,7 @@ class TestFromAC_ListTasksIdsExact:
         )
         view = _make_view(kanban_dir)
         resp = view.list_tasks(ids=[1, 2, 999])
-        assert resp.missing_ids == [999], (
-            f"missing_ids must be exactly [999], got {resp.missing_ids!r}"
-        )
+        assert resp.missing_ids == [999], f"missing_ids must be exactly [999], got {resp.missing_ids!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -695,9 +661,7 @@ class TestFromAC_ShowTaskSectionLookup:
     below via direct assertion here for orthogonality).
     """
 
-    def test_case_insensitive_section_lookup_returns_content(
-        self, tmp_path: Path
-    ) -> None:
+    def test_case_insensitive_section_lookup_returns_content(self, tmp_path: Path) -> None:
         """AC10: section='GOALS' matches '## Goals' heading (case-insensitive)."""
         kanban_dir = _make_board(tmp_path)
         _write_task(
@@ -711,9 +675,7 @@ class TestFromAC_ShowTaskSectionLookup:
         resp = view.show_task(11, section="GOALS")
         assert resp.body is not None, "Case-insensitive match must return body content"
         assert "Some goal text." in resp.body
-        assert "Irrelevant note." not in resp.body, (
-            "Section filter must exclude unrelated headings"
-        )
+        assert "Irrelevant note." not in resp.body, "Section filter must exclude unrelated headings"
 
     def test_missing_section_body_is_none(self, tmp_path: Path) -> None:
         """AC11: section not found → body=None."""
@@ -797,9 +759,7 @@ class TestFromAC_ListTasksDefaultExclusion:
 class TestFromAC_ShowTaskSectionGuidance:
     """AC12: multiple section matches → guidance includes occurrence count."""
 
-    def test_multiple_section_matches_guidance_has_occurrence_count(
-        self, tmp_path: Path
-    ) -> None:
+    def test_multiple_section_matches_guidance_has_occurrence_count(self, tmp_path: Path) -> None:
         """AC12: guidance must mention occurrence count when >1 sections matched."""
         kanban_dir = _make_board(tmp_path)
         body = "## Goals\nFirst goal.\n\n## Notes\nA note.\n\n## Goals\nSecond goal.\n"

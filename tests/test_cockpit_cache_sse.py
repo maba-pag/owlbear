@@ -236,9 +236,7 @@ class TestFromAC_CacheDirSignature:
     """AC1: signature must track more than max mtime — also file count or name-set —
     so that deletions, renames, and archive moves are detected."""
 
-    def test_signature_changes_when_non_newest_task_deleted(
-        self, two_task_board: Path
-    ) -> None:
+    def test_signature_changes_when_non_newest_task_deleted(self, two_task_board: Path) -> None:
         """Deleting the non-newest task file must change the signature.
 
         Current scan() returns max(st_mtime_ns), which is unchanged when the
@@ -263,9 +261,7 @@ class TestFromAC_CacheDirSignature:
             "the deleted file was not the newest — this is the AC1 bug."
         )
 
-    def test_has_changed_true_when_non_newest_task_deleted(
-        self, two_task_board: Path
-    ) -> None:
+    def test_has_changed_true_when_non_newest_task_deleted(self, two_task_board: Path) -> None:
         """has_changed() must return True after deleting the non-newest task file.
 
         Current has_changed() rescans with max-mtime; since the max is unchanged,
@@ -377,9 +373,7 @@ class TestFromAC_TaskListCacheInvalidation:
     """AC2: GET /api/tasks must reload whenever the directory signature changes and
     must never return a deleted or archived active task from stale cache."""
 
-    def test_get_tasks_excludes_deleted_non_newest_task(
-        self, http_client: TestClient, two_task_board: Path
-    ) -> None:
+    def test_get_tasks_excludes_deleted_non_newest_task(self, http_client: TestClient, two_task_board: Path) -> None:
         """After deleting the non-newest task file, GET /api/tasks must not return it.
 
         Current bug: max-mtime cache does not detect the deletion → cache miss is not
@@ -409,9 +403,7 @@ class TestFromAC_TaskListCacheInvalidation:
             "file count or name-set."
         )
 
-    def test_get_tasks_excludes_archived_non_newest_task(
-        self, http_client: TestClient, two_task_board: Path
-    ) -> None:
+    def test_get_tasks_excludes_archived_non_newest_task(self, http_client: TestClient, two_task_board: Path) -> None:
         """After moving the non-newest task to archive/, GET /api/tasks must exclude it.
 
         Current bug: moving (not deleting) the older task does not change max-mtime →
@@ -453,9 +445,7 @@ class TestFromAC_MutationCacheInvalidation:
     track enough information that archive/delete mutations of non-newest files are
     always detected without relying on coincidental lock-file side effects."""
 
-    def test_has_changed_detects_archive_of_non_newest_when_same_mtime(
-        self, tmp_path: Path
-    ) -> None:
+    def test_has_changed_detects_archive_of_non_newest_when_same_mtime(self, tmp_path: Path) -> None:
         """When two tasks share the same mtime and one is removed (archived),
         the cache must still detect the change via file-count or name-set.
 
@@ -503,9 +493,7 @@ class TestFromAC_MutationCacheInvalidation:
             "deterministic detection of file-set changes."
         )
 
-    def test_get_tasks_after_same_mtime_archive_excludes_archived_task(
-        self, tmp_path: Path
-    ) -> None:
+    def test_get_tasks_after_same_mtime_archive_excludes_archived_task(self, tmp_path: Path) -> None:
         """When two tasks share the same mtime and one is archived,
         GET /api/tasks must exclude the archived task on the next request.
 
@@ -563,9 +551,7 @@ class TestFromAC_MutationCacheInvalidation:
         finally:
             app.dependency_overrides.clear()
 
-    def test_get_tasks_reflects_status_change_after_move_route(
-        self, tmp_path: Path
-    ) -> None:
+    def test_get_tasks_reflects_status_change_after_move_route(self, tmp_path: Path) -> None:
         """After POST /api/tasks/{id}/move, GET /api/tasks must reflect the new status.
 
         AC3/AC7 proof gap: existing AC3 tests use direct filesystem renames rather
@@ -605,9 +591,7 @@ class TestFromAC_MutationCacheInvalidation:
             # Prime the cache with both tasks in 'todo'.
             resp_prime = client.get("/api/tasks")
             assert resp_prime.status_code == 200
-            todo_ids_before = {
-                t["id"] for t in resp_prime.json()["tasks"] if t["status"] == "todo"
-            }
+            todo_ids_before = {t["id"] for t in resp_prime.json()["tasks"] if t["status"] == "todo"}
             assert 1 in todo_ids_before, "Precondition: task 1 must be in 'todo'"
 
             # Move task 1 from 'todo' to 'in-progress' via the cockpit mutation route.
@@ -617,8 +601,7 @@ class TestFromAC_MutationCacheInvalidation:
                 json={"status": "in-progress", "updated": task.updated},
             )
             assert move_resp.status_code == 200, (
-                f"POST /api/tasks/1/move returned {move_resp.status_code}: "
-                f"{move_resp.json()}"
+                f"POST /api/tasks/1/move returned {move_resp.status_code}: {move_resp.json()}"
             )
 
             # GET /api/tasks?status=todo must NOT include task 1 (now in-progress).
@@ -673,9 +656,7 @@ class TestFromAC_SSEDeletedPathEvent:
         )
 
     @pytest.mark.asyncio
-    async def test_tasks_changed_payload_mtime_positive_for_deleted_path(
-        self, board_dir: Path
-    ) -> None:
+    async def test_tasks_changed_payload_mtime_positive_for_deleted_path(self, board_dir: Path) -> None:
         """The tasks-changed payload mtime must be a positive integer even when the
         changed path no longer exists (so stat() is unavailable).
 
@@ -704,9 +685,7 @@ class TestFromAC_SSEDeletedPathEvent:
         )
 
     @pytest.mark.asyncio
-    async def test_mixed_batch_tasks_deleted_decisions_changed_emits_tasks_changed(
-        self, board_dir: Path
-    ) -> None:
+    async def test_mixed_batch_tasks_deleted_decisions_changed_emits_tasks_changed(self, board_dir: Path) -> None:
         """Mixed batch: deleted task path + surviving decisions file.
 
         In this batch the only task-classified path is the DELETED task path.
@@ -743,9 +722,7 @@ class TestFromAC_SSEDeletedPathEvent:
         )
 
     @pytest.mark.asyncio
-    async def test_repeated_tasks_changed_payload_differs_when_candidate_mtime_unchanged(
-        self, board_dir: Path
-    ) -> None:
+    async def test_repeated_tasks_changed_payload_differs_when_candidate_mtime_unchanged(self, board_dir: Path) -> None:
         """Two successive tasks-changed emissions from the same file at the same mtime
         must produce different (strictly increasing) payload mtime values.
 
@@ -778,8 +755,7 @@ class TestFromAC_SSEDeletedPathEvent:
 
         tasks_changed = [e for e in collected if e.get("event") == "tasks-changed"]
         assert len(tasks_changed) == 2, (
-            f"Expected 2 tasks-changed events (one per batch); "
-            f"got {len(tasks_changed)}.  Events: {tasks_changed}"
+            f"Expected 2 tasks-changed events (one per batch); got {len(tasks_changed)}.  Events: {tasks_changed}"
         )
 
         mtime1 = json.loads(tasks_changed[0]["data"])["mtime"]
@@ -808,9 +784,7 @@ class TestFromAC_ArchiveInvalidationSignal:
     must be treated as tasks-changed invalidation signals."""
 
     @pytest.mark.asyncio
-    async def test_archive_path_classified_as_tasks_changed(
-        self, board_dir: Path
-    ) -> None:
+    async def test_archive_path_classified_as_tasks_changed(self, board_dir: Path) -> None:
         """A watch batch containing an archive/*.md path must produce tasks-changed.
 
         Current _classify_path returns None for archive paths → no event emitted.
@@ -835,9 +809,7 @@ class TestFromAC_ArchiveInvalidationSignal:
         )
 
     @pytest.mark.asyncio
-    async def test_archive_watch_emits_tasks_changed_not_other_event(
-        self, board_dir: Path
-    ) -> None:
+    async def test_archive_watch_emits_tasks_changed_not_other_event(self, board_dir: Path) -> None:
         """Archive path changes must be classified as tasks-changed, not a new event
         type.  Frontend only handles known event types; a new event type would be
         silently ignored."""
@@ -860,9 +832,7 @@ class TestFromAC_ArchiveInvalidationSignal:
             "as tasks-changed."
         )
 
-    def test_archived_task_absent_from_get_tasks_after_direct_archive_move(
-        self, two_task_board: Path
-    ) -> None:
+    def test_archived_task_absent_from_get_tasks_after_direct_archive_move(self, two_task_board: Path) -> None:
         """Simulating an archive move (moving task file to archive/) must cause the
         next GET /api/tasks to exclude the archived task.
 
@@ -921,9 +891,7 @@ class TestFromAC_ExistingEventBehaviorUnchanged:
     events must still be emitted correctly."""
 
     @pytest.mark.asyncio
-    async def test_activity_changed_still_emitted_after_archive_expansion(
-        self, board_dir: Path
-    ) -> None:
+    async def test_activity_changed_still_emitted_after_archive_expansion(self, board_dir: Path) -> None:
         """activity-changed must be emitted AND archive paths must be classified
         as tasks-changed.  This test requires BOTH the old behavior (activity-changed)
         and the new behavior (archive as tasks-changed) simultaneously.
@@ -950,8 +918,7 @@ class TestFromAC_ExistingEventBehaviorUnchanged:
 
         event_types = {e.get("event") for e in collected}
         assert "activity-changed" in event_types, (
-            "activity-changed must still be emitted when the batch also contains an "
-            "archive path. AC6 regression guard."
+            "activity-changed must still be emitted when the batch also contains an archive path. AC6 regression guard."
         )
         assert "tasks-changed" in event_types, (
             "tasks-changed must be emitted for the archive path in the same batch. "
@@ -960,9 +927,7 @@ class TestFromAC_ExistingEventBehaviorUnchanged:
         )
 
     @pytest.mark.asyncio
-    async def test_decisions_changed_still_emitted_after_archive_expansion(
-        self, board_dir: Path
-    ) -> None:
+    async def test_decisions_changed_still_emitted_after_archive_expansion(self, board_dir: Path) -> None:
         """decisions-changed must still be emitted after archive expansion.
 
         Similar to the activity-changed test: mixed batch with decisions and archive.
@@ -1089,8 +1054,7 @@ class TestFromAC_EditReleaseCacheInvalidation:
                 json={"updated": task.updated, "title": "Mutated title"},
             )
             assert edit_resp.status_code == 200, (
-                f"POST /api/tasks/1/edit returned {edit_resp.status_code}: "
-                f"{edit_resp.json()}"
+                f"POST /api/tasks/1/edit returned {edit_resp.status_code}: {edit_resp.json()}"
             )
 
             # Re-read: GET /api/tasks must reflect the mutated title.
@@ -1144,9 +1108,7 @@ class TestFromAC_EditReleaseCacheInvalidation:
             assert prime_resp.status_code == 200
             primed = {t["id"]: t for t in prime_resp.json()["tasks"]}
             assert 1 in primed, "Precondition: task 1 must be present"
-            assert "old-tag" in primed[1]["tags"], (
-                "Precondition: old-tag must be in task 1 before mutation"
-            )
+            assert "old-tag" in primed[1]["tags"], "Precondition: old-tag must be in task 1 before mutation"
 
             # Mutate: replace tags via the cockpit edit route (full-replacement semantics).
             task = eng.show_task("1")
@@ -1155,8 +1117,7 @@ class TestFromAC_EditReleaseCacheInvalidation:
                 json={"updated": task.updated, "tags": ["new-tag", "another-tag"]},
             )
             assert edit_resp.status_code == 200, (
-                f"POST /api/tasks/1/edit (tags) returned {edit_resp.status_code}: "
-                f"{edit_resp.json()}"
+                f"POST /api/tasks/1/edit (tags) returned {edit_resp.status_code}: {edit_resp.json()}"
             )
 
             # Re-read: GET /api/tasks must reflect the exact replacement tag list.
@@ -1175,9 +1136,7 @@ class TestFromAC_EditReleaseCacheInvalidation:
         finally:
             app.dependency_overrides.clear()
 
-    def test_get_tasks_reflects_claimed_false_after_release_route(
-        self, tmp_path: Path
-    ) -> None:
+    def test_get_tasks_reflects_claimed_false_after_release_route(self, tmp_path: Path) -> None:
         """AC3: GET /api/tasks reflects claimed=False after POST /api/tasks/{id}/release.
 
         After releasing a claimed task via the cockpit release route, a subsequent
@@ -1213,9 +1172,7 @@ class TestFromAC_EditReleaseCacheInvalidation:
             assert prime_resp.status_code == 200
             primed = {t["id"]: t for t in prime_resp.json()["tasks"]}
             assert 1 in primed, "Precondition: task 1 must be present"
-            assert primed[1]["claimed"] is True, (
-                "Precondition: task 1 must be claimed before release"
-            )
+            assert primed[1]["claimed"] is True, "Precondition: task 1 must be claimed before release"
 
             # Mutate: release the task via the cockpit release route.
             task = eng.show_task("1")
@@ -1224,8 +1181,7 @@ class TestFromAC_EditReleaseCacheInvalidation:
                 json={"updated": task.updated},
             )
             assert release_resp.status_code == 200, (
-                f"POST /api/tasks/1/release returned {release_resp.status_code}: "
-                f"{release_resp.json()}"
+                f"POST /api/tasks/1/release returned {release_resp.status_code}: {release_resp.json()}"
             )
 
             # Re-read: GET /api/tasks must reflect claimed=False for the released task.

@@ -40,8 +40,7 @@ class TestFromAC_CardExtraction:
         """Card.tsx must import the Task type from ../hooks/useBoard."""
         src = (_COMPONENTS / "Card.tsx").read_text()
         assert "../hooks/useBoard" in src, (
-            "Card.tsx does not import from '../hooks/useBoard' — "
-            "the Task type must be imported from that path"
+            "Card.tsx does not import from '../hooks/useBoard' — the Task type must be imported from that path"
         )
 
 
@@ -67,8 +66,7 @@ class TestFromAC_ColumnExtraction:
         """Column.tsx must import the Task type from ../hooks/useBoard."""
         src = (_COMPONENTS / "Column.tsx").read_text()
         assert "../hooks/useBoard" in src, (
-            "Column.tsx does not import from '../hooks/useBoard' — "
-            "the Task type must be imported from that path"
+            "Column.tsx does not import from '../hooks/useBoard' — the Task type must be imported from that path"
         )
 
 
@@ -83,30 +81,24 @@ class TestFromAC_NoMemoWrappers:
         """Card.tsx must not use React.memo, useMemo, or useCallback."""
         src = (_COMPONENTS / "Card.tsx").read_text()
         assert "React.memo" not in src, (
-            "Card.tsx uses React.memo — React Compiler handles memoisation automatically; "
-            "remove the wrapper"
+            "Card.tsx uses React.memo — React Compiler handles memoisation automatically; remove the wrapper"
         )
         assert "useMemo" not in src, (
-            "Card.tsx uses useMemo — React Compiler handles memoisation automatically; "
-            "remove the wrapper"
+            "Card.tsx uses useMemo — React Compiler handles memoisation automatically; remove the wrapper"
         )
         assert "useCallback" not in src, (
-            "Card.tsx uses useCallback — React Compiler handles memoisation automatically; "
-            "remove the wrapper"
+            "Card.tsx uses useCallback — React Compiler handles memoisation automatically; remove the wrapper"
         )
 
     def test_column_tsx_no_memo_wrappers(self) -> None:
         """Column.tsx must not use React.memo, useMemo, or useCallback."""
         src = (_COMPONENTS / "Column.tsx").read_text()
         assert "React.memo" not in src, (
-            "Column.tsx uses React.memo — React Compiler handles memoisation automatically; "
-            "remove the wrapper"
+            "Column.tsx uses React.memo — React Compiler handles memoisation automatically; remove the wrapper"
         )
         assert "useMemo" not in src, (
-            "Column.tsx uses useMemo — React Compiler handles memoisation automatically; "
-            "remove the wrapper"
+            "Column.tsx uses useMemo — React Compiler handles memoisation automatically; remove the wrapper"
         )
         assert "useCallback" not in src, (
-            "Column.tsx uses useCallback — React Compiler handles memoisation automatically; "
-            "remove the wrapper"
+            "Column.tsx uses useCallback — React Compiler handles memoisation automatically; remove the wrapper"
         )

@@ -54,7 +54,7 @@ _DEFAULT_KB_PATH = ".owlbear/knowledge/local.db"
 _DEFAULT_QDRANT_PATH = ".owlbear/knowledge/vectors"
 
 # Backward-compatible patch target used by legacy tests; the guard is no longer wired.
-globals()["Content" "InjectionGuard"] = object
+globals()["ContentInjectionGuard"] = object
 
 
 class _BrowserContentFetcher:
@@ -847,14 +847,8 @@ def _serialize_related_sources(value: object) -> list[RelatedSource]:
             name = getattr(item, "name", None)
             relationship = getattr(item, "relationship", None)
             entity = getattr(item, "entity", None)
-        if (
-            isinstance(name, str)
-            and isinstance(relationship, str)
-            and isinstance(entity, str)
-        ):
-            related_sources.append(
-                {"name": name, "relationship": relationship, "entity": entity}
-            )
+        if isinstance(name, str) and isinstance(relationship, str) and isinstance(entity, str):
+            related_sources.append({"name": name, "relationship": relationship, "entity": entity})
     return related_sources
 
 
@@ -1093,9 +1087,7 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
     global _app_context  # noqa: PLW0603
     token_path = Path.home() / ".owlbear" / "copilot_token.json"
     token_path.unlink(missing_ok=True)
-    path = os.environ.get("OWLBEAR_LOCAL_KB_PATH") or os.environ.get(
-        "OWLBEAR_KB_PATH", _DEFAULT_KB_PATH
-    )
+    path = os.environ.get("OWLBEAR_LOCAL_KB_PATH") or os.environ.get("OWLBEAR_KB_PATH", _DEFAULT_KB_PATH)
     qdrant_path = os.environ.get("OWLBEAR_QDRANT_PATH", _DEFAULT_QDRANT_PATH)
     conn = init_db(path)
     try:
@@ -1140,9 +1132,7 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
             inter_doc_builder=inter_doc_builder,
             graph_store=gs,
         )
-        consolidation_service: ConsolidationService | None = ConsolidationService(
-            conn, make_text_completion_fn()
-        )
+        consolidation_service: ConsolidationService | None = ConsolidationService(conn, make_text_completion_fn())
         ctx = AppContext(
             conn=conn,
             query_service=qs,
@@ -1167,15 +1157,11 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
 
 mcp = FastMCP("owlbear-knowledge", lifespan=app_lifespan)
 
-get_next_batch = mcp.tool(
-    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
-)(get_next_batch)
-get_consolidation_candidates = mcp.tool(
-    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
-)(get_consolidation_candidates)
-store_enrichment = mcp.tool(
-    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
-)(store_enrichment)
+get_next_batch = mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))(get_next_batch)
+get_consolidation_candidates = mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))(
+    get_consolidation_candidates
+)
+store_enrichment = mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))(store_enrichment)
 
 __all__ = [
     "AppContext",
@@ -1226,13 +1212,9 @@ async def search_knowledge(
                 "score": r.score,
                 "snippet": r.snippet,
                 "entity_type": r.entity_type,
-                "retrieval_path": (
-                    retrieval_path if isinstance(retrieval_path, str) else "vector"
-                ),
+                "retrieval_path": (retrieval_path if isinstance(retrieval_path, str) else "vector"),
                 "entities": _serialize_search_entities(getattr(r, "entities", [])),
-                "related_sources": _serialize_related_sources(
-                    getattr(r, "related_sources", [])
-                ),
+                "related_sources": _serialize_related_sources(getattr(r, "related_sources", [])),
                 "source": _serialize_source(getattr(r, "source", None)),
             }
         )
@@ -1312,17 +1294,12 @@ async def list_entities(
         except ValueError:
             valid = ", ".join(e.value for e in EntityType)
             return f"error: Invalid entity_type '{entity_type}'. Valid types: {valid}"
-        entities = await asyncio.to_thread(
-            gs.list_entities, entity_type=et, scopes=scopes
-        )
+        entities = await asyncio.to_thread(gs.list_entities, entity_type=et, scopes=scopes)
     else:
         entities = await asyncio.to_thread(gs.list_entities, scopes=scopes)
 
     page = entities[offset : offset + limit]
-    return [
-        {"name": e.name, "entity_type": e.entity_type, "description": e.description}
-        for e in page
-    ]
+    return [{"name": e.name, "entity_type": e.entity_type, "description": e.description} for e in page]
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
@@ -1338,15 +1315,9 @@ async def get_stats(ctx: Context) -> StatsResult:
 
     total_sources = conn.execute("SELECT COUNT(*) FROM knowledge_sources").fetchone()[0]
     total_chunks = conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
-    enriched_chunks = conn.execute(
-        "SELECT COUNT(*) FROM chunks WHERE enrichment_state = 'enriched'"
-    ).fetchone()[0]
-    chunks_enriched_ratio = (
-        float(enriched_chunks) / float(total_chunks) if total_chunks else 0.0
-    )
-    consolidation_candidates_remaining = len(
-        _fetch_consolidation_candidate_rows(conn, limit=None)
-    )
+    enriched_chunks = conn.execute("SELECT COUNT(*) FROM chunks WHERE enrichment_state = 'enriched'").fetchone()[0]
+    chunks_enriched_ratio = float(enriched_chunks) / float(total_chunks) if total_chunks else 0.0
+    consolidation_candidates_remaining = len(_fetch_consolidation_candidate_rows(conn, limit=None))
 
     return {
         "documents": doc_count,
@@ -1562,9 +1533,7 @@ async def sync_to_global(ctx: Context) -> str:
         global_conn = sqlite3.connect(str(global_path))
         try:
             _schema_init_db(global_conn)
-            raw = _core_do_import(
-                local_conn, global_conn, target_scope="global", source_scope="global"
-            )
+            raw = _core_do_import(local_conn, global_conn, target_scope="global", source_scope="global")
         finally:
             global_conn.close()
         # Reformat raw "Imported N documents (skipped M duplicates) into scope global"

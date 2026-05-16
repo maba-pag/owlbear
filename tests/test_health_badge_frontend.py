@@ -45,9 +45,7 @@ class TestFromAC_HealthBadgeStructure:
         )
 
     def test_vitest_test_file_contains_testfromac_class(self) -> None:
-        assert TEST_PATH.exists(), (
-            "Test file missing — run test_vitest_test_file_exists_at_contract_path first."
-        )
+        assert TEST_PATH.exists(), "Test file missing — run test_vitest_test_file_exists_at_contract_path first."
         content = TEST_PATH.read_text()
         assert "TestFromAC_HealthBadge" in content, (
             "Vitest test file must contain the TestFromAC_HealthBadge describe block."
@@ -56,9 +54,7 @@ class TestFromAC_HealthBadgeStructure:
     def test_component_file_contains_default_export(self) -> None:
         assert COMPONENT_PATH.exists(), "Component file missing."
         content = COMPONENT_PATH.read_text()
-        assert "export default" in content, (
-            "HealthBadge.tsx must use 'export default' for its component."
-        )
+        assert "export default" in content, "HealthBadge.tsx must use 'export default' for its component."
 
     def test_component_file_contains_health_badge_props_or_interface(self) -> None:
         assert COMPONENT_PATH.exists(), "Component file missing."
@@ -70,9 +66,7 @@ class TestFromAC_HealthBadgeStructure:
     def test_component_file_uses_data_health_attribute(self) -> None:
         assert COMPONENT_PATH.exists(), "Component file missing."
         content = COMPONENT_PATH.read_text()
-        assert "data-health" in content, (
-            "HealthBadge.tsx must use the data-health attribute for green/red state."
-        )
+        assert "data-health" in content, "HealthBadge.tsx must use the data-health attribute for green/red state."
 
     def test_component_file_uses_data_testid_health_badge(self) -> None:
         assert COMPONENT_PATH.exists(), "Component file missing."

@@ -85,16 +85,12 @@ class TestFromAC_SharedWorkflowContract:
             "structured context header",
             "anchor-recall",
         ]:
-            assert needle in text, (
-                f"w-ideation missing interaction-contract text: {needle}"
-            )
+            assert needle in text, f"w-ideation missing interaction-contract text: {needle}"
 
     def test_w_ideation_documents_validation_disciplines(self) -> None:
         """Validation disciplines live in their respective phase skills."""
         discovery = _read("share/skills/w-ideation-discovery/SKILL.md")
-        assert "## Conditional Denoise" in discovery, (
-            "Discovery skill missing Conditional Denoise section"
-        )
+        assert "## Conditional Denoise" in discovery, "Discovery skill missing Conditional Denoise section"
         mediation = _read("share/skills/w-ideation-mediation/SKILL.md")
         for needle in [
             "## Critic Validation (O15)",
@@ -104,9 +100,7 @@ class TestFromAC_SharedWorkflowContract:
             "## Disclosure Ladder",
             "Never hide decision-critical detail behind a file reference alone",
         ]:
-            assert needle in mediation, (
-                f"Mediation skill missing validation discipline: {needle}"
-            )
+            assert needle in mediation, f"Mediation skill missing validation discipline: {needle}"
 
     def test_discovery_skill_keeps_freeform_discovery_and_explicit_handoff(
         self,
@@ -117,9 +111,7 @@ class TestFromAC_SharedWorkflowContract:
             "@ideation-mediator",
             "existing-feature/refactor",
         ]:
-            assert needle in text, (
-                f"Discovery skill missing required contract text: {needle}"
-            )
+            assert needle in text, f"Discovery skill missing required contract text: {needle}"
         # Interaction turn shapes live in the shared w-ideation handbook
         shared = _read("share/skills/h-ideation/SKILL.md")
         for needle in [
@@ -129,9 +121,7 @@ class TestFromAC_SharedWorkflowContract:
             "structured context header",
             "anchor-recall",
         ]:
-            assert needle in shared, (
-                f"Shared handbook missing interaction contract text: {needle}"
-            )
+            assert needle in shared, f"Shared handbook missing interaction contract text: {needle}"
 
     def test_mediation_skill_keeps_o15_disclosure_and_decision_shape(self) -> None:
         text = _read("share/skills/w-ideation-mediation/SKILL.md")
@@ -142,9 +132,7 @@ class TestFromAC_SharedWorkflowContract:
             "Concrete Specifics",
             "Inline Verbatim Evidence",
         ]:
-            assert needle in text, (
-                f"Mediation skill missing required contract text: {needle}"
-            )
+            assert needle in text, f"Mediation skill missing required contract text: {needle}"
 
     def test_decision_entry_template_is_visible_in_workflow_surface(self) -> None:
         targets = [
@@ -160,9 +148,7 @@ class TestFromAC_SharedWorkflowContract:
                 "**Decision to make:** ...",
                 "**Rejected:**",
             ]:
-                assert needle in text, (
-                    f"Decision template missing from {path}: {needle}"
-                )
+                assert needle in text, f"Decision template missing from {path}: {needle}"
 
     def test_decision_entry_template_has_full_field_set(self) -> None:
         targets = [
@@ -176,9 +162,7 @@ class TestFromAC_SharedWorkflowContract:
                 "**Chosen:**",
                 "**Source inputs (when relevant):**",
             ]:
-                assert needle in text, (
-                    f"Decision template missing field in {path}: {needle}"
-                )
+                assert needle in text, f"Decision template missing field in {path}: {needle}"
 
 
 class TestFromAC_AgentContracts:
@@ -195,9 +179,7 @@ class TestFromAC_AgentContracts:
 
     def test_critic_has_pinned_model(self) -> None:
         text = _read("share/agents/ideation-critic.agent.md")
-        assert "model:" in text, (
-            "Critic must have a pinned model field for adversarial quality"
-        )
+        assert "model:" in text, "Critic must have a pinned model field for adversarial quality"
 
     def test_ideation_surfaces_keep_context_and_decisions_contract(self) -> None:
         paired_contract_files = [
@@ -217,18 +199,12 @@ class TestFromAC_AgentContracts:
             text = _read(path)
             if "context.md" not in text or "decisions.md" not in text:
                 missing.append(path)
-        assert not missing, (
-            f"Ideation contract missing context/decisions references: {missing}"
-        )
+        assert not missing, f"Ideation contract missing context/decisions references: {missing}"
 
     def test_critic_keeps_narrow_context_only_contract(self) -> None:
         text = _read("share/agents/ideation-critic.agent.md")
-        assert "context.md" in text, (
-            "Critic must keep the context.md engagement snapshot contract"
-        )
-        assert "decisions.md" not in text, (
-            "Critic contract should stay narrow and avoid decisions.md"
-        )
+        assert "context.md" in text, "Critic must keep the context.md engagement snapshot contract"
+        assert "decisions.md" not in text, "Critic contract should stay narrow and avoid decisions.md"
 
     def test_no_working_log_or_checkpoint_contract_reappears(self) -> None:
         offenders = []
@@ -236,9 +212,7 @@ class TestFromAC_AgentContracts:
             text = path.read_text(encoding="utf-8").lower()
             if "working-log.md" in text or "checkpoint" in text:
                 offenders.append(str(path.relative_to(_REPO_ROOT)))
-        assert not offenders, (
-            f"Deprecated ideation contract terms reappeared: {offenders}"
-        )
+        assert not offenders, f"Deprecated ideation contract terms reappeared: {offenders}"
 
 
 class TestFromAC_BlackboardDocs:
@@ -257,9 +231,7 @@ class TestFromAC_BlackboardDocs:
             "Rejected",
             "@ideation-mediator",
         ]:
-            assert needle in text, (
-                f"Brief blackboard docs missing required content: {needle}"
-            )
+            assert needle in text, f"Brief blackboard docs missing required content: {needle}"
 
 
 class TestFromAC_GoldenScenarioFixtures:
@@ -298,14 +270,9 @@ class TestFromAC_GoldenScenarioFixtures:
         net_new = _read(f"{self._ROOT}/01-net-new-work/decisions.md")
         refactor = _read(f"{self._ROOT}/02-existing-feature-refactor/decisions.md")
         assert "@ideation-mediator" in net_new
-        assert (
-            "context.md, `decisions.md`, and `research-notes.md`".replace("`", "")
-            not in net_new
-        )
+        assert "context.md, `decisions.md`, and `research-notes.md`".replace("`", "") not in net_new
         for needle in ["net-new", "existing-feature/refactor"]:
-            assert needle in (net_new + refactor), (
-                f"Project type missing from golden scenarios: {needle}"
-            )
+            assert needle in (net_new + refactor), f"Project type missing from golden scenarios: {needle}"
 
     def test_overscoped_scenario_records_scope_reduction_and_o15(self) -> None:
         decisions = _read(f"{self._ROOT}/03-overscoped-request/decisions.md")
@@ -315,9 +282,7 @@ class TestFromAC_GoldenScenarioFixtures:
             "Minor findings (grouped):",
             "Nonsense findings:",
         ]:
-            assert needle in decisions, (
-                f"Overscoped scenario missing required evidence: {needle}"
-            )
+            assert needle in decisions, f"Overscoped scenario missing required evidence: {needle}"
 
     def test_end_to_end_scenario_has_human_review_and_phase_two_outputs(self) -> None:
         readme = _read(f"{self._ROOT}/README.md")
@@ -338,24 +303,16 @@ class TestFromAC_GoldenScenarioFixtures:
 
     def test_overscoped_scenario_has_conditional_denoise_artifact(self) -> None:
         path = f"{self._ROOT}/03-overscoped-request/synthesis-idea-panel.md"
-        assert (_REPO_ROOT / path).exists(), (
-            f"Missing conditional-denoise artifact for overscoped scenario: {path}"
-        )
+        assert (_REPO_ROOT / path).exists(), f"Missing conditional-denoise artifact for overscoped scenario: {path}"
         text = _read(path)
         for marker in ["## Distinct Claims", "## Divergences"]:
-            assert marker in text, (
-                f"synthesis-idea-panel.md missing structural section: {marker}"
-            )
+            assert marker in text, f"synthesis-idea-panel.md missing structural section: {marker}"
 
     def test_overscoped_scenario_has_phase_two_outputs(self) -> None:
         synthesis = _read(f"{self._ROOT}/03-overscoped-request/synthesis.md")
         brief = _read(f"{self._ROOT}/03-overscoped-request/brief.md")
-        assert "## Recommendation" in synthesis, (
-            "03-overscoped-request/synthesis.md missing ## Recommendation"
-        )
-        assert "## Proposal" in brief, (
-            "03-overscoped-request/brief.md missing ## Proposal"
-        )
+        assert "## Recommendation" in synthesis, "03-overscoped-request/synthesis.md missing ## Recommendation"
+        assert "## Proposal" in brief, "03-overscoped-request/brief.md missing ## Proposal"
 
     def test_scenario_briefs_carry_runtime_disclaimer(self) -> None:
         scenarios = [
@@ -364,9 +321,7 @@ class TestFromAC_GoldenScenarioFixtures:
         ]
         for scenario in scenarios:
             text = _read(f"{self._ROOT}/{scenario}/brief.md")
-            assert "main-consuming" in text, (
-                f"{scenario}/brief.md missing runtime-validation disclaimer"
-            )
+            assert "main-consuming" in text, f"{scenario}/brief.md missing runtime-validation disclaimer"
 
 
 class TestFromAC_EarlyChallengeLane:
@@ -374,25 +329,19 @@ class TestFromAC_EarlyChallengeLane:
 
     def test_early_lane_always_invokes_simplifier_and_firstprinciples(self) -> None:
         text = _read("share/skills/h-ideation-panel/SKILL.md")
-        assert (
-            "Always invoke `ideation-simplifier` and `ideation-firstprinciples`" in text
-        ), (
-            "Panel handbook missing the default-roster 'always invoke' rule for "
-            "simplifier and firstprinciples"
+        assert "Always invoke `ideation-simplifier` and `ideation-firstprinciples`" in text, (
+            "Panel handbook missing the default-roster 'always invoke' rule for simplifier and firstprinciples"
         )
 
     def test_outsider_is_conditional_not_default(self) -> None:
         text = _read("share/skills/h-ideation-panel/SKILL.md")
-        assert (
-            "Invoke `ideation-outsider` only when the discovery agent sees "
-            "tunnel vision" in text
-        ), "Panel handbook missing the conditional-outsider selection rule"
+        assert "Invoke `ideation-outsider` only when the discovery agent sees tunnel vision" in text, (
+            "Panel handbook missing the conditional-outsider selection rule"
+        )
 
     def test_critic_excluded_from_default_early_lane(self) -> None:
         text = _read("share/skills/h-ideation-panel/SKILL.md")
-        assert (
-            "Do not use `ideation-critic` as the default early challenger." in text
-        ), (
+        assert "Do not use `ideation-critic` as the default early challenger." in text, (
             "Panel handbook missing the explicit critic-exclusion rule for the early lane"
         )
 
@@ -458,9 +407,7 @@ class TestFromAC_ProposalRoundContracts:
 
     def test_panel_handbook_has_propose_mode_section(self) -> None:
         text = _read("share/skills/h-ideation-panel/SKILL.md")
-        assert "### Propose Mode (M3.5 Path)" in text, (
-            "Panel handbook missing '### Propose Mode (M3.5 Path)' section"
-        )
+        assert "### Propose Mode (M3.5 Path)" in text, "Panel handbook missing '### Propose Mode (M3.5 Path)' section"
 
     def test_propose_mode_requires_five_proposal_sections(self) -> None:
         text = _read("share/skills/h-ideation-panel/SKILL.md")
@@ -471,9 +418,7 @@ class TestFromAC_ProposalRoundContracts:
             "Domain Rationale",
             "Confidence",
         ]:
-            assert section in text, (
-                f"Panel handbook Propose Mode missing required proposal section: {section}"
-            )
+            assert section in text, f"Panel handbook Propose Mode missing required proposal section: {section}"
 
     def test_propose_mode_names_stances_proposal_output(self) -> None:
         text = _read("share/skills/h-ideation-panel/SKILL.md")
@@ -493,9 +438,7 @@ class TestFromAC_ProposalRoundContracts:
 
     def test_pragmatist_has_compare_mode(self) -> None:
         text = _read("share/skills/h-ideation-panel/SKILL.md")
-        assert "### `mode=compare`" in text, (
-            "Panel handbook missing '### `mode=compare`' section for pragmatist"
-        )
+        assert "### `mode=compare`" in text, "Panel handbook missing '### `mode=compare`' section for pragmatist"
 
     def test_compare_mode_defines_output_structure(self) -> None:
         text = _read("share/skills/h-ideation-panel/SKILL.md")
@@ -504,9 +447,7 @@ class TestFromAC_ProposalRoundContracts:
             "common ground summary",
             "open questions",
         ]:
-            assert needle in text, (
-                f"Panel handbook mode=compare missing output-structure element: {needle}"
-            )
+            assert needle in text, f"Panel handbook mode=compare missing output-structure element: {needle}"
 
     def test_compare_mode_reads_proposal_files(self) -> None:
         text = _read("share/skills/h-ideation-panel/SKILL.md")
@@ -518,9 +459,7 @@ class TestFromAC_ProposalRoundContracts:
 
     def test_mediation_has_m35_gate(self) -> None:
         text = _read("share/skills/w-ideation-mediation/SKILL.md")
-        assert "## Step 1.5" in text, (
-            "Mediation skill missing '## Step 1.5' gate section"
-        )
+        assert "## Step 1.5" in text, "Mediation skill missing '## Step 1.5' gate section"
 
     def test_m35_gate_requires_two_viable_approaches(self) -> None:
         text = _read("share/skills/w-ideation-mediation/SKILL.md")
@@ -542,20 +481,14 @@ class TestFromAC_ProposalRoundContracts:
     def test_panelist_agents_support_propose_mode(self, name: str, path: str) -> None:
         text = _read(path)
         assert "PROPOSE mode" in text, f"{path} missing PROPOSE mode contract"
-        assert f"stances/{name}-proposal.md" in text, (
-            f"{path} missing stances/{name}-proposal.md output reference"
-        )
-        assert "skip embedded Critic" in text, (
-            f"{path} missing Critic-skip rule for PROPOSE mode"
-        )
+        assert f"stances/{name}-proposal.md" in text, f"{path} missing stances/{name}-proposal.md output reference"
+        assert "skip embedded Critic" in text, f"{path} missing Critic-skip rule for PROPOSE mode"
 
     # --- C7: Pragmatist agent has mode=compare ---
 
     def test_pragmatist_agent_has_compare_mode(self) -> None:
         text = _read("share/agents/ideation-pragmatist.agent.md")
-        assert "mode=compare" in text, (
-            "ideation-pragmatist.agent.md missing mode=compare contract"
-        )
+        assert "mode=compare" in text, "ideation-pragmatist.agent.md missing mode=compare contract"
         assert "stances/*-proposal.md" in text, (
             "ideation-pragmatist.agent.md missing stances/*-proposal.md reference for mode=compare"
         )
@@ -563,9 +496,7 @@ class TestFromAC_ProposalRoundContracts:
     def test_pragmatist_agent_compare_output_has_required_sections(self) -> None:
         text = _read("share/agents/ideation-pragmatist.agent.md")
         for section in ["Divergence Matrix", "Common Ground", "Open Questions"]:
-            assert section in text, (
-                f"ideation-pragmatist.agent.md mode=compare missing output section: {section}"
-            )
+            assert section in text, f"ideation-pragmatist.agent.md mode=compare missing output section: {section}"
 
     # --- Blackboard proposal artifacts in briefs README ---
 
@@ -577,18 +508,12 @@ class TestFromAC_ProposalRoundContracts:
             "enduser-proposal.md",
             "security-proposal.md",
         ]:
-            assert needle in text, (
-                f"Briefs README missing blackboard proposal artifact: {needle}"
-            )
+            assert needle in text, f"Briefs README missing blackboard proposal artifact: {needle}"
 
     def test_blackboard_marks_proposal_files_as_conditional(self) -> None:
         text = _read(".owlbear/briefs/README.md")
-        assert "*-proposal.md" in text, (
-            "Briefs README missing '*-proposal.md' wildcard reference for M3.5 artifacts"
-        )
-        assert "optional" in text, (
-            "Briefs README must mark proposal files as optional (M3.5-triggered)"
-        )
+        assert "*-proposal.md" in text, "Briefs README missing '*-proposal.md' wildcard reference for M3.5 artifacts"
+        assert "optional" in text, "Briefs README must mark proposal files as optional (M3.5-triggered)"
 
     def test_blackboard_proposal_conditionality_tied_to_m35_round(self) -> None:
         """Tighter proof: the specific M3.5 conditionality sentence must exist.

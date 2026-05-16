@@ -84,9 +84,7 @@ class TestFromAC_CachePopulateOrdering:
             cache.tasks = envelope.tasks
     """
 
-    def test_signature_not_committed_when_list_tasks_raises(
-        self, engine: KanbanEngine
-    ) -> None:
+    def test_signature_not_committed_when_list_tasks_raises(self, engine: KanbanEngine) -> None:
         """Error path: cache.last_mtime must stay at prior value after failed refresh.
 
         Setup:
@@ -119,9 +117,7 @@ class TestFromAC_CachePopulateOrdering:
         assert cache.last_mtime == sig_a, "Precondition: cache primed with sig_a."
 
         mock_view = MagicMock(spec=CockpitView)
-        mock_view.list_tasks.side_effect = CorruptionError(
-            "ERR_CORRUPT_DUPLICATE_ID", "duplicate task IDs"
-        )
+        mock_view.list_tasks.side_effect = CorruptionError("ERR_CORRUPT_DUPLICATE_ID", "duplicate task IDs")
 
         app.dependency_overrides[get_engine] = lambda: engine
         app.dependency_overrides[get_cache] = lambda: cache
@@ -132,9 +128,7 @@ class TestFromAC_CachePopulateOrdering:
             with patch.object(cache, "scan", return_value=sig_b):
                 response = client.get("/api/tasks")
 
-            assert response.status_code == 500, (
-                "A failed populate must propagate as 500 Internal Server Error."
-            )
+            assert response.status_code == 500, "A failed populate must propagate as 500 Internal Server Error."
             # Key assertion: signature must NOT have advanced to sig_b.
             assert cache.last_mtime != sig_b, (
                 f"cache.last_mtime must not advance to sig_b={sig_b} when "
@@ -150,9 +144,7 @@ class TestFromAC_CachePopulateOrdering:
         finally:
             app.dependency_overrides.clear()
 
-    def test_stale_cache_not_served_after_failed_populate(
-        self, engine: KanbanEngine
-    ) -> None:
+    def test_stale_cache_not_served_after_failed_populate(self, engine: KanbanEngine) -> None:
         """Boundary: repeated same-sig requests after failure must not serve stale data.
 
         Scenario (three requests):
@@ -184,12 +176,8 @@ class TestFromAC_CachePopulateOrdering:
         mock_view = MagicMock(spec=CockpitView)
         mock_view.list_tasks.side_effect = [
             prime_resp,  # Request 1 (prime): succeeds
-            CorruptionError(
-                "ERR_CORRUPT_YAML_PARSE", "parse error"
-            ),  # Request 2 (sig_b): fails
-            CorruptionError(
-                "ERR_CORRUPT_YAML_PARSE", "still broken"
-            ),  # Request 3 (sig_b): still fails
+            CorruptionError("ERR_CORRUPT_YAML_PARSE", "parse error"),  # Request 2 (sig_b): fails
+            CorruptionError("ERR_CORRUPT_YAML_PARSE", "still broken"),  # Request 3 (sig_b): still fails
         ]
 
         app.dependency_overrides[get_engine] = lambda: engine
@@ -227,9 +215,7 @@ class TestFromAC_CachePopulateOrdering:
         finally:
             app.dependency_overrides.clear()
 
-    def test_signature_committed_after_successful_populate(
-        self, engine: KanbanEngine
-    ) -> None:
+    def test_signature_committed_after_successful_populate(self, engine: KanbanEngine) -> None:
         """Happy path: cache.last_mtime must equal the scanned signature after success.
 
         Regression guard: proves that cache.commit_signature(mtime) IS called on the
@@ -347,9 +333,7 @@ class TestFromAC_WarmCacheFailureRecovery:
         mock_view = MagicMock(spec=CockpitView)
         mock_view.list_tasks.side_effect = [
             prime_response,  # (a) prime: 1 task
-            CorruptionError(
-                "ERR_CORRUPT_DUPLICATE_ID", "duplicate IDs"
-            ),  # (c) fail: raises
+            CorruptionError("ERR_CORRUPT_DUPLICATE_ID", "duplicate IDs"),  # (c) fail: raises
             fresh_response,  # (d) retry: 2 tasks
         ]
 
@@ -370,9 +354,7 @@ class TestFromAC_WarmCacheFailureRecovery:
             # (b)+(c) Sig change + failed refresh → 500.
             with patch.object(cache, "scan", return_value=sig_b):
                 r2 = client.get("/api/tasks")
-            assert r2.status_code == 500, (
-                "(b)+(c) Request with new sig and failing list_tasks() must be 500."
-            )
+            assert r2.status_code == 500, "(b)+(c) Request with new sig and failing list_tasks() must be 500."
 
             # (d) Same sig_b — list_tasks now succeeds with fresh 2-task data.
             # Fix:  sig rolled back to sig_a → has_changed_at(sig_b) True → retries.
@@ -401,9 +383,7 @@ class TestFromAC_WarmCacheFailureRecovery:
         finally:
             app.dependency_overrides.clear()
 
-    def test_signature_rolled_back_after_warm_cache_failure(
-        self, engine: KanbanEngine
-    ) -> None:
+    def test_signature_rolled_back_after_warm_cache_failure(self, engine: KanbanEngine) -> None:
         """Boundary: after warm-cache failure, cache.last_mtime must be prior value.
 
         Directly tests the rollback mechanism that enables the retry in the 4-step
@@ -432,9 +412,7 @@ class TestFromAC_WarmCacheFailureRecovery:
         assert cache.has_cached_tasks, "Precondition: warm cache."
 
         mock_view = MagicMock(spec=CockpitView)
-        mock_view.list_tasks.side_effect = CorruptionError(
-            "ERR_CORRUPT_YAML_PARSE", "engine error"
-        )
+        mock_view.list_tasks.side_effect = CorruptionError("ERR_CORRUPT_YAML_PARSE", "engine error")
 
         app.dependency_overrides[get_engine] = lambda: engine
         app.dependency_overrides[get_cache] = lambda: cache

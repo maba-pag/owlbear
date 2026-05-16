@@ -109,22 +109,16 @@ def _write_task(kanban_dir: Path, task_id: int = 1) -> None:
 class TestFromAC_ProofBundleUserMessage:
     """AC1: ValidationError from invalid proof_bundle has user_message listing every valid bundle."""
 
-    def test_create_task_invalid_proof_bundle_user_message_contains_all_valid_bundles(
-        self, tmp_path: Path
-    ) -> None:
+    def test_create_task_invalid_proof_bundle_user_message_contains_all_valid_bundles(self, tmp_path: Path) -> None:
         """AC1: create_task invalid proof_bundle → user_message mentions every VALID_PROOF_BUNDLES member."""
         engine, _ = _make_engine(tmp_path)
         with pytest.raises(ValidationError) as exc_info:
             engine.create_task(title="T", proof_bundle="bogus")
         msg = exc_info.value.user_message
         for member in VALID_PROOF_BUNDLES:
-            assert repr(member) in msg, (
-                f"Expected quoted token {member!r} in user_message, got: {msg!r}"
-            )
+            assert repr(member) in msg, f"Expected quoted token {member!r} in user_message, got: {msg!r}"
 
-    def test_edit_task_invalid_proof_bundle_user_message_contains_all_valid_bundles(
-        self, tmp_path: Path
-    ) -> None:
+    def test_edit_task_invalid_proof_bundle_user_message_contains_all_valid_bundles(self, tmp_path: Path) -> None:
         """AC1: edit_task invalid proof_bundle → user_message mentions every VALID_PROOF_BUNDLES member."""
         engine, kanban_dir = _make_engine(tmp_path)
         _write_task(kanban_dir, task_id=1)
@@ -132,6 +126,4 @@ class TestFromAC_ProofBundleUserMessage:
             engine.edit_task("1", proof_bundle="not-a-bundle")
         msg = exc_info.value.user_message
         for member in VALID_PROOF_BUNDLES:
-            assert repr(member) in msg, (
-                f"Expected quoted token {member!r} in user_message, got: {msg!r}"
-            )
+            assert repr(member) in msg, f"Expected quoted token {member!r} in user_message, got: {msg!r}"

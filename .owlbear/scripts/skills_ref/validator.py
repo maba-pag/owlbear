@@ -21,9 +21,7 @@ def _validate_naming_convention(value: str, label: str) -> list[str]:
     - no consecutive hyphens
     """
     if not _NAME_CHARS_RE.match(value):
-        return [
-            f"{label} '{value}' must contain only lowercase letters, digits, and hyphens"
-        ]
+        return [f"{label} '{value}' must contain only lowercase letters, digits, and hyphens"]
     if value.startswith("-") or value.endswith("-"):
         return [f"{label} '{value}' must not start or end with a hyphen"]
     if "--" in value:
@@ -64,9 +62,7 @@ def validate_metadata(metadata: dict, skill_dir: Path) -> list[str]:
         # against accidental HTML injection in agent skill menus).
         # Allow '->' text arrows by exempting '>' immediately preceded by '-'.
         if re.search(r"<|(?<!-)>", description):
-            errors.append(
-                f"Description contains angle brackets ('<' or '>'): {description!r}"
-            )
+            errors.append(f"Description contains angle brackets ('<' or '>'): {description!r}")
 
         # Agent Skills Spec: descriptions must not exceed 1024 characters.
         if len(description) > _MAX_DESCRIPTION_LENGTH:
@@ -78,9 +74,7 @@ def validate_metadata(metadata: dict, skill_dir: Path) -> list[str]:
     if "name" in metadata:
         name = str(metadata["name"])
         if name != dir_name:
-            errors.append(
-                f"name field '{name}' does not match directory name '{dir_name}'"
-            )
+            errors.append(f"name field '{name}' does not match directory name '{dir_name}'")
         # The name field value must also satisfy the naming convention.
         errors.extend(_validate_naming_convention(name, "name field"))
 

@@ -40,9 +40,7 @@ def _make_existing_hook(target_dir: Path, content: str) -> Path:
     return hook_path
 
 
-def test_noninteractive_conflict_skips_without_replace_flag(
-    tmp_path: Path, init_module: types.ModuleType
-) -> None:
+def test_noninteractive_conflict_skips_without_replace_flag(tmp_path: Path, init_module: types.ModuleType) -> None:
     owlbear_dir = tmp_path / "owlbear"
     target_dir = tmp_path / "project"
     _make_seed_hook(owlbear_dir, "seed-version")
@@ -54,9 +52,7 @@ def test_noninteractive_conflict_skips_without_replace_flag(
     assert existing.read_text(encoding="utf-8") == "local-version"
 
 
-def test_replace_hooks_flag_overwrites_existing_hook(
-    tmp_path: Path, init_module: types.ModuleType
-) -> None:
+def test_replace_hooks_flag_overwrites_existing_hook(tmp_path: Path, init_module: types.ModuleType) -> None:
     owlbear_dir = tmp_path / "owlbear"
     target_dir = tmp_path / "project"
     _make_seed_hook(owlbear_dir, "seed-version")

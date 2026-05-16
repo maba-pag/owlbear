@@ -1011,9 +1011,7 @@ class TestFromAC_EndWorkStringFieldContracts:
         """EndWorkParams.block_reason accepts a str value and stores it (§5.8 annotation proof)."""
         from owlbear_mcp_kanban.models import EndWorkParams
 
-        p = EndWorkParams(
-            id=1, outcome="block", block_reason="Waiting for dependency resolution."
-        )
+        p = EndWorkParams(id=1, outcome="block", block_reason="Waiting for dependency resolution.")
         assert p.block_reason == "Waiting for dependency resolution."
         assert isinstance(p.block_reason, str)
 
@@ -1034,9 +1032,7 @@ class TestFromAC_EndWorkStringFieldContracts:
         """move_to annotation is str | None: strict mode accepts str (annotation shape proof)."""
         from owlbear_mcp_kanban.models import EndWorkParams
 
-        p = EndWorkParams.model_validate(
-            {"id": 1, "outcome": "reject", "move_to": "todo"}, strict=True
-        )
+        p = EndWorkParams.model_validate({"id": 1, "outcome": "reject", "move_to": "todo"}, strict=True)
         assert p.move_to == "todo"
 
     def test_end_work_note_strict_mode_accepts_str(self) -> None:

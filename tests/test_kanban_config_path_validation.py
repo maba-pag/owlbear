@@ -233,9 +233,7 @@ class TestFromAC_RuntimeDefense:
         outside_dir.mkdir()
         (kanban_dir / "tasks").mkdir()
         (kanban_dir / "archive").mkdir()
-        (kanban_dir / "config.yml").write_text(
-            _STORAGE_BOARD_CONFIG_YAML, encoding="utf-8"
-        )
+        (kanban_dir / "config.yml").write_text(_STORAGE_BOARD_CONFIG_YAML, encoding="utf-8")
 
         engine = KanbanEngine(kanban_dir, activity_log=False)
 
@@ -247,9 +245,7 @@ class TestFromAC_RuntimeDefense:
         alt_tasks_link.symlink_to(outside_dir)
 
         # Update config.yml so tasks_dir names the symlink.
-        updated_config = _STORAGE_BOARD_CONFIG_YAML.replace(
-            "  tasks_dir: tasks", "  tasks_dir: alt-tasks"
-        )
+        updated_config = _STORAGE_BOARD_CONFIG_YAML.replace("  tasks_dir: tasks", "  tasks_dir: alt-tasks")
         (kanban_dir / "config.yml").write_text(updated_config, encoding="utf-8")
 
         # refresh_config must detect that alt-tasks resolves outside kanban_dir.
@@ -315,9 +311,7 @@ class TestFromAC_BoardConfigIntegration:
             BoardConfig(**data)
         assert exc_info.value.code == "ERR_PATH_ESCAPE"
 
-    def test_list_task_files_with_nondefault_relative_path(
-        self, tmp_path: Path
-    ) -> None:
+    def test_list_task_files_with_nondefault_relative_path(self, tmp_path: Path) -> None:
         """AC5 — list_task_files works end-to-end when tasks_dir is a nested relative subdir.
 
         Proves path derivation for non-default relative subdirectories: list_task_files
@@ -328,9 +322,9 @@ class TestFromAC_BoardConfigIntegration:
 
         kanban_dir = tmp_path / "board"
         kanban_dir.mkdir()
-        config_yaml = _STORAGE_BOARD_CONFIG_YAML.replace(
-            "  tasks_dir: tasks", "  tasks_dir: sub/tasks"
-        ).replace("  archive_dir: archive", "  archive_dir: sub/archive")
+        config_yaml = _STORAGE_BOARD_CONFIG_YAML.replace("  tasks_dir: tasks", "  tasks_dir: sub/tasks").replace(
+            "  archive_dir: archive", "  archive_dir: sub/archive"
+        )
         (kanban_dir / "config.yml").write_text(config_yaml, encoding="utf-8")
         # sub/tasks is intentionally absent — list_task_files must return [] not raise.
 
@@ -349,17 +343,13 @@ class TestFromAC_BoardConfigIntegration:
 
         kanban_dir = tmp_path / "board"
         kanban_dir.mkdir()
-        config_yaml = _STORAGE_BOARD_CONFIG_YAML.replace(
-            "  archive_dir: archive", "  archive_dir: sub/archive"
-        )
+        config_yaml = _STORAGE_BOARD_CONFIG_YAML.replace("  archive_dir: archive", "  archive_dir: sub/archive")
         (kanban_dir / "config.yml").write_text(config_yaml, encoding="utf-8")
 
         tasks_dir = kanban_dir / "tasks"
         tasks_dir.mkdir()
         task_file = tasks_dir / "1-test-task.md"
-        task_file.write_text(
-            "---\nid: 1\nstatus: done\n---\nTest task.\n", encoding="utf-8"
-        )
+        task_file.write_text("---\nid: 1\nstatus: done\n---\nTest task.\n", encoding="utf-8")
 
         archived_path = move_to_archive(1, kanban_dir)
 

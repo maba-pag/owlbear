@@ -105,9 +105,7 @@ class TestFromAC_SaveMemory:
         try:
             from owlbear_mcp_memory.tools import save_memory
         except ImportError as exc:
-            pytest.fail(
-                f"save_memory not importable from owlbear_mcp_memory.tools: {exc}"
-            )
+            pytest.fail(f"save_memory not importable from owlbear_mcp_memory.tools: {exc}")
 
         engine = MemoryEngine(memory_dir=tmp_path)
         ctx = _make_ctx(engine, caller="builder")
@@ -132,9 +130,7 @@ class TestFromAC_SaveMemory:
         try:
             from owlbear_mcp_memory.tools import save_memory
         except ImportError as exc:
-            pytest.fail(
-                f"save_memory not importable from owlbear_mcp_memory.tools: {exc}"
-            )
+            pytest.fail(f"save_memory not importable from owlbear_mcp_memory.tools: {exc}")
 
         engine = MemoryEngine(memory_dir=tmp_path)
         ctx = _make_ctx(engine, caller="builder")
@@ -159,9 +155,7 @@ class TestFromAC_SaveMemory:
         try:
             from owlbear_mcp_memory.tools import save_memory
         except ImportError as exc:
-            pytest.fail(
-                f"save_memory not importable from owlbear_mcp_memory.tools: {exc}"
-            )
+            pytest.fail(f"save_memory not importable from owlbear_mcp_memory.tools: {exc}")
 
         engine = MemoryEngine(memory_dir=tmp_path)
         ctx = _make_ctx(engine, caller="builder")
@@ -187,9 +181,7 @@ class TestFromAC_SaveMemory:
         try:
             from owlbear_mcp_memory.tools import save_memory
         except ImportError as exc:
-            pytest.fail(
-                f"save_memory not importable from owlbear_mcp_memory.tools: {exc}"
-            )
+            pytest.fail(f"save_memory not importable from owlbear_mcp_memory.tools: {exc}")
 
         engine = MemoryEngine(memory_dir=tmp_path)
         ctx = _make_ctx(engine, caller="some-other-agent")
@@ -206,9 +198,7 @@ class TestFromAC_SaveMemory:
         assert result["source_agent"] == "specific-builder"
 
     @pytest.mark.asyncio
-    async def test_save_memory_hint_identifies_save_pending_guidance(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_save_memory_hint_identifies_save_pending_guidance(self, tmp_path: Path) -> None:
         """save_memory hint contains discriminating substrings uniquely identifying save-pending guidance.
 
         Refined AC1: hint must mention both 'pending' state and curation action — a generic
@@ -233,12 +223,8 @@ class TestFromAC_SaveMemory:
 
         hint = result.get("hint", "")
         hint_lower = hint.lower()
-        assert "pending" in hint_lower, (
-            f"save_memory hint must identify 'pending' state, got: {hint!r}"
-        )
-        assert "curate" in hint_lower, (
-            f"save_memory hint must mention curation action ('curate'), got: {hint!r}"
-        )
+        assert "pending" in hint_lower, f"save_memory hint must identify 'pending' state, got: {hint!r}"
+        assert "curate" in hint_lower, f"save_memory hint must mention curation action ('curate'), got: {hint!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -258,9 +244,7 @@ class TestFromAC_ListMemories:
         try:
             from owlbear_mcp_memory.tools import list_memories
         except ImportError as exc:
-            pytest.fail(
-                f"list_memories not importable from owlbear_mcp_memory.tools: {exc}"
-            )
+            pytest.fail(f"list_memories not importable from owlbear_mcp_memory.tools: {exc}")
 
         engine = MemoryEngine(memory_dir=tmp_path)
         entry = _make_entry(n=1, state="curated", scope_agents=["builder"])
@@ -282,9 +266,7 @@ class TestFromAC_ListMemories:
         try:
             from owlbear_mcp_memory.tools import list_memories
         except ImportError as exc:
-            pytest.fail(
-                f"list_memories not importable from owlbear_mcp_memory.tools: {exc}"
-            )
+            pytest.fail(f"list_memories not importable from owlbear_mcp_memory.tools: {exc}")
 
         engine = MemoryEngine(memory_dir=tmp_path)
         curated = _make_entry(n=1, state="curated", scope_agents=["builder"])
@@ -305,9 +287,7 @@ class TestFromAC_ListMemories:
         )
 
     @pytest.mark.asyncio
-    async def test_list_memories_excludes_deleted_by_default(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_list_memories_excludes_deleted_by_default(self, tmp_path: Path) -> None:
         """list_memories default view excludes deleted entries.
 
         RED: list_memories does not exist → ImportError.
@@ -315,9 +295,7 @@ class TestFromAC_ListMemories:
         try:
             from owlbear_mcp_memory.tools import list_memories
         except ImportError as exc:
-            pytest.fail(
-                f"list_memories not importable from owlbear_mcp_memory.tools: {exc}"
-            )
+            pytest.fail(f"list_memories not importable from owlbear_mcp_memory.tools: {exc}")
 
         engine = MemoryEngine(memory_dir=tmp_path)
         curated = _make_entry(n=1, state="curated", scope_agents=["builder"])
@@ -329,9 +307,7 @@ class TestFromAC_ListMemories:
         results = await list_memories(ctx)
 
         returned_states = {r["state"] for r in results}
-        assert "deleted" not in returned_states, (
-            "deleted entries must be excluded by default"
-        )
+        assert "deleted" not in returned_states, "deleted entries must be excluded by default"
 
     @pytest.mark.asyncio
     async def test_list_memories_filters_by_categories(self, tmp_path: Path) -> None:
@@ -342,9 +318,7 @@ class TestFromAC_ListMemories:
         try:
             from owlbear_mcp_memory.tools import list_memories
         except ImportError as exc:
-            pytest.fail(
-                f"list_memories not importable from owlbear_mcp_memory.tools: {exc}"
-            )
+            pytest.fail(f"list_memories not importable from owlbear_mcp_memory.tools: {exc}")
 
         engine = MemoryEngine(memory_dir=tmp_path)
         entry_dk = _make_entry(
@@ -353,9 +327,7 @@ class TestFromAC_ListMemories:
             categories=["domain-knowledge"],
             scope_agents=["builder"],
         )
-        entry_pt = _make_entry(
-            n=2, state="curated", categories=["pitfall"], scope_agents=["builder"]
-        )
+        entry_pt = _make_entry(n=2, state="curated", categories=["pitfall"], scope_agents=["builder"])
         engine.write(entry_dk)
         engine.write(entry_pt)
         ctx = _make_ctx(engine)
@@ -374,9 +346,7 @@ class TestFromAC_ListMemories:
         try:
             from owlbear_mcp_memory.tools import list_memories
         except ImportError as exc:
-            pytest.fail(
-                f"list_memories not importable from owlbear_mcp_memory.tools: {exc}"
-            )
+            pytest.fail(f"list_memories not importable from owlbear_mcp_memory.tools: {exc}")
 
         engine = MemoryEngine(memory_dir=tmp_path)
         entry_a = _make_entry(n=1, state="curated", scope_agents=["builder"])
@@ -391,9 +361,7 @@ class TestFromAC_ListMemories:
         assert results[0]["id"] == entry_a.id
 
     @pytest.mark.asyncio
-    async def test_list_memories_same_state_ordered_by_created_at(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_list_memories_same_state_ordered_by_created_at(self, tmp_path: Path) -> None:
         """Within the same state, list_memories sorts entries by created_at ascending.
 
         Refined AC2: 2+ pending entries with different created_at — the entry with
@@ -420,14 +388,11 @@ class TestFromAC_ListMemories:
         assert len(pending_results) >= 2, "expected at least 2 pending entries"
         created_ats = [r["created_at"] for r in pending_results]
         assert created_ats == sorted(created_ats), (
-            f"Same-state entries must be sorted by created_at ascending. "
-            f"Got order: {created_ats}"
+            f"Same-state entries must be sorted by created_at ascending. Got order: {created_ats}"
         )
 
     @pytest.mark.asyncio
-    async def test_list_memories_explicit_states_filter_excludes_curated(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_list_memories_explicit_states_filter_excludes_curated(self, tmp_path: Path) -> None:
         """Passing states=['pending'] explicitly excludes curated entries from results.
 
         Refined AC2: explicit state filter must gate output — curated entries must NOT
@@ -449,12 +414,9 @@ class TestFromAC_ListMemories:
 
         returned_states = {r["state"] for r in results}
         assert "curated" not in returned_states, (
-            "list_memories(states=['pending']) must exclude curated entries; "
-            f"got states: {returned_states}"
+            f"list_memories(states=['pending']) must exclude curated entries; got states: {returned_states}"
         )
-        assert "pending" in returned_states, (
-            "list_memories(states=['pending']) must include pending entries"
-        )
+        assert "pending" in returned_states, "list_memories(states=['pending']) must include pending entries"
 
 
 # ---------------------------------------------------------------------------
@@ -466,9 +428,7 @@ class TestFromAC_ReadMemory:
     """AC3: read_memory returns full entry by ID; errors on invalid/deleted IDs."""
 
     @pytest.mark.asyncio
-    async def test_read_memory_returns_full_entry_with_content(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_read_memory_returns_full_entry_with_content(self, tmp_path: Path) -> None:
         """read_memory returns the full entry including 'content' body.
 
         RED: read_memory does not exist → ImportError.
@@ -476,9 +436,7 @@ class TestFromAC_ReadMemory:
         try:
             from owlbear_mcp_memory.tools import read_memory
         except ImportError as exc:
-            pytest.fail(
-                f"read_memory not importable from owlbear_mcp_memory.tools: {exc}"
-            )
+            pytest.fail(f"read_memory not importable from owlbear_mcp_memory.tools: {exc}")
 
         engine = MemoryEngine(memory_dir=tmp_path)
         entry = _make_entry(
@@ -496,9 +454,7 @@ class TestFromAC_ReadMemory:
         assert result["content"] == "Rich body text here."
 
     @pytest.mark.asyncio
-    async def test_read_memory_returns_all_metadata_fields(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_read_memory_returns_all_metadata_fields(self, tmp_path: Path) -> None:
         """read_memory result includes all frontmatter metadata fields.
 
         RED: read_memory does not exist → ImportError.
@@ -506,9 +462,7 @@ class TestFromAC_ReadMemory:
         try:
             from owlbear_mcp_memory.tools import read_memory
         except ImportError as exc:
-            pytest.fail(
-                f"read_memory not importable from owlbear_mcp_memory.tools: {exc}"
-            )
+            pytest.fail(f"read_memory not importable from owlbear_mcp_memory.tools: {exc}")
 
         engine = MemoryEngine(memory_dir=tmp_path)
         entry = _make_entry(n=1, state="curated", scope_agents=["builder"])
@@ -540,9 +494,7 @@ class TestFromAC_ReadMemory:
         try:
             from owlbear_mcp_memory.tools import read_memory
         except ImportError as exc:
-            pytest.fail(
-                f"read_memory not importable from owlbear_mcp_memory.tools: {exc}"
-            )
+            pytest.fail(f"read_memory not importable from owlbear_mcp_memory.tools: {exc}")
 
         engine = MemoryEngine(memory_dir=tmp_path)
         ctx = _make_ctx(engine)
@@ -559,9 +511,7 @@ class TestFromAC_ReadMemory:
         try:
             from owlbear_mcp_memory.tools import read_memory
         except ImportError as exc:
-            pytest.fail(
-                f"read_memory not importable from owlbear_mcp_memory.tools: {exc}"
-            )
+            pytest.fail(f"read_memory not importable from owlbear_mcp_memory.tools: {exc}")
 
         engine = MemoryEngine(memory_dir=tmp_path)
         deleted = _make_entry(n=1, state="deleted", scope_agents=[])
@@ -586,9 +536,7 @@ class TestFromAC_CurateMemoryValidation:
     """
 
     @pytest.mark.asyncio
-    async def test_curate_memory_rejects_blank_title_with_teaching_message(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_curate_memory_rejects_blank_title_with_teaching_message(self, tmp_path: Path) -> None:
         """curate_memory ToolError for blank title contains teaching message about title.
 
         RED: current error is raw Pydantic ValidationError str, not a teaching message.
@@ -605,14 +553,10 @@ class TestFromAC_CurateMemoryValidation:
         # Teaching message must be user-facing, not raw Pydantic
         error_text = str(exc_info.value).lower()
         # Teaching message must say "non-empty" (not Pydantic's "must not be empty")
-        assert "non-empty" in error_text, (
-            f"Expected teaching message with 'non-empty', got: {exc_info.value}"
-        )
+        assert "non-empty" in error_text, f"Expected teaching message with 'non-empty', got: {exc_info.value}"
 
     @pytest.mark.asyncio
-    async def test_curate_memory_rejects_oversized_content_with_teaching_message(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_curate_memory_rejects_oversized_content_with_teaching_message(self, tmp_path: Path) -> None:
         """curate_memory ToolError for content >1024 chars contains teaching message.
 
         RED: current error is raw Pydantic text ('String should have at most 1024 characters').
@@ -634,9 +578,7 @@ class TestFromAC_CurateMemoryValidation:
         )
 
     @pytest.mark.asyncio
-    async def test_curate_memory_rejects_confidence_below_range_with_teaching_message(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_curate_memory_rejects_confidence_below_range_with_teaching_message(self, tmp_path: Path) -> None:
         """curate_memory ToolError for confidence < 0.7 contains teaching message.
 
         RED: raw Pydantic error mentions 'greater than or equal to 0.7', not the
@@ -653,14 +595,10 @@ class TestFromAC_CurateMemoryValidation:
         error_text = str(exc_info.value).lower()
         # Teaching message must say "between" (Brief: "Confidence must be between 0.7 and 1.0")
         # Pydantic says "Input should be greater than or equal to 0.7" — no "between"
-        assert "between" in error_text, (
-            f"Expected teaching message with 'between', got: {exc_info.value}"
-        )
+        assert "between" in error_text, f"Expected teaching message with 'between', got: {exc_info.value}"
 
     @pytest.mark.asyncio
-    async def test_curate_memory_rejects_confidence_above_range_with_teaching_message(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_curate_memory_rejects_confidence_above_range_with_teaching_message(self, tmp_path: Path) -> None:
         """curate_memory ToolError for confidence > 1.0 contains teaching message.
 
         AC4 (3rd-pass refinement): BOTH bounds of [0.7, 1.0] must be proven.
@@ -682,9 +620,7 @@ class TestFromAC_CurateMemoryValidation:
         )
 
     @pytest.mark.asyncio
-    async def test_curate_memory_rejects_empty_categories_with_teaching_message(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_curate_memory_rejects_empty_categories_with_teaching_message(self, tmp_path: Path) -> None:
         """curate_memory ToolError for empty categories contains teaching message.
 
         RED: raw Pydantic error says 'List should have at least 1 item', not the
@@ -701,9 +637,7 @@ class TestFromAC_CurateMemoryValidation:
         error_text = str(exc_info.value).lower()
         # Teaching message must say "provide" (Brief: "Provide at least one category from: {list}")
         # Pydantic says "List should have at least 1 item after validation" — no "provide"
-        assert "provide" in error_text, (
-            f"Expected teaching message with 'provide', got: {exc_info.value}"
-        )
+        assert "provide" in error_text, f"Expected teaching message with 'provide', got: {exc_info.value}"
 
 
 # ---------------------------------------------------------------------------
@@ -719,9 +653,7 @@ class TestFromAC_CurateMemoryHint:
     """
 
     @pytest.mark.asyncio
-    async def test_curate_memory_pending_to_curated_returns_hint(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_curate_memory_pending_to_curated_returns_hint(self, tmp_path: Path) -> None:
         """Promoting pending→curated: hint mentions promotion and scope."""
         engine = MemoryEngine(memory_dir=tmp_path)
         entry = _make_entry(n=1, state="pending", scope_agents=[])
@@ -737,9 +669,7 @@ class TestFromAC_CurateMemoryHint:
         )
 
     @pytest.mark.asyncio
-    async def test_curate_memory_approved_to_curated_returns_downgrade_hint(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_curate_memory_approved_to_curated_returns_downgrade_hint(self, tmp_path: Path) -> None:
         """Auto-downgrade approved→curated: hint mentions downgrade and re-approval."""
         engine = MemoryEngine(memory_dir=tmp_path)
         entry = _make_entry(
@@ -760,9 +690,7 @@ class TestFromAC_CurateMemoryHint:
         )
 
     @pytest.mark.asyncio
-    async def test_curate_memory_curated_stays_curated_returns_update_hint(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_curate_memory_curated_stays_curated_returns_update_hint(self, tmp_path: Path) -> None:
         """Editing curated→curated: hint mentions the update and curated state."""
         engine = MemoryEngine(memory_dir=tmp_path)
         entry = _make_entry(n=1, state="curated", scope_agents=["builder"])
@@ -778,9 +706,7 @@ class TestFromAC_CurateMemoryHint:
         )
 
     @pytest.mark.asyncio
-    async def test_curate_memory_pending_to_curated_hint_identifies_transition(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_curate_memory_pending_to_curated_hint_identifies_transition(self, tmp_path: Path) -> None:
         """pending→curated hint contains discriminating phrases identifying both states.
 
         Refined AC5: hint must contain 'pending' or 'promot' AND 'curated' so it
@@ -798,14 +724,10 @@ class TestFromAC_CurateMemoryHint:
         assert "pending" in hint_lower or "promot" in hint_lower, (
             f"pending→curated hint must identify promotion from pending, got: {hint!r}"
         )
-        assert "curated" in hint_lower, (
-            f"pending→curated hint must mention curated state, got: {hint!r}"
-        )
+        assert "curated" in hint_lower, f"pending→curated hint must mention curated state, got: {hint!r}"
 
     @pytest.mark.asyncio
-    async def test_curate_memory_approved_to_curated_hint_identifies_downgrade(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_curate_memory_approved_to_curated_hint_identifies_downgrade(self, tmp_path: Path) -> None:
         """approved→curated hint contains discriminating phrase identifying a downgrade.
 
         Refined AC5: hint must contain 'downgrad' or 're-approv' so it cannot be
@@ -825,18 +747,12 @@ class TestFromAC_CurateMemoryHint:
 
         hint = result.get("hint", "")
         hint_lower = hint.lower()
-        assert (
-            "downgrad" in hint_lower
-            or "re-approv" in hint_lower
-            or "re-approve" in hint_lower
-        ), (
+        assert "downgrad" in hint_lower or "re-approv" in hint_lower or "re-approve" in hint_lower, (
             f"approved→curated hint must mention downgrade/re-approval to be discriminating, got: {hint!r}"
         )
 
     @pytest.mark.asyncio
-    async def test_curate_memory_curated_update_hint_does_not_imply_transition(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_curate_memory_curated_update_hint_does_not_imply_transition(self, tmp_path: Path) -> None:
         """curated→curated update hint is distinct from promotion/downgrade hints.
 
         Refined AC5: update-in-place hint must NOT mention 'pending' (would imply
@@ -854,9 +770,7 @@ class TestFromAC_CurateMemoryHint:
         assert "pending" not in hint_lower, (
             f"curated→curated hint must not mention pending (implies promotion), got: {hint!r}"
         )
-        assert "downgrad" not in hint_lower, (
-            f"curated→curated hint must not mention downgrade, got: {hint!r}"
-        )
+        assert "downgrad" not in hint_lower, f"curated→curated hint must not mention downgrade, got: {hint!r}"
         assert "updat" in hint_lower, (
             f"curated→curated hint must specifically mention update (not just 'curated'), got: {hint!r}"
         )
@@ -875,9 +789,7 @@ class TestFromAC_DeleteMemoryHint:
     """
 
     @pytest.mark.asyncio
-    async def test_delete_memory_pending_returns_hard_delete_hint(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_delete_memory_pending_returns_hard_delete_hint(self, tmp_path: Path) -> None:
         """Deleting a pending entry: hint indicates hard-delete, never committed."""
         engine = MemoryEngine(memory_dir=tmp_path)
         entry = _make_entry(n=1, state="pending", scope_agents=[])
@@ -893,9 +805,7 @@ class TestFromAC_DeleteMemoryHint:
         )
 
     @pytest.mark.asyncio
-    async def test_delete_memory_curated_returns_soft_delete_hint(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_delete_memory_curated_returns_soft_delete_hint(self, tmp_path: Path) -> None:
         """Deleting a curated entry: hint indicates soft-delete and file retention."""
         engine = MemoryEngine(memory_dir=tmp_path)
         entry = _make_entry(n=1, state="curated", scope_agents=["builder"])
@@ -911,9 +821,7 @@ class TestFromAC_DeleteMemoryHint:
         )
 
     @pytest.mark.asyncio
-    async def test_delete_memory_approved_returns_soft_delete_hint(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_delete_memory_approved_returns_soft_delete_hint(self, tmp_path: Path) -> None:
         """Deleting an approved entry: hint indicates soft-delete and file retention."""
         engine = MemoryEngine(memory_dir=tmp_path)
         entry = _make_entry(
@@ -934,9 +842,7 @@ class TestFromAC_DeleteMemoryHint:
         )
 
     @pytest.mark.asyncio
-    async def test_delete_memory_pending_hint_must_contain_hard_keyword(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_delete_memory_pending_hint_must_contain_hard_keyword(self, tmp_path: Path) -> None:
         """Pending delete hint must contain the word 'hard' to discriminate from soft-delete.
 
         Refined AC6: 'hard' uniquely identifies the hard-delete branch. Accepting only
@@ -957,9 +863,7 @@ class TestFromAC_DeleteMemoryHint:
         )
 
     @pytest.mark.asyncio
-    async def test_delete_memory_curated_hint_must_contain_soft_keyword(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_delete_memory_curated_hint_must_contain_soft_keyword(self, tmp_path: Path) -> None:
         """Curated delete hint must contain the word 'soft' to discriminate from hard-delete.
 
         Refined AC6: 'soft' uniquely identifies the soft-delete branch. Accepting only
@@ -988,16 +892,12 @@ class TestFromAC_ApproveMemory:
     """AC7: approve_memory only works on curated state; errors on all other states."""
 
     @pytest.mark.asyncio
-    async def test_approve_memory_promotes_curated_to_approved(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_approve_memory_promotes_curated_to_approved(self, tmp_path: Path) -> None:
         """approve_memory sets state=approved on a curated entry."""
         try:
             from owlbear_mcp_memory.tools import approve_memory
         except ImportError as exc:
-            pytest.fail(
-                f"approve_memory not importable from owlbear_mcp_memory.tools: {exc}"
-            )
+            pytest.fail(f"approve_memory not importable from owlbear_mcp_memory.tools: {exc}")
 
         engine = MemoryEngine(memory_dir=tmp_path)
         entry = _make_entry(n=1, state="curated", scope_agents=["builder"])
@@ -1009,16 +909,12 @@ class TestFromAC_ApproveMemory:
         assert result["state"] == "approved"
 
     @pytest.mark.asyncio
-    async def test_approve_memory_sets_approved_at_timestamp(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_approve_memory_sets_approved_at_timestamp(self, tmp_path: Path) -> None:
         """approve_memory sets approved_at when promoting to approved."""
         try:
             from owlbear_mcp_memory.tools import approve_memory
         except ImportError as exc:
-            pytest.fail(
-                f"approve_memory not importable from owlbear_mcp_memory.tools: {exc}"
-            )
+            pytest.fail(f"approve_memory not importable from owlbear_mcp_memory.tools: {exc}")
 
         engine = MemoryEngine(memory_dir=tmp_path)
         entry = _make_entry(n=1, state="curated", scope_agents=["builder"])
@@ -1027,9 +923,7 @@ class TestFromAC_ApproveMemory:
 
         result = await approve_memory(ctx, entry_id=entry.id)
 
-        assert result.get("approved_at") is not None, (
-            "approved_at must be set after approve_memory"
-        )
+        assert result.get("approved_at") is not None, "approved_at must be set after approve_memory"
 
     @pytest.mark.asyncio
     async def test_approve_memory_raises_on_pending_entry(self, tmp_path: Path) -> None:
@@ -1037,9 +931,7 @@ class TestFromAC_ApproveMemory:
         try:
             from owlbear_mcp_memory.tools import approve_memory
         except ImportError as exc:
-            pytest.fail(
-                f"approve_memory not importable from owlbear_mcp_memory.tools: {exc}"
-            )
+            pytest.fail(f"approve_memory not importable from owlbear_mcp_memory.tools: {exc}")
 
         engine = MemoryEngine(memory_dir=tmp_path)
         entry = _make_entry(n=1, state="pending", scope_agents=[])
@@ -1050,16 +942,12 @@ class TestFromAC_ApproveMemory:
             await approve_memory(ctx, entry_id=entry.id)
 
     @pytest.mark.asyncio
-    async def test_approve_memory_raises_on_already_approved_entry(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_approve_memory_raises_on_already_approved_entry(self, tmp_path: Path) -> None:
         """approve_memory raises ToolError when entry is already approved."""
         try:
             from owlbear_mcp_memory.tools import approve_memory
         except ImportError as exc:
-            pytest.fail(
-                f"approve_memory not importable from owlbear_mcp_memory.tools: {exc}"
-            )
+            pytest.fail(f"approve_memory not importable from owlbear_mcp_memory.tools: {exc}")
 
         engine = MemoryEngine(memory_dir=tmp_path)
         entry = _make_entry(
@@ -1080,9 +968,7 @@ class TestFromAC_ApproveMemory:
         try:
             from owlbear_mcp_memory.tools import approve_memory
         except ImportError as exc:
-            pytest.fail(
-                f"approve_memory not importable from owlbear_mcp_memory.tools: {exc}"
-            )
+            pytest.fail(f"approve_memory not importable from owlbear_mcp_memory.tools: {exc}")
 
         engine = MemoryEngine(memory_dir=tmp_path)
         entry = _make_entry(n=1, state="deleted", scope_agents=[])
@@ -1106,9 +992,7 @@ class TestFromAC_CallerEnvVarNoEffect:
     """
 
     @pytest.mark.asyncio
-    async def test_curate_memory_succeeds_with_any_caller_role(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_curate_memory_succeeds_with_any_caller_role(self, tmp_path: Path) -> None:
         """curate_memory must succeed regardless of ctx caller — no role check.
 
         RED: update_entry enforces _require_role({"curator"}). A ctx with
@@ -1211,9 +1095,7 @@ class TestFromAC_ValidationTeachingMessages:
     """
 
     @pytest.mark.asyncio
-    async def test_save_memory_missing_categories_teaching_message(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_save_memory_missing_categories_teaching_message(self, tmp_path: Path) -> None:
         """save_memory with empty categories raises ToolError with teaching message.
 
         Brief says: 'Provide at least one category from: {list}'
@@ -1242,9 +1124,7 @@ class TestFromAC_ValidationTeachingMessages:
         )
 
     @pytest.mark.asyncio
-    async def test_save_memory_content_too_long_teaching_message(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_save_memory_content_too_long_teaching_message(self, tmp_path: Path) -> None:
         """save_memory with content >1024 chars raises ToolError with teaching message.
 
         Brief says: 'Content exceeds 1024-character limit. Split into focused entries.'
@@ -1268,14 +1148,12 @@ class TestFromAC_ValidationTeachingMessages:
             )
 
         error_text = str(exc_info.value).lower()
-        assert (
-            "1024" in error_text or "limit" in error_text or "exceed" in error_text
-        ), f"Expected teaching message about 1024-char limit, got: {exc_info.value}"
+        assert "1024" in error_text or "limit" in error_text or "exceed" in error_text, (
+            f"Expected teaching message about 1024-char limit, got: {exc_info.value}"
+        )
 
     @pytest.mark.asyncio
-    async def test_save_memory_confidence_out_of_range_teaching_message(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_save_memory_confidence_out_of_range_teaching_message(self, tmp_path: Path) -> None:
         """save_memory with confidence outside [0.7, 1.0] raises ToolError with teaching message.
 
         Brief says: 'Confidence must be between 0.7 and 1.0'
@@ -1304,9 +1182,7 @@ class TestFromAC_ValidationTeachingMessages:
         )
 
     @pytest.mark.asyncio
-    async def test_save_memory_blank_title_error_contains_non_empty_keyword(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_save_memory_blank_title_error_contains_non_empty_keyword(self, tmp_path: Path) -> None:
         """save_memory blank title error contains 'non-empty' (Brief-specified keyword).
 
         Refined AC10: 'non-empty' uniquely identifies the Brief teaching message;
@@ -1335,9 +1211,7 @@ class TestFromAC_ValidationTeachingMessages:
         )
 
     @pytest.mark.asyncio
-    async def test_save_memory_oversized_content_error_contains_split_keyword(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_save_memory_oversized_content_error_contains_split_keyword(self, tmp_path: Path) -> None:
         """save_memory oversized content error contains 'split' (Brief-specified keyword).
 
         Refined AC10: 'split' uniquely identifies the Brief teaching message;
@@ -1366,9 +1240,7 @@ class TestFromAC_ValidationTeachingMessages:
         )
 
     @pytest.mark.asyncio
-    async def test_save_memory_confidence_error_contains_between_keyword(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_save_memory_confidence_error_contains_between_keyword(self, tmp_path: Path) -> None:
         """save_memory confidence error contains 'between' (Brief-specified keyword).
 
         Refined AC10: 'between' uniquely identifies the Brief teaching message;

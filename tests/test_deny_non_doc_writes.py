@@ -70,31 +70,19 @@ def _is_denied(result: dict[str, Any]) -> bool:
 
 
 class TestDenyCodeWrites:
-    def test_allows_markdown_outside_scratch(
-        self, hook_module: types.ModuleType
-    ) -> None:
+    def test_allows_markdown_outside_scratch(self, hook_module: types.ModuleType) -> None:
         result = _invoke(hook_module, _write("create_file", "README.md"))
         assert _is_allowed(result), result
 
-    def test_allows_excalidraw_outside_scratch(
-        self, hook_module: types.ModuleType
-    ) -> None:
-        result = _invoke(
-            hook_module, _write("create_file", "share/diagrams/flow.excalidraw")
-        )
+    def test_allows_excalidraw_outside_scratch(self, hook_module: types.ModuleType) -> None:
+        result = _invoke(hook_module, _write("create_file", "share/diagrams/flow.excalidraw"))
         assert _is_allowed(result), result
 
-    def test_allows_any_file_type_inside_scratch(
-        self, hook_module: types.ModuleType
-    ) -> None:
-        result = _invoke(
-            hook_module, _write("create_file", ".owlbear/scratch/notes.tmp")
-        )
+    def test_allows_any_file_type_inside_scratch(self, hook_module: types.ModuleType) -> None:
+        result = _invoke(hook_module, _write("create_file", ".owlbear/scratch/notes.tmp"))
         assert _is_allowed(result), result
 
-    def test_allows_scratch_directory_creation(
-        self, hook_module: types.ModuleType
-    ) -> None:
+    def test_allows_scratch_directory_creation(self, hook_module: types.ModuleType) -> None:
         payload = {
             "tool_name": "create_directory",
             "tool_input": {"dirPath": ".owlbear/scratch/research/cache"},
@@ -106,17 +94,11 @@ class TestDenyCodeWrites:
         result = _invoke(hook_module, _write("create_file", "serve/app.py"))
         assert _is_denied(result), result
 
-    def test_denies_typescript_outside_scratch(
-        self, hook_module: types.ModuleType
-    ) -> None:
-        result = _invoke(
-            hook_module, _write("create_file", "serve/cockpit/web/src/app.tsx")
-        )
+    def test_denies_typescript_outside_scratch(self, hook_module: types.ModuleType) -> None:
+        result = _invoke(hook_module, _write("create_file", "serve/cockpit/web/src/app.tsx"))
         assert _is_denied(result), result
 
-    def test_denies_directory_creation_outside_scratch(
-        self, hook_module: types.ModuleType
-    ) -> None:
+    def test_denies_directory_creation_outside_scratch(self, hook_module: types.ModuleType) -> None:
         payload = {
             "tool_name": "create_directory",
             "tool_input": {"dirPath": "docs/generated"},
@@ -124,9 +106,7 @@ class TestDenyCodeWrites:
         result = _invoke(hook_module, payload)
         assert _is_denied(result), result
 
-    def test_allows_apply_patch_inside_scratch(
-        self, hook_module: types.ModuleType
-    ) -> None:
+    def test_allows_apply_patch_inside_scratch(self, hook_module: types.ModuleType) -> None:
         payload = {
             "tool_name": "apply_patch",
             "tool_input": {
@@ -136,9 +116,7 @@ class TestDenyCodeWrites:
         result = _invoke(hook_module, payload)
         assert _is_allowed(result), result
 
-    def test_denies_apply_patch_for_python_file(
-        self, hook_module: types.ModuleType
-    ) -> None:
+    def test_denies_apply_patch_for_python_file(self, hook_module: types.ModuleType) -> None:
         payload = {
             "tool_name": "apply_patch",
             "tool_input": {

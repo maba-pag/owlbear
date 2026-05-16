@@ -37,9 +37,7 @@ from pathlib import Path
 
 _REPO_ROOT = Path(__file__).parent.parent
 _CODE_REVIEW_SKILL = _REPO_ROOT / "share" / "skills" / "w-code-review" / "SKILL.md"
-_PIPELINE_PROTOCOL = (
-    _REPO_ROOT / "share" / "skills" / "r-pipeline-protocol" / "SKILL.md"
-)
+_PIPELINE_PROTOCOL = _REPO_ROOT / "share" / "skills" / "r-pipeline-protocol" / "SKILL.md"
 
 
 class TestFromAC_CodeReviewSkillRewrite:
@@ -103,9 +101,7 @@ class TestFromAC_CodeReviewSkillRewrite:
         content = _CODE_REVIEW_SKILL.read_text(encoding="utf-8")
         lower = content.lower()
         # Rule: no citation → Observations (or equivalent phrasing)
-        has_rule = "no citation" in lower or (
-            "citation" in lower and "observations" in lower
-        )
+        has_rule = "no citation" in lower or ("citation" in lower and "observations" in lower)
         assert has_rule, (
             "w-code-review/SKILL.md must define the finding-vs-opinion rule: "
             "Review Evidence items must cite an AC line or factual deficiency; "
@@ -180,12 +176,8 @@ class TestFromAC_CodeReviewSkillRewrite:
             "w-code-review/SKILL.md 3-item checklist must include AC→code mapping — not found. "
             "Current skill has 8 Pass 1 checks, not a 3-item checklist."
         )
-        assert has_alignment, (
-            "w-code-review/SKILL.md 3-item checklist must include test→AC alignment — not found."
-        )
-        assert has_sufficiency, (
-            "w-code-review/SKILL.md 3-item checklist must include 'proof sufficiency' — not found."
-        )
+        assert has_alignment, "w-code-review/SKILL.md 3-item checklist must include test→AC alignment — not found."
+        assert has_sufficiency, "w-code-review/SKILL.md 3-item checklist must include 'proof sufficiency' — not found."
         # Absence of legacy Pass 1 scaffold (new AC line from arch review)
         # Check the operative section heading; the template placeholder '{Pass 1 check reference}'
         # is tolerated as cosmetic drift and excluded from this assertion.
@@ -204,9 +196,7 @@ class TestFromAC_CodeReviewSkillRewrite:
         states 'Any WEAKENED or REMOVED = automatic FAIL'. This must be removed.
         """
         content = _CODE_REVIEW_SKILL.read_text(encoding="utf-8")
-        still_has_immutability = (
-            "WEAKENED or REMOVED" in content or "TestFromAC immutability" in content
-        )
+        still_has_immutability = "WEAKENED or REMOVED" in content or "TestFromAC immutability" in content
         assert not still_has_immutability, (
             "w-code-review/SKILL.md still contains the TestFromAC immutability enforcement "
             "('WEAKENED or REMOVED = automatic FAIL' or 'TestFromAC immutability') — "

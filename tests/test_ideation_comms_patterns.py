@@ -144,8 +144,7 @@ class TestFromAC_VocabularyTable:
         section = _extract_section(content, "## Communication Patterns")
         assert section is not None, "## Communication Patterns section not found"
         assert "Internal Name" in section, (
-            "Vocabulary table missing 'Internal Name' column header inside "
-            "## Communication Patterns"
+            "Vocabulary table missing 'Internal Name' column header inside ## Communication Patterns"
         )
 
     def test_vocabulary_table_all_entries(self) -> None:
@@ -160,9 +159,7 @@ class TestFromAC_VocabularyTable:
         section = _extract_section(content, "## Communication Patterns")
         assert section is not None, "## Communication Patterns section not found"
         row_count = _count_table_data_rows(section, "Internal Name")
-        assert row_count >= 17, (
-            f"Vocabulary table has {row_count} data row(s); expected ≥17"
-        )
+        assert row_count >= 17, f"Vocabulary table has {row_count} data row(s); expected ≥17"
 
     def test_vocabulary_table_three_columns(self) -> None:
         """Every vocabulary data row must have exactly 3 pipe-separated columns."""
@@ -183,9 +180,7 @@ class TestFromAC_VocabularyTable:
             if len(cols) != 3:
                 violations.append(f"  {stripped!r} → {len(cols)} column(s)")
 
-        assert not violations, (
-            "Vocabulary table rows with wrong column count:\n" + "\n".join(violations)
-        )
+        assert not violations, "Vocabulary table rows with wrong column count:\n" + "\n".join(violations)
 
     def test_vocabulary_table_internal_to_label_mapping(self) -> None:
         """Key vocabulary rows must contain both the internal name and its user-visible label on the same table row."""
@@ -205,17 +200,12 @@ class TestFromAC_VocabularyTable:
         failures = []
         for internal, label in expected_row_mappings:
             matched = any(
-                internal in line and label in line
-                for line in content.splitlines()
-                if line.strip().startswith("|")
+                internal in line and label in line for line in content.splitlines() if line.strip().startswith("|")
             )
             if not matched:
-                failures.append(
-                    f"  {internal!r} \u2192 {label!r} not on same table row"
-                )
-        assert not failures, (
-            "Vocabulary table rows missing required internal\u2192label mapping:\n"
-            + "\n".join(failures)
+                failures.append(f"  {internal!r} \u2192 {label!r} not on same table row")
+        assert not failures, "Vocabulary table rows missing required internal\u2192label mapping:\n" + "\n".join(
+            failures
         )
 
     def test_vocabulary_internal_only_entries_never_announced(self) -> None:
@@ -234,13 +224,8 @@ class TestFromAC_VocabularyTable:
                 if line.strip().startswith("|")
             )
             if not matched:
-                failures.append(
-                    f"  {internal!r} not marked 'never' on its vocabulary table row"
-                )
-        assert not failures, (
-            "Expected 'never' markers missing in vocabulary table rows:\n"
-            + "\n".join(failures)
-        )
+                failures.append(f"  {internal!r} not marked 'never' on its vocabulary table row")
+        assert not failures, "Expected 'never' markers missing in vocabulary table rows:\n" + "\n".join(failures)
 
 
 class TestFromAC_RepeatedMentionRule:
@@ -249,9 +234,7 @@ class TestFromAC_RepeatedMentionRule:
     def test_repeated_mention_rule_stated(self) -> None:
         """'Repeated-mention rule' phrase must appear in h-ideation/SKILL.md."""
         content = _SKILL_FILE.read_text(encoding="utf-8")
-        assert "Repeated-mention rule" in content, (
-            "h-ideation/SKILL.md missing the 'Repeated-mention rule' statement"
-        )
+        assert "Repeated-mention rule" in content, "h-ideation/SKILL.md missing the 'Repeated-mention rule' statement"
 
     def test_repeated_mention_rule_specifies_first_form(self) -> None:
         """Repeated-mention rule must state that first mention uses the full form with parenthetical context."""
@@ -266,9 +249,7 @@ class TestFromAC_RepeatedMentionRule:
             ]
             if not ok
         ]
-        assert not missing, (
-            "Repeated-mention rule missing required phrases: " + ", ".join(missing)
-        )
+        assert not missing, "Repeated-mention rule missing required phrases: " + ", ".join(missing)
 
     def test_repeated_mention_rule_specifies_subsequent_form(self) -> None:
         """Repeated-mention rule must state that subsequent mentions use the descriptor only."""
@@ -283,9 +264,7 @@ class TestFromAC_RepeatedMentionRule:
             ]
             if not ok
         ]
-        assert not missing, (
-            "Repeated-mention rule missing required phrases: " + ", ".join(missing)
-        )
+        assert not missing, "Repeated-mention rule missing required phrases: " + ", ".join(missing)
 
 
 class TestFromAC_NarrationPrinciples:
@@ -294,9 +273,7 @@ class TestFromAC_NarrationPrinciples:
     def test_narration_principles_subsection_exists(self) -> None:
         """'Narration Principles' subsection heading must be present."""
         content = _SKILL_FILE.read_text(encoding="utf-8")
-        assert "Narration Principles" in content, (
-            "h-ideation/SKILL.md missing 'Narration Principles' subsection"
-        )
+        assert "Narration Principles" in content, "h-ideation/SKILL.md missing 'Narration Principles' subsection"
 
     def test_narration_principles_six_keywords(self) -> None:
         """All 6 narration principle anchor keywords from the brief must be present."""
@@ -311,13 +288,9 @@ class TestFromAC_NarrationPrinciples:
         if subsection is None:
             # Try without ### in case it's formatted differently
             subsection = _extract_section(content, "#### Narration Principles")
-        assert subsection is not None, (
-            "'Narration Principles' subsection not found under ## Communication Patterns"
-        )
+        assert subsection is not None, "'Narration Principles' subsection not found under ## Communication Patterns"
         bullets = [ln for ln in subsection.splitlines() if ln.strip().startswith("- ")]
-        assert len(bullets) == 6, (
-            f"Narration Principles has {len(bullets)} bullet(s); expected exactly 6"
-        )
+        assert len(bullets) == 6, f"Narration Principles has {len(bullets)} bullet(s); expected exactly 6"
 
     def test_narration_principles_mechanisms_silent(self) -> None:
         """'Results, not mechanisms' principle must include text stating internal verification is silent."""
@@ -334,9 +307,7 @@ class TestFromAC_TransitionPatterns:
     def test_transition_patterns_table_exists(self) -> None:
         """'Transition Patterns' table heading must be present."""
         content = _SKILL_FILE.read_text(encoding="utf-8")
-        assert "Transition Patterns" in content, (
-            "h-ideation/SKILL.md missing 'Transition Patterns' table"
-        )
+        assert "Transition Patterns" in content, "h-ideation/SKILL.md missing 'Transition Patterns' table"
 
     def test_transition_patterns_six_rows(self) -> None:
         """Transition Patterns table must have exactly 6 data rows."""
@@ -346,9 +317,7 @@ class TestFromAC_TransitionPatterns:
             subsection = _extract_section(content, "#### Transition Patterns")
         assert subsection is not None, "'Transition Patterns' subsection not found"
         row_count = _count_table_data_rows(subsection, "Transition")
-        assert row_count == 6, (
-            f"Transition Patterns table has {row_count} data row(s); expected exactly 6"
-        )
+        assert row_count == 6, f"Transition Patterns table has {row_count} data row(s); expected exactly 6"
 
     def test_transition_patterns_all_six_identities(self) -> None:
         """Each of the 6 required transition types must be identifiable by content in the table."""
@@ -365,14 +334,9 @@ class TestFromAC_TransitionPatterns:
             ("brief \u2192 handoff", "Brief approved"),
             ("tier calibration", "Tier calibration"),
         ]
-        failures = [
-            label
-            for label, fragment in required_transition_fragments
-            if fragment not in subsection
-        ]
-        assert not failures, (
-            "Transition Patterns table missing required transition identities:\n"
-            + "\n".join(f"  {label!r}" for label in failures)
+        failures = [label for label, fragment in required_transition_fragments if fragment not in subsection]
+        assert not failures, "Transition Patterns table missing required transition identities:\n" + "\n".join(
+            f"  {label!r}" for label in failures
         )
 
 
@@ -382,9 +346,7 @@ class TestFromAC_BoundaryHeuristic:
     def test_boundary_heuristic_table_exists(self) -> None:
         """'Boundary Heuristic' table heading must be present."""
         content = _SKILL_FILE.read_text(encoding="utf-8")
-        assert "Boundary Heuristic" in content, (
-            "h-ideation/SKILL.md missing 'Boundary Heuristic' table"
-        )
+        assert "Boundary Heuristic" in content, "h-ideation/SKILL.md missing 'Boundary Heuristic' table"
 
     def test_boundary_heuristic_four_rows(self) -> None:
         """Boundary Heuristic table must have exactly 4 data rows."""
@@ -394,9 +356,7 @@ class TestFromAC_BoundaryHeuristic:
             subsection = _extract_section(content, "#### Boundary Heuristic")
         assert subsection is not None, "'Boundary Heuristic' subsection not found"
         row_count = _count_table_data_rows(subsection, "Situation")
-        assert row_count == 4, (
-            f"Boundary Heuristic table has {row_count} data row(s); expected exactly 4"
-        )
+        assert row_count == 4, f"Boundary Heuristic table has {row_count} data row(s); expected exactly 4"
 
     def test_boundary_heuristic_all_four_situations(self) -> None:
         """All 4 required Boundary Heuristic situation types must be identifiable in the table."""
@@ -411,14 +371,9 @@ class TestFromAC_BoundaryHeuristic:
             ("depth", "Depth"),
             ("correction", "Correction"),
         ]
-        failures = [
-            label
-            for label, fragment in required_situations
-            if fragment not in subsection
-        ]
-        assert not failures, (
-            "Boundary Heuristic table missing required situation types:\n"
-            + "\n".join(f"  {label!r}" for label in failures)
+        failures = [label for label, fragment in required_situations if fragment not in subsection]
+        assert not failures, "Boundary Heuristic table missing required situation types:\n" + "\n".join(
+            f"  {label!r}" for label in failures
         )
 
 
@@ -428,17 +383,13 @@ class TestFromAC_DepthControlVerbalCues:
     def test_depth_control_table_exists(self) -> None:
         """'Depth-Control Verbal Cues' table heading must be present."""
         content = _SKILL_FILE.read_text(encoding="utf-8")
-        assert "Depth-Control Verbal Cues" in content, (
-            "h-ideation/SKILL.md missing 'Depth-Control Verbal Cues' table"
-        )
+        assert "Depth-Control Verbal Cues" in content, "h-ideation/SKILL.md missing 'Depth-Control Verbal Cues' table"
 
     def test_depth_control_three_disclosure_levels(self) -> None:
         """All three Disclosure Ladder level names must appear in the file."""
         content = _SKILL_FILE.read_text(encoding="utf-8")
         missing = [lvl for lvl in _DISCLOSURE_LADDER_LEVELS if lvl not in content]
-        assert not missing, (
-            f"Depth-Control Verbal Cues table missing Disclosure Ladder levels: {missing}"
-        )
+        assert not missing, f"Depth-Control Verbal Cues table missing Disclosure Ladder levels: {missing}"
 
     def test_depth_control_three_rows(self) -> None:
         """Depth-Control Verbal Cues table must have exactly 3 data rows."""
@@ -446,29 +397,19 @@ class TestFromAC_DepthControlVerbalCues:
         subsection = _extract_section(content, "### Depth-Control Verbal Cues")
         if subsection is None:
             subsection = _extract_section(content, "#### Depth-Control Verbal Cues")
-        assert subsection is not None, (
-            "'Depth-Control Verbal Cues' subsection not found"
-        )
+        assert subsection is not None, "'Depth-Control Verbal Cues' subsection not found"
         row_count = _count_table_data_rows(subsection, "Level")
-        assert row_count == 3, (
-            f"Depth-Control Verbal Cues table has {row_count} data row(s); expected exactly 3"
-        )
+        assert row_count == 3, f"Depth-Control Verbal Cues table has {row_count} data row(s); expected exactly 3"
 
     def test_depth_control_concrete_verbal_cue_present(self) -> None:
         """The Concrete Specifics row must state a verbal cue the user can invoke."""
         content = _SKILL_FILE.read_text(encoding="utf-8")
         lines = content.splitlines()
         concrete_row = next(
-            (
-                line
-                for line in lines
-                if "Concrete Specifics" in line and line.strip().startswith("|")
-            ),
+            (line for line in lines if "Concrete Specifics" in line and line.strip().startswith("|")),
             None,
         )
-        assert concrete_row is not None, (
-            "No table row found containing 'Concrete Specifics'"
-        )
+        assert concrete_row is not None, "No table row found containing 'Concrete Specifics'"
         assert "walk through" in concrete_row or "reasoning" in concrete_row, (
             f"Concrete Specifics row has no verbal cue ('walk through' or 'reasoning'): {concrete_row!r}"
         )
@@ -478,19 +419,11 @@ class TestFromAC_DepthControlVerbalCues:
         content = _SKILL_FILE.read_text(encoding="utf-8")
         lines = content.splitlines()
         verbatim_row = next(
-            (
-                line
-                for line in lines
-                if "Inline Verbatim Evidence" in line and line.strip().startswith("|")
-            ),
+            (line for line in lines if "Inline Verbatim Evidence" in line and line.strip().startswith("|")),
             None,
         )
-        assert verbatim_row is not None, (
-            "No table row found containing 'Inline Verbatim Evidence'"
-        )
-        assert (
-            "show it inline" in verbatim_row or "specific evidence" in verbatim_row
-        ), (
+        assert verbatim_row is not None, "No table row found containing 'Inline Verbatim Evidence'"
+        assert "show it inline" in verbatim_row or "specific evidence" in verbatim_row, (
             f"Inline Verbatim Evidence row has no verbal cue ('show it inline' or 'specific evidence'): "
             f"{verbatim_row!r}"
         )
@@ -509,17 +442,13 @@ class TestFromAC_BeforeAfterExamples:
         """Communication Patterns section must contain exactly 6 '**Before:**' markers."""
         section = self._get_section()
         count = len(re.findall(r"\*\*Before:\*\*", section))
-        assert count == 6, (
-            f"Found {count} '**Before:**' marker(s) in Communication Patterns; expected 6"
-        )
+        assert count == 6, f"Found {count} '**Before:**' marker(s) in Communication Patterns; expected 6"
 
     def test_six_after_markers(self) -> None:
         """Communication Patterns section must contain exactly 6 '**After:**' markers."""
         section = self._get_section()
         count = len(re.findall(r"\*\*After:\*\*", section))
-        assert count == 6, (
-            f"Found {count} '**After:**' marker(s) in Communication Patterns; expected 6"
-        )
+        assert count == 6, f"Found {count} '**After:**' marker(s) in Communication Patterns; expected 6"
 
     def test_before_after_pairs_balanced(self) -> None:
         """Before and After marker counts must be equal (each example is a pair)."""
@@ -527,8 +456,7 @@ class TestFromAC_BeforeAfterExamples:
         before_count = len(re.findall(r"\*\*Before:\*\*", section))
         after_count = len(re.findall(r"\*\*After:\*\*", section))
         assert before_count == after_count, (
-            f"Before/After pair counts are unbalanced: "
-            f"{before_count} Before vs {after_count} After"
+            f"Before/After pair counts are unbalanced: {before_count} Before vs {after_count} After"
         )
 
     def test_before_after_scenario_categories(self) -> None:
@@ -550,9 +478,7 @@ class TestFromAC_BeforeAfterExamples:
             ("phase handoff", "@ideation-mediator"),
             ("correction/rerun", "updated constraint"),
         ]
-        failures = [
-            label for label, marker in scenario_markers if marker not in section
-        ]
+        failures = [label for label, marker in scenario_markers if marker not in section]
         assert not failures, (
             "Missing required before/after scenario categories in ## Communication Patterns:\n"
             + "\n".join(f"  {label!r}" for label in failures)
@@ -597,12 +523,7 @@ class TestFromAC_JargonGuard:
             is_table_row = stripped.startswith("|")
             is_heading = stripped.startswith("#")
 
-            if (
-                re.search(r"\bM3\.5\b|\bO15\b", line)
-                and not in_before_block
-                and not is_table_row
-                and not is_heading
-            ):
+            if re.search(r"\bM3\.5\b|\bO15\b", line) and not in_before_block and not is_table_row and not is_heading:
                 violations.append((lineno, stripped))
 
         assert not violations, (
@@ -637,12 +558,7 @@ class TestFromAC_JargonGuard:
             is_table_row = stripped.startswith("|")
             is_heading = stripped.startswith("#")
 
-            if (
-                re.search(r"\bM3\.5\b|\bO15\b", line)
-                and not in_before_block
-                and not is_table_row
-                and not is_heading
-            ):
+            if re.search(r"\bM3\.5\b|\bO15\b", line) and not in_before_block and not is_table_row and not is_heading:
                 violations.append((lineno, stripped))
 
         assert not violations, (
@@ -663,9 +579,7 @@ class TestFromAC_SectionPlacement:
         comm_pos = content.find("## Communication Patterns")
 
         assert handoff_pos != -1, "## Handoff Contract not found in h-ideation/SKILL.md"
-        assert comm_pos != -1, (
-            "## Communication Patterns not found in h-ideation/SKILL.md"
-        )
+        assert comm_pos != -1, "## Communication Patterns not found in h-ideation/SKILL.md"
         assert comm_pos > handoff_pos, (
             "## Communication Patterns must come AFTER ## Handoff Contract; "
             f"found at offset {comm_pos} vs Handoff Contract at {handoff_pos}"
@@ -677,9 +591,7 @@ class TestFromAC_SectionPlacement:
         comm_pos = content.find("## Communication Patterns")
         cross_pos = content.find("## Cross-References")
 
-        assert comm_pos != -1, (
-            "## Communication Patterns not found in h-ideation/SKILL.md"
-        )
+        assert comm_pos != -1, "## Communication Patterns not found in h-ideation/SKILL.md"
         assert cross_pos != -1, "## Cross-References not found in h-ideation/SKILL.md"
         assert comm_pos < cross_pos, (
             "## Communication Patterns must come BEFORE ## Cross-References; "

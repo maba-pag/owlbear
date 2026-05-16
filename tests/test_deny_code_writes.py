@@ -60,19 +60,14 @@ def _is_safe_path_expr(  # noqa: C901, PLR0911, PLR0912
         return not first_literal.startswith(("/", "~", ".."))
 
     if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div):
-        return _is_safe_path_expr(node.left, safe_names) and _is_safe_path_expr(
-            node.right, safe_names
-        )
+        return _is_safe_path_expr(node.left, safe_names) and _is_safe_path_expr(node.right, safe_names)
 
     if isinstance(node, ast.Attribute):
         if node.attr in {"home", "cwd", "root"}:
             return False
         if node.attr == "parent":
             parent_unsafe_names = safe_names if tmp_aliases is None else tmp_aliases
-            if (
-                isinstance(node.value, ast.Name)
-                and node.value.id in parent_unsafe_names
-            ):
+            if isinstance(node.value, ast.Name) and node.value.id in parent_unsafe_names:
                 return False
             return _is_safe_path_expr(node.value, safe_names, tmp_aliases)
         if node.attr == "parents":
@@ -85,9 +80,7 @@ def _is_safe_path_expr(  # noqa: C901, PLR0911, PLR0912
 
     if isinstance(node, ast.Call):
         if isinstance(node.func, ast.Name) and node.func.id == "Path" and node.args:
-            return all(
-                _is_safe_path_expr(arg, safe_names, tmp_aliases) for arg in node.args
-            )
+            return all(_is_safe_path_expr(arg, safe_names, tmp_aliases) for arg in node.args)
         if isinstance(node.func, ast.Attribute) and node.func.attr in {
             "joinpath",
             "resolve",
@@ -95,9 +88,7 @@ def _is_safe_path_expr(  # noqa: C901, PLR0911, PLR0912
         }:
             if not _is_safe_path_expr(node.func.value, safe_names, tmp_aliases):
                 return False
-            return all(
-                _is_safe_path_expr(arg, safe_names, tmp_aliases) for arg in node.args
-            )
+            return all(_is_safe_path_expr(arg, safe_names, tmp_aliases) for arg in node.args)
 
     return False
 
@@ -206,9 +197,7 @@ class TestDenyCodeWrites:
                 target_src = ast.get_source_segment(source, target) or "<expr>"
                 if not _is_safe_path_expr(target, safe_names, tmp_aliases):
                     rel = path.relative_to(_REPO_ROOT)
-                    violations.append(
-                        f"{rel}:{node.lineno} -> not tmp_path-derived: {target_src}"
-                    )
+                    violations.append(f"{rel}:{node.lineno} -> not tmp_path-derived: {target_src}")
 
         assert not violations, (
             "Storage-related tests must not write outside tmp_path; "

@@ -280,9 +280,7 @@ def _extract_frontmatter(path: Path) -> str:
 class TestFromAC_SchemaRoundTrip:
     """AC 5: Old-format board → migrate → engine loads → saves → re-parseable."""
 
-    def test_full_round_trip_timestamps_unquoted_in_written_file(
-        self, tmp_path: Path
-    ) -> None:
+    def test_full_round_trip_timestamps_unquoted_in_written_file(self, tmp_path: Path) -> None:
         """AC 5: After migration + engine write, timestamp lines end with +00:00 (plain, not quoted).
 
         The round-trip: legacy board → kanban-migrate → engine.show_task →
@@ -296,9 +294,7 @@ class TestFromAC_SchemaRoundTrip:
         _write_legacy_task(kanban_dir, 1001, "Round-trip timestamp check")
 
         result = _run_migrate(kanban_dir)
-        assert result.returncode == 0, (
-            f"kanban-migrate failed:\n{result.stdout}\n{result.stderr}"
-        )
+        assert result.returncode == 0, f"kanban-migrate failed:\n{result.stdout}\n{result.stderr}"
 
         engine = KanbanEngine(kanban_dir=kanban_dir)
         task = engine.show_task(task_id="1001")
@@ -309,13 +305,10 @@ class TestFromAC_SchemaRoundTrip:
         for line in frontmatter.splitlines():
             if ts_re.search(line):
                 assert line.rstrip().endswith("+00:00"), (
-                    f"Round-trip: timestamp line must end with +00:00 "
-                    f"(not single-quoted): {line.rstrip()!r}"
+                    f"Round-trip: timestamp line must end with +00:00 (not single-quoted): {line.rstrip()!r}"
                 )
 
-    def test_full_round_trip_task_data_preserved_after_migrate_and_write(
-        self, tmp_path: Path
-    ) -> None:
+    def test_full_round_trip_task_data_preserved_after_migrate_and_write(self, tmp_path: Path) -> None:
         """AC 5: All core task fields survive the full round-trip without data loss.
 
         Round-trip: legacy board → kanban-migrate → engine.show_task →
@@ -330,9 +323,7 @@ class TestFromAC_SchemaRoundTrip:
         _write_legacy_task(kanban_dir, 1001, "Data integrity check task")
 
         result = _run_migrate(kanban_dir)
-        assert result.returncode == 0, (
-            f"kanban-migrate failed:\n{result.stdout}\n{result.stderr}"
-        )
+        assert result.returncode == 0, f"kanban-migrate failed:\n{result.stdout}\n{result.stderr}"
 
         engine = KanbanEngine(kanban_dir=kanban_dir)
         task_before = engine.show_task(task_id="1001")
@@ -381,39 +372,30 @@ class TestFromAC_ArchiveClaimedByStripping:
     extra='allow' instead of stripping it for archive files.
     """
 
-    def test_archive_read_task_claimed_by_stripped_to_none(
-        self, tmp_path: Path
-    ) -> None:
+    def test_archive_read_task_claimed_by_stripped_to_none(self, tmp_path: Path) -> None:
         """AC 5 / AC-C48: read_task on archive file returns claimed_by=None.
 
         Fails because read_task does not strip claimed_by from archive files;
         instead, 'some-agent' leaks through via Task.model_extra.
         """
         kanban_dir = _make_grouped_board(tmp_path)
-        archive_path = _write_archive_with_claimed_by(
-            kanban_dir, 5, "Archive with claimed_by"
-        )
+        archive_path = _write_archive_with_claimed_by(kanban_dir, 5, "Archive with claimed_by")
 
         task = read_task(archive_path)
         dumped = task.model_dump()
 
         assert dumped.get("claimed_by") is None, (
-            f"read_task must strip claimed_by from archive files; "
-            f"got {dumped.get('claimed_by')!r}"
+            f"read_task must strip claimed_by from archive files; got {dumped.get('claimed_by')!r}"
         )
 
-    def test_archive_read_task_claimed_by_not_in_model_extra(
-        self, tmp_path: Path
-    ) -> None:
+    def test_archive_read_task_claimed_by_not_in_model_extra(self, tmp_path: Path) -> None:
         """AC 5 / AC-C48: claimed_by must not appear in Task.model_extra for archive reads.
 
         Fails because Task.extra='allow' lets claimed_by persist in model_extra,
         which then appears in model_dump() and can silently propagate downstream.
         """
         kanban_dir = _make_grouped_board(tmp_path)
-        archive_path = _write_archive_with_claimed_by(
-            kanban_dir, 6, "claimed_by in extras"
-        )
+        archive_path = _write_archive_with_claimed_by(kanban_dir, 6, "claimed_by in extras")
 
         task = read_task(archive_path)
 
@@ -436,9 +418,7 @@ class TestFromAC_TimestampRoundTrip:
     All tests FAIL because ruamel.yaml adds single-quote protection.
     """
 
-    def test_write_task_timestamp_line_ends_with_utc_offset(
-        self, tmp_path: Path
-    ) -> None:
+    def test_write_task_timestamp_line_ends_with_utc_offset(self, tmp_path: Path) -> None:
         """AC 5 / AC-C15: Raw line for a UTC timestamp must end with +00:00 (not +00:00').
 
         Fails because write_task produces 'created: '2026-04-20T10:00:00+00:00''
@@ -467,13 +447,10 @@ class TestFromAC_TimestampRoundTrip:
         for line in frontmatter.splitlines():
             if ts_re.search(line):
                 assert line.rstrip().endswith("+00:00"), (
-                    f"Timestamp line must end with +00:00 (no surrounding quotes): "
-                    f"{line.rstrip()!r}"
+                    f"Timestamp line must end with +00:00 (no surrounding quotes): {line.rstrip()!r}"
                 )
 
-    def test_write_task_naive_timestamp_stored_with_utc_offset_unquoted(
-        self, tmp_path: Path
-    ) -> None:
+    def test_write_task_naive_timestamp_stored_with_utc_offset_unquoted(self, tmp_path: Path) -> None:
         """AC 5 / AC-C15: Naive timestamp written by write_task ends with +00:00 (unquoted).
 
         write_task must normalise 'YYYY-MM-DDTHH:MM:SS' (no tz) to
@@ -503,13 +480,10 @@ class TestFromAC_TimestampRoundTrip:
         for line in frontmatter.splitlines():
             if ts_re.search(line):
                 assert line.rstrip().endswith("+00:00"), (
-                    f"Naive timestamp must be normalised and unquoted, ending with +00:00: "
-                    f"{line.rstrip()!r}"
+                    f"Naive timestamp must be normalised and unquoted, ending with +00:00: {line.rstrip()!r}"
                 )
 
-    def test_write_task_non_utc_timestamp_converted_unquoted(
-        self, tmp_path: Path
-    ) -> None:
+    def test_write_task_non_utc_timestamp_converted_unquoted(self, tmp_path: Path) -> None:
         """AC 5 / AC-C15: +02:00 timestamp converted to UTC and written unquoted.
 
         created: '2026-04-20T10:00:00+02:00' must become '2026-04-20T08:00:00+00:00'
@@ -543,9 +517,5 @@ class TestFromAC_TimestampRoundTrip:
                 )
 
         # Also verify the UTC-converted value itself
-        assert "2026-04-20T08:00:00+00:00" in frontmatter, (
-            "created +02:00 must be converted to UTC 08:00+00:00"
-        )
-        assert "2026-04-20T10:00:00+00:00" in frontmatter, (
-            "updated +02:00 must be converted to UTC 10:00+00:00"
-        )
+        assert "2026-04-20T08:00:00+00:00" in frontmatter, "created +02:00 must be converted to UTC 08:00+00:00"
+        assert "2026-04-20T10:00:00+00:00" in frontmatter, "updated +02:00 must be converted to UTC 10:00+00:00"

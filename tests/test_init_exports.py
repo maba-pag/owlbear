@@ -88,30 +88,22 @@ class TestFromAC_KanbanInitExports:
     def test_validationerror_importable_from_root(self) -> None:
         """AC3: ValidationError is accessible as a top-level attribute of owlbear_kanban."""
         mod = importlib.import_module("owlbear_kanban")
-        assert hasattr(mod, "ValidationError"), (
-            "ValidationError not found on owlbear_kanban"
-        )
+        assert hasattr(mod, "ValidationError"), "ValidationError not found on owlbear_kanban"
 
     def test_notfounderror_importable_from_root(self) -> None:
         """AC3: NotFoundError is accessible as a top-level attribute of owlbear_kanban."""
         mod = importlib.import_module("owlbear_kanban")
-        assert hasattr(mod, "NotFoundError"), (
-            "NotFoundError not found on owlbear_kanban"
-        )
+        assert hasattr(mod, "NotFoundError"), "NotFoundError not found on owlbear_kanban"
 
     def test_concurrencyerror_importable_from_root(self) -> None:
         """AC3: ConcurrencyError is accessible as a top-level attribute of owlbear_kanban."""
         mod = importlib.import_module("owlbear_kanban")
-        assert hasattr(mod, "ConcurrencyError"), (
-            "ConcurrencyError not found on owlbear_kanban"
-        )
+        assert hasattr(mod, "ConcurrencyError"), "ConcurrencyError not found on owlbear_kanban"
 
     def test_corruptionerror_importable_from_root(self) -> None:
         """AC3: CorruptionError is accessible as a top-level attribute of owlbear_kanban."""
         mod = importlib.import_module("owlbear_kanban")
-        assert hasattr(mod, "CorruptionError"), (
-            "CorruptionError not found on owlbear_kanban"
-        )
+        assert hasattr(mod, "CorruptionError"), "CorruptionError not found on owlbear_kanban"
 
     # --- AC4: no owlbear_cockpit import in serve/kanban/src/ ---
 
@@ -122,9 +114,7 @@ class TestFromAC_KanbanInitExports:
         for py_file in src_root.rglob("*.py"):
             text = py_file.read_text(encoding="utf-8")
             if re.search(r"owlbear_cockpit", text):
-                violations.append(
-                    str(py_file.relative_to(src_root.parent.parent.parent))
-                )
+                violations.append(str(py_file.relative_to(src_root.parent.parent.parent)))
         assert not violations, f"owlbear_cockpit referenced in src files: {violations}"
 
     # --- AC5: pre-existing symbols still in __all__ ---

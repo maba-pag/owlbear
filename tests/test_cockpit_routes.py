@@ -64,13 +64,9 @@ def board_dir(tmp_path: Path) -> Path:
     kanban_dir = _make_board(tmp_path)
     seed = KanbanEngine(kanban_dir)
     seed.create_task("Alpha task", status="todo", priority="important")
-    seed.create_task(
-        "Beta blocked", status="todo", priority="needed", tags=["scope:cockpit"]
-    )
+    seed.create_task("Beta blocked", status="todo", priority="needed", tags=["scope:cockpit"])
     seed.list_tasks()  # populate id→filename cache
-    seed.edit_task(
-        "2", blocked=True, block_reason="setup block", add_tags=["block:user"]
-    )
+    seed.edit_task("2", blocked=True, block_reason="setup block", add_tags=["block:user"])
     return kanban_dir
 
 
@@ -135,9 +131,7 @@ class TestFromAC_MtimeInjection:
         assert "mtime" in body, "mtime field absent from response"  # FAIL
         assert isinstance(body["mtime"], int)
 
-    def test_list_tasks_mtime_injected_from_mtimescancache(
-        self, engine: KanbanEngine
-    ) -> None:
+    def test_list_tasks_mtime_injected_from_mtimescancache(self, engine: KanbanEngine) -> None:
         """GET /api/tasks mtime value must equal MtimeScanCache.scan() for the tasks dir.
 
         boundary — verifies the route reads mtime from the injected cache dependency
@@ -187,9 +181,7 @@ class TestFromAC_BlockUserTagLifecycle:
     All tests FAIL until _apply_block_kwargs is implemented in the edit route.
     """
 
-    def test_edit_block_reason_set_adds_block_user_tag(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_edit_block_reason_set_adds_block_user_tag(self, client: TestClient, engine: KanbanEngine) -> None:
         """Setting block_reason in an edit request adds 'block:user' to task tags.
 
         happy — cockpit adapter must inject add_tag=['block:user'] when block_reason
@@ -208,9 +200,7 @@ class TestFromAC_BlockUserTagLifecycle:
         assert body["blocked"] is True
         assert "block:user" in body["tags"]  # FAIL: _apply_block_kwargs not implemented
 
-    def test_edit_null_block_reason_removes_block_user_tag(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_edit_null_block_reason_removes_block_user_tag(self, client: TestClient, engine: KanbanEngine) -> None:
         """Clearing block_reason (null) removes 'block:user' from task tags.
 
         happy — cockpit adapter must inject remove_tag=['block:user'] when block_reason
@@ -228,9 +218,7 @@ class TestFromAC_BlockUserTagLifecycle:
         assert response.status_code == 200
         body = response.json()
         assert body["blocked"] is False
-        assert (
-            "block:user" not in body["tags"]
-        )  # FAIL: no remove_tag via _apply_block_kwargs
+        assert "block:user" not in body["tags"]  # FAIL: no remove_tag via _apply_block_kwargs
 
     def test_edit_block_reason_with_other_tags_adds_block_user_tag(
         self, client: TestClient, engine: KanbanEngine
@@ -257,9 +245,7 @@ class TestFromAC_BlockUserTagLifecycle:
         body = response.json()
         tags = set(body["tags"])
         assert "scope:test" in tags
-        assert (
-            "block:user" in tags
-        )  # FAIL: _apply_block_kwargs not called alongside tags diff
+        assert "block:user" in tags  # FAIL: _apply_block_kwargs not called alongside tags diff
 
 
 # ---------------------------------------------------------------------------
@@ -307,9 +293,7 @@ class TestFromAC_BlockUserTagConflict:
         assert response.status_code == 200
         body = response.json()
         # block_reason wins: block:user must survive despite tags diff requesting removal
-        assert (
-            "block:user" in body["tags"]
-        )  # FAIL: no conflict resolution; diff removes block:user
+        assert "block:user" in body["tags"]  # FAIL: no conflict resolution; diff removes block:user
         assert "scope:cockpit" in body["tags"]
 
     def test_tags_diff_keeps_block_user_but_null_block_reason_overrides(
@@ -342,7 +326,5 @@ class TestFromAC_BlockUserTagConflict:
         body = response.json()
         assert body["blocked"] is False
         # unblock wins: block:user must be removed despite tags diff being no-op
-        assert (
-            "block:user" not in body["tags"]
-        )  # FAIL: no _apply_block_kwargs + conflict resolution
+        assert "block:user" not in body["tags"]  # FAIL: no _apply_block_kwargs + conflict resolution
         assert "scope:cockpit" in body["tags"]

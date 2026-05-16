@@ -66,9 +66,7 @@ class TestFromAC_ScanBasedIdAllocation:
     # AC-1: scan-based allocation with lock held through write
     # ------------------------------------------------------------------
 
-    def test_ac1_empty_board_returns_id_1_ignoring_config_next_id(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac1_empty_board_returns_id_1_ignoring_config_next_id(self, tmp_path: Path) -> None:
         """AC-1: no task files → first create_task allocates ID 1 regardless of config.next_id.
 
         Board has config.yml with next_id=500 but no task files. Scan-based allocation
@@ -112,9 +110,7 @@ class TestFromAC_ScanBasedIdAllocation:
             "Archive directory is not scanned for max prefix."
         )
 
-    def test_ac1_lock_scope_covers_write_crash_does_not_burn_id_via_scan(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac1_lock_scope_covers_write_crash_does_not_burn_id_via_scan(self, tmp_path: Path) -> None:
         """AC-1 (lock scope via crash probe): write crash → no ID burned → same ID on retry.
 
         Lock held through write: if write fails, the lock is released but no file was
@@ -183,8 +179,7 @@ class TestFromAC_ScanBasedIdAllocation:
 
         task_files = list((kanban_dir / "tasks").glob("*.md"))
         assert task_files == [], (
-            f"No task file must exist after a failed write; found {task_files}. "
-            "Partial state was persisted."
+            f"No task file must exist after a failed write; found {task_files}. Partial state was persisted."
         )
 
         # Retry: scan still finds no files → same ID, not the next one
@@ -210,9 +205,7 @@ class TestFromAC_ScanBasedIdAllocation:
         assert task.id == 1
         assert task.title == "scratch-task"
         task_files = list((kanban_dir / "tasks").glob("1-*.md"))
-        assert len(task_files) == 1, (
-            "Task file must be written to tasks/ on scratch board"
-        )
+        assert len(task_files) == 1, "Task file must be written to tasks/ on scratch board"
         assert not (kanban_dir / "config.yml").exists(), (
             "create_task must not create config.yml on a scratch board "
             "(scan-based allocation must not call save_config)."
@@ -232,9 +225,7 @@ class TestFromAC_ScanBasedIdAllocation:
             "allocate_next_id is still calling save_config — replace with scan-based logic."
         )
 
-    def test_ac2_config_next_id_unchanged_after_create_task(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac2_config_next_id_unchanged_after_create_task(self, tmp_path: Path) -> None:
         """AC-2: config.next_id must not be incremented by create_task."""
         kanban_dir = _make_scratch_board(tmp_path)
         (kanban_dir / "config.yml").write_text("next_id: 999\n", encoding="utf-8")
@@ -250,9 +241,7 @@ class TestFromAC_ScanBasedIdAllocation:
             "allocate_next_id is still incrementing and saving config.next_id."
         )
 
-    def test_ac2_high_config_next_id_does_not_affect_allocated_id(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac2_high_config_next_id_does_not_affect_allocated_id(self, tmp_path: Path) -> None:
         """AC-2: config.next_id=999 with empty task dirs → allocated ID is 1 (scan wins)."""
         kanban_dir = _make_scratch_board(tmp_path)
         (kanban_dir / "config.yml").write_text("next_id: 999\n", encoding="utf-8")
@@ -287,9 +276,7 @@ class TestFromAC_ScanBasedIdAllocation:
     # AC-4: concurrent create_task → distinct IDs, config.yml absent/unchanged
     # ------------------------------------------------------------------
 
-    def test_ac4_concurrent_creates_produce_distinct_scan_based_ids(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac4_concurrent_creates_produce_distinct_scan_based_ids(self, tmp_path: Path) -> None:
         """AC-4: 10 concurrent create_task calls on one scratch board -> 10 distinct IDs 1-10.
 
         Board has config.yml with next_id=500 but no task files. Scan-based allocation
@@ -320,9 +307,7 @@ class TestFromAC_ScanBasedIdAllocation:
         for t in threads:
             t.join()
 
-        assert errors == [], (
-            f"Concurrent create_task raised unexpected errors: {errors}"
-        )
+        assert errors == [], f"Concurrent create_task raised unexpected errors: {errors}"
         assert len(results) == n, f"Expected {n} tasks created; got {len(results)}"
         assert len(set(results)) == n, (
             f"All {n} concurrent creates must have distinct IDs; "
@@ -334,9 +319,7 @@ class TestFromAC_ScanBasedIdAllocation:
             "create_task is reading config.next_id=500 instead of scanning files."
         )
 
-    def test_ac4_config_yml_absent_after_concurrent_creates_on_scratch_board(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac4_config_yml_absent_after_concurrent_creates_on_scratch_board(self, tmp_path: Path) -> None:
         """AC-4: concurrent create_task on scratch board must not create config.yml."""
         kanban_dir = _make_scratch_board(tmp_path)
         config_path = kanban_dir / "config.yml"
@@ -357,9 +340,7 @@ class TestFromAC_ScanBasedIdAllocation:
             f"found: {config_path}. scan-based allocate_next_id must not write config."
         )
 
-    def test_ac4_config_yml_unchanged_after_concurrent_creates(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac4_config_yml_unchanged_after_concurrent_creates(self, tmp_path: Path) -> None:
         """AC-4: concurrent creates on board with config.yml leave config.next_id unchanged."""
         kanban_dir = _make_scratch_board(tmp_path)
         (kanban_dir / "config.yml").write_text("next_id: 42\n", encoding="utf-8")
@@ -378,17 +359,14 @@ class TestFromAC_ScanBasedIdAllocation:
 
         after_next_id = load_config(kanban_dir).next_id
         assert after_next_id == initial_next_id, (
-            f"Concurrent create_task must not modify config.next_id; "
-            f"was {initial_next_id}, got {after_next_id}."
+            f"Concurrent create_task must not modify config.next_id; was {initial_next_id}, got {after_next_id}."
         )
 
     # ------------------------------------------------------------------
     # AC-5: activity logging defaults and create_task event emission
     # ------------------------------------------------------------------
 
-    def test_ac5_activity_log_default_none_enables_logging(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac5_activity_log_default_none_enables_logging(self, tmp_path: Path) -> None:
         """AC-5: KanbanEngine(kanban_dir) with no activity_log arg → logging enabled.
 
         The default must be True, applied directly — not via reading config.activity_log.
@@ -405,9 +383,7 @@ class TestFromAC_ScanBasedIdAllocation:
             "create_task does not emit ActivityEvent — not yet implemented."
         )
 
-    def test_ac5_create_task_appends_exactly_one_activity_event(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac5_create_task_appends_exactly_one_activity_event(self, tmp_path: Path) -> None:
         """AC-5: a single create_task call appends exactly one ActivityEvent to activity.jsonl."""
         kanban_dir = _make_scratch_board(tmp_path)
         engine = KanbanEngine(kanban_dir, activity_log=True)
@@ -419,31 +395,22 @@ class TestFromAC_ScanBasedIdAllocation:
             "create_task does not yet call _emit_event."
         )
 
-    def test_ac5_activity_event_has_all_six_required_fields(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac5_activity_event_has_all_six_required_fields(self, tmp_path: Path) -> None:
         """AC-5: ActivityEvent from create_task contains all 6 required model fields."""
         kanban_dir = _make_scratch_board(tmp_path)
         engine = KanbanEngine(kanban_dir, activity_log=True)
         task = engine.create_task("field-check-task")
 
         events = list_activity_events(kanban_dir)
-        assert len(events) == 1, (
-            f"Expected 1 ActivityEvent from create_task; got {len(events)}"
-        )
+        assert len(events) == 1, f"Expected 1 ActivityEvent from create_task; got {len(events)}"
         evt = events[0]
 
         # All six required fields must be present and non-trivially set
         assert evt.timestamp, "ActivityEvent.timestamp must be a non-empty string"
-        assert evt.task_id == task.id, (
-            f"ActivityEvent.task_id must equal created task id {task.id}; "
-            f"got {evt.task_id}"
-        )
+        assert evt.task_id == task.id, f"ActivityEvent.task_id must equal created task id {task.id}; got {evt.task_id}"
         assert evt.action, "ActivityEvent.action must be a non-empty string"
         assert evt.source, "ActivityEvent.source must be a non-empty string"
-        assert evt.detail is not None, (
-            "ActivityEvent.detail must be present (empty string is acceptable)"
-        )
+        assert evt.detail is not None, "ActivityEvent.detail must be present (empty string is acceptable)"
         assert evt.task_status_at_start is not None, (
             "ActivityEvent.task_status_at_start must be set for create_task events. "
             "The field is absent — create_task _emit_event call missing task_status_at_start."
@@ -456,9 +423,7 @@ class TestFromAC_ScanBasedIdAllocation:
         task = engine.create_task("entry-status-task")
 
         events = list_activity_events(kanban_dir)
-        assert len(events) == 1, (
-            f"Expected 1 ActivityEvent from create_task; got {len(events)}"
-        )
+        assert len(events) == 1, f"Expected 1 ActivityEvent from create_task; got {len(events)}"
         evt = events[0]
 
         assert evt.task_status_at_start == task.status, (

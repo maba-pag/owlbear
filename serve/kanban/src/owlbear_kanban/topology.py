@@ -73,9 +73,7 @@ PRODUCT_TOPOLOGY = ProductTopology(
             "type:user-action",
         }
     ),
-    archival_reasons=frozenset(
-        {"completed", "deprecated", "dropped", "duplicate", "wontfix"}
-    ),
+    archival_reasons=frozenset({"completed", "deprecated", "dropped", "duplicate", "wontfix"}),
     activity_log=True,
     tasks_dir="tasks",
     archive_dir="archive",

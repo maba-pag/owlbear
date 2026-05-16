@@ -234,9 +234,7 @@ class TestFromAC_GetConsolidationCandidates:
     # --- AC1: deterministic SQL, ORDER BY entity_name, 2+ sources (td:2) ---
 
     @pytest.mark.asyncio
-    async def test_entity_in_two_sources_appears_as_candidate(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_entity_in_two_sources_appears_as_candidate(self, conn: sqlite3.Connection) -> None:
         """AC1 happy: entity name appearing in 2 distinct sources is returned."""
         source_a = _insert_source(conn, name="Source A")
         source_b = _insert_source(conn, name="Source B")
@@ -252,9 +250,7 @@ class TestFromAC_GetConsolidationCandidates:
         assert "Python" in names, f"Expected 'Python' in candidates, got: {names}"
 
     @pytest.mark.asyncio
-    async def test_candidates_ordered_alphabetically_by_entity_name(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_candidates_ordered_alphabetically_by_entity_name(self, conn: sqlite3.Connection) -> None:
         """AC1 boundary: results ordered alphabetically ascending by entity_name."""
         source_a = _insert_source(conn, name="Source A")
         source_b = _insert_source(conn, name="Source B")
@@ -278,9 +274,7 @@ class TestFromAC_GetConsolidationCandidates:
         )
 
     @pytest.mark.asyncio
-    async def test_limit_caps_number_of_candidates(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_limit_caps_number_of_candidates(self, conn: sqlite3.Connection) -> None:
         """AC1 boundary: limit=1 returns at most 1 result even with multiple candidates."""
         source_a = _insert_source(conn, name="Source A")
         source_b = _insert_source(conn, name="Source B")
@@ -293,14 +287,10 @@ class TestFromAC_GetConsolidationCandidates:
         ctx = _make_mcp_ctx(conn)
         candidates = await get_consolidation_candidates(ctx, limit=1)
 
-        assert len(candidates) <= 1, (
-            f"Expected at most 1 candidate with limit=1, got {len(candidates)}"
-        )
+        assert len(candidates) <= 1, f"Expected at most 1 candidate with limit=1, got {len(candidates)}"
 
     @pytest.mark.asyncio
-    async def test_entity_in_single_source_excluded_from_candidates(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_entity_in_single_source_excluded_from_candidates(self, conn: sqlite3.Connection) -> None:
         """AC1 edge: entity name appearing in only one source is NOT returned."""
         source_a = _insert_source(conn, name="Source A")
         doc_a = _insert_document(conn, source_id=source_a)
@@ -317,9 +307,7 @@ class TestFromAC_GetConsolidationCandidates:
     # --- AC2: exclude entries with cross-source edges or reviewed_pairs (td:2) ---
 
     @pytest.mark.asyncio
-    async def test_entity_with_cross_source_edge_excluded_from_candidates(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_entity_with_cross_source_edge_excluded_from_candidates(self, conn: sqlite3.Connection) -> None:
         """AC2 edge: entity pair with existing cross-source edge is excluded."""
         source_a = _insert_source(conn, name="Source A")
         source_b = _insert_source(conn, name="Source B")
@@ -334,14 +322,10 @@ class TestFromAC_GetConsolidationCandidates:
         candidates = await get_consolidation_candidates(ctx, limit=20)
 
         names = [_get_field(c, "entity_name") for c in candidates]
-        assert "PyTorch" not in names, (
-            f"Expected 'PyTorch' excluded (cross-source edge exists), got: {names}"
-        )
+        assert "PyTorch" not in names, f"Expected 'PyTorch' excluded (cross-source edge exists), got: {names}"
 
     @pytest.mark.asyncio
-    async def test_entity_with_reviewed_pairs_entry_excluded_from_candidates(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_entity_with_reviewed_pairs_entry_excluded_from_candidates(self, conn: sqlite3.Connection) -> None:
         """AC2 boundary: entity pair with reviewed_pairs dismissal is excluded."""
         source_a = _insert_source(conn, name="Source A")
         source_b = _insert_source(conn, name="Source B")
@@ -349,22 +333,16 @@ class TestFromAC_GetConsolidationCandidates:
         doc_b = _insert_document(conn, source_id=source_b)
         _insert_entity(conn, name="Keras", document_id=doc_a)
         _insert_entity(conn, name="Keras", document_id=doc_b)
-        _insert_reviewed_pair(
-            conn, entity_name="Keras", source_a=source_a, source_b=source_b
-        )
+        _insert_reviewed_pair(conn, entity_name="Keras", source_a=source_a, source_b=source_b)
 
         ctx = _make_mcp_ctx(conn)
         candidates = await get_consolidation_candidates(ctx, limit=20)
 
         names = [_get_field(c, "entity_name") for c in candidates]
-        assert "Keras" not in names, (
-            f"Expected 'Keras' excluded (reviewed_pairs entry exists), got: {names}"
-        )
+        assert "Keras" not in names, f"Expected 'Keras' excluded (reviewed_pairs entry exists), got: {names}"
 
     @pytest.mark.asyncio
-    async def test_other_entity_candidates_unaffected_by_reviewed_pair(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_other_entity_candidates_unaffected_by_reviewed_pair(self, conn: sqlite3.Connection) -> None:
         """AC2 edge: reviewed_pairs exclusion is entity+source-pair scoped, not global."""
         source_a = _insert_source(conn, name="Source A")
         source_b = _insert_source(conn, name="Source B")
@@ -373,9 +351,7 @@ class TestFromAC_GetConsolidationCandidates:
         # Dismissed entity
         _insert_entity(conn, name="Dismissed", document_id=doc_a)
         _insert_entity(conn, name="Dismissed", document_id=doc_b)
-        _insert_reviewed_pair(
-            conn, entity_name="Dismissed", source_a=source_a, source_b=source_b
-        )
+        _insert_reviewed_pair(conn, entity_name="Dismissed", source_a=source_a, source_b=source_b)
         # Other entity that should still appear
         _insert_entity(conn, name="Active", document_id=doc_a)
         _insert_entity(conn, name="Active", document_id=doc_b)
@@ -384,19 +360,13 @@ class TestFromAC_GetConsolidationCandidates:
         candidates = await get_consolidation_candidates(ctx, limit=20)
 
         names = [_get_field(c, "entity_name") for c in candidates]
-        assert "Active" in names, (
-            f"Expected 'Active' in candidates (no dismissal for it), got: {names}"
-        )
-        assert "Dismissed" not in names, (
-            f"Expected 'Dismissed' excluded (dismissed pair), got: {names}"
-        )
+        assert "Active" in names, f"Expected 'Active' in candidates (no dismissal for it), got: {names}"
+        assert "Dismissed" not in names, f"Expected 'Dismissed' excluded (dismissed pair), got: {names}"
 
     # --- AC3: candidates return list of dicts with entity_name + chunks (td:1) ---
 
     @pytest.mark.asyncio
-    async def test_candidate_dict_contains_entity_name_key(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_candidate_dict_contains_entity_name_key(self, conn: sqlite3.Connection) -> None:
         """AC3 smoke: each candidate dict has an 'entity_name' key."""
         source_a = _insert_source(conn, name="Source A")
         source_b = _insert_source(conn, name="Source B")
@@ -410,15 +380,11 @@ class TestFromAC_GetConsolidationCandidates:
 
         assert len(candidates) >= 1, "Expected at least one candidate"
         candidate = candidates[0]
-        assert _has_field(candidate, "entity_name"), (
-            f"Expected 'entity_name' field in candidate dict, got: {candidate}"
-        )
+        assert _has_field(candidate, "entity_name"), f"Expected 'entity_name' field in candidate dict, got: {candidate}"
         assert _get_field(candidate, "entity_name") == "NumPy"
 
     @pytest.mark.asyncio
-    async def test_candidate_dict_contains_chunks_from_both_sources(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_candidate_dict_contains_chunks_from_both_sources(self, conn: sqlite3.Connection) -> None:
         """AC3 smoke: candidate dict includes chunk content from both sources."""
         source_a = _insert_source(conn, name="Source A")
         source_b = _insert_source(conn, name="Source B")
@@ -430,13 +396,11 @@ class TestFromAC_GetConsolidationCandidates:
         _insert_chunk(conn, document_id=doc_b, content="TensorFlow chunk from source B")
         # Link chunks to entities
         conn.execute(
-            "UPDATE entities SET chunk_id = (SELECT id FROM chunks WHERE document_id = ? LIMIT 1) "
-            "WHERE id = ?",
+            "UPDATE entities SET chunk_id = (SELECT id FROM chunks WHERE document_id = ? LIMIT 1) WHERE id = ?",
             (doc_a, entity_a),
         )
         conn.execute(
-            "UPDATE entities SET chunk_id = (SELECT id FROM chunks WHERE document_id = ? LIMIT 1) "
-            "WHERE id = ?",
+            "UPDATE entities SET chunk_id = (SELECT id FROM chunks WHERE document_id = ? LIMIT 1) WHERE id = ?",
             (doc_b, entity_b),
         )
         conn.commit()
@@ -445,9 +409,7 @@ class TestFromAC_GetConsolidationCandidates:
         candidates = await get_consolidation_candidates(ctx, limit=20)
 
         assert len(candidates) >= 1, "Expected at least one candidate for 'TensorFlow'"
-        tf_candidates = [
-            c for c in candidates if _get_field(c, "entity_name") == "TensorFlow"
-        ]
+        tf_candidates = [c for c in candidates if _get_field(c, "entity_name") == "TensorFlow"]
         assert tf_candidates, "Expected 'TensorFlow' in candidates"
         candidate = tf_candidates[0]
 
@@ -460,15 +422,10 @@ class TestFromAC_GetConsolidationCandidates:
                 "source" in str(_get_field(candidate, k)).lower()
                 for k in (candidate.keys() if isinstance(candidate, dict) else [])
             )
-        ), (
-            "Expected candidate to contain source information from both sources, "
-            f"got: {candidate}"
-        )
+        ), f"Expected candidate to contain source information from both sources, got: {candidate}"
 
     @pytest.mark.asyncio
-    async def test_candidate_chunk_payloads_are_exact_source_content(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_candidate_chunk_payloads_are_exact_source_content(self, conn: sqlite3.Connection) -> None:
         """AC3 exact (retry): source_a_chunk and source_b_chunk fields hold the
         specific chunk content for each source — not just a substring of the
         serialised candidate object."""
@@ -476,25 +433,15 @@ class TestFromAC_GetConsolidationCandidates:
         source_b = _insert_source(conn, name="Source B")
         doc_a = _insert_document(conn, source_id=source_a)
         doc_b = _insert_document(conn, source_id=source_b)
-        chunk_a = _insert_chunk(
-            conn, document_id=doc_a, content="Chunk text from Source A only"
-        )
-        chunk_b = _insert_chunk(
-            conn, document_id=doc_b, content="Chunk text from Source B only"
-        )
-        _insert_entity(
-            conn, name="TensorFlowExact", document_id=doc_a, chunk_id=chunk_a
-        )
-        _insert_entity(
-            conn, name="TensorFlowExact", document_id=doc_b, chunk_id=chunk_b
-        )
+        chunk_a = _insert_chunk(conn, document_id=doc_a, content="Chunk text from Source A only")
+        chunk_b = _insert_chunk(conn, document_id=doc_b, content="Chunk text from Source B only")
+        _insert_entity(conn, name="TensorFlowExact", document_id=doc_a, chunk_id=chunk_a)
+        _insert_entity(conn, name="TensorFlowExact", document_id=doc_b, chunk_id=chunk_b)
 
         ctx = _make_mcp_ctx(conn)
         candidates = await get_consolidation_candidates(ctx, limit=20)
 
-        tf_candidates = [
-            c for c in candidates if _get_field(c, "entity_name") == "TensorFlowExact"
-        ]
+        tf_candidates = [c for c in candidates if _get_field(c, "entity_name") == "TensorFlowExact"]
         assert tf_candidates, "Expected 'TensorFlowExact' in candidates"
         candidate = tf_candidates[0]
 
@@ -526,9 +473,7 @@ class TestFromAC_StoreEnrichmentPhase2:
     # --- AC4: Phase 2 with non-empty edges writes cross-source edges (td:1) ---
 
     @pytest.mark.asyncio
-    async def test_phase2_non_empty_edges_writes_edge_to_db(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_phase2_non_empty_edges_writes_edge_to_db(self, conn: sqlite3.Connection) -> None:
         """AC4 smoke: Phase 2 call with edges=[...] inserts edge into edges table."""
         source_a = _insert_source(conn, name="Source A")
         source_b = _insert_source(conn, name="Source B")
@@ -540,9 +485,7 @@ class TestFromAC_StoreEnrichmentPhase2:
         ctx = _make_mcp_ctx(conn)
         # get_consolidation_candidates returns the candidate with its candidate_id
         candidates = await get_consolidation_candidates(ctx, limit=20)
-        jax_candidates = [
-            c for c in candidates if _get_field(c, "entity_name") == "JAX"
-        ]
+        jax_candidates = [c for c in candidates if _get_field(c, "entity_name") == "JAX"]
         assert jax_candidates, "Expected 'JAX' to be a candidate"
         candidate_id = _get_field(jax_candidates[0], "candidate_id")
 
@@ -570,9 +513,7 @@ class TestFromAC_StoreEnrichmentPhase2:
     # --- AC5: Phase 2 with empty edges marks reviewed_pairs (td:1) ---
 
     @pytest.mark.asyncio
-    async def test_phase2_empty_edges_inserts_reviewed_pair_dismissal(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_phase2_empty_edges_inserts_reviewed_pair_dismissal(self, conn: sqlite3.Connection) -> None:
         """AC5 smoke: Phase 2 call with edges=[] inserts row into reviewed_pairs."""
         source_a = _insert_source(conn, name="Source A")
         source_b = _insert_source(conn, name="Source B")
@@ -583,31 +524,22 @@ class TestFromAC_StoreEnrichmentPhase2:
 
         ctx = _make_mcp_ctx(conn)
         candidates = await get_consolidation_candidates(ctx, limit=20)
-        scipy_candidates = [
-            c for c in candidates if _get_field(c, "entity_name") == "SciPy"
-        ]
+        scipy_candidates = [c for c in candidates if _get_field(c, "entity_name") == "SciPy"]
         assert scipy_candidates, "Expected 'SciPy' to be a candidate"
         candidate_id = _get_field(scipy_candidates[0], "candidate_id")
 
-        reviewed_before = conn.execute(
-            "SELECT COUNT(*) FROM reviewed_pairs"
-        ).fetchone()[0]
+        reviewed_before = conn.execute("SELECT COUNT(*) FROM reviewed_pairs").fetchone()[0]
 
         # Phase 2 dismissal: empty edges
         await store_enrichment(ctx, candidate_id=candidate_id, edges=[])
 
-        reviewed_after = conn.execute("SELECT COUNT(*) FROM reviewed_pairs").fetchone()[
-            0
-        ]
+        reviewed_after = conn.execute("SELECT COUNT(*) FROM reviewed_pairs").fetchone()[0]
         assert reviewed_after == reviewed_before + 1, (
-            f"Expected 1 new reviewed_pairs row after dismissal, "
-            f"before={reviewed_before}, after={reviewed_after}"
+            f"Expected 1 new reviewed_pairs row after dismissal, before={reviewed_before}, after={reviewed_after}"
         )
 
     @pytest.mark.asyncio
-    async def test_phase2_empty_edges_does_not_write_new_edges(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_phase2_empty_edges_does_not_write_new_edges(self, conn: sqlite3.Connection) -> None:
         """AC5 boundary: dismissal writes no edges — only marks reviewed_pairs."""
         source_a = _insert_source(conn, name="Source A")
         source_b = _insert_source(conn, name="Source B")
@@ -618,9 +550,7 @@ class TestFromAC_StoreEnrichmentPhase2:
 
         ctx = _make_mcp_ctx(conn)
         candidates = await get_consolidation_candidates(ctx, limit=20)
-        mpl_candidates = [
-            c for c in candidates if _get_field(c, "entity_name") == "Matplotlib"
-        ]
+        mpl_candidates = [c for c in candidates if _get_field(c, "entity_name") == "Matplotlib"]
         assert mpl_candidates, "Expected 'Matplotlib' to be a candidate"
         candidate_id = _get_field(mpl_candidates[0], "candidate_id")
 
@@ -629,16 +559,13 @@ class TestFromAC_StoreEnrichmentPhase2:
         edges_after = conn.execute("SELECT COUNT(*) FROM edges").fetchone()[0]
 
         assert edges_after == edges_before, (
-            f"Expected no new edges written for a dismissal, "
-            f"before={edges_before}, after={edges_after}"
+            f"Expected no new edges written for a dismissal, before={edges_before}, after={edges_after}"
         )
 
     # --- AC6: new sources generate new candidate pairs; old dismissals preserved (td:2) ---
 
     @pytest.mark.asyncio
-    async def test_new_source_generates_new_candidate_pair_for_same_entity(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_new_source_generates_new_candidate_pair_for_same_entity(self, conn: sqlite3.Connection) -> None:
         """AC6 happy: after dismissing (entity, A, B), adding source C creates (entity, *, C) candidate."""
         source_a = _insert_source(conn, name="Source A")
         source_b = _insert_source(conn, name="Source B")
@@ -647,9 +574,7 @@ class TestFromAC_StoreEnrichmentPhase2:
         _insert_entity(conn, name="Pandas", document_id=doc_a)
         _insert_entity(conn, name="Pandas", document_id=doc_b)
         # Dismiss the (A, B) pair for "Pandas"
-        _insert_reviewed_pair(
-            conn, entity_name="Pandas", source_a=source_a, source_b=source_b
-        )
+        _insert_reviewed_pair(conn, entity_name="Pandas", source_a=source_a, source_b=source_b)
 
         # Add a new source C with the same entity
         source_c = _insert_source(conn, name="Source C")
@@ -660,15 +585,10 @@ class TestFromAC_StoreEnrichmentPhase2:
         candidates = await get_consolidation_candidates(ctx, limit=20)
 
         names = [_get_field(c, "entity_name") for c in candidates]
-        assert "Pandas" in names, (
-            f"Expected 'Pandas' back in candidates after new source C added, "
-            f"got: {names}"
-        )
+        assert "Pandas" in names, f"Expected 'Pandas' back in candidates after new source C added, got: {names}"
 
     @pytest.mark.asyncio
-    async def test_old_dismissal_preserved_in_reviewed_pairs_after_new_source(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_old_dismissal_preserved_in_reviewed_pairs_after_new_source(self, conn: sqlite3.Connection) -> None:
         """AC6 boundary: reviewed_pairs row (A, B) still present after source C is added."""
         source_a = _insert_source(conn, name="Source A")
         source_b = _insert_source(conn, name="Source B")
@@ -676,9 +596,7 @@ class TestFromAC_StoreEnrichmentPhase2:
         doc_b = _insert_document(conn, source_id=source_b)
         _insert_entity(conn, name="Seaborn", document_id=doc_a)
         _insert_entity(conn, name="Seaborn", document_id=doc_b)
-        _insert_reviewed_pair(
-            conn, entity_name="Seaborn", source_a=source_a, source_b=source_b
-        )
+        _insert_reviewed_pair(conn, entity_name="Seaborn", source_a=source_a, source_b=source_b)
 
         source_c = _insert_source(conn, name="Source C")
         doc_c = _insert_document(conn, source_id=source_c)
@@ -689,8 +607,7 @@ class TestFromAC_StoreEnrichmentPhase2:
         await get_consolidation_candidates(ctx, limit=20)
 
         row = conn.execute(
-            "SELECT 1 FROM reviewed_pairs "
-            "WHERE entity_name = ? AND source_a = ? AND source_b = ?",
+            "SELECT 1 FROM reviewed_pairs WHERE entity_name = ? AND source_a = ? AND source_b = ?",
             ("Seaborn", source_a, source_b),
         ).fetchone()
         assert row is not None, (
@@ -699,9 +616,7 @@ class TestFromAC_StoreEnrichmentPhase2:
         )
 
     @pytest.mark.asyncio
-    async def test_dismissed_pair_remains_excluded_after_new_source_added(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_dismissed_pair_remains_excluded_after_new_source_added(self, conn: sqlite3.Connection) -> None:
         """AC6 boundary: (entity, A, B) pair stays excluded from candidates even after source C added."""
         source_a = _insert_source(conn, name="Source A")
         source_b = _insert_source(conn, name="Source B")
@@ -709,9 +624,7 @@ class TestFromAC_StoreEnrichmentPhase2:
         doc_b = _insert_document(conn, source_id=source_b)
         _insert_entity(conn, name="Bokeh", document_id=doc_a)
         _insert_entity(conn, name="Bokeh", document_id=doc_b)
-        _insert_reviewed_pair(
-            conn, entity_name="Bokeh", source_a=source_a, source_b=source_b
-        )
+        _insert_reviewed_pair(conn, entity_name="Bokeh", source_a=source_a, source_b=source_b)
 
         # Add source C — generates new (Bokeh, ?, C) pair, but (A, B) stays dismissed
         source_c = _insert_source(conn, name="Source C")
@@ -722,9 +635,7 @@ class TestFromAC_StoreEnrichmentPhase2:
         candidates = await get_consolidation_candidates(ctx, limit=20)
 
         # There should be at most 2 "Bokeh" candidate pairs (A-C and B-C), but NOT A-B
-        bokeh_candidates = [
-            c for c in candidates if _get_field(c, "entity_name") == "Bokeh"
-        ]
+        bokeh_candidates = [c for c in candidates if _get_field(c, "entity_name") == "Bokeh"]
         # Verify: no candidate has source_a, source_b that match the dismissed pair
         # The key assertion: only NEW pairs appear, not the dismissed (A, B) pair
         # If the implementation encodes source info in the candidate, check directly:
@@ -741,9 +652,7 @@ class TestFromAC_StoreEnrichmentPhase2:
             )
 
     @pytest.mark.asyncio
-    async def test_exact_candidate_pairs_after_dismissal_and_new_source(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_exact_candidate_pairs_after_dismissal_and_new_source(self, conn: sqlite3.Connection) -> None:
         """AC6 exact (retry): after dismissing (Dask, A, B), only the (A,C) and (B,C)
         pairs appear for 'Dask' — proven via structured source_a/source_b fields,
         not via string representation of the candidate object."""
@@ -753,9 +662,7 @@ class TestFromAC_StoreEnrichmentPhase2:
         doc_b = _insert_document(conn, source_id=source_b)
         _insert_entity(conn, name="DaskExact", document_id=doc_a)
         _insert_entity(conn, name="DaskExact", document_id=doc_b)
-        _insert_reviewed_pair(
-            conn, entity_name="DaskExact", source_a=source_a, source_b=source_b
-        )
+        _insert_reviewed_pair(conn, entity_name="DaskExact", source_a=source_a, source_b=source_b)
 
         source_c = _insert_source(conn, name="Source C")
         doc_c = _insert_document(conn, source_id=source_c)
@@ -764,26 +671,19 @@ class TestFromAC_StoreEnrichmentPhase2:
         ctx = _make_mcp_ctx(conn)
         candidates = await get_consolidation_candidates(ctx, limit=20)
 
-        dask_candidates = [
-            c for c in candidates if _get_field(c, "entity_name") == "DaskExact"
-        ]
+        dask_candidates = [c for c in candidates if _get_field(c, "entity_name") == "DaskExact"]
 
-        candidate_pairs = {
-            frozenset({_get_field(c, "source_a"), _get_field(c, "source_b")})
-            for c in dask_candidates
-        }
+        candidate_pairs = {frozenset({_get_field(c, "source_a"), _get_field(c, "source_b")}) for c in dask_candidates}
 
         ab_pair = frozenset({source_a, source_b})
         assert ab_pair not in candidate_pairs, (
-            f"Dismissed (A, B) pair must not appear in structured candidates, "
-            f"got pairs: {candidate_pairs}"
+            f"Dismissed (A, B) pair must not appear in structured candidates, got pairs: {candidate_pairs}"
         )
 
         ac_pair = frozenset({source_a, source_c})
         bc_pair = frozenset({source_b, source_c})
         assert candidate_pairs == {ac_pair, bc_pair}, (
-            f"Expected exactly pairs {{(A,C), (B,C)}}, got: {candidate_pairs}. "
-            f"Raw candidates: {dask_candidates}"
+            f"Expected exactly pairs {{(A,C), (B,C)}}, got: {candidate_pairs}. Raw candidates: {dask_candidates}"
         )
 
 
@@ -798,23 +698,17 @@ class TestFromAC_GetStatsExpansion:
     # --- AC7: preserves existing fields AND adds new Phase 2 fields (td:2) ---
 
     @pytest.mark.asyncio
-    async def test_stats_preserves_existing_documents_field(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_stats_preserves_existing_documents_field(self, conn: sqlite3.Connection) -> None:
         """AC7 happy: 'documents' field still present and matches graph_store count."""
         ctx = _make_mcp_ctx_with_graph(conn, doc_count=7, entity_count=0, edge_count=0)
         result = await get_stats(ctx)
-        assert "documents" in result, (
-            f"Expected 'documents' key in stats, got: {result}"
-        )
+        assert "documents" in result, f"Expected 'documents' key in stats, got: {result}"
         assert result["documents"] == 7, (
             f"Expected documents=7 from graph_store.get_counts(), got: {result['documents']}"
         )
 
     @pytest.mark.asyncio
-    async def test_stats_preserves_existing_entities_field(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_stats_preserves_existing_entities_field(self, conn: sqlite3.Connection) -> None:
         """AC7 happy: 'entities' field still present and matches graph_store count."""
         ctx = _make_mcp_ctx_with_graph(conn, doc_count=0, entity_count=42, edge_count=0)
         result = await get_stats(ctx)
@@ -822,9 +716,7 @@ class TestFromAC_GetStatsExpansion:
         assert result["entities"] == 42
 
     @pytest.mark.asyncio
-    async def test_stats_preserves_existing_edges_field(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_stats_preserves_existing_edges_field(self, conn: sqlite3.Connection) -> None:
         """AC7 happy: 'edges' field still present and matches graph_store count."""
         ctx = _make_mcp_ctx_with_graph(conn, doc_count=0, entity_count=0, edge_count=15)
         result = await get_stats(ctx)
@@ -832,9 +724,7 @@ class TestFromAC_GetStatsExpansion:
         assert result["edges"] == 15
 
     @pytest.mark.asyncio
-    async def test_stats_returns_total_sources_field(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_stats_returns_total_sources_field(self, conn: sqlite3.Connection) -> None:
         """AC7 happy: 'total_sources' field is present and counts knowledge_sources rows."""
         _insert_source(conn, name="Source A")
         _insert_source(conn, name="Source B")
@@ -843,17 +733,13 @@ class TestFromAC_GetStatsExpansion:
         ctx = _make_mcp_ctx_with_graph(conn)
         result = await get_stats(ctx)
 
-        assert "total_sources" in result, (
-            f"Expected 'total_sources' key in expanded stats, got: {list(result.keys())}"
-        )
+        assert "total_sources" in result, f"Expected 'total_sources' key in expanded stats, got: {list(result.keys())}"
         assert result["total_sources"] == 3, (
             f"Expected total_sources=3 (3 sources inserted), got: {result['total_sources']}"
         )
 
     @pytest.mark.asyncio
-    async def test_stats_returns_total_chunks_field(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_stats_returns_total_chunks_field(self, conn: sqlite3.Connection) -> None:
         """AC7 happy: 'total_chunks' field is present and counts chunks rows."""
         source_a = _insert_source(conn, name="Source A")
         doc_a = _insert_document(conn, source_id=source_a)
@@ -864,17 +750,11 @@ class TestFromAC_GetStatsExpansion:
         ctx = _make_mcp_ctx_with_graph(conn)
         result = await get_stats(ctx)
 
-        assert "total_chunks" in result, (
-            f"Expected 'total_chunks' key in expanded stats, got: {list(result.keys())}"
-        )
-        assert result["total_chunks"] == 3, (
-            f"Expected total_chunks=3, got: {result['total_chunks']}"
-        )
+        assert "total_chunks" in result, f"Expected 'total_chunks' key in expanded stats, got: {list(result.keys())}"
+        assert result["total_chunks"] == 3, f"Expected total_chunks=3, got: {result['total_chunks']}"
 
     @pytest.mark.asyncio
-    async def test_stats_returns_chunks_enriched_ratio_field(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_stats_returns_chunks_enriched_ratio_field(self, conn: sqlite3.Connection) -> None:
         """AC7 happy: 'chunks_enriched_ratio' present and equals enriched/total."""
         source_a = _insert_source(conn, name="Source A")
         doc_a = _insert_document(conn, source_id=source_a)
@@ -891,14 +771,10 @@ class TestFromAC_GetStatsExpansion:
         )
         # 2 enriched / 4 total = 0.5
         ratio = result["chunks_enriched_ratio"]
-        assert abs(ratio - 0.5) < 1e-9, (
-            f"Expected chunks_enriched_ratio=0.5 (2 enriched of 4 total), got: {ratio}"
-        )
+        assert abs(ratio - 0.5) < 1e-9, f"Expected chunks_enriched_ratio=0.5 (2 enriched of 4 total), got: {ratio}"
 
     @pytest.mark.asyncio
-    async def test_stats_returns_consolidation_candidates_remaining_field(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_stats_returns_consolidation_candidates_remaining_field(self, conn: sqlite3.Connection) -> None:
         """AC7 happy: 'consolidation_candidates_remaining' present and reflects candidate count."""
         source_a = _insert_source(conn, name="Source A")
         source_b = _insert_source(conn, name="Source B")
@@ -911,8 +787,7 @@ class TestFromAC_GetStatsExpansion:
         result = await get_stats(ctx)
 
         assert "consolidation_candidates_remaining" in result, (
-            f"Expected 'consolidation_candidates_remaining' in expanded stats, "
-            f"got: {list(result.keys())}"
+            f"Expected 'consolidation_candidates_remaining' in expanded stats, got: {list(result.keys())}"
         )
         assert result["consolidation_candidates_remaining"] >= 1, (
             f"Expected at least 1 consolidation candidate remaining (SciKit in 2 sources), "
@@ -920,25 +795,18 @@ class TestFromAC_GetStatsExpansion:
         )
 
     @pytest.mark.asyncio
-    async def test_stats_enriched_ratio_is_zero_when_no_chunks(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_stats_enriched_ratio_is_zero_when_no_chunks(self, conn: sqlite3.Connection) -> None:
         """AC7 boundary: chunks_enriched_ratio = 0.0 when no chunks exist (no division by zero)."""
         ctx = _make_mcp_ctx_with_graph(conn)
         result = await get_stats(ctx)
 
-        assert "chunks_enriched_ratio" in result, (
-            f"Expected 'chunks_enriched_ratio' key, got: {list(result.keys())}"
-        )
+        assert "chunks_enriched_ratio" in result, f"Expected 'chunks_enriched_ratio' key, got: {list(result.keys())}"
         assert result["chunks_enriched_ratio"] == 0.0, (
-            f"Expected chunks_enriched_ratio=0.0 with no chunks, "
-            f"got: {result['chunks_enriched_ratio']}"
+            f"Expected chunks_enriched_ratio=0.0 with no chunks, got: {result['chunks_enriched_ratio']}"
         )
 
     @pytest.mark.asyncio
-    async def test_stats_enriched_ratio_is_one_when_all_chunks_enriched(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_stats_enriched_ratio_is_one_when_all_chunks_enriched(self, conn: sqlite3.Connection) -> None:
         """AC7 boundary: chunks_enriched_ratio = 1.0 when all chunks are enriched."""
         source_a = _insert_source(conn, name="Source A")
         doc_a = _insert_document(conn, source_id=source_a)
@@ -949,27 +817,19 @@ class TestFromAC_GetStatsExpansion:
         result = await get_stats(ctx)
 
         ratio = result.get("chunks_enriched_ratio")
-        assert ratio == 1.0, (
-            f"Expected chunks_enriched_ratio=1.0 when all chunks enriched, got: {ratio}"
-        )
+        assert ratio == 1.0, f"Expected chunks_enriched_ratio=1.0 when all chunks enriched, got: {ratio}"
 
     @pytest.mark.asyncio
-    async def test_stats_total_sources_zero_when_no_sources(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_stats_total_sources_zero_when_no_sources(self, conn: sqlite3.Connection) -> None:
         """AC7 boundary: total_sources = 0 when knowledge_sources table is empty."""
         ctx = _make_mcp_ctx_with_graph(conn)
         result = await get_stats(ctx)
 
         assert "total_sources" in result
-        assert result["total_sources"] == 0, (
-            f"Expected total_sources=0 with no sources, got: {result['total_sources']}"
-        )
+        assert result["total_sources"] == 0, f"Expected total_sources=0 with no sources, got: {result['total_sources']}"
 
     @pytest.mark.asyncio
-    async def test_stats_consolidation_candidates_zero_when_all_pairs_dismissed(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_stats_consolidation_candidates_zero_when_all_pairs_dismissed(self, conn: sqlite3.Connection) -> None:
         """AC7 boundary: consolidation_candidates_remaining = 0 when all pairs dismissed."""
         source_a = _insert_source(conn, name="Source A")
         source_b = _insert_source(conn, name="Source B")
@@ -977,9 +837,7 @@ class TestFromAC_GetStatsExpansion:
         doc_b = _insert_document(conn, source_id=source_b)
         _insert_entity(conn, name="Arrow", document_id=doc_a)
         _insert_entity(conn, name="Arrow", document_id=doc_b)
-        _insert_reviewed_pair(
-            conn, entity_name="Arrow", source_a=source_a, source_b=source_b
-        )
+        _insert_reviewed_pair(conn, entity_name="Arrow", source_a=source_a, source_b=source_b)
 
         ctx = _make_mcp_ctx_with_graph(conn)
         result = await get_stats(ctx)
@@ -991,9 +849,7 @@ class TestFromAC_GetStatsExpansion:
         )
 
     @pytest.mark.asyncio
-    async def test_stats_consolidation_candidates_remaining_exact_count(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_stats_consolidation_candidates_remaining_exact_count(self, conn: sqlite3.Connection) -> None:
         """AC7 exact (retry): consolidation_candidates_remaining == 1 for a
         single-pair fixture — not >= 1, so overcounting is caught."""
         source_a = _insert_source(conn, name="Source A")
@@ -1007,8 +863,7 @@ class TestFromAC_GetStatsExpansion:
         result = await get_stats(ctx)
 
         assert "consolidation_candidates_remaining" in result, (
-            f"Expected 'consolidation_candidates_remaining' in stats, "
-            f"got: {list(result.keys())}"
+            f"Expected 'consolidation_candidates_remaining' in stats, got: {list(result.keys())}"
         )
         assert result["consolidation_candidates_remaining"] == 1, (
             f"Expected exactly 1 consolidation_candidates_remaining "
@@ -1026,9 +881,7 @@ class TestFromAC_ExactProofs:
     """Cycle-2 retry: exact assertions for AC3 dict shape, AC4 edge row, AC5 reviewed_pairs row."""
 
     @pytest.mark.asyncio
-    async def test_ac3_candidates_are_dicts_not_objects(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_ac3_candidates_are_dicts_not_objects(self, conn: sqlite3.Connection) -> None:
         """AC3 exact (cycle 2): every candidate must be a plain dict — isinstance(candidate, dict)
         required so duck-typing objects cannot slip past the shape contract."""
         source_a = _insert_source(conn, name="Source A")
@@ -1044,14 +897,11 @@ class TestFromAC_ExactProofs:
         assert len(candidates) >= 1, "Expected at least one candidate"
         for candidate in candidates:
             assert isinstance(candidate, dict), (
-                f"Expected each candidate to be a plain dict, "
-                f"got {type(candidate).__name__}: {candidate!r}"
+                f"Expected each candidate to be a plain dict, got {type(candidate).__name__}: {candidate!r}"
             )
 
     @pytest.mark.asyncio
-    async def test_ac4_exact_edge_row_content_after_phase2_store(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_ac4_exact_edge_row_content_after_phase2_store(self, conn: sqlite3.Connection) -> None:
         """AC4 exact (cycle 2): store_enrichment Phase 2 with non-empty edges writes
         an edge row whose source_id, target_id, and relation exactly match the
         caller-supplied values — not just a count increment."""
@@ -1064,9 +914,7 @@ class TestFromAC_ExactProofs:
 
         ctx = _make_mcp_ctx(conn)
         candidates = await get_consolidation_candidates(ctx, limit=20)
-        target = next(
-            c for c in candidates if _get_field(c, "entity_name") == "ExactEdgeEntity"
-        )
+        target = next(c for c in candidates if _get_field(c, "entity_name") == "ExactEdgeEntity")
         candidate_id = _get_field(target, "candidate_id")
 
         await store_enrichment(
@@ -1082,26 +930,19 @@ class TestFromAC_ExactProofs:
         )
 
         row = conn.execute(
-            "SELECT source_id, target_id, relation FROM edges "
-            "WHERE source_id = ? AND target_id = ? AND relation = ?",
+            "SELECT source_id, target_id, relation FROM edges WHERE source_id = ? AND target_id = ? AND relation = ?",
             (entity_a_id, entity_b_id, "exact_match_proof"),
         ).fetchone()
         assert row is not None, (
             f"Expected edge row (source_id={entity_a_id!r}, "
             f"target_id={entity_b_id!r}, relation='exact_match_proof') — not found in DB"
         )
-        assert row[0] == entity_a_id, (
-            f"source_id mismatch: {row[0]!r} != {entity_a_id!r}"
-        )
-        assert row[1] == entity_b_id, (
-            f"target_id mismatch: {row[1]!r} != {entity_b_id!r}"
-        )
+        assert row[0] == entity_a_id, f"source_id mismatch: {row[0]!r} != {entity_a_id!r}"
+        assert row[1] == entity_b_id, f"target_id mismatch: {row[1]!r} != {entity_b_id!r}"
         assert row[2] == "exact_match_proof", f"relation mismatch: {row[2]!r}"
 
     @pytest.mark.asyncio
-    async def test_ac5_exact_reviewed_pairs_row_content_after_dismissal(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_ac5_exact_reviewed_pairs_row_content_after_dismissal(self, conn: sqlite3.Connection) -> None:
         """AC5 exact (cycle 2): store_enrichment Phase 2 with edges=[] writes a
         reviewed_pairs row whose entity_name, source_a, source_b match the candidate
         decoded from candidate_id — not just a count increment."""
@@ -1114,32 +955,22 @@ class TestFromAC_ExactProofs:
 
         ctx = _make_mcp_ctx(conn)
         candidates = await get_consolidation_candidates(ctx, limit=20)
-        target = next(
-            c
-            for c in candidates
-            if _get_field(c, "entity_name") == "ExactDismissalEntity"
-        )
+        target = next(c for c in candidates if _get_field(c, "entity_name") == "ExactDismissalEntity")
         candidate_id = _get_field(target, "candidate_id")
 
         await store_enrichment(ctx, candidate_id=candidate_id, edges=[])
 
         row = conn.execute(
-            "SELECT entity_name, source_a, source_b FROM reviewed_pairs "
-            "WHERE entity_name = ?",
+            "SELECT entity_name, source_a, source_b FROM reviewed_pairs WHERE entity_name = ?",
             ("ExactDismissalEntity",),
         ).fetchone()
-        assert row is not None, (
-            "Expected reviewed_pairs row for 'ExactDismissalEntity' — not found in DB"
-        )
-        assert row[0] == "ExactDismissalEntity", (
-            f"entity_name mismatch: {row[0]!r} != 'ExactDismissalEntity'"
-        )
+        assert row is not None, "Expected reviewed_pairs row for 'ExactDismissalEntity' — not found in DB"
+        assert row[0] == "ExactDismissalEntity", f"entity_name mismatch: {row[0]!r} != 'ExactDismissalEntity'"
         # source_a and source_b may be stored in canonicalized order — check set equality
         stored_sources = {row[1], row[2]}
         expected_sources = {source_a, source_b}
         assert stored_sources == expected_sources, (
-            f"Expected reviewed_pairs sources to be {expected_sources}, "
-            f"got: {stored_sources}"
+            f"Expected reviewed_pairs sources to be {expected_sources}, got: {stored_sources}"
         )
 
 
@@ -1154,9 +985,7 @@ class TestFromAC_Cycle3Proofs:
     # --- AC2: reversed reviewed_pairs still excludes candidate ---
 
     @pytest.mark.asyncio
-    async def test_ac2_reversed_reviewed_pair_still_excludes_candidate(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_ac2_reversed_reviewed_pair_still_excludes_candidate(self, conn: sqlite3.Connection) -> None:
         """AC2 exact (cycle 3): a reviewed_pairs row inserted with source_a and source_b
         swapped relative to the candidate's canonical order (min/max) must still exclude
         the pair — proving the OR branch in the SQL filter fires correctly."""
@@ -1168,9 +997,7 @@ class TestFromAC_Cycle3Proofs:
         _insert_entity(conn, name="ReversedPairEntity", document_id=doc_y)
 
         # Determine which source_id is canonical source_a (the lexicographically smaller one)
-        canonical_a, canonical_b = (
-            (source_x, source_y) if source_x < source_y else (source_y, source_x)
-        )
+        canonical_a, canonical_b = (source_x, source_y) if source_x < source_y else (source_y, source_x)
         # Insert reviewed_pairs with the order DELIBERATELY REVERSED
         _insert_reviewed_pair(
             conn,
@@ -1191,9 +1018,7 @@ class TestFromAC_Cycle3Proofs:
     # --- AC3: positional chunk content assertion (direct dict indexing, no set) ---
 
     @pytest.mark.asyncio
-    async def test_ac3_source_a_chunk_and_source_b_chunk_match_positionally(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_ac3_source_a_chunk_and_source_b_chunk_match_positionally(self, conn: sqlite3.Connection) -> None:
         """AC3 exact (cycle 3): source_a_chunk must equal the chunk text from the
         source assigned as source_a (min source_id), and source_b_chunk must equal
         the chunk text from the source assigned as source_b (max source_id) — tested
@@ -1202,25 +1027,15 @@ class TestFromAC_Cycle3Proofs:
         source_q = _insert_source(conn, name="Source Q")
         doc_p = _insert_document(conn, source_id=source_p)
         doc_q = _insert_document(conn, source_id=source_q)
-        chunk_p = _insert_chunk(
-            conn, document_id=doc_p, content="Positional chunk from Source P"
-        )
-        chunk_q = _insert_chunk(
-            conn, document_id=doc_q, content="Positional chunk from Source Q"
-        )
-        _insert_entity(
-            conn, name="PositionalChunkEntity", document_id=doc_p, chunk_id=chunk_p
-        )
-        _insert_entity(
-            conn, name="PositionalChunkEntity", document_id=doc_q, chunk_id=chunk_q
-        )
+        chunk_p = _insert_chunk(conn, document_id=doc_p, content="Positional chunk from Source P")
+        chunk_q = _insert_chunk(conn, document_id=doc_q, content="Positional chunk from Source Q")
+        _insert_entity(conn, name="PositionalChunkEntity", document_id=doc_p, chunk_id=chunk_p)
+        _insert_entity(conn, name="PositionalChunkEntity", document_id=doc_q, chunk_id=chunk_q)
 
         ctx = _make_mcp_ctx(conn)
         candidates = await get_consolidation_candidates(ctx, limit=20)
 
-        target = next(
-            c for c in candidates if c["entity_name"] == "PositionalChunkEntity"
-        )
+        target = next(c for c in candidates if c["entity_name"] == "PositionalChunkEntity")
 
         # Determine canonical assignment: source with smaller string ID becomes source_a
         if source_p < source_q:
@@ -1260,9 +1075,7 @@ class TestFromAC_Cycle3Proofs:
 
         ctx = _make_mcp_ctx(conn)
         candidates = await get_consolidation_candidates(ctx, limit=20)
-        target = next(
-            c for c in candidates if c["entity_name"] == "PositionalDismissalEntity"
-        )
+        target = next(c for c in candidates if c["entity_name"] == "PositionalDismissalEntity")
         candidate_id = target["candidate_id"]
 
         # Decode per implementation contract: json.loads(candidate_id) == [entity_name, source_a, source_b]
@@ -1274,13 +1087,10 @@ class TestFromAC_Cycle3Proofs:
         await store_enrichment(ctx, candidate_id=candidate_id, edges=[])
 
         row = conn.execute(
-            "SELECT entity_name, source_a, source_b FROM reviewed_pairs "
-            "WHERE entity_name = ?",
+            "SELECT entity_name, source_a, source_b FROM reviewed_pairs WHERE entity_name = ?",
             (decoded_entity_name,),
         ).fetchone()
-        assert row is not None, (
-            f"Expected reviewed_pairs row for {decoded_entity_name!r} — not found in DB"
-        )
+        assert row is not None, f"Expected reviewed_pairs row for {decoded_entity_name!r} — not found in DB"
         # Positional column equality — no set/frozenset comparison
         assert row[1] == decoded_source_a, (
             f"reviewed_pairs.source_a must equal decoded candidate_id source_a exactly — "
@@ -1307,9 +1117,7 @@ class TestFromAC_Cycle4Proofs:
     """
 
     @pytest.mark.asyncio
-    async def test_ac2_reversed_edge_direction_still_excludes_candidate(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_ac2_reversed_edge_direction_still_excludes_candidate(self, conn: sqlite3.Connection) -> None:
         """AC2 exact (cycle 4): a cross-source edge inserted in the *reverse* entity
         ordering (source_entity_id = the larger-id entity, target_entity_id = the
         smaller-id entity) must still exclude the candidate pair.
@@ -1400,25 +1208,19 @@ class TestFromAC_GetConsolidationCandidates_1330:
     # --- AC1 boundary: empty DB → empty list ---
 
     @pytest.mark.asyncio
-    async def test_empty_database_returns_empty_candidate_list(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_empty_database_returns_empty_candidate_list(self, conn: sqlite3.Connection) -> None:
         """AC1 boundary: when no entities or sources exist, get_consolidation_candidates
         returns an empty list (not None, not an exception)."""
         ctx = _make_mcp_ctx(conn)
         candidates = await get_consolidation_candidates(ctx, limit=20)
 
         assert isinstance(candidates, list), f"Expected list, got {type(candidates)}"
-        assert len(candidates) == 0, (
-            f"Expected empty list for empty DB, got: {candidates}"
-        )
+        assert len(candidates) == 0, f"Expected empty list for empty DB, got: {candidates}"
 
     # --- AC2 boundary: entity with NULL chunk_id → chunk fields return "" ---
 
     @pytest.mark.asyncio
-    async def test_entity_with_no_chunk_id_yields_empty_chunk_fields(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_entity_with_no_chunk_id_yields_empty_chunk_fields(self, conn: sqlite3.Connection) -> None:
         """AC2 boundary: when entity.chunk_id IS NULL (no associated chunk), the
         candidate's source_a_chunk and source_b_chunk fields are both empty strings,
         not None and not an error."""
@@ -1433,21 +1235,15 @@ class TestFromAC_GetConsolidationCandidates_1330:
         ctx = _make_mcp_ctx(conn)
         candidates = await get_consolidation_candidates(ctx, limit=20)
 
-        nce = [
-            c for c in candidates if _get_field(c, "entity_name") == "NullChunkEntity"
-        ]
+        nce = [c for c in candidates if _get_field(c, "entity_name") == "NullChunkEntity"]
         assert nce, "Expected 'NullChunkEntity' in candidates"
         candidate = nce[0]
 
         source_a_chunk = _get_field(candidate, "source_a_chunk")
         source_b_chunk = _get_field(candidate, "source_b_chunk")
 
-        assert source_a_chunk == "", (
-            f"Expected source_a_chunk='' when entity has no chunk, got: {source_a_chunk!r}"
-        )
-        assert source_b_chunk == "", (
-            f"Expected source_b_chunk='' when entity has no chunk, got: {source_b_chunk!r}"
-        )
+        assert source_a_chunk == "", f"Expected source_a_chunk='' when entity has no chunk, got: {source_a_chunk!r}"
+        assert source_b_chunk == "", f"Expected source_b_chunk='' when entity has no chunk, got: {source_b_chunk!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -1461,9 +1257,7 @@ class TestFromAC_StoreEnrichmentPhase2_1330:
     # --- AC3 error: malformed candidate_id → ToolError ---
 
     @pytest.mark.asyncio
-    async def test_malformed_candidate_id_raises_tool_error(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_malformed_candidate_id_raises_tool_error(self, conn: sqlite3.Connection) -> None:
         """AC3 error: store_enrichment Phase 2 with a non-JSON candidate_id raises
         ToolError — the implementation must not crash with a generic exception."""
         ctx = _make_mcp_ctx(conn)
@@ -1472,9 +1266,7 @@ class TestFromAC_StoreEnrichmentPhase2_1330:
             await store_enrichment(ctx, candidate_id="not-valid-json", edges=[])
 
     @pytest.mark.asyncio
-    async def test_candidate_id_with_wrong_json_structure_raises_tool_error(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_candidate_id_with_wrong_json_structure_raises_tool_error(self, conn: sqlite3.Connection) -> None:
         """AC3 error: candidate_id that is valid JSON but not a 3-element string list
         raises ToolError (not IndexError, not KeyError)."""
         ctx = _make_mcp_ctx(conn)
@@ -1484,9 +1276,7 @@ class TestFromAC_StoreEnrichmentPhase2_1330:
             await store_enrichment(ctx, candidate_id='{"entity": "x"}', edges=[])
 
     @pytest.mark.asyncio
-    async def test_candidate_id_with_too_few_elements_raises_tool_error(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_candidate_id_with_too_few_elements_raises_tool_error(self, conn: sqlite3.Connection) -> None:
         """AC3 error: candidate_id that is a JSON list with fewer than 3 elements
         raises ToolError."""
         ctx = _make_mcp_ctx(conn)
@@ -1497,9 +1287,7 @@ class TestFromAC_StoreEnrichmentPhase2_1330:
     # --- AC3 boundary: multiple edges in one Phase 2 call → all written ---
 
     @pytest.mark.asyncio
-    async def test_phase2_multiple_edges_writes_all_edges(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_phase2_multiple_edges_writes_all_edges(self, conn: sqlite3.Connection) -> None:
         """AC3 boundary: Phase 2 store_enrichment with edges=[e1, e2] writes
         exactly 2 new rows to the edges table. Both edges use endpoints that
         match the reviewed candidate pair — cross-pair endpoints are rejected
@@ -1514,9 +1302,7 @@ class TestFromAC_StoreEnrichmentPhase2_1330:
         ctx = _make_mcp_ctx(conn)
         candidates = await get_consolidation_candidates(ctx, limit=20)
 
-        multi_cands = [
-            c for c in candidates if _get_field(c, "entity_name") == "MultiEdge"
-        ]
+        multi_cands = [c for c in candidates if _get_field(c, "entity_name") == "MultiEdge"]
         assert multi_cands, "Expected 'MultiEdge' to be a candidate"
         candidate_id = _get_field(multi_cands[0], "candidate_id")
 
@@ -1540,9 +1326,7 @@ class TestFromAC_StoreEnrichmentPhase2_1330:
     # --- AC4 boundary: dismissal is idempotent ---
 
     @pytest.mark.asyncio
-    async def test_phase2_dismissal_is_idempotent(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_phase2_dismissal_is_idempotent(self, conn: sqlite3.Connection) -> None:
         """AC4 boundary: calling Phase 2 dismissal (empty edges) twice for the same
         candidate does NOT raise an error and does NOT create duplicate reviewed_pairs
         rows (INSERT OR IGNORE semantics)."""
@@ -1555,25 +1339,19 @@ class TestFromAC_StoreEnrichmentPhase2_1330:
 
         ctx = _make_mcp_ctx(conn)
         candidates = await get_consolidation_candidates(ctx, limit=20)
-        ie_cands = [
-            c for c in candidates if _get_field(c, "entity_name") == "IdempotentEntity"
-        ]
+        ie_cands = [c for c in candidates if _get_field(c, "entity_name") == "IdempotentEntity"]
         assert ie_cands, "Expected 'IdempotentEntity' to be a candidate"
         candidate_id = _get_field(ie_cands[0], "candidate_id")
 
         # First dismissal
         await store_enrichment(ctx, candidate_id=candidate_id, edges=[])
 
-        reviewed_after_first = conn.execute(
-            "SELECT COUNT(*) FROM reviewed_pairs"
-        ).fetchone()[0]
+        reviewed_after_first = conn.execute("SELECT COUNT(*) FROM reviewed_pairs").fetchone()[0]
 
         # Second dismissal — must not raise and must not duplicate the row
         await store_enrichment(ctx, candidate_id=candidate_id, edges=[])
 
-        reviewed_after_second = conn.execute(
-            "SELECT COUNT(*) FROM reviewed_pairs"
-        ).fetchone()[0]
+        reviewed_after_second = conn.execute("SELECT COUNT(*) FROM reviewed_pairs").fetchone()[0]
 
         assert reviewed_after_second == reviewed_after_first, (
             f"Expected idempotent dismissal to not add duplicate row, "
@@ -1593,9 +1371,7 @@ class TestFromAC_GetStatsExpansion_1330:
     # --- AC6 boundary: single call returns ALL required fields together ---
 
     @pytest.mark.asyncio
-    async def test_stats_returns_all_required_fields_in_single_call(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_stats_returns_all_required_fields_in_single_call(self, conn: sqlite3.Connection) -> None:
         """AC6 boundary: a single get_stats call must return a dict containing
         all 7 required fields simultaneously — not a subset."""
         required_fields = {
@@ -1612,17 +1388,12 @@ class TestFromAC_GetStatsExpansion_1330:
         result = await get_stats(ctx)
 
         missing = required_fields - set(result.keys())
-        assert not missing, (
-            f"get_stats is missing required fields: {missing}. "
-            f"Got fields: {set(result.keys())}"
-        )
+        assert not missing, f"get_stats is missing required fields: {missing}. Got fields: {set(result.keys())}"
 
     # --- AC6 boundary: chunks_enriched_ratio = 1.0 when all enriched ---
 
     @pytest.mark.asyncio
-    async def test_stats_enriched_ratio_is_one_when_all_chunks_enriched(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_stats_enriched_ratio_is_one_when_all_chunks_enriched(self, conn: sqlite3.Connection) -> None:
         """AC6 boundary: chunks_enriched_ratio = 1.0 when every chunk in the
         table has enrichment_state='enriched' (100% enrichment)."""
         source_a = _insert_source(conn, name="Source A")
@@ -1635,24 +1406,18 @@ class TestFromAC_GetStatsExpansion_1330:
         result = await get_stats(ctx)
 
         ratio = result["chunks_enriched_ratio"]
-        assert ratio == 1.0, (
-            f"Expected chunks_enriched_ratio=1.0 when all chunks enriched, got: {ratio}"
-        )
+        assert ratio == 1.0, f"Expected chunks_enriched_ratio=1.0 when all chunks enriched, got: {ratio}"
 
     # --- AC6 boundary: total_chunks = 0 and ratio = 0.0 when no chunks ---
 
     @pytest.mark.asyncio
-    async def test_stats_total_chunks_zero_and_ratio_zero_when_no_chunks(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_stats_total_chunks_zero_and_ratio_zero_when_no_chunks(self, conn: sqlite3.Connection) -> None:
         """AC6 boundary: with no chunks in the DB, total_chunks=0 and
         chunks_enriched_ratio=0.0 (no division-by-zero error)."""
         ctx = _make_mcp_ctx_with_graph(conn)
         result = await get_stats(ctx)
 
-        assert result["total_chunks"] == 0, (
-            f"Expected total_chunks=0 with no chunks, got: {result['total_chunks']}"
-        )
+        assert result["total_chunks"] == 0, f"Expected total_chunks=0 with no chunks, got: {result['total_chunks']}"
         assert result["chunks_enriched_ratio"] == 0.0, (
             f"Expected ratio=0.0 with no chunks, got: {result['chunks_enriched_ratio']}"
         )
@@ -1660,28 +1425,21 @@ class TestFromAC_GetStatsExpansion_1330:
     # --- AC6 boundary: total_sources = 0 when knowledge_sources is empty ---
 
     @pytest.mark.asyncio
-    async def test_stats_total_sources_zero_when_no_sources(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_stats_total_sources_zero_when_no_sources(self, conn: sqlite3.Connection) -> None:
         """AC6 boundary: with no knowledge_sources rows, total_sources=0."""
         ctx = _make_mcp_ctx_with_graph(conn)
         result = await get_stats(ctx)
 
-        assert result["total_sources"] == 0, (
-            f"Expected total_sources=0 with no sources, got: {result['total_sources']}"
-        )
+        assert result["total_sources"] == 0, f"Expected total_sources=0 with no sources, got: {result['total_sources']}"
 
     # --- AC6 boundary: consolidation_candidates_remaining = 0 on empty DB ---
 
     @pytest.mark.asyncio
-    async def test_stats_consolidation_candidates_zero_on_empty_db(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_stats_consolidation_candidates_zero_on_empty_db(self, conn: sqlite3.Connection) -> None:
         """AC6 boundary: with no entities or sources, consolidation_candidates_remaining=0."""
         ctx = _make_mcp_ctx_with_graph(conn)
         result = await get_stats(ctx)
 
         assert result["consolidation_candidates_remaining"] == 0, (
-            f"Expected 0 consolidation candidates on empty DB, "
-            f"got: {result['consolidation_candidates_remaining']}"
+            f"Expected 0 consolidation candidates on empty DB, got: {result['consolidation_candidates_remaining']}"
         )

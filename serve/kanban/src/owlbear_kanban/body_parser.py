@@ -77,9 +77,7 @@ def parse_body(markdown: str) -> list[Section]:  # noqa: C901, PLR0915
         # Skip empty preamble (heading=None, no real content) to avoid ghost sections
         if current_heading is None and not content.strip():
             return
-        sections.append(
-            Section(heading=current_heading, level=current_level, content=content)
-        )
+        sections.append(Section(heading=current_heading, level=current_level, content=content))
 
     i = 0
     while i < len(lines):

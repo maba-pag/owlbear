@@ -61,19 +61,15 @@ class TestFromAC_CockpitDeliveryGateWorkflow:
             "Build cockpit SPA must run `npm run build` for cockpit frontend quality gate."
         )
         build_index = _step_index_by_name(steps, "Build cockpit SPA")
-        assert build_index < commit_index, (
-            "Build cockpit SPA must run before the consumer branch commit step."
-        )
+        assert build_index < commit_index, "Build cockpit SPA must run before the consumer branch commit step."
 
         vitest_steps = [
             (index, step)
             for index, step in enumerate(steps)
-            if "npm test" in str(step.get("run", ""))
-            and step.get("working-directory") == "serve/cockpit/web"
+            if "npm test" in str(step.get("run", "")) and step.get("working-directory") == "serve/cockpit/web"
         ]
         assert vitest_steps, (
-            "sync-to-main must run Vitest (`npm test`) inside serve/cockpit/web "
-            "before the consumer branch commit."
+            "sync-to-main must run Vitest (`npm test`) inside serve/cockpit/web before the consumer branch commit."
         )
         assert all(index < commit_index for index, _ in vitest_steps), (
             "All cockpit Vitest steps must run before the consumer branch commit step."
@@ -91,8 +87,7 @@ class TestFromAC_CockpitDeliveryGateWorkflow:
         cockpit_e2e_steps = [
             (index, step)
             for index, step in enumerate(steps)
-            if "npm run test:e2e" in str(step.get("run", ""))
-            and step.get("working-directory") == "serve/cockpit/web"
+            if "npm run test:e2e" in str(step.get("run", "")) and step.get("working-directory") == "serve/cockpit/web"
         ]
         assert cockpit_e2e_steps, (
             "sync-to-main must run cockpit Playwright E2E (`npm run test:e2e`) in "
@@ -119,10 +114,7 @@ class TestFromAC_CockpitDeliveryGateWorkflow:
             str(step.get("name", ""))
             for step in steps
             if step.get("working-directory") == "serve/cockpit/web"
-            and (
-                "npm test" in str(step.get("run", ""))
-                or "npm run test:e2e" in str(step.get("run", ""))
-            )
+            and ("npm test" in str(step.get("run", "")) or "npm run test:e2e" in str(step.get("run", "")))
         }
         gated_step_names = sorted(explicitly_gated | dynamic_cockpit_test_steps)
 
@@ -170,9 +162,7 @@ class TestFromAC_CockpitPackagingShape:
 
         build_index = _step_index_by_name(steps, "Build cockpit SPA")
         assert_index = _step_index_by_name(steps, "Assert SPA bundle exists")
-        assert build_index < assert_index, (
-            "Assert SPA bundle exists must run after Build cockpit SPA."
-        )
+        assert build_index < assert_index, "Assert SPA bundle exists must run after Build cockpit SPA."
 
         assert_step = _step_by_name(steps, "Assert SPA bundle exists")
         assert "serve/cockpit/dist/index.html" in str(assert_step.get("run", "")), (

@@ -138,9 +138,7 @@ class TestFromAC_SessionAgentField:
         assert task_sessions, "Expected a running session for task 2"
         _ = task_sessions[-1].agent  # AttributeError if field absent
 
-    def test_agent_equals_engine_agent_name_from_claim(
-        self, engine: KanbanEngine, board: Path
-    ) -> None:
+    def test_agent_equals_engine_agent_name_from_claim(self, engine: KanbanEngine, board: Path) -> None:
         """session.agent equals the agent_name stored in the claim event's detail field.
 
         AC-C42: engine stores agent_name as the claim event detail.
@@ -153,9 +151,7 @@ class TestFromAC_SessionAgentField:
 
         # Verify the claim event detail IS the agent name (AC-C42)
         events = _read_activity(board)
-        claim_events = [
-            e for e in events if e.get("action") == "claim" and e.get("task_id") == 1
-        ]
+        claim_events = [e for e in events if e.get("action") == "claim" and e.get("task_id") == 1]
         assert claim_events, "Expected a claim event for task 1"
         assert claim_events[-1].get("detail") == expected_agent, (
             f"claim event detail must equal engine agent_name {expected_agent!r}; "
@@ -167,13 +163,10 @@ class TestFromAC_SessionAgentField:
         task_sessions = [s for s in sessions if s.task_id == 1]
         assert task_sessions, "Expected session for task 1"
         assert task_sessions[-1].agent == expected_agent, (  # type: ignore[attr-defined]
-            f"session.agent must equal the claim event detail {expected_agent!r}; "
-            f"got {task_sessions[-1].agent!r}"  # type: ignore[attr-defined]
+            f"session.agent must equal the claim event detail {expected_agent!r}; got {task_sessions[-1].agent!r}"  # type: ignore[attr-defined]
         )
 
-    def test_agent_derives_from_claim_detail_not_actor(
-        self, engine: KanbanEngine, board: Path
-    ) -> None:
+    def test_agent_derives_from_claim_detail_not_actor(self, engine: KanbanEngine, board: Path) -> None:
         """session.agent comes from claim event `detail`, not from a hypothetical `actor` field.
 
         This guards against using the wrong source for agent name derivation.
@@ -182,14 +175,11 @@ class TestFromAC_SessionAgentField:
         """
         engine.claim_task("1")
         events = _read_activity(board)
-        claim_events = [
-            e for e in events if e.get("action") == "claim" and e.get("task_id") == 1
-        ]
+        claim_events = [e for e in events if e.get("action") == "claim" and e.get("task_id") == 1]
         assert claim_events, "Expected a claim event for task 1"
         # Engine-emitted events must NOT have an 'actor' field
         assert "actor" not in claim_events[-1], (
-            "Engine claim events must not include an 'actor' field; "
-            "agent name lives in 'detail'"
+            "Engine claim events must not include an 'actor' field; agent name lives in 'detail'"
         )
 
         sessions = engine.list_sessions(filter="all")
@@ -212,9 +202,7 @@ class TestFromAC_SessionAgentField:
         """Blocked session (end_work outcome=block) exposes the correct agent name."""
         expected_agent = engine.agent_name
         engine.claim_task("1")
-        engine.end_work(
-            "1", note="blocked", outcome="block", block_reason="dep missing"
-        )
+        engine.end_work("1", note="blocked", outcome="block", block_reason="dep missing")
         sessions = engine.list_sessions(filter="blocked-or-rejected")
         task_sessions = [s for s in sessions if s.task_id == 1]
         assert task_sessions, "Expected blocked session for task 1"
@@ -230,9 +218,7 @@ class TestFromAC_SessionAgentField:
         assert task_sessions, "Expected rejected session for task 1"
         assert task_sessions[-1].agent == expected_agent  # type: ignore[attr-defined]
 
-    def test_reclaim_second_session_has_correct_agent(
-        self, engine: KanbanEngine
-    ) -> None:
+    def test_reclaim_second_session_has_correct_agent(self, engine: KanbanEngine) -> None:
         """After re-claim, the second session's agent comes from the second claim event."""
         engine.claim_task("1")
         engine.release_task("1")
@@ -283,9 +269,7 @@ class TestFromAC_SessionDurationField:
         assert task_sessions, "Expected active session for task 2"
         _ = task_sessions[-1].duration  # AttributeError if field absent
 
-    def test_closed_session_duration_is_non_negative_float(
-        self, engine: KanbanEngine
-    ) -> None:
+    def test_closed_session_duration_is_non_negative_float(self, engine: KanbanEngine) -> None:
         """Closed session has duration >= 0.0."""
         engine.claim_task("1")
         engine.end_work("1", note="done", outcome="success")
@@ -303,9 +287,7 @@ class TestFromAC_SessionDurationField:
         task_sessions = [s for s in sessions if s.task_id == 2]
         assert task_sessions, "Expected active session for task 2"
         duration = task_sessions[-1].duration  # type: ignore[attr-defined]
-        assert duration is None, (
-            f"Open session must have duration=None; got {duration!r}"
-        )
+        assert duration is None, f"Open session must have duration=None; got {duration!r}"
 
     def test_released_session_has_duration(self, engine: KanbanEngine) -> None:
         """Released session (release_task) has duration set (non-None)."""
@@ -332,9 +314,7 @@ class TestFromAC_WorkSessionExport:
     the WorkSession field contract (agent + duration).
     """
 
-    def test_list_sessions_result_compatible_with_worksession_agent_field(
-        self, engine: KanbanEngine
-    ) -> None:
+    def test_list_sessions_result_compatible_with_worksession_agent_field(self, engine: KanbanEngine) -> None:
         """list_sessions() returns objects with an `agent` field, compatible with WorkSession."""
         engine.claim_task("1")
         sessions = engine.list_sessions(filter="all")
@@ -345,9 +325,7 @@ class TestFromAC_WorkSessionExport:
             "list_sessions() must return objects with `agent` field (WorkSession contract)"
         )
 
-    def test_list_sessions_result_compatible_with_worksession_duration_field(
-        self, engine: KanbanEngine
-    ) -> None:
+    def test_list_sessions_result_compatible_with_worksession_duration_field(self, engine: KanbanEngine) -> None:
         """list_sessions() returns objects with a `duration` field, compatible with WorkSession."""
         engine.claim_task("1")
         sessions = engine.list_sessions(filter="all")
@@ -358,9 +336,7 @@ class TestFromAC_WorkSessionExport:
             "list_sessions() must return objects with `duration` field (WorkSession contract)"
         )
 
-    def test_ac_c43_filter_active_excludes_session_with_agent_field_access(
-        self, engine: KanbanEngine
-    ) -> None:
+    def test_ac_c43_filter_active_excludes_session_with_agent_field_access(self, engine: KanbanEngine) -> None:
         """Active filter excludes closed sessions; remaining sessions all have agent field."""
         engine.claim_task("1")
         engine.end_work("1", note="done", outcome="success")
@@ -368,7 +344,5 @@ class TestFromAC_WorkSessionExport:
         sessions = engine.list_sessions(filter="active")
         assert sessions, "Expected at least one active session"
         for s in sessions:
-            assert hasattr(s, "agent"), (
-                "Every session in active filter must have agent field"
-            )
+            assert hasattr(s, "agent"), "Every session in active filter must have agent field"
             assert s.agent is not None, "Running session agent must not be None"  # type: ignore[attr-defined]

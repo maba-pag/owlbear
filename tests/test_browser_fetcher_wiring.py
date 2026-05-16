@@ -148,9 +148,7 @@ class TestFromAC_ContentFetcherInjection:
     """
 
     @pytest.fixture(autouse=True)
-    def _patch_home(
-        self, tmp_path: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def _patch_home(self, tmp_path: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
         monkeypatch.delenv("OWLBEAR_LLM_API_KEY", raising=False)
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
@@ -172,9 +170,7 @@ class TestFromAC_ContentFetcherInjection:
 
         orchestrator_cls.assert_called_once()
         _, kwargs = orchestrator_cls.call_args
-        assert "content_fetcher" in kwargs, (
-            "RefreshOrchestrator must receive content_fetcher= kwarg from app_lifespan"
-        )
+        assert "content_fetcher" in kwargs, "RefreshOrchestrator must receive content_fetcher= kwarg from app_lifespan"
         assert kwargs["content_fetcher"] is not None, "content_fetcher must not be None"
 
     @pytest.mark.asyncio
@@ -228,8 +224,7 @@ class TestFromAC_ContentFetcherInjection:
         # The wired content_fetcher must satisfy the ContentFetcher protocol
         actual_fetcher = kwargs.get("content_fetcher")
         assert isinstance(actual_fetcher, ContentFetcher), (
-            f"content_fetcher passed to RefreshOrchestrator must satisfy ContentFetcher, "
-            f"got {type(actual_fetcher)}"
+            f"content_fetcher passed to RefreshOrchestrator must satisfy ContentFetcher, got {type(actual_fetcher)}"
         )
 
 
@@ -247,9 +242,7 @@ class TestFromAC_GraphStoreInjection:
     """
 
     @pytest.fixture(autouse=True)
-    def _patch_home(
-        self, tmp_path: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def _patch_home(self, tmp_path: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
         monkeypatch.delenv("OWLBEAR_LLM_API_KEY", raising=False)
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
@@ -301,9 +294,7 @@ class TestFromAC_FetchMethodSelection:
         Currently FAILS: function does not exist.
         """
         fn = getattr(server_module, "select_content_fetcher", None)
-        assert fn is not None, (
-            "owlbear_mcp_knowledge.server must expose select_content_fetcher"
-        )
+        assert fn is not None, "owlbear_mcp_knowledge.server must expose select_content_fetcher"
         assert callable(fn), "select_content_fetcher must be callable"
 
     def test_fetch_method_http_selects_httpx_content_fetcher(self) -> None:
@@ -326,9 +317,7 @@ class TestFromAC_FetchMethodSelection:
         select_fn = getattr(server_module, "select_content_fetcher", None)
         assert select_fn is not None, "select_content_fetcher not found — see AC3"
         fetcher = select_fn("browser")
-        assert fetcher is not None, (
-            "select_content_fetcher('browser') must not return None"
-        )
+        assert fetcher is not None, "select_content_fetcher('browser') must not return None"
         assert isinstance(fetcher, ContentFetcher), (
             f"'browser' fetch_method must map to a ContentFetcher impl, got {type(fetcher)}"
         )
@@ -369,9 +358,7 @@ class TestFromAC_RefreshWithoutInterDocBuilder:
     """
 
     @pytest.fixture(autouse=True)
-    def _patch_home(
-        self, tmp_path: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def _patch_home(self, tmp_path: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
         monkeypatch.delenv("OWLBEAR_LLM_API_KEY", raising=False)
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
@@ -403,9 +390,7 @@ class TestFromAC_RefreshWithoutInterDocBuilder:
         # Exclude both KnowledgeSourceStore and IngestPipeline so our explicit
         # controlled mocks are not shadowed by the generic heavy-patch stubs.
         patches_filtered = [
-            p
-            for p in patches
-            if "KnowledgeSourceStore" not in str(p) and "IngestPipeline" not in str(p)
+            p for p in patches if "KnowledgeSourceStore" not in str(p) and "IngestPipeline" not in str(p)
         ]
 
         with (
@@ -582,9 +567,7 @@ class TestFromAC_RefreshSourceFetchMethodIntegration:
         # Patch select_content_fetcher with side_effect so each call dispatches
         # to the right mock based on fetch_method.
         # FAILS now: AttributeError (function not in server module).
-        with patch(
-            "owlbear_mcp_knowledge.server.select_content_fetcher", side_effect=_select
-        ):
+        with patch("owlbear_mcp_knowledge.server.select_content_fetcher", side_effect=_select):
             await refresh_source(mcp_http, source_id=source_http.id)
             await refresh_source(mcp_browser, source_id=source_browser.id)
 
@@ -706,9 +689,7 @@ class TestFromAC_InterDocBuilderNoneWiring:
     """
 
     @pytest.fixture(autouse=True)
-    def _patch_home(
-        self, tmp_path: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def _patch_home(self, tmp_path: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch) -> None:
         # Redirect home to avoid touching real user data; no env var clearing.
         monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
 
@@ -734,8 +715,7 @@ class TestFromAC_InterDocBuilderNoneWiring:
         orchestrator_cls.assert_called_once()
         _, kwargs = orchestrator_cls.call_args
         assert "inter_doc_builder" in kwargs, (
-            "RefreshOrchestrator must receive inter_doc_builder= kwarg from app_lifespan; "
-            "kwarg was absent"
+            "RefreshOrchestrator must receive inter_doc_builder= kwarg from app_lifespan; kwarg was absent"
         )
         assert kwargs["inter_doc_builder"] is None, (
             f"inter_doc_builder kwarg must be None in app_lifespan wiring, "
@@ -776,16 +756,13 @@ class TestFromAC_InterDocBuilderNoneWiring:
         mcp_ctx = MagicMock()
         mcp_ctx.request_context.lifespan_context = app_ctx
 
-        with patch(
-            "owlbear_mcp_knowledge.server.RefreshOrchestrator", orchestrator_cls
-        ):
+        with patch("owlbear_mcp_knowledge.server.RefreshOrchestrator", orchestrator_cls):
             await refresh_source(mcp_ctx, source_id=source.id)
 
         orchestrator_cls.assert_called_once()
         _, kwargs = orchestrator_cls.call_args
         assert "inter_doc_builder" in kwargs, (
-            "RefreshOrchestrator must receive inter_doc_builder= kwarg from refresh_source; "
-            "kwarg was absent"
+            "RefreshOrchestrator must receive inter_doc_builder= kwarg from refresh_source; kwarg was absent"
         )
         assert kwargs["inter_doc_builder"] is None, (
             f"inter_doc_builder kwarg must be None in refresh_source wiring, "

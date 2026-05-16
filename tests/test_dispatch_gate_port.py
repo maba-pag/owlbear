@@ -90,9 +90,7 @@ class TestFromAC_PickTasksTDDGate:
     must be excluded from pick_tasks output (gated before sort/wave assembly).
     """
 
-    def test_tdd_gate_excludes_in_progress_without_notes_section(
-        self, tmp_path: Path
-    ) -> None:
+    def test_tdd_gate_excludes_in_progress_without_notes_section(self, tmp_path: Path) -> None:
         """Error path: in-progress task with bullets but no ## Test-Writer Notes → excluded.
 
         Currently: pick_tasks includes it (no TDD gate applied).
@@ -110,13 +108,9 @@ class TestFromAC_PickTasksTDDGate:
 
         result = view.pick_tasks()
 
-        assert 1 not in _all_task_ids(result), (
-            "pick_tasks must exclude in-progress tasks without ## Test-Writer Notes"
-        )
+        assert 1 not in _all_task_ids(result), "pick_tasks must exclude in-progress tasks without ## Test-Writer Notes"
 
-    def test_tdd_gate_excludes_in_progress_with_empty_body(
-        self, tmp_path: Path
-    ) -> None:
+    def test_tdd_gate_excludes_in_progress_with_empty_body(self, tmp_path: Path) -> None:
         """Boundary: in-progress task with empty body → excluded by TDD gate.
 
         Currently: pick_tasks includes it.
@@ -134,13 +128,9 @@ class TestFromAC_PickTasksTDDGate:
 
         result = view.pick_tasks()
 
-        assert 2 not in _all_task_ids(result), (
-            "pick_tasks must exclude in-progress tasks with no body (fails TDD gate)"
-        )
+        assert 2 not in _all_task_ids(result), "pick_tasks must exclude in-progress tasks with no body (fails TDD gate)"
 
-    def test_tdd_gate_passes_in_progress_with_notes_section(
-        self, tmp_path: Path
-    ) -> None:
+    def test_tdd_gate_passes_in_progress_with_notes_section(self, tmp_path: Path) -> None:
         """Happy path: in-progress WITH ## Test-Writer Notes → included.
         Gated task (no notes) in same board must not appear.
 
@@ -168,12 +158,8 @@ class TestFromAC_PickTasksTDDGate:
         result = view.pick_tasks()
 
         all_ids = _all_task_ids(result)
-        assert 3 in all_ids, (
-            "in-progress task WITH ## Test-Writer Notes must be included in waves"
-        )
-        assert 4 not in all_ids, (
-            "in-progress task without ## Test-Writer Notes must be excluded by TDD gate"
-        )
+        assert 3 in all_ids, "in-progress task WITH ## Test-Writer Notes must be included in waves"
+        assert 4 not in all_ids, "in-progress task without ## Test-Writer Notes must be excluded by TDD gate"
 
     def test_tdd_gate_non_impl_tag_bypasses_tdd_gate(self, tmp_path: Path) -> None:
         """Edge: in-progress + non-impl tag (research) without notes → passes TDD gate.
@@ -204,12 +190,8 @@ class TestFromAC_PickTasksTDDGate:
         result = view.pick_tasks()
 
         all_ids = _all_task_ids(result)
-        assert 5 in all_ids, (
-            "in-progress task with non-impl tag (research) must be included in waves"
-        )
-        assert 6 not in all_ids, (
-            "in-progress task without notes or non-impl tag must be excluded"
-        )
+        assert 5 in all_ids, "in-progress task with non-impl tag (research) must be included in waves"
+        assert 6 not in all_ids, "in-progress task without notes or non-impl tag must be excluded"
 
     def test_tdd_gate_only_applies_to_in_progress_status(self, tmp_path: Path) -> None:
         """Edge: non-in-progress task (todo) without ## Test-Writer Notes is NOT subject
@@ -253,9 +235,7 @@ class TestFromAC_PickTasksClarityGate:
     numbered AC line must be excluded from pick_tasks output.
     """
 
-    def test_clarity_gate_excludes_todo_with_prose_only_body(
-        self, tmp_path: Path
-    ) -> None:
+    def test_clarity_gate_excludes_todo_with_prose_only_body(self, tmp_path: Path) -> None:
         """Error path: todo task with prose-only body (no bullets) → excluded.
 
         Currently: pick_tasks includes it.
@@ -273,13 +253,9 @@ class TestFromAC_PickTasksClarityGate:
 
         result = view.pick_tasks()
 
-        assert 10 not in _all_task_ids(result), (
-            "pick_tasks must exclude todo tasks with no bullet/numbered AC line"
-        )
+        assert 10 not in _all_task_ids(result), "pick_tasks must exclude todo tasks with no bullet/numbered AC line"
 
-    def test_clarity_gate_excludes_done_task_without_bullets(
-        self, tmp_path: Path
-    ) -> None:
+    def test_clarity_gate_excludes_done_task_without_bullets(self, tmp_path: Path) -> None:
         """Error path: done task with prose-only body → excluded.
 
         done is in _CLARITY_STATUSES; tasks without bullets must be excluded.
@@ -298,9 +274,7 @@ class TestFromAC_PickTasksClarityGate:
 
         result = view.pick_tasks()
 
-        assert 11 not in _all_task_ids(result), (
-            "pick_tasks must exclude done tasks with no bullet/numbered AC line"
-        )
+        assert 11 not in _all_task_ids(result), "pick_tasks must exclude done tasks with no bullet/numbered AC line"
 
     def test_clarity_gate_passes_todo_with_bullet_ac(self, tmp_path: Path) -> None:
         """Happy path: todo task with bullet AC line → included.
@@ -328,9 +302,7 @@ class TestFromAC_PickTasksClarityGate:
 
         result = view.pick_tasks()
 
-        assert 13 not in _all_task_ids(result), (
-            "todo task without bullets must be excluded by clarity gate"
-        )
+        assert 13 not in _all_task_ids(result), "todo task without bullets must be excluded by clarity gate"
 
     def test_clarity_gate_backlog_not_subject_to_gate(self, tmp_path: Path) -> None:
         """Edge: backlog task without bullets → passes clarity gate (not in _CLARITY_STATUSES).
@@ -389,12 +361,8 @@ class TestFromAC_PickTasksClarityGate:
         result = view.pick_tasks()
 
         all_ids = _all_task_ids(result)
-        assert 16 in all_ids, (
-            "todo task with numbered list items must be included in waves (clarity gate passes)"
-        )
-        assert 17 not in all_ids, (
-            "todo task without any list items must be excluded by clarity gate"
-        )
+        assert 16 in all_ids, "todo task with numbered list items must be included in waves (clarity gate passes)"
+        assert 17 not in all_ids, "todo task without any list items must be excluded by clarity gate"
 
 
 # ---------------------------------------------------------------------------
@@ -410,9 +378,7 @@ class TestFromAC_GateImportedFromDispatch:
     Test fails now because pick_tasks does not call dispatch._passes_tdd_gate.
     """
 
-    def test_tdd_gate_predicate_from_dispatch_controls_pick_tasks(
-        self, tmp_path: Path
-    ) -> None:
+    def test_tdd_gate_predicate_from_dispatch_controls_pick_tasks(self, tmp_path: Path) -> None:
         """Patching dispatch._passes_tdd_gate to always False must exclude a
         normally-passing in-progress task from pick_tasks.
 
@@ -436,8 +402,7 @@ class TestFromAC_GateImportedFromDispatch:
             result = view.pick_tasks()
 
         assert 1 not in _all_task_ids(result), (
-            "pick_tasks must use _passes_tdd_gate from dispatch.py; "
-            "patching the predicate must gate the task out"
+            "pick_tasks must use _passes_tdd_gate from dispatch.py; patching the predicate must gate the task out"
         )
 
 
@@ -472,9 +437,7 @@ class TestFromAC_WaveAssemblyRegressionGuard:
     waves as before.
     """
 
-    def test_gated_task_excluded_wave_assembly_slot_unaffected(
-        self, tmp_path: Path
-    ) -> None:
+    def test_gated_task_excluded_wave_assembly_slot_unaffected(self, tmp_path: Path) -> None:
         """Gated task must not consume a wave slot; passing task must still appear.
 
         Currently: gated in-progress task (id=2) appears → assertion on id=2 FAILS.
@@ -543,16 +506,12 @@ class TestFromAC_WaveAssemblyRegressionGuard:
 
         result = view.pick_tasks()
 
-        assert 3 not in _all_task_ids(result), (
-            "gated in-progress task must not appear in waves"
-        )
+        assert 3 not in _all_task_ids(result), "gated in-progress task must not appear in waves"
         all_ids = _all_task_ids(result)
         assert 1 in all_ids, "critical todo must appear in waves"
         assert 2 in all_ids, "someday todo must appear in waves"
         # Verify wave 0 contains id=1 (critical) before id=2 (someday) — sort unchanged
-        wave0_ids = (
-            [entry.id for entry in result.waves[0].tasks] if result.waves else []
-        )
+        wave0_ids = [entry.id for entry in result.waves[0].tasks] if result.waves else []
         assert wave0_ids.index(1) < wave0_ids.index(2), (
             "critical task (id=1) must sort before someday task (id=2) in wave 0"
         )
@@ -572,9 +531,7 @@ class TestFromAC_ClarityGateDelegation:
     excluded — the assertion then fails, catching the regression.
     """
 
-    def test_clarity_gate_predicate_from_dispatch_controls_pick_tasks(
-        self, tmp_path: Path
-    ) -> None:
+    def test_clarity_gate_predicate_from_dispatch_controls_pick_tasks(self, tmp_path: Path) -> None:
         """Patching dispatch._passes_clarity_gate to always True must include a
         normally-clarity-gated prose-only todo task in pick_tasks output.
 
@@ -626,9 +583,7 @@ class TestFromAC_ClarityGateStatusCoverage:
     when their bodies contain no bullet or numbered list items.
     """
 
-    def test_clarity_gate_excludes_review_task_with_prose_only_body(
-        self, tmp_path: Path
-    ) -> None:
+    def test_clarity_gate_excludes_review_task_with_prose_only_body(self, tmp_path: Path) -> None:
         """Error path: review task with prose-only body → excluded by clarity gate.
 
         review is in _CLARITY_STATUSES; tasks without bullets must be excluded.
@@ -648,13 +603,9 @@ class TestFromAC_ClarityGateStatusCoverage:
 
         result = view.pick_tasks()
 
-        assert 31 not in _all_task_ids(result), (
-            "pick_tasks must exclude review tasks with no bullet/numbered AC line"
-        )
+        assert 31 not in _all_task_ids(result), "pick_tasks must exclude review tasks with no bullet/numbered AC line"
 
-    def test_clarity_gate_excludes_docs_task_with_prose_only_body(
-        self, tmp_path: Path
-    ) -> None:
+    def test_clarity_gate_excludes_docs_task_with_prose_only_body(self, tmp_path: Path) -> None:
         """Error path: docs task with prose-only body → excluded by clarity gate.
 
         docs is in _CLARITY_STATUSES; uses a board config that includes 'docs'
@@ -672,13 +623,9 @@ class TestFromAC_ClarityGateStatusCoverage:
 
         result = view.pick_tasks()
 
-        assert 32 not in _all_task_ids(result), (
-            "pick_tasks must exclude docs tasks with no bullet/numbered AC line"
-        )
+        assert 32 not in _all_task_ids(result), "pick_tasks must exclude docs tasks with no bullet/numbered AC line"
 
-    def test_clarity_gate_passes_review_task_with_bullet_body(
-        self, tmp_path: Path
-    ) -> None:
+    def test_clarity_gate_passes_review_task_with_bullet_body(self, tmp_path: Path) -> None:
         """Happy path: review task WITH bullets → passes clarity gate.
 
         Alongside a prose-only review task (id=34) that must be excluded.
@@ -705,12 +652,8 @@ class TestFromAC_ClarityGateStatusCoverage:
         result = view.pick_tasks()
 
         all_ids = _all_task_ids(result)
-        assert 33 in all_ids, (
-            "review task WITH bullet body must be included in waves (clarity gate passes)"
-        )
-        assert 34 not in all_ids, (
-            "review task without bullets must be excluded by clarity gate"
-        )
+        assert 33 in all_ids, "review task WITH bullet body must be included in waves (clarity gate passes)"
+        assert 34 not in all_ids, "review task without bullets must be excluded by clarity gate"
 
 
 # ---------------------------------------------------------------------------
@@ -726,9 +669,7 @@ def _make_board_incompatible_buckets(base_dir: Path) -> Path:
     """Create a board where builder and reviewer agent types are mutually incompatible."""
     kanban_dir = base_dir / "board"
     kanban_dir.mkdir(parents=True, exist_ok=True)
-    (kanban_dir / "config.yml").write_text(
-        _BASE_CONFIG_INCOMPATIBLE_BUCKETS, encoding="utf-8"
-    )
+    (kanban_dir / "config.yml").write_text(_BASE_CONFIG_INCOMPATIBLE_BUCKETS, encoding="utf-8")
     (kanban_dir / "tasks").mkdir(exist_ok=True)
     (kanban_dir / "archive").mkdir(exist_ok=True)
     return kanban_dir
@@ -744,9 +685,7 @@ class TestFromAC_BucketCompatibilityRegressionGuard:
     an empty proof.
     """
 
-    def test_incompatible_agent_buckets_go_to_different_waves(
-        self, tmp_path: Path
-    ) -> None:
+    def test_incompatible_agent_buckets_go_to_different_waves(self, tmp_path: Path) -> None:
         """Two tasks mapped to incompatible agent buckets AND with clarity-compliant
         bodies must be placed in separate waves by pick_tasks.
 
@@ -783,9 +722,7 @@ class TestFromAC_BucketCompatibilityRegressionGuard:
 
         all_ids = _all_task_ids(result)
         assert 40 in all_ids, "todo task (builder bucket) must clear gates and appear"
-        assert 41 in all_ids, (
-            "review task (reviewer bucket) must clear gates and appear"
-        )
+        assert 41 in all_ids, "review task (reviewer bucket) must clear gates and appear"
 
         wave_sets = [{entry.id for entry in wave.tasks} for wave in result.waves]
         task_40_wave = next((i for i, ids in enumerate(wave_sets) if 40 in ids), None)
@@ -815,9 +752,7 @@ class TestFromAC_PostRehydrateArchivedGuard:
     (archived ∉ _CLARITY_STATUSES, archived ≠ in-progress) and is dispatched.
     """
 
-    def test_archived_task_returned_by_show_task_is_skipped(
-        self, tmp_path: Path
-    ) -> None:
+    def test_archived_task_returned_by_show_task_is_skipped(self, tmp_path: Path) -> None:
         """Patching show_task() to return status='archived' for a task that
         passed the active-list filter must cause that task to be absent from
         all waves.
@@ -889,9 +824,7 @@ class TestFromAC_InProgressClarityIsolation:
     causes this task to pass clarity and appear in waves → assertion FAILS.
     """
 
-    def test_in_progress_passes_tdd_but_fails_clarity_is_excluded(
-        self, tmp_path: Path
-    ) -> None:
+    def test_in_progress_passes_tdd_but_fails_clarity_is_excluded(self, tmp_path: Path) -> None:
         """in-progress task WITH ## Test-Writer Notes (passes TDD gate) but
         WITHOUT any bullet or numbered list line (fails clarity gate) must not
         appear in any wave.

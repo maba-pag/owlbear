@@ -79,9 +79,7 @@ def _make_view(base_dir: Path) -> tuple[AgentView, KanbanEngine]:
 class TestFromAC_CreateTaskAcProofBundle:
     """AC1: create_task accepts ac and proof_bundle; returned task reflects provided values."""
 
-    def test_create_task_ac_and_proof_bundle_in_returned_task(
-        self, tmp_path: Path
-    ) -> None:
+    def test_create_task_ac_and_proof_bundle_in_returned_task(self, tmp_path: Path) -> None:
         """AC1 happy: both ac and proof_bundle appear in the returned SingleTaskResponse."""
         view, _ = _make_view(tmp_path)
         result = view.create_task(title="T", ac=["x"], proof_bundle="behavioral")
@@ -102,9 +100,7 @@ class TestFromAC_CreateTaskAcProofBundle:
         assert result.task.proof_bundle == "smoke"
         assert result.task.ac == []
 
-    def test_create_task_multiple_ac_items_all_preserved(
-        self, tmp_path: Path
-    ) -> None:
+    def test_create_task_multiple_ac_items_all_preserved(self, tmp_path: Path) -> None:
         """AC1 boundary: all ac items are preserved in the returned task."""
         view, _ = _make_view(tmp_path)
         ac_items = ["AC-1: do X", "AC-2: do Y", "AC-3: do Z"]
@@ -117,14 +113,10 @@ class TestFromAC_CreateTaskAcProofBundle:
         result = view.create_task(title="T", ac=[])
         assert result.task.ac == []
 
-    def test_create_task_ac_and_proof_bundle_persisted_on_disk(
-        self, tmp_path: Path
-    ) -> None:
+    def test_create_task_ac_and_proof_bundle_persisted_on_disk(self, tmp_path: Path) -> None:
         """AC1 edge: ac and proof_bundle are persisted; re-reading via engine returns same values."""
         view, engine = _make_view(tmp_path)
-        result = view.create_task(
-            title="T", ac=["persisted-item"], proof_bundle="behavioral"
-        )
+        result = view.create_task(title="T", ac=["persisted-item"], proof_bundle="behavioral")
         task_id = result.id
         stored = engine.show_task(str(task_id))
         assert stored.ac == ["persisted-item"]
@@ -139,9 +131,7 @@ class TestFromAC_CreateTaskAcProofBundle:
 class TestFromAC_EditTaskAcProofBundle:
     """AC2: edit_task accepts ac, add_ac, remove_ac, proof_bundle; returned task reflects edits."""
 
-    def _seed(
-        self, tmp_path: Path, **engine_kwargs: object
-    ) -> tuple[AgentView, KanbanEngine, int]:
+    def _seed(self, tmp_path: Path, **engine_kwargs: object) -> tuple[AgentView, KanbanEngine, int]:
         """Create a task directly via engine (bypasses AgentView.create_task). Return view, engine, id."""
         view, engine = _make_view(tmp_path)
         task = engine.create_task(title="Seed", **engine_kwargs)  # type: ignore[arg-type]
@@ -172,18 +162,14 @@ class TestFromAC_EditTaskAcProofBundle:
         assert "x" not in result.task.ac
         assert "y" in result.task.ac
 
-    def test_edit_task_add_ac_and_proof_bundle_combined(
-        self, tmp_path: Path
-    ) -> None:
+    def test_edit_task_add_ac_and_proof_bundle_combined(self, tmp_path: Path) -> None:
         """AC2 edge: add_ac and proof_bundle can be combined in a single edit call."""
         view, _, task_id = self._seed(tmp_path)
         result = view.edit_task(task_id, add_ac=["z"], proof_bundle="critical")
         assert "z" in result.task.ac
         assert result.task.proof_bundle == "critical"
 
-    def test_edit_task_proof_bundle_overwrites_previous_value(
-        self, tmp_path: Path
-    ) -> None:
+    def test_edit_task_proof_bundle_overwrites_previous_value(self, tmp_path: Path) -> None:
         """AC2 boundary: setting proof_bundle again overwrites the previous value."""
         view, _, task_id = self._seed(tmp_path, proof_bundle="smoke")
         result = view.edit_task(task_id, proof_bundle="behavioral")
@@ -198,14 +184,10 @@ class TestFromAC_EditTaskAcProofBundle:
 class TestFromAC_ShowTaskAcProofBundleBackstop:
     """AC3: show_task response includes ac and proof_bundle set via AgentView.create_task."""
 
-    def test_show_task_reflects_ac_and_proof_bundle_from_create(
-        self, tmp_path: Path
-    ) -> None:
+    def test_show_task_reflects_ac_and_proof_bundle_from_create(self, tmp_path: Path) -> None:
         """AC3: create_task with ac/proof_bundle → show_task returns same values."""
         view, _ = _make_view(tmp_path)
-        created = view.create_task(
-            title="T", ac=["AC1 line"], proof_bundle="behavioral"
-        )
+        created = view.create_task(title="T", ac=["AC1 line"], proof_bundle="behavioral")
         shown = view.show_task(created.id)
         assert shown.ac == ["AC1 line"]
         assert shown.proof_bundle == "behavioral"

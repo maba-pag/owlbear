@@ -103,9 +103,7 @@ class TestFromAC_Mode6CollisionGuard:
 
         assert outcome.action == "quarantined"
 
-    def test_ac1_collision_corrupt_file_moved_to_quarantine_dir(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac1_collision_corrupt_file_moved_to_quarantine_dir(self, tmp_path: Path) -> None:
         """AC-1: corrupt file physically ends up in quarantine/ after collision guard fires."""
         kanban_dir = _make_board(tmp_path)
         config = load_config(kanban_dir)
@@ -116,9 +114,7 @@ class TestFromAC_Mode6CollisionGuard:
 
         attempt_repair(corrupt, ERR_CORRUPT_ID_FILENAME_MISMATCH, config)
 
-        assert not corrupt.exists(), (
-            "Corrupt file must be removed from tasks/ after quarantine"
-        )
+        assert not corrupt.exists(), "Corrupt file must be removed from tasks/ after quarantine"
         quarantine_file = kanban_dir / "quarantine" / "999-wrong.md"
         assert quarantine_file.exists(), "Corrupt file must be present in quarantine/"
 
@@ -166,9 +162,7 @@ class TestFromAC_Mode6CollisionGuard:
 
     # AC-3 -------------------------------------------------------------------
 
-    def test_ac3_existing_destination_file_content_untouched(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac3_existing_destination_file_content_untouched(self, tmp_path: Path) -> None:
         """AC-3: valid destination file is byte-for-byte identical after collision guard."""
         kanban_dir = _make_board(tmp_path)
         config = load_config(kanban_dir)
@@ -182,9 +176,7 @@ class TestFromAC_Mode6CollisionGuard:
 
         attempt_repair(corrupt, ERR_CORRUPT_ID_FILENAME_MISMATCH, config)
 
-        assert valid_path.exists(), (
-            "Valid destination file must still exist after collision guard"
-        )
+        assert valid_path.exists(), "Valid destination file must still exist after collision guard"
         assert valid_path.read_text(encoding="utf-8") == original_content, (
             "Valid file content must be unchanged after collision guard fires"
         )
@@ -214,9 +206,7 @@ class TestFromAC_Mode6CollisionGuard:
         attempt_repair(corrupt, ERR_CORRUPT_ID_FILENAME_MISMATCH, config)
 
         renamed = kanban_dir / "tasks" / "42-my-task.md"
-        assert renamed.exists(), (
-            "Renamed file must exist in tasks/ after happy-path mode-6 repair"
-        )
+        assert renamed.exists(), "Renamed file must exist in tasks/ after happy-path mode-6 repair"
 
     def test_ac4_happy_path_original_file_gone(self, tmp_path: Path) -> None:
         """AC-4: after successful mode-6 rename, original corrupt file no longer exists."""
@@ -228,13 +218,9 @@ class TestFromAC_Mode6CollisionGuard:
 
         attempt_repair(corrupt, ERR_CORRUPT_ID_FILENAME_MISMATCH, config)
 
-        assert not corrupt.exists(), (
-            "Original corrupt file must be gone after happy-path rename"
-        )
+        assert not corrupt.exists(), "Original corrupt file must be gone after happy-path rename"
 
-    def test_ac4_happy_path_outcome_task_id_is_frontmatter_id(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac4_happy_path_outcome_task_id_is_frontmatter_id(self, tmp_path: Path) -> None:
         """AC-4: RepairOutcome.task_id matches the frontmatter id (42), not the filename (999)."""
         kanban_dir = _make_board(tmp_path)
         config = load_config(kanban_dir)

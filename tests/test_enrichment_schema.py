@@ -64,9 +64,7 @@ def _index_columns(conn: sqlite3.Connection, index_name: str) -> list[str]:
 
 
 def _table_exists(conn: sqlite3.Connection, table: str) -> bool:
-    row = conn.execute(
-        "SELECT count(*) FROM sqlite_master WHERE type='table' AND name=?", (table,)
-    ).fetchone()
+    row = conn.execute("SELECT count(*) FROM sqlite_master WHERE type='table' AND name=?", (table,)).fetchone()
     return row is not None and row[0] > 0
 
 
@@ -84,30 +82,20 @@ class TestFromAC_EnrichmentStateColumn:
 
     def test_chunks_has_enrichment_state_column(self, conn: sqlite3.Connection) -> None:
         cols = _column_names(conn, "chunks")
-        assert "enrichment_state" in cols, (
-            "chunks table missing enrichment_state column"
-        )
+        assert "enrichment_state" in cols, "chunks table missing enrichment_state column"
 
     def test_enrichment_state_is_text_type(self, conn: sqlite3.Connection) -> None:
         info = _column_info(conn, "chunks")
-        assert "enrichment_state" in info, (
-            "chunks table missing enrichment_state column"
-        )
+        assert "enrichment_state" in info, "chunks table missing enrichment_state column"
         assert info["enrichment_state"]["type"].upper() == "TEXT", (
             f"enrichment_state should be TEXT, got {info['enrichment_state']['type']}"
         )
 
-    def test_enrichment_state_default_is_pending(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    def test_enrichment_state_default_is_pending(self, conn: sqlite3.Connection) -> None:
         info = _column_info(conn, "chunks")
-        assert "enrichment_state" in info, (
-            "chunks table missing enrichment_state column"
-        )
+        assert "enrichment_state" in info, "chunks table missing enrichment_state column"
         dflt = info["enrichment_state"]["dflt_value"]
-        assert dflt == "'pending'", (
-            f"enrichment_state default should be 'pending', got {dflt!r}"
-        )
+        assert dflt == "'pending'", f"enrichment_state default should be 'pending', got {dflt!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -121,16 +109,12 @@ class TestFromAC_EnrichmentStateNotConsolidated:
     def test_both_columns_coexist_on_chunks(self, conn: sqlite3.Connection) -> None:
         """Both consolidated (legacy) and enrichment_state (new) must exist together."""
         cols = _column_names(conn, "chunks")
-        assert "consolidated" in cols, (
-            "consolidated column was removed; it must be kept for backwards compat"
-        )
+        assert "consolidated" in cols, "consolidated column was removed; it must be kept for backwards compat"
         assert "enrichment_state" in cols, (
             "enrichment_state column missing — must coexist with consolidated, not replace it"
         )
 
-    def test_enrichment_state_and_consolidated_are_different_columns(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    def test_enrichment_state_and_consolidated_are_different_columns(self, conn: sqlite3.Connection) -> None:
         info = _column_info(conn, "chunks")
         assert "enrichment_state" in info, "enrichment_state column missing"
         assert "consolidated" in info, "consolidated column missing"
@@ -138,16 +122,12 @@ class TestFromAC_EnrichmentStateNotConsolidated:
             "enrichment_state and consolidated share the same column id — they must be distinct"
         )
 
-    def test_enrichment_state_is_text_not_integer(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    def test_enrichment_state_is_text_not_integer(self, conn: sqlite3.Connection) -> None:
         """consolidated is INTEGER; enrichment_state must be TEXT (different type)."""
         info = _column_info(conn, "chunks")
         assert "enrichment_state" in info, "enrichment_state column missing"
         assert "consolidated" in info, "consolidated column missing"
-        assert info["consolidated"]["type"].upper() == "INTEGER", (
-            "consolidated should be INTEGER"
-        )
+        assert info["consolidated"]["type"].upper() == "INTEGER", "consolidated should be INTEGER"
         assert info["enrichment_state"]["type"].upper() == "TEXT", (
             "enrichment_state should be TEXT (not INTEGER like consolidated)"
         )
@@ -190,13 +170,9 @@ class TestFromAC_ReviewedPairsTable:
     """AC4 — reviewed_pairs table exists with entity_name, source_a, source_b."""
 
     def test_reviewed_pairs_table_exists(self, conn: sqlite3.Connection) -> None:
-        assert _table_exists(conn, "reviewed_pairs"), (
-            "reviewed_pairs table does not exist"
-        )
+        assert _table_exists(conn, "reviewed_pairs"), "reviewed_pairs table does not exist"
 
-    def test_reviewed_pairs_has_entity_name_column(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    def test_reviewed_pairs_has_entity_name_column(self, conn: sqlite3.Connection) -> None:
         cols = _column_names(conn, "reviewed_pairs")
         assert "entity_name" in cols, "reviewed_pairs table missing entity_name column"
 
@@ -214,9 +190,7 @@ class TestFromAC_ReviewedPairsTable:
             "INSERT INTO reviewed_pairs (entity_name, source_a, source_b) VALUES (?, ?, ?)",
             ("Alice", "doc-1", "doc-2"),
         )
-        row = conn.execute(
-            "SELECT entity_name, source_a, source_b FROM reviewed_pairs"
-        ).fetchone()
+        row = conn.execute("SELECT entity_name, source_a, source_b FROM reviewed_pairs").fetchone()
         assert row == ("Alice", "doc-1", "doc-2")
 
 
@@ -282,8 +256,7 @@ class TestFromAC_EdgeUniqueConstraint:
         }
 
         conn.execute(
-            "INSERT INTO edges (id, source_id, target_id, relation, document_id, created_at)"
-            " VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO edges (id, source_id, target_id, relation, document_id, created_at) VALUES (?, ?, ?, ?, ?, ?)",
             (
                 edge_id_1,
                 common["source_id"],
@@ -308,9 +281,7 @@ class TestFromAC_EdgeUniqueConstraint:
                 ),
             )
 
-    def test_edges_different_document_id_is_allowed(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    def test_edges_different_document_id_is_allowed(self, conn: sqlite3.Connection) -> None:
         """Same source/target/relation but different document_id must NOT conflict."""
         now = _now()
 
@@ -333,14 +304,12 @@ class TestFromAC_EdgeUniqueConstraint:
         )
 
         conn.execute(
-            "INSERT INTO edges (id, source_id, target_id, relation, document_id, created_at)"
-            " VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO edges (id, source_id, target_id, relation, document_id, created_at) VALUES (?, ?, ?, ?, ?, ?)",
             (str(uuid.uuid4()), "entity-A", "entity-B", "RELATED_TO", "doc-1", now),
         )
         # Must not raise — different document_id
         conn.execute(
-            "INSERT INTO edges (id, source_id, target_id, relation, document_id, created_at)"
-            " VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO edges (id, source_id, target_id, relation, document_id, created_at) VALUES (?, ?, ?, ?, ?, ?)",
             (str(uuid.uuid4()), "entity-A", "entity-B", "RELATED_TO", "doc-2", now),
         )
         count = conn.execute("SELECT count(*) FROM edges").fetchone()[0]
@@ -355,50 +324,36 @@ class TestFromAC_EdgeUniqueConstraint:
 class TestFromAC_ChunkDefaultEnrichmentState:
     """AC6 — new chunks get enrichment_state='pending' by default."""
 
-    def test_insert_chunk_without_enrichment_state_defaults_to_pending(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    def test_insert_chunk_without_enrichment_state_defaults_to_pending(self, conn: sqlite3.Connection) -> None:
         chunk_id = str(uuid.uuid4())
         now = _now()
         conn.execute(
             "INSERT INTO chunks (id, content, created_at) VALUES (?, ?, ?)",
             (chunk_id, "some content", now),
         )
-        row = conn.execute(
-            "SELECT enrichment_state FROM chunks WHERE id = ?", (chunk_id,)
-        ).fetchone()
+        row = conn.execute("SELECT enrichment_state FROM chunks WHERE id = ?", (chunk_id,)).fetchone()
         assert row is not None, "Chunk not found after insert"
-        assert row[0] == "pending", (
-            f"Expected enrichment_state='pending', got {row[0]!r}"
-        )
+        assert row[0] == "pending", f"Expected enrichment_state='pending', got {row[0]!r}"
 
-    def test_insert_chunk_with_explicit_claimed_state(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    def test_insert_chunk_with_explicit_claimed_state(self, conn: sqlite3.Connection) -> None:
         chunk_id = str(uuid.uuid4())
         now = _now()
         conn.execute(
             "INSERT INTO chunks (id, content, created_at, enrichment_state) VALUES (?, ?, ?, ?)",
             (chunk_id, "content", now, "claimed"),
         )
-        row = conn.execute(
-            "SELECT enrichment_state FROM chunks WHERE id = ?", (chunk_id,)
-        ).fetchone()
+        row = conn.execute("SELECT enrichment_state FROM chunks WHERE id = ?", (chunk_id,)).fetchone()
         assert row is not None
         assert row[0] == "claimed"
 
-    def test_insert_chunk_with_explicit_enriched_state(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    def test_insert_chunk_with_explicit_enriched_state(self, conn: sqlite3.Connection) -> None:
         chunk_id = str(uuid.uuid4())
         now = _now()
         conn.execute(
             "INSERT INTO chunks (id, content, created_at, enrichment_state) VALUES (?, ?, ?, ?)",
             (chunk_id, "content", now, "enriched"),
         )
-        row = conn.execute(
-            "SELECT enrichment_state FROM chunks WHERE id = ?", (chunk_id,)
-        ).fetchone()
+        row = conn.execute("SELECT enrichment_state FROM chunks WHERE id = ?", (chunk_id,)).fetchone()
         assert row is not None
         assert row[0] == "enriched"
 
@@ -500,10 +455,7 @@ CREATE TABLE source_pages (
 
     # Pre-existing indexes created by earlier migrations
     c.execute("CREATE INDEX idx_document_status_source ON document_status(source)")
-    c.execute(
-        "CREATE UNIQUE INDEX idx_knowledge_sources_name_scope"
-        " ON knowledge_sources(name, scope)"
-    )
+    c.execute("CREATE UNIQUE INDEX idx_knowledge_sources_name_scope ON knowledge_sources(name, scope)")
     c.execute("CREATE INDEX idx_knowledge_sources_scope ON knowledge_sources(scope)")
     c.execute("CREATE UNIQUE INDEX idx_bookmarks_url_scope ON bookmarks(url, scope)")
     c.execute("CREATE INDEX idx_bookmarks_scope ON bookmarks(scope)")
@@ -525,48 +477,32 @@ CREATE TABLE source_pages (
 class TestFromAC_MigrationUpgradePath:
     """Upgrade-path tests: existing v10 database migrates to v11 via init_db()."""
 
-    def test_v10_to_v11_enrichment_state_added_to_chunks(
-        self, v10_conn: sqlite3.Connection
-    ) -> None:
+    def test_v10_to_v11_enrichment_state_added_to_chunks(self, v10_conn: sqlite3.Connection) -> None:
         """init_db() on a v10 DB must add enrichment_state column to chunks."""
         init_db(v10_conn)
         cols = _column_names(v10_conn, "chunks")
-        assert "enrichment_state" in cols, (
-            "v10→v11 migration did not add enrichment_state to chunks"
-        )
+        assert "enrichment_state" in cols, "v10→v11 migration did not add enrichment_state to chunks"
 
-    def test_v10_to_v11_claimed_at_added_to_chunks(
-        self, v10_conn: sqlite3.Connection
-    ) -> None:
+    def test_v10_to_v11_claimed_at_added_to_chunks(self, v10_conn: sqlite3.Connection) -> None:
         """init_db() on a v10 DB must add claimed_at column to chunks."""
         init_db(v10_conn)
         cols = _column_names(v10_conn, "chunks")
-        assert "claimed_at" in cols, (
-            "v10→v11 migration did not add claimed_at to chunks"
-        )
+        assert "claimed_at" in cols, "v10→v11 migration did not add claimed_at to chunks"
 
-    def test_v10_to_v11_document_id_added_to_edges(
-        self, v10_conn: sqlite3.Connection
-    ) -> None:
+    def test_v10_to_v11_document_id_added_to_edges(self, v10_conn: sqlite3.Connection) -> None:
         """init_db() on a v10 DB must add document_id column to edges."""
         init_db(v10_conn)
         cols = _column_names(v10_conn, "edges")
-        assert "document_id" in cols, (
-            "v10→v11 migration did not add document_id to edges"
-        )
+        assert "document_id" in cols, "v10→v11 migration did not add document_id to edges"
 
-    def test_v10_to_v11_reviewed_pairs_table_exists(
-        self, v10_conn: sqlite3.Connection
-    ) -> None:
+    def test_v10_to_v11_reviewed_pairs_table_exists(self, v10_conn: sqlite3.Connection) -> None:
         """init_db() on a v10 DB must result in the reviewed_pairs table existing."""
         init_db(v10_conn)
         assert _table_exists(v10_conn, "reviewed_pairs"), (
             "reviewed_pairs table not present after v10→v11 upgrade via init_db()"
         )
 
-    def test_v10_to_v11_d17_unique_index_exists(
-        self, v10_conn: sqlite3.Connection
-    ) -> None:
+    def test_v10_to_v11_d17_unique_index_exists(self, v10_conn: sqlite3.Connection) -> None:
         """init_db() on a v10 DB must create D17 UNIQUE index on edges."""
         init_db(v10_conn)
         indexes = v10_conn.execute("PRAGMA index_list(edges)").fetchall()
@@ -583,18 +519,14 @@ class TestFromAC_MigrationUpgradePath:
             " not present after v10→v11 upgrade via init_db()"
         )
 
-    def test_v10_to_v11_schema_version_updated_to_11(
-        self, v10_conn: sqlite3.Connection
-    ) -> None:
+    def test_v10_to_v11_schema_version_updated_to_11(self, v10_conn: sqlite3.Connection) -> None:
         """init_db() on a v10 DB must update schema_version to 11."""
         init_db(v10_conn)
         ver = v10_conn.execute("SELECT version FROM schema_version").fetchone()
         assert ver is not None, "schema_version table empty after migration"
         assert ver[0] == 11, f"Expected schema version 11, got {ver[0]}"  # noqa: PLR2004
 
-    def test_v10_to_v11_enrichment_state_default_on_insert(
-        self, v10_conn: sqlite3.Connection
-    ) -> None:
+    def test_v10_to_v11_enrichment_state_default_on_insert(self, v10_conn: sqlite3.Connection) -> None:
         """Post-upgrade chunk inserts must default enrichment_state to 'pending'."""
         init_db(v10_conn)
         chunk_id = str(uuid.uuid4())
@@ -603,13 +535,9 @@ class TestFromAC_MigrationUpgradePath:
             "INSERT INTO chunks (id, content, created_at) VALUES (?, ?, ?)",
             (chunk_id, "upgraded content", now),
         )
-        row = v10_conn.execute(
-            "SELECT enrichment_state FROM chunks WHERE id = ?", (chunk_id,)
-        ).fetchone()
+        row = v10_conn.execute("SELECT enrichment_state FROM chunks WHERE id = ?", (chunk_id,)).fetchone()
         assert row is not None, "Chunk not found after insert into upgraded DB"
-        assert row[0] == "pending", (
-            f"Post-upgrade chunk insert must default enrichment_state='pending', got {row[0]!r}"
-        )
+        assert row[0] == "pending", f"Post-upgrade chunk insert must default enrichment_state='pending', got {row[0]!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -645,36 +573,24 @@ CREATE TABLE reviewed_pairs (
         c.commit()
         return c
 
-    def test_upgrade_adds_entity_id_a_column(
-        self, legacy_reviewed_pairs_conn: sqlite3.Connection
-    ) -> None:
+    def test_upgrade_adds_entity_id_a_column(self, legacy_reviewed_pairs_conn: sqlite3.Connection) -> None:
         """init_db on legacy reviewed_pairs must produce entity_id_a column."""
         init_db(legacy_reviewed_pairs_conn)
         cols = _column_names(legacy_reviewed_pairs_conn, "reviewed_pairs")
-        assert "entity_id_a" in cols, (
-            "init_db did not add entity_id_a column to legacy reviewed_pairs table"
-        )
+        assert "entity_id_a" in cols, "init_db did not add entity_id_a column to legacy reviewed_pairs table"
 
-    def test_upgrade_adds_entity_id_b_column(
-        self, legacy_reviewed_pairs_conn: sqlite3.Connection
-    ) -> None:
+    def test_upgrade_adds_entity_id_b_column(self, legacy_reviewed_pairs_conn: sqlite3.Connection) -> None:
         """init_db on legacy reviewed_pairs must produce entity_id_b column."""
         init_db(legacy_reviewed_pairs_conn)
         cols = _column_names(legacy_reviewed_pairs_conn, "reviewed_pairs")
-        assert "entity_id_b" in cols, (
-            "init_db did not add entity_id_b column to legacy reviewed_pairs table"
-        )
+        assert "entity_id_b" in cols, "init_db did not add entity_id_b column to legacy reviewed_pairs table"
 
-    def test_upgrade_rebuilds_to_five_column_pk(
-        self, legacy_reviewed_pairs_conn: sqlite3.Connection
-    ) -> None:
+    def test_upgrade_rebuilds_to_five_column_pk(self, legacy_reviewed_pairs_conn: sqlite3.Connection) -> None:
         """After init_db, reviewed_pairs must have the 5-col PRIMARY KEY."""
         init_db(legacy_reviewed_pairs_conn)
         pk_cols = [
             row[1]
-            for row in legacy_reviewed_pairs_conn.execute(
-                "PRAGMA table_info(reviewed_pairs)"
-            ).fetchall()
+            for row in legacy_reviewed_pairs_conn.execute("PRAGMA table_info(reviewed_pairs)").fetchall()
             if row[5] > 0
         ]
         assert pk_cols == [
@@ -683,26 +599,17 @@ CREATE TABLE reviewed_pairs (
             "source_b",
             "entity_id_a",
             "entity_id_b",
-        ], (
-            f"Expected 5-col PK after upgrade, got {pk_cols!r}"
-        )
+        ], f"Expected 5-col PK after upgrade, got {pk_cols!r}"
 
-    def test_upgrade_preserves_legacy_row(
-        self, legacy_reviewed_pairs_conn: sqlite3.Connection
-    ) -> None:
+    def test_upgrade_preserves_legacy_row(self, legacy_reviewed_pairs_conn: sqlite3.Connection) -> None:
         """Legacy row must survive the PK rebuild with empty entity_id_a/entity_id_b."""
         init_db(legacy_reviewed_pairs_conn)
         row = legacy_reviewed_pairs_conn.execute(
-            "SELECT entity_name, source_a, source_b, entity_id_a, entity_id_b"
-            " FROM reviewed_pairs"
+            "SELECT entity_name, source_a, source_b, entity_id_a, entity_id_b FROM reviewed_pairs"
         ).fetchone()
         assert row is not None, "Legacy row must be preserved after reviewed_pairs PK rebuild"
         assert row[0] == "E", f"entity_name mismatch: expected 'E', got {row[0]!r}"
         assert row[1] == "S1", f"source_a mismatch: expected 'S1', got {row[1]!r}"
         assert row[2] == "S2", f"source_b mismatch: expected 'S2', got {row[2]!r}"
-        assert row[3] == "", (
-            f"entity_id_a must default to '' for legacy rows after upgrade, got {row[3]!r}"
-        )
-        assert row[4] == "", (
-            f"entity_id_b must default to '' for legacy rows after upgrade, got {row[4]!r}"
-        )
+        assert row[3] == "", f"entity_id_a must default to '' for legacy rows after upgrade, got {row[3]!r}"
+        assert row[4] == "", f"entity_id_b must default to '' for legacy rows after upgrade, got {row[4]!r}"

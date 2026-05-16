@@ -121,9 +121,7 @@ def _write_task(  # noqa: PLR0913
     return path
 
 
-def _make_view(
-    base_dir: Path, config_yaml: str = _BASE_CONFIG
-) -> tuple[AgentView, Path]:
+def _make_view(base_dir: Path, config_yaml: str = _BASE_CONFIG) -> tuple[AgentView, Path]:
     kanban_dir = _make_board(base_dir, config_yaml)
     engine = KanbanEngine(kanban_dir, activity_log=False)
     return AgentView(engine), kanban_dir
@@ -149,9 +147,7 @@ def _make_view(
 class TestFromAC_EndWorkArchiveRollback:
     """GAP-1: _move_file fault injection for end_work archive paths (D41 + new rollback branch)."""
 
-    def test_success_from_terminal_move_failure_reraises_oserror(
-        self, tmp_path: Path
-    ) -> None:
+    def test_success_from_terminal_move_failure_reraises_oserror(self, tmp_path: Path) -> None:
         """end_work(success) from terminal + _move_file OSError → OSError propagates to caller.
 
         FAIL reason: the rollback branch in KanbanEngine.end_work catches OSError
@@ -170,9 +166,7 @@ class TestFromAC_EndWorkArchiveRollback:
         ):
             view.end_work(1, outcome="success", note="Done.")
 
-    def test_success_from_terminal_move_failure_no_archive_file(
-        self, tmp_path: Path
-    ) -> None:
+    def test_success_from_terminal_move_failure_no_archive_file(self, tmp_path: Path) -> None:
         """end_work(success) from terminal + _move_file OSError → no file left in archive/.
 
         FAIL reason: the post-write state before rollback has the mutated record in
@@ -196,9 +190,7 @@ class TestFromAC_EndWorkArchiveRollback:
             "archive/ must be empty after _move_file OSError in end_work(success)"
         )
 
-    def test_success_from_terminal_move_failure_restores_original_status(
-        self, tmp_path: Path
-    ) -> None:
+    def test_success_from_terminal_move_failure_restores_original_status(self, tmp_path: Path) -> None:
         """end_work(success) from terminal + _move_file OSError → original status restored in tasks/.
 
         FAIL reason: KanbanEngine.end_work calls write_task(record, …) BEFORE _move_file;
@@ -219,13 +211,9 @@ class TestFromAC_EndWorkArchiveRollback:
 
         fresh = KanbanEngine(kanban_dir, activity_log=False)
         restored = fresh.show_task("1")
-        assert restored.status == "done", (
-            f"status must be restored to 'done' after rollback; got {restored.status!r}"
-        )
+        assert restored.status == "done", f"status must be restored to 'done' after rollback; got {restored.status!r}"
 
-    def test_success_from_terminal_move_failure_restores_claimed_at(
-        self, tmp_path: Path
-    ) -> None:
+    def test_success_from_terminal_move_failure_restores_claimed_at(self, tmp_path: Path) -> None:
         """end_work(success) + _move_file OSError → claimed_at restored (not cleared) in tasks/.
 
         FAIL reason: KanbanEngine.end_work clears claimed_at in the mutated record
@@ -250,9 +238,7 @@ class TestFromAC_EndWorkArchiveRollback:
             "claimed_at must be restored (non-null) after _move_file OSError rollback"
         )
 
-    def test_success_from_terminal_move_failure_restores_original_body(
-        self, tmp_path: Path
-    ) -> None:
+    def test_success_from_terminal_move_failure_restores_original_body(self, tmp_path: Path) -> None:
         """end_work(success) + _move_file OSError → original body restored (note NOT prepended).
 
         FAIL reason: KanbanEngine.end_work prepends the timestamped note before
@@ -261,9 +247,7 @@ class TestFromAC_EndWorkArchiveRollback:
         """
         original_body = "Original body before end_work."
         view, kanban_dir = _make_view(tmp_path)
-        _write_task(
-            kanban_dir, status="done", claimed_at=_LIVE_CLAIM_TS, body=original_body
-        )
+        _write_task(kanban_dir, status="done", claimed_at=_LIVE_CLAIM_TS, body=original_body)
 
         with (
             patch(
@@ -272,27 +256,17 @@ class TestFromAC_EndWorkArchiveRollback:
             ),
             pytest.raises(OSError),
         ):
-            view.end_work(
-                1, outcome="success", note="Prepended note that must be gone."
-            )
+            view.end_work(1, outcome="success", note="Prepended note that must be gone.")
 
         fresh = KanbanEngine(kanban_dir, activity_log=False)
         restored = fresh.show_task("1")
-        body_text = (
-            restored.body
-            if isinstance(restored.body, str)
-            else "\n".join(restored.body or [])
-        )
+        body_text = restored.body if isinstance(restored.body, str) else "\n".join(restored.body or [])
         assert "Prepended note that must be gone." not in body_text, (
             "note must NOT be present in restored body after _move_file OSError rollback"
         )
-        assert original_body in body_text, (
-            "original body content must be present in restored record after rollback"
-        )
+        assert original_body in body_text, "original body content must be present in restored record after rollback"
 
-    def test_reject_to_archived_move_failure_reraises_oserror(
-        self, tmp_path: Path
-    ) -> None:
+    def test_reject_to_archived_move_failure_reraises_oserror(self, tmp_path: Path) -> None:
         """end_work(reject, move_to='archived') + _move_file OSError → OSError propagates.
 
         FAIL reason: same rollback branch covers reject-to-archived path; must re-raise.
@@ -315,9 +289,7 @@ class TestFromAC_EndWorkArchiveRollback:
                 note="Dropping.",
             )
 
-    def test_reject_to_archived_move_failure_no_archive_file(
-        self, tmp_path: Path
-    ) -> None:
+    def test_reject_to_archived_move_failure_no_archive_file(self, tmp_path: Path) -> None:
         """end_work(reject, archived) + _move_file OSError → no file in archive/.
 
         FAIL reason: same as success path — rollback must leave archive/ empty.
@@ -344,9 +316,7 @@ class TestFromAC_EndWorkArchiveRollback:
             "archive/ must be empty after _move_file OSError in end_work(reject-to-archived)"
         )
 
-    def test_reject_to_archived_move_failure_restores_original_status(
-        self, tmp_path: Path
-    ) -> None:
+    def test_reject_to_archived_move_failure_restores_original_status(self, tmp_path: Path) -> None:
         """end_work(reject, archived) + _move_file OSError → original status restored in tasks/.
 
         FAIL reason: without rollback, tasks/ holds the mutated record with
@@ -373,13 +343,10 @@ class TestFromAC_EndWorkArchiveRollback:
         fresh = KanbanEngine(kanban_dir, activity_log=False)
         restored = fresh.show_task("1")
         assert restored.status == "in-progress", (
-            f"status must be restored to 'in-progress' after reject-to-archived rollback;"
-            f" got {restored.status!r}"
+            f"status must be restored to 'in-progress' after reject-to-archived rollback; got {restored.status!r}"
         )
 
-    def test_reject_to_archived_move_failure_restores_claimed_at(
-        self, tmp_path: Path
-    ) -> None:
+    def test_reject_to_archived_move_failure_restores_claimed_at(self, tmp_path: Path) -> None:
         """end_work(reject, archived) + _move_file OSError → claimed_at restored.
 
         FAIL reason: without rollback, the mutated record has claimed_at=null;
@@ -409,9 +376,7 @@ class TestFromAC_EndWorkArchiveRollback:
             "claimed_at must be non-null (restored from original) after reject-to-archived rollback"
         )
 
-    def test_reject_to_archived_move_failure_restores_original_body(
-        self, tmp_path: Path
-    ) -> None:
+    def test_reject_to_archived_move_failure_restores_original_body(self, tmp_path: Path) -> None:
         """end_work(reject, archived) + _move_file OSError → original body restored (note NOT prepended).
 
         FAIL reason: KanbanEngine.end_work prepends the timestamped note before
@@ -445,21 +410,13 @@ class TestFromAC_EndWorkArchiveRollback:
 
         fresh = KanbanEngine(kanban_dir, activity_log=False)
         restored = fresh.show_task("1")
-        body_text = (
-            restored.body
-            if isinstance(restored.body, str)
-            else "\n".join(restored.body or [])
-        )
+        body_text = restored.body if isinstance(restored.body, str) else "\n".join(restored.body or [])
         assert "Prepended reject note that must be gone." not in body_text, (
             "note must NOT be present in restored body after reject-to-archived _move_file OSError rollback"
         )
-        assert original_body in body_text, (
-            "original body content must be present in restored record after rollback"
-        )
+        assert original_body in body_text, "original body content must be present in restored record after rollback"
 
-    def test_reject_to_archived_move_failure_restores_archival_reason(
-        self, tmp_path: Path
-    ) -> None:
+    def test_reject_to_archived_move_failure_restores_archival_reason(self, tmp_path: Path) -> None:
         """end_work(reject, archived) + _move_file OSError → archival_reason restored to None.
 
         FAIL reason: _apply_outcome sets record.archival_reason = archival_reason
@@ -497,9 +454,7 @@ class TestFromAC_EndWorkArchiveRollback:
             f" got {restored.archival_reason!r}"
         )
 
-    def test_reject_to_archived_move_failure_restores_archival_refs(
-        self, tmp_path: Path
-    ) -> None:
+    def test_reject_to_archived_move_failure_restores_archival_refs(self, tmp_path: Path) -> None:
         """end_work(reject, archived) + _move_file OSError → archival_refs restored to [] (not caller-supplied).
 
         FAIL reason: _apply_outcome sets record.archival_refs = archival_refs
@@ -542,8 +497,7 @@ class TestFromAC_EndWorkArchiveRollback:
         fresh = KanbanEngine(kanban_dir, activity_log=False)
         restored = fresh.show_task("1")
         assert (restored.archival_refs or []) == [], (
-            f"archival_refs must be [] (original) after reject-to-archived rollback;"
-            f" got {restored.archival_refs!r}"
+            f"archival_refs must be [] (original) after reject-to-archived rollback; got {restored.archival_refs!r}"
         )
 
 
@@ -564,9 +518,7 @@ class TestFromAC_EndWorkArchiveRollback:
 class TestFromAC_GuidanceExact:
     """GAP-2: exact D54 guidance contract — AR hint and skip-warning strings (D54)."""
 
-    def test_block_outcome_guidance_is_singleton_exact_ar_hint(
-        self, tmp_path: Path
-    ) -> None:
+    def test_block_outcome_guidance_is_singleton_exact_ar_hint(self, tmp_path: Path) -> None:
         """block without move_to → guidance == [_BLOCK_AR_HINT] exactly (no extra items).
 
         FAIL reason: existing test uses any("decision" in hint …) which passes
@@ -584,13 +536,10 @@ class TestFromAC_GuidanceExact:
         )
 
         assert result.guidance == [_EXPECTED_BLOCK_AR_HINT], (
-            f"block without move_to must produce exactly [{_EXPECTED_BLOCK_AR_HINT!r}];"
-            f" got {result.guidance!r}"
+            f"block without move_to must produce exactly [{_EXPECTED_BLOCK_AR_HINT!r}]; got {result.guidance!r}"
         )
 
-    def test_block_with_multi_step_move_to_guidance_exact_list(
-        self, tmp_path: Path
-    ) -> None:
+    def test_block_with_multi_step_move_to_guidance_exact_list(self, tmp_path: Path) -> None:
         """block+move_to skipping >1 columns → guidance == [AR_HINT, skip_warning] exactly.
 
         Task at 'review' (idx=4) moves to 'backlog' (idx=1): delta=3, skipped=3
@@ -613,13 +562,10 @@ class TestFromAC_GuidanceExact:
         expected_skip = _expected_skip_warning("review", "backlog", 3)
         expected = [_EXPECTED_BLOCK_AR_HINT, expected_skip]
         assert result.guidance == expected, (
-            f"block+move_to(review→backlog) must produce guidance {expected!r};"
-            f" got {result.guidance!r}"
+            f"block+move_to(review→backlog) must produce guidance {expected!r}; got {result.guidance!r}"
         )
 
-    def test_block_with_single_step_move_to_guidance_is_singleton_ar_hint(
-        self, tmp_path: Path
-    ) -> None:
+    def test_block_with_single_step_move_to_guidance_is_singleton_ar_hint(self, tmp_path: Path) -> None:
         """block+move_to adjacent status (delta=1) → guidance == [AR_HINT] only, no skip-warning.
 
         Task at 'in-progress' (idx=3) moves to 'review' (idx=4): delta=1 → no skip.
@@ -639,13 +585,10 @@ class TestFromAC_GuidanceExact:
         )
 
         assert result.guidance == [_EXPECTED_BLOCK_AR_HINT], (
-            f"block+adjacent move_to must produce only [AR_HINT], no skip-warning;"
-            f" got {result.guidance!r}"
+            f"block+adjacent move_to must produce only [AR_HINT], no skip-warning; got {result.guidance!r}"
         )
 
-    def test_reject_backwards_multi_step_guidance_exact_list(
-        self, tmp_path: Path
-    ) -> None:
+    def test_reject_backwards_multi_step_guidance_exact_list(self, tmp_path: Path) -> None:
         """reject from 'done' (idx=6) to 'research' (idx=0) → guidance == [skip_warning] exactly.
 
         delta=6, include_target_column=True → skipped=6.
@@ -666,8 +609,7 @@ class TestFromAC_GuidanceExact:
 
         expected_skip = _expected_skip_warning("done", "research", 6)
         assert result.guidance == [expected_skip], (
-            f"reject(done→research) must produce guidance [{expected_skip!r}];"
-            f" got {result.guidance!r}"
+            f"reject(done→research) must produce guidance [{expected_skip!r}]; got {result.guidance!r}"
         )
 
     def test_reject_adjacent_move_guidance_is_empty(self, tmp_path: Path) -> None:
@@ -689,8 +631,7 @@ class TestFromAC_GuidanceExact:
         )
 
         assert result.guidance == [], (
-            f"reject(in-progress→todo, delta=1) must produce no guidance;"
-            f" got {result.guidance!r}"
+            f"reject(in-progress→todo, delta=1) must produce no guidance; got {result.guidance!r}"
         )
 
     def test_success_outcome_guidance_is_empty(self, tmp_path: Path) -> None:
@@ -705,6 +646,4 @@ class TestFromAC_GuidanceExact:
 
         result = view.end_work(1, outcome="success", note="Done with impl.")
 
-        assert result.guidance == [], (
-            f"success (non-terminal) must produce no guidance; got {result.guidance!r}"
-        )
+        assert result.guidance == [], f"success (non-terminal) must produce no guidance; got {result.guidance!r}"

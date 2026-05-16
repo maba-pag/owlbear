@@ -77,8 +77,7 @@ class TestFromAC_ClaimedByFieldRemoval:
         After the builder removes that declaration this test passes.
         """
         assert "claimed_by" not in Task.model_fields, (
-            "claimed_by is still declared in Task.model_fields. "
-            "Remove the field declaration from models.py."
+            "claimed_by is still declared in Task.model_fields. Remove the field declaration from models.py."
         )
 
 
@@ -95,9 +94,7 @@ class TestFromAC_LegacyOnDiskHandling:
     handlers intact.
     """
 
-    def test_storage_pop_prevents_claimed_by_reaching_disk(
-        self, tmp_path: Path
-    ) -> None:
+    def test_storage_pop_prevents_claimed_by_reaching_disk(self, tmp_path: Path) -> None:
         """AC3(storage): write_task must not write claimed_by to disk.
 
         With extra="allow" on Task, removing the declared field means any
@@ -129,9 +126,7 @@ class TestFromAC_LegacyOnDiskHandling:
             "Ensure the data.pop('claimed_by', None) guard is still present."
         )
 
-    def test_corruption_detection_flags_claimed_by_in_raw_frontmatter(
-        self, tmp_path: Path
-    ) -> None:
+    def test_corruption_detection_flags_claimed_by_in_raw_frontmatter(self, tmp_path: Path) -> None:
         """AC3(corruption): detect_corruption must still flag non-null claimed_by.
 
         corruption.py operates on raw YAML dicts independent of the Task model;
@@ -159,9 +154,7 @@ class TestFromAC_LegacyOnDiskHandling:
             "The detail string must be 'forbidden field claimed_by present'."
         )
 
-    def test_migrate_strips_claimed_by_from_task_frontmatter(
-        self, tmp_path: Path
-    ) -> None:
+    def test_migrate_strips_claimed_by_from_task_frontmatter(self, tmp_path: Path) -> None:
         """AC3(migrate): _migrate_task_file must remove claimed_by from frontmatter.
 
         The fm.pop('claimed_by', None) in migrate.py must still execute so
@@ -187,9 +180,7 @@ class TestFromAC_LegacyOnDiskHandling:
             "The fm.pop('claimed_by', None) guard was removed or is unreachable."
         )
 
-    def test_engine_migration_gate_raises_on_legacy_claimed_by(
-        self, tmp_path: Path
-    ) -> None:
+    def test_engine_migration_gate_raises_on_legacy_claimed_by(self, tmp_path: Path) -> None:
         """AC3(migration gate): KanbanEngine.__init__ must raise MigrationRequiredError.
 
         The migration gate in engine.py scans tasks/ frontmatter for non-null
@@ -202,9 +193,7 @@ class TestFromAC_LegacyOnDiskHandling:
             "Gate: remove claimed_by from Task.model_fields before this test can pass."
         )
         kanban_dir = _make_board(tmp_path)
-        (kanban_dir / "tasks" / "1-legacy.md").write_text(
-            _legacy_task_content(), encoding="utf-8"
-        )
+        (kanban_dir / "tasks" / "1-legacy.md").write_text(_legacy_task_content(), encoding="utf-8")
 
         with pytest.raises(MigrationRequiredError) as exc_info:
             KanbanEngine(kanban_dir)

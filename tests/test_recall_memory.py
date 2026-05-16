@@ -99,9 +99,7 @@ class TestFromAC_ScopeAgentMatch:
         assert entry.title in result
 
     @pytest.mark.asyncio
-    async def test_entry_with_different_agent_not_returned(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_entry_with_different_agent_not_returned(self, tmp_path: Path) -> None:
         """Entry scoped to "reviewer" is not returned when agent="builder"."""
         entry = _make_entry(id=_uuid(1), state="curated", scope_agents=["reviewer"])
         engine = MemoryEngine(memory_dir=tmp_path)
@@ -113,13 +111,9 @@ class TestFromAC_ScopeAgentMatch:
         assert entry.title not in result
 
     @pytest.mark.asyncio
-    async def test_entry_with_agent_among_multiple_scopes_is_returned(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_entry_with_agent_among_multiple_scopes_is_returned(self, tmp_path: Path) -> None:
         """Entry with scope_agents=["builder", "reviewer"] is returned for agent="builder"."""
-        entry = _make_entry(
-            id=_uuid(1), state="curated", scope_agents=["builder", "reviewer"]
-        )
+        entry = _make_entry(id=_uuid(1), state="curated", scope_agents=["builder", "reviewer"])
         engine = MemoryEngine(memory_dir=tmp_path)
         engine.write(entry)
         ctx = _make_ctx(engine)
@@ -138,9 +132,7 @@ class TestFromAC_UniversalScope:
     """AC2: scope_agents=["*"] entries are returned for any requesting agent."""
 
     @pytest.mark.asyncio
-    async def test_universal_scope_entry_returned_for_named_agent(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_universal_scope_entry_returned_for_named_agent(self, tmp_path: Path) -> None:
         """Entry with scope_agents=["*"] is visible to any named agent."""
         entry = _make_entry(id=_uuid(1), state="curated", scope_agents=["*"])
         engine = MemoryEngine(memory_dir=tmp_path)
@@ -152,9 +144,7 @@ class TestFromAC_UniversalScope:
         assert entry.title in result
 
     @pytest.mark.asyncio
-    async def test_universal_scope_entry_returned_for_different_agent(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_universal_scope_entry_returned_for_different_agent(self, tmp_path: Path) -> None:
         """Entry with scope_agents=["*"] is also visible to a different named agent."""
         entry = _make_entry(id=_uuid(1), state="curated", scope_agents=["*"])
         engine = MemoryEngine(memory_dir=tmp_path)
@@ -166,9 +156,7 @@ class TestFromAC_UniversalScope:
         assert entry.title in result
 
     @pytest.mark.asyncio
-    async def test_universal_scope_approved_entry_returned(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_universal_scope_approved_entry_returned(self, tmp_path: Path) -> None:
         """Approved entry with scope_agents=["*"] is also returned."""
         entry = _make_entry(
             id=_uuid(1),
@@ -223,16 +211,10 @@ class TestFromAC_UnscopedExclusion:
         assert entry.title not in result
 
     @pytest.mark.asyncio
-    async def test_mix_unscoped_and_scoped_only_scoped_returned(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_mix_unscoped_and_scoped_only_scoped_returned(self, tmp_path: Path) -> None:
         """Only scoped entries are returned when mixed with unscoped entries."""
-        unscoped = _make_entry(
-            id=_uuid(1), title="Unscoped entry", state="curated", scope_agents=[]
-        )
-        scoped = _make_entry(
-            id=_uuid(2), title="Scoped entry", state="curated", scope_agents=["builder"]
-        )
+        unscoped = _make_entry(id=_uuid(1), title="Unscoped entry", state="curated", scope_agents=[])
+        scoped = _make_entry(id=_uuid(2), title="Scoped entry", state="curated", scope_agents=["builder"])
         engine = MemoryEngine(memory_dir=tmp_path)
         engine.write(unscoped)
         engine.write(scoped)
@@ -345,16 +327,10 @@ class TestFromAC_BodyOnlyFormat:
         assert "scope_agents" not in result
 
     @pytest.mark.asyncio
-    async def test_multiple_entries_concatenated_in_result(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_multiple_entries_concatenated_in_result(self, tmp_path: Path) -> None:
         """Multiple matching entries all appear in a single concatenated string."""
-        e1 = _make_entry(
-            id=_uuid(1), title="First Entry", state="curated", scope_agents=["builder"]
-        )
-        e2 = _make_entry(
-            id=_uuid(2), title="Second Entry", state="curated", scope_agents=["builder"]
-        )
+        e1 = _make_entry(id=_uuid(1), title="First Entry", state="curated", scope_agents=["builder"])
+        e2 = _make_entry(id=_uuid(2), title="Second Entry", state="curated", scope_agents=["builder"])
         engine = MemoryEngine(memory_dir=tmp_path)
         engine.write(e1)
         engine.write(e2)
@@ -366,9 +342,7 @@ class TestFromAC_BodyOnlyFormat:
         assert "## Second Entry" in result
 
     @pytest.mark.asyncio
-    async def test_exact_per_entry_format_and_all_metadata_fields_absent(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_exact_per_entry_format_and_all_metadata_fields_absent(self, tmp_path: Path) -> None:
         """Pins exact output format and asserts ALL metadata field names and values
         are absent from the returned string (AC5-fix: discriminating check)."""
         entry = _make_entry(
@@ -403,9 +377,7 @@ class TestFromAC_BodyOnlyFormat:
             "created_at",
             "updated_at",
         ):
-            assert field_name not in result, (
-                f"metadata field {field_name!r} leaked into output"
-            )
+            assert field_name not in result, f"metadata field {field_name!r} leaked into output"
         # Assert metadata values absent
         assert _uuid(99) not in result  # id value
         assert "curated" not in result  # state value
@@ -416,9 +388,7 @@ class TestFromAC_BodyOnlyFormat:
         assert "2026-02-20T14:15:00Z" not in result  # updated_at value
 
     @pytest.mark.asyncio
-    async def test_two_entries_joined_with_double_newline_separator(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_two_entries_joined_with_double_newline_separator(self, tmp_path: Path) -> None:
         """Two matching entries are joined by '\\n\\n' — exact per-entry format pinned
         (AC5-fix: separator proof)."""
         e1 = _make_entry(
@@ -456,9 +426,7 @@ class TestFromAC_PriorityOrdering:
     """AC6: approved entries appear before curated entries in the output."""
 
     @pytest.mark.asyncio
-    async def test_approved_entry_appears_before_curated_in_result(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_approved_entry_appears_before_curated_in_result(self, tmp_path: Path) -> None:
         """When both approved and curated entries match, approved comes first."""
         curated = _make_entry(
             id=_uuid(1),
@@ -486,9 +454,7 @@ class TestFromAC_PriorityOrdering:
         assert approved_pos < curated_pos
 
     @pytest.mark.asyncio
-    async def test_multiple_approved_entries_all_precede_curated_entries(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_multiple_approved_entries_all_precede_curated_entries(self, tmp_path: Path) -> None:
         """All approved entries appear before any curated entry in the output."""
         c1 = _make_entry(
             id=_uuid(1),
@@ -525,9 +491,7 @@ class TestFromAC_PriorityOrdering:
         assert approved2_pos < curated_pos
 
     @pytest.mark.asyncio
-    async def test_pending_entries_are_excluded_from_results(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_pending_entries_are_excluded_from_results(self, tmp_path: Path) -> None:
         """Pending entries are not included even if scope_agents matches."""
         pending = _make_entry(
             id=_uuid(1),
@@ -544,9 +508,7 @@ class TestFromAC_PriorityOrdering:
         assert "## Pending Entry" not in result
 
     @pytest.mark.asyncio
-    async def test_deleted_entries_are_excluded_from_results(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_deleted_entries_are_excluded_from_results(self, tmp_path: Path) -> None:
         """Deleted entries are not included even if scope_agents matches."""
         deleted = _make_entry(
             id=_uuid(1),
@@ -563,9 +525,7 @@ class TestFromAC_PriorityOrdering:
         assert "## Deleted Entry" not in result
 
     @pytest.mark.asyncio
-    async def test_sort_then_slice_approved_fills_before_curated(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_sort_then_slice_approved_fills_before_curated(self, tmp_path: Path) -> None:
         """With 3 approved + 3 curated entries and limit=4, all 3 approved survive
         and exactly 1 curated fills the remaining slot.
 
@@ -618,14 +578,10 @@ class TestFromAC_PriorityOrdering:
         # All 3 approved entries must survive the sort-then-slice (a slice-before-sort
         # bug would keep 3 curated + 1 approved instead)
         for title in approved_titles:
-            assert f"## {title}" in result, (
-                f"approved entry '{title}' missing — sort-then-slice may be broken"
-            )
+            assert f"## {title}" in result, f"approved entry '{title}' missing — sort-then-slice may be broken"
         # Exactly 1 curated entry fills the remaining slot
         curated_in_result = sum(1 for t in curated_titles if f"## {t}" in result)
-        assert curated_in_result == 1, (
-            f"expected 1 curated entry in result, got {curated_in_result}"
-        )
+        assert curated_in_result == 1, f"expected 1 curated entry in result, got {curated_in_result}"
 
 
 # ---------------------------------------------------------------------------

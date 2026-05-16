@@ -47,9 +47,7 @@ class TestFromAC_SyncPdsAssetsScript:
     def test_ac3_components_dir_has_v41_core_chunk(self) -> None:
         """AC-3: After sync, components/ contains the v4.1.0 core chunk."""
         core_chunk = COMPONENTS_DIR / _CORE_CHUNK_V41
-        assert core_chunk.exists(), (
-            f"v4.1.0 core chunk missing in {COMPONENTS_DIR}: {_CORE_CHUNK_V41}"
-        )
+        assert core_chunk.exists(), f"v4.1.0 core chunk missing in {COMPONENTS_DIR}: {_CORE_CHUNK_V41}"
 
     def test_ac4_icons_dir_has_290_svg_files(self) -> None:
         """AC-4: After sync, icons/ contains 290 .svg files."""
@@ -60,16 +58,12 @@ class TestFromAC_SyncPdsAssetsScript:
         """AC-5: package.json scripts contains the sync:pds command."""
         pkg = json.loads(PACKAGE_JSON.read_text())
         scripts = pkg.get("scripts", {})
-        assert "sync:pds" in scripts, (
-            f"sync:pds not found in package.json scripts: {sorted(scripts)}"
-        )
+        assert "sync:pds" in scripts, f"sync:pds not found in package.json scripts: {sorted(scripts)}"
 
     def test_ac6_stale_v40_component_files_removed(self) -> None:
         """AC-6: After sync, stale v4.0.0 component chunk files are cleared."""
         stale = COMPONENTS_DIR / _STALE_V40_CHUNK
-        assert not stale.exists(), (
-            f"Stale v4.0.0 component file still present (not cleared): {stale}"
-        )
+        assert not stale.exists(), f"Stale v4.0.0 component file still present (not cleared): {stale}"
 
     def test_ac7_correct_file_counts_after_sync(self) -> None:
         """AC-7: components/ has 59 v4.1.0 .js files; icons/ has 290 .svg files."""
@@ -77,27 +71,15 @@ class TestFromAC_SyncPdsAssetsScript:
         svg_files = list(ICONS_DIR.glob("*.svg"))
         core_v41_present = (COMPONENTS_DIR / _CORE_CHUNK_V41).exists()
         # Count must be 59 AND v4.1.0 core chunk present (distinguishes from v4.0.0 state).
-        assert core_v41_present, (
-            f"v4.1.0 core chunk missing — components/ may still have stale v4.0.0 files"
-        )
-        assert len(js_files) == 59, (
-            f"Expected 59 .js files in components/, found {len(js_files)}"
-        )
+        assert core_v41_present, f"v4.1.0 core chunk missing — components/ may still have stale v4.0.0 files"
+        assert len(js_files) == 59, f"Expected 59 .js files in components/, found {len(js_files)}"
         assert len(svg_files) == 290, f"Expected 290 .svg files, found {len(svg_files)}"
 
-    def test_ac8_exits_nonzero_with_descriptive_error_on_parse_failure(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac8_exits_nonzero_with_descriptive_error_on_parse_failure(self, tmp_path: Path) -> None:
         """AC-8: Script exits non-zero with descriptive error when parsing fails."""
         # Provide a syntactically valid but semantically empty index.mjs so the script
         # can read it but cannot extract the core chunk URL.
-        esm_dir = (
-            tmp_path
-            / "node_modules"
-            / "@porsche-design-system"
-            / "components-js"
-            / "esm"
-        )
+        esm_dir = tmp_path / "node_modules" / "@porsche-design-system" / "components-js" / "esm"
         esm_dir.mkdir(parents=True)
         (esm_dir / "index.mjs").write_text("// empty — no chunk URL\nexport {};")
         result = subprocess.run(
@@ -108,23 +90,18 @@ class TestFromAC_SyncPdsAssetsScript:
             env={**os.environ},
             timeout=30,
         )
-        assert result.returncode != 0, (
-            "Expected non-zero exit when chunk-map parsing fails"
-        )
+        assert result.returncode != 0, "Expected non-zero exit when chunk-map parsing fails"
         error_out = result.stderr + result.stdout
         # Node's own "Cannot find module" error won't contain these domain terms.
         # The script must emit its own descriptive error mentioning the failure domain.
-        assert any(
-            kw in error_out.lower()
-            for kw in ("cdn", "chunk-map", "chunk map", "index.mjs", "parse")
-        ), f"Expected descriptive error message from script, got: {error_out[:300]!r}"
+        assert any(kw in error_out.lower() for kw in ("cdn", "chunk-map", "chunk map", "index.mjs", "parse")), (
+            f"Expected descriptive error message from script, got: {error_out[:300]!r}"
+        )
 
     @pytest.mark.api
     @pytest.mark.slow
     @pytest.mark.timeout(180)
-    def test_ac_script_execution_creates_outputs_in_isolated_workspace(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac_script_execution_creates_outputs_in_isolated_workspace(self, tmp_path: Path) -> None:
         """Proof: executing the script creates 59 component files + 290 icons from scratch.
 
         Runs sync-pds-assets.mjs in an isolated tmpdir with node_modules symlinked from
@@ -133,9 +110,7 @@ class TestFromAC_SyncPdsAssetsScript:
         """
         nm_link = tmp_path / "node_modules"
         nm_link.symlink_to(WEB_ROOT / "node_modules")
-        (tmp_path / "public" / "porsche-design-system" / "components").mkdir(
-            parents=True
-        )
+        (tmp_path / "public" / "porsche-design-system" / "components").mkdir(parents=True)
         (tmp_path / "public" / "porsche-design-system" / "icons").mkdir(parents=True)
 
         result = subprocess.run(
@@ -145,41 +120,28 @@ class TestFromAC_SyncPdsAssetsScript:
             cwd=str(tmp_path),
             timeout=120,
         )
-        assert result.returncode == 0, (
-            f"Script failed in isolated workspace: {result.stderr}\n{result.stdout}"
-        )
+        assert result.returncode == 0, f"Script failed in isolated workspace: {result.stderr}\n{result.stdout}"
 
         out_components = tmp_path / "public" / "porsche-design-system" / "components"
         out_icons = tmp_path / "public" / "porsche-design-system" / "icons"
         js_files = list(out_components.glob("*.js"))
         svg_files = list(out_icons.glob("*.svg"))
-        assert len(js_files) == 59, (
-            f"Script produced {len(js_files)} .js files in isolated workspace (expected 59)"
-        )
+        assert len(js_files) == 59, f"Script produced {len(js_files)} .js files in isolated workspace (expected 59)"
         assert len(svg_files) == 290, (
             f"Script produced {len(svg_files)} .svg files in isolated workspace (expected 290)"
         )
 
-    def test_ac8_cdn_download_failure_returns_descriptive_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac8_cdn_download_failure_returns_descriptive_error(self, tmp_path: Path) -> None:
         """AC-8: Script exits non-zero with descriptive error when CDN download fails (HTTP 503).
 
         Uses a Node.js harness that stubs globalThis.fetch to return 503 before
         importing the script. The fetch mock is in place when main() runs so the
         core-chunk download fails without any real network traffic.
         """
-        esm_dir = (
-            tmp_path
-            / "node_modules"
-            / "@porsche-design-system"
-            / "components-js"
-            / "esm"
-        )
+        esm_dir = tmp_path / "node_modules" / "@porsche-design-system" / "components-js" / "esm"
         esm_dir.mkdir(parents=True)
         (esm_dir / "index.mjs").write_text(
-            'cdn.url+"/porsche-design-system/components/'
-            'porsche-design-system.v4.1.0.59dc31ee9c99f5a43eb5.js"'
+            'cdn.url+"/porsche-design-system/components/porsche-design-system.v4.1.0.59dc31ee9c99f5a43eb5.js"'
         )
         script_js = json.dumps(str(SCRIPT_PATH))
         harness = tmp_path / "harness.mjs"
@@ -196,34 +158,23 @@ class TestFromAC_SyncPdsAssetsScript:
             env={**os.environ},
             timeout=30,
         )
-        assert result.returncode != 0, (
-            "Expected non-zero exit when CDN returns HTTP 503"
-        )
+        assert result.returncode != 0, "Expected non-zero exit when CDN returns HTTP 503"
         error_out = result.stderr + result.stdout
         assert any(kw in error_out.lower() for kw in ("cdn", "download", "http")), (
             f"Expected descriptive CDN-failure error, got: {error_out[:300]!r}"
         )
 
-    def test_ac8_chunk_map_parse_failure_returns_descriptive_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac8_chunk_map_parse_failure_returns_descriptive_error(self, tmp_path: Path) -> None:
         """AC-8: Script exits non-zero with descriptive error when component chunk-map parse fails.
 
         Uses a Node.js harness that stubs globalThis.fetch to return HTTP 200 with
         content that has no .u=e=> component-map pattern. The script can download the
         core chunk successfully but parseComponentHashes must fail with a descriptive error.
         """
-        esm_dir = (
-            tmp_path
-            / "node_modules"
-            / "@porsche-design-system"
-            / "components-js"
-            / "esm"
-        )
+        esm_dir = tmp_path / "node_modules" / "@porsche-design-system" / "components-js" / "esm"
         esm_dir.mkdir(parents=True)
         (esm_dir / "index.mjs").write_text(
-            'cdn.url+"/porsche-design-system/components/'
-            'porsche-design-system.v4.1.0.59dc31ee9c99f5a43eb5.js"'
+            'cdn.url+"/porsche-design-system/components/porsche-design-system.v4.1.0.59dc31ee9c99f5a43eb5.js"'
         )
         # Core chunk fetch succeeds (HTTP 200) but content lacks the .u=e=> chunk-map pattern.
         script_js = json.dumps(str(SCRIPT_PATH))
@@ -241,18 +192,13 @@ class TestFromAC_SyncPdsAssetsScript:
             env={**os.environ},
             timeout=30,
         )
-        assert result.returncode != 0, (
-            "Expected non-zero exit when chunk-map parse fails"
-        )
+        assert result.returncode != 0, "Expected non-zero exit when chunk-map parse fails"
         error_out = result.stderr + result.stdout
-        assert any(
-            kw in error_out.lower()
-            for kw in ("chunk-map", "chunk map", "component chunk", "parse")
-        ), f"Expected descriptive chunk-map error, got: {error_out[:300]!r}"
+        assert any(kw in error_out.lower() for kw in ("chunk-map", "chunk map", "component chunk", "parse")), (
+            f"Expected descriptive chunk-map error, got: {error_out[:300]!r}"
+        )
 
-    def test_ac9_mock_execution_proves_cleanup_and_output_without_cdn(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac9_mock_execution_proves_cleanup_and_output_without_cdn(self, tmp_path: Path) -> None:
         """AC-9: Mock-based execution proof — script clears stale sentinels and writes outputs.
 
         Not marked api/slow — runs in the standard smoke gate.
@@ -262,18 +208,11 @@ class TestFromAC_SyncPdsAssetsScript:
         output directories before execution so cleanup is proven mechanically.
         """
         # --- Workspace layout ---
-        esm_dir = (
-            tmp_path
-            / "node_modules"
-            / "@porsche-design-system"
-            / "components-js"
-            / "esm"
-        )
+        esm_dir = tmp_path / "node_modules" / "@porsche-design-system" / "components-js" / "esm"
         esm_dir.mkdir(parents=True)
         # index.mjs: provides a URL the script can extract via its regex
         (esm_dir / "index.mjs").write_text(
-            'cdn.url+"/porsche-design-system/components/'
-            'porsche-design-system.v4.1.0.aabbccdd.js"'
+            'cdn.url+"/porsche-design-system/components/porsche-design-system.v4.1.0.aabbccdd.js"'
         )
 
         components_dir = tmp_path / "public" / "porsche-design-system" / "components"
@@ -288,10 +227,7 @@ class TestFromAC_SyncPdsAssetsScript:
         # --- Build URL → body map for fetch stub ---
         cdn = "https://cdn.ui.porsche.com"
         # Core chunk: parseable .u=e=> component map with icon + button (≥2 entries)
-        core_body = (
-            '.u=e=>"porsche-design-system."+e+"."+'
-            '{"icon":"aaaa1111","button":"bbbb2222"}[e]+".js"'
-        )
+        core_body = '.u=e=>"porsche-design-system."+e+"."+{"icon":"aaaa1111","button":"bbbb2222"}[e]+".js"'
         # Icon chunk: ≥2 icon filename mappings (names and hashes in hex)
         icon_chunk_body = '"360":"360.abc12345.svg","add":"add.def67890.svg"'
         component_body = "// component chunk"
@@ -341,7 +277,5 @@ class TestFromAC_SyncPdsAssetsScript:
         # Output file counts (AC-9: ≥3 .js, ≥2 .svg)
         js_files = list(components_dir.glob("*.js"))
         svg_files = list(icons_dir.glob("*.svg"))
-        assert len(js_files) >= 3, (
-            f"Expected ≥3 .js files (1 core + ≥2 component chunks), found {len(js_files)}"
-        )
+        assert len(js_files) >= 3, f"Expected ≥3 .js files (1 core + ≥2 component chunks), found {len(js_files)}"
         assert len(svg_files) >= 2, f"Expected ≥2 .svg files, found {len(svg_files)}"

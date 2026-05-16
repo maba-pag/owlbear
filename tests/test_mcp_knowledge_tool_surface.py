@@ -180,7 +180,5 @@ class TestFromAC_ToolSurfaceValidation:
             if not callable(fn):
                 failures.append(f"  {name!r}: found but not callable (AC4)")
             if name in tool_names:
-                failures.append(
-                    f"  {name!r}: registered as MCP tool — remove @mcp.tool() decorator (AC5)"
-                )
+                failures.append(f"  {name!r}: registered as MCP tool — remove @mcp.tool() decorator (AC5)")
         assert not failures, "Scope stub check failures:\n" + "\n".join(failures)

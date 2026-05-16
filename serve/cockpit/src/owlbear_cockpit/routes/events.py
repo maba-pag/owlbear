@@ -71,9 +71,7 @@ def _classify_path(
     """Map a changed path to its typed SSE event or None."""
     if changed_path == activity_path:
         return "activity-changed"
-    if _is_direct_md(changed_path, tasks_dir) or _is_direct_md(
-        changed_path, archive_dir
-    ):
+    if _is_direct_md(changed_path, tasks_dir) or _is_direct_md(changed_path, archive_dir):
         return "tasks-changed"
     if _is_direct_md(changed_path, decisions_pending_dir):
         return "decisions-changed"

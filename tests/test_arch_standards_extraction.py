@@ -23,9 +23,7 @@ from __future__ import annotations
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).parent.parent
-_ARCH_INSTRUCTIONS = (
-    _REPO_ROOT / ".owlbear" / "instructions" / "architecture.instructions.md"
-)
+_ARCH_INSTRUCTIONS = _REPO_ROOT / ".owlbear" / "instructions" / "architecture.instructions.md"
 _ARCH_SKILL = _REPO_ROOT / "share" / "skills" / "r-architecture-standards" / "SKILL.md"
 
 
@@ -37,28 +35,22 @@ class TestFromAC_ArchInstructionsFile:
     def test_architecture_instructions_file_exists(self) -> None:
         """The file .owlbear/instructions/architecture.instructions.md must exist on disk."""
         assert _ARCH_INSTRUCTIONS.exists(), (
-            f"Expected {_ARCH_INSTRUCTIONS.relative_to(_REPO_ROOT)} to exist — "
-            "file not yet created by builder"
+            f"Expected {_ARCH_INSTRUCTIONS.relative_to(_REPO_ROOT)} to exist — file not yet created by builder"
         )
 
     def test_architecture_instructions_has_apply_to_serve(self) -> None:
         """architecture.instructions.md frontmatter must declare applyTo: \"serve/**\"."""
-        assert _ARCH_INSTRUCTIONS.exists(), (
-            f"{_ARCH_INSTRUCTIONS.relative_to(_REPO_ROOT)} does not exist"
-        )
+        assert _ARCH_INSTRUCTIONS.exists(), f"{_ARCH_INSTRUCTIONS.relative_to(_REPO_ROOT)} does not exist"
         content = _ARCH_INSTRUCTIONS.read_text(encoding="utf-8")
         assert 'applyTo: "serve/**"' in content, (
-            'architecture.instructions.md must declare applyTo: "serve/**" in its frontmatter — '
-            "not found"
+            'architecture.instructions.md must declare applyTo: "serve/**" in its frontmatter — not found'
         )
 
     # ---- AC2 (td:1): new file contains all three extracted sections ----------------------
 
     def test_architecture_instructions_has_architecture_overview_section(self) -> None:
         """architecture.instructions.md must contain the ## Architecture Overview section."""
-        assert _ARCH_INSTRUCTIONS.exists(), (
-            f"{_ARCH_INSTRUCTIONS.relative_to(_REPO_ROOT)} does not exist"
-        )
+        assert _ARCH_INSTRUCTIONS.exists(), f"{_ARCH_INSTRUCTIONS.relative_to(_REPO_ROOT)} does not exist"
         content = _ARCH_INSTRUCTIONS.read_text(encoding="utf-8")
         assert "## Architecture Overview" in content, (
             "architecture.instructions.md must contain '## Architecture Overview' section"
@@ -66,9 +58,7 @@ class TestFromAC_ArchInstructionsFile:
 
     def test_architecture_instructions_has_dependency_rules_section(self) -> None:
         """architecture.instructions.md must contain the ## Dependency Rules section."""
-        assert _ARCH_INSTRUCTIONS.exists(), (
-            f"{_ARCH_INSTRUCTIONS.relative_to(_REPO_ROOT)} does not exist"
-        )
+        assert _ARCH_INSTRUCTIONS.exists(), f"{_ARCH_INSTRUCTIONS.relative_to(_REPO_ROOT)} does not exist"
         content = _ARCH_INSTRUCTIONS.read_text(encoding="utf-8")
         assert "## Dependency Rules" in content, (
             "architecture.instructions.md must contain '## Dependency Rules' section"
@@ -76,9 +66,7 @@ class TestFromAC_ArchInstructionsFile:
 
     def test_architecture_instructions_has_domain_scope_map_section(self) -> None:
         """architecture.instructions.md must contain the ## Domain Scope Map section."""
-        assert _ARCH_INSTRUCTIONS.exists(), (
-            f"{_ARCH_INSTRUCTIONS.relative_to(_REPO_ROOT)} does not exist"
-        )
+        assert _ARCH_INSTRUCTIONS.exists(), f"{_ARCH_INSTRUCTIONS.relative_to(_REPO_ROOT)} does not exist"
         content = _ARCH_INSTRUCTIONS.read_text(encoding="utf-8")
         assert "## Domain Scope Map" in content, (
             "architecture.instructions.md must contain '## Domain Scope Map' section"
@@ -90,9 +78,7 @@ class TestFromAC_ArchInstructionsFile:
         The shared skill uses workspace/ as a path-neutral form; the instructions file
         restores concrete serve/ paths for the owlbear-dev consumer.
         """
-        assert _ARCH_INSTRUCTIONS.exists(), (
-            f"{_ARCH_INSTRUCTIONS.relative_to(_REPO_ROOT)} does not exist"
-        )
+        assert _ARCH_INSTRUCTIONS.exists(), f"{_ARCH_INSTRUCTIONS.relative_to(_REPO_ROOT)} does not exist"
         content = _ARCH_INSTRUCTIONS.read_text(encoding="utf-8")
         assert "serve/mcp-kanban/" in content, (
             "architecture.instructions.md Architecture Overview must reference 'serve/mcp-kanban/' "
@@ -105,9 +91,7 @@ class TestFromAC_ArchInstructionsFile:
         The shared skill uses workspace/ as a path-neutral form; the instructions file
         restores concrete serve/ paths for the owlbear-dev consumer.
         """
-        assert _ARCH_INSTRUCTIONS.exists(), (
-            f"{_ARCH_INSTRUCTIONS.relative_to(_REPO_ROOT)} does not exist"
-        )
+        assert _ARCH_INSTRUCTIONS.exists(), f"{_ARCH_INSTRUCTIONS.relative_to(_REPO_ROOT)} does not exist"
         content = _ARCH_INSTRUCTIONS.read_text(encoding="utf-8")
         assert "serve/knowledge/" in content, (
             "architecture.instructions.md Domain Scope Map must reference 'serve/knowledge/' "

@@ -154,11 +154,7 @@ def _resolve_text(by_id: dict[str, dict], element_id: str) -> str:
         return el.get("text") or ""
     # Shape — find its contained text element
     for other in by_id.values():
-        if (
-            other.get("containerId") == element_id
-            and other.get("type") == "text"
-            and not other.get("isDeleted")
-        ):
+        if other.get("containerId") == element_id and other.get("type") == "text" and not other.get("isDeleted"):
             return other.get("text") or ""
     return ""
 
@@ -221,40 +217,34 @@ class TestFromAC_IdeationTwoPhaseModel:
         """Happy: Phase 1 is labeled as a distinct discovery phase."""
         all_text = _all_element_text(diagram_data)
         assert "phase 1" in all_text or "discovery" in all_text, (
-            "Phase 1 Discovery region not found. "
-            "Diagram must show two distinct phases per AC2."
+            "Phase 1 Discovery region not found. Diagram must show two distinct phases per AC2."
         )
 
     def test_phase_2_mediation_labeled(self, diagram_data: dict) -> None:
         """Happy: Phase 2 is labeled as a distinct mediation phase."""
         all_text = _all_element_text(diagram_data)
         assert "phase 2" in all_text or "mediation" in all_text, (
-            "Phase 2 Mediation region not found. "
-            "Diagram must show two distinct phases per AC2."
+            "Phase 2 Mediation region not found. Diagram must show two distinct phases per AC2."
         )
 
     def test_discoverer_agent_present_as_phase1_owner(self, diagram_data: dict) -> None:
         """Happy: ideation-discoverer (or discoverer) appears as Phase 1 agent."""
         all_text = _all_element_text(diagram_data)
         assert "discoverer" in all_text, (
-            "discoverer agent not found. "
-            "Phase 1 is owned by ideation-discoverer, not a single Mediator."
+            "discoverer agent not found. Phase 1 is owned by ideation-discoverer, not a single Mediator."
         )
 
     def test_phase1_step0_setup_entry_present(self, diagram_data: dict) -> None:
         """Happy: Phase 1 has its own Step 0 (setup & entry) as a precondition."""
         all_text = _all_element_text(diagram_data)
-        assert "step 0" in all_text, (
-            "Phase 1 Step 0 (Setup & Entry precondition) not found in diagram"
-        )
+        assert "step 0" in all_text, "Phase 1 Step 0 (Setup & Entry precondition) not found in diagram"
 
     def test_obsolete_investigator_mode_absent(self, diagram_data: dict) -> None:
         """Edge: investigator mode must NOT appear — belongs to the old model.
         Old diagram has Investigator mode (M1-M3). This test FAILS against old."""
         all_text = _all_element_text(diagram_data)
         assert "investigator mode" not in all_text, (
-            "Obsolete investigator mode label found. "
-            "New model has two separate phase agents, not behavioral modes."
+            "Obsolete investigator mode label found. New model has two separate phase agents, not behavioral modes."
         )
 
     def test_obsolete_facilitative_mode_absent(self, diagram_data: dict) -> None:
@@ -262,8 +252,7 @@ class TestFromAC_IdeationTwoPhaseModel:
         Old diagram has Facilitative mode (M4-M6). This test FAILS against old."""
         all_text = _all_element_text(diagram_data)
         assert "facilitative mode" not in all_text, (
-            "Obsolete facilitative mode label found. "
-            "New model has two separate phase agents, not behavioral modes."
+            "Obsolete facilitative mode label found. New model has two separate phase agents, not behavioral modes."
         )
 
 
@@ -290,14 +279,11 @@ class TestFromAC_IdeationPhase1Discovery:
         """Happy: early challenge lane is labeled as a distinct group in Phase 1."""
         all_text = _all_element_text(diagram_data)
         assert "early challenge" in all_text, (
-            "Early challenge lane not labeled. "
-            "Phase 1 M2 fans out to the early challenge lane per AC2."
+            "Early challenge lane not labeled. Phase 1 M2 fans out to the early challenge lane per AC2."
         )
 
     @pytest.mark.parametrize("agent", _EARLY_CHALLENGE_AGENTS)
-    def test_early_challenge_agent_present(
-        self, diagram_data: dict, agent: str
-    ) -> None:
+    def test_early_challenge_agent_present(self, diagram_data: dict, agent: str) -> None:
         """Happy: each early challenge lane agent appears in the diagram."""
         all_text = _all_element_text(diagram_data)
         assert agent in all_text, (
@@ -352,8 +338,7 @@ class TestFromAC_IdeationPhase2Mediation:
         """Happy: late domain panel is labeled as a distinct group in Phase 2."""
         all_text = _all_element_text(diagram_data)
         assert "late" in all_text or "domain panel" in all_text, (
-            "Late domain panel not found. "
-            "Phase 2 orchestrates architect/data/enduser/security per AC2."
+            "Late domain panel not found. Phase 2 orchestrates architect/data/enduser/security per AC2."
         )
 
     @pytest.mark.parametrize("agent", _LATE_PANEL_AGENTS)
@@ -361,16 +346,13 @@ class TestFromAC_IdeationPhase2Mediation:
         """Happy: each late-domain panel agent appears in the Phase 2 section."""
         all_text = _all_element_text(diagram_data)
         assert agent in all_text, (
-            f"Late-domain panel agent {agent!r} not found. "
-            "Phase 2 late panel: architect, data, enduser, security."
+            f"Late-domain panel agent {agent!r} not found. Phase 2 late panel: architect, data, enduser, security."
         )
 
     def test_embedded_critic_loops_present(self, diagram_data: dict) -> None:
         """Happy: embedded Critic loops appear in Phase 2."""
         all_text = _all_element_text(diagram_data)
-        assert "critic" in all_text, (
-            "Critic not found — embedded loops required in Phase 2"
-        )
+        assert "critic" in all_text, "Critic not found — embedded loops required in Phase 2"
 
     def test_critic_loop_max_cycles_annotated(self, diagram_data: dict) -> None:
         """Boundary: Critic loop annotation shows <=5 cycle limit per panelist."""
@@ -388,8 +370,7 @@ class TestFromAC_IdeationPhase2Mediation:
         """Happy: M4 includes O15 Critic validation pass per AC2."""
         all_text = _all_element_text(diagram_data)
         assert "o15" in all_text, (
-            "O15 Critic validation pass not found. "
-            "M4 Decision Support must include the O15 validation step per AC2."
+            "O15 Critic validation pass not found. M4 Decision Support must include the O15 validation step per AC2."
         )
 
     def test_m4_decision_support_present(self, diagram_data: dict) -> None:
@@ -407,9 +388,7 @@ class TestFromAC_IdeationPhase2Mediation:
         """Happy: M6 (Pipeline Handoff) is labeled with kanban or planner reference."""
         all_text = _all_element_text(diagram_data)
         assert "m6" in all_text, "M6 moment label not found"
-        has_handoff = (
-            "handoff" in all_text or "planner" in all_text or "kanban" in all_text
-        )
+        has_handoff = "handoff" in all_text or "planner" in all_text or "kanban" in all_text
         assert has_handoff, "Pipeline handoff not found at M6"
 
 
@@ -430,36 +409,21 @@ class TestFromAC_IdeationStructuralConnections:
         """Structural: a bound arrow from the router entry to Phase 1."""
         router = _find_elem_by_text(diagram_data, "router")
         assert router is not None, (
-            "Router element not found by text router. "
-            "ideator must be labeled as a routing node per AC2."
+            "Router element not found by text router. ideator must be labeled as a routing node per AC2."
         )
-        phase1 = _find_elem_by_text(diagram_data, "phase 1") or _find_elem_by_text(
-            diagram_data, "discovery"
-        )
-        assert phase1 is not None, (
-            "Phase 1 entry element not found. "
-            "Diagram must have a labeled Phase 1 region."
-        )
+        phase1 = _find_elem_by_text(diagram_data, "phase 1") or _find_elem_by_text(diagram_data, "discovery")
+        assert phase1 is not None, "Phase 1 entry element not found. Diagram must have a labeled Phase 1 region."
         arrows = _arrows_between(diagram_data, router["id"], phase1["id"])
-        assert len(arrows) >= 1, (
-            "No bound arrow from router to Phase 1. Router -> Phase 1 path must be explicit."
-        )
+        assert len(arrows) >= 1, "No bound arrow from router to Phase 1. Router -> Phase 1 path must be explicit."
 
     def test_router_has_arrow_to_phase2(self, diagram_data: dict) -> None:
         """Structural: a bound arrow from the router entry to Phase 2."""
         router = _find_elem_by_text(diagram_data, "router")
         assert router is not None, "Router element not found by text router"
-        phase2 = _find_elem_by_text(diagram_data, "phase 2") or _find_elem_by_text(
-            diagram_data, "mediation"
-        )
-        assert phase2 is not None, (
-            "Phase 2 entry element not found. "
-            "Diagram must have a labeled Phase 2 region."
-        )
+        phase2 = _find_elem_by_text(diagram_data, "phase 2") or _find_elem_by_text(diagram_data, "mediation")
+        assert phase2 is not None, "Phase 2 entry element not found. Diagram must have a labeled Phase 2 region."
         arrows = _arrows_between(diagram_data, router["id"], phase2["id"])
-        assert len(arrows) >= 1, (
-            "No bound arrow from router to Phase 2. Router -> Phase 2 path must be explicit."
-        )
+        assert len(arrows) >= 1, "No bound arrow from router to Phase 2. Router -> Phase 2 path must be explicit."
 
     def test_m2_connects_to_early_challenge_lane(self, diagram_data: dict) -> None:
         """Structural: M2 fans out to the early challenge lane via a bound arrow."""
@@ -467,26 +431,18 @@ class TestFromAC_IdeationStructuralConnections:
         assert m2_elem is not None, "M2 element not found"
         challenge = _find_elem_by_text(diagram_data, "early challenge")
         assert challenge is not None, (
-            "Early challenge lane element not found. "
-            "M2 must fan out to the early challenge lane per AC2."
+            "Early challenge lane element not found. M2 must fan out to the early challenge lane per AC2."
         )
         arrows = _arrows_between(diagram_data, m2_elem["id"], challenge["id"])
         assert len(arrows) >= 1, "No bound arrow from M2 to early challenge lane"
 
-    def test_phase1_connects_to_phase2_via_research_bridge(
-        self, diagram_data: dict
-    ) -> None:
+    def test_phase1_connects_to_phase2_via_research_bridge(self, diagram_data: dict) -> None:
         """Structural: a bound arrow encodes the Phase 1 -> Phase 2 handoff."""
-        bridge = _find_elem_by_text(
-            diagram_data, "research bridge"
-        ) or _find_elem_by_text(diagram_data, "handoff")
+        bridge = _find_elem_by_text(diagram_data, "research bridge") or _find_elem_by_text(diagram_data, "handoff")
         assert bridge is not None, (
-            "Research bridge / handoff element not found. "
-            "Phase 1 must have an explicit handoff to Phase 2 per AC2."
+            "Research bridge / handoff element not found. Phase 1 must have an explicit handoff to Phase 2 per AC2."
         )
-        phase2 = _find_elem_by_text(diagram_data, "phase 2") or _find_elem_by_text(
-            diagram_data, "mediation"
-        )
+        phase2 = _find_elem_by_text(diagram_data, "phase 2") or _find_elem_by_text(diagram_data, "mediation")
         assert phase2 is not None, "Phase 2 entry element not found"
         arrows = _arrows_between(diagram_data, bridge["id"], phase2["id"])
         assert len(arrows) >= 1, "No bound arrow from handoff/bridge to Phase 2"
@@ -495,19 +451,14 @@ class TestFromAC_IdeationStructuralConnections:
         """Structural: an arrow from M3 triggers the late domain panel."""
         m3_elem = _find_elem_by_text(diagram_data, "m3")
         assert m3_elem is not None, "M3 element not found"
-        panel = _find_elem_by_text(diagram_data, "late", "panel") or _find_elem_by_text(
-            diagram_data, "domain panel"
-        )
+        panel = _find_elem_by_text(diagram_data, "late", "panel") or _find_elem_by_text(diagram_data, "domain panel")
         assert panel is not None, (
-            "Late domain panel element not found. "
-            "M3 must trigger the late domain panel via a bound arrow."
+            "Late domain panel element not found. M3 must trigger the late domain panel via a bound arrow."
         )
         arrows = _arrows_between(diagram_data, m3_elem["id"], panel["id"])
         assert len(arrows) >= 1, "No bound arrow from M3 to late domain panel"
 
-    def test_each_late_panelist_has_bidirectional_critic_loop(
-        self, diagram_data: dict
-    ) -> None:
+    def test_each_late_panelist_has_bidirectional_critic_loop(self, diagram_data: dict) -> None:
         """Structural: each late-domain panelist has a bidirectional Critic arrow.
         FAILS on old model because data and security elements do not exist.
         """
@@ -527,19 +478,11 @@ class TestFromAC_IdeationStructuralConnections:
                 missing_bidirectional.append(f"element for {kws!r} not found")
                 continue
             arrows = _arrows_between(diagram_data, panelist_elem["id"], critic["id"])
-            bidi = [
-                a
-                for a in arrows
-                if a.get("startArrowhead") is not None
-                and a.get("endArrowhead") is not None
-            ]
+            bidi = [a for a in arrows if a.get("startArrowhead") is not None and a.get("endArrowhead") is not None]
             if not bidi:
-                missing_bidirectional.append(
-                    f"{kws!r} -> critic: no bidirectional arrow"
-                )
-        assert not missing_bidirectional, (
-            "Missing bidirectional Critic loop arrows for: "
-            + "; ".join(missing_bidirectional)
+                missing_bidirectional.append(f"{kws!r} -> critic: no bidirectional arrow")
+        assert not missing_bidirectional, "Missing bidirectional Critic loop arrows for: " + "; ".join(
+            missing_bidirectional
         )
 
     def test_pragmatist_convergence_connects_to_m4(self, diagram_data: dict) -> None:
@@ -577,9 +520,7 @@ class TestFromAC_IdeationStructuralConnections:
         """Structural: M6 has a bound arrow to the pipeline handoff element."""
         m6_elem = _find_elem_by_text(diagram_data, "m6")
         assert m6_elem is not None, "M6 element not found"
-        handoff = _find_elem_by_text(diagram_data, "handoff") or _find_elem_by_text(
-            diagram_data, "planner"
-        )
+        handoff = _find_elem_by_text(diagram_data, "handoff") or _find_elem_by_text(diagram_data, "planner")
         assert handoff is not None, "Pipeline handoff element not found"
         arrows = _arrows_between(diagram_data, m6_elem["id"], handoff["id"])
         assert len(arrows) >= 1, "No bound arrow from M6 to handoff/planner"
@@ -611,22 +552,17 @@ class TestFromAC_IdeationDescribesField:
         assert len(diagram_data.get("describes", [])) > 0
 
     @pytest.mark.parametrize("glob", _REQUIRED_DESCRIBES_GLOBS)
-    def test_required_glob_present_in_describes(
-        self, diagram_data: dict, glob: str
-    ) -> None:
+    def test_required_glob_present_in_describes(self, diagram_data: dict, glob: str) -> None:
         """Happy: each of the 6 required file-path globs appears in describes."""
         describes: list = diagram_data.get("describes", [])
-        assert glob in describes, (
-            f"Required glob {glob!r} not found in describes: {describes}"
-        )
+        assert glob in describes, f"Required glob {glob!r} not found in describes: {describes}"
 
     def test_describes_has_exactly_six_entries(self, diagram_data: dict) -> None:
         """Boundary: describes contains exactly 6 entries.
         Old diagram had 4 entries; FAILS until phase-specific globs are added."""
         describes: list = diagram_data.get("describes", [])
         assert len(describes) == len(_REQUIRED_DESCRIBES_GLOBS), (
-            f"Expected {len(_REQUIRED_DESCRIBES_GLOBS)} describes entries, "
-            f"got {len(describes)}: {describes}"
+            f"Expected {len(_REQUIRED_DESCRIBES_GLOBS)} describes entries, got {len(describes)}: {describes}"
         )
 
 
@@ -641,9 +577,7 @@ class TestFromAC_IdeationFooterElement:
     def test_footer_element_contains_last_verified(self, diagram_data: dict) -> None:
         """Happy: at least one diagram element contains the text Last verified:."""
         all_text = _all_element_text(diagram_data)
-        assert "last verified:" in all_text, (
-            "No element contains Last verified: — footer element missing"
-        )
+        assert "last verified:" in all_text, "No element contains Last verified: — footer element missing"
 
     def test_footer_text_matches_date_hash_pattern(self, diagram_data: dict) -> None:
         """Boundary: footer matches Last verified: YYYY-MM-DD (short-hash) pattern."""
@@ -709,36 +643,23 @@ class TestFromAC_IdeationExcalidrawConventions:
         violators = [
             e.get("id", f"idx:{i}")
             for i, e in enumerate(elements)
-            if e.get("type") == "text"
-            and isinstance(e.get("fontSize"), (int, float))
-            and e["fontSize"] < 16
+            if e.get("type") == "text" and isinstance(e.get("fontSize"), (int, float)) and e["fontSize"] < 16
         ]
         assert not violators, f"Text elements with fontSize < 16px: {violators}"
 
-    def test_all_arrows_have_both_bindings_referencing_valid_ids(
-        self, diagram_data: dict
-    ) -> None:
+    def test_all_arrows_have_both_bindings_referencing_valid_ids(self, diagram_data: dict) -> None:
         """Boundary (sub-criterion 3): every arrow must have startBinding AND
         endBinding, each referencing an element ID that exists in the diagram."""
         elements = diagram_data.get("elements", [])
         valid_ids = {e.get("id") for e in elements if e.get("id")}
         arrows = [e for e in elements if e.get("type") == "arrow"]
 
-        missing_start = [
-            e.get("id", f"idx:{i}")
-            for i, e in enumerate(arrows)
-            if not e.get("startBinding")
-        ]
-        missing_end = [
-            e.get("id", f"idx:{i}")
-            for i, e in enumerate(arrows)
-            if not e.get("endBinding")
-        ]
+        missing_start = [e.get("id", f"idx:{i}") for i, e in enumerate(arrows) if not e.get("startBinding")]
+        missing_end = [e.get("id", f"idx:{i}") for i, e in enumerate(arrows) if not e.get("endBinding")]
         invalid_start = [
             (e.get("id"), e["startBinding"]["elementId"])
             for e in arrows
-            if e.get("startBinding")
-            and e["startBinding"].get("elementId") not in valid_ids
+            if e.get("startBinding") and e["startBinding"].get("elementId") not in valid_ids
         ]
         invalid_end = [
             (e.get("id"), e["endBinding"]["elementId"])
@@ -747,29 +668,20 @@ class TestFromAC_IdeationExcalidrawConventions:
         ]
         assert not missing_start, f"Arrows missing startBinding: {missing_start}"
         assert not missing_end, f"Arrows missing endBinding: {missing_end}"
-        assert not invalid_start, (
-            f"Arrows with invalid startBinding elementId: {invalid_start}"
-        )
-        assert not invalid_end, (
-            f"Arrows with invalid endBinding elementId: {invalid_end}"
-        )
+        assert not invalid_start, f"Arrows with invalid startBinding elementId: {invalid_start}"
+        assert not invalid_end, f"Arrows with invalid endBinding elementId: {invalid_end}"
 
-    def test_origin_top_left_non_arrow_element_at_100_100(
-        self, diagram_data: dict
-    ) -> None:
+    def test_origin_top_left_non_arrow_element_at_100_100(self, diagram_data: dict) -> None:
         """Boundary (sub-criterion 4): topmost-leftmost non-deleted non-arrow
         element must start at exactly (x=100, y=100)."""
         elements = diagram_data.get("elements", [])
-        candidates = [
-            e for e in elements if e.get("type") != "arrow" and not e.get("isDeleted")
-        ]
+        candidates = [e for e in elements if e.get("type") != "arrow" and not e.get("isDeleted")]
         assert candidates, "No non-deleted non-arrow elements found"
         top_left = min(candidates, key=lambda e: (e.get("y", 0), e.get("x", 0)))
         x, y = top_left.get("x", 0), top_left.get("y", 0)
         assert x == 100, f"Top-left non-arrow element has x={x} — expected 100"
         assert y == 100, (
-            f"Top-left non-arrow element starts at y={y} — "
-            f"expected y=100 per h-excalidraw-diagram origin rule"
+            f"Top-left non-arrow element starts at y={y} — expected y=100 per h-excalidraw-diagram origin rule"
         )
 
     def test_all_non_arrow_elements_on_20px_grid(self, diagram_data: dict) -> None:
@@ -788,8 +700,7 @@ class TestFromAC_IdeationExcalidrawConventions:
             )
         ]
         assert not violators, (
-            f"{len(violators)} non-arrow elements have off-grid coordinates "
-            f"(not multiples of 20): {violators}"
+            f"{len(violators)} non-arrow elements have off-grid coordinates (not multiples of 20): {violators}"
         )
 
     def test_no_standalone_text_elements_overlap(self, diagram_data: dict) -> None:
@@ -797,11 +708,7 @@ class TestFromAC_IdeationExcalidrawConventions:
         (containerId=null) have overlapping bounding boxes."""
         elements = diagram_data.get("elements", [])
         standalone_texts = [
-            e
-            for e in elements
-            if e.get("type") == "text"
-            and not e.get("isDeleted")
-            and e.get("containerId") is None
+            e for e in elements if e.get("type") == "text" and not e.get("isDeleted") and e.get("containerId") is None
         ]
         overlapping_pairs: list[tuple[str, str]] = []
         for i, a in enumerate(standalone_texts):
@@ -844,20 +751,14 @@ class TestFromAC_IdeationDocIndexIntegration:
     def test_doc_index_entry_includes_describes_line(self, tmp_path: Path) -> None:
         """Happy: generate_index emits a describes: line in the entry."""
         entry = self._generate_entry(tmp_path)
-        assert "describes:" in entry, (
-            "No describes: line in ideation.excalidraw doc-index entry"
-        )
+        assert "describes:" in entry, "No describes: line in ideation.excalidraw doc-index entry"
 
-    def test_doc_index_entry_includes_all_six_required_globs(
-        self, tmp_path: Path
-    ) -> None:
+    def test_doc_index_entry_includes_all_six_required_globs(self, tmp_path: Path) -> None:
         """Happy: all 6 required globs appear in the generated doc-index entry.
         Fails for the 2 new phase-specific globs until the diagram is updated."""
         entry = self._generate_entry(tmp_path)
         for glob in _REQUIRED_DESCRIBES_GLOBS:
-            assert glob in entry, (
-                f"Required glob {glob!r} not found in generated doc-index entry"
-            )
+            assert glob in entry, f"Required glob {glob!r} not found in generated doc-index entry"
 
 
 # ===========================================================================
@@ -870,13 +771,10 @@ class TestFromAC_IdeationCommittedDocIndex:
     ideation.excalidraw section with all 6 required describes globs."""
 
     def _ideation_entry_text(self) -> str:
-        assert _DOC_INDEX_PATH.exists(), (
-            f"Committed doc-index not found: {_DOC_INDEX_PATH}"
-        )
+        assert _DOC_INDEX_PATH.exists(), f"Committed doc-index not found: {_DOC_INDEX_PATH}"
         text = _DOC_INDEX_PATH.read_text()
         assert "## share/diagrams/ideation.excalidraw" in text, (
-            "Committed .owlbear/doc-index.md has no entry for "
-            "share/diagrams/ideation.excalidraw"
+            "Committed .owlbear/doc-index.md has no entry for share/diagrams/ideation.excalidraw"
         )
         start = text.index("## share/diagrams/ideation.excalidraw")
         nxt = text.find("\n## ", start + 1)
@@ -890,9 +788,7 @@ class TestFromAC_IdeationCommittedDocIndex:
     def test_committed_doc_index_has_describes_line(self) -> None:
         """Regression: the committed doc-index entry has a describes: line."""
         entry = self._ideation_entry_text()
-        assert "describes:" in entry, (
-            "No describes: line in committed doc-index ideation entry"
-        )
+        assert "describes:" in entry, "No describes: line in committed doc-index ideation entry"
 
     @pytest.mark.parametrize("glob", _REQUIRED_DESCRIBES_GLOBS)
     def test_committed_doc_index_ideation_entry_contains_glob(self, glob: str) -> None:
@@ -900,10 +796,7 @@ class TestFromAC_IdeationCommittedDocIndex:
         doc-index ideation entry. Fails for 2 new phase-specific globs
         until diagram and doc-index are rebuilt and recommitted."""
         entry = self._ideation_entry_text()
-        assert glob in entry, (
-            f"Required glob {glob!r} not found in committed "
-            ".owlbear/doc-index.md ideation entry"
-        )
+        assert glob in entry, f"Required glob {glob!r} not found in committed .owlbear/doc-index.md ideation entry"
 
     def test_committed_doc_index_has_exactly_six_describes_globs(
         self,
@@ -912,8 +805,7 @@ class TestFromAC_IdeationCommittedDocIndex:
         entry = self._ideation_entry_text()
         found = [g for g in _REQUIRED_DESCRIBES_GLOBS if g in entry]
         assert len(found) == len(_REQUIRED_DESCRIBES_GLOBS), (
-            f"Expected {len(_REQUIRED_DESCRIBES_GLOBS)} globs in committed entry, "
-            f"found {len(found)}: {found}"
+            f"Expected {len(_REQUIRED_DESCRIBES_GLOBS)} globs in committed entry, found {len(found)}: {found}"
         )
 
     def test_committed_doc_index_ideation_entry_has_no_extra_describes_globs(
@@ -1027,9 +919,7 @@ class TestFromAC_IdeationAbsenceRequirements:
             "phase-owned moment sequences with no unified M1\u2013M6 framing."
         )
 
-    def test_o15_is_separate_structural_step_with_arrow_from_m4(
-        self, diagram_data: dict
-    ) -> None:
+    def test_o15_is_separate_structural_step_with_arrow_from_m4(self, diagram_data: dict) -> None:
         """Structural (AC2 Phase 2): O15 Critic validation is a distinct element
         with a bound arrow from M4.
 
@@ -1046,9 +936,7 @@ class TestFromAC_IdeationAbsenceRequirements:
 
         # Find M4 element
         m4_elem = _find_elem_by_text(diagram_data, "m4")
-        assert m4_elem is not None, (
-            "M4 element not found — cannot verify O15 separation"
-        )
+        assert m4_elem is not None, "M4 element not found — cannot verify O15 separation"
 
         # O15 must be a SEPARATE element from M4
         o15_elems = [
@@ -1140,10 +1028,7 @@ class TestFromAC_IdeationStructuralAbsenceSx:
                 if "o15" in end_text.lower():
                     # Only M4 → O15 permitted
                     if not _M4_RE.search(start_text):
-                        violations.append(
-                            f"Arrow {el.get('id')}: non-M4 moment "
-                            f"'{start_text}' → O15 '{end_text}'"
-                        )
+                        violations.append(f"Arrow {el.get('id')}: non-M4 moment '{start_text}' → O15 '{end_text}'")
                 else:
                     violations.append(
                         f"Arrow {el.get('id')}: moment '{start_text}' "
@@ -1182,10 +1067,7 @@ class TestFromAC_IdeationStructuralAbsenceSx:
                     "(creates shared backbone — Phase 1 and Phase 2 must be "
                     "separate sequences connected only through the research bridge)"
                 )
-        assert not violations, (
-            "AC2 S3 violation — shared moment backbone M2→M3 arrow found. "
-            f"Violations: {violations}"
-        )
+        assert not violations, f"AC2 S3 violation — shared moment backbone M2→M3 arrow found. Violations: {violations}"
 
     def test_s4_bridge_arrow_targets_phase2_step0(self, diagram_data: dict) -> None:
         """Structural (S4): exactly one bridge/handoff outgoing arrow must exist,
@@ -1302,9 +1184,7 @@ class TestFromAC_IdeationStructuralAbsenceSx:
             f"Violations: {violations}"
         )
 
-    def test_s6_phase1_denoise_label_contains_authority_terms(
-        self, diagram_data: dict
-    ) -> None:
+    def test_s6_phase1_denoise_label_contains_authority_terms(self, diagram_data: dict) -> None:
         """Content (S6a): the Phase 1 denoise element must name 'pragmatist' AND 'denoise'.
 
         Authority: w-ideation-discovery Step 2 item 6 ("invoke ideation-pragmatist
@@ -1336,9 +1216,7 @@ class TestFromAC_IdeationStructuralAbsenceSx:
             "Phase 1 optional pragmatist denoise step must be labeled with 'denoise'."
         )
 
-    def test_s6_phase2_step0_label_contains_compound_stop_gate(
-        self, diagram_data: dict
-    ) -> None:
+    def test_s6_phase2_step0_label_contains_compound_stop_gate(self, diagram_data: dict) -> None:
         """Content (S6b): Phase 2 Step 0 must express BOTH the condition (thin/
         insufficient/correction) AND the action (stop/stops/halt).
 
@@ -1377,9 +1255,7 @@ class TestFromAC_IdeationStructuralAbsenceSx:
             "Phase 2 Step 0 gate element is missing from the diagram."
         )
 
-    def test_s7_phase1_denoise_has_incoming_and_outgoing_arrows(
-        self, diagram_data: dict
-    ) -> None:
+    def test_s7_phase1_denoise_has_incoming_and_outgoing_arrows(self, diagram_data: dict) -> None:
         """Wiring (S7): the Phase 1 denoise element must have BOTH an incoming
         AND an outgoing bound arrow.
 
@@ -1447,9 +1323,7 @@ class TestFromAC_IdeationStructuralAbsenceSx:
         by_id = _build_by_id(diagram_data)
         elements = diagram_data.get("elements", [])
 
-        bridge_checks: list[
-            tuple[str, str, str]
-        ] = []  # (arrow_id, bridge_id, bridge_text)
+        bridge_checks: list[tuple[str, str, str]] = []  # (arrow_id, bridge_id, bridge_text)
         for el in elements:
             if el.get("type") != "arrow" or el.get("isDeleted"):
                 continue
@@ -1475,9 +1349,7 @@ class TestFromAC_IdeationStructuralAbsenceSx:
                 "target agent — e.g., add '→ @ideation-mediator' to the bridge label."
             )
 
-    def test_s8_no_phase1_flow_to_phase2_moment_arrows(
-        self, diagram_data: dict
-    ) -> None:
+    def test_s8_no_phase1_flow_to_phase2_moment_arrows(self, diagram_data: dict) -> None:
         """Structural-absence (S8): no arrow from a Phase 1 flow element
         (resolved text matches 'denoise' or 'early challenge') may bind
         directly to a Phase 2 moment node (M3-M6).
@@ -1504,9 +1376,7 @@ class TestFromAC_IdeationStructuralAbsenceSx:
                 continue
             start_text = _resolve_text(by_id, start_id)
             end_text = _resolve_text(by_id, end_id)
-            if _PHASE1_FLOW_RE.search(start_text) and _PHASE2_MOMENT_RE.search(
-                end_text
-            ):
+            if _PHASE1_FLOW_RE.search(start_text) and _PHASE2_MOMENT_RE.search(end_text):
                 violations.append(
                     f"Arrow {el.get('id')!r}: Phase 1 flow element "
                     f"{start_text!r} → Phase 2 moment {end_text!r} "
@@ -1603,17 +1473,11 @@ class TestFromAC_IdeationPhase2ChainProof:
                 continue
             start_text = _resolve_text(by_id, start_id)
             end_text = _resolve_text(by_id, end_id)
-            if _text_matches(start_text, start_criteria) and _text_matches(
-                end_text, end_criteria
-            ):
+            if _text_matches(start_text, start_criteria) and _text_matches(end_text, end_criteria):
                 return  # Hop satisfied
 
-        start_desc = ", ".join(
-            c.pattern if isinstance(c, re.Pattern) else repr(c) for c in start_criteria
-        )
-        end_desc = ", ".join(
-            c.pattern if isinstance(c, re.Pattern) else repr(c) for c in end_criteria
-        )
+        start_desc = ", ".join(c.pattern if isinstance(c, re.Pattern) else repr(c) for c in start_criteria)
+        end_desc = ", ".join(c.pattern if isinstance(c, re.Pattern) else repr(c) for c in end_criteria)
         pytest.fail(
             f"AC2 S9 hop {hop_id}: no bound arrow from element matching "
             f"[{start_desc}] to element matching [{end_desc}]. "
@@ -1686,17 +1550,11 @@ class TestFromAC_IdeationPhase1ChainProof:
                 continue
             start_text = _resolve_text(by_id, start_id)
             end_text = _resolve_text(by_id, end_id)
-            if _text_matches(start_text, start_criteria) and _text_matches(
-                end_text, end_criteria
-            ):
+            if _text_matches(start_text, start_criteria) and _text_matches(end_text, end_criteria):
                 return  # Hop satisfied
 
-        start_desc = ", ".join(
-            c.pattern if isinstance(c, re.Pattern) else repr(c) for c in start_criteria
-        )
-        end_desc = ", ".join(
-            c.pattern if isinstance(c, re.Pattern) else repr(c) for c in end_criteria
-        )
+        start_desc = ", ".join(c.pattern if isinstance(c, re.Pattern) else repr(c) for c in start_criteria)
+        end_desc = ", ".join(c.pattern if isinstance(c, re.Pattern) else repr(c) for c in end_criteria)
         pytest.fail(
             f"AC2 S11 hop {hop_id}: no bound arrow from element matching "
             f"[{start_desc}] to element matching [{end_desc}]. "

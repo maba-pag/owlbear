@@ -67,18 +67,10 @@ def board_dir(tmp_path: Path) -> Path:
     """
     kanban_dir = _make_board(tmp_path)
     seed_engine = KanbanEngine(kanban_dir)
-    seed_engine.create_task(
-        "Alpha task", status="todo", priority="important", tags=["alpha"]
-    )
-    seed_engine.create_task(
-        "Beta task", status="review", priority="critical", tags=["beta"]
-    )
-    seed_engine.create_task(
-        "Gamma blocked", status="in-progress", priority="needed", tags=["gamma"]
-    )
-    seed_engine.create_task(
-        "Delta claimed", status="in-progress", priority="important", tags=["delta"]
-    )
+    seed_engine.create_task("Alpha task", status="todo", priority="important", tags=["alpha"])
+    seed_engine.create_task("Beta task", status="review", priority="critical", tags=["beta"])
+    seed_engine.create_task("Gamma blocked", status="in-progress", priority="needed", tags=["gamma"])
+    seed_engine.create_task("Delta claimed", status="in-progress", priority="important", tags=["delta"])
     # Populate id→filename cache before edits
     seed_engine.list_tasks()
     seed_engine.edit_task("3", blocked=True, block_reason="waiting on dependency")
@@ -240,9 +232,7 @@ class TestFromAC_BoardConfig:
         priorities = response.json()["priorities"]
         assert priorities == _PRIORITIES
 
-    def test_board_response_includes_valid_transitions_dict(
-        self, client: TestClient
-    ) -> None:
+    def test_board_response_includes_valid_transitions_dict(self, client: TestClient) -> None:
         """Response body contains a 'valid_transitions' key with a dict value (R1)."""
         response = client.get("/api/board")
         assert response.status_code == 200
@@ -250,18 +240,14 @@ class TestFromAC_BoardConfig:
         assert "valid_transitions" in body
         assert isinstance(body["valid_transitions"], dict)
 
-    def test_board_valid_transitions_maps_every_configured_status(
-        self, client: TestClient
-    ) -> None:
+    def test_board_valid_transitions_maps_every_configured_status(self, client: TestClient) -> None:
         """valid_transitions dict has an entry for every configured status (R1)."""
         response = client.get("/api/board")
         assert response.status_code == 200
         vt = response.json()["valid_transitions"]
         assert set(vt.keys()) == set(_STATUSES)
 
-    def test_board_valid_transitions_values_are_lists_of_strings(
-        self, client: TestClient
-    ) -> None:
+    def test_board_valid_transitions_values_are_lists_of_strings(self, client: TestClient) -> None:
         """Each valid_transitions value is a non-empty list of strings (R1)."""
         response = client.get("/api/board")
         assert response.status_code == 200
@@ -270,21 +256,15 @@ class TestFromAC_BoardConfig:
             assert isinstance(targets, list), f"targets for {status!r} is not a list"
             assert len(targets) > 0, f"targets for {status!r} is empty"
             for t in targets:
-                assert isinstance(t, str), (
-                    f"target {t!r} for {status!r} is not a string"
-                )
+                assert isinstance(t, str), f"target {t!r} for {status!r} is not a string"
 
-    def test_board_valid_transitions_excludes_current_status(
-        self, client: TestClient
-    ) -> None:
+    def test_board_valid_transitions_excludes_current_status(self, client: TestClient) -> None:
         """Each status is excluded from its own valid_transitions list (R1)."""
         response = client.get("/api/board")
         assert response.status_code == 200
         vt = response.json()["valid_transitions"]
         for status, targets in vt.items():
-            assert status not in targets, (
-                f"valid_transitions[{status!r}] contains itself: {targets}"
-            )
+            assert status not in targets, f"valid_transitions[{status!r}] contains itself: {targets}"
 
 
 # ---------------------------------------------------------------------------
@@ -334,9 +314,7 @@ class TestFromAC_TaskList:
         response = client.get("/api/tasks", params={"status": "review"})
         assert response.status_code == 200
 
-    def test_tasks_filter_by_status_returns_only_matching(
-        self, client: TestClient
-    ) -> None:
+    def test_tasks_filter_by_status_returns_only_matching(self, client: TestClient) -> None:
         """All tasks in a status-filtered response have the requested status."""
         response = client.get("/api/tasks", params={"status": "review"})
         assert response.status_code == 200
@@ -349,9 +327,7 @@ class TestFromAC_TaskList:
         response = client.get("/api/tasks", params={"priority": "critical"})
         assert response.status_code == 200
 
-    def test_tasks_filter_by_priority_returns_only_matching(
-        self, client: TestClient
-    ) -> None:
+    def test_tasks_filter_by_priority_returns_only_matching(self, client: TestClient) -> None:
         """All tasks in a priority-filtered response have the requested priority."""
         response = client.get("/api/tasks", params={"priority": "critical"})
         assert response.status_code == 200
@@ -364,9 +340,7 @@ class TestFromAC_TaskList:
         response = client.get("/api/tasks", params={"tag": "alpha"})
         assert response.status_code == 200
 
-    def test_tasks_filter_by_tag_returns_only_matching(
-        self, client: TestClient
-    ) -> None:
+    def test_tasks_filter_by_tag_returns_only_matching(self, client: TestClient) -> None:
         """All tasks in a tag-filtered response include the requested tag."""
         response = client.get("/api/tasks", params={"tag": "alpha"})
         assert response.status_code == 200
@@ -379,9 +353,7 @@ class TestFromAC_TaskList:
         response = client.get("/api/tasks", params={"blocked": "true"})
         assert response.status_code == 200
 
-    def test_tasks_filter_by_blocked_returns_only_blocked_tasks(
-        self, client: TestClient
-    ) -> None:
+    def test_tasks_filter_by_blocked_returns_only_blocked_tasks(self, client: TestClient) -> None:
         """All tasks in a blocked=true response have blocked=True."""
         response = client.get("/api/tasks", params={"blocked": "true"})
         assert response.status_code == 200
@@ -428,9 +400,7 @@ class TestFromAC_TaskDetail:
         ):
             assert field in body, f"Task detail missing field {field!r}"
 
-    def test_task_detail_nonexistent_id_returns_404_with_id_in_detail(
-        self, client: TestClient
-    ) -> None:
+    def test_task_detail_nonexistent_id_returns_404_with_id_in_detail(self, client: TestClient) -> None:
         """GET /api/tasks/9999 returns 404 with the ID referenced in the error detail."""
         response = client.get("/api/tasks/9999")
         assert response.status_code == 404
@@ -438,9 +408,7 @@ class TestFromAC_TaskDetail:
         assert "detail" not in body
         assert body.get("code") == "ERR_NOT_FOUND"
         message = body.get("message", "")
-        assert "9999" in str(message), (
-            f"404 message should reference the requested ID '9999', got: {message!r}"
-        )
+        assert "9999" in str(message), f"404 message should reference the requested ID '9999', got: {message!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -466,15 +434,11 @@ class TestFromAC_Sessions:
         response = client.get("/api/sessions", params={"filter": "all"})
         assert response.status_code == 200
         body = response.json()
-        assert isinstance(body, dict), (
-            f"Expected dict envelope, got {type(body).__name__}: {body!r}"
-        )
+        assert isinstance(body, dict), f"Expected dict envelope, got {type(body).__name__}: {body!r}"
         assert "sessions" in body, f"Response missing 'sessions' key: {body!r}"
         assert isinstance(body["sessions"], list)
 
-    def test_sessions_each_entry_has_task_id_and_state(
-        self, client: TestClient
-    ) -> None:
+    def test_sessions_each_entry_has_task_id_and_state(self, client: TestClient) -> None:
         """Each session entry has task_id (int) and state (str) fields."""
         response = client.get("/api/sessions", params={"filter": "all"})
         assert response.status_code == 200
@@ -486,9 +450,7 @@ class TestFromAC_Sessions:
             assert isinstance(session["task_id"], int)
             assert isinstance(session["state"], str)
 
-    def test_sessions_active_is_default_filter(
-        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_sessions_active_is_default_filter(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
         """GET /api/sessions (no filter param) defaults to active and returns HTTP 200."""
         from owlbear_cockpit.view import CockpitView
 
@@ -582,73 +544,49 @@ class TestFromAC_SessionsEnvelope1223:
         """SessionsResponse is importable from read.py and has a 'sessions' field."""
         from owlbear_cockpit.routes.read import SessionsResponse  # noqa: PLC0415
 
-        assert "sessions" in SessionsResponse.model_fields, (
-            "SessionsResponse must have a 'sessions' field"
-        )
+        assert "sessions" in SessionsResponse.model_fields, "SessionsResponse must have a 'sessions' field"
 
-    def test_sessions_all_filter_returns_dict_with_sessions_key(
-        self, client_1223: TestClient
-    ) -> None:
+    def test_sessions_all_filter_returns_dict_with_sessions_key(self, client_1223: TestClient) -> None:
         """Happy path: GET /api/sessions?filter=all returns dict with 'sessions'."""
         response = client_1223.get("/api/sessions", params={"filter": "all"})
         assert response.status_code == 200
         body = response.json()
-        assert isinstance(body, dict), (
-            f"Expected dict envelope, got {type(body).__name__}: {body!r}"
-        )
+        assert isinstance(body, dict), f"Expected dict envelope, got {type(body).__name__}: {body!r}"
         assert "sessions" in body, f"Response missing 'sessions' key: {body!r}"
         assert isinstance(body["sessions"], list)
 
-    def test_sessions_active_filter_returns_dict_with_sessions_key(
-        self, client_1223: TestClient
-    ) -> None:
+    def test_sessions_active_filter_returns_dict_with_sessions_key(self, client_1223: TestClient) -> None:
         """Happy path: GET /api/sessions?filter=active returns dict with 'sessions'."""
         response = client_1223.get("/api/sessions", params={"filter": "active"})
         assert response.status_code == 200
         body = response.json()
-        assert isinstance(body, dict), (
-            f"Expected dict envelope, got {type(body).__name__}: {body!r}"
-        )
+        assert isinstance(body, dict), f"Expected dict envelope, got {type(body).__name__}: {body!r}"
         assert "sessions" in body, f"Response missing 'sessions' key: {body!r}"
 
-    def test_sessions_no_param_returns_dict_with_sessions_key(
-        self, client_1223: TestClient
-    ) -> None:
+    def test_sessions_no_param_returns_dict_with_sessions_key(self, client_1223: TestClient) -> None:
         """Edge: GET /api/sessions (no filter param) returns dict with 'sessions'."""
         response = client_1223.get("/api/sessions")
         assert response.status_code == 200
         body = response.json()
-        assert isinstance(body, dict), (
-            f"Expected dict envelope, got {type(body).__name__}: {body!r}"
-        )
+        assert isinstance(body, dict), f"Expected dict envelope, got {type(body).__name__}: {body!r}"
         assert "sessions" in body, f"Response missing 'sessions' key: {body!r}"
 
-    def test_sessions_empty_board_wraps_empty_list(
-        self, client_1223: TestClient
-    ) -> None:
+    def test_sessions_empty_board_wraps_empty_list(self, client_1223: TestClient) -> None:
         """Edge: board with no sessions returns {'sessions': []}, not []."""
         response = client_1223.get("/api/sessions", params={"filter": "all"})
         assert response.status_code == 200
         body = response.json()
-        assert isinstance(body, dict), (
-            f"Expected dict envelope, got {type(body).__name__}: {body!r}"
-        )
+        assert isinstance(body, dict), f"Expected dict envelope, got {type(body).__name__}: {body!r}"
         sessions = body.get("sessions")
-        assert isinstance(sessions, list), (
-            f"body['sessions'] must be a list, got: {sessions!r}"
-        )
+        assert isinstance(sessions, list), f"body['sessions'] must be a list, got: {sessions!r}"
 
-    def test_sessions_envelope_has_only_sessions_key(
-        self, client_1223: TestClient
-    ) -> None:
+    def test_sessions_envelope_has_only_sessions_key(self, client_1223: TestClient) -> None:
         """Boundary: SessionsResponse has one field only: 'sessions'."""
         response = client_1223.get("/api/sessions", params={"filter": "all"})
         assert response.status_code == 200
         body = response.json()
         assert isinstance(body, dict)
-        assert set(body.keys()) == {"sessions"}, (
-            f"Expected only 'sessions' key in response, got: {set(body.keys())!r}"
-        )
+        assert set(body.keys()) == {"sessions"}, f"Expected only 'sessions' key in response, got: {set(body.keys())!r}"
 
     def test_sessions_response_sessions_field_annotation_is_list_of_session_record(
         self,
@@ -664,9 +602,7 @@ class TestFromAC_SessionsEnvelope1223:
         args = typing.get_args(field.annotation)
         assert origin is list, f"Expected list as container type, got {origin!r}"
         assert len(args) == 1, f"Expected single type arg, got args={args!r}"
-        assert args[0] is SessionRecord, (
-            f"Expected list[SessionRecord] annotation, got args={args!r}"
-        )
+        assert args[0] is SessionRecord, f"Expected list[SessionRecord] annotation, got args={args!r}"
 
     def test_sessions_explicit_all_filter_forwarded_to_view(
         self, client_1223: TestClient, monkeypatch: pytest.MonkeyPatch
@@ -686,23 +622,16 @@ class TestFromAC_SessionsEnvelope1223:
         response = client_1223.get("/api/sessions", params={"filter": "all"})
         assert response.status_code == 200
         assert captured_filters == ["all"], (
-            "Expected CockpitView.list_sessions called with filter='all', "
-            f"got: {captured_filters!r}"
+            f"Expected CockpitView.list_sessions called with filter='all', got: {captured_filters!r}"
         )
 
-    def test_sessions_per_entry_fields_with_nonempty_precondition(
-        self, client_with_session_1223: TestClient
-    ) -> None:
+    def test_sessions_per_entry_fields_with_nonempty_precondition(self, client_with_session_1223: TestClient) -> None:
         """Seeded board with active claim returns >=1 session with task_id/state."""
-        response = client_with_session_1223.get(
-            "/api/sessions", params={"filter": "all"}
-        )
+        response = client_with_session_1223.get("/api/sessions", params={"filter": "all"})
         assert response.status_code == 200
         body = response.json()
         sessions = body["sessions"]
-        assert len(sessions) >= 1, (
-            "Expected >=1 session from board with an active claim"
-        )
+        assert len(sessions) >= 1, "Expected >=1 session from board with an active claim"
         for session in sessions:
             assert "task_id" in session, f"Session missing task_id: {session}"
             assert "state" in session, f"Session missing state: {session}"
@@ -729,9 +658,7 @@ class TestFromAC_MtimeCache:
         assert isinstance(mtime, int)
         assert mtime > 0
 
-    def test_mtime_stable_on_repeated_calls_without_file_changes(
-        self, client: TestClient
-    ) -> None:
+    def test_mtime_stable_on_repeated_calls_without_file_changes(self, client: TestClient) -> None:
         """Two sequential GETs with no file changes return the same mtime (cache hit)."""
         r1 = client.get("/api/tasks")
         assert r1.status_code == 200
@@ -739,9 +666,7 @@ class TestFromAC_MtimeCache:
         assert r2.status_code == 200
         assert r1.json()["mtime"] == r2.json()["mtime"]
 
-    def test_mtime_changes_after_task_file_modified(
-        self, client: TestClient, board_dir: Path
-    ) -> None:
+    def test_mtime_changes_after_task_file_modified(self, client: TestClient, board_dir: Path) -> None:
         """After modifying a task file the mtime in the response changes."""
         r1 = client.get("/api/tasks")
         assert r1.status_code == 200
@@ -788,9 +713,7 @@ class TestFromAC_TaskSummaryFields:
         tasks = response.json()["tasks"]
         assert len(tasks) > 0
         for task in tasks:
-            assert "block_reason" in task, (
-                f"Task summary missing 'block_reason': {task}"
-            )
+            assert "block_reason" in task, f"Task summary missing 'block_reason': {task}"
 
     def test_task_summary_has_claimed_field(self, client: TestClient) -> None:
         """Each task summary in GET /api/tasks includes a 'claimed' key."""
@@ -801,9 +724,7 @@ class TestFromAC_TaskSummaryFields:
         for task in tasks:
             assert "claimed" in task, f"Task summary missing 'claimed': {task}"
 
-    def test_blocked_task_block_reason_is_correct_value(
-        self, client: TestClient
-    ) -> None:
+    def test_blocked_task_block_reason_is_correct_value(self, client: TestClient) -> None:
         """The blocked task (task 3) has block_reason == 'waiting on dependency'."""
         response = client.get("/api/tasks", params={"blocked": "true"})
         assert response.status_code == 200
@@ -835,17 +756,13 @@ class TestFromAC_TaskSummaryFields:
         assert len(tasks) == 1, f"Expected 1 alpha task, got {len(tasks)}"
         assert tasks[0]["claimed"] is False
 
-    def test_all_tasks_have_block_reason_and_claimed_with_correct_types(
-        self, client: TestClient
-    ) -> None:
+    def test_all_tasks_have_block_reason_and_claimed_with_correct_types(self, client: TestClient) -> None:
         """block_reason is str-or-null and claimed is bool for every task summary."""
         response = client.get("/api/tasks")
         assert response.status_code == 200
         tasks = response.json()["tasks"]
         for task in tasks:
-            assert task["block_reason"] is None or isinstance(
-                task["block_reason"], str
-            ), (
+            assert task["block_reason"] is None or isinstance(task["block_reason"], str), (
                 f"block_reason must be str or null, got {task['block_reason']!r} for task {task['id']}"
             )
             assert isinstance(task["claimed"], bool), (
@@ -873,58 +790,42 @@ class TestFromAC_TaskDetailClaimedFields:
         response = client.get("/api/tasks/1")
         assert response.status_code == 200
         body = response.json()
-        assert "claimed" in body, (
-            f"Task detail response missing 'claimed' field: {list(body.keys())}"
-        )
+        assert "claimed" in body, f"Task detail response missing 'claimed' field: {list(body.keys())}"
 
-    def test_task_detail_response_has_claimed_by_field(
-        self, client: TestClient
-    ) -> None:
+    def test_task_detail_response_has_claimed_by_field(self, client: TestClient) -> None:
         """GET /api/tasks/1 response excludes the legacy 'claimed_by' key."""
         response = client.get("/api/tasks/1")
         assert response.status_code == 200
         body = response.json()
-        assert "claimed_by" not in body, (
-            f"Task detail response must not include 'claimed_by': {list(body.keys())}"
-        )
+        assert "claimed_by" not in body, f"Task detail response must not include 'claimed_by': {list(body.keys())}"
 
     def test_unclaimed_task_detail_claimed_is_false(self, client: TestClient) -> None:
         """Unclaimed task (task 1, tag=alpha): detail response has claimed=false."""
         response = client.get("/api/tasks/1")
         assert response.status_code == 200
         body = response.json()
-        assert body["claimed"] is False, (
-            f"Expected claimed=false for task 1, got {body['claimed']!r}"
-        )
+        assert body["claimed"] is False, f"Expected claimed=false for task 1, got {body['claimed']!r}"
 
     def test_unclaimed_task_detail_claimed_by_is_null(self, client: TestClient) -> None:
         """Unclaimed task (task 1): detail response omits claimed_by."""
         response = client.get("/api/tasks/1")
         assert response.status_code == 200
         body = response.json()
-        assert "claimed_by" not in body, (
-            f"Expected no claimed_by field for task 1, got keys {list(body.keys())}"
-        )
+        assert "claimed_by" not in body, f"Expected no claimed_by field for task 1, got keys {list(body.keys())}"
 
     def test_claimed_task_detail_claimed_is_true(self, client: TestClient) -> None:
         """Claimed task (task 4, tag=delta): detail response has claimed=true."""
         response = client.get("/api/tasks/4")
         assert response.status_code == 200
         body = response.json()
-        assert body["claimed"] is True, (
-            f"Expected claimed=true for task 4, got {body['claimed']!r}"
-        )
+        assert body["claimed"] is True, f"Expected claimed=true for task 4, got {body['claimed']!r}"
 
-    def test_claimed_task_detail_claimed_by_is_non_null_string(
-        self, client: TestClient
-    ) -> None:
+    def test_claimed_task_detail_claimed_by_is_non_null_string(self, client: TestClient) -> None:
         """Claimed task (task 4): detail response omits legacy claimed_by."""
         response = client.get("/api/tasks/4")
         assert response.status_code == 200
         body = response.json()
-        assert "claimed_by" not in body, (
-            f"Expected no claimed_by field for task 4, got keys {list(body.keys())}"
-        )
+        assert "claimed_by" not in body, f"Expected no claimed_by field for task 4, got keys {list(body.keys())}"
 
     def test_claimed_field_is_bool_type(self, client: TestClient) -> None:
         """The 'claimed' field in task detail is a bool, not a string or other type."""
@@ -958,9 +859,7 @@ class TestFromAC_NewModulesImportable:
         from fastapi import APIRouter  # noqa: PLC0415
         from owlbear_cockpit.routes.read import router  # noqa: PLC0415
 
-        assert isinstance(router, APIRouter), (
-            f"routes.read.router must be an APIRouter, got {type(router).__name__}"
-        )
+        assert isinstance(router, APIRouter), f"routes.read.router must be an APIRouter, got {type(router).__name__}"
 
 
 class TestFromAC_PydanticResponseModels:
@@ -988,9 +887,7 @@ class TestFromAC_EmptyBoardEdgeCase:
         assert response.status_code == 200
         body = response.json()
         assert "tasks" in body
-        assert body["tasks"] == [], (
-            f"Expected empty tasks list for empty board, got {body['tasks']!r}"
-        )
+        assert body["tasks"] == [], f"Expected empty tasks list for empty board, got {body['tasks']!r}"
 
     def test_empty_board_tasks_mtime_is_zero(self, empty_client: TestClient) -> None:
         """GET /api/tasks on an empty board returns mtime=0."""
@@ -998,9 +895,7 @@ class TestFromAC_EmptyBoardEdgeCase:
         assert response.status_code == 200
         body = response.json()
         assert "mtime" in body
-        assert body["mtime"] == 0, (
-            f"Expected mtime=0 for empty board, got {body['mtime']!r}"
-        )
+        assert body["mtime"] == 0, f"Expected mtime=0 for empty board, got {body['mtime']!r}"
 
 
 class TestFromAC_MtimeScanCacheUnit:
@@ -1018,9 +913,7 @@ class TestFromAC_MtimeScanCacheUnit:
         from owlbear_cockpit.cache import MtimeScanCache  # noqa: PLC0415
 
         cache = MtimeScanCache(tmp_path)
-        assert cache.scan() == 0, (
-            "Empty tasks dir must return mtime=0 (max with default=0)"
-        )
+        assert cache.scan() == 0, "Empty tasks dir must return mtime=0 (max with default=0)"
 
     def test_non_empty_dir_scan_returns_positive_int(self, tmp_path: Path) -> None:
         """MtimeScanCache.scan() returns a positive integer when files are present."""
@@ -1029,14 +922,10 @@ class TestFromAC_MtimeScanCacheUnit:
         (tmp_path / "1-task.md").write_text("# task", encoding="utf-8")
         cache = MtimeScanCache(tmp_path)
         result = cache.scan()
-        assert isinstance(result, int), (
-            f"scan() must return int, got {type(result).__name__}"
-        )
+        assert isinstance(result, int), f"scan() must return int, got {type(result).__name__}"
         assert result > 0, "scan() must return positive mtime_ns when files are present"
 
-    def test_scan_returns_robust_signature_not_raw_max_mtime(
-        self, tmp_path: Path
-    ) -> None:
+    def test_scan_returns_robust_signature_not_raw_max_mtime(self, tmp_path: Path) -> None:
         """Post-1346 AC1: MtimeScanCache.scan() returns a directory signature (hash)
         that captures file-name set changes, NOT the raw maximum mtime_ns.
 
@@ -1076,17 +965,13 @@ class TestFromAC_MtimeScanCacheUnit:
 
         (tmp_path / "1-task.md").write_text("# task", encoding="utf-8")
         cache = MtimeScanCache(tmp_path)
-        assert cache.scan() == cache.scan(), (
-            "scan() must return a stable value when files are unchanged"
-        )
+        assert cache.scan() == cache.scan(), "scan() must return a stable value when files are unchanged"
 
 
 class TestFromAC_EngineReloadOnMtimeChange:
     """New tasks created between requests must be reflected in the task list."""
 
-    def test_new_task_appears_in_list_after_creation(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_new_task_appears_in_list_after_creation(self, client: TestClient, engine: KanbanEngine) -> None:
         """A task created after the first request appears in a subsequent request."""
         first = client.get("/api/tasks")
         assert first.status_code == 200
@@ -1098,13 +983,10 @@ class TestFromAC_EngineReloadOnMtimeChange:
         assert second.status_code == 200
         count_after = len(second.json()["tasks"])
         assert count_after > count_before, (
-            "New task must appear in subsequent GET /api/tasks response "
-            f"(before={count_before}, after={count_after})"
+            f"New task must appear in subsequent GET /api/tasks response (before={count_before}, after={count_after})"
         )
 
-    def test_mtime_increases_after_new_task_created(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_mtime_increases_after_new_task_created(self, client: TestClient, engine: KanbanEngine) -> None:
         """Creating a new task file increases the mtime returned by GET /api/tasks."""
         first = client.get("/api/tasks")
         assert first.status_code == 200
@@ -1116,8 +998,7 @@ class TestFromAC_EngineReloadOnMtimeChange:
         assert second.status_code == 200
         mtime_after = second.json()["mtime"]
         assert mtime_after != mtime_before, (
-            "signature must change after a new task file is created "
-            f"(before={mtime_before}, after={mtime_after})"
+            f"signature must change after a new task file is created (before={mtime_before}, after={mtime_after})"
         )
 
 
@@ -1146,9 +1027,7 @@ class TestFromAC_CacheHitShortCircuit:
 
         second = cache_client.get("/api/tasks")
         assert second.status_code == 200
-        assert call_count == 0, (
-            f"engine.list_tasks() called {call_count} times on cache hit, expected 0"
-        )
+        assert call_count == 0, f"engine.list_tasks() called {call_count} times on cache hit, expected 0"
 
     def test_has_changed_called_updates_last_mtime(
         self,
@@ -1156,13 +1035,10 @@ class TestFromAC_CacheHitShortCircuit:
         cache: MtimeScanCache,
     ) -> None:
         """cache.last_mtime is updated after the first GET /api/tasks."""
-        assert cache.last_mtime == 0, (
-            "Cache must start with last_mtime=0 before any request"
-        )
+        assert cache.last_mtime == 0, "Cache must start with last_mtime=0 before any request"
         cache_client.get("/api/tasks")
         assert cache.last_mtime > 0, (
-            "cache.last_mtime must be updated after GET /api/tasks — "
-            "has_changed() must be called in the route handler"
+            "cache.last_mtime must be updated after GET /api/tasks — has_changed() must be called in the route handler"
         )
 
     def test_status_filter_on_cache_hit_skips_engine(
@@ -1236,9 +1112,7 @@ class TestFromAC_CacheHitShortCircuit:
 
         response = cache_client.get("/api/tasks?tag=scope%3Ax")
         assert response.status_code == 200
-        assert call_count == 0, (
-            f"engine.list_tasks() called {call_count} times on tag-filtered cache hit, expected 0"
-        )
+        assert call_count == 0, f"engine.list_tasks() called {call_count} times on tag-filtered cache hit, expected 0"
 
     def test_blocked_filter_on_cache_hit_skips_engine(
         self,
@@ -1356,9 +1230,7 @@ class TestFromAC_CacheHitShortCircuit:
 
         second = empty_cache_client.get("/api/tasks")
         assert second.status_code == 200
-        assert second.json()["tasks"] == [], (
-            "Second empty-board response must also be empty"
-        )
+        assert second.json()["tasks"] == [], "Second empty-board response must also be empty"
         assert call_count == 0, (
             f"engine.list_tasks() called {call_count} times on second unchanged empty-board request — cached [] must be treated as a valid cache hit"
         )

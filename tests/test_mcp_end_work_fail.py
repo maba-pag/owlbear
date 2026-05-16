@@ -120,8 +120,7 @@ class TestFromAC_EndWorkOutcomeSpec:
         expected = {"success", "fail", "reject", "block", "release"}
         missing = expected - actual_args
         assert not missing, (
-            f"outcome type hint is missing outcomes: {sorted(missing)}. "
-            f"Current resolved args: {sorted(actual_args)!r}"
+            f"outcome type hint is missing outcomes: {sorted(missing)}. Current resolved args: {sorted(actual_args)!r}"
         )
 
     def test_end_work_outcome_type_hint_retains_release_after_fail_added(self) -> None:
@@ -139,8 +138,7 @@ class TestFromAC_EndWorkOutcomeSpec:
         actual_args = set(typing.get_args(outcome_hint)) if outcome_hint else set()
         # Require that BOTH are present — absence of 'fail' causes this to fail
         assert {"fail", "release"}.issubset(actual_args), (
-            f"outcome type hint must include both 'fail' and 'release'. "
-            f"Current resolved args: {sorted(actual_args)!r}"
+            f"outcome type hint must include both 'fail' and 'release'. Current resolved args: {sorted(actual_args)!r}"
         )
 
 
@@ -210,8 +208,7 @@ class TestFromAC_SkillDocEndWorkOutcomes:
         required = ["success", "fail", "reject", "block", "release"]
         missing_rows = [o for o in required if not _has_row(o)]
         assert not missing_rows, (
-            f"SKILL.md end_work Outcome table is missing rows for: {missing_rows}.\n"
-            f"Section:\n{section!r}"
+            f"SKILL.md end_work Outcome table is missing rows for: {missing_rows}.\nSection:\n{section!r}"
         )
 
     def test_skill_md_fail_outcome_has_use_when_guidance(self) -> None:
@@ -224,8 +221,7 @@ class TestFromAC_SkillDocEndWorkOutcomes:
         # Find a table row starting with | `fail`
         fail_row_idx = section.find("| `fail`")
         assert fail_row_idx != -1, (
-            "| `fail` | row not found in SKILL.md end_work Outcome table.\n"
-            f"Section:\n{section!r}"
+            f"| `fail` | row not found in SKILL.md end_work Outcome table.\nSection:\n{section!r}"
         )
         # The row should have at least one more cell with content
         row_line = section[fail_row_idx : section.find("\n", fail_row_idx)]
@@ -281,10 +277,7 @@ class TestFromAC_ReadmeEndWorkOutcomes:
         section = self._outcomes_section()
         required = {"success", "fail", "reject", "block", "release"}
         missing = [o for o in sorted(required) if o not in section.lower()]
-        assert not missing, (
-            f"README.md end_work Outcomes section is missing: {missing}.\n"
-            f"Section:\n{section!r}"
-        )
+        assert not missing, f"README.md end_work Outcomes section is missing: {missing}.\nSection:\n{section!r}"
 
     def test_readme_end_work_fail_outcome_has_description(self) -> None:
         """'fail' in README.md end_work section must be a documented entry.
@@ -297,12 +290,9 @@ class TestFromAC_ReadmeEndWorkOutcomes:
         assert fail_idx != -1, "'fail' not in README.md end_work section at all"
         # After the token, expect some prose or table structure
         surrounding = section[fail_idx : fail_idx + 150].lower()
-        has_structure = (
-            "|" in surrounding or "-" in surrounding or "record" in surrounding
-        )
+        has_structure = "|" in surrounding or "-" in surrounding or "record" in surrounding
         assert has_structure, (
-            f"'fail' in README.md end_work section has no associated description.\n"
-            f"Context: {surrounding!r}"
+            f"'fail' in README.md end_work section has no associated description.\nContext: {surrounding!r}"
         )
 
 
@@ -315,9 +305,7 @@ def _get_tool_props(tool_name: str) -> dict:
     """Return the JSON Schema 'properties' dict for a FastMCP tool."""
     import owlbear_mcp_kanban.server as _srv
 
-    tool = next(
-        t for t in _srv.mcp._tool_manager._tools.values() if t.name == tool_name
-    )
+    tool = next(t for t in _srv.mcp._tool_manager._tools.values() if t.name == tool_name)
     return tool.parameters.get("properties", {})
 
 
@@ -566,9 +554,7 @@ class TestFromAC_EndWorkReleaseRuntime:
     """AC2 runtime proof: end_work(outcome='release') executes without error."""
 
     @pytest.mark.asyncio
-    async def test_end_work_release_returns_task_response(
-        self, claimed_task_ctx: AppContext
-    ) -> None:
+    async def test_end_work_release_returns_task_response(self, claimed_task_ctx: AppContext) -> None:
         """end_work(outcome='release') must return a task response on a claimed task.
 
         Proves the runtime path for 'release' is reachable end-to-end through
@@ -584,9 +570,7 @@ class TestFromAC_EndWorkReleaseRuntime:
         assert result.id == 1
 
     @pytest.mark.asyncio
-    async def test_end_work_release_does_not_advance_status(
-        self, claimed_task_ctx: AppContext
-    ) -> None:
+    async def test_end_work_release_does_not_advance_status(self, claimed_task_ctx: AppContext) -> None:
         """end_work(outcome='release') must leave the task status unchanged.
 
         The task starts in 'in-progress'. Release unclaims it without advancing.
@@ -612,9 +596,7 @@ class TestFromAC_EndWorkSuccessMoveTo:
     """AC10 runtime proof: end_work(outcome='success', move_to=...) executes correctly."""
 
     @pytest.mark.asyncio
-    async def test_end_work_success_with_move_to_returns_task_response(
-        self, claimed_task_ctx: AppContext
-    ) -> None:
+    async def test_end_work_success_with_move_to_returns_task_response(self, claimed_task_ctx: AppContext) -> None:
         """end_work(outcome='success', move_to='done') must return a task response.
 
         Proves the runtime path for success+move_to is accepted end-to-end
@@ -631,9 +613,7 @@ class TestFromAC_EndWorkSuccessMoveTo:
         assert result.id == 1
 
     @pytest.mark.asyncio
-    async def test_end_work_success_move_to_advances_to_specified_status(
-        self, claimed_task_ctx: AppContext
-    ) -> None:
+    async def test_end_work_success_move_to_advances_to_specified_status(self, claimed_task_ctx: AppContext) -> None:
         """end_work(outcome='success', move_to='done') advances to 'done', not 'review'.
 
         Task starts in 'in-progress'. Default next is 'review'.
@@ -714,9 +694,7 @@ class TestFromAC_BlockMoveToMatrix:
         engine implementation and the full lifecycle matrix.
         """
         bullet = self._readme_block_bullet()
-        assert bullet, (
-            "- `block` bullet not found in README.md end_work Outcomes section."
-        )
+        assert bullet, "- `block` bullet not found in README.md end_work Outcomes section."
         assert "move_to" in bullet, (
             f"README 'block' outcome bullet does not mention 'move_to'.\n"
             f"Current bullet: {bullet!r}\n"

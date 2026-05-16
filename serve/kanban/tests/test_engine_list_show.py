@@ -154,9 +154,7 @@ class TestFromAC_ListTasksParentFilter:
         ids = [t.id for t in resp.tasks]
         assert 1 in ids, "Task with parent=10 must appear in list_tasks(parent=10)"
 
-    def test_parent_filter_excludes_tasks_without_matching_parent(
-        self, tmp_path: Path
-    ) -> None:
+    def test_parent_filter_excludes_tasks_without_matching_parent(self, tmp_path: Path) -> None:
         """AC-par-excl: list_tasks(parent=10) excludes tasks whose parent != 10."""
         kanban_dir = _make_board(tmp_path)
         _write_task(kanban_dir, task_id=1, title="Child", parent="10")
@@ -165,12 +163,8 @@ class TestFromAC_ListTasksParentFilter:
         view = _make_agent_view(kanban_dir)
         resp = view.list_tasks(parent=10)
         ids = [t.id for t in resp.tasks]
-        assert 2 not in ids, (
-            "Task without parent must not appear in list_tasks(parent=10)"
-        )
-        assert 3 not in ids, (
-            "Task with different parent must not appear in list_tasks(parent=10)"
-        )
+        assert 2 not in ids, "Task without parent must not appear in list_tasks(parent=10)"
+        assert 3 not in ids, "Task with different parent must not appear in list_tasks(parent=10)"
 
     def test_parent_filter_excludes_tasks_with_no_parent(self, tmp_path: Path) -> None:
         """AC-par-none: list_tasks(parent=5) excludes top-level (parent=null) tasks."""
@@ -180,9 +174,7 @@ class TestFromAC_ListTasksParentFilter:
         view = _make_agent_view(kanban_dir)
         resp = view.list_tasks(parent=5)
         ids = [t.id for t in resp.tasks]
-        assert 1 not in ids, (
-            "Top-level task must not appear when parent filter is active"
-        )
+        assert 1 not in ids, "Top-level task must not appear when parent filter is active"
         assert 2 in ids
 
     def test_parent_filter_returns_empty_when_no_match(self, tmp_path: Path) -> None:
@@ -192,9 +184,7 @@ class TestFromAC_ListTasksParentFilter:
         view = _make_agent_view(kanban_dir)
         resp = view.list_tasks(parent=999)
         assert isinstance(resp, ListTasksResponse)
-        assert resp.tasks == [], (
-            f"No tasks have parent=999; expected empty list, got {resp.tasks!r}"
-        )
+        assert resp.tasks == [], f"No tasks have parent=999; expected empty list, got {resp.tasks!r}"
 
     def test_parent_filter_result_is_list_tasks_response(self, tmp_path: Path) -> None:
         """AC-sig: list_tasks(parent=N) returns a ListTasksResponse envelope."""
@@ -203,9 +193,7 @@ class TestFromAC_ListTasksParentFilter:
         view = _make_agent_view(kanban_dir)
         resp = view.list_tasks(parent=1)
         assert isinstance(resp, ListTasksResponse)
-        assert hasattr(resp, "guidance"), (
-            "ListTasksResponse must carry guidance field (D39)"
-        )
+        assert hasattr(resp, "guidance"), "ListTasksResponse must carry guidance field (D39)"
 
 
 # ---------------------------------------------------------------------------
@@ -248,13 +236,9 @@ class TestFromAC_ShowTaskDepStatus:
         view = _make_agent_view(kanban_dir)
         resp = view.show_task(1)
         assert isinstance(resp, ShowTaskResponse)
-        assert resp.dep_status == "ok", (
-            f"All deps active; §3.3 requires dep_status='ok' but got {resp.dep_status!r}"
-        )
+        assert resp.dep_status == "ok", f"All deps active; §3.3 requires dep_status='ok' but got {resp.dep_status!r}"
 
-    def test_show_task_dep_status_blocked_when_dep_archived_dropped(
-        self, tmp_path: Path
-    ) -> None:
+    def test_show_task_dep_status_blocked_when_dep_archived_dropped(self, tmp_path: Path) -> None:
         """dep_status='blocked' when dep is archived with reason 'dropped' (§3.3)."""
         kanban_dir = _make_board(tmp_path)
         _write_task(kanban_dir, task_id=3, title="Consumer", depends_on="[4]")
@@ -269,13 +253,10 @@ class TestFromAC_ShowTaskDepStatus:
         view = _make_agent_view(kanban_dir)
         resp = view.show_task(3)
         assert resp.dep_status == "blocked", (
-            f"Dep archived w/ 'dropped'; §3.3 requires dep_status='blocked' "
-            f"but got {resp.dep_status!r}"
+            f"Dep archived w/ 'dropped'; §3.3 requires dep_status='blocked' but got {resp.dep_status!r}"
         )
 
-    def test_show_task_dep_status_redirect_when_dep_archived_duplicate(
-        self, tmp_path: Path
-    ) -> None:
+    def test_show_task_dep_status_redirect_when_dep_archived_duplicate(self, tmp_path: Path) -> None:
         """dep_status='redirect' when dep is archived with reason 'duplicate' (§3.3)."""
         kanban_dir = _make_board(tmp_path)
         _write_task(kanban_dir, task_id=5, title="Consumer", depends_on="[6]")
@@ -290,13 +271,10 @@ class TestFromAC_ShowTaskDepStatus:
         view = _make_agent_view(kanban_dir)
         resp = view.show_task(5)
         assert resp.dep_status == "redirect", (
-            f"Dep archived w/ 'duplicate'; §3.3 requires dep_status='redirect' "
-            f"but got {resp.dep_status!r}"
+            f"Dep archived w/ 'duplicate'; §3.3 requires dep_status='redirect' but got {resp.dep_status!r}"
         )
 
-    def test_show_task_dep_status_worst_wins_blocked_over_redirect(
-        self, tmp_path: Path
-    ) -> None:
+    def test_show_task_dep_status_worst_wins_blocked_over_redirect(self, tmp_path: Path) -> None:
         """dep_status='blocked' when mixed deps: one dropped, one duplicate (§3.3 precedence)."""
         kanban_dir = _make_board(tmp_path)
         _write_task(kanban_dir, task_id=7, title="Consumer", depends_on="[8, 9]")
@@ -349,9 +327,7 @@ class TestFromAC_AgentViewSortReverseLimitForwarding:
         resp = view.list_tasks(sort="id")
         ids = [t.id for t in resp.tasks]
         assert len(ids) == 4, f"expected 4 tasks, got {len(ids)}"
-        assert ids == sorted(ids), (
-            f"sort='id' must produce ascending ID order; got {ids}"
-        )
+        assert ids == sorted(ids), f"sort='id' must produce ascending ID order; got {ids}"
 
     def test_sort_title_produces_non_id_order(self, tmp_path: Path) -> None:
         """sort='title' returns alphabetical title order, provably different from filename order.
@@ -368,13 +344,9 @@ class TestFromAC_AgentViewSortReverseLimitForwarding:
         view = _make_agent_view(kanban_dir)
         resp = view.list_tasks(sort="title")
         ids = [t.id for t in resp.tasks]
-        assert ids == [2, 3, 1], (
-            f"sort='title' must produce alphabetical title order [2, 3, 1]; got {ids}"
-        )
+        assert ids == [2, 3, 1], f"sort='title' must produce alphabetical title order [2, 3, 1]; got {ids}"
 
-    def test_sort_id_with_reverse_returns_descending_order(
-        self, tmp_path: Path
-    ) -> None:
+    def test_sort_id_with_reverse_returns_descending_order(self, tmp_path: Path) -> None:
         """reverse=True inverts sort='id' to produce descending ID order through AgentView."""
         kanban_dir = _make_board(tmp_path)
         _write_task(kanban_dir, task_id=1, title="One")
@@ -384,9 +356,7 @@ class TestFromAC_AgentViewSortReverseLimitForwarding:
         resp = view.list_tasks(sort="id", reverse=True)
         ids = [t.id for t in resp.tasks]
         assert len(ids) == 3, f"expected 3 tasks, got {len(ids)}"
-        assert ids == sorted(ids, reverse=True), (
-            f"reverse=True must produce descending ID order; got {ids}"
-        )
+        assert ids == sorted(ids, reverse=True), f"reverse=True must produce descending ID order; got {ids}"
 
     def test_limit_caps_result_count(self, tmp_path: Path) -> None:
         """limit=2 returns exactly 2 tasks even when more exist through AgentView."""
@@ -395,9 +365,7 @@ class TestFromAC_AgentViewSortReverseLimitForwarding:
             _write_task(kanban_dir, task_id=i, title=f"Task {i}")
         view = _make_agent_view(kanban_dir)
         resp = view.list_tasks(limit=2)
-        assert len(resp.tasks) == 2, (
-            f"limit=2 must return exactly 2 tasks; got {len(resp.tasks)}"
-        )
+        assert len(resp.tasks) == 2, f"limit=2 must return exactly 2 tasks; got {len(resp.tasks)}"
 
     def test_limit_zero_returns_all_tasks(self, tmp_path: Path) -> None:
         """limit=0 (default) returns all tasks with no cap through AgentView."""
@@ -406,13 +374,9 @@ class TestFromAC_AgentViewSortReverseLimitForwarding:
             _write_task(kanban_dir, task_id=i, title=f"Task {i}")
         view = _make_agent_view(kanban_dir)
         resp = view.list_tasks(limit=0)
-        assert len(resp.tasks) == 5, (
-            f"limit=0 must return all 5 tasks; got {len(resp.tasks)}"
-        )
+        assert len(resp.tasks) == 5, f"limit=0 must return all 5 tasks; got {len(resp.tasks)}"
 
-    def test_sort_title_with_reverse_produces_title_descending_order(
-        self, tmp_path: Path
-    ) -> None:
+    def test_sort_title_with_reverse_produces_title_descending_order(self, tmp_path: Path) -> None:
         """reverse=True with sort='title' produces reverse-alphabetical title order.
 
         Title-descending order for Zebra(id=1), Mango(id=3), Apple(id=2) is [1, 3, 2].
@@ -428,9 +392,7 @@ class TestFromAC_AgentViewSortReverseLimitForwarding:
         view = _make_agent_view(kanban_dir)
         resp = view.list_tasks(sort="title", reverse=True)
         ids = [t.id for t in resp.tasks]
-        assert ids == [1, 3, 2], (
-            f"sort='title' + reverse=True must produce reverse-title order [1, 3, 2]; got {ids}"
-        )
+        assert ids == [1, 3, 2], f"sort='title' + reverse=True must produce reverse-title order [1, 3, 2]; got {ids}"
 
 
 # ---------------------------------------------------------------------------
@@ -459,9 +421,7 @@ class TestFromAC_SectionHeadingLevelAgnostic:
         view = _make_agent_view(kanban_dir)
         view.engine.list_tasks()  # warm index
         resp = view.show_task(50, section="Goals")
-        assert resp.body is not None, (
-            "D56: level-1 '# Goals' heading must match section='Goals'"
-        )
+        assert resp.body is not None, "D56: level-1 '# Goals' heading must match section='Goals'"
         assert "Level-one goal content." in resp.body
         assert "Not included." not in resp.body
 
@@ -477,32 +437,19 @@ class TestFromAC_SectionHeadingLevelAgnostic:
         view = _make_agent_view(kanban_dir)
         view.engine.list_tasks()  # warm index
         resp = view.show_task(51, section="GOALS")
-        assert resp.body is not None, (
-            "D56: level-3 '### Goals' heading must match case-insensitive section='GOALS'"
-        )
+        assert resp.body is not None, "D56: level-3 '### Goals' heading must match case-insensitive section='GOALS'"
         assert "Level-three goal content." in resp.body
         assert "Not included." not in resp.body
 
-    def test_mixed_heading_levels_all_match_same_section_name(
-        self, tmp_path: Path
-    ) -> None:
+    def test_mixed_heading_levels_all_match_same_section_name(self, tmp_path: Path) -> None:
         """show_task(section='Goals') matches # Goals AND ### Goals in the same body — D56."""
         kanban_dir = _make_board(tmp_path)
-        body = (
-            "# Goals\n"
-            "Level-one content.\n\n"
-            "## Notes\n"
-            "Notes not included.\n\n"
-            "### Goals\n"
-            "Level-three content.\n"
-        )
+        body = "# Goals\nLevel-one content.\n\n## Notes\nNotes not included.\n\n### Goals\nLevel-three content.\n"
         _write_task(kanban_dir, task_id=52, title="MixedLevels", body=body)
         view = _make_agent_view(kanban_dir)
         view.engine.list_tasks()  # warm index
         resp = view.show_task(52, section="Goals")
-        assert resp.body is not None, (
-            "D56: both # Goals and ### Goals must match section='Goals'"
-        )
+        assert resp.body is not None, "D56: both # Goals and ### Goals must match section='Goals'"
         assert "Level-one content." in resp.body
         assert "Level-three content." in resp.body
         assert "Notes not included." not in resp.body

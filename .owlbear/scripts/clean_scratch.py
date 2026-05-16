@@ -26,9 +26,7 @@ _DEFAULT_SCRATCH = Path(__file__).parent.parent / "scratch"
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Clean stale files from scratch directory."
-    )
+    parser = argparse.ArgumentParser(description="Clean stale files from scratch directory.")
     parser.add_argument(
         "--scratch-dir",
         type=Path,
@@ -91,9 +89,7 @@ def main(argv: list[str] | None = None) -> int:
     scratch_dir: Path = args.scratch_dir
 
     if not scratch_dir.exists():
-        print(
-            f"Error: scratch directory does not exist: {scratch_dir}", file=sys.stderr
-        )
+        print(f"Error: scratch directory does not exist: {scratch_dir}", file=sys.stderr)
         return 1
 
     return run(scratch_dir, dry_run=args.dry_run)

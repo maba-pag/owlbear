@@ -89,9 +89,7 @@ class TestFromAC_RemoveAgentNameParam:
         with pytest.raises(TypeError):
             KanbanEngine(kanban_dir, agent_name=None)
 
-    def test_agent_name_property_preserved_after_param_removal(
-        self, tmp_path: Path
-    ) -> None:
+    def test_agent_name_property_preserved_after_param_removal(self, tmp_path: Path) -> None:
         """After param removal, engine.agent_name property still returns a non-empty string.
 
         Guards against the builder accidentally removing internal random-name

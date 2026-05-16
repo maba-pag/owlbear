@@ -166,7 +166,5 @@ class InterDocGraphBuilder:
                 _search([0.0] * 1024, top_k=1)
                 break  # one representative call is sufficient
 
-        logger.debug(
-            "InterDocGraphBuilder.build called — returning empty result (no-op)"
-        )
+        logger.debug("InterDocGraphBuilder.build called — returning empty result (no-op)")
         return GraphBuildResult()

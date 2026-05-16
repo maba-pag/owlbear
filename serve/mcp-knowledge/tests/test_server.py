@@ -106,9 +106,7 @@ class TestFromAC_ServerLifespan:
         expected_path = "/custom/kb/path/knowledge.db"
 
         with (
-            patch(
-                "owlbear_mcp_knowledge.server.init_db", return_value=mock_conn
-            ) as mock_init,
+            patch("owlbear_mcp_knowledge.server.init_db", return_value=mock_conn) as mock_init,
             patch("owlbear_mcp_knowledge.server.GraphStore"),
             patch("owlbear_mcp_knowledge.server.QdrantVectorStore"),
             patch("owlbear_mcp_knowledge.server.BgeM3EmbeddingProvider"),
@@ -128,9 +126,7 @@ class TestFromAC_ServerLifespan:
         mock_conn = MagicMock()
 
         with (
-            patch(
-                "owlbear_mcp_knowledge.server.init_db", return_value=mock_conn
-            ) as mock_init,
+            patch("owlbear_mcp_knowledge.server.init_db", return_value=mock_conn) as mock_init,
             patch("owlbear_mcp_knowledge.server.GraphStore"),
             patch("owlbear_mcp_knowledge.server.QdrantVectorStore"),
             patch("owlbear_mcp_knowledge.server.BgeM3EmbeddingProvider"),

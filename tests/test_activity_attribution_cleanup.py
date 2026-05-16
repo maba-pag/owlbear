@@ -56,9 +56,7 @@ def _scan_for_activity_log_imports(pkg_dir: Path) -> list[str]:  # noqa: C901
                     violations.append(f"{py_file.name}: from {module} import ...")
                 for alias in node.names:
                     if alias.name == "activity_log":
-                        violations.append(
-                            f"{py_file.name}: from {module} import activity_log"
-                        )
+                        violations.append(f"{py_file.name}: from {module} import activity_log")
     return violations
 
 
@@ -119,8 +117,7 @@ class TestFromAC_SourceVocabularyDocumented:
 
         doc = store_mod.__doc__ or ""
         assert "engine" in doc, (
-            "'engine' source vocabulary must be documented in "
-            "owlbear_kanban.activity_store module docstring (AC3)"
+            "'engine' source vocabulary must be documented in owlbear_kanban.activity_store module docstring (AC3)"
         )
 
     def test_source_vocab_agent_in_docstring(self) -> None:
@@ -132,8 +129,7 @@ class TestFromAC_SourceVocabularyDocumented:
 
         doc = store_mod.__doc__ or ""
         assert "agent" in doc, (
-            "'agent' source vocabulary must be documented in "
-            "owlbear_kanban.activity_store module docstring (AC3)"
+            "'agent' source vocabulary must be documented in owlbear_kanban.activity_store module docstring (AC3)"
         )
 
     def test_source_vocab_cockpit_in_docstring(self) -> None:
@@ -145,8 +141,7 @@ class TestFromAC_SourceVocabularyDocumented:
 
         doc = store_mod.__doc__ or ""
         assert "cockpit" in doc, (
-            "'cockpit' source vocabulary must be documented in "
-            "owlbear_kanban.activity_store module docstring (AC3)"
+            "'cockpit' source vocabulary must be documented in owlbear_kanban.activity_store module docstring (AC3)"
         )
 
     def test_source_vocab_docstring_has_vocabulary_section(self) -> None:
@@ -175,10 +170,7 @@ class TestFromAC_SourceVocabularyDocumented:
 
         doc = store_mod.__doc__ or ""
         engine_decl_lines = [ln for ln in doc.splitlines() if "``engine``" in ln]
-        assert engine_decl_lines, (
-            "activity_store docstring has no line declaring '``engine``' as a "
-            "source value (AC3)"
-        )
+        assert engine_decl_lines, "activity_store docstring has no line declaring '``engine``' as a source value (AC3)"
         assert any("internal" in ln for ln in engine_decl_lines), (
             "activity_store docstring: the ``engine`` declaration line must also "
             "contain 'internal' on the same line, binding the source value to its "
@@ -197,10 +189,7 @@ class TestFromAC_SourceVocabularyDocumented:
 
         doc = store_mod.__doc__ or ""
         agent_decl_lines = [ln for ln in doc.splitlines() if "``agent``" in ln]
-        assert agent_decl_lines, (
-            "activity_store docstring has no line declaring '``agent``' as a "
-            "source value (AC3)"
-        )
+        assert agent_decl_lines, "activity_store docstring has no line declaring '``agent``' as a source value (AC3)"
         assert any("agent-initiated" in ln for ln in agent_decl_lines), (
             "activity_store docstring: the ``agent`` declaration line must also "
             "contain 'agent-initiated' on the same line, binding the source value "
@@ -219,8 +208,7 @@ class TestFromAC_SourceVocabularyDocumented:
         doc = store_mod.__doc__ or ""
         cockpit_decl_lines = [ln for ln in doc.splitlines() if "``cockpit``" in ln]
         assert cockpit_decl_lines, (
-            "activity_store docstring has no line declaring '``cockpit``' as a "
-            "source value (AC3)"
+            "activity_store docstring has no line declaring '``cockpit``' as a source value (AC3)"
         )
         assert any("ui" in ln.lower() for ln in cockpit_decl_lines), (
             "activity_store docstring: the ``cockpit`` declaration line must also "
@@ -261,9 +249,7 @@ class TestFromAC_CockpitReadmeAuditTrail:
             "documenting the source attribution contract (AC4)"
         )
 
-    def test_audit_trail_source_cockpit_mapping_present(
-        self, project_root: Path
-    ) -> None:
+    def test_audit_trail_source_cockpit_mapping_present(self, project_root: Path) -> None:
         """AC4 (section-scoped, binding): Audit Trail section maps source="cockpit" to UI-initiated.
 
         Scopes the search to the Audit Trail section body only — tokens outside the
@@ -273,13 +259,10 @@ class TestFromAC_CockpitReadmeAuditTrail:
         """
         readme = (project_root / "serve/cockpit/README.md").read_text(encoding="utf-8")
         section = _extract_audit_trail_section(readme)
-        assert section, (
-            "Audit Trail section body not found in serve/cockpit/README.md (AC4)"
-        )
+        assert section, "Audit Trail section body not found in serve/cockpit/README.md (AC4)"
         cockpit_lines = [ln for ln in section.splitlines() if 'source="cockpit"' in ln]
         assert cockpit_lines, (
-            'Audit Trail section must contain source="cockpit" mapping (AC4 — '
-            "UI-initiated mutation attribution)"
+            'Audit Trail section must contain source="cockpit" mapping (AC4 — UI-initiated mutation attribution)'
         )
         assert any("ui-initiated" in ln.lower() for ln in cockpit_lines), (
             'Audit Trail section: the line containing source="cockpit" must also '
@@ -295,13 +278,10 @@ class TestFromAC_CockpitReadmeAuditTrail:
         """
         readme = (project_root / "serve/cockpit/README.md").read_text(encoding="utf-8")
         section = _extract_audit_trail_section(readme)
-        assert section, (
-            "Audit Trail section body not found in serve/cockpit/README.md (AC4)"
-        )
+        assert section, "Audit Trail section body not found in serve/cockpit/README.md (AC4)"
         agent_lines = [ln for ln in section.splitlines() if 'source="agent"' in ln]
         assert agent_lines, (
-            'Audit Trail section must contain source="agent" mapping (AC4 — '
-            "agent-initiated mutation attribution)"
+            'Audit Trail section must contain source="agent" mapping (AC4 — agent-initiated mutation attribution)'
         )
         assert any("agent-initiated" in ln for ln in agent_lines), (
             'Audit Trail section: the line containing source="agent" must also '
@@ -309,9 +289,7 @@ class TestFromAC_CockpitReadmeAuditTrail:
             "purpose (AC4). Purpose swaps or relocations are not accepted."
         )
 
-    def test_audit_trail_source_engine_mapping_present(
-        self, project_root: Path
-    ) -> None:
+    def test_audit_trail_source_engine_mapping_present(self, project_root: Path) -> None:
         """AC4 (section-scoped, binding): Audit Trail section maps source="engine" to internal.
 
         Scopes the search to the Audit Trail section only and asserts the purpose
@@ -319,13 +297,10 @@ class TestFromAC_CockpitReadmeAuditTrail:
         """
         readme = (project_root / "serve/cockpit/README.md").read_text(encoding="utf-8")
         section = _extract_audit_trail_section(readme)
-        assert section, (
-            "Audit Trail section body not found in serve/cockpit/README.md (AC4)"
-        )
+        assert section, "Audit Trail section body not found in serve/cockpit/README.md (AC4)"
         engine_lines = [ln for ln in section.splitlines() if 'source="engine"' in ln]
         assert engine_lines, (
-            'Audit Trail section must contain source="engine" mapping (AC4 — '
-            "internal engine operation attribution)"
+            'Audit Trail section must contain source="engine" mapping (AC4 — internal engine operation attribution)'
         )
         assert any("internal" in ln for ln in engine_lines), (
             'Audit Trail section: the line containing source="engine" must also '
@@ -360,7 +335,6 @@ class TestFromAC_ImportGuard:
 
         # Phase 2: AST walk — no surviving module imports the deleted module
         violations = _scan_for_activity_log_imports(pkg_dir)
-        assert not violations, (
-            "AC6 violation — modules still importing activity_log:\n"
-            + "\n".join(f"  {v}" for v in violations)
+        assert not violations, "AC6 violation — modules still importing activity_log:\n" + "\n".join(
+            f"  {v}" for v in violations
         )

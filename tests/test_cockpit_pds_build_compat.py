@@ -64,9 +64,7 @@ def package_json_data() -> dict[str, object]:
 class TestFromAC_CockpitPdsV4BuildCompatibility:
     """AC1/AC4: build must pass cleanly as a delivery gate."""
 
-    def test_npm_build_exits_zero(
-        self, build_result: subprocess.CompletedProcess[str], build_output: str
-    ) -> None:
+    def test_npm_build_exits_zero(self, build_result: subprocess.CompletedProcess[str], build_output: str) -> None:
         """AC1/AC4: `npm run build` must complete successfully."""
         assert build_result.returncode == 0, (
             f"npm run build failed (exit {build_result.returncode}).\n"
@@ -99,13 +97,9 @@ class TestFromAC_PdsV4TypeContracts:
             ),
         ],
     )
-    def test_known_pds_v4_type_failures_absent(
-        self, fragment: str, reason: str, build_output: str
-    ) -> None:
+    def test_known_pds_v4_type_failures_absent(self, fragment: str, reason: str, build_output: str) -> None:
         """AC2: build output must not contain known audited PDS v4 type errors."""
-        assert fragment not in build_output, (
-            f"Detected known PDS v4 incompatibility: {reason}"
-        )
+        assert fragment not in build_output, f"Detected known PDS v4 incompatibility: {reason}"
 
 
 class TestFromAC_PendingDrResolveModalBodyContract:
@@ -147,22 +141,14 @@ class TestAc2NoBroadTypeSuppressionGuards:
         app_source_text: str,
     ) -> None:
         """Reject TypeScript directive suppressions in non-test cockpit source."""
-        assert directive not in app_source_text, (
-            f"Detected {directive} in app source. {reason}"
-        )
+        assert directive not in app_source_text, f"Detected {directive} in app source. {reason}"
 
-    def test_tsconfig_does_not_disable_typecheck(
-        self, tsconfig_data: dict[str, object]
-    ) -> None:
+    def test_tsconfig_does_not_disable_typecheck(self, tsconfig_data: dict[str, object]) -> None:
         """Reject tsconfig noCheck-based bypasses for build compatibility."""
         compiler_options = tsconfig_data.get("compilerOptions", {})
         assert isinstance(compiler_options, dict)
-        assert compiler_options.get("strict") is True, (
-            "tsconfig must keep strict mode enabled."
-        )
-        assert compiler_options.get("noCheck") is not True, (
-            "tsconfig must not disable type-checking via noCheck."
-        )
+        assert compiler_options.get("strict") is True, "tsconfig must keep strict mode enabled."
+        assert compiler_options.get("noCheck") is not True, "tsconfig must not disable type-checking via noCheck."
 
     def test_package_json_build_script_keeps_tsc_build(
         self,
@@ -172,12 +158,8 @@ class TestAc2NoBroadTypeSuppressionGuards:
         scripts = package_json_data.get("scripts", {})
         assert isinstance(scripts, dict)
         build_script = scripts.get("build")
-        assert isinstance(build_script, str), (
-            "package.json scripts.build must be a string."
-        )
-        assert "tsc -b" in build_script, (
-            "package.json scripts.build must include 'tsc -b'."
-        )
+        assert isinstance(build_script, str), "package.json scripts.build must be a string."
+        assert "tsc -b" in build_script, "package.json scripts.build must include 'tsc -b'."
 
 
 # --- merged from tests/test_cockpit_pds_build_compat_1365.py ---
@@ -272,8 +254,7 @@ class TestFromAC_ExistingVitestSuites:
         """
         exit_code = vitest_result.returncode
         assert exit_code == 0, (
-            f"vitest exited {exit_code} — "
-            "cockpit web vitest suite has test failures after PDS v4 alignment."
+            f"vitest exited {exit_code} — cockpit web vitest suite has test failures after PDS v4 alignment."
         )
 
     def test_pds_migration_suite_passes(

@@ -155,9 +155,7 @@ class TestFromAC_IngestSourceRegistration:
         Currently FAILS: TypeError — source_id is not a valid parameter.
         """
         source_id = "test-source-uuid-abc123"
-        result = await minimal_pipeline.ingest_text(
-            "Hello world content", source_id=source_id
-        )
+        result = await minimal_pipeline.ingest_text("Hello world content", source_id=source_id)
         assert result.status == "ok"
 
         # Verify insert_document was called with source_id set
@@ -166,14 +164,10 @@ class TestFromAC_IngestSourceRegistration:
         assert call_kwargs is not None, "insert_document was not called"
         # The source_id must appear either as a kwarg or be embedded in the doc
         actual_source_id = call_kwargs.kwargs.get("source_id")
-        assert actual_source_id == source_id, (
-            f"Expected source_id={source_id!r} but got {actual_source_id!r}"
-        )
+        assert actual_source_id == source_id, f"Expected source_id={source_id!r} but got {actual_source_id!r}"
 
     @pytest.mark.asyncio
-    async def test_ingest_text_resolves_same_source_id_idempotently(
-        self, minimal_pipeline: IngestPipeline
-    ) -> None:
+    async def test_ingest_text_resolves_same_source_id_idempotently(self, minimal_pipeline: IngestPipeline) -> None:
         """AC3 edge: two ingest_text() calls with the same source_id use the same FK.
 
         Idempotent resolution: the source_id FK should be identical across both
@@ -186,16 +180,12 @@ class TestFromAC_IngestSourceRegistration:
         await minimal_pipeline.ingest_text("First document", source_id=source_id)
         await minimal_pipeline.ingest_text("Second document", source_id=source_id)
 
-        assert mock_docs.insert_document.call_count == 2, (
-            "Expected insert_document to be called twice"
-        )
+        assert mock_docs.insert_document.call_count == 2, "Expected insert_document to be called twice"
 
         # Both calls must use the same source_id FK
         for call in mock_docs.insert_document.call_args_list:
             actual = call.kwargs.get("source_id")
-            assert actual == source_id, (
-                f"Expected source_id={source_id!r} in both calls, got {actual!r}"
-            )
+            assert actual == source_id, f"Expected source_id={source_id!r} in both calls, got {actual!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -223,9 +213,7 @@ class TestFromAC_KnowledgeSourceFields:
             "KnowledgeSource.model_fields must declare 'enrich' as a top-level bool field"
         )
 
-    def test_knowledge_source_fetch_method_round_trips_through_store(
-        self, db_conn: sqlite3.Connection
-    ) -> None:
+    def test_knowledge_source_fetch_method_round_trips_through_store(self, db_conn: sqlite3.Connection) -> None:
         """AC4: fetch_method persists and round-trips through KnowledgeSourceStore.
 
         Creates a source with fetch_method='http', persists, reopens, asserts value.
@@ -239,9 +227,7 @@ class TestFromAC_KnowledgeSourceFields:
         assert retrieved is not None
         assert retrieved.fetch_method == "http"  # type: ignore[attr-defined]
 
-    def test_knowledge_source_enrich_round_trips_through_store(
-        self, db_conn: sqlite3.Connection
-    ) -> None:
+    def test_knowledge_source_enrich_round_trips_through_store(self, db_conn: sqlite3.Connection) -> None:
         """AC4: enrich flag persists and round-trips through KnowledgeSourceStore.
 
         Creates a source with enrich=True, persists, reopens, asserts value.
@@ -255,39 +241,21 @@ class TestFromAC_KnowledgeSourceFields:
         assert retrieved is not None
         assert retrieved.enrich is True  # type: ignore[attr-defined]
 
-    def test_schema_knowledge_sources_table_has_fetch_method_column(
-        self, db_conn: sqlite3.Connection
-    ) -> None:
+    def test_schema_knowledge_sources_table_has_fetch_method_column(self, db_conn: sqlite3.Connection) -> None:
         """AC4: knowledge_sources table has fetch_method as a schema column, not in config JSON.
 
         Currently FAILS: column absent from DDL / init_db() migration.
         """
-        columns = [
-            row[1]
-            for row in db_conn.execute(
-                "PRAGMA table_info(knowledge_sources)"
-            ).fetchall()
-        ]
-        assert "fetch_method" in columns, (
-            f"knowledge_sources schema must have 'fetch_method' column; found: {columns}"
-        )
+        columns = [row[1] for row in db_conn.execute("PRAGMA table_info(knowledge_sources)").fetchall()]
+        assert "fetch_method" in columns, f"knowledge_sources schema must have 'fetch_method' column; found: {columns}"
 
-    def test_schema_knowledge_sources_table_has_enrich_column(
-        self, db_conn: sqlite3.Connection
-    ) -> None:
+    def test_schema_knowledge_sources_table_has_enrich_column(self, db_conn: sqlite3.Connection) -> None:
         """AC4: knowledge_sources table has enrich as a schema column, not in config JSON.
 
         Currently FAILS: column absent from DDL / init_db() migration.
         """
-        columns = [
-            row[1]
-            for row in db_conn.execute(
-                "PRAGMA table_info(knowledge_sources)"
-            ).fetchall()
-        ]
-        assert "enrich" in columns, (
-            f"knowledge_sources schema must have 'enrich' column; found: {columns}"
-        )
+        columns = [row[1] for row in db_conn.execute("PRAGMA table_info(knowledge_sources)").fetchall()]
+        assert "enrich" in columns, f"knowledge_sources schema must have 'enrich' column; found: {columns}"
 
 
 # ---------------------------------------------------------------------------
@@ -297,9 +265,7 @@ class TestFromAC_KnowledgeSourceFields:
 
 
 class TestFromAC_SourceIdentityResolution:
-    def test_resolve_by_url_returns_source_with_matching_uuid_fk(
-        self, db_conn: sqlite3.Connection
-    ) -> None:
+    def test_resolve_by_url_returns_source_with_matching_uuid_fk(self, db_conn: sqlite3.Connection) -> None:
         """AC5 happy: resolve_by_url() returns the source whose config.url matches.
 
         Assertion targets knowledge_sources.id UUID FK — NOT document_status.source string.
@@ -318,13 +284,9 @@ class TestFromAC_SourceIdentityResolution:
 
         resolved = store.resolve_by_url("https://docs.example.com")  # type: ignore[attr-defined]
         assert resolved is not None
-        assert resolved.id == source.id, (
-            "resolve_by_url must return the source with matching knowledge_sources.id UUID"
-        )
+        assert resolved.id == source.id, "resolve_by_url must return the source with matching knowledge_sources.id UUID"
 
-    def test_resolve_by_path_returns_source_with_matching_uuid_fk(
-        self, db_conn: sqlite3.Connection
-    ) -> None:
+    def test_resolve_by_path_returns_source_with_matching_uuid_fk(self, db_conn: sqlite3.Connection) -> None:
         """AC5 happy: resolve_by_path() returns the source whose config.path matches.
 
         Assertion targets knowledge_sources.id UUID FK — NOT document_status.source string.
@@ -347,9 +309,7 @@ class TestFromAC_SourceIdentityResolution:
             "resolve_by_path must return the source with matching knowledge_sources.id UUID"
         )
 
-    def test_resolve_by_url_returns_none_when_url_not_registered(
-        self, db_conn: sqlite3.Connection
-    ) -> None:
+    def test_resolve_by_url_returns_none_when_url_not_registered(self, db_conn: sqlite3.Connection) -> None:
         """AC5 edge: resolve_by_url() returns None when the URL has no matching source.
 
         Currently FAILS: AttributeError — KnowledgeSourceStore has no resolve_by_url().
@@ -366,9 +326,7 @@ class TestFromAC_SourceIdentityResolution:
 
 
 class TestFromAC_EnrichFlag:
-    def test_enrich_true_is_readable_on_source_record(
-        self, db_conn: sqlite3.Connection
-    ) -> None:
+    def test_enrich_true_is_readable_on_source_record(self, db_conn: sqlite3.Connection) -> None:
         """AC6: enrich=True is readable as a top-level attribute on a persisted record.
 
         Does NOT test enrichment worker/queue machinery — only the flag value on record.
@@ -382,9 +340,7 @@ class TestFromAC_EnrichFlag:
         assert retrieved is not None
         assert retrieved.enrich is True  # type: ignore[attr-defined]
 
-    def test_enrich_false_is_readable_on_source_record(
-        self, db_conn: sqlite3.Connection
-    ) -> None:
+    def test_enrich_false_is_readable_on_source_record(self, db_conn: sqlite3.Connection) -> None:
         """AC6: enrich=False is readable as a top-level attribute on a persisted record.
 
         Does NOT test enrichment worker/queue machinery — only the flag value on record.
@@ -409,9 +365,7 @@ class TestFromAC_EnrichFlag:
 class TestFromAC_QdrantFilesystemPersistence:
     """AC1: QdrantVectorStore persists vectors across instance recreation via filesystem path."""
 
-    def test_qdrant_filesystem_store_survives_instance_recreation(
-        self, tmp_path: pytest.TempPathFactory
-    ) -> None:
+    def test_qdrant_filesystem_store_survives_instance_recreation(self, tmp_path: pytest.TempPathFactory) -> None:
         """AC1 happy: store embedding, delete instance, re-create with same path, retrieve succeeds.
 
         QdrantVectorStore(location=<path>) must persist data across Python instances.
@@ -430,9 +384,7 @@ class TestFromAC_QdrantFilesystemPersistence:
             "QdrantVectorStore must retrieve a vector stored by a prior instance on the same path"
         )
 
-    def test_qdrant_different_filesystem_paths_are_isolated(
-        self, tmp_path: pytest.TempPathFactory
-    ) -> None:
+    def test_qdrant_different_filesystem_paths_are_isolated(self, tmp_path: pytest.TempPathFactory) -> None:
         """AC1 boundary: two different filesystem paths have separate, non-overlapping collections."""
         path_a = str(tmp_path / "qdrant_a")
         path_b = str(tmp_path / "qdrant_b")
@@ -444,13 +396,9 @@ class TestFromAC_QdrantFilesystemPersistence:
 
         store_b = QdrantVectorStore(location=path_b)
         result = store_b.get_embedding(chunk_id)
-        assert result is None, (
-            "Vector stored on path_a must NOT be visible on path_b — paths must be isolated"
-        )
+        assert result is None, "Vector stored on path_a must NOT be visible on path_b — paths must be isolated"
 
-    def test_qdrant_filesystem_store_retrieves_matching_vector_content(
-        self, tmp_path: pytest.TempPathFactory
-    ) -> None:
+    def test_qdrant_filesystem_store_retrieves_matching_vector_content(self, tmp_path: pytest.TempPathFactory) -> None:
         """AC1 content: retrieved vector must match stored vector element-wise (within 1e-6).
 
         Strengthens AC1 beyond presence check: a wrong or corrupted payload must fail.
@@ -469,13 +417,10 @@ class TestFromAC_QdrantFilesystemPersistence:
         retrieved = store2.get_embedding(chunk_id)
 
         assert retrieved is not None, "Vector must survive instance recreation"
-        assert len(retrieved) == len(dense), (
-            f"Retrieved vector length {len(retrieved)} != stored {len(dense)}"
-        )
+        assert len(retrieved) == len(dense), f"Retrieved vector length {len(retrieved)} != stored {len(dense)}"
         for i, (got, want) in enumerate(zip(retrieved, dense, strict=True)):
             assert abs(got - want) < 1e-6, (
-                f"Retrieved vector[{i}] = {got!r} differs from stored {want!r} "
-                "beyond tolerance 1e-6"
+                f"Retrieved vector[{i}] = {got!r} differs from stored {want!r} beyond tolerance 1e-6"
             )
 
 
@@ -488,9 +433,7 @@ class TestFromAC_QdrantFilesystemPersistence:
 class TestFromAC_SQLiteDiskPersistence:
     """AC2: SQLite KnowledgeSourceStore persists rows across close/reopen of a file-backed DB."""
 
-    def test_sqlite_file_backed_source_survives_close_reopen(
-        self, tmp_path: pytest.TempPathFactory
-    ) -> None:
+    def test_sqlite_file_backed_source_survives_close_reopen(self, tmp_path: pytest.TempPathFactory) -> None:
         """AC2 happy: create source, close connection, reopen same file, verify row persists.
 
         init_db must initialise the schema on a file-path connection.
@@ -512,15 +455,11 @@ class TestFromAC_SQLiteDiskPersistence:
         retrieved = store2.get(source.id)
         conn2.close()
 
-        assert retrieved is not None, (
-            "KnowledgeSourceStore.get must find the row after connection close/reopen"
-        )
+        assert retrieved is not None, "KnowledgeSourceStore.get must find the row after connection close/reopen"
         assert retrieved.id == source.id
         assert retrieved.name == "Persisted Source"
 
-    def test_sqlite_file_backed_multiple_sources_survive_reopen(
-        self, tmp_path: pytest.TempPathFactory
-    ) -> None:
+    def test_sqlite_file_backed_multiple_sources_survive_reopen(self, tmp_path: pytest.TempPathFactory) -> None:
         """AC2 boundary: multiple rows inserted, all survive close/reopen."""
         db_path = str(tmp_path / "knowledge_multi.db")
 
@@ -537,9 +476,7 @@ class TestFromAC_SQLiteDiskPersistence:
         all_rows = store2.list_all()
         conn2.close()
 
-        assert len(all_rows) == 3, (
-            f"All 3 inserted sources must survive close/reopen; found {len(all_rows)}"
-        )
+        assert len(all_rows) == 3, f"All 3 inserted sources must survive close/reopen; found {len(all_rows)}"
         persisted_ids = {r.id for r in all_rows}
         expected_ids = {s.id for s in sources}
         assert persisted_ids == expected_ids
@@ -554,12 +491,8 @@ class TestFromAC_SQLiteDiskPersistence:
 class TestFromAC_KnowledgeSourceAllNamedFields:
     """AC4: all 6 named fields are top-level model fields and schema columns, not config keys."""
 
-    @pytest.mark.parametrize(
-        "field_name", ["name", "source_type", "created_at", "updated_at"]
-    )
-    def test_remaining_ac4_named_fields_are_top_level_model_fields(
-        self, field_name: str
-    ) -> None:
+    @pytest.mark.parametrize("field_name", ["name", "source_type", "created_at", "updated_at"])
+    def test_remaining_ac4_named_fields_are_top_level_model_fields(self, field_name: str) -> None:
         """AC4: name, source_type, created_at, updated_at are declared as top-level model fields.
 
         Completes AC4 field coverage alongside the fetch_method/enrich tests above.
@@ -569,30 +502,17 @@ class TestFromAC_KnowledgeSourceAllNamedFields:
             "not as a key inside the config dict"
         )
 
-    @pytest.mark.parametrize(
-        "col_name", ["name", "source_type", "created_at", "updated_at"]
-    )
-    def test_remaining_ac4_named_fields_are_schema_columns(
-        self, col_name: str, db_conn: sqlite3.Connection
-    ) -> None:
+    @pytest.mark.parametrize("col_name", ["name", "source_type", "created_at", "updated_at"])
+    def test_remaining_ac4_named_fields_are_schema_columns(self, col_name: str, db_conn: sqlite3.Connection) -> None:
         """AC4: name, source_type, created_at, updated_at are dedicated schema columns.
 
         These must appear as actual columns in PRAGMA table_info, not be stored inside
         the config JSON blob.
         """
-        columns = [
-            row[1]
-            for row in db_conn.execute(
-                "PRAGMA table_info(knowledge_sources)"
-            ).fetchall()
-        ]
-        assert col_name in columns, (
-            f"knowledge_sources must have a dedicated '{col_name}' column; found: {columns}"
-        )
+        columns = [row[1] for row in db_conn.execute("PRAGMA table_info(knowledge_sources)").fetchall()]
+        assert col_name in columns, f"knowledge_sources must have a dedicated '{col_name}' column; found: {columns}"
 
-    def test_fetch_method_and_enrich_are_not_stored_as_config_json_keys(
-        self, db_conn: sqlite3.Connection
-    ) -> None:
+    def test_fetch_method_and_enrich_are_not_stored_as_config_json_keys(self, db_conn: sqlite3.Connection) -> None:
         """AC4 constraint: fetch_method/enrich are separate columns, NOT encoded in the config blob.
 
         Reads the raw row to verify the config JSON does not contain these fields as keys.
@@ -611,12 +531,8 @@ class TestFromAC_KnowledgeSourceAllNamedFields:
         assert "fetch_method" not in config_dict, (
             "fetch_method must be a dedicated column, not a key in the config JSON blob"
         )
-        assert "enrich" not in config_dict, (
-            "enrich must be a dedicated column, not a key in the config JSON blob"
-        )
-        assert row[1] == "rss-feed", (
-            f"fetch_method column must be 'rss-feed', got {row[1]!r}"
-        )
+        assert "enrich" not in config_dict, "enrich must be a dedicated column, not a key in the config JSON blob"
+        assert row[1] == "rss-feed", f"fetch_method column must be 'rss-feed', got {row[1]!r}"
         assert bool(row[2]) is True, f"enrich column must be 1 (True), got {row[2]!r}"
 
 
@@ -650,9 +566,7 @@ class TestFromAC_IngestSourceResolutionContract:
         mock_chunker.chunk.return_value = [MagicMock(text="chunk")] * chunk_count
 
         mock_extractor = MagicMock()
-        mock_extractor.extract = AsyncMock(
-            return_value=MagicMock(entities=[], edges=[])
-        )
+        mock_extractor.extract = AsyncMock(return_value=MagicMock(entities=[], edges=[]))
 
         mock_docs = MagicMock()
         mock_docs.insert_document.return_value = None
@@ -692,9 +606,7 @@ class TestFromAC_IngestSourceResolutionContract:
         mock_store.resolve_by_url.return_value = MagicMock(id="src-uuid")
         pipeline = self._make_pipeline_with_source_store(mock_store)
 
-        result = await pipeline.ingest_text(
-            "some content", source_url="https://docs.example.com"
-        )
+        result = await pipeline.ingest_text("some content", source_url="https://docs.example.com")
         assert result.status in ("ok", "failed", "skipped", "cancelled", "blocked")
 
     @pytest.mark.asyncio
@@ -708,9 +620,7 @@ class TestFromAC_IngestSourceResolutionContract:
         mock_store.resolve_by_url.return_value = MagicMock(id="resolved-uuid-abc")
         pipeline = self._make_pipeline_with_source_store(mock_store)
 
-        await pipeline.ingest_text(
-            "text content", source_url="https://docs.example.com"
-        )
+        await pipeline.ingest_text("text content", source_url="https://docs.example.com")
 
         mock_store.resolve_by_url.assert_called_once_with("https://docs.example.com")
 
@@ -729,16 +639,13 @@ class TestFromAC_IngestSourceResolutionContract:
         mock_store.resolve_by_url.return_value = MagicMock(id=expected_fk)
         pipeline = self._make_pipeline_with_source_store(mock_store)
 
-        await pipeline.ingest_text(
-            "document text", source_url="https://docs.example.com"
-        )
+        await pipeline.ingest_text("document text", source_url="https://docs.example.com")
 
         mock_docs = pipeline._docs  # type: ignore[attr-defined]
         call_kwargs = mock_docs.insert_document.call_args.kwargs
         actual_fk = call_kwargs.get("source_id")
         assert actual_fk == expected_fk, (
-            f"insert_document must receive source_id={expected_fk!r} "
-            f"from resolved source, got {actual_fk!r}"
+            f"insert_document must receive source_id={expected_fk!r} from resolved source, got {actual_fk!r}"
         )
 
     @pytest.mark.asyncio
@@ -757,12 +664,8 @@ class TestFromAC_IngestSourceResolutionContract:
         )
 
         mock_docs = MagicMock()
-        mock_docs.insert_document.side_effect = lambda *_a, **_kw: call_order.append(
-            "insert_document"
-        )
-        mock_docs.store_chunks.side_effect = lambda *_a, **_kw: (
-            call_order.append("store_chunks") or []
-        )
+        mock_docs.insert_document.side_effect = lambda *_a, **_kw: call_order.append("insert_document")
+        mock_docs.store_chunks.side_effect = lambda *_a, **_kw: call_order.append("store_chunks") or []
         mock_docs.store_embeddings.return_value = None
         mock_docs.store_extractions.return_value = (0, 0)
 
@@ -779,9 +682,7 @@ class TestFromAC_IngestSourceResolutionContract:
 
         await pipeline.ingest_text("text", source_url="https://docs.example.com")
 
-        assert "resolve_by_url" in call_order, (
-            "source_store.resolve_by_url must be called"
-        )
+        assert "resolve_by_url" in call_order, "source_store.resolve_by_url must be called"
         assert "insert_document" in call_order, "insert_document must be called"
         assert "store_chunks" in call_order, "store_chunks must be called"
 
@@ -789,12 +690,8 @@ class TestFromAC_IngestSourceResolutionContract:
         insert_idx = call_order.index("insert_document")
         chunks_idx = call_order.index("store_chunks")
 
-        assert resolve_idx < insert_idx, (
-            "source resolution must happen before document insertion"
-        )
-        assert insert_idx < chunks_idx, (
-            "document insertion (with source FK) must happen before chunk storage"
-        )
+        assert resolve_idx < insert_idx, "source resolution must happen before document insertion"
+        assert insert_idx < chunks_idx, "document insertion (with source FK) must happen before chunk storage"
 
     @pytest.mark.asyncio
     async def test_ingest_text_registers_source_via_real_store_contract(self) -> None:
@@ -820,16 +717,10 @@ class TestFromAC_IngestSourceResolutionContract:
 
         mock_store.create.assert_called_once()
         call_args = mock_store.create.call_args
-        created_obj = (
-            call_args[0][0] if call_args[0] else call_args.kwargs.get("source")
-        )
+        created_obj = call_args[0][0] if call_args[0] else call_args.kwargs.get("source")
         # The KnowledgeSource passed to create() must carry the requested URL
-        assert hasattr(created_obj, "name"), (
-            "create() must receive a KnowledgeSource object with a 'name' attribute"
-        )
-        assert created_obj.name == target_url, (
-            f"KnowledgeSource.name must be {target_url!r}, got {created_obj.name!r}"
-        )
+        assert hasattr(created_obj, "name"), "create() must receive a KnowledgeSource object with a 'name' attribute"
+        assert created_obj.name == target_url, f"KnowledgeSource.name must be {target_url!r}, got {created_obj.name!r}"
         # The real resolve_by_url() keys on source.config.get("url"), not on name.
         # If the ingest path wrote a wrong config URL the resolver would not find the
         # just-created source on the fallback call, so we must pin this key.
@@ -854,9 +745,7 @@ class TestFromAC_IngestSourceResolutionContract:
 
         pipeline = self._make_pipeline_with_source_store(mock_store)
 
-        await pipeline.ingest_text(
-            "content to ingest", source_url="https://docs.new.example.com"
-        )
+        await pipeline.ingest_text("content to ingest", source_url="https://docs.new.example.com")
 
         mock_docs = pipeline._docs  # type: ignore[attr-defined]
         call_kwargs = mock_docs.insert_document.call_args.kwargs

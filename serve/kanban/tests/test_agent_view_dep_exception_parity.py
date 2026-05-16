@@ -19,9 +19,7 @@ from pathlib import Path
 import pytest
 
 _PKG_DIR = Path(__file__).parent.parent / "src" / "owlbear_kanban"
-_EXPECTED_EXCEPTIONS: frozenset[str] = frozenset(
-    {"FileNotFoundError", "CorruptionError", "ValueError", "KeyError"}
-)
+_EXPECTED_EXCEPTIONS: frozenset[str] = frozenset({"FileNotFoundError", "CorruptionError", "ValueError", "KeyError"})
 
 
 # ---------------------------------------------------------------------------
@@ -33,9 +31,7 @@ def _agent_view_source() -> str:
     return (_PKG_DIR / "agent_view.py").read_text(encoding="utf-8")
 
 
-def _find_method(
-    tree: ast.AST, classname: str, methodname: str
-) -> ast.FunctionDef | None:
+def _find_method(tree: ast.AST, classname: str, methodname: str) -> ast.FunctionDef | None:
     """Return the FunctionDef for *classname*.*methodname*, or None."""
     for node in ast.walk(tree):
         if isinstance(node, ast.ClassDef) and node.name == classname:
@@ -58,9 +54,7 @@ def _dep_iteration_exception_sets(method_node: ast.FunctionDef) -> list[frozense
         if node.type is None:
             continue
         if isinstance(node.type, ast.Tuple):
-            names: frozenset[str] = frozenset(
-                elt.id for elt in node.type.elts if isinstance(elt, ast.Name)
-            )
+            names: frozenset[str] = frozenset(elt.id for elt in node.type.elts if isinstance(elt, ast.Name))
         elif isinstance(node.type, ast.Name):
             names = frozenset({node.type.id})
         else:
@@ -88,8 +82,7 @@ class TestDepLookupExceptionParity:
         assert method is not None, "AgentView.show_task not found in agent_view.py"
         sets = _dep_iteration_exception_sets(method)
         assert len(sets) == 1, (
-            f"Expected exactly 1 dep-iteration ExceptHandler in show_task(), "
-            f"found {len(sets)}: {sets}"
+            f"Expected exactly 1 dep-iteration ExceptHandler in show_task(), found {len(sets)}: {sets}"
         )
 
     def test_start_work_has_exactly_one_dep_iteration_handler(self) -> None:
@@ -100,8 +93,7 @@ class TestDepLookupExceptionParity:
         assert method is not None, "AgentView.start_work not found in agent_view.py"
         sets = _dep_iteration_exception_sets(method)
         assert len(sets) == 1, (
-            f"Expected exactly 1 dep-iteration ExceptHandler in start_work(), "
-            f"found {len(sets)}: {sets}"
+            f"Expected exactly 1 dep-iteration ExceptHandler in start_work(), found {len(sets)}: {sets}"
         )
 
     # -- exact exception types -----------------------------------------------
@@ -116,8 +108,7 @@ class TestDepLookupExceptionParity:
         assert sets, "No dep-iteration ExceptHandler found in show_task()"
         actual = sets[0]
         assert actual == _EXPECTED_EXCEPTIONS, (
-            f"show_task() dep handler mismatch — "
-            f"expected {set(_EXPECTED_EXCEPTIONS)}, got {set(actual)}"
+            f"show_task() dep handler mismatch — expected {set(_EXPECTED_EXCEPTIONS)}, got {set(actual)}"
         )
 
     def test_start_work_dep_handler_catches_exact_exception_set(self) -> None:
@@ -130,8 +121,7 @@ class TestDepLookupExceptionParity:
         assert sets, "No dep-iteration ExceptHandler found in start_work()"
         actual = sets[0]
         assert actual == _EXPECTED_EXCEPTIONS, (
-            f"start_work() dep handler mismatch — "
-            f"expected {set(_EXPECTED_EXCEPTIONS)}, got {set(actual)}"
+            f"start_work() dep handler mismatch — expected {set(_EXPECTED_EXCEPTIONS)}, got {set(actual)}"
         )
 
     # -- cross-method parity (the core drift guard) --------------------------
@@ -149,8 +139,7 @@ class TestDepLookupExceptionParity:
         assert show_sets, "No dep-iteration ExceptHandler in show_task()"
         assert start_sets, "No dep-iteration ExceptHandler in start_work()"
         assert show_sets[0] == start_sets[0], (
-            f"Exception tuple drift detected — "
-            f"show_task()={set(show_sets[0])}, start_work()={set(start_sets[0])}"
+            f"Exception tuple drift detected — show_task()={set(show_sets[0])}, start_work()={set(start_sets[0])}"
         )
 
     # -- no bare except ------------------------------------------------------

@@ -155,9 +155,7 @@ class CockpitView:
         except FileNotFoundError as exc:
             raise self._not_found(task_id) from exc
         except ValueError as exc:
-            raise ValidationError(
-                code="ERR_INVALID_STATUS", user_message=str(exc)
-            ) from exc
+            raise ValidationError(code="ERR_INVALID_STATUS", user_message=str(exc)) from exc
         return self._to_single_response(task)
 
     def move_task(
@@ -192,9 +190,7 @@ class CockpitView:
         except FileNotFoundError as exc:
             raise self._not_found(task_id) from exc
         except ValueError as exc:
-            raise ValidationError(
-                code="ERR_INVALID_STATUS", user_message=str(exc)
-            ) from exc
+            raise ValidationError(code="ERR_INVALID_STATUS", user_message=str(exc)) from exc
         return self._to_single_response(task)
 
     def release_task(

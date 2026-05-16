@@ -35,22 +35,16 @@ class TestFromAC_EngineNoLongerContainsAgentView:
         # live in owlbear_kanban.agent_view and only be *re-exported* from engine.
         assert not hasattr(engine_mod, "AgentView") or (
             getattr(engine_mod.AgentView, "__module__", "") != "owlbear_kanban.engine"
-        ), (
-            "class AgentView is still defined in owlbear_kanban.engine — "
-            "it must be moved to owlbear_kanban.agent_view"
-        )
+        ), "class AgentView is still defined in owlbear_kanban.engine — it must be moved to owlbear_kanban.agent_view"
 
     def test_engine_source_does_not_contain_agent_view_class_definition(
         self,
     ) -> None:
         """Source of engine.py must not contain `class AgentView`."""
-        engine_file = (
-            Path(__file__).parent.parent / "serve/kanban/src/owlbear_kanban/engine.py"
-        )
+        engine_file = Path(__file__).parent.parent / "serve/kanban/src/owlbear_kanban/engine.py"
         source = engine_file.read_text()
         assert "class AgentView" not in source, (
-            "engine.py still contains `class AgentView` — "
-            "the class must be extracted to agent_view.py"
+            "engine.py still contains `class AgentView` — the class must be extracted to agent_view.py"
         )
 
 
@@ -92,12 +86,9 @@ class TestFromAC_AgentViewModuleExists:
         from owlbear_kanban.agent_view import AgentView
 
         missing = _EXPECTED_PUBLIC_METHODS - {
-            name
-            for name, _ in inspect.getmembers(AgentView, predicate=inspect.isfunction)
+            name for name, _ in inspect.getmembers(AgentView, predicate=inspect.isfunction)
         }
-        assert not missing, (
-            f"AgentView in agent_view.py is missing public methods: {missing}"
-        )
+        assert not missing, f"AgentView in agent_view.py is missing public methods: {missing}"
 
 
 # ---------------------------------------------------------------------------
@@ -112,9 +103,7 @@ class TestFromAC_AgentViewImportsKanbanEngine:
         """KanbanEngine must be accessible in the agent_view module namespace."""
         import owlbear_kanban.agent_view as av_mod
 
-        assert hasattr(av_mod, "KanbanEngine"), (
-            "owlbear_kanban.agent_view does not import KanbanEngine from engine"
-        )
+        assert hasattr(av_mod, "KanbanEngine"), "owlbear_kanban.agent_view does not import KanbanEngine from engine"
 
     def test_no_circular_import_between_agent_view_and_engine(self) -> None:
         """Importing agent_view must not trigger a circular import error."""
@@ -149,9 +138,7 @@ class TestFromAC_PackageReexportsAgentView:
 
     def test_package_init_imports_agent_view_from_agent_view_module(self) -> None:
         """__init__.py must import AgentView from agent_view, not engine."""
-        init_file = (
-            Path(__file__).parent.parent / "serve/kanban/src/owlbear_kanban/__init__.py"
-        )
+        init_file = Path(__file__).parent.parent / "serve/kanban/src/owlbear_kanban/__init__.py"
         source = init_file.read_text()
         assert "from owlbear_kanban.agent_view import" in source or (
             "from owlbear_kanban import agent_view" in source
@@ -169,17 +156,13 @@ class TestFromAC_PackageReexportsAgentView:
 class TestFromAC_ExistingAPIUnchanged:
     """AgentView accessed via the package must remain fully functional."""
 
-    def test_agent_view_from_agent_view_module_is_instantiable(
-        self, tmp_path: Path
-    ) -> None:
+    def test_agent_view_from_agent_view_module_is_instantiable(self, tmp_path: Path) -> None:
         """AgentView from agent_view.py can be instantiated with a KanbanEngine."""
         from owlbear_kanban.agent_view import AgentView
         from owlbear_kanban import KanbanEngine
 
         config = tmp_path / "config.yml"
-        config.write_text(
-            "schema: grouped\nstatuses:\n  - todo\n  - done\nagents: []\n"
-        )
+        config.write_text("schema: grouped\nstatuses:\n  - todo\n  - done\nagents: []\n")
         (tmp_path / "tasks").mkdir()
 
         engine = KanbanEngine(tmp_path)
@@ -204,16 +187,12 @@ class TestFromAC_ExistingAPIUnchanged:
         from owlbear_kanban import KanbanEngine
 
         config = tmp_path / "config.yml"
-        config.write_text(
-            "schema: grouped\nstatuses:\n  - todo\n  - done\nagents: []\n"
-        )
+        config.write_text("schema: grouped\nstatuses:\n  - todo\n  - done\nagents: []\n")
         (tmp_path / "tasks").mkdir()
 
         engine = KanbanEngine(tmp_path)
         av = AgentView(engine)
-        assert av.engine is engine, (
-            "AgentView.engine must be the KanbanEngine passed to __init__"
-        )
+        assert av.engine is engine, "AgentView.engine must be the KanbanEngine passed to __init__"
 
 
 # ---------------------------------------------------------------------------

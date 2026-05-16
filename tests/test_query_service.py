@@ -116,9 +116,7 @@ def _mock_graph_store(
     gs = MagicMock()
     gs.get_document_id_for_chunk.return_value = doc_id
     gs.get_document.return_value = doc if doc is not None else _mock_doc(doc_id=doc_id)
-    gs.list_entities_for_document.return_value = (
-        entities if entities is not None else []
-    )
+    gs.list_entities_for_document.return_value = entities if entities is not None else []
     gs.list_edges.return_value = edges if edges is not None else []
     gs.get_entity.return_value = None
     return gs
@@ -545,9 +543,7 @@ class TestFromAC_ShapeDeterminism:
         results = await _query(service)
 
         for attr in self._PROVENANCE_ATTRS:
-            assert hasattr(results[0], attr), (
-                f"missing '{attr}' on StructuredSearchResult"
-            )
+            assert hasattr(results[0], attr), f"missing '{attr}' on StructuredSearchResult"
 
     @pytest.mark.asyncio
     async def test_all_provenance_attrs_present_enriched(self) -> None:
@@ -562,9 +558,7 @@ class TestFromAC_ShapeDeterminism:
         results = await _query(service)
 
         for attr in self._PROVENANCE_ATTRS:
-            assert hasattr(results[0], attr), (
-                f"missing '{attr}' on StructuredSearchResult"
-            )
+            assert hasattr(results[0], attr), f"missing '{attr}' on StructuredSearchResult"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -693,9 +687,7 @@ class TestFromAC_RelatedSourcesIncomingEdge:
         # Edge runs FROM peer (ent-b) TO focal (ent-a) — incoming from focal's perspective
         edge = _mock_edge("edge-inc", "ent-b", "ent-a", "calls")
 
-        def _list_edges(
-            _source_id: str | None = None, target_id: str | None = None, **_: object
-        ) -> list:  # type: ignore[return]
+        def _list_edges(_source_id: str | None = None, target_id: str | None = None, **_: object) -> list:  # type: ignore[return]
             """Route list_edges calls: only the target_id='ent-a' call returns results."""
             if target_id == "ent-a":
                 return [edge]

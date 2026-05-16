@@ -90,9 +90,7 @@ class TestFromAC_CreateTaskRebindContainment:
 
     # --- error paths: tasks_dir escape ---
 
-    def test_symlink_escaping_tasks_dir_raises_permission_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_symlink_escaping_tasks_dir_raises_permission_error(self, tmp_path: Path) -> None:
         """create_task raises PermissionError when post-write reload returns a
         tasks_dir that is a symlink resolving outside kanban_dir.
 
@@ -115,9 +113,7 @@ class TestFromAC_CreateTaskRebindContainment:
         with (
             patch(
                 "owlbear_kanban.engine.load_config",
-                side_effect=_side_effect_first_real_then_poisoned(
-                    real_config, poisoned
-                ),
+                side_effect=_side_effect_first_real_then_poisoned(real_config, poisoned),
             ),
             pytest.raises(PermissionError),
         ):
@@ -125,9 +121,7 @@ class TestFromAC_CreateTaskRebindContainment:
 
     # --- error paths: archive_dir escape ---
 
-    def test_symlink_escaping_archive_dir_raises_permission_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_symlink_escaping_archive_dir_raises_permission_error(self, tmp_path: Path) -> None:
         """create_task raises PermissionError when post-write reload returns an
         archive_dir that is a symlink resolving outside kanban_dir.
 
@@ -150,9 +144,7 @@ class TestFromAC_CreateTaskRebindContainment:
         with (
             patch(
                 "owlbear_kanban.engine.load_config",
-                side_effect=_side_effect_first_real_then_poisoned(
-                    real_config, poisoned
-                ),
+                side_effect=_side_effect_first_real_then_poisoned(real_config, poisoned),
             ),
             pytest.raises(PermissionError),
         ):
@@ -183,9 +175,7 @@ class TestFromAC_CreateTaskRebindContainment:
         with (
             patch(
                 "owlbear_kanban.engine.load_config",
-                side_effect=_side_effect_first_real_then_poisoned(
-                    real_config, poisoned
-                ),
+                side_effect=_side_effect_first_real_then_poisoned(real_config, poisoned),
             ),
             pytest.raises(PermissionError),
         ):
@@ -193,9 +183,7 @@ class TestFromAC_CreateTaskRebindContainment:
 
     # --- error: regression proof — poison only reaches post-write reload ---
 
-    def test_permission_error_raised_after_both_load_config_calls(
-        self, tmp_path: Path
-    ) -> None:
+    def test_permission_error_raised_after_both_load_config_calls(self, tmp_path: Path) -> None:
         """PermissionError originates from the post-write rebind, not the pre-write load.
 
         Asserts that both load_config calls inside create_task complete before the
@@ -237,9 +225,7 @@ class TestFromAC_CreateTaskRebindContainment:
 
     # --- boundary: symlink targets kanban_dir parent ---
 
-    def test_symlink_to_parent_of_kanban_dir_raises_permission_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_symlink_to_parent_of_kanban_dir_raises_permission_error(self, tmp_path: Path) -> None:
         """create_task raises PermissionError when tasks_dir symlink points to
         kanban_dir's own parent — the immediate-parent boundary case.
 
@@ -260,9 +246,7 @@ class TestFromAC_CreateTaskRebindContainment:
         with (
             patch(
                 "owlbear_kanban.engine.load_config",
-                side_effect=_side_effect_first_real_then_poisoned(
-                    real_config, poisoned
-                ),
+                side_effect=_side_effect_first_real_then_poisoned(real_config, poisoned),
             ),
             pytest.raises(PermissionError),
         ):

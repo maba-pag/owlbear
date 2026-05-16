@@ -141,9 +141,7 @@ def _is_archive_path(path: Path, board_dir: Path, config: BoardConfig | None) ->
     return path.parent.name == "archive"
 
 
-def _resolve_board_config(
-    path: Path, config: BoardConfig | None
-) -> tuple[Path, BoardConfig | None]:
+def _resolve_board_config(path: Path, config: BoardConfig | None) -> tuple[Path, BoardConfig | None]:
     """Resolve board root and optional config for a task file path."""
     board_dir = path.parent.parent
     if config is not None:
@@ -192,11 +190,7 @@ def _validation_to_corruption(path: Path, exc: ValidationError) -> CorruptionErr
         if error.get("type") in ("missing", "value_error"):
             code = "ERR_CORRUPT_MISSING_FIELD"
             break
-    detail = (
-        "required field missing"
-        if code == "ERR_CORRUPT_MISSING_FIELD"
-        else "field type mismatch"
-    )
+    detail = "required field missing" if code == "ERR_CORRUPT_MISSING_FIELD" else "field type mismatch"
     return CorruptionError(
         code=code,
         user_message=f"{detail} in {path.name}: {exc}",
@@ -230,9 +224,7 @@ _CANONICAL_FIELDS: list[str] = [
 _CANONICAL_FIELD_SET: frozenset[str] = frozenset(_CANONICAL_FIELDS)
 _TS_FIELDS: frozenset[str] = frozenset({"created", "updated", "claimed_at"})
 _CONFIG_WRITE_EXCLUDE: frozenset[str] = frozenset({"board", "version"})
-_TS_RE = re.compile(
-    r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})((?:\.\d+)?)([+-]\d{2}:\d{2}|Z)?$"
-)
+_TS_RE = re.compile(r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})((?:\.\d+)?)([+-]\d{2}:\d{2}|Z)?$")
 
 
 # ---------------------------------------------------------------------------
@@ -429,9 +421,7 @@ def write_task(task: Task, kanban_dir: Path, *, target_dir: Path | None = None) 
     # Vendor extras (AC-C15 applies to all timestamp-looking values).
     for key, val in data.items():
         if key not in _CANONICAL_FIELD_SET and key != "claimed_by":
-            normalized_val = (
-                _as_plain_timestamp_scalar(val) if isinstance(val, str) else val
-            )
+            normalized_val = _as_plain_timestamp_scalar(val) if isinstance(val, str) else val
             ordered[key] = normalized_val
 
     stream = io.StringIO()
@@ -499,10 +489,7 @@ def list_task_files(kanban_dir: Path) -> list[Path]:
     return sorted(
         p
         for p in tasks_dir.iterdir()
-        if p.is_file()
-        and p.suffix == ".md"
-        and not p.name.startswith(".tmp-")
-        and not p.name.startswith(".")
+        if p.is_file() and p.suffix == ".md" and not p.name.startswith(".tmp-") and not p.name.startswith(".")
     )
 
 
@@ -517,10 +504,7 @@ def list_archive_files(kanban_dir: Path) -> list[Path]:
     return sorted(
         p
         for p in archive_dir.iterdir()
-        if p.is_file()
-        and p.suffix == ".md"
-        and not p.name.startswith(".tmp-")
-        and not p.name.startswith(".")
+        if p.is_file() and p.suffix == ".md" and not p.name.startswith(".tmp-") and not p.name.startswith(".")
     )
 
 

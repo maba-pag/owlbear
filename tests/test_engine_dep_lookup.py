@@ -132,13 +132,9 @@ class TestFromAC_DirectDepLookup:
         kanban_dir = _make_board(tmp_path)
         _write_task(kanban_dir, task_id=1, title="NoDeps", depends_on="[]")
         view = _make_agent_view(kanban_dir)
-        with mock.patch.object(
-            view.engine, "list_tasks", side_effect=_raise_list_tasks_called
-        ):
+        with mock.patch.object(view.engine, "list_tasks", side_effect=_raise_list_tasks_called):
             resp = view.show_task(1)
-        assert resp.dep_status is None, (
-            "No deps → dep_status must be None (not computed via list_tasks)"
-        )
+        assert resp.dep_status is None, "No deps → dep_status must be None (not computed via list_tasks)"
 
     def test_no_list_tasks_for_active_dep(self, tmp_path: Path) -> None:
         """Active dep: dep_status='ok' computed via direct show_task, not list_tasks."""
@@ -147,13 +143,9 @@ class TestFromAC_DirectDepLookup:
         _write_task(kanban_dir, task_id=2, title="ActiveDep", status="todo")
         view = _make_agent_view(kanban_dir)
         view.engine.list_tasks(archived=False)  # warm the _id_to_filename index
-        with mock.patch.object(
-            view.engine, "list_tasks", side_effect=_raise_list_tasks_called
-        ):
+        with mock.patch.object(view.engine, "list_tasks", side_effect=_raise_list_tasks_called):
             resp = view.show_task(1)
-        assert resp.dep_status == "ok", (
-            f"Active dep → dep_status must be 'ok' but got {resp.dep_status!r}"
-        )
+        assert resp.dep_status == "ok", f"Active dep → dep_status must be 'ok' but got {resp.dep_status!r}"
 
     def test_no_list_tasks_for_archived_completed_dep(self, tmp_path: Path) -> None:
         """Archived-completed dep: dep_status='ok' without list_tasks."""
@@ -169,13 +161,9 @@ class TestFromAC_DirectDepLookup:
         )
         view = _make_agent_view(kanban_dir)
         view.engine.list_tasks(archived=False)  # warm index
-        with mock.patch.object(
-            view.engine, "list_tasks", side_effect=_raise_list_tasks_called
-        ):
+        with mock.patch.object(view.engine, "list_tasks", side_effect=_raise_list_tasks_called):
             resp = view.show_task(1)
-        assert resp.dep_status == "ok", (
-            f"Archived-completed dep → dep_status must be 'ok' but got {resp.dep_status!r}"
-        )
+        assert resp.dep_status == "ok", f"Archived-completed dep → dep_status must be 'ok' but got {resp.dep_status!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -213,9 +201,7 @@ class TestFromAC_FileNotFoundError:
             f"FileNotFoundError for dep → must be 'blocked' but got {resp.dep_status!r}"
         )
 
-    def test_one_missing_dep_blocks_even_with_active_other_dep(
-        self, tmp_path: Path
-    ) -> None:
+    def test_one_missing_dep_blocks_even_with_active_other_dep(self, tmp_path: Path) -> None:
         """One missing dep + one active dep → dep_status='blocked' (worst wins)."""
         kanban_dir = _make_board(tmp_path)
         _write_task(kanban_dir, task_id=1, title="Consumer", depends_on="[2, 3]")
@@ -233,9 +219,7 @@ class TestFromAC_FileNotFoundError:
 
         with mock.patch.object(view.engine, "show_task", side_effect=_side_effect):
             resp = view.show_task(1)
-        assert resp.dep_status == "blocked", (
-            "One missing dep among two must still yield dep_status='blocked'"
-        )
+        assert resp.dep_status == "blocked", "One missing dep among two must still yield dep_status='blocked'"
 
 
 # ---------------------------------------------------------------------------
@@ -250,9 +234,7 @@ class TestFromAC_FileNotFoundError:
 class TestFromAC_CorruptionErrorHandling:
     """AC4: CorruptionError/ValueError/KeyError for dep → dep_status 'blocked'."""
 
-    def test_corruption_error_for_active_dep_returns_blocked(
-        self, tmp_path: Path
-    ) -> None:
+    def test_corruption_error_for_active_dep_returns_blocked(self, tmp_path: Path) -> None:
         """engine.show_task raises CorruptionError for active dep → dep_status='blocked'.
 
         Current code: list_tasks sees dep 2 as active → dep_status='ok'.
@@ -267,20 +249,14 @@ class TestFromAC_CorruptionErrorHandling:
 
         def _side_effect(task_id_str: str) -> Any:
             if task_id_str == "2":
-                raise CorruptionError(
-                    code="ERR_CORRUPT_MISSING_FIELD", detail="id missing"
-                )
+                raise CorruptionError(code="ERR_CORRUPT_MISSING_FIELD", detail="id missing")
             return original(task_id_str)
 
         with mock.patch.object(view.engine, "show_task", side_effect=_side_effect):
             resp = view.show_task(1)
-        assert resp.dep_status == "blocked", (
-            f"CorruptionError for dep → must be 'blocked' but got {resp.dep_status!r}"
-        )
+        assert resp.dep_status == "blocked", f"CorruptionError for dep → must be 'blocked' but got {resp.dep_status!r}"
 
-    def test_corruption_error_for_archived_dep_overrides_archival_reason(
-        self, tmp_path: Path
-    ) -> None:
+    def test_corruption_error_for_archived_dep_overrides_archival_reason(self, tmp_path: Path) -> None:
         """engine.show_task raises CorruptionError for archived dep → 'blocked' not 'ok'.
 
         Dep 2 is on disk as archived 'completed' (would give dep_status='ok').
@@ -304,16 +280,13 @@ class TestFromAC_CorruptionErrorHandling:
 
         def _side_effect(task_id_str: str) -> Any:
             if task_id_str == "2":
-                raise CorruptionError(
-                    code="ERR_CORRUPT_MISSING_FIELD", detail="corrupt on direct lookup"
-                )
+                raise CorruptionError(code="ERR_CORRUPT_MISSING_FIELD", detail="corrupt on direct lookup")
             return original(task_id_str)
 
         with mock.patch.object(view.engine, "show_task", side_effect=_side_effect):
             resp = view.show_task(1)
         assert resp.dep_status == "blocked", (
-            f"CorruptionError overrides archival_reason='completed'; "
-            f"must be 'blocked' but got {resp.dep_status!r}"
+            f"CorruptionError overrides archival_reason='completed'; must be 'blocked' but got {resp.dep_status!r}"
         )
 
     def test_value_error_from_show_task_returns_blocked(self, tmp_path: Path) -> None:
@@ -333,9 +306,7 @@ class TestFromAC_CorruptionErrorHandling:
 
         with mock.patch.object(view.engine, "show_task", side_effect=_side_effect):
             resp = view.show_task(1)
-        assert resp.dep_status == "blocked", (
-            f"ValueError for dep → must be 'blocked' but got {resp.dep_status!r}"
-        )
+        assert resp.dep_status == "blocked", f"ValueError for dep → must be 'blocked' but got {resp.dep_status!r}"
 
     def test_key_error_from_show_task_returns_blocked(self, tmp_path: Path) -> None:
         """engine.show_task raises KeyError for dep → dep_status='blocked'."""
@@ -354,9 +325,7 @@ class TestFromAC_CorruptionErrorHandling:
 
         with mock.patch.object(view.engine, "show_task", side_effect=_side_effect):
             resp = view.show_task(1)
-        assert resp.dep_status == "blocked", (
-            f"KeyError for dep → must be 'blocked' but got {resp.dep_status!r}"
-        )
+        assert resp.dep_status == "blocked", f"KeyError for dep → must be 'blocked' but got {resp.dep_status!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -391,65 +360,43 @@ class TestFromAC_ArchivalReasonEffects:
             subdir="archive",
         )
         view = _make_agent_view(kanban_dir)
-        view.engine.list_tasks(
-            archived=False
-        )  # warm index so show_task can find task 1
+        view.engine.list_tasks(archived=False)  # warm index so show_task can find task 1
         return view
 
     def test_archived_dropped_dep_returns_blocked(self, tmp_path: Path) -> None:
         """archival_reason='dropped' → dep_status='blocked'."""
         view = self._setup_archived_dep(tmp_path, dep_archival_reason="dropped")
-        with mock.patch.object(
-            view.engine, "list_tasks", side_effect=_raise_list_tasks_called
-        ):
+        with mock.patch.object(view.engine, "list_tasks", side_effect=_raise_list_tasks_called):
             resp = view.show_task(1)
-        assert resp.dep_status == "blocked", (
-            f"dropped dep → must be 'blocked' but got {resp.dep_status!r}"
-        )
+        assert resp.dep_status == "blocked", f"dropped dep → must be 'blocked' but got {resp.dep_status!r}"
 
     def test_archived_wontfix_dep_returns_blocked(self, tmp_path: Path) -> None:
         """archival_reason='wontfix' → dep_status='blocked'."""
         view = self._setup_archived_dep(tmp_path, dep_archival_reason="wontfix")
-        with mock.patch.object(
-            view.engine, "list_tasks", side_effect=_raise_list_tasks_called
-        ):
+        with mock.patch.object(view.engine, "list_tasks", side_effect=_raise_list_tasks_called):
             resp = view.show_task(1)
-        assert resp.dep_status == "blocked", (
-            f"wontfix dep → must be 'blocked' but got {resp.dep_status!r}"
-        )
+        assert resp.dep_status == "blocked", f"wontfix dep → must be 'blocked' but got {resp.dep_status!r}"
 
     def test_archived_deprecated_dep_returns_redirect(self, tmp_path: Path) -> None:
         """archival_reason='deprecated' → dep_status='redirect'."""
         view = self._setup_archived_dep(tmp_path, dep_archival_reason="deprecated")
-        with mock.patch.object(
-            view.engine, "list_tasks", side_effect=_raise_list_tasks_called
-        ):
+        with mock.patch.object(view.engine, "list_tasks", side_effect=_raise_list_tasks_called):
             resp = view.show_task(1)
-        assert resp.dep_status == "redirect", (
-            f"deprecated dep → must be 'redirect' but got {resp.dep_status!r}"
-        )
+        assert resp.dep_status == "redirect", f"deprecated dep → must be 'redirect' but got {resp.dep_status!r}"
 
     def test_archived_duplicate_dep_returns_redirect(self, tmp_path: Path) -> None:
         """archival_reason='duplicate' → dep_status='redirect'."""
         view = self._setup_archived_dep(tmp_path, dep_archival_reason="duplicate")
-        with mock.patch.object(
-            view.engine, "list_tasks", side_effect=_raise_list_tasks_called
-        ):
+        with mock.patch.object(view.engine, "list_tasks", side_effect=_raise_list_tasks_called):
             resp = view.show_task(1)
-        assert resp.dep_status == "redirect", (
-            f"duplicate dep → must be 'redirect' but got {resp.dep_status!r}"
-        )
+        assert resp.dep_status == "redirect", f"duplicate dep → must be 'redirect' but got {resp.dep_status!r}"
 
     def test_archived_completed_dep_returns_ok(self, tmp_path: Path) -> None:
         """archival_reason='completed' → dep_status='ok'."""
         view = self._setup_archived_dep(tmp_path, dep_archival_reason="completed")
-        with mock.patch.object(
-            view.engine, "list_tasks", side_effect=_raise_list_tasks_called
-        ):
+        with mock.patch.object(view.engine, "list_tasks", side_effect=_raise_list_tasks_called):
             resp = view.show_task(1)
-        assert resp.dep_status == "ok", (
-            f"completed dep → must be 'ok' but got {resp.dep_status!r}"
-        )
+        assert resp.dep_status == "ok", f"completed dep → must be 'ok' but got {resp.dep_status!r}"
 
     def test_blocked_beats_redirect_for_mixed_deps(self, tmp_path: Path) -> None:
         """blocked > redirect: wontfix dep + duplicate dep → 'blocked' wins."""
@@ -473,13 +420,10 @@ class TestFromAC_ArchivalReasonEffects:
         )
         view = _make_agent_view(kanban_dir)
         view.engine.list_tasks(archived=False)
-        with mock.patch.object(
-            view.engine, "list_tasks", side_effect=_raise_list_tasks_called
-        ):
+        with mock.patch.object(view.engine, "list_tasks", side_effect=_raise_list_tasks_called):
             resp = view.show_task(1)
         assert resp.dep_status == "blocked", (
-            f"wontfix + duplicate → 'blocked' must win over 'redirect', "
-            f"got {resp.dep_status!r}"
+            f"wontfix + duplicate → 'blocked' must win over 'redirect', got {resp.dep_status!r}"
         )
 
     def test_archive_wins_over_tasks_copy_for_dep_status(self, tmp_path: Path) -> None:
@@ -510,9 +454,7 @@ class TestFromAC_ArchivalReasonEffects:
         # Warm the index: list_tasks sees archive-wins and skips tasks/ copy for dep 2.
         # After this call, _id_to_filename does NOT contain dep 2 (popped by AC-C19 mode 7).
         view.engine.list_tasks(archived=False)
-        with mock.patch.object(
-            view.engine, "list_tasks", side_effect=_raise_list_tasks_called
-        ):
+        with mock.patch.object(view.engine, "list_tasks", side_effect=_raise_list_tasks_called):
             resp = view.show_task(1)
         assert resp.dep_status == "blocked", (
             f"archive-wins: dep 2 in both tasks/ (active) and archive/ (dropped) "
@@ -531,30 +473,23 @@ class TestFromAC_ArchivalReasonEffects:
 class TestFromAC_CockpitViewRegression:
     """AC6: CockpitView.show_task unchanged — same signature, same return type."""
 
-    def test_cockpit_view_show_task_returns_show_task_response(
-        self, tmp_path: Path
-    ) -> None:
+    def test_cockpit_view_show_task_returns_show_task_response(self, tmp_path: Path) -> None:
         """CockpitView.show_task returns ShowTaskResponse with correct dep_status."""
         kanban_dir = _make_board(tmp_path)
         _write_task(kanban_dir, task_id=1, title="Consumer", depends_on="[2]")
         _write_task(kanban_dir, task_id=2, title="ActiveDep", status="todo")
         cv = _make_cockpit_view(kanban_dir)
         cv.engine.list_tasks(archived=False)  # warm index
-        with mock.patch.object(
-            cv.engine, "list_tasks", side_effect=_raise_list_tasks_called
-        ):
+        with mock.patch.object(cv.engine, "list_tasks", side_effect=_raise_list_tasks_called):
             resp = cv.show_task(1)
         assert isinstance(resp, ShowTaskResponse), (
             "CockpitView.show_task must still return ShowTaskResponse after refactor"
         )
         assert resp.dep_status == "ok", (
-            f"CockpitView.show_task: active dep → dep_status must be 'ok', "
-            f"got {resp.dep_status!r}"
+            f"CockpitView.show_task: active dep → dep_status must be 'ok', got {resp.dep_status!r}"
         )
 
-    def test_cockpit_view_show_task_accepts_section_parameter(
-        self, tmp_path: Path
-    ) -> None:
+    def test_cockpit_view_show_task_accepts_section_parameter(self, tmp_path: Path) -> None:
         """CockpitView.show_task still accepts optional section parameter (no API change)."""
         kanban_dir = _make_board(tmp_path)
         _write_task(
@@ -566,18 +501,12 @@ class TestFromAC_CockpitViewRegression:
         )
         cv = _make_cockpit_view(kanban_dir)
         cv.engine.list_tasks(archived=False)
-        with mock.patch.object(
-            cv.engine, "list_tasks", side_effect=_raise_list_tasks_called
-        ):
+        with mock.patch.object(cv.engine, "list_tasks", side_effect=_raise_list_tasks_called):
             resp = cv.show_task(1, section="Notes")
         assert isinstance(resp, ShowTaskResponse)
-        assert resp.body is not None, (
-            "section extraction must still work after refactor"
-        )
+        assert resp.body is not None, "section extraction must still work after refactor"
 
-    def test_cockpit_view_show_task_section_extracts_correct_content(
-        self, tmp_path: Path
-    ) -> None:
+    def test_cockpit_view_show_task_section_extracts_correct_content(self, tmp_path: Path) -> None:
         """AC6 (stronger): CockpitView.show_task section= returns the extracted content.
 
         Discriminating assertion: body must equal the section's content text,
@@ -594,9 +523,7 @@ class TestFromAC_CockpitViewRegression:
         )
         cv = _make_cockpit_view(kanban_dir)
         cv.engine.list_tasks(archived=False)
-        with mock.patch.object(
-            cv.engine, "list_tasks", side_effect=_raise_list_tasks_called
-        ):
+        with mock.patch.object(cv.engine, "list_tasks", side_effect=_raise_list_tasks_called):
             resp = cv.show_task(1, section="Notes")
         assert isinstance(resp, ShowTaskResponse)
         assert resp.body == "content here\n\n", (
@@ -626,9 +553,7 @@ class TestFromAC_WarmCacheArchivePrecedence:
     the ID evicted from _id_to_filename (AC-C19 mode 7 parity).
     """
 
-    def test_warm_cache_dep_returns_archive_when_archive_appears_after_index(
-        self, tmp_path: Path
-    ) -> None:
+    def test_warm_cache_dep_returns_archive_when_archive_appears_after_index(self, tmp_path: Path) -> None:
         """Discriminating warm-cache archive-wins test (AC6).
 
         Setup:
@@ -663,9 +588,7 @@ class TestFromAC_WarmCacheArchivePrecedence:
         )
 
         # Warm-cache hit for dep 2 — must return archive copy, not active copy.
-        with mock.patch.object(
-            view.engine, "list_tasks", side_effect=_raise_list_tasks_called
-        ):
+        with mock.patch.object(view.engine, "list_tasks", side_effect=_raise_list_tasks_called):
             resp = view.show_task(1)
         assert resp.dep_status == "blocked", (
             f"warm-cache archive-wins: dep 2 in tasks/ (active) and archive/ (dropped) "
@@ -673,9 +596,7 @@ class TestFromAC_WarmCacheArchivePrecedence:
             f"got {resp.dep_status!r}"
         )
 
-    def test_warm_cache_id_evicted_from_index_after_archive_precedence_applied(
-        self, tmp_path: Path
-    ) -> None:
+    def test_warm_cache_id_evicted_from_index_after_archive_precedence_applied(self, tmp_path: Path) -> None:
         """After archive-wins on warm-cache hit, dep ID is evicted from _id_to_filename.
 
         AC6 states: 'return the archive copy and evict the ID from _id_to_filename'.

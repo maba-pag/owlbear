@@ -315,9 +315,7 @@ class TestFromAC_BoardConfigRootAllow:
 class TestFromAC_DetectionCascade:
     """ACs 3-5 — schema field → flat key-set → legacy; mixed without schema raises."""
 
-    def test_schema_grouped_field_triggers_grouped_parsing(
-        self, tmp_path: Path
-    ) -> None:
+    def test_schema_grouped_field_triggers_grouped_parsing(self, tmp_path: Path) -> None:
         """schema: grouped → load_config succeeds and returns config with .paths sub-model."""
         kanban_dir = _make_board(tmp_path, _GROUPED_YAML)
         config = load_config(kanban_dir)
@@ -340,9 +338,7 @@ class TestFromAC_DetectionCascade:
         assert config.paths.tasks_dir == PRODUCT_TOPOLOGY.tasks_dir
         assert config.paths.archive_dir == PRODUCT_TOPOLOGY.archive_dir
 
-    def test_load_config_mixed_flat_and_grouped_without_schema_returns_product_topology(
-        self, tmp_path: Path
-    ) -> None:
+    def test_load_config_mixed_flat_and_grouped_without_schema_returns_product_topology(self, tmp_path: Path) -> None:
         """load_config ignores mixed YAML shape and returns product topology regardless."""
         kanban_dir = _make_board(tmp_path, _MIXED_NO_SCHEMA_YAML)
         config = load_config(kanban_dir)
@@ -361,9 +357,7 @@ class TestFromAC_DetectionCascade:
             BoardConfig.model_validate(data)
         assert exc_info.value.code == "ERR_INVALID_STATUS"
 
-    def test_grouped_schema_detection_does_not_break_flat_loading(
-        self, tmp_path: Path
-    ) -> None:
+    def test_grouped_schema_detection_does_not_break_flat_loading(self, tmp_path: Path) -> None:
         """Flat config without schema field still loads after grouped detection added."""
         kanban_dir = _make_board(tmp_path, _FLAT_YAML)
         config = load_config(kanban_dir)
@@ -383,30 +377,22 @@ class TestFromAC_DetectionCascade:
 class TestFromAC_DefaultsPriorityMigration:
     """AC7 — defaults.priority accessible as pipeline.default_priority."""
 
-    def test_grouped_config_exposes_pipeline_default_priority(
-        self, tmp_path: Path
-    ) -> None:
+    def test_grouped_config_exposes_pipeline_default_priority(self, tmp_path: Path) -> None:
         """Grouped config resolves pipeline.default_priority from product topology."""
         kanban_dir = _make_board(tmp_path, _GROUPED_YAML)
         config = load_config(kanban_dir)
         assert hasattr(config, "pipeline")
         assert config.pipeline.default_priority == PRODUCT_TOPOLOGY.default_priority
 
-    def test_legacy_defaults_priority_migrates_to_pipeline_default_priority(
-        self, tmp_path: Path
-    ) -> None:
+    def test_legacy_defaults_priority_migrates_to_pipeline_default_priority(self, tmp_path: Path) -> None:
         """Legacy defaults.priority does not override product default_priority."""
         kanban_dir = _make_board(tmp_path, _LEGACY_YAML)
         config = load_config(kanban_dir)
         assert config.pipeline.default_priority == PRODUCT_TOPOLOGY.default_priority
 
-    def test_migration_path_is_explicit_not_pydantic_default(
-        self, tmp_path: Path
-    ) -> None:
+    def test_migration_path_is_explicit_not_pydantic_default(self, tmp_path: Path) -> None:
         """Legacy default priority in YAML does not affect loaded product topology."""
-        yaml_with_critical = _LEGACY_YAML.replace(
-            "  priority: someday", "  priority: critical"
-        )
+        yaml_with_critical = _LEGACY_YAML.replace("  priority: someday", "  priority: critical")
         kanban_dir = _make_board(tmp_path, yaml_with_critical)
         config = load_config(kanban_dir)
         assert config.pipeline.default_priority == PRODUCT_TOPOLOGY.default_priority
@@ -450,9 +436,7 @@ class TestFromAC_SaveConfigCheckpointOnly:
         assert "pipeline" not in data
         assert data == {"next_id": config.next_id}
 
-    def test_save_config_omits_agents_and_policy_sub_sections(
-        self, tmp_path: Path
-    ) -> None:
+    def test_save_config_omits_agents_and_policy_sub_sections(self, tmp_path: Path) -> None:
         """save_config does not persist agents/policy sections."""
         kanban_dir = _make_board(tmp_path, _GROUPED_YAML)
         config = load_config(kanban_dir)
@@ -487,9 +471,7 @@ class TestFromAC_SaveConfigCheckpointOnly:
         assert reloaded.paths.tasks_dir == config.paths.tasks_dir
         assert reloaded.paths.archive_dir == config.paths.archive_dir
 
-    def test_round_trip_pipeline_default_priority_preserved(
-        self, tmp_path: Path
-    ) -> None:
+    def test_round_trip_pipeline_default_priority_preserved(self, tmp_path: Path) -> None:
         """Round-trip: pipeline.default_priority survives save → reload cycle."""
         kanban_dir = _make_board(tmp_path, _GROUPED_YAML)
         config = load_config(kanban_dir)
@@ -503,9 +485,7 @@ class TestFromAC_SaveConfigCheckpointOnly:
         config = load_config(kanban_dir)
         save_config(config, kanban_dir)
         data = yaml.safe_load((kanban_dir / "config.yml").read_text(encoding="utf-8"))
-        assert "tasks_dir" not in data, (
-            "tasks_dir must not leak as flat root key in grouped output"
-        )
+        assert "tasks_dir" not in data, "tasks_dir must not leak as flat root key in grouped output"
 
     def test_save_config_no_flat_archive_dir_at_root(self, tmp_path: Path) -> None:
         """AC8 (negative): grouped save_config must NOT write archive_dir as flat root key."""
@@ -513,9 +493,7 @@ class TestFromAC_SaveConfigCheckpointOnly:
         config = load_config(kanban_dir)
         save_config(config, kanban_dir)
         data = yaml.safe_load((kanban_dir / "config.yml").read_text(encoding="utf-8"))
-        assert "archive_dir" not in data, (
-            "archive_dir must not leak as flat root key in grouped output"
-        )
+        assert "archive_dir" not in data, "archive_dir must not leak as flat root key in grouped output"
 
     def test_save_config_grouped_nested_paths_structural(self, tmp_path: Path) -> None:
         """save_config output remains minimal and omits grouped sections."""
@@ -534,9 +512,7 @@ class TestFromAC_SaveConfigCheckpointOnly:
         reloaded = load_config(kanban_dir)
         # Exclude legacy 'defaults' field — not preserved in grouped round-trip
         exclude = {"defaults"}
-        assert reloaded.model_dump(exclude=exclude) == config.model_dump(
-            exclude=exclude
-        )
+        assert reloaded.model_dump(exclude=exclude) == config.model_dump(exclude=exclude)
 
 
 # ---------------------------------------------------------------------------
@@ -552,9 +528,7 @@ class TestFromAC_MigrateConfigDefaultsPriority:
     at root) — NOT the grouped pipeline: section; also drops tasks_dir/archive_dir.
     """
 
-    def test_migrate_config_writes_default_priority_grouped(
-        self, tmp_path: Path
-    ) -> None:
+    def test_migrate_config_writes_default_priority_grouped(self, tmp_path: Path) -> None:
         """_migrate_config must write default_priority nested under pipeline: section.
 
         MUST FAIL until #1172: current migrate writes flat new_cfg["default_priority"].
@@ -569,13 +543,10 @@ class TestFromAC_MigrateConfigDefaultsPriority:
             f"migrate must write pipeline as nested section; got keys={list(data.keys())!r}"
         )
         assert data["pipeline"].get("default_priority") == "someday", (
-            f"migrate must write default_priority='someday' in pipeline section, "
-            f"got pipeline={data.get('pipeline')!r}"
+            f"migrate must write default_priority='someday' in pipeline section, got pipeline={data.get('pipeline')!r}"
         )
 
-    def test_migrate_config_explicit_value_not_pydantic_default(
-        self, tmp_path: Path
-    ) -> None:
+    def test_migrate_config_explicit_value_not_pydantic_default(self, tmp_path: Path) -> None:
         """_migrate_config uses the actual defaults.priority value, not a model default.
 
         MUST FAIL until #1172. Uses 'critical' — differs from both fixture 'someday'
@@ -605,9 +576,7 @@ archive_dir: custom-archive
         assert result == "migrated"
         data = yaml.safe_load((kanban_dir / "config.yml").read_text(encoding="utf-8"))
         # Require GROUPED format only
-        assert isinstance(data.get("pipeline"), dict), (
-            "migrate must write pipeline as nested section"
-        )
+        assert isinstance(data.get("pipeline"), dict), "migrate must write pipeline as nested section"
         assert data["pipeline"].get("default_priority") == "critical", (
             f"Expected 'critical' in pipeline.default_priority, got {data.get('pipeline')!r}"
         )

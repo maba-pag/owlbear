@@ -65,9 +65,7 @@ def mock_emb() -> MagicMock:
 
 
 @pytest.fixture()
-def real_pipeline(
-    conn: sqlite3.Connection, mock_vs: MagicMock, mock_emb: MagicMock
-) -> dict:
+def real_pipeline(conn: sqlite3.Connection, mock_vs: MagicMock, mock_emb: MagicMock) -> dict:
     """Real pipeline components wired with mock vector/embedding."""
     graph_store = GraphStore(conn)
     source_store = KnowledgeSourceStore(conn)
@@ -89,12 +87,7 @@ def _write_single_source_manifest(
 ) -> None:
     """Write a minimal single-source file_glob manifest to *path*."""
     path.write_text(
-        f'sources:\n'
-        f'  - name: "{name}"\n'
-        f'    type: file_glob\n'
-        f'    config:\n'
-        f'      glob: "{glob}"\n'
-        f'    scope: "{scope}"\n'
+        f'sources:\n  - name: "{name}"\n    type: file_glob\n    config:\n      glob: "{glob}"\n    scope: "{scope}"\n'
     )
 
 
@@ -114,9 +107,7 @@ class TestFromAC_ManifestLoaderSourceId:
     """AC-1: load_manifest_file must create source row with scope and pass source_id to ingest."""
 
     @pytest.mark.asyncio
-    async def test_source_row_created_with_scope_from_manifest(
-        self, conn: sqlite3.Connection, tmp_path: Path
-    ) -> None:
+    async def test_source_row_created_with_scope_from_manifest(self, conn: sqlite3.Connection, tmp_path: Path) -> None:
         """KnowledgeSource row must carry the scope declared in the manifest entry.
 
         Fails because load_manifest_file creates KnowledgeSource without scope=entry.scope,
@@ -145,9 +136,7 @@ class TestFromAC_ManifestLoaderSourceId:
         )
 
     @pytest.mark.asyncio
-    async def test_source_row_scope_not_overridden_to_global(
-        self, conn: sqlite3.Connection, tmp_path: Path
-    ) -> None:
+    async def test_source_row_scope_not_overridden_to_global(self, conn: sqlite3.Connection, tmp_path: Path) -> None:
         """Non-global scope must not silently revert to 'global'.
 
         Fails because the KnowledgeSource default is scope='global' and the
@@ -176,9 +165,7 @@ class TestFromAC_ManifestLoaderSourceId:
         )
 
     @pytest.mark.asyncio
-    async def test_ingest_receives_source_id_kwarg(
-        self, conn: sqlite3.Connection, tmp_path: Path
-    ) -> None:
+    async def test_ingest_receives_source_id_kwarg(self, conn: sqlite3.Connection, tmp_path: Path) -> None:
         """pipeline.ingest() must be called with source_id= equal to the created source's id.
 
         Fails because load_manifest_file calls pipeline.ingest(intake, scope=entry.scope)
@@ -208,17 +195,12 @@ class TestFromAC_ManifestLoaderSourceId:
         assert captured_kwargs, "pipeline.ingest() was never called"
         call_kwargs = captured_kwargs[0]
         assert "source_id" in call_kwargs, (
-            "pipeline.ingest() must receive source_id= keyword argument; "
-            "currently load_manifest_file omits it entirely"
+            "pipeline.ingest() must receive source_id= keyword argument; currently load_manifest_file omits it entirely"
         )
-        assert call_kwargs["source_id"] is not None, (
-            "source_id passed to pipeline.ingest() must not be None"
-        )
+        assert call_kwargs["source_id"] is not None, "source_id passed to pipeline.ingest() must not be None"
 
     @pytest.mark.asyncio
-    async def test_ingest_source_id_matches_created_source_row(
-        self, conn: sqlite3.Connection, tmp_path: Path
-    ) -> None:
+    async def test_ingest_source_id_matches_created_source_row(self, conn: sqlite3.Connection, tmp_path: Path) -> None:
         """The source_id passed to ingest must equal the KnowledgeSource.id in the DB.
 
         Fails because source_id is never passed to ingest, so any captured value
@@ -256,9 +238,7 @@ class TestFromAC_ManifestLoaderSourceId:
         )
 
     @pytest.mark.asyncio
-    async def test_document_source_id_not_null_in_db(
-        self, real_pipeline: dict, tmp_path: Path
-    ) -> None:
+    async def test_document_source_id_not_null_in_db(self, real_pipeline: dict, tmp_path: Path) -> None:
         """Document row's source_id column must not be NULL after load_manifest_file.
 
         Fails because pipeline.ingest() is called without source_id= so
@@ -291,9 +271,7 @@ class TestFromAC_ManifestLoaderSourceId:
         )
 
     @pytest.mark.asyncio
-    async def test_document_source_id_references_existing_source_row(
-        self, real_pipeline: dict, tmp_path: Path
-    ) -> None:
+    async def test_document_source_id_references_existing_source_row(self, real_pipeline: dict, tmp_path: Path) -> None:
         """documents.source_id must be a valid FK reference to knowledge_sources.id.
 
         Fails because source_id is NULL in the document, so no FK match exists.
@@ -320,18 +298,13 @@ class TestFromAC_ManifestLoaderSourceId:
         doc_source_id = doc_row[0]
 
         assert doc_source_id is not None, "document.source_id is NULL; expected FK reference"
-        source_row = conn.execute(
-            "SELECT id FROM knowledge_sources WHERE id = ?", (doc_source_id,)
-        ).fetchone()
+        source_row = conn.execute("SELECT id FROM knowledge_sources WHERE id = ?", (doc_source_id,)).fetchone()
         assert source_row is not None, (
-            f"document.source_id={doc_source_id!r} does not reference any "
-            "knowledge_sources row — linkage is broken"
+            f"document.source_id={doc_source_id!r} does not reference any knowledge_sources row — linkage is broken"
         )
 
     @pytest.mark.asyncio
-    async def test_all_files_in_glob_receive_same_source_id(
-        self, conn: sqlite3.Connection, tmp_path: Path
-    ) -> None:
+    async def test_all_files_in_glob_receive_same_source_id(self, conn: sqlite3.Connection, tmp_path: Path) -> None:
         """Every file matched by the glob must pass the same source_id to ingest.
 
         Fails because source_id is never passed to ingest (all calls get None).
@@ -359,9 +332,7 @@ class TestFromAC_ManifestLoaderSourceId:
             pipeline=mock_pipeline,
         )
 
-        assert len(per_call_source_ids) == 3, (
-            f"Expected 3 ingest calls (one per file), got {len(per_call_source_ids)}"
-        )
+        assert len(per_call_source_ids) == 3, f"Expected 3 ingest calls (one per file), got {len(per_call_source_ids)}"
         # Every call must have received a non-None, consistent source_id.
         assert all(sid is not None for sid in per_call_source_ids), (
             f"All ingest calls must receive source_id; got: {per_call_source_ids}"
@@ -447,8 +418,7 @@ class TestFromAC_ManifestGlobPaths:
         """
         text = _SOURCES_YAML.read_text(encoding="utf-8")
         assert "docs/research" not in text, (
-            "sources.yaml still contains the stale path 'docs/research'; "
-            "replace with '.owlbear/research/*.md'"
+            "sources.yaml still contains the stale path 'docs/research'; replace with '.owlbear/research/*.md'"
         )
 
     def test_stale_glob_bare_skills_not_in_sources_yaml(self) -> None:
@@ -460,11 +430,8 @@ class TestFromAC_ManifestGlobPaths:
         # Must not contain the bare 'skills/' path (not preceded by 'share/')
         lines = [ln.strip() for ln in text.splitlines() if "glob" in ln]
         for line in lines:
-            assert not (
-                "skills/" in line and "share/skills/" not in line
-            ), (
-                f"Found stale glob line {line!r}; expected 'share/skills/*/SKILL.md', "
-                "not 'skills/*/SKILL.md'"
+            assert not ("skills/" in line and "share/skills/" not in line), (
+                f"Found stale glob line {line!r}; expected 'share/skills/*/SKILL.md', not 'skills/*/SKILL.md'"
             )
 
     def test_stale_glob_bare_instructions_not_in_sources_yaml(self) -> None:
@@ -475,11 +442,8 @@ class TestFromAC_ManifestGlobPaths:
         text = _SOURCES_YAML.read_text(encoding="utf-8")
         lines = [ln.strip() for ln in text.splitlines() if "glob" in ln]
         for line in lines:
-            assert not (
-                "instructions/" in line and "share/instructions/" not in line
-            ), (
-                f"Found stale glob line {line!r}; expected 'share/instructions/*.md', "
-                "not 'instructions/*.md'"
+            assert not ("instructions/" in line and "share/instructions/" not in line), (
+                f"Found stale glob line {line!r}; expected 'share/instructions/*.md', not 'instructions/*.md'"
             )
 
 
@@ -492,9 +456,7 @@ class TestFromAC_SearchSourceMetadata:
     """AC-3: search result 'source' field must be non-null with name after loader fix."""
 
     @pytest.mark.asyncio
-    async def test_loader_ingested_doc_query_returns_source_name(
-        self, real_pipeline: dict, tmp_path: Path
-    ) -> None:
+    async def test_loader_ingested_doc_query_returns_source_name(self, real_pipeline: dict, tmp_path: Path) -> None:
         """After load_manifest_file, querying the document must return source.name.
 
         Full integration chain:
@@ -574,9 +536,7 @@ class TestFromAC_SearchSourceMetadata:
         Fails as a contract test: asserts name != '' to prove linkage works, but
         currently name='' because source_id is NULL on the document.
         """
-        (tmp_path / "doc.md").write_text(
-            "# Linked Document\n\nText to produce a chunk for searching.\n"
-        )
+        (tmp_path / "doc.md").write_text("# Linked Document\n\nText to produce a chunk for searching.\n")
         manifest = tmp_path / "manifest.yaml"
         _write_single_source_manifest(manifest, name="Corpus Source", scope="corpus")
 
@@ -630,9 +590,7 @@ class TestFromAC_SearchSourceMetadata:
 class TestFromAC_LoaderCliVectorPath:
     """AC-4: main() must use QdrantVectorStore(location=...) with env var or default."""
 
-    def test_main_uses_owlbear_qdrant_path_env_var(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_main_uses_owlbear_qdrant_path_env_var(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """QdrantVectorStore must be called with location= from OWLBEAR_QDRANT_PATH.
 
         Fails because main() calls QdrantVectorStore() without any location= argument,
@@ -650,9 +608,7 @@ class TestFromAC_LoaderCliVectorPath:
 
         mock_qdrant.assert_called_once()
         call_kwargs = mock_qdrant.call_args
-        actual_location = call_kwargs.kwargs.get("location") or (
-            call_kwargs.args[0] if call_kwargs.args else None
-        )
+        actual_location = call_kwargs.kwargs.get("location") or (call_kwargs.args[0] if call_kwargs.args else None)
         assert actual_location == qdrant_path, (
             f"QdrantVectorStore must be called with location={qdrant_path!r}; "
             f"got location={actual_location!r}; main() uses QdrantVectorStore() without location="
@@ -679,12 +635,9 @@ class TestFromAC_LoaderCliVectorPath:
 
         mock_qdrant.assert_called_once()
         call_kwargs = mock_qdrant.call_args
-        actual_location = call_kwargs.kwargs.get("location") or (
-            call_kwargs.args[0] if call_kwargs.args else None
-        )
+        actual_location = call_kwargs.kwargs.get("location") or (call_kwargs.args[0] if call_kwargs.args else None)
         assert actual_location == expected_default, (
-            f"QdrantVectorStore must be called with location='{expected_default}'; "
-            f"got location={actual_location!r}"
+            f"QdrantVectorStore must be called with location='{expected_default}'; got location={actual_location!r}"
         )
 
     def test_main_qdrant_location_matches_mcp_server_default(
@@ -696,6 +649,7 @@ class TestFromAC_LoaderCliVectorPath:
         while server.py uses os.environ.get('OWLBEAR_QDRANT_PATH', '.owlbear/knowledge/vectors').
         """
         from owlbear_mcp_knowledge import server as _mcp_server  # noqa: PLC0415
+
         server_default = _mcp_server._DEFAULT_QDRANT_PATH
 
         manifest = tmp_path / "manifest.yaml"
@@ -708,9 +662,7 @@ class TestFromAC_LoaderCliVectorPath:
             main(["--manifest", str(manifest), "--root", str(tmp_path)])
 
         call_kwargs = mock_qdrant.call_args
-        actual_location = call_kwargs.kwargs.get("location") or (
-            call_kwargs.args[0] if call_kwargs.args else None
-        )
+        actual_location = call_kwargs.kwargs.get("location") or (call_kwargs.args[0] if call_kwargs.args else None)
         assert actual_location == server_default, (
             f"loader main() default Qdrant path must match server.py _DEFAULT_QDRANT_PATH "
             f"({server_default!r}); got {actual_location!r}"
@@ -739,13 +691,7 @@ class TestFromAC_ParseManifestBranches:
         """An unknown 'type' value in the manifest raises YAMLValidationError."""
         import strictyaml as sy  # noqa: PLC0415
 
-        yaml_text = (
-            "sources:\n"
-            "  - name: Bad Source\n"
-            "    type: totally_wrong\n"
-            "    config:\n"
-            "      glob: '*.md'\n"
-        )
+        yaml_text = "sources:\n  - name: Bad Source\n    type: totally_wrong\n    config:\n      glob: '*.md'\n"
         with pytest.raises(sy.YAMLValidationError):
             parse_manifest(yaml_text)
 
@@ -764,13 +710,7 @@ class TestFromAC_ParseManifestBranches:
 
     def test_entry_without_scope_defaults_to_global(self) -> None:
         """An entry without a 'scope' key defaults to ManifestEntry.scope='global'."""
-        entries = parse_manifest(
-            "sources:\n"
-            "  - name: No Scope\n"
-            "    type: file_glob\n"
-            "    config:\n"
-            "      glob: '*.md'\n"
-        )
+        entries = parse_manifest("sources:\n  - name: No Scope\n    type: file_glob\n    config:\n      glob: '*.md'\n")
         assert len(entries) == 1
         assert entries[0].scope == "global"
 
@@ -794,19 +734,12 @@ class TestFromAC_LoaderBranchCoverage:
     """Coverage for load_manifest_file branches not hit by the primary AC tests."""
 
     @pytest.mark.asyncio
-    async def test_disabled_source_entry_not_ingested(
-        self, conn: sqlite3.Connection, tmp_path: Path
-    ) -> None:
+    async def test_disabled_source_entry_not_ingested(self, conn: sqlite3.Connection, tmp_path: Path) -> None:
         """A source entry with enabled=false must not call pipeline.ingest()."""
         (tmp_path / "doc.md").write_text("Some content.")
         manifest = tmp_path / "manifest.yaml"
         manifest.write_text(
-            "sources:\n"
-            "  - name: Disabled\n"
-            "    type: file_glob\n"
-            "    config:\n"
-            '      glob: "*.md"\n'
-            "    enabled: false\n"
+            'sources:\n  - name: Disabled\n    type: file_glob\n    config:\n      glob: "*.md"\n    enabled: false\n'
         )
         source_store = KnowledgeSourceStore(conn)
         mock_pipeline = MagicMock()
@@ -823,9 +756,7 @@ class TestFromAC_LoaderBranchCoverage:
         assert summary.ingested == 0
 
     @pytest.mark.asyncio
-    async def test_glob_matching_no_files_skips_ingest(
-        self, conn: sqlite3.Connection, tmp_path: Path
-    ) -> None:
+    async def test_glob_matching_no_files_skips_ingest(self, conn: sqlite3.Connection, tmp_path: Path) -> None:
         """When a glob matches no files, no ingest call is made and counters stay zero."""
         manifest = tmp_path / "manifest.yaml"
         _write_single_source_manifest(manifest, glob="*.nonexistent_extension")
@@ -845,9 +776,7 @@ class TestFromAC_LoaderBranchCoverage:
         assert summary.failed == 0
 
     @pytest.mark.asyncio
-    async def test_skipped_status_increments_summary_skipped(
-        self, conn: sqlite3.Connection, tmp_path: Path
-    ) -> None:
+    async def test_skipped_status_increments_summary_skipped(self, conn: sqlite3.Connection, tmp_path: Path) -> None:
         """result.status == 'skipped' increments summary.skipped, not summary.ingested."""
         (tmp_path / "doc.md").write_text("Content.")
         manifest = tmp_path / "manifest.yaml"
@@ -871,9 +800,7 @@ class TestFromAC_LoaderBranchCoverage:
         assert summary.failed == 0
 
     @pytest.mark.asyncio
-    async def test_failed_status_increments_summary_failed(
-        self, conn: sqlite3.Connection, tmp_path: Path
-    ) -> None:
+    async def test_failed_status_increments_summary_failed(self, conn: sqlite3.Connection, tmp_path: Path) -> None:
         """result.status == 'failed' increments summary.failed (not ingested or skipped)."""
         (tmp_path / "doc.md").write_text("Content.")
         manifest = tmp_path / "manifest.yaml"
@@ -897,9 +824,7 @@ class TestFromAC_LoaderBranchCoverage:
         assert summary.skipped == 0
 
     @pytest.mark.asyncio
-    async def test_ingest_exception_increments_failed(
-        self, conn: sqlite3.Connection, tmp_path: Path
-    ) -> None:
+    async def test_ingest_exception_increments_failed(self, conn: sqlite3.Connection, tmp_path: Path) -> None:
         """An exception raised by pipeline.ingest() increments summary.failed."""
         (tmp_path / "doc.md").write_text("Content.")
         manifest = tmp_path / "manifest.yaml"
@@ -920,9 +845,7 @@ class TestFromAC_LoaderBranchCoverage:
         assert summary.ingested == 0
 
     @pytest.mark.asyncio
-    async def test_all_files_failed_sets_all_source_ok_false(
-        self, conn: sqlite3.Connection, tmp_path: Path
-    ) -> None:
+    async def test_all_files_failed_sets_all_source_ok_false(self, conn: sqlite3.Connection, tmp_path: Path) -> None:
         """When every file in a source fails, summary.all_source_ok becomes False."""
         (tmp_path / "a.md").write_text("File A.")
         manifest = tmp_path / "manifest.yaml"
@@ -944,9 +867,7 @@ class TestFromAC_LoaderBranchCoverage:
         assert summary.all_source_ok is False
 
     @pytest.mark.asyncio
-    async def test_partial_failure_preserves_all_source_ok_true(
-        self, conn: sqlite3.Connection, tmp_path: Path
-    ) -> None:
+    async def test_partial_failure_preserves_all_source_ok_true(self, conn: sqlite3.Connection, tmp_path: Path) -> None:
         """When only some files fail (not all), all_source_ok remains True."""
         (tmp_path / "ok.md").write_text("OK content.")
         (tmp_path / "fail.md").write_text("Fail content.")
@@ -985,9 +906,7 @@ class TestFromAC_LoaderBranchCoverage:
 class TestFromAC_MainCliExitCode:
     """Coverage for main() return-code paths (0 and 1)."""
 
-    def test_main_returns_one_when_all_source_ok_false(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_main_returns_one_when_all_source_ok_false(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """main() returns exit code 1 when summary.all_source_ok is False."""
         manifest = tmp_path / "manifest.yaml"
         manifest.write_text("sources:\n")
@@ -1006,9 +925,7 @@ class TestFromAC_MainCliExitCode:
 
         assert result == 1
 
-    def test_main_returns_zero_when_all_source_ok_true(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_main_returns_zero_when_all_source_ok_true(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """main() returns exit code 0 when summary.all_source_ok is True."""
         manifest = tmp_path / "manifest.yaml"
         manifest.write_text("sources:\n")
@@ -1105,12 +1022,8 @@ class TestFromAC_SearchKnowledgeMCPBoundary:
         ctx = _make_search_ctx(qs)
         result = await search_knowledge(ctx, query="pilot document")
 
-        assert isinstance(result, list), (
-            f"search_knowledge() must return a list; got: {type(result)!r}"
-        )
-        assert result, (
-            f"search_knowledge() must return a non-empty list; got: {result!r}"
-        )
+        assert isinstance(result, list), f"search_knowledge() must return a list; got: {type(result)!r}"
+        assert result, f"search_knowledge() must return a non-empty list; got: {result!r}"
         source_name = result[0].get("source", {}).get("name", "")
         assert source_name == "Pilot Source", (
             f"search_knowledge() result[0]['source']['name'] must be 'Pilot Source'; "
@@ -1133,8 +1046,7 @@ class TestFromAC_SearchKnowledgeMCPBoundary:
         source_name must NOT be empty — it must match the manifest source name.
         """
         (tmp_path / "content.md").write_text(
-            "# Knowledge Article\n\n"
-            "Content for chunk production and source-linkage assertion.\n"
+            "# Knowledge Article\n\nContent for chunk production and source-linkage assertion.\n"
         )
         manifest = tmp_path / "manifest.yaml"
         _write_single_source_manifest(manifest, name="Article Source", scope="articles")
@@ -1171,12 +1083,8 @@ class TestFromAC_SearchKnowledgeMCPBoundary:
         ctx = _make_search_ctx(qs)
         result = await search_knowledge(ctx, query="article")
 
-        assert isinstance(result, list), (
-            f"search_knowledge() must return a list; got: {type(result)!r}"
-        )
-        assert result, (
-            f"search_knowledge() returned no results: {result!r}"
-        )
+        assert isinstance(result, list), f"search_knowledge() must return a list; got: {type(result)!r}"
+        assert result, f"search_knowledge() returned no results: {result!r}"
         source_name = result[0].get("source", {}).get("name", "")
         # After fix: source_name must equal "Article Source" (not empty string).
         assert source_name == "Article Source", (
@@ -1201,9 +1109,7 @@ class TestFromAC_ChunkLinkageViaJoin:
     """
 
     @pytest.mark.asyncio
-    async def test_three_table_join_returns_rows_after_loader_ingest(
-        self, real_pipeline: dict, tmp_path: Path
-    ) -> None:
+    async def test_three_table_join_returns_rows_after_loader_ingest(self, real_pipeline: dict, tmp_path: Path) -> None:
         """knowledge_sources JOIN documents JOIN chunks must return rows after load_manifest_file.
 
         The JOIN `documents d ON d.source_id = ks.id` only succeeds when
@@ -1255,9 +1161,7 @@ class TestFromAC_ChunkLinkageViaJoin:
         assert source_id, "source_id must be non-empty"
 
     @pytest.mark.asyncio
-    async def test_chunk_scope_matches_manifest_scope_via_db_join(
-        self, real_pipeline: dict, tmp_path: Path
-    ) -> None:
+    async def test_chunk_scope_matches_manifest_scope_via_db_join(self, real_pipeline: dict, tmp_path: Path) -> None:
         """Chunks linked via JOIN must carry the scope declared in the manifest.
 
         Proves: knowledge_sources.scope = manifest scope AND documents.source_id links
@@ -1267,13 +1171,10 @@ class TestFromAC_ChunkLinkageViaJoin:
         the scope assertion is therefore unreachable — the JOIN itself already fails.
         """
         (tmp_path / "scoped.md").write_text(
-            "# Scoped Article\n\n"
-            "Content that should be scoped to 'research-scope' via its manifest source.\n"
+            "# Scoped Article\n\nContent that should be scoped to 'research-scope' via its manifest source.\n"
         )
         manifest = tmp_path / "manifest.yaml"
-        _write_single_source_manifest(
-            manifest, name="Research Source", scope="research-scope"
-        )
+        _write_single_source_manifest(manifest, name="Research Source", scope="research-scope")
 
         conn: sqlite3.Connection = real_pipeline["conn"]
         source_store: KnowledgeSourceStore = real_pipeline["source_store"]
@@ -1306,15 +1207,9 @@ class TestFromAC_ChunkLinkageViaJoin:
             "manifest scope='research-scope' is never reachable from chunks."
         )
         ks_scope, ks_name, doc_source_id, _ = row
-        assert ks_scope == "research-scope", (
-            f"knowledge_sources.scope must be 'research-scope', got {ks_scope!r}"
-        )
-        assert ks_name == "Research Source", (
-            f"knowledge_sources.name must be 'Research Source', got {ks_name!r}"
-        )
-        assert doc_source_id is not None, (
-            "documents.source_id must not be NULL for the JOIN to have returned a row"
-        )
+        assert ks_scope == "research-scope", f"knowledge_sources.scope must be 'research-scope', got {ks_scope!r}"
+        assert ks_name == "Research Source", f"knowledge_sources.name must be 'Research Source', got {ks_name!r}"
+        assert doc_source_id is not None, "documents.source_id must not be NULL for the JOIN to have returned a row"
 
     @pytest.mark.asyncio
     async def test_all_chunks_from_loader_document_link_to_same_source(
@@ -1370,8 +1265,7 @@ class TestFromAC_ChunkLinkageViaJoin:
         # All chunks must share the same source_id (consistent FK chain).
         source_ids = {row[1] for row in rows}
         assert len(source_ids) == 1, (
-            f"All chunks from the same source must share one source_id; "
-            f"got multiple distinct values: {source_ids}"
+            f"All chunks from the same source must share one source_id; got multiple distinct values: {source_ids}"
         )
 
     @pytest.mark.asyncio
@@ -1392,13 +1286,10 @@ class TestFromAC_ChunkLinkageViaJoin:
         """
         manifest_scope = "doc-scope-proof"
         (tmp_path / "document.md").write_text(
-            "# Document Scope Proof\n\n"
-            "Content for verifying that documents.scope is set from manifest entry scope.\n"
+            "# Document Scope Proof\n\nContent for verifying that documents.scope is set from manifest entry scope.\n"
         )
         manifest = tmp_path / "manifest.yaml"
-        _write_single_source_manifest(
-            manifest, name="Doc Scope Source", scope=manifest_scope
-        )
+        _write_single_source_manifest(manifest, name="Doc Scope Source", scope=manifest_scope)
 
         conn: sqlite3.Connection = real_pipeline["conn"]
         source_store: KnowledgeSourceStore = real_pipeline["source_store"]
@@ -1426,9 +1317,7 @@ class TestFromAC_ChunkLinkageViaJoin:
             "documents.source_id=NULL or documents.scope was never set."
         )
         for ks_scope, d_scope in rows:
-            assert ks_scope == manifest_scope, (
-                f"knowledge_sources.scope must be {manifest_scope!r}, got {ks_scope!r}"
-            )
+            assert ks_scope == manifest_scope, f"knowledge_sources.scope must be {manifest_scope!r}, got {ks_scope!r}"
             assert d_scope == manifest_scope, (
                 f"documents.scope must equal manifest scope {manifest_scope!r}, "
                 f"got {d_scope!r}. Proves pipeline.ingest() forwards scope= to "
@@ -1436,9 +1325,7 @@ class TestFromAC_ChunkLinkageViaJoin:
             )
 
     @pytest.mark.asyncio
-    async def test_chunk_scope_column_equals_manifest_scope_via_join(
-        self, real_pipeline: dict, tmp_path: Path
-    ) -> None:
+    async def test_chunk_scope_column_equals_manifest_scope_via_join(self, real_pipeline: dict, tmp_path: Path) -> None:
         """chunks.scope must equal the manifest scope — not just knowledge_sources.scope.
 
         Reviewer finding (cycle 2): existing test only asserts ks.scope. A regression
@@ -1454,13 +1341,10 @@ class TestFromAC_ChunkLinkageViaJoin:
         """
         manifest_scope = "chunk-scope-proof"
         (tmp_path / "chunks.md").write_text(
-            "# Chunk Scope Proof\n\n"
-            "Content for verifying that chunks.scope is set from manifest entry scope.\n"
+            "# Chunk Scope Proof\n\nContent for verifying that chunks.scope is set from manifest entry scope.\n"
         )
         manifest = tmp_path / "manifest.yaml"
-        _write_single_source_manifest(
-            manifest, name="Chunk Scope Source", scope=manifest_scope
-        )
+        _write_single_source_manifest(manifest, name="Chunk Scope Source", scope=manifest_scope)
 
         conn: sqlite3.Connection = real_pipeline["conn"]
         source_store: KnowledgeSourceStore = real_pipeline["source_store"]
@@ -1490,8 +1374,7 @@ class TestFromAC_ChunkLinkageViaJoin:
         )
         for _, d_scope, c_scope in rows:
             assert d_scope == manifest_scope, (
-                f"documents.scope must equal manifest scope {manifest_scope!r}, "
-                f"got {d_scope!r}."
+                f"documents.scope must equal manifest scope {manifest_scope!r}, got {d_scope!r}."
             )
             assert c_scope == manifest_scope, (
                 f"chunks.scope must equal manifest scope {manifest_scope!r}, "

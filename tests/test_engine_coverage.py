@@ -195,9 +195,7 @@ class TestFromAC_EngineEditTaskFieldMutations:
         with pytest.raises(ValueError, match="Invalid priority"):
             engine.edit_task("1", priority="ultra-mega-high")
 
-    def test_append_body_without_timestamp_has_no_date_prefix(
-        self, tmp_path: Path
-    ) -> None:
+    def test_append_body_without_timestamp_has_no_date_prefix(self, tmp_path: Path) -> None:
         """append_body with timestamp=False (default) must not prepend [[YYYY-MM-DD]]."""
         board = _make_board(tmp_path)
         _write_task(board, task_id=1, body="Initial.")
@@ -215,9 +213,7 @@ class TestFromAC_EngineEditTaskFieldMutations:
         engine = KanbanEngine(board, activity_log=False)
         result = engine.edit_task("1", append_body="NewContent.")
         body = str(result.body)
-        assert "OriginalContent." in body, (
-            "original body was lost (overwrite regression)"
-        )
+        assert "OriginalContent." in body, "original body was lost (overwrite regression)"
         assert "NewContent." in body
         assert body.index("OriginalContent.") < body.index("NewContent."), (
             "original body must appear before appended text"
@@ -234,9 +230,7 @@ class TestFromAC_EngineEditTaskFieldMutations:
         # Appended text is present
         assert "Appended text." in str(result.body)
         # Appended text comes AFTER original body (not before or instead of it)
-        assert str(result.body).index("Original body text.") < str(result.body).index(
-            "Appended text."
-        )
+        assert str(result.body).index("Original body text.") < str(result.body).index("Appended text.")
 
 
 # ---------------------------------------------------------------------------
@@ -268,9 +262,7 @@ class TestFromAC_EngineProperties:
         engine = KanbanEngine(board, activity_log=False)
         first = engine.agent_name
         subsequent = [engine.agent_name for _ in range(9)]
-        assert all(name == first for name in subsequent), (
-            f"agent_name changed across calls: {[first, *subsequent]}"
-        )
+        assert all(name == first for name in subsequent), f"agent_name changed across calls: {[first, *subsequent]}"
 
     def test_board_config_returns_deep_copy(self, tmp_path: Path) -> None:
         """Mutating the returned BoardConfig must not affect engine internal state."""
@@ -305,9 +297,7 @@ class TestFromAC_EngineProperties:
             "agent_types mutation leaked into engine state (shallow-copy regression)"
         )
 
-    def test_board_config_deep_copy_covers_nested_agent_map(
-        self, tmp_path: Path
-    ) -> None:
+    def test_board_config_deep_copy_covers_nested_agent_map(self, tmp_path: Path) -> None:
         """Mutating a nested dict in the returned config must not affect engine state."""
         board = _make_board(tmp_path)
         engine = KanbanEngine(board, activity_log=False)
@@ -320,9 +310,7 @@ class TestFromAC_EngineProperties:
         assert "INJECTED_KEY" not in engine.board_config().agent_map
         assert engine.board_config().agent_map == original_agent_map
 
-    def test_board_config_deep_copy_existing_nested_list_is_isolated(
-        self, tmp_path: Path
-    ) -> None:
+    def test_board_config_deep_copy_existing_nested_list_is_isolated(self, tmp_path: Path) -> None:
         """Mutating a pre-existing nested list value inside agent_map on the returned copy
         must not affect engine state — proves model_copy(deep=True) isolates existing
         nested mutable values, not just top-level containers or newly-inserted keys.
@@ -334,12 +322,8 @@ class TestFromAC_EngineProperties:
 
         # Fixture sets agent_map["research"] = [] (an existing nested list)
         config_copy = engine.board_config()
-        assert "research" in config_copy.agent_map, (
-            "fixture sanity: research key required"
-        )
-        original_list = list(
-            config_copy.agent_map["research"]
-        )  # snapshot before mutation
+        assert "research" in config_copy.agent_map, "fixture sanity: research key required"
+        original_list = list(config_copy.agent_map["research"])  # snapshot before mutation
 
         # Mutate the existing nested list in the returned copy
         config_copy.agent_map["research"].append("INJECTED_AGENT")

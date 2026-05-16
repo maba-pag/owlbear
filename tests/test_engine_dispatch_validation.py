@@ -110,27 +110,21 @@ class TestFromAC_InitDispatchValidation:
 
     def test_unknown_priority_raises_with_correct_code(self, tmp_path: Path) -> None:
         """Unknown priority in config → ConfigError code ERR_DISPATCH_PRIORITY_MISMATCH."""
-        kanban_dir = _make_board(
-            tmp_path, priorities=[*_STANDARD_PRIORITIES, "galaxy-brain"]
-        )
+        kanban_dir = _make_board(tmp_path, priorities=[*_STANDARD_PRIORITIES, "galaxy-brain"])
         with pytest.raises(ConfigError) as exc_info:
             KanbanEngine(kanban_dir, activity_log=False)
         assert exc_info.value.code == "ERR_DISPATCH_PRIORITY_MISMATCH"
 
     def test_priority_error_message_lists_unranked_values(self, tmp_path: Path) -> None:
         """Error message for priority mismatch must include the unranked value name."""
-        kanban_dir = _make_board(
-            tmp_path, priorities=[*_STANDARD_PRIORITIES, "ultra-critical"]
-        )
+        kanban_dir = _make_board(tmp_path, priorities=[*_STANDARD_PRIORITIES, "ultra-critical"])
         with pytest.raises(ConfigError) as exc_info:
             KanbanEngine(kanban_dir, activity_log=False)
         assert "ultra-critical" in exc_info.value.user_message
 
     def test_multiple_unknown_priorities_all_in_message(self, tmp_path: Path) -> None:
         """All unranked priority values appear in the error message (boundary: plural)."""
-        kanban_dir = _make_board(
-            tmp_path, priorities=[*_STANDARD_PRIORITIES, "alpha-tier", "omega-tier"]
-        )
+        kanban_dir = _make_board(tmp_path, priorities=[*_STANDARD_PRIORITIES, "alpha-tier", "omega-tier"])
         with pytest.raises(ConfigError) as exc_info:
             KanbanEngine(kanban_dir, activity_log=False)
         assert exc_info.value.code == "ERR_DISPATCH_PRIORITY_MISMATCH"
@@ -197,9 +191,7 @@ class TestFromAC_RefreshConfigValidation:
 
     # -- AC3: priority refresh mismatch -------------------------------------
 
-    def test_refresh_config_priority_mismatch_raises_exact_code(
-        self, tmp_path: Path
-    ) -> None:
+    def test_refresh_config_priority_mismatch_raises_exact_code(self, tmp_path: Path) -> None:
         """Reload with unknown priority → ConfigError code is exactly ERR_DISPATCH_PRIORITY_MISMATCH.
 
         Exact code assertion rejects ERR_DISPATCH_STATUS_MISMATCH false-greens.
@@ -216,9 +208,7 @@ class TestFromAC_RefreshConfigValidation:
             engine.refresh_config()
         assert exc_info.value.code == "ERR_DISPATCH_PRIORITY_MISMATCH"
 
-    def test_refresh_config_priority_mismatch_lists_unranked_in_message(
-        self, tmp_path: Path
-    ) -> None:
+    def test_refresh_config_priority_mismatch_lists_unranked_in_message(self, tmp_path: Path) -> None:
         """Error message for refresh-path priority mismatch must include the unranked value name."""
         kanban_dir = _make_board(tmp_path)
         engine = KanbanEngine(kanban_dir, activity_log=False)
@@ -234,9 +224,7 @@ class TestFromAC_RefreshConfigValidation:
 
     # -- AC3: status refresh mismatch ---------------------------------------
 
-    def test_refresh_config_status_mismatch_raises_exact_code(
-        self, tmp_path: Path
-    ) -> None:
+    def test_refresh_config_status_mismatch_raises_exact_code(self, tmp_path: Path) -> None:
         """Reload with unknown status → ConfigError code is exactly ERR_DISPATCH_STATUS_MISMATCH.
 
         'waiting' is inserted in the middle so 'done' stays last (satisfies terminal_status check).
@@ -254,9 +242,7 @@ class TestFromAC_RefreshConfigValidation:
             engine.refresh_config()
         assert exc_info.value.code == "ERR_DISPATCH_STATUS_MISMATCH"
 
-    def test_refresh_config_status_mismatch_lists_unranked_in_message(
-        self, tmp_path: Path
-    ) -> None:
+    def test_refresh_config_status_mismatch_lists_unranked_in_message(self, tmp_path: Path) -> None:
         """Error message for refresh-path status mismatch must include the unranked value name."""
         kanban_dir = _make_board(tmp_path)
         engine = KanbanEngine(kanban_dir, activity_log=False)

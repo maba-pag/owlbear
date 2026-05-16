@@ -143,9 +143,7 @@ def _write_task(  # noqa: PLR0913
     return path
 
 
-def _make_view(
-    base_dir: Path, config_yaml: str = _BASE_CONFIG
-) -> tuple[AgentView, Path]:
+def _make_view(base_dir: Path, config_yaml: str = _BASE_CONFIG) -> tuple[AgentView, Path]:
     kanban_dir = _make_board(base_dir, config_yaml)
     engine = KanbanEngine(kanban_dir, activity_log=False)
     return AgentView(engine), kanban_dir
@@ -165,9 +163,7 @@ class TestFromAC_DepStatusGuidance:
 
     # --- AC1: blocked dep → exact guidance string ---
 
-    def test_start_work_active_dep_returns_guidance_exact_string(
-        self, tmp_path: Path
-    ) -> None:
+    def test_start_work_active_dep_returns_guidance_exact_string(self, tmp_path: Path) -> None:
         """AC1: start_work on task with one active dep returns guidance with exact string.
 
         The guidance list must contain exactly one string equal to the
@@ -181,13 +177,9 @@ class TestFromAC_DepStatusGuidance:
         result = view.start_work(1)
 
         expected = _GUIDANCE_TEMPLATE.format(dep_ids="2")
-        assert result.guidance == [expected], (
-            f"Expected guidance == [{expected!r}], got {result.guidance!r}"
-        )
+        assert result.guidance == [expected], f"Expected guidance == [{expected!r}], got {result.guidance!r}"
 
-    def test_start_work_multiple_active_deps_guidance_lists_all_ids(
-        self, tmp_path: Path
-    ) -> None:
+    def test_start_work_multiple_active_deps_guidance_lists_all_ids(self, tmp_path: Path) -> None:
         """AC1: start_work with two active deps → guidance lists both IDs comma-separated.
 
         The dep IDs in the guidance string must be the comma-separated integers
@@ -201,13 +193,9 @@ class TestFromAC_DepStatusGuidance:
         result = view.start_work(1)
 
         expected = _GUIDANCE_TEMPLATE.format(dep_ids="2, 3")
-        assert result.guidance == [expected], (
-            f"Expected guidance == [{expected!r}], got {result.guidance!r}"
-        )
+        assert result.guidance == [expected], f"Expected guidance == [{expected!r}], got {result.guidance!r}"
 
-    def test_start_work_guidance_has_exactly_one_entry(
-        self, tmp_path: Path
-    ) -> None:
+    def test_start_work_guidance_has_exactly_one_entry(self, tmp_path: Path) -> None:
         """AC1: guidance list has exactly one entry — not zero, not multiple.
 
         A single blocked dep triggers exactly one guidance string. The list
@@ -223,9 +211,7 @@ class TestFromAC_DepStatusGuidance:
             f"Expected exactly one guidance entry, got {len(result.guidance)}: {result.guidance!r}"
         )
 
-    def test_start_work_dep_ids_in_guidance_match_blocked_set_only(
-        self, tmp_path: Path
-    ) -> None:
+    def test_start_work_dep_ids_in_guidance_match_blocked_set_only(self, tmp_path: Path) -> None:
         """AC1: guidance dep IDs list only the active (blocked) deps, not archived ones.
 
         When one dep is active and one is archived-completed, only the active
@@ -247,15 +233,11 @@ class TestFromAC_DepStatusGuidance:
         result = view.start_work(1)
 
         expected = _GUIDANCE_TEMPLATE.format(dep_ids="3")
-        assert result.guidance == [expected], (
-            f"Expected only active dep 3 in guidance, got {result.guidance!r}"
-        )
+        assert result.guidance == [expected], f"Expected only active dep 3 in guidance, got {result.guidance!r}"
 
     # --- AC2: no guidance for resolved/empty deps ---
 
-    def test_start_work_no_depends_on_returns_empty_guidance(
-        self, tmp_path: Path
-    ) -> None:
+    def test_start_work_no_depends_on_returns_empty_guidance(self, tmp_path: Path) -> None:
         """AC2: start_work on task with depends_on==[] returns guidance==[].
 
         No deps means no dep-status computation and no guidance.
@@ -265,13 +247,9 @@ class TestFromAC_DepStatusGuidance:
 
         result = view.start_work(1)
 
-        assert result.guidance == [], (
-            f"Expected guidance == [] for task with no deps, got {result.guidance!r}"
-        )
+        assert result.guidance == [], f"Expected guidance == [] for task with no deps, got {result.guidance!r}"
 
-    def test_start_work_dep_archived_completed_returns_empty_guidance(
-        self, tmp_path: Path
-    ) -> None:
+    def test_start_work_dep_archived_completed_returns_empty_guidance(self, tmp_path: Path) -> None:
         """AC2: start_work with dep archived archival_reason='completed' returns guidance==[].
 
         A completed dep is fully resolved — dep_status is 'ok', no guidance fires.
@@ -288,13 +266,9 @@ class TestFromAC_DepStatusGuidance:
 
         result = view.start_work(1)
 
-        assert result.guidance == [], (
-            f"Expected guidance == [] for completed dep, got {result.guidance!r}"
-        )
+        assert result.guidance == [], f"Expected guidance == [] for completed dep, got {result.guidance!r}"
 
-    def test_start_work_dep_archived_deprecated_returns_empty_guidance(
-        self, tmp_path: Path
-    ) -> None:
+    def test_start_work_dep_archived_deprecated_returns_empty_guidance(self, tmp_path: Path) -> None:
         """AC2: start_work with dep archived archival_reason='deprecated' returns guidance==[].
 
         A deprecated dep is a redirect — dep_status is 'redirect', not 'blocked'.
@@ -314,13 +288,9 @@ class TestFromAC_DepStatusGuidance:
 
         result = view.start_work(1)
 
-        assert result.guidance == [], (
-            f"Expected guidance == [] for redirect (deprecated) dep, got {result.guidance!r}"
-        )
+        assert result.guidance == [], f"Expected guidance == [] for redirect (deprecated) dep, got {result.guidance!r}"
 
-    def test_start_work_dep_archived_duplicate_returns_empty_guidance(
-        self, tmp_path: Path
-    ) -> None:
+    def test_start_work_dep_archived_duplicate_returns_empty_guidance(self, tmp_path: Path) -> None:
         """AC2: start_work with dep archived archival_reason='duplicate' returns guidance==[].
 
         A duplicate dep is a redirect — dep_status is 'redirect', not 'blocked'.
@@ -339,15 +309,11 @@ class TestFromAC_DepStatusGuidance:
 
         result = view.start_work(1)
 
-        assert result.guidance == [], (
-            f"Expected guidance == [] for redirect (duplicate) dep, got {result.guidance!r}"
-        )
+        assert result.guidance == [], f"Expected guidance == [] for redirect (duplicate) dep, got {result.guidance!r}"
 
     # --- AC3: dep lookup exceptions silently skipped ---
 
-    def test_start_work_dep_lookup_file_not_found_silently_continues(
-        self, tmp_path: Path
-    ) -> None:
+    def test_start_work_dep_lookup_file_not_found_silently_continues(self, tmp_path: Path) -> None:
         """AC3: dep lookup raises FileNotFoundError → silently skipped, valid response.
 
         The failing dep is not counted as blocked (no active_ids entry).
@@ -360,17 +326,12 @@ class TestFromAC_DepStatusGuidance:
         # Must not raise; FileNotFoundError from show_task(999) is silently skipped
         result = view.start_work(1)
 
-        assert isinstance(result, SingleTaskResponse), (
-            f"Expected SingleTaskResponse, got {type(result)!r}"
-        )
+        assert isinstance(result, SingleTaskResponse), f"Expected SingleTaskResponse, got {type(result)!r}"
         assert result.guidance == [], (
-            f"Expected guidance == [] when all dep lookups fail (conservative), "
-            f"got {result.guidance!r}"
+            f"Expected guidance == [] when all dep lookups fail (conservative), got {result.guidance!r}"
         )
 
-    def test_start_work_dep_lookup_corruption_error_silently_continues(
-        self, tmp_path: Path
-    ) -> None:
+    def test_start_work_dep_lookup_corruption_error_silently_continues(self, tmp_path: Path) -> None:
         """AC3: dep lookup raises CorruptionError → silently skipped, valid response.
 
         No exception propagates. The response is a valid SingleTaskResponse.
@@ -391,17 +352,12 @@ class TestFromAC_DepStatusGuidance:
         with patch.object(view.engine, "show_task", side_effect=_fake_show_task):
             result = view.start_work(1)
 
-        assert isinstance(result, SingleTaskResponse), (
-            f"Expected SingleTaskResponse, got {type(result)!r}"
-        )
+        assert isinstance(result, SingleTaskResponse), f"Expected SingleTaskResponse, got {type(result)!r}"
         assert result.guidance == [], (
-            f"Expected guidance == [] when dep lookup raises CorruptionError, "
-            f"got {result.guidance!r}"
+            f"Expected guidance == [] when dep lookup raises CorruptionError, got {result.guidance!r}"
         )
 
-    def test_start_work_dep_lookup_value_error_silently_continues(
-        self, tmp_path: Path
-    ) -> None:
+    def test_start_work_dep_lookup_value_error_silently_continues(self, tmp_path: Path) -> None:
         """AC3: dep lookup raises ValueError → silently skipped, valid response.
 
         No exception propagates. The response is a valid SingleTaskResponse.
@@ -420,17 +376,12 @@ class TestFromAC_DepStatusGuidance:
         with patch.object(view.engine, "show_task", side_effect=_fake_show_task):
             result = view.start_work(1)
 
-        assert isinstance(result, SingleTaskResponse), (
-            f"Expected SingleTaskResponse, got {type(result)!r}"
-        )
+        assert isinstance(result, SingleTaskResponse), f"Expected SingleTaskResponse, got {type(result)!r}"
         assert result.guidance == [], (
-            f"Expected guidance == [] when dep lookup raises ValueError, "
-            f"got {result.guidance!r}"
+            f"Expected guidance == [] when dep lookup raises ValueError, got {result.guidance!r}"
         )
 
-    def test_start_work_dep_lookup_key_error_silently_continues(
-        self, tmp_path: Path
-    ) -> None:
+    def test_start_work_dep_lookup_key_error_silently_continues(self, tmp_path: Path) -> None:
         """AC3: dep lookup raises KeyError → silently skipped, valid response.
 
         No exception propagates. The response is a valid SingleTaskResponse.
@@ -449,19 +400,14 @@ class TestFromAC_DepStatusGuidance:
         with patch.object(view.engine, "show_task", side_effect=_fake_show_task):
             result = view.start_work(1)
 
-        assert isinstance(result, SingleTaskResponse), (
-            f"Expected SingleTaskResponse, got {type(result)!r}"
-        )
+        assert isinstance(result, SingleTaskResponse), f"Expected SingleTaskResponse, got {type(result)!r}"
         assert result.guidance == [], (
-            f"Expected guidance == [] when dep lookup raises KeyError, "
-            f"got {result.guidance!r}"
+            f"Expected guidance == [] when dep lookup raises KeyError, got {result.guidance!r}"
         )
 
     # --- AC3 boundary: all dep lookups fail → conservative no-guidance ---
 
-    def test_start_work_all_dep_lookups_fail_guidance_is_empty(
-        self, tmp_path: Path
-    ) -> None:
+    def test_start_work_all_dep_lookups_fail_guidance_is_empty(self, tmp_path: Path) -> None:
         """AC3 boundary: all dep lookups fail → guidance == [] (conservative no-guidance).
 
         When EVERY dep lookup raises an exception, no blocked deps can be detected.
@@ -475,10 +421,7 @@ class TestFromAC_DepStatusGuidance:
 
         result = view.start_work(1)
 
-        assert isinstance(result, SingleTaskResponse), (
-            f"Expected SingleTaskResponse, got {type(result)!r}"
-        )
+        assert isinstance(result, SingleTaskResponse), f"Expected SingleTaskResponse, got {type(result)!r}"
         assert result.guidance == [], (
-            f"Expected guidance == [] when ALL dep lookups fail (conservative), "
-            f"got {result.guidance!r}"
+            f"Expected guidance == [] when ALL dep lookups fail (conservative), got {result.guidance!r}"
         )

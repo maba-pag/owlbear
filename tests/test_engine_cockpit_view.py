@@ -126,31 +126,21 @@ def _write_activity_event(  # noqa: PLR0913
 class TestFromAC_CockpitViewOCC:
     """OCC guard on CockpitView.edit_task and CockpitView.move_task."""
 
-    def test_edit_task_signature_has_expected_updated_param(
-        self, tmp_path: Path
-    ) -> None:
+    def test_edit_task_signature_has_expected_updated_param(self, tmp_path: Path) -> None:
         """CockpitView.edit_task declares required expected_updated."""
         cv = _make_cockpit_view(_make_board(tmp_path))
         sig = inspect.signature(cv.edit_task)
-        assert "expected_updated" in sig.parameters, (
-            "CockpitView.edit_task must require expected_updated"
-        )
+        assert "expected_updated" in sig.parameters, "CockpitView.edit_task must require expected_updated"
 
-    def test_edit_task_expected_updated_is_required_no_default(
-        self, tmp_path: Path
-    ) -> None:
+    def test_edit_task_expected_updated_is_required_no_default(self, tmp_path: Path) -> None:
         """CockpitView.edit_task.expected_updated has no default."""
         cv = _make_cockpit_view(_make_board(tmp_path))
         sig = inspect.signature(cv.edit_task)
         param = sig.parameters.get("expected_updated")
         assert param is not None, "expected_updated param missing"
-        assert param.default is inspect.Parameter.empty, (
-            "CockpitView.edit_task.expected_updated must be required"
-        )
+        assert param.default is inspect.Parameter.empty, "CockpitView.edit_task.expected_updated must be required"
 
-    def test_edit_task_stale_expected_updated_raises_concurrency_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_edit_task_stale_expected_updated_raises_concurrency_error(self, tmp_path: Path) -> None:
         """edit_task with a stale OCC token raises ERR_STALE."""
         kanban_dir = _make_board(tmp_path)
         _write_task(kanban_dir, 1, updated="2026-01-01T10:00:00+00:00")
@@ -165,9 +155,7 @@ class TestFromAC_CockpitViewOCC:
 
         assert exc_info.value.code == "ERR_STALE"
 
-    def test_edit_task_matching_expected_updated_returns_single_task_response(
-        self, tmp_path: Path
-    ) -> None:
+    def test_edit_task_matching_expected_updated_returns_single_task_response(self, tmp_path: Path) -> None:
         """edit_task with a fresh OCC token returns SingleTaskResponse."""
         kanban_dir = _make_board(tmp_path)
         _write_task(kanban_dir, 1, updated="2026-01-01T10:00:00+00:00")
@@ -181,9 +169,7 @@ class TestFromAC_CockpitViewOCC:
 
         assert isinstance(result, SingleTaskResponse)
 
-    def test_edit_task_success_path_routes_through_write_task_if_unchanged(
-        self, tmp_path: Path
-    ) -> None:
+    def test_edit_task_success_path_routes_through_write_task_if_unchanged(self, tmp_path: Path) -> None:
         """edit_task success uses storage.write_task_if_unchanged on the CAS path."""
         kanban_dir = _make_board(tmp_path)
         _write_task(kanban_dir, 1, updated="2026-01-01T10:00:00+00:00")
@@ -205,31 +191,21 @@ class TestFromAC_CockpitViewOCC:
 
         mock_cas.assert_called_once()
 
-    def test_move_task_signature_has_expected_updated_param(
-        self, tmp_path: Path
-    ) -> None:
+    def test_move_task_signature_has_expected_updated_param(self, tmp_path: Path) -> None:
         """CockpitView.move_task declares required expected_updated."""
         cv = _make_cockpit_view(_make_board(tmp_path))
         sig = inspect.signature(cv.move_task)
-        assert "expected_updated" in sig.parameters, (
-            "CockpitView.move_task must require expected_updated"
-        )
+        assert "expected_updated" in sig.parameters, "CockpitView.move_task must require expected_updated"
 
-    def test_move_task_expected_updated_is_required_no_default(
-        self, tmp_path: Path
-    ) -> None:
+    def test_move_task_expected_updated_is_required_no_default(self, tmp_path: Path) -> None:
         """CockpitView.move_task.expected_updated has no default."""
         cv = _make_cockpit_view(_make_board(tmp_path))
         sig = inspect.signature(cv.move_task)
         param = sig.parameters.get("expected_updated")
         assert param is not None, "expected_updated param missing"
-        assert param.default is inspect.Parameter.empty, (
-            "CockpitView.move_task.expected_updated must be required"
-        )
+        assert param.default is inspect.Parameter.empty, "CockpitView.move_task.expected_updated must be required"
 
-    def test_move_task_stale_expected_updated_raises_concurrency_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_move_task_stale_expected_updated_raises_concurrency_error(self, tmp_path: Path) -> None:
         """move_task with a stale OCC token raises ERR_STALE."""
         kanban_dir = _make_board(tmp_path)
         _write_task(kanban_dir, 1, updated="2026-01-01T10:00:00+00:00")
@@ -244,9 +220,7 @@ class TestFromAC_CockpitViewOCC:
 
         assert exc_info.value.code == "ERR_STALE"
 
-    def test_move_task_matching_expected_updated_returns_single_task_response(
-        self, tmp_path: Path
-    ) -> None:
+    def test_move_task_matching_expected_updated_returns_single_task_response(self, tmp_path: Path) -> None:
         """move_task with a fresh OCC token returns SingleTaskResponse."""
         kanban_dir = _make_board(tmp_path)
         _write_task(kanban_dir, 1, updated="2026-01-01T10:00:00+00:00")
@@ -260,9 +234,7 @@ class TestFromAC_CockpitViewOCC:
 
         assert isinstance(result, SingleTaskResponse)
 
-    def test_move_task_success_path_routes_through_write_task_if_unchanged(
-        self, tmp_path: Path
-    ) -> None:
+    def test_move_task_success_path_routes_through_write_task_if_unchanged(self, tmp_path: Path) -> None:
         """move_task success uses storage.write_task_if_unchanged on the CAS path."""
         kanban_dir = _make_board(tmp_path)
         _write_task(kanban_dir, 1, updated="2026-01-01T10:00:00+00:00")
@@ -297,9 +269,7 @@ class TestFromAC_CockpitViewEditTaskTitle:
         """CockpitView.edit_task exposes a title keyword parameter."""
         cv = _make_cockpit_view(_make_board(tmp_path))
         sig = inspect.signature(cv.edit_task)
-        assert "title" in sig.parameters, (
-            "CockpitView.edit_task must accept a title parameter"
-        )
+        assert "title" in sig.parameters, "CockpitView.edit_task must accept a title parameter"
 
     def test_edit_task_title_param_default_is_none(self, tmp_path: Path) -> None:
         """The title parameter defaults to None."""
@@ -329,9 +299,7 @@ class TestFromAC_CockpitViewEditTaskTitle:
         assert isinstance(result, SingleTaskResponse)
         assert result.task.title == "New Title"
 
-    def test_edit_task_title_none_preserves_original_title(
-        self, tmp_path: Path
-    ) -> None:
+    def test_edit_task_title_none_preserves_original_title(self, tmp_path: Path) -> None:
         """Passing title=None preserves the existing title."""
         kanban_dir = _make_board(tmp_path)
         _write_task(
@@ -372,9 +340,7 @@ class TestFromAC_CockpitViewEditTaskTitle:
 class TestFromAC_CockpitViewSweep:
     """CockpitView.sweep regression coverage."""
 
-    def test_sweep_returns_exactly_the_expired_task_ids_no_extras_and_no_missing(
-        self, tmp_path: Path
-    ) -> None:
+    def test_sweep_returns_exactly_the_expired_task_ids_no_extras_and_no_missing(self, tmp_path: Path) -> None:
         """sweep returns exactly the expired claim IDs and nothing else."""
         kanban_dir = _make_board(tmp_path)
         expired_ts = (datetime.now(tz=UTC) - timedelta(hours=2)).isoformat()
@@ -409,9 +375,7 @@ class TestFromAC_CockpitViewSweep:
         sweep_events = cv.list_activity(task_id=1, action="sweep-release")
         assert sweep_events == []
 
-    def test_sweep_cas_stale_task_skipped_and_later_eligible_task_still_released(
-        self, tmp_path: Path
-    ) -> None:
+    def test_sweep_cas_stale_task_skipped_and_later_eligible_task_still_released(self, tmp_path: Path) -> None:
         """sweep continues after ERR_STALE and still releases later eligible tasks."""
         kanban_dir = _make_board(tmp_path)
         expired_ts = (datetime.now(tz=UTC) - timedelta(hours=2)).isoformat()
@@ -484,9 +448,7 @@ class TestFromAC_CockpitViewListActivity:
         assert len(events) == 1
         assert events[0].source == "cockpit"
 
-    def test_list_activity_since_returns_only_events_within_window_exact_identity(
-        self, tmp_path: Path
-    ) -> None:
+    def test_list_activity_since_returns_only_events_within_window_exact_identity(self, tmp_path: Path) -> None:
         """since filter preserves exact task/action identity, not just event count."""
         _, cv = self._board_with_events(tmp_path)
         events = cv.list_activity(since="2026-01-01T12:00:00+00:00")
@@ -496,9 +458,7 @@ class TestFromAC_CockpitViewListActivity:
         assert task_ids == {2}
         assert actions == {"start_work", "release"}
 
-    def test_list_activity_until_returns_only_events_within_window_exact_identity(
-        self, tmp_path: Path
-    ) -> None:
+    def test_list_activity_until_returns_only_events_within_window_exact_identity(self, tmp_path: Path) -> None:
         """until filter preserves exact task/action identity, not just event count."""
         _, cv = self._board_with_events(tmp_path)
         events = cv.list_activity(until="2026-01-01T11:00:00+00:00")
@@ -508,9 +468,7 @@ class TestFromAC_CockpitViewListActivity:
         assert task_ids == {1}
         assert actions == {"start_work", "end_work"}
 
-    def test_list_activity_on_empty_log_returns_empty_list(
-        self, tmp_path: Path
-    ) -> None:
+    def test_list_activity_on_empty_log_returns_empty_list(self, tmp_path: Path) -> None:
         """Boards with no activity log produce an empty list."""
         kanban_dir = _make_board(tmp_path)
         cv = _make_cockpit_view(kanban_dir)
@@ -541,18 +499,14 @@ class TestFromAC_CockpitViewListSessions:
         )
         return kanban_dir, _make_cockpit_view(kanban_dir)
 
-    def test_list_sessions_returns_list_of_session_records(
-        self, tmp_path: Path
-    ) -> None:
+    def test_list_sessions_returns_list_of_session_records(self, tmp_path: Path) -> None:
         """list_sessions returns list[SessionRecord]."""
         _, cv = self._board_with_completed_session(tmp_path)
         sessions = cv.list_sessions()
         assert isinstance(sessions, list)
         assert all(isinstance(session, SessionRecord) for session in sessions)
 
-    def test_list_sessions_filter_released_returns_release_outcome_sessions(
-        self, tmp_path: Path
-    ) -> None:
+    def test_list_sessions_filter_released_returns_release_outcome_sessions(self, tmp_path: Path) -> None:
         """filter='released' returns release sessions with released state."""
         kanban_dir = _make_board(tmp_path)
         _write_task(kanban_dir, 1)
@@ -580,9 +534,7 @@ class TestFromAC_CockpitViewListSessions:
         assert sessions[0].outcome == "release"
         assert sessions[0].state == "released"
 
-    def test_list_sessions_canonical_claim_action_opens_session(
-        self, tmp_path: Path
-    ) -> None:
+    def test_list_sessions_canonical_claim_action_opens_session(self, tmp_path: Path) -> None:
         """Canonical claim events open running sessions."""
         kanban_dir = _make_board(tmp_path)
         _write_task(kanban_dir, 1)
@@ -603,9 +555,7 @@ class TestFromAC_CockpitViewListSessions:
         assert len(active) == 1
         assert active[0].state == "running"
 
-    def test_list_sessions_canonical_blocked_colon_detail_creates_blocked_session(
-        self, tmp_path: Path
-    ) -> None:
+    def test_list_sessions_canonical_blocked_colon_detail_creates_blocked_session(self, tmp_path: Path) -> None:
         """Canonical 'blocked: ...' detail yields blocked state."""
         kanban_dir = _make_board(tmp_path)
         _write_task(kanban_dir, 1)
@@ -633,9 +583,7 @@ class TestFromAC_CockpitViewListSessions:
         assert len(blocked) == 1
         assert blocked[0].state == "blocked"
 
-    def test_list_sessions_canonical_outcome_fail_detail_creates_blocked_session(
-        self, tmp_path: Path
-    ) -> None:
+    def test_list_sessions_canonical_outcome_fail_detail_creates_blocked_session(self, tmp_path: Path) -> None:
         """Canonical outcome=fail detail yields blocked state with fail outcome."""
         kanban_dir = _make_board(tmp_path)
         _write_task(kanban_dir, 1)
@@ -673,18 +621,14 @@ class TestFromAC_CockpitViewListSessions:
 class TestFromAC_CockpitViewScanCorruption:
     """scan_corruption read-only guarantees."""
 
-    def test_scan_corruption_clean_board_returns_empty_list(
-        self, tmp_path: Path
-    ) -> None:
+    def test_scan_corruption_clean_board_returns_empty_list(self, tmp_path: Path) -> None:
         """Clean boards produce no corruption records."""
         kanban_dir = _make_board(tmp_path)
         _write_task(kanban_dir, 1)
         cv = _make_cockpit_view(kanban_dir)
         assert cv.scan_corruption() == []
 
-    def test_scan_corruption_with_corrupt_file_returns_corruption_errors(
-        self, tmp_path: Path
-    ) -> None:
+    def test_scan_corruption_with_corrupt_file_returns_corruption_errors(self, tmp_path: Path) -> None:
         """Corrupt task files return CorruptionError instances."""
         kanban_dir = _make_board(tmp_path)
         (kanban_dir / "tasks" / "99-corrupt.md").write_text(
@@ -707,9 +651,7 @@ class TestFromAC_CockpitViewScanCorruption:
         result = cv.scan_corruption()
         assert len(result) >= 1
 
-    def test_scan_corruption_does_not_mutate_corrupt_file_contents(
-        self, tmp_path: Path
-    ) -> None:
+    def test_scan_corruption_does_not_mutate_corrupt_file_contents(self, tmp_path: Path) -> None:
         """scan_corruption never rewrites corrupt files in place."""
         kanban_dir = _make_board(tmp_path)
         corrupt_content = b"no yaml frontmatter here at all"
@@ -724,9 +666,7 @@ class TestFromAC_CockpitViewScanCorruption:
 class TestFromAC_CockpitViewRepairStorage:
     """repair_storage contracts preserved from the archived CockpitView suite."""
 
-    def test_repair_storage_returns_list_of_repair_outcomes(
-        self, tmp_path: Path
-    ) -> None:
+    def test_repair_storage_returns_list_of_repair_outcomes(self, tmp_path: Path) -> None:
         """repair_storage returns list[RepairOutcome]."""
         kanban_dir = _make_board(tmp_path)
         cv = _make_cockpit_view(kanban_dir)
@@ -734,9 +674,7 @@ class TestFromAC_CockpitViewRepairStorage:
         assert isinstance(result, list)
         assert all(isinstance(item, RepairOutcome) for item in result)
 
-    def test_repair_storage_phase1_quarantines_corrupt_file(
-        self, tmp_path: Path
-    ) -> None:
+    def test_repair_storage_phase1_quarantines_corrupt_file(self, tmp_path: Path) -> None:
         """repair_storage phase 1 calls scan_and_fix and quarantines corrupt files."""
         from owlbear_kanban.corruption import scan_and_fix as real_scan_and_fix  # noqa: PLC0415
 
@@ -755,14 +693,10 @@ class TestFromAC_CockpitViewRepairStorage:
 
         mock_scan_and_fix.assert_called_once()
         assert mock_scan_and_fix.call_args[0][0] == kanban_dir
-        quarantined = [
-            outcome for outcome in outcomes if outcome.action == "quarantined"
-        ]
+        quarantined = [outcome for outcome in outcomes if outcome.action == "quarantined"]
         assert len(quarantined) >= 1
 
-    def test_repair_storage_phase2_ar_creation_uses_engine_create_task_method(
-        self, tmp_path: Path
-    ) -> None:
+    def test_repair_storage_phase2_ar_creation_uses_engine_create_task_method(self, tmp_path: Path) -> None:
         """repair_storage phase 2 creates the follow-up AR task via engine.create_task."""
         kanban_dir = _make_board(tmp_path)
         (kanban_dir / "tasks" / "99-corrupt.md").write_text(
@@ -780,16 +714,12 @@ class TestFromAC_CockpitViewRepairStorage:
         ) as mock_create:
             outcomes = cv.repair_storage()
 
-        quarantined = [
-            outcome for outcome in outcomes if outcome.action == "quarantined"
-        ]
+        quarantined = [outcome for outcome in outcomes if outcome.action == "quarantined"]
         assert len(quarantined) >= 1
         mock_create.assert_called_once()
         assert "type:user-action" in mock_create.call_args.kwargs.get("tags", [])
 
-    def test_repair_storage_not_called_implicitly_at_engine_startup(
-        self, tmp_path: Path
-    ) -> None:
+    def test_repair_storage_not_called_implicitly_at_engine_startup(self, tmp_path: Path) -> None:
         """KanbanEngine.__init__ never auto-runs repair_storage."""
         kanban_dir = _make_board(tmp_path)
         corrupt_path = kanban_dir / "tasks" / "99-corrupt.md"
@@ -808,9 +738,7 @@ class TestFromAC_CockpitViewRepairStorage:
 class TestFromAC_CockpitViewCompactActivity:
     """compact_activity delegation and empty-log behavior."""
 
-    def test_compact_activity_delegates_to_storage_compact_activity_log(
-        self, tmp_path: Path
-    ) -> None:
+    def test_compact_activity_delegates_to_storage_compact_activity_log(self, tmp_path: Path) -> None:
         """compact_activity delegates to storage.compact_activity_log."""
         kanban_dir = _make_board(tmp_path)
         cv = _make_cockpit_view(kanban_dir)
@@ -825,9 +753,7 @@ class TestFromAC_CockpitViewCompactActivity:
 
         mock_compact.assert_called_once()
 
-    def test_compact_activity_on_board_with_no_log_does_not_raise(
-        self, tmp_path: Path
-    ) -> None:
+    def test_compact_activity_on_board_with_no_log_does_not_raise(self, tmp_path: Path) -> None:
         """Boards without activity.jsonl still return ActivityCompactionResult."""
         kanban_dir = _make_board(tmp_path)
         cv = _make_cockpit_view(kanban_dir)
@@ -843,9 +769,7 @@ class TestFromAC_CockpitViewCompactActivity:
 class TestFromAC_CockpitViewRoleSeparation:
     """CockpitView exposes admin APIs and not agent-only operations."""
 
-    def test_cockpit_view_exposes_all_required_admin_methods(
-        self, tmp_path: Path
-    ) -> None:
+    def test_cockpit_view_exposes_all_required_admin_methods(self, tmp_path: Path) -> None:
         """CockpitView exposes sweep, scan_corruption, repair_storage, compact_activity, list reads."""
         cv = _make_cockpit_view(_make_board(tmp_path))
         required_admin = {

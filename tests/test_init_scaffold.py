@@ -33,9 +33,7 @@ def _extract_directory_section(content: str) -> str:
     in_section = False
     section_lines: list[str] = []
     for line in lines:
-        if line.startswith("## ") and any(
-            kw in line.lower() for kw in ("directory", "path", "structure")
-        ):
+        if line.startswith("## ") and any(kw in line.lower() for kw in ("directory", "path", "structure")):
             in_section = True
             continue
         if in_section:
@@ -53,9 +51,7 @@ def _extract_directory_section(content: str) -> str:
 class TestFromAC_ConsumerScaffoldGeneration:
     """AC1: init() generates a consumer-generic .github/copilot-instructions.md."""
 
-    def test_generated_file_is_consumer_generic(
-        self, project_root: Path, tmp_path: Path
-    ) -> None:
+    def test_generated_file_is_consumer_generic(self, project_root: Path, tmp_path: Path) -> None:
         """Generated copilot-instructions.md must not contain OwlBear-dev branding.
 
         The seed template must be replaced with a consumer-generic scaffold.
@@ -88,9 +84,7 @@ class TestFromAC_CommentedPathMappingSection:
     Required dimensions: project layout, source packages, frontend root, test paths.
     """
 
-    def test_has_html_comments_in_template(
-        self, project_root: Path, tmp_path: Path
-    ) -> None:
+    def test_has_html_comments_in_template(self, project_root: Path, tmp_path: Path) -> None:
         """Generated copilot-instructions.md contains HTML comments (<!-- ... -->).
 
         The 'commented' path-mapping section requires inline HTML comments to
@@ -105,9 +99,7 @@ class TestFromAC_CommentedPathMappingSection:
             "No HTML comments found in the generated file."
         )
 
-    def test_directory_section_has_source_package_entry(
-        self, project_root: Path, tmp_path: Path
-    ) -> None:
+    def test_directory_section_has_source_package_entry(self, project_root: Path, tmp_path: Path) -> None:
         """Directory section references the source/packages directory (e.g. 'src/').
 
         AC2 requires a 'source packages' dimension in the path-mapping section.
@@ -123,9 +115,7 @@ class TestFromAC_CommentedPathMappingSection:
             f"Directory section content:\n{section}"
         )
 
-    def test_directory_section_has_frontend_entry(
-        self, project_root: Path, tmp_path: Path
-    ) -> None:
+    def test_directory_section_has_frontend_entry(self, project_root: Path, tmp_path: Path) -> None:
         """Directory section references the frontend root (e.g. 'frontend' or 'web/').
 
         AC2 requires a 'frontend root' dimension. The current OwlBear-dev seed
@@ -141,9 +131,7 @@ class TestFromAC_CommentedPathMappingSection:
             f"Directory section content:\n{section}"
         )
 
-    def test_directory_section_has_test_path_entry(
-        self, project_root: Path, tmp_path: Path
-    ) -> None:
+    def test_directory_section_has_test_path_entry(self, project_root: Path, tmp_path: Path) -> None:
         """Directory section references test paths (e.g. 'tests/').
 
         AC2 requires all four dimensions: project layout, source packages, frontend
@@ -170,9 +158,7 @@ class TestFromAC_CommentedPathMappingSection:
 class TestFromAC_IllustrativeExamples:
     """AC3: Template uses concrete examples with comments indicating customization needed."""
 
-    def test_has_customization_instruction_comment(
-        self, project_root: Path, tmp_path: Path
-    ) -> None:
+    def test_has_customization_instruction_comment(self, project_root: Path, tmp_path: Path) -> None:
         """Generated file has an HTML comment instructing consumers to customize.
 
         AC3 requires comments that tell the consumer to replace or adapt the
@@ -187,10 +173,7 @@ class TestFromAC_IllustrativeExamples:
 
         html_comments = re.findall(r"<!--(.*?)-->", content, re.DOTALL)
         customization_keywords = ("replace", "customize", "your project", "your ")
-        has_instruction = any(
-            any(kw in comment for kw in customization_keywords)
-            for comment in html_comments
-        )
+        has_instruction = any(any(kw in comment for kw in customization_keywords) for comment in html_comments)
         assert has_instruction, (
             "Generated copilot-instructions.md must have at least one HTML comment "
             "instructing the consumer to customize the content "
@@ -198,9 +181,7 @@ class TestFromAC_IllustrativeExamples:
             f"HTML comments found: {html_comments!r}"
         )
 
-    def test_directory_section_uses_generic_example_paths(
-        self, project_root: Path, tmp_path: Path
-    ) -> None:
+    def test_directory_section_uses_generic_example_paths(self, project_root: Path, tmp_path: Path) -> None:
         """Directory section uses generic illustrative paths, not OwlBear-specific ones.
 
         The consumer scaffold must replace OwlBear-internal paths ('serve/', 'share/',
@@ -228,9 +209,7 @@ class TestFromAC_IllustrativeExamples:
 class TestFromAC_SkipIfExistsPreservation:
     """AC4: Re-running init() on a project with a customized file preserves it."""
 
-    def test_preserves_customized_file_on_reinit(
-        self, project_root: Path, tmp_path: Path
-    ) -> None:
+    def test_preserves_customized_file_on_reinit(self, project_root: Path, tmp_path: Path) -> None:
         """init() does not overwrite a pre-existing customized copilot-instructions.md.
 
         This tests skip-if-exists behaviour: once the consumer has customized their
@@ -245,9 +224,7 @@ class TestFromAC_SkipIfExistsPreservation:
         )
         github_dir = tmp_path / ".github"
         github_dir.mkdir(parents=True)
-        (github_dir / "copilot-instructions.md").write_text(
-            custom_content, encoding="utf-8"
-        )
+        (github_dir / "copilot-instructions.md").write_text(custom_content, encoding="utf-8")
 
         module = _load_init(project_root)
         module.init(tmp_path, project_root)
@@ -261,9 +238,7 @@ class TestFromAC_SkipIfExistsPreservation:
             f"Got (after init):\n{after!r}"
         )
 
-    def test_skip_if_exists_constant_includes_copilot_instructions(
-        self, project_root: Path
-    ) -> None:
+    def test_skip_if_exists_constant_includes_copilot_instructions(self, project_root: Path) -> None:
         """_SKIP_IF_EXISTS_REL in setup/init.py contains '.github/copilot-instructions.md'.
 
         The skip-if-exists frozenset must be updated so that existing consumer files

@@ -37,9 +37,7 @@ class TestFromAC_KnowledgeStatsResource:
 
         resources = list(resource_manager.list_resources())
         uris = {str(getattr(r, "uri", r)) for r in resources}
-        assert "knowledge://stats" in uris, (
-            f"Expected 'knowledge://stats' to be registered as a resource, got: {uris}"
-        )
+        assert "knowledge://stats" in uris, f"Expected 'knowledge://stats' to be registered as a resource, got: {uris}"
 
     # ------------------------------------------------------------------
     # AC: resource returns "Knowledge base: N documents, N entities, N edges"
@@ -132,9 +130,7 @@ class TestFromAC_StatsResourceNotHardcoded:
         async def real_to_thread(fn, *args, **kwargs):  # type: ignore[no-untyped-def]
             return fn(*args, **kwargs)
 
-        with patch(
-            "owlbear_mcp_knowledge.server.asyncio.to_thread", side_effect=real_to_thread
-        ):
+        with patch("owlbear_mcp_knowledge.server.asyncio.to_thread", side_effect=real_to_thread):
             result = await knowledge_stats_resource(ctx)
 
         assert "3 documents" in result, (
@@ -173,9 +169,7 @@ class TestFromAC_StatsResourceNotHardcoded:
         ):
             await knowledge_stats_resource(ctx)
 
-        assert len(captured) == 1, (
-            "Expected asyncio.to_thread to be called exactly once."
-        )
+        assert len(captured) == 1, "Expected asyncio.to_thread to be called exactly once."
         assert captured[0] is mock_gs.get_counts, (
             f"asyncio.to_thread was called with {captured[0]!r}, expected gs.get_counts. "
             "The resource handler must not use a hardcoded lambda."

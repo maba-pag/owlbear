@@ -201,16 +201,10 @@ class TestFromAC_DynamicSubclasses:
     """AC6: 9 dynamic subclasses remain CorruptionError subclasses (td:1)."""
 
     @pytest.mark.parametrize("cls", _ALL_NINE_TYPES)
-    def test_dynamic_subclass_remains_corruption_error_and_is_kanban_error(
-        self, cls: type
-    ) -> None:
+    def test_dynamic_subclass_remains_corruption_error_and_is_kanban_error(self, cls: type) -> None:
         """Smoke+regression: subclass is still CorruptionError and also KanbanError."""
-        assert issubclass(cls, CorruptionError), (
-            f"{cls.__name__} lost CorruptionError base"
-        )
-        assert issubclass(cls, KanbanError), (
-            f"{cls.__name__} is not a KanbanError subclass"
-        )
+        assert issubclass(cls, CorruptionError), f"{cls.__name__} lost CorruptionError base"
+        assert issubclass(cls, KanbanError), f"{cls.__name__} is not a KanbanError subclass"
 
 
 # ---------------------------------------------------------------------------

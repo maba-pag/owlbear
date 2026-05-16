@@ -57,9 +57,7 @@ def _collect_serve_ref_violations(root: Path) -> list[tuple[Path, int, str]]:
     violations: list[tuple[Path, int, str]] = []
     md_files: list[Path] = [root] if root.is_file() else sorted(root.rglob("*.md"))
     for md_file in md_files:
-        for lineno, line in enumerate(
-            md_file.read_text(encoding="utf-8").splitlines(), start=1
-        ):
+        for lineno, line in enumerate(md_file.read_text(encoding="utf-8").splitlines(), start=1):
             if not _SERVE_REF_RE.search(line):
                 continue
             if any(pat.search(line) for pat in _SERVE_REF_EXCLUSION_RES):
@@ -82,10 +80,7 @@ class TestFromAC_PathNeutrality:
         violations = _collect_serve_ref_violations(_SKILLS_ROOT)
         assert violations == [], (
             f"{len(violations)} serve/ reference(s) found in share/skills/ (after exclusions):\n"
-            + "\n".join(
-                f"  {f.relative_to(_REPO_ROOT)}:{n}  {ln.strip()}"
-                for f, n, ln in violations
-            )
+            + "\n".join(f"  {f.relative_to(_REPO_ROOT)}:{n}  {ln.strip()}" for f, n, ln in violations)
         )
 
     def test_r_arch_standards_no_serve_path_refs(self) -> None:
@@ -95,14 +90,11 @@ class TestFromAC_PathNeutrality:
         GREEN task before the suite-wide test passes.
         """
         skill_file = _SKILLS_ROOT / "r-architecture-standards" / "SKILL.md"
-        assert skill_file.exists(), (
-            f"Expected {skill_file.relative_to(_REPO_ROOT)} to exist"
-        )
+        assert skill_file.exists(), f"Expected {skill_file.relative_to(_REPO_ROOT)} to exist"
         violations = _collect_serve_ref_violations(skill_file)
         assert violations == [], (
             f"{len(violations)} serve/ reference(s) in r-architecture-standards/SKILL.md "
-            f"(after exclusions):\n"
-            + "\n".join(f"  line {n}: {ln.strip()}" for _, n, ln in violations)
+            f"(after exclusions):\n" + "\n".join(f"  line {n}: {ln.strip()}" for _, n, ln in violations)
         )
 
     # ---- AC3 (td:1): h-quality-runner references copilot-instructions.md -----------------
@@ -114,16 +106,12 @@ class TestFromAC_PathNeutrality:
         """
         skill_file = _SKILLS_ROOT / "h-quality-runner" / "SKILL.md"
         content = skill_file.read_text(encoding="utf-8")
-        assert (
-            "Routing authority for frontend root and test-path mode selection is"
-            in content
-        ), (
+        assert "Routing authority for frontend root and test-path mode selection is" in content, (
             "h-quality-runner/SKILL.md must contain the routing authority directive "
             "('Routing authority for frontend root and test-path mode selection is …') — not found"
         )
         assert "copilot-instructions.md" in content, (
-            "h-quality-runner/SKILL.md must name copilot-instructions.md in the routing "
-            "authority directive — not found"
+            "h-quality-runner/SKILL.md must name copilot-instructions.md in the routing authority directive — not found"
         )
 
     # ---- AC4 (td:1): r-architecture-standards has no legacy section headers ---------------
@@ -138,9 +126,8 @@ class TestFromAC_PathNeutrality:
         skill_file = _SKILLS_ROOT / "r-architecture-standards" / "SKILL.md"
         content = skill_file.read_text(encoding="utf-8")
         found = [h for h in _LEGACY_SECTION_HEADERS if h in content]
-        assert found == [], (
-            "Legacy section header(s) still present in r-architecture-standards/SKILL.md: "
-            + ", ".join(repr(h) for h in found)
+        assert found == [], "Legacy section header(s) still present in r-architecture-standards/SKILL.md: " + ", ".join(
+            repr(h) for h in found
         )
 
     # ---- AC5 (td:2): r-doc-standards cross-reference chain --------------------------------
@@ -163,8 +150,7 @@ class TestFromAC_PathNeutrality:
         """
         instructions_file = _SHARE_INSTRUCTIONS_ROOT / "doc-standards.instructions.md"
         assert instructions_file.exists(), (
-            f"share/instructions/doc-standards.instructions.md not found at "
-            f"{instructions_file.relative_to(_REPO_ROOT)}"
+            f"share/instructions/doc-standards.instructions.md not found at {instructions_file.relative_to(_REPO_ROOT)}"
         )
         content = instructions_file.read_text(encoding="utf-8")
         assert ".owlbear/prompts/doc-audit.prompt.md" in content, (
@@ -200,8 +186,7 @@ class TestFromAC_PathNeutrality:
             "share/instructions/doc-standards.instructions.md (exact path required)"
         )
         assert instructions_file.exists(), (
-            f"Full-chain check: link 2a broken — "
-            f"{instructions_file.relative_to(_REPO_ROOT)} not found"
+            f"Full-chain check: link 2a broken — {instructions_file.relative_to(_REPO_ROOT)} not found"
         )
         instructions_content = instructions_file.read_text(encoding="utf-8")
         assert ".owlbear/prompts/doc-audit.prompt.md" in instructions_content, (
@@ -209,8 +194,7 @@ class TestFromAC_PathNeutrality:
             "reference .owlbear/prompts/doc-audit.prompt.md (exact path required)"
         )
         assert prompt_file.exists(), (
-            f"Full-chain check: link 3 broken — doc-audit.prompt.md not found at "
-            f"{prompt_file.relative_to(_REPO_ROOT)}"
+            f"Full-chain check: link 3 broken — doc-audit.prompt.md not found at {prompt_file.relative_to(_REPO_ROOT)}"
         )
 
     # ---- AC6 (td:1): audit prompts relocated to .owlbear/prompts/ -------------------------
@@ -223,10 +207,8 @@ class TestFromAC_PathNeutrality:
             owlbear_path = _OWLBEAR_PROMPTS_ROOT / prompt_name
             share_path = _SHARE_PROMPTS_ROOT / prompt_name
             assert owlbear_path.exists(), (
-                f"{prompt_name} not found at .owlbear/prompts/ — "
-                "must be relocated there from share/prompts/"
+                f"{prompt_name} not found at .owlbear/prompts/ — must be relocated there from share/prompts/"
             )
             assert not share_path.exists(), (
-                f"{prompt_name} still exists at share/prompts/ — "
-                "must be removed after relocation to .owlbear/prompts/"
+                f"{prompt_name} still exists at share/prompts/ — must be removed after relocation to .owlbear/prompts/"
             )

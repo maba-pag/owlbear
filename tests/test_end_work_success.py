@@ -196,8 +196,7 @@ class TestFromAC_SuccessStatusAdvancement:
         result = engine.end_work("1", note="done", outcome="success")
 
         assert result.status == "in-progress", (
-            f"AC1: success from 'todo' must advance to 'in-progress'; "
-            f"got {result.status!r}"
+            f"AC1: success from 'todo' must advance to 'in-progress'; got {result.status!r}"
         )
 
     def test_success_from_research_advances_to_backlog(self, tmp_path) -> None:
@@ -212,8 +211,7 @@ class TestFromAC_SuccessStatusAdvancement:
         result = engine.end_work("1", note="done", outcome="success")
 
         assert result.status == "backlog", (
-            f"AC1: success from 'research' must advance to 'backlog'; "
-            f"got {result.status!r}"
+            f"AC1: success from 'research' must advance to 'backlog'; got {result.status!r}"
         )
 
     def test_success_from_review_advances_to_done(self, tmp_path) -> None:
@@ -227,9 +225,7 @@ class TestFromAC_SuccessStatusAdvancement:
 
         result = engine.end_work("1", note="done", outcome="success")
 
-        assert result.status == "done", (
-            f"AC1: success from 'review' must advance to 'done'; got {result.status!r}"
-        )
+        assert result.status == "done", f"AC1: success from 'review' must advance to 'done'; got {result.status!r}"
 
     def test_success_advances_across_all_non_terminal_steps(self, tmp_path) -> None:
         """AC1: each step in sequence advances exactly one position forward.
@@ -249,8 +245,7 @@ class TestFromAC_SuccessStatusAdvancement:
             result = engine.end_work("1", note="advancing", outcome="success")
 
             assert result.status == expected, (
-                f"AC1: success from {start!r} must advance to {expected!r}; "
-                f"got {result.status!r}"
+                f"AC1: success from {start!r} must advance to {expected!r}; got {result.status!r}"
             )
 
 
@@ -269,9 +264,7 @@ class TestFromAC_SuccessAtTerminalStatus:
     - the file stays in tasks/ (not moved to archive/)
     """
 
-    def test_success_at_terminal_returns_archival_reason_completed(
-        self, tmp_path
-    ) -> None:
+    def test_success_at_terminal_returns_archival_reason_completed(self, tmp_path) -> None:
         """AC3: success from 'done' sets archival_reason='completed' on the returned task.
 
         FAIL reason: current code sets status to 'research' (buggy default move_to);
@@ -283,8 +276,7 @@ class TestFromAC_SuccessAtTerminalStatus:
         result = engine.end_work("1", note="shipped", outcome="success")
 
         assert result.archival_reason == "completed", (
-            f"AC3: success at terminal must set archival_reason='completed'; "
-            f"got {result.archival_reason!r}"
+            f"AC3: success at terminal must set archival_reason='completed'; got {result.archival_reason!r}"
         )
 
     def test_success_at_terminal_returns_status_archived(self, tmp_path) -> None:
@@ -299,8 +291,7 @@ class TestFromAC_SuccessAtTerminalStatus:
         result = engine.end_work("1", note="shipped", outcome="success")
 
         assert result.status == "archived", (
-            f"AC3: success at terminal must return status='archived'; "
-            f"got {result.status!r}"
+            f"AC3: success at terminal must return status='archived'; got {result.status!r}"
         )
 
     def test_success_at_terminal_moves_file_to_archive_dir(self, tmp_path) -> None:
@@ -316,16 +307,10 @@ class TestFromAC_SuccessAtTerminalStatus:
 
         archive_file = engine._archive_dir / "1-task.md"
         tasks_file = engine._tasks_dir / "1-task.md"
-        assert archive_file.exists(), (
-            "AC3: success at terminal must move task to archive/; file not found there"
-        )
-        assert not tasks_file.exists(), (
-            "AC3: success at terminal must remove task from tasks/; file still present"
-        )
+        assert archive_file.exists(), "AC3: success at terminal must move task to archive/; file not found there"
+        assert not tasks_file.exists(), "AC3: success at terminal must remove task from tasks/; file still present"
 
-    def test_success_at_terminal_normalizes_nonempty_archival_refs_to_empty(
-        self, tmp_path
-    ) -> None:
+    def test_success_at_terminal_normalizes_nonempty_archival_refs_to_empty(self, tmp_path) -> None:
         """AC3 (discriminating): terminal success normalizes non-empty archival_refs to [].
 
         Seeds archival_refs=[100, 200] via edit_task before calling end_work.
@@ -365,8 +350,7 @@ class TestFromAC_SuccessFromInProgress:
         result = engine.end_work("1", note="shipped", outcome="success")
 
         assert result.status == "review", (
-            f"AC1: success from 'in-progress' must advance to 'review'; "
-            f"got {result.status!r}"
+            f"AC1: success from 'in-progress' must advance to 'review'; got {result.status!r}"
         )
 
 
@@ -440,9 +424,7 @@ class TestFromAC_CustomConfigAdvancement:
     (stock idx 3→4).  Config-driven logic correctly advances to backlog (idx 0→1).
     """
 
-    def test_success_from_first_custom_status_advances_to_second(
-        self, tmp_path
-    ) -> None:
+    def test_success_from_first_custom_status_advances_to_second(self, tmp_path) -> None:
         """AC1: success from 'in-progress' (idx=0) advances to 'backlog' (idx=1) on custom board.
 
         Discriminating: stock-order code would advance in-progress → review (stock idx 3→4).
@@ -459,9 +441,7 @@ class TestFromAC_CustomConfigAdvancement:
             f"(config idx 0→1); got {result.status!r} — stock-order code would give 'review'"
         )
 
-    def test_success_from_second_custom_status_advances_to_third(
-        self, tmp_path
-    ) -> None:
+    def test_success_from_second_custom_status_advances_to_third(self, tmp_path) -> None:
         """AC1: success from 'backlog' (idx=1) advances to 'review' (idx=2) on custom board.
 
         Discriminating: proves advancement reads the second custom position,
@@ -491,9 +471,7 @@ class TestFromAC_CustomTerminalArchive:
     'review'; config-driven logic (current_idx == len(statuses) - 1) passes.
     """
 
-    def test_success_at_custom_terminal_sets_archival_reason_completed(
-        self, tmp_path
-    ) -> None:
+    def test_success_at_custom_terminal_sets_archival_reason_completed(self, tmp_path) -> None:
         """AC3: success from custom terminal 'review' sets archival_reason='completed'.
 
         Discriminating: proves terminal detection reads the last entry in
@@ -509,9 +487,7 @@ class TestFromAC_CustomTerminalArchive:
             f"must archive with archival_reason='completed'; got {result.archival_reason!r}"
         )
 
-    def test_success_at_custom_terminal_moves_file_to_archive_dir(
-        self, tmp_path
-    ) -> None:
+    def test_success_at_custom_terminal_moves_file_to_archive_dir(self, tmp_path) -> None:
         """AC3: success from custom terminal 'review' moves task file to archive/.
 
         Discriminating: confirms the full archival flow triggers for a
@@ -525,12 +501,10 @@ class TestFromAC_CustomTerminalArchive:
         archive_file = engine._archive_dir / "1-task.md"
         tasks_file = engine._tasks_dir / "1-task.md"
         assert archive_file.exists(), (
-            "AC3 (custom terminal): success from 'review' must move task to archive/; "
-            "file not found there"
+            "AC3 (custom terminal): success from 'review' must move task to archive/; file not found there"
         )
         assert not tasks_file.exists(), (
-            "AC3 (custom terminal): success from 'review' must remove task from tasks/; "
-            "file still present"
+            "AC3 (custom terminal): success from 'review' must remove task from tasks/; file still present"
         )
 
 
@@ -547,9 +521,7 @@ class TestFromAC_AgentViewNoMasking:
     driven advancement.  Proves the wrapper layer adds no masking logic.
     """
 
-    def test_agentview_success_advances_identically_to_raw_engine(
-        self, tmp_path
-    ) -> None:
+    def test_agentview_success_advances_identically_to_raw_engine(self, tmp_path) -> None:
         """AC5: AgentView success from 'in-progress' reaches 'review', same as raw engine.
 
         Two boards are constructed from the same config.  The raw engine and

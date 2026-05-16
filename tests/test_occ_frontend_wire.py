@@ -125,16 +125,12 @@ class TestFromAC_TaskSummaryUpdatedField:
             "TaskSummary docstring still claims 'updated' is excluded — AC0 not implemented"
         )
 
-    def test_list_tasks_result_has_updated_attribute(
-        self, engine: KanbanEngine
-    ) -> None:
+    def test_list_tasks_result_has_updated_attribute(self, engine: KanbanEngine) -> None:
         """Happy path: engine.list_tasks() returns TaskSummary objects with updated."""
         summaries = engine.list_tasks()
         assert len(summaries) > 0, "Board must have tasks for this test"
         for s in summaries:
-            assert hasattr(s, "updated"), (
-                f"TaskSummary from list_tasks() is missing 'updated': {s}"
-            )
+            assert hasattr(s, "updated"), f"TaskSummary from list_tasks() is missing 'updated': {s}"
             assert s.updated, "TaskSummary.updated must be non-empty"
 
 
@@ -156,18 +152,14 @@ class TestFromAC_TasksEndpointIncludesUpdated:
         tasks = response.json()["tasks"]
         assert len(tasks) > 0, "Board must have tasks for this assertion"
         for task in tasks:
-            assert "updated" in task, (
-                f"Task missing 'updated' field in GET /api/tasks response: {task}"
-            )
+            assert "updated" in task, f"Task missing 'updated' field in GET /api/tasks response: {task}"
 
     def test_get_tasks_updated_is_a_string(self, client: TestClient) -> None:
         """Boundary: each task's 'updated' value must be a string."""
         response = client.get("/api/tasks")
         assert response.status_code == 200
         for task in response.json()["tasks"]:
-            assert isinstance(task["updated"], str), (
-                f"Task 'updated' is not a string: {task.get('updated')!r}"
-            )
+            assert isinstance(task["updated"], str), f"Task 'updated' is not a string: {task.get('updated')!r}"
 
     def test_get_tasks_updated_is_non_empty(self, client: TestClient) -> None:
         """Edge: each task's 'updated' value must be a non-empty string."""
@@ -176,21 +168,15 @@ class TestFromAC_TasksEndpointIncludesUpdated:
         for task in response.json()["tasks"]:
             assert task.get("updated"), f"Task 'updated' is empty or missing: {task}"
 
-    def test_get_tasks_updated_matches_iso_timestamp_pattern(
-        self, client: TestClient
-    ) -> None:
+    def test_get_tasks_updated_matches_iso_timestamp_pattern(self, client: TestClient) -> None:
         """Boundary: each task's 'updated' must look like an ISO 8601 timestamp."""
         response = client.get("/api/tasks")
         assert response.status_code == 200
         for task in response.json()["tasks"]:
             val = task.get("updated", "")
-            assert _ISO_RE.match(val), (
-                f"Task 'updated' {val!r} does not match ISO timestamp pattern"
-            )
+            assert _ISO_RE.match(val), f"Task 'updated' {val!r} does not match ISO timestamp pattern"
 
-    def test_get_tasks_updated_value_matches_engine_show_task(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_get_tasks_updated_value_matches_engine_show_task(self, client: TestClient, engine: KanbanEngine) -> None:
         """Source-parity (AC2): GET /api/tasks 'updated' must equal engine.show_task(id).updated."""
         response = client.get("/api/tasks")
         assert response.status_code == 200
@@ -234,8 +220,7 @@ class TestFromAC_FrontendOCCContract:
         # Scan the 600 chars after the function declaration — covers the fetch body
         section = content[idx : idx + 600]
         assert "updated" in section, (
-            "KanbanBoard.tsx handleTransitionClick does not include 'updated' in "
-            "the request body — AC4 not implemented"
+            "KanbanBoard.tsx handleTransitionClick does not include 'updated' in the request body — AC4 not implemented"
         )
 
     def test_kanban_board_test_file_asserts_updated_in_move_body(self) -> None:
@@ -251,9 +236,7 @@ class TestFromAC_FrontendOCCContract:
         """AC4 tightened: JSON.stringify in KanbanBoard.tsx must include 'updated' in object literal."""
         content = (_SRC / "KanbanBoard.tsx").read_text(encoding="utf-8")
         # Regex specifically matches JSON.stringify({...updated...}) — not just nearby text
-        pattern = re.compile(
-            r"JSON\.stringify\(\s*\{[^}]*\bupdated\b[^}]*\}", re.DOTALL
-        )
+        pattern = re.compile(r"JSON\.stringify\(\s*\{[^}]*\bupdated\b[^}]*\}", re.DOTALL)
         assert pattern.search(content) is not None, (
             "KanbanBoard.tsx: no JSON.stringify call includes 'updated' in its object "
             "literal — AC4 not satisfied (updated may appear in function signature "
@@ -284,9 +267,7 @@ class TestFromAC_FrontendOCCContract:
 class TestFromAC_RoundTripOCCProof:
     """AC6: updated token from GET /api/tasks must be accepted by POST /move (no 409)."""
 
-    def test_move_with_updated_from_list_tasks_returns_200(
-        self, client: TestClient
-    ) -> None:
+    def test_move_with_updated_from_list_tasks_returns_200(self, client: TestClient) -> None:
         """Round-trip: updated extracted from GET /api/tasks accepted by POST /move → 200."""
         # Step 1: GET /api/tasks — extract first task's id, updated, and status
         list_resp = client.get("/api/tasks")
@@ -304,8 +285,7 @@ class TestFromAC_RoundTripOCCProof:
         valid_transitions = board_resp.json()["valid_transitions"]
         targets = valid_transitions.get(task_status, [])
         assert len(targets) > 0, (
-            f"Task {task_id} in status {task_status!r} has no valid transitions — "
-            "cannot execute round-trip test"
+            f"Task {task_id} in status {task_status!r} has no valid transitions — cannot execute round-trip test"
         )
         target_status = targets[0]
 
@@ -364,9 +344,7 @@ class TestFromAC_MCPFixtureRemediation:
 
     def test_mcp_read_tools_make_task_summary_defaults_include_updated(self) -> None:
         """AC7: _make_task_summary defaults in test_mcp_read_tools.py must include 'updated'."""
-        content = (_MCP_KANBAN_TESTS / "test_mcp_read_tools.py").read_text(
-            encoding="utf-8"
-        )
+        content = (_MCP_KANBAN_TESTS / "test_mcp_read_tools.py").read_text(encoding="utf-8")
         fn_start = content.find("def _make_task_summary")
         assert fn_start >= 0, "_make_task_summary not found in test_mcp_read_tools.py"
         # Scope to just this function body — stops before _make_show_task_response
@@ -381,17 +359,11 @@ class TestFromAC_MCPFixtureRemediation:
 
     def test_mcp_models_1084_archival_refs_construction_includes_updated(self) -> None:
         """AC7: TaskSummary call in test_task_summary_has_archival_refs_int_list must include updated=."""
-        content = (_MCP_KANBAN_TESTS / "test_mcp_models_1084.py").read_text(
-            encoding="utf-8"
-        )
+        content = (_MCP_KANBAN_TESTS / "test_mcp_models_1084.py").read_text(encoding="utf-8")
         fn_start = content.find("def test_task_summary_has_archival_refs_int_list")
-        assert fn_start >= 0, (
-            "test_task_summary_has_archival_refs_int_list not found in test_mcp_models_1084.py"
-        )
+        assert fn_start >= 0, "test_task_summary_has_archival_refs_int_list not found in test_mcp_models_1084.py"
         next_fn = content.find("def test_task_summary_has_dep_status", fn_start)
-        assert next_fn > fn_start, (
-            "dep_status sentinel not found after archival_refs test"
-        )
+        assert next_fn > fn_start, "dep_status sentinel not found after archival_refs test"
         section = content[fn_start:next_fn]
         assert "updated=" in section, (
             "test_mcp_models_1084.py: TaskSummary() in test_task_summary_has_archival_refs_int_list "
@@ -403,13 +375,9 @@ class TestFromAC_MCPFixtureRemediation:
         self,
     ) -> None:
         """AC7: TaskSummary call in test_task_summary_dep_status_none_when_no_deps must include updated=."""
-        content = (_MCP_KANBAN_TESTS / "test_mcp_models_1084.py").read_text(
-            encoding="utf-8"
-        )
+        content = (_MCP_KANBAN_TESTS / "test_mcp_models_1084.py").read_text(encoding="utf-8")
         fn_start = content.find("def test_task_summary_dep_status_none_when_no_deps")
-        assert fn_start >= 0, (
-            "test_task_summary_dep_status_none_when_no_deps not found in test_mcp_models_1084.py"
-        )
+        assert fn_start >= 0, "test_task_summary_dep_status_none_when_no_deps not found in test_mcp_models_1084.py"
         # Scope to this function body only
         next_fn = content.find("\n\n\n", fn_start)
         section = content[fn_start : next_fn if next_fn > fn_start else fn_start + 400]

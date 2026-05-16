@@ -84,15 +84,11 @@ class TestFromAC_NavRailTabIndex:
             text,
             re.DOTALL,
         )
-        assert nav_rail_match is not None, (
-            "Shell.tsx must contain a <nav> with class shell__nav-rail."
-        )
+        assert nav_rail_match is not None, "Shell.tsx must contain a <nav> with class shell__nav-rail."
         nav_rail_content = nav_rail_match.group(1)
 
         # PButton must be present inside nav-rail (not removed)
-        assert "<PButton" in nav_rail_content, (
-            "Nav-rail must contain a PButton element for keyboard navigation."
-        )
+        assert "<PButton" in nav_rail_content, "Nav-rail must contain a PButton element for keyboard navigation."
 
         # Assert there is NO PButton inside nav-rail that carries a negative tabIndex.
         # This catches both tabIndex={-1} and tabIndex={-2} etc.
@@ -139,9 +135,7 @@ class TestFromAC_ScreenshotArtifact:
         the PNG-signature check.  After the builder creates the file, this test
         validates that the file is not empty or corrupt.
         """
-        assert _SCREENSHOT_PATH.exists(), (
-            f"Screenshot artifact must exist before PNG validation: {_SCREENSHOT_PATH}"
-        )
+        assert _SCREENSHOT_PATH.exists(), f"Screenshot artifact must exist before PNG validation: {_SCREENSHOT_PATH}"
         header = _SCREENSHOT_PATH.read_bytes()[:8]
         # PNG magic bytes: 0x89 'P' 'N' 'G' \r \n 0x1a \n
         assert header == b"\x89PNG\r\n\x1a\n", (
@@ -156,9 +150,7 @@ class TestFromAC_ScreenshotArtifact:
         After the builder creates the file, this test guards against a 0-byte artifact
         written by a failed screenshot call that still created the file.
         """
-        assert _SCREENSHOT_PATH.exists(), (
-            f"Screenshot artifact must exist: {_SCREENSHOT_PATH}"
-        )
+        assert _SCREENSHOT_PATH.exists(), f"Screenshot artifact must exist: {_SCREENSHOT_PATH}"
         size = _SCREENSHOT_PATH.stat().st_size
         assert size > 1024, (  # A real desktop screenshot is several KB at minimum
             f"Screenshot artifact at {_SCREENSHOT_PATH} is too small ({size} bytes). "

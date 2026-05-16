@@ -117,9 +117,7 @@ class TestFromAC_MigrateConfigCleanGroupedOutput:
             f"'entry_status' belongs only inside pipeline: section."
         )
 
-    def test_migrate_output_no_flat_default_priority_at_root(
-        self, tmp_path: Path
-    ) -> None:
+    def test_migrate_output_no_flat_default_priority_at_root(self, tmp_path: Path) -> None:
         """_migrate_config output must NOT have flat default_priority at root level.
 
         MUST FAIL: current code writes new_cfg['default_priority'] as root key.
@@ -167,9 +165,7 @@ class TestFromAC_MigrateConfigCleanGroupedOutput:
             f"'non_impl_tags' belongs only inside policy: section."
         )
 
-    def test_migrate_output_no_flat_duplicates_comprehensive(
-        self, tmp_path: Path
-    ) -> None:
+    def test_migrate_output_no_flat_duplicates_comprehensive(self, tmp_path: Path) -> None:
         """_migrate_config output must have NONE of the flat-duplicate keys at root.
 
         MUST FAIL: checks all keys from _FLAT_DUPLICATE_KEYS simultaneously.
@@ -234,9 +230,7 @@ class TestFromAC_MigrateLoadSaveNoFlatKeyLeak:
             f"migrate → load → save; found value={data.get('agent_map')!r}"
         )
 
-    def test_migrate_load_save_no_flat_duplicates_comprehensive(
-        self, tmp_path: Path
-    ) -> None:
+    def test_migrate_load_save_no_flat_duplicates_comprehensive(self, tmp_path: Path) -> None:
         """No flat-duplicate key must survive migrate → load → save round-trip.
 
         MUST FAIL: comprehensive check for all _FLAT_DUPLICATE_KEYS.
@@ -247,10 +241,7 @@ class TestFromAC_MigrateLoadSaveNoFlatKeyLeak:
         save_config(config, kanban_dir)
         data = _read_yaml(kanban_dir / "config.yml")
         leaked = _FLAT_DUPLICATE_KEYS & set(data.keys())
-        assert not leaked, (
-            f"Flat-duplicate keys must not survive migrate → load → save. "
-            f"Leaked: {sorted(leaked)!r}"
-        )
+        assert not leaked, f"Flat-duplicate keys must not survive migrate → load → save. Leaked: {sorted(leaked)!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -335,9 +326,7 @@ class TestFromAC_MigrateIdempotencyAndPreservation:
             f"it must be removed from _LEGACY_CONFIG_KEYS."
         )
 
-    def test_grouped_with_activity_log_claim_timeout_preserved(
-        self, tmp_path: Path
-    ) -> None:
+    def test_grouped_with_activity_log_claim_timeout_preserved(self, tmp_path: Path) -> None:
         """pipeline.claim_timeout must not be reset after _migrate_config on a grouped
         config with activity_log.
 
@@ -355,9 +344,7 @@ class TestFromAC_MigrateIdempotencyAndPreservation:
             f"key is not read from the nested section."
         )
 
-    def test_grouped_with_activity_log_terminal_status_preserved(
-        self, tmp_path: Path
-    ) -> None:
+    def test_grouped_with_activity_log_terminal_status_preserved(self, tmp_path: Path) -> None:
         """pipeline.terminal_status must not be reset after _migrate_config on a grouped
         config with activity_log.
 
@@ -375,9 +362,7 @@ class TestFromAC_MigrateIdempotencyAndPreservation:
             f"key is not read from the nested section."
         )
 
-    def test_grouped_with_activity_log_default_priority_preserved(
-        self, tmp_path: Path
-    ) -> None:
+    def test_grouped_with_activity_log_default_priority_preserved(self, tmp_path: Path) -> None:
         """pipeline.default_priority must not be reset after _migrate_config on a
         grouped config with activity_log.
 
@@ -395,9 +380,7 @@ class TestFromAC_MigrateIdempotencyAndPreservation:
             f"section is not read during re-migration."
         )
 
-    def test_grouped_with_activity_log_wave_size_preserved(
-        self, tmp_path: Path
-    ) -> None:
+    def test_grouped_with_activity_log_wave_size_preserved(self, tmp_path: Path) -> None:
         """pipeline.wave_size must not be reset after _migrate_config on a grouped
         config with activity_log.
 

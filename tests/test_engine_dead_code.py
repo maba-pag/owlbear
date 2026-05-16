@@ -48,9 +48,7 @@ def _class_method_source(method_name: str, class_name: str = "KanbanEngine") -> 
     raise AssertionError(f"{class_name}.{method_name} not found in engine.py")
 
 
-def _class_method_ast(
-    method_name: str, class_name: str = "KanbanEngine"
-) -> ast.FunctionDef:
+def _class_method_ast(method_name: str, class_name: str = "KanbanEngine") -> ast.FunctionDef:
     """Return the AST node for *method_name* in *class_name*."""
     for node in ast.walk(_ENGINE_TREE):
         if isinstance(node, ast.ClassDef) and node.name == class_name:
@@ -147,9 +145,7 @@ def _write_task(
 # AC1 — Structural: all 6 dict-status isinstance branches removed
 # ===========================================================================
 
-_DICT_STATUS_ISINSTANCE_PATTERN = re.compile(
-    r"isinstance\s*\([^)]*,\s*(?:list\[dict\]|dict)\s*\)"
-)
+_DICT_STATUS_ISINSTANCE_PATTERN = re.compile(r"isinstance\s*\([^)]*,\s*(?:list\[dict\]|dict)\s*\)")
 
 _DICT_FIRST_ISINSTANCE_PATTERN = re.compile(r"isinstance\s*\(\s*\w+\s*,\s*dict\s*\)")
 
@@ -168,16 +164,14 @@ class TestFromAC_DictStatusBranchRemoval:
         """_status_rank must not contain any isinstance check after dead-code removal."""
         src = _class_method_source("_status_rank")
         assert "isinstance" not in src, (
-            "_status_rank still contains an isinstance check — "
-            "dict-status dead branch (branch 1) not removed"
+            "_status_rank still contains an isinstance check — dict-status dead branch (branch 1) not removed"
         )
 
     def test_valid_transitions_has_no_isinstance_check(self) -> None:
         """valid_transitions must not contain an isinstance check."""
         src = _class_method_source("valid_transitions")
         assert "isinstance" not in src, (
-            "valid_transitions still contains an isinstance check — "
-            "dict-status dead branch (branch 2) not removed"
+            "valid_transitions still contains an isinstance check — dict-status dead branch (branch 2) not removed"
         )
 
     def test_edit_task_has_no_dict_isinstance_on_statuses(self) -> None:
@@ -185,16 +179,14 @@ class TestFromAC_DictStatusBranchRemoval:
         src = _class_method_source("edit_task")
         # The dead branch pattern checked isinstance(first, dict) on statuses.
         assert not _DICT_FIRST_ISINSTANCE_PATTERN.search(src), (
-            "edit_task still contains an isinstance(…, dict) check — "
-            "dict-status dead branch (branch 3) not removed"
+            "edit_task still contains an isinstance(…, dict) check — dict-status dead branch (branch 3) not removed"
         )
 
     def test_move_task_has_no_dict_isinstance_on_statuses(self) -> None:
         """move_task must not guard valid_statuses with an isinstance(…, dict) check."""
         src = _class_method_source("move_task")
         assert not _DICT_FIRST_ISINSTANCE_PATTERN.search(src), (
-            "move_task still contains an isinstance(…, dict) check — "
-            "dict-status dead branch (branch 4) not removed"
+            "move_task still contains an isinstance(…, dict) check — dict-status dead branch (branch 4) not removed"
         )
 
     def test_apply_outcome_has_no_dict_isinstance_check(self) -> None:
@@ -212,9 +204,7 @@ class TestFromAC_DictStatusBranchRemoval:
     def test_status_rank_has_no_dot_get_call(self) -> None:
         """_status_rank must not use .get() — that was part of the dead dict-key branch."""
         src = _class_method_source("_status_rank")
-        assert ".get(" not in src, (
-            "_status_rank still calls .get() — suggests dict-status branch remains"
-        )
+        assert ".get(" not in src, "_status_rank still calls .get() — suggests dict-status branch remains"
 
 
 # ===========================================================================
@@ -244,9 +234,7 @@ class TestFromAC_StatusRankSimplification:
     def test_status_rank_return_value_is_dict_comprehension(self) -> None:
         """The Return value in _status_rank must be a DictComp, not a conditional or dict."""
         node = _class_method_ast("_status_rank")
-        return_node = next(
-            (stmt for stmt in node.body if isinstance(stmt, ast.Return)), None
-        )
+        return_node = next((stmt for stmt in node.body if isinstance(stmt, ast.Return)), None)
         assert return_node is not None, "_status_rank has no Return statement"
         assert isinstance(return_node.value, ast.DictComp), (
             f"_status_rank returns a {type(return_node.value).__name__}; expected DictComp. "
@@ -274,9 +262,7 @@ class TestFromAC_StrStatusBehaviouralContracts:
     removing the dead dict-status branches did not alter observable behaviour.
     """
 
-    def test_list_tasks_sorted_by_status_respects_config_order(
-        self, tmp_path: Path
-    ) -> None:
+    def test_list_tasks_sorted_by_status_respects_config_order(self, tmp_path: Path) -> None:
         """list_tasks(sort='status') must order tasks by their index in config.statuses."""
         board = _make_board(tmp_path)
         _write_task(board, task_id=1, status="done")
@@ -303,18 +289,14 @@ class TestFromAC_StrStatusBehaviouralContracts:
             "_status_rank() may not be returning a correct str→int mapping."
         )
 
-    def test_valid_transitions_returns_all_statuses_except_current(
-        self, tmp_path: Path
-    ) -> None:
+    def test_valid_transitions_returns_all_statuses_except_current(self, tmp_path: Path) -> None:
         """valid_transitions('todo') must return every configured status except 'todo'."""
         board = _make_board(tmp_path)
         engine = KanbanEngine(board, activity_log=False)
 
         result = engine.valid_transitions("todo")
         expected = {"research", "backlog", "in-progress", "review", "docs", "done"}
-        assert result == expected, (
-            f"valid_transitions('todo') returned {result!r}; expected {expected!r}"
-        )
+        assert result == expected, f"valid_transitions('todo') returned {result!r}; expected {expected!r}"
 
     def test_valid_transitions_raises_for_unknown_status(self, tmp_path: Path) -> None:
         """valid_transitions must raise ValueError for a status absent from config."""
@@ -323,9 +305,7 @@ class TestFromAC_StrStatusBehaviouralContracts:
         with pytest.raises(ValueError, match="Invalid status"):
             engine.valid_transitions("dict-shaped-nonsense")
 
-    def test_edit_task_rejects_invalid_status_with_value_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_edit_task_rejects_invalid_status_with_value_error(self, tmp_path: Path) -> None:
         """edit_task must reject a status not in config.statuses with ValueError.
 
         This confirms the valid_statuses check in edit_task uses set(list[str])
@@ -337,9 +317,7 @@ class TestFromAC_StrStatusBehaviouralContracts:
         with pytest.raises(ValueError, match="Invalid status"):
             engine.edit_task("1", status="not-a-configured-status")
 
-    def test_move_task_rejects_invalid_status_with_value_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_move_task_rejects_invalid_status_with_value_error(self, tmp_path: Path) -> None:
         """move_task must reject a status not in config.statuses with ValueError."""
         board = _make_board(tmp_path)
         _write_task(board, task_id=1)
@@ -347,9 +325,7 @@ class TestFromAC_StrStatusBehaviouralContracts:
         with pytest.raises(ValueError, match="Invalid status"):
             engine.move_task("1", "not-in-config")
 
-    def test_apply_outcome_success_advances_to_next_status(
-        self, tmp_path: Path
-    ) -> None:
+    def test_apply_outcome_success_advances_to_next_status(self, tmp_path: Path) -> None:
         """end_work(outcome='success') must advance status to the next in config sequence.
 
         Exercises _apply_outcome's success branch which uses list(statuses).index()
@@ -366,9 +342,7 @@ class TestFromAC_StrStatusBehaviouralContracts:
             "_apply_outcome success branch may have a dict-status regression."
         )
 
-    def test_apply_outcome_success_from_last_status_archives_task(
-        self, tmp_path: Path
-    ) -> None:
+    def test_apply_outcome_success_from_last_status_archives_task(self, tmp_path: Path) -> None:
         """end_work(outcome='success') from the final configured status must archive the task.
 
         This exercises the boundary path in _apply_outcome where
@@ -380,14 +354,11 @@ class TestFromAC_StrStatusBehaviouralContracts:
 
         result = engine.end_work("1", note="completing", outcome="success")
         assert result.status == "archived", (
-            f"end_work(success) from 'done' (last status) expected 'archived', "
-            f"got {result.status!r}."
+            f"end_work(success) from 'done' (last status) expected 'archived', got {result.status!r}."
         )
         # Task file must have moved to archive directory
         archive_path = board / "archive" / "1-task.md"
-        assert archive_path.exists(), (
-            "Task file was not moved to archive/ after success from final status"
-        )
+        assert archive_path.exists(), "Task file was not moved to archive/ after success from final status"
 
 
 # --- merged from tests/test_engine_dead_code_1204.py ---
@@ -427,8 +398,7 @@ class TestFromAC_RemoveValidateEngineConfig:
         import owlbear_kanban.engine as engine_mod
 
         assert not hasattr(engine_mod, "_validate_engine_config"), (
-            "_validate_engine_config still present in owlbear_kanban.engine — "
-            "function must be deleted (task #1204)"
+            "_validate_engine_config still present in owlbear_kanban.engine — function must be deleted (task #1204)"
         )
 
     def test_function_not_importable_from_engine(self) -> None:

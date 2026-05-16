@@ -39,7 +39,7 @@ def _make_task_file(
 def _body_section(content: str) -> str:
     """Return the body text after the closing --- delimiter."""
     fm_end = content.index("\n---\n", 4)
-    return content[fm_end + len("\n---\n"):]
+    return content[fm_end + len("\n---\n") :]
 
 
 def _fm_section(content: str) -> str:
@@ -139,12 +139,7 @@ class TestFromAC_ProofBundleMigration:
     def test_second_occurrence_preserved_in_body(self, tmp_path: Path) -> None:
         """AC2 edge: second Proof bundle: line is NOT removed."""
         fm = "id: 1011\ntitle: Test\nstatus: todo\n"
-        body = (
-            "Proof bundle: smoke\n"
-            "2026-05-01T10:00:00+00:00\n"
-            "## Builder Notes\n"
-            "Proof bundle: smoke\n"
-        )
+        body = "Proof bundle: smoke\n2026-05-01T10:00:00+00:00\n## Builder Notes\nProof bundle: smoke\n"
         path = _make_task_file(tmp_path, fm, body, filename="1011.md")
         _migrate_proof_bundle_field(path)
         content = path.read_text(encoding="utf-8")
@@ -155,13 +150,7 @@ class TestFromAC_ProofBundleMigration:
     def test_only_first_of_multiple_occurrences_removed(self, tmp_path: Path) -> None:
         """AC2 edge: body has three occurrences; only the first is removed."""
         fm = "id: 1012\ntitle: Test\nstatus: todo\n"
-        body = (
-            "Proof bundle: behavioral\n"
-            "## Notes\n"
-            "Proof bundle: behavioral\n"
-            "## More Notes\n"
-            "Proof bundle: behavioral\n"
-        )
+        body = "Proof bundle: behavioral\n## Notes\nProof bundle: behavioral\n## More Notes\nProof bundle: behavioral\n"
         path = _make_task_file(tmp_path, fm, body, filename="1012.md")
         _migrate_proof_bundle_field(path)
         content = path.read_text(encoding="utf-8")
@@ -171,12 +160,7 @@ class TestFromAC_ProofBundleMigration:
     def test_pipeline_note_occurrence_preserved(self, tmp_path: Path) -> None:
         """AC2 edge: Proof bundle: in ## Test-Writer Notes section preserved."""
         fm = "id: 1013\ntitle: Test\nstatus: todo\n"
-        body = (
-            "Proof bundle: behavioral\n"
-            "2026-05-01T10:00:00+00:00\n"
-            "## Test-Writer Notes\n"
-            "- Proof bundle: behavioral\n"
-        )
+        body = "Proof bundle: behavioral\n2026-05-01T10:00:00+00:00\n## Test-Writer Notes\n- Proof bundle: behavioral\n"
         path = _make_task_file(tmp_path, fm, body, filename="1013.md")
         _migrate_proof_bundle_field(path)
         content = path.read_text(encoding="utf-8")
@@ -196,9 +180,7 @@ class TestFromAC_ProofBundleMigration:
         result, _ = _migrate_proof_bundle_field(path)
         assert result == "already"
 
-    def test_file_not_modified_when_proof_bundle_already_set(
-        self, tmp_path: Path
-    ) -> None:
+    def test_file_not_modified_when_proof_bundle_already_set(self, tmp_path: Path) -> None:
         """AC3 happy: file content unchanged when proof_bundle already present."""
         fm = "id: 1021\ntitle: Test\nstatus: todo\nproof_bundle: behavioral\n"
         body = "Proof bundle: behavioral\n"
@@ -281,20 +263,14 @@ class TestFromAC_ProofBundleMigration:
     # semantics for both frontmatter population and body removal
     # -----------------------------------------------------------------------
 
-    def test_frontmatter_value_comes_from_first_match_not_later(
-        self, tmp_path: Path
-    ) -> None:
+    def test_frontmatter_value_comes_from_first_match_not_later(self, tmp_path: Path) -> None:
         """AC1+AC2: first body line has 'smoke', later line has 'behavioral'.
 
         Frontmatter proof_bundle must be 'smoke' (first match), not 'behavioral'.
         This test distinguishes first-match extraction from any-match extraction.
         """
         fm = "id: 1042\ntitle: Test\nstatus: todo\n"
-        body = (
-            "Proof bundle: smoke\n"
-            "## Builder Notes\n"
-            "Proof bundle: behavioral\n"
-        )
+        body = "Proof bundle: smoke\n## Builder Notes\nProof bundle: behavioral\n"
         path = _make_task_file(tmp_path, fm, body, filename="1042.md")
         _migrate_proof_bundle_field(path)
         content = path.read_text(encoding="utf-8")
@@ -302,9 +278,7 @@ class TestFromAC_ProofBundleMigration:
         assert "proof_bundle: smoke" in fm_text
         assert "proof_bundle: behavioral" not in fm_text
 
-    def test_first_match_line_removed_not_later_match_line(
-        self, tmp_path: Path
-    ) -> None:
+    def test_first_match_line_removed_not_later_match_line(self, tmp_path: Path) -> None:
         """AC2: first body line has 'smoke', later line has 'behavioral'.
 
         After migration: 'Proof bundle: smoke' is removed from body;
@@ -312,11 +286,7 @@ class TestFromAC_ProofBundleMigration:
         This test distinguishes first-line removal from any-line removal.
         """
         fm = "id: 1043\ntitle: Test\nstatus: todo\n"
-        body = (
-            "Proof bundle: smoke\n"
-            "## Builder Notes\n"
-            "Proof bundle: behavioral\n"
-        )
+        body = "Proof bundle: smoke\n## Builder Notes\nProof bundle: behavioral\n"
         path = _make_task_file(tmp_path, fm, body, filename="1043.md")
         _migrate_proof_bundle_field(path)
         content = path.read_text(encoding="utf-8")
@@ -329,9 +299,7 @@ class TestFromAC_ProofBundleMigration:
     # (Closes proof gaps from second review: substring checks were insufficient)
     # -----------------------------------------------------------------------
 
-    def test_frontmatter_proof_bundle_exact_yaml_value_first_match(
-        self, tmp_path: Path
-    ) -> None:
+    def test_frontmatter_proof_bundle_exact_yaml_value_first_match(self, tmp_path: Path) -> None:
         """AC1: YAML-parsed frontmatter proof_bundle equals 'smoke' exactly.
 
         Body has 'smoke' first, 'behavioral' later. Asserts the written
@@ -339,20 +307,14 @@ class TestFromAC_ProofBundleMigration:
         falsifies any-match or wrong-match extraction.
         """
         fm = "id: 1044\ntitle: Test\nstatus: todo\n"
-        body = (
-            "Proof bundle: smoke\n"
-            "## Builder Notes\n"
-            "Proof bundle: behavioral\n"
-        )
+        body = "Proof bundle: smoke\n## Builder Notes\nProof bundle: behavioral\n"
         path = _make_task_file(tmp_path, fm, body, filename="1044.md")
         _migrate_proof_bundle_field(path)
         content = path.read_text(encoding="utf-8")
         parsed = yaml.safe_load(_fm_section(content))
         assert parsed["proof_bundle"] == "smoke"
 
-    def test_first_match_line_absent_later_line_present_exact_lines(
-        self, tmp_path: Path
-    ) -> None:
+    def test_first_match_line_absent_later_line_present_exact_lines(self, tmp_path: Path) -> None:
         """AC2: line-list membership proves first 'smoke' line removed and 'behavioral' line preserved.
 
         Body has 'smoke' first, 'behavioral' later. Splits body into lines
@@ -360,11 +322,7 @@ class TestFromAC_ProofBundleMigration:
         that would pass even if the later line's content were corrupted.
         """
         fm = "id: 1045\ntitle: Test\nstatus: todo\n"
-        body = (
-            "Proof bundle: smoke\n"
-            "## Builder Notes\n"
-            "Proof bundle: behavioral\n"
-        )
+        body = "Proof bundle: smoke\n## Builder Notes\nProof bundle: behavioral\n"
         path = _make_task_file(tmp_path, fm, body, filename="1045.md")
         _migrate_proof_bundle_field(path)
         content = path.read_text(encoding="utf-8")

@@ -118,9 +118,7 @@ def _stub_decisions_module() -> MagicMock:
 class TestFromAC_PickTasksReadOnly:
     """AC-1: pick_tasks returns dispatch waves without calling resolve_pending_drs."""
 
-    def test_resolve_pending_drs_not_called(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
+    def test_resolve_pending_drs_not_called(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         """pick_tasks must NOT call decisions.resolve_pending_drs.
 
         Injects a mock owlbear_kanban.decisions module via sys.modules and
@@ -193,9 +191,7 @@ class TestFromAC_PickTasksExpiredClaim:
 
         resp = engine.agent_view().pick_tasks()
 
-        assert 1 in _all_ids(resp), (
-            "Task with expired claimed_at must appear in dispatch waves"
-        )
+        assert 1 in _all_ids(resp), "Task with expired claimed_at must appear in dispatch waves"
 
     def test_expired_claim_claimed_at_unchanged_on_disk(self, tmp_path: Path) -> None:
         """pick_tasks must leave claimed_at unchanged for expired-claim tasks.
@@ -209,9 +205,7 @@ class TestFromAC_PickTasksExpiredClaim:
         """
         expired_ts_raw = "2020-01-01T00:00:00+00:00"
         board = _make_board(tmp_path)
-        task_path = _write_task(
-            board, task_id=2, status="backlog", claimed_at=f'"{expired_ts_raw}"'
-        )
+        task_path = _write_task(board, task_id=2, status="backlog", claimed_at=f'"{expired_ts_raw}"')
         engine = KanbanEngine(board, activity_log=False)
 
         resp = engine.agent_view().pick_tasks()
@@ -244,8 +238,7 @@ class TestFromAC_PickTasksExpiredClaim:
         resp = engine.agent_view().pick_tasks()
 
         assert 3 in _all_ids(resp), (
-            "Claim expired 1 second beyond the 1h timeout must be treated as expired "
-            "and dispatched"
+            "Claim expired 1 second beyond the 1h timeout must be treated as expired and dispatched"
         )
 
     def test_multiple_expired_claim_tasks_all_dispatched(self, tmp_path: Path) -> None:
@@ -264,9 +257,7 @@ class TestFromAC_PickTasksExpiredClaim:
         resp = engine.agent_view().pick_tasks()
 
         returned = _all_ids(resp)
-        assert {4, 5, 6}.issubset(returned), (
-            "All tasks with expired claimed_at must appear in dispatch waves"
-        )
+        assert {4, 5, 6}.issubset(returned), "All tasks with expired claimed_at must appear in dispatch waves"
 
     def test_expired_claim_respects_configured_timeout(self, tmp_path: Path) -> None:
         """AC-2 discriminating proof: expired-claim eligibility uses the configured
@@ -347,9 +338,7 @@ class TestFromAC_PickTasksDRImmutability:
         pending_dir = board / "decisions" / "pending"
         pending_dir.mkdir(parents=True, exist_ok=True)
         dr_path = pending_dir / "0001-dr.md"
-        dr_path.write_text(
-            _DR_TMPL.format(task_id=1, response="approved"), encoding="utf-8"
-        )
+        dr_path.write_text(_DR_TMPL.format(task_id=1, response="approved"), encoding="utf-8")
 
         engine = KanbanEngine(board, activity_log=False)
         engine.agent_view().pick_tasks()
@@ -359,9 +348,7 @@ class TestFromAC_PickTasksDRImmutability:
             "pick_tasks must not call resolve_pending_drs"
         )
         resolved_path = board / "decisions" / "resolved" / "0001-dr.md"
-        assert not resolved_path.exists(), (
-            "DR must NOT be moved to decisions/resolved by pick_tasks"
-        )
+        assert not resolved_path.exists(), "DR must NOT be moved to decisions/resolved by pick_tasks"
 
     def test_linked_task_not_modified_by_pick_tasks(self, tmp_path: Path) -> None:
         """Linked task body and blocked field must be unchanged after pick_tasks.
@@ -374,18 +361,14 @@ class TestFromAC_PickTasksDRImmutability:
 
         pending_dir = board / "decisions" / "pending"
         pending_dir.mkdir(parents=True, exist_ok=True)
-        (pending_dir / "0002-dr.md").write_text(
-            _DR_TMPL.format(task_id=2, response="approved"), encoding="utf-8"
-        )
+        (pending_dir / "0002-dr.md").write_text(_DR_TMPL.format(task_id=2, response="approved"), encoding="utf-8")
 
         engine = KanbanEngine(board, activity_log=False)
         engine.agent_view().pick_tasks()
 
         final_content = task_path.read_text(encoding="utf-8")
         # blocked=true must be unchanged (resolve_pending_drs would have set it to false)
-        assert "blocked: true" in final_content, (
-            "Task blocked=true must remain unchanged after pick_tasks"
-        )
+        assert "blocked: true" in final_content, "Task blocked=true must remain unchanged after pick_tasks"
         # No DR summary section must have been appended
         assert "## Decision Request" not in final_content, (
             "Task body must not contain an appended DR summary after pick_tasks"

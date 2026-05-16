@@ -108,33 +108,23 @@ class TestFromAC_EngineReleaseOCC:
 
     # -- ac1-sig: signature -----------------------------------------------
 
-    def test_engine_release_task_signature_has_expected_updated_param(
-        self, tmp_path: Path
-    ) -> None:
+    def test_engine_release_task_signature_has_expected_updated_param(self, tmp_path: Path) -> None:
         """AC1: release_task must declare expected_updated as a keyword parameter."""
         engine = _make_engine(_make_board(tmp_path))
         sig = inspect.signature(engine.release_task)
-        assert "expected_updated" in sig.parameters, (
-            "engine.release_task must accept expected_updated OCC token"
-        )
+        assert "expected_updated" in sig.parameters, "engine.release_task must accept expected_updated OCC token"
 
-    def test_engine_release_task_expected_updated_default_is_none(
-        self, tmp_path: Path
-    ) -> None:
+    def test_engine_release_task_expected_updated_default_is_none(self, tmp_path: Path) -> None:
         """AC1: expected_updated default must be None (optional for agent callers)."""
         engine = _make_engine(_make_board(tmp_path))
         sig = inspect.signature(engine.release_task)
         param = sig.parameters.get("expected_updated")
         assert param is not None, "expected_updated param missing"
-        assert param.default is None, (
-            "expected_updated must default to None (optional OCC token)"
-        )
+        assert param.default is None, "expected_updated must default to None (optional OCC token)"
 
     # -- ac2-cas-write: CAS happy path (claimed + fresh token) ---------------
 
-    def test_engine_release_task_cas_fresh_token_clears_claimed_at(
-        self, tmp_path: Path
-    ) -> None:
+    def test_engine_release_task_cas_fresh_token_clears_claimed_at(self, tmp_path: Path) -> None:
         """AC2: claimed task + matching expected_updated → claimed_at cleared."""
         kanban_dir = _make_board(tmp_path)
         _write_task(
@@ -147,9 +137,7 @@ class TestFromAC_EngineReleaseOCC:
         result = engine.release_task("1", expected_updated="2026-01-01T10:00:00+00:00")
         assert result.claimed_at is None
 
-    def test_engine_release_task_cas_fresh_token_returns_task(
-        self, tmp_path: Path
-    ) -> None:
+    def test_engine_release_task_cas_fresh_token_returns_task(self, tmp_path: Path) -> None:
         """AC2: CAS release on claimed task returns the updated Task object."""
         from owlbear_kanban.models import Task
 
@@ -166,9 +154,7 @@ class TestFromAC_EngineReleaseOCC:
 
     # -- ac3-stale: CAS conflict on claimed task ------------------------------
 
-    def test_engine_release_task_stale_token_raises_concurrency_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_engine_release_task_stale_token_raises_concurrency_error(self, tmp_path: Path) -> None:
         """AC3: stale expected_updated on claimed task raises ConcurrencyError."""
         kanban_dir = _make_board(tmp_path)
         _write_task(
@@ -181,9 +167,7 @@ class TestFromAC_EngineReleaseOCC:
         with pytest.raises(ConcurrencyError):
             engine.release_task("1", expected_updated="2025-01-01T00:00:00+00:00")
 
-    def test_engine_release_task_stale_token_error_code_is_err_stale(
-        self, tmp_path: Path
-    ) -> None:
+    def test_engine_release_task_stale_token_error_code_is_err_stale(self, tmp_path: Path) -> None:
         """AC3: ConcurrencyError from stale token has code='ERR_STALE'."""
         kanban_dir = _make_board(tmp_path)
         _write_task(
@@ -199,9 +183,7 @@ class TestFromAC_EngineReleaseOCC:
 
     # -- ac4-lww: None token -> existing LWW behavior unchanged ---------------
 
-    def test_engine_release_task_none_token_lww_clears_claim(
-        self, tmp_path: Path
-    ) -> None:
+    def test_engine_release_task_none_token_lww_clears_claim(self, tmp_path: Path) -> None:
         """AC4: expected_updated=None -> LWW fallback, claim cleared without CAS check."""
         kanban_dir = _make_board(tmp_path)
         _write_task(
@@ -216,9 +198,7 @@ class TestFromAC_EngineReleaseOCC:
 
     # -- ac5-noop-stale: unclaimed + stale token → ConcurrencyError ----------
 
-    def test_engine_release_task_unclaimed_stale_token_raises_concurrency_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_engine_release_task_unclaimed_stale_token_raises_concurrency_error(self, tmp_path: Path) -> None:
         """AC5: unclaimed task + stale expected_updated → ConcurrencyError(ERR_STALE)."""
         kanban_dir = _make_board(tmp_path)
         _write_task(
@@ -234,9 +214,7 @@ class TestFromAC_EngineReleaseOCC:
 
     # -- ac5-noop-fresh: unclaimed + fresh token → silent no-op --------------
 
-    def test_engine_release_task_unclaimed_fresh_token_is_silent_noop(
-        self, tmp_path: Path
-    ) -> None:
+    def test_engine_release_task_unclaimed_fresh_token_is_silent_noop(self, tmp_path: Path) -> None:
         """AC5: unclaimed task + matching expected_updated → no-op, no exception."""
         kanban_dir = _make_board(tmp_path)
         _write_task(
@@ -250,9 +228,7 @@ class TestFromAC_EngineReleaseOCC:
         result = engine.release_task("1", expected_updated="2026-01-01T10:00:00+00:00")
         assert result.claimed_at is None
 
-    def test_engine_release_task_unclaimed_fresh_token_updated_not_advanced(
-        self, tmp_path: Path
-    ) -> None:
+    def test_engine_release_task_unclaimed_fresh_token_updated_not_advanced(self, tmp_path: Path) -> None:
         """AC5: unclaimed + fresh token no-op must NOT advance the updated timestamp."""
         kanban_dir = _make_board(tmp_path)
         original_updated = "2026-01-01T10:00:00+00:00"
@@ -264,15 +240,11 @@ class TestFromAC_EngineReleaseOCC:
         )
         engine = _make_engine(kanban_dir)
         result = engine.release_task("1", expected_updated=original_updated)
-        assert result.updated == original_updated, (
-            "No-op release must not advance updated timestamp"
-        )
+        assert result.updated == original_updated, "No-op release must not advance updated timestamp"
 
     # -- ac2-cas-helper: CAS path calls write_task_if_unchanged, not write_task --
 
-    def test_engine_release_task_cas_path_calls_write_task_if_unchanged(
-        self, tmp_path: Path
-    ) -> None:
+    def test_engine_release_task_cas_path_calls_write_task_if_unchanged(self, tmp_path: Path) -> None:
         """AC2: claimed + fresh token → write_task_if_unchanged called (not write_task)."""
         from owlbear_kanban import storage
 
@@ -290,13 +262,9 @@ class TestFromAC_EngineReleaseOCC:
             wraps=storage.write_task_if_unchanged,
         ) as mock_cas:
             engine.release_task("1", expected_updated="2026-01-01T10:00:00+00:00")
-        assert mock_cas.called, (
-            "release_task must call write_task_if_unchanged (CAS) when expected_updated is set"
-        )
+        assert mock_cas.called, "release_task must call write_task_if_unchanged (CAS) when expected_updated is set"
 
-    def test_engine_release_task_lww_path_does_not_call_write_task_if_unchanged(
-        self, tmp_path: Path
-    ) -> None:
+    def test_engine_release_task_lww_path_does_not_call_write_task_if_unchanged(self, tmp_path: Path) -> None:
         """AC4: expected_updated=None → write_task_if_unchanged must NOT be called (LWW path)."""
         from owlbear_kanban import storage
 
@@ -329,19 +297,13 @@ class TestFromAC_CockpitViewReleaseOCC:
 
     # -- ac6-facade-sig: signature -------------------------------------------
 
-    def test_cockpit_view_release_task_signature_has_expected_updated_param(
-        self, tmp_path: Path
-    ) -> None:
+    def test_cockpit_view_release_task_signature_has_expected_updated_param(self, tmp_path: Path) -> None:
         """AC6: CockpitView.release_task must declare expected_updated parameter."""
         cv = _make_cockpit_view(_make_board(tmp_path))
         sig = inspect.signature(cv.release_task)
-        assert "expected_updated" in sig.parameters, (
-            "CockpitView.release_task must accept expected_updated (OCC token)"
-        )
+        assert "expected_updated" in sig.parameters, "CockpitView.release_task must accept expected_updated (OCC token)"
 
-    def test_cockpit_view_release_task_expected_updated_is_required(
-        self, tmp_path: Path
-    ) -> None:
+    def test_cockpit_view_release_task_expected_updated_is_required(self, tmp_path: Path) -> None:
         """AC6: CockpitView.release_task expected_updated has no default (required)."""
         cv = _make_cockpit_view(_make_board(tmp_path))
         sig = inspect.signature(cv.release_task)
@@ -353,9 +315,7 @@ class TestFromAC_CockpitViewReleaseOCC:
 
     # -- ac6-facade-ok: fresh token + claimed → claim cleared -----------------
 
-    def test_cockpit_view_release_task_fresh_token_claimed_clears_claim(
-        self, tmp_path: Path
-    ) -> None:
+    def test_cockpit_view_release_task_fresh_token_claimed_clears_claim(self, tmp_path: Path) -> None:
         """AC6: CockpitView: fresh expected_updated + claimed task → claim cleared."""
         kanban_dir = _make_board(tmp_path)
         _write_task(
@@ -371,9 +331,7 @@ class TestFromAC_CockpitViewReleaseOCC:
 
     # -- ac6-facade-err: stale token propagates ConcurrencyError --------------
 
-    def test_cockpit_view_release_task_stale_token_raises_concurrency_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_cockpit_view_release_task_stale_token_raises_concurrency_error(self, tmp_path: Path) -> None:
         """AC6: CockpitView: stale expected_updated propagates ConcurrencyError(ERR_STALE)."""
         kanban_dir = _make_board(tmp_path)
         _write_task(
@@ -389,9 +347,7 @@ class TestFromAC_CockpitViewReleaseOCC:
 
     # -- ac6-facade-noop-fresh: unclaimed + fresh token → no-op ---------------
 
-    def test_cockpit_view_release_task_unclaimed_fresh_token_returns_unchanged(
-        self, tmp_path: Path
-    ) -> None:
+    def test_cockpit_view_release_task_unclaimed_fresh_token_returns_unchanged(self, tmp_path: Path) -> None:
         """AC6: CockpitView: fresh token + unclaimed → no-op, returns unchanged task."""
         kanban_dir = _make_board(tmp_path)
         _write_task(
@@ -407,9 +363,7 @@ class TestFromAC_CockpitViewReleaseOCC:
 
     # -- ac6-facade-noop-stale: unclaimed + stale token → ConcurrencyError ----
 
-    def test_cockpit_view_release_task_unclaimed_stale_token_raises_concurrency_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_cockpit_view_release_task_unclaimed_stale_token_raises_concurrency_error(self, tmp_path: Path) -> None:
         """AC6: CockpitView: unclaimed + stale token → ConcurrencyError(ERR_STALE)."""
         kanban_dir = _make_board(tmp_path)
         _write_task(

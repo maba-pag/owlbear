@@ -146,10 +146,7 @@ def _has_kanban_error_handler() -> bool:
     from owlbear_cockpit.main import app  # noqa: PLC0415
     from owlbear_kanban.errors import KanbanError  # noqa: PLC0415
 
-    return any(
-        isinstance(exc_cls, type) and issubclass(exc_cls, KanbanError)
-        for exc_cls in app.exception_handlers
-    )
+    return any(isinstance(exc_cls, type) and issubclass(exc_cls, KanbanError) for exc_cls in app.exception_handlers)
 
 
 # ---------------------------------------------------------------------------
@@ -204,9 +201,7 @@ class TestFromAC_ErrorEnvelopeShape:
         assert isinstance(message, str)  # FAILS: message is absent
         assert message  # non-empty
 
-    def test_stale_conflict_has_code_field(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_stale_conflict_has_code_field(self, client: TestClient, engine: KanbanEngine) -> None:
         """409 stale-conflict response body contains a 'code' field."""
         tasks = engine.list_tasks(status="todo")
         assert tasks, "fixture must have a todo task"
@@ -219,9 +214,7 @@ class TestFromAC_ErrorEnvelopeShape:
         body = resp.json()
         assert "code" in body  # FAILS: {"detail": "Task was modified..."} has no code
 
-    def test_stale_conflict_409_code_is_nonempty_string(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_stale_conflict_409_code_is_nonempty_string(self, client: TestClient, engine: KanbanEngine) -> None:
         """AC1 tightening: 409 envelope code and message are non-empty strings."""
         tasks = engine.list_tasks(status="todo")
         assert tasks, "fixture must have a todo task"
@@ -239,9 +232,7 @@ class TestFromAC_ErrorEnvelopeShape:
         assert isinstance(message, str)  # FAILS: message is absent
         assert message  # non-empty
 
-    def test_invalid_transition_422_code_is_nonempty_string(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_invalid_transition_422_code_is_nonempty_string(self, client: TestClient, engine: KanbanEngine) -> None:
         """AC1 tightening: 422 envelope code and message are non-empty strings."""
         tasks = engine.list_tasks(status="todo")
         assert tasks, "fixture must have a todo task"
@@ -259,9 +250,7 @@ class TestFromAC_ErrorEnvelopeShape:
         assert isinstance(message, str)  # FAILS: message is absent
         assert message  # non-empty
 
-    def test_config_error_500_code_is_nonempty_string(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_config_error_500_code_is_nonempty_string(self, client: TestClient, engine: KanbanEngine) -> None:
         """AC1 tightening: 500 envelope code and message are non-empty strings."""
         from owlbear_cockpit.view import CockpitView  # noqa: PLC0415
 
@@ -271,9 +260,7 @@ class TestFromAC_ErrorEnvelopeShape:
         with mock.patch.object(
             CockpitView,
             "edit_task",
-            side_effect=ConfigError(
-                "ERR_INVALID_STATUS", "invalid board configuration"
-            ),
+            side_effect=ConfigError("ERR_INVALID_STATUS", "invalid board configuration"),
         ):
             resp = client.post(
                 f"/api/tasks/{task.id}/edit",
@@ -311,9 +298,7 @@ class TestFromAC_ErrorCoverage:
         assert "code" in body  # FAILS
         assert "message" in body  # FAILS
 
-    def test_stale_conflict_409_has_envelope(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_stale_conflict_409_has_envelope(self, client: TestClient, engine: KanbanEngine) -> None:
         """POST /api/tasks/{id}/move with stale updated token → 409 + code + message."""
         tasks = engine.list_tasks(status="todo")
         assert tasks
@@ -328,9 +313,7 @@ class TestFromAC_ErrorCoverage:
         assert "message" in body  # FAILS
         assert "detail" not in body  # FAILS — FastAPI detail still present
 
-    def test_invalid_transition_422_has_envelope(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_invalid_transition_422_has_envelope(self, client: TestClient, engine: KanbanEngine) -> None:
         """POST /api/tasks/{id}/move with invalid target status → 422 + code + message."""
         tasks = engine.list_tasks(status="todo")
         assert tasks
@@ -345,9 +328,7 @@ class TestFromAC_ErrorCoverage:
         assert "message" in body  # FAILS
         assert "detail" not in body  # FAILS — FastAPI detail still present
 
-    def test_config_error_500_has_envelope(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_config_error_500_has_envelope(self, client: TestClient, engine: KanbanEngine) -> None:
         """POST /api/tasks/{id}/edit raising ConfigError → 500 + code + message."""
         tasks = engine.list_tasks(status="todo")
         assert tasks
@@ -357,9 +338,7 @@ class TestFromAC_ErrorCoverage:
         with mock.patch.object(
             CockpitView,
             "edit_task",
-            side_effect=ConfigError(
-                "ERR_INVALID_STATUS", "invalid board configuration"
-            ),
+            side_effect=ConfigError("ERR_INVALID_STATUS", "invalid board configuration"),
         ):
             resp = client.post(
                 f"/api/tasks/{task.id}/edit",
@@ -367,15 +346,11 @@ class TestFromAC_ErrorCoverage:
             )
         body = resp.json()
         assert resp.status_code == 500
-        assert (
-            "code" in body
-        )  # FAILS: currently {"detail": "Invalid board configuration"}
+        assert "code" in body  # FAILS: currently {"detail": "Invalid board configuration"}
         assert "message" in body  # FAILS
         assert "detail" not in body  # FAILS — FastAPI detail still present
 
-    def test_scan_corruption_exception_500_has_envelope(
-        self, client: TestClient
-    ) -> None:
+    def test_scan_corruption_exception_500_has_envelope(self, client: TestClient) -> None:
         """POST /api/tasks/scan raising RuntimeError → 500 + code + message, not generic page."""
         from owlbear_cockpit.view import CockpitView  # noqa: PLC0415
 
@@ -387,17 +362,13 @@ class TestFromAC_ErrorCoverage:
             resp = client.post("/api/tasks/scan")
         assert resp.status_code == 500
         # Pre-#1371: Starlette returns plain text; post-#1371: JSON envelope
-        assert resp.headers.get("content-type", "").startswith(
-            "application/json"
-        )  # FAILS
+        assert resp.headers.get("content-type", "").startswith("application/json")  # FAILS
         body = resp.json()
         assert "code" in body
         assert "message" in body
         assert "detail" not in body  # FAILS — envelope replaces FastAPI detail
 
-    def test_repair_storage_exception_500_has_envelope(
-        self, client: TestClient
-    ) -> None:
+    def test_repair_storage_exception_500_has_envelope(self, client: TestClient) -> None:
         """POST /api/tasks/repair raising RuntimeError → 500 + code + message."""
         from owlbear_cockpit.view import CockpitView  # noqa: PLC0415
 
@@ -409,9 +380,7 @@ class TestFromAC_ErrorCoverage:
             resp = client.post("/api/tasks/repair")
         assert resp.status_code == 500
         # Pre-#1371: Starlette returns plain text; post-#1371: JSON envelope
-        assert resp.headers.get("content-type", "").startswith(
-            "application/json"
-        )  # FAILS
+        assert resp.headers.get("content-type", "").startswith("application/json")  # FAILS
         body = resp.json()
         assert "code" in body
         assert "message" in body
@@ -437,9 +406,7 @@ class TestFromAC_StatusPreservation:
         body = resp.json()
         assert "code" in body  # FAILS — envelope not yet present
 
-    def test_stale_preserves_409_with_envelope(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_stale_preserves_409_with_envelope(self, client: TestClient, engine: KanbanEngine) -> None:
         """Stale-conflict error: 409 status preserved; response also includes code field."""
         tasks = engine.list_tasks(status="todo")
         assert tasks
@@ -452,9 +419,7 @@ class TestFromAC_StatusPreservation:
         body = resp.json()
         assert "code" in body  # FAILS
 
-    def test_validation_preserves_422_with_envelope(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_validation_preserves_422_with_envelope(self, client: TestClient, engine: KanbanEngine) -> None:
         """Invalid-transition error: 422 status preserved; response also includes code field."""
         tasks = engine.list_tasks(status="todo")
         assert tasks
@@ -487,9 +452,7 @@ class TestFromAC_GuidancePolicy:
     error path: mutation guidance=[]
     """
 
-    def test_error_response_no_guidance_and_uses_envelope(
-        self, client: TestClient
-    ) -> None:
+    def test_error_response_no_guidance_and_uses_envelope(self, client: TestClient) -> None:
         """(a) 404 error: no 'guidance' field AND response uses code+message envelope."""
         resp = client.get("/api/tasks/99999")
         assert resp.status_code == 404
@@ -497,9 +460,7 @@ class TestFromAC_GuidancePolicy:
         assert "guidance" not in body  # passes now (detail-response has no guidance)
         assert "code" in body  # FAILS — envelope not yet present
 
-    def test_list_cache_miss_guidance_in_response(
-        self, cache_client: TestClient
-    ) -> None:
+    def test_list_cache_miss_guidance_in_response(self, cache_client: TestClient) -> None:
         """(b) Cache-miss list response forwards exact engine guidance (not a hardcoded empty list).
 
         Injects a sentinel guidance payload via mock so a hardcoded [] implementation
@@ -523,13 +484,9 @@ class TestFromAC_GuidancePolicy:
             resp = cache_client.get("/api/tasks")
         body = resp.json()
         assert resp.status_code == 200
-        assert (
-            body["guidance"] == sentinel_guidance
-        )  # proves forwarding, not hardcoded []
+        assert body["guidance"] == sentinel_guidance  # proves forwarding, not hardcoded []
 
-    def test_list_cache_hit_guidance_is_empty_list(
-        self, cache_client: TestClient
-    ) -> None:
+    def test_list_cache_hit_guidance_is_empty_list(self, cache_client: TestClient) -> None:
         """(b) Cache-hit returns guidance=[] even when the seeding miss had sentinel guidance.
 
         Seeds the cache via a mocked miss that returns non-empty sentinel guidance.
@@ -559,9 +516,7 @@ class TestFromAC_GuidancePolicy:
         assert resp.status_code == 200
         assert body.get("guidance") == []  # must NOT return the sentinel guidance
 
-    def test_mutation_response_guidance_is_empty_list(
-        self, cache_client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_mutation_response_guidance_is_empty_list(self, cache_client: TestClient, engine: KanbanEngine) -> None:
         """(c) Successful mutation response returns guidance=[] (no operation-level guidance).
 
         Pre-condition: KanbanError exception handler must be registered (#1371).
@@ -757,17 +712,13 @@ class TestFromAC_LegacyTestMigration:
             )
         body = response.json()
         assert response.status_code == 409
-        assert "detail" not in body, (
-            f"Domain error must NOT include 'detail' key; got {body!r}"
-        )
+        assert "detail" not in body, f"Domain error must NOT include 'detail' key; got {body!r}"
         assert body.get("code") == "ERR_STALE"
         assert "stale snapshot detected" in body.get("message", ""), (
             f"Envelope message must carry ConcurrencyError.user_message; got {body!r}"
         )
 
-    def test_move_not_found_returns_envelope_not_detail(
-        self, client_1371: TestClient
-    ) -> None:
+    def test_move_not_found_returns_envelope_not_detail(self, client_1371: TestClient) -> None:
         """404 non-existent-task move response carries {code, message}; no 'detail' field."""
         response = client_1371.post(
             "/api/tasks/999/move",
@@ -775,9 +726,7 @@ class TestFromAC_LegacyTestMigration:
         )
         body = response.json()
         assert response.status_code == 404
-        assert "detail" not in body, (
-            f"Domain error must NOT include 'detail' key; got {body!r}"
-        )
+        assert "detail" not in body, f"Domain error must NOT include 'detail' key; got {body!r}"
         assert body.get("code") == "ERR_NOT_FOUND"
         assert "999" in str(body.get("message", "")), (
             f"404 message should reference the missing task ID '999'; got {body!r}"
@@ -796,24 +745,18 @@ class TestFromAC_LegacyTestMigration:
             )
         body = response.json()
         assert response.status_code == 409
-        assert "detail" not in body, (
-            f"Domain error must NOT include 'detail' key; got {body!r}"
-        )
+        assert "detail" not in body, f"Domain error must NOT include 'detail' key; got {body!r}"
         assert body.get("code") == "ERR_STALE"
         assert "stale write detected" in body.get("message", ""), (
             f"Envelope message must carry ConcurrencyError.user_message; got {body!r}"
         )
 
-    def test_get_task_not_found_returns_envelope_not_detail(
-        self, client_1371: TestClient
-    ) -> None:
+    def test_get_task_not_found_returns_envelope_not_detail(self, client_1371: TestClient) -> None:
         """404 task-detail response carries {code, message}; no 'detail' field."""
         response = client_1371.get("/api/tasks/9999")
         body = response.json()
         assert response.status_code == 404
-        assert "detail" not in body, (
-            f"Domain error must NOT include 'detail' key; got {body!r}"
-        )
+        assert "detail" not in body, f"Domain error must NOT include 'detail' key; got {body!r}"
         assert body.get("code") == "ERR_NOT_FOUND"
         assert "9999" in str(body.get("message", "")), (
             f"404 message should reference the requested ID '9999'; got {body!r}"
@@ -853,8 +796,7 @@ class TestFromAC_ShowTaskGuidanceForwarding:
 
         assert response.status_code == 200
         assert body.get("guidance") == sentinel, (
-            f"Expected sentinel guidance {sentinel!r} forwarded verbatim; "
-            f"got {body.get('guidance')!r}"
+            f"Expected sentinel guidance {sentinel!r} forwarded verbatim; got {body.get('guidance')!r}"
         )
 
 
@@ -871,9 +813,7 @@ class TestFromAC_DecisionsFrameworkCarveOut:
     applied here — the decisions route uses HTTPException, not KanbanError.
     """
 
-    def test_malformed_decision_id_returns_detail_body_not_domain_envelope(
-        self, client_1371: TestClient
-    ) -> None:
+    def test_malformed_decision_id_returns_detail_body_not_domain_envelope(self, client_1371: TestClient) -> None:
         """POST /decisions/.hidden/resolve returns {\"detail\": \"Invalid decision id\"}."""
         response = client_1371.post(
             "/api/decisions/.hidden/resolve",
@@ -881,18 +821,12 @@ class TestFromAC_DecisionsFrameworkCarveOut:
         )
         assert response.status_code == 422
         body = response.json()
-        assert "detail" in body, (
-            f"Decisions HTTPException must use FastAPI detail format; got {body!r}"
-        )
+        assert "detail" in body, f"Decisions HTTPException must use FastAPI detail format; got {body!r}"
         assert body["detail"] == "Invalid decision id", (
             f"Expected exact detail string 'Invalid decision id'; got {body['detail']!r}"
         )
-        assert "code" not in body, (
-            f"Decisions route must NOT use domain envelope; got {body!r}"
-        )
-        assert "message" not in body, (
-            f"Decisions route must NOT use domain envelope; got {body!r}"
-        )
+        assert "code" not in body, f"Decisions route must NOT use domain envelope; got {body!r}"
+        assert "message" not in body, f"Decisions route must NOT use domain envelope; got {body!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -930,9 +864,7 @@ class TestFromAC_UnexpectedErrorExactContract:
             f"Content-type must be application/json; got {resp.headers.get('content-type')!r}"
         )
         body = resp.json()
-        assert "detail" not in body, (
-            f"Unexpected-error envelope must NOT include 'detail'; got {body!r}"
-        )
+        assert "detail" not in body, f"Unexpected-error envelope must NOT include 'detail'; got {body!r}"
         assert body.get("code") == "COCKPIT_INTERNAL_ERROR", (
             f"Expected exact code 'COCKPIT_INTERNAL_ERROR'; got {body.get('code')!r}"
         )
@@ -958,9 +890,7 @@ class TestFromAC_UnexpectedErrorExactContract:
             f"Content-type must be application/json; got {resp.headers.get('content-type')!r}"
         )
         body = resp.json()
-        assert "detail" not in body, (
-            f"Unexpected-error envelope must NOT include 'detail'; got {body!r}"
-        )
+        assert "detail" not in body, f"Unexpected-error envelope must NOT include 'detail'; got {body!r}"
         assert body.get("code") == "COCKPIT_INTERNAL_ERROR", (
             f"Expected exact code 'COCKPIT_INTERNAL_ERROR'; got {body.get('code')!r}"
         )
@@ -995,12 +925,8 @@ class TestFromAC_ReleaseErrorEnvelope:
         response = client_1371.post("/api/tasks/999/release", json={"updated": token})
         body = response.json()
         assert response.status_code == 404
-        assert "detail" not in body, (
-            f"Domain 404 must NOT include 'detail' key; got {body!r}"
-        )
-        assert body.get("code") == "ERR_NOT_FOUND", (
-            f"Expected code 'ERR_NOT_FOUND'; got {body.get('code')!r}"
-        )
+        assert "detail" not in body, f"Domain 404 must NOT include 'detail' key; got {body!r}"
+        assert body.get("code") == "ERR_NOT_FOUND", f"Expected code 'ERR_NOT_FOUND'; got {body.get('code')!r}"
         assert "999" in str(body.get("message", "")), (
             f"404 message should reference the missing task ID '999'; got {body!r}"
         )
@@ -1017,19 +943,11 @@ class TestFromAC_ReleaseErrorEnvelope:
         stale_token = task.updated
         engine_1371.edit_task("2", title="Bumped to make stale token")
 
-        response = client_1371.post(
-            "/api/tasks/2/release", json={"updated": stale_token}
-        )
+        response = client_1371.post("/api/tasks/2/release", json={"updated": stale_token})
         body = response.json()
-        assert response.status_code == 409, (
-            f"Stale release must return 409; got {response.status_code}"
-        )
-        assert "detail" not in body, (
-            f"Domain 409 must NOT include 'detail' key; got {body!r}"
-        )
-        assert body.get("code") == "ERR_STALE", (
-            f"Expected code 'ERR_STALE'; got {body.get('code')!r}"
-        )
+        assert response.status_code == 409, f"Stale release must return 409; got {response.status_code}"
+        assert "detail" not in body, f"Domain 409 must NOT include 'detail' key; got {body!r}"
+        assert body.get("code") == "ERR_STALE", f"Expected code 'ERR_STALE'; got {body.get('code')!r}"
         assert "message" in body, f"Domain 409 must include 'message' key; got {body!r}"
 
     def test_release_unclaimed_task_returns_envelope_not_detail(
@@ -1037,16 +955,10 @@ class TestFromAC_ReleaseErrorEnvelope:
     ) -> None:
         """409 release of unclaimed task carries {code, message}; no 'detail' field."""
         task = engine_1371.show_task("1")
-        response = client_1371.post(
-            "/api/tasks/1/release", json={"updated": task.updated}
-        )
+        response = client_1371.post("/api/tasks/1/release", json={"updated": task.updated})
         body = response.json()
-        assert response.status_code == 409, (
-            f"Release of unclaimed task must return 409; got {response.status_code}"
-        )
-        assert "detail" not in body, (
-            f"Domain 409 must NOT include 'detail' key; got {body!r}"
-        )
+        assert response.status_code == 409, f"Release of unclaimed task must return 409; got {response.status_code}"
+        assert "detail" not in body, f"Domain 409 must NOT include 'detail' key; got {body!r}"
         assert "code" in body, f"Domain 409 must include 'code' key; got {body!r}"
         assert "message" in body, f"Domain 409 must include 'message' key; got {body!r}"
 
@@ -1080,9 +992,5 @@ class TestFromAC_PydanticCarveOut:
         assert isinstance(body.get("detail"), list), (
             f"Pydantic 422 must carry 'detail' list (FastAPI format); got {body!r}"
         )
-        assert "code" not in body, (
-            f"Pydantic 422 must NOT contain domain 'code' key; got {body!r}"
-        )
-        assert "message" not in body, (
-            f"Pydantic 422 must NOT contain domain 'message' key; got {body!r}"
-        )
+        assert "code" not in body, f"Pydantic 422 must NOT contain domain 'code' key; got {body!r}"
+        assert "message" not in body, f"Pydantic 422 must NOT contain domain 'message' key; got {body!r}"

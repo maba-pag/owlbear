@@ -305,9 +305,7 @@ class TestFromAC_PendingDecisions:
         assert item["id"] == "42-awaiting-approval"
         assert item["title"] == "Decision"
 
-    def test_pending_ignores_non_pending_and_malformed_files(
-        self, client: TestClient, decisions_dir: Path
-    ) -> None:
+    def test_pending_ignores_non_pending_and_malformed_files(self, client: TestClient, decisions_dir: Path) -> None:
         """Pending list skips malformed files, non-markdown files, and resolved DRs."""
         _write_pending_dr(
             decisions_dir,
@@ -326,9 +324,7 @@ class TestFromAC_PendingDecisions:
             "---\nkey: [unclosed bracket\n---\nBody text.\n",
             encoding="utf-8",
         )
-        (decisions_dir / "pending" / "not-a-decision.txt").write_text(
-            "ignored", encoding="utf-8"
-        )
+        (decisions_dir / "pending" / "not-a-decision.txt").write_text("ignored", encoding="utf-8")
 
         response = client.get("/api/decisions/pending")
 
@@ -337,9 +333,7 @@ class TestFromAC_PendingDecisions:
         assert payload["count"] == 1
         assert payload["items"][0]["id"] == "31-still-pending"
 
-    def test_pending_body_and_preview_preserve_full_markdown(
-        self, client: TestClient, decisions_dir: Path
-    ) -> None:
+    def test_pending_body_and_preview_preserve_full_markdown(self, client: TestClient, decisions_dir: Path) -> None:
         """Pending list returns full body and truncated preview from the same markdown."""
         body = "## Context\n\n" + ("A very long description that goes on and on. " * 10)
         assert len(body) > 200
@@ -360,18 +354,14 @@ class TestFromAC_PendingDecisions:
         assert len(item["body_preview"]) <= 200
         assert item["body"].startswith(item["body_preview"])
 
-    def test_pending_empty_returns_zero_and_empty_items(
-        self, client: TestClient
-    ) -> None:
+    def test_pending_empty_returns_zero_and_empty_items(self, client: TestClient) -> None:
         """Empty pending directory returns the empty response shape."""
         response = client.get("/api/decisions/pending")
 
         assert response.status_code == 200
         assert response.json() == {"count": 0, "items": []}
 
-    def test_missing_pending_dir_returns_zero_and_empty_items(
-        self, engine: KanbanEngine, tmp_path: Path
-    ) -> None:
+    def test_missing_pending_dir_returns_zero_and_empty_items(self, engine: KanbanEngine, tmp_path: Path) -> None:
         """Missing pending/ subdir returns the same empty response shape."""
         from fastapi.testclient import TestClient  # noqa: PLC0415
 
@@ -478,9 +468,7 @@ class TestFromAC_ResolveDecisions:
         assert "## Response" in content
         assert content.index(body_marker) < content.index("## Response")
 
-    def test_resolve_rejects_invalid_response_enum(
-        self, client: TestClient, decisions_dir: Path
-    ) -> None:
+    def test_resolve_rejects_invalid_response_enum(self, client: TestClient, decisions_dir: Path) -> None:
         """Resolve rejects unknown response enum values with 422."""
         decision_id = "77-invalid-enum"
         _write_pending_dr(
@@ -497,9 +485,7 @@ class TestFromAC_ResolveDecisions:
 
         assert response.status_code == 422
 
-    def test_resolve_returns_404_for_unknown_decision_id(
-        self, client: TestClient
-    ) -> None:
+    def test_resolve_returns_404_for_unknown_decision_id(self, client: TestClient) -> None:
         """Resolve returns 404 when the decision file does not exist."""
         response = client.post(
             "/api/decisions/not-a-real-id/resolve",
@@ -512,9 +498,7 @@ class TestFromAC_ResolveDecisions:
 class TestFromAC_DecisionsPending:
     """Coverage promoted from task #1189 for GET /api/decisions/pending."""
 
-    def test_pending_returns_count_and_items(
-        self, client: TestClient, decisions_dir: Path
-    ) -> None:
+    def test_pending_returns_count_and_items(self, client: TestClient, decisions_dir: Path) -> None:
         _write_pending_dr(
             decisions_dir,
             stem="42-awaiting-approval",
@@ -653,9 +637,7 @@ class TestFromAC_DecisionsResolve:
         assert "## Response" in content
         assert "Not aligned with scope." in content
 
-    def test_resolve_returns_404_for_unknown_decision_id_1189(
-        self, client: TestClient
-    ) -> None:
+    def test_resolve_returns_404_for_unknown_decision_id_1189(self, client: TestClient) -> None:
         response = client.post(
             "/api/decisions/not-a-real-id/resolve",
             json={"response": "approved"},
@@ -687,9 +669,7 @@ class TestFromAC_DecisionsResolve:
 class TestFromAC_GetPendingRegistered:
     """AC: GET /api/decisions/pending endpoint registered in Cockpit routes."""
 
-    def test_get_pending_endpoint_exists_and_returns_200(
-        self, client: TestClient
-    ) -> None:
+    def test_get_pending_endpoint_exists_and_returns_200(self, client: TestClient) -> None:
         response = client.get("/api/decisions/pending")
 
         assert response.status_code == 200
@@ -698,12 +678,8 @@ class TestFromAC_GetPendingRegistered:
 class TestFromAC_GetPendingParsing:
     """AC: Parses pending/*.md files and returns structured JSON."""
 
-    def test_reads_pending_md_and_returns_item(
-        self, client: TestClient, decisions_dir: Path
-    ) -> None:
-        _write_dr(
-            decisions_dir, stem="10-scope-question", task_id=10, body="Need direction."
-        )
+    def test_reads_pending_md_and_returns_item(self, client: TestClient, decisions_dir: Path) -> None:
+        _write_dr(decisions_dir, stem="10-scope-question", task_id=10, body="Need direction.")
 
         response = client.get("/api/decisions/pending")
 
@@ -712,9 +688,7 @@ class TestFromAC_GetPendingParsing:
         assert payload["count"] == 1
         assert len(payload["items"]) == 1
 
-    def test_non_md_files_in_pending_are_ignored(
-        self, client: TestClient, decisions_dir: Path
-    ) -> None:
+    def test_non_md_files_in_pending_are_ignored(self, client: TestClient, decisions_dir: Path) -> None:
         (decisions_dir / "pending" / "not-a-decision.txt").write_text(
             "---\ntask_id: 99\n---\nsome text\n", encoding="utf-8"
         )
@@ -724,9 +698,7 @@ class TestFromAC_GetPendingParsing:
         assert response.status_code == 200
         assert response.json()["count"] == 0
 
-    def test_malformed_yaml_in_pending_is_skipped_not_crashed(
-        self, client: TestClient, decisions_dir: Path
-    ) -> None:
+    def test_malformed_yaml_in_pending_is_skipped_not_crashed(self, client: TestClient, decisions_dir: Path) -> None:
         (decisions_dir / "pending" / "bad-yaml.md").write_text(
             "---\nkey: [unclosed bracket\n---\nBody text.\n", encoding="utf-8"
         )
@@ -737,13 +709,9 @@ class TestFromAC_GetPendingParsing:
         assert response.status_code == 200
         assert response.json()["count"] == 1
 
-    def test_multiple_pending_files_all_returned(
-        self, client: TestClient, decisions_dir: Path
-    ) -> None:
+    def test_multiple_pending_files_all_returned(self, client: TestClient, decisions_dir: Path) -> None:
         _write_dr(decisions_dir, stem="20-first-dr", task_id=20, body="First question.")
-        _write_dr(
-            decisions_dir, stem="21-second-dr", task_id=21, body="Second question."
-        )
+        _write_dr(decisions_dir, stem="21-second-dr", task_id=21, body="Second question.")
         _write_dr(decisions_dir, stem="22-third-dr", task_id=22, body="Third question.")
 
         response = client.get("/api/decisions/pending")
@@ -753,12 +721,8 @@ class TestFromAC_GetPendingParsing:
         assert payload["count"] == 3
         assert len(payload["items"]) == 3
 
-    def test_exact_metadata_values_are_forwarded(
-        self, client: TestClient, decisions_dir: Path
-    ) -> None:
-        _write_dr(
-            decisions_dir, stem="10-metadata-exact", task_id=10, body="Need direction."
-        )
+    def test_exact_metadata_values_are_forwarded(self, client: TestClient, decisions_dir: Path) -> None:
+        _write_dr(decisions_dir, stem="10-metadata-exact", task_id=10, body="Need direction.")
 
         response = client.get("/api/decisions/pending")
 
@@ -773,9 +737,7 @@ class TestFromAC_GetPendingParsing:
 class TestFromAC_GetPendingFilter:
     """AC: Only includes items where frontmatter response == pending."""
 
-    def test_resolved_dr_in_pending_dir_is_excluded(
-        self, client: TestClient, decisions_dir: Path
-    ) -> None:
+    def test_resolved_dr_in_pending_dir_is_excluded(self, client: TestClient, decisions_dir: Path) -> None:
         _write_dr(
             decisions_dir,
             stem="30-already-approved",
@@ -783,9 +745,7 @@ class TestFromAC_GetPendingFilter:
             body="Already resolved.",
             response="approved",
         )
-        _write_dr(
-            decisions_dir, stem="31-still-pending", task_id=31, body="Still waiting."
-        )
+        _write_dr(decisions_dir, stem="31-still-pending", task_id=31, body="Still waiting.")
 
         response = client.get("/api/decisions/pending")
 
@@ -794,9 +754,7 @@ class TestFromAC_GetPendingFilter:
         assert payload["count"] == 1
         assert payload["items"][0]["id"] == "31-still-pending"
 
-    def test_dr_with_no_response_field_is_excluded(
-        self, client: TestClient, decisions_dir: Path
-    ) -> None:
+    def test_dr_with_no_response_field_is_excluded(self, client: TestClient, decisions_dir: Path) -> None:
         path = decisions_dir / "pending" / "no-response-field.md"
         path.write_text(
             "---\ntask_id: 99\nagent: builder\nrequest_type: scope-decision\ncreated: '2026-04-30'\n---\n\n# No response field\n\nBody text.\n",
@@ -812,12 +770,8 @@ class TestFromAC_GetPendingFilter:
 class TestFromAC_GetPendingShape:
     """AC: Response shape with required pending decision fields."""
 
-    def test_item_contains_all_required_fields(
-        self, client: TestClient, decisions_dir: Path
-    ) -> None:
-        _write_dr(
-            decisions_dir, stem="40-shape-test", task_id=40, body="Shape test body."
-        )
+    def test_item_contains_all_required_fields(self, client: TestClient, decisions_dir: Path) -> None:
+        _write_dr(decisions_dir, stem="40-shape-test", task_id=40, body="Shape test body.")
 
         response = client.get("/api/decisions/pending")
 
@@ -834,9 +788,7 @@ class TestFromAC_GetPendingShape:
         }
         assert required_fields.issubset(item.keys())
 
-    def test_item_id_equals_file_stem(
-        self, client: TestClient, decisions_dir: Path
-    ) -> None:
+    def test_item_id_equals_file_stem(self, client: TestClient, decisions_dir: Path) -> None:
         _write_dr(decisions_dir, stem="41-specific-stem", task_id=41, body="Stem test.")
 
         response = client.get("/api/decisions/pending")
@@ -844,9 +796,7 @@ class TestFromAC_GetPendingShape:
         assert response.status_code == 200
         assert response.json()["items"][0]["id"] == "41-specific-stem"
 
-    def test_count_equals_length_of_items(
-        self, client: TestClient, decisions_dir: Path
-    ) -> None:
+    def test_count_equals_length_of_items(self, client: TestClient, decisions_dir: Path) -> None:
         _write_dr(decisions_dir, stem="42-count-check", task_id=42, body="Count test.")
 
         response = client.get("/api/decisions/pending")
@@ -859,9 +809,7 @@ class TestFromAC_GetPendingShape:
 class TestFromAC_GetPendingBodyPreview:
     """AC: body_preview truncation behavior."""
 
-    def test_body_preview_is_at_most_200_chars(
-        self, client: TestClient, decisions_dir: Path
-    ) -> None:
+    def test_body_preview_is_at_most_200_chars(self, client: TestClient, decisions_dir: Path) -> None:
         long_body = "START-" + ("x" * 500)
         _write_dr(decisions_dir, stem="50-long-body", task_id=50, body=long_body)
 
@@ -871,9 +819,7 @@ class TestFromAC_GetPendingBodyPreview:
         preview = response.json()["items"][0]["body_preview"]
         assert len(preview) <= 200
 
-    def test_body_preview_starts_from_body_content(
-        self, client: TestClient, decisions_dir: Path
-    ) -> None:
+    def test_body_preview_starts_from_body_content(self, client: TestClient, decisions_dir: Path) -> None:
         _write_dr(
             decisions_dir,
             stem="51-body-source",
@@ -897,9 +843,7 @@ class TestFromAC_GetPendingEmpty:
         assert response.status_code == 200
         assert response.json() == {"count": 0, "items": []}
 
-    def test_missing_pending_dir_returns_zero(
-        self, engine: KanbanEngine, tmp_path: Path
-    ) -> None:
+    def test_missing_pending_dir_returns_zero(self, engine: KanbanEngine, tmp_path: Path) -> None:
         from fastapi.testclient import TestClient  # noqa: PLC0415
 
         from owlbear_cockpit import deps as cockpit_deps  # noqa: PLC0415
@@ -925,12 +869,8 @@ class TestFromAC_GetPendingEmpty:
 class TestFromAC_PostResolveRegistered:
     """AC: POST /api/decisions/{id}/resolve endpoint registration."""
 
-    def test_post_resolve_endpoint_exists(
-        self, client: TestClient, decisions_dir: Path
-    ) -> None:
-        _write_dr(
-            decisions_dir, stem="60-registered-check", task_id=60, body="Check route."
-        )
+    def test_post_resolve_endpoint_exists(self, client: TestClient, decisions_dir: Path) -> None:
+        _write_dr(decisions_dir, stem="60-registered-check", task_id=60, body="Check route.")
 
         response = client.post(
             "/api/decisions/60-registered-check/resolve",
@@ -944,9 +884,7 @@ class TestFromAC_PostResolveEnum:
     """AC: Valid and invalid resolve response enum handling."""
 
     @pytest.mark.parametrize("resolution", ["approved", "needs-info", "rejected"])
-    def test_each_valid_enum_value_is_accepted(
-        self, client: TestClient, decisions_dir: Path, resolution: str
-    ) -> None:
+    def test_each_valid_enum_value_is_accepted(self, client: TestClient, decisions_dir: Path, resolution: str) -> None:
         stem = f"70-enum-{resolution.replace('-', '_')}"
         _write_dr(decisions_dir, stem=stem, task_id=70, body="Enum validation test.")
 
@@ -957,9 +895,7 @@ class TestFromAC_PostResolveEnum:
 
         assert response.status_code == 200
 
-    def test_invalid_enum_value_returns_422(
-        self, client: TestClient, decisions_dir: Path
-    ) -> None:
+    def test_invalid_enum_value_returns_422(self, client: TestClient, decisions_dir: Path) -> None:
         _write_dr(decisions_dir, stem="71-bad-enum", task_id=71, body="Bad enum test.")
 
         response = client.post(
@@ -969,12 +905,8 @@ class TestFromAC_PostResolveEnum:
 
         assert response.status_code == 422
 
-    def test_notes_field_is_optional(
-        self, client: TestClient, decisions_dir: Path
-    ) -> None:
-        _write_dr(
-            decisions_dir, stem="72-no-notes", task_id=72, body="Notes optional test."
-        )
+    def test_notes_field_is_optional(self, client: TestClient, decisions_dir: Path) -> None:
+        _write_dr(decisions_dir, stem="72-no-notes", task_id=72, body="Notes optional test.")
 
         response = client.post(
             "/api/decisions/72-no-notes/resolve",
@@ -983,12 +915,8 @@ class TestFromAC_PostResolveEnum:
 
         assert response.status_code == 200
 
-    def test_notes_field_accepts_empty_string(
-        self, client: TestClient, decisions_dir: Path
-    ) -> None:
-        _write_dr(
-            decisions_dir, stem="73-empty-notes", task_id=73, body="Empty notes test."
-        )
+    def test_notes_field_accepts_empty_string(self, client: TestClient, decisions_dir: Path) -> None:
+        _write_dr(decisions_dir, stem="73-empty-notes", task_id=73, body="Empty notes test.")
 
         response = client.post(
             "/api/decisions/73-empty-notes/resolve",
@@ -1001,9 +929,7 @@ class TestFromAC_PostResolveEnum:
 class TestFromAC_PostResolvePersistence:
     """AC: Resolve persistence and response section behavior."""
 
-    def test_response_field_updated_in_frontmatter(
-        self, client: TestClient, decisions_dir: Path
-    ) -> None:
+    def test_response_field_updated_in_frontmatter(self, client: TestClient, decisions_dir: Path) -> None:
         _write_dr(
             decisions_dir,
             stem="80-fm-update",
@@ -1020,48 +946,32 @@ class TestFromAC_PostResolvePersistence:
         frontmatter = _parse_frontmatter(dr_path)
         assert frontmatter["response"] == "needs-info"
 
-    def test_response_section_appended_with_notes(
-        self, client: TestClient, decisions_dir: Path
-    ) -> None:
-        _write_dr(
-            decisions_dir, stem="81-response-section", task_id=81, body="Section test."
-        )
+    def test_response_section_appended_with_notes(self, client: TestClient, decisions_dir: Path) -> None:
+        _write_dr(decisions_dir, stem="81-response-section", task_id=81, body="Section test.")
 
         client.post(
             "/api/decisions/81-response-section/resolve",
             json={"response": "rejected", "notes": "Out of scope for this sprint."},
         )
 
-        content = (decisions_dir / "resolved" / "81-response-section.md").read_text(
-            encoding="utf-8"
-        )
+        content = (decisions_dir / "resolved" / "81-response-section.md").read_text(encoding="utf-8")
         assert "## Response" in content
         assert "Out of scope for this sprint." in content
 
-    def test_response_section_appended_even_without_notes(
-        self, client: TestClient, decisions_dir: Path
-    ) -> None:
-        _write_dr(
-            decisions_dir, stem="82-no-notes-section", task_id=82, body="No notes test."
-        )
+    def test_response_section_appended_even_without_notes(self, client: TestClient, decisions_dir: Path) -> None:
+        _write_dr(decisions_dir, stem="82-no-notes-section", task_id=82, body="No notes test.")
 
         client.post(
             "/api/decisions/82-no-notes-section/resolve",
             json={"response": "approved"},
         )
 
-        content = (decisions_dir / "resolved" / "82-no-notes-section.md").read_text(
-            encoding="utf-8"
-        )
+        content = (decisions_dir / "resolved" / "82-no-notes-section.md").read_text(encoding="utf-8")
         assert "## Response" in content
 
-    def test_original_body_is_preserved_after_resolve(
-        self, client: TestClient, decisions_dir: Path
-    ) -> None:
+    def test_original_body_is_preserved_after_resolve(self, client: TestClient, decisions_dir: Path) -> None:
         unique_marker = "ORIGINAL-BODY-MARKER-XYZ"
-        _write_dr(
-            decisions_dir, stem="83-body-preserved", task_id=83, body=unique_marker
-        )
+        _write_dr(decisions_dir, stem="83-body-preserved", task_id=83, body=unique_marker)
 
         resp = client.post(
             "/api/decisions/83-body-preserved/resolve",
@@ -1069,14 +979,10 @@ class TestFromAC_PostResolvePersistence:
         )
         assert resp.status_code == 200
 
-        content = (decisions_dir / "resolved" / "83-body-preserved.md").read_text(
-            encoding="utf-8"
-        )
+        content = (decisions_dir / "resolved" / "83-body-preserved.md").read_text(encoding="utf-8")
         assert unique_marker in content
 
-    def test_response_section_appended_after_original_body(
-        self, client: TestClient, decisions_dir: Path
-    ) -> None:
+    def test_response_section_appended_after_original_body(self, client: TestClient, decisions_dir: Path) -> None:
         body_marker = "ORIGINAL-BODY-MARKER-84"
         _write_dr(decisions_dir, stem="84-ordering-check", task_id=84, body=body_marker)
 
@@ -1085,9 +991,7 @@ class TestFromAC_PostResolvePersistence:
             json={"response": "approved", "notes": "Ordering check."},
         )
 
-        content = (decisions_dir / "resolved" / "84-ordering-check.md").read_text(
-            encoding="utf-8"
-        )
+        content = (decisions_dir / "resolved" / "84-ordering-check.md").read_text(encoding="utf-8")
         assert body_marker in content
         assert "## Response" in content
         assert content.index(body_marker) < content.index("## Response")
@@ -1096,16 +1000,9 @@ class TestFromAC_PostResolvePersistence:
 class TestFromAC_PostResolveNotFound:
     """AC: 404 behavior for unknown decision IDs."""
 
-    def test_unknown_decision_id_returns_404(
-        self, client: TestClient, decisions_dir: Path
-    ) -> None:
+    def test_unknown_decision_id_returns_404(self, client: TestClient, decisions_dir: Path) -> None:
         _write_dr(decisions_dir, stem="90-exists", task_id=90, body="Exists.")
-        assert (
-            client.post(
-                "/api/decisions/90-exists/resolve", json={"response": "approved"}
-            ).status_code
-            == 200
-        )
+        assert client.post("/api/decisions/90-exists/resolve", json={"response": "approved"}).status_code == 200
 
         response = client.post(
             "/api/decisions/does-not-exist-anywhere/resolve",
@@ -1118,9 +1015,7 @@ class TestFromAC_PostResolveNotFound:
 class TestFromAC_PendingDecisionsBodyField:
     """Coverage promoted from #1194 for full body field behavior."""
 
-    def test_pending_item_includes_body_field(
-        self, client: TestClient, decisions_dir: Path
-    ) -> None:
+    def test_pending_item_includes_body_field(self, client: TestClient, decisions_dir: Path) -> None:
         _write_pending_dr(
             decisions_dir,
             stem="42-scope-decision",
@@ -1132,16 +1027,10 @@ class TestFromAC_PendingDecisionsBodyField:
 
         assert response.status_code == 200
         item = response.json()["items"][0]
-        assert "body" in item, (
-            f"Pending item must include 'body' field; got keys: {sorted(item.keys())}"
-        )
+        assert "body" in item, f"Pending item must include 'body' field; got keys: {sorted(item.keys())}"
 
-    def test_body_field_matches_full_markdown_body(
-        self, client: TestClient, decisions_dir: Path
-    ) -> None:
-        body_text = (
-            "## Context\n\nShould we include feature X?\n\n## Options\n\n1. Yes\n2. No"
-        )
+    def test_body_field_matches_full_markdown_body(self, client: TestClient, decisions_dir: Path) -> None:
+        body_text = "## Context\n\nShould we include feature X?\n\n## Options\n\n1. Yes\n2. No"
         _write_pending_dr(
             decisions_dir,
             stem="42-scope-decision",
@@ -1155,16 +1044,11 @@ class TestFromAC_PendingDecisionsBodyField:
         item = response.json()["items"][0]
         assert "body" in item, f"Item missing 'body'; got {sorted(item.keys())}"
         assert item["body"].strip() == body_text.strip(), (
-            f"'body' must be the full markdown body text; "
-            f"expected {body_text!r}, got {item['body']!r}"
+            f"'body' must be the full markdown body text; expected {body_text!r}, got {item['body']!r}"
         )
 
-    def test_body_not_truncated_unlike_body_preview(
-        self, client: TestClient, decisions_dir: Path
-    ) -> None:
-        long_body = "## Context\n\n" + (
-            "A very long description that goes on and on. " * 10
-        )
+    def test_body_not_truncated_unlike_body_preview(self, client: TestClient, decisions_dir: Path) -> None:
+        long_body = "## Context\n\n" + ("A very long description that goes on and on. " * 10)
         assert len(long_body) > 200, "Precondition: test body must exceed 200 chars"
         _write_pending_dr(
             decisions_dir,
@@ -1190,9 +1074,7 @@ class TestFromAC_PendingDecisionsBodyField:
 class TestFromAC_ResolveResponseEnum:
     """Coverage promoted from #1345 for completed enum rejection."""
 
-    def test_completed_response_returns_422(
-        self, client: TestClient, decisions_dir: Path
-    ) -> None:
+    def test_completed_response_returns_422(self, client: TestClient, decisions_dir: Path) -> None:
         stem = "10-completed-rejected"
         _write_pending_dr(decisions_dir, stem=stem, task_id=10, body="Scope question.")
 
@@ -1203,9 +1085,7 @@ class TestFromAC_ResolveResponseEnum:
 
         assert response.status_code == 422
 
-    def test_completed_with_notes_also_returns_422(
-        self, client: TestClient, decisions_dir: Path
-    ) -> None:
+    def test_completed_with_notes_also_returns_422(self, client: TestClient, decisions_dir: Path) -> None:
         stem = "11-completed-with-notes"
         _write_pending_dr(decisions_dir, stem=stem, task_id=11, body="Detail question.")
 
@@ -1220,13 +1100,9 @@ class TestFromAC_ResolveResponseEnum:
 class TestFromAC_ResolveCompletedImmutability:
     """Coverage promoted from #1345 for rejected-completed immutability."""
 
-    def test_completed_does_not_update_frontmatter_response(
-        self, client: TestClient, decisions_dir: Path
-    ) -> None:
+    def test_completed_does_not_update_frontmatter_response(self, client: TestClient, decisions_dir: Path) -> None:
         stem = "20-frontmatter-unchanged"
-        dr_path = _write_pending_dr(
-            decisions_dir, stem=stem, task_id=20, body="Original question."
-        )
+        dr_path = _write_pending_dr(decisions_dir, stem=stem, task_id=20, body="Original question.")
         original_response = _parse_frontmatter_response(dr_path)
         assert original_response == "pending"
 
@@ -1239,13 +1115,9 @@ class TestFromAC_ResolveCompletedImmutability:
             "Frontmatter response must remain 'pending' when completed is rejected"
         )
 
-    def test_completed_does_not_append_response_section(
-        self, client: TestClient, decisions_dir: Path
-    ) -> None:
+    def test_completed_does_not_append_response_section(self, client: TestClient, decisions_dir: Path) -> None:
         stem = "21-no-response-section"
-        dr_path = _write_pending_dr(
-            decisions_dir, stem=stem, task_id=21, body="Original question body."
-        )
+        dr_path = _write_pending_dr(decisions_dir, stem=stem, task_id=21, body="Original question body.")
         content_before = _read_full(dr_path)
         assert "## Response" not in content_before
 
@@ -1255,17 +1127,11 @@ class TestFromAC_ResolveCompletedImmutability:
         )
 
         content_after = _read_full(dr_path)
-        assert "## Response" not in content_after, (
-            "No ## Response section must be appended when completed is rejected"
-        )
+        assert "## Response" not in content_after, "No ## Response section must be appended when completed is rejected"
 
-    def test_completed_leaves_file_content_fully_unchanged(
-        self, client: TestClient, decisions_dir: Path
-    ) -> None:
+    def test_completed_leaves_file_content_fully_unchanged(self, client: TestClient, decisions_dir: Path) -> None:
         stem = "22-file-unchanged"
-        dr_path = _write_pending_dr(
-            decisions_dir, stem=stem, task_id=22, body="Immutability check body."
-        )
+        dr_path = _write_pending_dr(decisions_dir, stem=stem, task_id=22, body="Immutability check body.")
         content_before = _read_full(dr_path)
 
         client.post(
@@ -1290,17 +1156,11 @@ class TestFromAC_ApprovedResolution:
     ) -> None:
         task_id = _create_blocked_task_pattern_b(engine_pattern_b, "Approve move task")
         stem = f"{task_id}-scope-decision"
-        pending_path = _write_pending_dr_pattern_b(
-            board_dir_pattern_b, stem=stem, task_id=task_id
-        )
+        pending_path = _write_pending_dr_pattern_b(board_dir_pattern_b, stem=stem, task_id=task_id)
 
-        client_pattern_b.post(
-            f"/api/decisions/{stem}/resolve", json={"response": "approved"}
-        )
+        client_pattern_b.post(f"/api/decisions/{stem}/resolve", json={"response": "approved"})
 
-        assert not pending_path.exists(), (
-            "DR file must be removed from pending/ after approval"
-        )
+        assert not pending_path.exists(), "DR file must be removed from pending/ after approval"
 
     def test_approve_places_dr_in_resolved(
         self,
@@ -1308,16 +1168,12 @@ class TestFromAC_ApprovedResolution:
         engine_pattern_b: KanbanEngine,
         board_dir_pattern_b: Path,
     ) -> None:
-        task_id = _create_blocked_task_pattern_b(
-            engine_pattern_b, "Approve to resolved task"
-        )
+        task_id = _create_blocked_task_pattern_b(engine_pattern_b, "Approve to resolved task")
         stem = f"{task_id}-scope-resolved"
         _write_pending_dr_pattern_b(board_dir_pattern_b, stem=stem, task_id=task_id)
         resolved_path = board_dir_pattern_b / "decisions" / "resolved" / f"{stem}.md"
 
-        client_pattern_b.post(
-            f"/api/decisions/{stem}/resolve", json={"response": "approved"}
-        )
+        client_pattern_b.post(f"/api/decisions/{stem}/resolve", json={"response": "approved"})
 
         assert resolved_path.exists(), "DR file must appear in resolved/ after approval"
 
@@ -1327,20 +1183,14 @@ class TestFromAC_ApprovedResolution:
         engine_pattern_b: KanbanEngine,
         board_dir_pattern_b: Path,
     ) -> None:
-        task_id = _create_blocked_task_pattern_b(
-            engine_pattern_b, "Approve unblock task"
-        )
+        task_id = _create_blocked_task_pattern_b(engine_pattern_b, "Approve unblock task")
         stem = f"{task_id}-scope-unblock"
         _write_pending_dr_pattern_b(board_dir_pattern_b, stem=stem, task_id=task_id)
         assert _is_task_blocked_pattern_b(engine_pattern_b, task_id)
 
-        client_pattern_b.post(
-            f"/api/decisions/{stem}/resolve", json={"response": "approved"}
-        )
+        client_pattern_b.post(f"/api/decisions/{stem}/resolve", json={"response": "approved"})
 
-        assert not _is_task_blocked_pattern_b(engine_pattern_b, task_id), (
-            "Task must be unblocked after approval"
-        )
+        assert not _is_task_blocked_pattern_b(engine_pattern_b, task_id), "Task must be unblocked after approval"
 
     def test_approve_appends_canonical_summary_to_task_body(
         self,
@@ -1348,17 +1198,11 @@ class TestFromAC_ApprovedResolution:
         engine_pattern_b: KanbanEngine,
         board_dir_pattern_b: Path,
     ) -> None:
-        task_id = _create_blocked_task_pattern_b(
-            engine_pattern_b, "Approve summary task"
-        )
+        task_id = _create_blocked_task_pattern_b(engine_pattern_b, "Approve summary task")
         stem = f"{task_id}-scope-summary"
-        _write_pending_dr_pattern_b(
-            board_dir_pattern_b, stem=stem, task_id=task_id, body="Summary body text."
-        )
+        _write_pending_dr_pattern_b(board_dir_pattern_b, stem=stem, task_id=task_id, body="Summary body text.")
 
-        client_pattern_b.post(
-            f"/api/decisions/{stem}/resolve", json={"response": "approved"}
-        )
+        client_pattern_b.post(f"/api/decisions/{stem}/resolve", json={"response": "approved"})
 
         body = _read_task_body_pattern_b(engine_pattern_b, task_id)
         assert "## Decision Request" in body
@@ -1370,15 +1214,11 @@ class TestFromAC_ApprovedResolution:
         engine_pattern_b: KanbanEngine,
         board_dir_pattern_b: Path,
     ) -> None:
-        task_id = _create_blocked_task_pattern_b(
-            engine_pattern_b, "Approve response shape task"
-        )
+        task_id = _create_blocked_task_pattern_b(engine_pattern_b, "Approve response shape task")
         stem = f"{task_id}-approve-shape"
         _write_pending_dr_pattern_b(board_dir_pattern_b, stem=stem, task_id=task_id)
 
-        resp = client_pattern_b.post(
-            f"/api/decisions/{stem}/resolve", json={"response": "approved"}
-        )
+        resp = client_pattern_b.post(f"/api/decisions/{stem}/resolve", json={"response": "approved"})
 
         assert resp.status_code == 200
         data = resp.json()
@@ -1390,17 +1230,11 @@ class TestFromAC_ApprovedResolution:
         engine_pattern_b: KanbanEngine,
         board_dir_pattern_b: Path,
     ) -> None:
-        task_id = _create_blocked_task_pattern_b(
-            engine_pattern_b, "Approve source line task"
-        )
+        task_id = _create_blocked_task_pattern_b(engine_pattern_b, "Approve source line task")
         stem = f"{task_id}-approve-source"
-        _write_pending_dr_pattern_b(
-            board_dir_pattern_b, stem=stem, task_id=task_id, body="Decide the scope."
-        )
+        _write_pending_dr_pattern_b(board_dir_pattern_b, stem=stem, task_id=task_id, body="Decide the scope.")
 
-        client_pattern_b.post(
-            f"/api/decisions/{stem}/resolve", json={"response": "approved"}
-        )
+        client_pattern_b.post(f"/api/decisions/{stem}/resolve", json={"response": "approved"})
 
         body = _read_task_body_pattern_b(engine_pattern_b, task_id)
         assert "- source:" in body
@@ -1417,17 +1251,11 @@ class TestFromAC_RejectedResolution:
     ) -> None:
         task_id = _create_blocked_task_pattern_b(engine_pattern_b, "Reject move task")
         stem = f"{task_id}-reject-move"
-        pending_path = _write_pending_dr_pattern_b(
-            board_dir_pattern_b, stem=stem, task_id=task_id
-        )
+        pending_path = _write_pending_dr_pattern_b(board_dir_pattern_b, stem=stem, task_id=task_id)
 
-        client_pattern_b.post(
-            f"/api/decisions/{stem}/resolve", json={"response": "rejected"}
-        )
+        client_pattern_b.post(f"/api/decisions/{stem}/resolve", json={"response": "rejected"})
 
-        assert not pending_path.exists(), (
-            "DR file must be removed from pending/ after rejection"
-        )
+        assert not pending_path.exists(), "DR file must be removed from pending/ after rejection"
 
     def test_reject_places_dr_in_resolved(
         self,
@@ -1435,20 +1263,14 @@ class TestFromAC_RejectedResolution:
         engine_pattern_b: KanbanEngine,
         board_dir_pattern_b: Path,
     ) -> None:
-        task_id = _create_blocked_task_pattern_b(
-            engine_pattern_b, "Reject to resolved task"
-        )
+        task_id = _create_blocked_task_pattern_b(engine_pattern_b, "Reject to resolved task")
         stem = f"{task_id}-reject-resolved"
         _write_pending_dr_pattern_b(board_dir_pattern_b, stem=stem, task_id=task_id)
         resolved_path = board_dir_pattern_b / "decisions" / "resolved" / f"{stem}.md"
 
-        client_pattern_b.post(
-            f"/api/decisions/{stem}/resolve", json={"response": "rejected"}
-        )
+        client_pattern_b.post(f"/api/decisions/{stem}/resolve", json={"response": "rejected"})
 
-        assert resolved_path.exists(), (
-            "DR file must appear in resolved/ after rejection"
-        )
+        assert resolved_path.exists(), "DR file must appear in resolved/ after rejection"
 
     def test_reject_unblocks_the_associated_task(
         self,
@@ -1456,19 +1278,13 @@ class TestFromAC_RejectedResolution:
         engine_pattern_b: KanbanEngine,
         board_dir_pattern_b: Path,
     ) -> None:
-        task_id = _create_blocked_task_pattern_b(
-            engine_pattern_b, "Reject unblock task"
-        )
+        task_id = _create_blocked_task_pattern_b(engine_pattern_b, "Reject unblock task")
         stem = f"{task_id}-reject-unblock"
         _write_pending_dr_pattern_b(board_dir_pattern_b, stem=stem, task_id=task_id)
 
-        client_pattern_b.post(
-            f"/api/decisions/{stem}/resolve", json={"response": "rejected"}
-        )
+        client_pattern_b.post(f"/api/decisions/{stem}/resolve", json={"response": "rejected"})
 
-        assert not _is_task_blocked_pattern_b(engine_pattern_b, task_id), (
-            "Task must be unblocked after rejection"
-        )
+        assert not _is_task_blocked_pattern_b(engine_pattern_b, task_id), "Task must be unblocked after rejection"
 
     def test_reject_appends_canonical_summary_to_task_body(
         self,
@@ -1476,15 +1292,11 @@ class TestFromAC_RejectedResolution:
         engine_pattern_b: KanbanEngine,
         board_dir_pattern_b: Path,
     ) -> None:
-        task_id = _create_blocked_task_pattern_b(
-            engine_pattern_b, "Reject summary task"
-        )
+        task_id = _create_blocked_task_pattern_b(engine_pattern_b, "Reject summary task")
         stem = f"{task_id}-reject-summary"
         _write_pending_dr_pattern_b(board_dir_pattern_b, stem=stem, task_id=task_id)
 
-        client_pattern_b.post(
-            f"/api/decisions/{stem}/resolve", json={"response": "rejected"}
-        )
+        client_pattern_b.post(f"/api/decisions/{stem}/resolve", json={"response": "rejected"})
 
         body = _read_task_body_pattern_b(engine_pattern_b, task_id)
         assert "## Decision Request" in body
@@ -1496,15 +1308,11 @@ class TestFromAC_RejectedResolution:
         engine_pattern_b: KanbanEngine,
         board_dir_pattern_b: Path,
     ) -> None:
-        task_id = _create_blocked_task_pattern_b(
-            engine_pattern_b, "Reject response shape task"
-        )
+        task_id = _create_blocked_task_pattern_b(engine_pattern_b, "Reject response shape task")
         stem = f"{task_id}-reject-shape"
         _write_pending_dr_pattern_b(board_dir_pattern_b, stem=stem, task_id=task_id)
 
-        resp = client_pattern_b.post(
-            f"/api/decisions/{stem}/resolve", json={"response": "rejected"}
-        )
+        resp = client_pattern_b.post(f"/api/decisions/{stem}/resolve", json={"response": "rejected"})
 
         assert resp.status_code == 200
         data = resp.json()
@@ -1516,17 +1324,11 @@ class TestFromAC_RejectedResolution:
         engine_pattern_b: KanbanEngine,
         board_dir_pattern_b: Path,
     ) -> None:
-        task_id = _create_blocked_task_pattern_b(
-            engine_pattern_b, "Reject source line task"
-        )
+        task_id = _create_blocked_task_pattern_b(engine_pattern_b, "Reject source line task")
         stem = f"{task_id}-reject-source"
-        _write_pending_dr_pattern_b(
-            board_dir_pattern_b, stem=stem, task_id=task_id, body="Decide the scope."
-        )
+        _write_pending_dr_pattern_b(board_dir_pattern_b, stem=stem, task_id=task_id, body="Decide the scope.")
 
-        client_pattern_b.post(
-            f"/api/decisions/{stem}/resolve", json={"response": "rejected"}
-        )
+        client_pattern_b.post(f"/api/decisions/{stem}/resolve", json={"response": "rejected"})
 
         body = _read_task_body_pattern_b(engine_pattern_b, task_id)
         assert "- source:" in body
@@ -1541,18 +1343,12 @@ class TestFromAC_NeedsInfoResolution:
         engine_pattern_b: KanbanEngine,
         board_dir_pattern_b: Path,
     ) -> None:
-        task_id = _create_blocked_task_pattern_b(
-            engine_pattern_b, "Needs-info move task"
-        )
+        task_id = _create_blocked_task_pattern_b(engine_pattern_b, "Needs-info move task")
         stem = f"{task_id}-needs-info-move"
-        pending_path = _write_pending_dr_pattern_b(
-            board_dir_pattern_b, stem=stem, task_id=task_id
-        )
+        pending_path = _write_pending_dr_pattern_b(board_dir_pattern_b, stem=stem, task_id=task_id)
         resolved_path = board_dir_pattern_b / "decisions" / "resolved" / f"{stem}.md"
 
-        client_pattern_b.post(
-            f"/api/decisions/{stem}/resolve", json={"response": "needs-info"}
-        )
+        client_pattern_b.post(f"/api/decisions/{stem}/resolve", json={"response": "needs-info"})
 
         assert not pending_path.exists(), "DR must leave pending/ on needs-info"
         assert resolved_path.exists(), "DR must arrive in resolved/ on needs-info"
@@ -1563,16 +1359,12 @@ class TestFromAC_NeedsInfoResolution:
         engine_pattern_b: KanbanEngine,
         board_dir_pattern_b: Path,
     ) -> None:
-        task_id = _create_blocked_task_pattern_b(
-            engine_pattern_b, "Needs-info blocked task"
-        )
+        task_id = _create_blocked_task_pattern_b(engine_pattern_b, "Needs-info blocked task")
         stem = f"{task_id}-needs-info-blocked"
         _write_pending_dr_pattern_b(board_dir_pattern_b, stem=stem, task_id=task_id)
         resolved_path = board_dir_pattern_b / "decisions" / "resolved" / f"{stem}.md"
 
-        resp = client_pattern_b.post(
-            f"/api/decisions/{stem}/resolve", json={"response": "needs-info"}
-        )
+        resp = client_pattern_b.post(f"/api/decisions/{stem}/resolve", json={"response": "needs-info"})
 
         assert resp.status_code == 200
         assert resolved_path.exists(), "DR must be moved to resolved/ on needs-info"
@@ -1586,15 +1378,11 @@ class TestFromAC_NeedsInfoResolution:
         engine_pattern_b: KanbanEngine,
         board_dir_pattern_b: Path,
     ) -> None:
-        task_id = _create_blocked_task_pattern_b(
-            engine_pattern_b, "Needs-info summary task"
-        )
+        task_id = _create_blocked_task_pattern_b(engine_pattern_b, "Needs-info summary task")
         stem = f"{task_id}-needs-info-summary"
         _write_pending_dr_pattern_b(board_dir_pattern_b, stem=stem, task_id=task_id)
 
-        client_pattern_b.post(
-            f"/api/decisions/{stem}/resolve", json={"response": "needs-info"}
-        )
+        client_pattern_b.post(f"/api/decisions/{stem}/resolve", json={"response": "needs-info"})
 
         body = _read_task_body_pattern_b(engine_pattern_b, task_id)
         assert "## Decision Request" in body
@@ -1610,17 +1398,11 @@ class TestFromAC_AlreadyResolved:
         engine_pattern_b: KanbanEngine,
         board_dir_pattern_b: Path,
     ) -> None:
-        task_id = _create_blocked_task_pattern_b(
-            engine_pattern_b, "Already resolved task"
-        )
+        task_id = _create_blocked_task_pattern_b(engine_pattern_b, "Already resolved task")
         stem = f"{task_id}-already-resolved"
-        _write_resolved_dr_pattern_b(
-            board_dir_pattern_b, stem=stem, task_id=task_id, response="approved"
-        )
+        _write_resolved_dr_pattern_b(board_dir_pattern_b, stem=stem, task_id=task_id, response="approved")
 
-        resp = client_pattern_b.post(
-            f"/api/decisions/{stem}/resolve", json={"response": "approved"}
-        )
+        resp = client_pattern_b.post(f"/api/decisions/{stem}/resolve", json={"response": "approved"})
 
         assert resp.status_code == 409
 
@@ -1630,17 +1412,11 @@ class TestFromAC_AlreadyResolved:
         engine_pattern_b: KanbanEngine,
         board_dir_pattern_b: Path,
     ) -> None:
-        task_id = _create_blocked_task_pattern_b(
-            engine_pattern_b, "Already resolved envelope task"
-        )
+        task_id = _create_blocked_task_pattern_b(engine_pattern_b, "Already resolved envelope task")
         stem = f"{task_id}-already-resolved-envelope"
-        _write_resolved_dr_pattern_b(
-            board_dir_pattern_b, stem=stem, task_id=task_id, response="rejected"
-        )
+        _write_resolved_dr_pattern_b(board_dir_pattern_b, stem=stem, task_id=task_id, response="rejected")
 
-        resp = client_pattern_b.post(
-            f"/api/decisions/{stem}/resolve", json={"response": "approved"}
-        )
+        resp = client_pattern_b.post(f"/api/decisions/{stem}/resolve", json={"response": "approved"})
 
         assert resp.status_code == 409
         body = resp.json()
@@ -1653,17 +1429,11 @@ class TestFromAC_AlreadyResolved:
         engine_pattern_b: KanbanEngine,
         board_dir_pattern_b: Path,
     ) -> None:
-        task_id = _create_blocked_task_pattern_b(
-            engine_pattern_b, "In-place already answered task"
-        )
+        task_id = _create_blocked_task_pattern_b(engine_pattern_b, "In-place already answered task")
         stem = f"{task_id}-already-answered"
-        _write_pending_dr_pattern_b(
-            board_dir_pattern_b, stem=stem, task_id=task_id, response="approved"
-        )
+        _write_pending_dr_pattern_b(board_dir_pattern_b, stem=stem, task_id=task_id, response="approved")
 
-        resp = client_pattern_b.post(
-            f"/api/decisions/{stem}/resolve", json={"response": "rejected"}
-        )
+        resp = client_pattern_b.post(f"/api/decisions/{stem}/resolve", json={"response": "rejected"})
 
         assert resp.status_code == 409
 
@@ -1673,17 +1443,11 @@ class TestFromAC_AlreadyResolved:
         engine_pattern_b: KanbanEngine,
         board_dir_pattern_b: Path,
     ) -> None:
-        task_id = _create_blocked_task_pattern_b(
-            engine_pattern_b, "In-place envelope check task"
-        )
+        task_id = _create_blocked_task_pattern_b(engine_pattern_b, "In-place envelope check task")
         stem = f"{task_id}-in-place-envelope"
-        _write_pending_dr_pattern_b(
-            board_dir_pattern_b, stem=stem, task_id=task_id, response="needs-info"
-        )
+        _write_pending_dr_pattern_b(board_dir_pattern_b, stem=stem, task_id=task_id, response="needs-info")
 
-        resp = client_pattern_b.post(
-            f"/api/decisions/{stem}/resolve", json={"response": "approved"}
-        )
+        resp = client_pattern_b.post(f"/api/decisions/{stem}/resolve", json={"response": "approved"})
 
         assert resp.status_code == 409
         body = resp.json()
@@ -1700,20 +1464,14 @@ class TestFromAC_DuplicateResponse:
         engine_pattern_b: KanbanEngine,
         board_dir_pattern_b: Path,
     ) -> None:
-        task_id = _create_blocked_task_pattern_b(
-            engine_pattern_b, "Duplicate resolve task"
-        )
+        task_id = _create_blocked_task_pattern_b(engine_pattern_b, "Duplicate resolve task")
         stem = f"{task_id}-dup-resolve"
         _write_pending_dr_pattern_b(board_dir_pattern_b, stem=stem, task_id=task_id)
 
-        first = client_pattern_b.post(
-            f"/api/decisions/{stem}/resolve", json={"response": "approved"}
-        )
+        first = client_pattern_b.post(f"/api/decisions/{stem}/resolve", json={"response": "approved"})
         assert first.status_code == 200
 
-        second = client_pattern_b.post(
-            f"/api/decisions/{stem}/resolve", json={"response": "approved"}
-        )
+        second = client_pattern_b.post(f"/api/decisions/{stem}/resolve", json={"response": "approved"})
         assert second.status_code == 404
 
     def test_second_resolve_uses_fastapi_detail_format(
@@ -1722,19 +1480,13 @@ class TestFromAC_DuplicateResponse:
         engine_pattern_b: KanbanEngine,
         board_dir_pattern_b: Path,
     ) -> None:
-        task_id = _create_blocked_task_pattern_b(
-            engine_pattern_b, "Duplicate format task"
-        )
+        task_id = _create_blocked_task_pattern_b(engine_pattern_b, "Duplicate format task")
         stem = f"{task_id}-dup-format"
         _write_pending_dr_pattern_b(board_dir_pattern_b, stem=stem, task_id=task_id)
 
-        client_pattern_b.post(
-            f"/api/decisions/{stem}/resolve", json={"response": "rejected"}
-        )
+        client_pattern_b.post(f"/api/decisions/{stem}/resolve", json={"response": "rejected"})
 
-        resp = client_pattern_b.post(
-            f"/api/decisions/{stem}/resolve", json={"response": "rejected"}
-        )
+        resp = client_pattern_b.post(f"/api/decisions/{stem}/resolve", json={"response": "rejected"})
 
         assert resp.status_code == 404
         body = resp.json()
@@ -1746,19 +1498,13 @@ class TestFromAC_DuplicateResponse:
         engine_pattern_b: KanbanEngine,
         board_dir_pattern_b: Path,
     ) -> None:
-        task_id = _create_blocked_task_pattern_b(
-            engine_pattern_b, "Duplicate diff response task"
-        )
+        task_id = _create_blocked_task_pattern_b(engine_pattern_b, "Duplicate diff response task")
         stem = f"{task_id}-dup-diff"
         _write_pending_dr_pattern_b(board_dir_pattern_b, stem=stem, task_id=task_id)
 
-        client_pattern_b.post(
-            f"/api/decisions/{stem}/resolve", json={"response": "approved"}
-        )
+        client_pattern_b.post(f"/api/decisions/{stem}/resolve", json={"response": "approved"})
 
-        resp = client_pattern_b.post(
-            f"/api/decisions/{stem}/resolve", json={"response": "needs-info"}
-        )
+        resp = client_pattern_b.post(f"/api/decisions/{stem}/resolve", json={"response": "needs-info"})
 
         assert resp.status_code == 404
 
@@ -1772,18 +1518,12 @@ class TestFromAC_ImmediateEffects:
         engine_pattern_b: KanbanEngine,
         board_dir_pattern_b: Path,
     ) -> None:
-        task_id = _create_blocked_task_pattern_b(
-            engine_pattern_b, "Immediate effects task"
-        )
+        task_id = _create_blocked_task_pattern_b(engine_pattern_b, "Immediate effects task")
         stem = f"{task_id}-immediate"
-        pending_path = _write_pending_dr_pattern_b(
-            board_dir_pattern_b, stem=stem, task_id=task_id
-        )
+        pending_path = _write_pending_dr_pattern_b(board_dir_pattern_b, stem=stem, task_id=task_id)
         resolved_path = board_dir_pattern_b / "decisions" / "resolved" / f"{stem}.md"
 
-        resp = client_pattern_b.post(
-            f"/api/decisions/{stem}/resolve", json={"response": "approved"}
-        )
+        resp = client_pattern_b.post(f"/api/decisions/{stem}/resolve", json={"response": "approved"})
 
         assert resp.status_code == 200
         assert not pending_path.exists()
@@ -1846,17 +1586,11 @@ class TestFromAC_ErrorFormatPreserved:
     ) -> None:
         from owlbear_kanban.decisions import parse_dr  # noqa: F401, PLC0415
 
-        task_id = _create_blocked_task_pattern_b(
-            engine_pattern_b, "already-resolved-envelope-task"
-        )
+        task_id = _create_blocked_task_pattern_b(engine_pattern_b, "already-resolved-envelope-task")
         stem = f"{task_id}-already-resolved-envelope"
-        _write_resolved_dr_pattern_b(
-            board_dir_pattern_b, stem=stem, task_id=task_id, response="approved"
-        )
+        _write_resolved_dr_pattern_b(board_dir_pattern_b, stem=stem, task_id=task_id, response="approved")
 
-        resp = client_pattern_b.post(
-            f"/api/decisions/{stem}/resolve", json={"response": "approved"}
-        )
+        resp = client_pattern_b.post(f"/api/decisions/{stem}/resolve", json={"response": "approved"})
 
         assert resp.status_code == 409
         data = resp.json()

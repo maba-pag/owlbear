@@ -90,9 +90,7 @@ class TestFromAC_ErrorMessageClarity:
     """
 
     @pytest.mark.asyncio
-    async def test_non_numeric_string_error_message_is_clear(
-        self, app_ctx: AppContext
-    ) -> None:
+    async def test_non_numeric_string_error_message_is_clear(self, app_ctx: AppContext) -> None:
         """AC1 error: 'abc' → ToolError whose message mentions integer/numeric/task_id.
 
         FAIL path (RED): no validation exists; no ToolError raised at all.
@@ -103,14 +101,10 @@ class TestFromAC_ErrorMessageClarity:
             patch("owlbear_mcp_kanban.server.decisions.create_dr"),
             pytest.raises(ToolError, match=r"(?i)(integer|numeric|task_id)"),
         ):
-            await mcp_create_dr(
-                ctx, task_id="abc", agent="builder", request_type="decision", body="b"
-            )
+            await mcp_create_dr(ctx, task_id="abc", agent="builder", request_type="decision", body="b")
 
     @pytest.mark.asyncio
-    async def test_shell_injection_error_message_is_clear(
-        self, app_ctx: AppContext
-    ) -> None:
+    async def test_shell_injection_error_message_is_clear(self, app_ctx: AppContext) -> None:
         """AC1 error: '1; rm -rf' → ToolError whose message mentions integer/numeric/task_id.
 
         FAIL path (RED): no validation exists; no ToolError raised at all.
@@ -130,9 +124,7 @@ class TestFromAC_ErrorMessageClarity:
             )
 
     @pytest.mark.asyncio
-    async def test_path_traversal_error_message_is_clear(
-        self, app_ctx: AppContext
-    ) -> None:
+    async def test_path_traversal_error_message_is_clear(self, app_ctx: AppContext) -> None:
         """AC1 error: '../foo' → ToolError whose message mentions integer/numeric/task_id.
 
         FAIL path (RED): no validation exists; no ToolError raised at all.
@@ -165,9 +157,7 @@ class TestFromAC_IntegrationRejection:
     """
 
     @pytest.mark.asyncio
-    async def test_integration_etc_passwd_traversal_rejected(
-        self, app_ctx: AppContext
-    ) -> None:
+    async def test_integration_etc_passwd_traversal_rejected(self, app_ctx: AppContext) -> None:
         """AC2 integration: '../etc/passwd' raises ToolError at MCP boundary (no mock).
 
         FAIL path (RED): current code calls decisions.create_dr with the traversal path.
@@ -186,9 +176,7 @@ class TestFromAC_IntegrationRejection:
             )
 
     @pytest.mark.asyncio
-    async def test_integration_shell_injection_rejected(
-        self, app_ctx: AppContext
-    ) -> None:
+    async def test_integration_shell_injection_rejected(self, app_ctx: AppContext) -> None:
         """AC2 integration: '1; rm -rf' raises ToolError with a clear message (no mock).
 
         FAIL path (RED): current code calls decisions.create_dr; the semicolon-containing
@@ -226,9 +214,7 @@ class TestFromAC_IntegrationRejection:
             )
 
     @pytest.mark.asyncio
-    async def test_integration_decisions_pending_unchanged_after_traversal(
-        self, app_ctx: AppContext
-    ) -> None:
+    async def test_integration_decisions_pending_unchanged_after_traversal(self, app_ctx: AppContext) -> None:
         """AC2 integration: rejection of '../etc/passwd' leaves decisions/pending untouched.
 
         After early validation rejection, the decisions/pending directory must contain
@@ -250,12 +236,9 @@ class TestFromAC_IntegrationRejection:
                 body="probe",
             )
 
-        existing_files = (
-            list(decisions_pending.rglob("*")) if decisions_pending.exists() else []
-        )
+        existing_files = list(decisions_pending.rglob("*")) if decisions_pending.exists() else []
         assert existing_files == [], (
-            f"decisions/pending must be empty after path-traversal rejection; "
-            f"found: {existing_files}"
+            f"decisions/pending must be empty after path-traversal rejection; found: {existing_files}"
         )
 
 
@@ -272,9 +255,7 @@ class TestFromAC_RegressionValidIds:
     """
 
     @pytest.mark.asyncio
-    async def test_valid_numeric_string_forwarded_as_int(
-        self, app_ctx: AppContext
-    ) -> None:
+    async def test_valid_numeric_string_forwarded_as_int(self, app_ctx: AppContext) -> None:
         """AC4 happy: '99' is coerced to int 99 before forwarding to decisions.create_dr.
 
         FAIL path (RED): current code forwards task_id='99' (str) unchanged.
@@ -293,9 +274,7 @@ class TestFromAC_RegressionValidIds:
             )
 
         call_kwargs = mock_create_dr.call_args.kwargs
-        assert call_kwargs["task_id"] == 99, (
-            f"task_id forwarded as {call_kwargs['task_id']!r}; expected int 99"
-        )
+        assert call_kwargs["task_id"] == 99, f"task_id forwarded as {call_kwargs['task_id']!r}; expected int 99"
         assert isinstance(call_kwargs["task_id"], int), (
             f"task_id must be int after coercion, got {type(call_kwargs['task_id']).__name__}"
         )

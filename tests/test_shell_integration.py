@@ -21,8 +21,7 @@ class TestFromAC_ShellHealthBadgeStructure:
     def test_shell_imports_health_badge(self) -> None:
         content = SHELL_PATH.read_text()
         assert "HealthBadge" in content, (
-            "Shell.tsx must import and render HealthBadge. "
-            "AC1 requires data-testid='health-badge' inside status-bar."
+            "Shell.tsx must import and render HealthBadge. AC1 requires data-testid='health-badge' inside status-bar."
         )
 
     def test_shell_imports_use_scan_polling(self) -> None:
@@ -47,11 +46,8 @@ class TestFromAC_ShellHealthBadgeStructure:
         )
 
     def test_vitest_test_file_contains_testfromac_class(self) -> None:
-        assert TEST_PATH.exists(), (
-            "Test file missing — run test_vitest_test_file_exists first."
-        )
+        assert TEST_PATH.exists(), "Test file missing — run test_vitest_test_file_exists first."
         content = TEST_PATH.read_text()
         assert "TestFromAC_HealthBadgeShellIntegration" in content, (
-            "Vitest test file must contain the TestFromAC_HealthBadgeShellIntegration "
-            "describe block."
+            "Vitest test file must contain the TestFromAC_HealthBadgeShellIntegration describe block."
         )

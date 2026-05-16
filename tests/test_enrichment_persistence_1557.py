@@ -176,9 +176,7 @@ class TestFromAC_GetNextBatchProvenance:
         results = await get_next_batch(ctx, limit=1)
 
         assert len(results) == 1
-        assert "source_id" in results[0], (
-            f"batch item must include 'source_id'; got keys: {list(results[0].keys())}"
-        )
+        assert "source_id" in results[0], f"batch item must include 'source_id'; got keys: {list(results[0].keys())}"
         assert results[0]["source_id"] == "src-1"
 
     @pytest.mark.asyncio
@@ -192,9 +190,7 @@ class TestFromAC_GetNextBatchProvenance:
         results = await get_next_batch(ctx, limit=1)
 
         assert len(results) == 1
-        assert "scope" in results[0], (
-            f"batch item must include 'scope'; got keys: {list(results[0].keys())}"
-        )
+        assert "scope" in results[0], f"batch item must include 'scope'; got keys: {list(results[0].keys())}"
         assert results[0]["scope"] == "team-a"
 
 
@@ -221,18 +217,12 @@ class TestFromAC_StoreEnrichmentPhase1Provenance:
             entities=[{"name": "ProbeEntity", "type": "concept"}],
         )
 
-        row = conn.execute(
-            "SELECT document_id FROM entities WHERE name='ProbeEntity'"
-        ).fetchone()
+        row = conn.execute("SELECT document_id FROM entities WHERE name='ProbeEntity'").fetchone()
         assert row is not None, "Entity must be inserted"
-        assert row[0] == "doc-a", (
-            f"entity document_id must be 'doc-a' (derived server-side), got {row[0]!r}"
-        )
+        assert row[0] == "doc-a", f"entity document_id must be 'doc-a' (derived server-side), got {row[0]!r}"
 
     @pytest.mark.asyncio
-    async def test_entity_chunk_id_derived_from_call_parameter(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_entity_chunk_id_derived_from_call_parameter(self, conn: sqlite3.Connection) -> None:
         """Entity chunk_id column must equal the chunk_id passed to store_enrichment."""
         _insert_source(conn, source_id="src-1", name="S1", enrich=1)
         _insert_document(conn, doc_id="doc-a", title="D", source_id="src-1")
@@ -246,13 +236,9 @@ class TestFromAC_StoreEnrichmentPhase1Provenance:
             entities=[{"name": "ProbeEntity", "type": "concept"}],
         )
 
-        row = conn.execute(
-            "SELECT chunk_id FROM entities WHERE name='ProbeEntity'"
-        ).fetchone()
+        row = conn.execute("SELECT chunk_id FROM entities WHERE name='ProbeEntity'").fetchone()
         assert row is not None
-        assert row[0] == "chk-1", (
-            f"entity chunk_id must be 'chk-1' (stamped from call parameter), got {row[0]!r}"
-        )
+        assert row[0] == "chk-1", f"entity chunk_id must be 'chk-1' (stamped from call parameter), got {row[0]!r}"
 
     @pytest.mark.asyncio
     async def test_entity_scope_derived_from_document(self, conn: sqlite3.Connection) -> None:
@@ -268,18 +254,12 @@ class TestFromAC_StoreEnrichmentPhase1Provenance:
             entities=[{"name": "ProbeEntity", "type": "concept"}],
         )
 
-        row = conn.execute(
-            "SELECT scope FROM entities WHERE name='ProbeEntity'"
-        ).fetchone()
+        row = conn.execute("SELECT scope FROM entities WHERE name='ProbeEntity'").fetchone()
         assert row is not None
-        assert row[0] == "team-a", (
-            f"entity scope must be 'team-a' (derived from document), got {row[0]!r}"
-        )
+        assert row[0] == "team-a", f"entity scope must be 'team-a' (derived from document), got {row[0]!r}"
 
     @pytest.mark.asyncio
-    async def test_no_null_in_entity_required_provenance_fields(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_no_null_in_entity_required_provenance_fields(self, conn: sqlite3.Connection) -> None:
         """No entity row from store_enrichment may have NULL in document_id, chunk_id, or scope."""
         _insert_source(conn, source_id="src-1", name="S1", enrich=1, scope="team-a")
         _insert_document(conn, doc_id="doc-a", title="D", source_id="src-1", scope="team-a")
@@ -322,9 +302,7 @@ class TestFromAC_StoreEnrichmentPhase1Provenance:
 
         row = conn.execute("SELECT document_id FROM edges").fetchone()
         assert row is not None, "Edge must be inserted"
-        assert row[0] == "doc-a", (
-            f"edge document_id must be 'doc-a' (derived server-side), got {row[0]!r}"
-        )
+        assert row[0] == "doc-a", f"edge document_id must be 'doc-a' (derived server-side), got {row[0]!r}"
 
     @pytest.mark.asyncio
     async def test_edge_scope_derived_from_document(self, conn: sqlite3.Connection) -> None:
@@ -343,14 +321,10 @@ class TestFromAC_StoreEnrichmentPhase1Provenance:
 
         row = conn.execute("SELECT scope FROM edges").fetchone()
         assert row is not None, "Edge must be inserted"
-        assert row[0] == "team-a", (
-            f"edge scope must be 'team-a' (derived from document), got {row[0]!r}"
-        )
+        assert row[0] == "team-a", f"edge scope must be 'team-a' (derived from document), got {row[0]!r}"
 
     @pytest.mark.asyncio
-    async def test_relationship_key_stored_as_non_null_relation(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_relationship_key_stored_as_non_null_relation(self, conn: sqlite3.Connection) -> None:
         """Edge payload key 'relationship' must persist as a non-NULL 'relation' column value."""
         _insert_source(conn, source_id="src-1", name="S1", enrich=1)
         _insert_document(conn, doc_id="doc-a", title="D", source_id="src-1")
@@ -366,9 +340,7 @@ class TestFromAC_StoreEnrichmentPhase1Provenance:
 
         row = conn.execute("SELECT relation FROM edges").fetchone()
         assert row is not None, "Edge must be inserted"
-        assert row[0] is not None, (
-            "edge 'relation' column must not be NULL when caller uses 'relationship' key"
-        )
+        assert row[0] is not None, "edge 'relation' column must not be NULL when caller uses 'relationship' key"
         assert row[0] == "mentions"
 
     @pytest.mark.asyncio
@@ -386,9 +358,7 @@ class TestFromAC_StoreEnrichmentPhase1Provenance:
             edges=[{"relationship": "mentions", "target_name": "ProbeTarget"}],
         )
 
-        row = conn.execute(
-            "SELECT source_id, target_id, relation, document_id, scope FROM edges"
-        ).fetchone()
+        row = conn.execute("SELECT source_id, target_id, relation, document_id, scope FROM edges").fetchone()
         assert row is not None, "Edge must be inserted"
         source_id, target_id, relation, doc_id, scope = row
         assert source_id is not None, "edge source_id must not be NULL"
@@ -415,9 +385,7 @@ class TestFromAC_StoreEnrichmentPhase1Provenance:
         row = conn.execute("SELECT metadata FROM edges").fetchone()
         assert row is not None, "Edge must be inserted"
         metadata = json.loads(row[0]) if row[0] else {}
-        assert "chunk_id" in metadata, (
-            f"edge metadata must include 'chunk_id' field; got {metadata!r}"
-        )
+        assert "chunk_id" in metadata, f"edge metadata must include 'chunk_id' field; got {metadata!r}"
         assert metadata["chunk_id"] == "chk-1"
 
 
@@ -430,18 +398,14 @@ class TestFromAC_StoreEnrichmentRejection:
     """AC-3: store_enrichment must reject unresolvable provenance without inserting NULL rows."""
 
     @pytest.mark.asyncio
-    async def test_ghost_chunk_does_not_succeed_silently(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_ghost_chunk_does_not_succeed_silently(self, conn: sqlite3.Connection) -> None:
         """store_enrichment with chunk_id not in DB must raise or return a non-None error result."""
         ctx = _make_ctx(conn)
 
         raised = False
         result = None
         try:
-            result = await store_enrichment(
-                ctx, chunk_id="ghost-chk", entities=[{"name": "BrokenEntity"}]
-            )
+            result = await store_enrichment(ctx, chunk_id="ghost-chk", entities=[{"name": "BrokenEntity"}])
         except Exception:  # noqa: BLE001
             raised = True
 
@@ -458,9 +422,7 @@ class TestFromAC_StoreEnrichmentRejection:
         count_before = conn.execute("SELECT COUNT(*) FROM entities").fetchone()[0]
 
         with contextlib.suppress(Exception):
-            await store_enrichment(
-                ctx, chunk_id="ghost-chk", entities=[{"name": "BrokenEntity"}]
-            )
+            await store_enrichment(ctx, chunk_id="ghost-chk", entities=[{"name": "BrokenEntity"}])
 
         count_after = conn.execute("SELECT COUNT(*) FROM entities").fetchone()[0]
         assert count_after == count_before, (
@@ -483,9 +445,7 @@ class TestFromAC_StoreEnrichmentRejection:
                 entities=[{"name": "BrokenEntity"}],
             )
 
-        row = conn.execute(
-            "SELECT enrichment_state FROM chunks WHERE id='orphan-chk'"
-        ).fetchone()
+        row = conn.execute("SELECT enrichment_state FROM chunks WHERE id='orphan-chk'").fetchone()
         assert row is not None
         assert row[0] != "enriched", (
             f"Orphan chunk (NULL source_id document) was marked '{row[0]}' — "
@@ -493,9 +453,7 @@ class TestFromAC_StoreEnrichmentRejection:
         )
 
     @pytest.mark.asyncio
-    async def test_unresolvable_edge_not_inserted_with_null_endpoints(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_unresolvable_edge_not_inserted_with_null_endpoints(self, conn: sqlite3.Connection) -> None:
         """No edge with NULL source_id or target_id must be inserted by Phase 1 store_enrichment."""
         _insert_source(conn, source_id="src-1", name="S1", enrich=1)
         _insert_document(conn, doc_id="doc-a", title="D", source_id="src-1")
@@ -510,18 +468,14 @@ class TestFromAC_StoreEnrichmentRejection:
             edges=[{"relationship": "mentions", "target_name": "NonExistentTarget"}],
         )
 
-        null_edge = conn.execute(
-            "SELECT id FROM edges WHERE source_id IS NULL OR target_id IS NULL"
-        ).fetchone()
+        null_edge = conn.execute("SELECT id FROM edges WHERE source_id IS NULL OR target_id IS NULL").fetchone()
         assert null_edge is None, (
             "Edge with NULL source_id or target_id must not be inserted — "
             "endpoint names must be resolved to entity row IDs before insert"
         )
 
     @pytest.mark.asyncio
-    async def test_already_enriched_chunk_raises_tool_error(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_already_enriched_chunk_raises_tool_error(self, conn: sqlite3.Connection) -> None:
         """store_enrichment on an already-enriched chunk must raise or return an error.
 
         AC-3: the call must reject and leave the chunk in its 'enriched' state;
@@ -544,26 +498,18 @@ class TestFromAC_StoreEnrichmentRejection:
         except Exception:  # noqa: BLE001
             raised = True
 
-        assert raised, (
-            "store_enrichment on already-enriched chunk must raise (e.g. ToolError)"
-        )
+        assert raised, "store_enrichment on already-enriched chunk must raise (e.g. ToolError)"
         entity_count_after = conn.execute("SELECT COUNT(*) FROM entities").fetchone()[0]
         assert entity_count_after == entity_count_before, (
             "store_enrichment on already-enriched chunk must not insert new entity rows"
         )
 
-        state_row = conn.execute(
-            "SELECT enrichment_state FROM chunks WHERE id='enr-chk'"
-        ).fetchone()
+        state_row = conn.execute("SELECT enrichment_state FROM chunks WHERE id='enr-chk'").fetchone()
         assert state_row is not None
-        assert state_row[0] == "enriched", (
-            f"Already-enriched chunk state must remain 'enriched', got '{state_row[0]}'"
-        )
+        assert state_row[0] == "enriched", f"Already-enriched chunk state must remain 'enriched', got '{state_row[0]}'"
 
     @pytest.mark.asyncio
-    async def test_claimed_chunk_state_becomes_failed_on_rejected_phase1_write(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_claimed_chunk_state_becomes_failed_on_rejected_phase1_write(self, conn: sqlite3.Connection) -> None:
         """On rejected Phase 1 write from a claimed chunk, state becomes 'failed' and claimed_at clears.
 
         AC-3: a claimed chunk whose provenance cannot be resolved must not remain
@@ -590,21 +536,13 @@ class TestFromAC_StoreEnrichmentRejection:
                 entities=[{"name": "AnyEntity", "type": "concept"}],
             )
 
-        row = conn.execute(
-            "SELECT enrichment_state, claimed_at FROM chunks WHERE id='claimed-chk'"
-        ).fetchone()
+        row = conn.execute("SELECT enrichment_state, claimed_at FROM chunks WHERE id='claimed-chk'").fetchone()
         assert row is not None
-        assert row[0] == "failed", (
-            f"Claimed chunk must become 'failed' after rejected Phase 1 write, got '{row[0]}'"
-        )
-        assert row[1] is None, (
-            f"claimed_at must be cleared (NULL) after rejected Phase 1 write, got '{row[1]}'"
-        )
+        assert row[0] == "failed", f"Claimed chunk must become 'failed' after rejected Phase 1 write, got '{row[0]}'"
+        assert row[1] is None, f"claimed_at must be cleared (NULL) after rejected Phase 1 write, got '{row[1]}'"
 
     @pytest.mark.asyncio
-    async def test_truly_unresolvable_edge_raises_tool_error(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_truly_unresolvable_edge_raises_tool_error(self, conn: sqlite3.Connection) -> None:
         """entities=[] edge with no source/target fields → ToolError, zero edges, chunk not enriched.
 
         PO-1 (AC-3): when no entities are provided and the edge dict contains no source_name,
@@ -627,23 +565,17 @@ class TestFromAC_StoreEnrichmentRejection:
 
         edge_count = conn.execute("SELECT COUNT(*) FROM edges").fetchone()[0]
         assert edge_count == 0, (
-            f"store_enrichment with truly unresolvable edge endpoints must insert zero edges, "
-            f"got {edge_count}"
+            f"store_enrichment with truly unresolvable edge endpoints must insert zero edges, got {edge_count}"
         )
 
-        state_row = conn.execute(
-            "SELECT enrichment_state FROM chunks WHERE id='chk-x'"
-        ).fetchone()
+        state_row = conn.execute("SELECT enrichment_state FROM chunks WHERE id='chk-x'").fetchone()
         assert state_row is not None
         assert state_row[0] != "enriched", (
-            f"Chunk must not be marked 'enriched' when edge endpoint resolution fails, "
-            f"got '{state_row[0]}'"
+            f"Chunk must not be marked 'enriched' when edge endpoint resolution fails, got '{state_row[0]}'"
         )
 
     @pytest.mark.asyncio
-    async def test_bogus_explicit_phase1_source_id_raises_tool_error(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_bogus_explicit_phase1_source_id_raises_tool_error(self, conn: sqlite3.Connection) -> None:
         """Explicit source_id that doesn't match any persisted entity → ToolError, zero edges.
 
         PO-4 (AC-3): when an edge payload supplies an explicit source_id string that
@@ -688,19 +620,14 @@ class TestFromAC_StoreEnrichmentRejection:
             "explicit IDs must be validated against persisted entity rows before insert"
         )
 
-        state_row = conn.execute(
-            "SELECT enrichment_state FROM chunks WHERE id='chk-po4'"
-        ).fetchone()
+        state_row = conn.execute("SELECT enrichment_state FROM chunks WHERE id='chk-po4'").fetchone()
         assert state_row is not None
         assert state_row[0] != "enriched", (
-            f"Chunk must not be marked 'enriched' when explicit source_id is bogus, "
-            f"got '{state_row[0]}'"
+            f"Chunk must not be marked 'enriched' when explicit source_id is bogus, got '{state_row[0]}'"
         )
 
     @pytest.mark.asyncio
-    async def test_foreign_scope_explicit_source_id_raises_tool_error(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_foreign_scope_explicit_source_id_raises_tool_error(self, conn: sqlite3.Connection) -> None:
         """Explicit source_id from a foreign scope must be rejected — zero edges, chunk not enriched.
 
         PO-6 negative (AC-3): _resolve_phase1_edge_endpoints currently checks only
@@ -722,9 +649,7 @@ class TestFromAC_StoreEnrichmentRejection:
         )
         # team-a chunk that will be enriched
         _insert_source(conn, source_id="src-a", name="Source A", enrich=1, scope="team-a")
-        _insert_document(
-            conn, doc_id="doc-a", title="Doc A", source_id="src-a", scope="team-a"
-        )
+        _insert_document(conn, doc_id="doc-a", title="Doc A", source_id="src-a", scope="team-a")
         _insert_chunk(conn, chunk_id="chk-po6-neg", doc_id="doc-a", state="claimed")
         ctx = _make_ctx(conn)
 
@@ -748,19 +673,14 @@ class TestFromAC_StoreEnrichmentRejection:
             "entity IDs must be validated within the claimed chunk's scope"
         )
 
-        state_row = conn.execute(
-            "SELECT enrichment_state FROM chunks WHERE id='chk-po6-neg'"
-        ).fetchone()
+        state_row = conn.execute("SELECT enrichment_state FROM chunks WHERE id='chk-po6-neg'").fetchone()
         assert state_row is not None
         assert state_row[0] != "enriched", (
-            f"Chunk must not be marked 'enriched' when explicit source_id is from a "
-            f"foreign scope, got '{state_row[0]}'"
+            f"Chunk must not be marked 'enriched' when explicit source_id is from a foreign scope, got '{state_row[0]}'"
         )
 
     @pytest.mark.asyncio
-    async def test_same_scope_cross_document_explicit_source_id_accepted(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_same_scope_cross_document_explicit_source_id_accepted(self, conn: sqlite3.Connection) -> None:
         """Same-scope entity ID from a different document must be accepted (inter-document graph).
 
         PO-6 positive (AC-3): cross-document references within the same scope are the
@@ -771,12 +691,8 @@ class TestFromAC_StoreEnrichmentRejection:
         """
         # Same scope, but two different documents
         _insert_source(conn, source_id="src-a", name="Source A", enrich=1, scope="team-a")
-        _insert_document(
-            conn, doc_id="doc-a1", title="Doc A1", source_id="src-a", scope="team-a"
-        )
-        _insert_document(
-            conn, doc_id="doc-a2", title="Doc A2", source_id="src-a", scope="team-a"
-        )
+        _insert_document(conn, doc_id="doc-a1", title="Doc A1", source_id="src-a", scope="team-a")
+        _insert_document(conn, doc_id="doc-a2", title="Doc A2", source_id="src-a", scope="team-a")
         # E2: existing entity from doc-a1 (team-a scope, different document)
         _insert_entity(
             conn,
@@ -802,15 +718,12 @@ class TestFromAC_StoreEnrichmentRejection:
             ],
         )
 
-        edge_row = conn.execute(
-            "SELECT source_id, target_id FROM edges"
-        ).fetchone()
+        edge_row = conn.execute("SELECT source_id, target_id FROM edges").fetchone()
         assert edge_row is not None, "Edge must be persisted for same-scope cross-document reference"
         assert edge_row[0] is not None, "Persisted edge must have non-NULL source_id"
         assert edge_row[1] is not None, "Persisted edge must have non-NULL target_id"
         assert edge_row[0] == "cross-doc-ent-1", (
-            f"Edge source_id must match the cross-document entity ID 'cross-doc-ent-1', "
-            f"got '{edge_row[0]}'"
+            f"Edge source_id must match the cross-document entity ID 'cross-doc-ent-1', got '{edge_row[0]}'"
         )
 
 
@@ -862,9 +775,7 @@ class TestFromAC_ConsolidationCandidateIdentifiers:
         )
 
     @pytest.mark.asyncio
-    async def test_candidate_entity_ids_match_actual_db_rows(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_candidate_entity_ids_match_actual_db_rows(self, conn: sqlite3.Connection) -> None:
         """Candidate entity_id_a and entity_id_b must equal the actual entity table PKs."""
         ent_a, ent_b = _setup_cross_source_entities(conn)
         ctx = _make_ctx(conn)
@@ -904,15 +815,12 @@ class TestFromAC_StoreEnrichmentPhase2Edges:
         assert len(candidates) == 1
         candidate_id = candidates[0]["candidate_id"]
 
-        await store_enrichment(
-            ctx, candidate_id=candidate_id, edges=[{"relationship": "same_as"}]
-        )
+        await store_enrichment(ctx, candidate_id=candidate_id, edges=[{"relationship": "same_as"}])
 
         row = conn.execute("SELECT source_id FROM edges").fetchone()
         assert row is not None, "Edge must be inserted"
         assert row[0] is not None, (
-            "Phase 2 edge source_id must not be NULL — "
-            "must be derived from candidate entity row IDs"
+            "Phase 2 edge source_id must not be NULL — must be derived from candidate entity row IDs"
         )
 
     @pytest.mark.asyncio
@@ -933,14 +841,11 @@ class TestFromAC_StoreEnrichmentPhase2Edges:
         row = conn.execute("SELECT target_id FROM edges").fetchone()
         assert row is not None, "Edge must be inserted"
         assert row[0] is not None, (
-            "Phase 2 edge target_id must not be NULL — "
-            "must be derived from candidate entity row IDs"
+            "Phase 2 edge target_id must not be NULL — must be derived from candidate entity row IDs"
         )
 
     @pytest.mark.asyncio
-    async def test_phase2_edge_endpoints_match_entity_row_ids(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_phase2_edge_endpoints_match_entity_row_ids(self, conn: sqlite3.Connection) -> None:
         """Edge source_id and target_id must match the candidate's entity row PKs."""
         ent_a, ent_b = _setup_cross_source_entities(conn)
         ctx = _make_ctx(conn)
@@ -957,12 +862,8 @@ class TestFromAC_StoreEnrichmentPhase2Edges:
         row = conn.execute("SELECT source_id, target_id FROM edges").fetchone()
         assert row is not None, "Edge must be inserted"
         valid_ids = {ent_a, ent_b}
-        assert row[0] in valid_ids, (
-            f"edge source_id {row[0]!r} must be one of the entity row IDs {valid_ids}"
-        )
-        assert row[1] in valid_ids, (
-            f"edge target_id {row[1]!r} must be one of the entity row IDs {valid_ids}"
-        )
+        assert row[0] in valid_ids, f"edge source_id {row[0]!r} must be one of the entity row IDs {valid_ids}"
+        assert row[1] in valid_ids, f"edge target_id {row[1]!r} must be one of the entity row IDs {valid_ids}"
 
     @pytest.mark.asyncio
     async def test_phase2_edge_idempotent_no_duplicate(self, conn: sqlite3.Connection) -> None:
@@ -974,12 +875,8 @@ class TestFromAC_StoreEnrichmentPhase2Edges:
         assert len(candidates) == 1
         candidate_id = candidates[0]["candidate_id"]
 
-        await store_enrichment(
-            ctx, candidate_id=candidate_id, edges=[{"relationship": "same_as"}]
-        )
-        await store_enrichment(
-            ctx, candidate_id=candidate_id, edges=[{"relationship": "same_as"}]
-        )
+        await store_enrichment(ctx, candidate_id=candidate_id, edges=[{"relationship": "same_as"}])
+        await store_enrichment(ctx, candidate_id=candidate_id, edges=[{"relationship": "same_as"}])
 
         count = conn.execute("SELECT COUNT(*) FROM edges").fetchone()[0]
         assert count == 1, (
@@ -988,9 +885,7 @@ class TestFromAC_StoreEnrichmentPhase2Edges:
         )
 
     @pytest.mark.asyncio
-    async def test_accepted_candidate_absent_from_next_batch(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_accepted_candidate_absent_from_next_batch(self, conn: sqlite3.Connection) -> None:
         """Candidate for which an edge was stored must not reappear in the next batch."""
         _setup_cross_source_entities(conn)
         ctx = _make_ctx(conn)
@@ -1000,21 +895,16 @@ class TestFromAC_StoreEnrichmentPhase2Edges:
         candidate_id = candidates[0]["candidate_id"]
 
         # Store an edge for this candidate
-        await store_enrichment(
-            ctx, candidate_id=candidate_id, edges=[{"relationship": "same_as"}]
-        )
+        await store_enrichment(ctx, candidate_id=candidate_id, edges=[{"relationship": "same_as"}])
 
         next_candidates = await get_consolidation_candidates(ctx, limit=10)
         ids_in_next = [c["candidate_id"] for c in next_candidates]
         assert candidate_id not in ids_in_next, (
-            "Candidate whose edge was stored must not appear in the next "
-            "get_consolidation_candidates batch"
+            "Candidate whose edge was stored must not appear in the next get_consolidation_candidates batch"
         )
 
     @pytest.mark.asyncio
-    async def test_phase2_two_sided_mismatched_endpoints_rejected(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_phase2_two_sided_mismatched_endpoints_rejected(self, conn: sqlite3.Connection) -> None:
         """Both source_id and target_id explicitly wrong → ToolError, zero edges.
 
         PO-2 (AC-5): when both explicit endpoint fields do not match either candidate
@@ -1036,14 +926,10 @@ class TestFromAC_StoreEnrichmentPhase2Edges:
             )
 
         edge_count = conn.execute("SELECT COUNT(*) FROM edges").fetchone()[0]
-        assert edge_count == 0, (
-            f"Two-sided mismatched explicit endpoints must not insert any edge, got {edge_count}"
-        )
+        assert edge_count == 0, f"Two-sided mismatched explicit endpoints must not insert any edge, got {edge_count}"
 
     @pytest.mark.asyncio
-    async def test_phase2_one_sided_invalid_target_rejected(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_phase2_one_sided_invalid_target_rejected(self, conn: sqlite3.Connection) -> None:
         """Only target_id explicitly wrong (source_id omitted) → ToolError, zero edges.
 
         PO-2 (AC-5): when only target_id is supplied and does not match either candidate
@@ -1064,14 +950,10 @@ class TestFromAC_StoreEnrichmentPhase2Edges:
             )
 
         edge_count = conn.execute("SELECT COUNT(*) FROM edges").fetchone()[0]
-        assert edge_count == 0, (
-            f"One-sided invalid target_id must not insert any edge, got {edge_count}"
-        )
+        assert edge_count == 0, f"One-sided invalid target_id must not insert any edge, got {edge_count}"
 
     @pytest.mark.asyncio
-    async def test_phase2_one_sided_invalid_source_rejected(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_phase2_one_sided_invalid_source_rejected(self, conn: sqlite3.Connection) -> None:
         """Only source_id explicitly wrong (target_id omitted) → ToolError, zero edges.
 
         PO-2 (AC-5): when only source_id is supplied and does not match either candidate
@@ -1092,9 +974,7 @@ class TestFromAC_StoreEnrichmentPhase2Edges:
             )
 
         edge_count = conn.execute("SELECT COUNT(*) FROM edges").fetchone()[0]
-        assert edge_count == 0, (
-            f"One-sided invalid source_id must not insert any edge, got {edge_count}"
-        )
+        assert edge_count == 0, f"One-sided invalid source_id must not insert any edge, got {edge_count}"
 
     @pytest.mark.asyncio
     async def test_reviewed_without_edge_excludes_candidate_and_persists_pair_identity(
@@ -1127,12 +1007,8 @@ class TestFromAC_StoreEnrichmentPhase2Edges:
         )
 
         # (b) reviewed_pairs row has durable pair identity
-        row = conn.execute(
-            "SELECT entity_id_a, entity_id_b FROM reviewed_pairs"
-        ).fetchone()
-        assert row is not None, (
-            "reviewed_pairs must contain a row after reviewed-without-edge store_enrichment"
-        )
+        row = conn.execute("SELECT entity_id_a, entity_id_b FROM reviewed_pairs").fetchone()
+        assert row is not None, "reviewed_pairs must contain a row after reviewed-without-edge store_enrichment"
         assert row[0], f"reviewed_pairs.entity_id_a must be non-empty, got {row[0]!r}"
         assert row[0] != "", f"reviewed_pairs.entity_id_a must be non-empty, got {row[0]!r}"
         assert row[1], f"reviewed_pairs.entity_id_b must be non-empty, got {row[1]!r}"
@@ -1143,9 +1019,7 @@ class TestFromAC_StoreEnrichmentPhase2Edges:
         assert row[1] in expected_ids, (
             f"reviewed_pairs.entity_id_b {row[1]!r} must match one of the candidate entity PKs {expected_ids}"
         )
-        assert row[0] != row[1], (
-            "reviewed_pairs.entity_id_a and entity_id_b must differ"
-        )
+        assert row[0] != row[1], "reviewed_pairs.entity_id_a and entity_id_b must differ"
 
 
 # ---------------------------------------------------------------------------
@@ -1173,9 +1047,7 @@ class TestFromAC_OrphanChunkExclusion:
         )
 
     @pytest.mark.asyncio
-    async def test_source_linked_chunk_returned_while_orphan_excluded(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_source_linked_chunk_returned_while_orphan_excluded(self, conn: sqlite3.Connection) -> None:
         """Source-linked enrich-enabled chunk is included; orphan chunk is excluded."""
         # Orphan chunk
         _insert_document(conn, doc_id="orphan-doc", title="Orphan", source_id=None)
@@ -1197,9 +1069,7 @@ class TestFromAC_OrphanChunkExclusion:
     async def test_all_orphan_chunks_return_empty_batch(self, conn: sqlite3.Connection) -> None:
         """When only orphan chunks exist, get_next_batch must return an empty list."""
         for i in range(3):
-            _insert_document(
-                conn, doc_id=f"orphan-{i}", title=f"O{i}", source_id=None
-            )
+            _insert_document(conn, doc_id=f"orphan-{i}", title=f"O{i}", source_id=None)
             _insert_chunk(conn, chunk_id=f"ochk-{i}", doc_id=f"orphan-{i}")
         ctx = _make_ctx(conn)
 

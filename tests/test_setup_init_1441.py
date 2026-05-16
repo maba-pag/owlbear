@@ -49,9 +49,7 @@ class TestFromAC_BoardDirectoryCreation:
     under .owlbear/kanban/ on a fresh target, without writing config.yml.
     """
 
-    def test_decisions_pending_dir_created_on_fresh_target(
-        self, tmp_path: Path, init_module: types.ModuleType
-    ) -> None:
+    def test_decisions_pending_dir_created_on_fresh_target(self, tmp_path: Path, init_module: types.ModuleType) -> None:
         """decisions/pending directory must exist after init() on a fresh target.
 
         MUST FAIL: current code never creates .owlbear/kanban/decisions/pending.
@@ -64,8 +62,7 @@ class TestFromAC_BoardDirectoryCreation:
 
         decisions_pending = target / ".owlbear" / "kanban" / "decisions" / "pending"
         assert decisions_pending.is_dir(), (
-            f"init() must create .owlbear/kanban/decisions/pending; "
-            f"directory not found at {decisions_pending}"
+            f"init() must create .owlbear/kanban/decisions/pending; directory not found at {decisions_pending}"
         )
 
     def test_decisions_resolved_dir_created_on_fresh_target(
@@ -83,13 +80,10 @@ class TestFromAC_BoardDirectoryCreation:
 
         decisions_resolved = target / ".owlbear" / "kanban" / "decisions" / "resolved"
         assert decisions_resolved.is_dir(), (
-            f"init() must create .owlbear/kanban/decisions/resolved; "
-            f"directory not found at {decisions_resolved}"
+            f"init() must create .owlbear/kanban/decisions/resolved; directory not found at {decisions_resolved}"
         )
 
-    def test_all_four_board_dirs_exist_after_init(
-        self, tmp_path: Path, init_module: types.ModuleType
-    ) -> None:
+    def test_all_four_board_dirs_exist_after_init(self, tmp_path: Path, init_module: types.ModuleType) -> None:
         """All four board directories must exist after init() on a fresh target.
 
         MUST FAIL: decisions/pending and decisions/resolved are absent with
@@ -113,13 +107,10 @@ class TestFromAC_BoardDirectoryCreation:
             if not (kanban_root / name).is_dir()
         ]
         assert not missing, (
-            f"init() must create all four board directories under .owlbear/kanban/; "
-            f"missing: {missing!r}"
+            f"init() must create all four board directories under .owlbear/kanban/; missing: {missing!r}"
         )
 
-    def test_config_yml_not_written_to_board_dir(
-        self, tmp_path: Path, init_module: types.ModuleType
-    ) -> None:
+    def test_config_yml_not_written_to_board_dir(self, tmp_path: Path, init_module: types.ModuleType) -> None:
         """init() must not write config.yml under .owlbear/kanban/.
 
         MUST FAIL: seed/.owlbear/kanban/config.yml currently exists in the
@@ -136,9 +127,7 @@ class TestFromAC_BoardDirectoryCreation:
             f"be removed as part of AC-1); found file at {config_yml}"
         )
 
-    def test_board_dirs_created_idempotently(
-        self, tmp_path: Path, init_module: types.ModuleType
-    ) -> None:
+    def test_board_dirs_created_idempotently(self, tmp_path: Path, init_module: types.ModuleType) -> None:
         """Running init() twice must not error and all four board dirs must exist.
 
         Verifies that mkdir uses exist_ok=True so a second run does not raise
@@ -156,16 +145,10 @@ class TestFromAC_BoardDirectoryCreation:
 
         decisions_pending = target / ".owlbear" / "kanban" / "decisions" / "pending"
         decisions_resolved = target / ".owlbear" / "kanban" / "decisions" / "resolved"
-        assert decisions_pending.is_dir(), (
-            "After idempotent second init(), decisions/pending must still be present"
-        )
-        assert decisions_resolved.is_dir(), (
-            "After idempotent second init(), decisions/resolved must still be present"
-        )
+        assert decisions_pending.is_dir(), "After idempotent second init(), decisions/pending must still be present"
+        assert decisions_resolved.is_dir(), "After idempotent second init(), decisions/resolved must still be present"
 
-    def test_decisions_dirs_created_with_parents(
-        self, tmp_path: Path, init_module: types.ModuleType
-    ) -> None:
+    def test_decisions_dirs_created_with_parents(self, tmp_path: Path, init_module: types.ModuleType) -> None:
         """decisions/pending and decisions/resolved are nested and require parents=True.
 
         When the target has tasks/ and archive/ already seeded but no decisions/
@@ -187,10 +170,8 @@ class TestFromAC_BoardDirectoryCreation:
 
         kanban_root = target / ".owlbear" / "kanban"
         assert (kanban_root / "decisions" / "pending").is_dir(), (
-            "init() must create decisions/pending even when decisions/ parent is absent "
-            "(requires mkdir(parents=True))"
+            "init() must create decisions/pending even when decisions/ parent is absent (requires mkdir(parents=True))"
         )
         assert (kanban_root / "decisions" / "resolved").is_dir(), (
-            "init() must create decisions/resolved even when decisions/ parent is absent "
-            "(requires mkdir(parents=True))"
+            "init() must create decisions/resolved even when decisions/ parent is absent (requires mkdir(parents=True))"
         )

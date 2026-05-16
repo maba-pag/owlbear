@@ -88,13 +88,7 @@ next_id: 1
 # Used for D15/D41 predicate-on-destination tests.
 _PREDICATE_CONFIG = _BASE_CONFIG.replace(
     "status_predicates: {}",
-    (
-        "status_predicates:\n"
-        "  review:\n"
-        "    type: required_sections\n"
-        "    sections:\n"
-        "      - Test Results"
-    ),
+    ("status_predicates:\n  review:\n    type: required_sections\n    sections:\n      - Test Results"),
 )
 
 _TASK_TMPL = """\
@@ -166,9 +160,7 @@ def _write_task(  # noqa: PLR0913
     return path
 
 
-def _make_view(
-    base_dir: Path, config_yaml: str = _BASE_CONFIG
-) -> tuple[AgentView, Path]:
+def _make_view(base_dir: Path, config_yaml: str = _BASE_CONFIG) -> tuple[AgentView, Path]:
     kanban_dir = _make_board(base_dir, config_yaml)
     engine = KanbanEngine(kanban_dir, activity_log=False)
     return AgentView(engine), kanban_dir
@@ -192,9 +184,7 @@ def _make_view(
 class TestFromAC_MoveTask:
     """Archival validation, predicate-on-destination, and claim-clearing for move_task."""
 
-    def test_archive_without_reason_raises_archival_reason_required(
-        self, tmp_path: Path
-    ) -> None:
+    def test_archive_without_reason_raises_archival_reason_required(self, tmp_path: Path) -> None:
         """AC4: move_task(id, "archived") with no archival_reason → ERR_ARCHIVAL_REASON_REQUIRED.
 
         Every archive operation must carry an archival_reason. Current impl
@@ -206,9 +196,7 @@ class TestFromAC_MoveTask:
             view.move_task(1, "archived")
         assert exc_info.value.code == "ERR_ARCHIVAL_REASON_REQUIRED"
 
-    def test_archive_completed_from_non_terminal_raises_completed_requires_done(
-        self, tmp_path: Path
-    ) -> None:
+    def test_archive_completed_from_non_terminal_raises_completed_requires_done(self, tmp_path: Path) -> None:
         """AC5: move_task(id, "archived", archival_reason="completed") from a
         non-terminal status → ERR_COMPLETED_REQUIRES_DONE.
 
@@ -222,9 +210,7 @@ class TestFromAC_MoveTask:
             view.move_task(1, "archived", archival_reason="completed")
         assert exc_info.value.code == "ERR_COMPLETED_REQUIRES_DONE"
 
-    def test_archive_deprecated_without_refs_raises_archival_refs_required(
-        self, tmp_path: Path
-    ) -> None:
+    def test_archive_deprecated_without_refs_raises_archival_refs_required(self, tmp_path: Path) -> None:
         """AC7: move_task(id, "archived", archival_reason="deprecated") with no
         archival_refs → ERR_ARCHIVAL_REFS_REQUIRED.
 
@@ -238,9 +224,7 @@ class TestFromAC_MoveTask:
             view.move_task(1, "archived", archival_reason="deprecated")
         assert exc_info.value.code == "ERR_ARCHIVAL_REFS_REQUIRED"
 
-    def test_archive_dropped_with_refs_raises_archival_refs_forbidden(
-        self, tmp_path: Path
-    ) -> None:
+    def test_archive_dropped_with_refs_raises_archival_refs_forbidden(self, tmp_path: Path) -> None:
         """AC8: move_task(id, "archived", archival_reason="dropped", archival_refs=[ref])
         → ERR_ARCHIVAL_REFS_FORBIDDEN.
 
@@ -254,9 +238,7 @@ class TestFromAC_MoveTask:
             view.move_task(1, "archived", archival_reason="dropped", archival_refs=[2])
         assert exc_info.value.code == "ERR_ARCHIVAL_REFS_FORBIDDEN"
 
-    def test_archive_invalid_reason_raises_archival_reason_invalid(
-        self, tmp_path: Path
-    ) -> None:
+    def test_archive_invalid_reason_raises_archival_reason_invalid(self, tmp_path: Path) -> None:
         """AC9: move_task with archival_reason not in config.archival_reasons enum
         → ERR_ARCHIVAL_REASON_INVALID.
 
@@ -270,9 +252,7 @@ class TestFromAC_MoveTask:
             view.move_task(1, "archived", archival_reason="invalid-reason-xyz")
         assert exc_info.value.code == "ERR_ARCHIVAL_REASON_INVALID"
 
-    def test_archive_with_missing_ref_raises_archival_ref_missing(
-        self, tmp_path: Path
-    ) -> None:
+    def test_archive_with_missing_ref_raises_archival_ref_missing(self, tmp_path: Path) -> None:
         """AC26: move_task(..., archival_refs=[99999]) where 99999 does not exist
         → ERR_ARCHIVAL_REF_MISSING.
 
@@ -284,14 +264,10 @@ class TestFromAC_MoveTask:
         view, kanban_dir = _make_view(tmp_path)
         _write_task(kanban_dir, task_id=1, status="todo")
         with pytest.raises(ValidationError) as exc_info:
-            view.move_task(
-                1, "archived", archival_reason="deprecated", archival_refs=[99999]
-            )
+            view.move_task(1, "archived", archival_reason="deprecated", archival_refs=[99999])
         assert exc_info.value.code == "ERR_ARCHIVAL_REF_MISSING"
 
-    def test_archival_reason_on_active_status_raises_fields_forbidden(
-        self, tmp_path: Path
-    ) -> None:
+    def test_archival_reason_on_active_status_raises_fields_forbidden(self, tmp_path: Path) -> None:
         """ERR_ARCHIVAL_FIELDS_FORBIDDEN: move_task(id, active_status, archival_reason=...)
         → ERR_ARCHIVAL_FIELDS_FORBIDDEN.
 
@@ -305,35 +281,25 @@ class TestFromAC_MoveTask:
             view.move_task(1, "done", archival_reason="completed")
         assert exc_info.value.code == "ERR_ARCHIVAL_FIELDS_FORBIDDEN"
 
-    def test_product_topology_ignores_config_predicate_move_succeeds(
-        self, tmp_path: Path
-    ) -> None:
+    def test_product_topology_ignores_config_predicate_move_succeeds(self, tmp_path: Path) -> None:
         """With PRODUCT_TOPOLOGY, status_predicates={} — move_task to 'review' succeeds.
 
         Config predicate on 'review' is ignored; PRODUCT_TOPOLOGY provides empty predicates.
         move_task(1, 'review') succeeds and task is moved to 'review'.
         """
         view, kanban_dir = _make_view(tmp_path, _PREDICATE_CONFIG)
-        _write_task(
-            kanban_dir, task_id=1, status="in-progress", body="No test results here."
-        )
+        _write_task(kanban_dir, task_id=1, status="in-progress", body="No test results here.")
         result = view.move_task(1, "review")  # must NOT raise
-        assert result.status == "review", (
-            f"move_task must succeed (no predicate enforcement); got {result.status!r}"
-        )
+        assert result.status == "review", f"move_task must succeed (no predicate enforcement); got {result.status!r}"
 
-    def test_product_topology_ignores_config_predicate_task_is_moved(
-        self, tmp_path: Path
-    ) -> None:
+    def test_product_topology_ignores_config_predicate_task_is_moved(self, tmp_path: Path) -> None:
         """With PRODUCT_TOPOLOGY, status_predicates={} — task IS moved to 'review'.
 
         Config predicate on 'review' is ignored; PRODUCT_TOPOLOGY provides empty predicates.
         After move_task(1, 'review'), show_task reports task at 'review'.
         """
         view, kanban_dir = _make_view(tmp_path, _PREDICATE_CONFIG)
-        _write_task(
-            kanban_dir, task_id=1, status="in-progress", body="No test results here."
-        )
+        _write_task(kanban_dir, task_id=1, status="in-progress", body="No test results here.")
         view.move_task(1, "review")  # succeeds (no predicate)
         result = view.show_task(1)
         assert result.status == "review", (
@@ -357,9 +323,7 @@ class TestFromAC_MoveTask:
         result = view.move_task(1, "archived", archival_reason="dropped")
         assert result.claimed_at is None
 
-    def test_archive_cleared_claim_persisted_in_archive_file(
-        self, tmp_path: Path
-    ) -> None:
+    def test_archive_cleared_claim_persisted_in_archive_file(self, tmp_path: Path) -> None:
         """D17 (persistence proof): archiving a claimed task writes claimed_at=null to disk.
 
         The SingleTaskResponse.claimed_at=None only proves the in-memory record is correct;
@@ -375,20 +339,14 @@ class TestFromAC_MoveTask:
         )
         view.move_task(1, "archived", archival_reason="dropped")
         # File must exist in archive/ and NOT remain in tasks/.
-        assert any((kanban_dir / "archive").glob("1-*.md")), (
-            "task file must exist in archive/ after archive"
-        )
-        assert not any((kanban_dir / "tasks").glob("1-*.md")), (
-            "task file must not remain in tasks/ after archive"
-        )
+        assert any((kanban_dir / "archive").glob("1-*.md")), "task file must exist in archive/ after archive"
+        assert not any((kanban_dir / "tasks").glob("1-*.md")), "task file must not remain in tasks/ after archive"
         # Fresh engine: bypasses any in-memory cache from the view's engine.
         fresh_engine = KanbanEngine(kanban_dir, activity_log=False)
         on_disk = fresh_engine.show_task("1")
         assert on_disk.claimed_at is None
 
-    def test_move_skipping_two_columns_emits_skip_guidance(
-        self, tmp_path: Path
-    ) -> None:
+    def test_move_skipping_two_columns_emits_skip_guidance(self, tmp_path: Path) -> None:
         """AC-NEW-5: move_task that skips >1 status position returns non-empty guidance.
 
         Moving from 'research' (index 0) to 'in-progress' (index 3) skips 'backlog'
@@ -425,9 +383,7 @@ class TestFromAC_MoveTask:
             view.move_task(1, "not-a-valid-status-xyz")
         assert exc_info.value.code == "ERR_INVALID_STATUS"
 
-    def test_archive_move_failure_restores_original_task_record(
-        self, tmp_path: Path
-    ) -> None:
+    def test_archive_move_failure_restores_original_task_record(self, tmp_path: Path) -> None:
         """D17 (rollback proof): _move_file OSError during archive restores the original task record.
 
         If _move_file raises OSError after write_task has written the archived record
@@ -459,12 +415,8 @@ class TestFromAC_MoveTask:
         # Fresh engine proves the persisted record matches the pre-archive state.
         fresh_engine = KanbanEngine(kanban_dir, activity_log=False)
         restored = fresh_engine.show_task("1")
-        assert restored.status == "todo", (
-            "status must be restored to pre-archive value after rollback"
-        )
-        assert restored.claimed_at is not None, (
-            "claimed_at must not be cleared on a failed archive"
-        )
+        assert restored.status == "todo", "status must be restored to pre-archive value after rollback"
+        assert restored.claimed_at is not None, "claimed_at must not be cleared on a failed archive"
 
 
 # ---------------------------------------------------------------------------
@@ -529,9 +481,7 @@ class TestFromAC_StartWork:
             view.start_work(99999)
         assert exc_info.value.code == "ERR_NOT_FOUND"
 
-    def test_start_work_already_claimed_raises_already_claimed(
-        self, tmp_path: Path
-    ) -> None:
+    def test_start_work_already_claimed_raises_already_claimed(self, tmp_path: Path) -> None:
         """start_work on an already-claimed (non-expired) task → ConcurrencyError(ERR_ALREADY_CLAIMED).
 
         engine.claim_task raises ValueError('already claimed') when the existing claim
@@ -566,12 +516,8 @@ class TestFromAC_StartWork:
             claimed_at=f'"{stale}"',  # well over 1h ago
         )
         result = view.start_work(1)
-        assert result.claimed_at is not None, (
-            "expired claim should be released and re-claimed"
-        )
-        assert result.claimed_at != stale, (
-            "re-claim must issue a new timestamp, not return the stale expired one"
-        )
+        assert result.claimed_at is not None, "expired claim should be released and re-claimed"
+        assert result.claimed_at != stale, "re-claim must issue a new timestamp, not return the stale expired one"
 
 
 # --- merged from serve/kanban/tests/test_engine_move_claim_edges.py ---
@@ -595,8 +541,7 @@ class TestFromAC_StartWork_1075:
         assert exc_info.value.code == "ERR_ALREADY_CLAIMED"
         # D18+D36 brief contract: error detail must include the live claimed_at value.
         assert live_ts in exc_info.value.user_message, (
-            f"ERR_ALREADY_CLAIMED message must contain claimed_at timestamp; "
-            f"got: {exc_info.value.user_message!r}"
+            f"ERR_ALREADY_CLAIMED message must contain claimed_at timestamp; got: {exc_info.value.user_message!r}"
         )
 
     def test_expired_claim_release_uses_cas_primitive(self, tmp_path: Path) -> None:
@@ -643,9 +588,7 @@ class TestFromAC_StartWork_1075:
             "engine.claim_task currently uses plain write_task"
         )
 
-    def test_expired_claim_cas_stale_retry_raises_already_claimed(
-        self, tmp_path: Path
-    ) -> None:
+    def test_expired_claim_cas_stale_retry_raises_already_claimed(self, tmp_path: Path) -> None:
         """D18+D36: when the CAS write for expired-claim release raises ERR_STALE
         (concurrent agent beat us), start_work retries from the top; if the re-read
         finds a live claim, it raises ConcurrencyError(ERR_ALREADY_CLAIMED).
@@ -695,13 +638,10 @@ class TestFromAC_StartWork_1075:
             view.start_work(1)
 
         assert exc_info.value.code == "ERR_ALREADY_CLAIMED", (
-            f"Expected ERR_ALREADY_CLAIMED after ERR_STALE retry sees live claim; "
-            f"got {exc_info.value.code!r}"
+            f"Expected ERR_ALREADY_CLAIMED after ERR_STALE retry sees live claim; got {exc_info.value.code!r}"
         )
 
-    def test_expired_claim_release_before_claim_two_cas_writes(
-        self, tmp_path: Path
-    ) -> None:
+    def test_expired_claim_release_before_claim_two_cas_writes(self, tmp_path: Path) -> None:
         """D18+D36: expired-claim path must issue TWO CAS writes in sequence:
         (1) release write — task with claimed_at=None, then (2) claim write —
         task with claimed_at=<now>.
@@ -726,9 +666,7 @@ class TestFromAC_StartWork_1075:
             cas_call_claimed_ats.append(getattr(task, "claimed_at", None))
             return real_cas(task, expected_updated, kdir)
 
-        with patch(
-            "owlbear_kanban.storage.write_task_if_unchanged", side_effect=capture
-        ):
+        with patch("owlbear_kanban.storage.write_task_if_unchanged", side_effect=capture):
             view.start_work(1)
 
         assert len(cas_call_claimed_ats) >= 2, (
@@ -747,9 +685,7 @@ class TestFromAC_StartWork_1075:
             f"got claimed_at={cas_call_claimed_ats[1]!r}"
         )
 
-    def test_stale_retry_success_produces_fresh_timestamps(
-        self, tmp_path: Path
-    ) -> None:
+    def test_stale_retry_success_produces_fresh_timestamps(self, tmp_path: Path) -> None:
         """D14: on stale-retry-success, claimed_at and updated must be fresher
         than the pre-attempt snapshot (effective_now refreshed inside retry loop).
 
@@ -783,9 +719,7 @@ class TestFromAC_StartWork_1075:
                 )
             return real_cas(task, expected_updated, kdir)
 
-        with patch(
-            "owlbear_kanban.storage.write_task_if_unchanged", side_effect=stale_on_first
-        ):
+        with patch("owlbear_kanban.storage.write_task_if_unchanged", side_effect=stale_on_first):
             result = view.start_work(1)
 
         from datetime import datetime  # noqa: PLC0415
@@ -806,9 +740,7 @@ class TestFromAC_StartWork_1075:
             f"Expected exactly 2 CAS calls (first stale, second success); got {call_count}"
         )
 
-    def test_stale_retry_success_timestamps_fresher_than_concurrent_update(
-        self, tmp_path: Path
-    ) -> None:
+    def test_stale_retry_success_timestamps_fresher_than_concurrent_update(self, tmp_path: Path) -> None:
         """D14 (mutation-resistant): stale-retry claimed_at/updated must be fresher
         than the concurrent update written during ERR_STALE.
 
@@ -950,6 +882,5 @@ class TestFromAC_MoveTask_D37_1075:
                 archival_refs=[2],
             )
         assert exc_info.value.code == "ERR_ARCHIVAL_REF_CYCLE", (
-            f"move_task must reject cycles in archival_refs with "
-            f"ERR_ARCHIVAL_REF_CYCLE; got {exc_info.value.code!r}"
+            f"move_task must reject cycles in archival_refs with ERR_ARCHIVAL_REF_CYCLE; got {exc_info.value.code!r}"
         )

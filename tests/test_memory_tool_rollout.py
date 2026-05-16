@@ -59,10 +59,7 @@ _BANNED_TERMS: tuple[str, ...] = (
 def _in_scope_paths(project_root: Path) -> list[Path]:
     """Return the 14 in-scope file paths for AC6."""
     agents_dir = project_root / "share" / "agents"
-    paths: list[Path] = [
-        agents_dir / f"{name}.agent.md"
-        for name in (*_PIPELINE_AGENT_NAMES, *_SUBAGENT_NAMES)
-    ]
+    paths: list[Path] = [agents_dir / f"{name}.agent.md" for name in (*_PIPELINE_AGENT_NAMES, *_SUBAGENT_NAMES)]
     paths.append(project_root / "share" / "skills" / "r-pipeline-protocol" / "SKILL.md")
     return paths
 
@@ -85,9 +82,7 @@ class TestFromAC_MemoryToolMigration:
 
         # Verify every path exists — a missing file is itself a failure.
         missing = [p for p in paths if not p.exists()]
-        assert not missing, (
-            f"In-scope files missing from repo: {[str(p) for p in missing]}"
-        )
+        assert not missing, f"In-scope files missing from repo: {[str(p) for p in missing]}"
 
         violations: list[str] = []
         for path in paths:
@@ -97,7 +92,6 @@ class TestFromAC_MemoryToolMigration:
                 if term in content:
                     violations.append(f"{rel}: found banned term {term!r}")
 
-        assert not violations, (
-            "Banned terms found in in-scope files after migration:\n"
-            + "\n".join(f"  - {v}" for v in violations)
+        assert not violations, "Banned terms found in in-scope files after migration:\n" + "\n".join(
+            f"  - {v}" for v in violations
         )

@@ -253,9 +253,7 @@ class TestFromAC_CorruptionSubmodelMigration:
 
     # -- Behavioral checks (split-config) ------------------------------------
 
-    def test_detect_corruption_uses_pipeline_statuses_not_root(
-        self, tmp_path: Path
-    ) -> None:
+    def test_detect_corruption_uses_pipeline_statuses_not_root(self, tmp_path: Path) -> None:
         """AC1: detect_corruption must validate status against config.pipeline.statuses.
 
         Split-config: root.statuses=['root-status'], pipeline.statuses=['pipeline-status'].
@@ -271,9 +269,7 @@ class TestFromAC_CorruptionSubmodelMigration:
             f"got {result!r} (still using root config.statuses)"
         )
 
-    def test_detect_corruption_uses_pipeline_priorities_not_root(
-        self, tmp_path: Path
-    ) -> None:
+    def test_detect_corruption_uses_pipeline_priorities_not_root(self, tmp_path: Path) -> None:
         """AC1: detect_corruption must validate priority against config.pipeline.priorities.
 
         Split-config: root.priorities=['root-priority'], pipeline.priorities=['pipeline-priority'].
@@ -328,9 +324,7 @@ class TestFromAC_CorruptionSubmodelMigration:
             f"got {result!r} (still using root config.priorities)"
         )
 
-    def test_attempt_repair_mode9_uses_pipeline_priorities_first(
-        self, tmp_path: Path
-    ) -> None:
+    def test_attempt_repair_mode9_uses_pipeline_priorities_first(self, tmp_path: Path) -> None:
         """AC1: attempt_repair mode9 must coerce priority to config.pipeline.priorities[0].
 
         Split-config: root.priorities=['root-priority'], pipeline.priorities=['pipeline-priority'].
@@ -371,9 +365,7 @@ class TestFromAC_CorruptionSubmodelMigration:
             f"expected 'pipeline-priority', repaired content:\n{repaired_content}"
         )
 
-    def test_attempt_repair_mode3_default_priority_uses_pipeline_priorities(
-        self, tmp_path: Path
-    ) -> None:
+    def test_attempt_repair_mode3_default_priority_uses_pipeline_priorities(self, tmp_path: Path) -> None:
         """AC1: attempt_repair mode3 must fill missing priority from config.pipeline.priorities[0].
 
         A task missing the 'priority' field triggers mode3. The repair fills it with
@@ -444,15 +436,13 @@ class TestFromAC_StorageSubmodelPaths:
     def test_storage_source_contains_paths_tasks_dir(self) -> None:
         """AC2: storage.py must access tasks_dir via config.paths.tasks_dir."""
         assert "paths.tasks_dir" in _STORAGE_SOURCE, (
-            "storage.py must contain 'paths.tasks_dir' — "
-            "all 7 paths-based access sites must use the sub-model"
+            "storage.py must contain 'paths.tasks_dir' — all 7 paths-based access sites must use the sub-model"
         )
 
     def test_storage_source_contains_paths_archive_dir(self) -> None:
         """AC2: storage.py must access archive_dir via config.paths.archive_dir."""
         assert "paths.archive_dir" in _STORAGE_SOURCE, (
-            "storage.py must contain 'paths.archive_dir' — "
-            "all paths-based access sites must use the sub-model"
+            "storage.py must contain 'paths.archive_dir' — all paths-based access sites must use the sub-model"
         )
 
 
@@ -474,8 +464,7 @@ class TestFromAC_LiveConfigFlatKeyCleanup:
     def _load_live_yaml(self) -> dict:
         """Return the live config.yml as a plain dict (top-level keys only)."""
         assert _LIVE_CONFIG_PATH.exists(), (
-            f"Live config not found at {_LIVE_CONFIG_PATH}; "
-            "cannot validate flat key cleanup"
+            f"Live config not found at {_LIVE_CONFIG_PATH}; cannot validate flat key cleanup"
         )
         return yaml.safe_load(_LIVE_CONFIG_PATH.read_text(encoding="utf-8")) or {}
 
@@ -487,8 +476,7 @@ class TestFromAC_LiveConfigFlatKeyCleanup:
         """
         data = self._load_live_yaml()
         assert "tasks_dir" not in data, (
-            "live config.yml still has flat 'tasks_dir' at root — "
-            "remove it; the canonical location is paths.tasks_dir"
+            "live config.yml still has flat 'tasks_dir' at root — remove it; the canonical location is paths.tasks_dir"
         )
 
     def test_live_config_no_flat_archive_dir(self) -> None:
@@ -542,8 +530,7 @@ class TestFromAC_LiveConfigFlatKeyCleanup:
         """
         data = self._load_live_yaml()
         assert "agent_map" not in data, (
-            "live config.yml still has flat 'agent_map' at root — "
-            "remove it; the canonical location is agents.agent_map"
+            "live config.yml still has flat 'agent_map' at root — remove it; the canonical location is agents.agent_map"
         )
 
     def test_live_config_no_flat_non_impl_tags(self) -> None:
@@ -602,9 +589,7 @@ class TestFromAC_ForwardingPropertiesRemoved:
         """Load the live config from .owlbear/kanban/config.yml."""
         from owlbear_kanban.config_loader import load_config  # noqa: PLC0415
 
-        assert _LIVE_CONFIG_PATH.exists(), (
-            f"Live config not found at {_LIVE_CONFIG_PATH}"
-        )
+        assert _LIVE_CONFIG_PATH.exists(), f"Live config not found at {_LIVE_CONFIG_PATH}"
         return load_config(_LIVE_CONFIG_PATH.parent)
 
     def test_loaded_live_config_no_tasks_dir_forwarding(self) -> None:

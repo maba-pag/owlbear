@@ -28,9 +28,7 @@ _MANAGE_TODO_LIST = "manage_todo_list"
 # Canonical VS Code built-in toolset prefixes.
 # Source: VS Code Copilot cheat sheet 2026-03-25 + docs/research/stale-tool-names.md
 # Update this set when VS Code adds new toolsets.
-KNOWN_TOOLSETS: frozenset[str] = frozenset(
-    {"agent", "browser", "edit", "execute", "read", "search", "web", "vscode"}
-)
+KNOWN_TOOLSETS: frozenset[str] = frozenset({"agent", "browser", "edit", "execute", "read", "search", "web", "vscode"})
 
 # Standalone tool names not under any toolset prefix.
 # Source: VS Code Copilot cheat sheet 2026-03-25 + docs/research/stale-tool-names.md
@@ -39,15 +37,11 @@ KNOWN_STANDALONE_TOOLS: frozenset[str] = frozenset({"newWorkspace", "selection"}
 
 # MCP server names whose tools may appear as 'server/tool_name' or 'server/*'.
 # Update this set when a new MCP server is added to the workspace.
-KNOWN_MCP_SERVERS: frozenset[str] = frozenset(
-    {"ob-kanban", "ob-knowledge", "ob-memory", "ddgs", "markitdown"}
-)
+KNOWN_MCP_SERVERS: frozenset[str] = frozenset({"ob-kanban", "ob-knowledge", "ob-memory", "ddgs", "markitdown"})
 
 # Tool names that already produce specific ban errors — skip in unknown-tool check
 # to avoid double-reporting the same tool with two different error messages.
-_BANNED_TOOL_NAMES: frozenset[str] = frozenset(
-    {"todos", "todo", "manage_todo_list", "resolveMemoryFileUri"}
-)
+_BANNED_TOOL_NAMES: frozenset[str] = frozenset({"todos", "todo", "manage_todo_list", "resolveMemoryFileUri"})
 
 _AGENTS_DIR = Path(__file__).resolve().parents[2] / "share" / "agents"
 
@@ -156,17 +150,9 @@ def _body_agents_table(content: str) -> list[str]:
     agents: list[str] = []
     for raw_line in m.group(1).splitlines():
         line = raw_line.strip()
-        if (
-            line.startswith("|")
-            and not line.startswith("| Agent")
-            and not line.startswith("|---")
-        ):
+        if line.startswith("|") and not line.startswith("| Agent") and not line.startswith("|---"):
             cells = [c.strip() for c in line.split("|")]
-            if (
-                len(cells) >= _AGENT_TABLE_MIN_CELLS
-                and cells[1]
-                and cells[1] != "Agent"
-            ):
+            if len(cells) >= _AGENT_TABLE_MIN_CELLS and cells[1] and cells[1] != "Agent":
                 agents.append(cells[1])
     return agents
 
@@ -213,20 +199,14 @@ def validate_agent(agent_file: Path) -> list[str]:
     if _RESOLVE_URI in content:
         errors.append(f"{agent_file}: contains '{_RESOLVE_URI}'")
     if _MANAGE_TODO_LIST in content:
-        errors.append(
-            f"{agent_file}: contains 'manage_todo_list' — tool is disabled for subagents"
-        )
+        errors.append(f"{agent_file}: contains 'manage_todo_list' — tool is disabled for subagents")
 
     # tools: line checks — word-boundary checks for banned tool names
     tools = _tools_text(fm_lines)
     if tools and _TODOS_RE.search(tools):
-        errors.append(
-            f"{agent_file}: tools: contains 'todos' — tool is disabled for subagents"
-        )
+        errors.append(f"{agent_file}: tools: contains 'todos' — tool is disabled for subagents")
     if tools and _BARE_TODO_RE.search(tools):
-        errors.append(
-            f"{agent_file}: tools: contains bare 'todo' — tool is disabled for subagents"
-        )
+        errors.append(f"{agent_file}: tools: contains bare 'todo' — tool is disabled for subagents")
 
     # Unknown-tool check — runs after ban checks so banned tools are not double-reported
     errors.extend(_check_unknown_tools(fm_lines, agent_file))
@@ -241,32 +221,20 @@ def validate_agent(agent_file: Path) -> list[str]:
     if fm_custom and not body_agents:
         has_section = "<agents>" in content and "</agents>" in content
         if not has_section:
-            errors.append(
-                f"{agent_file}: has agents: {sorted(fm_custom)} in frontmatter "
-                f"but no <agents> body section"
-            )
+            errors.append(f"{agent_file}: has agents: {sorted(fm_custom)} in frontmatter but no <agents> body section")
 
     in_fm_not_body = fm_custom - body_custom
     if in_fm_not_body:
-        errors.append(
-            f"{agent_file}: in frontmatter agents: but missing from <agents> table: "
-            f"{sorted(in_fm_not_body)}"
-        )
+        errors.append(f"{agent_file}: in frontmatter agents: but missing from <agents> table: {sorted(in_fm_not_body)}")
 
     in_body_not_fm = body_custom - fm_custom
     if in_body_not_fm:
-        errors.append(
-            f"{agent_file}: in <agents> table but missing from frontmatter agents:: "
-            f"{sorted(in_body_not_fm)}"
-        )
+        errors.append(f"{agent_file}: in <agents> table but missing from frontmatter agents:: {sorted(in_body_not_fm)}")
 
     # --- ND3 DMI rule ---
     dmi = _fm_scalar(fm_lines, "disable-model-invocation")
     if name in ND3_AGENTS and dmi != "false":
-        errors.append(
-            f"{agent_file}: ND3 agent must have disable-model-invocation: false "
-            f"(currently: {dmi})"
-        )
+        errors.append(f"{agent_file}: ND3 agent must have disable-model-invocation: false (currently: {dmi})")
 
     return errors
 

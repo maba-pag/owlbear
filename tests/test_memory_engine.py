@@ -79,9 +79,7 @@ class TestFromAC_FileEngine:
         entries = engine.load()
         assert entries == []
 
-    def test_valid_entries_alongside_malformed_file_still_returned(
-        self, tmp_path: Path
-    ) -> None:
+    def test_valid_entries_alongside_malformed_file_still_returned(self, tmp_path: Path) -> None:
         """Valid entries are returned even when a malformed file exists in the dir."""
         engine = MemoryEngine(tmp_path)
 
@@ -198,9 +196,7 @@ class TestFromAC_AtomicWrite:
         engine = MemoryEngine(tmp_path)
         entry = _make_entry()
         with (
-            patch(
-                "owlbear_mcp_memory.engine.mkstemp", wraps=_real_mkstemp
-            ) as mock_mkstemp,
+            patch("owlbear_mcp_memory.engine.mkstemp", wraps=_real_mkstemp) as mock_mkstemp,
             patch("os.fsync") as mock_fsync,
         ):
             path = engine.write(entry)
@@ -240,9 +236,7 @@ class TestFromAC_SlugGeneration:
         path = engine.write(entry)
         # Current code produces e.g. "test-entry-title-000000.md"
         # After the fix, suffix must be a random token — NOT "000000"
-        assert "000000" not in path.stem, (
-            f"Slug suffix must not be derived from entry.id[:6]; got: {path.stem}"
-        )
+        assert "000000" not in path.stem, f"Slug suffix must not be derived from entry.id[:6]; got: {path.stem}"
 
     def test_same_title_yields_same_slug_prefix(self, tmp_path: Path) -> None:
         """Two entries with identical titles must share the same slug base prefix.
@@ -265,9 +259,7 @@ class TestFromAC_SlugGeneration:
         # Stem format: "<slug-base>-<6-char-suffix>"
         base_a = path_a.stem.rsplit("-", 1)[0]
         base_b = path_b.stem.rsplit("-", 1)[0]
-        assert base_a == base_b, (
-            f"Slug base differs for same title: {path_a.stem!r} vs {path_b.stem!r}"
-        )
+        assert base_a == base_b, f"Slug base differs for same title: {path_a.stem!r} vs {path_b.stem!r}"
         suffix_a = path_a.stem.rsplit("-", 1)[-1]
         suffix_b = path_b.stem.rsplit("-", 1)[-1]
         assert len(suffix_a) == 6, f"Suffix length unexpected: {suffix_a!r}"
@@ -289,9 +281,7 @@ class TestFromAC_MalformedLogging:
     All three tests FAIL: caplog records are empty after load().
     """
 
-    def test_invalid_yaml_logs_warning(
-        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_invalid_yaml_logs_warning(self, tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
         """A file with invalid YAML syntax must emit a WARNING log when skipped."""
         malformed = tmp_path / "bad-entry-aa1122.md"
         malformed.write_text(
@@ -303,13 +293,10 @@ class TestFromAC_MalformedLogging:
             engine.load()
         # FAILS: _load_file() catches yaml.YAMLError and returns None — no log
         assert len(caplog.records) >= 1, (
-            "Expected at least one WARNING log for invalid YAML frontmatter; "
-            f"got {caplog.records!r}"
+            f"Expected at least one WARNING log for invalid YAML frontmatter; got {caplog.records!r}"
         )
 
-    def test_missing_required_fields_logs_warning(
-        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_missing_required_fields_logs_warning(self, tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
         """A file with missing required MemoryEntry fields must emit a WARNING log."""
         partial = tmp_path / "partial-entry-bb2233.md"
         partial.write_text(
@@ -321,13 +308,10 @@ class TestFromAC_MalformedLogging:
             engine.load()
         # FAILS: _load_file() catches ValidationError and returns None — no log
         assert len(caplog.records) >= 1, (
-            "Expected at least one WARNING log for missing required fields; "
-            f"got {caplog.records!r}"
+            f"Expected at least one WARNING log for missing required fields; got {caplog.records!r}"
         )
 
-    def test_empty_frontmatter_logs_warning(
-        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_empty_frontmatter_logs_warning(self, tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
         """A file with an empty YAML frontmatter block must emit a WARNING log."""
         empty_fm = tmp_path / "empty-front-cc3344.md"
         empty_fm.write_text("---\n\n---\n\nsome body\n", encoding="utf-8")
@@ -337,8 +321,7 @@ class TestFromAC_MalformedLogging:
         # FAILS: empty YAML → safe_load returns None → {} fallback → ValidationError →
         # returns None — no log
         assert len(caplog.records) >= 1, (
-            "Expected at least one WARNING log for empty YAML frontmatter; "
-            f"got {caplog.records!r}"
+            f"Expected at least one WARNING log for empty YAML frontmatter; got {caplog.records!r}"
         )
 
 
@@ -360,9 +343,7 @@ class TestFromAC_DirectoryAutoCreation:
         nonexistent = tmp_path / "new_memory" / "nested"
         assert not nonexistent.exists()
         MemoryEngine(nonexistent)
-        assert nonexistent.exists(), (
-            "MemoryEngine did not create memory_dir on instantiation"
-        )
+        assert nonexistent.exists(), "MemoryEngine did not create memory_dir on instantiation"
 
     def test_write_succeeds_to_auto_created_directory(self, tmp_path: Path) -> None:
         """write() succeeds when memory_dir did not exist before engine init."""

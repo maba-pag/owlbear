@@ -108,9 +108,7 @@ def mock_emb() -> MagicMock:
 
 
 @pytest.fixture()
-def store_components(
-    conn: sqlite3.Connection, mock_vs: MagicMock, mock_emb: MagicMock
-) -> dict:
+def store_components(conn: sqlite3.Connection, mock_vs: MagicMock, mock_emb: MagicMock) -> dict:
     """Real storage components wired together with mock vector/embedder."""
     graph_store = GraphStore(conn)
     source_store = KnowledgeSourceStore(conn)
@@ -132,9 +130,7 @@ def store_components(
 
 
 @pytest.fixture()
-def app_ctx(
-    conn: sqlite3.Connection, store_components: dict
-) -> AppContext:
+def app_ctx(conn: sqlite3.Connection, store_components: dict) -> AppContext:
     """AppContext with real pipeline + source store; refresh_orchestrator is non-None."""
     pc = store_components
     return AppContext(
@@ -166,9 +162,7 @@ class TestFromAC_DirectIngestSourceIdentity:
     and the document row must have source_id pointing to that source."""
 
     @pytest.mark.asyncio
-    async def test_document_row_has_source_id(
-        self, conn: sqlite3.Connection, app_ctx: AppContext
-    ) -> None:
+    async def test_document_row_has_source_id(self, conn: sqlite3.Connection, app_ctx: AppContext) -> None:
         """Document row source_id must equal the auto-created KnowledgeSource.id.
 
         Fails because ingest_text passes a Document object to insert_document,
@@ -187,12 +181,9 @@ class TestFromAC_DirectIngestSourceIdentity:
         assert doc_row is not None, "No document row was created"
         doc_source_id = doc_row[0]
         assert doc_source_id is not None, (
-            "document.source_id must not be NULL — it must reference the "
-            "auto-created knowledge_sources row"
+            "document.source_id must not be NULL — it must reference the auto-created knowledge_sources row"
         )
-        source_row = conn.execute(
-            "SELECT id FROM knowledge_sources WHERE id = ?", (doc_source_id,)
-        ).fetchone()
+        source_row = conn.execute("SELECT id FROM knowledge_sources WHERE id = ?", (doc_source_id,)).fetchone()
         assert source_row is not None, (
             "document.source_id must reference an existing knowledge_sources row, "
             f"but no row found for id={doc_source_id!r}"
@@ -217,14 +208,10 @@ class TestFromAC_DirectIngestSourceIdentity:
         )
         row = conn.execute("SELECT scope FROM knowledge_sources").fetchone()
         assert row is not None, "No knowledge_sources row was created"
-        assert row[0] == "team-a", (
-            f"Auto-created source scope must be 'team-a', got {row[0]!r}"
-        )
+        assert row[0] == "team-a", f"Auto-created source scope must be 'team-a', got {row[0]!r}"
 
     @pytest.mark.asyncio
-    async def test_auto_created_source_enrich_is_enabled(
-        self, conn: sqlite3.Connection, app_ctx: AppContext
-    ) -> None:
+    async def test_auto_created_source_enrich_is_enabled(self, conn: sqlite3.Connection, app_ctx: AppContext) -> None:
         """Auto-created KnowledgeSource.enrich must be 1 (True).
 
         Fails because KnowledgeSource is created with enrich=False.
@@ -239,9 +226,7 @@ class TestFromAC_DirectIngestSourceIdentity:
         )
         row = conn.execute("SELECT enrich FROM knowledge_sources").fetchone()
         assert row is not None, "No knowledge_sources row was created"
-        assert row[0] == 1, (
-            f"Auto-created source enrich must be 1 (True), got {row[0]!r}"
-        )
+        assert row[0] == 1, f"Auto-created source enrich must be 1 (True), got {row[0]!r}"
 
     @pytest.mark.asyncio
     async def test_cross_scope_same_url_does_not_link_to_foreign_scope_source(
@@ -272,17 +257,12 @@ class TestFromAC_DirectIngestSourceIdentity:
             source_url="https://example.test/a",
         )
         # There must now be two distinct sources — one per scope.
-        source_rows = conn.execute(
-            "SELECT id, scope FROM knowledge_sources ORDER BY scope"
-        ).fetchall()
+        source_rows = conn.execute("SELECT id, scope FROM knowledge_sources ORDER BY scope").fetchall()
         assert len(source_rows) == 2, (  # noqa: PLR2004
-            f"Expected 2 knowledge_sources rows (team-a + team-b), found {len(source_rows)}: "
-            f"{source_rows}"
+            f"Expected 2 knowledge_sources rows (team-a + team-b), found {len(source_rows)}: {source_rows}"
         )
         scopes = {r[1] for r in source_rows}
-        assert scopes == {"team-a", "team-b"}, (
-            f"Expected scopes {{'team-a', 'team-b'}}, got {scopes}"
-        )
+        assert scopes == {"team-a", "team-b"}, f"Expected scopes {{'team-a', 'team-b'}}, got {scopes}"
         # The document must link to the team-a source, not the team-b source.
         doc_source_id = conn.execute("SELECT source_id FROM documents").fetchone()[0]
         team_a_source_id = next(r[0] for r in source_rows if r[1] == "team-a")
@@ -314,9 +294,7 @@ class TestFromAC_RefreshIngestSourceIdentity:
         conn.commit()
 
     @pytest.mark.asyncio
-    async def test_refresh_document_row_has_source_id(
-        self, conn: sqlite3.Connection, app_ctx: AppContext
-    ) -> None:
+    async def test_refresh_document_row_has_source_id(self, conn: sqlite3.Connection, app_ctx: AppContext) -> None:
         """After refresh, document row source_id must equal the refreshed source ID.
 
         Fails because IngestPipeline.ingest never receives/passes source_id to
@@ -337,9 +315,7 @@ class TestFromAC_RefreshIngestSourceIdentity:
 
         doc_row = conn.execute("SELECT source_id FROM documents").fetchone()
         assert doc_row is not None, "No document row created after refresh"
-        assert doc_row[0] == "src-a", (
-            f"Refreshed document source_id must be 'src-a', got {doc_row[0]!r}"
-        )
+        assert doc_row[0] == "src-a", f"Refreshed document source_id must be 'src-a', got {doc_row[0]!r}"
 
     @pytest.mark.asyncio
     async def test_refresh_vector_payloads_carry_source_scope(
@@ -365,19 +341,13 @@ class TestFromAC_RefreshIngestSourceIdentity:
 
         calls = mock_vs.store_embedding.call_args_list
         assert calls, "store_embedding was never called during refresh"
-        scopes_used = [
-            c.kwargs.get("scope") or (c.args[3] if len(c.args) > 3 else None)
-            for c in calls
-        ]
+        scopes_used = [c.kwargs.get("scope") or (c.args[3] if len(c.args) > 3 else None) for c in calls]
         assert any(s == "team-a" for s in scopes_used), (
-            "store_embedding must be called with scope='team-a' (source scope), "
-            f"but got scopes: {scopes_used}"
+            f"store_embedding must be called with scope='team-a' (source scope), but got scopes: {scopes_used}"
         )
 
     @pytest.mark.asyncio
-    async def test_refresh_chunks_carry_source_scope(
-        self, conn: sqlite3.Connection, app_ctx: AppContext
-    ) -> None:
+    async def test_refresh_chunks_carry_source_scope(self, conn: sqlite3.Connection, app_ctx: AppContext) -> None:
         """Chunks persisted after refresh must carry scope='team-a' (the source scope).
 
         Proof gap (cycle 7 review): existing refresh tests assert vector scope and
@@ -403,14 +373,10 @@ class TestFromAC_RefreshIngestSourceIdentity:
         doc_id = doc_row[0]
 
         chunk_scopes = [
-            r[0]
-            for r in conn.execute(
-                "SELECT scope FROM chunks WHERE document_id = ?", (doc_id,)
-            ).fetchall()
+            r[0] for r in conn.execute("SELECT scope FROM chunks WHERE document_id = ?", (doc_id,)).fetchall()
         ]
         assert chunk_scopes, (
-            f"No chunks found for document {doc_id!r} after refresh — "
-            "refresh must persist at least one chunk"
+            f"No chunks found for document {doc_id!r} after refresh — refresh must persist at least one chunk"
         )
         assert all(s == "team-a" for s in chunk_scopes), (
             "All chunks persisted by refresh must have scope='team-a' (source scope), "
@@ -446,8 +412,7 @@ class TestFromAC_RefreshIngestSourceIdentity:
         )
         result_v1 = await pipeline.ingest(intake_v1, scope="team-a", source_id="src-a")
         assert result_v1.status == "ok", (
-            f"First ingest must succeed for replace-on-change to fire on second call, "
-            f"got status={result_v1.status!r}"
+            f"First ingest must succeed for replace-on-change to fire on second call, got status={result_v1.status!r}"
         )
 
         # Reset so only v2 store_embedding calls are observed.
@@ -459,15 +424,12 @@ class TestFromAC_RefreshIngestSourceIdentity:
             metadata={"source_type": "url_list"},
         )
         result_v2 = await pipeline.ingest(intake_v2, scope="team-a", source_id="src-a")
-        assert result_v2.status == "ok", (
-            f"Replace-on-change ingest must succeed, got status={result_v2.status!r}"
-        )
+        assert result_v2.status == "ok", f"Replace-on-change ingest must succeed, got status={result_v2.status!r}"
 
         # (a) Exactly 1 document row: old document was replaced, not doubled.
         doc_count = conn.execute("SELECT count(*) FROM documents").fetchone()[0]
         assert doc_count == 1, (  # noqa: PLR2004
-            f"Replace-on-change must leave exactly 1 document row (old replaced), "
-            f"found {doc_count} row(s)"
+            f"Replace-on-change must leave exactly 1 document row (old replaced), found {doc_count} row(s)"
         )
 
         # (b) Replacement document source_id preserved as 'src-a'.
@@ -480,29 +442,19 @@ class TestFromAC_RefreshIngestSourceIdentity:
         # (c) Replacement chunks carry scope='team-a'.
         new_doc_id = conn.execute("SELECT id FROM documents").fetchone()[0]
         chunk_scopes = [
-            r[0]
-            for r in conn.execute(
-                "SELECT scope FROM chunks WHERE document_id = ?", (new_doc_id,)
-            ).fetchall()
+            r[0] for r in conn.execute("SELECT scope FROM chunks WHERE document_id = ?", (new_doc_id,)).fetchall()
         ]
-        assert chunk_scopes, (
-            "Replace-on-change must persist at least one chunk for the replacement document"
-        )
+        assert chunk_scopes, "Replace-on-change must persist at least one chunk for the replacement document"
         assert all(s == "team-a" for s in chunk_scopes), (
-            "All replacement chunks must have scope='team-a', "
-            f"but got chunk scopes: {chunk_scopes}"
+            f"All replacement chunks must have scope='team-a', but got chunk scopes: {chunk_scopes}"
         )
 
         # (d) Replacement vector payloads carry scope='team-a'.
         embed_calls = mock_vs.store_embedding.call_args_list
         assert embed_calls, (
-            "store_embedding must be called for replacement document chunks after "
-            "replace-on-change succeeds"
+            "store_embedding must be called for replacement document chunks after replace-on-change succeeds"
         )
-        scopes_used = [
-            c.kwargs.get("scope") or (c.args[3] if len(c.args) > 3 else None)
-            for c in embed_calls
-        ]
+        scopes_used = [c.kwargs.get("scope") or (c.args[3] if len(c.args) > 3 else None) for c in embed_calls]
         assert all(s == "team-a" for s in scopes_used), (
             "store_embedding must be called with scope='team-a' for all replacement "
             f"chunks, but got scopes: {scopes_used}"
@@ -544,9 +496,7 @@ class TestFromAC_FailedIngestAtomicCleanup:
                 source_url="https://example.test/fail",
             )
         assert isinstance(result, str), "ingest_document must return a string"
-        assert result.startswith("error:"), (
-            f"On persistence failure, must return 'error:...', got: {result!r}"
-        )
+        assert result.startswith("error:"), f"On persistence failure, must return 'error:...', got: {result!r}"
 
     @pytest.mark.asyncio
     async def test_failure_leaves_no_source_row(
@@ -577,9 +527,7 @@ class TestFromAC_FailedIngestAtomicCleanup:
             "SELECT count(*) FROM knowledge_sources WHERE config LIKE ?",
             ("%example.test/fail%",),
         ).fetchone()[0]
-        assert count == 0, (
-            f"Failed ingest must leave no knowledge_sources row, found {count} row(s)"
-        )
+        assert count == 0, f"Failed ingest must leave no knowledge_sources row, found {count} row(s)"
 
     @pytest.mark.asyncio
     async def test_failure_leaves_no_document_row(
@@ -607,9 +555,7 @@ class TestFromAC_FailedIngestAtomicCleanup:
                 source_url="https://example.test/fail",
             )
         count = conn.execute("SELECT count(*) FROM documents").fetchone()[0]
-        assert count == 0, (
-            f"Failed ingest must leave no document rows, found {count} row(s)"
-        )
+        assert count == 0, f"Failed ingest must leave no document rows, found {count} row(s)"
 
 
 # ---------------------------------------------------------------------------
@@ -650,12 +596,9 @@ class TestFromAC_EnrichBatchSourceLinkage:
         batch = await get_next_batch(ctx, limit=10)
         assert batch, "Batch must contain at least one chunk from the enabled source"
         item = batch[0]
-        source_name = (
-            item["source_name"] if isinstance(item, dict) else item.source_name
-        )
+        source_name = item["source_name"] if isinstance(item, dict) else item.source_name
         assert source_name == "Enabled Source", (
-            f"source_name must be 'Enabled Source' (from linked KnowledgeSource), "
-            f"got {source_name!r}"
+            f"source_name must be 'Enabled Source' (from linked KnowledgeSource), got {source_name!r}"
         )
 
     @pytest.mark.asyncio
@@ -700,23 +643,13 @@ class TestFromAC_EnrichBatchSourceLinkage:
             source_url="https://disabled.test/",
         )
         batch = await get_next_batch(ctx, limit=10)
-        source_names = [
-            (item["source_name"] if isinstance(item, dict) else item.source_name)
-            for item in batch
-        ]
+        source_names = [(item["source_name"] if isinstance(item, dict) else item.source_name) for item in batch]
         assert "Disabled Source" not in source_names, (
-            "Disabled source chunks must not appear in get_next_batch, "
-            f"got source_names: {source_names}"
+            f"Disabled source chunks must not appear in get_next_batch, got source_names: {source_names}"
         )
-        texts = [
-            (item["text"] if isinstance(item, dict) else item.text)
-            for item in batch
-        ]
+        texts = [(item["text"] if isinstance(item, dict) else item.text) for item in batch]
         disabled_texts = [t for t in texts if t and "disabled" in t.lower()]
-        assert not disabled_texts, (
-            "No chunk text from the disabled source must appear in batch, "
-            f"got: {disabled_texts}"
-        )
+        assert not disabled_texts, f"No chunk text from the disabled source must appear in batch, got: {disabled_texts}"
 
 
 # ---------------------------------------------------------------------------
@@ -748,13 +681,9 @@ class TestFromAC_SearchResultProvenance:
         )
         calls = mock_vs.store_embedding.call_args_list
         assert calls, "store_embedding was never called during direct ingest"
-        scopes_used = [
-            c.kwargs.get("scope") or (c.args[3] if len(c.args) > 3 else None)
-            for c in calls
-        ]
+        scopes_used = [c.kwargs.get("scope") or (c.args[3] if len(c.args) > 3 else None) for c in calls]
         assert any(s == "team-a" for s in scopes_used), (
-            "store_embedding must be called with scope='team-a' during direct ingest, "
-            f"but got scopes: {scopes_used}"
+            f"store_embedding must be called with scope='team-a' during direct ingest, but got scopes: {scopes_used}"
         )
 
     @pytest.mark.asyncio
@@ -782,11 +711,7 @@ class TestFromAC_SearchResultProvenance:
         # With the bug, source_id=NULL → lookup returns None → name serialises to "".
         doc_row = conn.execute("SELECT source_id FROM documents").fetchone()
         doc_source_id = doc_row[0] if doc_row else None
-        source_obj = (
-            store_components["source_store"].get(doc_source_id)
-            if doc_source_id
-            else None
-        )
+        source_obj = store_components["source_store"].get(doc_source_id) if doc_source_id else None
         mock_result = MagicMock()
         mock_result.source = source_obj  # None when source_id is NULL (the bug)
         mock_result.title = "Doc A"
@@ -835,11 +760,7 @@ class TestFromAC_SearchResultProvenance:
         )
         doc_row = conn.execute("SELECT source_id FROM documents").fetchone()
         doc_source_id = doc_row[0] if doc_row else None
-        source_obj = (
-            store_components["source_store"].get(doc_source_id)
-            if doc_source_id
-            else None
-        )
+        source_obj = store_components["source_store"].get(doc_source_id) if doc_source_id else None
         mock_result = MagicMock()
         mock_result.source = source_obj
         mock_result.title = "Doc A"
@@ -862,8 +783,7 @@ class TestFromAC_SearchResultProvenance:
         assert results, "search_knowledge must return results"
         source = results[0]["source"]
         assert source["url"] == "https://example.test/a", (
-            "source.url must come from KnowledgeSource config.url "
-            f"('https://example.test/a'), got {source['url']!r}"
+            f"source.url must come from KnowledgeSource config.url ('https://example.test/a'), got {source['url']!r}"
         )
 
 
@@ -928,12 +848,8 @@ class TestFromAC_RefreshEntityEdgeProvenance:
         ctx = _make_mcp_ctx(app_ctx)
         with patch("owlbear_knowledge.intake.read_url", new=AsyncMock(return_value=fake_intake)):
             result = await refresh_source(ctx, source_id="src-a")
-        assert isinstance(result, dict), (
-            f"refresh_source must return a dict on success, got {result!r}"
-        )
-        assert result["source_id"] == "src-a", (
-            f"result['source_id'] must be 'src-a', got {result.get('source_id')!r}"
-        )
+        assert isinstance(result, dict), f"refresh_source must return a dict on success, got {result!r}"
+        assert result["source_id"] == "src-a", f"result['source_id'] must be 'src-a', got {result.get('source_id')!r}"
         assert result["refreshed"] == 1, (
             f"result['refreshed'] must be 1 (one URL ingested), got {result.get('refreshed')!r}"
         )
@@ -969,13 +885,10 @@ class TestFromAC_RefreshEntityEdgeProvenance:
         entity_rows = conn.execute(
             "SELECT scope, document_id FROM entities WHERE document_id = ?", (doc_id,)
         ).fetchall()
-        assert entity_rows, (
-            f"No entities with document_id={doc_id!r} were persisted after refresh"
-        )
+        assert entity_rows, f"No entities with document_id={doc_id!r} were persisted after refresh"
         scopes = [r[0] for r in entity_rows]
         assert all(s == "team-a" for s in scopes), (
-            "All persisted entities must have scope='team-a' (from source scope), "
-            f"but got scopes: {scopes}"
+            f"All persisted entities must have scope='team-a' (from source scope), but got scopes: {scopes}"
         )
 
     @pytest.mark.asyncio
@@ -1005,14 +918,8 @@ class TestFromAC_RefreshEntityEdgeProvenance:
             await refresh_source(ctx, source_id="src-a")
         chunk_ids = {r[0] for r in conn.execute("SELECT id FROM chunks").fetchall()}
         assert chunk_ids, "No chunks were created by refresh"
-        entity_chunk_ids = {
-            r[0]
-            for r in conn.execute("SELECT chunk_id FROM entities").fetchall()
-            if r[0] is not None
-        }
-        assert entity_chunk_ids, (
-            "Entities must have chunk_id set after refresh, but all chunk_ids are NULL"
-        )
+        entity_chunk_ids = {r[0] for r in conn.execute("SELECT chunk_id FROM entities").fetchall() if r[0] is not None}
+        assert entity_chunk_ids, "Entities must have chunk_id set after refresh, but all chunk_ids are NULL"
         assert entity_chunk_ids.issubset(chunk_ids), (
             "Entity chunk_ids must reference actual chunks created during refresh, "
             f"got entity chunk_ids {entity_chunk_ids!r} not in chunks {chunk_ids!r}"
@@ -1047,45 +954,28 @@ class TestFromAC_RefreshEntityEdgeProvenance:
         doc_row = conn.execute("SELECT id FROM documents").fetchone()
         assert doc_row is not None, "No document row created by refresh"
         doc_id = doc_row[0]
-        edge_rows = conn.execute(
-            "SELECT document_id, metadata FROM edges WHERE document_id = ?", (doc_id,)
-        ).fetchall()
-        assert edge_rows, (
-            f"No edges with document_id={doc_id!r} were persisted after refresh"
-        )
-        chunk_ids = {
-            r[0]
-            for r in conn.execute(
-                "SELECT id FROM chunks WHERE document_id = ?", (doc_id,)
-            ).fetchall()
-        }
+        edge_rows = conn.execute("SELECT document_id, metadata FROM edges WHERE document_id = ?", (doc_id,)).fetchall()
+        assert edge_rows, f"No edges with document_id={doc_id!r} were persisted after refresh"
+        chunk_ids = {r[0] for r in conn.execute("SELECT id FROM chunks WHERE document_id = ?", (doc_id,)).fetchall()}
         for _row_doc_id, meta_json in edge_rows:
             meta = json.loads(meta_json) if meta_json else {}
             assert "document_id" in meta, (
-                "Edge metadata must contain 'document_id' provenance field, "
-                f"but got metadata: {meta!r}"
+                f"Edge metadata must contain 'document_id' provenance field, but got metadata: {meta!r}"
             )
             assert meta["document_id"] == doc_id, (
-                f"Edge metadata['document_id'] must be {doc_id!r}, "
-                f"got {meta.get('document_id')!r}"
+                f"Edge metadata['document_id'] must be {doc_id!r}, got {meta.get('document_id')!r}"
             )
             assert "scope" in meta, (
-                "Edge metadata must contain 'scope' provenance field, "
-                f"but got metadata keys: {list(meta)!r}"
+                f"Edge metadata must contain 'scope' provenance field, but got metadata keys: {list(meta)!r}"
             )
-            assert meta["scope"] == "team-a", (
-                f"Edge metadata['scope'] must be 'team-a', got {meta.get('scope')!r}"
-            )
+            assert meta["scope"] == "team-a", f"Edge metadata['scope'] must be 'team-a', got {meta.get('scope')!r}"
             assert "chunk_id" in meta, (
-                "Edge metadata must contain 'chunk_id' provenance field, "
-                f"but got metadata keys: {list(meta)!r}"
+                f"Edge metadata must contain 'chunk_id' provenance field, but got metadata keys: {list(meta)!r}"
             )
             assert isinstance(meta["chunk_id"], str), (
                 f"Edge metadata['chunk_id'] must be a string, got {type(meta['chunk_id'])!r}"
             )
-            assert meta["chunk_id"], (
-                f"Edge metadata['chunk_id'] must be non-empty, got {meta.get('chunk_id')!r}"
-            )
+            assert meta["chunk_id"], f"Edge metadata['chunk_id'] must be non-empty, got {meta.get('chunk_id')!r}"
             assert meta["chunk_id"] in chunk_ids, (
                 "Edge metadata['chunk_id'] must reference an actual chunk created "
                 f"during this refresh, got {meta.get('chunk_id')!r} not in {chunk_ids!r}"
@@ -1137,9 +1027,7 @@ class TestFromAC_LateFailureAtomicCleanup:
                 source_url="https://example.test/late-fail",
             )
         assert isinstance(result, str), f"ingest_document must return a string, got {result!r}"
-        assert result.startswith("error:"), (
-            f"Must return 'error:...' on late-stage failure, got: {result!r}"
-        )
+        assert result.startswith("error:"), f"Must return 'error:...' on late-stage failure, got: {result!r}"
         count = conn.execute("SELECT count(*) FROM chunks").fetchone()[0]
         assert count == 0, (
             "Failed ingest must leave no chunk rows after late-stage cleanup "
@@ -1207,9 +1095,7 @@ class TestFromAC_LateFailureAtomicCleanup:
                 source_url="https://example.test/late-fail",
             )
         count = conn.execute("SELECT count(*) FROM entities").fetchone()[0]
-        assert count == 0, (
-            f"Failed ingest must leave no entity rows, found {count} row(s)"
-        )
+        assert count == 0, f"Failed ingest must leave no entity rows, found {count} row(s)"
 
     @pytest.mark.asyncio
     async def test_late_failure_after_embeddings_leaves_no_edges(
@@ -1238,9 +1124,7 @@ class TestFromAC_LateFailureAtomicCleanup:
                 source_url="https://example.test/late-fail",
             )
         count = conn.execute("SELECT count(*) FROM edges").fetchone()[0]
-        assert count == 0, (
-            f"Failed ingest must leave no edge rows, found {count} row(s)"
-        )
+        assert count == 0, f"Failed ingest must leave no edge rows, found {count} row(s)"
 
     @pytest.mark.asyncio
     async def test_partial_extraction_write_leaves_no_entities_or_edges(
@@ -1308,12 +1192,8 @@ class TestFromAC_LateFailureAtomicCleanup:
                 source_url="https://example.test/partial-write",
             )
 
-        assert isinstance(result, str), (
-            f"ingest_document must return a string, got {result!r}"
-        )
-        assert result.startswith("error:"), (
-            f"Must return 'error:...' when extraction partially fails, got: {result!r}"
-        )
+        assert isinstance(result, str), f"ingest_document must return a string, got {result!r}"
+        assert result.startswith("error:"), f"Must return 'error:...' when extraction partially fails, got: {result!r}"
         assert entity_call_count >= 1, (
             "insert_entity must be called ≥1 time before edge-write failure to prove "
             f"the partial-write state was reached (got {entity_call_count} calls); "
@@ -1331,8 +1211,7 @@ class TestFromAC_LateFailureAtomicCleanup:
         )
         chunk_count = conn.execute("SELECT count(*) FROM chunks").fetchone()[0]
         assert chunk_count == 0, (
-            "Failed ingest must leave no chunk rows after partial extraction-write "
-            f"cleanup, found {chunk_count} row(s)"
+            f"Failed ingest must leave no chunk rows after partial extraction-write cleanup, found {chunk_count} row(s)"
         )
         doc_count = conn.execute("SELECT count(*) FROM documents").fetchone()[0]
         assert doc_count == 0, (
@@ -1427,12 +1306,8 @@ class TestFromAC_LateFailureAtomicCleanup:
                 source_url="https://example.test/committed-edge",
             )
 
-        assert isinstance(result, str), (
-            f"ingest_document must return a string, got {result!r}"
-        )
-        assert result.startswith("error:"), (
-            f"Must return 'error:...' when second edge insert fails, got: {result!r}"
-        )
+        assert isinstance(result, str), f"ingest_document must return a string, got {result!r}"
+        assert result.startswith("error:"), f"Must return 'error:...' when second edge insert fails, got: {result!r}"
         assert edge_call_count >= 2, (  # noqa: PLR2004
             "insert_edge must be called ≥2 times (first call commits edge1, second raises) "
             f"to prove the committed-edge state was reached (got {edge_call_count} calls); "
@@ -1444,25 +1319,13 @@ class TestFromAC_LateFailureAtomicCleanup:
             f"the committed edge row, found {edge_count} row(s)"
         )
         entity_count = conn.execute("SELECT count(*) FROM entities").fetchone()[0]
-        assert entity_count == 0, (
-            "Failed ingest must leave no entity rows after cleanup, "
-            f"found {entity_count} row(s)"
-        )
+        assert entity_count == 0, f"Failed ingest must leave no entity rows after cleanup, found {entity_count} row(s)"
         chunk_count = conn.execute("SELECT count(*) FROM chunks").fetchone()[0]
-        assert chunk_count == 0, (
-            "Failed ingest must leave no chunk rows after cleanup, "
-            f"found {chunk_count} row(s)"
-        )
+        assert chunk_count == 0, f"Failed ingest must leave no chunk rows after cleanup, found {chunk_count} row(s)"
         doc_count = conn.execute("SELECT count(*) FROM documents").fetchone()[0]
-        assert doc_count == 0, (
-            "Failed ingest must leave no document rows after cleanup, "
-            f"found {doc_count} row(s)"
-        )
+        assert doc_count == 0, f"Failed ingest must leave no document rows after cleanup, found {doc_count} row(s)"
         source_count = conn.execute("SELECT count(*) FROM knowledge_sources").fetchone()[0]
-        assert source_count == 0, (
-            "Failed ingest must leave no source rows after cleanup, "
-            f"found {source_count} row(s)"
-        )
+        assert source_count == 0, f"Failed ingest must leave no source rows after cleanup, found {source_count} row(s)"
 
 
 # ---------------------------------------------------------------------------
@@ -1535,12 +1398,7 @@ class TestFromAC_DeleteDocumentDataVectorCleanup:
         doc_row = conn.execute("SELECT id FROM documents").fetchone()
         assert doc_row is not None, "No document row created by ingest"
         doc_id = doc_row[0]
-        chunk_ids = [
-            r[0]
-            for r in conn.execute(
-                "SELECT id FROM chunks WHERE document_id = ?", (doc_id,)
-            ).fetchall()
-        ]
+        chunk_ids = [r[0] for r in conn.execute("SELECT id FROM chunks WHERE document_id = ?", (doc_id,)).fetchall()]
         assert chunk_ids, "No chunks created — cannot verify vector cleanup"
 
         # Reset so only calls from delete_document_data are observed.
@@ -1548,8 +1406,7 @@ class TestFromAC_DeleteDocumentDataVectorCleanup:
         store_components["doc_store"].delete_document_data(doc_id)
 
         called_ids = [
-            c.args[0] if c.args else c.kwargs.get("entity_or_doc_id")
-            for c in mock_vs.delete_embedding.call_args_list
+            c.args[0] if c.args else c.kwargs.get("entity_or_doc_id") for c in mock_vs.delete_embedding.call_args_list
         ]
         for chunk_id in chunk_ids:
             assert chunk_id in called_ids, (
@@ -1559,9 +1416,7 @@ class TestFromAC_DeleteDocumentDataVectorCleanup:
             )
 
     @pytest.mark.asyncio
-    async def test_delete_document_data_second_delete_embedding_returns_false(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_delete_document_data_second_delete_embedding_returns_false(self, conn: sqlite3.Connection) -> None:
         """After delete_document_data, subsequent delete_embedding calls for
         former chunk IDs must return False (embeddings were already removed).
 
@@ -1582,9 +1437,7 @@ class TestFromAC_DeleteDocumentDataVectorCleanup:
         doc_store = DocumentStore(conn, graph_store, tvs, mock_emb)
         chunker = TextChunker()
         extractor = EntityExtractor()
-        pipeline = IngestPipeline(
-            doc_store, extractor, chunker, source_store=source_store
-        )
+        pipeline = IngestPipeline(doc_store, extractor, chunker, source_store=source_store)
 
         result = await pipeline.ingest_text(
             text="content for tracking vector store cleanup test",
@@ -1592,19 +1445,12 @@ class TestFromAC_DeleteDocumentDataVectorCleanup:
             scope="team-a",
             source_url="https://example.test/tracking",
         )
-        assert result.status == "ok", (
-            f"ingest_text must return status='ok', got {result.status!r}"
-        )
+        assert result.status == "ok", f"ingest_text must return status='ok', got {result.status!r}"
 
         doc_row = conn.execute("SELECT id FROM documents").fetchone()
         assert doc_row is not None, "No document row created"
         doc_id = doc_row[0]
-        chunk_ids = [
-            r[0]
-            for r in conn.execute(
-                "SELECT id FROM chunks WHERE document_id = ?", (doc_id,)
-            ).fetchall()
-        ]
+        chunk_ids = [r[0] for r in conn.execute("SELECT id FROM chunks WHERE document_id = ?", (doc_id,)).fetchall()]
         assert chunk_ids, "No chunks created — cannot verify vector cleanup"
 
         stored_before = set(tvs.stored_ids)
@@ -1677,9 +1523,7 @@ class TestFromAC_EndToEndSearchResolution:
     """
 
     @pytest.mark.asyncio
-    async def test_chunk_ids_in_db_match_vector_store_ids(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_chunk_ids_in_db_match_vector_store_ids(self, conn: sqlite3.Connection) -> None:
         """Chunk IDs persisted in the chunks table must equal IDs in the vector store.
 
         ID continuity contract: store_chunks() generates UUID chunk IDs;
@@ -1694,9 +1538,7 @@ class TestFromAC_EndToEndSearchResolution:
         graph_store = GraphStore(conn)
         source_store = KnowledgeSourceStore(conn)
         doc_store = DocumentStore(conn, graph_store, svs, mock_emb_local)
-        pipeline = IngestPipeline(
-            doc_store, EntityExtractor(), TextChunker(), source_store=source_store
-        )
+        pipeline = IngestPipeline(doc_store, EntityExtractor(), TextChunker(), source_store=source_store)
 
         result = await pipeline.ingest_text(
             text="chunk id continuity content for direct ingest path",
@@ -1716,9 +1558,7 @@ class TestFromAC_EndToEndSearchResolution:
         )
 
     @pytest.mark.asyncio
-    async def test_query_resolves_ingested_document_source_and_scope(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_query_resolves_ingested_document_source_and_scope(self, conn: sqlite3.Connection) -> None:
         """KnowledgeQueryService.query() must resolve source name, URL, and scope
         for a document ingested via the live direct-ingest path.
 
@@ -1733,9 +1573,7 @@ class TestFromAC_EndToEndSearchResolution:
         graph_store = GraphStore(conn)
         source_store = KnowledgeSourceStore(conn)
         doc_store = DocumentStore(conn, graph_store, svs, mock_emb_local)
-        pipeline = IngestPipeline(
-            doc_store, EntityExtractor(), TextChunker(), source_store=source_store
-        )
+        pipeline = IngestPipeline(doc_store, EntityExtractor(), TextChunker(), source_store=source_store)
 
         ingest_result = await pipeline.ingest_text(
             text="end to end resolution test document content",
@@ -1764,9 +1602,7 @@ class TestFromAC_EndToEndSearchResolution:
         hit = hits[0]
 
         # (b) document title resolves via chunk_id → document_id → Document
-        assert hit.title == "E2E Resolution Doc", (
-            f"hit.title must be 'E2E Resolution Doc', got {hit.title!r}"
-        )
+        assert hit.title == "E2E Resolution Doc", f"hit.title must be 'E2E Resolution Doc', got {hit.title!r}"
 
         # (c) source from linked KnowledgeSource row (not None)
         assert hit.source is not None, (
@@ -1779,19 +1615,14 @@ class TestFromAC_EndToEndSearchResolution:
         )
         source_config_url = (hit.source.config or {}).get("url")
         assert source_config_url == "https://example.test/e2e", (
-            "hit.source.config['url'] must be 'https://example.test/e2e', "
-            f"got {source_config_url!r}"
+            f"hit.source.config['url'] must be 'https://example.test/e2e', got {source_config_url!r}"
         )
 
         # (d) scope must be source scope ('team-a'), not the default 'global'
-        assert hit.scope == "team-a", (
-            f"hit.scope must be 'team-a' (source scope, not 'global'), got {hit.scope!r}"
-        )
+        assert hit.scope == "team-a", f"hit.scope must be 'team-a' (source scope, not 'global'), got {hit.scope!r}"
 
     @pytest.mark.asyncio
-    async def test_refresh_path_query_resolves_source_name_url_and_scope(
-        self, conn: sqlite3.Connection
-    ) -> None:
+    async def test_refresh_path_query_resolves_source_name_url_and_scope(self, conn: sqlite3.Connection) -> None:
         """KnowledgeQueryService.query() must resolve source name, URL, and scope
         for a document ingested via the refresh-equivalent path (IngestPipeline.ingest).
 
@@ -1807,9 +1638,7 @@ class TestFromAC_EndToEndSearchResolution:
         graph_store = GraphStore(conn)
         source_store = KnowledgeSourceStore(conn)
         doc_store = DocumentStore(conn, graph_store, svs, mock_emb_local)
-        pipeline = IngestPipeline(
-            doc_store, EntityExtractor(), TextChunker(), source_store=source_store
-        )
+        pipeline = IngestPipeline(doc_store, EntityExtractor(), TextChunker(), source_store=source_store)
 
         # Pre-seed a source with config.url so the query serializer can resolve source.url.
         _insert_source_direct(
@@ -1832,9 +1661,7 @@ class TestFromAC_EndToEndSearchResolution:
             scope="team-a",
             source_id="refresh-src-e2e",
         )
-        assert ingest_result.status == "ok", (
-            f"Refresh-path ingest must succeed, got status={ingest_result.status!r}"
-        )
+        assert ingest_result.status == "ok", f"Refresh-path ingest must succeed, got status={ingest_result.status!r}"
 
         query_service = KnowledgeQueryService(
             vector_store=svs,
@@ -1863,19 +1690,14 @@ class TestFromAC_EndToEndSearchResolution:
             "hit.source must be a KnowledgeSource object — the refresh ingest path "
             "must link the document to its source via document.source_id"
         )
-        assert hit.source.name == "Refresh Source", (
-            f"hit.source.name must be 'Refresh Source', got {hit.source.name!r}"
-        )
+        assert hit.source.name == "Refresh Source", f"hit.source.name must be 'Refresh Source', got {hit.source.name!r}"
         source_config_url = (hit.source.config or {}).get("url")
         assert source_config_url == "https://example.test/refresh", (
-            "hit.source.config['url'] must be 'https://example.test/refresh', "
-            f"got {source_config_url!r}"
+            f"hit.source.config['url'] must be 'https://example.test/refresh', got {source_config_url!r}"
         )
 
         # (d) scope must be 'team-a', not 'global'
-        assert hit.scope == "team-a", (
-            f"hit.scope must be 'team-a' (source scope, not 'global'), got {hit.scope!r}"
-        )
+        assert hit.scope == "team-a", f"hit.scope must be 'team-a' (source scope, not 'global'), got {hit.scope!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -1921,9 +1743,7 @@ class TestFromAC_SQLiteThreadSafety:
         doc_store = DocumentStore(default_conn, graph_store, mock_vs, mock_emb)
         chunker = TextChunker()
         extractor = EntityExtractor()
-        pipeline = IngestPipeline(
-            doc_store, extractor, chunker, source_store=source_store
-        )
+        pipeline = IngestPipeline(doc_store, extractor, chunker, source_store=source_store)
 
         result = await pipeline.ingest_text(
             text="t",
@@ -2007,18 +1827,13 @@ class TestFromAC_RefreshEmbeddingFailurePropagation:
         ):
             result = await refresh_source(ctx, source_id="src-a")
 
-        assert isinstance(result, dict), (
-            f"refresh_source must return a dict, got {result!r}"
-        )
+        assert isinstance(result, dict), f"refresh_source must return a dict, got {result!r}"
         assert result.get("refreshed") == 0, (
             "refreshed must be 0 when store_embeddings raises — embedding failure "
             "must propagate as failed, not refreshed. "
             f"Got: {result}"
         )
-        assert result.get("failed", 0) >= 1, (
-            "failed must be >= 1 when store_embeddings raises. "
-            f"Got: {result}"
-        )
+        assert result.get("failed", 0) >= 1, f"failed must be >= 1 when store_embeddings raises. Got: {result}"
 
 
 # ---------------------------------------------------------------------------
@@ -2098,13 +1913,10 @@ class TestFromAC_ReplaceOnChangeFailureCleanup:
             "store_chunks",
             side_effect=RuntimeError("forced store_chunks failure"),
         ):
-            result_v2 = await pipeline.ingest(
-                intake_v2, scope="team-a", source_id="src-a"
-            )
+            result_v2 = await pipeline.ingest(intake_v2, scope="team-a", source_id="src-a")
 
         assert result_v2.status == "failed", (
-            f"ingest() must return status='failed' when store_chunks raises, "
-            f"got {result_v2.status!r}"
+            f"ingest() must return status='failed' when store_chunks raises, got {result_v2.status!r}"
         )
         doc_count = conn.execute("SELECT count(*) FROM documents").fetchone()[0]
         assert doc_count == 0, (
@@ -2147,8 +1959,7 @@ class TestFromAC_ReplaceOnChangeFailureCleanup:
         )
         result_v1 = await pipeline.ingest(intake_v1, scope="team-a", source_id="src-a")
         assert result_v1.status == "ok", (
-            f"First ingest must succeed for replace-on-change to fire on second call, "
-            f"got status={result_v1.status!r}"
+            f"First ingest must succeed for replace-on-change to fire on second call, got status={result_v1.status!r}"
         )
 
         # Reset so only v2-related mock calls are observed.
@@ -2165,17 +1976,12 @@ class TestFromAC_ReplaceOnChangeFailureCleanup:
         with patch.object(
             store_components["doc_store"],
             "store_extractions",
-            side_effect=RuntimeError(
-                "forced late-stage extraction failure in replace-on-change"
-            ),
+            side_effect=RuntimeError("forced late-stage extraction failure in replace-on-change"),
         ):
-            result_v2 = await pipeline.ingest(
-                intake_v2, scope="team-a", source_id="src-a"
-            )
+            result_v2 = await pipeline.ingest(intake_v2, scope="team-a", source_id="src-a")
 
         assert result_v2.status == "failed", (
-            f"ingest() must return status='failed' when store_extractions raises, "
-            f"got {result_v2.status!r}"
+            f"ingest() must return status='failed' when store_extractions raises, got {result_v2.status!r}"
         )
 
         # (a) documents=0: v1 deleted by replace-on-change; v2 cleaned by _cleanup_failed_ingest.
@@ -2207,13 +2013,11 @@ class TestFromAC_ReplaceOnChangeFailureCleanup:
         # (d) entities=0, edges=0: store_extractions raised before any writes.
         entity_count = conn.execute("SELECT count(*) FROM entities").fetchone()[0]
         assert entity_count == 0, (
-            f"entities table must be empty after failed late-stage replace-on-change, "
-            f"found {entity_count} row(s)"
+            f"entities table must be empty after failed late-stage replace-on-change, found {entity_count} row(s)"
         )
         edge_count = conn.execute("SELECT count(*) FROM edges").fetchone()[0]
         assert edge_count == 0, (
-            f"edges table must be empty after failed late-stage replace-on-change, "
-            f"found {edge_count} row(s)"
+            f"edges table must be empty after failed late-stage replace-on-change, found {edge_count} row(s)"
         )
 
     @pytest.mark.asyncio
@@ -2250,8 +2054,7 @@ class TestFromAC_ReplaceOnChangeFailureCleanup:
         )
         result_v1 = await pipeline.ingest(intake_v1, scope="team-a", source_id="src-a")
         assert result_v1.status == "ok", (
-            f"First ingest must succeed for replace-on-change to fire on v2, "
-            f"got status={result_v1.status!r}"
+            f"First ingest must succeed for replace-on-change to fire on v2, got status={result_v1.status!r}"
         )
 
         # Spy on store_chunks to capture v2 replacement chunk IDs.
@@ -2259,9 +2062,7 @@ class TestFromAC_ReplaceOnChangeFailureCleanup:
         v2_chunk_ids: list[str] = []
         real_store_chunks = store_components["doc_store"].store_chunks
 
-        def _capturing_store_chunks(
-            document_id: str, chunks: list[object], **kwargs: object
-        ) -> list[str]:
+        def _capturing_store_chunks(document_id: str, chunks: list[object], **kwargs: object) -> list[str]:
             ids = real_store_chunks(document_id, chunks, **kwargs)
             v2_chunk_ids.extend(ids)
             return ids
@@ -2281,18 +2082,13 @@ class TestFromAC_ReplaceOnChangeFailureCleanup:
             patch.object(
                 store_components["doc_store"],
                 "store_extractions",
-                side_effect=RuntimeError(
-                    "forced failure after v2 chunks+embeddings committed"
-                ),
+                side_effect=RuntimeError("forced failure after v2 chunks+embeddings committed"),
             ),
         ):
-            result_v2 = await pipeline.ingest(
-                intake_v2, scope="team-a", source_id="src-a"
-            )
+            result_v2 = await pipeline.ingest(intake_v2, scope="team-a", source_id="src-a")
 
         assert result_v2.status == "failed", (
-            f"ingest() must return status='failed' when store_extractions raises, "
-            f"got {result_v2.status!r}"
+            f"ingest() must return status='failed' when store_extractions raises, got {result_v2.status!r}"
         )
 
         # Non-vacuous precondition: spy must have captured at least one v2 chunk ID.
@@ -2305,8 +2101,7 @@ class TestFromAC_ReplaceOnChangeFailureCleanup:
         # delete_embedding's call_args_list.  This proves _cleanup_failed_ingest
         # cleaned up v2 replacement vector payloads specifically, not just v1 chunks.
         called_ids = {
-            (c.args[0] if c.args else c.kwargs.get("entity_or_doc_id"))
-            for c in mock_vs.delete_embedding.call_args_list
+            (c.args[0] if c.args else c.kwargs.get("entity_or_doc_id")) for c in mock_vs.delete_embedding.call_args_list
         }
         for chunk_id in v2_chunk_ids:
             assert chunk_id in called_ids, (
@@ -2320,21 +2115,17 @@ class TestFromAC_ReplaceOnChangeFailureCleanup:
         # Existing AC-8 contract: no relational rows survive after failed replace-on-change.
         doc_count = conn.execute("SELECT count(*) FROM documents").fetchone()[0]
         assert doc_count == 0, (
-            f"documents table must be empty after failed replace-on-change, "
-            f"found {doc_count} row(s). AC-8 contract."
+            f"documents table must be empty after failed replace-on-change, found {doc_count} row(s). AC-8 contract."
         )
         chunk_count = conn.execute("SELECT count(*) FROM chunks").fetchone()[0]
         assert chunk_count == 0, (
-            f"chunks table must be empty after failed replace-on-change, "
-            f"found {chunk_count} row(s). AC-8 contract."
+            f"chunks table must be empty after failed replace-on-change, found {chunk_count} row(s). AC-8 contract."
         )
         entity_count = conn.execute("SELECT count(*) FROM entities").fetchone()[0]
         assert entity_count == 0, (
-            f"entities table must be empty after failed replace-on-change, "
-            f"found {entity_count} row(s). AC-8 contract."
+            f"entities table must be empty after failed replace-on-change, found {entity_count} row(s). AC-8 contract."
         )
         edge_count = conn.execute("SELECT count(*) FROM edges").fetchone()[0]
         assert edge_count == 0, (
-            f"edges table must be empty after failed replace-on-change, "
-            f"found {edge_count} row(s). AC-8 contract."
+            f"edges table must be empty after failed replace-on-change, found {edge_count} row(s). AC-8 contract."
         )

@@ -152,9 +152,7 @@ class TestFromAC_ProofBundleValidation:
         task = engine.create_task(title="T", proof_bundle="behavioral+challenge")
         assert task.proof_bundle == "behavioral+challenge"
 
-    def test_create_task_invalid_proof_bundle_raises_validation_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_create_task_invalid_proof_bundle_raises_validation_error(self, tmp_path: Path) -> None:
         """AC1: create_task with proof_bundle not in VALID_PROOF_BUNDLES raises ValidationError."""
         engine, _ = _make_engine(tmp_path)
         with pytest.raises(ValidationError) as exc_info:
@@ -168,9 +166,7 @@ class TestFromAC_ProofBundleValidation:
         task = engine.edit_task("1", proof_bundle="smoke")
         assert task.proof_bundle == "smoke"
 
-    def test_edit_task_invalid_proof_bundle_raises_validation_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_edit_task_invalid_proof_bundle_raises_validation_error(self, tmp_path: Path) -> None:
         """AC1: edit_task with proof_bundle not in VALID_PROOF_BUNDLES raises ValidationError."""
         engine, kanban_dir = _make_engine(tmp_path)
         _write_task(kanban_dir, task_id=1)
@@ -181,33 +177,34 @@ class TestFromAC_ProofBundleValidation:
     def test_valid_proof_bundles_frozenset_exists(self) -> None:
         """AC1: VALID_PROOF_BUNDLES is exported from owlbear_kanban.engine as a frozenset."""
         from owlbear_kanban.engine import VALID_PROOF_BUNDLES  # noqa: PLC0415
+
         assert isinstance(VALID_PROOF_BUNDLES, frozenset)
 
     def test_valid_proof_bundles_contains_all_five_bases(self) -> None:
         """AC1: VALID_PROOF_BUNDLES contains all five base values."""
         from owlbear_kanban.engine import VALID_PROOF_BUNDLES  # noqa: PLC0415
+
         bases = {"skip", "existing", "smoke", "behavioral", "critical"}
         assert bases <= VALID_PROOF_BUNDLES
 
     def test_valid_proof_bundles_contains_challenge_modifier_variants(self) -> None:
         """AC1: VALID_PROOF_BUNDLES contains base+challenge for every base."""
         from owlbear_kanban.engine import VALID_PROOF_BUNDLES  # noqa: PLC0415
+
         for base in ("skip", "existing", "smoke", "behavioral", "critical"):
-            assert f"{base}+challenge" in VALID_PROOF_BUNDLES, (
-                f"Expected '{base}+challenge' in VALID_PROOF_BUNDLES"
-            )
+            assert f"{base}+challenge" in VALID_PROOF_BUNDLES, f"Expected '{base}+challenge' in VALID_PROOF_BUNDLES"
 
     def test_valid_proof_bundles_contains_reader_modifier_variants(self) -> None:
         """AC1: VALID_PROOF_BUNDLES contains base+reader for every base."""
         from owlbear_kanban.engine import VALID_PROOF_BUNDLES  # noqa: PLC0415
+
         for base in ("skip", "existing", "smoke", "behavioral", "critical"):
-            assert f"{base}+reader" in VALID_PROOF_BUNDLES, (
-                f"Expected '{base}+reader' in VALID_PROOF_BUNDLES"
-            )
+            assert f"{base}+reader" in VALID_PROOF_BUNDLES, f"Expected '{base}+reader' in VALID_PROOF_BUNDLES"
 
     def test_valid_proof_bundles_contains_challenge_reader_modifier_variants(self) -> None:
         """AC1: VALID_PROOF_BUNDLES contains base+challenge+reader for every base."""
         from owlbear_kanban.engine import VALID_PROOF_BUNDLES  # noqa: PLC0415
+
         for base in ("skip", "existing", "smoke", "behavioral", "critical"):
             assert f"{base}+challenge+reader" in VALID_PROOF_BUNDLES, (
                 f"Expected '{base}+challenge+reader' in VALID_PROOF_BUNDLES"
@@ -219,6 +216,7 @@ class TestFromAC_ProofBundleValidation:
         Guards against extra invalid members that subset checks would miss.
         """
         from owlbear_kanban.engine import VALID_PROOF_BUNDLES  # noqa: PLC0415
+
         bases = ("skip", "existing", "smoke", "behavioral", "critical")
         expected: frozenset[str] = frozenset(
             set(bases)
@@ -277,9 +275,7 @@ class TestFromAC_EditTaskAcMutation:
         task = engine.edit_task("1", remove_ac=["nonexistent"])
         assert task.ac == ["kept item"]
 
-    def test_edit_task_ac_and_add_ac_together_raises_validation_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_edit_task_ac_and_add_ac_together_raises_validation_error(self, tmp_path: Path) -> None:
         """AC2: edit_task with both ac= and add_ac= raises ValidationError(ERR_AC_EXCLUSIVE)."""
         engine, kanban_dir = _make_engine(tmp_path)
         _write_task(kanban_dir, task_id=1)
@@ -287,9 +283,7 @@ class TestFromAC_EditTaskAcMutation:
             engine.edit_task("1", ac=["item"], add_ac=["other"])
         assert exc_info.value.code == "ERR_AC_EXCLUSIVE"
 
-    def test_edit_task_ac_and_remove_ac_together_raises_validation_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_edit_task_ac_and_remove_ac_together_raises_validation_error(self, tmp_path: Path) -> None:
         """AC2: edit_task with both ac= and remove_ac= raises ValidationError(ERR_AC_EXCLUSIVE)."""
         engine, kanban_dir = _make_engine(tmp_path)
         _write_task(kanban_dir, task_id=1, extra_fields='ac:\n  - "existing"\n')
@@ -312,9 +306,7 @@ class TestFromAC_EditTaskAcMutation:
         task = engine.edit_task("1", add_ac=["appended item"])
         assert task.ac == ["first item", "second item", "appended item"]
 
-    def test_edit_task_remove_ac_exact_match_preserves_near_collision_item(
-        self, tmp_path: Path
-    ) -> None:
+    def test_edit_task_remove_ac_exact_match_preserves_near_collision_item(self, tmp_path: Path) -> None:
         """AC2: remove_ac uses exact string equality — a near-collision item sharing
         a common substring with the removed item is NOT removed.
 
@@ -325,12 +317,7 @@ class TestFromAC_EditTaskAcMutation:
         _write_task(
             kanban_dir,
             task_id=1,
-            extra_fields=(
-                'ac:\n'
-                '  - "item to remove"\n'
-                '  - "item to remove extended"\n'
-                '  - "unrelated item"\n'
-            ),
+            extra_fields=('ac:\n  - "item to remove"\n  - "item to remove extended"\n  - "unrelated item"\n'),
         )
         task = engine.edit_task("1", remove_ac=["item to remove"])
         assert task.ac == ["item to remove extended", "unrelated item"]
@@ -344,9 +331,7 @@ class TestFromAC_EditTaskAcMutation:
 class TestFromAC_EditTaskAddAcDuplicates:
     """AC3: edit_task rejects add_ac items already in task ac with ValidationError(ERR_AC_DUPLICATE)."""
 
-    def test_edit_task_add_ac_duplicate_raises_validation_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_edit_task_add_ac_duplicate_raises_validation_error(self, tmp_path: Path) -> None:
         """AC3: add_ac with an item already in task ac raises ValidationError(ERR_AC_DUPLICATE)."""
         engine, kanban_dir = _make_engine(tmp_path)
         _write_task(kanban_dir, task_id=1, extra_fields='ac:\n  - "already here"\n')
@@ -354,9 +339,7 @@ class TestFromAC_EditTaskAddAcDuplicates:
             engine.edit_task("1", add_ac=["already here"])
         assert exc_info.value.code == "ERR_AC_DUPLICATE"
 
-    def test_edit_task_add_ac_duplicate_error_lists_duplicate_items(
-        self, tmp_path: Path
-    ) -> None:
+    def test_edit_task_add_ac_duplicate_error_lists_duplicate_items(self, tmp_path: Path) -> None:
         """AC3: ValidationError for duplicate add_ac lists the existing duplicate items."""
         engine, kanban_dir = _make_engine(tmp_path)
         _write_task(kanban_dir, task_id=1, extra_fields='ac:\n  - "dup item"\n')
@@ -371,9 +354,7 @@ class TestFromAC_EditTaskAddAcDuplicates:
         task = engine.edit_task("1", add_ac=["brand new"])
         assert "brand new" in task.ac
 
-    def test_edit_task_add_ac_partial_duplicate_raises_validation_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_edit_task_add_ac_partial_duplicate_raises_validation_error(self, tmp_path: Path) -> None:
         """AC3: add_ac with mix of new and duplicate items raises ValidationError."""
         engine, kanban_dir = _make_engine(tmp_path)
         _write_task(kanban_dir, task_id=1, extra_fields='ac:\n  - "dup"\n')
@@ -381,9 +362,7 @@ class TestFromAC_EditTaskAddAcDuplicates:
             engine.edit_task("1", add_ac=["dup", "new item"])
         assert exc_info.value.code == "ERR_AC_DUPLICATE"
 
-    def test_edit_task_add_ac_multi_duplicate_error_lists_all_duplicates(
-        self, tmp_path: Path
-    ) -> None:
+    def test_edit_task_add_ac_multi_duplicate_error_lists_all_duplicates(self, tmp_path: Path) -> None:
         """AC3: ValidationError lists ALL existing duplicates when multiple are provided."""
         engine, kanban_dir = _make_engine(tmp_path)
         _write_task(
@@ -413,9 +392,7 @@ class TestFromAC_AcGuardrails:
         task = engine.create_task(title="T", ac=ac_items)
         assert len(task.ac) == 20
 
-    def test_create_task_21_ac_items_raises_validation_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_create_task_21_ac_items_raises_validation_error(self, tmp_path: Path) -> None:
         """AC4: create_task with 21 ac items raises ValidationError(ERR_AC_LIMIT)."""
         engine, _ = _make_engine(tmp_path)
         ac_items = [f"AC{i}: item" for i in range(21)]
@@ -423,26 +400,20 @@ class TestFromAC_AcGuardrails:
             engine.create_task(title="T", ac=ac_items)
         assert exc_info.value.code == "ERR_AC_LIMIT"
 
-    def test_create_task_ac_item_exactly_500_chars_succeeds(
-        self, tmp_path: Path
-    ) -> None:
+    def test_create_task_ac_item_exactly_500_chars_succeeds(self, tmp_path: Path) -> None:
         """AC4: create_task with an ac item of exactly 500 chars is accepted (boundary)."""
         engine, _ = _make_engine(tmp_path)
         task = engine.create_task(title="T", ac=["x" * 500])
         assert len(task.ac[0]) == 500
 
-    def test_create_task_ac_item_501_chars_raises_validation_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_create_task_ac_item_501_chars_raises_validation_error(self, tmp_path: Path) -> None:
         """AC4: create_task with an ac item of 501 chars raises ValidationError(ERR_AC_ITEM_TOO_LONG)."""
         engine, _ = _make_engine(tmp_path)
         with pytest.raises(ValidationError) as exc_info:
             engine.create_task(title="T", ac=["x" * 501])
         assert exc_info.value.code == "ERR_AC_ITEM_TOO_LONG"
 
-    def test_edit_task_ac_replace_21_items_raises_validation_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_edit_task_ac_replace_21_items_raises_validation_error(self, tmp_path: Path) -> None:
         """AC4: edit_task(ac=[21 items]) raises ValidationError(ERR_AC_LIMIT)."""
         engine, kanban_dir = _make_engine(tmp_path)
         _write_task(kanban_dir, task_id=1)
@@ -451,9 +422,7 @@ class TestFromAC_AcGuardrails:
             engine.edit_task("1", ac=ac_items)
         assert exc_info.value.code == "ERR_AC_LIMIT"
 
-    def test_edit_task_add_ac_exceeding_20_total_raises_validation_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_edit_task_add_ac_exceeding_20_total_raises_validation_error(self, tmp_path: Path) -> None:
         """AC4: edit_task(add_ac=[...]) that pushes total ac count above 20 raises ValidationError."""
         engine, kanban_dir = _make_engine(tmp_path)
         existing = "\n".join(f'  - "item {i}"' for i in range(19))
@@ -462,9 +431,7 @@ class TestFromAC_AcGuardrails:
             engine.edit_task("1", add_ac=["item A", "item B"])
         assert exc_info.value.code == "ERR_AC_LIMIT"
 
-    def test_edit_task_ac_item_501_chars_raises_validation_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_edit_task_ac_item_501_chars_raises_validation_error(self, tmp_path: Path) -> None:
         """AC4: edit_task(ac=[item > 500 chars]) raises ValidationError(ERR_AC_ITEM_TOO_LONG)."""
         engine, kanban_dir = _make_engine(tmp_path)
         _write_task(kanban_dir, task_id=1)
@@ -472,9 +439,7 @@ class TestFromAC_AcGuardrails:
             engine.edit_task("1", ac=["x" * 501])
         assert exc_info.value.code == "ERR_AC_ITEM_TOO_LONG"
 
-    def test_edit_task_add_ac_item_501_chars_raises_validation_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_edit_task_add_ac_item_501_chars_raises_validation_error(self, tmp_path: Path) -> None:
         """AC4: edit_task(add_ac=[item > 500 chars]) raises ValidationError(ERR_AC_ITEM_TOO_LONG)."""
         engine, kanban_dir = _make_engine(tmp_path)
         _write_task(kanban_dir, task_id=1)
@@ -490,9 +455,7 @@ class TestFromAC_AcGuardrails:
         task = engine.edit_task("1", ac=ac_items)
         assert len(task.ac) == 20
 
-    def test_edit_task_ac_item_exactly_500_chars_replace_succeeds(
-        self, tmp_path: Path
-    ) -> None:
+    def test_edit_task_ac_item_exactly_500_chars_replace_succeeds(self, tmp_path: Path) -> None:
         """AC4: edit_task(ac=['x' * 500]) is accepted - positive boundary for edit_task replace."""
         engine, kanban_dir = _make_engine(tmp_path)
         _write_task(kanban_dir, task_id=1)
@@ -547,9 +510,7 @@ class TestFromAC_ListTasksAcSearch:
         results = engine.list_tasks(search="authentication")
         assert any(t.id == 1 for t in results)
 
-    def test_list_tasks_search_ac_does_not_match_title_or_body(
-        self, tmp_path: Path
-    ) -> None:
+    def test_list_tasks_search_ac_does_not_match_title_or_body(self, tmp_path: Path) -> None:
         """AC5: search only in ac items returns task; title/body alone don't add to ac match."""
         engine, kanban_dir = _make_engine(tmp_path)
         # Task 1: keyword only in ac
@@ -573,9 +534,7 @@ class TestFromAC_ListTasksAcSearch:
         assert 1 in ids
         assert 2 in ids
 
-    def test_list_tasks_search_ac_multiple_items_any_match_returns_task(
-        self, tmp_path: Path
-    ) -> None:
+    def test_list_tasks_search_ac_multiple_items_any_match_returns_task(self, tmp_path: Path) -> None:
         """AC5: task is returned when keyword matches any one of its ac items."""
         engine, kanban_dir = _make_engine(tmp_path)
         _write_task(
@@ -583,9 +542,7 @@ class TestFromAC_ListTasksAcSearch:
             task_id=1,
             title="Unrelated",
             body="Unrelated body.",
-            extra_fields=(
-                'ac:\n  - "first AC item"\n  - "second AC item with targetword"\n'
-            ),
+            extra_fields=('ac:\n  - "first AC item"\n  - "second AC item with targetword"\n'),
         )
         results = engine.list_tasks(search="targetword")
         assert any(t.id == 1 for t in results)

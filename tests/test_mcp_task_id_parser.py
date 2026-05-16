@@ -299,9 +299,7 @@ class TestFromAC_EndpointBoundaryProofs:
             await mcp_edit_task(ctx, id="1; rm -rf", append_body="probe")
 
     @pytest.mark.asyncio
-    async def test_start_work_rejects_negative_string(
-        self, app_ctx: AppContext
-    ) -> None:
+    async def test_start_work_rejects_negative_string(self, app_ctx: AppContext) -> None:
         """AC1/AC3/AC4 endpoint: start_work rejects '-1' with clear ToolError.
 
         FAIL (RED): current start_work calls int('-1') which succeeds (int -1), then
@@ -368,9 +366,7 @@ class TestFromAC_NoSideEffects:
     """
 
     @pytest.mark.asyncio
-    async def test_rejected_move_task_does_not_change_status(
-        self, app_ctx_with_task: tuple[AppContext, int]
-    ) -> None:
+    async def test_rejected_move_task_does_not_change_status(self, app_ctx_with_task: tuple[AppContext, int]) -> None:
         """AC5: invalid ID for move_task leaves the existing task in its original status.
 
         A real task at 'todo' must remain at 'todo' after a rejected move_task call.
@@ -389,14 +385,11 @@ class TestFromAC_NoSideEffects:
 
         post_task = app_ctx.engine.show_task(str(task_id))
         assert post_task.status == original_status, (
-            f"Task status changed after rejected move_task; "
-            f"expected {original_status!r}, got {post_task.status!r}"
+            f"Task status changed after rejected move_task; expected {original_status!r}, got {post_task.status!r}"
         )
 
     @pytest.mark.asyncio
-    async def test_rejected_edit_task_does_not_modify_body(
-        self, app_ctx_with_task: tuple[AppContext, int]
-    ) -> None:
+    async def test_rejected_edit_task_does_not_modify_body(self, app_ctx_with_task: tuple[AppContext, int]) -> None:
         """AC5: invalid ID for edit_task leaves the existing task body unchanged.
 
         FAIL (RED): ImportError at collection.
@@ -416,9 +409,7 @@ class TestFromAC_NoSideEffects:
         )
 
     @pytest.mark.asyncio
-    async def test_rejected_start_work_does_not_claim_any_task(
-        self, app_ctx_with_task: tuple[AppContext, int]
-    ) -> None:
+    async def test_rejected_start_work_does_not_claim_any_task(self, app_ctx_with_task: tuple[AppContext, int]) -> None:
         """AC5: invalid ID for start_work leaves no task claimed.
 
         FAIL (RED): ImportError at collection.
@@ -430,9 +421,7 @@ class TestFromAC_NoSideEffects:
             await mcp_start_work(ctx, id="-5")
 
         post_task = app_ctx.engine.show_task(str(task_id))
-        assert post_task.claimed_at is None, (
-            "Task was claimed after rejected start_work with negative ID"
-        )
+        assert post_task.claimed_at is None, "Task was claimed after rejected start_work with negative ID"
 
 
 # ---------------------------------------------------------------------------
@@ -493,9 +482,7 @@ class TestFromAC_ValidIdsRegression:
         return AppContext(engine=engine, kanban_dir=kanban_dir), mock_view
 
     @pytest.mark.asyncio
-    async def test_move_task_valid_int_id_reaches_engine(
-        self, app_ctx_mocked: tuple[AppContext, MagicMock]
-    ) -> None:
+    async def test_move_task_valid_int_id_reaches_engine(self, app_ctx_mocked: tuple[AppContext, MagicMock]) -> None:
         """AC6 regression: move_task with valid int id='1' calls view.move_task.
 
         FAIL (RED): ImportError at collection.
@@ -512,9 +499,7 @@ class TestFromAC_ValidIdsRegression:
         ), f"move_task not called with int 1; args={call_args}"
 
     @pytest.mark.asyncio
-    async def test_edit_task_valid_int_id_reaches_engine(
-        self, app_ctx_mocked: tuple[AppContext, MagicMock]
-    ) -> None:
+    async def test_edit_task_valid_int_id_reaches_engine(self, app_ctx_mocked: tuple[AppContext, MagicMock]) -> None:
         """AC6 regression: edit_task with valid int id='1' calls view.edit_task.
 
         FAIL (RED): ImportError at collection.
@@ -524,18 +509,12 @@ class TestFromAC_ValidIdsRegression:
         await mcp_edit_task(ctx, id="1", append_body="ok")
         mock_view.edit_task.assert_called_once()
         call_args = mock_view.edit_task.call_args
-        task_id_arg = (
-            call_args.args[0] if call_args.args else call_args.kwargs.get("task_id")
-        )
+        task_id_arg = call_args.args[0] if call_args.args else call_args.kwargs.get("task_id")
         assert task_id_arg == 1, f"edit_task must receive int 1; got {task_id_arg!r}"
-        assert isinstance(task_id_arg, int), (
-            f"task_id must be int, got {type(task_id_arg)}"
-        )
+        assert isinstance(task_id_arg, int), f"task_id must be int, got {type(task_id_arg)}"
 
     @pytest.mark.asyncio
-    async def test_start_work_valid_int_id_reaches_engine(
-        self, app_ctx_mocked: tuple[AppContext, MagicMock]
-    ) -> None:
+    async def test_start_work_valid_int_id_reaches_engine(self, app_ctx_mocked: tuple[AppContext, MagicMock]) -> None:
         """AC6 regression: start_work with valid int id='1' calls view.start_work.
 
         FAIL (RED): ImportError at collection.
@@ -545,18 +524,12 @@ class TestFromAC_ValidIdsRegression:
         await mcp_start_work(ctx, id="1")
         mock_view.start_work.assert_called_once()
         call_args = mock_view.start_work.call_args
-        task_id_arg = (
-            call_args.args[0] if call_args.args else call_args.kwargs.get("task_id")
-        )
+        task_id_arg = call_args.args[0] if call_args.args else call_args.kwargs.get("task_id")
         assert task_id_arg == 1, f"start_work must receive int 1; got {task_id_arg!r}"
-        assert isinstance(task_id_arg, int), (
-            f"task_id must be int, got {type(task_id_arg)}"
-        )
+        assert isinstance(task_id_arg, int), f"task_id must be int, got {type(task_id_arg)}"
 
     @pytest.mark.asyncio
-    async def test_end_work_valid_int_id_reaches_engine(
-        self, app_ctx_mocked: tuple[AppContext, MagicMock]
-    ) -> None:
+    async def test_end_work_valid_int_id_reaches_engine(self, app_ctx_mocked: tuple[AppContext, MagicMock]) -> None:
         """AC6 regression: end_work with valid int id='1' calls view.end_work.
 
         FAIL (RED): ImportError at collection.
@@ -566,18 +539,12 @@ class TestFromAC_ValidIdsRegression:
         await mcp_end_work(ctx, id="1", note="done")
         mock_view.end_work.assert_called_once()
         call_args = mock_view.end_work.call_args
-        task_id_arg = (
-            call_args.args[0] if call_args.args else call_args.kwargs.get("task_id")
-        )
+        task_id_arg = call_args.args[0] if call_args.args else call_args.kwargs.get("task_id")
         assert task_id_arg == 1, f"end_work must receive int 1; got {task_id_arg!r}"
-        assert isinstance(task_id_arg, int), (
-            f"task_id must be int, got {type(task_id_arg)}"
-        )
+        assert isinstance(task_id_arg, int), f"task_id must be int, got {type(task_id_arg)}"
 
     @pytest.mark.asyncio
-    async def test_show_task_valid_int_id_reaches_engine(
-        self, app_ctx_mocked: tuple[AppContext, MagicMock]
-    ) -> None:
+    async def test_show_task_valid_int_id_reaches_engine(self, app_ctx_mocked: tuple[AppContext, MagicMock]) -> None:
         """AC6 regression: show_task with valid int id=1 calls view.show_task.
 
         FAIL (RED): ImportError at collection.
@@ -588,16 +555,10 @@ class TestFromAC_ValidIdsRegression:
         mock_view.show_task.assert_called_once()
         call_args = mock_view.show_task.call_args
         task_id_arg = (
-            call_args.kwargs.get("task_id")
-            if call_args.kwargs
-            else (call_args.args[0] if call_args.args else None)
+            call_args.kwargs.get("task_id") if call_args.kwargs else (call_args.args[0] if call_args.args else None)
         )
-        assert task_id_arg == 1, (
-            f"show_task must receive task_id=1; got {task_id_arg!r}"
-        )
-        assert isinstance(task_id_arg, int), (
-            f"task_id must be int, got {type(task_id_arg)}"
-        )
+        assert task_id_arg == 1, f"show_task must receive task_id=1; got {task_id_arg!r}"
+        assert isinstance(task_id_arg, int), f"task_id must be int, got {type(task_id_arg)}"
 
 
 # ---------------------------------------------------------------------------
@@ -638,9 +599,7 @@ class TestFromAC_ShowTaskStringBoundary:
     """
 
     @pytest.mark.asyncio
-    async def test_show_task_rejects_path_traversal_string(
-        self, app_ctx: AppContext
-    ) -> None:
+    async def test_show_task_rejects_path_traversal_string(self, app_ctx: AppContext) -> None:
         """AC4/AC7: show_task("../foo") must raise field-specific ToolError.
 
         "positive" in the error proves parse_task_id was reached, not the
@@ -673,9 +632,7 @@ class TestFromAC_ShowTaskStringBoundary:
             await mcp_show_task(ctx, id="")  # type: ignore[arg-type]
 
     @pytest.mark.asyncio
-    async def test_show_task_rejects_shell_injection_string(
-        self, app_ctx: AppContext
-    ) -> None:
+    async def test_show_task_rejects_shell_injection_string(self, app_ctx: AppContext) -> None:
         """AC4/AC7: show_task("1; rm -rf") must raise field-specific ToolError.
 
         FAIL (current): generic Pydantic error lacks "positive".
@@ -685,9 +642,7 @@ class TestFromAC_ShowTaskStringBoundary:
             await mcp_show_task(ctx, id="1; rm -rf")  # type: ignore[arg-type]
 
     @pytest.mark.asyncio
-    async def test_show_task_rejects_whitespace_padded_string(
-        self, app_ctx: AppContext
-    ) -> None:
+    async def test_show_task_rejects_whitespace_padded_string(self, app_ctx: AppContext) -> None:
         """AC4/AC7: show_task(" 42 ") must raise field-specific ToolError.
 
         Pydantic strips whitespace before int coercion; parse_task_id rejects

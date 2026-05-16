@@ -15,9 +15,7 @@ _INIT_PATH = _REPO_ROOT / "setup" / "init.py"
 
 
 def _load_init_module() -> types.ModuleType:
-    spec = importlib.util.spec_from_file_location(
-        "owlbear_setup_init_settings", _INIT_PATH
-    )
+    spec = importlib.util.spec_from_file_location("owlbear_setup_init_settings", _INIT_PATH)
     assert spec is not None
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)

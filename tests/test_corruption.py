@@ -100,12 +100,9 @@ class TestFromAC_CleanupDeadCodes:
         extra = actual - expected
         missing = expected - actual
         assert not extra, (
-            f"ERR_CORRUPT_* has extra codes with no Brief §4.1 authority (must be removed): "
-            f"{sorted(extra)}"
+            f"ERR_CORRUPT_* has extra codes with no Brief §4.1 authority (must be removed): {sorted(extra)}"
         )
-        assert not missing, (
-            f"ERR_CORRUPT_* is missing Brief §4.1 codes (must be added): {sorted(missing)}"
-        )
+        assert not missing, f"ERR_CORRUPT_* is missing Brief §4.1 codes (must be added): {sorted(missing)}"
 
 
 # --- merged from tests/test_corruption_1368.py ---
@@ -218,9 +215,7 @@ class TestFromAC_EncodingHardening:
     # tasks/ directory — AC-1 (no UnicodeDecodeError raised)
     # -----------------------------------------------------------------
 
-    def test_non_utf8_in_tasks_dir_does_not_raise_unicode_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_non_utf8_in_tasks_dir_does_not_raise_unicode_error(self, tmp_path: Path) -> None:
         """AC-1: Non-UTF8 file under tasks/ must not propagate UnicodeDecodeError.
 
         RED: current code raises UnicodeDecodeError from read_text(encoding='utf-8').
@@ -239,9 +234,7 @@ class TestFromAC_EncodingHardening:
     # tasks/ directory — AC-2 (CorruptionError shape)
     # -----------------------------------------------------------------
 
-    def test_non_utf8_in_tasks_dir_returns_corruption_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_non_utf8_in_tasks_dir_returns_corruption_error(self, tmp_path: Path) -> None:
         """AC-2: detect_corruption must return CorruptionError for non-UTF8 tasks/ file.
 
         RED: current code raises UnicodeDecodeError instead of returning CorruptionError.
@@ -252,9 +245,7 @@ class TestFromAC_EncodingHardening:
         config = load_config(board_dir)
 
         result = detect_corruption(bad_file, config)
-        assert isinstance(result, CorruptionError), (
-            f"Expected CorruptionError instance, got {type(result).__name__!r}"
-        )
+        assert isinstance(result, CorruptionError), f"Expected CorruptionError instance, got {type(result).__name__!r}"
 
     def test_non_utf8_in_tasks_dir_code_is_encoding(self, tmp_path: Path) -> None:
         """AC-2: CorruptionError for non-UTF8 tasks/ file has .code == ERR_CORRUPT_ENCODING.
@@ -271,9 +262,7 @@ class TestFromAC_EncodingHardening:
 
         result = detect_corruption(bad_file, config)
         assert isinstance(result, CorruptionError)
-        assert result.code == ERR_CORRUPT_ENCODING, (
-            f"Expected code ERR_CORRUPT_ENCODING, got {result.code!r}"
-        )
+        assert result.code == ERR_CORRUPT_ENCODING, f"Expected code ERR_CORRUPT_ENCODING, got {result.code!r}"
 
     def test_non_utf8_in_tasks_dir_file_path_is_set(self, tmp_path: Path) -> None:
         """AC-2: CorruptionError for non-UTF8 tasks/ file has .file_path set.
@@ -287,9 +276,7 @@ class TestFromAC_EncodingHardening:
 
         result = detect_corruption(bad_file, config)
         assert isinstance(result, CorruptionError)
-        assert result.file_path is not None, (
-            "file_path must be set on the CorruptionError"
-        )
+        assert result.file_path is not None, "file_path must be set on the CorruptionError"
         assert result.file_path == str(bad_file)
 
     def test_non_utf8_in_tasks_dir_detail_is_non_empty(self, tmp_path: Path) -> None:
@@ -305,18 +292,15 @@ class TestFromAC_EncodingHardening:
         result = detect_corruption(bad_file, config)
         assert isinstance(result, CorruptionError)
         assert isinstance(result.detail, str), "detail must be a string"
-        assert any(
-            kw in result.detail.lower()
-            for kw in ("encoding", "decode", "utf-8", "utf8", "unicode")
-        ), f"detail must reference the encoding/decode failure, got {result.detail!r}"
+        assert any(kw in result.detail.lower() for kw in ("encoding", "decode", "utf-8", "utf8", "unicode")), (
+            f"detail must reference the encoding/decode failure, got {result.detail!r}"
+        )
 
     # -----------------------------------------------------------------
     # archive/ directory — AC-1 (no UnicodeDecodeError raised)
     # -----------------------------------------------------------------
 
-    def test_non_utf8_in_archive_dir_does_not_raise_unicode_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_non_utf8_in_archive_dir_does_not_raise_unicode_error(self, tmp_path: Path) -> None:
         """AC-1: Non-UTF8 file under archive/ must not propagate UnicodeDecodeError.
 
         RED: current code raises UnicodeDecodeError from read_text(encoding='utf-8').
@@ -333,9 +317,7 @@ class TestFromAC_EncodingHardening:
     # archive/ directory — AC-2 (CorruptionError shape)
     # -----------------------------------------------------------------
 
-    def test_non_utf8_in_archive_dir_returns_corruption_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_non_utf8_in_archive_dir_returns_corruption_error(self, tmp_path: Path) -> None:
         """AC-2: detect_corruption must return CorruptionError for non-UTF8 archive/ file.
 
         RED: current code raises UnicodeDecodeError instead.
@@ -346,9 +328,7 @@ class TestFromAC_EncodingHardening:
         config = load_config(board_dir)
 
         result = detect_corruption(bad_file, config)
-        assert isinstance(result, CorruptionError), (
-            f"Expected CorruptionError instance, got {type(result).__name__!r}"
-        )
+        assert isinstance(result, CorruptionError), f"Expected CorruptionError instance, got {type(result).__name__!r}"
 
     def test_non_utf8_in_archive_dir_code_is_encoding(self, tmp_path: Path) -> None:
         """AC-2: CorruptionError for non-UTF8 archive/ file has .code == ERR_CORRUPT_ENCODING.
@@ -364,9 +344,7 @@ class TestFromAC_EncodingHardening:
 
         result = detect_corruption(bad_file, config)
         assert isinstance(result, CorruptionError)
-        assert result.code == ERR_CORRUPT_ENCODING, (
-            f"Expected code ERR_CORRUPT_ENCODING, got {result.code!r}"
-        )
+        assert result.code == ERR_CORRUPT_ENCODING, f"Expected code ERR_CORRUPT_ENCODING, got {result.code!r}"
 
     def test_non_utf8_in_archive_dir_file_path_is_set(self, tmp_path: Path) -> None:
         """AC-2: CorruptionError for non-UTF8 archive/ file has .file_path set.
@@ -380,9 +358,7 @@ class TestFromAC_EncodingHardening:
 
         result = detect_corruption(bad_file, config)
         assert isinstance(result, CorruptionError)
-        assert result.file_path is not None, (
-            "file_path must be set on the CorruptionError"
-        )
+        assert result.file_path is not None, "file_path must be set on the CorruptionError"
         assert result.file_path == str(bad_file)
 
     def test_non_utf8_in_archive_dir_detail_is_non_empty(self, tmp_path: Path) -> None:
@@ -398,10 +374,9 @@ class TestFromAC_EncodingHardening:
         result = detect_corruption(bad_file, config)
         assert isinstance(result, CorruptionError)
         assert isinstance(result.detail, str), "detail must be a string"
-        assert any(
-            kw in result.detail.lower()
-            for kw in ("encoding", "decode", "utf-8", "utf8", "unicode")
-        ), f"detail must reference the encoding/decode failure, got {result.detail!r}"
+        assert any(kw in result.detail.lower() for kw in ("encoding", "decode", "utf-8", "utf8", "unicode")), (
+            f"detail must reference the encoding/decode failure, got {result.detail!r}"
+        )
 
     # -----------------------------------------------------------------
     # Regression guard — AC-3

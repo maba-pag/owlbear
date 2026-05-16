@@ -73,9 +73,7 @@ class TestFromAC_CockpitViewNewModule:
     """AC1: CockpitView must be importable from owlbear_cockpit.view."""
 
     def test_view_py_file_exists(self, project_root: Path) -> None:
-        view_file = (
-            project_root / "serve" / "cockpit" / "src" / "owlbear_cockpit" / "view.py"
-        )
+        view_file = project_root / "serve" / "cockpit" / "src" / "owlbear_cockpit" / "view.py"
         assert view_file.exists(), (
             "serve/cockpit/src/owlbear_cockpit/view.py must exist — "
             "CockpitView class should be defined here after relocation"
@@ -84,9 +82,7 @@ class TestFromAC_CockpitViewNewModule:
     def test_cockpit_view_importable_from_new_path(self) -> None:
         from owlbear_cockpit.view import CockpitView  # noqa: PLC0415
 
-        assert CockpitView is not None, (
-            "CockpitView must be importable from owlbear_cockpit.view"
-        )
+        assert CockpitView is not None, "CockpitView must be importable from owlbear_cockpit.view"
 
     def test_cockpit_view_instantiable_from_new_module(self, tmp_path: Path) -> None:
         from owlbear_cockpit.view import CockpitView  # noqa: PLC0415
@@ -95,9 +91,7 @@ class TestFromAC_CockpitViewNewModule:
         kanban_dir = _make_board(tmp_path)
         engine = KanbanEngine(kanban_dir)
         view = CockpitView(engine)
-        assert view is not None, (
-            "CockpitView(engine) must construct successfully from new module"
-        )
+        assert view is not None, "CockpitView(engine) must construct successfully from new module"
 
     def test_cockpit_view_has_list_tasks(self, tmp_path: Path) -> None:
         from owlbear_cockpit.view import CockpitView  # noqa: PLC0415
@@ -117,9 +111,7 @@ class TestFromAC_CockpitViewNewModule:
         kanban_dir = _make_board(tmp_path)
         engine = KanbanEngine(kanban_dir)
         view = CockpitView(engine)
-        assert callable(getattr(view, "show_task", None)), (
-            "CockpitView from owlbear_cockpit.view must expose show_task"
-        )
+        assert callable(getattr(view, "show_task", None)), "CockpitView from owlbear_cockpit.view must expose show_task"
 
     def test_cockpit_view_has_edit_task(self, tmp_path: Path) -> None:
         from owlbear_cockpit.view import CockpitView  # noqa: PLC0415
@@ -128,9 +120,7 @@ class TestFromAC_CockpitViewNewModule:
         kanban_dir = _make_board(tmp_path)
         engine = KanbanEngine(kanban_dir)
         view = CockpitView(engine)
-        assert callable(getattr(view, "edit_task", None)), (
-            "CockpitView from owlbear_cockpit.view must expose edit_task"
-        )
+        assert callable(getattr(view, "edit_task", None)), "CockpitView from owlbear_cockpit.view must expose edit_task"
 
     def test_cockpit_view_has_move_task(self, tmp_path: Path) -> None:
         from owlbear_cockpit.view import CockpitView  # noqa: PLC0415
@@ -139,9 +129,7 @@ class TestFromAC_CockpitViewNewModule:
         kanban_dir = _make_board(tmp_path)
         engine = KanbanEngine(kanban_dir)
         view = CockpitView(engine)
-        assert callable(getattr(view, "move_task", None)), (
-            "CockpitView from owlbear_cockpit.view must expose move_task"
-        )
+        assert callable(getattr(view, "move_task", None)), "CockpitView from owlbear_cockpit.view must expose move_task"
 
     def test_cockpit_view_has_release_task(self, tmp_path: Path) -> None:
         from owlbear_cockpit.view import CockpitView  # noqa: PLC0415
@@ -188,23 +176,15 @@ class TestFromAC_EngineCleanup:
             "KanbanEngine must NOT initialize a _cockpit_view attribute after relocation"
         )
 
-    def test_engine_py_does_not_define_cockpit_view_class(
-        self, project_root: Path
-    ) -> None:
-        engine_py = (
-            project_root / "serve" / "kanban" / "src" / "owlbear_kanban" / "engine.py"
-        )
+    def test_engine_py_does_not_define_cockpit_view_class(self, project_root: Path) -> None:
+        engine_py = project_root / "serve" / "kanban" / "src" / "owlbear_kanban" / "engine.py"
         source = engine_py.read_text(encoding="utf-8")
         assert "class CockpitView" not in source, (
             "engine.py must not contain 'class CockpitView' after relocation to owlbear_cockpit.view"
         )
 
-    def test_engine_py_has_no_cockpit_view_property_def(
-        self, project_root: Path
-    ) -> None:
-        engine_py = (
-            project_root / "serve" / "kanban" / "src" / "owlbear_kanban" / "engine.py"
-        )
+    def test_engine_py_has_no_cockpit_view_property_def(self, project_root: Path) -> None:
+        engine_py = project_root / "serve" / "kanban" / "src" / "owlbear_kanban" / "engine.py"
         source = engine_py.read_text(encoding="utf-8")
         # Match "def cockpit_view" as a method/property definition
         assert not re.search(r"def cockpit_view\b", source), (
@@ -213,14 +193,10 @@ class TestFromAC_EngineCleanup:
 
     def test_engine_py_has_no_owlbear_cockpit_import(self, project_root: Path) -> None:
         """AC2: engine.py must have zero import/from lines referencing owlbear_cockpit."""
-        engine_py = (
-            project_root / "serve" / "kanban" / "src" / "owlbear_kanban" / "engine.py"
-        )
+        engine_py = project_root / "serve" / "kanban" / "src" / "owlbear_kanban" / "engine.py"
         source = engine_py.read_text(encoding="utf-8")
         hits = re.findall(r"^.*owlbear_cockpit.*$", source, re.MULTILINE)
-        assert not hits, (
-            f"engine.py must contain zero references to owlbear_cockpit; found: {hits}"
-        )
+        assert not hits, f"engine.py must contain zero references to owlbear_cockpit; found: {hits}"
 
 
 # ---------------------------------------------------------------------------
@@ -231,91 +207,43 @@ class TestFromAC_EngineCleanup:
 class TestFromAC_SourceConsumersImport:
     """AC3: deps.py, routes/read.py, routes/mutation.py must import from owlbear_cockpit.view."""
 
-    def test_deps_py_imports_from_owlbear_cockpit_view(
-        self, project_root: Path
-    ) -> None:
-        deps_py = (
-            project_root / "serve" / "cockpit" / "src" / "owlbear_cockpit" / "deps.py"
-        )
+    def test_deps_py_imports_from_owlbear_cockpit_view(self, project_root: Path) -> None:
+        deps_py = project_root / "serve" / "cockpit" / "src" / "owlbear_cockpit" / "deps.py"
         source = deps_py.read_text(encoding="utf-8")
         assert "from owlbear_cockpit.view import CockpitView" in source, (
             "deps.py must import CockpitView from owlbear_cockpit.view, not from owlbear_kanban.engine"
         )
 
-    def test_deps_py_does_not_import_from_kanban_engine(
-        self, project_root: Path
-    ) -> None:
-        deps_py = (
-            project_root / "serve" / "cockpit" / "src" / "owlbear_cockpit" / "deps.py"
-        )
+    def test_deps_py_does_not_import_from_kanban_engine(self, project_root: Path) -> None:
+        deps_py = project_root / "serve" / "cockpit" / "src" / "owlbear_cockpit" / "deps.py"
         source = deps_py.read_text(encoding="utf-8")
         assert "from owlbear_kanban.engine import CockpitView" not in source, (
             "deps.py must NOT import CockpitView from owlbear_kanban.engine after relocation"
         )
 
-    def test_routes_read_imports_from_owlbear_cockpit_view(
-        self, project_root: Path
-    ) -> None:
-        read_py = (
-            project_root
-            / "serve"
-            / "cockpit"
-            / "src"
-            / "owlbear_cockpit"
-            / "routes"
-            / "read.py"
-        )
+    def test_routes_read_imports_from_owlbear_cockpit_view(self, project_root: Path) -> None:
+        read_py = project_root / "serve" / "cockpit" / "src" / "owlbear_cockpit" / "routes" / "read.py"
         source = read_py.read_text(encoding="utf-8")
         assert "from owlbear_cockpit.view import CockpitView" in source, (
             "routes/read.py must import CockpitView from owlbear_cockpit.view"
         )
 
-    def test_routes_read_does_not_import_from_kanban_engine(
-        self, project_root: Path
-    ) -> None:
-        read_py = (
-            project_root
-            / "serve"
-            / "cockpit"
-            / "src"
-            / "owlbear_cockpit"
-            / "routes"
-            / "read.py"
-        )
+    def test_routes_read_does_not_import_from_kanban_engine(self, project_root: Path) -> None:
+        read_py = project_root / "serve" / "cockpit" / "src" / "owlbear_cockpit" / "routes" / "read.py"
         source = read_py.read_text(encoding="utf-8")
         assert "from owlbear_kanban.engine import CockpitView" not in source, (
             "routes/read.py must NOT import CockpitView from owlbear_kanban.engine after relocation"
         )
 
-    def test_routes_mutation_imports_from_owlbear_cockpit_view(
-        self, project_root: Path
-    ) -> None:
-        mutation_py = (
-            project_root
-            / "serve"
-            / "cockpit"
-            / "src"
-            / "owlbear_cockpit"
-            / "routes"
-            / "mutation.py"
-        )
+    def test_routes_mutation_imports_from_owlbear_cockpit_view(self, project_root: Path) -> None:
+        mutation_py = project_root / "serve" / "cockpit" / "src" / "owlbear_cockpit" / "routes" / "mutation.py"
         source = mutation_py.read_text(encoding="utf-8")
         assert "from owlbear_cockpit.view import CockpitView" in source, (
             "routes/mutation.py must import CockpitView from owlbear_cockpit.view"
         )
 
-    def test_routes_mutation_does_not_import_from_kanban_engine(
-        self, project_root: Path
-    ) -> None:
-        mutation_py = (
-            project_root
-            / "serve"
-            / "cockpit"
-            / "src"
-            / "owlbear_cockpit"
-            / "routes"
-            / "mutation.py"
-        )
+    def test_routes_mutation_does_not_import_from_kanban_engine(self, project_root: Path) -> None:
+        mutation_py = project_root / "serve" / "cockpit" / "src" / "owlbear_cockpit" / "routes" / "mutation.py"
         source = mutation_py.read_text(encoding="utf-8")
         assert "from owlbear_kanban.engine import CockpitView" not in source, (
             "routes/mutation.py must NOT import CockpitView from owlbear_kanban.engine after relocation"
@@ -343,29 +271,20 @@ class TestFromAC_TestFileImportUpdates:
         source = test_file.read_text(encoding="utf-8")
         pattern = r"from owlbear_cockpit\.view import CockpitView"
         assert re.search(pattern, source), (
-            f"{test_file.name} must contain 'from owlbear_cockpit.view import CockpitView' "
-            "after import path update"
+            f"{test_file.name} must contain 'from owlbear_cockpit.view import CockpitView' after import path update"
         )
 
     def test_engine_cockpit_view_test_import_updated(self, project_root: Path) -> None:
-        self._assert_no_old_import(
-            project_root / "tests" / "test_engine_cockpit_view.py"
-        )
+        self._assert_no_old_import(project_root / "tests" / "test_engine_cockpit_view.py")
 
     def test_engine_release_task_occ_import_updated(self, project_root: Path) -> None:
-        self._assert_no_old_import(
-            project_root / "tests" / "test_engine_release_task_occ.py"
-        )
+        self._assert_no_old_import(project_root / "tests" / "test_engine_release_task_occ.py")
 
     def test_cockpit_kanban_routes_import_updated(self, project_root: Path) -> None:
-        self._assert_no_old_import(
-            project_root / "tests" / "test_cockpit_kanban_routes.py"
-        )
+        self._assert_no_old_import(project_root / "tests" / "test_cockpit_kanban_routes.py")
 
     def test_cockpit_mutation_api_1132_import_updated(self, project_root: Path) -> None:
-        self._assert_no_old_import(
-            project_root / "tests" / "test_cockpit_mutation_api_1132.py"
-        )
+        self._assert_no_old_import(project_root / "tests" / "test_cockpit_mutation_api_1132.py")
 
     def test_cockpit_read_api_import_updated(self, project_root: Path) -> None:
         self._assert_no_old_import(project_root / "tests" / "test_cockpit_read_api.py")
@@ -377,39 +296,27 @@ class TestFromAC_TestFileImportUpdates:
 
     def test_engine_cockpit_view_test_has_new_import(self, project_root: Path) -> None:
         """AC4 cycle 3: test_engine_cockpit_view.py must positively import from owlbear_cockpit.view."""
-        self._assert_new_import_present(
-            project_root / "tests" / "test_engine_cockpit_view.py"
-        )
+        self._assert_new_import_present(project_root / "tests" / "test_engine_cockpit_view.py")
 
     def test_engine_release_task_occ_has_new_import(self, project_root: Path) -> None:
         """AC4 cycle 3: test_engine_release_task_occ.py must positively import from owlbear_cockpit.view."""
-        self._assert_new_import_present(
-            project_root / "tests" / "test_engine_release_task_occ.py"
-        )
+        self._assert_new_import_present(project_root / "tests" / "test_engine_release_task_occ.py")
 
     def test_cockpit_kanban_routes_has_new_import(self, project_root: Path) -> None:
         """AC4 cycle 3: test_cockpit_kanban_routes.py must positively import from owlbear_cockpit.view."""
-        self._assert_new_import_present(
-            project_root / "tests" / "test_cockpit_kanban_routes.py"
-        )
+        self._assert_new_import_present(project_root / "tests" / "test_cockpit_kanban_routes.py")
 
     def test_cockpit_mutation_api_1132_has_new_import(self, project_root: Path) -> None:
         """AC4 cycle 3: test_cockpit_mutation_api_1132.py must positively import from owlbear_cockpit.view."""
-        self._assert_new_import_present(
-            project_root / "tests" / "test_cockpit_mutation_api_1132.py"
-        )
+        self._assert_new_import_present(project_root / "tests" / "test_cockpit_mutation_api_1132.py")
 
     def test_cockpit_read_api_has_new_import(self, project_root: Path) -> None:
         """AC4 cycle 3: test_cockpit_read_api.py must positively import from owlbear_cockpit.view."""
-        self._assert_new_import_present(
-            project_root / "tests" / "test_cockpit_read_api.py"
-        )
+        self._assert_new_import_present(project_root / "tests" / "test_cockpit_read_api.py")
 
     def test_cockpit_read_api_has_new_import_1223(self, project_root: Path) -> None:
         """AC4 cycle 3: test_cockpit_read_api.py must positively import from owlbear_cockpit.view."""
-        self._assert_new_import_present(
-            project_root / "tests" / "test_cockpit_read_api.py"
-        )
+        self._assert_new_import_present(project_root / "tests" / "test_cockpit_read_api.py")
 
 
 # ---------------------------------------------------------------------------
@@ -420,36 +327,24 @@ class TestFromAC_TestFileImportUpdates:
 class TestFromAC_KanbanTestCleanup:
     """AC5: CockpitView test coverage must be removed from serve/kanban/tests/."""
 
-    def test_engine_init_1067_no_cockpit_view_constructability_test(
-        self, project_root: Path
-    ) -> None:
-        test_file = (
-            project_root / "serve" / "kanban" / "tests" / "test_engine_init_1067.py"
-        )
+    def test_engine_init_1067_no_cockpit_view_constructability_test(self, project_root: Path) -> None:
+        test_file = project_root / "serve" / "kanban" / "tests" / "test_engine_init_1067.py"
         source = test_file.read_text(encoding="utf-8")
         assert "CockpitView" not in source, (
             "test_engine_init_1067.py must not contain CockpitView after relocation; "
             "equivalent coverage lives in tests/test_engine_cockpit_view.py"
         )
 
-    def test_engine_init_1068_no_cockpit_view_method_stubs_class(
-        self, project_root: Path
-    ) -> None:
-        test_file = (
-            project_root / "serve" / "kanban" / "tests" / "test_engine_init_1068.py"
-        )
+    def test_engine_init_1068_no_cockpit_view_method_stubs_class(self, project_root: Path) -> None:
+        test_file = project_root / "serve" / "kanban" / "tests" / "test_engine_init_1068.py"
         source = test_file.read_text(encoding="utf-8")
         assert "TestFromAC_CockpitViewMethodStubs" not in source, (
             "test_engine_init_1068.py must not contain TestFromAC_CockpitViewMethodStubs; "
             "CockpitView tests belong in owlbear_cockpit package suite"
         )
 
-    def test_engine_init_1068_no_views_constructed_at_init_cockpit_tests(
-        self, project_root: Path
-    ) -> None:
-        test_file = (
-            project_root / "serve" / "kanban" / "tests" / "test_engine_init_1068.py"
-        )
+    def test_engine_init_1068_no_views_constructed_at_init_cockpit_tests(self, project_root: Path) -> None:
+        test_file = project_root / "serve" / "kanban" / "tests" / "test_engine_init_1068.py"
         source = test_file.read_text(encoding="utf-8")
         # The cockpit_view() accessor test must be gone
         assert "engine.cockpit_view()" not in source, (
@@ -457,83 +352,43 @@ class TestFromAC_KanbanTestCleanup:
             "the accessor is removed from KanbanEngine"
         )
 
-    def test_engine_list_show_1071_no_cockpit_view_list_tasks_class(
-        self, project_root: Path
-    ) -> None:
-        test_file = (
-            project_root
-            / "serve"
-            / "kanban"
-            / "tests"
-            / "test_engine_list_show_1071.py"
-        )
+    def test_engine_list_show_1071_no_cockpit_view_list_tasks_class(self, project_root: Path) -> None:
+        test_file = project_root / "serve" / "kanban" / "tests" / "test_engine_list_show_1071.py"
         source = test_file.read_text(encoding="utf-8")
         assert "TestFromAC_CockpitViewListTasks" not in source, (
             "test_engine_list_show_1071.py must not contain TestFromAC_CockpitViewListTasks; "
             "CockpitView tests belong in owlbear_cockpit package suite"
         )
 
-    def test_engine_list_show_1071_no_cockpit_view_show_task_class(
-        self, project_root: Path
-    ) -> None:
-        test_file = (
-            project_root
-            / "serve"
-            / "kanban"
-            / "tests"
-            / "test_engine_list_show_1071.py"
-        )
+    def test_engine_list_show_1071_no_cockpit_view_show_task_class(self, project_root: Path) -> None:
+        test_file = project_root / "serve" / "kanban" / "tests" / "test_engine_list_show_1071.py"
         source = test_file.read_text(encoding="utf-8")
         assert "TestFromAC_CockpitViewShowTask" not in source, (
             "test_engine_list_show_1071.py must not contain TestFromAC_CockpitViewShowTask; "
             "CockpitView tests belong in owlbear_cockpit package suite"
         )
 
-    def test_engine_list_show_1071_no_cockpit_view_parent_forwarding_class(
-        self, project_root: Path
-    ) -> None:
+    def test_engine_list_show_1071_no_cockpit_view_parent_forwarding_class(self, project_root: Path) -> None:
         """AC5a: TestFromAC_CockpitViewParentForwarding must be removed from kanban suite."""
-        test_file = (
-            project_root
-            / "serve"
-            / "kanban"
-            / "tests"
-            / "test_engine_list_show_1071.py"
-        )
+        test_file = project_root / "serve" / "kanban" / "tests" / "test_engine_list_show_1071.py"
         source = test_file.read_text(encoding="utf-8")
         assert "TestFromAC_CockpitViewParentForwarding" not in source, (
             "test_engine_list_show_1071.py must not contain TestFromAC_CockpitViewParentForwarding; "
             "equivalent parent-filter behavioral coverage belongs in tests/test_cockpit_view_1224.py"
         )
 
-    def test_engine_list_show_1071_no_make_cockpit_view_helper(
-        self, project_root: Path
-    ) -> None:
+    def test_engine_list_show_1071_no_make_cockpit_view_helper(self, project_root: Path) -> None:
         """AC5a: _make_cockpit_view helper must be removed once all CockpitView references are gone."""
-        test_file = (
-            project_root
-            / "serve"
-            / "kanban"
-            / "tests"
-            / "test_engine_list_show_1071.py"
-        )
+        test_file = project_root / "serve" / "kanban" / "tests" / "test_engine_list_show_1071.py"
         source = test_file.read_text(encoding="utf-8")
         assert "_make_cockpit_view" not in source, (
             "test_engine_list_show_1071.py must not contain _make_cockpit_view helper; "
             "CockpitView is no longer tested in the kanban package suite"
         )
 
-    def test_engine_list_show_1071_no_cockpit_view_import(
-        self, project_root: Path
-    ) -> None:
+    def test_engine_list_show_1071_no_cockpit_view_import(self, project_root: Path) -> None:
         """AC5a: CockpitView import must be removed from test_engine_list_show_1071.py."""
-        test_file = (
-            project_root
-            / "serve"
-            / "kanban"
-            / "tests"
-            / "test_engine_list_show_1071.py"
-        )
+        test_file = project_root / "serve" / "kanban" / "tests" / "test_engine_list_show_1071.py"
         source = test_file.read_text(encoding="utf-8")
         assert "CockpitView" not in source, (
             "test_engine_list_show_1071.py must not import or reference CockpitView; "
@@ -549,18 +404,12 @@ class TestFromAC_KanbanTestCleanup:
 class TestFromAC_ViewNoPrivateAccess:
     """AC6: view.py must not use any ._-prefixed engine attributes."""
 
-    def test_view_py_has_no_private_engine_attribute_access(
-        self, project_root: Path
-    ) -> None:
-        view_py = (
-            project_root / "serve" / "cockpit" / "src" / "owlbear_cockpit" / "view.py"
-        )
+    def test_view_py_has_no_private_engine_attribute_access(self, project_root: Path) -> None:
+        view_py = project_root / "serve" / "cockpit" / "src" / "owlbear_cockpit" / "view.py"
         source = view_py.read_text(encoding="utf-8")
         # Match self.engine._ or engine._ attribute access patterns
         private_access = re.findall(r"\bengine\._\w+", source)
-        assert not private_access, (
-            f"view.py must not access private engine attributes; found: {private_access}"
-        )
+        assert not private_access, f"view.py must not access private engine attributes; found: {private_access}"
 
 
 # ---------------------------------------------------------------------------
@@ -575,8 +424,7 @@ class TestFromAC_ReadmeCleanup:
         readme = project_root / "serve" / "kanban" / "README.md"
         source = readme.read_text(encoding="utf-8")
         assert "cockpit_view()" not in source, (
-            "serve/kanban/README.md must not contain a cockpit_view() row; "
-            "the accessor is removed from KanbanEngine"
+            "serve/kanban/README.md must not contain a cockpit_view() row; the accessor is removed from KanbanEngine"
         )
 
 
@@ -611,9 +459,7 @@ class TestFromAC_CockpitViewBehavior:
         """AC5b: CockpitView.list_tasks() on empty board returns a response with no tasks."""
         view = self._make_view(tmp_path)
         result = view.list_tasks()  # type: ignore[union-attr]
-        assert result.tasks == [], (
-            "CockpitView.list_tasks() on empty board must return tasks=[]"
-        )
+        assert result.tasks == [], "CockpitView.list_tasks() on empty board must return tasks=[]"
 
     def test_list_tasks_returns_created_tasks(self, tmp_path: Path) -> None:
         """AC5b: CockpitView.list_tasks() returns tasks that were created via the engine."""
@@ -627,16 +473,10 @@ class TestFromAC_CockpitViewBehavior:
         view = CockpitView(engine)
         result = view.list_tasks()
         titles = [t.title for t in result.tasks]
-        assert "Alpha" in titles, (
-            f"CockpitView.list_tasks() must include 'Alpha'; got titles: {titles}"
-        )
-        assert "Beta" in titles, (
-            f"CockpitView.list_tasks() must include 'Beta'; got titles: {titles}"
-        )
+        assert "Alpha" in titles, f"CockpitView.list_tasks() must include 'Alpha'; got titles: {titles}"
+        assert "Beta" in titles, f"CockpitView.list_tasks() must include 'Beta'; got titles: {titles}"
 
-    def test_list_tasks_parent_filter_returns_children_only(
-        self, tmp_path: Path
-    ) -> None:
+    def test_list_tasks_parent_filter_returns_children_only(self, tmp_path: Path) -> None:
         """AC5b: CockpitView.list_tasks(parent=N) returns only direct children of N."""
         from owlbear_cockpit.view import CockpitView  # noqa: PLC0415
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
@@ -656,9 +496,7 @@ class TestFromAC_CockpitViewBehavior:
             f"CockpitView.list_tasks(parent={parent_task.id}) must exclude unrelated task {_other.id}; got {ids}"
         )
 
-    def test_list_tasks_parent_filter_returns_empty_when_no_match(
-        self, tmp_path: Path
-    ) -> None:
+    def test_list_tasks_parent_filter_returns_empty_when_no_match(self, tmp_path: Path) -> None:
         """AC5b: CockpitView.list_tasks(parent=N) returns empty list when no children exist."""
         from owlbear_cockpit.view import CockpitView  # noqa: PLC0415
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
@@ -714,9 +552,7 @@ class TestFromAC_CockpitViewBehavior:
             f"CockpitView.list_tasks() count {len(view_result.tasks)} must equal "
             f"engine.agent_view().list_tasks() count {len(engine_result.tasks)}"
         )
-        assert {t.id for t in view_result.tasks} == {
-            t.id for t in engine_result.tasks
-        }, (
+        assert {t.id for t in view_result.tasks} == {t.id for t in engine_result.tasks}, (
             "CockpitView.list_tasks() task IDs must exactly match engine.agent_view().list_tasks() IDs"
         )
 
@@ -729,9 +565,7 @@ class TestFromAC_CockpitViewBehavior:
         assert isinstance(result, ShowTaskResponse), (
             f"CockpitView.show_task() must return ShowTaskResponse; got {type(result)}"
         )
-        assert result.id == task_id, (
-            f"CockpitView.show_task({task_id}).id must equal {task_id}; got {result.id}"
-        )
+        assert result.id == task_id, f"CockpitView.show_task({task_id}).id must equal {task_id}; got {result.id}"
         assert result.title == "Test Task", (
             f"CockpitView.show_task({task_id}).title must be 'Test Task'; got '{result.title}'"
         )
@@ -890,9 +724,7 @@ class TestFromAC_CockpitViewArchivalValidation:
         """
         updated = _get_updated_1240(engine_1240, 1)
         with pytest.raises(ValidationError) as exc_info:
-            view.move_task(
-                1, "archived", expected_updated=updated, archival_reason=None
-            )
+            view.move_task(1, "archived", expected_updated=updated, archival_reason=None)
         assert exc_info.value.code == "ERR_ARCHIVAL_REASON_REQUIRED"
 
     # -- AC2-AC4: refs forbidden for completed / dropped / wontfix --
@@ -1043,9 +875,7 @@ class TestFromAC_CockpitViewArchivalValidation:
 
     # -- AC9: self-reference in archival_refs --
 
-    def test_archive_with_self_ref_raises_archival_ref_self(
-        self, view: CockpitView, engine_1240: KanbanEngine
-    ) -> None:
+    def test_archive_with_self_ref_raises_archival_ref_self(self, view: CockpitView, engine_1240: KanbanEngine) -> None:
         """AC9: move_task with archival_refs=[task_id] (self-reference) raises a
         422 ValidationError.
 
@@ -1065,9 +895,7 @@ class TestFromAC_CockpitViewArchivalValidation:
 
     # -- AC10: archival_refs creates a dependency cycle --
 
-    def test_archive_with_cyclic_refs_raises_archival_ref_cycle(
-        self, tmp_path: Path
-    ) -> None:
+    def test_archive_with_cyclic_refs_raises_archival_ref_cycle(self, tmp_path: Path) -> None:
         """AC10: move_task with archival_refs that create a cycle raises a
         422 ValidationError.
 
@@ -1107,9 +935,7 @@ class TestFromAC_CockpitViewArchivalValidation:
 
     # -- AC11: valid archival persists archival_reason and archival_refs --
 
-    def test_valid_archival_persists_reason_and_refs(
-        self, view: CockpitView, engine_1240: KanbanEngine
-    ) -> None:
+    def test_valid_archival_persists_reason_and_refs(self, view: CockpitView, engine_1240: KanbanEngine) -> None:
         """AC11: move_task on a done task with status='archived',
         reason='completed', and archival_refs=[] succeeds and persists both
         fields on the returned response and on a fresh reload.
@@ -1281,9 +1107,7 @@ class TestFromAC_ArchivalValidation422Surfacing:
 
     # -- AC1: archival_reason required when status='archived' --
 
-    def test_route_archive_without_reason_returns_422_with_archival_detail(
-        self, client, engine: KanbanEngine
-    ) -> None:
+    def test_route_archive_without_reason_returns_422_with_archival_detail(self, client, engine: KanbanEngine) -> None:
         """AC1: POST /move with status='archived' and no archival_reason returns
         a 422 whose detail message references archival_reason, not a generic
         transition rejection.
@@ -1461,9 +1285,7 @@ class TestFromAC_ArchivalValidation422Surfacing:
 
     # -- AC9: self-reference in archival_refs --
 
-    def test_route_archive_with_self_ref_returns_422_with_self_ref_detail(
-        self, client, engine: KanbanEngine
-    ) -> None:
+    def test_route_archive_with_self_ref_returns_422_with_self_ref_detail(self, client, engine: KanbanEngine) -> None:
         """AC9: archival_refs contains the task's own ID → 422 detail reflects
         self-reference rejection.
 
@@ -1485,9 +1307,7 @@ class TestFromAC_ArchivalValidation422Surfacing:
 
     # -- AC10: cyclic archival_refs --
 
-    def test_route_archive_with_cyclic_refs_returns_422_with_cycle_detail(
-        self, tmp_path: Path
-    ) -> None:
+    def test_route_archive_with_cyclic_refs_returns_422_with_cycle_detail(self, tmp_path: Path) -> None:
         """AC10: archival_refs that create a cycle → 422 detail reflects cycle detection.
 
         Setup:
@@ -1535,9 +1355,7 @@ class TestFromAC_ArchivalValidation422Surfacing:
 
     # -- AC11 (happy path): valid archival from done → 200 --
 
-    def test_route_valid_archive_from_done_returns_200_with_archived_status(
-        self, client, engine: KanbanEngine
-    ) -> None:
+    def test_route_valid_archive_from_done_returns_200_with_archived_status(self, client, engine: KanbanEngine) -> None:
         """AC11: POST /move with status='archived', reason='completed', no refs,
         task at 'done' → HTTP 200 with status='archived' in the response.
 

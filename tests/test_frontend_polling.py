@@ -37,32 +37,25 @@ class TestFromAC_UsePollingFetchExists:
     def test_usepollingfetch_exports_named_hook(self) -> None:
         """usePollingFetch.ts must export a named function 'usePollingFetch'."""
         hook_file = HOOKS / "usePollingFetch.ts"
-        assert hook_file.exists(), (
-            "usePollingFetch.ts missing — run test_usepollingfetch_file_exists first."
-        )
+        assert hook_file.exists(), "usePollingFetch.ts missing — run test_usepollingfetch_file_exists first."
         content = hook_file.read_text()
-        assert (
-            "export function usePollingFetch" in content
-            or "export const usePollingFetch" in content
-        ), "usePollingFetch.ts must export 'usePollingFetch' as a named function."
+        assert "export function usePollingFetch" in content or "export const usePollingFetch" in content, (
+            "usePollingFetch.ts must export 'usePollingFetch' as a named function."
+        )
 
     def test_usepollingfetch_accepts_onsuccess_callback(self) -> None:
         """usePollingFetch must accept an onSuccess callback (health tracking)."""
         hook_file = HOOKS / "usePollingFetch.ts"
         assert hook_file.exists(), "usePollingFetch.ts missing."
         content = hook_file.read_text()
-        assert "onSuccess" in content, (
-            "usePollingFetch must accept 'onSuccess' callback for health tracking (AC2)."
-        )
+        assert "onSuccess" in content, "usePollingFetch must accept 'onSuccess' callback for health tracking (AC2)."
 
     def test_usepollingfetch_accepts_onerror_callback(self) -> None:
         """usePollingFetch must accept an onError callback (health degradation)."""
         hook_file = HOOKS / "usePollingFetch.ts"
         assert hook_file.exists(), "usePollingFetch.ts missing."
         content = hook_file.read_text()
-        assert "onError" in content, (
-            "usePollingFetch must accept 'onError' callback for health degradation (AC2)."
-        )
+        assert "onError" in content, "usePollingFetch must accept 'onError' callback for health degradation (AC2)."
 
     def test_usepollingfetch_uses_abortcontroller(self) -> None:
         """usePollingFetch must use AbortController for cleanup (AC2)."""
@@ -97,8 +90,7 @@ class TestFromAC_HooksConsumeSharedUtility:
         assert hook_file.exists(), "useBoard.ts missing."
         content = hook_file.read_text()
         assert "usePollingFetch" in content, (
-            "useBoard.ts must import and use usePollingFetch (AC3). "
-            "Currently useBoard manages its own polling loop."
+            "useBoard.ts must import and use usePollingFetch (AC3). Currently useBoard manages its own polling loop."
         )
 
     def test_usscanpolling_imports_usepollingfetch(self) -> None:
@@ -360,10 +352,7 @@ class TestFromAC_DurableSuiteAlignment:
         suite = self.TESTS_DIR / "useBoard_967.test.ts"
         assert suite.exists(), "useBoard_967.test.ts missing."
         content = suite.read_text()
-        assert (
-            "toHaveProperty('health')" in content
-            or 'toHaveProperty("health")' in content
-        ), (
+        assert "toHaveProperty('health')" in content or 'toHaveProperty("health")' in content, (
             "useBoard_967.test.ts does not assert toHaveProperty('health') in its "
             "interface test.  useBoard now returns a 'health' field — AC6 (cycle 3) "
             "requires the durable interface assertion to include it."

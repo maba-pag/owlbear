@@ -173,9 +173,7 @@ class TestFromAC_CreateTaskAdapter:
         mock_av.create_task.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_create_task_forwards_title(
-        self, app_ctx_with_mock_agent_view: tuple[AppContext, MagicMock]
-    ) -> None:
+    async def test_create_task_forwards_title(self, app_ctx_with_mock_agent_view: tuple[AppContext, MagicMock]) -> None:
         """Adapter must forward title to AgentView.create_task (positional or keyword)."""
         app_ctx, mock_av = app_ctx_with_mock_agent_view
         ctx = _make_mcp_ctx(app_ctx)
@@ -185,17 +183,13 @@ class TestFromAC_CreateTaskAdapter:
         assert title_val == "My Feature", "title not forwarded to AgentView.create_task"
 
     @pytest.mark.asyncio
-    async def test_create_task_forwards_body(
-        self, app_ctx_with_mock_agent_view: tuple[AppContext, MagicMock]
-    ) -> None:
+    async def test_create_task_forwards_body(self, app_ctx_with_mock_agent_view: tuple[AppContext, MagicMock]) -> None:
         """body must be forwarded to AgentView.create_task."""
         app_ctx, mock_av = app_ctx_with_mock_agent_view
         ctx = _make_mcp_ctx(app_ctx)
         await create_task(ctx, title="T", body="## AC\n\n- Do the thing")
         _, kwargs = mock_av.create_task.call_args
-        assert kwargs.get("body") == "## AC\n\n- Do the thing", (
-            "body not forwarded to AgentView.create_task"
-        )
+        assert kwargs.get("body") == "## AC\n\n- Do the thing", "body not forwarded to AgentView.create_task"
 
     @pytest.mark.asyncio
     async def test_create_task_forwards_priority(
@@ -206,9 +200,7 @@ class TestFromAC_CreateTaskAdapter:
         ctx = _make_mcp_ctx(app_ctx)
         await create_task(ctx, title="T", priority="critical")
         _, kwargs = mock_av.create_task.call_args
-        assert kwargs.get("priority") == "critical", (
-            "priority not forwarded to AgentView.create_task"
-        )
+        assert kwargs.get("priority") == "critical", "priority not forwarded to AgentView.create_task"
 
     @pytest.mark.asyncio
     async def test_create_task_forwards_tags_as_list(
@@ -219,9 +211,7 @@ class TestFromAC_CreateTaskAdapter:
         ctx = _make_mcp_ctx(app_ctx)
         await create_task(ctx, title="T", tags=["phase-2", "scope:mcp"])
         _, kwargs = mock_av.create_task.call_args
-        assert kwargs.get("tags") == ["phase-2", "scope:mcp"], (
-            "tags not forwarded as list to AgentView.create_task"
-        )
+        assert kwargs.get("tags") == ["phase-2", "scope:mcp"], "tags not forwarded as list to AgentView.create_task"
 
     @pytest.mark.asyncio
     async def test_create_task_forwards_parent(
@@ -232,9 +222,7 @@ class TestFromAC_CreateTaskAdapter:
         ctx = _make_mcp_ctx(app_ctx)
         await create_task(ctx, title="T", parent=42)
         _, kwargs = mock_av.create_task.call_args
-        assert kwargs.get("parent") == 42, (
-            "parent not forwarded to AgentView.create_task"
-        )
+        assert kwargs.get("parent") == 42, "parent not forwarded to AgentView.create_task"
 
     @pytest.mark.asyncio
     async def test_create_task_forwards_depends_on_as_list(
@@ -245,9 +233,7 @@ class TestFromAC_CreateTaskAdapter:
         ctx = _make_mcp_ctx(app_ctx)
         await create_task(ctx, title="T", depends_on=[10, 20])
         _, kwargs = mock_av.create_task.call_args
-        assert kwargs.get("depends_on") == [10, 20], (
-            "depends_on not forwarded as list[int] to AgentView.create_task"
-        )
+        assert kwargs.get("depends_on") == [10, 20], "depends_on not forwarded as list[int] to AgentView.create_task"
 
     @pytest.mark.asyncio
     async def test_create_task_returns_single_task_response(
@@ -268,8 +254,7 @@ class TestFromAC_CreateTaskAdapter:
         """create_task must not accept a status parameter — engine controls entry status (D50)."""
         params = inspect.signature(create_task).parameters
         assert "status" not in params, (
-            "create_task must not expose a 'status' parameter per D50; "
-            f"got params: {list(params)}"
+            f"create_task must not expose a 'status' parameter per D50; got params: {list(params)}"
         )
 
     @pytest.mark.asyncio
@@ -361,9 +346,7 @@ class TestFromAC_EditTaskAdapter:
         await edit_task(ctx, id="1", priority="critical")
         args, kwargs = mock_av.edit_task.call_args
         forwarded_id = args[0] if args else kwargs.get("id")
-        assert forwarded_id == 1, (
-            f"task_id must be forwarded as int; got {forwarded_id!r}"
-        )
+        assert forwarded_id == 1, f"task_id must be forwarded as int; got {forwarded_id!r}"
 
     @pytest.mark.asyncio
     async def test_edit_task_returns_single_task_response(
@@ -412,9 +395,9 @@ class TestFromAC_EditTaskAdapter:
         with pytest.raises(ToolError) as exc_info:
             await edit_task(ctx, id="1", archival_reason="dropped")
         mock_av.edit_task.assert_called_once()
-        assert "archival_reason can only be set on archived tasks" in str(
-            exc_info.value
-        ), "ToolError must carry the ERR_ARCHIVAL_FIELDS_FORBIDDEN user_message"
+        assert "archival_reason can only be set on archived tasks" in str(exc_info.value), (
+            "ToolError must carry the ERR_ARCHIVAL_FIELDS_FORBIDDEN user_message"
+        )
 
     @pytest.mark.asyncio
     async def test_edit_task_archival_refs_on_non_archived_raises_tool_error(
@@ -430,9 +413,9 @@ class TestFromAC_EditTaskAdapter:
         with pytest.raises(ToolError) as exc_info:
             await edit_task(ctx, id="1", archival_refs=[42])
         mock_av.edit_task.assert_called_once()
-        assert "archival_refs can only be set on archived tasks" in str(
-            exc_info.value
-        ), "ToolError must carry the ERR_ARCHIVAL_FIELDS_FORBIDDEN user_message"
+        assert "archival_refs can only be set on archived tasks" in str(exc_info.value), (
+            "ToolError must carry the ERR_ARCHIVAL_FIELDS_FORBIDDEN user_message"
+        )
 
     @pytest.mark.asyncio
     async def test_edit_task_no_op_raises_tool_error(
@@ -448,9 +431,7 @@ class TestFromAC_EditTaskAdapter:
         with pytest.raises(ToolError) as exc_info:
             await edit_task(ctx, id="1")
         mock_av.edit_task.assert_called_once()
-        assert "no fields would change" in str(exc_info.value), (
-            "ToolError must carry the ERR_NO_OP user_message"
-        )
+        assert "no fields would change" in str(exc_info.value), "ToolError must carry the ERR_NO_OP user_message"
 
     def test_edit_task_block_reason_default_is_none(self) -> None:
         """block_reason param must default to None (not '') to distinguish omission from explicit unblock (D53).
@@ -517,9 +498,7 @@ class TestFromAC_KanbanErrorMapping:
         assert payload["code"] == "ERR_INVALID_PRIORITY", (
             f"ToolError JSON must carry parseable error code; got {payload!r}"
         )
-        assert payload["message"] == user_msg, (
-            f"ToolError JSON must carry human-readable user_message; got {payload!r}"
-        )
+        assert payload["message"] == user_msg, f"ToolError JSON must carry human-readable user_message; got {payload!r}"
 
     @pytest.mark.asyncio
     async def test_not_found_error_maps_to_tool_error(
@@ -536,12 +515,8 @@ class TestFromAC_KanbanErrorMapping:
         with pytest.raises(ToolError) as exc_info:
             await edit_task(ctx, id="9999", priority="critical")
         payload = json.loads(str(exc_info.value))
-        assert payload["code"] == "ERR_NOT_FOUND", (
-            f"ToolError JSON must carry parseable error code; got {payload!r}"
-        )
-        assert payload["message"] == user_msg, (
-            f"ToolError JSON must carry human-readable user_message; got {payload!r}"
-        )
+        assert payload["code"] == "ERR_NOT_FOUND", f"ToolError JSON must carry parseable error code; got {payload!r}"
+        assert payload["message"] == user_msg, f"ToolError JSON must carry human-readable user_message; got {payload!r}"
 
     @pytest.mark.asyncio
     async def test_concurrency_error_maps_to_tool_error(
@@ -557,9 +532,7 @@ class TestFromAC_KanbanErrorMapping:
         ctx = _make_mcp_ctx(app_ctx)
         with pytest.raises(ToolError) as exc_info:
             await edit_task(ctx, id="1", priority="critical")
-        assert user_msg in str(exc_info.value), (
-            "ToolError must embed the ConcurrencyError.user_message verbatim"
-        )
+        assert user_msg in str(exc_info.value), "ToolError must embed the ConcurrencyError.user_message verbatim"
 
     @pytest.mark.asyncio
     async def test_all_kanban_error_subclasses_map_to_tool_error_not_raw_exception(

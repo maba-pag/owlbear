@@ -49,23 +49,11 @@ def _allowed_imports_keys() -> set[str]:
         # Handle both plain (ast.Assign) and annotated (ast.AnnAssign) assignments.
         if isinstance(node, ast.AnnAssign):
             target, value = node.target, node.value
-            if (
-                isinstance(target, ast.Name)
-                and target.id == "ALLOWED_IMPORTS"
-                and isinstance(value, ast.Dict)
-            ):
-                return {
-                    key.value
-                    for key in value.keys
-                    if isinstance(key, ast.Constant) and isinstance(key.value, str)
-                }
+            if isinstance(target, ast.Name) and target.id == "ALLOWED_IMPORTS" and isinstance(value, ast.Dict):
+                return {key.value for key in value.keys if isinstance(key, ast.Constant) and isinstance(key.value, str)}
         elif isinstance(node, ast.Assign):
             for target in node.targets:
-                if (
-                    isinstance(target, ast.Name)
-                    and target.id == "ALLOWED_IMPORTS"
-                    and isinstance(node.value, ast.Dict)
-                ):
+                if isinstance(target, ast.Name) and target.id == "ALLOWED_IMPORTS" and isinstance(node.value, ast.Dict):
                     return {
                         key.value
                         for key in node.value.keys
@@ -129,8 +117,7 @@ class TestFromAC_CoreRemoval:
         hits = [
             str(p)
             for p in (_REPO_ROOT / "tests").rglob("*.py")
-            if p.resolve() not in excluded
-            and "serve/orchestrator" in p.read_text(encoding="utf-8")
+            if p.resolve() not in excluded and "serve/orchestrator" in p.read_text(encoding="utf-8")
         ]
         assert hits == [], f"tests/ files still reference serve/orchestrator: {hits}"
 
@@ -152,12 +139,9 @@ class TestFromAC_CoreRemoval:
         hits = [
             str(p)
             for p in (_REPO_ROOT / "serve" / "knowledge").rglob("*")
-            if p.is_file()
-            and "serve/orchestrator" in p.read_text(encoding="utf-8", errors="ignore")
+            if p.is_file() and "serve/orchestrator" in p.read_text(encoding="utf-8", errors="ignore")
         ]
-        assert hits == [], (
-            f"serve/knowledge/ files still reference serve/orchestrator: {hits}"
-        )
+        assert hits == [], f"serve/knowledge/ files still reference serve/orchestrator: {hits}"
 
     # ---- Scope edit: test_package_boundary.py ALLOWED_IMPORTS ---------------
 
@@ -197,9 +181,7 @@ class TestFromAC_CoreRemoval:
         with pytest.raises(NotImplementedError):
             resolve_global_db_path(tmp_path)
 
-    def test_resolve_global_db_path_raises_with_env_var(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_resolve_global_db_path_raises_with_env_var(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """resolve_global_db_path() raises even when OWLBEAR_GLOBAL_KB_PATH is set.
 
         Previously the env-var short-circuit returned a Path; after gutting the body

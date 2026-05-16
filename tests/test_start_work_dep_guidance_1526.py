@@ -170,9 +170,7 @@ class TestFromAC_DepGuidanceBlocked:
         resp = engine.agent_view().start_work(1)
         assert len(resp.guidance) == 1
 
-    def test_single_blocked_dep_guidance_contains_dep_id(
-        self, tmp_path: Path
-    ) -> None:
+    def test_single_blocked_dep_guidance_contains_dep_id(self, tmp_path: Path) -> None:
         """Single active dep → guidance string mentions dep ID 99."""
         board = _make_board(tmp_path)
         _write_task(board, task_id=1, depends_on="[99]")
@@ -194,9 +192,7 @@ class TestFromAC_DepGuidanceBlocked:
         )
         assert resp.guidance[0] == expected
 
-    def test_multiple_blocked_deps_guidance_exact_format(
-        self, tmp_path: Path
-    ) -> None:
+    def test_multiple_blocked_deps_guidance_exact_format(self, tmp_path: Path) -> None:
         """Two active deps → guidance is exactly the AC1 format with comma-separated IDs."""
         board = _make_board(tmp_path)
         _write_task(board, task_id=1, depends_on="[98, 99]")
@@ -232,9 +228,7 @@ class TestFromAC_DepGuidanceNoDeps:
         resp = engine.agent_view().start_work(1)
         assert resp.guidance == []
 
-    def test_resolved_dep_archived_completed_guidance_is_empty(
-        self, tmp_path: Path
-    ) -> None:
+    def test_resolved_dep_archived_completed_guidance_is_empty(self, tmp_path: Path) -> None:
         """Task whose dep is archived/completed → dep resolved, guidance == []."""
         board = _make_board(tmp_path)
         _write_task(board, task_id=1, depends_on="[99]")
@@ -330,9 +324,7 @@ class TestFromAC_DepGuidanceResilience:
         assert resp.claimed_at is not None
         assert resp.guidance == []
 
-    def test_mixed_dep_one_fails_one_blocked_guidance_lists_surviving_dep(
-        self, tmp_path: Path
-    ) -> None:
+    def test_mixed_dep_one_fails_one_blocked_guidance_lists_surviving_dep(self, tmp_path: Path) -> None:
         """One dep raises FileNotFoundError (skipped), other dep is active blocked.
 
         Verifies that start_work() continues processing remaining deps after a

@@ -44,8 +44,7 @@ def _now() -> str:
 
 def _insert_document(conn: sqlite3.Connection, doc_id: str, source_id: str) -> None:
     conn.execute(
-        "INSERT INTO documents (id, title, content, created_at, source_id)"
-        " VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO documents (id, title, content, created_at, source_id) VALUES (?, ?, ?, ?, ?)",
         (doc_id, "T", "C", _now(), source_id),
     )
     conn.commit()
@@ -57,8 +56,7 @@ def _insert_entity(
     document_id: str | None,
 ) -> None:
     conn.execute(
-        "INSERT INTO entities (id, name, entity_type, created_at, document_id)"
-        " VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO entities (id, name, entity_type, created_at, document_id) VALUES (?, ?, ?, ?, ?)",
         (entity_id, "E", "person", _now(), document_id),
     )
     conn.commit()
@@ -101,8 +99,7 @@ class TestFromAC_ForeignKeyViolations:
         conn = _fresh_db()
         with pytest.raises(sqlite3.IntegrityError):
             conn.execute(
-                "INSERT INTO chunks (id, document_id, chunk_index, created_at)"
-                " VALUES (?, ?, ?, ?)",
+                "INSERT INTO chunks (id, document_id, chunk_index, created_at) VALUES (?, ?, ?, ?)",
                 ("chunk-1", "nonexistent-doc", 0, _now()),
             )
 
@@ -116,8 +113,7 @@ class TestFromAC_ForeignKeyViolations:
             conn.execute(
                 "INSERT INTO edges (id, source_id, target_id, relation, document_id,"
                 " created_at) VALUES (?, ?, ?, ?, ?, ?)",
-                ("edge-1", "nonexistent-entity", "entity-target", "relates_to",
-                 "doc-1", _now()),
+                ("edge-1", "nonexistent-entity", "entity-target", "relates_to", "doc-1", _now()),
             )
 
     def test_edge_with_nonexistent_target_entity_raises(self) -> None:
@@ -129,8 +125,7 @@ class TestFromAC_ForeignKeyViolations:
             conn.execute(
                 "INSERT INTO edges (id, source_id, target_id, relation, document_id,"
                 " created_at) VALUES (?, ?, ?, ?, ?, ?)",
-                ("edge-2", "entity-source", "nonexistent-entity", "relates_to",
-                 "doc-1", _now()),
+                ("edge-2", "entity-source", "nonexistent-entity", "relates_to", "doc-1", _now()),
             )
 
 
@@ -147,8 +142,7 @@ class TestFromAC_NotNullProvenanceColumns:
         conn = _fresh_db()
         with pytest.raises(sqlite3.IntegrityError):
             conn.execute(
-                "INSERT INTO entities (id, name, entity_type, created_at, document_id)"
-                " VALUES (?, ?, ?, ?, ?)",
+                "INSERT INTO entities (id, name, entity_type, created_at, document_id) VALUES (?, ?, ?, ?, ?)",
                 ("entity-1", "Alice", "person", _now(), None),
             )
 
@@ -186,40 +180,33 @@ class TestFromAC_ValidWritePathAccepted:
 
         # Pre-condition: FK enforcement must be enabled for the test to be meaningful.
         fk_status = conn.execute("PRAGMA foreign_keys").fetchone()[0]
-        assert fk_status == 1, (
-            f"PRAGMA foreign_keys must be 1 (enabled) after init_db(), got {fk_status!r}"
-        )
+        assert fk_status == 1, f"PRAGMA foreign_keys must be 1 (enabled) after init_db(), got {fk_status!r}"
 
         # Valid documents row.
         conn.execute(
-            "INSERT INTO documents (id, title, content, created_at, source_id)"
-            " VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO documents (id, title, content, created_at, source_id) VALUES (?, ?, ?, ?, ?)",
             ("doc-v", "Valid Doc", "content", _now(), "src-v"),
         )
 
         # Valid chunks row referencing the document.
         conn.execute(
-            "INSERT INTO chunks (id, document_id, chunk_index, created_at)"
-            " VALUES (?, ?, ?, ?)",
+            "INSERT INTO chunks (id, document_id, chunk_index, created_at) VALUES (?, ?, ?, ?)",
             ("chunk-v", "doc-v", 0, _now()),
         )
 
         # Valid entities row with non-NULL document_id.
         conn.execute(
-            "INSERT INTO entities (id, name, entity_type, created_at, document_id)"
-            " VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO entities (id, name, entity_type, created_at, document_id) VALUES (?, ?, ?, ?, ?)",
             ("entity-v1", "Alpha", "concept", _now(), "doc-v"),
         )
         conn.execute(
-            "INSERT INTO entities (id, name, entity_type, created_at, document_id)"
-            " VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO entities (id, name, entity_type, created_at, document_id) VALUES (?, ?, ?, ?, ?)",
             ("entity-v2", "Beta", "concept", _now(), "doc-v"),
         )
 
         # Valid edges row with existing source_id, target_id, and non-NULL document_id.
         conn.execute(
-            "INSERT INTO edges (id, source_id, target_id, relation, document_id,"
-            " created_at) VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO edges (id, source_id, target_id, relation, document_id, created_at) VALUES (?, ?, ?, ?, ?, ?)",
             ("edge-v", "entity-v1", "entity-v2", "relates_to", "doc-v", _now()),
         )
 

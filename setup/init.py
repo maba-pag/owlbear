@@ -84,9 +84,7 @@ def _merge_settings(owlbear: dict, existing: dict) -> dict:
     all_keys = set(owlbear) | set(existing)
     merged: dict = {}
     for key in all_keys:
-        is_dict_key = key in _DICT_MERGE_KEYS or (
-            key.startswith("[") and key.endswith("]")
-        )
+        is_dict_key = key in _DICT_MERGE_KEYS or (key.startswith("[") and key.endswith("]"))
         if is_dict_key:
             owlbear_inner = owlbear.get(key, {})
             user_inner = existing.get(key, {})
@@ -236,10 +234,7 @@ def _should_replace_hook_file(
         print(f"\nDiff for {dest} (seed -> existing):")
         print(diff)
 
-    prompt = (
-        f"Hook file '{dest}' differs from the OwlBear seed. "
-        "Choose replace, skip, or cancel: "
-    )
+    prompt = f"Hook file '{dest}' differs from the OwlBear seed. Choose replace, skip, or cancel: "
     while True:
         choice = input(prompt).strip().lower()
         if choice in {"replace", "r"}:
@@ -388,12 +383,8 @@ def init(  # noqa: C901
 if __name__ == "__main__":  # pragma: no cover
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description="Initialise an OwlBear workspace in the current directory."
-    )
-    parser.add_argument(
-        "--name", default=None, help="Project name (default: directory name)"
-    )
+    parser = argparse.ArgumentParser(description="Initialise an OwlBear workspace in the current directory.")
+    parser.add_argument("--name", default=None, help="Project name (default: directory name)")
     parser.add_argument(
         "--replace-hooks",
         action="store_true",

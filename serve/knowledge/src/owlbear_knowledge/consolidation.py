@@ -60,9 +60,7 @@ class ConsolidationService:
         if not rows:
             return 0
 
-        prompt = "\n\n".join(
-            f"Chunk {idx + 1}: {content}" for idx, (_, content) in enumerate(rows)
-        )
+        prompt = "\n\n".join(f"Chunk {idx + 1}: {content}" for idx, (_, content) in enumerate(rows))
 
         try:
             insight_text = await self._llm_fn(prompt)

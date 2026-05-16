@@ -98,9 +98,7 @@ def _mock_engine() -> MagicMock:
 class TestFromAC_CreateDr:
     """Tests for create_dr() mapped to AC lines 1-4."""
 
-    def test_creates_pending_file_with_five_field_frontmatter(
-        self, tmp_path: Path
-    ) -> None:
+    def test_creates_pending_file_with_five_field_frontmatter(self, tmp_path: Path) -> None:
         """AC1 happy: file written in pending/ with exactly the 5 required frontmatter fields."""
         decisions_dir = _make_decisions_dir(tmp_path)
         engine = _mock_engine()
@@ -115,9 +113,7 @@ class TestFromAC_CreateDr:
         )
 
         assert result_path.exists(), "DR file must exist after create_dr"
-        assert result_path.parent == decisions_dir / "pending", (
-            "File must be written in pending/"
-        )
+        assert result_path.parent == decisions_dir / "pending", "File must be written in pending/"
         fm = _parse_frontmatter(result_path)
         assert fm["task_id"] == 42
         assert fm["agent"] == "builder"
@@ -146,9 +142,7 @@ class TestFromAC_CreateDr:
         # Body must appear after the second --- delimiter
         parts = content.split("---", 2)
         assert len(parts) >= 3, "File must contain at least two --- delimiters"
-        assert body_text in parts[2], (
-            "Body must appear after the closing frontmatter delimiter"
-        )
+        assert body_text in parts[2], "Body must appear after the closing frontmatter delimiter"
 
     def test_collision_retries_with_counter_suffix(self, tmp_path: Path) -> None:
         """AC2 edge: when slug file already exists, create_dr uses a counter suffix (-2.md)."""
@@ -181,9 +175,7 @@ class TestFromAC_CreateDr:
         assert "approach-selection" in first_path.stem, (
             f"Slug must be derived from request_type 'approach-selection'; got stem {first_path.stem!r}"
         )
-        assert second_path.stem.endswith("-2"), (
-            f"Counter suffix must be '-2', got stem {second_path.stem!r}"
-        )
+        assert second_path.stem.endswith("-2"), f"Counter suffix must be '-2', got stem {second_path.stem!r}"
 
     def test_blocks_task_via_edit_task(self, tmp_path: Path) -> None:
         """AC3 smoke: create_dr calls engine.edit_task(blocked=True, block_reason='DR pending')."""
@@ -202,8 +194,7 @@ class TestFromAC_CreateDr:
         blocking_calls = [
             c
             for c in engine.edit_task.call_args_list
-            if c.kwargs.get("blocked") is True
-            and c.kwargs.get("block_reason") == "DR pending"
+            if c.kwargs.get("blocked") is True and c.kwargs.get("block_reason") == "DR pending"
         ]
         assert blocking_calls, (
             "create_dr must call engine.edit_task(blocked=True, block_reason='DR pending'); "
@@ -227,10 +218,7 @@ class TestFromAC_CreateDr:
             )
 
         leftover = list((decisions_dir / "pending").iterdir())
-        assert leftover == [], (
-            f"Rollback failed — orphaned DR file(s) remain in pending/: "
-            f"{[p.name for p in leftover]}"
-        )
+        assert leftover == [], f"Rollback failed — orphaned DR file(s) remain in pending/: {[p.name for p in leftover]}"
 
     def test_frontmatter_key_set_is_exactly_five_fields(self, tmp_path: Path) -> None:
         """AC1 boundary: pending file contains EXACTLY the 5-field schema — no more, no fewer."""
@@ -252,9 +240,7 @@ class TestFromAC_CreateDr:
             f"Frontmatter must have exactly {expected_keys!r}; got {set(fm.keys())!r}"
         )
 
-    def test_exclusive_create_uses_o_excl_flag(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_exclusive_create_uses_o_excl_flag(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """AC2 boundary: create_dr uses O_CREAT|O_EXCL for atomic file creation (not exists-then-write)."""
         import os as os_mod
 
@@ -282,9 +268,7 @@ class TestFromAC_CreateDr:
         assert observed_flags, "os.open must be called at least once by create_dr"
         flags = observed_flags[0]
         assert flags & os_mod.O_CREAT, "O_CREAT must be set in os.open call"
-        assert flags & os_mod.O_EXCL, (
-            "O_EXCL must be set — atomic exclusive-create required (not exists-then-write)"
-        )
+        assert flags & os_mod.O_EXCL, "O_EXCL must be set — atomic exclusive-create required (not exists-then-write)"
 
 
 # ---------------------------------------------------------------------------
@@ -310,14 +294,10 @@ class TestFromAC_ResolvePendingDrs:
 
         assert dr_file.exists(), "Pending DR must not be moved or deleted"
         assert not (decisions_dir / "resolved" / "42-question.md").exists()
-        assert not engine.edit_task.called, (
-            "engine.edit_task must not be called for response=pending DRs"
-        )
+        assert not engine.edit_task.called, "engine.edit_task must not be called for response=pending DRs"
 
     @pytest.mark.parametrize("response", ["approved", "rejected"])
-    def test_approved_or_rejected_unblocks_and_moves_to_resolved(
-        self, tmp_path: Path, response: str
-    ) -> None:
+    def test_approved_or_rejected_unblocks_and_moves_to_resolved(self, tmp_path: Path, response: str) -> None:
         """AC6 happy: approved/rejected → body appended, task unblocked, file in resolved/."""
         decisions_dir = _make_decisions_dir(tmp_path)
         _write_dr(
@@ -334,24 +314,16 @@ class TestFromAC_ResolvePendingDrs:
         assert (decisions_dir / "resolved" / "42-question.md").exists(), (
             f"DR file must be in resolved/ after response={response!r}"
         )
-        assert not (decisions_dir / "pending" / "42-question.md").exists(), (
-            "DR file must be removed from pending/"
-        )
+        assert not (decisions_dir / "pending" / "42-question.md").exists(), "DR file must be removed from pending/"
         # Task must be unblocked
-        unblock_calls = [
-            c
-            for c in engine.edit_task.call_args_list
-            if c.kwargs.get("blocked") is False
-        ]
+        unblock_calls = [c for c in engine.edit_task.call_args_list if c.kwargs.get("blocked") is False]
         assert unblock_calls, (
             f"engine.edit_task(blocked=False) must be called for response={response!r}; "
             f"actual calls: {engine.edit_task.call_args_list}"
         )
 
     @pytest.mark.parametrize("response", ["approved", "rejected"])
-    def test_approved_or_rejected_appends_dr_summary(
-        self, tmp_path: Path, response: str
-    ) -> None:
+    def test_approved_or_rejected_appends_dr_summary(self, tmp_path: Path, response: str) -> None:
         """AC6 edge: approved/rejected → DR summary appended to task body before unblock."""
         decisions_dir = _make_decisions_dir(tmp_path)
         _write_dr(
@@ -364,25 +336,15 @@ class TestFromAC_ResolvePendingDrs:
 
         resolve_pending_drs(decisions_dir, engine)
 
-        append_calls = [
-            c
-            for c in engine.edit_task.call_args_list
-            if c.kwargs.get("append_body") is not None
-        ]
+        append_calls = [c for c in engine.edit_task.call_args_list if c.kwargs.get("append_body") is not None]
         assert append_calls, (
             f"engine.edit_task must be called with append_body for response={response!r}; "
             f"actual calls: {engine.edit_task.call_args_list}"
         )
         payload = append_calls[0].kwargs["append_body"]
-        assert isinstance(payload, str), (
-            f"append_body payload must be a string; got {type(payload)!r}"
-        )
-        assert len(payload.strip()) > 0, (
-            f"append_body payload must be non-empty; got {payload!r}"
-        )
-        assert response in payload, (
-            f"append_body payload must contain the response value {response!r}; got {payload!r}"
-        )
+        assert isinstance(payload, str), f"append_body payload must be a string; got {type(payload)!r}"
+        assert len(payload.strip()) > 0, f"append_body payload must be non-empty; got {payload!r}"
+        assert response in payload, f"append_body payload must contain the response value {response!r}; got {payload!r}"
 
     def test_needs_info_moves_file_but_keeps_task_blocked(self, tmp_path: Path) -> None:
         """AC7 happy: needs-info → file in resolved/, task NOT unblocked."""
@@ -398,19 +360,12 @@ class TestFromAC_ResolvePendingDrs:
         resolve_pending_drs(decisions_dir, engine)
 
         # File must move to resolved/
-        assert (decisions_dir / "resolved" / "42-question.md").exists(), (
-            "DR file must be in resolved/ after needs-info"
-        )
+        assert (decisions_dir / "resolved" / "42-question.md").exists(), "DR file must be in resolved/ after needs-info"
         assert not (decisions_dir / "pending" / "42-question.md").exists()
         # Task must NOT be unblocked
-        unblock_calls = [
-            c
-            for c in engine.edit_task.call_args_list
-            if c.kwargs.get("blocked") is False
-        ]
+        unblock_calls = [c for c in engine.edit_task.call_args_list if c.kwargs.get("blocked") is False]
         assert not unblock_calls, (
-            "needs-info must NOT call engine.edit_task(blocked=False); "
-            f"found unexpected unblock calls: {unblock_calls}"
+            f"needs-info must NOT call engine.edit_task(blocked=False); found unexpected unblock calls: {unblock_calls}"
         )
 
     def test_needs_info_appends_summary_to_task_body(self, tmp_path: Path) -> None:
@@ -426,11 +381,7 @@ class TestFromAC_ResolvePendingDrs:
 
         resolve_pending_drs(decisions_dir, engine)
 
-        append_calls = [
-            c
-            for c in engine.edit_task.call_args_list
-            if c.kwargs.get("append_body") is not None
-        ]
+        append_calls = [c for c in engine.edit_task.call_args_list if c.kwargs.get("append_body") is not None]
         assert append_calls, (
             "engine.edit_task must be called with append_body for needs-info; "
             f"actual calls: {engine.edit_task.call_args_list}"
@@ -449,28 +400,14 @@ class TestFromAC_ResolvePendingDrs:
 
         resolve_pending_drs(decisions_dir, engine)
 
-        append_calls = [
-            c
-            for c in engine.edit_task.call_args_list
-            if c.kwargs.get("append_body") is not None
-        ]
-        assert append_calls, (
-            "engine.edit_task(append_body=...) must be called for needs-info"
-        )
+        append_calls = [c for c in engine.edit_task.call_args_list if c.kwargs.get("append_body") is not None]
+        assert append_calls, "engine.edit_task(append_body=...) must be called for needs-info"
         payload: str = append_calls[0].kwargs["append_body"]
-        assert "needs-info" in payload, (
-            f"append_body must include the response value 'needs-info'; got {payload!r}"
-        )
-        is_structured = (
-            "Decision Request" in payload or len(payload.strip().splitlines()) > 1
-        )
-        assert is_structured, (
-            f"append_body must contain a structured summary (not a one-word stub); got {payload!r}"
-        )
+        assert "needs-info" in payload, f"append_body must include the response value 'needs-info'; got {payload!r}"
+        is_structured = "Decision Request" in payload or len(payload.strip().splitlines()) > 1
+        assert is_structured, f"append_body must contain a structured summary (not a one-word stub); got {payload!r}"
 
-    def test_unknown_response_logs_warning_and_skips(
-        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_unknown_response_logs_warning_and_skips(self, tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
         """AC8 smoke: unknown response value → warning logged, file remains in pending/."""
         decisions_dir = _make_decisions_dir(tmp_path)
         dr_file = _write_dr(
@@ -485,10 +422,7 @@ class TestFromAC_ResolvePendingDrs:
             resolve_pending_drs(decisions_dir, engine)
 
         warning_records = [r for r in caplog.records if r.levelno >= logging.WARNING]
-        assert any(
-            "wibble" in r.message or "unknown" in r.message.lower()
-            for r in warning_records
-        ), (
+        assert any("wibble" in r.message or "unknown" in r.message.lower() for r in warning_records), (
             f"Expected warning about unknown response value 'wibble'; "
             f"log records: {[(r.levelname, r.message) for r in warning_records]}"
         )
@@ -514,9 +448,7 @@ class TestFromAC_ResolvePendingDrs:
             f"actual calls: {engine.edit_task.call_args_list}"
         )
 
-    def test_per_file_exception_does_not_stall_other_files(
-        self, tmp_path: Path
-    ) -> None:
+    def test_per_file_exception_does_not_stall_other_files(self, tmp_path: Path) -> None:
         """AC9 error: exception from one DR is caught; remaining DRs are still processed."""
         decisions_dir = _make_decisions_dir(tmp_path)
         # File A: task 10 — engine.edit_task raises for this task
@@ -652,9 +584,7 @@ class TestFromAC_CreateDr_1181:
             body="## Context\nSome body.",
         )
 
-        assert isinstance(result, Path), (
-            f"create_dr must return a Path; got {type(result)!r}"
-        )
+        assert isinstance(result, Path), f"create_dr must return a Path; got {type(result)!r}"
         assert result.exists(), "Returned path must exist on disk"
         assert result.parent == decisions_dir / "pending", (
             f"File must be written inside decisions_dir/pending/; got parent {result.parent}"
@@ -682,15 +612,9 @@ class TestFromAC_CreateDr_1181:
         fm = YAML(typ="safe").load("\n".join(lines[1:close_idx])) or {}
 
         expected = {"task_id", "agent", "request_type", "created", "response"}
-        assert set(fm.keys()) == expected, (
-            f"Frontmatter must have exactly {sorted(expected)}; got {sorted(fm.keys())}"
-        )
-        assert str(fm["created"]).count("-") == 2, (
-            f"'created' must be YYYY-MM-DD; got {fm['created']!r}"
-        )
-        assert fm["response"] == "pending", (
-            f"'response' must default to 'pending'; got {fm['response']!r}"
-        )
+        assert set(fm.keys()) == expected, f"Frontmatter must have exactly {sorted(expected)}; got {sorted(fm.keys())}"
+        assert str(fm["created"]).count("-") == 2, f"'created' must be YYYY-MM-DD; got {fm['created']!r}"
+        assert fm["response"] == "pending", f"'response' must default to 'pending'; got {fm['response']!r}"
 
     def test_ac5_slug_derived_from_request_type(self, tmp_path: Path) -> None:
         """AC5 smoke: filename slug comes from the request_type argument."""
@@ -735,13 +659,9 @@ class TestFromAC_CreateDr_1181:
         assert first.exists(), "First file must still exist after collision"
         assert second.exists(), "Second file must be created despite collision"
         assert first != second, "Collision must produce a distinct path"
-        assert second.stem.endswith("-2"), (
-            f"First collision must produce -2 suffix; got stem {second.stem!r}"
-        )
+        assert second.stem.endswith("-2"), f"First collision must produce -2 suffix; got stem {second.stem!r}"
 
-    def test_ac7_file_deleted_and_exception_reraises_on_engine_failure(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac7_file_deleted_and_exception_reraises_on_engine_failure(self, tmp_path: Path) -> None:
         """AC7 smoke: if engine.edit_task raises, the DR file is deleted and exception re-raised."""
         decisions_dir, _, _ = _make_dirs(tmp_path)
         engine = _mock_engine()
@@ -758,9 +678,7 @@ class TestFromAC_CreateDr_1181:
             )
 
         orphans = list((decisions_dir / "pending").glob("*.md"))
-        assert orphans == [], (
-            f"Rollback must remove the DR file; orphaned files: {[p.name for p in orphans]}"
-        )
+        assert orphans == [], f"Rollback must remove the DR file; orphaned files: {[p.name for p in orphans]}"
 
 
 # ---------------------------------------------------------------------------
@@ -773,9 +691,7 @@ class TestFromAC_ResolvePendingDrs_1181:
 
     # --- AC3: dual call-form (engine-only) — PRIMARY GAP not in #1180/#1195 ---
 
-    def test_ac3_engine_only_form_resolves_from_kanban_dir(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac3_engine_only_form_resolves_from_kanban_dir(self, tmp_path: Path) -> None:
         """AC3 smoke: resolve_pending_drs(engine) infers decisions_dir from engine._kanban_dir."""
         kanban_dir = tmp_path / "kanban"
         decisions_dir = kanban_dir / "decisions"
@@ -801,12 +717,8 @@ class TestFromAC_ResolvePendingDrs_1181:
 
         result = resolve_pending_drs(engine)  # single-argument (engine-only) form
 
-        assert isinstance(result, list), (
-            f"resolve_pending_drs must return a list; got {type(result)!r}"
-        )
-        assert len(result) == 1, (
-            f"Engine-only form must process DRs from engine._kanban_dir/decisions/; got {result}"
-        )
+        assert isinstance(result, list), f"resolve_pending_drs must return a list; got {type(result)!r}"
+        assert len(result) == 1, f"Engine-only form must process DRs from engine._kanban_dir/decisions/; got {result}"
         assert not dr_file.exists(), "Resolved DR must be removed from pending/"
         assert (resolved_dir / "42-approach-selection.md").exists(), (
             "Resolved DR must appear in decisions_dir/resolved/"
@@ -814,14 +726,10 @@ class TestFromAC_ResolvePendingDrs_1181:
 
     # --- AC8 (td:2): resolve logic — happy, edge, error, boundary ---
 
-    def test_ac8_happy_approved_appends_unblocks_and_moves(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac8_happy_approved_appends_unblocks_and_moves(self, tmp_path: Path) -> None:
         """AC8 happy: approved DR → append_body called, unblock called, file in resolved/."""
         decisions_dir, pending_dir, resolved_dir = _make_dirs(tmp_path)
-        _write_dr(
-            pending_dir, "42-approach-selection.md", response="approved", task_id=42
-        )
+        _write_dr(pending_dir, "42-approach-selection.md", response="approved", task_id=42)
         engine = _mock_engine()
 
         result = resolve_pending_drs(decisions_dir, engine)
@@ -830,9 +738,7 @@ class TestFromAC_ResolvePendingDrs_1181:
         append_calls = [
             c
             for c in engine.edit_task.call_args_list
-            if len(c.args) > 0
-            and c.args[0] == 42
-            and c.kwargs.get("append_body") is not None
+            if len(c.args) > 0 and c.args[0] == 42 and c.kwargs.get("append_body") is not None
         ]
         assert append_calls, (
             f"approved DR must trigger engine.edit_task(42, append_body=...) — "
@@ -851,22 +757,14 @@ class TestFromAC_ResolvePendingDrs_1181:
         )
 
         # file must move to resolved/
-        assert (resolved_dir / "42-approach-selection.md").exists(), (
-            "Approved DR must be moved to resolved/"
-        )
-        assert not (pending_dir / "42-approach-selection.md").exists(), (
-            "Approved DR must be removed from pending/"
-        )
+        assert (resolved_dir / "42-approach-selection.md").exists(), "Approved DR must be moved to resolved/"
+        assert not (pending_dir / "42-approach-selection.md").exists(), "Approved DR must be removed from pending/"
         assert len(result) == 1, f"One DR moved; got {result}"
 
-    def test_ac8_edge_needs_info_appends_and_moves_without_unblock(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac8_edge_needs_info_appends_and_moves_without_unblock(self, tmp_path: Path) -> None:
         """AC8 edge: needs-info DR → append_body called, file moved, NO unblock."""
         decisions_dir, pending_dir, resolved_dir = _make_dirs(tmp_path)
-        _write_dr(
-            pending_dir, "55-approach-selection.md", response="needs-info", task_id=55
-        )
+        _write_dr(pending_dir, "55-approach-selection.md", response="needs-info", task_id=55)
         engine = _mock_engine()
 
         resolve_pending_drs(decisions_dir, engine)
@@ -875,9 +773,7 @@ class TestFromAC_ResolvePendingDrs_1181:
         append_calls = [
             c
             for c in engine.edit_task.call_args_list
-            if len(c.args) > 0
-            and c.args[0] == 55
-            and c.kwargs.get("append_body") is not None
+            if len(c.args) > 0 and c.args[0] == 55 and c.kwargs.get("append_body") is not None
         ]
         assert append_calls, (
             f"needs-info DR must trigger engine.edit_task(55, append_body=...) — "
@@ -891,8 +787,7 @@ class TestFromAC_ResolvePendingDrs_1181:
             if len(c.args) > 0 and c.args[0] == 55 and c.kwargs.get("blocked") is False
         ]
         assert not unblock_calls, (
-            f"needs-info must NOT call engine.edit_task(55, blocked=False) — "
-            f"found unexpected unblock: {unblock_calls}"
+            f"needs-info must NOT call engine.edit_task(55, blocked=False) — found unexpected unblock: {unblock_calls}"
         )
 
         # file must still move to resolved/
@@ -900,14 +795,10 @@ class TestFromAC_ResolvePendingDrs_1181:
             "needs-info DR must be moved to resolved/ even though task stays blocked"
         )
 
-    def test_ac8_error_engine_raises_during_unblock_file_stays_pending(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac8_error_engine_raises_during_unblock_file_stays_pending(self, tmp_path: Path) -> None:
         """AC8 error: if engine raises during unblock, DR file stays in pending/ (not half-moved)."""
         decisions_dir, pending_dir, resolved_dir = _make_dirs(tmp_path)
-        dr_file = _write_dr(
-            pending_dir, "77-approach-selection.md", response="approved", task_id=77
-        )
+        dr_file = _write_dr(pending_dir, "77-approach-selection.md", response="approved", task_id=77)
         engine = _mock_engine()
 
         def _fail_on_unblock(*_args: object, **kwargs: object) -> MagicMock:
@@ -922,21 +813,15 @@ class TestFromAC_ResolvePendingDrs_1181:
         resolve_pending_drs(decisions_dir, engine)
 
         # DR must remain in pending/ — it was never successfully moved
-        assert dr_file.exists(), (
-            "DR file must stay in pending/ when engine.edit_task raises during unblock"
-        )
+        assert dr_file.exists(), "DR file must stay in pending/ when engine.edit_task raises during unblock"
         assert not (resolved_dir / "77-approach-selection.md").exists(), (
             "DR file must NOT appear in resolved/ when unblock failed"
         )
 
-    def test_ac8_boundary_rejected_full_flow_matches_approved(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac8_boundary_rejected_full_flow_matches_approved(self, tmp_path: Path) -> None:
         """AC8 boundary: rejected DR follows the same full flow as approved (append+unblock+move)."""
         decisions_dir, pending_dir, resolved_dir = _make_dirs(tmp_path)
-        _write_dr(
-            pending_dir, "88-approach-selection.md", response="rejected", task_id=88
-        )
+        _write_dr(pending_dir, "88-approach-selection.md", response="rejected", task_id=88)
         engine = _mock_engine()
 
         result = resolve_pending_drs(decisions_dir, engine)
@@ -946,31 +831,21 @@ class TestFromAC_ResolvePendingDrs_1181:
             for c in engine.edit_task.call_args_list
             if len(c.args) > 0 and c.args[0] == 88 and c.kwargs.get("blocked") is False
         ]
-        assert unblock_calls, (
-            "rejected DR must trigger unblock via engine.edit_task(88, blocked=False)"
-        )
-        assert (resolved_dir / "88-approach-selection.md").exists(), (
-            "rejected DR must be moved to resolved/"
-        )
+        assert unblock_calls, "rejected DR must trigger unblock via engine.edit_task(88, blocked=False)"
+        assert (resolved_dir / "88-approach-selection.md").exists(), "rejected DR must be moved to resolved/"
         assert len(result) == 1, f"One DR moved; got {result}"
 
     # --- AC9: per-file exception isolation ---
 
-    def test_ac9_exception_from_one_dr_does_not_stall_others(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac9_exception_from_one_dr_does_not_stall_others(self, tmp_path: Path) -> None:
         """AC9 smoke: exception from processing one DR does not prevent others from being resolved."""
         decisions_dir, pending_dir, _ = _make_dirs(tmp_path)
         resolved_dir = decisions_dir / "resolved"
 
         # File A: task 10 — engine.edit_task will raise for this task ID
-        _write_dr(
-            pending_dir, "10-approach-selection.md", response="approved", task_id=10
-        )
+        _write_dr(pending_dir, "10-approach-selection.md", response="approved", task_id=10)
         # File B: task 20 — must be processed successfully
-        _write_dr(
-            pending_dir, "20-approach-selection.md", response="approved", task_id=20
-        )
+        _write_dr(pending_dir, "20-approach-selection.md", response="approved", task_id=20)
 
         engine = _mock_engine()
 
@@ -997,34 +872,22 @@ class TestFromAC_ResolvePendingDrs_1181:
     ) -> None:
         """AC10 smoke: unknown response value → warning logged, file stays in pending/."""
         decisions_dir, pending_dir, _ = _make_dirs(tmp_path)
-        dr_file = _write_dr(
-            pending_dir, "42-approach-selection.md", response="bogus-status"
-        )
+        dr_file = _write_dr(pending_dir, "42-approach-selection.md", response="bogus-status")
         engine = _mock_engine()
 
         with caplog.at_level(logging.WARNING):
             resolve_pending_drs(decisions_dir, engine)
 
-        warning_texts = [
-            r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING
-        ]
-        assert any(
-            "bogus-status" in t or "unknown" in t.lower() for t in warning_texts
-        ), (
+        warning_texts = [r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING]
+        assert any("bogus-status" in t or "unknown" in t.lower() for t in warning_texts), (
             f"Expected warning mentioning the unknown response value; got: {warning_texts}"
         )
-        assert dr_file.exists(), (
-            "File with unknown response must remain in pending/ (not moved)"
-        )
-        assert not engine.edit_task.called, (
-            "engine.edit_task must NOT be called for unknown response values"
-        )
+        assert dr_file.exists(), "File with unknown response must remain in pending/ (not moved)"
+        assert not engine.edit_task.called, "engine.edit_task must NOT be called for unknown response values"
 
     # --- AC8 atomicity: move failure after mutation must not produce duplicate summary ---
 
-    def test_ac8_move_failure_after_mutation_no_duplicate_summary_on_retry(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac8_move_failure_after_mutation_no_duplicate_summary_on_retry(self, tmp_path: Path) -> None:
         """AC8 atomicity: if _move_with_collision_suffix fails after _append_summary and unblock,
         retrying resolve_pending_drs must NOT produce a second append_body call.
 
@@ -1033,9 +896,7 @@ class TestFromAC_ResolvePendingDrs_1181:
         A correct implementation either rolls back the mutation or guards against re-processing.
         """
         decisions_dir, pending_dir, _resolved_dir = _make_dirs(tmp_path)
-        _write_dr(
-            pending_dir, "99-approach-selection.md", response="approved", task_id=99
-        )
+        _write_dr(pending_dir, "99-approach-selection.md", response="approved", task_id=99)
         engine = _mock_engine()
 
         target = "owlbear_kanban.decisions._move_with_collision_suffix"
@@ -1048,21 +909,13 @@ class TestFromAC_ResolvePendingDrs_1181:
         )
 
         # Count append_body calls after the first (failed) attempt
-        append_calls_first = [
-            c
-            for c in engine.edit_task.call_args_list
-            if c.kwargs.get("append_body") is not None
-        ]
+        append_calls_first = [c for c in engine.edit_task.call_args_list if c.kwargs.get("append_body") is not None]
 
         # Retry: run resolve again with move still failing
         with patch(target, side_effect=OSError("disk full")):
             resolve_pending_drs(decisions_dir, engine)
 
-        append_calls_total = [
-            c
-            for c in engine.edit_task.call_args_list
-            if c.kwargs.get("append_body") is not None
-        ]
+        append_calls_total = [c for c in engine.edit_task.call_args_list if c.kwargs.get("append_body") is not None]
 
         assert len(append_calls_total) == len(append_calls_first), (
             "Retrying resolve after a move failure must NOT produce a duplicate append_body call; "
@@ -1075,9 +928,7 @@ class TestFromAC_ResolvePendingDrs_1181:
     def test_ac5_rejected_path_appends_summary_to_task(self, tmp_path: Path) -> None:
         """AC5 boundary: rejected DR must append_body to task before unblock and move."""
         decisions_dir, pending_dir, _resolved_dir = _make_dirs(tmp_path)
-        _write_dr(
-            pending_dir, "88-approach-selection.md", response="rejected", task_id=88
-        )
+        _write_dr(pending_dir, "88-approach-selection.md", response="rejected", task_id=88)
         engine = _mock_engine()
 
         resolve_pending_drs(decisions_dir, engine)
@@ -1085,9 +936,7 @@ class TestFromAC_ResolvePendingDrs_1181:
         append_calls = [
             c
             for c in engine.edit_task.call_args_list
-            if len(c.args) > 0
-            and c.args[0] == 88
-            and c.kwargs.get("append_body") is not None
+            if len(c.args) > 0 and c.args[0] == 88 and c.kwargs.get("append_body") is not None
         ]
         assert append_calls, (
             f"rejected DR must trigger engine.edit_task(88, append_body=...) — "
@@ -1095,43 +944,29 @@ class TestFromAC_ResolvePendingDrs_1181:
         )
         # Summary must mention the response value
         summary_text = append_calls[0].kwargs["append_body"]
-        assert "rejected" in summary_text, (
-            f"append_body summary must contain 'rejected'; got: {summary_text!r}"
-        )
+        assert "rejected" in summary_text, f"append_body summary must contain 'rejected'; got: {summary_text!r}"
 
     # --- AC6: pending removal for needs-info and rejected (retry gap fill) ---
 
-    def test_ac6_needs_info_file_removed_from_pending_after_resolve(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac6_needs_info_file_removed_from_pending_after_resolve(self, tmp_path: Path) -> None:
         """AC6: after resolve_pending_drs(), needs-info DR must not remain in pending/."""
         decisions_dir, pending_dir, _resolved_dir = _make_dirs(tmp_path)
-        dr_file = _write_dr(
-            pending_dir, "55-approach-selection.md", response="needs-info", task_id=55
-        )
+        dr_file = _write_dr(pending_dir, "55-approach-selection.md", response="needs-info", task_id=55)
         engine = _mock_engine()
 
         resolve_pending_drs(decisions_dir, engine)
 
-        assert not dr_file.exists(), (
-            "needs-info DR must be removed from pending/ after resolve_pending_drs() runs"
-        )
+        assert not dr_file.exists(), "needs-info DR must be removed from pending/ after resolve_pending_drs() runs"
 
-    def test_ac6_rejected_file_removed_from_pending_after_resolve(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac6_rejected_file_removed_from_pending_after_resolve(self, tmp_path: Path) -> None:
         """AC6: after resolve_pending_drs(), rejected DR must not remain in pending/."""
         decisions_dir, pending_dir, _resolved_dir = _make_dirs(tmp_path)
-        dr_file = _write_dr(
-            pending_dir, "88-approach-selection.md", response="rejected", task_id=88
-        )
+        dr_file = _write_dr(pending_dir, "88-approach-selection.md", response="rejected", task_id=88)
         engine = _mock_engine()
 
         resolve_pending_drs(decisions_dir, engine)
 
-        assert not dr_file.exists(), (
-            "rejected DR must be removed from pending/ after resolve_pending_drs() runs"
-        )
+        assert not dr_file.exists(), "rejected DR must be removed from pending/ after resolve_pending_drs() runs"
 
 
 # --- merged from tests/test_decisions_1195.py ---
@@ -1170,9 +1005,7 @@ from owlbear_kanban.decisions import resolve_pending_drs
 _SENTINEL = "ORIGINAL CONTENT MUST NOT CHANGE"
 
 
-def _write_resolved(
-    resolved_dir: Path, filename: str, content: str = _SENTINEL
-) -> Path:
+def _write_resolved(resolved_dir: Path, filename: str, content: str = _SENTINEL) -> Path:
     """Write a pre-existing file in resolved/ to simulate a collision."""
     path = resolved_dir / filename
     path.write_text(content, encoding="utf-8")
@@ -1188,9 +1021,7 @@ class TestFromAC_ResolvePendingDrsCollision:
     """Collision-protection tests for resolve_pending_drs(), AC1-AC5."""
 
     # AC1 — happy path: approved DR with a basename conflict in resolved/
-    def test_ac1_happy_approved_move_succeeds_without_overwrite(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac1_happy_approved_move_succeeds_without_overwrite(self, tmp_path: Path) -> None:
         """AC1 happy: approved DR moves even when resolved/ already has a file with the same name."""
         decisions_dir, pending_dir, resolved_dir = _make_dirs(tmp_path)
         engine = _mock_engine()
@@ -1207,14 +1038,11 @@ class TestFromAC_ResolvePendingDrsCollision:
         # The pre-existing resolved file must NOT have been overwritten
         existing_content = (resolved_dir / filename).read_text(encoding="utf-8")
         assert existing_content == _SENTINEL, (
-            "Pre-existing resolved file must be preserved byte-for-byte; "
-            f"got: {existing_content!r}"
+            f"Pre-existing resolved file must be preserved byte-for-byte; got: {existing_content!r}"
         )
 
     # AC1 — edge: the moved path is distinct from the pre-existing resolved file
-    def test_ac1_edge_moved_path_is_distinct_when_conflict_exists(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac1_edge_moved_path_is_distinct_when_conflict_exists(self, tmp_path: Path) -> None:
         """AC1 edge: the path returned for the moved file differs from the original basename."""
         decisions_dir, pending_dir, resolved_dir = _make_dirs(tmp_path)
         engine = _mock_engine()
@@ -1228,14 +1056,10 @@ class TestFromAC_ResolvePendingDrsCollision:
         assert len(result) == 1
         moved_path = result[0]
         # The moved path must NOT be the exact same name as the pre-existing file
-        assert moved_path.name != filename, (
-            f"Collision must produce a distinct filename; got {moved_path.name!r}"
-        )
+        assert moved_path.name != filename, f"Collision must produce a distinct filename; got {moved_path.name!r}"
 
     # AC1 — boundary: the collision-protected path appears in the returned list
-    def test_ac1_boundary_collision_protected_path_in_returned_list(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac1_boundary_collision_protected_path_in_returned_list(self, tmp_path: Path) -> None:
         """AC1 boundary: resolve_pending_drs returns the new (suffixed) path, not the original."""
         decisions_dir, pending_dir, resolved_dir = _make_dirs(tmp_path)
         engine = _mock_engine()
@@ -1259,17 +1083,13 @@ class TestFromAC_ResolvePendingDrsCollision:
     # AC2 (td:1): Original resolved file content preserved byte-for-byte
     # ---------------------------------------------------------------------------
 
-    def test_ac2_original_resolved_content_preserved_byte_for_byte(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac2_original_resolved_content_preserved_byte_for_byte(self, tmp_path: Path) -> None:
         """AC2: The pre-existing resolved file retains its exact bytes after a collision."""
         decisions_dir, pending_dir, resolved_dir = _make_dirs(tmp_path)
         engine = _mock_engine()
 
         filename = "10-approach-selection.md"
-        original_bytes = (
-            b"PRECIOUS ORIGINAL CONTENT\xc3\xa9"  # non-ASCII to catch encoding bugs
-        )
+        original_bytes = b"PRECIOUS ORIGINAL CONTENT\xc3\xa9"  # non-ASCII to catch encoding bugs
         (resolved_dir / filename).write_bytes(original_bytes)
         _write_dr(pending_dir, filename, response="approved", task_id=10)
 
@@ -1302,9 +1122,7 @@ class TestFromAC_ResolvePendingDrsCollision:
             f"First collision must produce '-2.md' suffix; got {moved.name!r}"
         )
 
-    def test_ac3_edge_two_preexisting_conflicts_yield_dash_3_suffix(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac3_edge_two_preexisting_conflicts_yield_dash_3_suffix(self, tmp_path: Path) -> None:
         """AC3 edge: when resolved/ has both base and -2 variant, next-free is -3.md."""
         decisions_dir, pending_dir, resolved_dir = _make_dirs(tmp_path)
         engine = _mock_engine()
@@ -1322,9 +1140,7 @@ class TestFromAC_ResolvePendingDrsCollision:
             f"With base and -2 taken, next free must be '-3.md'; got {moved.name!r}"
         )
 
-    def test_ac3_boundary_three_preexisting_conflicts_yield_dash_4_suffix(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac3_boundary_three_preexisting_conflicts_yield_dash_4_suffix(self, tmp_path: Path) -> None:
         """AC3 boundary: three pre-existing variants → next-free counter lands at -4.md."""
         decisions_dir, pending_dir, resolved_dir = _make_dirs(tmp_path)
         engine = _mock_engine()
@@ -1347,9 +1163,7 @@ class TestFromAC_ResolvePendingDrsCollision:
     # AC4 (td:1): Non-overwriting mechanism (O_EXCL or equivalent)
     # ---------------------------------------------------------------------------
 
-    def test_ac4_mechanism_does_not_overwrite_resolved_file(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac4_mechanism_does_not_overwrite_resolved_file(self, tmp_path: Path) -> None:
         """AC4: The collision mechanism must not overwrite the pre-existing resolved file."""
         decisions_dir, pending_dir, resolved_dir = _make_dirs(tmp_path)
         engine = _mock_engine()
@@ -1369,17 +1183,13 @@ class TestFromAC_ResolvePendingDrsCollision:
         )
         # And a suffixed copy must now exist
         suffixed = resolved_dir / "77-approach-selection-2.md"
-        assert suffixed.exists(), (
-            "A collision-suffixed file must have been created in resolved/"
-        )
+        assert suffixed.exists(), "A collision-suffixed file must have been created in resolved/"
 
     # ---------------------------------------------------------------------------
     # AC5 (td:1): Both resolution paths apply collision protection
     # ---------------------------------------------------------------------------
 
-    def test_ac5_approved_path_applies_collision_protection(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac5_approved_path_applies_collision_protection(self, tmp_path: Path) -> None:
         """AC5 approved: the approved branch applies the same collision-protection logic."""
         decisions_dir, pending_dir, resolved_dir = _make_dirs(tmp_path)
         engine = _mock_engine()
@@ -1392,15 +1202,11 @@ class TestFromAC_ResolvePendingDrsCollision:
 
         assert result, "Approved DR must be moved to resolved/"
         moved = result[0]
-        assert moved.name != filename, (
-            "Approved branch must not overwrite pre-existing resolved file"
-        )
+        assert moved.name != filename, "Approved branch must not overwrite pre-existing resolved file"
         # Verify original untouched
         assert (resolved_dir / filename).read_text(encoding="utf-8") == _SENTINEL
 
-    def test_ac5_rejected_path_applies_collision_protection(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac5_rejected_path_applies_collision_protection(self, tmp_path: Path) -> None:
         """AC5 rejected: the rejected branch applies the same collision-protection logic."""
         decisions_dir, pending_dir, resolved_dir = _make_dirs(tmp_path)
         engine = _mock_engine()
@@ -1413,14 +1219,10 @@ class TestFromAC_ResolvePendingDrsCollision:
 
         assert result, "Rejected DR must be moved to resolved/"
         moved = result[0]
-        assert moved.name != filename, (
-            "Rejected branch must not overwrite pre-existing resolved file"
-        )
+        assert moved.name != filename, "Rejected branch must not overwrite pre-existing resolved file"
         assert (resolved_dir / filename).read_text(encoding="utf-8") == _SENTINEL
 
-    def test_ac5_needs_info_path_applies_collision_protection(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac5_needs_info_path_applies_collision_protection(self, tmp_path: Path) -> None:
         """AC5 needs-info: the needs-info branch applies the same collision-protection logic."""
         decisions_dir, pending_dir, resolved_dir = _make_dirs(tmp_path)
         engine = _mock_engine()
@@ -1433,18 +1235,14 @@ class TestFromAC_ResolvePendingDrsCollision:
 
         assert result, "Needs-info DR must be moved to resolved/"
         moved = result[0]
-        assert moved.name != filename, (
-            "Needs-info branch must not overwrite pre-existing resolved file"
-        )
+        assert moved.name != filename, "Needs-info branch must not overwrite pre-existing resolved file"
         assert (resolved_dir / filename).read_text(encoding="utf-8") == _SENTINEL
 
     # ---------------------------------------------------------------------------
     # Retry gaps: collision-path source-removal and mechanism proof (reviewer Required Follow-up)
     # ---------------------------------------------------------------------------
 
-    def test_ac1_collision_case_pending_source_file_removed_after_move(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac1_collision_case_pending_source_file_removed_after_move(self, tmp_path: Path) -> None:
         """AC1 retry gap: pending source file must be deleted after a collision-protected move."""
         decisions_dir, pending_dir, resolved_dir = _make_dirs(tmp_path)
         engine = _mock_engine()
@@ -1484,13 +1282,10 @@ class TestFromAC_ResolvePendingDrsCollision:
 
         resolve_pending_drs(decisions_dir, engine)
 
-        assert observed_flags, (
-            "os.open must be called by the collision helper during resolution"
-        )
+        assert observed_flags, "os.open must be called by the collision helper during resolution"
         o_creat = os_mod.O_CREAT
         o_excl = os_mod.O_EXCL
         matching = [f for f in observed_flags if (f & o_creat) and (f & o_excl)]
         assert matching, (
-            "Collision helper must use O_CREAT|O_EXCL for atomic exclusive-create; "
-            "no matching os.open call found"
+            "Collision helper must use O_CREAT|O_EXCL for atomic exclusive-create; no matching os.open call found"
         )

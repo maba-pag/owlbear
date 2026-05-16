@@ -59,9 +59,7 @@ class TestFromAC_ThemeBootstrapServing:
     Expected failure mode: AssertionError on content-type or body assertions.
     """
 
-    def test_theme_bootstrap_js_response_contract(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_theme_bootstrap_js_response_contract(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """AC-1: GET /theme-bootstrap.js returns 200, JavaScript content-type, non-HTML body.
 
         FAILS: current catch-all returns content-type text/html with index.html body.
@@ -88,9 +86,7 @@ class TestFromAC_ThemeBootstrapServing:
         )
         assert "<html" not in resp.text.lower()
 
-    def test_theme_bootstrap_js_content_type_is_not_html(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_theme_bootstrap_js_content_type_is_not_html(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """AC-1/AC-2: content-type for /theme-bootstrap.js must not be text/html.
 
         FAILS: current implementation returns 'text/html; charset=utf-8'.
@@ -137,7 +133,6 @@ class TestFromAC_ThemeBootstrapServing:
 
         body = resp.text.lower()
         assert "<html" not in body, (
-            "Response body must not be an HTML document. "
-            "Bug: /theme-bootstrap.js falls through to SPA catch-all."
+            "Response body must not be an HTML document. Bug: /theme-bootstrap.js falls through to SPA catch-all."
         )
         assert "<!doctype" not in body

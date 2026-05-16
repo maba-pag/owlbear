@@ -140,18 +140,12 @@ class TestFromAC_MtimeCache:
 
     def test_init_creates_task_cache_as_empty_dict(self, engine: KanbanEngine) -> None:
         """_task_cache must exist and be an empty dict immediately after __init__."""
-        assert hasattr(engine, "_task_cache"), (
-            "_task_cache attribute missing from __init__"
-        )
+        assert hasattr(engine, "_task_cache"), "_task_cache attribute missing from __init__"
         assert engine._task_cache == {}
 
-    def test_init_creates_archive_cache_as_empty_dict(
-        self, engine: KanbanEngine
-    ) -> None:
+    def test_init_creates_archive_cache_as_empty_dict(self, engine: KanbanEngine) -> None:
         """_archive_cache must exist and be an empty dict immediately after __init__."""
-        assert hasattr(engine, "_archive_cache"), (
-            "_archive_cache attribute missing from __init__"
-        )
+        assert hasattr(engine, "_archive_cache"), "_archive_cache attribute missing from __init__"
         assert engine._archive_cache == {}
 
     def test_cache_entry_is_int_mtime_ns_task_tuple(self, engine: KanbanEngine) -> None:
@@ -159,18 +153,12 @@ class TestFromAC_MtimeCache:
         engine.list_tasks()
         assert engine._task_cache, "_task_cache must be non-empty after list_tasks()"
         for filename, value in engine._task_cache.items():
-            assert isinstance(filename, str), (
-                f"key must be str filename, got {type(filename)}"
-            )
+            assert isinstance(filename, str), f"key must be str filename, got {type(filename)}"
             assert isinstance(value, tuple), "value must be tuple"
             assert len(value) == 2, "value must be 2-tuple"
             mtime_ns, task = value
-            assert isinstance(mtime_ns, int), (
-                f"mtime_ns must be int (st_mtime_ns), got {type(mtime_ns).__name__}"
-            )
-            assert isinstance(task, Task), (
-                f"second element must be Task, got {type(task)}"
-            )
+            assert isinstance(mtime_ns, int), f"mtime_ns must be int (st_mtime_ns), got {type(mtime_ns).__name__}"
+            assert isinstance(task, Task), f"second element must be Task, got {type(task)}"
 
     # ------------------------------------------------------------------ AC 2 + 3
     # Warm cache: unchanged files not re-parsed
@@ -178,13 +166,9 @@ class TestFromAC_MtimeCache:
     def test_cold_call_populates_task_cache(self, engine: KanbanEngine) -> None:
         """Cold list_tasks() populates _task_cache with one entry per .md file."""
         results = engine.list_tasks()
-        assert len(engine._task_cache) == len(results), (
-            "_task_cache must contain one entry per returned task"
-        )
+        assert len(engine._task_cache) == len(results), "_task_cache must contain one entry per returned task"
 
-    def test_unchanged_file_not_reparsed_on_warm_call(
-        self, engine: KanbanEngine
-    ) -> None:
+    def test_unchanged_file_not_reparsed_on_warm_call(self, engine: KanbanEngine) -> None:
         """Second list_tasks() must not call read_task() when no files changed."""
         engine.list_tasks()  # cold call — populate cache
         with patch("owlbear_kanban.engine.read_task") as mock_read:
@@ -199,9 +183,7 @@ class TestFromAC_MtimeCache:
         # Also verify cache populated (fails with AttributeError if not implemented)
         assert len(engine._task_cache) == len(cold_ids)
 
-    def test_modified_file_triggers_reparsing_and_cache_update(
-        self, board: Path
-    ) -> None:
+    def test_modified_file_triggers_reparsing_and_cache_update(self, board: Path) -> None:
         """When a file's mtime changes, list_tasks() must re-parse it and update the cache."""
         tasks_dir = board / "tasks"
         eng = KanbanEngine(board, activity_log=False)
@@ -215,16 +197,12 @@ class TestFromAC_MtimeCache:
 
         # Overwrite with new content (ensures mtime changes)
         time.sleep(0.01)  # ensure mtime differs on coarse-grained filesystems
-        _write_task_file(
-            tasks_dir, int(target_name.split("-")[0]), status="in-progress"
-        )
+        _write_task_file(tasks_dir, int(target_name.split("-")[0]), status="in-progress")
 
         eng.list_tasks()  # second call — target file modified
 
         new_mtime_ns = eng._task_cache[target_name][0]
-        assert new_mtime_ns != old_mtime_ns, (
-            "cache must update mtime_ns after file modification"
-        )
+        assert new_mtime_ns != old_mtime_ns, "cache must update mtime_ns after file modification"
         assert eng._task_cache[target_name][1].status == "in-progress", (
             "cache must reflect new task content after re-parse"
         )
@@ -241,16 +219,12 @@ class TestFromAC_MtimeCache:
         md_files = sorted(tasks_dir.glob("*.md"))
         target = md_files[0]
         target_name = target.name
-        assert target_name in eng._task_cache, (
-            "pre-condition: file in cache before deletion"
-        )
+        assert target_name in eng._task_cache, "pre-condition: file in cache before deletion"
 
         target.unlink()
         eng.list_tasks()  # trigger eviction
 
-        assert target_name not in eng._task_cache, (
-            "deleted file must be evicted from cache"
-        )
+        assert target_name not in eng._task_cache, "deleted file must be evicted from cache"
 
     def test_deleted_file_absent_from_results_after_eviction(self, board: Path) -> None:
         """Deleted task must not appear in list_tasks() results."""
@@ -276,9 +250,7 @@ class TestFromAC_MtimeCache:
         engine.list_tasks()
         assert engine._task_cache, "pre-condition: cache must be populated"
         engine.refresh_config()
-        assert engine._task_cache == {}, (
-            "_task_cache must be empty after refresh_config()"
-        )
+        assert engine._task_cache == {}, "_task_cache must be empty after refresh_config()"
 
     def test_refresh_config_clears_archive_cache(self, board: Path) -> None:
         """refresh_config() must reset _archive_cache to empty dict."""
@@ -288,9 +260,7 @@ class TestFromAC_MtimeCache:
         eng.list_tasks(archived=True)
         assert eng._archive_cache, "pre-condition: archive cache must be populated"
         eng.refresh_config()
-        assert eng._archive_cache == {}, (
-            "_archive_cache must be empty after refresh_config()"
-        )
+        assert eng._archive_cache == {}, "_archive_cache must be empty after refresh_config()"
 
     # ------------------------------------------------------------------ AC 6
     # Non-existent archive_dir graceful handling
@@ -313,18 +283,14 @@ class TestFromAC_MtimeCache:
         try:
             eng.list_tasks(archived=True)
         except Exception as exc:  # noqa: BLE001
-            pytest.fail(
-                f"list_tasks(archived=True) raised unexpectedly: {type(exc).__name__}: {exc}"
-            )
+            pytest.fail(f"list_tasks(archived=True) raised unexpectedly: {type(exc).__name__}: {exc}")
         # Cache must exist and be empty (fails with AttributeError if not implemented)
         assert eng._archive_cache == {}
 
     # ------------------------------------------------------------------ AC 7
     # Revision counter orthogonal to cache
 
-    def test_revision_increments_after_create_with_warm_cache(
-        self, engine: KanbanEngine
-    ) -> None:
+    def test_revision_increments_after_create_with_warm_cache(self, engine: KanbanEngine) -> None:
         """revision must increment on create_task() even when cache is populated."""
         assert hasattr(engine, "_task_cache"), "pre-condition: _task_cache must exist"
         engine.list_tasks()  # warm cache
@@ -344,9 +310,7 @@ class TestFromAC_MtimeCache:
     # ------------------------------------------------------------------ AC 8
     # Lazy invalidation — write operations do NOT proactively update cache
 
-    def test_edit_does_not_proactively_update_task_cache(
-        self, engine: KanbanEngine
-    ) -> None:
+    def test_edit_does_not_proactively_update_task_cache(self, engine: KanbanEngine) -> None:
         """After edit_task(), _task_cache entry must still hold the pre-edit task state."""
         engine.list_tasks()  # populate cache
         cached_filename = next(iter(engine._task_cache))
@@ -360,9 +324,7 @@ class TestFromAC_MtimeCache:
             "write operations must not proactively update _task_cache"
         )
 
-    def test_cache_updated_lazily_on_next_list_tasks(
-        self, engine: KanbanEngine
-    ) -> None:
+    def test_cache_updated_lazily_on_next_list_tasks(self, engine: KanbanEngine) -> None:
         """Cache update is deferred to the next list_tasks() call (scandir-driven)."""
         engine.list_tasks()  # warm cache
         cached_filename = next(iter(engine._task_cache))
@@ -390,12 +352,8 @@ class TestFromAC_MtimeCache:
         (tasks_dir / "tmp_abc123.tmp").write_text("temp", encoding="utf-8")
         eng = KanbanEngine(board, activity_log=False)
         eng.list_tasks()
-        assert ".DS_Store" not in eng._task_cache, (
-            ".DS_Store must be excluded from cache"
-        )
-        assert "tmp_abc123.tmp" not in eng._task_cache, (
-            ".tmp files must be excluded from cache"
-        )
+        assert ".DS_Store" not in eng._task_cache, ".DS_Store must be excluded from cache"
+        assert "tmp_abc123.tmp" not in eng._task_cache, ".tmp files must be excluded from cache"
 
     def test_non_md_files_not_in_list_tasks_results(self, board: Path) -> None:
         """Non-.md files must not produce TaskSummary entries in list_tasks() results."""
@@ -414,18 +372,14 @@ class TestFromAC_MtimeCache:
     # ------------------------------------------------------------------ AC 10 (arch refinement)
     # Race condition guard
 
-    def test_race_condition_fileerror_during_read_task_suppressed(
-        self, engine: KanbanEngine
-    ) -> None:
+    def test_race_condition_fileerror_during_read_task_suppressed(self, engine: KanbanEngine) -> None:
         """FileNotFoundError from read_task() inside list_tasks() must be suppressed."""
         engine.list_tasks()  # populate cache
 
         # Simulate a race: first call to read_task raises FileNotFoundError
         # (file deleted between scandir and read)
         call_count: dict[str, int] = {"n": 0}
-        original_read_task = __import__(
-            "owlbear_kanban.storage", fromlist=["read_task"]
-        ).read_task
+        original_read_task = __import__("owlbear_kanban.storage", fromlist=["read_task"]).read_task
 
         def patched_read(path: Path, **_kwargs) -> Task:  # type: ignore[return]
             call_count["n"] += 1
@@ -439,9 +393,7 @@ class TestFromAC_MtimeCache:
             except FileNotFoundError as exc:
                 pytest.fail(f"FileNotFoundError must be suppressed, but got: {exc}")
 
-    def test_race_condition_evicts_entry_from_cache_when_file_gone(
-        self, board: Path
-    ) -> None:
+    def test_race_condition_evicts_entry_from_cache_when_file_gone(self, board: Path) -> None:
         """If read_task() raises FileNotFoundError for a cached file, evict that cache entry."""
         tasks_dir = board / "tasks"
         eng = KanbanEngine(board, activity_log=False)
@@ -458,9 +410,7 @@ class TestFromAC_MtimeCache:
         time.sleep(0.01)
         target.write_bytes(target.read_bytes())
 
-        original_read_task = __import__(
-            "owlbear_kanban.storage", fromlist=["read_task"]
-        ).read_task
+        original_read_task = __import__("owlbear_kanban.storage", fromlist=["read_task"]).read_task
 
         def patched_read(path: Path, **_kwargs) -> Task:  # type: ignore[return]
             if path.name == target_name:
@@ -470,6 +420,4 @@ class TestFromAC_MtimeCache:
         with patch("owlbear_kanban.engine.read_task", side_effect=patched_read):
             eng.list_tasks()
 
-        assert target_name not in eng._task_cache, (
-            "cache entry must be evicted when read_task raises FileNotFoundError"
-        )
+        assert target_name not in eng._task_cache, "cache entry must be evicted when read_task raises FileNotFoundError"

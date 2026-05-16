@@ -80,9 +80,7 @@ _EXPECTED_NON_IMPL_TAGS = frozenset(
         "type:user-action",
     }
 )
-_EXPECTED_ARCHIVAL_REASONS = frozenset(
-    {"completed", "deprecated", "dropped", "duplicate", "wontfix"}
-)
+_EXPECTED_ARCHIVAL_REASONS = frozenset({"completed", "deprecated", "dropped", "duplicate", "wontfix"})
 _EXPECTED_TASKS_DIR = "tasks"
 _EXPECTED_ARCHIVE_DIR = "archive"
 _EXPECTED_DECISIONS_DIR = "decisions"
@@ -258,10 +256,7 @@ class TestFromAC_TopologyConstant:
 
     def test_archival_reasons_contains_canonical_set(self) -> None:
         mod = importlib.import_module("owlbear_kanban.topology")
-        assert (
-            frozenset(mod.PRODUCT_TOPOLOGY.archival_reasons)
-            == _EXPECTED_ARCHIVAL_REASONS
-        )
+        assert frozenset(mod.PRODUCT_TOPOLOGY.archival_reasons) == _EXPECTED_ARCHIVAL_REASONS
 
     def test_activity_log_is_true(self) -> None:
         mod = importlib.import_module("owlbear_kanban.topology")
@@ -300,9 +295,7 @@ class TestFromAC_TopologyConstant:
 class TestFromAC_EngineNoConfig:
     """AC2: KanbanEngine works from board dir with no config.yml."""
 
-    def test_engine_init_without_config_yml_does_not_raise(
-        self, tmp_path: Path
-    ) -> None:
+    def test_engine_init_without_config_yml_does_not_raise(self, tmp_path: Path) -> None:
         """KanbanEngine(kanban_dir) must not raise when config.yml is absent."""
         board = _make_no_config_board(tmp_path)
         # Currently raises FileNotFoundError from load_config — will FAIL (RED)
@@ -316,27 +309,21 @@ class TestFromAC_EngineNoConfig:
         config = engine.board_config()
         assert config.statuses == _EXPECTED_STATUSES
 
-    def test_board_config_priorities_match_product_constant(
-        self, tmp_path: Path
-    ) -> None:
+    def test_board_config_priorities_match_product_constant(self, tmp_path: Path) -> None:
         """board_config().priorities must equal product-topology priorities."""
         board = _make_no_config_board(tmp_path)
         engine = KanbanEngine(board)
         config = engine.board_config()
         assert config.priorities == _EXPECTED_PRIORITIES
 
-    def test_board_config_pipeline_entry_status_matches_product_constant(
-        self, tmp_path: Path
-    ) -> None:
+    def test_board_config_pipeline_entry_status_matches_product_constant(self, tmp_path: Path) -> None:
         """board_config().pipeline.entry_status must equal product-topology entry_status."""
         board = _make_no_config_board(tmp_path)
         engine = KanbanEngine(board)
         config = engine.board_config()
         assert config.pipeline.entry_status == _EXPECTED_ENTRY_STATUS
 
-    def test_board_config_agents_agent_map_matches_product_constant(
-        self, tmp_path: Path
-    ) -> None:
+    def test_board_config_agents_agent_map_matches_product_constant(self, tmp_path: Path) -> None:
         """board_config().agents.agent_map must equal product-topology agent_map."""
         board = _make_no_config_board(tmp_path)
         engine = KanbanEngine(board)
@@ -350,9 +337,7 @@ class TestFromAC_EngineNoConfig:
         config = engine.board_config()
         assert config.next_id == 1
 
-    def test_board_config_activity_log_is_true_per_product_constant(
-        self, tmp_path: Path
-    ) -> None:
+    def test_board_config_activity_log_is_true_per_product_constant(self, tmp_path: Path) -> None:
         """board_config().activity_log must be True (product constant) without config.yml."""
         board = _make_no_config_board(tmp_path)
         engine = KanbanEngine(board)
@@ -422,9 +407,7 @@ class TestFromAC_OverridesIgnored:
         # Currently returns "todo" → assertion FAILS (RED)
         assert config.pipeline.entry_status == _EXPECTED_ENTRY_STATUS
 
-    def test_terminal_status_override_in_config_is_ignored(
-        self, tmp_path: Path
-    ) -> None:
+    def test_terminal_status_override_in_config_is_ignored(self, tmp_path: Path) -> None:
         """pipeline.terminal_status must be product-constant despite config override."""
         board = _make_board_with_override(
             tmp_path,
@@ -451,13 +434,9 @@ class TestFromAC_OverridesIgnored:
         # Currently returns "2h" → assertion FAILS (RED)
         assert config.pipeline.claim_timeout == _EXPECTED_CLAIM_TIMEOUT
 
-    def test_default_priority_override_in_config_is_ignored(
-        self, tmp_path: Path
-    ) -> None:
+    def test_default_priority_override_in_config_is_ignored(self, tmp_path: Path) -> None:
         """pipeline.default_priority must be product-constant despite config override."""
-        board = _make_board_with_override(
-            tmp_path, pipeline={"default_priority": "critical"}
-        )
+        board = _make_board_with_override(tmp_path, pipeline={"default_priority": "critical"})
         engine = KanbanEngine(board)
         config = engine.board_config()
         # Currently returns "critical" → assertion FAILS (RED)
@@ -494,9 +473,7 @@ class TestFromAC_OverridesIgnored:
         # Currently returns ["type:custom-tag"] → assertion FAILS (RED)
         assert frozenset(config.policy.non_impl_tags) == _EXPECTED_NON_IMPL_TAGS
 
-    def test_archival_reasons_override_in_config_is_ignored(
-        self, tmp_path: Path
-    ) -> None:
+    def test_archival_reasons_override_in_config_is_ignored(self, tmp_path: Path) -> None:
         """policy.archival_reasons must be product-constant despite config override."""
         board = _make_board_with_override(
             tmp_path,
@@ -521,9 +498,7 @@ class TestFromAC_OverridesIgnored:
 
     def test_tasks_dir_override_in_config_is_ignored(self, tmp_path: Path) -> None:
         """paths.tasks_dir must be product-constant despite config override."""
-        board = _make_board_with_override(
-            tmp_path, paths={"tasks_dir": "custom-tasks", "archive_dir": "archive"}
-        )
+        board = _make_board_with_override(tmp_path, paths={"tasks_dir": "custom-tasks", "archive_dir": "archive"})
         # Also create the custom-tasks directory so engine can validate path containment
         (board / "custom-tasks").mkdir(exist_ok=True)
         engine = KanbanEngine(board)
@@ -533,9 +508,7 @@ class TestFromAC_OverridesIgnored:
 
     def test_archive_dir_override_in_config_is_ignored(self, tmp_path: Path) -> None:
         """paths.archive_dir must be product-constant despite config override."""
-        board = _make_board_with_override(
-            tmp_path, paths={"tasks_dir": "tasks", "archive_dir": "custom-archive"}
-        )
+        board = _make_board_with_override(tmp_path, paths={"tasks_dir": "tasks", "archive_dir": "custom-archive"})
         (board / "custom-archive").mkdir(exist_ok=True)
         engine = KanbanEngine(board)
         config = engine.board_config()
@@ -557,9 +530,7 @@ class TestFromAC_OverridesIgnored:
         # Currently returns {"custom-type": "custom"} → assertion FAILS (RED)
         assert config.agents.agent_types == {}
 
-    def test_agent_compatibility_override_in_config_is_ignored(
-        self, tmp_path: Path
-    ) -> None:
+    def test_agent_compatibility_override_in_config_is_ignored(self, tmp_path: Path) -> None:
         """agents.agent_compatibility must be empty per product constant despite config override."""
         board = _make_board_with_override(
             tmp_path,
@@ -577,9 +548,7 @@ class TestFromAC_OverridesIgnored:
         # Currently returns {"builder": [...], "reviewer": [...]} → assertion FAILS (RED)
         assert config.agents.agent_compatibility == {}
 
-    def test_status_predicates_override_in_config_is_ignored(
-        self, tmp_path: Path
-    ) -> None:
+    def test_status_predicates_override_in_config_is_ignored(self, tmp_path: Path) -> None:
         """policy.status_predicates must be empty per product constant despite config override."""
         board = _make_board_with_override(
             tmp_path,
@@ -594,9 +563,7 @@ class TestFromAC_OverridesIgnored:
         # Currently returns {"research": "some_predicate"} → assertion FAILS (RED)
         assert config.policy.status_predicates == {}
 
-    def test_agent_view_list_tasks_uses_product_statuses_not_config(
-        self, tmp_path: Path
-    ) -> None:
+    def test_agent_view_list_tasks_uses_product_statuses_not_config(self, tmp_path: Path) -> None:
         """AgentView.list_tasks(status=...) must use product statuses for validation.
 
         Override config to only have 3 statuses; then call list_tasks with a
@@ -628,9 +595,7 @@ class TestFromAC_OverridesIgnored:
         result = av.list_tasks(status="in-progress")
         assert result is not None
 
-    def test_agent_view_create_task_uses_product_entry_status_not_config(
-        self, tmp_path: Path
-    ) -> None:
+    def test_agent_view_create_task_uses_product_entry_status_not_config(self, tmp_path: Path) -> None:
         """AgentView.create_task places new tasks at product entry_status, ignoring config.
 
         Config override sets entry_status='todo'; product constant is 'research'.
@@ -648,9 +613,7 @@ class TestFromAC_OverridesIgnored:
         # Before refactor: config entry_status='todo' → assertion FAILS (RED)
         assert result.status == _EXPECTED_ENTRY_STATUS
 
-    def test_agent_view_pick_tasks_agent_map_uses_product_constant_not_config(
-        self, tmp_path: Path
-    ) -> None:
+    def test_agent_view_pick_tasks_agent_map_uses_product_constant_not_config(self, tmp_path: Path) -> None:
         """AgentView.pick_tasks assigns agent from product agent_map, not config override.
 
         Config override maps all statuses to 'custom-agent'; product constant maps
@@ -692,9 +655,7 @@ class TestFromAC_OverridesIgnored:
         assert len(result.waves) == 1
         assert result.waves[0].tasks[0].agent == _EXPECTED_AGENT_MAP["research"]
 
-    def test_agent_view_move_task_terminal_status_uses_product_constant_not_config(
-        self, tmp_path: Path
-    ) -> None:
+    def test_agent_view_move_task_terminal_status_uses_product_constant_not_config(self, tmp_path: Path) -> None:
         """AgentView.move_task resolves can_mark_completed against product terminal_status.
 
         Config override sets terminal_status='review'; product constant is 'done'.
@@ -758,9 +719,7 @@ class TestFromAC_LoadSaveAndDispatch:
         config = load_config(board)
         assert config.statuses == _EXPECTED_STATUSES
 
-    def test_load_config_absent_returns_product_priorities(
-        self, tmp_path: Path
-    ) -> None:
+    def test_load_config_absent_returns_product_priorities(self, tmp_path: Path) -> None:
         """load_config on absent config.yml returns product-topology priorities."""
         board = _make_no_config_board(tmp_path)
         config = load_config(board)
@@ -837,15 +796,11 @@ class TestFromAC_LoadSaveAndDispatch:
         }
         present_topology_keys = topology_keys & set(raw.keys())
         # Currently all topology keys are present → assertion FAILS (RED)
-        assert not present_topology_keys, (
-            f"save_config wrote topology fields: {present_topology_keys}"
-        )
+        assert not present_topology_keys, f"save_config wrote topology fields: {present_topology_keys}"
 
     # --- board_config attribute paths preserved ---
 
-    def test_board_config_statuses_attribute_path_accessible(
-        self, tmp_path: Path
-    ) -> None:
+    def test_board_config_statuses_attribute_path_accessible(self, tmp_path: Path) -> None:
         """board_config().statuses must be accessible (backward-compat path)."""
         board = _make_no_config_board(tmp_path)
         engine = KanbanEngine(board)
@@ -853,45 +808,35 @@ class TestFromAC_LoadSaveAndDispatch:
         # Currently engine init fails → FAILS (RED); after fix: passes
         assert isinstance(config.statuses, list)
 
-    def test_board_config_pipeline_entry_status_attribute_path_accessible(
-        self, tmp_path: Path
-    ) -> None:
+    def test_board_config_pipeline_entry_status_attribute_path_accessible(self, tmp_path: Path) -> None:
         """board_config().pipeline.entry_status must be accessible."""
         board = _make_no_config_board(tmp_path)
         engine = KanbanEngine(board)
         config = engine.board_config()
         assert config.pipeline.entry_status == _EXPECTED_ENTRY_STATUS
 
-    def test_board_config_agents_agent_map_attribute_path_accessible(
-        self, tmp_path: Path
-    ) -> None:
+    def test_board_config_agents_agent_map_attribute_path_accessible(self, tmp_path: Path) -> None:
         """board_config().agents.agent_map must equal product-topology agent_map."""
         board = _make_no_config_board(tmp_path)
         engine = KanbanEngine(board)
         config = engine.board_config()
         assert dict(config.agents.agent_map) == _EXPECTED_AGENT_MAP
 
-    def test_board_config_policy_non_impl_tags_attribute_path_accessible(
-        self, tmp_path: Path
-    ) -> None:
+    def test_board_config_policy_non_impl_tags_attribute_path_accessible(self, tmp_path: Path) -> None:
         """board_config().policy.non_impl_tags must equal product-topology non_impl_tags."""
         board = _make_no_config_board(tmp_path)
         engine = KanbanEngine(board)
         config = engine.board_config()
         assert frozenset(config.policy.non_impl_tags) == _EXPECTED_NON_IMPL_TAGS
 
-    def test_board_config_paths_tasks_dir_attribute_path_accessible(
-        self, tmp_path: Path
-    ) -> None:
+    def test_board_config_paths_tasks_dir_attribute_path_accessible(self, tmp_path: Path) -> None:
         """board_config().paths.tasks_dir must be accessible."""
         board = _make_no_config_board(tmp_path)
         engine = KanbanEngine(board)
         config = engine.board_config()
         assert config.paths.tasks_dir == _EXPECTED_TASKS_DIR
 
-    def test_board_config_paths_archive_dir_attribute_path_accessible(
-        self, tmp_path: Path
-    ) -> None:
+    def test_board_config_paths_archive_dir_attribute_path_accessible(self, tmp_path: Path) -> None:
         """board_config().paths.archive_dir must be accessible."""
         board = _make_no_config_board(tmp_path)
         engine = KanbanEngine(board)
@@ -915,9 +860,7 @@ class TestFromAC_LoadSaveAndDispatch:
 
     # --- frontmatter validates against product topology ---
 
-    def test_task_with_released_status_invalid_per_product_topology(
-        self, tmp_path: Path
-    ) -> None:
+    def test_task_with_released_status_invalid_per_product_topology(self, tmp_path: Path) -> None:
         """A task with status='released' must fail corruption detection.
 
         'released' is in dispatch.STATUS_RANK but not in the product topology
@@ -953,9 +896,7 @@ class TestFromAC_LoadSaveAndDispatch:
             engine.show_task("1")
         assert exc_info.value.code == ERR_CORRUPT_INVALID_STATUS
 
-    def test_task_with_product_priority_valid_regardless_of_config_override(
-        self, tmp_path: Path
-    ) -> None:
+    def test_task_with_product_priority_valid_regardless_of_config_override(self, tmp_path: Path) -> None:
         """A task whose priority is in the product topology must be valid even if
         the config.yml override restricts priorities to a subset.
 
@@ -1006,9 +947,7 @@ class TestFromAC_LoadSaveAndDispatch:
             "---\n"
             "Body.\n"
         )
-        (board / "tasks" / "1-tag-round-trip.md").write_text(
-            task_content, encoding="utf-8"
-        )
+        (board / "tasks" / "1-tag-round-trip.md").write_text(task_content, encoding="utf-8")
         engine = KanbanEngine(board)
         # Currently engine init raises FileNotFoundError → test FAILS (RED)
         task = engine.show_task("1")
@@ -1037,9 +976,7 @@ class TestFromAC_LoadSaveAndDispatch:
             "---\n"
             "Body.\n"
         )
-        (board / "tasks" / "1-blocked-round-trip.md").write_text(
-            task_content, encoding="utf-8"
-        )
+        (board / "tasks" / "1-blocked-round-trip.md").write_text(task_content, encoding="utf-8")
         engine = KanbanEngine(board)
         # Currently engine init raises FileNotFoundError → test FAILS (RED)
         task = engine.show_task("1")

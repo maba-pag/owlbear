@@ -165,9 +165,7 @@ class TestFromAC_SharedArchivalHelper:
         def tracking_helper(*args: object, **kwargs: object) -> None:
             calls.append((args, kwargs))
 
-        monkeypatch.setattr(
-            _server_mod, "_validate_archival_constraints", tracking_helper
-        )
+        monkeypatch.setattr(_server_mod, "_validate_archival_constraints", tracking_helper)
 
         await move_task(_make_ctx(app_ctx), id="1", status="in-progress")
 
@@ -193,9 +191,7 @@ class TestFromAC_SharedArchivalHelper:
         def tracking_helper(*args: object, **kwargs: object) -> None:
             calls.append((args, kwargs))
 
-        monkeypatch.setattr(
-            _server_mod, "_validate_archival_constraints", tracking_helper
-        )
+        monkeypatch.setattr(_server_mod, "_validate_archival_constraints", tracking_helper)
 
         await end_work(
             _make_ctx(app_ctx),
@@ -233,9 +229,7 @@ class TestFromAC_StructuredErrors:
     # -- Path 1: _show_validated FileNotFoundError → ERR_NOT_FOUND --
 
     @pytest.mark.asyncio
-    async def test_show_validated_file_not_found_raises_json_envelope(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_show_validated_file_not_found_raises_json_envelope(self, tmp_path: Path) -> None:
         """_show_validated FileNotFoundError must raise ToolError with JSON {code, message}.
 
         FAIL path: current code raises ToolError(str(exc)) — plain string, not JSON.
@@ -253,9 +247,7 @@ class TestFromAC_StructuredErrors:
         assert "message" in payload
 
     @pytest.mark.asyncio
-    async def test_show_validated_file_not_found_has_not_found_code(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_show_validated_file_not_found_has_not_found_code(self, tmp_path: Path) -> None:
         """_show_validated FileNotFoundError must use ERR_NOT_FOUND code.
 
         FAIL path: raw string ToolError fails json.loads → JSONDecodeError.
@@ -274,9 +266,7 @@ class TestFromAC_StructuredErrors:
     # -- Path 2: create_dr request_type guard → ERR_PARAM_VALIDATION --
 
     @pytest.mark.asyncio
-    async def test_create_dr_invalid_request_type_raises_json_envelope(
-        self, app_ctx_todo_1451: AppContext
-    ) -> None:
+    async def test_create_dr_invalid_request_type_raises_json_envelope(self, app_ctx_todo_1451: AppContext) -> None:
         """create_dr invalid request_type must raise ToolError with JSON {code, message}.
 
         FAIL path: current code raises ToolError('request_type must be one of…') — plain string.
@@ -315,9 +305,7 @@ class TestFromAC_StructuredErrors:
     # -- Path 3: move_task missing status → ERR_PARAM_VALIDATION --
 
     @pytest.mark.asyncio
-    async def test_move_task_missing_status_raises_json_envelope(
-        self, app_ctx_todo_1451: AppContext
-    ) -> None:
+    async def test_move_task_missing_status_raises_json_envelope(self, app_ctx_todo_1451: AppContext) -> None:
         """move_task with status=None must raise ToolError with JSON {code, message}.
 
         FAIL path: current code raises ToolError('status is required') — plain string.
@@ -329,9 +317,7 @@ class TestFromAC_StructuredErrors:
         assert "message" in payload
 
     @pytest.mark.asyncio
-    async def test_move_task_missing_status_has_param_validation_code(
-        self, app_ctx_todo_1451: AppContext
-    ) -> None:
+    async def test_move_task_missing_status_has_param_validation_code(self, app_ctx_todo_1451: AppContext) -> None:
         """move_task with status=None must use ERR_PARAM_VALIDATION code.
 
         FAIL path: raw string ToolError fails json.loads → JSONDecodeError.
@@ -344,9 +330,7 @@ class TestFromAC_StructuredErrors:
     # -- Path 4: start_work ValueError → ERR_PARAM_VALIDATION --
 
     @pytest.mark.asyncio
-    async def test_start_work_value_error_raises_json_envelope(
-        self, app_ctx_todo_1451: AppContext
-    ) -> None:
+    async def test_start_work_value_error_raises_json_envelope(self, app_ctx_todo_1451: AppContext) -> None:
         """start_work ValueError must raise ToolError with JSON {code, message}.
 
         FAIL path: current code raises ToolError(str(exc)) — plain string.
@@ -361,9 +345,7 @@ class TestFromAC_StructuredErrors:
         assert "message" in payload
 
     @pytest.mark.asyncio
-    async def test_start_work_value_error_has_param_validation_code(
-        self, app_ctx_todo_1451: AppContext
-    ) -> None:
+    async def test_start_work_value_error_has_param_validation_code(self, app_ctx_todo_1451: AppContext) -> None:
         """start_work ValueError must use ERR_PARAM_VALIDATION code.
 
         FAIL path: raw string ToolError fails json.loads → JSONDecodeError.
@@ -379,9 +361,7 @@ class TestFromAC_StructuredErrors:
     # -- Path 5: start_work FileNotFoundError → ERR_NOT_FOUND --
 
     @pytest.mark.asyncio
-    async def test_start_work_file_not_found_raises_json_envelope(
-        self, app_ctx_todo_1451: AppContext
-    ) -> None:
+    async def test_start_work_file_not_found_raises_json_envelope(self, app_ctx_todo_1451: AppContext) -> None:
         """start_work FileNotFoundError must raise ToolError with JSON {code, message}.
 
         FAIL path: current code raises ToolError(str(exc)) — plain string.
@@ -396,9 +376,7 @@ class TestFromAC_StructuredErrors:
         assert "message" in payload
 
     @pytest.mark.asyncio
-    async def test_start_work_file_not_found_has_not_found_code(
-        self, app_ctx_todo_1451: AppContext
-    ) -> None:
+    async def test_start_work_file_not_found_has_not_found_code(self, app_ctx_todo_1451: AppContext) -> None:
         """start_work FileNotFoundError must use ERR_NOT_FOUND code.
 
         FAIL path: raw string ToolError fails json.loads → JSONDecodeError.
@@ -414,9 +392,7 @@ class TestFromAC_StructuredErrors:
     # -- Path 6: end_work ValueError → ERR_PARAM_VALIDATION --
 
     @pytest.mark.asyncio
-    async def test_end_work_value_error_raises_json_envelope(
-        self, app_ctx_claimed_1451: AppContext
-    ) -> None:
+    async def test_end_work_value_error_raises_json_envelope(self, app_ctx_claimed_1451: AppContext) -> None:
         """end_work ValueError must raise ToolError with JSON {code, message}.
 
         FAIL path: current code raises ToolError(str(exc)) — plain string.
@@ -425,17 +401,13 @@ class TestFromAC_StructuredErrors:
         mock_view.end_work.side_effect = ValueError("invalid outcome state")
         app_ctx_claimed_1451.engine._agent_view = mock_view  # noqa: SLF001
         with pytest.raises(ToolError) as exc_info:
-            await end_work(
-                _make_ctx(app_ctx_claimed_1451), id="1", outcome="success", note="done"
-            )
+            await end_work(_make_ctx(app_ctx_claimed_1451), id="1", outcome="success", note="done")
         payload = json.loads(str(exc_info.value))
         assert "code" in payload
         assert "message" in payload
 
     @pytest.mark.asyncio
-    async def test_end_work_value_error_has_param_validation_code(
-        self, app_ctx_claimed_1451: AppContext
-    ) -> None:
+    async def test_end_work_value_error_has_param_validation_code(self, app_ctx_claimed_1451: AppContext) -> None:
         """end_work ValueError must use ERR_PARAM_VALIDATION code.
 
         FAIL path: raw string ToolError fails json.loads → JSONDecodeError.
@@ -444,18 +416,14 @@ class TestFromAC_StructuredErrors:
         mock_view.end_work.side_effect = ValueError("invalid outcome state")
         app_ctx_claimed_1451.engine._agent_view = mock_view  # noqa: SLF001
         with pytest.raises(ToolError) as exc_info:
-            await end_work(
-                _make_ctx(app_ctx_claimed_1451), id="1", outcome="success", note="done"
-            )
+            await end_work(_make_ctx(app_ctx_claimed_1451), id="1", outcome="success", note="done")
         payload = json.loads(str(exc_info.value))
         assert payload["code"] == "ERR_PARAM_VALIDATION"
 
     # -- Path 7: end_work FileNotFoundError → ERR_NOT_FOUND --
 
     @pytest.mark.asyncio
-    async def test_end_work_file_not_found_raises_json_envelope(
-        self, app_ctx_claimed_1451: AppContext
-    ) -> None:
+    async def test_end_work_file_not_found_raises_json_envelope(self, app_ctx_claimed_1451: AppContext) -> None:
         """end_work FileNotFoundError must raise ToolError with JSON {code, message}.
 
         FAIL path: current code raises ToolError(str(exc)) — plain string.
@@ -464,17 +432,13 @@ class TestFromAC_StructuredErrors:
         mock_view.end_work.side_effect = FileNotFoundError("task file missing")
         app_ctx_claimed_1451.engine._agent_view = mock_view  # noqa: SLF001
         with pytest.raises(ToolError) as exc_info:
-            await end_work(
-                _make_ctx(app_ctx_claimed_1451), id="1", outcome="success", note="done"
-            )
+            await end_work(_make_ctx(app_ctx_claimed_1451), id="1", outcome="success", note="done")
         payload = json.loads(str(exc_info.value))
         assert "code" in payload
         assert "message" in payload
 
     @pytest.mark.asyncio
-    async def test_end_work_file_not_found_has_not_found_code(
-        self, app_ctx_claimed_1451: AppContext
-    ) -> None:
+    async def test_end_work_file_not_found_has_not_found_code(self, app_ctx_claimed_1451: AppContext) -> None:
         """end_work FileNotFoundError must use ERR_NOT_FOUND code.
 
         FAIL path: raw string ToolError fails json.loads → JSONDecodeError.
@@ -483,9 +447,7 @@ class TestFromAC_StructuredErrors:
         mock_view.end_work.side_effect = FileNotFoundError("task file missing")
         app_ctx_claimed_1451.engine._agent_view = mock_view  # noqa: SLF001
         with pytest.raises(ToolError) as exc_info:
-            await end_work(
-                _make_ctx(app_ctx_claimed_1451), id="1", outcome="success", note="done"
-            )
+            await end_work(_make_ctx(app_ctx_claimed_1451), id="1", outcome="success", note="done")
         payload = json.loads(str(exc_info.value))
         assert payload["code"] == "ERR_NOT_FOUND"
 
@@ -558,9 +520,7 @@ class TestFromAC_StructuredErrors:
     # -- AC-5a: _show_validated path-scrub discrimination (cycle 3) --
 
     @pytest.mark.asyncio
-    async def test_show_validated_path_like_not_found_scrubs_internal_path(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_show_validated_path_like_not_found_scrubs_internal_path(self, tmp_path: Path) -> None:
         """_safe_not_found_message must replace path-like FileNotFoundError messages.
 
         When show_task raises FileNotFoundError whose message contains a filesystem
@@ -582,9 +542,5 @@ class TestFromAC_StructuredErrors:
         with pytest.raises(ToolError) as exc_info:
             await _show_validated(app_ctx, 99)
         payload = json.loads(str(exc_info.value))
-        assert payload["message"] == "Task '99' not found", (
-            f"Expected fallback message, got: {payload['message']!r}"
-        )
-        assert "/var/" not in payload["message"], (
-            f"Internal path leaked into error message: {payload['message']!r}"
-        )
+        assert payload["message"] == "Task '99' not found", f"Expected fallback message, got: {payload['message']!r}"
+        assert "/var/" not in payload["message"], f"Internal path leaked into error message: {payload['message']!r}"

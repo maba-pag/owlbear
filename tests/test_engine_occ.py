@@ -98,9 +98,7 @@ class TestFromAC_EngineEditTaskOCC:
         kanban_dir = _make_board(tmp_path)
         engine = _make_engine(kanban_dir)
         sig = inspect.signature(engine.edit_task)
-        assert "expected_updated" in sig.parameters, (
-            "engine.edit_task must declare expected_updated parameter"
-        )
+        assert "expected_updated" in sig.parameters, "engine.edit_task must declare expected_updated parameter"
 
     def test_edit_task_expected_updated_defaults_to_none(self, tmp_path: Path) -> None:
         """engine.edit_task.expected_updated default is None (optional)."""
@@ -110,9 +108,7 @@ class TestFromAC_EngineEditTaskOCC:
         engine = _make_engine(kanban_dir)
         sig = inspect.signature(engine.edit_task)
         param = sig.parameters["expected_updated"]
-        assert param.default is None, (
-            "engine.edit_task.expected_updated must default to None"
-        )
+        assert param.default is None, "engine.edit_task.expected_updated must default to None"
 
     def test_edit_task_matching_token_writes_task(self, tmp_path: Path) -> None:
         """edit_task with correct expected_updated persists the change."""
@@ -128,9 +124,7 @@ class TestFromAC_EngineEditTaskOCC:
 
         assert "new note" in (result.body or "")
 
-    def test_edit_task_stale_token_raises_concurrency_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_edit_task_stale_token_raises_concurrency_error(self, tmp_path: Path) -> None:
         """edit_task with stale expected_updated raises ConcurrencyError."""
         kanban_dir = _make_board(tmp_path)
         _write_task(kanban_dir, 1, updated=_FIXED_UPDATED)
@@ -158,9 +152,7 @@ class TestFromAC_EngineEditTaskOCC:
 
         assert exc_info.value.code == "ERR_STALE"
 
-    def test_edit_task_with_token_calls_write_task_if_unchanged(
-        self, tmp_path: Path
-    ) -> None:
+    def test_edit_task_with_token_calls_write_task_if_unchanged(self, tmp_path: Path) -> None:
         """edit_task with expected_updated invokes storage.write_task_if_unchanged."""
         kanban_dir = _make_board(tmp_path)
         _write_task(kanban_dir, 1, updated=_FIXED_UPDATED)
@@ -182,9 +174,7 @@ class TestFromAC_EngineEditTaskOCC:
 
         mock_cas.assert_called_once()
 
-    def test_edit_task_without_token_does_not_call_write_task_if_unchanged(
-        self, tmp_path: Path
-    ) -> None:
+    def test_edit_task_without_token_does_not_call_write_task_if_unchanged(self, tmp_path: Path) -> None:
         """edit_task without expected_updated bypasses write_task_if_unchanged (AC#6)."""
         kanban_dir = _make_board(tmp_path)
         _write_task(kanban_dir, 1, updated=_FIXED_UPDATED)
@@ -211,9 +201,7 @@ class TestFromAC_EngineMoveTaskOCC:
         kanban_dir = _make_board(tmp_path)
         engine = _make_engine(kanban_dir)
         sig = inspect.signature(engine.move_task)
-        assert "expected_updated" in sig.parameters, (
-            "engine.move_task must declare expected_updated parameter"
-        )
+        assert "expected_updated" in sig.parameters, "engine.move_task must declare expected_updated parameter"
 
     def test_move_task_expected_updated_defaults_to_none(self, tmp_path: Path) -> None:
         """engine.move_task.expected_updated default is None (optional)."""
@@ -223,9 +211,7 @@ class TestFromAC_EngineMoveTaskOCC:
         engine = _make_engine(kanban_dir)
         sig = inspect.signature(engine.move_task)
         param = sig.parameters["expected_updated"]
-        assert param.default is None, (
-            "engine.move_task.expected_updated must default to None"
-        )
+        assert param.default is None, "engine.move_task.expected_updated must default to None"
 
     def test_move_task_matching_token_changes_status(self, tmp_path: Path) -> None:
         """move_task with correct expected_updated persists the new status."""
@@ -241,9 +227,7 @@ class TestFromAC_EngineMoveTaskOCC:
 
         assert result.status == "in-progress"
 
-    def test_move_task_stale_token_raises_concurrency_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_move_task_stale_token_raises_concurrency_error(self, tmp_path: Path) -> None:
         """move_task with stale expected_updated raises ConcurrencyError."""
         kanban_dir = _make_board(tmp_path)
         _write_task(kanban_dir, 1, status="todo", updated=_FIXED_UPDATED)
@@ -271,9 +255,7 @@ class TestFromAC_EngineMoveTaskOCC:
 
         assert exc_info.value.code == "ERR_STALE"
 
-    def test_move_task_with_token_calls_write_task_if_unchanged(
-        self, tmp_path: Path
-    ) -> None:
+    def test_move_task_with_token_calls_write_task_if_unchanged(self, tmp_path: Path) -> None:
         """move_task with expected_updated invokes storage.write_task_if_unchanged."""
         kanban_dir = _make_board(tmp_path)
         _write_task(kanban_dir, 1, status="todo", updated=_FIXED_UPDATED)
@@ -307,9 +289,7 @@ class TestFromAC_EngineSweepOCC:
     def _expired_ts(self) -> str:
         return (datetime.now(tz=UTC) - timedelta(hours=2)).isoformat()
 
-    def test_sweep_calls_write_task_if_unchanged_for_expired_claim(
-        self, tmp_path: Path
-    ) -> None:
+    def test_sweep_calls_write_task_if_unchanged_for_expired_claim(self, tmp_path: Path) -> None:
         """sweep invokes write_task_if_unchanged when clearing an expired claim."""
         kanban_dir = _make_board(tmp_path)
         _write_task(
@@ -348,9 +328,7 @@ class TestFromAC_EngineSweepOCC:
 
         assert isinstance(released, list)
 
-    def test_sweep_err_stale_task_excluded_from_released_list(
-        self, tmp_path: Path
-    ) -> None:
+    def test_sweep_err_stale_task_excluded_from_released_list(self, tmp_path: Path) -> None:
         """sweep does not include a ERR_STALE task in the returned released list."""
         kanban_dir = _make_board(tmp_path)
         _write_task(
@@ -370,9 +348,7 @@ class TestFromAC_EngineSweepOCC:
 
         assert 1 not in released
 
-    def test_sweep_continues_after_err_stale_releases_subsequent_tasks(
-        self, tmp_path: Path
-    ) -> None:
+    def test_sweep_continues_after_err_stale_releases_subsequent_tasks(self, tmp_path: Path) -> None:
         """sweep continues processing remaining expired tasks after an ERR_STALE."""
         kanban_dir = _make_board(tmp_path)
         expired = self._expired_ts()
@@ -411,9 +387,7 @@ class TestFromAC_EngineSweepOCC:
 class TestFromAC_EngineNonOCCPathPreserved:
     """AC#6: existing callers without expected_updated continue to work."""
 
-    def test_edit_task_without_expected_updated_persists_change(
-        self, tmp_path: Path
-    ) -> None:
+    def test_edit_task_without_expected_updated_persists_change(self, tmp_path: Path) -> None:
         """edit_task without expected_updated still writes the task (non-OCC path)."""
         kanban_dir = _make_board(tmp_path)
         _write_task(kanban_dir, 1, updated=_FIXED_UPDATED)
@@ -423,9 +397,7 @@ class TestFromAC_EngineNonOCCPathPreserved:
 
         assert result.priority == "someday"
 
-    def test_move_task_without_expected_updated_changes_status(
-        self, tmp_path: Path
-    ) -> None:
+    def test_move_task_without_expected_updated_changes_status(self, tmp_path: Path) -> None:
         """move_task without expected_updated still changes status (non-OCC path)."""
         kanban_dir = _make_board(tmp_path)
         _write_task(kanban_dir, 1, status="todo", updated=_FIXED_UPDATED)
@@ -435,9 +407,7 @@ class TestFromAC_EngineNonOCCPathPreserved:
 
         assert result.status == "in-progress"
 
-    def test_edit_task_none_expected_updated_does_not_raise_on_fresh_task(
-        self, tmp_path: Path
-    ) -> None:
+    def test_edit_task_none_expected_updated_does_not_raise_on_fresh_task(self, tmp_path: Path) -> None:
         """Explicitly passing expected_updated=None uses the non-OCC path."""
         kanban_dir = _make_board(tmp_path)
         _write_task(kanban_dir, 1, updated=_FIXED_UPDATED)
@@ -448,9 +418,7 @@ class TestFromAC_EngineNonOCCPathPreserved:
 
         assert "no-occ" in (result.body or "")
 
-    def test_move_task_none_expected_updated_does_not_raise(
-        self, tmp_path: Path
-    ) -> None:
+    def test_move_task_none_expected_updated_does_not_raise(self, tmp_path: Path) -> None:
         """Explicitly passing expected_updated=None to move_task uses non-OCC path."""
         kanban_dir = _make_board(tmp_path)
         _write_task(kanban_dir, 1, status="todo", updated=_FIXED_UPDATED)

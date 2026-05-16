@@ -40,9 +40,7 @@ class TestFromAC_CockpitDependencyDeclaration:
     def test_ruamel_yaml_in_cockpit_pyproject(self, project_root: Path) -> None:
         pyproject = project_root / "serve" / "cockpit" / "pyproject.toml"
         content = pyproject.read_text(encoding="utf-8")
-        assert "ruamel.yaml" in content, (
-            "serve/cockpit/pyproject.toml must declare ruamel.yaml as a dependency"
-        )
+        assert "ruamel.yaml" in content, "serve/cockpit/pyproject.toml must declare ruamel.yaml as a dependency"
 
 
 # ---------------------------------------------------------------------------
@@ -58,9 +56,7 @@ class TestFromAC_EnginePublicProperties:
 
         kanban_dir = _make_board(tmp_path)
         engine = KanbanEngine(kanban_dir)
-        assert hasattr(engine, "tasks_dir"), (
-            "KanbanEngine must expose a public 'tasks_dir' property"
-        )
+        assert hasattr(engine, "tasks_dir"), "KanbanEngine must expose a public 'tasks_dir' property"
 
     def test_tasks_dir_returns_expected_path(self, tmp_path: Path) -> None:
         from owlbear_kanban import KanbanEngine
@@ -82,9 +78,7 @@ class TestFromAC_EnginePublicProperties:
 
         kanban_dir = _make_board(tmp_path)
         engine = KanbanEngine(kanban_dir)
-        assert hasattr(engine, "kanban_dir"), (
-            "KanbanEngine must expose a public 'kanban_dir' property"
-        )
+        assert hasattr(engine, "kanban_dir"), "KanbanEngine must expose a public 'kanban_dir' property"
 
     def test_kanban_dir_returns_expected_path(self, tmp_path: Path) -> None:
         from owlbear_kanban import KanbanEngine
@@ -111,18 +105,14 @@ class TestFromAC_DepsUsesPublicProperties:
     """AC3: owlbear_cockpit.deps must use public properties, not private attrs."""
 
     def test_deps_does_not_access_private_tasks_dir(self, project_root: Path) -> None:
-        deps_path = (
-            project_root / "serve" / "cockpit" / "src" / "owlbear_cockpit" / "deps.py"
-        )
+        deps_path = project_root / "serve" / "cockpit" / "src" / "owlbear_cockpit" / "deps.py"
         content = deps_path.read_text(encoding="utf-8")
         assert "_tasks_dir" not in content, (
             "deps.py must not access engine._tasks_dir; use the public 'tasks_dir' property"
         )
 
     def test_deps_does_not_access_private_kanban_dir(self, project_root: Path) -> None:
-        deps_path = (
-            project_root / "serve" / "cockpit" / "src" / "owlbear_cockpit" / "deps.py"
-        )
+        deps_path = project_root / "serve" / "cockpit" / "src" / "owlbear_cockpit" / "deps.py"
         content = deps_path.read_text(encoding="utf-8")
         assert "_kanban_dir" not in content, (
             "deps.py must not access engine._kanban_dir; use the public 'kanban_dir' property"

@@ -153,16 +153,14 @@ class TestFromAC_CreateTaskACParams:
         """create_task must expose an 'ac' parameter (list[str] | None)."""
         params = inspect.signature(create_task).parameters
         assert "ac" in params, (
-            "create_task must expose 'ac: list[str] | None' parameter per AC1; "
-            f"current params: {list(params)}"
+            f"create_task must expose 'ac: list[str] | None' parameter per AC1; current params: {list(params)}"
         )
 
     def test_create_task_exposes_proof_bundle_param(self) -> None:
         """create_task must expose a 'proof_bundle' parameter (str | None)."""
         params = inspect.signature(create_task).parameters
         assert "proof_bundle" in params, (
-            "create_task must expose 'proof_bundle: str | None' parameter per AC1; "
-            f"current params: {list(params)}"
+            f"create_task must expose 'proof_bundle: str | None' parameter per AC1; current params: {list(params)}"
         )
 
     # --- Forwarding (happy path) ---
@@ -207,12 +205,8 @@ class TestFromAC_CreateTaskACParams:
         ctx = _make_mcp_ctx(app_ctx)
         await create_task(ctx, title="T", ac=[])
         _, kwargs = mock_av.create_task.call_args
-        assert "ac" in kwargs, (
-            "ac=[] (non-None empty list) must be forwarded to AgentView.create_task"
-        )
-        assert kwargs["ac"] == [], (
-            "ac=[] must be forwarded as an empty list, not dropped"
-        )
+        assert "ac" in kwargs, "ac=[] (non-None empty list) must be forwarded to AgentView.create_task"
+        assert kwargs["ac"] == [], "ac=[] must be forwarded as an empty list, not dropped"
 
 
 # ---------------------------------------------------------------------------
@@ -231,32 +225,28 @@ class TestFromAC_EditTaskACParams:
         """edit_task must expose an 'ac' parameter (list[str] | None)."""
         params = inspect.signature(edit_task).parameters
         assert "ac" in params, (
-            "edit_task must expose 'ac: list[str] | None' parameter per AC2; "
-            f"current params: {list(params)}"
+            f"edit_task must expose 'ac: list[str] | None' parameter per AC2; current params: {list(params)}"
         )
 
     def test_edit_task_exposes_add_ac_param(self) -> None:
         """edit_task must expose an 'add_ac' parameter (list[str] | None)."""
         params = inspect.signature(edit_task).parameters
         assert "add_ac" in params, (
-            "edit_task must expose 'add_ac: list[str] | None' parameter per AC2; "
-            f"current params: {list(params)}"
+            f"edit_task must expose 'add_ac: list[str] | None' parameter per AC2; current params: {list(params)}"
         )
 
     def test_edit_task_exposes_remove_ac_param(self) -> None:
         """edit_task must expose a 'remove_ac' parameter (list[str] | None)."""
         params = inspect.signature(edit_task).parameters
         assert "remove_ac" in params, (
-            "edit_task must expose 'remove_ac: list[str] | None' parameter per AC2; "
-            f"current params: {list(params)}"
+            f"edit_task must expose 'remove_ac: list[str] | None' parameter per AC2; current params: {list(params)}"
         )
 
     def test_edit_task_exposes_proof_bundle_param(self) -> None:
         """edit_task must expose a 'proof_bundle' parameter (str | None)."""
         params = inspect.signature(edit_task).parameters
         assert "proof_bundle" in params, (
-            "edit_task must expose 'proof_bundle: str | None' parameter per AC2; "
-            f"current params: {list(params)}"
+            f"edit_task must expose 'proof_bundle: str | None' parameter per AC2; current params: {list(params)}"
         )
 
     # --- Forwarding (happy path) ---
@@ -399,6 +389,4 @@ class TestFromAC_ShowTaskResponseFields:
                 "proof_bundle": "behavioral",
             }
         )
-        assert resp.proof_bundle == "behavioral", (
-            "ShowTaskResponse.proof_bundle must store the provided string value"
-        )
+        assert resp.proof_bundle == "behavioral", "ShowTaskResponse.proof_bundle must store the provided string value"

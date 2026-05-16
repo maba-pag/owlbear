@@ -18,9 +18,7 @@ from skills_ref.parser import find_skill_md, parse_frontmatter
 from skills_ref.validator import validate_metadata
 
 # OwlBear-specific VS Code vendor fields — not part of the Agent Skills Spec.
-_VENDOR_FIELDS = frozenset(
-    {"user-invocable", "argument-hint", "disable-model-invocation"}
-)
+_VENDOR_FIELDS = frozenset({"user-invocable", "argument-hint", "disable-model-invocation"})
 
 
 def validate_skill(skill_dir: Path) -> list[str]:

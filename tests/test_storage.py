@@ -184,9 +184,7 @@ class TestFromAC_ReadTaskCachedConfig:
     # AC2 — when config provided, detection runs unconditionally
     # ------------------------------------------------------------------
 
-    def test_ac2_happy_valid_task_no_config_yml_config_provided(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac2_happy_valid_task_no_config_yml_config_provided(self, tmp_path: Path) -> None:
         """AC2: valid task + config provided + no config.yml → task returned cleanly."""
         task_path = _make_task_no_config_yml(tmp_path, corrupt=False)
         config = _make_config()
@@ -195,9 +193,7 @@ class TestFromAC_ReadTaskCachedConfig:
         task = read_task(task_path, config=config)  # TypeError pre-impl
         assert task.id == 1
 
-    def test_ac2_edge_corrupt_task_no_config_yml_config_provided_raises(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac2_edge_corrupt_task_no_config_yml_config_provided_raises(self, tmp_path: Path) -> None:
         """AC2 edge: corrupt task + config provided + no config.yml → CorruptionError.
 
         The config.yml absence guard is skipped because config is pre-resolved.
@@ -211,9 +207,7 @@ class TestFromAC_ReadTaskCachedConfig:
             read_task(task_path, config=config)
         assert exc_info.value.code == ERR_CORRUPT_INVALID_STATUS
 
-    def test_ac2_error_corrupt_task_config_yml_present_config_provided_raises(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac2_error_corrupt_task_config_yml_present_config_provided_raises(self, tmp_path: Path) -> None:
         """AC2 error: corrupt task + config.yml present + config provided → CorruptionError."""
         board_dir, _ = _make_board_with_task(tmp_path)
         tasks_dir = board_dir / "tasks"
@@ -224,9 +218,7 @@ class TestFromAC_ReadTaskCachedConfig:
             read_task(corrupt_path, config=config)  # TypeError pre-impl
         assert exc_info.value.code == ERR_CORRUPT_INVALID_STATUS
 
-    def test_ac2_boundary_detection_runs_even_when_config_yml_absent(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac2_boundary_detection_runs_even_when_config_yml_absent(self, tmp_path: Path) -> None:
         """AC2 boundary: config.yml absent + config provided → CorruptionError, not silent skip.
 
         Without the guard bypass, missing config.yml would silently skip detection
@@ -255,9 +247,7 @@ class TestFromAC_ReadTaskCachedConfig:
     def test_ac3_explicit_none_calls_load_config(self, tmp_path: Path) -> None:
         """AC3: when config=None, load_config is still called from disk."""
         _, task_path = _make_board_with_task(tmp_path)
-        with patch(
-            "owlbear_kanban.config_loader.load_config", wraps=load_config
-        ) as mock_load:
+        with patch("owlbear_kanban.config_loader.load_config", wraps=load_config) as mock_load:
             # Pre-impl: TypeError before mock can capture the call
             read_task(task_path, config=None)
         mock_load.assert_called_once()
@@ -267,9 +257,7 @@ class TestFromAC_ReadTaskCachedConfig:
     # absent config.yml guard skips detection
     # ------------------------------------------------------------------
 
-    def test_ac3_corrupt_task_config_yml_present_none_raises(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac3_corrupt_task_config_yml_present_none_raises(self, tmp_path: Path) -> None:
         """AC3 td:2: corrupt task + config.yml present + config=None → CorruptionError.
 
         Proves detect_corruption fires on corrupt input in the config=None path.
@@ -284,9 +272,7 @@ class TestFromAC_ReadTaskCachedConfig:
             read_task(corrupt_path, config=None)
         assert exc_info.value.code == ERR_CORRUPT_INVALID_STATUS
 
-    def test_ac3_corrupt_task_no_config_yml_config_none_returns_task(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac3_corrupt_task_no_config_yml_config_none_returns_task(self, tmp_path: Path) -> None:
         """AC3 td:2: corrupt task + no config.yml + config=None → task returned.
 
         Proves the config_path.exists() guard works: when config.yml is absent
@@ -304,19 +290,13 @@ class TestFromAC_ReadTaskCachedConfig:
 
     def test_ac4_engine_all_call_sites_pass_config(self) -> None:
         """AC4: every read_task() call in engine.py must include config= keyword arg."""
-        engine_py = (
-            Path(__file__).parent.parent / "serve/kanban/src/owlbear_kanban/engine.py"
-        )
+        engine_py = Path(__file__).parent.parent / "serve/kanban/src/owlbear_kanban/engine.py"
         source = engine_py.read_text(encoding="utf-8")
         tree = ast.parse(source, filename=str(engine_py))
 
         violations: list[int] = []
         for node in ast.walk(tree):
-            if (
-                isinstance(node, ast.Call)
-                and isinstance(node.func, ast.Name)
-                and node.func.id == "read_task"
-            ):
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "read_task":
                 kwarg_names = [kw.arg for kw in node.keywords]
                 if "config" not in kwarg_names:
                     violations.append(node.lineno)
@@ -334,19 +314,13 @@ class TestFromAC_ReadTaskCachedConfig:
         Catches cases like config=None or config=load_config(...) which would pass
         test_ac4_engine_all_call_sites_pass_config but violate the contract.
         """
-        engine_py = (
-            Path(__file__).parent.parent / "serve/kanban/src/owlbear_kanban/engine.py"
-        )
+        engine_py = Path(__file__).parent.parent / "serve/kanban/src/owlbear_kanban/engine.py"
         source = engine_py.read_text(encoding="utf-8")
         tree = ast.parse(source, filename=str(engine_py))
 
         violations: list[int] = []
         for node in ast.walk(tree):
-            if (
-                isinstance(node, ast.Call)
-                and isinstance(node.func, ast.Name)
-                and node.func.id == "read_task"
-            ):
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "read_task":
                 for kw in node.keywords:
                     if kw.arg == "config":
                         val = kw.value
@@ -454,6 +428,5 @@ class TestFromAC_NoDoubleValidation:
 
         source = inspect.getsource(storage_mod)
         assert "_validate_claim_timeout" not in source, (
-            "storage.py still references _validate_claim_timeout — "
-            "the double-validation wrapper has not been removed"
+            "storage.py still references _validate_claim_timeout — the double-validation wrapper has not been removed"
         )

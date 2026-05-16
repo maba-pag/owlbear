@@ -66,15 +66,13 @@ class TestFromAC_SubmodelAccessPaths:
     def test_engine_source_contains_paths_tasks_dir(self) -> None:
         """engine.py must access tasks_dir via config.paths.tasks_dir after migration."""
         assert "paths.tasks_dir" in _ENGINE_SOURCE, (
-            "engine.py must contain 'paths.tasks_dir' — "
-            "currently uses forwarding property config.tasks_dir"
+            "engine.py must contain 'paths.tasks_dir' — currently uses forwarding property config.tasks_dir"
         )
 
     def test_engine_source_contains_paths_archive_dir(self) -> None:
         """engine.py must access archive_dir via config.paths.archive_dir after migration."""
         assert "paths.archive_dir" in _ENGINE_SOURCE, (
-            "engine.py must contain 'paths.archive_dir' — "
-            "currently uses forwarding property config.archive_dir"
+            "engine.py must contain 'paths.archive_dir' — currently uses forwarding property config.archive_dir"
         )
 
     # -- pipeline group ------------------------------------------------------
@@ -82,8 +80,7 @@ class TestFromAC_SubmodelAccessPaths:
     def test_engine_source_contains_pipeline_entry_status(self) -> None:
         """engine.py must access entry_status via config.pipeline.entry_status."""
         assert "pipeline.entry_status" in _ENGINE_SOURCE, (
-            "engine.py must contain 'pipeline.entry_status' — "
-            "currently uses forwarding property config.entry_status"
+            "engine.py must contain 'pipeline.entry_status' — currently uses forwarding property config.entry_status"
         )
 
     def test_engine_source_contains_pipeline_terminal_status(self) -> None:
@@ -96,15 +93,13 @@ class TestFromAC_SubmodelAccessPaths:
     def test_engine_source_contains_pipeline_wave_size(self) -> None:
         """engine.py must access wave_size via config.pipeline.wave_size."""
         assert "pipeline.wave_size" in _ENGINE_SOURCE, (
-            "engine.py must contain 'pipeline.wave_size' — "
-            "currently uses forwarding property config.wave_size"
+            "engine.py must contain 'pipeline.wave_size' — currently uses forwarding property config.wave_size"
         )
 
     def test_engine_source_contains_pipeline_claim_timeout(self) -> None:
         """engine.py must access claim_timeout via config.pipeline.claim_timeout."""
         assert "pipeline.claim_timeout" in _ENGINE_SOURCE, (
-            "engine.py must contain 'pipeline.claim_timeout' — "
-            "currently uses forwarding property config.claim_timeout"
+            "engine.py must contain 'pipeline.claim_timeout' — currently uses forwarding property config.claim_timeout"
         )
 
     def test_engine_source_contains_pipeline_default_priority(self) -> None:
@@ -117,15 +112,13 @@ class TestFromAC_SubmodelAccessPaths:
     def test_engine_source_contains_pipeline_statuses(self) -> None:
         """engine.py must access statuses via config.pipeline.statuses after migration."""
         assert "pipeline.statuses" in _ENGINE_SOURCE, (
-            "engine.py must contain 'pipeline.statuses' — "
-            "currently uses top-level forwarding config.statuses"
+            "engine.py must contain 'pipeline.statuses' — currently uses top-level forwarding config.statuses"
         )
 
     def test_engine_source_contains_pipeline_priorities(self) -> None:
         """engine.py must access priorities via config.pipeline.priorities after migration."""
         assert "pipeline.priorities" in _ENGINE_SOURCE, (
-            "engine.py must contain 'pipeline.priorities' — "
-            "currently uses top-level forwarding config.priorities"
+            "engine.py must contain 'pipeline.priorities' — currently uses top-level forwarding config.priorities"
         )
 
     # -- agents group --------------------------------------------------------
@@ -133,15 +126,13 @@ class TestFromAC_SubmodelAccessPaths:
     def test_engine_source_contains_agents_agent_map(self) -> None:
         """engine.py must access agent_map via config.agents.agent_map."""
         assert "agents.agent_map" in _ENGINE_SOURCE, (
-            "engine.py must contain 'agents.agent_map' — "
-            "currently uses forwarding property config.agent_map"
+            "engine.py must contain 'agents.agent_map' — currently uses forwarding property config.agent_map"
         )
 
     def test_engine_source_contains_agents_agent_types(self) -> None:
         """engine.py must access agent_types via config.agents.agent_types."""
         assert "agents.agent_types" in _ENGINE_SOURCE, (
-            "engine.py must contain 'agents.agent_types' — "
-            "currently uses forwarding property config.agent_types"
+            "engine.py must contain 'agents.agent_types' — currently uses forwarding property config.agent_types"
         )
 
     def test_engine_source_contains_agents_agent_compatibility(self) -> None:
@@ -192,9 +183,7 @@ class TestFromAC_GroupedFixtures:
             f"current fields: {list(fields)}"
         )
 
-    def test_engine_board_config_pipeline_statuses_returns_statuses_list(
-        self, tmp_path: Path
-    ) -> None:
+    def test_engine_board_config_pipeline_statuses_returns_statuses_list(self, tmp_path: Path) -> None:
         """board_config().pipeline.statuses must return the board statuses list."""
         kanban_dir = _make_board(tmp_path)
         engine = KanbanEngine(kanban_dir)
@@ -203,9 +192,7 @@ class TestFromAC_GroupedFixtures:
             f"board_config().pipeline.statuses must equal statuses list; got {cfg.pipeline!r}"
         )
 
-    def test_engine_board_config_pipeline_priorities_returns_priorities_list(
-        self, tmp_path: Path
-    ) -> None:
+    def test_engine_board_config_pipeline_priorities_returns_priorities_list(self, tmp_path: Path) -> None:
         """board_config().pipeline.priorities must return the board priorities list."""
         kanban_dir = _make_board(tmp_path)
         engine = KanbanEngine(kanban_dir)
@@ -320,8 +307,7 @@ class TestFromAC_NoForwardingProperties:
     def test_no_raw_default_priority_forwarding_call(self) -> None:
         """engine.py must not call config.default_priority; use config.pipeline.default_priority."""
         assert "config.default_priority" not in _ENGINE_SOURCE, (
-            "engine.py contains 'config.default_priority' — "
-            "migrate to 'config.pipeline.default_priority'"
+            "engine.py contains 'config.default_priority' — migrate to 'config.pipeline.default_priority'"
         )
 
     def test_no_raw_statuses_forwarding_call(self) -> None:
@@ -344,8 +330,7 @@ class TestFromAC_NoForwardingProperties:
     def test_no_raw_non_impl_tags_forwarding_call(self) -> None:
         """engine.py must not call config.non_impl_tags; use config.policy.non_impl_tags."""
         assert "config.non_impl_tags" not in _ENGINE_SOURCE, (
-            "engine.py contains 'config.non_impl_tags' — "
-            "migrate to 'config.policy.non_impl_tags'"
+            "engine.py contains 'config.non_impl_tags' — migrate to 'config.policy.non_impl_tags'"
         )
 
 
@@ -659,6 +644,5 @@ class TestFromAC_MutationSubModelPaths:
         ]
         missing = [pattern for pattern in patterns if pattern not in src]
         assert not missing, (
-            f"test_engine_coverage_1068.py: {len(missing)} sub-model mutation pattern(s) "
-            f"not yet migrated: {missing}"
+            f"test_engine_coverage_1068.py: {len(missing)} sub-model mutation pattern(s) not yet migrated: {missing}"
         )

@@ -182,9 +182,7 @@ class TestFromAC_ListTasksErrorPaths:
         FAILS: if the KanbanError handler is missing from list_tasks.
         """
         av = MagicMock()
-        av.list_tasks.side_effect = NotFoundError(
-            code="ERR_NOT_FOUND", user_message="board not accessible"
-        )
+        av.list_tasks.side_effect = NotFoundError(code="ERR_NOT_FOUND", user_message="board not accessible")
         engine = MagicMock()
         engine.agent_view.return_value = av
         ctx = _make_ctx_from_engine(engine)
@@ -198,9 +196,7 @@ class TestFromAC_ListTasksErrorPaths:
         FAILS: if the PydanticValidationError handler is missing from list_tasks.
         """
         ctx = MagicMock()
-        ctx.request_context.lifespan_context.engine.agent_view.return_value = (
-            MagicMock()
-        )
+        ctx.request_context.lifespan_context.engine.agent_view.return_value = MagicMock()
         with pytest.raises(ToolError):
             await list_tasks(ctx, ids=["not_an_int"])  # type: ignore[list-item]
 
@@ -318,9 +314,7 @@ class TestFromAC_CreateTaskPaths:
         FAILS: if KanbanError is not caught in create_task.
         """
         av = MagicMock()
-        av.create_task.side_effect = NotFoundError(
-            code="ERR_NOT_FOUND", user_message="create failed: board not found"
-        )
+        av.create_task.side_effect = NotFoundError(code="ERR_NOT_FOUND", user_message="create failed: board not found")
         engine = MagicMock()
         engine.agent_view.return_value = av
         ctx = _make_ctx_from_engine(engine)
@@ -433,9 +427,7 @@ class TestFromAC_EditTaskCoverage:
         FAILS: if KanbanError is not caught in edit_task.
         """
         av = MagicMock()
-        av.edit_task.side_effect = ValidationError(
-            code="ERR_INVALID_PRIORITY", user_message="invalid priority value"
-        )
+        av.edit_task.side_effect = ValidationError(code="ERR_INVALID_PRIORITY", user_message="invalid priority value")
         engine = MagicMock()
         engine.agent_view.return_value = av
         ctx = _make_ctx_from_engine(engine)
@@ -704,9 +696,7 @@ class TestFromAC_StatusNamesDictFormBug:
     # -- Happy path: forward-skip guidance is populated --------------------
 
     @pytest.mark.asyncio
-    async def test_forward_skip_more_than_one_slot_returns_guidance(
-        self, app_ctx: AppContext
-    ) -> None:
+    async def test_forward_skip_more_than_one_slot_returns_guidance(self, app_ctx: AppContext) -> None:
         """move_task forward-skip >1 slot returns non-empty guidance (fallback path).
 
         Task 1 is at 'research'; moving to 'todo' skips 'backlog' (2-slot jump).
@@ -714,69 +704,49 @@ class TestFromAC_StatusNamesDictFormBug:
         """
         ctx = _make_ctx(app_ctx)
         result = await move_task(ctx, id="1", status="todo")
-        assert len(result.guidance) > 0, (
-            f"Expected non-empty guidance for research→todo skip, got {result.guidance!r}"
-        )
+        assert len(result.guidance) > 0, f"Expected non-empty guidance for research→todo skip, got {result.guidance!r}"
 
     @pytest.mark.asyncio
-    async def test_forward_skip_guidance_contains_source_status(
-        self, app_ctx: AppContext
-    ) -> None:
+    async def test_forward_skip_guidance_contains_source_status(self, app_ctx: AppContext) -> None:
         """Forward-skip guidance message references the source status name.
 
         FAILS: guidance is [] due to suppressed TypeError at L481.
         """
         ctx = _make_ctx(app_ctx)
         result = await move_task(ctx, id="1", status="todo")
-        assert len(result.guidance) > 0, (
-            "No guidance returned — TypeError at L481 still suppressed"
-        )
+        assert len(result.guidance) > 0, "No guidance returned — TypeError at L481 still suppressed"
         assert "research" in result.guidance[0], (
             f"Expected source status 'research' in guidance, got {result.guidance[0]!r}"
         )
 
     @pytest.mark.asyncio
-    async def test_forward_skip_guidance_contains_target_status(
-        self, app_ctx: AppContext
-    ) -> None:
+    async def test_forward_skip_guidance_contains_target_status(self, app_ctx: AppContext) -> None:
         """Forward-skip guidance message references the target status name.
 
         FAILS: guidance is [] due to suppressed TypeError at L481.
         """
         ctx = _make_ctx(app_ctx)
         result = await move_task(ctx, id="1", status="todo")
-        assert len(result.guidance) > 0, (
-            "No guidance returned — TypeError at L481 still suppressed"
-        )
-        assert "todo" in result.guidance[0], (
-            f"Expected target status 'todo' in guidance, got {result.guidance[0]!r}"
-        )
+        assert len(result.guidance) > 0, "No guidance returned — TypeError at L481 still suppressed"
+        assert "todo" in result.guidance[0], f"Expected target status 'todo' in guidance, got {result.guidance[0]!r}"
 
     # -- Error path: collect_guidance must be reachable --------------------
 
     @pytest.mark.asyncio
-    async def test_collect_guidance_called_with_list_str_status_names(
-        self, app_ctx: AppContext
-    ) -> None:
+    async def test_collect_guidance_called_with_list_str_status_names(self, app_ctx: AppContext) -> None:
         """collect_guidance is reached and receives status_names as list[str].
 
         FAILS: TypeError at L481 fires before collect_guidance is reached →
         mock is never called.
         """
         ctx = _make_ctx(app_ctx)
-        with patch(
-            "owlbear_mcp_kanban.server.collect_guidance", return_value=[]
-        ) as mock_cg:
+        with patch("owlbear_mcp_kanban.server.collect_guidance", return_value=[]) as mock_cg:
             await move_task(ctx, id="1", status="todo")
 
-        assert mock_cg.called, (
-            "collect_guidance was never called — TypeError at L481 is still suppressed"
-        )
+        assert mock_cg.called, "collect_guidance was never called — TypeError at L481 is still suppressed"
         _, kwargs = mock_cg.call_args
         status_names = kwargs.get("status_names", [])
-        assert isinstance(status_names, list), (
-            f"Expected status_names to be list, got {type(status_names)!r}"
-        )
+        assert isinstance(status_names, list), f"Expected status_names to be list, got {type(status_names)!r}"
         assert all(isinstance(s, str) for s in status_names), (
             f"Expected status_names to be list[str], got {status_names!r}"
         )
@@ -784,9 +754,7 @@ class TestFromAC_StatusNamesDictFormBug:
     # -- Boundary: larger skip also triggers guidance ----------------------
 
     @pytest.mark.asyncio
-    async def test_four_slot_forward_skip_returns_guidance(
-        self, app_ctx: AppContext
-    ) -> None:
+    async def test_four_slot_forward_skip_returns_guidance(self, app_ctx: AppContext) -> None:
         """move_task with a 4-slot skip (research→review) also returns guidance.
 
         Verifies the fix works for skips larger than the minimum 2-slot case.
@@ -802,9 +770,7 @@ class TestFromAC_StatusNamesDictFormBug:
     # -- AC 3 (strict): collect_guidance receives exact board status list ---
 
     @pytest.mark.asyncio
-    async def test_collect_guidance_receives_exact_board_status_list(
-        self, app_ctx: AppContext
-    ) -> None:
+    async def test_collect_guidance_receives_exact_board_status_list(self, app_ctx: AppContext) -> None:
         """collect_guidance is called with status_names equal to the board's ordered list.
 
         Uses ``kwargs["status_names"]`` (no default) so the test FAILS if the kwarg
@@ -813,27 +779,19 @@ class TestFromAC_StatusNamesDictFormBug:
         """
         ctx = _make_ctx(app_ctx)
         expected = list(app_ctx.engine.board_config().statuses)
-        with patch(
-            "owlbear_mcp_kanban.server.collect_guidance", return_value=[]
-        ) as mock_cg:
+        with patch("owlbear_mcp_kanban.server.collect_guidance", return_value=[]) as mock_cg:
             await move_task(ctx, id="1", status="todo")
 
-        assert mock_cg.called, (
-            "collect_guidance was never called — fallback path not reached"
-        )
+        assert mock_cg.called, "collect_guidance was never called — fallback path not reached"
         _, kwargs = mock_cg.call_args
         # KeyError here if status_names kwarg was omitted — intentional, no default
         actual = kwargs["status_names"]
-        assert actual == expected, (
-            f"status_names mismatch: expected {expected!r}, got {actual!r}"
-        )
+        assert actual == expected, f"status_names mismatch: expected {expected!r}, got {actual!r}"
 
     # -- AC 4: collect_guidance return value is wired to result.guidance ----
 
     @pytest.mark.asyncio
-    async def test_collect_guidance_return_value_assigned_to_result_guidance(
-        self, app_ctx: AppContext
-    ) -> None:
+    async def test_collect_guidance_return_value_assigned_to_result_guidance(self, app_ctx: AppContext) -> None:
         """result.guidance is set to the return value of collect_guidance.
 
         Mocks collect_guidance to return a sentinel list and asserts the
@@ -996,16 +954,12 @@ class TestFromAC_IdParameterContract:
     def test_move_task_has_named_id_parameter(self) -> None:
         """move_task has 'id' as the named task-identifier parameter (not 'task_id')."""
         sig = inspect.signature(move_task)
-        assert "id" in sig.parameters, (
-            "move_task must have 'id' as named parameter — legacy 'task_id' has been removed"
-        )
+        assert "id" in sig.parameters, "move_task must have 'id' as named parameter — legacy 'task_id' has been removed"
 
     def test_edit_task_has_named_id_parameter(self) -> None:
         """edit_task has 'id' as the named task-identifier parameter (not 'task_id')."""
         sig = inspect.signature(edit_task)
-        assert "id" in sig.parameters, (
-            "edit_task must have 'id' as named parameter — legacy 'task_id' has been removed"
-        )
+        assert "id" in sig.parameters, "edit_task must have 'id' as named parameter — legacy 'task_id' has been removed"
 
     def test_start_work_has_named_id_parameter(self) -> None:
         """start_work has 'id' as the named task-identifier parameter (not 'task_id')."""
@@ -1017,9 +971,7 @@ class TestFromAC_IdParameterContract:
     def test_end_work_has_named_id_parameter(self) -> None:
         """end_work has 'id' as the named task-identifier parameter (not 'task_id')."""
         sig = inspect.signature(end_work)
-        assert "id" in sig.parameters, (
-            "end_work must have 'id' as named parameter — legacy 'task_id' has been removed"
-        )
+        assert "id" in sig.parameters, "end_work must have 'id' as named parameter — legacy 'task_id' has been removed"
 
     # --- StrId annotation ----------------------------------------------------
 
@@ -1027,33 +979,25 @@ class TestFromAC_IdParameterContract:
         """move_task 'id' annotation includes StrId — not a plain str or int."""
         sig = inspect.signature(move_task)
         annotation = str(sig.parameters["id"].annotation)
-        assert "StrId" in annotation, (
-            f"move_task 'id' annotation should include StrId, got {annotation!r}"
-        )
+        assert "StrId" in annotation, f"move_task 'id' annotation should include StrId, got {annotation!r}"
 
     def test_edit_task_id_annotation_strid_based(self) -> None:
         """edit_task 'id' annotation includes StrId — not a plain str or int."""
         sig = inspect.signature(edit_task)
         annotation = str(sig.parameters["id"].annotation)
-        assert "StrId" in annotation, (
-            f"edit_task 'id' annotation should include StrId, got {annotation!r}"
-        )
+        assert "StrId" in annotation, f"edit_task 'id' annotation should include StrId, got {annotation!r}"
 
     def test_start_work_id_annotation_strid_based(self) -> None:
         """start_work 'id' annotation includes StrId — not a plain str or int."""
         sig = inspect.signature(start_work)
         annotation = str(sig.parameters["id"].annotation)
-        assert "StrId" in annotation, (
-            f"start_work 'id' annotation should include StrId, got {annotation!r}"
-        )
+        assert "StrId" in annotation, f"start_work 'id' annotation should include StrId, got {annotation!r}"
 
     def test_end_work_id_annotation_strid_based(self) -> None:
         """end_work 'id' annotation includes StrId — not a plain str or int."""
         sig = inspect.signature(end_work)
         annotation = str(sig.parameters["id"].annotation)
-        assert "StrId" in annotation, (
-            f"end_work 'id' annotation should include StrId, got {annotation!r}"
-        )
+        assert "StrId" in annotation, f"end_work 'id' annotation should include StrId, got {annotation!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -1072,60 +1016,44 @@ class TestFromAC_IdDirectPassthrough:
     # --- Positive: id routes to the correct task ----------------------------
 
     @pytest.mark.asyncio
-    async def test_move_task_id_routes_to_correct_task(
-        self, app_ctx_1198: AppContext
-    ) -> None:
+    async def test_move_task_id_routes_to_correct_task(self, app_ctx_1198: AppContext) -> None:
         """move_task(id='1') moves task 1; proves id is used directly."""
         ctx = _make_ctx_1198(app_ctx_1198)
         result = await move_task(ctx, id="1", status="backlog")
-        assert result.id == 1, (
-            f"Expected id=1 in result, got {result.id!r} — id not routed directly"
-        )
+        assert result.id == 1, f"Expected id=1 in result, got {result.id!r} — id not routed directly"
 
     @pytest.mark.asyncio
-    async def test_edit_task_id_routes_to_correct_task(
-        self, app_ctx_1198: AppContext
-    ) -> None:
+    async def test_edit_task_id_routes_to_correct_task(self, app_ctx_1198: AppContext) -> None:
         """edit_task(id='1') edits task 1 and returns it; proves id is used directly."""
         ctx = _make_ctx_1198(app_ctx_1198)
         result = await edit_task(ctx, id="1", append_body="probe-payload")
-        assert result.id == 1, (
-            f"Expected id=1 in result, got {result.id!r} — id not routed directly"
-        )
+        assert result.id == 1, f"Expected id=1 in result, got {result.id!r} — id not routed directly"
 
     # --- Negative: legacy task_id= kwarg is rejected -----------------------
 
     @pytest.mark.asyncio
-    async def test_move_task_rejects_legacy_task_id_kwarg(
-        self, app_ctx_1198: AppContext
-    ) -> None:
+    async def test_move_task_rejects_legacy_task_id_kwarg(self, app_ctx_1198: AppContext) -> None:
         """move_task(task_id=...) raises TypeError — **legacy catch-all is gone."""
         ctx = _make_ctx_1198(app_ctx_1198)
         with pytest.raises(TypeError, match="unexpected keyword argument"):
             await move_task(ctx, task_id="1", status="backlog")  # type: ignore[call-arg]
 
     @pytest.mark.asyncio
-    async def test_edit_task_rejects_legacy_task_id_kwarg(
-        self, app_ctx_1198: AppContext
-    ) -> None:
+    async def test_edit_task_rejects_legacy_task_id_kwarg(self, app_ctx_1198: AppContext) -> None:
         """edit_task(task_id=...) raises TypeError — **legacy catch-all is gone."""
         ctx = _make_ctx_1198(app_ctx_1198)
         with pytest.raises(TypeError, match="unexpected keyword argument"):
             await edit_task(ctx, task_id="1", append_body="x")  # type: ignore[call-arg]
 
     @pytest.mark.asyncio
-    async def test_start_work_rejects_legacy_task_id_kwarg(
-        self, app_ctx_1198: AppContext
-    ) -> None:
+    async def test_start_work_rejects_legacy_task_id_kwarg(self, app_ctx_1198: AppContext) -> None:
         """start_work(task_id=...) raises TypeError — **legacy catch-all is gone."""
         ctx = _make_ctx_1198(app_ctx_1198)
         with pytest.raises(TypeError, match="unexpected keyword argument"):
             await start_work(ctx, task_id="1")  # type: ignore[call-arg]
 
     @pytest.mark.asyncio
-    async def test_end_work_rejects_legacy_task_id_kwarg(
-        self, app_ctx_1198: AppContext
-    ) -> None:
+    async def test_end_work_rejects_legacy_task_id_kwarg(self, app_ctx_1198: AppContext) -> None:
         """end_work(task_id=...) raises TypeError — **legacy catch-all is gone."""
         ctx = _make_ctx_1198(app_ctx_1198)
         with pytest.raises(TypeError, match="unexpected keyword argument"):
@@ -1180,9 +1108,7 @@ class TestFromAC_LifespanCallRemoval:
     """app_lifespan must not invoke server.remove_tool for KANBAN_TOOLS_EXCLUDE."""
 
     @pytest.mark.asyncio
-    async def test_lifespan_does_not_remove_tools_when_env_set(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_lifespan_does_not_remove_tools_when_env_set(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """With KANBAN_TOOLS_EXCLUDE set, lifespan never calls server.remove_tool.
 
         FAILS now: _apply_tool_exclusions IS called inside app_lifespan and it
@@ -1322,9 +1248,7 @@ def mock_lifespan_deps() -> None:
         patch("owlbear_mcp_knowledge.server.BgeM3EmbeddingProvider"),
         patch("owlbear_mcp_knowledge.server.KnowledgeQueryService"),
         patch("owlbear_mcp_knowledge.server.GraphAugmentedRetriever"),
-        patch(
-            "owlbear_mcp_knowledge.server.make_evaluate_fn", return_value=AsyncMock()
-        ),
+        patch("owlbear_mcp_knowledge.server.make_evaluate_fn", return_value=AsyncMock()),
     ):
         yield
 
@@ -1340,9 +1264,7 @@ class TestFromAC_LifespanNoCopilotAuth:
     """AC1 + AC2: app_lifespan does not import copilot_auth after removal."""
 
     @pytest.mark.asyncio
-    async def test_copilot_auth_not_imported_when_no_api_key(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_copilot_auth_not_imported_when_no_api_key(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """get_copilot_token is NOT called when OWLBEAR_LLM_API_KEY is unset.
 
         In the new code (after #1318), the copilot_auth import branch is removed,
@@ -1383,9 +1305,7 @@ class TestFromAC_LifespanNoCopilotAuth:
         monkeypatch.delenv("OWLBEAR_LLM_API_KEY", raising=False)
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         # Ensure copilot_auth is NOT pre-loaded so the check is meaningful.
-        monkeypatch.delitem(
-            sys.modules, "owlbear_knowledge.copilot_auth", raising=False
-        )
+        monkeypatch.delitem(sys.modules, "owlbear_knowledge.copilot_auth", raising=False)
         monkeypatch.delitem(sys.modules, "owlbear_knowledge", raising=False)
 
         async with app_lifespan(MagicMock()):
@@ -1423,9 +1343,7 @@ class TestFromAC_LifespanNoCopilotAuth:
                 assert ctx.ingest_pipeline is mock_pipeline_instance  # noqa: S101
 
     @pytest.mark.asyncio
-    async def test_structured_extractor_is_none_without_api_key(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_structured_extractor_is_none_without_api_key(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """ctx.structured_extractor is None when OWLBEAR_LLM_API_KEY is unset.
 
         After #1318, copilot_auth path is removed; structured_extractor stays None.
@@ -1504,9 +1422,7 @@ class TestFromAC_TokenFileCleanup:
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
     @pytest.mark.asyncio
-    async def test_token_file_deleted_when_present_at_startup(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_token_file_deleted_when_present_at_startup(self, tmp_path: Path) -> None:
         """Lifespan deletes ~/.owlbear/copilot_token.json when it exists before startup.
 
         After #1318, the lifespan includes cleanup code that removes a stale token
@@ -1526,9 +1442,7 @@ class TestFromAC_TokenFileCleanup:
                 assert not token_file.exists()  # noqa: S101
 
     @pytest.mark.asyncio
-    async def test_token_file_cleanup_idempotent_when_absent(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_token_file_cleanup_idempotent_when_absent(self, tmp_path: Path) -> None:
         """Lifespan startup does not raise when copilot_token.json is absent.
 
         Idempotency: cleanup is attempted even when file is missing (missing_ok=True
@@ -1551,9 +1465,7 @@ class TestFromAC_TokenFileCleanup:
         mock_unlink.assert_called()
 
     @pytest.mark.asyncio
-    async def test_token_file_cleanup_no_exception_when_absent_real_fs(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_token_file_cleanup_no_exception_when_absent_real_fs(self, tmp_path: Path) -> None:
         """Lifespan does NOT raise when copilot_token.json is absent (real filesystem, no mock).
 
         AC3 discriminating assertion: exercises real Path.unlink so missing_ok=True semantics
@@ -1627,9 +1539,7 @@ def mock_lifespan_deps_1358() -> None:
         patch("owlbear_mcp_knowledge.server.BgeM3EmbeddingProvider"),
         patch("owlbear_mcp_knowledge.server.KnowledgeQueryService"),
         patch("owlbear_mcp_knowledge.server.GraphAugmentedRetriever"),
-        patch(
-            "owlbear_mcp_knowledge.server.make_evaluate_fn", return_value=AsyncMock()
-        ),
+        patch("owlbear_mcp_knowledge.server.make_evaluate_fn", return_value=AsyncMock()),
     ):
         yield
 
@@ -1644,9 +1554,7 @@ class TestFromAC_ApiKeyBranchRemoved:
     """AC1: OWLBEAR_LLM_API_KEY / OPENAI_API_KEY branch removed; structured_extractor=None."""
 
     @pytest.mark.asyncio
-    async def test_structured_extractor_none_when_owlbear_key_set(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_structured_extractor_none_when_owlbear_key_set(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """structured_extractor=None even when OWLBEAR_LLM_API_KEY is set.
 
         Currently FAILS: current code creates an LLMExtractor instance when the key is present.
@@ -1661,9 +1569,7 @@ class TestFromAC_ApiKeyBranchRemoved:
                 assert ctx.structured_extractor is None  # noqa: S101
 
     @pytest.mark.asyncio
-    async def test_structured_extractor_none_when_openai_key_set(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_structured_extractor_none_when_openai_key_set(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """structured_extractor=None even when OPENAI_API_KEY is set as fallback.
 
         Currently FAILS: current code enters the api_key branch via the OPENAI_API_KEY or-clause.
@@ -1679,9 +1585,7 @@ class TestFromAC_ApiKeyBranchRemoved:
                 assert ctx.structured_extractor is None  # noqa: S101
 
     @pytest.mark.asyncio
-    async def test_llmextractor_never_instantiated_when_both_keys_set(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_llmextractor_never_instantiated_when_both_keys_set(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """LLMExtractor.__init__ is never called even when both API key env vars are present.
 
         Currently FAILS: current code calls LLMExtractor() inside the if api_key: branch.
@@ -1796,9 +1700,7 @@ class TestFromAC_NoRegression:
     """AC5: EntityExtractor and IntraDocGraphBuilder always get extractor=None after cleanup."""
 
     @pytest.mark.asyncio
-    async def test_entity_extractor_receives_none_when_api_key_set(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_entity_extractor_receives_none_when_api_key_set(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """EntityExtractor is constructed with extractor=None even when OWLBEAR_LLM_API_KEY is set.
 
         Currently FAILS: current code passes an LLMExtractor instance as extractor when a key
@@ -1820,9 +1722,7 @@ class TestFromAC_NoRegression:
         assert kwargs.get("extractor") is None  # noqa: S101
 
     @pytest.mark.asyncio
-    async def test_intra_doc_builder_receives_none_when_api_key_set(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_intra_doc_builder_receives_none_when_api_key_set(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """IntraDocGraphBuilder is constructed with extractor=None even when API key is set.
 
         Currently FAILS: current code passes an LLMExtractor instance as extractor when a key

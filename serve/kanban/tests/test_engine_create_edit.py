@@ -74,9 +74,7 @@ policy:
 """
 
 # entry_status differs from defaults.status to surface D50 bugs.
-_ENTRY_BACKLOG_CONFIG = _BASE_CONFIG.replace(
-    "entry_status: research", "entry_status: backlog"
-)
+_ENTRY_BACKLOG_CONFIG = _BASE_CONFIG.replace("entry_status: research", "entry_status: backlog")
 
 # entry_status=research has a required-sections predicate.
 _PREDICATE_CONFIG = _BASE_CONFIG.replace(
@@ -157,9 +155,7 @@ def _write_task(  # noqa: PLR0913
     return path
 
 
-def _make_view(
-    base_dir: Path, config_yaml: str = _BASE_CONFIG
-) -> tuple[AgentView, Path]:
+def _make_view(base_dir: Path, config_yaml: str = _BASE_CONFIG) -> tuple[AgentView, Path]:
     kanban_dir = _make_board(base_dir, config_yaml)
     engine = KanbanEngine(kanban_dir, activity_log=False)
     return AgentView(engine), kanban_dir
@@ -176,9 +172,7 @@ class TestFromAC_CreateTask:
     All tests are RED — none of the following validations exist in AgentView.create_task yet.
     """
 
-    def test_create_task_uses_entry_status_not_defaults_status(
-        self, tmp_path: Path
-    ) -> None:
+    def test_create_task_uses_entry_status_not_defaults_status(self, tmp_path: Path) -> None:
         """D50: tasks created at PRODUCT_TOPOLOGY.entry_status ('research'), not config entry_status.
 
         Board has entry_status='backlog' in config, but PRODUCT_TOPOLOGY overrides to 'research'.
@@ -187,27 +181,21 @@ class TestFromAC_CreateTask:
         result = view.create_task(title="X")
         assert result.status == "research"
 
-    def test_create_task_dep_not_found_raises_validation_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_create_task_dep_not_found_raises_validation_error(self, tmp_path: Path) -> None:
         """AC24: create_task with non-existent depends_on ID → ValidationError(ERR_DEP_NOT_FOUND)."""
         view, _ = _make_view(tmp_path)
         with pytest.raises(ValidationError) as exc_info:
             view.create_task(title="X", depends_on=[99999])
         assert exc_info.value.code == "ERR_DEP_NOT_FOUND"
 
-    def test_create_task_parent_not_found_raises_validation_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_create_task_parent_not_found_raises_validation_error(self, tmp_path: Path) -> None:
         """§3.4: create_task with non-existent parent → ValidationError(ERR_PARENT_NOT_FOUND)."""
         view, _ = _make_view(tmp_path)
         with pytest.raises(ValidationError) as exc_info:
             view.create_task(title="X", parent=99999)
         assert exc_info.value.code == "ERR_PARENT_NOT_FOUND"
 
-    def test_create_task_body_over_500kb_raises_body_too_large(
-        self, tmp_path: Path
-    ) -> None:
+    def test_create_task_body_over_500kb_raises_body_too_large(self, tmp_path: Path) -> None:
         """D35+D47: create_task body > 500 KB → ValidationError(ERR_BODY_TOO_LARGE)."""
         view, _ = _make_view(tmp_path)
         oversized = "x" * (501 * 1024)
@@ -215,9 +203,7 @@ class TestFromAC_CreateTask:
             view.create_task(title="X", body=oversized)
         assert exc_info.value.code == "ERR_BODY_TOO_LARGE"
 
-    def test_create_task_body_at_500kb_plus_one_byte_raises_body_too_large(
-        self, tmp_path: Path
-    ) -> None:
+    def test_create_task_body_at_500kb_plus_one_byte_raises_body_too_large(self, tmp_path: Path) -> None:
         """D47 boundary: exactly 500 KB + 1 byte → ValidationError(ERR_BODY_TOO_LARGE)."""
         view, _ = _make_view(tmp_path)
         boundary = "x" * (500 * 1024 + 1)
@@ -225,9 +211,7 @@ class TestFromAC_CreateTask:
             view.create_task(title="X", body=boundary)
         assert exc_info.value.code == "ERR_BODY_TOO_LARGE"
 
-    def test_create_task_body_over_100kb_returns_guidance_warning(
-        self, tmp_path: Path
-    ) -> None:
+    def test_create_task_body_over_100kb_returns_guidance_warning(self, tmp_path: Path) -> None:
         """D47-WARN-CREATE: create_task with body > 100 KB → succeeds and response
         guidance list contains the body-size warning. Hard cap (500 KB) not exceeded."""
         view, _ = _make_view(tmp_path)
@@ -237,9 +221,7 @@ class TestFromAC_CreateTask:
             f"Expected body-size guidance warning for >100 KB body, got: {result.guidance!r}"
         )
 
-    def test_create_task_predicate_failed_on_entry_status_raises_predicate_failed(
-        self, tmp_path: Path
-    ) -> None:
+    def test_create_task_predicate_failed_on_entry_status_raises_predicate_failed(self, tmp_path: Path) -> None:
         """With PRODUCT_TOPOLOGY, status_predicates={} — create_task succeeds without predicate check.
 
         Config predicate on 'research' is ignored; PRODUCT_TOPOLOGY provides empty predicates.
@@ -265,9 +247,7 @@ class TestFromAC_EditTaskValidation:
     All tests are RED — none of these validations exist in AgentView.edit_task yet.
     """
 
-    def test_body_and_append_body_both_set_raises_body_exclusive(
-        self, tmp_path: Path
-    ) -> None:
+    def test_body_and_append_body_both_set_raises_body_exclusive(self, tmp_path: Path) -> None:
         """AC14: body and append_body both non-empty → ValidationError(ERR_BODY_EXCLUSIVE)."""
         view, kanban_dir = _make_view(tmp_path)
         _write_task(kanban_dir, task_id=1)
@@ -299,9 +279,7 @@ class TestFromAC_EditTaskValidation:
             view.edit_task(1)  # all defaults — no meaningful field changed
         assert exc_info.value.code == "ERR_NO_OP"
 
-    def test_body_replace_over_500kb_raises_body_too_large(
-        self, tmp_path: Path
-    ) -> None:
+    def test_body_replace_over_500kb_raises_body_too_large(self, tmp_path: Path) -> None:
         """D47: edit_task replacement body > 500 KB → ValidationError(ERR_BODY_TOO_LARGE)."""
         view, kanban_dir = _make_view(tmp_path)
         _write_task(kanban_dir, task_id=1)
@@ -309,9 +287,7 @@ class TestFromAC_EditTaskValidation:
             view.edit_task(1, body="x" * (501 * 1024))
         assert exc_info.value.code == "ERR_BODY_TOO_LARGE"
 
-    def test_append_body_total_over_500kb_raises_body_too_large(
-        self, tmp_path: Path
-    ) -> None:
+    def test_append_body_total_over_500kb_raises_body_too_large(self, tmp_path: Path) -> None:
         """D47: post-append total body size > 500 KB → ValidationError(ERR_BODY_TOO_LARGE)."""
         view, kanban_dir = _make_view(tmp_path)
         _write_task(kanban_dir, task_id=1, body="x" * (400 * 1024))
@@ -319,9 +295,7 @@ class TestFromAC_EditTaskValidation:
             view.edit_task(1, append_body="y" * (200 * 1024))  # 400+200=600 KB
         assert exc_info.value.code == "ERR_BODY_TOO_LARGE"
 
-    def test_edit_task_body_replace_over_100kb_returns_guidance_warning(
-        self, tmp_path: Path
-    ) -> None:
+    def test_edit_task_body_replace_over_100kb_returns_guidance_warning(self, tmp_path: Path) -> None:
         """D47-WARN-EDIT-REPLACE: edit_task with replacement body > 100 KB → succeeds
         and response guidance list contains the body-size warning. Hard cap not exceeded."""
         view, kanban_dir = _make_view(tmp_path)
@@ -332,9 +306,7 @@ class TestFromAC_EditTaskValidation:
             f"Expected body-size guidance warning for >100 KB replacement body, got: {result.guidance!r}"
         )
 
-    def test_edit_task_append_total_over_100kb_returns_guidance_warning(
-        self, tmp_path: Path
-    ) -> None:
+    def test_edit_task_append_total_over_100kb_returns_guidance_warning(self, tmp_path: Path) -> None:
         """D47-WARN-EDIT-APPEND: append_body where post-append total > 100 KB → succeeds
         and response guidance list contains the body-size warning. Hard cap not exceeded."""
         view, kanban_dir = _make_view(tmp_path)
@@ -344,9 +316,7 @@ class TestFromAC_EditTaskValidation:
             f"Expected body-size guidance warning for post-append total >100 KB, got: {result.guidance!r}"
         )
 
-    def test_empty_block_reason_clears_blocked_and_block_reason(
-        self, tmp_path: Path
-    ) -> None:
+    def test_empty_block_reason_clears_blocked_and_block_reason(self, tmp_path: Path) -> None:
         """D53: empty block_reason string clears blocked=False and block_reason=None.
 
         Current impl treats empty string same as 'not provided' (no-op on the block fields).
@@ -371,9 +341,7 @@ class TestFromAC_EditTaskValidation:
         assert result.blocked is True
         assert result.block_reason == "dependency missing"
 
-    def test_omit_block_reason_on_blocked_task_preserves_state(
-        self, tmp_path: Path
-    ) -> None:
+    def test_omit_block_reason_on_blocked_task_preserves_state(self, tmp_path: Path) -> None:
         """D53-OMIT: edit_task that omits block_reason while changing another field →
         blocked and block_reason remain unchanged on a previously blocked task."""
         view, kanban_dir = _make_view(tmp_path)
@@ -387,9 +355,7 @@ class TestFromAC_EditTaskValidation:
         assert result.blocked is True
         assert result.block_reason == "dependency missing"
 
-    def test_append_body_timestamp_uses_iso_datetime_with_offset(
-        self, tmp_path: Path
-    ) -> None:
+    def test_append_body_timestamp_uses_iso_datetime_with_offset(self, tmp_path: Path) -> None:
         """AC30-TIGHT: timestamp=True prepends full ISO 8601 datetime with explicit ±HH:MM
         suffix, immediately followed by the appended note text.
 
@@ -400,12 +366,9 @@ class TestFromAC_EditTaskValidation:
         result = view.edit_task(1, append_body="Note.", timestamp=True)
         body: str = result.body or ""
         # Strict: full ±HH:MM offset form AND timestamp immediately precedes the note.
-        iso_with_prepend = re.compile(
-            r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}\nNote\."
-        )
+        iso_with_prepend = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}\nNote\.")
         assert iso_with_prepend.search(body) is not None, (
-            f"Expected full ISO 8601 timestamp with ±HH:MM immediately before '\\nNote.' "
-            f"in body, got: {body!r}"
+            f"Expected full ISO 8601 timestamp with ±HH:MM immediately before '\\nNote.' in body, got: {body!r}"
         )
 
 
@@ -421,9 +384,7 @@ class TestFromAC_EditTaskArchivalGates:
     All tests are RED — archival_reason and archival_refs are currently ignored in AgentView.edit_task.
     """
 
-    def test_archival_reason_on_active_task_raises_archival_fields_forbidden(
-        self, tmp_path: Path
-    ) -> None:
+    def test_archival_reason_on_active_task_raises_archival_fields_forbidden(self, tmp_path: Path) -> None:
         """D37+D57: archival_reason set on a non-archived (active) task →
         ValidationError(ERR_ARCHIVAL_FIELDS_FORBIDDEN)."""
         view, kanban_dir = _make_view(tmp_path)
@@ -432,9 +393,7 @@ class TestFromAC_EditTaskArchivalGates:
             view.edit_task(1, archival_reason="deprecated")
         assert exc_info.value.code == "ERR_ARCHIVAL_FIELDS_FORBIDDEN"
 
-    def test_archival_refs_on_active_task_raises_archival_fields_forbidden(
-        self, tmp_path: Path
-    ) -> None:
+    def test_archival_refs_on_active_task_raises_archival_fields_forbidden(self, tmp_path: Path) -> None:
         """D37+D57: archival_refs set on a non-archived (active) task →
         ValidationError(ERR_ARCHIVAL_FIELDS_FORBIDDEN)."""
         view, kanban_dir = _make_view(tmp_path)
@@ -443,9 +402,7 @@ class TestFromAC_EditTaskArchivalGates:
             view.edit_task(1, archival_refs=[2])
         assert exc_info.value.code == "ERR_ARCHIVAL_FIELDS_FORBIDDEN"
 
-    def test_archived_completed_reason_requires_terminal_status(
-        self, tmp_path: Path
-    ) -> None:
+    def test_archived_completed_reason_requires_terminal_status(self, tmp_path: Path) -> None:
         """AC6+D37+D65: setting archival_reason='completed' on archived task where
         status='archived' (not terminal 'done') → ValidationError(ERR_COMPLETED_REQUIRES_DONE)."""
         view, kanban_dir = _make_view(tmp_path)
@@ -460,9 +417,7 @@ class TestFromAC_EditTaskArchivalGates:
             view.edit_task(1, archival_reason="completed")
         assert exc_info.value.code == "ERR_COMPLETED_REQUIRES_DONE"
 
-    def test_invalid_archival_reason_raises_archival_reason_invalid(
-        self, tmp_path: Path
-    ) -> None:
+    def test_invalid_archival_reason_raises_archival_reason_invalid(self, tmp_path: Path) -> None:
         """D37: archival_reason value not in enum →
         ValidationError(ERR_ARCHIVAL_REASON_INVALID)."""
         view, kanban_dir = _make_view(tmp_path)
@@ -523,9 +478,7 @@ class TestFromAC_EditTaskArchivalRefs:
             view.edit_task(1, archival_reason="duplicate", archival_refs=[])
         assert exc_info.value.code == "ERR_ARCHIVAL_REFS_REQUIRED"
 
-    def test_completed_with_nonempty_refs_raises_refs_forbidden(
-        self, tmp_path: Path
-    ) -> None:
+    def test_completed_with_nonempty_refs_raises_refs_forbidden(self, tmp_path: Path) -> None:
         """§3.2: archival_reason='completed' with non-empty archival_refs →
         ValidationError(ERR_ARCHIVAL_REFS_FORBIDDEN).
 

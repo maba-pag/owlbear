@@ -69,9 +69,7 @@ class _AgentsConfig:
 class _PolicyConfig:
     non_impl_tags: list = field(default_factory=list)
     archival_reasons: frozenset = field(
-        default_factory=lambda: frozenset(
-            {"completed", "deprecated", "dropped", "duplicate", "wontfix"}
-        )
+        default_factory=lambda: frozenset({"completed", "deprecated", "dropped", "duplicate", "wontfix"})
     )
     status_predicates: dict = field(default_factory=dict)
 
@@ -134,9 +132,7 @@ def _make_board(base_dir: Path) -> Path:
     return kanban_dir
 
 
-def _write_task(
-    kanban_dir: Path, task_id: int = 1, status: str = "todo", subdir: str = "tasks"
-) -> Path:
+def _write_task(kanban_dir: Path, task_id: int = 1, status: str = "todo", subdir: str = "tasks") -> Path:
     path = kanban_dir / subdir / f"{task_id}-task.md"
     path.write_text(_TASK_FM.format(id=task_id, status=status), encoding="utf-8")
     return path
@@ -165,8 +161,7 @@ class TestFromAC_CorruptionSubModelPaths:
 
         source = inspect.getsource(_mod)
         assert "config.tasks_dir" not in source, (
-            "corruption.py still uses config.tasks_dir (forwarding property); "
-            "migrate to config.paths.tasks_dir"
+            "corruption.py still uses config.tasks_dir (forwarding property); migrate to config.paths.tasks_dir"
         )
 
     def test_corruption_source_uses_config_paths_tasks_dir(self) -> None:
@@ -184,8 +179,7 @@ class TestFromAC_CorruptionSubModelPaths:
 
         source = inspect.getsource(_mod)
         assert "config.archive_dir" not in source, (
-            "corruption.py still uses config.archive_dir (forwarding property); "
-            "migrate to config.paths.archive_dir"
+            "corruption.py still uses config.archive_dir (forwarding property); migrate to config.paths.archive_dir"
         )
 
     def test_corruption_source_uses_config_paths_archive_dir(self) -> None:
@@ -214,9 +208,7 @@ class TestFromAC_CorruptionSubModelPaths:
 
         assert isinstance(result, list)
 
-    def test_detect_corruption_works_without_forwarding_props(
-        self, tmp_path: Path
-    ) -> None:
+    def test_detect_corruption_works_without_forwarding_props(self, tmp_path: Path) -> None:
         """detect_corruption() must work when config has no forwarding properties.
 
         Internally calls _is_archive_path(path, config) which uses
@@ -286,11 +278,7 @@ class TestFromAC_CorruptionSubModelPaths:
             "claimed_by: some-agent\n---\n",
             encoding="utf-8",
         )
-        config = _MinimalConfig(
-            paths=_PathsConfig(
-                tasks_dir="sentinel_tasks", archive_dir="sentinel_archive"
-            )
-        )
+        config = _MinimalConfig(paths=_PathsConfig(tasks_dir="sentinel_tasks", archive_dir="sentinel_archive"))
 
         result = scan_and_fix(kanban_dir, config)
 
@@ -318,11 +306,7 @@ class TestFromAC_CorruptionSubModelPaths:
             "---\nid: 2\ntitle: Task\nstatus: todo\n---\n",  # missing priority, created, updated
             encoding="utf-8",
         )
-        config = _MinimalConfig(
-            paths=_PathsConfig(
-                tasks_dir="sentinel_tasks", archive_dir="sentinel_archive"
-            )
-        )
+        config = _MinimalConfig(paths=_PathsConfig(tasks_dir="sentinel_tasks", archive_dir="sentinel_archive"))
 
         result = scan_and_fix(kanban_dir, config)
 
@@ -352,11 +336,7 @@ class TestFromAC_CorruptionSubModelPaths:
             "claimed_by: some-agent\n---\n",
             encoding="utf-8",
         )
-        config = _MinimalConfig(
-            paths=_PathsConfig(
-                tasks_dir="sentinel_tasks", archive_dir="sentinel_archive"
-            )
-        )
+        config = _MinimalConfig(paths=_PathsConfig(tasks_dir="sentinel_tasks", archive_dir="sentinel_archive"))
 
         # With sentinel archive dir config, _is_archive_path returns True → no corruption.
         # With hardcoded 'archive', _is_archive_path returns False → false corruption reported.
@@ -398,8 +378,7 @@ class TestFromAC_StorageNonSaveConfigPaths:
 
         source = inspect.getsource(_mod.write_task_if_unchanged)
         assert "config.tasks_dir" not in source, (
-            "write_task_if_unchanged uses config.tasks_dir; "
-            "migrate to config.paths.tasks_dir"
+            "write_task_if_unchanged uses config.tasks_dir; migrate to config.paths.tasks_dir"
         )
 
     def test_write_task_if_unchanged_source_no_config_archive_dir(self) -> None:
@@ -408,8 +387,7 @@ class TestFromAC_StorageNonSaveConfigPaths:
 
         source = inspect.getsource(_mod.write_task_if_unchanged)
         assert "config.archive_dir" not in source, (
-            "write_task_if_unchanged uses config.archive_dir; "
-            "migrate to config.paths.archive_dir"
+            "write_task_if_unchanged uses config.archive_dir; migrate to config.paths.archive_dir"
         )
 
     def test_list_task_files_source_no_config_tasks_dir(self) -> None:
@@ -520,11 +498,7 @@ class TestFromAC_StorageNonSaveConfigPaths:
 
         kanban_dir = tmp_path / "board"
         (kanban_dir / "sentinel_tasks").mkdir(parents=True)
-        config = _MinimalConfig(
-            paths=_PathsConfig(
-                tasks_dir="sentinel_tasks", archive_dir="sentinel_archive"
-            )
-        )
+        config = _MinimalConfig(paths=_PathsConfig(tasks_dir="sentinel_tasks", archive_dir="sentinel_archive"))
         task = Task(
             id=1,
             title="Sentinel Task",
@@ -542,9 +516,7 @@ class TestFromAC_StorageNonSaveConfigPaths:
             "does not use config.paths.tasks_dir (sentinel value — hardcoded 'tasks' cannot pass)"
         )
 
-    def test_write_task_if_unchanged_reads_sentinel_tasks_dir(
-        self, tmp_path: Path
-    ) -> None:
+    def test_write_task_if_unchanged_reads_sentinel_tasks_dir(self, tmp_path: Path) -> None:
         """write_task_if_unchanged() must look in config.paths.tasks_dir (not hardcoded 'tasks').
 
         Task file is in 'sentinel_tasks/' — 'tasks/' does not exist.
@@ -567,16 +539,10 @@ class TestFromAC_StorageNonSaveConfigPaths:
         )
         task = read_task(task_path)
         expected_updated = task.updated
-        config = _MinimalConfig(
-            paths=_PathsConfig(
-                tasks_dir="sentinel_tasks", archive_dir="sentinel_archive"
-            )
-        )
+        config = _MinimalConfig(paths=_PathsConfig(tasks_dir="sentinel_tasks", archive_dir="sentinel_archive"))
 
         with patch("owlbear_kanban.config_loader.load_config", return_value=config):
-            result = _storage.write_task_if_unchanged(
-                task, expected_updated, kanban_dir
-            )
+            result = _storage.write_task_if_unchanged(task, expected_updated, kanban_dir)
 
         assert result.parent.name == "sentinel_tasks", (
             f"write_task_if_unchanged returned path under {result.parent.name!r}; "
@@ -596,11 +562,7 @@ class TestFromAC_StorageNonSaveConfigPaths:
         (kanban_dir / "sentinel_tasks").mkdir(parents=True)
         task_path = kanban_dir / "sentinel_tasks" / "1-task.md"
         task_path.write_text("---\nid: 1\n---\n", encoding="utf-8")
-        config = _MinimalConfig(
-            paths=_PathsConfig(
-                tasks_dir="sentinel_tasks", archive_dir="sentinel_archive"
-            )
-        )
+        config = _MinimalConfig(paths=_PathsConfig(tasks_dir="sentinel_tasks", archive_dir="sentinel_archive"))
 
         with patch("owlbear_kanban.config_loader.load_config", return_value=config):
             result = _storage.list_task_files(kanban_dir)
@@ -610,9 +572,7 @@ class TestFromAC_StorageNonSaveConfigPaths:
             "does not use config.paths.tasks_dir (sentinel value — hardcoded 'tasks' cannot pass)"
         )
 
-    def test_list_archive_files_reads_sentinel_archive_dir(
-        self, tmp_path: Path
-    ) -> None:
+    def test_list_archive_files_reads_sentinel_archive_dir(self, tmp_path: Path) -> None:
         """list_archive_files() must list from config.paths.archive_dir (not hardcoded 'archive').
 
         A file is placed in 'sentinel_archive/' — 'archive/' does not exist.
@@ -625,11 +585,7 @@ class TestFromAC_StorageNonSaveConfigPaths:
         (kanban_dir / "sentinel_archive").mkdir(parents=True)
         archive_path = kanban_dir / "sentinel_archive" / "1-archived.md"
         archive_path.write_text("---\nid: 1\n---\n", encoding="utf-8")
-        config = _MinimalConfig(
-            paths=_PathsConfig(
-                tasks_dir="sentinel_tasks", archive_dir="sentinel_archive"
-            )
-        )
+        config = _MinimalConfig(paths=_PathsConfig(tasks_dir="sentinel_tasks", archive_dir="sentinel_archive"))
 
         with patch("owlbear_kanban.config_loader.load_config", return_value=config):
             result = _storage.list_archive_files(kanban_dir)
@@ -657,11 +613,7 @@ class TestFromAC_StorageNonSaveConfigPaths:
             "created: '2026-01-01T10:00:00+00:00'\nupdated: '2026-01-01T10:00:00+00:00'\n---\n",
             encoding="utf-8",
         )
-        config = _MinimalConfig(
-            paths=_PathsConfig(
-                tasks_dir="sentinel_tasks", archive_dir="sentinel_archive"
-            )
-        )
+        config = _MinimalConfig(paths=_PathsConfig(tasks_dir="sentinel_tasks", archive_dir="sentinel_archive"))
 
         with patch("owlbear_kanban.config_loader.load_config", return_value=config):
             result = _storage.move_to_archive(1, kanban_dir)
@@ -670,9 +622,7 @@ class TestFromAC_StorageNonSaveConfigPaths:
             f"move_to_archive placed file in {result.parent.name!r}, expected 'sentinel_archive'; "
             "does not use config.paths.archive_dir (sentinel value)"
         )
-        assert not task_path.exists(), (
-            "task file still present in sentinel_tasks/ after move"
-        )
+        assert not task_path.exists(), "task file still present in sentinel_tasks/ after move"
 
 
 # ---------------------------------------------------------------------------
@@ -765,9 +715,7 @@ class TestFromAC_CompatLayerRemoval:
         """BoardConfig must not have an agent_compatibility @property (compat layer removed)."""
         from owlbear_kanban.models import BoardConfig
 
-        assert not isinstance(
-            BoardConfig.__dict__.get("agent_compatibility"), property
-        ), (
+        assert not isinstance(BoardConfig.__dict__.get("agent_compatibility"), property), (
             "BoardConfig.agent_compatibility forwarding property still present; compat not removed"
         )
 
@@ -791,9 +739,7 @@ class TestFromAC_CompatLayerRemoval:
         """BoardConfig must not have a status_predicates @property (compat layer removed)."""
         from owlbear_kanban.models import BoardConfig
 
-        assert not isinstance(
-            BoardConfig.__dict__.get("status_predicates"), property
-        ), (
+        assert not isinstance(BoardConfig.__dict__.get("status_predicates"), property), (
             "BoardConfig.status_predicates forwarding property still present; compat not removed"
         )
 
@@ -818,37 +764,28 @@ class TestFromAC_LiveConfigGroupedFormat:
         """Raw config.yml must contain 'schema: grouped' at the top level."""
         content = (_LIVE_KANBAN_DIR / "config.yml").read_text(encoding="utf-8")
         assert "schema: grouped" in content, (
-            "Live config.yml does not contain 'schema: grouped'; "
-            "flat-to-grouped migration not yet done"
+            "Live config.yml does not contain 'schema: grouped'; flat-to-grouped migration not yet done"
         )
 
     def test_live_config_has_paths_section(self) -> None:
         """Raw config.yml must have a 'paths:' subsection (not flat tasks_dir/archive_dir)."""
         content = (_LIVE_KANBAN_DIR / "config.yml").read_text(encoding="utf-8")
-        assert "paths:" in content, (
-            "Live config.yml missing 'paths:' section; grouped migration incomplete"
-        )
+        assert "paths:" in content, "Live config.yml missing 'paths:' section; grouped migration incomplete"
 
     def test_live_config_has_pipeline_section(self) -> None:
         """Raw config.yml must have a 'pipeline:' subsection."""
         content = (_LIVE_KANBAN_DIR / "config.yml").read_text(encoding="utf-8")
-        assert "pipeline:" in content, (
-            "Live config.yml missing 'pipeline:' section; grouped migration incomplete"
-        )
+        assert "pipeline:" in content, "Live config.yml missing 'pipeline:' section; grouped migration incomplete"
 
     def test_live_config_has_agents_section(self) -> None:
         """Raw config.yml must have an 'agents:' subsection (not flat agent_map)."""
         content = (_LIVE_KANBAN_DIR / "config.yml").read_text(encoding="utf-8")
-        assert "agents:" in content, (
-            "Live config.yml missing 'agents:' section; grouped migration incomplete"
-        )
+        assert "agents:" in content, "Live config.yml missing 'agents:' section; grouped migration incomplete"
 
     def test_live_config_has_policy_section(self) -> None:
         """Raw config.yml must have a 'policy:' subsection (not flat non_impl_tags)."""
         content = (_LIVE_KANBAN_DIR / "config.yml").read_text(encoding="utf-8")
-        assert "policy:" in content, (
-            "Live config.yml missing 'policy:' section; grouped migration incomplete"
-        )
+        assert "policy:" in content, "Live config.yml missing 'policy:' section; grouped migration incomplete"
 
     def test_live_config_paths_section_is_dict(self) -> None:
         """Raw config.yml 'paths:' value must be a YAML mapping, not a string."""
@@ -856,8 +793,7 @@ class TestFromAC_LiveConfigGroupedFormat:
             raw = yaml.safe_load(fh)
         paths = raw.get("paths")
         assert isinstance(paths, dict), (
-            f"config.yml 'paths' is {type(paths).__name__!r}, expected dict; "
-            "migration to grouped format not done"
+            f"config.yml 'paths' is {type(paths).__name__!r}, expected dict; migration to grouped format not done"
         )
 
     def test_live_config_loads_via_canonical_loader_with_grouped_submodels(
@@ -915,12 +851,9 @@ class TestFromAC_LiveConfigTerminalStatus:
             raw = yaml.safe_load(fh)
         pipeline = raw.get("pipeline")
         assert isinstance(pipeline, dict), (
-            f"config.yml 'pipeline' is {type(pipeline).__name__!r}, not a dict; "
-            "config not in grouped format"
+            f"config.yml 'pipeline' is {type(pipeline).__name__!r}, not a dict; config not in grouped format"
         )
-        assert "terminal_status" in pipeline, (
-            f"pipeline section has no terminal_status key; keys: {list(pipeline)!r}"
-        )
+        assert "terminal_status" in pipeline, f"pipeline section has no terminal_status key; keys: {list(pipeline)!r}"
 
     def test_live_config_terminal_status_equals_last_status(self) -> None:
         """pipeline.terminal_status in raw YAML must equal the last entry in statuses."""
@@ -931,6 +864,4 @@ class TestFromAC_LiveConfigTerminalStatus:
         terminal = pipeline.get("terminal_status")
         statuses = raw.get("statuses", [])
         assert statuses, "statuses list must not be empty"
-        assert terminal == statuses[-1], (
-            f"pipeline.terminal_status={terminal!r} != statuses[-1]={statuses[-1]!r}"
-        )
+        assert terminal == statuses[-1], f"pipeline.terminal_status={terminal!r} != statuses[-1]={statuses[-1]!r}"

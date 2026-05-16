@@ -29,9 +29,7 @@ class TestFromAC_GuidanceTextUpdate:
         from owlbear_mcp_kanban.guidance import _DR_REQUIRED_MSG
 
         assert _DR_REQUIRED_MSG == _NEW_DR_MSG, (
-            f"guidance.py _DR_REQUIRED_MSG not updated.\n"
-            f"  Expected: {_NEW_DR_MSG!r}\n"
-            f"  Got:      {_DR_REQUIRED_MSG!r}"
+            f"guidance.py _DR_REQUIRED_MSG not updated.\n  Expected: {_NEW_DR_MSG!r}\n  Got:      {_DR_REQUIRED_MSG!r}"
         )
 
     def test_block_ar_hint_engine_py(self) -> None:
@@ -60,6 +58,5 @@ class TestFromAC_GuidanceTextUpdate:
         content = skill_path.read_text(encoding="utf-8")
 
         assert "via the scribe agent" not in content, (
-            "h-mcp-kanban/SKILL.md still contains 'via the scribe agent'. "
-            "Replace with 'via the create_dr tool'."
+            "h-mcp-kanban/SKILL.md still contains 'via the scribe agent'. Replace with 'via the create_dr tool'."
         )

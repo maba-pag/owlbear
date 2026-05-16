@@ -68,39 +68,30 @@ class TestFromAC_EventsModuleExists:
         from owlbear_cockpit.routes.events import router  # noqa: PLC0415
         from fastapi import APIRouter  # noqa: PLC0415
 
-        assert isinstance(router, APIRouter), (
-            "events.router must be a FastAPI APIRouter"
-        )
+        assert isinstance(router, APIRouter), "events.router must be a FastAPI APIRouter"
 
     def test_events_router_registered_in_main(self) -> None:
         """main.py must import and register the events router under /api prefix."""
-        main_file = (
-            Path(__file__).parent.parent / "serve/cockpit/src/owlbear_cockpit/main.py"
-        )
+        main_file = Path(__file__).parent.parent / "serve/cockpit/src/owlbear_cockpit/main.py"
         content = main_file.read_text(encoding="utf-8")
-        assert "events" in content, (
-            "main.py must import the events router from routes.events"
-        )
+        assert "events" in content, "main.py must import the events router from routes.events"
         # Verify it follows the include_router pattern used by read/mutation/decisions
         assert "include_router" in content
         # The events router must be included (not just imported)
-        assert "events_router" in content or (
-            "events" in content and "include_router" in content
-        ), "events router must be registered via app.include_router() in main.py"
+        assert "events_router" in content or ("events" in content and "include_router" in content), (
+            "events router must be registered via app.include_router() in main.py"
+        )
 
     def test_get_api_events_not_404(self, client) -> None:
         """GET /api/events must be a registered endpoint (not 404)."""
         with client.stream("GET", "/api/events") as response:
             assert response.status_code != 404, (
-                f"GET /api/events returned 404 — router not registered. "
-                f"Status: {response.status_code}"
+                f"GET /api/events returned 404 — router not registered. Status: {response.status_code}"
             )
 
     def test_events_router_registered_in_main_exact_pattern(self) -> None:
         """AC1 (tightened): main.py must contain the exact include_router call wiring."""
-        main_file = (
-            Path(__file__).parent.parent / "serve/cockpit/src/owlbear_cockpit/main.py"
-        )
+        main_file = Path(__file__).parent.parent / "serve/cockpit/src/owlbear_cockpit/main.py"
         content = main_file.read_text(encoding="utf-8")
         assert 'include_router(events_router, prefix="/api")' in content, (
             'main.py must contain: include_router(events_router, prefix="/api"). '
@@ -121,9 +112,7 @@ class TestFromAC_EventSourceResponseEndpoint:
         """GET /api/events must return Content-Type: text/event-stream."""
         with client.stream("GET", "/api/events") as response:
             ct = response.headers.get("content-type", "")
-            assert "text/event-stream" in ct, (
-                f"Expected text/event-stream content-type, got: {ct!r}"
-            )
+            assert "text/event-stream" in ct, f"Expected text/event-stream content-type, got: {ct!r}"
 
     def test_endpoint_accepts_engine_dependency_override(self, board_dir) -> None:
         """Endpoint must work with a DI-overridden engine (test isolation pattern)."""
@@ -144,9 +133,7 @@ class TestFromAC_EventSourceResponseEndpoint:
             app.dependency_overrides[get_engine] = lambda e=eng: e
             with (
                 patch("owlbear_cockpit.routes.events.awatch", _noop_awatch),
-                TestClient(app, raise_server_exceptions=False).stream(
-                    "GET", "/api/events"
-                ) as response,
+                TestClient(app, raise_server_exceptions=False).stream("GET", "/api/events") as response,
             ):
                 assert response.status_code in {200, 307}, (
                     f"Endpoint must accept DI-overridden engine, got {response.status_code}"
@@ -173,9 +160,7 @@ class TestFromAC_EventSourceResponseEndpoint:
             with patch("owlbear_cockpit.routes.events.awatch", new=_capture_path):
                 transport = httpx.ASGITransport(app=app)
                 async with (
-                    httpx.AsyncClient(
-                        transport=transport, base_url="http://test"
-                    ) as ac,
+                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
                     ac.stream("GET", "/api/events") as response,
                 ):
                     assert response.status_code == 200
@@ -184,9 +169,7 @@ class TestFromAC_EventSourceResponseEndpoint:
         finally:
             app.dependency_overrides.clear()
 
-        assert len(awatch_paths) == 1, (
-            f"awatch must be called exactly once per connection, got {len(awatch_paths)}"
-        )
+        assert len(awatch_paths) == 1, f"awatch must be called exactly once per connection, got {len(awatch_paths)}"
         assert Path(awatch_paths[0]) == Path(engine_b.kanban_dir), (
             f"Endpoint must use injected engine_b.kanban_dir ({engine_b.kanban_dir!r}) "
             f"for recursive watching; got {awatch_paths[0]!r}. "
@@ -210,9 +193,7 @@ class TestFromAC_WatchFilter:
     def _make_filter(self) -> object:
         from owlbear_cockpit.routes.events import _build_watch_filter  # noqa: PLC0415
 
-        return _build_watch_filter(
-            self._TASKS, self._ARCHIVE, self._DECISIONS_PENDING, self._ACTIVITY
-        )
+        return _build_watch_filter(self._TASKS, self._ARCHIVE, self._DECISIONS_PENDING, self._ACTIVITY)
 
     def test_filter_accepts_plain_md_file(self) -> None:
         """Board-specific filter must return True for a direct .md child of tasks_dir."""
@@ -229,16 +210,11 @@ class TestFromAC_WatchFilter:
             tasks_dir.parent / "decisions" / "pending",
             tasks_dir.parent / "activity.jsonl",
         )
-        assert (
-            watch_filter(None, "/home/user/.owlbear/kanban/tasks/42-title.md") is True
-        )
+        assert watch_filter(None, "/home/user/.owlbear/kanban/tasks/42-title.md") is True
 
     def test_filter_rejects_tmp_prefix_md_file(self) -> None:
         """Filter must return False for .md files starting with .tmp-."""
-        assert (
-            self._make_filter()(None, "/fake/kanban/tasks/.tmp-1234-my-task.md")
-            is False
-        )
+        assert self._make_filter()(None, "/fake/kanban/tasks/.tmp-1234-my-task.md") is False
 
     def test_filter_rejects_non_md_file(self) -> None:
         """Filter must return False for non-.md files (e.g. .json) in tasks_dir."""
@@ -276,9 +252,7 @@ class TestFromAC_WatchFilter:
             with patch("owlbear_cockpit.routes.events.awatch", new=_capture_and_stop):
                 transport = httpx.ASGITransport(app=app)
                 async with (
-                    httpx.AsyncClient(
-                        transport=transport, base_url="http://test"
-                    ) as ac,
+                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
                     ac.stream("GET", "/api/events") as response,
                 ):
                     assert response.status_code == 200
@@ -287,17 +261,14 @@ class TestFromAC_WatchFilter:
         finally:
             app.dependency_overrides.clear()
 
-        assert len(awatch_calls) == 1, (
-            f"awatch must be called exactly once per connection, got {len(awatch_calls)}"
-        )
+        assert len(awatch_calls) == 1, f"awatch must be called exactly once per connection, got {len(awatch_calls)}"
         args, kwargs = awatch_calls[0]
         assert Path(args[0]) == Path(engine.kanban_dir), (
             f"awatch first arg must be engine.kanban_dir ({engine.kanban_dir!r}), "
             f"got {args[0]!r}. Post-1346: awatch uses kanban_dir with recursive=True."
         )
         assert callable(kwargs.get("watch_filter")), (
-            f"awatch must receive a callable watch_filter; "
-            f"got watch_filter={kwargs.get('watch_filter')!r}"
+            f"awatch must receive a callable watch_filter; got watch_filter={kwargs.get('watch_filter')!r}"
         )
         assert kwargs.get("recursive") is True, (
             f"awatch must receive recursive=True; got recursive={kwargs.get('recursive')!r}"
@@ -330,9 +301,7 @@ class TestFromAC_EventPayload:
             with patch("owlbear_cockpit.routes.events.awatch", _one_change):
                 transport = httpx.ASGITransport(app=app)
                 async with (
-                    httpx.AsyncClient(
-                        transport=transport, base_url="http://test"
-                    ) as ac,
+                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
                     ac.stream("GET", "/api/events") as response,
                 ):
                     assert response.status_code == 200
@@ -342,9 +311,7 @@ class TestFromAC_EventPayload:
                             event_names.append(line[len("event:") :].strip())
                         if event_names:
                             break
-            assert event_names == ["tasks-changed"], (
-                f"Expected event type 'tasks-changed', got: {event_names}"
-            )
+            assert event_names == ["tasks-changed"], f"Expected event type 'tasks-changed', got: {event_names}"
         finally:
             app.dependency_overrides.clear()
 
@@ -367,9 +334,7 @@ class TestFromAC_EventPayload:
             with patch("owlbear_cockpit.routes.events.awatch", _one_change):
                 transport = httpx.ASGITransport(app=app)
                 async with (
-                    httpx.AsyncClient(
-                        transport=transport, base_url="http://test"
-                    ) as ac,
+                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
                     ac.stream("GET", "/api/events") as response,
                 ):
                     data_payloads = []
@@ -391,9 +356,7 @@ class TestFromAC_EventPayload:
             app.dependency_overrides.clear()
 
     @pytest.mark.asyncio
-    async def test_event_emitted_when_changed_file_deleted_before_stat(
-        self, board_dir
-    ) -> None:
+    async def test_event_emitted_when_changed_file_deleted_before_stat(self, board_dir) -> None:
         """Post-1346 AC4: When a tasks file is deleted before stat(), a tasks-changed
         event MUST still be emitted using a synthetic time.time_ns() mtime.
 
@@ -418,9 +381,7 @@ class TestFromAC_EventPayload:
             with patch("owlbear_cockpit.routes.events.awatch", _one_change_then_stop):
                 transport = httpx.ASGITransport(app=app)
                 async with (
-                    httpx.AsyncClient(
-                        transport=transport, base_url="http://test"
-                    ) as ac,
+                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
                     ac.stream("GET", "/api/events") as response,
                 ):
                     assert response.status_code == 200
@@ -430,36 +391,22 @@ class TestFromAC_EventPayload:
         finally:
             app.dependency_overrides.clear()
 
-        event_names = [
-            ln.split(":", 1)[1].strip()
-            for ln in events_received
-            if ln.startswith("event:")
-        ]
-        data_payloads = [
-            ln.split(":", 1)[1].strip()
-            for ln in events_received
-            if ln.startswith("data:")
-        ]
+        event_names = [ln.split(":", 1)[1].strip() for ln in events_received if ln.startswith("event:")]
+        data_payloads = [ln.split(":", 1)[1].strip() for ln in events_received if ln.startswith("data:")]
         assert "tasks-changed" in event_names, (
             f"tasks-changed MUST be emitted for a deleted task file (AC4: synthetic mtime). "
             f"Got events: {event_names!r}. "
             f"Old contract said 'skip deleted paths' — new contract requires emission."
         )
-        assert data_payloads, (
-            "No data payload received for deleted-file tasks-changed event"
-        )
+        assert data_payloads, "No data payload received for deleted-file tasks-changed event"
         payload = json.loads(data_payloads[0])
         assert isinstance(payload.get("mtime"), int), (
             f"mtime must be an integer (synthetic time.time_ns()); got {payload!r}"
         )
-        assert payload["mtime"] > 0, (
-            f"Synthetic mtime must be positive; got {payload['mtime']}"
-        )
+        assert payload["mtime"] > 0, f"Synthetic mtime must be positive; got {payload['mtime']}"
 
     @pytest.mark.asyncio
-    async def test_mixed_batch_surviving_file_still_emits_event(
-        self, board_dir
-    ) -> None:
+    async def test_mixed_batch_surviving_file_still_emits_event(self, board_dir) -> None:
         """AC4b: When a batch contains both a deleted and a surviving .md file, the surviving file still produces a tasks-changed event."""
         from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
@@ -480,9 +427,7 @@ class TestFromAC_EventPayload:
             with patch("owlbear_cockpit.routes.events.awatch", _mixed_batch_then_stop):
                 transport = httpx.ASGITransport(app=app)
                 async with (
-                    httpx.AsyncClient(
-                        transport=transport, base_url="http://test"
-                    ) as ac,
+                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
                     ac.stream("GET", "/api/events") as response,
                 ):
                     assert response.status_code == 200
@@ -504,9 +449,7 @@ class TestFromAC_EventPayload:
         )
         assert data_lines, "No data line received for the mixed-batch event"
         payload = json.loads(data_lines[0])
-        assert isinstance(payload.get("mtime"), int), (
-            f"mtime must be an integer. Got: {payload!r}"
-        )
+        assert isinstance(payload.get("mtime"), int), f"mtime must be an integer. Got: {payload!r}"
         assert payload.get("mtime") > 0, (  # type: ignore[operator]
             f"mtime must be positive. Post-1346: the batch mtime is the "
             f"max of all paths' mtimes, including synthetic time.time_ns() for deleted "
@@ -532,9 +475,7 @@ class TestFromAC_EventPayload:
             with patch("owlbear_cockpit.routes.events.awatch", _one_change):
                 transport = httpx.ASGITransport(app=app)
                 async with (
-                    httpx.AsyncClient(
-                        transport=transport, base_url="http://test"
-                    ) as ac,
+                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
                     ac.stream("GET", "/api/events") as response,
                 ):
                     data_payloads = []
@@ -579,9 +520,7 @@ class TestFromAC_MissingDirGuard:
 
         mock_request = AsyncMock()
         response = await events(mock_request, engine)
-        assert response.status_code == 200, (
-            f"Expected 200 for missing tasks_dir guard, got {response.status_code}"
-        )
+        assert response.status_code == 200, f"Expected 200 for missing tasks_dir guard, got {response.status_code}"
 
     @pytest.mark.asyncio
     async def test_missing_tasks_dir_awatch_not_called(self, tmp_path) -> None:
@@ -637,14 +576,11 @@ class TestFromAC_MissingDirGuard:
             pass  # Expected: SSE stream is infinite, timeout is the exit path
 
         assert not event_lines, (
-            f"Missing-dir path must produce a truly empty SSE stream (zero event:/data: lines). "
-            f"Got: {event_lines}"
+            f"Missing-dir path must produce a truly empty SSE stream (zero event:/data: lines). Got: {event_lines}"
         )
 
     @pytest.mark.asyncio
-    async def test_missing_kanban_dir_awatch_unreachable_on_consumed_path(
-        self, tmp_path
-    ) -> None:
+    async def test_missing_kanban_dir_awatch_unreachable_on_consumed_path(self, tmp_path) -> None:
         """AC5 (combined proof): consuming a missing-dir stream produces zero events AND never calls awatch.
 
         Patches awatch to raise immediately if invoked, proving the missing-dir guard
@@ -675,9 +611,7 @@ class TestFromAC_MissingDirGuard:
             with patch("owlbear_cockpit.routes.events.awatch", _raise_if_called):
                 transport = httpx.ASGITransport(app=app)
                 async with (
-                    httpx.AsyncClient(
-                        transport=transport, base_url="http://test"
-                    ) as ac,
+                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
                     ac.stream("GET", "/api/events") as response,
                 ):
                     assert response.status_code == 200
@@ -688,9 +622,7 @@ class TestFromAC_MissingDirGuard:
         finally:
             app.dependency_overrides.clear()
 
-        assert not event_lines, (
-            f"Missing-dir path must produce zero SSE event:/data: lines. Got: {event_lines}"
-        )
+        assert not event_lines, f"Missing-dir path must produce zero SSE event:/data: lines. Got: {event_lines}"
 
 
 # ---------------------------------------------------------------------------
@@ -703,13 +635,8 @@ class TestFromAC_GeneratorCleanup:
 
     def test_generator_checks_is_disconnected(self) -> None:
         """events.py source must reference request.is_disconnected() for disconnect detection."""
-        events_file = (
-            Path(__file__).parent.parent
-            / "serve/cockpit/src/owlbear_cockpit/routes/events.py"
-        )
-        assert events_file.exists(), (
-            "serve/cockpit/src/owlbear_cockpit/routes/events.py does not exist"
-        )
+        events_file = Path(__file__).parent.parent / "serve/cockpit/src/owlbear_cockpit/routes/events.py"
+        assert events_file.exists(), "serve/cockpit/src/owlbear_cockpit/routes/events.py does not exist"
         content = events_file.read_text(encoding="utf-8")
         assert "is_disconnected" in content, (
             "Generator must call request.is_disconnected() to detect client disconnect (AC6). "
@@ -744,9 +671,7 @@ class TestFromAC_GeneratorCleanup:
 
         from sse_starlette import EventSourceResponse  # noqa: PLC0415
 
-        assert isinstance(response, EventSourceResponse), (
-            "events() must return an EventSourceResponse"
-        )
+        assert isinstance(response, EventSourceResponse), "events() must return an EventSourceResponse"
 
     @pytest.mark.asyncio
     async def test_events_endpoint_is_async(self) -> None:
@@ -780,9 +705,7 @@ class TestFromAC_GeneratorCleanup:
             async for _ in response.body_iterator:
                 pass  # consume the (empty) generator to ensure awatch was called
 
-        assert len(awatch_kwargs) == 1, (
-            f"awatch must be called exactly once, got {len(awatch_kwargs)}"
-        )
+        assert len(awatch_kwargs) == 1, f"awatch must be called exactly once, got {len(awatch_kwargs)}"
         assert awatch_kwargs[0].get("yield_on_timeout") is True, (
             "awatch() must receive yield_on_timeout=True (AC6a) so the generator can "
             "check request.is_disconnected() during idle periods (no file changes). "
@@ -790,9 +713,7 @@ class TestFromAC_GeneratorCleanup:
         )
 
     @pytest.mark.asyncio
-    async def test_generator_terminates_on_disconnect_executable(
-        self, board_dir
-    ) -> None:
+    async def test_generator_terminates_on_disconnect_executable(self, board_dir) -> None:
         """AC6b: When is_disconnected() returns True, generator exits the watch loop — proven by consuming body_iterator."""
         import asyncio  # noqa: PLC0415
 
@@ -835,9 +756,7 @@ class TestFromAC_GeneratorCleanup:
         )
 
     @pytest.mark.asyncio
-    async def test_generator_emits_zero_chunks_when_disconnected_before_first_yield(
-        self, board_dir
-    ) -> None:
+    async def test_generator_emits_zero_chunks_when_disconnected_before_first_yield(self, board_dir) -> None:
         """AC6b (revised): When is_disconnected() is True at the first disconnect check, zero event/data chunks must be emitted — disconnect fires before payload processing."""
         import asyncio  # noqa: PLC0415
 
@@ -861,10 +780,7 @@ class TestFromAC_GeneratorCleanup:
             emitted_chunks: list = []
             async with asyncio.timeout(3.0):
                 async for chunk in response.body_iterator:
-                    if (
-                        isinstance(chunk, dict)
-                        and chunk.get("event") == "tasks-changed"
-                    ):
+                    if isinstance(chunk, dict) and chunk.get("event") == "tasks-changed":
                         emitted_chunks.append(chunk)
 
         assert not emitted_chunks, (
@@ -899,10 +815,7 @@ class TestFromAC_GeneratorCleanup:
             events_yielded: list[dict] = []
             async with asyncio.timeout(3.0):
                 async for chunk in response.body_iterator:
-                    if (
-                        isinstance(chunk, dict)
-                        and chunk.get("event") == "tasks-changed"
-                    ):
+                    if isinstance(chunk, dict) and chunk.get("event") == "tasks-changed":
                         events_yielded.append(chunk)
                     if events_yielded:
                         break  # got the expected event, stop consuming
@@ -1147,9 +1060,7 @@ class TestFromAC_WatchFilter_1262:
         )
 
     @pytest.mark.asyncio
-    async def test_filter_rejects_decisions_non_pending_md(
-        self, board_dir: Path
-    ) -> None:
+    async def test_filter_rejects_decisions_non_pending_md(self, board_dir: Path) -> None:
         """Filter must return False for decisions that are not in pending/.
 
         Only decisions/pending/*.md is watched. decisions/resolved/*.md and
@@ -1163,8 +1074,7 @@ class TestFromAC_WatchFilter_1262:
         )
         top_level_md = str(engine.kanban_dir / "decisions" / "dr-99.md")
         assert captured["filter"](None, top_level_md) is False, (
-            f"Filter must reject decisions/*.md (not in pending/); "
-            f"got True for {top_level_md!r}"
+            f"Filter must reject decisions/*.md (not in pending/); got True for {top_level_md!r}"
         )
 
     @pytest.mark.asyncio
@@ -1176,14 +1086,11 @@ class TestFromAC_WatchFilter_1262:
         captured, engine = await _run_and_capture(board_dir)
         root_md = str(engine.kanban_dir / "notes.md")
         assert captured["filter"](None, root_md) is False, (
-            f"Filter must reject {root_md!r}; only tasks/, decisions/pending/, "
-            f"and activity.jsonl are watched surfaces."
+            f"Filter must reject {root_md!r}; only tasks/, decisions/pending/, and activity.jsonl are watched surfaces."
         )
 
     @pytest.mark.asyncio
-    async def test_filter_accepts_own_tasks_md_but_rejects_other_board(
-        self, board_dir: Path, tmp_path: Path
-    ) -> None:
+    async def test_filter_accepts_own_tasks_md_but_rejects_other_board(self, board_dir: Path, tmp_path: Path) -> None:
         """Filter must be board-specific: accepts own board's tasks/*.md and rejects
         the same relative path under a different board directory.
 
@@ -1194,9 +1101,7 @@ class TestFromAC_WatchFilter_1262:
         own_task = str(engine.tasks_dir / "task-1.md")
         other_task = str(tmp_path / "other_board" / "tasks" / "task-1.md")
 
-        assert captured["filter"](None, own_task) is True, (
-            f"Filter must accept own board tasks path: {own_task!r}"
-        )
+        assert captured["filter"](None, own_task) is True, f"Filter must accept own board tasks path: {own_task!r}"
         assert captured["filter"](None, other_task) is False, (
             f"Filter must reject tasks path from a different board: {other_task!r}. "
             f"Current filter accepts any .md — new filter must use board-specific paths."
@@ -1213,16 +1118,13 @@ class TestFromAC_WatchFilter_1262:
         """
         captured, engine = await _run_and_capture(board_dir)
         own_pending = str(engine.kanban_dir / "decisions" / "pending" / "dr.md")
-        other_pending = str(
-            tmp_path / "other_board" / "decisions" / "pending" / "dr.md"
-        )
+        other_pending = str(tmp_path / "other_board" / "decisions" / "pending" / "dr.md")
 
         assert captured["filter"](None, own_pending) is True, (
             f"Filter must accept own board's decisions/pending/*.md: {own_pending!r}"
         )
         assert captured["filter"](None, other_pending) is False, (
-            f"Filter must reject decisions/pending/*.md from a different board: "
-            f"{other_pending!r}"
+            f"Filter must reject decisions/pending/*.md from a different board: {other_pending!r}"
         )
 
     @pytest.mark.asyncio
@@ -1254,14 +1156,11 @@ class TestFromAC_WatchFilter_1262:
         captured, engine = await _run_and_capture(board_dir)
         nested = str(engine.tasks_dir / "subdir" / "task-x.md")
         assert captured["filter"](None, nested) is False, (
-            f"Filter must reject nested tasks path {nested!r}; "
-            f"only direct children of tasks/ qualify (depth=1)."
+            f"Filter must reject nested tasks path {nested!r}; only direct children of tasks/ qualify (depth=1)."
         )
 
     @pytest.mark.asyncio
-    async def test_filter_rejects_nested_decisions_pending_subdir_md(
-        self, board_dir: Path
-    ) -> None:
+    async def test_filter_rejects_nested_decisions_pending_subdir_md(self, board_dir: Path) -> None:
         """Filter must return False for paths nested below decisions/pending/ (depth > 1).
 
         decisions/pending/subdir/dr.md has len(relative.parts) == 2 relative to
@@ -1286,9 +1185,7 @@ class TestFromAC_Classify:
     "activity-changed" | None based on board-specific path matching."""
 
     @pytest.mark.asyncio
-    async def test_decisions_pending_path_emits_decisions_changed(
-        self, board_dir: Path
-    ) -> None:
+    async def test_decisions_pending_path_emits_decisions_changed(self, board_dir: Path) -> None:
         """A path in decisions/pending/ must produce a 'decisions-changed' event.
 
         Current code emits 'tasks-changed' for any path → this test FAILS.
@@ -1310,9 +1207,7 @@ class TestFromAC_Classify:
             with patch("owlbear_cockpit.routes.events.awatch", _one_change):
                 transport = httpx.ASGITransport(app=app)
                 async with (
-                    httpx.AsyncClient(
-                        transport=transport, base_url="http://test"
-                    ) as ac,
+                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
                     ac.stream("GET", "/api/events") as response,
                 ):
                     assert response.status_code == 200
@@ -1331,8 +1226,7 @@ class TestFromAC_Classify:
             f"Current code always emits 'tasks-changed'."
         )
         assert "tasks-changed" not in event_names, (
-            f"decisions/pending/*.md must NOT produce 'tasks-changed'. "
-            f"Got: {event_names!r}"
+            f"decisions/pending/*.md must NOT produce 'tasks-changed'. Got: {event_names!r}"
         )
 
     @pytest.mark.asyncio
@@ -1356,9 +1250,7 @@ class TestFromAC_Classify:
             with patch("owlbear_cockpit.routes.events.awatch", _one_change):
                 transport = httpx.ASGITransport(app=app)
                 async with (
-                    httpx.AsyncClient(
-                        transport=transport, base_url="http://test"
-                    ) as ac,
+                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
                     ac.stream("GET", "/api/events") as response,
                 ):
                     event_names: list[str] = []
@@ -1371,17 +1263,14 @@ class TestFromAC_Classify:
             app.dependency_overrides.clear()
 
         assert "activity-changed" in event_names, (
-            f"activity.jsonl must produce 'activity-changed' event. "
-            f"Got: {event_names!r}"
+            f"activity.jsonl must produce 'activity-changed' event. Got: {event_names!r}"
         )
         assert "tasks-changed" not in event_names, (
             f"activity.jsonl must NOT produce 'tasks-changed'. Got: {event_names!r}"
         )
 
     @pytest.mark.asyncio
-    async def test_archive_md_classified_as_tasks_changed(
-        self, board_dir: Path
-    ) -> None:
+    async def test_archive_md_classified_as_tasks_changed(self, board_dir: Path) -> None:
         """Post-1346 AC5: A path in archive/ must be classified as 'tasks-changed'
         (archive moves affect active-board membership).
 
@@ -1405,9 +1294,7 @@ class TestFromAC_Classify:
             with patch("owlbear_cockpit.routes.events.awatch", _one_change):
                 transport = httpx.ASGITransport(app=app)
                 async with (
-                    httpx.AsyncClient(
-                        transport=transport, base_url="http://test"
-                    ) as ac,
+                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
                     ac.stream("GET", "/api/events") as response,
                 ):
                     async for line in response.aiter_lines():
@@ -1418,11 +1305,7 @@ class TestFromAC_Classify:
         finally:
             app.dependency_overrides.clear()
 
-        event_names = [
-            ln.split(":", 1)[1].strip()
-            for ln in events_received
-            if ln.startswith("event:")
-        ]
+        event_names = [ln.split(":", 1)[1].strip() for ln in events_received if ln.startswith("event:")]
         assert "tasks-changed" in event_names, (
             f"archive/*.md must produce 'tasks-changed' (AC5: archive moves are "
             f"task-list invalidation signals). Got: {event_names!r}. "
@@ -1430,9 +1313,7 @@ class TestFromAC_Classify:
         )
 
     @pytest.mark.asyncio
-    async def test_different_board_path_classified_as_none_no_event(
-        self, board_dir: Path, tmp_path: Path
-    ) -> None:
+    async def test_different_board_path_classified_as_none_no_event(self, board_dir: Path, tmp_path: Path) -> None:
         """A tasks/*.md path from a different board must be classified as None (no event).
 
         Current code emits 'tasks-changed' for any surviving .md → FAILS.
@@ -1455,9 +1336,7 @@ class TestFromAC_Classify:
             with patch("owlbear_cockpit.routes.events.awatch", _one_change):
                 transport = httpx.ASGITransport(app=app)
                 async with (
-                    httpx.AsyncClient(
-                        transport=transport, base_url="http://test"
-                    ) as ac,
+                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
                     ac.stream("GET", "/api/events") as response,
                 ):
                     async for line in response.aiter_lines():
@@ -1499,9 +1378,7 @@ class TestFromAC_Classify:
             with patch("owlbear_cockpit.routes.events.awatch", _one_change):
                 transport = httpx.ASGITransport(app=app)
                 async with (
-                    httpx.AsyncClient(
-                        transport=transport, base_url="http://test"
-                    ) as ac,
+                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
                     ac.stream("GET", "/api/events") as response,
                 ):
                     async for line in response.aiter_lines():
@@ -1544,9 +1421,7 @@ class TestFromAC_Classify:
             with patch("owlbear_cockpit.routes.events.awatch", _one_change):
                 transport = httpx.ASGITransport(app=app)
                 async with (
-                    httpx.AsyncClient(
-                        transport=transport, base_url="http://test"
-                    ) as ac,
+                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
                     ac.stream("GET", "/api/events") as response,
                 ):
                     async for line in response.aiter_lines():
@@ -1562,9 +1437,7 @@ class TestFromAC_Classify:
         )
 
     @pytest.mark.asyncio
-    async def test_nested_tasks_subdir_classified_as_none_no_event(
-        self, board_dir: Path
-    ) -> None:
+    async def test_nested_tasks_subdir_classified_as_none_no_event(self, board_dir: Path) -> None:
         """A path at tasks/subdir/x.md must be classified as None → no SSE event.
 
         The endpoint receives the nested path via the mocked awatch (bypassing the
@@ -1588,9 +1461,7 @@ class TestFromAC_Classify:
             with patch("owlbear_cockpit.routes.events.awatch", _one_change):
                 transport = httpx.ASGITransport(app=app)
                 async with (
-                    httpx.AsyncClient(
-                        transport=transport, base_url="http://test"
-                    ) as ac,
+                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
                     ac.stream("GET", "/api/events") as response,
                 ):
                     async for line in response.aiter_lines():
@@ -1614,17 +1485,13 @@ class TestFromAC_AWatchTarget:
     """AC3: awatch must be called with engine.kanban_dir and recursive=True."""
 
     @pytest.mark.asyncio
-    async def test_awatch_called_with_kanban_dir_not_tasks_dir(
-        self, board_dir: Path
-    ) -> None:
+    async def test_awatch_called_with_kanban_dir_not_tasks_dir(self, board_dir: Path) -> None:
         """awatch's first positional arg must be engine.kanban_dir, not engine.tasks_dir.
 
         Current code passes engine.tasks_dir → this test FAILS.
         """
         captured, engine = await _run_and_capture(board_dir)
-        assert len(captured["args"]) >= 1, (
-            "awatch must be called with at least one positional arg"
-        )
+        assert len(captured["args"]) >= 1, "awatch must be called with at least one positional arg"
         called_with = Path(captured["args"][0])
         assert called_with == engine.kanban_dir, (
             f"awatch must be called with engine.kanban_dir ({engine.kanban_dir!r}), "
@@ -1657,9 +1524,7 @@ class TestFromAC_TypedEvents:
     surface; deletion-only for a type suppresses that type's event."""
 
     @pytest.mark.asyncio
-    async def test_decisions_change_emits_decisions_changed_event(
-        self, board_dir: Path
-    ) -> None:
+    async def test_decisions_change_emits_decisions_changed_event(self, board_dir: Path) -> None:
         """decisions/pending/*.md change must yield event='decisions-changed' with mtime.
 
         Current code only emits 'tasks-changed' → FAILS.
@@ -1682,9 +1547,7 @@ class TestFromAC_TypedEvents:
             with patch("owlbear_cockpit.routes.events.awatch", _one_change):
                 transport = httpx.ASGITransport(app=app)
                 async with (
-                    httpx.AsyncClient(
-                        transport=transport, base_url="http://test"
-                    ) as ac,
+                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
                     ac.stream("GET", "/api/events") as response,
                 ):
                     lines: list[str] = []
@@ -1704,14 +1567,10 @@ class TestFromAC_TypedEvents:
         )
         assert data_line is not None, "No data line received"
         payload = json.loads(data_line.split(":", 1)[1].strip())
-        assert payload.get("mtime") == expected_mtime, (
-            f"mtime mismatch: {payload.get('mtime')} != {expected_mtime}"
-        )
+        assert payload.get("mtime") == expected_mtime, f"mtime mismatch: {payload.get('mtime')} != {expected_mtime}"
 
     @pytest.mark.asyncio
-    async def test_activity_change_emits_activity_changed_event(
-        self, board_dir: Path
-    ) -> None:
+    async def test_activity_change_emits_activity_changed_event(self, board_dir: Path) -> None:
         """activity.jsonl change must yield event='activity-changed' with mtime.
 
         Current code only emits 'tasks-changed' → FAILS.
@@ -1732,9 +1591,7 @@ class TestFromAC_TypedEvents:
             with patch("owlbear_cockpit.routes.events.awatch", _one_change):
                 transport = httpx.ASGITransport(app=app)
                 async with (
-                    httpx.AsyncClient(
-                        transport=transport, base_url="http://test"
-                    ) as ac,
+                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
                     ac.stream("GET", "/api/events") as response,
                 ):
                     lines: list[str] = []
@@ -1754,14 +1611,10 @@ class TestFromAC_TypedEvents:
         )
         assert data_line is not None, "No data line received"
         payload = json.loads(data_line.split(":", 1)[1].strip())
-        assert payload.get("mtime") == expected_mtime, (
-            f"mtime mismatch: {payload.get('mtime')} != {expected_mtime}"
-        )
+        assert payload.get("mtime") == expected_mtime, f"mtime mismatch: {payload.get('mtime')} != {expected_mtime}"
 
     @pytest.mark.asyncio
-    async def test_mixed_batch_yields_tasks_and_decisions_changed_events(
-        self, board_dir: Path
-    ) -> None:
+    async def test_mixed_batch_yields_tasks_and_decisions_changed_events(self, board_dir: Path) -> None:
         """A batch with both a tasks path and a decisions/pending path must yield
         two distinct events: 'tasks-changed' and 'decisions-changed'.
 
@@ -1786,9 +1639,7 @@ class TestFromAC_TypedEvents:
             with patch("owlbear_cockpit.routes.events.awatch", _mixed_batch):
                 transport = httpx.ASGITransport(app=app)
                 async with (
-                    httpx.AsyncClient(
-                        transport=transport, base_url="http://test"
-                    ) as ac,
+                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
                     ac.stream("GET", "/api/events") as response,
                 ):
                     event_names: list[str] = []
@@ -1800,18 +1651,14 @@ class TestFromAC_TypedEvents:
         finally:
             app.dependency_overrides.clear()
 
-        assert "tasks-changed" in event_names, (
-            f"Expected 'tasks-changed' in mixed batch; got: {event_names!r}"
-        )
+        assert "tasks-changed" in event_names, f"Expected 'tasks-changed' in mixed batch; got: {event_names!r}"
         assert "decisions-changed" in event_names, (
             f"Expected 'decisions-changed' in mixed batch; got: {event_names!r}. "
             f"Current code only emits 'tasks-changed' per batch."
         )
 
     @pytest.mark.asyncio
-    async def test_mixed_batch_yields_all_three_surface_events(
-        self, board_dir: Path
-    ) -> None:
+    async def test_mixed_batch_yields_all_three_surface_events(self, board_dir: Path) -> None:
         """A batch with tasks, decisions/pending, and activity.jsonl paths must yield
         three separate events, one per surface.
 
@@ -1842,9 +1689,7 @@ class TestFromAC_TypedEvents:
             with patch("owlbear_cockpit.routes.events.awatch", _all_surfaces):
                 transport = httpx.ASGITransport(app=app)
                 async with (
-                    httpx.AsyncClient(
-                        transport=transport, base_url="http://test"
-                    ) as ac,
+                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
                     ac.stream("GET", "/api/events") as response,
                 ):
                     event_names: list[str] = []
@@ -1867,9 +1712,7 @@ class TestFromAC_TypedEvents:
         )
 
     @pytest.mark.asyncio
-    async def test_per_surface_mtime_is_max_of_paths_for_that_surface(
-        self, board_dir: Path
-    ) -> None:
+    async def test_per_surface_mtime_is_max_of_paths_for_that_surface(self, board_dir: Path) -> None:
         """When a batch contains two tasks-changed paths, the emitted mtime is the
         max st_mtime_ns across those two paths (not across all surfaces combined).
 
@@ -1889,9 +1732,7 @@ class TestFromAC_TypedEvents:
         task_late = engine.tasks_dir / "task-late.md"
         task_late.write_text("# late\n", encoding="utf-8")
         task_late_mtime = task_late.stat().st_mtime_ns
-        assert task_late_mtime > task_early_mtime, (
-            "Test setup: task_late must have newer mtime"
-        )
+        assert task_late_mtime > task_early_mtime, "Test setup: task_late must have newer mtime"
 
         # decisions/pending path with VERY late mtime (newest overall)
         pending_dir = engine.kanban_dir / "decisions" / "pending"
@@ -1915,19 +1756,14 @@ class TestFromAC_TypedEvents:
             with patch("owlbear_cockpit.routes.events.awatch", _two_tasks_one_dr):
                 transport = httpx.ASGITransport(app=app)
                 async with (
-                    httpx.AsyncClient(
-                        transport=transport, base_url="http://test"
-                    ) as ac,
+                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
                     ac.stream("GET", "/api/events") as response,
                 ):
                     current_event: str | None = None
                     async for line in response.aiter_lines():
                         if line.startswith("event:"):
                             current_event = line.split(":", 1)[1].strip()
-                        elif (
-                            line.startswith("data:")
-                            and current_event == "tasks-changed"
-                        ):
+                        elif line.startswith("data:") and current_event == "tasks-changed":
                             payload = json.loads(line.split(":", 1)[1].strip())
                             tasks_mtimes.append(payload.get("mtime", 0))
                             current_event = None
@@ -1942,9 +1778,7 @@ class TestFromAC_TypedEvents:
         )
 
     @pytest.mark.asyncio
-    async def test_decisions_surviving_path_emits_decisions_changed_not_tasks_changed(
-        self, board_dir: Path
-    ) -> None:
+    async def test_decisions_surviving_path_emits_decisions_changed_not_tasks_changed(self, board_dir: Path) -> None:
         """When a decisions/pending batch has one surviving and one deleted path,
         exactly one 'decisions-changed' event is emitted (not 'tasks-changed').
 
@@ -1972,9 +1806,7 @@ class TestFromAC_TypedEvents:
             with patch("owlbear_cockpit.routes.events.awatch", _mixed_decisions):
                 transport = httpx.ASGITransport(app=app)
                 async with (
-                    httpx.AsyncClient(
-                        transport=transport, base_url="http://test"
-                    ) as ac,
+                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
                     ac.stream("GET", "/api/events") as response,
                 ):
                     event_names: list[str] = []
@@ -1987,8 +1819,7 @@ class TestFromAC_TypedEvents:
             app.dependency_overrides.clear()
 
         assert "decisions-changed" in event_names, (
-            f"Surviving decisions/pending path must emit 'decisions-changed'. "
-            f"Got: {event_names!r}"
+            f"Surviving decisions/pending path must emit 'decisions-changed'. Got: {event_names!r}"
         )
         assert "tasks-changed" not in event_names, (
             f"decisions/pending path must NOT produce 'tasks-changed'. "
@@ -1997,9 +1828,7 @@ class TestFromAC_TypedEvents:
         )
 
     @pytest.mark.asyncio
-    async def test_deletion_only_tasks_batch_emits_tasks_changed_event(
-        self, board_dir: Path
-    ) -> None:
+    async def test_deletion_only_tasks_batch_emits_tasks_changed_event(self, board_dir: Path) -> None:
         """Post-1346 AC4: When ALL paths for the tasks surface are deleted (stat raises
         FileNotFoundError), a 'tasks-changed' event MUST still be emitted using a
         synthetic time.time_ns() mtime.
@@ -2031,14 +1860,10 @@ class TestFromAC_TypedEvents:
         app.dependency_overrides[get_engine] = lambda: engine
         event_names: list[str] = []
         try:
-            with patch(
-                "owlbear_cockpit.routes.events.awatch", _deleted_task_surviving_dr
-            ):
+            with patch("owlbear_cockpit.routes.events.awatch", _deleted_task_surviving_dr):
                 transport = httpx.ASGITransport(app=app)
                 async with (
-                    httpx.AsyncClient(
-                        transport=transport, base_url="http://test"
-                    ) as ac,
+                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
                     ac.stream("GET", "/api/events") as response,
                 ):
                     async for line in response.aiter_lines():
@@ -2055,14 +1880,11 @@ class TestFromAC_TypedEvents:
             f"Old contract said 'suppress deletion-only events' — new contract requires emission."
         )
         assert "decisions-changed" in event_names, (
-            f"decisions-changed MUST be emitted for the surviving decisions path. "
-            f"Got events: {event_names!r}"
+            f"decisions-changed MUST be emitted for the surviving decisions path. Got events: {event_names!r}"
         )
 
     @pytest.mark.asyncio
-    async def test_multiple_same_type_tasks_paths_emit_exactly_one_event(
-        self, board_dir: Path
-    ) -> None:
+    async def test_multiple_same_type_tasks_paths_emit_exactly_one_event(self, board_dir: Path) -> None:
         """A batch with two tasks/*.md paths must emit exactly ONE 'tasks-changed'
         event, not two. Multiple same-type paths coalesce into a single event
         (AC4: 'exactly one SSE event per distinct surface type present').
@@ -2085,9 +1907,7 @@ class TestFromAC_TypedEvents:
             with patch("owlbear_cockpit.routes.events.awatch", _two_tasks):
                 transport = httpx.ASGITransport(app=app)
                 async with (
-                    httpx.AsyncClient(
-                        transport=transport, base_url="http://test"
-                    ) as ac,
+                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
                     ac.stream("GET", "/api/events") as response,
                 ):
                     async for line in response.aiter_lines():
@@ -2145,9 +1965,7 @@ class TestFromAC_MissingKanbanDir:
             with patch("owlbear_cockpit.routes.events.awatch", _record_if_called):
                 transport = httpx.ASGITransport(app=app)
                 async with (
-                    httpx.AsyncClient(
-                        transport=transport, base_url="http://test"
-                    ) as ac,
+                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
                     ac.stream("GET", "/api/events") as response,
                 ):
                     assert response.status_code == 200
@@ -2186,9 +2004,7 @@ class TestFromAC_MissingKanbanDir:
             with patch("owlbear_cockpit.routes.events.awatch"):
                 transport = httpx.ASGITransport(app=app)
                 async with (
-                    httpx.AsyncClient(
-                        transport=transport, base_url="http://test"
-                    ) as ac,
+                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
                     ac.stream("GET", "/api/events") as response,
                 ):
                     assert response.status_code == 200

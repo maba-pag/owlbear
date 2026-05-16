@@ -104,9 +104,7 @@ class TestFromAC_AtomicWrite:
         assert target.read_text(encoding="utf-8") == content
         assert len(tmp_paths_seen) == 1
         tmp_used = tmp_paths_seen[0]
-        assert tmp_used.name.startswith(".tmp-"), (
-            f"Expected .tmp-* name, got {tmp_used.name}"
-        )
+        assert tmp_used.name.startswith(".tmp-"), f"Expected .tmp-* name, got {tmp_used.name}"
         assert tmp_used.parent == target.parent, (
             f"tmp file must be a sibling of target; got {tmp_used.parent} vs {target.parent}"
         )
@@ -143,9 +141,7 @@ class TestFromAC_AtomicWrite:
 
         # At least 2 fsyncs: file fd + parent-directory fd (O_DIRECTORY platforms)
         assert len(fsync_calls) >= 2, f"Expected >=2 fsyncs, got {len(fsync_calls)}"
-        assert len(dir_fds) >= 1, (
-            "Expected os.open call for parent directory (dir-fsync)"
-        )
+        assert len(dir_fds) >= 1, "Expected os.open call for parent directory (dir-fsync)"
         assert any(fd in set(dir_fds) for fd in fsync_calls), (
             f"No fsync on parent-dir fd; fsynced: {fsync_calls}, parent-dir fds: {dir_fds}"
         )
@@ -238,9 +234,7 @@ class TestFromAC_AtomicWrite:
         """AC-C3: list_task_files never returns .tmp-* entries."""
         kanban_dir = _make_board(tmp_path)
         tasks_dir = kanban_dir / "tasks"
-        (tasks_dir / "1001-real.md").write_text(
-            "---\nid: 1001\n---\n", encoding="utf-8"
-        )
+        (tasks_dir / "1001-real.md").write_text("---\nid: 1001\n---\n", encoding="utf-8")
         (tasks_dir / ".tmp-abc123.md").write_text("partial\n", encoding="utf-8")
 
         result = list_task_files(kanban_dir)
@@ -258,26 +252,18 @@ class TestFromAC_AtomicWrite:
 class TestFromAC_IDAllocation:
     """AC-C4, AC-C51: ID allocation contract."""
 
-    def test_ac_c4_next_id_file_exists_after_allocation(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac_c4_next_id_file_exists_after_allocation(self, tmp_path: Path) -> None:
         """AC-C4: allocate_next_id persists last ID in kanban_dir/.next_id."""
         kanban_dir = _make_board(tmp_path)
         expected_path = kanban_dir / ".next_id"
 
-        assert not expected_path.exists(), (
-            "ID file must not exist before first allocation"
-        )
+        assert not expected_path.exists(), "ID file must not exist before first allocation"
 
         allocate_next_id(kanban_dir)
 
-        assert expected_path.exists(), (
-            f".next_id must exist at {expected_path} after allocate_next_id"
-        )
+        assert expected_path.exists(), f".next_id must exist at {expected_path} after allocate_next_id"
 
-    def test_ac_c51_scan_based_allocation_ignores_config_next_id(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac_c51_scan_based_allocation_ignores_config_next_id(self, tmp_path: Path) -> None:
         """AC-#1443 scan-based: allocate_next_id ignores config.next_id; no burned-ID concept.
 
         Old AC-C51 tested burned-ID semantics (config.next_id incremented before write_task).
@@ -321,9 +307,7 @@ class TestFromAC_ListFilesFilesOnly:
     These tests expose the missing ``p.is_file()`` guard in both functions.
     """
 
-    def test_ac_c3_list_task_files_excludes_md_named_directories(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac_c3_list_task_files_excludes_md_named_directories(self, tmp_path: Path) -> None:
         """AC-C3: list_task_files must not return a directory with a .md extension."""
         kanban_dir = _make_board(tmp_path)
         tasks_dir = kanban_dir / "tasks"
@@ -342,13 +326,10 @@ class TestFromAC_ListFilesFilesOnly:
 
         assert "1002-real.md" in names, "Real task file must be listed"
         assert "1001-dir.md" not in names, (
-            "Directory with .md extension must NOT be returned by list_task_files; "
-            "only regular files are task files"
+            "Directory with .md extension must NOT be returned by list_task_files; only regular files are task files"
         )
 
-    def test_ac_c3_list_task_files_all_results_are_regular_files(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac_c3_list_task_files_all_results_are_regular_files(self, tmp_path: Path) -> None:
         """AC-C3: Every path returned by list_task_files must satisfy p.is_file()."""
         kanban_dir = _make_board(tmp_path)
         tasks_dir = kanban_dir / "tasks"
@@ -363,13 +344,9 @@ class TestFromAC_ListFilesFilesOnly:
         result = list_task_files(kanban_dir)
 
         non_files = [p for p in result if not p.is_file()]
-        assert non_files == [], (
-            f"list_task_files returned non-file entries: {[p.name for p in non_files]}"
-        )
+        assert non_files == [], f"list_task_files returned non-file entries: {[p.name for p in non_files]}"
 
-    def test_ac_c3_list_archive_files_excludes_md_named_directories(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac_c3_list_archive_files_excludes_md_named_directories(self, tmp_path: Path) -> None:
         """AC-C3: list_archive_files must not return a directory with a .md extension."""
         kanban_dir = _make_board(tmp_path)
         archive_dir = kanban_dir / "archive"
@@ -387,13 +364,9 @@ class TestFromAC_ListFilesFilesOnly:
         names = [p.name for p in result]
 
         assert "0002-archived.md" in names, "Real archived file must be listed"
-        assert "0001-dir.md" not in names, (
-            "Directory with .md extension must NOT be returned by list_archive_files"
-        )
+        assert "0001-dir.md" not in names, "Directory with .md extension must NOT be returned by list_archive_files"
 
-    def test_ac_c3_list_archive_files_all_results_are_regular_files(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac_c3_list_archive_files_all_results_are_regular_files(self, tmp_path: Path) -> None:
         """AC-C3: Every path returned by list_archive_files must satisfy p.is_file()."""
         kanban_dir = _make_board(tmp_path)
         archive_dir = kanban_dir / "archive"
@@ -408,6 +381,4 @@ class TestFromAC_ListFilesFilesOnly:
         result = list_archive_files(kanban_dir)
 
         non_files = [p for p in result if not p.is_file()]
-        assert non_files == [], (
-            f"list_archive_files returned non-file entries: {[p.name for p in non_files]}"
-        )
+        assert non_files == [], f"list_archive_files returned non-file entries: {[p.name for p in non_files]}"

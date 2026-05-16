@@ -20,13 +20,9 @@ import pytest
 # Helpers
 # ---------------------------------------------------------------------------
 
-_FORBIDDEN_NAMES: frozenset[str] = frozenset(
-    {"claim_task", "start_work", "end_work", "pick_dispatchable"}
-)
+_FORBIDDEN_NAMES: frozenset[str] = frozenset({"claim_task", "start_work", "end_work", "pick_dispatchable"})
 # Both top-level and submodule import paths are checked per research finding.
-_FORBIDDEN_MODULES: frozenset[str] = frozenset(
-    {"owlbear_kanban", "owlbear_kanban.engine", "owlbear_kanban.dispatch"}
-)
+_FORBIDDEN_MODULES: frozenset[str] = frozenset({"owlbear_kanban", "owlbear_kanban.engine", "owlbear_kanban.dispatch"})
 
 
 def _collect_forbidden_imports(src_root: Path) -> list[tuple[str, str, int]]:
@@ -77,9 +73,7 @@ class TestFromAC_CockpitPackageSkeleton:
         pyproject = project_root / "serve" / "cockpit" / "pyproject.toml"
         assert pyproject.exists(), f"Missing workspace member config: {pyproject}"
 
-    def test_pyproject_toml_declares_owlbear_kanban_dep(
-        self, project_root: Path
-    ) -> None:
+    def test_pyproject_toml_declares_owlbear_kanban_dep(self, project_root: Path) -> None:
         """AC#1: pyproject.toml lists owlbear-kanban as a dependency."""
         content = (project_root / "serve" / "cockpit" / "pyproject.toml").read_text()
         assert "owlbear-kanban" in content
@@ -99,9 +93,7 @@ class TestFromAC_CockpitPackageSkeleton:
         content = (project_root / "serve" / "cockpit" / "pyproject.toml").read_text()
         assert "pydantic" in content
 
-    def test_pyproject_toml_has_workspace_source_for_kanban(
-        self, project_root: Path
-    ) -> None:
+    def test_pyproject_toml_has_workspace_source_for_kanban(self, project_root: Path) -> None:
         """AC#1: pyproject.toml wires owlbear-kanban as a uv workspace source."""
         content = (project_root / "serve" / "cockpit" / "pyproject.toml").read_text()
         assert "workspace = true" in content, (
@@ -147,9 +139,7 @@ class TestFromAC_CockpitPackageSkeleton:
         client = TestClient(app)
         response = client.get("/health")
         body = response.json()
-        assert isinstance(body, dict), (
-            f"Expected JSON object, got {type(body).__name__}"
-        )
+        assert isinstance(body, dict), f"Expected JSON object, got {type(body).__name__}"
 
     def test_health_endpoint_requires_no_auth(self) -> None:
         """AC#3: /health is reachable without any authentication headers."""
@@ -201,47 +191,25 @@ class TestFromAC_BoundaryEnforcement:
 
     def test_no_forbidden_import_claim_task(self, cockpit_src_root: Path) -> None:
         """AC#5: cockpit src must not import 'claim_task' from owlbear_kanban*."""
-        violations = [
-            (f, n, ln)
-            for f, n, ln in _collect_forbidden_imports(cockpit_src_root)
-            if n == "claim_task"
-        ]
-        assert violations == [], (
-            f"D12 violation — 'claim_task' imported at: {violations}"
-        )
+        violations = [(f, n, ln) for f, n, ln in _collect_forbidden_imports(cockpit_src_root) if n == "claim_task"]
+        assert violations == [], f"D12 violation — 'claim_task' imported at: {violations}"
 
     def test_no_forbidden_import_start_work(self, cockpit_src_root: Path) -> None:
         """AC#5: cockpit src must not import 'start_work' from owlbear_kanban*."""
-        violations = [
-            (f, n, ln)
-            for f, n, ln in _collect_forbidden_imports(cockpit_src_root)
-            if n == "start_work"
-        ]
-        assert violations == [], (
-            f"D12 violation — 'start_work' imported at: {violations}"
-        )
+        violations = [(f, n, ln) for f, n, ln in _collect_forbidden_imports(cockpit_src_root) if n == "start_work"]
+        assert violations == [], f"D12 violation — 'start_work' imported at: {violations}"
 
     def test_no_forbidden_import_end_work(self, cockpit_src_root: Path) -> None:
         """AC#5: cockpit src must not import 'end_work' from owlbear_kanban*."""
-        violations = [
-            (f, n, ln)
-            for f, n, ln in _collect_forbidden_imports(cockpit_src_root)
-            if n == "end_work"
-        ]
+        violations = [(f, n, ln) for f, n, ln in _collect_forbidden_imports(cockpit_src_root) if n == "end_work"]
         assert violations == [], f"D12 violation — 'end_work' imported at: {violations}"
 
-    def test_no_forbidden_import_pick_dispatchable(
-        self, cockpit_src_root: Path
-    ) -> None:
+    def test_no_forbidden_import_pick_dispatchable(self, cockpit_src_root: Path) -> None:
         """AC#5: cockpit src must not import 'pick_dispatchable' from owlbear_kanban*."""
         violations = [
-            (f, n, ln)
-            for f, n, ln in _collect_forbidden_imports(cockpit_src_root)
-            if n == "pick_dispatchable"
+            (f, n, ln) for f, n, ln in _collect_forbidden_imports(cockpit_src_root) if n == "pick_dispatchable"
         ]
-        assert violations == [], (
-            f"D12 violation — 'pick_dispatchable' imported at: {violations}"
-        )
+        assert violations == [], f"D12 violation — 'pick_dispatchable' imported at: {violations}"
 
 
 # ---------------------------------------------------------------------------
@@ -269,9 +237,7 @@ class TestFromAC_RouteExclusionGuardrail:
             "/api/tasks/123/end-work",
         ],
     )
-    def test_excluded_lifecycle_post_routes_not_available(
-        self, client, path: str
-    ) -> None:
+    def test_excluded_lifecycle_post_routes_not_available(self, client, path: str) -> None:
         """POST lifecycle routes must return 404/405 to enforce product boundary."""
         response = client.post(path)
         assert response.status_code in (404, 405), (

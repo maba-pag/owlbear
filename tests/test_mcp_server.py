@@ -175,13 +175,7 @@ class TestFromAC_DurableSuiteRollout:
         kw.get("id") == 77, which is the WRONG kwarg name for the engine call.
         The assertion must be updated to kw.get("task_id") == 77.
         """
-        read_tools_file = (
-            Path(__file__).parent.parent
-            / "serve"
-            / "mcp-kanban"
-            / "tests"
-            / "test_mcp_read_tools.py"
-        )
+        read_tools_file = Path(__file__).parent.parent / "serve" / "mcp-kanban" / "tests" / "test_mcp_read_tools.py"
         content = read_tools_file.read_text(encoding="utf-8")
 
         bad_assertions = re.findall(r'kw\.get\("id"\)\s*==', content)

@@ -121,11 +121,7 @@ def _serialize_scan_item(item: Any) -> dict[str, Any]:  # noqa: ANN401
         path = getattr(item, "path", None)
         file_path = str(path) if path is not None else None
 
-    detail = (
-        getattr(item, "detail", None)
-        or getattr(item, "user_message", None)
-        or str(item)
-    )
+    detail = getattr(item, "detail", None) or getattr(item, "user_message", None) or str(item)
 
     return {
         "code": getattr(item, "code", None),

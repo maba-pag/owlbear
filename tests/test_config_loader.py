@@ -129,22 +129,16 @@ def _make_board(tmp_path: Path, config_yaml: str = _CONFIG_YAML) -> Path:
 class TestFromAC_ConfigLoaderGroupedLoad:
     """Loader-specific grouped-format regression coverage from #1171."""
 
-    def test_load_config_ignores_grouped_vendor_field_at_root(
-        self, tmp_path: Path
-    ) -> None:
+    def test_load_config_ignores_grouped_vendor_field_at_root(self, tmp_path: Path) -> None:
         """load_config ignores vendor keys from YAML in topology-constant mode."""
         kanban_dir = _make_board(tmp_path, _GROUPED_YAML + "vendor_integration: true\n")
 
         config = load_config(kanban_dir)
 
-        vendor_val = (config.model_extra or {}).get("vendor_integration") or getattr(
-            config, "vendor_integration", None
-        )
+        vendor_val = (config.model_extra or {}).get("vendor_integration") or getattr(config, "vendor_integration", None)
         assert vendor_val is None
 
-    def test_load_config_ignores_grouped_tui_section_at_root(
-        self, tmp_path: Path
-    ) -> None:
+    def test_load_config_ignores_grouped_tui_section_at_root(self, tmp_path: Path) -> None:
         """load_config ignores vendor tui sections from YAML in topology-constant mode."""
         kanban_dir = _make_board(tmp_path, _GROUPED_YAML + "tui:\n  theme: dark\n")
 
@@ -153,9 +147,7 @@ class TestFromAC_ConfigLoaderGroupedLoad:
         tui_val = (config.model_extra or {}).get("tui") or getattr(config, "tui", None)
         assert tui_val is None
 
-    def test_grouped_load_exposes_all_sub_models_and_schema(
-        self, tmp_path: Path
-    ) -> None:
+    def test_grouped_load_exposes_all_sub_models_and_schema(self, tmp_path: Path) -> None:
         """Grouped load must hydrate every sub-model and preserve schema metadata."""
         kanban_dir = _make_board(tmp_path, _GROUPED_YAML)
 
@@ -165,14 +157,10 @@ class TestFromAC_ConfigLoaderGroupedLoad:
         assert isinstance(config.pipeline, PipelineConfig)
         assert isinstance(config.agents, AgentsConfig)
         assert isinstance(config.policy, PolicyConfig)
-        schema_val = (config.model_extra or {}).get("schema") or getattr(
-            config, "schema", None
-        )
+        schema_val = (config.model_extra or {}).get("schema") or getattr(config, "schema", None)
         assert schema_val == "grouped"
 
-    def test_explicit_schema_grouped_allows_mixed_style_input(
-        self, tmp_path: Path
-    ) -> None:
+    def test_explicit_schema_grouped_allows_mixed_style_input(self, tmp_path: Path) -> None:
         """schema: grouped must suppress mixed-shape rejection for legacy flat keys."""
         kanban_dir = _make_board(tmp_path, _SCHEMA_GROUPED_MIXED_YAML)
 

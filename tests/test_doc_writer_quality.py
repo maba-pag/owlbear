@@ -29,15 +29,12 @@ class TestFromAC_DocUpdateSkillContent:
         content = SKILL_DOC_UPDATE.read_text()
         items = re.findall(r"### Item \d+:", content)
         assert len(items) == 4, (
-            f"SKILL.md must have exactly 4 checklist items under '### Item N:' headings, "
-            f"found {len(items)}: {items}"
+            f"SKILL.md must have exactly 4 checklist items under '### Item N:' headings, found {len(items)}: {items}"
         )
 
     def test_checklist_has_no_diagram_maintenance_item(self) -> None:
         content = SKILL_DOC_UPDATE.read_text()
-        assert "Diagram Maintenance" not in content, (
-            "SKILL.md must not have a 'Diagram Maintenance' checklist item"
-        )
+        assert "Diagram Maintenance" not in content, "SKILL.md must not have a 'Diagram Maintenance' checklist item"
 
     def test_checklist_has_no_explicit_diagram_creation_item(self) -> None:
         content = SKILL_DOC_UPDATE.read_text()
@@ -47,33 +44,29 @@ class TestFromAC_DocUpdateSkillContent:
 
     def test_verification_procedure_layer1_grep_present(self) -> None:
         content = SKILL_DOC_UPDATE.read_text()
-        assert re.search(
-            r"[Ll]ayer 1|Layer 1 —|grep.*structural|structural.*grep", content
-        ), "SKILL.md must document Layer 1 (grep-based structural) verification"
+        assert re.search(r"[Ll]ayer 1|Layer 1 —|grep.*structural|structural.*grep", content), (
+            "SKILL.md must document Layer 1 (grep-based structural) verification"
+        )
 
     def test_verification_procedure_layer2_editorial_present(self) -> None:
         content = SKILL_DOC_UPDATE.read_text()
-        assert re.search(
-            r"[Ll]ayer 2|Layer 2 —|LLM.*editorial|editorial.*LLM", content
-        ), "SKILL.md must document Layer 2 (LLM editorial) verification"
+        assert re.search(r"[Ll]ayer 2|Layer 2 —|LLM.*editorial|editorial.*LLM", content), (
+            "SKILL.md must document Layer 2 (LLM editorial) verification"
+        )
 
     def test_todo_marker_insertion_rules_present(self) -> None:
         content = SKILL_DOC_UPDATE.read_text()
-        assert "TODO marker" in content, (
-            "SKILL.md must contain TODO marker insertion rules"
-        )
+        assert "TODO marker" in content, "SKILL.md must contain TODO marker insertion rules"
 
     def test_todo_marker_blockquote_format_documented(self) -> None:
         content = SKILL_DOC_UPDATE.read_text()
-        assert "> **TODO:**" in content, (
-            "SKILL.md must document the TODO marker visible blockquote format: > **TODO:**"
-        )
+        assert "> **TODO:**" in content, "SKILL.md must document the TODO marker visible blockquote format: > **TODO:**"
 
     def test_gate_rule_task_caused_content_blocks(self) -> None:
         content = SKILL_DOC_UPDATE.read_text()
-        assert re.search(
-            r"task.caused|task.introduced|task.content", content, re.IGNORECASE
-        ), "SKILL.md must document that task-caused unverified content blocks the gate"
+        assert re.search(r"task.caused|task.introduced|task.content", content, re.IGNORECASE), (
+            "SKILL.md must document that task-caused unverified content blocks the gate"
+        )
 
     def test_gate_rule_preexisting_content_passes(self) -> None:
         content = SKILL_DOC_UPDATE.read_text()
@@ -87,19 +80,14 @@ class TestFromAC_DocWriterAgentNoDiagrams:
 
     def test_no_diagram_references_anywhere(self) -> None:
         content = DOC_WRITER_AGENT.read_text()
-        diagram_lines = [
-            line for line in content.splitlines() if "diagram" in line.lower()
-        ]
+        diagram_lines = [line for line in content.splitlines() if "diagram" in line.lower()]
         assert len(diagram_lines) == 0, (
-            f"doc-writer.agent.md must have zero 'diagram' references, "
-            f"found {len(diagram_lines)}: {diagram_lines[:3]}"
+            f"doc-writer.agent.md must have zero 'diagram' references, found {len(diagram_lines)}: {diagram_lines[:3]}"
         )
 
     def test_no_excalidraw_file_references(self) -> None:
         content = DOC_WRITER_AGENT.read_text()
-        assert ".excalidraw" not in content, (
-            "doc-writer.agent.md must not reference .excalidraw files"
-        )
+        assert ".excalidraw" not in content, "doc-writer.agent.md must not reference .excalidraw files"
 
     def test_no_excalidraw_brand_references(self) -> None:
         content = DOC_WRITER_AGENT.read_text()
@@ -124,9 +112,7 @@ class TestFromAC_DocAuditPromptContent:
         assert re.search(
             r"[Dd]iagram.*owner|[Dd]iagram.*responsib|[Dd]iagram.*full.*responsib",
             content,
-        ), (
-            "doc-audit.prompt.md must include a diagram ownership / full responsibility section"
-        )
+        ), "doc-audit.prompt.md must include a diagram ownership / full responsibility section"
 
     def test_describes_based_diagram_verification_present(self) -> None:
         content = DOC_AUDIT_PROMPT.read_text()
@@ -146,15 +132,13 @@ class TestFromAC_NoOldDiagramItems:
     def test_no_item_5_section_heading(self) -> None:
         content = SKILL_DOC_UPDATE.read_text()
         assert "### Item 5" not in content, (
-            "w-doc-update/SKILL.md must not contain '### Item 5' "
-            "(removed: old Diagram Maintenance item)"
+            "w-doc-update/SKILL.md must not contain '### Item 5' (removed: old Diagram Maintenance item)"
         )
 
     def test_no_item_6_section_heading(self) -> None:
         content = SKILL_DOC_UPDATE.read_text()
         assert "### Item 6" not in content, (
-            "w-doc-update/SKILL.md must not contain '### Item 6' "
-            "(removed: old Explicit Diagram Creation item)"
+            "w-doc-update/SKILL.md must not contain '### Item 6' (removed: old Explicit Diagram Creation item)"
         )
 
     def test_output_template_no_diagram_row_5(self) -> None:
@@ -189,16 +173,12 @@ class TestFromAC_TodoMarkerFormat:
 
     def test_todo_marker_format_verbatim_in_skill(self) -> None:
         content = SKILL_DOC_UPDATE.read_text()
-        assert "> **TODO:**" in content, (
-            "w-doc-update/SKILL.md must document the exact TODO marker format: > **TODO:**"
-        )
+        assert "> **TODO:**" in content, "w-doc-update/SKILL.md must document the exact TODO marker format: > **TODO:**"
 
     def test_four_todo_categories_documented(self) -> None:
         content = SKILL_DOC_UPDATE.read_text()
         for category in ("stale", "inaccurate", "missing", "unverified"):
-            assert category in content, (
-                f"w-doc-update/SKILL.md must document the '{category}' TODO marker category"
-            )
+            assert category in content, f"w-doc-update/SKILL.md must document the '{category}' TODO marker category"
 
     def test_todo_marker_includes_task_ref_placeholder(self) -> None:
         content = SKILL_DOC_UPDATE.read_text()
@@ -211,9 +191,7 @@ class TestFromAC_TodoMarkerFormat:
         content = SKILL_DOC_UPDATE.read_text()
         # The skill must show that the format is greppable (> **TODO:** prefix is consistent)
         # A concrete example like "> **TODO:** stale — ..." must appear
-        assert re.search(
-            r"> \*\*TODO:\*\* (stale|inaccurate|missing|unverified)", content
-        ), (
+        assert re.search(r"> \*\*TODO:\*\* (stale|inaccurate|missing|unverified)", content), (
             "w-doc-update/SKILL.md must include a concrete TODO marker example with a category"
         )
 
@@ -231,8 +209,7 @@ class TestFromAC_ChecklistItemNames:
     def test_item1_name_is_readme_verification(self) -> None:
         content = SKILL_DOC_UPDATE.read_text()
         assert "### Item 1: README Verification" in content, (
-            "SKILL.md Item 1 must be named 'README Verification' per refined AC1 "
-            "(brief §checklist)"
+            "SKILL.md Item 1 must be named 'README Verification' per refined AC1 (brief §checklist)"
         )
 
     def test_item2_name_is_external_attribution(self) -> None:
@@ -243,9 +220,7 @@ class TestFromAC_ChecklistItemNames:
 
     def test_item3_name_is_research_doc(self) -> None:
         content = SKILL_DOC_UPDATE.read_text()
-        assert "### Item 3: Research Doc" in content, (
-            "SKILL.md Item 3 must be named 'Research Doc' per refined AC1"
-        )
+        assert "### Item 3: Research Doc" in content, "SKILL.md Item 3 must be named 'Research Doc' per refined AC1"
 
     def test_item4_name_is_deletion_detection(self) -> None:
         content = SKILL_DOC_UPDATE.read_text()
@@ -258,8 +233,7 @@ class TestFromAC_ChecklistItemNames:
         item_headings = re.findall(r"### Item \d+:.*", content)
         docstring_items = [h for h in item_headings if re.search(r"[Dd]ocstring", h)]
         assert len(docstring_items) == 0, (
-            f"SKILL.md must not have a docstring checklist item (out of scope per brief); "
-            f"found: {docstring_items}"
+            f"SKILL.md must not have a docstring checklist item (out of scope per brief); found: {docstring_items}"
         )
 
     def test_no_diagram_in_any_checklist_heading(self) -> None:
@@ -287,8 +261,7 @@ class TestFromAC_ChecklistItemNames:
         assert match, "Could not find Item 1 section in SKILL.md"
         item1 = match.group(0)
         assert re.search(r"[Ll]ayer 1", item1), (
-            "Item 1 (README Verification) must include Layer 1 grep structural check "
-            "for removed symbols"
+            "Item 1 (README Verification) must include Layer 1 grep structural check for removed symbols"
         )
 
     def test_item1_has_layer2_editorial(self) -> None:
@@ -356,9 +329,7 @@ class TestFromAC_ConventionMappingTable:
 
     def test_convention_mapping_is_table(self) -> None:
         step1 = self._step1_section()
-        table_rows = [
-            line for line in step1.splitlines() if line.strip().startswith("|")
-        ]
+        table_rows = [line for line in step1.splitlines() if line.strip().startswith("|")]
         assert len(table_rows) >= 2, (
             f"Convention mapping must use a markdown table (at least 2 pipe-delimited rows), "
             f"found {len(table_rows)} table rows — not just bullets"
@@ -381,12 +352,10 @@ class TestFromAC_ConventionMappingTable:
     def test_convention_mapping_has_pyproject_tests_row(self) -> None:
         step1 = self._step1_section()
         assert "pyproject.toml" in step1, (
-            "Convention mapping table must include 'pyproject.toml' "
-            "(maps to serve/{pkg}/README.md per brief row 2)"
+            "Convention mapping table must include 'pyproject.toml' (maps to serve/{pkg}/README.md per brief row 2)"
         )
         assert "tests/**" in step1, (
-            "Convention mapping table must include 'tests/**' "
-            "(maps to serve/{pkg}/README.md per brief row 2)"
+            "Convention mapping table must include 'tests/**' (maps to serve/{pkg}/README.md per brief row 2)"
         )
 
     def test_convention_mapping_has_public_interface_row(self) -> None:
@@ -409,10 +378,7 @@ class TestFromAC_ConventionMappingTable:
         gate_match = re.search(r"Gate rules:.*?(?=## )", content, re.DOTALL)
         assert gate_match, "SKILL.md must have a 'Gate rules:' section"
         gate_lines = gate_match.group(0).splitlines()
-        assert any(
-            "task-caused" in line and "unverified" in line and "blocks" in line
-            for line in gate_lines
-        ), (
+        assert any("task-caused" in line and "unverified" in line and "blocks" in line for line in gate_lines), (
             "SKILL.md Gate rules section must have a single line binding "
             "'task-caused' + 'unverified' + 'blocks' — section-scoped to prevent "
             "false-green via checklist duplicate lines (R6 gap)"
@@ -423,10 +389,7 @@ class TestFromAC_ConventionMappingTable:
         gate_match = re.search(r"Gate rules:.*?(?=## )", content, re.DOTALL)
         assert gate_match, "SKILL.md must have a 'Gate rules:' section"
         gate_lines = gate_match.group(0).splitlines()
-        assert any(
-            "pre-existing" in line and "unverified" in line and "passes" in line
-            for line in gate_lines
-        ), (
+        assert any("pre-existing" in line and "unverified" in line and "passes" in line for line in gate_lines), (
             "SKILL.md Gate rules section must have a single line binding "
             "'pre-existing' + 'unverified' + 'passes' — section-scoped to prevent "
             "false-green via checklist duplicate lines (R6 gap)"
@@ -439,23 +402,16 @@ class TestFromAC_ConventionMappingTable:
             "proves the trigger condition (changed files map to no READMEs), "
             "not just the output phrase (R6 gap)"
         )
-        assert "no docs impact" in step1, (
-            "Step 1 must include the no-impact fast path phrase 'no docs impact'"
-        )
+        assert "no docs impact" in step1, "Step 1 must include the no-impact fast path phrase 'no docs impact'"
         assert "with evidence" in step1, (
             "Step 1 no-impact fast path must require 'with evidence' — "
             "AC1 refined specifies output is 'no docs impact with evidence', not bare phrase"
         )
-        assert "advance" in step1, (
-            "Step 1 no-impact fast path must say to 'advance' after writing 'no docs impact'"
-        )
+        assert "advance" in step1, "Step 1 no-impact fast path must say to 'advance' after writing 'no docs impact'"
 
     def test_convention_mapping_exact_src_row_coupled(self) -> None:
         step1 = self._step1_section()
-        assert any(
-            "serve/{pkg}/src/**" in line and "serve/{pkg}/README.md" in line
-            for line in step1.splitlines()
-        ), (
+        assert any("serve/{pkg}/src/**" in line and "serve/{pkg}/README.md" in line for line in step1.splitlines()), (
             "Convention mapping table must have a single row coupling "
             "'serve/{pkg}/src/**' to 'serve/{pkg}/README.md' — "
             "split checks on each token independently false-green when the src row "
@@ -502,9 +458,7 @@ class TestFromAC_AttributionRules:
 
     def test_item1_has_both_attribution_rules(self) -> None:
         item1 = self._item1_section()
-        has_task_caused_inline = bool(
-            re.search(r"[Ff]ix\s+task.caused\s+issues\s+inline", item1)
-        )
+        has_task_caused_inline = bool(re.search(r"[Ff]ix\s+task.caused\s+issues\s+inline", item1))
         has_preexisting_todo = bool(
             re.search(
                 r"pre.existing.*insert.*TODO\s+marker",

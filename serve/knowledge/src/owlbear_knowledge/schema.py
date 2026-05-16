@@ -184,9 +184,7 @@ def _migrate_v3_to_v4(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE document_status ADD COLUMN content_hash TEXT")
     with contextlib.suppress(sqlite3.OperationalError):
         conn.execute("ALTER TABLE entities ADD COLUMN document_id TEXT")
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_document_status_source ON document_status(source)"
-    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_document_status_source ON document_status(source)")
     conn.execute(
         "UPDATE schema_version SET version = ?, applied_at = ?",
         (4, datetime.now(tz=UTC).isoformat()),
@@ -206,12 +204,8 @@ def _migrate_v4_to_v5(conn: sqlite3.Connection) -> None:
 def _migrate_v5_to_v6(conn: sqlite3.Connection) -> None:
     """Migrate a v5 database to v6 — adds knowledge_sources table."""
     conn.execute(_CREATE_KNOWLEDGE_SOURCES)
-    conn.execute(
-        "CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_sources_name_scope ON knowledge_sources(name, scope)"
-    )
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_knowledge_sources_scope ON knowledge_sources(scope)"
-    )
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_sources_name_scope ON knowledge_sources(name, scope)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_knowledge_sources_scope ON knowledge_sources(scope)")
     conn.execute(
         "UPDATE schema_version SET version = ?, applied_at = ?",
         (6, datetime.now(tz=UTC).isoformat()),
@@ -238,9 +232,7 @@ CREATE TABLE IF NOT EXISTS bookmarks (
 )
 """
     )
-    conn.execute(
-        "CREATE UNIQUE INDEX IF NOT EXISTS idx_bookmarks_url_scope ON bookmarks(url, scope)"
-    )
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_bookmarks_url_scope ON bookmarks(url, scope)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_bookmarks_scope ON bookmarks(scope)")
     conn.execute(
         "UPDATE schema_version SET version = ?, applied_at = ?",
@@ -275,9 +267,7 @@ CREATE TABLE IF NOT EXISTS consolidations (
 def _migrate_v8_to_v9(conn: sqlite3.Connection) -> None:
     """Migrate a v8 database to v9 — adds source_pages table and source_id FK on documents."""
     conn.execute(_CREATE_SOURCE_PAGES)
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_source_pages_source_id ON source_pages(source_id)"
-    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_source_pages_source_id ON source_pages(source_id)")
     with contextlib.suppress(sqlite3.OperationalError):
         conn.execute("ALTER TABLE documents ADD COLUMN source_id TEXT")
     conn.execute(
@@ -289,13 +279,9 @@ def _migrate_v8_to_v9(conn: sqlite3.Connection) -> None:
 def _migrate_v9_to_v10(conn: sqlite3.Connection) -> None:
     """Migrate a v9 database to v10 — adds source fetch_method and enrich columns."""
     with contextlib.suppress(sqlite3.OperationalError):
-        conn.execute(
-            "ALTER TABLE knowledge_sources ADD COLUMN fetch_method TEXT NOT NULL DEFAULT ''"
-        )
+        conn.execute("ALTER TABLE knowledge_sources ADD COLUMN fetch_method TEXT NOT NULL DEFAULT ''")
     with contextlib.suppress(sqlite3.OperationalError):
-        conn.execute(
-            "ALTER TABLE knowledge_sources ADD COLUMN enrich INTEGER NOT NULL DEFAULT 0"
-        )
+        conn.execute("ALTER TABLE knowledge_sources ADD COLUMN enrich INTEGER NOT NULL DEFAULT 0")
     conn.execute(
         "UPDATE schema_version SET version = ?, applied_at = ?",
         (10, datetime.now(tz=UTC).isoformat()),
@@ -305,9 +291,7 @@ def _migrate_v9_to_v10(conn: sqlite3.Connection) -> None:
 def _migrate_v10_to_v11(conn: sqlite3.Connection) -> None:
     """Migrate a v10 database to v11 — adds enrichment schema and edge uniqueness."""
     with contextlib.suppress(sqlite3.OperationalError):
-        conn.execute(
-            "ALTER TABLE chunks ADD COLUMN enrichment_state TEXT DEFAULT 'pending'"
-        )
+        conn.execute("ALTER TABLE chunks ADD COLUMN enrichment_state TEXT DEFAULT 'pending'")
     with contextlib.suppress(sqlite3.OperationalError):
         conn.execute("ALTER TABLE chunks ADD COLUMN claimed_at TEXT")
     with contextlib.suppress(sqlite3.OperationalError):
@@ -315,8 +299,7 @@ def _migrate_v10_to_v11(conn: sqlite3.Connection) -> None:
 
     conn.execute(_CREATE_REVIEWED_PAIRS)
     conn.execute(
-        "CREATE UNIQUE INDEX IF NOT EXISTS idx_edges_d17_unique "
-        "ON edges(source_id, target_id, relation, document_id)"
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_edges_d17_unique ON edges(source_id, target_id, relation, document_id)"
     )
     conn.execute(
         "UPDATE schema_version SET version = ?, applied_at = ?",
@@ -386,19 +369,11 @@ def init_db(conn: sqlite3.Connection) -> None:
     conn.execute(_CREATE_SCHEMA_VERSION)
 
     with contextlib.suppress(sqlite3.OperationalError):
-        conn.execute(
-            "ALTER TABLE reviewed_pairs ADD COLUMN entity_id_a TEXT NOT NULL DEFAULT ''"
-        )
+        conn.execute("ALTER TABLE reviewed_pairs ADD COLUMN entity_id_a TEXT NOT NULL DEFAULT ''")
     with contextlib.suppress(sqlite3.OperationalError):
-        conn.execute(
-            "ALTER TABLE reviewed_pairs ADD COLUMN entity_id_b TEXT NOT NULL DEFAULT ''"
-        )
+        conn.execute("ALTER TABLE reviewed_pairs ADD COLUMN entity_id_b TEXT NOT NULL DEFAULT ''")
 
-    reviewed_pairs_pk = [
-        row[1]
-        for row in conn.execute("PRAGMA table_info(reviewed_pairs)").fetchall()
-        if row[5] > 0
-    ]
+    reviewed_pairs_pk = [row[1] for row in conn.execute("PRAGMA table_info(reviewed_pairs)").fetchall() if row[5] > 0]
     desired_reviewed_pairs_pk = [
         "entity_name",
         "source_a",
@@ -449,18 +424,11 @@ def init_db(conn: sqlite3.Connection) -> None:
     for table in _SCOPE_TABLES:
         conn.execute(f"CREATE INDEX IF NOT EXISTS idx_{table}_scope ON {table}(scope)")
 
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_source_pages_source_id ON source_pages(source_id)")
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_sources_name_scope ON knowledge_sources(name, scope)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_knowledge_sources_scope ON knowledge_sources(scope)")
     conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_source_pages_source_id ON source_pages(source_id)"
-    )
-    conn.execute(
-        "CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_sources_name_scope ON knowledge_sources(name, scope)"
-    )
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_knowledge_sources_scope ON knowledge_sources(scope)"
-    )
-    conn.execute(
-        "CREATE UNIQUE INDEX IF NOT EXISTS idx_edges_d17_unique "
-        "ON edges(source_id, target_id, relation, document_id)"
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_edges_d17_unique ON edges(source_id, target_id, relation, document_id)"
     )
 
     conn.commit()

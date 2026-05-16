@@ -121,9 +121,7 @@ class TestFromAC_MoveTask:
     invalid target (422), same-status boundary (422), non-existent task (404).
     """
 
-    def test_move_happy_path_returns_200(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_move_happy_path_returns_200(self, client: TestClient, engine: KanbanEngine) -> None:
         """Happy path: move task 1 from 'todo' to 'in-progress' returns 200."""
         task = engine.show_task("1")
         response = client.post(
@@ -132,9 +130,7 @@ class TestFromAC_MoveTask:
         )
         assert response.status_code == 200
 
-    def test_move_returns_updated_task_object(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_move_returns_updated_task_object(self, client: TestClient, engine: KanbanEngine) -> None:
         """Response body is a task object with the new status applied."""
         task = engine.show_task("1")
         response = client.post(
@@ -148,9 +144,7 @@ class TestFromAC_MoveTask:
         assert "title" in body
         assert "priority" in body
 
-    def test_move_invalid_target_status_returns_422(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_move_invalid_target_status_returns_422(self, client: TestClient, engine: KanbanEngine) -> None:
         """Unknown status string not in valid_transitions → 422."""
         task = engine.show_task("1")
         response = client.post(
@@ -159,9 +153,7 @@ class TestFromAC_MoveTask:
         )
         assert response.status_code == 422
 
-    def test_move_same_status_returns_422(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_move_same_status_returns_422(self, client: TestClient, engine: KanbanEngine) -> None:
         """Moving to current status is excluded from valid_transitions → 422."""
         task = engine.show_task("1")
         response = client.post(
@@ -170,9 +162,7 @@ class TestFromAC_MoveTask:
         )
         assert response.status_code == 422
 
-    def test_move_nonexistent_task_returns_404(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_move_nonexistent_task_returns_404(self, client: TestClient, engine: KanbanEngine) -> None:
         """Non-existent task ID returns 404 with ID in detail."""
         task = engine.show_task("1")
         response = client.post(
@@ -190,9 +180,7 @@ class TestFromAC_MoveTask:
         response = client.post("/api/tasks/1/move", json={"status": "in-progress"})
         assert response.status_code == 422
 
-    def test_move_stale_updated_returns_409(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_move_stale_updated_returns_409(self, client: TestClient, engine: KanbanEngine) -> None:
         """Stale OCC token in move request returns 409."""
         task = engine.show_task("1")
         stale_updated = task.updated
@@ -237,9 +225,7 @@ class TestFromAC_EditTask:
     'updated' snapshot, block/unblock mutations, and 404 for unknown tasks.
     """
 
-    def test_edit_title_returns_200_with_new_title(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_edit_title_returns_200_with_new_title(self, client: TestClient, engine: KanbanEngine) -> None:
         """Edit allowlisted field 'title' returns 200 with updated title."""
         task = engine.show_task("1")
         response = client.post(
@@ -249,9 +235,7 @@ class TestFromAC_EditTask:
         assert response.status_code == 200
         assert response.json()["title"] == "Renamed task"
 
-    def test_edit_tags_replaces_full_tag_list(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_edit_tags_replaces_full_tag_list(self, client: TestClient, engine: KanbanEngine) -> None:
         """Edit 'tags' replaces the full tag list (full-replacement semantics)."""
         task = engine.show_task("1")
         response = client.post(
@@ -261,9 +245,7 @@ class TestFromAC_EditTask:
         assert response.status_code == 200
         assert set(response.json()["tags"]) == {"new-tag", "another"}
 
-    def test_edit_priority_returns_200(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_edit_priority_returns_200(self, client: TestClient, engine: KanbanEngine) -> None:
         """Edit allowlisted field 'priority' returns 200 with updated priority."""
         task = engine.show_task("1")
         response = client.post(
@@ -273,9 +255,7 @@ class TestFromAC_EditTask:
         assert response.status_code == 200
         assert response.json()["priority"] == "critical"
 
-    def test_edit_depends_on_returns_200(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_edit_depends_on_returns_200(self, client: TestClient, engine: KanbanEngine) -> None:
         """Edit allowlisted field 'depends_on' (full replacement list) returns 200."""
         task = engine.show_task("1")
         response = client.post(
@@ -285,9 +265,7 @@ class TestFromAC_EditTask:
         assert response.status_code == 200
         assert set(response.json()["depends_on"]) == {2, 3}
 
-    def test_edit_parent_returns_200(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_edit_parent_returns_200(self, client: TestClient, engine: KanbanEngine) -> None:
         """Edit allowlisted field 'parent' returns 200 with updated parent."""
         task = engine.show_task("1")
         response = client.post(
@@ -297,9 +275,7 @@ class TestFromAC_EditTask:
         assert response.status_code == 200
         assert response.json()["parent"] == 3
 
-    def test_edit_body_returns_200(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_edit_body_returns_200(self, client: TestClient, engine: KanbanEngine) -> None:
         """Edit allowlisted field 'body' returns 200 with updated body."""
         task = engine.show_task("1")
         new_body = "## New body\n\nSome markdown content."
@@ -310,9 +286,7 @@ class TestFromAC_EditTask:
         assert response.status_code == 200
         assert response.json()["body"] == new_body
 
-    def test_edit_status_field_rejected_422(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_edit_status_field_rejected_422(self, client: TestClient, engine: KanbanEngine) -> None:
         """Non-allowlisted field 'status' (highest-value bypass target) → 422."""
         task = engine.show_task("1")
         response = client.post(
@@ -321,9 +295,7 @@ class TestFromAC_EditTask:
         )
         assert response.status_code == 422
 
-    def test_edit_blocked_field_directly_rejected_422(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_edit_blocked_field_directly_rejected_422(self, client: TestClient, engine: KanbanEngine) -> None:
         """Non-allowlisted field 'blocked' directly → 422; use block_reason instead."""
         task = engine.show_task("1")
         response = client.post(
@@ -337,9 +309,7 @@ class TestFromAC_EditTask:
         response = client.post("/api/tasks/1/edit", json={"title": "No timestamp"})
         assert response.status_code == 422
 
-    def test_edit_stale_updated_returns_409(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_edit_stale_updated_returns_409(self, client: TestClient, engine: KanbanEngine) -> None:
         """D9: stale 'updated' snapshot (task mutated since load) → 409 Conflict."""
         task = engine.show_task("1")
         stale_timestamp = task.updated
@@ -352,9 +322,7 @@ class TestFromAC_EditTask:
         )
         assert response.status_code == 409
 
-    def test_edit_block_reason_sets_blocked_state(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_edit_block_reason_sets_blocked_state(self, client: TestClient, engine: KanbanEngine) -> None:
         """Edit with block_reason sets blocked=True implicitly."""
         task = engine.show_task("1")
         response = client.post(
@@ -366,9 +334,7 @@ class TestFromAC_EditTask:
         assert body["blocked"] is True
         assert body["block_reason"] == "waiting on dependency"
 
-    def test_edit_null_block_reason_clears_blocked_state(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_edit_null_block_reason_clears_blocked_state(self, client: TestClient, engine: KanbanEngine) -> None:
         """Unblock: edit with block_reason=null clears blocked=False and block_reason=None."""
         # Setup: block task 1 via engine directly
         engine.edit_task("1", blocked=True, block_reason="originally blocked")
@@ -428,17 +394,13 @@ class TestFromAC_ReleaseTask:
     (409 Conflict per AC refinement), and non-existent task (404).
     """
 
-    def test_release_claimed_task_returns_200(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_release_claimed_task_returns_200(self, client: TestClient, engine: KanbanEngine) -> None:
         """Happy path: release pre-claimed task 2 returns 200."""
         task = engine.show_task("2")
         response = client.post("/api/tasks/2/release", json={"updated": task.updated})
         assert response.status_code == 200
 
-    def test_release_returns_task_object_shape(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_release_returns_task_object_shape(self, client: TestClient, engine: KanbanEngine) -> None:
         """Release response body matches the task-detail shape (same as GET /tasks/{id})."""
         task = engine.show_task("2")
         response = client.post("/api/tasks/2/release", json={"updated": task.updated})
@@ -450,17 +412,13 @@ class TestFromAC_ReleaseTask:
         assert "priority" in body
         assert "updated" in body
 
-    def test_release_unclaimed_task_returns_409(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_release_unclaimed_task_returns_409(self, client: TestClient, engine: KanbanEngine) -> None:
         """Releasing an unclaimed task is a state conflict → 409 (AC refinement #1)."""
         task = engine.show_task("1")
         response = client.post("/api/tasks/1/release", json={"updated": task.updated})
         assert response.status_code == 409
 
-    def test_release_nonexistent_task_returns_404(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_release_nonexistent_task_returns_404(self, client: TestClient, engine: KanbanEngine) -> None:
         """Non-existent task ID returns 404 with ID in detail."""
         token = engine.show_task("1").updated
         response = client.post("/api/tasks/999/release", json={"updated": token})
@@ -516,15 +474,9 @@ class TestFromAC_AuditLogging:
         )
         activity_file = board_dir / "activity.jsonl"
         assert activity_file.exists(), "activity.jsonl must be created by move mutation"
-        entries = [
-            json.loads(line)
-            for line in activity_file.read_text().splitlines()
-            if line.strip()
-        ]
+        entries = [json.loads(line) for line in activity_file.read_text().splitlines() if line.strip()]
         cockpit_entries = [e for e in entries if e.get("source") == "cockpit"]
-        assert len(cockpit_entries) >= 1, (
-            "At least one activity entry must have source='cockpit'"
-        )
+        assert len(cockpit_entries) >= 1, "At least one activity entry must have source='cockpit'"
 
     def test_edit_writes_activity_log_source_cockpit(
         self, client: TestClient, engine: KanbanEngine, board_dir: Path
@@ -537,15 +489,9 @@ class TestFromAC_AuditLogging:
         )
         activity_file = board_dir / "activity.jsonl"
         assert activity_file.exists(), "activity.jsonl must be created by edit mutation"
-        entries = [
-            json.loads(line)
-            for line in activity_file.read_text().splitlines()
-            if line.strip()
-        ]
+        entries = [json.loads(line) for line in activity_file.read_text().splitlines() if line.strip()]
         cockpit_entries = [e for e in entries if e.get("source") == "cockpit"]
-        assert len(cockpit_entries) >= 1, (
-            "At least one activity entry must have source='cockpit'"
-        )
+        assert len(cockpit_entries) >= 1, "At least one activity entry must have source='cockpit'"
 
     def test_edit_noop_only_updated_writes_activity_log_source_cockpit(
         self, client: TestClient, engine: KanbanEngine, board_dir: Path
@@ -568,14 +514,8 @@ class TestFromAC_AuditLogging:
         # If 200 is returned, an activity log entry with source='cockpit' MUST exist.
         if response.status_code == 200:
             activity_file = board_dir / "activity.jsonl"
-            assert activity_file.exists(), (
-                "activity.jsonl must exist after a 200 edit response (AC6)"
-            )
-            entries = [
-                json.loads(line)
-                for line in activity_file.read_text().splitlines()
-                if line.strip()
-            ]
+            assert activity_file.exists(), "activity.jsonl must exist after a 200 edit response (AC6)"
+            entries = [json.loads(line) for line in activity_file.read_text().splitlines() if line.strip()]
             cockpit_entries = [e for e in entries if e.get("source") == "cockpit"]
             assert len(cockpit_entries) >= 1, (
                 "POST /edit with only 'updated' returned 200 but wrote no activity log "
@@ -594,18 +534,10 @@ class TestFromAC_AuditLogging:
         task = engine.show_task("2")
         client.post("/api/tasks/2/release", json={"updated": task.updated})
         activity_file = board_dir / "activity.jsonl"
-        assert activity_file.exists(), (
-            "activity.jsonl must be created by release mutation"
-        )
-        entries = [
-            json.loads(line)
-            for line in activity_file.read_text().splitlines()
-            if line.strip()
-        ]
+        assert activity_file.exists(), "activity.jsonl must be created by release mutation"
+        entries = [json.loads(line) for line in activity_file.read_text().splitlines() if line.strip()]
         cockpit_entries = [e for e in entries if e.get("source") == "cockpit"]
-        assert len(cockpit_entries) >= 1, (
-            "At least one activity entry must have source='cockpit'"
-        )
+        assert len(cockpit_entries) >= 1, "At least one activity entry must have source='cockpit'"
 
 
 # ---------------------------------------------------------------------------
@@ -616,9 +548,7 @@ class TestFromAC_AuditLogging:
 class TestBuilderDiscovered:
     """Builder-discovered tests: invalid priority → 422, and audit log content assertions."""
 
-    def test_edit_invalid_priority_returns_422(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_edit_invalid_priority_returns_422(self, client: TestClient, engine: KanbanEngine) -> None:
         """Invalid priority string causes engine.edit_task to raise ValueError → must be 422."""
         task = engine.show_task("1")
         response = client.post(
@@ -636,11 +566,7 @@ class TestBuilderDiscovered:
             "/api/tasks/1/move",
             json={"status": "in-progress", "updated": task.updated},
         )
-        entries = [
-            json.loads(line)
-            for line in (board_dir / "activity.jsonl").read_text().splitlines()
-            if line.strip()
-        ]
+        entries = [json.loads(line) for line in (board_dir / "activity.jsonl").read_text().splitlines() if line.strip()]
         cockpit_entries = [e for e in entries if e.get("source") == "cockpit"]
         assert cockpit_entries[0]["action"] == "move"
         assert cockpit_entries[0]["task_id"] == 1
@@ -654,11 +580,7 @@ class TestBuilderDiscovered:
             "/api/tasks/1/edit",
             json={"updated": task.updated, "title": "Audit action test"},
         )
-        entries = [
-            json.loads(line)
-            for line in (board_dir / "activity.jsonl").read_text().splitlines()
-            if line.strip()
-        ]
+        entries = [json.loads(line) for line in (board_dir / "activity.jsonl").read_text().splitlines() if line.strip()]
         cockpit_entries = [e for e in entries if e.get("source") == "cockpit"]
         assert cockpit_entries[0]["action"] == "edit"
         assert cockpit_entries[0]["task_id"] == 1
@@ -669,11 +591,7 @@ class TestBuilderDiscovered:
         """Release audit log entry has action='release' and task_id matching the mutated task."""
         task = engine.show_task("2")
         client.post("/api/tasks/2/release", json={"updated": task.updated})
-        entries = [
-            json.loads(line)
-            for line in (board_dir / "activity.jsonl").read_text().splitlines()
-            if line.strip()
-        ]
+        entries = [json.loads(line) for line in (board_dir / "activity.jsonl").read_text().splitlines() if line.strip()]
         cockpit_entries = [e for e in entries if e.get("source") == "cockpit"]
         assert cockpit_entries[0]["action"] == "release"
         assert cockpit_entries[0]["task_id"] == 2
@@ -697,9 +615,7 @@ class TestFromAC_BlockUserTag:
     AC1-3 fail because the route does not inject/remove 'block:user' yet.
     """
 
-    def test_block_adds_block_user_tag(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_block_adds_block_user_tag(self, client: TestClient, engine: KanbanEngine) -> None:
         """AC1: Blocking via cockpit edit_task injects 'block:user' into the task's tags."""
         task = engine.show_task("1")
         response = client.post(
@@ -710,14 +626,10 @@ class TestFromAC_BlockUserTag:
         assert "block:user" in response.json()["tags"]
         assert response.json()["blocked"] is True
 
-    def test_unblock_removes_block_user_tag(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_unblock_removes_block_user_tag(self, client: TestClient, engine: KanbanEngine) -> None:
         """AC2: Unblocking via cockpit edit_task removes 'block:user' from task tags."""
         # Setup: block with block:user tag present (simulates a prior cockpit block)
-        engine.edit_task(
-            "1", blocked=True, block_reason="dependency", add_tags=["block:user"]
-        )
+        engine.edit_task("1", blocked=True, block_reason="dependency", add_tags=["block:user"])
         task = engine.show_task("1")
         assert "block:user" in (task.tags or [])  # confirm setup
 
@@ -729,9 +641,7 @@ class TestFromAC_BlockUserTag:
         assert "block:user" not in response.json()["tags"]
         assert response.json()["blocked"] is False
 
-    def test_block_user_tag_is_idempotent(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_block_user_tag_is_idempotent(self, client: TestClient, engine: KanbanEngine) -> None:
         """AC3: Blocking a second time doesn't create duplicate 'block:user' tags."""
         # First block
         task = engine.show_task("1")
@@ -753,9 +663,7 @@ class TestFromAC_BlockUserTag:
             f"Expected exactly 1 'block:user' tag, got {tags.count('block:user')}: {tags}"
         )
 
-    def test_unblock_without_tag_present_returns_200(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_unblock_without_tag_present_returns_200(self, client: TestClient, engine: KanbanEngine) -> None:
         """AC4: Unblocking a task that has no 'block:user' tag doesn't error (returns 200)."""
         # Setup: block via engine directly WITHOUT adding block:user tag
         engine.edit_task("1", blocked=True, block_reason="set by engine, no tag added")
@@ -784,9 +692,7 @@ class TestFromAC_BlockUserTagConflict:
     RED phase — all tests fail until _apply_block_kwargs strips conflicting entries.
     """
 
-    def test_block_conflict_preserves_block_user_tag(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_block_conflict_preserves_block_user_tag(self, client: TestClient, engine: KanbanEngine) -> None:
         """AC1 conflict: Blocking while tag-diff would remove block:user → block:user preserved.
 
         Setup: task already has 'block:user'. User sends tags=[] (omitting block:user)
@@ -817,9 +723,7 @@ class TestFromAC_BlockUserTagConflict:
             f"Expected scope:test sibling tag preserved, got {response.json()['tags']!r}"
         )
 
-    def test_unblock_conflict_removes_block_user_tag(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_unblock_conflict_removes_block_user_tag(self, client: TestClient, engine: KanbanEngine) -> None:
         """AC2 conflict: Unblocking while tag-diff would add block:user → block:user removed.
 
         Setup: task lacks 'block:user'. User sends tags=["block:user"] + block_reason=null.
@@ -845,9 +749,7 @@ class TestFromAC_BlockUserTagConflict:
             f"Expected block:user not added during unblock+tag-diff, got {response.json()['tags']!r}"
         )
 
-    def test_block_with_new_tags_adds_both(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_block_with_new_tags_adds_both(self, client: TestClient, engine: KanbanEngine) -> None:
         """AC3 happy path: Blocking with new tags adds both block:user and the new tag."""
         task = engine.show_task("1")
         assert "block:user" not in (task.tags or [])  # confirm no prior block:user
@@ -862,12 +764,8 @@ class TestFromAC_BlockUserTagConflict:
         )
         assert response.status_code == 200
         result_tags = response.json()["tags"]
-        assert "block:user" in result_tags, (
-            f"Expected block:user in tags after block, got {result_tags!r}"
-        )
-        assert "scope:test" in result_tags, (
-            f"Expected scope:test in tags after block, got {result_tags!r}"
-        )
+        assert "block:user" in result_tags, f"Expected block:user in tags after block, got {result_tags!r}"
+        assert "scope:test" in result_tags, f"Expected scope:test in tags after block, got {result_tags!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -885,9 +783,7 @@ class TestFromAC_EditBodyParentSemantics:
       (d) negative parent → 422
     """
 
-    def test_edit_parent_null_clears_parent(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_edit_parent_null_clears_parent(self, client: TestClient, engine: KanbanEngine) -> None:
         """AC7(a): parent: null in request body clears the parent field."""
         engine.edit_task("1", parent=3)
         task = engine.show_task("1")
@@ -900,9 +796,7 @@ class TestFromAC_EditBodyParentSemantics:
         assert response.status_code == 200
         assert response.json()["parent"] is None
 
-    def test_edit_body_empty_string_clears_body(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_edit_body_empty_string_clears_body(self, client: TestClient, engine: KanbanEngine) -> None:
         """AC7(b): body: "" clears the task body to empty string."""
         engine.edit_task("1", body="## Original content")
         task = engine.show_task("1")
@@ -915,9 +809,7 @@ class TestFromAC_EditBodyParentSemantics:
         assert response.status_code == 200
         assert response.json()["body"] == ""
 
-    def test_edit_body_null_does_not_change_body(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_edit_body_null_does_not_change_body(self, client: TestClient, engine: KanbanEngine) -> None:
         """AC7(c): body: null leaves the task body unchanged (no-change semantics)."""
         original_body = "## Persistent content"
         engine.edit_task("1", body=original_body)
@@ -931,9 +823,7 @@ class TestFromAC_EditBodyParentSemantics:
         assert response.status_code == 200
         assert response.json()["body"] == original_body
 
-    def test_edit_body_omitted_does_not_change_body(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_edit_body_omitted_does_not_change_body(self, client: TestClient, engine: KanbanEngine) -> None:
         """AC7(c): omitting body from the request leaves the task body unchanged."""
         original_body = "## Persistent content that must survive"
         engine.edit_task("1", body=original_body)
@@ -946,9 +836,7 @@ class TestFromAC_EditBodyParentSemantics:
         assert response.status_code == 200
         assert response.json()["body"] == original_body
 
-    def test_edit_negative_parent_returns_422(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_edit_negative_parent_returns_422(self, client: TestClient, engine: KanbanEngine) -> None:
         """AC7(d): negative parent value returns 422."""
         task = engine.show_task("1")
         response = client.post(
@@ -976,9 +864,7 @@ class TestFromAC_EditBodyParentSemantics:
         assert response.status_code == 200
         body = response.json()
         assert body["blocked"] is False, "empty block_reason must unblock the task"
-        assert "block:user" not in (body.get("tags") or []), (
-            "block:user tag must be removed"
-        )
+        assert "block:user" not in (body.get("tags") or []), "block:user tag must be removed"
 
 
 # ---------------------------------------------------------------------------
@@ -994,9 +880,7 @@ class TestFromAC_EditListClearOmit:
     - desired=None (field omitted from request) → no-op (preserve current items)
     """
 
-    def test_edit_tags_empty_list_clears_all_tags(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_edit_tags_empty_list_clears_all_tags(self, client: TestClient, engine: KanbanEngine) -> None:
         """AC1: tags=[] removes all existing tags (full-clear semantics)."""
         engine.edit_task("1", add_tags=["scope:test", "type:bug"])
         task = engine.show_task("1")
@@ -1011,15 +895,11 @@ class TestFromAC_EditListClearOmit:
         assert response.status_code == 200
         assert response.json()["tags"] == []
 
-    def test_edit_depends_on_empty_list_clears_all_deps(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_edit_depends_on_empty_list_clears_all_deps(self, client: TestClient, engine: KanbanEngine) -> None:
         """AC1: depends_on=[] removes all existing dependencies (full-clear semantics)."""
         engine.edit_task("1", add_deps=[3])
         task = engine.show_task("1")
-        assert 3 in (task.depends_on or []), (
-            "Precondition: task 1 must have dep on task 3"
-        )
+        assert 3 in (task.depends_on or []), "Precondition: task 1 must have dep on task 3"
 
         response = client.post(
             "/api/tasks/1/edit",
@@ -1028,15 +908,11 @@ class TestFromAC_EditListClearOmit:
         assert response.status_code == 200
         assert response.json()["depends_on"] == []
 
-    def test_edit_tags_field_omitted_preserves_existing_tags(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_edit_tags_field_omitted_preserves_existing_tags(self, client: TestClient, engine: KanbanEngine) -> None:
         """AC1: omitting tags from request leaves existing tags unchanged (omit semantics)."""
         engine.edit_task("1", add_tags=["scope:test"])
         task = engine.show_task("1")
-        assert "scope:test" in (task.tags or []), (
-            "Precondition: task 1 must have scope:test tag"
-        )
+        assert "scope:test" in (task.tags or []), "Precondition: task 1 must have scope:test tag"
 
         response = client.post(
             "/api/tasks/1/edit",
@@ -1051,9 +927,7 @@ class TestFromAC_EditListClearOmit:
         """AC1: omitting depends_on from request leaves existing deps unchanged (omit semantics)."""
         engine.edit_task("1", add_deps=[3])
         task = engine.show_task("1")
-        assert 3 in (task.depends_on or []), (
-            "Precondition: task 1 must have dep on task 3"
-        )
+        assert 3 in (task.depends_on or []), "Precondition: task 1 must have dep on task 3"
 
         response = client.post(
             "/api/tasks/1/edit",
@@ -1181,9 +1055,7 @@ class TestFromAC_GetViewDependency:
 
         assert get_view is not None, "get_view must be importable and not None (AC1)"
 
-    def test_get_view_returns_cockpit_view_instance(
-        self, engine_1132: KanbanEngine
-    ) -> None:
+    def test_get_view_returns_cockpit_view_instance(self, engine_1132: KanbanEngine) -> None:
         """get_view(engine_1132) returns a CockpitView instance — not a raw engine_1132 or other type (AC1)."""
         from owlbear_cockpit.deps import get_view  # noqa: PLC0415
 
@@ -1192,9 +1064,7 @@ class TestFromAC_GetViewDependency:
             f"get_view(engine_1132) must return CockpitView, got {type(result).__name__!r} (AC1)"
         )
 
-    def test_get_view_engine_attribute_is_injected_engine(
-        self, engine_1132: KanbanEngine
-    ) -> None:
+    def test_get_view_engine_attribute_is_injected_engine(self, engine_1132: KanbanEngine) -> None:
         """CockpitView from get_view() has .engine bound to the injected engine_1132 (AC1)."""
         from owlbear_cockpit.deps import get_view  # noqa: PLC0415
 
@@ -1203,9 +1073,7 @@ class TestFromAC_GetViewDependency:
             "CockpitView.engine must be the same engine_1132 instance that was injected (AC1)"
         )
 
-    def test_get_view_constructs_cockpit_view_with_engine_arg(
-        self, engine_1132: KanbanEngine
-    ) -> None:
+    def test_get_view_constructs_cockpit_view_with_engine_arg(self, engine_1132: KanbanEngine) -> None:
         """get_view() calls CockpitView(engine_1132) — fails if factory returns wrong type (AC1)."""
         from owlbear_cockpit.deps import get_view  # noqa: PLC0415
 
@@ -1223,9 +1091,7 @@ class TestFromAC_GetViewDependency:
 class TestFromAC_MoveCockpitViewDelegation:
     """AC2: Move route calls CockpitView.move_task with expected_updated kwarg."""
 
-    def test_move_calls_cockpit_view_move_task(
-        self, mock_view_client, engine_1132: KanbanEngine
-    ) -> None:
+    def test_move_calls_cockpit_view_move_task(self, mock_view_client, engine_1132: KanbanEngine) -> None:
         """Move route delegates to CockpitView.move_task (not engine_1132.move_task directly)."""
         client_1132, view = mock_view_client
         task = engine_1132.show_task("1")
@@ -1244,9 +1110,7 @@ class TestFromAC_MoveCockpitViewDelegation:
             "/api/tasks/1/move",
             json={"status": "in-progress", "updated": task.updated},
         )
-        assert view.move_task.called, (
-            "Move route must delegate to CockpitView.move_task (AC2)"
-        )
+        assert view.move_task.called, "Move route must delegate to CockpitView.move_task (AC2)"
 
     def test_move_cockpit_view_receives_expected_updated_kwarg(
         self, mock_view_client, engine_1132: KanbanEngine
@@ -1271,16 +1135,10 @@ class TestFromAC_MoveCockpitViewDelegation:
         )
         assert view.move_task.called, "move_task must be called"
         call_kwargs = view.move_task.call_args.kwargs
-        assert "expected_updated" in call_kwargs, (
-            "CockpitView.move_task must receive expected_updated kwarg (AC2)"
-        )
-        assert call_kwargs["expected_updated"] == task.updated, (
-            "expected_updated must equal req.updated (AC2)"
-        )
+        assert "expected_updated" in call_kwargs, "CockpitView.move_task must receive expected_updated kwarg (AC2)"
+        assert call_kwargs["expected_updated"] == task.updated, "expected_updated must equal req.updated (AC2)"
 
-    def test_move_cockpit_view_receives_correct_status(
-        self, mock_view_client, engine_1132: KanbanEngine
-    ) -> None:
+    def test_move_cockpit_view_receives_correct_status(self, mock_view_client, engine_1132: KanbanEngine) -> None:
         """CockpitView.move_task receives the target status from req.status."""
         client_1132, view = mock_view_client
         task = engine_1132.show_task("1")
@@ -1340,19 +1198,14 @@ class TestFromAC_ReleaseRequestModel:
         with pytest.raises(pydantic.ValidationError):
             ReleaseRequest(updated="2025-01-01T00:00:00", unknown_field="bad")
 
-    def test_release_without_body_returns_422_1132(
-        self, client_1132: TestClient
-    ) -> None:
+    def test_release_without_body_returns_422_1132(self, client_1132: TestClient) -> None:
         """POST /release without body returns 422 — ReleaseRequest.updated is required (AC3/AC8)."""
         response = client_1132.post("/api/tasks/2/release")  # no body
         assert response.status_code == 422, (
-            f"Release without body must return 422 (ReleaseRequest.updated required), "
-            f"got {response.status_code} (AC3)"
+            f"Release without body must return 422 (ReleaseRequest.updated required), got {response.status_code} (AC3)"
         )
 
-    def test_release_delegates_to_cockpit_view_release_task(
-        self, mock_view_client, engine_1132: KanbanEngine
-    ) -> None:
+    def test_release_delegates_to_cockpit_view_release_task(self, mock_view_client, engine_1132: KanbanEngine) -> None:
         """Release route delegates to CockpitView.release_task (not engine_1132.release_task)."""
         client_1132, view = mock_view_client
         task = engine_1132.show_task("2")
@@ -1378,13 +1231,9 @@ class TestFromAC_ReleaseRequestModel:
             updated=task.updated,
         )
         client_1132.post("/api/tasks/2/release", json={"updated": task.updated})
-        assert view.release_task.called, (
-            "Release route must delegate to CockpitView.release_task (AC3)"
-        )
+        assert view.release_task.called, "Release route must delegate to CockpitView.release_task (AC3)"
 
-    def test_release_passes_expected_updated_to_cockpit_view(
-        self, mock_view_client, engine_1132: KanbanEngine
-    ) -> None:
+    def test_release_passes_expected_updated_to_cockpit_view(self, mock_view_client, engine_1132: KanbanEngine) -> None:
         """CockpitView.release_task receives expected_updated=req.updated kwarg."""
         client_1132, view = mock_view_client
         task = engine_1132.show_task("2")
@@ -1412,12 +1261,8 @@ class TestFromAC_ReleaseRequestModel:
         client_1132.post("/api/tasks/2/release", json={"updated": task.updated})
         assert view.release_task.called, "release_task must be called"
         call_kwargs = view.release_task.call_args.kwargs
-        assert "expected_updated" in call_kwargs, (
-            "CockpitView.release_task must receive expected_updated kwarg (AC3)"
-        )
-        assert call_kwargs["expected_updated"] == task.updated, (
-            "expected_updated must equal req.updated (AC3)"
-        )
+        assert "expected_updated" in call_kwargs, "CockpitView.release_task must receive expected_updated kwarg (AC3)"
+        assert call_kwargs["expected_updated"] == task.updated, "expected_updated must equal req.updated (AC3)"
 
 
 # ---------------------------------------------------------------------------
@@ -1428,27 +1273,19 @@ class TestFromAC_ReleaseRequestModel:
 class TestFromAC_MoveErrorMapping:
     """AC4a: Move route maps CockpitView errors to HTTP status codes."""
 
-    def test_move_not_found_error_returns_404(
-        self, mock_view_client, engine_1132: KanbanEngine
-    ) -> None:
+    def test_move_not_found_error_returns_404(self, mock_view_client, engine_1132: KanbanEngine) -> None:
         """CockpitView.move_task raises NotFoundError → route returns 404."""
         client_1132, view = mock_view_client
         task = engine_1132.show_task("1")
-        view.move_task.side_effect = NotFoundError(
-            code="ERR_NOT_FOUND", user_message="Task '1' not found"
-        )
+        view.move_task.side_effect = NotFoundError(code="ERR_NOT_FOUND", user_message="Task '1' not found")
         view.engine.valid_transitions.return_value = {"in-progress"}
         response = client_1132.post(
             "/api/tasks/1/move",
             json={"status": "in-progress", "updated": task.updated},
         )
-        assert response.status_code == 404, (
-            "NotFoundError from CockpitView.move_task must map to 404 (AC4a)"
-        )
+        assert response.status_code == 404, "NotFoundError from CockpitView.move_task must map to 404 (AC4a)"
 
-    def test_move_validation_error_returns_422(
-        self, mock_view_client, engine_1132: KanbanEngine
-    ) -> None:
+    def test_move_validation_error_returns_422(self, mock_view_client, engine_1132: KanbanEngine) -> None:
         """CockpitView.move_task raises ValidationError → route returns 422."""
         client_1132, view = mock_view_client
         task = engine_1132.show_task("1")
@@ -1460,27 +1297,19 @@ class TestFromAC_MoveErrorMapping:
             "/api/tasks/1/move",
             json={"status": "in-progress", "updated": task.updated},
         )
-        assert response.status_code == 422, (
-            "ValidationError from CockpitView.move_task must map to 422 (AC4a)"
-        )
+        assert response.status_code == 422, "ValidationError from CockpitView.move_task must map to 422 (AC4a)"
 
-    def test_move_concurrency_error_returns_409(
-        self, mock_view_client, engine_1132: KanbanEngine
-    ) -> None:
+    def test_move_concurrency_error_returns_409(self, mock_view_client, engine_1132: KanbanEngine) -> None:
         """CockpitView.move_task raises ConcurrencyError → route returns 409."""
         client_1132, view = mock_view_client
         task = engine_1132.show_task("1")
-        view.move_task.side_effect = ConcurrencyError(
-            code="ERR_STALE", user_message="Stale snapshot"
-        )
+        view.move_task.side_effect = ConcurrencyError(code="ERR_STALE", user_message="Stale snapshot")
         view.engine.valid_transitions.return_value = {"in-progress"}
         response = client_1132.post(
             "/api/tasks/1/move",
             json={"status": "in-progress", "updated": task.updated},
         )
-        assert response.status_code == 409, (
-            "ConcurrencyError from CockpitView.move_task must map to 409 (AC4a)"
-        )
+        assert response.status_code == 409, "ConcurrencyError from CockpitView.move_task must map to 409 (AC4a)"
 
 
 # ---------------------------------------------------------------------------
@@ -1491,9 +1320,7 @@ class TestFromAC_MoveErrorMapping:
 class TestFromAC_ReleaseErrorMapping:
     """AC4b: Release route maps CockpitView errors: NotFoundError→404, ConcurrencyError→409."""
 
-    def test_release_not_found_error_returns_404(
-        self, mock_view_client, engine_1132: KanbanEngine
-    ) -> None:
+    def test_release_not_found_error_returns_404(self, mock_view_client, engine_1132: KanbanEngine) -> None:
         """CockpitView.release_task raises NotFoundError → route returns 404."""
         client_1132, view = mock_view_client
         task = engine_1132.show_task("2")
@@ -1511,19 +1338,11 @@ class TestFromAC_ReleaseErrorMapping:
             guidance=[],
             claimed_at="2025-01-01T00:00:00",
         )
-        view.release_task.side_effect = NotFoundError(
-            code="ERR_NOT_FOUND", user_message="Task '2' not found"
-        )
-        response = client_1132.post(
-            "/api/tasks/2/release", json={"updated": task.updated}
-        )
-        assert response.status_code == 404, (
-            "NotFoundError from CockpitView.release_task must map to 404 (AC4b)"
-        )
+        view.release_task.side_effect = NotFoundError(code="ERR_NOT_FOUND", user_message="Task '2' not found")
+        response = client_1132.post("/api/tasks/2/release", json={"updated": task.updated})
+        assert response.status_code == 404, "NotFoundError from CockpitView.release_task must map to 404 (AC4b)"
 
-    def test_release_concurrency_error_returns_409(
-        self, mock_view_client, engine_1132: KanbanEngine
-    ) -> None:
+    def test_release_concurrency_error_returns_409(self, mock_view_client, engine_1132: KanbanEngine) -> None:
         """CockpitView.release_task raises ConcurrencyError → route returns 409."""
         client_1132, view = mock_view_client
         task = engine_1132.show_task("2")
@@ -1540,15 +1359,9 @@ class TestFromAC_ReleaseErrorMapping:
             guidance=[],
             claimed_at="2025-01-01T00:00:00",
         )
-        view.release_task.side_effect = ConcurrencyError(
-            code="ERR_STALE", user_message="Stale snapshot"
-        )
-        response = client_1132.post(
-            "/api/tasks/2/release", json={"updated": task.updated}
-        )
-        assert response.status_code == 409, (
-            "ConcurrencyError from CockpitView.release_task must map to 409 (AC4b)"
-        )
+        view.release_task.side_effect = ConcurrencyError(code="ERR_STALE", user_message="Stale snapshot")
+        response = client_1132.post("/api/tasks/2/release", json={"updated": task.updated})
+        assert response.status_code == 409, "ConcurrencyError from CockpitView.release_task must map to 409 (AC4b)"
 
 
 # ---------------------------------------------------------------------------
@@ -1569,15 +1382,10 @@ class TestFromAC_ReleaseClaim:
         from CockpitView.show_task which correctly reflects claimed_at.
         """
         task = engine_1132.show_task("2")
-        assert task.claimed_at is not None, (
-            "Precondition: task 2 must have claimed_at on disk"
-        )
-        response = client_1132.post(
-            "/api/tasks/2/release", json={"updated": task.updated}
-        )
+        assert task.claimed_at is not None, "Precondition: task 2 must have claimed_at on disk"
+        response = client_1132.post("/api/tasks/2/release", json={"updated": task.updated})
         assert response.status_code == 200, (
-            f"Genuinely claimed task (claimed_at set) must return 200 after G3 fix (AC5), "
-            f"got {response.status_code}"
+            f"Genuinely claimed task (claimed_at set) must return 200 after G3 fix (AC5), got {response.status_code}"
         )
 
     def test_release_claimed_task_response_has_required_fields(
@@ -1585,9 +1393,7 @@ class TestFromAC_ReleaseClaim:
     ) -> None:
         """Release 200 response has all required task-detail fields."""
         task = engine_1132.show_task("2")
-        response = client_1132.post(
-            "/api/tasks/2/release", json={"updated": task.updated}
-        )
+        response = client_1132.post("/api/tasks/2/release", json={"updated": task.updated})
         assert response.status_code == 200
         body = response.json()
         for field in (
@@ -1606,9 +1412,7 @@ class TestFromAC_ReleaseClaim:
     ) -> None:
         """Release 200 response has claimed=False (claim cleared by release)."""
         task = engine_1132.show_task("2")
-        response = client_1132.post(
-            "/api/tasks/2/release", json={"updated": task.updated}
-        )
+        response = client_1132.post("/api/tasks/2/release", json={"updated": task.updated})
         assert response.status_code == 200
         assert response.json()["claimed"] is False, (
             "Release response must show claimed=False after claim is cleared (AC5)"
@@ -1652,8 +1456,7 @@ class TestFromAC_ResponseAdaptation:
             json={"status": "in-progress", "updated": task.updated},
         )
         assert response.status_code == 200, (
-            f"_task_to_detail must not raise AttributeError on SingleTaskResponse "
-            f"(AC6), got {response.status_code}"
+            f"_task_to_detail must not raise AttributeError on SingleTaskResponse (AC6), got {response.status_code}"
         )
 
     def test_move_response_has_claimed_field_from_single_task_response(
@@ -1708,16 +1511,13 @@ class TestFromAC_ReleaseStaleToken:
         # Advance task's updated timestamp so stale_token is now outdated
         engine_1132.edit_task("2", title="Modified to advance updated timestamp")
 
-        response = client_1132.post(
-            "/api/tasks/2/release", json={"updated": stale_token}
-        )
+        response = client_1132.post("/api/tasks/2/release", json={"updated": stale_token})
         assert response.status_code == 409
         body = response.json()
         assert "detail" not in body
         assert body.get("code") == "ERR_STALE"
         assert "message" in body, (
-            f"Stale token on claimed task must return 409 with stale-snapshot detail (AC7), "
-            f"got body: {body!r}"
+            f"Stale token on claimed task must return 409 with stale-snapshot detail (AC7), got body: {body!r}"
         )
 
     def test_release_fresh_updated_token_on_claimed_task_returns_200(
@@ -1725,12 +1525,9 @@ class TestFromAC_ReleaseStaleToken:
     ) -> None:
         """Claimed task + fresh updated token → 200 (contrast with stale-token 409, AC7)."""
         task = engine_1132.show_task("2")
-        response = client_1132.post(
-            "/api/tasks/2/release", json={"updated": task.updated}
-        )
+        response = client_1132.post("/api/tasks/2/release", json={"updated": task.updated})
         assert response.status_code == 200, (
-            f"Claimed task with fresh updated token must return 200 (AC7 contrast), "
-            f"got {response.status_code}"
+            f"Claimed task with fresh updated token must return 200 (AC7 contrast), got {response.status_code}"
         )
 
 
@@ -1747,26 +1544,15 @@ class TestFromAC_ReleaseActivityLogging:
     ) -> None:
         """Release success (200) produces activity.jsonl entry with source='cockpit'."""
         task = engine_1132.show_task("2")
-        response = client_1132.post(
-            "/api/tasks/2/release", json={"updated": task.updated}
-        )
+        response = client_1132.post("/api/tasks/2/release", json={"updated": task.updated})
         assert response.status_code == 200, (
-            f"Precondition: release must return 200 to verify activity logging (AC10), "
-            f"got {response.status_code}"
+            f"Precondition: release must return 200 to verify activity logging (AC10), got {response.status_code}"
         )
         activity_file = board_dir_1132 / "activity.jsonl"
-        assert activity_file.exists(), (
-            "activity.jsonl must exist after successful release (AC10)"
-        )
-        entries = [
-            json.loads(line)
-            for line in activity_file.read_text(encoding="utf-8").splitlines()
-            if line.strip()
-        ]
+        assert activity_file.exists(), "activity.jsonl must exist after successful release (AC10)"
+        entries = [json.loads(line) for line in activity_file.read_text(encoding="utf-8").splitlines() if line.strip()]
         cockpit_entries = [e for e in entries if e.get("source") == "cockpit"]
-        assert len(cockpit_entries) >= 1, (
-            "At least one activity entry must have source='cockpit' after release (AC10)"
-        )
+        assert len(cockpit_entries) >= 1, "At least one activity entry must have source='cockpit' after release (AC10)"
 
 
 # ---------------------------------------------------------------------------
@@ -1832,9 +1618,7 @@ def client_1134(engine_1134: KanbanEngine):
 class TestFromAC_EditCASEngagement:
     """AC1: edit route passes expected_updated to engine_1134.edit_task."""
 
-    def test_edit_passes_expected_updated_to_engine(
-        self, client_1134, engine_1134: KanbanEngine
-    ) -> None:
+    def test_edit_passes_expected_updated_to_engine(self, client_1134, engine_1134: KanbanEngine) -> None:
         """engine_1134.edit_task must be called with expected_updated in kwargs.
 
         The current route calls engine_1134.edit_task(**kwargs) without forwarding
@@ -1842,9 +1626,7 @@ class TestFromAC_EditCASEngagement:
         must appear in the captured call kwargs, engaging the engine_1134 CAS.
         """
         task = engine_1134.show_task("1")
-        with mock.patch.object(
-            engine_1134, "edit_task", wraps=engine_1134.edit_task
-        ) as mocked:
+        with mock.patch.object(engine_1134, "edit_task", wraps=engine_1134.edit_task) as mocked:
             response = client_1134.post(
                 "/api/tasks/1/edit",
                 json={"updated": task.updated, "title": "CAS probe"},
@@ -1857,18 +1639,14 @@ class TestFromAC_EditCASEngagement:
             "not just the route-level precheck)"
         )
 
-    def test_edit_expected_updated_value_matches_request_snapshot(
-        self, client_1134, engine_1134: KanbanEngine
-    ) -> None:
+    def test_edit_expected_updated_value_matches_request_snapshot(self, client_1134, engine_1134: KanbanEngine) -> None:
         """The expected_updated value forwarded to engine_1134 must equal req.updated.
 
         The CAS token is the updated timestamp from the request body.  Forwarding
         a different value would defeat the CAS purpose.
         """
         task = engine_1134.show_task("1")
-        with mock.patch.object(
-            engine_1134, "edit_task", wraps=engine_1134.edit_task
-        ) as mocked:
+        with mock.patch.object(engine_1134, "edit_task", wraps=engine_1134.edit_task) as mocked:
             response = client_1134.post(
                 "/api/tasks/1/edit",
                 json={"updated": task.updated, "title": "CAS value probe"},
@@ -1877,8 +1655,7 @@ class TestFromAC_EditCASEngagement:
         assert mocked.called, "engine_1134.edit_task must have been called"
         forwarded = mocked.call_args.kwargs.get("expected_updated")
         assert forwarded == task.updated, (
-            f"expected_updated forwarded to engine_1134 ({forwarded!r}) must equal "
-            f"req.updated ({task.updated!r})"
+            f"expected_updated forwarded to engine_1134 ({forwarded!r}) must equal req.updated ({task.updated!r})"
         )
 
 
@@ -1890,9 +1667,7 @@ class TestFromAC_EditCASEngagement:
 class TestFromAC_ConcurrencyErrorHandler:
     """AC2: ModelConcurrencyError from engine_1134.edit_task is mapped to HTTP 409."""
 
-    def test_edit_concurrency_error_returns_409(
-        self, client_1134, engine_1134: KanbanEngine
-    ) -> None:
+    def test_edit_concurrency_error_returns_409(self, client_1134, engine_1134: KanbanEngine) -> None:
         """When engine_1134.edit_task raises ModelConcurrencyError, route must return 409.
 
         Currently the route has no except ModelConcurrencyError handler, so the
@@ -1905,9 +1680,7 @@ class TestFromAC_ConcurrencyErrorHandler:
                 "/api/tasks/1/edit",
                 json={"updated": task.updated, "title": "ModelConcurrencyError probe"},
             )
-        assert response.status_code == 409, (
-            f"ModelConcurrencyError must map to 409, got {response.status_code}"
-        )
+        assert response.status_code == 409, f"ModelConcurrencyError must map to 409, got {response.status_code}"
 
     def test_edit_concurrency_error_detail_matches_canonical_message(
         self, client_1134, engine_1134: KanbanEngine
@@ -1925,9 +1698,7 @@ class TestFromAC_ConcurrencyErrorHandler:
         assert body.get("code") == "ERR_STALE"
         assert body.get("message") == "stale", f"Envelope message mismatch: {body!r}"
 
-    def test_edit_concurrency_error_not_propagated_as_500(
-        self, client_1134, engine_1134: KanbanEngine
-    ) -> None:
+    def test_edit_concurrency_error_not_propagated_as_500(self, client_1134, engine_1134: KanbanEngine) -> None:
         """ModelConcurrencyError must not leak as an unhandled 500 server error."""
         task = engine_1134.show_task("1")
         exc = ModelConcurrencyError(code="ERR_STALE", user_message="stale")
@@ -1953,9 +1724,7 @@ class TestFromAC_ExistingBehaviorUnchanged:
     in RED phase (they document the contract the builder must preserve).
     """
 
-    def test_edit_title_happy_path_returns_200(
-        self, client_1134, engine_1134: KanbanEngine
-    ) -> None:
+    def test_edit_title_happy_path_returns_200(self, client_1134, engine_1134: KanbanEngine) -> None:
         """Direct regression: edit title with valid snapshot → 200 with updated task."""
         task = engine_1134.show_task("1")
         response = client_1134.post(
@@ -1981,9 +1750,7 @@ class TestFromAC_ExistingBehaviorUnchanged:
         )
         assert response.status_code == 404
 
-    def test_edit_no_editable_fields_still_returns_422(
-        self, client_1134, engine_1134: KanbanEngine
-    ) -> None:
+    def test_edit_no_editable_fields_still_returns_422(self, client_1134, engine_1134: KanbanEngine) -> None:
         """Regression: request with only updated field (no editable fields) → 422."""
         task = engine_1134.show_task("1")
         response = client_1134.post(
@@ -2074,9 +1841,7 @@ class TestFromAC_MoveRequestUpdatedField:
         response = client_1135.post("/api/tasks/1/move", json={"status": "in-progress"})
         assert response.status_code == 422
 
-    def test_move_with_valid_updated_and_status_returns_200(
-        self, client_1135, engine_1135: KanbanEngine
-    ) -> None:
+    def test_move_with_valid_updated_and_status_returns_200(self, client_1135, engine_1135: KanbanEngine) -> None:
         """Happy path: move with valid 'updated' token and reachable status → 200.
 
         Fails against current code because 'updated' is not accepted in MoveRequest.
@@ -2137,9 +1902,7 @@ class TestFromAC_MovePrecheck:
         engine_1135.move_task without expected_updated — this test proves the gap.
         """
         task = engine_1135.show_task("1")
-        with mock.patch.object(
-            engine_1135, "move_task", wraps=engine_1135.move_task
-        ) as mocked:
+        with mock.patch.object(engine_1135, "move_task", wraps=engine_1135.move_task) as mocked:
             response = client_1135.post(
                 "/api/tasks/1/move",
                 json={"status": "in-progress", "updated": task.updated},
@@ -2147,14 +1910,10 @@ class TestFromAC_MovePrecheck:
         assert response.status_code == 200
         assert mocked.called, "engine_1135.move_task must have been called"
         call_kwargs = mocked.call_args.kwargs
-        assert "expected_updated" in call_kwargs, (
-            "Route must pass expected_updated to engine_1135.move_task"
-        )
+        assert "expected_updated" in call_kwargs, "Route must pass expected_updated to engine_1135.move_task"
         assert call_kwargs["expected_updated"] == task.updated
 
-    def test_move_precheck_stale_updated_returns_409(
-        self, client_1135, engine_1135: KanbanEngine
-    ) -> None:
+    def test_move_precheck_stale_updated_returns_409(self, client_1135, engine_1135: KanbanEngine) -> None:
         """Stale 'updated' token (precheck) → 409 before engine_1135 is called.
 
         The route must short-circuit with 409 when req.updated does not match
@@ -2171,9 +1930,7 @@ class TestFromAC_MovePrecheck:
         )
         assert response.status_code == 409
 
-    def test_move_precheck_stale_does_not_call_engine_move(
-        self, client_1135, engine_1135: KanbanEngine
-    ) -> None:
+    def test_move_precheck_stale_does_not_call_engine_move(self, client_1135, engine_1135: KanbanEngine) -> None:
         """When precheck detects stale token, route returns 409 without calling engine_1135.
 
         Ensures the route short-circuits before the write rather than relying
@@ -2182,20 +1939,14 @@ class TestFromAC_MovePrecheck:
         task = engine_1135.show_task("1")
         stale_timestamp = task.updated
         engine_1135.edit_task("1", title="Bump updated for precheck test")
-        with mock.patch.object(
-            engine_1135, "move_task", wraps=engine_1135.move_task
-        ) as mocked:
+        with mock.patch.object(engine_1135, "move_task", wraps=engine_1135.move_task) as mocked:
             response = client_1135.post(
                 "/api/tasks/1/move",
                 json={"status": "in-progress", "updated": stale_timestamp},
             )
         # Both assertions must hold: route returns 409 AND engine_1135 is never invoked
-        assert response.status_code == 409, (
-            "Stale precheck must return 409, not bypass to engine_1135"
-        )
-        assert not mocked.called, (
-            "engine_1135.move_task must not be called when precheck detects stale token"
-        )
+        assert response.status_code == 409, "Stale precheck must return 409, not bypass to engine_1135"
+        assert not mocked.called, "engine_1135.move_task must not be called when precheck detects stale token"
 
 
 # ---------------------------------------------------------------------------
@@ -2211,9 +1962,7 @@ class TestFromAC_MoveConcurrencyError:
     catch ConcurrencyError and return 409.
     """
 
-    def test_move_concurrency_error_from_engine_returns_409(
-        self, client_1135, engine_1135: KanbanEngine
-    ) -> None:
+    def test_move_concurrency_error_from_engine_returns_409(self, client_1135, engine_1135: KanbanEngine) -> None:
         """ConcurrencyError raised by engine_1135.move_task → HTTP 409.
 
         Currently the route has no ConcurrencyError handler — the exception
@@ -2227,18 +1976,14 @@ class TestFromAC_MoveConcurrencyError:
                 user_message="stale write detected",
             )
 
-        with mock.patch.object(
-            engine_1135, "move_task", side_effect=_raise_concurrency
-        ):
+        with mock.patch.object(engine_1135, "move_task", side_effect=_raise_concurrency):
             response = client_1135.post(
                 "/api/tasks/1/move",
                 json={"status": "in-progress", "updated": task.updated},
             )
         assert response.status_code == 409
 
-    def test_move_concurrency_error_has_exact_detail_string(
-        self, client_1135, engine_1135: KanbanEngine
-    ) -> None:
+    def test_move_concurrency_error_has_exact_detail_string(self, client_1135, engine_1135: KanbanEngine) -> None:
         """ConcurrencyError → 409 detail must be the canonical stale-snapshot message.
 
         Exact string: "Task was modified since your last load (stale snapshot)"
@@ -2251,9 +1996,7 @@ class TestFromAC_MoveConcurrencyError:
                 user_message="stale write detected",
             )
 
-        with mock.patch.object(
-            engine_1135, "move_task", side_effect=_raise_concurrency
-        ):
+        with mock.patch.object(engine_1135, "move_task", side_effect=_raise_concurrency):
             response = client_1135.post(
                 "/api/tasks/1/move",
                 json={"status": "in-progress", "updated": task.updated},
@@ -2276,9 +2019,7 @@ class TestFromAC_MoveStaleUpdated:
     HTTP move with stale token → 409.
     """
 
-    def test_move_stale_updated_returns_409_1135(
-        self, client_1135, engine_1135: KanbanEngine
-    ) -> None:
+    def test_move_stale_updated_returns_409_1135(self, client_1135, engine_1135: KanbanEngine) -> None:
         """Stale 'updated' token causes move route to return 409.
 
         Follows the pattern from test_edit_stale_updated_returns_409 in
@@ -2295,9 +2036,7 @@ class TestFromAC_MoveStaleUpdated:
         )
         assert response.status_code == 409
 
-    def test_move_fresh_updated_after_mutation_returns_200(
-        self, client_1135, engine_1135: KanbanEngine
-    ) -> None:
+    def test_move_fresh_updated_after_mutation_returns_200(self, client_1135, engine_1135: KanbanEngine) -> None:
         """After mutation, a fresh 'updated' token allows the move to succeed → 200.
 
         Boundary: confirms 409 is token-staleness specific, not a blanket block.
@@ -2353,10 +2092,7 @@ class TestFromAC_MoveSharedSuiteContract:
                 continue
             enclosing_test = self._find_enclosing_test_name(lines, i)
             # Intentionally missing-updated tests are expected to omit OCC token.
-            if (
-                "without_updated" in enclosing_test
-                or "missing_updated" in enclosing_test
-            ):
+            if "without_updated" in enclosing_test or "missing_updated" in enclosing_test:
                 continue
             # Collect a window covering the enclosing client.post(...) call
             start = max(0, i - 2)
@@ -2420,8 +2156,7 @@ class TestFromAC_MoveSharedSuiteContract:
 
         assert not violations, (
             "Move POST payloads in test_cockpit_mutation_api.py must source 'updated' from "
-            "engine.show_task().updated (not hardcoded) per AC4:\n"
-            + "\n".join(violations)
+            "engine.show_task().updated (not hardcoded) per AC4:\n" + "\n".join(violations)
         )
 
     def test_shared_suite_config_is_engine_compatible(self, tmp_path: Path) -> None:
@@ -2438,9 +2173,7 @@ class TestFromAC_MoveSharedSuiteContract:
         from being verified by executable regression of the named suite.
         """
         module_path = Path("tests/test_cockpit_mutation_api.py")
-        spec = importlib.util.spec_from_file_location(
-            "_shared_suite_probe", module_path
-        )
+        spec = importlib.util.spec_from_file_location("_shared_suite_probe", module_path)
         assert spec is not None
         assert spec.loader is not None
         mod = importlib.util.module_from_spec(spec)
@@ -2666,9 +2399,7 @@ class TestFromAC_MoveRouteArchivalPassThrough:
         call_kwargs = view.move_task.call_args.kwargs
         assert call_kwargs.get("archival_reason") == "dropped"
 
-    def test_move_route_forwards_archival_refs_to_view(
-        self, mock_view_client_1239, engine_1239: KanbanEngine
-    ) -> None:
+    def test_move_route_forwards_archival_refs_to_view(self, mock_view_client_1239, engine_1239: KanbanEngine) -> None:
         """Route passes req.archival_refs to view.move_task (AC4).
 
         Fails in RED: Pydantic rejects archival_refs as an extra field → 422.
@@ -2938,9 +2669,7 @@ class TestFromAC_ExtraForbidPreserved:
 class TestFromAC_RouteArchivalPassThrough:
     """AC4: Move route passes req.archival_reason and req.archival_refs to view.move_task()."""
 
-    def test_route_passes_archival_reason_kwarg(
-        self, mock_view_client_1243, engine_1243: KanbanEngine
-    ) -> None:
+    def test_route_passes_archival_reason_kwarg(self, mock_view_client_1243, engine_1243: KanbanEngine) -> None:
         """Route forwards archival_reason= kwarg to view.move_task() (AC4)."""
         from owlbear_kanban.models import SingleTaskResponse  # noqa: PLC0415
 
@@ -2968,9 +2697,7 @@ class TestFromAC_RouteArchivalPassThrough:
         assert "archival_reason" in kwargs
         assert kwargs["archival_reason"] == "wontfix"
 
-    def test_route_passes_archival_refs_kwarg(
-        self, mock_view_client_1243, engine_1243: KanbanEngine
-    ) -> None:
+    def test_route_passes_archival_refs_kwarg(self, mock_view_client_1243, engine_1243: KanbanEngine) -> None:
         """Route forwards archival_refs= kwarg to view.move_task() (AC4)."""
         from owlbear_kanban.models import SingleTaskResponse  # noqa: PLC0415
 
@@ -3184,9 +2911,7 @@ class TestFromAC_EditParentContract:
         → 200 instead of the required 422.
     """
 
-    def test_parent_null_returns_200_not_typeerror(
-        self, client_1344: TestClient, engine_1344: KanbanEngine
-    ) -> None:
+    def test_parent_null_returns_200_not_typeerror(self, client_1344: TestClient, engine_1344: KanbanEngine) -> None:
         """parent: null must never result in an uncaught TypeError (500).
 
         AC1: invalid values return 422, not uncaught exceptions.
@@ -3201,13 +2926,10 @@ class TestFromAC_EditParentContract:
             json={"updated": task.updated, "parent": None},
         )
         assert response.status_code == 200, (
-            f"parent: null caused uncaught exception — got {response.status_code}: "
-            f"{response.json()}"
+            f"parent: null caused uncaught exception — got {response.status_code}: {response.json()}"
         )
 
-    def test_parent_null_clears_parent_1344(
-        self, client_1344: TestClient, engine_1344: KanbanEngine
-    ) -> None:
+    def test_parent_null_clears_parent_1344(self, client_1344: TestClient, engine_1344: KanbanEngine) -> None:
         """parent: null in request body clears the parent field (engine_1344 clear signal).
 
         AC2: parent: null clears the parent (maps to engine_1344's parent-clear signal).
@@ -3228,9 +2950,7 @@ class TestFromAC_EditParentContract:
             f"parent: null did not clear the parent — got: {response.json()['parent']!r}"
         )
 
-    def test_negative_parent_returns_422(
-        self, client_1344: TestClient, engine_1344: KanbanEngine
-    ) -> None:
+    def test_negative_parent_returns_422(self, client_1344: TestClient, engine_1344: KanbanEngine) -> None:
         """Negative parent value is invalid and must return 422.
 
         AC2: negative values return 422.
@@ -3243,9 +2963,7 @@ class TestFromAC_EditParentContract:
             "/api/tasks/1/edit",
             json={"updated": task.updated, "parent": -1},
         )
-        assert response.status_code == 422, (
-            f"Negative parent -1 should return 422, got: {response.status_code}"
-        )
+        assert response.status_code == 422, f"Negative parent -1 should return 422, got: {response.status_code}"
 
 
 # ---------------------------------------------------------------------------
@@ -3265,9 +2983,7 @@ class TestFromAC_EditBodyContract:
         sent → original body remains unchanged → silent no-op violation of AC3.
     """
 
-    def test_body_empty_string_clears_body_1344(
-        self, client_1344: TestClient, engine_1344: KanbanEngine
-    ) -> None:
+    def test_body_empty_string_clears_body_1344(self, client_1344: TestClient, engine_1344: KanbanEngine) -> None:
         """body: "" in request body must clear the task body to empty string.
 
         AC3: body: "" clears the task body (maps to engine_1344's body="" contract).
@@ -3284,9 +3000,7 @@ class TestFromAC_EditBodyContract:
             json={"updated": task.updated, "body": ""},
         )
         assert response.status_code == 200
-        assert response.json()["body"] == "", (
-            f"body: '' must clear the task body, got: {response.json()['body']!r}"
-        )
+        assert response.json()["body"] == "", f"body: '' must clear the task body, got: {response.json()['body']!r}"
 
     def test_body_empty_string_does_not_return_unchanged_body(
         self, client_1344: TestClient, engine_1344: KanbanEngine
@@ -3433,9 +3147,7 @@ class TestFromAC_CleanupClaimRelease:
     - Live claimed_at (< 1 h old) → NOT in released_claim_ids; file unchanged
     """
 
-    def test_cleanup_returns_expired_task_id_in_released_claim_ids(
-        self, tmp_path: Path
-    ) -> None:
+    def test_cleanup_returns_expired_task_id_in_released_claim_ids(self, tmp_path: Path) -> None:
         """Expired claimed_at is cleared; task ID appears in released_claim_ids."""
         board = _make_board_1448(tmp_path)
         _write_task_1448(board, task_id=1, status="todo", claimed_at=_EPOCH_TS)
@@ -3470,9 +3182,7 @@ class TestFromAC_CleanupClaimRelease:
         assert 3 in result.released_claim_ids
         # Re-read from disk to prove CAS write persisted the cleared claimed_at
         task = engine_1448.show_task("3")
-        assert task.claimed_at is None, (
-            "cleanup must clear claimed_at on disk for expired task"
-        )
+        assert task.claimed_at is None, "cleanup must clear claimed_at on disk for expired task"
 
 
 # ---------------------------------------------------------------------------
@@ -3488,14 +3198,10 @@ class TestFromAC_CleanupArchiveMove:
     task ID in archived_task_ids.
     """
 
-    def test_cleanup_moves_archived_status_task_to_archive_dir(
-        self, tmp_path: Path
-    ) -> None:
+    def test_cleanup_moves_archived_status_task_to_archive_dir(self, tmp_path: Path) -> None:
         """Task with status=archived in tasks/ is moved to archive/."""
         board = _make_board_1448(tmp_path)
-        _write_task_1448(
-            board, task_id=1, status="archived", archival_reason='"completed"'
-        )
+        _write_task_1448(board, task_id=1, status="archived", archival_reason='"completed"')
         engine_1448 = KanbanEngine(board, activity_log=False)
 
         result = engine_1448.cleanup()  # type: ignore[attr-defined]  # not yet implemented
@@ -3522,13 +3228,9 @@ class TestFromAC_CleanupSafety:
     def test_cleanup_skips_archive_collision(self, tmp_path: Path) -> None:
         """Destination file already exists in archive/ → task skipped; not in archived_task_ids."""
         board = _make_board_1448(tmp_path)
-        _write_task_1448(
-            board, task_id=1, status="archived", archival_reason='"completed"'
-        )
+        _write_task_1448(board, task_id=1, status="archived", archival_reason='"completed"')
         # Pre-create collision target
-        (board / "archive" / "1-task.md").write_text(
-            "collision sentinel", encoding="utf-8"
-        )
+        (board / "archive" / "1-task.md").write_text("collision sentinel", encoding="utf-8")
         engine_1448 = KanbanEngine(board, activity_log=False)
 
         result = engine_1448.cleanup()  # type: ignore[attr-defined]  # not yet implemented
@@ -3536,15 +3238,11 @@ class TestFromAC_CleanupSafety:
         assert 1 not in result.archived_task_ids
         assert len(result.skipped_items) >= 1
 
-    def test_cleanup_skipped_item_has_path_and_reason_fields(
-        self, tmp_path: Path
-    ) -> None:
+    def test_cleanup_skipped_item_has_path_and_reason_fields(self, tmp_path: Path) -> None:
         """Each skipped_items entry must expose path (str) and reason (str)."""
         board = _make_board_1448(tmp_path)
         # Malformed frontmatter — unparseable by the engine_1448
-        (board / "tasks" / "99-bad.md").write_text(
-            "not valid frontmatter at all\n", encoding="utf-8"
-        )
+        (board / "tasks" / "99-bad.md").write_text("not valid frontmatter at all\n", encoding="utf-8")
         engine_1448 = KanbanEngine(board, activity_log=False)
 
         result = engine_1448.cleanup()  # type: ignore[attr-defined]  # not yet implemented
@@ -3556,26 +3254,18 @@ class TestFromAC_CleanupSafety:
             assert isinstance(item["path"], str)
             assert isinstance(item["reason"], str)
 
-    def test_cleanup_source_file_not_deleted_on_collision_skip(
-        self, tmp_path: Path
-    ) -> None:
+    def test_cleanup_source_file_not_deleted_on_collision_skip(self, tmp_path: Path) -> None:
         """Source task file is not deleted when archive collision causes a skip."""
         board = _make_board_1448(tmp_path)
-        source = _write_task_1448(
-            board, task_id=1, status="archived", archival_reason='"completed"'
-        )
-        (board / "archive" / "1-task.md").write_text(
-            "collision sentinel", encoding="utf-8"
-        )
+        source = _write_task_1448(board, task_id=1, status="archived", archival_reason='"completed"')
+        (board / "archive" / "1-task.md").write_text("collision sentinel", encoding="utf-8")
         engine_1448 = KanbanEngine(board, activity_log=False)
 
         engine_1448.cleanup()  # type: ignore[attr-defined]  # not yet implemented
 
         assert source.exists(), "Source task file must not be deleted when skip occurs"
 
-    def test_cleanup_source_file_not_deleted_on_malformed_skip(
-        self, tmp_path: Path
-    ) -> None:
+    def test_cleanup_source_file_not_deleted_on_malformed_skip(self, tmp_path: Path) -> None:
         """Malformed source file is not deleted when it is added to skipped_items."""
         board = _make_board_1448(tmp_path)
         malformed = board / "tasks" / "99-bad.md"
@@ -3584,9 +3274,7 @@ class TestFromAC_CleanupSafety:
 
         engine_1448.cleanup()  # type: ignore[attr-defined]  # not yet implemented
 
-        assert malformed.exists(), (
-            "malformed source file must not be deleted when skipped"
-        )
+        assert malformed.exists(), "malformed source file must not be deleted when skipped"
 
 
 # ---------------------------------------------------------------------------
@@ -3597,9 +3285,7 @@ class TestFromAC_CleanupSafety:
 class TestFromAC_CleanupAggregation:
     """AC4: one cleanup() invocation returns all three result categories."""
 
-    def test_cleanup_single_call_returns_all_three_categories(
-        self, tmp_path: Path
-    ) -> None:
+    def test_cleanup_single_call_returns_all_three_categories(self, tmp_path: Path) -> None:
         """Board with expired claim + drift-archived task + malformed file.
 
         A single cleanup() call must return all three categories in one result.
@@ -3608,13 +3294,9 @@ class TestFromAC_CleanupAggregation:
         # Expired claim
         _write_task_1448(board, task_id=1, status="todo", claimed_at=_EPOCH_TS)
         # Drift-archived task
-        _write_task_1448(
-            board, task_id=2, status="archived", archival_reason='"completed"'
-        )
+        _write_task_1448(board, task_id=2, status="archived", archival_reason='"completed"')
         # Malformed file (will be skipped)
-        (board / "tasks" / "99-bad.md").write_text(
-            "not valid frontmatter\n", encoding="utf-8"
-        )
+        (board / "tasks" / "99-bad.md").write_text("not valid frontmatter\n", encoding="utf-8")
         engine_1448 = KanbanEngine(board, activity_log=False)
 
         result = engine_1448.cleanup()  # type: ignore[attr-defined]  # not yet implemented
@@ -3641,9 +3323,7 @@ class TestFromAC_CockpitCleanupContract:
     generic error envelope.
     """
 
-    def test_post_cleanup_returns_200_with_correct_field_shape(
-        self, client_1448: TestClient
-    ) -> None:
+    def test_post_cleanup_returns_200_with_correct_field_shape(self, client_1448: TestClient) -> None:
         """POST /api/tasks/cleanup → 200 with released_claim_ids, archived_task_ids, skipped_items."""
         response = client_1448.post("/api/tasks/cleanup")
 
@@ -3661,9 +3341,7 @@ class TestFromAC_CockpitCleanupContract:
     ) -> None:
         """skipped_items entries are objects with path+reason, not converted to a generic error."""
         # Add a malformed file to trigger a skipped_items entry
-        (kanban_dir / "tasks" / "99-bad.md").write_text(
-            "not valid frontmatter\n", encoding="utf-8"
-        )
+        (kanban_dir / "tasks" / "99-bad.md").write_text("not valid frontmatter\n", encoding="utf-8")
 
         response = client_1448.post("/api/tasks/cleanup")
 
@@ -3677,17 +3355,13 @@ class TestFromAC_CockpitCleanupContract:
         self, client_1448: TestClient, kanban_dir: Path
     ) -> None:
         """skipped_items is non-empty when a malformed file is present; entries are typed."""
-        (kanban_dir / "tasks" / "99-bad.md").write_text(
-            "not valid frontmatter\n", encoding="utf-8"
-        )
+        (kanban_dir / "tasks" / "99-bad.md").write_text("not valid frontmatter\n", encoding="utf-8")
 
         response = client_1448.post("/api/tasks/cleanup")
 
         assert response.status_code == 200
         body = response.json()
-        assert len(body["skipped_items"]) >= 1, (
-            "malformed file must appear in skipped_items"
-        )
+        assert len(body["skipped_items"]) >= 1, "malformed file must appear in skipped_items"
         for item in body["skipped_items"]:
             assert isinstance(item["path"], str), "skipped_items path must be str"
             assert isinstance(item["reason"], str), "skipped_items reason must be str"
@@ -3709,9 +3383,7 @@ class TestFromAC_CleanupNegativeProbe:
     def test_engine_init_does_not_invoke_cleanup(self, tmp_path: Path) -> None:
         """KanbanEngine.__init__ must not call cleanup()."""
         board = _make_board_1448(tmp_path)
-        assert hasattr(KanbanEngine, "cleanup"), (
-            "KanbanEngine.cleanup must exist as a method"
-        )
+        assert hasattr(KanbanEngine, "cleanup"), "KanbanEngine.cleanup must exist as a method"
         with mock.patch.object(KanbanEngine, "cleanup") as mock_cleanup:
             KanbanEngine(board, activity_log=False)
             mock_cleanup.assert_not_called()
@@ -3759,9 +3431,7 @@ class TestFromAC_CleanupNegativeProbe:
             assert response.status_code == 200
             mock_cleanup.assert_not_called()
 
-    def test_cockpit_sse_does_not_invoke_cleanup(
-        self, client_1448: TestClient, engine_1448: KanbanEngine
-    ) -> None:
+    def test_cockpit_sse_does_not_invoke_cleanup(self, client_1448: TestClient, engine_1448: KanbanEngine) -> None:
         """SSE /api/events must not invoke cleanup() before streaming begins."""
         assert hasattr(engine_1448, "cleanup"), "KanbanEngine.cleanup() must exist"
 

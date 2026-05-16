@@ -91,9 +91,7 @@ class KnowledgeQueryService:
             kwargs["scopes"] = effective_scopes
         return self._vectors.search_similar(query_vec, top_k=top_k, **kwargs), 0
 
-    def _search_chunks(
-        self, prompt: str, top_k: int, *, scopes: list[str] | None = None
-    ) -> list[tuple[str, float]]:
+    def _search_chunks(self, prompt: str, top_k: int, *, scopes: list[str] | None = None) -> list[tuple[str, float]]:
         """Return (chunk_id, score) pairs for *prompt*, delegating to the retriever when set."""
         chunks, _ = self._search(prompt, top_k, scopes=scopes)
         return chunks
@@ -124,9 +122,7 @@ class KnowledgeQueryService:
                 source_entity = getattr(edge, "source_id", None)
                 target_entity = getattr(edge, "target_id", None)
                 relation = getattr(edge, "relation", None)
-                if not isinstance(source_entity, str) or not isinstance(
-                    target_entity, str
-                ):
+                if not isinstance(source_entity, str) or not isinstance(target_entity, str):
                     continue
 
                 peer_id = target_entity if source_entity == entity_id else source_entity
@@ -144,15 +140,11 @@ class KnowledgeQueryService:
                 related_source_name = ""
                 if self._source_store is not None:
                     related_source = self._source_store.get(peer_source_id)
-                    related_source_name = (
-                        related_source.name if related_source is not None else ""
-                    )
+                    related_source_name = related_source.name if related_source is not None else ""
 
                 relationship = str(relation)
                 entity_label = (
-                    peer_name
-                    if isinstance(peer_name, str)
-                    else (entity_name if isinstance(entity_name, str) else "")
+                    peer_name if isinstance(peer_name, str) else (entity_name if isinstance(entity_name, str) else "")
                 )
                 key = (related_source_name, relationship, entity_label)
                 if key in seen:
@@ -192,9 +184,7 @@ class KnowledgeQueryService:
             if not raw:
                 return []
 
-            filtered = [
-                (doc_id, score) for doc_id, score in raw if score >= self._threshold
-            ][:top_k]
+            filtered = [(doc_id, score) for doc_id, score in raw if score >= self._threshold][:top_k]
 
             structured: list[StructuredSearchResult] = []
             for raw_id, score in filtered:
@@ -240,9 +230,7 @@ class KnowledgeQueryService:
                     )
                 )
         except Exception:  # noqa: BLE001
-            logger.warning(
-                "Knowledge query failed for prompt: %s", prompt[:100], exc_info=True
-            )
+            logger.warning("Knowledge query failed for prompt: %s", prompt[:100], exc_info=True)
             return []
         else:
             return structured
@@ -286,9 +274,7 @@ class KnowledgeQueryService:
             if len(words) > max_tokens:
                 output = " ".join(words[:max_tokens])
         except Exception:  # noqa: BLE001
-            logger.warning(
-                "query_for_context failed for prompt: %s", prompt[:100], exc_info=True
-            )
+            logger.warning("query_for_context failed for prompt: %s", prompt[:100], exc_info=True)
             return None
         else:
             return output

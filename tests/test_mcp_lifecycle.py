@@ -39,16 +39,8 @@ from owlbear_mcp_kanban.server import move_task
 # Import _make_engine_mock from the file under test
 # ---------------------------------------------------------------------------
 
-_LIFECYCLE_TOOLS_PATH = (
-    Path(__file__).parent.parent
-    / "serve"
-    / "mcp-kanban"
-    / "tests"
-    / "test_mcp_lifecycle_tools.py"
-)
-_spec = importlib.util.spec_from_file_location(
-    "_lifecycle_tools", _LIFECYCLE_TOOLS_PATH
-)
+_LIFECYCLE_TOOLS_PATH = Path(__file__).parent.parent / "serve" / "mcp-kanban" / "tests" / "test_mcp_lifecycle_tools.py"
+_spec = importlib.util.spec_from_file_location("_lifecycle_tools", _LIFECYCLE_TOOLS_PATH)
 assert _spec is not None
 assert _spec.loader is not None
 _lifecycle_mod = importlib.util.module_from_spec(_spec)
@@ -193,12 +185,8 @@ class TestFromAC_MoveTaskGuidanceViaMock:
         """
         ctx = _make_fallback_ctx(before_dict=_RESEARCH_TASK, after_dict=_TODO_TASK)
         result = await move_task(ctx, id="1", status="todo")
-        assert len(result.guidance) > 0, (
-            f"Expected guidance message for research→todo, got {result.guidance!r}"
-        )
-        assert "research" in result.guidance[0], (
-            f"Expected 'research' in guidance message, got {result.guidance[0]!r}"
-        )
+        assert len(result.guidance) > 0, f"Expected guidance message for research→todo, got {result.guidance!r}"
+        assert "research" in result.guidance[0], f"Expected 'research' in guidance message, got {result.guidance[0]!r}"
 
     @pytest.mark.asyncio
     async def test_forward_skip_guidance_message_references_target_status(self) -> None:
@@ -209,9 +197,5 @@ class TestFromAC_MoveTaskGuidanceViaMock:
         """
         ctx = _make_fallback_ctx(before_dict=_RESEARCH_TASK, after_dict=_TODO_TASK)
         result = await move_task(ctx, id="1", status="todo")
-        assert len(result.guidance) > 0, (
-            f"Expected guidance message for research→todo, got {result.guidance!r}"
-        )
-        assert "todo" in result.guidance[0], (
-            f"Expected 'todo' in guidance message, got {result.guidance[0]!r}"
-        )
+        assert len(result.guidance) > 0, f"Expected guidance message for research→todo, got {result.guidance!r}"
+        assert "todo" in result.guidance[0], f"Expected 'todo' in guidance message, got {result.guidance[0]!r}"

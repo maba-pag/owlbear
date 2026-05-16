@@ -46,8 +46,7 @@ class TestFromAC_ReactCompilerConfig:
         pkg = json.loads((_WEB / "package.json").read_text())
         dev_deps = pkg.get("devDependencies", {})
         assert "babel-plugin-react-compiler" in dev_deps, (
-            "babel-plugin-react-compiler not found in devDependencies — run: "
-            "npm install -D babel-plugin-react-compiler"
+            "babel-plugin-react-compiler not found in devDependencies — run: npm install -D babel-plugin-react-compiler"
         )
 
     def test_vite_config_passes_babel_plugin_to_react_plugin(self) -> None:
@@ -93,8 +92,7 @@ class TestFromAC_KanbanBoardMemoRemoval:
     def test_card_not_wrapped_in_react_memo(self) -> None:
         """Callsite 1: export const Card = memo(...) must be removed."""
         assert "export const Card = memo(" not in self._kanbanboard, (
-            "Card is still wrapped in React.memo() — remove the wrapper; "
-            "React Compiler handles this automatically"
+            "Card is still wrapped in React.memo() — remove the wrapper; React Compiler handles this automatically"
         )
 
     # Callsite 2 — Column: memo wrapper
@@ -307,13 +305,10 @@ class TestFromAC_BuildTestE2EVerification:
             timeout=180,
         )
         combined = result.stdout + result.stderr
-        assert result.returncode == 0, (
-            f"npm run build failed (exit {result.returncode}):\n{combined[-2000:]}"
-        )
+        assert result.returncode == 0, f"npm run build failed (exit {result.returncode}):\n{combined[-2000:]}"
         assert "error TS" not in combined, (
             "TypeScript type errors found in build output — fix or exclude test "
-            "files from the production tsconfig so the compiler-enabled build is clean:\n"
-            + combined[-2000:]
+            "files from the production tsconfig so the compiler-enabled build is clean:\n" + combined[-2000:]
         )
 
     def test_vitest_suite_no_unhandled_errors(self) -> None:
@@ -331,13 +326,10 @@ class TestFromAC_BuildTestE2EVerification:
             timeout=120,
         )
         combined = result.stdout + result.stderr
-        assert result.returncode == 0, (
-            f"npm test failed (exit {result.returncode}):\n{combined[-2000:]}"
-        )
+        assert result.returncode == 0, f"npm test failed (exit {result.returncode}):\n{combined[-2000:]}"
         assert "Unhandled Errors" not in combined, (
             "Vitest reported unhandled errors — inspect and fix the cleanup "
-            "race condition (suspected: KanbanBoard.test.tsx ownerDocument error):\n"
-            + combined[-2000:]
+            "race condition (suspected: KanbanBoard.test.tsx ownerDocument error):\n" + combined[-2000:]
         )
 
     def test_playwright_e2e_passes(self) -> None:
@@ -358,6 +350,5 @@ class TestFromAC_BuildTestE2EVerification:
         combined = result.stdout + result.stderr
         assert result.returncode == 0, (
             f"npm run test:e2e failed (exit {result.returncode}) — "
-            "ensure `npx playwright install chromium` has been run:\n"
-            + combined[-2000:]
+            "ensure `npx playwright install chromium` has been run:\n" + combined[-2000:]
         )

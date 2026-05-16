@@ -129,9 +129,7 @@ _TASK_DETAIL_KEYS = frozenset(
 class TestFromAC_EditTOCTOU:
     """AC1 (updated for #1134 AC4): Edit route CAS engaged — expected_updated forwarded."""
 
-    def test_edit_route_passes_expected_updated_to_engine(
-        self, client, engine: KanbanEngine
-    ) -> None:
+    def test_edit_route_passes_expected_updated_to_engine(self, client, engine: KanbanEngine) -> None:
         """Wraps engine.edit_task to inspect kwargs; expected_updated must be present.
 
         Updated for #1134 AC4: inverts the original gap proof.  The route must now
@@ -165,9 +163,7 @@ class TestFromAC_MoveOCCContrast:
     CAS.  This test proves the structural asymmetry between the two routes.
     """
 
-    def test_move_route_passes_expected_updated_to_engine(
-        self, client, engine: KanbanEngine
-    ) -> None:
+    def test_move_route_passes_expected_updated_to_engine(self, client, engine: KanbanEngine) -> None:
         """Wraps engine.move_task; expected_updated must be present in call kwargs.
 
         Sends a valid move request using the task's current updated timestamp.
@@ -182,9 +178,7 @@ class TestFromAC_MoveOCCContrast:
         assert response.status_code == 200
         assert mocked.called, "engine.move_task must have been called"
         call_kwargs = mocked.call_args.kwargs
-        assert "expected_updated" in call_kwargs, (
-            "Move route must forward expected_updated to engine (OCC engaged)"
-        )
+        assert "expected_updated" in call_kwargs, "Move route must forward expected_updated to engine (OCC engaged)"
         assert call_kwargs["expected_updated"] == task.updated, (
             "expected_updated must match the updated value sent in the request"
         )
@@ -198,9 +192,7 @@ class TestFromAC_MoveOCCContrast:
 class TestFromAC_ReleaseGuardBroken:
     """AC3: Release route behavior after CockpitView wiring (#1132)."""
 
-    def test_release_returns_200_when_task_is_genuinely_claimed(
-        self, client, engine: KanbanEngine
-    ) -> None:
+    def test_release_returns_200_when_task_is_genuinely_claimed(self, client, engine: KanbanEngine) -> None:
         """Claim task 1 via engine (writes claimed_at to disk); release route → 200.
 
         No mocking: proves the live route behavior when claimed_at IS on disk.
@@ -216,9 +208,7 @@ class TestFromAC_ReleaseGuardBroken:
             json={"updated": claimed_task.updated},
         )
 
-        assert response.status_code == 200, (
-            "Release route must return 200 when task is genuinely claimed"
-        )
+        assert response.status_code == 200, "Release route must return 200 when task is genuinely claimed"
 
 
 # ---------------------------------------------------------------------------
@@ -241,9 +231,7 @@ class TestFromAC_409DetailStrings:
         assert body.get("code") == "ERR_STALE"
         assert "changed since read" in body["message"]
 
-    def test_release_unclaimed_task_exact_detail_string(
-        self, client, engine: KanbanEngine
-    ) -> None:
+    def test_release_unclaimed_task_exact_detail_string(self, client, engine: KanbanEngine) -> None:
         """Release on unclaimed task 1 → 409 with exact 'Task {id} is not currently claimed'."""
         task = engine.show_task("1")
         response = client.post("/api/tasks/1/release", json={"updated": task.updated})
@@ -266,9 +254,7 @@ class TestFromAC_SchemaBaseline:
     boards due to gap G3 (AC3 above).
     """
 
-    def test_move_200_response_has_all_14_taskdetailout_keys(
-        self, client, engine: KanbanEngine
-    ) -> None:
+    def test_move_200_response_has_all_14_taskdetailout_keys(self, client, engine: KanbanEngine) -> None:
         """Move 200 response body contains all 13 task-detail keys."""
         task = engine.show_task("1")
         response = client.post(
@@ -279,9 +265,7 @@ class TestFromAC_SchemaBaseline:
         missing = _TASK_DETAIL_KEYS - set(response.json().keys())
         assert not missing, f"Missing task-detail keys in move response: {missing}"
 
-    def test_edit_200_response_has_all_14_taskdetailout_keys(
-        self, client, engine: KanbanEngine
-    ) -> None:
+    def test_edit_200_response_has_all_14_taskdetailout_keys(self, client, engine: KanbanEngine) -> None:
         """Edit 200 response body contains all 13 task-detail keys."""
         task = engine.show_task("1")
         response = client.post(

@@ -261,9 +261,7 @@ class TestFromAC_EditTaskNormalization:
         assert append_passed == "note\nmore"
 
     @pytest.mark.asyncio
-    async def test_guidance_appended_when_body_normalized(
-        self, mock_view_ctx: tuple[AppContext, MagicMock]
-    ) -> None:
+    async def test_guidance_appended_when_body_normalized(self, mock_view_ctx: tuple[AppContext, MagicMock]) -> None:
         app_ctx, _ = mock_view_ctx
         result = await edit_task(_make_ctx(app_ctx), id="1", body="line1\\nline2")
         assert _has_norm_guidance(result.guidance)
@@ -306,20 +304,14 @@ class TestFromAC_EndWorkNormalization:
         self, mock_view_ctx: tuple[AppContext, MagicMock]
     ) -> None:
         app_ctx, mock_view = mock_view_ctx
-        await end_work(
-            _make_ctx(app_ctx), id="1", outcome="success", note="done\\nmore"
-        )
+        await end_work(_make_ctx(app_ctx), id="1", outcome="success", note="done\\nmore")
         note_passed = mock_view.end_work.call_args.kwargs["note"]
         assert note_passed == "done\nmore"
 
     @pytest.mark.asyncio
-    async def test_guidance_appended_when_note_normalized(
-        self, mock_view_ctx: tuple[AppContext, MagicMock]
-    ) -> None:
+    async def test_guidance_appended_when_note_normalized(self, mock_view_ctx: tuple[AppContext, MagicMock]) -> None:
         app_ctx, _ = mock_view_ctx
-        result = await end_work(
-            _make_ctx(app_ctx), id="1", outcome="success", note="done\\nmore"
-        )
+        result = await end_work(_make_ctx(app_ctx), id="1", outcome="success", note="done\\nmore")
         assert _has_norm_guidance(result.guidance)
 
     @pytest.mark.asyncio
@@ -327,9 +319,7 @@ class TestFromAC_EndWorkNormalization:
         self, mock_view_ctx: tuple[AppContext, MagicMock]
     ) -> None:
         app_ctx, mock_view = mock_view_ctx
-        await end_work(
-            _make_ctx(app_ctx), id="1", outcome="success", note="want\\\\nliteral"
-        )
+        await end_work(_make_ctx(app_ctx), id="1", outcome="success", note="want\\\\nliteral")
         note_passed = mock_view.end_work.call_args.kwargs["note"]
         assert note_passed == "want\\nliteral"
 
@@ -436,9 +426,7 @@ class TestFromAC_GuidancePositioning:
             "owlbear_mcp_kanban.server.collect_guidance",
             lambda *_args, **_kwargs: ["existing reminder"],
         )
-        result = await end_work(
-            _make_ctx(app_ctx), id="1", outcome="success", note="done\\nmore"
-        )
+        result = await end_work(_make_ctx(app_ctx), id="1", outcome="success", note="done\\nmore")
         assert any(g == "existing reminder" for g in result.guidance)
         assert _has_norm_guidance(result.guidance)
         # Assert relative order: existing reminder must precede normalization guidance.
@@ -506,9 +494,7 @@ class TestFromAC_PassthroughNoNormalization:
         _, changed = _normalize_escaped_newlines("clean note no escapes")
         assert not changed
         app_ctx, mock_view = mock_view_ctx
-        result = await end_work(
-            _make_ctx(app_ctx), id="1", outcome="success", note="clean note no escapes"
-        )
+        result = await end_work(_make_ctx(app_ctx), id="1", outcome="success", note="clean note no escapes")
         note_passed = mock_view.end_work.call_args.kwargs["note"]
         assert note_passed == "clean note no escapes"
         assert not _has_norm_guidance(result.guidance)

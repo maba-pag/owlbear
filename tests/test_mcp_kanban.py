@@ -260,9 +260,7 @@ class TestLifecycleErrorHelper:
 
 class TestNoRetryOnTypeError:
     @pytest.mark.asyncio
-    async def test_end_work_typeerror_propagates_after_one_call(
-        self, app_ctx_claimed: AppContext
-    ) -> None:
+    async def test_end_work_typeerror_propagates_after_one_call(self, app_ctx_claimed: AppContext) -> None:
         mock_view = MagicMock()
         mock_view.end_work.side_effect = TypeError("unexpected kwarg: archival_refs")
         app_ctx_claimed.engine._agent_view = mock_view  # noqa: SLF001
@@ -304,9 +302,7 @@ class TestNoRetryOnTypeError:
         assert mock_view.end_work.call_count == 1
 
     @pytest.mark.asyncio
-    async def test_move_task_typeerror_propagates_after_one_call(
-        self, app_ctx_todo: AppContext
-    ) -> None:
+    async def test_move_task_typeerror_propagates_after_one_call(self, app_ctx_todo: AppContext) -> None:
         mock_view = MagicMock()
         mock_view.move_task.side_effect = TypeError("unexpected kwarg: archival_refs")
         app_ctx_todo.engine._agent_view = mock_view  # noqa: SLF001
@@ -350,9 +346,7 @@ class TestAppContextContains:
 
 
 class TestApplyToolExclusions:
-    def test_empty_env_var_returns_empty_set(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_empty_env_var_returns_empty_set(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from mcp.server.fastmcp import FastMCP
 
         monkeypatch.delenv("KANBAN_TOOLS_EXCLUDE", raising=False)
@@ -360,9 +354,7 @@ class TestApplyToolExclusions:
         result = _apply_tool_exclusions(server)
         assert result == set()
 
-    def test_nonexistent_tool_name_is_silently_ignored(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_nonexistent_tool_name_is_silently_ignored(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from mcp.server.fastmcp import FastMCP
 
         monkeypatch.setenv("KANBAN_TOOLS_EXCLUDE", "no_such_tool")
@@ -383,9 +375,7 @@ class TestApplyToolExclusions:
         result = _apply_tool_exclusions(server)
         assert "deletable_tool" in result
 
-    def test_comma_separated_removes_valid_and_ignores_missing(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_comma_separated_removes_valid_and_ignores_missing(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from mcp.server.fastmcp import FastMCP
 
         server = FastMCP("test-multi")
@@ -481,9 +471,7 @@ class TestShowValidated:
 
 class TestListTasks:
     @pytest.mark.asyncio
-    async def test_happy_path_returns_list_response(
-        self, app_ctx_todo: AppContext
-    ) -> None:
+    async def test_happy_path_returns_list_response(self, app_ctx_todo: AppContext) -> None:
         from owlbear_kanban.models import ListTasksResponse
 
         ctx = _make_ctx(app_ctx_todo)
@@ -499,13 +487,9 @@ class TestListTasks:
         assert hasattr(result, "tasks")
 
     @pytest.mark.asyncio
-    async def test_kanban_error_raises_tool_error(
-        self, app_ctx_todo: AppContext
-    ) -> None:
+    async def test_kanban_error_raises_tool_error(self, app_ctx_todo: AppContext) -> None:
         mock_view = MagicMock()
-        mock_view.list_tasks.side_effect = KanbanError(
-            code="ERR_NOT_FOUND", user_message="list failed"
-        )
+        mock_view.list_tasks.side_effect = KanbanError(code="ERR_NOT_FOUND", user_message="list failed")
         app_ctx_todo.engine._agent_view = mock_view  # noqa: SLF001
         ctx = _make_ctx(app_ctx_todo)
         with pytest.raises(ToolError, match="list failed"):
@@ -523,13 +507,9 @@ class TestPickTasks:
         assert isinstance(result.waves, list)
 
     @pytest.mark.asyncio
-    async def test_kanban_error_raises_tool_error(
-        self, app_ctx_todo: AppContext
-    ) -> None:
+    async def test_kanban_error_raises_tool_error(self, app_ctx_todo: AppContext) -> None:
         mock_view = MagicMock()
-        mock_view.pick_tasks.side_effect = KanbanError(
-            code="ERR_NOT_FOUND", user_message="pick failed"
-        )
+        mock_view.pick_tasks.side_effect = KanbanError(code="ERR_NOT_FOUND", user_message="pick failed")
         app_ctx_todo.engine._agent_view = mock_view  # noqa: SLF001
         ctx = _make_ctx(app_ctx_todo)
         with pytest.raises(ToolError, match="pick failed"):
@@ -544,9 +524,7 @@ class TestShowTask:
         ctx = _make_ctx(app_ctx_todo)
         result = await show_task(ctx, id=1)
         assert isinstance(result, ShowTaskResponse)
-        assert (
-            result.id == 1
-        )  # confirms correct task was returned, not an arbitrary result
+        assert result.id == 1  # confirms correct task was returned, not an arbitrary result
 
     @pytest.mark.asyncio
     async def test_with_section_parameter(self, app_ctx_todo: AppContext) -> None:
@@ -557,13 +535,9 @@ class TestShowTask:
         assert isinstance(result, ShowTaskResponse)
 
     @pytest.mark.asyncio
-    async def test_kanban_error_raises_tool_error(
-        self, app_ctx_todo: AppContext
-    ) -> None:
+    async def test_kanban_error_raises_tool_error(self, app_ctx_todo: AppContext) -> None:
         mock_view = MagicMock()
-        mock_view.show_task.side_effect = KanbanError(
-            code="ERR_NOT_FOUND", user_message="show failed"
-        )
+        mock_view.show_task.side_effect = KanbanError(code="ERR_NOT_FOUND", user_message="show failed")
         app_ctx_todo.engine._agent_view = mock_view  # noqa: SLF001
         ctx = _make_ctx(app_ctx_todo)
         with pytest.raises(ToolError, match="show failed"):
@@ -578,9 +552,7 @@ class TestShowTask:
 
 class TestCreateDRExtraBranches:
     @pytest.mark.asyncio
-    async def test_invalid_request_type_raises_before_parse(
-        self, app_ctx_todo: AppContext
-    ) -> None:
+    async def test_invalid_request_type_raises_before_parse(self, app_ctx_todo: AppContext) -> None:
         ctx = _make_ctx(app_ctx_todo)
         with pytest.raises(ToolError, match="request_type must be one of"):
             await create_dr(
@@ -592,18 +564,14 @@ class TestCreateDRExtraBranches:
             )
 
     @pytest.mark.asyncio
-    async def test_kanban_error_from_decisions_raises_tool_error(
-        self, app_ctx_todo: AppContext
-    ) -> None:
+    async def test_kanban_error_from_decisions_raises_tool_error(self, app_ctx_todo: AppContext) -> None:
         from unittest.mock import patch
 
         ctx = _make_ctx(app_ctx_todo)
         with (
             patch(
                 "owlbear_mcp_kanban.server.decisions.create_dr",
-                side_effect=KanbanError(
-                    code="ERR_NOT_FOUND", user_message="dr create failed"
-                ),
+                side_effect=KanbanError(code="ERR_NOT_FOUND", user_message="dr create failed"),
             ),
             pytest.raises(ToolError, match="dr create failed"),
         ):
@@ -632,22 +600,16 @@ class TestMoveTaskDirectPath:
             await move_task(ctx, id="1")
 
     @pytest.mark.asyncio
-    async def test_agent_view_kanban_error_raises_tool_error(
-        self, app_ctx_todo: AppContext
-    ) -> None:
+    async def test_agent_view_kanban_error_raises_tool_error(self, app_ctx_todo: AppContext) -> None:
         mock_view = MagicMock()
-        mock_view.move_task.side_effect = KanbanError(
-            code="ERR_NOT_FOUND", user_message="move failed"
-        )
+        mock_view.move_task.side_effect = KanbanError(code="ERR_NOT_FOUND", user_message="move failed")
         app_ctx_todo.engine._agent_view = mock_view  # noqa: SLF001
         ctx = _make_ctx(app_ctx_todo)
         with pytest.raises(ToolError, match="move failed"):
             await move_task(ctx, id="1", status="in-progress")
 
     @pytest.mark.asyncio
-    async def test_not_implemented_propagates_without_fallback(
-        self, app_ctx_todo: AppContext
-    ) -> None:
+    async def test_not_implemented_propagates_without_fallback(self, app_ctx_todo: AppContext) -> None:
         """NotImplementedError from agent_view().move_task() is NOT caught — no engine fallback."""
         mock_view = MagicMock()
         mock_view.move_task.side_effect = NotImplementedError("view unavailable")
@@ -661,90 +623,70 @@ class TestEditTaskKwargsBranches:
     """edit_task kwargs — each conditional builds a different kwargs dict."""
 
     @pytest.mark.asyncio
-    async def test_body_kwarg(
-        self, app_ctx_with_mock_view: tuple[AppContext, MagicMock]
-    ) -> None:
+    async def test_body_kwarg(self, app_ctx_with_mock_view: tuple[AppContext, MagicMock]) -> None:
         app_ctx, mock_view = app_ctx_with_mock_view
         await edit_task(_make_ctx(app_ctx), id="1", body="new body")
         call_kwargs = mock_view.edit_task.call_args.kwargs
         assert "body" in call_kwargs
 
     @pytest.mark.asyncio
-    async def test_timestamp_kwarg(
-        self, app_ctx_with_mock_view: tuple[AppContext, MagicMock]
-    ) -> None:
+    async def test_timestamp_kwarg(self, app_ctx_with_mock_view: tuple[AppContext, MagicMock]) -> None:
         app_ctx, mock_view = app_ctx_with_mock_view
         await edit_task(_make_ctx(app_ctx), id="1", append_body="note", timestamp=True)
         call_kwargs = mock_view.edit_task.call_args.kwargs
         assert call_kwargs.get("timestamp") is True
 
     @pytest.mark.asyncio
-    async def test_parent_kwarg(
-        self, app_ctx_with_mock_view: tuple[AppContext, MagicMock]
-    ) -> None:
+    async def test_parent_kwarg(self, app_ctx_with_mock_view: tuple[AppContext, MagicMock]) -> None:
         app_ctx, mock_view = app_ctx_with_mock_view
         await edit_task(_make_ctx(app_ctx), id="1", parent=2)
         call_kwargs = mock_view.edit_task.call_args.kwargs
         assert call_kwargs.get("parent") == 2
 
     @pytest.mark.asyncio
-    async def test_add_dep_kwarg(
-        self, app_ctx_with_mock_view: tuple[AppContext, MagicMock]
-    ) -> None:
+    async def test_add_dep_kwarg(self, app_ctx_with_mock_view: tuple[AppContext, MagicMock]) -> None:
         app_ctx, mock_view = app_ctx_with_mock_view
         await edit_task(_make_ctx(app_ctx), id="1", add_dep=[2])
         call_kwargs = mock_view.edit_task.call_args.kwargs
         assert call_kwargs.get("add_dep") == [2]
 
     @pytest.mark.asyncio
-    async def test_remove_dep_kwarg(
-        self, app_ctx_with_mock_view: tuple[AppContext, MagicMock]
-    ) -> None:
+    async def test_remove_dep_kwarg(self, app_ctx_with_mock_view: tuple[AppContext, MagicMock]) -> None:
         app_ctx, mock_view = app_ctx_with_mock_view
         await edit_task(_make_ctx(app_ctx), id="1", remove_dep=[2])
         call_kwargs = mock_view.edit_task.call_args.kwargs
         assert call_kwargs.get("remove_dep") == [2]
 
     @pytest.mark.asyncio
-    async def test_add_tag_kwarg(
-        self, app_ctx_with_mock_view: tuple[AppContext, MagicMock]
-    ) -> None:
+    async def test_add_tag_kwarg(self, app_ctx_with_mock_view: tuple[AppContext, MagicMock]) -> None:
         app_ctx, mock_view = app_ctx_with_mock_view
         await edit_task(_make_ctx(app_ctx), id="1", add_tag=["security"])
         call_kwargs = mock_view.edit_task.call_args.kwargs
         assert call_kwargs.get("add_tag") == ["security"]
 
     @pytest.mark.asyncio
-    async def test_remove_tag_kwarg(
-        self, app_ctx_with_mock_view: tuple[AppContext, MagicMock]
-    ) -> None:
+    async def test_remove_tag_kwarg(self, app_ctx_with_mock_view: tuple[AppContext, MagicMock]) -> None:
         app_ctx, mock_view = app_ctx_with_mock_view
         await edit_task(_make_ctx(app_ctx), id="1", remove_tag=["old"])
         call_kwargs = mock_view.edit_task.call_args.kwargs
         assert call_kwargs.get("remove_tag") == ["old"]
 
     @pytest.mark.asyncio
-    async def test_block_reason_kwarg(
-        self, app_ctx_with_mock_view: tuple[AppContext, MagicMock]
-    ) -> None:
+    async def test_block_reason_kwarg(self, app_ctx_with_mock_view: tuple[AppContext, MagicMock]) -> None:
         app_ctx, mock_view = app_ctx_with_mock_view
         await edit_task(_make_ctx(app_ctx), id="1", block_reason="waiting on dep")
         call_kwargs = mock_view.edit_task.call_args.kwargs
         assert call_kwargs.get("block_reason") == "waiting on dep"
 
     @pytest.mark.asyncio
-    async def test_archival_reason_kwarg(
-        self, app_ctx_with_mock_view: tuple[AppContext, MagicMock]
-    ) -> None:
+    async def test_archival_reason_kwarg(self, app_ctx_with_mock_view: tuple[AppContext, MagicMock]) -> None:
         app_ctx, mock_view = app_ctx_with_mock_view
         await edit_task(_make_ctx(app_ctx), id="1", archival_reason="completed")
         call_kwargs = mock_view.edit_task.call_args.kwargs
         assert call_kwargs.get("archival_reason") == "completed"
 
     @pytest.mark.asyncio
-    async def test_archival_refs_kwarg(
-        self, app_ctx_with_mock_view: tuple[AppContext, MagicMock]
-    ) -> None:
+    async def test_archival_refs_kwarg(self, app_ctx_with_mock_view: tuple[AppContext, MagicMock]) -> None:
         app_ctx, mock_view = app_ctx_with_mock_view
         await edit_task(_make_ctx(app_ctx), id="1", archival_refs=[100])
         call_kwargs = mock_view.edit_task.call_args.kwargs
@@ -755,9 +697,7 @@ class TestStartWorkDirectPath:
     """start_work uses engine.agent_view() directly — no engine fallback (#1360)."""
 
     @pytest.mark.asyncio
-    async def test_not_implemented_propagates_without_fallback(
-        self, app_ctx_todo: AppContext
-    ) -> None:
+    async def test_not_implemented_propagates_without_fallback(self, app_ctx_todo: AppContext) -> None:
         """NotImplementedError from agent_view().start_work() propagates — no engine fallback."""
         mock_view = MagicMock()
         mock_view.start_work.side_effect = NotImplementedError("view unavailable")
@@ -767,9 +707,7 @@ class TestStartWorkDirectPath:
             await start_work(ctx, id="1")
 
     @pytest.mark.asyncio
-    async def test_agent_view_value_error_raises_tool_error(
-        self, app_ctx_todo: AppContext
-    ) -> None:
+    async def test_agent_view_value_error_raises_tool_error(self, app_ctx_todo: AppContext) -> None:
         """ValueError from agent_view().start_work() is converted to ToolError."""
         mock_view = MagicMock()
         mock_view.start_work.side_effect = ValueError("bad task id")
@@ -788,22 +726,16 @@ class TestEndWorkDirectPath:
         assert result.id == 1
 
     @pytest.mark.asyncio
-    async def test_agent_view_kanban_error_raises_tool_error(
-        self, app_ctx_claimed: AppContext
-    ) -> None:
+    async def test_agent_view_kanban_error_raises_tool_error(self, app_ctx_claimed: AppContext) -> None:
         mock_view = MagicMock()
-        mock_view.end_work.side_effect = KanbanError(
-            code="ERR_NOT_FOUND", user_message="end failed"
-        )
+        mock_view.end_work.side_effect = KanbanError(code="ERR_NOT_FOUND", user_message="end failed")
         app_ctx_claimed.engine._agent_view = mock_view  # noqa: SLF001
         ctx = _make_ctx(app_ctx_claimed)
         with pytest.raises(ToolError, match="end failed"):
             await end_work(ctx, id="1", outcome="success", note="done")
 
     @pytest.mark.asyncio
-    async def test_agent_view_value_error_raises_tool_error(
-        self, app_ctx_claimed: AppContext
-    ) -> None:
+    async def test_agent_view_value_error_raises_tool_error(self, app_ctx_claimed: AppContext) -> None:
         mock_view = MagicMock()
         mock_view.end_work.side_effect = ValueError("invalid outcome")
         app_ctx_claimed.engine._agent_view = mock_view  # noqa: SLF001
@@ -812,9 +744,7 @@ class TestEndWorkDirectPath:
             await end_work(ctx, id="1", outcome="success", note="done")
 
     @pytest.mark.asyncio
-    async def test_not_implemented_propagates_without_fallback(
-        self, app_ctx_claimed: AppContext
-    ) -> None:
+    async def test_not_implemented_propagates_without_fallback(self, app_ctx_claimed: AppContext) -> None:
         """NotImplementedError from agent_view().end_work() propagates — no engine fallback."""
         mock_view = MagicMock()
         mock_view.end_work.side_effect = NotImplementedError("view unavailable")
@@ -829,9 +759,7 @@ class TestEditTaskContractDurable:
     async def test_edit_task_non_empty_body_replaces_body(self, tmp_path: Path) -> None:
         board = _make_board(tmp_path)
         engine = KanbanEngine(board)
-        task = engine.create_task(
-            "Contract Task", body="original", status="todo", priority="important"
-        )
+        task = engine.create_task("Contract Task", body="original", status="todo", priority="important")
         app_ctx = AppContext(engine=engine, kanban_dir=board)
 
         result = await edit_task(_make_ctx(app_ctx), id=str(task.id), body="updated")
@@ -841,19 +769,13 @@ class TestEditTaskContractDurable:
         assert persisted.body == "updated"
 
     @pytest.mark.asyncio
-    async def test_edit_task_omitted_body_keeps_existing_body(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_edit_task_omitted_body_keeps_existing_body(self, tmp_path: Path) -> None:
         board = _make_board(tmp_path)
         engine = KanbanEngine(board)
-        task = engine.create_task(
-            "Contract Task", body="keep-me", status="todo", priority="important"
-        )
+        task = engine.create_task("Contract Task", body="keep-me", status="todo", priority="important")
         app_ctx = AppContext(engine=engine, kanban_dir=board)
 
-        result = await edit_task(
-            _make_ctx(app_ctx), id=str(task.id), priority="critical"
-        )
+        result = await edit_task(_make_ctx(app_ctx), id=str(task.id), priority="critical")
 
         assert result.body == "keep-me"
         persisted = engine.show_task(str(task.id))
@@ -861,14 +783,10 @@ class TestEditTaskContractDurable:
         assert persisted.priority == "critical"
 
     @pytest.mark.asyncio
-    async def test_edit_task_null_body_keeps_existing_body(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_edit_task_null_body_keeps_existing_body(self, tmp_path: Path) -> None:
         board = _make_board(tmp_path)
         engine = KanbanEngine(board)
-        task = engine.create_task(
-            "Contract Task", body="keep-me", status="todo", priority="important"
-        )
+        task = engine.create_task("Contract Task", body="keep-me", status="todo", priority="important")
         app_ctx = AppContext(engine=engine, kanban_dir=board)
 
         result = await edit_task(
@@ -884,14 +802,10 @@ class TestEditTaskContractDurable:
         assert persisted.priority == "critical"
 
     @pytest.mark.asyncio
-    async def test_edit_task_body_clear_append_conflict_does_not_mutate_storage(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_edit_task_body_clear_append_conflict_does_not_mutate_storage(self, tmp_path: Path) -> None:
         board = _make_board(tmp_path)
         engine = KanbanEngine(board)
-        task = engine.create_task(
-            "Contract Task", body="existing", status="todo", priority="important"
-        )
+        task = engine.create_task("Contract Task", body="existing", status="todo", priority="important")
         app_ctx = AppContext(engine=engine, kanban_dir=board)
 
         with pytest.raises(ToolError):
@@ -945,18 +859,14 @@ class TestEditTaskContractDurable:
         task = engine.create_task("Original Title", status="todo", priority="important")
         app_ctx = AppContext(engine=engine, kanban_dir=board)
 
-        result = await edit_task(
-            _make_ctx(app_ctx), id=str(task.id), title="Updated Title"
-        )
+        result = await edit_task(_make_ctx(app_ctx), id=str(task.id), title="Updated Title")
 
         assert result.title == "Updated Title"
         persisted = engine.show_task(str(task.id))
         assert persisted.title == "Updated Title"
 
     @pytest.mark.asyncio
-    async def test_edit_task_empty_title_raises_tool_error(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_edit_task_empty_title_raises_tool_error(self, tmp_path: Path) -> None:
         board = _make_board(tmp_path)
         engine = KanbanEngine(board)
         task = engine.create_task("My Task", status="todo", priority="important")
@@ -966,9 +876,7 @@ class TestEditTaskContractDurable:
             await edit_task(_make_ctx(app_ctx), id=str(task.id), title="")
 
     @pytest.mark.asyncio
-    async def test_edit_task_whitespace_title_raises_tool_error(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_edit_task_whitespace_title_raises_tool_error(self, tmp_path: Path) -> None:
         board = _make_board(tmp_path)
         engine = KanbanEngine(board)
         task = engine.create_task("My Task", status="todo", priority="important")
@@ -978,9 +886,7 @@ class TestEditTaskContractDurable:
             await edit_task(_make_ctx(app_ctx), id=str(task.id), title="   ")
 
     @pytest.mark.asyncio
-    async def test_edit_task_already_empty_body_clear_raises_noop(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_edit_task_already_empty_body_clear_raises_noop(self, tmp_path: Path) -> None:
         board = _make_board(tmp_path)
         engine = KanbanEngine(board)
         task = engine.create_task("My Task", status="todo", priority="important")
@@ -993,11 +899,7 @@ class TestEditTaskContractDurable:
 
 class TestEditTaskToolSchemaContract:
     def test_edit_task_tool_schema_keeps_body_optional_and_nullable(self) -> None:
-        tool = next(
-            t
-            for t in _server_mod.mcp._tool_manager._tools.values()
-            if t.name == "edit_task"
-        )
+        tool = next(t for t in _server_mod.mcp._tool_manager._tools.values() if t.name == "edit_task")
         required_fields = set(tool.parameters.get("required", []))
         body_schema = tool.parameters["properties"]["body"]
 
@@ -1006,14 +908,8 @@ class TestEditTaskToolSchemaContract:
         assert any(option.get("type") == "null" for option in any_of)
 
     def test_edit_task_parent_description_documents_clear_sentinel(self) -> None:
-        tool = next(
-            t
-            for t in _server_mod.mcp._tool_manager._tools.values()
-            if t.name == "edit_task"
-        )
-        parent_description = tool.parameters["properties"]["parent"].get(
-            "description", ""
-        )
+        tool = next(t for t in _server_mod.mcp._tool_manager._tools.values() if t.name == "edit_task")
+        parent_description = tool.parameters["properties"]["parent"].get("description", "")
         assert "0 to clear" in parent_description
 
 
@@ -1085,9 +981,7 @@ def app_ctx_with_mixed_archived_1450(tmp_path: Path) -> AppContext:
     kanban_dir = _make_board(tmp_path)
     engine = KanbanEngine(kanban_dir)
     dup_task = engine.create_task("Duplicate task", status="todo", priority="important")
-    comp_task = engine.create_task(
-        "Completed task", status="todo", priority="important"
-    )
+    comp_task = engine.create_task("Completed task", status="todo", priority="important")
     ref_task = engine.create_task("Reference task", status="todo", priority="important")
     av = engine.agent_view()
     av.move_task(
@@ -1287,9 +1181,7 @@ class TestMergedFrom1126:
 
 class TestMergedFrom1196:
     @pytest.mark.asyncio
-    async def test_empty_string_rejected_with_tool_error(
-        self, app_ctx_1196: AppContext
-    ) -> None:
+    async def test_empty_string_rejected_with_tool_error(self, app_ctx_1196: AppContext) -> None:
         from unittest.mock import patch
 
         with (
@@ -1305,9 +1197,7 @@ class TestMergedFrom1196:
             )
 
     @pytest.mark.asyncio
-    async def test_wildcard_rejected_with_tool_error(
-        self, app_ctx_1196: AppContext
-    ) -> None:
+    async def test_wildcard_rejected_with_tool_error(self, app_ctx_1196: AppContext) -> None:
         from unittest.mock import patch
 
         with (
@@ -1323,9 +1213,7 @@ class TestMergedFrom1196:
             )
 
     @pytest.mark.asyncio
-    async def test_path_traversal_rejected_with_tool_error(
-        self, app_ctx_1196: AppContext
-    ) -> None:
+    async def test_path_traversal_rejected_with_tool_error(self, app_ctx_1196: AppContext) -> None:
         from unittest.mock import patch
 
         with (
@@ -1341,9 +1229,7 @@ class TestMergedFrom1196:
             )
 
     @pytest.mark.asyncio
-    async def test_non_numeric_string_rejected_with_tool_error(
-        self, app_ctx_1196: AppContext
-    ) -> None:
+    async def test_non_numeric_string_rejected_with_tool_error(self, app_ctx_1196: AppContext) -> None:
         from unittest.mock import patch
 
         with (
@@ -1359,9 +1245,7 @@ class TestMergedFrom1196:
             )
 
     @pytest.mark.asyncio
-    async def test_mixed_alphanumeric_rejected_with_tool_error(
-        self, app_ctx_1196: AppContext
-    ) -> None:
+    async def test_mixed_alphanumeric_rejected_with_tool_error(self, app_ctx_1196: AppContext) -> None:
         from unittest.mock import patch
 
         with (
@@ -1377,9 +1261,7 @@ class TestMergedFrom1196:
             )
 
     @pytest.mark.asyncio
-    async def test_wildcard_does_not_reach_decisions_create_dr(
-        self, app_ctx_1196: AppContext
-    ) -> None:
+    async def test_wildcard_does_not_reach_decisions_create_dr(self, app_ctx_1196: AppContext) -> None:
         from unittest.mock import patch
 
         with patch("owlbear_mcp_kanban.server.decisions.create_dr") as mock_create_dr:
@@ -1394,9 +1276,7 @@ class TestMergedFrom1196:
             mock_create_dr.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_empty_string_does_not_reach_decisions_create_dr(
-        self, app_ctx_1196: AppContext
-    ) -> None:
+    async def test_empty_string_does_not_reach_decisions_create_dr(self, app_ctx_1196: AppContext) -> None:
         from unittest.mock import patch
 
         with patch("owlbear_mcp_kanban.server.decisions.create_dr") as mock_create_dr:
@@ -1411,9 +1291,7 @@ class TestMergedFrom1196:
             mock_create_dr.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_path_traversal_does_not_reach_decisions_create_dr(
-        self, app_ctx_1196: AppContext
-    ) -> None:
+    async def test_path_traversal_does_not_reach_decisions_create_dr(self, app_ctx_1196: AppContext) -> None:
         from unittest.mock import patch
 
         with patch("owlbear_mcp_kanban.server.decisions.create_dr") as mock_create_dr:
@@ -1428,9 +1306,7 @@ class TestMergedFrom1196:
             mock_create_dr.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_non_numeric_string_does_not_reach_decisions_create_dr(
-        self, app_ctx_1196: AppContext
-    ) -> None:
+    async def test_non_numeric_string_does_not_reach_decisions_create_dr(self, app_ctx_1196: AppContext) -> None:
         from unittest.mock import patch
 
         with patch("owlbear_mcp_kanban.server.decisions.create_dr") as mock_create_dr:
@@ -1445,9 +1321,7 @@ class TestMergedFrom1196:
             mock_create_dr.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_mixed_alphanumeric_does_not_reach_decisions_create_dr(
-        self, app_ctx_1196: AppContext
-    ) -> None:
+    async def test_mixed_alphanumeric_does_not_reach_decisions_create_dr(self, app_ctx_1196: AppContext) -> None:
         from unittest.mock import patch
 
         with patch("owlbear_mcp_kanban.server.decisions.create_dr") as mock_create_dr:
@@ -1462,9 +1336,7 @@ class TestMergedFrom1196:
             mock_create_dr.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_numeric_string_coerced_to_int_before_forwarding(
-        self, app_ctx_1196: AppContext
-    ) -> None:
+    async def test_numeric_string_coerced_to_int_before_forwarding(self, app_ctx_1196: AppContext) -> None:
         from unittest.mock import patch
 
         mock_create_dr = MagicMock(return_value=MagicMock())
@@ -1482,9 +1354,7 @@ class TestMergedFrom1196:
         assert isinstance(call_kwargs["task_id"], int)
 
     @pytest.mark.asyncio
-    async def test_literal_int_task_id_forwarded_unchanged(
-        self, app_ctx_1196: AppContext
-    ) -> None:
+    async def test_literal_int_task_id_forwarded_unchanged(self, app_ctx_1196: AppContext) -> None:
         from unittest.mock import patch
 
         mock_create_dr = MagicMock(return_value=MagicMock())
@@ -1505,59 +1375,32 @@ class TestMergedFrom1196:
 class TestMergedFrom1197:
     def test_server_has_no_unittest_mock_import(self) -> None:
         server_py = (
-            Path(__file__).parent
-            / ".."
-            / "serve"
-            / "mcp-kanban"
-            / "src"
-            / "owlbear_mcp_kanban"
-            / "server.py"
+            Path(__file__).parent / ".." / "serve" / "mcp-kanban" / "src" / "owlbear_mcp_kanban" / "server.py"
         ).resolve()
         source = server_py.read_text(encoding="utf-8")
         assert "from unittest.mock import Mock" not in source
 
     def test_server_has_no_isinstance_mock_check(self) -> None:
         server_py = (
-            Path(__file__).parent
-            / ".."
-            / "serve"
-            / "mcp-kanban"
-            / "src"
-            / "owlbear_mcp_kanban"
-            / "server.py"
+            Path(__file__).parent / ".." / "serve" / "mcp-kanban" / "src" / "owlbear_mcp_kanban" / "server.py"
         ).resolve()
         source = server_py.read_text(encoding="utf-8")
         assert "isinstance(return_value, Mock)" not in source
 
     def test_agent_view_for_not_defined_in_server(self) -> None:
         server_py = (
-            Path(__file__).parent
-            / ".."
-            / "serve"
-            / "mcp-kanban"
-            / "src"
-            / "owlbear_mcp_kanban"
-            / "server.py"
+            Path(__file__).parent / ".." / "serve" / "mcp-kanban" / "src" / "owlbear_mcp_kanban" / "server.py"
         ).resolve()
         source = server_py.read_text(encoding="utf-8")
         assert "def _agent_view_for" not in source
 
     def test_server_1170_make_engine_mock_uses_noncallable_agent_view(self) -> None:
-        source = (Path(__file__).parent / "test_server_1170.py").read_text(
-            encoding="utf-8"
-        )
+        source = (Path(__file__).parent / "test_server_1170.py").read_text(encoding="utf-8")
         assert "NonCallableMagicMock" in source
 
     def test_lifecycle_tools_mock_av_fixture_uses_noncallable_agent_view(self) -> None:
         source = (
-            (
-                Path(__file__).parent
-                / ".."
-                / "serve"
-                / "mcp-kanban"
-                / "tests"
-                / "test_mcp_lifecycle_tools.py"
-            )
+            (Path(__file__).parent / ".." / "serve" / "mcp-kanban" / "tests" / "test_mcp_lifecycle_tools.py")
             .resolve()
             .read_text(encoding="utf-8")
         )
@@ -1566,9 +1409,7 @@ class TestMergedFrom1197:
 
 class TestMergedFrom1360:
     @pytest.mark.asyncio
-    async def test_move_task_not_implemented_propagates_without_fallback(
-        self, app_ctx_todo: AppContext
-    ) -> None:
+    async def test_move_task_not_implemented_propagates_without_fallback(self, app_ctx_todo: AppContext) -> None:
         mock_view = MagicMock()
         mock_view.move_task.side_effect = NotImplementedError("view unavailable")
         app_ctx_todo.engine._agent_view = mock_view  # noqa: SLF001
@@ -1582,9 +1423,7 @@ class TestMergedFrom1360:
         mock_view.start_work.side_effect = NotImplementedError
         ctx = MagicMock()
         ctx.request_context.lifespan_context.engine = MagicMock()
-        ctx.request_context.lifespan_context.engine.agent_view = MagicMock(
-            return_value=mock_view
-        )
+        ctx.request_context.lifespan_context.engine.agent_view = MagicMock(return_value=mock_view)
         with pytest.raises(NotImplementedError):
             await start_work(ctx, id="42")
 
@@ -1594,9 +1433,7 @@ class TestMergedFrom1360:
         mock_view.end_work.side_effect = NotImplementedError
         ctx = MagicMock()
         ctx.request_context.lifespan_context.engine = MagicMock()
-        ctx.request_context.lifespan_context.engine.agent_view = MagicMock(
-            return_value=mock_view
-        )
+        ctx.request_context.lifespan_context.engine.agent_view = MagicMock(return_value=mock_view)
         with pytest.raises(NotImplementedError):
             await end_work(ctx, id="42", outcome="success")
 
@@ -1619,16 +1456,12 @@ class TestMergedFrom1360:
 
 class TestMergedFrom1450:
     @pytest.mark.asyncio
-    async def test_empty_ids_returns_empty_task_list(
-        self, app_ctx_1450: AppContext
-    ) -> None:
+    async def test_empty_ids_returns_empty_task_list(self, app_ctx_1450: AppContext) -> None:
         result = await list_tasks(_make_ctx(app_ctx_1450), ids=[])
         assert result.tasks == []
 
     @pytest.mark.asyncio
-    async def test_empty_ids_returns_empty_for_multi_task_board(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_empty_ids_returns_empty_for_multi_task_board(self, tmp_path: Path) -> None:
         kanban_dir = _make_board(tmp_path)
         engine = KanbanEngine(kanban_dir)
         engine.create_task("Alpha task", status="todo", priority="important")
@@ -1639,9 +1472,7 @@ class TestMergedFrom1450:
         assert result.tasks == []
 
     @pytest.mark.asyncio
-    async def test_empty_ids_returns_missing_ids_is_none(
-        self, app_ctx_1450: AppContext
-    ) -> None:
+    async def test_empty_ids_returns_missing_ids_is_none(self, app_ctx_1450: AppContext) -> None:
         result = await list_tasks(_make_ctx(app_ctx_1450), ids=[])
         assert result.missing_ids is None
 
@@ -1649,18 +1480,14 @@ class TestMergedFrom1450:
     async def test_archival_reason_without_status_finds_archived_task(
         self, app_ctx_with_archived_duplicate_1450: AppContext
     ) -> None:
-        result = await list_tasks(
-            _make_ctx(app_ctx_with_archived_duplicate_1450), archival_reason="duplicate"
-        )
+        result = await list_tasks(_make_ctx(app_ctx_with_archived_duplicate_1450), archival_reason="duplicate")
         assert len(result.tasks) >= 1
 
     @pytest.mark.asyncio
     async def test_archival_reason_filter_all_returned_tasks_match(
         self, app_ctx_with_archived_duplicate_1450: AppContext
     ) -> None:
-        result = await list_tasks(
-            _make_ctx(app_ctx_with_archived_duplicate_1450), archival_reason="duplicate"
-        )
+        result = await list_tasks(_make_ctx(app_ctx_with_archived_duplicate_1450), archival_reason="duplicate")
         assert result.tasks
         assert all(t.archival_reason == "duplicate" for t in result.tasks)
 
@@ -1668,25 +1495,19 @@ class TestMergedFrom1450:
     async def test_archival_reason_duplicate_excludes_completed_reason(
         self, app_ctx_with_mixed_archived_1450: AppContext
     ) -> None:
-        result = await list_tasks(
-            _make_ctx(app_ctx_with_mixed_archived_1450), archival_reason="duplicate"
-        )
+        result = await list_tasks(_make_ctx(app_ctx_with_mixed_archived_1450), archival_reason="duplicate")
         assert len(result.tasks) == 1
         assert result.tasks[0].archival_reason == "duplicate"
 
     @pytest.mark.asyncio
-    async def test_move_task_invalid_status_raises_tool_error_with_json_payload(
-        self, app_ctx_1450: AppContext
-    ) -> None:
+    async def test_move_task_invalid_status_raises_tool_error_with_json_payload(self, app_ctx_1450: AppContext) -> None:
         with pytest.raises(ToolError) as exc_info:
             await move_task(_make_ctx(app_ctx_1450), id="1", status="not-a-real-status")
         payload = json.loads(str(exc_info.value))
         assert isinstance(payload, dict)
 
     @pytest.mark.asyncio
-    async def test_move_task_invalid_status_json_has_code_and_message(
-        self, app_ctx_1450: AppContext
-    ) -> None:
+    async def test_move_task_invalid_status_json_has_code_and_message(self, app_ctx_1450: AppContext) -> None:
         with pytest.raises(ToolError) as exc_info:
             await move_task(_make_ctx(app_ctx_1450), id="1", status="not-a-real-status")
         payload = json.loads(str(exc_info.value))
@@ -1708,9 +1529,7 @@ class TestMergedFrom1450:
         assert isinstance(payload, dict)
 
     @pytest.mark.asyncio
-    async def test_end_work_reject_invalid_move_to_json_has_code_and_message(
-        self, app_ctx_1450: AppContext
-    ) -> None:
+    async def test_end_work_reject_invalid_move_to_json_has_code_and_message(self, app_ctx_1450: AppContext) -> None:
         with pytest.raises(ToolError) as exc_info:
             await end_work(
                 _make_ctx(app_ctx_1450),
@@ -1752,9 +1571,7 @@ class TestMergedFrom1450:
         assert "message" in payload
 
     @pytest.mark.asyncio
-    async def test_stale_write_via_edit_task_returns_json_envelope(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_stale_write_via_edit_task_returns_json_envelope(self, tmp_path: Path) -> None:
         mock_view = MagicMock()
         mock_view.edit_task.side_effect = ConcurrencyError(
             code="ERR_STALE",

@@ -81,15 +81,11 @@ class TestEngineWriteAgentViewRead:
     """AC1: tasks written via engine.create_task are readable by AgentView.show_task
     with ac and proof_bundle values intact."""
 
-    def test_show_task_returns_ac_and_proof_bundle_from_engine_create(
-        self, tmp_path: Path
-    ) -> None:
+    def test_show_task_returns_ac_and_proof_bundle_from_engine_create(self, tmp_path: Path) -> None:
         """AC1 happy: engine.create_task ac/proof_bundle visible via AgentView.show_task."""
         _, engine = _make_board(tmp_path)
         view = AgentView(engine)
-        task = engine.create_task(
-            title="T", ac=["criterion1"], proof_bundle="behavioral"
-        )
+        task = engine.create_task(title="T", ac=["criterion1"], proof_bundle="behavioral")
         response = view.show_task(task.id)
         assert response.ac == ["criterion1"]
         assert response.proof_bundle == "behavioral"
@@ -120,9 +116,7 @@ class TestEngineWriteAgentViewRead:
         response = view.show_task(task.id)
         assert response.ac == []
 
-    def test_show_task_multiple_ac_items_preserved_in_order(
-        self, tmp_path: Path
-    ) -> None:
+    def test_show_task_multiple_ac_items_preserved_in_order(self, tmp_path: Path) -> None:
         """AC1 boundary: multiple ac items are all preserved and in original order."""
         ac_items = ["line-A", "line-B", "line-C"]
         _, engine = _make_board(tmp_path)
@@ -141,9 +135,7 @@ class TestEngineMutateAgentViewRead:
     """AC2: engine.edit_task add_ac / proof_bundle mutations visible via AgentView.show_task
     with correct append semantics."""
 
-    def test_add_ac_and_proof_bundle_mutation_visible_via_show_task(
-        self, tmp_path: Path
-    ) -> None:
+    def test_add_ac_and_proof_bundle_mutation_visible_via_show_task(self, tmp_path: Path) -> None:
         """AC2 happy (exact AC2 assertion): after add_ac=['criterion2'] + proof_bundle='smoke'
         on a task with ac=['criterion1'], show_task returns ac==['criterion1','criterion2']
         and proof_bundle=='smoke'."""
@@ -231,9 +223,7 @@ class TestMigrationEngineRead:
     """AC3: after _migrate_proof_bundle_field extracts 'Proof bundle: critical' from body,
     engine.show_task returns proof_bundle=='critical' and body does not contain the line."""
 
-    def test_engine_show_task_returns_proof_bundle_after_migration(
-        self, tmp_path: Path
-    ) -> None:
+    def test_engine_show_task_returns_proof_bundle_after_migration(self, tmp_path: Path) -> None:
         """AC3 happy: after migration, engine.show_task proof_bundle == 'critical'."""
         kanban_dir = _make_migration_board(tmp_path)
         body = "Some notes.\nProof bundle: critical\nMore text.\n"
@@ -244,9 +234,7 @@ class TestMigrationEngineRead:
         task = engine.show_task("100")
         assert task.proof_bundle == "critical"
 
-    def test_engine_show_task_body_has_no_proof_bundle_line_after_migration(
-        self, tmp_path: Path
-    ) -> None:
+    def test_engine_show_task_body_has_no_proof_bundle_line_after_migration(self, tmp_path: Path) -> None:
         """AC3 happy: after migration, task.body does not contain 'Proof bundle: critical'."""
         kanban_dir = _make_migration_board(tmp_path)
         body = "Some notes.\nProof bundle: critical\nMore text.\n"
@@ -256,9 +244,7 @@ class TestMigrationEngineRead:
         task = engine.show_task("101")
         assert "Proof bundle: critical" not in (task.body or "")
 
-    def test_engine_body_other_content_preserved_after_migration(
-        self, tmp_path: Path
-    ) -> None:
+    def test_engine_body_other_content_preserved_after_migration(self, tmp_path: Path) -> None:
         """AC3 edge: body content before and after Proof bundle: line is preserved."""
         kanban_dir = _make_migration_board(tmp_path)
         body = "Before content.\nProof bundle: critical\nAfter content.\n"
@@ -269,9 +255,7 @@ class TestMigrationEngineRead:
         assert "Before content." in (task.body or "")
         assert "After content." in (task.body or "")
 
-    def test_single_occurrence_constraint_only_one_proof_bundle_line_in_fixture(
-        self, tmp_path: Path
-    ) -> None:
+    def test_single_occurrence_constraint_only_one_proof_bundle_line_in_fixture(self, tmp_path: Path) -> None:
         """AC3 boundary: fixture with exactly one Proof bundle: line; engine reads
         'critical' and body has no remaining Proof bundle: line."""
         kanban_dir = _make_migration_board(tmp_path)
@@ -282,7 +266,5 @@ class TestMigrationEngineRead:
         task = engine.show_task("103")
         assert task.proof_bundle == "critical"
         remaining_body = task.body or ""
-        proof_bundle_lines = [
-            line for line in remaining_body.splitlines() if "Proof bundle:" in line
-        ]
+        proof_bundle_lines = [line for line in remaining_body.splitlines() if "Proof bundle:" in line]
         assert proof_bundle_lines == []

@@ -68,9 +68,7 @@ class TestFromAC_DependencyVersionPin:
 
     def test_pyproject_exists(self) -> None:
         """AC1 (precondition): serve/mcp-kanban/pyproject.toml must exist."""
-        assert _PYPROJECT.exists(), (
-            f"serve/mcp-kanban/pyproject.toml not found at {_PYPROJECT}"
-        )
+        assert _PYPROJECT.exists(), f"serve/mcp-kanban/pyproject.toml not found at {_PYPROJECT}"
 
     def test_mcp_dependency_has_upper_bound(self) -> None:
         """AC1: MCP/FastMCP dependency spec must contain '<' (upper bound).
@@ -87,9 +85,7 @@ class TestFromAC_DependencyVersionPin:
             data = tomllib.load(fh)
 
         deps: list[str] = data.get("project", {}).get("dependencies", [])
-        assert deps, (
-            "serve/mcp-kanban/pyproject.toml must declare [project.dependencies]"
-        )
+        assert deps, "serve/mcp-kanban/pyproject.toml must declare [project.dependencies]"
 
         mcp_deps = [dep for dep in deps if dep.lower().startswith(("mcp", "fastmcp"))]
         assert mcp_deps, (
@@ -133,9 +129,7 @@ class TestFromAC_MutationToolOutputSchema:
         )
 
     @pytest.mark.parametrize("tool_name", _MUTATION_TOOLS)
-    def test_mutation_tool_output_schema_equals_single_task_response(
-        self, tool_name: str
-    ) -> None:
+    def test_mutation_tool_output_schema_equals_single_task_response(self, tool_name: str) -> None:
         """AC2: fn_metadata.output_schema must equal SingleTaskResponse.model_json_schema().
 
         Fails if:
@@ -169,9 +163,7 @@ class TestFromAC_ListTasksOutputSchema:
         Fails if FastMCP removes or renames fn_metadata or output_schema.
         """
         tool = _get_tool("list_tasks")
-        assert hasattr(tool, "fn_metadata"), (
-            "Tool 'list_tasks': FastMCP tool object must have 'fn_metadata' attribute."
-        )
+        assert hasattr(tool, "fn_metadata"), "Tool 'list_tasks': FastMCP tool object must have 'fn_metadata' attribute."
         fn_meta = tool.fn_metadata  # type: ignore[attr-defined]
         assert hasattr(fn_meta, "output_schema"), (
             "Tool 'list_tasks': fn_metadata must have 'output_schema' attribute. "
@@ -215,8 +207,7 @@ class TestFromAC_PatchedParameterDescriptions:
         props = _get_tool_props("list_tasks")
         assert "tag" in props, "list_tasks must have a 'tag' parameter property"
         assert "description" in props["tag"], (  # type: ignore[operator]
-            "list_tasks 'tag' parameter must have a description patch. "
-            "Expected: \"Filter by tag, e.g. 'phase-2'\""
+            "list_tasks 'tag' parameter must have a description patch. Expected: \"Filter by tag, e.g. 'phase-2'\""
         )
 
     def test_list_tasks_search_has_description(self) -> None:
@@ -244,9 +235,7 @@ class TestFromAC_PatchedParameterDescriptions:
             "title",
             "status",
             "created",
-        }, (
-            f"list_tasks 'sort' enum must include all sort field names. Got: {enum_values}"
-        )
+        }, f"list_tasks 'sort' enum must include all sort field names. Got: {enum_values}"
 
     def test_list_tasks_blocked_has_description(self) -> None:
         """AC4: list_tasks.parameters.properties.blocked must have a 'description' key."""
@@ -269,9 +258,7 @@ class TestFromAC_PatchedParameterDescriptions:
     def test_create_task_depends_on_has_description(self) -> None:
         """AC4: create_task.parameters.properties.depends_on must have a 'description' key."""
         props = _get_tool_props("create_task")
-        assert "depends_on" in props, (
-            "create_task must have a 'depends_on' parameter property"
-        )
+        assert "depends_on" in props, "create_task must have a 'depends_on' parameter property"
         assert "description" in props["depends_on"], (  # type: ignore[operator]
             "create_task 'depends_on' parameter must have a description patch."
         )
@@ -299,9 +286,7 @@ class TestFromAC_PatchedParameterDescriptions:
     def test_edit_task_append_body_has_description(self) -> None:
         """AC4: edit_task.parameters.properties.append_body must have a 'description' key."""
         props = _get_tool_props("edit_task")
-        assert "append_body" in props, (
-            "edit_task must have an 'append_body' parameter property"
-        )
+        assert "append_body" in props, "edit_task must have an 'append_body' parameter property"
         assert "description" in props["append_body"], (  # type: ignore[operator]
             "edit_task 'append_body' parameter must have a description patch."
         )
@@ -335,9 +320,7 @@ class TestFromAC_PatchedParameterDescriptions:
     def test_end_work_block_reason_has_description(self) -> None:
         """AC4: end_work.parameters.properties.block_reason must have a 'description' key."""
         props = _get_tool_props("end_work")
-        assert "block_reason" in props, (
-            "end_work must have a 'block_reason' parameter property"
-        )
+        assert "block_reason" in props, "end_work must have a 'block_reason' parameter property"
         assert "description" in props["block_reason"], (  # type: ignore[operator]
             "end_work 'block_reason' parameter must have a description patch."
         )

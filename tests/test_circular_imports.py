@@ -49,10 +49,7 @@ def _module_imports(source: str) -> list[tuple[str, list[str]]]:
 def _has_top_level_function(source: str, funcname: str) -> bool:
     """Return True if source has a module-level FunctionDef named funcname."""
     tree = ast.parse(source)
-    return any(
-        isinstance(node, ast.FunctionDef) and node.name == funcname
-        for node in ast.iter_child_nodes(tree)
-    )
+    return any(isinstance(node, ast.FunctionDef) and node.name == funcname for node in ast.iter_child_nodes(tree))
 
 
 def _has_module_level_assign(source: str, varname: str) -> bool:
@@ -121,8 +118,7 @@ class TestFromAC_DurationModule:
         intra = _intra_pkg_imports(src)
         forbidden = [m for m in intra if m != "owlbear_kanban.errors"]
         assert not forbidden, (
-            f"_duration.py must only import from owlbear_kanban.errors; "
-            f"found unexpected intra-pkg imports: {forbidden}"
+            f"_duration.py must only import from owlbear_kanban.errors; found unexpected intra-pkg imports: {forbidden}"
         )
 
     def test_parse_duration_happy_path_1h(self) -> None:
@@ -163,22 +159,15 @@ class TestFromAC_EngineDefinitionsRemoved:
         """engine.py must NOT contain a module-level _DURATION_RE assignment."""
         src = _source("engine.py")
         assert not _has_module_level_assign(src, "_DURATION_RE"), (
-            "engine.py still defines _DURATION_RE at module level — "
-            "must be removed and imported from _duration"
+            "engine.py still defines _DURATION_RE at module level — must be removed and imported from _duration"
         )
 
     def test_engine_imports_parse_duration_from_duration(self) -> None:
         """engine.py must import _parse_duration from owlbear_kanban._duration."""
         src = _source("engine.py")
         imports = _module_imports(src)
-        found = any(
-            mod == "owlbear_kanban._duration" and "_parse_duration" in names
-            for mod, names in imports
-        )
-        assert found, (
-            "engine.py must import _parse_duration from owlbear_kanban._duration; "
-            "import not found"
-        )
+        found = any(mod == "owlbear_kanban._duration" and "_parse_duration" in names for mod, names in imports)
+        assert found, "engine.py must import _parse_duration from owlbear_kanban._duration; import not found"
 
 
 # ===========================================================================
@@ -216,14 +205,8 @@ class TestFromAC_ConfigLoaderImport:
         """config_loader.py must have a direct import of _parse_duration from _duration."""
         src = _source("config_loader.py")
         imports = _module_imports(src)
-        found = any(
-            mod == "owlbear_kanban._duration" and "_parse_duration" in names
-            for mod, names in imports
-        )
-        assert found, (
-            "config_loader.py must import _parse_duration from owlbear_kanban._duration; "
-            "import not found"
-        )
+        found = any(mod == "owlbear_kanban._duration" and "_parse_duration" in names for mod, names in imports)
+        assert found, "config_loader.py must import _parse_duration from owlbear_kanban._duration; import not found"
 
 
 # ===========================================================================
@@ -245,9 +228,7 @@ class TestFromAC_StorageImport:
         """storage.py source must contain no string 'owlbear_kanban.engine'."""
         src = _source("storage.py")
         occurrences = src.count("owlbear_kanban.engine")
-        assert occurrences == 0, (
-            f"storage.py still references owlbear_kanban.engine {occurrences} time(s)"
-        )
+        assert occurrences == 0, f"storage.py still references owlbear_kanban.engine {occurrences} time(s)"
 
 
 # ===========================================================================
@@ -277,10 +258,7 @@ class TestFromAC_ModelsDuplicateRemoved:
         """models.py must import _parse_duration from owlbear_kanban._duration."""
         src = _source("models.py")
         imports = _module_imports(src)
-        found = any(
-            mod == "owlbear_kanban._duration" and "_parse_duration" in names
-            for mod, names in imports
-        )
+        found = any(mod == "owlbear_kanban._duration" and "_parse_duration" in names for mod, names in imports)
         assert found, (
             "models.py must import _parse_duration from owlbear_kanban._duration; "
             "the BoardConfig validator must call the canonical parser"
@@ -324,8 +302,7 @@ class TestFromAC_ModelsDuplicateRemoved:
         import owlbear_kanban.models as _models
 
         assert not hasattr(_models, "_parse_claim_timeout"), (
-            "owlbear_kanban.models still exposes _parse_claim_timeout — "
-            "duplicate function must be deleted"
+            "owlbear_kanban.models still exposes _parse_claim_timeout — duplicate function must be deleted"
         )
 
     def test_board_config_validate_semantics_calls_parse_duration(self) -> None:
@@ -335,16 +312,10 @@ class TestFromAC_ModelsDuplicateRemoved:
         tree = ast.parse(src)
 
         for class_node in ast.walk(tree):
-            if not (
-                isinstance(class_node, ast.ClassDef)
-                and class_node.name == "BoardConfig"
-            ):
+            if not (isinstance(class_node, ast.ClassDef) and class_node.name == "BoardConfig"):
                 continue
             for method in ast.walk(class_node):
-                if not (
-                    isinstance(method, ast.FunctionDef)
-                    and method.name == "_validate_semantics"
-                ):
+                if not (isinstance(method, ast.FunctionDef) and method.name == "_validate_semantics"):
                     continue
                 calls = [
                     child
@@ -361,9 +332,7 @@ class TestFromAC_ModelsDuplicateRemoved:
                     "the canonical parser must be invoked inside the validator"
                 )
                 return
-            pytest.fail(
-                "_validate_semantics method not found inside BoardConfig class in models.py"
-            )
+            pytest.fail("_validate_semantics method not found inside BoardConfig class in models.py")
             return
 
         pytest.fail("BoardConfig class not found in models.py")
@@ -383,10 +352,7 @@ class TestFromAC_TestFileImportUpdates:
         src = _test_source("test_engine_storage.py")
         tree = ast.parse(src)
         for node in ast.walk(tree):
-            if (
-                isinstance(node, ast.ImportFrom)
-                and node.module == "owlbear_kanban.engine"
-            ):
+            if isinstance(node, ast.ImportFrom) and node.module == "owlbear_kanban.engine":
                 names = [alias.name for alias in node.names]
                 assert "_parse_duration" not in names, (
                     "test_engine_storage.py still imports _parse_duration from "
@@ -399,6 +365,5 @@ class TestFromAC_TestFileImportUpdates:
             for node in ast.walk(tree)
         )
         assert found, (
-            "test_engine_storage.py must import _parse_duration from "
-            "owlbear_kanban._duration; import not found"
+            "test_engine_storage.py must import _parse_duration from owlbear_kanban._duration; import not found"
         )

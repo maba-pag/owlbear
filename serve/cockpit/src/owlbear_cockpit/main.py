@@ -92,16 +92,12 @@ def run() -> None:
         sys.stderr.write(f"Error: COCKPIT_PORT={port_str!r} is not a valid integer.\n")
         sys.exit(1)
     if not (1 <= port <= _MAX_PORT):
-        sys.stderr.write(
-            f"Error: COCKPIT_PORT={port} is out of range (1-{_MAX_PORT}).\n"
-        )
+        sys.stderr.write(f"Error: COCKPIT_PORT={port} is out of range (1-{_MAX_PORT}).\n")
         sys.exit(1)
 
     # --- kanban directory ---
     kanban_dir_str = os.environ.get("KANBAN_DIR")
-    kanban_dir = (
-        Path(kanban_dir_str) if kanban_dir_str else Path.cwd() / ".owlbear" / "kanban"
-    )
+    kanban_dir = Path(kanban_dir_str) if kanban_dir_str else Path.cwd() / ".owlbear" / "kanban"
     if not kanban_dir.is_dir():
         sys.stderr.write(f"Error: kanban directory not found: {kanban_dir}\n")
         sys.exit(1)
@@ -109,9 +105,7 @@ def run() -> None:
     # --- dist/ directory ---
     dist_dir = Path(__file__).parent.parent.parent / "dist"
     if not dist_dir.is_dir():
-        sys.stderr.write(
-            f"Error: dist/ directory not found at {dist_dir}. Run `npm run build` first.\n"
-        )
+        sys.stderr.write(f"Error: dist/ directory not found at {dist_dir}. Run `npm run build` first.\n")
         sys.exit(1)
 
     # --- engine init (before uvicorn starts) ---

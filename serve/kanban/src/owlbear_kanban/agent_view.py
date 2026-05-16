@@ -39,9 +39,7 @@ class AgentView:
     """Minimal role-scoped wrapper for agent-facing engine use."""
 
     _MAX_BODY_BYTES = 500 * 1024
-    _BODY_SIZE_WARNING = (
-        "\u26a0\ufe0f Task body is large (>100 KB); consider splitting."
-    )
+    _BODY_SIZE_WARNING = "\u26a0\ufe0f Task body is large (>100 KB); consider splitting."
     _BLOCK_AR_HINT = (
         "\u26a0\ufe0f ACTION REQUIRED: Create a Decision Request via the create_dr tool."
         " Blocks without a DR are invisible to the pipeline."
@@ -51,9 +49,7 @@ class AgentView:
         self.engine = engine
 
     @staticmethod
-    def _to_single_response(
-        task: Task, guidance: list[str] | None = None
-    ) -> SingleTaskResponse:
+    def _to_single_response(task: Task, guidance: list[str] | None = None) -> SingleTaskResponse:
         payload = task.model_dump()
         if isinstance(payload.get("body"), list):
             payload["body"] = None
@@ -159,9 +155,7 @@ class AgentView:
         if archival_reason and archival_reason not in config.policy.archival_reasons:
             raise ValidationError(
                 code="ERR_ARCHIVAL_REASON_INVALID",
-                user_message=(
-                    f"archival_reason must be one of {sorted(config.policy.archival_reasons)}"
-                ),
+                user_message=(f"archival_reason must be one of {sorted(config.policy.archival_reasons)}"),
             )
 
         if ids and (
@@ -205,9 +199,7 @@ class AgentView:
                 blocked=blocked,
             )
             if archival_reason:
-                tasks = [
-                    task for task in tasks if task.archival_reason == archival_reason
-                ]
+                tasks = [task for task in tasks if task.archival_reason == archival_reason]
 
         return ListTasksResponse(tasks=tasks, guidance=[], missing_ids=missing_ids)
 
@@ -272,14 +264,11 @@ class AgentView:
                     user_message="section must not be an empty string",
                 )
 
-            body_text = (
-                payload.get("body") if isinstance(payload.get("body"), str) else ""
-            )
+            body_text = payload.get("body") if isinstance(payload.get("body"), str) else ""
             matches = [
                 part
                 for part in parse_body(body_text)
-                if part.heading is not None
-                and part.heading.strip().casefold() == section_name.casefold()
+                if part.heading is not None and part.heading.strip().casefold() == section_name.casefold()
             ]
             if not matches:
                 payload["body"] = None
@@ -287,9 +276,7 @@ class AgentView:
             else:
                 payload["body"] = "\n".join(match.content for match in matches)
                 if len(matches) > 1:
-                    guidance.append(
-                        f"Section '{section_name}' matched {len(matches)} occurrences."
-                    )
+                    guidance.append(f"Section '{section_name}' matched {len(matches)} occurrences.")
 
         payload["guidance"] = guidance
         payload["missing_sections"] = missing_sections
@@ -353,20 +340,14 @@ class AgentView:
             )
 
         config = self.engine.board_config()
-        effective_wave = (
-            wave_size if wave_size is not None else config.pipeline.wave_size
-        )
+        effective_wave = wave_size if wave_size is not None else config.pipeline.wave_size
         if effective_wave < 1:
             raise ValidationError(
                 code="ERR_INVALID_WAVE_PARAM",
                 user_message="wave_size must be >= 1",
             )
 
-        missing_statuses = [
-            status
-            for status in config.pipeline.statuses
-            if status not in config.agents.agent_map
-        ]
+        missing_statuses = [status for status in config.pipeline.statuses if status not in config.agents.agent_map]
         if missing_statuses:
             raise ConfigError(
                 code="ERR_INVALID_STATUS",
@@ -386,11 +367,7 @@ class AgentView:
         # list_tasks computes dep_status against the full active snapshot before
         # filters, so use the projected value directly to avoid reclassifying
         # dependencies based on the filtered subset.
-        dispatchable = [
-            task
-            for task in active
-            if task.dep_status != "blocked" and task.status != "archived"
-        ]
+        dispatchable = [task for task in active if task.dep_status != "blocked" and task.status != "archived"]
         passes_tdd = dispatch_module._passes_tdd_gate  # noqa: SLF001
         passes_clarity = dispatch_module._passes_clarity_gate  # noqa: SLF001
 
@@ -451,10 +428,7 @@ class AgentView:
                 return True
             existing_allowed = set(compatibility.get(existing_bucket, []))
             candidate_allowed = set(compatibility.get(candidate_bucket, []))
-            return (
-                candidate_bucket in existing_allowed
-                and existing_bucket in candidate_allowed
-            )
+            return candidate_bucket in existing_allowed and existing_bucket in candidate_allowed
 
         wave_tasks: list[list[Task]] = []
         dropped = 0
@@ -508,13 +482,9 @@ class AgentView:
             dispatched_count += len(entries)
             waves.append(Wave(index=wave_index, tasks=entries))
 
-        guidance = [
-            f"Dispatch hints: {dispatched_count} task(s) across {len(waves)} wave(s)."
-        ]
+        guidance = [f"Dispatch hints: {dispatched_count} task(s) across {len(waves)} wave(s)."]
         if dropped:
-            guidance.append(
-                f"Dropped {dropped} task(s) because no wave fit within max_waves."
-            )
+            guidance.append(f"Dropped {dropped} task(s) because no wave fit within max_waves.")
         return PickTasksResponse(waves=waves, guidance=guidance)
 
     def create_task(  # noqa: PLR0913
@@ -601,9 +571,7 @@ class AgentView:
                 proof_bundle=proof_bundle,
             )
         except ValueError as exc:
-            raise ValidationError(
-                code="ERR_INVALID_STATUS", user_message=str(exc)
-            ) from exc
+            raise ValidationError(code="ERR_INVALID_STATUS", user_message=str(exc)) from exc
 
         guidance: list[str] = []
         if len(body.encode("utf-8")) > 100 * 1024:
@@ -717,11 +685,7 @@ class AgentView:
         if body_set:
             self.engine.validate_body_size(body)
 
-        if (
-            parent_set
-            and parent_value is not None
-            and not self.engine.task_exists(parent_value)
-        ):
+        if parent_set and parent_value is not None and not self.engine.task_exists(parent_value):
             raise ValidationError(
                 code="ERR_PARENT_NOT_FOUND",
                 user_message=f"Parent task '{parent_value}' not found",
@@ -749,14 +713,8 @@ class AgentView:
                     user_message="archival fields are only allowed on archived tasks",
                 )
 
-            effective_reason = (
-                archival_reason
-                if archival_reason_set
-                else (existing.archival_reason or "")
-            )
-            effective_refs = (
-                archival_refs if archival_refs_set else list(existing.archival_refs)
-            )
+            effective_reason = archival_reason if archival_reason_set else (existing.archival_reason or "")
+            effective_refs = archival_refs if archival_refs_set else list(existing.archival_refs)
             self.engine.validate_archival(
                 task_id=task_id,
                 archival_reason=effective_reason,
@@ -813,9 +771,7 @@ class AgentView:
         changes_requested = False
         if title_set and title != existing.title:
             changes_requested = True
-        if body_set and _task_body_as_text(body).rstrip("\n") != _task_body_as_text(
-            existing.body
-        ).rstrip("\n"):
+        if body_set and _task_body_as_text(body).rstrip("\n") != _task_body_as_text(existing.body).rstrip("\n"):
             changes_requested = True
         if append_set:
             changes_requested = True
@@ -831,13 +787,9 @@ class AgentView:
             changes_requested = True
         if proof_bundle is not None and proof_bundle != existing.proof_bundle:
             changes_requested = True
-        if add_dep is not None and any(
-            dep_id not in existing.depends_on for dep_id in add_dep
-        ):
+        if add_dep is not None and any(dep_id not in existing.depends_on for dep_id in add_dep):
             changes_requested = True
-        if remove_dep is not None and any(
-            dep_id in existing.depends_on for dep_id in remove_dep
-        ):
+        if remove_dep is not None and any(dep_id in existing.depends_on for dep_id in remove_dep):
             changes_requested = True
         if add_tag is not None and any(tag not in existing.tags for tag in add_tag):
             changes_requested = True
@@ -846,21 +798,16 @@ class AgentView:
         if block_reason_set:
             if block_reason:
                 changes_requested = changes_requested or (
-                    existing.blocked is not True
-                    or existing.block_reason != block_reason
+                    existing.blocked is not True or existing.block_reason != block_reason
                 )
             else:
                 changes_requested = changes_requested or (
                     existing.blocked is not False or existing.block_reason is not None
                 )
         if archival_reason_set:
-            changes_requested = changes_requested or (
-                (archival_reason or None) != (existing.archival_reason or None)
-            )
+            changes_requested = changes_requested or ((archival_reason or None) != (existing.archival_reason or None))
         if archival_refs_set:
-            changes_requested = changes_requested or (
-                list(archival_refs or []) != list(existing.archival_refs)
-            )
+            changes_requested = changes_requested or (list(archival_refs or []) != list(existing.archival_refs))
 
         if not changes_requested:
             raise ValidationError(
@@ -871,9 +818,7 @@ class AgentView:
         try:
             task = self.engine.edit_task(str(task_id), source="agent", **kwargs)
         except ValueError as exc:
-            raise ValidationError(
-                code="ERR_INVALID_STATUS", user_message=str(exc)
-            ) from exc
+            raise ValidationError(code="ERR_INVALID_STATUS", user_message=str(exc)) from exc
 
         guidance: list[str] = []
         if body_set and len(_task_body_as_text(body).encode("utf-8")) > 100 * 1024:
@@ -948,9 +893,7 @@ class AgentView:
         except FileNotFoundError as exc:
             raise self._wrap_not_found(task_id) from exc
         except ValueError as exc:
-            raise ValidationError(
-                code="ERR_INVALID_STATUS", user_message=str(exc)
-            ) from exc
+            raise ValidationError(code="ERR_INVALID_STATUS", user_message=str(exc)) from exc
 
         guidance = self._skip_transition_guidance(
             before_status=before.status,
@@ -1008,11 +951,7 @@ class AgentView:
             )
 
             if dep_status == "blocked" and active_ids:
-                dep_ids = ", ".join(
-                    str(dep_id)
-                    for dep_id in (task_record.depends_on or [])
-                    if dep_id in active_ids
-                )
+                dep_ids = ", ".join(str(dep_id) for dep_id in (task_record.depends_on or []) if dep_id in active_ids)
                 guidance.append(
                     "⚠️ This task has unresolved dependencies "
                     f"(IDs: {dep_ids}). "
@@ -1026,17 +965,10 @@ class AgentView:
             msg = str(exc)
             if "already claimed" in msg:
                 claimed_at_match = re.search(r"claimed_at=([^\)\s]+)", msg)
-                claimed_at_hint = (
-                    f" (claimed_at={claimed_at_match.group(1)})"
-                    if claimed_at_match is not None
-                    else ""
-                )
+                claimed_at_hint = f" (claimed_at={claimed_at_match.group(1)})" if claimed_at_match is not None else ""
                 raise ConcurrencyError(
                     code="ERR_ALREADY_CLAIMED",
-                    user_message=(
-                        f"Task '{task_id}' is already claimed by another agent"
-                        f"{claimed_at_hint}"
-                    ),
+                    user_message=(f"Task '{task_id}' is already claimed by another agent{claimed_at_hint}"),
                 ) from exc
             if "blocked" in msg and "cannot be claimed" in msg:
                 raise ValidationError(
@@ -1104,9 +1036,7 @@ class AgentView:
                 if move_to not in statuses:
                     raise ValidationError(
                         code="ERR_MOVE_TO_INVALID_STATUS",
-                        user_message=(
-                            f"move_to={move_to!r} is not a valid pipeline status"
-                        ),
+                        user_message=(f"move_to={move_to!r} is not a valid pipeline status"),
                     )
             if archival_reason is not None or archival_refs is not None:
                 raise ValidationError(
@@ -1214,10 +1144,7 @@ class AgentView:
             if outcome in {"success", "fail", "reject", "block"} and not claimed:
                 raise ValidationError(
                     code="ERR_NOT_CLAIMED",
-                    user_message=(
-                        "Task must be claimed before ending work with "
-                        f"outcome='{outcome}'"
-                    ),
+                    user_message=(f"Task must be claimed before ending work with outcome='{outcome}'"),
                 )
 
             body = _task_body_as_text(before.body)
@@ -1262,16 +1189,10 @@ class AgentView:
         except ConcurrencyError as exc:
             if exc.code == "ERR_STALE":
                 latest = self.engine.show_task(str(task_id))
-                if (
-                    outcome in {"success", "fail", "reject", "block"}
-                    and latest.claimed_at is None
-                ):
+                if outcome in {"success", "fail", "reject", "block"} and latest.claimed_at is None:
                     raise ValidationError(
                         code="ERR_NOT_CLAIMED",
-                        user_message=(
-                            "Task must be claimed before ending work with "
-                            f"outcome='{outcome}'"
-                        ),
+                        user_message=(f"Task must be claimed before ending work with outcome='{outcome}'"),
                     ) from exc
                 raise ConcurrencyError(
                     code="ERR_STALE",
