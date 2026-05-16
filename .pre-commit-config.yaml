@@ -67,7 +67,7 @@ repos:
 
   # ── EditorConfig (matches CI: EDITORCONFIG_EDITORCONFIG_CHECKER) ──
   - repo: https://github.com/editorconfig-checker/editorconfig-checker.python
-    rev: "3.2.1"
+    rev: "3.6.1"
     hooks:
       - id: editorconfig-checker
         args: [-disable-indent-size]
