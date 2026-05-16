@@ -255,4 +255,3 @@ describe('TestFromAC_ErrorMessageHelperNoDecoration', () => {
     expect(result).toBe('refs not allowed for dropped')
   })
 })
-

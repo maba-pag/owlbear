@@ -142,4 +142,3 @@ describe('TestFromAC_UseBoardDecisionsWiring', () => {
     expect(result.current.lastDecisionsMtime).toBe(1_000)
   })
 })
-

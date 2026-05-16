@@ -84,4 +84,3 @@ describe('TestFromAC_PendingDRsPollingActive', () => {
     expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(3)
   })
 })
-

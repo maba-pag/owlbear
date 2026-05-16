@@ -292,4 +292,3 @@ describe('TestFromAC_ActivityTabSSE', () => {
     })
   })
 })
-

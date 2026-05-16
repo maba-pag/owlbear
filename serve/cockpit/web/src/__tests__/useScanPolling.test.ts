@@ -444,4 +444,3 @@ describe('TestFromAC_useScanPolling', () => {
     })
   })
 })
-

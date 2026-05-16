@@ -65,4 +65,3 @@ export default function HistorySubtab({ sessions, onSelectTask }: HistorySubtabP
     </div>
   )
 }
-

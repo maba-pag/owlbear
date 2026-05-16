@@ -624,4 +624,3 @@ describe('TestFromAC_ConfirmDialogFocus', () => {
     expect(document.activeElement).toBe(triggerBtn)
   })
 })
-

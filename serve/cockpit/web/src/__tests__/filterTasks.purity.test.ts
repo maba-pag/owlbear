@@ -118,4 +118,3 @@ describe('TestFromAC_FilterTasksPurity', () => {
     expect(result1).toContainEqual(tasks[0])
   })
 })
-

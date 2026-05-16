@@ -342,4 +342,3 @@ describe('TestFromAC_StateMatrix', () => {
     expect(container.querySelector('[data-field="block_reason"]')).not.toBeNull()
   })
 })
-

@@ -39,4 +39,3 @@ declare namespace React {
     }
   }
 }
-

@@ -297,4 +297,3 @@ describe('TestFromAC_HealthBadge', () => {
     expect(rows[1].textContent).not.toContain(ITEM_A.detail)
   })
 })
-

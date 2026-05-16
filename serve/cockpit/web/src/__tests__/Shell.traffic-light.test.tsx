@@ -157,4 +157,3 @@ describe('TestFromAC_TrafficLight', () => {
     })
   })
 })
-

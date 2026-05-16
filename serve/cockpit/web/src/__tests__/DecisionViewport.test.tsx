@@ -321,4 +321,3 @@ describe('TestFromAC_DecisionViewport', () => {
     expect(['alert', 'status']).toContain(role)
   })
 })
-

@@ -165,4 +165,3 @@ describe('TestBuilderDiscovered', () => {
     expect(icon).not.toBeNull()
   })
 })
-

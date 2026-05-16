@@ -730,4 +730,3 @@ describe('TestFromAC_CoverageProof', () => {
     expect(inputEl?.value).toBe('Blocked by #50')
   })
 })
-

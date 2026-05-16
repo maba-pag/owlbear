@@ -40,4 +40,3 @@ export async function repairStorage(): Promise<RepairOutcome[]> {
     throw wrappedError
   }
 }
-

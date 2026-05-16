@@ -199,4 +199,3 @@ describe('TestFromAC_NoExtraActionGating', () => {
     )
   })
 })
-

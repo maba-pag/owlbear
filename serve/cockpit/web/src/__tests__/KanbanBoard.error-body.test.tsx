@@ -473,4 +473,3 @@ describe('TestFromAC_BoardLoadErrorBodyDiscrimination', () => {
     )
   })
 })
-

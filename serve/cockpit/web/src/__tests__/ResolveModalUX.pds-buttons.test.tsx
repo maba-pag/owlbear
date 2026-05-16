@@ -112,4 +112,3 @@ describe('TestFromAC_ResolveModalPDSButtons', () => {
     expect(pBtn!.variant).toBe('secondary')
   })
 })
-

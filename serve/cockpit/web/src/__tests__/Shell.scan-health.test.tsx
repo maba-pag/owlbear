@@ -626,4 +626,3 @@ describe('TestFromAC_ScanCurrentCodeFails', () => {
     expect(container.querySelector('[data-health="green"]')).toBeNull()
   })
 })
-

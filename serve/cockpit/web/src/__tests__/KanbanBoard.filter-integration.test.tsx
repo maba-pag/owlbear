@@ -471,4 +471,3 @@ describe('TestFromAC_FilterIntegration', () => {
     expect(capturedPriorities).toEqual(BOARD.priorities)
   })
 })
-

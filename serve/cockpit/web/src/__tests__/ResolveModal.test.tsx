@@ -266,4 +266,3 @@ describe('TestFromAC_ResolveModal', () => {
     })
   })
 })
-

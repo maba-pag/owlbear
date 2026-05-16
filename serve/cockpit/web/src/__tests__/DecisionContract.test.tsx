@@ -460,4 +460,3 @@ describe('TestFromAC_BodyContractAndErrorChain', () => {
       .toBe('Decision endpoint: Task 42 blocked by unresolved conflict')
   })
 })
-

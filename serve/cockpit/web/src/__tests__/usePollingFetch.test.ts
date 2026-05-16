@@ -333,4 +333,3 @@ describe('TestFromAC_UseBoardHealthTransition', () => {
     expect(result.current.health).toBe('green')
   })
 })
-

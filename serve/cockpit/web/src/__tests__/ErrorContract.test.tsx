@@ -733,4 +733,3 @@ describe('TestFromAC_FalseOKCoexistence', () => {
     expect(scanError!.textContent).toContain('board scan failed: task index corrupted')
   })
 })
-

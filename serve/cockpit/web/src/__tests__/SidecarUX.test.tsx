@@ -929,4 +929,3 @@ describe('TestFromAC_RepairErrorContractProof', () => {
     expect(fetchSpy).not.toHaveBeenCalled()
   })
 })
-

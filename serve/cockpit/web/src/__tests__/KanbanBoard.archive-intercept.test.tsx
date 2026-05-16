@@ -449,4 +449,3 @@ describe('TestFromAC_HandleTransitionClickArchive', () => {
     expect(modal?.getAttribute('data-expected-updated')).toBe(FROZEN_UPDATED)
   })
 })
-

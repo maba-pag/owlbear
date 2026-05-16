@@ -109,4 +109,3 @@ describe('TestFromAC_GFMPlugins', () => {
     })
   })
 })
-

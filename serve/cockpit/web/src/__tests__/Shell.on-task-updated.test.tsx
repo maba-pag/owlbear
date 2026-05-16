@@ -286,4 +286,3 @@ describe('TestFromAC_ShellOnTaskUpdated (AC6)', () => {
     expect(refetchTasksSpy.mock.calls.length).toBe(callCountBefore)
   })
 })
-

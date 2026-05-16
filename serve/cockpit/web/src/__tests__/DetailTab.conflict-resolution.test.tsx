@@ -1166,4 +1166,3 @@ describe('TestFromAC_ConflictBannerTaskSwitch', () => {
     )
   })
 })
-

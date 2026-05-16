@@ -167,4 +167,3 @@ describe('TestFromAC_DecisionPollBodyAndErrorChain', () => {
     expect(result.current.count).toBe(0)
   })
 })
-

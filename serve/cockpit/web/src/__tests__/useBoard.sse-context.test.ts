@@ -314,4 +314,3 @@ describe('TestFromAC_UseBoardSSEContext', () => {
     expect(tasksFetchCount(fetchMock)).toBe(countAfterMount)
   })
 })
-

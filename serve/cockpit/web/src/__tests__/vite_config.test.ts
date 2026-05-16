@@ -80,4 +80,3 @@ describe('TestFromAC_CSP', () => {
     expect(result).not.toContain('Content-Security-Policy')
   })
 })
-

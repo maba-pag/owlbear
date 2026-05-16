@@ -608,4 +608,3 @@ describe('TestFromAC_RepairPanel_RenderCoverage', () => {
     })
   })
 })
-

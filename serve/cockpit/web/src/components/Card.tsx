@@ -166,4 +166,3 @@ export function Card({
     </div>
   )
 }
-

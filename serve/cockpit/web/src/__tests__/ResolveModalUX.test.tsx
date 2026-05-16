@@ -260,4 +260,3 @@ describe('TestFromAC_ResolveModalUX', () => {
     expect(modal.getAttribute('aria-modal')).toBe('true')
   })
 })
-

@@ -123,4 +123,3 @@ export default function HealthBadge({ items }: HealthBadgeProps) {
     </div>
   )
 }
-

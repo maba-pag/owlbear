@@ -365,4 +365,3 @@ describe('TestFromAC_ModalLifecycle', () => {
     expect(refetchSpy).toHaveBeenCalledTimes(1)
   })
 })
-

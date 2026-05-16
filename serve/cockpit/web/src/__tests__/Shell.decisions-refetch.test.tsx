@@ -244,4 +244,3 @@ describe('TestFromAC_ShellDecisionsRefetch', () => {
     expect(calls[0]).toHaveLength(0)
   })
 })
-

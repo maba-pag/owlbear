@@ -256,4 +256,3 @@ describe('TestFromAC_DRStatusIndicator', () => {
     expect(() => renderIndicator(1, [DR_A])).not.toThrow()
   })
 })
-
