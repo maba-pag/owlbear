@@ -16,7 +16,7 @@ from datetime import UTC, datetime
 # Constants
 # ---------------------------------------------------------------------------
 
-_SCHEMA_VERSION: int = 12
+_SCHEMA_VERSION: int = 13
 """Current schema version written to the ``schema_version`` table."""
 
 _SCOPE_TABLES: tuple[str, ...] = (
@@ -317,6 +317,95 @@ def _migrate_v11_to_v12(conn: sqlite3.Connection) -> None:
     )
 
 
+def _migrate_v12_to_v13(conn: sqlite3.Connection) -> None:
+    """Migrate a v12 database to v13 — enforce NOT NULL document_id on entities/edges."""
+    fk_row = conn.execute("PRAGMA foreign_keys").fetchone()
+    foreign_keys_was_on = bool(fk_row and fk_row[0])
+    if foreign_keys_was_on:
+        conn.execute("PRAGMA foreign_keys = OFF")
+
+    conn.execute("DELETE FROM edges WHERE document_id IS NULL")
+    conn.execute(
+        """
+        DELETE FROM edges
+        WHERE source_id IN (SELECT id FROM entities WHERE document_id IS NULL)
+           OR target_id IN (SELECT id FROM entities WHERE document_id IS NULL)
+        """
+    )
+    conn.execute("DELETE FROM entities WHERE document_id IS NULL")
+    conn.execute(
+        """
+        DELETE FROM edges
+        WHERE (source_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM entities WHERE id = source_id))
+           OR (target_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM entities WHERE id = target_id))
+        """
+    )
+
+    conn.execute(
+        """
+        CREATE TABLE entities_v13 (
+            id          TEXT PRIMARY KEY,
+            name        TEXT,
+            entity_type TEXT,
+            description TEXT,
+            metadata    TEXT,
+            created_at  TEXT,
+            scope       TEXT DEFAULT 'global',
+            document_id TEXT NOT NULL,
+            chunk_id    TEXT,
+            importance  REAL DEFAULT 0.5
+        )
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO entities_v13
+        (id, name, entity_type, description, metadata, created_at, scope, document_id, chunk_id, importance)
+        SELECT id, name, entity_type, description, metadata, created_at, scope, document_id, chunk_id, importance
+        FROM entities
+        """
+    )
+    conn.execute("DROP TABLE entities")
+    conn.execute("ALTER TABLE entities_v13 RENAME TO entities")
+
+    conn.execute(
+        """
+        CREATE TABLE edges_v13 (
+            id          TEXT PRIMARY KEY,
+            source_id   TEXT REFERENCES entities(id),
+            target_id   TEXT REFERENCES entities(id),
+            relation    TEXT,
+            document_id TEXT NOT NULL,
+            weight      REAL,
+            metadata    TEXT,
+            created_at  TEXT,
+            scope       TEXT DEFAULT 'global'
+        )
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO edges_v13
+        (id, source_id, target_id, relation, document_id, weight, metadata, created_at, scope)
+        SELECT id, source_id, target_id, relation, document_id, weight, metadata, created_at, scope
+        FROM edges
+        """
+    )
+    conn.execute("DROP TABLE edges")
+    conn.execute("ALTER TABLE edges_v13 RENAME TO edges")
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_edges_d17_unique ON edges(source_id, target_id, relation, document_id)"
+    )
+
+    if foreign_keys_was_on:
+        conn.execute("PRAGMA foreign_keys = ON")
+
+    conn.execute(
+        "UPDATE schema_version SET version = ?, applied_at = ?",
+        (13, datetime.now(tz=UTC).isoformat()),
+    )
+
+
 def _apply_migrations(conn: sqlite3.Connection, current: int) -> None:
     """Apply all pending schema migrations starting from *current* version."""
     migrations: tuple[tuple[int, callable], ...] = (
@@ -331,6 +420,7 @@ def _apply_migrations(conn: sqlite3.Connection, current: int) -> None:
         (10, _migrate_v9_to_v10),
         (11, _migrate_v10_to_v11),
         (12, _migrate_v11_to_v12),
+        (13, _migrate_v12_to_v13),
     )
     for target_version, migration in migrations:
         if current < target_version:
