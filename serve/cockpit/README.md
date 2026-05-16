@@ -49,7 +49,7 @@ repository.
 | Attribute | Value |
 |-----------|-------|
 | Node requirement | `>=24.15.0` (`web/package.json`) |
-| Stack | React `^19.2.5`, Vite `^8.0.10`, TypeScript `^6.0.3`, React Router `^7.14.2`, Porsche Design System React `^4.0.0`, React Compiler (`babel-plugin-react-compiler` `^1.0.0`) |
+| Stack | React `^19.2.5`, Vite `^8.0.10`, TypeScript `^6.0.3`, React Router `^7.14.2`, Porsche Design System React `^4.0.0`, React Compiler (`babel-plugin-react-compiler` `^1.0.0`), Tailwind CSS `^4.3.0` (`@tailwindcss/vite` + `tailwindcss`) |
 | Test runner | Vitest `^4.1.5` (`npm test`) |
 | E2E runner | Playwright `^1.59.1` (`npm run test:e2e`) |
 | CSS/HTML lint | Stylelint `^17.10.0` (`npm run lint:css`), HTMLHint `^1.9.2` (`npm run lint:html`) |
