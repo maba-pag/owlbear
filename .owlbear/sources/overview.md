@@ -72,6 +72,17 @@ External repos and resources studied during OwlBear development.
 | PDS Notification Patterns | <https://designsystem.porsche.com/v3/patterns/notifications/introduction> | Component selection criteria: placement, criticality, states | `.owlbear/research/cockpit-mutation-error-banner.md` | 2026-05-12 |
 | PDS Notification Decision Tree | <https://designsystem.porsche.com/v3/patterns/notifications/decision-tree> | Error/warning case → Banner or Inline Notification recommended | `.owlbear/research/cockpit-mutation-error-banner.md` | 2026-05-12 |
 
+## PToast Success Feedback (Task #1624)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| PDS Toast Configurator (v3) | <https://designsystem.porsche.com/v3/components/toast/configurator/> | PToast singleton pattern, addMessage API, queue behavior | `.owlbear/research/ptoast-success-feedback.md` | 2026-05-16 |
+| PDS Toast API (v3) | <https://designsystem.porsche.com/v3/components/toast/api/> | Props (theme), CSS vars (--p-toast-position-bottom) | `.owlbear/research/ptoast-success-feedback.md` | 2026-05-16 |
+| PDS Toast Accessibility | <https://designsystem.porsche.com/v3/components/toast/accessibility/> | role="status" ARIA live, keyboard support, AXE compliance | `.owlbear/research/ptoast-success-feedback.md` | 2026-05-16 |
+| PDS GitHub ToastExample.tsx | <https://github.com/porsche-design-system/porsche-design-system/blob/main/packages/components-react/src/examples/ToastExample.tsx> | Canonical React PToast + useToastManager pattern | `.owlbear/research/ptoast-success-feedback.md` | 2026-05-16 |
+| PDS GitHub toast-manager.ts | <https://github.com/porsche-design-system/porsche-design-system/blob/main/packages/components/src/components/toast/toast/toast-manager.ts> | Internal ToastManager: 6s timeout, message queue, singleton guard | `.owlbear/research/ptoast-success-feedback.md` | 2026-05-16 |
+| PDS GitHub toast.e2e.ts | <https://github.com/porsche-design-system/porsche-design-system/blob/main/packages/components-js/tests/e2e/specs/toast.e2e.ts> | E2E test patterns: --p-temporary-toast-timeout CSS var override | `.owlbear/research/ptoast-success-feedback.md` | 2026-05-16 |
+
 ## Dark Mode Border Audit (Task #1625)
 
 | Source | URL | What | Where Used | Date |
