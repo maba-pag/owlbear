@@ -519,12 +519,12 @@ class TestFromAC_MigrationUpgradePath:
             " not present after v10→v11 upgrade via init_db()"
         )
 
-    def test_v10_to_v11_schema_version_updated_to_11(self, v10_conn: sqlite3.Connection) -> None:
-        """init_db() on a v10 DB must update schema_version to 11."""
+    def test_v10_to_v12_schema_version_updated_to_12(self, v10_conn: sqlite3.Connection) -> None:
+        """init_db() on a v10 DB must update schema_version to 12 (terminal version)."""
         init_db(v10_conn)
         ver = v10_conn.execute("SELECT version FROM schema_version").fetchone()
         assert ver is not None, "schema_version table empty after migration"
-        assert ver[0] == 11, f"Expected schema version 11, got {ver[0]}"  # noqa: PLR2004
+        assert ver[0] == 12, f"Expected schema version 12, got {ver[0]}"  # noqa: PLR2004
 
     def test_v10_to_v11_enrichment_state_default_on_insert(self, v10_conn: sqlite3.Connection) -> None:
         """Post-upgrade chunk inserts must default enrichment_state to 'pending'."""
