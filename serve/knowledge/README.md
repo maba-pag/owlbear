@@ -54,9 +54,8 @@ results: list[StructuredSearchResult] = service.search("What is OwlBear?")
 | Graph | `IntraDocGraphBuilder`, `InterDocGraphBuilder` |
 | Utilities | `CancelSignal`, `SourceEvaluator` |
 
-Active operational API is intentionally narrow. Inactive bookmark, scope-transfer,
-and consolidation surfaces are retained in code only as cleanup/deferred targets and
-are not part of the operational contract.
+Active operational API is intentionally narrow. Bookmark, scope-transfer, and
+consolidation surfaces have been retired and removed from this package.
 
 ## Configuration
 
@@ -89,5 +88,4 @@ Install with `uv pip install -e "serve/knowledge[<extra>]"`:
 | `embedding` | `FlagEmbedding` | BGE-M3 embedding provider (~2.3 GB model download on first use) |
 | `intake` | `httpx` | HTTP URL ingestion |
 | `llm` | `openai` | LLM-based entity extraction |
-| `copilot` | `httpx`, `truststore` | Copilot API authentication |
-| `full` | all of the above except `copilot` | All features |
+| `full` | all of the above | All features |
