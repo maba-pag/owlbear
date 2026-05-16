@@ -1,10 +1,10 @@
 ---
 id: 1594
 title: 'P0-02: PDS global-styles import + CSP font relaxation'
-status: review
+status: archived
 priority: critical
 created: 2026-05-16T03:35:01.700586+00:00
-updated: 2026-05-16T13:18:57.361037+00:00
+updated: 2026-05-16T13:43:07.735479+00:00
 tags:
   - frontend
   - pds
@@ -27,8 +27,8 @@ ac:
 proof_bundle: existing
 blocked: false
 block_reason:
-claimed_at: 2026-05-16T13:18:57.361037+00:00
-archival_reason:
+claimed_at:
+archival_reason: completed
 archival_refs: []
 ---
 Brief: see parent #1590.
@@ -144,3 +144,67 @@ See `.owlbear/research/1594-pds-global-styles-import.md` for full analysis.
   - AC6 satisfied: vite.config.ts resolve.alias has no color-scheme.css mapping.
   - AC2/AC7 validated by scoped proofs (CSP font-src and required vitest/e2e suites passing).
 
+[[2026-05-16T15:26:24+02:00]]
+## Review Evidence
+- Verdict: PASS
+- PASS confirmation: PASS #1594 -> docs | AC mapped to code and evidence sufficient.
+- Blocking findings: none.
+- Builder evidence reviewed first: scoped quality-runner notes report Vitest 26 passed, 0 failed on `src/__tests__/PdsColorSchemeBridge_1555.test.ts` and `src/__tests__/ViteConfigAlias_1555.test.ts`; Playwright 10 passed, 0 failed on `e2e/pds-foundation-1591.spec.ts` and `e2e/pds-scheme-dark-1555.spec.ts`; eslint clean on changed frontend files. Commit `7cbc8c4c6fa9a6b4ec436cf9e434ebdb5f4df6b8` is present in `.git/logs/refs/heads/dev:3110` and `.git/logs/HEAD:3351`.
+
+| AC Line | Code Evidence | Test Evidence | Status |
+|---|---|---|---|
+| 1 | `serve/cockpit/web/src/main.tsx:5` imports `./tokens.css`; `serve/cockpit/web/src/tokens.css:2` imports PDS `global-styles/index.css` | `serve/cockpit/web/src/__tests__/PdsColorSchemeBridge_1555.test.ts:115,121` plus `serve/cockpit/web/e2e/pds-foundation-1591.spec.ts:102,132` prove the import path yields non-empty computed PDS vars | PASS |
+| 2 | `serve/cockpit/web/vite.config.ts:14` contains `font-src 'self' https://cdn.ui.porsche.com` in the CSP policy | `serve/cockpit/web/e2e/pds-foundation-1591.spec.ts:182,189,202` prove directive presence and exact-token membership for both CDN origin and `'self'` | PASS |
+| 3 | Existing behavior surface retained; no new Porsche logging or runtime branch added in the cleanup files | `serve/cockpit/web/e2e/pds-foundation-1591.spec.ts:225` fails on any console error or warning containing `porsche` during shell load | PASS |
+| 4 | `grep_search` on `serve/cockpit/web/src/main.tsx` for `color-scheme.css` returned zero matches; current import surface at `serve/cockpit/web/src/main.tsx:1-6` contains only `tailwind.css`, `tokens.css`, and `App` imports | Static cleanup AC; no additional runtime proof required beyond retained regression suite green in AC7 | PASS |
+| 5 | `grep_search` on `serve/cockpit/web/vite.config.ts` for `pdsColorSchemeCssPath` returned zero matches | Static cleanup AC; current file inspection matches the removal claim and AC7 existing-proof run stayed green | PASS |
+| 6 | `grep_search` on `serve/cockpit/web/vite.config.ts` found no `resolve:`/`alias:` block and no `color-scheme.css` entry | `serve/cockpit/web/src/__tests__/ViteConfigAlias_1555.test.ts:44,49` assert the legacy alias key is absent in the imported config object | PASS |
+| 7 | Current scoped files open without editor diagnostics (`get_errors`: no errors on main.tsx, vite.config.ts, the two Vitest files, and the two Playwright files) | Builder quality-runner notes report Vitest 26 passed, 0 failed; Playwright 10 passed, 0 failed; eslint clean | PASS |
+
+- Safety/security check: AC2 touches CSP only. Source inspection shows a static `font-src` token in `serve/cockpit/web/vite.config.ts:14` with no new dynamic input, credential, or logging surface.
+
+## Observations
+- `serve/cockpit/web/playwright.config.ts:17-18` runs `npm run build && npm run preview`, so the retained Playwright proof legitimately exercises build-time CSP injection rather than dev-server HTML.
+- Terminal/git execution was unavailable in this session, so I could not independently run the scoped `git status --porcelain` contamination check. I confirmed commit presence via reflog and found no contradictory evidence in current source, tests, or editor diagnostics.
+
+[[2026-05-16T15:28:06+02:00]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | README verification | Yes | N/A — no update needed | `serve/cockpit/README.md` contains no references to `color-scheme.css`, `pdsColorSchemeCssPath`, or the removed Vite alias. The task removed implementation-internal dead code never surfaced in the README. grep confirmed zero matches. |
+| 2 | External attribution | Yes | N/A — already done | `sources/overview.md` line 117–121 has `## PDS Global-Styles Import Research (Task #1594)` with 5 source entries added by the researcher. No update needed. |
+| 3 | Research doc | Yes | N/A — linked | `.owlbear/research/1594-pds-global-styles-import.md` exists; task body references it ("See `.owlbear/research/1594-pds-global-styles-import.md` for full analysis."). |
+| 4 | Deletion detection | No | N/A | No source files deleted — only code removed from `main.tsx` and `vite.config.ts`, and test files updated (not deleted). No orphaned references. |
+
+### Verification Layers
+- Layer 1 — grep: zero hits for `color-scheme.css`/`pdsColorSchemeCssPath` in `serve/cockpit/README.md`; `sources/overview.md` confirmed to contain `#1594` entry at line 117.
+- Layer 2 — editorial: `serve/cockpit/README.md` Frontend Surface table, PDS integration, and Accessibility sections are all accurate with respect to this cleanup task. No contradictions or stale claims introduced.
+
+### Scratch Cleanup
+No `.owlbear/scratch/1594-*` files existed. Nothing to delete.
+
+[[2026-05-16T15:43:07+02:00]]
+## Audit
+### Regression Detection
+- quality-runner mode full: pytest 4642 passed, ~240 failed (pre-existing background set matching #1632 baseline of 236 failed/4646 passed), 9 errors (pre-existing). Vitest 26 passed 0 failed. Playwright 10 passed 0 failed. Ruff clean. ESLint clean (only ignore-pattern info on vite.config.ts, not a violation).
+- regression verdict: PASS (zero new failures)
+
+### Intent Verification
+- scope alignment: PASS (all 4 changed files within serve/cockpit/web/: main.tsx, vite.config.ts, PdsColorSchemeBridge_1555.test.ts, ViteConfigAlias_1555.test.ts)
+- purpose match: PASS (dead code removal of superseded color-scheme.css bridge + test contract updates, matching stated task purpose)
+- extraneous scope: none
+- boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 5/5
+AC refined from 3 to 7 lines after challenger feedback. AC1-3 are regression guards naming exact CSS properties and CSP directives. AC4-6 name exact removal targets (import, const, alias). AC7 is suite-level green gate. Specific, complete, clean implementation path. Challenger improved proof_bundle from behavioral to existing (appropriate for cleanup-only task).
+
+### Commit Integrity
+- upstream commit presence: PASS (builder commit 7cbc8c4c confirmed via git log on all 4 changed files)
+- kanban commit packaging: pending (this archive cycle)
+
+### Deduction Breakdown
+No deductions applied.
+
+### Confidence: 1.00
+### Action: archive
