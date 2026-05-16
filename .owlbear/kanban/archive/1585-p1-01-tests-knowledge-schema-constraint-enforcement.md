@@ -1,10 +1,10 @@
 ---
 id: 1585
 title: 'P1-01: Tests — knowledge schema constraint enforcement'
-status: done
+status: archived
 priority: critical
 created: 2026-05-15T16:24:12.183832+00:00
-updated: 2026-05-15T19:30:12.797092+00:00
+updated: 2026-05-16T04:16:52.134055+00:00
 tags:
   - phase-1
   - scope:knowledge
@@ -15,7 +15,7 @@ depends_on: []
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 Parent: #1580
@@ -270,3 +270,29 @@ Task returned to backlog after reviewer FAIL — builder erroneously implemented
 
 ### Scratch cleanup
 No `.owlbear/scratch/1585-*` files found — nothing to delete.
+
+[[2026-05-16T06:16:52+02:00]]
+## Audit
+### Regression Detection
+- quality-runner mode full: 4603 passed, 237 failed, 14 skipped, 9 errors. pytest exit 1, ruff exit 1 (1 violation in unrelated `tests/test_core_removal.py`).
+- All 237 failures are in unrelated domains (cockpit_view, ideation_diagram, server, engine_accessor_migration) — zero knowledge-domain tests failed. Reviewer independently verified 8 + 32 = 40 knowledge-domain tests pass.
+- regression verdict: PASS (pre-existing suite debt, not #1585 regressions)
+
+### Intent Verification
+- scope alignment: PASS — deliverables are `tests/test_knowledge_schema_constraints_1585.py` (new) and `tests/test_enrichment_schema.py` (durable update), both in knowledge/test domain matching `scope:knowledge` + `type:test` tags.
+- purpose match: PASS — tests verify FK enforcement, NOT NULL constraints, and valid write path per stated ACs. Schema.py implementation correctly re-attributed to #1586 per architect reconciliation.
+- extraneous scope: none
+- boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 5/5
+ACs are specific and complete: exact functions (`init_db()`), exact assertions (`sqlite3.IntegrityError`), exact database operations, and exact PRAGMA checks. Challenger surfaced two valid gaps (target_id FK, positive write path) that architect addressed by adding AC-2(c) and AC-4. Clean implementation path for test-writer.
+
+### Commit Integrity
+- upstream commit presence: PASS — test-writer commits `a95de26d` and `9c8400e3` present for task-scoped and durable test files. Schema.py commit `2f98e4ad` still carries `#1585` attribution in message but was architecturally re-attributed to #1586 — minor message hygiene issue, non-blocking.
+- kanban commit packaging: pending (this archive cycle)
+
+### Deduction Breakdown
+No deductions applied. All 4 pillars pass cleanly.
+
+### Confidence: 1.00
+### Action: archive
