@@ -395,8 +395,8 @@ test.describe('TestFromAC_MobileReachability', () => {
 // in the board column container (KanbanBoard line ~291) at 1024px and 1440px.
 
 test.describe('TestFromAC_AllColumnsVisible', () => {
-  // 1024px: workspace=608px. Board container overflowX:auto.
-  // Whether 7 columns overflow 608px depends on column content min-widths.
+  // 1024px: workspace=608px. After fix: repeat(7, minmax(200px,1fr)) → 7×200px=1400px > 608px → horizontal overflow.
+  // RED: updated for #1596 — board-container overflow assertion flipped to expect horizontal scroll.
   test.describe('at 1024px viewport', () => {
     test.use({ viewport: { width: 1024, height: 768 } })
 
@@ -406,8 +406,10 @@ test.describe('TestFromAC_AllColumnsVisible', () => {
       await page.locator('[data-column]').first().waitFor({ state: 'visible', timeout: 8_000 })
     })
 
-    // AC3: all 7 columns present in DOM and board container has no horizontal scroll.
-    test('all 7 status columns simultaneously visible without board-container horizontal scrolling at 1024px', async ({
+    // AC3 (updated for #1596): board container must overflow horizontally at 1024px after fix.
+    // repeat(7, minmax(200px,1fr)) → 7×200px=1400px > 608px workspace → scrollWidth > clientWidth.
+    // RED: asserts overflow=true; fails against current auto-fit (wraps, no overflow).
+    test('board column container overflows horizontally at 1024px with 7-column fixed layout (AC-3 #1596)', async ({
       page,
     }) => {
       const columnCount = await page.locator('[data-column]').count()
@@ -415,9 +417,9 @@ test.describe('TestFromAC_AllColumnsVisible', () => {
 
       const result = await page.evaluate(() => {
         const cols = Array.from(document.querySelectorAll('[data-column]'))
-        if (cols.length === 0) return { overflow: true, scrollWidth: 0, clientWidth: 0 }
+        if (cols.length === 0) return { overflow: false, scrollWidth: 0, clientWidth: 0 }
         const container = cols[0].parentElement
-        if (!container) return { overflow: true, scrollWidth: 0, clientWidth: 0 }
+        if (!container) return { overflow: false, scrollWidth: 0, clientWidth: 0 }
         return {
           overflow: container.scrollWidth > container.clientWidth,
           scrollWidth: container.scrollWidth,
@@ -426,8 +428,8 @@ test.describe('TestFromAC_AllColumnsVisible', () => {
       })
       expect(
         result.overflow,
-        `board column container (scrollWidth=${result.scrollWidth}px, clientWidth=${result.clientWidth}px) must not overflow at 1024px — all 7 status columns must be simultaneously visible`,
-      ).toBe(false)
+        `board column container (scrollWidth=${result.scrollWidth}px, clientWidth=${result.clientWidth}px) must overflow horizontally at 1024px — 7×200px=1400px exceeds workspace width`,
+      ).toBe(true)
     })
 
     // AC3: workspace must be wider than sidecar so board workspace dominates at desktop.
@@ -480,8 +482,8 @@ test.describe('TestFromAC_AllColumnsVisible', () => {
     })
   })
 
-  // 1440px: workspace=1024px. Columns easily fit → column count and overflow tests
-  // document full-viewport AC1/AC3 coverage.
+  // 1440px: workspace=1024px. After fix: repeat(7, minmax(200px,1fr)) → 7×200px=1400px > 1024px → horizontal overflow.
+  // RED: updated for #1596 — board-container overflow assertion flipped to expect horizontal scroll.
   test.describe('at 1440px viewport', () => {
     test.use({ viewport: { width: 1440, height: 900 } })
 
@@ -491,7 +493,10 @@ test.describe('TestFromAC_AllColumnsVisible', () => {
       await page.locator('[data-column]').first().waitFor({ state: 'visible', timeout: 8_000 })
     })
 
-    test('all 7 status columns simultaneously visible without board-container horizontal scrolling at 1440px', async ({
+    // AC3 (updated for #1596): board container must overflow horizontally at 1440px after fix.
+    // repeat(7, minmax(200px,1fr)) → 7×200px=1400px > 1024px workspace → scrollWidth > clientWidth.
+    // RED: asserts overflow=true; fails against current auto-fit (wraps, no overflow).
+    test('board column container overflows horizontally at 1440px with 7-column fixed layout (AC-3 #1596)', async ({
       page,
     }) => {
       const columnCount = await page.locator('[data-column]').count()
@@ -499,9 +504,9 @@ test.describe('TestFromAC_AllColumnsVisible', () => {
 
       const result = await page.evaluate(() => {
         const cols = Array.from(document.querySelectorAll('[data-column]'))
-        if (cols.length === 0) return { overflow: true, scrollWidth: 0, clientWidth: 0 }
+        if (cols.length === 0) return { overflow: false, scrollWidth: 0, clientWidth: 0 }
         const container = cols[0].parentElement
-        if (!container) return { overflow: true, scrollWidth: 0, clientWidth: 0 }
+        if (!container) return { overflow: false, scrollWidth: 0, clientWidth: 0 }
         return {
           overflow: container.scrollWidth > container.clientWidth,
           scrollWidth: container.scrollWidth,
@@ -510,8 +515,8 @@ test.describe('TestFromAC_AllColumnsVisible', () => {
       })
       expect(
         result.overflow,
-        `board column container (scrollWidth=${result.scrollWidth}px, clientWidth=${result.clientWidth}px) must not overflow at 1440px`,
-      ).toBe(false)
+        `board column container (scrollWidth=${result.scrollWidth}px, clientWidth=${result.clientWidth}px) must overflow horizontally at 1440px — 7×200px=1400px exceeds workspace width`,
+      ).toBe(true)
     })
 
     // AC-3 (cycle-4 addition): board container must not overflow vertically at 1440px.
