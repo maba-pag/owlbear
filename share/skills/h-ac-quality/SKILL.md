@@ -83,6 +83,7 @@ Run validation in order:
 
 - Check B3 banned words are absent unless exhaustively enumerated.
 - Check P1 agent/stage token is present for Tier 2 lines.
+- Check literal tokens (enum values, design tokens, prop values, CSS custom properties) against canonical sources; see `## Canonical Literal Verification`.
 - Check AC numbering is present and stable.
 
 2. Semantic review pass
@@ -124,6 +125,44 @@ Mechanical pass failing means rewrite before semantic review. Semantic failure m
 
 - Bad: "Auditor confirms the handoff is complete."
 - Good: "Auditor verifies handoff completeness by artifact inspection of '## Review Evidence' in the task body and stage-transition audit of review -> docs."
+
+## Canonical Literal Verification
+
+Use this when AC lines cite concrete literals that must match source-of-truth tokens.
+
+### Bad -> Good Examples
+
+1. Enum/union literals (`CardSignal`)
+
+- Bad: "Task cards must show green/yellow/red/gray/stale status labels in Cockpit."
+- Good: "Task cards use `CardSignal` literals from `serve/cockpit/web/src/utils/computeSignal.ts`: `dr-pending | blocked | claimed | deps-unmet | ready | unknown`."
+
+2. PDS design token
+
+- Bad: "Use standard medium spacing for card gaps."
+- Good: "Use `--pds-spacing-md` from `serve/cockpit/web/src/tokens.css` for card gap spacing."
+
+3. CSS custom property
+
+- Bad: "Claimed cards should use the purple claimed color variable."
+- Good: "Claimed cards use `--pds-signal-claimed` from `serve/cockpit/web/src/tokens.css`."
+
+### 5-Step Verifier Procedure
+
+1. Identify each literal in the AC line (enum value, token name, prop value, or CSS custom property).
+2. Locate the canonical source file for that literal category.
+3. Confirm exact spelling and allowed values via `grep_search` or `read_file`.
+4. Compare AC wording to the canonical source; treat paraphrased labels as mismatch.
+5. Rewrite AC to cite the exact literal and source path when any mismatch is found.
+
+### Canonical Source Map
+
+| Category | Source file | Example |
+|----------|-------------|---------|
+| Enum/union state literals | `serve/cockpit/web/src/utils/computeSignal.ts` | `CardSignal values: dr-pending, blocked, claimed, deps-unmet, ready, unknown` |
+| PDS design tokens used in Cockpit styles | `serve/cockpit/web/src/tokens.css` | `--pds-spacing-md` |
+| CSS custom properties for semantic signals | `serve/cockpit/web/src/tokens.css` | `--pds-signal-claimed`, `--pds-notification-warning` |
+| PDS component prop/type literals | `@porsche-design-system/components-react` type exports | component prop union literal from package type definitions |
 
 ## Validation Checklist
 
