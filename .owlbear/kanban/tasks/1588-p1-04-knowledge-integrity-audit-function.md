@@ -1,10 +1,10 @@
 ---
 id: 1588
 title: 'P1-04: Knowledge integrity audit function'
-status: review
+status: done
 priority: needed
 created: 2026-05-15T16:24:50.332910+00:00
-updated: 2026-05-16T13:03:25.288418+00:00
+updated: 2026-05-16T13:22:14.006149+00:00
 tags:
   - phase-1
   - scope:knowledge
@@ -135,3 +135,39 @@ Proof bundle: behavioral
   - AC-2: Query behavior preserved exactly (LEFT JOIN + IS NULL checks for all four categories).
   - AC-3: Function remains read-only (total_changes unchanged tests passing).
   - AC-4: `from owlbear_knowledge.schema import audit_integrity` remains importable and behavior-consistent (1587 + 1588 compatibility tests passing).
+
+[[2026-05-16T15:17:59+02:00]]
+## Review Evidence
+- Verdict: PASS
+- PASS confirmation: PASS #1588 -> docs | AC mapped to code and evidence sufficient.
+- Builder evidence reviewed first: scoped quality proof reported 25 passed, 0 failed, 0 skipped across `tests/test_knowledge_integrity_extraction_1588.py` and `tests/test_knowledge_integrity_audit_1587.py`; lint clean; no coverage failures reported; IDE diagnostics clean on touched source and task test files.
+- AC evidence map:
+
+| AC Line | Code Evidence | Test Evidence | Status |
+|---|---|---|---|
+| AC-1 | `serve/knowledge/src/owlbear_knowledge/integrity.py:11` defines `audit_integrity(conn: sqlite3.Connection) -> dict[str, dict[str, int | list[str]]]`; `serve/knowledge/src/owlbear_knowledge/integrity.py:70-84` returns the four required keys. | `tests/test_knowledge_integrity_extraction_1588.py:111`, `:115`, `:123`, `:130` exercise importability, callability, signature surface, and return-shape checks. | PASS |
+| AC-2 | `serve/knowledge/src/owlbear_knowledge/integrity.py:20-24`, `:33-37`, `:46-51`, `:60-64` use LEFT JOIN + IS NULL detection for chunks, entities, edges, and status rows. | `tests/test_knowledge_integrity_extraction_1588.py:160`, `:175`, `:187`, `:200`, `:214`, `:228`, `:245`, `:265` plus archived compatibility coverage in `tests/test_knowledge_integrity_audit_1587.py:94`, `:110`, `:124`, `:137`, `:181`, `:196`. | PASS |
+| AC-3 | `serve/knowledge/src/owlbear_knowledge/integrity.py:20-64` contains SELECT-only queries; no INSERT/UPDATE/DELETE statements present. | `tests/test_knowledge_integrity_extraction_1588.py:282`, `:290` and `tests/test_knowledge_integrity_audit_1587.py:164` verify `total_changes` is unchanged. | PASS |
+| AC-4 | `serve/knowledge/src/owlbear_knowledge/schema.py:15-17` re-exports `audit_integrity` from the new module. | `tests/test_knowledge_integrity_extraction_1588.py:310`, `:316` and archived import path at `tests/test_knowledge_integrity_audit_1587.py:21`. | PASS |
+- Challenger cross-check: no blocking findings; proceed recommendation (confidence 0.82).
+- Blocking findings: none.
+
+## Observations
+- The test-writer body summary says "Total: 14 tests", but the live task test file contains 17 `test_` cases; together with the 8 archived tests this explains the builder's 25-pass total. This is a stale summary, not a proof defect.
+- AC-1's type-annotation details are proved more strongly by code inspection than by runtime assertions; not blocking for this extraction task because the implemented signature matches the contract exactly.
+
+[[2026-05-16T15:22:14+02:00]]
+## Docs Gate
+
+**Changed files:** `serve/knowledge/src/owlbear_knowledge/integrity.py` (new), `serve/knowledge/src/owlbear_knowledge/schema.py` (re-export added)
+
+**Convention mapping:** `serve/knowledge/src/**` → `serve/knowledge/README.md`
+
+| Item | Result | Evidence |
+|------|--------|----------|
+| README Verification | PASS — no update needed | Layer 1: no grep hits for `audit_integrity` or `integrity` in README; no stale references to removed schema.py location. Layer 2: "Module groups" table lists public `__init__.py` exports only; `audit_integrity` is intentionally excluded from `__init__.py` per builder constraints (parent #1580 decision). No task-caused doc drift. |
+| External Attribution | N/A | Pure code extraction refactor; no external sources. |
+| Research Doc | N/A | No research artifact referenced in task body. |
+| Deletion Detection | N/A | No files deleted; `audit_integrity` moved with backward-compatible re-export preserved in `schema.py` (L15–17). |
+
+**Scratch cleanup:** 3 files removed (`1588-pytest-output.txt`, `1588-quality-check.txt`, `1588-ruff-output.txt`). Directory clean.

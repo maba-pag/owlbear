@@ -1,10 +1,10 @@
 ---
 id: 1594
 title: 'P0-02: PDS global-styles import + CSP font relaxation'
-status: in-progress
+status: review
 priority: critical
 created: 2026-05-16T03:35:01.700586+00:00
-updated: 2026-05-16T12:58:17.879427+00:00
+updated: 2026-05-16T13:18:57.361037+00:00
 tags:
   - frontend
   - pds
@@ -27,7 +27,7 @@ ac:
 proof_bundle: existing
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-16T13:18:57.361037+00:00
 archival_reason:
 archival_refs: []
 ---
@@ -112,3 +112,35 @@ See `.owlbear/research/1594-pds-global-styles-import.md` for full analysis.
 - Proof bundle: existing — no new test writing required.
 - Existing proof scope: serve/cockpit/web/e2e/pds-foundation-1591.spec.ts, serve/cockpit/web/e2e/pds-scheme-dark-1555.spec.ts
 - Passing through to builder.
+
+[[2026-05-16T15:13:17+02:00]]
+## Builder Notes
+- Files changed:
+  - serve/cockpit/web/src/main.tsx
+  - serve/cockpit/web/vite.config.ts
+  - serve/cockpit/web/src/__tests__/PdsColorSchemeBridge_1555.test.ts
+  - serve/cockpit/web/src/__tests__/ViteConfigAlias_1555.test.ts
+- Implementation summary:
+  - Removed legacy `color-scheme.css` import from main.tsx.
+  - Removed obsolete `pdsColorSchemeCssPath` constant and resolve.alias bridge from vite.config.ts.
+  - Updated #1555 contract test to assert global-styles/index.css import in tokens.css.
+  - Repurposed Vite alias test to assert the legacy alias key is absent while keeping vite config importability coverage.
+- Proof bundle handling:
+  - Proof bundle is `existing`; executed required existing proofs in scoped quality run.
+- Quality evidence (quality-runner, scoped):
+  - Vitest: 26 passed, 0 failed
+    - src/__tests__/PdsColorSchemeBridge_1555.test.ts
+    - src/__tests__/ViteConfigAlias_1555.test.ts
+  - Playwright: 10 passed, 0 failed
+    - e2e/pds-foundation-1591.spec.ts
+    - e2e/pds-scheme-dark-1555.spec.ts
+  - Lint: clean (eslint exit 0) on changed frontend files
+  - Coverage: N/A for this `existing` proof task
+- Commit:
+  - 7cbc8c4c6fa9a6b4ec436cf9e434ebdb5f4df6b8
+- AC mapping:
+  - AC4 satisfied: main.tsx has no color-scheme.css import.
+  - AC5 satisfied: vite.config.ts has no pdsColorSchemeCssPath const.
+  - AC6 satisfied: vite.config.ts resolve.alias has no color-scheme.css mapping.
+  - AC2/AC7 validated by scoped proofs (CSP font-src and required vitest/e2e suites passing).
+
