@@ -27,6 +27,16 @@ External repos and resources studied during OwlBear development.
 | PDS v4 component accessibility | <https://designsystem.porsche.com/v3/components/button/accessibility/> | PDS components tested against axe-core WCAG 2.2 AA | `.owlbear/research/accessibility-sweep-1628.md` | 2026-05-16 |
 | axe-core rule documentation | <https://www.deque.com/axe/core-documentation/api-documentation/> | WCAG tag mapping for withTags configuration | `.owlbear/research/accessibility-sweep-1628.md` | 2026-05-16 |
 
+## Motion/Transition Token Migration (Task #1627)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| PDS v4 Motion tokens docs | <https://designsystem.porsche.com/v4/tokens/motion/> | Duration (sm/md/lg/xl) and easing (in-out/in/out) token definitions | `.owlbear/research/1627-pds-motion-tokens.md` | 2026-05-16 |
+| PDS v4 CSS Variables docs | <https://designsystem.porsche.com/v4/stylesheets/css-variables/introduction/> | `--p-duration-*` and `--p-ease-*` custom property API | `.owlbear/research/1627-pds-motion-tokens.md` | 2026-05-16 |
+| PDS v4 Tailwind motion docs | <https://designsystem.porsche.com/v4/tailwindcss/motion/examples/> | Tailwind `.duration-*` and `.ease-*` class mapping | `.owlbear/research/1627-pds-motion-tokens.md` | 2026-05-16 |
+| PDS GitHub common-styles.ts | <https://github.com/porsche-design-system/porsche-design-system/blob/main/packages/components/src/styles/common-styles.ts> | `getTransition()` internal override mechanism (`--p-transition-duration`) | `.owlbear/research/1627-pds-motion-tokens.md` | 2026-05-16 |
+| PDS v4 global-styles/variables.css | (local: node_modules/@porsche-design-system/components-js/global-styles/variables.css) | Token value verification: sm=0.25s, md=0.4s, ease-in-out=cubic-bezier(0.25,0.1,0.25,1) | `.owlbear/research/1627-pds-motion-tokens.md` | 2026-05-16 |
+
 ## Sidecar Structure Research (Task #1607)
 
 | Source | URL | What | Where Used | Date |
