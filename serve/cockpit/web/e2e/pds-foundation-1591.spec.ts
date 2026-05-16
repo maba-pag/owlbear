@@ -184,22 +184,30 @@ test.describe('TestFromAC_CSPFontSrc', () => {
     expect(content, "CSP content must include 'font-src'").toContain('font-src')
   })
 
-  // Boundary: font-src directive value contains the Porsche CDN origin (D6 decision)
-  test("font-src directive value contains 'https://cdn.ui.porsche.com'", async ({ page }) => {
+  // Boundary: font-src directive tokens include https://cdn.ui.porsche.com as exact token (D6 decision)
+  // Splits directive by whitespace so 'https://cdn.ui.porsche.com.evil.com' cannot satisfy this check.
+  test("font-src directive tokens include 'https://cdn.ui.porsche.com' as exact token", async ({ page }) => {
     const content = await getCspContent(page)
     const fontSrc = extractFontSrcDirective(content)
     expect(fontSrc, 'font-src directive must be present in CSP').not.toBeNull()
-    expect(fontSrc!, "font-src directive value must include 'https://cdn.ui.porsche.com'").toContain(
-      'https://cdn.ui.porsche.com',
-    )
+    const tokens = fontSrc!.split(/\s+/)
+    expect(
+      tokens,
+      "font-src directive must contain 'https://cdn.ui.porsche.com' as an exact token",
+    ).toContain('https://cdn.ui.porsche.com')
   })
 
-  // Boundary: font-src directive value contains 'self' alongside the CDN origin
-  test("font-src directive value contains 'self'", async ({ page }) => {
+  // Boundary: font-src directive tokens include 'self' as exact token alongside the CDN origin
+  // Splits directive by whitespace — exact token membership, not substring check.
+  test("font-src directive tokens include 'self' as exact token", async ({ page }) => {
     const content = await getCspContent(page)
     const fontSrc = extractFontSrcDirective(content)
     expect(fontSrc, 'font-src directive must be present in CSP').not.toBeNull()
-    expect(fontSrc!, "font-src directive value must include 'self'").toContain("'self'")
+    const tokens = fontSrc!.split(/\s+/)
+    expect(
+      tokens,
+      "font-src directive must contain \"'self'\" as an exact token",
+    ).toContain("'self'")
   })
 })
 
