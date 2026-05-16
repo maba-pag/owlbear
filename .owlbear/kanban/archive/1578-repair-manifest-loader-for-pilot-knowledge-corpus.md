@@ -1,10 +1,10 @@
 ---
 id: 1578
 title: Repair manifest loader for pilot knowledge corpus
-status: done
+status: archived
 priority: important
 created: 2026-05-15T01:23:46.788046+00:00
-updated: 2026-05-15T19:29:34.710447+00:00
+updated: 2026-05-16T04:30:37.041158+00:00
 tags:
   - scope:knowledge
   - type:build
@@ -18,7 +18,7 @@ depends_on:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 Context:
@@ -364,3 +364,28 @@ None required.
 
 ### Scratch Cleanup
 No `1578-*` scratch files existed.
+
+[[2026-05-16T06:30:37+02:00]]
+## Audit
+### Regression Detection
+- quality-runner mode full: 4959 passed, lint clean (ruff=0, vitest=0, eslint=0, stylelint=0, htmlhint=0); failures in unrelated domains (kanban engine accessor migration ×10, cockpit PDS build compat ×5, cockpit react compiler ×2, shell integration ×2, dead code sweep ×1, plus ~186 additional non-knowledge failures)
+- knowledge-domain scoped run: task-specific 40/40 passed; mcp-knowledge failures (17) in unrelated modules (stats_resource, list_sources, ingest_graph_tools) — not manifest loader
+- regression verdict: PASS — no task-caused regressions detected
+
+### Intent Verification
+- scope alignment: PASS (changed files: serve/knowledge/src/owlbear_knowledge/loader.py, store/knowledge/general/sources.yaml, tests/test_manifest_loader_1578.py — all knowledge domain)
+- purpose match: PASS (source_id linkage, scope propagation, vector persistence, manifest path alignment — matches AC-1..AC-4)
+- extraneous scope: none
+- boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 4/5
+AC-1..AC-4 specific and verifiable with clear builder guidance (line numbers, patterns). Required cycle-3 refinement for scope proof gap in verification guidance. Minor gap: AC-3 narrowed post-challenger (original required source_type/scope but _serialize_source only returns name/url). Overall: adequate with responsive refinement.
+
+### Commit Integrity
+- upstream commit presence: PARTIAL — test-writer has 4 properly tagged commits (992c5108, b551e282, 1014f7f8, dd60fce0 all reference "#1578, test-writer"). Builder implementation commits lack #1578 attribution: loader.py changes in dd9f1c50 ("fix: update schema version to 12..."), sources.yaml changes in ab2cc4f4 ("fix: update glob paths..."). No commit across any branch matches "#1578" + "builder". All deliverable files are committed (git diff HEAD clean), but attribution is broken — cannot trace builder work via commit grep.
+- kanban commit packaging: pending (post end_work)
+
+### Deduction Breakdown
+- Evidence integrity concern: -.05 (builder commits lack #1578 attribution, complicating audit traceability)
+### Confidence: .95
+### Action: archive

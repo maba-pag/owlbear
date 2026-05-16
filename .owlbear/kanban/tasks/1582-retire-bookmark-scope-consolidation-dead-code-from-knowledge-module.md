@@ -4,7 +4,7 @@ title: Retire bookmark/scope/consolidation dead code from knowledge module
 status: in-progress
 priority: needed
 created: 2026-05-15T16:22:28.247084+00:00
-updated: 2026-05-15T19:29:15.480681+00:00
+updated: 2026-05-16T04:19:25.560284+00:00
 tags:
   - scope:knowledge
   - type:cleanup
@@ -86,3 +86,45 @@ Existing proof scope: tests/test_mcp_knowledge_tool_surface.py, tests/test_enric
 - Architect marked Test-writer: SKIP.
 - Existing proof scope: tests/test_mcp_knowledge_tool_surface.py, tests/test_enrichment_persistence_1557.py, tests/test_knowledge_guard_removal_1579.py, tests/test_browser_fetcher_wiring.py, tests/test_persistence_source_wiring.py, tests/test_knowledge_ingest_source_identity_1556.py, tests/test_server.py, tests/test_core_removal.py, serve/mcp-knowledge/tests/
 - Passing through to builder.
+
+[[2026-05-16T06:19:25+02:00]]
+## Builder Notes
+- Implementation: retired bookmark/scope/consolidation/coplan-auth dead surface per AC.
+- Source changes:
+  - `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py`
+  - `serve/knowledge/src/owlbear_knowledge/__init__.py`
+  - `serve/knowledge/pyproject.toml`
+- Module deletions:
+  - `serve/knowledge/src/owlbear_knowledge/bookmark_pipeline.py`
+  - `serve/knowledge/src/owlbear_knowledge/bookmark_store.py`
+  - `serve/knowledge/src/owlbear_knowledge/consolidation.py`
+  - `serve/knowledge/src/owlbear_knowledge/copilot_auth.py`
+  - `serve/knowledge/src/owlbear_knowledge/scope_transfer.py`
+- Test updates for retired symbols/wiring:
+  - `tests/test_mcp_knowledge_tool_surface.py`
+  - `tests/test_enrichment_persistence_1557.py`
+  - `tests/test_knowledge_guard_removal_1579.py`
+  - `tests/test_browser_fetcher_wiring.py`
+  - `tests/test_persistence_source_wiring.py`
+  - `tests/test_knowledge_ingest_source_identity_1556.py`
+  - `tests/test_server.py`
+  - `tests/test_core_removal.py`
+  - `serve/mcp-knowledge/tests/test_server.py`
+  - `serve/mcp-knowledge/tests/test_ingest_graph_tools.py`
+  - `serve/mcp-knowledge/tests/test_ingest_graph_wiring.py`
+
+- Quality evidence (quality-runner):
+  - Required broad proof attempt (`tests/` + `serve/mcp-knowledge/tests/`): `3048 passed`, `20 failed`, `14 skipped`; lint initially had 1 violation (`tests/test_core_removal.py:F401`), fixed in this task.
+  - Scoped follow-up on task-affected files: `317 passed`, `31 failed`, `0 skipped`; lint `clean: true`; coverage reported `server.py 84%`, `__init__.py 100%`.
+
+- Lint status:
+  - Changed-file error scan: no static errors.
+  - Scoped ruff: clean.
+
+- Gate status:
+  - AC-11 existing proof command scope remains red due pre-existing/unrelated failures in the requested proof scope; cannot advance to review under builder gate rules while required proof is failing.
+
+- Fixes applied:
+  - Removed retired imports/functions/helpers/context fields and `__all__` entries from MCP knowledge server.
+  - Removed retired package exports and `copilot` optional dependency group.
+  - Removed/deleted dead modules and corresponding test references/patch targets.

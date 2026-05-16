@@ -1,10 +1,10 @@
 ---
 id: 1583
 title: Drop bookmarks and consolidations tables from knowledge schema
-status: in-progress
+status: review
 priority: nice-to-have
 created: 2026-05-15T16:22:28.270394+00:00
-updated: 2026-05-15T19:29:15.601799+00:00
+updated: 2026-05-16T04:22:03.024872+00:00
 tags:
   - scope:knowledge
   - type:cleanup
@@ -91,3 +91,26 @@ Out of scope: Code module deletion (handled by sibling task #1582).
   | AC-6 fresh DB no retired tables | test_ac6_fresh_db_no_retired_tables |
   | AC-7 v11→v12 migration drops tables | test_ac7_migration_from_v11_drops_retired_tables |
 - Proof bundle: smoke (one test per AC line, happy path only)
+
+[[2026-05-16T06:22:03+02:00]]
+## Builder Notes
+- Implementation: No code changes required by builder; AC-aligned implementation already present in serve/knowledge/src/owlbear_knowledge/schema.py.
+- Files changed: none
+- Test results:
+  - Task-scoped smoke proof (`tests/test_schema_bookmark_drop_1583.py`): 7 passed, 0 failed, 0 skipped
+  - Module-level durable test file: not present (`serve/knowledge/tests/test_schema.py` missing; `tests/test_schema.py` missing)
+- Lint status:
+  - Task-scoped test lint: clean
+- Coverage evidence:
+  - Scoped run overall: 23%
+  - `owlbear_knowledge/schema.py`: 54%
+  - Note: task proof bundle is smoke; this run confirms AC behavior for #1583 and no builder edits were needed.
+- Evidence summary by AC:
+  - AC-1: `_CREATE_BOOKMARKS` and `_CREATE_CONSOLIDATIONS` are absent.
+  - AC-2: `init_db` does not execute bookmarks/consolidations DDL or bookmark index creation.
+  - AC-3: `_migrate_v11_to_v12` exists, drops both retired tables, and migration tuple includes `(12, _migrate_v11_to_v12)`.
+  - AC-4: `_SCHEMA_VERSION` is 12.
+  - AC-5: module docstring no longer lists bookmarks/consolidations.
+  - AC-6: fresh in-memory DB has no `bookmarks`/`consolidations` tables.
+  - AC-7: migration from version 11 removes both tables.
+- Fixes applied: none (pass-through; implementation already satisfied acceptance criteria before builder intervention).

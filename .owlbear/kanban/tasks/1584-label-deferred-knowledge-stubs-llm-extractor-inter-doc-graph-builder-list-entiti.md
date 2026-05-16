@@ -2,10 +2,10 @@
 id: 1584
 title: Label deferred knowledge stubs (llm_extractor, inter_doc_graph_builder, 
   list_entities)
-status: review
+status: docs
 priority: nice-to-have
 created: 2026-05-15T16:22:28.292693+00:00
-updated: 2026-05-15T19:30:48.376120+00:00
+updated: 2026-05-16T04:24:03.289230+00:00
 tags:
   - scope:knowledge
   - type:cleanup
@@ -92,3 +92,20 @@ Acceptance Criteria:
   - `inter_doc_graph_builder.py` module docstring now explicitly marked `DEFERRED` and states activation depends on StructuredExtractor integration.
   - `list_entities` in `server.py` now has a brief deferred comment noting it is intentionally not exposed as an MCP tool pending thread-safety review.
 - Commit: `daa10dc0` (`docs: label deferred knowledge stubs (#1584, builder)`).
+
+[[2026-05-16T06:24:03+02:00]]
+## Review Evidence
+- Verdict: PASS
+- PASS confirmation: PASS #1584 -> docs | AC mapped to code and evidence sufficient.
+- Builder evidence reviewed first and found consistent with a `skip` proof bundle: scoped lint reported clean (`ruff` exit 0, violations none), tests not required for this docs-only task.
+
+| AC Line | Code Evidence | Test/Lint Evidence | Status |
+|---|---|---|---|
+| AC-1 `llm_extractor.py` docstring includes `DEFERRED` and descriptive future activation reference | `serve/knowledge/src/owlbear_knowledge/llm_extractor.py:1` marks the module `DEFERRED`; `serve/knowledge/src/owlbear_knowledge/llm_extractor.py:3`-`4` says it remains inactive until future `LLMExtractor server` activation | Builder notes report scoped lint clean; reviewer diagnostics on the file found no errors | PASS |
+| AC-2 `inter_doc_graph_builder.py` docstring includes `DEFERRED` and StructuredExtractor dependency note | `serve/knowledge/src/owlbear_knowledge/inter_doc_graph_builder.py:1` marks the module `DEFERRED`; `serve/knowledge/src/owlbear_knowledge/inter_doc_graph_builder.py:4` states activation depends on `StructuredExtractor` integration in ingest lifecycle | Builder notes report scoped lint clean; reviewer diagnostics on the file found no errors | PASS |
+| AC-3 `list_entities` has a brief deferred comment explaining it is not exposed pending thread-safety review | `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:1212` defines `list_entities`; `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:1219`-`1220` add the deferred/thread-safety comment; decorated MCP tools resume at `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:1241`, so this helper remains undecorated | Builder notes report scoped lint clean; reviewer diagnostics on the file found no errors | PASS |
+| AC-4 No functional changes to code | The touched evidence in current workspace is confined to top-of-module docstrings in `llm_extractor.py` / `inter_doc_graph_builder.py` and an inline comment above `list_entities`; no behavior-bearing changes were observed in the inspected regions | Builder notes explicitly state docstring/comment-only scope; builder commit `daa10dc0` is present in `.git/logs/HEAD:3260`; reviewer diagnostics on all three files found no errors | PASS |
+
+## Observations
+- Proof quality is sufficient for `Proof bundle: skip`: this task changes documentation/comments only, so lint + direct source inspection is the relevant proof surface.
+- Reviewer tool surface did not provide direct `git show` access, so AC-4 is supported by current source inspection plus builder evidence rather than a commit diff. No contradiction was found, so this is non-blocking.

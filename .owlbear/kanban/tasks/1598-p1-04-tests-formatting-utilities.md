@@ -4,7 +4,7 @@ title: 'P1-04: Tests — formatting utilities'
 status: research
 priority: important
 created: 2026-05-16T03:35:25.261581+00:00
-updated: 2026-05-16T03:35:25.261581+00:00
+updated: 2026-05-16T04:19:55.611271+00:00
 tags:
   - frontend
   - pds
@@ -19,7 +19,7 @@ ac:
 proof_bundle: behavioral
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-16T04:19:55.611271+00:00
 archival_reason:
 archival_refs: []
 ---
