@@ -29,6 +29,15 @@ External repos and resources studied during OwlBear development.
 | PDS Notification Patterns | <https://designsystem.porsche.com/v3/patterns/notifications/introduction> | Component selection criteria: placement, criticality, states | `.owlbear/research/cockpit-mutation-error-banner.md` | 2026-05-12 |
 | PDS Notification Decision Tree | <https://designsystem.porsche.com/v3/patterns/notifications/decision-tree> | Error/warning case → Banner or Inline Notification recommended | `.owlbear/research/cockpit-mutation-error-banner.md` | 2026-05-12 |
 
+## Shell Layout Research (Task #1606)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| PDS v4 component introduction | <https://designsystem.porsche.com/v4/components/introduction/> | p-canvas (🧪 experimental) sidebar/shell component, full component catalog | `.owlbear/research/1606-shell-layout-sticky-header-responsive-sidebar.md` | 2026-05-16 |
+| PDS v4 Tailwind Grid docs | <https://designsystem.porsche.com/v4/tailwindcss/grid/examples/> | Porsche Grid utilities (grid-template, col-*), confirmed as content-page grid not app shell | `.owlbear/research/1606-shell-layout-sticky-header-responsive-sidebar.md` | 2026-05-16 |
+| Tailwind CSS v4 position docs | <https://tailwindcss.com/docs/position> | sticky/fixed/relative utilities and responsive variants | `.owlbear/research/1606-shell-layout-sticky-header-responsive-sidebar.md` | 2026-05-16 |
+| Tailwind CSS v4 grid-template-columns | <https://tailwindcss.com/docs/grid-template-columns> | grid-cols-[arbitrary] syntax for custom column definitions | `.owlbear/research/1606-shell-layout-sticky-header-responsive-sidebar.md` | 2026-05-16 |
+
 ## PDS Dark-Mode Compatibility Research (Task #1553)
 
 | Source | URL | What | Where Used | Date |
