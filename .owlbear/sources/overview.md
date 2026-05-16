@@ -19,6 +19,15 @@ External repos and resources studied during OwlBear development.
 | PDS v4 variables.css | (local: node_modules/@porsche-design-system/components-js/global-styles/variables.css) | Spacing, radius, shadow, motion, typography tokens | `.owlbear/research/1603-token-migration-provenance.md` | 2026-05-16 |
 | PDS v4 design system docs | <https://designsystem.porsche.com/v4/> | Token naming conventions and theming approach | `.owlbear/research/1603-token-migration-provenance.md` | 2026-05-16 |
 
+## Sidecar Structure Research (Task #1607)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| PDS v4 Spacing styles | <https://designsystem.porsche.com/v3/styles/spacing/> | Fluid/static spacing token names and values | `.owlbear/research/sidecar-structure-pds.md` | 2026-05-16 |
+| PDS v4 Typography styles | <https://designsystem.porsche.com/v3/styles/typography/> | Heading scale, pairing guidance | `.owlbear/research/sidecar-structure-pds.md` | 2026-05-16 |
+| PDS PHeading API | <https://designsystem.porsche.com/v3/components/heading/api/> | size prop values (small–xx-large), tag prop | `.owlbear/research/sidecar-structure-pds.md` | 2026-05-16 |
+| PDS PDivider API | <https://designsystem.porsche.com/v3/components/divider/api/> | Self-closing divider, orientation prop | `.owlbear/research/sidecar-structure-pds.md` | 2026-05-16 |
+
 ## CockpitProvider Extraction Research (Task #1491)
 
 | Source | URL | What | Where Used | Date |
