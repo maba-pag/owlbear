@@ -5,7 +5,7 @@
  * implements the changes.
  *
  * Coverage:
- *   AC-1: main.tsx imports PDS color-scheme.css
+ *   AC-1: tokens.css imports PDS global-styles/index.css
  *   AC-2: vite.config.ts excludes Features.LightDark from lightningcss
  *   AC-3: theme-bootstrap.js sets .scheme-dark/.scheme-light on documentElement
  *   AC-4: useTheme.ts — all 3 mutation sites toggle scheme classes (no accumulation)
@@ -25,7 +25,7 @@ import { fileURLToPath } from 'node:url'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
-const MAIN_TSX_PATH = resolve(__dirname, '../main.tsx')
+const TOKENS_CSS_PATH = resolve(__dirname, '../tokens.css')
 const VITE_CONFIG_PATH = resolve(__dirname, '../../vite.config.ts')
 const BOOTSTRAP_PATH = resolve(__dirname, '../../public/theme-bootstrap.js')
 const SRC_DIR = resolve(__dirname, '..')
@@ -109,23 +109,21 @@ function collectCssFiles(dir: string): string[] {
   return result
 }
 
-// ─── AC-1: main.tsx imports PDS color-scheme.css ──────────────────────────────
+// ─── AC-1: tokens.css imports PDS global-styles/index.css ─────────────────────
 
-describe('TestFromAC_MainTsxColorSchemeImport_1555', () => {
-  it('AC-1: main.tsx contains a static import of PDS color-scheme.css at the exact package path', () => {
-    const content = readFileSync(MAIN_TSX_PATH, 'utf-8')
+describe('TestFromAC_TokensCssGlobalStylesImport_1555', () => {
+  it('AC-1: tokens.css contains a static @import of PDS global-styles/index.css', () => {
+    const content = readFileSync(TOKENS_CSS_PATH, 'utf-8')
 
-    expect(content).toContain(
-      '@porsche-design-system/components-react/global-styles/color-scheme.css',
-    )
+    expect(content).toContain('@porsche-design-system/components-js/global-styles/index.css')
   })
 
-  it('AC-1: the color-scheme.css import line is not commented out', () => {
-    const content = readFileSync(MAIN_TSX_PATH, 'utf-8')
+  it('AC-1: the global-styles/index.css import line is not commented out', () => {
+    const content = readFileSync(TOKENS_CSS_PATH, 'utf-8')
     const lines = content.split('\n')
-    const importLine = lines.find((l) => l.includes('color-scheme.css'))
+    const importLine = lines.find((l) => l.includes('global-styles/index.css'))
 
-    expect(importLine, 'import line for color-scheme.css must exist in main.tsx').toBeDefined()
+    expect(importLine, 'import line for global-styles/index.css must exist in tokens.css').toBeDefined()
     expect(importLine!.trimStart()).not.toMatch(/^\/\//)
     expect(importLine!.trimStart()).not.toMatch(/^\/\*/)
   })

@@ -1,20 +1,8 @@
 /**
- * AC-8 (retry gap): resolve.alias PDS color-scheme.css mapping resolves correctly
- * in Vitest import context — task #1555.
+ * Regression coverage for task #1594 cleanup.
  *
- * The existing vite_config.test.ts and vite_config_pds_1513.test.ts cover the
- * "importable without TypeError" half of AC-8 (they fail with the same TypeError).
- * This file covers the second half: after importability is restored, the
- * resolve.alias entry must map the correct key to a path ending in color-scheme.css.
- *
- * RED reason: module-level fileURLToPath(new URL('./node_modules/...', import.meta.url))
- * in vite.config.ts throws TypeError when import.meta.url is not a file:// URL
- * (Vitest jsdom runner context). All three tests fail at module load time before
- * any assertions execute.
- *
- * Builder fix: make the PDS alias path resolution lazy (e.g. inside a function
- * called only at build/serve time, or use path.resolve(__dirname, ...)) so that
- * vite.config.ts can be safely imported in Vitest without a file:// URL.
+ * The old resolve.alias bridge for color-scheme.css is intentionally removed
+ * because tokens.css imports global-styles/index.css directly.
  */
 import { describe, it, expect, vi } from 'vitest'
 
@@ -38,7 +26,7 @@ vi.mock('node:fs', () => ({
 // at module level, where import.meta.url is not a file:// URL in Vitest.
 import config from '../../vite.config'
 
-const PDS_SCHEME_CSS_KEY =
+const LEGACY_PDS_SCHEME_CSS_KEY =
   '@porsche-design-system/components-react/global-styles/color-scheme.css'
 
 describe('TestFromAC_ViteConfigAlias_1555', () => {
@@ -48,28 +36,19 @@ describe('TestFromAC_ViteConfigAlias_1555', () => {
     }
   }
 
-  // AC-8: the alias object exists and contains the expected PDS key
-  it('AC-8: resolve.alias contains the PDS color-scheme.css mapping key', () => {
-    const rawConfig = config as RawConfig
-    expect(rawConfig.resolve?.alias, 'resolve.alias must be defined').toBeDefined()
-    expect(
-      PDS_SCHEME_CSS_KEY in (rawConfig.resolve?.alias ?? {}),
-      `resolve.alias must have key "${PDS_SCHEME_CSS_KEY}"`,
-    ).toBe(true)
+  it('vite.config.ts stays importable in Vitest context', () => {
+    expect(config).toBeDefined()
   })
 
-  // AC-8: alias value is a non-empty string (not undefined / null / number)
-  it('AC-8: resolve.alias PDS color-scheme.css value is a non-empty string', () => {
+  // AC-6: the legacy color-scheme.css alias key is removed
+  it('resolve.alias does not contain the legacy PDS color-scheme.css key', () => {
     const rawConfig = config as RawConfig
-    const value = rawConfig.resolve?.alias?.[PDS_SCHEME_CSS_KEY]
-    expect(typeof value, 'alias value must be a string').toBe('string')
-    expect((value as string).length, 'alias value must be non-empty').toBeGreaterThan(0)
+    expect(LEGACY_PDS_SCHEME_CSS_KEY in (rawConfig.resolve?.alias ?? {})).toBe(false)
   })
 
-  // AC-8: alias value resolves to the correct CSS file
-  it('AC-8: resolve.alias PDS color-scheme.css value ends with color-scheme.css', () => {
+  it('resolve.alias omits legacy key regardless of alias object presence', () => {
     const rawConfig = config as RawConfig
-    const value = rawConfig.resolve?.alias?.[PDS_SCHEME_CSS_KEY] ?? ''
-    expect(value).toMatch(/color-scheme\.css$/)
+    const aliases = rawConfig.resolve?.alias ?? {}
+    expect(Object.prototype.hasOwnProperty.call(aliases, LEGACY_PDS_SCHEME_CSS_KEY)).toBe(false)
   })
 })

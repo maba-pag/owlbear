@@ -6,11 +6,6 @@ import { Features } from 'lightningcss'
 import * as fs from 'node:fs'
 import { join } from 'node:path'
 
-const pdsColorSchemeCssPath = join(
-  process.cwd(),
-  'node_modules/@porsche-design-system/components-js/global-styles/color-scheme.css',
-)
-
 function cspPlugin() {
   const policy = [
     "default-src 'self'",
@@ -70,12 +65,6 @@ function pdsVersionCheckPlugin() {
 
 export default defineConfig({
   plugins: [tailwindcss(), react(), babel({ presets: [reactCompilerPreset()] }), pdsVersionCheckPlugin(), cspPlugin()],
-  resolve: {
-    alias: {
-      '@porsche-design-system/components-react/global-styles/color-scheme.css':
-        pdsColorSchemeCssPath,
-    },
-  },
   build: {
     outDir: '../dist',
     emptyOutDir: true,
