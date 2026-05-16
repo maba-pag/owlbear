@@ -11,7 +11,7 @@ store/
 
 # OwlBear internal data
 .owlbear/kanban/
-.owlbear/scratch/
+.owlbear/memory/
 .owlbear/sources/
 .owlbear/research/
 .owlbear/briefs/

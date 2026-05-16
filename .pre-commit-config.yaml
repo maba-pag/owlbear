@@ -1,18 +1,20 @@
 ---
 # Pre-commit config — aligned with CI (MegaLinter v9.5.0)
 #
-# Regular hooks:  uv run pre-commit run --all-files
-# Full CI parity: uv run pre-commit run megalinter --all-files --hook-stage manual
+# Commands:
+#   uv run lint       Staged files, default hooks (= git commit)
+#   uv run lint-all   All files, default hooks
+#   uv run megalint   Full CI parity (MegaLinter + typecheck, all files)
+#   uv run eslint-fix ESLint --fix on Cockpit frontend
 #
-# RULE: Ruff auto-fixes on commit (imports, formatting). Other linters
-# run in check/report-only mode. trailing-whitespace and end-of-file-fixer
-# also auto-fix. For ESLint fixes, run: uv run eslint-fix
+# Auto-fix on commit: ruff (lint + format), trailing-whitespace,
+# end-of-file-fixer, markdownlint. Everything else is check-only.
 
 # Exclude paths matching MegaLinter FILTER_REGEX_EXCLUDE + ADDITIONAL_EXCLUDED_DIRECTORIES.
 # Keep aligned with .mega-linter.yml.
 exclude: |
   (?x)^(
-    \.owlbear/(briefs|doc-index\.md|kanban/(archive|decisions|tasks)|memory|research|scratch|sources)/
+    \.owlbear/(briefs|doc-index\.md|kanban/(archive|decisions|tasks)|memory|research|sources)/
     |store/
     |\.egg-info/
     |coverage/
