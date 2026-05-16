@@ -4,7 +4,7 @@ title: Retire bookmark/scope/consolidation dead code from knowledge module
 status: in-progress
 priority: needed
 created: 2026-05-15T16:22:28.247084+00:00
-updated: 2026-05-16T04:19:25.560284+00:00
+updated: 2026-05-16T04:35:10.151077+00:00
 tags:
   - scope:knowledge
   - type:cleanup
@@ -12,6 +12,7 @@ tags:
 parent:
 depends_on:
   - 1576
+  - 1630
 blocked: false
 block_reason:
 claimed_at:
@@ -33,12 +34,12 @@ Acceptance Criteria:
 - [ ] AC-8: Remove `copilot` optional dependency group from serve/knowledge/pyproject.toml.
 - [ ] AC-9: Remove from server.py __all__: bookmark_source, consolidate_knowledge, export_scope, import_scope, list_bookmarks, sync_from_global, sync_to_global, update_bookmark_tags.
 - [ ] AC-10: Update test files referencing retired symbols. Affected files: tests/test_mcp_knowledge_tool_surface.py (remove retired function assertions), tests/test_enrichment_persistence_1557.py (remove bookmark_pipeline/bookmark_store AppContext kwargs), tests/test_knowledge_guard_removal_1579.py (remove BookmarkStore/BookmarkPipeline/ConsolidationService patches), tests/test_browser_fetcher_wiring.py (remove retired patches), tests/test_persistence_source_wiring.py (remove make_evaluate_fn patches), tests/test_knowledge_ingest_source_identity_1556.py (remove AppContext kwargs), tests/test_server.py (remove make_evaluate_fn patches at L1326/L1631 and TestFromAC_TokenFileCleanup class), tests/test_core_removal.py (remove resolve_global_db_path tests), serve/mcp-knowledge/tests/ (remove _bypass_copilot_auth fixtures from test_server.py, test_ingest_graph_tools.py, test_ingest_graph_wiring.py).
-- [ ] AC-11: `uv run pytest tests/ serve/mcp-knowledge/tests/ -x` passes with zero failures after cleanup.
+- [ ] AC-11: `uv run pytest tests/test_mcp_knowledge_tool_surface.py tests/test_enrichment_persistence_1557.py tests/test_knowledge_guard_removal_1579.py tests/test_browser_fetcher_wiring.py tests/test_persistence_source_wiring.py tests/test_knowledge_ingest_source_identity_1556.py tests/test_server.py tests/test_core_removal.py serve/mcp-knowledge/tests/test_server.py serve/mcp-knowledge/tests/test_ingest_graph_tools.py serve/mcp-knowledge/tests/test_ingest_graph_wiring.py -x` passes with zero failures after cleanup.
 
 Out of scope: evaluator.py module deletion (classified as "keep" in #1576), schema table removal (#1583), stub labeling and README updates (#1584).
 
 Proof bundle: existing
-Existing proof scope: tests/test_mcp_knowledge_tool_surface.py, tests/test_enrichment_persistence_1557.py, tests/test_knowledge_guard_removal_1579.py, tests/test_browser_fetcher_wiring.py, tests/test_persistence_source_wiring.py, tests/test_knowledge_ingest_source_identity_1556.py, tests/test_server.py, tests/test_core_removal.py, serve/mcp-knowledge/tests/
+Existing proof scope: tests/test_mcp_knowledge_tool_surface.py, tests/test_enrichment_persistence_1557.py, tests/test_knowledge_guard_removal_1579.py, tests/test_browser_fetcher_wiring.py, tests/test_persistence_source_wiring.py, tests/test_knowledge_ingest_source_identity_1556.py, tests/test_server.py, tests/test_core_removal.py, serve/mcp-knowledge/tests/test_server.py, serve/mcp-knowledge/tests/test_ingest_graph_tools.py, serve/mcp-knowledge/tests/test_ingest_graph_wiring.py
 2026-05-15T19:17:52+00:00
 ## Architecture Review
 
@@ -128,3 +129,19 @@ Existing proof scope: tests/test_mcp_knowledge_tool_surface.py, tests/test_enric
   - Removed retired imports/functions/helpers/context fields and `__all__` entries from MCP knowledge server.
   - Removed retired package exports and `copilot` optional dependency group.
   - Removed/deleted dead modules and corresponding test references/patch targets.
+
+[[2026-05-16T06:35:10+02:00]]
+## Builder Notes
+- Re-claimed task and reran required proof via quality-runner.
+- AC-11 equivalent broad proof (`tests/` + `serve/mcp-knowledge/tests/`) remains red: 599 passed, 6 failed, 0 skipped (lint clean).
+- Scoped existing-proof list rerun remains red: 317 passed, 31 failed, 0 skipped (lint clean).
+- Failure signatures are dominated by unrelated pre-existing suites (kanban agent_view/status guidance, ideation diagram naming, cockpit legacy test-file dependencies, generic server stats path), not by the knowledge dead-code retirement implementation.
+- Created follow-up unblock task #1630 (`Narrow #1582 proof gate scope to task-owned test files`) and linked dependency: #1582 now depends on #1630.
+- No additional code edits were applied in this retry; this cycle was proof verification + routing only.
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Refine task #1582 proof gate to task-owned scope or split unrelated failing suites into separate prerequisites (use follow-up #1630) | .owlbear/kanban/tasks/1582-retire-bookmark-scope-consolidation-dead-code-from-knowledge-module.md, .owlbear/kanban/tasks/1630-narrow-1582-proof-gate-scope-to-task-owned-test-files.md | quality-runner full: 599 passed / 6 failed; scoped: 317 passed / 31 failed; failures not attributable to AC-1..AC-10 implementation |
+| 2 | builder | Resume #1582 after #1630 resolves proof routing; rerun required proof and advance to review only when failing set is eliminated from required scope | .owlbear/kanban/tasks/1582-retire-bookmark-scope-consolidation-dead-code-from-knowledge-module.md | Current gate remains red despite implementation already present in task body Builder Notes |
+
