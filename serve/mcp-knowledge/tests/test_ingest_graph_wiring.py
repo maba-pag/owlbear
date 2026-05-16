@@ -17,12 +17,6 @@ from owlbear_mcp_knowledge.server import (
 )
 
 
-@pytest.fixture(autouse=True)
-def _bypass_copilot_auth(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Set a fake LLM API key so app_lifespan skips the Copilot device-auth flow."""
-    monkeypatch.setenv("OWLBEAR_LLM_API_KEY", "test-key")
-
-
 # ---------------------------------------------------------------------------
 # TestFromAC_GraphAugmentedRetrieverWiring — AC3a
 # Verifies app_lifespan creates GraphAugmentedRetriever(vs, gs, emb) and passes it as
@@ -46,10 +40,6 @@ class TestFromAC_GraphAugmentedRetrieverWiring:
             patch("owlbear_mcp_knowledge.server.QdrantVectorStore"),
             patch("owlbear_mcp_knowledge.server.BgeM3EmbeddingProvider"),
             patch("owlbear_mcp_knowledge.server.KnowledgeQueryService"),
-            patch(
-                "owlbear_mcp_knowledge.server.make_evaluate_fn",
-                return_value=AsyncMock(),
-            ),
             patch("owlbear_mcp_knowledge.server.GraphAugmentedRetriever", mock_gar_cls),
         ):
             async with app_lifespan(MagicMock()):
@@ -69,10 +59,6 @@ class TestFromAC_GraphAugmentedRetrieverWiring:
             patch("owlbear_mcp_knowledge.server.QdrantVectorStore"),
             patch("owlbear_mcp_knowledge.server.BgeM3EmbeddingProvider"),
             patch("owlbear_mcp_knowledge.server.KnowledgeQueryService", mock_qs_cls),
-            patch(
-                "owlbear_mcp_knowledge.server.make_evaluate_fn",
-                return_value=AsyncMock(),
-            ),
             patch(
                 "owlbear_mcp_knowledge.server.GraphAugmentedRetriever",
                 return_value=mock_gar_instance,
@@ -102,10 +88,6 @@ class TestFromAC_GraphAugmentedRetrieverWiring:
                 return_value=mock_emb,
             ),
             patch("owlbear_mcp_knowledge.server.KnowledgeQueryService"),
-            patch(
-                "owlbear_mcp_knowledge.server.make_evaluate_fn",
-                return_value=AsyncMock(),
-            ),
             patch("owlbear_mcp_knowledge.server.GraphAugmentedRetriever", mock_gar_cls),
         ):
             async with app_lifespan(MagicMock()):

@@ -71,10 +71,6 @@ class TestFromAC_QdrantFilesystemPersistence:
             patch("owlbear_mcp_knowledge.server.BgeM3EmbeddingProvider"),
             patch("owlbear_mcp_knowledge.server.KnowledgeQueryService"),
             patch("owlbear_mcp_knowledge.server.GraphAugmentedRetriever"),
-            patch(
-                "owlbear_mcp_knowledge.server.make_evaluate_fn",
-                return_value=AsyncMock(),
-            ),
         ):
             mock_server = MagicMock()
             async with app_lifespan(mock_server):
@@ -111,10 +107,6 @@ class TestFromAC_QdrantFilesystemPersistence:
             patch("owlbear_mcp_knowledge.server.BgeM3EmbeddingProvider"),
             patch("owlbear_mcp_knowledge.server.KnowledgeQueryService"),
             patch("owlbear_mcp_knowledge.server.GraphAugmentedRetriever"),
-            patch(
-                "owlbear_mcp_knowledge.server.make_evaluate_fn",
-                return_value=AsyncMock(),
-            ),
         ):
             mock_server = MagicMock()
             async with app_lifespan(mock_server):
@@ -257,10 +249,6 @@ class TestFromAC_SourceStoreWiring:
             patch(
                 "owlbear_mcp_knowledge.server.KnowledgeSourceStore",
                 mock_source_store_cls,
-            ),
-            patch(
-                "owlbear_mcp_knowledge.server.make_evaluate_fn",
-                return_value=AsyncMock(),
             ),
         ):
             mock_server = MagicMock()

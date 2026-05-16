@@ -67,11 +67,7 @@ def _lifespan_heavy_patches() -> list[Any]:
         patch("owlbear_mcp_knowledge.server.DocumentStore"),
         patch("owlbear_mcp_knowledge.server.TextChunker"),
         patch("owlbear_mcp_knowledge.server.KnowledgeSourceStore"),
-        patch("owlbear_mcp_knowledge.server.BookmarkStore"),
-        patch("owlbear_mcp_knowledge.server.SourceEvaluator"),
-        patch("owlbear_mcp_knowledge.server.BookmarkPipeline"),
         patch("owlbear_mcp_knowledge.server.RefreshOrchestrator"),
-        patch("owlbear_mcp_knowledge.server.ConsolidationService"),
     ]
 
 

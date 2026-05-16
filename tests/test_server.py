@@ -1248,7 +1248,6 @@ def mock_lifespan_deps() -> None:
         patch("owlbear_mcp_knowledge.server.BgeM3EmbeddingProvider"),
         patch("owlbear_mcp_knowledge.server.KnowledgeQueryService"),
         patch("owlbear_mcp_knowledge.server.GraphAugmentedRetriever"),
-        patch("owlbear_mcp_knowledge.server.make_evaluate_fn", return_value=AsyncMock()),
     ):
         yield
 
@@ -1403,88 +1402,6 @@ class TestFromAC_LifespanNoCopilotAuth:
                 assert ctx.query_service is not None  # noqa: S101
 
 
-# ---------------------------------------------------------------------------
-# TestFromAC_TokenFileCleanup
-# AC3: lifespan startup cleans up ~/.owlbear/copilot_token.json
-# ---------------------------------------------------------------------------
-
-
-class TestFromAC_TokenFileCleanup:
-    """AC3: app_lifespan deletes stale copilot_token.json at startup."""
-
-    @pytest.fixture(autouse=True)
-    def _block_copilot_auth(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Block copilot_auth import and clear API key env vars for cleanup tests."""
-        # Blocking import via None sentinel: from owlbear_knowledge.copilot_auth import ...
-        # raises ImportError → caught by lifespan's except → structured_extractor stays None.
-        monkeypatch.setitem(sys.modules, "owlbear_knowledge.copilot_auth", None)
-        monkeypatch.delenv("OWLBEAR_LLM_API_KEY", raising=False)
-        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-
-    @pytest.mark.asyncio
-    async def test_token_file_deleted_when_present_at_startup(self, tmp_path: Path) -> None:
-        """Lifespan deletes ~/.owlbear/copilot_token.json when it exists before startup.
-
-        After #1318, the lifespan includes cleanup code that removes a stale token
-        file left over from the old copilot_auth flow.
-
-        Currently FAILS: no cleanup code in app_lifespan — file persists after startup.
-        """
-        token_dir = tmp_path / ".owlbear"
-        token_dir.mkdir(parents=True)
-        token_file = token_dir / "copilot_token.json"
-        token_file.write_text('{"token": "stale_copilot_token"}')
-
-        with patch("pathlib.Path.home", return_value=tmp_path):
-            async with app_lifespan(MagicMock()):
-                # Assertion inside the body proves cleanup is a startup action, not teardown.
-                # A regression moving unlink() to the finally: block would fail here.
-                assert not token_file.exists()  # noqa: S101
-
-    @pytest.mark.asyncio
-    async def test_token_file_cleanup_idempotent_when_absent(self, tmp_path: Path) -> None:
-        """Lifespan startup does not raise when copilot_token.json is absent.
-
-        Idempotency: cleanup is attempted even when file is missing (missing_ok=True
-        or equivalent), so a second startup does not fail.
-
-        Currently FAILS: no cleanup code exists — Path.unlink is never called.
-        """
-        token_file = tmp_path / ".owlbear" / "copilot_token.json"
-        assert not token_file.exists()
-
-        with (
-            patch("pathlib.Path.home", return_value=tmp_path),
-            patch.object(Path, "unlink", autospec=True) as mock_unlink,
-        ):
-            async with app_lifespan(MagicMock()):
-                pass
-
-        # New code: cleanup code calls unlink (with missing_ok=True) even when absent.
-        # Current code: no cleanup → unlink never called → assertion FAILS.
-        mock_unlink.assert_called()
-
-    @pytest.mark.asyncio
-    async def test_token_file_cleanup_no_exception_when_absent_real_fs(self, tmp_path: Path) -> None:
-        """Lifespan does NOT raise when copilot_token.json is absent (real filesystem, no mock).
-
-        AC3 discriminating assertion: exercises real Path.unlink so missing_ok=True semantics
-        are verified. A bare unlink() without missing_ok would raise FileNotFoundError here
-        because the file is genuinely absent in tmp_path.
-        """
-        owlbear_dir = tmp_path / ".owlbear"
-        owlbear_dir.mkdir(parents=True)
-        token_file = owlbear_dir / "copilot_token.json"
-        assert not token_file.exists()
-
-        # No patch on Path.unlink — real filesystem call is exercised.
-        with patch("pathlib.Path.home", return_value=tmp_path):
-            async with app_lifespan(MagicMock()):
-                pass  # FileNotFoundError propagates here if missing_ok is absent
-
-        assert not token_file.exists()  # noqa: S101
-
-
 # --- merged from tests/test_server_1358.py ---
 """RED-phase tests for legacy API key branch removal — task #1358.
 
@@ -1539,7 +1456,6 @@ def mock_lifespan_deps_1358() -> None:
         patch("owlbear_mcp_knowledge.server.BgeM3EmbeddingProvider"),
         patch("owlbear_mcp_knowledge.server.KnowledgeQueryService"),
         patch("owlbear_mcp_knowledge.server.GraphAugmentedRetriever"),
-        patch("owlbear_mcp_knowledge.server.make_evaluate_fn", return_value=AsyncMock()),
     ):
         yield
 

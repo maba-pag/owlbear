@@ -9,7 +9,7 @@ from __future__ import annotations
 import sqlite3
 
 import owlbear_knowledge.schema as schema_mod
-from owlbear_knowledge.schema import _apply_migrations, init_db
+from owlbear_knowledge.schema import _migrate_v11_to_v12, init_db
 
 
 class TestFromAC_SchemaBookmarkConsolidationDrop:
@@ -55,9 +55,11 @@ class TestFromAC_SchemaBookmarkConsolidationDrop:
         finally:
             conn.close()
 
-    # AC-4: _SCHEMA_VERSION bumped to 12
-    def test_ac4_schema_version_is_12(self) -> None:
-        assert schema_mod._SCHEMA_VERSION == 12, f"_SCHEMA_VERSION must be 12, got {schema_mod._SCHEMA_VERSION}"
+    # AC-4: _SCHEMA_VERSION is at least 12 (later tasks own higher versions)
+    def test_ac4_schema_version_at_least_12(self) -> None:
+        assert schema_mod._SCHEMA_VERSION >= 12, (
+            f"_SCHEMA_VERSION must be at least 12, got {schema_mod._SCHEMA_VERSION}"
+        )
 
     # AC-5: Module docstring no longer references bookmarks or consolidations
     def test_ac5_docstring_excludes_retired_tables(self) -> None:
@@ -76,7 +78,7 @@ class TestFromAC_SchemaBookmarkConsolidationDrop:
         finally:
             conn.close()
 
-    # AC-7: v11 DB with both tables — _apply_migrations to v12 drops both
+    # AC-7: v11 DB with both tables — _migrate_v11_to_v12 directly drops both and bumps version to 12
     def test_ac7_migration_from_v11_drops_retired_tables(self) -> None:
         conn = sqlite3.connect(":memory:")
         try:
@@ -90,9 +92,12 @@ class TestFromAC_SchemaBookmarkConsolidationDrop:
                 ")"
             )
             conn.execute("CREATE TABLE consolidations (id TEXT PRIMARY KEY, source_ids TEXT NOT NULL)")
-            _apply_migrations(conn, 11)
+            _migrate_v11_to_v12(conn)
             tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
-            assert "bookmarks" not in tables, "_apply_migrations from v11 must drop the bookmarks table"
-            assert "consolidations" not in tables, "_apply_migrations from v11 must drop the consolidations table"
+            assert "bookmarks" not in tables, "_migrate_v11_to_v12 must drop the bookmarks table"
+            assert "consolidations" not in tables, "_migrate_v11_to_v12 must drop the consolidations table"
+            ver = conn.execute("SELECT version FROM schema_version").fetchone()
+            assert ver is not None, "schema_version must not be empty after _migrate_v11_to_v12"
+            assert ver[0] == 12, f"_migrate_v11_to_v12 must advance schema_version to 12, got {ver[0]}"
         finally:
             conn.close()

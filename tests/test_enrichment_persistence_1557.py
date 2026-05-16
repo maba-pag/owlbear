@@ -48,8 +48,6 @@ def _make_ctx(conn: sqlite3.Connection) -> MagicMock:
         graph_store=None,
         ingest_pipeline=None,
         source_store=None,
-        bookmark_pipeline=None,
-        bookmark_store=None,
     )
     ctx.request_context.lifespan_context = app_ctx
     return ctx

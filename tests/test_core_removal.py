@@ -12,9 +12,8 @@ AC coverage:
   AC5  — test_seed_project_json_absent
   AC6  — test_no_serve_orchestrator_in_pyproject, test_no_serve_orchestrator_in_tests_dir
   AC8  — test_allowed_imports_no_owlbear_namespace, test_allowed_imports_no_owlbear_orchestrator
-  scope edit — test_write_project_json_not_in_init, test_project_json_not_in_skip_if_exists_rel,
-               test_project_json_dispatch_removed_from_init,
-               test_resolve_global_db_path_raises, test_resolve_global_db_path_raises_with_env_var
+    scope edit — test_write_project_json_not_in_init, test_project_json_not_in_skip_if_exists_rel,
+                             test_project_json_dispatch_removed_from_init
 """
 
 from __future__ import annotations
@@ -23,8 +22,6 @@ import ast
 import importlib.util
 from pathlib import Path
 from types import ModuleType
-
-import pytest
 
 _REPO_ROOT = Path(__file__).parent.parent
 _INIT_PY = _REPO_ROOT / "setup" / "init.py"
@@ -171,24 +168,3 @@ class TestFromAC_CoreRemoval:
         """The owlbear-project.json dispatch block must be removed from setup/init.py."""
         text = _INIT_PY.read_text(encoding="utf-8")
         assert 'rel_posix == "owlbear-project.json"' not in text
-
-    # ---- Scope edit: resolve_global_db_path raises NotImplementedError ------
-
-    def test_resolve_global_db_path_raises(self, tmp_path: Path) -> None:
-        """resolve_global_db_path() must raise NotImplementedError (body gutted)."""
-        from owlbear_knowledge.scope_transfer import resolve_global_db_path
-
-        with pytest.raises(NotImplementedError):
-            resolve_global_db_path(tmp_path)
-
-    def test_resolve_global_db_path_raises_with_env_var(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        """resolve_global_db_path() raises even when OWLBEAR_GLOBAL_KB_PATH is set.
-
-        Previously the env-var short-circuit returned a Path; after gutting the body
-        the function must raise unconditionally.
-        """
-        from owlbear_knowledge.scope_transfer import resolve_global_db_path
-
-        monkeypatch.setenv("OWLBEAR_GLOBAL_KB_PATH", str(tmp_path / "global.db"))
-        with pytest.raises(NotImplementedError):
-            resolve_global_db_path(tmp_path)

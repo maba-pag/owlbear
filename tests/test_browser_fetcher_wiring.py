@@ -106,14 +106,6 @@ def _lifespan_heavy_patches() -> list[Any]:
         patch("owlbear_mcp_knowledge.server.KnowledgeSourceStore"),
         patch("owlbear_mcp_knowledge.server.ContentInjectionGuard"),
         patch("owlbear_mcp_knowledge.server.IngestPipeline"),
-        patch("owlbear_mcp_knowledge.server.BookmarkStore"),
-        patch("owlbear_mcp_knowledge.server.SourceEvaluator"),
-        patch("owlbear_mcp_knowledge.server.BookmarkPipeline"),
-        patch("owlbear_mcp_knowledge.server.ConsolidationService"),
-        patch(
-            "owlbear_mcp_knowledge.server.make_evaluate_fn",
-            return_value=AsyncMock(),
-        ),
     ]
 
 

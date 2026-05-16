@@ -13,10 +13,6 @@ qdrant = ["qdrant-client>=1.18.0"]
 embedding = ["FlagEmbedding>=1.4.0"]
 intake = ["httpx>=0.28.1"]
 llm = ["openai>=2.36.0"]
-copilot = [
-    "httpx>=0.28.1",
-    "truststore",
-]
 full = [
     "qdrant-client>=1.18.0",
     "FlagEmbedding>=1.4.0",

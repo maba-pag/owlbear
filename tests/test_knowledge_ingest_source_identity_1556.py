@@ -139,8 +139,6 @@ def app_ctx(conn: sqlite3.Connection, store_components: dict) -> AppContext:
         graph_store=pc["graph_store"],
         ingest_pipeline=pc["pipeline"],
         source_store=pc["source_store"],
-        bookmark_pipeline=None,
-        bookmark_store=None,
         refresh_orchestrator=MagicMock(),  # non-None so refresh_source passes the guard
     )
 

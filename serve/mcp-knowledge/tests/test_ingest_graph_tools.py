@@ -33,12 +33,6 @@ from owlbear_mcp_knowledge.server import (  # type: ignore[import]
 )
 
 
-@pytest.fixture(autouse=True)
-def _bypass_copilot_auth(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Set a fake LLM API key so app_lifespan skips the Copilot device-auth flow."""
-    monkeypatch.setenv("OWLBEAR_LLM_API_KEY", "test-key")
-
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
