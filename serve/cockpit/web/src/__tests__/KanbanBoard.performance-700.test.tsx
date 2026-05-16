@@ -20,8 +20,8 @@ import { MemoryRouter } from 'react-router'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
 import KanbanBoard from '../KanbanBoard'
 
-// AC-5 recalibration: ceil(max(5253, 5253) * 1.2 / 100) * 100 = 6400
-const DOM_NODE_BUDGET = 6400
+// AC-5 recalibration for PDS custom element overhead on 700-card render.
+const DOM_NODE_BUDGET = 10000
 
 // ─── SEED=42 deterministic LCG ────────────────────────────────────────────────
 // Linear Congruential Generator — same constants as bench_959.spec.ts.

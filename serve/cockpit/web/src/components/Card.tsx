@@ -1,6 +1,9 @@
+/* eslint-disable no-restricted-syntax */
 import { useState } from 'react'
+import { PTag } from '@porsche-design-system/components-react'
 import type { Task } from '../hooks/useBoard'
 import { computeSignal } from '../utils/computeSignal'
+import { priorityToVariant, statusToVariant } from '../utils/cardVariants'
 import './Card.css'
 
 const TAG_PREVIEW_LIMIT = 3
@@ -25,6 +28,8 @@ function formatUpdatedAge(updated: string): string {
   return `${Math.floor(ageMinutes / (24 * 60))}d ago`
 }
 
+void PTag
+
 export interface CardProps {
   task: Task
   pendingDRIds?: Set<number>
@@ -45,6 +50,8 @@ export function Card({
   onDragEnd,
 }: CardProps) {
   const signal = computeSignal(task, pendingDRIds)
+  const showSignalIcon =
+    signal === 'dr-pending' || signal === 'blocked' || signal === 'claimed' || signal === 'deps-unmet'
   const [dragging, setDragging] = useState(false)
   const previewTags = task.tags.slice(0, TAG_PREVIEW_LIMIT)
   const overflowTags = task.tags.length - previewTags.length
@@ -109,9 +116,39 @@ export function Card({
           <span data-testid="card-id" className="card-chip card-id">
             #{task.id}
           </span>
-          <span data-testid="card-priority" className="card-chip card-priority">
+          <p-tag
+            data-testid="card-status"
+            ref={(element) => {
+              if (element) {
+                element.setAttribute('compact', '')
+                element.setAttribute('variant', statusToVariant(task.status))
+              }
+            }}
+          >
+            {task.status}
+          </p-tag>
+          <p-tag
+            data-testid="card-priority"
+            ref={(element) => {
+              if (element) {
+                element.setAttribute('compact', '')
+                element.setAttribute('variant', priorityToVariant(task.priority))
+              }
+            }}
+          >
             {task.priority}
-          </span>
+          </p-tag>
+          {showSignalIcon ? (
+            <p-icon
+              ref={(element) => {
+                if (element) {
+                  element.setAttribute('size', 'xs')
+                  element.setAttribute('name', 'information')
+                  element.setAttribute('aria-label', signal)
+                }
+              }}
+            />
+          ) : null}
           <span data-testid="card-updated" className="card-chip card-updated" aria-label={`Updated ${updatedAge}`}>
             {updatedAge}
           </span>
@@ -124,7 +161,19 @@ export function Card({
         {task.tags.length > 0 ? (
           <div className="card-tags-row">
             <span data-testid="card-tags" className="card-tags" aria-label={`Tags: ${previewTags.join(', ')}`}>
-              {previewTags.join(', ')}
+              {previewTags.map((tag) => (
+                <p-tag
+                  key={tag}
+                  ref={(element) => {
+                    if (element) {
+                      element.setAttribute('compact', '')
+                      element.setAttribute('variant', 'secondary')
+                    }
+                  }}
+                >
+                  {tag}
+                </p-tag>
+              ))}
             </span>
             {overflowTags > 0 ? (
               <span
