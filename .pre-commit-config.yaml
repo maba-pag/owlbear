@@ -29,6 +29,18 @@ repos:
 
   - repo: local
     hooks:
+      - id: eslint-frontend
+        name: ESLint (Cockpit frontend)
+        language: system
+        entry: bash -c 'cd serve/cockpit/web && npx eslint src/ --max-warnings 0'
+        files: ^serve/cockpit/web/src/.*\.(ts|tsx)$
+        pass_filenames: false
+      - id: typecheck-frontend
+        name: TypeScript (Cockpit frontend)
+        language: system
+        entry: bash -c 'cd serve/cockpit/web && npx tsc --noEmit'
+        files: ^serve/cockpit/web/src/.*\.(ts|tsx)$
+        pass_filenames: false
       - id: validate-skills
         name: Validate Agent Skills
         language: system
