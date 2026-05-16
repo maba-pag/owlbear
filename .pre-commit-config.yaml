@@ -1,50 +1,94 @@
 ---
-# See https://pre-commit.com for more information
+# Pre-commit config — aligned with CI (MegaLinter v9.4.0)
+#
+# Regular hooks:  uv run pre-commit run --all-files
+# Full CI parity: uv run pre-commit run megalinter --all-files
+#
+# RULE: No hook may mutate files. All linters run in check/report-only mode.
+# The trailing-whitespace and end-of-file-fixer hooks from pre-commit-hooks
+# are intentionally omitted because they auto-modify files.
+
+# Exclude paths matching MegaLinter FILTER_REGEX_EXCLUDE + ADDITIONAL_EXCLUDED_DIRECTORIES.
+# Keep aligned with .mega-linter.yml.
+exclude: |
+  (?x)^(
+    \.owlbear/(briefs|doc-index\.md|kanban/(archive|decisions|tasks)|research|scratch|sources)/
+    |store/
+    |\.egg-info/
+    |coverage/
+    |dist/
+    |playwright-report/
+  )
 repos:
+  # ── General file checks (read-only only) ────────────────
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
       - id: check-yaml
-      - id: trailing-whitespace
-      - id: end-of-file-fixer
       - id: check-merge-conflict
       - id: check-added-large-files
 
+  # ── Python (matches CI: PYTHON_RUFF) ─────────────────────
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.15.2
     hooks:
       - id: ruff
-        args: [--fix]
-      - id: ruff-format
+        args: [--no-fix]
 
+  # ── YAML (matches CI: YAML_YAMLLINT) ────────────────────
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.38.0
+    hooks:
+      - id: yamllint
+        args: [--strict]
+
+  # ── Shell (matches CI: BASH_SHELLCHECK) ─────────────────
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.11.0.1
+    hooks:
+      - id: shellcheck
+
+  # ── Actions (matches CI: ACTION_ACTIONLINT) ─────────────
   - repo: https://github.com/rhysd/actionlint
-    rev: v1.7.7
+    rev: v1.7.11
     hooks:
       - id: actionlint
 
+  # ── Markdown (matches CI: MARKDOWN_MARKDOWNLINT) ────────
   - repo: https://github.com/DavidAnson/markdownlint-cli2
     rev: v0.21.0
     hooks:
       - id: markdownlint-cli2
 
+  # ── EditorConfig (matches CI: EDITORCONFIG_EDITORCONFIG_CHECKER) ──
+  - repo: https://github.com/editorconfig-checker/editorconfig-checker.python
+    rev: "3.2.1"
+    hooks:
+      - id: editorconfig-checker
+        args: [-disable-indent-size]
+
+  # ── Local hooks ─────────────────────────────────────────
   - repo: local
     hooks:
+      # Frontend — matches CI: TYPESCRIPT_ES
       - id: eslint-frontend
         name: ESLint (Cockpit frontend)
         language: system
         entry: bash -c 'cd serve/cockpit/web && npx eslint src/ --max-warnings 0'
         files: ^serve/cockpit/web/src/.*\.(ts|tsx)$
         pass_filenames: false
+      # Frontend — extra (no CI equivalent, catches type errors early)
       - id: typecheck-frontend
         name: TypeScript (Cockpit frontend)
         language: system
         entry: bash -c 'cd serve/cockpit/web && npx tsc --noEmit'
         files: ^serve/cockpit/web/src/.*\.(ts|tsx)$
         pass_filenames: false
+      # Project-specific validators
       - id: validate-skills
         name: Validate Agent Skills
         language: system
-        entry: python .owlbear/scripts/validate_skills.py
+        entry: bash -c 'python .owlbear/scripts/validate_skills.py share/skills/*/'
         pass_filenames: false
         always_run: true
       - id: validate-agents
@@ -53,3 +97,21 @@ repos:
         entry: python .owlbear/scripts/validate_agents.py
         files: ^share/agents/.*\.agent\.md$
         pass_filenames: true
+
+  # ── MegaLinter (manual-only, full CI parity) ────────────
+  # Usage: uv run pre-commit run megalinter --all-files
+  - repo: local
+    hooks:
+      - id: megalinter
+        name: MegaLinter (full CI parity)
+        language: system
+        entry: >-
+          bash -c 'docker run --rm
+          -v "$(pwd):/tmp/lint"
+          -e APPLY_FIXES=none
+          -e LOG_LEVEL=INFO
+          -e VALIDATE_ALL_CODEBASE=true
+          oxsecurity/megalinter-cupcake:v9.4.0'
+        pass_filenames: false
+        always_run: true
+        stages: [manual]
