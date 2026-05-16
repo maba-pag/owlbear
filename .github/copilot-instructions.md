@@ -99,3 +99,23 @@ Before marking a task `done`, delete all `.owlbear/scratch/{task-id}-*` files cr
 - Source: `serve/*/src/` (workspace packages, each with `__init__.py`).
 - Root tests: `tests/` at workspace root, named `test_{module}.py`.
 - Package-local tests: `serve/*/tests/` for package-scoped test suites.
+
+## 8. Test Domain Mapping
+
+Maps source paths to the test scope that covers them. Used by quality-runner `mode=full` with `changed_paths` for domain-scoped regression testing.
+
+| Source prefix | Test scope | Toolchain |
+|---------------|-----------|-----------|
+| `serve/cockpit/web/` | `npm test` in `serve/cockpit/web/` | vitest |
+| `serve/cockpit/` (Python, not `web/`) | `tests/test_cockpit_*` | pytest |
+| `serve/kanban/` | `serve/kanban/tests/` `tests/test_engine_*` `tests/test_kanban_*` | pytest |
+| `serve/knowledge/` | `serve/knowledge/tests/` `tests/test_knowledge_*` `tests/test_enrichment_*` | pytest |
+| `serve/mcp-kanban/` | `serve/mcp-kanban/tests/` | pytest |
+| `serve/mcp-knowledge/` | `serve/mcp-knowledge/tests/` | pytest |
+| `serve/mcp-memory/` | `serve/mcp-memory/tests/` | pytest |
+| `serve/mcp-browser/` | `serve/mcp-browser/tests/` | pytest |
+| `serve/tools/` | `serve/tools/tests/` | pytest |
+| `share/` `.owlbear/` `setup/` | skip (docs/config only) | — |
+| (no prefix match) | `tests/ serve/ -m "not api"` | pytest |
+
+When a task changes files in multiple domains, run ALL matched test scopes. The last row is the fallback — use it when changed files don't match any specific prefix, or when `changed_paths` is not provided.

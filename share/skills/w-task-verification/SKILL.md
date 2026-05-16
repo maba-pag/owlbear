@@ -40,16 +40,19 @@ Claim the task via `start_work` (atomic claim + retrieves task body). Check the 
 
 As 3rd-line defense, verify four pillars. Trust the reviewer's code-level verdict and do not duplicate reviewer-only checks:
 
-1. **Regression detection:** Run the full suite (not scoped to task files) via Quality-Runner:
+1. **Regression detection:** Determine the files changed by the task (from the builder's commit or proof bundle), then run domain-scoped regression via Quality-Runner:
 
   ```
   agentName: quality-runner
   prompt: |
     mode: full
     task_id: {id}
+    changed_paths: [{files changed by the builder's commit}]
   ```
 
-  Confirm `failed: []` and `clean: true` from the Quality-Runner report. Unlike the reviewer (who scopes tests), the auditor runs the FULL suite to catch cross-task regressions. This is the auditor's primary unique value.
+  Resolve `changed_paths` from git (e.g. `git diff --name-only` against the pre-task state) or from the builder's proof bundle. This ensures the regression check covers ALL test domains touched by the task — including frontend (vitest) when frontend files changed.
+
+  Confirm `failed: []` and `clean: true` from the Quality-Runner report. Unlike the reviewer (who scopes tests), the auditor runs domain-wide regression to catch cross-task regressions. This is the auditor's primary unique value.
 
   **Two-tier awareness:** Task-scoped tests (`test_{module}_{task_id}.py`) are verified during the active pipeline. Module-level tests (`test_{module}.py`) are managed by the test-curator post-archive. The auditor does not gate on module-level test existence — if a module-level file doesn’t exist yet for the module, that’s expected.
 
@@ -199,7 +202,7 @@ After committing, include the commit hash in Channel A or the final report. Do n
 
 ## Known Pitfalls
 
-- **Scoped tests instead of full suite:** The auditor's primary value is cross-task regression detection. Always invoke `quality-runner` with `mode: full` — never scope to task-specific files.
+- **Scoped tests instead of full suite:** The auditor's primary value is cross-task regression detection. Always invoke `quality-runner` with `mode: full` and `changed_paths` — never scope to task-specific files. Include `changed_paths` to ensure all affected domains (Python and/or frontend) are covered.
 - **Role overlap drift:** Re-checking function-level behavior or per-AC implementation evidence duplicates reviewer responsibility. Keep auditor intent checks at domain and purpose level.
 - **Gut-feeling confidence (.93–.97):** If your score lands in this range without an explicit deduction calculation, recalculate. Scores here are unreliable without itemized deductions.
 - **VS Code auto-staging:** VS Code silently re-serializes `.agent.md` files. Run `git diff --cached agents/` before committing and unstage unexpected changes with `git reset HEAD`.
