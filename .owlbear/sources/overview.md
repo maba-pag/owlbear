@@ -76,6 +76,15 @@ External repos and resources studied during OwlBear development.
 | PDS GitHub Issue #1185 | <https://github.com/porsche-design-system/porsche-design-system/issues/1185> | Provider-level theme prop history (closed, shipped in v3) | `.owlbear/research/1553-pds-dark-mode-compat.md` | 2026-05-14 |
 | PDS CHANGELOG v4.0.0-beta.0 | <https://github.com/porsche-design-system/porsche-design-system/tree/main/packages/components/CHANGELOG.md#L765> | Theme prop removal confirmation | `.owlbear/research/1553-pds-dark-mode-compat.md` | 2026-05-14 |
 
+## Card Visual Treatment Research (Task #1615)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| PDS v4 PTag source (tag-utils.ts, tag.tsx) | <https://github.com/porsche-design-system/porsche-design-system/tree/main/packages/components/src/components/tag/> | TagVariant type: 10 variants; props: variant, icon, iconSource, compact | `.owlbear/research/1615-card-visual-treatment-pds.md` | 2026-05-16 |
+| PDS v4 PTag examples | <https://designsystem.porsche.com/v4/components/tag/examples/> | Confirmed v4.1.0 API, button/link slot patterns, icon integration | `.owlbear/research/1615-card-visual-treatment-pds.md` | 2026-05-16 |
+| PDS v4 PIcon source (icon.tsx, icon-utils.ts) | <https://github.com/porsche-design-system/porsche-design-system/tree/main/packages/components/src/components/icon/> | IconColor type (11 values), IconSize type, icon names from manifest | `.owlbear/research/1615-card-visual-treatment-pds.md` | 2026-05-16 |
+| PDS v4 tag-styles.ts color maps | <https://github.com/porsche-design-system/porsche-design-system/tree/main/packages/components/src/components/tag/tag-styles.ts> | VARIANT_TO_COLOR_MAP, colorTextMap, colorBackgroundMap per variant | `.owlbear/research/1615-card-visual-treatment-pds.md` | 2026-05-16 |
+
 ## PBanner Shell Wiring Research (Task #1498)
 
 | Source | URL | What | Where Used | Date |
