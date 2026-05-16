@@ -5,14 +5,14 @@ categories:
 - pitfall
 - process
 confidence: 0.85
-state: curated
+state: deleted
 scope_agents:
 - builder
 - architect
 - planner
 source_agent: builder
 created_at: '2026-05-14T21:33:00.237238Z'
-updated_at: '2026-05-15T21:03:36.073403Z'
+updated_at: '2026-05-16T03:59:24.036623Z'
 approved_at: null
 ---
 
