@@ -1,14 +1,6 @@
 const EMPTY_FALLBACK = '—'
 const UNKNOWN_SIGNAL = 'Unknown'
 
-const PRIORITY_LABELS: Record<string, string> = {
-  low: 'Low',
-  normal: 'Normal',
-  needed: 'Needed',
-  important: 'Important',
-  critical: 'Critical',
-}
-
 const SIGNAL_LABELS: Record<string, string> = {
   ready: 'Ready',
   blocked: 'Blocked',
@@ -47,7 +39,7 @@ export function formatPriority(priority: string | null | undefined): string {
     return EMPTY_FALLBACK
   }
 
-  return PRIORITY_LABELS[priority] ?? (toTitleCaseWords(priority) || EMPTY_FALLBACK)
+  return toTitleCaseWords(priority) || EMPTY_FALLBACK
 }
 
 export function formatStatus(status: string | null | undefined): string {
