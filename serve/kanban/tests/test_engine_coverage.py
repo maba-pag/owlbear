@@ -2908,7 +2908,7 @@ class TestFromAC_EngineEditTaskMutationPaths:
         _write_task(board, task_id=1)
         engine = KanbanEngine(board, activity_log=False)
         task = engine.edit_task("1", append_body="My note content", timestamp=True)
-        assert re.search(r"\[\[20\d{2}-\d{2}-\d{2}\]\]", task.body)
+        assert re.search(r"\[\[20\d{2}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}\]\]", task.body)
         assert "My note content" in task.body
 
 

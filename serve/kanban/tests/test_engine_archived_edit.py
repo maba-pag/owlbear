@@ -681,10 +681,9 @@ class TestFromAC_StorageCoveragePaths:
         assert result == "2026-01-01T10:00:00+00:00"
 
     def test_normalize_timestamp_positive_offset_converts_to_utc(self) -> None:
-        """Line 280: non-Z timezone offset → UTC isoformat."""
+        """Line 280: non-Z timezone offset → preserved as-is."""
         result = _normalize_timestamp("2026-01-01T15:30:00+05:30")
-        # 15:30 +05:30 = 10:00 UTC
-        assert result == "2026-01-01T10:00:00+00:00"
+        assert result == "2026-01-01T15:30:00+05:30"
 
     def test_normalize_timestamp_no_timezone_appends_utc_suffix(self) -> None:
         """Line 282: no timezone in string → +00:00 appended."""

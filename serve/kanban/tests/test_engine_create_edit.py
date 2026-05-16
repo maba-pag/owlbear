@@ -357,18 +357,18 @@ class TestFromAC_EditTaskValidation:
 
     def test_append_body_timestamp_uses_iso_datetime_with_offset(self, tmp_path: Path) -> None:
         """AC30-TIGHT: timestamp=True prepends full ISO 8601 datetime with explicit ±HH:MM
-        suffix, immediately followed by the appended note text.
+        suffix, wrapped in [[…]], immediately followed by the appended note text.
 
-        Contract: body after append contains '<YYYY-MM-DDTHH:MM:SS±HH:MM>\nNote.'
+        Contract: body after append contains '[[<YYYY-MM-DDTHH:MM:SS±HH:MM>]]\nNote.'
         """
         view, kanban_dir = _make_view(tmp_path)
         _write_task(kanban_dir, task_id=1, body="Base.")
         result = view.edit_task(1, append_body="Note.", timestamp=True)
         body: str = result.body or ""
-        # Strict: full ±HH:MM offset form AND timestamp immediately precedes the note.
-        iso_with_prepend = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}\nNote\.")
+        # Strict: full ±HH:MM offset form AND timestamp in [[…]] immediately precedes the note.
+        iso_with_prepend = re.compile(r"\[\[\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}\]\]\nNote\.")
         assert iso_with_prepend.search(body) is not None, (
-            f"Expected full ISO 8601 timestamp with ±HH:MM immediately before '\\nNote.' in body, got: {body!r}"
+            f"Expected [[ISO 8601 timestamp with ±HH:MM]] immediately before '\\nNote.' in body, got: {body!r}"
         )
 
 

@@ -477,9 +477,8 @@ class TestFromAC_WriteReadRoundTrip:
         validated = Task.model_validate(loaded.model_dump())
 
         assert validated.id == 99
-        assert validated.created == "2026-04-09T01:24:26.697442+00:00", (
-            "created timestamp should be normalized to UTC +00:00 with microsecond precision; "
-            f"got {validated.created!r}"
+        assert validated.created == "2026-04-09T03:24:26.6974428+02:00", (
+            f"created timestamp should preserve original offset and precision; got {validated.created!r}"
         )
         assert validated.updated == ts_6, f"6-digit timestamp must survive; got {validated.updated!r}"
         assert validated.blocked is False

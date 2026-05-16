@@ -1089,7 +1089,7 @@ class KanbanEngine:
 
         def _write_new_task(task_id: int) -> None:
             nonlocal record, created_task_path
-            now = datetime.now(tz=UTC).isoformat()
+            now = datetime.now().astimezone().isoformat()
             created_task = Task(
                 id=task_id,
                 title=title,
@@ -1303,8 +1303,8 @@ class KanbanEngine:
         if append_body is not None:
             prefix = ""
             if timestamp:
-                date_str = datetime.now().astimezone().strftime("%Y-%m-%d")
-                prefix = f"[[{date_str}]]\n"
+                local_stamp = datetime.now().astimezone().replace(microsecond=0).isoformat()
+                prefix = f"[[{local_stamp}]]\n"
             existing = record.body.rstrip("\n")
             record.body = f"{existing}\n\n{prefix}{append_body}\n"
             self.validate_body_size(record.body)
@@ -1314,7 +1314,7 @@ class KanbanEngine:
         if archival_refs is not None:
             record.archival_refs = list(archival_refs)
 
-        record.updated = datetime.now(tz=UTC).isoformat()
+        record.updated = datetime.now().astimezone().isoformat()
 
         if expected_updated is not None:
             storage.write_task_if_unchanged(
@@ -1404,7 +1404,7 @@ class KanbanEngine:
             record.claimed_at = None
             record.archival_reason = archival_reason
             record.archival_refs = list(archival_refs) if archival_refs is not None else []
-            record.updated = datetime.now(tz=UTC).isoformat()
+            record.updated = datetime.now().astimezone().isoformat()
             if expected_updated is not None:
                 storage.write_task_if_unchanged(
                     record,
@@ -1428,7 +1428,7 @@ class KanbanEngine:
             archived = True
         else:
             record.status = status
-            record.updated = datetime.now(tz=UTC).isoformat()
+            record.updated = datetime.now().astimezone().isoformat()
             if expected_updated is not None:
                 storage.write_task_if_unchanged(
                     record,
@@ -1464,7 +1464,7 @@ class KanbanEngine:
         Args:
             task_id: Numeric task ID as a string.
             now:     Reference time for expiry calculation (injectable for tests).
-                     Defaults to ``datetime.now(UTC)``.
+                     Defaults to ``datetime.now().astimezone()``.
 
         Returns:
             Updated :class:`Task` with ``claimed_at`` set.
@@ -1480,7 +1480,7 @@ class KanbanEngine:
         while True:
             # Keep injected `now` deterministic in tests, but refresh runtime time
             # after each ERR_STALE retry so successful retries cannot regress D14.
-            effective_now = now if now is not None else datetime.now(tz=UTC)
+            effective_now = now if now is not None else datetime.now().astimezone()
             record = read_task(task_path, config=self._config)
             original = record.model_copy(deep=True)
             expected_for_claim = original.updated
@@ -1595,14 +1595,17 @@ class KanbanEngine:
         task_path = self._find_task_path(task_id, self._tasks_dir)
         record = read_task(task_path, config=self._config)
         original = record.model_copy(deep=True)
-        now = datetime.now(tz=UTC)
+        now = datetime.now().astimezone()
 
         if record.claimed_at is None:
-            if expected_updated is not None and record.updated != expected_updated:
-                raise ConcurrencyError(
-                    code="ERR_STALE",
-                    user_message=f"task {record.id} changed since read; reload and retry",
-                )
+            if expected_updated is not None:
+                current_dt = datetime.fromisoformat(record.updated)
+                expected_dt = datetime.fromisoformat(expected_updated)
+                if current_dt != expected_dt:
+                    raise ConcurrencyError(
+                        code="ERR_STALE",
+                        user_message=f"task {record.id} changed since read; reload and retry",
+                    )
             return record
 
         self._append_timestamped_note(record, note, now)
@@ -1760,7 +1763,7 @@ class KanbanEngine:
         old_status = record.status
 
         # --- Append timestamped note ---
-        now = datetime.now(tz=UTC)
+        now = datetime.now().astimezone()
         self._append_timestamped_note(record, note, now)
 
         # --- Release claim ---
@@ -1838,7 +1841,7 @@ class KanbanEngine:
         """
         released: list[int] = []
         timeout = self._parse_claim_timeout()
-        now = datetime.now(tz=UTC)
+        now = datetime.now().astimezone()
         for path in sorted(self._tasks_dir.glob("*.md")):
             try:
                 record = read_task(path, config=self._config)
@@ -1861,7 +1864,7 @@ class KanbanEngine:
                     original = record.model_copy(deep=True)
                     # Clear claimed_at and update timestamp
                     record.claimed_at = None
-                    record.updated = datetime.now(tz=UTC).isoformat()
+                    record.updated = datetime.now().astimezone().isoformat()
                     try:
                         storage.write_task_if_unchanged(
                             record,
@@ -1898,7 +1901,7 @@ class KanbanEngine:
         archived_task_ids: list[int] = []
         skipped_items: list[dict[str, str]] = []
         timeout = self._parse_claim_timeout()
-        now = datetime.now(tz=UTC)
+        now = datetime.now().astimezone()
 
         for path in sorted(self._tasks_dir.glob("*.md")):
             try:
@@ -1934,7 +1937,7 @@ class KanbanEngine:
                 if now >= claimed_dt + timeout:
                     original = record.model_copy(deep=True)
                     record.claimed_at = None
-                    record.updated = datetime.now(tz=UTC).isoformat()
+                    record.updated = datetime.now().astimezone().isoformat()
                     try:
                         storage.write_task_if_unchanged(
                             record,
@@ -2138,7 +2141,7 @@ class KanbanEngine:
         from owlbear_kanban.activity_store import append_activity_event  # noqa: PLC0415
         from owlbear_kanban.models import ActivityEvent  # noqa: PLC0415
 
-        event_time = timestamp if timestamp is not None else datetime.now(tz=UTC)
+        event_time = timestamp if timestamp is not None else datetime.now().astimezone()
         evt = ActivityEvent(
             timestamp=event_time.isoformat(),
             task_id=task_id,
@@ -2299,7 +2302,7 @@ class KanbanEngine:
             by_task[task_id].append(entry)
 
         timeout = self._parse_claim_timeout()
-        now = datetime.now(tz=UTC)
+        now = datetime.now().astimezone()
         sessions: list[SessionRecord] = []
         for task_id, events in by_task.items():
             _collect_task_sessions(task_id, events, timeout, now, sessions)
