@@ -18,7 +18,7 @@
  * Builder: #1595 (install @tailwindcss/vite + tailwindcss, import PDS theme, update Stylelint config).
  */
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { existsSync, readFileSync, readdirSync, writeFileSync, unlinkSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -34,6 +34,17 @@ const __dirname = dirname(__filename)
 const WEB_DIR = resolve(__dirname, '..', '..')
 // serve/cockpit/dist/assets/  (vite.config.ts: outDir: '../dist')
 const DIST_ASSETS_DIR = resolve(WEB_DIR, '..', 'dist', 'assets')
+// node_modules/.bin/vite → ../vite/bin/vite.js (Node.js script, invoke via node)
+const VITE_BIN = resolve(WEB_DIR, 'node_modules', '.bin', 'vite')
+// Fixture source file: deterministic Tailwind utility-class input for build (AC-1 reviewer finding)
+const FIXTURE_FILE = resolve(WEB_DIR, 'src', '_tailwind-test-fixture-1592.tsx')
+const FIXTURE_CONTENT = [
+  '// Tailwind v4 test fixture — created and removed by TailwindStylelint_1592.test.ts',
+  'export const TailwindTestFixture = () => (',
+  '  <div className="bg-canvas text-contrast-high gap-fluid-md rounded-sm" />',
+  ')',
+  '',
+].join('\n')
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -55,6 +66,31 @@ function getDistCss(): string {
 // ─── AC-1: PDS Tailwind utility class compilation ─────────────────────────────
 
 describe('TestFromAC_TailwindBuildOutput', () => {
+  /**
+   * Create a deterministic fixture source file with the four PDS utility classes, then
+   * run a fresh `vite build`. Without @tailwindcss/vite the scanner finds the classes
+   * in the fixture but emits no compiled selectors — giving AC-1/AC-2 a causal RED path.
+   * (Cycle-3 fix: reviewer cycle-2 finding 1 — previous retry had no fixture input.)
+   */
+  beforeAll(() => {
+    writeFileSync(FIXTURE_FILE, FIXTURE_CONTENT, 'utf-8')
+    const result = spawnSync('node', [VITE_BIN, 'build'], {
+      cwd: WEB_DIR,
+      encoding: 'utf-8',
+    })
+    if (result.status !== 0) {
+      throw new Error(
+        `vite build failed (exit ${result.status ?? 'null'}):\n${result.stderr}`,
+      )
+    }
+  }, 120_000) // 2-minute budget for the build
+
+  afterAll(() => {
+    if (existsSync(FIXTURE_FILE)) {
+      unlinkSync(FIXTURE_FILE)
+    }
+  })
+
   /**
    * AC-1: dist/assets/*.css must contain compiled CSS selectors for PDS utility classes.
    * Each class is emitted by @tailwindcss/vite when it processes the PDS theme CSS.
@@ -104,22 +140,28 @@ describe('TestFromAC_TailwindBuildOutput', () => {
   // ─── AC-2: light-dark() preservation in Tailwind-compiled PDS color output ───
 
   /**
-   * AC-2: PDS Tailwind theme defines all color variables via light-dark().
-   * When @tailwindcss/vite processes the PDS @theme block, it emits CSS custom property
-   * declarations in :root (e.g. --color-canvas: light-dark(#fff, hsl(...))). These must
-   * survive lightningcss processing (Features.LightDark already excluded in vite.config.ts).
+   * AC-2: Asserts two things about the fresh build output:
+   *   (a) @theme at-rule is ABSENT from dist CSS — discriminates Tailwind-processed output
+   *       from raw lightningcss passthrough (Tailwind consumes @theme → not in dist).
+   *   (b) --color-* custom property declarations with light-dark() values ARE present —
+   *       emitted by @tailwindcss/vite when it processes the PDS @theme block.
    *
-   * Verification: dist CSS contains a PDS-derived --color-* custom property assignment
-   * whose value includes light-dark(.
-   *
-   * RED failure cause: without @tailwindcss/vite the PDS @theme block is never processed
-   * → no --color-* custom property declarations are emitted into the dist → no light-dark()
-   * appears in a property-value context. (color-scheme.css uses light-dark only in an
-   * @supports feature-detection condition, not as a color value.)
+   * RED failure cause: without @tailwindcss/vite, PDS @theme is never processed →
+   * no --color-* declarations emitted (b fails). Assertion (a) guards against false-green
+   * where raw @theme passthrough could emit variables without Tailwind compilation.
+   * (Cycle-3 fix: architect cycle-3 refinement — added (a) discriminator.)
    */
-  it('AC-2: dist/assets/*.css contains a --color-* CSS variable with light-dark() value (PDS Tailwind theme)', () => {
+  it('AC-2: dist/assets/*.css shows @theme consumed by Tailwind (absent) and --color-* properties with light-dark() emitted', () => {
     const css = getDistCss()
+    // (a) discriminator: Tailwind processes @theme → block absent from dist output
+    expect(
+      css,
+      'dist/assets/*.css must NOT contain raw @theme { — its presence indicates lightningcss ' +
+        'passthrough rather than Tailwind compilation of the PDS theme',
+    ).not.toMatch(/@theme\s*\{/)
+    // (b) Tailwind emits PDS color vars as :root custom properties with light-dark() values
     // Pattern: --color-<name>: light-dark( — produced only by Tailwind processing PDS @theme
+    // RED: without @tailwindcss/vite no --color-* declarations emitted → this assertion fails
     expect(
       css,
       'dist/assets/*.css must contain a PDS Tailwind-compiled --color-* variable with ' +
@@ -174,7 +216,7 @@ describe('TestFromAC_StylelintAtRules', () => {
     ).toBe(0)
   })
 
-  it('AC-3: Stylelint passes on a combined fixture with @theme, @utility, and @apply together', () => {
+  it('AC-3: Stylelint passes on combined @theme + @utility + @apply fixture, and still rejects @foobar', () => {
     const fixture = [
       '@theme {',
       '  --color-canvas: light-dark(#fff, hsl(225 66.7% 1.2%));',
@@ -189,11 +231,21 @@ describe('TestFromAC_StylelintAtRules', () => {
       '}',
       '',
     ].join('\n')
-    const result = runStylelintOnFixture(fixture)
+    const resultCombined = runStylelintOnFixture(fixture)
+    // Fails RED: at-rule-no-unknown: true without ignoreAtRules → @theme/@utility/@apply rejected
     expect(
-      result.status,
+      resultCombined.status,
       `Stylelint must exit 0 on combined @theme + @utility + @apply fixture — ` +
-        `stdout: ${result.stdout}\nstderr: ${result.stderr}`,
+        `stdout: ${resultCombined.stdout}\nstderr: ${resultCombined.stderr}`,
     ).toBe(0)
+    // Guard: @foobar must still be flagged — proves ignoreAtRules is targeted, not a global disable.
+    // (Cycle-3 fix: architect cycle-3 refinement — prevents false-green from disabling entire rule.)
+    const resultGuard = runStylelintOnFixture('@foobar {\n  --test: 1;\n}\n')
+    expect(
+      resultGuard.status,
+      `Stylelint must still flag @foobar as an unknown at-rule (exit non-zero) — ` +
+        `proves ignoreAtRules is a targeted allowlist, not a global rule disable. ` +
+        `stdout: ${resultGuard.stdout}\nstderr: ${resultGuard.stderr}`,
+    ).not.toBe(0)
   })
 })
