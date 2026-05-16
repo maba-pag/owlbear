@@ -31,7 +31,9 @@ export class ErrorBoundary extends Component<Props, State> {
 
     return (
       <div role="alert" style={{ padding: 32, textAlign: 'center' }}>
-        <PHeading ref={setHeadingH3TagAttr}>Something went wrong{this.props.label ? ` in ${this.props.label}` : ''}</PHeading>
+        <PHeading ref={setHeadingH3TagAttr}>
+          Something went wrong{this.props.label ? ` in ${this.props.label}` : ''}
+        </PHeading>
         <p style={{ color: 'var(--p-color-contrast-medium)', marginBottom: 16 }}>
           {this.state.error?.message}
         </p>
