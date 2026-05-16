@@ -310,7 +310,7 @@ Append to parent task body (if dispatched with parent ID):
 
 ## Known Pitfalls
 
-- **Forgetting TDD pairs:** Every implementation task needs a preceding test task. Missing these causes pipeline violations downstream.
+- **Splitting RED and GREEN into separate tasks:** Do not create test-only tasks paired with implementation tasks — this deadlocks the pipeline (test-only tasks can never pass green-test gates). Each implementation task carries its own RED→GREEN cycle. Use research tasks for complex test design.
 - **Cross-phase dependencies:** These create long dependency chains that block parallelism. Use only when strictly necessary.
 - **Placeholder tasks:** Never create tasks with vague titles or empty bodies — they accumulate as board noise.
 - **Broad AC piles:** Many clear AC lines can still create an unclear task when they require different proof modes or failure domains. Split by proof burden, not just by wording quality.
