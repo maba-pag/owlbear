@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { PButton } from '@porsche-design-system/components-react'
+import { PButton, PModal } from '@porsche-design-system/components-react'
 
 export interface ConfirmDialogProps {
   type: 'move-backward' | 'unblock' | 'unclaim'
@@ -16,7 +16,6 @@ export default function ConfirmDialog({
   onCancel,
   onConfirm,
 }: ConfirmDialogProps) {
-  const dialogRef = useRef<HTMLDivElement>(null)
   const previousFocusRef = useRef<HTMLElement | null>(null)
 
   const { description, confirmLabel } = useMemo(() => {
@@ -43,81 +42,36 @@ export default function ConfirmDialog({
 
   useEffect(() => {
     previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    dialogRef.current?.focus()
+    document.querySelector<HTMLElement>('[data-testid="confirm-dialog"]')?.focus()
 
     return () => {
       previousFocusRef.current?.focus()
     }
   }, [])
 
-  function getFocusableElements(): HTMLElement[] {
-    const root = dialogRef.current
-    if (!root) {
-      return []
-    }
-
-    return Array.from(
-      root.querySelectorAll<HTMLElement>(
-        'p-button:not([disabled]), button:not([disabled]), [href], input:not([disabled]), ' +
-          'select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-      ),
-    )
-  }
-
-  function handleKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+  function handleModalKeyDown(event: React.KeyboardEvent<HTMLElement>) {
     if (event.key === 'Escape') {
       event.preventDefault()
       onCancel()
-      return
-    }
-
-    if (event.key !== 'Tab') {
-      return
-    }
-
-    const focusable = getFocusableElements()
-    if (focusable.length < 2) {
-      return
-    }
-
-    const first = focusable[0]
-    const last = focusable[focusable.length - 1]
-    const active = document.activeElement
-
-    if (event.shiftKey && active === first) {
-      event.preventDefault()
-      last.focus()
-      return
-    }
-
-    if (!event.shiftKey && active === last) {
-      event.preventDefault()
-      first.focus()
     }
   }
 
   return (
-    <div
-      ref={dialogRef}
+    <PModal
       data-testid="confirm-dialog"
-      role="dialog"
-      aria-modal="true"
-      aria-label={description}
       tabIndex={-1}
-      onKeyDown={handleKeyDown}
-      style={{
-        position: 'fixed',
-        top: '50%',
-        left: '50%',
-        transform: 'translate(-50%, -50%)',
-        zIndex: 1000,
-        maxWidth: '560px',
-      }}
+      open
+      onDismiss={onCancel}
+      onKeyDown={handleModalKeyDown}
+      disableBackdropClick
+      dismissButton={false}
+      aria-label={description}
+      aria={{ role: 'alertdialog', 'aria-label': description }}
     >
       <p>{description}</p>
       {type === 'unblock' && blockReason && <span>{blockReason}</span>}
       <PButton variant="secondary" onClick={onCancel}>Cancel</PButton>
       <PButton onClick={onConfirm}>{confirmLabel}</PButton>
-    </div>
+    </PModal>
   )
 }

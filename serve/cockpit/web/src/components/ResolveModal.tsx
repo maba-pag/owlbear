@@ -6,6 +6,7 @@ import {
   PButton,
   PHeading,
   PInlineNotification,
+  PModal,
   PText,
   PTextarea,
 } from '@porsche-design-system/components-react'
@@ -44,7 +45,7 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
   const [notes, setNotes] = useState('')
   const [error, setError] = useState<ResolveErrorState | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const modalRef = useRef<HTMLDivElement | null>(null)
+  const modalRef = useRef<HTMLElement | null>(null)
   const previousFocusRef = useRef<HTMLElement | null>(null)
   const submitRef = useRef<HTMLElement | null>(null)
   const inlineNotificationRef = useRef<InlineNotificationHost | null>(null)
@@ -112,66 +113,6 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
     submitRef.current?.removeAttribute('disabled')
   }, [response])
 
-  useEffect(() => {
-    function handleDocumentKeyDown(event: KeyboardEvent): void {
-      if (event.key === 'Escape') {
-        onClose()
-      }
-    }
-
-    document.addEventListener('keydown', handleDocumentKeyDown)
-    return () => {
-      document.removeEventListener('keydown', handleDocumentKeyDown)
-    }
-  }, [onClose])
-
-  function getFocusableElements(): HTMLElement[] {
-    const root = modalRef.current
-    if (!root) {
-      return []
-    }
-
-    return Array.from(
-      root.querySelectorAll<HTMLElement>(
-        'p-button:not([disabled]), button:not([disabled]), [href], input:not([disabled]), ' +
-          'select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-      ),
-    )
-  }
-
-  function handleModalKeyDown(event: React.KeyboardEvent<HTMLDivElement>): void {
-    if (event.key === 'Escape') {
-      event.preventDefault()
-      event.stopPropagation()
-      onClose()
-      return
-    }
-
-    if (event.key !== 'Tab') {
-      return
-    }
-
-    const focusable = getFocusableElements()
-    if (focusable.length < 2) {
-      return
-    }
-
-    const first = focusable[0]
-    const last = focusable[focusable.length - 1]
-    const active = document.activeElement
-
-    if (event.shiftKey && active === first) {
-      event.preventDefault()
-      last.focus()
-      return
-    }
-
-    if (!event.shiftKey && active === last) {
-      event.preventDefault()
-      first.focus()
-    }
-  }
-
   function setHeadingTagAttr(element: HTMLElement | null): void {
     element?.setAttribute('tag', 'h3')
   }
@@ -198,22 +139,12 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
   }
 
   return (
-    <div
+    <PModal
       data-testid="resolve-modal"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Resolve decision request"
       ref={modalRef}
-      tabIndex={-1}
-      onKeyDown={handleModalKeyDown}
-      style={{
-        position: 'fixed',
-        top: '50%',
-        left: '50%',
-        transform: 'translate(-50%, -50%)',
-        zIndex: 1000,
-        maxWidth: '720px',
-      }}
+      open
+      onDismiss={onClose}
+      aria={{ 'aria-label': 'Resolve decision request' }}
     >
       <PHeading ref={setHeadingTagAttr} tag="h2">{dr.title}</PHeading>
       <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>{dr.body ?? ''}</ReactMarkdown>
@@ -308,6 +239,6 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
           onDismiss={dismissError}
         />
       ) : null}
-    </div>
+    </PModal>
   )
 }

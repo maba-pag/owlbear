@@ -4,6 +4,7 @@ import {
   PHeading,
   PInlineNotification,
   PInputText,
+  PModal,
   PSelect,
   PText,
 } from '@porsche-design-system/components-react'
@@ -76,9 +77,7 @@ export default function ArchivalModal({
   onRefresh,
 }: ArchivalModalProps) {
   const titleId = useId()
-  const dialogRef = useRef<HTMLDivElement | null>(null)
   const reasonSelectRef = useRef<HTMLElement | null>(null)
-  const previousFocusRef = useRef<HTMLElement | null>(null)
 
   const [reason, setReason] = useState<ArchivalReason | ''>('')
   const [refsRaw, setRefsRaw] = useState('')
@@ -103,14 +102,8 @@ export default function ArchivalModal({
   }, [hasRefs, isSubmitting, reason, requiresRefs])
 
   useEffect(() => {
-    previousFocusRef.current = returnFocusTo
-      ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null)
     reasonSelectRef.current?.focus()
-
-    return () => {
-      previousFocusRef.current?.focus()
-    }
-  }, [returnFocusTo])
+  }, [])
 
   function setHeadingTagAttr(element: HTMLElement | null): void {
     element?.setAttribute('tag', 'h3')
@@ -130,51 +123,9 @@ export default function ArchivalModal({
     return ''
   }
 
-  function getFocusableElements(): HTMLElement[] {
-    const root = dialogRef.current
-    if (!root) {
-      return []
-    }
-
-    return Array.from(
-      root.querySelectorAll<HTMLElement>(
-        'p-button:not([disabled]), p-input-text:not([disabled]), p-select:not([disabled]), ' +
-          'p-textarea:not([disabled]), p-inline-notification, button:not([disabled]), [href], input:not([disabled]), ' +
-          'select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-      ),
-    )
-  }
-
-  function handleKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
-    if (event.key === 'Escape') {
-      event.preventDefault()
-      onClose()
-      return
-    }
-
-    if (event.key !== 'Tab') {
-      return
-    }
-
-    const focusable = getFocusableElements()
-    if (focusable.length < 2) {
-      return
-    }
-
-    const first = focusable[0]
-    const last = focusable[focusable.length - 1]
-    const active = document.activeElement
-
-    if (event.shiftKey && active === first) {
-      event.preventDefault()
-      last.focus()
-      return
-    }
-
-    if (!event.shiftKey && active === last) {
-      event.preventDefault()
-      first.focus()
-    }
+  function handleDismiss() {
+    returnFocusTo?.focus()
+    onClose()
   }
 
   function handleReasonChange(nextReason: string) {
@@ -252,21 +203,11 @@ export default function ArchivalModal({
   }
 
   return (
-    <div
-      ref={dialogRef}
+    <PModal
       data-testid="archival-modal"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby={titleId}
-      onKeyDown={handleKeyDown}
-      style={{
-        position: 'fixed',
-        top: '50%',
-        left: '50%',
-        transform: 'translate(-50%, -50%)',
-        zIndex: 1000,
-        maxWidth: '560px',
-      }}
+      open
+      onDismiss={handleDismiss}
+      aria-label="Archive task"
     >
       <PHeading ref={setHeadingTagAttr} id={titleId} tag="h2">Archive task</PHeading>
 
@@ -344,6 +285,6 @@ export default function ArchivalModal({
           onDismiss={dismissError}
         />
       ) : null}
-    </div>
+    </PModal>
   )
 }
