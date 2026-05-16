@@ -1,4 +1,4 @@
-export type CardSignal = 'dr-pending' | 'blocked' | 'claimed' | 'deps-unmet' | 'ready'
+export type CardSignal = 'dr-pending' | 'blocked' | 'claimed' | 'deps-unmet' | 'ready' | 'unknown'
 
 interface SignalInput {
   id: number
@@ -8,6 +8,10 @@ interface SignalInput {
 }
 
 export function computeSignal(task: SignalInput, pendingDRIds: Set<number>): CardSignal {
+  if (!task || typeof task.id !== 'number') {
+    return 'unknown'
+  }
+
   if (pendingDRIds.has(task.id)) {
     return 'dr-pending'
   }
