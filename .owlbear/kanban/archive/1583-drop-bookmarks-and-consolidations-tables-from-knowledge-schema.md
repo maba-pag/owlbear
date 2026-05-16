@@ -1,10 +1,10 @@
 ---
 id: 1583
 title: Drop bookmarks and consolidations tables from knowledge schema
-status: review
+status: archived
 priority: nice-to-have
 created: 2026-05-15T16:22:28.270394+00:00
-updated: 2026-05-16T06:19:08.793710+00:00
+updated: 2026-05-16T07:31:40.585446+00:00
 tags:
   - scope:knowledge
   - type:cleanup
@@ -33,7 +33,7 @@ ac:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 Context: Research #1576 classified bookmarks and consolidations tables as retire — no active write or read path (tests use mocks, not live SQL).
@@ -269,3 +269,80 @@ Refined AC-4 and AC-7 via `edit_task` to resolve reviewer blocking findings. Tas
 | AC-7 (direct call) | test_ac7_migration_from_v11_drops_retired_tables |
 
 - Builder skip: test-only retry, all tests green against current impl — advancing directly to review.
+
+[[2026-05-16T08:46:25+02:00]]
+## Review Evidence
+- Verdict: PASS
+- PASS confirmation: PASS #1583 -> docs | AC mapped to code and evidence sufficient.
+- Independent reviewer verification:
+  - Scoped `quality-runner` reran `uv run pytest tests/test_schema_bookmark_drop_1583.py tests/test_enrichment_schema.py -v --tb=short` and returned 39 passed, 0 failed, 0 skipped.
+  - Scoped `quality-runner` reran `uv run ruff check tests/test_schema_bookmark_drop_1583.py tests/test_enrichment_schema.py serve/knowledge/src/owlbear_knowledge/schema.py` and returned clean lint.
+- AC evidence map:
+
+| AC | Code Evidence | Test Evidence | Status |
+|---|---|---|---|
+| AC-1 | Retired DDL constants are absent from the live module surface in [serve/knowledge/src/owlbear_knowledge/schema.py](serve/knowledge/src/owlbear_knowledge/schema.py#L1-L140). | [tests/test_schema_bookmark_drop_1583.py](tests/test_schema_bookmark_drop_1583.py#L19) proves `_CREATE_BOOKMARKS` / `_CREATE_CONSOLIDATIONS` are not exported. | pass |
+| AC-2 | Current `init_db` starts at [serve/knowledge/src/owlbear_knowledge/schema.py](serve/knowledge/src/owlbear_knowledge/schema.py#L435-L520) and no longer issues retired bookmark/consolidation DDL or bookmark-index creation there. | [tests/test_schema_bookmark_drop_1583.py](tests/test_schema_bookmark_drop_1583.py#L28) proves bookmark indexes are absent; [tests/test_schema_bookmark_drop_1583.py](tests/test_schema_bookmark_drop_1583.py#L69) proves fresh `init_db()` creates neither retired table. | pass |
+| AC-3 | `_migrate_v11_to_v12` is defined at [serve/knowledge/src/owlbear_knowledge/schema.py](serve/knowledge/src/owlbear_knowledge/schema.py#L310-L316) with the required `DROP TABLE IF EXISTS` statements at [serve/knowledge/src/owlbear_knowledge/schema.py](serve/knowledge/src/owlbear_knowledge/schema.py#L312-L313), and `_apply_migrations` still registers `(12, _migrate_v11_to_v12)` at [serve/knowledge/src/owlbear_knowledge/schema.py](serve/knowledge/src/owlbear_knowledge/schema.py#L422). | [tests/test_schema_bookmark_drop_1583.py](tests/test_schema_bookmark_drop_1583.py#L43) proves the direct v11→v12 drop behavior. | pass |
+| AC-4 | `_SCHEMA_VERSION` is 13 at [serve/knowledge/src/owlbear_knowledge/schema.py](serve/knowledge/src/owlbear_knowledge/schema.py#L19), satisfying the refined `>= 12` contract. | [tests/test_schema_bookmark_drop_1583.py](tests/test_schema_bookmark_drop_1583.py#L59) proves the lower bound; adjacent durable proof at [tests/test_enrichment_schema.py](tests/test_enrichment_schema.py#L522-L527) proves the live terminal version is 13. | pass |
+| AC-5 | The module docstring table list at [serve/knowledge/src/owlbear_knowledge/schema.py](serve/knowledge/src/owlbear_knowledge/schema.py#L1-L6) no longer mentions bookmarks or consolidations. | [tests/test_schema_bookmark_drop_1583.py](tests/test_schema_bookmark_drop_1583.py#L63) proves those terms are absent from `schema_mod.__doc__`. | pass |
+| AC-6 | Fresh-schema creation is still rooted in [serve/knowledge/src/owlbear_knowledge/schema.py](serve/knowledge/src/owlbear_knowledge/schema.py#L435-L520) without retired-table creation. | [tests/test_schema_bookmark_drop_1583.py](tests/test_schema_bookmark_drop_1583.py#L69) proves `sqlite_master` contains neither retired table after `init_db()` on an empty database. | pass |
+| AC-7 | `_migrate_v11_to_v12` still drops both retired tables and updates `schema_version` to 12 in [serve/knowledge/src/owlbear_knowledge/schema.py](serve/knowledge/src/owlbear_knowledge/schema.py#L310-L316). | [tests/test_schema_bookmark_drop_1583.py](tests/test_schema_bookmark_drop_1583.py#L80) directly exercises `_migrate_v11_to_v12(conn)` against a synthetic v11 database and proves both table removal and version bump to 12. | pass |
+- Blocking findings: none.
+
+## Observations
+- The earlier contract drift is resolved: task-local AC-4 now asserts `>= 12`, while the adjacent durable migration proof correctly asserts the current terminal version 13 at [tests/test_enrichment_schema.py](tests/test_enrichment_schema.py#L522-L527).
+- I could not execute a scoped `git status --porcelain` contamination check because no terminal tool was exposed in this session. This review verdict is therefore based on live-tree inspection, zero in-editor diagnostics on the scoped files, and independent scoped test/lint proof.
+
+[[2026-05-16T09:10:11+02:00]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | README Verification | Yes — `serve/knowledge/src/**` → `serve/knowledge/README.md` | PASS | Layer 1 (grep): searched README for bookmark/consolidation/schema_version. Lines 57–58 state "Inactive bookmark, scope-transfer, and consolidation surfaces are retained in code only as cleanup/deferred targets" — still accurate post-#1583; schema tables dropped, code modules retained pending #1582. No removed symbols or stale flags. Layer 2 (editorial): README is coherent; module groups table correctly omits BookmarkStore/ConsolidationService from operational API. No contradictions. No updates required. |
+| 2 | External Attribution | N/A | PASS | Schema cleanup using internal migration chain patterns. The only external reference in the research doc is sqlite.org DROP TABLE docs (basic SQL reference, not a novel library dependency). No `.owlbear/sources/overview.md` update needed. |
+| 3 | Research Doc | Yes — `.owlbear/research/drop-bookmark-consolidation-tables.md` exists (owned by #1583) | PASS | Research doc correctly identifies owning task #1583 in header. Not hyperlinked from task body (pre-existing gap; multiple prior review cycles did not flag it). No gate impact. |
+| 4 | Deletion Detection | N/A | PASS | No source files deleted in this task. `schema.py` modified (not deleted). Test files created/updated. No orphaned README references. |
+
+### Files Updated
+None — README accurately reflects post-#1583 state with no changes required.
+
+### Scratch Cleanup
+No `.owlbear/scratch/1583-*` files found.
+
+[[2026-05-16T09:31:40+02:00]]
+## Audit
+### Regression Detection
+- quality-runner mode full: 4618 passed, 239 failed, 14 skipped, 9 errors
+- All 239 failures are in unrelated domains: test_support_module_migration (config cleanup), test_engine_dep_lookup, test_dispatch_gate_port, test_frontend_polling, test_cockpit_pds_build_compat, test_graph_store_counts (runtime errors), test_knowledge_integrity_audit_1587 (TDD RED expected). Zero failures in knowledge schema domain.
+- Task-scoped tests (test_schema_bookmark_drop_1583.py) and adjacent durable suite (test_enrichment_schema.py) all passed.
+- regression verdict: PASS (no cross-task regressions from #1583)
+
+### Intent Verification
+- scope alignment: PASS (changed files: schema.py in serve/knowledge/, task-scoped test, durable enrichment test -- all knowledge domain)
+- purpose match: PASS (retired DDL removed, v12 migration added, proof surface updated)
+- extraneous scope: none
+- boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 4/5
+Initial AC was specific and well-structured. Version ceiling (AC-4 == 12) and migration chain coupling (AC-7 via _apply_migrations) broke when concurrent task #1586 introduced v13. This triggered two review rejection cycles. Architect responded well: refined AC-4 to >= 12 and AC-7 to direct _migrate_v11_to_v12 call. Gaps were concurrency artifacts, not design failures. Overall adequate with minor adaptation needed.
+
+### Commit Integrity
+- upstream commit presence: PARTIAL
+  - schema.py: implementation was pre-existing (builder pass-through confirmed); no builder commit needed
+  - test_schema_bookmark_drop_1583.py: original smoke tests committed (0c7631cb), but second test-writer cycle (AC-4 >= 12, AC-7 direct call) is UNCOMMITTED (modified in working tree)
+  - test_enrichment_schema.py: first fix committed (31fa7663), but second fix (v12 to v13 terminal version) is UNCOMMITTED (modified in working tree)
+- PROCESS CONCERN: Two test files have uncommitted modifications from the final test-writer cycle. Reviewer PASS verdict is based on these uncommitted changes. These must be committed separately.
+- kanban commit packaging: pending (will commit after archival)
+
+### Deduction Breakdown
+- Evidence integrity concern: -.05 (uncommitted test deliverables; reviewer verdict relies on working-tree state not yet in git)
+- No other deductions.
+
+### Confidence: .95
+### Action: archive
+
+### Process Note
+Two test files require a commit from an upstream agent or user:
+- tests/test_schema_bookmark_drop_1583.py (AC-4/AC-7 refinements)
+- tests/test_enrichment_schema.py (v13 terminal version assertion)
