@@ -77,7 +77,9 @@
     {
       "customType": "regex",
       "description": "MegaLinter Docker image in pre-commit local hook",
-      "fileMatch": ["^\\.pre-commit-config\\.yaml$"],
+      "managerFilePatterns": [
+        "/^\\.pre-commit-config\\.yaml$/"
+      ],
       "matchStrings": ["oxsecurity/megalinter-cupcake:v(?<currentValue>[\\d.]+)"],
       "depNameTemplate": "oxsecurity/megalinter-cupcake",
       "datasourceTemplate": "docker"
