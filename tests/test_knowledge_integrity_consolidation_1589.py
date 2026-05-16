@@ -87,8 +87,9 @@ class TestFromAC_KnowledgeIntegrityConsolidation1589:
         store.set_status(doc_id, "done")
 
         # AC-1a: row-presence proof before auditing.
-        doc_row = conn.execute("SELECT id FROM documents WHERE id = ?", (doc_id,)).fetchone()
+        doc_row = conn.execute("SELECT content FROM documents WHERE id = ?", (doc_id,)).fetchone()
         assert doc_row is not None, "insert_document() must persist the document row"
+        assert doc_row[0] == "hello integrity", "insert_document() must persist intake content"
 
         chunk_row = conn.execute("SELECT id FROM chunks WHERE id = ?", (chunk_ids[0],)).fetchone()
         assert chunk_row is not None, "store_chunks() must persist the created chunk row"
