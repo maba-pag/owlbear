@@ -1,10 +1,10 @@
 ---
 id: 1596
 title: 'P0-06: Board horizontal scroll fix'
-status: done
+status: archived
 priority: critical
 created: 2026-05-16T03:35:01.759388+00:00
-updated: 2026-05-16T15:05:43.774482+00:00
+updated: 2026-05-16T15:12:42.685864+00:00
 tags:
   - frontend
   - pds
@@ -24,8 +24,8 @@ ac:
 proof_bundle: behavioral
 blocked: false
 block_reason:
-claimed_at: 2026-05-16T15:05:43.774482+00:00
-archival_reason:
+claimed_at:
+archival_reason: completed
 archival_refs: []
 ---
 Brief: see parent #1590.
@@ -178,3 +178,33 @@ No `.owlbear/scratch/1596-*` files found.
 
 ### Commit
 `0b60ba9e10ff416c855da7c0a64f44f507390b4b` — `docs: document board horizontal-scroll fix in cockpit README (#1596, doc-writer)`
+
+[[2026-05-16T17:12:42+02:00]]
+## Audit
+### Regression Detection
+- quality-runner mode=full: Python 6543 passed / 236 failed (all pre-existing task-scoped engine tests unrelated to frontend CSS change), vitest PASS, lint clean (ruff, eslint, stylelint, htmlhint)
+- quality-runner Playwright scoped: 36 passed / 1 failed (320px mobile reachability — pre-existing, documented in archive #1566 and reviewer evidence)
+- regression verdict: PASS — no task-caused regressions
+
+### Intent Verification
+- scope alignment: PASS (changed files: KanbanBoard.tsx, responsive-layout-1391.spec.ts, board-scroll-1593.spec.ts, cockpit/README.md — all within frontend/cockpit domain)
+- purpose match: PASS (CSS grid auto-fit→fixed-column fix matches stated task purpose)
+- extraneous scope: none
+- boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 5/5
+AC lines are precise after refinement: AC-1 specifies container, viewport, column count with scrollWidth>clientWidth measurement; AC-2 specifies single-row verification via offsetTop; AC-3 enumerates specific affected tests at specific viewports (1024px/1440px) with explicit preservation guards. Challenger findings were accepted and all ACs refined. No gaps.
+
+### Commit Integrity
+- upstream commit presence: PASS
+  - 5f5341bc research (#1596, researcher)
+  - 2f0eed09 test: RED tests (#1596, test-writer)
+  - 429a16a0 fix: implementation (#1596, builder)
+  - 0b60ba9e docs: README update (#1596, doc-writer)
+- kanban commit packaging: pending (this step)
+
+### Deduction Breakdown
+No deductions applied.
+
+### Confidence: 1.00
+### Action: archive
