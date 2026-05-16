@@ -114,6 +114,12 @@ External repos and resources studied during OwlBear development.
 | web.dev — Building a theme switch component | <https://web.dev/articles/building/a-theme-switch-component> | Canonical button + SVG + aria-label pattern, accessibility (aria-live), sun/moon animation | `.owlbear/research/1548-theme-toggle-button.md` | 2026-05-14 |
 | next-themes (pacocoursey) | <https://github.com/pacocoursey/next-themes> | aria-label set to current theme value, 3-state toggle patterns | `.owlbear/research/1548-theme-toggle-button.md` | 2026-05-14 |
 
+## PDS Global-Styles Import Research (Task #1594)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| PDS v4 React Getting Started | <https://designsystem.porsche.com/v4/developing/react/getting-started/> | Recommended `@import` path, Vite config, lightningcss exclusion | `.owlbear/research/1594-pds-global-styles-import.md` | 2026-05-16 |
+
 ## Empty State Illustration Prompts Research (Task #1551)
 
 | Source | URL | What | Where Used | Date |
@@ -4700,3 +4706,14 @@ External repos and resources studied during OwlBear development.
 | PDS v4 Theme docs | <https://designsystem.porsche.com/v4/must-know/theme/> | color-scheme classes on `<html>`, hierarchical scoping | `.owlbear/research/1555-pds-color-scheme-bridge.md` | 2026-05-14 |
 | PDS v4 Color Scheme Stylesheet docs | <https://designsystem.porsche.com/v4/stylesheets/color-scheme/introduction/> | Import path, lightningcss exclusion requirement, polyfill setup | `.owlbear/research/1555-pds-color-scheme-bridge.md` | 2026-05-14 |
 | PDS GitHub Issue #4257 | <https://github.com/porsche-design-system/porsche-design-system/issues/4257> | lightningcss broken `light-dark()` polyfill in Vite 8 | `.owlbear/research/1555-pds-color-scheme-bridge.md` | 2026-05-14 |
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| PDS v4 Tailwind Introduction | <https://designsystem.porsche.com/v4/tailwindcss/introduction/> | Tailwind v4 setup, PDS theme import, color-scheme utilities | `.owlbear/research/1592-tailwind-v4-stylelint-tests.md` | 2026-05-16 |
+| PDS v4 Tailwind Color Examples | <https://designsystem.porsche.com/v4/tailwindcss/color/examples/> | PDS color utility classes (bg-canvas, text-contrast-high, etc.) | `.owlbear/research/1592-tailwind-v4-stylelint-tests.md` | 2026-05-16 |
+| PDS v4 Tailwind Spacing Examples | <https://designsystem.porsche.com/v4/tailwindcss/spacing/examples/> | PDS spacing utilities (gap-fluid-md, gap-static-md), NOT gap-md | `.owlbear/research/1592-tailwind-v4-stylelint-tests.md` | 2026-05-16 |
+| PDS v4 Migration Guide (Tailwind) | <https://designsystem.porsche.com/v4/news/migration-guide/tailwindcss/> | Breaking changes: scheme-* classes, --color-* reset | `.owlbear/research/1592-tailwind-v4-stylelint-tests.md` | 2026-05-16 |
+| PDS tailwindcss theme source | <https://github.com/porsche-design-system/porsche-design-system/blob/main/packages/styles/projects/tailwindcss/src/index.ts> | @theme variable definitions, @utility rules, light-dark() usage | `.owlbear/research/1592-tailwind-v4-stylelint-tests.md` | 2026-05-16 |
+| Tailwind CSS v4 Vite Install | <https://tailwindcss.com/docs> | @tailwindcss/vite plugin setup, @import "tailwindcss" | `.owlbear/research/1592-tailwind-v4-stylelint-tests.md` | 2026-05-16 |
+| stylelint-config-tailwindcss | <https://github.com/zhilidali/stylelint-config-tailwindcss> | Stylelint config extending at-rule-no-unknown for Tailwind | `.owlbear/research/1592-tailwind-v4-stylelint-tests.md` | 2026-05-16 |
+| @tailwindcss/vite Vite 8 discussion | <https://github.com/tailwindlabs/tailwindcss/discussions/19624> | Vite 8 support timeline for @tailwindcss/vite | `.owlbear/research/1592-tailwind-v4-stylelint-tests.md` | 2026-05-16 |
