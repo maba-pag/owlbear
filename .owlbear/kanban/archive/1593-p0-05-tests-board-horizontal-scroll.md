@@ -1,10 +1,10 @@
 ---
 id: 1593
 title: 'P0-05: Tests — board horizontal scroll'
-status: in-progress
+status: archived
 priority: critical
 created: 2026-05-16T03:34:43.248583+00:00
-updated: 2026-05-16T06:10:02.118730+00:00
+updated: 2026-05-16T14:09:23.461491+00:00
 tags:
   - frontend
   - pds
@@ -12,15 +12,20 @@ tags:
 parent: 1590
 depends_on: []
 ac:
-  - Playwright test at default viewport (1280×720) asserts board grid container 
-    scrollWidth > clientWidth when all 7 statuses are rendered
-  - Test asserts all rendered columns share the same offsetTop value (single-row
-    layout, no wrapping to multiple rows)
-proof_bundle: behavioral
-blocked: true
-block_reason: DR pending
+  - Playwright test file exists at 
+    `serve/cockpit/web/e2e/board-scroll-1593.spec.ts` covering board horizontal 
+    scroll
+  - Test asserts board grid container scrollWidth > clientWidth and all 7 column
+    offsetTop values are identical (single-row layout) at default viewport 
+    1280×720
+  - 'Tests fail against current `repeat(auto-fit, ...)` layout — expected RED; implementation
+    is #1596'
+  - ESLint clean on test file
+proof_bundle: skip
+blocked: false
+block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 Brief: see parent #1590.
@@ -163,3 +168,91 @@ Out of scope: PDS foundation, token migration, implementation.
 |---|-------------|----------------|---------|----------|
 | 1 | architect | Resolve task ordering deadlock by removing/inverting `#1596 -> #1593` dependency or adjusting AC/proof semantics for test-only completion | `.owlbear/kanban/tasks/1593-p0-05-tests-board-horizontal-scroll.md`, `.owlbear/kanban/tasks/1596-p0-06-board-horizontal-scroll-fix.md` | quality-runner for `serve/cockpit/web/e2e/board-scroll-1593.spec.ts`: 2 failed against current `auto-fit` layout |
 | 2 | planner | Apply the selected routing decision on board dependencies/status so implementation can proceed before this GREEN gate | `.owlbear/kanban/tasks/1593-p0-05-tests-board-horizontal-scroll.md`, `.owlbear/kanban/tasks/1596-p0-06-board-horizontal-scroll-fix.md`, `.owlbear/kanban/decisions/pending/1593-action.md` | Current board state: `#1596` blocked by `#1593`; `#1593` requires behavior only achievable by `#1596` implementation |
+
+
+
+[[2026-05-16]]
+## AC Rewrite (user directive)
+Original AC described runtime behavior (scrollWidth > clientWidth, offsetTop identical) which is structurally unreachable until #1596 implements. Rewritten to describe the test-artifact deliverable: file exists, covers correct scenarios, correctly fails (RED), lint clean. proof_bundle changed from behavioral to skip — reviewer checks test quality via AC, automated test execution suppressed (tests are expected to fail).
+
+[[2026-05-16T15:45:01+02:00]]
+## Builder Notes
+- Implementation: none (test-artifact task; proof_bundle: skip)
+- Files changed: none
+- AC evidence summary:
+  - AC-1 satisfied: `serve/cockpit/web/e2e/board-scroll-1593.spec.ts` exists.
+  - AC-2 satisfied: file asserts both required conditions at default viewport (board container `scrollWidth > clientWidth` and all 7 columns share same `offsetTop`).
+  - AC-3 satisfied (expected RED): quality-runner scoped run reports 0 passed / 2 failed against current `repeat(auto-fit, ...)` layout.
+  - AC-4 satisfied: scoped lint clean (`eslint` exit 0).
+- quality-runner evidence:
+  - failed: `TestFromAC_BoardHorizontalScroll › board grid container overflows horizontally when all 7 statuses are rendered at 1280×720` (`Expected scrollWidth > 864, Received 864`).
+  - failed: `TestFromAC_BoardHorizontalScroll › all 7 board columns share the same offsetTop — no row wrapping at 1280×720` (`Received [144, 144, 144, 336, 336, 336, 528]`).
+  - lint: clean, no violations.
+- Coverage: N/A (Playwright E2E test-artifact scope).
+- Fixes applied: none.
+
+[[2026-05-16T15:53:40+02:00]]
+## Review Evidence
+- Verdict: PASS
+- PASS confirmation (one line): PASS #1593 -> docs | Rewritten AC map cleanly to the RED test artifact and builder evidence is sufficient.
+- No blocking findings after AC-to-code mapping, test-to-AC alignment, proof sufficiency, and safety review.
+
+| AC Line | Code/Test Evidence | Verification | Status |
+|---|---|---|---|
+| AC-1: Playwright test file exists at `serve/cockpit/web/e2e/board-scroll-1593.spec.ts` covering board horizontal scroll | `serve/cockpit/web/e2e/board-scroll-1593.spec.ts:90` and `serve/cockpit/web/e2e/board-scroll-1593.spec.ts:120` define the two board-scroll scenarios under `TestFromAC_BoardHorizontalScroll`. | File inspection confirms the task deliverable exists and is scoped to board horizontal scroll. | PASS |
+| AC-2: Test asserts board grid container `scrollWidth > clientWidth` and all 7 column `offsetTop` values are identical at default viewport 1280×720 | `serve/cockpit/web/e2e/board-scroll-1593.spec.ts:79` waits for all 7 rendered columns. `serve/cockpit/web/e2e/board-scroll-1593.spec.ts:99-107` asserts container `scrollWidth > clientWidth`. `serve/cockpit/web/e2e/board-scroll-1593.spec.ts:125-137` asserts exactly 7 columns and identical `offsetTop` values. `serve/cockpit/web/src/components/Column.tsx:98` provides the stable `[data-column]` selector used by the spec. | AC is directly encoded in the spec with specific, failure-meaningful assertions. | PASS |
+| AC-3: Tests fail against current `repeat(auto-fit, ...)` layout — expected RED; implementation is #1596 | `serve/cockpit/web/src/KanbanBoard.tsx:321` still uses `repeat(auto-fit, minmax(200px, 1fr))`. The latest builder proof packet reports canonical `quality-runner` results of `0 passed / 2 failed` for `serve/cockpit/web/e2e/board-scroll-1593.spec.ts`, matching the current layout. | Builder evidence is internally consistent with current source and with the earlier reviewer rerun already recorded in the task body. | PASS |
+| AC-4: ESLint clean on test file | Latest builder proof packet records scoped eslint clean on `serve/cockpit/web/e2e/board-scroll-1593.spec.ts`. Editor diagnostics for the file are also clean. | Builder `quality-runner` evidence plus local diagnostics check (`get_errors`: no errors found). | PASS |
+
+## Observations
+- I did not find a false-green gap in the new spec. The assertions at `serve/cockpit/web/e2e/board-scroll-1593.spec.ts:106-108` and `serve/cockpit/web/e2e/board-scroll-1593.spec.ts:133-138` would fail meaningfully against the current wrapping layout.
+- Viewport binding is supplied through the project Playwright default in `serve/cockpit/web/playwright.config.ts:14` rather than a local `test.use` override. That is acceptable for this rewritten `default viewport` contract, but future viewport-specific tasks should pin size locally when the AC is not intentionally tied to project defaults.
+- Adjacent durable proof still needs reconciliation in implementation task `#1596`: `serve/cockpit/web/e2e/responsive-layout-1391.spec.ts:410-429` still encodes no board-container overflow at 1024px.
+- I could not run a scoped `git status` check in this tool surface because terminal execution is unavailable here; contamination screening is therefore limited to current file inspection and the builder proof packet.
+
+[[2026-05-16T15:55:48+02:00]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | README verification | Yes | N/A — no update needed | `serve/cockpit/web/e2e/board-scroll-1593.spec.ts` maps to `serve/cockpit/README.md`. README "Accessibility and responsive state" section documents verified/passing tests for shipped features. #1593 is a RED-phase test artifact — tests are intentionally failing against current `auto-fit` layout; implementation ships with #1596. Adding a RED artifact entry to the README would be inaccurate; README entry belongs with #1596. Layer 1: no removed symbols or stale references. Layer 2: README is coherent and no contradiction introduced. |
+| 2 | External attribution | No | N/A — no external attribution needed | Task body and research doc cite codebase-internal sources only. |
+| 3 | Research doc | Yes | N/A — already linked | `.owlbear/research/1593-board-horizontal-scroll-tests.md` exists; linked in task body under `## Research`. |
+| 4 | Deletion detection | No | N/A — no deletion impact | Builder notes confirm no files deleted; test file was created during test-writer phase. |
+
+### Verification Layers
+- Layer 1 — grep structural: no symbols removed; no stale command/flag references introduced; no orphaned doc links.
+- Layer 2 — LLM editorial: `serve/cockpit/README.md` is coherent and unaffected by this task's deliverable. No contradictions found. Existing `TODO: stale` marker at cleanup row is pre-existing, outside task scope, pass-through only.
+
+### Scratch Cleanup
+No `.owlbear/scratch/1593-*` files found — nothing to delete.
+
+[[2026-05-16T16:09:23+02:00]]
+## Audit
+### Regression Detection
+- quality-runner mode full: 5047 passed, 138 failed, 25 skipped; ruff clean
+- All 138 failures are pre-existing background noise (baseline from #1632 audit: 236 failed / 4646 passed). Task created only one Playwright E2E spec file — no Python changes.
+- regression verdict: PASS
+
+### Intent Verification
+- scope alignment: PASS (single file `serve/cockpit/web/e2e/board-scroll-1593.spec.ts` in frontend E2E domain)
+- purpose match: PASS (RED-phase test artifact for board horizontal scroll; matches rewritten AC deliverable)
+- extraneous scope: none
+- boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 3/5
+- Initial AC described runtime behavior (tests passing) structurally unreachable without #1596 implementation
+- Caused two builder loops and a DR (`decisions/pending/1593-action.md`) before user-directed AC rewrite
+- Rewritten AC is clean and specific (4 verifiable criteria); proof_bundle corrected from behavioral to skip
+- Deduction justified: architect should have caught that behavioral proof_bundle + pass-gate AC was unreachable for a test-only task
+
+### Commit Integrity
+- upstream commit presence: PASS (`5d46b499 test: add RED-phase Playwright tests for board horizontal scroll (#1593, test-writer)`)
+- DR resolved: PASS (`decisions/pending/1593-action.md` — option 2 applied, AC rewritten)
+- kanban commit packaging: pending (this archival)
+
+### Deduction Breakdown
+- AC quality score ≤ 3: -.03
+
+### Confidence: 0.97
+### Action: archive
