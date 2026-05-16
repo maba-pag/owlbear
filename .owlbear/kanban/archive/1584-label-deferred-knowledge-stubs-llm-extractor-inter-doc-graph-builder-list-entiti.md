@@ -2,10 +2,10 @@
 id: 1584
 title: Label deferred knowledge stubs (llm_extractor, inter_doc_graph_builder, 
   list_entities)
-status: docs
+status: archived
 priority: nice-to-have
 created: 2026-05-15T16:22:28.292693+00:00
-updated: 2026-05-16T04:24:03.289230+00:00
+updated: 2026-05-16T05:11:02.224251+00:00
 tags:
   - scope:knowledge
   - type:cleanup
@@ -17,7 +17,7 @@ depends_on:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 Context: Research #1576 classified llm_extractor.py, inter_doc_graph_builder.py, and the list_entities function as document-as-stub.
@@ -109,3 +109,54 @@ Acceptance Criteria:
 ## Observations
 - Proof quality is sufficient for `Proof bundle: skip`: this task changes documentation/comments only, so lint + direct source inspection is the relevant proof surface.
 - Reviewer tool surface did not provide direct `git show` access, so AC-4 is supported by current source inspection plus builder evidence rather than a commit diff. No contradiction was found, so this is non-blocking.
+
+[[2026-05-16T06:44:43+02:00]]
+## Docs Gate
+
+**Item 1 — README Verification**
+- `serve/knowledge/README.md`: Module groups table lists `InterDocGraphBuilder`. Pre-existing disclaimer ("Active operational API is intentionally narrow. Inactive... surfaces are retained in code only as cleanup/deferred targets") already covers deferred status. No task-caused inaccuracy; no edit made.
+- `serve/mcp-knowledge/README.md`: `list_entities` was already absent from the Tools table (correctly so — never decorated). No edit needed.
+- `llm_extractor.py`: Not referenced in any README. No edit needed.
+- **Verdict: PASS — no README updates required.**
+
+**Item 2 — External Attribution:** N/A — internal docstring labeling only; no external sources consulted.
+
+**Item 3 — Research Doc:** `.owlbear/research/label-deferred-knowledge-stubs.md` referenced in task body. ✓
+
+**Item 4 — Deletion Detection:** No symbols removed; three docstring/comment-only additions. No orphaned references introduced. ✓
+
+**Files updated:** none — no docs impact from a docstring/comment-only task.
+**Scratch cleanup:** no task-scoped scratch files present.
+
+[[2026-05-16T07:11:02+02:00]]
+## Audit
+### Regression Detection
+- quality-runner mode full: 4599 passed, 258 failed, 9 errors, 14 skipped (pytest exit 1; ruff exit 0; vitest exit 1)
+- All failures are in cockpit, kanban, ideation, and frontend domains — completely disjoint from the 3 knowledge-domain files changed by this task.
+- Task changed only docstrings/comments in `llm_extractor.py`, `inter_doc_graph_builder.py`, and `server.py` — impossible to cause behavioral regressions.
+- regression verdict: PASS (pre-existing cross-task failures, not task-caused)
+
+### Intent Verification
+- scope alignment: PASS — changed files: `serve/knowledge/src/owlbear_knowledge/llm_extractor.py`, `serve/knowledge/src/owlbear_knowledge/inter_doc_graph_builder.py`, `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py` — all within `scope:knowledge`
+- purpose match: PASS — diff confirms DEFERRED docstrings added per AC; no functional code changes
+- extraneous scope: none
+- boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 4/5
+- AC specificity: Good — 4 lines naming exact files and functions, clear scope constraint (\"no functional changes\").
+- Edge case coverage: N/A for docs-only task.
+- Design direction: Research recommendation (replace stale #875 ref) correctly incorporated by architect.
+- Minor gap: AC could have specified the exact DEFERRED keyword format, but builder interpreted correctly.
+
+### Commit Integrity
+- upstream commit presence: PASS — research commit `c9501e8d`, builder commit `daa10dc0` both verified via `git log`
+- kanban commit packaging: pending (this audit cycle)
+
+### Deduction Breakdown
+- No deductions applied.
+- Regression failures are pre-existing (different domains, docstring-only changes cannot cause behavioral failures).
+- Reviewer evidence section present and detailed with per-AC mapping table — PASS verdict.
+- Lint clean per quality-runner.
+
+### Confidence: 1.00
+### Action: archive
