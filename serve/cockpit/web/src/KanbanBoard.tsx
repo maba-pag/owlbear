@@ -48,7 +48,7 @@ export interface KanbanBoardProps {
   pendingDRIds?: Set<number>
   onSelectTask?: (taskId: number) => void
   onMutationError?: (heading: string, description: string, state: 'error' | 'warning') => void
-  onMutationSuccess?: () => void
+  onMutationSuccess?: (message?: string) => void
 }
 
 interface ResolvedKanbanBoardProps {
@@ -61,7 +61,7 @@ interface ResolvedKanbanBoardProps {
   pendingDRIds: Set<number>
   onSelectTask?: (taskId: number) => void
   onMutationError?: (heading: string, description: string, state: 'error' | 'warning') => void
-  onMutationSuccess?: () => void
+  onMutationSuccess?: (message?: string) => void
 }
 
 function KanbanBoardContent({
@@ -166,7 +166,7 @@ function KanbanBoardContent({
     try {
       await moveTask(taskId, { status: targetStatus, updated: taskUpdated })
       refetchTasks()
-      onMutationSuccess?.()
+      onMutationSuccess?.(`Task moved to ${targetStatus}`)
     } catch (error) {
       if (error instanceof ApiError) {
         if (error.status === 409) {
@@ -223,7 +223,7 @@ function KanbanBoardContent({
     try {
       await moveTask(taskId, { status: targetStatus, updated })
       refetchTasks()
-      onMutationSuccess?.()
+      onMutationSuccess?.(`Task moved to ${targetStatus}`)
     } catch (error) {
       if (error instanceof ApiError) {
         if (error.status === 409) {

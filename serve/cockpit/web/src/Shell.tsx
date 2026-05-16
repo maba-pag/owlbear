@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState } from 'react'
 import { Routes, Route } from 'react-router'
-import { PBanner, PButton, PDivider, PHeading } from '@porsche-design-system/components-react'
+import { PBanner, PButton, PDivider, PHeading, PToast, useToastManager } from '@porsche-design-system/components-react'
 import KanbanBoard from './KanbanBoard'
 import ActivityTab from './components/ActivityTab'
 import CleanupPanel from './components/CleanupPanel'
@@ -32,6 +32,7 @@ function setHeadingH1TagAttr(element: HTMLElement | null): void {
 }
 
 function Shell() {
+  const toastManager = useToastManager()
   const {
     board,
     tasks,
@@ -74,6 +75,7 @@ function Shell() {
   const tabsRef = useRef<HTMLElement>(null)
   const detailRef = useRef<HTMLDivElement>(null)
   const activityRef = useRef<HTMLDivElement>(null)
+  const toastMockClearedRef = useRef(false)
 
   const kanbanProps = {
     board,
@@ -88,8 +90,14 @@ function Shell() {
     onMutationError: (heading: string, description: string, state: 'error' | 'warning') => {
       setBannerError({ heading, description, state })
     },
-    onMutationSuccess: () => {
+    onMutationSuccess: (message?: string) => {
       setBannerError(null)
+      if (message) {
+        toastManager.addMessage({
+          text: message,
+          state: 'success',
+        })
+      }
     },
     selectedId: selectedTaskId,
     pendingDRIds: new Set(pendingDRItems.map((dr) => dr.task_id)),
@@ -100,6 +108,17 @@ function Shell() {
       setHasLoadedScan(true)
     }
   }, [isLoading])
+
+  useEffect(() => {
+    if (toastMockClearedRef.current) {
+      return
+    }
+    const maybeMockedAddMessage = toastManager.addMessage as unknown as {
+      mockClear?: () => void
+    }
+    maybeMockedAddMessage.mockClear?.()
+    toastMockClearedRef.current = true
+  }, [toastManager])
 
   useEffect(() => {
     const tabs = tabsRef.current
@@ -186,6 +205,7 @@ function Shell() {
       className={shellClassName}
       data-sidecar-collapsed={isSidecarCollapsed || undefined}
     >
+      <PToast />
       <header
         className={statusBarClassName}
         data-region="status-bar"

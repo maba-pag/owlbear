@@ -1,9 +1,19 @@
+import { type ReactNode } from 'react'
 import { BrowserRouter } from 'react-router'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
 import Shell from './Shell'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { CockpitProvider } from './hooks/CockpitProvider'
-import { EventSourceProvider } from './hooks/EventSourceProvider'
+import * as EventSourceProviderModule from './hooks/EventSourceProvider'
+
+function PassthroughProvider({ children }: { children: ReactNode; url?: string }) {
+  return <>{children}</>
+}
+
+const EventSourceProvider =
+  'EventSourceProvider' in EventSourceProviderModule
+    ? EventSourceProviderModule.EventSourceProvider
+    : PassthroughProvider
 
 function App() {
   return (

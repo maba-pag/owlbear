@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   PButton,
   PInputText,
@@ -110,9 +110,11 @@ export default function TaskFieldsEditor({
   const [title, setTitle] = useState(task.title)
   const [priority, setPriority] = useState(task.priority)
   const [body, setBody] = useState(task.body ?? '')
+  const [saveConfirmed, setSaveConfirmed] = useState(false)
   const [dependsOn, setDependsOn] = useState(task.depends_on.join(', '))
   const [parent, setParent] = useState(task.parent !== null ? String(task.parent) : '')
   const [blockReason, setBlockReason] = useState(task.block_reason ?? '')
+  const saveConfirmedTimerRef = useRef<number | null>(null)
 
   useEffect(() => {
     if (conflictLocalDraft && conflictRemoteTaskId === task.id) {
@@ -128,11 +130,20 @@ export default function TaskFieldsEditor({
     setTitle(task.title)
     setPriority(task.priority)
     setBody(task.body ?? '')
+    setSaveConfirmed(false)
     setDependsOn(task.depends_on.join(', '))
     setParent(task.parent !== null ? String(task.parent) : '')
     setBlockReason(task.block_reason ?? '')
     clearConflictIfTaskChanged(task.id)
   }, [task.id, task.updated, conflictLocalDraft, conflictRemoteTaskId, clearConflictIfTaskChanged, task])
+
+  useEffect(() => {
+    return () => {
+      if (saveConfirmedTimerRef.current !== null) {
+        window.clearTimeout(saveConfirmedTimerRef.current)
+      }
+    }
+  }, [])
 
   const parsedParent = useMemo(() => parseParent(parent), [parent])
   const parsedDependsOn = useMemo(() => parseDependsOn(dependsOn), [dependsOn])
@@ -150,6 +161,7 @@ export default function TaskFieldsEditor({
     if (clientValidationMessage !== null) {
       return
     }
+    const shouldShowSaveConfirmed = isDirty
 
     const conflictDraft: ConflictLocalDraft = {
       title,
@@ -160,15 +172,30 @@ export default function TaskFieldsEditor({
       blockReason,
     }
 
-    await onSave({
-      updated: task.updated,
-      title,
-      priority,
-      body,
-      depends_on: parsedDependsOn.values,
-      parent: parsedParent.value,
-      block_reason: task.blocked ? blockReason : null,
-    }, conflictDraft)
+    try {
+      await onSave({
+        updated: task.updated,
+        title,
+        priority,
+        body,
+        depends_on: parsedDependsOn.values,
+        parent: parsedParent.value,
+        block_reason: task.blocked ? blockReason : null,
+      }, conflictDraft)
+
+      if (shouldShowSaveConfirmed && serverValidationMessage === null) {
+        setSaveConfirmed(true)
+        if (saveConfirmedTimerRef.current !== null) {
+          window.clearTimeout(saveConfirmedTimerRef.current)
+        }
+        saveConfirmedTimerRef.current = window.setTimeout(() => {
+          setSaveConfirmed(false)
+          saveConfirmedTimerRef.current = null
+        }, 2000)
+      }
+    } catch {
+      setSaveConfirmed(false)
+    }
   }
 
   return (
@@ -255,6 +282,8 @@ export default function TaskFieldsEditor({
       <PButton data-testid="save-button" onClick={() => void handleSave()}>
         Save
       </PButton>
+
+      {saveConfirmed && <div data-testid="save-confirmed">Saved</div>}
 
       {validationMessage && <div data-testid="validation-message">{validationMessage}</div>}
     </>
