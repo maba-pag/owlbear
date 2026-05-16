@@ -72,6 +72,16 @@ External repos and resources studied during OwlBear development.
 | PDS Notification Patterns | <https://designsystem.porsche.com/v3/patterns/notifications/introduction> | Component selection criteria: placement, criticality, states | `.owlbear/research/cockpit-mutation-error-banner.md` | 2026-05-12 |
 | PDS Notification Decision Tree | <https://designsystem.porsche.com/v3/patterns/notifications/decision-tree> | Error/warning case → Banner or Inline Notification recommended | `.owlbear/research/cockpit-mutation-error-banner.md` | 2026-05-12 |
 
+## Dark Mode Border Audit (Task #1625)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| PDS v4 Color Tokens | <https://designsystem.porsche.com/v4/tokens/color/> | Color token names, descriptions, `light-dark()` values for all contrast/notification/canvas/surface tokens | `.owlbear/research/dark-mode-border-audit.md` | 2026-05-16 |
+| PDS v4 CSS Variables stylesheet | <https://designsystem.porsche.com/v4/stylesheets/css-variables/introduction/> | Full `:root` variable definitions with `light-dark()`, spacing, radius, motion tokens | `.owlbear/research/dark-mode-border-audit.md` | 2026-05-16 |
+| PDS v4 Color Scheme docs | <https://designsystem.porsche.com/v4/stylesheets/color-scheme/introduction/> | `.scheme-dark`/`.scheme-light` classes, polyfill fallback, Lightning CSS bug workaround | `.owlbear/research/dark-mode-border-audit.md` | 2026-05-16 |
+| PDS v4 Border Tokens | <https://designsystem.porsche.com/v4/tokens/border/> | Border tokens cover only `border-radius` — no border-color tokens exist | `.owlbear/research/dark-mode-border-audit.md` | 2026-05-16 |
+| PDS Admin Panel template | <https://github.com/porsche-design-system/examples/tree/v4/templates/src/admin-panel/1> | Tailwind `border-contrast-low` pattern, `p-canvas` for layout, `bg-surface`/`bg-canvas` differentiation | `.owlbear/research/dark-mode-border-audit.md` | 2026-05-16 |
+
 ## Shell Layout Research (Task #1606)
 
 | Source | URL | What | Where Used | Date |
