@@ -1,10 +1,10 @@
 ---
 id: 1599
 title: 'P1-06: Tests — computeSignal unknown state'
-status: done
+status: archived
 priority: important
 created: 2026-05-16T03:35:25.284760+00:00
-updated: 2026-05-16T06:16:41.488546+00:00
+updated: 2026-05-16T06:52:25.155110+00:00
 tags:
   - frontend
   - pds
@@ -21,7 +21,7 @@ proof_bundle: behavioral
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 Brief: see parent #1590.
@@ -167,3 +167,27 @@ Out of scope: Implementation, formatting utilities, token migration.
 
 ### Scratch Cleanup
 No `.owlbear/scratch/1599-*` files found. Nothing to delete.
+
+[[2026-05-16T08:52:25+02:00]]
+## Audit
+
+### Regression Detection
+Python full suite: 4618 passed, 239 failed, 14 skipped, 9 errors. All failures in unrelated domains (test_cockpit_view, test_engine_accessor_migration, test_server, test_ideation_diagram, test_cockpit_pds_build_compat) — pre-existing background noise. Vitest computeSignal.test.ts: 23/23 passed. No task-caused regressions.
+
+### Intent Verification
+Changed files: computeSignal.ts, computeSignal.test.ts, compute-signal-unknown-state.md — all within cockpit frontend utils domain. Guard clause for invalid inputs returning 'unknown' matches stated AC purpose. No extraneous scope.
+
+### Architect Quality
+Score: 4/5. ACs specific (exact calls, cast patterns, expected returns). AC-2 refined from vague wording to verifiable "existing 17 tests remain unmodified" during arch review. Minor refinement needed but solid overall.
+
+### Commit Integrity
+- 5c9736bc — research doc (researcher)
+- 993a0b7d — failing tests (test-writer)
+- a6e26299 — implementation fix (builder)
+All properly attributed with task ref #1599.
+
+### Deductions
+None.
+
+### Confidence: 1.00
+### Action: ARCHIVE
