@@ -123,13 +123,14 @@ export default function DRStatusIndicator({ count, items, onItemClick }: DRStatu
                     <span>{item.task_id}</span>
                     <span>{formatAge(item.created)}</span>
                   </PButton>
-                  <button
+                  <PButton
                     type="button"
                     data-testid="resolve-button"
+                    variant="secondary"
                     onClick={() => onItemClick(item.id)}
                   >
                     Resolve
-                  </button>
+                  </PButton>
                 </li>
               ))}
             </ul>

@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react'
-import { PButton, PDivider, PHeading } from '@porsche-design-system/components-react'
+import {
+  PButton,
+  PDivider,
+  PHeading,
+} from '@porsche-design-system/components-react'
 import HistorySubtab, { type Session } from './HistorySubtab'
 import ConflictBanner from './ConflictBanner'
 import TaskActions from './TaskActions'
@@ -50,7 +54,20 @@ function setHeadingMediumSizeAttr(element: HTMLElement | null): void {
 }
 
 function setHeadingSmallSizeAttr(element: HTMLElement | null): void {
-  element?.setAttribute('size', 'small')
+  if (!element) {
+    return
+  }
+  element.setAttribute('size', 'small')
+  element.setAttribute('tag', 'h3')
+}
+
+function setMetadataAccordionAttrs(element: HTMLElement | null): void {
+  if (!element) {
+    return
+  }
+
+  element.setAttribute('compact', '')
+  element.setAttribute('heading', 'Metadata')
 }
 
 export default function DetailTab({
@@ -155,40 +172,6 @@ export default function DetailTab({
 
   return (
     <div>
-      {/* History tab button — always visible */}
-      <section data-region="history">
-        <PButton data-testid="history-tab" variant="secondary" onClick={() => void handleHistoryClick()}>
-          History
-        </PButton>
-      </section>
-
-      {/* Read-only fields */}
-      <div data-region="sidecar-metadata">
-        <p>
-          <strong>ID:</strong> <span data-testid="field-id">{t.id}</span>
-        </p>
-        <p>
-          <strong>Status:</strong> <span data-testid="field-status">{t.status}</span>
-        </p>
-        <p>
-          <strong>Priority:</strong> <span data-testid="field-priority">{t.priority}</span>
-        </p>
-        <p>
-          <strong>Created:</strong> <span data-testid="field-created">{t.created}</span>
-        </p>
-        <p>
-          <strong>Claimed:</strong> <span data-testid="field-claimed">{String(t.claimed)}</span>
-        </p>
-        <p>
-          <strong>Claimed at:</strong> <span data-testid="field-claimed-at">{t.claimed_at ?? ''}</span>
-        </p>
-        <p>
-          <strong>Dependency status:</strong> <span data-testid="field-dep-status">{t.dep_status ?? ''}</span>
-        </p>
-      </div>
-
-      <PDivider />
-
       <section data-region="sidecar-body">
         <PHeading ref={setHeadingMediumSizeAttr} size="medium">Details</PHeading>
         <TaskFieldsEditor
@@ -210,6 +193,42 @@ export default function DetailTab({
           backwardTarget={backwardTarget}
           runMutation={runMutation}
         />
+      </section>
+
+      <p-accordion ref={setMetadataAccordionAttrs}>
+        {/* Read-only fields */}
+        <div data-region="sidecar-metadata">
+          <p>
+            <strong>ID:</strong> <span data-testid="field-id">{t.id}</span>
+          </p>
+          <p>
+            <strong>Status:</strong> <span data-testid="field-status">{t.status}</span>
+          </p>
+          <p>
+            <strong>Priority:</strong> <span data-testid="field-priority">{t.priority}</span>
+          </p>
+          <p>
+            <strong>Created:</strong> <span data-testid="field-created">{t.created}</span>
+          </p>
+          <p>
+            <strong>Claimed:</strong> <span data-testid="field-claimed">{String(t.claimed)}</span>
+          </p>
+          <p>
+            <strong>Claimed at:</strong> <span data-testid="field-claimed-at">{t.claimed_at ?? ''}</span>
+          </p>
+          <p>
+            <strong>Dependency status:</strong> <span data-testid="field-dep-status">{t.dep_status ?? ''}</span>
+          </p>
+        </div>
+      </p-accordion>
+
+      <PDivider />
+
+      {/* History tab button — always visible */}
+      <section data-region="history">
+        <PButton data-testid="history-tab" variant="secondary" onClick={() => void handleHistoryClick()}>
+          History
+        </PButton>
       </section>
 
       {/* History subtab */}

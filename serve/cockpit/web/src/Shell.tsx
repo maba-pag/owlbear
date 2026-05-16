@@ -20,7 +20,15 @@ function isHealthBadgeItem(item: ScanPollingItem): item is HealthBadgeItem {
 }
 
 function setHeadingLargeSizeAttr(element: HTMLElement | null): void {
-  element?.setAttribute('size', 'large')
+  if (!element) {
+    return
+  }
+  element.setAttribute('size', 'large')
+  element.setAttribute('tag', 'h2')
+}
+
+function setHeadingH1TagAttr(element: HTMLElement | null): void {
+  element?.setAttribute('tag', 'h1')
 }
 
 function Shell() {
@@ -182,9 +190,9 @@ function Shell() {
         className={statusBarClassName}
         data-region="status-bar"
       >
-        <h1 className="shell__product-identity min-w-0 break-words">
+        <PHeading ref={setHeadingH1TagAttr} className="shell__product-identity min-w-0 break-words">
           OwlBear Cockpit
-        </h1>
+        </PHeading>
         <span data-testid="traffic-light" data-health={statusHealth} />
         <span data-testid="task-count" />
         {hasLoadedScan && !scanError ? (

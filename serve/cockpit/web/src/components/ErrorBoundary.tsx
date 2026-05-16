@@ -1,3 +1,4 @@
+import { PButton, PHeading } from '@porsche-design-system/components-react'
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 
 interface Props {
@@ -8,6 +9,10 @@ interface Props {
 interface State {
   hasError: boolean
   error: Error | null
+}
+
+function setHeadingH3TagAttr(element: HTMLElement | null): void {
+  element?.setAttribute('tag', 'h3')
 }
 
 export class ErrorBoundary extends Component<Props, State> {
@@ -26,17 +31,18 @@ export class ErrorBoundary extends Component<Props, State> {
 
     return (
       <div role="alert" style={{ padding: 32, textAlign: 'center' }}>
-        <h3>Something went wrong{this.props.label ? ` in ${this.props.label}` : ''}</h3>
+        <PHeading ref={setHeadingH3TagAttr}>Something went wrong{this.props.label ? ` in ${this.props.label}` : ''}</PHeading>
         <p style={{ color: 'var(--p-color-contrast-medium)', marginBottom: 16 }}>
           {this.state.error?.message}
         </p>
-        <button
+        <PButton
           type="button"
           onClick={() => this.setState({ hasError: false, error: null })}
+          variant="secondary"
           style={{ cursor: 'pointer', padding: '8px 16px' }}
         >
           Try again
-        </button>
+        </PButton>
       </div>
     )
   }
