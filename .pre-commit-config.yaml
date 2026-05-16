@@ -2,16 +2,17 @@
 # Pre-commit config — aligned with CI (MegaLinter v9.5.0)
 #
 # Regular hooks:  uv run pre-commit run --all-files
-# Full CI parity: uv run pre-commit run megalinter --all-files
+# Full CI parity: uv run pre-commit run megalinter --all-files --hook-stage manual
 #
-# RULE: Linters run in check/report-only mode (no --fix). Only
-# trailing-whitespace and end-of-file-fixer may auto-fix.
+# RULE: Ruff auto-fixes on commit (imports, formatting). Other linters
+# run in check/report-only mode. trailing-whitespace and end-of-file-fixer
+# also auto-fix. For ESLint fixes, run: uv run eslint-fix
 
 # Exclude paths matching MegaLinter FILTER_REGEX_EXCLUDE + ADDITIONAL_EXCLUDED_DIRECTORIES.
 # Keep aligned with .mega-linter.yml.
 exclude: |
   (?x)^(
-    \.owlbear/(briefs|doc-index\.md|kanban/(archive|decisions|tasks)|research|scratch|sources)/
+    \.owlbear/(briefs|doc-index\.md|kanban/(archive|decisions|tasks)|memory|research|scratch|sources)/
     |store/
     |\.egg-info/
     |coverage/
@@ -36,9 +37,7 @@ repos:
     rev: v0.15.13
     hooks:
       - id: ruff
-        args: [--no-fix]
       - id: ruff-format
-        args: [--check]
 
   # ── YAML (matches CI: YAML_YAMLLINT) ────────────────────
   - repo: https://github.com/adrienverge/yamllint
@@ -64,6 +63,7 @@ repos:
     rev: v0.22.1
     hooks:
       - id: markdownlint-cli2
+        args: [--fix]
 
   # ── EditorConfig (matches CI: EDITORCONFIG_EDITORCONFIG_CHECKER) ──
   - repo: https://github.com/editorconfig-checker/editorconfig-checker.python
@@ -108,7 +108,7 @@ repos:
         pass_filenames: true
 
   # ── MegaLinter (manual-only, full CI parity) ────────────
-  # Usage: uv run pre-commit run megalinter --all-files
+  # Usage: uv run pre-commit run megalinter --all-files --hook-stage manual
   - repo: local
     hooks:
       - id: megalinter
