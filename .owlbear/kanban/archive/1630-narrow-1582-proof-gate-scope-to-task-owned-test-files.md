@@ -1,10 +1,10 @@
 ---
 id: 1630
 title: 'Narrow #1582 proof gate scope to task-owned test files'
-status: done
+status: archived
 priority: critical
 created: 2026-05-16T04:34:46.549127+00:00
-updated: 2026-05-16T12:08:44.306616+00:00
+updated: 2026-05-16T12:31:18.253847+00:00
 tags:
   - pipeline
   - quality
@@ -24,7 +24,7 @@ proof_bundle: skip
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 Context: Task #1582 (knowledge dead-code retirement) implementation is complete, but AC-11 proof gate (`uv run pytest tests/ serve/mcp-knowledge/tests/ -x`) fails on 20+ unrelated pre-existing tests outside task scope. The task-scoped quality-runner pass (317 passed, 0 lint issues) confirms the actual changes are clean.
@@ -378,3 +378,37 @@ Restructured proof approach: reduced scope from 11 to 6 files (removing 5 entire
 
 ### Scratch Files Cleaned
 - None found
+
+[[2026-05-16T14:31:18+02:00]]
+## Audit
+### Regression Detection
+- Full Python suite: 59 failed, 919 passed. All 59 failures are pre-existing RED-phase tests from other in-progress tasks (#1557, #1172, #1199, #1317, #1358, #55, #699, etc.).
+- Task #1630 changed zero Python source files — only `.owlbear/kanban/tasks/1582-*.md`. Impossible for kanban metadata edits to introduce Python test regressions.
+- Lint: clean (ruff exit 0).
+- Regression verdict: PASS
+
+### Intent Verification
+- Scope alignment: PASS — only file changed is `.owlbear/kanban/tasks/1582-retire-bookmark-scope-consolidation-dead-code-from-knowledge-module.md`, which is the pipeline/quality domain this task targets.
+- Purpose match: PASS — AC-11 on #1582 is rewritten from 11-file broad scope to 6-file scope with 19 class-level `--deselect` directives; `Existing proof scope` updated to the 6-file list. Matches stated objective.
+- Extraneous scope: none.
+- Boundary check: function-level behavior verification deferred to reviewer.
+
+### Architect Quality: 3/5
+- AC specificity: ACs were clear and verifiable once finalized (exact command, exact pass criterion, boundary constraint). However, initial AC-1 design was flawed — using `-x` fail-fast masked additional failures, causing 4 architect cycles to converge.
+- Edge case coverage: Cycle 1-3 missed that `-x` hides subsequent failures. Cycle 4 finally introduced the discovery-run procedure.
+- Design direction: Cycle 4 structural fix (reduce to 6 files + discovery procedure) was sound.
+- Score 3: Notable gaps requiring multiple builder round-trips; 4 architect cycles to reach a viable design.
+
+### Commit Integrity
+- Upstream commit presence: PASS — deliverable committed via `dae7abcb` (\"chore: update kanban board\"). AC-11 content verified on disk at line 37 of #1582 task file.
+- Kanban commit packaging: pending (this audit cycle).
+
+### Deduction Breakdown
+- AC quality score 3 ≤ 3: -.03
+- No regression failures attributable to task: no deduction
+- No intent mismatch: no deduction
+- No lint violations: no deduction
+- Reviewer evidence present, detailed, PASS verdict: no deduction
+
+### Confidence: .97
+### Action: archive

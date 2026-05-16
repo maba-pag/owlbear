@@ -4,7 +4,7 @@ title: 'Planner guard: mandatory source-read + symbol validation before AC autho
 status: review
 priority: important
 created: 2026-05-16T08:36:17.257578+00:00
-updated: 2026-05-16T12:11:16.206496+00:00
+updated: 2026-05-16T12:23:44.217013+00:00
 tags:
   - process
   - quality
@@ -33,7 +33,7 @@ ac:
 proof_bundle: skip
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-16T12:23:44.217013+00:00
 archival_reason:
 archival_refs: []
 ---

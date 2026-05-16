@@ -1,10 +1,10 @@
 ---
 id: 1633
 title: 'AC lint checklist: canonical enum/token literals for cockpit/frontend tasks'
-status: todo
+status: in-progress
 priority: important
 created: 2026-05-16T08:36:17.402556+00:00
-updated: 2026-05-16T09:00:06.292665+00:00
+updated: 2026-05-16T12:22:39.753766+00:00
 tags:
   - process
   - quality
@@ -90,3 +90,8 @@ Confirmed canonical source locations via codebase search:
 
 ### Verdict: APPROVE (with refinements)
 ### Action Taken: Refined AC-3 (correct filename), AC-4 (correct integration point), set proof_bundle=skip, advanced backlog → todo
+
+[[2026-05-16T14:22:39+02:00]]
+## Test-Writer Notes
+- Proof bundle: skip — no new test writing required.
+- Passing through to builder.

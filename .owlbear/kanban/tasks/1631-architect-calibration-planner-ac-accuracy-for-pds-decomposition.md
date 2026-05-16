@@ -1,10 +1,10 @@
 ---
 id: 1631
 title: 'Architect calibration: planner AC accuracy for PDS decomposition'
-status: docs
+status: done
 priority: nice-to-have
 created: 2026-05-16T07:50:38.652054+00:00
-updated: 2026-05-16T09:03:19.467538+00:00
+updated: 2026-05-16T12:23:05.365198+00:00
 tags:
   - process
   - quality
@@ -186,3 +186,23 @@ No code files changed (process-quality task).
 ## Observations
 - Builder notes omitted explicit lint status for this `skip` bundle. Reviewer dispatched `quality-runner`; it confirmed `.markdownlint-cli2.jsonc:3-7` excludes `.owlbear/kanban/tasks/**`, so there is no runnable markdownlint surface for `#1631`, `#1632`, or `#1633`. Non-blocking.
 - `code-reader` and `challenger` were not required because the authoritative proof bundle is `skip`.
+
+[[2026-05-16T14:23:05+02:00]]
+## Docs Gate
+
+**Verdict: PASS — no docs impact**
+
+### Checklist
+
+| Item | Status | Evidence |
+|------|--------|----------|
+| README Verification | N/A | No `serve/**`, `share/**`, or `setup/**` files changed by this task. Deliverables were kanban board content only (audit table in task body + follow-up tasks #1632/#1633). |
+| External Attribution | N/A | No external sources influenced the audit work. |
+| Research Doc | N/A | No research artifact was created for this task. |
+| Deletion Detection | N/A | No files deleted. |
+
+### Files Updated
+None — no-impact fast path applied.
+
+### Scratch Cleanup
+No `.owlbear/scratch/1631-*` files found.

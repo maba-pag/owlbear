@@ -4,7 +4,7 @@ title: 'P0-02: PDS global-styles import + CSP font relaxation'
 status: research
 priority: critical
 created: 2026-05-16T03:35:01.700586+00:00
-updated: 2026-05-16T03:35:01.700586+00:00
+updated: 2026-05-16T12:30:49.543843+00:00
 tags:
   - frontend
   - pds
@@ -13,14 +13,14 @@ parent: 1590
 depends_on:
   - 1591
 ac:
-  - --p-color-canvas, --p-spacing-md, --p-font-family resolve to non-empty 
-    values in computed styles
+  - --p-color-canvas, --p-spacing-static-md, --p-font-porsche-next resolve to 
+    non-empty values in computed styles
   - CSP meta tag contains font-src 'self' https://cdn.ui.porsche.com
-  - No console warnings from PDS provider about missing stylesheets
+  - No console errors or warnings containing 'porsche' during shell load
 proof_bundle: behavioral
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-16T12:23:33.257595+00:00
 archival_reason:
 archival_refs: []
 ---
