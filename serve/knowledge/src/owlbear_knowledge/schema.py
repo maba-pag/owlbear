@@ -439,7 +439,7 @@ def init_db(conn: sqlite3.Connection) -> None:
     connection is safe and will not duplicate data or raise errors.
 
     If the database contains an older schema, it is automatically migrated
-    through v2-v12.
+    through v2-v13.
 
     Args:
         conn (sqlite3.Connection): An open :class:`sqlite3.Connection`.  Works with both
