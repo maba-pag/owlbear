@@ -107,7 +107,7 @@ Each task must be:
 - **Domain scoped:** one primary domain per task (see `r-architecture-standards` domain taxonomy). Multi-domain tasks must be split.
 - **Testable:** clear pass/fail criterion
 - **Small:** ~2 hours of focused work max
-- **TDD paired:** test task before implementation task
+- **Self-contained TDD:** each implementation task carries its own RED→GREEN cycle through the pipeline (test-writer writes RED, builder implements GREEN). Do not create separate test-only tasks paired with implementation tasks — this deadlocks the pipeline because test-only tasks can never pass the builder/reviewer green-test gates. When test design is complex, create a preceding **research** task instead (delivers findings to `.owlbear/research/`, not test code).
 
 ### Task Complexity Budget
 
@@ -156,11 +156,12 @@ When drafting AC for planned tasks:
 
 Build an explicit dependency graph:
 
-- Test depends on nothing (or prior schema)
-- Implementation depends on its test task
+- Research depends on nothing (or prior schema)
+- Implementation depends on its research task (when one exists)
 - Schema, CRUD, agent, CLI layers form a natural hierarchy
 - Cross-phase dependencies only when strictly necessary
 - Every dependency references a concrete task ID
+- Do not create test → implementation dependency chains — each task carries its own TDD cycle
 
 ## Step 5 — Assign Priority and Tags
 
@@ -195,6 +196,7 @@ Before creating any task, validate every planned task:
 - **Reject oversized tasks** — no task may exceed the Task Complexity Budget unless it has a `Complexity waiver:` note.
 - **Reject scratch-only proof** — if required proof can only live in `.owlbear/scratch/`, split or add a tracked-artifact deliverable owned by an agent that can write it.
 - **Reject hidden downstream impact** — behavior-changing refactors must name affected durable suites/consumers or include a downstream-impact scan task.
+- **Reject test-artifact-only tasks with `behavioral`/`critical` bundle** — tasks whose sole deliverable is a test file deadlock the pipeline (builder can't make tests green without implementation). Use a research task for complex test design, and let the implementation task carry the TDD cycle.
 
 If a planned task fails: refine the title and body or stop. Never create a placeholder task.
 
