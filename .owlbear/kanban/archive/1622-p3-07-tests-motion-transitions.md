@@ -1,10 +1,10 @@
 ---
 id: 1622
 title: 'P3-07: Tests — motion/transitions'
-status: research
+status: archived
 priority: important
 created: 2026-05-16T03:37:25.187720+00:00
-updated: 2026-05-16T03:37:25.187720+00:00
+updated: 2026-05-16T15:05:28.128264+00:00
 tags:
   - frontend
   - pds
@@ -25,8 +25,9 @@ proof_bundle: behavioral
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
-archival_refs: []
+archival_reason: deprecated
+archival_refs:
+  - 1627
 ---
 Brief: see parent #1590.
 

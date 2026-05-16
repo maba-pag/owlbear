@@ -86,14 +86,12 @@ class TestFromAC_KnowledgeIntegrityConsolidation1589:
 
         store.set_status(doc_id, "done")
 
-        # Direct row-presence assertions: verify API-created rows exist before auditing.
-        # These guards ensure set_status(), insert_document(), store_chunks(), and
-        # store_extractions() actually persisted rows — not just that audit reports zero.
+        # AC-1a: row-presence proof before auditing.
         doc_row = conn.execute("SELECT id FROM documents WHERE id = ?", (doc_id,)).fetchone()
         assert doc_row is not None, "insert_document() must persist the document row"
 
-        chunk_row = conn.execute("SELECT id FROM chunks WHERE document_id = ?", (doc_id,)).fetchone()
-        assert chunk_row is not None, "store_chunks() must persist at least one chunk row"
+        chunk_row = conn.execute("SELECT id FROM chunks WHERE id = ?", (chunk_ids[0],)).fetchone()
+        assert chunk_row is not None, "store_chunks() must persist the created chunk row"
 
         entity_row = conn.execute("SELECT id FROM entities WHERE id = ?", ("entity-1589",)).fetchone()
         assert entity_row is not None, "store_extractions() must persist the entity row"
@@ -105,73 +103,27 @@ class TestFromAC_KnowledgeIntegrityConsolidation1589:
         assert status_row is not None, "set_status() must persist the document_status row"
         assert status_row[0] == "done", "set_status() must store the correct status value"
 
-        result = audit_integrity(conn)
+        # AC-1b: linkage/provenance fields are correct before auditing.
+        chunk_link_row = conn.execute("SELECT document_id FROM chunks WHERE id = ?", (chunk_ids[0],)).fetchone()
+        assert chunk_link_row is not None
+        assert chunk_link_row[0] == doc_id, "chunks.document_id must reference the parent document"
 
-        assert result["chunks_orphaned"]["count"] == 0
-        assert result["entities_orphaned"]["count"] == 0
-        assert result["edges_dangling"]["count"] == 0
-        assert result["status_orphaned"]["count"] == 0
-
-    def test_ac1b_chain_linkage_fields_are_set_before_audit(self) -> None:
-        conn = _fresh_db()
-        store = _make_document_store(conn)
-        doc_id = "doc-1589-link"
-        entity_id = "entity-1589-link"
-
-        store.insert_document(
-            doc_id,
-            IntakeResult(
-                content="linkage test",
-                source="test",
-                metadata={"source_type": "text"},
-            ),
-        )
-
-        chunk_ids = store.store_chunks(doc_id, [Chunk(text="linkage test", index=0)])
-
-        entity = Entity(
-            id=entity_id,
-            name="LinkEntity",
-            entity_type=EntityType.CONCEPT,
-            document_id=doc_id,
-            chunk_id=chunk_ids[0],
-        )
-        edge = Edge(
-            id="edge-1589-link",
-            source_id=entity_id,
-            target_id=entity_id,
-            relation=RelationType.RELATED_TO,
-        )
-        store.store_extractions(
-            [ExtractionResult(entities=[entity], edges=[edge])],
-            document_id=doc_id,
-            chunk_ids=chunk_ids,
-        )
-
-        store.set_status(doc_id, "done")
-
-        # AC-1b: Assert linkage fields BEFORE calling audit_integrity.
-        chunk_row = conn.execute("SELECT document_id FROM chunks WHERE document_id = ?", (doc_id,)).fetchone()
-        assert chunk_row is not None
-        assert chunk_row[0] == doc_id, "chunks.document_id must reference the parent document"
-
-        entity_row = conn.execute("SELECT document_id, chunk_id FROM entities WHERE id = ?", (entity_id,)).fetchone()
-        assert entity_row is not None
-        assert entity_row[0] == doc_id, "entities.document_id must reference the parent document"
-        assert entity_row[1] == chunk_ids[0], "entities.chunk_id must reference the parent chunk"
-
-        edge_row = conn.execute(
-            "SELECT source_id, target_id, document_id FROM edges WHERE id = ?",
-            ("edge-1589-link",),
+        entity_link_row = conn.execute(
+            "SELECT document_id, chunk_id FROM entities WHERE id = ?",
+            ("entity-1589",),
         ).fetchone()
-        assert edge_row is not None
-        assert edge_row[0] == entity_id, "edges.source_id must equal the entity id"
-        assert edge_row[1] == entity_id, "edges.target_id must equal the entity id"
-        assert edge_row[2] == doc_id, "edges.document_id must reference the parent document"
+        assert entity_link_row is not None
+        assert entity_link_row[0] == doc_id, "entities.document_id must reference the parent document"
+        assert entity_link_row[1] == chunk_ids[0], "entities.chunk_id must reference the parent chunk"
 
-        status_row = conn.execute("SELECT status FROM document_status WHERE document_id = ?", (doc_id,)).fetchone()
-        assert status_row is not None
-        assert status_row[0] == "done", "document_status.status must equal 'done'"
+        edge_link_row = conn.execute(
+            "SELECT source_id, target_id, document_id FROM edges WHERE id = ?",
+            ("edge-1589",),
+        ).fetchone()
+        assert edge_link_row is not None
+        assert edge_link_row[0] == "entity-1589", "edges.source_id must equal the entity id"
+        assert edge_link_row[1] == "entity-1589", "edges.target_id must equal the entity id"
+        assert edge_link_row[2] == doc_id, "edges.document_id must reference the parent document"
 
         result = audit_integrity(conn)
 

@@ -1,10 +1,10 @@
 ---
 id: 1619
 title: 'P3-01: Tests — success feedback (PToast)'
-status: research
+status: archived
 priority: important
 created: 2026-05-16T03:37:25.051633+00:00
-updated: 2026-05-16T03:37:25.051633+00:00
+updated: 2026-05-16T15:04:59.702309+00:00
 tags:
   - frontend
   - pds
@@ -27,8 +27,9 @@ proof_bundle: behavioral
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
-archival_refs: []
+archival_reason: deprecated
+archival_refs:
+  - 1624
 ---
 Brief: see parent #1590.
 

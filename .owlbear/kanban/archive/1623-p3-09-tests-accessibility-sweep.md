@@ -1,10 +1,10 @@
 ---
 id: 1623
 title: 'P3-09: Tests — accessibility sweep'
-status: research
+status: archived
 priority: important
 created: 2026-05-16T03:37:25.230397+00:00
-updated: 2026-05-16T03:37:25.230397+00:00
+updated: 2026-05-16T15:05:50.277949+00:00
 tags:
   - frontend
   - pds
@@ -26,8 +26,9 @@ proof_bundle: behavioral
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
-archival_refs: []
+archival_reason: deprecated
+archival_refs:
+  - 1628
 ---
 Brief: see parent #1590.
 

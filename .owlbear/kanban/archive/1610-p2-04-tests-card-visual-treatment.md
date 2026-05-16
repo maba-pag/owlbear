@@ -1,10 +1,10 @@
 ---
 id: 1610
 title: 'P2-04: Tests — card visual treatment'
-status: research
+status: archived
 priority: important
 created: 2026-05-16T03:36:42.364176+00:00
-updated: 2026-05-16T03:36:42.364176+00:00
+updated: 2026-05-16T15:04:42.691587+00:00
 tags:
   - frontend
   - pds
@@ -21,8 +21,9 @@ proof_bundle: behavioral
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
-archival_refs: []
+archival_reason: deprecated
+archival_refs:
+  - 1615
 ---
 Brief: see parent #1590.
 

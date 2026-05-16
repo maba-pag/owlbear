@@ -1,10 +1,10 @@
 ---
 id: 1602
 title: 'P1-10: Tests — sidecar structure'
-status: research
+status: archived
 priority: important
 created: 2026-05-16T03:35:41.122973+00:00
-updated: 2026-05-16T03:35:41.122973+00:00
+updated: 2026-05-16T15:04:34.422208+00:00
 tags:
   - frontend
   - pds
@@ -23,8 +23,9 @@ proof_bundle: behavioral
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
-archival_refs: []
+archival_reason: deprecated
+archival_refs:
+  - 1607
 ---
 Brief: see parent #1590.
 
