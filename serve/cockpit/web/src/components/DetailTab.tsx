@@ -172,32 +172,9 @@ export default function DetailTab({
 
   return (
     <div>
-      <section data-region="sidecar-body">
-        <PHeading ref={setHeadingMediumSizeAttr} size="medium">Details</PHeading>
-        <TaskFieldsEditor
-          task={t}
-          priorities={board?.priorities ?? []}
-          conflictLocalDraft={conflictLocalDraft}
-          conflictRemoteTaskId={conflictRemoteTask?.id ?? null}
-          serverValidationMessage={serverValidationMessage}
-          clearConflictIfTaskChanged={clearConflictIfTaskChanged}
-          onSave={handleSave}
-        />
-      </section>
-
-      <section data-region="actions">
-        <PHeading ref={setHeadingSmallSizeAttr} size="small">Actions</PHeading>
-        <TaskActions
-          key={`${t.id}:${t.updated}`}
-          task={t}
-          backwardTarget={backwardTarget}
-          runMutation={runMutation}
-        />
-      </section>
-
-      <p-accordion ref={setMetadataAccordionAttrs}>
+      <p-accordion ref={setMetadataAccordionAttrs} data-region="sidecar-metadata">
         {/* Read-only fields */}
-        <div data-region="sidecar-metadata">
+        <div>
           <p>
             <strong>ID:</strong> <span data-testid="field-id">{t.id}</span>
           </p>
@@ -223,6 +200,29 @@ export default function DetailTab({
       </p-accordion>
 
       <PDivider />
+
+      <section data-region="sidecar-body">
+        <PHeading ref={setHeadingMediumSizeAttr} size="medium">Details</PHeading>
+        <TaskFieldsEditor
+          task={t}
+          priorities={board?.priorities ?? []}
+          conflictLocalDraft={conflictLocalDraft}
+          conflictRemoteTaskId={conflictRemoteTask?.id ?? null}
+          serverValidationMessage={serverValidationMessage}
+          clearConflictIfTaskChanged={clearConflictIfTaskChanged}
+          onSave={handleSave}
+        />
+      </section>
+
+      <section data-region="actions">
+        <PHeading ref={setHeadingSmallSizeAttr} size="small">Actions</PHeading>
+        <TaskActions
+          key={`${t.id}:${t.updated}`}
+          task={t}
+          backwardTarget={backwardTarget}
+          runMutation={runMutation}
+        />
+      </section>
 
       {/* History tab button — always visible */}
       <section data-region="history">
