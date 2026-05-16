@@ -36,6 +36,10 @@ declare namespace React {
       'p-sheet': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & {
         open?: boolean | string
       }
+      'p-accordion': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & {
+        heading?: string
+        open?: boolean | string
+      }
     }
   }
 }
