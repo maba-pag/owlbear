@@ -1,3 +1,6 @@
+/* PDS Global Styles via direct path */
+@import '../node_modules/@porsche-design-system/components-js/global-styles/index.css';
+
 /* PDS Design Tokens (v4)
  * Light defaults live in :root.
  * Dark values are applied via [data-theme="dark"] and OS-level fallback.
