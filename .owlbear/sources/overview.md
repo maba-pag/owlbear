@@ -4751,6 +4751,16 @@ External repos and resources studied during OwlBear development.
 | PDS v4 Color Scheme Stylesheet docs | <https://designsystem.porsche.com/v4/stylesheets/color-scheme/introduction/> | Import path, lightningcss exclusion requirement, polyfill setup | `.owlbear/research/1555-pds-color-scheme-bridge.md` | 2026-05-14 |
 | PDS GitHub Issue #4257 | <https://github.com/porsche-design-system/porsche-design-system/issues/4257> | lightningcss broken `light-dark()` polyfill in Vite 8 | `.owlbear/research/1555-pds-color-scheme-bridge.md` | 2026-05-14 |
 
+## Modal → PModal Migration Research (Task #1618)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| PDS v4 Modal source (GitHub) | <https://github.com/porsche-design-system/porsche-design-system/blob/main/packages/components/src/components/modal/modal.tsx> | PModal props, slots, events, native dialog usage | `.owlbear/research/1618-modal-pmodal-migration.md` | 2026-05-16 |
+| PDS v4 Modal examples page | <https://designsystem.porsche.com/v4/components/modal/examples/> | Alert dialog pattern with `disableBackdropClick` + `role: alertdialog` | `.owlbear/research/1618-modal-pmodal-migration.md` | 2026-05-16 |
+| MDN `<dialog>` element reference | <https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/dialog> | Native focus trap, Escape dismiss, focus return on `close()`, top-layer rendering | `.owlbear/research/1618-modal-pmodal-migration.md` | 2026-05-16 |
+| Stefan Judis — dialog element super powers | <https://www.stefanjudis.com/blog/a-look-at-the-dialog-elements-super-powers/> | Focus return confirmation: "focus will be moved back to the previously focused element" | `.owlbear/research/1618-modal-pmodal-migration.md` | 2026-05-16 |
+| Sam Hermes — giving the dialog element a whirl | <https://samhermes.com/posts/giving-the-dialog-element-a-whirl/> | Focus return confirmation: "focus will be returned to the element used to open the dialog" | `.owlbear/research/1618-modal-pmodal-migration.md` | 2026-05-16 |
+
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
 | PDS v4 Tailwind Introduction | <https://designsystem.porsche.com/v4/tailwindcss/introduction/> | Tailwind v4 setup, PDS theme import, color-scheme utilities | `.owlbear/research/1592-tailwind-v4-stylelint-tests.md` | 2026-05-16 |
