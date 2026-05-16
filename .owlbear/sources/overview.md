@@ -78,6 +78,18 @@ External repos and resources studied during OwlBear development.
 |--------|-----|------|------------|------|
 | PDS v4 Color Tokens | <https://designsystem.porsche.com/v4/tokens/color/> | Color token names, descriptions, `light-dark()` values for all contrast/notification/canvas/surface tokens | `.owlbear/research/dark-mode-border-audit.md` | 2026-05-16 |
 | PDS v4 CSS Variables stylesheet | <https://designsystem.porsche.com/v4/stylesheets/css-variables/introduction/> | Full `:root` variable definitions with `light-dark()`, spacing, radius, motion tokens | `.owlbear/research/dark-mode-border-audit.md` | 2026-05-16 |
+
+## Focus-Visible PDS Styling (Task #1626)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| PDS v4 Tailwind Focus examples | <https://designsystem.porsche.com/v4/tailwindcss/focus/examples/> | Canonical Tailwind classes for focus-visible: `focus-visible:outline outline-focus outline-offset-2` | `.owlbear/research/focus-visible-pds-styling.md` | 2026-05-16 |
+| PDS GitHub TailwindFocusVisible.tsx | <https://github.com/porsche-design-system/porsche-design-system/tree/main/packages/styles/src/app/tailwindcss/TailwindFocusVisible.tsx> | Reference React component showing focus-visible Tailwind pattern | `.owlbear/research/focus-visible-pds-styling.md` | 2026-05-16 |
+| PDS GitHub getFocusVisibleStyle.ts | <https://github.com/porsche-design-system/porsche-design-system/tree/main/packages/styles/projects/emotion/src/focus/getFocusVisibleStyle.ts> | JS/Emotion implementation: `outline: 2px solid colorFocus, outlineOffset: offset` | `.owlbear/research/focus-visible-pds-styling.md` | 2026-05-16 |
+| PDS GitHub common-styles.ts | <https://github.com/porsche-design-system/porsche-design-system/tree/main/packages/components/src/styles/common-styles.ts> | Internal component focus: `getFocusBaseStyles()` → `outline: 2px solid var(--p-color-focus)` | `.owlbear/research/focus-visible-pds-styling.md` | 2026-05-16 |
+| PDS Storefront AGENTS.md (focus section) | <https://github.com/porsche-design-system/porsche-design-system/tree/main/packages/storefront/AGENTS.md> | Canonical CSS pattern: `button:focus-visible { outline: 2px solid var(--p-color-focus); outline-offset: 2px; }` | `.owlbear/research/focus-visible-pds-styling.md` | 2026-05-16 |
+| PDS Tailwind @theme (local) | (local: node_modules/@porsche-design-system/components-react/tailwindcss/index.css) | `--color-focus: light-dark(#1a44ea, #1a44ea)` and `--default-outline-width: 2px` | `.owlbear/research/focus-visible-pds-styling.md` | 2026-05-16 |
+| PDS SCSS _focus.scss | <https://github.com/porsche-design-system/porsche-design-system/tree/main/packages/styles/projects/scss/src/_focus.scss> | SCSS mixin `focus-visible($offset)` generating `:focus-visible { outline: 2px solid $color-focus }` | `.owlbear/research/focus-visible-pds-styling.md` | 2026-05-16 |
 | PDS v4 Color Scheme docs | <https://designsystem.porsche.com/v4/stylesheets/color-scheme/introduction/> | `.scheme-dark`/`.scheme-light` classes, polyfill fallback, Lightning CSS bug workaround | `.owlbear/research/dark-mode-border-audit.md` | 2026-05-16 |
 | PDS v4 Border Tokens | <https://designsystem.porsche.com/v4/tokens/border/> | Border tokens cover only `border-radius` — no border-color tokens exist | `.owlbear/research/dark-mode-border-audit.md` | 2026-05-16 |
 | PDS Admin Panel template | <https://github.com/porsche-design-system/examples/tree/v4/templates/src/admin-panel/1> | Tailwind `border-contrast-low` pattern, `p-canvas` for layout, `bg-surface`/`bg-canvas` differentiation | `.owlbear/research/dark-mode-border-audit.md` | 2026-05-16 |
