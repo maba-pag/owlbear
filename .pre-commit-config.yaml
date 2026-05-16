@@ -4,9 +4,8 @@
 # Regular hooks:  uv run pre-commit run --all-files
 # Full CI parity: uv run pre-commit run megalinter --all-files
 #
-# RULE: No hook may mutate files. All linters run in check/report-only mode.
-# The trailing-whitespace and end-of-file-fixer hooks from pre-commit-hooks
-# are intentionally omitted because they auto-modify files.
+# RULE: Linters run in check/report-only mode (no --fix). Only
+# trailing-whitespace and end-of-file-fixer may auto-fix.
 
 # Exclude paths matching MegaLinter FILTER_REGEX_EXCLUDE + ADDITIONAL_EXCLUDED_DIRECTORIES.
 # Keep aligned with .mega-linter.yml.
@@ -20,20 +19,26 @@ exclude: |
     |playwright-report/
   )
 repos:
-  # ── General file checks (read-only only) ────────────────
+  # ── General file checks ──────────────────────────────────
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
+      - id: trailing-whitespace
+        exclude: ^serve/cockpit/web/public/porsche-design-system/
+      - id: end-of-file-fixer
+        exclude: ^serve/cockpit/web/public/porsche-design-system/
       - id: check-yaml
       - id: check-merge-conflict
       - id: check-added-large-files
 
-  # ── Python (matches CI: PYTHON_RUFF) ─────────────────────
+  # ── Python (matches CI: PYTHON_RUFF + PYTHON_RUFF_FORMAT) ─
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.15.2
     hooks:
       - id: ruff
         args: [--no-fix]
+      - id: ruff-format
+        args: [--check]
 
   # ── YAML (matches CI: YAML_YAMLLINT) ────────────────────
   - repo: https://github.com/adrienverge/yamllint
@@ -66,6 +71,7 @@ repos:
     hooks:
       - id: editorconfig-checker
         args: [-disable-indent-size]
+        exclude: ^serve/cockpit/web/public/porsche-design-system/
 
   # ── Local hooks ─────────────────────────────────────────
   - repo: local
