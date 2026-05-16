@@ -1,10 +1,10 @@
 ---
 id: 1633
 title: 'AC lint checklist: canonical enum/token literals for cockpit/frontend tasks'
-status: in-progress
+status: review
 priority: important
 created: 2026-05-16T08:36:17.402556+00:00
-updated: 2026-05-16T12:22:39.753766+00:00
+updated: 2026-05-16T12:40:25.068150+00:00
 tags:
   - process
   - quality
@@ -95,3 +95,15 @@ Confirmed canonical source locations via codebase search:
 ## Test-Writer Notes
 - Proof bundle: skip — no new test writing required.
 - Passing through to builder.
+
+[[2026-05-16T14:40:25+02:00]]
+## Builder Notes
+- Proof bundle: `skip` (no TestFromAC gate required).
+- Implementation status: no net code/doc diff required at execution time; target checklist content was already present in `share/skills/h-ac-quality/SKILL.md` and satisfied AC-1..AC-4.
+- AC evidence summary:
+  - AC-1: Includes 3 concrete Bad -> Good canonical-literal examples (enum/union, PDS token, component prop union).
+  - AC-2: Includes a verifier procedure with 5 explicit steps.
+  - AC-3: Includes canonical source map with `computeSignal.ts`, `tokens.css`, component prop unions, and PDS docs/type exports.
+  - AC-4: Two-pass Mechanical lint now includes canonical-literal verification.
+- Quality evidence (quality-runner, scoped): tests 0 passed / 0 failed, lint clean=true for `share/skills/h-ac-quality/SKILL.md`, markdownlint exit 0.
+- Commit status: no commit created for #1633 because there were no staged net changes (`git diff` for target file was empty).

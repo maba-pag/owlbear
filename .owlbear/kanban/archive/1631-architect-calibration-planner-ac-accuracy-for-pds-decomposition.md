@@ -1,10 +1,10 @@
 ---
 id: 1631
 title: 'Architect calibration: planner AC accuracy for PDS decomposition'
-status: done
+status: archived
 priority: nice-to-have
 created: 2026-05-16T07:50:38.652054+00:00
-updated: 2026-05-16T12:23:05.365198+00:00
+updated: 2026-05-16T12:44:03.324923+00:00
 tags:
   - process
   - quality
@@ -29,7 +29,7 @@ proof_bundle: skip
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Objective
@@ -206,3 +206,34 @@ None — no-impact fast path applied.
 
 ### Scratch Cleanup
 No `.owlbear/scratch/1631-*` files found.
+
+[[2026-05-16T14:44:03+02:00]]
+## Audit
+### Regression Detection
+- quality-runner mode full: 4625 passed, 240 failed, 14 skipped, 9 errors; ruff clean; vitest clean; eslint clean
+- Failures are pre-existing background failures (sqlite3 IntegrityError ×4, PDS build-compat timeouts ×4, execnet connection ×1) — zero code files changed by this task
+- regression verdict: PASS (no regressions attributable to #1631)
+
+### Intent Verification
+- scope alignment: PASS (process/quality task; deliverables are kanban body content + follow-up tasks; no code changes)
+- purpose match: PASS (39-task audit table delivered, systemic classification with 4 inaccurate tasks identified, process-guard proposal specified, 2 follow-ups created)
+- extraneous scope: none
+- boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 4/5
+ACs refined from vague originals to well-structured criteria: threshold-based classification (≤2 isolated / ≥3 systemic), conditional process-guard proposal with 4-field structure, artifact-inspection verification method, and reference-presence checks. Minor: the 3-task threshold is somewhat arbitrary but workable.
+
+### Commit Integrity
+- upstream commit presence: PASS (no source code changes expected — process task with proof bundle skip; deliverables are task body content and follow-up tasks #1632/#1633 confirmed on board)
+- kanban commit packaging: pending (will commit after archival)
+
+### Deduction Breakdown
+- No deductions applied
+- Regression failures (240) are pre-existing, not caused by this zero-code-change task: no deduction
+- Lint clean: no deduction
+- AC quality 4/5 (>3): no deduction
+- Reviewer evidence section present and detailed: no deduction
+- Intent aligned: no deduction
+
+### Confidence: 1.00
+### Action: archive

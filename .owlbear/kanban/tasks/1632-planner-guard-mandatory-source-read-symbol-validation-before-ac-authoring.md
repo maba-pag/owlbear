@@ -1,10 +1,10 @@
 ---
 id: 1632
 title: 'Planner guard: mandatory source-read + symbol validation before AC authoring'
-status: review
+status: docs
 priority: important
 created: 2026-05-16T08:36:17.257578+00:00
-updated: 2026-05-16T12:23:44.217013+00:00
+updated: 2026-05-16T12:31:26.253995+00:00
 tags:
   - process
   - quality
@@ -33,7 +33,7 @@ ac:
 proof_bundle: skip
 blocked: false
 block_reason:
-claimed_at: 2026-05-16T12:23:44.217013+00:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -101,3 +101,23 @@ Follow-up from AC-accuracy audit #1631.
 - Lint: commit hooks passed after whitespace correction (markdown/editorconfig gate).
 - Evidence summary: final commit `abe2e5b43100d8ced3af4c31d74ab5a3e55ff6d6` contains only the target skill-file change.
 - Fixes applied: inserted Step 1b guard, adjusted Step 1a shortcut skip list, added example block; no other functional/task files changed.
+
+[[2026-05-16T14:31:26+02:00]]
+## Review Evidence
+- Verdict: PASS
+- PASS confirmation: PASS #1632 -> docs | AC mapped to code and evidence sufficient.
+- Blocking findings: none.
+- AC evidence map:
+
+| AC | Code Evidence | Status |
+|---|---|---|
+| 1 | share/skills/w-task-decomposition/SKILL.md:58 updates the Step 1a shortcut skip list to include Step 1b; share/skills/w-task-decomposition/SKILL.md:68-83 adds Step 1b between Step 1a and Step 2 with target-file identification, source-read, and symbol-capture requirements; share/skills/w-task-decomposition/SKILL.md:77-80 enumerates function signatures/return types, enum or union values, component names, and token names. | PASS |
+| 2 | share/skills/w-task-decomposition/SKILL.md:70-72 applies the guard when existing modules or symbols will appear in AC text and explicitly allows skipping only for greenfield requests with no existing code references. | PASS |
+| 3 | share/skills/w-task-decomposition/SKILL.md:81-82 requires cross-checking each drafted AC against recorded symbols and exact matching for function return types, enum values, and component/token names. | PASS |
+| 4 | share/skills/w-task-decomposition/SKILL.md:86-95 includes both good_example and bad_example blocks illustrating the guard. | PASS |
+
+- Proof sufficiency: proof_bundle=skip. This task changes a markdown skill file only; the AC requires file inspection, not executable behavior proof. Builder Notes include scoped lint status, and no task section requires existing executable proof.
+- Builder evidence consistency: the Builder Notes' AC mapping matches the current file content. Commit reference abe2e5b43100d8ced3af4c31d74ab5a3e55ff6d6 is corroborated in .git/logs/HEAD:3338 and .git/logs/refs/heads/dev:3098.
+
+## Observations
+- I could not independently inspect the commit diff stat or path-scoped dirty-tree status through the current tool surface. Current on-disk content and recovered git-log evidence showed no contradiction with the builder's single-file-change summary, so this remained non-blocking for a proof_bundle=skip review.
