@@ -28,6 +28,16 @@ External repos and resources studied during OwlBear development.
 | PDS PHeading API | <https://designsystem.porsche.com/v3/components/heading/api/> | size prop values (small–xx-large), tag prop | `.owlbear/research/sidecar-structure-pds.md` | 2026-05-16 |
 | PDS PDivider API | <https://designsystem.porsche.com/v3/components/divider/api/> | Self-closing divider, orientation prop | `.owlbear/research/sidecar-structure-pds.md` | 2026-05-16 |
 
+## Filter Panel PDS Controls (Task #1617)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| PDS v3 component nav (deprecation markers) | <https://designsystem.porsche.com/v3/components/checkbox-wrapper/examples/> | Confirms CheckboxWrapper 🚫 deprecated, replaced by Checkbox | `.owlbear/research/filter-panel-pds-controls.md` | 2026-05-16 |
+| PDS GitHub CheckboxExampleControlled.tsx | <https://github.com/porsche-design-system/porsche-design-system/blob/main/packages/components-react/src/examples/CheckboxExampleControlled.tsx> | Canonical React controlled PCheckbox pattern | `.owlbear/research/filter-panel-pds-controls.md` | 2026-05-16 |
+| PDS GitHub CheckboxExampleForm.tsx | <https://github.com/porsche-design-system/porsche-design-system/blob/main/packages/components-react/src/examples/CheckboxExampleForm.tsx> | Form integration with onChange and CheckboxChangeEventDetail | `.owlbear/research/filter-panel-pds-controls.md` | 2026-05-16 |
+| PDS GitHub checkbox.tsx (Stencil source) | <https://github.com/porsche-design-system/porsche-design-system/blob/main/packages/components/src/components/checkbox/checkbox.tsx> | Props (name, label, checked, value, disabled), events (change, blur) | `.owlbear/research/filter-panel-pds-controls.md` | 2026-05-16 |
+| PDS v3 migration guide | <https://designsystem.porsche.com/v3/news/migration-guide/porsche-design-system/> | Wrapper → standalone component deprecation rationale | `.owlbear/research/filter-panel-pds-controls.md` | 2026-05-16 |
+
 ## CockpitProvider Extraction Research (Task #1491)
 
 | Source | URL | What | Where Used | Date |
