@@ -170,27 +170,67 @@ test.describe('TestFromAC_CSPFontSrc', () => {
     )
   }
 
-  // Happy path: CSP content includes a font-src directive
+  // Helper: extract the font-src directive's source list from a CSP string.
+  // Returns the trimmed sources string (e.g. "'self' https://cdn.ui.porsche.com")
+  // or null when no font-src directive is present.
+  function extractFontSrcDirective(csp: string): string | null {
+    const match = /font-src\s+([^;]+)/.exec(csp)
+    return match ? match[1].trim() : null
+  }
+
+  // Happy path: CSP contains a font-src directive
   test('CSP content includes a font-src directive', async ({ page }) => {
     const content = await getCspContent(page)
     expect(content, "CSP content must include 'font-src'").toContain('font-src')
   })
 
-  // Boundary: CSP font-src explicitly names the Porsche CDN origin (D6 decision)
-  test('CSP content includes https://cdn.ui.porsche.com in font-src', async ({ page }) => {
+  // Boundary: font-src directive value contains the Porsche CDN origin (D6 decision)
+  test("font-src directive value contains 'https://cdn.ui.porsche.com'", async ({ page }) => {
     const content = await getCspContent(page)
-    expect(content, "CSP must include 'https://cdn.ui.porsche.com'").toContain(
+    const fontSrc = extractFontSrcDirective(content)
+    expect(fontSrc, 'font-src directive must be present in CSP').not.toBeNull()
+    expect(fontSrc!, "font-src directive value must include 'https://cdn.ui.porsche.com'").toContain(
       'https://cdn.ui.porsche.com',
     )
   })
 
-  // Boundary: font-src includes both 'self' and the CDN origin together
-  test("CSP font-src includes 'self' alongside https://cdn.ui.porsche.com", async ({ page }) => {
+  // Boundary: font-src directive value contains 'self' alongside the CDN origin
+  test("font-src directive value contains 'self'", async ({ page }) => {
     const content = await getCspContent(page)
-    // Both sources must be present; ordering within the directive is not mandated.
-    expect(content, "CSP must include font-src with 'self'").toContain("'self'")
-    expect(content, "CSP must include font-src with CDN origin").toContain(
-      'https://cdn.ui.porsche.com',
-    )
+    const fontSrc = extractFontSrcDirective(content)
+    expect(fontSrc, 'font-src directive must be present in CSP').not.toBeNull()
+    expect(fontSrc!, "font-src directive value must include 'self'").toContain("'self'")
+  })
+})
+
+// ─── AC3: No console errors/warnings containing 'porsche' during shell load ────
+// Covers font-load failures (CDN requests blocked by CSP), PDS runtime errors, and
+// any other Porsche-related console output. The listener is registered before
+// page.goto() to capture every console event from page start.
+//
+// This is a retained regression guard: if font-src is removed from CSP (AC2
+// regression), the browser blocks cdn.ui.porsche.com font loads and emits a
+// console error whose message contains 'porsche' — causing this test to fail.
+
+test.describe('TestFromAC_PDSConsoleClean', () => {
+  // Happy path: shell load produces no console errors or warnings mentioning 'porsche'
+  test('no console errors or warnings containing "porsche" during shell load', async ({ page }) => {
+    const porschemessages: string[] = []
+    // Register BEFORE stubApis/goto — listener must be active from the first page event.
+    page.on('console', (msg) => {
+      if (
+        (msg.type() === 'error' || msg.type() === 'warning') &&
+        msg.text().toLowerCase().includes('porsche')
+      ) {
+        porschemessages.push(`[${msg.type()}] ${msg.text()}`)
+      }
+    })
+    await stubApis(page)
+    await page.goto('/')
+    await page.locator('[data-region="workspace"]').waitFor({ state: 'visible' })
+    expect(
+      porschemessages,
+      'No console errors or warnings containing "porsche" must appear during shell load',
+    ).toHaveLength(0)
   })
 })
