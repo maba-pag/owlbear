@@ -4,6 +4,7 @@ import {
   PInputSearch,
   PMultiSelect,
   PMultiSelectOption,
+  PSelect,
 } from '@porsche-design-system/components-react'
 
 import './FilterPanel.css'
@@ -61,7 +62,6 @@ export default function FilterPanel({
 }: FilterPanelProps) {
   const tagsRef = useRef<HTMLElement | null>(null)
   const searchRef = useRef<HTMLElement | null>(null)
-  const priorityRef = useRef<HTMLElement | null>(null)
   const panelRef = useRef<HTMLDivElement | null>(null)
   const wasOpenRef = useRef(open)
   const hadFocusInsideRef = useRef(false)
@@ -99,24 +99,6 @@ export default function FilterPanel({
     return () => {
       searchElement.removeEventListener('input', onSearchInput)
       searchElement.removeEventListener('change', onSearchInput)
-    }
-  }, [filter, onFilterChange, open])
-
-  useEffect(() => {
-    const priorityElement = priorityRef.current
-    if (!priorityElement) {
-      return
-    }
-
-    const onPriorityChange = (event: Event) => {
-      onFilterChange({ ...filter, priority: readStringValue(event as ControlValueEvent) })
-    }
-
-    priorityElement.addEventListener('input', onPriorityChange)
-    priorityElement.addEventListener('change', onPriorityChange)
-    return () => {
-      priorityElement.removeEventListener('input', onPriorityChange)
-      priorityElement.removeEventListener('change', onPriorityChange)
     }
   }, [filter, onFilterChange, open])
 
@@ -201,20 +183,20 @@ export default function FilterPanel({
         tabIndex={0}
       />
 
-      <p-select
-        ref={priorityRef}
+      <PSelect
         name="priority-filter"
         aria-label="Priority"
         value={filter.priority}
         tabIndex={0}
+        onChange={(event) => onFilterChange({ ...filter, priority: readStringValue(event as ControlValueEvent) })}
       >
-        <p-select-option value="">All priorities</p-select-option>
+        <option value="">All priorities</option>
         {priorities.map((priority) => (
-          <p-select-option key={`pds-${priority}`} value={priority}>
+          <option key={priority} value={priority}>
             {priority}
-          </p-select-option>
+          </option>
         ))}
-      </p-select>
+      </PSelect>
 
       {availableTags.length > 0 ? (
         <PMultiSelect

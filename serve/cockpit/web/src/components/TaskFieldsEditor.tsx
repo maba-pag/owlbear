@@ -3,6 +3,7 @@ import {
   PButton,
   PInputText,
   PSelect,
+  PTag,
   PTextarea,
 } from '@porsche-design-system/components-react'
 import ReactMarkdown from 'react-markdown'
@@ -23,6 +24,7 @@ export type TaskEditPayload = Record<string, unknown> & {
 
 export interface TaskFieldsEditorProps {
   task: TaskDetail
+  priorities: string[]
   conflictLocalDraft: ConflictLocalDraft | null
   conflictRemoteTaskId: number | null
   serverValidationMessage: string | null
@@ -97,6 +99,7 @@ function readControlValue(
 
 export default function TaskFieldsEditor({
   task,
+  priorities,
   conflictLocalDraft,
   conflictRemoteTaskId,
   serverValidationMessage,
@@ -187,10 +190,12 @@ export default function TaskFieldsEditor({
         value={priority}
         onChange={(event) => setPriority(readControlValue(event))}
       >
-        <option value={priority}>{priority}</option>
+        {priorities.map((p) => (
+          <option key={p} value={p}>{p}</option>
+        ))}
       </PSelect>
       {task.tags.map((tag) => (
-        <p-tag key={tag} data-testid="tag-chip">{tag}</p-tag>
+        <PTag key={tag} data-testid="tag-chip">{tag}</PTag>
       ))}
       <PInputText
         ref={setHideLabelAttr}

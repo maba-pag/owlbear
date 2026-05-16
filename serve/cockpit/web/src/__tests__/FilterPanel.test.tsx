@@ -100,13 +100,9 @@ function getPriorityOptions(container: HTMLElement): string[] {
     return []
   }
 
-  return Array.from(pSelect.querySelectorAll('p-select-option')).map((option) => {
-    const withValue = option as Element & { value?: unknown }
-    if (typeof withValue.value === 'string') {
-      return withValue.value
-    }
-
-    return option.getAttribute('value') ?? ''
+  return Array.from(pSelect.querySelectorAll('option')).map((option) => {
+    const withValue = option as HTMLOptionElement
+    return withValue.value ?? option.getAttribute('value') ?? ''
   })
 }
 

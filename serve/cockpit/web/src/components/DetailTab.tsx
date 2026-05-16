@@ -182,6 +182,7 @@ export default function DetailTab({
       <section data-region="sidecar-body">
         <TaskFieldsEditor
           task={t}
+          priorities={board?.priorities ?? []}
           conflictLocalDraft={conflictLocalDraft}
           conflictRemoteTaskId={conflictRemoteTask?.id ?? null}
           serverValidationMessage={serverValidationMessage}
