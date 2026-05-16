@@ -1,6 +1,20 @@
 {
   "rules": {
-    "at-rule-no-unknown": true,
+    "at-rule-no-unknown": [
+      true,
+      {
+        "ignoreAtRules": [
+          "theme",
+          "utility",
+          "apply",
+          "source",
+          "reference",
+          "variant",
+          "custom-variant",
+          "plugin"
+        ]
+      }
+    ],
     "block-no-empty": true,
     "color-no-invalid-hex": true,
     "comment-no-empty": true,

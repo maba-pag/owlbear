@@ -1,5 +1,6 @@
 import { defineConfig } from 'vitest/config'
 import react, { reactCompilerPreset } from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
 import babel from '@rolldown/plugin-babel'
 import { Features } from 'lightningcss'
 import * as fs from 'node:fs'
@@ -68,7 +69,7 @@ function pdsVersionCheckPlugin() {
 }
 
 export default defineConfig({
-  plugins: [react(), babel({ presets: [reactCompilerPreset()] }), pdsVersionCheckPlugin(), cspPlugin()],
+  plugins: [tailwindcss(), react(), babel({ presets: [reactCompilerPreset()] }), pdsVersionCheckPlugin(), cspPlugin()],
   resolve: {
     alias: {
       '@porsche-design-system/components-react/global-styles/color-scheme.css':
