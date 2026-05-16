@@ -1,10 +1,10 @@
 ---
 id: 1582
 title: Retire bookmark/scope/consolidation dead code from knowledge module
-status: in-progress
+status: review
 priority: needed
 created: 2026-05-15T16:22:28.247084+00:00
-updated: 2026-05-16T04:35:10.151077+00:00
+updated: 2026-05-16T12:47:15.817991+00:00
 tags:
   - scope:knowledge
   - type:cleanup
@@ -145,3 +145,21 @@ Existing proof scope: tests/test_enrichment_persistence_1557.py, tests/test_brow
 | 1 | architect | Refine task #1582 proof gate to task-owned scope or split unrelated failing suites into separate prerequisites (use follow-up #1630) | .owlbear/kanban/tasks/1582-retire-bookmark-scope-consolidation-dead-code-from-knowledge-module.md, .owlbear/kanban/tasks/1630-narrow-1582-proof-gate-scope-to-task-owned-test-files.md | quality-runner full: 599 passed / 6 failed; scoped: 317 passed / 31 failed; failures not attributable to AC-1..AC-10 implementation |
 | 2 | builder | Resume #1582 after #1630 resolves proof routing; rerun required proof and advance to review only when failing set is eliminated from required scope | .owlbear/kanban/tasks/1582-retire-bookmark-scope-consolidation-dead-code-from-knowledge-module.md | Current gate remains red despite implementation already present in task body Builder Notes |
 
+[[2026-05-16T14:47:15+02:00]]
+## Builder Notes
+- Scope: Proof-bundle `existing` verification for already-implemented dead-code retirement work on task #1582.
+- Code changes in this cycle: none (implementation was already present from prior builder passes).
+- Required proof executed from AC-11 (6-file scoped command with class-level deselections) and validated green.
+
+- Quality-runner evidence (scoped):
+  - Tests: `104 passed`, `0 failed`, `0 skipped`
+  - Lint: `clean: true` (ruff exit `0`)
+  - Pytest exit: `0`
+
+- Evidence summary:
+  - AC-11 proof command now passes on current tree with zero failures.
+  - Dependency #1630 was previously archived with refined proof scope; current builder run confirms #1582 gate is now satisfied.
+  - Task is ready for reviewer validation.
+
+- Fixes applied in this cycle:
+  - None (verification/routing-only completion cycle).

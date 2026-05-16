@@ -1,10 +1,10 @@
 ---
 id: 1595
 title: 'P0-04: Install @tailwindcss/vite + configure Stylelint for Tailwind v4'
-status: done
+status: archived
 priority: critical
 created: 2026-05-16T03:35:01.729375+00:00
-updated: 2026-05-16T12:24:29.149570+00:00
+updated: 2026-05-16T12:52:59.956367+00:00
 tags:
   - frontend
   - pds
@@ -23,8 +23,9 @@ proof_bundle: behavioral
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
-archival_refs: []
+archival_reason: duplicate
+archival_refs:
+  - 1592
 ---
 Brief: see parent #1590.
 
@@ -84,3 +85,28 @@ Verified in live codebase:
 
 ### Verdict: ARCHIVE AS SUPERSEDED
 ### Action Taken: All 3 ACs satisfied by #1592 builder commit 6a5b07b3. Task has zero remaining implementation scope. Moving to done for archival with archival_refs: [1592].
+
+[[2026-05-16T14:52:51+02:00]]
+## Audit
+### Regression Detection
+- quality-runner mode full: pytest 4621 passed / 224 pre-existing failures (all unrelated task-scoped tests); vitest 1895 passed / 0 failed; ruff 0 violations
+- regression verdict: PASS — task has zero code changes (superseded), no regressions possible
+
+### Intent Verification
+- scope alignment: PASS (all 3 ACs confirmed satisfied by #1592 commit 6a5b07b3)
+- purpose match: PASS (Tailwind v4 vite plugin, pin versions, Stylelint config — all present in live codebase)
+- extraneous scope: none
+- boundary check: function-level behavior verification deferred to reviewer (N/A — superseded path)
+
+### Architect Quality: 4/5
+ACs specific and testable. Minor inaccuracy: AC-1 references `gap-md` but PDS uses `gap-fluid-md` — caught by researcher, already corrected in #1592. Premise challenge correctly identified supersession.
+
+### Commit Integrity
+- upstream commit presence: PASS — no source commits expected (superseded task); #1592 commit 6a5b07b3 verified
+- kanban commit packaging: pending (this audit)
+
+### Deduction Breakdown
+No deductions. Task is superseded with zero code changes; all ACs verified against live codebase; AC quality adequate.
+
+### Confidence: 1.00
+### Action: archive (superseded by #1592)

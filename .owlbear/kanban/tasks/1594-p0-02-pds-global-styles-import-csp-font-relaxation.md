@@ -1,10 +1,10 @@
 ---
 id: 1594
 title: 'P0-02: PDS global-styles import + CSP font relaxation'
-status: research
+status: backlog
 priority: critical
 created: 2026-05-16T03:35:01.700586+00:00
-updated: 2026-05-16T12:36:59.513945+00:00
+updated: 2026-05-16T12:44:47.899118+00:00
 tags:
   - frontend
   - pds
@@ -20,7 +20,7 @@ ac:
 proof_bundle: behavioral
 blocked: false
 block_reason:
-claimed_at: 2026-05-16T12:23:33.257595+00:00
+claimed_at: 2026-05-16T12:44:47.899118+00:00
 archival_reason:
 archival_refs: []
 ---
@@ -48,3 +48,17 @@ Remaining builder work (cleanup):
 
 AC property names corrected: `--p-spacing-md` → `--p-spacing-static-md`, `--p-font-family` → `--p-font-porsche-next`.
 See `.owlbear/research/1594-pds-global-styles-import.md` for full analysis.
+
+[[2026-05-16T14:37:46+02:00]]
+## Research
+- Research doc: .owlbear/research/1594-pds-global-styles-import.md
+- Sources: 7 studied, 5 high-relevance (≥0.9)
+- Recommendation: Builder scope is cleanup-only — remove redundant color-scheme.css import, Vite alias, and update #1555 unit tests. Core implementation already committed by #1591 builder. (confidence: 0.85)
+- Follow-up tasks created: none (this task IS the implementation task)
+- Decision requests: none
+- AC corrected: --p-spacing-md → --p-spacing-static-md, --p-font-family → --p-font-porsche-next
+
+## Challenge Results
+- Challenger: reconsider (confidence in original: 0.63)
+- Key challenges: #1555 test contracts guard old pattern (regression risk), scope drift on optional import-path migration, proof gap on untested import path
+- Researcher response: accepted — added F4 finding for #1555 test updates, narrowed import-path change to advisory, kept alias cleanup as task-inherent. Revised confidence: 0.85

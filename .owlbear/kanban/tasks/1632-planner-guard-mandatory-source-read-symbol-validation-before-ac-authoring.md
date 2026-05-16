@@ -1,10 +1,10 @@
 ---
 id: 1632
 title: 'Planner guard: mandatory source-read + symbol validation before AC authoring'
-status: docs
+status: done
 priority: important
 created: 2026-05-16T08:36:17.257578+00:00
-updated: 2026-05-16T12:31:26.253995+00:00
+updated: 2026-05-16T12:45:47.194237+00:00
 tags:
   - process
   - quality
@@ -121,3 +121,35 @@ Follow-up from AC-accuracy audit #1631.
 
 ## Observations
 - I could not independently inspect the commit diff stat or path-scoped dirty-tree status through the current tool surface. Current on-disk content and recovered git-log evidence showed no contradiction with the builder's single-file-change summary, so this remained non-blocking for a proof_bundle=skip review.
+
+[[2026-05-16T14:45:47+02:00]]
+## Docs Gate
+
+**Verdict: PASS — no docs impact**
+
+### Convention Mapping
+- Changed file: `share/skills/w-task-decomposition/SKILL.md`
+- Mapped targets: `share/README.md`, `share/WIRING.md`
+
+### Checklist
+
+| Item | Result | Evidence |
+|------|--------|----------|
+| 1. README Verification | N/A | `share/README.md` has no entry for this skill by name; skill count (35) unchanged. `share/WIRING.md` lines 93 and 165 reference the skill by name only (wiring connections) — internal step structure is not documented at that level. No structural drift from adding Step 1b internally. Layer 1 grep: no removed symbols. Layer 2 editorial: WIRING and README remain coherent. |
+| 2. External Attribution | N/A | No external sources used; task is a follow-up from internal audit #1631. |
+| 3. Research Doc | N/A | No research file exists for this task. |
+| 4. Deletion Detection | N/A | No source files deleted. |
+
+### AC Content Verification
+Read `share/skills/w-task-decomposition/SKILL.md` lines 50–95. All four ACs confirmed in file:
+- Step 1a shortcut skip list includes \"Skip Step 1b\" ✓
+- Step 1b present between Step 1a and Step 2 with trigger, file-read, and symbol-capture requirements ✓
+- Greenfield skip condition explicit ✓
+- Cross-check sub-step with exact-match requirement ✓
+- good_example and bad_example blocks present ✓
+
+### Scratch Cleanup
+No `.owlbear/scratch/1632-*` files found.
+
+### Files Modified
+None (no docs changes required).
