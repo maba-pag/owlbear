@@ -1,10 +1,10 @@
 ---
 id: 1588
 title: 'P1-04: Knowledge integrity audit function'
-status: done
+status: archived
 priority: needed
 created: 2026-05-15T16:24:50.332910+00:00
-updated: 2026-05-16T13:22:14.006149+00:00
+updated: 2026-05-16T13:30:35.489608+00:00
 tags:
   - phase-1
   - scope:knowledge
@@ -17,7 +17,7 @@ proof_bundle: behavioral
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 Parent: #1580
@@ -171,3 +171,37 @@ Proof bundle: behavioral
 | Deletion Detection | N/A | No files deleted; `audit_integrity` moved with backward-compatible re-export preserved in `schema.py` (L15–17). |
 
 **Scratch cleanup:** 3 files removed (`1588-pytest-output.txt`, `1588-quality-check.txt`, `1588-ruff-output.txt`). Directory clean.
+
+[[2026-05-16T15:30:35+02:00]]
+## Audit
+### Regression Detection
+- quality-runner mode full: 4642 passed, ~240 failed, 9 errors, 14 skipped; lint clean
+- All failures/errors pre-existing (baseline: 236–244 failed, 9 errors across recent runs #1595, #1632)
+- No new regressions introduced by #1588
+- regression verdict: PASS
+
+### Intent Verification
+- scope alignment: PASS (changed files: `integrity.py` new, `schema.py` modified — both in `serve/knowledge/src/owlbear_knowledge/`, knowledge domain only)
+- purpose match: PASS (module extraction with backward-compatible re-export matches stated task purpose exactly)
+- extraneous scope: none (builder commit touches exactly 2 files, both in target domain)
+- boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 4/5
+AC-1 through AC-4 are specific with exact paths, signatures, return types, and constraints. Challenger found 5 pre-REFINE gaps (TDD drift, missing compat AC, query ambiguity, null proof_bundle, task-value justification) — all addressed in REFINE. Minor gap: AC could have been right first time without challenger intervention.
+
+### Commit Integrity
+- upstream commit presence: PASS (`b1bd1832` builder, `43cb5686` test-writer — both present with correct format `#1588, {role}`)
+- commit scope: PASS (builder commit: 2 files, 90 insertions / 78 deletions — purely knowledge domain)
+- kanban commit packaging: pending (this audit cycle)
+
+### Deduction Breakdown
+No deductions applied:
+- Regression: PASS (0)
+- Intent: PASS (0)
+- Lint: clean (0)
+- AC quality: 4/5 > 3 (0)
+- Reviewer evidence: present and detailed (0)
+- Evidence integrity: no concerns (0)
+
+### Confidence: 1.00
+### Action: archive
