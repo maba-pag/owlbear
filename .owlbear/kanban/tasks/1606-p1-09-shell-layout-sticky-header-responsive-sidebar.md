@@ -4,14 +4,13 @@ title: 'P1-09: Shell layout — sticky header + responsive sidebar'
 status: research
 priority: important
 created: 2026-05-16T03:36:07.069416+00:00
-updated: 2026-05-16T03:36:07.069416+00:00
+updated: 2026-05-16T15:06:54.354951+00:00
 tags:
   - frontend
   - pds
   - phase-1
 parent: 1590
-depends_on:
-  - 1601
+depends_on: []
 ac:
   - Header remains visible at scroll position > viewport height (Playwright 
     isVisible() after scroll)
@@ -21,7 +20,7 @@ ac:
 proof_bundle: behavioral
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-16T15:05:36.776075+00:00
 archival_reason:
 archival_refs: []
 ---

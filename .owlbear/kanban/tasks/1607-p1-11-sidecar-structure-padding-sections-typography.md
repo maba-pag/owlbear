@@ -4,14 +4,13 @@ title: 'P1-11: Sidecar structure — padding, sections, typography'
 status: research
 priority: important
 created: 2026-05-16T03:36:07.096771+00:00
-updated: 2026-05-16T03:36:07.096771+00:00
+updated: 2026-05-16T15:07:06.765185+00:00
 tags:
   - frontend
   - pds
   - phase-1
 parent: 1590
-depends_on:
-  - 1602
+depends_on: []
 ac:
   - Sidecar content has --p-spacing-md or greater padding on all sides
   - At least 3 visually distinct sections with PDS typography scale 
@@ -20,7 +19,7 @@ ac:
 proof_bundle: behavioral
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-16T15:05:47.854599+00:00
 archival_reason:
 archival_refs: []
 ---

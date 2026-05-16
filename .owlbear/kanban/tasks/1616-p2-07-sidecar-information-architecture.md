@@ -4,14 +4,13 @@ title: 'P2-07: Sidecar information architecture'
 status: research
 priority: important
 created: 2026-05-16T03:37:02.251956+00:00
-updated: 2026-05-16T03:37:02.251956+00:00
+updated: 2026-05-16T15:07:39.811540+00:00
 tags:
   - frontend
   - pds
   - phase-2
 parent: 1590
-depends_on:
-  - 1611
+depends_on: []
 ac:
   - Sections ordered by usage frequency (action controls prominent, metadata 
     lower)

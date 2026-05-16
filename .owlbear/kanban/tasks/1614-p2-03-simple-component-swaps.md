@@ -4,14 +4,13 @@ title: 'P2-03: Simple component swaps'
 status: research
 priority: important
 created: 2026-05-16T03:37:02.195428+00:00
-updated: 2026-05-16T03:37:02.195428+00:00
+updated: 2026-05-16T15:07:17.875222+00:00
 tags:
   - frontend
   - pds
   - phase-2
 parent: 1590
-depends_on:
-  - 1609
+depends_on: []
 ac:
   - Zero raw <select elements in source files outside test files
   - PDS web-component elements (<p-button>, <p-icon>) replaced with React 

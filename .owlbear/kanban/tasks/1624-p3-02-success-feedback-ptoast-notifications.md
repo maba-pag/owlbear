@@ -4,14 +4,13 @@ title: 'P3-02: Success feedback — PToast notifications'
 status: research
 priority: important
 created: 2026-05-16T03:37:44.703987+00:00
-updated: 2026-05-16T03:37:44.703987+00:00
+updated: 2026-05-16T15:08:23.658018+00:00
 tags:
   - frontend
   - pds
   - phase-3
 parent: 1590
-depends_on:
-  - 1619
+depends_on: []
 ac:
   - Task move triggers visible PToast notification (element appears within 
     500ms)

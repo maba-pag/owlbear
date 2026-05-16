@@ -4,7 +4,7 @@ title: 'Consolidation test: knowledge DB integrity hardening'
 status: review
 priority: important
 created: 2026-05-15T16:25:02.116082+00:00
-updated: 2026-05-16T14:06:52.349088+00:00
+updated: 2026-05-16T15:08:01.518205+00:00
 tags:
   - consolidation-test
   - scope:knowledge
@@ -14,6 +14,23 @@ parent: 1580
 depends_on:
   - 1586
   - 1588
+ac:
+  - 'AC-1: A SINGLE test function performs ALL of AC-1a through AC-1c in one setup.
+    Init fresh v13 DB via `init_db(conn)`, insert document→chunk→entity→edge chain
+    via `DocumentStore.insert_document()`, `store_chunks()`, `store_extractions()`,
+    create document_status via `set_status(doc_id, "done")`.'
+  - 'AC-1a: Same function asserts row existence: document row, chunk row by `chunk_ids[0]`
+    (NOT by document_id lookup), entity row, edge row, document_status row.'
+  - 'AC-1b: Same function asserts linkage fields: `chunks.document_id == doc_id`,
+    `entities.document_id == doc_id`, `entities.chunk_id == chunk_ids[0]`, `edges.source_id
+    == entity_id`, `edges.target_id == entity_id`, `edges.document_id == doc_id`,
+    `document_status.status == "done"`.'
+  - 'AC-1c: Same function calls `audit_integrity(conn)` AFTER all linkage assertions
+    and asserts `count == 0` for `chunks_orphaned`, `entities_orphaned`, `edges_dangling`,
+    `status_orphaned`.'
+  - 'AC-2: Test injects orphan rows in all four audit categories via direct SQL with
+    `PRAGMA foreign_keys = OFF`, re-enables FK, calls `audit_integrity(conn)`, asserts
+    each category `count` equals injected count and `ids` contains injected row IDs.'
 proof_bundle: behavioral
 blocked: false
 block_reason:
@@ -145,3 +162,205 @@ Builder Guidance:
   | AC-1: clean chain → zero audit counts | `test_ac1_...` (2 passes, now with row-presence guards) | PASS |
   | AC-2: orphan injection → detected with counts+ids | `test_ac2_...` | PASS (unchanged) |
 - Commit: 18f8bab
+
+[[2026-05-16T16:23:22+02:00]]
+## Review Evidence
+- Verdict: FAIL
+- Routing signal: FAIL #1589 -> backlog | AC-1 still lacks task-local proof that the revised test persists the document→chunk→entity→edge linkage; second review cycle routes to backlog.
+- AC evidence map:
+
+| AC Line | Code Evidence | Test Evidence | Status |
+|---|---|---|---|
+| AC-1: fresh v13 DB, insert document→chunk→entity→edge chain via DocumentStore, create document_status via set_status, audit clean, assert zero counts | `store_extractions()` stamps entity `document_id`/`chunk_id` and edge provenance before persisting via GraphStore in `serve/knowledge/src/owlbear_knowledge/document_store.py:231-256`; GraphStore persists entity linkage fields and edge source/target/document fields in `serve/knowledge/src/owlbear_knowledge/graph_store.py:85-105` and `serve/knowledge/src/owlbear_knowledge/graph_store.py:198-221`. `audit_integrity()` only checks `chunks.document_id`, `entities.document_id`, dangling non-null `edge.source_id`/`edge.target_id`, and `document_status.document_id` in `serve/knowledge/src/owlbear_knowledge/integrity.py:11-69`. | The retry now proves document, chunk, entity, edge, and document_status row existence before audit in `tests/test_knowledge_integrity_consolidation_1589.py:92-106`, then asserts the four zero counts in `tests/test_knowledge_integrity_consolidation_1589.py:108-113`. But it never asserts `entities.document_id`/`entities.chunk_id` or `edges.source_id`/`edges.target_id`/`edges.document_id`, so the named chain linkage is still not directly proved. | FAIL |
+| AC-2: inject all four orphan categories via direct SQL with FK off, re-enable, audit, assert per-category count and ids | `audit_integrity()` returns the four requested categories in `serve/knowledge/src/owlbear_knowledge/integrity.py:11-69`. | `tests/test_knowledge_integrity_consolidation_1589.py:123-162` disables FK checks, inserts orphan chunk/entity/edge/status rows, re-enables FK, and asserts both `count == 1` and injected ID membership for all four categories. | PASS |
+
+- Blocking findings:
+
+| # | AC Line | Finding | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | AC-1 | The retry closes the original `set_status()` no-op gap, but it still only proves row existence, not the document→chunk→entity→edge linkage the AC names. A regression that dropped or corrupted `entities.chunk_id`, `edges.source_id`/`target_id`, or `edges.document_id` could still pass because the test only checks row existence and `audit_integrity()` does not validate those fields. | `tests/test_knowledge_integrity_consolidation_1589.py:98-106`; `serve/knowledge/src/owlbear_knowledge/document_store.py:231-256`; `serve/knowledge/src/owlbear_knowledge/graph_store.py:85-105`; `serve/knowledge/src/owlbear_knowledge/graph_store.py:198-221`; `serve/knowledge/src/owlbear_knowledge/integrity.py:33-60` | backlog |
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Refine AC-1 proof expectations for the consolidation chain and require task-local assertions on the persisted linkage/provenance fields that make the document→chunk→entity→edge chain real before re-dispatching. | .owlbear/kanban/tasks/1589-consolidation-test-knowledge-db-integrity-hardening.md; tests/test_knowledge_integrity_consolidation_1589.py | AC-1; `tests/test_knowledge_integrity_consolidation_1589.py:98-106`; `serve/knowledge/src/owlbear_knowledge/document_store.py:231-256`; `serve/knowledge/src/owlbear_knowledge/integrity.py:33-60` |
+
+## Observations
+- The previous blocker around `set_status()` is fixed: the retry now asserts a `document_status` row exists and that its stored status equals `"done"` in `tests/test_knowledge_integrity_consolidation_1589.py:104-106`.
+- AC-2 proof remains strong and specific: each injected orphan category is checked for both exact count and injected ID membership in `tests/test_knowledge_integrity_consolidation_1589.py:152-162`.
+- Builder/test-writer quality evidence was internally consistent, so no independent `quality-runner` rerun was needed; the remaining blocker is visible from static proof inspection.
+- Adversarial cross-checks split on severity: challenger treated the remaining gap as medium but non-blocking, while code-reader judged it blocking under a strict task-local AC-1 reading. This review adopts the stricter reading because the task is a consolidation test whose unique value is proving the chain itself, not just row existence plus clean audit counts.
+
+[[2026-05-16T16:25:00+02:00]]
+## Architecture Review (cycle 2)
+
+### Evaluation
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | Single consolidation test — purpose is proving end-to-end chain linkage |
+| Interface clarity | PASS (after REFINE) | AC-1a/b/c now enumerates exact fields and values for linkage proof |
+| Dependency correctness | PASS | #1586 (archived), #1588 (archived) — both completed |
+| Module layering | PASS | Test-only task within knowledge domain |
+| TDD compliance | PASS | Tagged `type:test` — test-writer passes through, builder writes test |
+| KISS/YAGNI | PASS | Minimal scope — adds ~5 explicit linkage assertions to existing test |
+| Premise challenge | PASS | Consolidation test proves chain linkage not covered by unit tests or audit_integrity alone |
+| Pattern consistency | PASS | Follows existing test patterns from #1586 |
+| Security surface | N/A | Read-only test |
+| Single domain | PASS | Knowledge module only |
+
+### Reviewer Feedback Integration
+Reviewer rejected (cycle 2) because AC-1 required only row-existence assertions but not proof of actual linkage/provenance fields that `store_extractions()` stamps:
+- `entities.chunk_id` — not audited by `audit_integrity()` at all
+- `edges.document_id` — not checked by edge audit (only source_id/target_id → entities)
+- `chunks.document_id` — covered by audit orphan check, but explicit assertion proves chain direction
+- `document_status.status` value — proves `set_status()` stored correct value, not just a row
+
+Refined AC-1 → AC-1a/b/c now requires 7 explicit linkage field assertions before calling audit, closing all false-green paths.
+
+### Challenge Results
+- Challenger: ac-quality (confidence 0.64)
+- Valid findings addressed:
+  1. `set_status()` value proof missing → added `document_status.status == \"done\"` to AC-1b
+  2. `chunks.document_id` not in draft → added to AC-1b
+  3. \"reference the created entity\" too interpretive → replaced with `edges.source_id == entity_id`, `edges.target_id == entity_id`
+- Rebutted: B1 compound-AC concern — consolidation tests exist to prove the full chain in one pass; splitting defeats purpose
+
+### Proof-Bundle Validation
+- Planner assignment: behavioral
+- Final bundle: behavioral
+- Test-writer: PASS-THROUGH (type:test tag)
+
+### Builder Guidance (updated)
+- Extend `test_ac1_...` with linkage field assertions:
+  - `chunks.document_id == doc_id`
+  - `entities.document_id == doc_id`
+  - `entities.chunk_id == chunk_ids[0]`
+  - `edges.source_id == \"entity-1589\"`
+  - `edges.target_id == \"entity-1589\"`
+  - `edges.document_id == doc_id`
+  - `document_status.status == \"done\"` (likely already present)
+- Some assertions may already exist from prior retries; only add what's missing.
+
+### Verdict: APPROVED (after REFINE)
+Action: Refined AC to require explicit linkage field assertions, closing false-green paths. Re-approved to todo.
+
+[[2026-05-16T16:31:20+02:00]]
+## Architecture Review (cycle 2) — Summary
+Refined AC-1 into AC-1a/b/c to require 7 explicit linkage field assertions (chunks.document_id, entities.document_id, entities.chunk_id, edges.source_id, edges.target_id, edges.document_id, document_status.status) BEFORE calling audit_integrity. Closes all false-green paths identified by reviewer in cycles 1 and 2. Challenger findings (ac-quality, 0.64) integrated. AC-2 unchanged.
+
+[[2026-05-16T16:36:14+02:00]]
+## Test-Writer Notes
+- Retry (cycle 3): added AC-1b linkage field test method.
+- File: `tests/test_knowledge_integrity_consolidation_1589.py`
+- Class: `TestFromAC_KnowledgeIntegrityConsolidation1589`
+- New method: `test_ac1b_chain_linkage_fields_are_set_before_audit`
+- Changes: adds 7 explicit linkage field assertions BEFORE calling audit_integrity, covering all AC-1b requirements:
+  - `chunks.document_id == doc_id`
+  - `entities.document_id == doc_id`
+  - `entities.chunk_id == chunk_ids[0]`
+  - `edges.source_id == entity_id`
+  - `edges.target_id == entity_id`
+  - `edges.document_id == doc_id`
+  - `document_status.status == "done"`
+- Also asserts `audit_integrity()` zero counts after linkage checks (AC-1c).
+- Quality-runner (scoped): 3 passed, 0 failed, lint clean.
+- Builder skip: test-only retry — all new assertions PASS against current implementation (linkage fields are correctly stamped by `store_extractions()`). Direct-to-review advance per Step 1b.1.
+- AC coverage:
+  | AC | Tests | Status |
+  |---|---|---|
+  | AC-1a: API-created rows exist | `test_ac1_...` (existing) | PASS |
+  | AC-1b: linkage fields before audit | `test_ac1b_...` (new) | PASS |
+  | AC-1c: zero audit counts after linkage | `test_ac1b_...` (new, includes audit assert) | PASS |
+  | AC-2: orphan injection detected | `test_ac2_...` (existing) | PASS |
+- Commit: 53c396dde191624b3fdb5f9a365d9ac1882a03dc
+
+[[2026-05-16T16:48:01+02:00]]
+## Review Evidence
+- Verdict: FAIL
+- Routing signal: FAIL #1589 -> backlog | AC-1 still diverges from the refined contract: chunk proof is not by `chunk_ids[0]`, and the required one-pass AC-1 proof is split across two fresh-DB tests.
+- AC evidence map:
+
+| AC Line | Code Evidence | Test Evidence | Status |
+|---|---|---|---|
+| AC-1a: row existence for document, chunk (by `chunk_ids[0]`), entity, edge, document_status | Refined task AC requires the created chunk to be asserted by `chunk_ids[0]` in `.owlbear/kanban/tasks/1589-consolidation-test-knowledge-db-integrity-hardening.md:18`. | `test_ac1_clean_chain_returns_zero_for_all_audit_categories` proves document/entity/edge/status row presence, but the chunk check is `SELECT id FROM chunks WHERE document_id = ?` in `tests/test_knowledge_integrity_consolidation_1589.py:95`, which only proves some chunk exists for the document. | FAIL |
+| AC-1b / AC-1c: same test asserts linkage before audit, then runs clean audit in that same setup | Refined task AC requires the same test to assert linkage before audit in `.owlbear/kanban/tasks/1589-consolidation-test-knowledge-db-integrity-hardening.md:22` and then call `audit_integrity(conn)` after linkage in `.owlbear/kanban/tasks/1589-consolidation-test-knowledge-db-integrity-hardening.md:26`. The architecture retry notes also say consolidation must prove the full chain in one pass and explicitly instruct extending `test_ac1_...` in `.owlbear/kanban/tasks/1589-consolidation-test-knowledge-db-integrity-hardening.md:224` and `.owlbear/kanban/tasks/1589-consolidation-test-knowledge-db-integrity-hardening.md:232`. | Row-existence plus zero-count audit live in `test_ac1_clean_chain_returns_zero_for_all_audit_categories` at `tests/test_knowledge_integrity_consolidation_1589.py:52` and `tests/test_knowledge_integrity_consolidation_1589.py:92-113`, while linkage plus zero-count audit live in separate `test_ac1b_chain_linkage_fields_are_set_before_audit` at `tests/test_knowledge_integrity_consolidation_1589.py:115` and `tests/test_knowledge_integrity_consolidation_1589.py:154-181`. That split across two fresh-DB tests diverges from the refined one-pass proof contract. | FAIL |
+| AC-2: inject all four orphan categories and assert exact counts + IDs | `audit_integrity()` exposes the four categories in `serve/knowledge/src/owlbear_knowledge/integrity.py:11-69`. | `test_ac2_orphan_rows_are_detected_with_counts_and_ids` asserts exact count and injected-ID membership for all four categories in `tests/test_knowledge_integrity_consolidation_1589.py:183-229`. | PASS |
+
+- Blocking findings:
+
+| # | AC Line | Finding | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | AC-1a | The chunk presence check does not assert the created chunk by `chunk_ids[0]`; it only proves any chunk row exists for the document, which is weaker than the refined AC. | `.owlbear/kanban/tasks/1589-consolidation-test-knowledge-db-integrity-hardening.md:18`; `tests/test_knowledge_integrity_consolidation_1589.py:95` | backlog |
+| 2 | AC-1b, AC-1c | The refined contract requires one end-to-end AC-1 test. Current proof splits row-existence and linkage/audit across two fresh-DB tests, despite the architect explicitly rejecting split proof and instructing the existing `test_ac1_...` to be extended. | `.owlbear/kanban/tasks/1589-consolidation-test-knowledge-db-integrity-hardening.md:22`; `.owlbear/kanban/tasks/1589-consolidation-test-knowledge-db-integrity-hardening.md:26`; `.owlbear/kanban/tasks/1589-consolidation-test-knowledge-db-integrity-hardening.md:224`; `.owlbear/kanban/tasks/1589-consolidation-test-knowledge-db-integrity-hardening.md:232`; `tests/test_knowledge_integrity_consolidation_1589.py:52`; `tests/test_knowledge_integrity_consolidation_1589.py:115`; `tests/test_knowledge_integrity_consolidation_1589.py:154-181` | backlog |
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Re-scope AC-1 for a single end-to-end proof shape and re-dispatch with explicit wording that the existing `test_ac1_...` must carry row-existence, linkage, and clean-audit assertions in one setup. | .owlbear/kanban/tasks/1589-consolidation-test-knowledge-db-integrity-hardening.md; tests/test_knowledge_integrity_consolidation_1589.py | AC-1a/AC-1b/AC-1c; task lines 18, 22, 26, 224, 232; test lines 52, 95, 115, 154-181 |
+| 2 | architect | Preserve the refined `chunk_ids[0]` requirement in the next dispatch so the row-presence proof checks the created chunk, not any chunk for the document. | .owlbear/kanban/tasks/1589-consolidation-test-knowledge-db-integrity-hardening.md; tests/test_knowledge_integrity_consolidation_1589.py | AC-1a; task line 18; test line 95 |
+
+## Observations
+- AC-2 proof remains strong and specific: each injected orphan category is checked for exact count and injected-ID membership in `tests/test_knowledge_integrity_consolidation_1589.py:183-229`.
+- The earlier `set_status()` false-green is fixed: the current tests assert stored status `"done"` in `tests/test_knowledge_integrity_consolidation_1589.py:106` and `tests/test_knowledge_integrity_consolidation_1589.py:174`.
+- Builder/test-writer quality evidence was internally consistent, so no independent `quality-runner` rerun was needed; the blocker is visible from the current test structure and assertions.
+- Challenger cross-check returned `reconsider` (0.83 confidence) and agreed the remaining issue is contract compliance, not a source behavior defect.
+
+2026-05-16T14:49:34+00:00
+## Architecture Review (cycle 3)
+
+### Reviewer Feedback Integration
+Reviewer rejected (cycle 3) for two contract compliance issues:
+1. Chunk presence check uses `WHERE document_id = ?` instead of asserting by `chunk_ids[0]` directly.
+2. AC-1 proof is split across two test functions (`test_ac1_...` and `test_ac1b_...`) despite AC saying \"Same test.\"
+
+Root cause: the \"Same test\" language in AC-1b/AC-1c was ambiguous — builder interpreted it as \"same class\" not \"same function.\" Fixed by:
+- Consolidated AC-1a/b/c under a preamble AC-1 that says \"A SINGLE test function performs ALL of AC-1a through AC-1c in one setup.\"
+- AC-1a explicitly says chunk row checked \"by `chunk_ids[0]` (NOT by document_id lookup).\"
+
+### Builder Guidance (cycle 3)
+- **MERGE** the current `test_ac1b_chain_linkage_fields_are_set_before_audit` INTO `test_ac1_clean_chain_returns_zero_for_all_audit_categories`. Delete the separate `test_ac1b_...` method.
+- The resulting single function must: (1) setup chain, (2) assert row existence including chunk by `chunk_ids[0]`, (3) assert all 7 linkage fields, (4) call `audit_integrity` and assert zero counts.
+- For chunk row existence, use: `conn.execute(\"SELECT id FROM chunks WHERE id = ?\", (chunk_ids[0],)).fetchone()` — NOT `WHERE document_id = ?`.
+- The two existing test methods cover the right assertions individually; this is purely a merge + fix the chunk lookup.
+
+### Verdict: APPROVED (after REFINE)
+Action: Rewrote AC-1 preamble to mandate single-function proof shape; fixed chunk lookup requirement to use `chunk_ids[0]` identity; updated builder guidance to merge existing methods. Re-approved to todo.
+
+[[2026-05-16T16:49:41+02:00]]
+## Architecture Review (cycle 3)
+Refined AC-1a/b/c preamble to explicitly mandate a SINGLE test function for the full chain proof. Fixed two ambiguities that caused 3 review cycles:
+1. \"Same test\" → \"A SINGLE test function performs ALL of AC-1a through AC-1c in one setup\"
+2. Chunk lookup → \"by `chunk_ids[0]` (NOT by document_id lookup)\"
+
+Builder guidance updated: merge `test_ac1b_...` into `test_ac1_...`, fix chunk assertion to use ID lookup. AC-2 unchanged.
+
+Proof bundle: behavioral
+Test-writer: PASS-THROUGH (type:test tag)
+
+[[2026-05-16T17:05:03+02:00]]
+## Test-Writer Notes
+- Non-implementation task (tagged `type:test`) — pass-through to builder.
+- Architecture Review cycle 3 (2026-05-16T16:49) explicitly confirms: "Test-writer: PASS-THROUGH (type:test tag)".
+- Reviewer findings in cycles 1–3 are test-structure quality issues (wrong chunk lookup query, split proof across two methods), not missing tests. Per Step 1b: builder addresses code-quality findings.
+- Builder guidance (cycle 3) is clear: MERGE `test_ac1b_chain_linkage_fields_are_set_before_audit` INTO `test_ac1_clean_chain_returns_zero_for_all_audit_categories`; fix chunk lookup to `WHERE id = ?` with `chunk_ids[0]`; delete `test_ac1b_...` method.
+
+[[2026-05-16T17:08:01+02:00]]
+## Builder Notes
+- Files changed:
+  - tests/test_knowledge_integrity_consolidation_1589.py
+- Implementation summary:
+  - Merged AC-1 proof into a SINGLE function (`test_ac1_clean_chain_returns_zero_for_all_audit_categories`) per cycle-3 architecture guidance.
+  - Fixed chunk row-existence assertion to use `chunk_ids[0]` identity lookup (`SELECT id FROM chunks WHERE id = ?`) instead of document-level lookup.
+  - Moved AC-1b linkage/provenance assertions into the same AC-1 function before `audit_integrity(conn)`.
+  - Removed split method `test_ac1b_chain_linkage_fields_are_set_before_audit` to satisfy the one-function proof shape.
+- AC mapping:
+  - AC-1 / AC-1a / AC-1b / AC-1c: covered in single method `test_ac1_clean_chain_returns_zero_for_all_audit_categories`.
+  - AC-2: unchanged and still covered in `test_ac2_orphan_rows_are_detected_with_counts_and_ids`.
+- Quality evidence (quality-runner, scoped):
+  - Baseline before edit: 3 passed, 0 failed, lint clean.
+  - Post-edit verification: 2 passed, 0 failed, lint clean.
+  - Coverage report: overall 27% for `owlbear_knowledge (total)`; `owlbear_knowledge.integrity` not separately listed in this scoped run.
+- Module-level durable test check:
+  - No `serve/knowledge/tests/test*integrity*.py` durable file found; skipped per workflow.
+- Commit:
+  - 508d6059 `test: merge AC-1 consolidation proof into single function (#1589, builder)`

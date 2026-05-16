@@ -4,14 +4,13 @@ title: 'P3-04: Dark mode audit — border contrast + token compliance'
 status: research
 priority: important
 created: 2026-05-16T03:37:44.735785+00:00
-updated: 2026-05-16T03:37:44.735785+00:00
+updated: 2026-05-16T15:08:34.511767+00:00
 tags:
   - frontend
   - pds
   - phase-3
 parent: 1590
-depends_on:
-  - 1620
+depends_on: []
 ac:
   - In .scheme-dark, adjacent surface panels have visually distinct borders 
     (contrast ratio >= 1.3:1)

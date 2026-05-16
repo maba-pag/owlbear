@@ -1,10 +1,10 @@
 ---
 id: 1601
 title: 'P1-08: Tests — shell layout'
-status: research
+status: archived
 priority: important
 created: 2026-05-16T03:35:41.083212+00:00
-updated: 2026-05-16T03:35:41.083212+00:00
+updated: 2026-05-16T15:04:29.982833+00:00
 tags:
   - frontend
   - pds
@@ -24,8 +24,9 @@ proof_bundle: behavioral
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
-archival_refs: []
+archival_reason: deprecated
+archival_refs:
+  - 1606
 ---
 Brief: see parent #1590.
 

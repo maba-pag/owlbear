@@ -4,14 +4,13 @@ title: 'P2-11: Complex integrations — modals → PModal'
 status: research
 priority: important
 created: 2026-05-16T03:37:02.326584+00:00
-updated: 2026-05-16T03:37:02.326584+00:00
+updated: 2026-05-16T15:08:07.616029+00:00
 tags:
   - frontend
   - pds
   - phase-2
 parent: 1590
-depends_on:
-  - 1613
+depends_on: []
 ac:
   - ConfirmDialog, ResolveModal, and ArchivalModal use PModal component
   - Focus trapping and focus return behavior preserved post-migration 

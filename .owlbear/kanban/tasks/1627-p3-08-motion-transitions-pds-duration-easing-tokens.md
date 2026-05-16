@@ -4,14 +4,13 @@ title: 'P3-08: Motion/transitions — PDS duration + easing tokens'
 status: research
 priority: important
 created: 2026-05-16T03:37:44.829874+00:00
-updated: 2026-05-16T03:37:44.829874+00:00
+updated: 2026-05-16T15:09:02.999595+00:00
 tags:
   - frontend
   - pds
   - phase-3
 parent: 1590
-depends_on:
-  - 1622
+depends_on: []
 ac:
   - Expand/collapse animations use --p-transition-duration and 
     --p-transition-timing-function tokens

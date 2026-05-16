@@ -4,14 +4,13 @@ title: 'P3-06: Focus-visible rings — PDS focus styling'
 status: research
 priority: important
 created: 2026-05-16T03:37:44.792818+00:00
-updated: 2026-05-16T03:37:44.792818+00:00
+updated: 2026-05-16T15:08:52.663909+00:00
 tags:
   - frontend
   - pds
   - phase-3
 parent: 1590
-depends_on:
-  - 1621
+depends_on: []
 ac:
   - 'Tab through interactive elements: each shows visible focus ring on :focus-visible
     (Playwright verification)'

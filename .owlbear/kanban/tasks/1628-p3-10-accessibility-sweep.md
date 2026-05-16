@@ -4,14 +4,13 @@ title: 'P3-10: Accessibility sweep'
 status: research
 priority: important
 created: 2026-05-16T03:37:44.860840+00:00
-updated: 2026-05-16T03:37:44.860840+00:00
+updated: 2026-05-16T15:09:12.958056+00:00
 tags:
   - frontend
   - pds
   - phase-3
 parent: 1590
-depends_on:
-  - 1623
+depends_on: []
 ac:
   - axe-core automated scan via Playwright reports zero WCAG 2.1 AA violations
   - Interactive elements have accessible names (no empty aria-label or missing 

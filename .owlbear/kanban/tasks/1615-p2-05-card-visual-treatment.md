@@ -4,14 +4,13 @@ title: 'P2-05: Card visual treatment'
 status: research
 priority: important
 created: 2026-05-16T03:37:02.225503+00:00
-updated: 2026-05-16T03:37:02.225503+00:00
+updated: 2026-05-16T15:07:34.040710+00:00
 tags:
   - frontend
   - pds
   - phase-2
 parent: 1590
-depends_on:
-  - 1610
+depends_on: []
 ac:
   - 'Each card renders: title, status chip (PTag with color variant), priority indicator,
     signal icon, tag pills, relative timestamp'
