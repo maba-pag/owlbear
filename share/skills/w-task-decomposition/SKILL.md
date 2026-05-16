@@ -55,7 +55,7 @@ Before decomposition, detect whether the request is exactly one follow-up task w
 
 If yes, use the shortcut flow:
 
-- Skip Steps 2–4 and Step 7.
+- Skip Step 1b, Steps 2–4, and Step 7.
 - Continue with Steps 5, 5a, 5b (user mode only), and 6.
 - Preserve caller metadata verbatim where provided: title, parent ID, and tags.
 - Status routing: caller should specify target status (for example, "at backlog" or "at research"). Default is `backlog`; researcher follow-ups use `research`; never create `todo` (normalize caller-requested `todo` to `backlog`, or `research` for researcher follow-ups).
@@ -64,6 +64,36 @@ If yes, use the shortcut flow:
 - Return the created task ID explicitly in your response message (for downstream linking and parent-child follow-up operations).
 
 Typical shortcut cases: "fix off-by-one", "delete stale docs", "architect calibration".
+
+## Step 1b — Source-Read & Symbol Capture Guard
+
+Apply this step when the input plan, parent task, or brief references existing codebase modules or symbols that will appear in AC text.
+
+This step may be skipped only for greenfield requests with no existing code references.
+
+1. Identify target source files from caller context (plan text, parent task, brief, or referenced module paths).
+2. Read each target source file before drafting AC.
+3. Extract and record referenced symbols that may be cited in AC text:
+    - function signatures and return types
+    - enum or union values
+    - component names
+    - token names
+4. During AC drafting, cross-check each AC line against the recorded symbols.
+5. If an AC references a function return type, enum value, or component/token name, ensure it exactly matches the source-defined symbol.
+
+Do not continue to Step 2 until this guard is complete when triggered.
+
+### good_example — symbol guard applied
+
+- Parent task references `computeSignal` and card status enums in an existing UI module.
+- Planner reads the module first, records `computeSignal(...): CardSignal` and `CardSignal = "dr-pending" | "blocked" | "claimed" | "deps-unmet" | "ready" | "unknown"`.
+- Planner drafts AC lines that use only those exact symbols and values.
+
+### bad_example — source-read skipped
+
+- Planner drafts AC from memory and writes `computeSignal` returns an object with `state`.
+- Planner also lists statuses as `green/yellow/red/gray/stale`.
+- AC is factually incorrect because symbol references were not validated against source.
 
 ## Step 2 — Check Board State
 
