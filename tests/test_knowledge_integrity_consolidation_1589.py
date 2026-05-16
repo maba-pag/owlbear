@@ -86,6 +86,25 @@ class TestFromAC_KnowledgeIntegrityConsolidation1589:
 
         store.set_status(doc_id, "done")
 
+        # Direct row-presence assertions: verify API-created rows exist before auditing.
+        # These guards ensure set_status(), insert_document(), store_chunks(), and
+        # store_extractions() actually persisted rows — not just that audit reports zero.
+        doc_row = conn.execute("SELECT id FROM documents WHERE id = ?", (doc_id,)).fetchone()
+        assert doc_row is not None, "insert_document() must persist the document row"
+
+        chunk_row = conn.execute("SELECT id FROM chunks WHERE document_id = ?", (doc_id,)).fetchone()
+        assert chunk_row is not None, "store_chunks() must persist at least one chunk row"
+
+        entity_row = conn.execute("SELECT id FROM entities WHERE id = ?", ("entity-1589",)).fetchone()
+        assert entity_row is not None, "store_extractions() must persist the entity row"
+
+        edge_row = conn.execute("SELECT id FROM edges WHERE id = ?", ("edge-1589",)).fetchone()
+        assert edge_row is not None, "store_extractions() must persist the edge row"
+
+        status_row = conn.execute("SELECT status FROM document_status WHERE document_id = ?", (doc_id,)).fetchone()
+        assert status_row is not None, "set_status() must persist the document_status row"
+        assert status_row[0] == "done", "set_status() must store the correct status value"
+
         result = audit_integrity(conn)
 
         assert result["chunks_orphaned"]["count"] == 0
