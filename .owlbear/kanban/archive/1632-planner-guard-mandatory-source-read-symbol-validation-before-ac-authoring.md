@@ -1,10 +1,10 @@
 ---
 id: 1632
 title: 'Planner guard: mandatory source-read + symbol validation before AC authoring'
-status: done
+status: archived
 priority: important
 created: 2026-05-16T08:36:17.257578+00:00
-updated: 2026-05-16T12:45:47.194237+00:00
+updated: 2026-05-16T13:08:10.668299+00:00
 tags:
   - process
   - quality
@@ -34,7 +34,7 @@ proof_bundle: skip
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Objective
@@ -153,3 +153,29 @@ No `.owlbear/scratch/1632-*` files found.
 
 ### Files Modified
 None (no docs changes required).
+
+[[2026-05-16T15:08:10+02:00]]
+## Audit
+### Regression Detection
+- quality-runner mode full: 4646 passed, 236 failed, 14 skipped, lint clean, vitest clean
+- All failures are pre-existing (test_cockpit_view.py, test_server.py, test_engine_accessor_migration.py, test_ideation_diagram.py) — none related to the changed markdown skill file. Confirmed by prior audit cycle (#1595) which also showed exit code 1 on the same test domains.
+- regression verdict: PASS (no task-attributable regressions)
+
+### Intent Verification
+- scope alignment: PASS (single file changed: share/skills/w-task-decomposition/SKILL.md — pipeline/process domain matches tags process, quality, pipeline)
+- purpose match: PASS (Step 1b source-read guard added between Step 1a and Step 2 with symbol capture, trigger condition, cross-check, and examples — directly addresses audit #1631 finding)
+- extraneous scope: none (git diff stat: 1 file, 31 insertions, 1 deletion)
+- boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 5/5
+All 4 ACs are specific, verifiable, and complete. Each AC precisely states what to verify and how (read the skill file). Challenger cycle was properly conducted with findings accepted/rebutted. Shortcut-mode interaction was refined based on challenger feedback. Clean implementation path with no builder improvisation needed.
+
+### Commit Integrity
+- upstream commit presence: PASS (abe2e5b4 confirmed via git log; single-file diff matches builder claim)
+- kanban commit packaging: pending (will commit after archival)
+
+### Deduction Breakdown
+No deductions. Pre-existing test failures are not task-attributable (markdown-only change cannot cause Python test regressions). Lint clean. Reviewer evidence present and detailed. AC quality exemplary.
+
+### Confidence: 1.00
+### Action: archive

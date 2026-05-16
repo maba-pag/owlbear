@@ -1,10 +1,10 @@
 ---
 id: 1588
 title: 'P1-04: Knowledge integrity audit function'
-status: in-progress
+status: review
 priority: needed
 created: 2026-05-15T16:24:50.332910+00:00
-updated: 2026-05-16T12:51:47.068996+00:00
+updated: 2026-05-16T13:03:25.288418+00:00
 tags:
   - phase-1
   - scope:knowledge
@@ -106,3 +106,32 @@ Proof bundle: behavioral
   | AC-2 (detection: orphan chunks, entities, edges, status) | test_clean_db_all_four_keys_count_zero_ids_empty, test_detects_orphan_chunk, test_detects_orphan_entity, test_detects_dangling_edge_orphan_source_id, test_detects_dangling_edge_orphan_target_id, test_detects_orphan_document_status, test_multiple_orphans_same_category_all_reported, test_multiple_orphan_categories_reported_independently, test_valid_edge_with_both_endpoints_not_flagged_as_dangling |
   | AC-3 (read-only, total_changes unchanged) | test_read_only_total_changes_unchanged_on_clean_db, test_read_only_total_changes_unchanged_with_orphans |
   | AC-4 (backward-compat re-export from schema.py) | test_schema_reexport_is_importable, test_schema_reexport_returns_same_structure |
+
+[[2026-05-16T15:03:25+02:00]]
+## Builder Notes
+- Files changed:
+  - serve/knowledge/src/owlbear_knowledge/integrity.py
+  - serve/knowledge/src/owlbear_knowledge/schema.py
+- Implementation summary:
+  - Extracted `audit_integrity(conn)` from `schema.py` into new `integrity.py` module as canonical import path.
+  - Preserved backward compatibility by re-exporting from `schema.py` via `from owlbear_knowledge.integrity import audit_integrity`.
+  - Added `__all__ = ("audit_integrity", "init_db")` in `schema.py` so re-export is explicit/public.
+- RED verification (quality-runner):
+  - tests/test_knowledge_integrity_extraction_1588.py collection failed with `ModuleNotFoundError: owlbear_knowledge.integrity` before implementation.
+- GREEN verification (quality-runner):
+  - Scoped tests passed: 25 passed, 0 failed, 0 skipped.
+  - Test files:
+    - tests/test_knowledge_integrity_extraction_1588.py
+    - tests/test_knowledge_integrity_audit_1587.py
+  - Lint status: clean (ruff clean on touched source + task test file).
+  - Coverage: runner did not emit explicit per-module percentage for `owlbear_knowledge.integrity` in summary; no coverage failures reported.
+- Durable module-level test check:
+  - No canonical module-level integrity test file found under `serve/knowledge/tests/` for this target; skipped per workflow guidance.
+- Commit:
+  - `b1bd1832206eb176a7e52d044578644e1c2d967d`
+  - Message: `refactor: extract knowledge integrity audit module (#1588, builder)`
+- AC mapping:
+  - AC-1: `owlbear_knowledge/integrity.py` exists and exports callable `audit_integrity(conn)` with expected return shape/keys (validated by 1588 tests).
+  - AC-2: Query behavior preserved exactly (LEFT JOIN + IS NULL checks for all four categories).
+  - AC-3: Function remains read-only (total_changes unchanged tests passing).
+  - AC-4: `from owlbear_knowledge.schema import audit_integrity` remains importable and behavior-consistent (1587 + 1588 compatibility tests passing).

@@ -4,7 +4,7 @@ title: Retire bookmark/scope/consolidation dead code from knowledge module
 status: review
 priority: needed
 created: 2026-05-15T16:22:28.247084+00:00
-updated: 2026-05-16T12:47:15.817991+00:00
+updated: 2026-05-16T12:58:14.950643+00:00
 tags:
   - scope:knowledge
   - type:cleanup
@@ -15,7 +15,7 @@ depends_on:
   - 1630
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-16T12:58:14.950643+00:00
 archival_reason:
 archival_refs: []
 ---
