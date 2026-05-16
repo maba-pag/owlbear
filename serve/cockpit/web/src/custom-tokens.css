@@ -2,3 +2,13 @@
 :root {
   --custom-signal-claimed: light-dark(hsl(270 58% 46%), hsl(270 80% 70%));
 }
+
+button:focus-visible,
+[role="button"]:focus-visible,
+[role="menuitem"]:focus,
+[role="menuitem"]:focus-visible,
+input:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
