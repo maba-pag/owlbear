@@ -107,9 +107,7 @@ class TestFromAC_KanbanTaskGuidanceField:
         """guidance is the first key in model_dump() output (declaration-order)."""
         task = _task()
         keys = list(task.model_dump().keys())
-        assert keys[0] == "guidance", (
-            f"Expected 'guidance' as first serialization key, got {keys[0]!r}"
-        )
+        assert keys[0] == "guidance", f"Expected 'guidance' as first serialization key, got {keys[0]!r}"
 
     def test_model_validate_from_engine_dict_without_guidance_gives_empty_list(
         self,
@@ -145,12 +143,8 @@ class TestFromAC_CollectGuidance:
         before = _task()
         after = _task(tags=["scope:foo"])
         result = collect_guidance("edit_block", before, after)  # type: ignore[misc]
-        assert len(result) > 0, (
-            "Expected non-empty guidance for edit_block without block:user"
-        )
-        assert "Decision Request" in result[0], (
-            f"Expected 'Decision Request' in first guidance item, got {result[0]!r}"
-        )
+        assert len(result) > 0, "Expected non-empty guidance for edit_block without block:user"
+        assert "Decision Request" in result[0], f"Expected 'Decision Request' in first guidance item, got {result[0]!r}"
 
     def test_end_work_block_without_block_user_tag_returns_dr_message(self) -> None:
         """end_work_block without 'block:user' tag → non-empty list, first item contains 'Decision Request'."""
@@ -158,12 +152,8 @@ class TestFromAC_CollectGuidance:
         before = _task()
         after = _task(tags=["scope:bar"])
         result = collect_guidance("end_work_block", before, after)  # type: ignore[misc]
-        assert len(result) > 0, (
-            "Expected non-empty guidance for end_work_block without block:user"
-        )
-        assert "Decision Request" in result[0], (
-            f"Expected 'Decision Request' in first guidance item, got {result[0]!r}"
-        )
+        assert len(result) > 0, "Expected non-empty guidance for end_work_block without block:user"
+        assert "Decision Request" in result[0], f"Expected 'Decision Request' in first guidance item, got {result[0]!r}"
 
     # -- edit_block / end_work_block: block:user tag skips DR -------------------
 
@@ -173,9 +163,7 @@ class TestFromAC_CollectGuidance:
         before = _task()
         after = _task(tags=["block:user"])
         result = collect_guidance("edit_block", before, after)  # type: ignore[misc]
-        assert result == [], (
-            f"Expected [] for edit_block with block:user, got {result!r}"
-        )
+        assert result == [], f"Expected [] for edit_block with block:user, got {result!r}"
 
     def test_end_work_block_with_block_user_tag_returns_empty(self) -> None:
         """end_work_block with 'block:user' tag → returns []."""
@@ -183,9 +171,7 @@ class TestFromAC_CollectGuidance:
         before = _task()
         after = _task(tags=["block:user"])
         result = collect_guidance("end_work_block", before, after)  # type: ignore[misc]
-        assert result == [], (
-            f"Expected [] for end_work_block with block:user, got {result!r}"
-        )
+        assert result == [], f"Expected [] for end_work_block with block:user, got {result!r}"
 
     # -- move: forward skip >1 slot -------------------------------------------
 
@@ -195,9 +181,7 @@ class TestFromAC_CollectGuidance:
         before = _task(status="research")
         after = _task(status="todo")  # 2 slots ahead: research→backlog→todo
         result = collect_guidance("move", before, after, statuses=STATUSES)  # type: ignore[misc]
-        assert len(result) > 0, (
-            f"Expected guidance for >1-slot forward move (research→todo), got {result!r}"
-        )
+        assert len(result) > 0, f"Expected guidance for >1-slot forward move (research→todo), got {result!r}"
 
     # -- move: boundary — exactly 1 slot ahead --------------------------------
 
@@ -207,9 +191,7 @@ class TestFromAC_CollectGuidance:
         before = _task(status="research")
         after = _task(status="backlog")  # 1 slot ahead
         result = collect_guidance("move", before, after, statuses=STATUSES)  # type: ignore[misc]
-        assert result == [], (
-            f"Expected [] for 1-slot forward move (research→backlog), got {result!r}"
-        )
+        assert result == [], f"Expected [] for 1-slot forward move (research→backlog), got {result!r}"
 
     # -- move: backward -------------------------------------------------------
 
@@ -219,9 +201,7 @@ class TestFromAC_CollectGuidance:
         before = _task(status="todo")
         after = _task(status="backlog")  # backward
         result = collect_guidance("move", before, after, statuses=STATUSES)  # type: ignore[misc]
-        assert result == [], (
-            f"Expected [] for backward move (todo→backlog), got {result!r}"
-        )
+        assert result == [], f"Expected [] for backward move (todo→backlog), got {result!r}"
 
     # -- end_work_success: commit message -------------------------------------
 
@@ -313,17 +293,13 @@ class TestFromAC_EditTaskGuidanceIntegration:
         """edit_task(block=...) → guidance contains DR-required message."""
         ctx = _make_ctx(app_ctx)
         result = await edit_task(ctx, id="1", block_reason="waiting on infra")
-        assert len(result.guidance) > 0, (
-            f"Expected non-empty guidance on block, got guidance={result.guidance!r}"
-        )
+        assert len(result.guidance) > 0, f"Expected non-empty guidance on block, got guidance={result.guidance!r}"
         assert "Decision Request" in result.guidance[0], (
             f"Expected 'Decision Request' in guidance, got {result.guidance[0]!r}"
         )
 
     @pytest.mark.asyncio
-    async def test_block_removes_block_user_tag_if_present(
-        self, app_ctx: AppContext
-    ) -> None:
+    async def test_block_removes_block_user_tag_if_present(self, app_ctx: AppContext) -> None:
         """edit_task(block=...) on task with block:user → block:user tag removed."""
         # Setup: add block:user tag first
         app_ctx.engine.edit_task("1", add_tags=["block:user"])
@@ -334,33 +310,21 @@ class TestFromAC_EditTaskGuidanceIntegration:
         )
 
     @pytest.mark.asyncio
-    async def test_unblock_no_dr_guidance_and_removes_block_user_tag(
-        self, app_ctx: AppContext
-    ) -> None:
+    async def test_unblock_no_dr_guidance_and_removes_block_user_tag(self, app_ctx: AppContext) -> None:
         """edit_task(unblock=True) → no block guidance, block:user removed."""
         # Setup: block the task with block:user
-        app_ctx.engine.edit_task(
-            "1", blocked=True, block_reason="dependency", add_tags=["block:user"]
-        )
+        app_ctx.engine.edit_task("1", blocked=True, block_reason="dependency", add_tags=["block:user"])
         ctx = _make_ctx(app_ctx)
         result = await edit_task(ctx, id="1", block_reason="")
-        assert result.guidance == [], (
-            f"Expected empty guidance on unblock, got {result.guidance!r}"
-        )
-        assert "block:user" in result.tags, (
-            f"Expected block:user to remain unchanged on unblock, tags={result.tags!r}"
-        )
+        assert result.guidance == [], f"Expected empty guidance on unblock, got {result.guidance!r}"
+        assert "block:user" in result.tags, f"Expected block:user to remain unchanged on unblock, tags={result.tags!r}"
 
     @pytest.mark.asyncio
-    async def test_non_block_edit_returns_empty_guidance(
-        self, app_ctx: AppContext
-    ) -> None:
+    async def test_non_block_edit_returns_empty_guidance(self, app_ctx: AppContext) -> None:
         """Non-blocking edit (title change) → empty guidance."""
         ctx = _make_ctx(app_ctx)
         result = await edit_task(ctx, id="1", priority="critical")
-        assert result.guidance == [], (
-            f"Expected empty guidance for title change, got {result.guidance!r}"
-        )
+        assert result.guidance == [], f"Expected empty guidance for title change, got {result.guidance!r}"
 
 
 # --- merged from serve/mcp-kanban/tests/test_guidance_end_work.py ---
@@ -371,9 +335,7 @@ class TestFromAC_EndWorkGuidanceIntegration:
     """
 
     @pytest.mark.asyncio
-    async def test_block_outcome_returns_dr_guidance(
-        self, app_ctx_end: AppContext
-    ) -> None:
+    async def test_block_outcome_returns_dr_guidance(self, app_ctx_end: AppContext) -> None:
         """end_work(outcome='block') → guidance contains DR-required message."""
         ctx = _make_ctx(app_ctx_end)
         result = await end_work(
@@ -383,17 +345,13 @@ class TestFromAC_EndWorkGuidanceIntegration:
             outcome="block",
             block_reason="waiting on infra",
         )
-        assert len(result.guidance) > 0, (
-            f"Expected non-empty guidance for block outcome, got {result.guidance!r}"
-        )
+        assert len(result.guidance) > 0, f"Expected non-empty guidance for block outcome, got {result.guidance!r}"
         assert "Decision Request" in result.guidance[0], (
             f"Expected 'Decision Request' in guidance, got {result.guidance[0]!r}"
         )
 
     @pytest.mark.asyncio
-    async def test_block_outcome_removes_block_user_tag_if_present(
-        self, app_ctx_end: AppContext
-    ) -> None:
+    async def test_block_outcome_removes_block_user_tag_if_present(self, app_ctx_end: AppContext) -> None:
         """end_work(outcome='block') on task with block:user → block:user removed."""
         # Setup: add block:user tag before end_work
         app_ctx_end.engine.edit_task("1", add_tags=["block:user"])
@@ -410,9 +368,7 @@ class TestFromAC_EndWorkGuidanceIntegration:
         )
 
     @pytest.mark.asyncio
-    async def test_success_outcome_returns_commit_guidance(
-        self, app_ctx_end: AppContext
-    ) -> None:
+    async def test_success_outcome_returns_commit_guidance(self, app_ctx_end: AppContext) -> None:
         """end_work(outcome='success') → guidance contains commit reminder."""
         ctx = _make_ctx(app_ctx_end)
         result = await end_work(
@@ -421,17 +377,13 @@ class TestFromAC_EndWorkGuidanceIntegration:
             note="all done",
             outcome="success",
         )
-        assert len(result.guidance) > 0, (
-            f"Expected non-empty guidance for success outcome, got {result.guidance!r}"
-        )
+        assert len(result.guidance) > 0, f"Expected non-empty guidance for success outcome, got {result.guidance!r}"
         assert "commit" in result.guidance[0].lower(), (
             f"Expected 'commit' in guidance message, got {result.guidance[0]!r}"
         )
 
     @pytest.mark.asyncio
-    async def test_fail_outcome_returns_empty_guidance(
-        self, app_ctx_end: AppContext
-    ) -> None:
+    async def test_fail_outcome_returns_empty_guidance(self, app_ctx_end: AppContext) -> None:
         """end_work(outcome='fail') → empty guidance."""
         ctx = _make_ctx(app_ctx_end)
         result = await end_work(
@@ -440,14 +392,10 @@ class TestFromAC_EndWorkGuidanceIntegration:
             note="failed attempt",
             outcome="fail",
         )
-        assert result.guidance == [], (
-            f"Expected empty guidance for fail outcome, got {result.guidance!r}"
-        )
+        assert result.guidance == [], f"Expected empty guidance for fail outcome, got {result.guidance!r}"
 
     @pytest.mark.asyncio
-    async def test_reject_outcome_returns_empty_guidance(
-        self, app_ctx_end: AppContext
-    ) -> None:
+    async def test_reject_outcome_returns_empty_guidance(self, app_ctx_end: AppContext) -> None:
         """end_work(outcome='reject') may include status-transition guidance."""
         ctx = _make_ctx(app_ctx_end)
         result = await end_work(
@@ -457,9 +405,7 @@ class TestFromAC_EndWorkGuidanceIntegration:
             outcome="reject",
             move_to="backlog",
         )
-        assert result.guidance, (
-            f"Expected non-empty guidance for reject outcome, got {result.guidance!r}"
-        )
+        assert result.guidance, f"Expected non-empty guidance for reject outcome, got {result.guidance!r}"
         assert "Status skip" in result.guidance[0], (
             f"Expected status-skip guidance for reject outcome, got {result.guidance!r}"
         )
@@ -485,21 +431,15 @@ class TestFromAC_MoveTaskGuidanceIntegration:
     """
 
     @pytest.mark.asyncio
-    async def test_forward_skip_more_than_one_slot_returns_guidance(
-        self, app_ctx_move: AppContext
-    ) -> None:
+    async def test_forward_skip_more_than_one_slot_returns_guidance(self, app_ctx_move: AppContext) -> None:
         """move_task forward skip >1 slot → guidance with skip message."""
         ctx = _make_ctx(app_ctx_move)
         # Task 1 is at "research"; skip to "todo" (2 slots: research→backlog→todo)
         result = await move_task(ctx, id="1", status="todo")
-        assert len(result.guidance) > 0, (
-            f"Expected guidance for >1-slot skip (research→todo), got {result.guidance!r}"
-        )
+        assert len(result.guidance) > 0, f"Expected guidance for >1-slot skip (research→todo), got {result.guidance!r}"
 
     @pytest.mark.asyncio
-    async def test_forward_skip_one_slot_returns_empty_guidance(
-        self, app_ctx_move: AppContext
-    ) -> None:
+    async def test_forward_skip_one_slot_returns_empty_guidance(self, app_ctx_move: AppContext) -> None:
         """move_task forward skip exactly 1 slot → empty guidance."""
         ctx = _make_ctx(app_ctx_move)
         # Task 1 is at "research"; advance to "backlog" (1 slot)
@@ -509,9 +449,7 @@ class TestFromAC_MoveTaskGuidanceIntegration:
         )
 
     @pytest.mark.asyncio
-    async def test_backward_move_returns_empty_guidance(
-        self, app_ctx_move: AppContext
-    ) -> None:
+    async def test_backward_move_returns_empty_guidance(self, app_ctx_move: AppContext) -> None:
         """move_task backward move → empty guidance."""
         ctx = _make_ctx(app_ctx_move)
         # Task 2 is at "todo"; move back to "backlog"
@@ -521,9 +459,7 @@ class TestFromAC_MoveTaskGuidanceIntegration:
         )
 
     @pytest.mark.asyncio
-    async def test_archive_move_returns_empty_guidance(
-        self, app_ctx_move: AppContext
-    ) -> None:
+    async def test_archive_move_returns_empty_guidance(self, app_ctx_move: AppContext) -> None:
         """move_task to 'archived' → empty guidance (archived excluded from skip detection)."""
         ctx = _make_ctx(app_ctx_move)
         # Task 3 is at "done"; archive it
@@ -533,24 +469,16 @@ class TestFromAC_MoveTaskGuidanceIntegration:
             status="archived",
             archival_reason="completed",
         )
-        assert result.guidance == [], (
-            f"Expected empty guidance for archive move, got {result.guidance!r}"
-        )
+        assert result.guidance == [], f"Expected empty guidance for archive move, got {result.guidance!r}"
 
     @pytest.mark.asyncio
-    async def test_forward_skip_guidance_references_from_and_to_status(
-        self, app_ctx_move: AppContext
-    ) -> None:
+    async def test_forward_skip_guidance_references_from_and_to_status(self, app_ctx_move: AppContext) -> None:
         """Forward-skip guidance message references both source and target status."""
         ctx = _make_ctx(app_ctx_move)
         result = await move_task(ctx, id="1", status="todo")
         assert len(result.guidance) > 0
-        assert "research" in result.guidance[0], (
-            f"Expected 'research' in skip message, got {result.guidance[0]!r}"
-        )
-        assert "todo" in result.guidance[0], (
-            f"Expected 'todo' in skip message, got {result.guidance[0]!r}"
-        )
+        assert "research" in result.guidance[0], f"Expected 'research' in skip message, got {result.guidance[0]!r}"
+        assert "todo" in result.guidance[0], f"Expected 'todo' in skip message, got {result.guidance[0]!r}"
 
 
 # --- merged from serve/mcp-kanban/tests/test_guidance_rules.py ---
@@ -576,25 +504,19 @@ class TestFromAC_CollectGuidanceNewAPI:
         after = _task(blocked=True)
         result = collect_guidance("edit_task", None, after)
         assert len(result) > 0, "Expected guidance for edit_task with blocked=True"
-        assert "Decision Request" in result[0], (
-            f"Expected 'Decision Request' in first guidance item, got {result[0]!r}"
-        )
+        assert "Decision Request" in result[0], f"Expected 'Decision Request' in first guidance item, got {result[0]!r}"
 
     def test_edit_task_blocked_false_returns_empty(self) -> None:
         """edit_task with after.blocked=False → empty guidance."""
         after = _task(blocked=False)
         result = collect_guidance("edit_task", None, after)
-        assert result == [], (
-            f"Expected [] for edit_task with blocked=False, got {result!r}"
-        )
+        assert result == [], f"Expected [] for edit_task with blocked=False, got {result!r}"
 
     def test_edit_task_blocked_true_with_block_user_tag_returns_empty(self) -> None:
         """edit_task with blocked=True but block:user tag present → empty (user-driven block)."""
         after = _task(blocked=True, tags=["block:user"])
         result = collect_guidance("edit_task", None, after)
-        assert result == [], (
-            f"Expected [] for edit_task with block:user tag, got {result!r}"
-        )
+        assert result == [], f"Expected [] for edit_task with block:user tag, got {result!r}"
 
     def test_edit_task_before_none_works(self) -> None:
         """collect_guidance accepts before=None without error for edit_task."""
@@ -610,17 +532,13 @@ class TestFromAC_CollectGuidanceNewAPI:
         after = _task()
         result = collect_guidance("end_work", None, after, outcome="block")
         assert len(result) > 0, "Expected guidance for end_work with outcome=block"
-        assert "Decision Request" in result[0], (
-            f"Expected 'Decision Request' in first guidance item, got {result[0]!r}"
-        )
+        assert "Decision Request" in result[0], f"Expected 'Decision Request' in first guidance item, got {result[0]!r}"
 
     def test_end_work_outcome_block_with_block_user_tag_returns_empty(self) -> None:
         """end_work outcome='block' with block:user tag → empty (user-driven block)."""
         after = _task(tags=["block:user"])
         result = collect_guidance("end_work", None, after, outcome="block")
-        assert result == [], (
-            f"Expected [] for end_work/block with block:user tag, got {result!r}"
-        )
+        assert result == [], f"Expected [] for end_work/block with block:user tag, got {result!r}"
 
     def test_end_work_outcome_fail_returns_empty(self) -> None:
         """end_work with outcome='fail' → empty guidance."""
@@ -658,27 +576,21 @@ class TestFromAC_CollectGuidanceNewAPI:
         before = _task(status="research")
         after = _task(status="todo")  # 2 slots: research→backlog→todo
         result = collect_guidance("move", before, after, status_names=STATUSES)
-        assert len(result) > 0, (
-            f"Expected guidance for >1-slot forward move (research→todo), got {result!r}"
-        )
+        assert len(result) > 0, f"Expected guidance for >1-slot forward move (research→todo), got {result!r}"
 
     def test_move_status_names_one_slot_returns_empty(self) -> None:
         """move with status_names kwarg and 1 slot forward → empty guidance."""
         before = _task(status="research")
         after = _task(status="backlog")  # 1 slot
         result = collect_guidance("move", before, after, status_names=STATUSES)
-        assert result == [], (
-            f"Expected [] for 1-slot forward move (research→backlog), got {result!r}"
-        )
+        assert result == [], f"Expected [] for 1-slot forward move (research→backlog), got {result!r}"
 
     def test_move_status_names_backward_returns_empty(self) -> None:
         """move with status_names kwarg and backward move → empty guidance."""
         before = _task(status="todo")
         after = _task(status="backlog")  # backward
         result = collect_guidance("move", before, after, status_names=STATUSES)
-        assert result == [], (
-            f"Expected [] for backward move (todo→backlog), got {result!r}"
-        )
+        assert result == [], f"Expected [] for backward move (todo→backlog), got {result!r}"
 
     def test_move_skip_guidance_contains_from_to_status(self) -> None:
         """Forward-skip guidance message references both source and target status."""
@@ -686,12 +598,8 @@ class TestFromAC_CollectGuidanceNewAPI:
         after = _task(status="todo")
         result = collect_guidance("move", before, after, status_names=STATUSES)
         assert len(result) > 0
-        assert "research" in result[0], (
-            f"Expected source status in message, got {result[0]!r}"
-        )
-        assert "todo" in result[0], (
-            f"Expected target status in message, got {result[0]!r}"
-        )
+        assert "research" in result[0], f"Expected source status in message, got {result[0]!r}"
+        assert "todo" in result[0], f"Expected target status in message, got {result[0]!r}"
 
     def test_move_before_none_returns_empty(self) -> None:
         """move with before=None → empty guidance (can't compute delta)."""
@@ -733,8 +641,7 @@ class TestFromAC_BlockDRRuleOperationIndependence:
         result = collect_guidance("end_work", None, after, outcome="success")
         dr_msgs = [m for m in result if "Decision Request" in m]
         assert len(dr_msgs) > 0, (
-            f"Expected DR message when end_work+outcome=success and after.blocked=True. "
-            f"Got {result!r}"
+            f"Expected DR message when end_work+outcome=success and after.blocked=True. Got {result!r}"
         )
 
     def test_end_work_fail_with_after_blocked_emits_dr_message(self) -> None:
@@ -746,8 +653,7 @@ class TestFromAC_BlockDRRuleOperationIndependence:
         result = collect_guidance("end_work", None, after, outcome="fail")
         dr_msgs = [m for m in result if "Decision Request" in m]
         assert len(dr_msgs) > 0, (
-            f"Expected DR message for end_work+outcome=fail with after.blocked=True. "
-            f"Got {result!r}"
+            f"Expected DR message for end_work+outcome=fail with after.blocked=True. Got {result!r}"
         )
 
     def test_move_backward_with_after_blocked_emits_dr_message(self) -> None:
@@ -761,10 +667,7 @@ class TestFromAC_BlockDRRuleOperationIndependence:
         after = _task(status="backlog", blocked=True)  # backward: delta = -1
         result = collect_guidance("move", before, after, status_names=STATUSES)
         dr_msgs = [m for m in result if "Decision Request" in m]
-        assert len(dr_msgs) > 0, (
-            f"Expected DR message for backward move with after.blocked=True. "
-            f"Got {result!r}"
-        )
+        assert len(dr_msgs) > 0, f"Expected DR message for backward move with after.blocked=True. Got {result!r}"
 
 
 class TestFromAC_MultiRuleCofiring:
@@ -781,12 +684,8 @@ class TestFromAC_MultiRuleCofiring:
         result = collect_guidance("move", before, after, status_names=STATUSES)
         dr_msgs = [m for m in result if "Decision Request" in m]
         skip_msgs = [m for m in result if "Status skip" in m]
-        assert len(dr_msgs) > 0, (
-            f"Expected DR guidance in co-fire result (after.blocked=True). Got {result!r}"
-        )
-        assert len(skip_msgs) > 0, (
-            f"Expected skip guidance in co-fire result (delta=2). Got {result!r}"
-        )
+        assert len(dr_msgs) > 0, f"Expected DR guidance in co-fire result (after.blocked=True). Got {result!r}"
+        assert len(skip_msgs) > 0, f"Expected skip guidance in co-fire result (delta=2). Got {result!r}"
 
     def test_end_work_success_with_blocked_emits_both_dr_and_commit(self) -> None:
         """Both DR and commit rules fire: end_work+outcome=success and after.blocked=True."""
@@ -794,12 +693,8 @@ class TestFromAC_MultiRuleCofiring:
         result = collect_guidance("end_work", None, after, outcome="success")
         dr_msgs = [m for m in result if "Decision Request" in m]
         commit_msgs = [m for m in result if "commit" in m.lower()]
-        assert len(dr_msgs) > 0, (
-            f"Expected DR message in co-fire result (after.blocked=True). Got {result!r}"
-        )
-        assert len(commit_msgs) > 0, (
-            f"Expected commit message in co-fire result (outcome=success). Got {result!r}"
-        )
+        assert len(dr_msgs) > 0, f"Expected DR message in co-fire result (after.blocked=True). Got {result!r}"
+        assert len(commit_msgs) > 0, f"Expected commit message in co-fire result (outcome=success). Got {result!r}"
 
 
 # --- merged from serve/mcp-kanban/tests/test_guidance_server.py ---
@@ -832,9 +727,7 @@ class TestFromAC_GuidanceSuppressContract:
     """
 
     @pytest.mark.asyncio
-    async def test_edit_task_guidance_exception_suppressed(
-        self, app_ctx_edit: AppContext
-    ) -> None:
+    async def test_edit_task_guidance_exception_suppressed(self, app_ctx_edit: AppContext) -> None:
         """collect_guidance raising in edit_task → task still returned, guidance=[]."""
         ctx = _make_ctx(app_ctx_edit)
         with patch(
@@ -842,17 +735,11 @@ class TestFromAC_GuidanceSuppressContract:
             side_effect=RuntimeError("boom"),
         ):
             result = await edit_task(ctx, id="1", priority="critical")
-        assert result.id is not None, (
-            "Expected valid KanbanTask returned despite guidance failure"
-        )
-        assert result.guidance == [], (
-            f"Expected empty guidance when collect_guidance raises, got {result.guidance!r}"
-        )
+        assert result.id is not None, "Expected valid KanbanTask returned despite guidance failure"
+        assert result.guidance == [], f"Expected empty guidance when collect_guidance raises, got {result.guidance!r}"
 
     @pytest.mark.asyncio
-    async def test_end_work_guidance_exception_suppressed(
-        self, app_ctx_end: AppContext
-    ) -> None:
+    async def test_end_work_guidance_exception_suppressed(self, app_ctx_end: AppContext) -> None:
         """collect_guidance raising in end_work → task still returned, guidance=[]."""
         ctx = _make_ctx(app_ctx_end)
         with patch(
@@ -860,12 +747,8 @@ class TestFromAC_GuidanceSuppressContract:
             side_effect=RuntimeError("boom"),
         ):
             result = await end_work(ctx, id="1", note="done", outcome="success")
-        assert result.id is not None, (
-            "Expected valid KanbanTask returned despite guidance failure"
-        )
-        assert result.guidance == [], (
-            f"Expected empty guidance when collect_guidance raises, got {result.guidance!r}"
-        )
+        assert result.id is not None, "Expected valid KanbanTask returned despite guidance failure"
+        assert result.guidance == [], f"Expected empty guidance when collect_guidance raises, got {result.guidance!r}"
 
 
 class TestFromAC_GuidanceCallWiring:
@@ -876,38 +759,26 @@ class TestFromAC_GuidanceCallWiring:
     """
 
     @pytest.mark.asyncio
-    async def test_edit_task_calls_collect_guidance_with_edit_task_operation(
-        self, app_ctx_edit: AppContext
-    ) -> None:
+    async def test_edit_task_calls_collect_guidance_with_edit_task_operation(self, app_ctx_edit: AppContext) -> None:
         """edit_task invokes collect_guidance("edit_task", None, task)."""
         ctx = _make_ctx(app_ctx_edit)
-        with patch(
-            "owlbear_mcp_kanban.server.collect_guidance", return_value=[]
-        ) as mock_cg:
+        with patch("owlbear_mcp_kanban.server.collect_guidance", return_value=[]) as mock_cg:
             await edit_task(ctx, id="1", priority="critical")
         mock_cg.assert_called_once_with("edit_task", None, ANY)
 
     @pytest.mark.asyncio
-    async def test_end_work_success_calls_collect_guidance_with_outcome_kwarg(
-        self, app_ctx_end: AppContext
-    ) -> None:
+    async def test_end_work_success_calls_collect_guidance_with_outcome_kwarg(self, app_ctx_end: AppContext) -> None:
         """end_work(success) invokes collect_guidance("end_work", None, task, outcome="success")."""
         ctx = _make_ctx(app_ctx_end)
-        with patch(
-            "owlbear_mcp_kanban.server.collect_guidance", return_value=[]
-        ) as mock_cg:
+        with patch("owlbear_mcp_kanban.server.collect_guidance", return_value=[]) as mock_cg:
             await end_work(ctx, id="1", note="all done", outcome="success")
         mock_cg.assert_called_once_with("end_work", None, ANY, outcome="success")
 
     @pytest.mark.asyncio
-    async def test_end_work_fail_calls_collect_guidance_with_outcome_kwarg(
-        self, app_ctx_end: AppContext
-    ) -> None:
+    async def test_end_work_fail_calls_collect_guidance_with_outcome_kwarg(self, app_ctx_end: AppContext) -> None:
         """end_work(fail) invokes collect_guidance("end_work", None, task, outcome="fail")."""
         ctx = _make_ctx(app_ctx_end)
-        with patch(
-            "owlbear_mcp_kanban.server.collect_guidance", return_value=[]
-        ) as mock_cg:
+        with patch("owlbear_mcp_kanban.server.collect_guidance", return_value=[]) as mock_cg:
             await end_work(ctx, id="1", note="failed", outcome="fail")
         mock_cg.assert_called_once_with("end_work", None, ANY, outcome="fail")
 
@@ -922,9 +793,7 @@ class TestFromAC_BlockUserTagOrderingInEndWork:
     """
 
     @pytest.mark.asyncio
-    async def test_end_work_block_with_block_user_tag_emits_dr_guidance(
-        self, app_ctx_end: AppContext
-    ) -> None:
+    async def test_end_work_block_with_block_user_tag_emits_dr_guidance(self, app_ctx_end: AppContext) -> None:
         """end_work(block) on task with block:user → DR guidance emitted (tag removed first).
 
         Verifies ordering: block:user is stripped before collect_guidance runs,
@@ -939,12 +808,9 @@ class TestFromAC_BlockUserTagOrderingInEndWork:
             outcome="block",
             block_reason="dependency on external service",
         )
-        assert "block:user" not in result.tags, (
-            f"Expected block:user removed, tags={result.tags!r}"
-        )
+        assert "block:user" not in result.tags, f"Expected block:user removed, tags={result.tags!r}"
         assert len(result.guidance) > 0, (
-            f"Expected DR guidance emitted (block:user removed before guidance check), "
-            f"got guidance={result.guidance!r}"
+            f"Expected DR guidance emitted (block:user removed before guidance check), got guidance={result.guidance!r}"
         )
         assert any("Decision Request" in msg for msg in result.guidance), (
             f"Expected 'Decision Request' in guidance, got {result.guidance!r}"
@@ -972,13 +838,11 @@ _SECTION_OCCURRENCE_MSG = "Section 'Audit' matched 2 occurrences."
 _PICK_DISPATCH_HINT = "Dispatch hints: 3 task(s) across 1 wave(s)."
 
 _SKIP_MOVE_WARNING = (
-    "⚠️ Status skip: moved from 'todo' to 'review' (skipped 1 column(s))."
-    " Verify this jump is intentional."
+    "⚠️ Status skip: moved from 'todo' to 'review' (skipped 1 column(s)). Verify this jump is intentional."
 )
 
 _SKIP_REJECT_WARNING = (
-    "⚠️ Status skip: moved from 'todo' to 'done' (skipped 4 column(s))."
-    " Verify this jump is intentional."
+    "⚠️ Status skip: moved from 'todo' to 'done' (skipped 4 column(s)). Verify this jump is intentional."
 )
 
 _BLOCK_AR_HINT = (
@@ -1031,9 +895,7 @@ class TestFromAC_GuidancePassthrough:
     """AgentView response guidance passes through the MCP adapter unmodified."""
 
     @pytest.mark.asyncio
-    async def test_show_task_section_occurrence_count_guidance(
-        self, app_ctx_with_section_task: AppContext
-    ) -> None:
+    async def test_show_task_section_occurrence_count_guidance(self, app_ctx_with_section_task: AppContext) -> None:
         """AC12: When requested section appears more than once, guidance includes the count.
 
         AgentView.show_task must detect the duplicate '## Audit' sections and include
@@ -1046,14 +908,11 @@ class TestFromAC_GuidancePassthrough:
         ctx = _make_ctx(app_ctx_with_section_task)
         result = await show_task(ctx, id=1, section="Audit")
         assert result.guidance == [_SECTION_OCCURRENCE_MSG], (
-            f"Expected exact occurrence-count guidance {[_SECTION_OCCURRENCE_MSG]!r}; "
-            f"got {result.guidance!r}"
+            f"Expected exact occurrence-count guidance {[_SECTION_OCCURRENCE_MSG]!r}; got {result.guidance!r}"
         )
 
     @pytest.mark.asyncio
-    async def test_show_task_guidance_passes_through_unmodified(
-        self, app_ctx: AppContext
-    ) -> None:
+    async def test_show_task_guidance_passes_through_unmodified(self, app_ctx: AppContext) -> None:
         """Guidance returned by AgentView.show_task is not stripped or transformed.
 
         The adapter must return whatever guidance list AgentView provides, without
@@ -1078,9 +937,7 @@ class TestFromAC_GuidancePassthrough:
         )
 
     @pytest.mark.asyncio
-    async def test_pick_tasks_dispatch_hints_guidance(
-        self, app_ctx_multi: AppContext
-    ) -> None:
+    async def test_pick_tasks_dispatch_hints_guidance(self, app_ctx_multi: AppContext) -> None:
         """pick_tasks with dispatchable tasks → guidance includes wave/task count hints.
 
         AgentView.pick_tasks must populate the guidance field with dispatch context
@@ -1091,15 +948,10 @@ class TestFromAC_GuidancePassthrough:
         """
         ctx = _make_ctx(app_ctx_multi)
         result = await pick_tasks(ctx)
-        assert result.guidance == [], (
-            f"Expected empty guidance from pick_tasks passthrough, "
-            f"got {result.guidance!r}"
-        )
+        assert result.guidance == [], f"Expected empty guidance from pick_tasks passthrough, got {result.guidance!r}"
 
     @pytest.mark.asyncio
-    async def test_create_task_body_size_warning_guidance(
-        self, app_ctx: AppContext
-    ) -> None:
+    async def test_create_task_body_size_warning_guidance(self, app_ctx: AppContext) -> None:
         """create_task with body > 100 KB → guidance includes body-size warning from AgentView.
 
         AgentView.create_task must detect the oversized body and append the warning
@@ -1111,14 +963,11 @@ class TestFromAC_GuidancePassthrough:
         ctx = _make_ctx(app_ctx)
         result = await create_task(ctx, title="Big task", body=_LARGE_BODY)
         assert result.guidance == [_BODY_SIZE_WARNING], (
-            f"Expected exact body-size warning {[_BODY_SIZE_WARNING]!r}; "
-            f"got {result.guidance!r}"
+            f"Expected exact body-size warning {[_BODY_SIZE_WARNING]!r}; got {result.guidance!r}"
         )
 
     @pytest.mark.asyncio
-    async def test_edit_task_body_size_warning_guidance(
-        self, app_ctx: AppContext
-    ) -> None:
+    async def test_edit_task_body_size_warning_guidance(self, app_ctx: AppContext) -> None:
         """edit_task with body > 100 KB → guidance includes body-size warning from AgentView.
 
         AgentView.edit_task must detect the oversized body on edit and append the
@@ -1130,14 +979,11 @@ class TestFromAC_GuidancePassthrough:
         ctx = _make_ctx(app_ctx)
         result = await edit_task(ctx, id="1", body=_LARGE_BODY)
         assert result.guidance == [_BODY_SIZE_WARNING], (
-            f"Expected exact body-size warning {[_BODY_SIZE_WARNING]!r} in edit_task guidance; "
-            f"got {result.guidance!r}"
+            f"Expected exact body-size warning {[_BODY_SIZE_WARNING]!r} in edit_task guidance; got {result.guidance!r}"
         )
 
     @pytest.mark.asyncio
-    async def test_move_task_skip_transition_warning_guidance(
-        self, app_ctx: AppContext
-    ) -> None:
+    async def test_move_task_skip_transition_warning_guidance(self, app_ctx: AppContext) -> None:
         """AC-NEW-5: move_task skipping >1 column → skip-transition warning from AgentView.
 
         AgentView is the authoritative source. The adapter's collect_guidance fallback
@@ -1160,9 +1006,7 @@ class TestFromAC_GuidancePassthrough:
         )
 
     @pytest.mark.asyncio
-    async def test_end_work_reject_skip_transition_warning_guidance(
-        self, app_ctx: AppContext
-    ) -> None:
+    async def test_end_work_reject_skip_transition_warning_guidance(self, app_ctx: AppContext) -> None:
         """AC-NEW-5: end_work(reject, move_to='done') skipping columns → skip warning in guidance.
 
         AgentView.end_work must emit the skip-transition warning for large-jump rejects.
@@ -1183,14 +1027,11 @@ class TestFromAC_GuidancePassthrough:
             move_to="done",
         )
         assert result.guidance == [_SKIP_REJECT_WARNING], (
-            f"Expected skip-transition warning from AgentView.end_work; "
-            f"got {result.guidance!r}"
+            f"Expected skip-transition warning from AgentView.end_work; got {result.guidance!r}"
         )
 
     @pytest.mark.asyncio
-    async def test_end_work_block_action_request_hint_guidance(
-        self, app_ctx_claimed: AppContext
-    ) -> None:
+    async def test_end_work_block_action_request_hint_guidance(self, app_ctx_claimed: AppContext) -> None:
         """AC-NEW-4: end_work(outcome='block') → AR/DR hint from AgentView, not collect_guidance.
 
         AgentView.end_work must supply the Action-Request/Decision-Request hint when
@@ -1222,9 +1063,7 @@ class TestFromAC_ErrorMapping:
     """KanbanError subclasses raised by AgentView → ToolError with user_message only."""
 
     @pytest.mark.asyncio
-    async def test_validation_error_maps_to_tool_error(
-        self, app_ctx: AppContext
-    ) -> None:
+    async def test_validation_error_maps_to_tool_error(self, app_ctx: AppContext) -> None:
         """ValidationError from AgentView.create_task(title='') → structured JSON ToolError.
 
         An empty title is invalid input. AgentView.create_task must raise ValidationError;
@@ -1235,9 +1074,7 @@ class TestFromAC_ErrorMapping:
         with pytest.raises(ToolError) as exc_info:
             await create_task(ctx, title="")
         payload = json.loads(str(exc_info.value))
-        assert payload["code"] == "ERR_INVALID_STATUS", (
-            f"ToolError JSON must carry error code; got {payload!r}"
-        )
+        assert payload["code"] == "ERR_INVALID_STATUS", f"ToolError JSON must carry error code; got {payload!r}"
         assert payload["message"] == "title must not be empty", (
             f"ToolError JSON must carry human-readable message; got {payload!r}"
         )
@@ -1255,18 +1092,14 @@ class TestFromAC_GuidanceProofRepair:
     _SENTINEL: ClassVar[list[str]] = ["__AC_FIX_SENTINEL_GUIDANCE__"]
 
     @pytest.mark.asyncio
-    async def test_list_tasks_guidance_exact_field_value(
-        self, app_ctx: AppContext
-    ) -> None:
+    async def test_list_tasks_guidance_exact_field_value(self, app_ctx: AppContext) -> None:
         """AC-FIX-1: list_tasks.guidance field matches sentinel from AgentView.list_tasks.
 
         The prior assertion (`result is expected or result == expected`) can false-green
         when the adapter mutates the envelope in-place and returns the same object.
         This test asserts the guidance field directly to catch any in-place mutation.
         """
-        expected_response = ListTasksResponse(
-            tasks=[], guidance=self._SENTINEL, missing_ids=None
-        )
+        expected_response = ListTasksResponse(tasks=[], guidance=self._SENTINEL, missing_ids=None)
         ctx = _make_ctx(app_ctx)
         with patch.object(AgentView, "list_tasks", return_value=expected_response):
             result = await list_tasks(ctx)
@@ -1275,9 +1108,7 @@ class TestFromAC_GuidanceProofRepair:
         )
 
     @pytest.mark.asyncio
-    async def test_start_work_guidance_sentinel_passthrough(
-        self, app_ctx: AppContext
-    ) -> None:
+    async def test_start_work_guidance_sentinel_passthrough(self, app_ctx: AppContext) -> None:
         """AC-FIX-2: start_work returns guidance from AgentView.start_work unmodified.
 
         Existing suite only asserts isinstance(result, SingleTaskResponse); guidance
@@ -1295,9 +1126,7 @@ class TestFromAC_GuidanceProofRepair:
         )
 
     @pytest.mark.asyncio
-    async def test_end_work_success_guidance_sentinel_passthrough(
-        self, app_ctx_claimed: AppContext
-    ) -> None:
+    async def test_end_work_success_guidance_sentinel_passthrough(self, app_ctx_claimed: AppContext) -> None:
         """AC-FIX-3: end_work(outcome='success') returns guidance from AgentView.end_work.
 
         No prior test covered end_work(success) guidance. This test proves the
@@ -1314,9 +1143,7 @@ class TestFromAC_GuidanceProofRepair:
         )
 
     @pytest.mark.asyncio
-    async def test_not_found_error_maps_to_tool_error(
-        self, app_ctx: AppContext
-    ) -> None:
+    async def test_not_found_error_maps_to_tool_error(self, app_ctx: AppContext) -> None:
         """NotFoundError from AgentView.show_task(non-existent ID) → ToolError(user_message).
 
         Requesting a non-existent task ID must cause AgentView.show_task to raise
@@ -1329,17 +1156,13 @@ class TestFromAC_GuidanceProofRepair:
         with pytest.raises(ToolError) as exc_info:
             await show_task(ctx, id=9999)
         payload = json.loads(str(exc_info.value))
-        assert payload["code"] == "ERR_NOT_FOUND", (
-            f"ToolError JSON must carry parseable error code; got {payload!r}"
-        )
+        assert payload["code"] == "ERR_NOT_FOUND", f"ToolError JSON must carry parseable error code; got {payload!r}"
         assert payload["message"] == "Task '9999' not found", (
             f"ToolError JSON must carry human-readable message; got {payload!r}"
         )
 
     @pytest.mark.asyncio
-    async def test_concurrency_error_maps_to_tool_error_user_message_only(
-        self, app_ctx_claimed: AppContext
-    ) -> None:
+    async def test_concurrency_error_maps_to_tool_error_user_message_only(self, app_ctx_claimed: AppContext) -> None:
         """ConcurrencyError (already-claimed) → ToolError; machine code must not be on wire.
 
         Claiming a task that is already actively claimed must raise ConcurrencyError.
@@ -1363,9 +1186,7 @@ class TestFromAC_GuidanceProofRepair:
         )
 
     @pytest.mark.asyncio
-    async def test_config_error_maps_to_tool_error_user_message_only(
-        self, app_ctx: AppContext
-    ) -> None:
+    async def test_config_error_maps_to_tool_error_user_message_only(self, app_ctx: AppContext) -> None:
         """ConfigError (KanbanError subclass) from AgentView → ToolError; no code on wire.
 
         ConfigError is raised when board config contains an invalid value (e.g. an
@@ -1379,9 +1200,7 @@ class TestFromAC_GuidanceProofRepair:
             patch.object(
                 AgentView,
                 "list_tasks",
-                side_effect=ConfigError(
-                    code="ERR_INVALID_CLAIM_TIMEOUT", user_message=user_msg
-                ),
+                side_effect=ConfigError(code="ERR_INVALID_CLAIM_TIMEOUT", user_message=user_msg),
             ),
             pytest.raises(ToolError) as exc_info,
         ):
@@ -1390,9 +1209,7 @@ class TestFromAC_GuidanceProofRepair:
         assert payload["code"] == "ERR_INVALID_CLAIM_TIMEOUT", (
             f"ToolError JSON must carry parseable error code; got {payload!r}"
         )
-        assert payload["message"] == user_msg, (
-            f"ToolError JSON must carry human-readable user_message; got {payload!r}"
-        )
+        assert payload["message"] == user_msg, f"ToolError JSON must carry human-readable user_message; got {payload!r}"
 
 
 class TestFromAC_GuidanceDiscriminating_1475:
@@ -1412,9 +1229,7 @@ class TestFromAC_GuidanceDiscriminating_1475:
     _SENTINEL: ClassVar[list[str]] = ["__AGENTVIEW_SENTINEL_1475__"]
 
     @pytest.mark.asyncio
-    async def test_move_task_skip_warning_survives_disabled_collect_guidance(
-        self, app_ctx: AppContext
-    ) -> None:
+    async def test_move_task_skip_warning_survives_disabled_collect_guidance(self, app_ctx: AppContext) -> None:
         """move_task skip-transition warning must survive even when collect_guidance returns [].
 
         If the skip-transition warning originates from AgentView.move_task (the
@@ -1437,9 +1252,7 @@ class TestFromAC_GuidanceDiscriminating_1475:
         )
 
     @pytest.mark.asyncio
-    async def test_start_work_agentview_guidance_not_overwritten_by_collect_guidance(
-        self, app_ctx: AppContext
-    ) -> None:
+    async def test_start_work_agentview_guidance_not_overwritten_by_collect_guidance(self, app_ctx: AppContext) -> None:
         """start_work must return AgentView.start_work guidance unmodified.
 
         The adapter must NOT unconditionally overwrite guidance from AgentView with
@@ -1464,6 +1277,5 @@ class TestFromAC_GuidanceDiscriminating_1475:
         ):
             result = await start_work(ctx, id="1")
         assert result.guidance == self._SENTINEL, (
-            f"start_work must pass AgentView guidance unchanged when collect_guidance is []; "
-            f"got {result.guidance!r}"
+            f"start_work must pass AgentView guidance unchanged when collect_guidance is []; got {result.guidance!r}"
         )

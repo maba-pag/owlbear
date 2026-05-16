@@ -78,9 +78,7 @@ def main() -> None:
         return
 
     # Filter: only existing .py files
-    existing_py = [
-        p for p in candidate_paths if p.endswith(".py") and Path(p).is_file()
-    ]
+    existing_py = [p for p in candidate_paths if p.endswith(".py") and Path(p).is_file()]
     if not existing_py:
         print("{}")
         return

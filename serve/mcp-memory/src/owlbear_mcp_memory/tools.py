@@ -190,11 +190,7 @@ async def save_memory(  # noqa: PLR0913
     except ValidationError as exc:
         raise ToolError(_teaching_validation_message(exc)) from exc
     engine.write(entry)
-    hint = (
-        "Saved as pending."
-        f" Scoped to {initial_scope}."
-        " Curate to promote to curated and adjust scope if needed."
-    )
+    hint = f"Saved as pending. Scoped to {initial_scope}. Curate to promote to curated and adjust scope if needed."
     return _with_hint(_entry_to_dict(entry), hint)
 
 
@@ -223,20 +219,13 @@ async def list_memories(
 
     entries = [entry for entry in engine.get_entries() if entry.state in allowed_states]
     if category_filter:
-        entries = [
-            entry
-            for entry in entries
-            if bool(category_filter.intersection(set(entry.categories)))
-        ]
+        entries = [entry for entry in entries if bool(category_filter.intersection(set(entry.categories)))]
     if scope_filter:
         entries = [
             entry
             for entry in entries
             if entry.scope_agents
-            and bool(
-                scope_filter.intersection(set(entry.scope_agents))
-                or "*" in entry.scope_agents
-            )
+            and bool(scope_filter.intersection(set(entry.scope_agents)) or "*" in entry.scope_agents)
         ]
 
     entries.sort(
@@ -286,26 +275,13 @@ async def recall_memory(
         MemoryState.APPROVED: 0,
         MemoryState.CURATED: 1,
     }
+    entries = [entry for entry in engine.get_entries() if entry.state in {MemoryState.APPROVED, MemoryState.CURATED}]
     entries = [
-        entry
-        for entry in engine.get_entries()
-        if entry.state in {MemoryState.APPROVED, MemoryState.CURATED}
-    ]
-    entries = [
-        entry
-        for entry in entries
-        if entry.scope_agents
-        and (agent in entry.scope_agents or "*" in entry.scope_agents)
+        entry for entry in entries if entry.scope_agents and (agent in entry.scope_agents or "*" in entry.scope_agents)
     ]
     if category_filter:
-        entries = [
-            entry
-            for entry in entries
-            if bool(category_filter.intersection(set(entry.categories)))
-        ]
-    entries.sort(
-        key=lambda entry: (state_rank[entry.state], -entry.confidence, entry.id)
-    )
+        entries = [entry for entry in entries if bool(category_filter.intersection(set(entry.categories)))]
+    entries.sort(key=lambda entry: (state_rank[entry.state], -entry.confidence, entry.id))
     entries = entries[:capped_limit]
 
     return "\n\n".join(f"## {entry.title}\n{entry.content}" for entry in entries)
@@ -337,17 +313,11 @@ async def _update_entry(  # noqa: PLR0913
     if current.state == MemoryState.PENDING and not next_scope_agents:
         msg = "scope_agents are required when curating pending entries"
         raise ToolError(msg)
-    if (
-        current.state != MemoryState.PENDING
-        and scope_agents is not None
-        and not scope_agents
-    ):
+    if current.state != MemoryState.PENDING and scope_agents is not None and not scope_agents:
         msg = "scope_agents cannot be blanked on curated or approved entries"
         raise ToolError(msg)
 
-    if current.state == MemoryState.APPROVED or (
-        current.state == MemoryState.PENDING and bool(next_scope_agents)
-    ):
+    if current.state == MemoryState.APPROVED or (current.state == MemoryState.PENDING and bool(next_scope_agents)):
         target_state = MemoryState.CURATED
     else:
         target_state = current.state
@@ -365,9 +335,7 @@ async def _update_entry(  # noqa: PLR0913
         "source_agent": current.source_agent,
         "created_at": current.created_at,
         "updated_at": _now_iso(),
-        "approved_at": None
-        if current.state == MemoryState.APPROVED
-        else current.approved_at,
+        "approved_at": None if current.state == MemoryState.APPROVED else current.approved_at,
     }
     try:
         updated = MemoryEntry.model_validate(payload)
@@ -434,13 +402,9 @@ async def curate_memory(  # noqa: PLR0913
         confidence=confidence,
         scope_agents=scope_agents,
     )
-    if current.state == MemoryState.PENDING and updated["state"] == str(
-        MemoryState.CURATED
-    ):
+    if current.state == MemoryState.PENDING and updated["state"] == str(MemoryState.CURATED):
         hint = "Promoted from pending to curated with explicit scope."
-    elif current.state == MemoryState.APPROVED and updated["state"] == str(
-        MemoryState.CURATED
-    ):
+    elif current.state == MemoryState.APPROVED and updated["state"] == str(MemoryState.CURATED):
         hint = "Downgraded from approved to curated; re-approve after review."
     else:
         hint = "Curated entry updated."

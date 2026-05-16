@@ -215,10 +215,7 @@ class TestFromAC_ClaimFields:
             updated="2026-01-01T00:00:00+00:00",
             claimed_by="agent-x",
         )
-        assert (
-            not hasattr(s, "claimed_by")
-            or getattr(s, "claimed_by", _SENTINEL) is _SENTINEL
-        )
+        assert not hasattr(s, "claimed_by") or getattr(s, "claimed_by", _SENTINEL) is _SENTINEL
         # claimed should be derived from claimed_at, not claimed_by
         assert s.claimed is False
 
@@ -323,15 +320,11 @@ class TestFromAC_DispatchEntry:
         assert "tags" in DispatchEntry.model_fields
 
     def test_dispatch_entry_tags_defaults_to_empty(self) -> None:
-        d = DispatchEntry(
-            id=1, status="todo", priority="needed", title="T", agent="builder"
-        )
+        d = DispatchEntry(id=1, status="todo", priority="needed", title="T", agent="builder")
         assert d.tags == []
 
     def test_dispatch_entry_round_trips(self) -> None:
-        d = _make_dispatch(
-            id=7, status="review", priority="critical", title="My task", tags=["x"]
-        )
+        d = _make_dispatch(id=7, status="review", priority="critical", title="My task", tags=["x"])
         assert d.id == 7
         assert d.status == "review"
         assert d.priority == "critical"
@@ -511,9 +504,7 @@ class TestFromAC_KanbanErrorHierarchy:
         assert issubclass(ConfigError, KanbanError)
 
     def test_config_error_has_code_and_user_message(self) -> None:
-        e = ConfigError(
-            code="ERR_ENTRY_STATUS_INVALID", user_message="invalid entry status"
-        )
+        e = ConfigError(code="ERR_ENTRY_STATUS_INVALID", user_message="invalid entry status")
         assert e.code == "ERR_ENTRY_STATUS_INVALID"
         assert e.user_message == "invalid entry status"
 
@@ -521,9 +512,7 @@ class TestFromAC_KanbanErrorHierarchy:
         assert issubclass(MigrationRequiredError, KanbanError)
 
     def test_migration_required_error_has_code_and_user_message(self) -> None:
-        e = MigrationRequiredError(
-            code="ERR_MIGRATION_REQUIRED", user_message="migration required"
-        )
+        e = MigrationRequiredError(code="ERR_MIGRATION_REQUIRED", user_message="migration required")
         assert e.code == "ERR_MIGRATION_REQUIRED"
         assert e.user_message == "migration required"
 
@@ -561,9 +550,7 @@ class TestFromAC_ErrorCodeCatalogue:
         assert e.code == "ERR_NOT_CLAIMED"
 
     def test_err_block_reason_required(self) -> None:
-        e = ValidationError(
-            code="ERR_BLOCK_REASON_REQUIRED", user_message="block_reason required"
-        )
+        e = ValidationError(code="ERR_BLOCK_REASON_REQUIRED", user_message="block_reason required")
         assert e.code == "ERR_BLOCK_REASON_REQUIRED"
 
     def test_err_no_op(self) -> None:
@@ -587,21 +574,15 @@ class TestFromAC_ErrorCodeCatalogue:
         assert e.code == "ERR_INVALID_STATUS"
 
     def test_err_invalid_priority(self) -> None:
-        e = ValidationError(
-            code="ERR_INVALID_PRIORITY", user_message="invalid priority"
-        )
+        e = ValidationError(code="ERR_INVALID_PRIORITY", user_message="invalid priority")
         assert e.code == "ERR_INVALID_PRIORITY"
 
     def test_err_invalid_wave_param(self) -> None:
-        e = ValidationError(
-            code="ERR_INVALID_WAVE_PARAM", user_message="invalid wave param"
-        )
+        e = ValidationError(code="ERR_INVALID_WAVE_PARAM", user_message="invalid wave param")
         assert e.code == "ERR_INVALID_WAVE_PARAM"
 
     def test_err_parent_not_found(self) -> None:
-        e = ValidationError(
-            code="ERR_PARENT_NOT_FOUND", user_message="parent not found"
-        )
+        e = ValidationError(code="ERR_PARENT_NOT_FOUND", user_message="parent not found")
         assert e.code == "ERR_PARENT_NOT_FOUND"
 
     def test_err_dep_not_found(self) -> None:
@@ -609,33 +590,23 @@ class TestFromAC_ErrorCodeCatalogue:
         assert e.code == "ERR_DEP_NOT_FOUND"
 
     def test_err_archival_reason_invalid(self) -> None:
-        e = ValidationError(
-            code="ERR_ARCHIVAL_REASON_INVALID", user_message="invalid reason"
-        )
+        e = ValidationError(code="ERR_ARCHIVAL_REASON_INVALID", user_message="invalid reason")
         assert e.code == "ERR_ARCHIVAL_REASON_INVALID"
 
     def test_err_archival_reason_required(self) -> None:
-        e = ValidationError(
-            code="ERR_ARCHIVAL_REASON_REQUIRED", user_message="reason required"
-        )
+        e = ValidationError(code="ERR_ARCHIVAL_REASON_REQUIRED", user_message="reason required")
         assert e.code == "ERR_ARCHIVAL_REASON_REQUIRED"
 
     def test_err_archival_fields_forbidden(self) -> None:
-        e = ValidationError(
-            code="ERR_ARCHIVAL_FIELDS_FORBIDDEN", user_message="archival forbidden"
-        )
+        e = ValidationError(code="ERR_ARCHIVAL_FIELDS_FORBIDDEN", user_message="archival forbidden")
         assert e.code == "ERR_ARCHIVAL_FIELDS_FORBIDDEN"
 
     def test_err_archival_refs_required(self) -> None:
-        e = ValidationError(
-            code="ERR_ARCHIVAL_REFS_REQUIRED", user_message="refs required"
-        )
+        e = ValidationError(code="ERR_ARCHIVAL_REFS_REQUIRED", user_message="refs required")
         assert e.code == "ERR_ARCHIVAL_REFS_REQUIRED"
 
     def test_err_archival_refs_forbidden(self) -> None:
-        e = ValidationError(
-            code="ERR_ARCHIVAL_REFS_FORBIDDEN", user_message="refs forbidden"
-        )
+        e = ValidationError(code="ERR_ARCHIVAL_REFS_FORBIDDEN", user_message="refs forbidden")
         assert e.code == "ERR_ARCHIVAL_REFS_FORBIDDEN"
 
     def test_err_archival_ref_missing(self) -> None:
@@ -651,9 +622,7 @@ class TestFromAC_ErrorCodeCatalogue:
         assert e.code == "ERR_ARCHIVAL_REF_CYCLE"
 
     def test_err_completed_requires_done(self) -> None:
-        e = ValidationError(
-            code="ERR_COMPLETED_REQUIRES_DONE", user_message="completed requires done"
-        )
+        e = ValidationError(code="ERR_COMPLETED_REQUIRES_DONE", user_message="completed requires done")
         assert e.code == "ERR_COMPLETED_REQUIRES_DONE"
 
     def test_err_invalid_outcome(self) -> None:
@@ -661,9 +630,7 @@ class TestFromAC_ErrorCodeCatalogue:
         assert e.code == "ERR_INVALID_OUTCOME"
 
     def test_err_reject_requires_move_to(self) -> None:
-        e = ValidationError(
-            code="ERR_REJECT_REQUIRES_MOVE_TO", user_message="reject requires move_to"
-        )
+        e = ValidationError(code="ERR_REJECT_REQUIRES_MOVE_TO", user_message="reject requires move_to")
         assert e.code == "ERR_REJECT_REQUIRES_MOVE_TO"
 
     def test_err_block_reason_forbidden_on_non_block(self) -> None:
@@ -674,9 +641,7 @@ class TestFromAC_ErrorCodeCatalogue:
         assert e.code == "ERR_BLOCK_REASON_FORBIDDEN_ON_NON_BLOCK"
 
     def test_err_move_to_forbidden_on_success(self) -> None:
-        e = ValidationError(
-            code="ERR_MOVE_TO_FORBIDDEN_ON_SUCCESS", user_message="move_to forbidden"
-        )
+        e = ValidationError(code="ERR_MOVE_TO_FORBIDDEN_ON_SUCCESS", user_message="move_to forbidden")
         assert e.code == "ERR_MOVE_TO_FORBIDDEN_ON_SUCCESS"
 
     def test_err_move_to_forbidden_on_release(self) -> None:
@@ -694,9 +659,7 @@ class TestFromAC_ErrorCodeCatalogue:
         assert e.code == "ERR_ARCHIVAL_FIELDS_FORBIDDEN_ON_SUCCESS"
 
     def test_err_predicate_failed(self) -> None:
-        e = ValidationError(
-            code="ERR_PREDICATE_FAILED", user_message="predicate failed"
-        )
+        e = ValidationError(code="ERR_PREDICATE_FAILED", user_message="predicate failed")
         assert e.code == "ERR_PREDICATE_FAILED"
 
     def test_err_archived_not_claimable(self) -> None:
@@ -707,9 +670,7 @@ class TestFromAC_ErrorCodeCatalogue:
         assert e.code == "ERR_ARCHIVED_NOT_CLAIMABLE"
 
     def test_err_blocked_not_claimable(self) -> None:
-        e = ValidationError(
-            code="ERR_BLOCKED_NOT_CLAIMABLE", user_message="blocked task not claimable"
-        )
+        e = ValidationError(code="ERR_BLOCKED_NOT_CLAIMABLE", user_message="blocked task not claimable")
         assert e.code == "ERR_BLOCKED_NOT_CLAIMABLE"
 
     def test_err_body_too_large(self) -> None:
@@ -727,33 +688,23 @@ class TestFromAC_ErrorCodeCatalogue:
         assert e.code == "ERR_STALE"
 
     def test_err_already_claimed(self) -> None:
-        e = ConcurrencyError(
-            code="ERR_ALREADY_CLAIMED", user_message="task already claimed"
-        )
+        e = ConcurrencyError(code="ERR_ALREADY_CLAIMED", user_message="task already claimed")
         assert e.code == "ERR_ALREADY_CLAIMED"
 
     # ConfigError codes
     def test_err_entry_status_invalid(self) -> None:
-        e = ConfigError(
-            code="ERR_ENTRY_STATUS_INVALID", user_message="entry status invalid"
-        )
+        e = ConfigError(code="ERR_ENTRY_STATUS_INVALID", user_message="entry status invalid")
         assert e.code == "ERR_ENTRY_STATUS_INVALID"
 
     def test_err_invalid_claim_timeout(self) -> None:
-        e = ConfigError(
-            code="ERR_INVALID_CLAIM_TIMEOUT", user_message="invalid claim timeout"
-        )
+        e = ConfigError(code="ERR_INVALID_CLAIM_TIMEOUT", user_message="invalid claim timeout")
         assert e.code == "ERR_INVALID_CLAIM_TIMEOUT"
 
     def test_err_terminal_status_invalid(self) -> None:
-        e = ConfigError(
-            code="ERR_TERMINAL_STATUS_INVALID", user_message="terminal status invalid"
-        )
+        e = ConfigError(code="ERR_TERMINAL_STATUS_INVALID", user_message="terminal status invalid")
         assert e.code == "ERR_TERMINAL_STATUS_INVALID"
 
     # MigrationRequiredError code
     def test_err_migration_required(self) -> None:
-        e = MigrationRequiredError(
-            code="ERR_MIGRATION_REQUIRED", user_message="migration required"
-        )
+        e = MigrationRequiredError(code="ERR_MIGRATION_REQUIRED", user_message="migration required")
         assert e.code == "ERR_MIGRATION_REQUIRED"

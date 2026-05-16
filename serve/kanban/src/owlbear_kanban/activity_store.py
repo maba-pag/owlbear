@@ -140,18 +140,14 @@ def compact_activity_log(
     """
     activity_path = kanban_dir / _ACTIVITY_FILE
     if not activity_path.exists():
-        return ActivityCompactionResult(
-            before_bytes=0, after_bytes=0, records_compacted=0
-        )
+        return ActivityCompactionResult(before_bytes=0, after_bytes=0, records_compacted=0)
 
     before_bytes = activity_path.stat().st_size
     text = activity_path.read_text(encoding="utf-8")
     all_lines = [line for line in text.splitlines() if line.strip()]
 
     if not all_lines:
-        return ActivityCompactionResult(
-            before_bytes=before_bytes, after_bytes=before_bytes, records_compacted=0
-        )
+        return ActivityCompactionResult(before_bytes=before_bytes, after_bytes=before_bytes, records_compacted=0)
 
     # Parse all events
     parsed: list[tuple[str, dict]] = []
@@ -175,16 +171,9 @@ def compact_activity_log(
     to_keep: list[str] = []
     for index, (entry_line, entry_data) in enumerate(parsed):
         entry_dt = _parse_dt(entry_data.get("timestamp"))
-        in_open_session = _entry_in_open_session(
-            index, entry_data, open_session_starts
-        )
+        in_open_session = _entry_in_open_session(index, entry_data, open_session_starts)
 
-        if (
-            before_dt is None
-            or entry_dt is None
-            or entry_dt >= before_dt
-            or in_open_session
-        ):
+        if before_dt is None or entry_dt is None or entry_dt >= before_dt or in_open_session:
             to_keep.append(entry_line)
 
     # Hard floor: keep the most recent entries by timestamp for all compaction modes.
@@ -200,9 +189,7 @@ def compact_activity_log(
         # Merge: union of to_keep and floor_lines, preserving order
         floor_set = set(floor_lines)
         keep_set = set(to_keep)
-        to_keep_final = [
-            line for line, _ in parsed if line in keep_set or line in floor_set
-        ]
+        to_keep_final = [line for line, _ in parsed if line in keep_set or line in floor_set]
     else:
         to_keep_final = to_keep
 

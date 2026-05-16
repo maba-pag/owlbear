@@ -48,16 +48,12 @@ class TestFromAC_RequiredSections:
 
     def test_ac_c39_exact_match_returns_true(self) -> None:
         """AC-C39: exact heading match passes."""
-        task = _make_task_with_sections(
-            _make_sections(("Acceptance Criteria", 2, "- item\n"))
-        )
+        task = _make_task_with_sections(_make_sections(("Acceptance Criteria", 2, "- item\n")))
         assert required_sections(task, ["Acceptance Criteria"]) is True
 
     def test_ac_c39_case_insensitive_match(self) -> None:
         """AC-C39: heading match is case-insensitive."""
-        task = _make_task_with_sections(
-            _make_sections(("ACCEPTANCE CRITERIA", 2, "- item\n"))
-        )
+        task = _make_task_with_sections(_make_sections(("ACCEPTANCE CRITERIA", 2, "- item\n")))
         assert required_sections(task, ["acceptance criteria"]) is True
 
     def test_ac_c39_mixed_case_match(self) -> None:
@@ -74,16 +70,12 @@ class TestFromAC_RequiredSections:
 
     def test_ac_c39_whitespace_stripped_from_section_heading(self) -> None:
         """AC-C39: surrounding whitespace stripped from Section.heading in comparison."""
-        task = _make_task_with_sections(
-            _make_sections(("  Notes  ", 2, "some notes\n"))
-        )
+        task = _make_task_with_sections(_make_sections(("  Notes  ", 2, "some notes\n")))
         assert required_sections(task, ["Notes"]) is True
 
     def test_ac_c39_missing_section_returns_false(self) -> None:
         """AC-C39: required section not present → returns False."""
-        task = _make_task_with_sections(
-            _make_sections(("Other Section", 2, "content\n"))
-        )
+        task = _make_task_with_sections(_make_sections(("Other Section", 2, "content\n")))
         assert required_sections(task, ["Tests"]) is False
 
     def test_ac_c39_multiple_required_all_present(self) -> None:
@@ -98,9 +90,7 @@ class TestFromAC_RequiredSections:
 
     def test_ac_c39_multiple_required_one_missing(self) -> None:
         """AC-C39: one required section absent → False."""
-        task = _make_task_with_sections(
-            _make_sections(("Acceptance Criteria", 2, "- ac\n"))
-        )
+        task = _make_task_with_sections(_make_sections(("Acceptance Criteria", 2, "- ac\n")))
         assert required_sections(task, ["Acceptance Criteria", "Tests"]) is False
 
     def test_ac_c39_empty_required_list_returns_true(self) -> None:
@@ -152,23 +142,17 @@ class TestFromAC_RequireListInSection:
 
     def test_ac_c40_bullet_list_in_section_returns_true(self) -> None:
         """AC-C40: section with bullet list content → True."""
-        task = _make_task_with_sections(
-            _make_sections(("Tests", 2, "- test one\n- test two\n"))
-        )
+        task = _make_task_with_sections(_make_sections(("Tests", 2, "- test one\n- test two\n")))
         assert require_list_in_section(task, "Tests") is True
 
     def test_ac_c40_ordered_list_in_section_returns_true(self) -> None:
         """AC-C40: section with ordered list content → True."""
-        task = _make_task_with_sections(
-            _make_sections(("Steps", 2, "1. first\n2. second\n"))
-        )
+        task = _make_task_with_sections(_make_sections(("Steps", 2, "1. first\n2. second\n")))
         assert require_list_in_section(task, "Steps") is True
 
     def test_ac_c40_section_with_prose_only_returns_false(self) -> None:
         """AC-C40: section with prose content (no list) → False."""
-        task = _make_task_with_sections(
-            _make_sections(("Notes", 2, "Just some prose text.\nAnother line.\n"))
-        )
+        task = _make_task_with_sections(_make_sections(("Notes", 2, "Just some prose text.\nAnother line.\n")))
         assert require_list_in_section(task, "Notes") is False
 
     def test_ac_c40_empty_section_content_returns_false(self) -> None:
@@ -220,9 +204,7 @@ class TestFromAC_RequireListInSection:
             [
                 Section(heading=None, level=0, content=""),
                 Section(heading="Acceptance Criteria", level=2, content="- ac line\n"),
-                Section(
-                    heading="Tests", level=2, content="- test case 1\n- test case 2\n"
-                ),
+                Section(heading="Tests", level=2, content="- test case 1\n- test case 2\n"),
             ]
         )
         assert required_sections(task, ["Acceptance Criteria", "Tests"]) is True
@@ -248,16 +230,12 @@ class TestFromAC_RequireListInSection:
 
     def test_ac_c40_star_bullet_returns_true(self) -> None:
         """AC-C40: '* item' is a CommonMark bullet_list — must return True (mutation guard: [-*+] not narrowed to [-])."""
-        task = _make_task_with_sections(
-            _make_sections(("Steps", 2, "* first step\n* second step\n"))
-        )
+        task = _make_task_with_sections(_make_sections(("Steps", 2, "* first step\n* second step\n")))
         assert require_list_in_section(task, "Steps") is True
 
     def test_ac_c40_plus_bullet_returns_true(self) -> None:
         """AC-C40: '+ item' is a CommonMark bullet_list — must return True (mutation guard: [-*+] not narrowed to [-])."""
-        task = _make_task_with_sections(
-            _make_sections(("Steps", 2, "+ first step\n+ second step\n"))
-        )
+        task = _make_task_with_sections(_make_sections(("Steps", 2, "+ first step\n+ second step\n")))
         assert require_list_in_section(task, "Steps") is True
 
     def test_ac_c40_tilde_fence_excludes_list_items(self) -> None:
@@ -269,18 +247,14 @@ class TestFromAC_RequireListInSection:
     def test_ac_c41_all_bullet_markers_recognised(self) -> None:
         """AC-C41: Brief B D64 semantics covered all three CommonMark bullet markers; new substrate must match."""
         for marker in ("-", "*", "+"):
-            task = _make_task_with_sections(
-                _make_sections(("Items", 2, f"{marker} first\n{marker} second\n"))
-            )
+            task = _make_task_with_sections(_make_sections(("Items", 2, f"{marker} first\n{marker} second\n")))
             assert require_list_in_section(task, "Items") is True, (
                 f"Bullet marker '{marker}' not recognised — AC-C41 semantic equivalence broken"
             )
 
     def test_ac_c40c_post_fence_resume_returns_true(self) -> None:
         """AC-C40c: list-like lines inside fence are excluded, but a real list item after the closing fence IS counted."""
-        content = (
-            "```\n- fake inside fence\n1. also fake\n```\n- real item after fence\n"
-        )
+        content = "```\n- fake inside fence\n1. also fake\n```\n- real item after fence\n"
         task = _make_task_with_sections(_make_sections(("Steps", 2, content)))
         assert require_list_in_section(task, "Steps") is True
 
@@ -314,9 +288,7 @@ class TestFromAC_PredicateCommonMarkSubstrate:
     """
 
     def test_ac_c40_ordered_paren_delimiter_is_ordered_list(self) -> None:
-        task = _make_task(
-            [_make_section("Steps", 2, "1) First step\n2) Second step\n")]
-        )
+        task = _make_task([_make_section("Steps", 2, "1) First step\n2) Second step\n")])
         assert require_list_in_section(task, "Steps") is True
 
     def test_ac_c40_ordered_paren_delimiter_multi_digit_is_ordered_list(self) -> None:
@@ -329,21 +301,15 @@ class TestFromAC_PredicateCommonMarkSubstrate:
         assert require_list_in_section(task, "Steps") is True
 
     def test_ac_c40_four_space_indent_is_indented_code_block_not_list(self) -> None:
-        task = _make_task(
-            [_make_section("Steps", 2, "    - item inside indented code block\n")]
-        )
+        task = _make_task([_make_section("Steps", 2, "    - item inside indented code block\n")])
         assert require_list_in_section(task, "Steps") is False
 
     def test_ac_c40_tab_indent_is_indented_code_block_not_list(self) -> None:
-        task = _make_task(
-            [_make_section("Steps", 2, "\t- item inside tab-indented code block\n")]
-        )
+        task = _make_task([_make_section("Steps", 2, "\t- item inside tab-indented code block\n")])
         assert require_list_in_section(task, "Steps") is False
 
     def test_ac_c40_four_space_indent_ordered_is_code_block_not_list(self) -> None:
-        task = _make_task(
-            [_make_section("Steps", 2, "    1. item inside indented code block\n")]
-        )
+        task = _make_task([_make_section("Steps", 2, "    1. item inside indented code block\n")])
         assert require_list_in_section(task, "Steps") is False
 
     def test_ac_c40_three_space_indented_fence_excludes_content(self) -> None:
@@ -364,9 +330,7 @@ class TestFromAC_PredicateCommonMarkSubstrate:
     def test_ac_c40_three_space_indented_fence_close_resumes_list_detection(
         self,
     ) -> None:
-        content = (
-            "   ```\n- inside fence (excluded)\n   ```\n- real list item after close\n"
-        )
+        content = "   ```\n- inside fence (excluded)\n   ```\n- real list item after close\n"
         task = _make_task([_make_section("Steps", 2, content)])
         assert require_list_in_section(task, "Steps") is True
 

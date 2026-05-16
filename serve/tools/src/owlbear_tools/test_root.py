@@ -36,11 +36,7 @@ def find_test_root(test_path: str) -> dict[str, str]:
                 scripts = pkg.get("scripts", {})
                 dev_deps = pkg.get("devDependencies", {})
                 deps = pkg.get("dependencies", {})
-                has_vitest = (
-                    "vitest" in dev_deps
-                    or "vitest" in deps
-                    or any("vitest" in v for v in scripts.values())
-                )
+                has_vitest = "vitest" in dev_deps or "vitest" in deps or any("vitest" in v for v in scripts.values())
                 if has_vitest or "test" in scripts:
                     rel_cwd = current.relative_to(workspace_root)
                     return {

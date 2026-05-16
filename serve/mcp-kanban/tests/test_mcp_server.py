@@ -219,9 +219,7 @@ class TestFromAC_OutputSchema:
             (t for t in mcp._tool_manager._tools.values() if t.name == "list_tasks"),
             None,
         )
-        assert tool_obj is not None, (
-            "AC6: 'list_tasks' tool must be registered in the MCP server"
-        )
+        assert tool_obj is not None, "AC6: 'list_tasks' tool must be registered in the MCP server"
         registered = tool_obj.fn_metadata.output_schema
         expected = ListTasksResponse.model_json_schema()
         assert registered == expected, (

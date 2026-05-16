@@ -136,19 +136,13 @@ class TestFromAC_MoveTaskAdapter:
     """move_task adapter delegates to AgentView and returns SingleTaskResponse."""
 
     @pytest.mark.asyncio
-    async def test_move_task_forwards_id_and_status_to_agent_view(
-        self, ctx: MagicMock, mock_av: MagicMock
-    ) -> None:
+    async def test_move_task_forwards_id_and_status_to_agent_view(self, ctx: MagicMock, mock_av: MagicMock) -> None:
         """move_task calls AgentView.move_task(id, status, archival_reason=None, archival_refs=None)."""
         await move_task(ctx, id="42", status="in-progress")
-        mock_av.move_task.assert_called_once_with(
-            42, "in-progress", archival_reason=None, archival_refs=None
-        )
+        mock_av.move_task.assert_called_once_with(42, "in-progress", archival_reason=None, archival_refs=None)
 
     @pytest.mark.asyncio
-    async def test_move_task_forwards_archival_reason_and_refs(
-        self, ctx: MagicMock, mock_av: MagicMock
-    ) -> None:
+    async def test_move_task_forwards_archival_reason_and_refs(self, ctx: MagicMock, mock_av: MagicMock) -> None:
         """move_task forwards archival_reason and archival_refs to AgentView."""
         await move_task(
             ctx,
@@ -157,9 +151,7 @@ class TestFromAC_MoveTaskAdapter:
             archival_reason="completed",
             archival_refs=[],
         )
-        mock_av.move_task.assert_called_once_with(
-            42, "archived", archival_reason="completed", archival_refs=[]
-        )
+        mock_av.move_task.assert_called_once_with(42, "archived", archival_reason="completed", archival_refs=[])
 
     @pytest.mark.asyncio
     async def test_move_task_returns_single_task_response(self, ctx: MagicMock) -> None:
@@ -176,9 +168,7 @@ class TestFromAC_MoveTaskAdapter:
             code="ERR_ARCHIVAL_REASON_REQUIRED",
             user_message="archival_reason is required when status is archived",
         )
-        with pytest.raises(
-            ToolError, match="archival_reason is required when status is archived"
-        ):
+        with pytest.raises(ToolError, match="archival_reason is required when status is archived"):
             await move_task(
                 ctx,
                 id="42",
@@ -188,9 +178,7 @@ class TestFromAC_MoveTaskAdapter:
             )
 
     @pytest.mark.asyncio
-    async def test_move_task_not_found_raises_tool_error(
-        self, ctx: MagicMock, mock_av: MagicMock
-    ) -> None:
+    async def test_move_task_not_found_raises_tool_error(self, ctx: MagicMock, mock_av: MagicMock) -> None:
         """Task not found → NotFoundError from AgentView → ToolError with user_message."""
         mock_av.move_task.side_effect = NotFoundError(
             code="ERR_NOT_FOUND",
@@ -211,25 +199,19 @@ class TestFromAC_StartWorkAdapter:
     """start_work adapter delegates to AgentView.start_work and maps KanbanError → ToolError."""
 
     @pytest.mark.asyncio
-    async def test_start_work_forwards_id_to_agent_view(
-        self, ctx: MagicMock, mock_av: MagicMock
-    ) -> None:
+    async def test_start_work_forwards_id_to_agent_view(self, ctx: MagicMock, mock_av: MagicMock) -> None:
         """start_work calls AgentView.start_work(int(task_id))."""
         await start_work(ctx, id="42")
         mock_av.start_work.assert_called_once_with(42)
 
     @pytest.mark.asyncio
-    async def test_start_work_returns_single_task_response(
-        self, ctx: MagicMock
-    ) -> None:
+    async def test_start_work_returns_single_task_response(self, ctx: MagicMock) -> None:
         """start_work returns SingleTaskResponse, not KanbanTask."""
         result = await start_work(ctx, id="42")
         assert isinstance(result, SingleTaskResponse)
 
     @pytest.mark.asyncio
-    async def test_start_work_already_claimed_raises_tool_error(
-        self, ctx: MagicMock, mock_av: MagicMock
-    ) -> None:
+    async def test_start_work_already_claimed_raises_tool_error(self, ctx: MagicMock, mock_av: MagicMock) -> None:
         """Already-claimed task → ConcurrencyError from AgentView → ToolError."""
         mock_av.start_work.side_effect = ConcurrencyError(
             code="ERR_ALREADY_CLAIMED",
@@ -239,9 +221,7 @@ class TestFromAC_StartWorkAdapter:
             await start_work(ctx, id="42")
 
     @pytest.mark.asyncio
-    async def test_start_work_archived_task_raises_tool_error(
-        self, ctx: MagicMock, mock_av: MagicMock
-    ) -> None:
+    async def test_start_work_archived_task_raises_tool_error(self, ctx: MagicMock, mock_av: MagicMock) -> None:
         """Archived task → ValidationError from AgentView → ToolError."""
         mock_av.start_work.side_effect = ValidationError(
             code="ERR_ARCHIVED_NOT_CLAIMABLE",
@@ -251,9 +231,7 @@ class TestFromAC_StartWorkAdapter:
             await start_work(ctx, id="42")
 
     @pytest.mark.asyncio
-    async def test_start_work_blocked_task_raises_tool_error(
-        self, ctx: MagicMock, mock_av: MagicMock
-    ) -> None:
+    async def test_start_work_blocked_task_raises_tool_error(self, ctx: MagicMock, mock_av: MagicMock) -> None:
         """Blocked task → ValidationError from AgentView → ToolError."""
         mock_av.start_work.side_effect = ValidationError(
             code="ERR_BLOCKED_NOT_CLAIMABLE",
@@ -275,9 +253,7 @@ class TestFromAC_EndWorkAdapter:
     """end_work adapter delegates to AgentView; all 7 params forwarded per Brief A §5.8."""
 
     @pytest.mark.asyncio
-    async def test_end_work_all_params_forwarded_to_agent_view(
-        self, ctx: MagicMock, mock_av: MagicMock
-    ) -> None:
+    async def test_end_work_all_params_forwarded_to_agent_view(self, ctx: MagicMock, mock_av: MagicMock) -> None:
         """All 7 Brief A §5.8 params (id, outcome, move_to, note, block_reason, archival_reason, archival_refs) forwarded."""
         await end_work(
             ctx,
@@ -306,9 +282,7 @@ class TestFromAC_EndWorkAdapter:
         assert isinstance(result, SingleTaskResponse)
 
     @pytest.mark.asyncio
-    async def test_end_work_success_auto_advance(
-        self, ctx: MagicMock, mock_av: MagicMock
-    ) -> None:
+    async def test_end_work_success_auto_advance(self, ctx: MagicMock, mock_av: MagicMock) -> None:
         """outcome='success': AgentView.end_work called with outcome='success'; move_to not provided."""
         await end_work(ctx, id="42", outcome="success", note=None)
         mock_av.end_work.assert_called_once()
@@ -318,27 +292,21 @@ class TestFromAC_EndWorkAdapter:
         assert call_kwargs.get("move_to") is None
 
     @pytest.mark.asyncio
-    async def test_end_work_reject_with_move_to(
-        self, ctx: MagicMock, mock_av: MagicMock
-    ) -> None:
+    async def test_end_work_reject_with_move_to(self, ctx: MagicMock, mock_av: MagicMock) -> None:
         """outcome='reject': AgentView.end_work called with move_to."""
         await end_work(ctx, id="42", outcome="reject", move_to="research", note=None)
         mock_av.end_work.assert_called_once()
         assert mock_av.end_work.call_args.kwargs.get("move_to") == "research"
 
     @pytest.mark.asyncio
-    async def test_end_work_release_idempotent(
-        self, ctx: MagicMock, mock_av: MagicMock
-    ) -> None:
+    async def test_end_work_release_idempotent(self, ctx: MagicMock, mock_av: MagicMock) -> None:
         """outcome='release': AgentView.end_work called with outcome='release' (idempotent no-op)."""
         await end_work(ctx, id="42", outcome="release", note=None)
         mock_av.end_work.assert_called_once()
         assert mock_av.end_work.call_args.kwargs.get("outcome") == "release"
 
     @pytest.mark.asyncio
-    async def test_end_work_block_with_block_reason(
-        self, ctx: MagicMock, mock_av: MagicMock
-    ) -> None:
+    async def test_end_work_block_with_block_reason(self, ctx: MagicMock, mock_av: MagicMock) -> None:
         """outcome='block' + block_reason: AgentView.end_work called with block_reason forwarded."""
         await end_work(
             ctx,
@@ -348,10 +316,7 @@ class TestFromAC_EndWorkAdapter:
             note=None,
         )
         mock_av.end_work.assert_called_once()
-        assert (
-            mock_av.end_work.call_args.kwargs.get("block_reason")
-            == "waiting for design review"
-        )
+        assert mock_av.end_work.call_args.kwargs.get("block_reason") == "waiting for design review"
 
     @pytest.mark.asyncio
     async def test_end_work_block_without_block_reason_raises_tool_error(
@@ -369,9 +334,7 @@ class TestFromAC_EndWorkAdapter:
         assert "block_reason is required when outcome=block" in str(exc_info.value)
 
     @pytest.mark.asyncio
-    async def test_end_work_forwards_non_null_archival_fields(
-        self, ctx: MagicMock, mock_av: MagicMock
-    ) -> None:
+    async def test_end_work_forwards_non_null_archival_fields(self, ctx: MagicMock, mock_av: MagicMock) -> None:
         """Non-null archival_reason/archival_refs forwarded to AgentView verbatim."""
         await end_work(
             ctx,
@@ -393,9 +356,7 @@ class TestFromAC_EndWorkAdapter:
         )
 
     @pytest.mark.asyncio
-    async def test_end_work_note_is_optional(
-        self, ctx: MagicMock, mock_av: MagicMock
-    ) -> None:
+    async def test_end_work_note_is_optional(self, ctx: MagicMock, mock_av: MagicMock) -> None:
         """note is optional per Brief A §5.8 — omitting note must not raise."""
         await end_work(ctx, id="42", outcome="success")
         mock_av.end_work.assert_called_once()
@@ -416,9 +377,7 @@ class TestFromAC_KanbanErrorMapping:
     ) -> None:
         """ValidationError from AgentView → ToolError that carries user_message."""
         user_msg = "invalid status value '__bad__'"
-        mock_av.move_task.side_effect = ValidationError(
-            code="ERR_INVALID_STATUS", user_message=user_msg
-        )
+        mock_av.move_task.side_effect = ValidationError(code="ERR_INVALID_STATUS", user_message=user_msg)
         with pytest.raises(ToolError, match="invalid status value"):
             await move_task(ctx, id="1", status="__bad__")
 
@@ -428,9 +387,7 @@ class TestFromAC_KanbanErrorMapping:
     ) -> None:
         """NotFoundError from AgentView → ToolError with JSON payload carrying code + message."""
         user_msg = "task 999 not found"
-        mock_av.start_work.side_effect = NotFoundError(
-            code="ERR_NOT_FOUND", user_message=user_msg
-        )
+        mock_av.start_work.side_effect = NotFoundError(code="ERR_NOT_FOUND", user_message=user_msg)
         with pytest.raises(ToolError) as exc_info:
             await start_work(ctx, id="999")
         payload = json.loads(str(exc_info.value))
@@ -443,9 +400,7 @@ class TestFromAC_KanbanErrorMapping:
     ) -> None:
         """ConcurrencyError from AgentView → ToolError with JSON payload carrying code + message."""
         user_msg = "already claimed at 2026-01-01T00:00:00+00:00"
-        mock_av.start_work.side_effect = ConcurrencyError(
-            code="ERR_ALREADY_CLAIMED", user_message=user_msg
-        )
+        mock_av.start_work.side_effect = ConcurrencyError(code="ERR_ALREADY_CLAIMED", user_message=user_msg)
         with pytest.raises(ToolError) as exc_info:
             await start_work(ctx, id="42")
         payload = json.loads(str(exc_info.value))
@@ -458,9 +413,7 @@ class TestFromAC_KanbanErrorMapping:
     ) -> None:
         """MigrationRequiredError (KanbanError subclass) from AgentView → ToolError with JSON payload."""
         user_msg = "board requires migration before use"
-        mock_av.end_work.side_effect = MigrationRequiredError(
-            code="ERR_MIGRATION_REQUIRED", user_message=user_msg
-        )
+        mock_av.end_work.side_effect = MigrationRequiredError(code="ERR_MIGRATION_REQUIRED", user_message=user_msg)
         with pytest.raises(ToolError) as exc_info:
             await end_work(ctx, id="42", outcome="success", note=None)
         payload = json.loads(str(exc_info.value))
@@ -478,39 +431,27 @@ class TestFromAC_EndWorkForbiddenMatrix:
     """end_work forbidden-parameter matrix: deterministic ToolError for all forbidden combos."""
 
     @pytest.mark.asyncio
-    async def test_success_with_invalid_move_to_raises_tool_error(
-        self, ctx: MagicMock, mock_av: MagicMock
-    ) -> None:
+    async def test_success_with_invalid_move_to_raises_tool_error(self, ctx: MagicMock, mock_av: MagicMock) -> None:
         """outcome='success' + invalid move_to → ToolError (ERR_MOVE_TO_INVALID_STATUS)."""
         mock_av.end_work.side_effect = ValidationError(
             code="ERR_MOVE_TO_INVALID_STATUS",
             user_message="move_to='nonexistent' is not a valid pipeline status",
         )
         with pytest.raises(ToolError, match="is not a valid pipeline status"):
-            await end_work(
-                ctx, id="42", outcome="success", move_to="nonexistent", note=None
-            )
+            await end_work(ctx, id="42", outcome="success", move_to="nonexistent", note=None)
 
     @pytest.mark.asyncio
-    async def test_release_with_move_to_raises_tool_error(
-        self, ctx: MagicMock, mock_av: MagicMock
-    ) -> None:
+    async def test_release_with_move_to_raises_tool_error(self, ctx: MagicMock, mock_av: MagicMock) -> None:
         """outcome='release' + move_to → ToolError (ERR_MOVE_TO_FORBIDDEN_ON_RELEASE)."""
         mock_av.end_work.side_effect = ValidationError(
             code="ERR_MOVE_TO_FORBIDDEN_ON_RELEASE",
             user_message="move_to is forbidden when outcome is release",
         )
-        with pytest.raises(
-            ToolError, match="move_to is forbidden when outcome is release"
-        ):
-            await end_work(
-                ctx, id="42", outcome="release", move_to="research", note=None
-            )
+        with pytest.raises(ToolError, match="move_to is forbidden when outcome is release"):
+            await end_work(ctx, id="42", outcome="release", move_to="research", note=None)
 
     @pytest.mark.asyncio
-    async def test_success_with_archival_reason_raises_tool_error(
-        self, ctx: MagicMock, mock_av: MagicMock
-    ) -> None:
+    async def test_success_with_archival_reason_raises_tool_error(self, ctx: MagicMock, mock_av: MagicMock) -> None:
         """outcome='success' + archival_reason → ToolError (ERR_ARCHIVAL_FIELDS_FORBIDDEN_ON_SUCCESS)."""
         mock_av.end_work.side_effect = ValidationError(
             code="ERR_ARCHIVAL_FIELDS_FORBIDDEN_ON_SUCCESS",
@@ -526,9 +467,7 @@ class TestFromAC_EndWorkForbiddenMatrix:
             )
 
     @pytest.mark.asyncio
-    async def test_success_with_archival_refs_raises_tool_error(
-        self, ctx: MagicMock, mock_av: MagicMock
-    ) -> None:
+    async def test_success_with_archival_refs_raises_tool_error(self, ctx: MagicMock, mock_av: MagicMock) -> None:
         """outcome='success' + archival_refs → ToolError (ERR_ARCHIVAL_FIELDS_FORBIDDEN_ON_SUCCESS)."""
         mock_av.end_work.side_effect = ValidationError(
             code="ERR_ARCHIVAL_FIELDS_FORBIDDEN_ON_SUCCESS",
@@ -544,23 +483,17 @@ class TestFromAC_EndWorkForbiddenMatrix:
             )
 
     @pytest.mark.asyncio
-    async def test_success_with_block_reason_raises_tool_error(
-        self, ctx: MagicMock, mock_av: MagicMock
-    ) -> None:
+    async def test_success_with_block_reason_raises_tool_error(self, ctx: MagicMock, mock_av: MagicMock) -> None:
         """outcome='success' + block_reason → ToolError (ERR_BLOCK_REASON_FORBIDDEN_ON_NON_BLOCK)."""
         mock_av.end_work.side_effect = ValidationError(
             code="ERR_BLOCK_REASON_FORBIDDEN_ON_NON_BLOCK",
             user_message="block_reason is forbidden when outcome is not block",
         )
         with pytest.raises(ToolError, match="block_reason is forbidden"):
-            await end_work(
-                ctx, id="42", outcome="success", block_reason="oops", note=None
-            )
+            await end_work(ctx, id="42", outcome="success", block_reason="oops", note=None)
 
     @pytest.mark.asyncio
-    async def test_reject_with_block_reason_raises_tool_error(
-        self, ctx: MagicMock, mock_av: MagicMock
-    ) -> None:
+    async def test_reject_with_block_reason_raises_tool_error(self, ctx: MagicMock, mock_av: MagicMock) -> None:
         """outcome='reject' + block_reason → ToolError (ERR_BLOCK_REASON_FORBIDDEN_ON_NON_BLOCK)."""
         mock_av.end_work.side_effect = ValidationError(
             code="ERR_BLOCK_REASON_FORBIDDEN_ON_NON_BLOCK",
@@ -577,23 +510,17 @@ class TestFromAC_EndWorkForbiddenMatrix:
             )
 
     @pytest.mark.asyncio
-    async def test_release_with_block_reason_raises_tool_error(
-        self, ctx: MagicMock, mock_av: MagicMock
-    ) -> None:
+    async def test_release_with_block_reason_raises_tool_error(self, ctx: MagicMock, mock_av: MagicMock) -> None:
         """outcome='release' + block_reason → ToolError (ERR_BLOCK_REASON_FORBIDDEN_ON_NON_BLOCK)."""
         mock_av.end_work.side_effect = ValidationError(
             code="ERR_BLOCK_REASON_FORBIDDEN_ON_NON_BLOCK",
             user_message="block_reason is forbidden when outcome is not block",
         )
         with pytest.raises(ToolError, match="block_reason is forbidden"):
-            await end_work(
-                ctx, id="42", outcome="release", block_reason="oops", note=None
-            )
+            await end_work(ctx, id="42", outcome="release", block_reason="oops", note=None)
 
     @pytest.mark.asyncio
-    async def test_fail_with_block_reason_raises_tool_error(
-        self, ctx: MagicMock, mock_av: MagicMock
-    ) -> None:
+    async def test_fail_with_block_reason_raises_tool_error(self, ctx: MagicMock, mock_av: MagicMock) -> None:
         """outcome='fail' + block_reason → ToolError (ERR_BLOCK_REASON_FORBIDDEN_ON_NON_BLOCK).
 
         'fail' is a valid non-block outcome (server.py L485) and must also reject block_reason.

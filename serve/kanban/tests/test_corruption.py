@@ -120,9 +120,7 @@ class TestFromAC_CorruptionShape:
 
     def test_ac_c21_file_path_none_allowed(self) -> None:
         """AC-C21: file_path=None is valid (pre-parse failures)."""
-        err = CorruptionError(
-            code="ERR_CORRUPT_DELIMITERS", user_message="msg", file_path=None
-        )
+        err = CorruptionError(code="ERR_CORRUPT_DELIMITERS", user_message="msg", file_path=None)
         assert err.file_path is None
 
     def test_ac_c21_each_err_corrupt_code_is_subclass_of_corruption_error(self) -> None:
@@ -143,12 +141,8 @@ class TestFromAC_CorruptionShape:
         for name in expected_codes:
             cls = getattr(m, name, None)
             assert cls is not None, f"{name} not exported from corruption module"
-            assert isinstance(cls, type), (
-                f"{name} is not a class — expected subclass of CorruptionError"
-            )
-            assert issubclass(cls, CorruptionError), (
-                f"{name} is not a subclass of CorruptionError"
-            )
+            assert isinstance(cls, type), f"{name} is not a class — expected subclass of CorruptionError"
+            assert issubclass(cls, CorruptionError), f"{name} is not a subclass of CorruptionError"
 
 
 # ---------------------------------------------------------------------------
@@ -318,9 +312,7 @@ class TestFromAC_CorruptionDetection:
         }
         from owlbear_kanban import corruption as corr_module  # noqa: PLC0415
 
-        exported = {
-            name for name in dir(corr_module) if name.startswith("ERR_CORRUPT_")
-        }
+        exported = {name for name in dir(corr_module) if name.startswith("ERR_CORRUPT_")}
         assert expected.issubset(exported), f"Missing codes: {expected - exported}"
 
     def test_ac_c17_valid_task_no_corruption(self, tmp_path: Path) -> None:
@@ -377,9 +369,7 @@ class TestFromAC_CorruptionDetection:
 class TestFromAC_AutoFixMatrix:
     """AC-C22: auto-fix matrix — (mode, field, default) triples for mode 3 and mode 4."""
 
-    def test_ac_c22_mode3_missing_priority_defaults_to_first_config_priority(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac_c22_mode3_missing_priority_defaults_to_first_config_priority(self, tmp_path: Path) -> None:
         """AC-C22: mode 3, priority field absent → auto-fixed to config.priorities[0]."""
         kanban_dir = _make_board(tmp_path)
         bad_file = kanban_dir / "tasks" / "1010-noprio.md"
@@ -392,9 +382,7 @@ class TestFromAC_AutoFixMatrix:
         outcome = attempt_repair(bad_file, "ERR_CORRUPT_MISSING_FIELD", config)
         assert outcome.action == "fixed"
 
-    def test_ac_c22_mode3_missing_tags_defaults_to_empty_list(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac_c22_mode3_missing_tags_defaults_to_empty_list(self, tmp_path: Path) -> None:
         """AC-C22: mode 3, tags field absent → auto-fixed to []."""
         kanban_dir = _make_board(tmp_path)
         bad_file = kanban_dir / "tasks" / "1011-notags.md"
@@ -407,9 +395,7 @@ class TestFromAC_AutoFixMatrix:
         outcome = attempt_repair(bad_file, "ERR_CORRUPT_MISSING_FIELD", config)
         assert outcome.action == "fixed"
 
-    def test_ac_c22_mode3_missing_depends_on_defaults_to_empty_list(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac_c22_mode3_missing_depends_on_defaults_to_empty_list(self, tmp_path: Path) -> None:
         """AC-C22: mode 3, depends_on absent → auto-fixed to []."""
         kanban_dir = _make_board(tmp_path)
         bad_file = kanban_dir / "tasks" / "1012-nodeps.md"
@@ -422,9 +408,7 @@ class TestFromAC_AutoFixMatrix:
         outcome = attempt_repair(bad_file, "ERR_CORRUPT_MISSING_FIELD", config)
         assert outcome.action == "fixed"
 
-    def test_ac_c22_mode3_missing_blocked_defaults_to_false(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac_c22_mode3_missing_blocked_defaults_to_false(self, tmp_path: Path) -> None:
         """AC-C22: mode 3, blocked absent → auto-fixed to false."""
         kanban_dir = _make_board(tmp_path)
         bad_file = kanban_dir / "tasks" / "1013-noblocked.md"
@@ -438,9 +422,7 @@ class TestFromAC_AutoFixMatrix:
         outcome = attempt_repair(bad_file, "ERR_CORRUPT_MISSING_FIELD", config)
         assert outcome.action == "fixed"
 
-    def test_ac_c22_mode3_missing_block_reason_defaults_to_null(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac_c22_mode3_missing_block_reason_defaults_to_null(self, tmp_path: Path) -> None:
         """AC-C22: mode 3, block_reason absent → auto-fixed to null."""
         kanban_dir = _make_board(tmp_path)
         bad_file = kanban_dir / "tasks" / "1014-nobr.md"
@@ -454,9 +436,7 @@ class TestFromAC_AutoFixMatrix:
         outcome = attempt_repair(bad_file, "ERR_CORRUPT_MISSING_FIELD", config)
         assert outcome.action == "fixed"
 
-    def test_ac_c22_mode3_missing_claimed_at_defaults_to_null(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac_c22_mode3_missing_claimed_at_defaults_to_null(self, tmp_path: Path) -> None:
         """AC-C22: mode 3, claimed_at absent → auto-fixed to null."""
         kanban_dir = _make_board(tmp_path)
         bad_file = kanban_dir / "tasks" / "1015-noclaim.md"
@@ -470,9 +450,7 @@ class TestFromAC_AutoFixMatrix:
         outcome = attempt_repair(bad_file, "ERR_CORRUPT_MISSING_FIELD", config)
         assert outcome.action == "fixed"
 
-    def test_ac_c22_mode3_missing_archival_reason_defaults_to_null(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac_c22_mode3_missing_archival_reason_defaults_to_null(self, tmp_path: Path) -> None:
         """AC-C22: mode 3, archival_reason absent → auto-fixed to null."""
         kanban_dir = _make_board(tmp_path)
         bad_file = kanban_dir / "tasks" / "1016-noar.md"
@@ -486,9 +464,7 @@ class TestFromAC_AutoFixMatrix:
         outcome = attempt_repair(bad_file, "ERR_CORRUPT_MISSING_FIELD", config)
         assert outcome.action == "fixed"
 
-    def test_ac_c22_mode3_missing_archival_refs_defaults_to_empty_list(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac_c22_mode3_missing_archival_refs_defaults_to_empty_list(self, tmp_path: Path) -> None:
         """AC-C22: mode 3, archival_refs absent → auto-fixed to []."""
         kanban_dir = _make_board(tmp_path)
         bad_file = kanban_dir / "tasks" / "1017-noarr.md"
@@ -584,9 +560,7 @@ class TestFromAC_AutoFixMatrix:
         outcome = attempt_repair(bad_file, "ERR_CORRUPT_TYPE_MISMATCH", config)
         assert outcome.action == "fixed"
 
-    def test_ac_c22_mode9_invalid_priority_coerced_to_first(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac_c22_mode9_invalid_priority_coerced_to_first(self, tmp_path: Path) -> None:
         """AC-C22: mode 9 (ERR_CORRUPT_INVALID_PRIORITY) → auto-fixed to config.priorities[0]."""
         kanban_dir = _make_board(tmp_path)
         bad_file = kanban_dir / "tasks" / "1021-badprio.md"
@@ -665,9 +639,7 @@ class TestFromAC_AutoFixMatrix:
     # CommentedMap writes Python None as bare `field:` instead of `field: null`.
     # ------------------------------------------------------------------
 
-    def test_ac_c22_mode3_missing_block_reason_persists_null_to_disk(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac_c22_mode3_missing_block_reason_persists_null_to_disk(self, tmp_path: Path) -> None:
         """AC-C22: mode 3, block_reason absent → repaired file must contain 'block_reason: null' on disk."""
         kanban_dir = _make_board(tmp_path)
         bad_file = kanban_dir / "tasks" / "2004-noblockreason.md"
@@ -687,9 +659,7 @@ class TestFromAC_AutoFixMatrix:
         assert "block_reason:" in repaired_content
         assert "block_reason: null" in repaired_content
 
-    def test_ac_c22_mode3_missing_claimed_at_persists_null_to_disk(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac_c22_mode3_missing_claimed_at_persists_null_to_disk(self, tmp_path: Path) -> None:
         """AC-C22: mode 3, claimed_at absent → repaired file must contain 'claimed_at: null' on disk."""
         kanban_dir = _make_board(tmp_path)
         bad_file = kanban_dir / "tasks" / "2005-noclaimedat.md"
@@ -709,9 +679,7 @@ class TestFromAC_AutoFixMatrix:
         assert "claimed_at:" in repaired_content
         assert "claimed_at: null" in repaired_content
 
-    def test_ac_c22_mode3_missing_archival_reason_persists_null_to_disk(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac_c22_mode3_missing_archival_reason_persists_null_to_disk(self, tmp_path: Path) -> None:
         """AC-C22: mode 3, archival_reason absent → repaired file must contain 'archival_reason: null' on disk."""
         kanban_dir = _make_board(tmp_path)
         bad_file = kanban_dir / "tasks" / "2006-noarchivalreason.md"
@@ -731,9 +699,7 @@ class TestFromAC_AutoFixMatrix:
         assert "archival_reason:" in repaired_content
         assert "archival_reason: null" in repaired_content
 
-    def test_ac_c22_mode3_missing_parent_persists_null_to_disk(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac_c22_mode3_missing_parent_persists_null_to_disk(self, tmp_path: Path) -> None:
         """AC-C22: mode 3, parent absent → repaired file must contain 'parent: null' on disk."""
         kanban_dir = _make_board(tmp_path)
         bad_file = kanban_dir / "tasks" / "2008-noparent.md"
@@ -760,9 +726,7 @@ class TestFromAC_AutoFixMatrix:
     # pass against existing implementation and must be retained.
     # ------------------------------------------------------------------
 
-    def test_ac_c22_mode3_missing_tags_persists_empty_list_to_disk(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac_c22_mode3_missing_tags_persists_empty_list_to_disk(self, tmp_path: Path) -> None:
         """AC-C22: mode 3, tags absent → repaired file must contain 'tags: []' on disk."""
         kanban_dir = _make_board(tmp_path)
         bad_file = kanban_dir / "tasks" / "3001-notags.md"
@@ -782,9 +746,7 @@ class TestFromAC_AutoFixMatrix:
         assert "tags:" in repaired_content
         assert "tags: []" in repaired_content
 
-    def test_ac_c22_mode3_missing_depends_on_persists_empty_list_to_disk(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac_c22_mode3_missing_depends_on_persists_empty_list_to_disk(self, tmp_path: Path) -> None:
         """AC-C22: mode 3, depends_on absent → repaired file must contain 'depends_on: []' on disk."""
         kanban_dir = _make_board(tmp_path)
         bad_file = kanban_dir / "tasks" / "3002-nodeps.md"
@@ -804,9 +766,7 @@ class TestFromAC_AutoFixMatrix:
         assert "depends_on:" in repaired_content
         assert "depends_on: []" in repaired_content
 
-    def test_ac_c22_mode3_missing_blocked_persists_false_to_disk(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac_c22_mode3_missing_blocked_persists_false_to_disk(self, tmp_path: Path) -> None:
         """AC-C22: mode 3, blocked absent → repaired file must contain 'blocked: false' on disk."""
         kanban_dir = _make_board(tmp_path)
         bad_file = kanban_dir / "tasks" / "3003-noblocked.md"
@@ -826,9 +786,7 @@ class TestFromAC_AutoFixMatrix:
         assert "blocked:" in repaired_content
         assert "blocked: false" in repaired_content
 
-    def test_ac_c22_mode3_missing_archival_refs_persists_empty_list_to_disk(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac_c22_mode3_missing_archival_refs_persists_empty_list_to_disk(self, tmp_path: Path) -> None:
         """AC-C22: mode 3, archival_refs absent → repaired file must contain 'archival_refs: []' on disk."""
         kanban_dir = _make_board(tmp_path)
         bad_file = kanban_dir / "tasks" / "3004-noarchiverefs.md"
@@ -866,9 +824,7 @@ class TestFromAC_AutoFixMatrix:
         assert "id: 3005" in repaired_content
         assert 'id: "3005"' not in repaired_content
 
-    def test_ac_c22_mode4_string_bool_true_persists_true_to_disk(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac_c22_mode4_string_bool_true_persists_true_to_disk(self, tmp_path: Path) -> None:
         """AC-C22: mode 4, blocked='true' (string) → repaired file must contain 'blocked: true' on disk."""
         kanban_dir = _make_board(tmp_path)
         bad_file = kanban_dir / "tasks" / "3006-strbool-true.md"
@@ -887,9 +843,7 @@ class TestFromAC_AutoFixMatrix:
         assert "blocked: true" in repaired_content
         assert 'blocked: "true"' not in repaired_content
 
-    def test_ac_c22_mode4_string_bool_false_persists_false_to_disk(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac_c22_mode4_string_bool_false_persists_false_to_disk(self, tmp_path: Path) -> None:
         """AC-C22: mode 4, blocked='false' (string) → repaired file must contain 'blocked: false' on disk."""
         kanban_dir = _make_board(tmp_path)
         bad_file = kanban_dir / "tasks" / "3007-strbool-false.md"
@@ -958,9 +912,7 @@ class TestBuilderDiscovered:
 
         assert exc_info.value.code == "ERR_CORRUPT_INVALID_PRIORITY"
 
-    def test_attempt_repair_mode9_persists_priority_to_disk(
-        self, tmp_path: Path
-    ) -> None:
+    def test_attempt_repair_mode9_persists_priority_to_disk(self, tmp_path: Path) -> None:
         """Mode 9 auto-fix must write the repaired priority value to disk."""
         kanban_dir = _make_board(tmp_path)
         bad_file = kanban_dir / "tasks" / "1033-repair-priority.md"
@@ -978,9 +930,7 @@ class TestBuilderDiscovered:
         assert f"priority: {config.priorities[0]}" in repaired_content
         assert "priority: not_valid" not in repaired_content
 
-    def test_attempt_repair_mode3_persists_default_priority_to_disk(
-        self, tmp_path: Path
-    ) -> None:
+    def test_attempt_repair_mode3_persists_default_priority_to_disk(self, tmp_path: Path) -> None:
         """Mode 3 missing priority auto-fix must persist the default priority field."""
         kanban_dir = _make_board(tmp_path)
         bad_file = kanban_dir / "tasks" / "1034-missing-priority.md"
@@ -997,9 +947,7 @@ class TestBuilderDiscovered:
         repaired_content = bad_file.read_text(encoding="utf-8")
         assert f"priority: {config.priorities[0]}" in repaired_content
 
-    def test_attempt_repair_mode3_no_changes_returns_fixed(
-        self, tmp_path: Path
-    ) -> None:
+    def test_attempt_repair_mode3_no_changes_returns_fixed(self, tmp_path: Path) -> None:
         """Mode 3 repair returns fixed/no-op when no defaultable fields are missing."""
         kanban_dir = _make_board(tmp_path)
         file_path = kanban_dir / "tasks" / "1035-no-change.md"
@@ -1011,9 +959,7 @@ class TestBuilderDiscovered:
         assert outcome.action == "fixed"
         assert outcome.detail == "no changes needed"
 
-    def test_detect_corruption_frontmatter_not_mapping_reports_yaml_parse(
-        self, tmp_path: Path
-    ) -> None:
+    def test_detect_corruption_frontmatter_not_mapping_reports_yaml_parse(self, tmp_path: Path) -> None:
         """A non-mapping frontmatter document is mode 5 corruption."""
         kanban_dir = _make_board(tmp_path)
         bad_file = kanban_dir / "tasks" / "1036-frontmatter-list.md"
@@ -1028,9 +974,7 @@ class TestBuilderDiscovered:
         assert err is not None
         assert err.code == "ERR_CORRUPT_YAML_PARSE"
 
-    def test_detect_corruption_blocked_string_reports_type_mismatch(
-        self, tmp_path: Path
-    ) -> None:
+    def test_detect_corruption_blocked_string_reports_type_mismatch(self, tmp_path: Path) -> None:
         """Blocked as a string must be detected as mode 4 type mismatch."""
         kanban_dir = _make_board(tmp_path)
         bad_file = kanban_dir / "tasks" / "1037-blocked-string.md"
@@ -1164,12 +1108,9 @@ class TestFromAC_CleanupDeadCodes:
         extra = actual - expected
         missing = expected - actual
         assert not extra, (
-            f"ERR_CORRUPT_* has extra codes with no Brief §4.1 authority (must be removed): "
-            f"{sorted(extra)}"
+            f"ERR_CORRUPT_* has extra codes with no Brief §4.1 authority (must be removed): {sorted(extra)}"
         )
-        assert not missing, (
-            f"ERR_CORRUPT_* is missing Brief §4.1 codes (must be added): {sorted(missing)}"
-        )
+        assert not missing, f"ERR_CORRUPT_* is missing Brief §4.1 codes (must be added): {sorted(missing)}"
 
 
 """P1-05: Kanban corruption scanner encoding hardening — failing tests (RED phase).
@@ -1276,9 +1217,7 @@ class TestFromAC_EncodingHardening:
     # tasks/ directory — AC-1 (no UnicodeDecodeError raised)
     # -----------------------------------------------------------------
 
-    def test_non_utf8_in_tasks_dir_does_not_raise_unicode_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_non_utf8_in_tasks_dir_does_not_raise_unicode_error(self, tmp_path: Path) -> None:
         """AC-1: Non-UTF8 file under tasks/ must not propagate UnicodeDecodeError.
 
         RED: current code raises UnicodeDecodeError from read_text(encoding='utf-8').
@@ -1297,9 +1236,7 @@ class TestFromAC_EncodingHardening:
     # tasks/ directory — AC-2 (CorruptionError shape)
     # -----------------------------------------------------------------
 
-    def test_non_utf8_in_tasks_dir_returns_corruption_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_non_utf8_in_tasks_dir_returns_corruption_error(self, tmp_path: Path) -> None:
         """AC-2: detect_corruption must return CorruptionError for non-UTF8 tasks/ file.
 
         RED: current code raises UnicodeDecodeError instead of returning CorruptionError.
@@ -1310,9 +1247,7 @@ class TestFromAC_EncodingHardening:
         config = load_config(board_dir)
 
         result = detect_corruption(bad_file, config)
-        assert isinstance(result, CorruptionError), (
-            f"Expected CorruptionError instance, got {type(result).__name__!r}"
-        )
+        assert isinstance(result, CorruptionError), f"Expected CorruptionError instance, got {type(result).__name__!r}"
 
     def test_non_utf8_in_tasks_dir_code_is_encoding(self, tmp_path: Path) -> None:
         """AC-2: CorruptionError for non-UTF8 tasks/ file has .code == ERR_CORRUPT_ENCODING.
@@ -1329,9 +1264,7 @@ class TestFromAC_EncodingHardening:
 
         result = detect_corruption(bad_file, config)
         assert isinstance(result, CorruptionError)
-        assert result.code == ERR_CORRUPT_ENCODING, (
-            f"Expected code ERR_CORRUPT_ENCODING, got {result.code!r}"
-        )
+        assert result.code == ERR_CORRUPT_ENCODING, f"Expected code ERR_CORRUPT_ENCODING, got {result.code!r}"
 
     def test_non_utf8_in_tasks_dir_file_path_is_set(self, tmp_path: Path) -> None:
         """AC-2: CorruptionError for non-UTF8 tasks/ file has .file_path set.
@@ -1345,9 +1278,7 @@ class TestFromAC_EncodingHardening:
 
         result = detect_corruption(bad_file, config)
         assert isinstance(result, CorruptionError)
-        assert result.file_path is not None, (
-            "file_path must be set on the CorruptionError"
-        )
+        assert result.file_path is not None, "file_path must be set on the CorruptionError"
         assert result.file_path == str(bad_file)
 
     def test_non_utf8_in_tasks_dir_detail_is_non_empty(self, tmp_path: Path) -> None:
@@ -1363,18 +1294,15 @@ class TestFromAC_EncodingHardening:
         result = detect_corruption(bad_file, config)
         assert isinstance(result, CorruptionError)
         assert isinstance(result.detail, str), "detail must be a string"
-        assert any(
-            kw in result.detail.lower()
-            for kw in ("encoding", "decode", "utf-8", "utf8", "unicode")
-        ), f"detail must reference the encoding/decode failure, got {result.detail!r}"
+        assert any(kw in result.detail.lower() for kw in ("encoding", "decode", "utf-8", "utf8", "unicode")), (
+            f"detail must reference the encoding/decode failure, got {result.detail!r}"
+        )
 
     # -----------------------------------------------------------------
     # archive/ directory — AC-1 (no UnicodeDecodeError raised)
     # -----------------------------------------------------------------
 
-    def test_non_utf8_in_archive_dir_does_not_raise_unicode_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_non_utf8_in_archive_dir_does_not_raise_unicode_error(self, tmp_path: Path) -> None:
         """AC-1: Non-UTF8 file under archive/ must not propagate UnicodeDecodeError.
 
         RED: current code raises UnicodeDecodeError from read_text(encoding='utf-8').
@@ -1391,9 +1319,7 @@ class TestFromAC_EncodingHardening:
     # archive/ directory — AC-2 (CorruptionError shape)
     # -----------------------------------------------------------------
 
-    def test_non_utf8_in_archive_dir_returns_corruption_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_non_utf8_in_archive_dir_returns_corruption_error(self, tmp_path: Path) -> None:
         """AC-2: detect_corruption must return CorruptionError for non-UTF8 archive/ file.
 
         RED: current code raises UnicodeDecodeError instead.
@@ -1404,9 +1330,7 @@ class TestFromAC_EncodingHardening:
         config = load_config(board_dir)
 
         result = detect_corruption(bad_file, config)
-        assert isinstance(result, CorruptionError), (
-            f"Expected CorruptionError instance, got {type(result).__name__!r}"
-        )
+        assert isinstance(result, CorruptionError), f"Expected CorruptionError instance, got {type(result).__name__!r}"
 
     def test_non_utf8_in_archive_dir_code_is_encoding(self, tmp_path: Path) -> None:
         """AC-2: CorruptionError for non-UTF8 archive/ file has .code == ERR_CORRUPT_ENCODING.
@@ -1422,9 +1346,7 @@ class TestFromAC_EncodingHardening:
 
         result = detect_corruption(bad_file, config)
         assert isinstance(result, CorruptionError)
-        assert result.code == ERR_CORRUPT_ENCODING, (
-            f"Expected code ERR_CORRUPT_ENCODING, got {result.code!r}"
-        )
+        assert result.code == ERR_CORRUPT_ENCODING, f"Expected code ERR_CORRUPT_ENCODING, got {result.code!r}"
 
     def test_non_utf8_in_archive_dir_file_path_is_set(self, tmp_path: Path) -> None:
         """AC-2: CorruptionError for non-UTF8 archive/ file has .file_path set.
@@ -1438,9 +1360,7 @@ class TestFromAC_EncodingHardening:
 
         result = detect_corruption(bad_file, config)
         assert isinstance(result, CorruptionError)
-        assert result.file_path is not None, (
-            "file_path must be set on the CorruptionError"
-        )
+        assert result.file_path is not None, "file_path must be set on the CorruptionError"
         assert result.file_path == str(bad_file)
 
     def test_non_utf8_in_archive_dir_detail_is_non_empty(self, tmp_path: Path) -> None:
@@ -1456,10 +1376,9 @@ class TestFromAC_EncodingHardening:
         result = detect_corruption(bad_file, config)
         assert isinstance(result, CorruptionError)
         assert isinstance(result.detail, str), "detail must be a string"
-        assert any(
-            kw in result.detail.lower()
-            for kw in ("encoding", "decode", "utf-8", "utf8", "unicode")
-        ), f"detail must reference the encoding/decode failure, got {result.detail!r}"
+        assert any(kw in result.detail.lower() for kw in ("encoding", "decode", "utf-8", "utf8", "unicode")), (
+            f"detail must reference the encoding/decode failure, got {result.detail!r}"
+        )
 
     # -----------------------------------------------------------------
     # Regression guard — AC-3

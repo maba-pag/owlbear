@@ -55,7 +55,7 @@ Before decomposition, detect whether the request is exactly one follow-up task w
 
 If yes, use the shortcut flow:
 
-- Skip Steps 2–4 and Step 7.
+- Skip Step 1b, Steps 2–4, and Step 7.
 - Continue with Steps 5, 5a, 5b (user mode only), and 6.
 - Preserve caller metadata verbatim where provided: title, parent ID, and tags.
 - Status routing: caller should specify target status (for example, "at backlog" or "at research"). Default is `backlog`; researcher follow-ups use `research`; never create `todo` (normalize caller-requested `todo` to `backlog`, or `research` for researcher follow-ups).
@@ -64,6 +64,36 @@ If yes, use the shortcut flow:
 - Return the created task ID explicitly in your response message (for downstream linking and parent-child follow-up operations).
 
 Typical shortcut cases: "fix off-by-one", "delete stale docs", "architect calibration".
+
+## Step 1b — Source-Read & Symbol Capture Guard
+
+Apply this step when the input plan, parent task, or brief references existing codebase modules or symbols that will appear in AC text.
+
+This step may be skipped only for greenfield requests with no existing code references.
+
+1. Identify target source files from caller context (plan text, parent task, brief, or referenced module paths).
+2. Read each target source file before drafting AC.
+3. Extract and record referenced symbols that may be cited in AC text:
+    - function signatures and return types
+    - enum or union values
+    - component names
+    - token names
+4. During AC drafting, cross-check each AC line against the recorded symbols.
+5. If an AC references a function return type, enum value, or component/token name, ensure it exactly matches the source-defined symbol.
+
+Do not continue to Step 2 until this guard is complete when triggered.
+
+### good_example — symbol guard applied
+
+- Parent task references `computeSignal` and card status enums in an existing UI module.
+- Planner reads the module first, records `computeSignal(...): CardSignal` and `CardSignal = "dr-pending" | "blocked" | "claimed" | "deps-unmet" | "ready" | "unknown"`.
+- Planner drafts AC lines that use only those exact symbols and values.
+
+### bad_example — source-read skipped
+
+- Planner drafts AC from memory and writes `computeSignal` returns an object with `state`.
+- Planner also lists statuses as `green/yellow/red/gray/stale`.
+- AC is factually incorrect because symbol references were not validated against source.
 
 ## Step 2 — Check Board State
 
@@ -77,7 +107,7 @@ Each task must be:
 - **Domain scoped:** one primary domain per task (see `r-architecture-standards` domain taxonomy). Multi-domain tasks must be split.
 - **Testable:** clear pass/fail criterion
 - **Small:** ~2 hours of focused work max
-- **TDD paired:** test task before implementation task
+- **Self-contained TDD:** each implementation task carries its own RED→GREEN cycle through the pipeline (test-writer writes RED, builder implements GREEN). Do not create separate test-only tasks paired with implementation tasks — this deadlocks the pipeline because test-only tasks can never pass the builder/reviewer green-test gates. When test design is complex, create a preceding **research** task instead (delivers findings to `.owlbear/research/`, not test code).
 
 ### Task Complexity Budget
 
@@ -126,11 +156,12 @@ When drafting AC for planned tasks:
 
 Build an explicit dependency graph:
 
-- Test depends on nothing (or prior schema)
-- Implementation depends on its test task
+- Research depends on nothing (or prior schema)
+- Implementation depends on its research task (when one exists)
 - Schema, CRUD, agent, CLI layers form a natural hierarchy
 - Cross-phase dependencies only when strictly necessary
 - Every dependency references a concrete task ID
+- Do not create test → implementation dependency chains — each task carries its own TDD cycle
 
 ## Step 5 — Assign Priority and Tags
 
@@ -165,6 +196,7 @@ Before creating any task, validate every planned task:
 - **Reject oversized tasks** — no task may exceed the Task Complexity Budget unless it has a `Complexity waiver:` note.
 - **Reject scratch-only proof** — if required proof can only live in `.owlbear/scratch/`, split or add a tracked-artifact deliverable owned by an agent that can write it.
 - **Reject hidden downstream impact** — behavior-changing refactors must name affected durable suites/consumers or include a downstream-impact scan task.
+- **Reject test-artifact-only tasks with `behavioral`/`critical` bundle** — tasks whose sole deliverable is a test file deadlock the pipeline (builder can't make tests green without implementation). Use a research task for complex test design, and let the implementation task carry the TDD cycle.
 
 If a planned task fails: refine the title and body or stop. Never create a placeholder task.
 
@@ -217,6 +249,8 @@ When decomposition mode yields two or more implementation tasks (excluding test 
 - `depends_on`: all sibling implementation task IDs
 - Status: `backlog` via create, then `move_task(id={created_id}, status="backlog")`
 
+**Parent completion gate:** After creating the consolidation test, add its ID as a dependency on the parent task via `edit_task(id={parent_id}, add_dep=[{consolidation_id}])`. This ensures the parent shows `dep_status: blocked` until all child work is verified, and prevents the parent from being prematurely moved to `done`.
+
 Group by dependency layer (independent first, then dependents). Record created task IDs for the report.
 
 In shortcut mode, report the created task ID as a top-level result line (for example, `Created follow-up task: #{id}`).
@@ -256,7 +290,7 @@ Append to parent task body (if dispatched with parent ID):
 ## Verification Checklist
 
 - [ ] Announced decomposition plan and expected count
-- [ ] Every impl task has a preceding test task with dependency (decomposition mode only)
+- [ ] Every task carries its own RED→GREEN TDD cycle (no separate test-only tasks)
 - [ ] No task has multiple responsibilities
 - [ ] Every task fits the Task Complexity Budget or has a `Complexity waiver:` note
 - [ ] No task mixes multiple proof modes without being split
@@ -266,6 +300,7 @@ Append to parent task body (if dispatched with parent ID):
 - [ ] Priority reflects blocking potential
 - [ ] Tags include `phase-{n}` + category (decomposition mode only)
 - [ ] No cycles in dependency graph
+- [ ] Parent task has `depends_on` pointing to the consolidation test (completion gate)
 - [ ] Mermaid diagram matches task list (decomposition mode only)
 - [ ] Total 20 tasks or fewer
 - [ ] AC describes "done", not "how"
@@ -275,7 +310,7 @@ Append to parent task body (if dispatched with parent ID):
 
 ## Known Pitfalls
 
-- **Forgetting TDD pairs:** Every implementation task needs a preceding test task. Missing these causes pipeline violations downstream.
+- **Splitting RED and GREEN into separate tasks:** Do not create test-only tasks paired with implementation tasks — this deadlocks the pipeline (test-only tasks can never pass green-test gates). Each implementation task carries its own RED→GREEN cycle. Use research tasks for complex test design.
 - **Cross-phase dependencies:** These create long dependency chains that block parallelism. Use only when strictly necessary.
 - **Placeholder tasks:** Never create tasks with vague titles or empty bodies — they accumulate as board noise.
 - **Broad AC piles:** Many clear AC lines can still create an unclear task when they require different proof modes or failure domains. Split by proof burden, not just by wording quality.

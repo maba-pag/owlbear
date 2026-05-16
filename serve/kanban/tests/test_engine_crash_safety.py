@@ -124,9 +124,7 @@ class TestFromAC_EngineCrashSafety:
 
         # --- Assert: no task file created by the failed write ---
         all_files = list((kanban_dir / "tasks").glob("*.md"))
-        assert all_files == [], (
-            f"No task file must exist after a failed write; found {all_files}."
-        )
+        assert all_files == [], f"No task file must exist after a failed write; found {all_files}."
 
         # --- Assert: retry gets the SAME ID (scan-based: no file → same max+1 = 1) ---
         task = engine.create_task("after-crash")
@@ -142,9 +140,7 @@ class TestFromAC_EngineCrashSafety:
     #         (save_config inside flock) runs BEFORE write_task.
     # ------------------------------------------------------------------
 
-    def test_ac2_config_not_modified_when_write_task_executes(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac2_config_not_modified_when_write_task_executes(self, tmp_path: Path) -> None:
         """AC-#1443 scan-based: config.next_id must be UNCHANGED when write_task is invoked.
 
         Intercepts write_task and snapshots config.next_id at call time.
@@ -166,9 +162,7 @@ class TestFromAC_EngineCrashSafety:
         with patch("owlbear_kanban.engine.write_task", side_effect=_spy_write_task):
             engine.create_task("spy-subject")
 
-        assert len(config_next_id_at_write) == 1, (
-            "write_task must be called exactly once"
-        )
+        assert len(config_next_id_at_write) == 1, "write_task must be called exactly once"
         observed_next_id = config_next_id_at_write[0]
         assert observed_next_id == 1001, (
             f"Scan-based allocate_next_id must NOT modify config.next_id before write_task; "
@@ -182,9 +176,7 @@ class TestFromAC_EngineCrashSafety:
     #         inline config.next_id read/write.
     # ------------------------------------------------------------------
 
-    def test_ac2_create_task_routes_through_allocate_next_id(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac2_create_task_routes_through_allocate_next_id(self, tmp_path: Path) -> None:
         """AC-2: allocate_next_id is called exactly once per create_task invocation.
 
         Patches owlbear_kanban.storage.allocate_next_id with a wrapping spy.
@@ -209,9 +201,7 @@ class TestFromAC_EngineCrashSafety:
     #       the #1062 refactor (correct id, title, file on disk, config).
     # ------------------------------------------------------------------
 
-    def test_ac3_create_task_contract_preserved_with_new_routing(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac3_create_task_contract_preserved_with_new_routing(self, tmp_path: Path) -> None:
         """AC-3: create_task still returns a correct Task and updates config.
 
         Regression guard verifying that the #1062 allocate_next_id refactor does
@@ -247,6 +237,5 @@ class TestFromAC_EngineCrashSafety:
 
         # --- Routing assertion ---
         assert spy.call_count == 1, (
-            f"AC-3 regression: create_task must route through allocate_next_id "
-            f"(call_count=1), got {spy.call_count}."
+            f"AC-3 regression: create_task must route through allocate_next_id (call_count=1), got {spy.call_count}."
         )

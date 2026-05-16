@@ -111,9 +111,7 @@ class TestFromAC_FilesystemWalk:
         assert json_file not in result
 
     @pytest.mark.parametrize("excluded_dir", _EXCLUDED_DIRS)
-    def test_excludes_all_exclusion_dirs(
-        self, tmp_path: Path, excluded_dir: str
-    ) -> None:
+    def test_excludes_all_exclusion_dirs(self, tmp_path: Path, excluded_dir: str) -> None:
         """Boundary: each of the 12 exclusion dirs is skipped during walk."""
         excluded_path = tmp_path / excluded_dir
         excluded_path.mkdir(parents=True, exist_ok=True)
@@ -139,13 +137,9 @@ class TestFromAC_FilesystemWalk:
         assert similar in result
 
     @pytest.mark.parametrize("excluded_name", _EXCLUDED_NAMES)
-    def test_excludes_name_based_dirs_at_any_depth(
-        self, tmp_path: Path, excluded_name: str
-    ) -> None:
+    def test_excludes_name_based_dirs_at_any_depth(self, tmp_path: Path, excluded_name: str) -> None:
         """Boundary: name-based exclusions (node_modules, .venv, etc.) work at any nesting depth."""
-        nested = (
-            tmp_path / "serve" / "cockpit" / "web" / excluded_name / "pkg" / "README.md"
-        )
+        nested = tmp_path / "serve" / "cockpit" / "web" / excluded_name / "pkg" / "README.md"
         nested.parent.mkdir(parents=True)
         nested.write_text("# Nested excluded\n")
         result = collect_docs(tmp_path)
@@ -202,9 +196,7 @@ class TestFromAC_MarkdownFormat:
         assert "- # `Setup & Installation`" in text
         assert "- ## `Configuration`" in text
 
-    def test_outbound_links_subsection_present_when_links_exist(
-        self, tmp_path: Path
-    ) -> None:
+    def test_outbound_links_subsection_present_when_links_exist(self, tmp_path: Path) -> None:
         """Happy: ### Outbound links sub-section appears when a file has links."""
         _make_md(
             tmp_path,
@@ -216,9 +208,7 @@ class TestFromAC_MarkdownFormat:
         text = index_path.read_text()
         assert "### Outbound links" in text
 
-    def test_outbound_links_subsection_absent_when_no_links(
-        self, tmp_path: Path
-    ) -> None:
+    def test_outbound_links_subsection_absent_when_no_links(self, tmp_path: Path) -> None:
         """Edge: ### Outbound links sub-section is omitted when a file has no links."""
         _make_md(tmp_path, "docs/page.md", "# Page\n\nNo links here.\n")
         index_path = tmp_path / ".owlbear" / "doc-index.md"
@@ -229,9 +219,7 @@ class TestFromAC_MarkdownFormat:
         entry_start = text.index("## docs/page.md")
         # Next file section starts with '## ' or end of file
         next_entry = text.find("\n## ", entry_start + 1)
-        entry_text = (
-            text[entry_start:] if next_entry == -1 else text[entry_start:next_entry]
-        )
+        entry_text = text[entry_start:] if next_entry == -1 else text[entry_start:next_entry]
         assert "### Outbound links" not in entry_text
 
 
@@ -270,9 +258,7 @@ class TestFromAC_OutboundLinkExtraction:
         # The link from inside the code block must NOT appear in Outbound links
         entry_start = text.index("## page.md")
         next_entry = text.find("\n## ", entry_start + 1)
-        entry_text = (
-            text[entry_start:] if next_entry == -1 else text[entry_start:next_entry]
-        )
+        entry_text = text[entry_start:] if next_entry == -1 else text[entry_start:next_entry]
         assert "https://github.com/org/repo" not in entry_text
 
     def test_links_in_inline_code_not_extracted(self, tmp_path: Path) -> None:
@@ -284,9 +270,7 @@ class TestFromAC_OutboundLinkExtraction:
         text = index_path.read_text()
         entry_start = text.index("## page.md")
         next_entry = text.find("\n## ", entry_start + 1)
-        entry_text = (
-            text[entry_start:] if next_entry == -1 else text[entry_start:next_entry]
-        )
+        entry_text = text[entry_start:] if next_entry == -1 else text[entry_start:next_entry]
         assert "https://example.com" not in entry_text
 
     def test_link_in_indented_code_block_not_extracted(self, tmp_path: Path) -> None:
@@ -306,9 +290,7 @@ class TestFromAC_OutboundLinkExtraction:
         text = index_path.read_text()
         entry_start = text.index("## page.md")
         next_entry = text.find("\n## ", entry_start + 1)
-        entry_text = (
-            text[entry_start:] if next_entry == -1 else text[entry_start:next_entry]
-        )
+        entry_text = text[entry_start:] if next_entry == -1 else text[entry_start:next_entry]
         assert "https://hidden.example.com" not in entry_text
 
 
@@ -332,9 +314,7 @@ class TestFromAC_DiagramDescribesField:
         text = index_path.read_text()
         entry_start = text.index("## share/diagrams/overview.excalidraw")
         next_entry = text.find("\n## ", entry_start + 1)
-        entry_text = (
-            text[entry_start:] if next_entry == -1 else text[entry_start:next_entry]
-        )
+        entry_text = text[entry_start:] if next_entry == -1 else text[entry_start:next_entry]
         assert "describes" in entry_text
 
     def test_describes_field_contains_globs(self, tmp_path: Path) -> None:
@@ -349,9 +329,7 @@ class TestFromAC_DiagramDescribesField:
         text = index_path.read_text()
         entry_start = text.index("## share/diagrams/kanban.excalidraw")
         next_entry = text.find("\n## ", entry_start + 1)
-        entry_text = (
-            text[entry_start:] if next_entry == -1 else text[entry_start:next_entry]
-        )
+        entry_text = text[entry_start:] if next_entry == -1 else text[entry_start:next_entry]
         # At least one glob pattern (containing * or /) should appear
         assert "serve/kanban/**" in entry_text or "serve/mcp-kanban/**" in entry_text
 
@@ -363,9 +341,7 @@ class TestFromAC_DiagramDescribesField:
         text = index_path.read_text()
         entry_start = text.index("## README.md")
         next_entry = text.find("\n## ", entry_start + 1)
-        entry_text = (
-            text[entry_start:] if next_entry == -1 else text[entry_start:next_entry]
-        )
+        entry_text = text[entry_start:] if next_entry == -1 else text[entry_start:next_entry]
         assert "describes" not in entry_text
 
 
@@ -561,9 +537,7 @@ class TestBuilderDiscovered:
         text = index_path.read_text()
         entry_start = text.index("## arch.excalidraw")
         next_entry = text.find("\n## ", entry_start + 1)
-        entry_text = (
-            text[entry_start:] if next_entry == -1 else text[entry_start:next_entry]
-        )
+        entry_text = text[entry_start:] if next_entry == -1 else text[entry_start:next_entry]
         assert "describes" in entry_text
         assert "serve/**" in entry_text
 
@@ -589,9 +563,7 @@ class TestBuilderDiscovered:
         assert "https://first.example.com" in link_targets
         assert "https://ignored.example.com" not in link_targets
 
-    def test_main_generates_index_when_absent(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_main_generates_index_when_absent(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """main() creates the index at .owlbear/doc-index.md when it does not exist."""
         _make_md(tmp_path, "README.md", "# Root\n")
         index_path = tmp_path / ".owlbear" / "doc-index.md"
@@ -600,9 +572,7 @@ class TestBuilderDiscovered:
         assert index_path.exists()
         assert "## README.md" in index_path.read_text()
 
-    def test_main_skips_regen_when_index_is_current(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_main_skips_regen_when_index_is_current(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """main() does not overwrite the index when it is already up-to-date."""
         doc = _make_md(tmp_path, "README.md", "# Root\n")
         index_path = tmp_path / ".owlbear" / "doc-index.md"
@@ -616,9 +586,7 @@ class TestBuilderDiscovered:
         main()
         assert index_path.read_text() == "existing content"
 
-    def test_main_rejects_absolute_output_path(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_main_rejects_absolute_output_path(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """main() raises SystemExit when --output resolves to a path outside the workspace root."""
         _make_md(tmp_path, "README.md", "# Root\n")
         monkeypatch.setattr(
@@ -629,17 +597,13 @@ class TestBuilderDiscovered:
         with pytest.raises(SystemExit):
             main()
 
-    def test_should_regenerate_empty_workspace_with_existing_index(
-        self, tmp_path: Path
-    ) -> None:
+    def test_should_regenerate_empty_workspace_with_existing_index(self, tmp_path: Path) -> None:
         """should_regenerate returns False when no docs exist but an index exists — no stale trigger."""
         index_path = tmp_path / "doc-index.md"
         index_path.write_text("# existing\n")
         assert should_regenerate(index_path, tmp_path) is False
 
-    def test_excalidraw_empty_describes_list_no_describes_line(
-        self, tmp_path: Path
-    ) -> None:
+    def test_excalidraw_empty_describes_list_no_describes_line(self, tmp_path: Path) -> None:
         """Excalidraw with describes=[] silently emits no describes line in the index entry."""
         _make_excalidraw(tmp_path, "empty.excalidraw", '{"describes": []}')
         index_path = tmp_path / "doc-index.md"
@@ -647,7 +611,5 @@ class TestBuilderDiscovered:
         text = index_path.read_text()
         entry_start = text.index("## empty.excalidraw")
         next_entry = text.find("\n## ", entry_start + 1)
-        entry_text = (
-            text[entry_start:] if next_entry == -1 else text[entry_start:next_entry]
-        )
+        entry_text = text[entry_start:] if next_entry == -1 else text[entry_start:next_entry]
         assert "describes" not in entry_text

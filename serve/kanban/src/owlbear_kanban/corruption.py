@@ -113,16 +113,10 @@ ERR_CORRUPT_DUPLICATE_ID = _make_corruption_code_type("ERR_CORRUPT_DUPLICATE_ID"
 ERR_CORRUPT_MISSING_FIELD = _make_corruption_code_type("ERR_CORRUPT_MISSING_FIELD")
 ERR_CORRUPT_TYPE_MISMATCH = _make_corruption_code_type("ERR_CORRUPT_TYPE_MISMATCH")
 ERR_CORRUPT_YAML_PARSE = _make_corruption_code_type("ERR_CORRUPT_YAML_PARSE")
-ERR_CORRUPT_ID_FILENAME_MISMATCH = _make_corruption_code_type(
-    "ERR_CORRUPT_ID_FILENAME_MISMATCH"
-)
-ERR_CORRUPT_DUPLICATE_LOCATION = _make_corruption_code_type(
-    "ERR_CORRUPT_DUPLICATE_LOCATION"
-)
+ERR_CORRUPT_ID_FILENAME_MISMATCH = _make_corruption_code_type("ERR_CORRUPT_ID_FILENAME_MISMATCH")
+ERR_CORRUPT_DUPLICATE_LOCATION = _make_corruption_code_type("ERR_CORRUPT_DUPLICATE_LOCATION")
 ERR_CORRUPT_INVALID_STATUS = _make_corruption_code_type("ERR_CORRUPT_INVALID_STATUS")
-ERR_CORRUPT_INVALID_PRIORITY = _make_corruption_code_type(
-    "ERR_CORRUPT_INVALID_PRIORITY"
-)
+ERR_CORRUPT_INVALID_PRIORITY = _make_corruption_code_type("ERR_CORRUPT_INVALID_PRIORITY")
 ERR_CORRUPT_ENCODING = _make_corruption_code_type("ERR_CORRUPT_ENCODING")
 
 
@@ -430,10 +424,7 @@ def attempt_repair(  # noqa: C901, PLR0911, PLR0912, PLR0915
                     file_path=str(path),
                     code=code_name,
                     action="quarantined",
-                    detail=(
-                        f"rename collision on {new_path.name}; "
-                        f"quarantined to {quarantine_path}"
-                    ),
+                    detail=(f"rename collision on {new_path.name}; quarantined to {quarantine_path}"),
                 )
             except Exception as exc:  # noqa: BLE001
                 return RepairOutcome(
@@ -587,15 +578,9 @@ def scan_and_fix(kanban_dir: Path, config: BoardConfig) -> list[RepairOutcome]: 
     archive_files: list[Path] = []
 
     if tasks_dir.exists():
-        task_files = [
-            p for p in sorted(tasks_dir.glob("*.md")) if not p.name.startswith(".tmp-")
-        ]
+        task_files = [p for p in sorted(tasks_dir.glob("*.md")) if not p.name.startswith(".tmp-")]
     if archive_dir.exists():
-        archive_files = [
-            p
-            for p in sorted(archive_dir.glob("*.md"))
-            if not p.name.startswith(".tmp-")
-        ]
+        archive_files = [p for p in sorted(archive_dir.glob("*.md")) if not p.name.startswith(".tmp-")]
 
     # Mode 2: duplicate IDs — quarantine both
     id_to_paths: dict[int, list[Path]] = {}

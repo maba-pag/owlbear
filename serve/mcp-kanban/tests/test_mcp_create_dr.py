@@ -92,12 +92,8 @@ class TestFromAC_CreateDrTool:
             f"registered tools: {[t.name for t in mcp._tool_manager._tools.values()]}"
         )
         fn_ref = getattr(tool, "fn", None)
-        assert (
-            fn_ref is server_mod.create_dr
-            or getattr(fn_ref, "__wrapped__", None) is server_mod.create_dr
-        ), (
-            "create_dr tool must be backed by the module-level create_dr callable; "
-            "decorator identity check failed"
+        assert fn_ref is server_mod.create_dr or getattr(fn_ref, "__wrapped__", None) is server_mod.create_dr, (
+            "create_dr tool must be backed by the module-level create_dr callable; decorator identity check failed"
         )
 
     def test_create_dr_tool_accepts_four_required_params(self) -> None:
@@ -113,14 +109,11 @@ class TestFromAC_CreateDrTool:
         for required in ("task_id", "agent", "request_type", "body"):
             assert required in params, f"create_dr missing required param: {required}"
             assert params[required].default is inspect.Parameter.empty, (
-                f"create_dr param '{required}' must be required (no default), "
-                f"got default={params[required].default!r}"
+                f"create_dr param '{required}' must be required (no default), got default={params[required].default!r}"
             )
 
     @pytest.mark.asyncio
-    async def test_create_dr_success_returns_created_true_and_relative_path(
-        self, app_ctx: AppContext
-    ) -> None:
+    async def test_create_dr_success_returns_created_true_and_relative_path(self, app_ctx: AppContext) -> None:
         import owlbear_mcp_kanban.server as server_mod
 
         fn = getattr(server_mod, "create_dr", None)
@@ -129,9 +122,7 @@ class TestFromAC_CreateDrTool:
         ctx = _make_mcp_ctx(app_ctx)
         absolute_path = app_ctx.kanban_dir / "decisions" / "pending" / "1-decision.md"
 
-        with patch(
-            "owlbear_mcp_kanban.server.decisions.create_dr", return_value=absolute_path
-        ) as mock_create_dr:
+        with patch("owlbear_mcp_kanban.server.decisions.create_dr", return_value=absolute_path) as mock_create_dr:
             result = await fn(
                 ctx,
                 task_id="1",
@@ -145,27 +136,21 @@ class TestFromAC_CreateDrTool:
         assert _kwargs.get("task_id") == 1 or (len(_args) > 0 and _args[0] == 1), (
             "create_dr did not forward task_id to decisions.create_dr"
         )
-        assert _kwargs.get("agent") == "builder" or (
-            len(_args) > 1 and _args[1] == "builder"
-        ), "create_dr did not forward agent to decisions.create_dr"
-        assert _kwargs.get("request_type") == "decision" or (
-            len(_args) > 2 and _args[2] == "decision"
-        ), "create_dr did not forward request_type to decisions.create_dr"
+        assert _kwargs.get("agent") == "builder" or (len(_args) > 1 and _args[1] == "builder"), (
+            "create_dr did not forward agent to decisions.create_dr"
+        )
+        assert _kwargs.get("request_type") == "decision" or (len(_args) > 2 and _args[2] == "decision"), (
+            "create_dr did not forward request_type to decisions.create_dr"
+        )
         assert _kwargs.get("body") == "## Question\nShould we proceed?" or (
             len(_args) > 3 and _args[3] == "## Question\nShould we proceed?"
         ), "create_dr did not forward body to decisions.create_dr"
         assert result["created"] is True
-        assert result["path"] == "decisions/pending/1-decision.md", (
-            "create_dr must return a workspace-relative path"
-        )
-        assert not Path(result["path"]).is_absolute(), (
-            "create_dr response path must be relative, not absolute"
-        )
+        assert result["path"] == "decisions/pending/1-decision.md", "create_dr must return a workspace-relative path"
+        assert not Path(result["path"]).is_absolute(), "create_dr response path must be relative, not absolute"
 
     @pytest.mark.asyncio
-    async def test_create_dr_task_not_found_maps_to_tool_error(
-        self, app_ctx: AppContext
-    ) -> None:
+    async def test_create_dr_task_not_found_maps_to_tool_error(self, app_ctx: AppContext) -> None:
         import owlbear_mcp_kanban.server as server_mod
 
         fn = getattr(server_mod, "create_dr", None)
@@ -175,9 +160,7 @@ class TestFromAC_CreateDrTool:
         with (
             patch(
                 "owlbear_mcp_kanban.server.decisions.create_dr",
-                side_effect=NotFoundError(
-                    code="ERR_NOT_FOUND", user_message="task 999 not found"
-                ),
+                side_effect=NotFoundError(code="ERR_NOT_FOUND", user_message="task 999 not found"),
             ),
             pytest.raises(ToolError, match="task 999 not found"),
         ):
@@ -190,22 +173,16 @@ class TestFromAC_CreateDrTool:
             )
 
     @pytest.mark.asyncio
-    async def test_create_dr_collision_path_passthrough(
-        self, app_ctx: AppContext
-    ) -> None:
+    async def test_create_dr_collision_path_passthrough(self, app_ctx: AppContext) -> None:
         import owlbear_mcp_kanban.server as server_mod
 
         fn = getattr(server_mod, "create_dr", None)
         assert callable(fn), "owlbear_mcp_kanban.server.create_dr must exist"
 
         ctx = _make_mcp_ctx(app_ctx)
-        collision_path = (
-            app_ctx.kanban_dir / "decisions" / "pending" / "1-decision-2.md"
-        )
+        collision_path = app_ctx.kanban_dir / "decisions" / "pending" / "1-decision-2.md"
 
-        with patch(
-            "owlbear_mcp_kanban.server.decisions.create_dr", return_value=collision_path
-        ):
+        with patch("owlbear_mcp_kanban.server.decisions.create_dr", return_value=collision_path):
             result = await fn(
                 ctx,
                 task_id="1",
@@ -217,14 +194,10 @@ class TestFromAC_CreateDrTool:
         assert result == {
             "created": True,
             "path": "decisions/pending/1-decision-2.md",
-        }, (
-            "create_dr must preserve collision suffix path returned by decisions.create_dr"
-        )
+        }, "create_dr must preserve collision suffix path returned by decisions.create_dr"
 
     @pytest.mark.asyncio
-    async def test_create_dr_accepts_action_request_type(
-        self, app_ctx: AppContext
-    ) -> None:
+    async def test_create_dr_accepts_action_request_type(self, app_ctx: AppContext) -> None:
         import owlbear_mcp_kanban.server as server_mod
 
         fn = getattr(server_mod, "create_dr", None)
@@ -233,9 +206,7 @@ class TestFromAC_CreateDrTool:
         ctx = _make_mcp_ctx(app_ctx)
         action_path = app_ctx.kanban_dir / "decisions" / "pending" / "1-action.md"
 
-        with patch(
-            "owlbear_mcp_kanban.server.decisions.create_dr", return_value=action_path
-        ) as mock_create_dr:
+        with patch("owlbear_mcp_kanban.server.decisions.create_dr", return_value=action_path) as mock_create_dr:
             result = await fn(
                 ctx,
                 task_id="1",
@@ -245,15 +216,11 @@ class TestFromAC_CreateDrTool:
             )
 
         mock_create_dr.assert_called_once()
-        assert result["created"] is True, (
-            "create_dr must accept request_type='action' (got non-success result)"
-        )
+        assert result["created"] is True, "create_dr must accept request_type='action' (got non-success result)"
         assert result["path"] == "decisions/pending/1-action.md"
 
     @pytest.mark.asyncio
-    async def test_create_dr_rejects_invalid_request_type(
-        self, app_ctx: AppContext
-    ) -> None:
+    async def test_create_dr_rejects_invalid_request_type(self, app_ctx: AppContext) -> None:
         import owlbear_mcp_kanban.server as server_mod
 
         fn = getattr(server_mod, "create_dr", None)

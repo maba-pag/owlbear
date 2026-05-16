@@ -83,32 +83,21 @@ class TestFromAC_ActivityAppendQuery:
         assert record["action"] == "claim"
         assert record["source"] == "agent"
 
-    def test_ac_c42_append_multiple_events_each_on_own_line(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac_c42_append_multiple_events_each_on_own_line(self, tmp_path: Path) -> None:
         """AC-C42: multiple appends produce one JSON record per line (JSONL)."""
         kanban_dir = _make_board(tmp_path)
         for action in ("claim", "edit", "end_work"):
             append_activity_event(_make_event(action=action), kanban_dir)
 
-        lines = (
-            (kanban_dir / "activity.jsonl")
-            .read_text(encoding="utf-8")
-            .strip()
-            .splitlines()
-        )
+        lines = (kanban_dir / "activity.jsonl").read_text(encoding="utf-8").strip().splitlines()
         assert len(lines) == 3
         actions = [json.loads(line)["action"] for line in lines]
         assert actions == ["claim", "edit", "end_work"]
 
-    def test_ac_c42_event_fields_match_activity_event_schema(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac_c42_event_fields_match_activity_event_schema(self, tmp_path: Path) -> None:
         """AC-C42: written JSONL line contains all ActivityEvent fields."""
         kanban_dir = _make_board(tmp_path)
-        event = _make_event(
-            task_id=42, action="move", source="cockpit", detail="todo→in-progress"
-        )
+        event = _make_event(task_id=42, action="move", source="cockpit", detail="todo→in-progress")
         append_activity_event(event, kanban_dir)
 
         line = (kanban_dir / "activity.jsonl").read_text(encoding="utf-8").strip()
@@ -158,12 +147,8 @@ class TestFromAC_ActivityAppendQuery:
         past = (now - timedelta(hours=2)).isoformat()
         future = (now + timedelta(seconds=5)).isoformat()
 
-        append_activity_event(
-            _make_event(ts=(now - timedelta(hours=3)).isoformat()), kanban_dir
-        )
-        append_activity_event(
-            _make_event(ts=(now - timedelta(hours=1)).isoformat()), kanban_dir
-        )
+        append_activity_event(_make_event(ts=(now - timedelta(hours=3)).isoformat()), kanban_dir)
+        append_activity_event(_make_event(ts=(now - timedelta(hours=1)).isoformat()), kanban_dir)
         append_activity_event(_make_event(ts=future), kanban_dir)
 
         result = list_activity_events(kanban_dir, since=past)
@@ -209,9 +194,7 @@ class TestFromAC_ActivityAppendQuery:
 
         assert read_calls == [], f"Unexpectedly read .md files: {read_calls}"
 
-    def test_ac_c42_frontmatter_exclusion_via_path_read_text(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac_c42_frontmatter_exclusion_via_path_read_text(self, tmp_path: Path) -> None:
         """AC-C42: list_activity_events never reads .md files via Path.read_text or Path.open.
 
         Complements test_ac_c42_does_not_scan_task_frontmatter by also patching
@@ -247,9 +230,7 @@ class TestFromAC_ActivityAppendQuery:
         ):
             list_activity_events(kanban_dir, task_id=1001)
 
-        assert md_read_calls == [], (
-            f"Unexpectedly read .md files via Path: {md_read_calls}"
-        )
+        assert md_read_calls == [], f"Unexpectedly read .md files via Path: {md_read_calls}"
 
     def test_ac_c44_no_session_jsonl_file_on_disk(self, tmp_path: Path) -> None:
         """AC-C44: no session table on disk — only activity.jsonl."""
@@ -276,9 +257,7 @@ class TestFromAC_ActivityAppendQuery:
 class TestFromAC_ActivityCompaction:
     """AC-C44a: compact_activity_log contract — cutoff, open sessions, floor, atomic, idempotent."""
 
-    def test_ac_c44a_a_before_dt_none_resolves_to_latest_closed_session(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac_c44a_a_before_dt_none_resolves_to_latest_closed_session(self, tmp_path: Path) -> None:
         """AC-C44a (a): before_dt=None uses most-recently-closed session ended_at as cutoff.
 
         Uses >500 entries so the hard floor is active and the compat branch
@@ -293,9 +272,7 @@ class TestFromAC_ActivityCompaction:
 
         # Closed session for task 1 — positions 1-2, both outside the last-500 window.
         old_claim_ts = (now - timedelta(hours=601)).isoformat()
-        append_activity_event(
-            _make_event(action="claim", ts=old_claim_ts, task_id=1), kanban_dir
-        )
+        append_activity_event(_make_event(action="claim", ts=old_claim_ts, task_id=1), kanban_dir)
         old_close_ts = (now - timedelta(hours=600)).isoformat()
         append_activity_event(
             _make_event(
@@ -313,9 +290,7 @@ class TestFromAC_ActivityCompaction:
         # session/cutoff logic.
         for i in range(500):
             ts = (now - timedelta(hours=599 - i)).isoformat()
-            append_activity_event(
-                _make_event(action="edit", ts=ts, task_id=2), kanban_dir
-            )
+            append_activity_event(_make_event(action="edit", ts=ts, task_id=2), kanban_dir)
 
         # Total: 502 entries. Last 500 = filler[0..499] (positions 3-502).
         result = compact_activity_log(kanban_dir, before_dt=None)
@@ -340,9 +315,7 @@ class TestFromAC_ActivityCompaction:
             f"Exactly 1 record (old claim) should be compacted; got {result.records_compacted}"
         )
 
-    def test_ac_c44a_a_resolves_to_most_recent_close_not_oldest(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac_c44a_a_resolves_to_most_recent_close_not_oldest(self, tmp_path: Path) -> None:
         """AC-C44a(a): before_dt=None resolves to the MOST RECENTLY closed session timestamp.
 
         Uses >500 entries so the hard floor is active.  Both closed sessions and the
@@ -358,9 +331,7 @@ class TestFromAC_ActivityCompaction:
 
         # Older closed session (task 1) — position 1-2, outside floor window.
         append_activity_event(
-            _make_event(
-                action="claim", ts=(now - timedelta(hours=606)).isoformat(), task_id=1
-            ),
+            _make_event(action="claim", ts=(now - timedelta(hours=606)).isoformat(), task_id=1),
             kanban_dir,
         )
         append_activity_event(
@@ -387,13 +358,9 @@ class TestFromAC_ActivityCompaction:
         # All are newer than newer_close_dt so they survive both floor and cutoff logic.
         for i in range(499):
             ts = (now - timedelta(hours=601 - i)).isoformat()
-            append_activity_event(
-                _make_event(action="edit", ts=ts, task_id=3), kanban_dir
-            )
+            append_activity_event(_make_event(action="edit", ts=ts, task_id=3), kanban_dir)
         append_activity_event(
-            _make_event(
-                action="edit", ts=(now - timedelta(hours=1)).isoformat(), task_id=3
-            ),
+            _make_event(action="edit", ts=(now - timedelta(hours=1)).isoformat(), task_id=3),
             kanban_dir,
         )
 
@@ -412,9 +379,7 @@ class TestFromAC_ActivityCompaction:
         )
 
         # Event after newer close must be present
-        assert any(e.task_id == 3 for e in remaining), (
-            "Event after newer close must be retained"
-        )
+        assert any(e.task_id == 3 for e in remaining), "Event after newer close must be retained"
 
     def test_ac_c44a_b_open_sessions_always_retained(self, tmp_path: Path) -> None:
         """AC-C44a (b): entries in open sessions (no matching end event) always retained."""
@@ -437,9 +402,7 @@ class TestFromAC_ActivityCompaction:
         assert len(remaining) >= 1
         assert any(e.action == "claim" for e in remaining)
 
-    def test_ac_c44a_b_reclaim_same_task_compacts_closed_cycle_entries(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac_c44a_b_reclaim_same_task_compacts_closed_cycle_entries(self, tmp_path: Path) -> None:
         """AC-C44a(b): compaction removes closed-cycle entries for a task that was later re-claimed.
 
         Uses >500 entries so the hard floor is active.  The old closed cycle (first_claim
@@ -455,25 +418,17 @@ class TestFromAC_ActivityCompaction:
         # First (closed) claim cycle for task 7 — positions 1-2, outside floor window.
         first_claim_ts = (now - timedelta(hours=506)).isoformat()
         first_close_ts = (now - timedelta(hours=505)).isoformat()
-        append_activity_event(
-            _make_event(action="claim", ts=first_claim_ts, task_id=7), kanban_dir
-        )
-        append_activity_event(
-            _make_event(action="end_work", ts=first_close_ts, task_id=7), kanban_dir
-        )
+        append_activity_event(_make_event(action="claim", ts=first_claim_ts, task_id=7), kanban_dir)
+        append_activity_event(_make_event(action="end_work", ts=first_close_ts, task_id=7), kanban_dir)
 
         # 499 filler entries — fills the floor window (positions 3-501).
         for i in range(499):
             ts = (now - timedelta(hours=504 - i)).isoformat()
-            append_activity_event(
-                _make_event(action="move", ts=ts, task_id=i % 6 + 1), kanban_dir
-            )
+            append_activity_event(_make_event(action="move", ts=ts, task_id=i % 6 + 1), kanban_dir)
 
         # Second (open) claim cycle for task 7 — inside floor window (position 502).
         second_claim_ts = (now - timedelta(minutes=30)).isoformat()
-        append_activity_event(
-            _make_event(action="claim", ts=second_claim_ts, task_id=7), kanban_dir
-        )
+        append_activity_event(_make_event(action="claim", ts=second_claim_ts, task_id=7), kanban_dir)
 
         # Total: 502 entries. Last 500 = filler + second_claim (positions 3-502).
         # Compact with explicit cutoff that makes first_claim and first_close eligible.
@@ -483,19 +438,19 @@ class TestFromAC_ActivityCompaction:
         remaining = list_activity_events(kanban_dir, task_id=7)
 
         # Old closed-cycle claim must be gone (outside floor, before cutoff).
-        assert not any(
-            e.action == "claim" and e.timestamp == first_claim_ts for e in remaining
-        ), "Old closed-cycle claim must be compacted"
+        assert not any(e.action == "claim" and e.timestamp == first_claim_ts for e in remaining), (
+            "Old closed-cycle claim must be compacted"
+        )
 
         # Old closed-cycle close/end_work must also be gone — entire closed cycle eligible.
-        assert not any(
-            e.action == "end_work" and e.timestamp == first_close_ts for e in remaining
-        ), "Old closed-cycle end_work must also be compacted — not just the claim row"
+        assert not any(e.action == "end_work" and e.timestamp == first_close_ts for e in remaining), (
+            "Old closed-cycle end_work must also be compacted — not just the claim row"
+        )
 
         # Current open-cycle claim must be retained (open session always kept).
-        assert any(
-            e.action == "claim" and e.timestamp == second_claim_ts for e in remaining
-        ), "Current open-cycle claim must always be retained"
+        assert any(e.action == "claim" and e.timestamp == second_claim_ts for e in remaining), (
+            "Current open-cycle claim must always be retained"
+        )
 
     def test_ac_c44a_c_last_500_entries_always_retained(self, tmp_path: Path) -> None:
         """AC-C44a (c): at least last 500 entries always retained regardless of cutoff."""
@@ -566,13 +521,9 @@ class TestFromAC_ActivityCompaction:
         now = datetime.now(tz=UTC)
         old_ts = (now - timedelta(hours=3)).isoformat()
         recent_ts = (now - timedelta(minutes=10)).isoformat()
+        append_activity_event(_make_event(ts=old_ts, task_id=1, action="claim"), kanban_dir)
         append_activity_event(
-            _make_event(ts=old_ts, task_id=1, action="claim"), kanban_dir
-        )
-        append_activity_event(
-            _make_event(
-                ts=(now - timedelta(hours=2)).isoformat(), task_id=1, action="end_work"
-            ),
+            _make_event(ts=(now - timedelta(hours=2)).isoformat(), task_id=1, action="end_work"),
             kanban_dir,
         )
         append_activity_event(_make_event(ts=recent_ts, task_id=2), kanban_dir)
@@ -609,9 +560,7 @@ class TestFromAC_ActivityCompaction:
 class TestBuilderDiscovered:
     """Builder-discovered tests for activity_store edge cases."""
 
-    def test_compact_activity_log_floor_applies_to_small_session_logs(
-        self, tmp_path: Path
-    ) -> None:
+    def test_compact_activity_log_floor_applies_to_small_session_logs(self, tmp_path: Path) -> None:
         """Small session-bearing logs retain all rows when cutoff would compact everything."""
         kanban_dir = _make_board(tmp_path)
         now = datetime.now(tz=UTC)
@@ -651,9 +600,7 @@ class TestBuilderDiscovered:
         assert len(result) == 1
         assert result[0].task_id == 77
 
-    def test_compact_activity_log_missing_file_returns_zeroes(
-        self, tmp_path: Path
-    ) -> None:
+    def test_compact_activity_log_missing_file_returns_zeroes(self, tmp_path: Path) -> None:
         """Compaction on a missing activity.jsonl returns zero-byte/zero-record result."""
         kanban_dir = _make_board(tmp_path)
 
@@ -696,9 +643,7 @@ class TestBuilderDiscovered:
         # Write 600 old events
         for i in range(600):
             ts = (now - timedelta(hours=600 - i)).isoformat()
-            append_activity_event(
-                _make_event(ts=ts, task_id=i % 10, action="edit"), kanban_dir
-            )
+            append_activity_event(_make_event(ts=ts, task_id=i % 10, action="edit"), kanban_dir)
         # Compact with a cutoff newer than all entries so floor logic is required.
         cutoff = now + timedelta(hours=1)
         result = compact_activity_log(kanban_dir, before_dt=cutoff)
@@ -777,9 +722,7 @@ class TestFromAC_ActivityStoreFloorBoundary:
     All 500 entries are removed.  The same defect applies to any board smaller than 500.
     """
 
-    def test_ac_c44a_c_exactly_500_entries_floor_retains_all(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac_c44a_c_exactly_500_entries_floor_retains_all(self, tmp_path: Path) -> None:
         """AC-C44a(c): exactly 500 entries + future cutoff → records_compacted == 0.
 
         When the total log size equals the floor (500), the floor must protect all entries.
@@ -796,9 +739,7 @@ class TestFromAC_ActivityStoreFloorBoundary:
 
         for i in range(500):
             ts = (now - timedelta(hours=500 - i)).isoformat()
-            append_activity_event(
-                _make_event_1058(ts=ts, task_id=i % 20, action="move"), kanban_dir
-            )
+            append_activity_event(_make_event_1058(ts=ts, task_id=i % 20, action="move"), kanban_dir)
 
         cutoff = now + timedelta(hours=1)
         result = compact_activity_log(kanban_dir, before_dt=cutoff)
@@ -810,9 +751,7 @@ class TestFromAC_ActivityStoreFloorBoundary:
         remaining = list_activity_events(kanban_dir)
         assert len(remaining) == 500
 
-    def test_ac_c44a_c_small_board_fewer_than_500_entries_all_retained(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac_c44a_c_small_board_fewer_than_500_entries_all_retained(self, tmp_path: Path) -> None:
         """AC-C44a(c): small board (300 entries) + future cutoff → records_compacted == 0.
 
         Brief §7.1 explicitly names "prevents catastrophic compaction on a small board".
@@ -830,23 +769,18 @@ class TestFromAC_ActivityStoreFloorBoundary:
 
         for i in range(n):
             ts = (now - timedelta(hours=n - i)).isoformat()
-            append_activity_event(
-                _make_event_1058(ts=ts, task_id=i % 10, action="move"), kanban_dir
-            )
+            append_activity_event(_make_event_1058(ts=ts, task_id=i % 10, action="move"), kanban_dir)
 
         cutoff = now + timedelta(hours=1)
         result = compact_activity_log(kanban_dir, before_dt=cutoff)
 
         assert result.records_compacted == 0, (
-            f"Floor must protect all {n} entries on a small board; "
-            f"wrongly compacted {result.records_compacted}"
+            f"Floor must protect all {n} entries on a small board; wrongly compacted {result.records_compacted}"
         )
         remaining = list_activity_events(kanban_dir)
         assert len(remaining) == n
 
-    def test_ac_c44a_c_single_entry_board_floor_retains_it(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac_c44a_c_single_entry_board_floor_retains_it(self, tmp_path: Path) -> None:
         """AC-C44a(c): single-entry board + future cutoff → record is retained (floor protects).
 
         A board with 1 entry has an effective floor of 1; that entry must never be
@@ -861,16 +795,13 @@ class TestFromAC_ActivityStoreFloorBoundary:
         now = datetime.now(tz=UTC)
 
         old_ts = (now - timedelta(hours=48)).isoformat()
-        append_activity_event(
-            _make_event_1058(ts=old_ts, task_id=7, action="move"), kanban_dir
-        )
+        append_activity_event(_make_event_1058(ts=old_ts, task_id=7, action="move"), kanban_dir)
 
         cutoff = now + timedelta(hours=1)
         result = compact_activity_log(kanban_dir, before_dt=cutoff)
 
         assert result.records_compacted == 0, (
-            "A single-entry board must not compact its only record; "
-            f"wrongly compacted {result.records_compacted}"
+            f"A single-entry board must not compact its only record; wrongly compacted {result.records_compacted}"
         )
         remaining = list_activity_events(kanban_dir)
         assert len(remaining) == 1
@@ -883,9 +814,7 @@ class TestFromAC_ActivityCompactionIdempotency:
     covers idempotency at the boundary where floor behaviour must hold on every run.
     """
 
-    def test_ac_c44a_e_idempotent_at_floor_boundary_small_board(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac_c44a_e_idempotent_at_floor_boundary_small_board(self, tmp_path: Path) -> None:
         """AC-C44a(e): two successive compactions on a 300-entry board both compact 0 records.
 
         With a future cutoff the first run must compact 0 records (floor protects all).
@@ -901,21 +830,17 @@ class TestFromAC_ActivityCompactionIdempotency:
 
         for i in range(n):
             ts = (now - timedelta(hours=n - i)).isoformat()
-            append_activity_event(
-                _make_event_1058(ts=ts, task_id=i % 10, action="move"), kanban_dir
-            )
+            append_activity_event(_make_event_1058(ts=ts, task_id=i % 10, action="move"), kanban_dir)
 
         cutoff = now + timedelta(hours=1)
         result1 = compact_activity_log(kanban_dir, before_dt=cutoff)
         result2 = compact_activity_log(kanban_dir, before_dt=cutoff)
 
         assert result1.records_compacted == 0, (
-            f"First compact must not remove entries (floor protects 300); "
-            f"compacted {result1.records_compacted}"
+            f"First compact must not remove entries (floor protects 300); compacted {result1.records_compacted}"
         )
         assert result2.records_compacted == 0, (
-            f"Second compact must also compact 0 (idempotent); "
-            f"compacted {result2.records_compacted}"
+            f"Second compact must also compact 0 (idempotent); compacted {result2.records_compacted}"
         )
         assert result1.before_bytes == result2.before_bytes, (
             "File size must be unchanged between runs — idempotency violated"
@@ -965,9 +890,7 @@ class TestFromAC_ActivityEventModel:
                 detail=None,
             )
 
-    def test_ac_activity_event_written_detail_none_not_in_jsonl(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac_activity_event_written_detail_none_not_in_jsonl(self, tmp_path: Path) -> None:
         """AC §1.2: when detail is required, an event without detail must never appear in JSONL.
 
         If ActivityEvent requires detail, appending an event with detail=None must either
@@ -991,8 +914,7 @@ class TestFromAC_ActivityEventModel:
 
         events = list_activity_events(kanban_dir)
         assert events == [], (
-            "list_activity_events must skip JSONL lines whose detail violates §1.2 "
-            f"(detail=null); got {events}"
+            f"list_activity_events must skip JSONL lines whose detail violates §1.2 (detail=null); got {events}"
         )
 
 
@@ -1010,9 +932,7 @@ class TestFromAC_ActivityStoreFloorSessionBearing:
     2. open_session_starts non-empty — floor_count incorrectly set to 0.
     """
 
-    def test_ac_c44a_c_auto_cutoff_session_bearing_small_log_floor_retains_all(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac_c44a_c_auto_cutoff_session_bearing_small_log_floor_retains_all(self, tmp_path: Path) -> None:
         """AC-C44a(c): before_dt=None on a small (<=500) fully-closed session log retains all."""
         kanban_dir = _make_board_1058(tmp_path)
         now = datetime.now(tz=UTC)
@@ -1021,9 +941,7 @@ class TestFromAC_ActivityStoreFloorSessionBearing:
         for i in range(n // 2):
             claim_ts = (now - timedelta(hours=n - i * 2)).isoformat()
             close_ts = (now - timedelta(hours=n - i * 2 - 1)).isoformat()
-            append_activity_event(
-                _make_event_1058(ts=claim_ts, task_id=i + 1, action="claim"), kanban_dir
-            )
+            append_activity_event(_make_event_1058(ts=claim_ts, task_id=i + 1, action="claim"), kanban_dir)
             append_activity_event(
                 _make_event_1058(ts=close_ts, task_id=i + 1, action="end_work"),
                 kanban_dir,
@@ -1040,9 +958,7 @@ class TestFromAC_ActivityStoreFloorSessionBearing:
             f"All {n} entries must survive; found {len(list_activity_events(kanban_dir))}"
         )
 
-    def test_ac_c44a_c_open_session_small_log_floor_protects_all_entries(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac_c44a_c_open_session_small_log_floor_protects_all_entries(self, tmp_path: Path) -> None:
         """AC-C44a(c): small (<=500) log with an open session retains all entries via hard floor."""
         kanban_dir = _make_board_1058(tmp_path)
         now = datetime.now(tz=UTC)
@@ -1050,14 +966,10 @@ class TestFromAC_ActivityStoreFloorSessionBearing:
 
         for i in range(n_move):
             ts = (now - timedelta(hours=n_move - i)).isoformat()
-            append_activity_event(
-                _make_event_1058(ts=ts, task_id=i % 10, action="move"), kanban_dir
-            )
+            append_activity_event(_make_event_1058(ts=ts, task_id=i % 10, action="move"), kanban_dir)
 
         claim_ts = (now - timedelta(minutes=30)).isoformat()
-        append_activity_event(
-            _make_event_1058(ts=claim_ts, task_id=999, action="claim"), kanban_dir
-        )
+        append_activity_event(_make_event_1058(ts=claim_ts, task_id=999, action="claim"), kanban_dir)
 
         total = n_move + 1
         assert len(list_activity_events(kanban_dir)) == total
@@ -1077,9 +989,7 @@ class TestFromAC_ActivityStoreFloorSessionBearing:
 class TestFromAC_ActivityStoreFloorActiveStream:
     """AC-C44a(c): hard floor applies when before_dt < latest_entry_dt (active-stream)."""
 
-    def test_ac_c44a_c_auto_cutoff_active_stream_small_log_floor_retains_all(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac_c44a_c_auto_cutoff_active_stream_small_log_floor_retains_all(self, tmp_path: Path) -> None:
         """AC-C44a(c): auto-cutoff + active-stream entries newer than cutoff + small log."""
         kanban_dir = _make_board_1058(tmp_path)
         now = datetime.now(tz=UTC)
@@ -1088,9 +998,7 @@ class TestFromAC_ActivityStoreFloorActiveStream:
         for i in range(n_pairs):
             claim_ts = (now - timedelta(hours=50 - i * 2)).isoformat()
             end_work_ts = (now - timedelta(hours=49 - i * 2)).isoformat()
-            append_activity_event(
-                _make_event_1058(ts=claim_ts, task_id=i + 1, action="claim"), kanban_dir
-            )
+            append_activity_event(_make_event_1058(ts=claim_ts, task_id=i + 1, action="claim"), kanban_dir)
             append_activity_event(
                 _make_event_1058(ts=end_work_ts, task_id=i + 1, action="end_work"),
                 kanban_dir,
@@ -1099,9 +1007,7 @@ class TestFromAC_ActivityStoreFloorActiveStream:
         n_active = 20
         for i in range(n_active):
             ts = (now - timedelta(hours=30 - i)).isoformat()
-            append_activity_event(
-                _make_event_1058(ts=ts, task_id=99, action="move"), kanban_dir
-            )
+            append_activity_event(_make_event_1058(ts=ts, task_id=99, action="move"), kanban_dir)
 
         total = n_pairs * 2 + n_active
         assert len(list_activity_events(kanban_dir)) == total
@@ -1127,21 +1033,15 @@ class TestFromAC_ActivityStoreFloorActiveStream:
         n_old = 30
         for i in range(n_old):
             ts = (now - timedelta(hours=60 - i)).isoformat()
-            append_activity_event(
-                _make_event_1058(ts=ts, task_id=i % 5, action="move"), kanban_dir
-            )
+            append_activity_event(_make_event_1058(ts=ts, task_id=i % 5, action="move"), kanban_dir)
 
         claim_ts = (now - timedelta(hours=20)).isoformat()
-        append_activity_event(
-            _make_event_1058(ts=claim_ts, task_id=999, action="claim"), kanban_dir
-        )
+        append_activity_event(_make_event_1058(ts=claim_ts, task_id=999, action="claim"), kanban_dir)
 
         n_new = 15
         for i in range(n_new):
             ts = (now - timedelta(hours=15 - i)).isoformat()
-            append_activity_event(
-                _make_event_1058(ts=ts, task_id=i % 5, action="move"), kanban_dir
-            )
+            append_activity_event(_make_event_1058(ts=ts, task_id=i % 5, action="move"), kanban_dir)
 
         total = n_old + 1 + n_new
         assert len(list_activity_events(kanban_dir)) == total
@@ -1162,9 +1062,7 @@ class TestFromAC_ActivityStoreFloorActiveStream:
 class TestFromAC_ActivityStoreFloorTimestampOrder:
     """AC-C44a-ts: floor retains entries by parsed timestamp value, not by file position."""
 
-    def test_ac_c44a_ts_backdated_entry_excluded_from_floor_non_monotonic(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac_c44a_ts_backdated_entry_excluded_from_floor_non_monotonic(self, tmp_path: Path) -> None:
         """AC-C44a-ts: backdated late-appended entry is dropped; more-recent entry retained."""
         kanban_dir = _make_board_1058(tmp_path)
         now = datetime.now(tz=UTC)
@@ -1173,9 +1071,7 @@ class TestFromAC_ActivityStoreFloorTimestampOrder:
 
         for i in range(1, 502):
             ts = (now + timedelta(hours=i)).isoformat()
-            append_activity_event(
-                _make_event_1058(ts=ts, task_id=i, action="move"), kanban_dir
-            )
+            append_activity_event(_make_event_1058(ts=ts, task_id=i, action="move"), kanban_dir)
 
         backdated_ts = (now - timedelta(hours=10_000)).isoformat()
         append_activity_event(
@@ -1201,6 +1097,5 @@ class TestFromAC_ActivityStoreFloorTimestampOrder:
         )
 
         assert 2 in remaining_task_ids, (
-            "task_id=2 (timestamp=T+2h, rank 500 by recency) must be retained; "
-            "position-based floor wrongly drops it."
+            "task_id=2 (timestamp=T+2h, rank 500 by recency) must be retained; position-based floor wrongly drops it."
         )

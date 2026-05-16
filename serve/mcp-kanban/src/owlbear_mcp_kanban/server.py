@@ -103,9 +103,7 @@ def _append_norm_guidance(guidance: list[str] | None, *, changed: bool) -> list[
 
 def _startup_error(kanban_dir: Path, detail: str) -> RuntimeError:
     """Build a startup error with board path and KANBAN_DIR remediation guidance."""
-    return RuntimeError(
-        f"{detail}: {kanban_dir}. Set KANBAN_DIR to a valid kanban board directory."
-    )
+    return RuntimeError(f"{detail}: {kanban_dir}. Set KANBAN_DIR to a valid kanban board directory.")
 
 
 def parse_task_id(value: str | int, *, field: str = "task_id") -> int:
@@ -335,9 +333,7 @@ async def _show_validated(app_ctx: AppContext, task_id: int) -> KanbanTask:
     try:
         record = app_ctx.engine.show_task(str(task_id))
     except FileNotFoundError as exc:
-        _raise_not_found(
-            _safe_not_found_message(str(exc), f"Task '{task_id}' not found")
-        )
+        _raise_not_found(_safe_not_found_message(str(exc), f"Task '{task_id}' not found"))
     return _record_to_task(record)
 
 
@@ -464,9 +460,7 @@ async def move_task(
     with contextlib.suppress(Exception):
         if not result.guidance:
             status_names = list(app_ctx.engine.board_config().statuses)
-            result.guidance = collect_guidance(
-                "move", before=pre_task, after=result, status_names=status_names
-            )
+            result.guidance = collect_guidance("move", before=pre_task, after=result, status_names=status_names)
     return result
 
 
@@ -508,9 +502,7 @@ async def edit_task(  # noqa: PLR0912, PLR0913, PLR0915, C901
         normalized_body, body_changed = _normalize_escaped_newlines(body)
         kwargs["body"] = normalized_body
     if append_body:
-        normalized_append_body, append_body_changed = _normalize_escaped_newlines(
-            append_body
-        )
+        normalized_append_body, append_body_changed = _normalize_escaped_newlines(append_body)
         kwargs["append_body"] = normalized_append_body
     if timestamp:
         kwargs["timestamp"] = True
@@ -633,9 +625,7 @@ async def end_work(  # noqa: PLR0913
     if outcome in {"success", "block", "fail"}:
         with contextlib.suppress(Exception):
             if not task.guidance:
-                task.guidance = collect_guidance(
-                    "end_work", None, task, outcome=outcome
-                )
+                task.guidance = collect_guidance("end_work", None, task, outcome=outcome)
     task.guidance = _append_norm_guidance(task.guidance, changed=note_changed)
     return task
 
@@ -697,10 +687,7 @@ for _tool_name in (
 # FastMCP auto-generates titles from argument names but has no descriptions.
 # ---------------------------------------------------------------------------
 _SORT_FIELDS = ["priority", "updated", "id", "title", "status", "created"]
-_NORM_PARAM_DESC = (
-    "Literal \\n is normalized to a newline; send \\\\n in JSON to preserve a "
-    "literal \\n."
-)
+_NORM_PARAM_DESC = "Literal \\n is normalized to a newline; send \\\\n in JSON to preserve a literal \\n."
 
 
 def _patch_params(
@@ -721,18 +708,14 @@ _patch_params(
         "tag": {"description": "Filter by tag, e.g. 'phase-2'"},
         "search": {"description": "Full-text search in titles and bodies"},
         "sort": {"enum": _SORT_FIELDS},
-        "blocked": {
-            "description": "true = only blocked, false = only unblocked, null = all"
-        },
+        "blocked": {"description": "true = only blocked, false = only unblocked, null = all"},
     },
 )
 
 _patch_params(
     "create_task",
     {
-        "body": {
-            "description": f"Markdown body (objectives, AC, context). {_NORM_PARAM_DESC}"
-        },
+        "body": {"description": f"Markdown body (objectives, AC, context). {_NORM_PARAM_DESC}"},
         "depends_on": {"description": "JSON array of dependency task IDs"},
         "parent": {"description": "Parent task ID for subtask hierarchy"},
         "tags": {"description": "JSON array of tags"},
@@ -742,9 +725,7 @@ _patch_params(
 _patch_params(
     "move_task",
     {
-        "status": {
-            "description": "Target status name, or 'archived' to archive the task"
-        },
+        "status": {"description": "Target status name, or 'archived' to archive the task"},
     },
 )
 
@@ -753,33 +734,20 @@ _patch_params(
     {
         "title": {"description": "Replace task title (must be non-empty)"},
         "body": {
-            "description": (
-                "Replace task body; empty string clears, null/omitted = no change. "
-                f"{_NORM_PARAM_DESC}"
-            )
+            "description": (f"Replace task body; empty string clears, null/omitted = no change. {_NORM_PARAM_DESC}")
         },
-        "append_body": {
-            "description": f"Append to body (preserves existing content). {_NORM_PARAM_DESC}"
-        },
+        "append_body": {"description": f"Append to body (preserves existing content). {_NORM_PARAM_DESC}"},
         "timestamp": {"description": "Prepend [[date]] timestamp to appended body"},
-        "add_dep": {
-            "description": "Add dependency task IDs (JSON array, e.g. [601, 602])"
-        },
-        "remove_dep": {
-            "description": "Remove dependency task IDs (JSON array, e.g. [601, 602])"
-        },
-        "parent": {
-            "description": "Parent task ID for subtask hierarchy; use 0 to clear parent"
-        },
+        "add_dep": {"description": "Add dependency task IDs (JSON array, e.g. [601, 602])"},
+        "remove_dep": {"description": "Remove dependency task IDs (JSON array, e.g. [601, 602])"},
+        "parent": {"description": "Parent task ID for subtask hierarchy; use 0 to clear parent"},
     },
 )
 
 _patch_params(
     "end_work",
     {
-        "note": {
-            "description": f"Summary note appended to task body. {_NORM_PARAM_DESC}"
-        },
+        "note": {"description": f"Summary note appended to task body. {_NORM_PARAM_DESC}"},
         "outcome": {
             "description": (
                 "success = advance, fail = record failure and release claim, "
@@ -797,8 +765,6 @@ _patch_params(
 _patch_params(
     "create_dr",
     {
-        "body": {
-            "description": f"Decision/action request body. {_NORM_PARAM_DESC}"
-        },
+        "body": {"description": f"Decision/action request body. {_NORM_PARAM_DESC}"},
     },
 )

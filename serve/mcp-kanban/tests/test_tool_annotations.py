@@ -187,6 +187,5 @@ class TestFromAC_AnnotationContractRestore_1475:
         ann = _get_tool_annotations("move_task")
         assert ann is not None, "move_task has no ToolAnnotations"
         assert ann.idempotentHint is False, (  # type: ignore[union-attr]
-            f"Updated AC requires idempotentHint=False for move_task; "
-            f"got: {ann.idempotentHint!r}."
+            f"Updated AC requires idempotentHint=False for move_task; got: {ann.idempotentHint!r}."
         )

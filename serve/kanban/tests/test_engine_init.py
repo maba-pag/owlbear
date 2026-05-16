@@ -185,9 +185,7 @@ class TestFromAC_AgentMapCoverage:
         engine = KanbanEngine(kanban_dir)
         assert engine is not None
 
-    def test_pick_tasks_raises_for_missing_status_in_agent_map(
-        self, tmp_path: Path
-    ) -> None:
+    def test_pick_tasks_raises_for_missing_status_in_agent_map(self, tmp_path: Path) -> None:
         """With PRODUCT_TOPOLOGY, agent_map is always complete — pick_tasks succeeds."""
         # Custom agent_map in config.yml is ignored; PRODUCT_TOPOLOGY provides a complete map.
         config = _BASE_CONFIG.replace("  done: auditor\n", "")
@@ -320,9 +318,7 @@ class TestFromAC_NoAgentNameParam:
         sig = inspect.signature(KanbanEngine.__init__)
         assert "agent_name" not in sig.parameters
 
-    def test_constructor_rejects_agent_name_kwarg_at_runtime(
-        self, tmp_path: Path
-    ) -> None:
+    def test_constructor_rejects_agent_name_kwarg_at_runtime(self, tmp_path: Path) -> None:
         """Passing agent_name at runtime must raise TypeError per D33 behavioral contract.
 
         D33 states the constructor no longer accepts agent_name.  A hidden **kwargs
@@ -415,9 +411,7 @@ class TestFromAC_EntryStatusDefault:
     Mirrors the terminal_status omission-path pattern in TestFromAC_TerminalStatusField.
     """
 
-    def test_entry_status_default_is_research_without_yaml_key(
-        self, tmp_path: Path
-    ) -> None:
+    def test_entry_status_default_is_research_without_yaml_key(self, tmp_path: Path) -> None:
         """Config YAML without entry_status key → board_config().pipeline.entry_status == 'research'."""
         kanban_dir = _make_board(tmp_path, _BASE_CONFIG_NO_ENTRY_STATUS)
         engine = KanbanEngine(kanban_dir)
@@ -431,9 +425,7 @@ class TestFromAC_EntryStatusDefault:
         cfg = BoardConfig(
             statuses=["research", "backlog", "done"],
             priorities=["needed"],
-            agents=AgentsConfig(
-                agent_map={"research": "r", "backlog": "b", "done": "d"}
-            ),
+            agents=AgentsConfig(agent_map={"research": "r", "backlog": "b", "done": "d"}),
         )
         assert cfg.pipeline.entry_status == "research", (
             f"Expected entry_status='research' on direct BoardConfig() omission, got {cfg.pipeline.entry_status!r}"
@@ -446,13 +438,10 @@ class TestFromAC_TerminalStatusField:
     def test_terminal_status_is_declared_model_field(self) -> None:
         """terminal_status must appear in PipelineConfig.model_fields, not BoardConfig.model_fields."""
         assert "terminal_status" in PipelineConfig.model_fields, (
-            "terminal_status is not a declared PipelineConfig field — it must be declared "
-            "with default='done' per D65"
+            "terminal_status is not a declared PipelineConfig field — it must be declared with default='done' per D65"
         )
 
-    def test_terminal_status_default_is_done_without_yaml_key(
-        self, tmp_path: Path
-    ) -> None:
+    def test_terminal_status_default_is_done_without_yaml_key(self, tmp_path: Path) -> None:
         """Config YAML without terminal_status key → board_config().pipeline.terminal_status == 'done'."""
         kanban_dir = _make_board(tmp_path, _BASE_CONFIG_NO_TERMINAL_STATUS)
         engine = KanbanEngine(kanban_dir)
@@ -465,15 +454,11 @@ class TestFromAC_TerminalStatusField:
         cfg = BoardConfig(
             statuses=["research", "backlog", "done"],
             priorities=["needed"],
-            agents=AgentsConfig(
-                agent_map={"research": "r", "backlog": "b", "done": "d"}
-            ),
+            agents=AgentsConfig(agent_map={"research": "r", "backlog": "b", "done": "d"}),
         )
         assert cfg.pipeline.terminal_status == "done"
 
-    def test_terminal_status_engine_init_succeeds_without_yaml_key(
-        self, tmp_path: Path
-    ) -> None:
+    def test_terminal_status_engine_init_succeeds_without_yaml_key(self, tmp_path: Path) -> None:
         """Engine init with no terminal_status in YAML must not raise — default 'done' == statuses[-1]."""
         kanban_dir = _make_board(tmp_path, _BASE_CONFIG_NO_TERMINAL_STATUS)
         # Must not raise ConfigError — declared default "done" equals statuses[-1] "done"
@@ -492,15 +477,11 @@ class TestFromAC_ArchivalReasonsFrozenSet:
             f"Expected frozenset, got {type(cfg.policy.archival_reasons).__name__}"
         )
 
-    def test_archival_reasons_default_contains_standard_five_reasons(
-        self, tmp_path: Path
-    ) -> None:
+    def test_archival_reasons_default_contains_standard_five_reasons(self, tmp_path: Path) -> None:
         """Default archival_reasons frozenset == the 5 standard values."""
         engine = _make_engine(tmp_path)
         cfg = engine.board_config()
-        expected = frozenset(
-            {"completed", "deprecated", "dropped", "duplicate", "wontfix"}
-        )
+        expected = frozenset({"completed", "deprecated", "dropped", "duplicate", "wontfix"})
         assert cfg.policy.archival_reasons == expected
 
     def test_archival_reasons_is_frozenset_on_boardconfig_direct(self) -> None:
@@ -512,9 +493,7 @@ class TestFromAC_ArchivalReasonsFrozenSet:
         )
         assert isinstance(cfg.policy.archival_reasons, frozenset)
 
-    def test_archival_reasons_yaml_list_coerced_to_frozenset(
-        self, tmp_path: Path
-    ) -> None:
+    def test_archival_reasons_yaml_list_coerced_to_frozenset(self, tmp_path: Path) -> None:
         """archival_reasons is always a frozenset (product topology overrides config.yml)."""
         # Config with custom archival_reasons is ignored; PRODUCT_TOPOLOGY always applies
         config = _BASE_CONFIG.replace(
@@ -527,9 +506,7 @@ class TestFromAC_ArchivalReasonsFrozenSet:
             "archival_reasons must be frozenset even when config specifies a YAML list"
         )
         # Product topology always provides all 5 standard reasons
-        assert cfg.policy.archival_reasons == frozenset(
-            {"completed", "deprecated", "dropped", "duplicate", "wontfix"}
-        )
+        assert cfg.policy.archival_reasons == frozenset({"completed", "deprecated", "dropped", "duplicate", "wontfix"})
 
 
 class TestFromAC_AgentViewMethodStubs:
@@ -542,9 +519,7 @@ class TestFromAC_AgentViewMethodStubs:
 
     def test_agent_view_has_list_tasks_stub(self, tmp_path: Path) -> None:
         view = AgentView(_make_engine(tmp_path))
-        assert callable(getattr(view, "list_tasks", None)), (
-            "AgentView.list_tasks missing"
-        )
+        assert callable(getattr(view, "list_tasks", None)), "AgentView.list_tasks missing"
 
     def test_agent_view_has_show_task_stub(self, tmp_path: Path) -> None:
         view = AgentView(_make_engine(tmp_path))
@@ -552,15 +527,11 @@ class TestFromAC_AgentViewMethodStubs:
 
     def test_agent_view_has_pick_tasks_stub(self, tmp_path: Path) -> None:
         view = AgentView(_make_engine(tmp_path))
-        assert callable(getattr(view, "pick_tasks", None)), (
-            "AgentView.pick_tasks missing"
-        )
+        assert callable(getattr(view, "pick_tasks", None)), "AgentView.pick_tasks missing"
 
     def test_agent_view_has_create_task_stub(self, tmp_path: Path) -> None:
         view = AgentView(_make_engine(tmp_path))
-        assert callable(getattr(view, "create_task", None)), (
-            "AgentView.create_task missing"
-        )
+        assert callable(getattr(view, "create_task", None)), "AgentView.create_task missing"
 
     def test_agent_view_has_edit_task_stub(self, tmp_path: Path) -> None:
         view = AgentView(_make_engine(tmp_path))
@@ -568,9 +539,7 @@ class TestFromAC_AgentViewMethodStubs:
 
     def test_agent_view_has_start_work_stub(self, tmp_path: Path) -> None:
         view = AgentView(_make_engine(tmp_path))
-        assert callable(getattr(view, "start_work", None)), (
-            "AgentView.start_work missing"
-        )
+        assert callable(getattr(view, "start_work", None)), "AgentView.start_work missing"
 
     def test_agent_view_has_end_work_stub(self, tmp_path: Path) -> None:
         view = AgentView(_make_engine(tmp_path))
@@ -580,15 +549,11 @@ class TestFromAC_AgentViewMethodStubs:
 class TestFromAC_RoleViewAccessors:
     """AC: AgentView constructed at init and accessible via engine accessor."""
 
-    def test_engine_agent_view_returns_agent_view_instance(
-        self, tmp_path: Path
-    ) -> None:
+    def test_engine_agent_view_returns_agent_view_instance(self, tmp_path: Path) -> None:
         """engine.agent_view() must return an AgentView instance."""
         engine = _make_engine(tmp_path)
         view = engine.agent_view()
-        assert isinstance(view, AgentView), (
-            f"engine.agent_view() must return AgentView, got {type(view).__name__}"
-        )
+        assert isinstance(view, AgentView), f"engine.agent_view() must return AgentView, got {type(view).__name__}"
 
     def test_engine_agent_view_same_instance_across_calls(self, tmp_path: Path) -> None:
         """engine.agent_view() must return the same cached instance on repeated calls."""
@@ -601,9 +566,7 @@ class TestFromAC_RoleViewAccessors:
         """AgentView returned by engine.agent_view() must hold a reference to the engine."""
         engine = _make_engine(tmp_path)
         view = engine.agent_view()
-        assert view.engine is engine, (
-            "AgentView.engine must reference the engine that constructed it"
-        )
+        assert view.engine is engine, "AgentView.engine must reference the engine that constructed it"
 
 
 class TestFromAC_BoardConfigDirectValidation:

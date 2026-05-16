@@ -133,9 +133,7 @@ class TestFromAC_YAML12SafeLoader:
         from owlbear_kanban.storage import YAML12SafeLoader  # noqa: F401 — triggers class definition
 
         all_tags_in_safeloader = {
-            tag
-            for resolvers in yaml.SafeLoader.yaml_implicit_resolvers.values()
-            for tag, _ in resolvers
+            tag for resolvers in yaml.SafeLoader.yaml_implicit_resolvers.values() for tag, _ in resolvers
         }
         assert "tag:yaml.org,2002:timestamp" in all_tags_in_safeloader, (
             "yaml.SafeLoader.yaml_implicit_resolvers must not be mutated globally; "
@@ -244,9 +242,7 @@ class TestFromAC_ReadTaskPyYAML:
         """task_io must expose a 'yaml' attribute — pyyaml imported at module level."""
         import owlbear_kanban.storage as _task_io
 
-        assert hasattr(_task_io, "yaml"), (
-            "task_io must import yaml (pyyaml) at module level so read_task() can use it"
-        )
+        assert hasattr(_task_io, "yaml"), "task_io must import yaml (pyyaml) at module level so read_task() can use it"
 
     # -- AC 8b: read_task delegates to YAML12SafeLoader-backed helper ---------
 
@@ -325,9 +321,7 @@ class TestFromAC_ReadTaskPyYAML:
 
     # -- AC 11/12: timestamp regression via read_task() -----------------------
 
-    def test_read_task_preserves_7digit_timestamp_as_string(
-        self, tmp_path: Path
-    ) -> None:
+    def test_read_task_preserves_7digit_timestamp_as_string(self, tmp_path: Path) -> None:
         """read_task() must preserve 7-digit Go-style timestamps verbatim in Task.created."""
         from owlbear_kanban.storage import YAML12SafeLoader, read_task  # noqa: F401
 
@@ -346,12 +340,8 @@ class TestFromAC_ReadTaskPyYAML:
 
         task = read_task(task_file)
 
-        assert task.created == ts_7, (
-            f"7-digit timestamp must be preserved verbatim; got {task.created!r}"
-        )
-        assert task.updated == ts_6, (
-            f"6-digit timestamp must be preserved verbatim; got {task.updated!r}"
-        )
+        assert task.created == ts_7, f"7-digit timestamp must be preserved verbatim; got {task.created!r}"
+        assert task.updated == ts_6, f"6-digit timestamp must be preserved verbatim; got {task.updated!r}"
 
     # -- AC 13: YAML 1.1 coercion regression via read_task() -----------------
 
@@ -381,9 +371,7 @@ class TestFromAC_ReadTaskPyYAML:
         assert task.block_reason == "no", (
             f"block_reason 'no' must not be coerced to bool False; got {task.block_reason!r}"
         )
-        assert task.tags == ["on", "off"], (
-            f"tags with on/off values must survive as strings; got {task.tags!r}"
-        )
+        assert task.tags == ["on", "off"], f"tags with on/off values must survive as strings; got {task.tags!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -414,9 +402,7 @@ class TestFromAC_Dependencies:
 class TestFromAC_WriteReadRoundTrip:
     """Integration tests: write_task() → read_task() → Task.model_validate() round-trips."""
 
-    def test_yaml11_string_fields_survive_write_read_roundtrip(
-        self, tmp_path: Path
-    ) -> None:
+    def test_yaml11_string_fields_survive_write_read_roundtrip(self, tmp_path: Path) -> None:
         """YAML 1.1 words written by write_task must be readable as strings by read_task."""
         from owlbear_kanban.storage import YAML12SafeLoader, read_task, write_task  # noqa: F401
         from owlbear_kanban.models import Task
@@ -437,12 +423,8 @@ class TestFromAC_WriteReadRoundTrip:
 
         loaded = read_task(task_file)
 
-        assert loaded.block_reason == "no", (
-            f"block_reason 'no' must survive as string; got {loaded.block_reason!r}"
-        )
-        assert loaded.tags == ["on", "off"], (
-            f"tags ['on', 'off'] must survive as strings; got {loaded.tags!r}"
-        )
+        assert loaded.block_reason == "no", f"block_reason 'no' must survive as string; got {loaded.block_reason!r}"
+        assert loaded.tags == ["on", "off"], f"tags ['on', 'off'] must survive as strings; got {loaded.tags!r}"
 
     def test_roundtrip_bool_fields_preserved(self, tmp_path: Path) -> None:
         """bool fields (blocked=True) must survive write→read as Python True, not strings."""
@@ -464,13 +446,9 @@ class TestFromAC_WriteReadRoundTrip:
 
         loaded = read_task(task_file)
 
-        assert loaded.blocked is True, (
-            f"blocked=True must survive as bool True; got {loaded.blocked!r}"
-        )
+        assert loaded.blocked is True, f"blocked=True must survive as bool True; got {loaded.blocked!r}"
 
-    def test_full_roundtrip_with_7digit_timestamp_and_extra_fields(
-        self, tmp_path: Path
-    ) -> None:
+    def test_full_roundtrip_with_7digit_timestamp_and_extra_fields(self, tmp_path: Path) -> None:
         """Full write→read→model_validate round-trip: all field types including 7-digit ts."""
         from owlbear_kanban.storage import YAML12SafeLoader, read_task, write_task  # noqa: F401
         from owlbear_kanban.models import Task
@@ -503,9 +481,7 @@ class TestFromAC_WriteReadRoundTrip:
             "created timestamp should be normalized to UTC +00:00 with microsecond precision; "
             f"got {validated.created!r}"
         )
-        assert validated.updated == ts_6, (
-            f"6-digit timestamp must survive; got {validated.updated!r}"
-        )
+        assert validated.updated == ts_6, f"6-digit timestamp must survive; got {validated.updated!r}"
         assert validated.blocked is False
         assert validated.tags == ["cockpit", "engine", "phase-0"]
         assert validated.parent == 10

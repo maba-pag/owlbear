@@ -102,10 +102,7 @@ class MemoryEngine:
             "approved_at": entry.approved_at,
         }
         content = (
-            "---\n"
-            f"{yaml.safe_dump(frontmatter, default_flow_style=False, sort_keys=False)}"
-            "---\n\n"
-            f"{entry.content}\n"
+            f"---\n{yaml.safe_dump(frontmatter, default_flow_style=False, sort_keys=False)}---\n\n{entry.content}\n"
         )
 
         fd, tmp_name = mkstemp(dir=str(target_path.parent), suffix=".tmp")
@@ -147,9 +144,7 @@ class MemoryEngine:
         raw = file_path.read_text(encoding="utf-8-sig")
         parts = raw.split("---", 2)
         if len(parts) < _FRONTMATTER_PARTS:
-            _LOGGER.warning(
-                "Skipping malformed memory file without frontmatter: %s", file_path
-            )
+            _LOGGER.warning("Skipping malformed memory file without frontmatter: %s", file_path)
             return None
         _, frontmatter_raw, body = parts
         try:
@@ -158,9 +153,7 @@ class MemoryEngine:
             _LOGGER.warning("Skipping malformed memory YAML in %s: %s", file_path, exc)
             return None
         if not isinstance(data, dict):
-            _LOGGER.warning(
-                "Skipping memory file with non-object frontmatter: %s", file_path
-            )
+            _LOGGER.warning("Skipping memory file with non-object frontmatter: %s", file_path)
             return None
         data["content"] = body.strip()
         try:

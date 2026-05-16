@@ -53,9 +53,7 @@ EXPECTED_TOOLS: frozenset[str] = frozenset(
     }
 )
 
-EXPECTED_OUTCOMES: frozenset[str] = frozenset(
-    {"success", "fail", "reject", "block", "release"}
-)
+EXPECTED_OUTCOMES: frozenset[str] = frozenset({"success", "fail", "reject", "block", "release"})
 
 # ---------------------------------------------------------------------------
 # Shared helpers
@@ -156,9 +154,7 @@ class TestFromAC_LifespanStartup:
         monkeypatch.delenv("KANBAN_TOOLS_EXCLUDE", raising=False)
 
         async with app_lifespan(_server_mock()) as ctx:
-            assert isinstance(ctx, AppContext), (
-                f"app_lifespan must yield AppContext, got {type(ctx).__name__!r}"
-            )
+            assert isinstance(ctx, AppContext), f"app_lifespan must yield AppContext, got {type(ctx).__name__!r}"
 
     @pytest.mark.asyncio
     async def test_app_context_exposes_engine_and_resolved_kanban_dir(
@@ -282,9 +278,7 @@ class TestFromAC_EndWorkOutcomeSchema:
                 if "const" in branch and isinstance(branch["const"], str):
                     actual_values.add(branch["const"])
                 if "enum" in branch:
-                    actual_values.update(
-                        v for v in branch["enum"] if isinstance(v, str)
-                    )
+                    actual_values.update(v for v in branch["enum"] if isinstance(v, str))
 
         assert actual_values >= EXPECTED_OUTCOMES, (
             f"end_work outcome schema is missing values: "

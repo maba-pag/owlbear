@@ -176,9 +176,7 @@ class TestFromAC_ArchivedTaskEditPersistence:
     # AC-1: AgentView.edit_task — archival_reason update
     # ------------------------------------------------------------------
 
-    def test_agentview_edit_archived_archival_reason_result_updated(
-        self, tmp_path: Path
-    ) -> None:
+    def test_agentview_edit_archived_archival_reason_result_updated(self, tmp_path: Path) -> None:
         """AC-1: edit_task on archived task with archival_reason='dropped'; returned object shows updated reason."""
         view, kanban_dir = _make_view(tmp_path)
         _write_task(
@@ -194,9 +192,7 @@ class TestFromAC_ArchivedTaskEditPersistence:
 
         assert result.archival_reason == "dropped"
 
-    def test_agentview_edit_archived_archival_reason_reread_from_archive(
-        self, tmp_path: Path
-    ) -> None:
+    def test_agentview_edit_archived_archival_reason_reread_from_archive(self, tmp_path: Path) -> None:
         """AC-1: after edit, re-reading via show_task returns updated archival_reason from archive/.
 
         Confirms on-disk persistence, not just the in-memory return value.
@@ -220,9 +216,7 @@ class TestFromAC_ArchivedTaskEditPersistence:
     # AC-2: AgentView.edit_task — archival_refs update
     # ------------------------------------------------------------------
 
-    def test_agentview_edit_archived_archival_refs_result_updated(
-        self, tmp_path: Path
-    ) -> None:
+    def test_agentview_edit_archived_archival_refs_result_updated(self, tmp_path: Path) -> None:
         """AC-2: edit_task on archived task (reason=deprecated) with archival_refs=[2, 3]; result shows updated refs.
 
         Task starts with refs=[2]; edit adds ref 3 so the change is non-trivial and not a no-op.
@@ -243,9 +237,7 @@ class TestFromAC_ArchivedTaskEditPersistence:
 
         assert result.archival_refs == [2, 3]
 
-    def test_agentview_edit_archived_archival_refs_reread_from_archive(
-        self, tmp_path: Path
-    ) -> None:
+    def test_agentview_edit_archived_archival_refs_reread_from_archive(self, tmp_path: Path) -> None:
         """AC-2: after archival_refs edit, re-read from archive shows the new refs.
 
         Starts with refs=[2]; edits to [2, 3] to confirm a real change round-trips through disk.
@@ -271,9 +263,7 @@ class TestFromAC_ArchivedTaskEditPersistence:
     # AC-3: AgentView.edit_task — append_body
     # ------------------------------------------------------------------
 
-    def test_agentview_edit_archived_append_body_result_contains_text(
-        self, tmp_path: Path
-    ) -> None:
+    def test_agentview_edit_archived_append_body_result_contains_text(self, tmp_path: Path) -> None:
         """AC-3: append_body on an archived task; returned body contains the appended text."""
         view, kanban_dir = _make_view(tmp_path)
         _write_task(
@@ -287,14 +277,10 @@ class TestFromAC_ArchivedTaskEditPersistence:
 
         result = view.edit_task(1, append_body="Appended note.")
 
-        assert "Original body." in (result.body or ""), (
-            "original body content must be preserved after append"
-        )
+        assert "Original body." in (result.body or ""), "original body content must be preserved after append"
         assert "Appended note." in (result.body or "")
 
-    def test_agentview_edit_archived_append_body_reread_from_archive(
-        self, tmp_path: Path
-    ) -> None:
+    def test_agentview_edit_archived_append_body_reread_from_archive(self, tmp_path: Path) -> None:
         """AC-3: after append_body edit, re-reading from archive confirms text was persisted."""
         view, kanban_dir = _make_view(tmp_path)
         _write_task(
@@ -318,9 +304,7 @@ class TestFromAC_ArchivedTaskEditPersistence:
     # AC-4: core KanbanEngine.edit_task — priority update
     # ------------------------------------------------------------------
 
-    def test_core_engine_edit_archived_priority_result_updated(
-        self, tmp_path: Path
-    ) -> None:
+    def test_core_engine_edit_archived_priority_result_updated(self, tmp_path: Path) -> None:
         """AC-4: KanbanEngine.edit_task on archived task with priority='critical'; result shows updated priority.
 
         Bypasses AgentView to confirm the fix covers the core engine path, not only AgentView.
@@ -339,9 +323,7 @@ class TestFromAC_ArchivedTaskEditPersistence:
 
         assert result.priority == "critical"
 
-    def test_core_engine_edit_archived_priority_reread_from_archive(
-        self, tmp_path: Path
-    ) -> None:
+    def test_core_engine_edit_archived_priority_reread_from_archive(self, tmp_path: Path) -> None:
         """AC-4: after engine.edit_task, re-reading from archive shows the updated priority on disk."""
         engine, kanban_dir = _make_engine(tmp_path)
         _write_task(
@@ -378,9 +360,7 @@ class TestFromAC_ArchivedTaskEditPersistence:
         archive_file = kanban_dir / "archive" / "1-task.md"
         assert archive_file.exists(), "task file must remain in archive/ after edit"
 
-    def test_edit_archived_no_duplicate_created_in_tasks_dir(
-        self, tmp_path: Path
-    ) -> None:
+    def test_edit_archived_no_duplicate_created_in_tasks_dir(self, tmp_path: Path) -> None:
         """AC-5: no task file is created in tasks/ after editing an archived task."""
         view, kanban_dir = _make_view(tmp_path)
         _write_task(
@@ -395,8 +375,7 @@ class TestFromAC_ArchivedTaskEditPersistence:
 
         tasks_files = list((kanban_dir / "tasks").glob("1-*.md"))
         assert tasks_files == [], (
-            "no task file should exist in tasks/ after editing an archived task; "
-            f"found: {tasks_files}"
+            f"no task file should exist in tasks/ after editing an archived task; found: {tasks_files}"
         )
 
     # ------------------------------------------------------------------
@@ -426,9 +405,7 @@ class TestFromAC_ArchivedTaskEditPersistence:
             f"before={original_updated!r}, after={result.updated!r}"
         )
 
-    def test_edit_archived_updated_timestamp_advances_persisted_to_disk(
-        self, tmp_path: Path
-    ) -> None:
+    def test_edit_archived_updated_timestamp_advances_persisted_to_disk(self, tmp_path: Path) -> None:
         """AC-6 (on-disk): re-reading from archive confirms the advanced timestamp was persisted.
 
         The existing AC-6 test only checks the returned Task object; this test proves
@@ -457,9 +434,7 @@ class TestFromAC_ArchivedTaskEditPersistence:
     # AC-2 strengthened: archival_refs change to a different value
     # ------------------------------------------------------------------
 
-    def test_agentview_edit_archived_archival_refs_change_to_different_id_result_updated(
-        self, tmp_path: Path
-    ) -> None:
+    def test_agentview_edit_archived_archival_refs_change_to_different_id_result_updated(self, tmp_path: Path) -> None:
         """AC-2 (strict): archival_refs updated from [2] to [3]; result must equal [3] exactly.
 
         The existing AC-2 test seeds [2] and re-applies [2]; that test passes even if the
@@ -480,9 +455,7 @@ class TestFromAC_ArchivedTaskEditPersistence:
 
         result = view.edit_task(1, archival_refs=[3])
 
-        assert result.archival_refs == [3], (
-            f"archival_refs must be replaced with [3]; got {result.archival_refs!r}"
-        )
+        assert result.archival_refs == [3], f"archival_refs must be replaced with [3]; got {result.archival_refs!r}"
 
     def test_agentview_edit_archived_archival_refs_change_to_different_id_reread_from_archive(
         self, tmp_path: Path
@@ -513,9 +486,7 @@ class TestFromAC_ArchivedTaskEditPersistence:
     # AC-8: warm _id_to_filename cache must not bypass archive fallback
     # ------------------------------------------------------------------
 
-    def test_edit_archived_stale_id_to_filename_cache_falls_back_to_archive(
-        self, tmp_path: Path
-    ) -> None:
+    def test_edit_archived_stale_id_to_filename_cache_falls_back_to_archive(self, tmp_path: Path) -> None:
         """AC-8: _find_task_path archive fallback works even when _id_to_filename is warm.
 
         Scenario:
@@ -560,9 +531,7 @@ class TestFromAC_ArchivedTaskEditPersistence:
     # Rollback: archived-task edit must roll back to archive/ on emit failure
     # ------------------------------------------------------------------
 
-    def test_edit_archived_rollback_on_emit_failure_content_preserved_in_archive(
-        self, tmp_path: Path
-    ) -> None:
+    def test_edit_archived_rollback_on_emit_failure_content_preserved_in_archive(self, tmp_path: Path) -> None:
         """Rollback: when _emit_event fails for an archived task, write_task rolls back
         the original content to archive/ (not tasks/), and the OSError propagates.
 
@@ -588,12 +557,8 @@ class TestFromAC_ArchivedTaskEditPersistence:
             engine.edit_task("1", priority="critical")
 
         rolled_back = read_task(archive_file)
-        assert rolled_back.priority == "needed", (
-            "priority must be rolled back to 'needed' after emit failure"
-        )
-        assert not (kanban_dir / "tasks" / "1-task.md").exists(), (
-            "rollback write must not create a file in tasks/"
-        )
+        assert rolled_back.priority == "needed", "priority must be rolled back to 'needed' after emit failure"
+        assert not (kanban_dir / "tasks" / "1-task.md").exists(), "rollback write must not create a file in tasks/"
         _ = original_content  # retained for readability; content already validated via read_task
 
 
@@ -686,16 +651,12 @@ class TestFromAC_StorageCoveragePaths:
         with pytest.raises(ValueError, match="null byte"):
             validate_path_containment(tmp_path, _NullPath())  # type: ignore[arg-type]
 
-    def test_validate_path_containment_path_equals_dir_raises(
-        self, tmp_path: Path
-    ) -> None:
+    def test_validate_path_containment_path_equals_dir_raises(self, tmp_path: Path) -> None:
         """Lines 126-127: path == tasks_dir → ValueError."""
         with pytest.raises(ValueError, match="file inside tasks_dir"):
             validate_path_containment(tmp_path, tmp_path)
 
-    def test_validate_path_containment_path_outside_dir_raises(
-        self, tmp_path: Path
-    ) -> None:
+    def test_validate_path_containment_path_outside_dir_raises(self, tmp_path: Path) -> None:
         """Lines 131-133: path outside tasks_dir → PermissionError."""
         outside = tmp_path.parent / "other"
         with pytest.raises(PermissionError, match="outside tasks_dir"):
@@ -753,9 +714,7 @@ class TestFromAC_StorageCoveragePaths:
         assert task.id == 1
         assert task.title == "CP Task"
 
-    def test_read_task_no_opening_delimiter_raises_corruption(
-        self, tmp_path: Path
-    ) -> None:
+    def test_read_task_no_opening_delimiter_raises_corruption(self, tmp_path: Path) -> None:
         """Lines 144-145, 324-329: no opening --- → ERR_CORRUPT_DELIMITERS."""
         task_file = tmp_path / "1-nodelim.md"
         task_file.write_text("No frontmatter here.\n", encoding="utf-8")
@@ -763,9 +722,7 @@ class TestFromAC_StorageCoveragePaths:
             read_task(task_file)
         assert exc_info.value.code == "ERR_CORRUPT_DELIMITERS"
 
-    def test_read_task_no_closing_delimiter_raises_corruption(
-        self, tmp_path: Path
-    ) -> None:
+    def test_read_task_no_closing_delimiter_raises_corruption(self, tmp_path: Path) -> None:
         """Lines 154-155: no closing --- → ERR_CORRUPT_DELIMITERS."""
         task_file = tmp_path / "1-noclosing.md"
         task_file.write_text(
@@ -788,9 +745,7 @@ class TestFromAC_StorageCoveragePaths:
             read_task(task_file)
         assert "YAML" in exc_info.value.code or "ERR_CORRUPT" in exc_info.value.code
 
-    def test_read_task_missing_required_field_raises_missing_field_corruption(
-        self, tmp_path: Path
-    ) -> None:
+    def test_read_task_missing_required_field_raises_missing_field_corruption(self, tmp_path: Path) -> None:
         """Lines 322-323, 166-176: Pydantic missing field → ERR_CORRUPT_MISSING_FIELD."""
         task_file = tmp_path / "1-noid.md"
         task_file.write_text(
@@ -806,9 +761,7 @@ class TestFromAC_StorageCoveragePaths:
             read_task(task_file)
         assert exc_info.value.code == "ERR_CORRUPT_MISSING_FIELD"
 
-    def test_read_task_detect_corruption_raises_for_invalid_status(
-        self, tmp_path: Path
-    ) -> None:
+    def test_read_task_detect_corruption_raises_for_invalid_status(self, tmp_path: Path) -> None:
         """Line 338: detect_corruption returns error → raise corruption."""
         kanban_dir = _make_board(tmp_path)
         task_content = _TASK_TMPL.format(
@@ -825,9 +778,7 @@ class TestFromAC_StorageCoveragePaths:
         with pytest.raises(CorruptionError):
             read_task(task_file)
 
-    def test_read_task_non_integer_filename_prefix_reads_task_successfully(
-        self, tmp_path: Path
-    ) -> None:
+    def test_read_task_non_integer_filename_prefix_reads_task_successfully(self, tmp_path: Path) -> None:
         """Lines 343-344: stem prefix is non-integer → file_id=None → no mismatch check."""
         tasks_dir = tmp_path / "tasks"
         tasks_dir.mkdir()
@@ -846,9 +797,7 @@ class TestFromAC_StorageCoveragePaths:
         task = read_task(task_file)
         assert task.id == 1
 
-    def test_read_task_id_filename_mismatch_raises_corruption(
-        self, tmp_path: Path
-    ) -> None:
+    def test_read_task_id_filename_mismatch_raises_corruption(self, tmp_path: Path) -> None:
         """Line 346: filename prefix id=5 but frontmatter id=1 → ERR_CORRUPT_ID_FILENAME_MISMATCH."""
         tasks_dir = tmp_path / "tasks"
         tasks_dir.mkdir()
@@ -883,9 +832,7 @@ class TestFromAC_StorageCoveragePaths:
     # write_task: new-file else branch (lines 379-380) and default dir
     # ------------------------------------------------------------------
 
-    def test_write_task_creates_new_file_when_no_existing_match(
-        self, tmp_path: Path
-    ) -> None:
+    def test_write_task_creates_new_file_when_no_existing_match(self, tmp_path: Path) -> None:
         """Lines 379-380: no existing glob match → make_task_filename + new path created."""
         kanban_dir = _make_board(tmp_path)
         task = Task.model_validate({**_TASK_DICT, "id": 99, "title": "New Task"})
@@ -893,9 +840,7 @@ class TestFromAC_StorageCoveragePaths:
         assert path.exists()
         assert "99-new-task" in path.name
 
-    def test_write_task_default_target_dir_none_writes_to_tasks(
-        self, tmp_path: Path
-    ) -> None:
+    def test_write_task_default_target_dir_none_writes_to_tasks(self, tmp_path: Path) -> None:
         """Backwards-compat: write_task without target_dir → writes to tasks/."""
         kanban_dir = _make_board(tmp_path)
         task = Task.model_validate({**_TASK_DICT, "id": 1, "title": "Task"})
@@ -915,9 +860,7 @@ class TestFromAC_StorageCoveragePaths:
         result_path = write_task_if_unchanged(task, task.updated, kanban_dir)
         assert result_path.exists()
 
-    def test_write_task_if_unchanged_raises_stale_when_updated_changed(
-        self, tmp_path: Path
-    ) -> None:
+    def test_write_task_if_unchanged_raises_stale_when_updated_changed(self, tmp_path: Path) -> None:
         """Lines 444-446: on-disk updated differs from expected → ConcurrencyError ERR_STALE."""
         kanban_dir = _make_board(tmp_path)
         _write_task(kanban_dir, task_id=1, status="todo", subdir="tasks")
@@ -931,9 +874,7 @@ class TestFromAC_StorageCoveragePaths:
             write_task_if_unchanged(task, old_updated, kanban_dir)
         assert exc_info.value.code == "ERR_STALE"
 
-    def test_write_task_if_unchanged_raises_when_file_missing(
-        self, tmp_path: Path
-    ) -> None:
+    def test_write_task_if_unchanged_raises_when_file_missing(self, tmp_path: Path) -> None:
         """Lines 436-439: no file found for id → FileNotFoundError."""
         kanban_dir = _make_board(tmp_path)
         task = Task.model_validate({**_TASK_DICT, "id": 99, "title": "Absent Task"})
@@ -962,16 +903,12 @@ class TestFromAC_StorageCoveragePaths:
     # list_archive_files (lines 477-481)
     # ------------------------------------------------------------------
 
-    def test_list_archive_files_empty_dir_returns_empty_list(
-        self, tmp_path: Path
-    ) -> None:
+    def test_list_archive_files_empty_dir_returns_empty_list(self, tmp_path: Path) -> None:
         """Lines 477-481: no files in archive/ → []."""
         kanban_dir = _make_board(tmp_path)
         assert list_archive_files(kanban_dir) == []
 
-    def test_list_archive_files_returns_sorted_archive_md_files(
-        self, tmp_path: Path
-    ) -> None:
+    def test_list_archive_files_returns_sorted_archive_md_files(self, tmp_path: Path) -> None:
         """list_archive_files returns sorted .md files from archive/."""
         kanban_dir = _make_board(tmp_path)
         _write_task(
@@ -989,9 +926,7 @@ class TestFromAC_StorageCoveragePaths:
     # move_to_archive (lines 498-516)
     # ------------------------------------------------------------------
 
-    def test_move_to_archive_moves_file_from_tasks_to_archive(
-        self, tmp_path: Path
-    ) -> None:
+    def test_move_to_archive_moves_file_from_tasks_to_archive(self, tmp_path: Path) -> None:
         """Lines 498-516: task in tasks/ → moved to archive/."""
         kanban_dir = _make_board(tmp_path)
         _write_task(kanban_dir, task_id=1, subdir="tasks")
@@ -1023,9 +958,7 @@ class TestFromAC_StorageCoveragePaths:
     # allocate_next_id (lines 547-555)
     # ------------------------------------------------------------------
 
-    def test_allocate_next_id_returns_current_next_id_and_increments(
-        self, tmp_path: Path
-    ) -> None:
+    def test_allocate_next_id_returns_current_next_id_and_increments(self, tmp_path: Path) -> None:
         """Scan-based allocate_next_id returns 1 on empty board; config.next_id unchanged."""
         kanban_dir = _make_board(tmp_path)
         expected_id = load_config(kanban_dir).next_id
@@ -1037,15 +970,11 @@ class TestFromAC_StorageCoveragePaths:
     # write_task: backwards-compat default dir (canonical assertion — AC-2)
     # ------------------------------------------------------------------
 
-    def test_write_task_default_target_dir_canonical_dir_is_tasks(
-        self, tmp_path: Path
-    ) -> None:
+    def test_write_task_default_target_dir_canonical_dir_is_tasks(self, tmp_path: Path) -> None:
         """AC-2: write_task without target_dir → parent dir is exactly tasks/, not just a dir
         containing 'tasks' in its name."""
         kanban_dir = _make_board(tmp_path)
-        task = Task.model_validate(
-            {**_TASK_DICT, "id": 55, "title": "Canonical Dir Test"}
-        )
+        task = Task.model_validate({**_TASK_DICT, "id": 55, "title": "Canonical Dir Test"})
         path = write_task(task, kanban_dir)
         assert path.parent == kanban_dir / "tasks"
 
@@ -1053,16 +982,12 @@ class TestFromAC_StorageCoveragePaths:
     # write_task: explicit target_dir, no existing file (lines 375-380)
     # ------------------------------------------------------------------
 
-    def test_write_task_explicit_target_dir_no_existing_file_writes_to_explicit_dir(
-        self, tmp_path: Path
-    ) -> None:
+    def test_write_task_explicit_target_dir_no_existing_file_writes_to_explicit_dir(self, tmp_path: Path) -> None:
         """Lines 375-380 (else branch): explicit target_dir + no existing glob match →
         new file created in target_dir, not in tasks/."""
         kanban_dir = _make_board(tmp_path)
         archive_dir = kanban_dir / "archive"
-        task = Task.model_validate(
-            {**_TASK_DICT, "id": 77, "title": "Explicit Target Dir"}
-        )
+        task = Task.model_validate({**_TASK_DICT, "id": 77, "title": "Explicit Target Dir"})
         path = write_task(task, kanban_dir, target_dir=archive_dir)
         assert path.parent == archive_dir
         assert not (kanban_dir / "tasks" / path.name).exists()

@@ -195,9 +195,7 @@ class TestFromAC_KanbanDirBinding:
         with patch("owlbear_mcp_kanban.server.KanbanEngine") as mock_cls:
             mock_cls.return_value = _mocked_engine()
             async with app_lifespan(_server_mock()) as ctx:
-                assert ctx.kanban_dir.is_absolute(), (
-                    f"AppContext.kanban_dir must be absolute, got {ctx.kanban_dir!r}"
-                )
+                assert ctx.kanban_dir.is_absolute(), f"AppContext.kanban_dir must be absolute, got {ctx.kanban_dir!r}"
 
     @pytest.mark.asyncio
     async def test_absolute_kanban_dir_stored_correctly(
@@ -215,8 +213,7 @@ class TestFromAC_KanbanDirBinding:
             mock_cls.return_value = _mocked_engine()
             async with app_lifespan(_server_mock()) as ctx:
                 assert ctx.kanban_dir == absolute_path, (
-                    f"Absolute KANBAN_DIR {absolute_path!r} must be stored as-is, "
-                    f"got {ctx.kanban_dir!r}"
+                    f"Absolute KANBAN_DIR {absolute_path!r} must be stored as-is, got {ctx.kanban_dir!r}"
                 )
 
 
@@ -342,8 +339,7 @@ class TestFromAC_StartupValidation:
 
         error_msg = str(exc_info.value)
         assert str(empty_dir.resolve()) in error_msg, (
-            f"Engine-init failure must name the resolved board path "
-            f"{str(empty_dir.resolve())!r} in: {error_msg!r}"
+            f"Engine-init failure must name the resolved board path {str(empty_dir.resolve())!r} in: {error_msg!r}"
         )
         assert "KANBAN_DIR" in error_msg, (
             f"Engine-init failure must include 'KANBAN_DIR' remediation hint in: {error_msg!r}"
@@ -370,8 +366,7 @@ class TestFromAC_StartupValidation:
 
         error_msg = str(exc_info.value)
         assert str(board.resolve()) in error_msg, (
-            f"Tasks-dir failure must name the resolved board path "
-            f"{str(board.resolve())!r} in: {error_msg!r}"
+            f"Tasks-dir failure must name the resolved board path {str(board.resolve())!r} in: {error_msg!r}"
         )
         assert "KANBAN_DIR" in error_msg, (
             f"Tasks-dir failure must include 'KANBAN_DIR' remediation hint in: {error_msg!r}"
@@ -428,8 +423,7 @@ class TestFromAC_SweepOrdering:
                     pass
 
         assert sweep_calls == [], (
-            "sweep() must not be called when kanban_dir validation fails; "
-            f"got {len(sweep_calls)} call(s)"
+            f"sweep() must not be called when kanban_dir validation fails; got {len(sweep_calls)} call(s)"
         )
 
     @pytest.mark.asyncio
@@ -457,8 +451,7 @@ class TestFromAC_SweepOrdering:
                     pass
 
         assert sweep_calls == [], (
-            "sweep() must not be called when tasks_dir validation fails; "
-            f"got {len(sweep_calls)} call(s)"
+            f"sweep() must not be called when tasks_dir validation fails; got {len(sweep_calls)} call(s)"
         )
 
     @pytest.mark.asyncio

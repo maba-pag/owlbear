@@ -12,9 +12,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 _WINDOWS_RESERVED: frozenset[str] = frozenset(
-    ["con", "prn", "aux", "nul"]
-    + [f"com{i}" for i in range(1, 10)]
-    + [f"lpt{i}" for i in range(1, 10)]
+    ["con", "prn", "aux", "nul"] + [f"com{i}" for i in range(1, 10)] + [f"lpt{i}" for i in range(1, 10)]
 )
 
 
@@ -63,16 +61,10 @@ def validate_config_path_containment(path_value: str) -> None:
             user_message="Configured path must be a non-empty board-relative subdirectory.",
         )
 
-    if (
-        PurePosixPath(path_value).is_absolute()
-        or PureWindowsPath(path_value).is_absolute()
-    ):
+    if PurePosixPath(path_value).is_absolute() or PureWindowsPath(path_value).is_absolute():
         raise ConfigError(
             code="ERR_PATH_ESCAPE",
-            user_message=(
-                "Configured path must be board-relative and must not be absolute: "
-                f"{path_value!r}"
-            ),
+            user_message=(f"Configured path must be board-relative and must not be absolute: {path_value!r}"),
         )
 
     posix_parts = PurePosixPath(path_value).parts
@@ -80,10 +72,7 @@ def validate_config_path_containment(path_value: str) -> None:
     if any(part == ".." for part in (*posix_parts, *windows_parts)):
         raise ConfigError(
             code="ERR_PATH_ESCAPE",
-            user_message=(
-                "Configured path must be board-relative and must not contain '..': "
-                f"{path_value!r}"
-            ),
+            user_message=(f"Configured path must be board-relative and must not contain '..': {path_value!r}"),
         )
 
 

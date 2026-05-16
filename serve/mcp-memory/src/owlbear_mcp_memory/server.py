@@ -80,11 +80,7 @@ async def app_lifespan(
 mcp = FastMCP("owlbear-memory", lifespan=app_lifespan)
 
 
-@mcp.tool(
-    annotations=ToolAnnotations(
-        readOnlyHint=False, idempotentHint=False, destructiveHint=False
-    )
-)
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=False, destructiveHint=False))
 async def save_memory(  # noqa: PLR0913
     ctx: Context,
     *,
@@ -107,11 +103,7 @@ async def save_memory(  # noqa: PLR0913
     )
 
 
-@mcp.tool(
-    annotations=ToolAnnotations(
-        readOnlyHint=True, idempotentHint=True, destructiveHint=False
-    )
-)
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, destructiveHint=False))
 async def list_memories(
     ctx: Context,
     *,
@@ -128,11 +120,7 @@ async def list_memories(
     )
 
 
-@mcp.tool(
-    annotations=ToolAnnotations(
-        readOnlyHint=True, idempotentHint=True, destructiveHint=False
-    )
-)
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, destructiveHint=False))
 async def recall_memory(
     ctx: Context,
     *,
@@ -149,11 +137,7 @@ async def recall_memory(
     )
 
 
-@mcp.tool(
-    annotations=ToolAnnotations(
-        readOnlyHint=True, idempotentHint=True, destructiveHint=False
-    )
-)
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, destructiveHint=False))
 async def read_memory(
     ctx: Context,
     *,
@@ -163,11 +147,7 @@ async def read_memory(
     return await read_memory_impl(ctx, entry_id=entry_id)
 
 
-@mcp.tool(
-    annotations=ToolAnnotations(
-        readOnlyHint=False, idempotentHint=False, destructiveHint=True
-    )
-)
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=False, destructiveHint=True))
 async def curate_memory(  # noqa: PLR0913
     ctx: Context,
     *,
@@ -190,25 +170,13 @@ async def curate_memory(  # noqa: PLR0913
     )
 
 
-@mcp.tool(
-    annotations=ToolAnnotations(
-        readOnlyHint=False, idempotentHint=False, destructiveHint=True
-    )
-)
-async def delete_memory(
-    ctx: Context, *, entry_id: str
-) -> dict[str, Any]:  # pragma: no cover
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=False, destructiveHint=True))
+async def delete_memory(ctx: Context, *, entry_id: str) -> dict[str, Any]:  # pragma: no cover
     """Delete a memory entry with lifecycle-aware semantics."""
     return await delete_memory_impl(ctx, entry_id=entry_id)
 
 
-@mcp.tool(
-    annotations=ToolAnnotations(
-        readOnlyHint=False, idempotentHint=False, destructiveHint=False
-    )
-)
-async def approve_memory(
-    ctx: Context, *, entry_id: str
-) -> dict[str, Any]:  # pragma: no cover
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=False, destructiveHint=False))
+async def approve_memory(ctx: Context, *, entry_id: str) -> dict[str, Any]:  # pragma: no cover
     """Approve a curated memory entry."""
     return await approve_memory_impl(ctx, entry_id=entry_id)

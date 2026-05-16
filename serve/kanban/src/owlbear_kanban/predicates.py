@@ -52,9 +52,7 @@ def required_sections(task: Task, section_names: list[str]) -> bool:
     if not section_names:
         return True
     sections = _get_sections(task)
-    return all(
-        any(_section_matches(s, name) for s in sections) for name in section_names
-    )
+    return all(any(_section_matches(s, name) for s in sections) for name in section_names)
 
 
 def require_list_in_section(task: Task, section_name: str) -> bool:

@@ -91,9 +91,7 @@ def _make_yaml_rt() -> YAML:
     _ts_tag = "tag:yaml.org,2002:timestamp"
     for char_key in list(y.resolver.yaml_implicit_resolvers.keys()):
         y.resolver.yaml_implicit_resolvers[char_key] = [
-            (tag, regexp)
-            for tag, regexp in y.resolver.yaml_implicit_resolvers[char_key]
-            if tag != _ts_tag
+            (tag, regexp) for tag, regexp in y.resolver.yaml_implicit_resolvers[char_key] if tag != _ts_tag
         ]
     return y
 
@@ -141,11 +139,7 @@ def _is_archive_reason_valid(value: object) -> bool:
 
 def _is_archive_refs_valid(value: object) -> bool:
     return isinstance(value, list) and all(
-        (
-            isinstance(item, str)
-            or (isinstance(item, int) and not isinstance(item, bool))
-        )
-        for item in value
+        (isinstance(item, str) or (isinstance(item, int) and not isinstance(item, bool))) for item in value
     )
 
 
@@ -474,9 +468,7 @@ def _migrate_config(  # noqa: C901, PLR0911, PLR0915
     # Statuses: [{name: ...}] → [...]
     raw_statuses = plain_raw.get("statuses", [])
     if raw_statuses and isinstance(raw_statuses[0], dict):
-        new_cfg["statuses"] = [
-            s.get("name", str(s)) for s in raw_statuses if isinstance(s, dict)
-        ]
+        new_cfg["statuses"] = [s.get("name", str(s)) for s in raw_statuses if isinstance(s, dict)]
     elif isinstance(raw_statuses, list):
         new_cfg["statuses"] = [s for s in raw_statuses if isinstance(s, str)]
     else:
@@ -489,9 +481,7 @@ def _migrate_config(  # noqa: C901, PLR0911, PLR0915
 
     # entry_status from defaults.status or first status
     defaults = plain_raw.get("defaults", {})
-    entry_status = defaults.get(
-        "status", new_cfg["statuses"][0] if new_cfg["statuses"] else "research"
-    )
+    entry_status = defaults.get("status", new_cfg["statuses"][0] if new_cfg["statuses"] else "research")
     default_priority = defaults.get("priority", "important")
     wave_size = 4
     claim_timeout = plain_raw.get("claim_timeout", "1h")
@@ -583,9 +573,7 @@ def _run_lane(  # noqa: C901
     counts = {"scanned": 0, "migrated": 0, "already": 0, "failed": 0}
     manual_actions: list[str] = []
     crash_after_env = os.environ.get("KANBAN_MIGRATE_CRASH_AFTER")
-    crash_after = (
-        int(crash_after_env) if crash_after_env and crash_after_env.isdigit() else None
-    )
+    crash_after = int(crash_after_env) if crash_after_env and crash_after_env.isdigit() else None
     successful_writes = 0
 
     def _process_files(files: list[Path], migrate_fn: Any) -> None:  # noqa: ANN401
@@ -607,17 +595,13 @@ def _run_lane(  # noqa: C901
     if lane in ("tasks", "all"):
         tasks_dir = kanban_dir / "tasks"
         if tasks_dir.exists():
-            files = sorted(
-                p for p in tasks_dir.glob("*.md") if not p.name.startswith(".tmp-")
-            )
+            files = sorted(p for p in tasks_dir.glob("*.md") if not p.name.startswith(".tmp-"))
             _process_files(files, _migrate_task_file)
 
     if lane in ("archive", "all"):
         archive_dir = kanban_dir / "archive"
         if archive_dir.exists():
-            files = sorted(
-                p for p in archive_dir.glob("*.md") if not p.name.startswith(".tmp-")
-            )
+            files = sorted(p for p in archive_dir.glob("*.md") if not p.name.startswith(".tmp-"))
             _process_files(files, _migrate_archive_file)
 
     if lane in ("config", "all"):
@@ -626,11 +610,7 @@ def _run_lane(  # noqa: C901
         counts[result] += 1  # type: ignore[literal-required]
         if result == "failed":
             sys.stderr.write(f"FAIL {kanban_dir / 'config.yml'}: {reason}\n")
-        if (
-            result in {"migrated", "already"}
-            and not dry_run
-            and _config_requires_manual_action(kanban_dir)
-        ):
+        if result in {"migrated", "already"} and not dry_run and _config_requires_manual_action(kanban_dir):
             manual_actions.append(
                 "config: populate agent_map, agent_types, and "
                 "agent_compatibility, then create type:user-action task(s) "

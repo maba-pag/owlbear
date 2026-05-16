@@ -46,11 +46,7 @@ class TestFromAC_BodyParserRoundTrip:
 
     def test_ac_c5_roundtrip_multi_section(self) -> None:
         """AC-C5: multi-section body round-trips identically."""
-        md = (
-            "Preamble text.\n\n"
-            "## Section A\n\nContent A.\n\n"
-            "## Section B\n\nContent B.\n"
-        )
+        md = "Preamble text.\n\n## Section A\n\nContent A.\n\n## Section B\n\nContent B.\n"
         sections = parse_body(md)
         assert parse_body(render_body(sections)) == sections
 
@@ -139,14 +135,7 @@ class TestFromAC_BodyParserRoundTrip:
 
     def test_ac_c10_code_fenced_heading_not_a_section(self) -> None:
         """AC-C10: '## Looks-like-heading' inside a fenced code block is NOT a section."""
-        md = (
-            "## Real Section\n\n"
-            "```\n"
-            "## Looks-like-heading\n"
-            "code content\n"
-            "```\n\n"
-            "after code\n"
-        )
+        md = "## Real Section\n\n```\n## Looks-like-heading\ncode content\n```\n\nafter code\n"
         sections = parse_body(md)
         headings = [s.heading for s in sections if s.heading]
         assert "Looks-like-heading" not in headings
@@ -235,30 +224,14 @@ class TestFromAC_BodyParserEdgeCases:
 
     def test_ac_c10_five_backtick_fence_not_closed_by_three(self) -> None:
         """AC-C10: a longer backtick fence is not closed by a shorter fence."""
-        md = (
-            "## Real Section\n\n"
-            "`````\n"
-            "## inside-long-fence\n"
-            "```\n"
-            "## still-inside\n"
-            "`````\n"
-            "\nafter fence\n"
-        )
+        md = "## Real Section\n\n`````\n## inside-long-fence\n```\n## still-inside\n`````\n\nafter fence\n"
         sections = parse_body(md)
         headings = [section.heading for section in sections if section.heading]
         assert "still-inside" not in headings
 
     def test_ac_c10_five_tilde_fence_not_closed_by_three(self) -> None:
         """AC-C10: a longer tilde fence is not closed by a shorter fence."""
-        md = (
-            "## Real Section\n\n"
-            "~~~~~\n"
-            "## inside-long-tilde-fence\n"
-            "~~~\n"
-            "## still-inside-tilde\n"
-            "~~~~~\n"
-            "\nafter fence\n"
-        )
+        md = "## Real Section\n\n~~~~~\n## inside-long-tilde-fence\n~~~\n## still-inside-tilde\n~~~~~\n\nafter fence\n"
         sections = parse_body(md)
         headings = [section.heading for section in sections if section.heading]
         assert "still-inside-tilde" not in headings
@@ -268,26 +241,14 @@ class TestFromAC_BodyParserEdgeCases:
     ) -> None:
         """AC-C5: fenced and indented code content survives round-trip byte-exactly."""
         md = (
-            "## Section\n\n"
-            "```\n"
-            "line in fence\n"
-            "## not-a-heading\n"
-            "```\n\n"
-            "    indented line\n"
-            "    ## still-not-a-heading\n"
+            "## Section\n\n```\nline in fence\n## not-a-heading\n```\n\n    indented line\n    ## still-not-a-heading\n"
         )
 
         sections = parse_body(md)
         assert len(sections) == 1
         assert sections[0].heading == "Section"
         assert sections[0].content == (
-            "\n"
-            "```\n"
-            "line in fence\n"
-            "## not-a-heading\n"
-            "```\n\n"
-            "    indented line\n"
-            "    ## still-not-a-heading\n"
+            "\n```\nline in fence\n## not-a-heading\n```\n\n    indented line\n    ## still-not-a-heading\n"
         )
         assert parse_body(render_body(sections)) == sections
 

@@ -47,6 +47,14 @@ prompt: |
   Run: mode=full, task_id=263
 ```
 
+Full suite with domain scoping:
+
+```
+agentName: quality-runner
+prompt: |
+  Run: mode=full, task_id=263, changed_paths=["serve/cockpit/web/src/components/Foo.tsx", "serve/kanban/src/owlbear_kanban/engine.py"]
+```
+
 Quality-runner selects the toolchain and execution cwd by resolving the nearest package manifest from each test path:
 
 1. Walk up from the test file's directory toward the workspace root.
@@ -75,9 +83,10 @@ agents: [quality-runner]
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `mode` | `scoped` \| `full` | Yes | `scoped` runs only `test_paths`; `full` runs the project full-suite default (`tests/ serve/ -m "not api"` in OwlBear) |
+| `mode` | `scoped` \| `full` | Yes | `scoped` runs only `test_paths`; `full` runs the project full-suite default. When `changed_paths` is provided with `mode=full`, resolve affected test domains from the project's `.github/copilot-instructions.md` domain mapping and run ALL tests for those domains. When `changed_paths` is omitted, fall back to the project default (e.g. `tests/ serve/ -m "not api"` in OwlBear) |
 | `test_paths` | string[] | If `mode=scoped` | Paths to test files, e.g. `["tests/test_foo.py", "tests/test_bar.py"]` |
 | `task_id` | string | Yes | Kanban task ID, or a stable run label for suite-scoped workflows — isolates file-capture fallback output in `.owlbear/scratch/` |
+| `changed_paths` | string[] | No | Source files changed by the task. For `mode=full`: resolve each path against the domain mapping in `.github/copilot-instructions.md`, then run ALL tests for every matched domain. Multiple domains are supported (e.g. both vitest and pytest). Ignored for `mode=scoped` |
 | `coverage_modules` | string[] | No | Module names for focused coverage display; bare `--cov` always runs against all packages |
 | `lint_paths` | string[] | No | Paths to lint; defaults to your source package paths plus `tests/` (Python) or `src/` (frontend) if omitted |
 
