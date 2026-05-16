@@ -84,12 +84,15 @@ repos:
         files: ^serve/cockpit/web/src/.*\.(ts|tsx)$
         pass_filenames: false
       # Frontend — extra (no CI equivalent, catches type errors early)
+      # Manual stage: tsc --noEmit is a whole-project check — can't scope to
+      # staged files. Run explicitly: uv run pre-commit run typecheck-frontend --all-files --hook-stage manual
       - id: typecheck-frontend
         name: TypeScript (Cockpit frontend)
         language: system
         entry: bash -c 'cd serve/cockpit/web && npx tsc --noEmit'
         files: ^serve/cockpit/web/src/.*\.(ts|tsx)$
         pass_filenames: false
+        stages: [manual]
       # Project-specific validators
       - id: validate-skills
         name: Validate Agent Skills
