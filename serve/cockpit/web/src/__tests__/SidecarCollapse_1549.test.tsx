@@ -157,12 +157,12 @@ describe('TestFromAC_SidecarCollapse_1549', () => {
 
   // AC-2: Shell.css transition + collapsed grid-template-columns (desktop + tablet)
 
-  it('AC-2 transition: Shell.css .shell rule declares transition: grid-template-columns 250ms ease', () => {
+  it('AC-2 transition: Shell.css .shell rule declares transition: grid-template-columns var(--p-duration-sm) var(--p-ease-in-out)', () => {
     const css = readFileSync(SHELL_CSS_PATH, 'utf-8')
     const shellBlock = extractSelectorBlock(css, '.shell')
     expect(
-      /transition\s*:\s*grid-template-columns\s+250ms\s+ease/.test(shellBlock),
-      'Expected .shell block to contain "transition: grid-template-columns 250ms ease"',
+      /transition\s*:\s*grid-template-columns\s+var\(--p-duration-sm\)\s+var\(--p-ease-in-out\)/.test(shellBlock),
+      'Expected .shell block to contain "transition: grid-template-columns var(--p-duration-sm) var(--p-ease-in-out)"',
     ).toBe(true)
   })
 
