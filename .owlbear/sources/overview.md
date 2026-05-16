@@ -11,6 +11,14 @@ External repos and resources studied during OwlBear development.
 | PDS v4 Popover docs | <https://designsystem.porsche.com/v4/components/popover/> | Popover/top-layer behavior for floating disclosure instead of in-flow status-bar panels | `.owlbear/research/cockpit-visual-audit.md` | 2026-05-14 |
 | PDS v4 Tabs docs | <https://designsystem.porsche.com/v4/components/tabs/> | Tab component expectations for styled sidecar tab navigation | `.owlbear/research/cockpit-visual-audit.md` | 2026-05-14 |
 
+## Token Migration Provenance (Task #1603)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| PDS v4 color-scheme.css | (local: node_modules/@porsche-design-system/components-js/global-styles/color-scheme.css) | 33 `--p-color-*` tokens with light/dark variants via `.scheme-*` classes | `.owlbear/research/1603-token-migration-provenance.md` | 2026-05-16 |
+| PDS v4 variables.css | (local: node_modules/@porsche-design-system/components-js/global-styles/variables.css) | Spacing, radius, shadow, motion, typography tokens | `.owlbear/research/1603-token-migration-provenance.md` | 2026-05-16 |
+| PDS v4 design system docs | <https://designsystem.porsche.com/v4/> | Token naming conventions and theming approach | `.owlbear/research/1603-token-migration-provenance.md` | 2026-05-16 |
+
 ## CockpitProvider Extraction Research (Task #1491)
 
 | Source | URL | What | Where Used | Date |
