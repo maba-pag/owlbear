@@ -10,15 +10,15 @@
  * File-based parsing follows the PDSHexScan_1395 and token-architecture test patterns.
  *
  * Signal → token mapping (brief D10/D14):
- *   dr-pending → orange  → var(--pds-notification-warning)
- *   blocked    → red     → var(--pds-notification-error)
- *   claimed    → purple  → var(--pds-signal-claimed)  [custom token, no PDS purple]
- *   deps-unmet → grey    → var(--pds-contrast-medium)
+ *   dr-pending → orange  → var(--p-color-warning)
+ *   blocked    → red     → var(--p-color-error)
+ *   claimed    → purple  → var(--custom-signal-claimed)  [custom token, no PDS purple]
+ *   deps-unmet → grey    → var(--p-color-contrast-medium)
  *   ready      → theme-aware → no explicit border-left-color override
  *
  * Prerequisites:
  *   src/components/Card.css — created by builder #1546
- *   --pds-signal-claimed custom token — defined by builder #1543 or #1546
+ *   --custom-signal-claimed custom token — defined by builder #1543 or #1546
  */
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
@@ -50,32 +50,32 @@ function getCSSBlock(css: string, selector: string): string | null {
 // ─── AC-2: Signal selectors with border-left-color tokens ────────────────────
 
 describe('TestFromAC_CardCSSBorderSignal', () => {
-  it('[data-signal="dr-pending"] declares border-left-color: var(--pds-notification-warning) (orange)', () => {
+  it('[data-signal="dr-pending"] declares border-left-color: var(--p-color-warning) (orange)', () => {
     const css = readFileSync(CARD_CSS_PATH, 'utf-8')
     const block = getCSSBlock(css, '[data-signal="dr-pending"]')
     expect(block).not.toBeNull()
-    expect(block).toMatch(/border-left-color\s*:\s*var\(--pds-notification-warning\)/)
+    expect(block).toMatch(/border-left-color\s*:\s*var\(--p-color-warning\)/)
   })
 
-  it('[data-signal="blocked"] declares border-left-color: var(--pds-notification-error) (red)', () => {
+  it('[data-signal="blocked"] declares border-left-color: var(--p-color-error) (red)', () => {
     const css = readFileSync(CARD_CSS_PATH, 'utf-8')
     const block = getCSSBlock(css, '[data-signal="blocked"]')
     expect(block).not.toBeNull()
-    expect(block).toMatch(/border-left-color\s*:\s*var\(--pds-notification-error\)/)
+    expect(block).toMatch(/border-left-color\s*:\s*var\(--p-color-error\)/)
   })
 
-  it('[data-signal="claimed"] declares border-left-color: var(--pds-signal-claimed) (custom purple token)', () => {
+  it('[data-signal="claimed"] declares border-left-color: var(--custom-signal-claimed) (custom purple token)', () => {
     const css = readFileSync(CARD_CSS_PATH, 'utf-8')
     const block = getCSSBlock(css, '[data-signal="claimed"]')
     expect(block).not.toBeNull()
-    expect(block).toMatch(/border-left-color\s*:\s*var\(--pds-signal-claimed\)/)
+    expect(block).toMatch(/border-left-color\s*:\s*var\(--custom-signal-claimed\)/)
   })
 
-  it('[data-signal="deps-unmet"] declares border-left-color: var(--pds-contrast-medium) (grey)', () => {
+  it('[data-signal="deps-unmet"] declares border-left-color: var(--p-color-contrast-medium) (grey)', () => {
     const css = readFileSync(CARD_CSS_PATH, 'utf-8')
     const block = getCSSBlock(css, '[data-signal="deps-unmet"]')
     expect(block).not.toBeNull()
-    expect(block).toMatch(/border-left-color\s*:\s*var\(--pds-contrast-medium\)/)
+    expect(block).toMatch(/border-left-color\s*:\s*var\(--p-color-contrast-medium\)/)
   })
 
   it('[data-signal="ready"] has no explicit border-left-color — theme-aware default via inheritance', () => {
@@ -98,7 +98,7 @@ describe('TestFromAC_CardCSSSelectedState', () => {
     expect(css).toMatch(/\[data-selected/)
   })
 
-  it('[data-selected] selector declares box-shadow or outline referencing var(--pds-notification-success)', () => {
+  it('[data-selected] selector declares box-shadow or outline referencing var(--p-color-success)', () => {
     const css = readFileSync(CARD_CSS_PATH, 'utf-8')
     // Accept either attribute form the builder may choose.
     const block =
@@ -110,7 +110,7 @@ describe('TestFromAC_CardCSSSelectedState', () => {
     const hasOutline = /outline/.test(block!)
     expect(hasShadow || hasOutline).toBe(true)
     // Must reference PDS success token (green) — distinct from the left-border signal color.
-    expect(block).toMatch(/var\(--pds-notification-success\)/)
+    expect(block).toMatch(/var\(--p-color-success\)/)
   })
 
   it('[data-selected] block does not introduce border-left-color — selected state is additive to signal border (AC-2)', () => {
@@ -129,16 +129,16 @@ describe('TestFromAC_CardCSSSelectedState', () => {
 // ─── AC-4: Hover and focus-visible pseudo-selector styling ───────────────────
 
 describe('TestFromAC_CardCSSHoverFocus', () => {
-  it(':hover selector in Card.css declares background property with var(--pds-state-hover)', () => {
+  it(':hover selector in Card.css declares background property with var(--p-color-frosted)', () => {
     const css = readFileSync(CARD_CSS_PATH, 'utf-8')
     // Match any :hover block that sets background referencing the state-hover token.
     // [^}]* matches any characters including newlines until the closing brace.
-    expect(css).toMatch(/:hover\s*\{[^}]*background[^}]*var\(--pds-state-hover\)[^}]*\}/)
+    expect(css).toMatch(/:hover\s*\{[^}]*background[^}]*var\(--p-color-frosted\)[^}]*\}/)
   })
 
-  it(':focus-visible selector in Card.css declares outline property with var(--pds-state-focus)', () => {
+  it(':focus-visible selector in Card.css declares outline property with var(--p-color-focus)', () => {
     const css = readFileSync(CARD_CSS_PATH, 'utf-8')
     // Match any :focus-visible block that sets outline referencing the state-focus token.
-    expect(css).toMatch(/:focus-visible\s*\{[^}]*outline[^}]*var\(--pds-state-focus\)[^}]*\}/)
+    expect(css).toMatch(/:focus-visible\s*\{[^}]*outline[^}]*var\(--p-color-focus\)[^}]*\}/)
   })
 })

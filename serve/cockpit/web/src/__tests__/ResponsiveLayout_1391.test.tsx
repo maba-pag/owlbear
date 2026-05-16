@@ -277,36 +277,36 @@ describe('TestFromAC_ResponsiveCSSDiscriminating', () => {
 // These tests document and enforce continued PDS usage per AC5 broader scope (RF4).
 
 describe('TestFromAC_PdsShellTokenUsage', () => {
-  // AC5: Shell.css uses --pds-grid-gap spacing token (already present — documents coverage).
-  it('Shell.css uses --pds-grid-gap spacing token for layout gaps', () => {
+  // AC5: Shell.css uses --p-spacing-static-sm spacing token (already present — documents coverage).
+  it('Shell.css uses --p-spacing-static-sm spacing token for layout gaps', () => {
     expect(
       shellCss,
-      'Shell.css must use var(--pds-grid-gap) for spacing to maintain PDS token usage for spacing',
-    ).toContain('--pds-grid-gap')
+      'Shell.css must use var(--p-spacing-static-sm) for spacing to maintain PDS token usage for spacing',
+    ).toContain('--p-spacing-static-sm')
   })
 
-  // AC5: Shell.css uses --pds-grid-margin spacing token (already present).
-  it('Shell.css uses --pds-grid-margin spacing token for layout margins', () => {
+  // AC5: Shell.css uses --p-spacing-static-md spacing token (already present).
+  it('Shell.css uses --p-spacing-static-md spacing token for layout margins', () => {
     expect(
       shellCss,
-      'Shell.css must use var(--pds-grid-margin) for margin spacing to maintain PDS token usage',
-    ).toContain('--pds-grid-margin')
+      'Shell.css must use var(--p-spacing-static-md) for margin spacing to maintain PDS token usage',
+    ).toContain('--p-spacing-static-md')
   })
 
-  // AC5: Shell.css uses --pds-background-base color token (already present).
-  it('Shell.css uses --pds-background-base color token for page background', () => {
+  // AC5: Shell.css uses --p-color-canvas color token (already present).
+  it('Shell.css uses --p-color-canvas color token for page background', () => {
     expect(
       shellCss,
-      'Shell.css must use var(--pds-background-base) for page background color',
-    ).toContain('--pds-background-base')
+      'Shell.css must use var(--p-color-canvas) for page background color',
+    ).toContain('--p-color-canvas')
   })
 
-  // AC5: Shell.css uses --pds-contrast-low color token for borders (already present).
-  it('Shell.css uses --pds-contrast-low color token for surface borders', () => {
+  // AC5: Shell.css uses --p-color-contrast-low color token for borders (already present).
+  it('Shell.css uses --p-color-contrast-low color token for surface borders', () => {
     expect(
       shellCss,
-      'Shell.css must use var(--pds-contrast-low) for border colors',
-    ).toContain('--pds-contrast-low')
+      'Shell.css must use var(--p-color-contrast-low) for border colors',
+    ).toContain('--p-color-contrast-low')
   })
 
   // AC5: Shell.tsx imports PButton from @porsche-design-system for PDS-compatible controls

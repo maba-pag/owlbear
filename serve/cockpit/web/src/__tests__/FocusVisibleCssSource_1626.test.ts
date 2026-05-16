@@ -3,20 +3,20 @@
  *
  * CSS source-contract tests for AC-2:
  *   AC-2: Focus rings use `var(--color-focus)` from PDS Tailwind theme (not custom
- *         `--pds-state-focus` or hardcoded values); Card.css migrated from
- *         `--pds-state-focus` to `--color-focus` with `outline-offset: 2px`.
+ *         `--p-color-focus` or hardcoded values); Card.css migrated from
+ *         `--p-color-focus` to `--color-focus` with `outline-offset: 2px`.
  *
  * These tests inspect the CSS source files on disk to verify the token migration.
- * Computed-style checks for the PDS color cannot distinguish --pds-state-focus from
+ * Computed-style checks for the PDS color cannot distinguish --p-color-focus from
  * --color-focus (both resolve to #1A44EA), so source-level proof is required.
  *
  * RED reasons:
- *   - Card.css `:focus-visible` rule uses `var(--pds-state-focus)` — check for
+ *   - Card.css `:focus-visible` rule uses `var(--p-color-focus)` — check for
  *     `var(--color-focus)` FAILS.
  *   - Card.css `:focus-visible` rule has `outline-offset: 1px` — check for `2px` FAILS.
  *   - No CSS file in src/ contains a global `:focus-visible` rule targeting native
  *     elements (`button`, `input`, `a`) with `var(--color-focus)` — FAILS.
- *   - Card.css `:focus-visible` block still references `--pds-state-focus` — the
+ *   - Card.css `:focus-visible` block still references `--p-color-focus` — the
  *     "no legacy token in any :focus-visible rule" check FAILS.
  *
  * Behavioral (computed-style) coverage is in:
@@ -58,7 +58,7 @@ function collectCssFiles(dir: string): string[] {
 //
 // Card.css currently:
 //   .card:focus-visible {
-//     outline: 2px solid var(--pds-state-focus);
+//     outline: 2px solid var(--p-color-focus);
 //     outline-offset: 1px;
 //   }
 //
@@ -70,8 +70,8 @@ function collectCssFiles(dir: string): string[] {
 
 describe('TestFromAC_FocusTokenSource', () => {
   // Happy path: Card.css :focus-visible rule references --color-focus (AC-2)
-  // RED: Card.css uses var(--pds-state-focus) → string match for var(--color-focus) FAILS.
-  it('Card.css :focus-visible block references var(--color-focus) (not --pds-state-focus) (AC-2)', () => {
+  // RED: Card.css uses var(--p-color-focus) → string match for var(--color-focus) FAILS.
+  it('Card.css :focus-visible block references var(--color-focus) (not --p-color-focus) (AC-2)', () => {
     const source = readFileSync(CARD_CSS_PATH, 'utf-8')
 
     // Extract the :focus-visible block for .card
@@ -87,7 +87,7 @@ describe('TestFromAC_FocusTokenSource', () => {
     expect(
       focusBlock,
       'Card.css :focus-visible block must reference var(--color-focus) — the PDS canonical ' +
-        'token. RED: block currently uses var(--pds-state-focus) which is a custom legacy token.',
+        'token. RED: block currently uses var(--p-color-focus) which is a custom legacy token.',
     ).toContain('var(--color-focus)')
   })
 
@@ -108,10 +108,10 @@ describe('TestFromAC_FocusTokenSource', () => {
     ).toMatch(/outline-offset\s*:\s*2px/)
   })
 
-  // Error path: Card.css :focus-visible block must NOT reference --pds-state-focus (AC-2)
-  // RED: Card.css still uses var(--pds-state-focus) → this assertion FAILS.
-  // GREEN: After migration, --pds-state-focus is replaced with --color-focus → PASSES.
-  it('Card.css :focus-visible block does not reference legacy --pds-state-focus token (AC-2)', () => {
+  // Error path: Card.css :focus-visible block must NOT reference --p-color-focus (AC-2)
+  // RED: Card.css still uses var(--p-color-focus) → this assertion FAILS.
+  // GREEN: After migration, --p-color-focus is replaced with --color-focus → PASSES.
+  it('Card.css :focus-visible block does not reference legacy --p-color-focus token (AC-2)', () => {
     const source = readFileSync(CARD_CSS_PATH, 'utf-8')
 
     const focusBlockMatch = source.match(/\.card:focus-visible\s*\{([^}]+)\}/)
@@ -121,9 +121,9 @@ describe('TestFromAC_FocusTokenSource', () => {
 
     expect(
       focusBlock,
-      'Card.css :focus-visible block must not reference --pds-state-focus. ' +
-        'RED: block still has var(--pds-state-focus) — migration not yet applied.',
-    ).not.toContain('--pds-state-focus')
+      'Card.css :focus-visible block must not reference --p-color-focus. ' +
+        'RED: block still has var(--p-color-focus) — migration not yet applied.',
+    ).not.toContain('--p-color-focus')
   })
 
   // Happy path: some CSS file in src/ contains a :focus-visible rule covering native
@@ -183,10 +183,10 @@ describe('TestFromAC_FocusTokenSource', () => {
     ).toBeDefined()
   })
 
-  // Boundary: no :focus-visible rule in any src/ CSS file references --pds-state-focus
-  // RED: Card.css :focus-visible block uses var(--pds-state-focus) → FAILS.
+  // Boundary: no :focus-visible rule in any src/ CSS file references --p-color-focus
+  // RED: Card.css :focus-visible block uses var(--p-color-focus) → FAILS.
   // GREEN: After migration, no :focus-visible block uses the legacy token → PASSES.
-  it('no :focus-visible block in any src/ CSS file references legacy --pds-state-focus token (AC-2)', () => {
+  it('no :focus-visible block in any src/ CSS file references legacy --p-color-focus token (AC-2)', () => {
     const cssFiles = collectCssFiles(SRC_DIR)
 
     const violations: string[] = []
@@ -194,13 +194,13 @@ describe('TestFromAC_FocusTokenSource', () => {
     for (const filePath of cssFiles) {
       const content = readFileSync(filePath, 'utf-8')
 
-      // Find :focus-visible blocks and check if any reference --pds-state-focus
+      // Find :focus-visible blocks and check if any reference --p-color-focus
       // Split on :focus-visible occurrences and check the block that follows each
       const segments = content.split(':focus-visible')
       for (let i = 1; i < segments.length; i++) {
         // Extract characters up to the closing } of the block that follows :focus-visible
         const blockMatch = segments[i].match(/\s*\{([^}]+)\}/)
-        if (blockMatch && blockMatch[1].includes('--pds-state-focus')) {
+        if (blockMatch && blockMatch[1].includes('--p-color-focus')) {
           const relPath = filePath.replace(SRC_DIR + '/', '')
           violations.push(relPath)
           break
@@ -211,9 +211,9 @@ describe('TestFromAC_FocusTokenSource', () => {
     expect(
       violations,
       'The following CSS files contain a :focus-visible block referencing the legacy ' +
-        '--pds-state-focus token. Migrate each to var(--color-focus):\n' +
+        '--p-color-focus token. Migrate each to var(--color-focus):\n' +
         violations.map((f) => `  - ${f}`).join('\n') +
-        '\nRED: Card.css :focus-visible block still uses var(--pds-state-focus).',
+        '\nRED: Card.css :focus-visible block still uses var(--p-color-focus).',
     ).toHaveLength(0)
   })
 })

@@ -42,25 +42,25 @@ function getCSSBlock(css: string, selector: string): string | null {
 // ─── AC-1: .column base styling ───────────────────────────────────────────────
 
 describe('TestFromAC_ColumnBaseStyling', () => {
-  it('.column declares background: var(--pds-background-surface)', () => {
+  it('.column declares background: var(--p-color-surface)', () => {
     const css = readFileSync(COLUMN_CSS_PATH, 'utf-8')
     const block = getCSSBlock(css, '.column')
     expect(block).not.toBeNull()
-    expect(block).toMatch(/background\s*:\s*var\(--pds-background-surface\)/)
+    expect(block).toMatch(/background\s*:\s*var\(--p-color-surface\)/)
   })
 
-  it('.column declares border-radius: var(--pds-radius-md)', () => {
+  it('.column declares border-radius: var(--p-radius-md)', () => {
     const css = readFileSync(COLUMN_CSS_PATH, 'utf-8')
     const block = getCSSBlock(css, '.column')
     expect(block).not.toBeNull()
-    expect(block).toMatch(/border-radius\s*:\s*var\(--pds-radius-md\)/)
+    expect(block).toMatch(/border-radius\s*:\s*var\(--p-radius-md\)/)
   })
 
-  it('.column declares border: 1px solid var(--pds-contrast-low)', () => {
+  it('.column declares border: 1px solid var(--p-color-contrast-low)', () => {
     const css = readFileSync(COLUMN_CSS_PATH, 'utf-8')
     const block = getCSSBlock(css, '.column')
     expect(block).not.toBeNull()
-    expect(block).toMatch(/border\s*:\s*1px\s+solid\s+var\(--pds-contrast-low\)/)
+    expect(block).toMatch(/border\s*:\s*1px\s+solid\s+var\(--p-color-contrast-low\)/)
   })
 
   it('.column declares min-width: 200px (overrides skeleton min-width: 0)', () => {
@@ -150,11 +150,11 @@ describe('TestFromAC_ColumnEmptyState', () => {
 // ─── AC-4: Drag-over drop-target highlight ────────────────────────────────────
 
 describe('TestFromAC_ColumnDragOver', () => {
-  it('.column[data-drag-over="true"] declares background: var(--pds-state-hover)', () => {
+  it('.column[data-drag-over="true"] declares background: var(--p-color-frosted)', () => {
     const css = readFileSync(COLUMN_CSS_PATH, 'utf-8')
     const block = getCSSBlock(css, '.column[data-drag-over="true"]')
     expect(block).not.toBeNull()
-    expect(block).toMatch(/background\s*:\s*var\(--pds-state-hover\)/)
+    expect(block).toMatch(/background\s*:\s*var\(--p-color-frosted\)/)
   })
 })
 
@@ -163,31 +163,31 @@ describe('TestFromAC_ColumnDragOver', () => {
 // A regression from var(--pds-spacing-*) to raw pixel values must cause these to fail.
 
 describe('TestFromAC_ColumnSpacingTokens', () => {
-  it('.column header padding uses PDS spacing token var(--pds-spacing-sm) on both axes', () => {
+  it('.column header padding uses PDS spacing token var(--p-spacing-static-sm) on both axes', () => {
     const css = readFileSync(COLUMN_CSS_PATH, 'utf-8')
     const block = getCSSBlock(css, '.column header')
     expect(block).not.toBeNull()
-    expect(block).toMatch(/padding\s*:\s*var\(--pds-spacing-sm\)\s+var\(--pds-spacing-sm\)/)
+    expect(block).toMatch(/padding\s*:\s*var\(--p-spacing-static-sm\)\s+var\(--p-spacing-static-sm\)/)
   })
 
-  it('.column-body padding uses PDS spacing token var(--pds-spacing-xs)', () => {
+  it('.column-body padding uses PDS spacing token var(--p-spacing-static-xs)', () => {
     const css = readFileSync(COLUMN_CSS_PATH, 'utf-8')
     const block = getCSSBlock(css, '.column-body')
     expect(block).not.toBeNull()
-    expect(block).toMatch(/padding\s*:\s*var\(--pds-spacing-xs\)/)
+    expect(block).toMatch(/padding\s*:\s*var\(--p-spacing-static-xs\)/)
   })
 
-  it('.column-body gap uses PDS spacing token var(--pds-spacing-xs)', () => {
+  it('.column-body gap uses PDS spacing token var(--p-spacing-static-xs)', () => {
     const css = readFileSync(COLUMN_CSS_PATH, 'utf-8')
     const block = getCSSBlock(css, '.column-body')
     expect(block).not.toBeNull()
-    expect(block).toMatch(/gap\s*:\s*var\(--pds-spacing-xs\)/)
+    expect(block).toMatch(/gap\s*:\s*var\(--p-spacing-static-xs\)/)
   })
 
-  it('.column-empty padding uses PDS spacing token var(--pds-spacing-md)', () => {
+  it('.column-empty padding uses PDS spacing token var(--p-spacing-static-md)', () => {
     const css = readFileSync(COLUMN_CSS_PATH, 'utf-8')
     const block = getCSSBlock(css, '.column-empty')
     expect(block).not.toBeNull()
-    expect(block).toMatch(/padding\s*:\s*var\(--pds-spacing-md\)/)
+    expect(block).toMatch(/padding\s*:\s*var\(--p-spacing-static-md\)/)
   })
 })

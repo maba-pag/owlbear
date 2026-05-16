@@ -8,7 +8,7 @@
  *        (replaces raw <p-checkbox> web component with onClick)
  * AC2 — Priority PSelect uses PSelectOption children (replaces native <option> elements)
  * AC3 — Filter panel .filter-panel uses flex layout:
- *        display: flex; flex-wrap: wrap; gap: var(--pds-spacing-sm); align-items: flex-end
+ *        display: flex; flex-wrap: wrap; gap: var(--p-spacing-static-sm); align-items: flex-end
  *
  * All tests in this file are RED-phase: they FAIL against the current implementation
  * and PASS only after the builder completes #1617.
@@ -223,13 +223,13 @@ describe('TestFromAC_FilterPanelFlexLayout', () => {
     ).toBe(true)
   })
 
-  it('FilterPanel.css declares gap: var(--pds-spacing-sm) inside the .filter-panel selector block', () => {
+  it('FilterPanel.css declares gap: var(--p-spacing-static-sm) inside the .filter-panel selector block', () => {
     // AC3: PDS token-based spacing between filter controls.
     // Current CSS has no gap declaration → FAILS.
     const css = fs.readFileSync(FILTER_PANEL_CSS, 'utf-8')
     expect(
-      /\.filter-panel\s*\{[^}]*gap\s*:\s*var\(--pds-spacing-sm\)/s.test(css),
-      '.filter-panel CSS block must contain gap: var(--pds-spacing-sm)',
+      /\.filter-panel\s*\{[^}]*gap\s*:\s*var\(--p-spacing-static-sm\)/s.test(css),
+      '.filter-panel CSS block must contain gap: var(--p-spacing-static-sm)',
     ).toBe(true)
   })
 

@@ -100,9 +100,8 @@ function getPriorityOptions(container: HTMLElement): string[] {
     return []
   }
 
-  return Array.from(pSelect.querySelectorAll('option')).map((option) => {
-    const withValue = option as HTMLOptionElement
-    return withValue.value ?? option.getAttribute('value') ?? ''
+  return Array.from(pSelect.querySelectorAll('p-select-option')).map((option) => {
+    return option.getAttribute('value') ?? (option as Element & { value?: string }).value ?? ''
   })
 }
 
@@ -312,7 +311,8 @@ describe('TestFromAC_FilterPanel', () => {
       const onFilterChange = vi.fn()
       const { container } = renderPanel({ filter: emptyFilter, onFilterChange })
       const blocked = getBlockedControl(container) as HTMLElement
-      fireEvent.click(blocked)
+      // PCheckbox fires change CustomEvent with CheckboxChangeEventDetail = { checked: boolean }
+      fireEvent(blocked, new CustomEvent('change', { bubbles: true, detail: { checked: true } }))
       expect(onFilterChange).toHaveBeenCalledTimes(1)
       expect(onFilterChange).toHaveBeenCalledWith({ ...emptyFilter, blocked: true })
     })
@@ -324,7 +324,8 @@ describe('TestFromAC_FilterPanel', () => {
         onFilterChange,
       })
       const blocked = getBlockedControl(container) as HTMLElement
-      fireEvent.click(blocked)
+      // PCheckbox fires change CustomEvent with CheckboxChangeEventDetail = { checked: boolean }
+      fireEvent(blocked, new CustomEvent('change', { bubbles: true, detail: { checked: false } }))
       expect(onFilterChange).toHaveBeenCalledTimes(1)
       expect(onFilterChange).toHaveBeenCalledWith({ ...emptyFilter, blocked: false })
     })
@@ -390,7 +391,8 @@ describe('TestFromAC_FilterPanel', () => {
       const multiActive: FilterState = { text: 'search', priority: 'needed', tags: ['bug'], blocked: true }
       const { container } = renderPanel({ filter: multiActive, onFilterChange })
       const blocked = getBlockedControl(container) as HTMLElement
-      fireEvent.click(blocked)
+      // PCheckbox fires change CustomEvent with CheckboxChangeEventDetail = { checked: boolean }
+      fireEvent(blocked, new CustomEvent('change', { bubbles: true, detail: { checked: false } }))
       expect(onFilterChange).toHaveBeenCalledTimes(1)
       expect(onFilterChange).toHaveBeenCalledWith({
         text: 'search',
@@ -485,18 +487,19 @@ describe('TestFromAC_FilterPanel', () => {
       const { container } = renderPanel({ filter: { ...emptyFilter, blocked: true } })
       const blocked = getBlockedControl(container)
       expect(blocked).not.toBeNull()
-      const ariaChecked = blocked?.getAttribute('aria-checked')
-      const isChecked = ariaChecked === 'true' || ariaChecked === ''
-      expect(isChecked).toBe(true)
+      // PCheckbox React wrapper uses checked DOM property (not aria-checked attribute)
+      type WithChecked = Element & { checked?: unknown }
+      expect((blocked as WithChecked).checked).toBe(true)
     })
 
     it('blocked checkbox checked state reflects filter.blocked false', () => {
       const { container } = renderPanel({ filter: { ...emptyFilter, blocked: false } })
       const blocked = getBlockedControl(container)
       expect(blocked).not.toBeNull()
-      const ariaChecked = blocked?.getAttribute('aria-checked')
-      const isChecked = ariaChecked === 'true' || ariaChecked === ''
-      expect(isChecked).toBe(false)
+      // PCheckbox React wrapper uses checked DOM property (not aria-checked attribute)
+      type WithChecked = Element & { checked?: unknown }
+      const checked = (blocked as WithChecked).checked
+      expect(checked === false || checked === undefined).toBe(true)
     })
 
     it('tags multi-select value prop reflects filter.tags', () => {

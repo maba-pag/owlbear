@@ -49,9 +49,9 @@ function findClassSelectorsWithRequiredTokens(css: string): string[] {
   for (const match of css.matchAll(classBlockPattern)) {
     const className = match[1]
     const block = match[2]
-    const hasSurface = /:\s*[^;]*var\(--pds-background-surface\)/.test(block)
-    const hasShadow = /:\s*[^;]*var\(--pds-shadow-md\)/.test(block)
-    const hasRadius = /:\s*[^;]*var\(--pds-radius-md\)/.test(block)
+    const hasSurface = /:\s*[^;]*var\(--p-color-surface\)/.test(block)
+    const hasShadow = /:\s*[^;]*var\(--p-shadow-md\)/.test(block)
+    const hasRadius = /:\s*[^;]*var\(--p-radius-md\)/.test(block)
     if (hasSurface && hasShadow && hasRadius) {
       classNames.push(className)
     }
@@ -106,14 +106,14 @@ describe('TestFromAC_ContextMenuCssWiring_1542', () => {
     expect(source).toMatch(/import\s+['"]\.\/KanbanBoard\.css['"]/)
   })
 
-  it('AC-2: KanbanBoard.css has a context-menu class rule using --pds-background-surface, --pds-shadow-md, --pds-radius-md', () => {
+  it('AC-2: KanbanBoard.css has a context-menu class rule using --p-color-surface, --p-shadow-md, --p-radius-md', () => {
     expect(existsSync(KANBAN_BOARD_CSS), `KanbanBoard.css must exist at ${KANBAN_BOARD_CSS}`).toBe(true)
     const css = readFileSync(KANBAN_BOARD_CSS, 'utf-8')
 
     const classNames = findClassSelectorsWithRequiredTokens(css)
     expect(
       classNames.length,
-      'KanbanBoard.css must define at least one class rule containing var(--pds-background-surface), var(--pds-shadow-md), and var(--pds-radius-md)',
+      'KanbanBoard.css must define at least one class rule containing var(--p-color-surface), var(--p-shadow-md), and var(--p-radius-md)',
     ).toBeGreaterThan(0)
   })
 
