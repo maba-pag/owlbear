@@ -141,6 +141,16 @@ Accessibility and responsive state after #1396:
   both states and PDS custom-element hosts. `DecisionViewport` task-reference links were
   converted from native `<button>` to anchor elements to keep the native-control count
   within the documented exception ceiling.
+- #1596 fixes board horizontal scroll: `KanbanBoard.tsx` changes the board grid's
+  `gridTemplateColumns` from `repeat(auto-fit, minmax(200px, 1fr))` to
+  `repeat(${board.statuses.length}, minmax(200px, 1fr))`, producing a fixed N-column
+  track layout that overflows the board container horizontally instead of wrapping
+  columns to a second row. Board container `overflowX: 'auto'` (already present from
+  #1572) handles internal horizontal scroll. Shell-level `overflow-x: clip` is
+  unaffected. Verified by `e2e/board-scroll-1593.spec.ts` (scrollWidth > clientWidth at
+  1280×720, all 7 columns identical `offsetTop`) and `e2e/responsive-layout-1391.spec.ts`
+  (board-container assertions at 1024px and 1440px updated to expect horizontal overflow;
+  shell document-level and vertical-overflow guards remain passing).
 - Documentation here does not treat cache/SSE invalidation work from #1346 as part of
   this delivery bundle.
 
