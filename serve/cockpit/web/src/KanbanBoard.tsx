@@ -318,7 +318,7 @@ function KanbanBoardContent({
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+          gridTemplateColumns: `repeat(${board.statuses.length}, minmax(200px, 1fr))`,
           gap: 'var(--pds-spacing-md)',
           padding: 'var(--pds-spacing-md)',
           overflowX: 'auto',
