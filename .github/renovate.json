@@ -80,8 +80,8 @@
       "managerFilePatterns": [
         "/^\\.pre-commit-config\\.yaml$/"
       ],
-      "matchStrings": ["oxsecurity/megalinter-cupcake:v(?<currentValue>[\\d.]+)"],
-      "depNameTemplate": "oxsecurity/megalinter-cupcake",
+      "matchStrings": ["ghcr\\.io/oxsecurity/megalinter-cupcake:v(?<currentValue>[\\d.]+)"],
+      "depNameTemplate": "ghcr.io/oxsecurity/megalinter-cupcake",
       "datasourceTemplate": "docker"
     }
   ],

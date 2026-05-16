@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import io
 import re
-from datetime import UTC, datetime
+from datetime import datetime
 from pathlib import Path  # noqa: TC003
 from typing import TYPE_CHECKING, Any, cast
 
@@ -274,11 +274,11 @@ def _yaml_safe_value(value: object) -> object:
 
 
 def _normalize_timestamp(ts: str | None) -> str | None:
-    """Normalise *ts* to an explicit UTC ``+00:00`` form.
+    """Ensure *ts* carries an explicit timezone offset.
 
-    - No timezone: appends ``+00:00``.
+    - No timezone: appends ``+00:00`` (assumes UTC for legacy naive strings).
     - ``Z`` suffix: replaced with ``+00:00``.
-    - Non-UTC offset (e.g. ``+02:00``): converted to UTC via :func:`datetime.astimezone`.
+    - Existing offset (e.g. ``+02:00``): preserved as-is.
     - Non-timestamp strings: returned unchanged.
     """
     if ts is None:
@@ -291,7 +291,7 @@ def _normalize_timestamp(ts: str | None) -> str | None:
     if tz:
         if tz == "Z":
             return f"{base}{frac}+00:00"
-        return datetime.fromisoformat(normalized).astimezone(UTC).isoformat()
+        return normalized  # preserve existing offset
     return f"{base}{frac}+00:00"
 
 
@@ -467,7 +467,7 @@ def write_task_if_unchanged(
         raise FileNotFoundError(msg)
     task_path = matches[0]
     current = read_task(task_path)
-    if current.updated != expected_updated:
+    if datetime.fromisoformat(current.updated) != datetime.fromisoformat(expected_updated):
         msg = f"task {task.id} changed since read; reload and retry"
         raise ConcurrencyError(code="ERR_STALE", user_message=msg)
     return write_task(task, kanban_dir, target_dir=task_path.parent)

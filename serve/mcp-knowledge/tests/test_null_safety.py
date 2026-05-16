@@ -72,12 +72,8 @@ class TestFromAC_NullSafetyGuards:
             await list_sources(ctx)
 
         msg = str(exc_info.value)
-        assert not msg.startswith("error:"), (
-            f"ToolError message must not carry 'error:' prefix; got: {msg!r}"
-        )
-        assert "source store not available" in msg, (
-            f"Expected 'source store not available' in message, got: {msg!r}"
-        )
+        assert not msg.startswith("error:"), f"ToolError message must not carry 'error:' prefix; got: {msg!r}"
+        assert "source store not available" in msg, f"Expected 'source store not available' in message, got: {msg!r}"
 
     # -- list_entities: graph_store=None --------------------------------------
 
@@ -121,12 +117,8 @@ class TestFromAC_NullSafetyGuards:
             await get_stats(ctx)
 
         msg = str(exc_info.value)
-        assert not msg.startswith("error:"), (
-            f"ToolError message must not carry 'error:' prefix; got: {msg!r}"
-        )
-        assert "graph store not available" in msg, (
-            f"Expected 'graph store not available' in message, got: {msg!r}"
-        )
+        assert not msg.startswith("error:"), f"ToolError message must not carry 'error:' prefix; got: {msg!r}"
+        assert "graph store not available" in msg, f"Expected 'graph store not available' in message, got: {msg!r}"
 
     # -- ingest_document: ingest_pipeline=None --------------------------------
 
@@ -156,9 +148,7 @@ class TestFromAC_NullSafetyGuards:
 
         result = await ingest_document(ctx, text="any text")
 
-        assert not isinstance(result, str) or not result.startswith(
-            "error: ingestion failed:"
-        ), (
+        assert not isinstance(result, str) or not result.startswith("error: ingestion failed:"), (
             "ingest_document with None pipeline must not fall through to the generic "
             f"try/except handler; got: {result!r}"
         )
@@ -189,9 +179,7 @@ class TestFromAC_DunderAll:
         """
         all_list = list(_server_module.__all__)
         assert "get_stats" in all_list, f"'get_stats' missing from __all__: {all_list}"
-        assert "ingest_document" in all_list, (
-            f"'ingest_document' missing from __all__: {all_list}"
-        )
+        assert "ingest_document" in all_list, f"'ingest_document' missing from __all__: {all_list}"
         idx_get = all_list.index("get_stats")
         idx_ingest = all_list.index("ingest_document")
         assert idx_get < idx_ingest, (

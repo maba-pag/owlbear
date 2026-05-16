@@ -18,13 +18,9 @@ from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
 from mcp.types import ToolAnnotations
 
-from owlbear_knowledge.bookmark_pipeline import BookmarkPipeline
-from owlbear_knowledge.bookmark_store import BookmarkStore
 from owlbear_knowledge.chunker import TextChunker
-from owlbear_knowledge.consolidation import ConsolidationService, TextCompletionFn
 from owlbear_knowledge.document_store import DocumentStore
 from owlbear_knowledge.embeddings import BgeM3EmbeddingProvider
-from owlbear_knowledge.evaluator import EvaluateFn, EvaluationResult, SourceEvaluator
 from owlbear_knowledge.extractor import EntityExtractor
 from owlbear_knowledge.fetcher import HttpxContentFetcher
 from owlbear_knowledge.graph_builder import IntraDocGraphBuilder
@@ -36,10 +32,6 @@ from owlbear_knowledge.query_service import KnowledgeQueryService
 from owlbear_knowledge.refresh import RefreshOrchestrator
 from owlbear_knowledge.retrieval import GraphAugmentedRetriever
 from owlbear_knowledge.schema import init_db as _schema_init_db
-from owlbear_knowledge.scope_transfer import _do_import as _core_do_import
-from owlbear_knowledge.scope_transfer import export_scope as _core_export_scope
-from owlbear_knowledge.scope_transfer import import_scope as _core_import_scope
-from owlbear_knowledge.scope_transfer import resolve_global_db_path
 from owlbear_knowledge.source_store import KnowledgeSourceStore
 
 if TYPE_CHECKING:
@@ -54,7 +46,7 @@ _DEFAULT_KB_PATH = ".owlbear/knowledge/local.db"
 _DEFAULT_QDRANT_PATH = ".owlbear/knowledge/vectors"
 
 # Backward-compatible patch target used by legacy tests; the guard is no longer wired.
-globals()["Content" "InjectionGuard"] = object
+globals()["ContentInjectionGuard"] = object
 
 
 class _BrowserContentFetcher:
@@ -847,14 +839,8 @@ def _serialize_related_sources(value: object) -> list[RelatedSource]:
             name = getattr(item, "name", None)
             relationship = getattr(item, "relationship", None)
             entity = getattr(item, "entity", None)
-        if (
-            isinstance(name, str)
-            and isinstance(relationship, str)
-            and isinstance(entity, str)
-        ):
-            related_sources.append(
-                {"name": name, "relationship": relationship, "entity": entity}
-            )
+        if isinstance(name, str) and isinstance(relationship, str) and isinstance(entity, str):
+            related_sources.append({"name": name, "relationship": relationship, "entity": entity})
     return related_sources
 
 
@@ -1019,10 +1005,7 @@ class AppContext:
     graph_store: GraphStore | None
     ingest_pipeline: IngestPipeline | None
     source_store: KnowledgeSourceStore | None
-    bookmark_pipeline: BookmarkPipeline | None
-    bookmark_store: BookmarkStore | None
     refresh_orchestrator: RefreshOrchestrator | None = None
-    consolidation_service: ConsolidationService | None = None
     structured_extractor: object | None = None
     intra_doc_builder: IntraDocGraphBuilder | None = None
     inter_doc_builder: InterDocGraphBuilder | None = None
@@ -1049,36 +1032,6 @@ def _apply_tool_exclusions(server: FastMCP) -> set[str]:
     return excluded
 
 
-def make_text_completion_fn() -> TextCompletionFn:
-    """Return a no-op TextCompletionFn stub.
-
-    LLM-backed completion via pydantic-ai was removed. This stub preserves
-    the call-site contract so ConsolidationService still wires up.
-    """
-
-    async def _complete(_prompt: str) -> str:
-        return ""
-
-    return _complete
-
-
-def make_evaluate_fn() -> EvaluateFn:
-    """Return a neutral no-op EvaluateFn stub.
-
-    LLM-backed evaluation via pydantic-ai was removed. Returns a neutral
-    result that always allows ingestion.
-    """
-
-    async def _evaluate(_prompt: str) -> EvaluationResult:
-        return EvaluationResult(
-            relevance_score=0.5,
-            summary="No project context available -- neutral evaluation.",
-            worth_ingesting=True,
-        )
-
-    return _evaluate
-
-
 async def _web_read(url: str) -> str | None:
     """Fetch a URL with the knowledge package's SSRF-safe HTTP fetcher."""
     try:
@@ -1091,11 +1044,7 @@ async def _web_read(url: str) -> str | None:
 async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
     """Initialise knowledge-base services; close the DB connection on exit."""
     global _app_context  # noqa: PLW0603
-    token_path = Path.home() / ".owlbear" / "copilot_token.json"
-    token_path.unlink(missing_ok=True)
-    path = os.environ.get("OWLBEAR_LOCAL_KB_PATH") or os.environ.get(
-        "OWLBEAR_KB_PATH", _DEFAULT_KB_PATH
-    )
+    path = os.environ.get("OWLBEAR_LOCAL_KB_PATH") or os.environ.get("OWLBEAR_KB_PATH", _DEFAULT_KB_PATH)
     qdrant_path = os.environ.get("OWLBEAR_QDRANT_PATH", _DEFAULT_QDRANT_PATH)
     conn = init_db(path)
     try:
@@ -1123,15 +1072,6 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
             chunker,
             source_store=source_store,
         )
-        bookmark_store = BookmarkStore(conn)
-        evaluator = SourceEvaluator(llm_fn=make_evaluate_fn())
-
-        bookmark_pipeline = BookmarkPipeline(
-            bookmark_store=bookmark_store,
-            evaluator=evaluator,
-            ingest_pipeline=pipeline,
-            web_read_fn=_web_read,
-        )
         refresh_orchestrator = RefreshOrchestrator(
             store=source_store,
             pipeline=pipeline,
@@ -1140,19 +1080,13 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
             inter_doc_builder=inter_doc_builder,
             graph_store=gs,
         )
-        consolidation_service: ConsolidationService | None = ConsolidationService(
-            conn, make_text_completion_fn()
-        )
         ctx = AppContext(
             conn=conn,
             query_service=qs,
             graph_store=gs,
             ingest_pipeline=pipeline,
             source_store=source_store,
-            bookmark_pipeline=bookmark_pipeline,
-            bookmark_store=bookmark_store,
             refresh_orchestrator=refresh_orchestrator,
-            consolidation_service=consolidation_service,
             structured_extractor=structured_extractor,
             intra_doc_builder=intra_doc_builder,
             inter_doc_builder=inter_doc_builder,
@@ -1167,37 +1101,25 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
 
 mcp = FastMCP("owlbear-knowledge", lifespan=app_lifespan)
 
-get_next_batch = mcp.tool(
-    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
-)(get_next_batch)
-get_consolidation_candidates = mcp.tool(
-    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
-)(get_consolidation_candidates)
-store_enrichment = mcp.tool(
-    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)
-)(store_enrichment)
+get_next_batch = mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))(get_next_batch)
+get_consolidation_candidates = mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))(
+    get_consolidation_candidates
+)
+store_enrichment = mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))(store_enrichment)
 
 __all__ = [
     "AppContext",
     "_apply_tool_exclusions",
     "app_lifespan",
-    "bookmark_source",
-    "consolidate_knowledge",
-    "export_scope",
     "get_stats",
-    "import_scope",
     "ingest_document",
     "init_db",
-    "list_bookmarks",
     "list_entities",
     "list_sources",
     "mcp",
     "refresh_source",
     "search_knowledge",
     "select_content_fetcher",
-    "sync_from_global",
-    "sync_to_global",
-    "update_bookmark_tags",
 ]
 
 # Module-level context so zero-arg @mcp.resource handlers can access graph_store.
@@ -1226,13 +1148,9 @@ async def search_knowledge(
                 "score": r.score,
                 "snippet": r.snippet,
                 "entity_type": r.entity_type,
-                "retrieval_path": (
-                    retrieval_path if isinstance(retrieval_path, str) else "vector"
-                ),
+                "retrieval_path": (retrieval_path if isinstance(retrieval_path, str) else "vector"),
                 "entities": _serialize_search_entities(getattr(r, "entities", [])),
-                "related_sources": _serialize_related_sources(
-                    getattr(r, "related_sources", [])
-                ),
+                "related_sources": _serialize_related_sources(getattr(r, "related_sources", [])),
                 "source": _serialize_source(getattr(r, "source", None)),
             }
         )
@@ -1298,6 +1216,8 @@ async def list_entities(
     limit: int = 50,
     scopes: list[str] | None = None,
 ) -> list[EntityInfo] | str:
+    # DEFERRED: kept as an internal helper; not exposed as an MCP tool until
+    # thread-safety review is completed.
     """List entities in the knowledge graph."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     gs = app_ctx.graph_store
@@ -1310,17 +1230,12 @@ async def list_entities(
         except ValueError:
             valid = ", ".join(e.value for e in EntityType)
             return f"error: Invalid entity_type '{entity_type}'. Valid types: {valid}"
-        entities = await asyncio.to_thread(
-            gs.list_entities, entity_type=et, scopes=scopes
-        )
+        entities = await asyncio.to_thread(gs.list_entities, entity_type=et, scopes=scopes)
     else:
         entities = await asyncio.to_thread(gs.list_entities, scopes=scopes)
 
     page = entities[offset : offset + limit]
-    return [
-        {"name": e.name, "entity_type": e.entity_type, "description": e.description}
-        for e in page
-    ]
+    return [{"name": e.name, "entity_type": e.entity_type, "description": e.description} for e in page]
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
@@ -1336,15 +1251,9 @@ async def get_stats(ctx: Context) -> StatsResult:
 
     total_sources = conn.execute("SELECT COUNT(*) FROM knowledge_sources").fetchone()[0]
     total_chunks = conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
-    enriched_chunks = conn.execute(
-        "SELECT COUNT(*) FROM chunks WHERE enrichment_state = 'enriched'"
-    ).fetchone()[0]
-    chunks_enriched_ratio = (
-        float(enriched_chunks) / float(total_chunks) if total_chunks else 0.0
-    )
-    consolidation_candidates_remaining = len(
-        _fetch_consolidation_candidate_rows(conn, limit=None)
-    )
+    enriched_chunks = conn.execute("SELECT COUNT(*) FROM chunks WHERE enrichment_state = 'enriched'").fetchone()[0]
+    chunks_enriched_ratio = float(enriched_chunks) / float(total_chunks) if total_chunks else 0.0
+    consolidation_candidates_remaining = len(_fetch_consolidation_candidate_rows(conn, limit=None))
 
     return {
         "documents": doc_count,
@@ -1385,195 +1294,6 @@ async def knowledge_stats_resource(ctx: Context | None = None) -> str:
         counts_fn = lambda: (0, 0, 0)  # noqa: E731
     doc_count, entity_count, edge_count = counts_fn()
     return f"Knowledge base: {doc_count} documents, {entity_count} entities, {edge_count} edges"
-
-
-async def bookmark_source(ctx: Context, url: str, reason: str | None = None) -> str:
-    """Bookmark a URL: evaluate and optionally ingest into the knowledge base."""
-    app_ctx: AppContext = ctx.request_context.lifespan_context
-    pipeline = app_ctx.bookmark_pipeline
-    if pipeline is None:
-        return f"error: bookmark pipeline not available for {url}"
-    result = await pipeline.process(url, reason=reason)
-    if result.skipped_reason is not None:
-        return f"Skipped {url}: {result.skipped_reason}"
-    score = result.evaluation.relevance_score if result.evaluation else "n/a"
-    return f"Bookmarked {url} (score: {score}, ingested: {result.ingested})"
-
-
-class BookmarkInfo(TypedDict):
-    """A single bookmark entry."""
-
-    url: str
-    title: str | None
-    relevance_score: float | None
-    tags: list[str]
-
-
-async def list_bookmarks(
-    ctx: Context,
-    tag: str | None = None,
-    min_score: float | None = None,
-) -> list[BookmarkInfo]:
-    """List bookmarks, optionally filtered by tag or minimum relevance score."""
-    app_ctx: AppContext = ctx.request_context.lifespan_context
-    store = app_ctx.bookmark_store
-    if store is None:
-        return []
-    bookmarks = await asyncio.to_thread(store.list, tag=tag, min_score=min_score)
-    return [
-        {
-            "url": b.url,
-            "title": b.title,
-            "relevance_score": b.relevance_score,
-            "tags": b.tags,
-        }
-        for b in bookmarks
-    ]
-
-
-async def update_bookmark_tags(
-    ctx: Context,
-    url: str,
-    tags: list[str],
-    scope: str = "global",
-) -> BookmarkInfo:
-    """Update the tags on an existing bookmark."""
-    app_ctx: AppContext = ctx.request_context.lifespan_context
-    store = app_ctx.bookmark_store
-    if store is None:
-        msg = "bookmark store not available"
-        raise ToolError(msg)
-    bookmark = await asyncio.to_thread(store.get_by_url, url, scope)
-    if bookmark is None:
-        msg = f"bookmark not found for URL: {url}"
-        raise ToolError(msg)
-    await asyncio.to_thread(store.update_tags, bookmark.id, tags)
-    return {
-        "url": bookmark.url,
-        "title": bookmark.title,
-        "relevance_score": bookmark.relevance_score,
-        "tags": tags,
-    }
-
-
-async def import_scope(
-    ctx: Context,
-    project_name: str,
-    path: str | None = None,
-) -> str:
-    """Import a project-local knowledge snapshot into the global KB.
-
-    Reads a portable SQLite file (default: ``.owlbear/knowledge/local.db``)
-    and ingests its documents into the global KB under ``scope="project:{project_name}"``.
-    Duplicate documents (same content hash) are skipped.
-    """
-    app_ctx: AppContext = ctx.request_context.lifespan_context
-    src = Path(path) if path is not None else None
-    return await asyncio.to_thread(
-        _core_import_scope,
-        src,
-        project_name,
-        app_ctx.conn,
-        workspace_root=Path.cwd(),
-    )
-
-
-async def export_scope(
-    ctx: Context,
-    scope: str,
-    output_path: str,
-) -> str:
-    """Export all knowledge for a scope to a portable SQLite file.
-
-    Creates a new SQLite database at *output_path* containing only the rows
-    matching *scope*.  Qdrant embeddings are excluded (re-embedded on import).
-    """
-    app_ctx: AppContext = ctx.request_context.lifespan_context
-    return await asyncio.to_thread(
-        _core_export_scope,
-        scope,
-        Path(output_path),
-        app_ctx.conn,
-    )
-
-
-async def sync_from_global(ctx: Context) -> str:
-    """Import all documents from the global knowledge DB into the local DB under scope='global'.
-
-    Global DB path resolution via ``owlbear-project.json`` has been removed (see #1296).
-    This tool always returns an ``error: `` string until a replacement resolver is provided.
-
-    Returns a count string on success, or an ``error: `` string on failure.
-    """
-    try:
-        global_path = resolve_global_db_path(Path.cwd())
-    except NotImplementedError as exc:
-        return f"error: {exc}"
-    if isinstance(global_path, str):
-        return "error: global DB path could not be resolved"
-
-    if not global_path.exists():
-        return f"error: global DB not found at {global_path}"
-
-    app_ctx: AppContext = ctx.request_context.lifespan_context
-    local_conn: sqlite3.Connection = app_ctx.conn
-
-    def _run() -> str:
-        global_conn = sqlite3.connect(str(global_path))
-        try:
-            raw = _core_do_import(global_conn, local_conn, target_scope="global")
-        finally:
-            global_conn.close()
-        # Reformat raw "Imported N documents (skipped M duplicates) into scope global"
-        # → AC format: "Imported N documents (skipped M duplicates) from global into local under scope 'global'"
-        prefix = "Imported "
-        if raw.startswith(prefix):
-            counts_part = raw[len(prefix) : raw.index(" into scope")]
-            return f"Imported {counts_part} from global into local under scope 'global'"
-        return raw
-
-    return await asyncio.to_thread(_run)
-
-
-async def sync_to_global(ctx: Context) -> str:
-    """Export local documents with scope='global' into the global knowledge DB.
-
-    Global DB path resolution via ``owlbear-project.json`` has been removed (see #1296).
-    This tool always returns an ``error: `` string until a replacement resolver is provided.
-    Only documents with ``scope='global'`` in the local DB are exported.
-    Duplicate documents (same content hash) are skipped.
-
-    Returns a count string on success, or an ``error: `` string on failure.
-    """
-    try:
-        global_path = resolve_global_db_path(Path.cwd())
-    except NotImplementedError as exc:
-        return f"error: {exc}"
-    if isinstance(global_path, str):
-        return f"error: {global_path}"
-
-    app_ctx: AppContext = ctx.request_context.lifespan_context
-    local_conn: sqlite3.Connection = app_ctx.conn
-
-    def _run() -> str:
-        global_path.parent.mkdir(parents=True, exist_ok=True)
-        global_conn = sqlite3.connect(str(global_path))
-        try:
-            _schema_init_db(global_conn)
-            raw = _core_do_import(
-                local_conn, global_conn, target_scope="global", source_scope="global"
-            )
-        finally:
-            global_conn.close()
-        # Reformat raw "Imported N documents (skipped M duplicates) into scope global"
-        # → AC format: "Exported N documents (skipped M duplicates) from local scope 'global' to global DB"
-        prefix = "Imported "
-        if raw.startswith(prefix):
-            counts_part = raw[len(prefix) : raw.index(" into scope")]
-            return f"Exported {counts_part} from local scope 'global' to global DB"
-        return raw
-
-    return await asyncio.to_thread(_run)
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
@@ -1620,18 +1340,3 @@ async def refresh_source(ctx: Context, source_id: str) -> dict | str:
         "skipped": result.skipped,
         "failed": result.failed,
     }
-
-
-async def consolidate_knowledge(ctx: Context, batch_size: int = 50) -> str:
-    """Trigger cross-document insight synthesis for unconsolidated knowledge chunks.
-
-    Returns a human-readable summary of the consolidation result.
-    """
-    app_ctx: AppContext = ctx.request_context.lifespan_context
-    svc = app_ctx.consolidation_service
-    if svc is None:
-        return "error: consolidation service not available"
-    result = await svc.consolidate(batch_size=batch_size)
-    if result == 0:
-        return "No unconsolidated chunks available"
-    return f"Consolidated: {result} insight created"

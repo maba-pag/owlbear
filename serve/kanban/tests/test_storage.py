@@ -333,9 +333,9 @@ content
         ts_re = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}")
         for line in frontmatter.splitlines():
             if ts_re.search(line):
-                assert line.rstrip().endswith("+00:00"), f"Non-UTC offset not converted to +00:00: {line.rstrip()!r}"
-        assert "2026-04-20T08:00:00+00:00" in frontmatter
-        assert "2026-04-20T10:00:00+00:00" in frontmatter
+                assert re.search(r"[+-]\d{2}:\d{2}$", line.rstrip()), f"Timestamp missing tz offset: {line.rstrip()!r}"
+        assert "2026-04-20T10:00:00+02:00" in frontmatter
+        assert "2026-04-20T12:00:00+02:00" in frontmatter
 
 
 # ---------------------------------------------------------------------------
@@ -1615,11 +1615,11 @@ class TestBuilderDiscovered:
         assert after == before
 
     def test_normalize_timestamp_already_has_tz(self) -> None:
-        """_normalize_timestamp converts non-UTC offset to UTC per AC-C15 / Brief C §5.3."""
+        """_normalize_timestamp preserves existing non-UTC offsets."""
         from owlbear_kanban.storage import _normalize_timestamp
 
-        # +02:00 input → UTC equivalent 08:00+00:00
-        assert _normalize_timestamp("2026-04-20T10:00:00+02:00") == "2026-04-20T08:00:00+00:00"
+        # +02:00 input → preserved as-is
+        assert _normalize_timestamp("2026-04-20T10:00:00+02:00") == "2026-04-20T10:00:00+02:00"
 
     def test_normalize_timestamp_z_suffix_is_normalized_to_explicit_utc(self) -> None:
         """_normalize_timestamp rewrites Z-suffix timestamps to +00:00."""

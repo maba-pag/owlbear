@@ -41,9 +41,7 @@ def _make_ctx(domains: list[str] | None = None) -> MagicMock:
     Uses SimpleNamespace without a ``page`` attribute so navigate() reaches
     the dry-run return path when the SSRF check passes.
     """
-    allowlist = DomainAllowlist(
-        domains=domains if domains is not None else [_ALLOWED_HOST]
-    )
+    allowlist = DomainAllowlist(domains=domains if domains is not None else [_ALLOWED_HOST])
     app_ctx = SimpleNamespace(allowlist=allowlist)
     ctx = MagicMock()
     ctx.request_context.lifespan_context = app_ctx
@@ -95,9 +93,7 @@ class TestFromAC_NavigateSchemeCheck:
         """data://allowed-host/... must be caught by scheme check."""
         ctx = _make_ctx([_ALLOWED_HOST])
         with pytest.raises(ToolError):
-            await navigate(
-                ctx, f"data://{_ALLOWED_HOST}/text/html,<script>alert(1)</script>"
-            )
+            await navigate(ctx, f"data://{_ALLOWED_HOST}/text/html,<script>alert(1)</script>")
 
     @pytest.mark.asyncio
     async def test_ftp_scheme_rejected(self) -> None:
@@ -275,9 +271,7 @@ class TestFromAC_NavigateDNSFailure:
         """socket.getaddrinfo raises OSError → must raise ToolError (not propagate OSError)."""
         ctx = _make_ctx()
         with (
-            patch(
-                "socket.getaddrinfo", side_effect=OSError("Name or service not known")
-            ),
+            patch("socket.getaddrinfo", side_effect=OSError("Name or service not known")),
             pytest.raises(ToolError),
         ):
             await navigate(ctx, f"https://{_ALLOWED_HOST}/")
@@ -311,9 +305,7 @@ class TestFromAC_NavigatePassthrough:
     async def test_allowed_domain_dns_is_resolved(self) -> None:
         """Public IP for an allowed domain: SSRF check passes and DNS was called."""
         ctx = _make_ctx()
-        with patch(
-            "socket.getaddrinfo", return_value=_addr4("93.184.216.34")
-        ) as mock_dns:
+        with patch("socket.getaddrinfo", return_value=_addr4("93.184.216.34")) as mock_dns:
             result = await navigate(ctx, f"https://{_ALLOWED_HOST}/page")
         mock_dns.assert_called()  # DNS resolution must be called — AssertionError in RED
         assert result is not None
@@ -326,9 +318,7 @@ class TestFromAC_NavigatePassthrough:
         Fails in RED because mock_dns.assert_called() is never satisfied.
         """
         ctx = _make_ctx()
-        with patch(
-            "socket.getaddrinfo", return_value=_addr4("93.184.216.34")
-        ) as mock_dns:
+        with patch("socket.getaddrinfo", return_value=_addr4("93.184.216.34")) as mock_dns:
             result = await navigate(ctx, f"https://{_ALLOWED_HOST}/index.html")
         mock_dns.assert_called()
         assert result == f"https://{_ALLOWED_HOST}/index.html"

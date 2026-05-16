@@ -47,14 +47,15 @@ results: list[StructuredSearchResult] = service.search("What is OwlBear?")
 
 | Group | Key exports |
 |-------|-------------|
-| Data stores | `DocumentStore`, `GraphStore`, `StatusStore`, `KnowledgeSourceStore`, `BookmarkStore` |
+| Data stores | `DocumentStore`, `GraphStore`, `StatusStore`, `KnowledgeSourceStore` |
 | Ingestion | `IngestPipeline`, `IngestResult`, `TextChunker` |
 | Retrieval | `GraphAugmentedRetriever`, `KnowledgeQueryService`, `RetrievalResult`, `StructuredSearchResult` |
 | Embeddings | `BgeM3EmbeddingProvider`, `EmbeddingProvider` |
 | Graph | `IntraDocGraphBuilder`, `InterDocGraphBuilder` |
-| Utilities | `CancelSignal`, `ConsolidationService`, `SourceEvaluator`, `import_scope`, `export_scope` |
+| Utilities | `CancelSignal`, `SourceEvaluator` |
 
-All 23+ public modules are importable without optional dependencies installed.
+Active operational API is intentionally narrow. Bookmark, scope-transfer, and
+consolidation surfaces have been retired and removed from this package.
 
 ## Configuration
 
@@ -87,5 +88,4 @@ Install with `uv pip install -e "serve/knowledge[<extra>]"`:
 | `embedding` | `FlagEmbedding` | BGE-M3 embedding provider (~2.3 GB model download on first use) |
 | `intake` | `httpx` | HTTP URL ingestion |
 | `llm` | `openai` | LLM-based entity extraction |
-| `copilot` | `httpx`, `truststore` | Copilot API authentication |
-| `full` | all of the above except `copilot` | All features |
+| `full` | all of the above | All features |

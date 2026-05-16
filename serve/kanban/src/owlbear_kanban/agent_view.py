@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import importlib
 import re
-from datetime import UTC, datetime
+from datetime import datetime
 
 from owlbear_kanban._duration import _parse_duration
 from owlbear_kanban.body_parser import parse_body
@@ -700,8 +700,8 @@ class AgentView:
 
         if append_set:
             if timestamp:
-                stamp = datetime.now(tz=UTC).replace(microsecond=0).isoformat()
-                append_payload = f"{stamp}\n{append_body}"
+                local_stamp = datetime.now().astimezone().replace(microsecond=0).isoformat()
+                append_payload = f"[[{local_stamp}]]\n{append_body}"
             current_body = existing.body if isinstance(existing.body, str) else ""
             append_resulting_body = current_body + "\n" + append_payload
             self.engine.validate_body_size(append_resulting_body)

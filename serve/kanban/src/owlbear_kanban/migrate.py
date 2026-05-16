@@ -101,7 +101,10 @@ def _make_yaml_safe() -> YAML:
 
 
 def _normalise_timestamp(ts: object) -> str | None:
-    """Normalise an ISO-8601 timestamp to explicit UTC +00:00."""
+    """Ensure *ts* carries an explicit timezone offset.
+
+    Naive timestamps are assumed UTC; existing offsets are preserved.
+    """
     if ts is None:
         return None
     if not isinstance(ts, str):
@@ -115,7 +118,7 @@ def _normalise_timestamp(ts: object) -> str | None:
         return ts
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=UTC)
-    return dt.astimezone(UTC).isoformat()
+    return dt.isoformat()
 
 
 def _has_canonical_order(fm: dict[str, Any]) -> bool:
@@ -125,12 +128,16 @@ def _has_canonical_order(fm: dict[str, Any]) -> bool:
     return seen == [key for key in _CANONICAL_FIELDS if key in fm]
 
 
-def _is_timestamp_utc_plus_00(value: object) -> bool:
+def _is_timestamp_tz_aware(value: object) -> bool:
     if value is None:
         return True
     if not isinstance(value, str):
         return False
-    return value.endswith("+00:00")
+    try:
+        dt = datetime.fromisoformat(value)
+    except ValueError:
+        return False
+    return dt.tzinfo is not None
 
 
 def _is_archive_reason_valid(value: object) -> bool:
@@ -151,7 +158,7 @@ def _is_task_migrated(fm: dict[str, Any]) -> bool:
         if field not in fm:
             return False
     for field in _TS_FIELDS:
-        if not _is_timestamp_utc_plus_00(fm.get(field)):
+        if not _is_timestamp_tz_aware(fm.get(field)):
             return False
     for field in _ACTIVE_TASK_DEFAULTS:
         if field not in fm:

@@ -171,9 +171,7 @@ class TestFromAC_StatsOutputSchema:
         """get_stats schema must have top-level inline 'properties'."""
         schema = _get_output_schema("get_stats")
         assert schema is not None, "get_stats tool or fn_metadata not found"
-        assert "properties" in schema, (
-            f"get_stats schema missing top-level 'properties'; Current schema: {schema}"
-        )
+        assert "properties" in schema, f"get_stats schema missing top-level 'properties'; Current schema: {schema}"
 
     def test_get_stats_result_has_documents_property(self) -> None:
         """get_stats schema must have a 'documents' property of type integer."""

@@ -171,20 +171,17 @@ async def load_manifest_file(
             name=entry.name,
             source_type=SourceType(entry.type),
             config=entry.config,
+            scope=entry.scope,
             created_at=now,
             updated_at=now,
         )
         source_store.create(source)
 
         glob_pattern = entry.config.get("glob", "")
-        files = await asyncio.to_thread(
-            lambda pat=glob_pattern: sorted(workspace_root.glob(pat))
-        )
+        files = await asyncio.to_thread(lambda pat=glob_pattern: sorted(workspace_root.glob(pat)))
 
         if not files:
-            logger.warning(
-                "No files matched glob %r for source %r", glob_pattern, entry.name
-            )
+            logger.warning("No files matched glob %r for source %r", glob_pattern, entry.name)
             continue
 
         source_failed = 0
@@ -192,10 +189,12 @@ async def load_manifest_file(
 
         for file_path in files:
             try:
-                intake_result = await intake_mod.read_file(
-                    file_path, workspace_root=workspace_root
+                intake_result = await intake_mod.read_file(file_path, workspace_root=workspace_root)
+                result = await pipeline.ingest(
+                    intake_result,
+                    scope=entry.scope,
+                    source_id=source.id,
                 )
-                result = await pipeline.ingest(intake_result, scope=entry.scope)
                 if result.status == "skipped":
                     summary.skipped += 1
                 elif result.status == "failed":
@@ -224,15 +223,9 @@ def main(args: list[str] | None = None) -> int:
         Exit code: 0 when all sources processed successfully (or some skipped);
         non-zero when any source has all files fail.
     """
-    parser = argparse.ArgumentParser(
-        description="Load knowledge sources from a manifest file."
-    )
-    parser.add_argument(
-        "--manifest", required=True, help="Path to the sources YAML manifest."
-    )
-    parser.add_argument(
-        "--root", default=None, help="Workspace root (defaults to cwd)."
-    )
+    parser = argparse.ArgumentParser(description="Load knowledge sources from a manifest file.")
+    parser.add_argument("--manifest", required=True, help="Path to the sources YAML manifest.")
+    parser.add_argument("--root", default=None, help="Workspace root (defaults to cwd).")
 
     parsed = parser.parse_args(args)
 
@@ -257,7 +250,8 @@ def main(args: list[str] | None = None) -> int:
     conn = sqlite3.connect(str(db_file))
     _init_db(conn)
     gs = GraphStore(conn)
-    vs = QdrantVectorStore()
+    qdrant_path = os.environ.get("OWLBEAR_QDRANT_PATH", ".owlbear/knowledge/vectors")
+    vs = QdrantVectorStore(location=qdrant_path)
     emb = BgeM3EmbeddingProvider()
     doc_store = DocumentStore(conn, gs, vs, emb)
     extractor = EntityExtractor()

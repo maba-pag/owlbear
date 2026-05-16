@@ -19,9 +19,7 @@ if TYPE_CHECKING:
 
     from lxml.html import HtmlElement
 
-_NOISE_TAGS: frozenset[str] = frozenset(
-    {"nav", "header", "footer", "aside", "script", "style"}
-)
+_NOISE_TAGS: frozenset[str] = frozenset({"nav", "header", "footer", "aside", "script", "style"})
 _NOISE_CLASSES: frozenset[str] = frozenset(
     {
         # Cookie notices
@@ -222,12 +220,7 @@ def _normalize_content(text: str) -> str:
     - Collapses multiple consecutive spaces within a line to a single space.
     - Collapses more than one consecutive blank line to a single blank line.
     """
-    text = (
-        text.replace("\u200b", "")
-        .replace("\u200c", "")
-        .replace("\u200d", "")
-        .replace("\ufeff", "")
-    )
+    text = text.replace("\u200b", "").replace("\u200c", "").replace("\u200d", "").replace("\ufeff", "")
     text = text.replace("\r", "")
     text = text.replace("\u00a0", " ")
     lines = [re.sub(r" {2,}", " ", line.rstrip()) for line in text.split("\n")]

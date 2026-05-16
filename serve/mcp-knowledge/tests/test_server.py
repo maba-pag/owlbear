@@ -8,12 +8,6 @@ import pytest
 from owlbear_mcp_knowledge.server import app_lifespan, mcp
 
 
-@pytest.fixture(autouse=True)
-def _bypass_copilot_auth(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Set a fake LLM API key so app_lifespan skips device-auth setup."""
-    monkeypatch.setenv("OWLBEAR_LLM_API_KEY", "test-key")
-
-
 class TestFromAC_ServerLifespan:
     """Contract tests for the app_lifespan async context manager."""
 
@@ -106,9 +100,7 @@ class TestFromAC_ServerLifespan:
         expected_path = "/custom/kb/path/knowledge.db"
 
         with (
-            patch(
-                "owlbear_mcp_knowledge.server.init_db", return_value=mock_conn
-            ) as mock_init,
+            patch("owlbear_mcp_knowledge.server.init_db", return_value=mock_conn) as mock_init,
             patch("owlbear_mcp_knowledge.server.GraphStore"),
             patch("owlbear_mcp_knowledge.server.QdrantVectorStore"),
             patch("owlbear_mcp_knowledge.server.BgeM3EmbeddingProvider"),
@@ -128,9 +120,7 @@ class TestFromAC_ServerLifespan:
         mock_conn = MagicMock()
 
         with (
-            patch(
-                "owlbear_mcp_knowledge.server.init_db", return_value=mock_conn
-            ) as mock_init,
+            patch("owlbear_mcp_knowledge.server.init_db", return_value=mock_conn) as mock_init,
             patch("owlbear_mcp_knowledge.server.GraphStore"),
             patch("owlbear_mcp_knowledge.server.QdrantVectorStore"),
             patch("owlbear_mcp_knowledge.server.BgeM3EmbeddingProvider"),
