@@ -27,7 +27,7 @@ export class ErrorBoundary extends Component<Props, State> {
     return (
       <div role="alert" style={{ padding: 32, textAlign: 'center' }}>
         <h3>Something went wrong{this.props.label ? ` in ${this.props.label}` : ''}</h3>
-        <p style={{ color: 'var(--pds-contrast-medium)', marginBottom: 16 }}>
+        <p style={{ color: 'var(--p-color-contrast-medium)', marginBottom: 16 }}>
           {this.state.error?.message}
         </p>
         <button

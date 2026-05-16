@@ -9,9 +9,9 @@
  *     claimed, deps-unmet); column structure (.column class, <header> direct
  *     child, data-testid="column-body" sibling); Card-level dr-pending via
  *     explicit pendingDRIds prop; data-testid="theme-toggle" button present.
- * AC-2: Dark theme token coverage via tokens.css source inspection
- *   — [data-theme="dark"] block overrides all :root color token groups
- *     (--pds-primary, --pds-background-*, --pds-contrast-*, --pds-notification-*,
+ * AC-2: Component CSS token coverage
+ *   — color and semantic token usage follows the migrated PDS/native token map
+ *     (--p-color-primary, --pds-background-*, --pds-contrast-*, --pds-notification-*,
  *      --pds-signal-*, --pds-state-*); non-color tokens absent from dark block;
  *     component CSS files (Card.css, Column.css, KanbanBoard.css) contain no
  *     hardcoded hex / rgb() / hsl() color literals.
@@ -60,7 +60,6 @@ const __dirname = dirname(__filename)
 const CARD_CSS_PATH = resolve(__dirname, '..', 'components', 'Card.css')
 const COLUMN_CSS_PATH = resolve(__dirname, '..', 'components', 'Column.css')
 const KANBAN_CSS_PATH = resolve(__dirname, '..', 'KanbanBoard.css')
-const TOKENS_CSS_PATH = resolve(__dirname, '..', 'tokens.css')
 
 // ─── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -258,62 +257,6 @@ describe('ThemeTogglePresence', () => {
   })
 })
 
-// ─── AC-2: Dark theme token coverage ──────────────────────────────────────────
-
-const ALL_COLOR_TOKENS = [
-  '--pds-primary',
-  '--pds-background-base',
-  '--pds-background-surface',
-  '--pds-background-shading',
-  '--pds-contrast-low',
-  '--pds-contrast-medium',
-  '--pds-contrast-high',
-  '--pds-notification-success',
-  '--pds-notification-success-soft',
-  '--pds-notification-warning',
-  '--pds-notification-warning-soft',
-  '--pds-notification-error',
-  '--pds-notification-error-soft',
-  '--pds-notification-info',
-  '--pds-notification-info-soft',
-  '--pds-signal-claimed',
-  '--pds-state-hover',
-  '--pds-state-active',
-  '--pds-state-focus',
-  '--pds-state-disabled',
-] as const
-
-describe('DarkThemeTokenCoverage', () => {
-  function extractDarkBlock(css: string): string {
-    const block = getCSSBlock(css, '[data-theme="dark"]')
-    expect(block, 'tokens.css must have a [data-theme="dark"] block').not.toBeNull()
-    return block!
-  }
-
-  it('[data-theme="dark"] block in tokens.css overrides all 20 :root color tokens', () => {
-    const css = readFileSync(TOKENS_CSS_PATH, 'utf-8')
-    const block = extractDarkBlock(css)
-    for (const token of ALL_COLOR_TOKENS) {
-      expect(
-        block,
-        `[data-theme="dark"] must override ${token}`,
-      ).toMatch(new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*:'))
-    }
-  })
-
-  it('[data-theme="dark"] block does not override non-color tokens (shadow/radius/spacing)', () => {
-    const css = readFileSync(TOKENS_CSS_PATH, 'utf-8')
-    const block = extractDarkBlock(css)
-    const nonColorPrefixes = ['--pds-shadow-', '--pds-radius-', '--pds-spacing-']
-    for (const prefix of nonColorPrefixes) {
-      expect(
-        block,
-        `[data-theme="dark"] must not include ${prefix}* tokens — these are theme-independent`,
-      ).not.toMatch(new RegExp(prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
-    }
-  })
-})
-
 // ─── AC-2: Component CSS files use only var(--pds-*) for color values ─────────
 
 describe('ComponentCSSTokensOnly', () => {
@@ -352,39 +295,39 @@ describe('ComponentCSSTokensOnly', () => {
 // ─── AC-3: Card signal left-border CSS mapping (base rule + all 4 overrides) ──
 
 describe('CardSignalBorderMapping', () => {
-  it('.card base rule declares border-left: 4px solid var(--pds-contrast-medium)', () => {
+  it('.card base rule declares border-left: 4px solid var(--p-color-contrast-medium)', () => {
     const css = readFileSync(CARD_CSS_PATH, 'utf-8')
     const block = getCSSBlock(css, '.card')
     expect(block, '.card rule must exist in Card.css').not.toBeNull()
-    expect(block).toMatch(/border-left\s*:\s*4px\s+solid\s+var\(--pds-contrast-medium\)/)
+    expect(block).toMatch(/border-left\s*:\s*4px\s+solid\s+var\(--p-color-contrast-medium\)/)
   })
 
-  it('[data-signal="dr-pending"] → border-left-color: var(--pds-notification-warning) (orange)', () => {
+  it('[data-signal="dr-pending"] → border-left-color: var(--p-color-warning) (orange)', () => {
     const css = readFileSync(CARD_CSS_PATH, 'utf-8')
     const block = getCSSBlock(css, '[data-signal="dr-pending"]')
     expect(block, '[data-signal="dr-pending"] block must exist').not.toBeNull()
-    expect(block).toMatch(/border-left-color\s*:\s*var\(--pds-notification-warning\)/)
+    expect(block).toMatch(/border-left-color\s*:\s*var\(--p-color-warning\)/)
   })
 
-  it('[data-signal="blocked"] → border-left-color: var(--pds-notification-error) (red)', () => {
+  it('[data-signal="blocked"] → border-left-color: var(--p-color-error) (red)', () => {
     const css = readFileSync(CARD_CSS_PATH, 'utf-8')
     const block = getCSSBlock(css, '[data-signal="blocked"]')
     expect(block, '[data-signal="blocked"] block must exist').not.toBeNull()
-    expect(block).toMatch(/border-left-color\s*:\s*var\(--pds-notification-error\)/)
+    expect(block).toMatch(/border-left-color\s*:\s*var\(--p-color-error\)/)
   })
 
-  it('[data-signal="claimed"] → border-left-color: var(--pds-signal-claimed) (custom purple)', () => {
+  it('[data-signal="claimed"] → border-left-color: var(--custom-signal-claimed) (custom purple)', () => {
     const css = readFileSync(CARD_CSS_PATH, 'utf-8')
     const block = getCSSBlock(css, '[data-signal="claimed"]')
     expect(block, '[data-signal="claimed"] block must exist').not.toBeNull()
-    expect(block).toMatch(/border-left-color\s*:\s*var\(--pds-signal-claimed\)/)
+    expect(block).toMatch(/border-left-color\s*:\s*var\(--custom-signal-claimed\)/)
   })
 
-  it('[data-signal="deps-unmet"] → border-left-color: var(--pds-contrast-medium) (grey)', () => {
+  it('[data-signal="deps-unmet"] → border-left-color: var(--p-color-contrast-medium) (grey)', () => {
     const css = readFileSync(CARD_CSS_PATH, 'utf-8')
     const block = getCSSBlock(css, '[data-signal="deps-unmet"]')
     expect(block, '[data-signal="deps-unmet"] block must exist').not.toBeNull()
-    expect(block).toMatch(/border-left-color\s*:\s*var\(--pds-contrast-medium\)/)
+    expect(block).toMatch(/border-left-color\s*:\s*var\(--p-color-contrast-medium\)/)
   })
 })
 

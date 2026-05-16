@@ -210,7 +210,7 @@ describe('TestFromAC_LegacyTestFilesUpdated', () => {
     const source = readFileSync(path, 'utf-8')
     expect(
       source,
-      'CardCSS_1546.test.ts must not retain --pds-contrast-medium assertions after migration',
+      'CardCSS_1546.test.ts must not retain --p-color-contrast-medium assertions after migration',
     ).not.toMatch(/var\(--pds-contrast-medium\)/)
   })
 
@@ -226,7 +226,7 @@ describe('TestFromAC_LegacyTestFilesUpdated', () => {
     ).not.toMatch(/\[data-theme\s*=\s*["']dark["']\]\s*block/)
   })
 
-  it('AC-4: BoardVisualDesign.test.tsx card signal border uses --custom-signal-claimed (not retired --pds-signal-claimed)', () => {
+  it('AC-4: BoardVisualDesign.test.tsx card signal border uses --custom-signal-claimed (not retired --custom-signal-claimed)', () => {
     const path = resolve(TESTS_DIR, 'BoardVisualDesign.test.tsx')
     expect(existsSync(path)).toBe(true)
     const source = readFileSync(path, 'utf-8')

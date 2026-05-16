@@ -37,24 +37,24 @@ describe('TestFromAC_FilterPanelCSS_1550', () => {
     )
   })
 
-  it('AC-1: FilterPanel.css applies var(--pds-background-surface) for background', () => {
+  it('AC-1: FilterPanel.css applies var(--p-color-surface) for background', () => {
     const css = readFileSync(FILTER_PANEL_CSS, 'utf-8')
-    expect(css, 'FilterPanel.css must apply var(--pds-background-surface) as background').toMatch(
-      /background[^:]*:\s*[^;]*var\(--pds-background-surface\)/,
+    expect(css, 'FilterPanel.css must apply var(--p-color-surface) as background').toMatch(
+      /background[^:]*:\s*[^;]*var\(--p-color-surface\)/,
     )
   })
 
-  it('AC-1: FilterPanel.css applies var(--pds-border-default) for border', () => {
+  it('AC-1: FilterPanel.css applies var(--p-color-contrast-low) for border', () => {
     const css = readFileSync(FILTER_PANEL_CSS, 'utf-8')
-    expect(css, 'FilterPanel.css must apply var(--pds-border-default) for border').toMatch(
-      /border[^:]*:\s*[^;]*var\(--pds-border-default\)/,
+    expect(css, 'FilterPanel.css must apply var(--p-color-contrast-low) for border').toMatch(
+      /border[^:]*:\s*[^;]*var\(--p-color-contrast-low\)/,
     )
   })
 
-  it('AC-1: FilterPanel.css applies var(--pds-spacing-md) for padding', () => {
+  it('AC-1: FilterPanel.css applies var(--p-spacing-static-md) for padding', () => {
     const css = readFileSync(FILTER_PANEL_CSS, 'utf-8')
-    expect(css, 'FilterPanel.css must apply var(--pds-spacing-md) for padding').toMatch(
-      /padding[^:]*:\s*[^;]*var\(--pds-spacing-md\)/,
+    expect(css, 'FilterPanel.css must apply var(--p-spacing-static-md) for padding').toMatch(
+      /padding[^:]*:\s*[^;]*var\(--p-spacing-static-md\)/,
     )
   })
 })
@@ -69,12 +69,12 @@ describe('TestFromAC_StylesTsDeletion_1550', () => {
 })
 
 describe('TestFromAC_BoardGridTokens_1550', () => {
-  it('AC-3: KanbanBoard.tsx board grid container uses var(--pds-spacing-md) for gap', () => {
+  it('AC-3: KanbanBoard.tsx board grid container uses var(--p-spacing-static-md) for gap', () => {
     const source = readFileSync(KANBAN_BOARD_TSX, 'utf-8')
     expect(
       source,
-      "KanbanBoard.tsx board grid gap must be var(--pds-spacing-md), not hardcoded '16px'",
-    ).toMatch(/gap:\s*['"]var\(--pds-spacing-md\)['"]/)
+      "KanbanBoard.tsx board grid gap must be var(--p-spacing-static-md), not hardcoded '16px'",
+    ).toMatch(/gap:\s*['"]var\(--p-spacing-static-md\)['"]/)
   })
 
   it('AC-3: KanbanBoard.tsx board grid container uses overflowX: auto', () => {

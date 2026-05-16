@@ -2,7 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { load } from '@porsche-design-system/components-js'
 import './tailwind.css'
-import './tokens.css'
+import './custom-tokens.css'
 import App from './App'
 
 const REQUIRED_PDS_ELEMENTS = ['p-button', 'p-icon', 'p-tabs', 'p-tabs-item'] as const

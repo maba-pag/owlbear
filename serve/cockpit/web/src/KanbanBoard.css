@@ -1,6 +1,6 @@
 .kanban-context-menu {
-  background: var(--pds-background-surface);
-  box-shadow: var(--pds-shadow-md);
-  border-radius: var(--pds-radius-md);
+  background: var(--p-color-surface);
+  box-shadow: var(--p-shadow-md);
+  border-radius: var(--p-radius-md);
   padding: 4px;
 }

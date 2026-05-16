@@ -1,0 +1,4 @@
+/* Sole custom token retained after PDS v4 migration (no native purple equivalent). */
+:root {
+  --custom-signal-claimed: light-dark(hsl(270 58% 46%), hsl(270 80% 70%));
+}

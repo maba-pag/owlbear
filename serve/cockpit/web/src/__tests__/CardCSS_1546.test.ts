@@ -4,7 +4,7 @@
  * Covers AC-3 and AC-4 (CSS side) plus AC-1 base-token correctness.
  * The existing Card.css.test.ts (from #1538) covers signal selectors and
  * selected/hover/focus states but does not cover:
- *   AC-1: base border uses agnostic var(--pds-contrast-medium), no legacy token shadowing
+ *   AC-1: base border uses agnostic var(--p-color-contrast-medium), no legacy token shadowing
  *   AC-3: overflow-wrap: break-word, no max-height constraint
  *   AC-4: [data-dragging="true"] selector with opacity: 0.5
  *
@@ -12,7 +12,7 @@
  *   - overflow-wrap: break-word on .card
  *   - Removal of max-height: 56px
  *   - Removal of legacy --pds-theme-light-* token overrides inside .card
- *   - border-left using var(--pds-contrast-medium) directly
+ *   - border-left using var(--p-color-contrast-medium) directly
  *   - [data-dragging="true"] { opacity: 0.5 } selector
  */
 import { describe, it, expect } from 'vitest'
@@ -57,45 +57,45 @@ describe('TestFromAC_CardCSSTextOverflow', () => {
 // ─── AC-1: base border uses agnostic PDS token, no legacy shadowing ──────────
 
 describe('TestFromAC_CardCSSBaseToken', () => {
-  it('.card border-left references var(--pds-contrast-medium) directly for theme-aware base (AC-1)', () => {
+  it('.card border-left references var(--p-color-contrast-medium) directly for theme-aware base (AC-1)', () => {
     const css = readFileSync(CARD_CSS_PATH, 'utf-8')
     const block = getCSSBlock(css, '.card')
     expect(block).not.toBeNull()
-    // After builder fix: border-left: 4px solid var(--pds-contrast-medium)
+    // After builder fix: border-left: 4px solid var(--p-color-contrast-medium)
     // Currently uses --card-priority-border intermediate → test FAILS RED.
-    expect(block).toMatch(/border-left\s*:[^;]*var\(--pds-contrast-medium\)/)
+    expect(block).toMatch(/border-left\s*:[^;]*var\(--p-color-contrast-medium\)/)
   })
 
   it('.card border-left declaration specifies 4px width — falsifiable against 1px or 8px (AC-1)', () => {
     // Reviewer gap: previous test proved token reference but not the 4px width.
-    // A border-left: 1px solid var(--pds-contrast-medium) would have passed before.
+    // A border-left: 1px solid var(--p-color-contrast-medium) would have passed before.
     const css = readFileSync(CARD_CSS_PATH, 'utf-8')
     const block = getCSSBlock(css, '.card')
     expect(block).not.toBeNull()
     expect(block).toMatch(/border-left\s*:\s*4px/)
   })
 
-  it('.card block does not shadow --pds-contrast-medium with a theme-light override (AC-1 dark mode)', () => {
+  it('.card block does not shadow --p-color-contrast-medium with a theme-light override (AC-1 dark mode)', () => {
     const css = readFileSync(CARD_CSS_PATH, 'utf-8')
     const block = getCSSBlock(css, '.card')
     expect(block).not.toBeNull()
     // Builder removes all 7 legacy token-shadow lines inside .card.
-    // Currently --pds-contrast-medium: var(--pds-theme-light-contrast-medium) is present → FAILS RED.
-    expect(block).not.toMatch(/--pds-contrast-medium\s*:\s*var\(--pds-theme-light-contrast-medium\)/)
+    // Currently --p-color-contrast-medium: var(--pds-theme-light-contrast-medium) is present → FAILS RED.
+    expect(block).not.toMatch(/--p-color-contrast-medium\s*:\s*var\(--pds-theme-light-contrast-medium\)/)
   })
 
-  it('.card block does not shadow --pds-notification-warning with a theme-light override (AC-1 dark mode)', () => {
+  it('.card block does not shadow --p-color-warning with a theme-light override (AC-1 dark mode)', () => {
     const css = readFileSync(CARD_CSS_PATH, 'utf-8')
     const block = getCSSBlock(css, '.card')
     expect(block).not.toBeNull()
-    expect(block).not.toMatch(/--pds-notification-warning\s*:\s*var\(--pds-theme-light-notification-warning\)/)
+    expect(block).not.toMatch(/--p-color-warning\s*:\s*var\(--pds-theme-light-notification-warning\)/)
   })
 
-  it('.card block does not shadow --pds-notification-error with a theme-light override (AC-1 dark mode)', () => {
+  it('.card block does not shadow --p-color-error with a theme-light override (AC-1 dark mode)', () => {
     const css = readFileSync(CARD_CSS_PATH, 'utf-8')
     const block = getCSSBlock(css, '.card')
     expect(block).not.toBeNull()
-    expect(block).not.toMatch(/--pds-notification-error\s*:\s*var\(--pds-theme-light-notification-error\)/)
+    expect(block).not.toMatch(/--p-color-error\s*:\s*var\(--pds-theme-light-notification-error\)/)
   })
 })
 

@@ -1,16 +1,16 @@
 [data-testid='history-session-row'],
 [data-testid='session-row'] {
   cursor: pointer;
-  border-left: 4px solid var(--pds-border-default);
+  border-left: 4px solid var(--p-color-contrast-low);
 }
 
 [data-state="blocked"],
 [data-state="rejected"] {
-  border-left: 4px solid var(--pds-notification-error);
-  background: var(--pds-notification-error-soft);
+  border-left: 4px solid var(--p-color-error);
+  background: var(--p-color-error-frosted);
 }
 
 [data-state="stuck"] {
-  border-left: 4px solid var(--pds-notification-warning);
-  background: var(--pds-notification-warning-soft);
+  border-left: 4px solid var(--p-color-warning);
+  background: var(--p-color-warning-frosted);
 }
