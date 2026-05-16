@@ -192,3 +192,20 @@ class TestFromAC_IntegrityAudit:
 
         assert result["edges_dangling"]["count"] == 1
         assert "edge-2" in result["edges_dangling"]["ids"]
+
+    def test_edge_with_valid_nonnull_target_id_not_flagged_as_dangling(self) -> None:
+        """AC-5 proof-gap: edge whose both source_id and target_id reference existing
+        entities must NOT be flagged as dangling (guards against target-side false-positive)."""
+        conn = _fresh_db()
+        _insert_document(conn, "doc-clean")
+        _insert_entity(conn, "entity-src", "doc-clean")
+        _insert_entity(conn, "entity-tgt", "doc-clean")
+        # Both source and target exist — FK enforced
+        _insert_edge(conn, "edge-clean", "entity-src", "entity-tgt", "doc-clean")
+
+        result = audit_integrity(conn)
+
+        assert result["edges_dangling"]["count"] == 0, (
+            f"Valid edge with non-null target_id incorrectly flagged as dangling: {result['edges_dangling']['ids']!r}"
+        )
+        assert result["edges_dangling"]["ids"] == []
