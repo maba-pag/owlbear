@@ -19,6 +19,14 @@ External repos and resources studied during OwlBear development.
 | PDS v4 variables.css | (local: node_modules/@porsche-design-system/components-js/global-styles/variables.css) | Spacing, radius, shadow, motion, typography tokens | `.owlbear/research/1603-token-migration-provenance.md` | 2026-05-16 |
 | PDS v4 design system docs | <https://designsystem.porsche.com/v4/> | Token naming conventions and theming approach | `.owlbear/research/1603-token-migration-provenance.md` | 2026-05-16 |
 
+## Accessibility Sweep Research (Task #1628)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Playwright accessibility testing | <https://playwright.dev/docs/accessibility-testing> | @axe-core/playwright API, withTags WCAG scope, fixture pattern | `.owlbear/research/accessibility-sweep-1628.md` | 2026-05-16 |
+| PDS v4 component accessibility | <https://designsystem.porsche.com/v3/components/button/accessibility/> | PDS components tested against axe-core WCAG 2.2 AA | `.owlbear/research/accessibility-sweep-1628.md` | 2026-05-16 |
+| axe-core rule documentation | <https://www.deque.com/axe/core-documentation/api-documentation/> | WCAG tag mapping for withTags configuration | `.owlbear/research/accessibility-sweep-1628.md` | 2026-05-16 |
+
 ## Sidecar Structure Research (Task #1607)
 
 | Source | URL | What | Where Used | Date |
