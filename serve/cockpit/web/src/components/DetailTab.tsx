@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { PButton } from '@porsche-design-system/components-react'
+import { PButton, PDivider, PHeading } from '@porsche-design-system/components-react'
 import HistorySubtab, { type Session } from './HistorySubtab'
 import ConflictBanner from './ConflictBanner'
 import TaskActions from './TaskActions'
@@ -44,6 +44,14 @@ export interface DetailTabProps {
 }
 
 export type { TaskDetail }
+
+function setHeadingMediumSizeAttr(element: HTMLElement | null): void {
+  element?.setAttribute('size', 'medium')
+}
+
+function setHeadingSmallSizeAttr(element: HTMLElement | null): void {
+  element?.setAttribute('size', 'small')
+}
 
 export default function DetailTab({
   task,
@@ -179,7 +187,10 @@ export default function DetailTab({
         </p>
       </div>
 
+      <PDivider />
+
       <section data-region="sidecar-body">
+        <PHeading ref={setHeadingMediumSizeAttr} size="medium">Details</PHeading>
         <TaskFieldsEditor
           task={t}
           priorities={board?.priorities ?? []}
@@ -192,7 +203,7 @@ export default function DetailTab({
       </section>
 
       <section data-region="actions">
-        <h3>Actions</h3>
+        <PHeading ref={setHeadingSmallSizeAttr} size="small">Actions</PHeading>
         <TaskActions
           key={`${t.id}:${t.updated}`}
           task={t}
