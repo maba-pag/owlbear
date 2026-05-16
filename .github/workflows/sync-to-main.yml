@@ -61,18 +61,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
+    env:
+      SYNC_SHARE: ${{ inputs.sync_share }}
+      SYNC_BROWSER: ${{ inputs.sync_browser }}
+      SYNC_KANBAN: ${{ inputs.sync_kanban }}
+      SYNC_KNOWLEDGE: ${{ inputs.sync_knowledge }}
+      SYNC_COCKPIT: ${{ inputs.sync_cockpit }}
+      SYNC_TOOLS: ${{ inputs.sync_tools }}
+      SYNC_MCP_MEMORY: ${{ inputs.sync_mcp_memory }}
+      SYNC_SETUP: ${{ inputs.sync_setup }}
+      SYNC_INFRA: ${{ inputs.sync_infra }}
+      INPUT_DRY_RUN: ${{ inputs.dry_run }}
+      INPUT_MESSAGE: ${{ inputs.message }}
+
     steps:
       - name: Resolve scopes
-        env:
-          SYNC_SHARE: ${{ inputs.sync_share }}
-          SYNC_BROWSER: ${{ inputs.sync_browser }}
-          SYNC_KANBAN: ${{ inputs.sync_kanban }}
-          SYNC_KNOWLEDGE: ${{ inputs.sync_knowledge }}
-          SYNC_COCKPIT: ${{ inputs.sync_cockpit }}
-          SYNC_TOOLS: ${{ inputs.sync_tools }}
-          SYNC_MCP_MEMORY: ${{ inputs.sync_mcp_memory }}
-          SYNC_SETUP: ${{ inputs.sync_setup }}
-          SYNC_INFRA: ${{ inputs.sync_infra }}
         run: |
           scopes=""
           if [[ "$SYNC_SHARE" == "true" ]]; then scopes="${scopes:+$scopes,}share"; fi
@@ -135,16 +138,6 @@ jobs:
           } >> "$GITHUB_ENV"
 
       - name: Warn on unresolved TODO markers
-        env:
-          SYNC_SHARE: ${{ inputs.sync_share }}
-          SYNC_BROWSER: ${{ inputs.sync_browser }}
-          SYNC_KANBAN: ${{ inputs.sync_kanban }}
-          SYNC_KNOWLEDGE: ${{ inputs.sync_knowledge }}
-          SYNC_COCKPIT: ${{ inputs.sync_cockpit }}
-          SYNC_TOOLS: ${{ inputs.sync_tools }}
-          SYNC_MCP_MEMORY: ${{ inputs.sync_mcp_memory }}
-          SYNC_SETUP: ${{ inputs.sync_setup }}
-          SYNC_INFRA: ${{ inputs.sync_infra }}
         run: |
           # Build path list from selected sync scopes
           paths=""
@@ -190,16 +183,6 @@ jobs:
           echo "⚠️ ${todo_count} unresolved TODO marker(s) in synced scopes."
 
       - name: Validate selected paths exist on dev
-        env:
-          SYNC_SHARE: ${{ inputs.sync_share }}
-          SYNC_BROWSER: ${{ inputs.sync_browser }}
-          SYNC_KANBAN: ${{ inputs.sync_kanban }}
-          SYNC_KNOWLEDGE: ${{ inputs.sync_knowledge }}
-          SYNC_COCKPIT: ${{ inputs.sync_cockpit }}
-          SYNC_TOOLS: ${{ inputs.sync_tools }}
-          SYNC_MCP_MEMORY: ${{ inputs.sync_mcp_memory }}
-          SYNC_SETUP: ${{ inputs.sync_setup }}
-          SYNC_INFRA: ${{ inputs.sync_infra }}
         run: |
           failed=0
           paths=""
@@ -250,15 +233,15 @@ jobs:
           echo "All selected paths present on dev."
 
       - name: Install uv for MCP dev-source gate
-        if: ${{ inputs.sync_kanban }}
+        if: ${{ env.SYNC_KANBAN == 'true' }}
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # v8.1.0
 
       - name: Install Python (uv managed)
-        if: ${{ inputs.sync_kanban }}
+        if: ${{ env.SYNC_KANBAN == 'true' }}
         run: uv python install
 
       - name: Verify MCP surface contract from dev source
-        if: ${{ inputs.sync_kanban }}
+        if: ${{ env.SYNC_KANBAN == 'true' }}
         run: uv run pytest serve/mcp-kanban/tests/test_mcp_surface_contract.py -q --tb=short
 
       - name: Configure git identity
@@ -287,15 +270,6 @@ jobs:
         env:
           ALL_SCOPES: ${{ env.SCOPES }}
           ALL_SERVE: ${{ env.ALL_SERVE }}
-          SYNC_SHARE: ${{ inputs.sync_share }}
-          SYNC_BROWSER: ${{ inputs.sync_browser }}
-          SYNC_KANBAN: ${{ inputs.sync_kanban }}
-          SYNC_KNOWLEDGE: ${{ inputs.sync_knowledge }}
-          SYNC_COCKPIT: ${{ inputs.sync_cockpit }}
-          SYNC_TOOLS: ${{ inputs.sync_tools }}
-          SYNC_MCP_MEMORY: ${{ inputs.sync_mcp_memory }}
-          SYNC_SETUP: ${{ inputs.sync_setup }}
-          SYNC_INFRA: ${{ inputs.sync_infra }}
         run: |
           if [[ "$ALL_SCOPES" == "all" ]]; then
             echo "=== Full wipe — all scopes selected"
@@ -380,7 +354,7 @@ jobs:
           fi
 
       - name: Setup Node.js (cockpit)
-        if: ${{ inputs.sync_cockpit }}
+        if: ${{ env.SYNC_COCKPIT == 'true' }}
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0
         with:
           node-version-file: serve/cockpit/web/.nvmrc
@@ -388,33 +362,33 @@ jobs:
           cache-dependency-path: serve/cockpit/web/package-lock.json
 
       - name: Setup Node.js (diagrams only)
-        if: ${{ !inputs.sync_cockpit && inputs.sync_share }}
+        if: ${{ env.SYNC_COCKPIT != 'true' && env.SYNC_SHARE == 'true' }}
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0
         with:
           node-version: lts/*
 
       - name: Build cockpit SPA
-        if: ${{ inputs.sync_cockpit }}
+        if: ${{ env.SYNC_COCKPIT == 'true' }}
         working-directory: serve/cockpit/web
         run: npm ci && npm run build
 
       - name: Run cockpit Vitest
-        if: ${{ inputs.sync_cockpit }}
+        if: ${{ env.SYNC_COCKPIT == 'true' }}
         working-directory: serve/cockpit/web
         run: npm test
 
       - name: Install Chromium for cockpit E2E
-        if: ${{ inputs.sync_cockpit }}
+        if: ${{ env.SYNC_COCKPIT == 'true' }}
         working-directory: serve/cockpit/web
         run: npx playwright install chromium --with-deps
 
       - name: Run cockpit Playwright E2E
-        if: ${{ inputs.sync_cockpit }}
+        if: ${{ env.SYNC_COCKPIT == 'true' }}
         working-directory: serve/cockpit/web
         run: npm run test:e2e
 
       - name: Assert SPA bundle exists
-        if: ${{ inputs.sync_cockpit }}
+        if: ${{ env.SYNC_COCKPIT == 'true' }}
         run: |
           if [ ! -f serve/cockpit/dist/index.html ]; then
             echo "ERROR: serve/cockpit/dist/index.html not found — build may have failed or outDir is misconfigured."
@@ -422,11 +396,11 @@ jobs:
           fi
 
       - name: Stage built SPA bundle
-        if: ${{ inputs.sync_cockpit }}
+        if: ${{ env.SYNC_COCKPIT == 'true' }}
         run: git add -f serve/cockpit/dist/
 
       - name: Export Excalidraw diagrams to PNG
-        if: ${{ inputs.sync_share }}
+        if: ${{ env.SYNC_SHARE == 'true' }}
         run: |
           # The export script lives in .owlbear/ (dev-only, not synced to main).
           # Check it out from dev, run it, then remove the working tree copy.
@@ -448,21 +422,11 @@ jobs:
           git rm -f .github/copilot-instructions.md --quiet 2>/dev/null || true
 
           # serve/cockpit/web/ — consumers only need the pre-built dist/
-          if [[ "${{ inputs.sync_cockpit }}" == "true" ]]; then
+          if [[ "$SYNC_COCKPIT" == "true" ]]; then
             git rm -rf serve/cockpit/web --quiet 2>/dev/null || true
           fi
 
       - name: Prune stale files not present on dev
-        env:
-          SYNC_SHARE: ${{ inputs.sync_share }}
-          SYNC_BROWSER: ${{ inputs.sync_browser }}
-          SYNC_KANBAN: ${{ inputs.sync_kanban }}
-          SYNC_KNOWLEDGE: ${{ inputs.sync_knowledge }}
-          SYNC_COCKPIT: ${{ inputs.sync_cockpit }}
-          SYNC_TOOLS: ${{ inputs.sync_tools }}
-          SYNC_MCP_MEMORY: ${{ inputs.sync_mcp_memory }}
-          SYNC_SETUP: ${{ inputs.sync_setup }}
-          SYNC_INFRA: ${{ inputs.sync_infra }}
         run: |
           # Remove tracked files on main that no longer exist on dev.
           # Only prunes within synced scopes and truly orphaned paths.
@@ -555,7 +519,7 @@ jobs:
         env:
           COMMIT_SCOPES: ${{ env.SCOPES }}
           COMMIT_SHORT_SHA: ${{ env.SHORT_SHA }}
-          COMMIT_MESSAGE: ${{ inputs.message }}
+          COMMIT_MESSAGE: ${{ env.INPUT_MESSAGE }}
           COMMIT_SERVER_URL: ${{ github.server_url }}
           COMMIT_REPOSITORY: ${{ github.repository }}
           COMMIT_RUN_ID: ${{ github.run_id }}
@@ -572,14 +536,14 @@ jobs:
             --trailer "Run: $run_url"
 
       - name: Push to main
-        if: ${{ env.NO_CHANGES != 'true' && inputs.dry_run != true }}
+        if: ${{ env.NO_CHANGES != 'true' && env.INPUT_DRY_RUN != 'true' }}
         run: |
           git push origin consumer:main
 
       - name: Job summary — success
         if: ${{ success() }}
         env:
-          SUMMARY_DRY_RUN: ${{ inputs.dry_run }}
+          SUMMARY_DRY_RUN: ${{ env.INPUT_DRY_RUN }}
           SUMMARY_SHORT_SHA: ${{ env.SHORT_SHA }}
           SUMMARY_DATE: ${{ env.DATE }}
           SUMMARY_ACTOR: ${{ github.actor }}
