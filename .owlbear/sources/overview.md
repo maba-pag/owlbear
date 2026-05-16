@@ -91,6 +91,14 @@ External repos and resources studied during OwlBear development.
 |--------|-----|------|------------|------|
 | PDS Inline Notification examples (v3) | <https://designsystem.porsche.com/v3/components/inline-notification/examples/> | Usage patterns for actionLabel/actionIcon retry affordance and onDismiss binding | `.owlbear/research/cockpit-inline-notification-modal.md` | 2026-05-12 |
 
+## Board Horizontal Scroll Fix Research (Task #1596)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| CSS-Tricks: auto-fill vs auto-fit | <https://css-tricks.com/auto-sizing-columns-css-grid-auto-fill-vs-auto-fit/> | auto-fit collapses empty tracks; auto-fill preserves them — neither overflows | `.owlbear/research/1596-board-horizontal-scroll-fix.md` | 2026-05-16 |
+| MDN: repeat() CSS function | <https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Values/repeat> | `repeat(<integer>, ...)` creates exactly N tracks — forces overflow when total > container | `.owlbear/research/1596-board-horizontal-scroll-fix.md` | 2026-05-16 |
+| SO: CSS grid no-wrap with auto-fill | <https://stackoverflow.com/questions/65844797/css-grid-only-columns-no-wrap-and-with-auto-fill-covering-end-gap> | Confirms auto-fill/auto-fit never overflow; integer count is the solution | `.owlbear/research/1596-board-horizontal-scroll-fix.md` | 2026-05-16 |
+
 ## PDS v4 Local Hosting Research (Task #1495)
 
 | Source | URL | What | Where Used | Date |
