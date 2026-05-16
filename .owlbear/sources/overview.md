@@ -38,6 +38,14 @@ External repos and resources studied during OwlBear development.
 | PDS GitHub checkbox.tsx (Stencil source) | <https://github.com/porsche-design-system/porsche-design-system/blob/main/packages/components/src/components/checkbox/checkbox.tsx> | Props (name, label, checked, value, disabled), events (change, blur) | `.owlbear/research/filter-panel-pds-controls.md` | 2026-05-16 |
 | PDS v3 migration guide | <https://designsystem.porsche.com/v3/news/migration-guide/porsche-design-system/> | Wrapper → standalone component deprecation rationale | `.owlbear/research/filter-panel-pds-controls.md` | 2026-05-16 |
 
+## Simple Component Swaps (Task #1614)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| PDS v4 Button API | <https://designsystem.porsche.com/v4/components/button/api/> | PButton props (variant, type, onClick) | `.owlbear/research/1614-simple-component-swaps.md` | 2026-05-16 |
+| PDS v4 Heading API | <https://designsystem.porsche.com/v4/components/heading/api/> | PHeading props (tag, size) | `.owlbear/research/1614-simple-component-swaps.md` | 2026-05-16 |
+| PDS GitHub — PTabs React wrapper | <https://github.com/porsche-design-system/porsche-design-system> | PTabs onUpdate vs deprecated tabChange event contract | `.owlbear/research/1614-simple-component-swaps.md` | 2026-05-16 |
+
 ## CockpitProvider Extraction Research (Task #1491)
 
 | Source | URL | What | Where Used | Date |
