@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState } from 'react'
 import { Routes, Route } from 'react-router'
-import { PBanner, PButton } from '@porsche-design-system/components-react'
+import { PBanner, PButton, PDivider, PHeading } from '@porsche-design-system/components-react'
 import KanbanBoard from './KanbanBoard'
 import ActivityTab from './components/ActivityTab'
 import CleanupPanel from './components/CleanupPanel'
@@ -17,6 +17,10 @@ import './Shell.css'
 
 function isHealthBadgeItem(item: ScanPollingItem): item is HealthBadgeItem {
   return item.code !== null && item.detail !== null && item.file_path !== null
+}
+
+function setHeadingLargeSizeAttr(element: HTMLElement | null): void {
+  element?.setAttribute('size', 'large')
 }
 
 function Shell() {
@@ -101,6 +105,33 @@ function Shell() {
     return () => tabs.removeEventListener('tabChange', onTabChange)
   }, [])
 
+  const shellClassName = [
+    'shell grid h-screen min-w-0 bg-[var(--p-color-canvas)] text-[var(--p-color-primary)]',
+    "[font-family:'Porsche_Next','Arial_Narrow',Arial,sans-serif]",
+    '[grid-template-columns:var(--shell-columns)] [grid-template-rows:var(--shell-rows)]',
+    '[transition:grid-template-columns_250ms_ease]',
+  ].join(' ')
+
+  const statusBarClassName = [
+    'shell__status-bar sticky top-0 z-10 flex min-h-14 items-center',
+    'gap-[var(--p-spacing-static-sm)] border-b border-[var(--p-color-contrast-low)]',
+    'bg-[var(--p-color-surface)] px-[var(--p-spacing-static-md)]',
+    'max-[767px]:flex-wrap max-[767px]:gap-y-1 max-[767px]:py-1',
+  ].join(' ')
+
+  const navRailClassName = [
+    'shell__nav-rail flex min-w-0 items-center overflow-x-hidden bg-[var(--p-color-surface)]',
+    '[box-sizing:border-box] max-[767px]:flex-row max-[767px]:justify-start',
+    'max-[767px]:border-b max-[767px]:border-[var(--p-color-contrast-low)]',
+    'max-[767px]:px-[var(--p-spacing-static-md)] md:flex-col md:justify-start',
+    'md:border-b-0 md:pt-[var(--p-spacing-static-sm)]',
+  ].join(' ')
+
+  const sidecarClassName = [
+    'shell__sidecar min-w-0 overflow-hidden border-t border-[var(--p-color-contrast-low)]',
+    'md:border-t-0 md:border-l md:border-[var(--p-color-contrast-low)]',
+  ].join(' ')
+
   useEffect(() => {
     const mediaQuery = window.matchMedia('(max-width: 767px)')
     const handleViewportChange = () => {
@@ -143,9 +174,15 @@ function Shell() {
   }, [])
 
   return (
-    <div className="shell" data-sidecar-collapsed={isSidecarCollapsed || undefined}>
-      <header className="shell__status-bar" data-region="status-bar">
-        <h1 className="shell__product-identity">
+    <div
+      className={shellClassName}
+      data-sidecar-collapsed={isSidecarCollapsed || undefined}
+    >
+      <header
+        className={statusBarClassName}
+        data-region="status-bar"
+      >
+        <h1 className="shell__product-identity min-w-0 break-words">
           OwlBear Cockpit
         </h1>
         <span data-testid="traffic-light" data-health={statusHealth} />
@@ -191,14 +228,17 @@ function Shell() {
           </span>
         ) : null}
       </header>
-      <nav className="shell__nav-rail" data-region="nav-rail">
+      <nav
+        className={navRailClassName}
+        data-region="nav-rail"
+      >
         <PButton
           data-surface="kanban"
           tabIndex={0}
           aria-current="page"
           aria-label="Kanban"
           variant="secondary"
-          className="shell__nav-button"
+          className="shell__nav-button m-0 block w-10 min-w-0 max-w-10 overflow-hidden"
         >
           <svg
             aria-hidden="true"
@@ -212,7 +252,7 @@ function Shell() {
         </PButton>
       </nav>
       <main
-        className="shell__workspace"
+        className="shell__workspace min-w-0 overflow-hidden md:overflow-auto"
         data-region="workspace"
         onClickCapture={() => {
           if (isMobileViewport && selectedTaskId === null && tasks.length === 1) {
@@ -225,10 +265,13 @@ function Shell() {
           <Route path="/" element={<KanbanBoard {...kanbanProps} />} />
         </Routes>
       </main>
-      <aside className="shell__sidecar" data-region="sidecar">
+      <aside
+        className={sidecarClassName}
+        data-region="sidecar"
+      >
         <button
           type="button"
-          className="icon-button"
+          className="icon-button inline-flex items-center px-3 py-1"
           data-testid="sidecar-collapse"
           aria-expanded={!isSidecarCollapsed}
           aria-controls="shell-sidecar-content"
@@ -239,18 +282,32 @@ function Shell() {
         {isMobileViewport ? (
           <p-sheet
             open={selectedTaskId !== null}
-            className={`shell__mobile-sheet${selectedTaskId !== null ? ' shell__mobile-sheet--open' : ''}`}
+            className={selectedTaskId !== null
+              ? [
+                'shell__mobile-sheet fixed inset-x-0 bottom-0 z-20 block',
+                'max-h-[min(70vh,560px)] overflow-auto border-t',
+                'border-[var(--p-color-contrast-low)] bg-[var(--p-color-surface)] md:hidden',
+              ].join(' ')
+              : 'shell__mobile-sheet hidden md:hidden'}
           >
-            <div id="shell-sidecar-content" aria-hidden={isSidecarCollapsed ? 'true' : undefined}>
+            <div
+              id="shell-sidecar-content"
+              className="p-[var(--p-spacing-static-md)]"
+              aria-hidden={isSidecarCollapsed ? 'true' : undefined}
+            >
               <section data-region="sidecar-header" aria-live="polite">
-                <h2>{selectedTaskHeading}</h2>
+                <PHeading ref={setHeadingLargeSizeAttr} size="large">
+                  {selectedTaskHeading}
+                </PHeading>
               </section>
+              <PDivider />
               <DecisionViewport
                 items={pendingDRItems}
                 isLoading={pendingDRLoading}
                 error={pendingDRError}
                 onItemClick={setSelectedDRId}
               />
+              <PDivider />
               <p-tabs ref={tabsRef}>
                 <p-tabs-item ref={(el: HTMLElement | null) => el?.setAttribute('label', 'Detail')}>
                   <div ref={detailRef} data-tab-content="detail" aria-hidden="false">
@@ -331,16 +388,24 @@ function Shell() {
             </div>
           </p-sheet>
         ) : (
-          <div id="shell-sidecar-content" aria-hidden={isSidecarCollapsed ? 'true' : undefined}>
+          <div
+            id="shell-sidecar-content"
+            className="p-[var(--p-spacing-static-md)]"
+            aria-hidden={isSidecarCollapsed ? 'true' : undefined}
+          >
             <section data-region="sidecar-header" aria-live="polite">
-              <h2>{selectedTaskHeading}</h2>
+              <PHeading ref={setHeadingLargeSizeAttr} size="large">
+                {selectedTaskHeading}
+              </PHeading>
             </section>
+            <PDivider />
             <DecisionViewport
               items={pendingDRItems}
               isLoading={pendingDRLoading}
               error={pendingDRError}
               onItemClick={setSelectedDRId}
             />
+            <PDivider />
             <p-tabs ref={tabsRef}>
               <p-tabs-item ref={(el: HTMLElement | null) => el?.setAttribute('label', 'Detail')}>
                 <div ref={detailRef} data-tab-content="detail" aria-hidden="false">
@@ -432,7 +497,7 @@ function Shell() {
           }}
         />
       ) : null}
-      <div className="shell__contextual" data-region="contextual" />
+      <div className="shell__contextual hidden" data-region="contextual" />
     </div>
   )
 }
