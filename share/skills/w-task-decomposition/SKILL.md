@@ -290,7 +290,7 @@ Append to parent task body (if dispatched with parent ID):
 ## Verification Checklist
 
 - [ ] Announced decomposition plan and expected count
-- [ ] Every impl task has a preceding test task with dependency (decomposition mode only)
+- [ ] Every task carries its own RED→GREEN TDD cycle (no separate test-only tasks)
 - [ ] No task has multiple responsibilities
 - [ ] Every task fits the Task Complexity Budget or has a `Complexity waiver:` note
 - [ ] No task mixes multiple proof modes without being split
