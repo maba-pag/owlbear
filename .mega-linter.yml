@@ -1,7 +1,7 @@
 ---
 # MegaLinter configuration for OwlBear
 # https://megalinter.io/configuration/
-# Version: v9.4.0 (cupcake flavor — general-purpose, includes Python + JS/TS + CSS + HTML)
+# Version: v9.5.0 (cupcake flavor — general-purpose, includes Python + JS/TS + CSS + HTML)
 
 # Explicit linter list — only what applies to this project
 ENABLE_LINTERS:

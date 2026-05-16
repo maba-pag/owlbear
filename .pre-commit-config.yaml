@@ -1,5 +1,5 @@
 ---
-# Pre-commit config — aligned with CI (MegaLinter v9.4.0)
+# Pre-commit config — aligned with CI (MegaLinter v9.5.0)
 #
 # Regular hooks:  uv run pre-commit run --all-files
 # Full CI parity: uv run pre-commit run megalinter --all-files
@@ -117,7 +117,7 @@ repos:
           -e APPLY_FIXES=none
           -e LOG_LEVEL=INFO
           -e VALIDATE_ALL_CODEBASE=true
-          oxsecurity/megalinter-cupcake:v9.4.0'
+          ghcr.io/oxsecurity/megalinter-cupcake:v9.5.0'
         pass_filenames: false
         always_run: true
         stages: [manual]
