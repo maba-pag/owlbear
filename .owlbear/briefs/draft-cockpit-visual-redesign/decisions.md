@@ -31,3 +31,15 @@
 - **Acknowledged:** Both challengers correctly flagged the execution risk (builder agents writing CSS blind) and the need for human visual review between batches.
 - **Overridden:** Their recommendation to skip/defer Tailwind and scope down to "just the foundation." The user's direct experience is that this reductive pattern *is the failure mode*. PDS recommends a stack; we adopt the stack.
 - **Retained for Phase 2:** Smaller batches with human checkpoints. Re-audit after foundation lands. Builder visual feedback as a process constraint.
+
+## D6 — 2026-05-16 — Font hosting: relax CSP for Porsche CDN
+
+- **Chosen:** Add `font-src 'self' https://cdn.ui.porsche.com` to the CSP meta tag. One-line change in Vite HTML plugin.
+- **Rejected:** Self-hosting fonts via `sync-pds-assets.mjs` extension. More complexity for no real security benefit in a localhost-only tool.
+- **Rationale:** The cockpit is a localhost dev tool, not a production app. The CSP was set up for defense-in-depth, but allowing a first-party CDN for fonts is proportionate. The existing strict `default-src 'self'` still protects against arbitrary external resources.
+
+## D7 — 2026-05-16 — Remove inter-batch checkpoint
+
+- **Chosen:** Plan all batches upfront and execute continuously. No re-audit pause after foundation.
+- **Rejected:** Human visual review between batches; agent-driven re-audit checkpoint.
+- **Rationale:** User has no value-add at a visual checkpoint (agent + screenshots can verify). Planning all batches upfront avoids process overhead. If foundation self-resolves findings, those tasks become fast no-ops at build time — acceptable cost vs. pipeline stall.

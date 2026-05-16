@@ -94,13 +94,13 @@ repos:
       - id: validate-skills
         name: Validate Agent Skills
         language: system
-        entry: bash -c 'python .owlbear/scripts/validate_skills.py share/skills/*/'
+        entry: bash -c 'uv run python .owlbear/scripts/validate_skills.py share/skills/*/'
         pass_filenames: false
         always_run: true
       - id: validate-agents
         name: Validate Agent Tool Names
         language: system
-        entry: python .owlbear/scripts/validate_agents.py
+        entry: uv run python .owlbear/scripts/validate_agents.py
         files: ^share/agents/.*\.agent\.md$
         pass_filenames: true
 

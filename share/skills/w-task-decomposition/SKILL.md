@@ -217,6 +217,8 @@ When decomposition mode yields two or more implementation tasks (excluding test 
 - `depends_on`: all sibling implementation task IDs
 - Status: `backlog` via create, then `move_task(id={created_id}, status="backlog")`
 
+**Parent completion gate:** After creating the consolidation test, add its ID as a dependency on the parent task via `edit_task(id={parent_id}, add_dep=[{consolidation_id}])`. This ensures the parent shows `dep_status: blocked` until all child work is verified, and prevents the parent from being prematurely moved to `done`.
+
 Group by dependency layer (independent first, then dependents). Record created task IDs for the report.
 
 In shortcut mode, report the created task ID as a top-level result line (for example, `Created follow-up task: #{id}`).
@@ -266,6 +268,7 @@ Append to parent task body (if dispatched with parent ID):
 - [ ] Priority reflects blocking potential
 - [ ] Tags include `phase-{n}` + category (decomposition mode only)
 - [ ] No cycles in dependency graph
+- [ ] Parent task has `depends_on` pointing to the consolidation test (completion gate)
 - [ ] Mermaid diagram matches task list (decomposition mode only)
 - [ ] Total 20 tasks or fewer
 - [ ] AC describes "done", not "how"
