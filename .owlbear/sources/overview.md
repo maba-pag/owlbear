@@ -28,6 +28,14 @@ External repos and resources studied during OwlBear development.
 | PDS PHeading API | <https://designsystem.porsche.com/v3/components/heading/api/> | size prop values (small–xx-large), tag prop | `.owlbear/research/sidecar-structure-pds.md` | 2026-05-16 |
 | PDS PDivider API | <https://designsystem.porsche.com/v3/components/divider/api/> | Self-closing divider, orientation prop | `.owlbear/research/sidecar-structure-pds.md` | 2026-05-16 |
 
+## Sidecar Information Architecture (Task #1616)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| PDS Accordion API | <https://designsystem.porsche.com/v3/components/accordion/api/> | Props: heading, heading-tag, open, size, compact, update event | `.owlbear/research/sidecar-information-architecture.md` | 2026-05-16 |
+| PDS Accordion Usage | <https://designsystem.porsche.com/v3/components/accordion/usage/> | Usage guidelines: when to use/avoid accordions | `.owlbear/research/sidecar-information-architecture.md` | 2026-05-16 |
+| Jira Cloud: Configure work item details | <https://support.atlassian.com/jira-software-cloud/docs/configure-the-issue-detail-view/> | Field layout configuration, section ordering patterns | `.owlbear/research/sidecar-information-architecture.md` | 2026-05-16 |
+
 ## Filter Panel PDS Controls (Task #1617)
 
 | Source | URL | What | Where Used | Date |
