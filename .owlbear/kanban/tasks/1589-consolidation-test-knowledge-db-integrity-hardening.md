@@ -1,10 +1,10 @@
 ---
 id: 1589
 title: 'Consolidation test: knowledge DB integrity hardening'
-status: review
+status: docs
 priority: important
 created: 2026-05-15T16:25:02.116082+00:00
-updated: 2026-05-16T15:08:01.518205+00:00
+updated: 2026-05-16T20:30:57.154636+00:00
 tags:
   - consolidation-test
   - scope:knowledge
@@ -19,8 +19,10 @@ ac:
     Init fresh v13 DB via `init_db(conn)`, insert document→chunk→entity→edge chain
     via `DocumentStore.insert_document()`, `store_chunks()`, `store_extractions()`,
     create document_status via `set_status(doc_id, "done")`.'
-  - 'AC-1a: Same function asserts row existence: document row, chunk row by `chunk_ids[0]`
-    (NOT by document_id lookup), entity row, edge row, document_status row.'
+  - 'AC-1a: Same function asserts row existence: document row with `content` field
+    matching the intake content (proving `insert_document()` wrote it — `store_chunks()`
+    backfill writes empty content), chunk row by `chunk_ids[0]` (NOT by document_id
+    lookup), entity row, edge row, document_status row.'
   - 'AC-1b: Same function asserts linkage fields: `chunks.document_id == doc_id`,
     `entities.document_id == doc_id`, `entities.chunk_id == chunk_ids[0]`, `edges.source_id
     == entity_id`, `edges.target_id == entity_id`, `edges.document_id == doc_id`,
@@ -364,3 +366,130 @@ Test-writer: PASS-THROUGH (type:test tag)
   - No `serve/knowledge/tests/test*integrity*.py` durable file found; skipped per workflow.
 - Commit:
   - 508d6059 `test: merge AC-1 consolidation proof into single function (#1589, builder)`
+
+[[2026-05-16T17:58:17+02:00]]
+## Review Evidence
+- Verdict: FAIL
+- Routing signal: FAIL #1589 -> backlog | AC-1 still has a false-green around `insert_document()`: `store_chunks()` can backfill the document row, so the current proof can pass even if `insert_document()` regresses to a no-op.
+- AC evidence map:
+
+| AC Line | Code Evidence | Test Evidence | Status |
+|---|---|---|---|
+| AC-1: A SINGLE test function performs ALL of AC-1a through AC-1c in one setup using `insert_document()`, `store_chunks()`, `store_extractions()`, and `set_status()` | Refined contract requires one AC-1 function in [.owlbear/kanban/tasks/1589-consolidation-test-knowledge-db-integrity-hardening.md#L18](.owlbear/kanban/tasks/1589-consolidation-test-knowledge-db-integrity-hardening.md#L18). | The file now has a single AC-1 function at [tests/test_knowledge_integrity_consolidation_1589.py#L52](tests/test_knowledge_integrity_consolidation_1589.py#L52). | PASS |
+| AC-1a: Same function asserts row existence, including the document row and chunk row by `chunk_ids[0]` | `insert_document()` is the path that writes the intake-backed document payload in [serve/knowledge/src/owlbear_knowledge/document_store.py#L70](serve/knowledge/src/owlbear_knowledge/document_store.py#L70) and [serve/knowledge/src/owlbear_knowledge/document_store.py#L75](serve/knowledge/src/owlbear_knowledge/document_store.py#L75)-[serve/knowledge/src/owlbear_knowledge/document_store.py#L77](serve/knowledge/src/owlbear_knowledge/document_store.py#L77), but `store_chunks()` can independently create a minimal documents row in [serve/knowledge/src/owlbear_knowledge/document_store.py#L104](serve/knowledge/src/owlbear_knowledge/document_store.py#L104). | The test calls `insert_document()` at [tests/test_knowledge_integrity_consolidation_1589.py#L57](tests/test_knowledge_integrity_consolidation_1589.py#L57), then `store_chunks()` at [tests/test_knowledge_integrity_consolidation_1589.py#L66](tests/test_knowledge_integrity_consolidation_1589.py#L66), and only later checks document-row existence by id at [tests/test_knowledge_integrity_consolidation_1589.py#L90](tests/test_knowledge_integrity_consolidation_1589.py#L90)-[tests/test_knowledge_integrity_consolidation_1589.py#L91](tests/test_knowledge_integrity_consolidation_1589.py#L91). The chunk row, entity row, edge row, and status row checks are present at [tests/test_knowledge_integrity_consolidation_1589.py#L93](tests/test_knowledge_integrity_consolidation_1589.py#L93)-[tests/test_knowledge_integrity_consolidation_1589.py#L104](tests/test_knowledge_integrity_consolidation_1589.py#L104), but no assertion distinguishes a real `insert_document()` write from the later `store_chunks()` backfill. | FAIL |
+| AC-1b: Same function asserts linkage fields before audit | `store_extractions()` stamps document/chunk provenance in [serve/knowledge/src/owlbear_knowledge/document_store.py#L231](serve/knowledge/src/owlbear_knowledge/document_store.py#L231) and [serve/knowledge/src/owlbear_knowledge/document_store.py#L236](serve/knowledge/src/owlbear_knowledge/document_store.py#L236)-[serve/knowledge/src/owlbear_knowledge/document_store.py#L237](serve/knowledge/src/owlbear_knowledge/document_store.py#L237), and persists edge/document linkage via [serve/knowledge/src/owlbear_knowledge/document_store.py#L250](serve/knowledge/src/owlbear_knowledge/document_store.py#L250)-[serve/knowledge/src/owlbear_knowledge/document_store.py#L256](serve/knowledge/src/owlbear_knowledge/document_store.py#L256). | The required linkage assertions are present before audit at [tests/test_knowledge_integrity_consolidation_1589.py#L109](tests/test_knowledge_integrity_consolidation_1589.py#L109), [tests/test_knowledge_integrity_consolidation_1589.py#L116](tests/test_knowledge_integrity_consolidation_1589.py#L116)-[tests/test_knowledge_integrity_consolidation_1589.py#L117](tests/test_knowledge_integrity_consolidation_1589.py#L117), and [tests/test_knowledge_integrity_consolidation_1589.py#L124](tests/test_knowledge_integrity_consolidation_1589.py#L124)-[tests/test_knowledge_integrity_consolidation_1589.py#L126](tests/test_knowledge_integrity_consolidation_1589.py#L126). | PASS |
+| AC-1c: Same function audits after linkage assertions and expects zero orphan/dangling counts | `audit_integrity()` exposes the four required categories in [serve/knowledge/src/owlbear_knowledge/integrity.py#L11](serve/knowledge/src/owlbear_knowledge/integrity.py#L11)-[serve/knowledge/src/owlbear_knowledge/integrity.py#L84](serve/knowledge/src/owlbear_knowledge/integrity.py#L84). | The audit is called after the linkage checks at [tests/test_knowledge_integrity_consolidation_1589.py#L128](tests/test_knowledge_integrity_consolidation_1589.py#L128), and the test asserts zero counts for all four categories at [tests/test_knowledge_integrity_consolidation_1589.py#L130](tests/test_knowledge_integrity_consolidation_1589.py#L130)-[tests/test_knowledge_integrity_consolidation_1589.py#L133](tests/test_knowledge_integrity_consolidation_1589.py#L133). | PASS |
+| AC-2: Inject all four orphan categories with FK off, then assert exact counts and IDs | `audit_integrity()` reports `chunks_orphaned`, `entities_orphaned`, `edges_dangling`, and `status_orphaned` in [serve/knowledge/src/owlbear_knowledge/integrity.py#L16](serve/knowledge/src/owlbear_knowledge/integrity.py#L16), [serve/knowledge/src/owlbear_knowledge/integrity.py#L29](serve/knowledge/src/owlbear_knowledge/integrity.py#L29), [serve/knowledge/src/owlbear_knowledge/integrity.py#L42](serve/knowledge/src/owlbear_knowledge/integrity.py#L42), and [serve/knowledge/src/owlbear_knowledge/integrity.py#L56](serve/knowledge/src/owlbear_knowledge/integrity.py#L56). | The AC-2 test disables FK enforcement, injects all four orphan categories, then asserts exact counts and injected IDs at [tests/test_knowledge_integrity_consolidation_1589.py#L143](tests/test_knowledge_integrity_consolidation_1589.py#L143) and [tests/test_knowledge_integrity_consolidation_1589.py#L172](tests/test_knowledge_integrity_consolidation_1589.py#L172)-[tests/test_knowledge_integrity_consolidation_1589.py#L182](tests/test_knowledge_integrity_consolidation_1589.py#L182). | PASS |
+
+- Blocking findings:
+
+| # | AC Line | Finding | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | AC-1 / AC-1a | The document-row proof is not uniquely coupled to `insert_document()`. A regression where `insert_document()` becomes a no-op would still pass because `store_chunks()` can synthesize the documents row later, and the test only checks `documents.id` existence after both calls. This leaves AC-1 with a remaining false-green despite the cycle-3 structural fixes. | [.owlbear/kanban/tasks/1589-consolidation-test-knowledge-db-integrity-hardening.md#L18](.owlbear/kanban/tasks/1589-consolidation-test-knowledge-db-integrity-hardening.md#L18); [tests/test_knowledge_integrity_consolidation_1589.py#L57](tests/test_knowledge_integrity_consolidation_1589.py#L57); [tests/test_knowledge_integrity_consolidation_1589.py#L66](tests/test_knowledge_integrity_consolidation_1589.py#L66); [tests/test_knowledge_integrity_consolidation_1589.py#L90](tests/test_knowledge_integrity_consolidation_1589.py#L90)-[tests/test_knowledge_integrity_consolidation_1589.py#L91](tests/test_knowledge_integrity_consolidation_1589.py#L91); [serve/knowledge/src/owlbear_knowledge/document_store.py#L70](serve/knowledge/src/owlbear_knowledge/document_store.py#L70); [serve/knowledge/src/owlbear_knowledge/document_store.py#L75](serve/knowledge/src/owlbear_knowledge/document_store.py#L75)-[serve/knowledge/src/owlbear_knowledge/document_store.py#L77](serve/knowledge/src/owlbear_knowledge/document_store.py#L77); [serve/knowledge/src/owlbear_knowledge/document_store.py#L104](serve/knowledge/src/owlbear_knowledge/document_store.py#L104) | backlog |
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Refine AC-1a so the consolidation proof must verify a document field combination that only `insert_document()` can satisfy, or explicitly relax the contract if document-row existence alone is intended. Then re-dispatch with that clarified proof shape. | .owlbear/kanban/tasks/1589-consolidation-test-knowledge-db-integrity-hardening.md; tests/test_knowledge_integrity_consolidation_1589.py; serve/knowledge/src/owlbear_knowledge/document_store.py | AC-1 / AC-1a; [.owlbear/kanban/tasks/1589-consolidation-test-knowledge-db-integrity-hardening.md#L18](.owlbear/kanban/tasks/1589-consolidation-test-knowledge-db-integrity-hardening.md#L18); [tests/test_knowledge_integrity_consolidation_1589.py#L57](tests/test_knowledge_integrity_consolidation_1589.py#L57), [tests/test_knowledge_integrity_consolidation_1589.py#L66](tests/test_knowledge_integrity_consolidation_1589.py#L66), [tests/test_knowledge_integrity_consolidation_1589.py#L90](tests/test_knowledge_integrity_consolidation_1589.py#L90)-[tests/test_knowledge_integrity_consolidation_1589.py#L91](tests/test_knowledge_integrity_consolidation_1589.py#L91); [serve/knowledge/src/owlbear_knowledge/document_store.py#L70](serve/knowledge/src/owlbear_knowledge/document_store.py#L70), [serve/knowledge/src/owlbear_knowledge/document_store.py#L75](serve/knowledge/src/owlbear_knowledge/document_store.py#L75)-[serve/knowledge/src/owlbear_knowledge/document_store.py#L77](serve/knowledge/src/owlbear_knowledge/document_store.py#L77), [serve/knowledge/src/owlbear_knowledge/document_store.py#L104](serve/knowledge/src/owlbear_knowledge/document_store.py#L104) |
+
+## Observations
+- The cycle-3 structural blockers are fixed: AC-1 is back to a single test function at [tests/test_knowledge_integrity_consolidation_1589.py#L52](tests/test_knowledge_integrity_consolidation_1589.py#L52), the chunk existence check now uses `chunk_ids[0]` at [tests/test_knowledge_integrity_consolidation_1589.py#L93](tests/test_knowledge_integrity_consolidation_1589.py#L93)-[tests/test_knowledge_integrity_consolidation_1589.py#L94](tests/test_knowledge_integrity_consolidation_1589.py#L94), and the linkage/audit ordering matches the refined contract.
+- AC-2 proof remains strong and specific: exact counts plus injected-ID membership are asserted for all four categories at [tests/test_knowledge_integrity_consolidation_1589.py#L172](tests/test_knowledge_integrity_consolidation_1589.py#L172)-[tests/test_knowledge_integrity_consolidation_1589.py#L182](tests/test_knowledge_integrity_consolidation_1589.py#L182).
+- Builder evidence on scoped tests and lint was internally consistent, so no independent `quality-runner` rerun was needed. The blocker is visible from static proof inspection.
+- Behavioral-bundle challenger review returned `reconsider`, and an additional code-reader cross-check reached the same remaining blocker: the current AC-1 proof still cannot distinguish `insert_document()` from the `store_chunks()` document backfill path.
+
+[[2026-05-16T18:00:00+02:00]]
+## Architecture Review (cycle 4)
+
+### Reviewer Feedback Integration
+Reviewer rejected (cycle 4) because AC-1a document-row proof only checks `documents.id` existence, which `store_chunks()` backfill can satisfy independently of `insert_document()`.
+
+Root cause analysis:
+- `insert_document()` writes: `content=intake.content`, `title=intake.source`, `metadata=json.dumps(intake.metadata)`, `scope`, `source_id`
+- `store_chunks()` backfill writes: `content=''`, `title=''`, `metadata='{}'`, no `scope`/`source_id`
+- The discriminating field is `documents.content` — non-empty only when `insert_document()` created the row.
+
+Fix: AC-1a now requires asserting `documents.content` matches the intake content, closing the last false-green path.
+
+### Builder Guidance (cycle 4)
+- Change the document row-existence check from `SELECT id FROM documents WHERE id = ?` to `SELECT content FROM documents WHERE id = ?` and assert `content == \"hello integrity\"` (the intake content value used in the test setup).
+- This is a single-line change in the existing assertion block (~line 90-91).
+- All other assertions (chunk by `chunk_ids[0]`, entity, edge, status, linkage fields, audit) remain unchanged.
+
+### Proof-Bundle Validation
+- Final bundle: behavioral
+- Test-writer: PASS-THROUGH (type:test tag)
+
+### Challenge Results
+- Challenger: SKIPPED — minimal delta from cycle-3 approval (single column addition to existing SELECT); prior 3 challenger runs validated overall design.
+
+### Verdict: APPROVED (after REFINE)
+Action: Refined AC-1a to require `documents.content` field assertion, closing the `store_chunks()` backfill false-green path. Re-approved to todo.
+
+[[2026-05-16T18:24:51+02:00]]
+## Architecture Review (cycle 4)
+Refined AC-1a to require `documents.content` field assertion matching intake payload. This closes the last false-green: `store_chunks()` backfill writes `content=''`, so asserting non-empty content uniquely proves `insert_document()` created the row. Single-line change for builder.
+
+Proof bundle: behavioral
+Test-writer: PASS-THROUGH (type:test tag)
+
+[[2026-05-16T19:24:11+02:00]]
+## Test-Writer Notes
+- Retry cycle 5: PASS-THROUGH — `type:test` tag; Architecture Review cycle 4 (2026-05-16T18:24) explicitly confirms "Test-writer: PASS-THROUGH (type:test tag)".
+- Reviewer finding is **weak-test / false-green path** (not missing tests): current `SELECT id FROM documents WHERE id = ?` does not discriminate `insert_document()` from `store_chunks()` backfill. Per Step 1b, code-quality findings pass to builder.
+- File: `tests/test_knowledge_integrity_consolidation_1589.py`
+- Class: `TestFromAC_KnowledgeIntegrityConsolidation1589`
+
+**Builder action required (single-line change per architect cycle 4 guidance):**
+- Line ~91: change `SELECT id FROM documents WHERE id = ?` → `SELECT content FROM documents WHERE id = ?`
+- Change assertion: `assert doc_row is not None` → `assert doc_row is not None` PLUS `assert doc_row[0] == "hello integrity"` (or update the query to fetch `content` and assert its value)
+- All other assertions (chunk by `chunk_ids[0]`, entity, edge, status, all 7 linkage fields, audit zero counts, AC-2) remain unchanged.
+
+**AC coverage (current state):**
+| AC | Tests | Status |
+|---|---|---|
+| AC-1 / AC-1a: document row with `content` field assertion | `test_ac1_...` — missing `content` check | FAIL (false-green risk) |
+| AC-1b: linkage fields before audit | `test_ac1_...` lines 107–128 | PASS |
+| AC-1c: zero audit counts after linkage | `test_ac1_...` lines 130–133 | PASS |
+| AC-2: orphan injection → detected with counts+ids | `test_ac2_...` | PASS |
+
+[[2026-05-16T20:25:45+02:00]]
+## Builder Notes
+- Files changed: tests/test_knowledge_integrity_consolidation_1589.py
+- Implementation summary:
+  - Refined AC-1a document assertion to uniquely prove `insert_document()` persistence path.
+  - Changed query from `SELECT id FROM documents WHERE id = ?` to `SELECT content FROM documents WHERE id = ?`.
+  - Added explicit value assertion `doc_row[0] == "hello integrity"` to ensure intake content is persisted and prevent false-green via `store_chunks()` backfill.
+- AC mapping:
+  - AC-1 / AC-1a: now proves document row exists with expected content, chunk row by `chunk_ids[0]`, entity row, edge row, and status row.
+  - AC-1b / AC-1c: existing linkage and post-linkage audit-zero assertions unchanged and preserved.
+  - AC-2: orphan injection and count/id assertions unchanged and preserved.
+- Quality evidence (quality-runner, scoped):
+  - Baseline before edit: 2 passed, 0 failed; lint clean.
+  - Post-edit verification: 2 passed, 0 failed; lint clean.
+  - Coverage: scoped run reported overall 27%; module-specific coverage entry for `owlbear_knowledge.integrity` not emitted in final run output.
+- Module-level durable test check:
+  - No `serve/knowledge/tests/test*integrity*.py` durable file found; skipped per workflow.
+- Commit:
+  - f7cd800e586467c8945a1b54fd719c52582fd839
+
+[[2026-05-16T22:30:57+02:00]]
+## Review Evidence
+- Verdict: PASS
+- PASS confirmation: PASS #1589 -> docs | AC mapped to code and evidence sufficient.
+- Builder evidence reviewed first: scoped quality-runner reported 2 passed, 0 failed, lint clean; the live file state matches the builder note.
+- AC evidence map:
+
+| AC Line | Code Evidence | Test Evidence | Status |
+|---|---|---|---|
+| AC-1 / AC-1a | `insert_document()` writes the document row in `serve/knowledge/src/owlbear_knowledge/document_store.py:70`; the known `store_chunks()` backfill path writes empty content in `serve/knowledge/src/owlbear_knowledge/document_store.py:104`. | The single AC-1 function in `tests/test_knowledge_integrity_consolidation_1589.py:52` calls `insert_document()`, `store_chunks()`, `store_extractions()`, and `set_status()`, then proves `documents.content` at `tests/test_knowledge_integrity_consolidation_1589.py:90`, chunk existence by `chunk_ids[0]` at `tests/test_knowledge_integrity_consolidation_1589.py:94`, and entity/edge/status row existence at `tests/test_knowledge_integrity_consolidation_1589.py:97`, `tests/test_knowledge_integrity_consolidation_1589.py:100`, and `tests/test_knowledge_integrity_consolidation_1589.py:103`. | PASS |
+| AC-1b | `store_extractions()` persists entity/edge linkage through `serve/knowledge/src/owlbear_knowledge/document_store.py:207`, `serve/knowledge/src/owlbear_knowledge/graph_store.py:85`, and `serve/knowledge/src/owlbear_knowledge/graph_store.py:198`; `set_status()` persists status in `serve/knowledge/src/owlbear_knowledge/status_store.py:72`. | The same AC-1 function asserts chunk/entity/edge/status linkage fields before audit at `tests/test_knowledge_integrity_consolidation_1589.py:108` through `tests/test_knowledge_integrity_consolidation_1589.py:127`. | PASS |
+| AC-1c | `audit_integrity()` exposes the four audited categories in `serve/knowledge/src/owlbear_knowledge/integrity.py:11` through `serve/knowledge/src/owlbear_knowledge/integrity.py:84`. | The test calls `audit_integrity(conn)` after the linkage checks at `tests/test_knowledge_integrity_consolidation_1589.py:129` and asserts zero counts for all four categories at `tests/test_knowledge_integrity_consolidation_1589.py:131` through `tests/test_knowledge_integrity_consolidation_1589.py:134`. | PASS |
+| AC-2 | `audit_integrity()` returns `chunks_orphaned`, `entities_orphaned`, `edges_dangling`, and `status_orphaned` in `serve/knowledge/src/owlbear_knowledge/integrity.py:16`, `serve/knowledge/src/owlbear_knowledge/integrity.py:29`, `serve/knowledge/src/owlbear_knowledge/integrity.py:42`, and `serve/knowledge/src/owlbear_knowledge/integrity.py:56`. | `tests/test_knowledge_integrity_consolidation_1589.py:144` disables FK enforcement, injects all four orphan categories, restores FK enforcement, then asserts exact counts plus injected-ID membership for all four categories at `tests/test_knowledge_integrity_consolidation_1589.py:173` through `tests/test_knowledge_integrity_consolidation_1589.py:182`. | PASS |
+
+- Blocking findings: none.
+
+## Observations
+- Challenger returned `reconsider` on two theoretical false-green arguments. I overrode that with an explicit code-reader cross-check because, under the refined AC, both concerns are non-blocking: the document-content assertion at `tests/test_knowledge_integrity_consolidation_1589.py:90` distinguishes the known `store_chunks()` backfill behavior in `serve/knowledge/src/owlbear_knowledge/document_store.py:104`, and AC-1b requires proof of persisted linkage fields rather than intentionally wrong-input overwrite behavior.
+- The earlier structural blockers are closed in the live file: AC-1 is again a single function at `tests/test_knowledge_integrity_consolidation_1589.py:52`, and the chunk existence check is by `chunk_ids[0]` at `tests/test_knowledge_integrity_consolidation_1589.py:94`.
+- No independent quality-runner rerun was needed because builder evidence was internally consistent and the remaining review questions were resolvable from static proof inspection. `get_errors` also reported no file-level problems in `tests/test_knowledge_integrity_consolidation_1589.py`.
