@@ -6,8 +6,8 @@
  *         unknown status → variant "secondary"
  *   AC-2: Priority chip renders as <PTag compact> with variant from priorityToVariant();
  *         unknown priority → variant "secondary"
- *   AC-3: Signal icon renders as <PIcon size="xs" aria-label={signal}> for
- *         dr-pending, blocked, claimed, deps-unmet; no icon for ready or unknown
+ *   AC-3: Signal icon renders as <p-icon size="xs" aria-label={signal}> for
+ *         dr-pending, blocked, claimed, deps-unmet; no p-icon element in DOM when signal is ready
  *   AC-4: Each visible tag (up to TAG_PREVIEW_LIMIT=3) renders as individual
  *         <PTag compact variant="secondary">; overflow count indicator preserved
  *   AC-5: Existing state cue text spans (Blocked, Claimed, Dependencies blocked,
@@ -391,6 +391,13 @@ describe('TestFromAC_CardCueTextPreserved', () => {
 // ─── AC-6: No inline hex color values in Card output ─────────────────────────
 
 describe('TestFromAC_CardNoHexColors', () => {
+  it('Card.tsx source contains no no-restricted-syntax eslint-disable comment', () => {
+    // FAILS until builder removes the /* eslint-disable no-restricted-syntax */ line from Card.tsx
+    const cardSrcPath = resolve(__dirname, '../components/Card.tsx')
+    const src = readFileSync(cardSrcPath, 'utf-8')
+    expect(src).not.toContain('eslint-disable no-restricted-syntax')
+  })
+
   it('Card.tsx source imports PTag from @porsche-design-system/components-react', () => {
     // FAILS now: current Card.tsx has no PTag import.
     const cardSrcPath = resolve(__dirname, '../components/Card.tsx')

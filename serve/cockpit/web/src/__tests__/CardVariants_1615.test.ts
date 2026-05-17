@@ -11,7 +11,9 @@
  *   review, docs, done
  * Known priority values (from Builder Guidance): someday, nice-to-have, important,
  *   needed, critical
- * Valid PTag variants: primary, secondary, success, warning, error, notification
+ * Valid PDS TagVariant values: primary, secondary, info, info-frosted, warning,
+ *   warning-frosted, success, success-frosted, error, error-frosted
+ * Note: 'notification' is NOT a valid PDS TagVariant and must NOT appear in mappings.
  */
 import { describe, it, expect } from 'vitest'
 import { statusToVariant, priorityToVariant } from '../utils/cardVariants'
@@ -37,10 +39,14 @@ const KNOWN_PRIORITIES = [
 const VALID_PDS_VARIANTS = [
   'primary',
   'secondary',
-  'success',
+  'info',
+  'info-frosted',
   'warning',
+  'warning-frosted',
+  'success',
+  'success-frosted',
   'error',
-  'notification',
+  'error-frosted',
 ] as const
 
 // ─── AC-1: statusToVariant ───────────────────────────────────────────────────
@@ -87,6 +93,16 @@ describe('TestFromAC_CardVariantsMapping', () => {
         expect(variant).not.toBeNull()
       }
     })
+
+    it('statusToVariant("backlog") returns "info" — not the invalid "notification"', () => {
+      // FAILS until builder remaps backlog from 'notification' to 'info'
+      expect(statusToVariant('backlog')).toBe('info')
+    })
+
+    it('statusToVariant("review") returns "info" — not the invalid "notification"', () => {
+      // FAILS until builder remaps review from 'notification' to 'info'
+      expect(statusToVariant('review')).toBe('info')
+    })
   })
 
   // ─── AC-2: priorityToVariant ─────────────────────────────────────────────
@@ -131,6 +147,11 @@ describe('TestFromAC_CardVariantsMapping', () => {
         expect(variant).toBeDefined()
         expect(variant).not.toBeNull()
       }
+    })
+
+    it('priorityToVariant("needed") returns "warning" — not the invalid "notification"', () => {
+      // FAILS until builder remaps needed from 'notification' to 'warning'
+      expect(priorityToVariant('needed')).toBe('warning')
     })
   })
 })
