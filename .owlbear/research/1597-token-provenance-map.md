@@ -105,6 +105,7 @@ Source files containing `--pds-*` (non-test): `tokens.css`, `Shell.css`, `Card.c
 | `Card.css.supplemental.test.ts` | — | **Update** | Absorbed content from former CardCSS_1546 |
 | `Column.css.test.ts` | 12 | **Update** | Layout token assertions (formerly ColumnCSS_1547) |
 | `ShellSecondaryCSS.base.test.tsx` | 5 | **Update** | Consolidated Shell token + migration assertions (formerly _1542 + _1550) |
+| `Shell.secondary-css.test.tsx` | 0 | **Keep** | FilterPanel + KanbanBoard token assertions; already uses `--p-*` equivalents (formerly part of Shell secondary CSS family) |
 | `PDSHexScan.test.ts` | 16 | **Update** | Scanner exclusion regex `--pds-` references (formerly PDSHexScan_1395) |
 | `PdsMigration.test.tsx` | 0 | **Keep** | Verifies element-to-PDS component migration; no CSS token references |
 | `CardSignalModel.test.tsx` | 1 | **Keep** | Comment-only reference (formerly CardSignalModel_1544) |
