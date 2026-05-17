@@ -1,10 +1,10 @@
 ---
 id: 1618
 title: 'P2-11: Complex integrations — modals → PModal'
-status: done
+status: archived
 priority: important
 created: 2026-05-16T03:37:02.326584+00:00
-updated: 2026-05-17T16:15:32.684289+02:00
+updated: 2026-05-17T16:23:11.462877+02:00
 tags:
   - frontend
   - pds
@@ -29,8 +29,8 @@ ac:
 proof_bundle: behavioral
 blocked: false
 block_reason:
-claimed_at: 2026-05-17T16:15:32.684289+02:00
-archival_reason:
+claimed_at:
+archival_reason: completed
 archival_refs: []
 ---
 Brief: see parent #1590.
@@ -442,3 +442,33 @@ No source files were deleted in this task — only modifications to three existi
 
 ### Scratch Cleanup
 35 scratch files under `.owlbear/scratch/1618-*` deleted.
+
+[[2026-05-17T16:23:11+02:00]]
+## Audit
+### Regression Detection
+- quality-runner mode full: 2107 passed, 12 failed (all in unrelated files: DecisionViewport, FilterAccessibilityPanel, PdsMigration, RepairPanel, SidecarUX, cockpit_view, cockpit_mutation_api — background quality debt). Task-scoped: 116 passed / 0 failed. E2E: 19 passed (exit 0). Lint: clean.
+- regression verdict: PASS
+
+### Intent Verification
+- scope alignment: PASS (ConfirmDialog.tsx, ResolveModal.tsx, ArchivalModal.tsx — all modal components within task scope; Shell.css 5-line sidecar cleanup is minor drift but reasonable for component migration)
+- purpose match: PASS (implementation migrates 3 modals from hand-rolled overlays to PModal with per-modal dismiss policy, matching stated AC intent)
+- extraneous scope: Shell.css deletion of sidecar overflow/padding — minor, not blocking
+- boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 4/5
+Final AC (4 lines) is clear, per-modal specific, and mechanically verifiable. Challenger invoked twice (research + architecture). However, original AC had an internal contradiction (AC-1 \"remove Tab cycling\" vs AC-2 \"trap Tab within modal\") requiring a full review-reject-architect refinement cycle — hence 4 not 5.
+
+### Commit Integrity
+- upstream commit presence: PASS (9 commits: 94c4a452 researcher, ce4d6a90/0ca07c29/4089ec9f/c81200ef/92bcd58d/56932cab test-writer, 2fbc8e12/78ef3192 builder)
+- doc entry present in serve/cockpit/README.md:203 (committed in 6e5df0e8 — bundled with a #1627 commit, minor attribution gap)
+- kanban commit packaging: pending
+
+### Deduction Breakdown
+No deductions applied:
+- 12 failures are pre-existing background debt, not task regressions
+- Reviewer evidence section present and detailed with PASS verdict
+- AC quality 4/5 (>3, no deduction)
+- All source deliverables committed
+
+### Confidence: 1.00
+### Action: archive
