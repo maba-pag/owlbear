@@ -208,6 +208,18 @@ Accessibility and responsive state after #1396:
   for `ConfirmDialog.tsx` at 98.57% and `ResolveModal.tsx` at 92.75%), and
   `serve/cockpit/web/e2e/overlay-behavior.spec.ts` (19 E2E tests — host-attribute
   checks, Tab-cycle containment, and exact focus-return for all three modals).
+- #1626 applies PDS focus-visible ring styling to all native interactive elements.
+  `custom-tokens.css` adds a global `:focus-visible` rule for `button`, `[role="button"]`,
+  `[role="menuitem"]`, `input`, and `a` — the elements PDS Shadow DOM does not reach — using
+  `outline: 2px solid var(--color-focus)` and `outline-offset: 2px`. `Card.css`
+  `.card:focus-visible` migrates from the legacy `var(--p-color-focus)` token to
+  `var(--color-focus)` and aligns its offset from 1px to 2px. No `:focus` fallback is
+  present; styling is strictly focus-visible-only. Verified by
+  `serve/cockpit/web/src/__tests__/FocusVisibleCssSource_1626.test.ts` (Vitest — grouped-rule
+  source-contract proving the five-part selector list in a single rule block, legacy-token
+  prohibition, and hardcoded-color regex scan) and
+  `serve/cockpit/web/e2e/focus-visible-pds-1626.spec.ts` (Playwright — keyboard-traversal
+  behavioral proof under Tab/arrow-key for each selector bucket).
 - #1627 migrates CSS-file transition declarations to PDS v4 duration and easing tokens.
   `.shell` (`grid-template-columns`), `.icon-button` (`background`, `border-color`), and
   `.card` (`box-shadow`) transitions in `Shell.css` and `Card.css` replace hardcoded
