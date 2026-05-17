@@ -7,10 +7,11 @@
     'status-bar status-bar status-bar'
     'nav-rail workspace sidecar'
     'nav-rail workspace sidecar';
+  grid-template-columns: var(--shell-columns);
+  grid-template-rows: var(--shell-rows);
   background: var(--p-color-canvas);
   color: var(--p-color-primary);
   font-family: 'Porsche Next', 'Arial Narrow', Arial, sans-serif;
-  grid-template-columns: 56px minmax(0, 1fr) 360px;
   transition: grid-template-columns var(--p-duration-sm) var(--p-ease-in-out);
 }
 
@@ -44,10 +45,6 @@
   grid-area: sidecar;
   border-left: 1px solid var(--p-color-contrast-low);
   overflow: hidden;
-}
-
-#shell-sidecar-content {
-  padding: var(--p-spacing-static-md);
 }
 
 @media (max-width: 767px) {
