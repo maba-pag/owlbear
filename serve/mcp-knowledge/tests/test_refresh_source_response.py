@@ -1,0 +1,73 @@
+"""Response contract tests for refresh_source."""
+
+from __future__ import annotations
+
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
+from owlbear_knowledge.refresh import RefreshResult
+from owlbear_mcp_knowledge.server import refresh_source
+
+
+def _ctx(source: MagicMock) -> MagicMock:
+    store = MagicMock()
+    store.get.return_value = source
+    app_ctx = MagicMock()
+    app_ctx.source_store = store
+    app_ctx.refresh_orchestrator = MagicMock()
+    app_ctx.ingest_pipeline = MagicMock()
+    app_ctx.graph_store = None
+    context = MagicMock()
+    context.request_context.lifespan_context = app_ctx
+    return context
+
+
+def _source() -> MagicMock:
+    source = MagicMock()
+    source.id = "src-1"
+    source.fetch_method = "http"
+    return source
+
+
+@pytest.mark.asyncio
+async def test_refresh_source_response_includes_errors_from_result() -> None:
+    source = _source()
+    refresh = MagicMock()
+    refresh.refresh = AsyncMock(
+        return_value=RefreshResult(
+            source_id="src-1",
+            refreshed=0,
+            skipped=0,
+            failed=1,
+            errors=["no files matched source path 'missing.md'"],
+        )
+    )
+
+    with patch("owlbear_mcp_knowledge.server.RefreshOrchestrator", return_value=refresh):
+        result = await refresh_source(_ctx(source), source_id="src-1")
+
+    assert isinstance(result, dict)
+    assert result["errors"] == ["no files matched source path 'missing.md'"]
+
+
+@pytest.mark.asyncio
+async def test_refresh_source_success_response_includes_empty_errors() -> None:
+    source = _source()
+    refresh = MagicMock()
+    refresh.refresh = AsyncMock(
+        return_value=RefreshResult(
+            source_id="src-1",
+            refreshed=1,
+            skipped=0,
+            failed=0,
+            errors=[],
+        )
+    )
+
+    with patch("owlbear_mcp_knowledge.server.RefreshOrchestrator", return_value=refresh):
+        result = await refresh_source(_ctx(source), source_id="src-1")
+
+    assert isinstance(result, dict)
+    assert result["refreshed"] == 1
+    assert result["errors"] == []

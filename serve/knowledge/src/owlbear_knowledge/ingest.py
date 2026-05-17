@@ -5,7 +5,9 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import TYPE_CHECKING, Literal
+from urllib.parse import unquote, urlparse
 from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict
@@ -90,6 +92,40 @@ class IngestPipeline:
         if isinstance(result, BaseException):
             raise result
 
+    @staticmethod
+    def _local_path_from_source_url(source_url: str) -> str | None:
+        if source_url.startswith("file://"):
+            raw_path = source_url.removeprefix("file://")
+            if raw_path.startswith("localhost/"):
+                raw_path = raw_path.removeprefix("localhost")
+            return unquote(raw_path)
+
+        parsed = urlparse(source_url)
+        if not parsed.scheme:
+            return source_url
+        return None
+
+    @classmethod
+    def _direct_source_config(
+        cls,
+        source_url: str,
+    ) -> tuple[object, str, dict[str, object]]:
+        from owlbear_knowledge.models import SourceType  # noqa: PLC0415
+
+        local_path = cls._local_path_from_source_url(source_url)
+        if local_path is not None:
+            path = Path(local_path)
+            config: dict[str, object] = {
+                "url": source_url,
+                "path": local_path,
+                "pattern": path.name if path.is_absolute() else local_path,
+            }
+            if path.is_absolute():
+                config["base_dir"] = str(path.parent)
+            return SourceType.FILE_GLOB, "file", config
+
+        return SourceType.AUTHENTICATED_WEB, "http", {"url": source_url, "urls": [source_url]}
+
     def _resolve_or_create_source_id(
         self,
         source_url: str,
@@ -101,15 +137,16 @@ class IngestPipeline:
         created_source_id: str | None = None
         resolved_source = self._resolve_source_by_url(source_url, scope)
         if resolved_source is None:
-            from owlbear_knowledge.models import KnowledgeSource, SourceType  # noqa: PLC0415
+            from owlbear_knowledge.models import KnowledgeSource  # noqa: PLC0415
 
             now = datetime.now(tz=UTC).isoformat()
+            source_type, fetch_method, config = self._direct_source_config(source_url)
             new_source = KnowledgeSource(
                 name=source_url,
-                source_type=SourceType.AUTHENTICATED_WEB,
-                fetch_method="url",
+                source_type=source_type,
+                fetch_method=fetch_method,
                 enrich=True,
-                config={"url": source_url},
+                config=config,
                 scope=scope,
                 created_at=now,
                 updated_at=now,
@@ -122,7 +159,17 @@ class IngestPipeline:
             )
 
         resolved_source_id = getattr(resolved_source, "id", None)
+        if not isinstance(resolved_source_id, str):
+            resolved_source_id = created_source_id
         return resolved_source_id, created_source_id
+
+    @staticmethod
+    def _source_from_metadata(metadata: dict[str, object]) -> str | None:
+        for key in ("source", "url"):
+            value = metadata.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        return None
 
     async def _cleanup_failed_ingest(
         self,
@@ -164,23 +211,19 @@ class IngestPipeline:
         On internal failure, returns IngestResult with status='failed' and
         zero counts — no exceptions are propagated.
         """
-        from owlbear_knowledge.models import Document  # noqa: PLC0415
-
-        doc_id = uuid4().hex
         created_source_id: str | None = None
-        chunk_ids: list[str] = []
+        fallback_doc_id = uuid4().hex
         try:
-            _meta: dict[str, object] = dict(metadata or {})
-            chunks = await asyncio.to_thread(self._chunker.chunk, text, metadata=_meta)
-            chunk_count = len(chunks)
+            from owlbear_knowledge.intake import IntakeResult  # noqa: PLC0415
 
-            doc = Document(
-                id=doc_id,
-                title=str(_meta.get("title") or doc_id),
-                content=text,
-                metadata=_meta,
-                scope=scope,
+            intake_metadata: dict[str, object] = dict(metadata or {})
+            source = (
+                source_url
+                or self._source_from_metadata(intake_metadata)
+                or (f"source:{source_id}" if source_id is not None else f"inline:{fallback_doc_id}")
             )
+            intake_metadata.setdefault("source_type", "url" if source_url is not None else "text")
+            intake_metadata.setdefault("fetched_at", datetime.now(tz=UTC).isoformat())
 
             resolved_source_id = source_id
             if source_url is not None and self._source_store is not None:
@@ -189,62 +232,26 @@ class IngestPipeline:
                     scope,
                 )
 
-            doc = Document(
-                id=doc_id,
-                title=str(_meta.get("title") or doc_id),
-                content=text,
-                metadata=_meta,
+            result = await self.ingest(
+                IntakeResult(content=text, source=source, metadata=intake_metadata),
                 scope=scope,
                 source_id=resolved_source_id,
             )
+            if result.status == "failed" and created_source_id is not None:
+                await self._cleanup_failed_ingest(result.document_id, [], created_source_id)
 
-            self._docs.insert_document(  # type: ignore[union-attr]
-                doc,
-                source_id=resolved_source_id,
-            )
-
-            chunk_ids = self._docs.store_chunks(  # type: ignore[union-attr]
-                doc_id,
-                chunks,
-                scope=scope,
-            )
-            chunk_texts = [c.text for c in chunks]
-            self._docs.store_embeddings(  # type: ignore[union-attr]
-                chunk_ids,
-                chunk_texts,
-                scope=scope,
-            )
-
-            extraction_results = await asyncio.gather(
-                *(self._extractor.extract(chunk.text) for chunk in chunks),
-                return_exceptions=True,
-            )
-            valid_extractions = [r for r in extraction_results if not isinstance(r, BaseException)]
-            entity_count, edge_count = self._docs.store_extractions(  # type: ignore[union-attr]
-                valid_extractions,
-                scope=scope,
-                document_id=doc_id,
-                chunk_ids=chunk_ids,
-            )
-
-        except Exception:  # catch-all for unexpected ingest failures
-            logger.exception("ingest_text failed for doc_id=%s", doc_id)
-            await self._cleanup_failed_ingest(doc_id, chunk_ids, created_source_id)
+        except Exception:
+            logger.exception("ingest_text failed for doc_id=%s", fallback_doc_id)
+            await self._cleanup_failed_ingest(fallback_doc_id, [], created_source_id)
             return IngestResult(
-                document_id=doc_id,
+                document_id=fallback_doc_id,
                 chunk_count=0,
                 entity_count=0,
                 edge_count=0,
                 status="failed",
             )
-
-        return IngestResult(
-            document_id=doc_id,
-            chunk_count=chunk_count,
-            entity_count=entity_count,
-            edge_count=edge_count,
-            status="ok",
-        )
+        else:
+            return result
 
     async def ingest(
         self,

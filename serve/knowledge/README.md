@@ -11,6 +11,8 @@ Graph-augmented vector retrieval engine for the OwlBear pipeline. Provides docum
 No standalone launch. Used as a library by `owlbear-mcp-knowledge` and consumer code.
 
 ```python
+import sqlite3
+
 from owlbear_knowledge import (
     GraphAugmentedRetriever,
     KnowledgeQueryService,
@@ -22,7 +24,8 @@ from owlbear_knowledge.graph_store import GraphStore
 from owlbear_knowledge.embeddings import BgeM3EmbeddingProvider
 from owlbear_knowledge.schema import init_db
 
-conn = init_db("path/to/knowledge.db")
+conn = sqlite3.connect("path/to/knowledge.db")
+init_db(conn)
 vector_store = QdrantVectorStore(location=":memory:")
 graph_store = GraphStore(conn)
 embedding_provider = BgeM3EmbeddingProvider()   # ~2.3 GB download on first use
@@ -40,7 +43,9 @@ service = KnowledgeQueryService(
 )
 
 context: str | None = service.query_for_context("What is OwlBear?")
-results: list[StructuredSearchResult] = service.search("What is OwlBear?")
+
+async def search_owlbear() -> list[StructuredSearchResult]:
+    return await service.query("What is OwlBear?")
 ```
 
 ### Module groups

@@ -934,6 +934,16 @@ def _serialize_source(value: object) -> SearchSource:
     }
 
 
+def _normalize_optional_scope(scope: str | None) -> str | None:
+    """Normalize null-like MCP client encodings for optional scope filters."""
+    if scope is None:
+        return None
+    normalized = scope.strip()
+    if normalized.lower() in {"", "none", "null"}:
+        return None
+    return normalized
+
+
 async def get_next_batch(ctx: Context, limit: int = 10) -> list[EnrichmentChunk]:
     """Atomically claim a batch of chunks ready for enrichment.
 
@@ -1238,6 +1248,7 @@ async def list_sources(ctx: Context, scope: str | None = None) -> list[SourceInf
     if store is None:
         msg = "source store not available"
         raise ToolError(msg)
+    scope = _normalize_optional_scope(scope)
     sources = store.list_all(scope=scope)
     return [
         {
@@ -1373,7 +1384,7 @@ async def knowledge_stats_resource(ctx: Context | None = None) -> str:
 async def refresh_source(ctx: Context, source_id: str) -> dict | str:
     """Trigger re-ingestion of a registered knowledge source by its ID.
 
-    Returns a dict with source_id, refreshed, skipped, and failed counts on
+    Returns a dict with source_id, refreshed, skipped, failed, and errors on
     success.  Returns an error string for disabled sources or unavailable
     orchestrator.  Raises ToolError if source_store is unavailable or the
     source_id is not found.
@@ -1412,4 +1423,5 @@ async def refresh_source(ctx: Context, source_id: str) -> dict | str:
         "refreshed": result.refreshed,
         "skipped": result.skipped,
         "failed": result.failed,
+        "errors": result.errors,
     }

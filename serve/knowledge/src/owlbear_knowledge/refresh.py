@@ -8,6 +8,7 @@ import logging
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
+from urllib.parse import unquote
 
 from pydantic import BaseModel, ConfigDict
 
@@ -25,6 +26,31 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _MIN_SCOPE_DOCS = 2  # guard: skip inter-doc build when scope has fewer than 2 documents
+
+
+def _configured_urls(source: KnowledgeSource) -> list[str]:
+    """Return URL entries from either plural or singular source config keys."""
+    urls: list[str] = []
+    raw_urls = source.config.get("urls")
+    if isinstance(raw_urls, list):
+        urls.extend(url for url in raw_urls if isinstance(url, str) and url.strip())
+    raw_url = source.config.get("url")
+    if isinstance(raw_url, str) and raw_url.strip() and raw_url not in urls:
+        urls.append(raw_url)
+    return urls
+
+
+def _local_path_from_url(url: str) -> Path | None:
+    """Return a local path for file:// and plain path source identifiers."""
+    if url.startswith("file://"):
+        raw_path = url.removeprefix("file://")
+        if raw_path.startswith("localhost/"):
+            raw_path = raw_path.removeprefix("localhost")
+        return Path(unquote(raw_path))
+    if "://" not in url:
+        return Path(url)
+    return None
+
 
 # ---------------------------------------------------------------------------
 # Models
@@ -156,7 +182,7 @@ class RefreshOrchestrator:
         source: KnowledgeSource,
         cancel: CancelSignal | None = None,
     ) -> RefreshResult:
-        urls: list[str] = source.config.get("urls", [])
+        urls = _configured_urls(source)
         refreshed = skipped = failed = 0
         errors: list[str] = []
 
@@ -197,6 +223,7 @@ class RefreshOrchestrator:
         pattern: str = source.config.get("pattern", "*")
         base_dir_raw: str | None = source.config.get("base_dir")
         base_dir_path = Path(base_dir_raw) if base_dir_raw else self._workspace_root
+        single_source_identity = source.config.get("url") if isinstance(source.config.get("path"), str) else None
 
         try:
             safe_base = sandbox_path(self._workspace_root, base_dir_path)
@@ -213,12 +240,23 @@ class RefreshOrchestrator:
         refreshed = skipped = failed = 0
         errors: list[str] = []
 
+        if not matching_files and isinstance(source.config.get("path"), str):
+            return RefreshResult(
+                source_id=source.id,
+                refreshed=0,
+                skipped=0,
+                failed=1,
+                errors=[f"no files matched source path {source.config['path']!r}"],
+            )
+
         for file_path in matching_files:
             if cancel is not None and cancel.is_set():
                 break
             try:
                 safe_path = sandbox_path(self._workspace_root, file_path)
                 intake_result = await _intake.read_file(safe_path, workspace_root=self._workspace_root)
+                if isinstance(single_source_identity, str) and single_source_identity:
+                    intake_result = intake_result.model_copy(update={"source": single_source_identity})
                 ingest_result: IngestResult = await self._pipeline.ingest(
                     intake_result,
                     scope=source.scope,
@@ -261,29 +299,24 @@ class RefreshOrchestrator:
         Returns:
             RefreshResult with per-status counters.
         """
-        if self._content_fetcher is None:
+        urls = _configured_urls(source)
+        refreshed = skipped = failed = 0
+        errors: list[str] = []
+
+        if not urls:
             return RefreshResult(
                 source_id=str(source.id),
                 refreshed=0,
                 skipped=0,
-                failed=0,
-                errors=[],
+                failed=1,
+                errors=["source has no URL configured"],
             )
-
-        urls: list[str] = source.config.get("urls", [])
-        refreshed = skipped = failed = 0
-        errors: list[str] = []
 
         for url in urls:
             if cancel is not None and cancel.is_set():
                 break
             try:
-                content: str = await self._content_fetcher.fetch(url)  # type: ignore[union-attr]
-                intake_result = _intake.IntakeResult(
-                    content=content,
-                    source=url,
-                    metadata={"source_type": "authenticated_web"},
-                )
+                intake_result = await self._read_authenticated_url(url)
                 ingest_call = self._pipeline.ingest(
                     intake_result,
                     scope=source.scope,
@@ -316,6 +349,25 @@ class RefreshOrchestrator:
             skipped=skipped,
             failed=failed,
             errors=errors,
+        )
+
+    async def _read_authenticated_url(self, url: str) -> _intake.IntakeResult:
+        """Read a configured authenticated-web URL or legacy local file URL."""
+        local_path = _local_path_from_url(url)
+        if local_path is not None:
+            safe_path = sandbox_path(self._workspace_root, local_path)
+            intake_result = await _intake.read_file(safe_path, workspace_root=self._workspace_root)
+            return intake_result.model_copy(update={"source": url})
+
+        if self._content_fetcher is None:
+            msg = "content fetcher not available"
+            raise RuntimeError(msg)
+
+        content: str = await self._content_fetcher.fetch(url)  # type: ignore[union-attr]
+        return _intake.IntakeResult(
+            content=content,
+            source=url,
+            metadata={"source_type": "authenticated_web"},
         )
 
     def _schedule_inter_doc_build(self, source: KnowledgeSource, document_id: str) -> None:

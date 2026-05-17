@@ -96,6 +96,18 @@ class TestFromAC_ListSources:
 
         store.list_all.assert_called_once_with(scope=None)
 
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("null_scope", [None, "", "null", "None", " NULL "])
+    async def test_null_like_scope_passes_none_to_list_all(self, null_scope: str | None) -> None:
+        """Explicit null-like MCP scope values behave the same as omission."""
+        store = MagicMock()
+        store.list_all.return_value = []
+        ctx = _make_ctx(source_store=store)
+
+        await list_sources(ctx, scope=null_scope)
+
+        store.list_all.assert_called_once_with(scope=None)
+
     # ------------------------------------------------------------------
     # AC: empty result returns "No sources found."
     # ------------------------------------------------------------------
