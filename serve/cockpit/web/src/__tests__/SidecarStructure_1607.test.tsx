@@ -4,14 +4,16 @@
  *
  * AC-1: #shell-sidecar-content elements in Shell.tsx carry Tailwind class p-[var(--p-spacing-static-md)] on all four sides;
  *        present in both mobile (p-sheet) and desktop render paths
- * AC-2: Given a non-null task: Shell [data-region='sidecar-header'] contains p-heading[size='large'] and no raw h2,
- *        asserted in both mobile (innerWidth ≤ 767) and desktop (default) Shell renders;
- *        DetailTab [data-region='sidecar-body'] contains p-heading[size='medium'];
+ * AC-2: Shell [data-region='sidecar-header'] contains p-heading[size='large'] and no raw h2,
+ *        asserted in both desktop (#shell-sidecar-content has no p-sheet ancestor) and
+ *        mobile (innerWidth ≤ 767; #shell-sidecar-content is inside p-sheet ancestor) Shell renders;
+ *        DetailTab (given non-null task) [data-region='sidecar-body'] contains p-heading[size='medium'];
  *        DetailTab [data-region='actions'] contains p-heading[size='small'];
  *        DetailTab contains no raw h3
  * AC-3: PDivider elements separate content blocks: between sidecar-header and DecisionViewport,
- *        between DecisionViewport and p-tabs — asserted in both mobile and desktop Shell renders;
- *        immediately following sidecar-metadata section in DetailTab (given non-null task)
+ *        between DecisionViewport and p-tabs — asserted in both desktop (#shell-sidecar-content has no
+ *        p-sheet ancestor) and mobile (innerWidth ≤ 767; #shell-sidecar-content inside p-sheet ancestor)
+ *        Shell renders; immediately following sidecar-metadata section in DetailTab (given non-null task)
  */
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest'
 import { render } from '@testing-library/react'
@@ -202,18 +204,24 @@ describe('TestFromAC_SidecarStructure_Padding', () => {
 describe('TestFromAC_SidecarStructure_Typography', () => {
   it('sidecar-header section does not use a raw <h2> element (replaced by PHeading)', () => {
     const { container } = renderShell()
+    const content = container.querySelector('#shell-sidecar-content')
+    expect(content?.closest('p-sheet')).toBeNull() // desktop branch discriminator
     const header = container.querySelector('[data-region="sidecar-header"]')
     expect(header?.querySelector('h2')).toBeNull()
   })
 
   it('sidecar-header contains a p-heading element for the task title', () => {
     const { container } = renderShell()
+    const content = container.querySelector('#shell-sidecar-content')
+    expect(content?.closest('p-sheet')).toBeNull() // desktop branch discriminator
     const header = container.querySelector('[data-region="sidecar-header"]')
     expect(header?.querySelector('p-heading')).not.toBeNull()
   })
 
   it('sidecar-header p-heading has size="large"', () => {
     const { container } = renderShell()
+    const content = container.querySelector('#shell-sidecar-content')
+    expect(content?.closest('p-sheet')).toBeNull() // desktop branch discriminator
     const header = container.querySelector('[data-region="sidecar-header"]')
     expect(header?.querySelector('p-heading[size="large"]')).not.toBeNull()
   })
@@ -263,14 +271,14 @@ describe('TestFromAC_SidecarStructure_Typography', () => {
 
     it('mobile Shell [data-region="sidecar-header"] contains p-heading[size="large"]', () => {
       const { container } = renderShell()
-      const header = container.querySelector('[data-region="sidecar-header"]')
+      const header = container.querySelector('p-sheet [data-region="sidecar-header"]') // p-sheet ancestor discriminator
       expect(header).not.toBeNull()
       expect(header?.querySelector('p-heading[size="large"]')).not.toBeNull()
     })
 
     it('mobile Shell [data-region="sidecar-header"] contains no raw h2 element', () => {
       const { container } = renderShell()
-      const header = container.querySelector('[data-region="sidecar-header"]')
+      const header = container.querySelector('p-sheet [data-region="sidecar-header"]') // p-sheet ancestor discriminator
       expect(header).not.toBeNull()
       expect(header?.querySelector('h2')).toBeNull()
     })
@@ -284,12 +292,14 @@ describe('TestFromAC_SidecarStructure_Dividers', () => {
   it('#shell-sidecar-content contains at least one p-divider element', () => {
     const { container } = renderShell()
     const content = container.querySelector('#shell-sidecar-content')
+    expect(content?.closest('p-sheet')).toBeNull() // desktop branch discriminator
     expect(content?.querySelector('p-divider')).not.toBeNull()
   })
 
   it('p-divider is placed as the direct next sibling after sidecar-header (between header and DecisionViewport)', () => {
     const { container } = renderShell()
     const content = container.querySelector('#shell-sidecar-content') as HTMLElement
+    expect(content.closest('p-sheet')).toBeNull() // desktop branch discriminator
     const children = Array.from(content.children)
     const headerIdx = children.findIndex(
       el => el.getAttribute('data-region') === 'sidecar-header',
@@ -302,6 +312,7 @@ describe('TestFromAC_SidecarStructure_Dividers', () => {
   it('p-divider is placed immediately before p-tabs (between DecisionViewport and tabs)', () => {
     const { container } = renderShell()
     const content = container.querySelector('#shell-sidecar-content') as HTMLElement
+    expect(content.closest('p-sheet')).toBeNull() // desktop branch discriminator
     const children = Array.from(content.children)
     const tabsIdx = children.findIndex(el => el.tagName.toLowerCase() === 'p-tabs')
     expect(tabsIdx).toBeGreaterThanOrEqual(0)
@@ -312,6 +323,7 @@ describe('TestFromAC_SidecarStructure_Dividers', () => {
   it('at least two p-divider elements exist in #shell-sidecar-content (one per AC-3 position)', () => {
     const { container } = renderShell()
     const content = container.querySelector('#shell-sidecar-content') as HTMLElement
+    expect(content.closest('p-sheet')).toBeNull() // desktop branch discriminator
     const dividers = Array.from(content.children).filter(
       el => el.tagName.toLowerCase() === 'p-divider',
     )
@@ -352,7 +364,7 @@ describe('TestFromAC_SidecarStructure_Dividers', () => {
 
     it('mobile Shell: p-divider is direct next sibling after sidecar-header (between header and DecisionViewport)', () => {
       const { container } = renderShell()
-      const content = container.querySelector('#shell-sidecar-content') as HTMLElement
+      const content = container.querySelector('p-sheet #shell-sidecar-content') as HTMLElement // p-sheet ancestor discriminator
       expect(content).not.toBeNull()
       const children = Array.from(content.children)
       const headerIdx = children.findIndex(el => el.getAttribute('data-region') === 'sidecar-header')
@@ -362,7 +374,7 @@ describe('TestFromAC_SidecarStructure_Dividers', () => {
 
     it('mobile Shell: p-divider is immediately before p-tabs (between DecisionViewport and tabs)', () => {
       const { container } = renderShell()
-      const content = container.querySelector('#shell-sidecar-content') as HTMLElement
+      const content = container.querySelector('p-sheet #shell-sidecar-content') as HTMLElement // p-sheet ancestor discriminator
       expect(content).not.toBeNull()
       const children = Array.from(content.children)
       const tabsIdx = children.findIndex(el => el.tagName.toLowerCase() === 'p-tabs')
