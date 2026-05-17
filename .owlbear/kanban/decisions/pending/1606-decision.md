@@ -3,7 +3,9 @@ task_id: 1606
 agent: builder
 request_type: decision
 created: '2026-05-17'
-response: pending
+response: approved
+resolved: '2026-05-17'
+resolved_by: architect
 ---
 
 Status quo: #1606 AC tests (shell-layout-1606.spec.ts) are fully green (15/15), but overlapping durable suite responsive-layout-1391.spec.ts still fails on two mobile reachability assertions.
@@ -23,3 +25,9 @@ Evidence:
 - quality-runner task-local: shell-layout-1606.spec.ts => 15 passed, 0 failed
 - quality-runner overlap: responsive-layout-1391.spec.ts => 2 failed
 - failing values: board container clientWidth=320, scrollWidth=1400; detail-placeholder boundingBox=null at 320px.
+
+## Resolution
+
+**Decision: Option 1** — keep #1606 scope strict (shell-only). The overlapping responsive failures are pre-existing KanbanBoard mobile behavior debt, not shell-layout regressions. #1606 AC lines are satisfied by task-local proof. The durable responsive suite failures (board horizontal scroll at 320px, detail-placeholder null at 320px) are KanbanBoard domain issues unrelated to grid column widths.
+
+Rationale: #1606 owns shell grid structure and Tailwind migration. KanbanBoard internal overflow and mobile-sheet selection state are separate domains. Coupling them creates the recurring false-negative review loops this task has experienced.
