@@ -198,6 +198,12 @@ export default function TaskFieldsEditor({
           setSaveConfirmed(false)
           saveConfirmedTimerRef.current = null
         }, 2000)
+      } else if (mutationSucceeded === false) {
+        setSaveConfirmed(false)
+        if (saveConfirmedTimerRef.current !== null) {
+          window.clearTimeout(saveConfirmedTimerRef.current)
+          saveConfirmedTimerRef.current = null
+        }
       }
     } catch {
       setSaveConfirmed(false)
