@@ -1,10 +1,10 @@
 ---
 id: 1589
 title: 'Consolidation test: knowledge DB integrity hardening'
-status: docs
+status: archived
 priority: important
 created: 2026-05-15T16:25:02.116082+00:00
-updated: 2026-05-16T20:30:57.154636+00:00
+updated: 2026-05-17T00:44:46.635917+00:00
 tags:
   - consolidation-test
   - scope:knowledge
@@ -37,7 +37,7 @@ proof_bundle: behavioral
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 Parent: #1580
@@ -493,3 +493,48 @@ Test-writer: PASS-THROUGH (type:test tag)
 - Challenger returned `reconsider` on two theoretical false-green arguments. I overrode that with an explicit code-reader cross-check because, under the refined AC, both concerns are non-blocking: the document-content assertion at `tests/test_knowledge_integrity_consolidation_1589.py:90` distinguishes the known `store_chunks()` backfill behavior in `serve/knowledge/src/owlbear_knowledge/document_store.py:104`, and AC-1b requires proof of persisted linkage fields rather than intentionally wrong-input overwrite behavior.
 - The earlier structural blockers are closed in the live file: AC-1 is again a single function at `tests/test_knowledge_integrity_consolidation_1589.py:52`, and the chunk existence check is by `chunk_ids[0]` at `tests/test_knowledge_integrity_consolidation_1589.py:94`.
 - No independent quality-runner rerun was needed because builder evidence was internally consistent and the remaining review questions were resolvable from static proof inspection. `get_errors` also reported no file-level problems in `tests/test_knowledge_integrity_consolidation_1589.py`.
+
+[[2026-05-17T02:37:44+02:00]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | README verification | No | N/A | Root `tests/` has no convention mapping target. Changed file: `tests/test_knowledge_integrity_consolidation_1589.py` only. No `serve/{pkg}/src/**` or interface changes. |
+| 2 | External attribution | No | N/A | No external sources referenced. Test patterns sourced from sibling task #1586 (internal). |
+| 3 | Research doc | No | N/A | No research artifact exists for this task. |
+| 4 | Deletion detection | No | N/A | Builder merged `test_ac1b_chain_linkage_fields_are_set_before_audit` INTO `test_ac1_clean_chain_returns_zero_for_all_audit_categories` (in-file merge only). No file deletions; no orphaned references. |
+
+### Verification Layers
+- Layer 1 — grep: `serve/knowledge/README.md` contains no references to `integrity_consolidation`, `audit_integrity`, or `1589`; no removed symbols to check.
+- Layer 2 — editorial: Test-only task; no documentation file was created or modified upstream. No README coherence impact. No-impact determination confirmed.
+
+### Scratch Cleanup
+- No `.owlbear/scratch/1589-*` files found.
+
+[[2026-05-17T02:44:46+02:00]]
+## Audit
+### Regression Detection
+- quality-runner mode full: 4631 passed, 253 failed (pytest), 2006 passed / 55 failed (vitest), ruff clean, eslint clean
+- All failures pre-existing in unrelated files (test_cockpit_view.py, test_server.py, test_engine_accessor_migration.py, test_ideation_diagram.py, test_cockpit_pds_build_compat.py) — none touched by #1589 commits
+- Task's own test file: 2 passed, 0 failed
+- regression verdict: PASS
+
+### Intent Verification
+- scope alignment: PASS (only file changed: tests/test_knowledge_integrity_consolidation_1589.py — knowledge domain, test-only)
+- purpose match: PASS (consolidation integration test exercising init_db + DocumentStore API chain + audit_integrity, matches task title and AC)
+- extraneous scope: none
+- boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 3/5
+AC required 4 refinement cycles to close false-green paths. Each cycle the reviewer caught legitimate gaps: (1) missing row-presence assertions, (2) missing linkage field assertions, (3) ambiguous \"same test\" language causing split proof, (4) document row not discriminated from store_chunks() backfill. Final AC is precise and well-structured. The number of cycles indicates the original specification was under-specified for a consolidation test — notable gaps requiring significant builder/reviewer rework.
+
+### Commit Integrity
+- upstream commit presence: PASS (f7cd800e — builder commit touches only tests/test_knowledge_integrity_consolidation_1589.py; 5 total commits across builder/test-writer cycles)
+- kanban commit packaging: pending (this audit cycle)
+
+### Deduction Breakdown
+- AC quality score 3/5: -.03
+- No other deductions
+
+### Confidence: 0.97
+### Action: archive
