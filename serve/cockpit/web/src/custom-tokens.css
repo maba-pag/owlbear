@@ -1,4 +1,4 @@
-/* Sole custom token retained after PDS v4 migration (no native purple equivalent). */
+/* Custom tokens bundled locally for runtime availability and claimed-signal styling. */
 :root {
   /* Keep border contrast token available at runtime without CDN-loaded PDS globals. */
   --p-color-contrast-low: light-dark(hsl(240 5.3% 14.9% / 0.5), hsl(240 12.5% 96.9% / 0.45));
