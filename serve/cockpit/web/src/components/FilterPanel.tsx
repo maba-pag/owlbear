@@ -1,10 +1,12 @@
 import { useEffect, useRef } from 'react'
 import {
   PButton,
+  PCheckbox,
   PInputSearch,
   PMultiSelect,
   PMultiSelectOption,
   PSelect,
+  PSelectOption,
 } from '@porsche-design-system/components-react'
 
 import './FilterPanel.css'
@@ -26,6 +28,10 @@ type ControlValueEvent = {
   target?: unknown
   currentTarget?: unknown
   detail?: { value?: unknown }
+}
+
+type CheckboxChangeEvent = {
+  detail?: { checked?: unknown }
 }
 
 function readStringValue(event: ControlValueEvent): string {
@@ -179,6 +185,7 @@ export default function FilterPanel({
         ref={searchRef}
         name="search-filter"
         label="Search tasks"
+        role="textbox"
         tabIndex={0}
       />
 
@@ -189,11 +196,11 @@ export default function FilterPanel({
         tabIndex={0}
         onChange={(event) => onFilterChange({ ...filter, priority: readStringValue(event as ControlValueEvent) })}
       >
-        <option value="">All priorities</option>
+        <PSelectOption value="">All priorities</PSelectOption>
         {priorities.map((priority) => (
-          <option key={priority} value={priority}>
+          <PSelectOption key={priority} value={priority}>
             {priority}
-          </option>
+          </PSelectOption>
         ))}
       </PSelect>
 
@@ -216,14 +223,18 @@ export default function FilterPanel({
         </PMultiSelect>
       ) : null}
 
-      <p-checkbox
+      <PCheckbox
         name="blocked-filter"
         label="Show only blocked tasks"
+        checked={filter.blocked}
         tabIndex={0}
-        onClick={() => onFilterChange({ ...filter, blocked: !filter.blocked })}
+        onChange={(event) => {
+          const checked = (event as CheckboxChangeEvent).detail?.checked
+          onFilterChange({ ...filter, blocked: checked === true })
+        }}
       >
         Show only blocked tasks
-      </p-checkbox>
+      </PCheckbox>
 
       {isFilterActive ? (
         <PButton data-testid="filter-reset" variant="secondary" onClick={() => onFilterChange(EMPTY_FILTER)}>

@@ -1,5 +1,9 @@
 .filter-panel {
   background: var(--p-color-surface);
   border: 1px solid var(--p-color-contrast-low);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--p-spacing-static-sm);
+  align-items: flex-end;
   padding: var(--p-spacing-static-md);
 }
