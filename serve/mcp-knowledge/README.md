@@ -20,7 +20,7 @@ Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json
 |------|-------------|
 | `search_knowledge` | Semantic search over the knowledge base |
 | `list_sources` | List registered knowledge sources, optionally filtered by scope |
-| `ingest_document` | Ingest text content into the knowledge base (optional `source_url` for attribution) |
+| `ingest_document` | Ingest text content into the knowledge base; identified web/file sources use content-hash delta detection |
 | `get_consolidation_candidates` | List unresolved cross-source entity consolidation candidates (entities appearing in 2+ sources with no existing edge or reviewed dismissal) |
 | `get_stats` | Summary statistics: document, entity, and edge counts plus source count, chunk count, enrichment ratio, and consolidation candidates remaining |
 | `refresh_source` | Re-ingest a registered source by source ID |
