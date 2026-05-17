@@ -109,6 +109,7 @@ Source files containing `--pds-*` (non-test): `tokens.css`, `Shell.css`, `Card.c
 | `ShellSecondaryCSS_1550.test.tsx` | 8 | **Update** | FilterPanel + KanbanBoard tokens |
 | `ResponsiveLayout_1391.test.tsx` | 2 | **Update** | `--pds-grid-gap/margin` → `--p-spacing-*` |
 | `PDSHexScan_1395.test.ts` | 10 | **Update** | Scanner exclusion regex `--pds-` → `--p-` |
+| `PdsMigration.test.tsx` | 0 | **Keep** | Verifies element-to-PDS component migration; no CSS token references |
 | `CardSignalModel_1544.test.tsx` | 1 | **Keep** | Comment-only reference |
 | `ThemeLightTokenScan_1552.test.ts` | 3 | **Keep** | Checks `--pds-theme-light-*` (different prefix) |
 | `PdsColorSchemeBridge_1555.test.ts` | 0 | **Update** | Validates tokens.css import (file deleted) |
