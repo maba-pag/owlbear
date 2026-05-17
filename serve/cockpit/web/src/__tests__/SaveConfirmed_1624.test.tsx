@@ -454,4 +454,63 @@ describe('TestFromAC_SaveConfirmedRefetchSurvival', () => {
     // so same-task data refreshes no longer tear down the indicator prematurely.
     expect(container.querySelector('[data-testid="save-confirmed"]')).not.toBeNull()
   })
+
+  // ─── Timing: save-confirmed auto-resets at 2000ms after same-task refresh ─
+
+  it('save-confirmed auto-resets ~2000ms after surviving a same-task data refresh', async () => {
+    // Full lifecycle: save → indicator appears → same-task data refresh →
+    // indicator survives the refresh → indicator disappears at ~2000ms.
+    //
+    // The rerender is wrapped in await act() so the useEffect triggered by
+    // task.updated fires during the act() call, not after the assertion.
+    // This makes the test correctly detect when the effect clears saveConfirmed.
+    //
+    // FAILS on current code: the sync effect unconditionally calls
+    // setSaveConfirmed(false) when task.updated changes, so the indicator is
+    // gone immediately after the act(rerender) completes — the assertion
+    // "indicator still visible after refresh" fails.
+    // After fix: setSaveConfirmed(false) is guarded by task.id change, so
+    // the indicator survives the same-task refresh and disappears at 2000ms.
+
+    vi.useFakeTimers()
+    const onSave = vi.fn().mockResolvedValue(true)
+    const { container, rerender } = renderEditor({ onSave })
+
+    makeFieldDirty(container)
+    clickSave(container)
+
+    // Wait for the indicator to appear after a successful save (onSave returns true).
+    await act(async () => { await Promise.resolve() })
+    expect(container.querySelector('[data-testid="save-confirmed"]')).not.toBeNull()
+
+    // Simulate a CockpitProvider same-task refetch: same id=42, new updated timestamp.
+    // Wrap in await act() to flush the useEffect triggered by the dep change.
+    const refreshedTask: TaskDetail = { ...TASK, updated: '2026-05-01T12:01:00+00:00' }
+    await act(async () => {
+      rerender(
+        <PorscheDesignSystemProvider>
+          <TaskFieldsEditor
+            task={refreshedTask}
+            priorities={PRIORITIES}
+            conflictLocalDraft={null}
+            conflictRemoteTaskId={null}
+            serverValidationMessage={null}
+            clearConflictIfTaskChanged={vi.fn()}
+            onSave={onSave}
+          />
+        </PorscheDesignSystemProvider>,
+      )
+    })
+
+    // FAILS on current code: the sync effect [task.id, task.updated, ...] fires
+    // inside the act() call above (because task.updated changed) and calls
+    // setSaveConfirmed(false) unconditionally — indicator is already gone here.
+    // After fix: setSaveConfirmed(false) is guarded by task.id switch, so
+    // same-task refresh does NOT clear the indicator.
+    expect(container.querySelector('[data-testid="save-confirmed"]')).not.toBeNull()
+
+    // The 2000ms auto-reset timer started at save time must still fire after the refresh.
+    await act(async () => { vi.advanceTimersByTime(2001) })
+    expect(container.querySelector('[data-testid="save-confirmed"]')).toBeNull()
+  })
 })
