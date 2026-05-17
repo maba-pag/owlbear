@@ -58,8 +58,14 @@ function setMetadataAccordionAttrs(element: HTMLElement | null): void {
   element.setAttribute('heading', 'Metadata')
 }
 
-function syncHeadingH3TagAttr(element: HTMLElement | null): void {
-  element?.setAttribute('tag', 'h3')
+function syncHeadingAttrs(tag: 'h3', size: 'medium' | 'small') {
+  return (element: HTMLElement | null): void => {
+    if (!element) {
+      return
+    }
+    element.setAttribute('tag', tag)
+    element.setAttribute('size', size)
+  }
 }
 
 export default function DetailTab({
@@ -194,7 +200,7 @@ export default function DetailTab({
       <PDivider />
 
       <section data-region="sidecar-body">
-        <PHeading size="medium" tag="h3">Details</PHeading>
+        <PHeading ref={syncHeadingAttrs('h3', 'medium')} size="medium" tag="h3">Details</PHeading>
         <TaskFieldsEditor
           task={t}
           priorities={board?.priorities ?? []}
@@ -207,7 +213,7 @@ export default function DetailTab({
       </section>
 
       <section data-region="actions">
-        <PHeading ref={syncHeadingH3TagAttr} size="small" tag="h3">Actions</PHeading>
+        <PHeading ref={syncHeadingAttrs('h3', 'small')} size="small" tag="h3">Actions</PHeading>
         <TaskActions
           key={`${t.id}:${t.updated}`}
           task={t}

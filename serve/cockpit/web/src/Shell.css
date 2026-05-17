@@ -47,6 +47,10 @@
   overflow: hidden;
 }
 
+#shell-sidecar-content {
+  padding: var(--p-spacing-static-md);
+}
+
 @media (max-width: 767px) {
   .shell {
     --shell-columns: minmax(0, 1fr);

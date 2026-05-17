@@ -19,12 +19,15 @@ function isHealthBadgeItem(item: ScanPollingItem): item is HealthBadgeItem {
   return item.code !== null && item.detail !== null && item.file_path !== null
 }
 
-function syncHeadingTagAttr(tag: 'h1' | 'h2') {
+function syncHeadingTagAttr(tag: 'h1' | 'h2', size?: 'large' | 'medium' | 'small') {
   return (element: HTMLElement | null) => {
     if (!element) {
       return
     }
     element.setAttribute('tag', tag)
+    if (size) {
+      element.setAttribute('size', size)
+    }
   }
 }
 
@@ -324,7 +327,7 @@ function Shell() {
               aria-hidden={isSidecarCollapsed ? 'true' : undefined}
             >
               <section data-region="sidecar-header" aria-live="polite">
-                <PHeading ref={syncHeadingTagAttr('h2')} size="large" tag="h2">
+                <PHeading ref={syncHeadingTagAttr('h2', 'large')} size="large" tag="h2">
                   {selectedTaskHeading}
                 </PHeading>
               </section>
@@ -422,7 +425,7 @@ function Shell() {
             aria-hidden={isSidecarCollapsed ? 'true' : undefined}
           >
             <section data-region="sidecar-header" aria-live="polite">
-              <PHeading ref={syncHeadingTagAttr('h2')} size="large" tag="h2">
+              <PHeading ref={syncHeadingTagAttr('h2', 'large')} size="large" tag="h2">
                 {selectedTaskHeading}
               </PHeading>
             </section>
