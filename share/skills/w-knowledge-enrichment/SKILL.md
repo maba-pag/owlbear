@@ -80,8 +80,8 @@ Identify relationships between entities found in the same chunk:
 
 | Field | Description | Example |
 |-------|-------------|---------|
-| `source_id` | Entity name (source end) | "CI/CD Pipeline" |
-| `target_id` | Entity name (target end) | "Azure DevOps" |
+| `source_name` | Entity name (source end) | "CI/CD Pipeline" |
+| `target_name` | Entity name (target end) | "Azure DevOps" |
 | `relation` | Relationship type | "runs_on", "depends_on", "manages", "implements", "part_of" |
 | `weight` | Confidence 0.0–1.0 | 0.8 for explicitly stated, 0.4 for inferred |
 | `properties` | Additional context | `{"context": "Pipeline defined in AzDO YAML"}` |
@@ -104,7 +104,7 @@ store_enrichment(
         ...
     ],
     edges=[
-        {"source_id": "Azure DevOps", "target_id": "CI/CD Pipeline", "relation": "hosts", "weight": 0.7},
+        {"source_name": "Azure DevOps", "target_name": "CI/CD Pipeline", "relation": "hosts", "weight": 0.7},
         ...
     ]
 )

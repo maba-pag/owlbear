@@ -101,7 +101,7 @@ class BgeM3EmbeddingProvider:
         model = self._ensure_model()
         self._last_used = time.monotonic()
         self._reset_timer()
-        output = model.encode(texts)  # type: ignore[union-attr]
+        output = model.encode(texts, return_sparse=True, return_colbert_vecs=True)  # type: ignore[union-attr]
 
         results: list[HybridEmbedding] = []
         for i in range(len(texts)):

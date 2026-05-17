@@ -51,6 +51,7 @@ class QdrantVectorStore:
             self._client: QdrantClient = QdrantClient(path=location)  # type: ignore[misc]
         self._collection = collection_name
         self._initialized = False
+        self._has_colbert = False
 
     def _ensure_collection(self) -> None:
         """Create the Qdrant collection if it doesn't exist yet."""
@@ -76,6 +77,12 @@ class QdrantVectorStore:
                     "sparse": qmodels.SparseVectorParams(),
                 },
             )
+            self._has_colbert = True
+        else:
+            # Check if existing collection has the "colbert" named vector.
+            info = self._client.get_collection(self._collection)
+            vectors_cfg = info.config.params.vectors
+            self._has_colbert = isinstance(vectors_cfg, dict) and "colbert" in vectors_cfg
         self._initialized = True
 
     def store_embedding(
@@ -102,7 +109,7 @@ class QdrantVectorStore:
                     indices=embedding.sparse.indices,
                     values=embedding.sparse.values,
                 )
-            if embedding.colbert is not None:
+            if embedding.colbert is not None and self._has_colbert:
                 vectors["colbert"] = embedding.colbert
         else:
             vectors = {"dense": embedding}
@@ -205,7 +212,7 @@ class QdrantVectorStore:
             limit=top_k * 10,
         )
 
-        if query_embedding.colbert is not None:
+        if query_embedding.colbert is not None and self._has_colbert:
             # Two-stage: prefetch with dense+sparse via RRF, rerank with ColBERT MaxSim
             rrf_prefetch = qmodels.Prefetch(
                 prefetch=[dense_prefetch, sparse_prefetch],

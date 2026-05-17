@@ -26,6 +26,12 @@ class EntityType(StrEnum):
     PROCEDURE = "procedure"
     POLICY = "policy"
     STANDARD = "standard"
+    SYSTEM = "system"
+    TOOL = "tool"
+    PROCESS = "process"
+    ROLE = "role"
+    COMPONENT = "component"
+    SERVICE = "service"
 
 
 class RelationType(StrEnum):
@@ -40,6 +46,27 @@ class RelationType(StrEnum):
     GOVERNED_BY = "governed_by"
     GOVERNS = "governs"
     SUPERSEDES_VERSION = "supersedes_version"
+    BUILT_ON = "built_on"
+    COMPONENT_OF = "component_of"
+    CREATES = "creates"
+    DESCRIBES = "describes"
+    EXECUTES = "executes"
+    EXTENDS = "extends"
+    FOLLOWS = "follows"
+    GUIDES = "guides"
+    INSTANCE_OF = "instance_of"
+    INTEGRATES_WITH = "integrates_with"
+    INVOKES = "invokes"
+    MANAGES = "manages"
+    PART_OF = "part_of"
+    PRODUCES = "produces"
+    REGISTERS = "registers"
+    REQUIRES = "requires"
+    RERANKS_WITH = "reranks_with"
+    RUNS_IN = "runs_in"
+    SUPPORTS = "supports"
+    USES = "uses"
+    WRAPS = "wraps"
 
 
 class SourceType(StrEnum):
