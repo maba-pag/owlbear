@@ -35,6 +35,7 @@
 .shell__nav-rail {
   grid-area: nav-rail;
   background: var(--p-color-surface);
+  border-right: 1px solid var(--p-color-contrast-low, currentColor);
 }
 
 .shell__workspace {
