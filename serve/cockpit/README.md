@@ -200,6 +200,29 @@ Accessibility and responsive state after #1396:
   `PCheckbox` checked-state reflection, `onChange` true/false paths, `PSelectOption` presence,
   native-option absence, and CSS flex declarations) and
   `serve/cockpit/web/src/__tests__/FilterPanel.test.tsx` (durable regression, 40 passing).
+- #1618 migrates the three complex modal roots (`ConfirmDialog`, `ResolveModal`, and
+  `ArchivalModal`) from hand-rolled `div[role="dialog"]` overlays to PModal host elements.
+  Legacy `position:fixed` overlay styles, Tab/Shift+Tab keyboard handlers, and focus-trap
+  cycling code are removed from all three components. Per-modal dismiss policy: `ConfirmDialog`
+  uses `aria.role='alertdialog'`, `disableBackdropClick=true`, and `dismissButton=false`
+  (Escape and in-body Cancel/Confirm only); `ResolveModal` and `ArchivalModal` allow backdrop
+  click, Escape, dismiss button (X), and in-body Cancel/Close. Existing action callback
+  contracts (`onCancel`, `onConfirm`, `onClose`, `onResolved`, `onRefresh`) are preserved
+  unchanged. Three PDS-workaround categories are permitted under documented PModal
+  limitations: a Tab-cycling shim for slotted light-DOM focus trapping (native `<dialog>`
+  does not trap slotted controls in Chromium), focus-state capture/restore for close-path
+  variants, and host attribute normalization (`role`, `aria-modal`) via `MutationObserver`.
+  Focus return: `ResolveModal` returns focus to the DR trigger button on close;
+  `ArchivalModal` returns focus to the originating task card via `onDismiss` plus an
+  explicit fallback target (context-menu opener is destroyed before close); `ConfirmDialog`
+  returns focus to the action button that opened it. Verified by
+  `serve/cockpit/web/src/__tests__/PModalMigration_1618.test.tsx` (30 tests — AC-1 PModal
+  roots and no legacy wrapper/overlay/z-index, AC-3/AC-4 dismiss policy wiring and focus
+  fallback for all three modals),
+  `serve/cockpit/web/src/__tests__/CoverageGap_1618.test.tsx` (53 tests — branch coverage
+  for `ConfirmDialog.tsx` at 98.57% and `ResolveModal.tsx` at 92.75%), and
+  `serve/cockpit/web/e2e/overlay-behavior-1563.spec.ts` (19 E2E tests — host-attribute
+  checks, Tab-cycle containment, and exact focus-return for all three modals).
 - #1628 completes the WCAG 2.1 AA accessibility sweep: invalid host-level ARIA attributes
   (`aria-expanded`, `aria-controls`) on `p-button` host controls are replaced with native
   `<button>` elements in `KanbanBoard.tsx` (filter toggle) and `Shell.tsx` (nav rail
