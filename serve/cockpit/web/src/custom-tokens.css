@@ -5,7 +5,6 @@
 
 button:focus-visible,
 [role="button"]:focus-visible,
-[role="menuitem"]:focus,
 [role="menuitem"]:focus-visible,
 input:focus-visible,
 a:focus-visible {

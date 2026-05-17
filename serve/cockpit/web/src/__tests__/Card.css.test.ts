@@ -136,9 +136,9 @@ describe('TestFromAC_CardCSSHoverFocus', () => {
     expect(css).toMatch(/:hover\s*\{[^}]*background[^}]*var\(--p-color-frosted\)[^}]*\}/)
   })
 
-  it(':focus-visible selector in Card.css declares outline property with var(--p-color-focus)', () => {
+  it(':focus-visible selector in Card.css declares outline property with var(--color-focus)', () => {
     const css = readFileSync(CARD_CSS_PATH, 'utf-8')
-    // Match any :focus-visible block that sets outline referencing the state-focus token.
-    expect(css).toMatch(/:focus-visible\s*\{[^}]*outline[^}]*var\(--p-color-focus\)[^}]*\}/)
+    // Match any :focus-visible block that sets outline referencing the canonical focus token.
+    expect(css).toMatch(/:focus-visible\s*\{[^}]*outline[^}]*var\(--color-focus\)[^}]*\}/)
   })
 })

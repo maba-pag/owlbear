@@ -30,7 +30,7 @@
  * API isolation: all /api/* routes stubbed — no backend required.
  * LIFO route registration: catch-all registered first, specific routes last (highest priority).
  */
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect, type Page, type Locator } from '@playwright/test'
 
 // ─── PDS canonical focus color ────────────────────────────────────────────────
 // var(--color-focus) from PDS Tailwind theme resolves to #1A44EA = rgb(26, 68, 234).
@@ -117,6 +117,16 @@ async function stubApis(page: Page): Promise<void> {
 
   await page.route('/api/tasks', (route) => route.fulfill({ json: TASKS }))
   await page.route('/api/board', (route) => route.fulfill({ json: BOARD }))
+}
+
+async function tabUntilFocused(page: Page, locator: Locator, maxTabs = 12): Promise<void> {
+  for (let i = 0; i < maxTabs; i++) {
+    const isFocused = await locator.evaluate((element) => document.activeElement === element)
+    if (isFocused) {
+      return
+    }
+    await page.keyboard.press('Tab')
+  }
 }
 
 // ─── AC-1: Focus-visible outline on interactive elements ──────────────────────
@@ -245,9 +255,10 @@ test.describe('TestFromAC_FocusVisibleOutline', () => {
     await card.click({ button: 'right' })
     await page.waitForSelector('[data-testid="context-menu"]', { timeout: 5_000 })
 
-    // Focus first transition menuitem programmatically (they have tabIndex=-1)
-    const menuitem = page.locator('[data-testid="context-menu"] [role="menuitem"]').first()
-    await menuitem.focus()
+    const menuItems = page.locator('[data-testid="context-menu"] [role="menuitem"]')
+    await expect(menuItems.first()).toBeFocused()
+    await page.keyboard.press('ArrowDown')
+    await expect(menuItems.nth(1)).toBeFocused()
 
     const outlineStyle = await page.evaluate(
       () => getComputedStyle(document.activeElement as Element).outlineStyle,
@@ -269,8 +280,10 @@ test.describe('TestFromAC_FocusVisibleOutline', () => {
     await card.click({ button: 'right' })
     await page.waitForSelector('[data-testid="context-menu"]', { timeout: 5_000 })
 
-    const menuitem = page.locator('[data-testid="context-menu"] [role="menuitem"]').first()
-    await menuitem.focus()
+    const menuItems = page.locator('[data-testid="context-menu"] [role="menuitem"]')
+    await expect(menuItems.first()).toBeFocused()
+    await page.keyboard.press('ArrowDown')
+    await expect(menuItems.nth(1)).toBeFocused()
 
     const outlineColor = await page.evaluate(
       () => getComputedStyle(document.activeElement as Element).outlineColor,
@@ -280,6 +293,60 @@ test.describe('TestFromAC_FocusVisibleOutline', () => {
       outlineColor,
       `[role="menuitem"] must show outline-color:${PDS_FOCUS_COLOR} (var(--color-focus)). ` +
         'RED: no CSS rule → element has no outline (outlineColor is transparent).',
+    ).toBe(PDS_FOCUS_COLOR)
+  })
+
+  // ── input: ResolveModal response radio input ───────────────────────────────
+
+  test('input[type="radio"] (ResolveModal): outlineStyle is solid on keyboard focus (AC-1)', async ({
+    page,
+  }) => {
+    await page.click('[data-testid="dr-indicator"]')
+    await page.waitForSelector('[data-testid="dr-popover"]', { timeout: 5_000 })
+    await page.click('[data-testid="dr-item-dr-1626-001"]')
+    await page.waitForSelector('[data-testid="resolve-modal"]', { timeout: 5_000 })
+
+    const approvedRadio = page.locator(
+      '[data-testid="response-selector"] input[type="radio"][value="approved"]',
+    )
+    await expect(approvedRadio).toBeVisible({ timeout: 5_000 })
+    await tabUntilFocused(page, approvedRadio)
+    await expect(approvedRadio).toBeFocused()
+
+    const outlineStyle = await page.evaluate(
+      () => getComputedStyle(document.activeElement as Element).outlineStyle,
+    )
+
+    expect(
+      outlineStyle,
+      'input[type="radio"] must show outline-style:solid with PDS :focus-visible rule. ' +
+        "RED: no CSS rule → UA does not render the required PDS focus ring.",
+    ).toBe('solid')
+  })
+
+  test('input[type="radio"] (ResolveModal): outlineColor is PDS focus blue on keyboard focus (AC-1)', async ({
+    page,
+  }) => {
+    await page.click('[data-testid="dr-indicator"]')
+    await page.waitForSelector('[data-testid="dr-popover"]', { timeout: 5_000 })
+    await page.click('[data-testid="dr-item-dr-1626-001"]')
+    await page.waitForSelector('[data-testid="resolve-modal"]', { timeout: 5_000 })
+
+    const approvedRadio = page.locator(
+      '[data-testid="response-selector"] input[type="radio"][value="approved"]',
+    )
+    await expect(approvedRadio).toBeVisible({ timeout: 5_000 })
+    await tabUntilFocused(page, approvedRadio)
+    await expect(approvedRadio).toBeFocused()
+
+    const outlineColor = await page.evaluate(
+      () => getComputedStyle(document.activeElement as Element).outlineColor,
+    )
+
+    expect(
+      outlineColor,
+      `input[type="radio"] must show outline-color:${PDS_FOCUS_COLOR} (var(--color-focus)). ` +
+        'RED: no CSS rule → UA supplies non-PDS focus color.',
     ).toBe(PDS_FOCUS_COLOR)
   })
 
