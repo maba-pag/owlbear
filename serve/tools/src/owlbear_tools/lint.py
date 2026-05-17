@@ -46,12 +46,14 @@ from pathlib import Path
 
 LINT_HINT = (
     "\n"
-    "\033[1;34m\u2139 Lint commands:\033[0m\n"
+    "\033[1;34m\u2139 Dev commands:\033[0m\n"
     "  \033[32muv run lint\033[0m        all linters, auto-fix: ruff + markdownlint, staged files only\n"
     "  \033[32muv run lint-all\033[0m    same as \033[32mlint\033[0m, all files\n"
     "  \033[32muv run megalint\033[0m    same as \033[32mlint-all\033[0m + MegaLinter + TypeScript\n"
     "  \033[32muv run eslint-fix\033[0m  ESLint --fix for frontend files\n"
     "  \033[32muv run todo\033[0m        scan for TODO markers (warning only)\n"
+    "  \033[32muv run pytest\033[0m      Python tests (tests/ + serve/*/tests/)\n"
+    "  \033[32mnpm test\033[0m           Cockpit frontend tests (run from serve/cockpit/web)\n"
 )
 
 COCKPIT_WEB = "serve/cockpit/web"
