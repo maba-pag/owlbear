@@ -1,29 +1,27 @@
 /**
- * RED-phase tests for #1618 — P2-11: Complex integrations — modals → PModal
+ * Tests for #1618 — P2-11: Complex integrations — modals → PModal
  *
- * AC-1: ConfirmDialog, ResolveModal, and ArchivalModal render via PModal;
- *       hand-rolled focus trap, Tab cycling, position:fixed overlay, and z-index
- *       removed from all three.
+ * Revised AC (post architect refinement, 2026-05-17):
  *
- * AC-2: Focus behavior preserved per modal:
- *       (a) all three trap Tab within modal boundary on open (PModal native)
- *       (b) ResolveModal returns focus to DR trigger button on close (PModal native)
+ * AC-1: ConfirmDialog, ResolveModal, and ArchivalModal render via PModal host element;
+ *       legacy modal infrastructure removed: no div[role=dialog] wrapper, no
+ *       position:fixed overlay, no inline z-index.
+ *
+ * AC-2: PDS host-level workarounds permitted for documented PModal limitations:
+ *       (1) Tab-cycling shim for slotted light-DOM focus trapping,
+ *       (2) focus-state capture/restore for close-path variants,
+ *       (3) host attribute normalization (role, aria-modal) via MutationObserver.
+ *
+ * AC-3: Focus behavior preserved per modal:
+ *       (a) all three trap Tab within modal boundary on open
+ *       (b) ResolveModal returns focus to DR trigger button on close
  *       (c) ArchivalModal returns focus to originating task card on close via
  *           PModal onDismiss + explicit fallback target
- *       (d) ConfirmDialog returns focus to action button that opened it (PModal native)
+ *       (d) ConfirmDialog returns focus to the action button that opened it
  *
- * AC-3: Dismiss policy per modal:
+ * AC-4: Dismiss policy per modal:
  *       ConfirmDialog — role=alertdialog, disableBackdropClick=true, dismissButton=false
  *       ResolveModal and ArchivalModal — all dismiss methods allowed
- *
- * RED reasons:
- *   AC-1: All three modals render as <div role="dialog" style="position:fixed;z-index:1000">
- *         with hand-rolled getFocusableElements() / handleKeyDown Tab cycling.
- *         Tests asserting p-modal present / div[role="dialog"] absent / no position:fixed → FAIL.
- *   AC-3: No p-modal element exists; PModal prop assertions (disableBackdropClick,
- *         dismissButton, aria.role) → FAIL.
- *   AC-2: p-modal is absent; dismiss event cannot be dispatched to a real element;
- *         callback and focus-target assertions → FAIL.
  */
 import { beforeAll, describe, it, expect, vi, afterEach } from 'vitest'
 import { render, fireEvent } from '@testing-library/react'
@@ -85,6 +83,13 @@ function getPModal(container: HTMLElement): PModalElement | null {
 function hasFixedPositionStyle(container: HTMLElement): boolean {
   return Array.from(container.querySelectorAll('*')).some(
     (el) => (el as HTMLElement).style?.position === 'fixed',
+  )
+}
+
+/** True if any descendant has an inline z-index style set. */
+function hasInlineZIndexStyle(container: HTMLElement): boolean {
+  return Array.from(container.querySelectorAll('*')).some(
+    (el) => !!(el as HTMLElement).style?.zIndex,
   )
 }
 
@@ -172,9 +177,14 @@ describe('TestFromAC_PModalMigration', () => {
     })
 
     it('has no element with position:fixed as an inline style', () => {
-      // Current code: style={{ position: 'fixed', zIndex: 1000 }} → FAIL
       const { container } = renderConfirmDialog()
       expect(hasFixedPositionStyle(container)).toBe(false)
+    })
+
+    it('has no element with an inline z-index style', () => {
+      // AC-1: no inline z-index — legacy overlay used zIndex: 1000
+      const { container } = renderConfirmDialog()
+      expect(hasInlineZIndexStyle(container)).toBe(false)
     })
   })
 
@@ -198,6 +208,12 @@ describe('TestFromAC_PModalMigration', () => {
       const { container } = renderResolveModal()
       expect(hasFixedPositionStyle(container)).toBe(false)
     })
+
+    it('has no element with an inline z-index style', () => {
+      // AC-1: no inline z-index — legacy overlay used zIndex: 1000
+      const { container } = renderResolveModal()
+      expect(hasInlineZIndexStyle(container)).toBe(false)
+    })
   })
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -220,13 +236,19 @@ describe('TestFromAC_PModalMigration', () => {
       const { container } = renderArchivalModal()
       expect(hasFixedPositionStyle(container)).toBe(false)
     })
+
+    it('has no element with an inline z-index style', () => {
+      // AC-1: no inline z-index — legacy overlay used zIndex: 1000
+      const { container } = renderArchivalModal()
+      expect(hasInlineZIndexStyle(container)).toBe(false)
+    })
   })
 
   // ─────────────────────────────────────────────────────────────────────────
-  // AC-3: ConfirmDialog dismiss policy — alertdialog pattern
+  // AC-4: ConfirmDialog dismiss policy — alertdialog pattern
   // ─────────────────────────────────────────────────────────────────────────
 
-  describe('AC3: ConfirmDialog — alertdialog dismiss policy', () => {
+  describe('AC4: ConfirmDialog — alertdialog dismiss policy', () => {
     it('p-modal is open when ConfirmDialog is mounted', () => {
       // PModal must receive open={true}; current code has no p-modal → FAIL
       const { container } = renderConfirmDialog()
@@ -264,7 +286,7 @@ describe('TestFromAC_PModalMigration', () => {
   // AC-3: ResolveModal dismiss policy — all dismiss methods allowed
   // ─────────────────────────────────────────────────────────────────────────
 
-  describe('AC3: ResolveModal — full dismiss policy', () => {
+  describe('AC4: ResolveModal — full dismiss policy', () => {
     it('p-modal is open when ResolveModal is mounted', () => {
       const { container } = renderResolveModal()
       const pModal = getPModal(container)
@@ -293,7 +315,7 @@ describe('TestFromAC_PModalMigration', () => {
   // AC-3: ArchivalModal dismiss policy — all dismiss methods allowed
   // ─────────────────────────────────────────────────────────────────────────
 
-  describe('AC3: ArchivalModal — full dismiss policy', () => {
+  describe('AC4: ArchivalModal — full dismiss policy', () => {
     it('p-modal is open when ArchivalModal is mounted', () => {
       const { container } = renderArchivalModal()
       const pModal = getPModal(container)
@@ -322,7 +344,7 @@ describe('TestFromAC_PModalMigration', () => {
   // AC-2: ConfirmDialog dismiss event — onCancel wired to PModal dismiss
   // ─────────────────────────────────────────────────────────────────────────
 
-  describe('AC2: ConfirmDialog — dismiss event calls onCancel', () => {
+  describe('AC3/AC4: ConfirmDialog — dismiss event calls onCancel', () => {
     it('dispatching dismiss event on p-modal calls onCancel', () => {
       // AC-2(d): dismiss (Escape) must call onCancel.
       // Current code: no p-modal → getPModal returns null → expect .not.toBeNull() fails → FAIL
@@ -356,7 +378,7 @@ describe('TestFromAC_PModalMigration', () => {
   // AC-2: ResolveModal dismiss event — onClose wired to PModal dismiss
   // ─────────────────────────────────────────────────────────────────────────
 
-  describe('AC2: ResolveModal — dismiss event calls onClose', () => {
+  describe('AC3/AC4: ResolveModal — dismiss event calls onClose', () => {
     it('dispatching dismiss event on p-modal calls onClose', () => {
       // AC-2(b): dismiss (Escape, backdrop, X) returns focus to DR trigger and closes modal.
       // Current code: no p-modal → FAIL
@@ -381,7 +403,7 @@ describe('TestFromAC_PModalMigration', () => {
   // AC-2: ArchivalModal dismiss event — onClose + fallback focus target
   // ─────────────────────────────────────────────────────────────────────────
 
-  describe('AC2: ArchivalModal — dismiss event calls onClose', () => {
+  describe('AC3/AC4: ArchivalModal — dismiss event calls onClose', () => {
     it('dispatching dismiss event on p-modal calls onClose', () => {
       // AC-2(c): dismiss closes modal and returns focus.
       // Current code: no p-modal → FAIL
