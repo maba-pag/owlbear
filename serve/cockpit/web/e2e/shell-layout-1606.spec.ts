@@ -128,6 +128,26 @@ test.describe('TestFromAC_StickyHeader', () => {
     ).toContain('z-10')
   })
 
+  // GREEN regression guard (per AC1 cycle-3 — retain, do not prune): inject tall content into
+  // [data-region="workspace"], scroll workspace past viewport height, assert header remains visible.
+  // Expected: PASS on write (position:sticky + grid layout keeps header visible after workspace scroll).
+  test('header remains visible after workspace is scrolled past viewport height (behavioral regression guard)', async ({
+    page,
+  }) => {
+    // Inject content taller than viewport so [data-region="workspace"] can scroll
+    await page.locator('[data-region="workspace"]').evaluate((el) => {
+      const div = document.createElement('div')
+      div.style.height = '2000px'
+      el.appendChild(div)
+    })
+    // Scroll workspace past viewport height
+    await page.locator('[data-region="workspace"]').evaluate((el) => {
+      el.scrollTop = 1500
+    })
+    // Assert header is still visible after workspace scroll
+    await expect(page.locator('[data-region="status-bar"]')).toBeVisible()
+  })
+
 })
 
 // ─── AC2: Responsive sidecar column width ─────────────────────────────────────
@@ -361,5 +381,64 @@ test.describe('TestFromAC_TailwindCSSStructure', () => {
       css,
       'Shell.css must not contain "padding:" rules (move padding to Tailwind)',
     ).not.toMatch(/^\s*padding(-\w+)?\s*:/m)
+  })
+
+  // RED: Shell.css contains grid-template-columns in .shell base rule and .shell[data-sidecar-collapsed].
+  // Per AC3 cycle-3 refinement: grid-template-columns is newly banned.
+  // Tailwind arbitrary value [grid-template-columns:var(--shell-columns)] already handles binding.
+  test('Shell.css does not contain grid-template-columns property rules', async () => {
+    const css = fs.readFileSync(SHELL_CSS_PATH, 'utf-8')
+    expect(
+      css,
+      'Shell.css must not contain "grid-template-columns:" rules (newly banned per AC3 cycle-3; use Tailwind arbitrary value)',
+    ).not.toMatch(/^\s*grid-template-columns\s*:/m)
+  })
+
+  // RED: Shell.css contains grid-template-rows in .shell base rule.
+  // Per AC3 cycle-3 refinement: grid-template-rows is newly banned.
+  // Tailwind arbitrary value [grid-template-rows:var(--shell-rows)] already handles binding.
+  test('Shell.css does not contain grid-template-rows property rules', async () => {
+    const css = fs.readFileSync(SHELL_CSS_PATH, 'utf-8')
+    expect(
+      css,
+      'Shell.css must not contain "grid-template-rows:" rules (newly banned per AC3 cycle-3; use Tailwind arbitrary value)',
+    ).not.toMatch(/^\s*grid-template-rows\s*:/m)
+  })
+
+  // GREEN regression guard: width is banned; Shell.css currently has no width rules.
+  test('Shell.css does not contain width property rules (regression guard)', async () => {
+    const css = fs.readFileSync(SHELL_CSS_PATH, 'utf-8')
+    expect(
+      css,
+      'Shell.css must not contain "width:" rules (width is banned per AC3)',
+    ).not.toMatch(/^\s*width\s*:/m)
+  })
+
+  // GREEN regression guard: gap is banned; Shell.css currently has no gap rules.
+  test('Shell.css does not contain gap property rules (regression guard)', async () => {
+    const css = fs.readFileSync(SHELL_CSS_PATH, 'utf-8')
+    expect(
+      css,
+      'Shell.css must not contain "gap:" rules (gap is banned per AC3)',
+    ).not.toMatch(/^\s*gap\s*:/m)
+  })
+
+  // GREEN regression guard: .shell root and [data-region] children must have no inline style attribute.
+  // Per AC3: "DOM no-inline-style on .shell and [data-region] children".
+  test('shell root and data-region children have no inline style attributes (regression guard)', async ({
+    page,
+  }) => {
+    const shellStyle = await page.locator('.shell').evaluate((el) => el.getAttribute('style'))
+    expect(shellStyle, 'shell root (.shell) must not have inline style attribute').toBeNull()
+
+    const regionStyles = await page.locator('[data-region]').evaluateAll((els) =>
+      els.map((el) => ({ region: el.getAttribute('data-region'), style: el.getAttribute('style') })),
+    )
+    for (const { region, style } of regionStyles) {
+      expect(
+        style,
+        `[data-region="${region}"] must not have inline style attribute`,
+      ).toBeNull()
+    }
   })
 })
