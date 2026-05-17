@@ -91,7 +91,7 @@ Evaluate the architect's upstream work. This is the only pipeline stage where ar
    - **2** — Vague enough that implementation may not match intent
    - **1** — Useless or misleading
 
-Score ≤ 2: write lesson to `/memories/repo/inbox/{task-id}-auditor.md` and delegate an architect-calibration follow-up via planner using `Plan and create:` (single-task shortcut at `backlog`).
+Score ≤ 2: call `save_memory` with source agent `auditor` for the architect-quality lesson and delegate an architect-calibration follow-up via planner using `Plan and create:` (single-task shortcut at `backlog`).
 
 ## Step 3 — Score and decide
 

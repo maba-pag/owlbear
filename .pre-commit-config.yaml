@@ -108,6 +108,14 @@ repos:
         entry: uv run python .owlbear/scripts/validate_agents.py
         files: ^share/agents/.*\.agent\.md$
         pass_filenames: true
+      # TODO marker scan — warning only (always exit 0, output always shown)
+      - id: todo-check
+        name: TODO marker scan
+        language: system
+        entry: uv run todo
+        pass_filenames: false
+        always_run: true
+        verbose: true
 
   # ── MegaLinter (manual-only, full CI parity) ────────────
   # Usage: uv run pre-commit run megalinter --all-files --hook-stage manual

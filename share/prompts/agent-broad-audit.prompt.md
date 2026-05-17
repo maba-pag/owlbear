@@ -52,11 +52,11 @@ Then call `askQuestions` for that one item only. After the user answers, apply o
 | Surface | Weight | What to scan |
 |---|---|---|
 | Definitions | >80% | `.github/copilot-instructions.md`, `share/instructions/*.instructions.md`, `share/agents/*.agent.md`, `share/skills/*/SKILL.md`, `share/prompts/*.prompt.md` |
-| Memory | <20% | OwlBear `ob-memory` MCP entries relevant to the audited agents/skills/prompts; file-based `/memories/` tiers only as legacy/fallback governance evidence |
+| Memory | <20% | OwlBear `ob-memory` MCP entries relevant to the audited agents/skills/prompts |
 
 Use `file_search` to discover current files for the definitions surface. Do not assume a fixed count.
 
-**MCP degradation path:** If `ob-memory` tools are unavailable, audit file-based memory tiers only as fallback evidence and note skipped MCP checks.
+**MCP degradation path:** If `ob-memory` tools are unavailable, note skipped MCP checks. Do not use the retired `/memories/` store as fallback evidence.
 
 ### Standards Loading Order
 

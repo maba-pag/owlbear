@@ -37,16 +37,16 @@ For file placement rules, commit format, priorities, and tags, see `r-project-st
 
 ## 3. Memory Governance
 
-| Tier | Store | What goes here |
-|------|-------|----------------|
-| User | `/memories/` | Tool patterns, CLI recipes, process pitfalls |
-| Session | `/memories/session/` | Task-specific context (auto-cleared) |
-| Repo inbox | `/memories/repo/inbox/` | Agent lessons-learned (legacy, dual-write) |
-| Canonical | mcp-memory `ob-memory` | Agent institutional knowledge (queryable) |
+| Store | What goes here |
+|-------|----------------|
+| mcp-memory `ob-memory` | Agent institutional knowledge: durable, scoped lessons for future agents |
+| Task body / `.owlbear/kanban/decisions/` | Task-specific context, blockers, decisions, and action requests |
+| `.owlbear/research/` | Research findings and source-grounded analysis |
+| Project knowledge MCP | Domain knowledge and external-source knowledge |
 
-Do NOT store in user memory: architecture decisions (`.owlbear/kanban/decisions/`), research findings (`.owlbear/research/`), domain knowledge (project KB via MCP), code snippets, or task-specific context.
+The VS Code built-in `/memories/` store is retired for OwlBear agents. Do not write user, session, repo inbox, or fallback notes there; if the built-in memory tool appears, treat it as unavailable for agent learning. Use `ob-memory` for institutional memory and normal project artifacts for task context.
 
-Clear boundary: `/memories/` = user-centric tool patterns and process pitfalls; `ob-memory` = agent institutional knowledge. See `r-pipeline-protocol` → Knowledge Pre-flight and Post-task Reflection.
+Do NOT store as memory: architecture decisions, research findings, code snippets, or task-specific working notes. See `r-pipeline-protocol` → Knowledge Pre-flight and Post-task Reflection.
 
 ## 4. Operational Fundamentals
 
