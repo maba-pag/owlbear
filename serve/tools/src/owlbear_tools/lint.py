@@ -51,7 +51,7 @@ LINT_HINT = (
     "  \033[32muv run lint-all\033[0m    same as \033[32mlint\033[0m, all files\n"
     "  \033[32muv run megalint\033[0m    same as \033[32mlint-all\033[0m + MegaLinter + TypeScript\n"
     "  \033[32muv run eslint-fix\033[0m  ESLint --fix for frontend files\n"
-    "  \033[32muv run todo\033[0m       scan for TODO markers (warning only)\n"
+    "  \033[32muv run todo\033[0m        scan for TODO markers (warning only)\n"
 )
 
 COCKPIT_WEB = "serve/cockpit/web"
