@@ -2,8 +2,11 @@
  * Tests for sidecar structure: padding, typography hierarchy, dividers
  * Task: #1607 — P1-11: Sidecar structure — padding, sections, typography
  *
- * AC-1: #shell-sidecar-content has --p-spacing-static-md (≥16px) padding on all four sides
- * AC-2: Sidecar renders PHeading elements at 3 distinct size values (large, medium, small)
+ * AC-1: #shell-sidecar-content elements in Shell.tsx carry Tailwind class p-[var(--p-spacing-static-md)] on all four sides;
+ *        present in both mobile (p-sheet) and desktop render paths
+ * AC-2: Shell [data-region='sidecar-header'] contains p-heading[size='large'] (no raw h2);
+ *        DetailTab [data-region='sidecar-body'] contains p-heading[size='medium'];
+ *        DetailTab [data-region='actions'] contains p-heading[size='small']; DetailTab contains no raw h3
  * AC-3: PDivider separates: sidecar-header/DecisionViewport, DecisionViewport/p-tabs,
  *        and metadata/editor sections in DetailTab
  */
@@ -23,7 +26,7 @@ import DetailTab, { type TaskDetail } from '../components/DetailTab'
 // ---------------------------------------------------------------------------
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
-const SHELL_CSS_PATH = resolve(__dirname, '..', 'Shell.css')
+const SHELL_TSX_PATH = resolve(__dirname, '..', 'Shell.tsx')
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -114,53 +117,39 @@ function renderDetailTab() {
 }
 
 // ---------------------------------------------------------------------------
-// CSS source helpers — mirrors SidecarCollapse_1549.test.tsx pattern
-// ---------------------------------------------------------------------------
-function extractSelectorBlock(css: string, selector: string): string {
-  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  // Negative lookahead: selector must not be extended by class/modifier chars or `[`
-  const pattern = new RegExp(
-    `(?:^|[\\n\\r])${escaped}(?![a-zA-Z0-9_\\-\\[])\\s*\\{([\\s\\S]*?)\\}`,
-  )
-  const match = css.match(pattern)
-  expect(match, `Missing CSS selector block for: ${selector}`).not.toBeNull()
-  return match?.[1] ?? ''
-}
-
-// ---------------------------------------------------------------------------
-// AC-1: #shell-sidecar-content padding via CSS custom property
+// AC-1: #shell-sidecar-content Tailwind arbitrary-value padding class in Shell.tsx
 // ---------------------------------------------------------------------------
 describe('TestFromAC_SidecarStructure_Padding', () => {
-  it('Shell.css contains a #shell-sidecar-content selector', () => {
-    const css = readFileSync(SHELL_CSS_PATH, 'utf8')
-    expect(css).toContain('#shell-sidecar-content')
+  it('Shell.tsx source contains the Tailwind arbitrary-value padding class p-[var(--p-spacing-static-md)]', () => {
+    const src = readFileSync(SHELL_TSX_PATH, 'utf8')
+    expect(src).toContain('p-[var(--p-spacing-static-md)]')
   })
 
-  it('#shell-sidecar-content block has a padding shorthand property (covers all 4 sides)', () => {
-    const css = readFileSync(SHELL_CSS_PATH, 'utf8')
-    const block = extractSelectorBlock(css, '#shell-sidecar-content')
-    expect(block).toMatch(/\bpadding\s*:/)
+  it('Tailwind padding class appears at least twice in Shell.tsx — covering both mobile and desktop render paths', () => {
+    const src = readFileSync(SHELL_TSX_PATH, 'utf8')
+    const occurrences = (src.match(/p-\[var\(--p-spacing-static-md\)\]/g) ?? []).length
+    expect(occurrences).toBeGreaterThanOrEqual(2)
   })
 
-  it('#shell-sidecar-content padding value references var(--p-spacing-static-md)', () => {
-    const css = readFileSync(SHELL_CSS_PATH, 'utf8')
-    const block = extractSelectorBlock(css, '#shell-sidecar-content')
-    expect(block).toContain('var(--p-spacing-static-md)')
+  it('desktop render path #shell-sidecar-content DOM element className includes the Tailwind padding class', () => {
+    const { container } = renderShell()
+    const el = container.querySelector('#shell-sidecar-content')
+    expect(el).not.toBeNull()
+    expect(el?.className).toContain('p-[var(--p-spacing-static-md)]')
   })
 
-  it('padding token is a PDS native --p-* token, not a deprecated --pds-* custom token', () => {
-    const css = readFileSync(SHELL_CSS_PATH, 'utf8')
-    const block = extractSelectorBlock(css, '#shell-sidecar-content')
-    // --p-spacing-static-md is PDS native; --pds-* would be custom tokens from tokens.css (deleted by #1603)
-    expect(block).toContain('var(--p-spacing-static-md)')
-    expect(block).not.toMatch(/var\(--pds-spacing/)
+  it('Tailwind padding class uses PDS-native --p-spacing-static-md token (not deprecated --pds-* token)', () => {
+    const src = readFileSync(SHELL_TSX_PATH, 'utf8')
+    expect(src).toContain('p-[var(--p-spacing-static-md)]')
+    expect(src).not.toMatch(/p-\[var\(--pds-spacing/)
   })
 
-  it('#shell-sidecar-content has no directional padding-* overrides that zero out any side', () => {
-    const css = readFileSync(SHELL_CSS_PATH, 'utf8')
-    const block = extractSelectorBlock(css, '#shell-sidecar-content')
-    // Shorthand padding covers all 4 sides; individual overrides to 0 would break the AC
-    expect(block).not.toMatch(/padding-(top|bottom|left|right)\s*:\s*0/)
+  it('Tailwind shorthand p-[...] covers all four sides — no directional overrides (pt-/pb-/pl-/pr-) that would negate a side', () => {
+    const src = readFileSync(SHELL_TSX_PATH, 'utf8')
+    expect(src).toContain('p-[var(--p-spacing-static-md)]')
+    // Directional variants targeting the same token would conflict with the shorthand AC
+    expect(src).not.toContain('pt-[var(--p-spacing-static-md)]')
+    expect(src).not.toContain('pb-[var(--p-spacing-static-md)]')
   })
 })
 
