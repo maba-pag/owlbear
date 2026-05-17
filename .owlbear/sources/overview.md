@@ -4847,3 +4847,10 @@ External repos and resources studied during OwlBear development.
 | Tailwind CSS v4 Vite Install | <https://tailwindcss.com/docs> | @tailwindcss/vite plugin setup, @import "tailwindcss" | `.owlbear/research/1592-tailwind-v4-stylelint-tests.md` | 2026-05-16 |
 | stylelint-config-tailwindcss | <https://github.com/zhilidali/stylelint-config-tailwindcss> | Stylelint config extending at-rule-no-unknown for Tailwind | `.owlbear/research/1592-tailwind-v4-stylelint-tests.md` | 2026-05-16 |
 | @tailwindcss/vite Vite 8 discussion | <https://github.com/tailwindlabs/tailwindcss/discussions/19624> | Vite 8 support timeline for @tailwindcss/vite | `.owlbear/research/1592-tailwind-v4-stylelint-tests.md` | 2026-05-16 |
+
+## Component Complexity Inventory (Task #1608)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| PDS v4 React wrapper exports | (local: node_modules/@porsche-design-system/components-react/) | Available React wrappers: PTabs, PTabsItem, PSheet, PAccordion, PIcon, PRadioGroup, PRadioGroupOption, PLinkPure; absent: PList/PListItem | `.owlbear/research/1608-component-complexity-inventory.md` | 2026-05-17 |
+| PDS v4 component overview | <https://designsystem.porsche.com/v4/components/overview/> | Component availability and API surface for migration classification | `.owlbear/research/1608-component-complexity-inventory.md` | 2026-05-17 |
