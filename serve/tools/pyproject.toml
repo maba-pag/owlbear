@@ -15,3 +15,7 @@ packages = ["src/owlbear_tools"]
 [project.scripts]
 doc-index = "owlbear_tools.doc_index:main"
 test-root = "owlbear_tools.test_root:main"
+lint = "owlbear_tools.lint:lint"
+lint-all = "owlbear_tools.lint:lint_all"
+megalint = "owlbear_tools.lint:megalint"
+eslint-fix = "owlbear_tools.lint:eslint_fix"
