@@ -1,10 +1,10 @@
 ---
 id: 1617
 title: 'P2-09: Filter panel PDS controls'
-status: todo
+status: archived
 priority: important
 created: 2026-05-16T03:37:02.279043+00:00
-updated: 2026-05-17T09:16:08.320333+02:00
+updated: 2026-05-17T15:26:05.824165+02:00
 tags:
   - frontend
   - pds
@@ -23,7 +23,7 @@ proof_bundle: behavioral
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 Brief: see parent #1590.
@@ -282,3 +282,97 @@ Re-review after reviewer FAIL verdict. Single blocking finding: AC3 referenced d
 
 [[2026-05-17T09:16:08+02:00]]
 Re-review complete. Reconciled AC3 token from deprecated --pds-spacing-sm to --p-spacing-static-sm (per #1603 migration baseline). Implementation and task-scoped tests already aligned to correct token. Challenger reconsider (0.59) — accepted contract-completion concern (annotated body provenance), rebutted proof-sufficiency and ac-quality as non-blocking. Advanced to todo.
+
+[[2026-05-17T14:00:04+02:00]]
+## Test-Writer Notes (retry 2 — direct-to-review)
+
+**Retry cycle**: Reviewer Required Follow-up was architect-scope only (AC3 token reconciliation: `--pds-spacing-sm` → `--p-spacing-static-sm`). Architect resolved both items in re-review — AC3 updated in frontmatter, confirmed task-scoped tests already assert `--p-spacing-static-sm` (correct reconciled token).
+
+**Verification — GREEN state (Step 1b.1):**
+
+| File | Passed | Failed |
+|------|--------|--------|
+| `serve/cockpit/web/src/__tests__/FilterPanel_PDS_1617.test.tsx` | 13 | 0 |
+
+**Why GREEN is correct here:** Builder commit `281883df` already implemented AC1 (PCheckbox + onChange), AC2 (PSelectOption children), and AC3 (flex layout with `--p-spacing-static-sm`). The implementation matches the reconciled AC exactly. Tests were written RED in the prior cycle and are now GREEN because the builder's implementation is complete.
+
+**Builder skip:** No builder work remains. Test-only retry — advancing directly to review.
+
+**Lint:** ESLint clean (exit 0)
+
+[[2026-05-17T14:42:12+02:00]]
+## Review Evidence
+- Verdict: PASS
+- PASS confirmation (one line): PASS #1617 -> docs | AC mapped to code and evidence sufficient.
+- Builder evidence review: the builder packet was close but not fully auditable because the task history preserved a RED-count inconsistency and only a targeted durable rerun. Independent verification was therefore cost-justified.
+- Independent verification: quality-runner reran `serve/cockpit/web/src/__tests__/FilterPanel_PDS_1617.test.tsx` and `serve/cockpit/web/src/__tests__/FilterPanel.test.tsx` -> 53 passed, 0 failed, 0 skipped; eslint/stylelint clean; coverage for `src/components/FilterPanel.tsx` = 78.1% statements, 56.36% branches, 89.47% functions, 86.17% lines; Errors: none.
+- AC evidence map:
+
+| AC Line | Code Evidence | Test Evidence | Status |
+|---|---|---|---|
+| AC1 | `serve/cockpit/web/src/components/FilterPanel.tsx:226-232` renders `PCheckbox`, sets `checked={filter.blocked}`, and reads `event.detail.checked` | `serve/cockpit/web/src/__tests__/FilterPanel_PDS_1617.test.tsx:73,84,113`; `serve/cockpit/web/src/__tests__/FilterPanel.test.tsx:310,486` | PASS |
+| AC2 | `serve/cockpit/web/src/components/FilterPanel.tsx:199-200` renders `PSelectOption` children under `PSelect` | `serve/cockpit/web/src/__tests__/FilterPanel_PDS_1617.test.tsx:151,175,187`; `serve/cockpit/web/src/__tests__/FilterPanel.test.tsx:163,171` | PASS |
+| AC3 | `serve/cockpit/web/src/components/FilterPanel.css:4-7` declares `display:flex`, `flex-wrap:wrap`, `gap:var(--p-spacing-static-sm)`, and `align-items:flex-end`; live AC reconciled at `.owlbear/kanban/tasks/1617-p2-09-filter-panel-pds-controls.md:21` with authority note at `.owlbear/kanban/tasks/1617-p2-09-filter-panel-pds-controls.md:249` | `serve/cockpit/web/src/__tests__/FilterPanel_PDS_1617.test.tsx:207,216,226,236` | PASS |
+- Challenger: proceed (confidence 0.81). No blocking contradiction between the live AC, implementation, and proof.
+
+## Observations
+- Supporting artifacts still carry stale pre-reconciliation spacing-token text at `.owlbear/kanban/tasks/1617-p2-09-filter-panel-pds-controls.md:43` and `.owlbear/research/filter-panel-pds-controls.md:75`, but the task body explicitly marks frontmatter AC as authoritative at `.owlbear/kanban/tasks/1617-p2-09-filter-panel-pds-controls.md:249`. Non-blocking because current code/tests match the live contract.
+- Adjacent risk only: the tags update listener is attached at `serve/cockpit/web/src/components/FilterPanel.tsx:85` through a ref assigned only when `availableTags.length > 0` at `serve/cockpit/web/src/components/FilterPanel.tsx:207` and `serve/cockpit/web/src/components/FilterPanel.tsx:215`, so an `availableTags=[] -> non-empty` transition is not covered by current proof. This is outside the three AC lines for #1617.
+- Reflection:
+  - Independent rerun closed an evidence-quality gap without uncovering a code defect.
+  - The task-scoped tests use good falsifiability guards for `no aria-checked` and `no native option`, which materially strengthens the PASS.
+  - The live frontmatter AC, not the historical research note, is the operative contract for this task.
+
+[[2026-05-17T14:55:58+02:00]]
+## Docs Gate
+
+### Checklist
+
+**Item 1 — README Verification**
+Convention mapping: `serve/cockpit/web/src/components/FilterPanel.tsx` + `FilterPanel.css` → `serve/cockpit/README.md`.
+Finding: #1617 entry absent from the "Accessibility and responsive state" bullet list between #1614 and #1628.
+Fix: Added #1617 entry describing PCheckbox controlled wrapper (AC1), PSelectOption children (AC2), and `.filter-panel` flex layout with `--p-spacing-static-sm` (AC3). Verified by `FilterPanel_PDS_1617.test.tsx` (13 tests) and durable `FilterPanel.test.tsx` (40 tests).
+Layer 1 (grep): `#1617` present at lines 165 and 171; removed symbols not present; format consistent with adjacent entries.
+Layer 2 (editorial): Entry factually matches reviewer AC-evidence table; token name `--p-spacing-static-sm` matches reconciled AC3; test counts (13+40=53) match reviewer's independent run.
+Commit: `2943784`
+
+**Item 2 — External Attribution**
+`.owlbear/sources/overview.md` already contains a #1617 section (line 57) documenting PDS docs and GitHub sources studied during research. No update needed.
+
+**Item 3 — Research Doc**
+`.owlbear/research/filter-panel-pds-controls.md` exists and is linked from the task body ("Research doc: .owlbear/research/filter-panel-pds-controls.md"). ✓
+
+**Item 4 — Deletion Detection**
+No files deleted in builder commit `281883df`. No orphaned references. N/A.
+
+### Files Updated
+- `serve/cockpit/README.md` — added #1617 bullet in "Accessibility and responsive state" section
+
+### Scratch Cleanup
+Removed 20 scratch files: `1617-*.log` / `1617-*.txt` — all cleaned.
+
+[[2026-05-17T15:26:05+02:00]]
+## Audit
+### Regression Detection
+- quality-runner mode full: 2074 passed, 10 failed, 11 skipped; eslint/stylelint clean
+- All 10 failures confirmed pre-existing background debt (FilterAccessibilityPanel AC9 ×3 reproduce identically on pre-builder code at 281883df~1; DecisionViewport ×2, PdsMigration ×3, RepairPanel ×1, SidecarUX ×1 are in unrelated domains, last modified in cd8d74c3 whitespace cleanup)
+- regression verdict: PASS
+
+### Intent Verification
+- scope alignment: PASS (changed files: FilterPanel.tsx + FilterPanel.css in serve/cockpit/web/src/components/ — cockpit frontend domain matches task scope)
+- purpose match: PASS (migrate filter panel to PDS wrappers: PCheckbox with checked/onChange, PSelectOption children, flex layout with design tokens)
+- extraneous scope: none
+- boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 4/5
+AC lines are specific and testable — name exact components, props, CSS properties, and token values. Required one reconciliation cycle (deprecated --pds-spacing-sm → --p-spacing-static-sm per #1603 migration baseline), otherwise clean. Minor gap: research findings referenced pre-migration tokens, but architect corrected in re-review and annotated provenance clearly.
+
+### Commit Integrity
+- upstream commit presence: PASS (db5df013 researcher, d2086d42 test-writer, 281883df builder, 29437844 doc-writer — all properly attributed with #1617 and agent role)
+- kanban commit packaging: pending (this step)
+
+### Deduction Breakdown
+No deductions applied.
+
+### Confidence: 1.00
+### Action: archive
