@@ -1,9 +1,13 @@
 import '@porsche-design-system/components-react/jsdom-polyfill'
 import '@testing-library/jest-dom/vitest'
-import { skipPorscheDesignSystemCDNRequestsDuringTests } from '@porsche-design-system/components-react'
+import {
+  skipCheckForPorscheDesignSystemProviderDuringTests,
+  skipPorscheDesignSystemCDNRequestsDuringTests,
+} from '@porsche-design-system/components-react'
 import { vi } from 'vitest'
 
 skipPorscheDesignSystemCDNRequestsDuringTests()
+skipCheckForPorscheDesignSystemProviderDuringTests()
 
 if (typeof globalThis.requestAnimationFrame === 'undefined') {
   globalThis.requestAnimationFrame = (callback: FrameRequestCallback): number =>

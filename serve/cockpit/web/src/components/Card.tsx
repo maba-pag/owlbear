@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { PorscheDesignSystemProvider, PTag } from '@porsche-design-system/components-react'
+import { PTag } from '@porsche-design-system/components-react'
 import type { Task } from '../hooks/useBoard'
 import { computeSignal } from '../utils/computeSignal'
 import { priorityToVariant, statusToVariant } from '../utils/cardVariants'
@@ -83,8 +83,7 @@ export function Card({
   }
 
   return (
-    <PorscheDesignSystemProvider>
-      <div
+    <div
         data-testid="task-card"
         data-id={task.id}
         data-priority={task.priority}
@@ -108,8 +107,8 @@ export function Card({
           onDragEnd()
         }}
         onContextMenu={(e) => onContextMenu(e, task)}
-      >
-        <div className="card-main">
+    >
+      <div className="card-main">
           <div className="card-header-row">
             <span data-testid="card-id" className="card-chip card-id">
               #{task.id}
@@ -215,8 +214,7 @@ export function Card({
               ) : null}
             </div>
           ) : null}
-        </div>
       </div>
-    </PorscheDesignSystemProvider>
+    </div>
   )
 }
