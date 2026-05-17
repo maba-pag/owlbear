@@ -98,20 +98,18 @@ Source files containing `--pds-*` (non-test): `tokens.css`, `Shell.css`, `Card.c
 
 | Test File | `--pds-*` Refs | Action | Rationale |
 |---|---|---|---|
-| `TokenArchitecture_1535.test.ts` | 36 | **Retire** | Validates tokens.css structure (deleted) |
-| `TokenArchitecture_1543.test.ts` | 37 | **Retire** | Same — later iteration |
+| `TokenArchitecture_1535.test.ts` | 36 | **Retired** | Validated tokens.css structure (file deleted); test removed by downstream work |
+| `TokenArchitecture_1543.test.ts` | 37 | **Retired** | Same — later iteration; test removed |
 | `BoardVisualDesign.test.tsx` | 30+ | **Update** | Token name assertions `--pds-*` → `--p-*` |
 | `Card.css.test.ts` | 12 | **Update** | Signal color assertions |
-| `CardCSS_1546.test.ts` | 14 | **Update** | Border token assertions |
-| `ColumnCSS_1547.test.ts` | 12 | **Update** | Layout token assertions |
-| `ShellSecondaryCSS_1542.test.tsx` | 10 | **Update** | Shell token references |
-| `ShellSecondaryCSS_1550.test.tsx` | 8 | **Update** | FilterPanel + KanbanBoard tokens |
-| `ResponsiveLayout_1391.test.tsx` | 2 | **Update** | `--pds-grid-gap/margin` → `--p-spacing-*` |
-| `PDSHexScan_1395.test.ts` | 10 | **Update** | Scanner exclusion regex `--pds-` → `--p-` |
+| `Card.css.supplemental.test.ts` | — | **Update** | Absorbed content from former CardCSS_1546 |
+| `Column.css.test.ts` | 12 | **Update** | Layout token assertions (formerly ColumnCSS_1547) |
+| `ShellSecondaryCSS.base.test.tsx` | 5 | **Update** | Consolidated Shell token + migration assertions (formerly _1542 + _1550) |
+| `PDSHexScan.test.ts` | 16 | **Update** | Scanner exclusion regex `--pds-` references (formerly PDSHexScan_1395) |
 | `PdsMigration.test.tsx` | 0 | **Keep** | Verifies element-to-PDS component migration; no CSS token references |
-| `CardSignalModel_1544.test.tsx` | 1 | **Keep** | Comment-only reference |
-| `ThemeLightTokenScan_1552.test.ts` | 3 | **Keep** | Checks `--pds-theme-light-*` (different prefix) |
-| `PdsColorSchemeBridge_1555.test.ts` | 0 | **Update** | Validates tokens.css import (file deleted) |
+| `CardSignalModel.test.tsx` | 1 | **Keep** | Comment-only reference (formerly CardSignalModel_1544) |
+| `ThemeLightTokenScan.test.ts` | 3 | **Keep** | Checks `--pds-theme-light-*` legacy pattern guard (formerly ThemeLightTokenScan_1552) |
+| `PdsColorSchemeBridge.test.ts` | 0 | **Keep** | Validates custom-tokens.css exists (successor to deleted tokens.css); no `--pds-*` refs (formerly PdsColorSchemeBridge_1555) |
 
 ## 6. Recommendation (confidence: 0.90)
 
