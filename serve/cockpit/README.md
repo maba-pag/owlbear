@@ -151,6 +151,18 @@ Accessibility and responsive state after #1396:
   1280×720, all 7 columns identical `offsetTop`) and `e2e/responsive-layout-1391.spec.ts`
   (board-container assertions at 1024px and 1440px updated to expect horizontal overflow;
   shell document-level and vertical-overflow guards remain passing).
+- #1603 performs the atomic PDS token migration: `serve/cockpit/web/src/tokens.css` is
+  deleted and replaced with `serve/cockpit/web/src/custom-tokens.css`, which declares
+  exactly one custom property (`--custom-signal-claimed`) — the sole non-PDS-equivalent
+  signal color. All `--pds-*` token references in authored CSS and production TypeScript
+  are migrated to PDS v4 `--p-*` equivalents. Manual dark-mode override blocks
+  (`[data-theme="dark"]` and `@media (prefers-color-scheme: dark)`) are removed from
+  authored CSS; dark mode is handled natively by PDS via `.scheme-dark`/`.scheme-light`
+  class switching. `main.tsx` import updated from `tokens.css` to `custom-tokens.css`.
+  Verified by `serve/cockpit/web/src/__tests__/TokenMigration_1603.test.ts` (17 tests
+  covering AC-1 through AC-4) and durable suites `PdsColorSchemeBridge.test.ts`,
+  `BoardVisualDesign.test.tsx`, `CardCSS_1546.test.ts`, `ShellSecondaryCSS_1550.test.tsx`,
+  and `ShellSecondaryCSS.base.test.tsx` (90 tests total, all passing).
 - #1614 performs PDS simple component swaps across five cockpit components.
   `ActivityTab.tsx` session-row button, `DRStatusIndicator.tsx` resolve-button, and
   `ErrorBoundary.tsx` retry button are replaced with `PButton` controls with preserved
