@@ -170,6 +170,87 @@ async function ensurePDSTokens(page: Page, scheme: 'dark' | 'light' = 'light'): 
   await page.addStyleTag({ content: css })
 }
 
+// ─── WCAG 2.1 contrast ratio measurement helper ───────────────────────────────
+
+/**
+ * Measure WCAG 2.1 relative-luminance contrast ratio between a border and the
+ * shell canvas background. The border color (which may be semi-transparent via
+ * var(--p-color-contrast-low)) is first composited over the element's own
+ * background, then compared against the shell canvas — the surface that is
+ * directly adjacent to nav-rail, sidecar, column, and filter-panel borders.
+ *
+ * @param page       - Playwright Page object (must have PDS tokens already injected)
+ * @param elementSel - CSS selector for the bordered element
+ * @param borderProp - camelCase computed style property for the border side to check
+ *                     (e.g. 'borderRightColor', 'borderLeftColor', 'borderTopColor')
+ */
+async function measureBorderContrast(
+  page: Page,
+  elementSel: string,
+  borderProp: string,
+): Promise<{ found: boolean; contrastRatio: number; borderColor: string; canvasBg: string; hasSchemeDark: boolean }> {
+  return page.evaluate(
+    ({ sel, prop }: { sel: string; prop: string }) => {
+      // Convert camelCase to kebab-case for getPropertyValue
+      const toKebab = (s: string) => s.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)
+
+      const parseRgba = (s: string) => {
+        const m = s.match(
+          /rgba?\((\d+(?:\.\d+)?),\s*(\d+(?:\.\d+)?),\s*(\d+(?:\.\d+)?)(?:,\s*(\d+(?:\.\d+)?))?\)/,
+        )
+        return m ? { r: +m[1]!, g: +m[2]!, b: +m[3]!, a: m[4] !== undefined ? +m[4]! : 1 } : null
+      }
+      const lin = (c: number) => {
+        const s = c / 255
+        return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4
+      }
+      const lum = (r: number, g: number, b: number) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
+
+      const el = document.querySelector<HTMLElement>(sel)
+      const shellEl = document.querySelector<HTMLElement>('.shell')
+      if (!el || !shellEl) {
+        return { found: false, contrastRatio: 0, borderColor: '', canvasBg: '', hasSchemeDark: false }
+      }
+
+      const elStyle = window.getComputedStyle(el)
+      const shellStyle = window.getComputedStyle(shellEl)
+      const borderColorStr = elStyle.getPropertyValue(toKebab(prop))
+      const elementBgStr = elStyle.backgroundColor
+      const canvasBgStr = shellStyle.backgroundColor
+
+      const borderRgba = parseRgba(borderColorStr)
+      const elementBgRgba = parseRgba(elementBgStr)
+      const canvasBgRgba = parseRgba(canvasBgStr)
+      if (!borderRgba || !elementBgRgba || !canvasBgRgba) {
+        return { found: false, contrastRatio: 0, borderColor: borderColorStr, canvasBg: canvasBgStr, hasSchemeDark: false }
+      }
+
+      // Composite semi-transparent border over element's own background to get rendered border color
+      const fg =
+        borderRgba.a < 1
+          ? {
+              r: Math.round(borderRgba.a * borderRgba.r + (1 - borderRgba.a) * elementBgRgba.r),
+              g: Math.round(borderRgba.a * borderRgba.g + (1 - borderRgba.a) * elementBgRgba.g),
+              b: Math.round(borderRgba.a * borderRgba.b + (1 - borderRgba.a) * elementBgRgba.b),
+            }
+          : borderRgba
+
+      const L_border = lum(fg.r, fg.g, fg.b)
+      const L_canvas = lum(canvasBgRgba.r, canvasBgRgba.g, canvasBgRgba.b)
+      const ratio = (Math.max(L_border, L_canvas) + 0.05) / (Math.min(L_border, L_canvas) + 0.05)
+
+      return {
+        found: true,
+        contrastRatio: ratio,
+        borderColor: borderColorStr,
+        canvasBg: canvasBgStr,
+        hasSchemeDark: document.documentElement.classList.contains('scheme-dark'),
+      }
+    },
+    { sel: elementSel, prop: borderProp },
+  )
+}
+
 // ─── AC-1: Border contrast in dark mode ──────────────────────────────────────
 
 test.describe('TestFromAC_DarkModeBorderContrast', () => {
@@ -265,6 +346,150 @@ test.describe('TestFromAC_DarkModeBorderContrast', () => {
   // AC-1 Test 4 (filter-panel border) PASSED — pre-satisfied by FilterPanel.css migration.
   // FilterPanel.css already has border: 1px solid var(--p-color-contrast-low).
   // Removed per w-tdd-red §5.
+
+  /**
+   * AC-1 Contrast Test A — .shell__sidecar border-left vs canvas.
+   *
+   * Asserts that the rendered sidecar left border achieves >= 1.3:1 WCAG contrast
+   * against the shell canvas background. The border uses var(--p-color-contrast-low)
+   * which is semi-transparent; it is composited over the element's own surface
+   * background before the ratio is computed.
+   *
+   * Falsifiable: FAILS if contrastRatio < 1.3 (token resolves to value too close to canvas).
+   */
+  test(
+    'AC-1: sidecar border-left contrast ratio >= 1.3:1 against canvas in dark mode',
+    async ({ page }) => {
+      await page.addInitScript(() => {
+        localStorage.setItem('owlbear-theme', 'dark')
+      })
+      await stubApis(page)
+      await page.goto('/')
+      await ensurePDSTokens(page, 'dark')
+      await page.locator('[data-region="workspace"]').waitFor({ state: 'visible' })
+
+      const result = await measureBorderContrast(page, '.shell__sidecar', 'borderLeftColor')
+
+      expect(result.found, '.shell__sidecar must be present in the DOM').toBe(true)
+      expect(result.hasSchemeDark, 'html must carry .scheme-dark in dark mode').toBe(true)
+      expect(
+        result.contrastRatio,
+        `AC-1: .shell__sidecar border-left contrast must be >= 1.3:1 against canvas. ` +
+          `Got ${result.contrastRatio.toFixed(2)}:1. ` +
+          `border=${result.borderColor}, canvas=${result.canvasBg}. ` +
+          `Fix: ensure .shell__sidecar border-left uses a PDS token with sufficient contrast.`,
+      ).toBeGreaterThanOrEqual(1.3)
+    },
+  )
+
+  /**
+   * AC-1 Contrast Test B — .shell__nav-rail border-right vs canvas.
+   *
+   * Asserts that the rendered nav-rail right border achieves >= 1.3:1 WCAG contrast
+   * against the shell canvas background. Complements the border-existence test above
+   * with an explicit ratio assertion.
+   *
+   * Falsifiable: FAILS if border-right-color resolves to a value with contrast < 1.3:1.
+   */
+  test(
+    'AC-1: nav-rail border-right contrast ratio >= 1.3:1 against canvas in dark mode',
+    async ({ page }) => {
+      await page.addInitScript(() => {
+        localStorage.setItem('owlbear-theme', 'dark')
+      })
+      await stubApis(page)
+      await page.goto('/')
+      await ensurePDSTokens(page, 'dark')
+      await page.locator('[data-region="workspace"]').waitFor({ state: 'visible' })
+
+      const result = await measureBorderContrast(page, '.shell__nav-rail', 'borderRightColor')
+
+      expect(result.found, '.shell__nav-rail must be present in the DOM').toBe(true)
+      expect(result.hasSchemeDark, 'html must carry .scheme-dark in dark mode').toBe(true)
+      expect(
+        result.contrastRatio,
+        `AC-1: .shell__nav-rail border-right contrast must be >= 1.3:1 against canvas. ` +
+          `Got ${result.contrastRatio.toFixed(2)}:1. ` +
+          `border=${result.borderColor}, canvas=${result.canvasBg}. ` +
+          `Fix: ensure .shell__nav-rail border-right uses a PDS token with sufficient contrast.`,
+      ).toBeGreaterThanOrEqual(1.3)
+    },
+  )
+
+  /**
+   * AC-1 Contrast Test C — .column border vs canvas.
+   *
+   * Asserts that the rendered column border achieves >= 1.3:1 WCAG contrast
+   * against the shell canvas background (the workspace area behind columns).
+   *
+   * Falsifiable: FAILS if column border-top-color contrast < 1.3:1 against canvas.
+   */
+  test(
+    'AC-1: column border contrast ratio >= 1.3:1 against canvas in dark mode',
+    async ({ page }) => {
+      await page.addInitScript(() => {
+        localStorage.setItem('owlbear-theme', 'dark')
+      })
+      await stubApis(page)
+      await page.goto('/')
+      await ensurePDSTokens(page, 'dark')
+      await page.locator('[data-region="workspace"]').waitFor({ state: 'visible' })
+      await page.locator('.column').first().waitFor({ state: 'visible' })
+
+      const result = await measureBorderContrast(page, '.column', 'borderTopColor')
+
+      expect(result.found, 'At least one .column must be present in the DOM').toBe(true)
+      expect(result.hasSchemeDark, 'html must carry .scheme-dark in dark mode').toBe(true)
+      expect(
+        result.contrastRatio,
+        `AC-1: .column border contrast must be >= 1.3:1 against canvas. ` +
+          `Got ${result.contrastRatio.toFixed(2)}:1. ` +
+          `border=${result.borderColor}, canvas=${result.canvasBg}. ` +
+          `Fix: ensure .column border uses a PDS token with sufficient contrast.`,
+      ).toBeGreaterThanOrEqual(1.3)
+    },
+  )
+
+  /**
+   * AC-1 Contrast Test D — .filter-panel border vs canvas.
+   *
+   * Asserts that the rendered filter-panel border achieves >= 1.3:1 WCAG contrast
+   * against the shell canvas background. The filter panel is conditionally rendered
+   * and requires opening the filter toggle before measurement.
+   *
+   * Falsifiable: FAILS if .filter-panel border-top-color contrast < 1.3:1 against canvas.
+   */
+  test(
+    'AC-1: filter-panel border contrast ratio >= 1.3:1 against canvas in dark mode',
+    async ({ page }) => {
+      await page.addInitScript(() => {
+        localStorage.setItem('owlbear-theme', 'dark')
+      })
+      await stubApis(page)
+      await page.goto('/')
+      await ensurePDSTokens(page, 'dark')
+      await page.locator('[data-region="workspace"]').waitFor({ state: 'visible' })
+
+      // FilterPanel is conditionally rendered — open the filter toggle first
+      await page.click('[data-testid="filter-toggle"]')
+      await page.locator('#filter-panel').waitFor({ state: 'visible', timeout: 4_000 })
+
+      const result = await measureBorderContrast(page, '.filter-panel', 'borderTopColor')
+
+      expect(
+        result.found,
+        '.filter-panel must be present in the DOM after opening filter toggle',
+      ).toBe(true)
+      expect(result.hasSchemeDark, 'html must carry .scheme-dark in dark mode').toBe(true)
+      expect(
+        result.contrastRatio,
+        `AC-1: .filter-panel border contrast must be >= 1.3:1 against canvas. ` +
+          `Got ${result.contrastRatio.toFixed(2)}:1. ` +
+          `border=${result.borderColor}, canvas=${result.canvasBg}. ` +
+          `Fix: ensure .filter-panel border uses a PDS token with sufficient contrast.`,
+      ).toBeGreaterThanOrEqual(1.3)
+    },
+  )
 })
 
 // ─── AC-3: Border color differs between light and dark schemes ────────────────
@@ -330,6 +555,84 @@ test.describe('TestFromAC_DarkModeBorderSchemeSwitch', () => {
           lightBorderWidth,
           `.shell__nav-rail must have border-right-width > 0 in light mode as well. Got: ${lightBorderWidth}px.`,
         ).toBeGreaterThan(0)
+      } finally {
+        await lightPage.close()
+      }
+    },
+  )
+
+  /**
+   * AC-3 Color Test — sidecar and nav-rail computed border colors differ between schemes.
+   *
+   * Asserts that var(--p-color-contrast-low) resolves to different color values in dark vs
+   * light mode on at least 2 structural border elements (sidecar border-left + nav-rail
+   * border-right). This confirms that PDS light-dark() token switching is active and that
+   * the border color is not a fixed value identical across schemes.
+   *
+   * Falsifiable: FAILS if the computed border color is the same string in dark and light
+   * modes for either element — indicating the token does not switch between schemes.
+   */
+  test(
+    'AC-3: sidecar and nav-rail computed border colors differ between dark and light schemes (>= 2 elements)',
+    async ({ page }) => {
+      // ── Dark-mode border colors ────────────────────────────────────────────
+      await page.addInitScript(() => {
+        localStorage.setItem('owlbear-theme', 'dark')
+      })
+      await stubApis(page)
+      await page.goto('/')
+      await ensurePDSTokens(page, 'dark')
+      await page.locator('[data-region="workspace"]').waitFor({ state: 'visible' })
+
+      const darkColors = await page.evaluate(() => {
+        const sidecar = document.querySelector<HTMLElement>('.shell__sidecar')
+        const navRail = document.querySelector<HTMLElement>('.shell__nav-rail')
+        return {
+          sidecarFound: !!sidecar,
+          navRailFound: !!navRail,
+          sidecar: sidecar ? window.getComputedStyle(sidecar).getPropertyValue('border-left-color') : '',
+          navRail: navRail ? window.getComputedStyle(navRail).getPropertyValue('border-right-color') : '',
+        }
+      })
+
+      expect(darkColors.sidecarFound, '.shell__sidecar must exist in DOM (dark page)').toBe(true)
+      expect(darkColors.navRailFound, '.shell__nav-rail must exist in DOM (dark page)').toBe(true)
+
+      // ── Light-mode border colors ───────────────────────────────────────────
+      const lightPage = await page.context().newPage()
+      try {
+        await lightPage.addInitScript(() => {
+          localStorage.setItem('owlbear-theme', 'light')
+        })
+        await stubApis(lightPage)
+        await lightPage.goto('/')
+        await ensurePDSTokens(lightPage, 'light')
+        await lightPage.locator('[data-region="workspace"]').waitFor({ state: 'visible' })
+
+        const lightColors = await lightPage.evaluate(() => {
+          const sidecar = document.querySelector<HTMLElement>('.shell__sidecar')
+          const navRail = document.querySelector<HTMLElement>('.shell__nav-rail')
+          return {
+            sidecar: sidecar ? window.getComputedStyle(sidecar).getPropertyValue('border-left-color') : '',
+            navRail: navRail ? window.getComputedStyle(navRail).getPropertyValue('border-right-color') : '',
+          }
+        })
+
+        // Element 1: sidecar — border-left-color must differ between schemes
+        expect(
+          darkColors.sidecar,
+          `AC-3: .shell__sidecar border-left-color must differ between dark and light schemes. ` +
+            `Dark: "${darkColors.sidecar}", Light: "${lightColors.sidecar}". ` +
+            `Both use var(--p-color-contrast-low) — its light-dark() pair must produce different rendered values.`,
+        ).not.toBe(lightColors.sidecar)
+
+        // Element 2: nav-rail — border-right-color must differ between schemes (>= 2 required by AC-3)
+        expect(
+          darkColors.navRail,
+          `AC-3: .shell__nav-rail border-right-color must differ between dark and light schemes. ` +
+            `Dark: "${darkColors.navRail}", Light: "${lightColors.navRail}". ` +
+            `Both use var(--p-color-contrast-low) — its light-dark() pair must produce different rendered values.`,
+        ).not.toBe(lightColors.navRail)
       } finally {
         await lightPage.close()
       }
