@@ -4,12 +4,14 @@
  *
  * AC-1: #shell-sidecar-content elements in Shell.tsx carry Tailwind class p-[var(--p-spacing-static-md)] on all four sides;
  *        present in both mobile (p-sheet) and desktop render paths
- * AC-2: Given a non-null task: Shell [data-region='sidecar-header'] contains p-heading[size='large'] and no raw h2;
+ * AC-2: Given a non-null task: Shell [data-region='sidecar-header'] contains p-heading[size='large'] and no raw h2,
+ *        asserted in both mobile (innerWidth ≤ 767) and desktop (default) Shell renders;
  *        DetailTab [data-region='sidecar-body'] contains p-heading[size='medium'];
  *        DetailTab [data-region='actions'] contains p-heading[size='small'];
  *        DetailTab contains no raw h3
- * AC-3: PDivider separates: sidecar-header/DecisionViewport, DecisionViewport/p-tabs,
- *        and metadata/editor sections in DetailTab
+ * AC-3: PDivider elements separate content blocks: between sidecar-header and DecisionViewport,
+ *        between DecisionViewport and p-tabs — asserted in both mobile and desktop Shell renders;
+ *        immediately following sidecar-metadata section in DetailTab (given non-null task)
  */
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest'
 import { render } from '@testing-library/react'
@@ -117,6 +119,44 @@ function renderDetailTab() {
   )
 }
 
+/** Set mobile viewport so Shell.tsx useEffect triggers isMobileViewport=true. */
+function setMobileViewport(): void {
+  Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 767 })
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    writable: true,
+    value: (query: string): MediaQueryList => ({
+      matches: query === '(max-width: 767px)',
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => true,
+    }),
+  })
+}
+
+/** Restore desktop defaults after a mobile viewport test. */
+function restoreDesktopViewport(): void {
+  Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 1024 })
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    writable: true,
+    value: (query: string): MediaQueryList => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => true,
+    }),
+  })
+}
+
 // ---------------------------------------------------------------------------
 // AC-1: #shell-sidecar-content Tailwind arbitrary-value padding class in Shell.tsx
 // ---------------------------------------------------------------------------
@@ -216,6 +256,25 @@ describe('TestFromAC_SidecarStructure_Typography', () => {
     expect(allSizes.has('medium')).toBe(true)
     expect(allSizes.has('small')).toBe(true)
   })
+
+  describe('mobile viewport branch (AC-2 dual-branch proof)', () => {
+    beforeEach(() => { setMobileViewport() })
+    afterEach(() => { restoreDesktopViewport() })
+
+    it('mobile Shell [data-region="sidecar-header"] contains p-heading[size="large"]', () => {
+      const { container } = renderShell()
+      const header = container.querySelector('[data-region="sidecar-header"]')
+      expect(header).not.toBeNull()
+      expect(header?.querySelector('p-heading[size="large"]')).not.toBeNull()
+    })
+
+    it('mobile Shell [data-region="sidecar-header"] contains no raw h2 element', () => {
+      const { container } = renderShell()
+      const header = container.querySelector('[data-region="sidecar-header"]')
+      expect(header).not.toBeNull()
+      expect(header?.querySelector('h2')).toBeNull()
+    })
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -285,5 +344,30 @@ describe('TestFromAC_SidecarStructure_Dividers', () => {
     expect(metaIdx).toBeGreaterThanOrEqual(0)
     const nextSibling = siblings[metaIdx + 1]
     expect(nextSibling?.tagName.toLowerCase()).toBe('p-divider')
+  })
+
+  describe('mobile viewport branch (AC-3 dual-branch proof)', () => {
+    beforeEach(() => { setMobileViewport() })
+    afterEach(() => { restoreDesktopViewport() })
+
+    it('mobile Shell: p-divider is direct next sibling after sidecar-header (between header and DecisionViewport)', () => {
+      const { container } = renderShell()
+      const content = container.querySelector('#shell-sidecar-content') as HTMLElement
+      expect(content).not.toBeNull()
+      const children = Array.from(content.children)
+      const headerIdx = children.findIndex(el => el.getAttribute('data-region') === 'sidecar-header')
+      expect(headerIdx).toBeGreaterThanOrEqual(0)
+      expect(children[headerIdx + 1]?.tagName.toLowerCase()).toBe('p-divider')
+    })
+
+    it('mobile Shell: p-divider is immediately before p-tabs (between DecisionViewport and tabs)', () => {
+      const { container } = renderShell()
+      const content = container.querySelector('#shell-sidecar-content') as HTMLElement
+      expect(content).not.toBeNull()
+      const children = Array.from(content.children)
+      const tabsIdx = children.findIndex(el => el.tagName.toLowerCase() === 'p-tabs')
+      expect(tabsIdx).toBeGreaterThanOrEqual(0)
+      expect(children[tabsIdx - 1]?.tagName.toLowerCase()).toBe('p-divider')
+    })
   })
 })
