@@ -4,7 +4,7 @@ title: 'Consolidation test: cockpit visual redesign'
 status: backlog
 priority: important
 created: 2026-05-16T03:37:57.297125+00:00
-updated: 2026-05-16T03:38:34.878969+00:00
+updated: 2026-05-17T22:31:42.387623+02:00
 tags:
   - frontend
   - pds
@@ -29,6 +29,7 @@ depends_on:
   - 1626
   - 1627
   - 1628
+  - 1636
 ac:
   - Vitest unit tests (npm test) and Playwright e2e tests (npm run test:e2e) 
     pass with zero failures
