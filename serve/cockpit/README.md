@@ -208,6 +208,16 @@ Accessibility and responsive state after #1396:
   for `ConfirmDialog.tsx` at 98.57% and `ResolveModal.tsx` at 92.75%), and
   `serve/cockpit/web/e2e/overlay-behavior.spec.ts` (19 E2E tests — host-attribute
   checks, Tab-cycle containment, and exact focus-return for all three modals).
+- #1627 migrates CSS-file transition declarations to PDS v4 duration and easing tokens.
+  `.shell` (`grid-template-columns`), `.icon-button` (`background`, `border-color`), and
+  `.card` (`box-shadow`) transitions in `Shell.css` and `Card.css` replace hardcoded
+  `250ms ease` values with `var(--p-duration-sm)` and `var(--p-ease-in-out)`. Collapsed-state
+  sidecar declarations (`.shell[data-sidecar-collapsed]` for desktop and tablet) and
+  `.shell__sidecar { overflow: hidden; }` are added to complete the sidecar collapse
+  contract. No `transition: all` declarations are introduced (AC-2 regression guard).
+  Verified by `serve/cockpit/web/src/__tests__/PdsMotionTokens_1627.test.tsx` (10 tests —
+  token presence, no-hardcoded-ms, and property-level exact-match assertions using
+  space-delimited matching for all 3 migrated declarations).
 - #1628 completes the WCAG 2.1 AA accessibility sweep: invalid host-level ARIA attributes
   (`aria-expanded`, `aria-controls`) on `p-button` host controls are replaced with native
   `<button>` elements in `KanbanBoard.tsx` (filter toggle) and `Shell.tsx` (nav rail
