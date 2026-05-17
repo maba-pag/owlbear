@@ -35,7 +35,7 @@ Scoped with explicit frontend proof:
 ```
 agentName: quality-runner
 prompt: |
-  Run: mode=scoped, task_id=1392, test_paths=["serve/cockpit/web/e2e/responsive-layout-1391.spec.ts"], lint_paths=["serve/cockpit/web/src/Shell.css"]
+  Run: mode=scoped, task_id=1392, test_paths=["serve/cockpit/web/e2e/responsive-contract.spec.ts"], lint_paths=["serve/cockpit/web/src/Shell.css"]
   Also run the Cockpit frontend build, Playwright E2E, and CSS lint because the AC names viewport/layout proof and CSS validity.
 ```
 

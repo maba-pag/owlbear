@@ -21,6 +21,16 @@ def find_test_root(test_path: str) -> dict[str, str]:
     path = Path(test_path).resolve()
     start = path.parent if path.is_file() else path
 
+    # Python files never belong to an npm test runner, even when a parent
+    # package.json has a "test" script (e.g. root proxy scripts).
+    if path.suffix == ".py":
+        return {
+            "test_path": test_path,
+            "cwd": ".",
+            "toolchain": "pytest",
+            "cmd": "uv run pytest",
+        }
+
     current = start
     workspace_root = Path.cwd()
 

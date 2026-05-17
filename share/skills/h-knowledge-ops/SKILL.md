@@ -31,9 +31,11 @@ Ingest a text document into the knowledge base.
 | `text` | str | required | Text content to ingest |
 | `metadata` | dict | None | Optional metadata dict |
 | `scope` | str | `global` | Knowledge scope for ingested document |
-| `source_url` | str | None | Optional source URL for attribution |
+| `source_url` | str | None | Optional source identity URL; creates/reuses a source row and enables delta detection |
 
 Returns: document ID, chunk count, entity count, edge count, and status.
+
+Behavior: direct text ingestion uses the same source/status delta detection as registered source refresh. When `source_url` is supplied, unchanged content returns `status: skipped`; changed content replaces the prior document for that source and scope. `http`/`https` URLs register as web sources; `file://` URLs and plain local paths register as file sources. If `source_url` is omitted, `metadata.source` or `metadata.url` is used as the delta key when present; otherwise the text is treated as a new anonymous inline document.
 
 ### list_sources
 
@@ -53,7 +55,7 @@ Trigger re-ingestion of a registered knowledge source by source ID.
 |-------|------|---------|-------|
 | `source_id` | str | required | Registered source ID to refresh |
 
-Returns: refresh count dict on success, or an `error: ...` string when refresh infrastructure is unavailable. Raises `ToolError` when the source store is unavailable or the source ID is unknown.
+Returns: refresh result dict on success — `{"source_id": str, "refreshed": int, "skipped": int, "failed": int, "errors": list[str]}` — or an `error: ...` string when refresh infrastructure is unavailable. Raises `ToolError` when the source store is unavailable or the source ID is unknown.
 
 ### get_stats
 
@@ -114,7 +116,8 @@ Behavior:
 
 Edge payload schema:
 
-- `relation` (preferred) or `relationship` (accepted alias): required non-empty string.
+- `relation` (preferred) or `relationship` (accepted alias): required relation value from the Domain Reference below.
+- Entity `entity_type` (or `type` alias) defaults to `concept` when omitted and must otherwise use an EntityType value from the Domain Reference below.
 - Phase 1 endpoint fields:
   - `source_id`/`target_id`: optional direct entity IDs; when supplied, must match a persisted entity row **within the claimed chunk's scope** — cross-scope explicit IDs are unresolvable and raise `ToolError`. Cross-document references within the same scope are allowed.
   - `source_name`/`target_name`: optional name-based endpoint resolution when IDs are omitted.
@@ -142,6 +145,8 @@ Only the tools documented in this reference are agent-callable MCP tools. Treat 
 | Claim Phase 2 consolidation work | `get_consolidation_candidates` | Returns unresolved cross-source pairs |
 | Store Phase 2 consolidation | `store_enrichment` | Pass `candidate_id`; stores edges or marks reviewed |
 
+Direct-ingested sources listed by `list_sources` can be passed to `refresh_source`. Local file sources refresh from the workspace file path, while web sources refresh through the configured fetch method.
+
 ## Scope Conventions
 
 | Scope | Format | When to use |
@@ -153,11 +158,11 @@ Queries auto-filter to `["global", "project:{id}"]` when a project is active.
 
 ## Domain Reference
 
-**EntityType:** `file`, `function`, `class_`, `decision`, `pattern`, `concept`
+**EntityType:** `file`, `function`, `class_`, `decision`, `pattern`, `concept`, `requirement`, `solution`, `procedure`, `policy`, `standard`, `system`, `tool`, `process`, `role`, `person`, `team`, `component`, `service`
 
-**RelationType:** `defines`, `imports`, `depends_on`, `related_to`, `implements`, `documents`, `governed_by`
+**RelationType:** `defines`, `imports`, `depends_on`, `related_to`, `implements`, `documents`, `governed_by`, `governs`, `supersedes_version`, `built_on`, `component_of`, `creates`, `describes`, `executes`, `extends`, `follows`, `guides`, `hosts`, `instance_of`, `integrates_with`, `invokes`, `manages`, `part_of`, `produces`, `registers`, `requires`, `replaces`, `reranks_with`, `runs_in`, `runs_on`, `same_as`, `similar_to`, `supports`, `uses`, `wraps`
 
-**SourceType:** `url_list`, `file_glob`
+**SourceType:** `url_list`, `file_glob`, `authenticated_web`
 
 Config examples per source type:
 
