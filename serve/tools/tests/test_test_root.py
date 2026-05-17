@@ -69,6 +69,20 @@ class TestFindTestRoot:
         result = find_test_root(path)
         assert result["test_path"] == path
 
+    def test_python_resolves_to_pytest_even_with_root_test_script(self, frontend_project: Path) -> None:
+        """Root proxy scripts must not capture Python test files."""
+        root_pkg = frontend_project / "package.json"
+        root_pkg.write_text(
+            json.dumps(
+                {
+                    "scripts": {"test": "npm --prefix web test --"},
+                }
+            )
+        )
+        result = find_test_root("tests/test_foo.py")
+        assert result["toolchain"] == "pytest"
+        assert result["cmd"] == "uv run pytest"
+
 
 class TestCLIEntryPoint:
     """Integration tests for the `test-root` CLI."""
