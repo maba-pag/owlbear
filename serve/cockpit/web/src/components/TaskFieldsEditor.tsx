@@ -3,6 +3,7 @@ import {
   PButton,
   PInputText,
   PSelect,
+  PSelectOption,
   PTag,
   PTextarea,
 } from '@porsche-design-system/components-react'
@@ -230,7 +231,7 @@ export default function TaskFieldsEditor({
         onChange={(event) => setPriority(readControlValue(event))}
       >
         {priorities.map((p) => (
-          <option key={p} value={p}>{p}</option>
+          <PSelectOption key={p} value={p}>{p}</PSelectOption>
         ))}
       </PSelect>
       {task.tags.map((tag) => (

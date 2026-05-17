@@ -154,7 +154,8 @@ describe('TestFromAC_DecisionViewport', () => {
     const ref = container.querySelector('[data-testid="decision-task-ref-dr-vp-001"]')!
     const tag = ref.tagName.toLowerCase()
     const role = ref.getAttribute('role')?.toLowerCase()
-    const isClickable = tag === 'button' || tag === 'a' || role === 'button' || role === 'link'
+    const isClickable =
+      tag === 'button' || tag === 'a' || tag === 'p-link-pure' || role === 'button' || role === 'link'
     expect(isClickable).toBe(true)
   })
 
@@ -288,7 +289,7 @@ describe('TestFromAC_DecisionViewport', () => {
     const taskRefs = container.querySelectorAll('[data-testid^="decision-task-ref-"]')
     expect(taskRefs.length).toBe(2)
     for (const taskRef of Array.from(taskRefs)) {
-      expect(taskRef.tagName.toLowerCase()).toBe('a')
+      expect(['a', 'p-link-pure']).toContain(taskRef.tagName.toLowerCase())
       expect(taskRef.getAttribute('href')).toMatch(/^#task-\d+$/)
     }
   })

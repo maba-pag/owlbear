@@ -1,4 +1,4 @@
-import { PText } from '@porsche-design-system/components-react'
+import { PLinkPure, PText } from '@porsche-design-system/components-react'
 
 import type { PendingDR } from '../hooks/usePendingDRs'
 
@@ -49,8 +49,13 @@ export default function DecisionViewport({ items, isLoading, error, onItemClick 
     <ul>
       {items.map((item) => (
         <li key={item.id}>
-          <a
+          <PLinkPure
             href={`#task-${item.task_id}`}
+            icon="none"
+            ref={(element) => {
+              element?.setAttribute('href', `#task-${item.task_id}`)
+              element?.setAttribute('icon', 'none')
+            }}
             data-testid={`decision-task-ref-${item.id}`}
             onClick={(event) => {
               event.preventDefault()
@@ -58,7 +63,7 @@ export default function DecisionViewport({ items, isLoading, error, onItemClick 
             }}
           >
             {item.task_id}
-          </a>
+          </PLinkPure>
           <article
             data-testid={`decision-item-${item.id}`}
           >
