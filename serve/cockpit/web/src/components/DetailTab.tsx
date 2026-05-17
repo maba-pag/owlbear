@@ -58,6 +58,10 @@ function setMetadataAccordionAttrs(element: HTMLElement | null): void {
   element.setAttribute('heading', 'Metadata')
 }
 
+function syncHeadingH3TagAttr(element: HTMLElement | null): void {
+  element?.setAttribute('tag', 'h3')
+}
+
 export default function DetailTab({
   task,
   board,
@@ -203,7 +207,7 @@ export default function DetailTab({
       </section>
 
       <section data-region="actions">
-        <PHeading size="small" tag="h3">Actions</PHeading>
+        <PHeading ref={syncHeadingH3TagAttr} size="small" tag="h3">Actions</PHeading>
         <TaskActions
           key={`${t.id}:${t.updated}`}
           task={t}

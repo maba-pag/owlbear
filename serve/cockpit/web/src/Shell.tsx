@@ -19,12 +19,13 @@ function isHealthBadgeItem(item: ScanPollingItem): item is HealthBadgeItem {
   return item.code !== null && item.detail !== null && item.file_path !== null
 }
 
-function setHeadingLargeSizeAttr(element: HTMLElement | null): void {
-  if (!element) {
-    return
+function syncHeadingTagAttr(tag: 'h1' | 'h2') {
+  return (element: HTMLElement | null) => {
+    if (!element) {
+      return
+    }
+    element.setAttribute('tag', tag)
   }
-  element.setAttribute('size', 'large')
-  element.setAttribute('tag', 'h2')
 }
 
 function Shell() {
@@ -61,6 +62,7 @@ function Shell() {
   const [hasLoadedScan, setHasLoadedScan] = useState(false)
   const [isSidecarCollapsed, setIsSidecarCollapsed] = useState(false)
   const [isMobileViewport, setIsMobileViewport] = useState(false)
+  const [isTabletViewport, setIsTabletViewport] = useState(false)
   const [selectedTaskSubtab, setSelectedTaskSubtab] = useState<string | null>(null)
   const [detailValidationMessage, setDetailValidationMessage] = useState<string | null>(null)
   const [bannerError, setBannerError] = useState<{
@@ -153,12 +155,15 @@ function Shell() {
   const sidecarClassName = [
     'shell__sidecar min-w-0 overflow-hidden border-t border-[var(--p-color-contrast-low)]',
     'md:border-t-0 md:border-l md:border-[var(--p-color-contrast-low)]',
+    isTabletViewport ? 'w-12' : 'w-auto',
   ].join(' ')
 
   useEffect(() => {
     const mediaQuery = window.matchMedia('(max-width: 767px)')
     const handleViewportChange = () => {
-      setIsMobileViewport(window.innerWidth <= 767 || mediaQuery.matches)
+      const mobileViewport = window.innerWidth <= 767 || mediaQuery.matches
+      setIsMobileViewport(mobileViewport)
+      setIsTabletViewport(window.innerWidth >= 768 && window.innerWidth <= 1023)
     }
 
     handleViewportChange()
@@ -206,8 +211,7 @@ function Shell() {
         className={statusBarClassName}
         data-region="status-bar"
       >
-        <h1 style={{ position: 'absolute', left: '-9999px' }}>OwlBear Cockpit</h1>
-        <PHeading tag="h1" className="shell__product-identity min-w-0 break-words">
+        <PHeading ref={syncHeadingTagAttr('h1')} tag="h1" className="shell__product-identity min-w-0 break-words">
           OwlBear Cockpit
         </PHeading>
         <span data-testid="traffic-light" data-health={statusHealth} />
@@ -320,7 +324,7 @@ function Shell() {
               aria-hidden={isSidecarCollapsed ? 'true' : undefined}
             >
               <section data-region="sidecar-header" aria-live="polite">
-                <PHeading ref={setHeadingLargeSizeAttr} size="large">
+                <PHeading ref={syncHeadingTagAttr('h2')} size="large" tag="h2">
                   {selectedTaskHeading}
                 </PHeading>
               </section>
@@ -418,7 +422,7 @@ function Shell() {
             aria-hidden={isSidecarCollapsed ? 'true' : undefined}
           >
             <section data-region="sidecar-header" aria-live="polite">
-              <PHeading ref={setHeadingLargeSizeAttr} size="large">
+              <PHeading ref={syncHeadingTagAttr('h2')} size="large" tag="h2">
                 {selectedTaskHeading}
               </PHeading>
             </section>

@@ -11,7 +11,7 @@ interface State {
   error: Error | null
 }
 
-function setHeadingH3TagAttr(element: HTMLElement | null): void {
+function syncHeadingTagAttr(element: HTMLElement | null): void {
   element?.setAttribute('tag', 'h3')
 }
 
@@ -31,7 +31,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
     return (
       <div role="alert" style={{ padding: 32, textAlign: 'center' }}>
-        <PHeading ref={setHeadingH3TagAttr}>
+        <PHeading ref={syncHeadingTagAttr} tag="h3">
           Something went wrong{this.props.label ? ` in ${this.props.label}` : ''}
         </PHeading>
         <p style={{ color: 'var(--p-color-contrast-medium)', marginBottom: 16 }}>
