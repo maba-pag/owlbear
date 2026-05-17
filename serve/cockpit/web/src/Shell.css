@@ -99,9 +99,7 @@
   font: inherit;
   font-size: 0.875rem;
   cursor: pointer;
-  transition:
-    background var(--p-duration-sm) var(--p-ease-in-out),
-    border-color var(--p-duration-sm) var(--p-ease-in-out);
+ transition:background var(--p-duration-sm) var(--p-ease-in-out),border-color var(--p-duration-sm) var(--p-ease-in-out);
 }
 
 .icon-button:hover {
