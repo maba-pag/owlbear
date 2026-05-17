@@ -13,7 +13,7 @@
     "lint:css": "stylelint --config .stylelintrc.json \"src/**/*.css\"",
     "lint:html": "htmlhint --config .htmlhintrc index.html",
     "preview": "vite preview",
-    "test": "NODE_OPTIONS='--max-old-space-size=2048' vitest run",
+    "test": "NODE_OPTIONS='--max-old-space-size=2048' vitest run --silent",
     "test:e2e": "playwright test"
   },
   "dependencies": {
