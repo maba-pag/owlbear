@@ -149,6 +149,19 @@ Accessibility and responsive state after #1396:
   covering AC-1 through AC-4) and durable suites `PdsColorSchemeBridge.test.ts`,
   `BoardVisualDesign.test.tsx`, `Card.css.supplemental.test.ts`, `Shell.secondary-css.test.tsx`,
   and `ShellSecondaryCSS.base.test.tsx` (90 tests total, all passing).
+- #1606 applies sticky header and responsive sidecar layout via Tailwind utilities.
+  `[data-region="status-bar"]` in `Shell.tsx` gains `sticky top-0 z-10` classes, ensuring
+  the header remains visible after the workspace element is scrolled past viewport height.
+  At 768–1023px (tablet, without manual collapse), `--shell-columns` resolves to `48px`
+  for the sidecar column; at ≥1024px it resolves to `360px`. `Shell.css` is stripped of
+  10 banned layout property families (`display`, `width`, `height`, `overflow`, `padding`,
+  `gap`, `position`, `z-index`, `grid-template-columns`, `grid-template-rows`); only
+  `grid-template-areas` declarations and `--shell-*` custom-property aliases are retained
+  in CSS. Verified by `serve/cockpit/web/e2e/shell-layout-1606.spec.ts` (21 Playwright
+  E2E tests — AC1 behavioral workspace-scroll guard plus `sticky`/`top-0`/`z-10` class
+  checks; AC2 sidecar `boundingBox()` width at 1023px and 1024px; AC3 file-content
+  negatives for all 10 banned property families and DOM no-inline-style regression guard
+  for `.shell` and `[data-region]` children).
 - #1614 performs PDS simple component swaps across five cockpit components.
   `ActivityTab.tsx` session-row button, `DRStatusIndicator.tsx` resolve-button, and
   `ErrorBoundary.tsx` retry button are replaced with `PButton` controls with preserved
