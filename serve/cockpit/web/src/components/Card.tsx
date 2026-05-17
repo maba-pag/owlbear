@@ -1,6 +1,5 @@
-/* eslint-disable no-restricted-syntax */
 import { useState } from 'react'
-import { PTag } from '@porsche-design-system/components-react'
+import { PorscheDesignSystemProvider, PTag } from '@porsche-design-system/components-react'
 import type { Task } from '../hooks/useBoard'
 import { computeSignal } from '../utils/computeSignal'
 import { priorityToVariant, statusToVariant } from '../utils/cardVariants'
@@ -27,8 +26,6 @@ function formatUpdatedAge(updated: string): string {
 
   return `${Math.floor(ageMinutes / (24 * 60))}d ago`
 }
-
-void PTag
 
 export interface CardProps {
   task: Task
@@ -86,132 +83,140 @@ export function Card({
   }
 
   return (
-    <div
-      data-testid="task-card"
-      data-id={task.id}
-      data-priority={task.priority}
-      data-selected={selected ? 'true' : 'false'}
-      data-signal={signal}
-      data-dragging={dragging ? 'true' : 'false'}
-      role="button"
-      tabIndex={0}
-      aria-haspopup="menu"
-      className="card"
-      draggable={true}
-      onClick={() => onSelect?.(task.id)}
-      onKeyDown={handleKeyDown}
-      onDragStart={() => {
-        onSelect?.(task.id)
-        setDragging(true)
-        onDragStart(task.id, task.updated)
-      }}
-      onDragEnd={() => {
-        setDragging(false)
-        onDragEnd()
-      }}
-      onContextMenu={(e) => onContextMenu(e, task)}
-    >
-      <div className="card-main">
-        <div className="card-header-row">
-          <span data-testid="card-id" className="card-chip card-id">
-            #{task.id}
-          </span>
-          <p-tag
-            data-testid="card-status"
-            ref={(element) => {
-              if (element) {
-                element.setAttribute('compact', '')
-                element.setAttribute('variant', statusToVariant(task.status))
-              }
-            }}
-          >
-            {task.status}
-          </p-tag>
-          <p-tag
-            data-testid="card-priority"
-            ref={(element) => {
-              if (element) {
-                element.setAttribute('compact', '')
-                element.setAttribute('variant', priorityToVariant(task.priority))
-              }
-            }}
-          >
-            {task.priority}
-          </p-tag>
-          {showSignalIcon ? (
-            <p-icon
+    <PorscheDesignSystemProvider>
+      <div
+        data-testid="task-card"
+        data-id={task.id}
+        data-priority={task.priority}
+        data-selected={selected ? 'true' : 'false'}
+        data-signal={signal}
+        data-dragging={dragging ? 'true' : 'false'}
+        role="button"
+        tabIndex={0}
+        aria-haspopup="menu"
+        className="card"
+        draggable={true}
+        onClick={() => onSelect?.(task.id)}
+        onKeyDown={handleKeyDown}
+        onDragStart={() => {
+          onSelect?.(task.id)
+          setDragging(true)
+          onDragStart(task.id, task.updated)
+        }}
+        onDragEnd={() => {
+          setDragging(false)
+          onDragEnd()
+        }}
+        onContextMenu={(e) => onContextMenu(e, task)}
+      >
+        <div className="card-main">
+          <div className="card-header-row">
+            <span data-testid="card-id" className="card-chip card-id">
+              #{task.id}
+            </span>
+            <PTag
+              compact
+              data-testid="card-status"
+              variant={statusToVariant(task.status)}
               ref={(element) => {
                 if (element) {
-                  element.setAttribute('size', 'xs')
-                  element.setAttribute('name', 'information')
-                  element.setAttribute('aria-label', signal)
+                  element.setAttribute('compact', '')
+                  element.setAttribute('variant', statusToVariant(task.status))
                 }
               }}
-            />
-          ) : null}
-          <span data-testid="card-updated" className="card-chip card-updated" aria-label={`Updated ${updatedAge}`}>
-            {updatedAge}
-          </span>
-        </div>
-
-        <span data-testid="card-title" className="card-title" title={task.title}>
-          {task.title}
-        </span>
-
-        {task.tags.length > 0 ? (
-          <div className="card-tags-row">
-            <span data-testid="card-tags" className="card-tags" aria-label={`Tags: ${previewTags.join(', ')}`}>
-              {previewTags.map((tag) => (
-                <p-tag
-                  key={tag}
-                  ref={(element) => {
-                    if (element) {
-                      element.setAttribute('compact', '')
-                      element.setAttribute('variant', 'secondary')
-                    }
-                  }}
-                >
-                  {tag}
-                </p-tag>
-              ))}
+            >
+              {task.status}
+            </PTag>
+            <PTag
+              compact
+              data-testid="card-priority"
+              variant={priorityToVariant(task.priority)}
+              ref={(element) => {
+                if (element) {
+                  element.setAttribute('compact', '')
+                  element.setAttribute('variant', priorityToVariant(task.priority))
+                }
+              }}
+            >
+              {task.priority}
+            </PTag>
+            {showSignalIcon ? (
+              <p-icon
+                ref={(element) => {
+                  if (element) {
+                    element.setAttribute('size', 'xs')
+                    element.setAttribute('name', 'information')
+                    element.setAttribute('aria-label', signal)
+                  }
+                }}
+              />
+            ) : null}
+            <span data-testid="card-updated" className="card-chip card-updated" aria-label={`Updated ${updatedAge}`}>
+              {updatedAge}
             </span>
-            {overflowTags > 0 ? (
-              <span
-                data-testid="card-tag-overflow"
-                className="card-chip card-tag-overflow"
-                aria-label={`${overflowTags} more tags`}
-              >
-                +{overflowTags}
-              </span>
-            ) : null}
           </div>
-        ) : null}
 
-        {hasStateCue ? (
-          <div className="card-cues-row" aria-label="Task state cues">
-            {task.blocked ? (
-              <span data-testid="card-blocked-cue" className="card-chip card-cue card-cue-blocked">
-                Blocked
+          <span data-testid="card-title" className="card-title" title={task.title}>
+            {task.title}
+          </span>
+
+          {task.tags.length > 0 ? (
+            <div className="card-tags-row">
+              <span data-testid="card-tags" className="card-tags" aria-label={`Tags: ${previewTags.join(', ')}`}>
+                {previewTags.map((tag) => (
+                  <PTag
+                    key={tag}
+                    compact
+                    variant="secondary"
+                    ref={(element) => {
+                      if (element) {
+                        element.setAttribute('compact', '')
+                        element.setAttribute('variant', 'secondary')
+                      }
+                    }}
+                  >
+                    {tag}
+                  </PTag>
+                ))}
               </span>
-            ) : null}
-            {task.claimed ? (
-              <span data-testid="card-claimed-cue" className="card-chip card-cue card-cue-claimed">
-                Claimed
-              </span>
-            ) : null}
-            {task.dep_status === 'blocked' ? (
-              <span data-testid="card-deps-unmet-cue" className="card-chip card-cue card-cue-deps">
-                Dependencies blocked
-              </span>
-            ) : null}
-            {signal === 'dr-pending' ? (
-              <span data-testid="card-dr-pending-cue" className="card-chip card-cue card-cue-dr">
-                Decision pending
-              </span>
-            ) : null}
-          </div>
-        ) : null}
+              {overflowTags > 0 ? (
+                <span
+                  data-testid="card-tag-overflow"
+                  className="card-chip card-tag-overflow"
+                  aria-label={`${overflowTags} more tags`}
+                >
+                  +{overflowTags}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
+
+          {hasStateCue ? (
+            <div className="card-cues-row" aria-label="Task state cues">
+              {task.blocked ? (
+                <span data-testid="card-blocked-cue" className="card-chip card-cue card-cue-blocked">
+                  Blocked
+                </span>
+              ) : null}
+              {task.claimed ? (
+                <span data-testid="card-claimed-cue" className="card-chip card-cue card-cue-claimed">
+                  Claimed
+                </span>
+              ) : null}
+              {task.dep_status === 'blocked' ? (
+                <span data-testid="card-deps-unmet-cue" className="card-chip card-cue card-cue-deps">
+                  Dependencies blocked
+                </span>
+              ) : null}
+              {signal === 'dr-pending' ? (
+                <span data-testid="card-dr-pending-cue" className="card-chip card-cue card-cue-dr">
+                  Decision pending
+                </span>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
       </div>
-    </div>
+    </PorscheDesignSystemProvider>
   )
 }
