@@ -87,15 +87,17 @@ function makeTask(): Task {
 }
 
 describe('TestFromAC_ShellTokenMigration_1542', () => {
-  it('AC-1: Shell.css has zero --pds-theme-light-* tokens and at least 5 --pds-* token references', () => {
+  it('AC-1: Shell.css has zero legacy --pds-* tokens and at least 5 migrated --p-* token references', () => {
     const css = readFileSync(SHELL_CSS, 'utf-8')
     const legacy = css.match(/--pds-theme-light-[a-z0-9-]+/g) ?? []
-    const agnostic = css.match(/--pds-[a-z0-9-]+/g) ?? []
+    const stale = css.match(/--pds-[a-z0-9-]+/g) ?? []
+    const migrated = css.match(/--p-[a-z0-9-]+/g) ?? []
 
     expect(legacy, 'Shell.css must not contain legacy --pds-theme-light-* tokens').toHaveLength(0)
+    expect(stale, 'Shell.css must not contain stale --pds-* token references after migration').toHaveLength(0)
     expect(
-      agnostic.length,
-      'Shell.css must include at least 5 --pds-* token references to guard against empty/gutted file',
+      migrated.length,
+      'Shell.css must include at least 5 --p-* token references to guard against empty/gutted file',
     ).toBeGreaterThanOrEqual(5)
   })
 })

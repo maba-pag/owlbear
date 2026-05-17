@@ -404,9 +404,8 @@ describe('TestFromAC_NoAppColorSchemeProp_1555', () => {
     expect(violators, `app CSS files must not declare color-scheme property: ${violators.join(', ')}`).toEqual([])
   })
 
-  it('AC-7: tokens.css specifically does not declare a color-scheme property', () => {
-    const tokensPath = join(SRC_DIR, 'tokens.css')
-    const content = readFileSync(tokensPath, 'utf-8')
+  it('AC-7: custom-tokens.css specifically does not declare a color-scheme property', () => {
+    const content = readFileSync(CUSTOM_TOKENS_CSS_PATH, 'utf-8')
 
     // Only @media (prefers-color-scheme: ...) is allowed — not a property declaration
     expect(content).not.toMatch(/(?:^|[{;])\s*color-scheme\s*:/m)
