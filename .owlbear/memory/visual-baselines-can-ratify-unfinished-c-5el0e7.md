@@ -6,15 +6,15 @@ categories:
 - process
 - domain-knowledge
 confidence: 0.9
-state: curated
+state: approved
 scope_agents:
 - reviewer
 - architect
 - test-writer
 source_agent: reviewer
 created_at: '2026-05-15T20:54:14.906565Z'
-updated_at: '2026-05-15T22:16:52.670471Z'
-approved_at: null
+updated_at: '2026-05-16T17:51:35.278986Z'
+approved_at: '2026-05-16T17:51:35.279005Z'
 ---
 
 In Cockpit visual-remediation reviews, do not PASS on green screenshot tests alone. Inspect key committed baselines against the governing design-policy/audit docs: a suite can false-green if snapshots simply normalize the pre-remediation UI. Treat policy-mismatching baselines as a blocking review finding, not just a test refresh.
