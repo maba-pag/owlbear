@@ -72,7 +72,17 @@ PDS v4 exports no `PList`/`PListItem` component. Lists may benefit from PDS toke
 
 **Key risk:** Shell `tabChange` → PTabs `onUpdate` migration requires updating 5+ test files that dispatch `tabChange` custom events.
 
-### 3.6 Modals — **Fully migrated.** All three modals (ConfirmDialog, ResolveModal, ArchivalModal) use `<PModal>`. No raw `<dialog>` or `div[role=dialog]` remains. Completed in #1618.
+### 3.6 Modals and Dialog Surfaces (7 total surfaces)
+
+| File | Element | Classification | Owner | Notes |
+|------|---------|---------------|-------|-------|
+| ConfirmDialog.tsx | `<PModal>` | **Already migrated** | #1618 (done) | Wrapper modal with dialog semantics enforced via `aria` |
+| ResolveModal.tsx | `<PModal>` | **Already migrated** | #1618 (done) | Decision-request modal flow migrated |
+| ArchivalModal.tsx | `<PModal>` | **Already migrated** | #1618 (done) | Archival workflow modal migrated |
+| CleanupPanel.tsx:92 | `<div role="dialog" aria-modal="true">` | **Complex integration** | **Unowned** | Confirm overlay uses custom focus trap/keyboard handling; candidate for migration to a shared modal wrapper |
+| RepairPanel.tsx:72 | `<div role="dialog" aria-modal="true">` | **Complex integration** | **Unowned** | Confirm overlay includes file-preview list + ESC handling; same migration class as CleanupPanel |
+| DRStatusIndicator.tsx:92 | `<div role="dialog">` | **Intentional native** | — | Anchored status-bar popover behavior with explicit focus/position management; not part of modal migration scope |
+| HealthBadge.tsx:91 | `<div role="dialog">` | **Intentional native** | — | Anchored status-bar popover behavior with explicit focus/position management; mirrors DRStatusIndicator |
 
 ### 3.7 Form Controls
 
@@ -94,11 +104,13 @@ PDS v4 exports no `PList`/`PListItem` component. Lists may benefit from PDS toke
 
 **Confidence: 0.82**
 
-The inventory is complete for the AC-3 scope. Two unowned migration targets were identified:
+The inventory is complete for the AC-3 scope. Four unowned migration targets were identified:
 1. TaskFieldsEditor `<option>` → `PSelectOption` (simple swap, ~5 LOC)
 2. DecisionViewport `<a>` → `PLinkPure` (simple swap, ~10 LOC)
+3. CleanupPanel confirm overlay `div[role="dialog"]` → shared modal pattern (complex integration)
+4. RepairPanel confirm overlay `div[role="dialog"]` → shared modal pattern (complex integration)
 
-Both are trivial and can be bundled into a single follow-up task.
+The two simple swaps are already routed via follow-up #1634. The two confirm-overlay dialogs require one additional follow-up task.
 
 Challenge: proceed — confidence in original revised from 0.85 to 0.82 after challenger identified: (1) missing `<legend>` element (added to §3.7), (2) misclassified `<option>` elements in ArchivalModal/TaskFieldsEditor (reclassified as simple swap), (3) incorrect DecisionViewport `<a>` routing to #1616 (corrected to unowned), (4) uneven intentional-native rationale (added marker-as-decision reasoning in §3.1 note). Accepted all four challenges; adjusted classifications and routing.
 
@@ -119,4 +131,5 @@ No inter-task dependencies within Phase 2 — all five streams are independent. 
 
 ## 6. Follow-Up Tasks
 
-1. **New task needed:** Migrate TaskFieldsEditor `<option>` → `PSelectOption` + DecisionViewport `<a>` → `PLinkPure` (unowned simple swaps discovered by inventory)
+1. **Created:** #1634 — Migrate TaskFieldsEditor `<option>` → `PSelectOption` + DecisionViewport `<a>` → `PLinkPure` (unowned simple swaps discovered by inventory)
+2. **New task needed:** Migrate CleanupPanel + RepairPanel confirm overlays from raw `div[role="dialog"]` to a shared modal implementation path (unowned complex integration)
