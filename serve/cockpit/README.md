@@ -151,10 +151,24 @@ Accessibility and responsive state after #1396:
   1280×720, all 7 columns identical `offsetTop`) and `e2e/responsive-layout-1391.spec.ts`
   (board-container assertions at 1024px and 1440px updated to expect horizontal overflow;
   shell document-level and vertical-overflow guards remain passing).
+- #1614 performs PDS simple component swaps across five cockpit components.
+  `ActivityTab.tsx` session-row button, `DRStatusIndicator.tsx` resolve-button, and
+  `ErrorBoundary.tsx` retry button are replaced with `PButton` controls with preserved
+  `data-testid` attributes and `onClick` handlers. `Shell.tsx` status-bar `<h1>`, both
+  sidecar-section `<h2>` elements, `DetailTab.tsx` actions `<h3>`, and `ErrorBoundary.tsx`
+  error-state `<h3>` are replaced with `PHeading` with explicit `tag` props. Remaining
+  native `<button>` elements carry `data-pds-exception` attributes or are the
+  sidecar-collapse toggle (`aria-expanded` pattern); zero raw `<select>` elements exist
+  in source. Verified by `serve/cockpit/web/src/__tests__/PdsSimpleSwaps1614.test.tsx`
+  (29 tests covering AC-1 through AC-4) and `serve/cockpit/web/src/__tests__/PdsMigration.test.tsx`
+  (durable regression, 78 passing).
 - #1628 completes the WCAG 2.1 AA accessibility sweep: invalid host-level ARIA attributes
   (`aria-expanded`, `aria-controls`) on `p-button` host controls are replaced with native
   `<button>` elements in `KanbanBoard.tsx` (filter toggle) and `Shell.tsx` (nav rail
   control); prohibited `aria-current`/`aria-label` on the nav `p-button` host is removed.
+
+> **TODO:** unverified — heading semantics claim below ("Shell.tsx adds the page-level `<h1>` product identity and `<h2>` headings for sidecar sections; `DetailTab.tsx` adds `<h3>` section headings") may duplicate #1614 work; the `PHeading` additions in `Shell.tsx`/`DetailTab.tsx` were implemented by #1614. Verify which aspects of heading structure #1628 actually introduced vs. inherited. [#1628]
+
   Heading semantics are corrected: `Shell.tsx` adds the page-level `<h1>` product identity
   and `<h2>` headings for sidecar sections; `DetailTab.tsx` adds `<h3>` section headings
   for accordion content. `RepairPanel.tsx` moves the confirm action from a non-interactive
@@ -166,6 +180,7 @@ Accessibility and responsive state after #1396:
   FilterPanel open state, ResolveModal, ArchivalModal, ConfirmDialog, CleanupPanel confirm
   dialog, and RepairPanel confirm dialog, all zero violations) and
   `e2e/accessibility-1395.spec.ts` (regression gate, no regressions).
+
 - Documentation here does not treat cache/SSE invalidation work from #1346 as part of
   this delivery bundle.
 
