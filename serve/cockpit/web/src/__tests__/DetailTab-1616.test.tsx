@@ -1,5 +1,5 @@
 /**
- * P2-07: Sidecar information architecture — task #1616 (Cycle 2)
+ * P2-07: Sidecar information architecture — task #1616 (Cycle 3)
  *
  * AC1: Given a non-null task, DetailTab's root element contains exactly four
  *   data-region children in DOM order: sidecar-body → actions → sidecar-metadata → history.
@@ -9,16 +9,17 @@
  * AC2: sidecar-metadata region is a p-accordion host element
  *   (p-accordion[data-region='sidecar-metadata'][compact][heading='Metadata']);
  *   closed by default (no open attribute);
- *   all field-* testid elements within remain queryable in DOM when closed
- *   (PAccordion CSS visibility contract per research).
+ *   accordion subtree remains in DOM when closed — proved by querying at least one
+ *   field-* testid descendant (PAccordion uses CSS height animation, not conditional render).
  *
- * Cycle 2 revision notes:
+ * Cycle 3 revision notes:
+ *   - AC2 narrowed from "all field-*" to "at least one field-* testid descendant".
+ *     Rationale: PAccordion CSS-visibility contract is proved by any single queryable
+ *     descendant — individual field rendering is a separate concern owned by DetailTab.test.tsx.
  *   - AC1 refined: direct-child scoping (not deep query); non-null precondition explicit.
- *   - AC2 refined: accordion HOST is the metadata region (data-region on p-accordion itself,
- *     not on a child). Architect revised AC2 to match existing implementation —
- *     AC2 tests serve as regression guards (all pass against current impl).
- *   - Builder work: AC1 section reordering only.
- *     AC1 tests fail until builder moves sidecar-body and actions before sidecar-metadata.
+ *   - Accordion HOST pattern: data-region on p-accordion itself (not on a child inside it).
+ *   - Cycle 2 builder (commit 301a886) already reordered sections; all tests now PASS.
+ *   - AC2 tests serve as regression guards (implementation already satisfies them).
  */
 import { beforeAll, describe, it, expect, vi } from 'vitest'
 import { render } from '@testing-library/react'
@@ -166,17 +167,16 @@ describe('TestFromAC_SidecarIA', () => {
       expect(accordion?.hasAttribute('open')).toBe(false)
     })
 
-    it('all field-* testid elements remain queryable inside the accordion when closed (CSS visibility contract)', () => {
+    it('at least one field-* testid descendant is queryable inside the closed accordion (CSS visibility contract)', () => {
       const { container } = renderDetail()
       const accordion = container.querySelector('p-accordion[data-region="sidecar-metadata"]')
       expect(accordion?.hasAttribute('open')).toBe(false)
-      // Content must stay in DOM — PAccordion uses CSS height animation, not conditional render.
-      for (const testid of ['field-id', 'field-status', 'field-created', 'field-claimed']) {
-        expect(
-          accordion?.querySelector(`[data-testid="${testid}"]`),
-          `${testid} must be in accordion DOM when closed`,
-        ).not.toBeNull()
-      }
+      // Querying any one descendant proves PAccordion CSS height animation (not conditional render).
+      // Checks field-id as representative sample — AC2 requires at least one.
+      expect(
+        accordion?.querySelector('[data-testid="field-id"]'),
+        'field-id must be in accordion DOM when closed',
+      ).not.toBeNull()
     })
   })
 })
