@@ -94,8 +94,10 @@ export function CockpitProvider({ children }: PropsWithChildren): ReactElement {
     previousSelectedTaskIdRef.current = selectedTaskId
     activeTaskControllerRef.current?.abort()
 
-    setSelectedTask(null)
-    setSelectedTaskError(null)
+    if (isTaskSwitch) {
+      setSelectedTask(null)
+      setSelectedTaskError(null)
+    }
 
     const controller = new AbortController()
     activeTaskControllerRef.current = controller

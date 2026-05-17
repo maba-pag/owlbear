@@ -115,8 +115,12 @@ export default function TaskFieldsEditor({
   const [parent, setParent] = useState(task.parent !== null ? String(task.parent) : '')
   const [blockReason, setBlockReason] = useState(task.block_reason ?? '')
   const saveConfirmedTimerRef = useRef<number | null>(null)
+  const previousTaskIdRef = useRef(task.id)
 
   useEffect(() => {
+    const isTaskSwitch = previousTaskIdRef.current !== task.id
+    previousTaskIdRef.current = task.id
+
     if (conflictLocalDraft && conflictRemoteTaskId === task.id) {
       setTitle(conflictLocalDraft.title)
       setPriority(conflictLocalDraft.priority)
@@ -130,7 +134,9 @@ export default function TaskFieldsEditor({
     setTitle(task.title)
     setPriority(task.priority)
     setBody(task.body ?? '')
-    setSaveConfirmed(false)
+    if (isTaskSwitch) {
+      setSaveConfirmed(false)
+    }
     setDependsOn(task.depends_on.join(', '))
     setParent(task.parent !== null ? String(task.parent) : '')
     setBlockReason(task.block_reason ?? '')
