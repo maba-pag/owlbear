@@ -39,6 +39,8 @@ FILTER_REGEX_EXCLUDE: '(\.owlbear/(briefs|doc-index\.md$|kanban/(archive|decisio
 ADDITIONAL_EXCLUDED_DIRECTORIES:
   - store
   - .venv
+  - .owlbear
+  - .ruff_cache
   - __pycache__
   - node_modules
   - coverage             # Vitest/Playwright HTML coverage reports
