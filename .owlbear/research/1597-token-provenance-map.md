@@ -20,7 +20,7 @@
 
 ## 3. Four-Way Classification
 
-### 3a. PDS Equivalent (22 consumed tokens → replace with `--p-*`)
+### 3a. PDS Equivalent (27 consumed tokens → replace with `--p-*`)
 
 | `--pds-*` Token | PDS v4 `--p-*` Replacement | Consumer Files |
 |---|---|---|
@@ -84,11 +84,11 @@ No `--pds-*` token maps to a Tailwind utility class. All consumed tokens have di
 
 | Classification | Count | Action |
 |---|---|---|
-| PDS equivalent | 22 (15 direct + 4 aliases + 2 undeclared + 1 layout×2) | `--pds-*` → `--p-*` at each usage site |
+| PDS equivalent | 27 (21 direct + 2 aliases + 4 undeclared) | `--pds-*` → `--p-*` at each usage site |
 | Tailwind utility | 0 | — |
 | Custom-keep | 1 | Move to `custom-tokens.css` |
 | Dead-delete | 11 | Deleted with `tokens.css` |
-| **Total classified** | **34** | |
+| **Total classified** | **39** | |
 
 ## 4. Grep-Verified Coverage
 
