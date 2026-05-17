@@ -188,7 +188,7 @@ async function measureBorderContrast(
   page: Page,
   elementSel: string,
   borderProp: string,
-): Promise<{ found: boolean; contrastRatio: number; borderColor: string; canvasBg: string; hasSchemeDark: boolean }> {
+): Promise<{ found: boolean; contrastRatio: number; borderColor: string; canvasBg: string; hasSchemeDark: boolean; borderWidth: number }> {
   return page.evaluate(
     ({ sel, prop }: { sel: string; prop: string }) => {
       // Convert camelCase to kebab-case for getPropertyValue
@@ -209,7 +209,7 @@ async function measureBorderContrast(
       const el = document.querySelector<HTMLElement>(sel)
       const shellEl = document.querySelector<HTMLElement>('.shell')
       if (!el || !shellEl) {
-        return { found: false, contrastRatio: 0, borderColor: '', canvasBg: '', hasSchemeDark: false }
+        return { found: false, contrastRatio: 0, borderColor: '', canvasBg: '', hasSchemeDark: false, borderWidth: 0 }
       }
 
       const elStyle = window.getComputedStyle(el)
@@ -222,7 +222,7 @@ async function measureBorderContrast(
       const elementBgRgba = parseRgba(elementBgStr)
       const canvasBgRgba = parseRgba(canvasBgStr)
       if (!borderRgba || !elementBgRgba || !canvasBgRgba) {
-        return { found: false, contrastRatio: 0, borderColor: borderColorStr, canvasBg: canvasBgStr, hasSchemeDark: false }
+        return { found: false, contrastRatio: 0, borderColor: borderColorStr, canvasBg: canvasBgStr, hasSchemeDark: false, borderWidth: 0 }
       }
 
       // Composite semi-transparent border over element's own background to get rendered border color
@@ -239,12 +239,14 @@ async function measureBorderContrast(
       const L_canvas = lum(canvasBgRgba.r, canvasBgRgba.g, canvasBgRgba.b)
       const ratio = (Math.max(L_border, L_canvas) + 0.05) / (Math.min(L_border, L_canvas) + 0.05)
 
+      const borderWidthStr = elStyle.getPropertyValue(toKebab(prop.replace('Color', 'Width')))
       return {
         found: true,
         contrastRatio: ratio,
         borderColor: borderColorStr,
         canvasBg: canvasBgStr,
         hasSchemeDark: document.documentElement.classList.contains('scheme-dark'),
+        borderWidth: parseFloat(borderWidthStr),
       }
     },
     { sel: elementSel, prop: borderProp },
@@ -408,6 +410,10 @@ test.describe('TestFromAC_DarkModeBorderContrast', () => {
       expect(result.found, '.shell__sidecar must be present in the DOM').toBe(true)
       expect(result.hasSchemeDark, 'html must carry .scheme-dark in dark mode').toBe(true)
       expect(
+        result.borderWidth,
+        `AC-1: .shell__sidecar border-left-width must be > 0 before contrast can be measured. Got: ${result.borderWidth}px.`,
+      ).toBeGreaterThan(0)
+      expect(
         result.contrastRatio,
         `AC-1: .shell__sidecar border-left contrast must be >= 1.3:1 against canvas. ` +
           `Got ${result.contrastRatio.toFixed(2)}:1. ` +
@@ -442,6 +448,10 @@ test.describe('TestFromAC_DarkModeBorderContrast', () => {
       expect(result.found, '.shell__nav-rail must be present in the DOM').toBe(true)
       expect(result.hasSchemeDark, 'html must carry .scheme-dark in dark mode').toBe(true)
       expect(
+        result.borderWidth,
+        `AC-1: .shell__nav-rail border-right-width must be > 0 before contrast can be measured. Got: ${result.borderWidth}px.`,
+      ).toBeGreaterThan(0)
+      expect(
         result.contrastRatio,
         `AC-1: .shell__nav-rail border-right contrast must be >= 1.3:1 against canvas. ` +
           `Got ${result.contrastRatio.toFixed(2)}:1. ` +
@@ -475,6 +485,10 @@ test.describe('TestFromAC_DarkModeBorderContrast', () => {
 
       expect(result.found, 'At least one .column must be present in the DOM').toBe(true)
       expect(result.hasSchemeDark, 'html must carry .scheme-dark in dark mode').toBe(true)
+      expect(
+        result.borderWidth,
+        `AC-1: .column border-top-width must be > 0 before contrast can be measured. Got: ${result.borderWidth}px.`,
+      ).toBeGreaterThan(0)
       expect(
         result.contrastRatio,
         `AC-1: .column border contrast must be >= 1.3:1 against canvas. ` +
@@ -516,6 +530,10 @@ test.describe('TestFromAC_DarkModeBorderContrast', () => {
         '.filter-panel must be present in the DOM after opening filter toggle',
       ).toBe(true)
       expect(result.hasSchemeDark, 'html must carry .scheme-dark in dark mode').toBe(true)
+      expect(
+        result.borderWidth,
+        `AC-1: .filter-panel border-top-width must be > 0 before contrast can be measured. Got: ${result.borderWidth}px.`,
+      ).toBeGreaterThan(0)
       expect(
         result.contrastRatio,
         `AC-1: .filter-panel border contrast must be >= 1.3:1 against canvas. ` +
@@ -608,10 +626,14 @@ test.describe('TestFromAC_DarkModeBorderSchemeSwitch', () => {
           const sidecar = document.querySelector<HTMLElement>('.shell__sidecar')
           const navRail = document.querySelector<HTMLElement>('.shell__nav-rail')
           return {
+            sidecarFound: !!sidecar,
+            navRailFound: !!navRail,
             sidecar: sidecar ? window.getComputedStyle(sidecar).getPropertyValue('border-left-color') : '',
             navRail: navRail ? window.getComputedStyle(navRail).getPropertyValue('border-right-color') : '',
           }
         })
+        expect(lightColors.sidecarFound, '.shell__sidecar must exist in DOM (light page)').toBe(true)
+        expect(lightColors.navRailFound, '.shell__nav-rail must exist in DOM (light page)').toBe(true)
 
         // Element 1: sidecar border-left-color must differ at runtime between schemes
         expect(

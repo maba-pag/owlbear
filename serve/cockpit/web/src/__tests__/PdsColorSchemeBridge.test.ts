@@ -117,10 +117,10 @@ describe('TestFromAC_TokensCssGlobalStylesImport_1555', () => {
     expect(content).toContain('--custom-signal-claimed')
   })
 
-  it('AC-1: custom-tokens.css declares exactly one custom property', () => {
+  it('AC-1: custom-tokens.css declares exactly two custom properties (--custom-signal-claimed + --p-color-contrast-low)', () => {
     const content = readFileSync(CUSTOM_TOKENS_CSS_PATH, 'utf-8')
     const declarations = [...content.matchAll(/--[a-z][a-z0-9-]*\s*:/g)]
-    expect(declarations).toHaveLength(1)
+    expect(declarations).toHaveLength(2)
   })
 })
 
