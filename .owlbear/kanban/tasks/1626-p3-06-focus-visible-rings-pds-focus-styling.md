@@ -4,7 +4,7 @@ title: 'P3-06: Focus-visible rings — PDS focus styling'
 status: todo
 priority: important
 created: 2026-05-16T03:37:44.792818+00:00
-updated: 2026-05-17T09:18:46.667695+02:00
+updated: 2026-05-17T16:14:53.375277+02:00
 tags:
   - frontend
   - pds
@@ -12,16 +12,21 @@ tags:
 parent: 1590
 depends_on: []
 ac:
-  - 'Global `:focus-visible` rule in custom-tokens.css targets `button, [role="button"],
-    [role="menuitem"], input, a` with `outline: 2px solid var(--color-focus); outline-offset:
-    2px` — Vitest source-contract assertion'
-  - 'Behavioral proof: one representative per selector bucket shows correct outline
-    under real keyboard traversal (Tab/arrow-key; NOT .focus()). button=theme-toggle,
-    [role="button"]=HistorySubtab row [data-testid="history-session-row"] (NOT Card),
-    menuitem=context-menu, input=radio, a=anchor'
-  - 'No `:focus-visible` rule references legacy `--pds-state-focus`, `--p-color-focus`,
-    or hardcoded colors. Card.css uses `var(--color-focus)` with `outline-offset:
-    2px`'
+  - "Vitest reads `src/custom-tokens.css` by resolved path. Extracts ONE rule block's
+    selector list (text before `{`). Normalizes whitespace, asserts all five selectors
+    present in that single list: `button:focus-visible`, `[role=\"button\"]:focus-visible`,
+    `[role=\"menuitem\"]:focus-visible`, `input:focus-visible`, `a:focus-visible`.
+    Independent per-selector `toContain` against the full file is insufficient. Asserts
+    `outline: 2px solid var(--color-focus)` and `outline-offset: 2px` in that block."
+  - 'Playwright behavioral proof: one representative per selector bucket shows outline-style
+    `solid` and outline-color `rgb(26, 68, 234)` under real keyboard traversal (Tab
+    or arrow-key; `.focus()` prohibited). Representatives: button=theme-toggle Tab,
+    [role="button"]=HistorySubtab [data-testid="history-session-row"] Tab (NOT Card),
+    menuitem=context-menu ArrowDown, input=radio Tab, a=anchor Tab.'
+  - 'No `:focus-visible` block in `src/**/*.css` references `--pds-state-focus`, `--p-color-focus`,
+    or hardcoded color literals (regex: `#[0-9a-fA-F]{3,8}|rgb\(|rgba\(|hsl\(|hsla\(`)
+    in outline/outline-color property values. Card.css `.card:focus-visible` uses
+    `var(--color-focus)` with `outline-offset: 2px`.'
 proof_bundle: behavioral
 blocked: false
 block_reason:
@@ -291,3 +296,203 @@ Refined AC addressing reviewer findings from 2 prior FAIL cycles:
 Challenger: reconsider (0.44) — accepted 3/5, rebutted 1/5 (setup preconditions are test impl), partial 1/5 (universal quantifier reworded but CSS cascade makes source+sample sufficient). Consolidation-test gap: none (#1629 exists).
 
 Proof bundle: behavioral (unchanged). Test-writer: PROCEED.
+
+[[2026-05-17T14:02:25+02:00]]
+## Test-Writer Notes
+
+**Test files (committed):**
+- `serve/cockpit/web/e2e/focus-visible-pds-1626.spec.ts`
+- `serve/cockpit/web/src/__tests__/FocusVisibleCssSource_1626.test.ts`
+
+**Prior cycle 2 commit:** `8d3ec581` — test: add keyboard-traversal proof and --pds-state-focus check for #1626 (test-writer)
+
+**All 23 tests PASS against current implementation (builder commit 0cd8260c).**
+
+| Class | File | Category | Count |
+|-------|------|----------|-------|
+| `TestFromAC_FocusVisibleOutline` | E2E | AC-1 (original) | 8 |
+| `TestFromAC_CardFocusTokenMigration` | E2E | AC-2 boundary | 1 |
+| `TestFromAC_FocusVisibleKeyboardProof` | E2E | AC-1 keyboard-traversal (cycle 2 corrected) | 8 |
+| `TestFromAC_FocusTokenSource` | Vitest | AC-2 / AC-3 CSS source | 6 |
+
+**AC coverage:**
+
+| AC | Tests | Status |
+|----|-------|--------|
+| AC-1: Global :focus-visible rule; keyboard traversal (Tab/arrow-key); HistorySubtab for [role="button"] | 16 E2E | PASS |
+| AC-2: var(--color-focus); Card.css outline-offset 2px | 1 E2E + 5 Vitest | PASS |
+| AC-3: No legacy --pds-state-focus or --p-color-focus in :focus-visible blocks | 1 Vitest | PASS |
+
+**Builder skip: test-only retry, all tests green.**
+Reviewer's Required Follow-up (cycle 2) were ARCHITECT actions only — no implementation fixes required. Implementation was already correct. Advancing directly to review.
+
+[[2026-05-17T14:42:52+02:00]]
+## Review Evidence
+- Verdict: FAIL
+- FAIL #1626 -> backlog | runtime behavior appears correct, but the refined AC still lacks durable source-contract proof for AC-1 and the hardcoded-color prohibition in AC-3.
+- Challenger cross-check: reconsidered the earlier broader fail. Keyboard-path coverage now exists for all selector buckets, so the remaining blocker is narrowed to source-proof quality rather than runtime behavior.
+- Blocking findings:
+
+| # | AC Line | Finding | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | AC-1 | The required Vitest source-contract assertion is still too weak for the refined contract. The implementation in `custom-tokens.css` is exact, but the task-local test only scans any CSS file under `src/` for some native-element `:focus-visible` rule using `var(--color-focus)`. It does not pin the rule to `custom-tokens.css`, does not require the full selector group `button, [role="button"], [role="menuitem"], input, a`, and does not assert the global rule's `outline-offset: 2px` declaration. That can false-green if the precise contract regresses while some looser matching rule remains elsewhere. | AC frontmatter in `.owlbear/kanban/tasks/1626-p3-06-focus-visible-rings-pds-focus-styling.md`; exact implementation at `serve/cockpit/web/src/custom-tokens.css:6-12`; current pass condition at `serve/cockpit/web/src/__tests__/FocusVisibleCssSource_1626.test.ts:132-170`; exact selector/declaration text appears only in failure guidance at `serve/cockpit/web/src/__tests__/FocusVisibleCssSource_1626.test.ts:178-181` | backlog |
+| 2 | AC-3 | The executable proof still omits the `hardcoded colors` portion of the contract. The source suite has negative assertions for legacy `--p-color-focus` and `--pds-state-focus`, but no runnable assertion that rejects hex/rgb/hsl literals inside any `:focus-visible` block. The only hardcoded-color mention is a header comment, so a future literal color in a focus rule could false-green. | AC frontmatter in `.owlbear/kanban/tasks/1626-p3-06-focus-visible-rings-pds-focus-styling.md`; comment mention at `serve/cockpit/web/src/__tests__/FocusVisibleCssSource_1626.test.ts:6`; executable token-only checks at `serve/cockpit/web/src/__tests__/FocusVisibleCssSource_1626.test.ts:189-248` | backlog |
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Refine the AC-1 proof contract so RED/GREEN must assert the exact `custom-tokens.css` selector group and declarations (`outline` and `outline-offset`) instead of a loose any-CSS-file existence scan. | `.owlbear/kanban/tasks/1626-p3-06-focus-visible-rings-pds-focus-styling.md`; `serve/cockpit/web/src/__tests__/FocusVisibleCssSource_1626.test.ts`; `serve/cockpit/web/src/custom-tokens.css` | Finding #1 |
+| 2 | architect | Refine the AC-3 proof contract so the source suite includes an executable no-hardcoded-color assertion across `:focus-visible` blocks before the task re-enters RED/GREEN. | `.owlbear/kanban/tasks/1626-p3-06-focus-visible-rings-pds-focus-styling.md`; `serve/cockpit/web/src/__tests__/FocusVisibleCssSource_1626.test.ts`; `serve/cockpit/web/src/custom-tokens.css`; `serve/cockpit/web/src/components/Card.css` | Finding #2 |
+
+## Observations
+- Live implementation now matches the refined contract: `serve/cockpit/web/src/custom-tokens.css:6-12` carries the exact selector list and declarations, `serve/cockpit/web/src/main.tsx:5` loads that stylesheet, and `serve/cockpit/web/src/components/Card.css:115-117` matches the token/offset requirement.
+- Behavioral proof is now present for all selector buckets under keyboard traversal: menuitem/input in `serve/cockpit/web/e2e/focus-visible-pds-1626.spec.ts:249-352`, button in `serve/cockpit/web/e2e/focus-visible-pds-1626.spec.ts:499-542`, `[role="button"]` via HistorySubtab in `serve/cockpit/web/e2e/focus-visible-pds-1626.spec.ts:555-607`, and anchor in `serve/cockpit/web/e2e/focus-visible-pds-1626.spec.ts:614-656`.
+- The older `.focus()` and stale DecisionViewport article cases remain in the spec file as superseded noise. They are not the reason for this rejection, but they should be cleaned up when the task is reworked to reduce future proof confusion.
+
+[[2026-05-17T15:02:19+02:00]]
+## Architecture Review (cycle 3)
+### Evaluation
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | Focus-visible only; unchanged |
+| Interface clarity | PASS | AC refined with path-pinned source-contract, concrete color literal, and hardcoded-color regex |
+| Dependency correctness | PASS | No unmet deps |
+| Module layering | PASS | CSS-only, no module imports |
+| TDD compliance | PASS | Test-writer re-processes for corrected RED |
+| KISS/YAGNI | PASS | Same global CSS rule approach |
+| Premise challenge | PASS | PDS does not style native focus; gap remains real |
+| Pattern consistency | PASS | PDS canonical var(--color-focus), 2px/2px |
+| Security surface | PASS | No system boundaries |
+| Single domain | PASS | Frontend CSS only |
+
+### AC Refinement (cycle 3 — addressing reviewer findings)
+| Prior AC gap | Reviewer finding | Refinement |
+|---|---|---|
+| AC-1: test scanned any CSS file | Source-contract can false-green if precise rule regresses while looser match remains | AC-1 now mandates reading `src/custom-tokens.css` BY RESOLVED PATH, asserting exact five-part selector group and both declarations |
+| AC-3: no hardcoded-color assertion | Only legacy token checks; hex/rgb/hsl literals undetected | AC-3 now provides explicit regex (`#[0-9a-fA-F]{3,8}|rgb\\(|rgba\\(|hsl\\(|hsla\\(`) for hardcoded color prohibition |
+| AC-2: \"PDS focus color\" unnamed | Challenger: concrete computed value unstated | AC-2 now names `rgb(26, 68, 234)` as the expected outline-color |
+
+### Challenge Results
+- Challenger: reconsider (confidence 0.56)
+- Findings:
+  - #1 artifact drift (moderate): ACCEPTED — AC frontmatter updated with refined lines before advancing
+  - #2 ambiguous canonical literal (moderate): ACCEPTED — AC-2 now names `rgb(26, 68, 234)`
+  - #3 missing traversal boundary (moderate): REBUTTED — Tab/arrow-key method specified; tab-helper cap is test implementation detail
+  - #4 hidden sampling assumption (moderate): REBUTTED — two-layer proof model (source-contract proves rule existence, behavioral sample proves no override on clean representative); Card excluded, HistorySubtab has no component-level focus CSS
+  - #5 split primary target (minor): REBUTTED — single verification axis (token correctness); splitting adds complexity without testability gain
+- Blind spots: stale DecisionViewport tests — ACCEPTED as builder cleanup guidance; outline-offset per bucket — REBUTTED (AC-1 source-contract covers offset globally)
+- Architect response: accepted 2/5, rebutted 3/5
+
+### Builder Guidance
+- AC-1: Replace the recursive `collectCssFiles` glob approach in FocusVisibleCssSource_1626.test.ts with a direct `readFileSync` of `src/custom-tokens.css`. Assert exact selector group string and both declaration strings.
+- AC-3: Add a new test that scans all `src/**/*.css` files, extracts `:focus-visible` blocks, and asserts no outline/outline-color value matches the hardcoded-color regex.
+- Cleanup: remove stale DecisionViewport `.focus()` tests from the E2E spec (superseded by keyboard-traversal tests in cycle 2).
+
+### Proof-Bundle Validation
+- Planner assignment: behavioral
+- Final bundle: behavioral
+- Existing proof scope: N/A
+- Test-writer: PROCEED
+
+### Verdict: APPROVE
+### Action Taken: Refined AC into 3 precision-tightened lines addressing reviewer's source-proof and hardcoded-color gaps. Named concrete color literal in AC-2. Advanced to todo.
+
+[[2026-05-17T15:27:27+02:00]]
+## Test-Writer Notes
+
+**Test files:**
+- `serve/cockpit/web/src/__tests__/FocusVisibleCssSource_1626.test.ts` — Vitest source-contract (updated cycle 3)
+- `serve/cockpit/web/e2e/focus-visible-pds-1626.spec.ts` — Playwright E2E (unchanged from cycle 2)
+
+**Cycle 3 additions (cycle 3 AC refinement from architect):**
+
+| Class | File | Category | Count |
+|-------|------|----------|-------|
+| `TestFromAC_FocusSourceContractPinned` | Vitest | AC-1 pinned path (new) | 8 |
+| `TestFromAC_FocusHardcodedColorProhibition` | Vitest | AC-3 hardcoded-color regex (new) | 1 |
+
+**Prior tests unchanged:**
+- `TestFromAC_FocusTokenSource` (6 tests) — AC-2/AC-3 glob approach
+- `TestFromAC_FocusVisibleOutline` (8 tests) — E2E behavioral
+- `TestFromAC_CardFocusTokenMigration` (1 test) — E2E boundary
+- `TestFromAC_FocusVisibleKeyboardProof` (8 tests) — E2E keyboard-traversal
+
+**Total: 32 tests, all PASS (direct-to-review advance per Step 1b.1).**
+
+**Why direct-to-review:** Reviewer's Required Follow-up (cycle 3) were ARCHITECT-only actions — architect refined AC-1 (pinned path, exact selector+declarations) and AC-3 (hardcoded-color regex). Implementation was already correct. All 9 new tests pass against current code. Builder skip.
+
+**AC coverage (cycle 3 AC):**
+
+| AC | Tests | Status |
+|----|-------|--------|
+| AC-1: custom-tokens.css by path; five-part selector; both declarations | 8 Vitest (TestFromAC_FocusSourceContractPinned) + 8 E2E keyboard-proof | PASS |
+| AC-2: keyboard behavioral proof; outline-style solid; outline-color rgb(26,68,234) | 8 E2E (TestFromAC_FocusVisibleKeyboardProof) + 1 E2E boundary | PASS |
+| AC-3: no legacy tokens or hardcoded colors in :focus-visible outline values | 1 Vitest (hardcoded-color regex) + 2 Vitest (legacy tokens) | PASS |
+
+**Verification:** quality-runner scoped run — 15/15 Vitest pass, lint clean.
+**Commit:** `a42e7359` — test: add pinned source-contract and hardcoded-color prohibition tests for #1626 (test-writer)
+
+[[2026-05-17T15:49:13+02:00]]
+## Review Evidence
+- Verdict: FAIL
+- FAIL #1626 -> backlog | cycle-3 AC-1 still is not mechanically proven: the pinned-source suite reads the right file, but it does not assert the exact grouped selector block the refined contract requires.
+- Challenger cross-check: proceed (confidence 0.84). The challenge narrowed this to a source-contract gap rather than a runtime-behavior gap, but agreed the blocker is real once the cycle-3 refinement is treated as binding.
+- Blocking findings:
+
+| # | AC Line | Finding | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | AC-1 | The current Vitest source-contract still falls short of the refined AC-1 grouped-rule invariant. The task AC requires asserting the five-part selector group in `src/custom-tokens.css` with both declarations inside that block, and the cycle-3 architecture note tightened that further to an exact selector-group string. The new test reads the correct resolved path, but it only checks each selector substring independently and then checks declarations from a block matched from `button:focus-visible`. That can false-green if the selectors are split across multiple rules or the exact selector group drifts while those substrings and the button block remain. The implementation is currently correct; the blocker is that the proof still does not encode the precise invariant the prior review cycle required. | `.owlbear/kanban/tasks/1626-p3-06-focus-visible-rings-pds-focus-styling.md:16`; `.owlbear/kanban/tasks/1626-p3-06-focus-visible-rings-pds-focus-styling.md:370`; `.owlbear/kanban/tasks/1626-p3-06-focus-visible-rings-pds-focus-styling.md:386`; `serve/cockpit/web/src/custom-tokens.css:6-12`; `serve/cockpit/web/src/__tests__/FocusVisibleCssSource_1626.test.ts:278-346` | backlog |
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Re-issue AC-1 and RED guidance so the source-contract proves the single grouped selector invariant directly in `src/custom-tokens.css` rather than via independent selector-presence checks plus a button-anchored block match, then re-dispatch test-writing against that clarified gate. | `.owlbear/kanban/tasks/1626-p3-06-focus-visible-rings-pds-focus-styling.md`; `serve/cockpit/web/src/__tests__/FocusVisibleCssSource_1626.test.ts`; `serve/cockpit/web/src/custom-tokens.css` | Finding #1 |
+
+## Observations
+- Implementation-to-AC mapping looks correct. `serve/cockpit/web/src/custom-tokens.css:6-12` contains the intended selector group and declarations, `serve/cockpit/web/src/main.tsx:4-5` loads that stylesheet globally, and `serve/cockpit/web/src/components/Card.css:116-117` matches the token and offset contract.
+- Behavioral proof appears sufficient for all selector buckets under keyboard traversal: menuitem at `serve/cockpit/web/e2e/focus-visible-pds-1626.spec.ts:249` and `:275`, input at `serve/cockpit/web/e2e/focus-visible-pds-1626.spec.ts:301` and `:327`, button at `serve/cockpit/web/e2e/focus-visible-pds-1626.spec.ts:507` and `:526`, `[role="button"]` via HistorySubtab at `serve/cockpit/web/e2e/focus-visible-pds-1626.spec.ts:555` and `:584` with the representative confirmed in `serve/cockpit/web/src/components/HistorySubtab.tsx:47-50`, and anchor at `serve/cockpit/web/e2e/focus-visible-pds-1626.spec.ts:614` and `:635`.
+- AC-3 proof also appears present: legacy-token checks at `serve/cockpit/web/src/__tests__/FocusVisibleCssSource_1626.test.ts:115` and `:225`, plus the hardcoded-color assertion at `serve/cockpit/web/src/__tests__/FocusVisibleCssSource_1626.test.ts:363-393`.
+- The older `.focus()`-based and stale DecisionViewport article tests remain in the Playwright file (`serve/cockpit/web/e2e/focus-visible-pds-1626.spec.ts:165`, `:184`, `:209`, `:229`, `:365`, `:384`) even though `DecisionViewport` currently renders the item as a plain article with no `role="button"` (`serve/cockpit/web/src/components/DecisionViewport.tsx:62-78`). They are not the reason for this rejection, but they should be removed when the task is reworked so future reviewers are not sorting through superseded proof.
+
+[[2026-05-17T16:14:53+02:00]]
+## Architecture Review (cycle 4)
+### Evaluation
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | Focus-visible only; unchanged |
+| Interface clarity | PASS | AC-1 now explicitly encodes grouped-rule proof methodology |
+| Dependency correctness | PASS | No unmet deps |
+| Module layering | PASS | CSS-only, no module imports |
+| TDD compliance | PASS | Test-writer re-processes for corrected RED |
+| KISS/YAGNI | PASS | Same global CSS rule approach |
+| Premise challenge | PASS | PDS does not style native focus; gap remains real |
+| Pattern consistency | PASS | PDS canonical var(--color-focus), 2px/2px |
+| Security surface | PASS | No system boundaries |
+| Single domain | PASS | Frontend CSS only |
+
+### AC Refinement (cycle 4 — addressing reviewer finding #1)
+| Prior AC gap | Reviewer finding | Refinement |
+|---|---|---|
+| AC-1: test checked selectors independently via toContain | Can false-green if selectors split into multiple rules | AC-1 now mandates: extract ONE rule block's selector list (text before {), normalize whitespace, assert all five selectors present in that single list. Explicitly states independent per-selector toContain is insufficient. |
+
+### Challenge Results
+- Challenger: reconsider (confidence 0.66)
+- Findings:
+  - #1 stale .focus() tests in Playwright spec (moderate): ACCEPTED — added to builder cleanup guidance. Not an AC or approval blocker (reviewer noted in 3 consecutive cycles these are not the rejection reason)
+  - #2 outline-offset not behaviorally asserted per bucket (moderate): REBUTTED — two-layer proof model separates source-contract (proves offset textually in AC-1) from behavioral proof (proves no-override via representatives). AC-3 scan catches overrides in all src/**/*.css
+  - #3 AC quality overloading (moderate): REBUTTED — AC-2/3 stable through 3 review cycles; each has one concern (visual output under keyboard focus / no legacy tokens). Setup preconditions are test implementation details, rebutted in cycle 2 challenge
+- Consolidation-test gap: NONE — #1629 confirmed (depends on #1626)
+- Architect response: accepted 1/3, rebutted 2/3
+
+### Builder Guidance
+- AC-1 fix: Replace the 8 independent toContain checks + button-anchored block regex with a single test that: (1) matches one CSS rule in custom-tokens.css, (2) extracts its complete selector list text before {, (3) asserts all 5 selector parts appear within that one selector list, (4) asserts both declarations in that block
+- Cleanup: Remove stale superseded tests from E2E spec — the older TestFromAC_FocusVisibleOutline describe block with .focus() calls and DecisionViewport article assertions (lines ~147-460 in current spec). These are fully superseded by the corrected TestFromAC_FocusVisibleKeyboardProof block.
+
+### Proof-Bundle Validation
+- Planner assignment: behavioral
+- Final bundle: behavioral
+- Existing proof scope: N/A
+- Test-writer: PROCEED
+
+### Verdict: APPROVE
+### Action Taken: Refined AC-1 to mandate single-rule extraction proof methodology (closing the grouped-selector false-green gap). Advanced to todo.

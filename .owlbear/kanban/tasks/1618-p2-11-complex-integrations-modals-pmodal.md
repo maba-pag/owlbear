@@ -1,10 +1,10 @@
 ---
 id: 1618
 title: 'P2-11: Complex integrations — modals → PModal'
-status: todo
+status: done
 priority: important
 created: 2026-05-16T03:37:02.326584+00:00
-updated: 2026-05-17T09:54:01.765521+02:00
+updated: 2026-05-17T16:15:32.684289+02:00
 tags:
   - frontend
   - pds
@@ -12,21 +12,24 @@ tags:
 parent: 1590
 depends_on: []
 ac:
-  - ConfirmDialog, ResolveModal, and ArchivalModal render via PModal; 
-    hand-rolled focus trap, Tab cycling, position:fixed overlay, and z-index 
-    removed from all three
+  - 'ConfirmDialog, ResolveModal, and ArchivalModal render via PModal host element;
+    legacy modal infrastructure removed: no div[role=dialog] wrapper, no position:fixed
+    overlay, no inline z-index'
+  - 'PDS host-level workarounds permitted for documented PModal limitations: (1) Tab-cycling
+    shim for slotted light-DOM focus trapping, (2) focus-state capture/restore for
+    close-path variants, (3) host attribute normalization (role, aria-modal) via MutationObserver'
   - 'Focus behavior preserved per modal: (a) all three trap Tab within modal boundary
     on open; (b) ResolveModal returns focus to DR trigger button on close; (c) ArchivalModal
     returns focus to originating task card on close (context-menu opener is destroyed
-    — use PModal onDismiss + explicit fallback target); (d) ConfirmDialog returns
-    focus to the action button that opened it'
+    — PModal onDismiss + explicit fallback target); (d) ConfirmDialog returns focus
+    to the action button that opened it'
   - 'Dismiss policy per modal: ConfirmDialog uses role=alertdialog, disableBackdropClick=true,
     dismissButton=false (Escape + in-body Cancel/Confirm only); ResolveModal and ArchivalModal
     allow backdrop click, Escape, dismiss button (X), and in-body Cancel/Close button'
 proof_bundle: behavioral
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-17T16:15:32.684289+02:00
 archival_reason:
 archival_refs: []
 ---
@@ -284,3 +287,158 @@ Gate assessment:
 | 1 | test-writer | Add/expand task-scoped coverage for ConfirmDialog and ResolveModal paths (especially focus/keyboard and close-path branches) until touched-module coverage reaches >=90%. | serve/cockpit/web/src/__tests__/PModalMigration_1618.test.tsx; serve/cockpit/web/src/__tests__/ResolveModalUX.test.tsx; serve/cockpit/web/src/components/ConfirmDialog.tsx; serve/cockpit/web/src/components/ResolveModal.tsx | quality-runner coverage: ConfirmDialog 63%, ResolveModal 75% |
 | 2 | test-writer | Provide a coverage-producing proof packet for this behavioral bundle that includes module-level percentages for the touched modal components and meets threshold. | serve/cockpit/web/src/__tests__/PModalMigration_1618.test.tsx; serve/cockpit/web/src/__tests__/ResolveModalUX.test.tsx; serve/cockpit/web/e2e/overlay-behavior-1563.spec.ts | quality-runner final run: overall 68.5%, module coverage below threshold |
 
+[[2026-05-17T14:23:49+02:00]]
+## Test-Writer Notes
+
+Retry cycle: expanded `CoverageGap_1618.test.tsx` with targeted branch-coverage tests until both components crossed ≥90%.
+
+**Test file:** `serve/cockpit/web/src/__tests__/CoverageGap_1618.test.tsx`
+**Classes:** `TestFromAC_ConfirmDialogCoverageGap`, `TestFromAC_ResolveModalCoverageGap`
+**Total tests in file:** 53 (all PASS against current implementation)
+
+**Coverage results (all 6 test files combined):**
+- `ConfirmDialog.tsx`: 98.57% branch (only line 63 remains — the `modal ? new MutationObserver(...) : null` null branch; modalRef.current is always set when the effect runs, making the null branch genuinely unreachable)
+- `ResolveModal.tsx`: 92.75% branch (lines 128 + 187-196 remain — optional-chain null paths inside a MutationObserver callback and the `readControlValue` PDS custom-event detail branch; both require dispatching non-standard custom events from jsdom PDS stubs)
+
+**Key tests added in this retry:**
+- ConfirmDialog: Tab with null activeElement; Tab with middle element focused; non-Tab/Escape key no-op; focus restoration on unmount; rerender with different type (React Compiler cache-miss at lines 131-132); rerender with SAME callback refs (React Compiler cache-hit at lines 131-132)
+- ResolveModal: MutationObserver callback invocation; non-Error throw path; isSubmitting guard; handleDocumentEscape non-Escape key; Tab with null activeElement; handleResponseChange with invalid value; dr.body null; focus restoration on unmount; non-Tab/non-Escape key (line 221 false branch); ApiError with custom message (line 91 ternary false branch); activeElement not HTMLElement at mount (line 119 null branch)
+
+**ESLint:** clean
+**Commit:** 92bcd58d — test: expand coverage gap tests for ConfirmDialog and ResolveModal (#1618, test-writer)
+
+**AC coverage:**
+| AC | Tests |
+|---|---|
+| ConfirmDialog branch ≥90% | ✅ 98.57% |
+| ResolveModal branch ≥90% | ✅ 92.75% |
+
+All tests pass. Moving directly to review (retry cycle per w-tdd-red §1b.1).
+
+[[2026-05-17T14:43:36+02:00]]
+## Review Evidence
+- Verdict: FAIL
+- Routing: review -> backlog
+- AC mapping:
+| AC Line | Code Evidence | Test Evidence | Status |
+|---|---|---|---|
+| AC-1 | All three modal roots now render through `PModal`, but the current implementation still retains custom focus-trap and Tab-cycling logic in all three components: `serve/cockpit/web/src/components/ConfirmDialog.tsx:4,79,90,123`, `serve/cockpit/web/src/components/ResolveModal.tsx:18,157,201,235`, and `serve/cockpit/web/src/components/ArchivalModal.tsx:14,25,140,177-178,188,231,346`. That conflicts with the AC-1 requirement that hand-rolled focus trap and Tab cycling be removed. | The AC-1 tests only prove `PModal` roots / no hand-rolled `div[role="dialog"]` wrapper / no `position:fixed` inline overlay (`serve/cockpit/web/src/__tests__/PModalMigration_1618.test.tsx:162-219`). The later retry proof then explicitly proves Tab wrapping behavior instead of guarding the removal clause (`serve/cockpit/web/src/__tests__/CoverageGap_1618.test.tsx:224,243,541,560`; `serve/cockpit/web/e2e/overlay-behavior-1563.spec.ts:434,469,554`). | FAIL |
+| AC-2 | Current source explicitly implements the required Tab and focus-return behaviors: `serve/cockpit/web/src/components/ConfirmDialog.tsx:49-67,90-105`, `serve/cockpit/web/src/components/ResolveModal.tsx:104-152,201-222`, `serve/cockpit/web/src/components/ArchivalModal.tsx:122-183,217-260`, and `serve/cockpit/web/src/KanbanBoard.tsx:207-218,352-361`. | The latest task evidence shows the behavioral proof packet went green after the retry (`.owlbear/kanban/tasks/1618-p2-11-complex-integrations-modals-pmodal.md:268-270,297-298`), and the task-local E2E surface does cover Tab/focus-return behaviors (`serve/cockpit/web/e2e/overlay-behavior-1563.spec.ts:434,469,517,554,617,647`). | PASS |
+| AC-3 | ConfirmDialog sets the alertdialog dismiss policy props (`serve/cockpit/web/src/components/ConfirmDialog.tsx:124-127`); ResolveModal and ArchivalModal wire full-dismiss behavior through `onDismiss` (`serve/cockpit/web/src/components/ResolveModal.tsx:234-235`; `serve/cockpit/web/src/components/ArchivalModal.tsx:217,345-346`). | Task-local unit tests cover the per-modal dismiss-policy wiring and dismissal callbacks (`serve/cockpit/web/src/__tests__/PModalMigration_1618.test.tsx:238,246,254,275,283,304,312,326,360,385,404`). | PASS |
+- Blocking findings:
+| # | AC Line | Finding | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | AC-1, AC-2 | The final implementation satisfies AC-2 by reintroducing custom Tab-cycle and focus-trap logic that AC-1 explicitly says must be removed. The task history itself documents that native `PModal` did not trap slotted controls in Chromium E2E, after which the builder added deterministic `Tab` / `Shift+Tab` handling in all three modals. This is an AC conflict that needs architect refinement, not a clean PASS. | `.owlbear/kanban/tasks/1618-p2-11-complex-integrations-modals-pmodal.md:16-18,222,260`; `serve/cockpit/web/src/components/ConfirmDialog.tsx:90`; `serve/cockpit/web/src/components/ResolveModal.tsx:201`; `serve/cockpit/web/src/components/ArchivalModal.tsx:140,231` | backlog |
+| 2 | AC-1 | The proof packet does not encode the "hand-rolled focus trap, Tab cycling ... removed" clause, so the suite can go green while the forbidden code remains. Existing AC-1 tests stop at PModal root / wrapper / fixed-overlay checks, and the later retry tests reinforce custom Tab wrapping rather than guarding against it. | `serve/cockpit/web/src/__tests__/PModalMigration_1618.test.tsx:162-219`; `serve/cockpit/web/src/__tests__/CoverageGap_1618.test.tsx:224,243,541,560`; `serve/cockpit/web/e2e/overlay-behavior-1563.spec.ts:434,469,554` | backlog |
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Refine AC-1 and AC-2 so the contract is internally consistent: either permit a minimal `PModal` host shim for Tab trapping under the documented PDS limitation, or choose an implementation strategy that achieves Tab trapping without retained hand-rolled logic. | `.owlbear/kanban/tasks/1618-p2-11-complex-integrations-modals-pmodal.md`; `.owlbear/research/1618-modal-pmodal-migration.md` | Finding 1; `.owlbear/kanban/tasks/1618-p2-11-complex-integrations-modals-pmodal.md:16-18,222,260` |
+| 2 | architect | Rewrite the AC-1 proof expectations so the test surface can distinguish "migrated to PModal" from "legacy focus-trap logic still present", then re-route through test-writer and builder on that executable contract. | `.owlbear/kanban/tasks/1618-p2-11-complex-integrations-modals-pmodal.md`; `serve/cockpit/web/src/__tests__/PModalMigration_1618.test.tsx`; `serve/cockpit/web/src/__tests__/CoverageGap_1618.test.tsx`; `serve/cockpit/web/e2e/overlay-behavior-1563.spec.ts` | Finding 2; `serve/cockpit/web/src/__tests__/PModalMigration_1618.test.tsx:162-219`; `serve/cockpit/web/src/__tests__/CoverageGap_1618.test.tsx:224,243,541,560` |
+
+## Observations
+- The current functional evidence is otherwise strong: the latest task record reports `174 passed / 0 failed / 0 skipped`, Playwright pass, lint clean, and post-retry coverage closure (`.owlbear/kanban/tasks/1618-p2-11-complex-integrations-modals-pmodal.md:268-270,297-298`). This FAIL is about the AC contract and proof surface, not a newly observed behavioral regression.
+- I did not dispatch `quality-runner` for an independent rerun because the blocking issue is visible in the current source and task history, and the latest builder / test-writer evidence is internally consistent on behavior.
+
+[[2026-05-17T15:02:33+02:00]]
+## Architecture Review (AC Refinement Cycle)
+### Context
+Task returned from reviewer with FAIL verdict due to AC-1/AC-2 internal contradiction. AC-1 mandated "Tab cycling removed" while AC-2 required "trap Tab within modal boundary." Implementation correctly added a Tab-cycling shim because PModal's native `<dialog>` does not trap focus for slotted light-DOM children in Chromium (confirmed by E2E evidence in test-writer retry notes).
+
+### AC Refinement
+Split original AC-1 into two lines:
+- AC-1: Migration observable outcomes (PModal host, no legacy wrapper/overlay/z-index)
+- AC-2: Explicit enumeration of 3 permitted PDS workaround categories (Tab shim, focus-state, attribute normalization)
+- AC-3/AC-4: Unchanged (focus behavior, dismiss policy)
+
+### Challenge Results
+- Challenger: reconsider (0.58 confidence)
+- Key challenges: (1) AC-1 wording too vague — doesn't bound workaround surface, (2) MutationObserver attribute-repair not mentioned, (3) z-index not independently asserted in tests, (4) proof-chain sufficiency without fresh test-writer cycle
+- Architect response: Accepted 1-2 — enumerated all 3 workaround categories explicitly (Tab shim, focus-state, MutationObserver). Rebutted 3 — z-index is testable via inline style assertion (same mechanism as position:fixed check). Rebutted 4 — pipeline routes to todo; test-writer processes; existing 174 passing tests + Playwright + coverage >90% satisfy the revised AC since the contradiction (not implementation) was the failure reason.
+
+### Proof-Bundle Validation
+- Planner assignment: behavioral
+- Final bundle: behavioral
+- Existing proof scope: PModalMigration_1618.test.tsx, CoverageGap_1618.test.tsx, overlay-behavior-1563.spec.ts, KeyboardA11y_1395.test.tsx, ResolveModalUX.pds-buttons.test.tsx, KanbanBoard.archive-handler.test.tsx
+- Test-writer: PROCEED (verify existing tests against revised AC; add assertions for negative AC-1 claims if missing)
+
+### Consolidation-test check
+- Sibling consolidation task #1629 exists under parent #1590 — no gap.
+
+### Verdict: APPROVE (after REFINE)
+### Action Taken: Refined AC-1 to resolve internal contradiction with AC-2. Split into outcome line + permitted-workaround enumeration. Existing implementation and proof surface satisfy the revised contract.
+
+[[2026-05-17T15:28:54+02:00]]
+## Test-Writer Notes (Retry — direct-to-review)
+
+**Trigger:** AC refinement by architect (2026-05-17) resolved AC-1/AC-2 contradiction. Architect directed test-writer to verify existing tests against revised AC and add missing negative AC-1 assertions.
+
+**Changes made:**
+- Updated file header in `serve/cockpit/web/src/__tests__/PModalMigration_1618.test.tsx` to reflect revised AC numbering (AC-1 through AC-4).
+- Added `hasInlineZIndexStyle()` helper to the test file.
+- Added 3 new tests (one per modal) asserting `no inline z-index` per revised AC-1: `ConfirmDialog`, `ResolveModal`, `ArchivalModal`.
+- Renamed `AC3:` → `AC4:` and `AC2:` → `AC3/AC4:` describe blocks to match revised AC numbering.
+
+**Commit:** `56932cab` — test: add inline z-index regression guard + update AC refs for #1618 (test-writer)
+
+**Quality verification:**
+- 30 tests — 30 passed / 0 failed (27 original + 3 new z-index)
+- ESLint: clean
+
+**Step 1b.1 criteria met:**
+- Architect's required follow-up: test-proof gaps only (negative AC-1 claim for z-index)
+- All NEW tests PASS against current implementation (no inline z-index in source)
+- No lint issues
+- Builder skip: test-only retry, all tests green → advancing directly to review
+
+**AC coverage:**
+| AC | Tests |
+|---|---|
+| AC-1: no div[role=dialog], no position:fixed, no inline z-index | 9 (3 per modal × 3 assertions) |
+| AC-2: workarounds permitted | N/A (permissive — existing tests validate outcomes) |
+| AC-3: focus behavior | Covered by KeyboardA11y.test.tsx, CoverageGap_1618.test.tsx, overlay-behavior-1563.spec.ts |
+| AC-4: dismiss policy per modal | Covered by PModalMigration_1618.test.tsx AC4 tests |
+
+[[2026-05-17T15:49:46+02:00]]
+## Review Evidence
+- Verdict: PASS
+- PASS confirmation (one line): PASS #1618 to docs | AC mapped to code and evidence sufficient.
+- Behavioral bundle sufficiency: `.owlbear/kanban/tasks/1618-p2-11-complex-integrations-modals-pmodal.md:271,273,300-301,386` records 174 passed / 0 failed / 0 skipped, Playwright pass, 30 / 30 retry pass, and post-retry branch coverage of 98.57% for ConfirmDialog and 92.75% for ResolveModal.
+- AC mapping:
+| AC Line | Code Evidence | Test Evidence | Status |
+|---|---|---|---|
+| AC-1 | `serve/cockpit/web/src/components/ConfirmDialog.tsx:119,121-127`, `serve/cockpit/web/src/components/ResolveModal.tsx:230,233-235`, and `serve/cockpit/web/src/components/ArchivalModal.tsx:343-346` render the three modals through `PModal` host elements. | `serve/cockpit/web/src/__tests__/PModalMigration_1618.test.tsx:167,173,179,184,196,202,207,212,224,230,235,240` proves `p-modal` roots plus no hand-rolled `div[role="dialog"]`, no inline `position:fixed`, and no inline `z-index` for all three modals. | PASS |
+| AC-2 | `serve/cockpit/web/src/components/ConfirmDialog.tsx:58,64,68,90`, `serve/cockpit/web/src/components/ResolveModal.tsx:119,122,129,133,201`, `serve/cockpit/web/src/components/ArchivalModal.tsx:125,132,136,217,231`, and `serve/cockpit/web/src/KanbanBoard.tsx:211,356` stay within the architect-approved workaround surface: host role/aria-modal normalization via `MutationObserver`, Tab-cycling shim, and close-path focus-state / fallback-target handling. | `serve/cockpit/web/e2e/overlay-behavior-1563.spec.ts:390,401,414,434,469,517,554,617,647` and `serve/cockpit/web/src/__tests__/PModalMigration_1618.test.tsx:426` exercise the approved workaround surface through green host-attribute, Tab-cycle, exact-focus-return, and fallback-focus proofs. | PASS |
+| AC-3 | `serve/cockpit/web/src/components/ConfirmDialog.tsx:55,74,90,122`, `serve/cockpit/web/src/components/ResolveModal.tsx:64,119,145,152,201,224,234`, `serve/cockpit/web/src/components/ArchivalModal.tsx:217,231,262,345,401`, and `serve/cockpit/web/src/KanbanBoard.tsx:211,356` preserve exact focus return and shared close paths for each modal. | `serve/cockpit/web/e2e/overlay-behavior-1563.spec.ts:434,469,517,554,617,647` proves Tab containment and exact focus return for ConfirmDialog, ResolveModal, and ArchivalModal; `serve/cockpit/web/src/__tests__/PModalMigration_1618.test.tsx:426` proves ArchivalModal's explicit fallback focus on dismiss. | PASS |
+| AC-4 | `serve/cockpit/web/src/components/ConfirmDialog.tsx:122,124,125,127` wires ConfirmDialog dismiss policy and `aria.role='alertdialog'`; `serve/cockpit/web/node_modules/@porsche-design-system/components-react/esm/lib/components/modal.wrapper.mjs:7-16` syncs `aria` onto `p-modal`; `serve/cockpit/web/node_modules/@porsche-design-system/components-js/jsdom-polyfill/index.cjs:25292-25302,25373-25376` accepts `role` in modal `aria` and applies parsed aria attributes to the internal `<dialog>`; `serve/cockpit/web/src/components/ResolveModal.tsx:234,307` and `serve/cockpit/web/src/components/ArchivalModal.tsx:345,401` keep the full-dismiss paths enabled for the other two modals. | `serve/cockpit/web/src/__tests__/PModalMigration_1618.test.tsx:260,268,276,297,305,326,334,348,382,407` verifies ConfirmDialog alertdialog prop wiring, backdrop / dismiss-button policy, and dismiss callbacks for all three modals. | PASS |
+- Blocking findings: none.
+
+## Observations
+- Challenger cross-check overturned a provisional FAIL on ConfirmDialog alertdialog semantics. Host `role="dialog"` normalization is the AC-2 workaround layer, while `aria.role='alertdialog'` is a separate PDS-supported runtime path on the internal dialog; I did not find a blocking contradiction.
+- I did not dispatch `quality-runner` for an independent rerun because the current builder and test-writer packet was internally consistent, and the only open question was resolved by direct source inspection rather than missing execution evidence.
+
+[[2026-05-17T16:10:37+02:00]]
+## Docs Gate
+
+### Checklist
+
+**Item 1 — README Verification**
+Convention mapping: `serve/cockpit/web/src/components/*.tsx` → `serve/cockpit/README.md`.
+Full-file read performed. No removed symbols, flags, or commands to check (changes were internal component replacements). Added `#1618` entry at line 203 describing: PModal migration for ConfirmDialog/ResolveModal/ArchivalModal, per-modal dismiss policy, three permitted PDS workaround categories (Tab-cycling shim, focus-state capture/restore, host attribute normalization via MutationObserver), focus-return contracts per modal, and test evidence (PModalMigration_1618.test.tsx 30 tests, CoverageGap_1618.test.tsx 53 tests, overlay-behavior-1563.spec.ts 19 tests).
+Layer 1 grep: `#1618` present at lines 203, 219, 222. Layer 2 editorial: entry is coherent, consistent with adjacent entries, and accurately reflects the implementation evidence in Review Evidence.
+
+**Item 2 — External Attribution**
+`.owlbear/sources/overview.md` already contains "Modal → PModal Migration Research (Task #1618)" section with 5 high-relevance source entries (PDS v4 Modal source, PDS examples page, MDN dialog reference, Stefan Judis, Sam Hermes). No new attribution needed. ✓
+
+**Item 3 — Research Doc**
+`.owlbear/research/1618-modal-pmodal-migration.md` exists and is referenced in task body under `## Research`. ✓
+
+**Item 4 — Deletion Detection**
+No source files were deleted in this task — only modifications to three existing component files. No orphaned references. ✓
+
+### Files Updated
+- `serve/cockpit/README.md` — added `#1618` entry (committed in `6e5df0e8`)
+
+### Scratch Cleanup
+35 scratch files under `.owlbear/scratch/1618-*` deleted.
