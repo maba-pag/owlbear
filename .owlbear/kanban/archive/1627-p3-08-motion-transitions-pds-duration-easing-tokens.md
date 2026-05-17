@@ -1,10 +1,10 @@
 ---
 id: 1627
 title: 'P3-08: Motion/transitions — PDS duration + easing tokens'
-status: review
+status: archived
 priority: important
 created: 2026-05-16T03:37:44.829874+00:00
-updated: 2026-05-17T16:09:38.858316+02:00
+updated: 2026-05-17T17:29:02.169919+02:00
 tags:
   - frontend
   - pds
@@ -26,7 +26,7 @@ proof_bundle: behavioral
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 Brief: see parent #1590.
@@ -447,3 +447,73 @@ quality-runner scoped: 10/10 PASS (9 existing + 1 new), ESLint exit 0.
 | AC-1 .card box-shadow | 3 original + 1 property-level (exact match) |
 | AC-2 zero transition:all | Regression guard — no RED surface |
 | AC-3 property-level assertions with space-delimited matching | All 10 tests in PdsMotionTokens_1627.test.tsx |
+
+[[2026-05-17T16:35:10+02:00]]
+## Review Evidence
+- Verdict: PASS
+- PASS confirmation: PASS #1627 to docs | AC mapped to code and evidence sufficient.
+- Challenger: proceed (0.86)
+- Blocking findings: none
+
+| AC Line | Code Evidence | Test Evidence | Status |
+|---|---|---|---|
+| AC-1 | `serve/cockpit/web/src/Shell.css:15`, `serve/cockpit/web/src/Shell.css:98`, and `serve/cockpit/web/src/components/Card.css:16` implement the exact tokenized CSS-file declarations named by the task. | `serve/cockpit/web/src/__tests__/PdsMotionTokens_1627.test.tsx:92`, `:104`, `:116`, and `:131` assert the named transitioned properties for `.icon-button`, `.card`, and base `.shell`; reviewer quality-runner scoped rerun: 10 passed, 0 failed. | PASS |
+| AC-2 | Reviewer repo search across `serve/cockpit/web/src/**/*.css` found no `transition: all` declarations. | No contradictory proof surfaced in the fresh scoped verification; lint clean. | PASS |
+| AC-3 | `serve/cockpit/web/src/__tests__/PdsMotionTokens_1627.test.tsx:20` defines the selector-block extraction helper, and exact property-name matchers now use space-delimited matching at `:98`, `:110`, `:122`, and `:137`. | Reviewer quality-runner scoped rerun on `serve/cockpit/web/src/__tests__/PdsMotionTokens_1627.test.tsx`: 10 passed, 0 failed, 0 skipped; `eslint=0`; `stylelint=0`. | PASS |
+
+## Observations
+- No blocking safety or security issues surfaced; the task touches authored CSS declarations and source-contract tests only.
+- `serve/cockpit/web/src/Shell.tsx:140` still contains a hardcoded Tailwind transition utility, but the current frontmatter AC explicitly scopes 1627 to CSS-file transition declarations, so that utility is adjacent cleanup rather than a blocker for this task.
+
+[[2026-05-17T17:05:55+02:00]]
+## Docs Gate
+
+### Checklist
+
+**Item 1 — README Verification**
+Convention mapping: `serve/cockpit/web/src/**` → `serve/cockpit/README.md`.
+Layer 1: grep confirmed `var(--p-duration-sm)` present at Shell.css:15, Shell.css:98, Card.css:16; `PdsMotionTokens_1627.test.tsx` exists with 10 tests; no `SidecarCollapse_1549` reference in README (deletion handled cleanly).
+Layer 2: README "Accessibility and responsive state" list documents every PDS migration task; #1627 entry was absent — added between #1618 and #1628 with accurate description of changed CSS declarations, collapsed-state additions, and test coverage.
+Fix: added `- #1627` bullet (10 lines) covering Shell.css + Card.css token migration and test proof.
+Commit: `43be979e04bd96b91f8b236361831be4c872dc6e`.
+
+**Item 2 — External Attribution**
+Research doc notes 5 sources studied (4 high-relevance). No new attribution beyond what was committed at research time. N/A — no new external attribution entry needed.
+
+**Item 3 — Research Doc**
+`.owlbear/research/1627-pds-motion-tokens.md` exists; referenced in task body. N/A — linkage already in place.
+
+**Item 4 — Deletion Detection**
+`SidecarCollapse_1549.test.tsx` was deleted during the review cycle. No README reference to this file existed — no orphaned references. N/A — no deletion impact.
+
+### Files Updated
+- `serve/cockpit/README.md` — added #1627 entry between #1618 and #1628.
+
+### Scratch Cleanup
+No `.owlbear/scratch/1627-*` files found.
+
+[[2026-05-17T17:29:02+02:00]]
+## Audit
+### Regression Detection
+- quality-runner mode full: 2107 passed, 0 failed, 11 skipped; vitest=0, eslint=0, stylelint=0
+- regression verdict: PASS
+
+### Intent Verification
+- scope alignment: PASS (all changed files in serve/cockpit/web/ frontend domain — Shell.css, Card.css, PdsMotionTokens_1627.test.tsx, cockpit README, research doc)
+- purpose match: PASS (CSS transition declarations migrated to PDS tokens as intended)
+- extraneous scope: none
+- boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 3/5
+The final AC (after 3 architect cycles) are specific, testable, and led to a clean implementation. However, the initial AC referenced nonexistent tokens (--p-transition-timing-function), included an untestable route-transition AC line, and had insufficient proof-contract specificity for property-level assertions. Each cycle responded well to challenger/reviewer feedback, but the upfront gaps caused 4 reviewer cycles and significant pipeline churn. Score reflects notable gaps requiring significant builder improvisation across the task lifetime.
+
+### Commit Integrity
+- upstream commit presence: PASS (builder: e987812c, 4cabdecb, 7dc4a4a4; test-writer: b6a66a9f, 38635565, 6e5df0e8; doc-writer: 43be979e; researcher: 3a1a81a1 — all on dev branch)
+- kanban commit packaging: pending (this step)
+
+### Deduction Breakdown
+- AC quality score 3/5: -.03
+- No regression failures, no intent mismatch, no evidence integrity concerns, no lint violations, reviewer evidence section present and detailed
+
+### Confidence: .97
+### Action: archive
