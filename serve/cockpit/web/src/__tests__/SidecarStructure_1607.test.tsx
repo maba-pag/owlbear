@@ -4,9 +4,10 @@
  *
  * AC-1: #shell-sidecar-content elements in Shell.tsx carry Tailwind class p-[var(--p-spacing-static-md)] on all four sides;
  *        present in both mobile (p-sheet) and desktop render paths
- * AC-2: Shell [data-region='sidecar-header'] contains p-heading[size='large'] (no raw h2);
+ * AC-2: Given a non-null task: Shell [data-region='sidecar-header'] contains p-heading[size='large'] and no raw h2;
  *        DetailTab [data-region='sidecar-body'] contains p-heading[size='medium'];
- *        DetailTab [data-region='actions'] contains p-heading[size='small']; DetailTab contains no raw h3
+ *        DetailTab [data-region='actions'] contains p-heading[size='small'];
+ *        DetailTab contains no raw h3
  * AC-3: PDivider separates: sidecar-header/DecisionViewport, DecisionViewport/p-tabs,
  *        and metadata/editor sections in DetailTab
  */
@@ -150,6 +151,8 @@ describe('TestFromAC_SidecarStructure_Padding', () => {
     // Directional variants targeting the same token would conflict with the shorthand AC
     expect(src).not.toContain('pt-[var(--p-spacing-static-md)]')
     expect(src).not.toContain('pb-[var(--p-spacing-static-md)]')
+    expect(src).not.toContain('pl-[var(--p-spacing-static-md)]')
+    expect(src).not.toContain('pr-[var(--p-spacing-static-md)]')
   })
 })
 
@@ -180,14 +183,14 @@ describe('TestFromAC_SidecarStructure_Typography', () => {
     expect(container.querySelector('p-heading')).not.toBeNull()
   })
 
-  it('DetailTab with task renders p-heading[size="medium"] for a primary section', () => {
+  it('DetailTab [data-region="sidecar-body"] contains p-heading[size="medium"] for primary sections', () => {
     const { container } = renderDetailTab()
-    expect(container.querySelector('p-heading[size="medium"]')).not.toBeNull()
+    expect(container.querySelector('[data-region="sidecar-body"] p-heading[size="medium"]')).not.toBeNull()
   })
 
-  it('DetailTab with task renders p-heading[size="small"] for a secondary section', () => {
+  it('DetailTab [data-region="actions"] contains p-heading[size="small"] for secondary sections', () => {
     const { container } = renderDetailTab()
-    expect(container.querySelector('p-heading[size="small"]')).not.toBeNull()
+    expect(container.querySelector('[data-region="actions"] p-heading[size="small"]')).not.toBeNull()
   })
 
   it('DetailTab does not use raw <h3> elements (replaced by PHeading)', () => {

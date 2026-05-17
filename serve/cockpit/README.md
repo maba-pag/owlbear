@@ -162,6 +162,22 @@ Accessibility and responsive state after #1396:
   in source. Verified by `serve/cockpit/web/src/__tests__/PdsSimpleSwaps1614.test.tsx`
   (29 tests covering AC-1 through AC-4) and `serve/cockpit/web/src/__tests__/PdsMigration.test.tsx`
   (durable regression, 78 passing).
+- #1615 migrates `Card.tsx` visual chips and tags to PDS React wrappers and introduces a
+  mapping utility. Status and priority chips are replaced with `<PTag compact variant={...}>`
+  using `statusToVariant()` and `priorityToVariant()` from `utils/cardVariants.ts`; both
+  utilities return only valid PDS `TagVariant` values (`primary`, `secondary`, `info`,
+  `warning`, `success`, `error`, and frosted variants) with a `secondary` fallback for
+  unrecognized strings. Signal icon renders as `<p-icon size="xs" aria-label={signal}>` for
+  `dr-pending`, `blocked`, `claimed`, and `deps-unmet` states; no icon is rendered for
+  `ready`. Each visible tag (up to `TAG_PREVIEW_LIMIT=3`) renders as an individual
+  `<PTag compact variant="secondary">` pill with overflow count indicator preserved. Existing
+  state cue text spans (`Blocked`, `Claimed`, `Dependencies blocked`, `Decision pending`) are
+  unchanged. `Card.tsx` carries no `no-restricted-syntax` eslint-disable. Verified by
+  `serve/cockpit/web/src/__tests__/CardVariants_1615.test.ts` and
+  `serve/cockpit/web/src/__tests__/CardVisualTreatment_1615.test.tsx` (48 tests covering
+  AC-1 through AC-6) and `serve/cockpit/web/src/__tests__/Card.signal.test.tsx` (durable
+  regression, 27 passing).
+- #1616 establishes the `DetailTab` sidecar information architecture: `DetailTab.tsx` root renders four `data-region` direct children in DOM order `sidecar-body` → `actions` → `sidecar-metadata` → `history` (asserted via `:scope > [data-region]` direct-child selector). The `sidecar-metadata` region is the `p-accordion` host element (`p-accordion[data-region='sidecar-metadata'][compact][heading="Metadata"]`), closed by default (no `open` attribute); accordion subtree remains in DOM when closed via CSS height animation, not conditional render. `SidecarStructure_1607.test.tsx` divider assertion updated to be order-agnostic. Verified by `serve/cockpit/web/src/__tests__/DetailTab-1616.test.tsx` (9 tests covering AC1 DOM order and AC2 accordion host attributes and closed-state DOM visibility).
 - #1617 migrates the remaining filter panel controls to PDS React wrappers: the blocked
   checkbox replaces raw `<p-checkbox>` + `onClick` toggle with a controlled `PCheckbox`
   wrapper using `checked={filter.blocked}` and `onChange` reading `event.detail.checked`;
