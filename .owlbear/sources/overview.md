@@ -4854,3 +4854,10 @@ External repos and resources studied during OwlBear development.
 |--------|-----|------|------------|------|
 | PDS v4 React wrapper exports | (local: node_modules/@porsche-design-system/components-react/) | Available React wrappers: PTabs, PTabsItem, PSheet, PAccordion, PIcon, PRadioGroup, PRadioGroupOption, PLinkPure; absent: PList/PListItem | `.owlbear/research/1608-component-complexity-inventory.md` | 2026-05-17 |
 | PDS v4 component overview | <https://designsystem.porsche.com/v4/components/overview/> | Component availability and API surface for migration classification | `.owlbear/research/1608-component-complexity-inventory.md` | 2026-05-17 |
+
+## CleanupPanel/RepairPanel PModal Migration (Task #1635)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| PDS v3 Modal configurator docs | <https://designsystem.porsche.com/v3/components/modal/configurator/> | PModal component behavior: native dialog, focus trap, top-layer, dismiss event, controlled open prop | `.owlbear/research/1635-cleanup-repair-pmodal-migration.md` | 2026-05-17 |
+| PDS v3 Modal accessibility docs | <https://designsystem.porsche.com/v3/components/modal/accessibility/> | ARIA support: aria-label, role (dialog/alertdialog), keyboard behavior (Tab trap, Escape), focus return | `.owlbear/research/1635-cleanup-repair-pmodal-migration.md` | 2026-05-17 |
