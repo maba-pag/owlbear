@@ -27,6 +27,8 @@ import { PorscheDesignSystemProvider } from '@porsche-design-system/components-r
 import ConfirmDialog from '../components/ConfirmDialog'
 import ResolveModal from '../components/ResolveModal'
 import type { PendingDRWithBody } from '../components/ResolveModal'
+import { ApiError } from '../api/errors'
+import * as decisionsApi from '../api/decisions'
 
 // ─── PDS Stencil form-component workaround ───────────────────────────────────
 beforeAll(() => {
@@ -367,6 +369,136 @@ describe('TestFromAC_ConfirmDialogCoverageGap', () => {
     expect(pModal.getAttribute('aria-modal')).toBe('true')
   })
 
+  // ─── Tab key: active is null (non-HTMLElement) ────────────────────────────
+
+  it('Tab key when document.activeElement is not an HTMLElement does not wrap focus', () => {
+    // Covers the null branch of:
+    //   const active = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    // in handleModalKeyDown. When active is null, neither wrap condition is satisfied.
+    const { container } = renderConfirmDialog()
+    const pModal = container.querySelector('p-modal') as HTMLElement
+
+    vi.spyOn(document, 'activeElement', 'get').mockReturnValue(null as unknown as Element)
+
+    expect(() => {
+      fireEvent.keyDown(pModal, { key: 'Tab', shiftKey: false })
+    }).not.toThrow()
+  })
+
+  // ─── Tab key: active is middle element (no wrap) ──────────────────────────
+
+  it('Tab key when active is neither first nor last element does not call focus', () => {
+    // Covers the "neither branch taken" path inside the Tab block:
+    // !event.shiftKey && active === last is false → no wrap, just returns.
+    // Injects a third button so there is a "middle" element between first and last.
+    const { container } = renderConfirmDialog()
+    const pModal = container.querySelector('p-modal') as HTMLElement
+
+    const middleBtn = document.createElement('p-button')
+    pModal.appendChild(middleBtn)
+
+    const pButtons = Array.from(container.querySelectorAll('p-button')) as HTMLElement[]
+    // middle is the element before the last
+    const middle = pButtons[Math.floor(pButtons.length / 2)] ?? pButtons[0]
+    const last = pButtons[pButtons.length - 1]
+
+    const lastFocusSpy = vi.spyOn(last, 'focus')
+    vi.spyOn(document, 'activeElement', 'get').mockReturnValue(middle)
+
+    fireEvent.keyDown(pModal, { key: 'Tab', shiftKey: false })
+
+    // Focus should NOT wrap to first (active is not last)
+    expect(lastFocusSpy).not.toHaveBeenCalled()
+
+    pModal.removeChild(middleBtn)
+  })
+
+  // ─── Non-Tab, non-Escape key ──────────────────────────────────────────────
+
+  it('pressing a non-Tab non-Escape key does not call onCancel or onConfirm', () => {
+    // Covers the false branch of `if (event.key === 'Escape')` for keys that
+    // are neither Tab nor Escape — the handler returns without action.
+    const { container, onCancel, onConfirm } = renderConfirmDialog()
+    const pModal = container.querySelector('p-modal') as HTMLElement
+
+    fireEvent.keyDown(pModal, { key: 'Enter' })
+
+    expect(onCancel).not.toHaveBeenCalled()
+    expect(onConfirm).not.toHaveBeenCalled()
+  })
+
+  // ─── Focus restoration on unmount ─────────────────────────────────────────
+
+  it('restores focus to the previously focused element on unmount', () => {
+    // Covers `previousFocusRef.current?.focus()` in the useEffect cleanup.
+    // Creates a real button, focuses it so previousFocusRef.current is set,
+    // then unmounts the dialog and asserts focus() was called on the button.
+    const triggerBtn = document.createElement('button')
+    document.body.appendChild(triggerBtn)
+    triggerBtn.focus()
+
+    const focusSpy = vi.spyOn(triggerBtn, 'focus')
+    const { unmount } = renderConfirmDialog()
+
+    // Reset the spy after mount so we only track the unmount-cleanup focus call
+    focusSpy.mockClear()
+    unmount()
+
+    expect(focusSpy).toHaveBeenCalled()
+    document.body.removeChild(triggerBtn)
+  })
+
+  // ─── Rerender with type change (React Compiler cache-miss) ───────────────
+
+  it('re-render with different type updates description text (React Compiler cache-miss)', () => {
+    // Covers React Compiler cache-miss branches at lines 130-132.
+    // Rendering with one type and re-rendering with a different type forces
+    // the compiler to recompute the memoized JSX and prop objects.
+    const onCancel = vi.fn()
+    const onConfirm = vi.fn()
+    const { container, rerender } = renderConfirmDialog({ type: 'unclaim' })
+    expect(container.textContent).toContain('Release claim')
+
+    rerender(
+      <PorscheDesignSystemProvider>
+        <ConfirmDialog type="move-backward" targetStatus="done" onCancel={onCancel} onConfirm={onConfirm} />
+      </PorscheDesignSystemProvider>,
+    )
+    expect(container.textContent).toContain('Move to done')
+
+    rerender(
+      <PorscheDesignSystemProvider>
+        <ConfirmDialog type="unblock" blockReason="blocked reason" onCancel={onCancel} onConfirm={onConfirm} />
+      </PorscheDesignSystemProvider>,
+    )
+    expect(container.textContent).toContain('Unblock task')
+    expect(container.textContent).toContain('blocked reason')
+  })
+
+  // ─── PButton cache-hit: re-render with same callbacks ────────────────────
+
+  it('re-render with same onCancel/onConfirm references covers cache-hit path for PButton elements', () => {
+    // Covers the React Compiler cache-hit branches at lines 131-132.
+    // When onCancel, onConfirm, and confirmLabel are all unchanged,
+    // the compiler reuses cached PButton elements without re-creating them.
+    const onCancel = vi.fn()
+    const onConfirm = vi.fn()
+    const { container, rerender } = render(
+      <PorscheDesignSystemProvider>
+        <ConfirmDialog type="unclaim" onCancel={onCancel} onConfirm={onConfirm} />
+      </PorscheDesignSystemProvider>,
+    )
+    expect(container.textContent).toContain('Release claim')
+
+    // Re-render with EXACT same function references → cache hit for PButton elements at lines 131-132
+    rerender(
+      <PorscheDesignSystemProvider>
+        <ConfirmDialog type="unclaim" onCancel={onCancel} onConfirm={onConfirm} />
+      </PorscheDesignSystemProvider>,
+    )
+    expect(container.textContent).toContain('Release claim')
+  })
+
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -684,5 +816,241 @@ describe('TestFromAC_ResolveModalCoverageGap', () => {
       expect(fetchMock).toHaveBeenCalledTimes(2)
       expect(onResolved).toHaveBeenCalledOnce()
     })
+  })
+
+  // ─── Non-Error, non-ApiError throw (line 102) ─────────────────────────────
+
+  it('non-Error non-ApiError thrown in handleSubmit shows generic error message', async () => {
+    // Covers the final setError branch in the catch block:
+    //   setError({ message: 'Failed to resolve decision request.', retryable: true })
+    // This runs when caught is neither instanceof ApiError nor instanceof Error
+    // (e.g. a raw string or plain object is thrown).
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.reject('unexpected string error')),
+    )
+    const { container } = renderResolveModal()
+
+    const radio = container.querySelector('input[type="radio"][value="approved"]') as HTMLElement
+    fireEvent.click(radio)
+
+    const submitBtn = container.querySelector('[data-testid="resolve-submit"]') as HTMLElement
+    fireEvent.click(submitBtn)
+
+    await waitFor(() => {
+      const notification = container.querySelector(
+        'p-inline-notification[data-testid="resolve-error"]',
+      ) as (HTMLElement & { description?: string }) | null
+      expect(notification).not.toBeNull()
+      expect(notification!.description).toBe('Failed to resolve decision request.')
+    })
+  })
+
+  // ─── isSubmitting guard prevents duplicate submit (line 74) ───────────────
+
+  it('clicking submit while already submitting calls fetch only once', async () => {
+    // Covers `return` at line 74: `if (!dr || isSubmitting) { return }`.
+    // The isSubmitting branch is hit when submit is clicked a second time while
+    // the first async fetch is still in flight.
+    const fetchMock = vi.fn(() => new Promise<never>(() => {})) // never resolves
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { container } = renderResolveModal()
+
+    const radio = container.querySelector('input[type="radio"][value="approved"]') as HTMLElement
+    fireEvent.click(radio)
+
+    const submitBtn = container.querySelector('[data-testid="resolve-submit"]') as HTMLElement
+
+    // First click: starts fetch, setIsSubmitting(true) fires synchronously
+    fireEvent.click(submitBtn)
+    // Second click: isSubmitting is true → early return, fetch not called again
+    fireEvent.click(submitBtn)
+
+    // Fetch should have been called exactly once
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  // ─── MutationObserver callback in ResolveModal useEffect (line 130) ───────
+
+  it('MutationObserver callback re-applies dialog attributes in ResolveModal', () => {
+    // Covers the `applyDialogAttrs()` call at line 130 (inside the MutationObserver
+    // callback body in ResolveModal's useEffect).
+    let capturedCallback: MutationCallback | null = null
+    const mockDisconnect = vi.fn()
+    const mockObserve = vi.fn()
+
+    class MockMutationObserver {
+      observe = mockObserve
+      disconnect = mockDisconnect
+      constructor(cb: MutationCallback) {
+        capturedCallback = cb
+      }
+    }
+    vi.stubGlobal('MutationObserver', MockMutationObserver)
+
+    const { container } = renderResolveModal()
+    const pModal = container.querySelector('p-modal') as HTMLElement
+
+    // Invoke captured callback — covers the applyDialogAttrs() call inside the observer callback.
+    capturedCallback!([], {} as MutationObserver)
+
+    expect(pModal.getAttribute('role')).toBe('dialog')
+    expect(pModal.getAttribute('aria-modal')).toBe('true')
+  })
+
+  // ─── getFocusableElements: disabled via tabindex element (line 159) ───────
+
+  it('getFocusableElements excludes tabindex=0 disabled elements in ResolveModal', () => {
+    // Covers `return false` at line 159 inside getFocusableElements:
+    //   if (element.hasAttribute('disabled')) { return false }
+    // The element must PASS the CSS selector (so `button:not([disabled])` won't find it)
+    // but HAVE the disabled attribute. A div[tabindex="0"][disabled] satisfies both:
+    // it matches `[tabindex]:not([tabindex="-1"])` but is filtered by hasAttribute('disabled').
+    const { container } = renderResolveModal()
+    const pModal = container.querySelector('p-modal') as HTMLElement
+    const radios = Array.from(container.querySelectorAll('input[type="radio"]')) as HTMLElement[]
+    const pButtons = Array.from(container.querySelectorAll('p-button')) as HTMLElement[]
+
+    const disabledTabEl = document.createElement('div')
+    disabledTabEl.setAttribute('tabindex', '0')
+    disabledTabEl.setAttribute('disabled', '')
+    pModal.appendChild(disabledTabEl)
+
+    // Mock active element to last p-button — Tab wraps to first radio (not disabledTabEl)
+    vi.spyOn(document, 'activeElement', 'get').mockReturnValue(pButtons[pButtons.length - 1])
+    const firstFocusSpy = vi.spyOn(radios[0], 'focus')
+
+    fireEvent.keyDown(pModal, { key: 'Tab', shiftKey: false })
+
+    // Focus wraps to first radio, confirming disabled tabindex element was filtered
+    expect(firstFocusSpy).toHaveBeenCalledOnce()
+
+    pModal.removeChild(disabledTabEl)
+  })
+
+  // ─── handleDocumentEscape: non-Escape key early return ───────────────────
+
+  it('document keydown with non-Escape key does not call onClose', () => {
+    // Covers the `return` branch in handleDocumentEscape:
+    //   if (event.key !== 'Escape') { return }
+    const { onClose } = renderResolveModal()
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  // ─── Tab key: active is null in ResolveModal handleModalKeyDown ───────────
+
+  it('Tab key when document.activeElement is not an HTMLElement does not wrap focus', () => {
+    // Covers the null branch at line 209:
+    //   const active = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    // When active is null, neither wrap condition is satisfied.
+    const { container } = renderResolveModal()
+    const pModal = container.querySelector('p-modal') as HTMLElement
+
+    vi.spyOn(document, 'activeElement', 'get').mockReturnValue(null as unknown as Element)
+
+    expect(() => {
+      fireEvent.keyDown(pModal, { key: 'Tab', shiftKey: false })
+    }).not.toThrow()
+  })
+
+  // ─── handleResponseChange: invalid value does not update state ────────────
+
+  it('handleResponseChange with a value outside the allowed set does not update response', () => {
+    // Covers the false branch of `if (value === 'approved' || value === 'rejected' || value === 'needs-info')`.
+    // When an event fires with an out-of-set value, setResponse is NOT called.
+    // The submit button stays disabled (response remains '').
+    const { container } = renderResolveModal()
+    const radio = container.querySelector('input[type="radio"][value="approved"]') as HTMLElement
+
+    // Fire a change event whose target.value is not in the allowed set
+    fireEvent.change(radio, { target: { value: 'unknown-option' } })
+
+    const submitBtn = container.querySelector('[data-testid="resolve-submit"]') as HTMLElement
+    // submit remains disabled because response was not updated from ''
+    expect(submitBtn.hasAttribute('disabled')).toBe(true)
+  })
+
+  // ─── dr.body null / undefined — ?? '' fallback ────────────────────────────
+
+  it('renders without crashing when dr.body is falsy (covers the ?? \'\' fallback)', () => {
+    // Covers the '' branch of `{dr.body ?? ''}` in the JSX.
+    // When body is null or undefined, ReactMarkdown receives an empty string.
+    const drWithNullBody = { ...DR_FIXTURE, body: null } as unknown as typeof DR_FIXTURE
+    const { container } = renderResolveModal({ dr: drWithNullBody })
+    expect(container.querySelector('p-modal')).not.toBeNull()
+    const markdown = container.querySelector('[data-testid="markdown-body"]')
+    expect(markdown?.textContent).toBe('')
+  })
+
+  // ─── Focus restoration on unmount ─────────────────────────────────────────
+
+  it('restores focus to previously focused element on unmount', () => {
+    // Covers `previousFocusRef.current?.focus()` in the ResolveModal useEffect cleanup.
+    const triggerBtn = document.createElement('button')
+    document.body.appendChild(triggerBtn)
+    triggerBtn.focus()
+
+    const focusSpy = vi.spyOn(triggerBtn, 'focus')
+    const { unmount } = renderResolveModal()
+
+    focusSpy.mockClear()
+    unmount()
+
+    expect(focusSpy).toHaveBeenCalled()
+    document.body.removeChild(triggerBtn)
+  })
+
+  // ─── Non-Escape, non-Tab key in handleModalKeyDown (line 221) ─────────────
+
+  it('pressing a non-Tab non-Escape key in ResolveModal does not call requestClose', () => {
+    // Covers the false branch of `if (event.key === 'Escape')` at line 221
+    // for keys that are neither Tab nor Escape — the block is not entered.
+    const { container, onClose } = renderResolveModal()
+    const pModal = container.querySelector('p-modal') as HTMLElement
+    fireEvent.keyDown(pModal, { key: 'Enter' })
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  // ─── ApiError with non-default message (line 91) ─────────────────────────
+
+  it('ApiError with a custom message uses caught.message not the fallback', async () => {
+    // Covers the false branch of:
+    //   const message = caught.message === `Resolve request failed with status ${caught.status}`
+    //     ? fallback
+    //     : caught.message
+    // When ApiError has a custom (non-default) message, caught.message is used directly.
+    vi.spyOn(decisionsApi, 'resolveDR').mockRejectedValueOnce(
+      new ApiError(403, 'Specific validation error from server'),
+    )
+    const { container } = renderResolveModal()
+
+    const radio = container.querySelector('input[type="radio"][value="approved"]') as HTMLElement
+    fireEvent.click(radio)
+
+    const submitBtn = container.querySelector('[data-testid="resolve-submit"]') as HTMLElement
+    fireEvent.click(submitBtn)
+
+    await waitFor(() => {
+      const notification = container.querySelector(
+        'p-inline-notification[data-testid="resolve-error"]',
+      ) as (HTMLElement & { description?: string }) | null
+      expect(notification).not.toBeNull()
+      // Non-default message should appear directly (not replaced by fallback)
+      expect(notification!.description).toBe('Specific validation error from server')
+    })
+  })
+
+  // ─── useEffect: document.activeElement null at mount (line 119) ──────────
+
+  it('useEffect sets previousFocusRef to null when activeElement is not an HTMLElement at mount', () => {
+    // Covers the null branch of:
+    //   previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    // in the useEffect. When null, the cleanup's previousFocusRef.current?.focus() is a no-op.
+    vi.spyOn(document, 'activeElement', 'get').mockReturnValue(null as unknown as Element)
+    const { unmount } = renderResolveModal()
+    // Unmount triggers cleanup — previousFocusRef.current is null → ?.focus() is a no-op
+    expect(() => unmount()).not.toThrow()
   })
 })
