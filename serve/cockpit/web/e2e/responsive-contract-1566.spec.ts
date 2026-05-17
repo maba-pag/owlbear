@@ -6,7 +6,7 @@
  *   git add serve/cockpit/web/e2e/responsive-contract-1566.spec.ts
  *   cd serve/cockpit/web && npm run test:e2e -- responsive-contract-1566  # must show failures
  *
- * Covers the post-#1560 responsive contract delta over responsive-layout-1391.spec.ts:
+ * Covers the post-#1560 responsive contract delta after the older responsive-layout proof:
  *   AC-1: scrollable-region keyboard focusability — [data-testid="column-body"] tabIndex="0"
  *         when scrollHeight > clientHeight, at 320x800, 768x1024, and 1024x768.
  *   AC-2: 320px mobile board-first contract — task detail appears inside a p-sheet custom
@@ -26,7 +26,7 @@
  * Viewport note (AC-2): at 320px the current Shell.css grid (56px 1fr 360px) makes
  * workspace = -96px → clamped to 0px → cards are in DOM but not visible. click({ force: true })
  * dispatches the event via Playwright without visibility check; this tests the p-sheet
- * contract, not the click-reachability failure (covered by responsive-layout-1391.spec.ts).
+ * contract rather than re-running the deleted click-reachability proof.
  *
  * API mocking: all routes stubbed via page.route() — no real backend required.
  * Proof bundle: behavioral.

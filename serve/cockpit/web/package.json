@@ -13,8 +13,9 @@
     "lint:css": "stylelint --config .stylelintrc.json \"src/**/*.css\"",
     "lint:html": "htmlhint --config .htmlhintrc index.html",
     "preview": "vite preview",
-    "test": "NODE_OPTIONS='--max-old-space-size=2048' vitest run --silent",
-    "test:e2e": "playwright test"
+    "test": "NODE_OPTIONS='--max-old-space-size=2048' vitest run --silent=true",
+    "test:e2e": "node scripts/run-e2e.mjs",
+    "test:e2e:all": "playwright test"
   },
   "dependencies": {
     "@porsche-design-system/components-js": "^4.1.0",

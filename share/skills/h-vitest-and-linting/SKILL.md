@@ -34,6 +34,8 @@ Multiple files:
 npm test -- src/__tests__/A.test.tsx src/__tests__/B.test.tsx
 ```
 
+The `test` script uses `--silent=true` rather than bare `--silent` so npm-forwarded file arguments remain positional test filters.
+
 ### Full suite
 
 ```shell
@@ -45,7 +47,7 @@ Matches all `src/**/*.{test,spec}.{ts,tsx}` files (configured in `vite.config.ts
 ### Default flags
 
 - `NODE_OPTIONS='--max-old-space-size=2048'` — matches the `test` script in `package.json`. Without it, PDS test suites can OOM.
-- `--silent` — baked into `npm test`. Suppresses `console.log` / `console.warn` / `console.error` from test code. PDS components emit hundreds of thousands of console lines in jsdom; without `--silent`, output can exceed 600K lines, making logs unreadable. Vitest still reports test names, pass/fail status, and assertion errors — only console noise is hidden.
+- `--silent=true` — baked into `npm test`. Suppresses `console.log` / `console.warn` / `console.error` from test code. PDS components emit hundreds of thousands of console lines in jsdom; without `--silent=true`, output can exceed 600K lines, making logs unreadable. Vitest still reports test names, pass/fail status, and assertion errors — only console noise is hidden.
 - For full console output during debugging, use `npx vitest run` (without `--silent`).
 - `vitest run` (not `vitest`) — `run` disables watch mode. Without it, vitest stays open waiting for file changes.
 
@@ -99,6 +101,24 @@ Playwright E2E:
 
 ```shell
 cd serve/cockpit/web && npm run test:e2e
+```
+
+The default E2E script is a fast gate. With no extra args it runs only stable contract specs:
+
+- `e2e/smoke.spec.ts`
+- `e2e/mutation-error-banner.spec.ts`
+- `e2e/pds-runtime-csp.spec.ts`
+
+Scoped task proof runs still work by passing a file or filter:
+
+```shell
+cd serve/cockpit/web && npm run test:e2e -- e2e/focus-visible-pds-1626.spec.ts
+```
+
+Run every checked-in Playwright spec only when explicitly requested:
+
+```shell
+cd serve/cockpit/web && npm run test:e2e:all
 ```
 
 The Playwright config runs Chromium only and starts through `npm run build && npm run preview` on port 4173. If TypeScript or Vite build fails, Playwright may report a webServer/startup failure before any E2E assertions execute.
@@ -161,6 +181,7 @@ Imports and shims applied before every test:
 - **Must `cd` to your frontend package root first.** This is the #1 cause of quality-runner frontend failures. Vitest reads `vite.config.ts` from the cwd, so running from the repo root skips the jsdom environment entirely.
   > Example (OwlBear-dev): `cd serve/cockpit/web`
 - **Build failures can mask E2E assertions.** When Playwright fails before tests run, inspect the build output first; the failure may belong to TypeScript/Vite rather than the E2E test body.
+- **Full E2E is opt-in.** `npm run test:e2e` is intentionally the fast sync gate. Use `npm run test:e2e:all` only for deliberate full sweeps; archived visual, accessibility, layout, and RED-era task proofs can be expensive.
 - **PDS console noise.** PDS components emit thousands of `console.error` / `console.warn` lines in jsdom (e.g. `variant 'tertiary'`, `CDN request blocked`). `npm test` includes `--silent` by default. If you omit `--silent` for debugging (`npx vitest run`), only the vitest summary line (`Test Files: N passed`, `Tests: N passed`) determines pass/fail.
 - **Output volume.** Without `--silent`, PDS noise can produce 600K+ lines. `npm test` includes `--silent` by default. If output is still truncated, use the file-capture fallback: redirect to `.owlbear/scratch/vitest-{task_id}.log` and `grep` or `tail -50` for the summary — **never `read_file` on a vitest log** (they can be hundreds of thousands of lines).
 - **`npx vitest run` vs `npx vitest`.** Always use `run`. Without it, vitest enters watch mode and never exits.

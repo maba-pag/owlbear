@@ -17,9 +17,8 @@
  *   - RepairPanel confirm dialog
  *   All surfaces must report zero WCAG 2.1 AA violations.
  *
- * AC2 (regression gate): The existing accessibility-1395.spec.ts suite continues to pass
- *   with no regressions. This is verified by running the existing suite unmodified —
- *   no new tests are written for it here.
+ * AC2 (regression gate): Durable board and overlay accessibility coverage remains
+ *   consolidated here after the older accessibility-1395 proof suite was removed.
  *
  * RED reasons:
  *   1. RepairPanel confirm dialog: `<span data-testid="repair-confirm-btn" onClick>` wraps
@@ -30,9 +29,8 @@
  *      ConfirmDialog, ArchivalModal, FilterPanel): these surfaces have not previously been
  *      axe-scanned with WCAG-scoped tags. Unknown violations discovered at scan time will
  *      cause failures until remediated.
- *   3. Board view and sidecar detail view: scanned with default (all rules) in
- *      accessibility-1395.spec.ts. WCAG-specific tags may surface additional SC-specific
- *      violations not caught by the broader default scan.
+ *   3. Board view and sidecar detail view: WCAG-specific tags may surface additional
+ *      SC-specific violations beyond earlier broad scans.
  *
  * Counterpart implementation task: #1628 (builder phase).
  *
