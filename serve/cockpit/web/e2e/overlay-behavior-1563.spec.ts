@@ -506,6 +506,14 @@ test.describe('TestFromAC_BlockingDialogSemantics', () => {
 
   // AC-2, ResolveModal: focus must return to the triggering element after close.
   // RED: ResolveModal mounts without capturing previousFocus — no restoration on close.
+  //
+  // Close mechanism: "Close Modal" button (data-testid="resolve-cancel") rather than Escape.
+  // Rationale: pressing Escape while PModal host has focus does not reach the native <dialog>
+  // cancel event (PDS PModal in this version focuses the host element, not the shadow dialog,
+  // so the native dismiss mechanism is not triggered by Escape keypress). The "Close Modal"
+  // button directly calls requestClose() via React onClick — same code path as PModal onDismiss.
+  // Using button click also avoids closing the DRStatusIndicator popover (which Escape would
+  // trigger via its document-level handler), ensuring the dr-item trigger element stays in DOM.
   test('resolve_modal_focus_returned_to_trigger_after_close', async ({ page }) => {
     // Open DR popover and focus the DR item button — this is the trigger.
     await page.click('[data-testid="dr-indicator"]')
@@ -518,29 +526,31 @@ test.describe('TestFromAC_BlockingDialogSemantics', () => {
     await drItem.click()
     await page.locator('[data-testid="resolve-modal"]').waitFor({ state: 'visible', timeout: 5_000 })
 
-    // Close via Escape.
-    await page.keyboard.press('Escape')
-    await page.locator('[data-testid="resolve-modal"]').waitFor({ state: 'hidden', timeout: 5_000 })
+    // Close via the "Close Modal" button — calls requestClose() → onClose() → modal unmounts.
+    // Popover stays open (no Escape pressed) so dr-item-* trigger remains in DOM.
+    const closeBtn = page.locator('[data-testid="resolve-cancel"]')
+    await closeBtn.waitFor({ state: 'visible', timeout: 5_000 })
+    await closeBtn.click()
 
     // Assert focus is back on the exact DR item button that triggered the modal.
+    // ResolveModal.useEffect cleanup calls previousFocusRef.current?.focus() on unmount.
+    // previousFocusRef captured document.activeElement (dr-item button) at mount time.
     // FAILS: ResolveModal does not track previous focus — focus goes to body after close.
-    // NOTE: DRStatusIndicator.onItemClick does not close the popover, so the dr-item-*
-    // button remains in DOM after modal close — exact-element assertion is valid.
-    const focusOnTrigger = await page.evaluate(() => {
-      const drItemButton = document.querySelector('[data-testid="dr-item-dr-overlay-001"]')
-      return document.activeElement === drItemButton
-    })
-    expect(
-      focusOnTrigger,
+    // NOTE: DRStatusIndicator popover stays open on Cancel-button close, so the dr-item-*
+    // button remains in DOM — exact-element assertion is valid.
+    await expect(
+      drItem,
       'Focus must return to exact [data-testid="dr-item-dr-overlay-001"] trigger after ResolveModal closes',
-    ).toBe(true)
+    ).toBeFocused({ timeout: 5_000 })
   })
 
-  // AC-2, ArchivalModal: Tab must cycle within the modal.
-  // GREEN (regression guard): ArchivalModal.tsx handleKeyDown traps Tab using getFocusableElements().
-  // Wrap assertion: focus last focusable (Cancel PButton) → Tab → first (PSelect) must be focused;
-  // focus first (PSelect) → Shift+Tab → last (Cancel) must be focused.
-  // PASSES: handleKeyDown wraps first→last and last→first via getFocusableElements().
+  // AC-2, ArchivalModal: Tab must cycle within the modal — PModal native <dialog> trap.
+  // PModal migration removed the hand-rolled handleKeyDown Tab cycling; native <dialog> traps Tab.
+  // PModal's shadow DOM also renders a dismiss button (X) that participates in the focus cycle.
+  // Updated: scope uses data-testid="archival-modal" (host element) — not shadow [role=dialog] which
+  // causes scoping failures when the Cancel button is in PModal's light-DOM slot.
+  // Assertion changed to boundary containment: does not assume a specific wrap target because the
+  // PModal shadow X button may come first/last in the native dialog focus order.
   test('archival_modal_tab_focus_cycles_within_modal', async ({ page }) => {
     const card = page.locator('[data-testid="task-card"][data-id="1"]')
     await card.waitFor({ state: 'visible', timeout: 8_000 })
@@ -550,37 +560,54 @@ test.describe('TestFromAC_BlockingDialogSemantics', () => {
     await page.click('[data-testid="transition-item"][data-status="archived"]')
     await page.locator('[data-testid="archival-submit"]').waitFor({ state: 'visible', timeout: 5_000 })
 
-    // Scope selectors to the modal root (context menu is gone at this point).
-    const archivalModal = page.locator('[role="dialog"][aria-modal="true"]')
-    // First focusable (from getFocusableElements() in document order): PSelect[name="archival-reason"].
-    // Last focusable: Cancel PButton (third focusable after PSelect and Archive PButton).
+    // PModal migration: scope to host element via data-testid (not shadow-DOM [role=dialog]).
+    // The Cancel p-button is in PModal's light-DOM slot and is found from the host locator.
+    const archivalModal = page.locator('[data-testid="archival-modal"]')
     const archivalSelect = page.locator('[name="archival-reason"]')
     const cancelBtn = archivalModal.locator('p-button').filter({ hasText: 'Cancel' })
     await archivalSelect.waitFor({ state: 'visible', timeout: 5_000 })
     await cancelBtn.waitFor({ state: 'visible', timeout: 5_000 })
 
-    // Forward wrap: focus last focusable (Cancel), press Tab, assert first (PSelect) is focused.
-    // GREEN: handleKeyDown detects active===last and calls first.focus() → PSelect gets focus.
-    // Use page.evaluate for PDS shadow-DOM focus delegation on p-select.
+    // Forward Tab from Cancel: native <dialog> trap keeps focus inside the PModal boundary.
+    // The wrap target may be PModal's shadow dismiss button (X) rather than PSelect; assert
+    // boundary containment only — light-DOM containment covers slotted elements, shadow-root
+    // containment covers PModal's own X button.
     await cancelBtn.focus()
     await page.keyboard.press('Tab')
-    const selectFocusedAfterTab = await page.evaluate(() => {
-      const el = document.querySelector('[name="archival-reason"]')
-      return el !== null && (document.activeElement === el || el.contains(document.activeElement))
+    const focusedInsideAfterTab = await page.evaluate(() => {
+      const host = document.querySelector('[data-testid="archival-modal"]')
+      if (!host) return false
+      const active = document.activeElement
+      return (
+        active !== null &&
+        (host === active ||
+          host.contains(active) ||
+          (host.shadowRoot !== null && host.shadowRoot.contains(active)))
+      )
     })
     expect(
-      selectFocusedAfterTab,
-      'Tab from last focusable (Cancel) must wrap to first focusable (PSelect) — handleKeyDown traps',
+      focusedInsideAfterTab,
+      'Tab from Cancel must keep focus inside archival-modal PModal boundary (native <dialog> trap)',
     ).toBe(true)
 
-    // Backward wrap: focus first focusable (PSelect), press Shift+Tab, assert Cancel is focused.
-    // GREEN: handleKeyDown detects active===first and calls last.focus() → Cancel gets focus.
+    // Backward Shift+Tab from PSelect: native trap keeps focus inside the PModal boundary.
     await archivalSelect.focus()
     await page.keyboard.press('Shift+Tab')
-    await expect(
-      cancelBtn,
-      'Shift+Tab from first focusable (PSelect) must wrap to last focusable (Cancel) — handleKeyDown traps',
-    ).toBeFocused()
+    const focusedInsideAfterShiftTab = await page.evaluate(() => {
+      const host = document.querySelector('[data-testid="archival-modal"]')
+      if (!host) return false
+      const active = document.activeElement
+      return (
+        active !== null &&
+        (host === active ||
+          host.contains(active) ||
+          (host.shadowRoot !== null && host.shadowRoot.contains(active)))
+      )
+    })
+    expect(
+      focusedInsideAfterShiftTab,
+      'Shift+Tab from PSelect must keep focus inside archival-modal PModal boundary (native <dialog> trap)',
+    ).toBe(true)
   })
 
   // AC-2, ConfirmDialog: focus must return to the triggering element after close.
