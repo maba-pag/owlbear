@@ -209,6 +209,28 @@ Accessibility and responsive state after #1396:
   for `ConfirmDialog.tsx` at 98.57% and `ResolveModal.tsx` at 92.75%), and
   `serve/cockpit/web/e2e/overlay-behavior.spec.ts` (19 E2E tests — host-attribute
   checks, Tab-cycle containment, and exact focus-return for all three modals).
+- #1624 adds success feedback via PDS `PToast` for move operations and an inline
+  save-confirmed indicator for edit saves. `Shell.tsx` mounts a `<PToast />` singleton
+  and calls `useToastManager().addMessage({ state: 'success', text })` from
+  `onMutationSuccess`; `KanbanBoard.tsx` passes the target status name in the success
+  message on drag-drop and context-menu moves. `TaskFieldsEditor.tsx` shows
+  `[data-testid="save-confirmed"]` for 2000ms after a successful dirty-field edit and
+  actively clears it (with timer cancellation) when a handled failure returns `false`.
+  `CockpitProvider.tsx` guards `setSelectedTask(null)` to fire only on true task
+  switches (`isTaskSwitch`), not nonce-driven same-task refetches, so the indicator
+  survives the post-edit data refresh. `TaskFieldsEditor.tsx` mirrors this with a
+  `prevTaskIdRef` guard that resets the indicator immediately only on `task.id` change.
+  Existing `PBanner` error/warning surfaces are unchanged. Verified by
+  `serve/cockpit/web/src/__tests__/PToastSuccess_1624.test.tsx` (AC1 wiring: KanbanBoard
+  message, Shell addMessage, PToast in tree) and
+  `serve/cockpit/web/src/__tests__/SaveConfirmed_1624.test.tsx` (AC2 indicator lifecycle:
+  appears on success, survives same-task refetch, resets on task-switch; AC3 failure
+  contract: indicator absent on initial false-return and cleared from prior success;
+  `TestFromAC_SaveConfirmedRefetchSurvival`, `TestFromAC_SaveConfirmedTaskSwitch`,
+  `TestFromAC_SaveConfirmedFailure`) and
+  `serve/cockpit/web/src/__tests__/CockpitRefetch_1624.test.tsx` (provider-level
+  same-task refetch guard). (Literal `p-toast-item` shadow-DOM timing proof deferred to
+  consolidation task #1629.)
 - #1626 applies PDS focus-visible ring styling to all native interactive elements.
   `custom-tokens.css` adds a global `:focus-visible` rule for `button`, `[role="button"]`,
   `[role="menuitem"]`, `input`, and `a` — the elements PDS Shadow DOM does not reach — using
