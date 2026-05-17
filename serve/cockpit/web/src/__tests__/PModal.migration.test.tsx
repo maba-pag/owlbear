@@ -727,6 +727,26 @@ describe('PModal migration contract', () => {
 
       expect(lastFocusSpy).toHaveBeenCalled()
     })
+
+    it('Shift+Tab when p-modal host itself is focused wraps to last focusable element (modal-host-active path)', () => {
+      // AC6(c): active === event.currentTarget — the p-modal container is the active element on mount
+      const { container } = renderCleanupConfirming()
+      const pModal = getPModal(container)
+      expect(pModal).not.toBeNull()
+      const focusable = Array.from(
+        pModal!.querySelectorAll<HTMLElement>('p-button:not([disabled]), button:not([disabled])'),
+      )
+      expect(focusable.length).toBeGreaterThanOrEqual(2)
+
+      const last = focusable[focusable.length - 1]
+      const lastFocusSpy = vi.spyOn(last, 'focus')
+
+      // Focus the p-modal host element itself (as happens on confirming phase mount via modal.focus())
+      pModal!.focus()
+      fireEvent.keyDown(pModal!, { key: 'Tab', shiftKey: true, bubbles: true })
+
+      expect(lastFocusSpy).toHaveBeenCalled()
+    })
   })
 
   describe('AC6: RepairPanel — Tab focus-trap retained within p-modal', () => {
@@ -767,6 +787,26 @@ describe('PModal migration contract', () => {
 
       first.setAttribute('tabindex', '0')
       first.focus()
+      fireEvent.keyDown(pModal!, { key: 'Tab', shiftKey: true, bubbles: true })
+
+      expect(lastFocusSpy).toHaveBeenCalled()
+    })
+
+    it('Shift+Tab when p-modal host itself is focused wraps to last focusable element (modal-host-active path)', () => {
+      // AC6(c): active === event.currentTarget — the p-modal container is the active element on mount
+      const { container } = renderRepairConfirming()
+      const pModal = getPModal(container)
+      expect(pModal).not.toBeNull()
+      const focusable = Array.from(
+        pModal!.querySelectorAll<HTMLElement>('p-button:not([disabled]), button:not([disabled])'),
+      )
+      expect(focusable.length).toBeGreaterThanOrEqual(2)
+
+      const last = focusable[focusable.length - 1]
+      const lastFocusSpy = vi.spyOn(last, 'focus')
+
+      // Focus the p-modal host element itself (as happens on confirming phase mount via modal.focus())
+      pModal!.focus()
       fireEvent.keyDown(pModal!, { key: 'Tab', shiftKey: true, bubbles: true })
 
       expect(lastFocusSpy).toHaveBeenCalled()
