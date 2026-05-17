@@ -20,7 +20,7 @@
 
 ## 3. Four-Way Classification
 
-### 3a. PDS Equivalent (23 consumed tokens → replace with `--p-*`)
+### 3a. PDS Equivalent (22 consumed tokens → replace with `--p-*`)
 
 | `--pds-*` Token | PDS v4 `--p-*` Replacement | Consumer Files |
 |---|---|---|
@@ -36,7 +36,6 @@
 | `--pds-notification-warning-soft` | `--p-color-warning-frosted` | SessionRows.css |
 | `--pds-notification-error` | `--p-color-error` | Card.css, SessionRows.css |
 | `--pds-notification-error-soft` | `--p-color-error-frosted` | SessionRows.css |
-| `--pds-signal-claimed` | — | **custom-keep** (see §3c) |
 | `--pds-state-hover` | `--p-color-frosted` | Shell.css, Card.css, Column.css |
 | `--pds-state-focus` | `--p-color-focus` | Card.css |
 | `--pds-shadow-sm` | `--p-shadow-sm` | Card.css, Column.css |
@@ -85,11 +84,11 @@ No `--pds-*` token maps to a Tailwind utility class. All consumed tokens have di
 
 | Classification | Count | Action |
 |---|---|---|
-| PDS equivalent | 23 (16 direct + 4 aliases + 2 undeclared + 1 layout×2) | `--pds-*` → `--p-*` at each usage site |
+| PDS equivalent | 22 (15 direct + 4 aliases + 2 undeclared + 1 layout×2) | `--pds-*` → `--p-*` at each usage site |
 | Tailwind utility | 0 | — |
 | Custom-keep | 1 | Move to `custom-tokens.css` |
 | Dead-delete | 11 | Deleted with `tokens.css` |
-| **Total classified** | **35** | |
+| **Total classified** | **34** | |
 
 ## 4. Grep-Verified Coverage
 
