@@ -1,28 +1,4 @@
-/**
- * Tests for #1618 — P2-11: Complex integrations — modals → PModal
- *
- * Revised AC (post architect refinement, 2026-05-17):
- *
- * AC-1: ConfirmDialog, ResolveModal, and ArchivalModal render via PModal host element;
- *       legacy modal infrastructure removed: no div[role=dialog] wrapper, no
- *       position:fixed overlay, no inline z-index.
- *
- * AC-2: PDS host-level workarounds permitted for documented PModal limitations:
- *       (1) Tab-cycling shim for slotted light-DOM focus trapping,
- *       (2) focus-state capture/restore for close-path variants,
- *       (3) host attribute normalization (role, aria-modal) via MutationObserver.
- *
- * AC-3: Focus behavior preserved per modal:
- *       (a) all three trap Tab within modal boundary on open
- *       (b) ResolveModal returns focus to DR trigger button on close
- *       (c) ArchivalModal returns focus to originating task card on close via
- *           PModal onDismiss + explicit fallback target
- *       (d) ConfirmDialog returns focus to the action button that opened it
- *
- * AC-4: Dismiss policy per modal:
- *       ConfirmDialog — role=alertdialog, disableBackdropClick=true, dismissButton=false
- *       ResolveModal and ArchivalModal — all dismiss methods allowed
- */
+/** PModal migration regressions for ConfirmDialog, ResolveModal, and ArchivalModal. */
 import { beforeAll, describe, it, expect, vi, afterEach } from 'vitest'
 import { render, fireEvent } from '@testing-library/react'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
@@ -158,7 +134,7 @@ function renderArchivalModal(overrides: {
 // AC-1: ConfirmDialog renders via PModal — no hand-rolled overlay
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('TestFromAC_PModalMigration', () => {
+describe('PModal migration contract', () => {
   afterEach(() => {
     vi.clearAllMocks()
   })

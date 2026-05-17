@@ -1,21 +1,4 @@
-/**
- * RED phase tests for #1603: Atomic token migration — delete tokens.css + migrate references
- *
- * AC-1: grep -r '--pds-' serve/cockpit/web/src/ returns zero matches (CSS and TSX)
- * AC-2: tokens.css deleted; custom-tokens.css declares exactly --custom-signal-claimed
- *       (the sole custom-keep token) and no other custom properties
- * AC-3: Manual dark-mode override blocks ([data-theme="dark"] and
- *       @media prefers-color-scheme) removed from authored CSS
- * AC-4: Tests formerly asserting --pds-* names updated to assert --p-* equivalents
- *       or deleted when their assertion target (tokens.css structure) no longer exists
- *
- * All tests FAIL in RED phase because:
- *   AC-1 — source CSS/TSX files currently contain --pds-* references
- *   AC-2 — tokens.css currently exists; custom-tokens.css does not exist
- *   AC-3 — tokens.css currently contains [data-theme="dark"] and
- *           @media (prefers-color-scheme: dark) blocks
- *   AC-4 — TokenArchitecture test files still exist; key assertions still name --pds-* tokens
- */
+/** Token migration regressions for PDS v4 token adoption and legacy CSS cleanup. */
 import { describe, expect, it } from 'vitest'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { dirname, extname, join, resolve } from 'node:path'
@@ -63,7 +46,7 @@ const EXCLUDE_FROM_SRC_SCAN = new Set(['__tests__', 'node_modules', 'dist', 'bui
 
 // ─── AC-1: Zero --pds-* references in source CSS and TSX/TS component files ──
 
-describe('TestFromAC_NoPdsTokensInSource', () => {
+describe('PDS token namespace cleanup', () => {
   it('AC-1: all authored CSS files in src/ contain zero --pds-* references after migration', () => {
     const cssFiles = collectSourceFiles(SRC_DIR, ['.css'], EXCLUDE_FROM_SRC_SCAN)
     expect(cssFiles.length, 'src/ must contain CSS files to scan').toBeGreaterThan(0)
@@ -87,7 +70,7 @@ describe('TestFromAC_NoPdsTokensInSource', () => {
 
 // ─── AC-2: tokens.css deleted; custom-tokens.css with exactly --custom-signal-claimed ──
 
-describe('TestFromAC_TokenFileMigration', () => {
+describe('token file migration', () => {
   const TOKENS_CSS_PATH = resolve(SRC_DIR, 'tokens.css')
   const CUSTOM_TOKENS_CSS_PATH = resolve(SRC_DIR, 'custom-tokens.css')
 
@@ -138,7 +121,7 @@ describe('TestFromAC_TokenFileMigration', () => {
 
 // ─── AC-3: Dark-mode override blocks removed from all authored CSS files ──────
 
-describe('TestFromAC_DarkModeOverridesRemoved', () => {
+describe('dark-mode override removal', () => {
   it('AC-3: no authored CSS file in src/ contains a [data-theme="dark"] selector block', () => {
     const cssFiles = collectSourceFiles(SRC_DIR, ['.css'], EXCLUDE_FROM_SRC_SCAN)
     const violations: string[] = []
@@ -173,7 +156,7 @@ describe('TestFromAC_DarkModeOverridesRemoved', () => {
 
 // ─── AC-4: Retired test files deleted ─────────────────────────────────────────
 
-describe('TestFromAC_LegacyTestFilesRetired', () => {
+describe('retired legacy token tests', () => {
   it('AC-4: TokenArchitecture_1535.test.ts is deleted (assertion target tokens.css no longer exists)', () => {
     const path = resolve(TESTS_DIR, 'TokenArchitecture_1535.test.ts')
     expect(
@@ -193,24 +176,24 @@ describe('TestFromAC_LegacyTestFilesRetired', () => {
 
 // ─── AC-4: Updated test files assert --p-* equivalents ────────────────────────
 
-describe('TestFromAC_LegacyTestFilesUpdated', () => {
-  it('AC-4: CardCSS_1546.test.ts asserts the migrated --p-color-contrast-medium token (not retired --pds-contrast-medium)', () => {
-    const path = resolve(TESTS_DIR, 'CardCSS_1546.test.ts')
-    expect(existsSync(path), 'CardCSS_1546.test.ts must exist (updated, not retired)').toBe(true)
+describe('migrated token test coverage', () => {
+  it('AC-4: Card.css.supplemental.test.ts asserts the migrated --p-color-contrast-medium token', () => {
+    const path = resolve(TESTS_DIR, 'Card.css.supplemental.test.ts')
+    expect(existsSync(path), 'Card.css.supplemental.test.ts must exist').toBe(true)
     const source = readFileSync(path, 'utf-8')
     expect(
       source,
-      'CardCSS_1546.test.ts must reference --p-color-contrast-medium (PDS v4 replacement)',
+      'Card.css.supplemental.test.ts must reference --p-color-contrast-medium (PDS v4 replacement)',
     ).toMatch(/--p-color-contrast-medium/)
   })
 
-  it('AC-4: CardCSS_1546.test.ts no longer asserts var(--pds-contrast-medium) as a declaration value', () => {
-    const path = resolve(TESTS_DIR, 'CardCSS_1546.test.ts')
+  it('AC-4: Card.css.supplemental.test.ts no longer asserts var(--pds-contrast-medium) as a declaration value', () => {
+    const path = resolve(TESTS_DIR, 'Card.css.supplemental.test.ts')
     expect(existsSync(path)).toBe(true)
     const source = readFileSync(path, 'utf-8')
     expect(
       source,
-      'CardCSS_1546.test.ts must not retain --p-color-contrast-medium assertions after migration',
+      'Card.css.supplemental.test.ts must not retain --pds-contrast-medium assertions after migration',
     ).not.toMatch(/var\(--pds-contrast-medium\)/)
   })
 
@@ -236,23 +219,23 @@ describe('TestFromAC_LegacyTestFilesUpdated', () => {
     ).toMatch(/--custom-signal-claimed/)
   })
 
-  it('AC-4: ShellSecondaryCSS_1550.test.tsx does not assert the retired --pds-background-surface token name', () => {
-    const path = resolve(TESTS_DIR, 'ShellSecondaryCSS_1550.test.tsx')
-    expect(existsSync(path), 'ShellSecondaryCSS_1550.test.tsx must exist (updated, not retired)').toBe(true)
+  it('AC-4: Shell.secondary-css.test.tsx does not assert the retired --pds-background-surface token name', () => {
+    const path = resolve(TESTS_DIR, 'Shell.secondary-css.test.tsx')
+    expect(existsSync(path), 'Shell.secondary-css.test.tsx must exist').toBe(true)
     const source = readFileSync(path, 'utf-8')
     expect(
       source,
-      'ShellSecondaryCSS_1550.test.tsx must not retain --pds-background-surface assertions (replaced by --p-color-surface)',
+      'Shell.secondary-css.test.tsx must not retain --pds-background-surface assertions (replaced by --p-color-surface)',
     ).not.toMatch(/--pds-background-surface/)
   })
 
-  it('AC-4: ShellSecondaryCSS_1550.test.tsx asserts the PDS v4 --p-color-surface token (migration applied)', () => {
-    const path = resolve(TESTS_DIR, 'ShellSecondaryCSS_1550.test.tsx')
+  it('AC-4: Shell.secondary-css.test.tsx asserts the PDS v4 --p-color-surface token', () => {
+    const path = resolve(TESTS_DIR, 'Shell.secondary-css.test.tsx')
     expect(existsSync(path)).toBe(true)
     const source = readFileSync(path, 'utf-8')
     expect(
       source,
-      'ShellSecondaryCSS_1550.test.tsx must reference --p-color-surface (PDS v4 replacement for --pds-background-surface)',
+      'Shell.secondary-css.test.tsx must reference --p-color-surface (PDS v4 replacement for --pds-background-surface)',
     ).toMatch(/--p-color-surface/)
   })
 })

@@ -14,7 +14,7 @@ const FILTER_PANEL_CSS = resolve(COMPONENTS_DIR, 'FilterPanel.css')
 const KANBAN_BOARD_TSX = resolve(SRC_DIR, 'KanbanBoard.tsx')
 const STYLES_TS = resolve(SRC_DIR, 'utils', 'styles.ts')
 
-describe('TestFromAC_FilterPanelCSS_1550', () => {
+describe('FilterPanel CSS migration', () => {
   it('AC-1: FilterPanel.css exists in src/components/', () => {
     expect(existsSync(FILTER_PANEL_CSS), `FilterPanel.css must exist at ${FILTER_PANEL_CSS}`).toBe(true)
   })
@@ -59,7 +59,7 @@ describe('TestFromAC_FilterPanelCSS_1550', () => {
   })
 })
 
-describe('TestFromAC_StylesTsDeletion_1550', () => {
+describe('retired style utility cleanup', () => {
   it('AC-2: utils/styles.ts is deleted (file must not exist)', () => {
     expect(
       existsSync(STYLES_TS),
@@ -68,7 +68,7 @@ describe('TestFromAC_StylesTsDeletion_1550', () => {
   })
 })
 
-describe('TestFromAC_BoardGridTokens_1550', () => {
+describe('KanbanBoard grid token CSS', () => {
   it('AC-3: KanbanBoard.tsx board grid container uses var(--p-spacing-static-md) for gap', () => {
     const source = readFileSync(KANBAN_BOARD_TSX, 'utf-8')
     expect(

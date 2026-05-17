@@ -144,9 +144,9 @@ Accessibility and responsive state after #1396:
   (`[data-theme="dark"]` and `@media (prefers-color-scheme: dark)`) are removed from
   authored CSS; dark mode is handled natively by PDS via `.scheme-dark`/`.scheme-light`
   class switching. `main.tsx` import updated from `tokens.css` to `custom-tokens.css`.
-  Verified by `serve/cockpit/web/src/__tests__/TokenMigration_1603.test.ts` (17 tests
+  Verified by `serve/cockpit/web/src/__tests__/TokenMigration.test.ts` (17 tests
   covering AC-1 through AC-4) and durable suites `PdsColorSchemeBridge.test.ts`,
-  `BoardVisualDesign.test.tsx`, `CardCSS_1546.test.ts`, `ShellSecondaryCSS_1550.test.tsx`,
+  `BoardVisualDesign.test.tsx`, `Card.css.supplemental.test.ts`, `Shell.secondary-css.test.tsx`,
   and `ShellSecondaryCSS.base.test.tsx` (90 tests total, all passing).
 - #1614 performs PDS simple component swaps across five cockpit components.
   `ActivityTab.tsx` session-row button, `DRStatusIndicator.tsx` resolve-button, and
@@ -201,10 +201,10 @@ Accessibility and responsive state after #1396:
   `ArchivalModal` returns focus to the originating task card via `onDismiss` plus an
   explicit fallback target (context-menu opener is destroyed before close); `ConfirmDialog`
   returns focus to the action button that opened it. Verified by
-  `serve/cockpit/web/src/__tests__/PModalMigration_1618.test.tsx` (30 tests — AC-1 PModal
+  `serve/cockpit/web/src/__tests__/PModal.migration.test.tsx` (30 tests — AC-1 PModal
   roots and no legacy wrapper/overlay/z-index, AC-3/AC-4 dismiss policy wiring and focus
   fallback for all three modals),
-  `serve/cockpit/web/src/__tests__/CoverageGap_1618.test.tsx` (53 tests — branch coverage
+  `serve/cockpit/web/src/__tests__/PModal.coverage.test.tsx` (53 tests — branch coverage
   for `ConfirmDialog.tsx` at 98.57% and `ResolveModal.tsx` at 92.75%), and
   `serve/cockpit/web/e2e/overlay-behavior.spec.ts` (19 E2E tests — host-attribute
   checks, Tab-cycle containment, and exact focus-return for all three modals).

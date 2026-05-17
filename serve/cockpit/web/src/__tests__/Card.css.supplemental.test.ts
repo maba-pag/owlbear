@@ -1,19 +1,6 @@
 /**
- * Card CSS supplemental tests — task #1546
- *
- * Covers AC-3 and AC-4 (CSS side) plus AC-1 base-token correctness.
- * The existing Card.css.test.ts (from #1538) covers signal selectors and
- * selected/hover/focus states but does not cover:
- *   AC-1: base border uses agnostic var(--p-color-contrast-medium), no legacy token shadowing
- *   AC-3: overflow-wrap: break-word, no max-height constraint
- *   AC-4: [data-dragging="true"] selector with opacity: 0.5
- *
- * All tests fail RED against current Card.css until builder #1546 applies:
- *   - overflow-wrap: break-word on .card
- *   - Removal of max-height: 56px
- *   - Removal of legacy --pds-theme-light-* token overrides inside .card
- *   - border-left using var(--p-color-contrast-medium) directly
- *   - [data-dragging="true"] { opacity: 0.5 } selector
+ * Supplemental Card.css regressions for text wrapping, base tokens, and drag state.
+ * Card.css.test.ts covers signal selectors and selected/hover/focus states.
  */
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
@@ -38,7 +25,7 @@ function getCSSBlock(css: string, selector: string): string | null {
 
 // ─── AC-3: overflow-wrap and height constraint ────────────────────────────────
 
-describe('TestFromAC_CardCSSTextOverflow', () => {
+describe('card text overflow CSS', () => {
   it('.card block declares overflow-wrap: break-word (AC-3)', () => {
     const css = readFileSync(CARD_CSS_PATH, 'utf-8')
     const block = getCSSBlock(css, '.card')
@@ -56,13 +43,11 @@ describe('TestFromAC_CardCSSTextOverflow', () => {
 
 // ─── AC-1: base border uses agnostic PDS token, no legacy shadowing ──────────
 
-describe('TestFromAC_CardCSSBaseToken', () => {
+describe('card base token CSS', () => {
   it('.card border-left references var(--p-color-contrast-medium) directly for theme-aware base (AC-1)', () => {
     const css = readFileSync(CARD_CSS_PATH, 'utf-8')
     const block = getCSSBlock(css, '.card')
     expect(block).not.toBeNull()
-    // After builder fix: border-left: 4px solid var(--p-color-contrast-medium)
-    // Currently uses --card-priority-border intermediate → test FAILS RED.
     expect(block).toMatch(/border-left\s*:[^;]*var\(--p-color-contrast-medium\)/)
   })
 
@@ -79,8 +64,6 @@ describe('TestFromAC_CardCSSBaseToken', () => {
     const css = readFileSync(CARD_CSS_PATH, 'utf-8')
     const block = getCSSBlock(css, '.card')
     expect(block).not.toBeNull()
-    // Builder removes all 7 legacy token-shadow lines inside .card.
-    // Currently --p-color-contrast-medium: var(--pds-theme-light-contrast-medium) is present → FAILS RED.
     expect(block).not.toMatch(/--p-color-contrast-medium\s*:\s*var\(--pds-theme-light-contrast-medium\)/)
   })
 
@@ -101,7 +84,7 @@ describe('TestFromAC_CardCSSBaseToken', () => {
 
 // ─── AC-4: Drag state CSS selector ────────────────────────────────────────────
 
-describe('TestFromAC_CardCSSDragState', () => {
+describe('card drag-state CSS', () => {
   it('[data-dragging="true"] selector exists in Card.css (AC-4)', () => {
     const css = readFileSync(CARD_CSS_PATH, 'utf-8')
     expect(css).toMatch(/\[data-dragging="true"\]/)

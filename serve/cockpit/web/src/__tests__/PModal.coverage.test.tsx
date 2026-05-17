@@ -1,8 +1,7 @@
 /**
- * Coverage gap tests for #1618 (retry) — ConfirmDialog and ResolveModal
+ * Branch coverage regressions for ConfirmDialog and ResolveModal.
  *
- * Targets uncovered code paths identified by the behavioral proof bundle
- * coverage report:
+ * Targets code paths identified by the component coverage report:
  *   - ConfirmDialog: 63% → target ≥90%
  *   - ResolveModal:  75% → target ≥90%
  *
@@ -102,7 +101,7 @@ function renderResolveModal(overrides: {
 // ─────────────────────────────────────────────────────────────────────────────
 // ConfirmDialog coverage gaps
 // ─────────────────────────────────────────────────────────────────────────────
-describe('TestFromAC_ConfirmDialogCoverageGap', () => {
+describe('ConfirmDialog branch coverage', () => {
   afterEach(() => {
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
@@ -504,7 +503,7 @@ describe('TestFromAC_ConfirmDialogCoverageGap', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 // ResolveModal coverage gaps
 // ─────────────────────────────────────────────────────────────────────────────
-describe('TestFromAC_ResolveModalCoverageGap', () => {
+describe('ResolveModal branch coverage', () => {
   afterEach(() => {
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
