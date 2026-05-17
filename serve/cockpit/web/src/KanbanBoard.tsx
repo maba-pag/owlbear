@@ -6,7 +6,6 @@ import { filterTasks, type FilterState } from './utils/filterTasks'
 import { type Board, type Task } from './hooks/useBoard'
 import { moveTask } from './api/tasks'
 import { ApiError } from './api/errors'
-import { PButton } from '@porsche-design-system/components-react'
 import './KanbanBoard.css'
 
 // ─── KanbanBoard ──────────────────────────────────────────────────────────────
@@ -83,7 +82,7 @@ function KanbanBoardContent({
   const [panelOpen, setPanelOpen] = useState(false)
   const [filterAnnouncement, setFilterAnnouncement] = useState('')
   const menuRef = useRef<HTMLDivElement | null>(null)
-  const filterToggleRef = useRef<HTMLElement | null>(null)
+  const filterToggleRef = useRef<HTMLButtonElement | null>(null)
   const announcementTimerRef = useRef<number | null>(null)
   const contextMenuOriginRef = useRef<HTMLElement | null>(null)
   const archivalReturnFocusRef = useRef<HTMLElement | null>(null)
@@ -276,19 +275,19 @@ function KanbanBoardContent({
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <PButton
+        <button
           ref={filterToggleRef}
           type="button"
           data-testid="filter-toggle"
-          tabIndex={0}
-          aria-expanded={panelOpen ? 'true' : 'false'}
+          data-pds-exception="filter-toggle"
+          className="icon-button"
+          aria-expanded={panelOpen}
           aria-controls="filter-panel"
-          variant="secondary"
           onClick={() => setPanelOpen((open) => !open)}
         >
           Filters
           {hasActiveFilters ? ` (${activeFilterCount})` : ''}
-        </PButton>
+        </button>
         <span
           data-testid="filter-result-count-live"
           aria-live="polite"

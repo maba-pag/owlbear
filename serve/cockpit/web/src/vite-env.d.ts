@@ -38,6 +38,7 @@ declare namespace React {
       }
       'p-accordion': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & {
         heading?: string
+        compact?: boolean | string
         open?: boolean | string
       }
     }

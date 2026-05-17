@@ -178,14 +178,13 @@ export default function FilterPanel({
       <PInputSearch
         ref={searchRef}
         name="search-filter"
-        aria-label="Search tasks"
-        role="textbox"
+        label="Search tasks"
         tabIndex={0}
       />
 
       <PSelect
         name="priority-filter"
-        aria-label="Priority"
+        label="Priority"
         value={filter.priority}
         tabIndex={0}
         onChange={(event) => onFilterChange({ ...filter, priority: readStringValue(event as ControlValueEvent) })}
@@ -202,7 +201,6 @@ export default function FilterPanel({
         <PMultiSelect
           name="tags-filter"
           label="Tags"
-          aria-label="Tags"
           data-testid="filter-tags"
           value={filter.tags}
           tabIndex={0}
@@ -221,7 +219,6 @@ export default function FilterPanel({
       <p-checkbox
         name="blocked-filter"
         label="Show only blocked tasks"
-        aria-checked={filter.blocked}
         tabIndex={0}
         onClick={() => onFilterChange({ ...filter, blocked: !filter.blocked })}
       >

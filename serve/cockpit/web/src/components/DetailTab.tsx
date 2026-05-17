@@ -49,18 +49,6 @@ export interface DetailTabProps {
 
 export type { TaskDetail }
 
-function setHeadingMediumSizeAttr(element: HTMLElement | null): void {
-  element?.setAttribute('size', 'medium')
-}
-
-function setHeadingSmallSizeAttr(element: HTMLElement | null): void {
-  if (!element) {
-    return
-  }
-  element.setAttribute('size', 'small')
-  element.setAttribute('tag', 'h3')
-}
-
 function setMetadataAccordionAttrs(element: HTMLElement | null): void {
   if (!element) {
     return
@@ -202,7 +190,7 @@ export default function DetailTab({
       <PDivider />
 
       <section data-region="sidecar-body">
-        <PHeading ref={setHeadingMediumSizeAttr} size="medium">Details</PHeading>
+        <PHeading size="medium" tag="h3">Details</PHeading>
         <TaskFieldsEditor
           task={t}
           priorities={board?.priorities ?? []}
@@ -215,7 +203,7 @@ export default function DetailTab({
       </section>
 
       <section data-region="actions">
-        <PHeading ref={setHeadingSmallSizeAttr} size="small">Actions</PHeading>
+        <PHeading size="small" tag="h3">Actions</PHeading>
         <TaskActions
           key={`${t.id}:${t.updated}`}
           task={t}

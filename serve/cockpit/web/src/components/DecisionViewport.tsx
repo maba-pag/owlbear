@@ -61,15 +61,6 @@ export default function DecisionViewport({ items, isLoading, error, onItemClick 
           </a>
           <article
             data-testid={`decision-item-${item.id}`}
-            role="button"
-            tabIndex={0}
-            onClick={() => onItemClick(item.id)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' || event.key === ' ') {
-                event.preventDefault()
-                onItemClick(item.id)
-              }
-            }}
           >
             <PText>
               <strong>Agent:</strong> {item.agent}

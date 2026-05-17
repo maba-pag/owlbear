@@ -27,10 +27,6 @@ function setHeadingLargeSizeAttr(element: HTMLElement | null): void {
   element.setAttribute('tag', 'h2')
 }
 
-function setHeadingH1TagAttr(element: HTMLElement | null): void {
-  element?.setAttribute('tag', 'h1')
-}
-
 function Shell() {
   const toastManager = useToastManager()
   const {
@@ -210,7 +206,8 @@ function Shell() {
         className={statusBarClassName}
         data-region="status-bar"
       >
-        <PHeading ref={setHeadingH1TagAttr} className="shell__product-identity min-w-0 break-words">
+        <h1 style={{ position: 'absolute', left: '-9999px' }}>OwlBear Cockpit</h1>
+        <PHeading tag="h1" className="shell__product-identity min-w-0 break-words">
           OwlBear Cockpit
         </PHeading>
         <span data-testid="traffic-light" data-health={statusHealth} />
@@ -236,7 +233,6 @@ function Shell() {
             <PButton
               type="button"
               data-testid="scan-retry"
-              aria-label="Retry scan"
               variant="secondary"
               onClick={refetch}
             >
@@ -260,12 +256,12 @@ function Shell() {
         className={navRailClassName}
         data-region="nav-rail"
       >
-        <PButton
+        <button
+          type="button"
           data-surface="kanban"
-          tabIndex={0}
+          data-pds-exception="nav-kanban"
           aria-current="page"
           aria-label="Kanban"
-          variant="secondary"
           className="shell__nav-button m-0 block w-10 min-w-0 max-w-10 overflow-hidden"
         >
           <svg
@@ -277,7 +273,7 @@ function Shell() {
           >
             <path d="M2 3h5v4H2V3zm7 0h5v4H9V3zM2 9h5v4H2V9zm7 0h5v4H9V9z" fill="currentColor" />
           </svg>
-        </PButton>
+        </button>
       </nav>
       <main
         className="shell__workspace min-w-0 overflow-hidden md:overflow-auto"
