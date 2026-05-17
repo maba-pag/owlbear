@@ -1,10 +1,10 @@
 ---
 id: 1607
 title: 'P1-11: Sidecar structure — padding, sections, typography'
-status: backlog
+status: archived
 priority: important
 created: 2026-05-16T03:36:07.096771+00:00
-updated: 2026-05-17T16:15:37.367528+02:00
+updated: 2026-05-17T19:09:08.735794+02:00
 tags:
   - frontend
   - pds
@@ -17,18 +17,22 @@ ac:
     #shell-sidecar-content carries the class; source proof: Shell.tsx contains no
     directional Tailwind overrides (pt-/pb-/pl-/pr-) using --p-spacing-static-md token;
     token is PDS-native (not deprecated --pds-*)'
-  - "Given a non-null task: Shell [data-region='sidecar-header'] contains p-heading[size='large']
-    and no raw h2; DetailTab [data-region='sidecar-body'] contains p-heading[size='medium'];
-    DetailTab [data-region='actions'] contains p-heading[size='small']; DetailTab
-    contains no raw h3"
+  - "Shell [data-region='sidecar-header'] contains p-heading[size='large'] and no
+    raw h2, asserted in both desktop (default; #shell-sidecar-content has no p-sheet
+    ancestor) and mobile (innerWidth ≤ 767; #shell-sidecar-content is inside p-sheet
+    ancestor) Shell renders; DetailTab (given non-null task) [data-region='sidecar-body']
+    contains p-heading[size='medium']; DetailTab [data-region='actions'] contains
+    p-heading[size='small']; DetailTab contains no raw h3"
   - 'PDivider elements separate content blocks: between sidecar-header and DecisionViewport,
-    between DecisionViewport and p-tabs, and immediately following sidecar-metadata
-    section in DetailTab'
+    between DecisionViewport and p-tabs — asserted in both desktop (default; #shell-sidecar-content
+    has no p-sheet ancestor) and mobile (innerWidth ≤ 767; #shell-sidecar-content
+    is inside p-sheet ancestor) Shell renders; immediately following sidecar-metadata
+    section in DetailTab (given non-null task)'
 proof_bundle: behavioral
 blocked: false
 block_reason:
-claimed_at: 2026-05-17T16:15:37.367528+02:00
-archival_reason:
+claimed_at:
+archival_reason: completed
 archival_refs: []
 ---
 Brief: see parent #1590.
@@ -584,3 +588,275 @@ All reviewer-cited gaps are test-proof gaps only. Implementation was already cor
 - The adversarial read agrees the blocker is proof completeness, not an implementation mismatch.
 - The behavioral bundle still lacks a coverage percentage in the latest packet, but I am not routing on that procedural ambiguity because the Shell branch-parity proof gap is already blocking.
 - No editor diagnostics are present in `serve/cockpit/web/src/Shell.tsx`, `serve/cockpit/web/src/components/DetailTab.tsx`, or `serve/cockpit/web/src/__tests__/SidecarStructure_1607.test.tsx`.
+
+[[2026-05-17T16:26:15+02:00]]
+## Architecture Review (Cycle 5 — dual-branch DOM proof)
+
+### Context
+Reviewer returned to backlog (5th rejection) citing that Shell AC-2 and AC-3 DOM assertions exercise only one rendered branch (desktop default). Mobile-only regressions would false-green. Reviewer routed to architect for proof-contract refinement.
+
+### Evaluation
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | Pure structural change: padding, heading hierarchy, dividers |
+| Interface clarity | PASS (after refinement) | AC now mandates dual-branch DOM proof with explicit viewport threshold |
+| Dependency correctness | PASS | No active blockers |
+| Module layering | PASS | Frontend-only: Shell.tsx, Shell.css, DetailTab.tsx |
+| TDD compliance | PASS | Test-writer will add mobile viewport render helper |
+| KISS/YAGNI | PASS | Uses established viewport-mock pattern (vitest.setup.ts, theme.test.tsx) |
+| Premise challenge | PASS | Sidecar needs structural PDS components |
+| Pattern consistency | PASS | Viewport mock override pattern proven in theme.test.tsx:10-30 |
+| Security surface | PASS | No system boundaries |
+| Single domain | PASS | Frontend only |
+
+### AC Refinements (Cycle 5)
+
+| AC | Old wording | New wording | Rationale |
+|----|------------|-------------|----------|
+| AC-1 | (unchanged) | (unchanged) | Already passing with reviewer acceptance |
+| AC-2 | `Given a non-null task: Shell [data-region='sidecar-header'] contains p-heading[size='large'] and no raw h2; DetailTab [data-region='sidecar-body'] contains p-heading[size='medium']; DetailTab [data-region='actions'] contains p-heading[size='small']; DetailTab contains no raw h3` | `Given a non-null task: Shell [data-region='sidecar-header'] contains p-heading[size='large'] and no raw h2, asserted in both mobile (innerWidth ≤ 767) and desktop (default) Shell renders; DetailTab [data-region='sidecar-body'] contains p-heading[size='medium']; DetailTab [data-region='actions'] contains p-heading[size='small']; DetailTab contains no raw h3` | Adds explicit dual-branch DOM proof requirement. Uses established viewport mock pattern (vitest.setup.ts matchMedia mock + window.innerWidth override). Deterministically fails if mobile branch loses heading structure. |
+| AC-3 | `PDivider elements separate content blocks: between sidecar-header and DecisionViewport, between DecisionViewport and p-tabs, and immediately following sidecar-metadata section in DetailTab` | `PDivider elements separate content blocks: between sidecar-header and DecisionViewport, between DecisionViewport and p-tabs — asserted in both mobile (innerWidth ≤ 767) and desktop Shell renders; immediately following sidecar-metadata section in DetailTab (given non-null task)` | Adds explicit dual-branch DOM proof requirement matching AC-2 pattern. Also adds DetailTab precondition (task must be non-null since DetailTab returns null otherwise). |
+
+### Challenge Results
+- Challenger: block (confidence 0.33)
+- Findings: (1) Source-count approach insufficient — doesn't deterministically fail on mobile-only regression [ACCEPTED — switched to dual-branch DOM proof], (2) AC-3 missing DetailTab precondition [ACCEPTED — added], (3) Existing viewport mock patterns available [ACCEPTED — cited as implementation mechanism], (4) AC lines bundle multiple targets [REBUTTED — Shell-specific clause is a proof dimension of the structural assertion, not independent responsibility]
+- Architect response: ACCEPTED findings 1-3. Replaced source-count approach with dual-branch DOM proof using established viewport-mock infrastructure (vitest.setup.ts matchMedia + innerWidth override, theme.test.tsx demonstrates per-test override). This directly addresses reviewer's \"deterministically fails on mobile-only regressions\" requirement.
+
+### Proof-Bundle Validation
+- Planner assignment: behavioral
+- Final bundle: behavioral
+- Test-writer: PROCEED — must add renderShellMobile() helper and duplicate Shell structural assertions for mobile branch
+
+### Builder Guidance (Cycle 5)
+- No implementation changes needed. Code is correct and complete.
+- Test-writer must:
+  1. Add a `renderShellMobile()` helper that sets `window.innerWidth = 767` and overrides `matchMedia` to return `matches: true` for `(max-width: 767px)` before rendering Shell.
+  2. Add AC-2 mobile assertions: mobile Shell render → [data-region='sidecar-header'] contains p-heading[size='large'] and no raw h2.
+  3. Add AC-3 mobile assertions: mobile Shell render → p-divider after sidecar-header, p-divider before p-tabs.
+  4. Viewport mock pattern reference: vitest.setup.ts:29-42 (default matchMedia), theme.test.tsx:10-30 (per-test override via Object.defineProperty).
+  5. Shell viewport detection: Shell.tsx:165-170 uses window.innerWidth ≤ 767 || matchMedia('(max-width: 767px)').matches.
+- After test-writer updates, tests should remain GREEN (implementation places identical structure in both branches).
+
+### Verdict: APPROVE (after REFINE)
+### Action Taken: Refined AC-2 and AC-3 to require dual-branch DOM proof (mobile + desktop) using established viewport-mock patterns. Persisted AC via edit_task. Moved to todo.
+
+[[2026-05-17T16:41:18+02:00]]
+## Test-Writer Notes (Retry Cycle 5)
+
+### Status
+Surgical gap-fill: added dual-branch mobile viewport proof for AC-2 and AC-3 Shell assertions.
+
+### Changes made to `serve/cockpit/web/src/__tests__/SidecarStructure_1607.test.tsx`
+
+**New helpers:**
+- `setMobileViewport()` — sets `window.innerWidth = 767`, overrides `matchMedia` to return `matches: true` for `(max-width: 767px)` (matches Shell.tsx:165-170 detection logic)
+- `restoreDesktopViewport()` — restores `innerWidth = 1024`, `matchMedia` returns `matches: false`
+
+**AC-2 mobile assertions (2 new tests)** in nested `describe('mobile viewport branch (AC-2 dual-branch proof)')` inside `TestFromAC_SidecarStructure_Typography`:
+- `mobile Shell [data-region=\"sidecar-header\"] contains p-heading[size=\"large\"]`
+- `mobile Shell [data-region=\"sidecar-header\"] contains no raw h2 element`
+
+**AC-3 mobile assertions (2 new tests)** in nested `describe('mobile viewport branch (AC-3 dual-branch proof)')` inside `TestFromAC_SidecarStructure_Dividers`:
+- `mobile Shell: p-divider is direct next sibling after sidecar-header`
+- `mobile Shell: p-divider is immediately before p-tabs`
+
+### Verification (quality-runner scoped)
+- **23 passed / 0 failed / 0 skipped** — all GREEN ✓
+- lint: clean (eslint exit 0) ✓
+
+### Builder Skip: direct-to-review advance
+Reviewer's RF-1 targeted test-proof gaps only. All 4 new tests PASS against current implementation (architect confirmed code is correct in Cycle 5 guidance). Builder has no work to do.
+
+### Commit
+- 039e1f07e33609f310075c5f918cee6cb5dec049
+- `test: add dual-branch mobile viewport proof for #1607 cycle 5 (test-writer)`
+
+### AC Coverage
+| AC line | Tests |
+|---------|-------|
+| AC-1: Tailwind p-[var(--p-spacing-static-md)] on both paths; no directional overrides | 5 source + DOM tests |
+| AC-2: Shell sidecar-header=large; DetailTab sidecar-body=medium; actions=small; no raw h2/h3 — BOTH desktop and mobile Shell branches | 8+2=10 DOM tests |
+| AC-3: PDivider Shell×2; DetailTab metadata divider — BOTH desktop and mobile Shell branches | 6+2=8 DOM tests |
+
+[[2026-05-17T17:21:58+02:00]]
+## Review Evidence
+- Verdict: FAIL
+- FAIL signal: FAIL #1607 -> backlog | Shell proof still does not verify a non-null selected-task render or a mobile-only branch render.
+- Builder/test-writer evidence review: The latest task-local packet reports 23 passed / 0 failed / 0 skipped with clean lint. I did not dispatch quality-runner because that packet is internally consistent; the blocker is proof sufficiency, not contradictory execution output.
+
+| # | AC Line | Finding | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | AC-2: Given a non-null task, Shell sidecar-header contains p-heading[size='large'] and no raw h2 in both mobile and desktop renders | [renderShell()](serve/cockpit/web/src/__tests__/SidecarStructure_1607.test.tsx#L102) always mounts Shell under the default CockpitProvider state, where [selectedTaskId and selectedTask start null](serve/cockpit/web/src/hooks/CockpitProvider.tsx#L69). The Shell assertions at [desktop AC-2 checks](serve/cockpit/web/src/__tests__/SidecarStructure_1607.test.tsx#L206-L218) and [mobile AC-2 block](serve/cockpit/web/src/__tests__/SidecarStructure_1607.test.tsx#L260-L275) therefore prove only the null-selection header path, while [Shell falls back to "No task selected"](serve/cockpit/web/src/Shell.tsx#L58-L62). A selected-task-only heading regression would false-green. | [renderShell()](serve/cockpit/web/src/__tests__/SidecarStructure_1607.test.tsx#L102), [CockpitProvider default selection state](serve/cockpit/web/src/hooks/CockpitProvider.tsx#L69), [selectedTaskHeading fallback](serve/cockpit/web/src/Shell.tsx#L58-L62), [desktop Shell AC-2 assertions](serve/cockpit/web/src/__tests__/SidecarStructure_1607.test.tsx#L206-L218), [mobile Shell AC-2 assertions](serve/cockpit/web/src/__tests__/SidecarStructure_1607.test.tsx#L260-L275) | backlog |
+| 2 | AC-3: Shell divider placements asserted in both mobile and desktop renders | The mobile Shell assertions do not prove that the mobile p-sheet branch rendered. They set viewport globals via [setMobileViewport()](serve/cockpit/web/src/__tests__/SidecarStructure_1607.test.tsx#L123-L140) but then query descendants that are duplicated in both the [mobile branch](serve/cockpit/web/src/Shell.tsx#L314) and the [desktop branch](serve/cockpit/web/src/Shell.tsx#L423). The “mobile” checks at [AC-2 mobile block](serve/cockpit/web/src/__tests__/SidecarStructure_1607.test.tsx#L260-L275) and [AC-3 mobile block](serve/cockpit/web/src/__tests__/SidecarStructure_1607.test.tsx#L349-L367) would still pass if viewport branching regressed and the desktop subtree rendered under the helper. | [setMobileViewport()](serve/cockpit/web/src/__tests__/SidecarStructure_1607.test.tsx#L123-L140), [AC-2 mobile block](serve/cockpit/web/src/__tests__/SidecarStructure_1607.test.tsx#L260-L275), [AC-3 mobile block](serve/cockpit/web/src/__tests__/SidecarStructure_1607.test.tsx#L349-L367), [Shell viewport detection](serve/cockpit/web/src/Shell.tsx#L165-L171), [mobile Shell branch](serve/cockpit/web/src/Shell.tsx#L314), [desktop Shell branch](serve/cockpit/web/src/Shell.tsx#L423) | backlog |
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Re-state the Shell AC-2 proof contract so the retry either explicitly limits the Shell clause to the null-selection header path or requires a selected-task Shell render with assertions that fail on a selected-task-only regression. | [serve/cockpit/web/src/__tests__/SidecarStructure_1607.test.tsx](serve/cockpit/web/src/__tests__/SidecarStructure_1607.test.tsx); [serve/cockpit/web/src/Shell.tsx](serve/cockpit/web/src/Shell.tsx); [serve/cockpit/web/src/hooks/CockpitProvider.tsx](serve/cockpit/web/src/hooks/CockpitProvider.tsx) | Finding #1 |
+| 2 | architect | Re-state the mobile Shell proof contract so the retry proves the p-sheet branch itself, not only shared descendants, and reroute with matching assertions for the Shell portions of AC-2 and AC-3. | [serve/cockpit/web/src/__tests__/SidecarStructure_1607.test.tsx](serve/cockpit/web/src/__tests__/SidecarStructure_1607.test.tsx); [serve/cockpit/web/src/Shell.tsx](serve/cockpit/web/src/Shell.tsx) | Finding #2 |
+
+## Observations
+- The current implementation still reads structurally AC-aligned: [mobile Shell padding](serve/cockpit/web/src/Shell.tsx#L326), [desktop Shell padding](serve/cockpit/web/src/Shell.tsx#L424), [mobile large heading](serve/cockpit/web/src/Shell.tsx#L330), [desktop large heading](serve/cockpit/web/src/Shell.tsx#L428), [mobile divider 1](serve/cockpit/web/src/Shell.tsx#L334), [mobile divider 2](serve/cockpit/web/src/Shell.tsx#L341), [desktop divider 1](serve/cockpit/web/src/Shell.tsx#L432), [desktop divider 2](serve/cockpit/web/src/Shell.tsx#L439), [DetailTab medium heading](serve/cockpit/web/src/components/DetailTab.tsx#L174), [DetailTab small heading](serve/cockpit/web/src/components/DetailTab.tsx#L187), and [DetailTab divider](serve/cockpit/web/src/components/DetailTab.tsx#L223).
+- No editor diagnostics are present in [serve/cockpit/web/src/Shell.tsx](serve/cockpit/web/src/Shell.tsx), [serve/cockpit/web/src/components/DetailTab.tsx](serve/cockpit/web/src/components/DetailTab.tsx), or [serve/cockpit/web/src/__tests__/SidecarStructure_1607.test.tsx](serve/cockpit/web/src/__tests__/SidecarStructure_1607.test.tsx).
+- I could not perform a path-scoped git dirty-tree contamination check in this tool surface because no git/terminal command tool is available.
+
+[[2026-05-17T17:37:32+02:00]]
+## Architecture Review (Cycle 6 — branch discriminators)
+
+### Context
+Reviewer returned to backlog (6th rejection) citing two proof gaps:
+1. Shell test renders with null selection but AC says "Given a non-null task" — no selected-task proof
+2. Mobile assertions query shared descendants without proving the p-sheet branch actually rendered
+
+### Resolution
+1. **Removed "Given a non-null task" precondition from Shell clause.** Shell.tsx:58-62 shows PHeading size="large" in sidecar-header renders in ALL selection states (selected→title, id-only→#id, none→"No task selected"). The structure is constant. "Given a non-null task" was relevant only for DetailTab (returns null without task). This task's scope explicitly excludes info architecture — heading content is out of scope, heading structure is in scope.
+2. **Added symmetric branch discriminators.** Mobile assertions must query via `p-sheet` ancestor (Shell.tsx:314 wraps mobile content in p-sheet; Shell.tsx:423 desktop has no p-sheet). Desktop assertions must verify NO p-sheet ancestor wraps #shell-sidecar-content. This creates deterministic failure in both directions: desktop regression to mobile = unexpected p-sheet ancestor; mobile regression to desktop = missing p-sheet ancestor.
+
+### Evaluation
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | Pure structural change: padding, heading hierarchy, dividers |
+| Interface clarity | PASS (after refinement) | AC now specifies symmetric branch discriminators and scoped preconditions |
+| Dependency correctness | PASS | No active blockers |
+| Module layering | PASS | Frontend-only: Shell.tsx, Shell.css, DetailTab.tsx |
+| TDD compliance | PASS | Test-writer must add branch discriminator assertions |
+| KISS/YAGNI | PASS | p-sheet ancestor check is one querySelector — minimal mechanism |
+| Premise challenge | PASS | Sidecar needs structural PDS components |
+| Pattern consistency | PASS | Follows Tailwind + PDS component patterns established by #1614 |
+| Security surface | PASS | No system boundaries |
+| Single domain | PASS | Frontend only |
+
+### Challenge Results
+- Challenger: block (confidence 0.35)
+- Findings: (1) CRITICAL: persist AC before approval [ACCEPTED — persisted via edit_task], (2) desktop has no symmetric discriminator [PARTIALLY ACCEPTED — added desktop discriminator: no p-sheet ancestor], (3) contract narrowing disguised as proof closure [REBUTTED — task scope explicitly excludes info architecture; structural element existence is constant in all selection states; removing Shell precondition is scope-correct]
+- Architect response: ACCEPTED findings 1-2 (incorporated into AC). REBUTTED finding 3 — Shell heading structure is invariant across selection states (Shell.tsx:58-62 + Shell.tsx:330/428); heading content (task title vs fallback) is explicitly out of scope per task body "Out of scope: Sidecar information architecture (Batch 2)".
+
+### Proof-Bundle Validation
+- Planner assignment: behavioral
+- Final bundle: behavioral
+- Test-writer: PROCEED — must add branch discriminator assertions to existing mobile/desktop Shell tests
+
+### Builder Guidance (Cycle 6)
+- No implementation changes needed. Code is correct and complete.
+- Test-writer must update SidecarStructure_1607.test.tsx:
+  1. Desktop AC-2/AC-3 tests: add assertion that `#shell-sidecar-content` has NO `p-sheet` ancestor (e.g. `expect(content.closest('p-sheet')).toBeNull()`)
+  2. Mobile AC-2/AC-3 tests: change selectors from `container.querySelector('[data-region=\"sidecar-header\"]')` to `container.querySelector('p-sheet #shell-sidecar-content [data-region=\"sidecar-header\"]')` or equivalent p-sheet ancestor query
+  3. No "Given a non-null task" precondition needed for Shell — heading structure is always present
+- After test-writer updates, tests should remain GREEN (implementation places p-sheet wrapper in mobile, no p-sheet in desktop)
+
+### Verdict: APPROVE (after REFINE)
+### Action Taken: Refined AC-2 and AC-3: removed non-null-task precondition from Shell clause (structure is selection-invariant), added symmetric branch discriminators (mobile: p-sheet ancestor; desktop: no p-sheet ancestor). Persisted AC via edit_task. Moved to todo.
+
+[[2026-05-17T18:00:53+02:00]]
+## Test-Writer Notes (Retry Cycle 6)
+
+### Status
+Surgical gap-fill: added symmetric branch discriminators to Shell AC-2 and AC-3 assertions per arch cycle 6 guidance. No new tests added — modified 9 existing Shell tests.
+
+### Changes made to `serve/cockpit/web/src/__tests__/SidecarStructure_1607.test.tsx`
+
+**Desktop AC-2 tests (3 tests)** — added `expect(content?.closest('p-sheet')).toBeNull()` desktop discriminator:
+- test: sidecar-header does not use raw h2
+- test: sidecar-header contains p-heading
+- test: sidecar-header p-heading has size=\"large\"
+
+**Desktop AC-3 tests (4 tests)** — added `expect(content.closest('p-sheet')).toBeNull()` desktop discriminator:
+- test: #shell-sidecar-content contains at least one p-divider
+- test: p-divider direct next sibling after sidecar-header
+- test: p-divider immediately before p-tabs
+- test: at least two p-divider elements
+
+**Mobile AC-2 tests (2 tests)** — changed selector from `container.querySelector('[data-region=\"sidecar-header\"]')` to `container.querySelector('p-sheet [data-region=\"sidecar-header\"]')`
+
+**Mobile AC-3 tests (2 tests)** — changed selector from `container.querySelector('#shell-sidecar-content')` to `container.querySelector('p-sheet #shell-sidecar-content')`
+
+**File header** — updated to reflect refined AC-2/AC-3 wording (cycle 6 branch discriminator requirements)
+
+### Verification (quality-runner scoped)
+- **23 passed / 0 failed / 0 skipped** — all GREEN ✓
+- lint: clean (eslint exit 0) ✓
+
+### Builder Skip: direct-to-review advance
+All reviewer-cited RF items targeted test-proof gaps only. All tests PASS against current implementation (arch confirmed code is correct in cycle 6 guidance). Builder has no work to do.
+
+### Commit
+- 6ef9ff9
+- `test: add branch discriminators for AC-2/AC-3 Shell proof (#1607, test-writer)`
+
+### AC Coverage
+| AC line | Tests |
+|---------|-------|
+| AC-1: Tailwind p-[var(--p-spacing-static-md)] on both render paths; no directional overrides | 5 source + DOM tests |
+| AC-2: Shell sidecar-header=large, no h2 — desktop (no p-sheet ancestor) and mobile (p-sheet ancestor); DetailTab sidecar-body=medium; actions=small; no h3 | 8+2=10 DOM tests |
+| AC-3: PDivider Shell×2 — desktop (no p-sheet ancestor) and mobile (p-sheet ancestor); DetailTab metadata divider | 6+2=8 DOM tests |
+
+[[2026-05-17T18:26:17+02:00]]
+## Review Evidence
+- Verdict: PASS
+- PASS confirmation: PASS #1607 -> docs | AC mapped to code and evidence sufficient.
+- Builder/test-writer evidence review: reviewed the latest direct-to-review packet first. The active proof packet reports `23 passed / 0 failed / 0 skipped` with clean lint after the cycle-6 branch-discriminator updates; I did not rerun quality-runner because the packet is internally consistent and the remaining question was proof sufficiency, not contradictory execution output.
+- Blocking findings: none.
+
+| AC Line | Code Evidence | Test Evidence | Status |
+|---|---|---|---|
+| AC-1: both Shell branches carry `p-[var(--p-spacing-static-md)]`; rendered `#shell-sidecar-content` carries the class; no `pt-/pb-/pl-/pr-` overrides with the token; token is PDS-native | Mobile and desktop `#shell-sidecar-content` both carry the padding class in [Shell mobile branch](serve/cockpit/web/src/Shell.tsx#L325) and [Shell desktop branch](serve/cockpit/web/src/Shell.tsx#L423). | Source proof covers class presence/count, PDS-native token, and four-direction override guard in [AC-1 tests](serve/cockpit/web/src/__tests__/SidecarStructure_1607.test.tsx#L164) through [AC-1 directional guard](serve/cockpit/web/src/__tests__/SidecarStructure_1607.test.tsx#L184); DOM proof checks rendered `#shell-sidecar-content` class in [desktop DOM class assertion](serve/cockpit/web/src/__tests__/SidecarStructure_1607.test.tsx#L175). | PASS |
+| AC-2: Shell header renders `p-heading[size='large']` with no raw `h2` in both desktop and mobile branches; DetailTab body/actions render `medium`/`small`; no raw `h3` | Shell renders large `PHeading` in both branches at [mobile header](serve/cockpit/web/src/Shell.tsx#L329) and [desktop header](serve/cockpit/web/src/Shell.tsx#L427). DetailTab binds `medium` to [sidecar-body heading](serve/cockpit/web/src/components/DetailTab.tsx#L173) and `small` to [actions heading](serve/cockpit/web/src/components/DetailTab.tsx#L186). | Desktop Shell discriminator and heading assertions are in [desktop Shell AC-2 checks](serve/cockpit/web/src/__tests__/SidecarStructure_1607.test.tsx#L194) through [large heading assertion](serve/cockpit/web/src/__tests__/SidecarStructure_1607.test.tsx#L214). Region-scoped DetailTab assertions are in [body medium assertion](serve/cockpit/web/src/__tests__/SidecarStructure_1607.test.tsx#L219), [actions small assertion](serve/cockpit/web/src/__tests__/SidecarStructure_1607.test.tsx#L224), and [no raw h3 assertion](serve/cockpit/web/src/__tests__/SidecarStructure_1607.test.tsx#L229). Mobile branch proof is in [mobile Shell AC-2 block](serve/cockpit/web/src/__tests__/SidecarStructure_1607.test.tsx#L249) through [mobile no-h2 assertion](serve/cockpit/web/src/__tests__/SidecarStructure_1607.test.tsx#L261). | PASS |
+| AC-3: Shell dividers separate header/DecisionViewport and DecisionViewport/tabs in both desktop and mobile branches; DetailTab divider immediately follows metadata | Shell places dividers in both branches at [mobile divider positions](serve/cockpit/web/src/Shell.tsx#L333) and [mobile tabs divider](serve/cockpit/web/src/Shell.tsx#L340), mirrored in [desktop divider positions](serve/cockpit/web/src/Shell.tsx#L431) and [desktop tabs divider](serve/cockpit/web/src/Shell.tsx#L438). DetailTab places metadata then divider at [metadata section](serve/cockpit/web/src/components/DetailTab.tsx#L195) and [metadata divider](serve/cockpit/web/src/components/DetailTab.tsx#L222). | Desktop Shell divider proof is in [desktop Shell divider checks](serve/cockpit/web/src/__tests__/SidecarStructure_1607.test.tsx#L271) through [desktop divider count](serve/cockpit/web/src/__tests__/SidecarStructure_1607.test.tsx#L299). DetailTab divider assertions are in [metadata divider presence](serve/cockpit/web/src/__tests__/SidecarStructure_1607.test.tsx#L301) and [metadata immediate divider](serve/cockpit/web/src/__tests__/SidecarStructure_1607.test.tsx#L314). Mobile branch proof is in [mobile Shell AC-3 block](serve/cockpit/web/src/__tests__/SidecarStructure_1607.test.tsx#L331) through [mobile tabs divider assertion](serve/cockpit/web/src/__tests__/SidecarStructure_1607.test.tsx#L344). | PASS |
+
+## Observations
+- Challenger cross-check: `proceed` with confidence `0.84`. The strongest residual concern was AC-1 proof rigor, but it is non-blocking under the current refined AC because the authored mobile and desktop nodes both carry the padding class and the active proof contract explicitly combines one DOM render with source-level parity/override checks.
+- No editor diagnostics are present in [Shell.tsx](serve/cockpit/web/src/Shell.tsx), [DetailTab.tsx](serve/cockpit/web/src/components/DetailTab.tsx), or [SidecarStructure_1607.test.tsx](serve/cockpit/web/src/__tests__/SidecarStructure_1607.test.tsx).
+- I could not perform a path-scoped git dirty-tree contamination check in this tool surface because no git/terminal command tool is available.
+
+[[2026-05-17T18:54:30+02:00]]
+## Docs Gate
+
+### Item 1: README Verification
+- Convention mapping: `serve/cockpit/web/src/Shell.tsx`, `Shell.css`, `DetailTab.tsx` → `serve/cockpit/README.md`
+- Finding: #1607 absent from README; all adjacent tasks (#1614–#1628) documented.
+- Fix: added #1607 entry between #1616 and #1617 describing Tailwind padding class, PHeading sizes + `syncHeadingAttrs` ref helper, PDivider placements, and 23-test dual-branch proof coverage.
+- Layer 1 (grep): confirmed entry present at line 178.
+- Layer 2 (LLM editorial): entry is factually grounded in builder notes and review evidence; style consistent with adjacent entries; no contradictions.
+- Commit: `3e04af1` `docs: add #1607 sidecar structure entry to cockpit README (#1607, doc-writer)`
+
+### Item 2: External Attribution
+- PDS sources (Spacing, Typography, PHeading API, PDivider API) already recorded in `.owlbear/sources/overview.md` (lines 44–47) during task research.
+- N/A — no new external attribution needed.
+
+### Item 3: Research Doc
+- `.owlbear/research/sidecar-structure-pds.md` exists and is linked from task body (lines 46 and 55).
+- PASS.
+
+### Item 4: Deletion Detection
+- No source files deleted by this task.
+- N/A — no deletion impact.
+
+### Scratch Cleanup
+- No scratch files created during this docs gate session.
+
+[[2026-05-17T19:09:08+02:00]]
+## Audit
+### Regression Detection
+- quality-runner mode full: 2104 passed, 1 failed, 11 skipped; lint clean
+- The single failure is CockpitProvider.test.tsx (AbortController abort-on-task-switch) — unrelated to sidecar structure changes; background quality debt, not task-caused regression
+- regression verdict: PASS
+
+### Intent Verification
+- scope alignment: PASS — all changed files in serve/cockpit/web/ (Shell.tsx, Shell.css, DetailTab.tsx, SidecarStructure_1607.test.tsx) plus serve/cockpit/README.md
+- purpose match: PASS — padding via PDS token, PHeading hierarchy, PDivider placements match stated task purpose
+- extraneous scope: none
+- boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 3/5
+AC required 6 refinement cycles. Implementation was correct from cycle 1 but the proof-contract was repeatedly under-specified: missing mobile branch parity (cycles 2-3), vague region references (cycle 4), absent branch discriminators (cycles 5-6). Final AC is specific and well-structured. The architect should have anticipated dual-branch proof requirements from the start given Shell's visible mobile/desktop JSX split.
+
+### Commit Integrity
+- upstream commit presence: PASS — builder (61101267, c9d3bab5, b9db7a13), test-writer (6ef9ff9a, 039e1f07, 5f6ec112, d3a4679a, 03535766), doc-writer (3e04af16) all present in git log
+- kanban commit packaging: pending (this archival)
+
+### Deduction Breakdown
+- AC quality score 3/5: -.03
+- No other deductions (regression background debt excluded, lint clean, intent aligned, reviewer evidence thorough)
+
+### Confidence: 0.97
+### Action: archive
