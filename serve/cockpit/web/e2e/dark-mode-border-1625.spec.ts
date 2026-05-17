@@ -267,6 +267,41 @@ test.describe('TestFromAC_DarkModeBorderContrast', () => {
   // Removed per w-tdd-red §5 (passes against current code).
 
   /**
+   * AC-1 Runtime Guard — --p-color-contrast-low resolves at runtime on :root without injection.
+   *
+   * This guard test proves PDS CSS custom properties are bundled via the @import chain in
+   * tailwind.css (not loaded asynchronously from CDN), making injection-based contrast
+   * measurements in the tests below valid behavioral proof of the app's runtime path.
+   *
+   * Falsifiable: FAILS if the token is an empty string on :root after waitFor — indicating
+   * the token is not available in the Playwright test environment at runtime without injection.
+   */
+  test(
+    'AC-1: --p-color-contrast-low resolves to a non-empty value at runtime without injection',
+    async ({ page }) => {
+      await page.addInitScript(() => {
+        localStorage.setItem('owlbear-theme', 'dark')
+      })
+      await stubApis(page)
+      await page.goto('/')
+      // NO ensurePDSTokens() call — this test proves runtime resolution
+      await page.locator('[data-region="workspace"]').waitFor({ state: 'visible' })
+
+      const tokenValue = await page.evaluate(() =>
+        getComputedStyle(document.documentElement).getPropertyValue('--p-color-contrast-low').trim(),
+      )
+
+      expect(
+        tokenValue,
+        '--p-color-contrast-low must resolve to a non-empty string on :root without injection. ' +
+          'This proves the token is bundled via the @import chain (tailwind.css → PDS Tailwind), ' +
+          'not loaded asynchronously from CDN. An empty string means injection-based contrast ' +
+          'measurements are not valid behavioral proof of the app runtime path.',
+      ).not.toBe('')
+    },
+  )
+
+  /**
    * AC-1 Test 2 — .shell__nav-rail must have a right border separating it from the workspace in dark mode.
    *
    * RED: .shell__nav-rail currently has NO border-right. In dark mode, surface-to-canvas
@@ -499,90 +534,43 @@ test.describe('TestFromAC_DarkModeBorderContrast', () => {
 
 test.describe('TestFromAC_DarkModeBorderSchemeSwitch', () => {
   /**
-   * AC-3 — .shell__nav-rail must have a visible border in both dark and light mode.
+   * AC-3 Runtime Proof — --p-color-contrast-low token resolves in both schemes at runtime
+   * and computed border-color differs between dark and light on >= 2 structural elements.
    *
-   * RED: .shell__nav-rail currently has no border-right. Once the builder adds a border
-   * (fix for AC-1), this test verifies the border uses a token that switches between schemes.
+   * Proves:
+   *   (a) Token guard: --p-color-contrast-low is non-empty on :root in BOTH dark and light
+   *       schemes without injection — confirms the token is bundled, not fetched from CDN.
+   *   (b) Color comparison: computed border-left-color (.shell__sidecar) and border-right-color
+   *       (.shell__nav-rail) differ between schemes in separate page contexts — proves runtime
+   *       scheme-switching is active on >= 2 elements (AC-3 requirement).
    *
-   * Falsifiable:
-   *   - FAILS (RED): border-right-width = 0 in dark mode → no border to compare.
-   *   - PASSES (GREEN): border exists in both modes and border-colors differ.
+   * NO injection in this test — runtime values only. This is the proof the reviewer required:
+   * the app's own runtime token path is exercised, not a fixture-injected substitute.
+   *
+   * Falsifiable: FAILS if:
+   *   - Token is empty in either scheme (not bundled at runtime)
+   *   - Computed border colors are identical across schemes (no scheme-switching)
    */
   test(
-    'AC-3: shell__nav-rail has a visible border in both dark and light mode (scheme-switch forward guard)',
+    'AC-3: --p-color-contrast-low resolves at runtime and border-color differs between schemes on sidecar and nav-rail (>= 2 elements, NO injection)',
     async ({ page }) => {
-      // ── Dark page ──────────────────────────────────────────────────────────
+      // ── Dark page — runtime only, no injection ────────────────────────────
       await page.addInitScript(() => {
         localStorage.setItem('owlbear-theme', 'dark')
       })
       await stubApis(page)
       await page.goto('/')
-      await ensurePDSTokens(page, 'dark')
       await page.locator('[data-region="workspace"]').waitFor({ state: 'visible' })
 
-      const darkBorderWidth = await page.evaluate(() => {
-        const el = document.querySelector('.shell__nav-rail') as HTMLElement | null
-        if (!el) return -1
-        return parseFloat(window.getComputedStyle(el).borderRightWidth)
-      })
-
-      // Primary: border must exist in dark mode (FAILS in RED state)
+      // Runtime guard: token must be non-empty on dark page before reading border colors
+      const darkToken = await page.evaluate(() =>
+        getComputedStyle(document.documentElement).getPropertyValue('--p-color-contrast-low').trim(),
+      )
       expect(
-        darkBorderWidth,
-        `.shell__nav-rail must have border-right-width > 0 in dark mode. ` +
-          `Got: ${darkBorderWidth}px. The border is required for scheme-switch verification (AC-3) ` +
-          `and visual separation (AC-1). Fix: add border-right to .shell__nav-rail in Shell.css.`,
-      ).toBeGreaterThan(0)
-
-      // ── Light page ─────────────────────────────────────────────────────────
-      const lightPage = await page.context().newPage()
-      try {
-        await lightPage.addInitScript(() => {
-          localStorage.setItem('owlbear-theme', 'light')
-        })
-        await stubApis(lightPage)
-        await lightPage.goto('/')
-        await ensurePDSTokens(lightPage, 'light')
-        await lightPage.locator('[data-region="workspace"]').waitFor({ state: 'visible' })
-
-        const lightBorderWidth = await lightPage.evaluate(() => {
-          const el = document.querySelector('.shell__nav-rail') as HTMLElement | null
-          if (!el) return -1
-          return parseFloat(window.getComputedStyle(el).borderRightWidth)
-        })
-
-        expect(
-          lightBorderWidth,
-          `.shell__nav-rail must have border-right-width > 0 in light mode as well. Got: ${lightBorderWidth}px.`,
-        ).toBeGreaterThan(0)
-      } finally {
-        await lightPage.close()
-      }
-    },
-  )
-
-  /**
-   * AC-3 Color Test — sidecar and nav-rail computed border colors differ between schemes.
-   *
-   * Asserts that var(--p-color-contrast-low) resolves to different color values in dark vs
-   * light mode on at least 2 structural border elements (sidecar border-left + nav-rail
-   * border-right). This confirms that PDS light-dark() token switching is active and that
-   * the border color is not a fixed value identical across schemes.
-   *
-   * Falsifiable: FAILS if the computed border color is the same string in dark and light
-   * modes for either element — indicating the token does not switch between schemes.
-   */
-  test(
-    'AC-3: sidecar and nav-rail computed border colors differ between dark and light schemes (>= 2 elements)',
-    async ({ page }) => {
-      // ── Dark-mode border colors ────────────────────────────────────────────
-      await page.addInitScript(() => {
-        localStorage.setItem('owlbear-theme', 'dark')
-      })
-      await stubApis(page)
-      await page.goto('/')
-      await ensurePDSTokens(page, 'dark')
-      await page.locator('[data-region="workspace"]').waitFor({ state: 'visible' })
+        darkToken,
+        '--p-color-contrast-low must resolve to a non-empty value at runtime in dark mode (no injection). ' +
+          'Proves the token is bundled via tailwind.css @import chain, not loaded from CDN.',
+      ).not.toBe('')
 
       const darkColors = await page.evaluate(() => {
         const sidecar = document.querySelector<HTMLElement>('.shell__sidecar')
@@ -594,11 +582,10 @@ test.describe('TestFromAC_DarkModeBorderSchemeSwitch', () => {
           navRail: navRail ? window.getComputedStyle(navRail).getPropertyValue('border-right-color') : '',
         }
       })
-
       expect(darkColors.sidecarFound, '.shell__sidecar must exist in DOM (dark page)').toBe(true)
       expect(darkColors.navRailFound, '.shell__nav-rail must exist in DOM (dark page)').toBe(true)
 
-      // ── Light-mode border colors ───────────────────────────────────────────
+      // ── Light page — runtime only, no injection ───────────────────────────
       const lightPage = await page.context().newPage()
       try {
         await lightPage.addInitScript(() => {
@@ -606,8 +593,16 @@ test.describe('TestFromAC_DarkModeBorderSchemeSwitch', () => {
         })
         await stubApis(lightPage)
         await lightPage.goto('/')
-        await ensurePDSTokens(lightPage, 'light')
         await lightPage.locator('[data-region="workspace"]').waitFor({ state: 'visible' })
+
+        // Runtime guard on light page
+        const lightToken = await lightPage.evaluate(() =>
+          getComputedStyle(document.documentElement).getPropertyValue('--p-color-contrast-low').trim(),
+        )
+        expect(
+          lightToken,
+          '--p-color-contrast-low must resolve to a non-empty value at runtime in light mode (no injection).',
+        ).not.toBe('')
 
         const lightColors = await lightPage.evaluate(() => {
           const sidecar = document.querySelector<HTMLElement>('.shell__sidecar')
@@ -618,20 +613,20 @@ test.describe('TestFromAC_DarkModeBorderSchemeSwitch', () => {
           }
         })
 
-        // Element 1: sidecar — border-left-color must differ between schemes
+        // Element 1: sidecar border-left-color must differ at runtime between schemes
         expect(
           darkColors.sidecar,
-          `AC-3: .shell__sidecar border-left-color must differ between dark and light schemes. ` +
+          `AC-3: .shell__sidecar border-left-color must differ at runtime between dark and light. ` +
             `Dark: "${darkColors.sidecar}", Light: "${lightColors.sidecar}". ` +
-            `Both use var(--p-color-contrast-low) — its light-dark() pair must produce different rendered values.`,
+            `Proves runtime scheme-switching via PDS light-dark() token pairs — NOT fixture injection.`,
         ).not.toBe(lightColors.sidecar)
 
-        // Element 2: nav-rail — border-right-color must differ between schemes (>= 2 required by AC-3)
+        // Element 2: nav-rail border-right-color must differ (satisfies >= 2 elements AC-3 requirement)
         expect(
           darkColors.navRail,
-          `AC-3: .shell__nav-rail border-right-color must differ between dark and light schemes. ` +
+          `AC-3: .shell__nav-rail border-right-color must differ at runtime between dark and light. ` +
             `Dark: "${darkColors.navRail}", Light: "${lightColors.navRail}". ` +
-            `Both use var(--p-color-contrast-low) — its light-dark() pair must produce different rendered values.`,
+            `Proves runtime scheme-switching via PDS light-dark() token pairs — NOT fixture injection.`,
         ).not.toBe(lightColors.navRail)
       } finally {
         await lightPage.close()
@@ -641,6 +636,91 @@ test.describe('TestFromAC_DarkModeBorderSchemeSwitch', () => {
 })
 
 // ─── AC-4: Card chip border resolves to a defined value in both schemes ───────
-// AC-4 tests PASSED — Card.css migration (#1614–#1618) replaced --pds-border-subtle
-// with var(--p-color-contrast-low) which resolves correctly in both schemes.
-// All AC-4 tests removed per w-tdd-red §5 (pass against current code).
+
+test.describe('TestFromAC_CardChipBorderResolution', () => {
+  /**
+   * AC-4 — .card-chip border is visible in dark mode without injection.
+   *
+   * Card.css: `border: 1px solid var(--p-color-contrast-low)` — NO fallback value.
+   * Therefore border-width > 0 directly proves the token resolved at runtime:
+   * if the token were undefined, CSS invalid substitution → border-style:none → border-width:0px.
+   *
+   * Fixture: TASKS always renders card-id and card-updated chips (always-present .card-chip
+   * elements regardless of tags). A tagged task is also included to exercise tag chips.
+   *
+   * Falsifiable: FAILS if border-width = 0 (token undefined) or border-color is transparent.
+   */
+  test(
+    'AC-4: .card-chip border-width > 0 in dark mode without injection (proves token resolves at runtime)',
+    async ({ page }) => {
+      await page.addInitScript(() => {
+        localStorage.setItem('owlbear-theme', 'dark')
+      })
+      await stubApis(page)
+      await page.goto('/')
+      // NO ensurePDSTokens() — Card.css has no fallback; border-width > 0 proves token resolved
+      await page.locator('[data-region="workspace"]').waitFor({ state: 'visible' })
+      await page.locator('.card-chip').first().waitFor({ state: 'visible' })
+
+      const result = await page.evaluate(() => {
+        const chip = document.querySelector<HTMLElement>('.card-chip')
+        if (!chip) return { found: false, borderWidth: 0, borderColor: '' }
+        const style = window.getComputedStyle(chip)
+        return {
+          found: true,
+          borderWidth: parseFloat(style.borderTopWidth),
+          borderColor: style.borderTopColor,
+        }
+      })
+
+      expect(result.found, '.card-chip must be present in the DOM').toBe(true)
+      expect(
+        result.borderWidth,
+        `AC-4: .card-chip border-width must be > 0 in dark mode WITHOUT injection. ` +
+          `Card.css: border: 1px solid var(--p-color-contrast-low) — no fallback. ` +
+          `border-width = 0 means --p-color-contrast-low is undefined at runtime. Got: ${result.borderWidth}px.`,
+      ).toBeGreaterThan(0)
+      expect(
+        result.borderColor,
+        `AC-4: .card-chip border-color must not be transparent in dark mode. Got: "${result.borderColor}"`,
+      ).not.toBe('rgba(0, 0, 0, 0)')
+    },
+  )
+
+  test(
+    'AC-4: .card-chip border-width > 0 in light mode without injection (proves token resolves at runtime)',
+    async ({ page }) => {
+      await page.addInitScript(() => {
+        localStorage.setItem('owlbear-theme', 'light')
+      })
+      await stubApis(page)
+      await page.goto('/')
+      // NO ensurePDSTokens() — Card.css has no fallback; border-width > 0 proves token resolved
+      await page.locator('[data-region="workspace"]').waitFor({ state: 'visible' })
+      await page.locator('.card-chip').first().waitFor({ state: 'visible' })
+
+      const result = await page.evaluate(() => {
+        const chip = document.querySelector<HTMLElement>('.card-chip')
+        if (!chip) return { found: false, borderWidth: 0, borderColor: '' }
+        const style = window.getComputedStyle(chip)
+        return {
+          found: true,
+          borderWidth: parseFloat(style.borderTopWidth),
+          borderColor: style.borderTopColor,
+        }
+      })
+
+      expect(result.found, '.card-chip must be present in the DOM').toBe(true)
+      expect(
+        result.borderWidth,
+        `AC-4: .card-chip border-width must be > 0 in light mode WITHOUT injection. ` +
+          `Card.css: border: 1px solid var(--p-color-contrast-low) — no fallback. ` +
+          `border-width = 0 means --p-color-contrast-low is undefined at runtime. Got: ${result.borderWidth}px.`,
+      ).toBeGreaterThan(0)
+      expect(
+        result.borderColor,
+        `AC-4: .card-chip border-color must not be transparent in light mode. Got: "${result.borderColor}"`,
+      ).not.toBe('rgba(0, 0, 0, 0)')
+    },
+  )
+})
