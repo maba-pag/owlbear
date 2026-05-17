@@ -96,6 +96,19 @@ class KnowledgeQueryService:
         chunks, _ = self._search(prompt, top_k, scopes=scopes)
         return chunks
 
+    def _resolve_snippet(self, raw_id: str, doc_id: str, doc_content: str) -> str:
+        """Return the best available snippet for a search hit."""
+        if hasattr(self._graph, "get_chunk"):
+            chunk = self._graph.get_chunk(raw_id)
+            if isinstance(chunk, dict) and isinstance(chunk.get("content"), str):
+                chunk_index = chunk.get("chunk_index", 0)
+                total_chunks = self._graph.count_chunks_for_document(doc_id)
+                snippet = chunk["content"][:500]
+                if isinstance(total_chunks, int) and total_chunks > 1:
+                    return f"[chunk {chunk_index + 1}/{total_chunks}] {snippet}"
+                return snippet
+        return doc_content[:500]
+
     def _related_sources(
         self,
         *,
@@ -195,15 +208,7 @@ class KnowledgeQueryService:
                     continue
 
                 # Use chunk content when available; fall back to doc content.
-                snippet = doc.content[:500]
-                if hasattr(self._graph, "get_chunk"):
-                    chunk = self._graph.get_chunk(raw_id)
-                    if isinstance(chunk, dict) and isinstance(chunk.get("content"), str):
-                        chunk_index = chunk.get("chunk_index", 0)
-                        total_chunks = self._graph.count_chunks_for_document(doc_id)
-                        snippet = chunk["content"][:500]
-                        if isinstance(total_chunks, int) and total_chunks > 1:
-                            snippet = f"[chunk {chunk_index + 1}/{total_chunks}] {snippet}"
+                snippet = self._resolve_snippet(raw_id, doc_id, doc.content)
 
                 entities = self._graph.list_entities_for_document(doc_id)
                 entity_type = str(entities[0].entity_type) if entities else None
