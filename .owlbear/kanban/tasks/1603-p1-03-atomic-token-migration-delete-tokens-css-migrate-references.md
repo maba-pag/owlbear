@@ -1,10 +1,10 @@
 ---
 id: 1603
 title: 'P1-03: Atomic token migration — delete tokens.css + migrate references'
-status: in-progress
+status: review
 priority: important
 created: 2026-05-16T03:36:06.954546+00:00
-updated: 2026-05-17T08:58:43.207908+02:00
+updated: 2026-05-17T10:13:06.457984+02:00
 tags:
   - frontend
   - pds
@@ -304,3 +304,34 @@ None of these require `--pds-*` tokens to exist in production code. Production s
   - AC-4 ✓ — `TestFromAC_LegacyTestFilesRetired` + `TestFromAC_LegacyTestFilesUpdated`: 8 tests; non-executable refs explicitly out of scope per refined AC-4
 - No new tests written — reviewer cited scope/proof issues (not missing tests); architect refined AC to match existing test scope.
 - Builder: re-run proof packet with refined AC-1 grep (`grep -r '--pds-' serve/cockpit/web/src/ --exclude-dir=__tests__` must be zero); provide full critical-bundle proof packet including all durable suites cited by reviewer.
+
+[[2026-05-17T10:13:06+02:00]]
+## Builder Notes
+- Implementation: no new source or test edits were required in this pass.
+- Files changed: none.
+- Tests: critical proof packet PASS (90 passed, 0 failed, 0 skipped).
+- Coverage: 60% on scoped frontend `src` run (reported by quality-runner).
+- Lint: clean (ESLint).
+- Approach: validated current workspace state against refined AC and reviewer-requested durable suites, then confirmed acceptance-criteria contract with direct grep/file checks.
+
+### Evidence Summary
+- Quality-runner scoped proof packet (task + durable suites):
+  - `serve/cockpit/web/src/__tests__/TokenMigration_1603.test.ts`
+  - `serve/cockpit/web/src/__tests__/PdsColorSchemeBridge_1555.test.ts`
+  - `serve/cockpit/web/src/__tests__/BoardVisualDesign.test.tsx`
+  - `serve/cockpit/web/src/__tests__/CardCSS_1546.test.ts`
+  - `serve/cockpit/web/src/__tests__/ShellSecondaryCSS_1550.test.tsx`
+  - `serve/cockpit/web/src/__tests__/ShellSecondaryCSS_1542.test.tsx`
+  - Result: 90 passed, 0 failed, lint clean.
+- AC-1: `rg -- '--pds-' serve/cockpit/web/src --glob '!**/__tests__/**'` returned no matches (exit 1 from `rg` = no matches).
+- AC-2:
+  - `serve/cockpit/web/src/tokens.css` absent.
+  - `serve/cockpit/web/src/custom-tokens.css` contains `--custom-signal-claimed` and no additional custom properties.
+- AC-3: grep for `[data-theme="dark"]|prefers-color-scheme` in authored CSS (excluding `__tests__`) returned no matches.
+- AC-4: retired durable tests absent:
+  - `serve/cockpit/web/src/__tests__/TokenArchitecture_1535.test.ts`
+  - `serve/cockpit/web/src/__tests__/TokenArchitecture_1543.test.ts`
+  and executable durable assertions in the proof packet are green.
+
+### Fixes Applied
+- None in this pass; task state already satisfied refined AC and critical proof requirements.

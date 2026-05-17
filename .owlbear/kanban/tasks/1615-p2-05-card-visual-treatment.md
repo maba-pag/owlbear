@@ -1,10 +1,10 @@
 ---
 id: 1615
 title: 'P2-05: Card visual treatment'
-status: todo
+status: in-progress
 priority: important
 created: 2026-05-16T03:37:02.225503+00:00
-updated: 2026-05-17T09:07:54.931697+02:00
+updated: 2026-05-17T10:17:48.992323+02:00
 tags:
   - frontend
   - pds
@@ -366,3 +366,42 @@ The `CardVariant` type in `cardVariants.ts` must be replaced with the imported P
 
 [[2026-05-17T09:07:54+02:00]]
 Architecture re-review cycle 3 complete. Challenger raised critical variant-type mismatch (notification not in PDS TagVariant) — accepted and addressed in AC refinement. AC refined: wrapper contract enforced via typed PTag props (inherently validates variant values), notification remap required, unknown removed from AC-3 (unreachable at Card level), AC-6 quantifier enumerated. Advancing to todo for test-writer to update utility test expectations and builder to fix implementation.
+
+[[2026-05-17T10:17:48+02:00]]
+## Test-Writer Notes
+- Retry cycle (architect AC refinement after Cycle 2 review)
+- Test files: `serve/cockpit/web/src/__tests__/CardVariants_1615.test.ts`, `serve/cockpit/web/src/__tests__/CardVisualTreatment_1615.test.tsx`
+- Commit: da3e167a
+
+### Changes made
+- Removed `'notification'` from `VALID_PDS_VARIANTS` (not a valid PDS `TagVariant`); replaced with full valid set: `info`, `info-frosted`, `warning-frosted`, `success-frosted`, `error-frosted`
+- Added 3 specific remap assertions (FAIL): `statusToVariant('backlog')` → `'info'`; `statusToVariant('review')` → `'info'`; `priorityToVariant('needed')` → `'warning'`
+- Added AC-6 eslint-disable absence test (FAIL): Card.tsx must have no `no-restricted-syntax` eslint-disable
+- Updated AC-3 header comment: `<PIcon>` → `<p-icon>`, removed `unknown` branch (removed from AC-3 per architect Cycle 3 Revised)
+
+### Counts
+- Total tests: 49 (was 45)
+- Failing: 6 (all new/updated assertions)
+- Passing: 43 (existing behavior preserved)
+- lint: clean
+
+### New failing tests (6)
+| Test | File | Failure |
+|------|------|---------|
+| `statusToVariant — AC-1 > returns valid PDS variant for each status` | CardVariants_1615.test.ts | `notification` not in VALID_PDS_VARIANTS |
+| `statusToVariant("backlog") returns "info"` | CardVariants_1615.test.ts | returns `'notification'` |
+| `statusToVariant("review") returns "info"` | CardVariants_1615.test.ts | returns `'notification'` |
+| `priorityToVariant — AC-2 > returns valid PDS variant for each priority` | CardVariants_1615.test.ts | `notification` not in VALID_PDS_VARIANTS |
+| `priorityToVariant("needed") returns "warning"` | CardVariants_1615.test.ts | returns `'notification'` |
+| `Card.tsx source contains no no-restricted-syntax eslint-disable comment` | CardVisualTreatment_1615.test.tsx | comment present on line 1 |
+
+### AC coverage
+| AC | Tests |
+|----|-------|
+| AC-1 | VALID_PDS_VARIANTS check + backlog/review remap assertions |
+| AC-2 | VALID_PDS_VARIANTS check + needed remap assertion |
+| AC-3 | Unchanged (4 icon + 2 no-icon; `unknown` removed per architect) |
+| AC-4 | Unchanged (7 tests) |
+| AC-5 | Unchanged (4 regression guards) |
+| AC-6 | eslint-disable absence test ADDED; hex + import tests unchanged |
+| AC-7 | Unchanged (1 DOM budget source check) |

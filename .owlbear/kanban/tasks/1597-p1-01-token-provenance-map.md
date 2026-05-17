@@ -1,10 +1,10 @@
 ---
 id: 1597
 title: 'P1-01: Token provenance map'
-status: in-progress
+status: review
 priority: important
 created: 2026-05-16T03:35:25.235271+00:00
-updated: 2026-05-17T08:56:24.336178+02:00
+updated: 2026-05-17T10:13:06.003372+02:00
 tags:
   - frontend
   - pds
@@ -210,3 +210,20 @@ Reconciled reviewer finding: PdsMigration.test.tsx has 0 --pds-* refs (verified 
 - Proof bundle: `skip` — no new test writing required.
 - Research task tagged `research`; architect review cycle 2 explicitly marks "Test-writer: SKIP".
 - Passing through to builder.
+
+[[2026-05-17T10:13:06+02:00]]
+## Builder Notes
+- Implementation: updated `.owlbear/research/1597-token-provenance-map.md` affected-test inventory with explicit `PdsMigration.test.tsx` disposition (`0 refs`, `Keep`).
+- Tests: none (proof bundle `skip`, research artifact task)
+- Coverage: N/A (no executable module change)
+- ruff: N/A
+- Lint: quality-runner scoped lint proof executed for `.owlbear/research/1597-token-provenance-map.md`; markdownlint skipped because path is ignored by `.markdownlintignore` (`.owlbear/research`), with no violations reported.
+- Approach: surgical artifact correction to close reviewer gap while preserving existing classification and coverage sections.
+
+### Evidence Summary
+- `rg -n -- '--pds-' serve/cockpit/web/src/__tests__/PdsMigration.test.tsx` returned no matches (supports unaffected classification).
+- quality-runner report (scoped lint path): `markdownlint: skipped (path ignored)`, `violations: none`.
+- Commit: `3d2e5512b13dbe4546e0338f24fe826ca8048b97` containing only `.owlbear/research/1597-token-provenance-map.md`.
+
+### Fixes Applied
+- Added explicit inventory row for `PdsMigration.test.tsx` with rationale: element-to-PDS component migration assertions, no CSS token references.

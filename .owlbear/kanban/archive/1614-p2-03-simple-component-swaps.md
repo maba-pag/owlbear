@@ -1,10 +1,10 @@
 ---
 id: 1614
 title: 'P2-03: Simple component swaps'
-status: done
+status: archived
 priority: important
 created: 2026-05-16T03:37:02.195428+00:00
-updated: 2026-05-17T09:00:15.024216+02:00
+updated: 2026-05-17T10:27:52.746982+02:00
 tags:
   - frontend
   - pds
@@ -25,7 +25,7 @@ proof_bundle: behavioral
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 Brief: see parent #1590.
@@ -263,3 +263,40 @@ Out of scope: Cards, sidecar IA, modals, filter panel.
 
 ### Scratch Cleanup
 - Deleted 16 `.owlbear/scratch/1614-*` files before commit.
+
+[[2026-05-17T10:27:52+02:00]]
+## Audit
+### Regression Detection
+- quality-runner mode full: 400 passed, 13 failed, ESLint exit 0 (clean)
+- All 13 failures are pre-existing quality debt, not task regressions:
+  - PdsMigration.test.tsx (3): nav-rail button assertions — builder explicitly documented as pre-existing
+  - SidecarUX.test.tsx (1): ActivityTab session-row tabIndex — git blame shows TDD RED from #1393 (ce95a391, May 8) with explicit "FAILS" comment predating #1614
+  - DecisionViewport.test.tsx (2): keyboard semantics — unrelated to task files
+  - FilterAccessibilityPanel.test.tsx (3): accessible labels — unrelated to task files
+  - ResponsiveLayout_1391.test.tsx (3): Shell.css responsive rules — #1391 scope
+  - RepairPanel.test.tsx (1): confirm button — unrelated to task files
+- Task-scoped tests (PdsSimpleSwaps1614.test.tsx): 29/29 passed
+- regression verdict: PASS
+
+### Intent Verification
+- scope alignment: PASS (all changed files in serve/cockpit/web/src/ — cockpit frontend domain; doc-writer updated serve/cockpit/README.md)
+- purpose match: PASS (3 buttons → PButton, 5 headings → PHeading — matches task title and AC)
+- extraneous scope: none
+- boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 4/5
+AC set solid after refinement. Original AC-2 named non-existent elements (p-button, p-icon tags); architect caught via challenger feedback and rewrote to target actual elements with contract preservation. AC-3 added for headings. AC-4 clarified intentional-native policy. Minor initial gap corrected through good process.
+
+### Commit Integrity
+- upstream commit presence: PASS
+  - test-writer: f6b6314b — test: PDS simple component swaps (#1614, test-writer)
+  - builder cycle 1: b2de7a9abd — feat: swap simple buttons and headings to PDS wrappers (#1614, builder)
+  - builder cycle 2: 3da50004 — feat: align heading tag props and proof for simple swaps (#1614, builder)
+  - doc-writer: 07706cd3 — docs: add #1614 PDS simple swaps entry to cockpit README (#1614, doc-writer)
+- kanban commit packaging: pending (this step)
+
+### Deduction Breakdown
+No deductions applied.
+
+### Confidence: 1.00
+### Action: archive

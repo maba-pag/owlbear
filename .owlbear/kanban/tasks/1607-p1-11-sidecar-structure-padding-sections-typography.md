@@ -1,10 +1,10 @@
 ---
 id: 1607
 title: 'P1-11: Sidecar structure — padding, sections, typography'
-status: review
+status: backlog
 priority: important
 created: 2026-05-16T03:36:07.096771+00:00
-updated: 2026-05-17T08:59:17.484357+02:00
+updated: 2026-05-17T10:23:43.961064+02:00
 tags:
   - frontend
   - pds
@@ -334,3 +334,26 @@ No new tests written. Architect resolved both RF items from Review Cycle 2 by re
 ### Commit
 - 6110126796b8b35055e3e64ecbc413ba9bececfb
 - feat: restore sidecar structure contracts (#1607, builder)
+
+[[2026-05-17T10:23:43+02:00]]
+## Review Evidence
+- Verdict: FAIL
+- FAIL signal: FAIL #1607 -> backlog | AC-2 proof still does not show the selected-task sidecar header renders the task title in the large heading.
+- Builder evidence review: The latest builder retry restores the CSS selector and heading-size host attributes, and the changed source reads AC-aligned. I did not rerun quality-runner because the green packet is internally consistent; the blocker is proof sufficiency, not contradictory execution output.
+- Routing note: This is a repeated review cycle on the same task, so the remaining proof-contract gap returns to backlog per reviewer protocol.
+
+| # | AC Line | Finding | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | AC-2: `Shell [data-region='sidecar-header'] renders p-heading[size='large'] for task title; DetailTab (given non-null task) renders p-heading[size='medium'] for primary sections and p-heading[size='small'] for secondary sections; Shell sidecar-header contains no raw h2, DetailTab contains no raw h3` | The executed proof still does not cover the selected-task header-title clause. `renderShell()` mounts a bare `Shell` with no selected task, and the AC-2 assertions only prove header presence and `size="large"`. The adjacent green packet runs `Shell.test.tsx` and `DetailTab.test.tsx`, not the architect-cited selection integration suite; that suite, even read directly, asserts DetailTab title input values rather than `[data-region="sidecar-header"]` text. No executed assertion would fail if the large header stopped showing the selected task title. | `serve/cockpit/web/src/__tests__/SidecarStructure_1607.test.tsx:96-101`; `serve/cockpit/web/src/__tests__/SidecarStructure_1607.test.tsx:177-186`; `serve/cockpit/web/src/Shell.tsx:58-62`; `serve/cockpit/web/src/Shell.tsx:329-331`; `.owlbear/kanban/tasks/1607-p1-11-sidecar-structure-padding-sections-typography.md:230-242`; `.owlbear/kanban/tasks/1607-p1-11-sidecar-structure-padding-sections-typography.md:321-326`; `serve/cockpit/web/src/__tests__/Shell.card-selection.integration.test.tsx:252-282` | backlog |
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Confirm the proof contract for AC-2's `for task title` clause and reroute with a matching executable assertion that proves the real selected-task `Shell` header renders the selected task title in `p-heading[size="large"]`; the current bare-Shell assertion is not sufficient. | `serve/cockpit/web/src/__tests__/SidecarStructure_1607.test.tsx`, `serve/cockpit/web/src/__tests__/Shell.card-selection.integration.test.tsx`, `serve/cockpit/web/src/Shell.tsx` | Finding #1 |
+
+## Observations
+- AC-1 is implemented and sufficiently proved by `#shell-sidecar-content { padding: var(--p-spacing-static-md); }` in `serve/cockpit/web/src/Shell.css:50-51` and the task-local CSS source assertions.
+- AC-3 is implemented and sufficiently proved by the Shell divider placements in `serve/cockpit/web/src/Shell.tsx:334-341` and `serve/cockpit/web/src/Shell.tsx:432-439`, the DetailTab metadata divider at `serve/cockpit/web/src/components/DetailTab.tsx:196-223`, and the task-local divider assertions in `serve/cockpit/web/src/__tests__/SidecarStructure_1607.test.tsx:233-295`.
+- The latest retry correctly restores `size` host-attribute syncing in `serve/cockpit/web/src/Shell.tsx:22-29` and `serve/cockpit/web/src/components/DetailTab.tsx:61-67`; that closes the prior size-attribute regressions.
+- No editor diagnostics are present in the touched source or task test file.
+- I could not complete a path-scoped git dirty-tree contamination check because this tool surface exposes no git/terminal command.
