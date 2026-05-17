@@ -31,9 +31,11 @@ Ingest a text document into the knowledge base.
 | `text` | str | required | Text content to ingest |
 | `metadata` | dict | None | Optional metadata dict |
 | `scope` | str | `global` | Knowledge scope for ingested document |
-| `source_url` | str | None | Optional source URL for attribution |
+| `source_url` | str | None | Optional source identity URL; creates/reuses a source row and enables delta detection |
 
 Returns: document ID, chunk count, entity count, edge count, and status.
+
+Behavior: direct text ingestion uses the same source/status delta detection as registered source refresh. When `source_url` is supplied, unchanged content returns `status: skipped`; changed content replaces the prior document for that source and scope. `http`/`https` URLs register as web sources; `file://` URLs and plain local paths register as file sources. If `source_url` is omitted, `metadata.source` or `metadata.url` is used as the delta key when present; otherwise the text is treated as a new anonymous inline document.
 
 ### list_sources
 
@@ -53,7 +55,7 @@ Trigger re-ingestion of a registered knowledge source by source ID.
 |-------|------|---------|-------|
 | `source_id` | str | required | Registered source ID to refresh |
 
-Returns: refresh count dict on success, or an `error: ...` string when refresh infrastructure is unavailable. Raises `ToolError` when the source store is unavailable or the source ID is unknown.
+Returns: refresh result dict on success — `{"source_id": str, "refreshed": int, "skipped": int, "failed": int, "errors": list[str]}` — or an `error: ...` string when refresh infrastructure is unavailable. Raises `ToolError` when the source store is unavailable or the source ID is unknown.
 
 ### get_stats
 
@@ -142,6 +144,8 @@ Only the tools documented in this reference are agent-callable MCP tools. Treat 
 | Store Phase 1 enrichment | `store_enrichment` | Pass `chunk_id`; marks chunk enriched |
 | Claim Phase 2 consolidation work | `get_consolidation_candidates` | Returns unresolved cross-source pairs |
 | Store Phase 2 consolidation | `store_enrichment` | Pass `candidate_id`; stores edges or marks reviewed |
+
+Direct-ingested sources listed by `list_sources` can be passed to `refresh_source`. Local file sources refresh from the workspace file path, while web sources refresh through the configured fetch method.
 
 ## Scope Conventions
 
