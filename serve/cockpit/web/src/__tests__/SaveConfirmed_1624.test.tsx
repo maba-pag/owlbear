@@ -514,3 +514,101 @@ describe('TestFromAC_SaveConfirmedRefetchSurvival', () => {
     expect(container.querySelector('[data-testid="save-confirmed"]')).toBeNull()
   })
 })
+
+// ════════════════════════════════════════════════════════════════════════════
+// TestFromAC_SaveConfirmedFailure
+// AC3: When onSave resolves false (handled mutation failure), save-confirmed
+//      does NOT appear. If already visible from a prior success, it is
+//      actively cleared and its pending timer cancelled.
+//      Tests MUST model failure as resolving false — NOT rejecting.
+//
+// FAILS on current code: handleSave() has no else-if branch that calls
+// setSaveConfirmed(false) when mutationSucceeded === false. The catch block
+// only fires on thrown exceptions; real useTaskMutation failure paths resolve
+// false without throwing, so an already-visible indicator is never cleared.
+// ════════════════════════════════════════════════════════════════════════════
+
+describe('TestFromAC_SaveConfirmedFailure', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
+  // ─── AC3: already-visible indicator cleared when subsequent save resolves false
+
+  it('save-confirmed is cleared when a subsequent save resolves false', async () => {
+    // First save: resolves undefined (success) → indicator appears.
+    // Second save: resolves false (handled mutation failure) → indicator must be cleared.
+    //
+    // FAILS on current code: handleSave()'s try block has no branch for the
+    // false-return case — the if condition is skipped, catch never fires, and
+    // saveConfirmed remains true from the prior success.
+    const onSave = vi.fn()
+      .mockResolvedValueOnce(undefined)  // first call → success
+      .mockResolvedValueOnce(false)       // second call → handled mutation failure
+
+    const { container } = renderEditor({ onSave })
+
+    // ── First save: success path ────────────────────────────────────────────
+    makeFieldDirty(container)
+    clickSave(container)
+
+    await waitFor(() => {
+      expect(container.querySelector('[data-testid="save-confirmed"]')).not.toBeNull()
+    })
+
+    // ── Second save: handled-failure path (resolves false) ──────────────────
+    // The form is still dirty (local title state ≠ task.title prop) so
+    // shouldShowSaveConfirmed=true and onSave is called again.
+    clickSave(container)
+
+    // FAILS on current code: indicator remains visible because the false-return
+    // path falls through without calling setSaveConfirmed(false).
+    await waitFor(() => {
+      expect(container.querySelector('[data-testid="save-confirmed"]')).toBeNull()
+    })
+  })
+
+  // ─── AC3: pending timer cancelled when save resolves false
+
+  it('pending save-confirmed timer is cancelled when subsequent save resolves false', async () => {
+    // Full lifecycle with fake timers:
+    //   1. First save (success) → indicator visible, 2000ms timer running.
+    //   2. At 1000ms: second save resolves false → indicator must clear immediately.
+    //   3. At 3000ms: indicator still null — timer was cancelled, not just ignored.
+    //
+    // FAILS on current code: the false-return path in handleSave() does not call
+    // setSaveConfirmed(false) or clearTimeout(), so the indicator stays visible
+    // after the second save, and the timer eventually clears it at 2000ms.
+    vi.useFakeTimers()
+
+    const onSave = vi.fn()
+      .mockResolvedValueOnce(undefined)  // first call → success
+      .mockResolvedValueOnce(false)       // second call → handled mutation failure
+
+    const { container } = renderEditor({ onSave })
+
+    // ── First save: success path ────────────────────────────────────────────
+    makeFieldDirty(container)
+    clickSave(container)
+
+    await act(async () => { await Promise.resolve() })
+    expect(container.querySelector('[data-testid="save-confirmed"]')).not.toBeNull()
+
+    // Advance 1000ms — indicator still visible, timer has 1000ms remaining.
+    await act(async () => { vi.advanceTimersByTime(1000) })
+    expect(container.querySelector('[data-testid="save-confirmed"]')).not.toBeNull()
+
+    // ── Second save at t=1000ms: handled-failure path (resolves false) ──────
+    clickSave(container)
+    await act(async () => { await Promise.resolve() })
+
+    // FAILS on current code: indicator not cleared by false-return; it stays visible.
+    expect(container.querySelector('[data-testid="save-confirmed"]')).toBeNull()
+
+    // Advance 2000ms more (total t=3000ms) — timer was cancelled, so indicator
+    // must stay null and not re-appear due to a stale timer callback.
+    await act(async () => { vi.advanceTimersByTime(2000) })
+    expect(container.querySelector('[data-testid="save-confirmed"]')).toBeNull()
+  })
+})
