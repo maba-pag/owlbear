@@ -6,6 +6,7 @@ uv run lint        Staged files, default hooks (= git commit).
 uv run lint-all    All files, default hooks.
 uv run megalint    lint-all + MegaLinter (Docker) + TypeScript check — full CI parity.
 uv run eslint-fix  ESLint --fix on Cockpit frontend (serve/cockpit/web).
+uv run todo        Scan for ``> **TODO:**`` markers (warning only).
 
 Default hooks (lint / lint-all)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -37,6 +38,8 @@ typecheck-frontend         no        TypeScript check (tsc --noEmit, whole-proje
 
 from __future__ import annotations
 
+import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -48,6 +51,7 @@ LINT_HINT = (
     "  \033[32muv run lint-all\033[0m    same as \033[32mlint\033[0m, all files\n"
     "  \033[32muv run megalint\033[0m    same as \033[32mlint-all\033[0m + MegaLinter + TypeScript\n"
     "  \033[32muv run eslint-fix\033[0m  ESLint --fix for frontend files\n"
+    "  \033[32muv run todo\033[0m       scan for TODO markers (warning only)\n"
 )
 
 COCKPIT_WEB = "serve/cockpit/web"
@@ -81,9 +85,60 @@ def eslint_fix() -> None:
     if not web_dir.is_dir():
         sys.stderr.write(f"Error: {COCKPIT_WEB} not found\n")
         raise SystemExit(1)
-    raise SystemExit(
-        subprocess.call(
-            ["npx", "eslint", "src/", "--fix"],  # noqa: S607
-            cwd=web_dir,
-        )
+    rc = subprocess.call(
+        ["npx", "eslint", "src/", "--fix"],  # noqa: S607
+        cwd=web_dir,
     )
+    sys.stderr.write(LINT_HINT + "\n")
+    raise SystemExit(rc)
+
+
+# ── TODO marker scan ──────────────────────────────────────────
+
+_TODO_RE = re.compile(r"^> \*\*TODO:\*\*", re.MULTILINE)
+_SKIP_DIRS = frozenset(
+    {
+        ".git",
+        "node_modules",
+        ".venv",
+        "dist",
+        "__pycache__",
+        "build",
+        ".egg-info",
+        "megalinter-reports",
+        "test-results",
+        "scratch",
+    }
+)
+
+
+def todo_check() -> None:
+    """Scan for ``> **TODO:**`` markers (warning only, exit 0)."""
+    hits: list[str] = []
+    _walk_todo(".", hits)
+    if hits:
+        print(  # noqa: T201
+            f"\033[1;33m\u26a0 {len(hits)} TODO marker(s):\033[0m"
+        )
+        for h in hits:
+            print(f"  {h}")  # noqa: T201
+    else:
+        print("\033[32m\u2713 No TODO markers found\033[0m")  # noqa: T201
+    sys.stderr.write(LINT_HINT + "\n")
+
+
+def _walk_todo(root: str, hits: list[str]) -> None:
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d not in _SKIP_DIRS]
+        for f in filenames:
+            _scan_todo(str(Path(dirpath) / f), hits)
+
+
+def _scan_todo(path: str, hits: list[str]) -> None:
+    try:
+        with Path(path).open(encoding="utf-8", errors="replace") as fh:
+            for i, line in enumerate(fh, 1):
+                if _TODO_RE.search(line):
+                    hits.append(f"{path}:{i}: {line.rstrip()}")
+    except OSError:
+        pass
