@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { PButton, PSpinner, PText } from '@porsche-design-system/components-react'
+import { PButton, PModal, PSpinner, PText } from '@porsche-design-system/components-react'
 import { useCleanupFlow } from '../hooks/useCleanupFlow'
 
 export interface CleanupPanelProps {
@@ -16,7 +16,7 @@ function renderSkippedItems(skippedItems: Array<{ path: string; reason: string }
 }
 
 export default function CleanupPanel({ onSuccess }: CleanupPanelProps) {
-  const dialogRef = useRef<HTMLDivElement | null>(null)
+  const modalRef = useRef<HTMLElement | null>(null)
   const previousFocusRef = useRef<HTMLElement | null>(null)
   const {
     phase,
@@ -35,11 +35,28 @@ export default function CleanupPanel({ onSuccess }: CleanupPanelProps) {
     }
 
     previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    dialogRef.current?.focus()
+    const modal = modalRef.current
+    const applyDialogAttrs = () => {
+      modal?.setAttribute('role', 'dialog')
+      modal?.setAttribute('aria-modal', 'true')
+    }
+
+    applyDialogAttrs()
+    const observer = modal
+      ? new MutationObserver(() => {
+        applyDialogAttrs()
+      })
+      : null
+    observer?.observe(modal as Node, { attributes: true, attributeFilter: ['role', 'aria-modal'] })
+    modal?.focus()
+
+    return () => {
+      observer?.disconnect()
+    }
   }, [phase])
 
   function getFocusableElements(): HTMLElement[] {
-    const root = dialogRef.current
+    const root = modalRef.current
     if (!root) {
       return []
     }
@@ -52,7 +69,7 @@ export default function CleanupPanel({ onSuccess }: CleanupPanelProps) {
     )
   }
 
-  function handleConfirmDialogKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+  function handleConfirmDialogKeyDown(event: React.KeyboardEvent<HTMLElement>) {
     if (event.key === 'Escape') {
       event.preventDefault()
       cancelCleanup()
@@ -86,22 +103,16 @@ export default function CleanupPanel({ onSuccess }: CleanupPanelProps) {
 
   if (phase === 'confirming') {
     return (
-      <div
-        ref={dialogRef}
+      <PModal
+        ref={modalRef}
         data-testid="cleanup-confirm-dialog"
-        role="dialog"
-        aria-modal="true"
         aria-label="Confirm task cleanup"
         tabIndex={-1}
+        open
+        onDismiss={cancelCleanup}
         onKeyDown={handleConfirmDialogKeyDown}
-        style={{
-          position: 'fixed',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          zIndex: 1000,
-          maxWidth: '560px',
-        }}
+        disableBackdropClick
+        dismissButton={false}
       >
         <PText>
           This will run maintenance cleanup to release stale claims and archive completed tasks.
@@ -117,7 +128,7 @@ export default function CleanupPanel({ onSuccess }: CleanupPanelProps) {
         <PButton data-testid="cleanup-cancel-btn" variant="secondary" onClick={cancelCleanup}>
           Cancel
         </PButton>
-      </div>
+      </PModal>
     )
   }
 

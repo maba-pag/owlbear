@@ -1,6 +1,6 @@
 import type { RepairOutcome } from '../api/repair'
 import { useEffect, useRef } from 'react'
-import { PButton, PSpinner, PText } from '@porsche-design-system/components-react'
+import { PButton, PModal, PSpinner, PText } from '@porsche-design-system/components-react'
 import { useRepairFlow } from '../hooks/useRepairFlow'
 
 const OVERLAY_STYLE = {
@@ -28,7 +28,7 @@ function renderOutcomeRows(outcomes: RepairOutcome[]) {
 }
 
 export default function RepairPanel({ corruptionCount, onSuccess, files = [] }: RepairPanelProps) {
-  const dialogRef = useRef<HTMLDivElement | null>(null)
+  const modalRef = useRef<HTMLElement | null>(null)
   const previousFocusRef = useRef<HTMLElement | null>(null)
   const {
     phase,
@@ -48,7 +48,20 @@ export default function RepairPanel({ corruptionCount, onSuccess, files = [] }: 
     }
 
     previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    dialogRef.current?.focus()
+    const modal = modalRef.current
+    const applyDialogAttrs = () => {
+      modal?.setAttribute('role', 'dialog')
+      modal?.setAttribute('aria-modal', 'true')
+    }
+
+    applyDialogAttrs()
+    const observer = modal
+      ? new MutationObserver(() => {
+        applyDialogAttrs()
+      })
+      : null
+    observer?.observe(modal as Node, { attributes: true, attributeFilter: ['role', 'aria-modal'] })
+    modal?.focus()
 
     function handleDocumentKeyDown(event: KeyboardEvent) {
       if (event.key !== 'Escape') {
@@ -60,28 +73,70 @@ export default function RepairPanel({ corruptionCount, onSuccess, files = [] }: 
 
     document.addEventListener('keydown', handleDocumentKeyDown)
     return () => {
+      observer?.disconnect()
       document.removeEventListener('keydown', handleDocumentKeyDown)
     }
   }, [cancelRepair, phase])
 
+  function getFocusableElements(): HTMLElement[] {
+    const root = modalRef.current
+    if (!root) {
+      return []
+    }
+
+    return Array.from(
+      root.querySelectorAll<HTMLElement>(
+        'p-button:not([disabled]), button:not([disabled]), [href], input:not([disabled]), ' +
+          'select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ),
+    )
+  }
+
+  function handleConfirmDialogKeyDown(event: React.KeyboardEvent<HTMLElement>) {
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      event.stopPropagation()
+      cancelRepair()
+      return
+    }
+
+    if (event.key !== 'Tab') {
+      return
+    }
+
+    const focusable = getFocusableElements()
+    if (focusable.length < 2) {
+      return
+    }
+
+    const first = focusable[0]
+    const last = focusable[focusable.length - 1]
+    const active = document.activeElement
+
+    if (event.shiftKey && active === first) {
+      event.preventDefault()
+      last.focus()
+      return
+    }
+
+    if (!event.shiftKey && active === last) {
+      event.preventDefault()
+      first.focus()
+    }
+  }
+
   if (phase === 'confirming') {
     return (
-      <div
-        ref={dialogRef}
+      <PModal
+        ref={modalRef}
         data-testid="repair-confirm-dialog"
-        role="dialog"
-        aria-modal="true"
         aria-label="Confirm storage repair"
         tabIndex={-1}
-        style={OVERLAY_STYLE}
-        onKeyDown={(event) => {
-          if (event.key !== 'Escape') {
-            return
-          }
-          event.preventDefault()
-          event.stopPropagation()
-          cancelRepair()
-        }}
+        open
+        onDismiss={cancelRepair}
+        onKeyDown={handleConfirmDialogKeyDown}
+        disableBackdropClick
+        dismissButton={false}
       >
         <PText>
           This will attempt to repair {requestedCount} corrupted files. Fixed files are restored,
@@ -110,7 +165,7 @@ export default function RepairPanel({ corruptionCount, onSuccess, files = [] }: 
         <PButton data-testid="repair-cancel-btn" variant="secondary" onClick={cancelRepair}>
           Cancel
         </PButton>
-      </div>
+      </PModal>
     )
   }
 
