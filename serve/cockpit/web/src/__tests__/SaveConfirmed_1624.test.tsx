@@ -612,3 +612,60 @@ describe('TestFromAC_SaveConfirmedFailure', () => {
     expect(container.querySelector('[data-testid="save-confirmed"]')).toBeNull()
   })
 })
+
+// ════════════════════════════════════════════════════════════════════════════
+// TestFromAC_SaveConfirmedTaskSwitch
+// AC2: Resets immediately on task-switch (different task.id).
+//      Proof: rerender with different task.id → indicator gone immediately.
+//
+// The isTaskSwitch guard in TaskFieldsEditor's sync effect calls
+// setSaveConfirmed(false) when previousTaskIdRef.current !== task.id.
+// ════════════════════════════════════════════════════════════════════════════
+
+describe('TestFromAC_SaveConfirmedTaskSwitch', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
+  it('save-confirmed is cleared immediately when rerendered with a different task.id', async () => {
+    // Setup: indicator visible after a successful dirty save.
+    const onSave = vi.fn().mockResolvedValue(undefined)
+    const { container, rerender } = renderEditor({ onSave })
+
+    makeFieldDirty(container)
+    clickSave(container)
+
+    await waitFor(() => {
+      expect(container.querySelector('[data-testid="save-confirmed"]')).not.toBeNull()
+    })
+
+    // Simulate a task-switch: rerender with a different task.id.
+    const switchedTask: TaskDetail = {
+      ...TASK,
+      id: 99,
+      title: 'Different task',
+      updated: '2026-05-02T10:00:00+00:00',
+    }
+
+    await act(async () => {
+      rerender(
+        <PorscheDesignSystemProvider>
+          <TaskFieldsEditor
+            task={switchedTask}
+            priorities={PRIORITIES}
+            conflictLocalDraft={null}
+            conflictRemoteTaskId={null}
+            serverValidationMessage={null}
+            clearConflictIfTaskChanged={vi.fn()}
+            onSave={onSave}
+          />
+        </PorscheDesignSystemProvider>,
+      )
+    })
+
+    // Indicator must be gone immediately after the task-switch rerender
+    // because the sync effect fires setSaveConfirmed(false) when isTaskSwitch=true.
+    expect(container.querySelector('[data-testid="save-confirmed"]')).toBeNull()
+  })
+})
