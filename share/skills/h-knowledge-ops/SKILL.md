@@ -114,7 +114,8 @@ Behavior:
 
 Edge payload schema:
 
-- `relation` (preferred) or `relationship` (accepted alias): required non-empty string.
+- `relation` (preferred) or `relationship` (accepted alias): required relation value from the Domain Reference below.
+- Entity `entity_type` (or `type` alias) defaults to `concept` when omitted and must otherwise use an EntityType value from the Domain Reference below.
 - Phase 1 endpoint fields:
   - `source_id`/`target_id`: optional direct entity IDs; when supplied, must match a persisted entity row **within the claimed chunk's scope** — cross-scope explicit IDs are unresolvable and raise `ToolError`. Cross-document references within the same scope are allowed.
   - `source_name`/`target_name`: optional name-based endpoint resolution when IDs are omitted.
@@ -153,11 +154,11 @@ Queries auto-filter to `["global", "project:{id}"]` when a project is active.
 
 ## Domain Reference
 
-**EntityType:** `file`, `function`, `class_`, `decision`, `pattern`, `concept`
+**EntityType:** `file`, `function`, `class_`, `decision`, `pattern`, `concept`, `requirement`, `solution`, `procedure`, `policy`, `standard`, `system`, `tool`, `process`, `role`, `person`, `team`, `component`, `service`
 
-**RelationType:** `defines`, `imports`, `depends_on`, `related_to`, `implements`, `documents`, `governed_by`
+**RelationType:** `defines`, `imports`, `depends_on`, `related_to`, `implements`, `documents`, `governed_by`, `governs`, `supersedes_version`, `built_on`, `component_of`, `creates`, `describes`, `executes`, `extends`, `follows`, `guides`, `hosts`, `instance_of`, `integrates_with`, `invokes`, `manages`, `part_of`, `produces`, `registers`, `requires`, `replaces`, `reranks_with`, `runs_in`, `runs_on`, `same_as`, `similar_to`, `supports`, `uses`, `wraps`
 
-**SourceType:** `url_list`, `file_glob`
+**SourceType:** `url_list`, `file_glob`, `authenticated_web`
 
 Config examples per source type:
 

@@ -26,7 +26,7 @@ from owlbear_knowledge.fetcher import HttpxContentFetcher
 from owlbear_knowledge.graph_builder import IntraDocGraphBuilder
 from owlbear_knowledge.graph_store import GraphStore
 from owlbear_knowledge.ingest import IngestPipeline
-from owlbear_knowledge.models import EntityType
+from owlbear_knowledge.models import EntityType, RelationType
 from owlbear_knowledge.qdrant import QdrantVectorStore
 from owlbear_knowledge.query_service import KnowledgeQueryService
 from owlbear_knowledge.refresh import RefreshOrchestrator
@@ -477,12 +477,82 @@ def _extract_relation(edge: dict[str, Any]) -> str:
     if not isinstance(relation, str) or not relation.strip():
         msg = "edge relation is required (use 'relation' or 'relationship')"
         raise ToolError(msg)
-    return relation.strip()
+    relation_value = relation.strip().lower()
+    try:
+        return RelationType(relation_value).value
+    except ValueError as exc:
+        valid = ", ".join(item.value for item in RelationType)
+        msg = f"unsupported edge relation {relation_value!r}; valid values: {valid}"
+        raise ToolError(msg) from exc
+
+
+def _extract_entity_type(entity: dict[str, Any]) -> str:
+    """Read entity type from documented aliases and return a readable graph value."""
+    entity_type = entity.get("entity_type")
+    if not isinstance(entity_type, str) or not entity_type.strip():
+        type_alias = entity.get("type")
+        entity_type = type_alias if isinstance(type_alias, str) else ""
+    if not isinstance(entity_type, str) or not entity_type.strip():
+        return EntityType.CONCEPT.value
+
+    entity_type_value = entity_type.strip().lower()
+    try:
+        return EntityType(entity_type_value).value
+    except ValueError as exc:
+        valid = ", ".join(item.value for item in EntityType)
+        msg = f"unsupported entity_type {entity_type_value!r}; valid values: {valid}"
+        raise ToolError(msg) from exc
 
 
 def _stable_edge_id(*parts: str) -> str:
     """Return a deterministic edge row ID for idempotent retries."""
     return hashlib.sha256("\x1f".join(parts).encode("utf-8")).hexdigest()
+
+
+def _load_phase2_edge_provenance(
+    conn: sqlite3.Connection,
+    *,
+    source_id: str,
+    target_id: str,
+) -> tuple[str, str, dict[str, list[str] | str]]:
+    """Derive edge document/scope metadata from candidate endpoints."""
+    row = conn.execute(
+        """
+        SELECT
+            source_entity.document_id,
+            source_entity.scope,
+            source_doc.source_id,
+            target_entity.document_id,
+            target_entity.scope,
+            target_doc.source_id
+        FROM entities AS source_entity
+        JOIN entities AS target_entity ON target_entity.id = ?
+        LEFT JOIN documents AS source_doc ON source_doc.id = source_entity.document_id
+        LEFT JOIN documents AS target_doc ON target_doc.id = target_entity.document_id
+        WHERE source_entity.id = ?
+        """,
+        (target_id, source_id),
+    ).fetchone()
+    if row is None or not isinstance(row[0], str) or not isinstance(row[3], str):
+        msg = "edge endpoints must resolve to persisted documents"
+        raise ToolError(msg)
+
+    source_scope = row[1] if isinstance(row[1], str) and row[1] else "global"
+    target_scope = row[4] if isinstance(row[4], str) and row[4] else source_scope
+    if target_scope != source_scope:
+        msg = "edge endpoints must be in the same scope"
+        raise ToolError(msg)
+
+    source_ids = [value for value in (row[2], row[5]) if isinstance(value, str)]
+    return (
+        row[0],
+        source_scope,
+        {
+            "phase": "phase2",
+            "document_ids": [row[0], row[3]],
+            "source_ids": source_ids,
+        },
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -526,7 +596,7 @@ def _resolve_or_create_chunk_entity(
         (
             entity_id,
             name,
-            "",
+            EntityType.CONCEPT.value,
             "",
             json.dumps({}),
             now_iso,
@@ -667,6 +737,12 @@ def _persist_phase2_enrichment(
                 entity_id_a=entity_id_a,
                 entity_id_b=entity_id_b,
             )
+            edge_document_id, edge_scope, provenance_metadata = _load_phase2_edge_provenance(
+                conn,
+                source_id=resolved_source_id,
+                target_id=resolved_target_id,
+            )
+            edge_metadata = {**edge_metadata, **provenance_metadata}
 
             conn.execute(
                 """
@@ -686,11 +762,11 @@ def _persist_phase2_enrichment(
                     resolved_source_id,
                     resolved_target_id,
                     relation,
-                    edge.get("document_id"),
+                    edge_document_id,
                     edge.get("weight", 1.0),
                     json.dumps(edge_metadata),
                     now_iso,
-                    edge.get("scope", "global"),
+                    edge_scope,
                 ),
             )
 
@@ -721,10 +797,7 @@ def _persist_phase1_enrichment(
         if not isinstance(entity_name, str) or not entity_name.strip():
             msg = "entity name is required"
             raise ToolError(msg)
-        entity_type = entity.get("entity_type")
-        if not isinstance(entity_type, str):
-            entity_type_alias = entity.get("type")
-            entity_type = entity_type_alias if isinstance(entity_type_alias, str) else ""
+        entity_type = _extract_entity_type(entity)
 
         entity_id = entity.get("id") if isinstance(entity.get("id"), str) else uuid4().hex
         conn.execute(

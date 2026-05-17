@@ -89,7 +89,7 @@ Identify relationships between entities found in the same chunk:
 **Edge quality rules:**
 
 - Only create edges between entities in the SAME chunk (cross-chunk edges are Phase 2)
-- Use specific relation types, not generic "related_to"
+- Use specific relation types from `h-knowledge-ops` Domain Reference, not generic "related_to"
 - Weight reflects how explicitly the relationship is stated in the text
 
 ### 2d — Store Results
