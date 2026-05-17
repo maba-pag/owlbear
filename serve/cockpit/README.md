@@ -138,8 +138,9 @@ Accessibility and responsive state after #1396:
   clientWidth at 1280x720, all 7 columns identical `offsetTop`).
 - #1603 performs the atomic PDS token migration: `serve/cockpit/web/src/tokens.css` is
   deleted and replaced with `serve/cockpit/web/src/custom-tokens.css`, which declares
-  exactly one custom property (`--custom-signal-claimed`) — the sole non-PDS-equivalent
-  signal color. All `--pds-*` token references in authored CSS and production TypeScript
+  `--custom-signal-claimed` — the sole non-PDS-equivalent signal color at migration time
+  (a second bundled token, `--p-color-contrast-low`, was added by #1625). All `--pds-*`
+  token references in authored CSS and production TypeScript
   are migrated to PDS v4 `--p-*` equivalents. Manual dark-mode override blocks
   (`[data-theme="dark"]` and `@media (prefers-color-scheme: dark)`) are removed from
   authored CSS; dark mode is handled natively by PDS via `.scheme-dark`/`.scheme-light`
@@ -231,6 +232,18 @@ Accessibility and responsive state after #1396:
   `serve/cockpit/web/src/__tests__/CockpitRefetch_1624.test.tsx` (provider-level
   same-task refetch guard). (Literal `p-toast-item` shadow-DOM timing proof deferred to
   consolidation task #1629.)
+- #1625 extends `custom-tokens.css` with a second bundled token: `--p-color-contrast-low`
+  declared via `light-dark()` for runtime border contrast without CDN dependency. `Shell.css`
+  gains `border-right: 1px solid var(--p-color-contrast-low, currentColor)` on
+  `.shell__nav-rail`, completing the structural border set alongside existing sidecar, column,
+  and filter-panel declarations (all using `--p-color-contrast-low` via #1614–#1618 token
+  migration). Contract tests (`TokenMigration.test.ts`, `PdsColorSchemeBridge.test.ts`)
+  updated to expect 2 custom declarations. Verified by
+  `serve/cockpit/web/e2e/dark-mode-border-1625.spec.ts` (9 Playwright E2E tests — AC-1
+  runtime guard + 4 border-width + contrast-ratio assertions for sidecar, nav-rail, column,
+  and filter-panel; AC-3 runtime no-injection scheme-color comparison on sidecar + nav-rail;
+  AC-4 no-injection card-chip border-width in both schemes) and updated Vitest contract
+  tests (40 passing, 0 failed).
 - #1626 applies PDS focus-visible ring styling to all native interactive elements.
   `custom-tokens.css` adds a global `:focus-visible` rule for `button`, `[role="button"]`,
   `[role="menuitem"]`, `input`, and `a` — the elements PDS Shadow DOM does not reach — using
