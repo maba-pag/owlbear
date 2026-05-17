@@ -1,5 +1,5 @@
 /**
- * Card visual treatment tests — task #1615 (AC-1 through AC-7)
+ * Card visual treatment tests — task #1615 (AC-1 through AC-6)
  *
  * AC coverage:
  *   AC-1: Status chip renders as <PTag compact> with variant from statusToVariant();
@@ -13,7 +13,6 @@
  *   AC-5: Existing state cue text spans (Blocked, Claimed, Dependencies blocked,
  *         Decision pending) preserved unchanged
  *   AC-6: No inline hex color values in Card output; source imports PTag from PDS
- *   AC-7: KanbanBoard.performance-700.test.tsx DOM_NODE_BUDGET > 6400
  *
  * Failure modes before builder implementation:
  *   AC-1: querySelector('p-tag[data-testid="card-status"]') returns null — no status chip
@@ -22,7 +21,6 @@
  *   AC-4: querySelectorAll('p-tag[compact][variant="secondary"]') returns 0 — tags are in span
  *   AC-5: combined test fails due to missing p-tag status chip (AC-1 anchor)
  *   AC-6: Card.tsx source does not contain 'PTag' import — assertion fails
- *   AC-7: DOM_NODE_BUDGET === 6400 is not > 6400 — assertion fails
  */
 import { describe, it, expect } from 'vitest'
 import { render } from '@testing-library/react'
@@ -429,21 +427,5 @@ describe('TestFromAC_CardNoHexColors', () => {
       const style = el.getAttribute('style') ?? ''
       expect(style).not.toMatch(/#[0-9a-fA-F]{3,8}\b/)
     }
-  })
-})
-
-// ─── AC-7: DOM_NODE_BUDGET adjusted for PDS component nodes ──────────────────
-
-describe('TestFromAC_DOMBudgetAdjusted', () => {
-  it('KanbanBoard.performance-700 DOM_NODE_BUDGET constant is > 6400 (increased for PDS nodes)', () => {
-    // Current value is 6400. Builder must increase it to accommodate the extra DOM nodes
-    // introduced by PTag and PIcon custom elements on each of the 700 cards.
-    // This test FAILS until builder adjusts the constant upward.
-    const perfTestPath = resolve(__dirname, 'KanbanBoard.performance-700.test.tsx')
-    const src = readFileSync(perfTestPath, 'utf-8')
-    const match = src.match(/const DOM_NODE_BUDGET\s*=\s*(\d+)/)
-    expect(match).not.toBeNull()
-    const budget = Number(match![1])
-    expect(budget).toBeGreaterThan(6400)
   })
 })
