@@ -444,6 +444,24 @@ class GraphStore:
         ).fetchone()
         return row[0] if row else None
 
+    def get_chunk(self, chunk_id: str) -> dict[str, object] | None:
+        """Return chunk row as a dict, or ``None`` if not found."""
+        row = self._conn.execute(
+            "SELECT id, document_id, chunk_index, content FROM chunks WHERE id = ?",
+            (chunk_id,),
+        ).fetchone()
+        if not row:
+            return None
+        return {"id": row[0], "document_id": row[1], "chunk_index": row[2], "content": row[3]}
+
+    def count_chunks_for_document(self, document_id: str) -> int:
+        """Return the number of chunks belonging to *document_id*."""
+        row = self._conn.execute(
+            "SELECT COUNT(*) FROM chunks WHERE document_id = ?",
+            (document_id,),
+        ).fetchone()
+        return row[0] if row else 0
+
     # ── Count operations ───────────────────────────────────────────────────
 
     def get_counts(self) -> tuple[int, int, int]:

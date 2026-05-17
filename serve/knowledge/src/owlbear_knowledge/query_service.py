@@ -193,6 +193,18 @@ class KnowledgeQueryService:
                 doc = self._graph.get_document(doc_id)
                 if doc is None:
                     continue
+
+                # Use chunk content when available; fall back to doc content.
+                snippet = doc.content[:500]
+                if hasattr(self._graph, "get_chunk"):
+                    chunk = self._graph.get_chunk(raw_id)
+                    if isinstance(chunk, dict) and isinstance(chunk.get("content"), str):
+                        chunk_index = chunk.get("chunk_index", 0)
+                        total_chunks = self._graph.count_chunks_for_document(doc_id)
+                        snippet = chunk["content"][:500]
+                        if isinstance(total_chunks, int) and total_chunks > 1:
+                            snippet = f"[chunk {chunk_index + 1}/{total_chunks}] {snippet}"
+
                 entities = self._graph.list_entities_for_document(doc_id)
                 entity_type = str(entities[0].entity_type) if entities else None
                 source_id = getattr(doc, "source_id", None)
@@ -209,7 +221,7 @@ class KnowledgeQueryService:
                         doc_id=doc_id,
                         title=doc.title,
                         score=score,
-                        snippet=doc.content[:500],
+                        snippet=snippet,
                         entity_type=entity_type,
                         scope=doc.scope,
                         retrieval_path=retrieval_path,

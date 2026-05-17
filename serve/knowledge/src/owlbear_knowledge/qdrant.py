@@ -64,6 +64,13 @@ class QdrantVectorStore:
                         size=DENSE_DIM,
                         distance=qmodels.Distance.COSINE,
                     ),
+                    "colbert": qmodels.VectorParams(
+                        size=DENSE_DIM,
+                        distance=qmodels.Distance.COSINE,
+                        multivector_config=qmodels.MultiVectorConfig(
+                            comparator=qmodels.MultiVectorComparator.MAX_SIM,
+                        ),
+                    ),
                 },
                 sparse_vectors_config={
                     "sparse": qmodels.SparseVectorParams(),
@@ -95,6 +102,8 @@ class QdrantVectorStore:
                     indices=embedding.sparse.indices,
                     values=embedding.sparse.values,
                 )
+            if embedding.colbert is not None:
+                vectors["colbert"] = embedding.colbert
         else:
             vectors = {"dense": embedding}
 
@@ -195,14 +204,32 @@ class QdrantVectorStore:
             using="sparse",
             limit=top_k * 10,
         )
-        response = self._client.query_points(
-            collection_name=self._collection,
-            prefetch=[dense_prefetch, sparse_prefetch],
-            query=qmodels.FusionQuery(fusion=qmodels.Fusion.RRF),
-            limit=top_k,
-            query_filter=query_filter,
-            with_payload=True,
-        )
+
+        if query_embedding.colbert is not None:
+            # Two-stage: prefetch with dense+sparse via RRF, rerank with ColBERT MaxSim
+            rrf_prefetch = qmodels.Prefetch(
+                prefetch=[dense_prefetch, sparse_prefetch],
+                query=qmodels.FusionQuery(fusion=qmodels.Fusion.RRF),
+                limit=top_k * 5,
+                filter=query_filter,
+            )
+            response = self._client.query_points(
+                collection_name=self._collection,
+                prefetch=[rrf_prefetch],
+                query=query_embedding.colbert,
+                using="colbert",
+                limit=top_k,
+                with_payload=True,
+            )
+        else:
+            response = self._client.query_points(
+                collection_name=self._collection,
+                prefetch=[dense_prefetch, sparse_prefetch],
+                query=qmodels.FusionQuery(fusion=qmodels.Fusion.RRF),
+                limit=top_k,
+                query_filter=query_filter,
+                with_payload=True,
+            )
         raw = [
             (point.payload["entity_or_doc_id"], point.score)  # type: ignore[index]
             for point in response.points
