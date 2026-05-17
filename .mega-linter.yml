@@ -44,6 +44,7 @@ ADDITIONAL_EXCLUDED_DIRECTORIES:
   - coverage             # Vitest/Playwright HTML coverage reports
   - dist                 # Vite build output
   - playwright-report    # Playwright HTML reports
+  - test-results         # Playwright test output
 
 # ──────────────────────────────────────────────
 # Linter-specific configuration
