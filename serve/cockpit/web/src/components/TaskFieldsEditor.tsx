@@ -29,7 +29,7 @@ export interface TaskFieldsEditorProps {
   conflictRemoteTaskId: number | null
   serverValidationMessage: string | null
   clearConflictIfTaskChanged: (taskId: number | undefined) => void
-  onSave: (payload: TaskEditPayload, conflictDraft: ConflictLocalDraft) => Promise<void>
+  onSave: (payload: TaskEditPayload, conflictDraft: ConflictLocalDraft) => Promise<boolean | void>
 }
 
 export function parseDependsOn(raw: string): { values: number[]; error: string | null } {
@@ -173,7 +173,7 @@ export default function TaskFieldsEditor({
     }
 
     try {
-      await onSave({
+      const mutationSucceeded = await onSave({
         updated: task.updated,
         title,
         priority,
@@ -183,7 +183,7 @@ export default function TaskFieldsEditor({
         block_reason: task.blocked ? blockReason : null,
       }, conflictDraft)
 
-      if (shouldShowSaveConfirmed && serverValidationMessage === null) {
+      if (shouldShowSaveConfirmed && mutationSucceeded !== false) {
         setSaveConfirmed(true)
         if (saveConfirmedTimerRef.current !== null) {
           window.clearTimeout(saveConfirmedTimerRef.current)

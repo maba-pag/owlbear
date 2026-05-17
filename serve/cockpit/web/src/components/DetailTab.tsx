@@ -121,7 +121,7 @@ export default function DetailTab({
   const backwardTarget = previousStatus(t.status)
 
   async function handleSave(payload: TaskEditPayload, conflictDraft: ConflictLocalDraft) {
-    await runMutation(`/api/tasks/${t.id}/edit`, payload, {
+    return runMutation(`/api/tasks/${t.id}/edit`, payload, {
       conflictDraft,
       errorHeading: 'Edit failed',
     })

@@ -13,7 +13,7 @@ export interface TaskActionsProps {
     url: string,
     payload: Record<string, unknown>,
     options: MutationRunOptions,
-  ) => Promise<void>
+  ) => Promise<boolean>
 }
 
 export default function TaskActions({

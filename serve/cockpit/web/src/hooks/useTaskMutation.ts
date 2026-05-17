@@ -43,7 +43,7 @@ export interface UseTaskMutationResult {
     url: string,
     payload: Record<string, unknown>,
     options: MutationRunOptions,
-  ) => Promise<void>
+  ) => Promise<boolean>
 }
 
 export function useTaskMutation(options: UseTaskMutationOptions): UseTaskMutationResult {
@@ -89,19 +89,19 @@ export function useTaskMutation(options: UseTaskMutationOptions): UseTaskMutatio
     url: string,
     payload: Record<string, unknown>,
     mutationOptions: MutationRunOptions,
-  ): Promise<void> {
+  ): Promise<boolean> {
     setServerValidationMessage(null)
     try {
       const updatedTask = await runTaskMutation(url, payload)
       options.conflictActions.clearConflict()
       options.onTaskUpdated?.(updatedTask)
-      return
+      return true
     } catch (error) {
       if (!(error instanceof ApiError)) {
         const message = error instanceof Error ? error.message : 'Network error'
         setServerValidationMessage(message)
         options.onMutationError?.(mutationOptions.errorHeading, message, 'error')
-        return
+        return false
       }
 
       if (error.status === 409) {
@@ -110,31 +110,31 @@ export function useTaskMutation(options: UseTaskMutationOptions): UseTaskMutatio
           const latestTask = (await getTask(options.taskId)) as TaskDetail
           options.conflictActions.setConflictDetected(localDraft, latestTask)
           options.onTaskUpdated?.(latestTask)
-          return
+          return false
         } catch (latestError) {
           if (latestError instanceof ApiError && latestError.status === 404) {
             setServerValidationMessage(latestError.message)
             options.conflictActions.clearConflict()
             options.onTaskCleared?.(latestError.message)
-            return
+            return false
           }
 
           options.conflictActions.setConflictDetectedNoRefetch(localDraft)
           const message = latestError instanceof Error ? latestError.message : 'Request failed'
           setServerValidationMessage(message)
-          return
+          return false
         }
       }
 
       if (error.status === 404) {
         options.onTaskCleared?.()
-        return
+        return false
       }
 
       if (error.status === 422) {
         setServerValidationMessage(error.message)
         options.onMutationError?.(mutationOptions.errorHeading, error.message, 'warning')
-        return
+        return false
       }
 
       const fallbackMessage = `Request failed with status ${error.status}`
@@ -146,6 +146,7 @@ export function useTaskMutation(options: UseTaskMutationOptions): UseTaskMutatio
           : error.message
       setServerValidationMessage(message)
       options.onMutationError?.(mutationOptions.errorHeading, message, 'error')
+      return false
     }
   }
 
