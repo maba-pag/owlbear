@@ -213,12 +213,24 @@ class QdrantVectorStore:
         )
 
         if query_embedding.colbert is not None and self._has_colbert:
-            # Two-stage: prefetch with dense+sparse via RRF, rerank with ColBERT MaxSim
+            # Two-stage: prefetch with dense+sparse via RRF, rerank with ColBERT MaxSim.
+            # Filter to document embeddings only — entity embeddings lack ColBERT vectors
+            # and the local Qdrant client's MaxSim fails on points without them.
+            colbert_filter_conditions = [
+                qmodels.FieldCondition(
+                    key="embedding_type",
+                    match=qmodels.MatchValue(value="document"),
+                ),
+            ]
+            if query_filter is not None and hasattr(query_filter, "must") and query_filter.must:
+                colbert_filter_conditions.extend(query_filter.must)
+            colbert_filter = qmodels.Filter(must=colbert_filter_conditions)
+
             rrf_prefetch = qmodels.Prefetch(
                 prefetch=[dense_prefetch, sparse_prefetch],
                 query=qmodels.FusionQuery(fusion=qmodels.Fusion.RRF),
                 limit=top_k * 5,
-                filter=query_filter,
+                filter=colbert_filter,
             )
             response = self._client.query_points(
                 collection_name=self._collection,

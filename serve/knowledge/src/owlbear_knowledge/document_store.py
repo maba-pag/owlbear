@@ -161,14 +161,25 @@ class DocumentStore:
             chunk_texts = chunks_or_texts
             if not chunk_ids:
                 return
-            computed: list[list[float]] = self._embedder.embed(chunk_texts)  # type: ignore[union-attr]
-            for cid, emb in zip(chunk_ids, computed, strict=False):
-                self._vector.store_embedding(  # type: ignore[union-attr]
-                    entity_or_doc_id=cid,
-                    embedding=emb,
-                    embedding_type="document",
-                    scope=scope,
-                )
+            # Prefer hybrid embeddings (dense+sparse+ColBERT) when available
+            if hasattr(self._embedder, "embed_hybrid"):
+                hybrid_embs = self._embedder.embed_hybrid(chunk_texts)  # type: ignore[union-attr]
+                for cid, emb in zip(chunk_ids, hybrid_embs, strict=False):
+                    self._vector.store_embedding(  # type: ignore[union-attr]
+                        entity_or_doc_id=cid,
+                        embedding=emb,
+                        embedding_type="document",
+                        scope=scope,
+                    )
+            else:
+                computed: list[list[float]] = self._embedder.embed(chunk_texts)  # type: ignore[union-attr]
+                for cid, emb in zip(chunk_ids, computed, strict=False):
+                    self._vector.store_embedding(  # type: ignore[union-attr]
+                        entity_or_doc_id=cid,
+                        embedding=emb,
+                        embedding_type="document",
+                        scope=scope,
+                    )
 
     def store_entity_embeddings(
         self,

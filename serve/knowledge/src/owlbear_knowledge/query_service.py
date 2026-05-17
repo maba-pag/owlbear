@@ -246,8 +246,8 @@ class KnowledgeQueryService:
                         source=source,
                     )
                 )
-        except Exception:  # noqa: BLE001
-            logger.warning("Knowledge query failed for prompt: %s", prompt[:100], exc_info=True)
+        except Exception:
+            logger.exception("Knowledge query failed for prompt: %s", prompt[:100])
             return []
         else:
             return structured
