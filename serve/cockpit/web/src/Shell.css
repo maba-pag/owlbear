@@ -21,6 +21,7 @@
   grid-area: status-bar;
   background: var(--p-color-surface);
   border-bottom: 1px solid var(--p-color-contrast-low);
+  min-height: 57px;
 }
 
 .shell__product-identity {

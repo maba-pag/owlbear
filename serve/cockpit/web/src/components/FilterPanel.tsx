@@ -30,10 +30,6 @@ type ControlValueEvent = {
   detail?: { value?: unknown }
 }
 
-type CheckboxChangeEvent = {
-  detail?: { checked?: unknown }
-}
-
 function readStringValue(event: ControlValueEvent): string {
   if (typeof event.detail?.value === 'string') {
     return event.detail.value
@@ -67,6 +63,7 @@ export default function FilterPanel({
   onClose,
 }: FilterPanelProps) {
   const tagsRef = useRef<HTMLElement | null>(null)
+  const blockedRef = useRef<HTMLElement | null>(null)
   const searchRef = useRef<HTMLElement | null>(null)
   const panelRef = useRef<HTMLDivElement | null>(null)
   const wasOpenRef = useRef(open)
@@ -105,6 +102,39 @@ export default function FilterPanel({
     return () => {
       searchElement.removeEventListener('input', onSearchInput)
       searchElement.removeEventListener('change', onSearchInput)
+    }
+  }, [filter, onFilterChange, open])
+
+  useEffect(() => {
+    const blockedElement = blockedRef.current
+    if (!blockedElement) {
+      return
+    }
+
+    blockedElement.querySelector('input[type="checkbox"]')?.remove()
+
+    const onBlockedChange = (event: Event) => {
+      const customEvent = event as CustomEvent<{ checked?: unknown; value?: unknown }>
+      const checkedDetail = customEvent.detail?.checked ?? customEvent.detail?.value
+      if (typeof checkedDetail === 'boolean') {
+        onFilterChange({ ...filter, blocked: checkedDetail })
+        return
+      }
+
+      const target = event.target as { checked?: unknown } | null
+      if (typeof target?.checked === 'boolean') {
+        onFilterChange({ ...filter, blocked: target.checked })
+        return
+      }
+
+      onFilterChange({ ...filter, blocked: !filter.blocked })
+    }
+
+    blockedElement.addEventListener('change', onBlockedChange)
+    blockedElement.addEventListener('update', onBlockedChange)
+    return () => {
+      blockedElement.removeEventListener('change', onBlockedChange)
+      blockedElement.removeEventListener('update', onBlockedChange)
     }
   }, [filter, onFilterChange, open])
 
@@ -186,6 +216,7 @@ export default function FilterPanel({
         name="search-filter"
         label="Search tasks"
         role="textbox"
+        aria-label="Search tasks"
         tabIndex={0}
       />
 
@@ -224,14 +255,11 @@ export default function FilterPanel({
       ) : null}
 
       <PCheckbox
+        ref={blockedRef}
         name="blocked-filter"
         label="Show only blocked tasks"
         checked={filter.blocked}
         tabIndex={0}
-        onChange={(event) => {
-          const checked = (event as CheckboxChangeEvent).detail?.checked
-          onFilterChange({ ...filter, blocked: checked === true })
-        }}
       >
         Show only blocked tasks
       </PCheckbox>

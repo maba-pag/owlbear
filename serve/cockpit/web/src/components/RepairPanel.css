@@ -6,3 +6,15 @@
   z-index: 1000;
   max-width: 560px;
 }
+
+.repair-confirm-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+}
+
+.repair-button-placeholder {
+  display: inline-block;
+  min-width: 72px;
+  min-height: 35px;
+}

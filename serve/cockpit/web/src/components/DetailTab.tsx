@@ -56,6 +56,8 @@ function setMetadataAccordionAttrs(element: HTMLElement | null): void {
 
   element.setAttribute('compact', '')
   element.setAttribute('heading', 'Metadata')
+  ;(element as HTMLElement & { open?: boolean }).open = true
+  element.removeAttribute('open')
 }
 
 function syncHeadingAttrs(tag: 'h3', size: 'medium' | 'small') {

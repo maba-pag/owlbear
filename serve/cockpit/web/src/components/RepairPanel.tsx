@@ -119,43 +119,47 @@ export default function RepairPanel({ corruptionCount, onSuccess, files = [] }: 
 
   if (phase === 'confirming') {
     return (
-      <PModal
-        ref={modalRef}
-        data-testid="repair-confirm-dialog"
-        aria-label="Confirm storage repair"
-        tabIndex={-1}
-        open
-        onDismiss={cancelRepair}
-        onKeyDown={handleConfirmDialogKeyDown}
-        disableBackdropClick
-        dismissButton={false}
-      >
-        <PText>
-          This will attempt to repair {requestedCount} corrupted files. Fixed files are restored,
-          quarantined files are moved to the quarantine directory (.owlbear/scratch/quarantine),
-          and failed files remain corrupted. This action can be irreversible and cannot be undone.
-        </PText>
-        {files.length > 0 ? (
-          <ul>
-            {files.map((file, index) => (
-              <li key={`${file.file_path}-${file.code}-${index}`}>
-                <span>{file.file_path}</span>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-        <PButton
-          data-testid="repair-confirm-button"
-          onClick={() => {
-            void confirmRepair()
-          }}
+      <>
+        <div className="repair-button-placeholder" aria-hidden="true" />
+        <PModal
+          ref={modalRef}
+          className="repair-confirm-modal"
+          data-testid="repair-confirm-dialog"
+          aria-label="Confirm storage repair"
+          tabIndex={-1}
+          open
+          onDismiss={cancelRepair}
+          onKeyDown={handleConfirmDialogKeyDown}
+          disableBackdropClick
+          dismissButton={false}
         >
-          Confirm
-        </PButton>
-        <PButton data-testid="repair-cancel-btn" variant="secondary" onClick={cancelRepair}>
-          Cancel
-        </PButton>
-      </PModal>
+          <PText>
+            This will attempt to repair {requestedCount} corrupted files. Fixed files are restored,
+            quarantined files are moved to the quarantine directory (.owlbear/scratch/quarantine),
+            and failed files remain corrupted. This action can be irreversible and cannot be undone.
+          </PText>
+          {files.length > 0 ? (
+            <ul>
+              {files.map((file, index) => (
+                <li key={`${file.file_path}-${file.code}-${index}`}>
+                  <span>{file.file_path}</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          <PButton
+            data-testid="repair-confirm-button"
+            onClick={() => {
+              void confirmRepair()
+            }}
+          >
+            Confirm
+          </PButton>
+          <PButton data-testid="repair-cancel-btn" variant="secondary" onClick={cancelRepair}>
+            Cancel
+          </PButton>
+        </PModal>
+      </>
     )
   }
 

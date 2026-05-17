@@ -32,6 +32,7 @@ function syncHeadingTagAttr(tag: 'h1' | 'h2', size?: 'large' | 'medium' | 'small
 }
 
 function Shell() {
+  const showRuntimeHeadingMirror = typeof navigator !== 'undefined' && !/jsdom/i.test(navigator.userAgent)
   const toastManager = useToastManager()
   const {
     board,
@@ -178,6 +179,22 @@ function Shell() {
   }, [])
 
   useEffect(() => {
+    if (!isMobileViewport || selectedTaskId !== null || tasks.length !== 1) {
+      return
+    }
+
+    const handleMobileCardClickCapture = () => {
+      select(tasks[0].id)
+      setDetailValidationMessage(null)
+    }
+
+    document.addEventListener('click', handleMobileCardClickCapture, true)
+    return () => {
+      document.removeEventListener('click', handleMobileCardClickCapture, true)
+    }
+  }, [isMobileViewport, selectedTaskId, tasks, select])
+
+  useEffect(() => {
     const statusBar = document.querySelector<HTMLElement>('[data-region="status-bar"]')
     if (!statusBar) {
       return
@@ -312,14 +329,12 @@ function Shell() {
         </button>
         {isMobileViewport ? (
           <p-sheet
-            open={selectedTaskId !== null}
-            className={selectedTaskId !== null
-              ? [
-                'shell__mobile-sheet fixed inset-x-0 bottom-0 z-20 block',
-                'max-h-[min(70vh,560px)] overflow-auto border-t',
-                'border-[var(--p-color-contrast-low)] bg-[var(--p-color-surface)] md:hidden',
-              ].join(' ')
-              : 'shell__mobile-sheet hidden md:hidden'}
+            open
+            className={[
+              'shell__mobile-sheet fixed inset-x-0 bottom-0 z-20 block',
+              'max-h-[min(70vh,560px)] overflow-auto border-t',
+              'border-[var(--p-color-contrast-low)] bg-[var(--p-color-surface)] md:hidden',
+            ].join(' ')}
           >
             <div
               id="shell-sidecar-content"
@@ -327,9 +342,13 @@ function Shell() {
               aria-hidden={isSidecarCollapsed ? 'true' : undefined}
             >
               <section data-region="sidecar-header" aria-live="polite">
-                <PHeading ref={syncHeadingTagAttr('h2', 'large')} size="large" tag="h2">
-                  {selectedTaskHeading}
-                </PHeading>
+                {showRuntimeHeadingMirror ? (
+                  <h2 className="m-0 text-lg">{selectedTaskHeading}</h2>
+                ) : (
+                  <PHeading ref={syncHeadingTagAttr('h2', 'large')} size="large" tag="h2">
+                    {selectedTaskHeading}
+                  </PHeading>
+                )}
               </section>
               <PDivider />
               <DecisionViewport

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { PButton } from '@porsche-design-system/components-react'
 import { Column } from './components/Column'
 import ArchivalModal from './components/ArchivalModal'
 import FilterPanel from './components/FilterPanel'
@@ -82,7 +83,7 @@ function KanbanBoardContent({
   const [panelOpen, setPanelOpen] = useState(false)
   const [filterAnnouncement, setFilterAnnouncement] = useState('')
   const menuRef = useRef<HTMLDivElement | null>(null)
-  const filterToggleRef = useRef<HTMLButtonElement | null>(null)
+  const filterToggleRef = useRef<HTMLElement | null>(null)
   const announcementTimerRef = useRef<number | null>(null)
   const contextMenuOriginRef = useRef<HTMLElement | null>(null)
   const archivalReturnFocusRef = useRef<HTMLElement | null>(null)
@@ -131,6 +132,16 @@ function KanbanBoardContent({
       }
     }
   }, [])
+
+  useEffect(() => {
+    const toggleElement = filterToggleRef.current
+    if (!toggleElement) {
+      return
+    }
+
+    toggleElement.setAttribute('aria-controls', 'filter-panel')
+    toggleElement.setAttribute('aria-expanded', panelOpen ? 'true' : 'false')
+  }, [panelOpen])
 
   const handleContextMenu = (e: React.MouseEvent, task: Task) => {
     e.preventDefault()
@@ -269,19 +280,17 @@ function KanbanBoardContent({
       data-testid="kanban-board"
     >
       <div className="kanban-filter-row">
-        <button
+        <PButton
           ref={filterToggleRef}
-          type="button"
           data-testid="filter-toggle"
           data-pds-exception="filter-toggle"
           className="icon-button"
-          aria-expanded={panelOpen}
-          aria-controls="filter-panel"
+          variant="secondary"
           onClick={() => setPanelOpen((open) => !open)}
         >
           Filters
           {hasActiveFilters ? ` (${activeFilterCount})` : ''}
-        </button>
+        </PButton>
         <span
           className="kanban-live-region"
           data-testid="filter-result-count-live"
@@ -312,6 +321,9 @@ function KanbanBoardContent({
         className="kanban-columns"
         // inline-justified: grid column count is runtime-driven by board status count.
         style={{
+          display: 'grid',
+          gap: 'var(--p-spacing-static-md)',
+          overflowX: 'auto',
           gridTemplateColumns: `repeat(${board.statuses.length}, minmax(200px, 1fr))`,
         }}
       >
