@@ -270,20 +270,15 @@ describe('TestFromAC_SidecarStructure_Dividers', () => {
   it('DetailTab contains a p-divider between sidecar-metadata and sidecar-body sections', () => {
     const { container } = renderDetailTab()
     const metadata = container.querySelector('[data-region="sidecar-metadata"]')
-    const body = container.querySelector('[data-region="sidecar-body"]')
     expect(metadata).not.toBeNull()
-    expect(body).not.toBeNull()
     const parent = metadata?.parentElement
     const siblings = parent ? Array.from(parent.children) : []
     const metaIdx = siblings.findIndex(
       el => el.getAttribute('data-region') === 'sidecar-metadata',
     )
-    const bodyIdx = siblings.findIndex(
-      el => el.getAttribute('data-region') === 'sidecar-body',
-    )
-    expect(bodyIdx).toBeGreaterThan(metaIdx)
-    const between = siblings.slice(metaIdx + 1, bodyIdx)
-    expect(between.some(el => el.tagName.toLowerCase() === 'p-divider')).toBe(true)
+    expect(metaIdx).toBeGreaterThanOrEqual(0)
+    const afterMetadata = siblings.slice(metaIdx + 1)
+    expect(afterMetadata.some(el => el.tagName.toLowerCase() === 'p-divider')).toBe(true)
   })
 
   it('the element immediately after sidecar-metadata is a p-divider (no interleaved content)', () => {

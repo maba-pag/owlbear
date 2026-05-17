@@ -170,6 +170,29 @@ export default function DetailTab({
 
   return (
     <div>
+      <section data-region="sidecar-body">
+        <PHeading ref={syncHeadingAttrs('h3', 'medium')} size="medium" tag="h3">Details</PHeading>
+        <TaskFieldsEditor
+          task={t}
+          priorities={board?.priorities ?? []}
+          conflictLocalDraft={conflictLocalDraft}
+          conflictRemoteTaskId={conflictRemoteTask?.id ?? null}
+          serverValidationMessage={serverValidationMessage}
+          clearConflictIfTaskChanged={clearConflictIfTaskChanged}
+          onSave={handleSave}
+        />
+      </section>
+
+      <section data-region="actions">
+        <PHeading ref={syncHeadingAttrs('h3', 'small')} size="small" tag="h3">Actions</PHeading>
+        <TaskActions
+          key={`${t.id}:${t.updated}`}
+          task={t}
+          backwardTarget={backwardTarget}
+          runMutation={runMutation}
+        />
+      </section>
+
       <p-accordion ref={setMetadataAccordionAttrs} data-region="sidecar-metadata">
         {/* Read-only fields */}
         <div>
@@ -198,29 +221,6 @@ export default function DetailTab({
       </p-accordion>
 
       <PDivider />
-
-      <section data-region="sidecar-body">
-        <PHeading ref={syncHeadingAttrs('h3', 'medium')} size="medium" tag="h3">Details</PHeading>
-        <TaskFieldsEditor
-          task={t}
-          priorities={board?.priorities ?? []}
-          conflictLocalDraft={conflictLocalDraft}
-          conflictRemoteTaskId={conflictRemoteTask?.id ?? null}
-          serverValidationMessage={serverValidationMessage}
-          clearConflictIfTaskChanged={clearConflictIfTaskChanged}
-          onSave={handleSave}
-        />
-      </section>
-
-      <section data-region="actions">
-        <PHeading ref={syncHeadingAttrs('h3', 'small')} size="small" tag="h3">Actions</PHeading>
-        <TaskActions
-          key={`${t.id}:${t.updated}`}
-          task={t}
-          backwardTarget={backwardTarget}
-          runMutation={runMutation}
-        />
-      </section>
 
       {/* History tab button — always visible */}
       <section data-region="history">
