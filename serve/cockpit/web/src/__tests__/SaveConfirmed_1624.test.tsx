@@ -2,13 +2,14 @@
  * Save-confirmed indicator — task #1624
  *
  * Covers:
- *   AC2 — After a successful edit-only mutation in TaskFieldsEditor,
- *          [data-testid='save-confirmed'] becomes visible; resets after
- *          2000ms (±500ms); does NOT appear on mutation error or on
- *          non-edit mutations (release, move-backward) through the same
- *          hook instance.
- *
- * All tests must FAIL until the builder adds the save-confirmed indicator.
+ *   AC2 — After a successful save in TaskFieldsEditor where form was dirty,
+ *          [data-testid='save-confirmed'] becomes visible for 2000ms (±500ms),
+ *          surviving same-task refetch without unmount. Resets immediately on
+ *          task-switch (different task.id).
+ *   AC3 — When onSave resolves false (handled mutation failure):
+ *          (a) initial dirty save resolves false → indicator never appears;
+ *          (b) already-visible indicator is actively cleared and timer cancelled.
+ *          Tests MUST use .mockResolvedValue(false) — NOT .mockRejectedValue().
  */
 import {
   describe,
@@ -47,20 +48,17 @@ vi.mock('@porsche-design-system/components-react', async (importOriginal) => {
         label,
         value,
         onChange,
-        onInput,
         ...rest
       }: {
         label?: string
         value?: string
         onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void
-        onInput?: (e: React.ChangeEvent<HTMLInputElement>) => void
         [key: string]: unknown
       }) => (
         <input
           aria-label={label}
           value={value ?? ''}
           onChange={onChange}
-          onInput={onInput}
           {...(rest as Record<string, unknown>)}
         />
       ),
@@ -89,20 +87,17 @@ vi.mock('@porsche-design-system/components-react', async (importOriginal) => {
         label,
         value,
         onChange,
-        onInput,
         ...rest
       }: {
         label?: string
         value?: string
         onChange?: (e: React.ChangeEvent<HTMLTextAreaElement>) => void
-        onInput?: (e: React.ChangeEvent<HTMLTextAreaElement>) => void
         [key: string]: unknown
       }) => (
         <textarea
           aria-label={label}
           value={value ?? ''}
           onChange={onChange}
-          onInput={onInput}
           {...(rest as Record<string, unknown>)}
         />
       ),
@@ -272,129 +267,6 @@ describe('TestFromAC_SaveConfirmed', () => {
     })
   })
 
-  // ─── Edge: save-confirmed absent after mutation error ─────────────────────
-
-  describe('edge: save-confirmed does not appear when onSave rejects', () => {
-    it('successful save shows save-confirmed; subsequent error does not re-show it', async () => {
-      // Two renders in sequence: first onSave resolves, then rejects.
-      // We assert save-confirmed appears on success (fails RED) and is absent on error.
-      const onSave = vi.fn().mockResolvedValue(undefined)
-      const { container, rerender } = renderEditor({ onSave })
-
-      makeFieldDirty(container)
-      clickSave(container)
-
-      // Must appear after success — Fails RED: element not present.
-      await waitFor(() => {
-        expect(
-          container.querySelector('[data-testid="save-confirmed"]'),
-        ).not.toBeNull()
-      })
-
-      // Now simulate error: onSave rejects.
-      const rejectSave = vi.fn().mockRejectedValue(new Error('Save failed'))
-      rerender(
-        <PorscheDesignSystemProvider>
-          <TaskFieldsEditor
-            task={TASK}
-            priorities={PRIORITIES}
-            conflictLocalDraft={null}
-            conflictRemoteTaskId={null}
-            serverValidationMessage="Save failed"
-            clearConflictIfTaskChanged={vi.fn()}
-            onSave={rejectSave}
-          />
-        </PorscheDesignSystemProvider>,
-      )
-
-      makeFieldDirty(container)
-      clickSave(container)
-
-      await waitFor(() => {
-        expect(
-          container.querySelector('[data-testid="save-confirmed"]'),
-        ).toBeNull()
-      })
-    })
-
-    it('save-confirmed absent on error state, but present in prior success render', async () => {
-      // Full flow: success path shows save-confirmed (fails RED); then error path
-      // confirms it is absent.
-      const successSave = vi.fn().mockResolvedValue(undefined)
-      const { container: successContainer } = renderEditor({ onSave: successSave })
-
-      makeFieldDirty(successContainer)
-      clickSave(successContainer)
-
-      // Must appear on success — Fails RED: element absent.
-      await waitFor(() => {
-        expect(
-          successContainer.querySelector('[data-testid="save-confirmed"]'),
-        ).not.toBeNull()
-      })
-
-      // Render separate editor with serverValidationMessage set (error state).
-      const { container: errorContainer } = renderEditor({
-        onSave: vi.fn().mockResolvedValue(undefined),
-        serverValidationMessage: 'Conflict: task was updated',
-      })
-
-      makeFieldDirty(errorContainer)
-      clickSave(errorContainer)
-
-      // When serverValidationMessage is set, save-confirmed must NOT appear.
-      await waitFor(() => {
-        expect(
-          errorContainer.querySelector('[data-testid="save-confirmed"]'),
-        ).toBeNull()
-      })
-    })
-  })
-
-  // ─── Edge: non-edit mutations (TaskActions paths) via same onSave ─────────
-
-  describe('edge: save-confirmed does not appear for non-edit mutations via shared hook', () => {
-    it('save-confirmed only appears from TaskFieldsEditor save, not from TaskActions-style calls', async () => {
-      // The save-confirmed indicator is scoped to the edit call-site in
-      // TaskFieldsEditor. Verify that the indicator element appears ONLY
-      // when onSave (edit path) resolves successfully.
-      // We simulate a release-style call by invoking onSave with a release payload
-      // that lacks 'title' — the contract is that save-confirmed tracks the
-      // SUCCESS of the edit path, not any mutation.
-      //
-      // For test purposes: render TaskFieldsEditor with onSave that resolves,
-      // click Save (edit path), confirm save-confirmed appears.
-      // Then simulate a "release" scenario (component with no dirty state but
-      // a forced save-trigger) — save-confirmed must not appear.
-      //
-      // The primary failure point is in the "appears after edit" assertion below.
-
-      const onSave = vi.fn().mockResolvedValue(undefined)
-      const { container } = renderEditor({ onSave })
-
-      makeFieldDirty(container)
-      clickSave(container)
-
-      // Fails RED: save-confirmed element absent.
-      await waitFor(() => {
-        expect(
-          container.querySelector('[data-testid="save-confirmed"]'),
-        ).not.toBeNull()
-      })
-
-      // Confirm the indicator is NOT already present before any save on a clean form.
-      const { container: cleanContainer } = renderEditor({ onSave: vi.fn().mockResolvedValue(undefined) })
-
-      // On a clean (non-dirty) form, clicking Save does not call onSave.
-      // save-confirmed must not appear.
-      clickSave(cleanContainer)
-      await act(async () => { await Promise.resolve() })
-
-      expect(
-        cleanContainer.querySelector('[data-testid="save-confirmed"]'),
-      ).toBeNull()
-    })
-  })
 })
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -569,7 +441,27 @@ describe('TestFromAC_SaveConfirmedFailure', () => {
     })
   })
 
-  // ─── AC3: pending timer cancelled when save resolves false
+  // ─── AC3(a): initial dirty save resolves false → indicator never appears
+
+  it('save-confirmed never appears on initial dirty save that resolves false', async () => {
+    // AC3(a): first dirty save resolves false (handled mutation failure from the start).
+    // The indicator must never appear — not even momentarily.
+    // Models the real useTaskMutation false-return path (not exception/rejection).
+    const onSave = vi.fn().mockResolvedValue(false)
+    const { container } = renderEditor({ onSave })
+
+    makeFieldDirty(container)
+    clickSave(container)
+
+    // Allow all microtasks and state updates to settle.
+    await act(async () => { await Promise.resolve() })
+
+    // Indicator must remain absent: shouldShowSaveConfirmed is true but
+    // mutationSucceeded !== false is false, so setSaveConfirmed(true) never fires.
+    expect(container.querySelector('[data-testid="save-confirmed"]')).toBeNull()
+  })
+
+  // ─── AC3(b): pending timer cancelled when save resolves false
 
   it('pending save-confirmed timer is cancelled when subsequent save resolves false', async () => {
     // Full lifecycle with fake timers:
