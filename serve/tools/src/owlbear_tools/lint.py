@@ -68,7 +68,7 @@ def _run(args: list[str], *, hint: str = "") -> None:
 
 def lint() -> None:
     """Staged files, default hooks (same as git commit)."""
-    _run(["run"])
+    _run(["run"], hint=LINT_HINT)
 
 
 def lint_all() -> None:
@@ -126,6 +126,8 @@ def todo_check() -> None:
             print(f"  {h}")  # noqa: T201
     else:
         print("\033[32m\u2713 No TODO markers found\033[0m")  # noqa: T201
+    if not os.environ.get("PRE_COMMIT"):
+        sys.stderr.write(LINT_HINT + "\n")
 
 
 def _walk_todo(root: str, hits: list[str]) -> None:
