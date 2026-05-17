@@ -271,6 +271,20 @@ Accessibility and responsive state after #1396:
   FilterPanel open state, ResolveModal, ArchivalModal, ConfirmDialog, CleanupPanel confirm
   dialog, and RepairPanel confirm dialog, all zero violations).
 
+- #1634 migrates two unowned raw HTML elements discovered by #1608 to PDS React wrappers.
+  `TaskFieldsEditor.tsx` replaces native `<option>` children inside `<PSelect>` with
+  `PSelectOption`, following the established FilterPanel pattern from #1617.
+  `DecisionViewport.tsx` replaces the task reference `<a>` with `<PLinkPure href="..." icon="none">`
+  using the host-href pattern; `data-testid` and click callback are preserved; `href` and `icon`
+  host attributes are normalized via `ref` for deterministic jsdom assertions. Existing
+  `DecisionViewport.test.tsx` clickable-element and keyboard-reachability assertions are updated
+  to accept `p-link-pure` with host `href` preserved. Verified by
+  `serve/cockpit/web/src/__tests__/PdsSimpleSwaps_1634.test.tsx` (3 tests — AC1 `p-select-option`
+  presence and zero native `OPTION` guard; AC2 `PLinkPure` host `href`, `icon="none"`,
+  `data-testid`, and click callback; AC3 keyboard-reachability host-`href`) and updated
+  `serve/cockpit/web/src/__tests__/DecisionViewport.test.tsx` (durable regression suite,
+  35 passing).
+
 - Documentation here does not treat cache/SSE invalidation work from #1346 as part of
   this delivery bundle.
 

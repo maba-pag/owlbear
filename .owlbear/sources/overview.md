@@ -310,6 +310,12 @@ External repos and resources studied during OwlBear development.
 | github/codeql-action upload-sarif action.yml | <https://github.com/github/codeql-action/blob/main/upload-sarif/action.yml> | Action input parameters: sarif_file, category, wait-for-processing, token | `.owlbear/research/1417-sarif-upload-code-scanning.md` | 2026-05-08 |
 | oxsecurity/megalinter SarifReporter.md | <https://github.com/oxsecurity/megalinter/blob/main/docs/reporters/SarifReporter.md> | Confirms file path and recommended workflow step | `.owlbear/research/1417-sarif-upload-code-scanning.md` | 2026-05-08 |
 
+## Unowned Simple Swaps Research (Task #1634)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| PDS v3 link-pure examples | <https://designsystem.porsche.com/v3/components/link-pure/examples/> | PLinkPure props and host-href pattern, `icon` prop values, slot usage | `.owlbear/research/1634-unowned-simple-swaps.md` | 2026-05-17 |
+
 ## Legacy Audit Prompt (Task #1414)
 
 | Source | URL | What | Where Used | Date |
