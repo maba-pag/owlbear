@@ -396,3 +396,62 @@ describe('TestFromAC_SaveConfirmed', () => {
     })
   })
 })
+
+// ════════════════════════════════════════════════════════════════════════════
+// TestFromAC_SaveConfirmedRefetchSurvival
+// AC2: save-confirmed must survive CockpitProvider same-task refetch.
+//      When the provider refreshes the same task (same task.id, new task.updated)
+//      after a successful edit, the indicator must remain visible for its full
+//      2000ms window — it must NOT be reset by the data-refresh re-render.
+// ════════════════════════════════════════════════════════════════════════════
+
+describe('TestFromAC_SaveConfirmedRefetchSurvival', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
+  it('save-confirmed remains visible after re-render with same task.id but new task.updated', async () => {
+    // onSave returns true — explicit boolean success, matching the real runMutation
+    // return type after builder cycle 2 fix.
+    const onSave = vi.fn().mockResolvedValue(true)
+    const { container, rerender } = renderEditor({ onSave })
+
+    // Make the field dirty and save.
+    makeFieldDirty(container)
+    clickSave(container)
+
+    // Wait for the save-confirmed indicator to appear after a successful save.
+    await waitFor(() => {
+      expect(container.querySelector('[data-testid="save-confirmed"]')).not.toBeNull()
+    })
+
+    // Simulate a CockpitProvider same-task refetch:
+    // After Shell calls update(updatedTask), CockpitProvider re-fetches from the API
+    // and pushes the refreshed task (same id=42, new updated timestamp) into DetailTab.
+    const refreshedTask: TaskDetail = {
+      ...TASK,
+      updated: '2026-05-01T12:01:00+00:00',
+    }
+    rerender(
+      <PorscheDesignSystemProvider>
+        <TaskFieldsEditor
+          task={refreshedTask}
+          priorities={PRIORITIES}
+          conflictLocalDraft={null}
+          conflictRemoteTaskId={null}
+          serverValidationMessage={null}
+          clearConflictIfTaskChanged={vi.fn()}
+          onSave={onSave}
+        />
+      </PorscheDesignSystemProvider>,
+    )
+
+    // FAILS on current code: the sync effect [task.id, task.updated, ...] fires
+    // when task.updated changes and unconditionally calls setSaveConfirmed(false),
+    // clearing the indicator even though the task.id is unchanged.
+    // After fix: setSaveConfirmed(false) is guarded by task.id change (isTaskSwitch)
+    // so same-task data refreshes no longer tear down the indicator prematurely.
+    expect(container.querySelector('[data-testid="save-confirmed"]')).not.toBeNull()
+  })
+})
