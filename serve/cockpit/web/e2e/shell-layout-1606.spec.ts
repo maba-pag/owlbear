@@ -127,6 +127,7 @@ test.describe('TestFromAC_StickyHeader', () => {
       `status-bar className "${classes}" must include Tailwind z-10 class`,
     ).toContain('z-10')
   })
+
 })
 
 // ─── AC2: Responsive sidecar column width ─────────────────────────────────────
@@ -345,5 +346,20 @@ test.describe('TestFromAC_TailwindCSSStructure', () => {
       css,
       'Shell.css must not contain "z-index:" rules (move z-index to Tailwind)',
     ).not.toMatch(/^\s*z-index\s*:/m)
+  })
+
+  // ─── File: Shell.css remaining banned property families (padding) ─────────────
+  //
+  // AC3 bans 8 CSS property families. Previous tests covered: display, height,
+  // overflow, position, z-index. Width and gap are already compliant (no rules
+  // present in Shell.css). Padding still has a violation: #shell-sidecar-content.
+
+  // RED: #shell-sidecar-content { padding: var(--p-spacing-static-md) } still in Shell.css
+  test('Shell.css does not contain padding property rules', async () => {
+    const css = fs.readFileSync(SHELL_CSS_PATH, 'utf-8')
+    expect(
+      css,
+      'Shell.css must not contain "padding:" rules (move padding to Tailwind)',
+    ).not.toMatch(/^\s*padding(-\w+)?\s*:/m)
   })
 })
