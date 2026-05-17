@@ -2,15 +2,7 @@ import type { RepairOutcome } from '../api/repair'
 import { useEffect, useRef } from 'react'
 import { PButton, PModal, PSpinner, PText } from '@porsche-design-system/components-react'
 import { useRepairFlow } from '../hooks/useRepairFlow'
-
-const OVERLAY_STYLE = {
-  position: 'fixed' as const,
-  top: '50%',
-  left: '50%',
-  transform: 'translate(-50%, -50%)',
-  zIndex: 1000,
-  maxWidth: '560px',
-}
+import './RepairPanel.css'
 
 export interface RepairPanelProps {
   corruptionCount: number
@@ -152,16 +144,14 @@ export default function RepairPanel({ corruptionCount, onSuccess, files = [] }: 
             ))}
           </ul>
         ) : null}
-        <span data-testid="repair-confirm-btn">
-          <PButton
-            data-testid="repair-confirm-button"
-            onClick={() => {
-              void confirmRepair()
-            }}
-          >
-            Confirm
-          </PButton>
-        </span>
+        <PButton
+          data-testid="repair-confirm-button"
+          onClick={() => {
+            void confirmRepair()
+          }}
+        >
+          Confirm
+        </PButton>
         <PButton data-testid="repair-cancel-btn" variant="secondary" onClick={cancelRepair}>
           Cancel
         </PButton>
@@ -171,7 +161,7 @@ export default function RepairPanel({ corruptionCount, onSuccess, files = [] }: 
 
   if (phase === 'repairing') {
     return (
-      <div data-testid="repair-loading" role="status" aria-live="polite" style={OVERLAY_STYLE}>
+      <div className="repair-overlay" data-testid="repair-loading" role="status" aria-live="polite">
         <PSpinner aria={{ 'aria-label': 'Repairing storage' }} />
         <PText>Repairing...</PText>
       </div>
@@ -181,7 +171,7 @@ export default function RepairPanel({ corruptionCount, onSuccess, files = [] }: 
   if (phase === 'done') {
     const grouped = results as NonNullable<typeof results>
     return (
-      <div style={OVERLAY_STYLE}>
+      <div className="repair-overlay">
         <section data-testid="repair-results-fixed">
           <PText weight="semibold">Fixed</PText>
           <ul>{renderOutcomeRows(grouped.fixed)}</ul>
@@ -203,7 +193,7 @@ export default function RepairPanel({ corruptionCount, onSuccess, files = [] }: 
 
   if (phase === 'error') {
     return (
-      <div style={OVERLAY_STYLE}>
+      <div className="repair-overlay">
         <PText data-testid="repair-error">{error}</PText>
         <PButton
           data-testid="repair-retry-btn"

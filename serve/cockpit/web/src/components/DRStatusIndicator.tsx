@@ -92,6 +92,7 @@ export default function DRStatusIndicator({ count, items, onItemClick }: DRStatu
           role="dialog"
           aria-label="Pending decision requests"
           tabIndex={-1}
+          // inline-justified: popover top/left are runtime-computed from trigger geometry.
           style={{
             position: 'fixed',
             top: position.top,

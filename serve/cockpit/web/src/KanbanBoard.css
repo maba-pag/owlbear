@@ -1,3 +1,31 @@
+.kanban-board {
+  display: flex;
+  flex-direction: column;
+  gap: var(--p-spacing-static-md);
+  min-height: 0;
+  height: 100%;
+}
+
+.kanban-filter-row {
+  display: flex;
+  align-items: center;
+  gap: var(--p-spacing-static-xs);
+}
+
+.kanban-live-region {
+  position: absolute;
+  left: -9999px;
+}
+
+.kanban-columns {
+  display: grid;
+  gap: var(--p-spacing-static-md);
+  padding: var(--p-spacing-static-md);
+  overflow-x: auto;
+  flex: 1;
+  min-height: 0;
+}
+
 .kanban-context-menu {
   background: var(--p-color-surface);
   box-shadow: var(--p-shadow-md);

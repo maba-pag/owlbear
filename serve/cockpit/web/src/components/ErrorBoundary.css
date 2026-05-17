@@ -1,0 +1,13 @@
+.error-boundary {
+  padding: var(--p-spacing-static-xl);
+  text-align: center;
+}
+
+.error-boundary-message {
+  color: var(--p-color-contrast-medium);
+  margin-bottom: var(--p-spacing-static-md);
+}
+
+.error-boundary-reset {
+  cursor: pointer;
+}

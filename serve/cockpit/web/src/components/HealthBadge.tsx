@@ -91,6 +91,7 @@ export default function HealthBadge({ items }: HealthBadgeProps) {
           role="dialog"
           aria-label="Health details"
           tabIndex={-1}
+          // inline-justified: popover top/left are runtime-computed from trigger geometry.
           style={{
             position: 'fixed',
             top: position.top,

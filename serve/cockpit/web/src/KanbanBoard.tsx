@@ -265,16 +265,10 @@ function KanbanBoardContent({
 
   return (
     <div
+      className="kanban-board"
       data-testid="kanban-board"
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '16px',
-        minHeight: 0,
-        height: '100%',
-      }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+      <div className="kanban-filter-row">
         <button
           ref={filterToggleRef}
           type="button"
@@ -289,9 +283,9 @@ function KanbanBoardContent({
           {hasActiveFilters ? ` (${activeFilterCount})` : ''}
         </button>
         <span
+          className="kanban-live-region"
           data-testid="filter-result-count-live"
           aria-live="polite"
-          style={{ position: 'absolute', left: '-9999px' }}
         >
           {filterAnnouncement}
         </span>
@@ -315,14 +309,10 @@ function KanbanBoardContent({
       />
 
       <div
+        className="kanban-columns"
+        // inline-justified: grid column count is runtime-driven by board status count.
         style={{
-          display: 'grid',
           gridTemplateColumns: `repeat(${board.statuses.length}, minmax(200px, 1fr))`,
-          gap: 'var(--p-spacing-static-md)',
-          padding: 'var(--p-spacing-static-md)',
-          overflowX: 'auto',
-          flex: 1,
-          minHeight: 0,
         }}
       >
         {board.statuses.map(({ name }) => {
@@ -368,6 +358,7 @@ function KanbanBoardContent({
           data-testid="context-menu"
           role="menu"
           aria-label="Task actions"
+          // inline-justified: menu anchor coordinates are computed from pointer position.
           style={{ position: 'fixed', top: contextMenu.y, left: contextMenu.x }}
         >
           {(board.valid_transitions[contextMenu.taskStatus] ?? []).map((target) => (

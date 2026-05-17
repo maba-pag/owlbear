@@ -55,7 +55,6 @@ export default function HistorySubtab({ sessions, onSelectTask }: HistorySubtabP
               navigateToTask(s.task_id)
             }
           }}
-          style={{ cursor: 'pointer' }}
         >
           <span data-testid="session-agent">{s.agent ?? 'unknown agent'}</span>
           <span data-testid="session-duration">{formatDuration(s.duration)}</span>

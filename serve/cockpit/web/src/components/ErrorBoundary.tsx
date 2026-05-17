@@ -1,5 +1,6 @@
 import { PButton, PHeading } from '@porsche-design-system/components-react'
 import { Component, type ErrorInfo, type ReactNode } from 'react'
+import './ErrorBoundary.css'
 
 interface Props {
   children: ReactNode
@@ -30,18 +31,18 @@ export class ErrorBoundary extends Component<Props, State> {
     if (!this.state.hasError) return this.props.children
 
     return (
-      <div role="alert" style={{ padding: 32, textAlign: 'center' }}>
+      <div role="alert" className="error-boundary">
         <PHeading ref={syncHeadingTagAttr} tag="h3">
           Something went wrong{this.props.label ? ` in ${this.props.label}` : ''}
         </PHeading>
-        <p style={{ color: 'var(--p-color-contrast-medium)', marginBottom: 16 }}>
+        <p className="error-boundary-message">
           {this.state.error?.message}
         </p>
         <PButton
           type="button"
           onClick={() => this.setState({ hasError: false, error: null })}
           variant="secondary"
-          style={{ cursor: 'pointer', padding: '8px 16px' }}
+          className="error-boundary-reset"
         >
           Try again
         </PButton>
