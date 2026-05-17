@@ -126,7 +126,6 @@ def todo_check() -> None:
             print(f"  {h}")  # noqa: T201
     else:
         print("\033[32m\u2713 No TODO markers found\033[0m")  # noqa: T201
-    sys.stderr.write(LINT_HINT + "\n")
 
 
 def _walk_todo(root: str, hits: list[str]) -> None:
