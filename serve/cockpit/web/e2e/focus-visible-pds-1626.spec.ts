@@ -436,3 +436,219 @@ test.describe('TestFromAC_CardFocusTokenMigration', () => {
   })
 
 })
+
+// ─── Session data for HistorySubtab keyboard-proof tests ─────────────────────
+const HISTORY_SESSION_DATA = {
+  sessions: [
+    {
+      task_id: 1,
+      state: 'released',
+      agent: 'builder',
+      started_at: '2026-05-16T00:00:00+00:00',
+      duration: 3_600,
+      outcome: 'success',
+    },
+  ],
+}
+// Task detail for /api/tasks/1 — needed for DetailTab to render the history-tab button.
+// DetailTab returns null if task prop is null (if (!task) return null).
+const TASK_DETAIL_1626 = {
+  id: 1,
+  title: 'Focus ring test task',
+  status: 'todo',
+  priority: 'important',
+  body: null,
+  updated: '2026-05-16T00:00:00+00:00',
+  created: '2026-05-16T00:00:00+00:00',
+  tags: [],
+  blocked: false,
+  block_reason: null,
+  claimed: false,
+  claimed_at: null,
+  dep_status: null,
+  parent: null,
+  depends_on: [],
+}
+// ─── AC-1 keyboard-traversal proof — corrected per architect review cycle 2 ──
+//
+// Architect review cycle 2 mandate (addressing review FAIL cycle 2 findings):
+//   - [role="button"] representative: HistorySubtab session-row
+//     (NOT DecisionViewport article — renders as plain <article> with NO role attribute)
+//   - button (ThemeToggle) and a (anchor): Tab keyboard traversal (NOT .focus())
+//   - menuitem and input: unchanged (already keyboard-driven in TestFromAC_FocusVisibleOutline)
+//
+// All tests use real Tab keyboard navigation per the refined AC.
+// Proof method: Tab traversal from page start / element setup — .focus() explicitly prohibited.
+
+test.describe('TestFromAC_FocusVisibleKeyboardProof', () => {
+  test.use({ viewport: { width: 1280, height: 800 } })
+
+  test.beforeEach(async ({ page }) => {
+    await stubApis(page)
+    // Override sessions stub with actual data — HistorySubtab renders no rows when sessions:[].
+    // LIFO: registered after stubApis, so this handler takes priority over the stubApis stub.
+    await page.route(/\/api\/sessions(\?.*)?$/, (route) =>
+      route.fulfill({ json: HISTORY_SESSION_DATA }),
+    )
+    // Provide valid task detail — DetailTab returns null if task is null/empty, which
+    // prevents history-tab button from rendering. LIFO: registered last → highest priority.
+    await page.route('/api/tasks/*', (route) =>
+      route.fulfill({ json: TASK_DETAIL_1626 }),
+    )
+    await page.goto('/')
+    await page.waitForSelector('[data-region="workspace"]', { timeout: 10_000 })
+  })
+
+  // ── button: ThemeToggle — Tab keyboard navigation ──────────────────────────
+
+  // Happy path: button (ThemeToggle) shows outline-style 'solid' via Tab keyboard focus (AC-1)
+  // Proof method: Tab traversal from page start (NOT .focus()).
+  // GREEN: global :focus-visible rule exists → outline-style is 'solid' via Tab.
+  test('button (theme-toggle): outlineStyle solid via Tab keyboard focus (AC-1)', async ({
+    page,
+  }) => {
+    const themeToggle = page.locator('[data-testid="theme-toggle"]')
+    await tabUntilFocused(page, themeToggle, 20)
+    await expect(themeToggle).toBeFocused()
+
+    const outlineStyle = await page.evaluate(
+      () => getComputedStyle(document.activeElement as Element).outlineStyle,
+    )
+
+    expect(
+      outlineStyle,
+      'button.icon-button (ThemeToggle) must show outline-style:solid via Tab keyboard focus. ' +
+        "Proof method: Tab traversal (NOT .focus()). RED: no CSS rule → UA applies 'auto'.",
+    ).toBe('solid')
+  })
+
+  // Happy path: button (ThemeToggle) shows PDS focus color via Tab keyboard focus (AC-1)
+  test('button (theme-toggle): outlineColor PDS blue via Tab keyboard focus (AC-1)', async ({
+    page,
+  }) => {
+    const themeToggle = page.locator('[data-testid="theme-toggle"]')
+    await tabUntilFocused(page, themeToggle, 20)
+    await expect(themeToggle).toBeFocused()
+
+    const outlineColor = await page.evaluate(
+      () => getComputedStyle(document.activeElement as Element).outlineColor,
+    )
+
+    expect(
+      outlineColor,
+      `button.icon-button (ThemeToggle) must show outline-color:${PDS_FOCUS_COLOR} via Tab focus. ` +
+        'Proof method: Tab traversal (NOT .focus()). RED: no CSS rule → UA uses system accent color.',
+    ).toBe(PDS_FOCUS_COLOR)
+  })
+
+  // ── [role="button"]: HistorySubtab session-row — Tab keyboard navigation ───
+  //
+  // Representative: div[data-testid="history-session-row"][role="button"][tabIndex=0]
+  // in HistorySubtab component. This is a real div[role="button"] — confirmed in source.
+  // DecisionViewport DR items are plain <article> elements with NO role attribute and
+  // are therefore NOT valid [role="button"] representatives (reviewer finding #1, cycle 2).
+  //
+  // Setup: mouse clicks open the sidecar and history tab; only the Tab-to-row step
+  // constitutes the keyboard-focus proof.
+
+  // Happy path: div[role="button"] (HistorySubtab row) shows outline-style 'solid' via Tab (AC-1)
+  test('div[role="button"] (HistorySubtab session-row): outlineStyle solid via Tab focus (AC-1)', async ({
+    page,
+  }) => {
+    // Setup: open sidecar (click task card) then show history rows (click history tab).
+    const card = page.locator('[data-testid="task-card"]').first()
+    await expect(card).toBeVisible({ timeout: 5_000 })
+    await card.click()
+    await page.waitForSelector('[data-testid="history-tab"]', { timeout: 5_000 })
+    await page.locator('[data-testid="history-tab"]').click()
+
+    const sessionRow = page.locator('[data-testid="history-session-row"]').first()
+    await expect(sessionRow).toBeVisible({ timeout: 5_000 })
+
+    // Proof: Tab keyboard traversal to the session row (tabIndex=0 — in normal tab order).
+    await tabUntilFocused(page, sessionRow, 50)
+    await expect(sessionRow).toBeFocused()
+
+    const outlineStyle = await page.evaluate(
+      () => getComputedStyle(document.activeElement as Element).outlineStyle,
+    )
+
+    expect(
+      outlineStyle,
+      'div[role="button"] (HistorySubtab session-row) must show outline-style:solid via Tab focus. ' +
+        "RED: no CSS rule → UA gives no outline to div[role='button'] (outlineStyle 'none').",
+    ).toBe('solid')
+  })
+
+  // Happy path: div[role="button"] (HistorySubtab row) shows PDS focus color via Tab (AC-1)
+  test('div[role="button"] (HistorySubtab session-row): outlineColor PDS blue via Tab focus (AC-1)', async ({
+    page,
+  }) => {
+    const card = page.locator('[data-testid="task-card"]').first()
+    await expect(card).toBeVisible({ timeout: 5_000 })
+    await card.click()
+    await page.waitForSelector('[data-testid="history-tab"]', { timeout: 5_000 })
+    await page.locator('[data-testid="history-tab"]').click()
+
+    const sessionRow = page.locator('[data-testid="history-session-row"]').first()
+    await expect(sessionRow).toBeVisible({ timeout: 5_000 })
+
+    await tabUntilFocused(page, sessionRow, 50)
+    await expect(sessionRow).toBeFocused()
+
+    const outlineColor = await page.evaluate(
+      () => getComputedStyle(document.activeElement as Element).outlineColor,
+    )
+
+    expect(
+      outlineColor,
+      `div[role="button"] (HistorySubtab session-row) must show outline-color:${PDS_FOCUS_COLOR} via Tab focus. ` +
+        "RED: no CSS rule → element has no outline (outlineColor transparent).",
+    ).toBe(PDS_FOCUS_COLOR)
+  })
+
+  // ── a anchor: DecisionViewport — Tab keyboard navigation ──────────────────
+
+  // Happy path: a anchor (DecisionViewport) shows outline-style 'solid' via Tab focus (AC-1)
+  // Proof method: Tab traversal from page start (NOT .focus()).
+  test('a anchor (DecisionViewport): outlineStyle solid via Tab keyboard focus (AC-1)', async ({
+    page,
+  }) => {
+    const anchor = page.locator('[data-testid="decision-task-ref-dr-1626-001"]')
+    await expect(anchor).toBeVisible({ timeout: 5_000 })
+
+    await tabUntilFocused(page, anchor, 50)
+    await expect(anchor).toBeFocused()
+
+    const outlineStyle = await page.evaluate(
+      () => getComputedStyle(document.activeElement as Element).outlineStyle,
+    )
+
+    expect(
+      outlineStyle,
+      'a anchor (DecisionViewport) must show outline-style:solid via Tab keyboard focus. ' +
+        "Proof method: Tab traversal (NOT .focus()). RED: no CSS rule → UA applies 'auto'.",
+    ).toBe('solid')
+  })
+
+  // Happy path: a anchor (DecisionViewport) shows PDS focus color via Tab focus (AC-1)
+  test('a anchor (DecisionViewport): outlineColor PDS blue via Tab keyboard focus (AC-1)', async ({
+    page,
+  }) => {
+    const anchor = page.locator('[data-testid="decision-task-ref-dr-1626-001"]')
+    await expect(anchor).toBeVisible({ timeout: 5_000 })
+
+    await tabUntilFocused(page, anchor, 50)
+    await expect(anchor).toBeFocused()
+
+    const outlineColor = await page.evaluate(
+      () => getComputedStyle(document.activeElement as Element).outlineColor,
+    )
+
+    expect(
+      outlineColor,
+      `a anchor (DecisionViewport) must show outline-color:${PDS_FOCUS_COLOR} via Tab keyboard focus. ` +
+        'Proof method: Tab traversal (NOT .focus()). RED: no CSS rule → UA supplies system accent color.',
+    ).toBe(PDS_FOCUS_COLOR)
+  })
+})

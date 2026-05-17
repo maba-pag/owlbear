@@ -216,4 +216,36 @@ describe('TestFromAC_FocusTokenSource', () => {
         '\nRED: Card.css :focus-visible block still uses var(--p-color-focus).',
     ).toHaveLength(0)
   })
+
+  // Error path: no :focus-visible block in any src/ CSS file references --pds-state-focus (AC-3)
+  // Architecture review cycle 2 (challenge #3 accepted): AC-3 now names both legacy tokens
+  // (--pds-state-focus AND --p-color-focus). Both must be absent from all :focus-visible blocks.
+  // GREEN: no CSS file uses --pds-state-focus in a :focus-visible context.
+  it('no :focus-visible block in any src/ CSS file references legacy --pds-state-focus token (AC-3)', () => {
+    const cssFiles = collectCssFiles(SRC_DIR)
+
+    const violations: string[] = []
+
+    for (const filePath of cssFiles) {
+      const content = readFileSync(filePath, 'utf-8')
+
+      const segments = content.split(':focus-visible')
+      for (let i = 1; i < segments.length; i++) {
+        const blockMatch = segments[i].match(/\s*\{([^}]+)\}/)
+        if (blockMatch && blockMatch[1].includes('--pds-state-focus')) {
+          const relPath = filePath.replace(SRC_DIR + '/', '')
+          violations.push(relPath)
+          break
+        }
+      }
+    }
+
+    expect(
+      violations,
+      'The following CSS files contain a :focus-visible block referencing the legacy ' +
+        '--pds-state-focus token. Migrate each to var(--color-focus):\n' +
+        violations.map((f) => `  - ${f}`).join('\n') +
+        '\nAC-3: no :focus-visible rule may reference --pds-state-focus.',
+    ).toHaveLength(0)
+  })
 })
