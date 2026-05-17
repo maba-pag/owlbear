@@ -359,6 +359,8 @@ test.describe('TestFromAC_DarkModeBorderContrast', () => {
    * AC-1 Test 4 — .filter-panel border is visible and non-transparent in dark mode.
    *
    * FilterPanel.css: border: 1px solid var(--p-color-contrast-low).
+   * FilterPanel is conditionally rendered (panelOpen=false by default) — the Filters toggle
+   * must be clicked before the panel is in the DOM. Interface contract from KanbanBoard.tsx.
    *
    * Falsifiable: FAILS if filter-panel has no visible border or transparent border-color.
    */
@@ -372,6 +374,10 @@ test.describe('TestFromAC_DarkModeBorderContrast', () => {
       await page.goto('/')
       await page.locator('[data-region="workspace"]').waitFor({ state: 'visible' })
 
+      // FilterPanel is closed by default — open it via the Filters toggle button
+      await page.click('[data-testid="filter-toggle"]')
+      await page.locator('#filter-panel').waitFor({ state: 'visible', timeout: 4_000 })
+
       const result = await page.evaluate(() => {
         const panel = document.querySelector('.filter-panel') as HTMLElement | null
         if (!panel) return { found: false, borderWidth: 0, borderColor: '' }
@@ -383,7 +389,7 @@ test.describe('TestFromAC_DarkModeBorderContrast', () => {
         }
       })
 
-      expect(result.found, '.filter-panel must be rendered in the workspace').toBe(true)
+      expect(result.found, '.filter-panel must be rendered in the workspace after opening Filters toggle').toBe(true)
       expect(
         result.borderWidth,
         `filter-panel must have border-top-width > 0 in dark mode (got: ${result.borderWidth}px)`,
