@@ -1,23 +1,9 @@
 /**
- * Playwright E2E tests for #1591: PDS global-styles import + CSP font relaxation.
+ * Playwright coverage for PDS global styles and CSP font policy.
  *
- * Proves that:
- * AC1 — PDS CSS custom properties (--p-color-canvas, --p-spacing-static-md,
- *        --p-font-porsche-next) resolve to non-empty values on document.documentElement.
- * AC2 — CSP meta tag includes font-src 'self' https://cdn.ui.porsche.com.
- * AC3 — No console errors or warnings containing 'porsche' during shell load.
- *
- * Expected to FAIL in RED phase because:
- * - AC1: global-styles/index.css (variables.css) not yet imported → --p-* props absent on :root
- *   (color-scheme.css @supports not block is skipped in Chromium 123+ because light-dark()
- *   is natively supported → no fallback vars either)
- * - AC2: vite.config.ts cspPlugin emits no font-src directive → only default-src 'self'
- * - AC3: missing font-src allows CDN font-load requests to fail with CSP violations,
- *   and browser logs blocked-URI errors containing 'porsche' to the console
- *
- * Task #1594 (builder) will fix these by importing global-styles and adding font-src.
- *
- * API isolation: all /api/* routes stubbed via page.route() — no backend required.
+ * Verifies PDS CSS custom properties resolve, the CSP meta tag allows Porsche
+ * font loading, and shell load emits no Porsche-related console errors.
+ * API isolation: all /api/* routes stubbed via page.route(); no backend required.
  */
 import { test, expect, type Page } from '@playwright/test'
 

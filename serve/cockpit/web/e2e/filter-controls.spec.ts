@@ -1,49 +1,8 @@
 /**
- * E2E tests for filter panel and task-editor PDS compliance — #1564
- * P2-08 RED: Specify filter and form control behavior
+ * Playwright coverage for filter panel and task-editor PDS compliance.
  *
- * Proof bundle: behavioral
- *
- * ═══════════════════════════════════════════════════════════════════════
- * AC-3: TEST EVIDENCE — Current PDS §5 Violations (pre-remediation)
- * ═══════════════════════════════════════════════════════════════════════
- *
- * Audit P1 finding: Filter controls use bolted-on native HTML, not PDS
- * components. Source: .owlbear/research/cockpit-visual-audit-consolidated-2026-05-14.md
- *
- * Policy reference: .owlbear/research/1560-cockpit-design-policy.md §5
- *
- * Violations:
- *   FilterPanel.tsx L152     -- <input type="text" aria-label="Search tasks">
- *                              §5 "Search" requires: p-input-search
- *
- *   FilterPanel.tsx L195     -- <input type="checkbox" role="switch">
- *                              §5 "Binary filter/setting" requires: p-switch or p-checkbox
- *
- *   FilterPanel.tsx L166-170 -- <PSelect name="priority-filter"> children are native <option>
- *                              §5 "Select/dropdown": native options inside PDS selects
- *                              are not accepted -- requires: p-select-option children
- *
- *   KanbanBoard.tsx L268-276 -- native <button data-testid="filter-toggle" tabIndex={-1}>
- *                              §5 "Primary/secondary command" requires: PButton (p-button)
- *
- *   TaskFieldsEditor.tsx L182-195 -- <PSelect name="priority"> children are native <option>
- *                                   §5 "Select/dropdown" requires: p-select-option children
- *
- *   TaskFieldsEditor.tsx L197 -- <span data-testid="tag-chip">{tag}</span>
- *                               §5 "Metadata/status chip" requires: p-tag
- *
- * Documented exception -- no remediation required:
- *   FilterPanel.tsx L177-187 -- PMultiSelect with PMultiSelectOption children are
- *                              PDS-compliant (tags filter). Presence assertion included.
- *
- * Already-compliant controls in TaskFieldsEditor.tsx (presence assertions only):
- *   title       via PInputText -> p-input-text
- *   body        via PTextarea  -> p-textarea
- *   depends_on  via PInputText -> p-input-text
- *   parent      via PInputText -> p-input-text
- *   save/edit   via PButton    -> p-button
- * ═══════════════════════════════════════════════════════════════════════
+ * Covers PDS search/filter controls, PSelect option structure, filter toggle
+ * behavior, task editor field controls, and tag chip rendering.
  */
 
 import { test, expect, type Page } from '@playwright/test'
@@ -443,7 +402,7 @@ test.describe('AC-2 | FilterPanel PDS compliance assertions', () => {
     // AC-2(d) dual-assertion — negative half.
     // A positive-only check on p-button cannot falsify a surviving native button sharing the same
     // test-id. This assertion closes that gap, matching the dual-render guards for search/blocked
-    // controls (filter-controls-1564.spec.ts:392-405).
+    // controls (filter-controls.spec.ts:392-405).
     // KanbanBoard.tsx L269-281: toggle renders <PButton data-testid="filter-toggle"> only.
     // Fails if builder introduces a parallel native <button data-testid="filter-toggle">.
     await expect(page.locator('button[data-testid="filter-toggle"]')).toHaveCount(0)
@@ -481,9 +440,7 @@ test.describe('AC-4 | Task-editor PDS compliance assertions', () => {
   })
 
   test('(b.1) tag chips render as p-tag[data-testid="tag-chip"] elements', async ({ page }) => {
-    // §5 "Metadata/status chip" row: required p-tag.
-    // RED-phase evidence (spec line 32): legacy chip was <span data-testid="tag-chip">{tag}</span>.
-    // Currently: <span data-testid="tag-chip"> for each tag -- p-tag absent -- FAILS.
+    // PDS metadata/status chip contract: required p-tag.
     // TASK_BETA has tags ["frontend", "backend"] so chip elements will render.
     await expect(page.locator('p-tag[data-testid="tag-chip"]')).toBeVisible({ timeout: 2_000 })
   })

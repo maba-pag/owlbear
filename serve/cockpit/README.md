@@ -65,7 +65,7 @@ Accessibility and responsive state after #1396:
   tag preview with overflow indicator, update-recency metadata, and explicit text cues
   (`Blocked`, `Claimed`, `Dependencies blocked`, `Decision pending`) for all four state
   signals. State cues are perceivable without relying on rail color alone, verified by
-  Playwright locator/text assertions in `e2e/card-density-1565.spec.ts` (AC-2).
+  Playwright locator/text assertions in `serve/cockpit/web/e2e/card-density.spec.ts` (AC-2).
 - #1562 adds shell/sidecar inspector semantic structure: `[data-region="sidecar-header"]`
   renders the selected task identity outside the tab content area; metadata fields render
   `Status:` and `Priority:` labels paired with their values; body, history, and actions
@@ -73,10 +73,10 @@ Accessibility and responsive state after #1396:
   elements with separately labeled Agent/Request type/Age/Task fields; filter controls are
   grouped in `role="toolbar"`; the product-identity `<h1>` has non-zero visible dimensions
   (width > 50px, height > 10px); each named status-bar control carries an individually
-  asserted accessible name. Verified in `e2e/shell-sidecar-inspector-1562.spec.ts`
+  asserted accessible name. Verified in `serve/cockpit/web/e2e/shell-sidecar-inspector.spec.ts`
   (18 tests).
 - #1564 adds filter and form control PDS compliance verification: 34 Playwright E2E
-  tests in `e2e/filter-controls-1564.spec.ts` cover the filter-panel workflow (toggle
+  tests in `serve/cockpit/web/e2e/filter-controls.spec.ts` cover the filter-panel workflow (toggle
   open via `p-button[data-testid="filter-toggle"]`, search, priority selection via
   `CustomEvent('change', { detail: { value } })`, tags selection via
   `CustomEvent('update', { detail: { value: [...] } })`, blocked toggle, badge and
@@ -87,7 +87,7 @@ Accessibility and responsive state after #1396:
   per PDS policy §5 from #1560.
 - #1566 extends the responsive contract: `[data-testid="column-body"]` receives
   `tabIndex="0"` when scrollable (axe `scrollable-region-focusable`), verified at
-  320x800, 768x1024, and 1024x768 in `e2e/responsive-contract-1566.spec.ts`. Mobile
+  320x800, 768x1024, and 1024x768 in `serve/cockpit/web/e2e/responsive-contract.spec.ts`. Mobile
   task detail renders in a `p-sheet` custom element at 320x800 (post-#1560 board-first
   contract) with click-dependent selection signals.
 - #1568 restores sequential keyboard reachability for the nav-rail: the `<PButton
@@ -95,8 +95,8 @@ Accessibility and responsive state after #1396:
   persistent nav control is reachable via Tab. Modal/popover containers
   (`role="dialog"`) retain their `tabIndex={-1}` for focus-management; only the
   persistent nav control was changed. Verified in
-  `e2e/nav-rail-taborder-1568.spec.ts` (2 E2E assertions) and
-  `tests/test_cockpit_shell_sidecar_1568.py` (source inspection).
+  `serve/cockpit/web/e2e/nav-rail-taborder.spec.ts` (2 E2E assertions) and
+  `tests/test_cockpit_shell_sidecar.py` (source inspection).
 - #1569 converts in-flow disclosure and confirmation surfaces to out-of-flow overlay
   containers across seven components. `HealthBadge` and `DRStatusIndicator` disclosures
   become trigger-anchored fixed-position popovers (coordinates derived from
@@ -108,8 +108,8 @@ Accessibility and responsive state after #1396:
   `HealthBadge` disclosure and mounted as an independent sibling control in `Shell.tsx`.
   The context-menu overlay contract (`position:fixed`, `role="menu"`, arrow-key
   navigation, Escape focus-return to the originating task card) is preserved unchanged.
-  Verified by `serve/cockpit/web/e2e/overlay-behavior-1563.spec.ts` (19 E2E tests, all
-  pass) and `serve/cockpit/web/src/__tests__/OverlayAnchoring_1569.test.tsx` (13 unit
+  Verified by `serve/cockpit/web/e2e/overlay-behavior.spec.ts` (19 E2E tests, all
+  pass) and `serve/cockpit/web/src/__tests__/OverlayAnchoring.test.tsx` (13 unit
   tests covering trigger-anchored positioning and CleanupPanel modal-equivalence
   semantics).
 - #1572 completes the cockpit responsive contract: `Shell.css` eliminates 320px
@@ -118,39 +118,24 @@ Accessibility and responsive state after #1396:
   `overflow-wrap: anywhere` on the product-identity text. `Column.tsx` makes
   `tabIndex="0"` conditional on `scrollHeight > clientHeight` via `ResizeObserver`,
   `window.resize`, and `MutationObserver`-based re-sync, removing the attribute when
-  the column body is not scrollable. Responsive proof coverage:
-  `e2e/responsive-layout-1391.spec.ts` (42 tests) proves 320px overflow elimination
-  and last-column reachability via board-container `scrollIntoView`, 768px tablet
-  workspace/sidecar sizing, and 1024px/1440px desktop layout with exactly 7 visible
-  columns and no board-container vertical overflow; `e2e/responsive-contract-1566.spec.ts`
-  (39 tests) proves the conditional `tabIndex` both-branch contract (scrollable column
-  bodies gain the attribute; non-scrollable column bodies lack it) and mobile `p-sheet`
-  heading identity (exact selected task title) after task selection at 320×800.
-- #1573 adds cross-cutting visual-regression and structural consolidation coverage for
-  the phase-2 visual remediation lane: 19 screenshot baselines committed across desktop
-  board, selected-task sidecar, filter panel, context menu, Health popover, DR popover,
-  Cleanup dialog, Resolve modal, Archive modal, Repair confirm, dark mode, tablet 768px,
-  and mobile 320px states (`e2e/visual-remediation-1573.spec.ts`). Structural gates
-  include non-reflow proof (overlay surfaces do not expand parent containers), 320px
-  horizontal-overflow guard, and a non-circular PDS native-control gate
-  (`ac2c_v2_native_controls_match_documented_exception_set`) that enumerates all native
-  `<button>` elements in the rendered board view and fails if any fall outside the
-  six-item documented exception set. Keyboard reachability gates (AC-7-v2) verify Tab
-  traversal reaches the status bar, nav-rail, workspace, filter-toggle, sidecar-collapse,
-  and sidecar-content controls in base state and filter-panel-open state; DOM audit covers
-  both states and PDS custom-element hosts. `DecisionViewport` task-reference links were
-  converted from native `<button>` to anchor elements to keep the native-control count
-  within the documented exception ceiling.
+  the column body is not scrollable. Responsive proof coverage now lives in
+  `serve/cockpit/web/e2e/responsive-contract.spec.ts`, which proves the conditional
+  `tabIndex` both-branch contract and mobile `p-sheet` heading identity after task
+  selection at 320x800. The older responsive layout proof suite was retired during test
+  curation.
+- #1573 added cross-cutting visual-remediation proof coverage for phase 2. The archived
+  screenshot-baseline suite was retired during test curation; durable structural coverage
+  remains in `serve/cockpit/web/e2e/overlay-behavior.spec.ts`,
+  `serve/cockpit/web/e2e/responsive-contract.spec.ts`, and
+  `serve/cockpit/web/e2e/filter-controls.spec.ts`.
 - #1596 fixes board horizontal scroll: `KanbanBoard.tsx` changes the board grid's
   `gridTemplateColumns` from `repeat(auto-fit, minmax(200px, 1fr))` to
   `repeat(${board.statuses.length}, minmax(200px, 1fr))`, producing a fixed N-column
   track layout that overflows the board container horizontally instead of wrapping
   columns to a second row. Board container `overflowX: 'auto'` (already present from
   #1572) handles internal horizontal scroll. Shell-level `overflow-x: clip` is
-  unaffected. Verified by `e2e/board-scroll-1593.spec.ts` (scrollWidth > clientWidth at
-  1280×720, all 7 columns identical `offsetTop`) and `e2e/responsive-layout-1391.spec.ts`
-  (board-container assertions at 1024px and 1440px updated to expect horizontal overflow;
-  shell document-level and vertical-overflow guards remain passing).
+  unaffected. Verified by `serve/cockpit/web/e2e/board-scroll.spec.ts` (scrollWidth >
+  clientWidth at 1280x720, all 7 columns identical `offsetTop`).
 - #1603 performs the atomic PDS token migration: `serve/cockpit/web/src/tokens.css` is
   deleted and replaced with `serve/cockpit/web/src/custom-tokens.css`, which declares
   exactly one custom property (`--custom-signal-claimed`) — the sole non-PDS-equivalent
@@ -171,7 +156,7 @@ Accessibility and responsive state after #1396:
   error-state `<h3>` are replaced with `PHeading` with explicit `tag` props. Remaining
   native `<button>` elements carry `data-pds-exception` attributes or are the
   sidecar-collapse toggle (`aria-expanded` pattern); zero raw `<select>` elements exist
-  in source. Verified by `serve/cockpit/web/src/__tests__/PdsSimpleSwaps1614.test.tsx`
+  in source. Verified by `serve/cockpit/web/src/__tests__/PdsSimpleSwaps.test.tsx`
   (29 tests covering AC-1 through AC-4) and `serve/cockpit/web/src/__tests__/PdsMigration.test.tsx`
   (durable regression, 78 passing).
 - #1615 migrates `Card.tsx` visual chips and tags to PDS React wrappers and introduces a
@@ -185,18 +170,18 @@ Accessibility and responsive state after #1396:
   `<PTag compact variant="secondary">` pill with overflow count indicator preserved. Existing
   state cue text spans (`Blocked`, `Claimed`, `Dependencies blocked`, `Decision pending`) are
   unchanged. `Card.tsx` carries no `no-restricted-syntax` eslint-disable. Verified by
-  `serve/cockpit/web/src/__tests__/CardVariants_1615.test.ts` and
-  `serve/cockpit/web/src/__tests__/CardVisualTreatment_1615.test.tsx` (48 tests covering
+  `serve/cockpit/web/src/__tests__/CardVariants.test.ts` and
+  `serve/cockpit/web/src/__tests__/Card.visual-treatment.test.tsx` (48 tests covering
   AC-1 through AC-6) and `serve/cockpit/web/src/__tests__/Card.signal.test.tsx` (durable
   regression, 27 passing).
-- #1616 establishes the `DetailTab` sidecar information architecture: `DetailTab.tsx` root renders four `data-region` direct children in DOM order `sidecar-body` → `actions` → `sidecar-metadata` → `history` (asserted via `:scope > [data-region]` direct-child selector). The `sidecar-metadata` region is the `p-accordion` host element (`p-accordion[data-region='sidecar-metadata'][compact][heading="Metadata"]`), closed by default (no `open` attribute); accordion subtree remains in DOM when closed via CSS height animation, not conditional render. `SidecarStructure_1607.test.tsx` divider assertion updated to be order-agnostic. Verified by `serve/cockpit/web/src/__tests__/DetailTab-1616.test.tsx` (9 tests covering AC1 DOM order and AC2 accordion host attributes and closed-state DOM visibility).
+- #1616 establishes the `DetailTab` sidecar information architecture: `DetailTab.tsx` root renders four `data-region` direct children in DOM order `sidecar-body` -> `actions` -> `sidecar-metadata` -> `history` (asserted via `:scope > [data-region]` direct-child selector). The `sidecar-metadata` region is the `p-accordion` host element (`p-accordion[data-region='sidecar-metadata'][compact][heading="Metadata"]`), closed by default (no `open` attribute); accordion subtree remains in DOM when closed via CSS height animation, not conditional render. `SidecarStructure_1607.test.tsx` divider assertion updated to be order-agnostic. Verified by `serve/cockpit/web/src/__tests__/DetailTab.information-architecture.test.tsx` (9 tests covering AC1 DOM order and AC2 accordion host attributes and closed-state DOM visibility).
 - #1617 migrates the remaining filter panel controls to PDS React wrappers: the blocked
   checkbox replaces raw `<p-checkbox>` + `onClick` toggle with a controlled `PCheckbox`
   wrapper using `checked={filter.blocked}` and `onChange` reading `event.detail.checked`;
   the priority `PSelect` replaces native `<option>` children with `PSelectOption`; and
   `.filter-panel` gains a flex layout (`display:flex`, `flex-wrap:wrap`,
   `gap:var(--p-spacing-static-sm)`, `align-items:flex-end`). Verified by
-  `serve/cockpit/web/src/__tests__/FilterPanel_PDS_1617.test.tsx` (13 tests covering
+  `serve/cockpit/web/src/__tests__/FilterPanel.pds-controls.test.tsx` (13 tests covering
   `PCheckbox` checked-state reflection, `onChange` true/false paths, `PSelectOption` presence,
   native-option absence, and CSS flex declarations) and
   `serve/cockpit/web/src/__tests__/FilterPanel.test.tsx` (durable regression, 40 passing).
@@ -221,7 +206,7 @@ Accessibility and responsive state after #1396:
   fallback for all three modals),
   `serve/cockpit/web/src/__tests__/CoverageGap_1618.test.tsx` (53 tests — branch coverage
   for `ConfirmDialog.tsx` at 98.57% and `ResolveModal.tsx` at 92.75%), and
-  `serve/cockpit/web/e2e/overlay-behavior-1563.spec.ts` (19 E2E tests — host-attribute
+  `serve/cockpit/web/e2e/overlay-behavior.spec.ts` (19 E2E tests — host-attribute
   checks, Tab-cycle containment, and exact focus-return for all three modals).
 - #1628 completes the WCAG 2.1 AA accessibility sweep: invalid host-level ARIA attributes
   (`aria-expanded`, `aria-controls`) on `p-button` host controls are replaced with native
@@ -236,11 +221,10 @@ Accessibility and responsive state after #1396:
   `<span onClick>` wrapper to the `<PButton>` element; `DecisionViewport.tsx` removes
   `role="button"` misuse from non-interactive `<article>` decision cards. `vite-env.d.ts`
   adds `p-accordion` IntrinsicElements typing. Verified by
-  `e2e/accessibility-sweep-1628.spec.ts` (10 E2E tests — WCAG 2.1 AA `.withTags()` axe
+  `serve/cockpit/web/e2e/accessibility-sweep.spec.ts` (10 E2E tests — WCAG 2.1 AA `.withTags()` axe
   scans on board view, sidecar detail view, DRStatusIndicator popover, HealthBadge popover,
   FilterPanel open state, ResolveModal, ArchivalModal, ConfirmDialog, CleanupPanel confirm
-  dialog, and RepairPanel confirm dialog, all zero violations) and
-  `e2e/accessibility-1395.spec.ts` (regression gate, no regressions).
+  dialog, and RepairPanel confirm dialog, all zero violations).
 
 - Documentation here does not treat cache/SSE invalidation work from #1346 as part of
   this delivery bundle.

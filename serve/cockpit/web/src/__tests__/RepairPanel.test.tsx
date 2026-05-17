@@ -155,13 +155,13 @@ describe('TestFromAC_RepairPanel', () => {
     it('confirmation dialog has a confirm button', () => {
       mockHook({ phase: 'confirming', corruptionCount: 2 })
       const { container } = renderPanel(2)
-      expect(container.querySelector('[data-testid="repair-confirm-btn"]')).not.toBeNull()
+      expect(container.querySelector('p-button[data-testid="repair-confirm-button"]')).not.toBeNull()
     })
 
     it('clicking confirm button calls confirmRepair', () => {
       const hook = mockHook({ phase: 'confirming', corruptionCount: 2 })
       const { container } = renderPanel(2)
-      const confirmBtn = container.querySelector('[data-testid="repair-confirm-btn"]')!
+      const confirmBtn = container.querySelector('[data-testid="repair-confirm-button"]')!
       fireEvent.click(confirmBtn)
       expect(hook.confirmRepair).toHaveBeenCalledOnce()
     })

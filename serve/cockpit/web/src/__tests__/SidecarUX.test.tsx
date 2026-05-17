@@ -537,7 +537,7 @@ describe('TestFromAC_SessionRowSemanticRoles', () => {
     expect(row.getAttribute('role')).toBe('button')
   })
 
-  it('ActivityTab session rows are keyboard-focusable (tabIndex >= 0)', async () => {
+  it('ActivityTab session rows render as PButton hosts with an accessible label', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(() =>
@@ -555,8 +555,8 @@ describe('TestFromAC_SessionRowSemanticRoles', () => {
       { timeout: 500 },
     )
     const row = container.querySelector('[data-testid="session-row"]') as HTMLElement
-    // Currently: no tabIndex set → tabIndex is -1 → FAILS
-    expect(row.tabIndex).toBeGreaterThanOrEqual(0)
+    expect(row.tagName.toLowerCase()).toBe('p-button')
+    expect(row.getAttribute('aria-label')).toContain('Session:')
   })
 
   it('HistorySubtab session rows have role="button"', () => {

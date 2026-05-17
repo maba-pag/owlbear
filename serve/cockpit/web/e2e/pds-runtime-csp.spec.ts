@@ -1,20 +1,9 @@
 /**
- * Playwright E2E tests for #1366: PDS runtime loading under CSP.
+ * Playwright coverage for PDS runtime loading under CSP.
  *
- * Proves that Porsche Design System custom elements register from local
- * bundles (not CDN) so the shell works under the script-src 'self' CSP
- * injected by vite.config.ts cspPlugin on build.
- *
- * Expected to FAIL in RED phase because PorscheDesignSystemProvider
- * currently triggers CDN loading which, under the built CSP:
- *   - customElements.get() returns undefined for p-button/p-icon/p-tabs/p-tabs-item
- *     once CDN scripts are blocked by the meta CSP (confidence: 0.9)
- *   - securitypolicyviolation fires with Porsche CDN blockedURIs (confidence: 0.99)
- *   - p-button shadowRoot is null/empty when component initialization fails (confidence: 0.85)
- *
- * Task #1367 (builder) will fix this by switching PDS to local bundle loading.
- *
- * API isolation: all /api/* routes stubbed via page.route() — no backend required.
+ * Proves that Porsche Design System custom elements register from local bundles
+ * so the shell works under the script-src 'self' CSP injected by vite.config.ts.
+ * API isolation: all /api/* routes stubbed via page.route(); no backend required.
  */
 import { test, expect, type Page } from '@playwright/test'
 

@@ -1,37 +1,9 @@
 /**
- * AC-5 behavioral Playwright E2E for #1555 (RETRY v4 — explicit light addInitScript)
+ * Playwright coverage for the PDS dark color-scheme bridge.
  *
- * BUILDER INSTRUCTION (#1555 retry v4):
- *   Replace the tracked spec with this file:
- *     cp .owlbear/scratch/1555-pds-scheme-dark-v4.spec.ts serve/cockpit/web/e2e/pds-scheme-dark-1555.spec.ts
- *     git add serve/cockpit/web/e2e/pds-scheme-dark-1555.spec.ts
- *     cd serve/cockpit/web && npm run test:e2e -- pds-scheme-dark-1555
- *
- * Root cause analysis (v2 and v3 failures):
- *   v2 failure: used page.reload() to switch dark→light. addInitScript fires on every
- *   navigation, so reload re-applied dark override even after localStorage was set to light.
- *
- *   v3 failure: used page.context().newPage() with NO init script, assuming light is the
- *   default. But on macOS in dark mode, prefersDark() returns true → auto theme resolves
- *   to dark → new page also loaded in dark mode → both captures returned rgb(255,255,255).
- *
- * Fix (v4): the light-mode page uses its OWN addInitScript that explicitly forces 'light'.
- *   - addInitScript is page-scoped — dark page's script does not bleed to the new page.
- *   - addInitScript on the light page fires on its initial navigation only (no reload).
- *   - The explicit 'light' localStorage value overrides the OS prefers-dark signal.
- *
- * Test 1 (unchanged) — computed color-scheme property on <html>:
- *   Checks getComputedStyle(html).colorScheme contains 'dark' when .scheme-dark is active.
- *   Falsifiable: FAILS if color-scheme.css is not imported or .scheme-dark does not set
- *   the CSS color-scheme property (class presence alone is not enough).
- *
- * Test 2 (v4 fix) — PDS shadow DOM visual rendering:
- *   Captures p-button shadow inner-button computed text color for dark and light using
- *   SEPARATE pages, each with its own addInitScript forcing the theme explicitly.
- *   Falsifiable: FAILS if PDS color-scheme bridge is not active → darkColor === lightColor.
- *
- * API isolation: all /api/* routes stubbed — no backend required.
- * LIFO route registration: catch-all first, specific routes last (highest priority).
+ * Verifies the computed html color-scheme and PDS shadow DOM rendering differ
+ * between explicit dark and light theme pages. API routes are stubbed with the
+ * catch-all registered before specific handlers.
  */
 import { test, expect, type Page } from '@playwright/test'
 

@@ -1,42 +1,8 @@
 /**
- * E2E tests for task card information density — #1565
- * P2-10 RED: Specify task card information density
+ * Playwright coverage for task card information density.
  *
- * Proof bundle: behavioral
- *
- * ═══════════════════════════════════════════════════════════════════════
- * AC-3: TEST EVIDENCE — Current Card Information Density Violations (pre-remediation)
- * ═══════════════════════════════════════════════════════════════════════
- *
- * Audit finding: Task cards are title-only. All metadata (id, priority, tags,
- * state cues, update recency) is absent from the rendered card UI.
- * Source: .owlbear/research/cockpit-visual-audit-consolidated-2026-05-14.md §6, §8
- * Policy reference: .owlbear/research/1560-cockpit-design-policy.md
- *
- * Violations in Card.tsx (confirmed pre-remediation baseline):
- *
- *   Card.tsx L74–80 -- <span data-testid="card-title">{task.title}</span>
- *                      Only rendered field. All other task fields are absent.
- *
- *   Card.tsx L56    -- data-signal={signal}
- *                      computeSignal.ts emits dr-pending | blocked | claimed |
- *                      deps-unmet | ready, distinguished by CSS rail color only.
- *                      No text, icon, or ARIA annotation communicates state.
- *
- *   Card.tsx        -- NO data-testid="card-id"           (task id absent)
- *   Card.tsx        -- NO data-testid="card-priority"     (priority tag absent)
- *   Card.tsx        -- NO data-testid="card-tags"         (tag preview absent)
- *   Card.tsx        -- NO data-testid="card-tag-overflow" (overflow indicator absent)
- *   Card.tsx        -- NO data-testid="card-blocked-cue"  (blocked cue absent)
- *   Card.tsx        -- NO data-testid="card-claimed-cue"  (claimed cue absent)
- *   Card.tsx        -- NO data-testid="card-deps-unmet-cue" (deps-unmet cue absent)
- *   Card.tsx        -- NO data-testid="card-dr-pending-cue" (dr-pending cue absent)
- *   Card.tsx        -- NO data-testid="card-updated"      (update recency absent)
- *
- * Baseline confirmed: Card.tsx renders task.title and nothing else.
- * computeSignal.ts computes 5 states (dr-pending, blocked, claimed, deps-unmet,
- * ready) but Card.tsx does not surface any cue element for any state.
- * ═══════════════════════════════════════════════════════════════════════
+ * Exercises rendered card metadata, priority, tag previews, overflow indicators,
+ * state cues, and update recency across the board UI.
  */
 
 import { test, expect, type Page } from '@playwright/test'

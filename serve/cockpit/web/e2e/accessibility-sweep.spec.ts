@@ -1,41 +1,9 @@
 /**
- * RED-phase Playwright E2E tests for #1628: P3-10 Accessibility sweep
+ * WCAG 2.1 AA Playwright accessibility sweep for Cockpit surfaces.
  *
- * BUILDER INSTRUCTION: Verify tests FAIL before implementing:
- *   npm run test:e2e -- accessibility-sweep-1628  # must show failures before implementing
- *
- * AC1: @axe-core/playwright with .withTags(['wcag2a','wcag2aa','wcag21a','wcag21aa']) on:
- *   - board view
- *   - sidecar detail view
- *   - DRStatusIndicator popover
- *   - HealthBadge popover
- *   - FilterPanel (open)
- *   - ResolveModal
- *   - ArchivalModal
- *   - ConfirmDialog
- *   - CleanupPanel confirm dialog
- *   - RepairPanel confirm dialog
- *   All surfaces must report zero WCAG 2.1 AA violations.
- *
- * AC2 (regression gate): Durable board and overlay accessibility coverage remains
- *   consolidated here after the older accessibility-1395 proof suite was removed.
- *
- * RED reasons:
- *   1. RepairPanel confirm dialog: `<span data-testid="repair-confirm-btn" onClick>` wraps
- *      a PButton but carries a click handler on a non-interactive element. Axe flags this
- *      as an `interactive-supports-focus` violation (wcag2a). Test fails until the span is
- *      replaced with a proper interactive element.
- *   2. Overlay surfaces (DRStatusIndicator popover, HealthBadge popover, CleanupPanel,
- *      ConfirmDialog, ArchivalModal, FilterPanel): these surfaces have not previously been
- *      axe-scanned with WCAG-scoped tags. Unknown violations discovered at scan time will
- *      cause failures until remediated.
- *   3. Board view and sidecar detail view: WCAG-specific tags may surface additional
- *      SC-specific violations beyond earlier broad scans.
- *
- * Counterpart implementation task: #1628 (builder phase).
- *
- * API mocking: all routes stubbed via page.route() LIFO — catch-all registered
- * first (lowest LIFO priority), specific routes registered last (take LIFO precedence).
+ * Covers the board, sidecar detail view, DR and health popovers, FilterPanel,
+ * ResolveModal, ArchivalModal, ConfirmDialog, CleanupPanel, and RepairPanel.
+ * Route mocks use Playwright LIFO ordering: catch-all first, specific routes last.
  */
 
 import { test, expect, type Page } from '@playwright/test'

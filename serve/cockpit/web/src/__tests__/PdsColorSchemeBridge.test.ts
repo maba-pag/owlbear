@@ -12,7 +12,7 @@
  *   AC-7: No app-authored color-scheme CSS property declarations in src/ CSS files
  *         (constraint guard — passes in RED because violation doesn't exist yet)
  *
- * AC-5 (Playwright e2e) → e2e/pds-scheme-dark-1555.spec.ts
+ * AC-5 (Playwright e2e) -> e2e/pds-scheme-dark.spec.ts
  * AC-6 (existing tests green) → builder obligation, no new tests needed
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'

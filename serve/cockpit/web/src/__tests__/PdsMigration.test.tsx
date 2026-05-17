@@ -288,17 +288,17 @@ describe('TestFromAC_PdsMigration_Buttons', () => {
     })
   })
 
-  describe('AC1: Shell nav rail uses PButton', () => {
-    it('kanban surface selector is p-button', () => {
+  describe('AC1: Shell nav rail uses a documented native-button exception', () => {
+    it('kanban surface selector is a native button with a PDS exception marker', () => {
       const { container } = renderShell()
       const navRail = container.querySelector('[data-region="nav-rail"]')
-      expect(navRail?.querySelector('p-button[data-surface="kanban"]')).not.toBeNull()
+      expect(navRail?.querySelector('button[data-surface="kanban"][data-pds-exception="nav-kanban"]')).not.toBeNull()
     })
 
-    it('renders no raw <button> in nav-rail', () => {
+    it('renders no unmarked raw <button> in nav-rail', () => {
       const { container } = renderShell()
       const navRail = container.querySelector('[data-region="nav-rail"]')
-      expect(navRail?.querySelector('button')).toBeNull()
+      expect(navRail?.querySelector('button:not([data-pds-exception])')).toBeNull()
     })
   })
 
@@ -465,11 +465,12 @@ describe('TestFromAC_PdsMigration_Buttons', () => {
     })
   })
 
-  describe('AC1 variant: Shell — nav rail kanban button is secondary (PDS v4: tertiary removed)', () => {
-    it('kanban surface selector has variant="secondary"', () => {
+  describe('AC1 variant: Shell — native nav rail exception remains accessible', () => {
+    it('kanban surface selector has an accessible name and current-page state', () => {
       const { container } = renderShell()
-      const el = container.querySelector('p-button[data-surface="kanban"]')
-      expect((el as HTMLElement & { variant: string }).variant).toBe('secondary')
+      const el = container.querySelector('button[data-surface="kanban"]')
+      expect(el?.getAttribute('aria-label')).toBe('Kanban')
+      expect(el?.getAttribute('aria-current')).toBe('page')
     })
   })
 })

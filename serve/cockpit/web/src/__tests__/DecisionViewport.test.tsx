@@ -283,32 +283,23 @@ describe('TestFromAC_DecisionViewport', () => {
 
   // ─── AC5 (td:2): Decision list items are keyboard-reachable ──────────────
 
-  it('each decision item is reachable via keyboard (button semantics)', () => {
+  it('each decision task reference is reachable via keyboard', () => {
     const { container } = renderViewport({ items: [DR_A, DR_B] })
-    const items = container.querySelectorAll('[data-testid^="decision-item-"]')
-    expect(items.length).toBe(2)
-    for (const item of Array.from(items)) {
-      const tag = item.tagName.toLowerCase()
-      const role = item.getAttribute('role')?.toLowerCase()
-      // Item must be focusable: either a <button>, <a>, or have role=button/link
-      const isFocusable = tag === 'button' || tag === 'a' || role === 'button' || role === 'link'
-      expect(isFocusable).toBe(true)
+    const taskRefs = container.querySelectorAll('[data-testid^="decision-task-ref-"]')
+    expect(taskRefs.length).toBe(2)
+    for (const taskRef of Array.from(taskRefs)) {
+      expect(taskRef.tagName.toLowerCase()).toBe('a')
+      expect(taskRef.getAttribute('href')).toMatch(/^#task-\d+$/)
     }
   })
 
-  it('decision-item elements are keyboard-reachable: natively focusable or explicit tabindex >= 0 on the same element', () => {
-    // AC5 requires: natively focusable (button/a) OR explicit tabindex attribute with value >= 0.
-    // Checking `tabindex !== '-1'` is insufficient — absent tabindex (null) would also pass that check,
-    // leaving a div[role="button"] without tabIndex={0} silently unreachable by keyboard.
+  it('decision item articles keep metadata separate from the clickable task reference', () => {
     const { container } = renderViewport({ items: [DR_A, DR_B] })
     const items = container.querySelectorAll('[data-testid^="decision-item-"]')
     expect(items.length).toBe(2)
     for (const item of Array.from(items)) {
-      const tag = item.tagName.toLowerCase()
-      const isNativelyFocusable = tag === 'button' || tag === 'a'
-      const tabIndexAttr = item.getAttribute('tabindex')
-      const hasExplicitTabIndex = tabIndexAttr !== null && Number(tabIndexAttr) >= 0
-      expect(isNativelyFocusable || hasExplicitTabIndex).toBe(true)
+      expect(item.tagName.toLowerCase()).toBe('article')
+      expect(item.querySelector('[data-testid^="decision-task-ref-"]')).toBeNull()
     }
   })
 

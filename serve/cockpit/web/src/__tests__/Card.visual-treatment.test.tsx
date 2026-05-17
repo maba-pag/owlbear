@@ -77,7 +77,7 @@ function renderCard(task: CardTask, pendingDRIds: Set<number> = new Set()) {
 
 // ─── AC-1: Status chip renders as PTag compact ───────────────────────────────
 
-describe('TestFromAC_CardStatusChip', () => {
+describe('Card status chip', () => {
   it('status chip element has tag name p-tag (not a plain span)', () => {
     // Current Card.tsx has no status chip at all — querySelector returns null,
     // then tagName check fails. FAIL until builder adds <PTag data-testid="card-status">.
@@ -125,7 +125,7 @@ describe('TestFromAC_CardStatusChip', () => {
 
 // ─── AC-2: Priority chip renders as PTag compact ──────────────────────────────
 
-describe('TestFromAC_CardPriorityChip', () => {
+describe('Card priority chip', () => {
   it('priority chip element has tag name p-tag (not a plain span)', () => {
     // Current Card.tsx has <span data-testid="card-priority"> — tagName check fails.
     // FAIL until builder migrates to <PTag data-testid="card-priority">.
@@ -173,7 +173,7 @@ describe('TestFromAC_CardPriorityChip', () => {
 
 // ─── AC-3: Signal icon renders as PIcon ──────────────────────────────────────
 
-describe('TestFromAC_CardSignalIcon', () => {
+describe('Card signal icon', () => {
   it('dr-pending signal renders p-icon with size="xs" and aria-label="dr-pending"', () => {
     // No PIcon in current Card.tsx — querySelector returns null. FAIL until builder adds it.
     const task = makeTask({ id: 5 })
@@ -231,7 +231,7 @@ describe('TestFromAC_CardSignalIcon', () => {
 
 // ─── AC-4: Tags render as individual PTag elements ───────────────────────────
 
-describe('TestFromAC_CardTagPills', () => {
+describe('Card tag pills', () => {
   // Note: tests use status='in-progress' and priority='critical' — both are known values
   // that the mapping utility must map to non-secondary variants (per AC-1/2 fallback contract).
   // This ensures p-tag[compact][variant="secondary"] selects only tag pills, not chips.
@@ -341,7 +341,7 @@ describe('TestFromAC_CardTagPills', () => {
 
 // ─── AC-5: Existing state cue text spans preserved unchanged (regression guard) ─
 
-describe('TestFromAC_CardCueTextPreserved', () => {
+describe('Card cue text preservation', () => {
   // These are regression guards. Each test is anchored with an AC-1 check
   // (status chip is p-tag) so the test fails RED until BOTH the new PDS chip
   // AND the preserved cue span are present. Without the anchor, the cue tests
@@ -388,7 +388,7 @@ describe('TestFromAC_CardCueTextPreserved', () => {
 
 // ─── AC-6: No inline hex color values in Card output ─────────────────────────
 
-describe('TestFromAC_CardNoHexColors', () => {
+describe('Card color token usage', () => {
   it('Card.tsx source contains no no-restricted-syntax eslint-disable comment', () => {
     // FAILS until builder removes the /* eslint-disable no-restricted-syntax */ line from Card.tsx
     const cardSrcPath = resolve(__dirname, '../components/Card.tsx')

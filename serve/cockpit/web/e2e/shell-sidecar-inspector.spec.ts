@@ -1,33 +1,9 @@
 /**
- * RED phase Playwright E2E tests for #1562: P2-04 Shell and sidecar inspector behavior.
- *
- * BUILDER INSTRUCTION (#1568): Copy this file to the tracked E2E directory before implementing:
- *   cp .owlbear/scratch/1562-shell-sidecar-inspector.spec.ts serve/cockpit/web/e2e/shell-sidecar-inspector-1562.spec.ts
- *   git add serve/cockpit/web/e2e/shell-sidecar-inspector-1562.spec.ts
- *   cd serve/cockpit/web && npm run test:e2e -- shell-sidecar-inspector-1562  # must show failures
+ * Playwright coverage for shell and sidecar inspector behavior.
  *
  * Covers sidecar inspector composition, decision queue structure, keyboard
- * collapse contract, status-bar chrome hierarchy, and activity row/filter grouping.
- *
- * RED targets (failing against current implementation):
- *   AC-1(a): No [data-region="sidecar-header"] or heading outside tabs showing task title/ID
- *   AC-1(b): Metadata fields use unlabeled <span data-testid="field-*"> — no visible "Status:"/"Priority:" labels
- *   AC-1(c): No distinct body section ([data-region="sidecar-body"] or "Description" heading)
- *   AC-1(d): No identifiable activity/actions sub-regions inside sidecar
- *   AC-2:    DecisionViewport renders each item as <button data-testid="decision-item-*">
- *   AC-3(b): [data-region="sidecar-header"] does not exist after keyboard collapse/expand
- *   AC-4(a): <h1> uses SR-only clipping — rendered width ≤ 1px, invisible to users
- *   AC-5(a): ActivityTab renders session rows as div[role="button"] (ActivityTab.tsx current code)
- *   AC-5(b): ActivityTab filter controls are ungrouped sibling PButtons — no ARIA grouping role
- *
- * Regression guards (expected to pass — existing behavior):
- *   AC-3(a): Sidecar collapse toggle is keyboard-activatable via Enter
- *   AC-4(b): Nav rail active surface has aria-current="page"
- *   AC-4(c): Status-bar area contains at least one element with an accessible name (aria-label)
- *   AC-4(d): Nav rail button bounding box fits within nav-rail container bounds
- *
- * API mocking: all routes stubbed via page.route() — no real backend required.
- * Desktop viewport: 1280×800 (default Playwright Desktop Chrome).
+ * collapse behavior, status-bar chrome hierarchy, and activity row/filter grouping.
+ * API mocking: all routes stubbed via page.route(); no real backend required.
  */
 import { test, expect, type Page } from '@playwright/test'
 

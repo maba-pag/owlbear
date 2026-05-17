@@ -1,55 +1,9 @@
 /**
- * RED-phase Playwright E2E tests for #1563: P2-06 Specify Cockpit overlay behavior.
+ * Playwright coverage for Cockpit overlay behavior.
  *
- * BUILDER INSTRUCTION (#1569): Copy this file to the tracked E2E directory and
- * verify tests FAIL before implementing:
- *   cp .owlbear/scratch/1563-overlay-behavior.spec.ts serve/cockpit/web/e2e/overlay-behavior-1563.spec.ts
- *   git add serve/cockpit/web/e2e/overlay-behavior-1563.spec.ts
- *   npm run test:e2e -- overlay-behavior-1563  # must show at least 9 failures before implementing
- *
- * AC-1: Shell and status-bar bounding-box height unchanged before and after
- *       opening each overlay surface at desktop viewport (≥1024px).
- *       Covered surfaces: HealthBadge popover, DRStatusIndicator popover,
- *       CleanupPanel confirm dialog, RepairPanel confirm dialog,
- *       ResolveModal, and ArchivalModal (all six AC-1 surfaces).
- *
- * AC-2: Blocking dialog semantics for ConfirmDialog, ResolveModal, ArchivalModal:
- *       - Tab focus must cycle within the dialog (focus trap).
- *       - Focus must be returned to the triggering element after close.
- *       Existing green behaviors (aria-modal="true" on all three, keyboard nav in
- *       ArchivalModal, Escape-closes on all) are documented in Test-Writer Notes
- *       but intentionally not re-tested here — they pass against current code.
- *
- * AC-3: Failing evidence for in-flow expansion of HealthBadge, DRStatusIndicator,
- *       CleanupPanel, and RepairPanel is provided by the AC-1 tests.
- *
- * AC-4: Task context menu overlay behavior: focus returned to the originating card
- *       on Escape. Existing green behaviors (position:fixed overlay, role="menu" /
- *       role="menuitem" structure, ArrowDown/Up/Home/End navigation, Escape
- *       closes) are documented in notes only — they pass against current code.
- *
- * RED reasons:
- *   AC-1 (4 failing): HealthBadge, DRStatusIndicator, CleanupPanel, and RepairPanel
- *     render their disclosure panels as inline flex children of .shell__status-bar.
- *     Opening each panel expands the flex row vertically, increasing the status-bar
- *     bounding-box height. No position:fixed/absolute or portal is used.
- *
- *   AC-2 (4 failing):
- *     - ConfirmDialog: no Tab key handler — Tab escapes the dialog after cycling
- *       through the Cancel and Confirm PButtons.
- *     - ResolveModal: no Tab focus-trap and no previous-focus tracking — focus is
- *       not returned to the DR item button after the modal closes.
- *     - ArchivalModal: no previous-focus tracking — focus is not returned to the
- *       task card after the modal closes (Tab trap via handleKeyDown exists but
- *       focus-return on close is definitely absent).
- *
- *   AC-4 (1 failing): context menu close via Escape calls setContextMenu(null) but
- *     does not restore focus to the task card that was right-clicked.
- *
- * Counterpart implementation task: #1569.
- *
- * API mocking: all routes stubbed via page.route() LIFO — catch-all registered
- * first (lowest priority), specific routes registered last (take LIFO precedence).
+ * Covers shell/status-bar bounding-box stability, dialog focus traps, focus
+ * return after close, and task context-menu keyboard behavior. API mocking uses
+ * Playwright route LIFO order: catch-all first, specific routes last.
  */
 
 import { test, expect, type Page } from '@playwright/test'

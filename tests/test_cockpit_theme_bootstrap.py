@@ -1,14 +1,4 @@
-"""Failing tests for theme-bootstrap.js static serving (#1561).
-
-RED phase — all tests must fail until the static route is fixed in GREEN (#1567).
-
-AC coverage:
-  - AC-1: GET /theme-bootstrap.js returns 200 with JavaScript content-type and non-HTML body
-  - AC-2: Current implementation fails this contract (text/html catch-all documented by failing tests)
-  - AC-3: Regression scope: serve/cockpit/web/e2e/pds-runtime-csp.spec.ts,
-           tests/test_cockpit_pds_build_compat.py,
-           serve/cockpit/web/src/__tests__/ThemeBootstrap_1545.test.ts
-"""
+"""Regression tests for theme-bootstrap.js static serving."""
 
 from __future__ import annotations
 
@@ -50,20 +40,11 @@ def _reset_app_after_run() -> object:
         del _m.app.state.engine
 
 
-class TestFromAC_ThemeBootstrapServing:
-    """AC-1/AC-2: GET /theme-bootstrap.js must be served as JavaScript, not HTML.
-
-    All tests FAIL in RED phase because the current implementation's catch-all
-    route (main.py /{path:path}) returns index.html (text/html) for every path
-    not covered by a static mount, including /theme-bootstrap.js.
-    Expected failure mode: AssertionError on content-type or body assertions.
-    """
+class TestThemeBootstrapServing:
+    """GET /theme-bootstrap.js must be served as JavaScript, not HTML."""
 
     def test_theme_bootstrap_js_response_contract(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        """AC-1: GET /theme-bootstrap.js returns 200, JavaScript content-type, non-HTML body.
-
-        FAILS: current catch-all returns content-type text/html with index.html body.
-        """
+        """GET /theme-bootstrap.js returns 200, JavaScript content-type, and non-HTML body."""
         from fastapi.testclient import TestClient  # noqa: PLC0415
 
         kanban_dir = _make_kanban_dir(tmp_path)
@@ -87,10 +68,7 @@ class TestFromAC_ThemeBootstrapServing:
         assert "<html" not in resp.text.lower()
 
     def test_theme_bootstrap_js_content_type_is_not_html(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        """AC-1/AC-2: content-type for /theme-bootstrap.js must not be text/html.
-
-        FAILS: current implementation returns 'text/html; charset=utf-8'.
-        """
+        """Content-type for /theme-bootstrap.js must not be text/html."""
         from fastapi.testclient import TestClient  # noqa: PLC0415
 
         kanban_dir = _make_kanban_dir(tmp_path)
@@ -113,10 +91,7 @@ class TestFromAC_ThemeBootstrapServing:
     def test_theme_bootstrap_js_body_is_not_html_document(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """AC-1/AC-2: response body for /theme-bootstrap.js must not be an HTML document.
-
-        FAILS: current implementation returns index.html content (contains <html> and <!doctype).
-        """
+        """Response body for /theme-bootstrap.js must not be an HTML document."""
         from fastapi.testclient import TestClient  # noqa: PLC0415
 
         kanban_dir = _make_kanban_dir(tmp_path)

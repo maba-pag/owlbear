@@ -43,8 +43,13 @@ def _step_index_by_name(steps: list[dict[str, Any]], name: str) -> int:
     raise AssertionError(f"Expected workflow step named {name!r}.")
 
 
-class TestFromAC_CockpitDeliveryGateWorkflow:
-    """AC1/AC2/AC3/AC5: workflow must enforce cockpit frontend quality gates."""
+def _uses_cockpit_gate(value: object) -> bool:
+    """Return true when a workflow expression gates on the Cockpit sync scope."""
+    return "SYNC_COCKPIT" in str(value)
+
+
+class TestCockpitDeliveryGateWorkflow:
+    """Workflow must enforce Cockpit frontend quality gates."""
 
     def test_sync_workflow_runs_cockpit_vitest_before_commit(self) -> None:
         """AC1/AC5: sync-to-main must run cockpit build and Vitest before commit."""
@@ -105,7 +110,7 @@ class TestFromAC_CockpitDeliveryGateWorkflow:
         steps = _sync_job_steps(workflow)
 
         explicitly_gated = {
-            "Setup Node.js",
+            "Setup Node.js (cockpit)",
             "Build cockpit SPA",
             "Assert SPA bundle exists",
             "Stage built SPA bundle",
@@ -121,37 +126,42 @@ class TestFromAC_CockpitDeliveryGateWorkflow:
         for name in gated_step_names:
             step = _step_by_name(steps, name)
             if_expr = str(step.get("if", ""))
-            assert "inputs.sync_cockpit" in if_expr, (
-                f"{name} must be gated by sync_cockpit to avoid accidental cross-scope runs."
+            assert _uses_cockpit_gate(if_expr), (
+                f"{name} must be gated by SYNC_COCKPIT to avoid accidental cross-scope runs."
             )
             assert "build_cockpit" not in if_expr, (
                 f"{name} condition must not depend on build_cockpit; this input allows "
                 "bypassing cockpit quality gates while sync_cockpit is enabled."
             )
 
-    def test_setup_node_condition_preserves_sync_share(self) -> None:
-        """AC3: Setup Node.js must keep inputs.sync_share while requiring sync_cockpit and excluding build_cockpit."""
+    def test_setup_node_conditions_scope_cockpit_and_diagram_paths(self) -> None:
+        """Node setup stays scoped to Cockpit or share-only diagram exports."""
         workflow = _load_sync_workflow()
         steps = _sync_job_steps(workflow)
 
-        step = _step_by_name(steps, "Setup Node.js")
-        if_expr = str(step.get("if", ""))
-        assert "inputs.sync_share" in if_expr, (
-            "Setup Node.js must preserve inputs.sync_share so the Excalidraw export "
-            "path still activates when sync_share is enabled without sync_cockpit."
+        cockpit_step = _step_by_name(steps, "Setup Node.js (cockpit)")
+        cockpit_if = str(cockpit_step.get("if", ""))
+        assert _uses_cockpit_gate(cockpit_if), (
+            "Cockpit Node.js setup must be gated by SYNC_COCKPIT so Node.js is "
+            "available for cockpit build and test steps."
         )
-        assert "inputs.sync_cockpit" in if_expr, (
-            "Setup Node.js must be gated by inputs.sync_cockpit so Node.js is "
-            "available for the cockpit build and test steps."
-        )
-        assert "build_cockpit" not in if_expr, (
-            "Setup Node.js condition must not reference build_cockpit; "
+        assert "build_cockpit" not in cockpit_if, (
+            "Cockpit Node.js setup must not reference build_cockpit; "
             "that input is no longer a valid gate for Node.js setup."
         )
 
+        diagrams_step = _step_by_name(steps, "Setup Node.js (diagrams only)")
+        diagrams_if = str(diagrams_step.get("if", ""))
+        assert "SYNC_SHARE" in diagrams_if, (
+            "Diagram-only Node.js setup must preserve the share sync path when cockpit is disabled."
+        )
+        assert "SYNC_COCKPIT != 'true'" in diagrams_if, (
+            "Diagram-only Node.js setup must not duplicate the cockpit Node.js setup path."
+        )
 
-class TestFromAC_CockpitPackagingShape:
-    """AC2/AC4: workflow packaging must keep dist and remove source web tree."""
+
+class TestCockpitPackagingShape:
+    """Workflow packaging must keep dist and remove the source web tree."""
 
     def test_sync_workflow_asserts_cockpit_dist_index_and_stages_dist_tree(
         self,
@@ -184,6 +194,85 @@ class TestFromAC_CockpitPackagingShape:
         assert "git rm -rf serve/cockpit/web" in run_script, (
             "Prune step must remove serve/cockpit/web so consumers rely on prebuilt dist/."
         )
-        assert "inputs.sync_cockpit" in run_script, (
-            "Prune of serve/cockpit/web must stay scoped to sync_cockpit=true runs."
+        assert _uses_cockpit_gate(run_script), "Prune of serve/cockpit/web must stay scoped to SYNC_COCKPIT=true runs."
+
+
+class TestCockpitDeliveryGateOrdering:
+    """Cockpit quality-gate steps must run before pruning frontend sources."""
+
+    def test_vitest_step_runs_before_prune_step(self) -> None:
+        """Vitest runs before the consumer sync prunes serve/cockpit/web."""
+        workflow = _load_sync_workflow()
+        steps = _sync_job_steps(workflow)
+
+        prune_index = _step_index_by_name(steps, "Prune dev-only files from consumer tree")
+
+        vitest_steps = [
+            (index, step)
+            for index, step in enumerate(steps)
+            if "npm test" in str(step.get("run", "")) and step.get("working-directory") == "serve/cockpit/web"
+        ]
+        assert vitest_steps, "sync-to-main must include a Vitest step (`npm test` in serve/cockpit/web)."
+        assert all(index < prune_index for index, _ in vitest_steps), (
+            "Vitest step must run before 'Prune dev-only files from consumer tree' "
+            "because the prune step removes serve/cockpit/web."
+        )
+
+    def test_playwright_chromium_install_precedes_cockpit_e2e(self) -> None:
+        """Chromium is installed before Cockpit E2E runs."""
+        workflow = _load_sync_workflow()
+        steps = _sync_job_steps(workflow)
+
+        cockpit_e2e_steps = [
+            (index, step)
+            for index, step in enumerate(steps)
+            if "npm run test:e2e" in str(step.get("run", "")) and step.get("working-directory") == "serve/cockpit/web"
+        ]
+        assert cockpit_e2e_steps, (
+            "sync-to-main must include a cockpit Playwright E2E step (`npm run test:e2e` in serve/cockpit/web)."
+        )
+
+        e2e_index = cockpit_e2e_steps[0][0]
+        run_text = " ".join(str(step.get("run", "")) for index, step in enumerate(steps) if index <= e2e_index)
+        assert "playwright install" in run_text, (
+            "A `playwright install chromium` (or equivalent) command must appear "
+            "at or before the cockpit E2E step so Chromium is available in CI."
+        )
+
+    def test_playwright_e2e_runs_before_prune_step(self) -> None:
+        """Cockpit Playwright E2E runs before frontend source pruning."""
+        workflow = _load_sync_workflow()
+        steps = _sync_job_steps(workflow)
+
+        prune_index = _step_index_by_name(steps, "Prune dev-only files from consumer tree")
+
+        cockpit_e2e_steps = [
+            (index, step)
+            for index, step in enumerate(steps)
+            if "npm run test:e2e" in str(step.get("run", "")) and step.get("working-directory") == "serve/cockpit/web"
+        ]
+        assert cockpit_e2e_steps, (
+            "sync-to-main must include a cockpit Playwright E2E step (`npm run test:e2e` in serve/cockpit/web)."
+        )
+        assert all(index < prune_index for index, _ in cockpit_e2e_steps), (
+            "Cockpit Playwright E2E must run before 'Prune dev-only files from consumer tree' "
+            "because the prune step removes serve/cockpit/web."
+        )
+
+    def test_vitest_step_runs_after_build_step(self) -> None:
+        """Vitest runs after the Cockpit SPA build."""
+        workflow = _load_sync_workflow()
+        steps = _sync_job_steps(workflow)
+
+        build_index = _step_index_by_name(steps, "Build cockpit SPA")
+
+        vitest_steps = [
+            (index, step)
+            for index, step in enumerate(steps)
+            if "npm test" in str(step.get("run", "")) and step.get("working-directory") == "serve/cockpit/web"
+        ]
+        assert vitest_steps, "sync-to-main must include a Vitest step (`npm test` in serve/cockpit/web)."
+        assert all(index > build_index for index, _ in vitest_steps), (
+            "Vitest step must run after 'Build cockpit SPA' so tests run against "
+            "the current build output, not a stale or missing dist."
         )

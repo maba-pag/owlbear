@@ -1,17 +1,7 @@
 // @vitest-environment jsdom
 
 /**
- * FilterPanel PDS controls — task #1617
- * P2-09: Filter panel PDS controls (blocked checkbox + priority select + flex layout)
- *
- * AC1 — Blocked checkbox uses PCheckbox React wrapper with checked prop and onChange handler
- *        (replaces raw <p-checkbox> web component with onClick)
- * AC2 — Priority PSelect uses PSelectOption children (replaces native <option> elements)
- * AC3 — Filter panel .filter-panel uses flex layout:
- *        display: flex; flex-wrap: wrap; gap: var(--p-spacing-static-sm); align-items: flex-end
- *
- * All tests in this file are RED-phase: they FAIL against the current implementation
- * and PASS only after the builder completes #1617.
+ * FilterPanel PDS controls: blocked checkbox, priority select, and flex layout.
  */
 
 import * as fs from 'node:fs'
@@ -65,7 +55,7 @@ function renderPanel({
 
 // ─── AC1: PCheckbox React wrapper with checked prop + onChange handler ─────────
 
-describe('TestFromAC_PCheckboxWrapper', () => {
+describe('FilterPanel PCheckbox wrapper', () => {
   afterEach(() => {
     vi.resetAllMocks()
   })
@@ -143,7 +133,7 @@ describe('TestFromAC_PCheckboxWrapper', () => {
 
 // ─── AC2: PSelect uses PSelectOption children (not native <option>) ───────────
 
-describe('TestFromAC_PSelectOption', () => {
+describe('FilterPanel PSelect options', () => {
   afterEach(() => {
     vi.resetAllMocks()
   })
@@ -203,7 +193,7 @@ describe('TestFromAC_PSelectOption', () => {
 
 // ─── AC3: .filter-panel flex layout CSS declarations ─────────────────────────
 
-describe('TestFromAC_FilterPanelFlexLayout', () => {
+describe('FilterPanel flex layout', () => {
   it('FilterPanel.css declares display: flex inside the .filter-panel selector block', () => {
     // AC3: horizontal flex layout required. Current CSS has only background/border/padding → FAILS.
     const css = fs.readFileSync(FILTER_PANEL_CSS, 'utf-8')

@@ -1,18 +1,8 @@
 /**
- * RED phase Playwright E2E test for #1568: P2-05 GREEN shell/sidecar inspector gate.
+ * Playwright coverage for nav-rail keyboard reachability.
  *
- * AC-2 DOM assertion: The nav-rail PButton must be keyboard-reachable via Tab.
- *
- * RED target: Shell.tsx:168 carries `tabIndex={-1}` on the <PButton data-surface="kanban">
- * inside <nav className="shell__nav-rail">, which removes it from the natural tab order.
- * After the builder removes the attribute, Tab traversal must land on the button.
- *
- * This spec covers only the tab-reachability contract (AC-2 DOM-assertion path).
- * Source-inspection coverage for AC-2, and AC-3 screenshot evidence, are in
- * tests/test_cockpit_shell_sidecar_1568.py.
- *
- * API mocking: all routes stubbed via page.route() — no real backend required.
- * Desktop viewport: 1280×800.
+ * Ensures Tab traversal can reach the nav-rail PButton at a desktop viewport.
+ * API mocking: all routes stubbed via page.route(); no real backend required.
  */
 import { test, expect, type Page } from '@playwright/test'
 

@@ -98,7 +98,7 @@ function getDirectChildRegions(container: HTMLElement): (string | null)[] {
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
-describe('TestFromAC_SidecarIA', () => {
+describe('DetailTab sidecar information architecture', () => {
   // ─── AC1: Section DOM order via direct-child selector ─────────────────────
 
   describe('AC1: exactly four direct-child data-region sections in correct DOM order', () => {

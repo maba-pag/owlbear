@@ -45,6 +45,10 @@ function renderPanel(open = true, availableTags = ['bug']) {
   )
 }
 
+function getPdsLabel(element: Element): string | null {
+  return (element as HTMLElement & { label?: string }).label ?? element.getAttribute('label')
+}
+
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe('TestFromAC_FilterA11yPanel', () => {
@@ -245,21 +249,21 @@ describe('TestFromAC_FilterA11yPanel', () => {
       const { container } = renderPanel(true)
       const textInput = container.querySelector('p-input-search') as HTMLElement
       expect(textInput).not.toBeNull()
-      expect(textInput.getAttribute('aria-label')).toBe('Search tasks')
+      expect(getPdsLabel(textInput)).toBe('Search tasks')
     })
 
     it('priority select has an accessible label', () => {
       const { container } = renderPanel(true)
       const pSelect = container.querySelector('p-select')
       expect(pSelect).not.toBeNull()
-      expect(pSelect!.getAttribute('aria-label')).toBe('Priority')
+      expect(getPdsLabel(pSelect!)).toBe('Priority')
     })
 
     it('tags multi-select has an accessible label', () => {
       const { container } = renderPanel(true, ['bug', 'feature'])
       const pMultiSelect = container.querySelector('[data-testid="filter-tags"]')
       expect(pMultiSelect).not.toBeNull()
-      expect(pMultiSelect!.getAttribute('aria-label')).toBe('Tags')
+      expect(getPdsLabel(pMultiSelect!)).toBe('Tags')
     })
 
   })

@@ -1,33 +1,8 @@
 /**
- * RED phase E2E tests for #1574: P2-14 — Column body keyboard focusability
+ * Playwright accessibility coverage for column-body keyboard focusability.
  *
- * AC-3: axe proof scoped to column-body elements (include selector:
- *       `[data-testid="column-body"]`) asserting zero violations for rule
- *       `scrollable-region-focusable` per scrollable column. Must NOT rely on
- *       whole-page axe scans that conflate card-level violations.
- *
- * ─── BUILDER MANDATORY FIRST STEP (#1575) ────────────────────────────────────
- * DO THIS BEFORE ANY IMPLEMENTATION. Run these exact commands in order:
- *
- *   cp .owlbear/scratch/1574-column-body-a11y.spec.ts \
- *      serve/cockpit/web/e2e/column-body-a11y-1574.spec.ts
- *   git add serve/cockpit/web/e2e/column-body-a11y-1574.spec.ts
- *   cd serve/cockpit/web
- *   npm run test:e2e -- column-body-a11y-1574
- *   # → BOTH tests must FAIL before you touch Column.tsx (RED gate)
- *
- * The cp+git-add makes the E2E file tracked so all quality-runner passes
- * (scoped AND regression) include it automatically. Do NOT skip this step.
- * ────────────────────────────────────────────────────────────────────────────
- *
- * RED expectation:
- *   .column-body has overflow-y: auto (Column.css) but no tabIndex prop in Column.tsx
- *   and no tabindex attribute in DOM. When the column body overflows (20 tasks in
- *   "in-progress"), axe flags the scrollable region as inaccessible by keyboard.
- *   → scrollable-region-focusable violation → results.violations is not empty → FAIL.
- *
- * Builder fix (#1575): add tabIndex={0} (or role="region" + tabIndex={0}) to
- * the .column-body div in Column.tsx so keyboard users can reach overflowing content.
+ * Uses axe scoped to [data-testid="column-body"] so scrollable-region-focusable
+ * violations are attributed to overflowing column bodies, not unrelated card UI.
  */
 import { test, expect, type Page } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
@@ -160,7 +135,7 @@ test.describe('TestFromAC_ColumnBodyFocusability', () => {
   // trivially because no scanned element has scrollHeight > clientHeight (non-scrollable
   // regions never trigger scrollable-region-focusable).
   //
-  // Pattern from responsive-contract-1566.spec.ts: inject max-height CSS to force
+  // Pattern from responsive-contract.spec.ts: inject max-height CSS to force
   // overflow, then evaluate DOM scrollHeight vs clientHeight, then assert scrollableCount > 0.
   // The axe scan then runs on regions that are provably scrollable.
   // FAIL: in-progress column body has no tabindex → axe flags the violation.

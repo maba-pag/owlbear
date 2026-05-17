@@ -144,7 +144,7 @@ describe('TestFromAC_CardDensityElements', () => {
     // required — re-dispatched to test-writer/builder.
     // Note: path guard prevents test-writer from writing to e2e/; this Vitest test
     // provides unit-level AC-1 title proof. Builder must add the companion E2E
-    // assertion to serve/cockpit/web/e2e/card-density-1565.spec.ts (see Builder Notes).
+    // assertion to serve/cockpit/web/e2e/card-density.spec.ts (see Builder Notes).
     const task = makeTask({ id: 1, title: 'My specific task title' })
     const { container } = renderCard(task)
     const titleEl = container.querySelector('[data-testid="card-title"]')

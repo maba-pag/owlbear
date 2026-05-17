@@ -51,7 +51,7 @@ const VALID_PDS_VARIANTS = [
 
 // ─── AC-1: statusToVariant ───────────────────────────────────────────────────
 
-describe('TestFromAC_CardVariantsMapping', () => {
+describe('card variant mappings', () => {
   describe('statusToVariant — AC-1', () => {
     it('returns a valid PDS variant string for each known status value', () => {
       for (const status of KNOWN_STATUSES) {
