@@ -8,7 +8,7 @@ user-invocable: false
 
 > **Audience:** Agents writing post-task reflections and the memory-curator agent. **When:** Before calling `save_memory` (shape, dedup, quality checks) and during curation sessions. **Why:** Ensures entries meet the structural and quality bar for long-lived agent knowledge.
 
-Structural standards for project memory entries across file-based (`/memories/`) and MCP (`ob-memory`) storage. Covers entry shape, tier selection, deduplication, and quality enforcement.
+Structural standards for project memory entries in MCP (`ob-memory`) storage. Covers entry shape, tier selection, deduplication, and quality enforcement.
 
 For tool syntax, see `h-mcp-memory`. For curation workflow, see `w-mem-curation`. For pipeline integration (pre-flight, reflection), see `r-pipeline-protocol`.
 
@@ -38,42 +38,30 @@ Enumerations and ranges used by the schema:
 
 This schema is validated by `MemoryEntry` in the `mcp-memory` package.
 
-**File-based entry shape** (legacy migration format — used only as fallback when MCP is unavailable):
-
-```
-# {task-id}-{agent}.md
-agent: {agent_name}
-task: {task_id}
-date: {YYYY-MM-DD}
-- {bullet}
-```
-
 ## Tier-Content Fit
 
 Per `owlbear-system.instructions.md` § Memory Governance (single source of truth):
 
 | Content type | Tier | Store |
 |-------------|------|-------|
-| Tool patterns, CLI recipes, process pitfalls | User | `/memories/` |
-| Task-specific context, in-progress working state | Session | `/memories/session/` |
-| Agent lessons-learned (curation inbox) | Repo inbox | `/memories/repo/inbox/` |
 | Agent institutional knowledge (queryable) | MCP canonical | `ob-memory` |
+| Task-specific context and working state | Task artifacts | Task body, `.owlbear/scratch/`, or kanban DR/AR files |
 | Architecture decisions | Not memory | `.owlbear/kanban/decisions/` |
 | Research findings | Not memory | `.owlbear/research/` |
 | Code snippets, task-specific context | Not memory | Do not record |
 
-**User memory** (`/memories/`) is for the human operator's preferences, not agent learnings.
+The VS Code built-in `/memories/` store is retired for OwlBear agents. Do not use it for user preferences, session notes, repo inbox notes, or fallback agent learnings.
 
-## File vs. MCP Relationship
+## MCP Relationship
 
-MCP memory is canonical. File-based inbox notes are fallback/migration input only.
+MCP memory is canonical.
 
 | Situation | Action |
 |-----------|--------|
 | Standard post-task reflection | Write MCP via `save_memory` |
-| MCP tool unavailable or errors | Write file-based inbox fallback only; do not retry MCP |
-| Curation pass | Read MCP pending entries plus file-inbox migration notes; promote durable insights into MCP |
-| Pre-flight knowledge load | MCP only (`recall_memory(agent="{agent_name}")`) — file inbox is write-only for agents |
+| MCP tool unavailable or errors | Proceed without memory write; do not use `/memories/` fallback |
+| Curation pass | Read MCP pending entries and promote durable insights into MCP |
+| Pre-flight knowledge load | MCP only (`recall_memory(agent="{agent_name}")`) |
 
 Post-task reflection is defined in `r-pipeline-protocol` § Post-task Reflection. Follow it exactly.
 
@@ -137,7 +125,7 @@ An entry **fails** if any of the following are true:
 ## Anti-Patterns
 
 1. **Storing research findings as memory entries.** Research belongs in `.owlbear/research/`; memory is for agent behavioral learnings.
-2. **Writing to `/memories/` for agent learnings.** User memory is the operator's space. Agent learnings go to `ob-memory` and the inbox.
+2. **Writing to `/memories/` for agent learnings.** The built-in store is retired. Agent learnings go to `ob-memory` only.
 3. **Recording with `scope_agents=null`.** Global entries flood every agent's pre-flight. Always pass `scope_agents`.
 4. **One entry per task regardless of insight count.** Record 0 entries if nothing notable happened. Record N entries for N distinct insights.
 5. **Confidence below 0.7.** The server rejects it. Do not round up to bypass the floor — raise confidence only when evidence justifies it.
