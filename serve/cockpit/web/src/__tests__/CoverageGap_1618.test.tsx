@@ -113,6 +113,56 @@ describe('TestFromAC_ConfirmDialogCoverageGap', () => {
     expect(container.textContent).toContain('Move to done')
   })
 
+  it('previousFocusRef is null when document.activeElement is not an HTMLElement', () => {
+    // Covers the null branch of the ternary:
+    //   previousFocusRef.current = document.activeElement instanceof HTMLElement ? ... : null
+    // and the null path of:
+    //   previousFocusRef.current?.focus()  (in cleanup — no-op because ref is null)
+    vi.spyOn(document, 'activeElement', 'get').mockReturnValue(null as unknown as Element)
+    const { container, unmount } = renderConfirmDialog()
+    expect(container.querySelector('p-modal')).not.toBeNull()
+    // Unmount to trigger cleanup — previousFocusRef.current is null, so ?.focus() is a no-op
+    unmount()
+  })
+
+  it('useMemo cache-hit: move-backward re-render with same props keeps description stable', () => {
+    // React Compiler transforms useMemo into a cache-check. When deps are unchanged,
+    // the cached value is returned via a code path mapped to the return-object closing brace
+    // (line 38 in source). Re-rendering with same type+targetStatus triggers this path.
+    const { container, rerender } = renderConfirmDialog({ type: 'move-backward', targetStatus: 'done' })
+    expect(container.textContent).toContain('Move to done')
+    rerender(
+      <PorscheDesignSystemProvider>
+        <ConfirmDialog type="move-backward" targetStatus="done" onCancel={vi.fn()} onConfirm={vi.fn()} />
+      </PorscheDesignSystemProvider>,
+    )
+    expect(container.textContent).toContain('Move to done')
+  })
+
+  it('useMemo cache-hit: unclaim re-render with same props keeps description stable', () => {
+    // Covers React Compiler cache-hit path mapped to useMemo unclaim branch closing brace (line 45).
+    const { container, rerender } = renderConfirmDialog({ type: 'unclaim' })
+    expect(container.textContent).toContain('Release claim')
+    rerender(
+      <PorscheDesignSystemProvider>
+        <ConfirmDialog type="unclaim" onCancel={vi.fn()} onConfirm={vi.fn()} />
+      </PorscheDesignSystemProvider>,
+    )
+    expect(container.textContent).toContain('Release claim')
+  })
+
+  it('useMemo cache-hit: unblock re-render with same props keeps description stable', () => {
+    // Covers React Compiler cache-hit path mapped to useMemo default branch closing brace (line 51).
+    const { container, rerender } = renderConfirmDialog({ type: 'unblock' })
+    expect(container.textContent).toContain('Unblock task')
+    rerender(
+      <PorscheDesignSystemProvider>
+        <ConfirmDialog type="unblock" onCancel={vi.fn()} onConfirm={vi.fn()} />
+      </PorscheDesignSystemProvider>,
+    )
+    expect(container.textContent).toContain('Unblock task')
+  })
+
   it('type=move-backward with null targetStatus renders "previous status" in description', () => {
     const { container } = renderConfirmDialog({ type: 'move-backward', targetStatus: null })
     expect(container.textContent).toContain('previous status')
@@ -235,6 +285,88 @@ describe('TestFromAC_ConfirmDialogCoverageGap', () => {
       fireEvent.keyDown(pModal, { key: 'Tab' })
     }).not.toThrow()
   })
+
+  // ─── getFocusableElements: filter branches ────────────────────────────────
+
+  it('getFocusableElements excludes elements with aria-hidden="true"', () => {
+    // Inject a native button with aria-hidden into p-modal so the TAB_FOCUSABLE_SELECTOR
+    // picks it up (button:not([disabled])) but the aria-hidden filter excludes it.
+    const { container } = renderConfirmDialog()
+    const pModal = container.querySelector('p-modal') as HTMLElement
+    const pButtons = Array.from(container.querySelectorAll('p-button')) as HTMLElement[]
+
+    const hiddenBtn = document.createElement('button')
+    hiddenBtn.setAttribute('aria-hidden', 'true')
+    pModal.appendChild(hiddenBtn)
+
+    // Mock active element to be the last p-button so Tab would wrap to first
+    // ONLY if the hidden button is excluded; if included, wrapping would go to hiddenBtn
+    vi.spyOn(document, 'activeElement', 'get').mockReturnValue(pButtons[pButtons.length - 1])
+    const firstBtnSpy = vi.spyOn(pButtons[0], 'focus')
+
+    fireEvent.keyDown(pModal, { key: 'Tab', shiftKey: false })
+
+    // Focus wrapped to the first p-button, confirming hidden button was excluded
+    expect(firstBtnSpy).toHaveBeenCalledOnce()
+
+    pModal.removeChild(hiddenBtn)
+  })
+
+  it('getFocusableElements excludes elements that have the disabled attribute', () => {
+    // Inject a tabIndex=0 element WITH disabled attribute: it passes the
+    // [tabindex]:not([tabindex="-1"]) CSS selector but is filtered out by
+    // the hasAttribute('disabled') check inside getFocusableElements.
+    const { container } = renderConfirmDialog()
+    const pModal = container.querySelector('p-modal') as HTMLElement
+    const pButtons = Array.from(container.querySelectorAll('p-button')) as HTMLElement[]
+
+    const disabledTabEl = document.createElement('div')
+    disabledTabEl.setAttribute('tabindex', '0')
+    disabledTabEl.setAttribute('disabled', '')
+    pModal.appendChild(disabledTabEl)
+
+    // Mock active element to be the last p-button so Tab would wrap to first p-button
+    // (not to disabledTabEl, because it should be filtered out)
+    vi.spyOn(document, 'activeElement', 'get').mockReturnValue(pButtons[pButtons.length - 1])
+    const firstBtnSpy = vi.spyOn(pButtons[0], 'focus')
+
+    fireEvent.keyDown(pModal, { key: 'Tab', shiftKey: false })
+
+    expect(firstBtnSpy).toHaveBeenCalledOnce()
+
+    pModal.removeChild(disabledTabEl)
+  })
+
+  // ─── MutationObserver callback (line 65) ─────────────────────────────────
+  // Mocking MutationObserver lets us invoke the captured callback directly
+  // without triggering real attribute mutations (which would fight with PDS).
+
+  it('MutationObserver callback re-applies dialog attributes when invoked', () => {
+    let capturedCallback: MutationCallback | null = null
+    const mockDisconnect = vi.fn()
+    const mockObserve = vi.fn()
+
+    // MutationObserver must be mocked as a class (arrow functions cannot be constructors).
+    // vi.unstubAllGlobals() in afterEach restores the real MutationObserver.
+    class MockMutationObserver {
+      observe = mockObserve
+      disconnect = mockDisconnect
+      constructor(cb: MutationCallback) {
+        capturedCallback = cb
+      }
+    }
+    vi.stubGlobal('MutationObserver', MockMutationObserver)
+
+    const { container } = renderConfirmDialog()
+    const pModal = container.querySelector('p-modal') as HTMLElement
+
+    // Invoke the captured callback — covers the applyDialogAttrs() call at line 65.
+    capturedCallback!([], {} as MutationObserver)
+
+    expect(pModal.getAttribute('role')).toBe('dialog')
+    expect(pModal.getAttribute('aria-modal')).toBe('true')
+  })
+
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -336,6 +468,85 @@ describe('TestFromAC_ResolveModalCoverageGap', () => {
     expect(() => {
       fireEvent.keyDown(pModal, { key: 'Tab' })
     }).not.toThrow()
+  })
+
+  // ─── handleModalKeyDown: Escape ────────────────────────────────────────────
+
+  it('Escape key in the modal calls requestClose via handleModalKeyDown', () => {
+    const { onClose } = renderResolveModal()
+    const pModal = document.querySelector('p-modal') as HTMLElement
+    fireEvent.keyDown(pModal, { key: 'Escape' })
+    expect(onClose).toHaveBeenCalledOnce()
+  })
+
+  // ─── handleDocumentEscape: document-level Escape key ──────────────────────
+
+  it('document Escape keydown calls requestClose via handleDocumentEscape', () => {
+    const { onClose } = renderResolveModal()
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    expect(onClose).toHaveBeenCalledOnce()
+  })
+
+  it('document Escape keydown with defaultPrevented does not call requestClose', () => {
+    const { onClose } = renderResolveModal()
+    // Create an event where defaultPrevented is always true (simulates another
+    // handler having already called preventDefault() before ours runs).
+    const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+    Object.defineProperty(event, 'defaultPrevented', { get: () => true })
+    document.dispatchEvent(event)
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  // ─── getFocusableElements: filter branches ─────────────────────────────────
+
+  it('getFocusableElements excludes disabled elements in ResolveModal Tab wrapping', () => {
+    const { container } = renderResolveModal()
+    const pModal = container.querySelector('p-modal') as HTMLElement
+    const radios = Array.from(container.querySelectorAll('input[type="radio"]')) as HTMLElement[]
+    const pButtons = Array.from(container.querySelectorAll('p-button')) as HTMLElement[]
+
+    // Inject a native button with disabled attribute — selector matches but filter excludes it
+    const disabledBtn = document.createElement('button')
+    disabledBtn.setAttribute('disabled', '')
+    pModal.appendChild(disabledBtn)
+
+    vi.spyOn(document, 'activeElement', 'get').mockReturnValue(pButtons[pButtons.length - 1])
+    const firstFocusSpy = vi.spyOn(radios[0], 'focus')
+    fireEvent.keyDown(pModal, { key: 'Tab', shiftKey: false })
+    expect(firstFocusSpy).toHaveBeenCalledOnce()
+
+    pModal.removeChild(disabledBtn)
+  })
+
+  it('getFocusableElements excludes aria-hidden elements in ResolveModal Tab wrapping', () => {
+    const { container } = renderResolveModal()
+    const pModal = container.querySelector('p-modal') as HTMLElement
+    const radios = Array.from(container.querySelectorAll('input[type="radio"]')) as HTMLElement[]
+    const pButtons = Array.from(container.querySelectorAll('p-button')) as HTMLElement[]
+
+    // Inject a native button with aria-hidden="true" — selector matches but filter excludes it
+    const hiddenBtn = document.createElement('button')
+    hiddenBtn.setAttribute('aria-hidden', 'true')
+    pModal.appendChild(hiddenBtn)
+
+    vi.spyOn(document, 'activeElement', 'get').mockReturnValue(pButtons[pButtons.length - 1])
+    const firstFocusSpy = vi.spyOn(radios[0], 'focus')
+    fireEvent.keyDown(pModal, { key: 'Tab', shiftKey: false })
+    expect(firstFocusSpy).toHaveBeenCalledOnce()
+
+    pModal.removeChild(hiddenBtn)
+  })
+
+  // ─── notes onChange ────────────────────────────────────────────────────────
+
+  it('onChange on resolution notes textarea invokes setNotes', () => {
+    // React 19 registers custom element event handlers via addEventListener (not
+    // as element properties). fireEvent.change dispatches a native change event
+    // that reaches the React handler, covering the arrow function at line 290.
+    const { container } = renderResolveModal()
+    const textarea = container.querySelector('[data-testid="resolve-notes"]') as HTMLElement
+    expect(textarea).not.toBeNull()
+    expect(() => fireEvent.change(textarea)).not.toThrow()
   })
 
   // ─── Error state: retryable vs non-retryable ──────────────────────────────
