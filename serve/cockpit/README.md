@@ -151,6 +151,21 @@ Accessibility and responsive state after #1396:
   1280×720, all 7 columns identical `offsetTop`) and `e2e/responsive-layout-1391.spec.ts`
   (board-container assertions at 1024px and 1440px updated to expect horizontal overflow;
   shell document-level and vertical-overflow guards remain passing).
+- #1628 completes the WCAG 2.1 AA accessibility sweep: invalid host-level ARIA attributes
+  (`aria-expanded`, `aria-controls`) on `p-button` host controls are replaced with native
+  `<button>` elements in `KanbanBoard.tsx` (filter toggle) and `Shell.tsx` (nav rail
+  control); prohibited `aria-current`/`aria-label` on the nav `p-button` host is removed.
+  Heading semantics are corrected: `Shell.tsx` adds the page-level `<h1>` product identity
+  and `<h2>` headings for sidecar sections; `DetailTab.tsx` adds `<h3>` section headings
+  for accordion content. `RepairPanel.tsx` moves the confirm action from a non-interactive
+  `<span onClick>` wrapper to the `<PButton>` element; `DecisionViewport.tsx` removes
+  `role="button"` misuse from non-interactive `<article>` decision cards. `vite-env.d.ts`
+  adds `p-accordion` IntrinsicElements typing. Verified by
+  `e2e/accessibility-sweep-1628.spec.ts` (10 E2E tests — WCAG 2.1 AA `.withTags()` axe
+  scans on board view, sidecar detail view, DRStatusIndicator popover, HealthBadge popover,
+  FilterPanel open state, ResolveModal, ArchivalModal, ConfirmDialog, CleanupPanel confirm
+  dialog, and RepairPanel confirm dialog, all zero violations) and
+  `e2e/accessibility-1395.spec.ts` (regression gate, no regressions).
 - Documentation here does not treat cache/SSE invalidation work from #1346 as part of
   this delivery bundle.
 
