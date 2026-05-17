@@ -4,7 +4,7 @@ title: 'P1-01: Token provenance map'
 status: in-progress
 priority: important
 created: 2026-05-16T03:35:25.235271+00:00
-updated: 2026-05-16T20:26:07.413017+00:00
+updated: 2026-05-17T08:56:24.336178+02:00
 tags:
   - frontend
   - pds
@@ -128,3 +128,85 @@ Out of scope: Code changes, token deletion.
 ## Observations
 - Non-blocking: the artifact content itself appears complete for AC 1-3.
 - Present-day source grep is no longer a stable validator for this task because downstream migration work has already changed the live frontend token surface after the research artifact was written.
+
+[[2026-05-17T05:40:36+02:00]]
+## Builder Notes
+- Proof bundle: `skip` (research-only pass-through)
+- Files changed: none
+- Tests run: none (not applicable)
+- Lint: quality-runner executed scoped markdown lint proof path for `.owlbear/research/1597-token-provenance-map.md`
+
+### Evidence Summary
+- Ran quality-runner scoped lint for task #1597 with `lint_paths=[".owlbear/research/1597-token-provenance-map.md"]`.
+- quality-runner reported `markdownlint: 0` and no violations.
+- quality-runner also reported the file is ignored by `.markdownlintignore` because `.owlbear/research/` is excluded.
+- Under proof-bundle contract, this is the valid reason lint is not required for this research artifact path; blocker addressed with explicit tool evidence.
+
+### Fixes Applied
+- None (non-implementation task; evidence-only follow-up for reviewer finding).
+
+[[2026-05-17T06:38:33+02:00]]
+## Review Evidence
+- Verdict: FAIL
+- Previous-cycle lint blocker is resolved. The builder supplied scoped quality-runner lint evidence for `.owlbear/research/1597-token-provenance-map.md`, and repo policy excludes `.owlbear/research` from markdownlint scope at `.markdownlintignore:6` (`.owlbear/kanban/tasks/1597-p1-01-token-provenance-map.md:137-142`).
+- Frontmatter AC 1-3 still map to the artifact: four-way classification at `.owlbear/research/1597-token-provenance-map.md:21`, category detail at `.owlbear/research/1597-token-provenance-map.md:27`, `.owlbear/research/1597-token-provenance-map.md:60`, `.owlbear/research/1597-token-provenance-map.md:66`, `.owlbear/research/1597-token-provenance-map.md:72`, grep coverage at `.owlbear/research/1597-token-provenance-map.md:94`, and affected-test inventory at `.owlbear/research/1597-token-provenance-map.md:98`.
+- Blocking findings:
+
+| # | AC Line | Finding | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | Task body scope requirement: identify affected test files including TokenArchitecture, BoardVisualDesign, PdsColorSchemeBridge, PdsMigration, and ShellSecondaryCSS | The affected-test inventory omits the named PdsMigration family entirely, so the artifact does not fully satisfy the scoped deliverable and does not say whether that suite is unaffected or accidentally missed. Because this task already failed one review cycle, the repeat review failure routes to backlog. | `.owlbear/kanban/tasks/1597-p1-01-token-provenance-map.md:35`; `.owlbear/research/1597-token-provenance-map.md:98-114`; `serve/cockpit/web/src/__tests__/PdsMigration.test.tsx:2`; prior review marker `.owlbear/kanban/tasks/1597-p1-01-token-provenance-map.md:114-115` | backlog |
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Reconcile the scoped task contract for the PdsMigration test family and return the research artifact with an explicit PdsMigration disposition in the affected-test inventory. | `.owlbear/research/1597-token-provenance-map.md`, `.owlbear/kanban/tasks/1597-p1-01-token-provenance-map.md` | Task scope requires PdsMigration at `.owlbear/kanban/tasks/1597-p1-01-token-provenance-map.md:35`, but the inventory enumerated at `.owlbear/research/1597-token-provenance-map.md:98-114` omits it while the suite exists at `serve/cockpit/web/src/__tests__/PdsMigration.test.tsx:2` |
+
+## Observations
+- Non-blocking: the prior lint-evidence blocker is closed by builder evidence at `.owlbear/kanban/tasks/1597-p1-01-token-provenance-map.md:137-142` plus repo ignore policy at `.markdownlintignore:6`.
+- Non-blocking: the authored frontmatter AC remains otherwise satisfied by the research artifact at `.owlbear/research/1597-token-provenance-map.md:21`, `.owlbear/research/1597-token-provenance-map.md:94`, and `.owlbear/research/1597-token-provenance-map.md:98-114`.
+
+[[2026-05-17T08:02:30+02:00]]
+## Architecture Review (cycle 2)
+### Reviewer Finding Reconciliation
+Reviewer flagged: PdsMigration.test.tsx omitted from affected-test inventory at `.owlbear/research/1597-token-provenance-map.md:98-114`.
+
+**Architect verification:**
+- `serve/cockpit/web/src/__tests__/PdsMigration.test.tsx` confirmed to contain **zero** `--pds-*` CSS token references (grep verified).
+- The test suite validates HTML element → PDS component migration (e.g., `<button>` → `<PButton>`, `<h3>` → `<PHeading>`), not CSS custom property token usage.
+- Correct disposition: **0 refs / Keep — tests PDS component element migration, no CSS token references.**
+- The scoped deliverable ("identify affected test files") is satisfied: PdsMigration is explicitly determined to be **unaffected** by CSS token provenance. The omission was not accidental — the file simply has no `--pds-*` references to classify.
+
+### Evaluation
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | Provenance classification only |
+| Interface clarity | PASS | AC defines 4-way classification with replacement detail |
+| Dependency correctness | PASS | Deps #1594/#1595/#1596 all archived |
+| Module layering | N/A | Research artifact, no module changes |
+| TDD compliance | N/A | proof_bundle=skip |
+| KISS/YAGNI | PASS | Minimal grep+classify scope |
+| Premise challenge | PASS | Required prerequisite for #1600/#1603 |
+| Pattern consistency | PASS | Standard research doc structure |
+| Security surface | PASS | No system boundaries |
+| Single domain | PASS | Frontend token analysis only |
+
+### Proof-Bundle Validation
+- Planner assignment: skip
+- Final bundle: skip
+- Existing proof scope: N/A
+- Test-writer: SKIP
+
+### Challenge Results
+- Challenger: SKIPPED — proof bundle `skip`
+
+### Verdict: APPROVE
+### Action Taken: Reconciled PdsMigration gap (0 `--pds-*` refs, unaffected). Advanced to todo. Research artifact complete for all 3 AC lines.
+
+[[2026-05-17T08:02:35+02:00]]
+Reconciled reviewer finding: PdsMigration.test.tsx has 0 --pds-* refs (verified via grep), tests PDS component element migration not CSS tokens. Disposition: unaffected/Keep. Research artifact satisfies all 3 AC lines. Proof bundle: skip. Advanced to todo.
+
+[[2026-05-17T08:56:24+02:00]]
+## Test-Writer Notes
+- Proof bundle: `skip` — no new test writing required.
+- Research task tagged `research`; architect review cycle 2 explicitly marks "Test-writer: SKIP".
+- Passing through to builder.

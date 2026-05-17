@@ -1,10 +1,10 @@
 ---
 id: 1606
 title: 'P1-09: Shell layout — sticky header + responsive sidebar'
-status: todo
+status: in-progress
 priority: important
 created: 2026-05-16T03:36:07.069416+00:00
-updated: 2026-05-16T20:24:03.420544+00:00
+updated: 2026-05-17T07:02:04.006017+02:00
 tags:
   - frontend
   - pds
@@ -25,8 +25,8 @@ ac:
     (display, width, height, overflow, padding, gap, position, z-index) remain 
     in CSS
 proof_bundle: behavioral
-blocked: false
-block_reason:
+blocked: true
+block_reason: 'builder crashed twice before claiming: no response returned'
 claimed_at:
 archival_reason:
 archival_refs: []
@@ -240,3 +240,41 @@ Rejecting to `todo` for test-writer ownership because the unresolved review find
 | 3 | builder (next cycle after test-writer retry) | Re-run scoped quality proof for #1606 once task tests are updated; then reconcile overlapping regression suite expectations for `responsive-layout-1391.spec.ts` as part of behavioral bundle evidence. | serve/cockpit/web/e2e/shell-layout-1606.spec.ts; serve/cockpit/web/e2e/responsive-layout-1391.spec.ts | Current cycle blocked by TypeScript compile failure in serve/cockpit/web/src/components/DetailTab.tsx reported by quality-runner (twice). |
 | 4 | builder/owner of blocking change | Restore frontend buildability by fixing JSX typing error around `p-accordion` host element in DetailTab component so Playwright webServer can launch. | serve/cockpit/web/src/components/DetailTab.tsx | quality-runner errors: `Property 'p-accordion' does not exist on type 'JSX.IntrinsicElements'` |
 
+[[2026-05-17T05:46:44+02:00]]
+## Test-Writer Notes
+- Retry cycle: filled reviewer/builder-flagged test-proof gaps.
+- Test file: `serve/cockpit/web/e2e/shell-layout-1606.spec.ts`
+- Commit: `07031151`
+
+### New tests added
+
+| Test | Class | Result |
+|------|-------|--------|
+| Shell.css does not contain padding property rules | TestFromAC_TailwindCSSStructure | FAIL (RED) ✓ |
+
+**Total new failing tests: 1 FAIL**
+**Lint: clean (ESLint exit 0)**
+
+### Reviewer gap disposition
+
+| Gap | Action | Outcome |
+|-----|--------|---------|
+| AC1: real workspace-scroll proof | Wrote test (inject tall content, scroll workspace, assert header isVisible) | PASS — implementation already correct: sticky + grid layout keeps header visible independently of workspace scroll. Removed per Step 5. |
+| AC3: width ban | Wrote test | PASS — no width rules in Shell.css. Removed per Step 5. |
+| AC3: gap ban | Wrote test | PASS — no gap rules in Shell.css. Removed per Step 5. |
+| AC3: no-inline-style | Wrote test | PASS — no inline styles on shell elements. Removed per Step 5. |
+| AC3: padding ban | Wrote test | FAIL — `#shell-sidecar-content { padding: var(--p-spacing-static-md) }` still in Shell.css. Kept. |
+
+### AC coverage (retry additions)
+| AC line | Gap filled |
+|---------|-----------|
+| AC1 | Scroll proof written — passes (builder already correct); surrogate tests remain as class guards |
+| AC3 | Padding property ban now tested (FAIL); width/gap/inline-style already compliant |
+
+### Remaining for builder
+- Fix `#shell-sidecar-content { padding: ... }` in Shell.css (move to Tailwind)
+- Reconcile `responsive-layout-1391.spec.ts` 320px failures (reviewer finding #2)
+- Provide behavioral-proof coverage justification (reviewer finding #4)
+
+[[2026-05-17T07:01:45+02:00]]
+builder crashed once; releasing claim before retry: no response returned

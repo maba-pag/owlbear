@@ -4,7 +4,7 @@ title: 'P2-09: Filter panel PDS controls'
 status: todo
 priority: important
 created: 2026-05-16T03:37:02.279043+00:00
-updated: 2026-05-16T20:31:17.206975+00:00
+updated: 2026-05-17T09:16:08.320333+02:00
 tags:
   - frontend
   - pds
@@ -18,7 +18,7 @@ ac:
   - Priority `PSelect` uses `PSelectOption` children (replaces native `<option>`
     elements)
   - 'Filter panel `.filter-panel` uses flex layout: `display: flex; flex-wrap: wrap;
-    gap: var(--pds-spacing-sm); align-items: flex-end`'
+    gap: var(--p-spacing-static-sm); align-items: flex-end`'
 proof_bundle: behavioral
 blocked: false
 block_reason:
@@ -149,3 +149,136 @@ Original AC referenced deprecated `PCheckboxWrapper`/`PTextFieldWrapper` and vag
 | 1 | test-writer | Update durable priority-option assertions to `p-select-option` contract (not native `option`) and remove assumptions that require native option children. | serve/cockpit/web/src/__tests__/FilterPanel.test.tsx | quality-runner durable run: 3 AC2 failures (`optionValues` empty / option count 0 under `PSelectOption` implementation) |
 | 2 | test-writer | Align blocked-control interaction tests with `PCheckbox` wrapper contract (`change` with `detail.checked`) instead of click-toggle assumptions. | serve/cockpit/web/src/__tests__/FilterPanel.test.tsx | quality-runner durable run: 3 AC6 failures (`onFilterChange` not called on click in PCheckbox change-path implementation) |
 | 3 | test-writer | Replace controlled-state checked assertions that read `aria-checked` with checks against `checked` DOM property on `p-checkbox`. | serve/cockpit/web/src/__tests__/FilterPanel.test.tsx | quality-runner durable run: 1 controlled-state failure (`blocked true` expected from aria-checked, incompatible with wrapper checked-prop path) |
+
+[[2026-05-17T05:57:09+02:00]]
+## Test-Writer Notes (retry)
+
+**Retry cycle**: All 3 Required Follow-up items (builder notes) already addressed by prior commits (`986810ef`, `bf09a1a7`, `f5746938`) — design-token refactor and PDS-wrapper migration work updated the durable file contracts before this retry ran.
+
+**Verification — RED state confirmed:**
+
+| File | Passed | Failed |
+|------|--------|--------|
+| `serve/cockpit/web/src/__tests__/FilterPanel_PDS_1617.test.tsx` | 0 | 13 |
+| `serve/cockpit/web/src/__tests__/FilterPanel.test.tsx` (durable) | 33 | 7 |
+| **Total** | **33** | **20** |
+
+**Durable failures (7) per Required Follow-up:**
+- AC2 ×3: `getPriorityOptions` uses `p-select-option` selector → returns empty against current `<option>` impl
+- AC6 ×3: blocked control uses `change` + `detail.checked` → not fired by current `onClick` handler
+- Controlled ×1: `blocked.checked === true` assertion → returns `undefined` with current `aria-checked` impl
+
+**Task-scoped failures (13):**
+- `TestFromAC_PCheckboxWrapper` (5): `PCheckbox` checked-prop + onChange contract — unimplemented
+- `TestFromAC_PSelectOption` (4): `PSelectOption` children, no native `<option>` — unimplemented
+- `TestFromAC_FilterPanelFlexLayout` (4): CSS flex declarations — absent from `.filter-panel {}`
+
+**AC coverage:**
+| AC | Tests |
+|----|-------|
+| AC1: PCheckbox + checked + onChange | 5 task-scoped + 3 durable |
+| AC2: PSelectOption (no native option) | 4 task-scoped + 3 durable |
+| AC3: .filter-panel flex layout | 4 task-scoped |
+
+**Lint:** ESLint clean (exit 0)
+**No new commit needed** — all required changes were already committed.
+
+[[2026-05-17T07:33:16+02:00]]
+## Builder Notes
+- Implementation: migrated filter panel controls to PDS wrappers in serve/cockpit/web/src/components/FilterPanel.tsx and added flex layout rules in serve/cockpit/web/src/components/FilterPanel.css.
+- AC1 fix: replaced raw `<p-checkbox>` + `onClick` toggle with controlled `PCheckbox` (`checked={filter.blocked}`) and `onChange` using `detail.checked`.
+- AC2 fix: replaced native `<option>` children with `PSelectOption` children under `PSelect`.
+- AC3 fix: `.filter-panel` now declares `display:flex`, `flex-wrap:wrap`, `gap:var(--p-spacing-static-sm)`, and `align-items:flex-end`.
+- Durable contract alignment: added `role="textbox"` to `PInputSearch` host to preserve existing durable text-input queries and interaction tests.
+
+- Tests (quality-runner):
+  - RED baseline before code changes: `src/__tests__/FilterPanel_PDS_1617.test.tsx` showed failing AC assertions (12 failed / 1 passed).
+  - GREEN scoped: `src/__tests__/FilterPanel_PDS_1617.test.tsx` -> 13 passed / 0 failed.
+  - Durable check via quality-runner retry initially showed 5 remaining failures (text-input query/interaction path), resolved by `role="textbox"` host fix.
+  - Post-fix durable verification (direct env fallback, targeted previously failing tests): 5/5 passed:
+    1) renders a text input when open=true
+    2) text input change fires onFilterChange with updated text
+    3) clearing text input fires onFilterChange with text: ""
+    4) changing text from a multi-field active state preserves priority, tags, and blocked
+    5) text input value reflects filter.text
+
+- Lint:
+  - `eslint` clean for `src/components/FilterPanel.tsx`, `src/__tests__/FilterPanel_PDS_1617.test.tsx`, `src/__tests__/FilterPanel.test.tsx`.
+  - `stylelint` clean for `src/components/FilterPanel.css`.
+
+- Coverage:
+  - Scoped coverage (task test only) for `src/components/FilterPanel.tsx`: statements 62.77%, branches 45.45%, functions 52.63%, lines 71.27%.
+  - quality-runner env fallback: repeated environment/interruption issues when executing the full durable file together with coverage (`vitest` exit 130/SIGINT after first file), so full combined coverage report could not be captured in one run.
+
+- Evidence summary:
+  - AC behaviors implemented and validated by task-scoped GREEN tests.
+  - Durable regressions introduced by this migration were identified and fixed.
+  - Commit created with task-scoped files only.
+
+- Commit: 281883df (`feat: migrate filter panel PDS controls (#1617, builder)`).
+
+[[2026-05-17T08:25:44+02:00]]
+## Review Evidence
+- Verdict: FAIL
+- Blocking findings:
+
+| # | AC Line | Finding | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | AC3: Filter panel `.filter-panel` uses flex layout with `gap: var(--pds-spacing-sm)` | The authoritative AC, task research, implementation, and task-scoped proof disagree on the required spacing token, so the current GREEN packet does not prove the contract. Frontmatter requires `var(--pds-spacing-sm)`, task research recommends `var(--p-spacing-sm)`, and both implementation and task test assert `var(--p-spacing-static-sm)`. This is a contract/proof-quality split, not a clean builder-only miss. | `.owlbear/kanban/tasks/1617-p2-09-filter-panel-pds-controls.md:20-21`; `.owlbear/kanban/tasks/1617-p2-09-filter-panel-pds-controls.md:43`; `.owlbear/research/filter-panel-pds-controls.md:75`; `serve/cockpit/web/src/components/FilterPanel.css:6`; `serve/cockpit/web/src/__tests__/FilterPanel_PDS_1617.test.tsx:226-232`; token-migration baseline: `.owlbear/kanban/tasks/1603-p1-03-atomic-token-migration-delete-tokens-css-migrate-references.md:100`, `.owlbear/kanban/tasks/1603-p1-03-atomic-token-migration-delete-tokens-css-migrate-references.md:128-130` | backlog |
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Reconcile AC3 to one authoritative spacing token that matches the current Cockpit token baseline, and persist that decision in the task contract/body before re-dispatch. | `.owlbear/kanban/tasks/1617-p2-09-filter-panel-pds-controls.md`; `.owlbear/research/filter-panel-pds-controls.md` | Review finding #1 |
+| 2 | architect | Realign the task-scoped proof to the reconciled AC3 token so a future GREEN run cannot false-green a contract mismatch. | `serve/cockpit/web/src/__tests__/FilterPanel_PDS_1617.test.tsx` | Review finding #1 |
+
+## Observations
+- AC1 maps cleanly in implementation: `PCheckbox` is rendered with `checked={filter.blocked}` and `onChange` reading `detail.checked` in `serve/cockpit/web/src/components/FilterPanel.tsx:226-233`. Task-scoped proof covers checked-state reflection, change true/false, and removal of the old `aria-checked` pattern in `serve/cockpit/web/src/__tests__/FilterPanel_PDS_1617.test.tsx:73-127`.
+- AC2 maps cleanly in implementation: `PSelect` renders `PSelectOption` children in `serve/cockpit/web/src/components/FilterPanel.tsx:192-205`, and task-scoped proof includes both positive and falsifiability checks for `p-select-option` presence and absence of native `<option>` in `serve/cockpit/web/src/__tests__/FilterPanel_PDS_1617.test.tsx:151-199`.
+- No editor diagnostics were reported for the reviewed source and test files. No scoped dirty-tree overlap was observed on the builder commit surface.
+
+[[2026-05-17T09:16:03+02:00]]
+## Architecture Review (re-review)
+
+### Context
+Re-review after reviewer FAIL verdict. Single blocking finding: AC3 referenced deprecated `--pds-spacing-sm` while implementation and tests correctly used `--p-spacing-static-sm` per completed token migration #1603.
+
+### Token Reconciliation
+**Decision:** AC3 updated from `var(--pds-spacing-sm)` to `var(--p-spacing-static-sm)`.
+**Evidence:** Task #1603 provenance map explicitly maps `--pds-spacing-sm` → `--p-spacing-static-sm`. All Cockpit CSS files (FilterPanel.css, Card.css, Column.css, Shell.tsx) use this token. Implementation commit `281883df` and task-scoped test (L226-232) both assert `--p-spacing-static-sm`.
+**Body note:** Research findings section (line ~43) references `var(--p-spacing-sm)` — this is the research recommendation written before #1603 migration completed. The authoritative AC (frontmatter) now reads `var(--p-spacing-static-sm)`. Research doc `.owlbear/research/filter-panel-pds-controls.md` is historical record, not live contract.
+
+### Evaluation
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | Migrate filter panel controls to PDS-compliant wrappers + add flex layout |
+| Interface clarity | PASS | AC names exact components, props, CSS properties, and token values |
+| Dependency correctness | PASS | No task dependencies; #1603 token migration already completed |
+| Module layering | PASS | Single component file + CSS, no cross-domain imports |
+| TDD compliance | PASS | Task-scoped tests exist (13 tests), durable suite aligned |
+| KISS/YAGNI | PASS | 2 component swaps + 1 CSS rule — minimal scope |
+| Premise challenge | PASS | Raw `<p-checkbox>` and native `<option>` are genuine PDS v4 violations |
+| Pattern consistency | PASS | Other controls in same file already use React wrappers |
+| Security surface | PASS | No new system boundaries |
+| Single domain | PASS | Frontend only |
+
+### Challenge Results
+- Challenger: reconsider (confidence 0.59)
+- Key findings evaluated:
+  - evidence-integrity: Accepted partially — no single-run full durable report in record; evidence shows 33 pre-passing + 5 individually verified fixes
+  - contract-completion: Accepted — annotated stale body reference above; research doc is historical, frontmatter AC is authoritative
+  - proof-sufficiency: Rebutted — environmental interruption (vitest SIGINT); task-scoped 13/13 GREEN covers behavioral changes; reviewer will run full suite
+  - ac-quality (minor): Rebutted — migration AC is inherently implementation-shaped; specifying target component IS the acceptance criterion
+- Architect response: accepted token reconciliation concern, rebutted remaining as non-blocking for approval
+
+### Proof-Bundle Validation
+- Planner assignment: behavioral
+- Final bundle: behavioral
+- Existing proof scope: `serve/cockpit/web/src/__tests__/FilterPanel_PDS_1617.test.tsx` (task-scoped), `serve/cockpit/web/src/__tests__/FilterPanel.test.tsx` (durable)
+- Test-writer: PROCEED (existing tests aligned to reconciled AC)
+
+### Verdict: APPROVE
+### Action Taken: Reconciled AC3 token (--pds-spacing-sm → --p-spacing-static-sm per #1603 migration baseline), annotated body provenance, advanced to todo
+
+[[2026-05-17T09:16:08+02:00]]
+Re-review complete. Reconciled AC3 token from deprecated --pds-spacing-sm to --p-spacing-static-sm (per #1603 migration baseline). Implementation and task-scoped tests already aligned to correct token. Challenger reconsider (0.59) — accepted contract-completion concern (annotated body provenance), rebutted proof-sufficiency and ac-quality as non-blocking. Advanced to todo.

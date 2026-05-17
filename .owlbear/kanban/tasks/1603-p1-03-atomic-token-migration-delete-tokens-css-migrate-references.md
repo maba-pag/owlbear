@@ -4,7 +4,7 @@ title: 'P1-03: Atomic token migration — delete tokens.css + migrate references
 status: in-progress
 priority: important
 created: 2026-05-16T03:36:06.954546+00:00
-updated: 2026-05-16T20:30:02.876193+00:00
+updated: 2026-05-17T08:58:43.207908+02:00
 tags:
   - frontend
   - pds
@@ -12,15 +12,18 @@ tags:
 parent: 1590
 depends_on: []
 ac:
-  - grep -r '\-\-pds-' serve/cockpit/web/src/ returns zero matches (CSS and TSX)
+  - grep -r '\-\-pds-' serve/cockpit/web/src/ --exclude-dir=__tests__ returns 
+    zero matches (all authored CSS and production TS/TSX are free of legacy 
+    token references)
   - tokens.css deleted; custom-tokens.css declares exactly 
     --custom-signal-claimed (the sole custom-keep token with no PDS equivalent) 
     and no other custom properties
   - Manual dark-mode override blocks ([data-theme="dark"] and @media 
     prefers-color-scheme) removed from authored CSS
-  - Tests formerly asserting --pds-* names updated to assert --p-* equivalents 
-    or deleted when their assertion target (tokens.css structure) no longer 
-    exists
+  - Tests with executable assertions requiring --pds-* token presence in source 
+    files updated to assert --p-* equivalents or deleted when their assertion 
+    target (tokens.css) no longer exists; non-executable references (comments, 
+    error messages, anti-regression regex patterns) are explicitly out of scope
 proof_bundle: critical
 blocked: false
 block_reason:
@@ -175,3 +178,129 @@ Skipped — single approach (direct token replacement per provenance map). No co
 - Independent durable reruns passed for `serve/cockpit/web/src/__tests__/BoardVisualDesign.test.tsx`, `serve/cockpit/web/src/__tests__/CardCSS_1546.test.ts`, and `serve/cockpit/web/src/__tests__/ShellSecondaryCSS_1550.test.tsx`.
 - Remaining `--pds-*` strings in comments, negative anti-regression regexes, or synthetic fixture text were not used as standalone blockers here; the reject is based on executable stale durable tests plus the missing critical-bundle proof packet.
 - On retry, tighten the task-local oracle or the task note so AC-1 proof and the actual review surface describe the same scope.
+
+[[2026-05-17T05:43:05+02:00]]
+## Builder Notes
+- Implementation: updated durable assertions in `serve/cockpit/web/src/__tests__/PdsColorSchemeBridge_1555.test.ts` and `serve/cockpit/web/src/__tests__/ShellSecondaryCSS_1542.test.tsx` to match post-migration token contract.
+- Tests: reviewer-requested proof packet PASS — 90 passed, 0 failed, 0 skipped.
+- Lint: clean (ESLint).
+- Coverage: scoped frontend coverage run reported 60.05% for broad `src` scope; this retry only touched durable test contracts (no production-source edits).
+
+### Evidence Summary
+- Pre-fix RED verification (quality-runner scoped packet):
+  - `PdsColorSchemeBridge_1555.test.ts` failed on `AC-7: tokens.css specifically does not declare a color-scheme property` with ENOENT (deleted file).
+  - `ShellSecondaryCSS_1542.test.tsx` failed on stale requirement `>=5 --pds-*` tokens.
+- Fix 1: replaced deleted-file assertion to check `custom-tokens.css` for no `color-scheme:` declaration.
+- Fix 2: migrated shell token assertion to require zero stale `--pds-*` and require `>=5` migrated `--p-*` references.
+- Post-fix GREEN verification (quality-runner scoped packet over required suites):
+  - `TokenMigration_1603.test.ts`
+  - `PdsColorSchemeBridge_1555.test.ts`
+  - `BoardVisualDesign.test.tsx`
+  - `CardCSS_1546.test.ts`
+  - `ShellSecondaryCSS_1550.test.tsx`
+  - `ShellSecondaryCSS_1542.test.tsx`
+  - Result: 90 passed, 0 failed.
+
+### Fixes Applied
+- No source-code behavior changes.
+- Durable test contracts aligned with atomic token migration AC and deleted `tokens.css` target.
+
+[[2026-05-17T06:48:15+02:00]]
+## Review Evidence
+- Verdict: FAIL
+- Route: backlog
+- FAIL confirmation: FAIL #1603 to backlog | frontmatter AC-1 still fails under its literal src-wide scope, and the retry evidence narrows the contract instead of satisfying it.
+
+| AC | Status | Evidence |
+|---|---|---|
+| AC-1 | FAIL | The authoritative frontmatter AC requires a src-wide grep contract. Legacy token strings remain in durable tests under `serve/cockpit/web/src/__tests__`, including `BoardVisualDesign.test.tsx:14-20,260-290`, `ShellSecondaryCSS_1542.test.tsx:90-97`, `ThemeLightTokenScan_1552.test.ts:9,55-66`, `CardCSS_1546.test.ts:78-98`, `ResponsiveLayout_1391.test.tsx:172-176`, and `PDSHexScan_1395.test.ts:128-156`. |
+| AC-2 | PASS | `serve/cockpit/web/src/tokens.css` is absent, `serve/cockpit/web/src/custom-tokens.css:1-4` declares a single custom property, and `serve/cockpit/web/src/main.tsx:5` imports the replacement stylesheet. |
+| AC-3 | PASS | Independent search across `serve/cockpit/web/src/**/*.css` found no manual dark-mode override selectors, and `serve/cockpit/web/src/Shell.css:1-99` contains only viewport media queries. |
+| AC-4 | Partial | The retry repaired the prior executable failures in `PdsColorSchemeBridge_1555.test.ts:407-412` and `ShellSecondaryCSS_1542.test.tsx:90-100`, but the task-local verifier in `TokenMigration_1603.test.ts:67-83,217-236` still narrows review scope instead of resolving the src-wide AC-1 contract conflict. |
+
+- Blocking findings:
+
+| # | AC Line | Finding | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | AC-1 | The literal frontmatter AC is still unsatisfied: multiple files under `serve/cockpit/web/src/__tests__` retain legacy token strings, so the required src-wide grep proof is not green. | `serve/cockpit/web/src/__tests__/BoardVisualDesign.test.tsx:14-20,260-290`; `serve/cockpit/web/src/__tests__/ShellSecondaryCSS_1542.test.tsx:90-97`; `serve/cockpit/web/src/__tests__/ThemeLightTokenScan_1552.test.ts:9,55-66`; `serve/cockpit/web/src/__tests__/CardCSS_1546.test.ts:78-98`; `serve/cockpit/web/src/__tests__/ResponsiveLayout_1391.test.tsx:172-176`; `serve/cockpit/web/src/__tests__/PDSHexScan_1395.test.ts:128-156` | backlog |
+| 2 | AC-1 / proof contract | The retry proof narrows AC-1 to authored source only, but that interpretation is not present in frontmatter. On the second review cycle, this unresolved AC/proof mismatch requires architect rework instead of another builder pass. | `serve/cockpit/web/src/__tests__/TokenMigration_1603.test.ts:67-83,217-236`; task body `## Builder Notes` dated 2026-05-17 describes an authored-source scan excluding `__tests__`; task frontmatter `proof_bundle=critical` remains unchanged. | backlog |
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Refine AC-1 to state whether the src-wide grep contract includes durable tests, comments, and anti-regression patterns, or explicitly require elimination of the remaining legacy token strings across `src/__tests__`. | `serve/cockpit/web/src/__tests__/BoardVisualDesign.test.tsx`, `serve/cockpit/web/src/__tests__/ShellSecondaryCSS_1542.test.tsx`, `serve/cockpit/web/src/__tests__/ThemeLightTokenScan_1552.test.ts`, `serve/cockpit/web/src/__tests__/CardCSS_1546.test.ts`, `serve/cockpit/web/src/__tests__/ResponsiveLayout_1391.test.tsx`, `serve/cockpit/web/src/__tests__/PDSHexScan_1395.test.ts` | Finding #1 |
+| 2 | architect | Align the task-local proof strategy with the authoritative AC before the next retry so review evidence does not depend on an implicit authored-source-only interpretation. | `serve/cockpit/web/src/__tests__/TokenMigration_1603.test.ts` | Finding #2 |
+
+## Observations
+- Source-side migration looks correct: `main.tsx` imports `custom-tokens.css`, `tokens.css` is gone, `custom-tokens.css` keeps one custom token, and no authored CSS dark-override blocks were found.
+- The retry did fix the previous executable failures in `PdsColorSchemeBridge_1555.test.ts` and `ShellSecondaryCSS_1542.test.tsx`.
+- `BoardVisualDesign.test.tsx` still carries stale legacy-token wording in comments and failure messages even where executable assertions now use migrated tokens; that did not drive the reject by itself, but it reinforces the need for contract cleanup.
+
+[[2026-05-17T08:11:52+02:00]]
+## Architecture Review (Re-review after reviewer rejection to backlog)
+
+### Context
+Task returned from review with two findings: (1) AC-1 literal src-wide grep is unsatisfied because test files under `__tests__/` contain `--pds-*` in anti-regression patterns, negative assertions, comments, and scanner fixtures; (2) task-local proof narrowed scope without updating authoritative AC.
+
+### Root Cause Analysis
+AC-1 as originally worded (`grep -r '\\-\\-pds-' serve/cockpit/web/src/`) includes test infrastructure files that legitimately contain the string `--pds-*` in:
+- Negative assertions (`.not.toMatch(/var\\(--pds-/)`): prove migration correctness
+- Anti-regression regex scanners: enforce no legacy token re-introduction
+- Documentary comments: explain migration history
+- Synthetic test fixtures: validate scanner correctness (PDSHexScan_1395)
+
+None of these require `--pds-*` tokens to exist in production code. Production source is confirmed clean: zero matches in `src/**/*.css`, `src/*.tsx`, `src/components/**`.
+
+### AC Refinement
+| AC | Before | After | Rationale |
+|---|---|---|---|
+| AC-1 | `grep -r '\\-\\-pds-' serve/cockpit/web/src/` | `grep -r '\\-\\-pds-' serve/cockpit/web/src/ --exclude-dir=__tests__` | Test files are verification infrastructure, not production code; the grep verifies runtime contract |
+| AC-4 | \"Tests formerly asserting --pds-* names updated...\" | Added explicit scope: \"non-executable references (comments, error messages, anti-regression regex patterns) are explicitly out of scope\" | Resolves ambiguity that caused two review-builder cycles |
+
+### Evaluation
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | Token migration only |
+| Interface clarity | PASS | AC-1 is now a single verifiable command; AC-4 scope is explicit |
+| Dependency correctness | PASS | No dependencies; predecessors archived |
+| Module layering | PASS | CSS tokens are leaf-level |
+| TDD compliance | PASS | Test file exists and passes (17 tests GREEN) |
+| KISS/YAGNI | PASS | Minimal scope — direct token replacement |
+| Premise challenge | PASS | tokens.css genuinely duplicated PDS v4 native tokens |
+| Pattern consistency | PASS | Follows PDS v4 --p-* naming |
+| Security surface | N/A | Pure CSS |
+| Single domain | PASS | Frontend CSS only |
+
+### Challenge Results
+- Challenger: reconsider (confidence 0.69)
+- Findings: (1) AC contract needs frontmatter update before approve (agreed — done), (2) AC-4 ambiguous about non-executable refs (agreed — refined), (3) stale test comments as orphaned debt, (4) PDSHexScan dead carve-out
+- Architect response: ACCEPTED findings 1-2 (AC refined in frontmatter). REBUTTED findings 3-4: stale comments/dead carve-outs are documentation hygiene, not migration debt; they don't affect runtime behavior or test correctness (90 tests pass). Not blocking an atomic migration on comment wording. Noted in builder guidance for future cleanup.
+
+### Proof-Bundle Validation
+- Planner assignment: critical
+- Final bundle: critical
+- Test-writer: PROCEED (existing task-local test covers refined AC-1 scope)
+
+### Builder Guidance
+- AC-1 proof: `grep -r '\\-\\-pds-' serve/cockpit/web/src/ --exclude-dir=__tests__` must return zero matches
+- The task-local test (TokenMigration_1603.test.ts) already verifies this scope — no test changes needed
+- Stale `--pds-*` references in test comments/messages (BoardVisualDesign.test.tsx, PDSHexScan_1395.test.ts, ColumnCSS_1547.test.ts) are explicitly out of scope per refined AC-4
+- Previous builder evidence (90 tests GREEN, production source clean) remains valid under refined AC
+
+### Verdict: APPROVE
+### Action Taken: Refined AC-1 (added --exclude-dir=__tests__) and AC-4 (explicit non-executable scope). Advanced to todo.
+
+[[2026-05-17T08:58:43+02:00]]
+## Test-Writer Notes
+- Retry cycle: both `## Test-Writer Notes` and `## Review Evidence` present in task body.
+- Required Follow-up from last reviewer (second review, backlog route): both items targeted **architect** — no test-writer gaps identified.
+- Architect addressed both items: AC-1 refined to `--exclude-dir=__tests__`; AC-4 scope made explicit (non-executable refs out of scope).
+- Existing test file: `serve/cockpit/web/src/__tests__/TokenMigration_1603.test.ts`
+- Verification: quality-runner scoped run — 17 passed, 0 failed, lint clean (ESLint).
+- AC coverage alignment with refined AC:
+  - AC-1 ✓ — test already excludes `__tests__` via `EXCLUDE_FROM_SRC_SCAN`; exact match for refined `--exclude-dir=__tests__` scope
+  - AC-2 ✓ — `TestFromAC_TokenFileMigration`: 5 tests covering tokens.css deletion, custom-tokens.css existence, single declaration, no --pds-*
+  - AC-3 ✓ — `TestFromAC_DarkModeOverridesRemoved`: 2 tests for [data-theme="dark"] and prefers-color-scheme absence
+  - AC-4 ✓ — `TestFromAC_LegacyTestFilesRetired` + `TestFromAC_LegacyTestFilesUpdated`: 8 tests; non-executable refs explicitly out of scope per refined AC-4
+- No new tests written — reviewer cited scope/proof issues (not missing tests); architect refined AC to match existing test scope.
+- Builder: re-run proof packet with refined AC-1 grep (`grep -r '--pds-' serve/cockpit/web/src/ --exclude-dir=__tests__` must be zero); provide full critical-bundle proof packet including all durable suites cited by reviewer.

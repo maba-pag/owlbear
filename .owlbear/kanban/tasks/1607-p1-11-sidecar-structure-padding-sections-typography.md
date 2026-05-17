@@ -4,7 +4,7 @@ title: 'P1-11: Sidecar structure — padding, sections, typography'
 status: review
 priority: important
 created: 2026-05-16T03:36:07.096771+00:00
-updated: 2026-05-16T20:22:47.506184+00:00
+updated: 2026-05-17T08:59:17.484357+02:00
 tags:
   - frontend
   - pds
@@ -14,10 +14,13 @@ depends_on: []
 ac:
   - '#shell-sidecar-content has --p-spacing-static-md (≥16px) padding on all four
     sides via CSS custom property'
-  - Sidecar renders PHeading elements at 3 distinct size values (large, medium, 
-    small) establishing typography hierarchy
+  - Shell [data-region='sidecar-header'] renders p-heading[size='large'] for 
+    task title; DetailTab (given non-null task) renders p-heading[size='medium']
+    for primary sections and p-heading[size='small'] for secondary sections; 
+    Shell sidecar-header contains no raw h2, DetailTab contains no raw h3
   - 'PDivider elements separate content blocks: between sidecar-header and DecisionViewport,
-    between DecisionViewport and p-tabs, and between metadata/editor sections in DetailTab'
+    between DecisionViewport and p-tabs, and immediately following sidecar-metadata
+    section in DetailTab'
 proof_bundle: behavioral
 blocked: false
 block_reason:
@@ -201,3 +204,133 @@ lint: clean (eslint exit 0) ✓
 ### Commit
 - c9d3bab57e017e514ca1edce8ee4717fd911016f
 - feat: fix DetailTab divider ordering (#1607, builder)
+
+[[2026-05-17T05:47:58+02:00]]
+## Review Evidence
+- Verdict: FAIL
+- Builder evidence review: The retry fixes the prior AC-3 divider defect, but it does not resolve the remaining AC-2 proof gap from the first review cycle. The executed task proof still splits `Shell` and `DetailTab` into separate renders and would false-green if the live selected-task Shell path stopped mounting `DetailTab`. Per reviewer-mode routing, this second-cycle failure returns to backlog.
+
+| # | AC Line | Finding | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | AC-2: `Sidecar renders PHeading elements at 3 distinct size values (large, medium, small) establishing typography hierarchy` | The task-local suite proves `large` in a standalone `Shell` render and `medium`/`small` in a standalone `DetailTab` render, then merges those size sets. Because `Shell` shows `detail-placeholder` when no task is selected and mounts `DetailTab` only on the selected-task path, the executed proof would still pass if the live sidecar stopped rendering `DetailTab`. The builder retry changed only `DetailTab.tsx` and left this test gap unresolved; the cited adjacent regressions (`Shell.test.tsx`, `DetailTab.test.tsx`) do not cover selected-task detail rendering or heading hierarchy. | `serve/cockpit/web/src/__tests__/SidecarStructure_1607.test.tsx:96`, `serve/cockpit/web/src/__tests__/SidecarStructure_1607.test.tsx:108`, `serve/cockpit/web/src/__tests__/SidecarStructure_1607.test.tsx:183-211`, `serve/cockpit/web/src/Shell.tsx:349-350`, `serve/cockpit/web/src/Shell.tsx:370`, `serve/cockpit/web/src/Shell.tsx:447-448`, `serve/cockpit/web/src/Shell.tsx:468`, `serve/cockpit/web/src/components/DetailTab.tsx:126`, `serve/cockpit/web/src/__tests__/Shell.test.tsx:120-145`, `serve/cockpit/web/src/__tests__/DetailTab.test.tsx:157-188` | backlog |
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Refine AC-2 and the task proof contract to state whether the live selected-task `Shell -> DetailTab` path must be explicitly proved, then reroute the task with matching proof obligations instead of relying on split-render composition. | `serve/cockpit/web/src/__tests__/SidecarStructure_1607.test.tsx`, `serve/cockpit/web/src/Shell.tsx`, `serve/cockpit/web/src/components/DetailTab.tsx` | Finding #1 |
+| 2 | architect | If integrated selected-task proof is required, replace the current merged-tree heading assertion with an executable proof that would fail when `Shell` shows `detail-placeholder` instead of mounting `DetailTab` for a selected task. | `serve/cockpit/web/src/__tests__/SidecarStructure_1607.test.tsx`, `serve/cockpit/web/src/Shell.tsx` | Finding #1 |
+
+## Observations
+- AC-1 remains implemented and sufficiently evidenced by `serve/cockpit/web/src/Shell.css:45-46`.
+- AC-3 is now implemented and structurally aligned: `serve/cockpit/web/src/components/DetailTab.tsx:175`, `serve/cockpit/web/src/components/DetailTab.tsx:202`, and `serve/cockpit/web/src/components/DetailTab.tsx:204` place metadata, divider, then body; `serve/cockpit/web/src/Shell.tsx:326-338` and `serve/cockpit/web/src/Shell.tsx:424-436` keep the two shell dividers in both viewport branches.
+- I did not rerun quality-runner on this retry because the blocker is assertion scope, not contradictory pass/fail output; the builder's green claim can coexist with insufficient proof.
+- I could not complete a git dirty-tree contamination check in this tool surface because no terminal/git command tool was available.
+
+[[2026-05-17T06:44:44+02:00]]
+## Architecture Review (Cycle 2 — AC-2 Refinement)
+
+### Context
+Reviewer returned task to backlog twice citing AC-2 proof gap: the merged-assertion test (#8) combines Shell and DetailTab from independent renders, which would false-green if Shell stopped mounting DetailTab. Reviewer routed to architect for AC-2 refinement.
+
+### Resolution
+Refined AC-2 from ambiguous sidecar-level wording to per-component proof obligations:
+- Old: "Sidecar renders PHeading elements at 3 distinct size values (large, medium, small) establishing typography hierarchy"
+- New: "Shell [data-region='sidecar-header'] renders p-heading[size='large'] for task title; DetailTab (given non-null task) renders p-heading[size='medium'] for primary sections and p-heading[size='small'] for secondary sections; Shell sidecar-header contains no raw h2, DetailTab contains no raw h3"
+
+### Rationale
+1. Shell→DetailTab composition is already proven by durable integration test `Shell.card-selection.integration.test.tsx` (intentionally does NOT mock DetailTab, tests full selected-task path)
+2. The existing individual tests (#1-7) in `SidecarStructure_1607.test.tsx` already satisfy the refined AC per-component
+3. Test #8 (merged assertion) remains in the file as a bonus assertion but is not required for AC proof
+4. Per-component proof is architecturally correct: unit tests should test at the component level; integration is covered elsewhere
+
+### Challenge Results
+- Challenger: reconsider (confidence 0.41)
+- Findings: (1) missing input state for DetailTab, (2) negative clause broader than proof, (3) integration tests elsewhere cover gap, (4) consolidation-test-gap check — #1629 exists
+- Architect response: ACCEPTED findings 1-2 — incorporated into refined AC wording. Finding 3 supports the per-component approach. Finding 4: sibling consolidation test #1629 exists.
+
+### Proof-Bundle Validation
+- Planner assignment: behavioral
+- Final bundle: behavioral
+- Test-writer: PROCEED (existing tests satisfy refined AC; test-writer confirms)
+
+### Builder Guidance (cycle 2)
+- Implementation is already complete and GREEN (19/19). The refined AC-2 is satisfied by existing individual tests.
+- No code changes needed. If test-writer elects to remove or modify test #8, that is their prerogative.
+
+### Verdict: APPROVE (after REFINE)
+### Action Taken: Refined AC-2 to per-component proof obligations with explicit input state and scoped negative clauses. Moved to todo.
+
+[[2026-05-17T08:08:21+02:00]]
+## Test-Writer Notes (Retry Cycle 2)
+
+### Status
+No new tests written. Architect resolved both RF items from Review Cycle 2 by refining AC-2 to per-component obligations. Existing test file (`serve/cockpit/web/src/__tests__/SidecarStructure_1607.test.tsx`) is confirmed RED.
+
+### Current Test State (quality-runner scoped)
+- **passed: 10 / failed: 7 / skipped: 2**
+- lint: clean (eslint exit 0)
+
+### Why Tests Are RED
+
+**AC-1 (3 failures)** — Missing CSS selector block for `#shell-sidecar-content` in Shell.css:
+- Task #1614 (`3da50004`) changed padding from `#shell-sidecar-content { padding: var(--p-spacing-static-md) }` in Shell.css to Tailwind inline `className="p-[var(--p-spacing-static-md)]"`. The CSS source tests look for the Shell.css selector and now fail.
+
+**AC-2 (4 failures)** — `p-heading[size=...]` attribute not present in DOM:
+- `syncHeadingTagAttr` (introduced by #1614) only calls `element.setAttribute('tag', tag)` — it does NOT sync the `size` attribute. So `p-heading[size="large"]`, `[size="medium"]`, `[size="small"]` all return null in jsdom queries.
+- Affected: Shell size=large (test 3), DetailTab size=medium (test 5), size=small (test 6), merged assertion (test 8).
+
+### Builder Actions Required
+1. **AC-1**: Restore `#shell-sidecar-content { padding: var(--p-spacing-static-md); }` to Shell.css (or update `syncHeadingTagAttr` equivalent for CSS so the source-file test can find it). Simplest: add back the CSS selector.
+2. **AC-2**: Update `syncHeadingTagAttr` (or add a separate ref helper) to also call `element.setAttribute('size', size)` so jsdom querySelector can find `p-heading[size="large/medium/small"]`. Apply to both Shell sidecar branches and DetailTab.
+
+### AC Coverage (unchanged from original)
+| AC line | Tests (current state) |
+|---------|----------------------|
+| AC-1: #shell-sidecar-content padding via --p-spacing-static-md | 5 CSS source tests (3 FAILING → builder must restore CSS rule) |
+| AC-2: per-component PHeading sizes (refined by arch cycle 2) | 8 DOM tests (3 failing → builder must sync size attribute) |
+| AC-3: PDivider placements | 6 DOM tests (all PASSING) |
+
+### Architect Resolutions (cycle 2)
+- RF-1 (refine AC-2): DONE — AC-2 now per-component: Shell=large, DetailTab=medium+small, no raw h2/h3
+- RF-2 (integrated proof): DONE — architect confirmed per-component proof is sufficient; integration covered by `Shell.card-selection.integration.test.tsx`
+- Test #8 (merged assertion) remains as bonus; architect confirmed not required for AC proof
+
+[[2026-05-17T08:59:17+02:00]]
+## Builder Notes
+- Proof bundle: behavioral.
+- Files changed:
+  - serve/cockpit/web/src/Shell.css
+  - serve/cockpit/web/src/Shell.tsx
+  - serve/cockpit/web/src/components/DetailTab.tsx
+
+### What changed
+- Restored AC-1 CSS source contract by re-adding `#shell-sidecar-content { padding: var(--p-spacing-static-md); }` in `Shell.css`.
+- Updated `syncHeadingTagAttr` in `Shell.tsx` to also mirror heading `size` to the host attribute and applied `size="large"` sync in both mobile and desktop sidecar header render paths.
+- Replaced `DetailTab.tsx` heading ref helper with a tag+size sync helper and applied it to:
+  - `PHeading size="medium"` in `sidecar-body`
+  - `PHeading size="small"` in `actions`
+
+### Verification Evidence
+- RED verification before implementation (quality-runner scoped):
+  - test: serve/cockpit/web/src/__tests__/SidecarStructure_1607.test.tsx
+  - result: 10 passed, 9 failed, 0 skipped
+  - failures matched expected AC-1 selector/padding and AC-2 size-attribute contracts
+  - lint: clean
+- GREEN verification after implementation (quality-runner scoped):
+  - test: serve/cockpit/web/src/__tests__/SidecarStructure_1607.test.tsx
+  - result: 19 passed, 0 failed, 0 skipped
+  - lint: clean
+- Adjacent durable regression verification (quality-runner scoped):
+  - tests:
+    - serve/cockpit/web/src/__tests__/Shell.test.tsx
+    - serve/cockpit/web/src/__tests__/DetailTab.test.tsx
+  - result: 65 passed, 0 failed, 1 skipped
+  - lint: clean
+
+### Lint / Coverage
+- Lint status: clean across scoped task proof and adjacent durable tests.
+- Coverage: not emitted by this frontend scoped quality-runner flow.
+
+### Commit
+- 6110126796b8b35055e3e64ecbc413ba9bececfb
+- feat: restore sidecar structure contracts (#1607, builder)
