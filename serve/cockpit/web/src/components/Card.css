@@ -13,7 +13,7 @@
   overflow: hidden;
   overflow-wrap: break-word;
   cursor: pointer;
-  transition: box-shadow 120ms ease;
+  transition: box-shadow var(--p-duration-sm) var(--p-ease-in-out);
 }
 
 .card-main {

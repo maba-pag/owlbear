@@ -10,10 +10,13 @@
   background: var(--p-color-canvas);
   color: var(--p-color-primary);
   font-family: 'Porsche Next', 'Arial Narrow', Arial, sans-serif;
+  grid-template-columns: 56px minmax(0, 1fr) 360px;
+  transition: grid-template-columns var(--p-duration-sm) var(--p-ease-in-out);
 }
 
 .shell[data-sidecar-collapsed] {
   --shell-columns: 56px minmax(0, 1fr) 0fr;
+  grid-template-columns: 56px 1fr 0fr;
 }
 
 .shell__status-bar {
@@ -40,6 +43,7 @@
 .shell__sidecar {
   grid-area: sidecar;
   border-left: 1px solid var(--p-color-contrast-low);
+  overflow: hidden;
 }
 
 #shell-sidecar-content {
@@ -69,6 +73,10 @@
       'nav-rail workspace sidecar'
       'nav-rail workspace sidecar';
   }
+
+.shell[data-sidecar-collapsed] {
+  grid-template-columns: 56px minmax(0, 1fr) 0fr;
+}
 }
 
 @media (min-width: 1024px) {
@@ -91,7 +99,9 @@
   font: inherit;
   font-size: 0.875rem;
   cursor: pointer;
-  transition: background 120ms ease, border-color 120ms ease;
+  transition:
+    background var(--p-duration-sm) var(--p-ease-in-out),
+    border-color var(--p-duration-sm) var(--p-ease-in-out);
 }
 
 .icon-button:hover {
