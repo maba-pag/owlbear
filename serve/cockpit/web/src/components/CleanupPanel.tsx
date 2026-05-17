@@ -89,7 +89,7 @@ export default function CleanupPanel({ onSuccess }: CleanupPanelProps) {
     const last = focusable[focusable.length - 1]
     const active = document.activeElement
 
-    if (event.shiftKey && active === first) {
+    if (event.shiftKey && (active === first || active === event.currentTarget)) {
       event.preventDefault()
       last.focus()
       return
