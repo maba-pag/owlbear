@@ -85,4 +85,43 @@ describe('TestFromAC_PdsMotionTokens_1627', () => {
       'Expected .card transition to have no hardcoded ms value — currently uses 120ms',
     ).toBe(false)
   })
+
+  // AC-1 property-level specificity: assert correct property names are in the transition declarations
+  // (not just token presence — a wrong property list with the same tokens must still fail)
+
+  it('AC-1 icon-button-background-property: Shell.css .icon-button transition names background with PDS duration and easing', () => {
+    const css = readFileSync(SHELL_CSS_PATH, 'utf-8')
+    const block = extractSelectorBlock(css, '.icon-button')
+    const transitionMatch = block.match(/transition\s*:([^;]+)/)
+    expect(transitionMatch, 'No transition declaration found in .icon-button').not.toBeNull()
+    const subDeclarations = transitionMatch![1].split(',').map((s) => s.trim())
+    const backgroundSub = subDeclarations.find((s) => /^background\b/.test(s))
+    expect(backgroundSub, '.icon-button transition does not name background as a transitioned property').toBeDefined()
+    expect(backgroundSub).toMatch(/var\(--p-duration-sm\)/)
+    expect(backgroundSub).toMatch(/var\(--p-ease-in-out\)/)
+  })
+
+  it('AC-1 icon-button-border-color-property: Shell.css .icon-button transition names border-color with PDS duration and easing', () => {
+    const css = readFileSync(SHELL_CSS_PATH, 'utf-8')
+    const block = extractSelectorBlock(css, '.icon-button')
+    const transitionMatch = block.match(/transition\s*:([^;]+)/)
+    expect(transitionMatch, 'No transition declaration found in .icon-button').not.toBeNull()
+    const subDeclarations = transitionMatch![1].split(',').map((s) => s.trim())
+    const borderColorSub = subDeclarations.find((s) => /^border-color\b/.test(s))
+    expect(borderColorSub, '.icon-button transition does not name border-color as a transitioned property').toBeDefined()
+    expect(borderColorSub).toMatch(/var\(--p-duration-sm\)/)
+    expect(borderColorSub).toMatch(/var\(--p-ease-in-out\)/)
+  })
+
+  it('AC-1 card-box-shadow-property: Card.css .card transition names box-shadow with PDS duration and easing', () => {
+    const css = readFileSync(CARD_CSS_PATH, 'utf-8')
+    const block = extractSelectorBlock(css, '.card')
+    const transitionMatch = block.match(/transition\s*:([^;]+)/)
+    expect(transitionMatch, 'No transition declaration found in .card').not.toBeNull()
+    const subDeclarations = transitionMatch![1].split(',').map((s) => s.trim())
+    const boxShadowSub = subDeclarations.find((s) => /^box-shadow\b/.test(s))
+    expect(boxShadowSub, '.card transition does not name box-shadow as a transitioned property').toBeDefined()
+    expect(boxShadowSub).toMatch(/var\(--p-duration-sm\)/)
+    expect(boxShadowSub).toMatch(/var\(--p-ease-in-out\)/)
+  })
 })
