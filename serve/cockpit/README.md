@@ -162,6 +162,16 @@ Accessibility and responsive state after #1396:
   in source. Verified by `serve/cockpit/web/src/__tests__/PdsSimpleSwaps1614.test.tsx`
   (29 tests covering AC-1 through AC-4) and `serve/cockpit/web/src/__tests__/PdsMigration.test.tsx`
   (durable regression, 78 passing).
+- #1617 migrates the remaining filter panel controls to PDS React wrappers: the blocked
+  checkbox replaces raw `<p-checkbox>` + `onClick` toggle with a controlled `PCheckbox`
+  wrapper using `checked={filter.blocked}` and `onChange` reading `event.detail.checked`;
+  the priority `PSelect` replaces native `<option>` children with `PSelectOption`; and
+  `.filter-panel` gains a flex layout (`display:flex`, `flex-wrap:wrap`,
+  `gap:var(--p-spacing-static-sm)`, `align-items:flex-end`). Verified by
+  `serve/cockpit/web/src/__tests__/FilterPanel_PDS_1617.test.tsx` (13 tests covering
+  `PCheckbox` checked-state reflection, `onChange` true/false paths, `PSelectOption` presence,
+  native-option absence, and CSS flex declarations) and
+  `serve/cockpit/web/src/__tests__/FilterPanel.test.tsx` (durable regression, 40 passing).
 - #1628 completes the WCAG 2.1 AA accessibility sweep: invalid host-level ARIA attributes
   (`aria-expanded`, `aria-controls`) on `p-button` host controls are replaced with native
   `<button>` elements in `KanbanBoard.tsx` (filter toggle) and `Shell.tsx` (nav rail

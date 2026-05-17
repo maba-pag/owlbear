@@ -124,4 +124,19 @@ describe('TestFromAC_PdsMotionTokens_1627', () => {
     expect(boxShadowSub).toMatch(/var\(--p-duration-sm\)/)
     expect(boxShadowSub).toMatch(/var\(--p-ease-in-out\)/)
   })
+
+  // AC-1 / AC-3: Shell.css .shell — base block grid-template-columns transition uses PDS tokens
+  // (property-level: must name grid-template-columns, not just have token strings somewhere)
+
+  it('AC-1 shell-grid-template-columns-property: Shell.css .shell transition names grid-template-columns with PDS duration and easing', () => {
+    const css = readFileSync(SHELL_CSS_PATH, 'utf-8')
+    const block = extractSelectorBlock(css, '.shell')
+    const transitionMatch = block.match(/transition\s*:([^;]+)/)
+    expect(transitionMatch, 'No transition declaration found in base .shell block').not.toBeNull()
+    const subDeclarations = transitionMatch![1].split(',').map((s) => s.trim())
+    const gridSub = subDeclarations.find((s) => /^grid-template-columns\b/.test(s))
+    expect(gridSub, '.shell transition does not name grid-template-columns as a transitioned property').toBeDefined()
+    expect(gridSub).toMatch(/var\(--p-duration-sm\)/)
+    expect(gridSub).toMatch(/var\(--p-ease-in-out\)/)
+  })
 })
