@@ -44,11 +44,6 @@
 .shell__sidecar {
   grid-area: sidecar;
   border-left: 1px solid var(--p-color-contrast-low);
-  overflow: hidden;
-}
-
-#shell-sidecar-content {
-  padding: var(--p-spacing-static-md);
 }
 
 @media (max-width: 767px) {

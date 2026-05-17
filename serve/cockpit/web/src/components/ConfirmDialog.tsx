@@ -1,6 +1,16 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { PButton, PModal } from '@porsche-design-system/components-react'
 
+const TAB_FOCUSABLE_SELECTOR = [
+  'button:not([disabled])',
+  'input:not([disabled])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  'a[href]',
+  'p-button:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',')
+
 export interface ConfirmDialogProps {
   type: 'move-backward' | 'unblock' | 'unclaim'
   targetStatus?: string | null
@@ -17,6 +27,7 @@ export default function ConfirmDialog({
   onConfirm,
 }: ConfirmDialogProps) {
   const previousFocusRef = useRef<HTMLElement | null>(null)
+  const modalRef = useRef<HTMLElement | null>(null)
 
   const { description, confirmLabel } = useMemo(() => {
     if (type === 'move-backward') {
@@ -42,14 +53,60 @@ export default function ConfirmDialog({
 
   useEffect(() => {
     previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    document.querySelector<HTMLElement>('[data-testid="confirm-dialog"]')?.focus()
+    const modal = modalRef.current
+    const applyDialogAttrs = () => {
+      modal?.setAttribute('role', 'dialog')
+      modal?.setAttribute('aria-modal', 'true')
+    }
+
+    applyDialogAttrs()
+    const observer = modal
+      ? new MutationObserver(() => {
+        applyDialogAttrs()
+      })
+      : null
+    observer?.observe(modal as Node, { attributes: true, attributeFilter: ['role', 'aria-modal'] })
+
+    modal?.focus()
 
     return () => {
+      observer?.disconnect()
       previousFocusRef.current?.focus()
     }
   }, [])
 
+  function getFocusableElements(root: HTMLElement): HTMLElement[] {
+    return Array.from(root.querySelectorAll<HTMLElement>(TAB_FOCUSABLE_SELECTOR)).filter((element) => {
+      if (element.hasAttribute('disabled')) {
+        return false
+      }
+      if (element.getAttribute('aria-hidden') === 'true') {
+        return false
+      }
+      return true
+    })
+  }
+
   function handleModalKeyDown(event: React.KeyboardEvent<HTMLElement>) {
+    if (event.key === 'Tab') {
+      const focusable = getFocusableElements(event.currentTarget)
+      if (focusable.length === 0) {
+        return
+      }
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      const active = document.activeElement instanceof HTMLElement ? document.activeElement : null
+
+      if (event.shiftKey && (active === first || active === event.currentTarget)) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault()
+        first.focus()
+      }
+      return
+    }
+
     if (event.key === 'Escape') {
       event.preventDefault()
       onCancel()
@@ -58,6 +115,7 @@ export default function ConfirmDialog({
 
   return (
     <PModal
+      ref={modalRef}
       data-testid="confirm-dialog"
       tabIndex={-1}
       open

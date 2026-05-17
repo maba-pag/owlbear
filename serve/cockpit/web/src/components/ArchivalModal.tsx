@@ -11,6 +11,22 @@ import {
 import { moveTask } from '../api/tasks'
 import { ApiError } from '../api/errors'
 
+const TAB_FOCUSABLE_SELECTOR = [
+  'button:not([disabled])',
+  'input:not([disabled])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  'a[href]',
+  'p-button:not([disabled])',
+  'p-inline-notification',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',')
+
+const LEGACY_TAB_FOCUSABLE_SELECTOR =
+  'p-button:not([disabled]), p-input-text:not([disabled]), p-select:not([disabled]), ' +
+  'p-textarea:not([disabled]), button:not([disabled]), [href], input:not([disabled]), ' +
+  'select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
 export const ARCHIVAL_REASONS = [
   'completed',
   'dropped',
@@ -77,12 +93,14 @@ export default function ArchivalModal({
   onRefresh,
 }: ArchivalModalProps) {
   const titleId = useId()
+  const modalRef = useRef<HTMLElement | null>(null)
   const reasonSelectRef = useRef<HTMLElement | null>(null)
 
   const [reason, setReason] = useState<ArchivalReason | ''>('')
   const [refsRaw, setRefsRaw] = useState('')
   const [error, setError] = useState<ArchivalErrorState | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const closeRequestedRef = useRef(false)
   const inlineNotificationRef = useRef<InlineNotificationHost | null>(null)
 
   const requiresRefs = reason !== '' && REASONS_REQUIRING_REFS.has(reason)
@@ -102,8 +120,81 @@ export default function ArchivalModal({
   }, [hasRefs, isSubmitting, reason, requiresRefs])
 
   useEffect(() => {
+    const modal = modalRef.current
+    const applyDialogAttrs = () => {
+      modal?.setAttribute('role', 'dialog')
+      modal?.setAttribute('aria-modal', 'true')
+      modal?.setAttribute('aria-labelledby', titleId)
+    }
+
+    applyDialogAttrs()
+    const observer = modal
+      ? new MutationObserver(() => {
+        applyDialogAttrs()
+      })
+      : null
+    observer?.observe(modal as Node, { attributes: true, attributeFilter: ['role', 'aria-modal'] })
+
     reasonSelectRef.current?.focus()
-  }, [])
+
+    const handleDocumentTab = (nativeEvent: KeyboardEvent) => {
+      if (nativeEvent.key !== 'Tab') {
+        return
+      }
+      const root = modalRef.current
+      if (!root) {
+        return
+      }
+      const focusable = getFocusableElements(root)
+      if (focusable.length === 0) {
+        return
+      }
+
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      const legacyFocusable = root.querySelectorAll<HTMLElement>(LEGACY_TAB_FOCUSABLE_SELECTOR)
+      const legacyFirst = legacyFocusable[0] ?? first
+      const legacyLast = legacyFocusable[legacyFocusable.length - 1] ?? last
+      const active = document.activeElement instanceof HTMLElement ? document.activeElement : null
+      const target = nativeEvent.target instanceof Element
+        ? (nativeEvent.target.closest(TAB_FOCUSABLE_SELECTOR) as HTMLElement | null)
+        : null
+      const current = target ?? active
+      const isLastTarget = nativeEvent.target === last || active === last || current === last
+      if (!current) {
+        return
+      }
+
+      if (nativeEvent.shiftKey && (current === first || current === root)) {
+        nativeEvent.preventDefault()
+        legacyLast.focus()
+      } else if (!nativeEvent.shiftKey && isLastTarget) {
+        nativeEvent.preventDefault()
+        legacyFirst.focus()
+      }
+    }
+
+    modal?.addEventListener('keydown', handleDocumentTab)
+    document.addEventListener('keydown', handleDocumentTab, true)
+
+    return () => {
+      observer?.disconnect()
+      modal?.removeEventListener('keydown', handleDocumentTab)
+      document.removeEventListener('keydown', handleDocumentTab, true)
+    }
+  }, [titleId])
+
+  function getFocusableElements(root: HTMLElement): HTMLElement[] {
+    return Array.from(root.querySelectorAll<HTMLElement>(TAB_FOCUSABLE_SELECTOR)).filter((element) => {
+      if (element.hasAttribute('disabled')) {
+        return false
+      }
+      if (element.getAttribute('aria-hidden') === 'true') {
+        return false
+      }
+      return true
+    })
+  }
 
   function setHeadingTagAttr(element: HTMLElement | null): void {
     element?.setAttribute('tag', 'h3')
@@ -124,8 +215,52 @@ export default function ArchivalModal({
   }
 
   function handleDismiss() {
-    returnFocusTo?.focus()
+    if (closeRequestedRef.current) {
+      return
+    }
+    closeRequestedRef.current = true
+    const fallbackTarget =
+      returnFocusTo ?? document.querySelector<HTMLElement>(`[data-testid="task-card"][data-id="${taskId}"]`)
+    fallbackTarget?.focus()
     onClose()
+    setTimeout(() => {
+      fallbackTarget?.focus()
+    }, 0)
+  }
+
+  function handleModalKeyDown(event: React.KeyboardEvent<HTMLElement>) {
+    if (event.key === 'Tab') {
+      const focusable = getFocusableElements(event.currentTarget)
+      if (focusable.length === 0) {
+        return
+      }
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      const legacyFocusable = event.currentTarget.querySelectorAll<HTMLElement>(LEGACY_TAB_FOCUSABLE_SELECTOR)
+      const legacyFirst = legacyFocusable[0] ?? first
+      const legacyLast = legacyFocusable[legacyFocusable.length - 1] ?? last
+      const active = document.activeElement instanceof HTMLElement ? document.activeElement : null
+      const target = event.target instanceof Element
+        ? (event.target.closest(TAB_FOCUSABLE_SELECTOR) as HTMLElement | null)
+        : null
+      const current = target ?? active
+      const isLastTarget = event.target === last || active === last || current === last
+
+      if (event.shiftKey && (current === first || current === event.currentTarget)) {
+        event.preventDefault()
+        legacyLast.focus()
+      } else if (!event.shiftKey && isLastTarget) {
+        event.preventDefault()
+        legacyFirst.focus()
+      }
+      return
+    }
+
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      event.stopPropagation()
+      handleDismiss()
+    }
   }
 
   function handleReasonChange(nextReason: string) {
@@ -204,9 +339,11 @@ export default function ArchivalModal({
 
   return (
     <PModal
+      ref={modalRef}
       data-testid="archival-modal"
       open
       onDismiss={handleDismiss}
+      onKeyDown={handleModalKeyDown}
       aria-label="Archive task"
     >
       <PHeading ref={setHeadingTagAttr} id={titleId} tag="h2">Archive task</PHeading>
@@ -261,7 +398,7 @@ export default function ArchivalModal({
       >
         Archive
       </PButton>
-      <PButton type="button" variant="secondary" onClick={onClose}>
+      <PButton type="button" variant="secondary" onClick={handleDismiss}>
         Cancel
       </PButton>
 

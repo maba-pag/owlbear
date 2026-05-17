@@ -15,6 +15,16 @@ import type { PendingDR } from '../hooks/usePendingDRs'
 import { resolveDR } from '../api/decisions'
 import { ApiError } from '../api/errors'
 
+const TAB_FOCUSABLE_SELECTOR = [
+  'button:not([disabled])',
+  'input:not([disabled])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  'a[href]',
+  'p-button:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',')
+
 export type PendingDRWithBody = PendingDR
 
 export interface ResolveModalProps {
@@ -47,8 +57,17 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
   const [isSubmitting, setIsSubmitting] = useState(false)
   const modalRef = useRef<HTMLElement | null>(null)
   const previousFocusRef = useRef<HTMLElement | null>(null)
+  const closeRequestedRef = useRef(false)
   const submitRef = useRef<HTMLElement | null>(null)
   const inlineNotificationRef = useRef<InlineNotificationHost | null>(null)
+
+  function requestClose() {
+    if (closeRequestedRef.current) {
+      return
+    }
+    closeRequestedRef.current = true
+    onClose()
+  }
 
   async function handleSubmit(retrying = false) {
     if (!dr || isSubmitting) {
@@ -65,7 +84,7 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
       })
       setError(null)
       onResolved()
-      onClose()
+      requestClose()
     } catch (caught) {
       if (caught instanceof ApiError) {
         const fallback = `Failed to resolve decision request (${caught.status}).`
@@ -98,12 +117,53 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
 
   useEffect(() => {
     previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    modalRef.current?.focus()
+    const modal = modalRef.current
+    const applyDialogAttrs = () => {
+      modal?.setAttribute('role', 'dialog')
+      modal?.setAttribute('aria-modal', 'true')
+      modal?.setAttribute('tabindex', '-1')
+    }
+
+    applyDialogAttrs()
+    const observer = modal
+      ? new MutationObserver(() => {
+        applyDialogAttrs()
+      })
+      : null
+    observer?.observe(modal as Node, { attributes: true, attributeFilter: ['role', 'aria-modal'] })
+
+    modal?.focus()
+
+    const handleDocumentEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') {
+        return
+      }
+      if (event.defaultPrevented) {
+        return
+      }
+      event.preventDefault()
+      requestClose()
+    }
+    document.addEventListener('keydown', handleDocumentEscape)
 
     return () => {
+      observer?.disconnect()
+      document.removeEventListener('keydown', handleDocumentEscape)
       previousFocusRef.current?.focus()
     }
   }, [])
+
+  function getFocusableElements(root: HTMLElement): HTMLElement[] {
+    return Array.from(root.querySelectorAll<HTMLElement>(TAB_FOCUSABLE_SELECTOR)).filter((element) => {
+      if (element.hasAttribute('disabled')) {
+        return false
+      }
+      if (element.getAttribute('aria-hidden') === 'true') {
+        return false
+      }
+      return true
+    })
+  }
 
   useEffect(() => {
     if (response === '') {
@@ -138,12 +198,41 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
     }
   }
 
+  function handleModalKeyDown(event: React.KeyboardEvent<HTMLElement>) {
+    if (event.key === 'Tab') {
+      const focusable = getFocusableElements(event.currentTarget)
+      if (focusable.length === 0) {
+        return
+      }
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      const active = document.activeElement instanceof HTMLElement ? document.activeElement : null
+
+      if (event.shiftKey && (active === first || active === event.currentTarget)) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault()
+        first.focus()
+      }
+      return
+    }
+
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      event.stopPropagation()
+      requestClose()
+    }
+  }
+
   return (
     <PModal
       data-testid="resolve-modal"
       ref={modalRef}
+      tabIndex={-1}
       open
-      onDismiss={onClose}
+      onDismiss={requestClose}
+      onKeyDown={handleModalKeyDown}
       aria={{ 'aria-label': 'Resolve decision request' }}
     >
       <PHeading ref={setHeadingTagAttr} tag="h2">{dr.title}</PHeading>
@@ -215,7 +304,7 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
       >
         Submit Decision
       </PButton>
-      <PButton type="button" data-testid="resolve-cancel" variant="secondary" onClick={onClose}>
+      <PButton type="button" data-testid="resolve-cancel" variant="secondary" onClick={requestClose}>
         Close Modal
       </PButton>
 
