@@ -12,6 +12,7 @@ AC coverage:
 
 from __future__ import annotations
 
+from enum import StrEnum
 from pathlib import Path
 from tempfile import mkstemp as _real_mkstemp
 from unittest.mock import patch
@@ -120,6 +121,16 @@ class TestFromAC_Models:
         expected = {"pending", "curated", "approved", "deleted"}
         actual = {v.value for v in MemoryState}
         assert actual == expected
+
+    # --- AC5: StrEnum subclass contract ---
+
+    def test_memory_category_is_str_enum_subclass(self) -> None:
+        """AC5: MemoryCategory must be a StrEnum, not a plain Enum (regression guard)."""
+        assert issubclass(MemoryCategory, StrEnum)
+
+    def test_memory_state_is_str_enum_subclass(self) -> None:
+        """AC5: MemoryState must be a StrEnum, not a plain Enum (regression guard)."""
+        assert issubclass(MemoryState, StrEnum)
 
     # --- MemoryEntry construction ---
 
@@ -316,6 +327,42 @@ class TestFromAC_StorageRead:
         assert entry_file.stat().st_size > _8KB
         result = storage.read_entry(entry_file)
         assert result is None
+
+    def test_read_entry_file_at_exactly_8192_bytes_returns_entry(self, tmp_path: Path) -> None:
+        """Boundary (AC6): file at exactly 8192 bytes passes size guard (>8192) and returns MemoryEntry."""
+        entry_file = tmp_path / "boundary_8192.md"
+        # Pad the frontmatter with a YAML comment line to reach exactly _8KB bytes total.
+        # A YAML comment is ignored by the parser, so the file remains fully parseable.
+        body_suffix = "A\n"  # 2 bytes; content "A" is well within the 1024-char limit
+        base_content = _VALID_FRONTMATTER + body_suffix
+        base_size = len(base_content.encode("utf-8"))
+        comment_size = _8KB - base_size  # bytes needed from the inserted comment line
+        assert comment_size > 2, "Base content already >=8190 bytes; cannot construct boundary case"
+        # comment line = "# " (2) + padding_chars + "\n" (1)
+        padding_chars = comment_size - 3
+        comment_line = "# " + "x" * padding_chars + "\n"
+        # Insert comment after opening "---\n"; _VALID_FRONTMATTER[4:] is the rest
+        content = "---\n" + comment_line + _VALID_FRONTMATTER[4:] + body_suffix
+        entry_file.write_text(content, encoding="utf-8")
+        assert entry_file.stat().st_size == _8KB, f"Expected {_8KB} bytes, got {entry_file.stat().st_size}"
+        result = storage.read_entry(entry_file)
+        assert result is not None, "File at exactly 8192 bytes must not be rejected by the size guard"
+
+    def test_read_entry_file_at_8193_bytes_returns_none(self, tmp_path: Path) -> None:
+        """Boundary (AC6): file at exactly 8193 bytes exceeds size guard (>8192) and returns None."""
+        entry_file = tmp_path / "boundary_8193.md"
+        body_suffix = "A\n"  # 2 bytes
+        base_content = _VALID_FRONTMATTER + body_suffix
+        base_size = len(base_content.encode("utf-8"))
+        comment_size = (_8KB + 1) - base_size  # one byte over the limit
+        assert comment_size > 2
+        padding_chars = comment_size - 3
+        comment_line = "# " + "x" * padding_chars + "\n"
+        content = "---\n" + comment_line + _VALID_FRONTMATTER[4:] + body_suffix
+        entry_file.write_text(content, encoding="utf-8")
+        assert entry_file.stat().st_size == _8KB + 1, f"Expected {_8KB + 1} bytes, got {entry_file.stat().st_size}"
+        result = storage.read_entry(entry_file)
+        assert result is None, "File at 8193 bytes must be rejected by size guard (st_size > 8192)"
 
     def test_read_entry_malformed_yaml_returns_none(self, tmp_path: Path) -> None:
         """Error: a file with malformed YAML frontmatter returns None (lenient)."""
