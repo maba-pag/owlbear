@@ -1,10 +1,10 @@
 ---
 id: 1653
 title: 'P1-04: Verify handler equivalence for URL_LIST retype'
-status: docs
+status: archived
 priority: important
 created: 2026-05-18T03:11:06.930657+02:00
-updated: 2026-05-18T14:32:23.459094+02:00
+updated: 2026-05-18T14:54:39.133992+02:00
 tags:
   - scope:knowledge
   - research
@@ -25,7 +25,7 @@ proof_bundle: skip
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 Brief: see parent #1650
@@ -308,3 +308,35 @@ Architecture Review: APPROVE. AC already precisely refined from prior cycle — 
 - No blocking findings remain after the final trusted-set wording correction.
 - Proof sufficiency is acceptable for a `skip` bundle: this review validated the memo against current codepaths rather than requiring tests for a research-only task.
 - Reviewer pitfall noted during verification: `serve/knowledge/src/owlbear_knowledge/ingest.py:300-332` (`ingest_text`) backfills `fetched_at`, but the handler comparison under review uses `ingest(IntakeResult)` at `serve/knowledge/src/owlbear_knowledge/ingest.py:368-485`, which persists `intake.metadata` directly; that distinction does not affect the current verdict but is easy to misread during future reviews.
+
+[[2026-05-18T14:43:31+02:00]]
+## Docs Gate
+- README Verification: N/A — sole changed file is `.owlbear/research/1653-url-list-handler-equivalence.md`; not mapped by convention to any README target.
+- External Attribution: N/A — research used 9 codebase-only sources; no external attribution needed.
+- Research Doc: LINKED — task body `## Research` explicitly references `.owlbear/research/1653-url-list-handler-equivalence.md`.
+- Deletion Detection: N/A — no source files deleted.
+- Scratch cleanup: no `1653-*` scratch files found.
+
+Gate verdict: PASS — research-only task with no docs impact.
+
+[[2026-05-18T14:54:39+02:00]]
+## Audit
+
+### Regression Detection
+N/A — only `.owlbear/research/1653-url-list-handler-equivalence.md` changed (3 builder commits: `7eaee2e0`, `a10d670c`, `5d490dca`). Per test domain mapping, `.owlbear/` is docs/config only — no test suite applicable.
+
+### Intent Verification
+PASS — changed file stays within scope:knowledge research domain. Research doc exists at expected path. Follow-up task #1656 confirmed in backlog with `depends_on: [1653]`. No extraneous scope.
+
+### Architect Quality
+Score: 3/5 — Original AC said "documenting input handling, URL fetching, chunking, and result aggregation differences" without defining equivalence boundary. This caused 3 review FAILs before architect refined AC to define four explicit comparison dimensions and a precise PASS/FAIL threshold. Refined version is strong but the initial ambiguity consumed significant pipeline resources.
+
+### Commit Integrity
+PASS — Builder commit `5d490dca` (final correction) verified via `git log`. All 3 builder commits present and scoped to research doc only.
+
+### Deductions
+| Criterion | Deduction |
+|-----------|----------|
+| AC quality score 3 | -.03 |
+
+### Confidence: 0.97 → ARCHIVE
