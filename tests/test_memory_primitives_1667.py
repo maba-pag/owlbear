@@ -13,6 +13,8 @@ AC coverage:
 from __future__ import annotations
 
 from pathlib import Path
+from tempfile import mkstemp as _real_mkstemp
+from unittest.mock import patch
 
 import pytest
 from pydantic import ValidationError as PydanticValidationError
@@ -397,28 +399,28 @@ class TestFromAC_StorageWrite:
         assert result.content == entry.content
 
     def test_write_entry_path_outside_memory_dir_raises(self, tmp_path: Path) -> None:
-        """Error: path outside memory_dir raises an exception (containment assertion)."""
+        """Error: path outside memory_dir raises ValueError (containment assertion)."""
         memory_dir = tmp_path / "memory"
         memory_dir.mkdir()
         outside_dir = tmp_path / "outside"
         outside_dir.mkdir()
         outside = outside_dir / "entry.md"
         entry = _make_valid_entry()
-        with pytest.raises(Exception):  # noqa: B017 — containment exception type unspecified in AC
+        with pytest.raises(ValueError):
             storage.write_entry(outside, entry, memory_dir=memory_dir)
 
     def test_write_entry_path_traversal_raises(self, tmp_path: Path) -> None:
-        """Error: path traversal (/../) that escapes memory_dir raises (containment)."""
+        """Error: path traversal (/../) that escapes memory_dir raises ValueError (containment)."""
         memory_dir = tmp_path / "memory"
         memory_dir.mkdir()
         # Resolved path escapes memory_dir via ..
         escape = (memory_dir / ".." / "escaped.md").resolve()
         entry = _make_valid_entry()
-        with pytest.raises(Exception):  # noqa: B017 — containment exception type unspecified in AC
+        with pytest.raises(ValueError):
             storage.write_entry(escape, entry, memory_dir=memory_dir)
 
     def test_write_entry_symlink_target_raises(self, tmp_path: Path) -> None:
-        """Error: writing to a symlink path raises an exception (symlink rejected)."""
+        """Error: writing to a symlink path raises ValueError (symlink rejected)."""
         memory_dir = tmp_path / "memory"
         memory_dir.mkdir()
         real_target = memory_dir / "real.md"
@@ -426,16 +428,35 @@ class TestFromAC_StorageWrite:
         link = memory_dir / "link.md"
         link.symlink_to(real_target)
         entry = _make_valid_entry()
-        with pytest.raises(Exception):  # noqa: B017 — symlink rejection exception type unspecified in AC
+        with pytest.raises(ValueError):
             storage.write_entry(link, entry, memory_dir=memory_dir)
 
     def test_write_entry_invalid_object_raises(self, tmp_path: Path) -> None:
-        """Error: passing a non-MemoryEntry object raises (strict Pydantic validation)."""
+        """Error: passing a non-MemoryEntry object raises PydanticValidationError (strict validation)."""
         memory_dir = tmp_path / "memory"
         memory_dir.mkdir()
         target = memory_dir / "entry.md"
-        with pytest.raises((PydanticValidationError, TypeError, AttributeError)):
+        with pytest.raises(PydanticValidationError):
             storage.write_entry(target, "not-a-memory-entry", memory_dir=memory_dir)  # type: ignore[arg-type]
+
+    def test_write_entry_uses_mkstemp_and_replace_atomically(self, tmp_path: Path) -> None:
+        """AC4: write_entry must use mkstemp to create a temp file, then replace atomically.
+
+        Proves the full mkstemp → fsync → replace contract. Would fail if write_entry
+        used write_text() or any non-atomic approach.
+        """
+        memory_dir = tmp_path / "memory"
+        memory_dir.mkdir()
+        target = memory_dir / "entry.md"
+        entry = _make_valid_entry()
+        with (
+            patch("owlbear_memory.storage.mkstemp", wraps=_real_mkstemp) as mock_mkstemp,
+            patch("os.fsync") as mock_fsync,
+        ):
+            storage.write_entry(target, entry, memory_dir=memory_dir)
+        mock_mkstemp.assert_called_once()
+        mock_fsync.assert_called()
+        assert target.exists(), "Target file was not created after atomic replace"
 
 
 # ---------------------------------------------------------------------------
@@ -466,23 +487,23 @@ class TestFromAC_StorageDelete:
             storage.delete_entry(missing, memory_dir=memory_dir)
 
     def test_delete_entry_path_outside_memory_dir_raises(self, tmp_path: Path) -> None:
-        """Error: path outside memory_dir raises on containment check before deletion."""
+        """Error: path outside memory_dir raises ValueError on containment check before deletion."""
         memory_dir = tmp_path / "memory"
         memory_dir.mkdir()
         outside_dir = tmp_path / "outside"
         outside_dir.mkdir()
         outside_file = outside_dir / "entry.md"
         outside_file.write_text("placeholder", encoding="utf-8")
-        with pytest.raises(Exception):  # noqa: B017 — containment exception type unspecified in AC
+        with pytest.raises(ValueError):
             storage.delete_entry(outside_file, memory_dir=memory_dir)
 
     def test_delete_entry_symlink_raises(self, tmp_path: Path) -> None:
-        """Error: deleting a symlink raises an exception (symlink rejected)."""
+        """Error: deleting a symlink raises ValueError (symlink rejected)."""
         memory_dir = tmp_path / "memory"
         memory_dir.mkdir()
         real_file = memory_dir / "real.md"
         real_file.write_text("placeholder", encoding="utf-8")
         link = memory_dir / "link.md"
         link.symlink_to(real_file)
-        with pytest.raises(Exception):  # noqa: B017 — symlink rejection exception type unspecified in AC
+        with pytest.raises(ValueError):
             storage.delete_entry(link, memory_dir=memory_dir)
