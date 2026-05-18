@@ -2,6 +2,12 @@
 
 External repos and resources studied during OwlBear development.
 
+## Remove Source MCP Tool (Task #1652)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| MCP Python SDK — ToolAnnotations | <https://github.com/modelcontextprotocol/python-sdk> | `destructive_hint` field semantics, FastMCP tool registration patterns | `.owlbear/research/1652-remove-source-mcp-tool.md` | 2026-05-18 |
+
 ## Cockpit Visual Audit (Task #1534)
 
 | Source | URL | What | Where Used | Date |
