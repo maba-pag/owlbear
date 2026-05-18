@@ -1,15 +1,14 @@
 """Tests for task #1654: Expose source health fields in list_sources MCP tool.
 
-TDD RED phase — SourceInfo TypedDict has only 4 fields; list_sources response
-dict does not include the 5 new health fields. All tests fail until the builder
-implements the changes.
+Retry-cycle rewrite: adds AC-3/AC-4 (_sanitize_error) coverage and replaces
+raw last_error passthrough assertions with safe-disclosure contract assertions.
 
 AC coverage:
-  AC-1: SourceInfo TypedDict includes last_refreshed_at: str | None,
-        last_checked_at: str | None, last_error: str | None, enabled: bool,
-        fetch_method: str keys with correct types.
-  AC-2: list_sources response dict maps the 5 new fields from the corresponding
-        KnowledgeSource model attributes for each source returned.
+  AC-1: SourceInfo TypedDict includes 5 new health keys (shape + output schema).
+  AC-2: list_sources maps all 5 fields; last_error is passed through _sanitize_error.
+  AC-3: _sanitize_error returns None for None; extracts first Error/Exception class
+        name or HTTP NNN; falls back to "error"; output never exceeds 120 chars.
+  AC-4: Canonical input/output pairs as specified by the architect.
 """
 
 from __future__ import annotations
@@ -19,7 +18,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from owlbear_mcp_knowledge.server import SourceInfo, list_sources, mcp
+from owlbear_mcp_knowledge.server import (
+    SourceInfo,
+    _sanitize_error,
+    list_sources,
+    mcp,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -80,12 +84,10 @@ def _get_output_schema(tool_name: str) -> dict | None:
 class TestFromAC_SourceInfoShape:
     """AC-1: SourceInfo TypedDict must include 5 new health keys with correct types."""
 
-    # Use get_type_hints to evaluate lazy string annotations (from __future__ import annotations)
-
     def test_source_info_has_last_refreshed_at(self) -> None:
         """SourceInfo must declare 'last_refreshed_at' annotation."""
         hints = typing.get_type_hints(SourceInfo)
-        assert "last_refreshed_at" in hints, f"SourceInfo missing 'last_refreshed_at'; declared keys: {list(hints)}"
+        assert "last_refreshed_at" in hints, f"SourceInfo missing 'last_refreshed_at'; declared: {list(hints)}"
 
     def test_source_info_last_refreshed_at_is_optional_str(self) -> None:
         """SourceInfo.last_refreshed_at must be str | None."""
@@ -98,7 +100,7 @@ class TestFromAC_SourceInfoShape:
     def test_source_info_has_last_checked_at(self) -> None:
         """SourceInfo must declare 'last_checked_at' annotation."""
         hints = typing.get_type_hints(SourceInfo)
-        assert "last_checked_at" in hints, f"SourceInfo missing 'last_checked_at'; declared keys: {list(hints)}"
+        assert "last_checked_at" in hints, f"SourceInfo missing 'last_checked_at'; declared: {list(hints)}"
 
     def test_source_info_last_checked_at_is_optional_str(self) -> None:
         """SourceInfo.last_checked_at must be str | None."""
@@ -111,7 +113,7 @@ class TestFromAC_SourceInfoShape:
     def test_source_info_has_last_error(self) -> None:
         """SourceInfo must declare 'last_error' annotation."""
         hints = typing.get_type_hints(SourceInfo)
-        assert "last_error" in hints, f"SourceInfo missing 'last_error'; declared keys: {list(hints)}"
+        assert "last_error" in hints, f"SourceInfo missing 'last_error'; declared: {list(hints)}"
 
     def test_source_info_last_error_is_optional_str(self) -> None:
         """SourceInfo.last_error must be str | None."""
@@ -124,7 +126,7 @@ class TestFromAC_SourceInfoShape:
     def test_source_info_has_enabled(self) -> None:
         """SourceInfo must declare 'enabled' annotation."""
         hints = typing.get_type_hints(SourceInfo)
-        assert "enabled" in hints, f"SourceInfo missing 'enabled'; declared keys: {list(hints)}"
+        assert "enabled" in hints, f"SourceInfo missing 'enabled'; declared: {list(hints)}"
 
     def test_source_info_enabled_is_bool(self) -> None:
         """SourceInfo.enabled must be bool."""
@@ -135,7 +137,7 @@ class TestFromAC_SourceInfoShape:
     def test_source_info_has_fetch_method(self) -> None:
         """SourceInfo must declare 'fetch_method' annotation."""
         hints = typing.get_type_hints(SourceInfo)
-        assert "fetch_method" in hints, f"SourceInfo missing 'fetch_method'; declared keys: {list(hints)}"
+        assert "fetch_method" in hints, f"SourceInfo missing 'fetch_method'; declared: {list(hints)}"
 
     def test_source_info_fetch_method_is_str(self) -> None:
         """SourceInfo.fetch_method must be str."""
@@ -210,13 +212,92 @@ class TestFromAC_SourceInfoOutputSchema:
 
 
 # ---------------------------------------------------------------------------
+# TestFromAC_SanitizeError
+# AC-3/AC-4: module-private _sanitize_error strips sensitive detail from errors
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_SanitizeError:
+    """AC-3/AC-4: _sanitize_error extracts safe error token or returns fixed fallback."""
+
+    # --- Happy path ---
+
+    def test_none_input_returns_none(self) -> None:
+        """AC-3: None input must return None."""
+        assert _sanitize_error(None) is None
+
+    def test_extracts_error_class_name(self) -> None:
+        """AC-3: first [A-Z][a-zA-Z]*(Error|Exception) match is extracted."""
+        assert _sanitize_error("ValueError: bad value") == "ValueError"
+
+    def test_extracts_exception_suffix_class(self) -> None:
+        """AC-3: class ending in 'Exception' suffix is extracted."""
+        assert _sanitize_error("RuntimeException: unexpected state") == "RuntimeException"
+
+    def test_extracts_http_status_code(self) -> None:
+        """AC-3: HTTP NNN pattern extracted when error/exception class absent."""
+        assert _sanitize_error("HTTP 200 OK received") == "HTTP 200"
+
+    # --- Edge cases ---
+
+    def test_first_error_class_wins_when_multiple_present(self) -> None:
+        """AC-3: leftmost Error/Exception match is returned, not subsequent ones."""
+        result = _sanitize_error("ConnectionError: refused; TimeoutError: timed out")
+        assert result == "ConnectionError"
+
+    def test_http_pattern_returned_when_no_error_class_in_string(self) -> None:
+        """AC-3: HTTP NNN matched when no Error/Exception class present."""
+        result = _sanitize_error("upstream returned HTTP 429 Too Many Requests")
+        assert result == "HTTP 429"
+
+    def test_output_within_120_chars_for_very_long_input(self) -> None:
+        """AC-3: output never exceeds 120 characters even for pathological input."""
+        long_raw = "ValueError: " + "x" * 300
+        result = _sanitize_error(long_raw)
+        assert result is not None
+        assert len(result) <= 120
+
+    # --- Error paths ---
+
+    def test_no_pattern_match_returns_error_fallback(self) -> None:
+        """AC-3: raw string with no pattern match returns the fixed string 'error'."""
+        assert _sanitize_error("connection refused") == "error"
+
+    def test_empty_string_returns_error_fallback(self) -> None:
+        """AC-3: empty string has no pattern match; returns 'error'."""
+        assert _sanitize_error("") == "error"
+
+    # --- Boundary (AC-4 canonical input/output pairs) ---
+
+    def test_ac4_permission_error_with_path(self) -> None:
+        """AC-4: PermissionError with path detail -> 'PermissionError' with no path."""
+        raw = "PermissionError: [Errno 13] Permission denied: '/home/user/secret.pem'"
+        assert _sanitize_error(raw) == "PermissionError"
+
+    def test_ac4_http_503_with_internal_host(self) -> None:
+        """AC-4: HTTP 503 with internal hostname -> 'HTTP 503' with no host."""
+        raw = "HTTP 503 Service Unavailable from internal.corp:8080"
+        assert _sanitize_error(raw) == "HTTP 503"
+
+    def test_ac4_no_pattern_match_returns_error(self) -> None:
+        """AC-4: raw without error class or HTTP code -> 'error'."""
+        raw = "no files matched source path '/secret/data'"
+        assert _sanitize_error(raw) == "error"
+
+    def test_ac4_connection_error_is_first_match(self) -> None:
+        """AC-4: ConnectionError returned before later TimeoutError in same string."""
+        raw = "ConnectionError: refused; TimeoutError: timed out"
+        assert _sanitize_error(raw) == "ConnectionError"
+
+
+# ---------------------------------------------------------------------------
 # TestFromAC_ListSourcesHealthMapping
-# AC-2: list_sources response dict maps 5 new fields from KnowledgeSource attributes
+# AC-2: list_sources response maps all 5 fields; last_error via _sanitize_error
 # ---------------------------------------------------------------------------
 
 
 class TestFromAC_ListSourcesHealthMapping:
-    """AC-2: list_sources response dict must map the 5 new health fields per source."""
+    """AC-2: list_sources response dict maps 5 new health fields; last_error sanitized."""
 
     @pytest.mark.asyncio
     async def test_response_includes_last_refreshed_at_with_value(self) -> None:
@@ -241,7 +322,7 @@ class TestFromAC_ListSourcesHealthMapping:
 
         result = await list_sources(ctx)
 
-        assert "last_refreshed_at" in result[0], "Response dict missing 'last_refreshed_at'"
+        assert "last_refreshed_at" in result[0]
         assert result[0]["last_refreshed_at"] is None
 
     @pytest.mark.asyncio
@@ -254,7 +335,7 @@ class TestFromAC_ListSourcesHealthMapping:
 
         result = await list_sources(ctx)
 
-        assert "last_checked_at" in result[0], "Response dict missing 'last_checked_at'"
+        assert "last_checked_at" in result[0]
         assert result[0]["last_checked_at"] == "2026-05-02T08:00:00Z"
 
     @pytest.mark.asyncio
@@ -267,25 +348,12 @@ class TestFromAC_ListSourcesHealthMapping:
 
         result = await list_sources(ctx)
 
-        assert "last_checked_at" in result[0], "Response dict missing 'last_checked_at'"
+        assert "last_checked_at" in result[0]
         assert result[0]["last_checked_at"] is None
 
     @pytest.mark.asyncio
-    async def test_response_includes_last_error_with_value(self) -> None:
-        """Response dict includes 'last_error' mapped from source attribute."""
-        source = _make_source(last_error="Connection refused")
-        store = MagicMock()
-        store.list_all.return_value = [source]
-        ctx = _make_ctx(source_store=store)
-
-        result = await list_sources(ctx)
-
-        assert "last_error" in result[0], "Response dict missing 'last_error'"
-        assert result[0]["last_error"] == "Connection refused"
-
-    @pytest.mark.asyncio
-    async def test_response_last_error_is_none_when_no_error(self) -> None:
-        """Response dict has 'last_error'=None when source has no error."""
+    async def test_response_last_error_is_none_when_source_has_no_error(self) -> None:
+        """AC-2: _sanitize_error(None) -> None; response has last_error=None."""
         source = _make_source(last_error=None)
         store = MagicMock()
         store.list_all.return_value = [source]
@@ -293,7 +361,7 @@ class TestFromAC_ListSourcesHealthMapping:
 
         result = await list_sources(ctx)
 
-        assert "last_error" in result[0], "Response dict missing 'last_error'"
+        assert "last_error" in result[0]
         assert result[0]["last_error"] is None
 
     @pytest.mark.asyncio
@@ -306,7 +374,7 @@ class TestFromAC_ListSourcesHealthMapping:
 
         result = await list_sources(ctx)
 
-        assert "enabled" in result[0], "Response dict missing 'enabled'"
+        assert "enabled" in result[0]
         assert result[0]["enabled"] is True
 
     @pytest.mark.asyncio
@@ -319,7 +387,7 @@ class TestFromAC_ListSourcesHealthMapping:
 
         result = await list_sources(ctx)
 
-        assert "enabled" in result[0], "Response dict missing 'enabled'"
+        assert "enabled" in result[0]
         assert result[0]["enabled"] is False
 
     @pytest.mark.asyncio
@@ -332,7 +400,7 @@ class TestFromAC_ListSourcesHealthMapping:
 
         result = await list_sources(ctx)
 
-        assert "fetch_method" in result[0], "Response dict missing 'fetch_method'"
+        assert "fetch_method" in result[0]
         assert result[0]["fetch_method"] == "http_get"
 
     @pytest.mark.asyncio
@@ -345,12 +413,12 @@ class TestFromAC_ListSourcesHealthMapping:
 
         result = await list_sources(ctx)
 
-        assert "fetch_method" in result[0], "Response dict missing 'fetch_method'"
+        assert "fetch_method" in result[0]
         assert result[0]["fetch_method"] == ""
 
     @pytest.mark.asyncio
     async def test_all_five_health_fields_present_in_single_response(self) -> None:
-        """Response dict for a source contains all 5 new health fields."""
+        """Response dict for a single source contains all 5 new health fields."""
         source = _make_source(
             last_refreshed_at="2026-01-01T00:00:00Z",
             last_checked_at="2026-01-02T00:00:00Z",
@@ -373,7 +441,7 @@ class TestFromAC_ListSourcesHealthMapping:
 
     @pytest.mark.asyncio
     async def test_all_five_fields_present_across_multi_source_response(self) -> None:
-        """All items in a multi-source response include the 5 new health fields."""
+        """All items in a multi-source response include all 5 new health fields."""
         sources = [
             _make_source(name="s1", enabled=True, fetch_method="http"),
             _make_source(name="s2", enabled=False, last_error="timeout"),
@@ -393,13 +461,66 @@ class TestFromAC_ListSourcesHealthMapping:
             assert "enabled" in item
             assert "fetch_method" in item
 
+    # --- Sanitized last_error contract (AC-2: last_error via _sanitize_error) ---
+
     @pytest.mark.asyncio
-    async def test_health_field_values_match_source_attributes_exactly(self) -> None:
-        """All 5 health field values in response match the source model attributes exactly."""
+    async def test_response_last_error_sanitized_to_error_class(self) -> None:
+        """AC-2: raw last_error with PermissionError + path -> 'PermissionError' only."""
+        source = _make_source(last_error="PermissionError: [Errno 13] /home/user/secret")
+        store = MagicMock()
+        store.list_all.return_value = [source]
+        ctx = _make_ctx(source_store=store)
+
+        result = await list_sources(ctx)
+
+        assert result[0]["last_error"] == "PermissionError"
+
+    @pytest.mark.asyncio
+    async def test_response_last_error_sanitized_to_http_status(self) -> None:
+        """AC-2: raw last_error with HTTP status + host info -> HTTP NNN only."""
+        source = _make_source(last_error="HTTP 404 Not Found from internal.corp/api")
+        store = MagicMock()
+        store.list_all.return_value = [source]
+        ctx = _make_ctx(source_store=store)
+
+        result = await list_sources(ctx)
+
+        assert result[0]["last_error"] == "HTTP 404"
+
+    @pytest.mark.asyncio
+    async def test_response_last_error_sanitized_to_error_for_no_pattern_match(self) -> None:
+        """AC-2: raw last_error with no error class or HTTP code -> 'error'."""
+        source = _make_source(last_error="connection refused")
+        store = MagicMock()
+        store.list_all.return_value = [source]
+        ctx = _make_ctx(source_store=store)
+
+        result = await list_sources(ctx)
+
+        assert result[0]["last_error"] == "error"
+
+    @pytest.mark.asyncio
+    async def test_response_last_error_does_not_leak_path_details(self) -> None:
+        """AC-2: sanitized last_error must not contain path separators from raw value."""
+        raw_with_path = "PermissionError: [Errno 13] '/home/user/secret.pem'"
+        source = _make_source(last_error=raw_with_path)
+        store = MagicMock()
+        store.list_all.return_value = [source]
+        ctx = _make_ctx(source_store=store)
+
+        result = await list_sources(ctx)
+
+        error_val = result[0]["last_error"]
+        assert error_val is not None
+        assert "/" not in error_val, f"Path detail leaked into last_error: {error_val!r}"
+
+    @pytest.mark.asyncio
+    async def test_health_field_values_match_sanitized_contract(self) -> None:
+        """AC-2: all 5 health field values correct; last_error is sanitized output."""
         source = _make_source(
             last_refreshed_at="2025-12-31T23:59:59Z",
             last_checked_at="2026-01-01T00:00:01Z",
-            last_error="HTTP 503",
+            last_error="PermissionError: [Errno 13] /secret/data",
             enabled=False,
             fetch_method="atom_feed",
         )
@@ -412,6 +533,6 @@ class TestFromAC_ListSourcesHealthMapping:
         item = result[0]
         assert item["last_refreshed_at"] == "2025-12-31T23:59:59Z"
         assert item["last_checked_at"] == "2026-01-01T00:00:01Z"
-        assert item["last_error"] == "HTTP 503"
+        assert item["last_error"] == "PermissionError"  # sanitized, not raw
         assert item["enabled"] is False
         assert item["fetch_method"] == "atom_feed"
