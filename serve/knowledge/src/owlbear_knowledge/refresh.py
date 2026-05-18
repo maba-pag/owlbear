@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from urllib.parse import unquote
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 import owlbear_knowledge.intake as _intake
 from owlbear_knowledge._paths import sandbox_path
@@ -64,9 +64,11 @@ class RefreshResult(BaseModel):
 
     source_id: str
     refreshed: int
+    partial: int = 0
     skipped: int
     failed: int
-    errors: list[str] = []
+    errors: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -177,14 +179,42 @@ class RefreshOrchestrator:
     # Private handlers
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _ingest_warnings(ingest_result: object) -> list[str]:
+        warnings = getattr(ingest_result, "warnings", [])
+        return [warning for warning in warnings if isinstance(warning, str)] if isinstance(warnings, list) else []
+
+    def _record_ingest_outcome(self, source: KnowledgeSource, ingest_result: object) -> tuple[str, list[str]]:
+        status = getattr(ingest_result, "status", "ok")
+        if status not in {"ok", "partial", "skipped", "failed"}:
+            status = "ok"
+
+        if status in {"ok", "partial"}:
+            document_id = str(getattr(ingest_result, "document_id", ""))
+            if document_id:
+                self._schedule_inter_doc_build(source, document_id)
+
+        return str(status), self._ingest_warnings(ingest_result)
+
     async def _handle_url_list(
         self,
         source: KnowledgeSource,
         cancel: CancelSignal | None = None,
     ) -> RefreshResult:
         urls = _configured_urls(source)
-        refreshed = skipped = failed = 0
+        refreshed = partial = skipped = failed = 0
         errors: list[str] = []
+        warnings: list[str] = []
+
+        if not urls:
+            return RefreshResult(
+                source_id=source.id,
+                refreshed=0,
+                partial=0,
+                skipped=0,
+                failed=1,
+                errors=["source has no URL configured"],
+            )
 
         for url in urls:
             if cancel is not None and cancel.is_set():
@@ -196,10 +226,13 @@ class RefreshOrchestrator:
                     scope=source.scope,
                     source_id=source.id,
                 )
-                if ingest_result.status == "ok":
+                status, ingest_warnings = self._record_ingest_outcome(source, ingest_result)
+                warnings.extend(ingest_warnings)
+                if status == "ok":
                     refreshed += 1
-                    self._schedule_inter_doc_build(source, ingest_result.document_id)
-                elif ingest_result.status == "skipped":
+                elif status == "partial":
+                    partial += 1
+                elif status == "skipped":
                     skipped += 1
                 else:
                     failed += 1
@@ -210,9 +243,11 @@ class RefreshOrchestrator:
         return RefreshResult(
             source_id=source.id,
             refreshed=refreshed,
+            partial=partial,
             skipped=skipped,
             failed=failed,
             errors=errors,
+            warnings=warnings,
         )
 
     async def _handle_file_glob(
@@ -231,19 +266,22 @@ class RefreshOrchestrator:
             return RefreshResult(
                 source_id=source.id,
                 refreshed=0,
+                partial=0,
                 skipped=0,
                 failed=1,
                 errors=[str(exc)],
             )
 
         matching_files = sorted(safe_base.glob(pattern))
-        refreshed = skipped = failed = 0
+        refreshed = partial = skipped = failed = 0
         errors: list[str] = []
+        warnings: list[str] = []
 
         if not matching_files and isinstance(source.config.get("path"), str):
             return RefreshResult(
                 source_id=source.id,
                 refreshed=0,
+                partial=0,
                 skipped=0,
                 failed=1,
                 errors=[f"no files matched source path {source.config['path']!r}"],
@@ -262,10 +300,13 @@ class RefreshOrchestrator:
                     scope=source.scope,
                     source_id=source.id,
                 )
-                if ingest_result.status == "ok":
+                status, ingest_warnings = self._record_ingest_outcome(source, ingest_result)
+                warnings.extend(ingest_warnings)
+                if status == "ok":
                     refreshed += 1
-                    self._schedule_inter_doc_build(source, ingest_result.document_id)
-                elif ingest_result.status == "skipped":
+                elif status == "partial":
+                    partial += 1
+                elif status == "skipped":
                     skipped += 1
                 else:
                     failed += 1
@@ -276,9 +317,11 @@ class RefreshOrchestrator:
         return RefreshResult(
             source_id=source.id,
             refreshed=refreshed,
+            partial=partial,
             skipped=skipped,
             failed=failed,
             errors=errors,
+            warnings=warnings,
         )
 
     async def _handle_authenticated_web(
@@ -300,13 +343,15 @@ class RefreshOrchestrator:
             RefreshResult with per-status counters.
         """
         urls = _configured_urls(source)
-        refreshed = skipped = failed = 0
+        refreshed = partial = skipped = failed = 0
         errors: list[str] = []
+        warnings: list[str] = []
 
         if not urls:
             return RefreshResult(
                 source_id=str(source.id),
                 refreshed=0,
+                partial=0,
                 skipped=0,
                 failed=1,
                 errors=["source has no URL configured"],
@@ -327,14 +372,12 @@ class RefreshOrchestrator:
                 else:
                     ingest_result = ingest_call
 
-                status = getattr(ingest_result, "status", "ok")
-                if status not in {"ok", "skipped", "failed"}:
-                    status = "ok"
-
+                status, ingest_warnings = self._record_ingest_outcome(source, ingest_result)
+                warnings.extend(ingest_warnings)
                 if status == "ok":
                     refreshed += 1
-                    document_id = str(getattr(ingest_result, "document_id", ""))
-                    self._schedule_inter_doc_build(source, document_id)
+                elif status == "partial":
+                    partial += 1
                 elif status == "skipped":
                     skipped += 1
                 else:
@@ -346,9 +389,11 @@ class RefreshOrchestrator:
         return RefreshResult(
             source_id=str(source.id),
             refreshed=refreshed,
+            partial=partial,
             skipped=skipped,
             failed=failed,
             errors=errors,
+            warnings=warnings,
         )
 
     async def _read_authenticated_url(self, url: str) -> _intake.IntakeResult:
@@ -382,10 +427,14 @@ class RefreshOrchestrator:
             try:
                 if len(graph_store.list_documents(scopes=[source.scope])) < _MIN_SCOPE_DOCS:
                     return
-                entities = graph_store.list_entities_for_document(document_id)
+                entities = graph_store.list_entities(scopes=[source.scope])
                 result = await builder.build(entities, scope=source.scope)
                 for edge in result.edges:
-                    graph_store.insert_edge(edge)
+                    edge_document_id = edge.metadata.get("document_id")
+                    if not isinstance(edge_document_id, str) or not edge_document_id:
+                        edge_document_id = document_id
+                    scoped_edge = edge.model_copy(update={"scope": source.scope})
+                    graph_store.insert_edge(scoped_edge, document_id=edge_document_id)
             except Exception as exc:  # noqa: BLE001
                 logger.error(  # noqa: TRY400
                     "Inter-doc build failed for source %r: %s", source.id, exc
@@ -398,14 +447,24 @@ class RefreshOrchestrator:
         source: KnowledgeSource,
         result: RefreshResult,
     ) -> None:
-        """Persist last_refreshed_at and last_error to the store."""
+        """Persist source refresh check state to the store."""
+        if result.refreshed == 0 and result.partial == 0 and result.skipped == 0 and result.failed == 0:
+            return
+
         now = datetime.now(tz=UTC).isoformat()
-        last_error = "; ".join(result.errors) if result.errors else None
-        updated = source.model_copy(
-            update={
-                "last_refreshed_at": now,
-                "last_error": last_error,
-                "updated_at": now,
-            }
-        )
+        update: dict[str, str | None] = {
+            "last_checked_at": now,
+            "updated_at": now,
+        }
+
+        if result.refreshed > 0 or result.partial > 0:
+            messages = [*result.errors, *result.warnings]
+            update["last_refreshed_at"] = now
+            update["last_error"] = "; ".join(messages) if messages else None
+        elif result.failed > 0:
+            update["last_error"] = "; ".join(result.errors) if result.errors else None
+        else:
+            update["last_error"] = None
+
+        updated = source.model_copy(update=update)
         self._store.update(updated)

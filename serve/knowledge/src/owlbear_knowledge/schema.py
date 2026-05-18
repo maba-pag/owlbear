@@ -20,7 +20,7 @@ __all__ = ("audit_integrity", "init_db")
 # Constants
 # ---------------------------------------------------------------------------
 
-_SCHEMA_VERSION: int = 13
+_SCHEMA_VERSION: int = 14
 """Current schema version written to the ``schema_version`` table."""
 
 _SCOPE_TABLES: tuple[str, ...] = (
@@ -118,6 +118,7 @@ CREATE TABLE IF NOT EXISTS knowledge_sources (
     enabled           INTEGER DEFAULT 1,
     priority          INTEGER DEFAULT 0,
     last_refreshed_at TEXT,
+    last_checked_at   TEXT,
     last_error        TEXT,
     created_at        TEXT NOT NULL,
     updated_at        TEXT NOT NULL
@@ -410,6 +411,16 @@ def _migrate_v12_to_v13(conn: sqlite3.Connection) -> None:
     )
 
 
+def _migrate_v13_to_v14(conn: sqlite3.Connection) -> None:
+    """Migrate a v13 database to v14 — adds last_checked_at on knowledge_sources."""
+    with contextlib.suppress(sqlite3.OperationalError):
+        conn.execute("ALTER TABLE knowledge_sources ADD COLUMN last_checked_at TEXT")
+    conn.execute(
+        "UPDATE schema_version SET version = ?, applied_at = ?",
+        (14, datetime.now(tz=UTC).isoformat()),
+    )
+
+
 def _apply_migrations(conn: sqlite3.Connection, current: int) -> None:
     """Apply all pending schema migrations starting from *current* version."""
     migrations: tuple[tuple[int, callable], ...] = (
@@ -425,6 +436,7 @@ def _apply_migrations(conn: sqlite3.Connection, current: int) -> None:
         (11, _migrate_v10_to_v11),
         (12, _migrate_v11_to_v12),
         (13, _migrate_v12_to_v13),
+        (14, _migrate_v13_to_v14),
     )
     for target_version, migration in migrations:
         if current < target_version:
@@ -443,7 +455,7 @@ def init_db(conn: sqlite3.Connection) -> None:
     connection is safe and will not duplicate data or raise errors.
 
     If the database contains an older schema, it is automatically migrated
-    through v2-v13.
+    through v2-v14.
 
     Args:
         conn (sqlite3.Connection): An open :class:`sqlite3.Connection`.  Works with both

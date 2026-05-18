@@ -82,6 +82,7 @@ class SourceType(StrEnum):
     URL_LIST = "url_list"
     FILE_GLOB = "file_glob"
     AUTHENTICATED_WEB = "authenticated_web"
+    INLINE = "inline"
 
 
 # -- Helpers -----------------------------------------------------------------
@@ -122,6 +123,7 @@ class KnowledgeSource(BaseModel):
     enabled: bool = True
     priority: int = 0
     last_refreshed_at: str | None = None
+    last_checked_at: str | None = None
     last_error: str | None = None
     created_at: str
     updated_at: str

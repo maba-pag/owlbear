@@ -53,16 +53,32 @@ class KnowledgeSourceStore:
             last_error=row[10],  # type: ignore[arg-type]
             created_at=row[11],  # type: ignore[arg-type]
             updated_at=row[12],  # type: ignore[arg-type]
+            last_checked_at=row[13],  # type: ignore[arg-type]
         )
 
     _SELECT_COLS = (
         "id, name, source_type, fetch_method, enrich, config, scope, enabled, priority,"
-        " last_refreshed_at, last_error, created_at, updated_at"
+        " last_refreshed_at, last_error, created_at, updated_at, last_checked_at"
     )
 
     def _select_from_sources(self) -> str:
         """Return the ``SELECT ... FROM knowledge_sources`` prefix."""
         return f"SELECT {self._SELECT_COLS} FROM knowledge_sources"  # noqa: S608
+
+    @staticmethod
+    def _configured_urls(config: dict[str, object]) -> set[str]:
+        """Return singular and plural URL identities from a source config."""
+        urls: set[str] = set()
+        raw_urls = config.get("urls")
+        if isinstance(raw_urls, list):
+            urls.update(url.strip() for url in raw_urls if isinstance(url, str) and url.strip())
+        elif isinstance(raw_urls, str) and raw_urls.strip():
+            urls.update(url.strip() for url in raw_urls.split(",") if url.strip())
+
+        raw_url = config.get("url")
+        if isinstance(raw_url, str) and raw_url.strip():
+            urls.add(raw_url.strip())
+        return urls
 
     # -- CRUD ----------------------------------------------------------------
 
@@ -71,8 +87,8 @@ class KnowledgeSourceStore:
         self._conn.execute(
             "INSERT INTO knowledge_sources"
             " (id, name, source_type, fetch_method, enrich, config, scope, enabled, priority,"
-            "  last_refreshed_at, last_error, created_at, updated_at)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "  last_refreshed_at, last_error, created_at, updated_at, last_checked_at)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 source.id,
                 source.name,
@@ -87,6 +103,7 @@ class KnowledgeSourceStore:
                 source.last_error,
                 source.created_at,
                 source.updated_at,
+                source.last_checked_at,
             ),
         )
         self._conn.commit()
@@ -123,7 +140,7 @@ class KnowledgeSourceStore:
             "UPDATE knowledge_sources SET"
             " name = ?, source_type = ?, fetch_method = ?, enrich = ?, config = ?, scope = ?,"
             " enabled = ?, priority = ?, last_refreshed_at = ?,"
-            " last_error = ?, created_at = ?, updated_at = ?"
+            " last_error = ?, created_at = ?, updated_at = ?, last_checked_at = ?"
             " WHERE id = ?",
             (
                 source.name,
@@ -138,6 +155,7 @@ class KnowledgeSourceStore:
                 source.last_error,
                 source.created_at,
                 source.updated_at,
+                source.last_checked_at,
                 source.id,
             ),
         )
@@ -156,9 +174,9 @@ class KnowledgeSourceStore:
         rows = self._conn.execute(self._select_from_sources()).fetchall()
         for row in rows:
             source = self._row_to_model(row)
-            if source.config.get("url") != url:
-                continue
             if scope is not None and source.scope != scope:
+                continue
+            if url not in self._configured_urls(source.config):
                 continue
             return source
         return None
