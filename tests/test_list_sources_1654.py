@@ -299,6 +299,30 @@ class TestFromAC_SanitizeError:
         raw = r"no files matched source path '\\secret\\TimeoutError'"
         assert _sanitize_error(raw) == "error"
 
+    # --- AC-5 pairs 6-7: falsifiable truncation and reject-and-continue ---
+
+    def test_ac5_long_error_token_truncated_to_120_chars(self) -> None:
+        """AC-5 pair 6: matched token > 120 chars is truncated to first 120 chars.
+
+        Input: 'V' + 'a'*119 + 'Error: x' => matched group = 'V' + 'a'*119 + 'Error' (125 chars).
+        Expected: first 120 chars = 'V' + 'a'*119 (Error suffix excluded).
+        Removing [:120] truncation would return 125-char string and fail this assertion.
+        """
+        raw = "V" + "a" * 119 + "Error: x"
+        expected = "V" + "a" * 119  # 120 chars exactly
+        result = _sanitize_error(raw)
+        assert result == expected
+        assert len(result) == 120
+
+    def test_ac5_reject_and_continue_returns_later_valid_token(self) -> None:
+        """AC-5 pair 7: path-preceded token is rejected; search continues and returns later valid token.
+
+        '/opt/TimeoutError' -> lookbehind rejects TimeoutError (preceded by '/').
+        Regex continues and finds 'PermissionError' (preceded by space) -> returned.
+        """
+        raw = "path '/opt/TimeoutError' triggered PermissionError"
+        assert _sanitize_error(raw) == "PermissionError"
+
 
 # ---------------------------------------------------------------------------
 # TestFromAC_ListSourcesHealthMapping
