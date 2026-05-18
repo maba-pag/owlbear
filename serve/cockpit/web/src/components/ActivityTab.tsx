@@ -151,7 +151,6 @@ export default function ActivityTab({ onSelectTask }: ActivityTabProps) {
             role="button"
             aria-label={`Session: ${s.agent ?? 'unknown agent'}, task ${s.task_id ?? 'unassigned'}, ${s.state}`}
             variant="secondary"
-            style={{ cursor: 'pointer' }}
             onClick={() => navigateToTask(s.task_id)}
           >
             <span data-testid="session-agent">{s.agent ?? 'unknown agent'}</span>

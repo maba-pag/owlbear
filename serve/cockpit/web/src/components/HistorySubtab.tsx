@@ -48,7 +48,6 @@ export default function HistorySubtab({ sessions, onSelectTask }: HistorySubtabP
           data-state={s.state}
           role="button"
           tabIndex={0}
-          style={{ cursor: 'pointer' }}
           onClick={() => navigateToTask(s.task_id)}
           onKeyDown={(event) => {
             if (event.key === 'Enter' || event.key === ' ') {
