@@ -127,7 +127,7 @@ class IngestPipeline:
                 config["base_dir"] = str(path.parent)
             return SourceType.FILE_GLOB, "file", config
 
-        return SourceType.AUTHENTICATED_WEB, "http", {"url": source_url, "urls": [source_url]}
+        return SourceType.URL_LIST, "http", {"url": source_url, "urls": [source_url]}
 
     def _resolve_or_create_source_id(
         self,
