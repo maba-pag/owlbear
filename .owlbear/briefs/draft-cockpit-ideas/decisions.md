@@ -1,5 +1,77 @@
 # Decisions — Cockpit Ideas Notebook
 
+## D9 — 2026-05-18 — External-Edit Conflict Interaction
+
+**Status quo:** D6 defines external-edit awareness but the "file changed externally" notice had no actionable interaction — Save still meant blind overwrite.
+**Decision to make:** What happens when dirty + external change detected?
+
+**Options considered:**
+
+- A: Two-button interaction (Overwrite / Discard & Reload) — forces explicit choice
+- B: Notice only, Save still works normally — awareness without agency
+- C: Drop conflict notice entirely — simpler v1
+
+**Chosen:** A — when dirty content + external change detected, show a notice with Overwrite and Discard & Reload buttons. Regular Save is disabled while the notice is showing, forcing an explicit choice. This completes the trust contract for explicit save (Critic Pass 2 finding #2, validated).
+
+**Rejected:**
+
+- B because naming a conflict without actionable options is worse than no notice at all.
+- C because the feature's value is cockpit co-location alongside VS Code; ignoring the dual-surface reality undermines the value proposition.
+
+## D6 — 2026-05-18 — External-Edit Awareness
+
+**Status quo:** No mechanism to detect changes made to `.owlbear/ideas.md` outside the cockpit.
+**Decision to make:** Include external-edit detection in v1 or defer?
+
+**Options considered:**
+
+- A: Re-fetch on tab focus (`visibilitychange` + re-fetch; dirty-state notice for conflicts)
+- B: Defer to later — ship simple, see if stale-content friction materializes
+- C: Manual refresh button
+
+**Chosen:** A — re-fetch on tab focus AND route activation. Dual-surface use (cockpit + VS Code) is the expected pattern per D5. Shipping without detection creates predictable stale-content frustration on a feature whose value is co-location.
+
+Triggers: (1) `visibilitychange` for alt-tab/minimize scenarios; (2) route activation (component remount) for intra-cockpit navigation (Ideas → Kanban → Ideas). Both are needed because `visibilitychange` alone misses intra-cockpit route changes (Critic finding #5, validated).
+
+**Rejected:**
+
+- B because the user knows dual-surface use is the norm; deferring would require a near-certain follow-up.
+- C because it doesn't solve the problem — user must remember to click.
+
+**Source inputs:**
+
+- UX review: "dual-surface use is the expected pattern, not an edge case"
+- Architecture review: silent on this topic (complementary coverage gap)
+
+## D7 — 2026-05-18 — Preview Toggle
+
+**Status quo:** Simplifier (Phase 1) proposed cutting preview entirely. Dependencies already bundled.
+**Decision to make:** Include markdown preview toggle in v1 or ship textarea-only?
+
+**Options considered:**
+
+- A: Include preview toggle — complete feature, marginal code, supports re-reading
+- B: Textarea-only — simplest v1, toggle trivially addable later
+
+**Chosen:** A — include preview toggle in v1. Dependencies are already bundled, pattern exists in TaskFieldsEditor, and it supports the re-reading use case without requiring a context switch to VS Code.
+
+**Rejected:**
+
+- B because the incremental cost is low and the feature would feel incomplete without it.
+
+## D8 — 2026-05-18 — Housekeeping Bundling
+
+**Status quo:** Two minor items flagged by architecture review.
+**Decision to make:** Bundle into ideas feature or separate tasks?
+
+**Chosen:** Include `atomic_write` docstring update in the ideas feature scope. Update to remove kanban-specific framing since the function is now consumed cross-package.
+
+**Removed from scope (Critic finding #3, validated):** CockpitProvider eager polling on non-board routes is an app-topology issue owned by #1638 (tab system), not page-local housekeeping. The ideas page depends on #1638 solving this.
+
+**Rejected:**
+
+- Separate task for docstring — too small to warrant its own task; naturally touched during implementation.
+
 ## D1 — 2026-05-17 — Project Type
 
 **Status quo:** No prior classification.
