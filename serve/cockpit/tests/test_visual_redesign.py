@@ -26,15 +26,45 @@ _TSX_SRC = _WEB / "src"
 
 @pytest.mark.slow
 class TestCockpitVisualRedesignSuiteGates:
-    """AC-1: Full Playwright e2e suite (npm run test:e2e:all) passes with zero failures.
+    """AC-1: Vitest unit tests, full Playwright e2e suite, and production build pass with zero failures.
 
-    Vitest (npm test) and production build (npm run build) are currently green and
-    are regression-guarded by the builder's code-review gate. This class verifies
-    the Playwright e2e suite — the one delivery gate that currently FAILS due to the
-    RepairPanel <span onClick> violation in accessibility-sweep.spec.ts.
-
+    All three delivery gates from AC-1 are verified here as durable subprocess proofs.
     Prerequisites: ``npx playwright install chromium`` run once in serve/cockpit/web/.
     """
+
+    @pytest.mark.timeout(300)
+    def test_vitest_passes(self) -> None:
+        """AC-1: ``npm test`` (Vitest unit suite) exits 0 with zero test failures."""
+        result = subprocess.run(
+            ["npm", "test"],
+            cwd=_WEB,
+            capture_output=True,
+            text=True,
+            timeout=240,
+        )
+        combined = result.stdout + result.stderr
+        assert result.returncode == 0, (
+            f"Vitest unit suite failed (exit {result.returncode}).\n"
+            "Fix all failing unit tests before marking this consolidation task done.\n\n"
+            f"Vitest output:\n{combined[-4000:]}"
+        )
+
+    @pytest.mark.timeout(180)
+    def test_production_build_passes(self) -> None:
+        """AC-1: ``npm run build`` (tsc -b && vite build) exits 0."""
+        result = subprocess.run(
+            ["npm", "run", "build"],
+            cwd=_WEB,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        combined = result.stdout + result.stderr
+        assert result.returncode == 0, (
+            f"Production build failed (exit {result.returncode}).\n"
+            "Fix all TypeScript/build errors before marking this consolidation task done.\n\n"
+            f"Build output:\n{combined[-4000:]}"
+        )
 
     @pytest.mark.timeout(420)
     def test_playwright_e2e_all_passes(self) -> None:
