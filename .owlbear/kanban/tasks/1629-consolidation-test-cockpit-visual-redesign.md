@@ -47,7 +47,7 @@ ac:
     ArchivalModal, ConfirmDialog, CleanupPanel, and RepairPanel under both 
     `.scheme-light` and `.scheme-dark` document themes
 proof_bundle: critical
-blocked: true
+blocked: false
 block_reason: 'Dependency #1657 (CockpitProvider abort-test timing regression) must
   resolve before AC-1 gate passes'
 claimed_at:
