@@ -70,11 +70,6 @@ class TestCockpitVisualRedesignSuiteGates:
     def test_playwright_e2e_all_passes(self) -> None:
         """AC-1: ``npm run test:e2e:all`` (full Playwright suite, all specs) exits 0.
 
-        Fails until the builder fixes:
-        - RepairPanel <span onClick> interactive-supports-focus violation
-          (already flagged in accessibility-sweep.spec.ts and dual-theme spec).
-        - Any additional violations exposed by the new accessibility-dual-theme spec.
-
         Prerequisites: ``npx playwright install chromium`` run once.
         """
         result = subprocess.run(
@@ -87,8 +82,7 @@ class TestCockpitVisualRedesignSuiteGates:
         combined = result.stdout + result.stderr
         assert result.returncode == 0, (
             f"Playwright test:e2e:all failed (exit {result.returncode}).\n"
-            "Fix all e2e spec failures (RepairPanel violation + dual-theme violations) "
-            "before marking this consolidation task done.\n\n"
+            "Fix all failing e2e specs before marking this consolidation task done.\n\n"
             f"Playwright output:\n{combined[-4000:]}"
         )
 
@@ -176,9 +170,10 @@ class TestCockpitVisualRedesignDualTheme:
     def test_dual_theme_axe_spec_passes(self) -> None:
         """accessibility-dual-theme.spec.ts exits 0 with zero violations in both themes.
 
-        Fails until the builder:
-        - Fixes the RepairPanel <span onClick> interactive-supports-focus violation.
-        - Resolves any dark-theme-specific axe violations exposed by the new sweep.
+        Covers all 10 surfaces from accessibility-sweep.spec.ts under both
+        .scheme-light and .scheme-dark: board view, sidecar, DRStatusIndicator
+        popover, HealthBadge popover, FilterPanel, ResolveModal, ArchivalModal,
+        ConfirmDialog, CleanupPanel, and RepairPanel.
         """
         result = subprocess.run(
             ["npx", "playwright", "test", "e2e/accessibility-dual-theme.spec.ts"],

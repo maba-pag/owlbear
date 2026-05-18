@@ -8,13 +8,17 @@
  * useTheme() hook resolves the target scheme before first render — no post-load
  * DOM patching needed.
  *
- * Surfaces tested per theme:
+ * Surfaces tested per theme (full parity with accessibility-sweep.spec.ts):
  *   1. Board view
  *   2. Sidecar detail view
- *   3. ResolveModal (DR resolution modal)
- *   4. RepairPanel confirm dialog — KNOWN RED: <span onClick> violates
- *      interactive-supports-focus (wcag2a, SC 2.1.1). Builder must replace
- *      with a proper interactive element under both themes.
+ *   3. DRStatusIndicator popover
+ *   4. HealthBadge popover
+ *   5. FilterPanel (open state)
+ *   6. ResolveModal (DR resolution modal)
+ *   7. ArchivalModal
+ *   8. ConfirmDialog
+ *   9. CleanupPanel confirm dialog
+ *  10. RepairPanel confirm dialog
  *
  * Route mocks use Playwright LIFO ordering: catch-all first, specific routes last.
  */
@@ -232,7 +236,78 @@ for (const theme of THEMES) {
       expect(results.violations, formatViolations(results.violations)).toEqual([])
     })
 
-    // ── Surface 3: ResolveModal (modal surface) ────────────────────────────
+    // ── Surface 3: DRStatusIndicator popover ─────────────────────────────
+    // The DR popover opens when the dr-indicator button is clicked. Renders a
+    // custom fixed-position div with role="dialog" and a list of pending DR items.
+    test(`dr status indicator popover passes wcag2.1 aa under ${theme} theme (AC3)`, async ({ page }) => {
+      await expect(
+        page.locator('html'),
+        `html element must carry class scheme-${theme}`,
+      ).toHaveClass(new RegExp(`scheme-${theme}`))
+
+      const drIndicator = page.locator('[data-testid="dr-indicator"]')
+      await drIndicator.waitFor({ state: 'visible', timeout: 5_000 })
+      await expect(
+        drIndicator,
+        'dr-indicator must have data-status="attention" — /api/decisions/pending must have returned items',
+      ).toHaveAttribute('data-status', 'attention')
+
+      await drIndicator.click()
+      await page.locator('[data-testid="dr-popover"]').waitFor({ state: 'visible', timeout: 3_000 })
+
+      const results = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze()
+      expect(results.violations, formatViolations(results.violations)).toEqual([])
+    })
+
+    // ── Surface 4: HealthBadge popover ────────────────────────────────────
+    // The HealthBadge popover opens when the health-badge button is clicked.
+    // Renders a fixed-position div with role="dialog" listing scan issues.
+    test(`health badge popover passes wcag2.1 aa under ${theme} theme (AC3)`, async ({ page }) => {
+      await expect(
+        page.locator('html'),
+        `html element must carry class scheme-${theme}`,
+      ).toHaveClass(new RegExp(`scheme-${theme}`))
+
+      await page
+        .locator('[data-testid="health-badge"]')
+        .waitFor({ state: 'visible', timeout: 8_000 })
+      await expect(
+        page.locator('[data-testid="health-badge"]'),
+        'health-badge must have data-health="red" — /api/tasks/scan must have returned scan items',
+      ).toHaveAttribute('data-health', 'red')
+
+      await page.locator('[data-testid="health-badge"]').click()
+      await page
+        .locator('[data-testid="health-badge-popover"]')
+        .waitFor({ state: 'visible', timeout: 3_000 })
+
+      const results = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze()
+      expect(results.violations, formatViolations(results.violations)).toEqual([])
+    })
+
+    // ── Surface 5: FilterPanel (open state) ──────────────────────────────
+    // The FilterPanel is visible when panelOpen=true. Contains PDS search,
+    // select, and multi-select inputs. Toggled by filter-toggle.
+    test(`filter panel open state passes wcag2.1 aa under ${theme} theme (AC3)`, async ({ page }) => {
+      await expect(
+        page.locator('html'),
+        `html element must carry class scheme-${theme}`,
+      ).toHaveClass(new RegExp(`scheme-${theme}`))
+
+      const filterToggle = page.locator('[data-testid="filter-toggle"]')
+      await filterToggle.waitFor({ state: 'visible', timeout: 5_000 })
+      await filterToggle.click()
+
+      await expect(
+        page.locator('[data-testid="filter-panel"]'),
+        'filter-panel must be visible after clicking filter-toggle',
+      ).toBeVisible({ timeout: 3_000 })
+
+      const results = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze()
+      expect(results.violations, formatViolations(results.violations)).toEqual([])
+    })
+
+    // ── Surface 6: ResolveModal (modal surface) ───────────────────────────
     // DR resolution modal — opened from DRStatusIndicator popover.
     test(`resolve modal passes wcag2.1 aa under ${theme} theme (AC3)`, async ({ page }) => {
       await expect(
@@ -260,12 +335,91 @@ for (const theme of THEMES) {
       expect(results.violations, formatViolations(results.violations)).toEqual([])
     })
 
-    // ── Surface 4: RepairPanel confirm dialog (modal surface) ──────────────
-    // KNOWN RED: <span data-testid="repair-confirm-btn" onClick> in RepairPanel.tsx
-    // carries a click handler on a non-interactive <span> element. Axe flags this as
-    // an `interactive-supports-focus` violation under wcag2a:
-    //   SC 2.1.1 (keyboard): click target not keyboard reachable.
-    // Test fails under BOTH themes until builder replaces the span with a <button>.
+    // ── Surface 7: ArchivalModal ──────────────────────────────────────────
+    // ArchivalModal opens when the user selects "archived" from the task context menu.
+    // The context menu appears on right-click of a task card.
+    test(`archival modal passes wcag2.1 aa under ${theme} theme (AC3)`, async ({ page }) => {
+      await expect(
+        page.locator('html'),
+        `html element must carry class scheme-${theme}`,
+      ).toHaveClass(new RegExp(`scheme-${theme}`))
+
+      const card = page.locator('[data-testid="task-card"][data-id="1"]')
+      await card.waitFor({ state: 'visible', timeout: 8_000 })
+
+      await card.click({ button: 'right' })
+      const contextMenu = page.locator('[data-testid="context-menu"]')
+      await contextMenu.waitFor({ state: 'visible', timeout: 5_000 })
+
+      await page.locator('[data-testid="transition-item"][data-status="archived"]').click()
+
+      await page
+        .locator('[data-testid="archival-modal"]')
+        .waitFor({ state: 'attached', timeout: 5_000 })
+      await page
+        .locator('[data-testid="archival-submit"]')
+        .waitFor({ state: 'visible', timeout: 5_000 })
+
+      const results = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze()
+      expect(results.violations, formatViolations(results.violations)).toEqual([])
+    })
+
+    // ── Surface 8: ConfirmDialog ──────────────────────────────────────────
+    // ConfirmDialog opens from TaskActions when "Move Backward" is clicked.
+    // The task must be in-progress with a valid backward transition.
+    test(`confirm dialog passes wcag2.1 aa under ${theme} theme (AC3)`, async ({ page }) => {
+      await expect(
+        page.locator('html'),
+        `html element must carry class scheme-${theme}`,
+      ).toHaveClass(new RegExp(`scheme-${theme}`))
+
+      const card = page.locator('[data-testid="task-card"][data-id="1"]')
+      await card.waitFor({ state: 'visible', timeout: 8_000 })
+      await card.click()
+
+      await expect(
+        page.locator('[data-field="title"]'),
+        'sidecar [data-field="title"] must be visible before clicking move-backward',
+      ).toBeVisible({ timeout: 5_000 })
+
+      const moveBackwardBtn = page.locator('[data-testid="move-backward"]')
+      await moveBackwardBtn.waitFor({ state: 'visible', timeout: 5_000 })
+      await moveBackwardBtn.click()
+
+      await page
+        .locator('[data-testid="confirm-dialog"]')
+        .waitFor({ state: 'attached', timeout: 5_000 })
+
+      const results = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze()
+      expect(results.violations, formatViolations(results.violations)).toEqual([])
+    })
+
+    // ── Surface 9: CleanupPanel confirm dialog ────────────────────────────
+    // CleanupPanel confirm dialog opens when the "Cleanup" button is clicked.
+    // Renders as a custom div with role="dialog" in the status-bar.
+    test(`cleanup panel confirm dialog passes wcag2.1 aa under ${theme} theme (AC3)`, async ({ page }) => {
+      await expect(
+        page.locator('html'),
+        `html element must carry class scheme-${theme}`,
+      ).toHaveClass(new RegExp(`scheme-${theme}`))
+
+      const cleanupButton = page.locator('[data-testid="cleanup-button"]')
+      await cleanupButton.waitFor({ state: 'visible', timeout: 5_000 })
+      await cleanupButton.click()
+
+      await expect(
+        page.locator('[data-testid="cleanup-confirm-dialog"]'),
+        'cleanup-confirm-dialog must be visible after clicking cleanup-button',
+      ).toBeVisible({ timeout: 3_000 })
+
+      const results = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze()
+      expect(results.violations, formatViolations(results.violations)).toEqual([])
+    })
+
+    // ── Surface 10: RepairPanel confirm dialog ────────────────────────────
+    // RepairPanel confirm dialog opens from the HealthBadge popover: click
+    // health-badge to open the popover, then click repair-button to trigger
+    // the confirming phase.
     test(`repair panel confirm dialog passes wcag2.1 aa under ${theme} theme (AC3)`, async ({
       page,
     }) => {
@@ -296,8 +450,6 @@ for (const theme of THEMES) {
         'repair-confirm-dialog must be visible after clicking repair-button',
       ).toBeVisible({ timeout: 3_000 })
 
-      // AC3: KNOWN FAILING — <span onClick> on repair-confirm-btn violates
-      // interactive-supports-focus (wcag2a / SC 2.1.1). Must fail under both themes.
       const results = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze()
       expect(results.violations, formatViolations(results.violations)).toEqual([])
     })
