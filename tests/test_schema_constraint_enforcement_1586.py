@@ -129,33 +129,33 @@ class TestFromAC_SchemaVersion:
     """Contract tests derived from AC-1."""
 
     def test_schema_version_constant_is_13(self) -> None:
-        """_SCHEMA_VERSION constant must be bumped to 13."""
-        assert _SCHEMA_VERSION == 13
+        """_SCHEMA_VERSION constant must be at the current terminal version (14 after #1651)."""
+        assert _SCHEMA_VERSION == 14
 
     def test_fresh_db_schema_version_is_13_after_init_db(self) -> None:
-        """init_db() on a new connection writes schema_version = 13 to the table."""
+        """init_db() on a new connection writes schema_version = 14 to the table."""
         conn = sqlite3.connect(":memory:")
         init_db(conn)
         row = conn.execute("SELECT version FROM schema_version").fetchone()
         assert row is not None
-        assert row[0] == 13
+        assert row[0] == 14
 
     def test_init_db_enables_foreign_keys_and_reaches_v13(self) -> None:
-        """init_db() enables PRAGMA foreign_keys = ON and reaches schema version 13."""
+        """init_db() enables PRAGMA foreign_keys = ON and reaches current schema version."""
         conn = sqlite3.connect(":memory:")
         init_db(conn)
         fk = conn.execute("PRAGMA foreign_keys").fetchone()[0]
         ver = conn.execute("SELECT version FROM schema_version").fetchone()[0]
         assert fk == 1
-        assert ver == 13  # fails when _SCHEMA_VERSION is still 12
+        assert ver == 14  # updated to 14 by #1651
 
     def test_apply_migrations_dispatches_v12_to_v13(self) -> None:
-        """_apply_migrations(conn, 12) migrates a v12 db to schema version 13."""
+        """_apply_migrations(conn, 12) migrates a v12 db to the terminal schema version (14)."""
         conn = _make_v12_legacy_conn()
         _apply_migrations(conn, 12)
         row = conn.execute("SELECT version FROM schema_version").fetchone()
         assert row is not None, "schema_version table must contain a row"
-        assert row[0] == 13
+        assert row[0] == 14
 
 
 # ---------------------------------------------------------------------------

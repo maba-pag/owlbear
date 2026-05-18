@@ -289,6 +289,43 @@ class TestFromAC_UpdateSourceRecordRefreshed:
         refreshed = datetime.fromisoformat(spy.updated.last_refreshed_at)
         assert before <= refreshed <= after
 
+    def test_partial_positive_clears_last_error_when_no_messages(self) -> None:
+        """partial=1, no errors or warnings → last_error cleared to None (AC-2 path)."""
+        spy = _SpyStore()
+        orch = self._orch(spy)
+        source = _make_source(
+            last_refreshed_at="2026-01-01T00:00:00+00:00",
+            last_error="stale error",
+        )
+        result = RefreshResult(source_id="src-test", refreshed=0, partial=1, skipped=0, failed=0)
+
+        orch._update_source_record(source, result)  # noqa: SLF001
+
+        assert spy.updated is not None
+        assert spy.updated.last_checked_at is not None  # AttributeError until field added
+        assert spy.updated.last_error is None
+
+    def test_partial_positive_sets_last_error_from_errors_and_warnings(self) -> None:
+        """partial=1, errors=['e1'] warnings=['w1'] → last_error = 'e1; w1' (AC-2 path)."""
+        spy = _SpyStore()
+        orch = self._orch(spy)
+        source = _make_source(last_refreshed_at="2026-01-01T00:00:00+00:00")
+        result = RefreshResult(
+            source_id="src-test",
+            refreshed=0,
+            partial=1,
+            skipped=0,
+            failed=0,
+            errors=["e1"],
+            warnings=["w1"],
+        )
+
+        orch._update_source_record(source, result)  # noqa: SLF001
+
+        assert spy.updated is not None
+        assert spy.updated.last_checked_at is not None  # AttributeError until field added
+        assert spy.updated.last_error == "e1; w1"
+
     def test_refreshed_clears_last_error_when_no_messages(self) -> None:
         """refreshed=1 with no errors or warnings → last_error cleared to None."""
         spy = _SpyStore()
