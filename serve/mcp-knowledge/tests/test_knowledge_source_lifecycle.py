@@ -257,21 +257,31 @@ class TestKnowledgeSourceLifecycleDurable:
         )
 
     def test_ac2_skipped_result_sets_last_checked_at(self, lifecycle: dict) -> None:
-        """After skipped refresh, last_checked_at is set (reflects the skipped check timestamp)."""
+        """Skipped-path _update_source_record writes last_checked_at (proven by resetting to NULL first)."""
         ss = lifecycle["source_store"]
         src = lifecycle["source"]
+        conn = lifecycle["conn"]
         orchestrator = RefreshOrchestrator(store=ss, pipeline=MagicMock())
 
         result_refreshed = RefreshResult(source_id="src-lc-1", refreshed=1, skipped=0, failed=0)
         orchestrator._update_source_record(src, result_refreshed)
         after_refreshed = ss.get("src-lc-1")
+        assert after_refreshed is not None
+
+        # Reset last_checked_at to NULL so only the skipped-path call can restore it.
+        # If the skipped path fails to write last_checked_at, the value stays NULL.
+        conn.execute("UPDATE knowledge_sources SET last_checked_at = NULL WHERE id = ?", ("src-lc-1",))
+        conn.commit()
 
         result_skipped = RefreshResult(source_id="src-lc-1", refreshed=0, skipped=1, failed=0)
         orchestrator._update_source_record(after_refreshed, result_skipped)
         after_skipped = ss.get("src-lc-1")
 
         assert after_skipped is not None
-        assert after_skipped.last_checked_at is not None, "last_checked_at must be set after skipped refresh"
+        assert after_skipped.last_checked_at is not None, (
+            "last_checked_at must be written by the skipped-path call "
+            "(was reset to NULL before the call to prove it is not a stale refreshed-path value)"
+        )
 
     # ------------------------------------------------------------------
     # AC-3: list_sources includes all 5 health fields with correct values
@@ -320,19 +330,25 @@ class TestKnowledgeSourceLifecycleDurable:
 
     @pytest.mark.asyncio
     async def test_ac3_last_refreshed_at_retained_after_skipped_refresh(self, lifecycle: dict) -> None:
-        """list_sources shows last_refreshed_at from refreshed path, not overwritten by skipped refresh."""
+        """list_sources: last_refreshed_at preserved; last_checked_at comes from the skipped refresh."""
         ss = lifecycle["source_store"]
         src = lifecycle["source"]
+        conn = lifecycle["conn"]
         app_ctx = lifecycle["app_ctx"]
         orchestrator = RefreshOrchestrator(store=ss, pipeline=MagicMock())
 
-        # Refreshed path → sets last_refreshed_at
+        # Refreshed path → sets last_refreshed_at and last_checked_at
         orchestrator._update_source_record(src, RefreshResult(source_id="src-lc-1", refreshed=1, skipped=0, failed=0))
         after_refreshed = ss.get("src-lc-1")
         assert after_refreshed is not None
         expected_refreshed_at = after_refreshed.last_refreshed_at
 
-        # Skipped path → must NOT overwrite last_refreshed_at
+        # Reset last_checked_at to NULL so only the skipped-path call can restore it.
+        # This proves list_sources reflects the skipped-refresh timestamp, not the stale refreshed-path value.
+        conn.execute("UPDATE knowledge_sources SET last_checked_at = NULL WHERE id = ?", ("src-lc-1",))
+        conn.commit()
+
+        # Skipped path → must NOT overwrite last_refreshed_at, but MUST write last_checked_at
         orchestrator._update_source_record(
             after_refreshed, RefreshResult(source_id="src-lc-1", refreshed=0, skipped=1, failed=0)
         )
@@ -345,7 +361,10 @@ class TestKnowledgeSourceLifecycleDurable:
             "list_sources last_refreshed_at must retain the refreshed-path value "
             "and not be overwritten by the subsequent skipped refresh"
         )
-        assert src_item["last_checked_at"] is not None, "list_sources last_checked_at must reflect the skipped refresh"
+        assert src_item["last_checked_at"] is not None, (
+            "list_sources last_checked_at must reflect the skipped refresh "
+            "(was reset to NULL before the skipped call to prove the skipped path writes it)"
+        )
 
     # ------------------------------------------------------------------
     # AC-4: remove_source counts and delete_embedding calls
