@@ -107,12 +107,16 @@ class TestCockpitVisualRedesignInlineStyleBudget:
     """
 
     def _collect_style_attrs(self) -> list[tuple[str, int, str]]:
-        """Return (filepath, 1-based line number, stripped line text) for every style={ hit."""
+        """Return (filepath, 1-based line number, stripped line text) for every style={…} hit.
+
+        Uses a whitespace-tolerant regex (``style\\s*=\\s*\\{``) to catch any JSX
+        inline-style attribute regardless of formatting.
+        """
         hits: list[tuple[str, int, str]] = []
         for path in sorted(_TSX_SRC.rglob("*.tsx")):
             lines = path.read_text(encoding="utf-8").splitlines()
             for i, line in enumerate(lines):
-                if re.search(r"style=\{", line):
+                if re.search(r"style\s*=\s*\{", line):
                     hits.append((str(path), i + 1, line.strip()))
         return hits
 
@@ -141,13 +145,15 @@ class TestCockpitVisualRedesignInlineStyleBudget:
         for path in sorted(_TSX_SRC.rglob("*.tsx")):
             lines = path.read_text(encoding="utf-8").splitlines()
             for i, line in enumerate(lines):
-                if re.search(r"style=\{", line):
+                if re.search(r"style\s*=\s*\{", line):
                     context = "\n".join(lines[max(0, i - 3) : i + 1])
-                    if "// inline-justified:" not in context:
+                    # Require non-empty reason text after the colon (≥1 non-whitespace char).
+                    if not re.search(r"//\s*inline-justified:\s*\S", context):
                         missing.append((str(path), i + 1, line.strip()))
         assert missing == [], (
             f"{len(missing)} inline style(s) lack a '// inline-justified: <reason>' comment "
-            "within 3 lines before the attribute:\n" + "\n".join(f"  {f}:{ln}: {text}" for f, ln, text in missing)
+            "(with non-empty reason text) within 3 lines before the attribute:\n"
+            + "\n".join(f"  {f}:{ln}: {text}" for f, ln, text in missing)
         )
 
 
