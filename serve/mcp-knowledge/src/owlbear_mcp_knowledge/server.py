@@ -112,6 +112,11 @@ class SourceInfo(TypedDict):
     name: str
     source_type: str
     scope: str
+    last_refreshed_at: str | None
+    last_checked_at: str | None
+    last_error: str | None
+    enabled: bool
+    fetch_method: str
 
 
 class EntityInfo(TypedDict):
@@ -1411,6 +1416,11 @@ async def list_sources(ctx: Context, scope: str | None = None) -> list[SourceInf
             "name": s.name,
             "source_type": str(s.source_type),
             "scope": s.scope,
+            "last_refreshed_at": s.last_refreshed_at,
+            "last_checked_at": s.last_checked_at,
+            "last_error": s.last_error,
+            "enabled": s.enabled,
+            "fetch_method": s.fetch_method,
         }
         for s in sources
     ]
