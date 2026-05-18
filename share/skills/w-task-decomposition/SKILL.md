@@ -47,6 +47,8 @@ Read input (free-text, plan doc section, or requirements). Identify phase number
 
 If the parent task body contains a `## Brief` or `## Problem` section (Brief artifact, produced by ideation), use it to derive scope, investment tier, and approach constraints for decomposition. Include `Brief: see parent #{id}` reference in each child task body.
 
+When the parent contains an approved ideation Brief, the planner sequences or splits Brief requirements but does not delete them. If a Brief requirement cannot fit one atomic task, split it across tasks. If a Brief requirement appears invalid, conflicting, or impossible, surface that conflict in the planning note instead of dropping the requirement.
+
 Announce: "Decomposing: {name}. Expected: {N} tasks in {M} layers."
 
 ## Step 1a — Single-Task Shortcut

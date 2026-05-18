@@ -32,6 +32,7 @@ When Critic is invoked on the current position, validate findings before they af
 6. Do not silently absorb Critic output.
 7. Let the user reclassify or reject your assessment.
 8. Record the validated outcome in `decisions.md`.
+9. For expectation-fidelity findings, evaluate whether the challenged item is wanted, not merely necessary for bare function. If the Expectation Signal or prior decisions do not already answer that question, ask the user instead of deciding silently.
 
 ## Disclosure Ladder
 
@@ -107,6 +108,7 @@ Use the lightest disclosure level that still supports a good decision. Never hid
 9. Dispatch `ideation-pragmatist` with `mode=compare` so it reads proposal files plus `context.md` and `decisions.md`, then writes `synthesis.md` with:
    - divergence-only comparison matrix columns: Decision Point, architect, data, enduser, security, Tension Level
    - common ground summary
+   - expectation fit: how each viable direction preserves what the user is actually trying to get, what makes it feel worth using, and what remains after any First Useful Step
    - open questions
 
 ## Step 2 — Late Domain Panel Orchestration (Stance Path)
@@ -123,7 +125,8 @@ Use the lightest disclosure level that still supports a good decision. Never hid
    - `ideation-security`
 5. Use sequential deep-dive only when panel interdependence makes the parallel pass misleading.
 6. After domain panelists finish, invoke `ideation-pragmatist` in `converge` mode to write `synthesis.md`.
-7. Read `synthesis.md` only. Do not read raw debate logs unless the user asks for drill-in and the decision depends on exact wording.
+7. Require the normal stance-path `synthesis.md` to include expectation fit: how the dominant approach preserves what the user is actually trying to get, what makes it feel worth using, and what remains after any First Useful Step.
+8. Read `synthesis.md` only. Do not read raw debate logs unless the user asks for drill-in and the decision depends on exact wording.
 
 ## Step 3 — M4: Decision — "What are we doing and why?"
 
@@ -139,7 +142,7 @@ Apply O15 to every Critic pass. See the Critic Validation section above for the 
 
 1. After hybridization (or equivalent final direction selection), run two sequential `ideation-critic` passes:
    - Pass 1 (synthesis critic): read the hybridized `synthesis.md` and challenge internal consistency of the combined elements.
-   - Pass 2 (result critic): read the updated `synthesis.md` plus `decisions.md` and challenge the final design on its own merits.
+   - Pass 2 (result critic): read the updated `synthesis.md` plus `decisions.md` and challenge the final design on its own merits. For `Tool`, `Shared`, and `Production` tiers, include expectation-fidelity mode before Brief drafting.
 2. Apply O15 to both passes. See the Critic Validation section above for the full procedure.
 
 ## Step 5 — M5: The Brief — "Here's the plan"
@@ -148,14 +151,25 @@ Apply O15 to every Critic pass. See the Critic Validation section above for the 
 2. Draft the Brief from `context.md`, `decisions.md`, `research-notes.md`, and `synthesis.md`.
 3. Apply the Disclosure Ladder in all subagent-to-user translation.
 4. If the user chooses a walkthrough, present each chunk inline before asking for approval.
-5. Write `brief.md` only after user approval.
+5. No mandatory/recommended tiers: everything in the approved Brief is a requirement. If an item should not be built, remove it or record an accepted trade-off before approval.
+6. Write `brief.md` only after user approval. Once approved, the Brief is the binding product promise for downstream planning.
 
 ## Step 6 — M6: Handoff — "Go"
 
 1. Create the parent kanban task from the approved Brief.
 2. Invoke `planner` with the canonical prefix: `Plan and create: #{parent_id} — {brief summary}`.
-3. Commit the final Working Directory state: `git add .owlbear/briefs/draft-{name}/ && git commit -m "ideation: complete Phase 2 mediation for {name}"`
-4. Report the handoff result to the user:
+3. Write `planning-summary.md` from the planner result: parent task, child-task list, Brief coverage, expected-experience coverage, omissions, and repair actions.
+4. Apply the tier-scaled M6 handoff check from `h-ideation` against `brief.md`, `planning-summary.md`, and the created child tasks:
+   - `Scratch` and `Tool`: no formal M6 fidelity check.
+   - `Shared`: post-planner expectation-fidelity Critic check.
+   - `Production`: post-planner expectation-fidelity Critic check.
+5. Use additive-only repair for M6 gaps:
+   - coverage omissions go back to planner as additional tasks
+   - value or scope trade-offs go back to the user
+   - unclear cases go back to the user
+   - do not delete, merge, or materially rewrite existing child tasks during M6 repair
+6. Commit the final Working Directory state: `git add .owlbear/briefs/draft-{name}/ && git commit -m "ideation: complete Phase 2 mediation for {name}"`
+7. Report the handoff result to the user:
    - parent task ID and title
    - number of child tasks created by planner
    - what happens next (architect reviews, then pipeline proceeds automatically)
@@ -177,3 +191,7 @@ Apply O15 to every Critic pass. See the Critic Validation section above for the 
 - [ ] Proposal artifacts were produced at `stances/{name}-proposal.md` with the required sections.
 - [ ] Pragmatist `mode=compare` produced `synthesis.md` with divergence matrix, common ground summary, and open questions.
 - [ ] Post-hybridization dual Critic passes were executed and both were triaged with O15.
+- [ ] Expectation fit is represented in `synthesis.md` before Brief drafting.
+- [ ] Approved `brief.md` contains no mandatory/recommended tiers and carries the binding product promise.
+- [ ] `planning-summary.md` records child-task coverage against the approved Brief and expected experience.
+- [ ] Tier-scaled M6 handoff check ran when required, with additive-only repair for coverage omissions.

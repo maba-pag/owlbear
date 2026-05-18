@@ -60,6 +60,7 @@ This agent handles both invocation scopes from one contract:
 
 - **Standalone (mediation agent):** challenge the current framing, chosen approach, or draft Brief.
 - **Embedded (domain panelist):** challenge the panelist's current stance before it is published.
+- **expectation-fidelity mode:** compare the current outcomes, synthesis, Brief, or planning summary against the Expectation Signal. Challenge underdelivery, silent descoping, and any technically done but still wrong result. Do not propose fixes.
 
 The input context determines the scope.
 

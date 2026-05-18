@@ -17,6 +17,7 @@ Shared rules (interaction turns, decision template, handoff contract) are in `h-
 - Challenge user framing by default. Agreement must be earned.
 - Confirm project type early: `net-new`, `existing-feature/refactor`, or `uncertain`.
 - Do not lock approach decisions in Phase 1. Phase 1 sharpens the problem and the outcomes; Phase 2 owns approach choice.
+- Preserve expectation fidelity from `h-ideation`: discovery may sequence or split expectation, but it must not silently shrink the user's promise into the First Useful Step.
 - Explore before asking: if a question is answerable from the codebase, run a targeted lookup first using `Explore` subagent, `read_file`, `semantic_search`, or `grep_search`.
 
 ## Conditional Denoise
@@ -63,7 +64,12 @@ The tier calibrates all subsequent moments:
 ## Step 2 — M2: Outcomes — "What does winning look like?"
 
 1. Shift from the problem to the desired future state.
-2. Define the best realistic outcome, the minimum viable win, and any obvious scope boundaries.
+2. Capture the Expectation Signal from `h-ideation` using the contrastive questions:
+   - What are we actually trying to give the user?
+   - What would make it feel worth using?
+   - What can arrive first without pretending it is finished? Record this as the **First Useful Step**, not replacement scope.
+   - What would be technically done but still wrong?
+   - What did the user knowingly give up?
 3. Record candidate choices and rejected directions in `decisions.md` using the decision entry template from `h-ideation`.
 4. Invoke the early challenge lane at the end of M2:
    - always: `ideation-simplifier`
@@ -73,9 +79,10 @@ The tier calibrates all subsequent moments:
 6. If the combined early-challenger output is actually redundant or noisy, invoke `ideation-pragmatist` in `denoise` mode to write `synthesis-idea-panel.md`.
 7. If challenger output is already compact, skip denoise and read the challenger stances directly.
 8. Lightweight Critic check: once the outcomes are written, validate: are these outcomes measurable? Do they describe end-state, not implementation steps? Is the scope boundary real or aspirational?
-9. Update `context.md` with the locked outcomes and the latest active tensions.
+9. For `Shared` and `Production` tiers, run an expectation-fidelity Critic check after the Expectation Signal is captured. Ask the Critic to challenge underdelivery, silent descoping, and places where the First Useful Step replaced the promise.
+10. Update `context.md` with the locked outcomes, Expectation Signal, and latest active tensions.
 
-**Exit criteria:** `context.md` contains the current outcomes; the early challenge lane has either produced direct challenger stances or an optional `synthesis-idea-panel.md` digest.
+**Exit criteria:** `context.md` contains the current outcomes and Expectation Signal; the early challenge lane has either produced direct challenger stances or an optional `synthesis-idea-panel.md` digest; Shared and Production tiers have completed the M2 expectation-fidelity Critic check.
 
 ## Step 3 — Research Bridge and Phase Handoff
 
@@ -93,6 +100,7 @@ The tier calibrates all subsequent moments:
 6. Commit the Working Directory: `git add .owlbear/briefs/draft-{name}/ && git commit -m "ideation: complete Phase 1 discovery for {name}"`
 7. End Phase 1 with an explicit handoff message that:
    - summarises what was discovered (1–3 sentences)
+   - names `@ideation-mediator` as the Phase 2 owner
    - explains whether `synthesis-idea-panel.md` exists and why
    - provides a fenced code block with the exact command to start Phase 2 in a new chat:
 
@@ -115,12 +123,14 @@ The tier calibrates all subsequent moments:
 - Narrow current-state snapshot only.
 - No transcript.
 - No rejected-option history.
+- Carries the living Expectation Signal until `brief.md` becomes the binding product promise.
 - Update at moment boundaries and after material direction changes.
 
 ### `decisions.md`
 
 - Append-only.
 - Preserve chosen and rejected options with rationale whenever a real choice is made.
+- Preserve accepted trade-offs when the user knowingly gives up, delays, or removes part of the expectation.
 - Preserve exact user wording only when the wording itself matters.
 - Use the decision entry template from `h-ideation`.
 
@@ -139,8 +149,10 @@ The tier calibrates all subsequent moments:
 
 - [ ] Project type recorded before deep research.
 - [ ] Investment Tier confirmed and recorded in `decisions.md` between M1 and M2.
+- [ ] Expectation Signal captured with the contrastive questions from `h-ideation`.
 - [ ] `context.md` stays narrow enough for subagent read use.
 - [ ] `decisions.md` records rejected options where a real choice occurred.
+- [ ] Shared and Production tiers ran the M2 expectation-fidelity Critic check.
 - [ ] Early challengers ran with the default set and conditional outsider logic.
 - [ ] `research-notes.md` separates verified findings, candidate implications, and open questions.
 - [ ] Phase 1 ends with a purpose-framed handoff: what is complete, what starts next, and the Phase 2 command + artifact path.
