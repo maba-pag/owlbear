@@ -274,13 +274,19 @@ class TestKnowledgeSourceLifecycleDurable:
         conn.commit()
 
         result_skipped = RefreshResult(source_id="src-lc-1", refreshed=0, skipped=1, failed=0)
+        before = datetime.now(tz=UTC)
         orchestrator._update_source_record(after_refreshed, result_skipped)
+        after = datetime.now(tz=UTC)
         after_skipped = ss.get("src-lc-1")
 
         assert after_skipped is not None
-        assert after_skipped.last_checked_at is not None, (
-            "last_checked_at must be written by the skipped-path call "
-            "(was reset to NULL before the call to prove it is not a stale refreshed-path value)"
+        assert after_skipped.last_checked_at is not None, "last_checked_at must be written by the skipped-path call"
+        checked_at = datetime.fromisoformat(after_skipped.last_checked_at)
+        assert before <= checked_at <= after, (
+            f"last_checked_at must fall within the before/after window of the skipped-path call: "
+            f"before={before.isoformat()!r}, last_checked_at={after_skipped.last_checked_at!r}, "
+            f"after={after.isoformat()!r}. A stale repersisted value from the in-memory model "
+            f"would predate 'before' — only a fresh datetime.now() inside the call passes this check."
         )
 
     # ------------------------------------------------------------------
@@ -349,9 +355,11 @@ class TestKnowledgeSourceLifecycleDurable:
         conn.commit()
 
         # Skipped path → must NOT overwrite last_refreshed_at, but MUST write last_checked_at
+        before = datetime.now(tz=UTC)
         orchestrator._update_source_record(
             after_refreshed, RefreshResult(source_id="src-lc-1", refreshed=0, skipped=1, failed=0)
         )
+        after = datetime.now(tz=UTC)
 
         ctx = _mcp_ctx(app_ctx)
         sources = await list_sources(ctx)
@@ -362,8 +370,14 @@ class TestKnowledgeSourceLifecycleDurable:
             "and not be overwritten by the subsequent skipped refresh"
         )
         assert src_item["last_checked_at"] is not None, (
-            "list_sources last_checked_at must reflect the skipped refresh "
-            "(was reset to NULL before the skipped call to prove the skipped path writes it)"
+            "list_sources last_checked_at must be non-null after skipped refresh"
+        )
+        last_checked_parsed = datetime.fromisoformat(src_item["last_checked_at"])
+        assert before <= last_checked_parsed <= after, (
+            f"list_sources last_checked_at must fall within the before/after window of the skipped-path "
+            f"call: before={before.isoformat()!r}, last_checked_at={src_item['last_checked_at']!r}, "
+            f"after={after.isoformat()!r}. A stale repersisted value from the in-memory model "
+            f"would predate 'before' — only a fresh datetime.now() inside the call passes this check."
         )
 
     # ------------------------------------------------------------------
