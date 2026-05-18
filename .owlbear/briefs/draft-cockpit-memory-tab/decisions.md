@@ -67,3 +67,80 @@
 ## D6 — 2026-05-17 — Delete Semantics
 
 **Chosen:** State-dependent, matching engine behavior — pending = hard delete (remove file from disk), curated/approved = soft delete (state → deleted).
+
+## D7 — 2026-05-18 — Engine Extraction Sequencing
+
+**Status quo:** Memory engine lives inside `serve/mcp-memory/`. Cockpit cannot import MCP packages.
+**Decision to make:** Extract to shared package or reimplement in cockpit?
+
+**Options considered:**
+
+- A: Extract `serve/memory/` as shared package (like kanban pattern)
+- B: Direct-read with contract tests (cockpit reimplements logic)
+
+**Chosen:** A — extract first. Matches kanban pattern, eliminates drift permanently, proven approach.
+
+**Rejected:**
+
+- B because logic drift between two state machines is a category of bug testing cannot fully prevent; ongoing maintenance cost.
+
+## D8 — 2026-05-18 — Tab Infrastructure Dependency
+
+**Status quo:** #1638 (nav-rail, route config, React Router) still in research.
+**Decision to make:** How to handle the frontend dependency?
+
+**Options considered:**
+
+- A: Block all work on #1638
+- B: Build with temporary Shell modification
+- C: Split scope — backend now, frontend after #1638
+
+**Chosen:** C — split scope. Backend (engine extraction + API routes) proceeds independently; frontend blocks on #1638 for the component mounting contract.
+
+**Rejected:**
+
+- A because backend has zero dependency on the frontend tab system
+- B because temporary wiring is real rework and creates merge conflicts
+
+## D9 — 2026-05-18 — SSE for Memory Events
+
+**Status quo:** SSE exists for kanban; memory changes infrequently.
+**Decision to make:** Include SSE in V1 or defer?
+
+**Chosen:** No SSE in V1. Refetch-after-action + refetch-on-tab-focus. Add SSE as a follow-on.
+
+**Rejected:**
+
+- SSE in V1 because memory changes are rare and user-initiated; the effort adds scope without matching value.
+
+## D10 — 2026-05-18 — Deleted Entries Default Visibility
+
+**Chosen:** Exclude deleted from default view. State filter defaults to pending + curated + approved. Deleted available via opt-in filter toggle.
+
+## D11 — 2026-05-18 — Git Commit Lifecycle
+
+**Status quo:** MCP tools auto-commit; cockpit kanban mutations do not.
+**Decision to make:** Should cockpit memory mutations auto-commit?
+
+**Chosen:** No auto-commit (match cockpit kanban pattern). Cockpit writes files; git managed externally.
+
+**Rejected:**
+
+- Auto-commit because it's inconsistent with cockpit kanban behavior and creates noisy commit history.
+
+## D12 — 2026-05-18 — Validation Leniency
+
+**Status quo:** Existing entries may have minor cross-field invariant violations.
+**Decision to make:** Strict reader requiring migration, or lenient read?
+
+**Chosen:** Lenient on read, strict on write. Existing entries display as-is; mutations enforce full validation. Self-heals on edit.
+
+**Rejected:**
+
+- Migration because touching 103 files adds complexity and risk for cosmetic fixes.
+
+## D13 — 2026-05-18 — Deferred Items
+
+**Chosen:** Defer both to post-V1:
+- Approval provenance (`approved_by` field) — schema change, future enhancement
+- Remote image blocking in rendered markdown — defence-in-depth for local tool, lower severity
