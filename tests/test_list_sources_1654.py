@@ -289,6 +289,16 @@ class TestFromAC_SanitizeError:
         raw = "ConnectionError: refused; TimeoutError: timed out"
         assert _sanitize_error(raw) == "ConnectionError"
 
+    def test_ac4_path_preceded_error_token_returns_fallback(self) -> None:
+        """AC-4 pair 5: Error token immediately preceded by '/' is rejected; returns 'error'."""
+        raw = "no files matched source path '/secret/TimeoutError'"
+        assert _sanitize_error(raw) == "error"
+
+    def test_backslash_preceded_error_token_returns_fallback(self) -> None:
+        """AC-3: Error token immediately preceded by backslash is rejected; returns 'error'."""
+        raw = r"no files matched source path '\\secret\\TimeoutError'"
+        assert _sanitize_error(raw) == "error"
+
 
 # ---------------------------------------------------------------------------
 # TestFromAC_ListSourcesHealthMapping
@@ -536,3 +546,15 @@ class TestFromAC_ListSourcesHealthMapping:
         assert item["last_error"] == "PermissionError"  # sanitized, not raw
         assert item["enabled"] is False
         assert item["fetch_method"] == "atom_feed"
+
+    @pytest.mark.asyncio
+    async def test_response_last_error_path_preceded_token_sanitized_to_fallback(self) -> None:
+        """AC-2/AC-4 pair 5: path '/secret/TimeoutError' in last_error returns 'error', not 'TimeoutError'."""
+        source = _make_source(last_error="no files matched source path '/secret/TimeoutError'")
+        store = MagicMock()
+        store.list_all.return_value = [source]
+        ctx = _make_ctx(source_store=store)
+
+        result = await list_sources(ctx)
+
+        assert result[0]["last_error"] == "error"
