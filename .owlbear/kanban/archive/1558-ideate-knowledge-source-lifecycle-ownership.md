@@ -1,10 +1,10 @@
 ---
 id: 1558
 title: Ideate knowledge source lifecycle ownership
-status: research
+status: archived
 priority: important
 created: 2026-05-14T17:24:27.895979+00:00
-updated: 2026-05-15T03:58:44.488703+00:00
+updated: 2026-05-18T03:31:50.461584+02:00
 tags:
   - scope:knowledge
   - type:ideation
@@ -13,10 +13,10 @@ parent:
 depends_on:
   - 1556
   - 1557
-blocked: true
+blocked: false
 block_reason: DR pending
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 Context:
@@ -73,3 +73,36 @@ Design constraint for this ideation:
 - Decide whether direct-ingest `source_url` records are one-shot/manual provenance records, refreshable managed sources, or candidates that must be converted before refresh.
 - Define the required `source_type`, `fetch_method`, and `config` shape for each lifecycle state.
 - `refresh_source` should not silently no-op on one-shot/manual source records that are not refreshable.
+
+## ideation done
+follow up tasks created: #1650 and children #1651-#1655.
+
+[[2026-05-18T03:31:50+02:00]]
+## Audit
+### Regression Detection
+- Ideation task — zero code changes (only .owlbear/briefs/ and .owlbear/kanban/ files)
+- No test domains affected per test domain mapping (.owlbear/ → skip)
+- Regression verdict: PASS (no code to regress)
+
+### Intent Verification
+- Scope alignment: PASS — all changes in .owlbear/briefs/draft-knowledge-source-lifecycle/ (17 files) and .owlbear/kanban/ (follow-up tasks). Correct ideation domain.
+- Purpose match: PASS — AC asked for ownership decision + follow-up tasks. D2 resolved ownership (narrow scope on existing MCP surface, user-accepted). Follow-ups #1650-#1655 created with structured decomposition and dependency graph.
+- AC coverage: Dependencies #1556/#1557 archived. Brief covers register (D2: ingest_document sufficient), inspect health (O1), remove data (O4), edit/toggle (D2: deferred at this scale), refresh honesty (O2/D3), direct-ingest typing (O3/D4). Pilot ingestion superseded by challenger code-analysis that drove D2 narrow scope.
+- Extraneous scope: none
+- Boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 4/5
+AC was specific and verifiable for ideation. All 5 criteria addressable. Minor gap: pilot ingestion criterion somewhat rigid but included \"explicitly waived\" escape hatch. D2 decision quality excellent — two independent challengers converged on narrow scope.
+
+### Commit Integrity
+- Upstream commit presence: PASS
+  - Phase 1 discovery: 6641c09e
+  - Phase 2 mediation: 0e911f82
+  - Follow-up tasks: 17b7360c (creates #1650-#1655)
+- Kanban commit packaging: pending (this audit cycle)
+
+### Deduction Breakdown
+No deductions applied.
+
+### Confidence: 1.00
+### Action: archive
