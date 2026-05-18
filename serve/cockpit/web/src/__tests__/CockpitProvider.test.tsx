@@ -402,12 +402,13 @@ describe('TestFromAC_CockpitProvider', () => {
         result.current.select(42)
       })
       expect(capturedSignal?.aborted).toBe(false)
+      const firstSignal = capturedSignal
 
       await act(async () => {
         result.current.select(99) // switch task → abort previous
       })
 
-      expect(capturedSignal?.aborted).toBe(true)
+      expect(firstSignal?.aborted).toBe(true)
     })
 
     // AbortController: abort on unmount
