@@ -25,6 +25,7 @@ import pytest
 
 from owlbear_knowledge.models import KnowledgeSource, SourceType
 from owlbear_knowledge.query_service import (
+    KnowledgeQueryError,
     KnowledgeQueryService,
     StructuredSearchResult,
 )
@@ -128,11 +129,16 @@ def _mock_source_store(source: KnowledgeSource | None = None) -> MagicMock:
     return ss
 
 
-def _mock_retriever(chunks: list | None = None, entities_found: int = 0) -> MagicMock:
+def _mock_retriever(
+    chunks: list | None = None,
+    entities_found: int = 0,
+    graph_context: str = "",
+) -> MagicMock:
     ret = MagicMock()
     result = MagicMock()
     result.chunks = chunks if chunks is not None else [("chunk-1", 0.9)]
     result.entities_found = entities_found
+    result.expansion_text = graph_context
     ret.retrieve.return_value = result
     return ret
 
@@ -244,6 +250,20 @@ class TestFromAC_RetrievalPath:
         assert results[0].retrieval_path == "vector"
 
     @pytest.mark.asyncio
+    async def test_vector_search_filters_to_document_embeddings_without_retriever(self) -> None:
+        """Fallback vector search requests chunk/document IDs, not entity IDs."""
+        vector_store = _mock_vector_store()
+        service = KnowledgeQueryService(
+            vector_store=vector_store,
+            graph_store=_mock_graph_store(),
+            embedding_provider=_mock_embedding_provider(),
+        )
+
+        await _query(service)
+
+        assert vector_store.search_similar.call_args.kwargs["embedding_type"] == "document"
+
+    @pytest.mark.asyncio
     async def test_retrieval_path_is_vector_when_retriever_finds_zero_entities(
         self,
     ) -> None:
@@ -301,6 +321,137 @@ class TestFromAC_RetrievalPath:
         results = await _query(service)
 
         assert results[0].retrieval_path in {"vector", "vector+graph", "graph"}
+
+    @pytest.mark.asyncio
+    async def test_graph_context_populated_from_retriever_expansion_text(self) -> None:
+        """graph_context carries retriever expansion text when graph retrieval contributes."""
+        graph_context = "Alpha --[depends_on]--> Beta: neighbor detail"
+        service = KnowledgeQueryService(
+            vector_store=_mock_vector_store(),
+            graph_store=_mock_graph_store(),
+            embedding_provider=_mock_embedding_provider(),
+            retriever=_mock_retriever(entities_found=1, graph_context=graph_context),
+        )
+
+        results = await _query(service)
+
+        assert results[0].retrieval_path == "vector+graph"
+        assert results[0].graph_context == graph_context
+
+    @pytest.mark.asyncio
+    async def test_graph_context_empty_without_graph_contribution(self) -> None:
+        """graph_context is empty when the result remains a vector-only hit."""
+        service = KnowledgeQueryService(
+            vector_store=_mock_vector_store(),
+            graph_store=_mock_graph_store(),
+            embedding_provider=_mock_embedding_provider(),
+            retriever=_mock_retriever(entities_found=0, graph_context="unused expansion"),
+        )
+
+        results = await _query(service)
+
+        assert results[0].retrieval_path == "vector"
+        assert results[0].graph_context == ""
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# AC2b: effective scopes applied consistently (td:2)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestFromAC_EffectiveScopes:
+    """Effective query scopes apply to vector search and graph expansion reads."""
+
+    @pytest.mark.asyncio
+    async def test_default_scopes_apply_to_entity_reads(self) -> None:
+        """Service default scopes are passed to list_entities_for_document."""
+        graph_store = _mock_graph_store()
+        service = KnowledgeQueryService(
+            vector_store=_mock_vector_store(),
+            graph_store=graph_store,
+            embedding_provider=_mock_embedding_provider(),
+            scopes=["team-a"],
+        )
+
+        results = await _query(service)
+
+        assert results
+        graph_store.list_entities_for_document.assert_called_with("doc-1", scopes=["team-a"])
+
+    @pytest.mark.asyncio
+    async def test_explicit_scopes_override_defaults_for_search_and_graph_reads(self) -> None:
+        """Per-query scopes override service defaults across search and entity reads."""
+        graph_store = _mock_graph_store()
+        vector_store = _mock_vector_store()
+        service = KnowledgeQueryService(
+            vector_store=vector_store,
+            graph_store=graph_store,
+            embedding_provider=_mock_embedding_provider(),
+            scopes=["team-a"],
+        )
+
+        results = await service.query("test query", top_k=5, scopes=["team-b"])
+
+        assert results
+        assert vector_store.search_similar.call_args.kwargs["scopes"] == ["team-b"]
+        graph_store.list_entities_for_document.assert_called_with("doc-1", scopes=["team-b"])
+
+    @pytest.mark.asyncio
+    async def test_default_scopes_apply_to_related_source_edges(self) -> None:
+        """Service default scopes are passed into related-source edge traversal."""
+        primary_doc = _mock_doc("doc-1", source_id="src-1")
+        target_doc = _mock_doc("doc-2", source_id="src-2")
+        entity = _mock_entity("ent-1", "PrimaryEntity", "concept", "doc-1")
+        target_entity = _mock_entity("ent-2", "TargetEntity", "pattern", "doc-2")
+        edge = _mock_edge("edge-1", "ent-1", "ent-2", "related_to")
+
+        graph_store = MagicMock()
+        graph_store.get_document_id_for_chunk.return_value = "doc-1"
+        graph_store.get_document.side_effect = {"doc-1": primary_doc, "doc-2": target_doc}.get
+        graph_store.list_entities_for_document.return_value = [entity]
+        graph_store.list_edges.return_value = [edge]
+        graph_store.get_entity.return_value = target_entity
+
+        source_store = MagicMock()
+        source_store.get.return_value = _real_source("Target Source", "https://target.example/", "src-2")
+
+        service = KnowledgeQueryService(
+            vector_store=_mock_vector_store(),
+            graph_store=graph_store,
+            embedding_provider=_mock_embedding_provider(),
+            scopes=["team-a"],
+            source_store=source_store,
+        )
+
+        results = await _query(service)
+
+        assert results[0].related_sources
+        assert graph_store.list_edges.call_args_list
+        for edge_call in graph_store.list_edges.call_args_list:
+            assert edge_call.kwargs["scopes"] == ["team-a"]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# AC2c: explicit query failures (td:1)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestFromAC_QueryFailures:
+    """Infrastructure failures raise instead of masquerading as no results."""
+
+    @pytest.mark.asyncio
+    async def test_vector_search_failure_raises_query_error(self) -> None:
+        """KnowledgeQueryService.query raises KnowledgeQueryError when vector search fails."""
+        vector_store = _mock_vector_store()
+        vector_store.search_similar.side_effect = RuntimeError("vector down")
+        service = KnowledgeQueryService(
+            vector_store=vector_store,
+            graph_store=_mock_graph_store(),
+            embedding_provider=_mock_embedding_provider(),
+        )
+
+        with pytest.raises(KnowledgeQueryError):
+            await _query(service)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -526,6 +677,7 @@ class TestFromAC_ShapeDeterminism:
     _PROVENANCE_ATTRS: ClassVar[list[str]] = [
         "score",
         "retrieval_path",
+        "graph_context",
         "entities",
         "related_sources",
         "source",

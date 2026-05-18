@@ -20,7 +20,7 @@ Search the knowledge base for relevant context.
 | `limit` | int | 5 | Max results to return |
 | `scopes` | list[str] \| null | null | Scope filter (e.g. `["global", "project:myproj"]`) |
 
-Returns: `list[dict]` — `[{"title": str, "score": float, "snippet": str}, ...]`; `[]` if no results; error string if service unavailable.
+Returns: `list[dict]` — ranked results with `title`, `score`, `snippet`, `retrieval_path`, `graph_context`, `entities`, `related_sources`, and `source`; `graph_context` is an empty string unless graph expansion contributes context. Returns `[]` if no results, or an error string if service unavailable.
 
 ### ingest_document
 
@@ -33,9 +33,11 @@ Ingest a text document into the knowledge base.
 | `scope` | str | `global` | Knowledge scope for ingested document |
 | `source_url` | str | None | Optional source identity URL; creates/reuses a source row and enables delta detection |
 
-Returns: document ID, chunk count, entity count, edge count, and status.
+Returns: document ID, chunk count, entity count, edge count, status, and warnings when automatic graph extraction partially fails.
 
-Behavior: direct text ingestion uses the same source/status delta detection as registered source refresh. When `source_url` is supplied, unchanged content returns `status: skipped`; changed content replaces the prior document for that source and scope. `http`/`https` URLs register as web sources; `file://` URLs and plain local paths register as file sources. If `source_url` is omitted, `metadata.source` or `metadata.url` is used as the delta key when present; otherwise the text is treated as a new anonymous inline document.
+Behavior: direct text ingestion uses the same source/status delta detection as registered source refresh. When `source_url` is supplied, unchanged content returns `status: skipped`; changed content replaces the prior document for that source and scope. `http`/`https` URLs register as web sources; `file://` URLs and plain local paths register as file sources. If `source_url` is omitted, `metadata.url` is promoted to the same source-linked path; URL/file-like `metadata.source` values are also promoted. Plain labels and anonymous direct text create disabled `inline` source rows so chunks retain provenance and remain enrichment-claimable without being refreshable.
+
+If document/chunk/vector persistence succeeds but automatic per-chunk graph extraction fails for some chunks, ingestion returns `status: partial`, stores successful extraction results against their original chunk IDs, and surfaces warnings. Treat `partial` as searchable content with incomplete automatic graph extraction.
 
 ### list_sources
 
@@ -55,7 +57,7 @@ Trigger re-ingestion of a registered knowledge source by source ID.
 |-------|------|---------|-------|
 | `source_id` | str | required | Registered source ID to refresh |
 
-Returns: refresh result dict on success — `{"source_id": str, "refreshed": int, "skipped": int, "failed": int, "errors": list[str]}` — or an `error: ...` string when refresh infrastructure is unavailable. Raises `ToolError` when the source store is unavailable or the source ID is unknown.
+Returns: refresh result dict on success — `{"source_id": str, "refreshed": int, "partial": int, "skipped": int, "failed": int, "errors": list[str], "warnings": list[str]}` — or an `error: ...` string when refresh infrastructure is unavailable. Raises `ToolError` when the source store is unavailable or the source ID is unknown.
 
 ### get_stats
 

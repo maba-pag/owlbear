@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -17,6 +18,19 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True, slots=True)
+class _SearchBackendResult:
+    """Raw retrieval output before document and source resolution."""
+
+    chunks: list[tuple[str, float]]
+    entities_found: int = 0
+    graph_context: str = ""
+
+
+class KnowledgeQueryError(RuntimeError):
+    """Raised when retrieval infrastructure fails during an explicit query."""
+
+
 class StructuredSearchResult(BaseModel):
     """Structured knowledge hit for consumers that need raw retrieval fields."""
 
@@ -29,6 +43,7 @@ class StructuredSearchResult(BaseModel):
     entity_type: str | None
     scope: str
     retrieval_path: Literal["vector", "vector+graph", "graph"] = "vector"
+    graph_context: str = ""
     entities: list[dict[str, str]] = Field(default_factory=list)
     related_sources: list[dict[str, str]] = Field(default_factory=list)
     source: object | None = None
@@ -73,28 +88,34 @@ class KnowledgeQueryService:
         self._retriever = retriever
         self._source_store = source_store
 
-    def _search(
-        self, prompt: str, top_k: int, *, scopes: list[str] | None = None
-    ) -> tuple[list[tuple[str, float]], int]:
-        """Return chunk scores and number of graph entities resolved by retriever."""
-        effective_scopes = scopes if scopes is not None else self._scopes
+    def _effective_scopes(self, scopes: list[str] | None) -> list[str] | None:
+        """Return the per-call scopes, falling back to service defaults."""
+        return scopes if scopes is not None else self._scopes
+
+    def _search(self, prompt: str, top_k: int, *, scopes: list[str] | None = None) -> _SearchBackendResult:
+        """Return raw search matches and graph expansion context."""
+        effective_scopes = self._effective_scopes(scopes)
         if self._retriever is not None:
             result = self._retriever.retrieve(prompt, top_k, effective_scopes)
-            return result.chunks[:top_k], result.entities_found
+            graph_context = result.expansion_text if isinstance(result.expansion_text, str) else ""
+            return _SearchBackendResult(
+                chunks=result.chunks[:top_k],
+                entities_found=result.entities_found,
+                graph_context=graph_context,
+            )
 
         embeddings = self._embedder.embed([prompt])
         if not embeddings:
-            return [], 0
+            return _SearchBackendResult(chunks=[])
         query_vec = embeddings[0]
-        kwargs: dict[str, object] = {}
+        kwargs: dict[str, object] = {"embedding_type": "document"}
         if effective_scopes is not None:
             kwargs["scopes"] = effective_scopes
-        return self._vectors.search_similar(query_vec, top_k=top_k, **kwargs), 0
+        return _SearchBackendResult(chunks=self._vectors.search_similar(query_vec, top_k=top_k, **kwargs))
 
     def _search_chunks(self, prompt: str, top_k: int, *, scopes: list[str] | None = None) -> list[tuple[str, float]]:
         """Return (chunk_id, score) pairs for *prompt*, delegating to the retriever when set."""
-        chunks, _ = self._search(prompt, top_k, scopes=scopes)
-        return chunks
+        return self._search(prompt, top_k, scopes=scopes).chunks
 
     def _resolve_snippet(self, raw_id: str, doc_id: str, doc_content: str) -> str:
         """Return the best available snippet for a search hit."""
@@ -193,7 +214,9 @@ class KnowledgeQueryService:
                 the instance-level ``self._scopes`` for this call only.
         """
         try:
-            raw, entities_found = self._search(prompt, top_k, scopes=scopes)
+            effective_scopes = self._effective_scopes(scopes)
+            search_result = self._search(prompt, top_k, scopes=effective_scopes)
+            raw = search_result.chunks
             if not raw:
                 return []
 
@@ -210,7 +233,7 @@ class KnowledgeQueryService:
                 # Use chunk content when available; fall back to doc content.
                 snippet = self._resolve_snippet(raw_id, doc_id, doc.content)
 
-                entities = self._graph.list_entities_for_document(doc_id)
+                entities = self._graph.list_entities_for_document(doc_id, scopes=effective_scopes)
                 entity_type = str(entities[0].entity_type) if entities else None
                 source_id = getattr(doc, "source_id", None)
                 source = None
@@ -218,7 +241,7 @@ class KnowledgeQueryService:
                     source = self._source_store.get(source_id)
 
                 retrieval_path: Literal["vector", "vector+graph", "graph"] = "vector"
-                if self._retriever is not None and entities_found > 0:
+                if self._retriever is not None and search_result.entities_found > 0:
                     retrieval_path = "vector+graph"
 
                 structured.append(
@@ -230,6 +253,7 @@ class KnowledgeQueryService:
                         entity_type=entity_type,
                         scope=doc.scope,
                         retrieval_path=retrieval_path,
+                        graph_context=search_result.graph_context if retrieval_path == "vector+graph" else "",
                         entities=[
                             {
                                 "name": str(getattr(entity, "name", "")),
@@ -241,14 +265,15 @@ class KnowledgeQueryService:
                             doc_id=doc_id,
                             source_id=source_id,
                             entities=entities,
-                            scopes=scopes,
+                            scopes=effective_scopes,
                         ),
                         source=source,
                     )
                 )
-        except Exception:
+        except Exception as exc:
             logger.exception("Knowledge query failed for prompt: %s", prompt[:100])
-            return []
+            msg = "knowledge query failed"
+            raise KnowledgeQueryError(msg) from exc
         else:
             return structured
 
@@ -272,16 +297,19 @@ class KnowledgeQueryService:
         if self._retriever is None:
             return None
         try:
-            chunks = self._search_chunks(prompt, top_k)
-            if not chunks:
+            search_result = self._search(prompt, top_k)
+            if not search_result.chunks:
                 return None
 
             lines: list[str] = []
-            for chunk_id, _ in chunks:
+            for chunk_id, _ in search_result.chunks:
                 doc_id = self._graph.get_document_id_for_chunk(chunk_id) or chunk_id
                 doc = self._graph.get_document(doc_id)
                 if doc is not None:
                     lines.append(f"- {doc.title}: {doc.content}")
+
+            if search_result.graph_context:
+                lines.append(f"Graph context:\n{search_result.graph_context}")
 
             if not lines:
                 return None

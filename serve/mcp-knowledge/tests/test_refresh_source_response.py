@@ -10,7 +10,7 @@ from owlbear_knowledge.refresh import RefreshResult
 from owlbear_mcp_knowledge.server import refresh_source
 
 
-def _ctx(source: MagicMock) -> MagicMock:
+def _ctx(source: MagicMock, *, inter_doc_builder: object | None = None) -> MagicMock:
     store = MagicMock()
     store.get.return_value = source
     app_ctx = MagicMock()
@@ -18,6 +18,7 @@ def _ctx(source: MagicMock) -> MagicMock:
     app_ctx.refresh_orchestrator = MagicMock()
     app_ctx.ingest_pipeline = MagicMock()
     app_ctx.graph_store = None
+    app_ctx.inter_doc_builder = inter_doc_builder
     context = MagicMock()
     context.request_context.lifespan_context = app_ctx
     return context
@@ -48,7 +49,9 @@ async def test_refresh_source_response_includes_errors_from_result() -> None:
         result = await refresh_source(_ctx(source), source_id="src-1")
 
     assert isinstance(result, dict)
+    assert result["partial"] == 0
     assert result["errors"] == ["no files matched source path 'missing.md'"]
+    assert result["warnings"] == []
 
 
 @pytest.mark.asyncio
@@ -70,4 +73,28 @@ async def test_refresh_source_success_response_includes_empty_errors() -> None:
 
     assert isinstance(result, dict)
     assert result["refreshed"] == 1
+    assert result["partial"] == 0
     assert result["errors"] == []
+    assert result["warnings"] == []
+
+
+@pytest.mark.asyncio
+async def test_refresh_source_passes_inter_doc_builder_to_orchestrator() -> None:
+    source = _source()
+    builder = object()
+    refresh = MagicMock()
+    refresh.refresh = AsyncMock(
+        return_value=RefreshResult(
+            source_id="src-1",
+            refreshed=1,
+            skipped=0,
+            failed=0,
+            errors=[],
+        )
+    )
+
+    with patch("owlbear_mcp_knowledge.server.RefreshOrchestrator", return_value=refresh) as orchestrator_cls:
+        result = await refresh_source(_ctx(source, inter_doc_builder=builder), source_id="src-1")
+
+    assert isinstance(result, dict)
+    assert orchestrator_cls.call_args.kwargs["inter_doc_builder"] is builder

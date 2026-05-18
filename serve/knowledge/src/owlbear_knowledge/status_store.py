@@ -119,6 +119,8 @@ class StatusStore:
         existing = self.find_status_by_source(source, scope=scope)
         if existing is None:
             return True, None
+        if existing.status != "ok":
+            return True, existing.document_id
         if existing.content_hash == new_hash:
             return False, existing.document_id
         return True, existing.document_id

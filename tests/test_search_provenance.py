@@ -53,6 +53,7 @@ def _make_enriched_result(  # noqa: PLR0913
     score: float = 0.85,
     snippet: str = "snippet text",
     retrieval_path: str = "vector+graph",
+    graph_context: str = "Alpha --[related_to]--> Beta: graph detail",
     entities: list | None = None,
     related_sources: list | None = None,
     source: object | None = None,
@@ -64,6 +65,7 @@ def _make_enriched_result(  # noqa: PLR0913
     r.snippet = snippet
     r.entity_type = "concept"
     r.retrieval_path = retrieval_path
+    r.graph_context = graph_context
     r.entities = entities if entities is not None else [{"name": "Python", "type": "technology"}]
     r.related_sources = (
         related_sources
@@ -87,6 +89,7 @@ def _make_unenriched_result(
     r.snippet = snippet
     r.entity_type = "concept"
     r.retrieval_path = "vector"
+    r.graph_context = ""
     r.entities = []
     r.related_sources = []
     r.source = source if source is not None else _make_source()
@@ -149,6 +152,29 @@ class TestFromAC_SearchProvenanceFields:
         result = await search_knowledge(ctx, query="test")
 
         assert result[0]["retrieval_path"] == "vector+graph"
+
+    @pytest.mark.asyncio
+    async def test_graph_context_key_present_in_result(self) -> None:
+        """search_knowledge result dict includes 'graph_context' key."""
+        qs = AsyncMock()
+        qs.query = AsyncMock(return_value=[_make_enriched_result()])
+        ctx = _make_ctx(qs)
+
+        result = await search_knowledge(ctx, query="test")
+
+        assert "graph_context" in result[0]
+
+    @pytest.mark.asyncio
+    async def test_graph_context_value_serialized(self) -> None:
+        """graph_context serialized from the query-service result."""
+        graph_context = "Alpha --[depends_on]--> Beta: neighbor detail"
+        qs = AsyncMock()
+        qs.query = AsyncMock(return_value=[_make_enriched_result(graph_context=graph_context)])
+        ctx = _make_ctx(qs)
+
+        result = await search_knowledge(ctx, query="test")
+
+        assert result[0]["graph_context"] == graph_context
 
     # ------------------------------------------------------------------
     # AC: entities array of {name, type} objects
@@ -330,6 +356,7 @@ class TestFromAC_SearchProvenanceDeterminism:
 
     _PROVENANCE_KEYS: ClassVar[set[str]] = {
         "retrieval_path",
+        "graph_context",
         "entities",
         "related_sources",
         "source",

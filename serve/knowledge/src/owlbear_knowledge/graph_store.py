@@ -120,9 +120,9 @@ class GraphStore:
         self,
         entity_type: EntityType | None = None,
         scopes: list[str] | None = None,
-        source_pipeline: str | None = None,
+        pipeline_name: str | None = None,
     ) -> list[Entity]:
-        """Return all entities, optionally filtered by type, scopes, and/or source_pipeline."""
+        """Return all entities, optionally filtered by type, scopes, and/or pipeline_name."""
         if scopes is not None and len(scopes) == 0:
             return []
 
@@ -136,9 +136,9 @@ class GraphStore:
             placeholders = ", ".join("?" for _ in scopes)
             clauses.append(f"scope IN ({placeholders})")
             params.extend(scopes)
-        if source_pipeline is not None:
-            clauses.append("json_extract(metadata, '$.source_pipeline') = ?")
-            params.append(source_pipeline)
+        if pipeline_name is not None:
+            clauses.append("json_extract(metadata, '$.pipeline_name') = ?")
+            params.append(pipeline_name)
 
         sql = (
             "SELECT id, name, entity_type, description, metadata,"
@@ -235,9 +235,9 @@ class GraphStore:
         source_id: str | None = None,
         target_id: str | None = None,
         scopes: list[str] | None = None,
-        source_pipeline: str | None = None,
+        pipeline_name: str | None = None,
     ) -> list[Edge]:
-        """Return edges, optionally filtered by source/target, scopes, and/or source_pipeline."""
+        """Return edges, optionally filtered by source/target, scopes, and/or pipeline_name."""
         if scopes is not None and len(scopes) == 0:
             return []
 
@@ -253,9 +253,9 @@ class GraphStore:
             placeholders = ", ".join("?" for _ in scopes)
             clauses.append(f"scope IN ({placeholders})")
             params.extend(scopes)
-        if source_pipeline is not None:
-            clauses.append("json_extract(metadata, '$.source_pipeline') = ?")
-            params.append(source_pipeline)
+        if pipeline_name is not None:
+            clauses.append("json_extract(metadata, '$.pipeline_name') = ?")
+            params.append(pipeline_name)
 
         sql = "SELECT id, source_id, target_id, relation, weight, metadata, scope FROM edges"
         if clauses:

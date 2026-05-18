@@ -19,7 +19,7 @@ from owlbear_knowledge.models import KnowledgeSource, SourceType
 from owlbear_knowledge.refresh import RefreshOrchestrator
 from owlbear_knowledge.schema import init_db
 from owlbear_knowledge.source_store import KnowledgeSourceStore
-from owlbear_mcp_knowledge.server import AppContext, ingest_document
+from owlbear_mcp_knowledge.server import AppContext, get_next_batch, ingest_document
 
 
 @pytest.fixture()
@@ -124,7 +124,172 @@ async def test_anonymous_text_ingests_remain_independent(
     assert "status: ok" in first
     assert "status: ok" in second
     assert conn.execute("SELECT COUNT(*) FROM documents").fetchone()[0] == 2
-    assert conn.execute("SELECT COUNT(*) FROM knowledge_sources").fetchone()[0] == 0
+    assert conn.execute("SELECT COUNT(*) FROM knowledge_sources WHERE source_type = 'inline'").fetchone()[0] == 2
+
+
+@pytest.mark.asyncio
+async def test_anonymous_text_ingest_creates_claimable_inline_source(
+    conn: sqlite3.Connection,
+    app_ctx: AppContext,
+) -> None:
+    await ingest_document(
+        _ctx(app_ctx),
+        text="anonymous claimable content",
+        metadata={"title": "Jeff sent x.pdf"},
+    )
+
+    source_row = conn.execute(
+        "SELECT id, name, source_type, fetch_method, enabled, enrich FROM knowledge_sources"
+    ).fetchone()
+    assert source_row[1:] == ("Jeff sent x.pdf", "inline", "inline", 0, 1)
+    assert conn.execute("SELECT source_id FROM documents").fetchone()[0] == source_row[0]
+    batch = await get_next_batch(_ctx(app_ctx), limit=1)
+    assert len(batch) == 1
+    assert batch[0]["source_id"] == source_row[0]
+    assert batch[0]["source_name"] == "Jeff sent x.pdf"
+
+
+@pytest.mark.asyncio
+async def test_anonymous_text_ingests_with_same_title_create_distinct_inline_sources(
+    conn: sqlite3.Connection,
+    app_ctx: AppContext,
+) -> None:
+    first = await ingest_document(_ctx(app_ctx), text="first", metadata={"title": "Repeated Title"})
+    second = await ingest_document(_ctx(app_ctx), text="second", metadata={"title": "Repeated Title"})
+
+    assert "status: ok" in first
+    assert "status: ok" in second
+    rows = conn.execute("SELECT name, source_type FROM knowledge_sources ORDER BY created_at ASC, id ASC").fetchall()
+    assert len(rows) == 2
+    assert rows[0] == ("Repeated Title", "inline")
+    assert rows[1][0].startswith("Repeated Title (")
+    assert rows[1][1] == "inline"
+
+
+@pytest.mark.asyncio
+async def test_metadata_url_creates_source_link_for_enrichment(
+    conn: sqlite3.Connection,
+    app_ctx: AppContext,
+) -> None:
+    source_url = "https://example.test/meta-doc"
+
+    result = await ingest_document(
+        _ctx(app_ctx),
+        text="metadata url content",
+        metadata={"title": "Meta Doc", "url": source_url},
+    )
+
+    assert "status: ok" in result
+    doc_source_id = conn.execute("SELECT source_id FROM documents").fetchone()[0]
+    assert doc_source_id is not None
+    source_row = conn.execute(
+        "SELECT name, source_type, fetch_method, enrich, config FROM knowledge_sources"
+    ).fetchone()
+    assert source_row[:4] == (source_url, "authenticated_web", "http", 1)
+    assert json.loads(source_row[4])["url"] == source_url
+    status = conn.execute("SELECT source, status FROM document_status").fetchone()
+    assert status == (source_url, "ok")
+    claimable = conn.execute(
+        """
+        SELECT COUNT(*)
+        FROM chunks AS c
+        JOIN documents AS d ON d.id = c.document_id
+        JOIN knowledge_sources AS ks ON ks.id = d.source_id
+        WHERE ks.enrich = 1
+        """
+    ).fetchone()[0]
+    assert claimable == 1
+
+
+@pytest.mark.asyncio
+async def test_global_ingest_does_not_reuse_non_global_source(
+    conn: sqlite3.Connection,
+    app_ctx: AppContext,
+) -> None:
+    source_url = "https://example.test/shared"
+    now = _now()
+    assert app_ctx.source_store is not None
+    app_ctx.source_store.create(
+        KnowledgeSource(
+            id="team-src",
+            name="Team Source",
+            source_type=SourceType.AUTHENTICATED_WEB,
+            fetch_method="http",
+            enrich=True,
+            config={"url": source_url, "urls": [source_url]},
+            scope="team",
+            created_at=now,
+            updated_at=now,
+        )
+    )
+
+    result = await ingest_document(_ctx(app_ctx), text="global text", source_url=source_url, scope="global")
+
+    assert "status: ok" in result
+    linked_row = conn.execute(
+        """
+        SELECT ks.id, ks.scope
+        FROM documents AS d
+        JOIN knowledge_sources AS ks ON ks.id = d.source_id
+        """
+    ).fetchone()
+    assert linked_row[0] != "team-src"
+    assert linked_row[1] == "global"
+    source_scopes = conn.execute("SELECT scope FROM knowledge_sources ORDER BY scope").fetchall()
+    assert source_scopes == [("global",), ("team",)]
+
+
+@pytest.mark.asyncio
+async def test_direct_ingest_reuses_url_list_source_for_secondary_url(
+    conn: sqlite3.Connection,
+    app_ctx: AppContext,
+) -> None:
+    primary_url = "https://example.test/a"
+    secondary_url = "https://example.test/b"
+    now = _now()
+    assert app_ctx.source_store is not None
+    app_ctx.source_store.create(
+        KnowledgeSource(
+            id="url-list-src",
+            name="URL List Source",
+            source_type=SourceType.URL_LIST,
+            fetch_method="http",
+            enrich=True,
+            config={"url": primary_url, "urls": [primary_url, secondary_url]},
+            scope="team",
+            created_at=now,
+            updated_at=now,
+        )
+    )
+
+    result = await ingest_document(_ctx(app_ctx), text="secondary text", source_url=secondary_url, scope="team")
+
+    assert "status: ok" in result
+    linked_source_id = conn.execute("SELECT source_id FROM documents").fetchone()[0]
+    assert linked_source_id == "url-list-src"
+    assert conn.execute("SELECT COUNT(*) FROM knowledge_sources").fetchone()[0] == 1
+
+
+@pytest.mark.asyncio
+async def test_plain_metadata_source_label_creates_inline_source(
+    conn: sqlite3.Connection,
+    app_ctx: AppContext,
+) -> None:
+    result = await ingest_document(
+        _ctx(app_ctx),
+        text="manual label content",
+        metadata={"title": "Manual Doc", "source": "manual upload"},
+    )
+
+    assert "status: ok" in result
+    doc_source_id = conn.execute("SELECT source_id FROM documents").fetchone()[0]
+    assert doc_source_id is not None
+    source_row = conn.execute(
+        "SELECT name, source_type, fetch_method, enabled, config FROM knowledge_sources"
+    ).fetchone()
+    assert source_row[:4] == ("Manual Doc", "inline", "inline", 0)
+    assert json.loads(source_row[4])["source"] == "manual upload"
+    assert conn.execute("SELECT source FROM document_status").fetchone()[0] == "manual upload"
 
 
 @pytest.mark.asyncio
@@ -144,6 +309,27 @@ async def test_file_source_url_creates_file_source_kind(
     assert config["url"] == "file://docs/direct.md"
     assert config["path"] == "docs/direct.md"
     assert config["pattern"] == "docs/direct.md"
+
+
+@pytest.mark.asyncio
+async def test_metadata_file_url_creates_file_source_kind(
+    conn: sqlite3.Connection,
+    app_ctx: AppContext,
+) -> None:
+    await ingest_document(
+        _ctx(app_ctx),
+        text="metadata local file content",
+        metadata={"url": "file://docs/meta.md"},
+    )
+
+    doc_source_id = conn.execute("SELECT source_id FROM documents").fetchone()[0]
+    assert doc_source_id is not None
+    row = conn.execute("SELECT source_type, fetch_method, config FROM knowledge_sources").fetchone()
+    assert row[:2] == ("file_glob", "file")
+    config = json.loads(row[2])
+    assert config["url"] == "file://docs/meta.md"
+    assert config["path"] == "docs/meta.md"
+    assert config["pattern"] == "docs/meta.md"
 
 
 @pytest.mark.asyncio

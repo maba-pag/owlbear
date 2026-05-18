@@ -28,6 +28,7 @@ from owlbear_knowledge.graph_store import GraphStore
 from owlbear_knowledge.ingest import IngestPipeline
 from owlbear_knowledge.intake import IntakeResult
 from owlbear_knowledge.loader import LoadSummary, load_manifest_file, main, parse_manifest
+from owlbear_knowledge.refresh import RefreshOrchestrator
 from owlbear_mcp_knowledge.server import search_knowledge
 
 from owlbear_knowledge.query_service import KnowledgeQueryService
@@ -302,6 +303,226 @@ class TestFromAC_ManifestLoaderSourceId:
         assert source_row is not None, (
             f"document.source_id={doc_source_id!r} does not reference any knowledge_sources row — linkage is broken"
         )
+
+    @pytest.mark.asyncio
+    async def test_file_glob_source_is_enrichable_and_refresh_compatible(
+        self,
+        real_pipeline: dict,
+        tmp_path: Path,
+    ) -> None:
+        """Manifest file_glob sources should be usable after the one-time load."""
+        (tmp_path / "doc.md").write_text("# Source Contract\n\nOperational source content.")
+        manifest = tmp_path / "manifest.yaml"
+        _write_single_source_manifest(manifest, name="Operational", glob="*.md")
+
+        await load_manifest_file(
+            manifest_path=manifest,
+            workspace_root=tmp_path,
+            source_store=real_pipeline["source_store"],
+            pipeline=real_pipeline["pipeline"],
+        )
+
+        source = real_pipeline["source_store"].list_all()[0]
+        assert source.fetch_method == "file"
+        assert source.enrich is True
+        assert source.config["glob"] == "*.md"
+        assert source.config["pattern"] == "*.md"
+        claimable = (
+            real_pipeline["conn"]
+            .execute(
+                """
+            SELECT COUNT(*)
+            FROM chunks AS c
+            JOIN documents AS d ON d.id = c.document_id
+            JOIN knowledge_sources AS ks ON ks.id = d.source_id
+            WHERE ks.enrich = 1
+            """
+            )
+            .fetchone()[0]
+        )
+        assert claimable == 1
+
+    @pytest.mark.asyncio
+    async def test_refresh_loaded_file_glob_uses_manifest_glob(
+        self,
+        real_pipeline: dict,
+        tmp_path: Path,
+    ) -> None:
+        """Refreshing a manifest-loaded source must not fall back to '*' and ingest manifest files."""
+        (tmp_path / "doc.md").write_text("# Refresh Contract\n\nOnly this markdown file should match.")
+        manifest = tmp_path / "manifest.yaml"
+        _write_single_source_manifest(manifest, name="Refreshable", glob="*.md")
+
+        await load_manifest_file(
+            manifest_path=manifest,
+            workspace_root=tmp_path,
+            source_store=real_pipeline["source_store"],
+            pipeline=real_pipeline["pipeline"],
+        )
+
+        source = real_pipeline["source_store"].list_all()[0]
+        result = await RefreshOrchestrator(
+            store=real_pipeline["source_store"],
+            pipeline=real_pipeline["pipeline"],
+            workspace_root=tmp_path,
+        ).refresh(source)
+
+        assert result.failed == 0
+        assert result.skipped == 1
+        document_sources = (
+            real_pipeline["conn"].execute("SELECT source FROM document_status ORDER BY source").fetchall()
+        )
+        assert len(document_sources) == 1
+        assert str(document_sources[0][0]).endswith("doc.md")
+
+    @pytest.mark.asyncio
+    async def test_reloading_manifest_reuses_existing_source_and_ingests(
+        self,
+        real_pipeline: dict,
+        tmp_path: Path,
+    ) -> None:
+        """The same manifest should reconcile the source row and still run file ingest."""
+        (tmp_path / "doc.md").write_text("# Idempotent\n\nSame content.")
+        manifest = tmp_path / "manifest.yaml"
+        _write_single_source_manifest(manifest, name="Repeatable", glob="*.md")
+
+        first = await load_manifest_file(
+            manifest_path=manifest,
+            workspace_root=tmp_path,
+            source_store=real_pipeline["source_store"],
+            pipeline=real_pipeline["pipeline"],
+        )
+        second = await load_manifest_file(
+            manifest_path=manifest,
+            workspace_root=tmp_path,
+            source_store=real_pipeline["source_store"],
+            pipeline=real_pipeline["pipeline"],
+        )
+
+        assert first.ingested == 1
+        assert second.skipped == 1
+        assert real_pipeline["conn"].execute("SELECT COUNT(*) FROM knowledge_sources").fetchone()[0] == 1
+        assert real_pipeline["conn"].execute("SELECT COUNT(*) FROM documents").fetchone()[0] == 1
+
+    @pytest.mark.asyncio
+    async def test_reloading_manifest_updates_existing_source_config(
+        self,
+        real_pipeline: dict,
+        tmp_path: Path,
+    ) -> None:
+        """Existing source rows should track the manifest's current glob."""
+        (tmp_path / "doc.md").write_text("# Markdown\n")
+        (tmp_path / "note.txt").write_text("Plain text note.")
+        manifest = tmp_path / "manifest.yaml"
+        _write_single_source_manifest(manifest, name="Mutable", glob="*.md")
+
+        await load_manifest_file(
+            manifest_path=manifest,
+            workspace_root=tmp_path,
+            source_store=real_pipeline["source_store"],
+            pipeline=real_pipeline["pipeline"],
+        )
+        source_id = real_pipeline["source_store"].list_all()[0].id
+        _write_single_source_manifest(manifest, name="Mutable", glob="*.txt")
+
+        await load_manifest_file(
+            manifest_path=manifest,
+            workspace_root=tmp_path,
+            source_store=real_pipeline["source_store"],
+            pipeline=real_pipeline["pipeline"],
+        )
+
+        sources = real_pipeline["source_store"].list_all()
+        assert len(sources) == 1
+        assert sources[0].id == source_id
+        assert sources[0].config["pattern"] == "*.txt"
+        assert real_pipeline["conn"].execute("SELECT COUNT(*) FROM documents").fetchone()[0] == 2
+
+    @pytest.mark.asyncio
+    async def test_url_list_manifest_registers_operational_source_and_ingests_url(
+        self,
+        conn: sqlite3.Connection,
+        tmp_path: Path,
+    ) -> None:
+        """url_list manifest entries should use URL intake, not file glob handling."""
+        source_url = "https://example.test/doc"
+        manifest = tmp_path / "manifest.yaml"
+        manifest.write_text(
+            f"sources:\n  - name: URL Source\n    type: url_list\n    config:\n      url: {source_url}\n"
+        )
+        source_store = KnowledgeSourceStore(conn)
+        captured_kwargs: list[dict[str, object]] = []
+
+        async def capture_ingest(_intake: IntakeResult, **kwargs: object) -> MagicMock:
+            captured_kwargs.append(dict(kwargs))
+            return _stub_ingest_result()
+
+        mock_pipeline = MagicMock()
+        mock_pipeline.ingest = capture_ingest
+
+        with patch(
+            "owlbear_knowledge.loader.intake_mod.read_url",
+            new=AsyncMock(return_value=IntakeResult(content="web content", source=source_url, metadata={})),
+        ) as read_url:
+            summary = await load_manifest_file(
+                manifest_path=manifest,
+                workspace_root=tmp_path,
+                source_store=source_store,
+                pipeline=mock_pipeline,
+            )
+
+        source = source_store.list_all()[0]
+        read_url.assert_awaited_once_with(source_url)
+        assert summary.ingested == 1
+        assert source.fetch_method == "http"
+        assert source.enrich is True
+        assert source.config["url"] == source_url
+        assert source.config["urls"] == [source_url]
+        assert captured_kwargs[0]["source_id"] == source.id
+
+    @pytest.mark.asyncio
+    async def test_url_list_manifest_accepts_block_list_urls(
+        self,
+        conn: sqlite3.Connection,
+        tmp_path: Path,
+    ) -> None:
+        source_urls = ["https://example.test/a", "https://example.test/b"]
+        manifest = tmp_path / "manifest.yaml"
+        manifest.write_text(
+            "sources:\n"
+            "  - name: URL Source\n"
+            "    type: url_list\n"
+            "    config:\n"
+            "      urls:\n"
+            "        - https://example.test/a\n"
+            "        - https://example.test/b\n"
+        )
+        source_store = KnowledgeSourceStore(conn)
+        captured_sources: list[str] = []
+
+        async def read_url(url: str) -> IntakeResult:
+            return IntakeResult(content=f"content for {url}", source=url, metadata={})
+
+        async def capture_ingest(intake: IntakeResult, **_kwargs: object) -> MagicMock:
+            captured_sources.append(intake.source)
+            return _stub_ingest_result()
+
+        mock_pipeline = MagicMock()
+        mock_pipeline.ingest = capture_ingest
+
+        with patch("owlbear_knowledge.loader.intake_mod.read_url", new=AsyncMock(side_effect=read_url)):
+            summary = await load_manifest_file(
+                manifest_path=manifest,
+                workspace_root=tmp_path,
+                source_store=source_store,
+                pipeline=mock_pipeline,
+            )
+
+        source = source_store.list_all()[0]
+        assert summary.ingested == 2
+        assert captured_sources == source_urls
+        assert source.config["url"] == source_urls[0]
+        assert source.config["urls"] == source_urls
 
     @pytest.mark.asyncio
     async def test_all_files_in_glob_receive_same_source_id(self, conn: sqlite3.Connection, tmp_path: Path) -> None:

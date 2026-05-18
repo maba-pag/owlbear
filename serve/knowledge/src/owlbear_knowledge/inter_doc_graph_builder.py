@@ -10,7 +10,9 @@ for LLM inference via an injected :class:`StructuredExtractor`, and stamps all
 returned edges with ``weight=0.4``,
 ``metadata["source"]="inter_doc_inference"``,
 ``metadata["doc_pair"]=[doc_a_id, doc_b_id]``, and
-``metadata["source_pair"]=[source_a_id, source_b_id]``.
+``metadata["source_pair"]=[source_a_id, source_b_id]``. Edges are also
+forced to the build scope and receive ``metadata["document_id"]`` from the
+document pair so SQLite edge provenance remains non-null.
 """
 
 from __future__ import annotations
@@ -67,8 +69,9 @@ def _stamp_inter_edge(
     edge: Edge,
     entity_by_id: dict[str, Entity],
     source_by_entity: dict[str, str | None],
+    scope: str,
 ) -> Edge:
-    """Return a copy of *edge* stamped with inter-doc weight, source, doc_pair, and source_pair."""
+    """Return a scoped edge stamped with inter-doc provenance."""
     ent_a = entity_by_id.get(edge.source_id)
     ent_b = entity_by_id.get(edge.target_id)
     doc_id_a = ent_a.document_id if ent_a is not None else None
@@ -77,15 +80,19 @@ def _stamp_inter_edge(
     src_b = source_by_entity.get(edge.target_id)
     doc_pair = sorted(d for d in [doc_id_a, doc_id_b] if isinstance(d, str))
     source_pair = sorted(s for s in [src_a, src_b] if isinstance(s, str))
+    metadata = {
+        **edge.metadata,
+        "source": _INTER_SOURCE,
+        "doc_pair": doc_pair,
+        "source_pair": source_pair,
+    }
+    if doc_pair:
+        metadata.setdefault("document_id", doc_pair[0])
     return edge.model_copy(
         update={
             "weight": _INTER_WEIGHT,
-            "metadata": {
-                **edge.metadata,
-                "source": _INTER_SOURCE,
-                "doc_pair": doc_pair,
-                "source_pair": source_pair,
-            },
+            "scope": scope,
+            "metadata": metadata,
         }
     )
 
@@ -125,7 +132,9 @@ class InterDocGraphBuilder:
     6. Stamping all returned edges with ``weight=0.4``,
        ``metadata["source"]="inter_doc_inference"``,
        ``metadata["doc_pair"]=[doc_a_id, doc_b_id]``, and
-       ``metadata["source_pair"]=[source_a_id, source_b_id]``.
+         ``metadata["source_pair"]=[source_a_id, source_b_id]``. The edge
+         scope is forced to the build scope, and ``metadata["document_id"]``
+         is set from the document pair for persistence provenance.
        Entity pairs where either source ID is unknown (``None``) are placed
        in the same-source bucket and receive a partial or empty
        ``source_pair``.
@@ -203,6 +212,7 @@ class InterDocGraphBuilder:
         entity_by_id: dict[str, Entity],
         existing_pairs: set[tuple[str, str]],
         source_by_entity: dict[str, str | None] | None = None,
+        scopes: list[str] | None = None,
     ) -> list[tuple[Entity, Entity]]:
         """Return cross-document candidate pairs, cross-source pairs first.
 
@@ -220,26 +230,12 @@ class InterDocGraphBuilder:
 
         canonical = self._canonical_candidates(entities, existing_pairs)
         seen: set[tuple[str, str]] = {(min(a.id, b.id), max(a.id, b.id)) for a, b in canonical}
+        seen.update((min(source_id, target_id), max(source_id, target_id)) for source_id, target_id in existing_pairs)
 
         cross_source: list[tuple[Entity, Entity]] = []
         same_source: list[tuple[Entity, Entity]] = []
         for entity in entities:
-            embedding = self._vector_store.get_embedding(entity.id)
-            similar = self._vector_store.search_similar(embedding, top_k=self._top_k)
-            for sim_id, score in similar:
-                if score < self._cosine_threshold:
-                    continue
-                if sim_id not in entity_by_id:
-                    continue
-                other = entity_by_id[sim_id]
-                if entity.document_id == other.document_id:
-                    continue
-                if (entity.id, other.id) in existing_pairs:
-                    continue
-                pair_key = (min(entity.id, other.id), max(entity.id, other.id))
-                if pair_key in seen:
-                    continue
-                seen.add(pair_key)
+            for other in self._vector_candidate_peers(entity, entity_by_id, seen, scopes):
                 src_a = source_by_entity.get(entity.id)
                 src_b = source_by_entity.get(other.id)
                 if src_a is not None and src_b is not None and src_a != src_b:
@@ -248,6 +244,51 @@ class InterDocGraphBuilder:
                     same_source.append((entity, other))
 
         return canonical + cross_source + same_source
+
+    def _vector_candidate_peers(
+        self,
+        entity: Entity,
+        entity_by_id: dict[str, Entity],
+        seen: set[tuple[str, str]],
+        scopes: list[str] | None,
+    ) -> list[Entity]:
+        """Return vector-similar peers for one entity, skipping missing embeddings."""
+        embedding = self._vector_store.get_embedding(entity.id)
+        if embedding is None:
+            return []
+
+        similar = self._vector_store.search_similar(
+            embedding,
+            top_k=self._top_k,
+            embedding_type="entity",
+            scopes=scopes,
+        )
+        peers: list[Entity] = []
+        for sim_id, score in similar:
+            peer = self._valid_vector_peer(entity, sim_id, score, entity_by_id, seen)
+            if peer is not None:
+                peers.append(peer)
+        return peers
+
+    def _valid_vector_peer(
+        self,
+        entity: Entity,
+        sim_id: str,
+        score: float,
+        entity_by_id: dict[str, Entity],
+        seen: set[tuple[str, str]],
+    ) -> Entity | None:
+        """Validate and mark one vector candidate peer."""
+        if score < self._cosine_threshold or sim_id not in entity_by_id:
+            return None
+        other = entity_by_id[sim_id]
+        if entity.document_id == other.document_id:
+            return None
+        pair_key = (min(entity.id, other.id), max(entity.id, other.id))
+        if pair_key in seen:
+            return None
+        seen.add(pair_key)
+        return other
 
     async def build(
         self,
@@ -263,7 +304,7 @@ class InterDocGraphBuilder:
             return GraphBuildResult()
 
         # Fetch existing edges once for deduplication.
-        existing_edges = self._graph_store.list_edges()
+        existing_edges = self._graph_store.list_edges(scopes=[scope])
         existing_pairs: set[tuple[str, str]] = set()
         for e in existing_edges:
             existing_pairs.add((e.source_id, e.target_id))
@@ -271,7 +312,13 @@ class InterDocGraphBuilder:
 
         entity_by_id: dict[str, Entity] = {e.id: e for e in entities}
         source_by_entity = self._build_source_map(entities)
-        candidate_pairs = self._collect_candidates(entities, entity_by_id, existing_pairs, source_by_entity)
+        candidate_pairs = self._collect_candidates(
+            entities,
+            entity_by_id,
+            existing_pairs,
+            source_by_entity,
+            scopes=[scope],
+        )
 
         if not candidate_pairs:
             return GraphBuildResult()
@@ -284,5 +331,5 @@ class InterDocGraphBuilder:
             result = await self._extractor.extract(prompt)
             all_edges.extend(result.edges)
 
-        stamped = [_stamp_inter_edge(e, entity_by_id, source_by_entity) for e in all_edges]
+        stamped = [_stamp_inter_edge(e, entity_by_id, source_by_entity, scope) for e in all_edges]
         return GraphBuildResult(edges=stamped, edges_added=len(stamped))

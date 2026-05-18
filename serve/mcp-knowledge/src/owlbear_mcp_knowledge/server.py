@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import logging
 import os
 import sqlite3
 from contextlib import asynccontextmanager
@@ -26,9 +27,9 @@ from owlbear_knowledge.fetcher import HttpxContentFetcher
 from owlbear_knowledge.graph_builder import IntraDocGraphBuilder
 from owlbear_knowledge.graph_store import GraphStore
 from owlbear_knowledge.ingest import IngestPipeline
-from owlbear_knowledge.models import EntityType, RelationType
+from owlbear_knowledge.models import Edge, Entity, EntityType, RelationType
 from owlbear_knowledge.qdrant import QdrantVectorStore
-from owlbear_knowledge.query_service import KnowledgeQueryService
+from owlbear_knowledge.query_service import KnowledgeQueryError, KnowledgeQueryService
 from owlbear_knowledge.refresh import RefreshOrchestrator
 from owlbear_knowledge.retrieval import GraphAugmentedRetriever
 from owlbear_knowledge.schema import init_db as _schema_init_db
@@ -44,6 +45,9 @@ else:
 
 _DEFAULT_KB_PATH = ".owlbear/knowledge/local.db"
 _DEFAULT_QDRANT_PATH = ".owlbear/knowledge/vectors"
+_MAX_ENRICHMENT_BATCH_SIZE = 100
+
+logger = logging.getLogger(__name__)
 
 # Backward-compatible patch target used by legacy tests; the guard is no longer wired.
 globals()["ContentInjectionGuard"] = object
@@ -73,6 +77,7 @@ class SearchResult(TypedDict):
     snippet: str
     entity_type: str | None
     retrieval_path: str
+    graph_context: str
     entities: list[SearchEntity]
     related_sources: list[RelatedSource]
     source: SearchSource
@@ -260,6 +265,8 @@ def _fetch_consolidation_candidate_rows(
             WHERE d1.source_id IS NOT NULL
               AND d2.source_id IS NOT NULL
               AND d1.source_id != d2.source_id
+                            AND COALESCE(e1.scope, 'global') = COALESCE(e2.scope, 'global')
+                            AND COALESCE(d1.scope, 'global') = COALESCE(d2.scope, 'global')
               AND NOT EXISTS (
                   SELECT 1
                   FROM edges AS ed
@@ -367,6 +374,8 @@ def _candidate_entity_ids(
         JOIN documents AS d1 ON d1.id = e1.document_id
         JOIN documents AS d2 ON d2.id = e2.document_id
         WHERE e1.name = ?
+                    AND COALESCE(e1.scope, 'global') = COALESCE(e2.scope, 'global')
+                    AND COALESCE(d1.scope, 'global') = COALESCE(d2.scope, 'global')
           AND (
                 (d1.source_id = ? AND d2.source_id = ?)
                 OR (d1.source_id = ? AND d2.source_id = ?)
@@ -397,7 +406,11 @@ def _resolve_candidate_identity(
                 d1.source_id,
                 d2.source_id,
                 e1.name,
-                e2.name
+                e2.name,
+                e1.scope,
+                e2.scope,
+                d1.scope,
+                d2.scope
             FROM entities AS e1
             JOIN entities AS e2 ON e2.id = ?
             JOIN documents AS d1 ON d1.id = e1.document_id
@@ -416,6 +429,8 @@ def _resolve_candidate_identity(
             or row[5] != entity_name
             or row[2] != source_a
             or row[3] != source_b
+            or (row[6] or "global") != (row[7] or "global")
+            or (row[8] or "global") != (row[9] or "global")
         ):
             msg = "candidate_id does not resolve to persisted entity endpoints"
             raise ToolError(msg)
@@ -609,6 +624,77 @@ def _resolve_or_create_chunk_entity(
     return entity_id
 
 
+def _validate_phase1_entity_id(
+    conn: sqlite3.Connection,
+    *,
+    entity_id: str,
+    provenance: _ChunkProvenance,
+    allow_new: bool,
+) -> str:
+    """Return a phase-1 entity ID only when it is new or already chunk-local."""
+    normalized_entity_id = entity_id.strip()
+    if not normalized_entity_id:
+        msg = "entity id must not be blank"
+        raise ToolError(msg)
+
+    row = conn.execute(
+        """
+        SELECT document_id, chunk_id, scope
+        FROM entities
+        WHERE id = ?
+        LIMIT 1
+        """,
+        (normalized_entity_id,),
+    ).fetchone()
+    if row is None:
+        if allow_new:
+            return normalized_entity_id
+        msg = "unable to resolve edge endpoints from provided payload"
+        raise ToolError(msg)
+
+    entity_scope = row[2] if isinstance(row[2], str) and row[2] else "global"
+    if row[0] == provenance.document_id and row[1] == provenance.chunk_id and entity_scope == provenance.scope:
+        return normalized_entity_id
+
+    msg = "phase-1 entity IDs must belong to the target chunk"
+    raise ToolError(msg)
+
+
+def _validate_phase1_entity_payload(
+    *,
+    entity_id: str,
+    entity_name: str,
+    entity_type: str,
+    entity: dict[str, Any],
+    provenance: _ChunkProvenance,
+) -> Entity:
+    """Return a domain-validated Entity for a phase-1 payload."""
+    try:
+        return Entity(
+            id=entity_id,
+            name=entity_name,
+            entity_type=entity_type,
+            description=entity.get("description", ""),
+            metadata=entity.get("metadata", {}),
+            scope=provenance.scope,
+            document_id=provenance.document_id,
+            chunk_id=provenance.chunk_id,
+            importance=entity.get("importance", 0.5),
+        )
+    except ValueError as exc:
+        msg = "invalid entity payload"
+        raise ToolError(msg) from exc
+
+
+def _validate_enrichment_edge_payload(payload: dict[str, Any]) -> Edge:
+    """Return a domain-validated Edge for an enrichment payload."""
+    try:
+        return Edge(**payload)
+    except ValueError as exc:
+        msg = "invalid edge payload"
+        raise ToolError(msg) from exc
+
+
 def _resolve_phase1_edge_endpoints(
     conn: sqlite3.Connection,
     *,
@@ -620,13 +706,6 @@ def _resolve_phase1_edge_endpoints(
     """Resolve edge endpoints using IDs, names, and chunk-local fallbacks."""
     source_id = edge.get("source_id") if isinstance(edge.get("source_id"), str) else None
     target_id = edge.get("target_id") if isinstance(edge.get("target_id"), str) else None
-
-    def _entity_id_exists(entity_id: str) -> bool:
-        row = conn.execute(
-            "SELECT 1 FROM entities WHERE id = ? AND scope = ? LIMIT 1",
-            (entity_id, provenance.scope),
-        ).fetchone()
-        return row is not None
 
     if source_id is None:
         source_name = edge.get("source_name")
@@ -650,13 +729,21 @@ def _resolve_phase1_edge_endpoints(
                 name=target_name.strip(),
             )
 
-    if source_id is not None and not _entity_id_exists(source_id):
-        msg = "unable to resolve edge endpoints from provided payload"
-        raise ToolError(msg)
+    if source_id is not None:
+        source_id = _validate_phase1_entity_id(
+            conn,
+            entity_id=source_id,
+            provenance=provenance,
+            allow_new=False,
+        )
 
-    if target_id is not None and not _entity_id_exists(target_id):
-        msg = "unable to resolve edge endpoints from provided payload"
-        raise ToolError(msg)
+    if target_id is not None:
+        target_id = _validate_phase1_entity_id(
+            conn,
+            entity_id=target_id,
+            provenance=provenance,
+            allow_new=False,
+        )
 
     if source_id is None or target_id is None:
         msg = "unable to resolve edge endpoints from provided payload"
@@ -743,6 +830,28 @@ def _persist_phase2_enrichment(
                 target_id=resolved_target_id,
             )
             edge_metadata = {**edge_metadata, **provenance_metadata}
+            edge_id = (
+                edge.get("id")
+                if isinstance(edge.get("id"), str) and edge.get("id").strip()
+                else _stable_edge_id(
+                    "phase2",
+                    candidate_id,
+                    resolved_source_id,
+                    resolved_target_id,
+                    relation,
+                )
+            )
+            validated_edge = _validate_enrichment_edge_payload(
+                {
+                    "id": edge_id,
+                    "source_id": resolved_source_id,
+                    "target_id": resolved_target_id,
+                    "relation": relation,
+                    "weight": edge.get("weight", 1.0),
+                    "metadata": edge_metadata,
+                    "scope": edge_scope,
+                }
+            )
 
             conn.execute(
                 """
@@ -751,22 +860,15 @@ def _persist_phase2_enrichment(
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    edge.get("id")
-                    or _stable_edge_id(
-                        "phase2",
-                        candidate_id,
-                        resolved_source_id,
-                        resolved_target_id,
-                        relation,
-                    ),
-                    resolved_source_id,
-                    resolved_target_id,
-                    relation,
+                    validated_edge.id,
+                    validated_edge.source_id,
+                    validated_edge.target_id,
+                    validated_edge.relation.value,
                     edge_document_id,
-                    edge.get("weight", 1.0),
-                    json.dumps(edge_metadata),
+                    validated_edge.weight,
+                    json.dumps(validated_edge.metadata),
                     now_iso,
-                    edge_scope,
+                    validated_edge.scope,
                 ),
             )
 
@@ -799,7 +901,24 @@ def _persist_phase1_enrichment(
             raise ToolError(msg)
         entity_type = _extract_entity_type(entity)
 
-        entity_id = entity.get("id") if isinstance(entity.get("id"), str) else uuid4().hex
+        raw_entity_id = entity.get("id")
+        entity_id = (
+            _validate_phase1_entity_id(
+                conn,
+                entity_id=raw_entity_id,
+                provenance=provenance,
+                allow_new=True,
+            )
+            if isinstance(raw_entity_id, str) and raw_entity_id.strip()
+            else uuid4().hex
+        )
+        validated_entity = _validate_phase1_entity_payload(
+            entity_id=entity_id,
+            entity_name=entity_name.strip(),
+            entity_type=entity_type,
+            entity=entity,
+            provenance=provenance,
+        )
         conn.execute(
             """
             INSERT OR REPLACE INTO entities
@@ -807,20 +926,20 @@ def _persist_phase1_enrichment(
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                entity_id,
-                entity_name.strip(),
-                entity_type,
-                entity.get("description", ""),
-                json.dumps(entity.get("metadata", {})),
+                validated_entity.id,
+                validated_entity.name,
+                validated_entity.entity_type.value,
+                validated_entity.description,
+                json.dumps(validated_entity.metadata),
                 now_iso,
-                provenance.scope,
-                provenance.document_id,
-                provenance.chunk_id,
-                entity.get("importance", 0.5),
+                validated_entity.scope,
+                validated_entity.document_id,
+                validated_entity.chunk_id,
+                validated_entity.importance,
             ),
         )
         if first_entity_id is None:
-            first_entity_id = entity_id
+            first_entity_id = validated_entity.id
 
     for edge in edges:
         relation = _extract_relation(edge)
@@ -834,6 +953,18 @@ def _persist_phase1_enrichment(
         metadata = edge.get("metadata")
         edge_metadata = metadata.copy() if isinstance(metadata, dict) else {}
         edge_metadata.setdefault("chunk_id", chunk_id)
+        edge_id = edge.get("id") if isinstance(edge.get("id"), str) and edge.get("id").strip() else uuid4().hex
+        validated_edge = _validate_enrichment_edge_payload(
+            {
+                "id": edge_id,
+                "source_id": endpoint_source_id,
+                "target_id": endpoint_target_id,
+                "relation": relation,
+                "weight": edge.get("weight", 1.0),
+                "metadata": edge_metadata,
+                "scope": provenance.scope,
+            }
+        )
         conn.execute(
             """
             INSERT OR IGNORE INTO edges
@@ -841,15 +972,15 @@ def _persist_phase1_enrichment(
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                edge.get("id") or uuid4().hex,
-                endpoint_source_id,
-                endpoint_target_id,
-                relation,
+                validated_edge.id,
+                validated_edge.source_id,
+                validated_edge.target_id,
+                validated_edge.relation.value,
                 provenance.document_id,
-                edge.get("weight", 1.0),
-                json.dumps(edge_metadata),
+                validated_edge.weight,
+                json.dumps(validated_edge.metadata),
                 now_iso,
-                provenance.scope,
+                validated_edge.scope,
             ),
         )
 
@@ -895,6 +1026,11 @@ def _serialize_search_entities(value: object) -> list[SearchEntity]:
         if isinstance(name, str) and isinstance(entity_type, str):
             entities.append({"name": name, "type": entity_type})
     return entities
+
+
+def _serialize_graph_context(value: object) -> str:
+    """Normalize graph expansion text for MCP search results."""
+    return value if isinstance(value, str) else ""
 
 
 def _serialize_related_sources(value: object) -> list[RelatedSource]:
@@ -944,6 +1080,17 @@ def _normalize_optional_scope(scope: str | None) -> str | None:
     return normalized
 
 
+def _normalize_batch_limit(limit: int) -> int:
+    """Validate and bound mutable enrichment batch claims."""
+    if isinstance(limit, bool) or not isinstance(limit, int):
+        msg = "limit must be an integer"
+        raise ToolError(msg)
+    if limit < 1:
+        msg = "limit must be at least 1"
+        raise ToolError(msg)
+    return min(limit, _MAX_ENRICHMENT_BATCH_SIZE)
+
+
 async def get_next_batch(ctx: Context, limit: int = 10) -> list[EnrichmentChunk]:
     """Atomically claim a batch of chunks ready for enrichment.
 
@@ -952,6 +1099,7 @@ async def get_next_batch(ctx: Context, limit: int = 10) -> list[EnrichmentChunk]
     """
     app_ctx: AppContext = ctx.request_context.lifespan_context
     conn = app_ctx.conn
+    limit = _normalize_batch_limit(limit)
     now = datetime.now(tz=UTC)
     now_iso = now.isoformat()
 
@@ -1086,6 +1234,7 @@ class AppContext:
     conn: sqlite3.Connection
     query_service: KnowledgeQueryService | None
     graph_store: GraphStore | None
+    vector_store: QdrantVectorStore | None
     ingest_pipeline: IngestPipeline | None
     source_store: KnowledgeSourceStore | None
     refresh_orchestrator: RefreshOrchestrator | None = None
@@ -1167,6 +1316,7 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
             conn=conn,
             query_service=qs,
             graph_store=gs,
+            vector_store=vs,
             ingest_pipeline=pipeline,
             source_store=source_store,
             refresh_orchestrator=refresh_orchestrator,
@@ -1201,6 +1351,7 @@ __all__ = [
     "list_sources",
     "mcp",
     "refresh_source",
+    "remove_source",
     "search_knowledge",
     "select_content_fetcher",
 ]
@@ -1221,7 +1372,10 @@ async def search_knowledge(
     qs = app_ctx.query_service
     if qs is None:
         return "error: Knowledge service not available."
-    results = await qs.query(query, top_k=limit, scopes=scopes)
+    try:
+        results = await qs.query(query, top_k=limit, scopes=scopes)
+    except KnowledgeQueryError as exc:
+        return f"error: {exc}"
     serialized: list[SearchResult] = []
     for r in results:
         retrieval_path = getattr(r, "retrieval_path", "vector")
@@ -1232,6 +1386,7 @@ async def search_knowledge(
                 "snippet": r.snippet,
                 "entity_type": r.entity_type,
                 "retrieval_path": (retrieval_path if isinstance(retrieval_path, str) else "vector"),
+                "graph_context": _serialize_graph_context(getattr(r, "graph_context", "")),
                 "entities": _serialize_search_entities(getattr(r, "entities", [])),
                 "related_sources": _serialize_related_sources(getattr(r, "related_sources", [])),
                 "source": _serialize_source(getattr(r, "source", None)),
@@ -1286,10 +1441,11 @@ async def ingest_document(
     else:
         if result.status == "failed":
             return f"error: ingestion failed for document {result.document_id}"
+        warning_text = f", warnings: {'; '.join(result.warnings)}" if result.warnings else ""
         return (
             f"Ingested: {result.document_id}, {result.chunk_count} chunks, "
             f"{result.entity_count} entities, {result.edge_count} edges "
-            f"(status: {result.status})"
+            f"(status: {result.status}{warning_text})"
         )
 
 
@@ -1384,7 +1540,7 @@ async def knowledge_stats_resource(ctx: Context | None = None) -> str:
 async def refresh_source(ctx: Context, source_id: str) -> dict | str:
     """Trigger re-ingestion of a registered knowledge source by its ID.
 
-    Returns a dict with source_id, refreshed, skipped, failed, and errors on
+    Returns a dict with source_id, refreshed, partial, skipped, failed, errors, and warnings on
     success.  Returns an error string for disabled sources or unavailable
     orchestrator.  Raises ToolError if source_store is unavailable or the
     source_id is not found.
@@ -1411,7 +1567,7 @@ async def refresh_source(ctx: Context, source_id: str) -> dict | str:
         pipeline=pipeline,
         workspace_root=Path.cwd(),
         content_fetcher=selected_fetcher,
-        inter_doc_builder=None,
+        inter_doc_builder=getattr(app_ctx, "inter_doc_builder", None),
         graph_store=app_ctx.graph_store,
     )
     try:
@@ -1421,7 +1577,96 @@ async def refresh_source(ctx: Context, source_id: str) -> dict | str:
     return {
         "source_id": result.source_id,
         "refreshed": result.refreshed,
+        "partial": result.partial,
         "skipped": result.skipped,
         "failed": result.failed,
         "errors": result.errors,
+        "warnings": result.warnings,
+    }
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True))
+async def remove_source(ctx: Context, source_id: str) -> dict[str, int]:
+    """Delete a source after removing vectors; abort on vector deletion exceptions."""
+    app_ctx: AppContext = ctx.request_context.lifespan_context
+    store = app_ctx.source_store
+    if store is None:
+        msg = "source store not available"
+        raise ToolError(msg)
+
+    source = store.get(source_id)
+    if source is None:
+        msg = f"Source '{source_id}' not found"
+        raise ToolError(msg)
+
+    conn = app_ctx.conn
+    vector_store = app_ctx.vector_store
+    if vector_store is None:
+        msg = "vector store not available"
+        raise ToolError(msg)
+
+    doc_count_row = conn.execute("SELECT COUNT(*) FROM documents WHERE source_id = ?", (source_id,)).fetchone()
+    chunk_count_row = conn.execute(
+        """
+        SELECT COUNT(*)
+        FROM chunks c
+        JOIN documents d ON c.document_id = d.id
+        WHERE d.source_id = ?
+        """,
+        (source_id,),
+    ).fetchone()
+    entity_count_row = conn.execute(
+        """
+        SELECT COUNT(*)
+        FROM entities e
+        JOIN documents d ON e.document_id = d.id
+        WHERE d.source_id = ?
+        """,
+        (source_id,),
+    ).fetchone()
+
+    chunk_rows = conn.execute(
+        """
+        SELECT c.id
+        FROM chunks c
+        JOIN documents d ON c.document_id = d.id
+        WHERE d.source_id = ?
+        """,
+        (source_id,),
+    ).fetchall()
+    chunk_ids = [str(row[0]) for row in chunk_rows]
+    entity_rows = conn.execute(
+        """
+        SELECT e.id
+        FROM entities e
+        JOIN documents d ON e.document_id = d.id
+        WHERE d.source_id = ?
+        """,
+        (source_id,),
+    ).fetchall()
+    entity_ids = [str(row[0]) for row in entity_rows]
+
+    try:
+        for vector_id in [*chunk_ids, *entity_ids]:
+            vector_store.delete_embedding(vector_id)
+    except Exception as exc:
+        msg = f"Failed to delete vectors for source '{source_id}': {exc}"
+        raise ToolError(msg) from exc
+
+    doc_count = int(doc_count_row[0] if doc_count_row is not None else 0)
+    chunk_count = int(chunk_count_row[0] if chunk_count_row is not None else 0)
+    entity_count = int(entity_count_row[0] if entity_count_row is not None else 0)
+    logger.info(
+        "remove_source audit source_id=%s source_name=%s documents=%d chunks=%d entities=%d",
+        source_id,
+        source.name,
+        doc_count,
+        chunk_count,
+        entity_count,
+    )
+    store.delete_cascade(source_id)
+    return {
+        "documents": doc_count,
+        "chunks": chunk_count,
+        "entities": entity_count,
     }

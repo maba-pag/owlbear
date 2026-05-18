@@ -186,7 +186,7 @@ class DocumentStore:
         entities_or_results: list[Entity] | list[ExtractionResult] | None = None,
         *,
         results: list[ExtractionResult] | None = None,
-        scope: str = "global",  # noqa: ARG002 - reserved for future scoped vector store routing
+        scope: str = "global",
     ) -> None:
         """Embed entity descriptions and store with embedding_type='entity'.
 
@@ -196,6 +196,9 @@ class DocumentStore:
           — extracts entities from :class:`~owlbear_knowledge.extractor.ExtractionResult` list.
         - Legacy API: ``store_entity_embeddings(entities)``
           — accepts a list of :class:`~owlbear_knowledge.models.Entity` objects.
+
+                Entity objects with an explicitly set ``scope`` keep that scope;
+                otherwise the method-level ``scope`` is used for vector provenance.
         """
         if results is not None:
             # New API: extract entities from ExtractionResult list
@@ -207,10 +210,14 @@ class DocumentStore:
         texts = [e.description or e.name for e in entities]  # type: ignore[union-attr]
         computed: list[list[float]] = self._embedder.embed(texts)  # type: ignore[union-attr]
         for entity, emb in zip(entities, computed, strict=False):
+            fields_set = getattr(entity, "model_fields_set", set())
+            entity_scope = getattr(entity, "scope", None) if "scope" in fields_set else None
+            vector_scope = entity_scope if isinstance(entity_scope, str) and entity_scope else scope
             self._vector.store_embedding(  # type: ignore[union-attr]
                 entity_or_doc_id=entity.id,  # type: ignore[union-attr]
                 embedding=emb,
                 embedding_type="entity",
+                scope=vector_scope,
             )
 
     # ── Entity extractions ────────────────────────────────────────────────

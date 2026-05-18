@@ -114,6 +114,16 @@ class TestFromAC_ListToolOutputSchemas:
             f"SearchResult.snippet type expected 'string', got: {props['snippet'].get('type')!r}"
         )
 
+    def test_search_knowledge_search_result_has_graph_context_field(self) -> None:
+        """SearchResult in $defs must have a 'graph_context' property of type string."""
+        schema = _get_output_schema("search_knowledge")
+        assert schema is not None
+        props = schema.get("$defs", {}).get("SearchResult", {}).get("properties", {})
+        assert "graph_context" in props, "SearchResult missing 'graph_context' property"
+        assert props["graph_context"].get("type") == "string", (
+            f"SearchResult.graph_context type expected 'string', got: {props['graph_context'].get('type')!r}"
+        )
+
     # -- AC2: list_sources / SourceInfo ---------------------------------------
 
     def test_list_sources_output_schema_has_defs_with_source_info(self) -> None:

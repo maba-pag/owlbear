@@ -16,7 +16,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from owlbear_knowledge.query_service import StructuredSearchResult
+from owlbear_knowledge.query_service import KnowledgeQueryError, StructuredSearchResult
 from owlbear_mcp_knowledge.server import search_knowledge
 
 
@@ -36,6 +36,7 @@ def _make_result(
     title: str = "doc",
     score: float = 0.85,
     snippet: str = "snippet text",
+    graph_context: str = "",
 ) -> StructuredSearchResult:
     return StructuredSearchResult(
         doc_id="d1",
@@ -44,6 +45,7 @@ def _make_result(
         snippet=snippet,
         entity_type="concept",
         scope="global",
+        graph_context=graph_context,
     )
 
 
@@ -137,6 +139,17 @@ class TestFromAC_SearchKnowledgeV2:
         result = await search_knowledge(ctx, query="test")
 
         assert result == []
+
+    @pytest.mark.asyncio
+    async def test_query_failure_returns_error_string(self) -> None:
+        """search_knowledge returns an error string when query infrastructure fails."""
+        qs = AsyncMock()
+        qs.query = AsyncMock(side_effect=KnowledgeQueryError("knowledge query failed"))
+        ctx = _make_ctx(qs)
+
+        result = await search_knowledge(ctx, query="test")
+
+        assert result == "error: knowledge query failed"
 
     # ------------------------------------------------------------------
     # AC: awaits query() directly (not via asyncio.to_thread)
@@ -262,6 +275,18 @@ class TestFromAC_SearchKnowledgeStructuredReturn:
         result = await search_knowledge(ctx, query="sn")
 
         assert isinstance(result[0]["snippet"], str)  # type: ignore[index]
+
+    @pytest.mark.asyncio
+    async def test_graph_context_serialized_from_structured_result(self) -> None:
+        """graph_context field carries graph expansion text through MCP serialization."""
+        graph_context = "Alpha --[depends_on]--> Beta: neighbor detail"
+        qs = AsyncMock()
+        qs.query = AsyncMock(return_value=[_make_result(graph_context=graph_context)])
+        ctx = _make_ctx(qs)
+
+        result = await search_knowledge(ctx, query="graph")
+
+        assert result[0]["graph_context"] == graph_context  # type: ignore[index]
 
     @pytest.mark.asyncio
     async def test_dict_values_match_source_result_fields(self) -> None:

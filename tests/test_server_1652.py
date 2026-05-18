@@ -38,6 +38,7 @@ def _make_source(source_id: str = "src-1", name: str = "Test Source") -> MagicMo
 
 def _make_conn(
     chunk_ids: list[str] | None = None,
+    entity_ids: list[str] | None = None,
     doc_count: int = 2,
     chunk_count: int = 3,
     entity_count: int = 5,
@@ -49,6 +50,8 @@ def _make_conn(
     """
     if chunk_ids is None:
         chunk_ids = ["chunk-1", "chunk-2", "chunk-3"]
+    if entity_ids is None:
+        entity_ids = []
 
     conn = MagicMock()
 
@@ -62,6 +65,8 @@ def _make_conn(
                 cursor.fetchone.return_value = (chunk_count,)
             else:
                 cursor.fetchone.return_value = (doc_count,)
+        elif "from entities" in sql_lower:
+            cursor.fetchall.return_value = [(eid,) for eid in entity_ids]
         else:
             cursor.fetchall.return_value = [(cid,) for cid in chunk_ids]
         return cursor
@@ -204,6 +209,22 @@ class TestFromAC_RemoveSourceTool:
         vs.delete_embedding.assert_any_call("chunk-a")
         vs.delete_embedding.assert_any_call("chunk-b")
         vs.delete_embedding.assert_any_call("chunk-c")
+
+    @pytest.mark.asyncio
+    async def test_remove_source_calls_delete_embedding_for_each_entity(self) -> None:
+        """delete_embedding is also called for entity IDs collected from the source."""
+        entity_ids = ["entity-a", "entity-b"]
+        source = _make_source()
+        vs = MagicMock()
+        vs.delete_embedding.return_value = True
+        conn = _make_conn(chunk_ids=[], entity_ids=entity_ids)
+        ctx = _make_ctx(source=source, vector_store=vs, conn=conn)
+
+        await remove_source(ctx, source_id="src-1")
+
+        assert vs.delete_embedding.call_count == 2
+        vs.delete_embedding.assert_any_call("entity-a")
+        vs.delete_embedding.assert_any_call("entity-b")
 
     @pytest.mark.asyncio
     async def test_remove_source_calls_delete_cascade_with_source_id(self) -> None:

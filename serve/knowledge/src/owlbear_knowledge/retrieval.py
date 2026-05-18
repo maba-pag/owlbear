@@ -103,6 +103,7 @@ class GraphAugmentedRetriever:
         raw_chunks: list[tuple[str, float]] = self._vector_store.search_similar(
             embedding,
             top_k=top_k,
+            embedding_type="document",
             scopes=scopes,
         )
         chunks = raw_chunks[:top_k]

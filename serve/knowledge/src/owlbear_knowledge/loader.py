@@ -37,7 +37,7 @@ _SOURCE_SCHEMA = sy.Map(
     {
         "name": sy.Str(),
         "type": sy.Enum(["file_glob", "url_list"]),
-        "config": sy.MapPattern(sy.Str(), sy.Str()),
+        "config": sy.MapPattern(sy.Str(), sy.Str() | sy.Seq(sy.Str())),
         sy.Optional("scope"): sy.Str(),
         sy.Optional("enabled"): sy.Bool(),
     }
@@ -60,7 +60,7 @@ class ManifestEntry:
 
     name: str
     type: str
-    config: dict[str, str]
+    config: dict[str, object]
     scope: str = "global"
     enabled: bool = True
 
@@ -73,6 +73,172 @@ class LoadSummary:
     skipped: int = 0
     failed: int = 0
     all_source_ok: bool = True
+
+
+def _source_defaults(entry: ManifestEntry) -> tuple[str, bool, dict[str, object]]:
+    """Return fetch/enrich/config values for a manifest source."""
+    config: dict[str, object] = dict(entry.config)
+    if entry.type == SourceType.FILE_GLOB.value:
+        glob_pattern = entry.config.get("glob") or entry.config.get("pattern") or ""
+        if glob_pattern:
+            config.setdefault("glob", glob_pattern)
+            config.setdefault("pattern", glob_pattern)
+        return "file", True, config
+
+    if entry.type == SourceType.URL_LIST.value:
+        urls = _manifest_urls(config)
+        if urls:
+            config.setdefault("url", urls[0])
+            config["urls"] = urls
+        return "http", True, config
+
+    return "", False, config
+
+
+def _manifest_urls(config: dict[str, object]) -> list[str]:
+    """Return URL entries from manifest config keys."""
+    urls: list[str] = []
+    raw_urls = config.get("urls")
+    if isinstance(raw_urls, list):
+        urls.extend(url.strip() for url in raw_urls if isinstance(url, str) and url.strip())
+    elif isinstance(raw_urls, str) and raw_urls.strip():
+        urls.extend(url.strip() for url in raw_urls.split(",") if url.strip())
+
+    raw_url = config.get("url")
+    if isinstance(raw_url, str) and raw_url.strip() and raw_url.strip() not in urls:
+        urls.append(raw_url.strip())
+    return urls
+
+
+def _find_source_by_name_scope(
+    source_store: KnowledgeSourceStore,
+    *,
+    name: str,
+    scope: str,
+) -> KnowledgeSource | None:
+    """Return an existing source by manifest identity, if present."""
+    for source in source_store.list_all(scope):
+        if source.name == name:
+            return source
+    return None
+
+
+def _upsert_manifest_source(
+    source_store: KnowledgeSourceStore,
+    entry: ManifestEntry,
+    *,
+    now: str,
+) -> KnowledgeSource:
+    """Create or update the source row represented by a manifest entry."""
+    fetch_method, enrich, source_config = _source_defaults(entry)
+    existing_source = _find_source_by_name_scope(source_store, name=entry.name, scope=entry.scope)
+    if existing_source is None:
+        source = KnowledgeSource(
+            name=entry.name,
+            source_type=SourceType(entry.type),
+            fetch_method=fetch_method,
+            enrich=enrich,
+            config=source_config,
+            scope=entry.scope,
+            enabled=entry.enabled,
+            created_at=now,
+            updated_at=now,
+        )
+        source_store.create(source)
+        return source
+
+    source = existing_source.model_copy(
+        update={
+            "source_type": SourceType(entry.type),
+            "fetch_method": fetch_method,
+            "enrich": enrich,
+            "config": source_config,
+            "enabled": entry.enabled,
+            "updated_at": now,
+        }
+    )
+    source_store.update(source)
+    return source
+
+
+def _record_ingest_result(summary: LoadSummary, result: object) -> bool:
+    """Update load counters from an ingest result and return whether it failed."""
+    status = getattr(result, "status", "ok")
+    if status == "skipped":
+        summary.skipped += 1
+        return False
+    if status == "failed":
+        summary.failed += 1
+        return True
+    summary.ingested += 1
+    return False
+
+
+async def _load_url_list_entry(
+    entry: ManifestEntry,
+    source: KnowledgeSource,
+    pipeline: IngestPipeline,
+    summary: LoadSummary,
+) -> None:
+    """Read and ingest all URLs for a url_list manifest entry."""
+    urls = _manifest_urls(source.config)
+    if not urls:
+        logger.warning("No URLs configured for source %r", entry.name)
+        summary.failed += 1
+        summary.all_source_ok = False
+        return
+
+    source_failed = 0
+    for url in urls:
+        try:
+            intake_result = await intake_mod.read_url(url)
+            result = await pipeline.ingest(
+                intake_result,
+                scope=entry.scope,
+                source_id=source.id,
+            )
+            source_failed += int(_record_ingest_result(summary, result))
+        except Exception:
+            logger.exception("Failed to process URL %s", url)
+            summary.failed += 1
+            source_failed += 1
+
+    if source_failed == len(urls):
+        summary.all_source_ok = False
+
+
+async def _load_file_glob_entry(
+    entry: ManifestEntry,
+    source: KnowledgeSource,
+    workspace_root: Path,
+    pipeline: IngestPipeline,
+    summary: LoadSummary,
+) -> None:
+    """Read and ingest all files for a file_glob manifest entry."""
+    glob_pattern = str(source.config.get("glob") or source.config.get("pattern") or "")
+    files = await asyncio.to_thread(lambda pat=glob_pattern: sorted(workspace_root.glob(pat)))
+
+    if not files:
+        logger.warning("No files matched glob %r for source %r", glob_pattern, entry.name)
+        return
+
+    source_failed = 0
+    for file_path in files:
+        try:
+            intake_result = await intake_mod.read_file(file_path, workspace_root=workspace_root)
+            result = await pipeline.ingest(
+                intake_result,
+                scope=entry.scope,
+                source_id=source.id,
+            )
+            source_failed += int(_record_ingest_result(summary, result))
+        except Exception:
+            logger.exception("Failed to process file %s", file_path)
+            summary.failed += 1
+            source_failed += 1
+
+    if source_failed == len(files):
+        summary.all_source_ok = False
 
 
 # ---------------------------------------------------------------------------
@@ -167,48 +333,13 @@ async def load_manifest_file(
             logger.debug("Skipping disabled source %r", entry.name)
             continue
 
-        source = KnowledgeSource(
-            name=entry.name,
-            source_type=SourceType(entry.type),
-            config=entry.config,
-            scope=entry.scope,
-            created_at=now,
-            updated_at=now,
-        )
-        source_store.create(source)
+        source = _upsert_manifest_source(source_store, entry, now=now)
 
-        glob_pattern = entry.config.get("glob", "")
-        files = await asyncio.to_thread(lambda pat=glob_pattern: sorted(workspace_root.glob(pat)))
-
-        if not files:
-            logger.warning("No files matched glob %r for source %r", glob_pattern, entry.name)
+        if entry.type == SourceType.URL_LIST.value:
+            await _load_url_list_entry(entry, source, pipeline, summary)
             continue
 
-        source_failed = 0
-        source_total = len(files)
-
-        for file_path in files:
-            try:
-                intake_result = await intake_mod.read_file(file_path, workspace_root=workspace_root)
-                result = await pipeline.ingest(
-                    intake_result,
-                    scope=entry.scope,
-                    source_id=source.id,
-                )
-                if result.status == "skipped":
-                    summary.skipped += 1
-                elif result.status == "failed":
-                    summary.failed += 1
-                    source_failed += 1
-                else:
-                    summary.ingested += 1
-            except Exception:
-                logger.exception("Failed to process file %s", file_path)
-                summary.failed += 1
-                source_failed += 1
-
-        if source_failed == source_total:
-            summary.all_source_ok = False
+        await _load_file_glob_entry(entry, source, workspace_root, pipeline, summary)
 
     return summary
 

@@ -10,6 +10,7 @@ from owlbear_knowledge.ingest import IngestPipeline, IngestResult
 from owlbear_knowledge.intake import IntakeResult
 from owlbear_knowledge.models import PageStatus, SourcePage
 from owlbear_knowledge.query_service import (
+    KnowledgeQueryError,
     KnowledgeQueryService,
     StructuredSearchResult,
 )
@@ -33,6 +34,7 @@ __all__ = [
     "IngestPipeline",
     "IngestResult",
     "IntakeResult",
+    "KnowledgeQueryError",
     "KnowledgeQueryService",
     "KnowledgeSourceStore",
     "LinkedCancelSignal",

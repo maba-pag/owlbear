@@ -20,10 +20,10 @@ Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json
 |------|-------------|
 | `search_knowledge` | Semantic search over the knowledge base |
 | `list_sources` | List registered knowledge sources, optionally filtered by scope |
-| `ingest_document` | Ingest text content into the knowledge base; identified web/file sources use content-hash delta detection |
+| `ingest_document` | Ingest text content into the knowledge base; `source_url` and URL-like metadata identities use content-hash delta detection and source linkage; anonymous/plain-label text creates non-refreshable inline source provenance; partial graph extraction returns warnings |
 | `get_consolidation_candidates` | List unresolved cross-source entity consolidation candidates (entities appearing in 2+ sources with no existing edge or reviewed dismissal) |
 | `get_stats` | Summary statistics: document, entity, and edge counts plus source count, chunk count, enrichment ratio, and consolidation candidates remaining |
-| `refresh_source` | Re-ingest a registered source by source ID |
+| `refresh_source` | Re-ingest a registered source by source ID; response includes full, partial, skipped, failed, error, and warning counts |
 | `get_next_batch` | Atomically claim a batch of chunks ready for enrichment |
 | `store_enrichment` | Dual-mode enrichment persist: Phase 1 (`chunk_id`, `entities`, `edges`) marks chunk enriched; Phase 2 (`candidate_id`, `edges`) writes cross-source edges or records a reviewed-pair dismissal |
 
