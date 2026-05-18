@@ -415,6 +415,42 @@ class TestFromAC_AuditLog:
         all_args = " ".join(str(a) for c in mock_logger.info.call_args_list for a in c.args)
         assert "77" in all_args
 
+    @pytest.mark.asyncio
+    async def test_remove_source_logger_info_strictly_before_delete_cascade(self) -> None:
+        """Call-order regression guard: logger.info must precede delete_cascade in execution sequence.
+
+        Fails if logger.info is moved after delete_cascade — side-effect tracking records
+        the actual invocation order and asserts the index of logger.info is strictly less
+        than the index of delete_cascade.
+        """
+        source = _make_source()
+        ctx = _make_ctx(source=source)
+        store = ctx.request_context.lifespan_context.source_store
+
+        call_order: list[str] = []
+        original_delete_cascade = store.delete_cascade.side_effect
+
+        def _record_cascade(*args: object, **kwargs: object) -> None:
+            call_order.append("delete_cascade")
+            if original_delete_cascade is not None:
+                original_delete_cascade(*args, **kwargs)
+
+        store.delete_cascade.side_effect = _record_cascade
+
+        with patch("owlbear_mcp_knowledge.server.logger") as mock_logger:
+
+            def _record_info(*args: object, **kwargs: object) -> None:  # noqa: ARG001
+                call_order.append("logger.info")
+
+            mock_logger.info.side_effect = _record_info
+            await remove_source(ctx, source_id="src-1")
+
+        assert "logger.info" in call_order, "logger.info was never called"
+        assert "delete_cascade" in call_order, "delete_cascade was never called"
+        info_idx = call_order.index("logger.info")
+        cascade_idx = call_order.index("delete_cascade")
+        assert info_idx < cascade_idx, f"logger.info must be called before delete_cascade; actual order: {call_order}"
+
 
 # ---------------------------------------------------------------------------
 # TestFromAC_SourceNotFound — AC-5
