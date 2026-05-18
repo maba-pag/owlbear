@@ -223,17 +223,8 @@ export default function TaskFieldsEditor({
         onInput={(event) => setTitle(readControlValue(event))}
       />
       <PSelect
-        name="priority"
-        value={priority}
-        hidden
-        aria-hidden="true"
-        tabIndex={-1}
-      >
-        <PSelectOption value={priority}>{priority}</PSelectOption>
-      </PSelect>
-      <PSelect
         ref={setHideLabelAttr}
-        name="priority-editor"
+        name="priority"
         label="Priority"
         data-field="priority"
         value={priority}
@@ -243,14 +234,8 @@ export default function TaskFieldsEditor({
           <PSelectOption key={p} value={p}>{p}</PSelectOption>
         ))}
       </PSelect>
-      {task.tags.map((tag, index) => (
-        index === 0 ? (
-          <PTag key={tag} data-testid="tag-chip">{tag}</PTag>
-        ) : (
-          <div key={tag} data-testid="tag-chip">
-            <PTag>{tag}</PTag>
-          </div>
-        )
+      {task.tags.map((tag) => (
+        <PTag key={tag} data-testid="tag-chip">{tag}</PTag>
       ))}
       <PInputText
         ref={setHideLabelAttr}
