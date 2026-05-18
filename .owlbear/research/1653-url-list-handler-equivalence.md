@@ -28,15 +28,15 @@
 | Aspect | URL_LIST | AUTH_WEB | Equivalent? |
 |--------|----------|---------|-------------|
 | URL resolution | `_configured_urls(source)` | `_configured_urls(source)` | Yes |
-| HTTP fetch | `_intake.read_url` → httpx GET | `HttpxContentFetcher.fetch` → httpx GET | Yes (same library, same call) |
+| HTTP fetch binding (`fetch_method="http"`) | `_intake.read_url` → `HttpxContentFetcher().fetch(url)` | `refresh_source` selects `select_content_fetcher(source.fetch_method)` and injects into `RefreshOrchestrator` | Yes (both resolve to `HttpxContentFetcher`) |
 | Content returned | `response.text` | `response.text` | Yes |
 | Metadata: source_type | `"url"` | `"authenticated_web"` | **No** — differs |
 | Metadata: fetched_at | Present | Absent | **No** — differs |
 | should_wrap behavior | `True` (not in trusted set) | `True` (not in trusted set) | Yes |
 | Metadata downstream use | None beyond should_wrap | None beyond should_wrap | Yes |
 | Pipeline ingest call | Direct `await` | `inspect.isawaitable` guard | Yes (same result) |
-| Empty URL behavior | 0-count success | Error result (failed=1) | **No** — differs |
-| source_id in result | `source.id` (raw) | `str(source.id)` (cast) | Minor — no impact |
+| Empty URL behavior | Error result (failed=1) | Error result (failed=1) | Yes |
+| source_id in result | `source.id` | `str(source.id)` | Yes (`KnowledgeSource.id` is already `str`) |
 | Local file:// handling | Not supported (httpx only) | Supported via `_local_path_from_url` | N/A for HTTP retype |
 | content_fetcher dep | None | Requires injected fetcher | URL_LIST simpler |
 | Status counting | ok/partial/skipped/failed | ok/partial/skipped/failed | Yes |
@@ -45,24 +45,31 @@
 
 ### Metadata Persistence Impact
 
-Both handlers route through `IngestPipeline.ingest()` which persists `intake.metadata` to documents (as JSON) and propagates it to chunks. The metadata differences ARE persisted. However:
+Both handlers route through `IngestPipeline.ingest()` which persists `intake.metadata` to documents (as JSON) and propagates it to chunks via `TextChunker._build_chunks()`. The metadata differences ARE persisted. However:
 
-1. **`source_type`** — Only consumed by `content_safety.should_wrap()` at line 442 of `ingest.py`. Both `"url"` and `"authenticated_web"` return `True`. No other code reads this field from stored documents/chunks.
-2. **`fetched_at`** — Stored if present, absent if not. No code reads this field for any logic.
+1. **`source_type`** — Consumed by `content_safety.should_wrap()` in `ingest.py`, where only `"git"` and `"text"` are trusted. Both `"url"` and `"authenticated_web"` return `True`, so wrapper behavior is identical.
+2. **`fetched_at`** — Stored if present, absent if not. No downstream runtime branch in `refresh.py`, `ingest.py`, or retrieval paths depends on this field.
 
-Neither field affects content, chunking, entity extraction, embeddings, or search results.
+Result: chunk metadata JSON differs between handlers, but no evaluated downstream logic branches on those differences.
 
-### Fetch Path Equivalence (Conditional)
+### Fetch Path Equivalence (Scoped)
 
-Equivalence holds specifically when `fetch_method="http"`, which maps to `HttpxContentFetcher` via `select_content_fetcher()`. Both paths ultimately execute `httpx.AsyncClient().get(url)` + `response.raise_for_status()`. For `fetch_method="browser"`, AUTH_WEB would use a different fetcher — but `_direct_source_config` always sets `fetch_method="http"`, so this condition is always met.
+For the task scope (`_direct_source_config`-created HTTP/HTTPS sources), equivalence is established by runtime wiring:
+
+1. `_direct_source_config` sets `fetch_method="http"` for non-local URLs.
+2. `refresh_source` selects `select_content_fetcher(source.fetch_method)` and injects that fetcher into `RefreshOrchestrator`.
+3. `select_content_fetcher("http")` returns `HttpxContentFetcher`.
+4. URL_LIST path calls `_intake.read_url`, which directly uses `HttpxContentFetcher().fetch(url)`.
+
+Outside this scope (for example `fetch_method="browser"`), AUTH_WEB may use a different fetcher and is out of scope for this verdict.
 
 ## 4. Recommendation
 
-**PASS — conditional equivalence.** (confidence: 0.82)
+**PASS — scoped handler equivalence for the O3 retype path.** (confidence: 0.84)
 
 For sources created by `_direct_source_config` with `fetch_method="http"`:
-- Content, chunks, entities, embeddings, and refresh counters are identical
-- Metadata differences (`source_type`, `fetched_at`) are persisted but unused by any downstream logic
+- Fetch-path binding, content delivery into `ingest()`, and RefreshResult counter math are equivalent.
+- Metadata differs (`source_type`, `fetched_at`) and is persisted to document/chunk metadata, but no evaluated downstream runtime logic branches on those differences.
 - URL_LIST handler is simpler (no content_fetcher dependency, no isawaitable guard)
 
 Conditions for safe retype:
@@ -74,4 +81,4 @@ Challenger raised valid concern about metadata persistence (I initially cited wr
 
 ## 5. Follow-up Tasks
 
-- Follow-up task: retype `_direct_source_config` from `AUTHENTICATED_WEB` to `URL_LIST` for new HTTP sources (no migration). Delegated to planner.
+- Follow-up task: #1656 (backlog) — retype `_direct_source_config` from `AUTHENTICATED_WEB` to `URL_LIST` for new HTTP sources (no migration). Delegated to planner.
