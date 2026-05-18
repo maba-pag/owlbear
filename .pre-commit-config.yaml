@@ -82,8 +82,8 @@ repos:
       - id: eslint-frontend
         name: ESLint (Cockpit frontend)
         language: system
-        entry: bash -c 'cd serve/cockpit/web && npx eslint src/ --max-warnings 0'
-        files: ^serve/cockpit/web/src/.*\.(ts|tsx)$
+        entry: bash -c 'cd serve/cockpit/web && npx eslint src/ e2e/ --max-warnings 0'
+        files: ^serve/cockpit/web/(src|e2e)/.*\.(ts|tsx)$
         pass_filenames: false
       # Frontend — extra (no CI equivalent, catches type errors early)
       # Manual stage: tsc --noEmit is a whole-project check — can't scope to
