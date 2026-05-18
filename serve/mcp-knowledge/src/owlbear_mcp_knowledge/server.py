@@ -7,6 +7,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import sqlite3
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -203,6 +204,22 @@ def _decode_candidate_id(candidate_id: str) -> tuple[str, str, str, str | None, 
     if len(parsed) == _CANDIDATE_ID_BASE_PARTS:
         return parsed[0], parsed[1], parsed[2], None, None
     return parsed[0], parsed[1], parsed[2], parsed[3], parsed[4]
+
+
+_SANITIZED_ERROR_MAX_LEN = 120
+_ERROR_CLASS_OR_HTTP_RE = re.compile(r"[A-Z][a-zA-Z]*(?:Error|Exception)|HTTP \d{3}")
+
+
+def _sanitize_error(raw: str | None) -> str | None:
+    """Return a safe error token for read surfaces without leaking raw details."""
+    if raw is None:
+        return None
+    if not isinstance(raw, str):
+        return "error"
+    match = _ERROR_CLASS_OR_HTTP_RE.search(raw)
+    if match is None:
+        return "error"
+    return match.group(0)[:_SANITIZED_ERROR_MAX_LEN]
 
 
 def _fetch_consolidation_candidate_rows(
@@ -1418,7 +1435,7 @@ async def list_sources(ctx: Context, scope: str | None = None) -> list[SourceInf
             "scope": s.scope,
             "last_refreshed_at": s.last_refreshed_at,
             "last_checked_at": s.last_checked_at,
-            "last_error": s.last_error,
+            "last_error": _sanitize_error(s.last_error),
             "enabled": s.enabled,
             "fetch_method": s.fetch_method,
         }
