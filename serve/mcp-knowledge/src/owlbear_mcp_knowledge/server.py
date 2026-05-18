@@ -207,7 +207,7 @@ def _decode_candidate_id(candidate_id: str) -> tuple[str, str, str, str | None, 
 
 
 _SANITIZED_ERROR_MAX_LEN = 120
-_ERROR_CLASS_OR_HTTP_RE = re.compile(r"[A-Z][a-zA-Z]*(?:Error|Exception)|HTTP \d{3}")
+_ERROR_CLASS_OR_HTTP_RE = re.compile(r"(?<![/\\])[A-Z][a-zA-Z]*(?:Error|Exception)|HTTP \d{3}")
 
 
 def _sanitize_error(raw: str | None) -> str | None:
