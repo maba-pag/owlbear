@@ -24,6 +24,7 @@ Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json
 | `get_consolidation_candidates` | List unresolved cross-source entity consolidation candidates (entities appearing in 2+ sources with no existing edge or reviewed dismissal) |
 | `get_stats` | Summary statistics: document, entity, and edge counts plus source count, chunk count, enrichment ratio, and consolidation candidates remaining |
 | `refresh_source` | Re-ingest a registered source by source ID; response includes full, partial, skipped, failed, error, and warning counts |
+| `remove_source` | Delete a source and all its associated vectors, documents, chunks, and entities; vectors are deleted first — any Qdrant failure aborts before SQLite changes |
 | `get_next_batch` | Atomically claim a batch of chunks ready for enrichment |
 | `store_enrichment` | Dual-mode enrichment persist: Phase 1 (`chunk_id`, `entities`, `edges`) marks chunk enriched; Phase 2 (`candidate_id`, `edges`) writes cross-source edges or records a reviewed-pair dismissal |
 
