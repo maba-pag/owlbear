@@ -47,7 +47,7 @@
 
 Both handlers route through `IngestPipeline.ingest()` which persists `intake.metadata` to documents (as JSON) and propagates it to chunks via `TextChunker._build_chunks()`. The metadata differences ARE persisted. However:
 
-1. **`source_type`** — Consumed by `content_safety.should_wrap()` in `ingest.py`, where only `"git"` and `"text"` are trusted. Both `"url"` and `"authenticated_web"` return `True`, so wrapper behavior is identical.
+1. **`source_type`** — Consumed by `content_safety.should_wrap()` in `ingest.py`, where only `"file"`, `"file_glob"`, and `"text"` are trusted. Both `"url"` and `"authenticated_web"` return `True`, so wrapper behavior is identical.
 2. **`fetched_at`** — Stored if present, absent if not. No downstream runtime branch in `refresh.py`, `ingest.py`, or retrieval paths depends on this field.
 
 Result: chunk metadata JSON differs between handlers, but no evaluated downstream logic branches on those differences.
