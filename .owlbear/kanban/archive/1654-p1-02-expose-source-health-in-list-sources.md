@@ -1,10 +1,10 @@
 ---
 id: 1654
 title: 'P1-02: Expose source health in list_sources'
-status: review
+status: archived
 priority: needed
 created: 2026-05-18T03:11:18.823946+02:00
-updated: 2026-05-18T16:03:44.731063+02:00
+updated: 2026-05-18T16:52:36.763445+02:00
 tags:
   - scope:mcp-knowledge
   - mcp-tools
@@ -16,24 +16,28 @@ ac:
     str | None`, `last_error: str | None`, `enabled: bool`, `fetch_method: str`.'
   - 'AC-2: `list_sources` response dict maps `last_refreshed_at`, `last_checked_at`,
     `enabled`, and `fetch_method` directly from `KnowledgeSource` attributes. `last_error`
-    is mapped through `_sanitize_error()` (AC-3/AC-4) before inclusion.'
+    is mapped through `_sanitize_error()` (AC-3/AC-4/AC-5) before inclusion.'
   - 'AC-3: Module-private `_sanitize_error(raw: str | None) -> str | None` in `server.py`:
     returns `None` when input is `None`; otherwise searches raw text for the first
     match of pattern `[A-Z][a-zA-Z]*(Error|Exception)` (with a negative lookbehind
-    rejecting matches whose first uppercase letter is immediately preceded by `/`
-    or `\`) or `HTTP \d{3}`. If no valid match exists, returns the fixed string `"error"`.
-    Output never exceeds 120 characters.'
-  - "AC-4: `_sanitize_error` input/output pairs: `\"PermissionError: [Errno 13] ...'/home/user/secret.pem'\"\
-    ` -> `\"PermissionError\"`; `\"HTTP 503 Service Unavailable from internal.corp:8080\"\
-    ` -> `\"HTTP 503\"`; `\"no files matched source path '/secret/data'\"` -> `\"\
-    error\"`; `\"ConnectionError: refused; TimeoutError: timed out\"` -> `\"ConnectionError\"\
-    `; `\"no files matched source path '/secret/TimeoutError'\"` -> `\"error\"` (path-preceded
-    token rejected by lookbehind)."
+    rejecting matches preceded by `/` or `\`) or `HTTP \d{3}`. No valid match returns
+    `"error"`. Output never exceeds 120 characters.'
+  - "AC-4: `_sanitize_error` pairs 1-5: (1) `\"PermissionError: [Errno 13] ...'/home/user/secret.pem'\"\
+    ` -> `\"PermissionError\"`; (2) `\"HTTP 503 Service Unavailable from internal.corp:8080\"\
+    ` -> `\"HTTP 503\"`; (3) `\"no files matched source path '/secret/data'\"` ->
+    `\"error\"`; (4) `\"ConnectionError: refused; TimeoutError: timed out\"` -> `\"\
+    ConnectionError\"`; (5) `\"no files matched source path '/secret/TimeoutError'\"\
+    ` -> `\"error\"`."
+  - "AC-5: `_sanitize_error` pairs 6-7: (6) input with Error token > 120 chars (e.g.
+    `\"V\"+\"a\"*119+\"Error: x\"`, matched group=125 chars) -> first 120 chars of
+    token (removing truncation must fail the test); (7) `\"path '/opt/TimeoutError'
+    triggered PermissionError\"` -> `\"PermissionError\"` (path-token rejected, later
+    valid token returned)."
 proof_bundle: behavioral
 blocked: false
 block_reason:
-claimed_at: 2026-05-18T16:03:44.731063+02:00
-archival_reason:
+claimed_at:
+archival_reason: completed
 archival_refs: []
 ---
 Brief: see parent #1650
@@ -330,3 +334,179 @@ The existing tests/test_list_sources_1654.py must gain coverage for AC-4 pair 5 
 - Durable module post-change: [serve/mcp-knowledge/tests/test_list_sources.py](serve/mcp-knowledge/tests/test_list_sources.py) -> 17 passed, 1 failed (same existing failure; no regression introduced).
 - Commit: 582663bb feat: reject path-preceded error tokens in sanitizer (#1654, builder).
 - Evidence summary: New path-token guard now returns fallback "error" for slash/backslash-preceded error tokens, closing the three failing AC-3/AC-4 tests while keeping all prior task assertions green.
+
+[[2026-05-18T16:16:22+02:00]]
+## Review Evidence
+- Verdict: FAIL
+- FAIL summary: FAIL #1654 to backlog | AC-3 proof remains insufficient: the task-local suite does not make the 120-character cap falsifiable, and it does not prove reject-and-continue behavior after a path-preceded token is ignored.
+
+| # | AC Line | Finding | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | AC-3 | The 120-character cap is implemented, but the current proof is false-green. The only length test uses `"ValueError: " + "x" * 300`, so the regex match is still only `ValueError`; that assertion would stay green even if the truncation at `server.py:222` were removed. | tests/test_list_sources_1654.py:253-258; serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:222 | backlog |
+| 2 | AC-3 | The suite proves fallback when a slash- or backslash-preceded token is the only candidate, but it never proves that `_sanitize_error` continues searching and returns a later valid token. A buggy implementation could reject `/secret/TimeoutError` and fall back immediately instead of returning a later valid `PermissionError` or `HTTP 503`, and the current task tests would still pass. | tests/test_list_sources_1654.py:292-300; tests/test_list_sources_1654.py:551-560; serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:219 | backlog |
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Re-open AC-3 proof expectations and route the task back with an explicit task-local case that uses a matched `Error` or `Exception` token longer than 120 characters, so removing the truncation becomes red. | tests/test_list_sources_1654.py; .owlbear/kanban/tasks/1654-p1-02-expose-source-health-in-list-sources.md | tests/test_list_sources_1654.py:253-258; serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:222 |
+| 2 | architect | Re-open AC-3 proof expectations and require a reject-and-continue case where a path-preceded token is ignored and a later valid `Error`, `Exception`, or `HTTP` token is returned instead of the fallback. | tests/test_list_sources_1654.py; .owlbear/kanban/tasks/1654-p1-02-expose-source-health-in-list-sources.md | tests/test_list_sources_1654.py:292-300; tests/test_list_sources_1654.py:551-560; serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:219 |
+
+## Observations
+- Builder evidence was otherwise internally consistent. The current implementation in serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py satisfies the present AC mapping for SourceInfo, list_sources field exposure, and slash/backslash path-token rejection.
+- The rejection is about proof sufficiency, not a confirmed implementation defect.
+- This task is already on its third review cycle in the task history, so backlog is the loop-breaker route for the remaining proof-quality gap.
+
+[[2026-05-18T16:25:52+02:00]]
+## Architecture Review (Fourth cycle — proof falsifiability fix)
+### Context
+Third reviewer rejection: two proof-quality gaps identified (not implementation defects). (1) 120-char cap test uses short matched token — removing truncation wouldn't fail the test. (2) Reject-and-continue not tested — path-preceded token rejected but no test proves a later valid token is returned.
+
+### Evaluation
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | One concern: expose health fields with sanitization |
+| Interface clarity | PASS | AC-5 adds deterministic falsifiable pairs for both gaps |
+| Dependency correctness | PASS | #1651 archived — all model fields exist |
+| Module layering | PASS | MCP server sanitizes at trust boundary |
+| TDD compliance | PASS | Test-writer will add AC-5 coverage |
+| KISS/YAGNI | PASS | No implementation change needed — only test proof improvements |
+| Premise challenge | PASS | Reviewer empirically demonstrated the proof gaps |
+| Pattern consistency | PASS | Same regex pattern, same sanitizer function |
+| Security surface | PASS | AC-5 pair 7 proves reject-and-continue; pair 6 proves truncation is exercised |
+| Single domain | PASS | scope:mcp-knowledge only |
+
+### Design Decision: Scope of proof refinement
+The two reviewer gaps are proof-quality issues, not implementation defects. The regex `.search()` already skips failed lookbehind positions and `[:120]` already truncates. Only the tests fail to exercise these paths in a falsifiable way. AC-5 closes both gaps with deterministic I/O pairs.
+
+### Challenge Results
+- Challenger: reconsider (0.47)
+- Findings: (1) HTTP branch lacks path lookbehind — dismissed: HTTP status codes are standardized public tokens, not sensitive information; extracting `HTTP 503` from any context reveals nothing about system internals; (2) proof artifacts not yet present — expected: arch review refines AC, test-writer implements; (3) reject-and-continue not yet demonstrated — exactly what AC-5 pair 7 addresses
+- Architect response: Override to APPROVE. HTTP-in-path is not a security concern (public standardized tokens). Proof gaps closed by AC-5 pairs 6-7.
+
+### Proof-Bundle Validation
+- Planner assignment: behavioral
+- Final bundle: behavioral
+- Existing proof scope: N/A
+- Test-writer: PROCEED (must add AC-5 pair 6 and pair 7 tests; existing tests remain valid)
+
+### Scope Note for Test-Writer
+Add two new tests to TestFromAC_SanitizeError: (1) pair 6 — construct an Error class token > 120 chars (e.g. `\"V\" + \"a\"*119 + \"Error: overflow\"`) and assert output == first 120 chars of matched token (must fail if `[:120]` is removed); (2) pair 7 — `\"path '/opt/TimeoutError' triggered PermissionError\"` -> `\"PermissionError\"` proving reject-and-continue.
+
+### Verdict: APPROVE
+### Action Taken: Refined AC with AC-5 (pairs 6-7 for falsifiable truncation and reject-and-continue proofs). Advanced to todo.
+
+[[2026-05-18T16:29:35+02:00]]
+## Test-Writer Notes
+- Test file: tests/test_list_sources_1654.py
+- Classes: TestFromAC_SourceInfoShape, TestFromAC_SourceInfoOutputSchema, TestFromAC_SanitizeError, TestFromAC_ListSourcesHealthMapping
+- Tests per category: happy 17, edge 10, error 4, boundary 6 (incl. AC-4 pairs 1–5 + AC-5 pairs 6–7)
+- Total: 51 tests, all PASS
+- ruff: clean
+
+### Retry changes (4th cycle — AC-5 proof falsifiability)
+- Added `TestFromAC_SanitizeError::test_ac5_long_error_token_truncated_to_120_chars`: AC-5 pair 6 — `"V" + "a"*119 + "Error: x"` → `"V" + "a"*119` (120 chars). Removing `[:120]` would return 125-char string and fail the assertion.
+- Added `TestFromAC_SanitizeError::test_ac5_reject_and_continue_returns_later_valid_token`: AC-5 pair 7 — `"path '/opt/TimeoutError' triggered PermissionError"` → `"PermissionError"` (path-token rejected, later valid token returned).
+
+### Advance reason: direct-to-review (Step 1b.1)
+- Reviewer's Required Follow-up: ONLY test-proof gaps (no implementation fixes)
+- Both new tests PASS against current code (implementation already handles them correctly)
+- Lint: clean
+- Commit: d54d767a
+
+### AC Coverage
+| AC | Tests | Class |
+|----|-------|-------|
+| AC-1 TypedDict shape (presence + type) | 10 | TestFromAC_SourceInfoShape |
+| AC-1 output schema (5 new fields) | 7 | TestFromAC_SourceInfoOutputSchema |
+| AC-3/AC-4/AC-5 _sanitize_error contract | 17 | TestFromAC_SanitizeError |
+| AC-2 response mapping (last_error sanitized + other 4 direct) | 17 | TestFromAC_ListSourcesHealthMapping |
+
+[[2026-05-18T16:42:07+02:00]]
+## Review Evidence
+- Verdict: PASS
+- PASS confirmation: PASS #1654 -> docs | AC mapped to code and evidence sufficient.
+- Evidence map:
+| AC | Code Evidence | Test Evidence | Status |
+|---|---|---|---|
+| AC-1 | serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:116-120 | tests/test_list_sources_1654.py:92-142 and 158-203 | PASS |
+| AC-2 | serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:1440-1444 | tests/test_list_sources_1654.py:333-584, especially 501-584 | PASS |
+| AC-3 | serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:209-222 | tests/test_list_sources_1654.py:220-324, including 304-321 | PASS |
+| AC-4 | serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:210-222 | tests/test_list_sources_1654.py:267-300 and 575-584 | PASS |
+| AC-5 | serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:219-222 | tests/test_list_sources_1654.py:304-324 | PASS |
+- Upstream evidence review: latest task-body retry records 51 task-local tests PASS and lint clean after adding the two AC-5 falsifiability cases; this is consistent with the current file state in server.py and tests/test_list_sources_1654.py.
+- Independent checks performed: editor diagnostics are clean for serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py and tests/test_list_sources_1654.py.
+- Challenger cross-check: required behavioral challenger returned proceed with no code-backed blocking issue.
+
+## Observations
+- Non-blocking: tests/test_list_sources_1654.py:158-177 proves nullable-field schema property presence but not the explicit nullable-schema shape for last_refreshed_at, last_checked_at, and last_error. AC-1 is still sufficiently covered by the TypedDict type assertions and runtime mapping proofs, but schema assertions could be hardened in a future contract-focused task.
+- The adjacent durable failure noted in prior builder evidence for serve/mcp-knowledge/tests/test_list_sources.py remains outside this task’s change surface and is not a regression from #1654.
+
+[[2026-05-18T16:44:08+02:00]]
+## Docs Gate
+
+**Verdict: PASS**
+
+### Convention Mapping
+- Changed file: `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py`
+- Mapped target: `serve/mcp-knowledge/README.md`
+
+### Item 1: README Verification
+- Full read of `serve/mcp-knowledge/README.md` performed.
+- Layer 1 grep: no matches for `SourceInfo`, `last_error`, `last_refreshed_at`, `last_checked_at`, `fetch_method`, `_sanitize_error` — no stale references in README.
+- Layer 2 editorial: `list_sources` description ("List registered knowledge sources, optionally filtered by scope") remains accurate. The task expanded the response shape but didn't change the tool's fundamental purpose. The README doesn't enumerate response fields, so no drift.
+- **Result: no update required.**
+
+### Item 2: External Attribution
+N/A — no external sources cited in task; entirely codebase-internal field expansion.
+
+### Item 3: Research Doc
+N/A — task body explicitly states "No research doc — trivial implementation with clear AC and no trade-offs."
+
+### Item 4: Deletion Detection
+N/A — no files deleted; only `server.py` modified.
+
+### Scratch Cleanup
+No `.owlbear/scratch/1654-*` files found — nothing to clean.
+
+[[2026-05-18T16:52:36+02:00]]
+## Audit
+
+### Regression Detection
+Quality-runner full-suite: 4836 passed, 15 failed, 9 errors. All failures are pre-existing background debt unrelated to #1654's changed surface:
+- `test_mcp_knowledge_tool_surface::test_exactly_eight_tools_registered` — tool count drift from sibling #1652 (add-remove tool), not this task's response-shape change
+- `test_engine_accessor_migration`, `test_server`, `test_dead_code_sweep`, `test_cockpit_*`, `test_schema_roundtrip` — different domains entirely
+- `serve/knowledge/tests/test_graph_store_counts.py` — schema constraint in graph store, not list_sources
+- Lint: clean
+
+Task-scoped evidence: 51/51 passed. Durable module: 17 passed, 1 pre-existing failure (asyncio.to_thread mock — same pre/post builder baseline). No regression from #1654.
+
+### Intent Verification
+Changed files: `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py`, `tests/test_list_sources_1654.py`. Both stay within `scope:mcp-knowledge` domain. Implementation addresses stated purpose (expose source health fields with sanitized last_error). No extraneous scope.
+
+### Architect Quality: 4/5
+Initial AC missed sanitization requirement (reviewer caught it first cycle), but architect responded to each of three rejections with clear, deterministic refinements. Final AC (5 criteria, 7 canonical I/O pairs) is highly specific and complete. Four cycles is unusual but each was architecturally responsive — not a sign of poor initial quality so much as iterative security hardening. Score reflects the initial gap that required reviewer intervention.
+
+### Commit Integrity
+7 commits present in `git log`, all correctly attributed:
+- `4004d378` test: add failing tests (#1654, test-writer)
+- `f06a3339` feat: expose source health in list_sources (#1654, builder)
+- `2de0328d` test: rewrite retry tests (#1654, test-writer)
+- `a259b6d4` feat: sanitize list_sources last_error exposure (#1654, builder)
+- `b460ec87` test: add path-token lookbehind coverage (#1654, test-writer)
+- `582663bb` feat: reject path-preceded error tokens in sanitizer (#1654, builder)
+- `d54d767a` test: add retry tests for sanitize-error proof (#1654, test-writer)
+
+All follow commit format conventions. Files tracked in HEAD.
+
+### Deduction Breakdown
+| Criterion | Deduction |
+|-----------|----------|
+| Regression failures | 0 (none from this task) |
+| Intent mismatch | 0 |
+| Evidence integrity | 0 |
+| Lint violations | 0 |
+| AC quality (4/5, above threshold) | 0 |
+| Missing reviewer evidence | 0 (detailed PASS with evidence map) |
+
+### Confidence: 1.00
+### Action: Archive
