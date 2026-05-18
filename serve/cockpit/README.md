@@ -311,6 +311,42 @@ Accessibility and responsive state after #1396:
   `serve/cockpit/web/src/__tests__/DecisionViewport.test.tsx` (durable regression suite,
   35 passing).
 
+- #1636 migrates the confirming-phase overlays in `CleanupPanel.tsx` and `RepairPanel.tsx`
+  from raw `div[role="dialog"]` overlays to `PModal`, completing the PModal migration
+  across all confirm surfaces (following #1618 for `ConfirmDialog`, `ResolveModal`, and
+  `ArchivalModal`). Both confirm modals pass `open`, `disableBackdropClick`, and
+  `dismissButton={false}`; `role="dialog"` is retained (PModal default — no `alertdialog`
+  override). Inline `position:fixed` and `z-index` styles are removed from both confirm
+  phases. Focus management is retained: `previousFocusRef` restore on close, modal-container
+  focus on open, and Tab/Shift+Tab wrapping including the modal-host-active Shift+Tab path
+  (`active === event.currentTarget`), matching the `ConfirmDialog` focus-trap pattern.
+  Escape cancel is wired via both `onDismiss` and `onKeyDown` for belt-and-suspenders
+  coverage. Verified by `serve/cockpit/web/src/__tests__/PModal.migration.test.tsx`
+  (56 tests — extended with CleanupPanel and RepairPanel AC1–AC6 including modal-host-active
+  Shift+Tab path), `serve/cockpit/web/src/__tests__/CleanupPanel.test.tsx`,
+  `serve/cockpit/web/src/__tests__/CleanupPanel.integration.test.tsx`,
+  `serve/cockpit/web/src/__tests__/RepairPanel.test.tsx`,
+  `serve/cockpit/web/src/__tests__/RepairPanelFocusMgmt.test.tsx`,
+  `serve/cockpit/web/src/__tests__/OverlayAnchoring.test.tsx`,
+  `serve/cockpit/web/src/__tests__/HealthBadgeRepair.test.tsx`, and
+  `serve/cockpit/web/src/__tests__/SidecarUX.test.tsx` (206 passed, 0 failed, ESLint clean;
+  coverage `CleanupPanel.tsx` 97.59%, `RepairPanel.tsx` 98.98%).
+
+- #1637 unblocks the full Playwright e2e:all gate. `TaskFieldsEditor.tsx` removes the
+  hidden `p-select[name="priority"]` shim and assigns `name="priority"` directly to the
+  visible editable `PSelect` with `PSelectOption` children; every tag chip now renders as
+  `PTag data-testid="tag-chip"` (no mixed wrapper-`div`/`PTag` host pattern). Additional
+  component-level fixes resolve PDS filter-toggle event-wiring mismatches, sidecar metadata
+  visibility contracts, focus-visible token runtime gaps, mobile-sheet selection signals at
+  320px, and repair-confirm overlay status-bar reflow. `filter-controls.spec.ts` assertions
+  are updated to non-strict multi-element locators for priority-option counts and multi-chip
+  tag rendering, removing false-green paths from the prior hidden-shim state. Verified by
+  `serve/cockpit/web/e2e/filter-controls.spec.ts` (assertions at `:425–476` cover editable
+  priority control, `PSelectOption` children, visible `p-select[name="priority"]`,
+  `p-tag[data-testid="tag-chip"]` chip equality, and no legacy span chips) and full
+  proof bundle (`npm run test:e2e:all`, `npm test`, `npm run build` all exit 0;
+  2324 passed, 0 failed, 11 skipped).
+
 - Documentation here does not treat cache/SSE invalidation work from #1346 as part of
   this delivery bundle.
 
