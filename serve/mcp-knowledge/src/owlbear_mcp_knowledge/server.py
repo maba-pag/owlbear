@@ -1234,9 +1234,9 @@ class AppContext:
     conn: sqlite3.Connection
     query_service: KnowledgeQueryService | None
     graph_store: GraphStore | None
-    vector_store: QdrantVectorStore | None
     ingest_pipeline: IngestPipeline | None
     source_store: KnowledgeSourceStore | None
+    vector_store: QdrantVectorStore | None = None
     refresh_orchestrator: RefreshOrchestrator | None = None
     structured_extractor: object | None = None
     intra_doc_builder: IntraDocGraphBuilder | None = None
