@@ -1,10 +1,10 @@
 ---
 id: 1629
 title: 'Consolidation test: cockpit visual redesign'
-status: review
+status: backlog
 priority: important
 created: 2026-05-16T03:37:57.297125+00:00
-updated: 2026-05-18T03:19:01.227001+02:00
+updated: 2026-05-18T14:00:47.341222+02:00
 tags:
   - frontend
   - pds
@@ -31,19 +31,25 @@ depends_on:
   - 1628
   - 1636
   - 1637
+  - 1657
 ac:
   - Vitest unit tests (`npm test`), full Playwright e2e suite (`npm run 
     test:e2e:all`), and production build (`npm run build`) complete with zero 
     failures
-  - 'JSX inline-style attributes (`style={…}`) in `serve/cockpit/web/src/**/*.tsx`
-    total at most 4; each has a `// inline-justified: {reason}` code comment documenting
-    why CSS/Tailwind cannot replace it'
+  - 'JSX inline-style attributes (matched by whitespace-tolerant pattern `style\s*=\s*\{`)
+    in `serve/cockpit/web/src/**/*.tsx` total at most 4; each has a preceding `//
+    inline-justified: {reason}` comment (within 3 lines) where `{reason}` contains
+    ≥1 non-whitespace character after the colon, documenting why CSS/Tailwind cannot
+    replace it'
   - Playwright AxeBuilder scans with tags `['wcag2a', 'wcag2aa', 'wcag21a', 
-    'wcag21aa']` produce zero violations across board, sidecar, and modal 
-    surfaces under both `.scheme-light` and `.scheme-dark` document themes
+    'wcag21aa']` produce zero violations across board view, sidecar detail view,
+    DRStatusIndicator popover, HealthBadge popover, FilterPanel, ResolveModal, 
+    ArchivalModal, ConfirmDialog, CleanupPanel, and RepairPanel under both 
+    `.scheme-light` and `.scheme-dark` document themes
 proof_bundle: critical
-blocked: false
-block_reason:
+blocked: true
+block_reason: 'Dependency #1657 (CockpitProvider abort-test timing regression) must
+  resolve before AC-1 gate passes'
 claimed_at:
 archival_reason:
 archival_refs: []
@@ -169,3 +175,282 @@ Challenger confidence: 0.31 (block recommendation). Three critical/moderate find
 - Evidence summary: quality-runner (scoped, task 1629) now reports all consolidation tests passing, including AC-1/AC-2/AC-3 checks in `test_visual_redesign.py`.
 - Commit: 9843892d (`fix: finalize inline style budget for visual redesign consolidation (#1629, builder)`).
 - Approach: surgical GREEN fix only; no test changes; no unrelated frontend refactors.
+
+[[2026-05-18T03:45:29+02:00]]
+## Review Evidence
+- Verdict: FAIL
+- Route: todo
+- Summary: Independent quality-runner invalidated the builder packet for AC-1. `npm test` is still red, while `npm run test:e2e:all`, `npm run build`, lint, and `serve/cockpit/tests/test_visual_redesign.py` all passed.
+
+| # | AC Line | Finding | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | AC-1 | Full-suite proof is still red because a stale Vitest assertion requires inline cursor styling after the implementation moved that styling into shared CSS. This is a blocking test-proof gap. | quality-runner: `npm test` exit 1; failing test `src/__tests__/ActivityTab.fetch-filter.test.tsx > TestFromAC_HistorySubtabClickThrough > HistorySubtab session rows have cursor:pointer style`; `serve/cockpit/web/src/__tests__/ActivityTab.fetch-filter.test.tsx:523`; `serve/cockpit/web/src/components/HistorySubtab.tsx:1`; `serve/cockpit/web/src/components/SessionRows.css:1-4` | todo |
+| 2 | AC-1 | The durable consolidation gate does not directly prove the Vitest and build clauses. `test_visual_redesign.py` only executes `npm run test:e2e:all` and explicitly says Vitest/build are assumed green elsewhere, so future regressions in those commands would not fail task 1629's consolidation proof. | `serve/cockpit/tests/test_visual_redesign.py:31`; `serve/cockpit/tests/test_visual_redesign.py:51`; builder packet only cited a 4-test scoped pass | todo |
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | test-writer | Replace the inline-style cursor assertion with proof that matches the stylesheet-backed interaction contract, then rerun the frontend unit suite until `npm test` is green | serve/cockpit/web/src/__tests__/ActivityTab.fetch-filter.test.tsx; serve/cockpit/web/src/components/HistorySubtab.tsx; serve/cockpit/web/src/components/SessionRows.css | quality-runner: `npm test` exit 1; failing assertion at `ActivityTab.fetch-filter.test.tsx:523`; cursor styling now defined in `SessionRows.css:1-4` |
+| 2 | test-writer | Extend the consolidation durable gate so AC-1 fails on broken Vitest and broken build, or explicitly bind equivalent durable proof into the task-level evidence packet | serve/cockpit/tests/test_visual_redesign.py; serve/cockpit/web/package.json | `test_visual_redesign.py:31` says Vitest/build are assumed green elsewhere; only subprocess call is `test:e2e:all` at `test_visual_redesign.py:51`; package scripts define separate `test` and `build` gates |
+
+## Observations
+- AC-2 appears satisfied: exactly four remaining `style={` sites were found in `KanbanBoard.tsx:323`, `KanbanBoard.tsx:374`, `DRStatusIndicator.tsx:96`, and `HealthBadge.tsx:95`, each with adjacent `inline-justified` comments.
+- AC-3 is green in the independent run: `npm run test:e2e:all` exited 0 with no timeout, and `serve/cockpit/tests/test_visual_redesign.py` passed 4 of 4.
+- Residual scope risk: the dual-theme spec currently covers ResolveModal and RepairPanel modal surfaces, while the baseline accessibility sweep still enumerates ArchivalModal, ConfirmDialog, and CleanupPanel. Treat that as a follow-up question if strict sweep parity remains desired.
+- Independent quality-runner was necessary because the builder packet only cited a scoped wrapper pass, not the full critical-bundle proof surface.
+
+[[2026-05-18T03:52:22+02:00]]
+## Test-Writer Notes
+- Retry: filled both gaps from reviewer Required Follow-up. All new tests PASS against current implementation → direct-to-review advance.
+- Files changed: serve/cockpit/tests/test_visual_redesign.py, serve/cockpit/web/src/__tests__/ActivityTab.fetch-filter.test.tsx
+- Commit: 93d06aa4
+
+**Gap 1 (reviewer #1): Stale cursor assertion**
+- Replaced `expect(row!.style.cursor).toBe('pointer')` with stylesheet-backed contract: asserts `data-testid="history-session-row"` is present (activates CSS `cursor: pointer` via SessionRows.css) and `row!.style.cursor === ''` (no inline override).
+- Vitest: 49/49 passed, clean.
+
+**Gap 2 (reviewer #2): Consolidation gate missing Vitest and build proofs**
+- Added `test_vitest_passes` (runs `npm test`, exits 0) and `test_production_build_passes` (runs `npm run build`, exits 0) to TestCockpitVisualRedesignSuiteGates.
+- Both tests PASSED against current code (43.48s total), ruff clean.
+
+**Direct-to-review rationale:** Reviewer Required Follow-up was test-proof gaps only; no implementation work needed; all new tests green against current implementation.
+
+[[2026-05-18T04:05:06+02:00]]
+## Review Evidence
+- Verdict: FAIL
+- Route: backlog
+- Summary: AC-3 remains under-proven after the retry. The dual-theme accessibility proof covers only ResolveModal and RepairPanel, while the architect-refined contract ties "modal surfaces" to the existing accessibility sweep scope, which also includes ArchivalModal, ConfirmDialog, and CleanupPanel. On a second review cycle, this routes back to backlog.
+
+| # | AC Line | Finding | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | AC-3 | The dual-theme Playwright proof does not cover all modal surfaces implied by the architect-refined contract. `accessibility-dual-theme.spec.ts` only exercises ResolveModal and RepairPanel under both themes, but the Architecture Review explicitly says AC-3 was expanded to "board, sidecar, and modal surfaces" to match the existing accessibility sweep scope, whose modal cases also include ArchivalModal, ConfirmDialog, and CleanupPanel. This is a blocking test-to-AC alignment gap. | `.owlbear/kanban/tasks/1629-consolidation-test-cockpit-visual-redesign.md:69`; `serve/cockpit/web/e2e/accessibility-dual-theme.spec.ts:237`; `serve/cockpit/web/e2e/accessibility-dual-theme.spec.ts:269`; `serve/cockpit/web/e2e/accessibility-sweep.spec.ts:294`; `serve/cockpit/web/e2e/accessibility-sweep.spec.ts:321`; `serve/cockpit/web/e2e/accessibility-sweep.spec.ts:349` | backlog |
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Clarify AC-3 modal-surface scope against the architecture-review parity requirement and re-dispatch with an explicit contract: either require dual-theme coverage for ArchivalModal, ConfirmDialog, and CleanupPanel in addition to ResolveModal/RepairPanel, or narrow the AC text so the sampled modal subset is unambiguous. | .owlbear/kanban/tasks/1629-consolidation-test-cockpit-visual-redesign.md; serve/cockpit/web/e2e/accessibility-dual-theme.spec.ts; serve/cockpit/web/e2e/accessibility-sweep.spec.ts | Architecture Review parity note at task line 69; dual-theme modal coverage at `accessibility-dual-theme.spec.ts:237` and `:269`; missing modal cases present in `accessibility-sweep.spec.ts:294`, `:321`, `:349` |
+
+## Observations
+- AC-1 proof is materially improved and now directly mapped in `serve/cockpit/tests/test_visual_redesign.py`: `npm test`, `npm run build`, and `npm run test:e2e:all` each have their own subprocess gate.
+- AC-2 appears satisfied in current source: broad search finds only four `style={` occurrences, with adjacent `// inline-justified:` comments in `serve/cockpit/web/src/KanbanBoard.tsx`, `serve/cockpit/web/src/components/DRStatusIndicator.tsx`, and `serve/cockpit/web/src/components/HealthBadge.tsx`.
+- Non-blocking proof-quality note: the updated HistorySubtab cursor test in `serve/cockpit/web/src/__tests__/ActivityTab.fetch-filter.test.tsx` proves selector compatibility and absence of inline cursor override, but not computed cursor behavior from `serve/cockpit/web/src/components/SessionRows.css`.
+- Non-blocking maintenance note: stale KNOWN RED comments remain in `serve/cockpit/web/e2e/accessibility-dual-theme.spec.ts`, `serve/cockpit/web/e2e/accessibility-sweep.spec.ts`, and `serve/cockpit/tests/test_visual_redesign.py`, even though the RepairPanel span-onClick defect has been removed.
+
+[[2026-05-18T04:24:11+02:00]]
+## Architecture Review (re-review cycle 2)
+
+**Verdict:** APPROVED (after REFINE)
+
+### AC Assessment
+
+| AC | Assessment | Action |
+|----|-----------|--------|
+| AC-1: Vitest + Playwright e2e:all + production build zero failures | UNCHANGED — proven green in latest builder notes. Durable gate now includes `test_vitest_passes`, `test_production_build_passes`, and `test_playwright_e2e_all_passes`. | No change |
+| AC-2: ≤4 inline styles with justification comments | UNCHANGED — proven green. 4 remaining `style={…}` sites in KanbanBoard.tsx, DRStatusIndicator.tsx, HealthBadge.tsx, each with `// inline-justified:` comment. | No change |
+| AC-3: Dual-theme axe-core zero violations | REFINED — previous text used "modal surfaces" (B3 naked quantifier without exhaustive enumeration). Reviewer correctly flagged that dual-theme spec only covers 4 of 10 sweep surfaces. Expanded to explicit enumeration of all 10 surfaces from `accessibility-sweep.spec.ts`: board view, sidecar detail view, DRStatusIndicator popover, HealthBadge popover, FilterPanel, ResolveModal, ArchivalModal, ConfirmDialog, CleanupPanel, RepairPanel. Full sweep parity under both `.scheme-light` and `.scheme-dark`. | Rewrote for B3 compliance + sweep parity |
+
+### Architecture Notes
+
+1. **Proof bundle: `critical`** — Confirmed. Final quality gate for 20-dependency visual redesign umbrella.
+2. **Dependencies:** All 20 dependencies archived (completed), including #1636 (CleanupPanel/RepairPanel PModal migration) and #1637 (Playwright e2e:all unblock).
+3. **AC-3 scope decision:** Full sweep parity, not modal-subset sampling. The bespoke surfaces (DRStatusIndicator popover, HealthBadge popover, FilterPanel) use custom CSS/inline positioning and are higher theme-regression risk than PModal-standardized modals. Dropping them would narrow the consolidation gate exactly where risk is highest.
+4. **Test-writer action:** Extend `accessibility-dual-theme.spec.ts` to cover 6 additional surfaces (DRStatusIndicator popover, HealthBadge popover, FilterPanel, ArchivalModal, ConfirmDialog, CleanupPanel) under both themes. The existing parametrized structure (light/dark × surfaces) supports straightforward extension.
+
+### Dependency Analysis
+
+- Parent #1590 (umbrella) depends on this task. Completing #1629 unblocks the umbrella.
+- All 20 `depends_on` entries are `archived` with `archival_reason: completed`.
+- No circular dependencies.
+
+### Challenger Results
+
+Challenger confidence: 0.24 (block recommendation). Five findings evaluated:
+
+| Finding | Severity | Disposition |
+|---------|----------|-------------|
+| Scope reduction disguised as clarification — 7-surface enumeration drops bespoke surfaces | Critical | **ACCEPTED.** Expanded AC-3 to all 10 sweep surfaces. Full parity restored. |
+| Evidence contradiction — latest review FAIL unaddressed | Critical | **ADDRESSED.** This re-review directly resolves the AC-3 blocker by refining the ambiguous scope and routing back to test-writer for implementation. |
+| Theme proof mismatch — dual-theme suite checks class but not `data-theme` | Moderate | **NOTED, non-blocking.** Bridge tests (`PdsColorSchemeBridge.test.ts`) already prove `data-theme` + class are set together. Redundant assertion in e2e spec not required. |
+| AC-quality target ambiguity (B1) — AC-3 doesn't name executable target | Moderate | **ACCEPTED as-is.** Consolidation-test ACs describe test outcomes; the target is the named Playwright spec. Adding B1 formalism would over-constrain without clarity gain. |
+| AC-quality process gap (P1/P3) — ACs don't name agent/stage | Minor | **ACCEPTED as-is.** These are Tier 1 behavior ACs (test outcomes), not Tier 2 process ACs. P1/P3 don't apply. |
+
+Architect override of block recommendation: all critical findings resolved by expanding AC-3 to full sweep parity. Remaining findings are non-blocking.
+
+[[2026-05-18T12:44:08+02:00]]
+## Test-Writer Notes
+- Retry: filled gap from reviewer Required Follow-up #1 (AC-3 modal-surface scope). All new tests PASS against current implementation → direct-to-review advance.
+- Files changed: serve/cockpit/web/e2e/accessibility-dual-theme.spec.ts, serve/cockpit/tests/test_visual_redesign.py
+- Commit: 1a4b250e
+
+**Gap filled: 6 missing surfaces added to accessibility-dual-theme.spec.ts**
+- Previous coverage: 4 surfaces (board view, sidecar, ResolveModal, RepairPanel)
+- New coverage: all 10 surfaces matching accessibility-sweep.spec.ts (added DRStatusIndicator popover, HealthBadge popover, FilterPanel, ArchivalModal, ConfirmDialog, CleanupPanel)
+- Structure: 10 surfaces × 2 themes (light/dark) = 20 Playwright tests, all GREEN
+
+**Also cleaned up (reviewer non-blocking observation):**
+- Removed stale KNOWN RED comments from RepairPanel test in dual-theme spec (builder fixed span-onClick in prior cycle)
+- Updated test_visual_redesign.py docstrings to remove stale RepairPanel failure references
+
+**Direct-to-review rationale:** Reviewer Required Follow-up contained ONLY a test-proof scope gap; no implementation work needed. All 20 dual-theme spec tests pass against current code. quality-runner: playwright exit 0, eslint clean, tsc clean.
+
+**AC coverage:**
+| AC | Test(s) |
+|----|---------|
+| AC-1: Vitest + Playwright e2e:all + build zero failures | test_vitest_passes, test_playwright_e2e_all_passes, test_production_build_passes (unchanged, all green) |
+| AC-2: ≤4 inline styles with justification | test_inline_style_count_at_most_four, test_each_inline_style_has_justification_comment (unchanged, green) |
+| AC-3: Dual-theme axe zero violations — all 10 surfaces | accessibility-dual-theme.spec.ts (20 tests, all GREEN) + test_dual_theme_axe_spec_passes |
+
+[[2026-05-18T13:02:22+02:00]]
+## Review Evidence
+- Verdict: FAIL
+- Route: backlog
+- Summary: Independent quality-runner cleared the execution-evidence concerns for AC-1 and AC-3, but AC-2 is still under-proven by structurally weak durable assertions. Because this task has already failed prior review cycles in [.owlbear/kanban/tasks/1629-consolidation-test-cockpit-visual-redesign.md:176] and [.owlbear/kanban/tasks/1629-consolidation-test-cockpit-visual-redesign.md:215], the remaining blocker routes back to backlog.
+
+| # | AC Line | Finding | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | AC-2 | The durable justification check can false-green on comment markers that omit the required reason text. The test only checks for the presence of `// inline-justified:` somewhere in the preceding context, but the AC requires `// inline-justified: {reason}` documenting why CSS/Tailwind cannot replace the inline style. | `serve/cockpit/tests/test_visual_redesign.py:146`; authoritative AC-2 in task frontmatter/body | backlog |
+| 2 | AC-2 | The durable inline-style scan is format-sensitive rather than behavior-sensitive. Both AC-2 tests only match the exact token `style={`, so a JSX inline-style attribute written with whitespace around `=` would evade both the count gate and the justification gate. | `serve/cockpit/tests/test_visual_redesign.py:115`; `serve/cockpit/tests/test_visual_redesign.py:144` | backlog |
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Re-evaluate and re-dispatch AC-2 proof requirements so the durable gate treats any JSX `style` attribute as in scope regardless of formatting and requires a non-empty `inline-justified` reason, then send the task back through test-writing with hardened assertions. | `.owlbear/kanban/tasks/1629-consolidation-test-cockpit-visual-redesign.md`; `serve/cockpit/tests/test_visual_redesign.py` | Review finding #1 (`serve/cockpit/tests/test_visual_redesign.py:146`) and review finding #2 (`serve/cockpit/tests/test_visual_redesign.py:115`, `:144`) |
+
+## Observations
+- Independent quality-runner resolved the earlier execution-evidence concern: `serve/cockpit/tests/test_visual_redesign.py::TestCockpitVisualRedesignSuiteGates` passed 3/3; `npm test` passed 2134 tests with 11 skipped; `npx playwright test e2e/accessibility-dual-theme.spec.ts` passed 20/20; `npm run build`, ESLint, Stylelint, HTMLHint, and Ruff all exited 0.
+- AC-3 surface coverage now matches the architect-refined 10-surface contract in `serve/cockpit/web/e2e/accessibility-dual-theme.spec.ts`; no remaining modal-scope gap was found.
+- Current source still appears compliant with AC-2 as implemented today: the matched inline-style sites remain at `serve/cockpit/web/src/KanbanBoard.tsx:323`, `serve/cockpit/web/src/KanbanBoard.tsx:374`, `serve/cockpit/web/src/components/DRStatusIndicator.tsx:96`, and `serve/cockpit/web/src/components/HealthBadge.tsx:95`, with adjacent justification comments. The blocker is proof quality, not a live source violation.
+
+[[2026-05-18T13:08:55+02:00]]
+## Architecture Review (re-review cycle 3)
+
+**Verdict:** APPROVED (after REFINE)
+
+### AC Assessment
+
+| AC | Assessment | Action |
+|----|-----------|--------|
+| AC-1: Vitest + Playwright e2e:all + production build | UNCHANGED — proven green across prior cycles. Durable gate includes `test_vitest_passes`, `test_production_build_passes`, `test_playwright_e2e_all_passes`. | No change |
+| AC-2: ≤4 inline styles with justification | REFINED — reviewer correctly identified two proof-quality gaps: (1) scan regex `style=\\{` is format-sensitive (misses `style = {`), (2) justification check doesn't enforce non-empty reason text. Rewrote AC to require whitespace-tolerant regex `style\\s*=\\s*\\{` and ≥1 non-whitespace character after `// inline-justified:` colon. Source is already compliant; test-writer must harden the durable assertions. | Rewrote for proof robustness |
+| AC-3: Dual-theme axe-core — all 10 surfaces | UNCHANGED — proven green. 20 Playwright specs (10 surfaces × 2 themes) all pass. | No change |
+
+### Architecture Notes
+
+1. **Proof bundle: `critical`** — Confirmed. No change from prior cycles.
+2. **Source compliance:** All 4 remaining inline styles (KanbanBoard.tsx:323, KanbanBoard.tsx:374, DRStatusIndicator.tsx:96, HealthBadge.tsx:95) have adjacent `// inline-justified:` comments with non-empty reason text. No source changes needed.
+3. **Test-writer action:** Update `serve/cockpit/tests/test_visual_redesign.py` `_collect_style_attrs` regex from `r\"style=\\{\"` to `r\"style\\s*=\\s*\\{\"` and add non-empty reason assertion after `// inline-justified:` marker. Minimal two-line change.
+4. **Line-break concern (challenger moderate):** Prettier enforces same-line `style={` in JSX. Multi-line scanning is unnecessary overhead for this codebase.
+
+### Dependency Analysis
+
+- All 20 dependencies archived (completed). No change.
+- Parent #1590 umbrella unblocked upon this task completing.
+
+### Challenger Results
+
+Challenger confidence: 0.41 (block recommendation). Three findings:
+
+| Finding | Severity | Disposition |
+|---------|----------|-------------|
+| Live durable gate still uses literal `style={` | Critical | **Expected.** Test-writer will implement hardened assertions after this approval. Architect refines AC, doesn't write code. |
+| Canonical AC drift — refined text not in task artifact | Moderate | **RESOLVED.** Updated AC via `edit_task` before advancing. |
+| Line-oriented scan misses line-broken style attributes | Moderate | **Accepted as-is.** Prettier enforces same-line format; theoretical concern only. |
+
+Architect override of block: All critical findings are process-state concerns resolved by the standard pipeline flow (architect refines AC → test-writer updates assertions). No live source breach exists.
+
+### Proof-Bundle Validation
+
+- Planner assignment: `critical`
+- Final bundle: `critical`
+- Existing proof scope: N/A
+- Test-writer: PROCEED
+
+### Verdict: APPROVE
+### Action Taken: Refined AC-2 wording to mandate whitespace-tolerant regex and non-empty justification reason. Advanced to todo for test-writer to harden durable assertions.
+
+[[2026-05-18T13:12:21+02:00]]
+## Test-Writer Notes
+- Retry: filled both AC-2 proof-quality gaps from reviewer Required Follow-up. All new assertions PASS against current implementation → direct-to-review advance.
+- Files changed: serve/cockpit/tests/test_visual_redesign.py
+- Commit: bd47982d
+
+**Gap 1 (reviewer #2): Format-sensitive regex**
+- Updated `_collect_style_attrs` regex from `r"style=\{"` to `r"style\s*=\s*\{"` (whitespace-tolerant).
+- Also updated the inline scan in `test_each_inline_style_has_justification_comment` to use the same pattern.
+- Both tests PASS: current source uses Prettier-formatted `style={` (no spaces), so count remains 4.
+
+**Gap 2 (reviewer #1): Non-empty reason check**
+- Updated justification guard from `"// inline-justified:" not in context` to `not re.search(r"//\s*inline-justified:\s*\S", context)`.
+- Requires ≥1 non-whitespace character after the colon.
+- Test PASSES: all 4 inline-justified comments have non-empty reason text.
+- ruff: clean (pre-commit hooks: Passed)
+
+**Direct-to-review rationale:** Reviewer Required Follow-up contained ONLY test-proof quality gaps; no implementation work needed. Both hardened assertions pass against current code (architect confirmed source compliance in cycle 3 architecture review).
+
+[[2026-05-18T13:45:22+02:00]]
+## Review Evidence
+- Verdict: FAIL
+- Route: backlog
+- Summary: Independent verification re-opened AC-1. The durable consolidation gate is currently red because [serve/cockpit/tests/test_visual_redesign.py](serve/cockpit/tests/test_visual_redesign.py#L36) fails its `npm test` subprocess check, so this task does not presently satisfy the requirement that Vitest, full Playwright `test:e2e:all`, and production build all complete green. This is now a 4th review attempt after prior FAIL sections at [.owlbear/kanban/tasks/1629-consolidation-test-cockpit-visual-redesign.md](.owlbear/kanban/tasks/1629-consolidation-test-cockpit-visual-redesign.md#L178), [.owlbear/kanban/tasks/1629-consolidation-test-cockpit-visual-redesign.md](.owlbear/kanban/tasks/1629-consolidation-test-cockpit-visual-redesign.md#L217), and [.owlbear/kanban/tasks/1629-consolidation-test-cockpit-visual-redesign.md](.owlbear/kanban/tasks/1629-consolidation-test-cockpit-visual-redesign.md#L302), so protocol routes the task back to backlog.
+
+| # | AC Line | Finding | Evidence | Route |
+|---|---------|---------|----------|-------|
+| 1 | AC-1 | The full-suite delivery gate is still red. The durable proof at [serve/cockpit/tests/test_visual_redesign.py](serve/cockpit/tests/test_visual_redesign.py#L36) currently fails because `npm test` exits non-zero, so the consolidation task cannot be approved while AC-1 requires all three delivery-gate commands to finish with zero failures. | Independent `quality-runner` scoped on [serve/cockpit/tests/test_visual_redesign.py](serve/cockpit/tests/test_visual_redesign.py) reported `passed: 5`, `failed: TestCockpitVisualRedesignSuiteGates::test_vitest_passes`; nested Vitest failure: [serve/cockpit/web/src/__tests__/CockpitProvider.test.tsx](serve/cockpit/web/src/__tests__/CockpitProvider.test.tsx#L392) with failed expectation at [serve/cockpit/web/src/__tests__/CockpitProvider.test.tsx](serve/cockpit/web/src/__tests__/CockpitProvider.test.tsx#L410); related task-switch abort/refetch path is in [serve/cockpit/web/src/hooks/CockpitProvider.tsx](serve/cockpit/web/src/hooks/CockpitProvider.tsx#L92) and [serve/cockpit/web/src/hooks/CockpitProvider.tsx](serve/cockpit/web/src/hooks/CockpitProvider.tsx#L134). I am not attributing this to source or test drift in this review; the blocking fact is that AC-1's Vitest gate is currently red. | backlog |
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | architect | Re-dispatch the AC-1 blocker: triage why the frontend unit suite is currently red on the CockpitProvider task-switch abort case, assign the owning implementation or test fix, then rerun [serve/cockpit/tests/test_visual_redesign.py](serve/cockpit/tests/test_visual_redesign.py) before returning this task to review. | [serve/cockpit/web/src/__tests__/CockpitProvider.test.tsx](serve/cockpit/web/src/__tests__/CockpitProvider.test.tsx); [serve/cockpit/web/src/hooks/CockpitProvider.tsx](serve/cockpit/web/src/hooks/CockpitProvider.tsx); [serve/cockpit/tests/test_visual_redesign.py](serve/cockpit/tests/test_visual_redesign.py) | quality-runner failure above; backlog routing is required after the prior FAIL sections at [.owlbear/kanban/tasks/1629-consolidation-test-cockpit-visual-redesign.md](.owlbear/kanban/tasks/1629-consolidation-test-cockpit-visual-redesign.md#L178), [.owlbear/kanban/tasks/1629-consolidation-test-cockpit-visual-redesign.md](.owlbear/kanban/tasks/1629-consolidation-test-cockpit-visual-redesign.md#L217), and [.owlbear/kanban/tasks/1629-consolidation-test-cockpit-visual-redesign.md](.owlbear/kanban/tasks/1629-consolidation-test-cockpit-visual-redesign.md#L302) |
+
+## Observations
+- The same independent rerun did not surface additional execution blockers in the durable gate: 5 tests passed in [serve/cockpit/tests/test_visual_redesign.py](serve/cockpit/tests/test_visual_redesign.py), and lint was clean.
+- AC-2 still appears source-compliant in the current tree: the only `style` sites remain at [serve/cockpit/web/src/KanbanBoard.tsx](serve/cockpit/web/src/KanbanBoard.tsx#L323), [serve/cockpit/web/src/KanbanBoard.tsx](serve/cockpit/web/src/KanbanBoard.tsx#L374), [serve/cockpit/web/src/components/DRStatusIndicator.tsx](serve/cockpit/web/src/components/DRStatusIndicator.tsx#L96), and [serve/cockpit/web/src/components/HealthBadge.tsx](serve/cockpit/web/src/components/HealthBadge.tsx#L95), with adjacent non-empty justification comments at [serve/cockpit/web/src/KanbanBoard.tsx](serve/cockpit/web/src/KanbanBoard.tsx#L322), [serve/cockpit/web/src/KanbanBoard.tsx](serve/cockpit/web/src/KanbanBoard.tsx#L373), [serve/cockpit/web/src/components/DRStatusIndicator.tsx](serve/cockpit/web/src/components/DRStatusIndicator.tsx#L95), and [serve/cockpit/web/src/components/HealthBadge.tsx](serve/cockpit/web/src/components/HealthBadge.tsx#L94).
+- AC-3 mapping remains intact: the durable dual-theme gate is still at [serve/cockpit/tests/test_visual_redesign.py](serve/cockpit/tests/test_visual_redesign.py#L176), and the dedicated Playwright spec continues to cover the 10 named surfaces across both themes in [serve/cockpit/web/e2e/accessibility-dual-theme.spec.ts](serve/cockpit/web/e2e/accessibility-dual-theme.spec.ts#L202), [serve/cockpit/web/e2e/accessibility-dual-theme.spec.ts](serve/cockpit/web/e2e/accessibility-dual-theme.spec.ts#L220), [serve/cockpit/web/e2e/accessibility-dual-theme.spec.ts](serve/cockpit/web/e2e/accessibility-dual-theme.spec.ts#L242), [serve/cockpit/web/e2e/accessibility-dual-theme.spec.ts](serve/cockpit/web/e2e/accessibility-dual-theme.spec.ts#L265), [serve/cockpit/web/e2e/accessibility-dual-theme.spec.ts](serve/cockpit/web/e2e/accessibility-dual-theme.spec.ts#L291), [serve/cockpit/web/e2e/accessibility-dual-theme.spec.ts](serve/cockpit/web/e2e/accessibility-dual-theme.spec.ts#L312), [serve/cockpit/web/e2e/accessibility-dual-theme.spec.ts](serve/cockpit/web/e2e/accessibility-dual-theme.spec.ts#L341), [serve/cockpit/web/e2e/accessibility-dual-theme.spec.ts](serve/cockpit/web/e2e/accessibility-dual-theme.spec.ts#L370), [serve/cockpit/web/e2e/accessibility-dual-theme.spec.ts](serve/cockpit/web/e2e/accessibility-dual-theme.spec.ts#L400), and [serve/cockpit/web/e2e/accessibility-dual-theme.spec.ts](serve/cockpit/web/e2e/accessibility-dual-theme.spec.ts#L423).
+- Code-reader still sees a theoretical multiline-format blind spot in the AC-2 scanner at [serve/cockpit/tests/test_visual_redesign.py](serve/cockpit/tests/test_visual_redesign.py#L117) and [serve/cockpit/tests/test_visual_redesign.py](serve/cockpit/tests/test_visual_redesign.py#L146), but the latest architecture review explicitly accepted that line-break concern as non-blocking under repo formatting conventions at [.owlbear/kanban/tasks/1629-consolidation-test-cockpit-visual-redesign.md](.owlbear/kanban/tasks/1629-consolidation-test-cockpit-visual-redesign.md#L340) and [.owlbear/kanban/tasks/1629-consolidation-test-cockpit-visual-redesign.md](.owlbear/kanban/tasks/1629-consolidation-test-cockpit-visual-redesign.md#L355).
+
+[[2026-05-18T14:00:47+02:00]]
+## Architecture Review (re-review cycle 4)
+
+**Verdict:** BLOCK — waiting on dependency #1657
+
+### AC Assessment
+
+| AC | Assessment | Action |
+|----|-----------|--------|
+| AC-1: Vitest + Playwright e2e:all + production build | BLOCKED — gate is currently red. `npm test` fails because `CockpitProvider.test.tsx:392` ("aborts in-flight getTask fetch when selectedTaskId changes") fails at `:410`. Root cause: `setTimeout(..., 1)` deferral in `CockpitProvider.tsx:133` causes React Testing Library `act()` to flush the timer, overwriting the captured AbortSignal. Created #1657 to fix. | Added #1657 as dependency |
+| AC-2: ≤4 inline styles with justification | UNCHANGED — proven green. Hardened assertions (whitespace-tolerant regex, non-empty reason) implemented in prior cycle. | No change |
+| AC-3: Dual-theme axe-core — all 10 surfaces | UNCHANGED — proven green. 20 Playwright specs (10 surfaces × 2 themes) all pass. | No change |
+
+### Architecture Notes
+
+1. **Proof bundle: `critical`** — Confirmed. No change from prior cycles.
+2. **External regression triage:** The failing test was written for #1504 (CockpitProvider implementation, archived/completed). None of #1629's 20 visual-redesign dependencies modified `CockpitProvider.tsx`. The regression is from the `setTimeout` deferral on task-switch path — a timing concern between implementation and test expectations.
+3. **Fix scope:** #1657 is a test-only fix (capture first signal independently or use fake timers). No implementation change to CockpitProvider.tsx needed.
+4. **Task state:** All implementation work for #1629 is complete. AC-2 and AC-3 gates are passing. Only AC-1's Vitest subprocess check is red due to the external test regression.
+
+### Dependency Analysis
+
+- 20 original dependencies: all archived (completed/duplicate).
+- New dependency #1657: `research` status — must reach `archived` before #1629 unblocks.
+- Parent #1590 waits on #1629.
+
+### Challenger Results
+
+Challenger confidence: 0.29 (block recommendation). Accepted.
+
+| Finding | Severity | Disposition |
+|---------|----------|-------------|
+| AC-1 is currently red — cannot approve with failing gate | Critical | **ACCEPTED.** Blocking task until #1657 resolves. |
+| Dependency #1657 still at research — unresolved | Moderate | **ACCEPTED.** Task blocked on this dep by design. |
+| Externality claim lacks causal artifact | Moderate | **NOTED.** Evidence: git history shows no visual-redesign deps touched CockpitProvider.tsx; the setTimeout deferral predates the visual redesign batch. |
+| AC-2 was refined in cycle 3, not "unchanged from prior" | Minor | **ACCEPTED.** Corrected: AC-2 was last refined in cycle 3 and has not changed since. |
+
+### Proof-Bundle Validation
+
+- Planner assignment: `critical`
+- Final bundle: `critical`
+- Existing proof scope: N/A
+- Test-writer: PROCEED (after #1657 unblocks)
+
+### Verdict: BLOCK
+### Action Taken: Created #1657 (CockpitProvider abort-test timing fix), added as dependency. Task remains in backlog/blocked until #1657 resolves and AC-1 gate is green. Re-review will be minimal (verify gate green → approve).
