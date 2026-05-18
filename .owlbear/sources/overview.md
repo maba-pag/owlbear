@@ -4867,3 +4867,4 @@ External repos and resources studied during OwlBear development.
 |--------|-----|------|------------|------|
 | PDS v3 Modal configurator docs | <https://designsystem.porsche.com/v3/components/modal/configurator/> | PModal component behavior: native dialog, focus trap, top-layer, dismiss event, controlled open prop | `.owlbear/research/1635-cleanup-repair-pmodal-migration.md` | 2026-05-17 |
 | PDS v3 Modal accessibility docs | <https://designsystem.porsche.com/v3/components/modal/accessibility/> | ARIA support: aria-label, role (dialog/alertdialog), keyboard behavior (Tab trap, Escape), focus return | `.owlbear/research/1635-cleanup-repair-pmodal-migration.md` | 2026-05-17 |
+| RFC 9110 §8.8.2 Last-Modified | <https://httpwg.org/specs/rfc9110.html#field.last-modified> | Prior art for two-field timestamp model (Last-Modified vs Date semantics) | `.owlbear/research/refresh-honesty-two-field-timestamps.md` | 2026-05-18 |
