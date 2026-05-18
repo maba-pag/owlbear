@@ -185,7 +185,7 @@ async def test_metadata_url_creates_source_link_for_enrichment(
     source_row = conn.execute(
         "SELECT name, source_type, fetch_method, enrich, config FROM knowledge_sources"
     ).fetchone()
-    assert source_row[:4] == (source_url, "authenticated_web", "http", 1)
+    assert source_row[:4] == (source_url, "url_list", "http", 1)
     assert json.loads(source_row[4])["url"] == source_url
     status = conn.execute("SELECT source, status FROM document_status").fetchone()
     assert status == (source_url, "ok")
