@@ -62,6 +62,12 @@ PYTHON_RUFF_FORMAT_CLI_LINT_MODE: project
 
 # TypeScript — scope to Cockpit web (only dir with eslint.config.js).
 TYPESCRIPT_ES_FILTER_REGEX_INCLUDE: '^serve/cockpit/web/.*\.(ts|tsx)$'
+TYPESCRIPT_ES_FILE_EXTENSIONS:
+  - .ts
+  - .tsx
+TYPESCRIPT_ES_CONFIG_FILE: eslint.config.js
+TYPESCRIPT_ES_RULES_PATH: serve/cockpit/web
+TYPESCRIPT_ES_ARGUMENTS: "--max-warnings 0"
 
 # CSS — use the Cockpit web policy instead of MegaLinter defaults.
 CSS_STYLELINT_FILTER_REGEX_INCLUDE: '^serve/cockpit/web/.*\.css$'
@@ -98,6 +104,7 @@ REPOSITORY_TRIVY_ARGUMENTS: "--scanners vuln,misconfig --skip-dirs .venv"
 # Performance & Display
 # ──────────────────────────────────────────────
 FLAVOR_SUGGESTIONS: false
+SECURITY_SUGGESTIONS: false
 PARALLEL: true
 SHOW_ELAPSED_TIME: true
 SHOW_SKIPPED_LINTERS: false

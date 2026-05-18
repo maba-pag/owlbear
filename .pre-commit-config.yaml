@@ -126,8 +126,10 @@ repos:
         language: system
         entry: >-
           bash -c 'docker run --rm
+          --platform linux/amd64
           -v "$(pwd):/tmp/lint"
           -e APPLY_FIXES=none
+          -e UPDATED_SOURCES_REPORTER=false
           -e LOG_LEVEL=INFO
           -e VALIDATE_ALL_CODEBASE=true
           ghcr.io/oxsecurity/megalinter-cupcake:v9.5.0'

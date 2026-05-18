@@ -28,9 +28,9 @@ If these don't exist yet, use `/ideation-discover` first.
 1. **Phase 2 Start** — the agent reads discovery artifacts in a fresh context
 2. **M3: Landscape** — research findings are presented with attribution; gaps trigger targeted follow-up research
 3. **Late Domain Panel** — architect, data, end-user, and security panelists evaluate approaches in parallel, then a pragmatist convergence produces `synthesis.md`
-4. **M4: Decision Support** — panel findings are presented; you make real choices with full trade-off framing
-5. **Critic Validation (O15)** — adversarial stress-test findings are triaged before affecting the recommendation
-6. **M5: Brief Drafting** — walkthrough or self-review of the Brief before approval
+4. **M4: Decision Support** — panel findings are presented with expectation-fidelity framing; you make real choices with full trade-off framing
+5. **Critic Validation (O15)** — adversarial stress-test findings are triaged before affecting the recommendation, including whether the plan preserves what was wanted rather than merely satisfying bare function
+6. **M5: Brief Drafting** — walkthrough or self-review of the Brief before approval; after approval the Brief is the binding product promise
 7. **M6: Handoff** — parent kanban task created, planner dispatched
 
 ## Tips

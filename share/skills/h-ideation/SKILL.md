@@ -18,7 +18,7 @@ Phase agents load this file for shared rules and their own phase skill for steps
 | Phase               | User-facing Agent     | Owns                                                        | Primary Outputs                                                                       |
 | ------------------- | --------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------- |
 | Phase 1 — Discovery | `ideation-discoverer` | M1-M2, early challenge lane, first research bridge          | `context.md`, `decisions.md`, `research-notes.md`, optional `synthesis-idea-panel.md` |
-| Phase 2 — Mediation | `ideation-mediator`   | M3-M6, late-domain panel, Critic validation, Brief, handoff | `synthesis.md`, `brief.md`, kanban parent task                                        |
+| Phase 2 — Mediation | `ideation-mediator`   | M3-M6, late-domain panel, Critic validation, Brief, handoff | `synthesis.md`, `brief.md`, `planning-summary.md`, kanban parent task                |
 
 ## Moment Reference
 
@@ -43,6 +43,47 @@ Between M1 and M2, the discovery agent proposes a tier based on problem scope an
 | Tool       | Internal utility, single user             | Standard M2, selective panel, full Brief |
 | Shared     | Multi-consumer or team artifact           | Full panel, research bridge required    |
 | Production | External-facing, durability matters       | Full panel + Critic at every moment     |
+
+## Expectation Fidelity
+
+Expectation fidelity preserves the difference between the product the user wants and the smallest result that can pass literal criteria. The expectation signal is not a task list, implementation plan, or acceptance-criteria substitute. It is the product promise that later synthesis, Brief drafting, and planning must not silently shrink.
+
+### Expectation Signal
+
+Capture the expectation signal with contrastive questions. Each answer should stay compact enough for `context.md`, but concrete enough that a later Critic can detect underdelivery.
+
+| Question | Captures | Not This |
+|---|---|---|
+| **What are we actually trying to give the user?** | The promised end state in user language. | Implementation approach, first milestone, task list, or AC wording. |
+| **What would make it feel worth using?** | The qualities or moments that make the result feel intentional, useful, polished, powerful, relieving, or satisfying. Each quality needs a concrete behavior, interaction, or product effect. | Generic adjectives or vague polish requests. |
+| **What can arrive first without pretending it is finished?** | The First Useful Step: the earliest useful delivery slice plus what remains before the promise is fulfilled. | Replacement scope. **First Useful Step is sequencing, not descoping.** |
+| **What would be technically done but still wrong?** | The passable-but-misdelivered version to avoid. | A new lower target or a softened acceptance bar. |
+| **What did the user knowingly give up?** | Explicitly accepted reductions, delays, or omissions. | Cuts inferred by the agent for effort, convenience, or minimum-viable logic. |
+
+### Artifact Authority
+
+- During discovery and mediation, `context.md` carries the living expectation signal.
+- `decisions.md` records accepted trade-offs and supersedes older expectation text only when the user explicitly chooses the change.
+- At Brief approval, `brief.md` becomes the binding product promise for downstream work.
+- The active phase agent owns fidelity while it owns the moment: discovery through M2, mediation through Brief approval and M6. Planner decomposes the promise; it does not own product trade-offs.
+- Planner output and child tasks decompose the approved Brief; they are not a new scope authority.
+
+### Tier-Scaled Fidelity Checks
+
+| Tier | Expectation-fidelity checks |
+|---|---|
+| Scratch | 0 formal checks; keep the expectation signal lightweight or omit it when the work is truly throwaway. |
+| Tool | One pre-Brief expectation-fidelity Critic check before `brief.md` is approved. |
+| Shared | M2 expectation-fidelity Critic check, pre-Brief expectation-fidelity Critic check, and post-planner expectation-fidelity Critic check. |
+| Production | M2 expectation-fidelity Critic check, pre-Brief expectation-fidelity Critic check, and post-planner expectation-fidelity Critic check. |
+
+### Fidelity Rules
+
+- A first useful step is valid only when it names what remains before the promise is fulfilled.
+- If remaining expectation disappears from the Brief or plan, that is descoping and requires a recorded user decision.
+- Simplification may split, sequence, or remove explicitly rejected ideas. It must not redefine the user's promise as the first useful step.
+- KISS/YAGNI applies to implementation shape, not product deletion.
+- When a Critic says an item is not necessary, evaluate whether it is wanted, not merely necessary for bare function.
 
 ## User-Facing Entry Points
 
@@ -90,6 +131,7 @@ Use for:
   synthesis-idea-panel.md
   synthesis.md
   brief.md
+  planning-summary.md
 ```
 
 ## Shared Artifact Meanings
@@ -113,6 +155,14 @@ Optional denoised digest of the Phase 1 early challenge lane. Exists only when d
 ### `synthesis.md`
 
 Late-domain panel synthesis for Phase 2.
+
+### `brief.md`
+
+Approved product promise for downstream planning.
+
+### `planning-summary.md`
+
+M6 record of planner output against the approved Brief: parent task, child-task coverage, expected-experience coverage, omissions, and repair actions. It proves decomposition coverage; it does not supersede `brief.md` or child-task bodies.
 
 ### `stances/*-proposal.md`
 

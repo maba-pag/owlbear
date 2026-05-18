@@ -30,7 +30,7 @@ Ideation now has two panel surfaces.
 
 | Agent                      | Role                                            | Default?    | Output                       |
 | -------------------------- | ----------------------------------------------- | ----------- | ---------------------------- |
-| `ideation-simplifier`      | Scope reduction and decomposition pressure      | Yes         | `stances/simplifier.md`      |
+| `ideation-simplifier`      | Expectation-preserving scope reduction and decomposition pressure | Yes         | `stances/simplifier.md`      |
 | `ideation-firstprinciples` | Strips the framing to irreducible claims        | Yes         | `stances/firstprinciples.md` |
 | `ideation-outsider`        | Reframes through analogous domains or audiences | Conditional | `stances/outsider.md`        |
 
@@ -54,6 +54,9 @@ Discoverer
 
 - Outputs must be short and bounded.
 - The point is signal, not volume.
+- Early simplification may split, sequence, or cut rejected ideas. It must not redefine the user's expectation as the first useful step.
+- Simplifier output must name the preserved expectation and what remains after any proposed First Useful Step.
+- When a proposed cut would remove part of the Expectation Signal, surface it as a user decision rather than treating it as simplification.
 - Early challengers do **not** run the late-domain Critic loop by default.
 - If a later revision deliberately adds an embedded Critic loop to an early challenger, its debate log belongs in `stances/{name}-debate.md`.
 - Discovery may read challenger outputs directly when they are already compact. Denoise is conditional, not mandatory.
@@ -189,6 +192,7 @@ Use after M3.5 proposal collection in Phase 2.
   - security
   - Tension Level
 - includes common ground summary
+- includes expectation fit against the Expectation Signal
 - includes open questions
 
 ## Disagreement Resolution

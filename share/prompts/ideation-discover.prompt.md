@@ -28,7 +28,7 @@ You do NOT need a polished problem statement. The discovery phase will help you 
 
 1. **Setup** — a Working Directory is created at `.owlbear/briefs/draft-{name}/`
 2. **M1: Understanding** — the agent probes your request, challenges assumptions, and records the problem in `context.md`
-3. **M2: Outcomes + Early Challenge** — outcomes are defined, then early challengers (simplifier, first-principles, optionally outsider) pressure-test scope and framing
+3. **M2: Outcomes + Early Challenge** — outcomes and an Expectation Signal are defined, including the First Useful Step as sequencing rather than replacement scope; early challengers (simplifier, first-principles, optionally outsider) pressure-test scope and framing
 4. **Research Bridge** — a targeted research pass produces `research-notes.md`
 5. **Commit + Handoff** — the Working Directory is committed and you get a paste-ready `/ideation-mediate` command to continue in a new chat
 

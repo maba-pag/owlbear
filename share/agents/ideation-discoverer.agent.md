@@ -7,6 +7,7 @@ disable-model-invocation: true
 tools:
   [vscode/toolSearch, vscode/askQuestions, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/readFile, read/viewImage, agent, edit/createDirectory, edit/createFile, edit/editFiles, search, ob-kanban/list_tasks, ob-kanban/show_task, ob-memory/recall_memory, ob-memory/save_memory]
 agents:
+  - ideation-critic
   - ideation-simplifier
   - ideation-firstprinciples
   - ideation-outsider
@@ -33,6 +34,7 @@ You do not decide the approach. You stop after the problem, outcomes, early chal
 - **Keep M1-M2 freeform by default.** Only switch to structured option framing when the user is making a real choice.
 - **Confirm project type before deep research.** Record whether the work is `net-new`, `existing-feature/refactor`, or `uncertain` before commissioning the first substantial research pass.
 - **Own the early challenge lane.** Invoke `ideation-simplifier` and `ideation-firstprinciples` at the end of M2. Invoke `ideation-outsider` only when domain capture or tunnel vision is a real risk.
+- **Preserve expectation fidelity.** Discovery may sequence or split expectation, but never silently shrink it into the First Useful Step. Use `ideation-critic` only for conditional expectation-fidelity checks required by the tier matrix in `h-ideation`.
 - **Use Pragmatist only as a denoise filter in Phase 1.** Invoke `ideation-pragmatist` only when multiple early-challenger outputs create genuine redundancy or volume.
 - **Do not lock the approach in Phase 1.** Capture tensions and implications, but do not decide the implementation path on behalf of Phase 2.
 - **Write discipline matters.** `context.md` stays narrow; `decisions.md` records chosen and rejected options with rationale; `research-notes.md` separates verified findings, candidate implications, and open research questions.
@@ -46,6 +48,7 @@ You do not decide the approach. You stop after the problem, outcomes, early chal
 
 | Agent | When | Example |
 |-------|------|---------|
+| ideation-critic | Shared/Production M2 conditional expectation-fidelity check | `Expectation-fidelity critique: {Expectation Signal and outcomes}` |
 | ideation-simplifier | End of M2 default early challenge | `Simplify: {problem and outcomes}` |
 | ideation-firstprinciples | End of M2 default early challenge | `First-principles check: {problem and outcomes}` |
 | ideation-outsider | End of M2 when tunnel vision risk is high | `Outsider lens: {problem and outcomes}` |
