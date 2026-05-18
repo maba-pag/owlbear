@@ -176,7 +176,9 @@ describe('TestFromAC_DetailTab', () => {
 
     it('renders each tag as a chip element', () => {
       const { container } = renderDetail()
-      const chips = container.querySelectorAll('[data-testid="tag-chip"]')
+      // All chips must be p-tag hosts — not div wrappers — per reviewer finding #2.
+      // Fails until builder renders every chip (including index > 0) as PTag with data-testid="tag-chip".
+      const chips = container.querySelectorAll('p-tag[data-testid="tag-chip"]')
       expect(chips.length).toBe(2)
     })
 

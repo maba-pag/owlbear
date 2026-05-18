@@ -419,11 +419,11 @@ test.describe('AC-4 | Task-editor PDS compliance assertions', () => {
 
   test('(a) priority select uses p-select-option children, not native option', async ({ page }) => {
     // §5 "Select/dropdown" row: native options inside PDS selects are not accepted.
-    // Currently: PSelect[name="priority"] with <option> children -- p-select-option absent -- FAILS.
-    // Uses toBeAttached: options are in DOM but hidden when select is closed.
+    // Uses not.toHaveCount(0): the editable control has multiple p-select-option children;
+    // toBeAttached fails in strict mode when more than one element matches the locator.
     await expect(
       page.locator('p-select[name="priority"] p-select-option'),
-    ).toBeAttached({ timeout: 4_000 })
+    ).not.toHaveCount(0, { timeout: 4_000 })
   })
 
   test('(a.2) task-editor priority p-select contains no native option children (dual-render falsifiability)', async ({ page }) => {
@@ -439,10 +439,19 @@ test.describe('AC-4 | Task-editor PDS compliance assertions', () => {
     expect(nativeOptionCount).toBe(0)
   })
 
+  test('(a.4) editable priority p-select is visible — not a hidden shim', async ({ page }) => {
+    // Reviewer finding #1: the prior proof was satisfied by a hidden p-select[name="priority"]
+    // shim; the visible editable control used name="priority-editor" instead.
+    // Contract: name="priority" must be on the visible editable control, not a hidden element.
+    // Fails until builder removes the hidden shim and assigns name="priority" to the editor.
+    await expect(page.locator('p-select[name="priority"]')).toBeVisible({ timeout: 4_000 })
+  })
+
   test('(b.1) tag chips render as p-tag[data-testid="tag-chip"] elements', async ({ page }) => {
     // PDS metadata/status chip contract: required p-tag.
     // TASK_BETA has tags ["frontend", "backend"] so chip elements will render.
-    await expect(page.locator('p-tag[data-testid="tag-chip"]')).toBeVisible({ timeout: 2_000 })
+    // Uses .first() to avoid strict-mode failure when both chips are p-tag hosts.
+    await expect(page.locator('p-tag[data-testid="tag-chip"]').first()).toBeVisible({ timeout: 2_000 })
   })
 
   test('(b.2) no legacy span[data-testid="tag-chip"] chips survive (dual-render falsifiability)', async ({ page }) => {
@@ -453,6 +462,18 @@ test.describe('AC-4 | Task-editor PDS compliance assertions', () => {
     // TaskFieldsEditor.tsx L192: impl renders <p-tag data-testid="tag-chip"> with no legacy spans.
     // Fails if builder accidentally introduces or re-introduces plain span chips.
     await expect(page.locator('span[data-testid="tag-chip"]')).toHaveCount(0)
+  })
+
+  test('(b.3) all task tag chips are p-tag hosts — no div wrappers (multi-chip coverage)', async ({ page }) => {
+    // Reviewer finding #2: first chip was PTag but chips at index > 0 used div[data-testid="tag-chip"]
+    // wrapping an inner PTag, so only the first chip registered as p-tag[data-testid="tag-chip"].
+    // Contract: every chip host must be a direct p-tag element, regardless of position.
+    // Uses count equality to avoid strict-mode issues with multiple matching elements.
+    // Fails until builder renders all chips (including index > 0) as PTag with data-testid="tag-chip".
+    const total = await page.locator('[data-testid="tag-chip"]').count()
+    const ptag = await page.locator('p-tag[data-testid="tag-chip"]').count()
+    expect(total).toBeGreaterThan(0)
+    expect(ptag).toBe(total)
   })
 
   test('[presence] title field: p-input-text[name="title"] is in the DOM', async ({ page }) => {
