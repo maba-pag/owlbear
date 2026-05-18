@@ -443,20 +443,31 @@ class TestFromAC_StorageWrite:
         """AC4: write_entry must use mkstemp to create a temp file, then replace atomically.
 
         Proves the full mkstemp → fsync → replace contract. Would fail if write_entry
-        used write_text() or any non-atomic approach.
+        used write_text() or any non-atomic approach. The temp-file-consumed assertion
+        specifically fails when replace is skipped (e.g. direct write leaves temp on disk).
         """
         memory_dir = tmp_path / "memory"
         memory_dir.mkdir()
         target = memory_dir / "entry.md"
         entry = _make_valid_entry()
+        _mkstemp_results: list[tuple[int, str]] = []
+
+        def _capturing_mkstemp(*args: object, **kwargs: object) -> tuple[int, str]:
+            fd, name = _real_mkstemp(*args, **kwargs)  # type: ignore[arg-type]
+            _mkstemp_results.append((fd, name))
+            return fd, name
+
         with (
-            patch("owlbear_memory.storage.mkstemp", wraps=_real_mkstemp) as mock_mkstemp,
+            patch("owlbear_memory.storage.mkstemp", side_effect=_capturing_mkstemp) as mock_mkstemp,
             patch("os.fsync") as mock_fsync,
         ):
             storage.write_entry(target, entry, memory_dir=memory_dir)
         mock_mkstemp.assert_called_once()
         mock_fsync.assert_called()
         assert target.exists(), "Target file was not created after atomic replace"
+        assert len(_mkstemp_results) == 1, "mkstemp capturing function was not called"
+        tmp_path_used = Path(_mkstemp_results[0][1])
+        assert not tmp_path_used.exists(), "Temp file should be consumed by atomic replace (os.replace/Path.replace)"
 
 
 # ---------------------------------------------------------------------------
