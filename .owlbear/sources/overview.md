@@ -8,6 +8,10 @@ External repos and resources studied during OwlBear development.
 |--------|-----|------|------------|------|
 | MCP Python SDK — ToolAnnotations | <https://github.com/modelcontextprotocol/python-sdk> | `destructive_hint` field semantics, FastMCP tool registration patterns | `.owlbear/research/1652-remove-source-mcp-tool.md` | 2026-05-18 |
 
+## URL_LIST Handler Equivalence (Task #1653)
+
+No external sources — analysis based entirely on codebase static analysis of `refresh.py`, `ingest.py`, `fetcher.py`, `intake.py`, `content_safety.py`, `chunker.py`, and `document_store.py`.
+
 ## Cockpit Visual Audit (Task #1534)
 
 | Source | URL | What | Where Used | Date |
