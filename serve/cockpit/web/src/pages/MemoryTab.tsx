@@ -302,15 +302,7 @@ function MemoryTab(_props: KanbanBoardProps) {
           }}
         >
           {categoryOptions.map((category) => (
-            <PMultiSelectOption
-              key={category}
-              value={category}
-              ref={(element) => {
-                if (element) {
-                  element.setAttribute('value', category)
-                }
-              }}
-            >
+            <PMultiSelectOption key={category} value={category}>
               {category}
             </PMultiSelectOption>
           ))}
@@ -326,15 +318,7 @@ function MemoryTab(_props: KanbanBoardProps) {
         >
           <PSelectOption value="">All agents</PSelectOption>
           {agentOptions.map((agent) => (
-            <PSelectOption
-              key={agent}
-              value={agent}
-              ref={(element) => {
-                if (element) {
-                  element.setAttribute('value', agent)
-                }
-              }}
-            >
+            <PSelectOption key={agent} value={agent}>
               {agent}
             </PSelectOption>
           ))}
@@ -383,11 +367,6 @@ function MemoryTab(_props: KanbanBoardProps) {
               <PTag
                 data-testid="memory-entry-state"
                 variant={STATE_VARIANTS[entry.state]}
-                ref={(element) => {
-                  if (element) {
-                    element.setAttribute('color', STATE_VARIANTS[entry.state])
-                  }
-                }}
               >
                 {entry.state}
               </PTag>

@@ -1,9 +1,7 @@
 import { lazy, type ComponentType, type LazyExoticComponent } from 'react'
 import KanbanBoard, { type KanbanBoardProps } from './KanbanBoard'
 
-const decisionsPageModule = import('./pages/DecisionsPage')
-
-const DecisionsPage = lazy(async () => decisionsPageModule)
+const DecisionsPage = lazy(() => import('./pages/DecisionsPage'))
 const MemoryTab = lazy(() => import('./pages/MemoryTab'))
 
 export interface RouteConfigEntry {
