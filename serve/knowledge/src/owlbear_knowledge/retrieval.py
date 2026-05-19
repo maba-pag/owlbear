@@ -12,7 +12,7 @@ from owlbear_knowledge.protocol import HybridEmbedding
 if TYPE_CHECKING:
     from owlbear_knowledge.embeddings import EmbeddingProvider
     from owlbear_knowledge.graph_store import GraphStore
-    from owlbear_knowledge.models import Entity
+    from owlbear_knowledge.models import Edge, Entity
     from owlbear_knowledge.protocol import VectorStoreProtocol
 
 logger = logging.getLogger(__name__)
@@ -88,6 +88,7 @@ class GraphAugmentedRetriever:
         query: str,
         top_k: int = 5,
         scopes: list[str] | None = None,
+        similarity_threshold: float = 0.0,
     ) -> RetrievalResult:
         """Run hybrid search and return a :class:`RetrievalResult`.
 
@@ -95,6 +96,7 @@ class GraphAugmentedRetriever:
             query: Natural language query string.
             top_k: Maximum number of chunks to include in the result.
             scopes: Optional scope filter for graph operations.
+            similarity_threshold: Minimum vector score to include in chunks and graph expansion.
 
         Returns:
             :class:`RetrievalResult` with vector chunks and graph expansion.
@@ -106,12 +108,12 @@ class GraphAugmentedRetriever:
             embedding_type="document",
             scopes=scopes,
         )
-        chunks = raw_chunks[:top_k]
+        chunks = [(chunk_id, score) for chunk_id, score in raw_chunks if score >= similarity_threshold][:top_k]
 
         if not chunks:
             return RetrievalResult(chunks=[], expansion_text="", entities_found=0)
 
-        seeds = self._resolve_seeds(raw_chunks, scopes=scopes)
+        seeds = self._resolve_seeds(chunks, scopes=scopes)
 
         expansion_text = self._expand(seeds, scopes=scopes) if self._expansion_enabled else ""
 
@@ -138,6 +140,27 @@ class GraphAugmentedRetriever:
         chunk_ids = {chunk_id for chunk_id, _ in chunks}
         all_entities = self._graph_store.list_entities(scopes=scopes)
         return [e for e in all_entities if e.chunk_id is not None and e.chunk_id in chunk_ids]
+
+    def _resolve_endpoint_entity(self, entity_id: str, seed: Entity, neighbor: Entity) -> Entity | None:
+        """Resolve an edge endpoint from the known traversal entities or graph store."""
+        if entity_id == seed.id:
+            return seed
+        if entity_id == neighbor.id:
+            return neighbor
+        get_entity = getattr(self._graph_store, "get_entity", None)
+        if not callable(get_entity):
+            return None
+        entity = get_entity(entity_id)
+        return entity if entity is not None else None
+
+    def _format_expansion_line(self, seed: Entity, neighbor: Entity, edge: Edge) -> str:
+        """Format a graph-context line using the edge's stored direction."""
+        source = self._resolve_endpoint_entity(edge.source_id, seed, neighbor)
+        target = self._resolve_endpoint_entity(edge.target_id, seed, neighbor)
+        source_name = source.name if source is not None else edge.source_id
+        target_name = target.name if target is not None else edge.target_id
+        target_description = target.description if target is not None else ""
+        return f"{source_name} --[{edge.relation}]--> {target_name}: {target_description}"
 
     def _expand(
         self,
@@ -172,14 +195,18 @@ class GraphAugmentedRetriever:
             if budget_exhausted:
                 break
 
-            neighbors = self._graph_store.get_neighbors(seed.id, scopes=scopes)
-            neighbors = neighbors[: self._max_neighbors_per_entity]
+            neighbors = self._graph_store.get_neighbors(
+                seed.id,
+                max_depth=self._expansion_depth,
+                scopes=scopes,
+            )
 
             if self._weight_by_importance:
                 neighbors = sorted(neighbors, key=lambda pair: pair[0].importance, reverse=True)
+            neighbors = neighbors[: self._max_neighbors_per_entity]
 
             for neighbor, edge in neighbors:
-                line = f"{seed.name} --[{edge.relation}]--> {neighbor.name}: {neighbor.description}"
+                line = self._format_expansion_line(seed, neighbor, edge)
                 line_words = len(line.split())
                 if words_used + line_words > self._max_expansion_tokens:
                     budget_exhausted = True
@@ -217,7 +244,7 @@ def query_for_context(
         ``None``.
     """
     try:
-        result = retriever.retrieve(query)
+        result = retriever.retrieve(query, similarity_threshold=similarity_threshold)
 
         qualified = [(cid, score) for cid, score in result.chunks if score >= similarity_threshold]
         if not qualified:

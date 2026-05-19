@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING
 import strictyaml as sy
 
 from owlbear_knowledge import intake as intake_mod
+from owlbear_knowledge._paths import sandbox_path
 from owlbear_knowledge.models import KnowledgeSource, SourceType
 
 if TYPE_CHECKING:
@@ -215,11 +216,29 @@ async def _load_file_glob_entry(
     summary: LoadSummary,
 ) -> None:
     """Read and ingest all files for a file_glob manifest entry."""
-    glob_pattern = str(source.config.get("glob") or source.config.get("pattern") or "")
-    files = await asyncio.to_thread(lambda pat=glob_pattern: sorted(workspace_root.glob(pat)))
+    glob_pattern = str(source.config.get("glob") or source.config.get("pattern") or "").strip()
+    if not glob_pattern:
+        logger.warning("No glob pattern configured for source %r", entry.name)
+        summary.failed += 1
+        summary.all_source_ok = False
+        return
+
+    base_dir_raw = source.config.get("base_dir")
+    base_dir_path = Path(base_dir_raw) if isinstance(base_dir_raw, str) and base_dir_raw else workspace_root
+    try:
+        safe_base = sandbox_path(workspace_root, base_dir_path)
+    except PermissionError:
+        logger.exception("Invalid base_dir %r for source %r", base_dir_raw, entry.name)
+        summary.failed += 1
+        summary.all_source_ok = False
+        return
+
+    files = await asyncio.to_thread(lambda pat=glob_pattern: sorted(safe_base.glob(pat)))
 
     if not files:
         logger.warning("No files matched glob %r for source %r", glob_pattern, entry.name)
+        summary.failed += 1
+        summary.all_source_ok = False
         return
 
     source_failed = 0
@@ -329,11 +348,10 @@ async def load_manifest_file(
     now = datetime.now(tz=UTC).isoformat()
 
     for entry in entries:
+        source = _upsert_manifest_source(source_store, entry, now=now)
         if not entry.enabled:
             logger.debug("Skipping disabled source %r", entry.name)
             continue
-
-        source = _upsert_manifest_source(source_store, entry, now=now)
 
         if entry.type == SourceType.URL_LIST.value:
             await _load_url_list_entry(entry, source, pipeline, summary)

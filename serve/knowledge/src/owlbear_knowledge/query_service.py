@@ -96,7 +96,12 @@ class KnowledgeQueryService:
         """Return raw search matches and graph expansion context."""
         effective_scopes = self._effective_scopes(scopes)
         if self._retriever is not None:
-            result = self._retriever.retrieve(prompt, top_k, effective_scopes)
+            result = self._retriever.retrieve(
+                prompt,
+                top_k=top_k,
+                scopes=effective_scopes,
+                similarity_threshold=self._threshold,
+            )
             graph_context = result.expansion_text if isinstance(result.expansion_text, str) else ""
             return _SearchBackendResult(
                 chunks=result.chunks[:top_k],

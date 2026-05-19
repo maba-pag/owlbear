@@ -50,7 +50,11 @@ class GraphStore:
         """Deserialize a JSON string back to a metadata dict."""
         if not raw:
             return {}
-        return json.loads(raw)  # type: ignore[no-any-return]
+        try:
+            parsed = json.loads(raw)
+        except (TypeError, ValueError):
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
 
     @staticmethod
     def _entity_from_row(row: tuple[object, ...]) -> Entity:
@@ -137,7 +141,7 @@ class GraphStore:
             clauses.append(f"scope IN ({placeholders})")
             params.extend(scopes)
         if pipeline_name is not None:
-            clauses.append("json_extract(metadata, '$.pipeline_name') = ?")
+            clauses.append("CASE WHEN json_valid(metadata) THEN json_extract(metadata, '$.pipeline_name') END = ?")
             params.append(pipeline_name)
 
         sql = (
@@ -195,15 +199,11 @@ class GraphStore:
 
     # ── Edge operations ────────────────────────────────────────────────────
 
-    def insert_edge(self, edge: Edge, *, document_id: str | None = None) -> None:
+    def insert_edge(self, edge: Edge, *, document_id: str | None = None) -> bool:
         """Insert *edge* into the ``edges`` table."""
-        resolved_document_id = document_id
-        if resolved_document_id is None:
-            meta_document_id = edge.metadata.get("document_id")
-            if isinstance(meta_document_id, str):
-                resolved_document_id = meta_document_id
-        self._conn.execute(
-            "INSERT INTO edges "
+        resolved_document_id = self._resolve_edge_document_id(edge, document_id)
+        cursor = self._conn.execute(
+            "INSERT OR IGNORE INTO edges "
             "(id, source_id, target_id, relation, document_id, weight, metadata, created_at, scope) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
@@ -219,6 +219,24 @@ class GraphStore:
             ),
         )
         self._conn.commit()
+        return cursor.rowcount > 0
+
+    def _resolve_edge_document_id(self, edge: Edge, document_id: str | None) -> str:
+        if isinstance(document_id, str) and document_id:
+            return document_id
+
+        meta_document_id = edge.metadata.get("document_id")
+        if isinstance(meta_document_id, str) and meta_document_id:
+            return meta_document_id
+
+        for entity_id in (edge.source_id, edge.target_id):
+            entity = self.get_entity(entity_id)
+            entity_document_id = getattr(entity, "document_id", None)
+            if isinstance(entity_document_id, str) and entity_document_id:
+                return entity_document_id
+
+        msg = "edge document_id is required when endpoint entities have no document provenance"
+        raise ValueError(msg)
 
     def get_edge(self, edge_id: str) -> Edge | None:
         """Return the :class:`Edge` with *edge_id*, or ``None``."""
@@ -254,7 +272,7 @@ class GraphStore:
             clauses.append(f"scope IN ({placeholders})")
             params.extend(scopes)
         if pipeline_name is not None:
-            clauses.append("json_extract(metadata, '$.pipeline_name') = ?")
+            clauses.append("CASE WHEN json_valid(metadata) THEN json_extract(metadata, '$.pipeline_name') END = ?")
             params.append(pipeline_name)
 
         sql = "SELECT id, source_id, target_id, relation, weight, metadata, scope FROM edges"
@@ -289,11 +307,13 @@ class GraphStore:
         Updates canonical metadata, redirects all edges, deletes duplicates.
         Returns the number of duplicates merged.
         """
+        duplicate_id_list = list(duplicate_ids)
         self._conn.execute(
             "UPDATE entities SET metadata = ? WHERE id = ?",
             (self._dump_meta(merged_metadata), canonical_id),
         )
-        for dup_id in duplicate_ids:
+        self._dedupe_edges_for_entity_merge(canonical_id, duplicate_id_list)
+        for dup_id in duplicate_id_list:
             self._conn.execute(
                 "UPDATE edges SET source_id = ? WHERE source_id = ?",
                 (canonical_id, dup_id),
@@ -302,9 +322,53 @@ class GraphStore:
                 "UPDATE edges SET target_id = ? WHERE target_id = ?",
                 (canonical_id, dup_id),
             )
-            self.delete_entity(dup_id)
+        if duplicate_id_list:
+            placeholders = ", ".join("?" for _ in duplicate_id_list)
+            self._conn.execute(
+                f"DELETE FROM entities WHERE id IN ({placeholders})",  # noqa: S608
+                duplicate_id_list,
+            )
         self._conn.commit()
-        return len(duplicate_ids)
+        return len(duplicate_id_list)
+
+    def _dedupe_edges_for_entity_merge(self, canonical_id: str, duplicate_ids: Sequence[str]) -> None:
+        if not duplicate_ids:
+            return
+
+        merge_ids = [canonical_id, *duplicate_ids]
+        placeholders = ", ".join("?" for _ in merge_ids)
+        rows = self._conn.execute(
+            "SELECT id, source_id, target_id, relation, document_id FROM edges "  # noqa: S608
+            f"WHERE source_id IN ({placeholders}) OR target_id IN ({placeholders})",
+            (*merge_ids, *merge_ids),
+        ).fetchall()
+
+        duplicate_id_set = set(duplicate_ids)
+        rows = sorted(
+            rows,
+            key=lambda row: (
+                row[1] in duplicate_id_set or row[2] in duplicate_id_set,
+                str(row[0]),
+            ),
+        )
+        seen: set[tuple[object, object, object, object]] = set()
+        edge_ids_to_delete: list[str] = []
+        for edge_id, source_id, target_id, relation, row_document_id in rows:
+            normalized_source_id = canonical_id if source_id in duplicate_id_set else source_id
+            normalized_target_id = canonical_id if target_id in duplicate_id_set else target_id
+            key = (normalized_source_id, normalized_target_id, relation, row_document_id)
+            if key in seen:
+                if isinstance(edge_id, str):
+                    edge_ids_to_delete.append(edge_id)
+                continue
+            seen.add(key)
+
+        if edge_ids_to_delete:
+            delete_placeholders = ", ".join("?" for _ in edge_ids_to_delete)
+            self._conn.execute(
+                f"DELETE FROM edges WHERE id IN ({delete_placeholders})",  # noqa: S608
+                edge_ids_to_delete,
+            )
 
     # ── Traversal operations ───────────────────────────────────────────────
 

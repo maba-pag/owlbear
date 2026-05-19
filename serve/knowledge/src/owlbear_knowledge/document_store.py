@@ -148,9 +148,21 @@ class DocumentStore:
             # New API
             if not embeddings:
                 return
+            chunk_rows = self._conn.execute(
+                "SELECT id, chunk_index FROM chunks WHERE document_id = ? ORDER BY chunk_index ASC, id ASC",
+                (document_id_or_chunk_ids,),
+            ).fetchall()
+            chunk_ids_by_index = {
+                chunk_index: chunk_id
+                for chunk_id, chunk_index in chunk_rows
+                if isinstance(chunk_id, str) and isinstance(chunk_index, int)
+            }
             for chunk, embedding in zip(chunks_or_texts, embeddings, strict=False):
+                chunk_id = chunk_ids_by_index.get(chunk.index)  # type: ignore[union-attr]
+                if chunk_id is None:
+                    continue
                 self._vector.store_embedding(  # type: ignore[union-attr]
-                    entity_or_doc_id=f"{document_id_or_chunk_ids}_{chunk.index}",  # type: ignore[union-attr]
+                    entity_or_doc_id=chunk_id,
                     embedding=embedding,
                     embedding_type="document",
                     scope=scope,
@@ -243,6 +255,11 @@ class DocumentStore:
         Returns:
             Tuple of ``(entity_count, edge_count)``.
         """
+        has_graph_rows = any(result.entities or result.edges for result in results)
+        if has_graph_rows and not document_id.strip():
+            msg = "document_id is required when storing extraction entities or edges"
+            raise ValueError(msg)
+
         entity_count = 0
         edge_count = 0
         for i, result in enumerate(results):
@@ -271,8 +288,8 @@ class DocumentStore:
                         },
                     }
                 )
-                self._graph.insert_edge(stamped_edge, document_id=document_id)
-                edge_count += 1
+                if self._graph.insert_edge(stamped_edge, document_id=document_id):
+                    edge_count += 1
         return entity_count, edge_count
 
     def delete_chunk_embeddings(self, chunk_ids: list[str]) -> None:
@@ -284,6 +301,16 @@ class DocumentStore:
                 self._vector.delete_embedding(chunk_id)  # type: ignore[union-attr]
             except Exception:  # noqa: BLE001
                 logger.debug("chunk embedding cleanup failed", exc_info=True)
+
+    def delete_entity_embeddings(self, entity_ids: list[str]) -> None:
+        """Best-effort deletion of vector payloads for entity IDs."""
+        if not entity_ids:
+            return
+        for entity_id in entity_ids:
+            try:
+                self._vector.delete_embedding(entity_id)  # type: ignore[union-attr]
+            except Exception:  # noqa: BLE001
+                logger.debug("entity embedding cleanup failed", exc_info=True)
 
     # ── Cascade delete ────────────────────────────────────────────────────
 
@@ -301,6 +328,8 @@ class DocumentStore:
 
         # Delete entities and their edges for this document
         entity_rows = self._conn.execute("SELECT id FROM entities WHERE document_id = ?", (document_id,)).fetchall()
+        entity_ids = [row[0] for row in entity_rows]
+        self.delete_entity_embeddings(entity_ids)
         for (eid,) in entity_rows:
             self._conn.execute("DELETE FROM edges WHERE source_id = ? OR target_id = ?", (eid, eid))
         self._conn.execute("DELETE FROM entities WHERE document_id = ?", (document_id,))

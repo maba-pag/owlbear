@@ -102,9 +102,36 @@ def _build_inter_prompt(pairs: list[tuple[Entity, Entity]], scope: str) -> str:
     for a, b in pairs:
         a_desc = f" — {a.description}" if a.description else ""
         b_desc = f" — {b.description}" if b.description else ""
-        pair_lines.append(f"  ({a.name} [{a.entity_type.value}]{a_desc}, {b.name} [{b.entity_type.value}]{b_desc})")
+        pair_lines.append(
+            f"  ({a.id} | {a.name} [{a.entity_type.value}]{a_desc}, {b.id} | {b.name} [{b.entity_type.value}]{b_desc})"
+        )
     pairs_str = "\n".join(pair_lines)
-    return f"scope: {scope}\nEntity pairs:\n{pairs_str}"
+    return f"scope: {scope}\nEntity pairs (entity_id | name [type]):\n{pairs_str}"
+
+
+def _pair_key(source_id: str, target_id: str) -> tuple[str, str]:
+    """Return an order-insensitive entity-pair key."""
+    return (min(source_id, target_id), max(source_id, target_id))
+
+
+def _candidate_pair_keys(pairs: list[tuple[Entity, Entity]]) -> set[tuple[str, str]]:
+    """Return allowed endpoint pairs for an extractor batch."""
+    return {_pair_key(source.id, target.id) for source, target in pairs}
+
+
+def _filter_candidate_edges(edges: list[Edge], allowed_pairs: set[tuple[str, str]]) -> list[Edge]:
+    """Drop extractor edges that do not match the prompted candidate pairs."""
+    filtered: list[Edge] = []
+    for edge in edges:
+        if _pair_key(edge.source_id, edge.target_id) in allowed_pairs:
+            filtered.append(edge)
+        else:
+            logger.debug(
+                "dropping inter-doc edge outside candidate pairs: %s -> %s",
+                edge.source_id,
+                edge.target_id,
+            )
+    return filtered
 
 
 class InterDocGraphBuilder:
@@ -329,7 +356,7 @@ class InterDocGraphBuilder:
             batch = candidate_pairs[i : i + _INTER_BATCH_SIZE]
             prompt = _build_inter_prompt(batch, scope)
             result = await self._extractor.extract(prompt)
-            all_edges.extend(result.edges)
+            all_edges.extend(_filter_candidate_edges(result.edges, _candidate_pair_keys(batch)))
 
         stamped = [_stamp_inter_edge(e, entity_by_id, source_by_entity, scope) for e in all_edges]
         return GraphBuildResult(edges=stamped, edges_added=len(stamped))

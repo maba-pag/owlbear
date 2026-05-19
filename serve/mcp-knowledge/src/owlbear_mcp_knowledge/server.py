@@ -292,8 +292,11 @@ def _fetch_consolidation_candidate_rows(
               AND NOT EXISTS (
                   SELECT 1
                   FROM edges AS ed
-                  WHERE (ed.source_id = e1.id AND ed.target_id = e2.id)
-                     OR (ed.source_id = e2.id AND ed.target_id = e1.id)
+                        WHERE (
+                                (ed.source_id = e1.id AND ed.target_id = e2.id)
+                            OR (ed.source_id = e2.id AND ed.target_id = e1.id)
+                        )
+                          AND ed.relation = 'same_as'
               )
         )
         SELECT
@@ -354,6 +357,7 @@ async def get_consolidation_candidates(
     """Return unresolved cross-source consolidation candidates."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     conn = app_ctx.conn
+    limit = _normalize_read_limit(limit)
     rows = _fetch_consolidation_candidate_rows(conn, limit=limit)
     return [
         {
@@ -783,21 +787,26 @@ def _load_chunk_provenance(conn: sqlite3.Connection, *, chunk_id: str) -> _Chunk
         JOIN documents AS d ON d.id = c.document_id
         JOIN knowledge_sources AS ks ON ks.id = d.source_id
         WHERE c.id = ?
+          AND ks.enrich = 1
+                    AND ks.enabled = 1
         """,
         (chunk_id,),
     ).fetchone()
     if row is None:
         msg = "chunk_id does not resolve to an enrich-enabled source-linked chunk"
         raise ToolError(msg)
-    if row[3] == "enriched":
+    state = row[3] if isinstance(row[3], str) else "pending"
+    if state == "enriched":
         msg = "chunk is already enriched"
+        raise ToolError(msg)
+    if state not in {"pending", "claimed"}:
+        msg = "chunk is not pending or claimed"
         raise ToolError(msg)
     if not isinstance(row[0], str) or not isinstance(row[1], str):
         msg = "chunk provenance could not be resolved"
         raise ToolError(msg)
 
     scope = row[2] if isinstance(row[2], str) and row[2] else "global"
-    state = row[3] if isinstance(row[3], str) else "pending"
     return _ChunkProvenance(
         document_id=row[0],
         source_id=row[1],
@@ -1078,18 +1087,28 @@ def _serialize_related_sources(value: object) -> list[RelatedSource]:
 def _serialize_source(value: object) -> SearchSource:
     """Normalize source metadata to a {name, url} object."""
     name = getattr(value, "name", None)
-    url = getattr(value, "url", None)
+    raw_url = getattr(value, "url", None)
+    url = raw_url.strip() if isinstance(raw_url, str) and raw_url.strip() else None
 
-    if not isinstance(url, str):
+    if url is None:
         config = getattr(value, "config", None)
         config_url = config.get("url") if isinstance(config, dict) else None
-        if isinstance(config_url, str):
-            url = config_url
+        if isinstance(config_url, str) and config_url.strip():
+            url = config_url.strip()
+        elif isinstance(config, dict):
+            config_urls = config.get("urls")
+            if isinstance(config_urls, list):
+                url = next((item.strip() for item in config_urls if isinstance(item, str) and item.strip()), None)
+            elif isinstance(config_urls, str):
+                url = next((item.strip() for item in config_urls.split(",") if item.strip()), None)
 
     return {
         "name": name if isinstance(name, str) else "",
-        "url": url if isinstance(url, str) else "",
+        "url": url or "",
     }
+
+
+_NULL_LIKE_SCOPE_VALUES = {"", "none", "null"}
 
 
 def _normalize_optional_scope(scope: str | None) -> str | None:
@@ -1097,13 +1116,44 @@ def _normalize_optional_scope(scope: str | None) -> str | None:
     if scope is None:
         return None
     normalized = scope.strip()
-    if normalized.lower() in {"", "none", "null"}:
+    if normalized.lower() in _NULL_LIKE_SCOPE_VALUES:
         return None
     return normalized
 
 
+def _normalize_scope_list(scopes: object) -> list[str] | None:
+    """Normalize MCP search scope filters before vector retrieval."""
+    if scopes is None:
+        return None
+    if not isinstance(scopes, list):
+        msg = "scopes must be a list of strings"
+        raise ToolError(msg)
+
+    normalized_scopes: list[str] = []
+    for scope in scopes:
+        if not isinstance(scope, str):
+            msg = "scopes must be a list of strings"
+            raise ToolError(msg)
+        normalized = scope.strip()
+        if normalized.lower() in _NULL_LIKE_SCOPE_VALUES:
+            continue
+        normalized_scopes.append(normalized)
+    return normalized_scopes or None
+
+
 def _normalize_batch_limit(limit: int) -> int:
     """Validate and bound mutable enrichment batch claims."""
+    if isinstance(limit, bool) or not isinstance(limit, int):
+        msg = "limit must be an integer"
+        raise ToolError(msg)
+    if limit < 1:
+        msg = "limit must be at least 1"
+        raise ToolError(msg)
+    return min(limit, _MAX_ENRICHMENT_BATCH_SIZE)
+
+
+def _normalize_read_limit(limit: int) -> int:
+    """Validate and bound read-only list limits exposed through MCP tools."""
     if isinstance(limit, bool) or not isinstance(limit, int):
         msg = "limit must be an integer"
         raise ToolError(msg)
@@ -1142,7 +1192,8 @@ async def get_next_batch(ctx: Context, limit: int = 10) -> list[EnrichmentChunk]
             FROM chunks AS c
             JOIN documents AS d ON d.id = c.document_id
             JOIN knowledge_sources AS ks ON ks.id = d.source_id
-            WHERE ks.enrich = 1
+                        WHERE ks.enrich = 1
+                            AND ks.enabled = 1
               AND (
                 c.enrichment_state = 'pending'
                 OR (
@@ -1201,24 +1252,25 @@ async def store_enrichment(
     now_iso = datetime.now(tz=UTC).isoformat()
     edge_rows = edges or []
 
-    if chunk_id is None:
-        if candidate_id is not None:
-            conn.execute("PRAGMA busy_timeout = 5000")
-            conn.execute("BEGIN IMMEDIATE")
-            try:
-                _persist_phase2_enrichment(
-                    conn,
-                    candidate_id=candidate_id,
-                    edges=edge_rows,
-                    now_iso=now_iso,
-                )
-            except Exception:
-                conn.rollback()
-                raise
-            conn.commit()
-            return
-        msg = "chunk_id is required for phase-1 store_enrichment"
+    if (chunk_id is None) == (candidate_id is None):
+        msg = "provide exactly one of chunk_id or candidate_id"
         raise ToolError(msg)
+
+    if chunk_id is None:
+        conn.execute("PRAGMA busy_timeout = 5000")
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            _persist_phase2_enrichment(
+                conn,
+                candidate_id=candidate_id or "",
+                edges=edge_rows,
+                now_iso=now_iso,
+            )
+        except Exception:
+            conn.rollback()
+            raise
+        conn.commit()
+        return
 
     conn.execute("PRAGMA busy_timeout = 5000")
     conn.execute("BEGIN IMMEDIATE")
@@ -1357,7 +1409,7 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
 mcp = FastMCP("owlbear-knowledge", lifespan=app_lifespan)
 
 get_next_batch = mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))(get_next_batch)
-get_consolidation_candidates = mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))(
+get_consolidation_candidates = mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))(
     get_consolidation_candidates
 )
 store_enrichment = mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))(store_enrichment)
@@ -1394,6 +1446,8 @@ async def search_knowledge(
     qs = app_ctx.query_service
     if qs is None:
         return "error: Knowledge service not available."
+    limit = _normalize_read_limit(limit)
+    scopes = _normalize_scope_list(scopes)
     try:
         results = await qs.query(query, top_k=limit, scopes=scopes)
     except KnowledgeQueryError as exc:

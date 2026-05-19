@@ -26,18 +26,57 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _MIN_SCOPE_DOCS = 2  # guard: skip inter-doc build when scope has fewer than 2 documents
+_STATUS_COUNTER_KEYS = {
+    "ok": "refreshed",
+    "partial": "partial",
+    "skipped": "skipped",
+}
+
+
+def _increment_status_count(status_counts: dict[str, int], status: str) -> None:
+    """Increment a RefreshResult counter for a pipeline status string."""
+    status_counts[_STATUS_COUNTER_KEYS.get(status, "failed")] += 1
 
 
 def _configured_urls(source: KnowledgeSource) -> list[str]:
     """Return URL entries from either plural or singular source config keys."""
     urls: list[str] = []
+
+    def append_url(value: str) -> None:
+        url = value.strip()
+        if url and url not in urls:
+            urls.append(url)
+
     raw_urls = source.config.get("urls")
     if isinstance(raw_urls, list):
-        urls.extend(url for url in raw_urls if isinstance(url, str) and url.strip())
+        for url in raw_urls:
+            if isinstance(url, str):
+                append_url(url)
+    elif isinstance(raw_urls, str):
+        for url in raw_urls.split(","):
+            append_url(url)
+
     raw_url = source.config.get("url")
-    if isinstance(raw_url, str) and raw_url.strip() and raw_url not in urls:
-        urls.append(raw_url)
+    if isinstance(raw_url, str):
+        append_url(raw_url)
     return urls
+
+
+def _no_file_glob_matches_result(source: KnowledgeSource, pattern: str) -> RefreshResult:
+    """Return a failed refresh result for an empty file_glob match."""
+    error = (
+        f"no files matched source path {source.config['path']!r}"
+        if isinstance(source.config.get("path"), str)
+        else f"no files matched source pattern {pattern!r}"
+    )
+    return RefreshResult(
+        source_id=source.id,
+        refreshed=0,
+        partial=0,
+        skipped=0,
+        failed=1,
+        errors=[error],
+    )
 
 
 def _local_path_from_url(url: str) -> Path | None:
@@ -202,7 +241,7 @@ class RefreshOrchestrator:
         cancel: CancelSignal | None = None,
     ) -> RefreshResult:
         urls = _configured_urls(source)
-        refreshed = partial = skipped = failed = 0
+        status_counts = {"refreshed": 0, "partial": 0, "skipped": 0, "failed": 0}
         errors: list[str] = []
         warnings: list[str] = []
 
@@ -228,24 +267,17 @@ class RefreshOrchestrator:
                 )
                 status, ingest_warnings = self._record_ingest_outcome(source, ingest_result)
                 warnings.extend(ingest_warnings)
-                if status == "ok":
-                    refreshed += 1
-                elif status == "partial":
-                    partial += 1
-                elif status == "skipped":
-                    skipped += 1
-                else:
-                    failed += 1
+                _increment_status_count(status_counts, status)
             except Exception as exc:  # noqa: BLE001
-                failed += 1
+                status_counts["failed"] += 1
                 errors.append(str(exc))
 
         return RefreshResult(
             source_id=source.id,
-            refreshed=refreshed,
-            partial=partial,
-            skipped=skipped,
-            failed=failed,
+            refreshed=status_counts["refreshed"],
+            partial=status_counts["partial"],
+            skipped=status_counts["skipped"],
+            failed=status_counts["failed"],
             errors=errors,
             warnings=warnings,
         )
@@ -255,7 +287,17 @@ class RefreshOrchestrator:
         source: KnowledgeSource,
         cancel: CancelSignal | None = None,
     ) -> RefreshResult:
-        pattern: str = source.config.get("pattern", "*")
+        pattern = str(source.config.get("pattern") or source.config.get("glob") or "").strip()
+        if not pattern:
+            return RefreshResult(
+                source_id=source.id,
+                refreshed=0,
+                partial=0,
+                skipped=0,
+                failed=1,
+                errors=["source has no glob pattern configured"],
+            )
+
         base_dir_raw: str | None = source.config.get("base_dir")
         base_dir_path = Path(base_dir_raw) if base_dir_raw else self._workspace_root
         single_source_identity = source.config.get("url") if isinstance(source.config.get("path"), str) else None
@@ -273,19 +315,12 @@ class RefreshOrchestrator:
             )
 
         matching_files = sorted(safe_base.glob(pattern))
-        refreshed = partial = skipped = failed = 0
+        status_counts = {"refreshed": 0, "partial": 0, "skipped": 0, "failed": 0}
         errors: list[str] = []
         warnings: list[str] = []
 
-        if not matching_files and isinstance(source.config.get("path"), str):
-            return RefreshResult(
-                source_id=source.id,
-                refreshed=0,
-                partial=0,
-                skipped=0,
-                failed=1,
-                errors=[f"no files matched source path {source.config['path']!r}"],
-            )
+        if not matching_files:
+            return _no_file_glob_matches_result(source, pattern)
 
         for file_path in matching_files:
             if cancel is not None and cancel.is_set():
@@ -302,24 +337,17 @@ class RefreshOrchestrator:
                 )
                 status, ingest_warnings = self._record_ingest_outcome(source, ingest_result)
                 warnings.extend(ingest_warnings)
-                if status == "ok":
-                    refreshed += 1
-                elif status == "partial":
-                    partial += 1
-                elif status == "skipped":
-                    skipped += 1
-                else:
-                    failed += 1
+                _increment_status_count(status_counts, status)
             except Exception as exc:  # noqa: BLE001
-                failed += 1
+                status_counts["failed"] += 1
                 errors.append(str(exc))
 
         return RefreshResult(
             source_id=source.id,
-            refreshed=refreshed,
-            partial=partial,
-            skipped=skipped,
-            failed=failed,
+            refreshed=status_counts["refreshed"],
+            partial=status_counts["partial"],
+            skipped=status_counts["skipped"],
+            failed=status_counts["failed"],
             errors=errors,
             warnings=warnings,
         )
