@@ -228,6 +228,7 @@ class KnowledgeSourceStore:
         doc_rows = self._conn.execute("SELECT id FROM documents WHERE source_id = ?", (source_id,)).fetchall()
 
         for (doc_id,) in doc_rows:
+            self._conn.execute("DELETE FROM edges WHERE document_id = ?", (doc_id,))
             # Delete edges for each entity in the document
             entity_rows = self._conn.execute("SELECT id FROM entities WHERE document_id = ?", (doc_id,)).fetchall()
             for (eid,) in entity_rows:
@@ -236,6 +237,7 @@ class KnowledgeSourceStore:
             self._conn.execute("DELETE FROM chunks WHERE document_id = ?", (doc_id,))
             self._conn.execute("DELETE FROM document_status WHERE document_id = ?", (doc_id,))
 
+        self._conn.execute("DELETE FROM reviewed_pairs WHERE source_a = ? OR source_b = ?", (source_id, source_id))
         self._conn.execute("DELETE FROM documents WHERE source_id = ?", (source_id,))
         self._conn.execute("DELETE FROM source_pages WHERE source_id = ?", (source_id,))
         self._conn.execute("DELETE FROM knowledge_sources WHERE id = ?", (source_id,))
