@@ -305,6 +305,8 @@ async def _update_entry(  # noqa: C901, PLR0913
         payload["confidence"] = confidence
     if scope_agents is not None:
         payload["scope_agents"] = scope_agents
+    if current.state == MemoryState.PENDING and "scope_agents" not in payload:
+        payload["scope_agents"] = next_scope_agents
 
     try:
         updated = engine.edit(
