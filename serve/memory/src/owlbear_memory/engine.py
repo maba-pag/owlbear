@@ -73,7 +73,7 @@ class MemoryEngine:
                 id_to_path[entry.id] = file_path
                 continue
 
-            if entry.updated_at > current.updated_at:
+            if self._parse_iso_datetime(entry.updated_at) > self._parse_iso_datetime(current.updated_at):
                 _LOGGER.warning("Duplicate UUID %s found in %s; keeping later updated_at", entry.id, file_path)
                 by_id[entry.id] = entry
                 id_to_path[entry.id] = file_path
@@ -223,3 +223,6 @@ class MemoryEngine:
 
     def _now_iso(self) -> str:
         return datetime.now(UTC).isoformat()
+
+    def _parse_iso_datetime(self, value: str) -> datetime:
+        return datetime.fromisoformat(value)

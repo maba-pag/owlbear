@@ -744,6 +744,27 @@ class TestFromAC_LenientRead:
         assert len(matching) == 1
         assert matching[0].updated_at == _TS_LATE
 
+    def test_duplicate_uuid_keeps_later_updated_at_with_timezone_offsets(self, tmp_path: Path) -> None:
+        """Edge: dedup compares timestamps chronologically, not lexically, across offsets."""
+        # Chronology in UTC:
+        # - +01:00 timestamp => 2026-01-01T00:30:00+00:00 (earlier)
+        # - +00:00 timestamp => 2026-01-01T00:45:00+00:00 (later)
+        earlier_lexically_larger = "2026-01-01T01:30:00+01:00"
+        later_lexically_smaller = "2026-01-01T00:45:00+00:00"
+
+        first = _make_entry(_DEDUP_ID, MemoryState.CURATED, updated_at=earlier_lexically_larger)
+        second = _make_entry(_DEDUP_ID, MemoryState.CURATED, updated_at=later_lexically_smaller)
+
+        storage.write_entry(tmp_path / "first.md", first, memory_dir=tmp_path)
+        storage.write_entry(tmp_path / "second.md", second, memory_dir=tmp_path)
+
+        engine = MemoryEngine(memory_dir=tmp_path)
+        entries = engine.get_entries()
+
+        matching = [entry for entry in entries if entry.id == _DEDUP_ID]
+        assert len(matching) == 1
+        assert matching[0].updated_at == later_lexically_smaller
+
     def test_duplicate_uuid_logs_warning(self, tmp_path: Path) -> None:
         """Happy: duplicate UUID discovery emits a warning log."""
         early_entry = _make_entry(_DEDUP_ID, MemoryState.CURATED, updated_at=_TS_EARLY)
