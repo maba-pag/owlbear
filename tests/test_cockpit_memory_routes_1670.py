@@ -418,6 +418,87 @@ class TestFromAC_EditMemory:
         )
         assert response.status_code == 422
 
+    def test_edit_content_forwarded_to_engine_and_reflected_in_response(
+        self, client: TestClient, mock_engine: MagicMock
+    ) -> None:
+        """content field is forwarded to engine.edit() payload and reflected in response body."""
+        updated_entry = MemoryEntry(
+            id=_ENTRY_ID,
+            title="Test Memory",
+            content="Updated content text",
+            categories=[MemoryCategory.DOMAIN_KNOWLEDGE],
+            confidence=0.9,
+            state=MemoryState.CURATED,
+            scope_agents=[],
+            source_agent="test-agent",
+            created_at=_NOW,
+            updated_at=_NOW,
+            approved_at=None,
+        )
+        mock_engine.edit.return_value = updated_entry
+        response = client.post(
+            f"/api/memories/{_ENTRY_ID}/edit",
+            json={"expected_updated_at": _NOW, "content": "Updated content text"},
+        )
+        assert response.status_code == 200
+        call_fields = mock_engine.edit.call_args.args[1]
+        assert call_fields["content"] == "Updated content text"
+        assert response.json()["entry"]["content"] == "Updated content text"
+
+    def test_edit_categories_forwarded_to_engine_and_reflected_in_response(
+        self, client: TestClient, mock_engine: MagicMock
+    ) -> None:
+        """categories field is forwarded to engine.edit() payload and reflected in response body."""
+        updated_entry = MemoryEntry(
+            id=_ENTRY_ID,
+            title="Test Memory",
+            content="Some memory content.",
+            categories=[MemoryCategory.PITFALL],
+            confidence=0.9,
+            state=MemoryState.CURATED,
+            scope_agents=[],
+            source_agent="test-agent",
+            created_at=_NOW,
+            updated_at=_NOW,
+            approved_at=None,
+        )
+        mock_engine.edit.return_value = updated_entry
+        response = client.post(
+            f"/api/memories/{_ENTRY_ID}/edit",
+            json={"expected_updated_at": _NOW, "categories": ["pitfall"]},
+        )
+        assert response.status_code == 200
+        call_fields = mock_engine.edit.call_args.args[1]
+        assert call_fields["categories"] == [MemoryCategory.PITFALL]
+        assert response.json()["entry"]["categories"] == ["pitfall"]
+
+    def test_edit_confidence_forwarded_to_engine_and_reflected_in_response(
+        self, client: TestClient, mock_engine: MagicMock
+    ) -> None:
+        """confidence field is forwarded to engine.edit() payload and reflected in response body."""
+        updated_entry = MemoryEntry(
+            id=_ENTRY_ID,
+            title="Test Memory",
+            content="Some memory content.",
+            categories=[MemoryCategory.DOMAIN_KNOWLEDGE],
+            confidence=0.75,
+            state=MemoryState.CURATED,
+            scope_agents=[],
+            source_agent="test-agent",
+            created_at=_NOW,
+            updated_at=_NOW,
+            approved_at=None,
+        )
+        mock_engine.edit.return_value = updated_entry
+        response = client.post(
+            f"/api/memories/{_ENTRY_ID}/edit",
+            json={"expected_updated_at": _NOW, "confidence": 0.75},
+        )
+        assert response.status_code == 200
+        call_fields = mock_engine.edit.call_args.args[1]
+        assert call_fields["confidence"] == 0.75
+        assert response.json()["entry"]["confidence"] == 0.75
+
 
 # ---------------------------------------------------------------------------
 # AC4: POST /api/memories/{id}/delete
