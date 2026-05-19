@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState } from 'react'
-import { Routes, Route } from 'react-router'
+import { Routes, Route, useLocation, useNavigate } from 'react-router'
 import { PBanner, PButton, PDivider, PHeading, PToast, useToastManager } from '@porsche-design-system/components-react'
 import ActivityTab from './components/ActivityTab'
 import CleanupPanel from './components/CleanupPanel'
@@ -31,7 +31,50 @@ function syncHeadingTagAttr(tag: 'h1' | 'h2', size?: 'large' | 'medium' | 'small
   }
 }
 
+function navIcon(surface: string) {
+  if (surface === 'kanban') {
+    return (
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 16 16"
+        width="16"
+        height="16"
+        focusable="false"
+      >
+        <path d="M2 3h5v4H2V3zm7 0h5v4H9V3zM2 9h5v4H2V9zm7 0h5v4H9V9z" fill="currentColor" />
+      </svg>
+    )
+  }
+  if (surface === 'decisions') {
+    return (
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 16 16"
+        width="16"
+        height="16"
+        focusable="false"
+      >
+        <path d="M3 2h10v3H3V2zm0 4.5h10v3H3v-3zm0 4.5h10v3H3v-3z" fill="currentColor" />
+      </svg>
+    )
+  }
+
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 16 16"
+      width="16"
+      height="16"
+      focusable="false"
+    >
+      <path d="M3 3h10v10H3V3z" fill="currentColor" />
+    </svg>
+  )
+}
+
 function Shell() {
+  const { pathname } = useLocation()
+  const navigate = useNavigate()
   const showRuntimeHeadingMirror = typeof navigator !== 'undefined' && !/jsdom/i.test(navigator.userAgent)
   const toastManager = useToastManager()
   const {
@@ -161,6 +204,9 @@ function Shell() {
     'w-auto',
   ].join(' ')
 
+  const matchedRoute = routeConfig.find((route) => route.path === pathname)
+  const hasSidecar = matchedRoute?.hasSidecar !== false
+
   useEffect(() => {
     const mediaQuery = window.matchMedia('(max-width: 767px)')
     const handleViewportChange = () => {
@@ -223,6 +269,7 @@ function Shell() {
     <div
       className={shellClassName}
       data-sidecar-collapsed={isSidecarCollapsed || undefined}
+      data-no-sidecar={!hasSidecar || undefined}
     >
       <PToast />
       <header
@@ -294,25 +341,26 @@ function Shell() {
       <nav
         className={navRailClassName}
         data-region="nav-rail"
+        role="navigation"
       >
-        <button
-          type="button"
-          data-surface="kanban"
-          data-pds-exception="nav-kanban"
-          aria-current="page"
-          aria-label="Kanban"
-          className="shell__nav-button m-0 block w-10 min-w-0 max-w-10 overflow-hidden"
-        >
-          <svg
-            aria-hidden="true"
-            viewBox="0 0 16 16"
-            width="16"
-            height="16"
-            focusable="false"
-          >
-            <path d="M2 3h5v4H2V3zm7 0h5v4H9V3zM2 9h5v4H2V9zm7 0h5v4H9V9z" fill="currentColor" />
-          </svg>
-        </button>
+        {routeConfig.map((route) => {
+          const isActive = pathname === route.path
+
+          return (
+            <button
+              key={route.path}
+              type="button"
+              data-surface={route.icon}
+              data-pds-exception={`nav-${route.icon}`}
+              aria-current={isActive ? 'page' : undefined}
+              aria-label={route.label}
+              className="shell__nav-button m-0 block w-10 min-w-0 max-w-10 overflow-hidden"
+              onClick={() => navigate(route.path)}
+            >
+              {navIcon(route.icon)}
+            </button>
+          )
+        })}
       </nav>
       <main
         className="shell__workspace min-w-0 overflow-hidden md:overflow-auto"
@@ -337,10 +385,11 @@ function Shell() {
           })}
         </Routes>
       </main>
-      <aside
-        className={sidecarClassName}
-        data-region="sidecar"
-      >
+      {hasSidecar ? (
+        <aside
+          className={sidecarClassName}
+          data-region="sidecar"
+        >
         <button
           type="button"
           className="shell__sidecar-toggle icon-button"
@@ -560,7 +609,8 @@ function Shell() {
             </p-tabs>
           </div>
         )}
-      </aside>
+        </aside>
+      ) : null}
       {selectedDR ? (
         <ResolveModal
           dr={selectedDR}
