@@ -478,6 +478,49 @@ async def test_phase1_invalid_edge_weight_fails_before_persistence(conn: sqlite3
 
 
 @pytest.mark.asyncio
+async def test_phase1_non_object_edge_payload_rolls_back_and_releases_claim(conn: sqlite3.Connection) -> None:
+    source_id = _insert_source(conn, "Source")
+    document_id = _insert_document(conn, source_id)
+    chunk_id = _insert_chunk(conn, document_id)
+
+    with pytest.raises(ToolError):
+        await store_enrichment(
+            _ctx(conn),
+            chunk_id=chunk_id,
+            entities=[{"id": "entity-a", "name": "A", "entity_type": "concept"}],
+            edges=["not-an-object"],  # type: ignore[list-item]
+        )
+
+    assert not conn.in_transaction
+    state = conn.execute("SELECT enrichment_state, claimed_at FROM chunks WHERE id = ?", (chunk_id,)).fetchone()
+    assert state == ("failed", None)
+    assert conn.execute("SELECT COUNT(*) FROM entities").fetchone()[0] == 0
+    assert conn.execute("SELECT COUNT(*) FROM edges").fetchone()[0] == 0
+
+
+@pytest.mark.asyncio
+async def test_phase2_non_object_edge_payload_rolls_back_without_review(conn: sqlite3.Connection) -> None:
+    source_a = _insert_source(conn, "Source A")
+    source_b = _insert_source(conn, "Source B")
+    doc_a = _insert_document(conn, source_a)
+    doc_b = _insert_document(conn, source_b)
+    _insert_entity(conn, doc_a, "Shared Concept")
+    _insert_entity(conn, doc_b, "Shared Concept")
+    candidate_id = (await get_consolidation_candidates(_ctx(conn), limit=20))[0]["candidate_id"]
+
+    with pytest.raises(ToolError):
+        await store_enrichment(
+            _ctx(conn),
+            candidate_id=candidate_id,
+            edges=["not-an-object"],  # type: ignore[list-item]
+        )
+
+    assert not conn.in_transaction
+    assert conn.execute("SELECT COUNT(*) FROM edges").fetchone()[0] == 0
+    assert conn.execute("SELECT COUNT(*) FROM reviewed_pairs").fetchone()[0] == 0
+
+
+@pytest.mark.asyncio
 async def test_phase1_rejects_entity_id_from_another_chunk(conn: sqlite3.Connection) -> None:
     source_id = _insert_source(conn, "Source")
     doc_a = _insert_document(conn, source_id)

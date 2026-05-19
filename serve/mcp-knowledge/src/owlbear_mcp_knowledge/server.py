@@ -1200,6 +1200,20 @@ def _normalize_optional_read_limit(limit: int | None) -> int | None:
     return _normalize_read_limit(limit)
 
 
+def _normalize_enrichment_items(value: object, *, field_name: str) -> list[dict[str, Any]]:
+    """Validate MCP enrichment payload fields that must be lists of objects."""
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        msg = f"{field_name} must be a list of objects"
+        raise ToolError(msg)
+    for item in value:
+        if not isinstance(item, dict):
+            msg = f"{field_name} must be a list of objects"
+            raise ToolError(msg)
+    return value
+
+
 async def get_next_batch(ctx: Context, limit: int = 10) -> list[EnrichmentChunk]:
     """Atomically claim a batch of chunks ready for enrichment.
 
@@ -1287,13 +1301,13 @@ async def store_enrichment(
     app_ctx: AppContext = ctx.request_context.lifespan_context
     conn = app_ctx.conn
     now_iso = datetime.now(tz=UTC).isoformat()
-    edge_rows = edges or []
 
     if (chunk_id is None) == (candidate_id is None):
         msg = "provide exactly one of chunk_id or candidate_id"
         raise ToolError(msg)
 
     if chunk_id is None:
+        edge_rows = _normalize_enrichment_items(edges, field_name="edges")
         conn.execute("PRAGMA busy_timeout = 5000")
         conn.execute("BEGIN IMMEDIATE")
         try:
@@ -1312,14 +1326,16 @@ async def store_enrichment(
     conn.execute("PRAGMA busy_timeout = 5000")
     conn.execute("BEGIN IMMEDIATE")
     try:
+        entity_rows = _normalize_enrichment_items(entities, field_name="entities")
+        edge_rows = _normalize_enrichment_items(edges, field_name="edges")
         _persist_phase1_enrichment(
             conn,
             chunk_id=chunk_id,
-            entities=entities or [],
+            entities=entity_rows,
             edges=edge_rows,
             now_iso=now_iso,
         )
-    except (sqlite3.Error, ToolError, TypeError, ValueError):
+    except Exception:
         conn.rollback()
         conn.execute("BEGIN IMMEDIATE")
         try:
