@@ -12,6 +12,13 @@ External repos and resources studied during OwlBear development.
 
 No external sources — analysis based entirely on codebase static analysis of `refresh.py`, `ingest.py`, `fetcher.py`, `intake.py`, `content_safety.py`, `chunker.py`, and `document_store.py`.
 
+## ResolveModal Snapshot Guard (Task #1647)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| React docs — useState lazy initializer | <https://react.dev/reference/react/useState> | `useState(() => initialValue)` pattern — captures prop at mount, ignores subsequent prop changes | `.owlbear/research/resolve-modal-snapshot-guard.md` | 2026-05-20 |
+| Stack Overflow — modal data via State Hook | <https://stackoverflow.com/questions/74123582> | Community corroboration of useState initializer for modal snapshot isolation | `.owlbear/research/resolve-modal-snapshot-guard.md` | 2026-05-20 |
+
 ## Cockpit Visual Audit (Task #1534)
 
 | Source | URL | What | Where Used | Date |
