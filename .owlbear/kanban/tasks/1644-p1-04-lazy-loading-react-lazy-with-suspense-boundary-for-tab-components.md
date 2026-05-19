@@ -4,7 +4,7 @@ title: 'P1-04: Lazy loading — React.lazy() with Suspense boundary for tab comp
 status: review
 priority: important
 created: 2026-05-18T00:49:27.367267+02:00
-updated: 2026-05-19T09:30:59.397337+02:00
+updated: 2026-05-19T10:42:33.056837+02:00
 tags:
   - phase-1
   - scope:cockpit-web
@@ -174,3 +174,41 @@ Two test files needed because vi.mock(routes) for the Suspense test conflicts wi
 
 ### Commit
 - `d36dba01` — `feat: add lazy-loaded decisions route with suspense boundary (#1644, builder)`
+
+[[2026-05-19T10:16:53+02:00]]
+## Review Evidence
+- Verdict: FAIL
+- Route: todo
+- Summary: Builder evidence and direct inspection show the implementation satisfies the lazy-loading behavior, Suspense boundary, and build chunk split, but review cannot approve because adjacent durable route tests are stale and fail against the new lazy-route contract.
+
+| AC Line | Code Evidence | Test Evidence | Status |
+|---|---|---|---|
+| AC1 | `serve/cockpit/web/src/routes.ts:4`, `serve/cockpit/web/src/routes.ts:19`, `serve/cockpit/web/src/routes.ts:25`, `serve/cockpit/web/src/Shell.tsx:375`, `serve/cockpit/web/src/Shell.tsx:383` implement lazy `/decisions`, eager `/`, and the Suspense fallback. | quality-runner: `routes.lazy-loading_1644.test.tsx` PASS (2), `Shell.suspense-boundary_1644.test.tsx` PASS (1), `Shell.test.tsx` PASS including synchronous `/` proof at `serve/cockpit/web/src/__tests__/Shell.test.tsx:101`. | FAIL — the durable proof surface is inconsistent because two adjacent route tests still fail under the new contract. |
+| AC2 | Build artifact inspection shows `serve/cockpit/dist/assets/DecisionsPage-Drjp7AeY.js` and `serve/cockpit/dist/assets/index-BWngbxiX.js`. | quality-runner: `serve/cockpit/web/src/__tests__/routes.lazy-loading_1644.test.tsx` build check PASS. | PASS |
+
+- Blocking findings:
+| # | AC Line | Finding | Evidence | Route |
+|---|---|---|---|---|
+| 1 | AC1 | The durable `routeConfig` contract test still requires every `component` value to be a callable function, which is incompatible with `React.lazy` and now fails on the exported config. | quality-runner failure at `serve/cockpit/web/src/__tests__/routes_1639.test.tsx:49` (`expected 'object' to be 'function'`); implementation at `serve/cockpit/web/src/routes.ts:4` and `serve/cockpit/web/src/routes.ts:25`. | todo |
+| 2 | AC1 | The real-route `/decisions` integration test still assumes synchronous rendering and now fails against the Suspense-based lazy route. | quality-runner failure at `serve/cockpit/web/src/__tests__/Shell.decisions-integration_1639.test.tsx:61` (`Unable to find an element by: [data-testid="decisions-page"]`); lazy route rendered under Suspense at `serve/cockpit/web/src/Shell.tsx:375` and `serve/cockpit/web/src/Shell.tsx:383`. | todo |
+
+### Required Follow-up
+| # | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|----------------|---------|----------|
+| 1 | test-writer | Update the durable `routeConfig` contract test to accept `React.lazy` for non-default routes while still proving `/` remains eager. | `serve/cockpit/web/src/__tests__/routes_1639.test.tsx` | quality-runner failure at `serve/cockpit/web/src/__tests__/routes_1639.test.tsx:49`; `serve/cockpit/web/src/routes.ts:4`, `serve/cockpit/web/src/routes.ts:19`, `serve/cockpit/web/src/routes.ts:25` |
+| 2 | test-writer | Update the real `/decisions` integration test to await lazy route resolution and keep proving Shell wires the real `routeConfig` entry to DecisionsPage. | `serve/cockpit/web/src/__tests__/Shell.decisions-integration_1639.test.tsx` | quality-runner failure at `serve/cockpit/web/src/__tests__/Shell.decisions-integration_1639.test.tsx:61`; `serve/cockpit/web/src/Shell.tsx:375`, `serve/cockpit/web/src/Shell.tsx:383` |
+
+## Observations
+- `serve/cockpit/web/src/__tests__/Shell.test.tsx` still passes, including the `/` loading-indicator check at `serve/cockpit/web/src/__tests__/Shell.test.tsx:101`, so the eager home-route behavior remains intact.
+- Build artifact inspection matches AC2: `serve/cockpit/dist/assets/` currently contains a dedicated `DecisionsPage` chunk and the main `index` chunk.
+
+[[2026-05-19T10:42:33+02:00]]
+## Test-Writer Notes
+- Retry: updated 2 stale durable tests from task #1639 that broke under the lazy-loading contract introduced by #1644.
+- `routes_1639.test.tsx`: replaced `typeof entry.component === 'function'` (all-entries check) with two targeted tests:
+  - Proves `/` (KanbanBoard) is an eager non-lazy callable function (checks `$$typeof !== Symbol.for('react.lazy')`).
+  - Proves all entries are renderable (defined and truthy), accepting both eager functions and `React.lazy` objects.
+- `Shell.decisions-integration_1639.test.tsx`: made the happy-path integration test async, wrapping render in `act(async)` and asserting via `waitFor` to await Suspense resolution before checking `data-testid=\"decisions-page\"`.
+- Quality-runner: 15 passed, 0 failed, ESLint clean.
+- Builder skip: test-only retry — all tests green against current impl.
+- Commit: `ff1b058f` — `test: fix stale route-contract and decisions-integration tests for lazy-loading (#1644, test-writer)`

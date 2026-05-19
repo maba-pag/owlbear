@@ -1,10 +1,10 @@
 ---
 id: 1643
 title: 'P1-03: Route-conditional sidecar — suppress sidecar DOM on non-kanban routes'
-status: todo
+status: in-progress
 priority: needed
 created: 2026-05-18T00:49:27.343819+02:00
-updated: 2026-05-19T09:43:37.837179+02:00
+updated: 2026-05-19T10:25:15.193864+02:00
 tags:
   - phase-1
   - scope:cockpit-web
@@ -153,3 +153,16 @@ N/A — client-side conditional rendering. React Router handles unknown routes (
 - Challenger requested reconsider because there is a coherent indirect evidence chain. I retained FAIL after narrowing the issue to AC3 regression proof only, not implementation correctness.
 - Code-reader cross-check found no blocking implementation defects in AC1-AC3 and agreed the correct route is todo.
 - Non-blocking: no scoped test exercises a route with hasSidecar explicitly set to true. Current code treats true and unset identically at serve/cockpit/web/src/Shell.tsx:208, so this is lower risk than the AC3 gap.
+
+[[2026-05-19T10:25:15+02:00]]
+## Test-Writer Notes
+- Retry: added 2 CSS regression tests for reviewer AC3 gap (finding #1 from Review Evidence).
+- Test file: serve/cockpit/web/src/__tests__/Shell.sidecar-conditional_1643.test.tsx
+- New tests added to: TestFromAC_SidecarConditional
+- New tests (2):
+  - `ac3 css-columns` — reads Shell.css, asserts `.shell[data-no-sidecar]` sets `--shell-columns` to `var(--shell-rail-width) minmax(0, 1fr)` (2 columns, no sidecar). Fails if block removed or changed to 3 columns.
+  - `ac3 css-no-sidecar-area` — reads Shell.css, asserts `.shell[data-no-sidecar]` grid-template-areas excludes `sidecar` region. Fails if sidecar area re-added.
+- Both new tests PASS — implementation already covers them (Shell.css lines 306-312 are in place).
+- Pre-existing regression: ac2 happy remove + ac2 edge preserve-collapsed now fail with "expected <aside ...> to be null" — AC2 was marked PASS in the reviewer's evidence table (Shell.sidecar-conditional_1643.test.tsx:82-114), so this is a regression that emerged between the review verdict and the retry assignment. The builder must investigate and resolve the AC2 regression in addition to the now-passing CSS coverage.
+- Lint: clean (ESLint 0 violations, pre-commit passed).
+- Commit: 229b1c1c (test: add AC3 CSS regression tests for no-sidecar grid contract (#1643, test-writer))

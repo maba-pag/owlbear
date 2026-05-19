@@ -1,10 +1,10 @@
 ---
 id: 1640
 title: 'P2-05: Pydantic response model for GET /api/decisions/pending'
-status: docs
+status: archived
 priority: important
 created: 2026-05-18T00:49:02.493590+02:00
-updated: 2026-05-19T09:28:53.565843+02:00
+updated: 2026-05-19T10:48:39.405095+02:00
 tags:
   - phase-2
   - scope:cockpit
@@ -33,7 +33,7 @@ proof_bundle: behavioral
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 Brief: see parent #1638 and `.owlbear/briefs/draft-cockpit-decisions-tab/brief.md`
@@ -315,3 +315,53 @@ Precedent for direct-call isinstance assertion exists at tests/test_cockpit_even
 ## Observations
 - Durable API coverage continues to corroborate the route contract for field set, malformed/non-pending exclusion, body/body_preview behavior, and empty/missing-directory response shape at `tests/test_cockpit_decisions_api.py:277`, `tests/test_cockpit_decisions_api.py:308`, `tests/test_cockpit_decisions_api.py:336`, `tests/test_cockpit_decisions_api.py:357`, and `tests/test_cockpit_decisions_api.py:364`.
 - Editor diagnostics are clean for the reviewed source and test files (`serve/cockpit/src/owlbear_cockpit/routes/decisions.py`, `tests/test_cockpit_decisions_pydantic_1640.py`, `tests/test_cockpit_decisions_api.py`).
+
+[[2026-05-19T10:08:39+02:00]]
+## Docs Gate
+
+**Verdict: PASS**
+
+### Checklist
+
+| Item | Result | Evidence |
+|------|--------|----------|
+| README Verification | UPDATED | `serve/cockpit/README.md` Decisions API table: `GET /api/decisions/pending` row updated to document `task_id (int)` coercion and malformed-item exclusion via `ValidationError`. Both behaviors added by this task were absent from the prior description. Layer 1 (grep) confirmed no removed symbols/flags orphaned. Layer 2 (LLM comparison) confirmed description now matches implementation. |
+| External Attribution | N/A | No external sources used; mechanical replication of existing cockpit `response_model=` pattern. |
+| Research Doc | LINKED | Research doc `.owlbear/research/1640-pydantic-decisions-pending.md` exists and is linked from task body. |
+| Deletion Detection | N/A | No symbols, commands, or flags removed by this task. API JSON shape unchanged; field set identical. |
+
+### Files Updated
+- `serve/cockpit/README.md` — `GET /api/decisions/pending` row updated (commit `4dbc9a6b`)
+
+### Scratch Cleanup
+- No `1640-*` scratch files found.
+
+[[2026-05-19T10:48:39+02:00]]
+## Audit
+
+### Regression Detection
+Task-scoped tests: 101 passed (13 task + 88 module). 27 cockpit-domain failures in `test_cockpit_mutation_api.py` are pre-existing background debt (confirmed via git checkout to pre-task state — same AttributeError on `valid_transitions.return_value` mock). No task-caused regressions. Lint: clean (ruff).
+
+### Intent Verification
+Changed files: `serve/cockpit/src/owlbear_cockpit/routes/decisions.py`, `tests/test_cockpit_decisions_pydantic_1640.py`, `serve/cockpit/README.md`. All in cockpit backend domain. Implementation adds Pydantic response model with coercion and validation-exclusion — matches stated purpose. No extraneous scope.
+
+### Architect Quality
+Score: 3/5. Required 3 architecture review cycles: initial AC had incorrect HTTP 422 claim (no ResponseValidationError handler exists in cockpit) and compound AC1 that lacked discriminating proof specification for instance-return vs dict-return. Architect responded correctly to each rejection by refining rather than forcing workarounds, but the iteration cost was significant. Final AC set (4 lines) is specific, testable, and minimal.
+
+### Commit Integrity
+5 commits properly attributed:
+- `a957fc58` test-writer (initial failing tests)
+- `6ead5190` builder (feat: response models)
+- `d31a809b` builder (fix: typed response on empty dir)
+- `7bc5b32c` test-writer (AC4 instance-return proof)
+- `4dbc9a6b` doc-writer (README update)
+
+All deliverable files tracked in HEAD.
+
+### Deductions
+| Criterion | Deduction |
+|-----------|-----------|
+| AC quality score ≤ 3 | -.03 |
+
+### Confidence: 0.97
+### Action: ARCHIVE

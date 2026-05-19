@@ -1,10 +1,10 @@
 ---
 id: 1642
 title: 'P1-02: Nav-rail tab navigation — dynamic buttons from route config'
-status: todo
+status: review
 priority: needed
 created: 2026-05-18T00:49:27.319192+02:00
-updated: 2026-05-19T09:48:21.587000+02:00
+updated: 2026-05-19T10:24:22.599768+02:00
 tags:
   - phase-1
   - scope:cockpit-web
@@ -174,3 +174,25 @@ N/A — client-side nav rendering. No failure codepaths beyond React's own error
 | # | Target Agent | Action Required | File(s) | Evidence |
 |---|-------------|----------------|---------|----------|
 | 1 | test-writer | Strengthen task-local proof so at least one test fails against a manually hardcoded three-button nav and specifically proves nav buttons are derived from `routeConfig` entries, not just matched to the current mocked trio. | `serve/cockpit/web/src/__tests__/NavRailButtons_1642.test.tsx` | Review finding #1; current mock/assert pattern at `:29-37`, `:111`, `:152-155`, `:228-257`. |
+
+[[2026-05-19T10:24:22+02:00]]
+## Test-Writer Notes
+- Retry: added 4 falsifiability gate tests addressing reviewer finding #1. Builder skip: test-only retry, all 26 tests green.
+- Test file: `serve/cockpit/web/src/__tests__/NavRailButtons_1642.test.tsx`
+- New describe class: `AC1/AC3 — falsifiability gate: button count and surface track config entries` (nested in `TestFromAC_NavRailButtons`)
+- Tests added (4): happy/falsify × 4
+
+**What changed:**
+- Replaced static `vi.mock('../routes', () => ({ routeConfig: [...] }))` with a `vi.hoisted()` mutable array (`routeConfigMut`) exported via the same mock. Shell.tsx holds a reference to this array; in-place mutation is visible at render time.
+- Each falsifiability test mutates `routeConfigMut` to use novel entries (`sentinel-1642`, `gate-1642`, `extra-gate-1642`) that no hardcoded implementation would render, then restores via `afterEach`.
+
+**AC coverage gap closed:**
+| Finding | Test(s) | Why it falsifies hardcoded |
+|---------|---------|---------------------------|
+| AC1/AC3: 3-button mock matches what impl could hardcode | ac1 falsify (1-entry → 1 button) | Hardcoded 3-button nav yields 3 ≠ 1 |
+| AC1/AC3: 3-button mock matches what impl could hardcode | ac1 falsify (sentinel icon present) | Hardcoded nav has no sentinel-1642 button |
+| AC1/AC3: 3-button mock matches what impl could hardcode | ac3 falsify (4-entry → 4 buttons) | Hardcoded 3-button nav yields 3 ≠ 4 |
+| AC1/AC3: 3-button mock matches what impl could hardcode | ac3 falsify (gate-1642 navigates to /gate-test-1642) | Hardcoded nav has no gate-1642 button → navBtn throws |
+
+- Quality-runner: 26/26 passed, ESLint clean
+- Commit: 69b45761 (test: add falsifiability gate tests for nav-rail data-driven rendering (#1642, test-writer))
