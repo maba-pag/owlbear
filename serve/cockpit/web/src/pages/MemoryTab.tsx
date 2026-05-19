@@ -474,7 +474,7 @@ function MemoryTab(_props: KanbanBoardProps) {
       : []
 
     if (apiError?.status === 409) {
-      setEntryError(entry.id, 'Entry was modified - refreshing')
+      setEntryError(entry.id, 'Entry was modified — refreshing')
       void refetch()
       return
     }
