@@ -130,9 +130,9 @@ APPROVED #606 -> todo | Narrowed from 4-server scope to mcp-kanban only (other s
 |----|-------|--------|
 | AC1: _DEFAULT_KANBAN_DIR = Path(".owlbear/kanban") | test_default_kanban_dir_is_owlbear_dotdir, test_default_kanban_bin_reflects_new_dir, test_default_kanban_bin_not_bare_kanban_prefix, test_lifespan_yields_ctx_with_new_kanban_dir | 4 tests FAIL |
 | AC2: FileNotFoundError message updated | test_lifespan_error_message_names_new_path, test_lifespan_error_message_not_old_bare_kanban_path | 2 tests FAIL |
-| AC3: mcp.json no change needed | Verified by AC1 — no independent failing test (mcp.json already has no hardcoded KANBAN_BIN) | pass-through |
-| AC4: manual verification | Non-testable — manual server start check | pass-through |
-| AC5: existing tests pass | Builder gate — not test-writer scope | pass-through |
+| AC3: mcp.json no change needed | Verified by AC1 â€” no independent failing test (mcp.json already has no hardcoded KANBAN_BIN) | pass-through |
+| AC4: manual verification | Non-testable â€” manual server start check | pass-through |
+| AC5: existing tests pass | Builder gate â€” not test-writer scope | pass-through |
 
 DONE #606 -> in-progress | 6 tests, all FAIL
 
