@@ -44,9 +44,22 @@ describe('TestFromAC_RouteConfig', () => {
     }
   })
 
-  it('ac1 happy: component field is a callable ComponentType on every entry', () => {
+  it('ac1 happy: default route "/" component is an eager non-lazy callable function', () => {
+    const homeEntry = routeConfig.find((e) => e.path === '/')
+    expect(homeEntry?.component).toBeDefined()
+    // React.lazy() objects carry $$typeof === Symbol.for('react.lazy');
+    // eager components are plain functions that do not carry this symbol.
+    expect(
+      (homeEntry?.component as { $$typeof?: symbol })?.$$typeof,
+    ).not.toBe(Symbol.for('react.lazy'))
+    expect(typeof homeEntry?.component).toBe('function')
+  })
+
+  it('ac1 happy: all route component entries are renderable (defined and truthy)', () => {
     for (const entry of routeConfig) {
-      expect(typeof entry.component).toBe('function')
+      // Both eager functions and React.lazy objects are truthy and defined.
+      expect(entry.component).toBeDefined()
+      expect(entry.component).toBeTruthy()
     }
   })
 

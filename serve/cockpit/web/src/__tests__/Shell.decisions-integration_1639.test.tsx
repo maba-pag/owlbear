@@ -10,7 +10,8 @@
  * '../routes' is intentionally NOT mocked here.
  */
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { act } from 'react'
+import { render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
 import Shell from '../Shell'
@@ -54,11 +55,17 @@ function renderShell(route: string) {
 describe('TestFromAC_DecisionsIntegration', () => {
   // ── AC2 integration: real routeConfig → real DecisionsPage ───────────────
 
-  it('ac2 integration happy: real routeConfig wires /decisions to DecisionsPage testid', () => {
+  it('ac2 integration happy: real routeConfig wires /decisions to DecisionsPage testid', async () => {
     // If routeConfig["/decisions"].component were changed to any other component,
     // data-testid="decisions-page" would not appear and this test would fail.
-    renderShell('/decisions')
-    expect(screen.getByTestId('decisions-page')).not.toBeNull()
+    // DecisionsPage is now lazy-loaded under a <Suspense> boundary, so we must
+    // wait for React to resolve the dynamic import before asserting.
+    await act(async () => {
+      renderShell('/decisions')
+    })
+    await waitFor(() => {
+      expect(screen.getByTestId('decisions-page')).not.toBeNull()
+    })
   })
 
   it('ac2 integration boundary: decisions-page testid absent at / (path-specific routing)', () => {
