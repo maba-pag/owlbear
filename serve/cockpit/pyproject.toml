@@ -5,6 +5,7 @@ requires-python = ">=3.12.13"
 description = "OwlBear Cockpit — FastAPI backend for the kanban UI"
 dependencies = [
   "owlbear-kanban",
+  "owlbear-memory",
   "fastapi",
   "uvicorn",
   "pydantic",
@@ -25,3 +26,4 @@ cockpit = "owlbear_cockpit.main:run"
 
 [tool.uv.sources]
 owlbear-kanban = { workspace = true }
+owlbear-memory = { workspace = true }
