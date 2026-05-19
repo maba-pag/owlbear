@@ -8,8 +8,9 @@ AC coverage:
   - AC1: GET /api/memories → { entries: [...], parse_errors: int }, all 11 entry fields, all states
   - AC2: POST /api/memories/{id}/approve → 200 { entry }, 404/409/422 with MEM_ codes
   - AC3: POST /api/memories/{id}/edit → 200 { entry }, state transition, extra fields forbidden, errors
-  - AC4: POST /api/memories/{id}/delete → 200 { success: true }, hard/soft delete, errors
-  - AC5: Memory exception handlers in main.py use owlbear_memory.errors imports, MEM_ codes
+  - AC4: Edit route forwarding contract — per-field (title, scope_agents) + combined + positional args
+  - AC5: POST /api/memories/{id}/delete → 200 { success: true }, hard/soft delete, errors
+  - AC6: Memory exception handlers in main.py use owlbear_memory.errors imports, MEM_ codes
 """
 
 from typing import TYPE_CHECKING
@@ -501,12 +502,135 @@ class TestFromAC_EditMemory:
 
 
 # ---------------------------------------------------------------------------
-# AC4: POST /api/memories/{id}/delete
+# AC4 (new): Edit forwarding contract — positional args and per-field proof
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_EditForwardingContract:
+    """AC4: Edit route forwards (entry_id, fields, expected_updated_at) to engine.edit().
+
+    Proof requirements (architect-refined):
+    - each of the 5 fields individually reaches engine when sent
+    - combined multi-field request forwards all sent fields intact
+    - URL entry_id is engine call positional arg 0
+    - body expected_updated_at is engine call positional arg 2
+    """
+
+    def test_title_forwarded_to_engine_when_sent(self, client: TestClient, mock_engine: MagicMock) -> None:
+        """title field is forwarded to engine.edit() fields payload when included in request."""
+        updated_entry = MemoryEntry(
+            id=_ENTRY_ID,
+            title="New Title Value",
+            content="Some memory content.",
+            categories=[MemoryCategory.DOMAIN_KNOWLEDGE],
+            confidence=0.9,
+            state=MemoryState.CURATED,
+            scope_agents=[],
+            source_agent="test-agent",
+            created_at=_NOW,
+            updated_at=_NOW,
+            approved_at=None,
+        )
+        mock_engine.edit.return_value = updated_entry
+        response = client.post(
+            f"/api/memories/{_ENTRY_ID}/edit",
+            json={"expected_updated_at": _NOW, "title": "New Title Value"},
+        )
+        assert response.status_code == 200
+        call_fields = mock_engine.edit.call_args.args[1]
+        assert "title" in call_fields, "title was not forwarded to engine.edit() fields payload"
+        assert call_fields["title"] == "New Title Value"
+
+    def test_scope_agents_forwarded_to_engine_when_sent(self, client: TestClient, mock_engine: MagicMock) -> None:
+        """scope_agents field is forwarded to engine.edit() fields payload when included in request."""
+        updated_entry = MemoryEntry(
+            id=_ENTRY_ID,
+            title="Test Memory",
+            content="Some memory content.",
+            categories=[MemoryCategory.DOMAIN_KNOWLEDGE],
+            confidence=0.9,
+            state=MemoryState.CURATED,
+            scope_agents=["agent-x", "agent-y"],
+            source_agent="test-agent",
+            created_at=_NOW,
+            updated_at=_NOW,
+            approved_at=None,
+        )
+        mock_engine.edit.return_value = updated_entry
+        response = client.post(
+            f"/api/memories/{_ENTRY_ID}/edit",
+            json={"expected_updated_at": _NOW, "scope_agents": ["agent-x", "agent-y"]},
+        )
+        assert response.status_code == 200
+        call_fields = mock_engine.edit.call_args.args[1]
+        assert "scope_agents" in call_fields, "scope_agents was not forwarded to engine.edit() fields payload"
+        assert call_fields["scope_agents"] == ["agent-x", "agent-y"]
+
+    def test_combined_multi_field_payload_forwards_all_five_fields_intact(
+        self, client: TestClient, mock_engine: MagicMock
+    ) -> None:
+        """All 5 editable fields sent together are all forwarded intact to engine.edit()."""
+        updated_entry = MemoryEntry(
+            id=_ENTRY_ID,
+            title="Combined Title",
+            content="Combined content.",
+            categories=[MemoryCategory.PITFALL],
+            confidence=0.85,
+            state=MemoryState.CURATED,
+            scope_agents=["combined-agent"],
+            source_agent="test-agent",
+            created_at=_NOW,
+            updated_at=_NOW,
+            approved_at=None,
+        )
+        mock_engine.edit.return_value = updated_entry
+        response = client.post(
+            f"/api/memories/{_ENTRY_ID}/edit",
+            json={
+                "expected_updated_at": _NOW,
+                "title": "Combined Title",
+                "content": "Combined content.",
+                "categories": ["pitfall"],
+                "confidence": 0.85,
+                "scope_agents": ["combined-agent"],
+            },
+        )
+        assert response.status_code == 200
+        call_fields = mock_engine.edit.call_args.args[1]
+        assert call_fields.get("title") == "Combined Title", "title not forwarded in multi-field payload"
+        assert call_fields.get("content") == "Combined content.", "content not forwarded in multi-field payload"
+        assert call_fields.get("categories") == [MemoryCategory.PITFALL], "categories not forwarded"
+        assert call_fields.get("confidence") == 0.85, "confidence not forwarded"
+        assert call_fields.get("scope_agents") == ["combined-agent"], "scope_agents not forwarded"
+
+    def test_edit_positional_args_are_entry_id_fields_and_expected_updated_at(
+        self, client: TestClient, mock_engine: MagicMock
+    ) -> None:
+        """engine.edit() receives URL entry_id as arg[0] and body expected_updated_at as arg[2]."""
+        occ_token = "2026-01-15T12:00:00+00:00"
+        updated_entry = _make_entry(_ENTRY_ID_2, MemoryState.CURATED)
+        mock_engine.edit.return_value = updated_entry
+        response = client.post(
+            f"/api/memories/{_ENTRY_ID_2}/edit",
+            json={"expected_updated_at": occ_token, "title": "Any Title"},
+        )
+        assert response.status_code == 200
+        positional_args = mock_engine.edit.call_args.args
+        assert positional_args[0] == _ENTRY_ID_2, (
+            f"engine.edit() arg[0] must be the URL entry_id {_ENTRY_ID_2!r}, got {positional_args[0]!r}"
+        )
+        assert positional_args[2] == occ_token, (
+            f"engine.edit() arg[2] must be body expected_updated_at {occ_token!r}, got {positional_args[2]!r}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# AC5: POST /api/memories/{id}/delete
 # ---------------------------------------------------------------------------
 
 
 class TestFromAC_DeleteMemory:
-    """AC4: POST /api/memories/{id}/delete — hard/soft delete with { success: true } response."""
+    """AC5: POST /api/memories/{id}/delete — hard/soft delete with { success: true } response."""
 
     def test_delete_returns_200_with_success_true(self, client: TestClient, mock_engine: MagicMock) -> None:
         """Happy path: delete returns 200 with exactly { success: true }."""
@@ -595,7 +719,7 @@ class TestFromAC_DeleteMemory:
 
 
 # ---------------------------------------------------------------------------
-# AC5: Memory exception handlers in main.py — qualified imports, MEM_ codes
+# AC6: Memory exception handlers in main.py — qualified imports, MEM_ codes
 # ---------------------------------------------------------------------------
 
 

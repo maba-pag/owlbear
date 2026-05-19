@@ -832,6 +832,70 @@ class TestFromAC_CurateMemoryHint:
 
 
 # ---------------------------------------------------------------------------
+# AC5 (1669 regression): inherited-scope pending→curated adapter path
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_InheritedScopePendingPromotion:
+    """AC5 (#1669): adapter forwards inherited scope_agents to engine.edit() for pending→curated.
+
+    Regression guard for the _update_entry() fix in tools.py (commit 35af4181):
+    calling curate_memory with no scope_agents arg on a pending entry that already
+    has stored scope_agents must promote the entry to curated and preserve scope.
+
+    Without the fix, 'scope_agents' was missing from the engine.edit() payload,
+    so engine.edit() saw no scope and left the entry pending instead of promoting it.
+    """
+
+    @pytest.mark.asyncio
+    async def test_curate_memory_pending_with_stored_scope_promotes_without_explicit_scope_arg(
+        self, tmp_path: Path
+    ) -> None:
+        """curate_memory on pending entry with stored scope promotes to curated without re-supplying scope.
+
+        Setup: pending entry with scope_agents=['researcher'] already stored.
+        Call: curate_memory(ctx, entry_id=..., title="Title update only") — no scope_agents arg.
+        Assert: result state == 'curated' AND scope_agents == ['researcher'].
+        """
+        engine = MemoryEngine(memory_dir=tmp_path)
+        entry = _make_entry(n=1, state="pending", scope_agents=["researcher"])
+        _seed_entry(engine, entry)
+        ctx = _make_ctx(engine)
+
+        result = await curate_memory(ctx, entry_id=entry.id, title="Title update only")
+
+        assert result["state"] == "curated", (
+            f"Pending entry with stored scope must be promoted to curated when only title is changed, "
+            f"got state={result['state']!r}"
+        )
+        assert result["scope_agents"] == ["researcher"], (
+            f"Promoted entry must preserve inherited scope_agents=['researcher'], "
+            f"got scope_agents={result['scope_agents']!r}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_curate_memory_pending_inherited_scope_not_blanked_by_other_field_edit(self, tmp_path: Path) -> None:
+        """curate_memory editing only confidence on a pending entry with stored scope promotes correctly.
+
+        Confirms the inherited-scope path is exercised for any field edit, not just title.
+        """
+        engine = MemoryEngine(memory_dir=tmp_path)
+        entry = _make_entry(n=2, state="pending", scope_agents=["researcher"])
+        _seed_entry(engine, entry)
+        ctx = _make_ctx(engine)
+
+        result = await curate_memory(ctx, entry_id=entry.id, confidence=0.9)
+
+        assert result["state"] == "curated", (
+            f"Pending entry with stored scope must promote when editing confidence without scope_agents arg, "
+            f"got state={result['state']!r}"
+        )
+        assert result["scope_agents"] == ["researcher"], (
+            f"Promoted entry scope_agents must equal stored value ['researcher'], got {result['scope_agents']!r}"
+        )
+
+
+# ---------------------------------------------------------------------------
 # AC6 (td:2): delete_memory returns correct hint for hard-delete vs soft-delete
 # ---------------------------------------------------------------------------
 
