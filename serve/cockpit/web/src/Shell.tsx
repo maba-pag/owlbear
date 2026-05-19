@@ -314,7 +314,7 @@ function Shell() {
               <HealthBadge items={normalizedItems} />
             ) : null}
             {scanError ? (
-              <span className="text-xs text-[var(--p-color-error)] whitespace-nowrap" data-testid="scan-error" data-health="error" role="status">
+              <span className="text-xs text-error whitespace-nowrap" data-testid="scan-error" data-health="error" role="status">
                 Scan failed: {scanError.message}
               </span>
             ) : null}
@@ -389,7 +389,7 @@ function Shell() {
           </div>
 
           {pendingDRError ? (
-            <span className="text-xs text-[var(--p-color-error)]" data-testid="dr-polling-error" role="status">
+            <span className="text-xs text-error" data-testid="dr-polling-error" role="status">
               {pendingDRError.message}
             </span>
           ) : null}

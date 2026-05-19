@@ -97,7 +97,7 @@ export function Column({
       className={[
         'column',
         'flex min-w-[var(--kanban-column-min)] flex-col overflow-hidden rounded-md border border-contrast-low bg-surface',
-        isDragOver && isValidDragTarget ? 'bg-[var(--p-color-frosted)]' : '',
+        isDragOver && isValidDragTarget ? 'bg-frosted' : '',
       ].join(' ')}
       data-column={status}
       data-density={density}
@@ -120,13 +120,13 @@ export function Column({
     >
       <header className="flex min-h-11 shrink-0 items-center justify-between border-b border-contrast-low px-static-sm text-[0.8125rem] font-semibold capitalize">
         <span>{displayStatus}</span>
-        <span className="rounded-full border border-contrast-low bg-[var(--p-color-frosted-soft)] px-2 py-0.5 text-xs font-semibold" data-testid="column-count">{tasks.length}</span>
+        <span className="rounded-full border border-contrast-low bg-frosted-soft px-2 py-0.5 text-xs font-semibold" data-testid="column-count">{tasks.length}</span>
       </header>
       <div
         ref={bodyRef}
         className={[
           'column-body relative flex min-h-0 min-w-0 flex-1 flex-col gap-static-sm overflow-y-auto p-static-sm',
-          density === 'empty' || density === 'sparse' ? 'bg-[var(--p-color-frosted-soft)]' : 'bg-canvas',
+          density === 'empty' || density === 'sparse' ? 'bg-frosted-soft' : 'bg-canvas',
         ].join(' ')}
         data-testid="column-body"
       >

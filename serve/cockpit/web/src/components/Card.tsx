@@ -108,12 +108,12 @@ export function Card({
 
   // Compute border-left signal color
   const signalBorderClass =
-    signal === 'blocked' ? 'border-l-[var(--p-color-error)]' :
-    signal === 'dr-pending' ? 'border-l-[var(--p-color-warning)]' :
+    signal === 'blocked' ? 'border-l-error' :
+    signal === 'dr-pending' ? 'border-l-warning' :
     signal === 'claimed' ? 'border-l-[var(--custom-signal-claimed)]' :
-    signal === 'deps-unmet' ? 'border-l-[var(--p-color-contrast-medium)]' :
-    signal === 'ready' && task.priority === 'critical' ? 'border-l-[var(--p-color-error)]' :
-    signal === 'ready' && (task.priority === 'needed' || task.priority === 'important') ? 'border-l-[var(--p-color-warning)]' :
+    signal === 'deps-unmet' ? 'border-l-contrast-medium' :
+    signal === 'ready' && task.priority === 'critical' ? 'border-l-error' :
+    signal === 'ready' && (task.priority === 'needed' || task.priority === 'important') ? 'border-l-warning' :
     'border-l-contrast-medium'
 
   return (
@@ -142,10 +142,10 @@ export function Card({
           'px-static-sm pb-static-sm pt-2.5 text-xs leading-normal',
           'cursor-pointer shadow-md',
           'transition-[box-shadow,background-color,border-color] duration-sm',
-          'hover:-translate-y-0.5 hover:bg-[var(--p-color-frosted)] hover:shadow-lg',
+          'hover:-translate-y-0.5 hover:bg-frosted hover:shadow-lg',
           'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]',
           signalBorderClass,
-          selected ? 'shadow-[inset_0_0_0_1px_var(--p-color-success),var(--p-shadow-sm)] bg-[var(--p-color-success-frosted)]' : '',
+          selected ? 'inset-ring-1 inset-ring-success shadow-sm bg-success-frosted' : '',
           dragging ? 'opacity-50' : '',
         ].join(' ')}
         draggable={true}

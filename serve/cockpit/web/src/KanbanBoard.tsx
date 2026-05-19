@@ -281,7 +281,7 @@ function KanbanBoardContent({
       data-testid="kanban-board"
     >
       <section className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-md border border-contrast-low bg-surface shadow-sm" aria-labelledby="kanban-board-title">
-        <header className="grid min-h-16 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-static-md border-b border-contrast-low bg-[var(--p-color-frosted-soft)] px-static-md py-static-sm">
+        <header className="grid min-h-16 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-static-md border-b border-contrast-low bg-frosted-soft px-static-md py-static-sm">
           <div className="flex min-w-0 flex-col gap-0.5">
             <span className="text-xs font-semibold uppercase leading-tight text-contrast-high">Kanban</span>
             <h2 id="kanban-board-title" className="m-0 text-lg font-semibold leading-tight text-primary">Pipeline</h2>
@@ -317,7 +317,7 @@ function KanbanBoardContent({
               {filterAnnouncement}
             </span>
             {hasActiveFilters ? (
-              <span className="whitespace-nowrap rounded-full border border-contrast-low bg-[var(--p-color-frosted-soft)] px-2 py-0.5 text-xs font-semibold leading-normal text-primary" data-testid="filter-result-count">
+              <span className="whitespace-nowrap rounded-full border border-contrast-low bg-frosted-soft px-2 py-0.5 text-xs font-semibold leading-normal text-primary" data-testid="filter-result-count">
                 {filteredTasks.length} / {tasks.length} tasks
               </span>
             ) : null}
@@ -398,7 +398,7 @@ function KanbanBoardContent({
               data-status={target}
               role="menuitem"
               tabIndex={-1}
-              className="block w-full cursor-pointer px-3 py-2 text-left text-sm hover:bg-[var(--p-color-frosted)]"
+              className="block w-full cursor-pointer px-3 py-2 text-left text-sm hover:bg-frosted"
               onKeyDown={(event) => {
                 if (event.key === 'Enter' || event.key === ' ') {
                   event.preventDefault()
@@ -440,7 +440,7 @@ function KanbanBoardContent({
           {(board.valid_transitions[contextMenu.taskStatus] ?? []).includes('archived') ? null : (
             <div
               role="menuitem"
-              className="block w-full cursor-pointer px-3 py-2 text-left text-sm hover:bg-[var(--p-color-frosted)]"
+              className="block w-full cursor-pointer px-3 py-2 text-left text-sm hover:bg-frosted"
               onClick={() =>
                 void handleTransitionClick(
                   contextMenu.taskId,
