@@ -19,6 +19,7 @@ AC coverage:
 from __future__ import annotations
 
 import inspect
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import patch
 
@@ -682,6 +683,27 @@ class TestFromAC_Save:
         )
 
         assert result.scope_agents == ["builder", "reviewer"]
+
+    def test_save_timestamps_fall_within_wall_clock_bound(self, tmp_path: Path) -> None:
+        """Boundary: created_at and updated_at are within before/after UTC wall-clock bound."""
+        engine = MemoryEngine(memory_dir=tmp_path)
+
+        before = datetime.now(UTC)
+        result = engine.save(
+            title="Wall-clock Bound",
+            content="Content",
+            categories=["domain-knowledge"],
+            confidence=0.9,
+            source_agent="test-agent",
+            scope_agents=[],
+        )
+        after = datetime.now(UTC)
+
+        parsed_created_at = datetime.fromisoformat(result.created_at)
+        parsed_updated_at = datetime.fromisoformat(result.updated_at)
+
+        assert before <= parsed_created_at <= after
+        assert before <= parsed_updated_at <= after
 
 
 # ---------------------------------------------------------------------------
