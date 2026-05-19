@@ -24,6 +24,7 @@ import RepairPanel from './components/RepairPanel'
 import ResolveModal from './components/ResolveModal'
 import ThemeToggle from './components/ThemeToggle'
 import { useBoardState, useDRState, useTaskSelection } from './hooks/CockpitProvider'
+import { usePendingMemoryCount } from './hooks/usePendingMemoryCount'
 import { type ScanItem as ScanPollingItem } from './hooks/useScanPolling'
 import { routeConfig } from './routes'
 
@@ -83,6 +84,7 @@ function Shell() {
     setSelectedDRId,
     selectedDR,
   } = useDRState()
+  const { count: pendingMemoryCount } = usePendingMemoryCount()
   const { selectedTaskId, selectedTask, selectedTaskError, select, clear, update } = useTaskSelection()
   const selectedTaskHeading = selectedTask
     ? `${selectedTask.title || `#${selectedTask.id}`}`
@@ -295,15 +297,15 @@ function Shell() {
             <span
               className={[
                 'size-2.5 flex-none rounded-full',
-                statusHealth === 'red' ? 'bg-[var(--p-color-error)] shadow-[0_0_0_3px_var(--p-color-error-low)]' :
-                statusHealth === 'yellow' ? 'bg-[var(--p-color-warning)] shadow-[0_0_0_3px_var(--p-color-warning-low)]' :
-                'bg-[var(--p-color-success)] shadow-[0_0_0_3px_var(--p-color-success-low)]',
+                statusHealth === 'red' ? 'bg-error ring-3 ring-error-low' :
+                statusHealth === 'yellow' ? 'bg-warning ring-3 ring-warning-low' :
+                'bg-success ring-3 ring-success-low',
               ].join(' ')}
               data-testid="traffic-light"
               data-health={statusHealth}
             />
             <span
-              className="whitespace-nowrap rounded-full border border-contrast-low bg-[var(--p-color-frosted-soft)] px-2 py-0.5 text-xs font-semibold"
+              className="whitespace-nowrap rounded-full border border-contrast-low bg-frosted-soft px-2 py-0.5 text-xs font-semibold"
               data-testid="task-count"
             >
               {tasks.length} tasks
@@ -349,7 +351,7 @@ function Shell() {
               Maintenance
             </PButtonPure>
             {normalizedItems.length > 0 ? (
-              <span className="absolute -top-1 -right-1 inline-flex size-4 items-center justify-center rounded-full bg-[var(--p-color-warning)] text-[10px] font-semibold leading-none border border-surface" aria-hidden="true">
+              <span className="absolute -top-1 -right-1 inline-flex size-4 items-center justify-center rounded-full bg-warning text-[10px] font-semibold leading-none border border-surface" aria-hidden="true">
                 {normalizedItems.length}
               </span>
             ) : null}
@@ -409,8 +411,9 @@ function Shell() {
             {routeConfig.map((route) => {
               const isActive = normalizedPathname === normalizeRoutePath(route.path)
               const isDecisions = route.icon === 'decisions'
-              const badgeCount = isDecisions ? pendingDRCount : 0
-              const label = isDecisions && badgeCount > 0
+              const isMemory = route.icon === 'memory'
+              const badgeCount = isDecisions ? pendingDRCount : isMemory ? pendingMemoryCount : 0
+              const label = badgeCount > 0
                 ? `${route.label} (${badgeCount} pending)`
                 : route.label
               return (
@@ -430,7 +433,7 @@ function Shell() {
                     aria-hidden="true"
                   />
                   {route.label}
-                  {isDecisions && badgeCount > 0 ? (
+                  {badgeCount > 0 ? (
                     <span
                       data-testid="nav-badge"
                       className="ml-static-xs inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-error px-1 text-[0.65rem] font-bold leading-none text-canvas"
@@ -502,7 +505,7 @@ function Shell() {
               'inline-flex h-18 w-8 items-center justify-center',
               'rounded-l-full border-r-0 bg-surface shadow-sm',
               'text-primary transition-all duration-sm',
-              'hover:bg-[var(--p-color-frosted-soft)] hover:shadow-md hover:-translate-x-0.5 hover:-translate-y-1/2',
+              'hover:bg-frosted-soft hover:shadow-md hover:-translate-x-0.5 hover:-translate-y-1/2',
               'max-md:hidden',
             ].join(' ')}
             data-testid="sidecar-collapse"
