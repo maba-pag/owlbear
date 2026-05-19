@@ -1,10 +1,10 @@
 ---
 id: 1642
 title: 'P1-02: Nav-rail tab navigation — dynamic buttons from route config'
-status: backlog
+status: archived
 priority: needed
 created: 2026-05-18T00:49:27.319192+02:00
-updated: 2026-05-19T17:22:03.206961+02:00
+updated: 2026-05-19T18:42:28.879312+02:00
 tags:
   - phase-1
   - scope:cockpit-web
@@ -22,8 +22,8 @@ ac:
 proof_bundle: smoke+challenge
 blocked: false
 block_reason:
-claimed_at: 2026-05-19T17:22:03.206961+02:00
-archival_reason:
+claimed_at:
+archival_reason: completed
 archival_refs: []
 ---
 Brief: see parent #1638 and `.owlbear/briefs/draft-cockpit-decisions-tab/brief.md`
@@ -322,3 +322,68 @@ The behavioral bundle was appropriate at planner time when implementation shape 
 | # | Target Agent | Action Required | File(s) | Evidence |
 |---|-------------|----------------|---------|----------|
 | 1 | architect | Rework the AC2 contract and re-dispatch implementation/proof so nav current-state uses the same normalized route identity as the rest of `Shell`, and require task-local proof for a slash-normalized configured route before the next review cycle. | `serve/cockpit/web/src/Shell.tsx`, `serve/cockpit/web/src/__tests__/NavRailButtons_1642.test.tsx` | Review findings #1-2; normalized-path mismatch at `serve/cockpit/web/src/Shell.tsx:95-99`, `:275-278`, `:456-464`; missing proof at `serve/cockpit/web/src/__tests__/NavRailButtons_1642.test.tsx:165-224`, `:243-254`. |
+
+[[2026-05-19T18:37:16+02:00]]
+## Audit
+### Regression Detection
+- quality-runner mode full: pytest 5206 passed / 252 failed; vitest 2235 passed / 37 failed; eslint 0, ruff 0
+- All failures pre-existing and unattributable to #1642: Python failures in test_cockpit_view.py (CockpitView), test_server.py (StatusNames), test_engine_accessor_migration.py (accessor paths) — kanban engine code; frontend failures in Card.signal.test.tsx and Card.visual-treatment.test.tsx — Card component tests introduced by unrelated commit e3bb2cd9
+- Verified Card tests passed 58/58 against pre-#1642 state; failures caused by concurrent Card/KanbanBoard UI rework in e3bb2cd9
+- Task-specific tests (NavRailButtons_1642 27/27, Shell.test 18/18) PASS
+- Regression verdict: PASS
+
+### Intent Verification
+- scope alignment: PASS (all changed files in serve/cockpit/web/ — Shell.tsx, Shell.css, NavRailButtons_1642.test.tsx, routes.ts, cockpit README; matches scope:cockpit-web tag)
+- purpose match: PASS (implements dynamic nav-rail buttons from route config with useNavigate/useLocation hooks and aria-current; matches stated AC purpose)
+- extraneous scope: none
+- boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 4/5
+- AC specificity: good — behavioral ACs with validation gate (AC3)
+- Edge case gap: normalization case not anticipated in original AC; discovered through review cycle
+- Proof-bundle de-escalation well-reasoned (898-line shared component; consolidation test #1649 designated)
+- Design direction helpful (research doc + #1639 pattern reuse)
+
+### Commit Integrity
+- upstream commit presence: PASS (f2c36663 builder, 2ea77dbd + 69b45761 test-writer, 6f65364c doc-writer — all committed)
+- kanban commit packaging: pending (this step)
+- Process observation: AC2 normalization fix landed in bulk commit e3bb2cd9 without #1642 attribution. Fix IS committed and reviewer-verified; test for it IS in attributed commit 69b45761. Attribution gap only, not a missing-work gap.
+
+### Deduction Breakdown
+- No deductions applied
+- Regression failures: not attributable to #1642 (pre-existing) — 0
+- Intent mismatch: none — 0
+- Lint violations: none — 0
+- AC quality score 4 (> 3) — 0
+- Reviewer evidence section present with PASS verdict and full AC table — 0
+- Evidence integrity: normalization fix committed (present in e3bb2cd9), reviewer independently verified — 0
+
+### Confidence: 1.00
+### Action: archive
+
+[[2026-05-19T18:42:28+02:00]]
+## Audit
+### Regression Detection
+- quality-runner mode full: pytest 5206 passed / 252 failed; vitest 2235 passed / 37 failed; eslint 0, ruff 0
+- All failures pre-existing and unattributable to #1642: Python in test_cockpit_view (CockpitView), test_server (StatusNames), test_engine_accessor_migration (accessor paths); frontend in Card.signal.test.tsx and Card.visual-treatment.test.tsx introduced by unrelated commit e3bb2cd9
+- Verified Card tests passed 58/58 pre-#1642; task-specific tests (NavRailButtons_1642 27/27, Shell.test 18/18) PASS
+- Regression verdict: PASS
+
+### Intent Verification
+- scope alignment: PASS (all changes in serve/cockpit/web/ matching scope:cockpit-web)
+- purpose match: PASS (nav-rail dynamic buttons from route config with useNavigate/useLocation)
+- extraneous scope: none
+- boundary check: function-level behavior verification deferred to reviewer
+
+### Architect Quality: 4/5
+AC specific and verifiable with validation gate. Minor gap: normalization case not anticipated originally but discovered and resolved through review cycles. Proof-bundle de-escalation well-reasoned.
+
+### Commit Integrity
+- upstream commit presence: PASS (f2c36663 builder, 2ea77dbd + 69b45761 test-writer, 6f65364c doc-writer)
+- Process note: AC2 normalization fix in bulk commit e3bb2cd9 (unattributed) but committed and reviewer-verified
+- kanban commit packaging: pending
+
+### Deduction Breakdown
+No deductions. All pre-existing failures unrelated to task.
+### Confidence: 1.00
+### Action: archive
