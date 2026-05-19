@@ -34,6 +34,7 @@ Open VS Code with `code .`.
 | `serve/cockpit/`          | Steering Cockpit — browser UI for kanban board management |
 | `serve/knowledge/`        | Knowledge engine (graph + vector)                      |
 | `serve/kanban/`           | Kanban engine (transport-free; used by mcp-kanban)     |
+| `serve/memory/`           | Memory primitives — models, errors, and storage (used by mcp-memory) |
 | `serve/mcp-browser/`      | MCP server for authenticated web content fetching      |
 | `serve/mcp-kanban/`       | MCP server wrapping kanban operations                  |
 | `serve/mcp-knowledge/`    | MCP server exposing knowledge operations               |
