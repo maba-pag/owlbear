@@ -510,14 +510,17 @@ describe('TestFromAC_MemoryEditForm', () => {
 
   it('ac3 happy: edit form contains a title input field', async () => {
     const container = await renderWithEntries([makeEntry()])
-    await openAccordion(container)
+    const accordion = await openAccordion(container)
+    // Accordion must open first — fails in RED (no p-accordion exists)
+    expect(accordion).not.toBeNull()
     const editBtn = container.querySelector('[data-testid="memory-edit-btn"]')
-    if (editBtn) {
-      await act(async () => { fireEvent.click(editBtn) })
-      await flush()
-    }
+    expect(editBtn).not.toBeNull()
+    await act(async () => { fireEvent.click(editBtn!) })
+    await flush()
     const form = container.querySelector('[data-testid="memory-edit-form"]')
-    expect(form?.querySelector('[name="edit-title"]') ?? form?.querySelector('[data-testid="edit-title"]')).not.toBeNull()
+    expect(form).not.toBeNull()
+    const titleField = form!.querySelector('[name="edit-title"]') ?? form!.querySelector('[data-testid="edit-title"]')
+    expect(titleField).not.toBeNull()
   })
 
   it('ac3 happy: edit form content field has a character counter with 1024 limit', async () => {
@@ -607,17 +610,17 @@ describe('TestFromAC_MemoryEditForm', () => {
     let container!: HTMLElement
     await act(async () => { container = renderMemoryTab().container })
     await flush()
-    await openAccordion(container)
+    // Accordion must open — fails in RED (no p-accordion)
+    const accordion = await openAccordion(container)
+    expect(accordion).not.toBeNull()
     const editBtn = container.querySelector('[data-testid="memory-edit-btn"]')
-    if (editBtn) {
-      await act(async () => { fireEvent.click(editBtn) })
-      await flush()
-    }
+    expect(editBtn).not.toBeNull()
+    await act(async () => { fireEvent.click(editBtn!) })
+    await flush()
     const saveBtn = container.querySelector('[data-testid="memory-edit-save-btn"]')
-    if (saveBtn) {
-      await act(async () => { fireEvent.click(saveBtn) })
-    }
-    // While mutation is in-flight, the entry title must still be in DOM
+    expect(saveBtn).not.toBeNull()
+    await act(async () => { fireEvent.click(saveBtn!) })
+    // While mutation is in-flight: entry title must still be in DOM
     expect(container.querySelector('[data-testid="memory-entry-title"]')).not.toBeNull()
     // No list-level loading indicator
     expect(container.querySelector('[data-testid="memory-loading"]')).toBeNull()
