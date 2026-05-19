@@ -10,8 +10,26 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, fireEvent } from '@testing-library/react'
 import { MemoryRouter, useNavigate } from 'react-router'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import Shell from '../Shell'
 import { CockpitProvider } from '../hooks/CockpitProvider'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+const SHELL_CSS_PATH = resolve(__dirname, '..', 'Shell.css')
+
+/** Extract the property declarations inside the first matching CSS selector block. */
+function extractSelectorBlock(css: string, selector: string): string {
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const pattern = new RegExp(
+    `(?:^|[\\n\\r])${escaped}(?![a-zA-Z0-9_\\-\\[])\\s*\\{([\\s\\S]*?)\\}`,
+  )
+  const match = css.match(pattern)
+  expect(match, `Missing CSS selector block for: ${selector}`).not.toBeNull()
+  return match?.[1] ?? ''
+}
 
 vi.mock('../hooks/EventSourceProvider', () => ({
   useSSEEvent: vi.fn(() => ({ status: 'closed', mtime: null })),
@@ -122,6 +140,26 @@ describe('TestFromAC_SidecarConditional', () => {
     expect(shell).not.toBeNull()
     // data-no-sidecar drives the CSS --shell-columns override to 2-column layout
     expect(shell!.hasAttribute('data-no-sidecar')).toBe(true)
+  })
+
+  // ── AC3 CSS regression: .shell[data-no-sidecar] grid contract in Shell.css ──
+
+  it('ac3 css-columns: .shell[data-no-sidecar] sets --shell-columns to 2-column value (rail + workspace, no sidecar column)', () => {
+    const css = readFileSync(SHELL_CSS_PATH, 'utf-8')
+    const block = extractSelectorBlock(css, '.shell[data-no-sidecar]')
+    expect(
+      /--shell-columns\s*:\s*var\(--shell-rail-width\)\s+minmax\(0,\s*1fr\)/.test(block),
+      'Expected .shell[data-no-sidecar] to set --shell-columns to "var(--shell-rail-width) minmax(0, 1fr)" — removing the block or changing to 3 columns would regress the layout',
+    ).toBe(true)
+  })
+
+  it('ac3 css-no-sidecar-area: .shell[data-no-sidecar] grid-template-areas excludes sidecar region', () => {
+    const css = readFileSync(SHELL_CSS_PATH, 'utf-8')
+    const block = extractSelectorBlock(css, '.shell[data-no-sidecar]')
+    expect(
+      /sidecar/.test(block),
+      'Expected .shell[data-no-sidecar] grid-template-areas to not include a sidecar grid area',
+    ).toBe(false)
   })
 
 })
