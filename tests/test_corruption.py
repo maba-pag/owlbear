@@ -88,6 +88,7 @@ class TestFromAC_CleanupDeadCodes:
         expected = {
             "ERR_CORRUPT_DELIMITERS",
             "ERR_CORRUPT_DUPLICATE_ID",
+            "ERR_CORRUPT_ENCODING",
             "ERR_CORRUPT_MISSING_FIELD",
             "ERR_CORRUPT_TYPE_MISMATCH",
             "ERR_CORRUPT_YAML_PARSE",
