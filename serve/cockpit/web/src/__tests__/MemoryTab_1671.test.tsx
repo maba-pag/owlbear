@@ -1207,6 +1207,85 @@ describe('TestFromAC_MemoryTabPDSContracts', () => {
   })
 })
 
+// ─── G9–G12 v3: State badge no-synthetic-color guard (retry after arch re-pass) ──
+
+describe('TestFromAC_MemoryTabStateVariantProof', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  // AC5 falsifiability: state badge p-tag must NOT carry a synthetic `color` attribute.
+  // Current impl calls element.setAttribute('color', STATE_VARIANTS[entry.state]) in a ref
+  // callback (MemoryTab.tsx ~L388). That call must be removed; variant contract must be
+  // satisfied exclusively via the PDS `variant` prop → PDS sets .variant DOM property.
+  // Each test queries p-tag[data-testid="memory-entry-state"] and asserts no `color` attribute.
+
+  it('g9 ac5: pending state p-tag carries no synthetic color attribute', async () => {
+    const entries = [makeEntry({ state: 'pending' })]
+    vi.stubGlobal('fetch', makeOkFetch(makeApiResponse(entries)))
+    let container!: HTMLElement
+    await act(async () => {
+      container = renderMemoryTab().container
+    })
+    await flush()
+
+    const pTag = container.querySelector('p-tag[data-testid="memory-entry-state"]')
+    expect(pTag, 'p-tag[data-testid="memory-entry-state"] must exist').not.toBeNull()
+    // FAILS: component calls element.setAttribute('color', 'warning') via ref
+    expect(pTag!.getAttribute('color'), 'color attribute must not be injected via ref').toBeNull()
+  })
+
+  it('g10 ac5: curated state p-tag carries no synthetic color attribute', async () => {
+    const entries = [makeEntry({ state: 'curated' })]
+    vi.stubGlobal('fetch', makeOkFetch(makeApiResponse(entries)))
+    let container!: HTMLElement
+    await act(async () => {
+      container = renderMemoryTab().container
+    })
+    await flush()
+
+    const pTag = container.querySelector('p-tag[data-testid="memory-entry-state"]')
+    expect(pTag, 'p-tag[data-testid="memory-entry-state"] must exist').not.toBeNull()
+    // FAILS: component calls element.setAttribute('color', 'info') via ref
+    expect(pTag!.getAttribute('color'), 'color attribute must not be injected via ref').toBeNull()
+  })
+
+  it('g11 ac5: approved state p-tag carries no synthetic color attribute', async () => {
+    const entries = [makeEntry({ state: 'approved' })]
+    vi.stubGlobal('fetch', makeOkFetch(makeApiResponse(entries)))
+    let container!: HTMLElement
+    await act(async () => {
+      container = renderMemoryTab().container
+    })
+    await flush()
+
+    const pTag = container.querySelector('p-tag[data-testid="memory-entry-state"]')
+    expect(pTag, 'p-tag[data-testid="memory-entry-state"] must exist').not.toBeNull()
+    // FAILS: component calls element.setAttribute('color', 'success') via ref
+    expect(pTag!.getAttribute('color'), 'color attribute must not be injected via ref').toBeNull()
+  })
+
+  it('g12 ac5: deleted state p-tag carries no synthetic color attribute', async () => {
+    const entries = [makeEntry({ state: 'deleted' })]
+    vi.stubGlobal('fetch', makeOkFetch(makeApiResponse(entries)))
+    let container!: HTMLElement
+    await act(async () => {
+      container = renderMemoryTab().container
+    })
+    await flush()
+
+    // Clear state filter to expose deleted entries
+    const stateFilter = container.querySelector('p-multi-select[name="state-filter"]')
+    fireEvent(stateFilter!, new CustomEvent('update', { detail: { value: [] }, bubbles: true }))
+    await flush()
+
+    const pTag = container.querySelector('p-tag[data-testid="memory-entry-state"]')
+    expect(pTag, 'p-tag[data-testid="memory-entry-state"] must exist').not.toBeNull()
+    // FAILS: component calls element.setAttribute('color', 'secondary') via ref
+    expect(pTag!.getAttribute('color'), 'color attribute must not be injected via ref').toBeNull()
+  })
+})
+
 // ─── G5-G8 v2: Literal proof tests (3rd retry) ────────────────────────────────
 
 describe('TestFromAC_MemoryTabLiteralProofs', () => {
